@@ -255,6 +255,12 @@ separate.
 6. **Adminul încarcă CodeMirror de pe `cdn.jsdelivr.net` pe fiecare pagină**:
    fără acel CDN, editoarele de cod nu merg. Nereparat (portul C6/C7 din
    Biovitality, încărcare leneșă).
+7. **`/checkout/succes` deschis direct (fără numărul comenzii) dădea eroare 500**:
+   pagina din bază cu tokenul `{{checkout_success_order_info}}` trimitea starea
+   comenzii (text) în locul totalului (număr), iar PHP-ul cu tipuri stricte
+   oprea pagina (`TypeError`). Găsit de testul pluginurilor, care cere fiecare
+   rută. **Reparat** (al doilea parametru nu se mai trimite); pagina de
+   mulțumire reală, `/checkout/succes/<număr>`, nu era afectată.
 
 De știut (nu sunt erori):
 

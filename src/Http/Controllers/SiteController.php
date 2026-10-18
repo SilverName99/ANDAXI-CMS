@@ -3730,8 +3730,9 @@ final class SiteController
         $checkoutSuccessOrderInfoHtml = '';
         if ($slug === 'checkout/succes' && str_contains($pageHtmlContent, self::CHECKOUT_SUCCESS_ORDER_INFO_TOKEN)) {
             $orderNumber = trim((string) ($_GET['order_number'] ?? ''));
-            $orderStatus = trim((string) ($_GET['order_status'] ?? ''));
-            $checkoutSuccessOrderInfoHtml = $this->renderCheckoutSuccessOrderInfoSection($orderNumber, $orderStatus);
+            // Al doilea parametru e totalul comenzii (float), nu starea: cu starea
+            // (text) pagina cădea cu eroare 500 la deschiderea directă a /checkout/succes.
+            $checkoutSuccessOrderInfoHtml = $this->renderCheckoutSuccessOrderInfoSection($orderNumber);
         }
         View::render('site/custom-page', array_merge([
             'title' => (string) $page['title'],
