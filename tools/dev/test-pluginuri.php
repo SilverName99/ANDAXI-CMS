@@ -5,8 +5,12 @@ declare(strict_types=1);
 /**
  * Testele mecanismului de pluginuri (fără browser).
  *
- *   tools/dev/php.sh tools/dev/test-pluginuri.php            # licența + rutele, pe toate pachetele
+ *   tools/dev/php.sh tools/dev/test-pluginuri.php            # tot: A, B, C, D, E
  *   tools/dev/php.sh tools/dev/test-pluginuri.php --doar-licenta
+ *   … --fara-garda     # fără B (cererea fiecărei rute, cea mai lungă parte)
+ *   … --fara-browser   # C fără Playwright
+ *   … --fara-baza      # fără E (comparația cu codul de bază)
+ *   … --capturi=DIR    # unde se pun capturile meniului adminului (implicit $CMS_DEV_DIR/capturi)
  *
  * A. Licența (fără server, într-un dosar temporar, cu o pereche de chei nouă):
  *    bună, semnătură greșită/lipsă/altă cheie, versiune mai veche, lipsă, chei și
@@ -20,6 +24,20 @@ declare(strict_types=1);
  *    (admin, nelogat) sau 404 (site); adresele de confirmare răspund mereu
  *    (400/401/403, niciodată 404/500). Plus meniul, dashboard-ul, cronurile,
  *    checkout-ul închis și plățile noi la „se oprește”.
+ * C. Fiecare pachet (toate, magazin, catalog, prezentare, asociatie) parcurs din
+ *    afară: site-ul pornind de la prima pagină și din harta site-ului (refăcută
+ *    singură la schimbarea licenței), contul clientului, fiecare pagină din meniul
+ *    adminului. Nicio pagină cu 500 sau eroare PHP (nici în jurnal), niciun link,
+ *    formular sau semn (coș, oferte, recenzii, chat…) al unui plugin ascuns, nicio
+ *    adresă ascunsă în harta site-ului. Apoi aceleași pagini cu Playwright: DOM-ul
+ *    după JavaScript, erorile JS noi față de „toate” și captura meniului adminului.
+ * D. Magazinul „se oprește”: checkout închis, coșul refuză produse noi, o comandă
+ *    existentă se editează în admin, notificarea Stripe (semnată cu un secret de
+ *    test) o marchează plătită și emailul ei pleacă; ERP-ul „se oprește” ține
+ *    comenzile noi, „oprit” nu mai vorbește deloc; cronurile care termină ce e în
+ *    curs rulează, cele care pornesc ceva nou tac.
+ * E. Cu licența „toate”, paginile-cheie (prima pagină, produs, coș, checkout,
+ *    dashboard, comenzi…) au HTML identic cu codul de bază (compara-cu-baza.sh).
  *
  * Cererile POST de admin se fac nelogat (garda sau loginul răspund înainte de
  * controller), ca testul să nu schimbe setări sau comenzi. La final pune la loc
@@ -471,7 +489,7 @@ $formularComanda = [];
 $webhookuri = ['/webhook/stripe', '/webhook/euplatesc', '/webhook/bt-ipay', '/api/erp/notificare', '/api/erp/adrese'];
 $scriptCron = static function (string $script) use ($radacina): array {
     exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($script) . ' 2>&1', $iesire, $cod);
-    return ['cod' => $cod, 'text' => implode(' ', $iesire)];
+    return ['cod' => $cod, 'text' => implode(' ', $iesire), 'linii' => count($iesire)];
 };
 
 $scenarii = [
@@ -485,6 +503,9 @@ $scenarii = [
     'prezentare, catalogul duce la /contact' => [$pachet('prezentare'), ['redirectionari' => ['catalog' => '/contact']]],
 ];
 
+if (in_array('--fara-garda', $argv, true)) {
+    $scenarii = [];
+}
 try {
     foreach ($scenarii as $numeScenariu => [$pluginuri, $extra]) {
         $scrie('');
@@ -600,8 +621,8 @@ try {
                     continue;
                 }
                 $rez = $scriptCron($script);
-                $verifica('cron ' . $script . ' (' . $cheie . ' ' . Plugins::stare($cheie) . '): nu rulează',
-                    $rez['cod'] === 0 && str_contains($rez['text'], 'nu este pornit pe acest site'), $rez['text']);
+                $verifica('cron ' . $script . ' (' . $cheie . ' ' . Plugins::stare($cheie) . '): nu rulează (exit 0, o linie)',
+                    $rez['cod'] === 0 && $rez['linii'] === 1 && str_contains($rez['text'], 'nu este pornit pe acest site'), $rez['text']);
             }
         }
 
@@ -673,6 +694,485 @@ try {
                 array_unique(array_values($variante)) === [404]);
         }
     }
+
+    // =================================================================
+    // C. Fiecare pachet văzut din afară: site-ul pornind de la prima pagină și
+    //    din harta site-ului, contul clientului și tot meniul adminului
+    // =================================================================
+    $scrie('');
+    $scrie('== C. Pachetele, pagină cu pagină (linkuri, formulare, erori PHP/JS)');
+    $faraCod = static fn (string $html): string => (string) preg_replace('#<(script|style|textarea)\b[^>]*>.*?</\1\s*>#is', '', $html);
+    /** Linkurile și formularele din HTML (în afara scripturilor, ca filtrul din Plugins). */
+    $linkuriSiFormulare = static function (string $html) use ($faraCod): array {
+        $vizibil = $faraCod($html);
+        preg_match_all('#<a\b[^>]*?\bhref\s*=\s*(["\'])(.*?)\1#is', $vizibil, $a);
+        preg_match_all('#<form\b([^>]*)>#is', $vizibil, $f);
+        $formulare = [];
+        foreach ($f[1] as $atribute) {
+            if (preg_match('#\baction\s*=\s*(["\'])(.*?)\1#is', $atribute, $m) === 1) {
+                $formulare[] = [html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                    preg_match('#\bmethod\s*=\s*["\']?post#i', $atribute) === 1 ? 'POST' : 'GET'];
+            }
+        }
+        return [array_map(static fn ($h): string => html_entity_decode((string) $h, ENT_QUOTES | ENT_HTML5, 'UTF-8'), $a[2]), $formulare];
+    };
+    /** Calea internă a unui link (cu query), sau null pentru linkurile din afară, ancore, mailto… */
+    $caleInterna = static function (string $href): ?string {
+        $href = trim($href);
+        if ($href === '' || $href[0] === '#') {
+            return null;
+        }
+        $p = parse_url($href);
+        if (!is_array($p) || (isset($p['scheme']) && !in_array(strtolower((string) $p['scheme']), ['http', 'https'], true))) {
+            return null;
+        }
+        if (isset($p['host']) && !in_array(strtolower((string) $p['host']), ['127.0.0.1', 'localhost'], true)) {
+            return null;
+        }
+        $cale = (string) ($p['path'] ?? '/');
+        if ($cale === '' || $cale[0] !== '/') {
+            return null;
+        }
+        return $cale . (isset($p['query']) && $p['query'] !== '' ? '?' . $p['query'] : '');
+    };
+    // Căile pe care nu le urmăm: adminul (are trecerea lui), API-urile, fișierele,
+    // autentificarea Google (pleacă în afară) și linkurile din emailuri.
+    $deUrmat = static function (string $cale): bool {
+        foreach (['/admin', '/api/', '/assets/', '/uploads/', '/webhook', '/auth/', '/newsletter/', '/checkout/bt/',
+            '/contul-meu/resetare-parola/', '/logout'] as $prefix) {
+            if (str_starts_with($cale, $prefix)) {
+                return false;
+            }
+        }
+        return preg_match('#\.[a-z0-9]{2,4}(\?|$)#i', $cale) !== 1;
+    };
+    // Semnele pluginurilor în pagina afișată (fără scripturi și stiluri) și în scripturi.
+    $semneVizibile = [
+        'magazin' => ['Adaugă în coș', 'data-cart-button-total', 'class="bv-cart-v2'],
+        'oferte_bbd' => ['class="bv-bbd-sidebar"'],
+        'recenzii' => ['data-tab="reviews"'],
+        'precomenzi' => ['Precomandă'],
+        'cupoane' => ['class="bv-cart-v2__coupon'],
+    ];
+    $semneScript = [
+        'chat_live' => ['embed.tawk.to'],
+        'magazin' => ['/assets/js/floating-cart.js'],
+    ];
+    $fisierErori = $dosarDev . '/php-erori.log';
+    $pozitieErori = 0;
+    $eroriPhpNoi = static function () use ($fisierErori, &$pozitieErori): array {
+        clearstatcache(true, $fisierErori);
+        $marime = (int) @filesize($fisierErori);
+        if ($marime < $pozitieErori) {
+            $pozitieErori = 0;
+        }
+        $text = $marime > $pozitieErori ? (string) @file_get_contents($fisierErori, false, null, $pozitieErori) : '';
+        $pozitieErori = $marime;
+        return array_values(array_filter(array_map('trim', explode("\n", $text)), static fn (string $l): bool => $l !== ''));
+    };
+    $eroriPhpNoi();
+
+    // Harta site-ului: o facem o dată (cu „toate”); la fiecare schimbare de pachet
+    // site-ul o reface singur, fără ce nu mai e în abonament.
+    $puneLicenta($pachet('toate'));
+    $fisierHarta = $radacina . '/public/sitemap.xml';
+    $hartaExista = is_file($fisierHarta);
+    @unlink($jar);
+    $cerere('POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parolaAdmin]);
+    $cerere('POST', '/admin/settings/store', $jar, ['action' => 'generate_sitemap', 'sitemap_filename' => 'sitemap.xml']);
+    $verifica('harta site-ului generată pentru test (public/sitemap.xml)', is_file($fisierHarta));
+
+    $nodePath = (string) (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules');
+    $areBrowser = !in_array('--fara-browser', $argv, true) && is_dir($nodePath . '/playwright');
+    $dosarCapturi = $dosarDev . '/capturi';
+    foreach ($argv as $argument) {
+        if (str_starts_with((string) $argument, '--capturi=')) {
+            $dosarCapturi = rtrim(substr((string) $argument, 10), '/');
+        }
+    }
+    $eroriJsToate = [];
+
+    foreach (['toate', 'magazin', 'catalog', 'prezentare', 'asociatie'] as $numePachet) {
+        $scrie('');
+        $scrie('-- Pachetul „' . $numePachet . '”');
+        $puneLicenta($pachet($numePachet));
+        $ascunse = array_keys(array_filter(Plugins::stari(), static fn (string $s): bool => $s === 'oprit'));
+        $scrie('  INFO  ascunse: ' . ($ascunse === [] ? 'niciunul' : implode(', ', $ascunse)));
+
+        // Prima cerere reface harta site-ului (semnalul pus la schimbarea licenței).
+        $cerere('GET', '/health');
+        $cerere('GET', '/');
+        $harta = $cerere('GET', '/sitemap.xml');
+        preg_match_all('#<loc>(.*?)</loc>#', $harta['corp'], $locuri);
+        $dinHarta = [];
+        $ascunseInHarta = [];
+        foreach ($locuri[1] as $loc) {
+            $loc = html_entity_decode((string) $loc, ENT_QUOTES | ENT_XML1, 'UTF-8');
+            if (!Plugins::adresaVizibila($loc)) {
+                $ascunseInHarta[] = $loc;
+            }
+            $cale = $caleInterna($loc);
+            if ($cale !== null) {
+                $dinHarta[] = $cale;
+            }
+        }
+        $verifica('harta site-ului: ' . count($locuri[1]) . ' adrese, niciuna a unui plugin ascuns',
+            $harta['cod'] === 200 && $locuri[1] !== [] && $ascunseInHarta === [], 'cod ' . $harta['cod'] . '; ' . implode(', ', array_slice($ascunseInHarta, 0, 10)));
+
+        // Trecerea prin site, ca vizitator și (dacă pachetul are conturi) ca client logat.
+        $jarViz = $dosarDev . '/test-pluginuri-viz-' . getmypid() . '.txt';
+        $jarCli = $dosarDev . '/test-pluginuri-cli-' . getmypid() . '.txt';
+        @unlink($jarViz);
+        @unlink($jarCli);
+        $treceri = [['vizitator', $jarViz, array_merge(['/'], $dinHarta), 220]];
+        if (Plugins::vizibil('conturi_clienti')) {
+            $cerere('POST', '/login', $jarCli, ['email' => 'andrei.exemplu@exemplu.ro', 'password' => $parolaAdmin]);
+            $treceri[] = ['client', $jarCli, ['/contul-meu'], 40];
+        }
+        $problemeSite = [];
+        $vizitatePublic = [];
+        foreach ($treceri as [$rol, $jarRol, $start, $maxim]) {
+            $coada = $start;
+            $vazute = [];
+            $variantePeCale = [];
+            $pagini = 0;
+            while ($coada !== [] && $pagini < $maxim) {
+                $cale = (string) array_shift($coada);
+                if (isset($vazute[$cale])) {
+                    continue;
+                }
+                $vazute[$cale] = true;
+                $doarCale = (string) strtok($cale, '?');
+                if (str_contains($cale, '?')) {
+                    $variantePeCale[$doarCale] = ($variantePeCale[$doarCale] ?? 0) + 1;
+                    if ($variantePeCale[$doarCale] > 2) {
+                        continue;
+                    }
+                }
+                $r = $cerere('GET', $cale, $jarRol);
+                $pagini++;
+                if ($rol === 'vizitator' && $r['cod'] === 200) {
+                    $vizitatePublic[] = $cale;
+                }
+                $eticheta = $rol . ' ' . $cale;
+                if ($r['cod'] >= 500 || $r['cod'] === 0) {
+                    $problemeSite[] = $eticheta . ': cod ' . $r['cod'];
+                }
+                if (preg_match('/(Fatal error|Parse error|Uncaught |<b>Warning<\/b>|<b>Notice<\/b>|<b>Deprecated<\/b>)/', $r['corp']) === 1) {
+                    $problemeSite[] = $eticheta . ': eroare PHP în pagină';
+                }
+                if (!str_contains((string) ($r['antete']['content-type'] ?? ''), 'text/html')) {
+                    continue;
+                }
+                [$hrefuri, $formulare] = $linkuriSiFormulare($r['corp']);
+                foreach ($hrefuri as $href) {
+                    if (!Plugins::adresaVizibila($href)) {
+                        $problemeSite[] = $eticheta . ': link spre un plugin ascuns: ' . $href;
+                    }
+                    $tinta = $caleInterna($href);
+                    if ($tinta !== null && $deUrmat($tinta) && !isset($vazute[$tinta])) {
+                        $coada[] = $tinta;
+                    }
+                }
+                foreach ($formulare as [$actiune, $metoda]) {
+                    if (!Plugins::adresaVizibila($actiune, $metoda)) {
+                        $problemeSite[] = $eticheta . ': formular spre un plugin ascuns: ' . $metoda . ' ' . $actiune;
+                    }
+                }
+                $vizibil = $faraCod($r['corp']);
+                foreach ($semneVizibile as $plugin => $semne) {
+                    if (Plugins::vizibil($plugin)) {
+                        continue;
+                    }
+                    foreach ($semne as $semn) {
+                        if (str_contains($vizibil, $semn)) {
+                            $problemeSite[] = $eticheta . ': „' . $semn . '” (' . $plugin . ' ascuns)';
+                        }
+                    }
+                }
+                foreach ($semneScript as $plugin => $semne) {
+                    if (Plugins::vizibil($plugin)) {
+                        continue;
+                    }
+                    foreach ($semne as $semn) {
+                        if (str_contains($r['corp'], $semn)) {
+                            $problemeSite[] = $eticheta . ': „' . $semn . '” în cod (' . $plugin . ' ascuns)';
+                        }
+                    }
+                }
+                // Catalog fără magazin: produsele se văd, prețurile nu.
+                if (Plugins::vizibil('catalog') && !Plugins::vizibil('magazin')
+                    && preg_match('#\d[\d.]*,\d{2}\s*lei|\d+\.\d{2}\s*lei#i', $vizibil, $pret) === 1) {
+                    $problemeSite[] = $eticheta . ': preț afișat fără magazin („' . $pret[0] . '”)';
+                }
+            }
+            $scrie('  INFO  ' . $rol . ': ' . $pagini . ' pagini parcurse');
+        }
+        @unlink($jarViz);
+        @unlink($jarCli);
+        $problemeSite = array_values(array_unique($problemeSite));
+        $verifica('site: nicio pagină cu eroare, niciun link/formular/semn al unui plugin ascuns', $problemeSite === [],
+            implode("\n          ", array_slice($problemeSite, 0, 30)) . (count($problemeSite) > 30 ? "\n          … încă " . (count($problemeSite) - 30) : ''));
+
+        // Un vizitator cu coș: checkout-ul are formularul întreg (filtrul nu are voie să
+        // strice un formular care trece peste un <textarea> sau o pagină lungă).
+        if (Plugins::permiteInceput('magazin')) {
+            $jarCos = $dosarDev . '/test-pluginuri-cos-' . getmypid() . '.txt';
+            @unlink($jarCos);
+            $cerere('POST', '/cos/adauga/' . $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'"), $jarCos, ['quantity' => '1']);
+            $checkout = $cerere('GET', '/checkout', $jarCos);
+            @unlink($jarCos);
+            $verifica('checkout cu produse în coș: formularul e întreg', $checkout['cod'] === 200
+                && str_contains($checkout['corp'], 'name="checkout_form_token"') && str_contains($checkout['corp'], 'name="payment_method"')
+                && preg_match('#<form\b[^>]*action="/checkout"#', $checkout['corp']) === 1);
+        }
+        if (!Plugins::nimicAscuns()) {
+            $pagina = '<ul><li><a href="/">Acasă</a></li><li><a href="/contact">Contact</a></li></ul>'
+                . '<form method="post" action="/contact/trimite">' . str_repeat('<div class="rand">text text</div>', 30000)
+                . '<textarea name="mesaj"><a href="/x">nu se atinge</a></textarea></form>'
+                . '<script>var u = "/blog";</script>';
+            $ascunsaPrima = null;
+            foreach (['/blog', '/magazin', '/cos', '/contul-meu'] as $cale) {
+                if (!Plugins::adresaVizibila($cale)) {
+                    $ascunsaPrima = $cale;
+                    break;
+                }
+            }
+            if ($ascunsaPrima !== null) {
+                // Formular GET spre pagina ascunsă (cu un textarea înăuntru): se scoate întreg.
+                $pagina .= '<ul><li><a href="' . $ascunsaPrima . '">Ascuns</a></li></ul><form method="get" action="' . $ascunsaPrima
+                    . '"><textarea>t</textarea></form>';
+            }
+            $filtrata = Plugins::filtreazaLinkuri($pagina);
+            $verifica('filtrul pe o pagină de ' . round(strlen($pagina) / 1024) . ' KB: păstrează tot ce e vizibil, scoate doar ce e ascuns',
+                str_contains($filtrata, 'action="/contact/trimite"') && substr_count($filtrata, '<div class="rand">') === 30000
+                && str_contains($filtrata, '<a href="/x">nu se atinge</a>') && str_contains($filtrata, 'var u = "/blog";')
+                && str_contains($filtrata, '<a href="/contact">Contact</a>')
+                && ($ascunsaPrima === null || (!str_contains($filtrata, 'href="' . $ascunsaPrima . '"') && !str_contains($filtrata, 'action="' . $ascunsaPrima . '"')
+                    && !str_contains($filtrata, '<textarea>t</textarea>'))),
+                'lungime ' . strlen($pagina) . ' → ' . strlen($filtrata));
+        }
+
+        // Meniul adminului: fiecare pagină din el se deschide, fără linkuri spre pluginuri ascunse.
+        $panou = $cerere('GET', '/admin', $jar);
+        preg_match('#<nav class="admin-nav">(.*?)</nav>#s', $panou['corp'], $nav);
+        preg_match_all('#href="([^"]+)"#', $nav[1] ?? '', $hrefuriMeniu);
+        $paginiMeniu = array_values(array_unique(array_map(static fn ($h): string => html_entity_decode((string) $h), $hrefuriMeniu[1])));
+        $problemeAdmin = [];
+        foreach ($paginiMeniu as $cale) {
+            $r = $cerere('GET', $cale, $jar);
+            $eticheta = 'admin ' . $cale;
+            if ($r['cod'] !== 200) {
+                $problemeAdmin[] = $eticheta . ': cod ' . $r['cod'];
+                continue;
+            }
+            if (str_contains($r['corp'], 'Modulul nu este inclus în abonament')) {
+                $problemeAdmin[] = $eticheta . ': refuzată de gardă, deși e în meniu';
+            }
+            [$hrefuri, $formulare] = $linkuriSiFormulare($r['corp']);
+            foreach ($hrefuri as $href) {
+                if (!Plugins::adresaVizibila($href)) {
+                    $problemeAdmin[] = $eticheta . ': link spre un plugin ascuns: ' . $href;
+                }
+            }
+            foreach ($formulare as [$actiune, $metoda]) {
+                if (!Plugins::adresaVizibila($actiune, $metoda)) {
+                    $problemeAdmin[] = $eticheta . ': formular spre un plugin ascuns: ' . $metoda . ' ' . $actiune;
+                }
+            }
+        }
+        $problemeAdmin = array_values(array_unique($problemeAdmin));
+        $verifica('admin: ' . count($paginiMeniu) . ' pagini din meniu se deschid, fără linkuri/formulare spre pluginuri ascunse',
+            $paginiMeniu !== [] && $problemeAdmin === [], implode("\n          ", array_slice($problemeAdmin, 0, 30)));
+
+        // Cu browserul: aceleași linkuri după ce rulează JavaScript-ul, plus erorile JS.
+        if ($areBrowser) {
+            $fisierPagini = $dosarDev . '/crawl-pagini-' . getmypid() . '.json';
+            $fisierRezultat = $dosarDev . '/crawl-rezultat-' . getmypid() . '.json';
+            $esantion = array_values(array_unique(array_merge(['/'], array_slice($vizitatePublic, 0, 35))));
+            file_put_contents($fisierPagini, json_encode(['public' => $esantion, 'admin' => $paginiMeniu]));
+            $comanda = 'CMS_DEV_URL=' . escapeshellarg($baza) . ' CMS_DEV_ADMIN_EMAIL=' . escapeshellarg($adminEmail)
+                . ' CMS_DEV_PAROLA=' . escapeshellarg($parolaAdmin) . ' CMS_DEV_PAGINI=' . escapeshellarg($fisierPagini)
+                . ' CMS_DEV_REZULTAT=' . escapeshellarg($fisierRezultat) . ' CMS_DEV_CAPTURI=' . escapeshellarg($dosarCapturi)
+                . ' CMS_DEV_CAPTURI_SUFIX=' . escapeshellarg('-' . $numePachet) . ' NODE_PATH=' . escapeshellarg($nodePath)
+                . ' node ' . escapeshellarg($radacina . '/tools/dev/crawl-pachet.cjs') . ' 2>&1';
+            exec($comanda, $iesireNode, $codNode);
+            $rez = json_decode((string) @file_get_contents($fisierRezultat), true);
+            @unlink($fisierPagini);
+            @unlink($fisierRezultat);
+            if ($codNode !== 0 || !is_array($rez)) {
+                $verifica('browser: trecerea cu Playwright', false, implode(' ', $iesireNode));
+            } else {
+                $problemeDom = [];
+                $eroriJs = [];
+                foreach ((array) $rez['pagini'] as $p) {
+                    $eticheta = $p['rol'] . ' ' . $p['cale'];
+                    foreach ((array) $p['linkuri'] as $href) {
+                        if (!Plugins::adresaVizibila((string) $href)) {
+                            $problemeDom[] = $eticheta . ': link în DOM spre un plugin ascuns: ' . $href;
+                        }
+                    }
+                    foreach ((array) $p['formulare'] as [$actiune, $metoda]) {
+                        if (!Plugins::adresaVizibila((string) $actiune, (string) $metoda)) {
+                            $problemeDom[] = $eticheta . ': formular în DOM spre un plugin ascuns: ' . $metoda . ' ' . $actiune;
+                        }
+                    }
+                    foreach ((array) $p['erori'] as $eroare) {
+                        $cheie = $p['rol'] . ' ' . $p['cale'] . ' ' . $eroare;
+                        if ($numePachet === 'toate') {
+                            $eroriJsToate[$cheie] = true;
+                        } elseif (!isset($eroriJsToate[$cheie])) {
+                            // O eroare care apare și cu toate pluginurile nu e a pachetului.
+                            $eroriJs[] = $eticheta . ': ' . $eroare;
+                        }
+                    }
+                }
+                $problemeDom = array_values(array_unique($problemeDom));
+                $verifica('browser: ' . count((array) $rez['pagini']) . ' pagini, niciun link/formular în DOM spre pluginuri ascunse',
+                    $problemeDom === [], implode("\n          ", array_slice($problemeDom, 0, 20)));
+                $verifica('browser: nicio eroare JavaScript nouă față de „toate”', $eroriJs === [],
+                    implode("\n          ", array_slice(array_unique($eroriJs), 0, 20)));
+                if ($numePachet === 'toate' && $eroriJsToate !== []) {
+                    $scrie('  INFO  erori JavaScript și cu toate pluginurile (nu țin de pluginuri): '
+                        . implode(' | ', array_slice(array_keys($eroriJsToate), 0, 5)));
+                }
+                foreach ((array) $rez['capturi'] as $captura) {
+                    $scrie('  INFO  captura meniului: ' . $captura);
+                }
+                if ((array) $rez['blocate'] !== []) {
+                    $scrie('  INFO  cereri spre alte servere, blocate: ' . implode(', ', (array) $rez['blocate']));
+                }
+            }
+        }
+
+        $eroriPhp = $eroriPhpNoi();
+        $verifica('jurnalul PHP: niciun avertisment sau eroare nouă', $eroriPhp === [],
+            implode("\n          ", array_slice($eroriPhp, 0, 15)));
+    }
+    if (!$hartaExista) {
+        @unlink($fisierHarta);
+    }
+
+    // =================================================================
+    // D. Magazinul „se oprește”: comenzile noi nu mai intră, cele plasate
+    //    se termină (editare în admin, plata confirmată de procesator)
+    // =================================================================
+    $scrie('');
+    $scrie('== D. Magazinul „se oprește” (comenzile existente se termină)');
+    $puneLicenta(array_merge($pachet('toate'), ['magazin' => 'se_opreste', 'plata_stripe' => 'se_opreste',
+        'fidelitate' => 'se_opreste', 'cupoane' => 'se_opreste', 'erp' => 'se_opreste']));
+    $cerere('GET', '/health');
+    $eroriPhpNoi();
+    @unlink($jar);
+    $cerere('POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parolaAdmin]);
+
+    $checkout = $cerere('GET', '/checkout');
+    $verifica('se oprește: checkout-ul închis, cu mesajul în română', $checkout['cod'] === 200
+        && str_contains($checkout['corp'], 'Momentan nu se mai pot plasa comenzi online') && !str_contains($checkout['corp'], 'name="payment_method"'));
+    $jarCos = $dosarDev . '/test-pluginuri-cos-' . getmypid() . '.txt';
+    @unlink($jarCos);
+    $idMenta = $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'");
+    $adaugat = $cerere('POST', '/cos/adauga/' . $idMenta, $jarCos, ['quantity' => '1']);
+    $sumar = json_decode($cerere('GET', '/api/cart/summary', $jarCos)['corp'], true);
+    $verifica('se oprește: „Adaugă în coș” refuzat (coșul rămâne gol)', $adaugat['cod'] === 302
+        && is_array($sumar) && (int) ($sumar['items_count'] ?? -1) === 0, 'cod ' . $adaugat['cod']);
+    @unlink($jarCos);
+    $produs = $cerere('GET', '/produs/ceai-de-menta');
+    $verifica('se oprește: pagina produsului se vede, fără butonul de coș', $produs['cod'] === 200
+        && !str_contains($faraCod($produs['corp']), 'Adaugă în coș') && str_contains($produs['corp'], 'Momentan nu se mai pot plasa comenzi online'));
+
+    // O comandă existentă: se editează în admin.
+    $idComanda = (int) $mostre['comanda_id'];
+    $rand = $db->query('SELECT order_number, admin_notes, payment_method, payment_status, status, paid_at, paid_amount, payment_error, '
+        . 'stripe_session_id, stripe_payment_intent_id FROM orders WHERE id = ' . $idComanda)->fetch(PDO::FETCH_ASSOC);
+    $nota = 'Notă de test „se oprește” ' . getmypid();
+    $salvare = json_decode($cerere('POST', '/admin/orders/' . $idComanda . '/note-interne', $jar, ['admin_notes' => $nota])['corp'], true);
+    $notaSalvata = (string) $db->query('SELECT admin_notes FROM orders WHERE id = ' . $idComanda)->fetchColumn();
+    $verifica('se oprește: o comandă existentă se editează în admin (nota internă)', is_array($salvare) && ($salvare['ok'] ?? false) === true
+        && $notaSalvata === $nota, json_encode($salvare, JSON_UNESCAPED_UNICODE));
+    $comenzi = $cerere('GET', '/admin/orders?search=' . rawurlencode((string) $rand['order_number']), $jar);
+    $verifica('se oprește: comanda apare în lista de comenzi', $comenzi['cod'] === 200 && str_contains($comenzi['corp'], (string) $rand['order_number']));
+
+    // Plata unei comenzi existente, confirmată de procesator după oprire (Stripe, semnat cu un secret de test).
+    $setariVechi = $db->query("SELECT `key`, `value` FROM settings WHERE `key` IN ('stripe_webhook_secret')")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $secret = 'whsec_test_pluginuri_' . getmypid();
+    \App\Support\Settings::save($db, ['stripe_webhook_secret' => $secret]);
+    $db->prepare("UPDATE orders SET payment_method = 'stripe', payment_status = 'pending', status = 'pending_payment', paid_at = NULL,
+        payment_error = NULL WHERE id = :id")->execute(['id' => $idComanda]);
+    // Emailul „comandă nouă” pleacă o singură dată pe comandă (email_logs); îl
+    // scoatem din jurnal pe durata testului și îl punem la loc după.
+    $jurnalEmail = $db->query("SELECT * FROM email_logs WHERE order_id = " . $idComanda . " AND email_type = 'new_order'")->fetch(PDO::FETCH_ASSOC);
+    $db->exec("DELETE FROM email_logs WHERE order_id = " . $idComanda . " AND email_type = 'new_order'");
+    $mailuriInainte = glob($dosarDev . '/mail/*') ?: [];
+    $eveniment = json_encode(['id' => 'evt_test', 'type' => 'checkout.session.completed', 'data' => ['object' => [
+        'id' => 'cs_test_pluginuri', 'payment_status' => 'paid', 'payment_intent' => 'pi_test_pluginuri',
+        'client_reference_id' => (string) $rand['order_number'],
+        'metadata' => ['order_id' => (string) $idComanda, 'order_number' => (string) $rand['order_number']],
+    ]]]);
+    $moment = time();
+    $semnatura = 't=' . $moment . ',v1=' . hash_hmac('sha256', $moment . '.' . $eveniment, $secret);
+    $c = curl_init($baza . '/webhook/stripe');
+    curl_setopt_array($c, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $eveniment, CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 60,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Stripe-Signature: ' . $semnatura]]);
+    $raspunsWebhook = (string) curl_exec($c);
+    $codWebhook = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+    curl_close($c);
+    $dupa = $db->query('SELECT payment_status, status FROM orders WHERE id = ' . $idComanda)->fetch(PDO::FETCH_ASSOC);
+    $verifica('se oprește: notificarea Stripe a unei comenzi existente e procesată (comanda devine plătită)',
+        $codWebhook === 200 && trim($raspunsWebhook) === 'ok' && ($dupa['payment_status'] ?? '') === 'paid' && ($dupa['status'] ?? '') === 'pending',
+        'cod ' . $codWebhook . ' „' . trim($raspunsWebhook) . '”, ' . json_encode($dupa));
+    $mailuriNoi = array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte);
+    $verifica('se oprește: emailul comenzii existente pleacă în continuare', $mailuriNoi !== []);
+    array_map('unlink', $mailuriNoi);
+    // Comanda și setările înapoi cum erau.
+    $db->prepare('UPDATE orders SET admin_notes = :admin_notes, payment_method = :payment_method, payment_status = :payment_status,
+        status = :status, paid_at = :paid_at, paid_amount = :paid_amount, payment_error = :payment_error,
+        stripe_session_id = :stripe_session_id, stripe_payment_intent_id = :stripe_payment_intent_id WHERE id = :id')
+        ->execute(array_diff_key($rand, ['order_number' => 1]) + ['id' => $idComanda]);
+    $db->exec("DELETE FROM email_logs WHERE order_id = " . $idComanda . " AND email_type = 'new_order'");
+    if (is_array($jurnalEmail)) {
+        $coloane = array_keys($jurnalEmail);
+        $db->prepare('INSERT INTO email_logs (`' . implode('`, `', $coloane) . '`) VALUES (:' . implode(', :', $coloane) . ')')->execute($jurnalEmail);
+    }
+    if (isset($setariVechi['stripe_webhook_secret'])) {
+        \App\Support\Settings::save($db, ['stripe_webhook_secret' => (string) $setariVechi['stripe_webhook_secret']]);
+    } else {
+        $db->exec("DELETE FROM settings WHERE `key` = 'stripe_webhook_secret'");
+    }
+
+    // ERP „se oprește”: o comandă care n-a ajuns în ERP nu mai pleacă, stă „în așteptare”.
+    \App\Support\ErpSync::ensureSchema($db);
+    $erpVechi = $db->query("SELECT `key`, `value` FROM settings WHERE `key` IN ('erp_enabled')")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $randErp = $db->query('SELECT erp_status, erp_last_error, erp_next_retry_at, erp_attempts, erp_order_id FROM orders WHERE id = '
+        . $idComanda)->fetch(PDO::FETCH_ASSOC);
+    \App\Support\Settings::save($db, ['erp_enabled' => '1']);
+    $db->prepare("UPDATE orders SET erp_status = 'pending', erp_order_id = NULL WHERE id = :id")->execute(['id' => $idComanda]);
+    $impins = \App\Support\ErpSync::push($db, $idComanda, true);
+    $stareErp = (string) $db->query('SELECT erp_status FROM orders WHERE id = ' . $idComanda)->fetchColumn();
+    $verifica('se oprește (erp): comanda nouă nu mai pleacă în ERP, rămâne „în așteptare”', ($impins['tinuta'] ?? false) === true
+        && $stareErp === 'pending' && str_contains((string) $impins['message'], 'se oprește'), json_encode($impins, JSON_UNESCAPED_UNICODE));
+    $puneLicenta($pachet('magazin'));
+    $impins = \App\Support\ErpSync::push($db, $idComanda, true);
+    $verifica('oprit (erp): nicio legătură cu ERP-ul, comanda rămâne doar pe site', ($impins['ok'] ?? true) === false
+        && str_contains((string) $impins['message'], 'nu este inclusă în abonament') && \App\Support\ErpClient::fromSettings(['erp_url' => 'x', 'erp_api_key' => 'y']) === null,
+        json_encode($impins, JSON_UNESCAPED_UNICODE));
+    $db->prepare('UPDATE orders SET erp_status = :erp_status, erp_last_error = :erp_last_error, erp_next_retry_at = :erp_next_retry_at,
+        erp_attempts = :erp_attempts, erp_order_id = :erp_order_id WHERE id = :id')->execute($randErp + ['id' => $idComanda]);
+    \App\Support\Settings::save($db, ['erp_enabled' => (string) ($erpVechi['erp_enabled'] ?? '0')]);
+
+    // Cronurile: cele care termină ce e în curs rulează, cele care pornesc ceva nou tac.
+    $puneLicenta(array_merge($pachet('toate'), ['magazin' => 'se_opreste', 'newsletter' => 'se_opreste']));
+    $bt = $scriptCron('scripts/bt-ipay-sync.php');
+    $verifica('se oprește: cronul BT (termină plățile începute) rulează în continuare', !str_contains($bt['text'], 'nu este pornit'), $bt['text']);
+    $abandonat = $scriptCron('scripts/abandoned-cart-emails.php');
+    $verifica('se oprește: cronul coșurilor abandonate tace (exit 0, o linie)', $abandonat['cod'] === 0
+        && str_contains($abandonat['text'], 'nu este pornit') && $abandonat['linii'] === 1, $abandonat['text']);
+    $nl = $scriptCron('scripts/newsletter-campaigns.php');
+    $verifica('se oprește: cronul newsletterului termină campaniile pornite, nu pornește programate', $nl['cod'] === 0
+        && str_contains($nl['text'], 'programate_pornite=0'), $nl['text']);
+    $eroriPhp = $eroriPhpNoi();
+    $verifica('jurnalul PHP: niciun avertisment sau eroare nouă (D)', $eroriPhp === [], implode("\n          ", array_slice($eroriPhp, 0, 15)));
 } finally {
     // Dezvoltarea continuă cu toate pluginurile pornite.
     $puneLicenta($pachet('toate'));
@@ -681,6 +1181,18 @@ try {
     if ($amPornitServerul) {
         exec(escapeshellarg($radacina . '/tools/dev/server.sh') . ' --opreste >/dev/null 2>&1');
     }
+}
+
+// =====================================================================
+// E. Cu toate pluginurile, paginile-cheie ies exact ca în codul de bază
+// =====================================================================
+if (!in_array('--fara-baza', $argv, true)) {
+    $scrie('');
+    $scrie('== E. Licența „toate”: HTML identic cu codul dinaintea pluginurilor (tools/dev/compara-cu-baza.sh)');
+    exec(escapeshellarg($radacina . '/tools/dev/compara-cu-baza.sh') . ' 2>&1', $iesireBaza, $codBaza);
+    $ultima = trim((string) end($iesireBaza));
+    $diferite = array_filter($iesireBaza, static fn (string $l): bool => !str_starts_with(trim($l), 'OK') && trim($l) !== '');
+    $verifica($ultima !== '' ? $ultima : 'compara-cu-baza', $codBaza === 0, implode("\n          ", array_slice($diferite, 0, 20)));
 }
 
 $scrie('');

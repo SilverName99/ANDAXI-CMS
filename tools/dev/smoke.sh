@@ -206,7 +206,11 @@ verifica_p catalog "categorie" 200 viz GET /categorie/ceaiuri "Ceai de mentă"
 verifica_p catalog "marcă" 200 viz GET /marca/livada-demo "Ceai de mentă"
 verifica_p catalog "produs cu șablon" 200 viz GET /produs/ceai-de-menta "Ceai de mentă"
 verifica_p catalog "produs fără șablon" 200 viz GET /produs/ceai-de-musetel "Ceai de mușețel"
-verifica_p catalog "produs cu oferte BBD" 200 viz GET "/produs/$SLUG_BBD" "data-bbd-key="
+if vizibil oferte_bbd; then
+    verifica_p catalog "produs cu oferte BBD" 200 viz GET "/produs/$SLUG_BBD" "data-bbd-key="
+else
+    verifica_p catalog "produs cu oferte BBD (fără pluginul ofertelor: produs obișnuit)" 200 viz GET "/produs/$SLUG_BBD"
+fi
 verifica_p catalog "produs la precomandă" 200 viz GET "/produs/$SLUG_PRE"
 verifica_p catalog "căutare" 200 viz GET "/api/search/products?q=ceai" "Ceai"
 verifica_p magazin "adaugă în coș" 302 viz POST "/cos/adauga/$ID_MENTA" "" "quantity=2"
