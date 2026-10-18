@@ -20,6 +20,10 @@ final class BbdOferte
     {
         // Controllerul o calculează deja pentru produsele pe care le pregătește;
         // când e prezentă, ea decide.
+        // Pluginul „Oferte BBD” din licență: fără el, nicio ofertă de ales.
+        if (!Plugins::permiteInceput('oferte_bbd')) {
+            return false;
+        }
         if (array_key_exists('requires_bbd_selection', $product)) {
             return (bool) $product['requires_bbd_selection'];
         }

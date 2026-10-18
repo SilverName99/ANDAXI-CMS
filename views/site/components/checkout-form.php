@@ -17,6 +17,8 @@ $total = (float) ($summary['total'] ?? 0);
 $coupon = is_array($summary['coupon'] ?? null) ? $summary['coupon'] : null;
 $couponCode = trim((string) ($coupon['code'] ?? ''));
 $couponAppliesOnlySelectedProducts = ((int) (($coupon['applies_only_selected_products'] ?? 0))) === 1;
+// Câmpul de cupon doar cât pluginul „Cupoane” e pornit (punctele le oprește deja sumarul coșului).
+$poateCupon = \App\Support\Plugins::permiteInceput('cupoane');
 // Produsele de precomanda se platesc acum, dar pleaca abia cand vine marfa.
 // Se spune si pe fiecare rand, si o data langa butonul de plasare — omul
 // trebuie sa vada asta inainte sa plateasca, nu dupa.
@@ -471,12 +473,15 @@ $antiBotRenderedAt = (int) ($antiBot['rendered_at'] ?? 0);
                         </li>
                     <?php endforeach; ?>
                 </ul>
+<?php if ($poateCupon || $pointsEnabled): ?>
                 <div class="bv-checkout-v3__coupon">
+<?php if ($poateCupon): ?>
                     <form class="bv-checkout-v3__coupon-form" method="post" action="/cos/cupon">
                         <input type="hidden" name="redirect_to" value="/checkout">
                         <input type="text" name="coupon_code" placeholder="Cod cupon" value="<?= htmlspecialchars($couponCode, ENT_QUOTES) ?>">
                         <button class="btn" type="submit">Aplică</button>
                     </form>
+<?php endif; ?>
                     <?php if ($couponCode !== ''): ?>
                         <p class="bv-checkout-v3__coupon-meta">
                             Cupon activ: <strong><?= htmlspecialchars($couponCode, ENT_QUOTES) ?></strong>
@@ -524,6 +529,7 @@ $antiBotRenderedAt = (int) ($antiBot['rendered_at'] ?? 0);
                         </div>
                     <?php endif; ?>
                 </div>
+<?php endif; ?>
                 <div class="bv-checkout-v3__totals">
                     <div class="bv-checkout-v3__row"><span>Subtotal</span><strong><?= number_format($subtotalWithoutVat, 2) ?> lei</strong></div>
                     <div class="bv-checkout-v3__row"><span>TVA</span><strong data-checkout-vat data-vat-initial="<?= htmlspecialchars(number_format($vat, 2, '.', ''), ENT_QUOTES) ?>"><?= number_format($vat, 2) ?> lei</strong></div>

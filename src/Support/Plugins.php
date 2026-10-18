@@ -41,6 +41,7 @@ final class Plugins
     public const SE_OPRESTE = 'se_opreste';
     public const OPRIT = 'oprit';
     public const NUCLEU = 'nucleu';
+    private const FISIER_HARTA_DE_REFACUT = 'harta-site-de-refacut';
 
     private const RANG = [self::OPRIT => 0, self::SE_OPRESTE => 1, self::PORNIT => 2];
 
@@ -54,6 +55,11 @@ final class Plugins
     private static array $declaratiiRute = [];
     private static ?array $listaDeclaratii = null;
     private static ?array $impartite = null;
+    private static ?bool $nimicAscuns = null;
+    /** @var array<string, bool> */
+    private static array $adreseVizibile = [];
+    private static ?\App\Http\Router $router = null;
+    private static ?string $gazda = null;
 
     // ---------------------------------------------------------------- stări
 
@@ -497,6 +503,206 @@ final class Plugins
         return (string) preg_replace('#\{[a-zA-Z_][a-zA-Z0-9_]*\}#', '{}', $tipar);
     }
 
+    // ---------------------------------------------------------------- pagini: linkuri și tokenuri
+
+    /**
+     * Toate pluginurile care au cod sunt pe site (pornite sau „se oprește”)?
+     * Atunci nu e nimic de ascuns în pagini: filtrele de mai jos nu se ating de
+     * HTML (cu licența „toate”, paginile ies exact ca înainte de pluginuri).
+     */
+    public static function nimicAscuns(): bool
+    {
+        if (self::$nimicAscuns === null) {
+            self::$nimicAscuns = true;
+            foreach (self::catalog()['pluginuri'] as $cheie => $definitie) {
+                if (($definitie['portat'] ?? true) !== false && !self::vizibil((string) $cheie)) {
+                    self::$nimicAscuns = false;
+                    break;
+                }
+            }
+        }
+        return self::$nimicAscuns;
+    }
+
+    /**
+     * Duce adresa (dintr-un link, dintr-un formular, din harta site-ului) la o
+     * pagină a unui plugin pe care site-ul nu-l are? Adresele din afara
+     * site-ului, ancorele, fișierele și adresele necunoscute de router sunt
+     * mereu „vizibile”: nu e treaba noastră să le ascundem.
+     */
+    public static function adresaVizibila(string $url, string $metoda = 'GET'): bool
+    {
+        $url = html_entity_decode(trim($url), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if ($url === '' || $url[0] === '#' || $url[0] === '?' || preg_match('#^(mailto|tel|javascript|data):#i', $url) === 1) {
+            return true;
+        }
+        $bucati = parse_url($url);
+        if (!is_array($bucati)) {
+            return true;
+        }
+        if (isset($bucati['host'])) {
+            if (strcasecmp((string) $bucati['host'], self::gazdaSite()) !== 0) {
+                return true;
+            }
+        } elseif (isset($bucati['scheme'])) {
+            return true;
+        }
+        $cale = (string) ($bucati['path'] ?? '/');
+        if ($cale === '' || $cale[0] !== '/' || str_starts_with($cale, '//')
+            || str_starts_with($cale, '/uploads/') || str_starts_with($cale, '/assets/')) {
+            return true;
+        }
+        $get = [];
+        if (isset($bucati['query'])) {
+            parse_str((string) $bucati['query'], $get);
+        }
+        $cheieMemo = strtoupper($metoda) . ' ' . $cale . '?' . http_build_query($get);
+        if (isset(self::$adreseVizibile[$cheieMemo])) {
+            return self::$adreseVizibile[$cheieMemo];
+        }
+        $gasita = self::routerSite()->gaseste(strtoupper($metoda), $cale);
+        $vizibila = true;
+        if ($gasita !== null) {
+            $proprietar = self::proprietarRuta(strtoupper($metoda), $gasita['tipar'], $gasita['parametri'], $get, []);
+            $vizibila = $proprietar['mereu_deschis'] || self::oricareVizibil($proprietar['chei']);
+        }
+        if (count(self::$adreseVizibile) > 2000) {
+            self::$adreseVizibile = [];
+        }
+        return self::$adreseVizibile[$cheieMemo] = $vizibila;
+    }
+
+    /**
+     * Scoate din HTML linkurile și formularele care duc la paginile pluginurilor
+     * pe care site-ul nu le are: antetul, meniul și subsolul scrise de client în
+     * admin, butoanele din paginile adminului, linkurile din conținut. Un `<li>`
+     * care avea doar linkul dispare cu tot cu el, la fel o listă rămasă goală.
+     * Conținutul din `<script>`, `<style>` și `<textarea>` nu se atinge.
+     * Cu toate pluginurile pe site, HTML-ul se întoarce neschimbat.
+     */
+    public static function filtreazaLinkuri(string $html): string
+    {
+        if ($html === '' || self::nimicAscuns()) {
+            return $html;
+        }
+        $bucati = preg_split('#(<(script|style|textarea)\b[^>]*>.*?</\2\s*>)#is', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($bucati === false) {
+            return $html;
+        }
+        $rezultat = '';
+        // preg_split cu două grupuri: [text, bloc, numele etichetei, text, bloc, nume, …]
+        for ($i = 0, $n = count($bucati); $i < $n; $i += 3) {
+            $rezultat .= self::filtreazaFragment((string) $bucati[$i]);
+            if (isset($bucati[$i + 1])) {
+                $rezultat .= (string) $bucati[$i + 1];
+            }
+        }
+        return $rezultat;
+    }
+
+    /**
+     * Tokenurile din paginile din bază (`{{shop_catalog}}`, `{{latest_posts:3}}`
+     * …) ale pluginurilor care nu sunt pe site se scot, ca pagina să nu
+     * arate nici bucata pluginului, nici codul tokenului. Lista lor e în
+     * catalog („tokenuri”).
+     */
+    public static function curataTokenuri(string $html): string
+    {
+        if ($html === '' || !str_contains($html, '{{') || self::nimicAscuns()) {
+            return $html;
+        }
+        $nume = [];
+        foreach (self::catalog()['pluginuri'] as $cheie => $definitie) {
+            if (!self::vizibil((string) $cheie)) {
+                foreach ((array) ($definitie['tokenuri'] ?? []) as $token) {
+                    $nume[] = preg_quote((string) $token, '/');
+                }
+            }
+        }
+        if ($nume === []) {
+            return $html;
+        }
+        return (string) preg_replace('/\{\{\s*(?:' . implode('|', $nume) . ')\s*(?::[^}]*)?\}\}/i', '', $html);
+    }
+
+    /**
+     * Tokenul (fără acolade: „shop_catalog”) e al unui plugin pe care site-ul
+     * îl are, sau al nimănui? Folosit de lista de coduri din editorul de pagini.
+     */
+    public static function tokenVizibil(string $token): bool
+    {
+        foreach (self::catalog()['pluginuri'] as $cheie => $definitie) {
+            if (in_array($token, (array) ($definitie['tokenuri'] ?? []), true)) {
+                return self::vizibil((string) $cheie);
+            }
+        }
+        return true;
+    }
+
+    /** O parte de HTML fără scripturi/stiluri: linkurile, formularele și listele rămase goale. */
+    private static function filtreazaFragment(string $html): string
+    {
+        if ($html === '' || (stripos($html, 'href') === false && stripos($html, 'action') === false)) {
+            return $html;
+        }
+        $ascuns = static fn (string $url, string $metoda = 'GET'): bool => !self::adresaVizibila($url, $metoda);
+        // 1. Elementele de listă care au doar linkul (meniuri).
+        $html = (string) preg_replace_callback(
+            '#<li\b[^>]*>\s*<a\b[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(?:(?!</?(?:li|a)\b).)*?</a>\s*</li>#is',
+            static fn (array $m): string => $ascuns($m[2]) ? '' : $m[0],
+            $html
+        );
+        // 2. Linkurile rămase.
+        $html = (string) preg_replace_callback(
+            '#<a\b[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>.*?</a>#is',
+            static fn (array $m): string => $ascuns($m[2]) ? '' : $m[0],
+            $html
+        );
+        // 3. Formularele trimise la o rută a pluginului (cu metoda formularului).
+        $html = (string) preg_replace_callback(
+            '#<form\b([^>]*?)\baction\s*=\s*(["\'])(.*?)\2([^>]*)>.*?</form>#is',
+            static function (array $m) use ($ascuns): string {
+                $metoda = preg_match('#\bmethod\s*=\s*["\']?post#i', $m[1] . $m[4]) === 1 ? 'POST' : 'GET';
+                return $ascuns($m[3], $metoda) ? '' : $m[0];
+            },
+            $html
+        );
+        // 4. Listele și elementele rămase goale (un submeniu fără nicio intrare).
+        for ($pas = 0; $pas < 3; $pas++) {
+            $inainte = $html;
+            $html = (string) preg_replace('#<(ul|ol)\b[^>]*>\s*</\1>#i', '', $html);
+            $html = (string) preg_replace('#<li\b[^>]*>\s*</li>#i', '', $html);
+            if ($html === $inainte) {
+                break;
+            }
+        }
+        return $html;
+    }
+
+    /** Routerul cu toate rutele site-ului (pentru adresele din linkuri), construit o dată. */
+    private static function routerSite(): \App\Http\Router
+    {
+        if (self::$router === null) {
+            self::$router = new \App\Http\Router();
+            (require dirname(__DIR__) . '/Http/rute.php')(self::$router);
+        }
+        return self::$router;
+    }
+
+    /** Gazda site-ului (din APP_URL sau din cerere), ca linkurile absolute spre site să fie verificate și ele. */
+    private static function gazdaSite(): string
+    {
+        if (self::$gazda === null) {
+            $app = (string) Env::get('APP_URL', '');
+            $gazda = (string) (parse_url($app, PHP_URL_HOST) ?: '');
+            if ($gazda === '') {
+                $gazda = (string) (parse_url('http://' . (string) ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST) ?: '');
+            }
+            self::$gazda = $gazda;
+        }
+        return self::$gazda;
+    }
+
     // ---------------------------------------------------------------- jurnal
 
     /** O linie în `storage/logs/pluginuri.log`. */
@@ -518,6 +724,8 @@ final class Plugins
         self::$stari = null;
         self::$licenta = null;
         self::$mesaje = [];
+        self::$nimicAscuns = null;
+        self::$adreseVizibile = [];
         Licenta::reseteaza();
     }
 
@@ -570,7 +778,22 @@ final class Plugins
                     ? ' (licența ' . $licenta['site'] . ' v' . $licenta['versiune'] . ')' : ' (fără licență)')
                 . ': ' . ($pornite === [] ? 'doar nucleul' : implode(', ', $pornite)) . '.');
             ResponseCache::purgePageCache();
+            // Harta site-ului (fișierul static generat din admin) se reface la
+            // prima cerere web: altfel ar trimite Google spre pagini oprite.
+            @touch(Licenta::dosar() . '/' . self::FISIER_HARTA_DE_REFACUT);
         }
+    }
+
+    /** Stările s-au schimbat de la ultima generare a hărții site-ului? */
+    public static function hartaSiteDeRefacut(): bool
+    {
+        self::stari();
+        return is_file(Licenta::dosar() . '/' . self::FISIER_HARTA_DE_REFACUT);
+    }
+
+    public static function hartaSiteRefacuta(): void
+    {
+        @unlink(Licenta::dosar() . '/' . self::FISIER_HARTA_DE_REFACUT);
     }
 
     private static function jurnalizeazaOData(string $mesaj): void

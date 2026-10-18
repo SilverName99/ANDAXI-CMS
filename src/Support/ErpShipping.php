@@ -40,7 +40,7 @@ final class ErpShipping
         if (!$db instanceof PDO || trim($county) === '') {
             return null;
         }
-        if ((string) ($settings['erp_enabled'] ?? '0') !== '1') {
+        if ((string) ($settings['erp_enabled'] ?? '0') !== '1' || !Plugins::vizibil('erp')) {
             return null;
         }
 

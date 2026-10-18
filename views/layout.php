@@ -1,5 +1,17 @@
 <!doctype html>
 <?php
+// Pluginurile site-ului: bucățile pluginurilor pe care site-ul nu le are nu
+// apar în pagină, iar linkurile spre paginile lor se scot din antet, meniu,
+// subsol și conținut (Plugins::filtreazaLinkuri). Cu toate pluginurile pe
+// site nu se schimbă nimic în HTML.
+$filtruLinkuriPluginuri = !\App\Support\Plugins::nimicAscuns();
+if ($filtruLinkuriPluginuri) {
+    ob_start();
+}
+$areMagazin = \App\Support\Plugins::vizibil('magazin');
+$magazinPrimesteComenzi = \App\Support\Plugins::permiteInceput('magazin');
+$areCatalog = \App\Support\Plugins::vizibil('catalog');
+$areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 $appConfig = require __DIR__ . '/../config/app.php';
 $db = \App\Support\Database::connection($appConfig['db']);
 $currentCustomer = $db instanceof \PDO ? \App\Support\CustomerAuth::user($db) : null;
@@ -34,6 +46,10 @@ $adsConversionId = preg_replace('/[^A-Za-z0-9\-]/', '', trim((string) ($designSe
 $headerCartCount = \App\Support\Cart::countItems();
 $headerCustomerLoggedIn = is_array($currentCustomer);
 $headerCustomerPoints = $headerCustomerLoggedIn ? max(0, (int) ($currentCustomer['loyalty_points'] ?? 0)) : 0;
+// Antetul și subsolul scrise în admin pot avea {{cart_count}}; fără magazin, codul dispare.
+$designHeader = \App\Support\Plugins::curataTokenuri($designHeader);
+$designFooter = \App\Support\Plugins::curataTokenuri($designFooter);
+$designMenu = \App\Support\Plugins::curataTokenuri($designMenu);
 $cartCountTokens = ['{{cart_count}}', '{{ cart_count }}'];
 $mobileMenuToken = '{{mobile_menu}}';
 $mobileMenuTokenPattern = '/\{\{\s*mobile_menu\s*\}\}/i';
@@ -47,7 +63,8 @@ foreach (['bioscem-logo.webp', 'bioscem-logo.png', 'bioscem-logo.jpg', 'bioscem-
 }
 $mobileMenuFallbackHtml = '<ul class="menu-root"><li><a href="/">Acasă</a></li><li><a href="/magazin">Magazin</a></li><li><a href="/blog">Blog</a></li><li><a href="/contact">Contact</a></li></ul>';
 $mobileMenuTokenAssetsEnabled = false;
-$floatingCartEnabled = (string) ($designSettings['floating_cart_enabled'] ?? '1') === '1';
+// Coșul flotant e al magazinului; când magazinul se oprește nu mai primește produse noi.
+$floatingCartEnabled = $magazinPrimesteComenzi && (string) ($designSettings['floating_cart_enabled'] ?? '1') === '1';
 $floatingCartExcludedRaw = (string) ($designSettings['floating_cart_excluded_urls'] ?? '');
 $floatingCartExcludedPaths = [];
 foreach (preg_split('/\r\n|\r|\n/', $floatingCartExcludedRaw) ?: [] as $rawPath) {
@@ -144,7 +161,8 @@ $floatingCartConfig = [
     ) ? 1 : 0,
 ];
 // Sertarul lateral „Oferte” se poate dezactiva din Admin -> Setări magazin.
-$bbdSidebarEnabled = (string) ($designSettings['store_bbd_sidebar_enabled'] ?? '1') !== '0';
+// Pluginul „Oferte BBD”: ofertele noi se arată doar cât pluginul e pornit.
+$bbdSidebarEnabled = \App\Support\Plugins::permiteInceput('oferte_bbd') && (string) ($designSettings['store_bbd_sidebar_enabled'] ?? '1') !== '0';
 $bbdSidebarOffers = $bbdSidebarEnabled ? \App\Support\BbdSidebarOffers::load($db, 10) : [];
 $siteFaviconUrl = trim((string) ($designSettings['store_favicon_url'] ?? ''));
 if ($siteFaviconUrl === '') {
@@ -1084,7 +1102,9 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
             })();
         </script>
     <?php endif; ?>
+<?php if ($areMagazin): ?>
     <script src="/assets/js/qty-stoc.js?v=<?= $qtyStocJsVersion ?><?= $assetVersionQuery ?>" defer></script>
+<?php endif; ?>
     <?php if ($floatingCartEnabled): ?>
         <script>
             window.floatingCartConfig = <?= json_encode($floatingCartConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -1282,6 +1302,7 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
             })();
         </script>
     <?php endif; ?>
+<?php if ($areCatalog): ?>
     <script>
         (() => {
             const normalize = (value) => String(value ?? '')
@@ -1554,6 +1575,8 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
             }
         })();
     </script>
+<?php endif; ?>
+<?php if ($areFidelitate): ?>
     <script>
         (() => {
             const isLoggedIn = <?= $headerCustomerLoggedIn ? 'true' : 'false' ?>;
@@ -1620,6 +1643,7 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
             targets.forEach(attachBadge);
         })();
     </script>
+<?php endif; ?>
     <?php if ($mobileMenuTokenAssetsEnabled): ?>
         <script>
             (() => {
@@ -1911,6 +1935,7 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
             }
         })();
     </script>
+<?php if ($areMagazin): ?>
     <script>
         (() => {
             const initialCount = <?= (int) $headerCartCount ?>;
@@ -2034,5 +2059,11 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
             });
         })();
     </script>
+<?php endif; ?>
 </body>
 </html>
+<?php
+if ($filtruLinkuriPluginuri) {
+    echo \App\Support\Plugins::filtreazaLinkuri((string) ob_get_clean());
+}
+?>

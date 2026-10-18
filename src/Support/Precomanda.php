@@ -59,10 +59,15 @@ final class Precomanda
         }
     }
 
-    /** Produsul se poate precomanda? */
+    /**
+     * Produsul se poate precomanda (acum, pentru o comandă nouă)? Doar cu
+     * pluginul „Precomenzi” pornit; fără el, produsul fără stoc e „Stoc epuizat”,
+     * ca oricare altul. Precomenzile deja plasate rămân cum sunt (tabul și
+     * butonul de eliberare din admin).
+     */
     public static function estePrecomanda(array $product): bool
     {
-        return (int) ($product['preorder_enabled'] ?? 0) === 1;
+        return (int) ($product['preorder_enabled'] ?? 0) === 1 && Plugins::permiteInceput('precomenzi');
     }
 
     /** Câte bucăți poate lua un client într-o singură comandă. */
@@ -200,7 +205,9 @@ final class Precomanda
         if (!$db instanceof PDO || $orderId <= 0) {
             return false;
         }
-        if (!self::comandaArePrecomanda($db, $orderId)) {
+        // Fără pluginul pornit nu se vinde nimic în precomandă, deci nici nu se
+        // ține vreo comandă nouă în așteptare.
+        if (!Plugins::permiteInceput('precomenzi') || !self::comandaArePrecomanda($db, $orderId)) {
             return false;
         }
         try {

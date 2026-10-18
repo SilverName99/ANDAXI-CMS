@@ -1,6 +1,12 @@
 <?php
 /** @var array<int, list<string>> $categoriiExtra Numele celorlalte rafturi în care stă produsul. */
 $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
+// Câmpurile pluginurilor din fișa produsului (ofertele BBD, precomanda, nota de
+// sub butonul de coș) apar doar pe site-urile care au pluginul; la salvare,
+// valorile lor rămân în bază (AdminController::updateProduct).
+$areBbd = \App\Support\Plugins::vizibil('oferte_bbd');
+$arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
+$areMagazin = \App\Support\Plugins::vizibil('magazin');
 ?>
 <section class="panel">
     <div class="section-head">
@@ -254,6 +260,7 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
                                 <button class="btn btn-secondary" type="button" id="p_add_sale_period" style="margin-top:8px;">+ Adaugă perioadă</button>
                                 <small class="muted">Ex: 12.06.2026 - 20.06.2026 (preț X), apoi 05.09.2026 - 22.10.2026 (preț Y).</small>
                             </div>
+<?php if ($areBbd): ?>
                             <div class="field full">
                                 <label style="display:inline-flex;align-items:center;gap:8px;">
                                     <input type="checkbox" name="bbd_enabled" id="p_bbd_enabled" value="1">
@@ -264,6 +271,7 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
                                 <button class="btn btn-secondary" type="button" id="p_add_bbd_entry" style="margin-top:8px;">+ Adaugă ofertă</button>
                                 <small class="muted">Setează data de expirare, opțional un preț redus și opțional stoc separat per ofertă.</small>
                             </div>
+<?php endif; ?>
                             <div class="field">
                                 <label>Stoc</label>
                                 <input type="number" name="stock" id="p_stock">
@@ -316,6 +324,7 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
                                 <label>Puncte forte (separate prin punct și virgulă)</label>
                                 <input type="text" name="product_highlights" id="p_product_highlights" placeholder="Ex: Absorbție rapidă; Formula premium; Fără zahăr">
                             </div>
+<?php if ($areMagazin): ?>
                             <div class="field full">
                                 <label style="display:inline-flex;align-items:center;gap:8px;">
                                     <input type="checkbox" name="post_cart_note_enabled" id="p_post_cart_note_enabled" value="1">
@@ -329,6 +338,7 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
                                     style="margin-top:8px;display:none;"
                                 ></textarea>
                             </div>
+<?php endif; ?>
                         </div>
                     </section>
 
@@ -498,16 +508,21 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
                                         <input type="checkbox" name="out_of_stock" id="p_out_of_stock" value="1">
                                         Fără stoc
                                     </label>
+<?php if ($arePrecomenzi): ?>
                                     <label>
                                         <input type="checkbox" name="preorder_enabled" id="p_preorder_enabled" value="1">
                                         Valabil pentru precomandă
                                     </label>
+<?php endif; ?>
                                 </div>
+<?php if ($arePrecomenzi): ?>
                                 <p class="field-hint" style="margin-top:6px;">
                                     Produsul de precomandă se poate cumpăra și fără stoc. Comenzile
                                     cu el nu pleacă în ERP până nu le eliberezi din „Precomenzi".
                                 </p>
+<?php endif; ?>
                             </div>
+<?php if ($arePrecomenzi): ?>
                             <div class="field">
                                 <label for="p_preorder_max_per_order">Maxim per comandă</label>
                                 <input type="number" min="1" step="1" name="preorder_max_per_order" id="p_preorder_max_per_order" placeholder="fără limită">
@@ -518,6 +533,7 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
                                 <input type="number" min="1" step="1" name="preorder_max_total" id="p_preorder_max_total" placeholder="fără limită">
                                 <p class="field-hint">Câte bucăți se pot precomanda cu totul, pe toate comenzile.</p>
                             </div>
+<?php endif; ?>
                         </div>
                     </section>
 

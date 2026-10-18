@@ -45,6 +45,13 @@ final class ErpSync
      */
     private const PAUZA_MODUL_OPRIT = 3600;
 
+    /** Licența site-ului nu mai are pluginul „Legătura cu ERP-ul”. */
+    private const MESAJ_PLUGIN_OPRIT = 'Legătura cu ERP-ul nu este inclusă în abonament; comanda rămâne doar pe site.';
+
+    /** Pluginul „Legătura cu ERP-ul” se oprește pe acest site. */
+    private const MESAJ_PLUGIN_SE_OPRESTE = 'Legătura cu ERP-ul se oprește pe acest site: comenzile noi nu mai pleacă în ERP, '
+        . 'cele trimise deja se lucrează normal. Comanda rămâne aici și pleacă singură dacă legătura e pornită din nou.';
+
     /**
      * Trimite comanda dacă e cazul.
      *
@@ -68,6 +75,11 @@ final class ErpSync
         if ((string) ($settings['erp_enabled'] ?? '0') !== '1') {
             return ['ok' => false, 'message' => 'Integrarea cu ERP-ul este dezactivată.'];
         }
+        // Pluginul „Legătura cu ERP-ul” lipsește din licență: comanda rămâne pe
+        // site, neatinsă (fără marcaj), ca la integrarea dezactivată din setări.
+        if (!Plugins::vizibil('erp')) {
+            return ['ok' => false, 'message' => self::MESAJ_PLUGIN_OPRIT];
+        }
 
         $order = self::loadOrder($db, $orderId);
         if ($order === null) {
@@ -76,6 +88,18 @@ final class ErpSync
 
         if ((string) ($order['erp_status'] ?? '') === self::STATUS_SENT && !$force) {
             return ['ok' => true, 'message' => 'Comanda era deja trimisă în ERP.'];
+        }
+
+        // Pluginul „se oprește”: comenzile trimise deja se lucrează mai departe
+        // (modificări, anulări, retururi, AWB), dar cele noi nu mai pleacă.
+        // Comanda stă aici „în așteptare” și pleacă singură dacă pluginul e
+        // pornit din nou; nu consumă din încercări.
+        if (!Plugins::permiteInceput('erp') && !self::aAjunsInErp($order)) {
+            self::mark($db, $orderId, self::STATUS_PENDING, [
+                'error' => self::MESAJ_PLUGIN_SE_OPRESTE,
+                'retry_in' => self::PAUZA_MODUL_OPRIT,
+            ]);
+            return ['ok' => false, 'message' => self::MESAJ_PLUGIN_SE_OPRESTE, 'tinuta' => true];
         }
 
         $blocker = self::blockingReason($order);

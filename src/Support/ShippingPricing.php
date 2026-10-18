@@ -36,6 +36,26 @@ final class ShippingPricing
         return (string) ($settings['shipping_fixed_fanbox_enabled'] ?? '0') === '1';
     }
 
+    /**
+     * Comenzile noi au tariful calculat live de FAN? Setarea din Setări livrare,
+     * dar doar cât pluginul „Livrare FAN Courier” e pornit: când se oprește,
+     * comenzile noi primesc regulile interne de transport ale magazinului.
+     */
+    public static function tarifLiveFan(array $settings): bool
+    {
+        return (string) ($settings['fan_live_tariff_enabled'] ?? '0') === '1' && Plugins::permiteInceput('livrare_fan');
+    }
+
+    /**
+     * Checkout-ul oferă livrarea la FANbox unei comenzi noi? Ca mai sus: bifa
+     * magazinului și pluginul FAN pornit. (Comenzile deja plasate la FANbox își
+     * păstrează punctul și prețul, vezi ofertaFanbox.)
+     */
+    public static function fanboxPentruComenziNoi(array $settings): bool
+    {
+        return self::ofertaFanbox($settings) && Plugins::permiteInceput('livrare_fan');
+    }
+
     /** Denumirea veche, păstrată pentru apelurile existente. */
     public static function livrareLaFanbox(array $settings): bool
     {

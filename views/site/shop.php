@@ -1,3 +1,8 @@
+<?php
+// Fără magazin (catalog de prezentare): fără prețuri și coș; când magazinul se oprește, fără coș.
+$arePreturi = \App\Support\Plugins::vizibil('magazin');
+$poateCumpara = \App\Support\Plugins::permiteInceput('magazin');
+?>
 <section class="panel">
     <h1>Magazin</h1>
     <p>Listă produse (v1). Urmează filtre/categorii exact ca în site-ul actual.</p>
@@ -37,14 +42,17 @@
                 <div class="card-body">
                     <h3><?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?></h3>
                     <p><?= htmlspecialchars((string) ($product['short_description'] ?? ''), ENT_QUOTES) ?></p>
+<?php if ($arePreturi): ?>
                     <p class="price">
                         <?php if ((bool) ($product['has_sale_price'] ?? false)): ?>
                             <span class="price-old"><?= number_format((float) ($product['base_price'] ?? $product['price'] ?? 0), 2) ?> lei</span>
                         <?php endif; ?>
                         <span><?= number_format((float) ($product['price'] ?? 0), 2) ?> lei</span>
                     </p>
+<?php endif; ?>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <a class="btn btn-secondary" href="/produs/<?= urlencode((string) ($product['slug'] ?? '')) ?>">Vezi produs</a>
+<?php if ($poateCumpara): ?>
                         <?php
                             // Cu oferte pe dată de expirare, adăugarea directă e
                             // refuzată: alegerea se face pe pagina produsului.
@@ -64,6 +72,7 @@
                                 <button class="btn" type="submit">Adaugă în coș</button>
                             </form>
                         <?php endif; ?>
+<?php endif; ?>
                     </div>
                 </div>
             </article>

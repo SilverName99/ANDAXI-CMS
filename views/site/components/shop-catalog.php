@@ -23,6 +23,14 @@ if ($sortOptions === []) {
         'price_desc' => 'Preț: mare → mic',
     ];
 }
+// Pluginurile: fără magazin (catalog de prezentare) produsele n-au preț și coș;
+// când magazinul se oprește, nu se mai adaugă nimic în coș; stelele doar cu recenziile.
+$arePreturi = \App\Support\Plugins::vizibil('magazin');
+$poateCumpara = \App\Support\Plugins::permiteInceput('magazin');
+$areRecenzii = \App\Support\Plugins::vizibil('recenzii');
+if (!$arePreturi) {
+    unset($sortOptions['price_asc'], $sortOptions['price_desc']);
+}
 ?>
 <section class="shop-catalog-v2" data-shop-catalog-token="1">
   <div class="shop-catalog-v2__toolbar">
@@ -122,6 +130,7 @@ if ($sortOptions === []) {
           <div class="bv-popular-card__media-wrap">
             <a class="bv-popular-card__media" href="/produs/<?= rawurlencode($slug) ?>">
               <img class="bv-popular-card__img" src="<?= htmlspecialchars($image, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($name, ENT_QUOTES) ?>" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+<?php if ($arePreturi): ?>
               <?php if ($discount > 0): ?>
                 <?php if ($discountMode === 'value'): ?>
                   <span class="bv-popular-card__bubble bv-popular-card__bubble--value">-<?= $discountValueLabel ?> lei</span>
@@ -129,6 +138,7 @@ if ($sortOptions === []) {
                   <span class="bv-popular-card__bubble">-<?= $discount ?>%</span>
                 <?php endif; ?>
               <?php endif; ?>
+<?php endif; ?>
               <?php if ($hasBbdOffers): ?>
                 <span class="bv-popular-card__bubble bv-popular-card__bubble--offer">OFERTE PREȚ</span>
               <?php endif; ?>
@@ -139,6 +149,7 @@ if ($sortOptions === []) {
             <p class="bv-popular-card__desc"><?= htmlspecialchars($desc !== '' ? $desc : 'Supliment natural', ENT_QUOTES) ?></p>
             <h3 class="bv-popular-card__name"><a href="/produs/<?= rawurlencode($slug) ?>"><?= htmlspecialchars($name, ENT_QUOTES) ?></a></h3>
 
+<?php if ($areRecenzii): ?>
             <div class="bv-popular-card__rating">
               <span class="bv-popular-card__stars" aria-label="Rating <?= number_format($reviewsAverage, 1) ?> din 5">
                 <?php for ($i = 1; $i <= 5; $i++): ?>
@@ -147,14 +158,18 @@ if ($sortOptions === []) {
               </span>
               <span class="bv-popular-card__reviews">(<?= $reviewsCount ?>)</span>
             </div>
+<?php endif; ?>
 
             <div class="bv-popular-card__bottom">
+<?php if ($arePreturi): ?>
               <p class="bv-popular-card__price">
                 <?= number_format($price, 2) ?> lei
                 <?php if ($hasSale && $basePrice > $price): ?>
                   <span class="bv-popular-card__old"><?= number_format($basePrice, 2) ?> lei</span>
                 <?php endif; ?>
               </p>
+<?php endif; ?>
+<?php if ($poateCumpara): ?>
               <?php if ($outOfStock): ?>
                 <span class="bv-popular-card__stock-out">Stoc epuizat</span>
               <?php elseif ($ePrecomanda): ?>
@@ -181,6 +196,7 @@ if ($sortOptions === []) {
                   </button>
                 </form>
               <?php endif; ?>
+<?php endif; ?>
             </div>
           </div>
         </article>

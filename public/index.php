@@ -88,6 +88,9 @@ if (\App\Support\Maintenance::intercepteaza(
 // licența s-a schimbat, cache-ul se golește aici, ca nimeni să nu primească o
 // pagină salvată de când pluginul avea altă stare.
 Plugins::incarca();
+if (Plugins::hartaSiteDeRefacut()) {
+    (new \App\Http\Controllers\AdminController())->refaHartaSiteDupaPluginuri();
+}
 $pageCacheContext = ResponseCache::beginRequest(
     (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
     (string) ($_SERVER['REQUEST_URI'] ?? '/'),

@@ -38,6 +38,21 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
             }
         }
         $availableStoreTabs = ['pages', 'sitemap', 'branding', 'seo', 'clarity', 'chat', 'quantity', 'widgets', 'caching', 'maintenance', 'numerotare', 'tva', 'popup', 'cookies'];
+        // Taburile pluginurilor (chat, numerotarea comenzilor, TVA, cantitate,
+        // sertarul „Oferte”) apar doar pe site-urile care au pluginul. Fiecare tab
+        // își salvează doar setările lui, deci cele ascunse rămân neatinse în bază.
+        $taburiPluginuri = [
+            'chat' => \App\Support\Plugins::vizibil('chat_live'),
+            'numerotare' => \App\Support\Plugins::vizibil('magazin'),
+            'tva' => \App\Support\Plugins::vizibil('catalog'),
+            'quantity' => \App\Support\Plugins::vizibil('magazin'),
+            'widgets' => \App\Support\Plugins::vizibil('oferte_bbd'),
+        ];
+        $availableStoreTabs = array_values(array_filter(
+            $availableStoreTabs,
+            static fn (string $tabMagazin): bool => $taburiPluginuri[$tabMagazin] ?? true
+        ));
+        $cuMagazin = \App\Support\Plugins::vizibil('magazin');
         $cookieBannerEnabled = (string) ($settings['cookie_banner_enabled'] ?? '1') === '1';
         $cookieBannerText = (string) ($settings['cookie_banner_text'] ?? '');
         $cookiePolicyUrl = (string) ($settings['cookie_banner_policy_url'] ?? '');
@@ -86,12 +101,22 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
             <button class="btn btn-secondary <?= $defaultStoreTab === 'branding' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="branding">Favicon</button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'seo' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="seo">SEO Google</button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'clarity' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="clarity">Microsoft Clarity</button>
+<?php if ($taburiPluginuri['chat']): ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'chat' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="chat">Chat live</button>
+<?php endif; ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'maintenance' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="maintenance">Mentenanță</button>
+<?php if ($taburiPluginuri['numerotare']): ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'numerotare' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="numerotare">Numerotare comenzi</button>
+<?php endif; ?>
+<?php if ($taburiPluginuri['tva']): ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'tva' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="tva">TVA</button>
+<?php endif; ?>
+<?php if ($taburiPluginuri['quantity']): ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'quantity' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="quantity">Control cantitate</button>
+<?php endif; ?>
+<?php if ($taburiPluginuri['widgets']): ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'widgets' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="widgets">Sertar Oferte</button>
+<?php endif; ?>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'caching' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="caching">Caching</button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'popup' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="popup">Popup anunț</button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'cookies' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="cookies">Cookies</button>
@@ -99,10 +124,16 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
 
         <article class="panel store-settings-panel" data-store-settings-panel="pages" <?= $defaultStoreTab !== 'pages' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Pagini magazin</h3>
+<?php if ($cuMagazin): ?>
             <p style="margin:0 0 10px;color:#64748b;">
                 Verifică și creează automat paginile necesare pentru fluxul de cumpărare:
                 Acasă, Magazin, Coș, Checkout, Thank you (checkout/succes), Blog, Contact, 404.
             </p>
+<?php else: ?>
+            <p style="margin:0 0 10px;color:#64748b;">
+                Verifică și creează automat paginile de bază ale site-ului: Acasă, Contact, 404.
+            </p>
+<?php endif; ?>
             <form method="post" action="/admin/settings/store">
                 <input type="hidden" name="action" value="generate_pages">
                 <button class="btn" type="submit">Generează pagini necesare</button>
@@ -240,6 +271,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
             </div>
         </article>
 
+<?php if ($taburiPluginuri['chat']): ?>
         <article class="panel store-settings-panel" data-store-settings-panel="chat" <?= $defaultStoreTab !== 'chat' ? 'hidden' : '' ?> style="margin:12px 0;">
             <?php
             $chatEnabled = (string) ($settings['tawk_enabled'] ?? '0') === '1';
@@ -344,6 +376,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 </p>
             </div>
         </article>
+<?php endif; ?>
 
         <article class="panel store-settings-panel" data-store-settings-panel="maintenance" <?= $defaultStoreTab !== 'maintenance' ? 'hidden' : '' ?> style="margin:12px 0;">
             <?php
@@ -426,6 +459,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
             </div>
         </article>
 
+<?php if ($taburiPluginuri['tva']): ?>
         <article class="panel store-settings-panel" data-store-settings-panel="tva" <?= $defaultStoreTab !== 'tva' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Cota de TVA</h3>
             <?php if ($vatSumar !== []): ?>
@@ -486,7 +520,9 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 </div>
             </form>
         </article>
+<?php endif; ?>
 
+<?php if ($taburiPluginuri['numerotare']): ?>
         <article class="panel store-settings-panel" data-store-settings-panel="numerotare" <?= $defaultStoreTab !== 'numerotare' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Numerotare comenzi</h3>
             <p style="margin:0 0 10px;color:#64748b;">
@@ -515,7 +551,9 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 </div>
             </form>
         </article>
+<?php endif; ?>
 
+<?php if ($taburiPluginuri['quantity']): ?>
         <article class="panel store-settings-panel" data-store-settings-panel="quantity" <?= $defaultStoreTab !== 'quantity' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Control cantitate</h3>
             <p style="margin:0 0 10px;color:#64748b;">
@@ -549,7 +587,9 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 </div>
             </form>
         </article>
+<?php endif; ?>
 
+<?php if ($taburiPluginuri['widgets']): ?>
         <article class="panel store-settings-panel" data-store-settings-panel="widgets" <?= $defaultStoreTab !== 'widgets' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Sertar lateral „Oferte”</h3>
             <p style="margin:0 0 10px;color:#64748b;">
@@ -569,6 +609,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 </div>
             </form>
         </article>
+<?php endif; ?>
 
         <article class="panel store-settings-panel" data-store-settings-panel="caching" <?= $defaultStoreTab !== 'caching' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Caching (file-based)</h3>

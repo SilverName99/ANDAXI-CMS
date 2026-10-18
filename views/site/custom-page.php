@@ -7,7 +7,8 @@ $socialAuthConfig = is_array($socialAuthConfig ?? null) ? $socialAuthConfig : []
 $registerAntiBot = is_array($registerAntiBot ?? null) ? $registerAntiBot : [];
 ?>
 <?php
-$pageHtml = (string) ($page['html_content'] ?? '');
+// Tokenurile pluginurilor pe care site-ul nu le are se scot din pagină.
+$pageHtml = \App\Support\Plugins::curataTokenuri((string) ($page['html_content'] ?? ''));
 $mannequinSectionHtml = (string) ($mannequinSectionHtml ?? '');
 $shopCatalogHtml = (string) ($shopCatalogHtml ?? '');
 $blogPostsHtml = (string) ($blogPostsHtml ?? '');

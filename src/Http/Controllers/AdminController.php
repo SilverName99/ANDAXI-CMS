@@ -4377,6 +4377,34 @@ final class AdminController
         $badgeBest = isset($_POST['badge_best_seller']) ? 1 : 0;
         $badgeSeason = isset($_POST['badge_seasonal']) ? 1 : 0;
         $precomandaUpdate = $this->plafoanePrecomandaDinPost();
+        // Câmpurile pluginurilor pe care site-ul nu le are lipsesc din formular;
+        // valorile lor rămân cele din bază (la repornire, produsul își regăsește
+        // ofertele BBD, plafoanele de precomandă și nota de după coș).
+        if (!\App\Support\Plugins::vizibil('oferte_bbd') || !\App\Support\Plugins::vizibil('precomenzi')
+            || !\App\Support\Plugins::vizibil('magazin')) {
+            $stmtVechi = $db->prepare(
+                'SELECT bbd_enabled, bbd_entries_json, preorder_enabled, preorder_max_per_order, preorder_max_total,
+                        post_cart_note_enabled, post_cart_note_text
+                 FROM products WHERE id = :id LIMIT 1'
+            );
+            $stmtVechi->execute(['id' => $id]);
+            $vechi = $stmtVechi->fetch() ?: [];
+            if (!\App\Support\Plugins::vizibil('oferte_bbd')) {
+                $bbdEnabled = (int) ($vechi['bbd_enabled'] ?? 0);
+                $bbdEntriesJson = (string) ($vechi['bbd_entries_json'] ?? '[]');
+            }
+            if (!\App\Support\Plugins::vizibil('precomenzi')) {
+                $precomandaUpdate = [
+                    'enabled' => (int) ($vechi['preorder_enabled'] ?? 0),
+                    'per_order' => $vechi['preorder_max_per_order'] ?? null,
+                    'total' => $vechi['preorder_max_total'] ?? null,
+                ];
+            }
+            if (!\App\Support\Plugins::vizibil('magazin')) {
+                $postCartNoteEnabled = (int) ($vechi['post_cart_note_enabled'] ?? 0);
+                $postCartNoteText = trim((string) ($vechi['post_cart_note_text'] ?? ''));
+            }
+        }
         $stmt = $db->prepare(
             'UPDATE products
              SET name = :name,
@@ -4727,7 +4755,8 @@ final class AdminController
             \App\Support\Precomanda::ensureSchema($db);
             // Coloanele precomenzii sunt adăugate prin ALTER; dacă lipsesc (bază
             // veche, ALTER refuzat), tabul „Precomenzi” dispare în loc să crape lista.
-            $arePrecomanda = $this->tableHasColumn($db, 'orders', 'preorder_status');
+            // Tabul „Precomenzi” doar cu pluginul pe site.
+            $arePrecomanda = \App\Support\Plugins::vizibil('precomenzi') && $this->tableHasColumn($db, 'orders', 'preorder_status');
             \App\Support\CheckoutCalculator::ensureOrderShippingSchema($db);
             $promoProducts = $db->query('SELECT id, name FROM promotional_products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC')->fetchAll() ?: [];
             try {
@@ -5034,7 +5063,7 @@ final class AdminController
             'arePrecomanda' => $arePrecomanda,
             'precomenziCount' => $precomenziCount,
             'orders' => $orders,
-            'promoProducts' => is_array($promoProducts) ? $promoProducts : [],
+            'promoProducts' => is_array($promoProducts) && \App\Support\Plugins::vizibil('produse_promo') ? $promoProducts : [],
             'orderProducts' => is_array($orderProducts) ? $orderProducts : [],
             'filters' => $filters,
             'ordersBackUrl' => $ordersBackUrl,
@@ -5047,7 +5076,7 @@ final class AdminController
             'orderPaymentStatusLabels' => $orderPaymentStatusLabels,
             'orderPaymentMethodLabels' => $orderPaymentMethodLabels,
             'settings' => $setariComenzi,
-            'erpModulBanner' => \App\Support\ErpModul::banner($db, $setariComenzi),
+            'erpModulBanner' => \App\Support\Plugins::vizibil('erp') ? \App\Support\ErpModul::banner($db, $setariComenzi) : '',
         ], 'admin/layout');
     }
 
@@ -8234,8 +8263,14 @@ final class AdminController
         $fromStatus = trim($fromStatus);
         $toStatus = trim($toStatus);
         if ($toStatus === 'completed') {
-            $settings = Settings::all($db);
-            LoyaltyService::awardPointsForCompletedOrder($db, $settings, $orderId, Auth::id());
+            // Punctele câștigate se acordă cât pluginul „Puncte de fidelitate” e pe
+            // site (și când se oprește: comanda a fost plasată cu promisiunea lor).
+            // Restituirea punctelor folosite, mai jos, se face oricum: e doar
+            // socoteala soldului clientului, ca la repornire totul să fie corect.
+            if (\App\Support\Plugins::vizibil('fidelitate')) {
+                $settings = Settings::all($db);
+                LoyaltyService::awardPointsForCompletedOrder($db, $settings, $orderId, Auth::id());
+            }
             return;
         }
 
@@ -9352,6 +9387,20 @@ final class AdminController
         $settings = Settings::all($db);
 
         $action = trim((string) ($_POST['action'] ?? ''));
+        // Setările pluginurilor pe care site-ul nu le are nu se salvează (taburile
+        // lor nici nu apar în pagină).
+        $pluginActiune = [
+            'save_chat_settings' => 'chat_live',
+            'save_order_numbering' => 'magazin',
+            'save_vat_bulk' => 'catalog',
+            'save_quantity_controls' => 'magazin',
+            'save_bbd_sidebar' => 'oferte_bbd',
+        ][$action] ?? null;
+        if ($pluginActiune !== null && !\App\Support\Plugins::vizibil($pluginActiune)) {
+            Flash::set('error', 'Modulul nu este inclus în abonament.');
+            header('Location: /admin/settings/store');
+            return;
+        }
         if ($action === 'generate_pages') {
             [$created, $restored] = $this->generateStorePages($db);
             $this->refreshCacheAfterPublicContentChange();
@@ -10789,6 +10838,13 @@ final class AdminController
         $db = $this->db();
         $settings = Settings::all($db);
         $tab = (string) ($_GET['tab'] ?? '') === 'bt' ? 'bt' : 'plati';
+        // Fiecare procesator apare doar cu pluginul lui (ordinul de plată e al magazinului).
+        $vizibile = $this->procesatoriPlataVizibili();
+        if ($tab === 'bt' && !$vizibile['bt']) {
+            $tab = 'plati';
+        } elseif ($tab === 'plati' && $vizibile['bt'] && !$vizibile['euplatesc'] && !$vizibile['stripe'] && !$vizibile['ordin']) {
+            $tab = 'bt';
+        }
 
         View::render('admin/settings-payments', [
             'title' => 'Setări plăți',
@@ -10797,7 +10853,25 @@ final class AdminController
             'tab' => $tab,
             'bt' => $this->btIpayDateAdmin($db, $settings, $tab === 'bt'),
             'csrfToken' => \App\Support\AdminCsrf::token(),
+            'procesatoriVizibili' => $vizibile,
         ], 'admin/layout');
+    }
+
+    /**
+     * Ce procesatori de plată are site-ul în licență (pornit sau „se oprește”):
+     * doar pe ei îi arată și îi salvează pagina de setări. Setările celorlalți
+     * rămân neatinse în baza de date.
+     *
+     * @return array{euplatesc: bool, stripe: bool, bt: bool, ordin: bool}
+     */
+    private function procesatoriPlataVizibili(): array
+    {
+        return [
+            'euplatesc' => \App\Support\Plugins::vizibil('plata_euplatesc'),
+            'stripe' => \App\Support\Plugins::vizibil('plata_stripe'),
+            'bt' => \App\Support\Plugins::vizibil('plata_bt'),
+            'ordin' => \App\Support\Plugins::vizibil('magazin'),
+        ];
     }
 
     /**
@@ -10834,9 +10908,38 @@ final class AdminController
             'bank_transfer_enabled' => isset($_POST['bank_transfer_enabled']) ? '1' : '0',
             'bank_transfer_instructiuni' => trim((string) ($_POST['bank_transfer_instructiuni'] ?? '')),
         ];
+        // Procesatorii care nu sunt în licență nu apar în formular: setările lor
+        // nu se ating (altfel o salvare le-ar goli bifa și datele).
+        $vizibile = $this->procesatoriPlataVizibili();
+        $prefixeAscunse = [];
+        if (!$vizibile['euplatesc']) {
+            $prefixeAscunse[] = 'euplatesc_';
+        }
+        if (!$vizibile['stripe']) {
+            $prefixeAscunse[] = 'stripe_';
+        }
+        if (!$vizibile['ordin']) {
+            $prefixeAscunse[] = 'bank_transfer_';
+        }
+        $ascunsa = static function (string $cheie) use ($prefixeAscunse): bool {
+            foreach ($prefixeAscunse as $prefix) {
+                if (str_starts_with($cheie, $prefix)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        foreach (array_keys($valori) as $cheie) {
+            if ($ascunsa($cheie)) {
+                unset($valori[$cheie]);
+            }
+        }
 
         $secreteSchimbate = [];
         foreach (self::CHEI_SECRETE_PLATI as $cheie) {
+            if ($ascunsa($cheie)) {
+                continue;
+            }
             $nou = trim((string) ($_POST[$cheie] ?? ''));
             if ($cheie === 'euplatesc_secret_key') {
                 // Cheia EuPlătesc e hexazecimală; spațiile lipite la copiere
@@ -13151,6 +13254,15 @@ final class AdminController
             return;
         }
 
+        // Cât pluginul „Newsletter” se oprește, campaniile pornite se termină
+        // (le duce cronul la capăt), dar nu mai pornește nicio trimitere nouă.
+        if (in_array($section, ['newsletter-campaign-send-now', 'newsletter-campaign-schedule'], true)
+            && !\App\Support\Plugins::permiteInceput('newsletter')) {
+            Flash::set('error', 'Newsletterul se oprește pe acest site: campaniile noi nu mai pot fi trimise sau programate.');
+            header('Location: /admin/emails/newsletters?tab=campaigns');
+            return;
+        }
+
         if ($section === 'newsletter-campaign-send-now') {
             if (!$db instanceof PDO) {
                 Flash::set('error', 'Conexiunea DB nu este disponibilă.');
@@ -13959,6 +14071,14 @@ final class AdminController
                  WHERE deleted_at IS NULL
                  ORDER BY updated_at DESC, id DESC'
             )->fetchAll();
+            // Paginile pluginurilor pe care site-ul nu le are (coș, checkout, blog…)
+            // rămân în bază, dar nu se mai arată în listă.
+            if (!\App\Support\Plugins::nimicAscuns()) {
+                $pages = array_values(array_filter(
+                    $pages,
+                    static fn (array $pagina): bool => \App\Support\Plugins::adresaVizibila('/' . ltrim((string) ($pagina['slug'] ?? ''), '/'))
+                ));
+            }
         }
 
         View::render('admin/pages', [
@@ -17431,6 +17551,15 @@ HTML;
             ];
         }
 
+        // Paginile pluginurilor pe care site-ul nu le are nu se mai propun în meniu
+        // (intrările deja puse în meniu rămân în editor; pe site le scoate filtrul de linkuri).
+        if (!\App\Support\Plugins::nimicAscuns()) {
+            $items = array_values(array_filter(
+                $items,
+                static fn (array $item): bool => \App\Support\Plugins::adresaVizibila((string) ($item['url'] ?? ''))
+            ));
+        }
+
         return $items;
     }
 
@@ -18331,6 +18460,12 @@ HTML;
         $restored = 0;
         foreach ($pages as $page) {
             $slug = (string) ($page['slug'] ?? '');
+            // Paginile pluginurilor pe care site-ul nu le are (coș, checkout, blog,
+            // cont, acorduri GDPR…) nu se generează.
+            $proprietarPagina = \App\Support\Plugins::proprietarPagina($slug);
+            if ($proprietarPagina !== null && !\App\Support\Plugins::vizibil($proprietarPagina)) {
+                continue;
+            }
             if ($slug === '') {
                 // Home page is represented by the root URL (/), stored with empty slug.
                 $lookup = $db->query(
@@ -18385,6 +18520,32 @@ HTML;
         }
 
         return [$created, $restored];
+    }
+
+    /**
+     * După o schimbare a pluginurilor din licență, harta site-ului generată
+     * înainte ar trimite Google spre paginile unui plugin oprit (sau n-ar avea
+     * paginile unuia repornit). Dacă site-ul are o hartă generată, o refacem
+     * o singură dată, la prima cerere de după schimbare (public/index.php).
+     */
+    public function refaHartaSiteDupaPluginuri(): void
+    {
+        \App\Support\Plugins::hartaSiteRefacuta();
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            return;
+        }
+        try {
+            $settings = Settings::all($db);
+            $nume = $this->normalizeSitemapFilename((string) ($settings['store_sitemap_filename'] ?? 'sitemap.xml'));
+            if (is_file(__DIR__ . '/../../../public/' . $nume)) {
+                $rezultat = $this->generateSitemap($db, $nume);
+                \App\Support\Plugins::jurnal('Harta site-ului (' . $nume . ') refăcută după schimbarea pluginurilor: '
+                    . (string) ($rezultat['message'] ?? ($rezultat['ok'] ?? false ? 'ok' : 'eroare')));
+            }
+        } catch (Throwable $e) {
+            \App\Support\Plugins::jurnal('Harta site-ului nu s-a putut reface după schimbarea pluginurilor: ' . $e->getMessage());
+        }
     }
 
     private function generateSitemap(PDO $db, string $sitemapFilename = 'sitemap.xml'): array
@@ -18460,6 +18621,11 @@ HTML;
             $path = '/' . ltrim(trim($path), '/');
             if ($path === '//') {
                 $path = '/';
+            }
+            // Adresele pluginurilor pe care site-ul nu le are (produse fără
+            // catalog, articole fără blog, coș, cont…) nu intră în hartă.
+            if (!\App\Support\Plugins::adresaVizibila($path)) {
+                return;
             }
             $loc = $path === '/' ? $baseUrl . '/' : $baseUrl . $path;
             if (isset($seen[$loc])) {
@@ -21058,7 +21224,8 @@ HTML;
 
     private function maybeSendCompletedAwbEmail(PDO $db, int $orderId): void
     {
-        if ($orderId <= 0) {
+        // Emailul „comanda a plecat, iată AWB-ul” e al pluginului FAN.
+        if ($orderId <= 0 || !\App\Support\Plugins::vizibil('livrare_fan')) {
             return;
         }
 
@@ -21129,7 +21296,9 @@ HTML;
         }
 
         $settings = Settings::all($db);
-        if ((string) ($settings['fan_awb_auto'] ?? '0') !== '1') {
+        // AWB-ul automat e al pluginului „Livrare FAN Courier” (și când se oprește:
+        // termină comenzile în curs).
+        if ((string) ($settings['fan_awb_auto'] ?? '0') !== '1' || !\App\Support\Plugins::vizibil('livrare_fan')) {
             return;
         }
 
@@ -21882,24 +22051,28 @@ HTML;
             $db->exec('ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT NULL');
         } catch (Throwable) {
         }
-        try {
-            $db->exec(
-                "UPDATE pages
-                 SET deleted_at = NULL, is_published = 1
-                 WHERE slug = 'acorduri-gdpr' AND deleted_at IS NOT NULL"
-            );
-        } catch (Throwable) {
-        }
-        try {
-            $db->exec(
-                "INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published)
-                 SELECT 'Acorduri GDPR', 'acorduri-gdpr', '<section class=\"gdpr-agreements-page\">{{gdpr_agreements_form}}</section>', '', '', 1
-                 FROM DUAL
-                 WHERE NOT EXISTS (
-                    SELECT 1 FROM pages WHERE slug = 'acorduri-gdpr'
-                 )"
-            );
-        } catch (Throwable) {
+        // Pagina formularului de acorduri GDPR e a pluginului „Acorduri GDPR
+        // semnate”: se readuce doar pe site-urile care au pluginul.
+        if (\App\Support\Plugins::vizibil('acorduri_gdpr')) {
+            try {
+                $db->exec(
+                    "UPDATE pages
+                     SET deleted_at = NULL, is_published = 1
+                     WHERE slug = 'acorduri-gdpr' AND deleted_at IS NOT NULL"
+                );
+            } catch (Throwable) {
+            }
+            try {
+                $db->exec(
+                    "INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published)
+                     SELECT 'Acorduri GDPR', 'acorduri-gdpr', '<section class=\"gdpr-agreements-page\">{{gdpr_agreements_form}}</section>', '', '', 1
+                     FROM DUAL
+                     WHERE NOT EXISTS (
+                        SELECT 1 FROM pages WHERE slug = 'acorduri-gdpr'
+                     )"
+                );
+            } catch (Throwable) {
+            }
         }
 
         NewsletterService::ensureSchema($db);

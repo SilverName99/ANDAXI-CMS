@@ -63,7 +63,9 @@ final class EmailAutomation
         string $customerName = ''
     ): void {
         $email = trim($email);
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        // Emailul de bun venit e al pluginului „Conturi clienți” (fără el, contul
+        // creat la comandă nu se poate folosi pe site: nu-l anunțăm).
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || !Plugins::vizibil('conturi_clienti')) {
             return;
         }
         // Adresele interne generate când formularul nu cere email nu primesc nimic.
@@ -142,7 +144,9 @@ final class EmailAutomation
     public static function sendOrderTemplate(PDO $db, array $settings, array $order, string $templateType): void
     {
         $orderId = (int) ($order['id'] ?? 0);
-        if ($orderId <= 0) {
+        // Emailurile comenzilor sunt ale pluginului „Magazin online”: cât se
+        // oprește pleacă mai departe (comenzile în curs se termină); oprit, nu.
+        if ($orderId <= 0 || !Plugins::vizibil('magazin')) {
             return;
         }
 
@@ -238,9 +242,10 @@ final class EmailAutomation
             'order_summary_rows' => $orderSummaryRows,
             'order_totals_html' => self::orderTotalsRowsHtml($order, $orderItems),
             // Clientul primește linkuri publice; nimeni nu e trimis în /admin.
+            // Fără pluginul „Conturi clienți”, contul nu există: butonul duce la prima pagină.
             'order_action_url' => $templateType === 'cancelled'
                 ? '/contact'
-                : '/contul-meu?section=orders',
+                : (Plugins::vizibil('conturi_clienti') ? '/contul-meu?section=orders' : '/'),
         ];
 
         // Datele bancare stau într-un singur loc — Setări plăți — de unde le ia

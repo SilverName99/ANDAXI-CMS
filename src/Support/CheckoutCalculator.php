@@ -37,6 +37,10 @@ final class CheckoutCalculator
         // Prețul îl dă alegerea modului de livrare, nu punctul concret: clientul
         // bifează „Livrare la FANbox" înainte să apuce să aleagă lockerul, iar
         // până atunci sumarul arăta tariful de livrare la adresă.
+        // Alegerea din sesiune contează doar cât pluginul FAN e pornit.
+        if (!Plugins::permiteInceput('livrare_fan')) {
+            return false;
+        }
         return !empty($_SESSION[self::FANBOX_INTENT_KEY])
             || (int) ($_SESSION[self::FANBOX_SESSION_KEY] ?? 0) > 0;
     }
@@ -44,6 +48,9 @@ final class CheckoutCalculator
     /** Id-ul punctului FANbox ales (0 = niciunul ales încă). */
     public static function fanboxAles(): int
     {
+        if (!Plugins::permiteInceput('livrare_fan')) {
+            return 0;
+        }
         return max(0, (int) ($_SESSION[self::FANBOX_SESSION_KEY] ?? 0));
     }
 
@@ -243,7 +250,9 @@ final class CheckoutCalculator
         $points = null;
         $pointsDiscount = 0.0;
 
-        if ($couponCode !== null && $couponCode !== '') {
+        // Coșul e o comandă nouă: cuponul se aplică doar cu pluginul „Cupoane”
+        // pornit (comenzile deja plasate își păstrează reducerea).
+        if ($couponCode !== null && $couponCode !== '' && Plugins::permiteInceput('cupoane')) {
             $coupon = self::validateCoupon($db, $couponCode, $lines);
             if ($coupon === null) {
                 $couponError = 'Cupon invalid sau inactiv.';
@@ -499,7 +508,8 @@ final class CheckoutCalculator
 
     private static function resolveBbdSelection(array $product, string $requestedKey): array
     {
-        $enabled = ((int) ($product['bbd_enabled'] ?? 0)) === 1;
+        // Coșul e o comandă viitoare: ofertele BBD se aplică doar cu pluginul pornit.
+        $enabled = ((int) ($product['bbd_enabled'] ?? 0)) === 1 && Plugins::permiteInceput('oferte_bbd');
         if (!$enabled) {
             return [];
         }
@@ -1096,7 +1106,7 @@ final class CheckoutCalculator
 
         // In FAN live mode we no longer expose legacy manual tariffs in summaries.
         // The final shipping value is resolved from FAN at checkout submit time.
-        if ((string) ($settings['fan_live_tariff_enabled'] ?? '0') === '1') {
+        if (ShippingPricing::tarifLiveFan($settings)) {
             return 0.0;
         }
 

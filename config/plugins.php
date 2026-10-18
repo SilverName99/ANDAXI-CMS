@@ -30,6 +30,9 @@ declare(strict_types=1);
  *    (cu pluginul oprit, cererea se notează în jurnal), altfel o plată sau o
  *    notificare deja pornită s-ar pierde;
  *  - pagini: pagini din baza de date (slug) care sunt ale pluginului;
+ *  - tokenuri: codurile din paginile scrise în admin („{{shop_catalog}}”,
+ *    „{{latest_posts:3}}” …) care afișează bucăți ale pluginului. Cu pluginul
+ *    oprit, codul se scoate din pagină (Plugins::curataTokenuri);
  *  - meniu: intrările lui din meniul adminului (grup, ordine în grup, etichetă,
  *    adresă, iconiță, regula „activ”: listă de prefixe sau o funcție);
  *  - cron: scripturile lui programate și ce stare cer: „vizibil” (pornit sau se
@@ -133,6 +136,7 @@ return [
             'rute_admin' => ['/admin/products/*', '/admin/categories/*'],
             'rute_publice' => ['/magazin', '/categorie/*', '/marca/*', '/eticheta/*', '/produs/*',
                 '/api/products/*', '/api/search/*', '/api/shop/*'],
+            'tokenuri' => ['shop_catalog', 'shop_category', 'shop_title', 'featured_products', 'product_categories'],
             'meniu' => [
                 ['grup' => 'magazin', 'ordine' => 10, 'eticheta' => 'Produse', 'href' => '/admin/products', 'icon' => 'products',
                     'activ' => $activExact('/admin/products')],
@@ -158,6 +162,7 @@ return [
             // EuPlătesc trimite clientul înapoi prin POST, cu rezultatul semnat al plății.
             'rute_mereu_deschise' => ['POST /checkout/succes/{orderNumber}'],
             'pagini' => ['checkout/succes'],
+            'tokenuri' => ['cart_form', 'checkout_form', 'checkout_success_order_info', 'cart_count'],
             'meniu' => [
                 ['grup' => 'magazin', 'ordine' => 50, 'eticheta' => 'Comenzi', 'href' => '/admin/orders', 'icon' => 'orders',
                     'activ' => $activExact('/admin/orders', '/admin/orders/trash')],
@@ -287,6 +292,7 @@ return [
             'necesita' => ['catalog'],
             'rute_admin' => ['/admin/products/reviews/*'],
             'rute_publice' => ['/produs/{slug}/review', '/review-form/*'],
+            'tokenuri' => ['product_review_form'],
             'meniu' => [
                 ['grup' => 'magazin', 'ordine' => 80, 'eticheta' => 'Recenzii', 'href' => '/admin/products/reviews',
                     'icon' => 'star', 'activ' => ['/admin/products/reviews']],
@@ -337,6 +343,7 @@ return [
             'rute_admin' => ['/admin/users/*'],
             'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*'],
             'pagini' => ['resetare-parola'],
+            'tokenuri' => ['account_section', 'auth_google_button'],
             'meniu' => [
                 ['grup' => 'utilizatori', 'ordine' => 10, 'eticheta' => 'Listă utilizatori', 'href' => '/admin/users', 'icon' => 'users',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users'])
@@ -355,6 +362,8 @@ return [
             'necesita' => [],
             'rute_admin' => ['/admin/blog/*'],
             'rute_publice' => ['/blog/*', '/api/blog/*'],
+            'tokenuri' => ['blog_posts', 'latest_posts', 'category_posts', 'category_grid', 'category_events', 'next_event_image',
+                'next_event_url', 'next_event_title', 'next_event_excerpt', 'next_event_period', 'next_event_video'],
             'meniu' => [
                 ['grup' => 'blog', 'ordine' => 10, 'eticheta' => 'Postări blog', 'href' => '/admin/blog/posts', 'icon' => 'pages',
                     'activ' => ['/admin/blog/posts']],
@@ -459,6 +468,7 @@ return [
             'necesita' => ['catalog'],
             'client' => true,
             'rute_admin' => ['/admin/settings/mannequin'],
+            'tokenuri' => ['mannequin_section'],
             'meniu' => [
                 ['grup' => 'configurare', 'ordine' => 50, 'eticheta' => 'Configurare manechin', 'href' => '/admin/settings/mannequin',
                     'icon' => 'design', 'activ' => ['/admin/settings/mannequin']],
@@ -474,6 +484,7 @@ return [
             'rute_admin' => ['/admin/users/gdpr-agreements/*', '/admin/pages/gdpr-agreements/*'],
             'rute_publice' => ['/gdpr-agreements/*'],
             'pagini' => ['acorduri-gdpr'],
+            'tokenuri' => ['gdpr_agreements_form'],
             'meniu' => [
                 ['grup' => 'utilizatori', 'ordine' => 50, 'eticheta' => 'Acorduri GDPR', 'href' => '/admin/users/gdpr-agreements',
                     'icon' => 'pages', 'activ' => ['/admin/users/gdpr-agreements']],

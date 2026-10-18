@@ -36,6 +36,12 @@ final class ErpClient
     /** Construiește clientul din setările salvate în admin. */
     public static function fromSettings(array $settings): ?self
     {
+        // Fără pluginul „Legătura cu ERP-ul” în licență, site-ul nu vorbește cu
+        // ERP-ul deloc (setările rămân, pentru repornire). Cât „se oprește”,
+        // legătura merge mai departe: doar comenzile noi nu mai pleacă (ErpSync::push).
+        if (!Plugins::vizibil('erp')) {
+            return null;
+        }
         $url = trim((string) ($settings['erp_url'] ?? ''));
         $key = trim((string) ($settings['erp_api_key'] ?? ''));
         if ($url === '' || $key === '') {

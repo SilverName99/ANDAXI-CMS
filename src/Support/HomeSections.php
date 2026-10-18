@@ -132,13 +132,22 @@ final class HomeSections
                     : '')
                 . '<span>' . number_format($price, 2, ',', '.') . ' lei</span>';
 
+            // Fără magazin (catalog de prezentare): fără preț și fără coș; când
+            // magazinul se oprește, prețul rămâne, dar nu se mai adaugă în coș.
+            if (!Plugins::permiteInceput('magazin')) {
+                $action = '';
+            }
+            if (!Plugins::vizibil('magazin')) {
+                $priceHtml = '';
+            }
+
             $cards[] = '<article class="bs-product-card">'
                 . '<a class="bs-product-card__media" href="' . self::e($url) . '">'
                 . '<img src="' . self::e($image) . '" alt="' . self::e($name) . '" loading="lazy" decoding="async"'
                 . ' onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></a>'
                 . '<div class="bs-product-card__body">'
                 . '<a class="bs-product-card__name" href="' . self::e($url) . '">' . self::e($name) . '</a>'
-                . '<p class="bs-product-card__price">' . $priceHtml . '</p>'
+                . ($priceHtml !== '' ? '<p class="bs-product-card__price">' . $priceHtml . '</p>' : '')
                 . $action
                 . '</div></article>';
         }

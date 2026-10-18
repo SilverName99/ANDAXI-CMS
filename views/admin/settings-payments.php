@@ -13,6 +13,7 @@
  * @var string $tab
  * @var array<string, mixed> $bt
  * @var string $csrfToken
+ * @var array<string, bool> $procesatoriVizibili ce procesatori are licența (vezi AdminController::procesatoriPlataVizibili)
  */
 $appUrl = rtrim((string) ($appUrl ?? ''), '/');
 $tab = (string) ($tab ?? 'plati') === 'bt' ? 'bt' : 'plati';
@@ -33,6 +34,20 @@ $btActiv = !empty($btSetari['activ']);
 $btMod = (string) ($bt['mod'] ?? 'test');
 $btModLive = $btMod === 'live';
 $btConfigurat = !empty($bt['configurat']);
+
+// Fiecare procesator apare doar dacă e în licență; ordinul de plată e al magazinului.
+$procesatoriVizibili = is_array($procesatoriVizibili ?? null) ? $procesatoriVizibili : [];
+$areEu = (bool) ($procesatoriVizibili['euplatesc'] ?? true);
+$areStripe = (bool) ($procesatoriVizibili['stripe'] ?? true);
+$areBt = (bool) ($procesatoriVizibili['bt'] ?? true);
+$areOrdin = (bool) ($procesatoriVizibili['ordin'] ?? true);
+$areCard = $areEu || $areStripe || $areBt;
+$etichetaTabPlati = ucfirst(implode(', ', array_keys(array_filter([
+    'EuPlătesc' => $areEu,
+    'Stripe' => $areStripe,
+    'ordin de plată' => $areOrdin,
+]))));
+$areTabPlati = $etichetaTabPlati !== '';
 
 /** Eticheta „configurat / lipsește" — niciodată valoarea. */
 $insigna = static function (bool $ok, string $textOk = 'configurat', string $textLipsa = 'lipsește') use ($e): string {
@@ -91,28 +106,38 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
     <h1>Setări plăți</h1>
 
     <nav class="pay-tabs" aria-label="Secțiuni plăți">
-        <a href="/admin/settings/payments" class="<?= $tab === 'plati' ? 'is-active' : '' ?>"<?= $tab === 'plati' ? ' aria-current="page"' : '' ?>>EuPlătesc, Stripe, ordin de plată</a>
+<?php if ($areTabPlati): ?>
+        <a href="/admin/settings/payments" class="<?= $tab === 'plati' ? 'is-active' : '' ?>"<?= $tab === 'plati' ? ' aria-current="page"' : '' ?>><?= $e($etichetaTabPlati) ?></a>
+<?php endif; ?>
+<?php if ($areBt): ?>
         <a href="/admin/settings/payments?tab=bt" class="<?= $tab === 'bt' ? 'is-active' : '' ?>"<?= $tab === 'bt' ? ' aria-current="page"' : '' ?>>Banca Transilvania (BT iPay)</a>
+<?php endif; ?>
     </nav>
 
 <?php if ($tab === 'plati'): ?>
     <p>Fiecare procesator de card are bifa lui. Bifa ascunde doar opțiunea din checkout: plățile deja începute cu un procesator oprit
         (confirmări, întoarceri, notificări, butoanele din comandă) merg mai departe, ca nicio comandă plătită să nu rămână în aer.</p>
 
+<?php if ($areCard): ?>
     <article class="panel" style="margin:0 0 14px;background:#f8fafc;border-color:#cbd5e1;">
         <h3 style="margin:0 0 8px;">Plata cu cardul în checkout</h3>
         <table class="pay-overview">
             <tr><th>Procesator</th><th>În checkout</th><th>Date</th></tr>
+<?php if ($areEu): ?>
             <tr>
                 <td>EuPlătesc</td>
                 <td><?= $insigna($euActiv && $euConfigurat, 'apare', $euActiv ? 'nu apare (date incomplete)' : 'oprit') ?></td>
                 <td><?= $insigna($euConfigurat, 'configurat', 'incomplet') ?></td>
             </tr>
+<?php endif; ?>
+<?php if ($areStripe): ?>
             <tr>
                 <td>Stripe (rezervă)</td>
                 <td><?= $insigna($stripeActiv && $stripeConfigurat, 'apare', $stripeActiv ? 'nu apare (lipsește cheia)' : 'oprit') ?></td>
                 <td><?= $insigna($stripeConfigurat, 'configurat', 'incomplet') ?></td>
             </tr>
+<?php endif; ?>
+<?php if ($areBt): ?>
             <tr>
                 <td>Banca Transilvania</td>
                 <td>
@@ -125,14 +150,17 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                     <?php else: ?>
                         <?= $insigna(false, '', $btActiv ? 'nu apare (date incomplete)' : 'oprit') ?>
                     <?php endif; ?>
+<?php endif; ?>
                 </td>
                 <td><?= $insigna($btConfigurat, 'configurat', 'incomplet') ?> <a href="/admin/settings/payments?tab=bt" style="font-size:13px;">Setări BT →</a></td>
             </tr>
+<?php endif; ?>
         </table>
     </article>
 
     <form method="post" action="/admin/settings/payments" class="form-grid" autocomplete="off">
         <?= $campCsrf ?>
+<?php if ($areEu): ?>
         <article class="panel" style="grid-column:1/-1;margin:0 0 4px;background:#f8fafc;border-color:#cbd5e1;">
             <h3 style="margin:0;">EuPlătesc</h3>
             <p style="margin:6px 0 0;color:#64748b;">
@@ -191,7 +219,9 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                 dar comanda rămâne „plată în așteptare", el e primul lucru de verificat.
             </p>
         </article>
+<?php endif; ?>
 
+<?php if ($areOrdin): ?>
         <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
             <h3 style="margin:0;">Ordin de plată (transfer bancar)</h3>
             <p style="margin:6px 0 0;color:#64748b;">
@@ -217,7 +247,9 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                 caseta se adaugă singură la finalul emailului de comandă nouă.
             </p>
         </div>
+<?php endif; ?>
 
+<?php if ($areStripe): ?>
         <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
             <h3 style="margin:0;">Stripe (rezervă)</h3>
             <p style="margin:6px 0 0;color:#64748b;">
@@ -251,6 +283,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <label>Webhook endpoint Stripe</label>
             <input type="text" value="<?= htmlspecialchars($appUrl . '/webhook/stripe', ENT_QUOTES) ?>" readonly>
         </div>
+<?php endif; ?>
 
         <div style="grid-column:1/-1;">
             <p style="margin:0 0 8px;color:#64748b;font-size:13px;">

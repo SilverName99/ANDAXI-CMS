@@ -2,6 +2,10 @@
 $products = is_array($products ?? null) ? $products : [];
 $categories = is_array($categories ?? null) ? $categories : [];
 $blogPosts = is_array($blogPosts ?? null) ? $blogPosts : [];
+// Fără magazin (catalog de prezentare) produsele n-au preț; când magazinul se
+// oprește, nu se mai pot adăuga în coș.
+$arePreturi = \App\Support\Plugins::vizibil('magazin');
+$poateCumpara = \App\Support\Plugins::permiteInceput('magazin');
 
 $categoryUrl = static function (string $name): string {
     $name = trim($name);
@@ -946,13 +950,16 @@ $whyItems = [
                 <?= htmlspecialchars($name, ENT_QUOTES) ?>
               </a>
 
+<?php if ($arePreturi): ?>
               <p class="bs-product-card__price">
                 <?php if ($hasSale): ?>
                   <span class="bs-product-card__price-old"><?= number_format($basePrice, 2, ',', '.') ?> lei</span>
                 <?php endif; ?>
                 <span><?= number_format($price, 2, ',', '.') ?> lei</span>
               </p>
+<?php endif; ?>
 
+<?php if ($poateCumpara): ?>
               <?php
                   $cereOferta = \App\Support\BbdOferte::cereAlegere($product);
               ?>
@@ -972,6 +979,7 @@ $whyItems = [
                   </button>
                 </form>
               <?php endif; ?>
+<?php endif; ?>
             </div>
 
           </article>

@@ -76,25 +76,63 @@ if (!is_string($previewAppCssContent)) {
                 Pentru secțiuni dinamice, poți folosi token-urile de mai jos în HTML:
             </p>
             <div style="display:grid;gap:6px;">
+<?php if (\App\Support\Plugins::tokenVizibil('mannequin_section')): ?>
                 <div><code><?= htmlspecialchars($mannequinCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ secțiune manechin</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('shop_catalog')): ?>
                 <div><code><?= htmlspecialchars($shopCatalogCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ catalog magazin (filtre + produse)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('blog_posts')): ?>
                 <div><code><?= htmlspecialchars($blogPostsCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ listare postări blog</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('cart_form')): ?>
                 <div><code><?= htmlspecialchars($cartFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ coș de cumpărături (produse + rezumat)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('checkout_form')): ?>
                 <div><code><?= htmlspecialchars($checkoutFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ formular checkout modern (sumar + plată)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('checkout_success_order_info')): ?>
                 <div><code><?= htmlspecialchars($checkoutSuccessOrderInfoCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ sumar comandă pentru pagina checkout/succes (număr + status)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('account_section')): ?>
                 <div><code><?= htmlspecialchars($accountSectionCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ secțiune cont client (profil, comenzi, adrese, puncte)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('auth_google_button')): ?>
                 <div><code><?= htmlspecialchars($authGoogleButtonCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ buton Google Login/Register (manual în builder)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('product_review_form')): ?>
                 <div><code><?= htmlspecialchars($productReviewFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ formular recenzii produse (util pentru pagini QR)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('gdpr_agreements_form')): ?>
                 <div><code><?= htmlspecialchars($gdprAgreementsFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ formular acorduri GDPR (semnătură tactilă + salvare backend)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('next_event_image')): ?>
                 <div><code>{{next_event_image}}</code> <span style="color:#64748b;">→ imaginea principală a următorului eveniment</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('next_event_url')): ?>
                 <div><code>{{next_event_url}}</code> <span style="color:#64748b;">→ link către pagina următorului eveniment</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('next_event_title')): ?>
                 <div><code>{{next_event_title}}</code> <span style="color:#64748b;">→ titlul următorului eveniment</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('next_event_excerpt')): ?>
                 <div><code>{{next_event_excerpt}}</code> <span style="color:#64748b;">→ descrierea succintă a următorului eveniment</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('next_event_period')): ?>
                 <div><code>{{next_event_period}}</code> <span style="color:#64748b;">→ perioada următorului eveniment</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('next_event_video')): ?>
                 <div><code>{{next_event_video}}</code> <span style="color:#64748b;">→ playerul video al următorului eveniment</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('category_posts')): ?>
                 <div><code>{{category_posts:slug-categorie}}</code> <span style="color:#64748b;">→ slider cu postările dintr-o categorie (ex: <code>{{category_posts:noutati}}</code>)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('category_grid')): ?>
                 <div><code>{{category_grid:slug-categorie}}</code> <span style="color:#64748b;">→ grilă cu postările dintr-o categorie; pentru evenimente, viitoarele primele, apoi cele trecute (ex: <code>{{category_grid:evenimente}}</code>)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('category_events')): ?>
                 <div><code>{{category_events:slug-categorie}}</code> <span style="color:#64748b;">→ pagină de evenimente: hero cu următorul eveniment + secțiunile „viitoare" și „trecute" (ex: <code>{{category_events:evenimente}}</code>)</span></div>
+<?php endif; ?>
             </div>
         </details>
 

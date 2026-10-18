@@ -23,6 +23,16 @@ $singleFormGap = $requiresBbdSelection ? 'display:grid;gap:10px;max-width:520px;
 if ($galleryUrls === []) {
     $galleryUrls = [(string) ($product['image_url'] ?? '/assets/img/product-placeholder.svg')];
 }
+// Pluginurile: fără magazin produsul n-are preț și nici coș; când magazinul se
+// oprește, butonul de coș lasă locul unui mesaj; recenziile doar cu pluginul lor.
+$arePreturi = \App\Support\Plugins::vizibil('magazin');
+$poateCumpara = \App\Support\Plugins::permiteInceput('magazin');
+$areRecenzii = \App\Support\Plugins::vizibil('recenzii');
+if (!$arePreturi) {
+    // Nici scripturile paginii nu primesc prețul.
+    $templateCurrentPriceDisplay = '';
+    $templateOldPriceDisplay = '';
+}
 ?>
 <?php if ($hasTemplateRender): ?>
     <section class="panel product-template-render">
@@ -90,12 +100,14 @@ if ($galleryUrls === []) {
                 </div>
             </section>
         <?php endif; ?>
+<?php if ($arePreturi): ?>
         <p class="price">
             <?php if ((bool) ($product['has_sale_price'] ?? false)): ?>
                 <span class="price-old"><?= number_format((float) ($product['base_price'] ?? 0), 2) ?> lei</span>
             <?php endif; ?>
             <span class="price-current"><?= number_format((float) ($product['price'] ?? 0), 2) ?> lei</span>
         </p>
+<?php endif; ?>
         <?php
             // Precomanda arată altfel decât un produs epuizat: acolo clientul
             // n-are ce face, aici poate comanda. Butonul rămâne, doar numele
@@ -107,7 +119,11 @@ if ($galleryUrls === []) {
                 Produs în precomandă — se livrează după ce marfa ajunge la noi
             </p>
         <?php endif; ?>
-        <?php if ($isOutOfStock && !$ePrecomanda): ?>
+        <?php if (!$poateCumpara): ?>
+<?php if ($arePreturi): ?>
+        <?= \App\Http\Controllers\SiteController::mesajComenziInchiseHtml() ?>
+<?php endif; ?>
+<?php elseif ($isOutOfStock && !$ePrecomanda): ?>
             <p style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border:1px solid #e5e7eb;background:#f8fafc;color:#b91c1c;font-weight:700;border-radius:999px;">Stoc epuizat</p>
         <?php else: ?>
             <form method="post" action="/cos/adauga/<?= (int) ($product['id'] ?? 0) ?>" style="<?= $singleFormGap ?>" data-product-single-cart-form="1">
@@ -230,6 +246,7 @@ if ($galleryUrls === []) {
                 <?php endif; ?>
             </div>
         <?php endif; ?>
+<?php if ($areRecenzii): ?>
         <section id="product-reviews" class="product-reviews" style="margin-top:18px;">
             <div class="product-reviews-head">
                 <div class="product-reviews-head__inline">
@@ -240,6 +257,7 @@ if ($galleryUrls === []) {
             <?= (string) ($reviews['list_html'] ?? '<p class="product-reviews-empty">Nu există review-uri încă.</p>') ?>
             <?= (string) ($reviews['form_html'] ?? '') ?>
         </section>
+<?php endif; ?>
         <?= $similarProductsSectionHtml ?>
     </section>
 <?php endif; ?>
@@ -931,15 +949,21 @@ if ($galleryUrls === []) {
                         + '<div class="similar-product-card__body">'
                         + '<p class="similar-product-card__desc">' + description + '</p>'
                         + '<h4 class="similar-product-card__name"><a href="' + url + '">' + name + '</a></h4>'
+<?php if ($areRecenzii): ?>
                         + '<div class="similar-product-card__rating"><span class="similar-product-card__stars" aria-label="Rating ' + reviewsAverage.toFixed(1) + ' din 5">' + starsHtml + '</span><span class="similar-product-card__reviews">(' + reviewsCount + ')</span></div>'
+<?php endif; ?>
                         + '<div class="similar-product-card__bottom">'
+<?php if ($arePreturi): ?>
                         + '<p class="similar-product-card__price">' + priceLabel + (regularPriceLabel !== '' ? '<span class="similar-product-card__old">' + regularPriceLabel + '</span>' : '') + '</p>'
+<?php endif; ?>
+<?php if ($poateCumpara): ?>
                         + (outOfStock
                             ? '<span class="similar-product-card__stock-out">Stoc epuizat</span>'
                             : ePrecomanda
                             ? '<a class="similar-product-card__cart-btn" href="' + url + '" title="Se livrează după ce marfa ajunge la noi" style="padding:0 14px;width:auto;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;">Precomandă</a>'
                             : '<form method="post" action="/cos/adauga/' + productId + '"><button type="submit" class="similar-product-card__cart-btn" aria-label="Adaugă în coș"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H7"/></svg></button></form>'
                         )
+<?php endif; ?>
                         + '</div>'
                         + '</article>';
                 });

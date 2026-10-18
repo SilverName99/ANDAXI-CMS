@@ -1,4 +1,10 @@
 <?php
+// Magazinul „se oprește”: coșul nu mai duce la o comandă nouă, deci în locul
+// lui apare mesajul de comenzi închise (comenzile deja plasate se termină).
+if (!\App\Support\Plugins::permiteInceput('magazin')) {
+    require __DIR__ . '/components/checkout-inchis.php';
+    return;
+}
 $quantityUi = is_array($quantityUi ?? null) ? $quantityUi : ['style' => 'default', 'apply_cart_page' => false];
 $quantityStyle = ((string) ($quantityUi['style'] ?? 'default') === 'stepper') ? 'stepper' : 'default';
 $applyStepperInCart = true;
@@ -33,6 +39,8 @@ $pointsSliderValue = max($pointsSliderMin, min($pointsSliderMax, $pointsRequeste
 $loginUrl = '/login';
 $couponCode = trim((string) (($summary['coupon']['code'] ?? '')));
 $couponAppliesOnlySelectedProducts = ((int) (($summary['coupon']['applies_only_selected_products'] ?? 0))) === 1;
+// Câmpul de cupon doar cât pluginul „Cupoane” e pornit (punctele le oprește deja sumarul coșului).
+$poateCupon = \App\Support\Plugins::permiteInceput('cupoane');
 $heartbeatSnapshot = [];
 foreach ($lines as $line) {
     if (!is_array($line)) {
@@ -218,6 +226,7 @@ foreach ($lines as $line) {
                     </div>
                 </form>
                 <div class="bv-cart-v2__coupon-area">
+<?php if ($poateCupon): ?>
                     <form method="post" action="/cos/cupon" class="bv-cart-v2__line-form">
                         <label>Cod cupon</label>
                         <div class="inline">
@@ -226,6 +235,7 @@ foreach ($lines as $line) {
                             <button type="submit" class="bv-cart-v2__line-form--ghost" formaction="/cos/cupon/sterge" formmethod="post">Elimină cupon</button>
                         </div>
                     </form>
+<?php endif; ?>
                     <?php if ($couponCode !== '' && $couponAppliesOnlySelectedProducts): ?>
                         <p class="bv-cart-v2__coupon-note">Cuponul este activ doar pentru produsele selectate; celelalte produse rămân la preț întreg.</p>
                     <?php endif; ?>

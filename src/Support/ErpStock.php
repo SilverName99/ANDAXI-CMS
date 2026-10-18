@@ -38,7 +38,8 @@ final class ErpStock
             return false;
         }
         return (string) ($settings['erp_enabled'] ?? '0') === '1'
-            && (string) ($settings['erp_stock_enabled'] ?? '0') === '1';
+            && (string) ($settings['erp_stock_enabled'] ?? '0') === '1'
+            && Plugins::vizibil('erp');
     }
 
     /**

@@ -10,9 +10,9 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
     <p><?= $areComenzi ? 'Panou de administrare pentru magazinul tău online.' : 'Panou de administrare pentru site-ul tău.' ?></p>
 
     <?php $recentUsers = is_array($recentUsers ?? null) ? $recentUsers : []; ?>
-    <?php if ($areProduse || $areComenzi || $areUtilizatori): ?>
+<?php if ($areProduse || $areComenzi || $areUtilizatori): ?>
     <div class="dashboard-cards">
-        <?php if ($areProduse): ?>
+<?php if ($areProduse): ?>
         <div class="dashboard-card">
             <div>
                 <strong><?= (int) ($metrics['products'] ?? 0) ?></strong>
@@ -22,8 +22,8 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7l8 4 8-4-8-4Z"/><path d="M4 7v10l8 4 8-4V7"/></svg>
             </span>
         </div>
-        <?php endif; ?>
-        <?php if ($areComenzi): ?>
+<?php endif; ?>
+<?php if ($areComenzi): ?>
         <div class="dashboard-card">
             <div>
                 <strong><?= (int) ($metrics['orders'] ?? 0) ?></strong>
@@ -33,8 +33,8 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/><path d="M4 5h2l2.1 9.2h9.9l2-7.2H7.2"/></svg>
             </span>
         </div>
-        <?php endif; ?>
-        <?php if ($areUtilizatori): ?>
+<?php endif; ?>
+<?php if ($areUtilizatori): ?>
         <a class="dashboard-card dashboard-card-link" href="/admin/users">
             <div>
                 <strong><?= (int) ($metrics['users'] ?? 0) ?></strong>
@@ -44,11 +44,11 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
                 <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 18a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.3"/><path d="M14.5 18a4.2 4.2 0 0 1 6 0"/></svg>
             </span>
         </a>
-        <?php endif; ?>
+<?php endif; ?>
     </div>
-    <?php endif; ?>
+<?php endif; ?>
 
-    <?php if ($areComenzi): ?>
+<?php if ($areComenzi): ?>
     <div class="recent-orders-card">
         <div class="recent-orders-head">
             <h2>Comenzi recente</h2>
@@ -69,9 +69,9 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
             <p>Nu există comenzi încă.</p>
         <?php endif; ?>
     </div>
-    <?php endif; ?>
+<?php endif; ?>
 
-    <?php if ($areUtilizatori): ?>
+<?php if ($areUtilizatori): ?>
     <div class="recent-orders-card">
         <div class="recent-orders-head">
             <h2>Utilizatori recenți</h2>
@@ -85,11 +85,11 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
                             <strong><?= htmlspecialchars(trim((string) ($user['first_name'] ?? '') . ' ' . (string) ($user['last_name'] ?? '')), ENT_QUOTES) ?></strong>
                             <p><?= htmlspecialchars((string) ($user['email'] ?? ''), ENT_QUOTES) ?></p>
                         </div>
-                        <?php if ($areComenzi): ?>
+<?php if ($areComenzi): ?>
                         <div class="right">
                             <strong><?= (int) ($user['orders_count'] ?? 0) ?> comenzi</strong>
                         </div>
-                        <?php endif; ?>
+<?php endif; ?>
                     </a>
                 <?php endforeach; ?>
             </div>
@@ -97,5 +97,5 @@ $areUtilizatori = (bool) ($widgeturi['utilizatori'] ?? true);
             <p>Nu există utilizatori încă.</p>
         <?php endif; ?>
     </div>
-    <?php endif; ?>
+<?php endif; ?>
 </section>

@@ -123,6 +123,11 @@ final class LoyaltyService
     public static function cartRedemptionSummary(?PDO $db, array $settings, float $subtotal, float $couponDiscount): array
     {
         $cfg = self::config($settings);
+        // Punctele se folosesc doar la comenzi noi, deci doar cu pluginul
+        // „Puncte de fidelitate” pornit; altfel coșul arată ca fără puncte.
+        if (!Plugins::permiteInceput('fidelitate')) {
+            $cfg['enabled'] = false;
+        }
         $requested = max(0, Cart::pointsRequested());
         $available = self::currentUserPoints($db);
         $baseAmount = max(0.0, $subtotal - $couponDiscount);
@@ -188,7 +193,8 @@ final class LoyaltyService
     public static function estimateEarnPoints(array $settings, float $eligibleAmount): int
     {
         $cfg = self::config($settings);
-        if (!$cfg['enabled']) {
+        // Estimarea „Primești X puncte” e o promisiune pentru o comandă nouă.
+        if (!$cfg['enabled'] || !Plugins::permiteInceput('fidelitate')) {
             return 0;
         }
         $base = max(0.0, $eligibleAmount);

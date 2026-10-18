@@ -1,4 +1,13 @@
 <?php
+// Pluginurile din licență: butoanele, coloanele și panourile lor apar doar pe site-urile care le au.
+$areFan = \App\Support\Plugins::vizibil('livrare_fan');
+$areErp = \App\Support\Plugins::vizibil('erp');
+$arePromo = \App\Support\Plugins::vizibil('produse_promo');
+$arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
+$areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
+$areCupoane = \App\Support\Plugins::vizibil('cupoane');
+$areBt = \App\Support\Plugins::vizibil('plata_bt');
+$poateLinkPlata = \App\Support\Plugins::permiteInceput('link_plata');
 $orders = is_array($orders ?? null) ? $orders : [];
 $promoProducts = is_array($promoProducts ?? null) ? $promoProducts : [];
 $filters = is_array($filters ?? null) ? $filters : [];
@@ -262,9 +271,13 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                     <option value="">Acțiune în masă</option>
                     <option value="delete">Șterge (mută în coș)</option>
                     <option value="status">Schimbă status</option>
+<?php if ($areFan): ?>
                     <option value="awb">Generează AWB</option>
+<?php endif; ?>
                     <option value="shipping">Corectează transportul</option>
+<?php if ($areErp): ?>
                     <option value="erp_retry">Retrimite în ERP</option>
+<?php endif; ?>
                 </select>
                 <input type="number" name="bulk_shipping_value" id="orders-bulk-shipping" step="0.01" min="0"
                        placeholder="Transport (lei)" style="display:none;width:150px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
@@ -379,7 +392,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                         }
                         $platitPartial = $restDeIncasat > 0.009;
                         $paymentMethodPillClass = (string) ($paymentMethodPillClassMap[$paymentMethodKey] ?? 'muted');
-                        $erpEnabled = (string) ($settings['erp_enabled'] ?? '0') === '1';
+                        $erpEnabled = $areErp && (string) ($settings['erp_enabled'] ?? '0') === '1';
                         $erpStatus = strtolower(trim((string) ($order['erp_status'] ?? 'pending')));
                         $erpError = trim((string) ($order['erp_last_error'] ?? ''));
                         $erpProblems = trim((string) ($order['erp_problems'] ?? ''));
@@ -409,7 +422,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                             'retur_pending' => 'warn',
                         ][$erpStatus] ?? 'warn';
                         $erpFactura = trim((string) ($order['erp_factura_numar'] ?? ''));
-                        $precomandaStare = strtolower(trim((string) ($order['preorder_status'] ?? '')));
+                        $precomandaStare = $arePrecomenzi ? strtolower(trim((string) ($order['preorder_status'] ?? ''))) : '';
                         $ePrecomandaInAsteptare = $precomandaStare === 'asteptare';
                     ?>
                     <tr class="<?= $isCancelled ? 'is-cancelled' : '' ?><?= $eClientAgresiv ? ($isCancelled ? ' ' : '') . 'is-client-agresiv' : '' ?>">
@@ -456,7 +469,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     <?php endif; ?>
                                 <?php endif; ?>
                                 <span class="status-pill status-pill--<?= htmlspecialchars($paymentMethodPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($paymentMethodLabels[$paymentMethodKey] ?? $paymentMethodRaw), ENT_QUOTES) ?></span>
-<?php if (is_array($order['bt'] ?? null)): ?>
+<?php if ($areBt && is_array($order['bt'] ?? null)): ?>
 <?php
     $btRand = $order['bt'];
     if (!empty($btRand['necesita_rambursare'])) {
@@ -476,7 +489,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     <?= htmlspecialchars($btEticheta, ENT_QUOTES) ?>
                                 </span>
 <?php endif; ?>
-<?php foreach ((array) ($order['bt_linkuri'] ?? []) as $btLink): ?>
+<?php foreach ((array) ($areBt ? ($order['bt_linkuri'] ?? []) : []) as $btLink): ?>
 <?php if (is_array($btLink) && (!empty($btLink['necesita_rambursare']) || ($btLink['stare'] ?? '') === 'authorized')): ?>
                                 <span class="status-pill status-pill--<?= !empty($btLink['necesita_rambursare']) ? 'off' : 'warn' ?>"
                                       title="<?= htmlspecialchars('Diferență plătită prin Banca Transilvania ' . (string) ($btLink['numar_bt'] ?? '') . ': ' . (string) ($btLink['eticheta'] ?? '') . (($btLink['eroare'] ?? '') !== '' ? ' — ' . (string) $btLink['eroare'] : ''), ENT_QUOTES) ?>">
@@ -521,14 +534,14 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     . " Completează „Greutate (g)” în ERP → Produse.";
                         ?>
                         <td>
-                            <?php if ($faraGreutate !== []): ?>
+                            <?php if ($areFan && $faraGreutate !== []): ?>
                                 <span class="orders-fara-greutate"
                                       title="<?= htmlspecialchars($faraGreutateTitlu, ENT_QUOTES) ?>">!</span>
                             <?php endif; ?>
-                            <?php if ($erpFactura !== ''): ?>
+                            <?php if ($areErp && $erpFactura !== ''): ?>
                                 <small style="display:block;color:#0f766e;">Factură ERP: <?= htmlspecialchars($erpFactura, ENT_QUOTES) ?></small>
                             <?php endif; ?>
-                            <?php if (count($awbColete) > 1): ?>
+                            <?php if ($areFan && count($awbColete) > 1): ?>
                                 <?php foreach ($awbColete as $awbColet): ?>
                                     <small style="display:block;">
                                         FAN:
@@ -543,10 +556,10 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     </small>
                                 <?php endforeach; ?>
                                 <small style="display:block;color:#64748b;"><?= htmlspecialchars($trackingStatus !== '' ? $trackingStatus : 'AWB generat', ENT_QUOTES) ?></small>
-                            <?php elseif ($awb !== ''): ?>
+                            <?php elseif ($areFan && $awb !== ''): ?>
                                 <small style="display:block;">FAN: <?= htmlspecialchars($awb, ENT_QUOTES) ?></small>
                                 <small style="display:block;color:#64748b;"><?= htmlspecialchars($trackingStatus !== '' ? $trackingStatus : 'AWB generat', ENT_QUOTES) ?></small>
-                            <?php else: ?>
+                            <?php elseif ($areFidelitate): ?>
                                 <small style="color:#94a3b8;">Puncte: <?= $pointsAwarded ?> / <?= (int) ($order['loyalty_points_pending_claim'] ?? 0) ?></small>
                             <?php endif; ?>
                         </td>
@@ -595,7 +608,10 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                             <?php else: ?>
                                 <div class="order-actions">
                                     <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" title="Detalii">👁</button>
+<?php if ($arePromo): ?>
                                     <button type="button" class="order-action-btn client-promo-btn" data-order-id="<?= $orderId ?>" title="Toate promoționalele clientului">🎁</button>
+<?php endif; ?>
+<?php if ($areFan): ?>
                                     <?php
                                         // Butonul rămâne și după emitere: un AWB greșit (serviciu
                                         // nepotrivit, adresă corectată ulterior) nu se poate repara
@@ -626,6 +642,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                                 title="Coletul e deja la curier (<?= htmlspecialchars($trackingStatus, ENT_QUOTES) ?>) — nu se mai poate emite alt AWB. Se poate doar cât timp statusul e „AWB generat" sau indisponibil."
                                                 style="opacity:.4;cursor:not-allowed;">🚚</button>
                                     <?php endif; ?>
+<?php endif; ?>
                                     <?php if ($paymentMethodKey === 'bank_transfer' && $paymentStatusKey !== 'paid' && !$isCancelled): ?>
                                         <form method="post" action="/admin/orders/<?= $orderId ?>/confirma-plata-op"
                                               onsubmit="return confirm('Confirmi că banii pentru comanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?> au intrat în cont?\n\nComanda devine plătită și pleacă în ERP.');">
@@ -768,7 +785,9 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                 <?php endif; ?>
             </div>
             <div class="order-actions-modal-buttons" style="grid-column:1/-1;">
+<?php if ($areFan): ?>
                 <a class="btn btn-secondary" href="#" id="order-actions-tracking-link" target="_blank" rel="noopener">↗ Deschide tracking FAN</a>
+<?php endif; ?>
                 <button class="btn" type="submit">Salvează status</button>
             </div>
         </form>
@@ -1376,10 +1395,17 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                     <div><small>Telefon</small><p id="order-client-phone-${order.id}">${esc(order.billing_phone)} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
                     <div><small>Plată</small><p id="order-payment-method-${order.id}">${esc(order.payment_method)} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
                     ${paymentStatusHtml}
+<?php if ($areFan): ?>
                     <div><small>AWB FAN</small><p>${esc(order.fan_awb || '-')}</p></div>
+<?php endif; ?>
+<?php if ($areCupoane): ?>
                     <div><small>Cupon folosit</small><p>${couponCode !== '' ? esc(couponCode) : '— (fără cupon)'}</p></div>
+<?php endif; ?>
                 </div>
+<?php if ($areBt): ?>
                 ${btPanelHtml}
+<?php endif; ?>
+<?php if ($areFan): ?>
                 <div id="order-fanbox-${order.id}" style="background:#f6faf8;border:1px solid #d5e5dc;border-radius:8px;padding:12px;margin-bottom:10px;">
                   <small style="display:block;margin-bottom:6px;color:#475569;">Destinație livrare</small>
                   <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
@@ -1398,6 +1424,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                   </div>
                   <button type="button" onclick="salveazaFanbox(${order.id})" style="margin-top:8px;font-size:12px;padding:5px 10px;border:1px solid #1f8b57;border-radius:6px;background:#1f8b57;color:#fff;cursor:pointer;">Salvează destinația</button>
                 </div>
+<?php endif; ?>
                 <p>
                   <small>Adresă</small>
                   <span id="order-address-display-${order.id}">${addressParts.length ? addressParts.map(esc).join(', ') : '-'}</span>
@@ -1470,7 +1497,9 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                 </div>
                 ${companyRows.length ? `<div class="order-modal-grid">${companyRows.join('')}</div>` : ''}
                 ${shippingHtml}
+<?php if ($areFan): ?>
                 <p><small>Tracking FAN</small><br>${trackingLabel}</p>
+<?php endif; ?>
                 <p><small>Observații</small><br>${orderNotes !== '' ? esc(orderNotes) : '-'}</p>
                 <div class="order-items-box">
                     <div id="order-items-${order.id}">${itemsHtml}</div>
@@ -1479,8 +1508,10 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         <p style="margin:0 0 8px;color:#92400e;font-size:13px;">
                             Comanda e plătită doar în parte. Rest de încasat: <strong>${orderMoney(restDeIncasat)}</strong>.
                         </p>
+<?php if ($poateLinkPlata): ?>
                         <button type="button" onclick="sendPaymentLink(${order.id})" style="padding:6px 12px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Trimite link de plată pentru diferență</button>
                         <span id="payment-link-status-${order.id}" style="font-size:13px;margin-left:8px;"></span>
+<?php endif; ?>
                         <div style="margin-top:10px;padding-top:10px;border-top:1px solid #fde68a;">
                             <p style="margin:0 0 6px;color:#92400e;font-size:12px;">
                                 Sau, dacă banii au venit deja pe lângă site — ramburs de la curier, OP, numerar —
@@ -1565,7 +1596,9 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         Nu ajunge la client — nici pe factură, nici în emailuri. Se trimite în ERP, pe comandă și pe factura emisă din ea.
                     </p>
                 </div>
+<?php if ($arePromo): ?>
                 ${promoHtml}
+<?php endif; ?>
                 <div class="order-totals">
                     ${totalsHtml}
                 </div>

@@ -88,7 +88,11 @@ NewsletterService::ensureSchema($db);
 $settings = Settings::all($db);
 
 $continuate = NewsletterService::continueRunningCampaigns($db, $settings, $perRun, $deadline);
-$programate = NewsletterService::sendDueScheduledCampaigns($db, $settings, $limit, $deadline);
+// Cât pluginul „Newsletter” se oprește, campaniile pornite se termină, dar
+// cele programate nu mai pornesc (rămân programate, pentru o eventuală repornire).
+$programate = \App\Support\Plugins::permiteInceput('newsletter')
+    ? NewsletterService::sendDueScheduledCampaigns($db, $settings, $limit, $deadline)
+    : [];
 
 flock($lock, LOCK_UN);
 fclose($lock);

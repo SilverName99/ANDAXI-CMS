@@ -1,5 +1,12 @@
 <!doctype html>
 <?php
+// Butoanele, formularele și linkurile spre paginile pluginurilor pe care
+// site-ul nu le are se scot din pagină (Plugins::filtreazaLinkuri); cu toate
+// pluginurile pe site, HTML-ul rămâne neatins.
+$adminFiltruLinkuri = !\App\Support\Plugins::nimicAscuns();
+if ($adminFiltruLinkuri) {
+    ob_start();
+}
 $adminAppConfig = require __DIR__ . '/../../config/app.php';
 $adminDb = \App\Support\Database::connection($adminAppConfig['db']);
 $adminSettings = \App\Support\Settings::all($adminDb);
@@ -81,14 +88,60 @@ if ($adminFavicon === '') {
         // doar dacă rolul adminului are voie la ea ($can).
         $tab = is_scalar($_GET['tab'] ?? null) ? trim((string) $_GET['tab']) : null;
         $esteActiva = static fn (mixed $regula): bool => \App\Support\Plugins::intrareActiva($regula, $isActive, $path, $tab);
-        $meniu = [];
+        $poateIntrarea = static fn (array $intrare): bool => $can((string) ($intrare['permisiune'] ?? $intrare['href']));
+
+        // HTML-ul meniului se scrie exact cum îl scria șablonul de dinainte de
+        // pluginuri, cu aceleași spații și rânduri goale: cu toate pluginurile
+        // pornite, paginile adminului sunt identice cu cele de atunci
+        // (tools/dev/compara-cu-baza.sh). De aici cele două particularități:
+        // după primele cinci blocuri vine un rând gol, iar în grupurile
+        // Configurare și Blog fiecare intrare își are propria condiție de rol.
+        $randGolDupa = ['dashboard', 'utilizatori', 'magazin', 'configurare', 'jurnal'];
+        $conditiePeIntrare = ['configurare', 'blog'];
+        $sp = static fn (int $n): string => str_repeat(' ', $n);
+        $linkMeniu = static function (array $intrare, int $indent, bool $etichetaPeRand = false) use ($sp, $esteActiva, $icon): string {
+            $html = $sp($indent) . '<a class="' . ($esteActiva($intrare['activ'] ?? []) ? 'active' : '') . '" href="'
+                . htmlspecialchars((string) $intrare['href'], ENT_QUOTES) . '">' . "\n"
+                . $sp($indent + 4) . '<span class="nav-icon">' . $icon((string) ($intrare['icon'] ?? '')) . '</span>';
+            $eticheta = htmlspecialchars((string) $intrare['eticheta'], ENT_QUOTES);
+            $html .= $etichetaPeRand ? "\n" . $sp($indent + 4) . $eticheta . "\n" : ' ' . $eticheta . "\n";
+            return $html . $sp($indent) . '</a>' . "\n";
+        };
+        $meniuHtml = '';
         foreach (\App\Support\Plugins::meniuAdmin() as $slot) {
-            $slot['intrari'] = array_values(array_filter(
-                $slot['intrari'],
-                static fn (array $intrare): bool => $can((string) ($intrare['permisiune'] ?? $intrare['href']))
-            ));
-            if ($slot['intrari'] !== []) {
-                $meniu[] = $slot;
+            $permise = array_values(array_filter($slot['intrari'], $poateIntrarea));
+            $meniuHtml .= $sp(20);
+            if ($permise !== []) {
+                if ($slot['tip'] === 'link') {
+                    foreach ($permise as $intrare) {
+                        $meniuHtml .= $linkMeniu($intrare, 20, $slot['cheie'] === 'dashboard');
+                    }
+                } else {
+                    $grupDeschis = $isActive($slot['deschis']);
+                    $meniuHtml .= $sp(20) . '<div class="admin-nav-group toggle-group ' . ($grupDeschis ? 'open' : '') . '" data-toggle-group="'
+                        . htmlspecialchars($slot['cheie'], ENT_QUOTES) . '">' . "\n"
+                        . $sp(24) . '<button type="button" class="group-toggle ' . ($grupDeschis ? 'active' : '') . '">' . "\n"
+                        . $sp(28) . '<span class="left">' . "\n"
+                        . $sp(32) . '<span class="nav-icon">' . $icon($slot['icon']) . '</span> ' . htmlspecialchars($slot['eticheta'], ENT_QUOTES) . "\n"
+                        . $sp(28) . '</span>' . "\n"
+                        . $sp(28) . '<span class="caret">' . ($grupDeschis ? '↑' : '↓') . '</span>' . "\n"
+                        . $sp(24) . '</button>' . "\n"
+                        . $sp(24) . '<div class="group-items">' . "\n";
+                    if (in_array($slot['cheie'], $conditiePeIntrare, true)) {
+                        foreach ($slot['intrari'] as $intrare) {
+                            $meniuHtml .= $sp(28) . ($poateIntrarea($intrare) ? $linkMeniu($intrare, 28) . $sp(28) : '');
+                        }
+                    } else {
+                        foreach ($permise as $intrare) {
+                            $meniuHtml .= $linkMeniu($intrare, 28);
+                        }
+                    }
+                    $meniuHtml .= $sp(24) . '</div>' . "\n" . $sp(20) . '</div>' . "\n";
+                }
+                $meniuHtml .= $sp(20);
+            }
+            if (in_array($slot['cheie'], $randGolDupa, true)) {
+                $meniuHtml .= "\n";
             }
         }
         ?>
@@ -99,32 +152,7 @@ if ($adminFavicon === '') {
                 </div>
 
                 <nav class="admin-nav">
-                    <?php foreach ($meniu as $slot): ?>
-                    <?php if ($slot['tip'] === 'link'): ?>
-                    <?php foreach ($slot['intrari'] as $intrare): ?>
-                    <a class="<?= $esteActiva($intrare['activ'] ?? []) ? 'active' : '' ?>" href="<?= htmlspecialchars((string) $intrare['href'], ENT_QUOTES) ?>">
-                        <span class="nav-icon"><?= $icon((string) ($intrare['icon'] ?? '')) ?></span> <?= htmlspecialchars((string) $intrare['eticheta'], ENT_QUOTES) ?>
-                    </a>
-                    <?php endforeach; ?>
-                    <?php else: ?>
-                    <?php $grupDeschis = $isActive($slot['deschis']); ?>
-                    <div class="admin-nav-group toggle-group <?= $grupDeschis ? 'open' : '' ?>" data-toggle-group="<?= htmlspecialchars($slot['cheie'], ENT_QUOTES) ?>">
-                        <button type="button" class="group-toggle <?= $grupDeschis ? 'active' : '' ?>">
-                            <span class="left">
-                                <span class="nav-icon"><?= $icon($slot['icon']) ?></span> <?= htmlspecialchars($slot['eticheta'], ENT_QUOTES) ?>
-                            </span>
-                            <span class="caret"><?= $grupDeschis ? '↑' : '↓' ?></span>
-                        </button>
-                        <div class="group-items">
-                            <?php foreach ($slot['intrari'] as $intrare): ?>
-                            <a class="<?= $esteActiva($intrare['activ'] ?? []) ? 'active' : '' ?>" href="<?= htmlspecialchars((string) $intrare['href'], ENT_QUOTES) ?>">
-                                <span class="nav-icon"><?= $icon((string) ($intrare['icon'] ?? '')) ?></span> <?= htmlspecialchars((string) $intrare['eticheta'], ENT_QUOTES) ?>
-                            </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    <?php endforeach; ?>
+<?= $meniuHtml ?>
                 </nav>
 
                 <div class="admin-sidebar-footer">
@@ -139,11 +167,11 @@ if ($adminFavicon === '') {
                 <div class="admin-topbar">
                     <button type="button" class="icon-btn" id="sidebar-toggle-btn" title="Toggle meniu">☰</button>
                 </div>
-                <?php if (\App\Support\Plugins::licentaLipseste()): ?>
-                    <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
-                        <strong>Licența lipsește.</strong> Site-ul funcționează doar cu funcțiile de bază. Vă rugăm să contactați ANDAXI WEB SOLUTIONS.
-                    </section>
-                <?php endif; ?>
+<?php if (\App\Support\Plugins::licentaLipseste()): ?>
+                <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
+                    <strong>Licența lipsește.</strong> Site-ul funcționează doar cu funcțiile de bază. Vă rugăm să contactați ANDAXI WEB SOLUTIONS.
+                </section>
+<?php endif; ?>
                 <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
                     <section class="panel" style="border-color:#34d399;background:#ecfdf5;color:#065f46;">
                         <?= htmlspecialchars($message, ENT_QUOTES) ?>
@@ -196,3 +224,8 @@ if ($adminFavicon === '') {
     <?php endif; ?>
 </body>
 </html>
+<?php
+if ($adminFiltruLinkuri) {
+    echo \App\Support\Plugins::filtreazaLinkuri((string) ob_get_clean());
+}
+?>

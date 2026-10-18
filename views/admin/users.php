@@ -3,6 +3,9 @@ $users = is_array($users ?? null) ? $users : [];
 $selectedUser = is_array($selectedUser ?? null) ? $selectedUser : null;
 $selectedUserOrders = is_array($selectedUserOrders ?? null) ? $selectedUserOrders : [];
 $selectedBilling = is_array($selectedBilling ?? null) ? $selectedBilling : null;
+// Coloanele și cifrele pluginurilor (puncte de fidelitate, comenzi) doar pe site-urile care le au.
+$areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
+$areMagazin = \App\Support\Plugins::vizibil('magazin');
 $search = trim((string) ($search ?? ''));
 $sort = in_array((string) ($sort ?? 'id'), ['id', 'orders', 'total', 'points'], true) ? (string) $sort : 'id';
 $dir = strtolower((string) ($dir ?? 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -254,11 +257,14 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                                 <input type="checkbox" data-users-master-checkbox aria-label="Selectează toți utilizatorii">
                             </th>
                             <th>Client</th>
+<?php if ($areFidelitate): ?>
                             <th>
                                 <a class="users-sort-link <?= $sort === 'points' ? 'active' : '' ?>" href="<?= htmlspecialchars($sortLink('points'), ENT_QUOTES) ?>">
                                     Puncte fidelizare <span><?= htmlspecialchars($sortArrow('points'), ENT_QUOTES) ?></span>
                                 </a>
                             </th>
+<?php endif; ?>
+<?php if ($areMagazin): ?>
                             <th>
                                 <a class="users-sort-link <?= $sort === 'orders' ? 'active' : '' ?>" href="<?= htmlspecialchars($sortLink('orders'), ENT_QUOTES) ?>">
                                     Comenzi <span><?= htmlspecialchars($sortArrow('orders'), ENT_QUOTES) ?></span>
@@ -269,6 +275,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                                     Total <span><?= htmlspecialchars($sortArrow('total'), ENT_QUOTES) ?></span>
                                 </a>
                             </th>
+<?php endif; ?>
                             <th style="width:120px;"></th>
                         </tr>
                         </thead>
@@ -297,9 +304,13 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                                             </span>
                                         </a>
                                     </td>
+<?php if ($areFidelitate): ?>
                                     <td><strong><?= (int) ($user['loyalty_points'] ?? 0) ?></strong> pct</td>
+<?php endif; ?>
+<?php if ($areMagazin): ?>
                                     <td><strong><?= (int) ($user['orders_count'] ?? 0) ?></strong> comenzi</td>
                                     <td><?= number_format((float) ($user['total_spent'] ?? 0), 2) ?> lei</td>
+<?php endif; ?>
                                     <td>
                                         <a class="btn btn-secondary users-detail-btn" href="/admin/users/<?= $id ?><?= $searchSuffix ?>">Detalii</a>
                                     </td>
@@ -331,6 +342,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                         </div>
 
                         <div class="admin-user-kpis">
+<?php if ($areMagazin): ?>
                             <article>
                                 <small>Total comenzi</small>
                                 <strong><?= (int) $selectedStats['orders_count'] ?></strong>
@@ -339,10 +351,13 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                                 <small>Total cheltuit</small>
                                 <strong><?= number_format((float) $selectedStats['total_spent'], 2) ?> lei</strong>
                             </article>
+<?php endif; ?>
+<?php if ($areFidelitate): ?>
                             <article>
                                 <small>Puncte</small>
                                 <strong><?= (int) ($selectedUser['loyalty_points'] ?? 0) ?></strong>
                             </article>
+<?php endif; ?>
                         </div>
 
                         <div class="admin-user-grid" style="margin-top:12px;">
@@ -404,6 +419,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                                 </div>
                             </article>
 
+<?php if ($areMagazin): ?>
                             <article class="panel" style="margin:0;">
                                 <h4 style="margin-top:0;">Facturare (ultima comandă)</h4>
                                 <?php if (!is_array($selectedBilling)): ?>
@@ -419,6 +435,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                                         <div><small>Județ</small><p><?= htmlspecialchars((string) ($selectedBilling['billing_county'] ?? '-'), ENT_QUOTES) ?></p></div>
                                     </div>
                                 <?php endif; ?>
+<?php endif; ?>
                             </div>
                         </article>
                     </article>

@@ -84,7 +84,8 @@ final class ChatLive
      */
     public static function activ(array $settings): bool
     {
-        if (!self::configurat($settings)) {
+        // Pluginul „Chat live” din licență: fără el (sau când se oprește) bulina nu mai apare.
+        if (!Plugins::permiteInceput('chat_live') || !self::configurat($settings)) {
             return false;
         }
         $cereConsimtamant = (string) ($settings['tawk_requires_consent'] ?? '1') !== self::CONSIMTAMANT_OPTIONAL;

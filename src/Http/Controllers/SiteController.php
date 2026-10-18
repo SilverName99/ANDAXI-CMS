@@ -71,12 +71,15 @@ final class SiteController
         }
 
         $db = $this->db();
-        [$products] = $this->loadProducts(limit: 4);
+        // Pagina de start din cod arată produse și categorii doar cu catalogul,
+        // articole doar cu blogul.
+        $cuCatalog = \App\Support\Plugins::vizibil('catalog');
+        [$products] = $cuCatalog ? $this->loadProducts(limit: 4) : [[]];
 
         View::render('site/home', [
             'products' => $products,
-            'categories' => $this->loadShopCatalogCategories($db instanceof PDO ? $db : null),
-            'blogPosts' => $this->loadPublishedBlogPosts($db instanceof PDO ? $db : null, 3),
+            'categories' => $cuCatalog ? $this->loadShopCatalogCategories($db instanceof PDO ? $db : null) : [],
+            'blogPosts' => \App\Support\Plugins::vizibil('blog') ? $this->loadPublishedBlogPosts($db instanceof PDO ? $db : null, 3) : [],
             'title' => 'Acasă',
         ]);
     }
@@ -1057,7 +1060,7 @@ final class SiteController
 
         // Alegerea FANbox vine din formular; fără punct ales, comanda n-are
         // unde fi livrată, deci o oprim aici, nu la generarea AWB-ului.
-        $laFanbox = isset($_POST['livrare_fanbox']);
+        $laFanbox = isset($_POST['livrare_fanbox']) && \App\Support\Plugins::permiteInceput('livrare_fan');
         $lockerId = $laFanbox ? (int) ($_POST['fan_locker_id'] ?? 0) : 0;
         \App\Support\CheckoutCalculator::alegeFanbox($lockerId, $laFanbox);
         $locker = null;
@@ -1068,7 +1071,7 @@ final class SiteController
                 header('Location: /checkout');
                 return;
             }
-        } elseif (isset($_POST['livrare_fanbox'])) {
+        } elseif ($laFanbox) {
             Flash::set('error', 'Alege punctul FANbox la care vrei livrarea.');
             header('Location: /checkout');
             return;
@@ -1104,7 +1107,7 @@ final class SiteController
                     + $liveShippingCost
                     + (float) ($summary['vat_additional'] ?? 0.0)
             );
-        } elseif ((string) ($settings['fan_live_tariff_enabled'] ?? '0') === '1' && $requiresShippingCharge) {
+        } elseif (\App\Support\ShippingPricing::tarifLiveFan($settings) && $requiresShippingCharge) {
             $message = trim((string) $shippingError);
             if ($message === '') {
                 $message = 'Nu am putut calcula transportul prin FAN Courier. Verifică localitatea/județul și încearcă din nou.';
@@ -1969,7 +1972,7 @@ final class SiteController
     {
         $limit = (int) ($_GET['limit'] ?? 4);
         $limit = max(1, min(24, $limit));
-        $items = $this->loadBestSellersFromCompletedOrders($limit);
+        $items = array_map([self::class, 'faraPreturiFaraMagazin'], $this->loadBestSellersFromCompletedOrders($limit));
         $this->jsonResponse([
             'ok' => true,
             'items' => $items,
@@ -2020,13 +2023,31 @@ final class SiteController
 
         $this->jsonResponse([
             'ok' => true,
-            'items' => array_values($items),
+            'items' => array_values(array_map([self::class, 'faraPreturiFaraMagazin'], $items)),
             'categories' => array_values($categories),
             'activeCategory' => $categoryFilter,
             'sort' => $sort,
             'sortOptions' => $this->shopCatalogSortOptions(),
             'count' => count($items),
         ]);
+    }
+
+    /**
+     * Catalog fără magazin (de prezentare): produsele din API-urile publice
+     * pleacă fără prețuri. Cu magazinul pe site, produsul rămâne neatins.
+     */
+    private static function faraPreturiFaraMagazin(array $produs): array
+    {
+        if (\App\Support\Plugins::vizibil('magazin')) {
+            return $produs;
+        }
+        foreach (['price', 'sale_price', 'regular_price', 'base_price', 'price_label', 'regular_price_label', 'discount_value_label'] as $cheie) {
+            unset($produs[$cheie]);
+        }
+        if (array_key_exists('has_sale_price', $produs)) {
+            $produs['has_sale_price'] = false;
+        }
+        return $produs;
     }
 
     public function productSearchApi(): void
@@ -2123,6 +2144,15 @@ final class SiteController
         $payload = $this->requestPayload();
         $quantity = max(1, (int) ($payload['quantity'] ?? $_POST['quantity'] ?? 1));
         $requestedBbdKey = strtolower(trim((string) ($payload['bbd_key'] ?? $_POST['bbd_key'] ?? '')));
+
+        // Magazinul „se oprește”: nimic nou în coș (comenzile plasate se termină).
+        if (!\App\Support\Plugins::permiteInceput('magazin')) {
+            $this->jsonResponse([
+                'ok' => false,
+                'message' => 'Momentan nu se mai pot plasa comenzi online.',
+            ], 409);
+            return;
+        }
 
         $product = $this->findProductById($productId);
         if ($product === null) {
@@ -2249,6 +2279,14 @@ final class SiteController
     {
         $payload = $this->requestPayload();
         $code = trim((string) ($payload['coupon_code'] ?? $_POST['coupon_code'] ?? ''));
+        // Pluginul „Cupoane” se oprește: cupoanele nu se mai aplică la comenzi noi.
+        if (!\App\Support\Plugins::permiteInceput('cupoane')) {
+            $this->jsonResponse([
+                'ok' => false,
+                'message' => 'Cupoanele nu mai pot fi folosite.',
+            ], 409);
+            return;
+        }
         if ($code === '') {
             $this->jsonResponse([
                 'ok' => false,
@@ -2289,6 +2327,13 @@ final class SiteController
         $productId = (int) ($params['id'] ?? 0);
         $quantity = max(1, (int) ($_POST['quantity'] ?? 1));
         $requestedBbdKey = strtolower(trim((string) ($_POST['bbd_key'] ?? '')));
+
+        // Magazinul „se oprește”: nimic nou în coș (comenzile plasate se termină).
+        if (!\App\Support\Plugins::permiteInceput('magazin')) {
+            Flash::set('error', 'Momentan nu se mai pot plasa comenzi online.');
+            header('Location: /cos');
+            return;
+        }
 
         $product = $this->findProductById($productId);
         if ($product === null) {
@@ -2390,6 +2435,12 @@ final class SiteController
         if (!in_array($redirectTo, ['/cos', '/checkout'], true)) {
             $redirectTo = '/cos';
         }
+        // Pluginul „Cupoane” se oprește: cupoanele nu se mai aplică la comenzi noi.
+        if (!\App\Support\Plugins::permiteInceput('cupoane')) {
+            Flash::set('error', 'Cupoanele nu mai pot fi folosite.');
+            header('Location: ' . $redirectTo);
+            return;
+        }
         if ($code === '') {
             Flash::set('error', 'Introdu un cod de cupon.');
             header('Location: ' . $redirectTo);
@@ -2419,6 +2470,12 @@ final class SiteController
             $redirectTo = '/cos';
         }
         $points = max(0, (int) ($_POST['points'] ?? 0));
+        // Pluginul „Puncte de fidelitate” se oprește: punctele nu se mai folosesc la comenzi noi.
+        if (!\App\Support\Plugins::permiteInceput('fidelitate')) {
+            Flash::set('error', 'Punctele de fidelitate nu mai pot fi folosite.');
+            header('Location: ' . $redirectTo);
+            return;
+        }
         if ($points <= 0) {
             Flash::set('error', 'Introdu numărul de puncte pe care vrei să le folosești.');
             header('Location: ' . $redirectTo);
@@ -2583,7 +2640,8 @@ final class SiteController
             'registrationFields' => $registrationFields,
             'socialAuthConfig' => $socialAuthConfig,
             'loyaltyTransactions' => $loyaltyTransactions,
-            'loyaltyConfig' => LoyaltyService::config($settings),
+            // Punctele din cont: doar cu pluginul „Puncte de fidelitate” pe site.
+            'loyaltyConfig' => array_merge(LoyaltyService::config($settings), \App\Support\Plugins::vizibil('fidelitate') ? [] : ['enabled' => false]),
             'dbReady' => $db instanceof PDO,
             'next' => $next,
             'registerAntiBot' => $this->issueRegisterAntiBotPayload(),
@@ -3747,7 +3805,10 @@ final class SiteController
         $accountSectionHtml = '';
         $productReviewFormHtml = '';
         $gdprAgreementsFormHtml = '';
-        $pageHtmlContent = (string) ($page['html_content'] ?? '');
+        // Tokenurile pluginurilor pe care site-ul nu le are (coș, checkout, cont,
+        // recenzii, acorduri GDPR…) nici nu se mai calculează.
+        $page['html_content'] = \App\Support\Plugins::curataTokenuri((string) ($page['html_content'] ?? ''));
+        $pageHtmlContent = (string) $page['html_content'];
         if (str_contains($pageHtmlContent, self::CART_FORM_TOKEN)) {
             $cartState = $this->buildCartRenderState($db);
             $cartFormHtml = $this->renderCartSection(
@@ -4000,7 +4061,7 @@ final class SiteController
         $summary['county'] = $county;
         // Prețul fix e deja în sumar și nu depinde de interogarea FAN, deci
         // pentru acest răspuns tratăm magazinul ca fiind pe tarif propriu.
-        $fanLiveEnabled = ((string) ($settings['fan_live_tariff_enabled'] ?? '0')) === '1'
+        $fanLiveEnabled = \App\Support\ShippingPricing::tarifLiveFan($settings)
             && !\App\Support\ShippingPricing::esteActiv($settings);
         $requiresShippingCharge = $this->requiresFanLiveShippingCharge($settings, $summary);
 
@@ -4913,7 +4974,8 @@ HTML;
             return $state;
         }
         $this->ensureCustomerSchema($db);
-        $state['loyalty_enabled'] = !empty(LoyaltyService::config(Settings::all($db))['enabled']);
+        // Punctele din cont: doar cu pluginul „Puncte de fidelitate” pe site.
+        $state['loyalty_enabled'] = !empty(LoyaltyService::config(Settings::all($db))['enabled']) && \App\Support\Plugins::vizibil('fidelitate');
 
         $customer = CustomerAuth::user($db);
         if (!is_array($customer)) {
@@ -5030,7 +5092,7 @@ HTML;
     private function fanboxDisponibil(): bool
     {
         $db = $this->db();
-        if (!\App\Support\ShippingPricing::ofertaFanbox($this->cachedSettings($db))) {
+        if (!\App\Support\ShippingPricing::fanboxPentruComenziNoi($this->cachedSettings($db))) {
             return false;
         }
         return \App\Support\FanLockers::numar($db) > 0;
@@ -5176,7 +5238,7 @@ HTML;
             $summary['county'] = $selectedCounty;
         }
         $pretFixActiv = \App\Support\ShippingPricing::esteActiv($settings);
-        if ($pretFixActiv || (string) ($settings['fan_live_tariff_enabled'] ?? '0') === '1') {
+        if ($pretFixActiv || \App\Support\ShippingPricing::tarifLiveFan($settings)) {
             $previewBilling = [
                 'billing_county' => $selectedCounty,
                 'billing_city' => trim((string) ($values['billing_city'] ?? '')),
@@ -7299,7 +7361,7 @@ CSS;
             );
         }
 
-        if ((string) ($settings['fan_live_tariff_enabled'] ?? '0') !== '1') {
+        if (!\App\Support\ShippingPricing::tarifLiveFan($settings)) {
             return null;
         }
 
@@ -8860,7 +8922,9 @@ CSS;
 
     private function productRequiresBbdSelection(array $product): bool
     {
-        if ((int) ($product['bbd_enabled'] ?? 0) !== 1) {
+        // Pluginul „Oferte BBD”: fără el (sau când se oprește) produsul se vinde
+        // ca oricare altul, la prețul lui, fără alegerea unei oferte.
+        if ((int) ($product['bbd_enabled'] ?? 0) !== 1 || !\App\Support\Plugins::permiteInceput('oferte_bbd')) {
             return false;
         }
         $entries = is_array($product['bbd_entries'] ?? null)
@@ -9483,6 +9547,23 @@ CSS;
                 . 'Produs în precomandă — se livrează după ce marfa ajunge la noi'
                 . '</p>'
             : '';
+        // Butonul de coș, cu banda de precomandă în față și marca/etichetele după.
+        $productAddToCartHtml = $bandaPrecomandaHtml . $this->buildProductAddToCartButtonHtml(
+            $productId,
+            $productPrice,
+            $epuizatTemplate,
+            $requiresBbdSelection,
+            $ePrecomandaTemplate
+        ) . $addToCartSuffixHtml;
+        if (!\App\Support\Plugins::permiteInceput('magazin')) {
+            // Fără magazin (catalog de prezentare) nu există coș; când magazinul
+            // se oprește, locul butonului îl ia un mesaj scurt. Marca și
+            // etichetele rămân, ele sunt ale catalogului.
+            $productQuantityInputHtml = '';
+            $productPostCartNoteHtml = '';
+            $productAddToCartHtml = (\App\Support\Plugins::vizibil('magazin') ? self::mesajComenziInchiseHtml() : '')
+                . ($templateHasTaxonomyPlaceholder ? '' : $productTaxonomiesHtml);
+        }
         $map = [
             'product_name' => $productName,
             'product_slug' => $productSlug,
@@ -9526,13 +9607,7 @@ CSS;
             'product_bbd_selector' => $productBbdSelectorHtml,
             'product_requires_bbd' => $requiresBbdSelection ? '1' : '0',
             'product_quantity_input' => $productQuantityInputHtml,
-            'product_add_to_cart_button' => $bandaPrecomandaHtml . $this->buildProductAddToCartButtonHtml(
-                $productId,
-                $productPrice,
-                $epuizatTemplate,
-                $requiresBbdSelection,
-                $ePrecomandaTemplate
-            ) . $addToCartSuffixHtml,
+            'product_add_to_cart_button' => $productAddToCartHtml,
             'product_preorder_notice' => $bandaPrecomandaHtml,
             'product_post_cart_note' => $productPostCartNoteHtml,
             'product_brand' => $productBrand,
@@ -9546,6 +9621,14 @@ CSS;
             'product_stock' => (string) max(0, (int) ($product['stock'] ?? 0)),
             'product_weight_grams' => (string) max(0, (int) ($product['weight_grams'] ?? 0)),
         ];
+        // Catalog fără magazin (de prezentare): produsele n-au preț.
+        if (!\App\Support\Plugins::vizibil('magazin')) {
+            foreach (['product_price', 'product_price_label', 'product_price_display', 'product_sale_price', 'product_regular_price',
+                'product_regular_price_display', 'product_old_price', 'product_old_price_display'] as $cheiePret) {
+                $map[$cheiePret] = '';
+            }
+            $map['product_has_sale_price'] = '0';
+        }
         foreach ($map as $key => $value) {
             if (strpos($key, 'product_') === 0) {
                 $map['product:' . substr($key, 8)] = $value;
@@ -9611,6 +9694,17 @@ CSS;
             'css' => $css,
             'js' => $js,
         ];
+    }
+
+    /**
+     * Mesajul scurt care ține locul butonului de coș cât magazinul „se oprește”
+     * (pagina de produs, cardurile): comenzile deja plasate se termină, dar nu
+     * se mai pot plasa altele noi.
+     */
+    public static function mesajComenziInchiseHtml(): string
+    {
+        return '<p class="magazin-inchis-nota" style="margin:8px 0 0;color:#92400e;font-weight:600;">'
+            . 'Momentan nu se mai pot plasa comenzi online.</p>';
     }
 
     private function buildProductQuantityInputHtml(
@@ -9917,6 +10011,38 @@ CSS;
 
     private function loadProductReviewsForSite(PDO $db, array $product): array
     {
+        // Pluginul „Recenzii produse”: oprit, pagina produsului n-are nici
+        // recenzii, nici formular; când se oprește, recenziile rămân, dar nu
+        // se mai pot scrie altele noi.
+        if (!\App\Support\Plugins::vizibil('recenzii')) {
+            return [
+                'count' => 0,
+                'average' => 0.0,
+                'average_label' => '0.0',
+                'stars_html' => '',
+                'list_html' => '',
+                'form_html' => '',
+                'section_html' => '',
+                'items' => [],
+            ];
+        }
+        $reviews = $this->incarcaRecenziileProdusului($db, $product);
+        if (!\App\Support\Plugins::permiteInceput('recenzii')) {
+            $reviews['form_html'] = '';
+            $reviews['section_html'] = $this->buildReviewSectionHtml(
+                (string) $reviews['average_label'],
+                (int) $reviews['count'],
+                (string) $reviews['stars_html'],
+                (string) $reviews['list_html'],
+                '',
+                false
+            );
+        }
+        return $reviews;
+    }
+
+    private function incarcaRecenziileProdusului(PDO $db, array $product): array
+    {
         $productId = (int) ($product['id'] ?? 0);
         if ($productId <= 0) {
             return [
@@ -10122,45 +10248,57 @@ CSS;
             . ' din 5 · '
             . (int) $reviewsCount
             . ' review-uri';
-        $tabs[] = [
-            'id' => 'reviews',
-            'label' => 'Recenzii',
-            'label_html' => '<span class="product-tabs__reviews-title">Recenzii</span>',
-            'anchor' => 'recenzii',
-        ];
-        $tabs[] = [
-            'id' => 'write-review',
-            'label' => 'Lasă o recenzie',
-            'label_html' => '<span class="product-tabs__reviews-title">Lasă o recenzie</span>',
-        ];
-        $panes[] = [
-            'id' => 'reviews',
-            'title' => 'Recenzii',
-            'hide_title' => true,
-            'content_html' => '<section id="product-reviews" class="product-reviews">'
-                . '<div class="product-reviews-head product-reviews-head--inside">'
-                . '<div class="product-reviews-head__inline">'
-                . $reviewsStarsHtml
-                . '<p>' . $reviewsSummaryText . '</p>'
-                . '</div>'
-                . '</div>'
-                . ($reviewsListHtml !== '' ? $reviewsListHtml : '<p class="product-reviews-empty">Nu există review-uri încă.</p>')
-                . '</section>',
-        ];
-        $panes[] = [
-            'id' => 'write-review',
-            'title' => 'Lasă o recenzie',
-            'hide_title' => true,
-            'content_html' => '<section id="product-review-form" class="product-reviews product-reviews--write">'
-                . '<div class="product-reviews-head product-reviews-head--inside">'
-                . '<div class="product-reviews-head__inline">'
-                . '<span class="product-reviews-head__label">Scrie o recenzie</span>'
-                . '<p>Spune-ne experiența ta cu acest produs.</p>'
-                . '</div>'
-                . '</div>'
-                . ($reviewFormHtml !== '' ? $reviewFormHtml : '<p class="product-reviews-empty">Formular indisponibil.</p>')
-                . '</section>',
-        ];
+        // Taburile de recenzii sunt ale pluginului „Recenzii produse”; „Lasă o
+        // recenzie” doar cât pluginul e pornit.
+        $cuRecenzii = \App\Support\Plugins::vizibil('recenzii');
+        $cuRecenzieNoua = \App\Support\Plugins::permiteInceput('recenzii');
+        if ($cuRecenzii) {
+            $tabs[] = [
+                'id' => 'reviews',
+                'label' => 'Recenzii',
+                'label_html' => '<span class="product-tabs__reviews-title">Recenzii</span>',
+                'anchor' => 'recenzii',
+            ];
+        }
+        if ($cuRecenzieNoua) {
+            $tabs[] = [
+                'id' => 'write-review',
+                'label' => 'Lasă o recenzie',
+                'label_html' => '<span class="product-tabs__reviews-title">Lasă o recenzie</span>',
+            ];
+        }
+        if ($cuRecenzii) {
+            $panes[] = [
+                'id' => 'reviews',
+                'title' => 'Recenzii',
+                'hide_title' => true,
+                'content_html' => '<section id="product-reviews" class="product-reviews">'
+                    . '<div class="product-reviews-head product-reviews-head--inside">'
+                    . '<div class="product-reviews-head__inline">'
+                    . $reviewsStarsHtml
+                    . '<p>' . $reviewsSummaryText . '</p>'
+                    . '</div>'
+                    . '</div>'
+                    . ($reviewsListHtml !== '' ? $reviewsListHtml : '<p class="product-reviews-empty">Nu există review-uri încă.</p>')
+                    . '</section>',
+            ];
+        }
+        if ($cuRecenzieNoua) {
+            $panes[] = [
+                'id' => 'write-review',
+                'title' => 'Lasă o recenzie',
+                'hide_title' => true,
+                'content_html' => '<section id="product-review-form" class="product-reviews product-reviews--write">'
+                    . '<div class="product-reviews-head product-reviews-head--inside">'
+                    . '<div class="product-reviews-head__inline">'
+                    . '<span class="product-reviews-head__label">Scrie o recenzie</span>'
+                    . '<p>Spune-ne experiența ta cu acest produs.</p>'
+                    . '</div>'
+                    . '</div>'
+                    . ($reviewFormHtml !== '' ? $reviewFormHtml : '<p class="product-reviews-empty">Formular indisponibil.</p>')
+                    . '</section>',
+            ];
+        }
 
         if ($tabs === [] || $panes === []) {
             return '';
@@ -10397,6 +10535,11 @@ CSS;
                 'out_of_stock' => (int) ($candidate['out_of_stock'] ?? 0) === 1
                     && !\App\Support\Precomanda::estePrecomanda($candidate) ? 1 : 0,
             ];
+            // Catalog fără magazin (de prezentare): în pagină nu ajunge niciun preț.
+            if (!\App\Support\Plugins::vizibil('magazin')) {
+                $item = array_merge($item, ['price' => 0.0, 'regular_price' => 0.0, 'has_sale_price' => 0,
+                    'discount_value_label' => '', 'price_label' => '', 'regular_price_label' => '']);
+            }
             $items[] = $item;
             $itemById[$id] = $item;
             if (count($items) >= 40) {
@@ -10484,7 +10627,9 @@ CSS;
     private function autoGenerateFanAwbForPaidOrder(PDO $db, string $orderNumber, int $orderId): void
     {
         $settings = Settings::all($db);
-        if ((string) ($settings['fan_awb_auto'] ?? '0') !== '1') {
+        // AWB-ul automat e al pluginului „Livrare FAN Courier” (și când se oprește:
+        // termină comenzile în curs).
+        if ((string) ($settings['fan_awb_auto'] ?? '0') !== '1' || !\App\Support\Plugins::vizibil('livrare_fan')) {
             return;
         }
 
@@ -10882,7 +11027,8 @@ CSS;
 
     private function renderMannequinSection(?PDO $db, array $settings): string
     {
-        if (!$db instanceof PDO) {
+        // Manechinul e un plugin; fără el, secțiunea nici nu se mai calculează.
+        if (!$db instanceof PDO || !\App\Support\Plugins::vizibil('manechin')) {
             return '';
         }
         if ((string) ($settings['mannequin_enabled'] ?? '1') !== '1') {
