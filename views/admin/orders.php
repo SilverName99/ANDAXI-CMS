@@ -1,0 +1,2298 @@
+<?php
+$orders = is_array($orders ?? null) ? $orders : [];
+$promoProducts = is_array($promoProducts ?? null) ? $promoProducts : [];
+$filters = is_array($filters ?? null) ? $filters : [];
+$allowedStatuses = is_array($allowedOrderStatuses ?? null) ? $allowedOrderStatuses : ['pending', 'pending_payment', 'processing', 'completed', 'cancelled', 'refunded', 'failed', 'returned'];
+$bulkStatusOptions = array_values(array_filter(
+    $allowedStatuses,
+    static fn ($status): bool => (string) $status !== 'completed'
+));
+// Intrări din lista „Status comandă" care sunt de fapt acțiuni, nu stări. Nu
+// intră în acțiunea în masă: încasarea se confirmă pe o comandă anume, nu pe
+// o bifă peste douăzeci deodată.
+$statusActions = is_array($orderStatusActions ?? null) ? $orderStatusActions : [];
+$ordersBackUrl = is_string($ordersBackUrl ?? null) ? (string) $ordersBackUrl : '/admin/orders';
+$selectedStatus = (string) ($filters['status'] ?? '');
+$dateFrom = (string) ($filters['from_date'] ?? '');
+$dateTo = (string) ($filters['to_date'] ?? '');
+$sortBy = (string) ($filters['sort_by'] ?? 'date');
+$sortDir = (string) ($filters['sort_dir'] ?? 'desc');
+$search = trim((string) ($filters['q'] ?? ''));
+$paymentFilter = (string) ($filters['payment_method'] ?? '');
+$doarRestDeIncasat = !empty($filters['rest_incasat']);
+// Precomenzile nu sunt o pagină separată: sunt aceeași listă, filtrată. Tabul
+// „În așteptare" arată comenzile care încă n-au plecat în ERP.
+$arePrecomanda = !empty($arePrecomanda ?? false);
+$precomenziCount = is_array($precomenziCount ?? null) ? $precomenziCount : [];
+$precomenziAsteptare = (int) ($precomenziCount['asteptare'] ?? 0);
+$precomenziEliberate = (int) ($precomenziCount['eliberata'] ?? 0);
+$tabPrecomanda = (string) ($filters['precomanda'] ?? '');
+/** Aceeași listă, alt tab: restul filtrelor rămân pe loc. */
+$urlTabPrecomanda = static function (string $valoare): string {
+    $query = is_array($_GET) ? $_GET : [];
+    unset($query['precomanda']);
+    if ($valoare !== '') {
+        $query['precomanda'] = $valoare;
+    }
+    $qs = http_build_query($query);
+    return '/admin/orders' . ($qs !== '' ? ('?' . $qs) : '');
+};
+$statusLabels = is_array($orderStatusLabels ?? null) ? $orderStatusLabels : [];
+$paymentStatusLabels = is_array($orderPaymentStatusLabels ?? null) ? $orderPaymentStatusLabels : [];
+$paymentMethodLabels = is_array($orderPaymentMethodLabels ?? null) ? $orderPaymentMethodLabels : [];
+$summary = is_array($ordersSummary ?? null) ? $ordersSummary : [
+    'total_count' => count($orders),
+    'completed_count' => 0,
+    'cancelled_count' => 0,
+    'pending_like_count' => 0,
+    'total_value' => 0.0,
+];
+$formatDateTime = static function (string $value): string {
+    $value = trim($value);
+    if ($value === '') {
+        return '-';
+    }
+    $ts = strtotime($value);
+    if ($ts === false) {
+        return $value;
+    }
+    return date('d.m.Y H:i', $ts);
+};
+$statusPillClassMap = [
+    'pending' => 'warn',
+    'pending_payment' => 'warn',
+    'processing' => 'info',
+    'completed' => 'ok',
+    'cancelled' => 'off',
+    'refunded' => 'muted',
+    'failed' => 'off',
+];
+$paymentStatusPillClassMap = [
+    'paid' => 'ok',
+    'unpaid' => 'off',
+    'pending' => 'warn',
+    'failed' => 'off',
+    'refunded' => 'muted',
+];
+$paymentMethodPillClassMap = [
+    'cod' => 'cod',
+    'card' => 'card',
+    'euplatesc' => 'card',
+    'stripe' => 'card',
+    'btipay' => 'card',
+    'bank_transfer' => 'card',
+];
+// Plățile Banca Transilvania au butoanele lor (încasează / rambursează), care
+// cer jetonul anti-CSRF al sesiunii. Doar dacă lista are comenzi cu plăți BT
+// (ale comenzii sau ale unei diferențe plătite prin link).
+$areComenziBt = false;
+foreach ($orders as $comandaBtVerificata) {
+    if (is_array($comandaBtVerificata['bt'] ?? null) || !empty($comandaBtVerificata['bt_linkuri'])) {
+        $areComenziBt = true;
+        break;
+    }
+}
+$currentQuery = $_GET;
+if (!is_array($currentQuery)) {
+    $currentQuery = [];
+}
+$nextSortDir = strtolower($sortDir) === 'asc' ? 'desc' : 'asc';
+$sortToggleQuery = array_merge($currentQuery, ['dir' => $nextSortDir]);
+$sortToggleUrl = '/admin/orders?' . http_build_query($sortToggleQuery);
+$sortToggleLabel = strtolower($sortDir) === 'asc'
+    ? 'Sortare curentă: crescător. Click pentru descrescător.'
+    : 'Sortare curentă: descrescător. Click pentru crescător.';
+?>
+
+<?php if (!empty($erpModulBanner)): ?>
+    <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
+        <?= htmlspecialchars((string) $erpModulBanner, ENT_QUOTES) ?>
+    </section>
+<?php endif; ?>
+
+<section class="panel">
+    <div class="section-head">
+        <div>
+            <h1>Comenzi</h1>
+            <p>Vizualizează și gestionează comenzile.</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <?php $exportQuery = trim((string) ($_SERVER['QUERY_STRING'] ?? '')); ?>
+            <a class="btn" href="/admin/orders/export<?= $exportQuery !== '' ? ('?' . htmlspecialchars($exportQuery, ENT_QUOTES)) : '' ?>" title="Descarcă lista de comenzi (se deschide în Excel)">⬇ Export Excel</a>
+            <a class="btn btn-secondary" href="/admin/orders/trash">Coș comenzi</a>
+        </div>
+    </div>
+
+    <div class="orders-kpis">
+        <article class="orders-kpi-card">
+            <span class="orders-kpi-icon orders-kpi-icon--all">📦</span>
+            <small>Total comenzi</small>
+            <strong><?= (int) ($summary['total_count'] ?? 0) ?></strong>
+        </article>
+        <article class="orders-kpi-card">
+            <span class="orders-kpi-icon orders-kpi-icon--ok">✅</span>
+            <small>Finalizate</small>
+            <strong class="ok"><?= (int) ($summary['completed_count'] ?? 0) ?></strong>
+        </article>
+        <article class="orders-kpi-card">
+            <span class="orders-kpi-icon orders-kpi-icon--off">⛔</span>
+            <small>Anulate</small>
+            <strong class="off"><?= (int) ($summary['cancelled_count'] ?? 0) ?></strong>
+        </article>
+        <article class="orders-kpi-card">
+            <span class="orders-kpi-icon orders-kpi-icon--warn">⏳</span>
+            <small>În așteptare</small>
+            <strong class="warn"><?= (int) ($summary['pending_like_count'] ?? 0) ?></strong>
+        </article>
+        <article class="orders-kpi-card">
+            <span class="orders-kpi-icon orders-kpi-icon--sum">📈</span>
+            <small>Valoare totală</small>
+            <strong><?= number_format((float) ($summary['total_value'] ?? 0.0), 2) ?> RON</strong>
+        </article>
+    </div>
+
+    <?php if ($arePrecomanda): ?>
+        <?php
+        $stilTab = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid #e2e8f0;'
+            . 'border-bottom:none;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;text-decoration:none;';
+        $stilActiv = $stilTab . 'background:#fff;color:#0f172a;border-color:#cbd5e1;box-shadow:0 -2px 0 #2563eb inset;';
+        $stilInactiv = $stilTab . 'background:#f8fafc;color:#64748b;';
+        ?>
+        <nav style="display:flex;gap:4px;margin:4px 0 -1px;border-bottom:1px solid #cbd5e1;flex-wrap:wrap;">
+            <a href="<?= htmlspecialchars($urlTabPrecomanda(''), ENT_QUOTES) ?>"
+               style="<?= $tabPrecomanda === '' ? $stilActiv : $stilInactiv ?>">Toate comenzile</a>
+            <a href="<?= htmlspecialchars($urlTabPrecomanda('asteptare'), ENT_QUOTES) ?>"
+               title="Comenzi cu produse în precomandă. Nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe fiecare."
+               style="<?= $tabPrecomanda === 'asteptare' ? $stilActiv : $stilInactiv ?>">
+                ⏳ Precomenzi
+                <?php if ($precomenziAsteptare > 0): ?>
+                    <span style="background:#b45309;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;"><?= $precomenziAsteptare ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="<?= htmlspecialchars($urlTabPrecomanda('eliberata'), ENT_QUOTES) ?>"
+               title="Precomenzi deja trimise în ERP."
+               style="<?= $tabPrecomanda === 'eliberata' ? $stilActiv : $stilInactiv ?>">
+                ✅ Precomenzi eliberate
+                <?php if ($precomenziEliberate > 0): ?>
+                    <span style="background:#e2e8f0;color:#334155;border-radius:999px;padding:1px 7px;font-size:11px;"><?= $precomenziEliberate ?></span>
+                <?php endif; ?>
+            </a>
+        </nav>
+        <?php if ($tabPrecomanda === 'asteptare'): ?>
+            <p style="margin:12px 0 0;color:#64748b;font-size:13px;">
+                Comenzi cu produse bifate „Valabil pentru precomandă". Marfa încă n-a venit, deci
+                comanda nu pleacă în „Comenzi site" din ERP — apasă ▶ pe rândul ei când poți onora.
+            </p>
+        <?php endif; ?>
+    <?php endif; ?>
+
+    <form method="get" action="/admin/orders" class="orders-filters orders-filters--compact">
+        <?php if ($tabPrecomanda !== ''): ?>
+            <input type="hidden" name="precomanda" value="<?= htmlspecialchars($tabPrecomanda, ENT_QUOTES) ?>">
+        <?php endif; ?>
+        <div class="orders-filters-grid">
+            <div class="orders-filter-field orders-filter-field--search">
+                <span class="orders-filter-label">Căutare</span>
+                <input type="text" name="q" value="<?= htmlspecialchars($search, ENT_QUOTES) ?>" placeholder="Caută după ID, client, email...">
+            </div>
+            <div class="orders-filter-field">
+                <span class="orders-filter-label">Status</span>
+                <select name="status">
+                    <option value="">Toate statusurile</option>
+                    <?php foreach ($allowedStatuses as $statusOption): ?>
+                        <option value="<?= htmlspecialchars((string) $statusOption, ENT_QUOTES) ?>" <?= $selectedStatus === (string) $statusOption ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string) ($statusLabels[(string) $statusOption] ?? (string) $statusOption), ENT_QUOTES) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="orders-filter-field">
+                <span class="orders-filter-label">Plată</span>
+                <select name="payment_method">
+                    <option value="">Toate</option>
+                    <option value="card" <?= $paymentFilter === 'card' ? 'selected' : '' ?>>Card</option>
+                    <option value="cod" <?= $paymentFilter === 'cod' ? 'selected' : '' ?>>Ramburs</option>
+                    <option value="bank_transfer" <?= $paymentFilter === 'bank_transfer' ? 'selected' : '' ?>>OP (transfer)</option>
+                </select>
+            </div>
+            <div class="orders-filter-field">
+                <span class="orders-filter-label">Încasare</span>
+                <label style="display:flex;align-items:center;gap:6px;height:38px;font-size:13px;color:#334155;white-space:nowrap;">
+                    <input type="checkbox" name="rest_incasat" value="1" <?= $doarRestDeIncasat ? 'checked' : '' ?>>
+                    Doar cu rest de încasat
+                </label>
+            </div>
+            <div class="orders-filter-field">
+                <span class="orders-filter-label">De la data</span>
+                <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom, ENT_QUOTES) ?>">
+            </div>
+            <div class="orders-filter-field">
+                <span class="orders-filter-label">Până la data</span>
+                <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo, ENT_QUOTES) ?>">
+            </div>
+            <div class="orders-filter-field">
+                <span class="orders-filter-label">Sortare</span>
+                <select name="sort">
+                    <option value="date" <?= $sortBy === 'date' ? 'selected' : '' ?>>Data</option>
+                    <option value="status" <?= $sortBy === 'status' ? 'selected' : '' ?>>Status</option>
+                    <option value="total" <?= $sortBy === 'total' ? 'selected' : '' ?>>Preț</option>
+                </select>
+            </div>
+            <input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir, ENT_QUOTES) ?>">
+            <div class="orders-filter-actions">
+                <button class="btn" type="submit">Aplică</button>
+                <a class="btn btn-secondary" href="/admin/orders<?= $tabPrecomanda !== '' ? ('?precomanda=' . urlencode($tabPrecomanda)) : '' ?>">Reset</a>
+            </div>
+        </div>
+    </form>
+
+    <form method="post" action="/admin/orders/bulk" id="orders-bulk-form">
+        <?= \App\Support\AdminCsrf::camp() ?>
+        <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
+        <div id="orders-bulk-ids"></div>
+        <div class="orders-bulk-toolbar">
+            <div class="orders-bulk-toolbar__left">
+                <label style="display:inline-flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="orders-select-all">
+                    Selectează toate
+                </label>
+            </div>
+            <div class="orders-bulk-toolbar__right">
+                <select name="bulk_action" id="orders-bulk-action">
+                    <option value="">Acțiune în masă</option>
+                    <option value="delete">Șterge (mută în coș)</option>
+                    <option value="status">Schimbă status</option>
+                    <option value="awb">Generează AWB</option>
+                    <option value="shipping">Corectează transportul</option>
+                    <option value="erp_retry">Retrimite în ERP</option>
+                </select>
+                <input type="number" name="bulk_shipping_value" id="orders-bulk-shipping" step="0.01" min="0"
+                       placeholder="Transport (lei)" style="display:none;width:150px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
+                <select name="bulk_status" id="orders-bulk-status" style="display:none;">
+                    <option value="">Alege status</option>
+                    <?php foreach ($bulkStatusOptions as $statusOption): ?>
+                        <option value="<?= htmlspecialchars((string) $statusOption, ENT_QUOTES) ?>">
+                            <?= htmlspecialchars((string) $statusOption, ENT_QUOTES) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn btn-secondary" type="submit">Aplică pe selecție</button>
+            </div>
+        </div>
+    </form>
+
+    <?php if ($orders === []): ?>
+        <p style="margin:0;color:#64748b;">Nu există comenzi pentru filtrele selectate.</p>
+    <?php else: ?>
+        <div class="orders-list-head">
+            <p class="orders-count-note"><?= count($orders) ?> comenzi</p>
+            <a class="orders-sort-toggle" href="<?= htmlspecialchars($sortToggleUrl, ENT_QUOTES) ?>" title="<?= htmlspecialchars($sortToggleLabel, ENT_QUOTES) ?>">↕️</a>
+        </div>
+        <div class="orders-table-wrap">
+            <table class="table orders-table">
+                <thead>
+                <tr>
+                    <th style="width:44px;"></th>
+                    <th>Client / ID</th>
+                    <th>Data</th>
+                    <th>Sumă</th>
+                    <th>Status</th>
+                    <th>Livrare</th>
+                    <th style="width:190px;">Observații interne</th>
+                    <th style="width:220px;">Acțiuni</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($orders as $order): ?>
+                    <?php
+                        // Nume de afișat în modal: cel real sau, pentru conturile
+                        // fără nume („Client Nou"), adresa de email.
+                        $order['display_name'] = \App\Support\CustomerDisplay::nume(
+                            (string) ($order['billing_first_name'] ?? ''),
+                            (string) ($order['billing_last_name'] ?? ''),
+                            (string) ($order['billing_email'] ?? '')
+                        );
+                        // „Client agresiv” din ERP: rând roz + eticheta roșie în
+                        // fereastra comenzii. Doar pe cele marcate ajunge în datele
+                        // ferestrei; restul comenzilor rămân exact ca înainte.
+                        $eClientAgresiv = (string) ($order['erp_client_agresiv'] ?? '') === '1';
+                        unset($order['erp_client_agresiv']);
+                        if ($eClientAgresiv) {
+                            $order['client_agresiv'] = true;
+                        }
+                        $orderJson = htmlspecialchars((string) json_encode($order, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), ENT_QUOTES);
+                    ?>
+                    <?php
+                        $paymentStatus = (string) ($order['payment_status'] ?? 'unpaid');
+                        $paymentStatusKey = strtolower($paymentStatus);
+                        $statusRaw = (string) ($order['status'] ?? '');
+                        $statusKey = strtolower($statusRaw);
+                        $paymentMethodRaw = (string) ($order['payment_method'] ?? '');
+                        $paymentMethodKey = strtolower($paymentMethodRaw);
+                        $awb = trim((string) ($order['fan_awb'] ?? ''));
+                        $trackingStatus = trim((string) ($order['fan_tracking_status'] ?? ''));
+                        $trackingUrl = trim((string) ($order['fan_tracking_url'] ?? ''));
+                        // Comenzile plecate din mai multe depozite au mai multe AWB-uri.
+                        $awbColete = [];
+                        $awbListaRaw = json_decode((string) ($order['fan_awb_list'] ?? ''), true);
+                        if (is_array($awbListaRaw) && count($awbListaRaw) > 1) {
+                            foreach ($awbListaRaw as $awbIntrare) {
+                                if (!is_array($awbIntrare) || trim((string) ($awbIntrare['awb'] ?? '')) === '') {
+                                    continue;
+                                }
+                                $awbColete[] = [
+                                    'awb' => trim((string) $awbIntrare['awb']),
+                                    'url' => trim((string) ($awbIntrare['tracking_url'] ?? '')),
+                                    'gestiune' => trim((string) ($awbIntrare['gestiune'] ?? '')),
+                                ];
+                            }
+                        }
+                        // Motivul respingerii plății, salvat de procesator la eșec.
+                        $paymentError = trim((string) ($order['payment_error'] ?? ''));
+                        $paymentErrorScurt = $paymentError === ''
+                            ? ''
+                            : (function_exists('mb_strimwidth')
+                                ? mb_strimwidth($paymentError, 0, 64, '…', 'UTF-8')
+                                : substr($paymentError, 0, 64));
+                        $pointsAwarded = (int) ($order['loyalty_points_awarded'] ?? 0);
+                        $orderId = (int) ($order['id'] ?? 0);
+                        // Conturile fără nume real („Client Nou") se arată prin email.
+                        $customerName = \App\Support\CustomerDisplay::nume(
+                            (string) ($order['billing_first_name'] ?? ''),
+                            (string) ($order['billing_last_name'] ?? ''),
+                            (string) ($order['billing_email'] ?? '')
+                        );
+                        $isCancelled = $statusKey === 'cancelled';
+                        $isCod = $paymentMethodKey === 'cod';
+                        $statusPillClass = (string) ($statusPillClassMap[$statusKey] ?? 'info');
+                        $paymentStatusPillClass = (string) ($paymentStatusPillClassMap[$paymentStatusKey] ?? 'info');
+                        // Plătită cu cardul, dar totalul a crescut după încasare: eticheta
+                        // „Plătit" ascundea faptul că mai e ceva de încasat, iar comanda
+                        // arăta identic cu una achitată integral.
+                        $restDeIncasat = 0.0;
+                        if ($paymentStatusKey === 'paid') {
+                            $incasat = $order['paid_amount'] ?? null;
+                            $incasat = ($incasat === null || $incasat === '')
+                                ? (float) ($order['total'] ?? 0)
+                                : (float) $incasat;
+                            $restDeIncasat = round(max(0.0, (float) ($order['total'] ?? 0) - $incasat), 2);
+                        }
+                        $platitPartial = $restDeIncasat > 0.009;
+                        $paymentMethodPillClass = (string) ($paymentMethodPillClassMap[$paymentMethodKey] ?? 'muted');
+                        $erpEnabled = (string) ($settings['erp_enabled'] ?? '0') === '1';
+                        $erpStatus = strtolower(trim((string) ($order['erp_status'] ?? 'pending')));
+                        $erpError = trim((string) ($order['erp_last_error'] ?? ''));
+                        $erpProblems = trim((string) ($order['erp_problems'] ?? ''));
+                        $erpLabels = [
+                            'sent' => 'ERP: trimisă',
+                            'pending' => 'ERP: în așteptare',
+                            'failed' => 'ERP: eșuată',
+                            'skipped' => 'ERP: netrimisă',
+                            'cancelled' => 'ERP: anulată',
+                            'cancel_pending' => 'ERP: anulare în curs',
+                            'retur_pending' => 'ERP: retur în curs',
+                        ];
+                        // O comandă anulată/eșuată nu mai pleacă în ERP, chiar dacă a
+                        // rămas marcată „în așteptare" dinainte de anulare.
+                        if (in_array($statusKey, ['cancelled', 'refunded', 'failed', 'returned'], true)
+                            && in_array($erpStatus, ['pending', 'failed'], true)
+                        ) {
+                            $erpStatus = 'skipped';
+                            $erpError = '';
+                        }
+                        $erpPill = [
+                            'sent' => 'ok',
+                            'failed' => 'off',
+                            'skipped' => 'muted',
+                            'cancelled' => 'muted',
+                            'cancel_pending' => 'warn',
+                            'retur_pending' => 'warn',
+                        ][$erpStatus] ?? 'warn';
+                        $erpFactura = trim((string) ($order['erp_factura_numar'] ?? ''));
+                        $precomandaStare = strtolower(trim((string) ($order['preorder_status'] ?? '')));
+                        $ePrecomandaInAsteptare = $precomandaStare === 'asteptare';
+                    ?>
+                    <tr class="<?= $isCancelled ? 'is-cancelled' : '' ?><?= $eClientAgresiv ? ($isCancelled ? ' ' : '') . 'is-client-agresiv' : '' ?>">
+                        <td class="orders-table__check">
+                            <input type="checkbox" class="order-bulk-checkbox" data-order-id="<?= $orderId ?>" <?= $isCancelled ? 'disabled' : '' ?>>
+                        </td>
+                        <td>
+                            <small style="display:block;color:#94a3b8;">#<?= (int) $orderId ?> / <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?></small>
+                            <strong><?= htmlspecialchars($customerName !== '' ? $customerName : 'Client', ENT_QUOTES) ?></strong>
+                            <?php if ($eClientAgresiv): ?><span class="client-agresiv-badge" title="În ERP, clientul acestei comenzi are semnul „Client agresiv” pe fișă.">Client agresiv</span><?php endif; ?><small style="display:block;color:#64748b;"><?= htmlspecialchars((string) ($order['billing_email'] ?? ''), ENT_QUOTES) ?></small>
+                            <?php if (trim((string) ($order['ad_source'] ?? '')) !== ''): ?>
+                                <span title="Comandă provenită dintr-un anunț Google Ads<?= trim((string) ($order['ad_click_id'] ?? '')) !== '' ? (' (' . htmlspecialchars((string) $order['ad_click_id'], ENT_QUOTES) . ')') : '' ?>"
+                                      style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:2px 8px;border-radius:999px;background:#e8f0fe;color:#1a73e8;font-size:11px;font-weight:700;line-height:1.4;">
+                                    📣 Google Ads
+                                </span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($formatDateTime((string) ($order['created_at'] ?? '')), ENT_QUOTES) ?></td>
+                        <td>
+                            <strong><?= number_format((float) ($order['total'] ?? 0), 2) ?> RON</strong>
+                            <?php
+                                // Transportul e inclus în total, dar până acum se vedea
+                                // doar deschizând comanda. Aceeași regulă de „gratuit" ca
+                                // în fereastra comenzii, ca cifrele să nu se contrazică.
+                                $transportComanda = (float) ($order['shipping_cost'] ?? 0);
+                            ?>
+                            <?php if ($transportComanda > 0.004): ?>
+                                <small style="display:block;color:#64748b;">din care transport: <?= number_format($transportComanda, 2) ?> RON</small>
+                            <?php else: ?>
+                                <small style="display:block;color:#64748b;">transport gratuit</small>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <div class="orders-status-stack">
+                                <span class="status-pill status-pill--<?= htmlspecialchars($statusPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($statusLabels[$statusRaw] ?? $statusRaw), ENT_QUOTES) ?></span>
+                                <?php if (!$isCod): ?>
+                                    <?php if ($platitPartial): ?>
+                                        <span class="status-pill status-pill--warn"
+                                              title="Încasat <?= number_format((float) ($order['total'] ?? 0) - $restDeIncasat, 2) ?> RON din <?= number_format((float) ($order['total'] ?? 0), 2) ?> RON. Din fereastra comenzii: „Trimite link de plată pentru diferență”, dacă banii se cer de la client, sau „Înregistrează încasarea”, dacă au venit deja (ramburs, OP, numerar).">
+                                            Plătit parțial — rest <?= number_format($restDeIncasat, 2) ?> RON
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="status-pill status-pill--<?= htmlspecialchars($paymentStatusPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($paymentStatusLabels[$paymentStatusKey] ?? $paymentStatus), ENT_QUOTES) ?></span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <span class="status-pill status-pill--<?= htmlspecialchars($paymentMethodPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($paymentMethodLabels[$paymentMethodKey] ?? $paymentMethodRaw), ENT_QUOTES) ?></span>
+<?php if (is_array($order['bt'] ?? null)): ?>
+<?php
+    $btRand = $order['bt'];
+    if (!empty($btRand['necesita_rambursare'])) {
+        $btEticheta = 'BT: plată încasată — necesită rambursare';
+    } elseif (!empty($btRand['eliberata_comanda_activa'])) {
+        $btEticheta = 'BT: suma eliberată — comanda NU e plătită' . (!empty($btRand['comanda_platita_partial']) ? ' integral' : '');
+    } elseif (!empty($btRand['aprobare_refuzata'])) {
+        $btEticheta = 'BT: aprobarea din ERP refuzată — plata lipsește';
+    } elseif (($btRand['stare'] ?? '') === 'authorized') {
+        $btEticheta = 'BT: autorizată — de încasat' . (($btRand['termen'] ?? '') !== '' ? ' (automat la ' . $btRand['termen'] . ')' : '');
+    } else {
+        $btEticheta = 'BT: ' . mb_strtolower((string) ($btRand['eticheta'] ?? ''));
+    }
+?>
+                                <span class="status-pill status-pill--<?= htmlspecialchars(in_array($btRand['clasa'] ?? '', ['ok', 'warn', 'off', 'muted', 'info'], true) ? (string) $btRand['clasa'] : 'info', ENT_QUOTES) ?>"
+                                      title="<?= htmlspecialchars('Plată Banca Transilvania ' . (string) ($btRand['numar_bt'] ?? '') . ': ' . (string) ($btRand['eticheta'] ?? '') . (($btRand['eroare'] ?? '') !== '' ? ' — ' . (string) $btRand['eroare'] : ''), ENT_QUOTES) ?>">
+                                    <?= htmlspecialchars($btEticheta, ENT_QUOTES) ?>
+                                </span>
+<?php endif; ?>
+<?php foreach ((array) ($order['bt_linkuri'] ?? []) as $btLink): ?>
+<?php if (is_array($btLink) && (!empty($btLink['necesita_rambursare']) || ($btLink['stare'] ?? '') === 'authorized')): ?>
+                                <span class="status-pill status-pill--<?= !empty($btLink['necesita_rambursare']) ? 'off' : 'warn' ?>"
+                                      title="<?= htmlspecialchars('Diferență plătită prin Banca Transilvania ' . (string) ($btLink['numar_bt'] ?? '') . ': ' . (string) ($btLink['eticheta'] ?? '') . (($btLink['eroare'] ?? '') !== '' ? ' — ' . (string) $btLink['eroare'] : ''), ENT_QUOTES) ?>">
+                                    <?= !empty($btLink['necesita_rambursare']) ? 'BT diferență: încasată — necesită rambursare' : 'BT diferență: autorizată — se încasează' ?>
+                                </span>
+<?php endif; ?>
+<?php endforeach; ?>
+                                <?php if ($ePrecomandaInAsteptare): ?>
+                                    <span class="status-pill status-pill--warn"
+                                          title="Precomandă: nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe rândul ei.">
+                                        ⏳ Precomandă
+                                    </span>
+                                <?php elseif ($precomandaStare === 'eliberata'): ?>
+                                    <span class="status-pill status-pill--muted"
+                                          title="Precomandă eliberată<?= trim((string) ($order['preorder_released_at'] ?? '')) !== '' ? (' la ' . htmlspecialchars($formatDateTime((string) $order['preorder_released_at']), ENT_QUOTES)) : '' ?>">
+                                        Precomandă eliberată
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($erpEnabled && !$ePrecomandaInAsteptare): ?>
+                                    <span class="status-pill status-pill--<?= htmlspecialchars($erpPill, ENT_QUOTES) ?>"
+                                          title="<?= htmlspecialchars($erpError !== '' ? $erpError : ($erpProblems !== '' ? 'De rezolvat în ERP: ' . $erpProblems : ''), ENT_QUOTES) ?>">
+                                        <?= htmlspecialchars((string) ($erpLabels[$erpStatus] ?? $erpStatus), ENT_QUOTES) ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($paymentError !== ''): ?>
+                                    <small class="orders-payment-error" title="<?= htmlspecialchars($paymentError, ENT_QUOTES) ?>">
+                                        Motiv: <?= htmlspecialchars($paymentErrorScurt, ENT_QUOTES) ?>
+                                    </small>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                        <?php
+                            // Semnul roșu de lângă livrare: comanda are produse fără
+                            // gramaj în fișă, deci AWB-ul pleacă declarat mai ușor decât e.
+                            $faraGreutate = is_array($order['produse_fara_greutate'] ?? null)
+                                ? $order['produse_fara_greutate']
+                                : [];
+                            $faraGreutateTitlu = $faraGreutate === []
+                                ? ''
+                                : "Fără greutate în fișă: " . implode(', ', $faraGreutate)
+                                    . " — produsele astea cântăresc zero la AWB, iar FAN recântărește și taxează diferența."
+                                    . " Completează „Greutate (g)” în ERP → Produse.";
+                        ?>
+                        <td>
+                            <?php if ($faraGreutate !== []): ?>
+                                <span class="orders-fara-greutate"
+                                      title="<?= htmlspecialchars($faraGreutateTitlu, ENT_QUOTES) ?>">!</span>
+                            <?php endif; ?>
+                            <?php if ($erpFactura !== ''): ?>
+                                <small style="display:block;color:#0f766e;">Factură ERP: <?= htmlspecialchars($erpFactura, ENT_QUOTES) ?></small>
+                            <?php endif; ?>
+                            <?php if (count($awbColete) > 1): ?>
+                                <?php foreach ($awbColete as $awbColet): ?>
+                                    <small style="display:block;">
+                                        FAN:
+                                        <?php if ($awbColet['url'] !== ''): ?>
+                                            <a href="<?= htmlspecialchars($awbColet['url'], ENT_QUOTES) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($awbColet['awb'], ENT_QUOTES) ?></a>
+                                        <?php else: ?>
+                                            <?= htmlspecialchars($awbColet['awb'], ENT_QUOTES) ?>
+                                        <?php endif; ?>
+                                        <?php if ($awbColet['gestiune'] !== ''): ?>
+                                            <span style="color:#64748b;">(<?= htmlspecialchars($awbColet['gestiune'], ENT_QUOTES) ?>)</span>
+                                        <?php endif; ?>
+                                    </small>
+                                <?php endforeach; ?>
+                                <small style="display:block;color:#64748b;"><?= htmlspecialchars($trackingStatus !== '' ? $trackingStatus : 'AWB generat', ENT_QUOTES) ?></small>
+                            <?php elseif ($awb !== ''): ?>
+                                <small style="display:block;">FAN: <?= htmlspecialchars($awb, ENT_QUOTES) ?></small>
+                                <small style="display:block;color:#64748b;"><?= htmlspecialchars($trackingStatus !== '' ? $trackingStatus : 'AWB generat', ENT_QUOTES) ?></small>
+                            <?php else: ?>
+                                <small style="color:#94a3b8;">Puncte: <?= $pointsAwarded ?> / <?= (int) ($order['loyalty_points_pending_claim'] ?? 0) ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <?php
+                            // Nota se citește din listă, fără să mai deschizi comanda:
+                            // asta era rostul ei — să vezi dintr-o privire cu cine s-a
+                            // vorbit deja. Se scurtează, iar textul întreg stă în tooltip
+                            // și în fereastra comenzii.
+                            $notaInterna = trim((string) ($order['admin_notes'] ?? ''));
+                            $notaScurt = $notaInterna === ''
+                                ? ''
+                                : (function_exists('mb_strimwidth')
+                                    ? mb_strimwidth($notaInterna, 0, 90, '…', 'UTF-8')
+                                    : substr($notaInterna, 0, 90));
+                        ?>
+                        <td class="orders-col-notes">
+                            <?php if ($notaInterna !== ''): ?>
+                                <span class="order-note-pill" title="<?= htmlspecialchars($notaInterna, ENT_QUOTES) ?>">
+                                    <?= nl2br(htmlspecialchars($notaScurt, ENT_QUOTES)) ?>
+                                </span>
+                            <?php else: ?>
+                                <small style="color:#cbd5e1;">—</small>
+                            <?php endif; ?>
+                        </td>
+                        <td class="orders-col-actions">
+                            <?php if ($isCancelled): ?>
+                                <?php /* Anularea nu mai e fundătură: comanda se poate vedea
+                                        și readuce într-o stare de lucru. Fără butoanele astea,
+                                        o comandă anulată din greșeală rămânea așa pentru
+                                        totdeauna, iar singura ieșire era prin baza de date. */ ?>
+                                <div class="order-actions">
+                                    <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" title="Detalii">👁</button>
+                                    <button
+                                        type="button"
+                                        class="order-action-btn order-action-btn--edit"
+                                        data-action="open-order-actions"
+                                        data-order-id="<?= $orderId ?>"
+                                        data-order-number="<?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>"
+                                        data-current-status="<?= htmlspecialchars($statusRaw, ENT_QUOTES) ?>"
+                                        data-tracking-url="<?= htmlspecialchars($trackingUrl, ENT_QUOTES) ?>"
+                                        title="Restaurează comanda (alege alt status)"
+                                    >
+                                        ↩️
+                                    </button>
+                                </div>
+                            <?php else: ?>
+                                <div class="order-actions">
+                                    <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" title="Detalii">👁</button>
+                                    <button type="button" class="order-action-btn client-promo-btn" data-order-id="<?= $orderId ?>" title="Toate promoționalele clientului">🎁</button>
+                                    <?php
+                                        // Butonul rămâne și după emitere: un AWB greșit (serviciu
+                                        // nepotrivit, adresă corectată ulterior) nu se poate repara
+                                        // la FAN, doar înlocuit cu altul. Ascuns, comanda rămânea
+                                        // blocată cu eticheta greșită.
+                                        //
+                                        // Din clipa în care curierul a luat coletul, însă, un AWB nou
+                                        // nu mai repară nimic — s-a întâmplat: o comandă deja livrată
+                                        // a primit alt AWB, iar în SelfAWB au rămas două expedieri.
+                                        $poateReemite = \App\Support\FanCourierGateway::poateReemiteAwb($awb, $trackingStatus);
+                                        $confirmareAwb = $awb === ''
+                                            ? 'Sigur vrei să generezi AWB FAN pentru această comandă?'
+                                            : 'Comanda are deja AWB-ul ' . $awb . '. Emiți ALT AWB? '
+                                                . 'Cel vechi NU se anulează automat la FAN — anulează-l în SelfAWB, '
+                                                . 'altfel rămân două expedieri pe aceeași comandă.';
+                                    ?>
+                                    <?php if ($poateReemite): ?>
+                                        <form method="post" action="/admin/orders/<?= $orderId ?>/fan-awb" data-awb-form
+                                              data-awb-comanda="<?= $orderId ?>"
+                                              data-awb-confirm="<?= htmlspecialchars($confirmareAwb, ENT_QUOTES) ?>">
+                                            <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
+                                            <input type="hidden" name="trimite_email_tracking" value="1" data-awb-email>
+                                            <input type="hidden" name="colete" value="" data-awb-colete>
+                                            <button type="submit" class="order-action-btn" title="<?= $awb === '' ? 'Generează AWB FAN' : 'Emite alt AWB (îl înlocuiește pe ' . htmlspecialchars($awb, ENT_QUOTES) . ')' ?>">🚚</button>
+                                        </form>
+                                    <?php else: ?>
+                                        <button type="button" class="order-action-btn" disabled
+                                                title="Coletul e deja la curier (<?= htmlspecialchars($trackingStatus, ENT_QUOTES) ?>) — nu se mai poate emite alt AWB. Se poate doar cât timp statusul e „AWB generat" sau indisponibil."
+                                                style="opacity:.4;cursor:not-allowed;">🚚</button>
+                                    <?php endif; ?>
+                                    <?php if ($paymentMethodKey === 'bank_transfer' && $paymentStatusKey !== 'paid' && !$isCancelled): ?>
+                                        <form method="post" action="/admin/orders/<?= $orderId ?>/confirma-plata-op"
+                                              onsubmit="return confirm('Confirmi că banii pentru comanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?> au intrat în cont?\n\nComanda devine plătită și pleacă în ERP.');">
+                                            <button type="submit" class="order-action-btn" title="Confirmă plata OP — comanda devine plătită și pleacă în ERP">💰</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($ePrecomandaInAsteptare && !$isCancelled): ?>
+                                        <form method="post" action="/admin/orders/<?= $orderId ?>/precomanda-elibereaza"
+                                              onsubmit="return confirm('Eliberezi precomanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>?\n\nPleacă acum în „Comenzi site” din ERP — marfa trebuie să fie disponibilă.');">
+                                            <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
+                                            <button type="submit" class="order-action-btn"
+                                                    title="Eliberează precomanda — o trimite în „Comenzi site” din ERP">▶</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <?php if ($erpEnabled && $erpStatus !== 'skipped' && !$ePrecomandaInAsteptare): ?>
+                                        <?php
+                                        // Comanda deja trimisă se poate retrimite, dar e o apăsare
+                                        // cu intenție, nu o reparare de eroare: ERP-ul o ia de la
+                                        // capăt cu conținutul de acum. Ingestia e idempotentă pe
+                                        // numărul comenzii, deci nu se dublează — se actualizează.
+                                        $erpTrimisa = $erpStatus === 'sent';
+                                        $erpTitlu = $erpTrimisa
+                                            ? 'Retrimite în ERP (a fost deja trimisă — se actualizează acolo, nu se dublează)'
+                                            : 'Retrimite în ERP'
+                                                . ($erpError !== '' ? ' — ultima eroare: ' . $erpError : '');
+                                        ?>
+                                        <form method="post" action="/admin/orders/<?= $orderId ?>/erp-retry"
+                                              <?= $erpTrimisa ? 'onsubmit="return confirm(\'Comanda ' . htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) . ' a fost deja trimisă în ERP.\n\nO retrimiți? Acolo se actualizează cu ce e acum pe site.\')"' : '' ?>>
+                                            <button type="submit" class="order-action-btn"
+                                                    title="<?= htmlspecialchars($erpTitlu, ENT_QUOTES) ?>"
+                                                    <?= $erpTrimisa ? 'style="opacity:.55;"' : '' ?>>🔄</button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <button
+                                        type="button"
+                                        class="order-action-btn order-action-btn--edit"
+                                        data-action="open-order-actions"
+                                        data-order-id="<?= $orderId ?>"
+                                        data-order-number="<?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>"
+                                        data-current-status="<?= htmlspecialchars($statusRaw, ENT_QUOTES) ?>"
+                                        data-tracking-url="<?= htmlspecialchars($trackingUrl, ENT_QUOTES) ?>"
+                                        title="Editează acțiuni"
+                                    >
+                                        ✏️
+                                    </button>
+                                    <form method="post" action="/admin/orders/<?= $orderId ?>/delete" onsubmit="return confirm('Muți comanda în coș?');">
+                                        <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
+                                        <button type="submit" class="order-action-btn order-action-btn--danger" title="Mută în coș">🗑</button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+</section>
+
+<div class="modal-overlay" id="order-modal">
+    <div class="modal-card order-modal-card">
+        <div class="modal-head">
+            <h3 id="order-modal-title">Detalii comandă</h3>
+            <button type="button" class="icon-btn" id="close-order-modal">✕</button>
+        </div>
+        <div id="order-modal-content"></div>
+    </div>
+</div>
+
+<div id="client-promo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:0 24px 64px rgba(0,0,0,.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+            <h3 id="client-promo-title" style="margin:0;">Promoționale client</h3>
+            <button type="button" id="client-promo-close" style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:#6b7280;">&times;</button>
+        </div>
+        <div id="client-promo-body"></div>
+    </div>
+</div>
+
+<!-- Confirmarea emiterii AWB, cu alegerea trimiterii emailului de tracking. -->
+<div class="modal-overlay" id="awb-modal">
+    <div class="modal-card" style="max-width:520px;">
+        <div class="modal-head">
+            <h3>Emitere AWB FAN</h3>
+            <button type="button" class="icon-btn" id="awb-modal-close" aria-label="Închide">✕</button>
+        </div>
+        <div style="padding:18px 20px;display:grid;gap:14px;">
+            <p id="awb-modal-text" style="margin:0;color:#334155;line-height:1.5;"></p>
+            <div id="awb-modal-preview" class="awb-preview" aria-live="polite"></div>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="awb-modal-email" checked style="margin-top:3px;">
+                <span>
+                    Trimite email cu tracking clientului
+                    <small style="display:block;color:#64748b;">
+                        Debifează dacă nu vrei să afle acum că a plecat coletul.
+                    </small>
+                </span>
+            </label>
+        </div>
+        <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:10px;padding:0 20px 18px;">
+            <button type="button" class="btn ghost" id="awb-modal-cancel">Anulează</button>
+            <button type="button" class="btn" id="awb-modal-ok">Emite AWB</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="order-actions-modal">
+    <div class="modal-card order-actions-modal-card">
+        <div class="modal-head">
+            <h3 id="order-actions-modal-title">Acțiuni comandă</h3>
+            <button type="button" class="icon-btn" id="close-order-actions-modal">✕</button>
+        </div>
+        <form method="post" action="/admin/orders/0/status" id="order-actions-status-form" class="form-grid">
+            <?= \App\Support\AdminCsrf::camp() ?>
+            <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
+            <div class="field" style="grid-column:1/-1;">
+                <label>Status comandă</label>
+                <select name="status" id="order-actions-status-select">
+                    <?php foreach ($allowedStatuses as $status): ?>
+                        <option value="<?= htmlspecialchars((string) $status, ENT_QUOTES) ?>">
+                            <?= htmlspecialchars((string) ($statusLabels[(string) $status] ?? (string) $status), ENT_QUOTES) ?>
+                        </option>
+                    <?php endforeach; ?>
+                    <?php if ($statusActions !== []): ?>
+                        <optgroup label="Încasare">
+                            <?php foreach ($statusActions as $actiune => $eticheta): ?>
+                                <option value="<?= htmlspecialchars((string) $actiune, ENT_QUOTES) ?>">
+                                    <?= htmlspecialchars((string) $eticheta, ENT_QUOTES) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                    <?php endif; ?>
+                </select>
+                <?php if ($statusActions !== []): ?>
+                    <p class="muted" style="margin:.4rem 0 0;font-size:.85rem;">
+                        „Plătit prin link extern de plată" nu e o stare: marchează comanda încasată,
+                        o scoate din „plată în așteptare" și o trimite în ERP, ca o plată reușită pe site.
+                    </p>
+                <?php endif; ?>
+            </div>
+            <div class="order-actions-modal-buttons" style="grid-column:1/-1;">
+                <a class="btn btn-secondary" href="#" id="order-actions-tracking-link" target="_blank" rel="noopener">↗ Deschide tracking FAN</a>
+                <button class="btn" type="submit">Salvează status</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+window.promoProducts = <?= json_encode(array_map(static fn(array $p): array => ['id' => (int) ($p['id'] ?? 0), 'name' => (string) ($p['name'] ?? '')], $promoProducts), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+window.orderProducts = <?= json_encode(array_map(static function (array $p): array {
+    $price = (float) ($p['price'] ?? 0);
+    $sale = (float) ($p['sale_price'] ?? 0);
+    return ['id' => (int) ($p['id'] ?? 0), 'name' => (string) ($p['name'] ?? ''), 'price' => ($sale > 0 && $sale < $price) ? round($sale, 2) : round($price, 2)];
+}, is_array($orderProducts ?? null) ? $orderProducts : []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+(() => {
+    const bulkForm = document.getElementById('orders-bulk-form');
+    const selectAll = document.getElementById('orders-select-all');
+    const rowCheckboxes = Array.from(document.querySelectorAll('.order-bulk-checkbox'));
+    const bulkAction = document.getElementById('orders-bulk-action');
+    const bulkStatus = document.getElementById('orders-bulk-status');
+    const bulkIds = document.getElementById('orders-bulk-ids');
+    const selectableRowCheckboxes = () => rowCheckboxes.filter((input) => input instanceof HTMLInputElement && !input.disabled);
+
+    const syncSelectAllState = () => {
+        if (!(selectAll instanceof HTMLInputElement)) {
+            return;
+        }
+        const selectable = selectableRowCheckboxes();
+        if (selectable.length === 0) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+            selectAll.disabled = true;
+            return;
+        }
+        selectAll.disabled = false;
+        const checkedCount = selectable.filter((input) => input.checked).length;
+        selectAll.checked = checkedCount > 0 && checkedCount === selectable.length;
+        selectAll.indeterminate = checkedCount > 0 && checkedCount < selectable.length;
+    };
+
+    selectAll?.addEventListener('change', () => {
+        selectableRowCheckboxes().forEach((input) => {
+            input.checked = selectAll.checked;
+        });
+        syncSelectAllState();
+    });
+
+    rowCheckboxes.forEach((input) => {
+        input.addEventListener('change', syncSelectAllState);
+    });
+
+    const syncBulkStatusVisibility = () => {
+        if (!(bulkAction instanceof HTMLSelectElement) || !(bulkStatus instanceof HTMLSelectElement)) {
+            return;
+        }
+        const isStatusAction = bulkAction.value === 'status';
+        bulkStatus.style.display = isStatusAction ? '' : 'none';
+        bulkStatus.required = isStatusAction;
+        if (!isStatusAction) {
+            bulkStatus.value = '';
+        }
+        const bulkShipping = document.getElementById('orders-bulk-shipping');
+        if (bulkShipping instanceof HTMLInputElement) {
+            const isShippingAction = bulkAction.value === 'shipping';
+            bulkShipping.style.display = isShippingAction ? '' : 'none';
+            bulkShipping.required = isShippingAction;
+            if (!isShippingAction) {
+                bulkShipping.value = '';
+            }
+        }
+    };
+
+    bulkAction?.addEventListener('change', syncBulkStatusVisibility);
+
+    bulkForm?.addEventListener('submit', (event) => {
+        if (!(bulkAction instanceof HTMLSelectElement)) {
+            return;
+        }
+        const selectedIds = selectableRowCheckboxes().filter((input) => input.checked);
+        if (selectedIds.length === 0) {
+            event.preventDefault();
+            window.alert('Selectează cel puțin o comandă.');
+            return;
+        }
+        if (!bulkAction.value) {
+            event.preventDefault();
+            window.alert('Alege o acțiune în masă.');
+            return;
+        }
+        if (bulkAction.value === 'status' && bulkStatus instanceof HTMLSelectElement && !bulkStatus.value) {
+            event.preventDefault();
+            window.alert('Selectează statusul pentru actualizarea în masă.');
+            return;
+        }
+        if (bulkAction.value === 'delete' && !window.confirm('Muți comenzile selectate în coș?')) {
+            event.preventDefault();
+            return;
+        }
+        if (bulkAction.value === 'awb' && !window.confirm('Generezi AWB FAN pentru comenzile selectate?')) {
+            event.preventDefault();
+            return;
+        }
+        if (bulkAction.value === 'erp_retry' && !window.confirm(
+            'Retrimiți ' + selectedIds.length + ' comenzi în ERP?\n\n'
+            + 'Cele pe care ERP-ul le are deja se actualizează cu ce e acum pe site, nu se dublează.\n'
+            + 'Durează câteva secunde per comandă — nu închide pagina.'
+        )) {
+            event.preventDefault();
+            return;
+        }
+        if (bulkAction.value === 'shipping') {
+            const bulkShipping = document.getElementById('orders-bulk-shipping');
+            const valoare = bulkShipping instanceof HTMLInputElement ? bulkShipping.value.trim() : '';
+            if (valoare === '' || !Number.isFinite(Number(valoare)) || Number(valoare) < 0) {
+                event.preventDefault();
+                window.alert('Scrie valoarea transportului (ex. 30).');
+                return;
+            }
+            // Scrie peste transportul tuturor comenzilor bifate, deci merită o
+            // oprire: o selecție greșită s-ar vedea abia pe facturi.
+            if (!window.confirm('Pui transportul pe ' + Number(valoare).toFixed(2) + ' lei la '
+                + selectedIds.length + ' comenzi? Totalul fiecărei comenzi se reface.')) {
+                event.preventDefault();
+                return;
+            }
+        }
+
+        if (bulkIds instanceof HTMLElement) {
+            bulkIds.innerHTML = '';
+            selectedIds.forEach((input) => {
+                if (!(input instanceof HTMLInputElement)) {
+                    return;
+                }
+                const orderId = String(input.dataset.orderId || '').trim();
+                if (!orderId) {
+                    return;
+                }
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'order_ids[]';
+                hidden.value = orderId;
+                bulkIds.appendChild(hidden);
+            });
+        }
+
+        if (!(bulkIds instanceof HTMLElement) || bulkIds.querySelectorAll('input[name="order_ids[]"]').length === 0) {
+            event.preventDefault();
+            window.alert('Selectează cel puțin o comandă validă.');
+        }
+    });
+
+    syncSelectAllState();
+    syncBulkStatusVisibility();
+
+    const modal = document.getElementById('order-modal');
+    const closeBtn = document.getElementById('close-order-modal');
+    const title = document.getElementById('order-modal-title');
+    const content = document.getElementById('order-modal-content');
+    // ── Emitere AWB: confirmarea, cu alegerea trimiterii emailului ──────
+    // Înlocuiește un `confirm()` simplu, ca să încapă și bifa. Emailul e bifat
+    // din start — clientul îl așteaptă — dar se poate scoate când coletul
+    // pleacă mai târziu sau când s-a anunțat deja pe altă cale.
+    const awbModal = document.getElementById('awb-modal');
+    if (awbModal) {
+        const awbText = document.getElementById('awb-modal-text');
+        const awbEmail = document.getElementById('awb-modal-email');
+        let awbForm = null;
+
+        const inchideAwb = () => {
+            awbModal.classList.remove('open');
+            awbForm = null;
+        };
+        document.getElementById('awb-modal-close').addEventListener('click', inchideAwb);
+        document.getElementById('awb-modal-cancel').addEventListener('click', inchideAwb);
+        awbModal.addEventListener('click', (e) => { if (e.target === awbModal) inchideAwb(); });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && awbModal.classList.contains('open')) inchideAwb();
+        });
+
+        const awbPreview = document.getElementById('awb-modal-preview');
+        const kg = (v) => `${Number(v || 0).toFixed(2)} kg`;
+        const ron = (v) => `${Number(v || 0).toFixed(2)} RON`;
+
+        /** Ce pleacă spre FAN, arătat înainte de emitere. */
+        const incarcaPreview = async (comandaId) => {
+            if (!awbPreview) return;
+            awbPreview.innerHTML = '<small class="awb-preview-load">Se încarcă ce se trimite la FAN…</small>';
+            try {
+                const r = await fetch(`/admin/orders/${comandaId}/fan-awb-preview`, {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                const text = await r.text();
+                let d = null;
+                try {
+                    d = JSON.parse(text);
+                } catch (e) {
+                    // Serverul a răspuns cu altceva decât JSON (eroare PHP, pagină de
+                    // login). Arătăm codul și începutul răspunsului, ca să se vadă ce e.
+                    awbPreview.innerHTML = `<small class="awb-preview-err">Nu am putut citi ce se trimite la FAN (cod ${r.status}). ${esc(text.slice(0, 160))}</small>`;
+                    return;
+                }
+                if (!d || d.ok !== true) {
+                    awbPreview.innerHTML = `<small class="awb-preview-err">${esc(d?.message || 'Nu am putut citi ce se trimite.')}</small>`;
+                    return;
+                }
+                const t = d.trimis || {};
+                // Numărul de colete se poate schimba aici: calculul merge doar
+                // după greutate și nu știe, de exemplu, că un bax pleacă separat.
+                const coleteCamp = Number(t.colete || 0) > 0
+                    ? `<input type="number" id="awb-modal-colete" min="1" max="99" step="1" value="${Number(t.colete)}"
+                         data-calculat="${Number(t.colete)}" style="width:70px;padding:2px 6px;">`
+                      + (t.plicuri ? ` (+${t.plicuri} plicuri)` : '')
+                      + ` <small style="color:#64748b;font-weight:400;">calculat: ${Number(t.colete)} — îl poți schimba</small>`
+                    : String(t.colete || 0) + (t.plicuri ? ` (+${t.plicuri} plicuri)` : '');
+                const randuri = [
+                    ['Greutate', kg(t.greutate)],
+                    ['Colete', coleteCamp],
+                    ['Serviciu', t.serviciu || '—'],
+                    ['Plata transport', t.plata_transport === 'sender' ? 'expeditor (noi)'
+                        : (t.plata_transport === 'recipient' ? 'destinatar (clientul)' : (t.plata_transport || '—'))],
+                    ['Ramburs', Number(t.ramburs || 0) > 0 ? ron(t.ramburs) : 'fără'],
+                    ['Valoare declarată', t.valoare_declarata === null ? 'netrimisă' : ron(t.valoare_declarata)],
+                    ['Destinatar', `${t.destinatar || '—'} · ${t.telefon || '—'}`],
+                    ['Adresă', t.fanbox
+                        ? `FANbox ${esc(t.fanbox)}`
+                        : [t.judet, t.localitate, t.strada, t.cod_postal].filter(Boolean).join(', ')],
+                ];
+                const produse = (d.produse || []).map((p) => {
+                    const gramaj = Number(p.grame || 0) > 0
+                        ? `${p.bucati} × ${p.grame} g`
+                        : `${p.bucati} × <strong>fără gramaj</strong>`;
+                    return `<li>${esc(p.nume)} — ${gramaj}</li>`;
+                }).join('');
+                const avert = (d.fara_gramaj || []).length > 0
+                    ? `<p class="awb-preview-err">Greutatea e mai mică decât adevărul: ${esc((d.fara_gramaj || []).join(', '))} n-au gramaj în fișă. FAN recântărește la depozit și taxează diferența.</p>`
+                    : '';
+                awbPreview.innerHTML = `
+                    <div class="awb-preview-grid">
+                        ${randuri.map(([k, v]) => `<span>${esc(k)}</span><strong>${v}</strong>`).join('')}
+                    </div>
+                    ${avert}
+                    <details class="awb-preview-det"><summary>Din ce iese greutatea</summary><ul>${produse}</ul>
+                        <small>Peste ${esc(String(d.kg_max_colet ?? 13))} kg se adaugă încă un colet.</small>
+                    </details>`;
+            } catch (err) {
+                awbPreview.innerHTML = '<small class="awb-preview-err">Nu am putut citi ce se trimite la FAN.</small>';
+            }
+        };
+
+        document.querySelectorAll('form[data-awb-form]').forEach((form) => {
+            form.addEventListener('submit', (e) => {
+                if (form.dataset.awbConfirmat === '1') return; // trimiterea reală
+                e.preventDefault();
+                awbForm = form;
+                awbText.textContent = form.dataset.awbConfirm || '';
+                awbEmail.checked = true;
+                awbModal.classList.add('open');
+                incarcaPreview(form.dataset.awbComanda || '0');
+            });
+        });
+
+        document.getElementById('awb-modal-ok').addEventListener('click', () => {
+            if (!awbForm) return;
+            const camp = awbForm.querySelector('[data-awb-email]');
+            if (camp) camp.value = awbEmail.checked ? '1' : '0';
+            // Coletele se trimit doar când omul le-a schimbat; altfel serverul
+            // le calculează singur, ca până acum.
+            const coleteInput = document.getElementById('awb-modal-colete');
+            const coleteCamp = awbForm.querySelector('[data-awb-colete]');
+            if (coleteCamp) {
+                const ales = Math.round(Number(coleteInput?.value || 0));
+                const calculat = Number(coleteInput?.dataset.calculat || 0);
+                coleteCamp.value = ales >= 1 && ales <= 99 && ales !== calculat ? String(ales) : '';
+            }
+            awbForm.dataset.awbConfirmat = '1';
+            const form = awbForm;
+            inchideAwb();
+            form.submit();
+        });
+    }
+
+    const actionsModal = document.getElementById('order-actions-modal');
+    const closeActionsModalBtn = document.getElementById('close-order-actions-modal');
+    const actionsModalTitle = document.getElementById('order-actions-modal-title');
+    const actionsStatusForm = document.getElementById('order-actions-status-form');
+    const actionsStatusSelect = document.getElementById('order-actions-status-select');
+    const actionsTrackingLink = document.getElementById('order-actions-tracking-link');
+    const esc = (value) => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    const toAmount = (value) => {
+        const amount = Number(value);
+        return Number.isFinite(amount) ? amount : 0;
+    };
+    const formatRon = (value) => `${toAmount(value).toFixed(2)} RON`;
+    const closeOrderActionsModal = () => {
+        actionsModal?.classList.remove('open');
+    };
+
+    document.querySelectorAll('[data-action="open-order-actions"]').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (
+                !(button instanceof HTMLElement)
+                || !(actionsModal instanceof HTMLElement)
+                || !(actionsStatusForm instanceof HTMLFormElement)
+                || !(actionsStatusSelect instanceof HTMLSelectElement)
+                || !(actionsTrackingLink instanceof HTMLAnchorElement)
+            ) {
+                return;
+            }
+            const orderId = Number(button.dataset.orderId || 0);
+            const orderNumber = String(button.dataset.orderNumber || '').trim();
+            const currentStatus = String(button.dataset.currentStatus || '').trim();
+            const trackingUrl = String(button.dataset.trackingUrl || '').trim();
+            if (!Number.isFinite(orderId) || orderId <= 0) {
+                return;
+            }
+
+            actionsStatusForm.action = `/admin/orders/${orderId}/status`;
+            actionsStatusForm.dataset.currentStatus = currentStatus;
+            actionsStatusSelect.value = currentStatus !== '' ? currentStatus : actionsStatusSelect.value;
+            actionsModalTitle.textContent = `Acțiuni comandă ${orderNumber !== '' ? orderNumber : ('#' + orderId)}`;
+
+            if (trackingUrl !== '') {
+                actionsTrackingLink.hidden = false;
+                actionsTrackingLink.href = trackingUrl;
+            } else {
+                actionsTrackingLink.hidden = true;
+                actionsTrackingLink.href = '#';
+            }
+
+            actionsModal.classList.add('open');
+        });
+    });
+
+    closeActionsModalBtn?.addEventListener('click', closeOrderActionsModal);
+    actionsModal?.addEventListener('click', (event) => {
+        if (event.target === actionsModal) {
+            closeOrderActionsModal();
+        }
+    });
+
+    actionsStatusForm?.addEventListener('submit', (event) => {
+        if (!(actionsStatusSelect instanceof HTMLSelectElement)) {
+            return;
+        }
+        const nextStatus = String(actionsStatusSelect.value || '').trim();
+        const currentStatus = String((actionsStatusForm.dataset.currentStatus || '')).trim();
+        if (nextStatus === currentStatus) {
+            closeOrderActionsModal();
+            return;
+        }
+        if (nextStatus === 'completed' && currentStatus !== 'completed') {
+            const ok = window.confirm('Sigur vrei să setezi comanda pe completed?');
+            if (!ok) {
+                event.preventDefault();
+                return;
+            }
+        }
+        closeOrderActionsModal();
+    });
+
+    document.querySelectorAll('.view-order-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const order = JSON.parse(btn.dataset.order || '{}');
+            title.textContent = 'Detalii comandă ' + esc(order.order_number || '');
+            const items = Array.isArray(order.items) ? order.items : [];
+            const addressParts = [
+                String(order.billing_address_line1 || '').trim(),
+                String(order.billing_address_line2 || '').trim(),
+                String(order.billing_city || '').trim(),
+                String(order.billing_postcode || '').trim(),
+                String(order.billing_county || '').trim(),
+            ].filter((part) => part !== '');
+            const orderNotes = String(order.notes || '').trim();
+            const isCompany = Number(order.billing_is_company || 0) === 1;
+            const companyRows = [];
+            if (isCompany) {
+                const companyName = String(order.billing_company_name || '').trim();
+                const companyTaxId = String(order.billing_company_tax_id || '').trim();
+                const companyRegNo = String(order.billing_company_registration_no || '').trim();
+                if (companyName !== '') {
+                    companyRows.push(`<div><small>Denumire firmă</small><p>${esc(companyName)}</p></div>`);
+                }
+                if (companyTaxId !== '') {
+                    companyRows.push(`<div><small>CUI / Cod fiscal</small><p>${esc(companyTaxId)}</p></div>`);
+                }
+                if (companyRegNo !== '') {
+                    companyRows.push(`<div><small>Reg. Comerțului (J)</small><p>${esc(companyRegNo)}</p></div>`);
+                }
+            }
+            const trackingStatus = String(order.fan_tracking_status || '').trim();
+            const trackingDate = String(order.fan_tracking_last_event_at || '').trim();
+            const trackingLabel = trackingStatus !== ''
+                ? `${esc(trackingStatus)}${trackingDate !== '' ? ' (' + esc(trackingDate) + ')' : ''}`
+                : '-';
+            const subtotalWithoutVat = toAmount(order.subtotal_without_vat || order.subtotal || 0);
+            const vatTotal = toAmount(order.vat_total || 0);
+            const couponDiscount = toAmount(order.discount_total || 0);
+            const pointsDiscount = toAmount(order.loyalty_points_discount || 0);
+            const pointsUsed = Math.max(0, Number(order.loyalty_points_used || 0) || 0);
+            const manualDiscount = toAmount(order.manual_discount || 0);
+            const manualPercent = Number(order.manual_discount_percent || 0) || 0;
+            const manualReason = String(order.manual_discount_reason || '').trim();
+            const shippingCost = toAmount(order.shipping_cost || 0);
+            const shippingLabel = shippingCost <= 0.004 ? 'GRATUIT' : formatRon(shippingCost);
+            const paymentMethodValue = String(order.payment_method || '').trim().toLowerCase();
+            const paymentErrorValue = String(order.payment_error || '').trim();
+            const euplatescId = String(order.euplatesc_ep_id || '').trim();
+            const paymentStatusHtml = paymentMethodValue === 'cod'
+                ? ''
+                : `<div><small>Status plată</small><p>${esc(order.payment_status || 'unpaid')}</p></div>`
+                  + (paymentErrorValue !== ''
+                        ? `<div><small>Motiv eșec plată</small><p style="color:#b91c1c;">${esc(paymentErrorValue)}</p></div>`
+                        : '')
+                  + (euplatescId !== ''
+                        ? `<div><small>ID tranzacție EuPlătesc</small><p>${esc(euplatescId)}</p></div>`
+                        : '');
+            // Plata Banca Transilvania: starea de la bancă și butoanele pentru bani
+            // (plata comenzii și, separat, plățile diferențelor prin link).
+            const bt = order.bt && typeof order.bt === 'object' ? order.bt : null;
+            const btLinkuri = Array.isArray(order.bt_linkuri) ? order.bt_linkuri : [];
+            const btPanou = (p, titlu) => {
+                const btRand = (eticheta, valoare) => `<tr><td style="color:#64748b;padding:3px 12px 3px 0;white-space:nowrap;vertical-align:top;">${eticheta}</td><td style="padding:3px 0;">${valoare}</td></tr>`;
+                const btClasa = ['ok', 'warn', 'off', 'muted', 'info'].includes(String(p.clasa)) ? String(p.clasa) : 'info';
+                const btTx = Number(p.tx_id || 0);
+                const alarma = !!(p.necesita_rambursare || p.eliberata_comanda_activa || p.aprobare_refuzata);
+                const banner = (text) => `<p style="margin:0 0 8px;padding:8px 10px;border-radius:6px;background:#dc2626;color:#fff;font-weight:700;">${text}</p>`;
+                return `<div id="order-bt-${btTx}" data-bt-panou style="margin:0 0 10px;padding:12px;border:1px solid ${alarma ? '#fca5a5' : '#c7d2fe'};border-radius:8px;background:${alarma ? '#fef2f2' : '#f5f7ff'};">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+                        <strong style="font-size:14px;">${titlu}${String(p.mod) === 'test' ? ' <span class="status-pill status-pill--off">MOD TEST</span>' : ''}</strong>
+                        <span class="status-pill status-pill--${btClasa}">${esc(p.eticheta)}</span>
+                    </div>
+                    ${p.necesita_rambursare ? banner('Plată încasată – necesită rambursare. Comanda e închisă, dar banii au fost încasați; rambursarea NU se face automat.') : ''}
+                    ${p.eliberata_comanda_activa && !p.comanda_platita_partial ? banner('Suma blocată a fost eliberată, dar comanda e încă activă: comanda NU mai e plătită. Aprobarea din ERP e refuzată (fără AWB) până o anulezi sau, după ce clientul plătește pe alt drum, o marchezi din „Acțiuni comandă" → „Plătit prin link extern de plată".') : ''}
+                    ${p.eliberata_comanda_activa && p.comanda_platita_partial ? banner(`Suma blocată a fost eliberată, dar comanda e încă activă: comanda NU mai e plătită integral (rest de încasat ${formatRon(p.rest_comanda)}). Aprobarea din ERP e refuzată (fără AWB) până o anulezi sau încasezi restul: „Trimite link de plată pentru diferență” sau, dacă banii au venit altfel, „Înregistrează încasarea”.`) : ''}
+                    ${p.aprobare_refuzata && !p.eliberata_comanda_activa ? banner('Aprobarea din ERP a fost refuzată: plata nu acoperă comanda. Comanda NU a trecut în procesare și nu are AWB.') : ''}
+                    ${p.plata_test ? banner('Plată făcută pe platforma de TEST: nu se socotește pe comandă.') : ''}
+                    <table style="border-collapse:collapse;font-size:13px;margin:0 0 8px;">
+                        ${btRand('Nr. plată la bancă', `<code>${esc(p.numar_bt)}</code>${Number(p.incercari || 1) > 1 ? ` <small style="color:#64748b;">(${Number(p.incercari)} încercări)</small>` : ''}`)}
+                        ${p.link_referinta ? btRand('Link de plată', `<code>${esc(p.link_referinta)}</code> <small style="color:#64748b;">(${esc(p.link_status === 'paid' ? 'plătit' : (p.link_status === 'cancelled' ? 'anulat' : 'în așteptare'))})</small>`) : ''}
+                        ${btRand('Sumă plătită', formatRon(p.suma))}
+                        ${Number(p.puncte || 0) > 0 ? btRand('Din care puncte STAR', formatRon(p.puncte)) : ''}
+                        ${p.stare === 'authorized' ? btRand('Blocat, încă neîncasat', formatRon(p.autorizat)) : ''}
+                        ${Number(p.incasat || 0) > 0 ? btRand('Încasat', formatRon(p.incasat)) : ''}
+                        ${Number(p.rambursat || 0) > 0 ? btRand('Rambursat', formatRon(p.rambursat) + (p.referinta_rambursare ? ` <small style="color:#64748b;">ref. ${esc(p.referinta_rambursare)}</small>` : '')) : ''}
+                        ${p.termen ? btRand('Încasare automată', `${esc(p.termen)} <small style="color:#64748b;">(${p.tip === 'link' ? 'dacă încasarea imediată n-a mers' : 'dacă nu e aprobată în ERP înainte'})</small>`) : ''}
+                        ${p.cod_aprobare ? btRand('Cod autorizare', esc(p.cod_aprobare)) : ''}
+                        ${p.eroare ? btRand('Ultima problemă', `<span style="color:#b91c1c;">${esc(p.eroare)}</span>`) : ''}
+                        ${p.nota ? btRand('Notă', esc(p.nota)) : ''}
+                    </table>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+                        <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'status')" style="padding:6px 12px;background:#fff;border:1px solid #6366f1;border-radius:5px;cursor:pointer;font-size:13px;color:#3730a3;">Verifică la bancă</button>
+                        ${p.poate_incasa && p.tip === 'link' ? `<span style="display:inline-flex;gap:6px;align-items:center;">
+                            <input type="hidden" id="bt-suma-incasare-${btTx}" value="${Number(p.incasabil || 0).toFixed(2)}">
+                            <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'deposit', ${Number(p.incasabil || 0)})" style="padding:6px 12px;background:#15803d;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Încasează ${formatRon(p.incasabil)}</button>
+                            <small style="color:#64748b;">diferența se încasează doar întreagă</small>
+                        </span>` : ''}
+                        ${p.poate_incasa && p.tip !== 'link' ? `<span style="display:inline-flex;gap:6px;align-items:center;">
+                            <input type="number" step="0.01" min="0.01" max="${Number(p.incasabil || 0).toFixed(2)}" id="bt-suma-incasare-${btTx}" value="${Number(p.sugestie_incasare || 0).toFixed(2)}" aria-label="Suma de încasat (lei)" style="width:100px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px;">
+                            <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'deposit', ${Number(p.incasabil || 0)})" style="padding:6px 12px;background:#15803d;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Încasează</button>
+                            <small style="color:#64748b;">max ${formatRon(p.incasabil)}</small>
+                            ${Number(p.sugestie_incasare || 0) <= 0 ? '<small style="color:#b45309;">nimic de încasat: comanda e deja încasată integral (suma blocată se poate elibera)</small>' : ''}
+                        </span>` : ''}
+                        ${p.poate_anula ? `<button type="button" onclick="${p.cere_confirmare_eliberare ? `btArataAlegere(${btTx})` : `btActiune(${order.id}, ${btTx}, 'reverse')`}" style="padding:6px 12px;background:#fff;border:1px solid #b45309;border-radius:5px;cursor:pointer;font-size:13px;color:#92400e;">Anulează autorizarea</button>` : ''}
+                        ${p.poate_rambursa ? `<span style="display:inline-flex;gap:6px;align-items:center;">
+                            <input type="number" step="0.01" min="0.01" max="${Number(p.rambursabil || 0).toFixed(2)}" id="bt-suma-rambursare-${btTx}" value="${Number(p.rambursabil || 0).toFixed(2)}" aria-label="Suma de rambursat (lei)" style="width:100px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:13px;">
+                            <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'refund', ${Number(p.rambursabil || 0)}, ${Number(p.puncte || 0)})" style="padding:6px 12px;background:#b91c1c;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Rambursează</button>
+                            <small style="color:#64748b;">max ${formatRon(p.rambursabil)}</small>
+                        </span>` : ''}
+                    </div>
+                    ${p.cere_confirmare_eliberare ? `<div id="bt-alegere-${btTx}" hidden style="margin:10px 0 0;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;">
+                        <p style="margin:0 0 8px;color:#78350f;font-size:13px;line-height:1.45;"><strong>Comanda e încă activă.</strong> Dacă doar eliberezi suma, comanda rămâne activă dar <strong>NEPLĂTITĂ</strong>, iar în ERP figurează încă plătită: aprobarea ei de acolo va fi refuzată (fără AWB) până se rezolvă plata. <strong>Recomandat:</strong> anulează comanda — suma se eliberează automat, ERP-ul e anunțat, clientul primește emailul de anulare și punctele se întorc.</p>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                            <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'anuleaza_comanda')" style="padding:6px 12px;background:#b91c1c;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Anulează comanda și eliberează suma (recomandat)</button>
+                            <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'reverse', 0, 0, true)" style="padding:6px 12px;background:#fff;border:1px solid #b45309;border-radius:5px;cursor:pointer;font-size:13px;color:#92400e;">Doar eliberează suma (comanda rămâne neplătită)</button>
+                            <button type="button" onclick="btArataAlegere(${btTx}, false)" style="padding:6px 12px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;font-size:13px;">Renunță</button>
+                        </div>
+                    </div>` : ''}
+                    <p id="bt-status-${btTx}" role="status" style="margin:8px 0 0;font-size:13px;"></p>
+                </div>`;
+            };
+            let btPanelHtml = '';
+            if (bt) {
+                btPanelHtml += btPanou(bt, 'Plată Banca Transilvania');
+            }
+            btLinkuri.forEach((p) => {
+                btPanelHtml += btPanou(p, 'Plată diferență (link) — Banca Transilvania');
+            });
+            let totalsHtml = `
+                    <p><span>Subtotal (fără TVA)</span><strong>${formatRon(subtotalWithoutVat)}</strong></p>
+                    <p><span>TVA</span><strong>${formatRon(vatTotal)}</strong></p>
+            `;
+            const couponCode = String(order.coupon_code || '').trim();
+            if (couponDiscount > 0.004 || couponCode !== '') {
+                const codeLabel = couponCode !== '' ? ` (${esc(couponCode)})` : '';
+                totalsHtml += `<p><span>Reducere cupon${codeLabel}</span><strong>- ${formatRon(couponDiscount)}</strong></p>`;
+            }
+            if (pointsDiscount > 0.004) {
+                const pointsLabel = pointsUsed > 0 ? ` (${pointsUsed} pct)` : '';
+                totalsHtml += `<p><span>Reducere puncte</span><strong>- ${formatRon(pointsDiscount)}${pointsLabel}</strong></p>`;
+            }
+            if (manualDiscount > 0.004) {
+                const procentLabel = manualPercent > 0 ? ` (${manualPercent}%)` : '';
+                const motivLabel = manualReason !== '' ? `<br><small style="color:#64748b;">${esc(manualReason)}</small>` : '';
+                totalsHtml += `<p><span>Reducere comercială${procentLabel}${motivLabel}</span><strong>- ${formatRon(manualDiscount)}</strong></p>`;
+            }
+            totalsHtml += `
+                    <p>
+                      <span>Livrare</span>
+                      <strong>
+                        <span id="order-shipping-label-${order.id}">${shippingLabel}</span>
+                        <button type="button" onclick="comutaTransport(${order.id})" title="Corectează transportul"
+                                style="margin-left:6px;font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button>
+                      </strong>
+                    </p>
+                    <p id="order-shipping-form-${order.id}" style="display:none;">
+                      <span>Transport nou</span>
+                      <strong style="display:flex;align-items:center;gap:6px;">
+                        <input type="number" id="order-shipping-input-${order.id}" step="0.01" min="0" value="${shippingCost.toFixed(2)}"
+                               style="width:90px;padding:4px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;text-align:right;">
+                        <button type="button" onclick="salveazaTransport(${order.id})"
+                                style="padding:4px 10px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">Salvează</button>
+                      </strong>
+                    </p>
+                    <p class="total"><span>Total</span><strong id="order-total-label-${order.id}">${formatRon(order.total || 0)}</strong></p>
+            `;
+            const shipSame = Number(order.shipping_same_as_billing ?? 1) === 1;
+            const shipName = [order.shipping_first_name, order.shipping_last_name].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
+            const shipParts = [order.shipping_address_line1, order.shipping_city, order.shipping_postcode, order.shipping_county].map((x) => String(x || '').trim()).filter(Boolean);
+            const shippingHtml = shipSame
+                ? `<p><small>Adresă livrare</small><br>Identică cu adresa de facturare</p>`
+                : `<p><small>Adresă livrare</small><br>${shipName ? esc(shipName) + ' — ' : ''}${shipParts.length ? shipParts.map(esc).join(', ') : '-'}${String(order.shipping_phone || '').trim() ? ' — tel: ' + esc(order.shipping_phone) : ''}</p>`;
+
+            // După aprobare/facturare în ERP, comanda nu se mai modifică (nici
+            // produsele) — decât dacă a fost deblocată anume pentru corecție.
+            const statusComanda = String(order.status || '').toLowerCase();
+            const deblocataPtCorectie = String(order.edit_unlocked_at || '').trim() !== '';
+            // Anulată sau returnată rămâne închisă oricum: acolo nu e nimic de corectat.
+            const sePoateDebloca = ['processing', 'completed'].includes(statusComanda);
+            const comandaBlocata = ['processing', 'completed', 'cancelled', 'refunded']
+                .includes(statusComanda) && !deblocataPtCorectie;
+            // Plătită cu cardul, dar totalul a crescut ulterior → diferență de încasat.
+            const platitCard = String(order.payment_status || '').toLowerCase() === 'paid';
+            const sumaIncasata = order.paid_amount === null || order.paid_amount === undefined || order.paid_amount === ''
+                ? toAmount(order.total || 0)
+                : toAmount(order.paid_amount);
+            const restDeIncasat = platitCard
+                ? Math.max(0, Math.round((toAmount(order.total || 0) - sumaIncasata) * 100) / 100)
+                : 0;
+            const itemsHtml = items.map((it) => {
+                const qty = Math.max(1, Number(it.quantity || 1) || 1);
+                const lineTotal = toAmount(it.line_total || 0);
+                let unitPrice = toAmount(it.unit_price || 0);
+                if (unitPrice <= 0.0 && qty > 0) {
+                    unitPrice = lineTotal / qty;
+                }
+                // Prețul de pe linie e cel redus; eticheta spune de ce, ca să nu
+                // pară că s-a schimbat singur.
+                const reducereErp = Number(it.erp_discount_percent || 0);
+                const pretInainte = Number(it.erp_price_before || 0);
+                const eticheta = reducereErp > 0
+                    ? `<div style="font-size:11px;color:#b45309;margin-top:2px;">
+                        🏷️ Discount ${reducereErp.toFixed(2).replace(/\.?0+$/, '')}% setat din ERP${pretInainte > 0 ? ` — era ${orderMoney(pretInainte)}` : ''}
+                       </div>`
+                    : '';
+                if (comandaBlocata) {
+                    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                        <span style="flex:1;">${esc(it.product_name || '')}${eticheta}</span>
+                        <span style="width:60px;text-align:center;">${qty}</span>
+                        <span style="min-width:92px;text-align:right;font-weight:600;">${orderMoney(unitPrice * qty)}</span>
+                    </div>`;
+                }
+                if (eticheta !== '') {
+                    return orderItemRowHtml(Number(it.product_id || 0), it.product_name || '', qty, unitPrice) + eticheta;
+                }
+                return orderItemRowHtml(Number(it.product_id || 0), it.product_name || '', qty, unitPrice);
+            }).join('');
+
+            const promoList = Array.isArray(window.promoProducts) ? window.promoProducts : [];
+            const promoItems = Array.isArray(order.promo_items) ? order.promo_items : [];
+            let promoHtml;
+            if (promoList.length === 0 && promoItems.length === 0) {
+                promoHtml = `<div class="order-promo-box" style="margin-top:14px;border-top:1px solid #eee;padding-top:12px;"><p style="margin:0 0 6px;"><small>Produse promoționale (intern)</small></p><p style="color:#6b7280;font-style:italic;font-size:13px;margin:0;">Niciun produs promoțional definit. <a href="/admin/promo-products">Adaugă în nomenclator</a>.</p></div>`;
+            } else {
+                const rows = (promoItems.length ? promoItems.map((it) => promoRowHtml(it.promo_product_id, it.quantity, it.name)) : [promoRowHtml('', 1, '')]).join('');
+                promoHtml = `<div class="order-promo-box" style="margin-top:14px;border-top:1px solid #eee;padding-top:12px;">
+                    <p style="margin:0 0 8px;"><small>Produse promoționale adăugate (intern)</small></p>
+                    <div id="promo-rows-${order.id}">${rows}</div>
+                    <div style="display:flex;gap:8px;margin-top:6px;align-items:center;">
+                        <button type="button" onclick="addPromoRow(${order.id})" style="padding:6px 12px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:13px;">+ Rând</button>
+                        <button type="button" onclick="saveOrderPromo(${order.id})" style="padding:6px 14px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Salvează</button>
+                        <span id="promo-status-${order.id}" style="font-size:13px;"></span>
+                    </div>
+                </div>`;
+            }
+
+            content.innerHTML = `${order.client_agresiv === true ? '<p class="client-agresiv-note"><span class="client-agresiv-badge">Client agresiv</span> În ERP, clientul acestei comenzi are semnul „Client agresiv” pe fișă.</p>' : ''}
+                <div class="order-modal-grid">
+                    <div><small>Client</small><p id="order-client-name-${order.id}">${esc(order.display_name || ((order.billing_first_name||'') + ' ' + (order.billing_last_name||'')).trim())}</p></div>
+                    <div><small>Email</small><p id="order-client-email-${order.id}">${esc(order.billing_email)}</p></div>
+                    <div><small>Telefon</small><p id="order-client-phone-${order.id}">${esc(order.billing_phone)} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
+                    <div><small>Plată</small><p id="order-payment-method-${order.id}">${esc(order.payment_method)} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
+                    ${paymentStatusHtml}
+                    <div><small>AWB FAN</small><p>${esc(order.fan_awb || '-')}</p></div>
+                    <div><small>Cupon folosit</small><p>${couponCode !== '' ? esc(couponCode) : '— (fără cupon)'}</p></div>
+                </div>
+                ${btPanelHtml}
+                <div id="order-fanbox-${order.id}" style="background:#f6faf8;border:1px solid #d5e5dc;border-radius:8px;padding:12px;margin-bottom:10px;">
+                  <small style="display:block;margin-bottom:6px;color:#475569;">Destinație livrare</small>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                    <input type="checkbox" id="order-fanbox-toggle-${order.id}" ${order.fan_locker_id ? 'checked' : ''}>
+                    Livrare la FANbox
+                  </label>
+                  <div id="order-fanbox-pick-${order.id}" style="margin-top:8px;${order.fan_locker_id ? '' : 'display:none;'}">
+                    <select id="order-fanbox-select-${order.id}" style="width:100%;padding:7px;border:1px solid #d1d5db;border-radius:6px;">
+                      <option value="">Se încarcă…</option>
+                    </select>
+                    <p id="order-fanbox-note-${order.id}" style="margin:6px 0 0;font-size:12px;color:#64748b;">
+                      ${order.fan_locker_name ? esc(order.fan_locker_name) + ' — ' + esc(order.fan_locker_address || '') : ''}
+                    </p>
+                    <button type="button" id="order-fanbox-maptoggle-${order.id}" style="margin-top:6px;border:0;background:none;padding:0;color:#1f8b57;font-size:12px;text-decoration:underline;cursor:pointer;">Vezi pe hartă</button>
+                    <div id="order-fanbox-map-${order.id}" style="display:none;height:300px;margin-top:8px;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;"></div>
+                  </div>
+                  <button type="button" onclick="salveazaFanbox(${order.id})" style="margin-top:8px;font-size:12px;padding:5px 10px;border:1px solid #1f8b57;border-radius:6px;background:#1f8b57;color:#fff;cursor:pointer;">Salvează destinația</button>
+                </div>
+                <p>
+                  <small>Adresă</small>
+                  <span id="order-address-display-${order.id}">${addressParts.length ? addressParts.map(esc).join(', ') : '-'}</span>
+                  <button type="button" onclick="toggleAddressEdit(${order.id})" style="margin-left:8px;font-size:11px;padding:2px 7px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎ Editează datele clientului</button>
+                </p>
+                <div id="order-address-form-${order.id}" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-bottom:10px;">
+                  <div style="display:grid;gap:8px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                      <label style="font-size:12px;color:#374151;">Nume<br><input name="billing_first_name" value="${esc(order.billing_first_name||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                      <label style="font-size:12px;color:#374151;">Prenume<br><input name="billing_last_name" value="${esc(order.billing_last_name||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                      <label style="font-size:12px;color:#374151;">Email<br><input name="billing_email" type="email" value="${esc(order.billing_email||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                      <label style="font-size:12px;color:#374151;">Telefon<br><input name="billing_phone" value="${esc(order.billing_phone||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                    </div>
+                    <label style="font-size:12px;color:#374151;">Adresă linie 1<br><input name="billing_address_line1" value="${esc(order.billing_address_line1||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                    <label style="font-size:12px;color:#374151;">Bloc, scară, apartament, etaj<br><input name="billing_address_line2" value="${esc(order.billing_address_line2||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                      <label style="font-size:12px;color:#374151;">Oraș<br><input name="billing_city" value="${esc(order.billing_city||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                      <label style="font-size:12px;color:#374151;">Cod poștal<br><input name="billing_postcode" value="${esc(order.billing_postcode||'')}" pattern="[0-9]{6}" maxlength="6" inputmode="numeric" required title="Exact 6 cifre" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                      <label style="font-size:12px;color:#374151;">Județ<br><input name="billing_county" value="${esc(order.billing_county||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                    </div>
+                    <label style="font-size:12px;color:#374151;">Plată<br>
+                      <select name="payment_method" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}">
+                        ${['cod','euplatesc','stripe','btipay','card','bank_transfer'].filter((m) => m !== 'btipay' || String(order.payment_method||'') === 'btipay').map((m) => `<option value="${m}"${String(order.payment_method||'') === m ? ' selected' : ''}>${m === 'cod' ? 'Ramburs (cod)' : m}</option>`).join('')}
+                      </select>
+                      <span style="display:block;margin-top:3px;font-size:11px;color:#6b7280;">Schimbă doar metoda trecută pe comandă; nu marchează comanda ca plătită.</span>
+                    </label>
+                    <div style="border-top:1px solid #e5e7eb;padding-top:8px;">
+                      <p style="margin:0 0 6px;font-size:13px;font-weight:600;color:#374151;">Date de livrare</p>
+                      <p style="margin:0 0 8px;font-size:11px;color:#6b7280;">
+                        Se tipăresc pe AWB. Lasă gol ce vrei să fie luat de la facturare —
+                        așa se poartă și acum, când clientul a scris acolo un punct sau o liniuță.
+                        <strong>Dacă AWB-ul a plecat deja, modificarea de aici nu-l schimbă:</strong>
+                        emite altul (🚚) și anulează-l pe cel vechi în SelfAWB.
+                      </p>
+                      <div style="display:grid;gap:8px;margin-bottom:10px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                          <label style="font-size:12px;color:#374151;">Nume<br><input name="shipping_first_name" value="${esc(order.shipping_first_name||'')}" placeholder="ca la facturare" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                          <label style="font-size:12px;color:#374151;">Prenume<br><input name="shipping_last_name" value="${esc(order.shipping_last_name||'')}" placeholder="ca la facturare" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                          <label style="font-size:12px;color:#374151;">Telefon<br><input name="shipping_phone" value="${esc(order.shipping_phone||'')}" placeholder="ca la facturare" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                        </div>
+                        <label style="font-size:12px;color:#374151;">Adresă<br><input name="shipping_address_line1" value="${esc(order.shipping_address_line1||'')}" placeholder="gol = se livrează la adresa de facturare" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                          <label style="font-size:12px;color:#374151;">Oraș<br><input name="shipping_city" value="${esc(order.shipping_city||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                          <label style="font-size:12px;color:#374151;">Cod poștal<br><input name="shipping_postcode" value="${esc(order.shipping_postcode||'')}" pattern="[0-9]{6}" maxlength="6" inputmode="numeric" title="Exact 6 cifre" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                          <label style="font-size:12px;color:#374151;">Județ<br><input name="shipping_county" value="${esc(order.shipping_county||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                        </div>
+                      </div>
+                    </div>
+                    <div style="border-top:1px solid #e5e7eb;padding-top:8px;">
+                      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;">
+                        <input type="checkbox" name="billing_is_company" id="order-is-company-${order.id}" ${isCompany ? 'checked' : ''} onchange="document.getElementById('order-company-fields-${order.id}').style.display = this.checked ? 'grid' : 'none';">
+                        Comandă pe firmă (persoană juridică)
+                      </label>
+                      <div id="order-company-fields-${order.id}" style="display:${isCompany ? 'grid' : 'none'};gap:8px;margin-top:8px;">
+                        <label style="font-size:12px;color:#374151;">Denumire firmă<br><input name="billing_company_name" value="${esc(order.billing_company_name||'')}" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                          <label style="font-size:12px;color:#374151;">CUI / Cod fiscal<br><input name="billing_company_tax_id" value="${esc(order.billing_company_tax_id||'')}" placeholder="RO12345678" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                          <label style="font-size:12px;color:#374151;">Reg. Comerțului (J)<br><input name="billing_company_registration_no" value="${esc(order.billing_company_registration_no||'')}" placeholder="J40/1234/2020" style="width:100%;padding:5px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;box-sizing:border-box;" class="addr-input-${order.id}"></label>
+                        </div>
+                        <span style="font-size:11px;color:#6b7280;">Dacă în CUI a ajuns și denumirea firmei, la salvare se păstrează doar codul. Denumirea se scrie în câmpul de deasupra.</span>
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                      <button type="button" onclick="saveOrderAddress(${order.id})" style="padding:5px 14px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Salvează</button>
+                      <button type="button" onclick="toggleAddressEdit(${order.id})" style="padding:5px 10px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:13px;">Anulează</button>
+                    </div>
+                  </div>
+                </div>
+                ${companyRows.length ? `<div class="order-modal-grid">${companyRows.join('')}</div>` : ''}
+                ${shippingHtml}
+                <p><small>Tracking FAN</small><br>${trackingLabel}</p>
+                <p><small>Observații</small><br>${orderNotes !== '' ? esc(orderNotes) : '-'}</p>
+                <div class="order-items-box">
+                    <div id="order-items-${order.id}">${itemsHtml}</div>
+                    ${restDeIncasat > 0
+                        ? `<div style="margin:8px 0 0;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
+                        <p style="margin:0 0 8px;color:#92400e;font-size:13px;">
+                            Comanda e plătită doar în parte. Rest de încasat: <strong>${orderMoney(restDeIncasat)}</strong>.
+                        </p>
+                        <button type="button" onclick="sendPaymentLink(${order.id})" style="padding:6px 12px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Trimite link de plată pentru diferență</button>
+                        <span id="payment-link-status-${order.id}" style="font-size:13px;margin-left:8px;"></span>
+                        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #fde68a;">
+                            <p style="margin:0 0 6px;color:#92400e;font-size:12px;">
+                                Sau, dacă banii au venit deja pe lângă site — ramburs de la curier, OP, numerar —
+                                consemnează-i aici. Nu se trimite nimic clientului.
+                            </p>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                                <input type="number" step="0.01" min="0.01" id="incasare-suma-${order.id}"
+                                       value="${restDeIncasat.toFixed(2)}"
+                                       style="width:110px;padding:6px 8px;border:1px solid #d6d3d1;border-radius:5px;font-size:13px;">
+                                <select id="incasare-metoda-${order.id}" style="padding:6px 8px;border:1px solid #d6d3d1;border-radius:5px;font-size:13px;">
+                                    <option value="ramburs">Ramburs la curier</option>
+                                    <option value="op">Ordin de plată</option>
+                                    <option value="numerar">Numerar</option>
+                                    <option value="card">Card (POS / link extern)</option>
+                                </select>
+                                <button type="button" onclick="inregistreazaIncasare(${order.id})" style="padding:6px 12px;background:#fff;border:1px solid #92400e;border-radius:5px;cursor:pointer;font-size:13px;color:#92400e;">Înregistrează încasarea</button>
+                                <span id="incasare-status-${order.id}" style="font-size:13px;"></span>
+                            </div>
+                        </div>
+                    </div>`
+                        : ''}
+                    ${comandaBlocata
+                        ? `<div style="margin:8px 0 0;padding:8px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:13px;">
+                        <p style="margin:0;">🔒 Comanda e procesată — factura există deja în ERP, produsele nu se mai pot modifica.</p>
+                        ${sePoateDebloca ? `<button type="button" onclick="ceruDeblocare(${order.id})" style="margin-top:8px;padding:6px 12px;background:#fff;border:1px solid #d97706;border-radius:5px;cursor:pointer;font-size:13px;color:#92400e;">🔓 Deblochează pentru corecție</button>
+                        <div id="order-unlock-form-${order.id}" style="display:none;margin-top:8px;">
+                            <p style="margin:0 0 6px;font-size:12px;">Scrie de ce se corectează comanda. Motivul rămâne în jurnal.</p>
+                            <input type="text" id="order-unlock-reason-${order.id}" maxlength="500"
+                                   placeholder="ex. produsul X s-a epuizat, scos și de pe factură în ERP"
+                                   style="width:100%;height:32px;border:1px solid #d97706;border-radius:5px;padding:0 8px;font-size:13px;box-sizing:border-box;">
+                            <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+                                <button type="button" onclick="deblocheazaComanda(${order.id})" style="padding:6px 12px;background:#d97706;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Deblochează</button>
+                                <button type="button" onclick="ceruDeblocare(${order.id})" style="padding:6px 10px;background:#fff;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:13px;">Renunț</button>
+                                <span id="order-unlock-status-${order.id}" style="font-size:13px;"></span>
+                            </div>
+                        </div>` : ''}
+                    </div>`
+                        : `${deblocataPtCorectie ? `<div style="margin:8px 0 0;padding:8px 10px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;color:#065f46;font-size:13px;">
+                        <p style="margin:0;">🔓 Comandă deblocată pentru corecție${order.edit_unlocked_by ? ' de ' + esc(order.edit_unlocked_by) : ''}${order.edit_unlocked_at ? ' (' + esc(String(order.edit_unlocked_at)) + ')' : ''}.</p>
+                        ${order.edit_unlock_reason ? `<p style="margin:4px 0 0;">Motiv: ${esc(order.edit_unlock_reason)}</p>` : ''}
+                        <p style="margin:4px 0 0;">Modificările NU se propagă în ERP — factura se corectează acolo separat. Dacă se schimbă totalul, emite alt AWB (🚚) și anulează-l pe cel vechi în SelfAWB.</p>
+                        <button type="button" onclick="blocheazaComanda(${order.id})" style="margin-top:8px;padding:6px 12px;background:#fff;border:1px solid #059669;border-radius:5px;cursor:pointer;font-size:13px;color:#065f46;">🔒 Blochează la loc</button>
+                        <span id="order-unlock-status-${order.id}" style="font-size:13px;margin-left:8px;"></span>
+                    </div>` : ''}
+                    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+                        <button type="button" onclick="addOrderItemRow(${order.id})" style="padding:6px 12px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:13px;">+ Adaugă produs</button>
+                        <button type="button" onclick="saveOrderItems(${order.id})" style="padding:6px 14px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Recalculează și salvează</button>
+                        <span id="order-items-status-${order.id}" style="font-size:13px;"></span>
+                    </div>
+                    <div style="margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+                        <div style="font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Reducere comercială</div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                            <select id="order-discount-mode-${order.id}" style="height:32px;border:1px solid #cbd5e1;border-radius:5px;padding:0 6px;font-size:13px;">
+                                <option value="procent"${manualPercent > 0 ? ' selected' : ''}>Procent (%)</option>
+                                <option value="suma"${manualPercent > 0 || manualDiscount <= 0.004 ? '' : ' selected'}>Sumă (lei)</option>
+                            </select>
+                            <input type="number" step="0.01" min="0" id="order-discount-value-${order.id}"
+                                   value="${manualPercent > 0 ? manualPercent : (manualDiscount > 0.004 ? manualDiscount.toFixed(2) : '')}"
+                                   placeholder="ex. 5" style="width:100px;height:32px;border:1px solid #cbd5e1;border-radius:5px;padding:0 8px;font-size:13px;">
+                            <input type="text" id="order-discount-reason-${order.id}" maxlength="190"
+                                   value="${esc(manualReason)}" placeholder="Motiv (ex. agreat telefonic)"
+                                   style="flex:1;min-width:200px;height:32px;border:1px solid #cbd5e1;border-radius:5px;padding:0 8px;font-size:13px;">
+                            <button type="button" onclick="saveOrderDiscount(${order.id})" style="padding:6px 12px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Aplică</button>
+                            ${manualDiscount > 0.004 ? `<button type="button" onclick="clearOrderDiscount(${order.id})" style="padding:6px 12px;background:#fff;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:13px;">Anulează reducerea</button>` : ''}
+                            <span id="order-discount-status-${order.id}" style="font-size:13px;"></span>
+                        </div>
+                        <p style="margin:6px 0 0;color:#64748b;font-size:12px;">
+                            Se aplică doar la produse, nu și la transport. Procentul se recalculează dacă se schimbă produsele.
+                        </p>
+                    </div>`}
+                </div>
+                <div style="margin-top:10px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
+                    <div style="font-size:13px;font-weight:600;color:#92400e;margin-bottom:6px;">Observații interne</div>
+                    <textarea id="order-notes-${order.id}" rows="3" maxlength="5000"
+                              placeholder="Ce s-a vorbit cu clientul. Ex: a confirmat, așteaptă marfa, sună joi."
+                              style="width:100%;box-sizing:border-box;border:1px solid #e5d08a;border-radius:5px;padding:8px;font-size:13px;font-family:inherit;resize:vertical;">${esc(String(order.admin_notes || ''))}</textarea>
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+                        <button type="button" onclick="saveOrderNotes(${order.id})" style="padding:6px 12px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Salvează nota</button>
+                        <span id="order-notes-status-${order.id}" style="font-size:13px;"></span>
+                    </div>
+                    <p style="margin:6px 0 0;color:#926a1e;font-size:12px;">
+                        Nu ajunge la client — nici pe factură, nici în emailuri. Se trimite în ERP, pe comandă și pe factura emisă din ea.
+                    </p>
+                </div>
+                ${promoHtml}
+                <div class="order-totals">
+                    ${totalsHtml}
+                </div>
+            `;
+            // Bifa de FANbox arată selectorul și încarcă punctele din județul
+            // comenzii; legarea se face după injectarea conținutului.
+            const fbToggle = document.getElementById('order-fanbox-toggle-' + order.id);
+            const fbPick = document.getElementById('order-fanbox-pick-' + order.id);
+            if (fbToggle && fbPick) {
+                const sincro = () => {
+                    fbPick.style.display = fbToggle.checked ? '' : 'none';
+                    if (fbToggle.checked) {
+                        incarcaFanboxComanda(
+                            order.id,
+                            order.billing_county || '',
+                            order.billing_city || '',
+                            order.fan_locker_id || '',
+                        );
+                    }
+                };
+                fbToggle.addEventListener('change', sincro);
+                if (fbToggle.checked) sincro();
+            }
+            const fbMapBtn = document.getElementById('order-fanbox-maptoggle-' + order.id);
+            const fbMapEl = document.getElementById('order-fanbox-map-' + order.id);
+            if (fbMapBtn && fbMapEl) {
+                fbMapBtn.addEventListener('click', function () {
+                    const deschis = fbMapEl.style.display !== 'none';
+                    fbMapEl.style.display = deschis ? 'none' : '';
+                    fbMapBtn.textContent = deschis ? 'Vezi pe hartă' : 'Ascunde harta';
+                    if (!deschis) deseneazaHartaComanda(order.id);
+                });
+            }
+            modal.classList.add('open');
+        });
+    });
+
+    closeBtn?.addEventListener('click', () => modal?.classList.remove('open'));
+    modal?.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            modal.classList.remove('open');
+        }
+    });
+})();
+
+// Leaflet se încarcă o singură dată, la prima cerere de hartă.
+let fanboxLeafletPromise = null;
+function incarcaLeafletAdmin() {
+  if (window.L) return Promise.resolve(window.L);
+  if (fanboxLeafletPromise) return fanboxLeafletPromise;
+  fanboxLeafletPromise = new Promise(function (resolve, reject) {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = function () { resolve(window.L); };
+    js.onerror = function () { reject(new Error('leaflet')); };
+    document.head.appendChild(js);
+  });
+  return fanboxLeafletPromise;
+}
+
+// Punctele încărcate pentru comanda deschisă, ca harta să le poată desena.
+const fanboxPuncte = {};
+const fanboxHarti = {};
+
+async function deseneazaHartaComanda(orderId) {
+  const el = document.getElementById('order-fanbox-map-' + orderId);
+  if (!el) return;
+  const puncte = (fanboxPuncte[orderId] || []).filter(function (p) {
+    return isFinite(Number(p.lat)) && isFinite(Number(p.lng));
+  });
+  if (!puncte.length) { el.innerHTML = '<p style="padding:10px;font-size:12px;color:#64748b;">Punctele nu au coordonate. Reimportă lista FANbox.</p>'; return; }
+  let L;
+  try { L = await incarcaLeafletAdmin(); } catch (e) {
+    el.innerHTML = '<p style="padding:10px;font-size:12px;color:#b91c1c;">Harta nu s-a putut încărca.</p>';
+    return;
+  }
+  let h = fanboxHarti[orderId];
+  if (!h) {
+    h = { map: L.map(el, { scrollWheelZoom: false }) };
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(h.map);
+    h.layer = L.layerGroup().addTo(h.map);
+    fanboxHarti[orderId] = h;
+  }
+  h.layer.clearLayers();
+  const limite = [];
+  puncte.forEach(function (p) {
+    const lat = Number(p.lat), lng = Number(p.lng);
+    limite.push([lat, lng]);
+    const m = L.marker([lat, lng]).addTo(h.layer);
+    m.bindPopup('<strong>' + String(p.name || '') + '</strong><br>' + String(p.address || ''));
+    // Alegerea se face tot prin select, ca să rămână o singură sursă.
+    m.on('click', function () {
+      const sel = document.getElementById('order-fanbox-select-' + orderId);
+      if (sel) sel.value = String(p.id);
+    });
+  });
+  h.map.fitBounds(limite, { padding: [20, 20], maxZoom: 14 });
+  setTimeout(function () { h.map.invalidateSize(); }, 60);
+}
+
+// Destinația comenzii: FANbox sau adresa clientului. Punctele se încarcă
+// din județul comenzii, la deschiderea ferestrei.
+async function incarcaFanboxComanda(orderId, judet, localitate, alesId) {
+  const sel = document.getElementById('order-fanbox-select-' + orderId);
+  if (!sel) return;
+  if (!judet) { sel.innerHTML = '<option value="">Comanda nu are județ completat</option>'; return; }
+  try {
+    const r = await fetch('/api/fan/lockers?county=' + encodeURIComponent(judet) + '&locality=' + encodeURIComponent(localitate || ''));
+    const d = await r.json();
+    const items = Array.isArray(d.items) ? d.items : [];
+    if (!items.length) { sel.innerHTML = '<option value="">Niciun punct FANbox în acest județ</option>'; return; }
+    fanboxPuncte[orderId] = items;
+    const harta = document.getElementById('order-fanbox-map-' + orderId);
+    if (harta && harta.style.display !== 'none') { deseneazaHartaComanda(orderId); }
+    sel.innerHTML = '<option value="">— Alege punctul —</option>' + items.map(function (p) {
+      const sel2 = String(p.id) === String(alesId || '') ? ' selected' : '';
+      return '<option value="' + p.id + '"' + sel2 + '>' + String(p.label || p.name).replace(/</g, '&lt;') + '</option>';
+    }).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Nu am putut încărca punctele</option>';
+  }
+}
+
+async function salveazaFanbox(orderId) {
+  const toggle = document.getElementById('order-fanbox-toggle-' + orderId);
+  const sel = document.getElementById('order-fanbox-select-' + orderId);
+  const laFanbox = toggle && toggle.checked;
+  if (laFanbox && (!sel || !sel.value)) { alert('Alege punctul FANbox.'); return; }
+  const body = new URLSearchParams();
+  body.set('fan_locker_id', laFanbox && sel ? sel.value : '0');
+  try {
+    const r = await fetch('/admin/orders/' + orderId + '/fanbox', { method: 'POST', body: body });
+    const d = await r.json();
+    if (!d.ok) { alert(d.error || 'Nu am putut salva destinația.'); return; }
+    let mesaj = 'Destinație salvată. Transport: ' + Number(d.shipping_cost).toFixed(2) + ' lei, total: ' + Number(d.total).toFixed(2) + ' lei.';
+    if (d.plata_diferenta) {
+      mesaj += '\n\nComanda e deja plătită, iar totalul s-a schimbat. Dacă a crescut, trimite clientului linkul de plată pentru diferență.';
+    }
+    alert(mesaj);
+    location.reload();
+  } catch (e) {
+    alert('Nu am putut salva destinația.');
+  }
+}
+
+/**
+ * Corecția transportului pe o comandă.
+ *
+ * Transportul se calcula doar automat; la comenzile la care valoarea a ieșit
+ * greșit nu exista de unde să fie îndreptată, iar reducerea comercială —
+ * singura pârghie apropiată — schimbă cu totul altceva pe document.
+ */
+function comutaTransport(orderId) {
+    const form = document.getElementById('order-shipping-form-' + orderId);
+    if (!form) {
+        return;
+    }
+    const ascuns = form.style.display === 'none';
+    form.style.display = ascuns ? '' : 'none';
+    if (ascuns) {
+        const camp = document.getElementById('order-shipping-input-' + orderId);
+        if (camp) {
+            camp.focus();
+            camp.select();
+        }
+    }
+}
+
+async function salveazaTransport(orderId) {
+    const camp = document.getElementById('order-shipping-input-' + orderId);
+    if (!camp) {
+        return;
+    }
+    // `formatRon` din fereastra comenzii trăiește într-o funcție închisă;
+    // aici e nevoie de același format („12.34 RON"), nu de „lei".
+    const inRon = (v) => (Number(v) || 0).toFixed(2) + ' RON';
+    const valoare = String(camp.value || '').trim();
+    if (valoare === '' || !Number.isFinite(Number(valoare)) || Number(valoare) < 0) {
+        window.alert('Scrie o valoare de transport validă.');
+        return;
+    }
+    const date = new FormData();
+    date.append('value', valoare);
+    try {
+        const raspuns = await fetch('/admin/orders/' + orderId + '/shipping', { method: 'POST', body: date });
+        const rezultat = await raspuns.json();
+        if (!rezultat || !rezultat.ok) {
+            window.alert((rezultat && rezultat.error) || 'Nu am putut salva transportul.');
+            return;
+        }
+        const eticheta = document.getElementById('order-shipping-label-' + orderId);
+        if (eticheta) {
+            eticheta.textContent = Number(rezultat.shipping) <= 0.004 ? 'GRATUIT' : inRon(rezultat.shipping);
+        }
+        const totalEticheta = document.getElementById('order-total-label-' + orderId);
+        if (totalEticheta) {
+            totalEticheta.textContent = inRon(rezultat.total);
+        }
+        comutaTransport(orderId);
+        // Rambursul de pe AWB și banii de dat înapoi nu se rezolvă singuri.
+        const mesaje = (rezultat.warnings || []).slice();
+        if (rezultat.erp_note) {
+            mesaje.push(rezultat.erp_note);
+        }
+        if (mesaje.length) {
+            window.alert(mesaje.join('\n\n'));
+        }
+    } catch (eroare) {
+        window.alert('Nu am putut salva transportul.');
+    }
+}
+
+function toggleAddressEdit(orderId) {
+    const form = document.getElementById('order-address-form-' + orderId);
+    if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+}
+
+function saveOrderAddress(orderId) {
+    const form = document.getElementById('order-address-form-' + orderId);
+    if (!form) return;
+    const body = new URLSearchParams();
+    // Bifa de firmă trimite 1/0, nu textul „on"; selectul de plată intră și el.
+    form.querySelectorAll('input[name], select[name]').forEach((inp) => {
+        if (inp.type === 'checkbox') {
+            body.append(inp.name, inp.checked ? '1' : '0');
+        } else {
+            body.append(inp.name, inp.value);
+        }
+    });
+    fetch('/admin/orders/' + orderId + '/address', {method:'POST', body})
+        .then(r => r.json())
+        .then(data => {
+            if (!data.ok) { alert(data.error || 'Eroare la salvare.'); return; }
+            if (data.erp_sync && !data.erp_sync.ok) {
+                alert('Adresa a fost salvată pe site, dar nu s-a propagat în ERP: ' + (data.erp_sync.message || 'se reîncearcă automat.'));
+            }
+            const a = data.address || {};
+            const parts = [a.billing_address_line1, a.billing_address_line2, a.billing_city, a.billing_postcode, a.billing_county].filter(Boolean);
+            const display = document.getElementById('order-address-display-' + orderId);
+            if (display) display.textContent = parts.join(', ') || '-';
+            const nameEl = document.getElementById('order-client-name-' + orderId);
+            if (nameEl) nameEl.textContent = [a.billing_first_name, a.billing_last_name].filter(Boolean).join(' ');
+            const emailEl = document.getElementById('order-client-email-' + orderId);
+            if (emailEl) emailEl.textContent = a.billing_email || '';
+            const phoneEl = document.getElementById('order-client-phone-' + orderId);
+            if (phoneEl) phoneEl.textContent = a.billing_phone || '';
+            const payEl = document.getElementById('order-payment-method-' + orderId);
+            if (payEl) payEl.textContent = a.payment_method || '';
+            // Actualizează și comanda memorată în buton, ca la redeschidere să apară corect.
+            document.querySelectorAll('.view-order-btn').forEach((b) => {
+                try {
+                    const o = JSON.parse(b.dataset.order || '{}');
+                    if (Number(o.id) === Number(orderId)) {
+                        Object.assign(o, a);
+                        b.dataset.order = JSON.stringify(o);
+                    }
+                } catch (e) {}
+            });
+            form.style.display = 'none';
+        })
+        .catch(() => alert('Eroare la comunicarea cu serverul.'));
+}
+
+/* --- Editare produse comandă (cantități + adăugare) --- */
+function orderItemEsc(v){return String(v==null?'':v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');}
+function orderMoney(v){ return (Number(v)||0).toFixed(2) + ' lei'; }
+function orderProdOptions(selId){
+    const list = Array.isArray(window.orderProducts) ? window.orderProducts : [];
+    return '<option value="">— alege produs —</option>' + list.map((p) => `<option value="${Number(p.id)}" data-price="${Number(p.price)||0}"${Number(p.id)===Number(selId)?' selected':''}>${orderItemEsc(p.name)}</option>`).join('');
+}
+function orderItemRowHtml(pid, name, qty, unit){
+    const u = Number(unit)||0;
+    const q = Math.max(0, Number(qty)||0);
+    const noVat = u > 0 ? (u/1.21).toFixed(4) : '—';
+    return `<div class="oi-row" data-pid="${Number(pid)}" data-unit="${u}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+        <span style="flex:1;">${orderItemEsc(name)}</span>
+        <span class="oi-novat" style="color:#6b7280;font-size:12px;min-width:64px;text-align:right;">(${noVat})</span>
+        <input type="number" min="0" value="${q}" class="oi-qty" style="width:60px;padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;" oninput="recalcOrderItem(this)">
+        <span class="oi-line" style="min-width:92px;text-align:right;font-weight:600;">${orderMoney(u*q)}</span>
+        <button type="button" onclick="this.closest('.oi-row').remove()" title="Elimină" style="border:none;background:#fee2e2;color:#b91c1c;border-radius:5px;padding:4px 9px;cursor:pointer;">✕</button>
+    </div>`;
+}
+function orderNewRowHtml(){
+    return `<div class="oi-row" data-unit="0" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+        <select class="oi-pid" style="flex:1;padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;" onchange="orderPickProduct(this)">${orderProdOptions('')}</select>
+        <span class="oi-novat" style="color:#6b7280;font-size:12px;min-width:64px;text-align:right;">(—)</span>
+        <input type="number" min="1" value="1" class="oi-qty" style="width:60px;padding:4px 6px;border:1px solid #d1d5db;border-radius:5px;" oninput="recalcOrderItem(this)">
+        <span class="oi-line" style="min-width:92px;text-align:right;font-weight:600;">0.00 lei</span>
+        <button type="button" onclick="this.closest('.oi-row').remove()" title="Elimină" style="border:none;background:#fee2e2;color:#b91c1c;border-radius:5px;padding:4px 9px;cursor:pointer;">✕</button>
+    </div>`;
+}
+function recalcOrderItem(el){
+    const row = el.closest('.oi-row');
+    if (!row) return;
+    const unit = Number(row.dataset.unit)||0;
+    const qty = Number(row.querySelector('.oi-qty')?.value)||0;
+    const lineEl = row.querySelector('.oi-line');
+    if (lineEl) lineEl.textContent = orderMoney(unit*qty);
+}
+function orderPickProduct(sel){
+    const row = sel.closest('.oi-row');
+    if (!row) return;
+    // Produsul e deja în comandă: se adună la rândul lui, nu se face a doua
+    // linie (ERP-ul nu aprobă o comandă cu două linii pe același produs).
+    const wrap = row.parentElement;
+    const altul = sel.value === '' || !wrap ? null : Array.from(wrap.querySelectorAll('.oi-row')).find((r) =>
+        r !== row && String(r.dataset.pid || r.querySelector('.oi-pid')?.value || '') === sel.value);
+    if (altul) {
+        const q = altul.querySelector('.oi-qty');
+        const adaug = Math.max(1, Number(row.querySelector('.oi-qty')?.value) || 1);
+        if (q) { q.value = (Number(q.value) || 0) + adaug; recalcOrderItem(q); }
+        row.remove();
+        altul.style.background = '#fef9c3';
+        setTimeout(() => { altul.style.background = ''; }, 2000);
+        const status = document.getElementById('order-items-status-' + String(wrap.id || '').replace('order-items-', ''));
+        if (status) { status.style.color = '#b45309'; status.textContent = 'Produsul era deja în comandă: i-am crescut cantitatea.'; }
+        return;
+    }
+    const opt = sel.options[sel.selectedIndex];
+    const price = opt ? (Number(opt.dataset.price)||0) : 0;
+    row.dataset.unit = price;
+    const noVatEl = row.querySelector('.oi-novat');
+    if (noVatEl) noVatEl.textContent = price > 0 ? `(${(price/1.21).toFixed(4)})` : '(—)';
+    recalcOrderItem(sel);
+}
+function addOrderItemRow(orderId){
+    const wrap = document.getElementById('order-items-' + orderId);
+    if (wrap) wrap.insertAdjacentHTML('beforeend', orderNewRowHtml());
+}
+function saveOrderItems(orderId){
+    const wrap = document.getElementById('order-items-' + orderId);
+    if (!wrap) return;
+    const body = new URLSearchParams();
+    let count = 0;
+    wrap.querySelectorAll('.oi-row').forEach((row) => {
+        const pid = row.dataset.pid || row.querySelector('.oi-pid')?.value || '';
+        const qty = row.querySelector('.oi-qty')?.value || '0';
+        if (pid !== '' && Number(qty) > 0) { body.append('product_id[]', pid); body.append('quantity[]', qty); count++; }
+    });
+    const status = document.getElementById('order-items-status-' + orderId);
+    if (count === 0) { if(status){status.style.color='#dc2626';status.textContent='Adaugă cel puțin un produs.';} return; }
+    if (status) { status.style.color='#6b7280'; status.textContent='Se recalculează...'; }
+    fetch('/admin/orders/' + orderId + '/items', {method:'POST', body})
+        .then((r) => r.json())
+        .then((data) => {
+            if (!data.ok) { if(status){status.style.color='#dc2626';status.textContent=data.error||'Eroare';} return; }
+            const erp = data.erp_sync;
+            let mesaj = 'Salvat ✓ (subtotal ' + orderMoney(data.subtotal) + ', transport ' + orderMoney(data.shipping) + ', total ' + orderMoney(data.total) + ').';
+            let culoare = '#16a34a';
+            let intarziere = 1500;
+            const rest = Number(data.rest_de_incasat) || 0;
+            if (rest > 0) {
+                culoare = '#b45309';
+                mesaj += ' ⚠ Comanda era plătită cu cardul: mai sunt de încasat ' + orderMoney(rest) + '.';
+                intarziere = 5000;
+            }
+            if (erp && erp.ok) {
+                mesaj += ' ' + (erp.message || 'Propagat în ERP.');
+            } else if (erp && !erp.ok) {
+                culoare = '#b45309';
+                mesaj += ' ⚠ ERP: ' + (erp.message || 'nu s-a propagat acum; se reîncearcă automat.');
+                intarziere = 4000;
+            } else if (data.erp_note) {
+                culoare = '#b45309';
+                mesaj += ' ' + data.erp_note;
+                intarziere = 5000;
+            }
+            // Corectura pe o comandă facturată lasă AWB-ul cu rambursul vechi;
+            // avertismentul trebuie citit, nu clipit — de aceea îl arătăm
+            // într-o alertă, nu doar pe rândul de status care dispare la reload.
+            const atentionari = Array.isArray(data.warnings) ? data.warnings : [];
+            if (atentionari.length > 0) {
+                culoare = '#b45309';
+                intarziere = 6000;
+                window.alert('⚠ ' + atentionari.join('\n\n'));
+            }
+            if (status) { status.style.color = culoare; status.textContent = mesaj + ' Se reîncarcă...'; }
+            setTimeout(() => { window.location.reload(); }, intarziere);
+        })
+        .catch(() => { if(status){status.style.color='#dc2626';status.textContent='Eroare server';} });
+}
+
+/* --- Nota interna: ce s-a vorbit cu clientul --- */
+async function saveOrderNotes(orderId){
+  const camp = document.getElementById('order-notes-' + orderId);
+  const stare = document.getElementById('order-notes-status-' + orderId);
+  if (!camp) { return; }
+  if (stare) { stare.textContent = 'Se salvează...'; stare.style.color = '#64748b'; }
+  try {
+    const body = new URLSearchParams();
+    body.set('admin_notes', camp.value);
+    const res = await fetch('/admin/orders/' + orderId + '/note-interne', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    const data = await res.json();
+    if (stare) {
+      stare.textContent = data.ok ? (data.message || 'Salvat.') : (data.error || 'Nu am putut salva.');
+      stare.style.color = data.ok ? '#15803d' : '#b91c1c';
+    }
+  } catch (e) {
+    if (stare) { stare.textContent = 'Eroare de rețea.'; stare.style.color = '#b91c1c'; }
+  }
+}
+
+/* --- Reducere comercială pe o comandă venită din site --- */
+async function trimiteReducere(orderId, mode, value, reason){
+  const status = document.getElementById('order-discount-status-' + orderId);
+  if (status) { status.textContent = 'Se salvează...'; status.style.color = '#64748b'; }
+  const body = new URLSearchParams({ mode: mode, value: String(value), reason: reason });
+  try {
+    const res = await fetch('/admin/orders/' + orderId + '/discount', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      if (status) { status.textContent = data.error || 'Nu am putut salva reducerea.'; status.style.color = '#b91c1c'; }
+      return;
+    }
+    if (status) {
+      const erp = data.erp_sync && data.erp_sync.ok === false
+        ? ' Atenție: nu a ajuns încă în ERP, se reia automat.'
+        : '';
+      status.textContent = 'Salvat. Total: ' + Number(data.total).toFixed(2) + ' lei.' + erp;
+      status.style.color = erp ? '#b45309' : '#166534';
+    }
+    // Reîncărcăm lista, ca totalul și eticheta de plată să se vadă corect.
+    setTimeout(() => window.location.reload(), 900);
+  } catch (e) {
+    if (status) { status.textContent = 'Eroare de rețea.'; status.style.color = '#b91c1c'; }
+  }
+}
+
+function saveOrderDiscount(orderId){
+  const mode = (document.getElementById('order-discount-mode-' + orderId) || {}).value || 'procent';
+  const value = (document.getElementById('order-discount-value-' + orderId) || {}).value || '0';
+  const reason = (document.getElementById('order-discount-reason-' + orderId) || {}).value || '';
+  trimiteReducere(orderId, mode, value, reason);
+}
+
+function clearOrderDiscount(orderId){
+  if (!confirm('Anulezi reducerea comercială de pe această comandă?')) return;
+  trimiteReducere(orderId, 'suma', '0', '');
+}
+
+/* --- Deblocarea unei comenzi deja facturate, pentru corecție ---
+   Se întâmplă ca un produs să iasă din stoc după emiterea facturii: linia se
+   scoate din factură în ERP, iar comanda de pe site trebuie pusă la zi ca să-i
+   rămână clientului ce a cumpărat cu adevărat și ca AWB-ul reemis să ceară
+   rambursul corect. Motivul e obligatoriu și rămâne în jurnal. */
+function ceruDeblocare(orderId){
+    const form = document.getElementById('order-unlock-form-' + orderId);
+    if (!form) return;
+    const ascuns = form.style.display === 'none';
+    form.style.display = ascuns ? '' : 'none';
+    if (ascuns) {
+        const input = document.getElementById('order-unlock-reason-' + orderId);
+        if (input) input.focus();
+    }
+}
+
+function deblocheazaComanda(orderId){
+    const input = document.getElementById('order-unlock-reason-' + orderId);
+    const status = document.getElementById('order-unlock-status-' + orderId);
+    const motiv = input ? String(input.value || '').trim() : '';
+    if (motiv.length < 5) {
+        if (status) { status.style.color = '#dc2626'; status.textContent = 'Scrie motivul corecției.'; }
+        if (input) input.focus();
+        return;
+    }
+    if (status) { status.style.color = '#6b7280'; status.textContent = 'Se deblochează...'; }
+    const body = new URLSearchParams();
+    body.set('reason', motiv);
+    fetch('/admin/orders/' + orderId + '/deblocheaza', {method:'POST', body})
+        .then((r) => r.json())
+        .then((data) => {
+            if (!data.ok) {
+                if (status) { status.style.color = '#dc2626'; status.textContent = data.error || 'Eroare'; }
+                return;
+            }
+            // Modalul se construiește din datele rândului, deci reîncărcăm
+            // pagina: altfel ar rămâne pe ecran comanda blocată.
+            location.reload();
+        })
+        .catch(() => { if (status) { status.style.color = '#dc2626'; status.textContent = 'Eroare server'; } });
+}
+
+function blocheazaComanda(orderId){
+    if (!confirm('Blochezi comanda la loc? Produsele nu se vor mai putea modifica.')) return;
+    const status = document.getElementById('order-unlock-status-' + orderId);
+    if (status) { status.style.color = '#6b7280'; status.textContent = 'Se blochează...'; }
+    fetch('/admin/orders/' + orderId + '/blocheaza', {method:'POST'})
+        .then((r) => r.json())
+        .then((data) => {
+            if (!data.ok) {
+                if (status) { status.style.color = '#dc2626'; status.textContent = data.error || 'Eroare'; }
+                return;
+            }
+            location.reload();
+        })
+        .catch(() => { if (status) { status.style.color = '#dc2626'; status.textContent = 'Eroare server'; } });
+}
+
+<?php if ($areComenziBt): ?>
+/* --- Plata Banca Transilvania: verifică, încasează, anulează, rambursează --- */
+window.BT_CSRF = <?= json_encode(\App\Support\AdminCsrf::token()) ?>;
+function btArataAlegere(txId, arata){
+    const caseta = document.getElementById('bt-alegere-' + txId);
+    if (caseta) { caseta.hidden = arata === false; }
+}
+function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
+    const status = document.getElementById('bt-status-' + txId);
+    const panou = document.getElementById('order-bt-' + txId);
+    const date = new URLSearchParams();
+    date.append('tx_id', String(txId));
+    date.append('_csrf', window.BT_CSRF || '');
+    let confirmare = '';
+    if (actiune === 'deposit' || actiune === 'refund') {
+        const camp = document.getElementById((actiune === 'deposit' ? 'bt-suma-incasare-' : 'bt-suma-rambursare-') + txId);
+        const suma = Number(String(camp ? camp.value : '').replace(',', '.'));
+        if (!Number.isFinite(suma) || suma <= 0) {
+            if (status) { status.style.color = '#dc2626'; status.textContent = 'Scrie o sumă mai mare ca 0.'; }
+            return;
+        }
+        if (maxim && suma > Number(maxim) + 0.0001) {
+            if (status) { status.style.color = '#dc2626'; status.textContent = 'Suma depășește maximul de ' + Number(maxim).toFixed(2) + ' lei.'; }
+            return;
+        }
+        date.append('suma', suma.toFixed(2));
+        confirmare = actiune === 'deposit'
+            ? 'Încasezi ' + suma.toFixed(2) + ' lei din suma blocată pe cardul clientului?' + (Number(maxim) > suma ? ' Restul de ' + (Number(maxim) - suma).toFixed(2) + ' lei NU se mai încasează.' : '')
+            : 'Rambursezi ' + suma.toFixed(2) + ' lei clientului? Banii pleacă înapoi pe card și operația nu se poate anula.' + (Number(puncte) > 0 ? ' Punctele STAR se întorc primele.' : '') + ' Magazinul primește un email despre rambursare.';
+    } else if (actiune === 'reverse') {
+        if (confirmActiva) {
+            date.append('confirm_activa', '1');
+            confirmare = 'Sigur eliberezi doar suma? Comanda rămâne ACTIVĂ și NEPLĂTITĂ, iar aprobarea ei din ERP va fi refuzată până se rezolvă plata.';
+        } else {
+            confirmare = 'Anulezi autorizarea? Suma blocată pe cardul clientului se eliberează.';
+        }
+    } else if (actiune === 'anuleaza_comanda') {
+        confirmare = 'Anulezi comanda? Suma blocată se eliberează, ERP-ul e anunțat, iar clientul primește emailul de anulare.';
+    }
+    if (confirmare !== '' && !window.confirm(confirmare)) {
+        return;
+    }
+    if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = true; }); }
+    if (status) { status.style.color = '#6b7280'; status.textContent = 'Se trimite la bancă...'; }
+    fetch('/admin/orders/' + orderId + '/bt/' + actiune, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': window.BT_CSRF || ''},
+        body: date.toString()
+    })
+        .then((r) => r.json())
+        .then((data) => {
+            if (data.ok) {
+                if (status) { status.style.color = '#16a34a'; status.textContent = (data.mesaj || 'Gata') + ' — pagina se reîncarcă...'; }
+                setTimeout(() => window.location.reload(), 1800);
+                return;
+            }
+            // Eroarea rămâne pe ecran, ca să poată fi citită; starea reală se
+            // vede după reîncărcarea paginii.
+            if (data.cere_confirmare) { btArataAlegere(txId, true); }
+            if (status) { status.style.color = '#dc2626'; status.textContent = (data.error || 'Eroare') + ' (Reîncarcă pagina ca să vezi starea actualizată.)'; }
+            if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+        })
+        .catch(() => {
+            if (status) { status.style.color = '#dc2626'; status.textContent = 'Eroare de comunicare cu serverul. Verifică starea înainte să repeți.'; }
+            if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+        });
+}
+
+<?php endif; ?>
+/* --- Link de plată pentru diferența rămasă --- */
+function sendPaymentLink(orderId){
+    const status = document.getElementById('payment-link-status-' + orderId);
+    if (status) { status.style.color = '#6b7280'; status.textContent = 'Se trimite...'; }
+    fetch('/admin/orders/' + orderId + '/payment-link', {method:'POST'})
+        .then((r) => r.json())
+        .then((data) => {
+            if (!status) return;
+            if (data.ok) {
+                status.style.color = '#16a34a';
+                status.textContent = 'Link trimis pe ' + (data.email || 'emailul clientului') + (data.procesator ? ' (plată prin ' + data.procesator + ')' : '') + ' ✓';
+                return;
+            }
+            status.style.color = '#dc2626';
+            status.textContent = data.error || 'Eroare';
+            // Emailul a picat, dar linkul există: îl poate trimite manual.
+            if (data.url) { window.prompt('Trimite manual acest link clientului:', data.url); }
+        })
+        .catch(() => { if (status) { status.style.color = '#dc2626'; status.textContent = 'Eroare server'; } });
+}
+
+/* --- Bani veniți pe lângă site (ramburs, OP, numerar) --- */
+function inregistreazaIncasare(orderId){
+    const status = document.getElementById('incasare-status-' + orderId);
+    const suma = document.getElementById('incasare-suma-' + orderId);
+    const metoda = document.getElementById('incasare-metoda-' + orderId);
+    if (!suma || !metoda) { return; }
+    if (status) { status.style.color = '#6b7280'; status.textContent = 'Se salvează...'; }
+    const date = new URLSearchParams();
+    date.append('suma', suma.value);
+    date.append('metoda', metoda.value);
+    fetch('/admin/orders/' + orderId + '/incasare', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: date.toString()
+    })
+        .then((r) => r.json())
+        .then((data) => {
+            if (!status) return;
+            if (data.ok) {
+                status.style.color = '#16a34a';
+                status.textContent = (data.mesaj || 'Salvat') + ' — reîncarcă pagina';
+                // Eticheta „Plătit parțial" se calculează la randare, deci
+                // rămâne veche până la o reîncărcare.
+                setTimeout(() => window.location.reload(), 1200);
+                return;
+            }
+            status.style.color = '#dc2626';
+            status.textContent = data.error || 'Eroare';
+        })
+        .catch(() => { if (status) { status.style.color = '#dc2626'; status.textContent = 'Eroare server'; } });
+}
+
+/* --- Produse promoționale (intern) --- */
+function promoEsc(v){return String(v==null?'':v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');}
+function promoOptionsHtml(selId, selName){
+    const list = Array.isArray(window.promoProducts) ? window.promoProducts : [];
+    let html = '<option value="">— alege —</option>' + list.map((p) => `<option value="${Number(p.id)}"${Number(p.id)===Number(selId)?' selected':''}>${promoEsc(p.name)}</option>`).join('');
+    // Dacă produsul salvat pe comandă nu mai e în nomenclatorul activ (dezactivat/șters),
+    // afișează-l totuși ca opțiune selectată, ca să nu „dispară” selecția salvată.
+    const sel = Number(selId) || 0;
+    if (sel > 0 && !list.some((p) => Number(p.id) === sel)) {
+        html += `<option value="${sel}" selected>${promoEsc(selName || ('#' + sel))} (inactiv)</option>`;
+    }
+    return html;
+}
+function promoRowHtml(pid, qty, name){
+    const q = Math.max(1, Number(qty||1)||1);
+    return `<div class="promo-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
+        <select class="promo-pid" style="flex:1;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;">${promoOptionsHtml(pid, name)}</select>
+        <input type="number" min="1" value="${q}" class="promo-qty" style="width:72px;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;">
+        <button type="button" onclick="this.closest('.promo-row').remove()" style="padding:6px 10px;background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;cursor:pointer;">✕</button>
+    </div>`;
+}
+function addPromoRow(orderId){
+    const wrap = document.getElementById('promo-rows-' + orderId);
+    if (wrap) wrap.insertAdjacentHTML('beforeend', promoRowHtml('', 1));
+}
+function saveOrderPromo(orderId){
+    const wrap = document.getElementById('promo-rows-' + orderId);
+    if (!wrap) return;
+    const body = new URLSearchParams();
+    wrap.querySelectorAll('.promo-row').forEach((row) => {
+        const sel = row.querySelector('.promo-pid');
+        const qty = row.querySelector('.promo-qty');
+        const pid = sel ? sel.value : '';
+        if (pid !== '') { body.append('promo_product_id[]', pid); body.append('quantity[]', qty ? qty.value : '1'); }
+    });
+    const status = document.getElementById('promo-status-' + orderId);
+    if (status) { status.style.color='#6b7280'; status.textContent='Se salvează...'; }
+    fetch('/admin/orders/' + orderId + '/promo', {method:'POST', body})
+        .then((r) => r.json())
+        .then((data) => {
+            if (!data.ok) { if(status){status.style.color='#dc2626';status.textContent=data.error||'Eroare';} return; }
+            // Actualizează comanda memorată în buton, ca la redeschidere să apară fără refresh
+            document.querySelectorAll('.view-order-btn').forEach((b) => {
+                try {
+                    const o = JSON.parse(b.dataset.order || '{}');
+                    if (Number(o.id) === Number(orderId)) {
+                        o.promo_items = Array.isArray(data.items) ? data.items : [];
+                        b.dataset.order = JSON.stringify(o);
+                    }
+                } catch (e) {}
+            });
+            if (status) { status.style.color='#16a34a'; status.textContent='Salvat ✓'; setTimeout(() => { if(status) status.textContent=''; }, 2500); }
+        })
+        .catch(() => { if(status){status.style.color='#dc2626';status.textContent='Eroare server';} });
+}
+
+/* --- Popup: toate promoționalele clientului --- */
+(function(){
+    var modal = document.getElementById('client-promo-modal');
+    if (!modal) { return; }
+    var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    function closeModal(){ modal.style.display = 'none'; }
+    document.getElementById('client-promo-close')?.addEventListener('click', closeModal);
+    modal.addEventListener('click', function(e){ if (e.target === modal) { closeModal(); } });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') { closeModal(); } });
+
+    document.querySelectorAll('.client-promo-btn').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var orderId = btn.getAttribute('data-order-id');
+            var body = document.getElementById('client-promo-body');
+            var title = document.getElementById('client-promo-title');
+            if (title) title.textContent = 'Promoționale client';
+            if (body) body.innerHTML = '<p style="color:#6b7280;">Se încarcă...</p>';
+            modal.style.display = 'flex';
+            fetch('/admin/orders/' + orderId + '/client-promo')
+                .then(function(r){ return r.json(); })
+                .then(function(d){
+                    if (!d.ok) { if (body) body.innerHTML = '<p style="color:#dc2626;">' + esc(d.error || 'Eroare.') + '</p>'; return; }
+                    if (title) title.textContent = 'Promoționale — ' + (d.client_name || 'client');
+                    var items = Array.isArray(d.items) ? d.items : [];
+                    var totalHtml = items.length
+                        ? '<ul style="margin:0 0 4px;padding-left:20px;line-height:1.8;">' + items.map(function(i){ return '<li>' + esc(i.name) + ' × <strong>' + (Number(i.quantity)||0) + '</strong></li>'; }).join('') + '</ul>'
+                        : '<p style="color:#6b7280;font-style:italic;">Niciun produs promoțional.</p>';
+                    var orders = Array.isArray(d.orders) ? d.orders : [];
+                    var ordersHtml = orders.map(function(o){
+                        var its = Array.isArray(o.items) ? o.items.map(function(i){ return esc(i.name) + ' × ' + (Number(i.quantity)||1); }).join(', ') : '';
+                        return '<div style="border-top:1px solid #eee;padding:8px 0;font-size:13px;"><strong>' + esc(o.order_number) + '</strong> <span style="color:#94a3b8;">' + esc(o.created_at) + '</span><br>' + its + '</div>';
+                    }).join('');
+                    if (body) body.innerHTML =
+                        (d.email ? '<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">' + esc(d.email) + '</p>' : '') +
+                        '<p style="margin:0 0 6px;font-weight:700;">Total primite (toate comenzile):</p>' + totalHtml +
+                        (orders.length ? '<p style="margin:16px 0 4px;font-weight:700;">Pe comenzi:</p>' + ordersHtml : '');
+                })
+                .catch(function(){ if (body) body.innerHTML = '<p style="color:#dc2626;">Eroare de comunicare.</p>'; });
+        });
+    });
+})();
+</script>

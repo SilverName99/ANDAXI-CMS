@@ -1,0 +1,860 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Support;
+
+use DateTimeImmutable;
+use PDO;
+use RuntimeException;
+use Throwable;
+
+final class EmailAutomation
+{
+    public static function ensureSchema(PDO $db): void
+    {
+        OrderMailer::ensureEmailSendHistorySchema($db);
+
+        try {
+            $db->exec(
+                'CREATE TABLE IF NOT EXISTS email_logs (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    order_id INT UNSIGNED DEFAULT NULL,
+                    email_type VARCHAR(80) NOT NULL,
+                    recipient VARCHAR(190) NOT NULL,
+                    subject VARCHAR(255) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT \'sent\',
+                    error_message TEXT DEFAULT NULL,
+                    sent_at DATETIME DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uniq_order_email_type (order_id, email_type)
+                )'
+            );
+        } catch (Throwable) {
+        }
+
+        try {
+            $db->exec(
+                'CREATE TABLE IF NOT EXISTS cart_abandonments (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    session_id VARCHAR(190) NOT NULL UNIQUE,
+                    email VARCHAR(190) DEFAULT NULL,
+                    customer_name VARCHAR(190) DEFAULT NULL,
+                    cart_snapshot LONGTEXT DEFAULT NULL,
+                    last_seen_at DATETIME NOT NULL,
+                    converted_at DATETIME DEFAULT NULL,
+                    abandoned_email_sent_at DATETIME DEFAULT NULL,
+                    abandoned_email_error TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )'
+            );
+        } catch (Throwable) {
+        }
+    }
+
+    /**
+     * Emailul de bun venit la crearea contului. Best-effort: dacă trimiterea
+     * eșuează, contul rămâne creat — clientul nu are voie să vadă o eroare.
+     */
+    public static function sendAccountWelcome(
+        PDO $db,
+        array $settings,
+        string $email,
+        string $customerName = ''
+    ): void {
+        $email = trim($email);
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+        // Adresele interne generate când formularul nu cere email nu primesc nimic.
+        if (str_ends_with(strtolower($email), '@local.invalid')) {
+            return;
+        }
+        if (!OrderMailer::isTemplateActive('account_created', $settings)) {
+            return;
+        }
+
+        $recipients = OrderMailer::resolveTemplateRecipients('account_created', $settings, $email);
+        if ($recipients === []) {
+            return;
+        }
+
+        // Fără nume real, utilizatorul e adresa de email — o afișăm întreagă.
+        $parti = preg_split('/\s+/', trim($customerName), 2) ?: [];
+        $customerName = CustomerDisplay::nume(
+            (string) ($parti[0] ?? ''),
+            (string) ($parti[1] ?? ''),
+            $email
+        );
+        $storeName = trim((string) ($settings['order_email_from_name'] ?? 'Bioscem')) ?: 'Bioscem';
+
+        $context = [
+            'customer_name' => $customerName,
+            'customer_email' => $email,
+            'store_name' => $storeName,
+            'year' => date('Y'),
+            'order_action_url' => '/contul-meu',
+        ];
+
+        foreach ($recipients as $recipient) {
+            $contextWithRecipient = $context;
+            $contextWithRecipient['to'] = $recipient;
+            try {
+                OrderMailer::sendTemplate('account_created', $contextWithRecipient, $settings, $db, [
+                    'source' => 'account_automation',
+                    'meta' => [
+                        'automation_template' => 'account_created',
+                        'recipient_mode' => OrderMailer::templateRecipientMode('account_created', $settings),
+                    ],
+                ]);
+            } catch (Throwable) {
+                // Emailul de bun venit nu blochează niciodată înregistrarea.
+            }
+        }
+    }
+
+    public static function sendOrderTemplateById(PDO $db, array $settings, int $orderId, string $templateType): void
+    {
+        if ($orderId <= 0) {
+            return;
+        }
+
+        self::ensureSchema($db);
+        // Garantează coloana fan_awb_list (comenzile care pleacă în mai multe colete).
+        ErpSync::ensureSchema($db);
+        $stmt = $db->prepare(
+            'SELECT id, order_number, status, payment_method, billing_first_name, billing_last_name, billing_email,
+                    fan_awb, fan_awb_list, fan_tracking_url, created_at, total,
+                    subtotal, shipping_cost, discount_total, loyalty_points_discount
+             FROM orders
+             WHERE id = :id AND deleted_at IS NULL
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $orderId]);
+        $order = $stmt->fetch() ?: null;
+        if (!is_array($order)) {
+            return;
+        }
+
+        self::sendOrderTemplate($db, $settings, $order, $templateType);
+    }
+
+    public static function sendOrderTemplate(PDO $db, array $settings, array $order, string $templateType): void
+    {
+        $orderId = (int) ($order['id'] ?? 0);
+        if ($orderId <= 0) {
+            return;
+        }
+
+        // La o comandă cu ordin de plată, confirmarea obişnuită e înlocuită de
+        // şablonul cu datele bancare — nu se trimit amândouă. Dacă şablonul de
+        // OP e oprit, rămâne confirmarea obişnuită, ca înainte.
+        if (
+            $templateType === 'new_order'
+            && strtolower((string) ($order['payment_method'] ?? '')) === 'bank_transfer'
+            && OrderMailer::isTemplateActive('new_order_op', $settings)
+        ) {
+            $templateType = 'new_order_op';
+        }
+
+        if (!OrderMailer::isTemplateActive($templateType, $settings)) {
+            return;
+        }
+
+        if (self::isOrderTemplateAlreadySent($db, $orderId, $templateType)) {
+            return;
+        }
+
+        $customerEmail = trim((string) ($order['billing_email'] ?? ''));
+        $recipients = OrderMailer::resolveTemplateRecipients($templateType, $settings, $customerEmail);
+        if ($recipients === []) {
+            return;
+        }
+
+        $customerName = trim((string) ($order['billing_first_name'] ?? '') . ' ' . (string) ($order['billing_last_name'] ?? ''));
+        if ($customerName === '') {
+            $customerName = 'Client';
+        }
+
+        // Comenzile din mai multe depozite au mai multe AWB-uri (fan_awb_list);
+        // emailul de tracking primește câte un link pentru fiecare colet.
+        $trackingLinks = [];
+        $listaAwb = json_decode((string) ($order['fan_awb_list'] ?? ''), true);
+        if (is_array($listaAwb)) {
+            foreach ($listaAwb as $intrare) {
+                if (!is_array($intrare)) {
+                    continue;
+                }
+                $awbColet = trim((string) ($intrare['awb'] ?? ''));
+                if ($awbColet === '') {
+                    continue;
+                }
+                $urlColet = trim((string) ($intrare['tracking_url'] ?? ''));
+                $trackingLinks[] = [
+                    'awb' => $awbColet,
+                    'url' => $urlColet !== '' ? $urlColet : FanCourierGateway::trackingUrl($awbColet),
+                    'gestiune' => trim((string) ($intrare['gestiune'] ?? '')),
+                ];
+            }
+        }
+
+        $awb = trim((string) ($order['fan_awb'] ?? ''));
+        $trackingUrl = trim((string) ($order['fan_tracking_url'] ?? ''));
+        if ($trackingLinks !== []) {
+            $awb = implode(', ', array_column($trackingLinks, 'awb'));
+            $trackingUrl = (string) $trackingLinks[0]['url'];
+        } elseif ($awb !== '') {
+            $trackingUrl = FanCourierGateway::trackingUrl($awb);
+        }
+        if ($trackingUrl === '') {
+            $trackingUrl = '/contul-meu?section=orders';
+        }
+
+        $storeName = trim((string) ($settings['order_email_from_name'] ?? 'Bioscem'));
+        if ($storeName === '') {
+            $storeName = 'Bioscem';
+        }
+        $orderItems = self::loadOrderItems($db, $orderId);
+        $orderSummaryText = self::orderItemsSummaryText($orderItems);
+        $orderSummaryRows = self::orderItemsSummaryRowsHtml($orderItems);
+
+        $context = [
+            'customer_name' => $customerName,
+            'order_number' => (string) ($order['order_number'] ?? ''),
+            'awb' => $awb,
+            'courier_name' => $awb !== '' ? 'FAN Courier' : 'Curier rapid',
+            'tracking_url' => $trackingUrl,
+            'tracking_links' => $trackingLinks,
+            'cart_summary' => '',
+            'order_status' => self::orderStatusLabel((string) ($order['status'] ?? '')),
+            'estimated_delivery' => self::estimatedDeliveryWindowLabel((string) ($order['created_at'] ?? '')),
+            'customer_email' => $customerEmail,
+            'store_name' => $storeName,
+            'year' => date('Y'),
+            'order_date' => self::orderDateLabel((string) ($order['created_at'] ?? '')),
+            'order_total' => self::formatLei((float) ($order['total'] ?? 0)),
+            'order_summary' => $orderSummaryText,
+            'order_items_html' => $orderSummaryRows,
+            'order_summary_rows' => $orderSummaryRows,
+            'order_totals_html' => self::orderTotalsRowsHtml($order, $orderItems),
+            // Clientul primește linkuri publice; nimeni nu e trimis în /admin.
+            'order_action_url' => $templateType === 'cancelled'
+                ? '/contact'
+                : '/contul-meu?section=orders',
+        ];
+
+        // Datele bancare stau într-un singur loc — Setări plăți — de unde le ia
+        // și pagina de checkout.
+        $instructiuni = trim((string) ($settings['bank_transfer_instructiuni'] ?? ''));
+
+        if ($templateType === 'new_order_op') {
+            // Șablonul de OP își pune singur titlul, suma și referința, deci
+            // primește datele curate.
+            $context['payment_details'] = $instructiuni;
+        } elseif (
+            $templateType === 'new_order'
+            && strtolower((string) ($order['payment_method'] ?? '')) === 'bank_transfer'
+            && $instructiuni !== ''
+        ) {
+            // Cazul în care șablonul de OP e oprit: confirmarea obișnuită duce
+            // mai departe datele de plată, ca până acum.
+            $context['payment_instructions'] =
+                "Plata prin ordin de plată — comanda se procesează după încasare.\n"
+                . 'Referință plată: ' . (string) ($order['order_number'] ?? '') . "\n"
+                . $instructiuni;
+        }
+
+        $sentCount = 0;
+        $sentSubject = '';
+        $sentRecipient = '';
+        $lastErrorMessage = '';
+        $recipientMode = OrderMailer::templateRecipientMode($templateType, $settings);
+
+        foreach ($recipients as $recipient) {
+            $contextWithRecipient = $context;
+            $contextWithRecipient['to'] = $recipient;
+            if (trim((string) $contextWithRecipient['customer_email']) === '') {
+                $contextWithRecipient['customer_email'] = $recipient;
+            }
+            try {
+                $mail = OrderMailer::sendTemplate($templateType, $contextWithRecipient, $settings, $db, [
+                    'order_id' => $orderId,
+                    'source' => 'order_automation',
+                    'meta' => [
+                        'automation_template' => $templateType,
+                        'recipient_mode' => $recipientMode,
+                    ],
+                ]);
+                if ($sentRecipient === '') {
+                    $sentRecipient = $recipient;
+                }
+                if ($sentSubject === '') {
+                    $sentSubject = trim((string) ($mail['subject'] ?? ''));
+                }
+                $sentCount++;
+            } catch (RuntimeException $exception) {
+                $lastErrorMessage = $exception->getMessage();
+            }
+        }
+
+        if ($sentCount > 0) {
+            self::writeOrderEmailLog(
+                $db,
+                $orderId,
+                $templateType,
+                $sentRecipient !== '' ? $sentRecipient : implode(', ', $recipients),
+                $sentSubject,
+                'sent',
+                null
+            );
+            return;
+        }
+
+        self::writeOrderEmailLog(
+            $db,
+            $orderId,
+            $templateType,
+            implode(', ', $recipients),
+            '',
+            'error',
+            $lastErrorMessage !== '' ? $lastErrorMessage : 'Nu am putut trimite emailul.'
+        );
+    }
+
+    private static function orderStatusLabel(string $status): string
+    {
+        $status = trim(strtolower($status));
+        return match ($status) {
+            'pending' => 'În așteptare',
+            'pending_payment' => 'Așteaptă plata',
+            'processing' => 'În procesare',
+            'completed' => 'Finalizată',
+            'cancelled' => 'Anulată',
+            'refunded' => 'Rambursată',
+            'returned' => 'Returnată',
+            'failed' => 'Eșuată',
+            default => 'În procesare',
+        };
+    }
+
+    private static function estimatedDeliveryWindowLabel(string $createdAt): string
+    {
+        $timestamp = strtotime($createdAt);
+        if ($timestamp === false) {
+            return '2-3 zile lucratoare';
+        }
+
+        $start = strtotime('+2 days', $timestamp);
+        $end = strtotime('+3 days', $timestamp);
+        if ($start === false || $end === false) {
+            return '2-3 zile lucratoare';
+        }
+
+        $months = [
+            1 => 'Ianuarie',
+            2 => 'Februarie',
+            3 => 'Martie',
+            4 => 'Aprilie',
+            5 => 'Mai',
+            6 => 'Iunie',
+            7 => 'Iulie',
+            8 => 'August',
+            9 => 'Septembrie',
+            10 => 'Octombrie',
+            11 => 'Noiembrie',
+            12 => 'Decembrie',
+        ];
+        $startDay = (int) date('j', $start);
+        $endDay = (int) date('j', $end);
+        $monthIndex = (int) date('n', $end);
+        $year = date('Y', $end);
+        $month = $months[$monthIndex] ?? date('F', $end);
+
+        return $startDay . '-' . $endDay . ' ' . $month . ' ' . $year;
+    }
+
+    private static function orderDateLabel(string $createdAt): string
+    {
+        $timestamp = strtotime($createdAt);
+        if ($timestamp === false) {
+            return date('j F Y');
+        }
+
+        $months = [
+            1 => 'Ianuarie',
+            2 => 'Februarie',
+            3 => 'Martie',
+            4 => 'Aprilie',
+            5 => 'Mai',
+            6 => 'Iunie',
+            7 => 'Iulie',
+            8 => 'August',
+            9 => 'Septembrie',
+            10 => 'Octombrie',
+            11 => 'Noiembrie',
+            12 => 'Decembrie',
+        ];
+        $day = (int) date('j', $timestamp);
+        $monthIndex = (int) date('n', $timestamp);
+        $year = date('Y', $timestamp);
+        $month = $months[$monthIndex] ?? date('F', $timestamp);
+
+        return $day . ' ' . $month . ' ' . $year;
+    }
+
+    private static function loadOrderItems(PDO $db, int $orderId): array
+    {
+        if ($orderId <= 0) {
+            return [];
+        }
+
+        // Cota de TVA stă pe produs, nu pe linia de comandă; o aducem ca să
+        // putem arăta în email cât TVA e inclus în total.
+        $stmt = $db->prepare(
+            'SELECT oi.product_name, oi.quantity, oi.unit_price, oi.line_total,
+                    p.vat_percent, p.vat_included
+             FROM order_items oi
+             LEFT JOIN products p ON p.id = oi.product_id
+             WHERE oi.order_id = :order_id
+             ORDER BY oi.id ASC'
+        );
+        $stmt->execute(['order_id' => $orderId]);
+        $rows = $stmt->fetchAll();
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    private static function orderItemsSummaryText(array $items): string
+    {
+        if ($items === []) {
+            return 'Nu există produse în această comandă.';
+        }
+
+        $lines = [];
+        foreach ($items as $item) {
+            $name = trim((string) ($item['product_name'] ?? 'Produs'));
+            if ($name === '') {
+                $name = 'Produs';
+            }
+            $qty = max(1, (int) ($item['quantity'] ?? 1));
+            $lineTotal = self::formatLei((float) ($item['line_total'] ?? 0));
+            $lines[] = $name . ' x' . $qty . ' - ' . $lineTotal;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private static function orderItemsSummaryRowsHtml(array $items): string
+    {
+        if ($items === []) {
+            return '<p style="margin:0;color:#64748b;font-size:14px;line-height:1.5;">Nu există produse în această comandă.</p>';
+        }
+
+        // Aşezarea pe tabel, nu pe flexbox: Gmail păstrează `display:flex` dar
+        // aruncă `justify-content` şi `gap`, iar denumirea ajungea lipită de
+        // preţ. Tabelele sunt singurul lucru care se aşază la fel peste tot.
+        $rows = '';
+        foreach ($items as $item) {
+            $name = trim((string) ($item['product_name'] ?? 'Produs'));
+            if ($name === '') {
+                $name = 'Produs';
+            }
+            $safeName = htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $qty = max(1, (int) ($item['quantity'] ?? 1));
+            $unitPrice = (float) ($item['unit_price'] ?? 0);
+            $lineTotal = htmlspecialchars(self::formatLei((float) ($item['line_total'] ?? 0)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+            $subtitlu = $unitPrice > 0
+                ? $qty . ' × ' . htmlspecialchars(self::formatLei($unitPrice), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                : 'Cantitate: ' . $qty;
+
+            $rows .= '<tr>'
+                . '<td style="padding:12px 0;border-bottom:1px solid #e5e7eb;color:#0f2532;'
+                . 'font-size:16px;line-height:1.4;text-align:left;vertical-align:top;">'
+                . '<span style="font-weight:700;">' . $safeName . '</span><br>'
+                . '<span style="color:#5f7680;font-size:13px;">' . $subtitlu . '</span>'
+                . '</td>'
+                . '<td style="padding:12px 0 12px 14px;border-bottom:1px solid #e5e7eb;color:#0f2532;'
+                . 'font-size:16px;font-weight:700;text-align:right;vertical-align:top;white-space:nowrap;">'
+                . $lineTotal
+                . '</td>'
+                . '</tr>';
+        }
+
+        return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
+            . ' style="border-collapse:collapse;width:100%;">' . $rows . '</table>';
+    }
+
+    /**
+     * Totalurile comenzii: produse, transport, reduceri, TVA inclus.
+     *
+     * TVA-ul îl arătăm doar când toate liniile au aceeaşi cotă şi preţurile o
+     * includ — atunci cifra e exactă. Dacă în comandă se amestecă cote diferite,
+     * scriem doar că preţurile includ TVA: mai bine fără cifră decât cu una
+     * greşită într-un email care ajunge la client.
+     */
+    private static function orderTotalsRowsHtml(array $order, array $items): string
+    {
+        $total = (float) ($order['total'] ?? 0);
+        if ($total <= 0 && $items === []) {
+            return '';
+        }
+
+        $subtotal = (float) ($order['subtotal'] ?? 0);
+        if ($subtotal <= 0) {
+            $subtotal = array_sum(array_map(static fn ($i) => (float) ($i['line_total'] ?? 0), $items));
+        }
+        $transport = (float) ($order['shipping_cost'] ?? 0);
+        $reducere = (float) ($order['discount_total'] ?? 0);
+        $puncte = (float) ($order['loyalty_points_discount'] ?? 0);
+
+        $rand = static function (string $eticheta, string $valoare, bool $tare = false, bool $liniePeste = false): string {
+            $bord = $liniePeste ? 'border-top:1px solid #e5e7eb;' : '';
+            $marime = $tare ? '19px' : '15px';
+            $greutate = $tare ? '700' : '400';
+            return '<tr>'
+                . '<td style="padding:9px 0;' . $bord . 'color:#5f7680;font-size:' . $marime
+                . ';line-height:1.4;text-align:left;">' . htmlspecialchars($eticheta, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</td>'
+                . '<td style="padding:9px 0 9px 14px;' . $bord . 'color:#0f2532;font-size:' . $marime
+                . ';font-weight:' . $greutate . ';line-height:1.4;text-align:right;white-space:nowrap;">'
+                . htmlspecialchars($valoare, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</td>'
+                . '</tr>';
+        };
+
+        $randuri = $rand('Produse', self::formatLei($subtotal));
+        if ($reducere > 0) {
+            $randuri .= $rand('Reducere', '−' . self::formatLei($reducere));
+        }
+        if ($puncte > 0) {
+            $randuri .= $rand('Puncte de fidelitate', '−' . self::formatLei($puncte));
+        }
+        $randuri .= $rand('Transport', $transport > 0 ? self::formatLei($transport) : 'Gratuit');
+        $randuri .= $rand('Total', self::formatLei($total), true, true);
+
+        $cota = self::cotaTvaUnica($items);
+        if ($cota !== null && $cota > 0) {
+            $tva = $total - ($total / (1 + ($cota / 100)));
+            $randuri .= $rand(
+                'din care TVA (' . rtrim(rtrim(number_format($cota, 2, ',', '.'), '0'), ',') . '%)',
+                self::formatLei(round($tva, 2)),
+            );
+        } elseif ($items !== []) {
+            $randuri .= '<tr><td colspan="2" style="padding:6px 0 0;color:#5f7680;font-size:13px;'
+                . 'line-height:1.4;text-align:right;">Prețurile includ TVA.</td></tr>';
+        }
+
+        return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
+            . ' style="border-collapse:collapse;width:100%;margin:6px 0 0;">' . $randuri . '</table>';
+    }
+
+    /**
+     * Comanda de probă pentru emailurile de test din administrare.
+     *
+     * Trece prin aceiaşi randori ca o comandă adevărată, ca emailul de test să
+     * arate exact ca cel primit de client. Înainte, ecranul de test avea propria
+     * copie a aşezării, scrisă de mână, şi rămânea în urmă la fiecare schimbare.
+     */
+    public static function exempluComanda(): array
+    {
+        $items = [
+            [
+                'product_name' => 'Ulei Esențial de Lavandă',
+                'quantity' => 2,
+                'unit_price' => 89.00,
+                'line_total' => 178.00,
+                'vat_percent' => 21.0,
+                'vat_included' => 1,
+            ],
+            [
+                'product_name' => 'Cremă Hidratantă cu Aloe',
+                'quantity' => 1,
+                'unit_price' => 125.00,
+                'line_total' => 125.00,
+                'vat_percent' => 21.0,
+                'vat_included' => 1,
+            ],
+        ];
+        $order = [
+            'subtotal' => 303.00,
+            'shipping_cost' => 19.00,
+            'discount_total' => 0.0,
+            'loyalty_points_discount' => 0.0,
+            'total' => 322.00,
+        ];
+
+        return [
+            'order_summary' => self::orderItemsSummaryText($items),
+            'order_items_html' => self::orderItemsSummaryRowsHtml($items),
+            'order_totals_html' => self::orderTotalsRowsHtml($order, $items),
+            'order_total' => self::formatLei((float) $order['total']),
+            'cart_summary' => self::orderItemsSummaryText($items),
+            'cart_items_html' => self::orderItemsSummaryRowsHtml($items),
+            'cart_total' => self::formatLei((float) $order['subtotal']),
+        ];
+    }
+
+    /** Cota comună a liniilor, sau null dacă se amestecă ori nu e inclusă în preţ. */
+    private static function cotaTvaUnica(array $items): ?float
+    {
+        $cota = null;
+        foreach ($items as $item) {
+            if (((int) ($item['vat_included'] ?? 1)) !== 1) {
+                return null;
+            }
+            $a = round((float) ($item['vat_percent'] ?? 0), 2);
+            if ($a <= 0) {
+                return null;
+            }
+            if ($cota === null) {
+                $cota = $a;
+                continue;
+            }
+            if (abs($cota - $a) > 0.001) {
+                return null;
+            }
+        }
+
+        return $cota;
+    }
+
+    private static function formatLei(float $amount): string
+    {
+        return number_format($amount, 2, ',', '.') . ' lei';
+    }
+
+    public static function touchCartAbandonment(PDO $db, string $sessionId, array $payload): void
+    {
+        $sessionId = trim($sessionId);
+        if ($sessionId === '') {
+            return;
+        }
+
+        self::ensureSchema($db);
+        $email = trim((string) ($payload['email'] ?? ''));
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $email = '';
+        }
+
+        $name = trim((string) ($payload['customer_name'] ?? ''));
+        $snapshot = trim((string) ($payload['cart_snapshot'] ?? ''));
+        $now = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+
+        $stmt = $db->prepare(
+            'INSERT INTO cart_abandonments (session_id, email, customer_name, cart_snapshot, last_seen_at)
+             VALUES (:session_id, :email, :customer_name, :cart_snapshot, :last_seen_at)
+             ON DUPLICATE KEY UPDATE
+                email = CASE WHEN VALUES(email) <> "" THEN VALUES(email) ELSE email END,
+                customer_name = CASE WHEN VALUES(customer_name) <> "" THEN VALUES(customer_name) ELSE customer_name END,
+                cart_snapshot = VALUES(cart_snapshot),
+                last_seen_at = VALUES(last_seen_at)'
+        );
+        $stmt->execute([
+            'session_id' => $sessionId,
+            'email' => $email,
+            'customer_name' => $name,
+            'cart_snapshot' => $snapshot,
+            'last_seen_at' => $now,
+        ]);
+    }
+
+    public static function markCartConverted(PDO $db, string $sessionId): void
+    {
+        $sessionId = trim($sessionId);
+        if ($sessionId === '') {
+            return;
+        }
+
+        self::ensureSchema($db);
+        $stmt = $db->prepare(
+            'UPDATE cart_abandonments
+             SET converted_at = NOW()
+             WHERE session_id = :session_id AND converted_at IS NULL'
+        );
+        $stmt->execute(['session_id' => $sessionId]);
+    }
+
+    public static function sendDueAbandonedCartEmails(PDO $db, array $settings, int $limit = 100): array
+    {
+        self::ensureSchema($db);
+
+        if (!OrderMailer::isTemplateActive('abandoned_cart', $settings)) {
+            return ['sent' => 0, 'failed' => 0, 'total' => 0];
+        }
+
+        $minutes = (int) ($settings['email_abandoned_after_minutes'] ?? 60);
+        if ($minutes <= 0) {
+            $minutes = 60;
+        }
+
+        $limit = max(1, min(1000, $limit));
+        $thresholdAt = (new DateTimeImmutable('now'))->modify("-{$minutes} minutes")->format('Y-m-d H:i:s');
+
+        // Plasă de siguranță peste marcajul de conversie: dacă pe adresa asta
+        // există o comandă plasată după ce a început coșul, clientul a cumpărat
+        // — indiferent dacă s-a mai întors pe site după plată sau dacă marcajul
+        // s-a pierdut. Fără verificarea asta, cine plătea cu cardul și închidea
+        // pagina primea „ați uitat produse în coș".
+        //
+        // Verificarea „comandă după începerea coșului" nu era însă de ajuns:
+        // clientul care comandă, plătește și se mai întoarce pe site pornește un
+        // coș NOU, ulterior comenzii. Pentru acel coș nu există nicio comandă mai
+        // nouă, așa că emailul pleca — exact la oamenii care tocmai cumpăraseră,
+        // iar ei sunau să întrebe ce n-a mers. De aceea fereastra se lărgește la
+        // ultimele zile: o adresă care a comandat de curând nu primește
+        // „ați uitat produse în coș", oricând ar fi început coșul.
+        $stmt = $db->prepare(
+            'SELECT ca.id, ca.session_id, ca.email, ca.customer_name, ca.cart_snapshot
+             FROM cart_abandonments ca
+             WHERE ca.converted_at IS NULL
+               AND ca.abandoned_email_sent_at IS NULL
+               AND ca.email IS NOT NULL
+               AND ca.email <> ""
+               AND ca.last_seen_at <= :threshold_at
+               AND NOT EXISTS (
+                   SELECT 1 FROM orders o
+                   WHERE o.billing_email = ca.email
+                     AND o.deleted_at IS NULL
+                     AND o.status NOT IN ("cancelled", "failed", "refunded")
+                     AND o.created_at >= LEAST(ca.created_at, NOW() - INTERVAL 7 DAY)
+               )
+             ORDER BY ca.last_seen_at ASC
+             LIMIT :limit'
+        );
+        $stmt->bindValue(':threshold_at', $thresholdAt);
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
+
+        $sent = 0;
+        $failed = 0;
+        foreach ($rows as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            $to = trim((string) ($row['email'] ?? ''));
+            if ($id <= 0 || $to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+
+            $recipients = OrderMailer::resolveTemplateRecipients('abandoned_cart', $settings, $to);
+            if ($recipients === []) {
+                continue;
+            }
+
+            $sentAtLeastOne = false;
+            $lastSubject = '';
+            $lastError = null;
+            foreach ($recipients as $recipient) {
+                try {
+                    $mail = OrderMailer::sendTemplate('abandoned_cart', [
+                        'to' => $recipient,
+                        'customer_name' => trim((string) ($row['customer_name'] ?? '')) ?: 'Client',
+                        'customer_email' => $to,
+                        'order_number' => '',
+                        'awb' => '',
+                        'tracking_url' => '',
+                        'cart_summary' => trim((string) ($row['cart_snapshot'] ?? '')),
+                        'order_action_url' => '/cos',
+                        'cart_action_url' => '/cos',
+                    ], $settings, $db, [
+                        'source' => 'abandoned_cart_automation',
+                        'meta' => [
+                            'cart_abandonment_id' => $id,
+                            'session_id' => (string) ($row['session_id'] ?? ''),
+                            'recipient_mode' => OrderMailer::templateRecipientMode('abandoned_cart', $settings),
+                        ],
+                    ]);
+                    $lastSubject = (string) ($mail['subject'] ?? '');
+                    $sentAtLeastOne = true;
+                } catch (RuntimeException $exception) {
+                    $lastError = $exception;
+                }
+            }
+
+            if ($sentAtLeastOne) {
+                $ok = $db->prepare(
+                    'UPDATE cart_abandonments
+                     SET abandoned_email_sent_at = NOW(),
+                         abandoned_email_error = NULL
+                     WHERE id = :id'
+                );
+                $ok->execute(['id' => $id]);
+
+                $log = $db->prepare(
+                    'INSERT INTO email_logs (order_id, email_type, recipient, subject, status, error_message, sent_at)
+                     VALUES (NULL, :email_type, :recipient, :subject, :status, NULL, NOW())'
+                );
+                $log->execute([
+                    'email_type' => 'abandoned_cart',
+                    'recipient' => implode(', ', $recipients),
+                    'subject' => $lastSubject,
+                    'status' => 'sent',
+                ]);
+                $sent++;
+                continue;
+            }
+
+            $errorMessage = $lastError instanceof RuntimeException ? $lastError->getMessage() : 'Nu am putut trimite emailul.';
+            try {
+                $fail = $db->prepare(
+                    'UPDATE cart_abandonments
+                     SET abandoned_email_error = :error
+                     WHERE id = :id'
+                );
+                $fail->execute([
+                    'error' => substr($errorMessage, 0, 1000),
+                    'id' => $id,
+                ]);
+            } catch (Throwable) {
+            }
+            $failed++;
+        }
+
+        return ['sent' => $sent, 'failed' => $failed, 'total' => count($rows)];
+    }
+
+    private static function isOrderTemplateAlreadySent(PDO $db, int $orderId, string $templateType): bool
+    {
+        $stmt = $db->prepare(
+            'SELECT status
+             FROM email_logs
+             WHERE order_id = :order_id AND email_type = :email_type
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'order_id' => $orderId,
+            'email_type' => $templateType,
+        ]);
+        $status = $stmt->fetchColumn();
+        return $status !== false && (string) $status === 'sent';
+    }
+
+    private static function writeOrderEmailLog(
+        PDO $db,
+        int $orderId,
+        string $templateType,
+        string $recipient,
+        string $subject,
+        string $status,
+        ?string $error
+    ): void {
+        $stmt = $db->prepare(
+            'INSERT INTO email_logs (order_id, email_type, recipient, subject, status, error_message, sent_at)
+             VALUES (:order_id, :email_type, :recipient, :subject, :status, :error_message, :sent_at)
+             ON DUPLICATE KEY UPDATE
+                recipient = VALUES(recipient),
+                subject = VALUES(subject),
+                status = VALUES(status),
+                error_message = VALUES(error_message),
+                sent_at = VALUES(sent_at)'
+        );
+
+        $stmt->execute([
+            'order_id' => $orderId,
+            'email_type' => $templateType,
+            'recipient' => substr($recipient, 0, 190),
+            'subject' => substr($subject, 0, 255),
+            'status' => $status === 'sent' ? 'sent' : 'error',
+            'error_message' => $error !== null ? substr($error, 0, 1000) : null,
+            'sent_at' => $status === 'sent' ? (new DateTimeImmutable('now'))->format('Y-m-d H:i:s') : null,
+        ]);
+    }
+}

@@ -1,0 +1,368 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Support;
+
+use PDO;
+use RuntimeException;
+use Throwable;
+
+/**
+ * Client HTTP pentru ERP-ul ANDAXI.
+ *
+ * Autentificarea se face cu cheia generată în ERP (Setări → Setări site),
+ * trimisă în antetul `X-Andaxi-Site-Key`. Toate metodele aruncă
+ * RuntimeException cu un mesaj citibil de operator — apelantul decide dacă
+ * reîncearcă sau doar notează eroarea pe comandă. Refuzul modulului „Magazin
+ * online” vine ca ErpModulOpritException (tot o RuntimeException), ca
+ * apelantul să-l poată deosebi de o pană.
+ */
+final class ErpClient
+{
+    private const HEADER = 'X-Andaxi-Site-Key';
+
+    private string $baseUrl;
+    private string $apiKey;
+    private int $timeout;
+
+    public function __construct(string $baseUrl, string $apiKey, int $timeout = 20)
+    {
+        $this->baseUrl = rtrim(trim($baseUrl), '/');
+        $this->apiKey = trim($apiKey);
+        $this->timeout = max(5, $timeout);
+    }
+
+    /** Construiește clientul din setările salvate în admin. */
+    public static function fromSettings(array $settings): ?self
+    {
+        $url = trim((string) ($settings['erp_url'] ?? ''));
+        $key = trim((string) ($settings['erp_api_key'] ?? ''));
+        if ($url === '' || $key === '') {
+            return null;
+        }
+        return new self($url, $key, (int) ($settings['erp_timeout'] ?? 20));
+    }
+
+    /** Clientul activ, sau null dacă integrarea e oprită/neconfigurată. */
+    public static function fromDb(PDO $db): ?self
+    {
+        try {
+            $settings = Settings::all($db);
+        } catch (Throwable) {
+            return null;
+        }
+        if ((string) ($settings['erp_enabled'] ?? '0') !== '1') {
+            return null;
+        }
+        return self::fromSettings($settings);
+    }
+
+    /**
+     * Verifică dacă ERP-ul răspunde și are gestiunea configurată. ERP-urile cu
+     * modulul „Magazin online” întorc și `modulMagazin` (pornit, se_opreste,
+     * oprit); cele mai vechi nu — vezi ErpModul::dinPing.
+     */
+    public function ping(): array
+    {
+        return $this->request('GET', '/api/site/ping');
+    }
+
+    /**
+     * Disponibilul pe SKU-uri. Cheia rezultatului e SKU-ul (majuscule).
+     *
+     * @param string[] $skus
+     * @return array<string, array{cunoscut: bool, disponibil: float, existent: bool}>
+     */
+    public function stockBySku(array $skus): array
+    {
+        $clean = [];
+        foreach ($skus as $sku) {
+            $value = trim((string) $sku);
+            if ($value !== '') {
+                $clean[strtoupper($value)] = $value;
+            }
+        }
+        if ($clean === []) {
+            return [];
+        }
+
+        $response = $this->request('POST', '/api/site/stoc', ['skuuri' => array_values($clean)]);
+
+        $out = [];
+        foreach ((is_array($response) ? $response : []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sku = strtoupper(trim((string) ($row['sku'] ?? '')));
+            if ($sku === '') {
+                continue;
+            }
+            $out[$sku] = [
+                'cunoscut' => (bool) ($row['cunoscut'] ?? false),
+                'disponibil' => (float) ($row['disponibil'] ?? 0),
+                'existent' => (bool) ($row['existent'] ?? false),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Notificările pe care ERP-ul nu a reușit să ni le livreze (site jos,
+     * rețea căzută). Cron-ul le preia și le aplică, apoi le confirmă.
+     *
+     * `?evenimente=client_agresiv` cere și vestea „Client agresiv” (pe lângă
+     * aprobare / modificare / anulare, care vin oricum, primele). Parametrul
+     * trebuie trimis la FIECARE apel: ERP-ul ține minte cererea și, de cum îl
+     * vede, lasă pentru cron vestea pe care n-a putut-o livra direct; un apel
+     * fără el îi spune că site-ul nu mai o culege și o închide. Un ERP mai
+     * vechi ignoră parametrul.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function pendingNotifications(): array
+    {
+        $rows = $this->request('GET', '/api/site/notificari?evenimente=client_agresiv');
+        $out = [];
+        foreach ($rows as $row) {
+            if (is_array($row)) {
+                $out[] = $row;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Confirmă notificările procesate, ca ERP-ul să nu le mai trimită.
+     *
+     * @param int[] $ids
+     */
+    public function confirmNotifications(array $ids): void
+    {
+        if ($ids === []) {
+            return;
+        }
+        $this->request('POST', '/api/site/notificari/confirma', ['ids' => array_values($ids)]);
+    }
+
+    /** Raportează în ERP AWB-ul generat pe site. */
+    public function reportAwb(string $numarSite, string $awb, string $trackingUrl = ''): void
+    {
+        if (trim($numarSite) === '' || trim($awb) === '') {
+            return;
+        }
+        $this->request('POST', '/api/site/comenzi/awb', [
+            'numarSite' => trim($numarSite),
+            'awb' => trim($awb),
+            'trackingUrl' => trim($trackingUrl),
+        ]);
+    }
+
+    /**
+     * Gestiunile legate de site, cu județele deservite de fiecare.
+     *
+     * @return array{gestiuniPeJudete: bool, gestiuni: array<int, array{id: string, name: string, judete: string[]}>}
+     */
+    public function gestiuni(): array
+    {
+        $raw = $this->request('GET', '/api/site/gestiuni');
+        $gestiuni = [];
+        foreach ((array) ($raw['gestiuni'] ?? []) as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $gestiuni[] = [
+                'id' => (string) ($row['id'] ?? ''),
+                'name' => (string) ($row['name'] ?? ''),
+                'judete' => array_values(array_map('strval', (array) ($row['judete'] ?? []))),
+            ];
+        }
+        return [
+            'gestiuniPeJudete' => (bool) ($raw['gestiuniPeJudete'] ?? false),
+            'gestiuni' => $gestiuni,
+        ];
+    }
+
+    /**
+     * Greutățile produselor, pe cod (SKU), așa cum sunt ținute în ERP.
+     *
+     * Din ele iese greutatea de pe AWB și numărul de colete. Ambalajele se
+     * schimbă, iar cine le cântărește lucrează în ERP.
+     *
+     * @return array<string, int> cod produs → grame
+     */
+    public function productWeights(): array
+    {
+        $raw = $this->request('GET', '/api/site/greutati');
+        $out = [];
+        foreach ((array) $raw as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $sku = strtoupper(trim((string) ($row['sku'] ?? '')));
+            $grame = (int) ($row['greutateGrame'] ?? 0);
+            if ($sku === '' || $grame <= 0) {
+                continue;
+            }
+            $out[$sku] = $grame;
+        }
+        return $out;
+    }
+
+    /** Trimite o comandă în ERP. Idempotent: ERP-ul deduplică pe numărul comenzii. */
+    public function pushOrder(array $payload): array
+    {
+        return $this->request('POST', '/api/comenzi-site/ingest', $payload);
+    }
+
+    /**
+     * Anulează în ERP o comandă anulată pe site. Idempotentă: dacă ERP-ul nu o
+     * are sau e deja anulată, răspunde tot cu succes.
+     *
+     * @return array{gasita: bool, status: string, avertisment: string}
+     */
+    public function cancelOrder(string $numarSite, string $motiv = ''): array
+    {
+        $numar = trim($numarSite);
+        if ($numar === '') {
+            return ['gasita' => false, 'status' => 'inexistenta', 'avertisment' => ''];
+        }
+        $raw = $this->request('POST', '/api/comenzi-site/anuleaza', [
+            'numarSite' => $numar,
+            'motiv' => trim($motiv),
+        ]);
+        return [
+            'gasita' => (bool) ($raw['gasita'] ?? false),
+            'status' => (string) ($raw['status'] ?? ''),
+            // ERP-ul a anulat comanda, dar factura legată a rămas de verificat.
+            'avertisment' => trim((string) ($raw['avertisment'] ?? '')),
+        ];
+    }
+
+    /**
+     * Marchează în ERP o comandă întoarsă de la client.
+     *
+     * Deosebirea față de `cancelOrder` e că ERP-ul nu ne răspunde cu o cerere
+     * de a schimba ceva pe site și, mai ales, nu pornește nicio notificare
+     * către client: vestea a plecat de aici. Idempotentă, ca anularea.
+     *
+     * @return array{gasita: bool, status: string, avertisment: string}
+     */
+    public function returnOrder(string $numarSite, string $motiv = ''): array
+    {
+        $numar = trim($numarSite);
+        if ($numar === '') {
+            return ['gasita' => false, 'status' => 'inexistenta', 'avertisment' => ''];
+        }
+        $raw = $this->request('POST', '/api/comenzi-site/retur', [
+            'numarSite' => $numar,
+            'motiv' => trim($motiv),
+        ]);
+        return [
+            'gasita' => (bool) ($raw['gasita'] ?? false),
+            'status' => (string) ($raw['status'] ?? ''),
+            'avertisment' => trim((string) ($raw['avertisment'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<mixed>|null $body
+     * @return array<mixed>
+     */
+    private function request(string $method, string $path, ?array $body = null): array
+    {
+        if ($this->baseUrl === '' || $this->apiKey === '') {
+            throw new RuntimeException('Integrarea cu ERP-ul nu este configurată complet.');
+        }
+        if (!function_exists('curl_init')) {
+            throw new RuntimeException('Extensia cURL lipsește pe server; nu pot contacta ERP-ul.');
+        }
+
+        $url = $this->baseUrl . $path;
+        $json = $body === null ? null : json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($body !== null && $json === false) {
+            throw new RuntimeException('Nu am putut serializa datele pentru ERP.');
+        }
+
+        $headers = [
+            'Accept: application/json',
+            self::HEADER . ': ' . $this->apiKey,
+        ];
+        if ($json !== null) {
+            $headers[] = 'Content-Type: application/json';
+        }
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $this->timeout);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min(10, $this->timeout));
+        if ($json !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
+        }
+
+        $raw = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+
+        if ($raw === false) {
+            throw new RuntimeException('Nu am putut contacta ERP-ul: ' . ($error !== '' ? $error : 'eroare de rețea'));
+        }
+
+        $decoded = json_decode((string) $raw, true);
+
+        if ($status < 200 || $status >= 300) {
+            $refuzModul = $this->refuzDeModul($status, $decoded);
+            if ($refuzModul !== null) {
+                throw $refuzModul;
+            }
+            throw new RuntimeException($this->errorMessage($status, $decoded, (string) $raw));
+        }
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Refuzul venit din garda de modul a ERP-ului: 403 cu `module` și `reason`
+     * în corp. Doar cel al modulului „Magazin online” are aici un înțeles al
+     * lui — comanda se ține pe site, fără să-și ardă încercările —; orice alt
+     * 403 rămâne o eroare obișnuită.
+     */
+    private function refuzDeModul(int $status, mixed $decoded): ?ErpModulOpritException
+    {
+        if ($status !== 403 || !is_array($decoded)) {
+            return null;
+        }
+        if ((string) ($decoded['module'] ?? '') !== ErpModul::CHEIE) {
+            return null;
+        }
+        $motiv = (string) ($decoded['reason'] ?? '');
+        return new ErpModulOpritException($motiv === 'se_opreste' ? ErpModul::SE_OPRESTE : ErpModul::OPRIT);
+    }
+
+    /** Traduce răspunsurile de eroare ale ERP-ului în mesaje pentru operator. */
+    private function errorMessage(int $status, mixed $decoded, string $raw): string
+    {
+        $detail = '';
+        if (is_array($decoded)) {
+            $message = $decoded['message'] ?? null;
+            if (is_array($message)) {
+                $detail = implode(' ', array_map('strval', $message));
+            } elseif (is_string($message)) {
+                $detail = $message;
+            }
+        }
+        if ($detail === '') {
+            $detail = trim(mb_substr($raw, 0, 300));
+        }
+
+        return match (true) {
+            $status === 401 => 'ERP: cheie de integrare invalidă sau integrarea e dezactivată în ERP. ' . $detail,
+            $status === 404 => 'ERP: adresa configurată nu răspunde la această rută (verifică URL-ul). ' . $detail,
+            $status >= 500 => 'ERP: eroare pe server (' . $status . '). ' . $detail,
+            default => 'ERP a respins cererea (' . $status . '). ' . $detail,
+        };
+    }
+}

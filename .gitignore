@@ -1,0 +1,19 @@
+/vendor/
+/.env
+/.idea/
+/.vscode/
+*.log
+
+# Datele de rulare ale fiecărui site (sesiuni, cache, copii, jurnale, importuri)
+# nu intră niciodată în git. Rămân doar folderele goale, cu .gitkeep.
+/storage/*/*
+!/storage/*/.gitkeep
+!/storage/cache/pages/
+/storage/cache/pages/*
+!/storage/cache/pages/.gitkeep
+!/storage/import/.gitignore
+
+# Fișiere scrise de aplicație în public/: încărcări, sitemap, reguli de cache.
+/public/uploads/
+/public/assets/.htaccess
+/public/*.xml
