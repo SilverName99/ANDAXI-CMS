@@ -6,6 +6,8 @@
 
 # Datele de rulare ale fiecărui site (sesiuni, cache, copii, jurnale, importuri)
 # nu intră niciodată în git. Rămân doar folderele goale, cu .gitkeep.
+/storage/*
+!/storage/*/
 /storage/*/*
 !/storage/*/.gitkeep
 !/storage/cache/pages/
