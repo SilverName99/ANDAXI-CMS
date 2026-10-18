@@ -1038,6 +1038,12 @@ final class SiteController
             header('Location: /checkout');
             return;
         }
+        // Magazinul „se oprește”: nicio comandă nouă (cele începute se termină).
+        if (!\App\Support\Plugins::permiteInceput('magazin')) {
+            Flash::set('error', 'Momentan nu se mai pot plasa comenzi online.');
+            header('Location: /checkout');
+            return;
+        }
         $this->ensureStripeSchema($db);
         $this->ensureCustomerSchema($db);
         $this->ensureCheckoutAntiBotSchema($db);
@@ -5055,6 +5061,11 @@ HTML;
 
     private function renderCheckoutSection(array $summary, array $values, array $fanCounties, bool $isLoggedIn = false): string
     {
+        // Magazinul „se oprește”: comenzile începute se termină, dar nu se mai
+        // pot plasa altele noi. Formularul lasă locul unui mesaj.
+        if (!\App\Support\Plugins::permiteInceput('magazin')) {
+            return $this->renderPhpView('site/components/checkout-inchis', []);
+        }
         return $this->renderPhpView('site/components/checkout-form', [
             'summary' => $summary,
             'values' => $values,
@@ -6242,7 +6253,8 @@ CSS;
      * procesator are bifa lui în Setări plăți: Banca Transilvania (când e
      * pornită, prima), EuPlătesc, apoi Stripe. Bifa ascunde doar opțiunea din
      * checkout; plățile deja începute (retur, notificări, cron, butoanele din
-     * admin) merg mai departe și cu procesatorul oprit.
+     * admin) merg mai departe și cu procesatorul oprit. La fel licența: un
+     * procesator al cărui plugin nu e „pornit” nu mai primește plăți noi.
      *
      * @return string[]
      */
@@ -6256,14 +6268,16 @@ CSS;
         $metode = [];
         // Doar citim sesiunea de admin: o vizită în checkout nu are voie să-i
         // reîmprospăteze ceasul de inactivitate (sau să-l delogheze).
-        if (BtIpayPayments::vizibilInCheckout($settings, Auth::esteAdminGeneralFaraReimprospatare())) {
+        if (\App\Support\Plugins::permiteInceput('plata_bt')
+            && BtIpayPayments::vizibilInCheckout($settings, Auth::esteAdminGeneralFaraReimprospatare())) {
             $metode[] = PaymentMethods::BT_IPAY;
         }
-        if (EuPlatescGateway::isEnabled($settings)) {
+        if (\App\Support\Plugins::permiteInceput('plata_euplatesc') && EuPlatescGateway::isEnabled($settings)) {
             $metode[] = 'euplatesc';
         }
         if (
-            (string) ($settings['stripe_enabled'] ?? '0') === '1'
+            \App\Support\Plugins::permiteInceput('plata_stripe')
+            && (string) ($settings['stripe_enabled'] ?? '0') === '1'
             && trim((string) ($settings['stripe_secret_key'] ?? '')) !== ''
         ) {
             $metode[] = 'stripe';

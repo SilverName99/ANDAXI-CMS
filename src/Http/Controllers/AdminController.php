@@ -6420,6 +6420,11 @@ final class AdminController
             return;
         }
         header('Content-Type: application/json');
+        // Pluginul „se oprește”: linkurile trimise deja se pot plăti, dar nu se mai trimit altele noi.
+        if (!\App\Support\Plugins::permiteInceput('link_plata')) {
+            echo json_encode(['ok' => false, 'error' => 'Linkurile de plată noi nu mai sunt disponibile.']);
+            return;
+        }
         $orderId = max(0, (int) ($params['id'] ?? 0));
         $db = $this->db();
         if (!$db instanceof PDO || $orderId <= 0) {

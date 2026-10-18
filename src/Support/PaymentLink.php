@@ -111,10 +111,10 @@ final class PaymentLink
      */
     public static function procesorPentruLinkNou(array $settings): string
     {
-        if (BtIpayPayments::poatePlatiLinkuri($settings)) {
+        if (self::btPentruLinkuri($settings, true)) {
             return self::PROCESATOR_BT;
         }
-        if (EuPlatescGateway::isEnabled($settings)) {
+        if (self::euPlatescPentruLinkuri($settings, true)) {
             return self::PROCESATOR_EUPLATESC;
         }
         return '';
@@ -124,8 +124,26 @@ final class PaymentLink
     public static function procesorDisponibil(string $procesator, array $settings): bool
     {
         return $procesator === self::PROCESATOR_BT
-            ? BtIpayPayments::poatePlatiLinkuri($settings)
-            : EuPlatescGateway::isEnabled($settings);
+            ? self::btPentruLinkuri($settings, false)
+            : self::euPlatescPentruLinkuri($settings, false);
+    }
+
+    /**
+     * BT poate încasa linkuri: setările o permit și licența are pluginul.
+     * Un link NOU cere pluginul „pornit”; unul deja trimis se poate plăti și
+     * cât pluginul „se oprește” (e o plată începută).
+     */
+    private static function btPentruLinkuri(array $settings, bool $linkNou): bool
+    {
+        $licenta = $linkNou ? Plugins::permiteInceput('plata_bt') : Plugins::vizibil('plata_bt');
+        return $licenta && BtIpayPayments::poatePlatiLinkuri($settings);
+    }
+
+    /** La fel ca mai sus, pentru EuPlătesc. */
+    private static function euPlatescPentruLinkuri(array $settings, bool $linkNou): bool
+    {
+        $licenta = $linkNou ? Plugins::permiteInceput('plata_euplatesc') : Plugins::vizibil('plata_euplatesc');
+        return $licenta && EuPlatescGateway::isEnabled($settings);
     }
 
     public static function procesator(array $link): string
@@ -145,8 +163,8 @@ final class PaymentLink
     {
         $procesator = self::procesator($link);
         if ($procesator === self::PROCESATOR_BT
-            && !BtIpayPayments::poatePlatiLinkuri($settings)
-            && EuPlatescGateway::isEnabled($settings)) {
+            && !self::btPentruLinkuri($settings, false)
+            && self::euPlatescPentruLinkuri($settings, false)) {
             return self::PROCESATOR_EUPLATESC;
         }
         return $procesator;

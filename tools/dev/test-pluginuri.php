@@ -14,11 +14,12 @@ declare(strict_types=1);
  *    dependență, jurnalul „o singură dată”, vectorul de test pentru CRM.
  * B. Garda rutelor (cu serverul de dezvoltare, pe baza de test cu date demo):
  *    pentru fiecare pachet (toate, magazin, catalog, prezentare, asociatie), fără
- *    licență și cu o redirecționare, cere FIECARE rută
+ *    licență, cu magazinul „se oprește” și cu o redirecționare, cere FIECARE rută
  *    din router și verifică: rutele pluginurilor vizibile ajung la controller;
  *    celelalte dau 403 „Modulul nu este inclus în abonament” (admin, logat), login
  *    (admin, nelogat) sau 404 (site); adresele de confirmare răspund mereu
- *    (400/401/403, niciodată 404/500). Plus meniul, dashboard-ul și cronurile.
+ *    (400/401/403, niciodată 404/500). Plus meniul, dashboard-ul, cronurile,
+ *    checkout-ul închis și plățile noi la „se oprește”.
  *
  * Cererile POST de admin se fac nelogat (garda sau loginul răspund înainte de
  * controller), ca testul să nu schimbe setări sau comenzi. La final pune la loc
@@ -465,6 +466,8 @@ $puneLicenta = static function (?array $pluginuri, array $extra = []) use ($chei
 $parolaAdmin = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
 $adminEmail = (string) (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro');
 $jar = $dosarDev . '/test-pluginuri-cookie-' . getmypid() . '.txt';
+$jarClient = $dosarDev . '/test-pluginuri-client-' . getmypid() . '.txt';
+$formularComanda = [];
 $webhookuri = ['/webhook/stripe', '/webhook/euplatesc', '/webhook/bt-ipay', '/api/erp/notificare', '/api/erp/adrese'];
 $scriptCron = static function (string $script) use ($radacina): array {
     exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($script) . ' 2>&1', $iesire, $cod);
@@ -478,6 +481,7 @@ $scenarii = [
     'prezentare' => [$pachet('prezentare'), []],
     'asociatie' => [$pachet('asociatie'), []],
     'fără licență' => [null, []],
+    'toate, magazinul se oprește' => [array_merge($pachet('toate'), ['magazin' => 'se_opreste', 'plata_euplatesc' => 'se_opreste']), []],
     'prezentare, catalogul duce la /contact' => [$pachet('prezentare'), ['redirectionari' => ['catalog' => '/contact']]],
 ];
 
@@ -601,6 +605,36 @@ try {
             }
         }
 
+        if ($numeScenariu === 'toate, magazinul se oprește') {
+            $checkout = $cerere('GET', '/checkout');
+            $verifica('se oprește: /checkout arată „Momentan nu se mai pot plasa comenzi online”',
+                $checkout['cod'] === 200 && str_contains($checkout['corp'], 'Momentan nu se mai pot plasa comenzi online')
+                && !str_contains($checkout['corp'], 'name="payment_method"'));
+            // Clientul a deschis checkout-ul cât magazinul era pornit (formular valid, coș plin)
+            // și trimite comanda după ce magazinul a trecut în „se oprește”: nu trebuie să intre.
+            $inainte = (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+            $trimis = $cerere('POST', '/checkout', $jarClient, $formularComanda);
+            $dupa = (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn();
+            $verifica('se oprește: o comandă cu formular valid, început înainte, e refuzată', $formularComanda !== []
+                && $trimis['cod'] === 302 && ($trimis['antete']['location'] ?? '') === '/checkout' && $dupa === $inainte,
+                'cod ' . $trimis['cod'] . ', comenzi ' . $inainte . ' → ' . $dupa);
+            $comenzi = $cerere('GET', '/admin/orders', $jar);
+            $verifica('se oprește: comenzile se văd în admin (ca să se termine)', $comenzi['cod'] === 200);
+            $setariCard = ['euplatesc_enabled' => '1', 'euplatesc_merchant_id' => 'demo', 'euplatesc_secret_key' => 'demo',
+                'stripe_enabled' => '1', 'stripe_secret_key' => 'sk_test_demo'];
+            $metode = (new SiteController())->metodeCardActive($setariCard);
+            $verifica('se oprește: EuPlătesc nu mai e oferit pentru plăți noi, Stripe da', !in_array('euplatesc', $metode, true)
+                && in_array('stripe', $metode, true), implode(',', $metode));
+            $verifica('se oprește: un link de plată nou nu mai pleacă prin EuPlătesc, unul trimis se poate plăti',
+                PaymentLink::procesorPentruLinkNou($setariCard) === '' && PaymentLink::procesorDisponibil('euplatesc', $setariCard));
+            $link = $cerere('POST', '/admin/orders/' . $mostre['comanda_id'] . '/payment-link', $jar);
+            $raspunsLink = json_decode($link['corp'], true);
+            $verifica('se oprește: adminul nu mai poate trimite un link de plată nou',
+                is_array($raspunsLink) && str_contains((string) ($raspunsLink['error'] ?? ''), 'Linkurile de plată noi nu mai sunt disponibile'),
+                $link['corp']);
+            $abandonat = $scriptCron('scripts/abandoned-cart-emails.php');
+            $verifica('se oprește: emailurile de coș abandonat nu mai pleacă', str_contains($abandonat['text'], 'nu este pornit'));
+        }
         if ($numeScenariu === 'toate') {
             $setariCard = ['euplatesc_enabled' => '1', 'euplatesc_merchant_id' => 'demo', 'euplatesc_secret_key' => 'demo',
                 'stripe_enabled' => '1', 'stripe_secret_key' => 'sk_test_demo'];
@@ -608,6 +642,23 @@ try {
             $verifica('toate pornite: EuPlătesc și Stripe oferite ca înainte', in_array('euplatesc', $metode, true) && in_array('stripe', $metode, true));
             $checkout = $cerere('GET', '/checkout');
             $verifica('toate pornite: checkout-ul normal', str_contains($checkout['corp'], 'name="payment_method"'));
+            // Pentru scenariul „se oprește”: un client cu coș și formular de checkout valid.
+            @unlink($jarClient);
+            $idProdus = $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'");
+            $cerere('POST', '/cos/adauga/' . $idProdus, $jarClient, ['quantity' => '1']);
+            $pag = $cerere('GET', '/checkout', $jarClient)['corp'];
+            preg_match('/name="checkout_form_token" value="([^"]*)"/', $pag, $token);
+            preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pag, $randat);
+            if (isset($token[1], $randat[1])) {
+                $formularComanda = [
+                    'checkout_form_token' => $token[1], 'checkout_form_rendered_at' => $randat[1],
+                    'billing_first_name' => 'Test', 'billing_last_name' => 'Pluginuri', 'billing_phone' => '0700000777',
+                    'billing_email' => 'pluginuri@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '7',
+                    'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400000',
+                    'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+                ];
+            }
+            $verifica('toate pornite: client cu coș și formular de checkout (pentru „se oprește”)', $formularComanda !== []);
         }
         if ($numeScenariu === 'prezentare') {
             $p404 = $cerere('GET', '/magazin');
@@ -626,6 +677,7 @@ try {
     // Dezvoltarea continuă cu toate pluginurile pornite.
     $puneLicenta($pachet('toate'));
     @unlink($jar);
+    @unlink($jarClient);
     if ($amPornitServerul) {
         exec(escapeshellarg($radacina . '/tools/dev/server.sh') . ' --opreste >/dev/null 2>&1');
     }
