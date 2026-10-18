@@ -576,28 +576,37 @@ final class Plugins
      * Scoate din HTML linkurile și formularele care duc la paginile pluginurilor
      * pe care site-ul nu le are: antetul, meniul și subsolul scrise de client în
      * admin, butoanele din paginile adminului, linkurile din conținut. Un `<li>`
-     * care avea doar linkul dispare cu tot cu el, la fel o listă rămasă goală.
-     * Conținutul din `<script>`, `<style>` și `<textarea>` nu se atinge.
-     * Cu toate pluginurile pe site, HTML-ul se întoarce neschimbat.
+     * rămas fără nimic dispare cu tot cu el, la fel o listă rămasă goală.
+     * Conținutul din `<script>`, `<style>` și `<textarea>` nu se atinge (se pune
+     * deoparte și se pune la loc la final; un formular cu textarea se scoate tot).
+     * Cu toate pluginurile pe site, HTML-ul se întoarce neschimbat; dacă PCRE
+     * cedează pe o pagină uriașă, pagina se întoarce nefiltrată, niciodată goală.
      */
     public static function filtreazaLinkuri(string $html): string
     {
         if ($html === '' || self::nimicAscuns()) {
             return $html;
         }
-        $bucati = preg_split('#(<(script|style|textarea)\b[^>]*>.*?</\2\s*>)#is', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
-        if ($bucati === false) {
+        $deoparte = [];
+        $mascat = preg_replace_callback(
+            '#<(script|style|textarea)\b[^>]*>.*?</\1\s*>#is',
+            static function (array $m) use (&$deoparte): string {
+                $deoparte[] = $m[0];
+                return "\x1A" . (count($deoparte) - 1) . "\x1A";
+            },
+            $html
+        );
+        if ($mascat === null) {
+            self::jurnalizeazaOData('Filtrul de linkuri n-a putut citi o pagină (PCRE: ' . preg_last_error_msg() . '); a rămas nefiltrată.');
             return $html;
         }
-        $rezultat = '';
-        // preg_split cu două grupuri: [text, bloc, numele etichetei, text, bloc, nume, …]
-        for ($i = 0, $n = count($bucati); $i < $n; $i += 3) {
-            $rezultat .= self::filtreazaFragment((string) $bucati[$i]);
-            if (isset($bucati[$i + 1])) {
-                $rezultat .= (string) $bucati[$i + 1];
-            }
-        }
-        return $rezultat;
+        $filtrat = self::filtreazaFragment($mascat);
+        $pusLaLoc = preg_replace_callback(
+            '#\x1A(\d+)\x1A#',
+            static fn (array $m): string => $deoparte[(int) $m[1]] ?? '',
+            $filtrat
+        );
+        return $pusLaLoc ?? $html;
     }
 
     /**
@@ -622,7 +631,7 @@ final class Plugins
         if ($nume === []) {
             return $html;
         }
-        return (string) preg_replace('/\{\{\s*(?:' . implode('|', $nume) . ')\s*(?::[^}]*)?\}\}/i', '', $html);
+        return preg_replace('/\{\{\s*(?:' . implode('|', $nume) . ')\s*(?::[^}]*)?\}\}/i', '', $html) ?? $html;
     }
 
     /**
@@ -639,44 +648,63 @@ final class Plugins
         return true;
     }
 
-    /** O parte de HTML fără scripturi/stiluri: linkurile, formularele și listele rămase goale. */
+    /** HTML-ul fără scripturi/stiluri: formularele, linkurile și listele rămase goale. */
     private static function filtreazaFragment(string $html): string
     {
-        if ($html === '' || (stripos($html, 'href') === false && stripos($html, 'action') === false)) {
+        if (stripos($html, 'href') === false && stripos($html, 'action') === false) {
             return $html;
         }
-        $ascuns = static fn (string $url, string $metoda = 'GET'): bool => !self::adresaVizibila($url, $metoda);
-        // 1. Elementele de listă care au doar linkul (meniuri).
-        $html = (string) preg_replace_callback(
-            '#<li\b[^>]*>\s*<a\b[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(?:(?!</?(?:li|a)\b).)*?</a>\s*</li>#is',
-            static fn (array $m): string => $ascuns($m[2]) ? '' : $m[0],
-            $html
-        );
-        // 2. Linkurile rămase.
-        $html = (string) preg_replace_callback(
-            '#<a\b[^>]*?\bhref\s*=\s*(["\'])(.*?)\1[^>]*>.*?</a>#is',
-            static fn (array $m): string => $ascuns($m[2]) ? '' : $m[0],
-            $html
-        );
-        // 3. Formularele trimise la o rută a pluginului (cu metoda formularului).
-        $html = (string) preg_replace_callback(
-            '#<form\b([^>]*?)\baction\s*=\s*(["\'])(.*?)\2([^>]*)>.*?</form>#is',
-            static function (array $m) use ($ascuns): string {
-                $metoda = preg_match('#\bmethod\s*=\s*["\']?post#i', $m[1] . $m[4]) === 1 ? 'POST' : 'GET';
-                return $ascuns($m[3], $metoda) ? '' : $m[0];
-            },
-            $html
-        );
-        // 4. Listele și elementele rămase goale (un submeniu fără nicio intrare).
+        // 1. Formularele trimise la o rută a unui plugin ascuns (cu metoda formularului), întregi.
+        $html = self::scoateElemente($html, 'form', static function (string $eticheta): bool {
+            if (preg_match('#\baction\s*=\s*(["\'])(.*?)\1#is', $eticheta, $m) !== 1) {
+                return false;
+            }
+            $metoda = preg_match('#\bmethod\s*=\s*["\']?post#i', $eticheta) === 1 ? 'POST' : 'GET';
+            return !self::adresaVizibila($m[2], $metoda);
+        });
+        // 2. Linkurile.
+        $html = self::scoateElemente($html, 'a', static fn (string $eticheta): bool
+            => preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $eticheta, $m) === 1 && !self::adresaVizibila($m[2]));
+        // 3. Elementele de listă și listele rămase goale (un meniu sau submeniu fără nicio intrare).
         for ($pas = 0; $pas < 3; $pas++) {
             $inainte = $html;
-            $html = (string) preg_replace('#<(ul|ol)\b[^>]*>\s*</\1>#i', '', $html);
-            $html = (string) preg_replace('#<li\b[^>]*>\s*</li>#i', '', $html);
+            $html = preg_replace('#<li\b[^>]*>\s*</li>#i', '', $html) ?? $html;
+            $html = preg_replace('#<(ul|ol)\b[^>]*>\s*</\1>#i', '', $html) ?? $html;
             if ($html === $inainte) {
                 break;
             }
         }
         return $html;
+    }
+
+    /**
+     * Scoate elementele `<$nume …>…</$nume>` pentru care $deScos(eticheta de
+     * deschidere) spune da. Parcurge HTML-ul o singură dată, fără expresii care
+     * să se întindă peste toată pagina (pe pagini mari, PCRE ar ceda). Un element
+     * fără închidere pierde doar eticheta de deschidere.
+     */
+    private static function scoateElemente(string $html, string $nume, callable $deScos): string
+    {
+        $deschidere = '#<' . $nume . '\b[^>]*>#i';
+        $inchidere = '#</' . $nume . '\s*>#i';
+        $rezultat = '';
+        $pozitie = 0;
+        while (preg_match($deschidere, $html, $m, PREG_OFFSET_CAPTURE, $pozitie) === 1) {
+            [$eticheta, $inceput] = $m[0];
+            $dupaEticheta = (int) $inceput + strlen((string) $eticheta);
+            if (!$deScos((string) $eticheta)) {
+                $rezultat .= substr($html, $pozitie, $dupaEticheta - $pozitie);
+                $pozitie = $dupaEticheta;
+                continue;
+            }
+            $rezultat .= substr($html, $pozitie, (int) $inceput - $pozitie);
+            if (preg_match($inchidere, $html, $i, PREG_OFFSET_CAPTURE, $dupaEticheta) === 1) {
+                $pozitie = (int) $i[0][1] + strlen((string) $i[0][0]);
+            } else {
+                $pozitie = $dupaEticheta;
+            }
+        }
+        return $rezultat . substr($html, $pozitie);
     }
 
     /** Routerul cu toate rutele site-ului (pentru adresele din linkuri), construit o dată. */
