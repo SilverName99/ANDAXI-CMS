@@ -7,8 +7,6 @@ require_once __DIR__ . '/../bootstrap.php';
 use App\Support\Database;
 use App\Support\FanCourierGateway;
 use App\Support\Settings;
-use RuntimeException;
-use Throwable;
 
 $config = require __DIR__ . '/../config/app.php';
 $db = Database::connection($config['db']);

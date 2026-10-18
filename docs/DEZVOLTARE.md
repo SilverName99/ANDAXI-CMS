@@ -230,10 +230,12 @@ plecare”), cu datele demo. Nu le-am reparat decât dacă reparația era
 banală și era clar o greșeală; restul se repară în etapele lor, ca schimbări
 separate.
 
-1. **`scripts/fan-tracking-sync.php` scrie 2 avertismente PHP la fiecare
+1. **`scripts/fan-tracking-sync.php` scria 2 avertismente PHP la fiecare
    rulare** (`use RuntimeException; use Throwable;` fără efect, într-un fișier
    fără namespace). Cronul rulează la 10–15 minute pe Bioscem, deci jurnalul de
-   erori se umple. Singura eroare care oprește testul de fum pe codul de plecare.
+   erori se umplea. A fost singura eroare care oprea testul de fum pe codul de
+   plecare. **Reparat** (cele două rânduri scoase; comportamentul cronului nu se
+   schimbă, numele se rezolvă la fel fără ele).
 2. **`fputcsv()` fără parametrul `$escape`** (exporturile de comenzi, produse
    și localități/județe FAN din `AdminController`): mesaje `Deprecated` doar pe
    PHP 8.4, câte unul pe rând exportat. Pe PHP 8.3 și mai vechi nu apar.
