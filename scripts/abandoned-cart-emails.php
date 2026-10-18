@@ -8,6 +8,14 @@ use App\Support\Database;
 use App\Support\EmailAutomation;
 use App\Support\Settings;
 
+// Cronul e al unui plugin (config/plugins.php). Dacă licența site-ului nu-l
+// are (sau, la cronurile care pornesc ceva nou, dacă pluginul se oprește),
+// nu face nimic.
+if (!\App\Support\Plugins::cronPermis(__FILE__)) {
+    echo 'Pluginul „' . \App\Support\Plugins::pluginCron(__FILE__) . '” nu este pornit pe acest site; nu fac nimic.' . "\n";
+    exit(0);
+}
+
 $config = require __DIR__ . '/../config/app.php';
 $db = Database::connection($config['db']);
 

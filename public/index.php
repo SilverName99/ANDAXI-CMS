@@ -35,8 +35,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../bootstrap.php';
 
+use App\Http\GardaPluginuri;
 use App\Http\Router;
 use App\Support\Database;
+use App\Support\Plugins;
 use App\Support\ResponseCache;
 use App\Support\Settings;
 
@@ -82,6 +84,10 @@ if (\App\Support\Maintenance::intercepteaza(
 )) {
     return;
 }
+// Pluginurile site-ului, din licență. Înaintea cache-ului de pagină: dacă
+// licența s-a schimbat, cache-ul se golește aici, ca nimeni să nu primească o
+// pagină salvată de când pluginul avea altă stare.
+Plugins::incarca();
 $pageCacheContext = ResponseCache::beginRequest(
     (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
     (string) ($_SERVER['REQUEST_URI'] ?? '/'),
@@ -91,8 +97,9 @@ if (($pageCacheContext['served'] ?? false) === true) {
     return;
 }
 
-// Rutele stau în src/Http/rute.php.
-$router = new Router();
+// Rutele stau în src/Http/rute.php. Garda oprește rutele pluginurilor pe care
+// site-ul nu le are (404 pe site, „Modulul nu este inclus în abonament” în admin).
+$router = new Router([GardaPluginuri::class, 'permite']);
 (require __DIR__ . '/../src/Http/rute.php')($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

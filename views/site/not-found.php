@@ -18,6 +18,9 @@ $produseSugerate = is_array($produseSugerate ?? null) ? $produseSugerate : [];
         <?= htmlspecialchars($mesaj404, ENT_QUOTES) ?>
     </p>
 
+    <?php // Căutarea și „Vezi toate produsele” doar dacă site-ul are catalog. ?>
+    <?php $cuCatalog404 = \App\Support\Plugins::vizibil('catalog'); ?>
+    <?php if ($cuCatalog404): ?>
     <form action="/magazin" method="get" style="margin:0 auto 22px;max-width:460px;display:flex;gap:8px;">
         <label for="cauta-404" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Caută produse</label>
         <input id="cauta-404" type="search" name="q" placeholder="Caută un produs…"
@@ -25,9 +28,12 @@ $produseSugerate = is_array($produseSugerate ?? null) ? $produseSugerate : [];
         <button type="submit"
                 style="padding:12px 20px;border:none;border-radius:10px;background:#2f8d5b;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Caută</button>
     </form>
+    <?php endif; ?>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+        <?php if ($cuCatalog404): ?>
         <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#2f8d5b;color:#fff;text-decoration:none;font-weight:700;font-size:15px;">Vezi toate produsele</a>
+        <?php endif; ?>
         <a href="/" style="display:inline-block;padding:12px 22px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#334155;text-decoration:none;font-weight:600;font-size:15px;">Prima pagină</a>
         <a href="/contact" style="display:inline-block;padding:12px 22px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;color:#334155;text-decoration:none;font-weight:600;font-size:15px;">Contact</a>
     </div>

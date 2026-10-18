@@ -1,0 +1,320 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Verifică harta pluginurilor (config/plugins.php) față de cod:
+ *
+ *  1. fiecare rută din router (src/Http/rute.php) are un proprietar explicit:
+ *     nucleul sau un plugin, fără ambiguitate (două declarații la fel de precise,
+ *     cu proprietari diferiți);
+ *  2. fiecare declarație de rută din catalog acoperă cel puțin o rută reală;
+ *  3. rutele împărțite există și trimit spre chei cunoscute;
+ *  4. fiecare intrare din meniu duce la o rută a aceluiași plugin;
+ *  5. cronurile din catalog există și au garda; orice script cu gardă e în catalog;
+ *  6. dependențele și pachetele folosesc chei cunoscute, fără cerc;
+ *  7. cheile pluginurilor sunt exact cele 26 hotărâte + unealta internă;
+ *  8. codul întreabă doar de chei care există (Plugins::activ('…') etc.).
+ *
+ * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
+ *
+ *   php tools/dev/verifica-rute.php            # raport complet
+ *   php tools/dev/verifica-rute.php --scurt    # doar problemele și sumarul
+ */
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+$radacina = dirname(__DIR__, 2);
+require_once $radacina . '/bootstrap.php';
+
+use App\Http\Router;
+use App\Support\Plugins;
+
+$scurt = in_array('--scurt', $argv, true);
+$probleme = [];
+$problema = static function (string $text) use (&$probleme): void {
+    $probleme[] = $text;
+};
+
+$catalog = Plugins::catalog();
+$pluginuri = $catalog['pluginuri'];
+$cheiValide = array_merge(['nucleu'], array_keys($pluginuri));
+
+// 7. Cheile hotărâte de proprietar (ANALIZA.md, secțiunea 3), plus unealta internă.
+$cheiHotarate = ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_euplatesc', 'plata_bt', 'link_plata', 'erp',
+    'cupoane', 'fidelitate', 'recenzii', 'precomenzi', 'oferte_bbd', 'produse_promo', 'pachete_produse', 'conturi_clienti',
+    'blog', 'newsletter', 'chat_live', 'donatii', 'membri', 'cereri_oferta', 'fisiere_cloud', 'concurenta', 'manechin',
+    'acorduri_gdpr', 'migrare_wordpress'];
+$lipsa = array_diff($cheiHotarate, array_keys($pluginuri));
+$inPlus = array_diff(array_keys($pluginuri), $cheiHotarate);
+if ($lipsa !== []) {
+    $problema('Catalogul nu are pluginurile: ' . implode(', ', $lipsa));
+}
+if ($inPlus !== []) {
+    $problema('Catalogul are chei nehotărâte: ' . implode(', ', $inPlus));
+}
+foreach ($pluginuri as $cheie => $definitie) {
+    foreach (['nume', 'descriere'] as $camp) {
+        if (trim((string) ($definitie[$camp] ?? '')) === '') {
+            $problema('Pluginul „' . $cheie . '” nu are „' . $camp . '”.');
+        }
+    }
+    if (($definitie['intern'] ?? false) === true) {
+        foreach ($catalog['pachete'] as $numePachet => $pachet) {
+            if (in_array($cheie, array_merge($pachet['pluginuri'] ?? [], $pachet['optionale'] ?? [], $pachet['cel_putin_una_din'] ?? []), true)) {
+                $problema('Unealta internă „' . $cheie . '” apare în pachetul „' . $numePachet . '”.');
+            }
+        }
+    }
+    if (($definitie['portat'] ?? true) === false) {
+        foreach (['rute_admin', 'rute_publice', 'rute_mereu_deschise', 'meniu', 'cron', 'pagini'] as $camp) {
+            if (($definitie[$camp] ?? []) !== []) {
+                $problema('Pluginul neportat „' . $cheie . '” are deja „' . $camp . '”.');
+            }
+        }
+    }
+}
+
+// 6. Dependențe și pachete.
+foreach ($pluginuri as $cheie => $definitie) {
+    foreach ((array) ($definitie['necesita'] ?? []) as $nevoie) {
+        foreach ((array) $nevoie as $dep) {
+            if (!isset($pluginuri[$dep])) {
+                $problema('Pluginul „' . $cheie . '” are nevoie de „' . $dep . '”, care nu există.');
+            }
+        }
+    }
+}
+$vizitat = [];
+$cerc = static function (string $cheie, array $drum) use (&$cerc, &$vizitat, $pluginuri, $problema): void {
+    if (in_array($cheie, $drum, true)) {
+        $problema('Dependență circulară: ' . implode(' → ', array_merge($drum, [$cheie])));
+        return;
+    }
+    if (isset($vizitat[$cheie])) {
+        return;
+    }
+    foreach ((array) ($pluginuri[$cheie]['necesita'] ?? []) as $nevoie) {
+        foreach ((array) $nevoie as $dep) {
+            if (isset($pluginuri[$dep])) {
+                $cerc((string) $dep, array_merge($drum, [$cheie]));
+            }
+        }
+    }
+    $vizitat[$cheie] = true;
+};
+foreach (array_keys($pluginuri) as $cheie) {
+    $cerc((string) $cheie, []);
+}
+foreach ($catalog['pachete'] as $numePachet => $pachet) {
+    foreach (array_merge($pachet['pluginuri'] ?? [], $pachet['optionale'] ?? [], $pachet['cel_putin_una_din'] ?? []) as $cheie) {
+        if (!isset($pluginuri[$cheie])) {
+            $problema('Pachetul „' . $numePachet . '” are pluginul necunoscut „' . $cheie . '”.');
+        }
+    }
+    // Fiecare plugin din pachet are dependențele tot în pachet.
+    $inPachet = array_merge($pachet['pluginuri'] ?? [], $pachet['cel_putin_una_din'] ?? []);
+    $rezultat = Plugins::calculeazaStari(array_fill_keys($inPachet, 'pornit'));
+    foreach ($rezultat['mesaje'] as $mesaj) {
+        $problema('Pachetul „' . $numePachet . '”: ' . $mesaj);
+    }
+}
+
+// 1–3. Rutele.
+$router = new Router();
+(require $radacina . '/src/Http/rute.php')($router);
+$rute = $router->rute();
+$declaratiiFolosite = [];
+$linii = [];
+foreach ($rute as $ruta) {
+    $metoda = $ruta['metoda'];
+    $tipar = $ruta['tipar'];
+    $eticheta = str_pad($metoda, 5) . ' ' . $tipar;
+    $impartita = Plugins::impartitaNormalizata($metoda, $tipar);
+    if ($impartita !== null) {
+        $descriere = [];
+        foreach ($impartita as [$conditii, $tinta]) {
+            foreach ((array) $tinta as $t) {
+                if (!in_array($t, $cheiValide, true)) {
+                    $problema($eticheta . ': regula trimite spre cheia necunoscută „' . $t . '”.');
+                }
+            }
+            $cond = [];
+            foreach ((array) $conditii as $k => $v) {
+                $cond[] = $k . '=' . implode('|', (array) $v);
+            }
+            $descriere[] = ($cond === [] ? 'altfel' : implode(' & ', $cond)) . ' → ' . implode('|', (array) $tinta);
+        }
+        if (end($impartita)[0] !== []) {
+            $problema($eticheta . ': regulile împărțite nu se termină cu o regulă fără condiții (cine răspunde altfel?).');
+        }
+        $linii[] = sprintf('  %-62s %s', $eticheta, 'după parametri: ' . implode('; ', $descriere));
+        continue;
+    }
+
+    $potriviri = Plugins::declaratiiPentru($metoda, $tipar);
+    if ($potriviri === []) {
+        $problema($eticheta . ': nicio declarație în config/plugins.php (nici nucleu, nici plugin).');
+        $linii[] = sprintf('  %-62s %s', $eticheta, '??? FĂRĂ PROPRIETAR');
+        continue;
+    }
+    $prima = $potriviri[0];
+    foreach ($potriviri as $p) {
+        $declaratiiFolosite[$p['sursa']] = true;
+    }
+    if (isset($potriviri[1]) && $potriviri[1]['scor'] === $prima['scor'] && $potriviri[1]['proprietar'] !== $prima['proprietar']) {
+        $problema($eticheta . ': ambiguă între „' . $prima['sursa'] . '” și „' . $potriviri[1]['sursa'] . '”.');
+    }
+    $proprietar = $prima['proprietar'];
+    $extra = $prima['mereu_deschis'] ? '  [mereu deschisă]' : '';
+    if ($tipar === '/{slug*}') {
+        $pagini = [];
+        foreach ($pluginuri as $cheie => $definitie) {
+            foreach ((array) ($definitie['pagini'] ?? []) as $pagina) {
+                $pagini[] = $pagina . '→' . $cheie;
+            }
+        }
+        $extra .= '  (pagini din bază ale pluginurilor: ' . implode(', ', $pagini) . ')';
+    }
+    $linii[] = sprintf('  %-62s %s', $eticheta, $proprietar . $extra);
+}
+
+foreach (Plugins::listaDeclaratii() as $declaratie) {
+    if (!isset($declaratiiFolosite[$declaratie['sursa']])) {
+        $problema('Declarația „' . $declaratie['sursa'] . '” nu acoperă nicio rută.');
+    }
+}
+foreach (array_keys($catalog['rute_impartite']) as $cheieImpartita) {
+    [$m, $t] = array_pad(explode(' ', (string) $cheieImpartita, 2), 2, '');
+    $exista = false;
+    foreach ($rute as $ruta) {
+        if ($ruta['metoda'] === strtoupper($m) && Plugins::normalizeazaTipar($ruta['tipar']) === Plugins::normalizeazaTipar($t)) {
+            $exista = true;
+        }
+    }
+    if (!$exista) {
+        $problema('Ruta împărțită „' . $cheieImpartita . '” nu există în router.');
+    }
+}
+$pagini = [];
+foreach ($pluginuri as $cheie => $definitie) {
+    foreach ((array) ($definitie['pagini'] ?? []) as $pagina) {
+        if (isset($pagini[$pagina])) {
+            $problema('Pagina „' . $pagina . '” e declarată de „' . $pagini[$pagina] . '” și de „' . $cheie . '”.');
+        }
+        $pagini[$pagina] = $cheie;
+    }
+}
+
+// 4. Meniul.
+$grupuri = array_column($catalog['meniu_admin'], 'cheie');
+$intrari = [];
+foreach (array_merge(['nucleu' => $catalog['nucleu']], $pluginuri) as $cheie => $definitie) {
+    foreach ((array) ($definitie['meniu'] ?? []) as $intrare) {
+        $intrari[] = [$cheie, $intrare];
+    }
+}
+foreach ($intrari as [$cheie, $intrare]) {
+    $href = (string) ($intrare['href'] ?? '');
+    $eticheta = 'Meniu „' . ($intrare['eticheta'] ?? '?') . '” (' . $cheie . ')';
+    if (!in_array($intrare['grup'] ?? '', $grupuri, true)) {
+        $problema($eticheta . ': grupul „' . ($intrare['grup'] ?? '') . '” nu există în meniu_admin.');
+    }
+    $gasita = $router->gaseste('GET', $href);
+    if ($gasita === null) {
+        $problema($eticheta . ': adresa ' . $href . ' nu e o rută.');
+        continue;
+    }
+    parse_str((string) parse_url($href, PHP_URL_QUERY), $get);
+    $proprietar = Plugins::proprietarRuta('GET', $gasita['tipar'], $gasita['parametri'], $get, []);
+    $asteptat = isset($intrare['oricare_din']) ? (array) $intrare['oricare_din'] : [$cheie];
+    sort($asteptat);
+    $real = $proprietar['chei'];
+    sort($real);
+    if ($real !== $asteptat) {
+        $problema($eticheta . ': adresa ' . $href . ' e a lui „' . implode('|', $real) . '”, nu a lui „' . implode('|', $asteptat) . '”.');
+    }
+}
+
+// 5. Cronurile.
+$cronuriCatalog = [];
+foreach ($pluginuri as $cheie => $definitie) {
+    foreach ((array) ($definitie['cron'] ?? []) as $fisier => $cerinta) {
+        $cronuriCatalog[$fisier] = $cheie;
+        if (!in_array($cerinta, ['vizibil', 'pornit'], true)) {
+            $problema('Cronul ' . $fisier . ' (' . $cheie . ') cere starea necunoscută „' . $cerinta . '”.');
+        }
+        if (!is_file($radacina . '/' . $fisier)) {
+            $problema('Cronul ' . $fisier . ' (' . $cheie . ') nu există.');
+        } elseif (!str_contains((string) file_get_contents($radacina . '/' . $fisier), 'Plugins::cronPermis(__FILE__)')) {
+            $problema('Cronul ' . $fisier . ' (' . $cheie . ') nu are garda Plugins::cronPermis(__FILE__).');
+        }
+    }
+}
+foreach (glob($radacina . '/scripts/*.php') ?: [] as $script) {
+    $relativ = 'scripts/' . basename($script);
+    if (str_contains((string) file_get_contents($script), 'Plugins::cronPermis(') && !isset($cronuriCatalog[$relativ])) {
+        $problema('Scriptul ' . $relativ . ' are garda de cron, dar nu e în catalogul niciunui plugin.');
+    }
+}
+
+// 8. Codul întreabă doar de chei care există.
+$fisiere = [];
+foreach (['src', 'views', 'scripts', 'public', 'config'] as $dosar) {
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($radacina . '/' . $dosar, FilesystemIterator::SKIP_DOTS));
+    foreach ($iterator as $fisier) {
+        if ($fisier->isFile() && str_ends_with($fisier->getFilename(), '.php')) {
+            $fisiere[] = $fisier->getPathname();
+        }
+    }
+}
+$intrebari = 0;
+foreach ($fisiere as $fisier) {
+    $text = (string) file_get_contents($fisier);
+    preg_match_all("/Plugins::(?:activ|stare|vizibil|permiteInceput|redirectionare)\\(\\s*'([^']*)'/", $text, $m);
+    preg_match_all("/Plugins::oricareVizibil\\(\\s*\\[([^\\]]*)\\]/", $text, $liste);
+    $chei = $m[1];
+    foreach ($liste[1] as $lista) {
+        preg_match_all("/'([^']*)'/", $lista, $din);
+        $chei = array_merge($chei, $din[1]);
+    }
+    foreach ($chei as $cheie) {
+        $intrebari++;
+        if (!in_array($cheie, $cheiValide, true)) {
+            $problema(substr($fisier, strlen($radacina) + 1) . ': întreabă de pluginul necunoscut „' . $cheie . '”.');
+        }
+    }
+}
+
+// Raportul.
+if (!$scurt) {
+    echo 'Rutele din router și proprietarul lor (' . count($rute) . "):\n";
+    echo implode("\n", $linii), "\n\n";
+}
+$numarate = [];
+foreach ($rute as $ruta) {
+    $p = Plugins::proprietarRuta($ruta['metoda'], $ruta['tipar']);
+    $numarate[implode('|', $p['chei'])] = ($numarate[implode('|', $p['chei'])] ?? 0) + 1;
+}
+arsort($numarate);
+echo 'Rute: ' . count($rute) . '; declarații în catalog: ' . count(Plugins::listaDeclaratii())
+    . '; reguli împărțite: ' . count($catalog['rute_impartite']) . '; intrări de meniu: ' . count($intrari)
+    . '; cronuri: ' . count($cronuriCatalog) . '; întrebări Plugins::… în cod: ' . $intrebari . "\n";
+$bucati = [];
+foreach ($numarate as $cheie => $n) {
+    $bucati[] = $cheie . ' ' . $n;
+}
+echo 'Rute pe proprietar (fără parametri): ' . implode(', ', $bucati) . "\n";
+
+if ($probleme !== []) {
+    echo "\nPROBLEME (" . count($probleme) . "):\n";
+    foreach ($probleme as $p) {
+        echo '  - ' . $p . "\n";
+    }
+    exit(1);
+}
+echo "\nOK: fiecare rută are un proprietar explicit, catalogul corespunde codului.\n";
+exit(0);

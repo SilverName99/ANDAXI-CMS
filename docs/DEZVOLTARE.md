@@ -84,12 +84,18 @@ Node + Playwright (pentru capturi).
 ```sh
 tools/dev/smoke.sh                       # totul de la zero: bază, date demo, server, verificări, capturi
 tools/dev/smoke.sh --fara-capturi        # la fel, fără Playwright
-tools/dev/instaleaza.sh                  # doar baza de test, de la zero, cu date demo
-tools/dev/instaleaza.sh --fara-demo      # doar install.php + seed.php
+tools/dev/smoke.sh --toate-pachetele     # testul de fum pe fiecare pachet de abonament
+tools/dev/instaleaza.sh                  # doar baza de test, de la zero, cu date demo și licența „toate”
+tools/dev/instaleaza.sh --fara-demo      # doar install.php + seed.php (+ licența)
 tools/dev/server.sh                      # pornește serverul: http://127.0.0.1:8701
 tools/dev/server.sh --opreste            # îl oprește
 tools/dev/php.sh scripts/erp-sync.php    # orice script sau cron, pe baza de test
+tools/dev/php.sh tools/dev/licenta.php prezentare   # altă licență (pachet sau cheie=stare)
+tools/dev/php.sh tools/dev/verifica-rute.php        # fiecare rută are proprietar în catalogul pluginurilor
+tools/dev/php.sh tools/dev/test-pluginuri.php       # testele licenței și ale gărzii, pe toate pachetele
 ```
+
+Pluginurile, licența și garda rutelor sunt descrise în [PLUGINURI.md](PLUGINURI.md).
 
 Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 `storage/logs/dev/admin-parola.txt`):
@@ -109,8 +115,11 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | `router.php` | Face pentru `php -S` ce fac pe Hostinger cele două `.htaccess`: fișierele existente se servesc direct, restul ajunge la `public/index.php`. |
 | `php.sh` | Rulează un script PHP al proiectului cu mediul de dezvoltare (pentru cronuri). |
 | `mail-capturat.sh` | Ține locul lui `sendmail`: fiecare email trimis cu `mail()` se scrie în `storage/logs/dev/mail/*.eml`. |
-| `smoke.sh` | Testul de fum (mai jos). |
+| `smoke.sh` | Testul de fum (mai jos), pe pachetul „toate” sau pe oricare pachet. |
 | `capturi.cjs` | Capturile Playwright din admin. |
+| `licenta.php` | Perechea de chei de dezvoltare (în locul celei a CRM-ului) și licențele de test: pachete, `cheie=stare`, fără licență; `stari`, `cron`, `arata` pentru teste. |
+| `verifica-rute.php` | Listează fiecare rută cu proprietarul ei (nucleu sau plugin) și pică dacă o rută nu are proprietar, dacă o declarație din catalog nu acoperă nicio rută, dacă meniul și rutele nu se potrivesc, dacă un cron nu are garda sau dacă codul întreabă de un plugin inexistent. |
+| `test-pluginuri.php` | Testele mecanismului de pluginuri (fără browser): licența (A) și garda rutelor pe fiecare pachet (B). Pornește singur serverul dacă nu merge. |
 
 Variabile pe care le poți schimba din mediu:
 
@@ -134,6 +143,14 @@ Variabile pe care le poți schimba din mediu:
   mesajele în `storage/logs/dev/php-erori.log`, `allow_url_fopen=0` și
   `sendmail_path` = `mail-capturat.sh`.
 - **Sesiunile** stau, ca pe server, în `storage/sessions/` (ignorat de git).
+- **Licența.** `comun.sh` dă aplicației cheia publică a perechii de chei de
+  dezvoltare (`LICENTA_CHEIE_PUBLICA`, cheia privată în
+  `storage/logs/dev/licenta-cheie-privata.txt`, niciodată în git) și
+  `LICENTA_SITE=demo`; `instaleaza.sh` scrie licența „toate”, deci local site-ul
+  are toate pluginurile pornite, ca Bioscem azi. Licența stă în
+  `storage/licenta/` (ignorat de git). `comun.sh` pune și
+  `CMS_DEV_GARDA_ANTET=1`: garda pluginurilor adaugă atunci antetul
+  `X-Andaxi-Garda`, ca testele să știe că a răspuns ea; pe site-uri variabila nu există.
 
 ### Ce nu poate ieși din calculator
 
@@ -222,6 +239,16 @@ Pornește de la o bază goală și verifică, în ordine:
 
 Raportul: `storage/logs/dev/smoke-raport.txt`. Codul de ieșire e 0 doar dacă
 totul a trecut.
+
+**Pe pachete** (`--pachet=<nume>` sau `--toate-pachetele`): după instalare se
+pune licența pachetului (prezentare, catalog, magazin, asociatie), iar fiecare
+verificare știe al cui plugin e pagina. Paginile pluginurilor care nu sunt în
+pachet trebuie să dea 404 pe site și „Modulul nu este inclus în abonament” (403)
+în admin; comanda, emailul ei și verificările cronurilor acelor pluginuri sunt
+sărite; cronurile lor trebuie să iasă fără să facă nimic; adresele de confirmare
+răspund în orice pachet. Rapoartele: `smoke-raport-<pachet>.txt`, capturile cu
+sufixul pachetului (`admin-meniu-prezentare.png`). Cu pachetul „toate”,
+rezultatul e identic cu cel de dinainte de mecanismul de pluginuri.
 
 ## Erori moștenite
 

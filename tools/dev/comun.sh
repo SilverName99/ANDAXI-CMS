@@ -81,6 +81,18 @@ exporta_mediul_aplicatiei() {
     # FAN Courier: adresa API-ului înlocuită cu gaura neagră.
     export FAN_API_BASE="$GAURA_NEAGRA"
 
+    # Licența: în locul cheii CRM-ului, o pereche de chei locală (tools/dev/licenta.php,
+    # cheia privată în $CMS_DEV_DIR, niciodată în git). Licențele de test le scrie
+    # tot tools/dev/licenta.php (instaleaza.sh pune „toate”).
+    export CMS_DEV_DIR
+    LICENTA_CHEIE_PUBLICA="$(php "$RADACINA/tools/dev/licenta.php" cheie)"
+    export LICENTA_CHEIE_PUBLICA
+    export LICENTA_SITE="demo"
+    unset LICENTA_DOSAR
+    # Garda pluginurilor adaugă antetul X-Andaxi-Garda când ea a răspuns (doar
+    # aici; pe site-uri variabila nu există), ca testele să știe cine a răspuns.
+    export CMS_DEV_GARDA_ANTET="1"
+
     # Plasa de siguranță pentru tot ce nu are adresă configurabilă (Stripe,
     # SendGrid, Google, ERP cu altă adresă): curl trece prin acest „proxy”, care
     # nu există, deci orice cerere spre internet eșuează imediat. Doar

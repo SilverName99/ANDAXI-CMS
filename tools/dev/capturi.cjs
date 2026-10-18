@@ -4,7 +4,8 @@
 // raportată, ca să vedem dacă adminul încarcă ceva din afară.
 //
 // Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_CAPTURI
-// (folderul pentru PNG-uri). Playwright se ia din NODE_PATH.
+// (folderul pentru PNG-uri), CMS_DEV_CAPTURI_SUFIX (adăugat la numele fișierelor,
+// de exemplu „-prezentare” pentru testul unui pachet). Playwright se ia din NODE_PATH.
 
 'use strict';
 
@@ -16,6 +17,7 @@ const baza = process.env.CMS_DEV_URL || 'http://127.0.0.1:8701';
 const email = process.env.CMS_DEV_ADMIN_EMAIL || 'admin@exemplu.ro';
 const parola = process.env.CMS_DEV_PAROLA || '';
 const dosar = process.env.CMS_DEV_CAPTURI || path.join(__dirname, '../../storage/logs/dev/capturi');
+const sufix = process.env.CMS_DEV_CAPTURI_SUFIX || '';
 
 (async () => {
     if (!parola) {
@@ -44,7 +46,7 @@ const dosar = process.env.CMS_DEV_CAPTURI || path.join(__dirname, '../../storage
     await page.fill('input[name="password"]', parola);
     await Promise.all([page.waitForURL(baza + '/admin'), page.click('form[action="/admin/login"] button, form[action="/admin/login"] [type="submit"]')]);
 
-    const fisierDashboard = path.join(dosar, 'admin-dashboard.png');
+    const fisierDashboard = path.join(dosar, 'admin-dashboard' + sufix + '.png');
     await page.screenshot({ path: fisierDashboard, fullPage: true });
 
     // Meniul: toate grupurile deschise, bara laterală cât e de lungă.
@@ -58,12 +60,12 @@ const dosar = process.env.CMS_DEV_CAPTURI || path.join(__dirname, '../../storage
             bara.style.overflow = 'visible';
         }
     });
-    const fisierMeniu = path.join(dosar, 'admin-meniu.png');
+    const fisierMeniu = path.join(dosar, 'admin-meniu' + sufix + '.png');
     await page.locator('.admin-sidebar').screenshot({ path: fisierMeniu });
     const intrari = await page.locator('.admin-nav a[href^="/admin"]').count();
 
     await page.goto(baza + '/admin/orders');
-    const fisierComenzi = path.join(dosar, 'admin-comenzi.png');
+    const fisierComenzi = path.join(dosar, 'admin-comenzi' + sufix + '.png');
     await page.screenshot({ path: fisierComenzi, fullPage: false });
 
     await browser.close();

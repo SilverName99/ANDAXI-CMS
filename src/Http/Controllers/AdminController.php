@@ -78,13 +78,28 @@ final class AdminController
         ];
         $recentOrder = null;
         $recentUsers = [];
+        // Fiecare bucată a dashboard-ului e a unui plugin: cele ale pluginurilor
+        // pe care site-ul nu le are nu apar (și nici nu se mai citesc din bază).
+        $widgeturi = [
+            'produse' => \App\Support\Plugins::vizibil('catalog'),
+            'comenzi' => \App\Support\Plugins::vizibil('magazin'),
+            'utilizatori' => \App\Support\Plugins::vizibil('conturi_clienti'),
+        ];
 
         if ($db instanceof PDO) {
             $this->ensureOptionalSchema($db);
-            $metrics['products'] = (int) $db->query('SELECT COUNT(*) FROM products WHERE deleted_at IS NULL')->fetchColumn();
-            $metrics['orders'] = (int) $db->query('SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL')->fetchColumn();
-            $metrics['users'] = (int) $db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+            if ($widgeturi['produse']) {
+                $metrics['products'] = (int) $db->query('SELECT COUNT(*) FROM products WHERE deleted_at IS NULL')->fetchColumn();
+            }
+            if ($widgeturi['comenzi']) {
+                $metrics['orders'] = (int) $db->query('SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL')->fetchColumn();
+            }
+            if ($widgeturi['utilizatori']) {
+                $metrics['users'] = (int) $db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+            }
+        }
 
+        if ($db instanceof PDO && $widgeturi['comenzi']) {
             $recentOrder = $db->query(
                 'SELECT order_number, billing_first_name, billing_last_name, total, status'
                 . ($this->tableHasColumn($db, 'orders', 'erp_client_agresiv') ? ', erp_client_agresiv' : '') . '
@@ -93,7 +108,9 @@ final class AdminController
                  ORDER BY id DESC
                  LIMIT 1'
             )->fetch() ?: null;
+        }
 
+        if ($db instanceof PDO && $widgeturi['utilizatori']) {
             $recentUsers = $db->query(
                 'SELECT u.id, u.first_name, u.last_name, u.email, u.created_at,
                         COUNT(o.id) AS orders_count
@@ -112,6 +129,7 @@ final class AdminController
             'metrics' => $metrics,
             'recentOrder' => $recentOrder,
             'recentUsers' => $recentUsers,
+            'widgeturi' => $widgeturi,
         ], 'admin/layout');
     }
 

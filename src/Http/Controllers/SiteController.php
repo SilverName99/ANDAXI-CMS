@@ -3634,6 +3634,46 @@ final class SiteController
         header('Location: ' . $destUrl);
     }
 
+    /**
+     * Pagina 404 a site-ului pentru adresele pluginurilor pe care site-ul nu
+     * le are (o cheamă GardaPluginuri). Aceeași pagină ca pentru o adresă
+     * inexistentă: pagina „404” din admin, dacă e publicată, altfel cea din cod.
+     * Fără căutarea „poate e un produs vechi”: adresa e a unui plugin, nu a unui produs.
+     */
+    public function paginaNegasita(): void
+    {
+        $db = $this->db();
+        $notFoundPage = null;
+        if ($db instanceof PDO) {
+            $this->ensureOptionalPageSchema($db);
+            $notFoundPage = $this->findPublishedPageBySlug('404');
+        }
+        if (!$db instanceof PDO || !is_array($notFoundPage)) {
+            $this->renderPagina404(
+                'Pagina nu a fost găsită',
+                \App\Support\Plugins::vizibil('catalog')
+                    ? 'Este posibil ca linkul să fie vechi. Caută produsul dorit sau vezi tot magazinul.'
+                    : 'Este posibil ca linkul să fie vechi.',
+                $db instanceof PDO ? $db : null
+            );
+            return;
+        }
+        http_response_code(404);
+        View::render('site/custom-page', array_merge([
+            'title' => (string) ($notFoundPage['title'] ?? 'Pagina nu a fost găsită'),
+            'page' => $notFoundPage,
+            'mannequinSectionHtml' => $this->renderMannequinSection($db, $this->cachedSettings($db)),
+            'shopCatalogHtml' => '',
+            'blogPostsHtml' => '',
+            'cartFormHtml' => '',
+            'checkoutFormHtml' => '',
+            'accountSectionHtml' => '',
+            'productReviewFormHtml' => '',
+            'gdprAgreementsFormHtml' => '',
+            'checkoutSuccessOrderInfoHtml' => '',
+        ], $this->customPageSeoMeta($db, $notFoundPage)));
+    }
+
     public function customPage(array $params): void
     {
         $slug = trim((string) ($params['slug'] ?? ''));
@@ -3650,6 +3690,17 @@ final class SiteController
         $this->ensureOptionalPageSchema($db);
 
         $page = $this->findPublishedPageBySlug($slug);
+
+        // Pagina e a unui plugin pe care site-ul nu-l are? Garda routerului o oprește
+        // după adresă; aici o oprim și după slug-ul din bază (baza găsește pagina și
+        // când adresa e scrisă cu alte litere sau fără diacritice).
+        if ($page !== null) {
+            $proprietarPagina = \App\Support\Plugins::proprietarPagina((string) ($page['slug'] ?? ''));
+            if ($proprietarPagina !== null && !\App\Support\Plugins::vizibil($proprietarPagina)) {
+                $this->paginaNegasita();
+                return;
+            }
+        }
 
         if ($page === null) {
             $notFoundPage = $this->findPublishedPageBySlug('404');
@@ -10138,7 +10189,8 @@ CSS;
     {
         http_response_code(404);
         $sugestii = [];
-        if ($db instanceof PDO) {
+        // Fără catalog pe site, nici produse sugerate.
+        if ($db instanceof PDO && \App\Support\Plugins::vizibil('catalog')) {
             try {
                 $sugestii = $db->query(
                     'SELECT slug, name FROM products

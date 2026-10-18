@@ -22,4 +22,13 @@ return [
         // Fără parolă de rezervă în cod: instalarea o cere în .env și refuză altfel.
         'default_password' => Env::get('ADMIN_DEFAULT_PASSWORD', ''),
     ],
+    // Licența cu pluginurile site-ului (vezi App\Support\Licenta și config/plugins.php).
+    'licenta' => [
+        // Cheia publică Ed25519 a CRM-ului (base64); mai multe, separate prin virgulă, la schimbarea cheii.
+        'cheie_publica' => Env::get('LICENTA_CHEIE_PUBLICA', ''),
+        // Identificatorul site-ului în CRM; licența trebuie să fie emisă exact pentru el.
+        'site' => Env::get('LICENTA_SITE', ''),
+        // Unde stau licenta.json și licenta-buna.json; gol = storage/licenta.
+        'dosar' => Env::get('LICENTA_DOSAR', ''),
+    ],
 ];

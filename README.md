@@ -10,4 +10,5 @@ site doar din CRM, după contract.
 
 Punctul de plecare este codul site-ului Bioscem.
 
-Pentru programatori: [docs/DEZVOLTARE.md](docs/DEZVOLTARE.md).
+Pentru programatori: [docs/DEZVOLTARE.md](docs/DEZVOLTARE.md) și
+[docs/PLUGINURI.md](docs/PLUGINURI.md) (pluginurile, licența semnată, garda rutelor).

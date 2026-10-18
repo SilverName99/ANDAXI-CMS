@@ -24,7 +24,7 @@ mysql_dev -e "DROP DATABASE IF EXISTS \`$CMS_DEV_DB\`; CREATE DATABASE \`$CMS_DE
 # Ce a rămas de la baza veche: sesiuni, cache de pagini, emailuri capturate, jurnale.
 find "$RADACINA/storage/sessions" -maxdepth 1 -type f -name 'sess_*' -delete 2>/dev/null || true
 find "$RADACINA/storage/cache" -mindepth 1 -type f ! -name '.gitkeep' -delete 2>/dev/null || true
-rm -f "$CMS_DEV_DIR"/mail/*.eml "$CMS_DEV_DIR/php-erori.log"
+rm -f "$CMS_DEV_DIR"/mail/*.eml "$CMS_DEV_DIR/php-erori.log" "$RADACINA/storage/logs/pluginuri.log"
 rm -rf "$RADACINA/public/uploads/demo"
 rm -f "$RADACINA"/public/*.xml
 
@@ -37,6 +37,10 @@ if [ "$cu_demo" = 1 ]; then
     echo "== tools/dev/date-demo.php"
     "${PHP_DEV[@]}" tools/dev/date-demo.php
 fi
+# Licența de test: toate pluginurile pornite (ca Bioscem azi). Alt pachet:
+# tools/dev/php.sh tools/dev/licenta.php <prezentare|catalog|magazin|asociatie|toate>
+echo "== Licența de test"
+"${PHP_DEV[@]}" tools/dev/licenta.php toate
 
 echo
 echo "Gata. Admin: $CMS_DEV_ADMIN_EMAIL / parola în $CMS_DEV_DIR/admin-parola.txt"

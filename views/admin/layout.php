@@ -75,20 +75,22 @@ if ($adminFavicon === '') {
             };
         };
 
-        $magazinOpen = $isActive(['/admin/products', '/admin/orders', '/admin/coupons', '/admin/categories', '/admin/promo-products', '/admin/settings/floating-cart', '/admin/products/fields', '/admin/products/templates', '/admin/products/reviews'])
-            || $path === '/admin/orders/trash';
-        $usersOpen = $isActive(['/admin/users']);
-        $usersSettingsActive = $isActive(['/admin/users/settings']) && trim((string) ($_GET['tab'] ?? 'settings')) !== 'points';
-        $usersPointsActive = $isActive(['/admin/users/points']) || ($isActive(['/admin/users/settings']) && trim((string) ($_GET['tab'] ?? 'settings')) === 'points');
-        $usersSecurityActive = $isActive(['/admin/users/security']);
-        $usersGdprActive = $isActive(['/admin/users/gdpr-agreements']);
-        $usersListActive = $isActive(['/admin/users']) && !$usersSettingsActive && !$usersPointsActive && !$usersSecurityActive && !$usersGdprActive;
-        $configOpen = $isActive(['/admin/settings/store', '/admin/settings/shipping', '/admin/settings/payments', '/admin/settings/erp', '/admin/settings/mannequin', '/admin/settings/admins']);
-        $activityLogActive = $isActive(['/admin/activity-log']);
-        $emailsOpen = $isActive(['/admin/emails/sender', '/admin/emails/test']);
-        $newsletterOpen = $isActive(['/admin/emails/newsletters']);
-        $newsletterTab = trim((string) ($_GET['tab'] ?? 'templates'));
-        $blogOpen = $isActive(['/admin/blog/posts', '/admin/blog/categories', '/admin/blog/templates', '/admin/blog/authors']);
+        // Meniul se construiește din catalogul pluginurilor (config/plugins.php):
+        // intrările pluginurilor pe care site-ul nu le are lipsesc, iar un grup
+        // rămas fără intrări nu apare deloc. Peste asta, fiecare intrare se vede
+        // doar dacă rolul adminului are voie la ea ($can).
+        $tab = is_scalar($_GET['tab'] ?? null) ? trim((string) $_GET['tab']) : null;
+        $esteActiva = static fn (mixed $regula): bool => \App\Support\Plugins::intrareActiva($regula, $isActive, $path, $tab);
+        $meniu = [];
+        foreach (\App\Support\Plugins::meniuAdmin() as $slot) {
+            $slot['intrari'] = array_values(array_filter(
+                $slot['intrari'],
+                static fn (array $intrare): bool => $can((string) ($intrare['permisiune'] ?? $intrare['href']))
+            ));
+            if ($slot['intrari'] !== []) {
+                $meniu[] = $slot;
+            }
+        }
         ?>
         <div class="admin-shell" id="admin-shell">
             <aside class="admin-sidebar">
@@ -97,241 +99,32 @@ if ($adminFavicon === '') {
                 </div>
 
                 <nav class="admin-nav">
-                    <?php if ($can('/admin')): ?>
-                    <a class="<?= $isActive(['/admin']) && !$isActive(['/admin/users', '/admin/products', '/admin/categories', '/admin/orders', '/admin/settings', '/admin/pages', '/admin/gallery', '/admin/design', '/admin/emails']) ? 'active' : '' ?>" href="/admin">
-                        <span class="nav-icon"><?= $icon('dashboard') ?></span>
-                        Dashboard
+                    <?php foreach ($meniu as $slot): ?>
+                    <?php if ($slot['tip'] === 'link'): ?>
+                    <?php foreach ($slot['intrari'] as $intrare): ?>
+                    <a class="<?= $esteActiva($intrare['activ'] ?? []) ? 'active' : '' ?>" href="<?= htmlspecialchars((string) $intrare['href'], ENT_QUOTES) ?>">
+                        <span class="nav-icon"><?= $icon((string) ($intrare['icon'] ?? '')) ?></span> <?= htmlspecialchars((string) $intrare['eticheta'], ENT_QUOTES) ?>
                     </a>
-                    <?php endif; ?>
-
-                    <?php if ($can('/admin/users')): ?>
-                    <div class="admin-nav-group toggle-group <?= $usersOpen ? 'open' : '' ?>" data-toggle-group="utilizatori">
-                        <button type="button" class="group-toggle <?= $usersOpen ? 'active' : '' ?>">
+                    <?php endforeach; ?>
+                    <?php else: ?>
+                    <?php $grupDeschis = $isActive($slot['deschis']); ?>
+                    <div class="admin-nav-group toggle-group <?= $grupDeschis ? 'open' : '' ?>" data-toggle-group="<?= htmlspecialchars($slot['cheie'], ENT_QUOTES) ?>">
+                        <button type="button" class="group-toggle <?= $grupDeschis ? 'active' : '' ?>">
                             <span class="left">
-                                <span class="nav-icon"><?= $icon('users') ?></span> Utilizatori
+                                <span class="nav-icon"><?= $icon($slot['icon']) ?></span> <?= htmlspecialchars($slot['eticheta'], ENT_QUOTES) ?>
                             </span>
-                            <span class="caret"><?= $usersOpen ? '↑' : '↓' ?></span>
+                            <span class="caret"><?= $grupDeschis ? '↑' : '↓' ?></span>
                         </button>
                         <div class="group-items">
-                            <a class="<?= $usersListActive ? 'active' : '' ?>" href="/admin/users">
-                                <span class="nav-icon"><?= $icon('users') ?></span> Listă utilizatori
+                            <?php foreach ($slot['intrari'] as $intrare): ?>
+                            <a class="<?= $esteActiva($intrare['activ'] ?? []) ? 'active' : '' ?>" href="<?= htmlspecialchars((string) $intrare['href'], ENT_QUOTES) ?>">
+                                <span class="nav-icon"><?= $icon((string) ($intrare['icon'] ?? '')) ?></span> <?= htmlspecialchars((string) $intrare['eticheta'], ENT_QUOTES) ?>
                             </a>
-                            <a class="<?= $usersSettingsActive ? 'active' : '' ?>" href="/admin/users/settings">
-                                <span class="nav-icon"><?= $icon('settings') ?></span> Setări utilizatori
-                            </a>
-                            <a class="<?= $usersPointsActive ? 'active' : '' ?>" href="/admin/users/points">
-                                <span class="nav-icon"><?= $icon('stats') ?></span> Puncte fidelitate
-                            </a>
-                            <a class="<?= $usersSecurityActive ? 'active' : '' ?>" href="/admin/users/security">
-                                <span class="nav-icon"><?= $icon('shield') ?></span> Securitate formulare
-                            </a>
-                            <a class="<?= $usersGdprActive ? 'active' : '' ?>" href="/admin/users/gdpr-agreements">
-                                <span class="nav-icon"><?= $icon('pages') ?></span> Acorduri GDPR
-                            </a>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                     <?php endif; ?>
-
-                    <?php if ($can('/admin/products')): ?>
-                    <div class="admin-nav-group toggle-group <?= $magazinOpen ? 'open' : '' ?>" data-toggle-group="magazin">
-                        <button type="button" class="group-toggle <?= $magazinOpen ? 'active' : '' ?>">
-                            <span class="left">
-                                <span class="nav-icon"><?= $icon('store') ?></span> Magazin
-                            </span>
-                            <span class="caret"><?= $magazinOpen ? '↑' : '↓' ?></span>
-                        </button>
-                        <div class="group-items">
-                            <a class="<?= ($path === '/admin/products') ? 'active' : '' ?>" href="/admin/products">
-                                <span class="nav-icon"><?= $icon('products') ?></span> Produse
-                            </a>
-                            <a class="<?= $isActive(['/admin/categories']) ? 'active' : '' ?>" href="/admin/categories">
-                                <span class="nav-icon"><?= $icon('categories') ?></span> Categorii produse
-                            </a>
-                            <a class="<?= $isActive(['/admin/products/fields']) ? 'active' : '' ?>" href="/admin/products/fields">
-                                <span class="nav-icon"><?= $icon('settings') ?></span> Câmpuri suplimentare
-                            </a>
-                            <a class="<?= $isActive(['/admin/products/templates']) ? 'active' : '' ?>" href="/admin/products/templates">
-                                <span class="nav-icon"><?= $icon('design') ?></span> Template-uri produse
-                            </a>
-                            <a class="<?= ($path === '/admin/orders' || $path === '/admin/orders/trash') ? 'active' : '' ?>" href="/admin/orders">
-                                <span class="nav-icon"><?= $icon('orders') ?></span> Comenzi
-                            </a>
-                            <a class="<?= ($path === '/admin/coupons') ? 'active' : '' ?>" href="/admin/coupons">
-                                <span class="nav-icon"><?= $icon('coupon') ?></span> Cupoane
-                            </a>
-                            <a class="<?= $isActive(['/admin/coupons/unique']) ? 'active' : '' ?>" href="/admin/coupons/unique">
-                                <span class="nav-icon"><?= $icon('coupon') ?></span> Cupoane unice
-                            </a>
-                            <a class="<?= $isActive(['/admin/products/reviews']) ? 'active' : '' ?>" href="/admin/products/reviews">
-                                <span class="nav-icon"><?= $icon('star') ?></span> Recenzii
-                            </a>
-                            <a class="<?= $isActive(['/admin/promo-products']) ? 'active' : '' ?>" href="/admin/promo-products">
-                                <span class="nav-icon"><?= $icon('coupon') ?></span> Produse promoționale
-                            </a>
-                            <a class="<?= $isActive(['/admin/settings/floating-cart']) ? 'active' : '' ?>" href="/admin/settings/floating-cart">
-                                <span class="nav-icon"><?= $icon('store') ?></span> Coș flotant
-                            </a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-
-                    <?php if ($can('/admin/settings/store') || $can('/admin/settings/shipping') || $can('/admin/settings/payments') || $can('/admin/settings/erp') || $can('/admin/settings/mannequin') || $can('/admin/settings/google') || $can('/admin/settings/admins')): ?>
-                    <div class="admin-nav-group toggle-group <?= $configOpen ? 'open' : '' ?>" data-toggle-group="configurare">
-                        <button type="button" class="group-toggle <?= $configOpen ? 'active' : '' ?>">
-                            <span class="left">
-                                <span class="nav-icon"><?= $icon('settings') ?></span> Configurare
-                            </span>
-                            <span class="caret"><?= $configOpen ? '↑' : '↓' ?></span>
-                        </button>
-                        <div class="group-items">
-                            <?php if ($can('/admin/settings/store')): ?>
-                            <a class="<?= $isActive(['/admin/settings/store']) ? 'active' : '' ?>" href="/admin/settings/store">
-                                <span class="nav-icon"><?= $icon('settings') ?></span> Setări magazin
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/settings/shipping')): ?>
-                            <a class="<?= $isActive(['/admin/settings/shipping']) ? 'active' : '' ?>" href="/admin/settings/shipping">
-                                <span class="nav-icon"><?= $icon('shipping') ?></span> Setări livrare
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/settings/payments')): ?>
-                            <a class="<?= $isActive(['/admin/settings/payments']) ? 'active' : '' ?>" href="/admin/settings/payments">
-                                <span class="nav-icon"><?= $icon('payments') ?></span> Setări plăți
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/settings/erp')): ?>
-                            <a class="<?= $isActive(['/admin/settings/erp']) ? 'active' : '' ?>" href="/admin/settings/erp">
-                                <span class="nav-icon"><?= $icon('settings') ?></span> ERP ANDAXI
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/settings/mannequin')): ?>
-                            <a class="<?= $isActive(['/admin/settings/mannequin']) ? 'active' : '' ?>" href="/admin/settings/mannequin">
-                                <span class="nav-icon"><?= $icon('design') ?></span> Configurare manechin
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/settings/google')): ?>
-                            <a class="<?= $isActive(['/admin/settings/google']) ? 'active' : '' ?>" href="/admin/settings/google">
-                                <span class="nav-icon"><?= $icon('settings') ?></span> Google
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/settings/admins')): ?>
-                            <a class="<?= $isActive(['/admin/settings/admins']) ? 'active' : '' ?>" href="/admin/settings/admins">
-                                <span class="nav-icon"><?= $icon('users') ?></span> Administratori
-                            </a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-
-                    <?php if (\App\Support\Auth::isGeneralAdmin()): ?>
-                    <a class="<?= $activityLogActive ? 'active' : '' ?>" href="/admin/activity-log">
-                        <span class="nav-icon"><?= $icon('shield') ?></span> Jurnal activitate
-                    </a>
-                    <?php endif; ?>
-
-                    <?php if ($can('/admin/pages')): ?>
-                    <a class="<?= $isActive(['/admin/pages']) ? 'active' : '' ?>" href="/admin/pages">
-                        <span class="nav-icon"><?= $icon('pages') ?></span> Pagini
-                    </a>
-                    <?php endif; ?>
-                    <?php if ($can('/admin/gallery')): ?>
-                    <a class="<?= $isActive(['/admin/gallery']) ? 'active' : '' ?>" href="/admin/gallery">
-                        <span class="nav-icon"><?= $icon('gallery') ?></span> Galerie
-                    </a>
-                    <?php endif; ?>
-                    <?php if ($can('/admin/design')): ?>
-                    <a class="<?= $isActive(['/admin/design']) ? 'active' : '' ?>" href="/admin/design">
-                        <span class="nav-icon"><?= $icon('design') ?></span> Header/Footer/Meniu
-                    </a>
-                    <?php endif; ?>
-                    <?php if ($can('/admin/blog/posts') || $can('/admin/blog/templates') || $can('/admin/blog/authors')): ?>
-                    <div class="admin-nav-group toggle-group <?= $blogOpen ? 'open' : '' ?>" data-toggle-group="blog">
-                        <button type="button" class="group-toggle <?= $blogOpen ? 'active' : '' ?>">
-                            <span class="left">
-                                <span class="nav-icon"><?= $icon('blog') ?></span> Blog
-                            </span>
-                            <span class="caret"><?= $blogOpen ? '↑' : '↓' ?></span>
-                        </button>
-                        <div class="group-items">
-                            <?php if ($can('/admin/blog/posts')): ?>
-                            <a class="<?= $isActive(['/admin/blog/posts']) ? 'active' : '' ?>" href="/admin/blog/posts">
-                                <span class="nav-icon"><?= $icon('pages') ?></span> Postări blog
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/blog/posts')): ?>
-                            <a class="<?= $isActive(['/admin/blog/categories']) ? 'active' : '' ?>" href="/admin/blog/categories">
-                                <span class="nav-icon"><?= $icon('pages') ?></span> Categorii
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/blog/templates')): ?>
-                            <a class="<?= $isActive(['/admin/blog/templates']) ? 'active' : '' ?>" href="/admin/blog/templates">
-                                <span class="nav-icon"><?= $icon('design') ?></span> Template blog
-                            </a>
-                            <?php endif; ?>
-                            <?php if ($can('/admin/blog/authors')): ?>
-                            <a class="<?= $isActive(['/admin/blog/authors']) ? 'active' : '' ?>" href="/admin/blog/authors">
-                                <span class="nav-icon"><?= $icon('users') ?></span> Autori blog
-                            </a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    <?php if ($can('/admin/emails/sender') || $can('/admin/emails/test')): ?>
-                    <div class="admin-nav-group toggle-group <?= $emailsOpen ? 'open' : '' ?>" data-toggle-group="emailuri">
-                        <button type="button" class="group-toggle <?= $emailsOpen ? 'active' : '' ?>">
-                            <span class="left">
-                                <span class="nav-icon"><?= $icon('emails') ?></span> Setări email
-                            </span>
-                            <span class="caret"><?= $emailsOpen ? '↑' : '↓' ?></span>
-                        </button>
-                        <div class="group-items">
-                            <a class="<?= $isActive(['/admin/emails/sender']) ? 'active' : '' ?>" href="/admin/emails/sender">
-                                <span class="nav-icon"><?= $icon('emails') ?></span> Setări trimitere
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/test']) ? 'active' : '' ?>" href="/admin/emails/test">
-                                <span class="nav-icon"><?= $icon('orders') ?></span> Trimite email test
-                            </a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
-                    <?php if ($can('/admin/emails/automation')): ?>
-                    <a class="<?= $isActive(['/admin/emails/automation']) ? 'active' : '' ?>" href="/admin/emails/automation">
-                        <span class="nav-icon"><?= $icon('automation') ?></span> Automatizări
-                    </a>
-                    <?php endif; ?>
-                    <?php if ($can('/admin/emails/newsletters')): ?>
-                    <div class="admin-nav-group toggle-group <?= $newsletterOpen ? 'open' : '' ?>" data-toggle-group="newslettere">
-                        <button type="button" class="group-toggle <?= $newsletterOpen ? 'active' : '' ?>">
-                            <span class="left">
-                                <span class="nav-icon"><?= $icon('newsletter') ?></span> Email-uri
-                            </span>
-                            <span class="caret"><?= $newsletterOpen ? '↑' : '↓' ?></span>
-                        </button>
-                        <div class="group-items">
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'templates' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=templates">
-                                <span class="nav-icon"><?= $icon('pages') ?></span> Template-uri
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'ecommerce' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=ecommerce">
-                                <span class="nav-icon"><?= $icon('orders') ?></span> Email-uri ecommerce
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'subscribers' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=subscribers">
-                                <span class="nav-icon"><?= $icon('dashboard') ?></span> Liste abonați
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'optin' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=optin">
-                                <span class="nav-icon"><?= $icon('emails') ?></span> Formulare opt-in
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'contact_forms' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=contact_forms">
-                                <span class="nav-icon"><?= $icon('emails') ?></span> Formulare contact
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'stats' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=stats">
-                                <span class="nav-icon"><?= $icon('stats') ?></span> Statistici
-                            </a>
-                            <a class="<?= $isActive(['/admin/emails/newsletters']) && $newsletterTab === 'history' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=history">
-                                <span class="nav-icon"><?= $icon('emails') ?></span> Istoric trimitere
-                            </a>
-                        </div>
-                    </div>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </nav>
 
                 <div class="admin-sidebar-footer">
@@ -346,6 +139,11 @@ if ($adminFavicon === '') {
                 <div class="admin-topbar">
                     <button type="button" class="icon-btn" id="sidebar-toggle-btn" title="Toggle meniu">☰</button>
                 </div>
+                <?php if (\App\Support\Plugins::licentaLipseste()): ?>
+                    <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
+                        <strong>Licența lipsește.</strong> Site-ul funcționează doar cu funcțiile de bază. Vă rugăm să contactați ANDAXI WEB SOLUTIONS.
+                    </section>
+                <?php endif; ?>
                 <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
                     <section class="panel" style="border-color:#34d399;background:#ecfdf5;color:#065f46;">
                         <?= htmlspecialchars($message, ENT_QUOTES) ?>
