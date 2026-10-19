@@ -13,6 +13,7 @@ declare(strict_types=1);
  * Întreabă: numele bazei, utilizatorul ei, parola ei, emailul proprietarului, căsuța de
  * trimitere și parola ei (opțional), parola porții (de două ori). Parolele nu se văd când
  * le scrii (stty); pe ecran apar doar DA/NU, niciodată o parolă sau o valoare din .env.
+ * Ctrl-C la o parolă pune terminalul înapoi (cu ecou) și oprește scriptul fără să scrie nimic.
  *
  * Refuză (cod 1, fără să scrie nimic) dacă:
  * - PHP-ul e mai vechi decât `php_min` (config/app.php) sau lipsesc pdo_mysql/sodium;
@@ -107,19 +108,133 @@ function verificare_e_terminal()
     return false;
 }
 
+// Starea terminalului dinaintea unei parole (`stty -g`), cât timp parola se scrie.
 $GLOBALS['verificare_stty'] = '';
-register_shutdown_function(function () {
-    // Ecoul terminalului înapoi, și dacă scriptul se oprește în mijlocul unei parole.
+
+/** Terminalul înapoi cum era înaintea parolei (dacă e cazul). */
+function verificare_reda_terminalul()
+{
     if ($GLOBALS['verificare_stty'] !== '') {
         verificare_comanda('stty ' . escapeshellarg($GLOBALS['verificare_stty']) . ' 2>/dev/null');
+        $GLOBALS['verificare_stty'] = '';
     }
-});
-if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal') && defined('SIGINT')) {
+}
+// Și dacă scriptul se oprește altfel în mijlocul unei parole (o eroare, un exit).
+register_shutdown_function('verificare_reda_terminalul');
+
+function verificare_semnal($semnal)
+{
+    verificare_reda_terminalul();
+    fwrite(STDOUT, "\n");
+    exit(128 + (int) $semnal);
+}
+
+/**
+ * Cât se scrie o parolă: SIGTERM, SIGHUP (de exemplu găzduirea care oprește un proces lung)
+ * și un SIGINT trimis din altă parte pun terminalul înapoi înainte de oprire (dacă există
+ * pcntl). În rest semnalele rămân cum sunt: Ctrl-C la o întrebare obișnuită oprește scriptul
+ * pe loc, ecoul fiind oricum pornit acolo.
+ */
+function verificare_prinde_semnale($da)
+{
+    if (!function_exists('pcntl_signal') || !function_exists('pcntl_async_signals') || !defined('SIGTERM')) {
+        return;
+    }
     pcntl_async_signals(true);
-    pcntl_signal(SIGINT, function () {
+    foreach (array(SIGTERM, SIGHUP, SIGINT) as $semnal) {
+        pcntl_signal($semnal, $da ? 'verificare_semnal' : SIG_DFL, false);
+    }
+}
+
+function verificare_nu_pot_ascunde()
+{
+    fwrite(STDOUT, "\n");
+    verificare_opreste('nu pot ascunde ce scrii (comanda stty nu merge pe acest server), deci nu cer parola. Trimite-ne textul acesta.');
+}
+
+/**
+ * O parolă scrisă în terminal, fără ecou. Cât se scrie, terminalul dă scriptului fiecare tastă
+ * (`-icanon`), iar Ctrl-C nu mai e un semnal (`-isig`): scriptul îl citește ca pe o tastă, pune
+ * singur terminalul înapoi și abia apoi se oprește (cod 130). Oprit de semnal în mijlocul
+ * parolei, PHP-ul ar lăsa terminalul fără ecou: nimic din ce scrie proprietarul după aceea nu
+ * s-ar mai vedea. Backspace șterge ultima literă, Ctrl-U tot ce s-a scris, Enter încheie.
+ *
+ * @return string|false false dacă intrarea s-a încheiat (Ctrl-D la început)
+ */
+function verificare_citeste_ascuns()
+{
+    $stare = trim((string) verificare_comanda('stty -g 2>/dev/null'));
+    if ($stare === '') {
+        verificare_nu_pot_ascunde();
+    }
+    $GLOBALS['verificare_stty'] = $stare;
+    verificare_prinde_semnale(true);
+    if (trim((string) verificare_comanda('stty -echo -icanon -isig min 1 time 0 2>/dev/null && echo DA')) !== 'DA') {
+        verificare_reda_terminalul();
+        verificare_prinde_semnale(false);
+        verificare_nu_pot_ascunde();
+    }
+    $text = '';
+    $ctrlC = false;
+    $sfarsit = false;
+    $erori = 0;
+    while (true) {
+        $citire = array(STDIN);
+        $scriere = null;
+        $exceptii = null;
+        // Așteptări de o secundă, ca un semnal prins mai sus să fie tratat pe loc.
+        $gata = @stream_select($citire, $scriere, $exceptii, 1);
+        if ($gata === false && ++$erori > 30) {
+            $sfarsit = true;
+            break;
+        }
+        if (!$gata) {
+            continue;
+        }
+        $c = fread(STDIN, 1);
+        if ($c === false || $c === '') {
+            $sfarsit = true;
+            break;
+        }
+        if ($c === "\n" || $c === "\r") {
+            break;
+        }
+        if ($c === "\x03") {
+            $ctrlC = true;
+            break;
+        }
+        if ($c === "\x04") {
+            if ($text === '') {
+                $sfarsit = true;
+                break;
+            }
+            continue;
+        }
+        if ($c === "\x7f" || $c === "\x08") {
+            // Ultima literă, cu toți octeții ei (UTF-8).
+            $i = strlen($text) - 1;
+            while ($i > 0 && (ord($text[$i]) & 0xC0) === 0x80) {
+                $i--;
+            }
+            $text = $i > 0 ? substr($text, 0, $i) : '';
+            continue;
+        }
+        if ($c === "\x15") {
+            $text = '';
+            continue;
+        }
+        // Alt caracter de control (o săgeată, Tab) rămâne în text: după Enter, verificare_intreaba
+        // oprește scriptul, ca la un rând obișnuit.
+        $text .= $c;
+    }
+    verificare_reda_terminalul();
+    verificare_prinde_semnale(false);
+    if ($ctrlC) {
         fwrite(STDOUT, "\n");
+        fwrite(STDERR, "Oprit (Ctrl-C). Nu am scris nimic.\n");
         exit(130);
-    });
+    }
+    return $sfarsit ? false : $text;
 }
 
 /** O întrebare; cu $ascuns, ce scrii nu apare pe ecran. Fără intrare: oprire. */
@@ -127,22 +242,11 @@ function verificare_intreaba($intrebare, $ascuns)
 {
     fwrite(STDOUT, $intrebare);
     fflush(STDOUT);
-    $ascunsAcum = false;
     if ($ascuns && verificare_e_terminal()) {
-        $stare = trim((string) verificare_comanda('stty -g 2>/dev/null'));
-        $ok = trim((string) verificare_comanda('stty -echo 2>/dev/null && echo DA'));
-        if ($stare === '' || $ok !== 'DA') {
-            fwrite(STDOUT, "\n");
-            verificare_opreste('nu pot ascunde ce scrii (comanda stty nu merge pe acest server), deci nu cer parola. Trimite-ne textul acesta.');
-        }
-        $GLOBALS['verificare_stty'] = $stare;
-        $ascunsAcum = true;
-    }
-    $rand = fgets(STDIN);
-    if ($ascunsAcum) {
-        verificare_comanda('stty ' . escapeshellarg($GLOBALS['verificare_stty']) . ' 2>/dev/null');
-        $GLOBALS['verificare_stty'] = '';
+        $rand = verificare_citeste_ascuns();
         fwrite(STDOUT, "\n");
+    } else {
+        $rand = fgets(STDIN);
     }
     if ($rand === false) {
         verificare_opreste('intrarea s-a încheiat înainte de răspuns; nu am scris nimic.');

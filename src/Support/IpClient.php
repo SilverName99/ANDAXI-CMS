@@ -19,6 +19,8 @@ namespace App\Support;
  * Ce rețea are proxy-ul găzduirii (CDN-ul Hostinger) arată `tools/verificare/stare.php`
  * (clasa lui `REMOTE_ADDR` și dacă sosește `X-Forwarded-For`). Limitele de încercări
  * ale site-ului trec pe această clasă în WP-12b; până atunci o folosește doar poarta.
+ * O limită numără pe `cheieLimita()`, nu pe adresa exactă: o adresă IPv6 contează cu
+ * toată rețeaua ei /64.
  */
 final class IpClient
 {
@@ -73,6 +75,25 @@ final class IpClient
             $ultima = $ip;
         }
         return $ultima;
+    }
+
+    /**
+     * Cheia după care numără o limită de încercări: o adresă IPv4 așa cum e, o adresă IPv6
+     * ca rețeaua ei /64 („2001:db8:1:2::/64”). Un abonat IPv6 primește de obicei un /64
+     * întreg, deci, numărată pe adresa exactă, limita s-ar ocoli schimbând adresa la fiecare
+     * încercare. Ce nu e adresă rămâne cum e (fără spații).
+     */
+    public static function cheieLimita(string $ip): string
+    {
+        $normala = self::normalizeaza($ip);
+        if ($normala === null) {
+            return trim($ip);
+        }
+        $octeti = (string) inet_pton($normala);
+        if (strlen($octeti) !== 16) {
+            return $normala;
+        }
+        return (string) inet_ntop(substr($octeti, 0, 8) . str_repeat("\0", 8)) . '/64';
     }
 
     /**

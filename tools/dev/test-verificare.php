@@ -24,18 +24,24 @@ declare(strict_types=1);
  *       parole ale porții diferite, scurte sau egale cu parola bazei, .env existent,
  *       --rescrie peste .env-ul unui site adevărat) fără să scrie nimic; apoi configurarea
  *       pe o bază goală: .env 0600 cu cheile așteptate, parola porții doar ca hash, niciun
- *       tabel creat, nicio parolă sau adresă de email pe ecran.
+ *       tabel creat, nicio parolă sau adresă de email pe ecran. Într-un terminal adevărat
+ *       (pty, dacă există python3; tools/dev/lib/terminal.py): Ctrl-C în mijlocul unei
+ *       parole → cod 130 și terminalul înapoi cu ecou, cu și fără pcntl; SIGTERM la fel;
+ *       parola nu apare pe ecran, Backspace o corectează; Ctrl-C la o întrebare obișnuită
+ *       oprește pe loc.
  *    B3 poarta: 401 fără parolă (Basic și formularul în pagină) pe orice adresă și metodă;
  *       robots „Disallow: /” și health fără parolă; parola bună → 503 „copia lipsește”;
  *       parola greșită → 401; a 11-a încercare greșită în 10 minute → 429 (și cu parola
- *       bună), cu amprente în loc de adrese pe disc; formularul (cookie, întoarcerea doar
- *       pe o cale locală), cookie falsificat, ieșirea, HEAD, modul „formular”; sonda (un
- *       jeton, o dată); stare.php → „PREGĂTIT PENTRU CONFIGURARE, NU PENTRU DATE”, fără
- *       secrete; --rescrie cu altă parolă anulează cookie-urile vechi.
+ *       bună), cu amprente în loc de adrese pe disc; IPv6 numărat pe rețeaua /64 (10 adrese
+ *       din același /64 → 429 pentru tot /64-ul); formularul (cookie, întoarcerea doar pe o
+ *       cale locală), cookie falsificat, câmpuri trimise ca liste (tot închis, nimic în
+ *       jurnal), ieșirea, HEAD, modul „formular”; sonda (un jeton, o dată); stare.php →
+ *       „PREGĂTIT PENTRU CONFIGURARE, NU PENTRU DATE”, fără secrete; --rescrie cu altă
+ *       parolă anulează cookie-urile vechi.
  *    B4 copie „încărcată” (baza de dezvoltare și o dată de încărcare scrisă de test): cu
  *       parola, paginile aplicației răspund 200, cu noindex și no-store chiar și unde
- *       aplicația pune alt antet (sitemap); fără cache de pagini; fără parolă tot 401;
- *       copie expirată, cu dată de necitit sau din viitor → 503.
+ *       aplicația pune alt antet (sitemap); fără parolă tot 401; copie expirată, cu dată
+ *       de necitit sau din viitor → 503.
  *    B5 SITE_COPIE_VERIFICARE=0: poarta nu face nimic (pagina aplicației, robots-ul ei).
  *    Pe tot parcursul: niciun tabel în baza goală, nicio sesiune pornită de o cerere oprită
  *    la poartă, niciun email, jurnalul PHP al copiei fără avertismente.
@@ -114,6 +120,12 @@ $verifica('IpClient: clasele (loopback, privată, CGNAT, publică, invalidă)',
     IpClient::clasa('127.0.0.1') === 'loopback (127.0.0.0/8)' && IpClient::clasa('10.2.3.4') === 'privată (10.0.0.0/8)'
     && IpClient::clasa('100.64.1.1') === 'CGNAT (100.64.0.0/10)' && IpClient::clasa('8.8.8.8') === 'publică'
     && IpClient::clasa('x') === 'invalidă' && IpClient::clasa('fd00::1') === 'privată (fc00::/7)');
+$verifica('IpClient::cheieLimita: IPv4 așa cum e (și scris ca IPv6), IPv6 → rețeaua /64, altceva neatins',
+    IpClient::cheieLimita('198.51.100.7') === '198.51.100.7' && IpClient::cheieLimita('::ffff:198.51.100.7') === '198.51.100.7'
+    && IpClient::cheieLimita('2001:db8:1:2::1') === '2001:db8:1:2::/64'
+    && IpClient::cheieLimita('2001:0DB8:0001:0002:ffff:ffff:ffff:ffff') === '2001:db8:1:2::/64'
+    && IpClient::cheieLimita('2001:db8:1:3::1') === '2001:db8:1:3::/64' && IpClient::cheieLimita('198.51.100.8') !== IpClient::cheieLimita('198.51.100.7')
+    && IpClient::cheieLimita(' ceva ') === 'ceva' && IpClient::cheieLimita('') === '');
 $serverVechi = $_SERVER;
 $_SERVER['REMOTE_ADDR'] = '10.9.9.9';
 $_SERVER['HTTP_X_FORWARDED_FOR'] = '6.6.6.6, 198.51.100.8';
@@ -445,6 +457,49 @@ try {
     $verifica('intrare încheiată înainte de răspunsuri → nimic scris', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'intrarea s-a încheiat'));
     $verifica('refuzurile n-au creat niciun tabel', $tabeleIn('cms_verif_gol') === 0);
 
+    // În terminal (pty): doar acolo se ascund parolele și doar acolo se vede ce lasă Ctrl-C în urmă.
+    if (trim((string) shell_exec('command -v python3 2>/dev/null')) === '') {
+        $scrie('  INFO  python3 lipsește: configureaza.php nu s-a încercat într-un terminal (Ctrl-C la o parolă)');
+    } else {
+        $inTerminal = static function (array $pasi, array $iniInPlus = []) use ($radacina, $copie, $acasa, $mediu, $ini): array {
+            $cererePty = [
+                'comanda' => array_merge([PHP_BINARY], $ini(), $iniInPlus, [$copie . '/tools/verificare/configureaza.php']),
+                'cwd' => $copie,
+                'env' => $mediu($acasa),
+                'pasi' => $pasi,
+                'asteptare' => 4,
+            ];
+            // json_encode scrie diacriticele ca \u…, deci escapeshellarg nu le pierde (localul C).
+            $iesire = (string) shell_exec('python3 -I ' . escapeshellarg($radacina . '/tools/dev/lib/terminal.py') . ' '
+                . escapeshellarg((string) json_encode($cererePty)) . ' 2>&1');
+            $rezultat = json_decode($iesire, true);
+            return is_array($rezultat) ? $rezultat : ['iesit' => false, 'ecran' => $iesire, 'nevazut' => null];
+        };
+        $terminalBun = static fn (array $t): bool => ($t['ecou'] ?? false) === true && ($t['mod_rand'] ?? false) === true
+            && ($t['ctrl_c_semnal'] ?? false) === true;
+        $descrie = static fn (array $t): string => json_encode(array_intersect_key($t, array_flip(['iesit', 'cod', 'semnal', 'secunde', 'ecou',
+            'mod_rand', 'ctrl_c_semnal', 'nevazut']))) . ' | ' . substr(trim((string) ($t['ecran'] ?? '')), -160);
+        $tastat = 'Ascuns-' . bin2hex(random_bytes(4));
+        $panaLaParola = [['asteapta' => 'Numele bazei', 'trimite' => "cms_verif_gol\r"], ['asteapta' => 'Utilizatorul bazei', 'trimite' => $utilizatorDb . "\r"]];
+        foreach (['cu pcntl' => [], 'fără pcntl' => ['-d', 'disable_functions=pcntl_signal,pcntl_async_signals']] as $fel => $iniPty) {
+            $t = $inTerminal(array_merge($panaLaParola, [['asteapta' => 'Parola bazei', 'trimite' => $tastat . "\x03"]]), $iniPty);
+            $verifica('terminal, ' . $fel . ': Ctrl-C în mijlocul parolei bazei → oprit pe loc (cod 130), terminalul cu ecou, nimic scris',
+                ($t['cod'] ?? null) === 130 && (float) ($t['secunde'] ?? 9) < 2 && $terminalBun($t) && $fara()
+                && str_contains((string) $t['ecran'], 'Oprit (Ctrl-C)') && !str_contains((string) $t['ecran'], $tastat), $descrie($t));
+        }
+        if (extension_loaded('pcntl')) {
+            $t = $inTerminal(array_merge($panaLaParola, [['asteapta' => 'Parola bazei', 'trimite' => 'ab'], ['asteapta' => 'Parola bazei', 'semnal' => 15]]));
+            $verifica('terminal: SIGTERM în timpul parolei (găzduirea oprește procesul) → terminalul cu ecou, cod 143, nimic scris',
+                ($t['cod'] ?? null) === 143 && $terminalBun($t) && $fara(), $descrie($t));
+        }
+        // Parola scrisă cu o greșeală corectată (Backspace), apoi Ctrl-C la o întrebare obișnuită.
+        $t = $inTerminal(array_merge($panaLaParola, [['asteapta' => 'Parola bazei', 'trimite' => $parolaDb . "xș\x7f\x7f\r"],
+            ['asteapta' => 'Emailul tău', 'trimite' => "\x03"]]));
+        $verifica('terminal: parola ascunsă, Backspace șterge (baza se deschide), Ctrl-C la întrebarea următoare oprește pe loc',
+            str_contains((string) $t['ecran'], 'DA    legătura cu baza') && !str_contains((string) $t['ecran'], $parolaDb)
+            && ($t['semnal'] ?? null) === 2 && (float) ($t['secunde'] ?? 9) < 2 && $terminalBun($t) && $fara(), $descrie($t));
+    }
+
     $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare($bune));
     $textEnv = (string) @file_get_contents($copie . '/.env');
     $cheiEnv = Verificare::citesteEnv($textEnv);
@@ -526,6 +581,19 @@ try {
     unlink($copie . '/storage/verificare/poarta-esecuri.json');
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);
     $verifica('după ce trece blocarea, parola bună trece iar', $r['cod'] === 503);
+    // IPv6: limita numără pe rețeaua /64, nu pe adresa exactă. Adresele vin aici din X-Forwarded-For,
+    // de la serverul de test trecut ca proxy de încredere (IpClient).
+    $scrieEnv(['IP_PROXY_DE_INCREDERE' => '127.0.0.1']);
+    for ($i = 1; $i <= 10; $i++) {
+        $cerere('GET', '/', ['basic' => 'verificare:gresita', 'antete' => ['X-Forwarded-For: 2001:db8:1:2::' . dechex($i)]]);
+    }
+    $r = $cerere('GET', '/', ['basic' => $bunaBasic, 'antete' => ['X-Forwarded-For: 2001:db8:1:2:ffff::1']]);
+    $r2 = $cerere('GET', '/', ['basic' => $bunaBasic, 'antete' => ['X-Forwarded-For: 2001:db8:1:3::1']]);
+    $r3 = $cerere('GET', '/', ['basic' => $bunaBasic]);
+    $verifica('IPv6: 10 parole greșite de la 10 adrese din același /64 → 429 pentru tot /64-ul; alt /64 și altă adresă trec',
+        $r['cod'] === 429 && $r2['cod'] === 503 && $r3['cod'] === 503, $r['cod'] . ' / ' . $r2['cod'] . ' / ' . $r3['cod']);
+    $scrieEnv(['IP_PROXY_DE_INCREDERE' => '']);
+    unlink($copie . '/storage/verificare/poarta-esecuri.json');
 
     $r = $cerere('POST', Verificare::CALE_INTRARE, ['post' => ['utilizator' => 'verificare', 'parola' => 'gresita', 'inapoi' => '/magazin']]);
     $verifica('formularul cu parola greșită → 401 fără fereastra Basic', $r['cod'] === 401 && !isset($r['antete']['www-authenticate'])
@@ -548,6 +616,14 @@ try {
         && ($r2['antete']['location'] ?? '') === '/');
     $r = $cerere('GET', '/', ['cookie' => Verificare::COOKIE . '=v1.' . (time() + 3600) . '.' . str_repeat('0', 64)]);
     $verifica('cookie falsificat → 401', $r['cod'] === 401);
+    // Câmpuri trimise ca liste (x[]=…, x[a]=…): oricine le poate trimite; tot închis și nimic în jurnal.
+    $r = $cerere('GET', Verificare::CALE_SONDA . '?sonda[]=x');
+    $r2 = $cerere('GET', '/', ['cookie' => Verificare::COOKIE . '[a]=1']);
+    $r3 = $cerere('POST', Verificare::CALE_INTRARE, ['post' => ['utilizator' => ['x'], 'parola' => ['y'], 'inapoi' => ['/magazin']]]);
+    $r4 = $cerere('POST', Verificare::CALE_INTRARE, ['post' => ['utilizator' => 'verificare', 'parola' => $parolaPoarta, 'inapoi' => ['/magazin']]]);
+    $verifica('câmpuri ca liste (sonda[], cookie[a], utilizator[]/parola[]/inapoi[]) → 401, 401, 401, 303 „/”, fără avertismente în jurnal',
+        $r['cod'] === 401 && $r2['cod'] === 401 && $r3['cod'] === 401 && $r4['cod'] === 303 && ($r4['antete']['location'] ?? '') === '/'
+        && !str_contains((string) @file_get_contents($jurnalErori), 'Array to string'), $r['cod'] . ' ' . $r2['cod'] . ' ' . $r3['cod'] . ' ' . $r4['cod']);
     $r = $cerere('GET', Verificare::CALE_IESIRE, ['cookie' => Verificare::COOKIE . '=' . $cookiePoarta]);
     $verifica('ieșirea → 303 „/” și cookie-ul șters', $r['cod'] === 303 && ($r['antete']['location'] ?? '') === '/'
         && preg_match('/' . Verificare::COOKIE . '=(deleted)?;/', implode("\n", $r['cookies'])) === 1);
@@ -571,6 +647,11 @@ try {
     file_put_contents($copie . '/storage/verificare/sonda.json', json_encode(['amprenta' => hash('sha256', $jeton), 'expira' => time() - 1]));
     $r = $cerere('GET', Verificare::CALE_SONDA . '?sonda=' . $jeton);
     $verifica('sonda: jeton expirat → 401', $r['cod'] === 401);
+    file_put_contents($copie . '/storage/verificare/sonda.json', json_encode(['amprenta' => hash('sha256', $jeton), 'expira' => time() + 60]));
+    $r = $cerere('GET', Verificare::CALE_SONDA . '?sonda=' . $jeton, ['cookie' => Verificare::COOKIE_SONDA . '[a]=' . $jeton]);
+    $fapte = json_decode($r['corp'], true);
+    $verifica('sonda: cookie-ul ei trimis ca listă → „cookie” NU, fără avertisment', $r['cod'] === 200 && is_array($fapte)
+        && ($fapte['cookie'] ?? true) === false && !str_contains((string) @file_get_contents($jurnalErori), 'Array to string'), substr($r['corp'], 0, 120));
     @unlink($copie . '/storage/verificare/sonda.json');
 
     $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '');
@@ -619,8 +700,6 @@ try {
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);
     $verifica('cu parola, prima pagină a aplicației → 200, noindex, no-store', $r['cod'] === 200 && str_contains($r['corp'], '</html>') && $antetPoarta($r),
         (string) $r['cod']);
-    $r = $cerere('GET', '/', ['basic' => $bunaBasic]);
-    $verifica('a doua oară la fel (nu din cache-ul de pagini)', $r['cod'] === 200 && $antetPoarta($r) && !isset($r['antete']['x-page-cache']));
     $r = $cerere('GET', '/admin/login', ['basic' => $bunaBasic]);
     $verifica('/admin/login → 200, noindex, no-store', $r['cod'] === 200 && $antetPoarta($r), (string) $r['cod']);
     $r = $cerere('GET', '/sitemap.xml', ['basic' => $bunaBasic]);
@@ -630,7 +709,6 @@ try {
     $verifica('/robots.txt rămâne „Disallow: /” și cu parola', $r['corp'] === "User-agent: *\nDisallow: /\n");
     $r = $cerere('GET', '/');
     $verifica('fără parolă tot 401, și cu copia încărcată', $r['cod'] === 401);
-    $verifica('nicio pagină în cache-ul de pagini (no-store)', (glob($copie . '/storage/cache/pages/*') ?: []) === []);
     file_put_contents($copie . '/storage/verificare/incarcat-la', date('c', time() - 8 * 86400) . "\n");
     $scrieEnv(['VERIFICARE_ZILE_PASTRARE' => '30']);
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);

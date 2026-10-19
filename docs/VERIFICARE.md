@@ -69,7 +69,8 @@ $PHP tools/verificare/stare.php
 $PHP tools/verificare/configureaza.php
 #   întreabă: numele bazei, utilizatorul bazei, parola bazei (nu se vede când scrii),
 #   emailul tău, căsuța de trimitere și parola ei (Enter = fără căsuță),
-#   parola porții (de două ori, cel puțin 12 caractere, alta decât parola bazei)
+#   parola porții (de două ori, cel puțin 12 caractere, alta decât parola bazei);
+#   Ctrl-C oprește oricând, fără să scrie nimic
 $PHP tools/verificare/stare.php
 #   ultimul rând trebuie să fie: „PREGĂTIT PENTRU CONFIGURARE, NU PENTRU DATE”
 ```
@@ -104,6 +105,7 @@ sunt în git, deci rămân neatinse.
 | „Prea multe încercări” (429) | 10 parole greșite în 10 minute de la aceeași adresă: aștepți 10 minute. După o parolă nouă a porții, închide browserul (ține minte parola veche și o trimite singur) |
 | Ai uitat parola porții | `$PHP tools/verificare/configureaza.php --rescrie` |
 | „nu pot ascunde ce scrii (comanda stty nu merge …)” | Trimite-ne textul. Nu scrie parolele în altă parte |
+| După o oprire în mijlocul unei parole nu mai vezi ce scrii (sau Ctrl-C nu mai merge) | Scrie `stty sane` și Enter (literele nu apar cât scrii, dar comanda merge). Ctrl-C la o parolă pune singur terminalul înapoi; asta se întâmplă doar dacă procesul a fost oprit cu forța (de exemplu de găzduire) |
 | `stare.php`: „PHP CLI ≥ minimul codului: NU” | Folosești PHP-ul implicit al contului; pune `PHP=/opt/alt/php83/usr/bin/php` (sau versiunea aleasă) |
 
 ## Cum funcționează (pentru programatori)
@@ -123,8 +125,9 @@ stratului SEO și a sesiunii. Citește `.env` (ca `Env::load`; `.env` are priori
    `Cache-Control: no-store, private` și `X-LiteSpeed-Cache-Control: no-cache`. Sunt puse la început și
    din nou chiar înainte de trimitere (`header_register_callback`), peste ce pune aplicația: o pagină văzută
    cu parola nu are voie să rămână în cache-ul CDN-ului, unde ar vedea-o oricine. Cache-ul de pagini al
-   aplicației nu scrie nimic (vede `no-store`). Fișierele statice din `public/assets` (CSS, JS, icoane din
-   git, fără date) le servește direct serverul web, fără antet; `robots.txt` le închide oricum.
+   aplicației rulează după poartă, deci nici o pagină păstrată de el nu ajunge la cineva fără parolă.
+   Fișierele statice din `public/assets` (CSS, JS, icoane din git, fără date) le servește direct serverul
+   web, fără antet; `robots.txt` le închide oricum.
 4. Fără parolă: `GET /robots.txt` → `User-agent: *` / `Disallow: /`; `GET /health` → `ok` (fără bază, fără
    sesiune).
 5. Poarta are nevoie de `VERIFICARE_POARTA_UTILIZATOR`, de un hash valid în `VERIFICARE_POARTA_HASH` și de
@@ -133,10 +136,13 @@ stratului SEO și a sesiunii. Citește `.env` (ca `Env::load`; `.env` are priori
    (`HTTP_AUTHORIZATION`, `REDIRECT_HTTP_AUTHORIZATION`) sau din `getallheaders()`; sau **formularul**
    din pagina 401 (`POST /_verificare/intrare` → cookie `verificare_poarta`, semnat HMAC cu o cheie din
    hash-ul parolei, 12 ore; o parolă nouă anulează cookie-urile). `/_verificare/iesire` șterge cookie-ul.
-   În modul `formular` (`VERIFICARE_POARTA_MOD`) pagina 401 nu mai cere și fereastra Basic.
+   În modul `formular` (`VERIFICARE_POARTA_MOD`) pagina 401 nu mai cere și fereastra Basic. Un câmp
+   trimis ca listă (`parola[]=…`, un cookie `verificare_poarta[a]`) contează ca gol: tot 401, nimic în
+   jurnalul PHP.
 7. **10 încercări greșite** de la aceeași adresă (`IpClient::adresa()`) în 10 minute → **429** cu
-   `Retry-After`, și pentru parola bună, și pentru formular. Pe disc (`poarta-esecuri.json`) stau doar
-   amprente HMAC ale adreselor, nu adresele.
+   `Retry-After`, și pentru parola bună, și pentru formular. O adresă IPv6 contează cu toată rețeaua ei
+   /64 (`IpClient::cheieLimita()`): un abonat IPv6 are de obicei un /64 întreg și altfel ar schimba
+   adresa la fiecare încercare. Pe disc (`poarta-esecuri.json`) stau doar amprente HMAC, nu adresele.
 8. Cu parola bună: dacă `storage/verificare/incarcat-la` lipsește → 503 „Copia de verificare lipsește”;
    dacă e mai veche de `VERIFICARE_ZILE_PASTRARE` zile (cel mult 7, decizia D1), de necitit sau din viitor →
    503 „a expirat”. Așa aplicația nu rulează niciodată pe baza goală (nici `ensure*`, nici erori), iar o
@@ -158,8 +164,9 @@ funcțiile oprite, extensiile, `imagewebp`. Fără jetonul bun, adresa e tratat�
 stânga, prima adresă din `X-Forwarded-For` care nu e de încredere. Ce scrie vizitatorul în antet stă în
 stânga și nu se ajunge la el. Dacă `stare.php` arată că PHP-ul vede un proxy (o rețea privată sau a CDN-ului
 în loc de adresa vizitatorului), toți vizitatorii împart aceeași limită de 10 încercări până se trece
-rețeaua lui în `IP_PROXY_DE_INCREDERE`. Limitele de încercări ale site-ului (checkout, înregistrare,
-recenzii) trec pe `IpClient` în WP-12b.
+rețeaua lui în `IP_PROXY_DE_INCREDERE`. O limită numără pe `IpClient::cheieLimita()`: IPv4 adresa
+întreagă, IPv6 rețeaua /64. Limitele de încercări ale site-ului (checkout, înregistrare, recenzii) trec pe
+`IpClient` în WP-12b.
 
 ### Cheile din `.env` (scrise de `configureaza.php`)
 
@@ -185,6 +192,13 @@ Refuză fără să scrie nimic: un dosar care nu e `~/domains/<gazdă>/public_ht
 `--rescrie`, doar unul cu `SITE_COPIE_VERIFICARE=1`), o bază care nu se deschide sau are tabele fără
 `_verificare`, parole ale porții diferite, scurte (sub 12) sau egale cu parola bazei sau a căsuței, un
 terminal în care parola nu se poate ascunde. Nu creează niciun tabel.
+
+O parolă se citește tastă cu tastă, cu terminalul fără ecou și cu Ctrl-C citit ca o tastă
+(`stty -echo -icanon -isig`, doar cât se scrie parola): la Ctrl-C scriptul pune singur terminalul
+înapoi și abia apoi se oprește (cod 130). Oprit de semnal în acel mod, PHP-ul ar lăsa terminalul fără
+ecou, iar proprietarul n-ar mai vedea ce scrie. SIGTERM și SIGHUP (găzduirea care oprește un proces)
+sunt prinse la fel, dacă PHP-ul are pcntl; altfel rămâne `stty sane` din tabelul de mai sus. La
+celelalte întrebări semnalele rămân cele obișnuite: Ctrl-C oprește pe loc.
 
 `configureaza.php` și `stare.php` folosesc doar sintaxa PHP 7.0 (codul aplicației îl încarcă abia după
 verificarea versiunii), ca un PHP prea vechi să primească un mesaj, nu o eroare de sintaxă. Nu pornesc
@@ -222,4 +236,8 @@ simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public
 intră în raport), o copie „încărcată” pe baza de dezvoltare (paginile 200, cu noindex și no-store) și una
 expirată, apoi `SITE_COPIE_VERIFICARE=0` (poarta nu face nimic). Bazele `cms_verif_gol`, `cms_verif_plina`
 și utilizatorul `cms_verif_test` se fac și se șterg acolo. Cu un PHP 7 instalat (`php7.0`, `php7.4`)
-verifică și mesajul pentru un PHP prea vechi. Toate datele sunt inventate.
+verifică și mesajul pentru un PHP prea vechi. Cu `python3` rulează `configureaza.php` și într-un
+terminal adevărat (`tools/dev/lib/terminal.py`, un pty): Ctrl-C în mijlocul unei parole, cu și fără
+pcntl, și SIGTERM lasă terminalul cu ecou; parola nu apare pe ecran, iar Backspace o corectează. Limita
+pe /64 se încearcă prin `X-Forwarded-For`, cu serverul de test trecut ca proxy de încredere. Toate datele
+sunt inventate.

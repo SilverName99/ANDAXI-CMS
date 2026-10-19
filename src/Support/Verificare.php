@@ -22,9 +22,10 @@ namespace App\Support;
  *   HTTP Basic (citit din `PHP_AUTH_USER`, din antetul `Authorization` sau din
  *   `getallheaders()`) sau, dacă găzduirea nu dă antetul mai departe, formularul din
  *   pagina 401 (cookie semnat, 12 ore). 10 parole greșite de la aceeași adresă în 10
- *   minute → 429 (adresa după `IpClient`, păstrată doar ca amprentă). Cu parola bună,
- *   până la prima încărcare (sau după `VERIFICARE_ZILE_PASTRARE` zile, cel mult 7)
- *   copia lipsește sau a expirat → 503; abia apoi cererea ajunge la aplicație.
+ *   minute → 429 (adresa după `IpClient`, o adresă IPv6 cu toată rețeaua ei /64, păstrată
+ *   doar ca amprentă). Cu parola bună, până la prima încărcare (sau după
+ *   `VERIFICARE_ZILE_PASTRARE` zile, cel mult 7) copia lipsește sau a expirat → 503; abia
+ *   apoi cererea ajunge la aplicație.
  * - Altfel nu face nimic: nicio ieșire, niciun antet.
  *
  * Gărzile din cod (emailuri, plăți, ERP, FAN, etichete de urmărire, banner) vin în WP-08,
@@ -348,6 +349,19 @@ final class Verificare
         header_register_callback($aplica);
     }
 
+    /**
+     * Un câmp al cererii (`$_GET`, `$_POST`, `$_COOKIE`) ca text. O listă (`x[]=…`, `x[a]=…`),
+     * pe care o poate trimite oricine, contează ca un câmp gol: nici avertisment în jurnal,
+     * nici altceva decât un răspuns de „lipsă” sau „greșit”.
+     *
+     * @param array<array-key, mixed> $sursa
+     */
+    private static function parametru(array $sursa, string $cheie, string $implicit = ''): string
+    {
+        $valoare = $sursa[$cheie] ?? $implicit;
+        return is_string($valoare) ? $valoare : '';
+    }
+
     /** Calea cererii, fără parametri și fără decodare (o formă neobișnuită cade la poartă). */
     private static function cale(): string
     {
@@ -362,7 +376,7 @@ final class Verificare
     {
         $utilizator = trim((string) Env::get('VERIFICARE_POARTA_UTILIZATOR', ''));
         $hash = trim((string) Env::get('VERIFICARE_POARTA_HASH', ''));
-        $cookie = (string) ($_COOKIE[self::COOKIE] ?? '');
+        $cookie = self::parametru($_COOKIE, self::COOKIE);
         if ($cookie !== '' && self::cookieValid($cookie, $utilizator, $hash, time())) {
             return 'ok';
         }
@@ -385,8 +399,8 @@ final class Verificare
     {
         $utilizator = trim((string) Env::get('VERIFICARE_POARTA_UTILIZATOR', ''));
         $hash = trim((string) Env::get('VERIFICARE_POARTA_HASH', ''));
-        $inapoi = self::caleInapoi((string) ($_POST['inapoi'] ?? '/'));
-        if (!self::potrivire((string) ($_POST['utilizator'] ?? ''), (string) ($_POST['parola'] ?? ''), $utilizator, $hash)) {
+        $inapoi = self::caleInapoi(self::parametru($_POST, 'inapoi', '/'));
+        if (!self::potrivire(self::parametru($_POST, 'utilizator'), self::parametru($_POST, 'parola'), $utilizator, $hash)) {
             self::noteazaEsec($ip);
             // Fără provocarea Basic: cine folosește formularul nu mai primește și fereastra browserului.
             self::cerePoarta('POST', 'Utilizator sau parolă greșite.', false, $inapoi);
@@ -498,8 +512,10 @@ final class Verificare
 
     private static function amprentaIp(string $ip): string
     {
-        // Adresa nu se scrie pe disc; doar o amprentă cu cheia porții.
-        return substr(hash_hmac('sha256', $ip, self::cheie(trim((string) Env::get('VERIFICARE_POARTA_HASH', '')), 'ip')), 0, 32);
+        // Adresa nu se scrie pe disc; doar o amprentă cu cheia porții. O adresă IPv6 contează cu
+        // toată rețeaua ei /64 (IpClient::cheieLimita): altfel, schimbând adresa în /64-ul lui la
+        // fiecare încercare, cineva n-ar ajunge niciodată la 10.
+        return substr(hash_hmac('sha256', IpClient::cheieLimita($ip), self::cheie(trim((string) Env::get('VERIFICARE_POARTA_HASH', '')), 'ip')), 0, 32);
     }
 
     /** Câte secunde mai e blocată adresa (0 = deloc). */
@@ -564,7 +580,7 @@ final class Verificare
      */
     private static function jetonSonda(): ?string
     {
-        $jeton = (string) ($_GET['sonda'] ?? '');
+        $jeton = self::parametru($_GET, 'sonda');
         $fisier = self::dosar() . '/sonda.json';
         if (preg_match('/^[a-f0-9]{64}$/', $jeton) !== 1 || !is_file($fisier)) {
             return null;
@@ -601,7 +617,7 @@ final class Verificare
             'sapi' => PHP_SAPI,
             'server' => substr((string) preg_replace('/[^A-Za-z0-9 .\/_()-]/', '', (string) ($_SERVER['SERVER_SOFTWARE'] ?? '')), 0, 60),
             'basic' => $basic !== null && $basic['utilizator'] === 'sonda' && hash_equals($jeton, $basic['parola']) ? $basic['sursa'] : '',
-            'cookie' => hash_equals($jeton, (string) ($_COOKIE[self::COOKIE_SONDA] ?? '')),
+            'cookie' => hash_equals($jeton, self::parametru($_COOKIE, self::COOKIE_SONDA)),
             'antet' => hash_equals($jeton, (string) ($antete['x-verificare-sonda'] ?? '')),
             'remote_addr' => IpClient::clasa($remote),
             'remote_addr_e_server' => $remote !== '' && $remote === (string) ($_SERVER['SERVER_ADDR'] ?? ''),
