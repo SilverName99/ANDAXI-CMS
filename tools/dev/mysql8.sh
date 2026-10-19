@@ -43,10 +43,12 @@ case "${1:-}" in
         die "MySQL 8 nu a pornit în 30 s (vezi $RUN/err.log)"
         ;;
     opreste)
-        if [ -s "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; then
-            kill "$(cat "$PID")"
+        proces="$(cat "$PID" 2>/dev/null || true)"
+        if [[ "$proces" =~ ^[0-9]+$ ]] && kill -0 "$proces" 2>/dev/null; then
+            kill "$proces"
+            # Numărul procesului, ținut de dinainte: mysqld șterge fișierul pid la oprire.
             for _ in $(seq 1 60); do
-                kill -0 "$(cat "$PID" 2>/dev/null || echo 0)" 2>/dev/null || { echo "MySQL 8 oprit."; exit 0; }
+                kill -0 "$proces" 2>/dev/null || { echo "MySQL 8 oprit."; exit 0; }
                 sleep 0.5
             done
             die "MySQL 8 nu s-a oprit în 30 s"
