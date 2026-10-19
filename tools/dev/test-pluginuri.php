@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Testele mecanismului de pluginuri (fără browser).
  *
- *   tools/dev/php.sh tools/dev/test-pluginuri.php            # tot: A, B, C, D, E
+ *   tools/dev/php.sh tools/dev/test-pluginuri.php            # tot: A, B0, B, C, D, E, G
  *   tools/dev/php.sh tools/dev/test-pluginuri.php --doar-licenta
  *   … --fara-garda     # fără B (cererea fiecărei rute, cea mai lungă parte)
  *   … --fara-browser   # C fără Playwright
@@ -18,6 +18,10 @@ declare(strict_types=1);
  *    bună, semnătură greșită/lipsă/altă cheie, versiune mai veche, lipsă, chei și
  *    stări necunoscute, alt site, JSON stricat, ultima bună stricată, regulile de
  *    dependență, jurnalul „o singură dată”, vectorul de test pentru CRM.
+ * B0. Instantaneul rutelor (tools/dev/instantaneu-rute.php, fără server): suprafața
+ *    fiecărei licențe de test față de fișierele din tools/dev/instantanee/, regulile
+ *    fixe care nu depind de catalog și mecanismul diferențelor declarate din
+ *    compara-cu-baza.php (marcajele de port).
  * B. Garda rutelor (cu serverul de dezvoltare, pe baza de test cu date demo):
  *    pentru fiecare pachet (toate, magazin, catalog, prezentare, asociatie), fără
  *    licență, cu magazinul „se oprește” și cu o redirecționare, cere FIECARE rută
@@ -43,8 +47,9 @@ declare(strict_types=1);
  *    curs rulează, cele care pornesc ceva nou tac. Plus magazinul fără livrarea
  *    FAN: checkout-ul fără nomenclatorul FAN și o comandă cu localitatea scrisă
  *    de mână; un link de plată al cărui procesator a fost scos din licență.
- * E. Cu licența „toate”, paginile-cheie (prima pagină, produs, coș, checkout,
- *    dashboard, comenzi…) au HTML identic cu codul de bază (compara-cu-baza.sh).
+ * E. Cu licența „toate” și cu licența de dezvoltare a Bioscem, paginile-cheie (prima
+ *    pagină, produs, coș, checkout, dashboard, comenzi…) au HTML identic cu codul
+ *    Bioscem însuși (compara-cu-baza.sh, la ultimul commit revizuit din docs/de-portat.md).
  * F. (--fiecare-plugin) Pe rând, fiecare plugin oprit cu restul pornite: aceleași
  *    verificări cu browserul ca la C, pentru pluginul oprit și cele care depind de el.
  * G. SEO (tools/dev/test-seo.php; sărit cu --fara-seo): adresa unică (www, „/” final,
@@ -355,8 +360,10 @@ $canonic = Licenta::jsonCanonic(json_decode((string) json_encode(['z' => "x\u{20
 $asteptat = '{"redirectionari":{"blog":"/pagină-ăîșț/€"},"z":"x' . "\u{2028}" . 'y' . "\u{2029}" . '"}';
 $dinNode = '';
 if (trim((string) shell_exec('command -v node 2>/dev/null')) !== '') {
-    $dinNode = (string) shell_exec('node -e ' . escapeshellarg('const o={redirectionari:{blog:"/pagină-ăîșț/€"},z:"x\u2028y\u2029"};'
-        . 'process.stdout.write(JSON.stringify(o))'));
+    // Scriptul stă într-un fișier: pe PHP 8.0 (php_min), escapeshellarg scoate literele cu diacritice.
+    file_put_contents($tmp . '/canonic.cjs', 'const o={redirectionari:{blog:"/pagină-ăîșț/€"},z:"x\u2028y\u2029"};'
+        . 'process.stdout.write(JSON.stringify(o))');
+    $dinNode = (string) shell_exec('node ' . escapeshellarg($tmp . '/canonic.cjs'));
 }
 $verifica('JSON canonic: U+2028/U+2029 și diacriticele scrise ca JSON.stringify (nu \\u2028)', $canonic === $asteptat
     && ($dinNode === '' || $dinNode === $canonic), $canonic . ' / node: ' . $dinNode);
@@ -375,6 +382,20 @@ if (in_array('--doar-licenta', $argv, true)) {
     $scrie('Rezultat: ' . $trecute . ' verificări trecute, ' . $esuate . ' eșuate.');
     exit($esuate === 0 ? 0 : 1);
 }
+
+// =====================================================================
+// B0. Instantaneul rutelor (fără server și fără bază)
+// =====================================================================
+$scrie('');
+$scrie('== B0. Instantaneul rutelor (tools/dev/instantanee/) și diferențele declarate ale comparației cu baza');
+$iesireB0 = [];
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' tools/dev/instantaneu-rute.php 2>&1', $iesireB0, $codB0);
+$verifica('instantaneul rutelor: ' . trim((string) end($iesireB0)), $codB0 === 0,
+    implode("\n          ", array_slice(array_filter($iesireB0, static fn (string $l): bool => !str_starts_with($l, '  OK')), 0, 40)));
+$iesireB0 = [];
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' tools/dev/compara-cu-baza.php --autotest 2>&1', $iesireB0, $codB0);
+$verifica('compara-cu-baza: marcajele de port și textele declarate (declarat dar lipsă, de două ori, nedeclarat, fără pereche)',
+    $codB0 === 0, implode("\n          ", $iesireB0));
 
 // =====================================================================
 // B. Garda rutelor, cu serverul de dezvoltare
@@ -487,49 +508,12 @@ $valoare = static function (string $tipar, string $nume, string $metoda) use ($m
     };
 };
 
-// Lista cererilor: fiecare rută din router, plus variantele rutelor împărțite și paginile pluginurilor.
+// Lista cererilor: fiecare rută din router, plus variantele rutelor împărțite și paginile
+// pluginurilor (aceeași listă ca instantaneul rutelor, tools/dev/lib/cereri-rute.php).
+require_once __DIR__ . '/lib/cereri-rute.php';
 $router = new Router();
 (require $radacina . '/src/Http/rute.php')($router);
-$cereri = [];
-foreach ($router->rute() as $ruta) {
-    $metoda = $ruta['metoda'];
-    $tipar = $ruta['tipar'];
-    $parametri = [];
-    $cale = (string) preg_replace_callback('#\{([a-zA-Z_][a-zA-Z0-9_]*)(\*?)\}#', static function (array $m) use ($tipar, $metoda, $valoare, &$parametri): string {
-        $v = $valoare($tipar, $m[1], $metoda);
-        $parametri[$m[1]] = $v;
-        return $m[2] === '*' ? implode('/', array_map('rawurlencode', explode('/', $v))) : rawurlencode($v);
-    }, str_replace('\\.', '.', $tipar));
-    $variante = [['get' => [], 'post' => [], 'parametri' => $parametri, 'cale' => $cale]];
-    $impartita = Plugins::impartitaNormalizata($metoda, $tipar);
-    if ($impartita !== null) {
-        $variante = [];
-        foreach ($impartita as [$conditii]) {
-            $v = ['get' => [], 'post' => [], 'parametri' => $parametri, 'cale' => $cale];
-            foreach ((array) $conditii as $cheie => $valori) {
-                [$sursa, $nume] = explode('.', (string) $cheie, 2);
-                $primul = rtrim((string) ((array) $valori)[0], '*');
-                if ($sursa === 'ruta') {
-                    $v['parametri'][$nume] = $primul;
-                    $v['cale'] = str_replace('/' . rawurlencode($parametri[$nume]), '/' . rawurlencode($primul), $v['cale']);
-                } else {
-                    $v[$sursa][$nume] = $primul . (str_ends_with((string) ((array) $valori)[0], '*') ? 'save' : '');
-                }
-            }
-            $variante[] = $v;
-        }
-    }
-    if ($tipar === '/{slug*}') {
-        foreach (Plugins::chei() as $cheie) {
-            foreach ((array) (Plugins::definitie($cheie)['pagini'] ?? []) as $pagina) {
-                $variante[] = ['get' => [], 'post' => [], 'parametri' => ['slug' => $pagina], 'cale' => '/' . $pagina];
-            }
-        }
-    }
-    foreach ($variante as $v) {
-        $cereri[] = ['metoda' => $metoda, 'tipar' => $tipar] + $v;
-    }
-}
+$cereri = cereri_rute($router, $valoare);
 $scrie('  INFO  ' . count($router->rute()) . ' rute, ' . count($cereri) . ' cereri pe scenariu');
 
 // Licențele scenariilor, semnate cu cheia de dezvoltare (ca tools/dev/licenta.php).
@@ -1648,7 +1632,7 @@ try {
 // =====================================================================
 if (!in_array('--fara-baza', $argv, true)) {
     $scrie('');
-    $scrie('== E. Licența „toate” și licența Bioscem: HTML identic cu codul dinaintea pluginurilor (tools/dev/compara-cu-baza.sh)');
+    $scrie('== E. Licența „toate” și licența Bioscem: HTML identic cu codul Bioscem (tools/dev/compara-cu-baza.sh)');
     foreach (['toate' => '', 'bioscem (fără unealta internă)' => ' --licenta=bioscem'] as $numeLicenta => $optiune) {
         $iesireBaza = [];
         exec(escapeshellarg($radacina . '/tools/dev/compara-cu-baza.sh') . $optiune . ' 2>&1', $iesireBaza, $codBaza);

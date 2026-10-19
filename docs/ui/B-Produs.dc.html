@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>Editare produs · varianta B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',system-ui,sans-serif;background:#f3f4f6;color:#111827}
+*,*::before,*::after{box-sizing:border-box}
+button,input,select,textarea{font:inherit}
+input::placeholder,textarea::placeholder{color:#6b7280}
+a{color:#1d4ed8}a:hover{color:#1e3a8a}
+</style>
+</helmet>
+<div style="display:flex; flex-wrap:wrap; align-items:stretch; min-height:100vh; background:#f3f4f6; color:#111827; font-family:'IBM Plex Sans', system-ui, sans-serif; font-size:14px; line-height:1.45;">
+
+<nav aria-label="Meniu principal" style="flex:1 1 224px; background:#111827; color:#d1d5db; padding:12px 10px 20px; display:flex; flex-direction:column; gap:14px;">
+<div style="display:flex; align-items:center; gap:10px; padding:4px 8px 12px; border-bottom:1px solid #1f2937;">
+<span aria-hidden="true" style="flex:0 0 auto; width:30px; height:30px; border-radius:6px; background:{{accent}}; color:#ffffff; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:600; font-size:14px;">A</span>
+<span style="display:flex; flex-direction:column; min-width:0;">
+<span style="font-size:14px; font-weight:600; color:#ffffff; line-height:1.25;">ANDAXI CMS</span>
+<span style="font-size:12px; color:#9ca3af; line-height:1.35;">Magazin Demo SRL</span>
+</span>
+</div>
+<ul style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px;">
+<li><a href="#" style="display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border-radius:6px; color:#d1d5db; text-decoration:none; font-weight:500;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path></svg><span>Acasă</span></a></li>
+<li><a href="#" style="display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border-radius:6px; color:#d1d5db; text-decoration:none; font-weight:500;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="M4 13h4l2 3h4l2-3h4"></path></svg><span style="flex:1 1 auto;">Comenzi</span><span style="min-width:24px; height:20px; padding:0 6px; border-radius:10px; background:{{accent}}; color:#ffffff; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:12px; font-weight:600; display:inline-flex; align-items:center; justify-content:center;">7</span><span style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;">comenzi noi</span></a></li>
+<li>
+<button type="button" aria-expanded="true" style="width:100%; display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#ffffff; font-weight:600; text-align:left; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"></path><path d="m3 8 9 5 9-5"></path><path d="M12 13v8"></path></svg><span style="flex:1 1 auto;">Produse</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<ul style="list-style:none; margin:2px 0 4px; padding:0; display:flex; flex-direction:column; gap:1px;">
+<li><a href="#" aria-current="page" style="display:flex; align-items:center; min-height:44px; padding:0 10px 0 36px; border-radius:6px; background:{{accent}}; color:#ffffff; text-decoration:none; font-size:13.5px; font-weight:500;">Produse</a></li>
+<li><a href="#" style="display:flex; align-items:center; min-height:44px; padding:0 10px 0 36px; border-radius:6px; color:#d1d5db; text-decoration:none; font-size:13.5px;">Categorii</a></li>
+<li><a href="#" style="display:flex; align-items:center; min-height:44px; padding:0 10px 0 36px; border-radius:6px; color:#d1d5db; text-decoration:none; font-size:13.5px;">Câmpuri și șabloane</a></li>
+<li><a href="#" style="display:flex; align-items:center; gap:8px; min-height:44px; padding:0 10px 0 36px; border-radius:6px; color:#d1d5db; text-decoration:none; font-size:13.5px;"><span style="flex:1 1 auto;">Recenzii</span><span style="min-width:22px; height:20px; padding:0 6px; border-radius:10px; background:#374151; color:#f9fafb; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:12px; font-weight:600; display:inline-flex; align-items:center; justify-content:center;">3</span><span style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;">recenzii de aprobat</span></a></li>
+<li><a href="#" style="display:flex; align-items:center; min-height:44px; padding:0 10px 0 36px; border-radius:6px; color:#d1d5db; text-decoration:none; font-size:13.5px;">Oferte BBD</a></li>
+<li><a href="#" style="display:flex; align-items:center; min-height:44px; padding:0 10px 0 36px; border-radius:6px; color:#d1d5db; text-decoration:none; font-size:13.5px;">Produse promoționale</a></li>
+</ul>
+</li>
+<li><button type="button" aria-expanded="false" style="width:100%; display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#d1d5db; font-weight:500; text-align:left; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"></path><path d="M16 4.5a3.5 3.5 0 0 1 0 7"></path><path d="M18 14.8c1.9.7 3.1 2.4 3.5 5.2"></path></svg><span style="flex:1 1 auto;">Clienți</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg></button></li>
+<li><button type="button" aria-expanded="false" style="width:100%; display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#d1d5db; font-weight:500; text-align:left; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1z"></path><path d="M17 9a4 4 0 0 1 0 6"></path></svg><span style="flex:1 1 auto;">Marketing</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg></button></li>
+<li><button type="button" aria-expanded="false" style="width:100%; display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#d1d5db; font-weight:500; text-align:left; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6v18h12V7z"></path><path d="M14 3v4h4"></path><path d="M9 12h6M9 16h6"></path></svg><span style="flex:1 1 auto;">Conținut</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg></button></li>
+<li><a href="#" style="display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border-radius:6px; color:#d1d5db; text-decoration:none; font-weight:500;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M6 17v-6"></path><path d="M11 17V6"></path><path d="M16 17v-4"></path></svg><span>Rapoarte</span></a></li>
+<li><button type="button" aria-expanded="false" style="width:100%; display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#d1d5db; font-weight:500; text-align:left; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"></path><circle cx="15" cy="6" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg><span style="flex:1 1 auto;">Setări</span><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg></button></li>
+</ul>
+<div style="border-top:1px solid #1f2937; padding-top:10px; display:flex; flex-direction:column; gap:6px;">
+<a href="#" style="display:flex; align-items:center; gap:10px; min-height:44px; padding:0 10px; border-radius:6px; color:#d1d5db; text-decoration:none; font-weight:500;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"></path><path d="M20 4 11 13"></path><path d="M18 14v6H4V6h6"></path></svg><span>Vezi site-ul</span></a>
+<div style="display:flex; align-items:center; gap:10px; padding:4px 0 0 10px;">
+<span aria-hidden="true" style="flex:0 0 auto; width:30px; height:30px; border-radius:50%; background:#374151; color:#f9fafb; font-size:12px; font-weight:600; display:flex; align-items:center; justify-content:center;">LI</span>
+<span style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; line-height:1.3;">
+<span style="color:#ffffff; font-size:13px; font-weight:500;">Laura Ilie</span>
+<span style="color:#9ca3af; font-size:12px;">Administrator</span>
+</span>
+<button type="button" style="flex:0 0 auto; min-height:44px; padding:0 10px; display:flex; align-items:center; gap:6px; border:1px solid #374151; border-radius:6px; background:transparent; color:#d1d5db; font-size:13px; cursor:pointer;"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4v16h-4"></path><path d="m10 8-4 4 4 4"></path><path d="M6 12h10"></path></svg>Ieșire</button>
+</div>
+</div>
+</nav>
+
+<div style="flex:999 1 560px; min-width:0; display:flex; flex-direction:column;">
+
+<header style="display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 20px; background:#ffffff; border-bottom:1px solid #e5e7eb;">
+<div role="search" style="flex:1 1 320px; max-width:720px; position:relative;">
+<label for="cauta-global" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;">Caută în tot magazinul</label>
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position:absolute; left:13px; top:13px; pointer-events:none;"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+<input id="cauta-global" type="search" placeholder="Caută comenzi, produse, clienți…" style="width:100%; height:44px; padding:0 86px 0 42px; border:1px solid #d1d5db; border-radius:6px; background:#f9fafb; color:#111827; font-size:14px;">
+<span aria-hidden="true" style="position:absolute; right:10px; top:12px; display:flex; gap:3px;"><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px; font-weight:500;">Ctrl</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px; font-weight:500;">K</kbd></span>
+</div>
+<div style="margin-left:auto; display:flex; align-items:center; gap:4px;">
+<button type="button" style="display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#374151; font-size:13px; font-weight:500; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"></path></svg>Scurtături<kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px; font-weight:500;">?</kbd></button>
+<button type="button" aria-label="Notificări, 3 necitite" style="position:relative; width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:6px; background:transparent; color:#374151; cursor:pointer;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"></path><path d="M10 21h4"></path></svg><span aria-hidden="true" style="position:absolute; top:7px; right:6px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:#b91c1c; color:#ffffff; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:10px; font-weight:600; display:flex; align-items:center; justify-content:center;">3</span></button>
+</div>
+</header>
+
+<div style="position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:6px 20px 6px 12px; background:#ffffff; border-bottom:1px solid #d1d5db;">
+<a href="#" aria-label="Înapoi la lista de produse" style="flex:0 0 auto; width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; color:#374151;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="m11 6-6 6 6 6"></path></svg></a>
+<div style="flex:1 1 280px; min-width:0;">
+<nav aria-label="Unde te afli" style="font-size:12px; color:#4b5563; line-height:1.3;"><a href="#" style="color:#374151;">Produse</a> <span aria-hidden="true">›</span> <a href="#" style="color:#374151;">Miere și produse apicole</a></nav>
+<div style="display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px;">
+<h1 style="margin:0; font-size:17px; line-height:1.35; font-weight:600;">Miere de manuka MGO 400+ 250 g</h1>
+<span style="display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:4px; background:#15803d; color:#ffffff; font-size:11.5px; font-weight:600;">Publicat</span>
+<span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:12px; color:#4b5563;">ID 1482</span>
+</div>
+</div>
+<div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px;">
+<span style="display:inline-flex; align-items:center; gap:6px; margin-right:4px; font-size:12.5px; font-weight:500; color:#92400e;"><span aria-hidden="true" style="width:8px; height:8px; border-radius:50%; background:#d97706;"></span>2 modificări nesalvate</span>
+<a href="#" aria-label="Produsul anterior" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#374151;"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"></path></svg></a>
+<a href="#" aria-label="Produsul următor" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#374151;"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg></a>
+<button type="button" style="min-height:44px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:#374151; font-size:13px; font-weight:500; cursor:pointer;">Renunță</button>
+<a href="#" style="display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:13px; font-weight:500; text-decoration:none;"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"></path><path d="M20 4 11 13"></path><path d="M18 14v6H4V6h6"></path></svg>Vezi pe site</a>
+<button type="button" style="display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:0 14px; border:1px solid transparent; border-radius:6px; background:{{accent}}; color:#ffffff; font-size:13px; font-weight:600; cursor:pointer;"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg>Salvează<span aria-hidden="true" style="display:inline-flex; gap:3px;"><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #bfdbfe; border-radius:4px; background:transparent; color:#ffffff; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">Ctrl</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #bfdbfe; border-radius:4px; background:transparent; color:#ffffff; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">S</kbd></span></button>
+</div>
+</div>
+
+<main style="width:100%; max-width:1400px; padding:14px 20px 32px; display:flex; flex-wrap:wrap; align-items:flex-start; gap:14px;">
+
+<div style="flex:999 1 560px; min-width:0; display:flex; flex-direction:column; gap:14px;">
+
+<section aria-labelledby="t-baza" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-baza" style="margin:0; font-size:14px; font-weight:600;">Informații de bază</h2>
+</div>
+<div style="display:flex; flex-direction:column; gap:14px; padding:14px;">
+<div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px;"><label for="p-nume" style="font-size:12.5px; font-weight:600; color:#374151;">Numele produsului</label><span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; color:#4b5563;">30 / 120</span></div>
+<input id="p-nume" type="text" value="Miere de manuka MGO 400+ 250 g" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px; font-weight:500;">
+</div>
+<div>
+<label for="p-slug" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Adresa paginii</label>
+<div style="display:flex; flex-wrap:wrap; gap:6px;">
+<div style="flex:1 1 320px; min-width:0; display:flex; align-items:stretch; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; background:#ffffff;">
+<span style="flex:0 0 auto; display:flex; align-items:center; padding:0 10px; background:#f3f4f6; border-right:1px solid #d1d5db; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:12.5px; white-space:nowrap;">magazindemo.ro/produs/</span>
+<input id="p-slug" type="text" value="miere-de-manuka-mgo-400-250-g" style="flex:1 1 auto; min-width:0; height:42px; padding:0 10px; border:0; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:13px;">
+</div>
+<button type="button" style="display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:13px; font-weight:500; cursor:pointer;"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"></path><path d="M20 4v5h-5"></path></svg>Refă din nume</button>
+</div>
+<p style="margin:4px 0 0; font-size:12px; color:#4b5563;">Dacă schimbi adresa, vechea adresă trimite automat clienții aici.</p>
+</div>
+<div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px;"><label for="p-scurta" style="font-size:12.5px; font-weight:600; color:#374151;">Descriere scurtă <span style="font-weight:400; color:#4b5563;">(apare lângă preț)</span></label><span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; color:#4b5563;">74 / 200</span></div>
+<textarea id="p-scurta" rows="2" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px; line-height:1.5; resize:vertical;">Miere de manuka din Noua Zeelandă, MGO 400+, în borcan de sticlă de 250 g.</textarea>
+</div>
+<div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px;"><label for="p-lunga" style="font-size:12.5px; font-weight:600; color:#374151;">Descriere completă</label><span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; color:#4b5563;">53 de cuvinte</span></div>
+<div role="toolbar" aria-label="Formatare text" aria-controls="p-lunga" style="display:flex; flex-wrap:wrap; align-items:center; padding:0 4px; border:1px solid #d1d5db; border-bottom:0; border-radius:6px 6px 0 0; background:#f9fafb;">
+<label for="p-stil" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;">Stilul textului</label>
+<select id="p-stil" style="height:44px; padding:0 6px; border:0; background:transparent; color:#111827; font-size:13px;">
+<option selected>Paragraf</option>
+<option>Titlu mare</option>
+<option>Titlu mic</option>
+</select>
+<span aria-hidden="true" style="width:1px; height:22px; margin:0 4px; background:#d1d5db;"></span>
+<button type="button" aria-label="Îngroșat (Ctrl B)" aria-pressed="false" style="width:44px; height:44px; border:0; border-radius:4px; background:transparent; color:#111827; font-weight:700; font-size:15px; cursor:pointer;">B</button>
+<button type="button" aria-label="Cursiv (Ctrl I)" aria-pressed="false" style="width:44px; height:44px; border:0; border-radius:4px; background:transparent; color:#111827; font-style:italic; font-size:15px; font-family:Georgia, serif; cursor:pointer;">I</button>
+<button type="button" aria-label="Subliniat (Ctrl U)" aria-pressed="false" style="width:44px; height:44px; border:0; border-radius:4px; background:transparent; color:#111827; text-decoration:underline; font-size:15px; cursor:pointer;">U</button>
+<span aria-hidden="true" style="width:1px; height:22px; margin:0 4px; background:#d1d5db;"></span>
+<button type="button" aria-label="Listă cu puncte" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:#111827; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"></path><path d="M4 6h.01M4 12h.01M4 18h.01"></path></svg></button>
+<button type="button" aria-label="Listă numerotată" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:#111827; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h10M10 12h10M10 18h10"></path><path d="M4 4.5h1.5V9"></path><path d="M3.5 13.5a1.5 1.5 0 0 1 3 0c0 1.2-3 2-3 3.5h3"></path></svg></button>
+<span aria-hidden="true" style="width:1px; height:22px; margin:0 4px; background:#d1d5db;"></span>
+<button type="button" aria-label="Adaugă link (Ctrl K)" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:#111827; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"></path><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg></button>
+<button type="button" aria-label="Adaugă imagine în text" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:#111827; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="m21 16-5-5-9 9"></path></svg></button>
+<span aria-hidden="true" style="width:1px; height:22px; margin:0 4px; background:#d1d5db;"></span>
+<button type="button" aria-label="Anulează ultima modificare (Ctrl Z)" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:#111827; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10a6 6 0 0 1 0 12h-3"></path></svg></button>
+<button type="button" aria-label="Refă modificarea (Ctrl Y)" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:4px; background:transparent; color:#111827; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"></path><path d="M20 9H10a6 6 0 0 0 0 12h3"></path></svg></button>
+</div>
+<textarea id="p-lunga" rows="9" style="display:block; width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:0 0 6px 6px; background:#ffffff; color:#111827; font-size:14px; line-height:1.6; resize:vertical;">Miere de manuka monoflorală, recoltată în Noua Zeelandă. Indicele MGO 400+ arată conținutul de metilglioxal, măsurat în laborator pentru fiecare lot.
+
+Mod de folosire: 1–2 lingurițe pe zi, simplă sau în ceai călduț (sub 40 °C).
+
+Păstrare: la temperatura camerei, ferită de lumina directă a soarelui. Nu se recomandă copiilor sub 1 an.</textarea>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="t-pret" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-pret" style="margin:0; font-size:14px; font-weight:600;">Preț și TVA</h2>
+<span style="font-size:12px; color:#4b5563;">prețurile includ TVA</span>
+</div>
+<div style="display:flex; flex-direction:column; gap:12px; padding:14px;">
+<div style="display:flex; flex-wrap:wrap; gap:12px;">
+<div style="flex:1 1 160px; min-width:0;">
+<label for="p-pret" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Preț de vânzare</label>
+<div style="display:flex; align-items:stretch; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; background:#ffffff;"><input id="p-pret" type="text" inputmode="decimal" value="149,90" style="flex:1 1 auto; min-width:0; height:42px; padding:0 10px; border:0; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:14px; text-align:right;"><span style="display:flex; align-items:center; padding:0 10px; background:#f3f4f6; border-left:1px solid #d1d5db; color:#374151; font-size:13px;">lei</span></div>
+</div>
+<div style="flex:1 1 160px; min-width:0;">
+<label for="p-redus" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Preț redus <span style="font-weight:400; color:#4b5563;">(opțional)</span></label>
+<div style="display:flex; align-items:stretch; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; background:#ffffff;"><input id="p-redus" type="text" inputmode="decimal" value="134,90" style="flex:1 1 auto; min-width:0; height:42px; padding:0 10px; border:0; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:14px; text-align:right;"><span style="display:flex; align-items:center; padding:0 10px; background:#f3f4f6; border-left:1px solid #d1d5db; color:#374151; font-size:13px;">lei</span></div>
+</div>
+<div style="flex:1 1 160px; min-width:0;">
+<label for="p-tva" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Cota de TVA</label>
+<select id="p-tva" style="width:100%; height:44px; padding:0 8px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px;">
+<option selected>11% (redusă, alimente)</option>
+<option>21% (standard)</option>
+</select>
+</div>
+</div>
+<div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+<div style="flex:1 1 160px; min-width:0;">
+<label for="p-red-de" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Reducerea începe</label>
+<input id="p-red-de" type="date" value="2026-10-15" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:13px;">
+</div>
+<div style="flex:1 1 160px; min-width:0;">
+<label for="p-red-pana" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Reducerea se termină</label>
+<input id="p-red-pana" type="date" value="2026-10-31" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:13px;">
+</div>
+<div style="flex:1 1 160px; min-width:0;"></div>
+</div>
+<dl style="margin:0; display:flex; flex-wrap:wrap; gap:6px 24px; padding:10px 12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; font-size:12.5px;">
+<div style="display:flex; gap:6px;"><dt style="color:#4b5563;">Fără TVA:</dt><dd style="margin:0; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500;">121,53 lei</dd></div>
+<div style="display:flex; gap:6px;"><dt style="color:#4b5563;">TVA inclus:</dt><dd style="margin:0; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500;">13,37 lei</dd></div>
+<div style="display:flex; gap:6px;"><dt style="color:#4b5563;">Reducere afișată:</dt><dd style="margin:0; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500;">−10%</dd></div>
+<div style="display:flex; gap:6px;"><dt style="color:#4b5563;">Cel mai mic preț în cele 30 de zile dinaintea reducerii:</dt><dd style="margin:0; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500;">149,90 lei</dd></div>
+</dl>
+</div>
+</section>
+
+<section aria-labelledby="t-stoc" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-stoc" style="margin:0; font-size:14px; font-weight:600;">Stoc și coduri</h2>
+</div>
+<div style="display:flex; flex-direction:column; gap:12px; padding:14px;">
+<p role="status" style="margin:0; display:flex; align-items:flex-start; gap:8px; padding:9px 12px; background:#fef3c7; border-radius:6px; color:#78350f; font-size:13px;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex:0 0 auto; margin-top:2px;"><path d="M12 3 2 20h20z"></path><path d="M12 10v4M12 17h.01"></path></svg><span>Stoc scăzut: mai sunt <strong>2 bucăți</strong>, iar una e deja într-o comandă neexpediată (<a href="#" style="color:#78350f; font-family:'IBM Plex Mono', ui-monospace, monospace;">DEMO-10245</a>).</span></p>
+<div style="display:flex; flex-wrap:wrap; gap:12px;">
+<div style="flex:1 1 130px; min-width:0;">
+<label for="p-stoc" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Bucăți în stoc</label>
+<input id="p-stoc" type="number" value="2" min="0" style="width:100%; height:44px; padding:0 10px; border:1px solid #d97706; border-radius:6px; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:14px; text-align:right;">
+</div>
+<div style="flex:1 1 130px; min-width:0;">
+<label for="p-prag" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Anunță-mă sub</label>
+<input id="p-prag" type="number" value="5" min="0" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:14px; text-align:right;">
+</div>
+<div style="flex:1 1 160px; min-width:0;">
+<label for="p-sku" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Cod produs (SKU)</label>
+<input id="p-sku" type="text" value="DEMO-MMK-250" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:13.5px;">
+</div>
+<div style="flex:1 1 170px; min-width:0;">
+<label for="p-ean" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Cod de bare (EAN)</label>
+<input id="p-ean" type="text" inputmode="numeric" value="5949990012345" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:13.5px;">
+</div>
+<div style="flex:1 1 130px; min-width:0;">
+<label for="p-greutate" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Greutate colet</label>
+<div style="display:flex; align-items:stretch; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; background:#ffffff;"><input id="p-greutate" type="text" inputmode="decimal" value="0,35" style="flex:1 1 auto; min-width:0; height:42px; padding:0 10px; border:0; background:#ffffff; color:#111827; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:14px; text-align:right;"><span style="display:flex; align-items:center; padding:0 10px; background:#f3f4f6; border-left:1px solid #d1d5db; color:#374151; font-size:13px;">kg</span></div>
+</div>
+</div>
+<div>
+<label for="p-stoc0" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Când nu mai e pe stoc</label>
+<select id="p-stoc0" style="width:100%; max-width:520px; height:44px; padding:0 8px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px;">
+<option selected>Rămâne pe site cu mesajul „Stoc epuizat”</option>
+<option>Se poate comanda în avans (precomandă)</option>
+<option>Dispare de pe site până revine pe stoc</option>
+</select>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="t-imagini" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-imagini" style="margin:0; font-size:14px; font-weight:600;">Imagini <span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500; color:#4b5563;">(4)</span></h2>
+<span style="font-size:12px; color:#4b5563;">trage o imagine ca să schimbi ordinea</span>
+</div>
+<div style="display:flex; flex-direction:column; gap:12px; padding:14px;">
+<ul style="list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
+<li style="width:200px; border:2px solid {{accent}}; border-radius:6px; overflow:hidden;">
+<div role="img" aria-label="Imaginea principală: borcanul de miere, din față" style="height:196px; background:#fde68a; display:flex; align-items:center; justify-content:center; color:#92400e;"><svg aria-hidden="true" width="84" height="84" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h8v3H8z"></path><path d="M7 6h10l1 3v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9z"></path><path d="M6 12h12M6 16h12"></path></svg></div>
+<div style="display:flex; align-items:center; justify-content:space-between; gap:4px; padding-left:8px; background:#ffffff;">
+<span style="display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 7px; border-radius:4px; background:{{accent}}; color:#ffffff; font-size:11.5px; font-weight:600;"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1 6.2L12 17.4l-5.5 2.9 1-6.2L3 9.7l6.2-.9z"></path></svg>Principală</span>
+<button type="button" aria-label="Mai multe opțiuni pentru imaginea principală" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; background:transparent; color:#374151; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</li>
+<li style="width:140px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
+<div role="img" aria-label="Imaginea 2: borcanul, din lateral" style="height:138px; background:#fef3c7; display:flex; align-items:center; justify-content:center; color:#92400e;"><svg aria-hidden="true" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v3H9z"></path><path d="M8 6h8l1 3v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9z"></path></svg></div>
+<div style="display:flex; align-items:center; justify-content:space-between; padding-left:2px; background:#ffffff;">
+<button type="button" style="min-height:44px; padding:0 6px; border:0; background:transparent; color:#1d4ed8; font-size:12.5px; font-weight:500; cursor:pointer;">Fă principală</button>
+<button type="button" aria-label="Mai multe opțiuni pentru imaginea 2" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; background:transparent; color:#374151; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</li>
+<li style="width:140px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
+<div role="img" aria-label="Imaginea 3: eticheta cu valorile nutriționale" style="height:138px; background:#e7e5e4; display:flex; align-items:center; justify-content:center; color:#44403c;"><svg aria-hidden="true" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"></rect><path d="M8 8h8M8 11h8M8 14h5M8 17h6"></path></svg></div>
+<div style="display:flex; align-items:center; justify-content:space-between; padding-left:2px; background:#ffffff;">
+<button type="button" style="min-height:44px; padding:0 6px; border:0; background:transparent; color:#1d4ed8; font-size:12.5px; font-weight:500; cursor:pointer;">Fă principală</button>
+<button type="button" aria-label="Mai multe opțiuni pentru imaginea 3" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; background:transparent; color:#374151; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</li>
+<li style="width:140px; border:1px solid #e5e7eb; border-radius:6px; overflow:hidden;">
+<div role="img" aria-label="Imaginea 4: o linguriță de miere" style="height:138px; background:#fed7aa; display:flex; align-items:center; justify-content:center; color:#9a3412;"><svg aria-hidden="true" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="8" rx="4" ry="5"></ellipse><path d="m11 11 9 9"></path></svg></div>
+<div style="display:flex; align-items:center; justify-content:space-between; padding-left:2px; background:#ffffff;">
+<button type="button" style="min-height:44px; padding:0 6px; border:0; background:transparent; color:#1d4ed8; font-size:12.5px; font-weight:500; cursor:pointer;">Fă principală</button>
+<button type="button" aria-label="Mai multe opțiuni pentru imaginea 4" style="width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border:0; background:transparent; color:#374151; cursor:pointer;"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</li>
+<li style="width:140px;">
+<button type="button" style="width:140px; height:184px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:10px; border:1.5px dashed #9ca3af; border-radius:6px; background:#f9fafb; color:#111827; text-align:center; cursor:pointer;"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M4 20h16"></path></svg><span style="font-size:13px; font-weight:600;">Adaugă imagini</span><span style="font-size:12px; color:#4b5563; line-height:1.35;">sau trage fișierele aici<br>JPG, PNG, WebP · max. 5 MB</span></button>
+</li>
+</ul>
+<div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px;"><label for="p-alt" style="font-size:12.5px; font-weight:600; color:#374151;">Descrierea imaginii principale <span style="font-weight:400; color:#4b5563;">(pentru Google și pentru cititoarele de ecran)</span></label><span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; color:#4b5563;">41 / 125</span></div>
+<input id="p-alt" type="text" value="Borcan de miere de manuka MGO 400+, 250 g" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px;">
+</div>
+</div>
+</section>
+
+<section aria-labelledby="t-seo" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-seo" style="margin:0; font-size:14px; font-weight:600;">Cum apare în Google</h2>
+<span style="font-size:12px; color:#4b5563;">SEO</span>
+</div>
+<div style="display:flex; flex-wrap:wrap; gap:16px; padding:14px;">
+<div style="flex:1 1 300px; min-width:0; display:flex; flex-direction:column; gap:12px;">
+<div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px;"><label for="p-seo-titlu" style="font-size:12.5px; font-weight:600; color:#374151;">Titlu în Google</label><span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; color:#166534; font-weight:500;">45 / 60</span></div>
+<input id="p-seo-titlu" type="text" value="Miere de manuka MGO 400+ 250 g | Magazin Demo" style="width:100%; height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px;">
+<div aria-hidden="true" style="margin-top:5px; height:4px; border-radius:2px; background:#e5e7eb;"><div style="width:75%; height:4px; border-radius:2px; background:#15803d;"></div></div>
+<p style="margin:4px 0 0; font-size:12px; color:#166534;">Lungime bună. Google arată de obicei până la 60 de caractere.</p>
+</div>
+<div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:4px;"><label for="p-seo-desc" style="font-size:12.5px; font-weight:600; color:#374151;">Descriere în Google</label><span style="font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11.5px; color:#166534; font-weight:500;">124 / 160</span></div>
+<textarea id="p-seo-desc" rows="3" style="width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px; line-height:1.5; resize:vertical;">Miere de manuka MGO 400+ din Noua Zeelandă, borcan de 250 g. Livrare prin FAN Courier sau în FANbox, în 1–2 zile lucrătoare.</textarea>
+<div aria-hidden="true" style="margin-top:3px; height:4px; border-radius:2px; background:#e5e7eb;"><div style="width:77.5%; height:4px; border-radius:2px; background:#15803d;"></div></div>
+<p style="margin:4px 0 0; font-size:12px; color:#166534;">Lungime bună. Ideal între 120 și 160 de caractere.</p>
+</div>
+</div>
+<div style="flex:1 1 300px; min-width:0;">
+<p style="margin:0 0 6px; font-size:12.5px; font-weight:600; color:#374151;">Previzualizare în rezultatele Google</p>
+<div style="padding:14px 16px; border:1px solid #e5e7eb; border-radius:8px; background:#ffffff;">
+<div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+<span aria-hidden="true" style="width:26px; height:26px; border-radius:50%; background:#f3f4f6; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px; font-weight:600; color:#374151;">M</span>
+<span style="display:flex; flex-direction:column; line-height:1.3; min-width:0;"><span style="font-size:13px; color:#202124;">Magazin Demo</span><span style="font-size:12px; color:#4d5156; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">magazindemo.ro › produs › miere-de-manuka-mgo-400-250-g</span></span>
+</div>
+<p style="margin:0; font-size:18px; line-height:1.3; color:#1a0dab;">Miere de manuka MGO 400+ 250 g | Magazin Demo</p>
+<p style="margin:3px 0 0; font-size:13px; line-height:1.5; color:#4d5156;">Miere de manuka MGO 400+ din Noua Zeelandă, borcan de 250 g. Livrare prin FAN Courier sau în FANbox, în 1–2 zile lucrătoare.</p>
+<p style="margin:4px 0 0; font-size:13px; color:#4d5156;">134,90 lei · În stoc · Evaluare 4,8 (23)</p>
+</div>
+</div>
+</div>
+</section>
+
+</div>
+
+<aside aria-label="Starea produsului" style="flex:1 1 300px; min-width:0; display:flex; flex-direction:column; gap:14px;">
+
+<section aria-labelledby="t-stare" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-stare" style="margin:0; font-size:14px; font-weight:600;">Stare</h2>
+<span style="display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:4px; background:#15803d; color:#ffffff; font-size:11.5px; font-weight:600;">Publicat</span>
+</div>
+<div style="padding:6px 14px 12px;">
+<button type="button" role="switch" aria-checked="true" style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:48px; padding:0; border:0; background:transparent; color:#111827; text-align:left; cursor:pointer;"><span style="display:flex; flex-direction:column; line-height:1.35;"><span style="font-size:14px; font-weight:600;">Vizibil pe site</span><span style="font-size:12px; color:#4b5563;">Clienții îl văd și îl pot cumpăra.</span></span><span aria-hidden="true" style="flex:0 0 auto; position:relative; width:40px; height:22px; border-radius:11px; background:{{accent}};"><span style="position:absolute; top:3px; left:21px; width:16px; height:16px; border-radius:50%; background:#ffffff;"></span></span></button>
+<button type="button" role="switch" aria-checked="false" style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:48px; padding:0; border:0; border-top:1px solid #f0f1f3; background:transparent; color:#111827; text-align:left; cursor:pointer;"><span style="display:flex; flex-direction:column; line-height:1.35;"><span style="font-size:14px; font-weight:600;">Recomandat pe prima pagină</span><span style="font-size:12px; color:#4b5563;">Apare în lista „Produse recomandate”.</span></span><span aria-hidden="true" style="flex:0 0 auto; position:relative; width:40px; height:22px; border-radius:11px; background:#6b7280;"><span style="position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:#ffffff;"></span></span></button>
+<dl style="margin:8px 0 0; padding-top:10px; border-top:1px solid #e5e7eb; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); row-gap:6px; column-gap:10px; font-size:12.5px;">
+<dt style="color:#4b5563;">Ultima salvare</dt><dd style="margin:0; text-align:right;">azi, <span style="font-family:'IBM Plex Mono', ui-monospace, monospace;">09:14</span> · Laura Ilie</dd>
+<dt style="color:#4b5563;">Adăugat</dt><dd style="margin:0; text-align:right; font-family:'IBM Plex Mono', ui-monospace, monospace;">12.03.2026</dd>
+<dt style="color:#4b5563;">ID produs</dt><dd style="margin:0; text-align:right; font-family:'IBM Plex Mono', ui-monospace, monospace;">1482</dd>
+<dt style="color:#4b5563;">În ERP</dt><dd style="margin:0; text-align:right; display:flex; justify-content:flex-end; align-items:center; gap:4px;"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg>legat, cod <span style="font-family:'IBM Plex Mono', ui-monospace, monospace;">DEMO-MMK-250</span></dd>
+</dl>
+<a href="#" style="display:inline-flex; align-items:center; min-height:44px; margin-top:2px; font-size:13px; font-weight:500; text-decoration:none;">Istoricul modificărilor</a>
+</div>
+</section>
+
+<section aria-labelledby="t-org" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-org" style="margin:0; font-size:14px; font-weight:600;">Organizare</h2>
+</div>
+<div style="display:flex; flex-direction:column; gap:12px; padding:12px 14px 14px;">
+<div>
+<label for="p-categ" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Categoria principală</label>
+<select id="p-categ" style="width:100%; height:44px; padding:0 8px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px;">
+<option selected>Miere și produse apicole</option>
+<option>Uleiuri</option>
+<option>Vitamine și minerale</option>
+<option>Ceaiuri</option>
+</select>
+</div>
+<div>
+<p id="p-alte-lbl" style="margin:0 0 4px; font-size:12.5px; font-weight:600; color:#374151;">Apare și în</p>
+<div aria-labelledby="p-alte-lbl" role="group" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px;">
+<span style="display:inline-flex; align-items:center; height:26px; padding:0 9px; border-radius:4px; background:#f3f4f6; border:1px solid #e5e7eb; font-size:12.5px;">Superalimente</span>
+<span style="display:inline-flex; align-items:center; height:26px; padding:0 9px; border-radius:4px; background:#f3f4f6; border:1px solid #e5e7eb; font-size:12.5px;">Idei de cadouri</span>
+<button type="button" style="min-height:44px; padding:0 6px; border:0; background:transparent; color:#1d4ed8; font-size:13px; font-weight:500; cursor:pointer;">Modifică</button>
+</div>
+</div>
+<div>
+<label for="p-brand" style="display:block; margin-bottom:4px; font-size:12.5px; font-weight:600; color:#374151;">Brand</label>
+<select id="p-brand" style="width:100%; height:44px; padding:0 8px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:14px;">
+<option selected>Natura Demo</option>
+<option>Fără brand</option>
+</select>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="t-vanzari" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-vanzari" style="margin:0; font-size:14px; font-weight:600;">Vânzări în ultimele 30 de zile</h2>
+</div>
+<dl style="margin:0; padding:10px 14px 12px; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); row-gap:6px; column-gap:10px; font-size:12.5px;">
+<dt style="color:#4b5563;">Bucăți vândute</dt><dd style="margin:0; text-align:right; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500;">64</dd>
+<dt style="color:#4b5563;">Încasări</dt><dd style="margin:0; text-align:right; font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:500;">8.633,60 lei</dd>
+<dt style="color:#4b5563;">Recenzii</dt><dd style="margin:0; text-align:right;"><a href="#" style="font-family:'IBM Plex Mono', ui-monospace, monospace;">4,8 din 5 (23)</a></dd>
+<dt style="color:#4b5563;">Ultima comandă</dt><dd style="margin:0; text-align:right;"><a href="#" style="font-family:'IBM Plex Mono', ui-monospace, monospace;">DEMO-10245</a></dd>
+</dl>
+</section>
+
+<section aria-labelledby="t-scurt" style="background:#ffffff; border:1px solid #e5e7eb; border-radius:6px;">
+<div style="display:flex; align-items:center; gap:8px; padding:0 14px; min-height:44px; border-bottom:1px solid #e5e7eb;">
+<h2 id="t-scurt" style="margin:0; font-size:14px; font-weight:600;">Scurtături pe pagina asta</h2>
+</div>
+<ul style="list-style:none; margin:0; padding:10px 14px 12px; display:flex; flex-direction:column; gap:7px; font-size:12.5px; color:#374151;">
+<li style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span>Salvează</span><span style="display:inline-flex; gap:3px;"><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">Ctrl</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">S</kbd></span></li>
+<li style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span>Vezi pe site</span><span style="display:inline-flex; gap:3px;"><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">Ctrl</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">Shift</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">V</kbd></span></li>
+<li style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span>Produsul anterior / următor</span><span style="display:inline-flex; gap:3px;"><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">Alt</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">←</kbd><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">→</kbd></span></li>
+<li style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span>Înapoi la listă</span><kbd style="display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:20px; padding:0 5px; border:1px solid #d1d5db; border-bottom-width:2px; border-radius:4px; background:#ffffff; color:#374151; font-family:'IBM Plex Mono', ui-monospace, monospace; font-size:11px;">Esc</kbd></li>
+</ul>
+</section>
+
+<div style="display:flex; flex-wrap:wrap; gap:6px;">
+<button type="button" style="display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#ffffff; color:#111827; font-size:13px; font-weight:500; cursor:pointer;"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V4H4v12h4"></path></svg>Duplică produsul</button>
+<button type="button" style="display:inline-flex; align-items:center; gap:6px; min-height:44px; padding:0 10px; border:1px solid #fecaca; border-radius:6px; background:#ffffff; color:#b91c1c; font-size:13px; font-weight:500; cursor:pointer;"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"></path></svg>Șterge produsul</button>
+</div>
+
+</aside>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000},"accent":{"editor":"color","default":"#2563eb"}}'>
+class Component extends DCLogic {
+renderVals() {
+return { };
+}
+}
+</script>
+</body>
+</html>

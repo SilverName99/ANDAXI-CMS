@@ -19,9 +19,13 @@ declare(strict_types=1);
  * nicio licență nu se verifică (atunci site-ul ar merge doar pe ultima licență
  * aplicată sau, pe un site nou, doar cu nucleul).
  *
+ * Arată și versiunea de PHP a liniei de comandă față de minimul cerut de cod
+ * (`php_min` din config/app.php) și iese cu 1 sub el. Versiunea site-ului (web) poate
+ * fi alta: pe Hostinger se vede în hPanel → PHP Configuration.
+ *
  * Rulare:
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php
- *   /usr/bin/php /cale/catre/scripts/diagnostic.php --licenta    # doar licența (verificarea dinaintea unui deploy)
+ *   /usr/bin/php /cale/catre/scripts/diagnostic.php --licenta    # doar licența și PHP-ul (verificarea dinaintea unui deploy)
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -41,6 +45,14 @@ use App\Support\Plugins;
 use App\Support\Settings;
 
 $config = require __DIR__ . '/../config/app.php';
+
+// PHP-ul minim pe care trebuie să meargă codul (config/app.php → php_min).
+$phpMin = (string) ($config['php_min'] ?? '8.0');
+$phpPreaVechi = version_compare(PHP_VERSION, $phpMin, '<');
+$arataPhp = static function () use ($phpMin, $phpPreaVechi): void {
+    echo 'versiune PHP (CLI)  : ' . PHP_VERSION . ', minim ' . $phpMin
+        . ($phpPreaVechi ? ' -> PREA VECHE: codul nu e făcut pentru ea (config/app.php php_min)' : ' -> ok') . "\n";
+};
 
 /** Licența: se verifică acum? Întoarce true dacă da. */
 $arataLicenta = static function (): bool {
@@ -74,7 +86,9 @@ $arataLicenta = static function (): bool {
 };
 
 if (in_array('--licenta', $argv, true)) {
-    exit($arataLicenta() ? 0 : 1);
+    $licentaOk = $arataLicenta();
+    $arataPhp();
+    exit($licentaOk && !$phpPreaVechi ? 0 : 1);
 }
 
 echo "=== Mediu ===\n";
@@ -82,7 +96,7 @@ echo 'radacina aplicatiei : ' . dirname(__DIR__) . "\n";
 echo 'fisier .env         : ' . ($envExista ? $envPath : 'LIPSESTE') . "\n";
 echo 'citibil             : ' . ($envCitibil ? 'da' : 'NU (cronul ruleaza cu alt utilizator?)') . "\n";
 echo 'utilizator sistem   : ' . (function_exists('posix_geteuid') ? (string) posix_geteuid() : 'necunoscut') . "\n";
-echo 'versiune PHP        : ' . PHP_VERSION . "\n";
+$arataPhp();
 
 echo "\n=== Baza de date ===\n";
 echo 'host      : ' . (string) ($config['db']['host'] ?? '') . "\n";
@@ -153,4 +167,4 @@ echo "\n";
 $licentaOk = $arataLicenta();
 
 echo "\nGata.\n";
-exit($licentaOk ? 0 : 1);
+exit($licentaOk && !$phpPreaVechi ? 0 : 1);

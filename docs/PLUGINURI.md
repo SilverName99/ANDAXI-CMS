@@ -9,15 +9,16 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 
 | Fișier | Ce e |
 |---|---|
-| `config/plugins.php` | **Catalogul**: pentru fiecare plugin numele, descrierea, de ce are nevoie, rutele, paginile, intrările din meniu, cronurile, tabelele. Plus ordinea meniului adminului, rutele împărțite între pluginuri și pachetele de abonament. |
+| `config/plugins.php` | **Catalogul**: pentru fiecare plugin numele, descrierea, de ce are nevoie, rutele, paginile, intrările din meniu, cronurile, tabelele. Plus ordinea meniului adminului, rutele împărțite între pluginuri, pachetele de abonament și licențele de dezvoltare ale celor patru site-uri existente (`licente_dev`, doar pentru teste). |
 | `src/Support/Licenta.php` | Citirea și verificarea licenței (`storage/licenta/licenta.json`) și memoria „ultima bună”. Aici se adaugă în Etapa 2 preluarea de la CRM. |
 | `src/Support/Plugins.php` | Întrebările pentru tot codul: `activ`, `permiteInceput`, `vizibil`, `stare`; regula dependențelor; proprietarul unei rute; meniul. |
 | `src/Http/rute.php` | Toate rutele site-ului (mutate din `public/index.php`). |
 | `src/Http/GardaPluginuri.php` | Garda routerului: o rută a unui plugin care nu e pe site nu ajunge la controller. |
 | `tools/dev/licenta.php` | Chei și licențe de test (dezvoltare). |
 | `tools/dev/verifica-rute.php` | Verifică că fiecare rută are proprietar, că catalogul corespunde codului și că blocurile pluginurilor din șabloane închid HTML-ul pe care îl deschid. |
+| `tools/dev/instantaneu-rute.php` | Instantaneul rutelor: ce face garda cu fiecare rută, meniul și cronurile, pe fiecare licență de test, față de fișierele din `tools/dev/instantanee/` (în git); plus regulile fixe care nu depind de catalog. |
 | `tools/dev/test-pluginuri.php` | Testele: licența, garda, fiecare pachet parcurs pagină cu pagină (și cu browserul, inclusiv textul vizibil), „se oprește”, comparația cu codul de bază, la cerere fiecare plugin oprit pe rând. |
-| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența reală a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`); diferențele așteptate (SEO și schimbările portate din Bioscem) sunt scrise explicit și se scot înainte. |
+| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența de dezvoltare a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului Bioscem însuși (ultimul commit revizuit din `docs/de-portat.md`); diferențele voite sunt declarate explicit, cu motivul lor, și se scot înainte. Istoric: `--baza=f5ae5ea`, codul dinaintea pluginurilor. |
 | `scripts/diagnostic.php --licenta` | Verificarea dinaintea unui deploy: licența se verifică cu cheia și site-ul din `.env`? Iese cu 1 dacă nu. |
 | `tools/dev/crawl-pachet.cjs` | Trecerea cu Playwright prin paginile unui pachet (DOM și text după JavaScript, ferestrele comenzilor și ale produselor, contul clientului, erori JS, captura meniului). |
 | `tools/dev/test-seo.php` | Testele SEO pe fiecare pachet: sitemap, robots.txt, date structurate, redirecționări (niciodată pe adresele mereu deschise). Vezi [SEO.md](SEO.md). |
@@ -211,7 +212,7 @@ puse exact în locurile unde începe ceva nou:
   JavaScript, separatoare de meniu) rămân neatinse. Conținutul din `<script>`,
   `<style>` și `<textarea>` nu se atinge. Cu toate pluginurile care au cod pe
   site filtrul nici nu rulează; uneltele interne (migrarea din WordPress) nu
-  contează aici, deci nici licența reală a Bioscem, fără ele, nu-l pornește.
+  contează aici, deci nici licența de dezvoltare a Bioscem, fără ele, nu-l pornește.
 - **Codurile din pagini** (`{{shop_catalog}}`, `{{latest_posts:3}}` …) ale unui
   plugin ascuns se scot din pagină (`Plugins::curataTokenuri`, lista lor e în
   catalog la „tokenuri”); în editorul de pagini nu mai apar în lista de coduri.
@@ -279,18 +280,18 @@ puse exact în locurile unde începe ceva nou:
   ERP” a BT și restricția unui cupon pe utilizatori (fără conturi de clienți)
   rămân în bază neatinse.
 
-Cu licența „toate” și cu licența reală a Bioscem (toate pluginurile portate, fără
-unealta internă) nimic din toate acestea nu schimbă vreun octet: paginile-cheie
-(prima pagină, produs, coș, checkout, contul clientului, linkul de plată,
+Cu licența „toate” și cu licența de dezvoltare a Bioscem (lista explicită din
+`licente_dev`, fără unealta internă) nimic din toate acestea nu schimbă vreun octet:
+paginile-cheie (prima pagină, produs, coș, checkout, contul clientului, linkul de plată,
 dashboard, comenzi cu fereastra comenzii, produse, clienți, cupoane, setări,
 coșul flotant, administratori, emailuri, editorul de pagini, pe patru roluri de
-admin) și pagina pe care ajunge fiecare rol după login se compară cu codul de
-dinainte (`compara-cu-baza.sh`). Singurele diferențe sunt cele ale livrării 1 SEO
-(datele structurate, robots.txt, width/height și poza principală, stilurile
-catalogului, textul „Sitemap XML”, [SEO.md](SEO.md)) și cele ale schimbărilor
-portate din Bioscem după aceea (fraza despre coletele alese în ERP din Setări
-livrare), scrise una câte una în `compara-cu-baza.php` și scoase explicit înainte
-de comparare.
+admin), pagina pe care ajunge fiecare rol după login, sitemap-ul și harta adreselor
+vechi se compară cu **codul Bioscem însuși**, la ultimul commit revizuit
+(`compara-cu-baza.sh`, cu datele site-ului din `site-uri/bioscem/`). Singurele
+diferențe sunt scrise una câte una, cu motivul lor, în `$deBioscem` din
+`compara-cu-baza.php` și în `site-uri/bioscem/ce-se-schimba.md`: azi explicația
+„Sitemap XML” din Setări magazin (pomenește și articolele) și locul regulii
+`/cos-cumparaturi` în robots.txt, ambele din portarea generalizată a livrării 1 SEO.
 
 ## Pluginurile, unul câte unul
 
@@ -428,7 +429,9 @@ dispar, iar linkurile spre el se scot din pagini.
   coș; expeditorul FAN pe gestiuni; cronul `scripts/erp-sync.php` („vizibil”);
   adresele `/api/erp/notificare` și `/api/erp/adrese` (mereu deschise). Tabel:
   `orders.erp_*`.
-- **Are nevoie de**: magazin.
+- **Are nevoie de**: magazin. Ține de bani (`'bani' => true` în catalog, ca plățile):
+  la CRM trece în „oprit” cel mai devreme după 30 de zile de „se oprește” (OD-36, D7);
+  pe site nimic nu citește încă marcajul.
 - **Se oprește**: comenzile plasate **înainte** de oprire pleacă în ERP ca de
   obicei, oricând li s-ar confirma plata (EuPlătesc, BT, Stripe, OP) sau ar trece
   prin reîncercările cronului; doar o comandă plasată **după** momentul în care
@@ -696,22 +699,30 @@ conturilor de clienți).
 ## Dezvoltare
 
 `tools/dev/instaleaza.sh` pune licența „toate” (toate pluginurile, inclusiv unealta
-internă). Licența reală a Bioscem e „bioscem” (tot ce are cod, fără unealta
-internă). Altă licență:
+internă). Licențele de dezvoltare ale celor patru site-uri existente sunt scrise
+explicit în `config/plugins.php` → `licente_dev`: `bioscem` (ce avea codul Bioscem la
+`4915478`, fără unealta internă), `biovitality`, `vertij`, `grafoanaytis` (catalog și
+cereri de ofertă). Sunt liste pentru teste, după codul vechi al fiecărui site, nu
+contractul clientului (acela e în CRM). Un plugin portat mai târziu nu intră singur
+în ele: intră doar scris explicit, cu motivul lui (`instantaneu-rute.php` pică dacă
+lista Bioscem se schimbă). Altă licență:
 
 ```sh
-tools/dev/php.sh tools/dev/licenta.php prezentare            # sau catalog, magazin, asociatie, toate, bioscem
+tools/dev/php.sh tools/dev/licenta.php prezentare            # sau catalog, magazin, asociatie, toate, bioscem, grafoanaytis…
 tools/dev/php.sh tools/dev/licenta.php magazin cupoane=pornit magazin=se_opreste
 tools/dev/php.sh tools/dev/licenta.php fara                  # fără licență și fără stare aplicată: doar nucleul
 tools/dev/php.sh tools/dev/licenta.php arata                 # ce licență e folosită și ce probleme are
 tools/dev/php.sh tools/dev/verifica-rute.php                 # fiecare rută cu proprietarul ei
+tools/dev/php.sh tools/dev/instantaneu-rute.php              # suprafața fiecărei licențe față de tools/dev/instantanee/
+tools/dev/php.sh tools/dev/instantaneu-rute.php --actualizeaza   # după o schimbare voită (fișierele intră în commit)
 tools/dev/php.sh tools/dev/test-pluginuri.php                # toate testele (pornește singur serverul)
 tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus fiecare plugin oprit pe rând, cu restul pornite (~20 min)
 tools/dev/php.sh tools/dev/test-pluginuri.php --fara-garda   # fără cererea fiecărei rute (mai repede)
 tools/dev/php.sh tools/dev/test-pluginuri.php --capturi=DIR  # capturile meniului adminului, pe pachete, în DIR
-tools/dev/compara-cu-baza.sh                                 # „toate” = HTML identic cu codul de bază
-tools/dev/compara-cu-baza.sh --licenta=bioscem               # la fel, cu licența reală a Bioscem (fără unealta internă)
+tools/dev/compara-cu-baza.sh                                 # „toate” = HTML identic cu codul Bioscem
+tools/dev/compara-cu-baza.sh --licenta=bioscem               # la fel, cu licența de dezvoltare a Bioscem (fără unealta internă)
 tools/dev/smoke.sh --toate-pachetele                         # testul de fum pe fiecare pachet
+tools/dev/smoke.sh --pachet=grafoanaytis                     # pe licența unui site existent
 tools/dev/php.sh scripts/diagnostic.php --licenta            # se verifică licența? (ca înaintea unui deploy)
 ```
 
@@ -729,6 +740,9 @@ unde pluginul e oprit. Un plugin nou își trece în catalog și codurile
 („tokenuri”) și paginile din bază („pagini”), ca filtrele să le găsească; dacă
 are coduri în editorul de pagini, previzualizarea lor intră în
 `AdminController::previzualizariEditorPagini` (calculată doar cu pluginul pe site).
+O rută nouă (sau un proprietar schimbat) schimbă instantaneul rutelor: se rulează
+`instantaneu-rute.php --actualizeaza`, iar fișierele din `tools/dev/instantanee/` intră în
+același commit, ca schimbarea suprafeței fiecărui pachet să se vadă la revizie.
 O acțiune a unui plugin trimisă printr-o rută comună (de exemplu `bulk_action` din
 comenzi) se declară în `rute_impartite`, ca garda s-o oprească; verificarea se
 pune și acolo unde se face lucrul (de exemplu `createFanAwbInternal`).

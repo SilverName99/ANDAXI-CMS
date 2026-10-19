@@ -1,0 +1,172 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Diferențele așteptate față de codul de bază, folosite de tools/dev/compara-cu-baza.php.
+ * Se scot doar din pagina codului curent; restul paginii se compară octet cu octet.
+ *
+ *  - texte declarate: [nume, cale, nou, vechi, motiv]. „nou” e textul exact scris de
+ *    codul curent, „vechi” ce scrie codul de bază în locul lui; fiecare trebuie găsit
+ *    exact o dată pe fiecare pagină a lui și niciodată pe altă pagină;
+ *  - marcaje de port: `<!--port:<sursa>:<NUME>-->…<!--/port:<sursa>:<NUME>-->` (scrise de
+ *    App\Support\Dev::marcaj); blocul întreg se scoate. Fiecare nume e declarat o
+ *    singură dată, cu pagina lui, și trebuie găsit exact o dată pe ea; un marcaj
+ *    nedeclarat, desperecheat sau găsit pe altă pagină face comparația să pice.
+ *
+ * „cale” e pagina comparată (cu parametrii ei, ca în lista de pagini) sau un prefix
+ * terminat în „*” („/admin*” = fiecare pagină comparată care începe cu /admin).
+ * Funcții pure (fără server și fără bază), verificate de diferente_autotest().
+ */
+
+/** Pagina comparată e una dintre paginile declarației? */
+function diferenta_pe_pagina(string $declarata, string $cale): bool
+{
+    return str_ends_with($declarata, '*')
+        ? str_starts_with($cale, substr($declarata, 0, -1))
+        : $declarata === $cale;
+}
+
+/**
+ * Pune la loc textele declarate. Problemele (text negăsit pe pagina lui, găsit de mai
+ * multe ori sau pe altă pagină, declarație incompletă) se adaugă în $probleme.
+ *
+ * @param array<string, list<array{nume?: string, cale?: string, nou?: string, vechi?: string, motiv?: string}>> $liste
+ * @param array<string, int> $gasite
+ * @param list<string> $probleme
+ */
+function diferente_texte(array $liste, string $cale, string $html, array &$gasite, array &$probleme): string
+{
+    foreach ($liste as $numeLista => $lista) {
+        foreach ($lista as $intrare) {
+            $nume = (string) ($intrare['nume'] ?? '');
+            $eticheta = $numeLista . ' „' . $nume . '”';
+            foreach (['nume', 'cale', 'nou', 'motiv'] as $camp) {
+                if (trim((string) ($intrare[$camp] ?? '')) === '') {
+                    $probleme[] = $eticheta . ': lipsește „' . $camp . '” (fiecare diferență se declară cu pagina și motivul ei)';
+                    continue 2;
+                }
+            }
+            $html = str_replace((string) $intrare['nou'], (string) ($intrare['vechi'] ?? ''), $html, $n);
+            $asteptat = diferenta_pe_pagina((string) $intrare['cale'], $cale) ? 1 : 0;
+            if ($n !== $asteptat) {
+                $probleme[] = $eticheta . ' găsit de ' . $n . ' ori, așteptat ' . $asteptat;
+            }
+            if ($n > 0) {
+                $gasite[$eticheta] = ($gasite[$eticheta] ?? 0) + $n;
+            }
+        }
+    }
+    return $html;
+}
+
+/**
+ * Scoate blocurile marcate. $marcaje: nume („bv:tab-spam”) => ['cale' => …, 'motiv' => …].
+ *
+ * @param array<string, array{cale?: string, motiv?: string}> $marcaje
+ * @param array<string, int> $gasite
+ * @param list<string> $probleme
+ */
+function diferente_marcaje(array $marcaje, string $cale, string $html, array &$gasite, array &$probleme): string
+{
+    foreach ($marcaje as $nume => $declaratie) {
+        if (preg_match('/^[a-z]+:[A-Za-z0-9_.-]+$/', (string) $nume) !== 1) {
+            $probleme[] = 'marcajul „' . $nume . '”: numele trebuie să fie <sursa>:<NUME> (de exemplu bv:tab-spam)';
+        }
+        if (trim((string) ($declaratie['cale'] ?? '')) === '' || trim((string) ($declaratie['motiv'] ?? '')) === '') {
+            $probleme[] = 'marcajul „' . $nume . '”: lipsește pagina sau motivul';
+        }
+    }
+    $numarate = [];
+    $html = preg_replace_callback(
+        '#<!--port:([a-z]+:[A-Za-z0-9_.-]+)-->.*?<!--/port:\1-->#s',
+        static function (array $m) use (&$numarate): string {
+            $numarate[$m[1]] = ($numarate[$m[1]] ?? 0) + 1;
+            return '';
+        },
+        $html
+    );
+    if ($html === null) {
+        throw new RuntimeException('PCRE la marcajele de port: ' . preg_last_error_msg());
+    }
+    foreach ($numarate as $nume => $n) {
+        if (!isset($marcaje[$nume])) {
+            $probleme[] = 'marcajul „' . $nume . '” nu e declarat în $marcajePort (găsit de ' . $n . ' ori)';
+        }
+    }
+    foreach ($marcaje as $nume => $declaratie) {
+        $n = $numarate[$nume] ?? 0;
+        $asteptat = diferenta_pe_pagina((string) ($declaratie['cale'] ?? ''), $cale) ? 1 : 0;
+        if ($n !== $asteptat) {
+            $probleme[] = 'marcajul „' . $nume . '” găsit de ' . $n . ' ori, așteptat ' . $asteptat;
+        }
+        if ($n > 0) {
+            $gasite['marcaj ' . $nume] = $n;
+        }
+    }
+    // Ce a rămas: un marcaj fără pereche (început fără sfârșit, sfârșit fără început, nume diferite).
+    if (preg_match_all('#<!--/?port:[^>]*-->#', $html, $ramase) > 0) {
+        $probleme[] = 'marcaje fără pereche: ' . implode(' ', array_unique($ramase[0]));
+    }
+    return $html;
+}
+
+/**
+ * Verificarea mecanismului, fără server: un marcaj declarat dar lipsă, unul găsit de
+ * două ori, unul nedeclarat, unul fără pereche, un text pe altă pagină trebuie să pice;
+ * cazurile bune trebuie să treacă și să lase exact pagina de bază.
+ *
+ * @return list<string> ce nu a mers (gol = totul în regulă)
+ */
+function diferente_autotest(): array
+{
+    $esecuri = [];
+    $ruleaza = static function (string $caz, callable $f, bool $trebuiePica, ?string $paginaAsteptata = null) use (&$esecuri): void {
+        $gasite = [];
+        $probleme = [];
+        $rezultat = $f($gasite, $probleme);
+        $aPicat = $probleme !== [];
+        if ($aPicat !== $trebuiePica) {
+            $esecuri[] = $caz . ': ' . ($trebuiePica ? 'trebuia să pice și a trecut' : 'a picat: ' . implode('; ', $probleme));
+        } elseif ($paginaAsteptata !== null && $rezultat !== $paginaAsteptata) {
+            $esecuri[] = $caz . ': pagina rămasă diferă (' . json_encode($rezultat, JSON_UNESCAPED_UNICODE) . ')';
+        }
+    };
+    $marcaje = ['bv:bloc' => ['cale' => '/admin/products', 'motiv' => 'test'], 'gr:peste-tot' => ['cale' => '/admin*', 'motiv' => 'test']];
+    $baza = '<p>a</p><p>b</p>';
+    $cuBloc = '<p>a</p><!--port:bv:bloc--><div>nou</div><!--/port:bv:bloc--><p>b</p>';
+    $peAdmin = static fn (string $html): string => str_replace('<p>b</p>', '<!--port:gr:peste-tot-->x<!--/port:gr:peste-tot--><p>b</p>', $html);
+
+    $ruleaza('marcaj declarat, găsit o dată, pe pagina lui', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/products', $peAdmin($cuBloc), $g, $p), false, $baza);
+    $ruleaza('marcaj declarat, dar lipsă de pe pagina lui', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/products', $peAdmin($baza), $g, $p), true);
+    $ruleaza('marcaj găsit de două ori', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/products', $peAdmin(str_replace('<p>a</p>', '<p>a</p><!--port:bv:bloc-->y<!--/port:bv:bloc-->', $cuBloc)), $g, $p), true);
+    $ruleaza('marcaj pe altă pagină decât a lui', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/orders', $peAdmin($cuBloc), $g, $p), true);
+    $ruleaza('marcaj nedeclarat', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/products', $peAdmin($cuBloc) . '<!--port:vt:altul-->z<!--/port:vt:altul-->', $g, $p), true);
+    $ruleaza('marcaj fără pereche', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/products', $peAdmin($cuBloc) . '<!--port:bv:bloc-->', $g, $p), true);
+    $ruleaza('marcaj cu „/admin*” lipsă de pe o pagină de admin', static fn (array &$g, array &$p): string
+        => diferente_marcaje($marcaje, '/admin/orders', $baza, $g, $p), true);
+    $ruleaza('marcaj cu „/admin*” pe o pagină a site-ului', static fn (array &$g, array &$p): string
+        => diferente_marcaje(['gr:peste-tot' => $marcaje['gr:peste-tot']], '/cos', $peAdmin($baza), $g, $p), true);
+    $ruleaza('marcaj declarat fără motiv', static fn (array &$g, array &$p): string
+        => diferente_marcaje(['bv:bloc' => ['cale' => '/admin/products']], '/admin/products', $cuBloc, $g, $p), true);
+
+    $texte = ['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => 'Text vechi', 'motiv' => 'test']]];
+    $ruleaza('text găsit o dată, pe pagina lui', static fn (array &$g, array &$p): string
+        => diferente_texte($texte, '/magazin', '<b>Text nou</b>', $g, $p), false, '<b>Text vechi</b>');
+    $ruleaza('text lipsă de pe pagina lui', static fn (array &$g, array &$p): string
+        => diferente_texte($texte, '/magazin', '<b>Text vechi</b>', $g, $p), true);
+    $ruleaza('text găsit de două ori', static fn (array &$g, array &$p): string
+        => diferente_texte($texte, '/magazin', '<b>Text nou</b><i>Text nou</i>', $g, $p), true);
+    $ruleaza('text pe altă pagină', static fn (array &$g, array &$p): string
+        => diferente_texte($texte, '/cos', '<b>Text nou</b>', $g, $p), true);
+    $ruleaza('text declarat fără motiv', static fn (array &$g, array &$p): string
+        => diferente_texte(['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => '']]],
+            '/magazin', '<b>Text nou</b>', $g, $p), true);
+    return $esecuri;
+}

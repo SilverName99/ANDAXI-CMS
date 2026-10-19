@@ -5,10 +5,32 @@
 #
 #   tools/dev/instaleaza.sh            # bază nouă + date demo
 #   tools/dev/instaleaza.sh --fara-demo  # doar install + seed
+#   tools/dev/instaleaza.sh --php-min    # doar instalează PHP-ul minim (php_min din config/app.php),
+#                                        # ca testele să ruleze și cu el (CMS_DEV_PHP=php8.0 …); nu atinge baza
 #
 # ATENȚIE: șterge baza $CMS_DEV_DB (doar dacă numele începe cu cms_).
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
+
+if [ "${1:-}" = "--php-min" ]; then
+    versiune="$(php_min)"
+    [ -n "$versiune" ] || die "nu găsesc 'php_min' în config/app.php"
+    # Aceleași extensii ca pe găzduire (docs/DEZVOLTARE.md, „Cerințe”), din depozitul
+    # ondrej/php deja configurat în apt (sodium vine cu php-common).
+    pachete=()
+    for extensie in cli mysql mbstring gd curl xml zip intl; do
+        pachete+=("php$versiune-$extensie")
+    done
+    echo "== PHP $versiune (php_min): ${pachete[*]}"
+    prefix=()
+    [ "$(id -u)" != 0 ] && prefix=(sudo)
+    "${prefix[@]}" apt-get install -y "${pachete[@]}" \
+        || die "instalarea a eșuat (listele apt vechi? încearcă întâi: ${prefix[*]} apt-get update)"
+    "php$versiune" -v | head -1
+    echo "Gata. Testele cu PHP $versiune: CMS_DEV_PHP=php$versiune tools/dev/smoke.sh --toate-pachetele"
+    exit 0
+fi
+
 verifica_mediul
 
 cu_demo=1

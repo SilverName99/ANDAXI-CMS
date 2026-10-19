@@ -7,23 +7,44 @@ declare(strict_types=1);
  * aceleași cereri spre serverul curent și spre copia de bază, apoi compararea
  * răspunsurilor normalizate.
  *
- *   php compara-cu-baza.php <port-baza> <commit-baza> <dosarul-copiei-de-baza>
+ *   php compara-cu-baza.php <port-baza> <eticheta-bazei> <dosarul-copiei-de-baza> <repo|commit> [<port-curent>]
+ *   php compara-cu-baza.php --autotest     # doar verificarea mecanismului de diferențe (fără servere)
  *
  * Ce se scoate înainte de comparare (diferă la fiecare cerere, nu ține de cod):
  * tokenurile formularelor (checkout, înregistrare, CSRF), momentul randării,
  * versiunea fișierelor CSS/JS (`?v=` = data fișierului pe disc), identificatorii
  * aleși la întâmplare ai formularelor, ora curentă.
  *
- * Plus, doar din pagina codului curent, diferențele SEO ale livrării 1 (docs/SEO.md),
- * scrise mai jos una câte una ($faraSeo): ce s-a scos se afișează pe pagină, iar
- * datele structurate trebuie să apară exact unde sunt așteptate ($jsonLdAsteptat).
- * La fel textele schimbărilor portate din Bioscem după codul de bază
- * ($porturiBioscem): fiecare exact o dată, pe pagina ei.
+ * Baza „repo” (implicit: codul Bioscem însuși, la ultimul commit revizuit): nimic
+ * altceva; livrarea 1 SEO și porturile din Bioscem sunt deja în codul de bază, deci
+ * trebuie să iasă octet cu octet.
+ *
+ * Baza „commit” (un commit din acest repo, de exemplu f5ae5ea, dinaintea pluginurilor;
+ * doar pentru istoric): în plus, doar din pagina codului curent, diferențele SEO ale
+ * livrării 1 (docs/SEO.md), scrise mai jos una câte una ($faraSeo): ce s-a scos se
+ * afișează pe pagină, iar datele structurate trebuie să apară exact unde sunt
+ * așteptate ($jsonLdAsteptat). La fel textele schimbărilor portate din Bioscem după
+ * acel commit ($porturiBioscem): fiecare exact o dată, pe pagina ei.
+ *
+ * În ambele moduri, tot doar din pagina codului curent: diferențele declarate
+ * explicit, cu pagina și motivul lor ($deBioscem, $porturiBiovitality,
+ * $porturiVertij, $porturiGrafo) și blocurile marcate cu <!--port:…--> ($marcajePort).
+ * Contractul lor e în tools/dev/lib/diferente-asteptate.php.
  */
 
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit;
+}
+
+require_once __DIR__ . '/lib/diferente-asteptate.php';
+if (in_array('--autotest', $argv, true)) {
+    $esecuri = diferente_autotest();
+    foreach ($esecuri as $esec) {
+        echo '  EȘEC  ', $esec, "\n";
+    }
+    echo $esecuri === [] ? "Mecanismul diferențelor așteptate (texte, marcaje de port): OK\n" : count($esecuri) . " cazuri greșite.\n";
+    exit($esecuri === [] ? 0 : 1);
 }
 
 $radacina = dirname(__DIR__, 2);
@@ -35,11 +56,16 @@ use App\Support\Plugins;
 $portBaza = (string) ($argv[1] ?? '');
 $commitBaza = (string) ($argv[2] ?? '?');
 $dosarBaza = rtrim((string) ($argv[3] ?? ''), '/');
-if ($portBaza === '') {
+// „repo”: codul unui site vechi (Bioscem); „commit”: un commit din acest repo (istoric).
+$modBaza = (string) ($argv[4] ?? 'commit');
+$fataDeCommit = $modBaza === 'commit';
+if ($portBaza === '' || !in_array($modBaza, ['repo', 'commit'], true)) {
     fwrite(STDERR, "Folosește tools/dev/compara-cu-baza.sh\n");
     exit(1);
 }
-$portCurent = (string) (getenv('CMS_DEV_PORT') ?: '8701');
+// Serverul codului curent: cel de dezvoltare sau, față de un repo vechi, unul pornit doar
+// pentru comparație (cu pachetul de date al site-ului).
+$portCurent = (string) (($argv[5] ?? '') !== '' ? $argv[5] : (getenv('CMS_DEV_PORT') ?: '8701'));
 $dosarDev = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/');
 $dosarDiff = $dosarDev . '/compara';
 @mkdir($dosarDiff, 0770, true);
@@ -47,16 +73,20 @@ foreach (glob($dosarDiff . '/*') ?: [] as $vechi) {
     @unlink($vechi);
 }
 
-// Comparația are sens doar cu toate pluginurile care au cod pornite: licența
-// „toate” sau licența Bioscem (fără unealta internă și fără pluginurile neportate).
-$neoprite = array_filter(Plugins::stari(), static function (string $s, string $cheie): bool {
-    $definitie = Plugins::definitie($cheie) ?? [];
-    $areCod = ($definitie['portat'] ?? true) !== false && ($definitie['intern'] ?? false) !== true;
-    return $s !== 'pornit' && $areCod;
-}, ARRAY_FILTER_USE_BOTH);
-if ($neoprite !== []) {
+$autotest = diferente_autotest();
+if ($autotest !== []) {
+    fwrite(STDERR, "Mecanismul diferențelor așteptate nu merge (tools/dev/lib/diferente-asteptate.php):\n  "
+        . implode("\n  ", $autotest) . "\n");
+    exit(1);
+}
+
+// Comparația are sens doar cu pluginurile Bioscem pornite: licența „toate” sau
+// licența de dezvoltare „bioscem” (config/plugins.php → licente_dev; fără unealta internă).
+$neoprite = array_values(array_filter(array_map('strval', (array) (Plugins::catalog()['licente_dev']['bioscem'] ?? [])),
+    static fn (string $cheie): bool => Plugins::stare($cheie) !== 'pornit'));
+if ($neoprite !== [] || (Plugins::catalog()['licente_dev']['bioscem'] ?? []) === []) {
     fwrite(STDERR, 'Comparația are sens doar cu licența „toate” sau „bioscem” (pune-o cu: tools/dev/php.sh tools/dev/licenta.php toate). '
-        . 'Acum nu sunt pornite: ' . implode(', ', array_keys($neoprite)) . "\n");
+        . 'Acum nu sunt pornite: ' . implode(', ', $neoprite) . "\n");
     exit(1);
 }
 $faraUnealtaInterna = !Plugins::vizibil('migrare_wordpress');
@@ -252,35 +282,99 @@ $faraSeo = static function (string $cale, string $html, array &$gasite) use ($pr
     return $html;
 };
 /**
- * Schimbările din Bioscem portate după codul de bază, altele decât SEO: textul
- * nou, exact cum îl scrie codul, pagina pe care trebuie să apară și ce era în
- * locul lui. Se pun la loc, ca și cele SEO, doar în pagina codului curent; fiecare
- * trebuie găsită o singură dată, exact pe pagina ei (altundeva, ori de mai multe
- * ori, comparația pică). Un port nou care schimbă o pagină se adaugă aici, explicit.
+ * Doar față de un commit din acest repo (baza „commit”): schimbările din Bioscem
+ * portate după acel commit, altele decât SEO. Textul nou, exact cum îl scrie codul,
+ * pagina pe care trebuie să apară și ce era în locul lui. Față de Bioscem (baza
+ * „repo”) nu se aplică: codul Bioscem le are deja. Un port din Bioscem nu se mai
+ * adaugă aici (se mută „ultimul commit revizuit” în docs/de-portat.md).
  */
 $porturiBioscem = [
-    // „AWB: numărul de colete poate fi ales în ERP la aprobare” (Setări livrare, doar cu ERP-ul pe site).
     [
         'nume' => 'colete alese în ERP',
         'cale' => '/admin/settings/shipping',
         'nou' => "0 = fără împărțire automată. Numărul calculat se poate schimba pe\n"
             . "            fiecare comandă din ERP, înainte de aprobare.</small>",
         'vechi' => '0 = fără împărțire automată.</small>',
+        'motiv' => 'Bioscem de5c2b0 „AWB: numărul de colete poate fi ales în ERP la aprobare” (CMS 4915478; doar cu ERP-ul pe site)',
     ],
 ];
-/** Pune la loc textele porturilor; întoarce pagina și, în $probleme, porturile negăsite sau găsite unde nu trebuie. */
-$faraPorturi = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($porturiBioscem): string {
-    foreach ($porturiBioscem as $port) {
-        $html = str_replace($port['nou'], $port['vechi'], $html, $n);
-        $asteptat = $cale === $port['cale'] ? 1 : 0;
-        if ($n !== $asteptat) {
-            $probleme[] = 'port „' . $port['nume'] . '” găsit de ' . $n . ' ori, așteptat ' . $asteptat;
-        }
-        if ($n > 0) {
-            $gasite['port ' . $port['nume']] = $n;
-        }
-    }
-    return $html;
+
+/**
+ * În ambele moduri: diferențele față de codul de bază declarate explicit, fiecare cu
+ * pagina și motivul ei (contractul: tools/dev/lib/diferente-asteptate.php). Câte o
+ * listă pe sursă, câte un sub-bloc pe WP (`// WP-xx: <id-uri>`).
+ *
+ *  - $deBioscem: ce scrie nucleul altfel decât Bioscem, intenționat (texte Bioscem
+ *    scoase din nucleu, generalizări); fiecare rând intră și în
+ *    site-uri/bioscem/ce-se-schimba.md dacă îl vede clientul;
+ *  - $porturiBiovitality, $porturiVertij, $porturiGrafo: textele mici aduse din
+ *    celelalte site-uri (o bucată mai mare se scrie între marcaje, mai jos).
+ *
+ * O intrare cu 'mod' => 'repo' descrie o diferență față de implementarea Bioscem
+ * însăși (de exemplu cum a generalizat nucleul livrarea 1 SEO) și se verifică doar
+ * față de codul Bioscem: față de un commit dinaintea SEO, $faraSeo scoate oricum
+ * toată bucata.
+ */
+$deBioscem = [
+    // WP-01: diferențele găsite la prima comparație cu Bioscem f5eafa3 (G-M2), toate din
+    // portarea generalizată a livrării 1 SEO (c2b9331). Nu schimbă ce vede un vizitator.
+    [
+        'nume' => 'robots.txt: regula coșului din constructor, din seo.json',
+        'cale' => '/robots.txt',
+        'nou' => "Disallow: /gdpr-agreements\nDisallow: /cos-cumparaturi\n",
+        'vechi' => "Disallow: /gdpr-agreements\n",
+        'motiv' => 'Bioscem are /cos-cumparaturi scris în cod (Robots::DISALLOW), după /cos/; nucleul îl ia din '
+            . 'site-uri/bioscem/seo.json (robots_disallow) și îl pune după regulile pluginurilor. Aceleași reguli, '
+            . 'altă ordine: pentru roboți ordinea nu contează (câștigă regula cea mai lungă).',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'robots.txt: locul regulii coșului din constructor',
+        'cale' => '/robots.txt',
+        'nou' => "Disallow: /cos/\nDisallow: /checkout\n",
+        'vechi' => "Disallow: /cos/\nDisallow: /cos-cumparaturi\nDisallow: /checkout\n",
+        'motiv' => 'perechea rândului de mai sus: în Bioscem regula stă imediat după regulile coșului.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'Setări magazin → Sitemap XML: lista din pluginurile de pe site',
+        'cale' => '/admin/settings/store',
+        'nou' => "Sitemap-ul se construiește automat din baza de date, la fiecare cerere: produsele active, categoriile, "
+            . "mărcile, etichetele, paginile publicate și articolele.\n                Nu mai trebuie generat după modificări.",
+        'vechi' => "Sitemap-ul se construiește automat din baza de date, la fiecare cerere: produsele active,\n"
+            . "                categoriile, mărcile, etichetele și paginile publicate. Nu mai trebuie generat după modificări.",
+        'motiv' => 'explicația din admin își ia lista din pluginurile de pe site (fără blog nu mai pomenește articolele); '
+            . 'pomenește și articolele, pe care sitemap-ul Bioscem le are deja. Sitemap-ul e același (comparat mai jos).',
+        'mod' => 'repo',
+    ],
+];
+$porturiBiovitality = [
+];
+$porturiVertij = [
+];
+$porturiGrafo = [
+];
+/**
+ * Marcajele de port (App\Support\Dev::marcaj): nume „<sursa>:<NUME>” => pagina (sau
+ * „/admin*”) și motivul. Blocul marcat se scoate din pagina codului curent; fiecare
+ * nume trebuie găsit exact o dată pe pagina lui și pe nicio altă pagină.
+ */
+$marcajePort = [
+];
+$listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
+    '$porturiGrafo' => $porturiGrafo];
+if ($fataDeCommit) {
+    $listeDeclarate = ['$porturiBioscem' => $porturiBioscem] + $listeDeclarate;
+}
+// Intrările legate de un singur mod ('mod' => 'repo' sau 'commit') se verifică doar în el.
+foreach ($listeDeclarate as $numeLista => $lista) {
+    $listeDeclarate[$numeLista] = array_values(array_filter($lista,
+        static fn (array $intrare): bool => !isset($intrare['mod']) || $intrare['mod'] === $modBaza));
+}
+/** Scoate din pagina curentă tot ce e declarat (marcaje, apoi texte); problemele în $probleme. */
+$faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort): string {
+    $html = diferente_marcaje($marcajePort, $cale, $html, $gasite, $probleme);
+    return diferente_texte($listeDeclarate, $cale, $html, $gasite, $probleme);
 };
 /** [cale => tipurile JSON-LD așteptate]; orice altă pagină nu are date structurate. */
 $jsonLdAsteptat = static function (string $cale): array {
@@ -295,7 +389,7 @@ $jsonLdAsteptat = static function (string $cale): array {
 // Două sesiuni pe fiecare server: vizitator (cu coș) și admin; plus clientul logat.
 $jaruri = [];
 foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
-    foreach (['viz', 'adm', 'cli', 'adm-magazin', 'adm-blog', 'adm-emailuri'] as $rol) {
+    foreach (['viz', 'adm', 'cli', 'adm-magazin', 'adm-blog', 'adm-emailuri', 'anon'] as $rol) {
         $jaruri[$eticheta][$rol] = $dosarDiff . '/jar-' . $eticheta . '-' . $rol . '.txt';
         @unlink($jaruri[$eticheta][$rol]);
     }
@@ -403,6 +497,18 @@ $pagini = [
 
 // O pagină a site-ului (din bază, ca orice pagină scrisă de client) cu liste goale,
 // de umplut din JavaScript, și un separator de meniu: trebuie să iasă neatinsă.
+// Securitate formulare (/admin/users/security) ordonează jurnalele de înregistrare și de
+// checkout, unite, după (created_at, id): două rânduri din tabele diferite cu aceeași secundă
+// și același id (le scriu testele anterioare, câte o cerere în fiecare, în aceeași secundă)
+// nu au o ordine fixă, nici în Bioscem, nici aici. Rândurile de checkout care se suprapun așa
+// se scot din baza de test înainte de comparare, ca pagina să se compare tot octet cu octet.
+$suprapuse = (int) $db->exec('DELETE c FROM checkout_submit_logs c
+    JOIN register_submit_logs r ON r.id = c.id AND r.created_at = c.created_at');
+if ($suprapuse > 0) {
+    echo '  INFO  ', $suprapuse, ' rânduri de checkout din jurnalul anti-robot (scrise de teste) aveau aceeași secundă și '
+        . "același id ca o înregistrare; scoase din baza de test (ordinea lor nu e fixă nici în Bioscem).\n";
+}
+
 $paginaListe = 'test-liste-goale-' . getmypid();
 $db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published, created_at, updated_at)
     VALUES (:title, :slug, :html, \'\', \'\', 1, NOW(), NOW())')->execute([
@@ -413,11 +519,31 @@ $db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_cont
 ]);
 $pagini[] = ['viz', '/' . $paginaListe];
 
+// Doar față de codul Bioscem (care are deja livrarea 1 SEO): harta site-ului, adresa unică
+// și fiecare regulă din harta adreselor vechi a site-ului (pachetul lui din site-uri/), cerute
+// de un vizitator nou, fără sesiune. Rezultatul lor se rezumă într-o linie, dacă e identic.
+if (!$fataDeCommit) {
+    $pagini[] = ['anon', '/sitemap.xml'];
+    foreach (['/Magazin', '/produs/ceai-de-menta/', '/categorie/Ceaiuri', '/produs/ceai-de-ment', '/blog/', '/magazin?utm_source=test'] as $cale) {
+        $pagini[] = ['anon', $cale, 'adresa unică'];
+    }
+    $harta = \App\Support\DateSite::json('redirecturi.json');
+    foreach ((array) ($harta['exacte'] ?? []) as $regula) {
+        $pagini[] = ['anon', (string) ($regula[0] ?? '/'), 'harta adreselor vechi'];
+    }
+    foreach ((array) ($harta['prefixe'] ?? []) as $regula) {
+        $pagini[] = ['anon', rtrim((string) ($regula[0] ?? '/'), '/') . '/test', 'harta adreselor vechi'];
+    }
+}
+
 $identice = 0;
 $diferite = [];
 $diferenteSeoAsteptate = [];
 $diferentePorturi = [];
-foreach ($pagini as [$rol, $cale]) {
+$grupuriIdentice = [];
+foreach ($pagini as $pagina) {
+    [$rol, $cale] = $pagina;
+    $grup = (string) ($pagina[2] ?? '');
     $r = [];
     foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
         $r[$eticheta] = $cerere($port, 'GET', $cale, $jaruri[$eticheta][$rol]);
@@ -426,18 +552,20 @@ foreach ($pagini as [$rol, $cale]) {
     $porturiGasite = [];
     $problemePorturi = [];
     $a = $normalizeaza($r['baza']['corp']);
-    $b = $normalizeaza($faraPorturi($cale, $faraSeo($cale, $r['curent']['corp'], $gasite), $porturiGasite, $problemePorturi));
+    $corpCurent = $fataDeCommit ? $faraSeo($cale, $r['curent']['corp'], $gasite) : $r['curent']['corp'];
+    $b = $normalizeaza($faraDeclarate($cale, $corpCurent, $porturiGasite, $problemePorturi));
     $eticheta = str_pad($rol, 13) . $cale;
-    // Diferențele SEO așteptate: datele structurate exact unde trebuie, robots.txt cu regulile noi.
+    // Diferențele SEO așteptate (doar față de un commit dinaintea SEO): datele structurate
+    // exact unde trebuie, robots.txt cu regulile noi.
     $tipuriJsonLd = (array) ($gasite['JSON-LD'] ?? []);
     unset($gasite['JSON-LD']);
     $problemeSeo = [];
-    if ($rol === 'viz' && $tipuriJsonLd !== $jsonLdAsteptat($cale)) {
+    if ($fataDeCommit && $rol === 'viz' && $tipuriJsonLd !== $jsonLdAsteptat($cale)) {
         $problemeSeo[] = 'JSON-LD ' . json_encode($tipuriJsonLd) . ', așteptat ' . json_encode($jsonLdAsteptat($cale));
-    } elseif ($rol !== 'viz' && $tipuriJsonLd !== []) {
+    } elseif ($fataDeCommit && $rol !== 'viz' && $tipuriJsonLd !== []) {
         $problemeSeo[] = 'JSON-LD în admin: ' . json_encode($tipuriJsonLd);
     }
-    if ($cale === '/robots.txt' && ($gasite['robots: /cos exact'] ?? 0) !== 1) {
+    if ($fataDeCommit && $cale === '/robots.txt' && ($gasite['robots: /cos exact'] ?? 0) !== 1) {
         $problemeSeo[] = 'robots.txt fără regulile exacte pentru /cos';
     }
     $seoGasit = array_filter($gasite);
@@ -450,9 +578,15 @@ foreach ($pagini as [$rol, $cale]) {
     if ($rezumatPorturi !== '') {
         $diferentePorturi[$eticheta] = $rezumatPorturi;
     }
+    // Redirecționările absolute (adresa unică) poartă portul serverului.
+    $locatieBaza = str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['baza']['location']);
     if ($problemeSeo === [] && $problemePorturi === [] && $r['baza']['cod'] === $r['curent']['cod']
-        && $r['baza']['location'] === $r['curent']['location'] && $a === $b) {
+        && $locatieBaza === $r['curent']['location'] && $a === $b) {
         $identice++;
+        if ($grup !== '') {
+            $grupuriIdentice[$grup][$r['curent']['cod']] = ($grupuriIdentice[$grup][$r['curent']['cod']] ?? 0) + 1;
+            continue;
+        }
         echo '  OK    ', $r['curent']['cod'], '  ', $eticheta, $rezumatSeo !== '' ? '  (SEO: ' . $rezumatSeo . ')' : '',
             $rezumatPorturi !== '' ? '  (' . $rezumatPorturi . ')' : '', "\n";
         continue;
@@ -471,7 +605,14 @@ foreach ($pagini as [$rol, $cale]) {
     file_put_contents($dosarDiff . '/' . $nume . '.diff', $diff);
     $linii = substr_count($diff, "\n- ") + substr_count($diff, "\n+ ") + preg_match_all('/^[-+](?![-+])/m', $diff);
     $diferite[] = $eticheta;
-    echo '  DIFERĂ ', $r['baza']['cod'], '→', $r['curent']['cod'], '  ', $eticheta, '  (', $dosarDiff, '/', $nume, '.diff)', "\n";
+    echo '  DIFERĂ ', $r['baza']['cod'], '→', $r['curent']['cod'], '  ', $eticheta,
+        $locatieBaza !== $r['curent']['location'] ? '  (Location: ' . $locatieBaza . ' → ' . $r['curent']['location'] . ')' : '',
+        '  (', $dosarDiff, '/', $nume, '.diff)', "\n";
+}
+foreach ($grupuriIdentice as $grup => $coduri) {
+    ksort($coduri);
+    echo '  OK    ', str_pad('anon', 13), $grup, ': ', array_sum($coduri), ' adrese identice (',
+        implode(', ', array_map(static fn ($cod, $n) => $n . ' × ' . $cod, array_keys($coduri), $coduri)), ")\n";
 }
 // Unde ajunge fiecare administrator cu rol parțial după login.
 foreach ($dupaLogin['baza'] ?? [] as $rolAdmin => $locatieBaza) {
@@ -489,7 +630,17 @@ foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
     @unlink($jar);
 }
 $db->prepare('DELETE FROM pages WHERE slug = :slug')->execute(['slug' => $paginaListe]);
+$declarate = [];
+foreach ($listeDeclarate as $numeLista => $lista) {
+    if ($lista !== []) {
+        $declarate[] = $numeLista . ' ' . count($lista);
+    }
+}
+if ($marcajePort !== []) {
+    $declarate[] = count($marcajePort) . ' marcaje de port';
+}
 echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice, ', count($diferite), ' diferite; ',
-    count($diferenteSeoAsteptate), ' pagini cu diferențele SEO așteptate (livrarea 1 SEO), ', count($diferentePorturi),
-    " cu porturile din Bioscem; ambele scoase explicit înainte de comparare.\n";
+    $fataDeCommit ? count($diferenteSeoAsteptate) . ' pagini cu diferențele SEO așteptate (livrarea 1 SEO), ' : '',
+    count($diferentePorturi), ' pagini cu diferențe declarate (', $declarate === [] ? 'nicio declarație' : implode(', ', $declarate),
+    "), scoase explicit înainte de comparare.\n";
 exit($diferite === [] ? 0 : 1);

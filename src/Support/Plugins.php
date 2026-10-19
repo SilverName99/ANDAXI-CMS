@@ -920,6 +920,26 @@ final class Plugins
         self::$jurnal = $fisier;
     }
 
+    /**
+     * Doar pentru teste și unelte (ca `Licenta::configureaza`): stările din licență date
+     * direct, fără fișiere. Se aplică regula dependențelor, dar nu se citește și nu se
+     * scrie nimic în dosarul licenței (nici `stare-aplicata.json`, nici jurnalul).
+     * `reseteaza()` întoarce la licența de pe disc. Site-ul nu o cheamă niciodată.
+     *
+     * @param array<string, string> $stari pluginul => starea din licență (lipsă = oprit)
+     */
+    public static function folosesteStari(array $stari): void
+    {
+        self::reseteaza();
+        $calcul = self::calculeazaStari($stari);
+        $pluginuri = array_filter($stari, static fn ($stare): bool => $stare !== self::OPRIT);
+        self::$stari = $calcul['stari'];
+        self::$mesaje = $calcul['mesaje'];
+        self::$licenta = ['site' => 'test', 'emisa_la' => '1970-01-01T00:00:00Z', 'versiune' => 0, 'pluginuri' => $pluginuri];
+        self::$sursa = self::DIN_LICENTA;
+        self::$amprenta = sha1((string) json_encode([self::$stari, [], $pluginuri]));
+    }
+
     /** Uită tot ce s-a calculat (teste, unelte care schimbă licența în același proces). */
     public static function reseteaza(): void
     {

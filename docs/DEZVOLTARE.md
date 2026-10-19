@@ -79,6 +79,21 @@ nu e accesibil din browser).
 `sodium`; MariaDB/MySQL accesibil printr-un socket; `curl`, `mysql`; opțional
 Node + Playwright (pentru capturi).
 
+**PHP-ul minim** (`php_min` în `config/app.php`): **8.0** până la decizia OD-48 (cea mai
+prudentă alegere: serverele pot fi încă pe 8.0). Codul care ajunge pe site-uri nu are voie
+să folosească nimic mai nou (enum, `readonly`, `array_is_list`, `mb_str_pad`…). Se verifică
+așa: `tools/dev/instaleaza.sh --php-min` instalează `php8.0` (din depozitul ondrej/php deja
+configurat; `php` rămâne cel implicit), `tools/dev/verifica-php.sh` verifică sintaxa
+fiecărui fișier de pe site cu el, iar `CMS_DEV_PHP=php8.0` pornește orice unealtă (serverul,
+copia de bază, testul de fum, testele pluginurilor) cu PHP-ul minim.
+`scripts/diagnostic.php` iese cu 1 dacă PHP-ul liniei de comandă e mai vechi decât minimul.
+Ce s-a găsit rulând uneltele cu 8.0 (și e bine de știut când scrii unelte noi):
+`mb_str_pad` nu există (8.3); o metodă privată se cheamă prin Reflection doar după
+`setAccessible(true)`; `escapeshellarg` scoate literele cu diacritice (localul C), deci un
+text cu diacritice nu se dă prin linia de comandă, ci printr-un fișier; procesele de lucru
+ale lui `php -S` (`PHP_CLI_SERVER_WORKERS`) nu se opresc odată cu procesul principal, așa că
+uneltele le opresc explicit (`opreste_server_php` din `comun.sh`).
+
 ### Pe scurt
 
 ```sh
@@ -91,14 +106,21 @@ tools/dev/server.sh                      # pornește serverul: http://127.0.0.1:
 tools/dev/server.sh --opreste            # îl oprește
 tools/dev/php.sh scripts/erp-sync.php    # orice script sau cron, pe baza de test
 tools/dev/php.sh tools/dev/licenta.php prezentare   # altă licență (pachet sau cheie=stare)
-tools/dev/php.sh tools/dev/licenta.php bioscem      # licența reală a Bioscem: tot ce are cod, fără unealta internă
+tools/dev/php.sh tools/dev/licenta.php bioscem      # licența de dezvoltare a Bioscem (listă explicită, fără unealta internă)
+tools/dev/php.sh tools/dev/licenta.php grafoanaytis # la fel pentru biovitality, vertij, grafoanaytis
 tools/dev/php.sh tools/dev/verifica-rute.php        # fiecare rută are proprietar în catalogul pluginurilor
+tools/dev/php.sh tools/dev/instantaneu-rute.php     # suprafața fiecărei licențe de test față de tools/dev/instantanee/ (--actualizeaza)
 tools/dev/php.sh tools/dev/test-pluginuri.php       # testele pluginurilor: licența, garda, fiecare pachet, „se oprește”
 tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus, pe rând, fiecare plugin oprit cu restul pornite (~20 min)
-tools/dev/compara-cu-baza.sh                        # cu toate pluginurile, HTML identic cu codul dinaintea pluginurilor (în afara diferențelor SEO și ale porturilor din Bioscem, scrise explicit)
-tools/dev/compara-cu-baza.sh --licenta=bioscem      # la fel, cu licența reală a Bioscem
+tools/dev/compara-cu-baza.sh                        # HTML identic cu codul Bioscem însuși (ultimul commit revizuit din docs/de-portat.md)
+tools/dev/compara-cu-baza.sh --licenta=bioscem      # la fel, cu licența de dezvoltare a Bioscem
+tools/dev/compara-cu-baza.sh --baza=f5ae5ea         # istoric: față de codul dinaintea pluginurilor (SEO și porturile scoase explicit)
 tools/dev/php.sh tools/dev/test-seo.php             # SEO pe fiecare pachet: adresa unică, harta, sitemap, robots.txt, date structurate (docs/SEO.md)
-tools/dev/php.sh scripts/diagnostic.php --licenta   # licența se verifică? (verificarea dinaintea unui deploy)
+tools/dev/verifica-php.sh                           # sintaxa codului de pe site-uri cu PHP-ul minim (php_min)
+CMS_DEV_PHP=php8.0 tools/dev/smoke.sh --toate-pachetele   # orice unealtă, cu PHP-ul minim
+tools/dev/porti.sh --wp=WP-01                       # porțile unui pachet de lucru din planul Etapei 1, în ordine
+tools/dev/php.sh tools/dev/de-portat.php            # commit-urile noi din codurile vechi, de trecut în docs/de-portat.md
+tools/dev/php.sh scripts/diagnostic.php --licenta   # licența se verifică? PHP-ul e destul de nou? (verificarea dinaintea unui deploy)
 ```
 
 Pluginurile, licența și garda rutelor sunt descrise în [PLUGINURI.md](PLUGINURI.md).
@@ -123,10 +145,14 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | `mail-capturat.sh` | Ține locul lui `sendmail`: fiecare email trimis cu `mail()` se scrie în `storage/logs/dev/mail/*.eml`. |
 | `smoke.sh` | Testul de fum (mai jos), pe pachetul „toate” sau pe oricare pachet. |
 | `capturi.cjs` | Capturile Playwright din admin. |
-| `licenta.php` | Perechea de chei de dezvoltare (în locul celei a CRM-ului) și licențele de test: pachete, „toate” (cu unealta internă), „bioscem” (ca licența reală a Bioscem, fără unealta internă), `cheie=stare`, fără licență (șterge și starea aplicată); `stari`, `cron`, `arata` pentru teste. |
+| `licenta.php` | Perechea de chei de dezvoltare (în locul celei a CRM-ului) și licențele de test: pachete, „toate” (cu unealta internă), licențele de dezvoltare ale celor patru site-uri existente (`bioscem`, `biovitality`, `vertij`, `grafoanaytis`: liste scrise explicit în `config/plugins.php` → `licente_dev`, ce are codul vechi al fiecăruia, nu contractul; un plugin portat mai târziu nu intră singur în licența Bioscem), `cheie=stare`, fără licență (șterge și starea aplicată); `stari`, `cron`, `arata`, `presetari` pentru teste. |
 | `verifica-rute.php` | Listează fiecare rută cu proprietarul ei (nucleu sau plugin) și pică dacă o rută nu are proprietar, dacă o declarație din catalog nu acoperă nicio rută, dacă meniul și rutele nu se potrivesc, dacă un cron nu are garda, dacă codul întreabă de un plugin inexistent sau dacă un bloc `<?php if (…): ?>` de pe coloana 0 dintr-un șablon nu închide HTML-ul pe care îl deschide (un `endif` pus greșit lasă, cu pluginul oprit, jumătăți de tabel). |
 | `test-pluginuri.php` | Testele mecanismului de pluginuri: licența (A: și ultima licență aplicată când nicio licență nu se verifică, codul 2 al cronurilor fără licență, momentul intrării în „se oprește”, jurnalul o dată pe zi, dosarul fără drept de scriere, JSON-ul canonic față de Node, filtrul care nu atinge listele goale ale clientului), garda rutelor pe fiecare pachet (B: plus linkul de urmărire din newsletter, robots.txt, API-urile catalogului, „Trimite email test”, acțiunile necunoscute din Setări magazin, adresele mereu deschise fără o plată adevărată, redirecționările în buclă), fiecare pachet parcurs pagină cu pagină pe site, în contul clientului și în tot meniul adminului, plus cu Playwright și sursa editoarelor de pagini și de șablon de produs (C), magazinul „se oprește” cu o comandă existentă dusă la capăt, ERP-ul care trimite comenzile plasate înainte de oprire, FAN oprit fără niciun AWB și fără regula coletelor trimisă în ERP, Setări livrare fără ERP (D), comparația cu codul de bază, cu licența „toate” și cu cea a Bioscem (E) și, la cerere, fiecare plugin oprit pe rând cu restul pornite (F). În browser se verifică și textul vizibil: nicio etichetă sau explicație a unui plugin oprit, nici în ferestrele comenzilor și ale produselor, în tab-urile setărilor sau în contul clientului. Plus SEO (G: `test-seo.php`, pe fiecare pachet). Opțiuni: `--fara-garda`, `--fara-browser`, `--fara-baza`, `--fara-seo`, `--fiecare-plugin`, `--capturi=DIR`. Pornește singur serverul dacă nu merge. |
-| `compara-cu-baza.sh` (+ `.php`) | Scoate codul unui commit (implicit `f5ae5ea`, dinaintea pluginurilor) în `$CMS_DEV_DIR/baza-<commit>`, îl pornește pe portul următor cu aceeași bază și compară HTML-ul a peste 60 de pagini-cheie (vizitator, client, patru roluri de admin, plus o pagină de test cu liste goale scrise de client), fără tokenuri și versiuni de fișiere. Cu `--licenta=bioscem` pune înainte licența reală a Bioscem (fără unealta internă; panoul „Import din backup WordPress” lipsește intenționat și nu se compară) și la final pune la loc „toate”. Diferențele SEO ale livrării 1 (date structurate, robots.txt, width/height, poza principală, stilurile catalogului, textul „Sitemap XML”) sunt scrise una câte una în `compara-cu-baza.php` și se scot doar din pagina codului curent; datele structurate trebuie să apară exact pe prima pagină, pe produse și pe categorie. O schimbare SEO nouă se adaugă acolo, explicit. La fel schimbările portate din Bioscem după codul de bază (`$porturiBioscem`: textul nou, pagina lui și ce era înainte; fiecare trebuie găsit exact o dată, pe pagina lui), acum fraza despre coletele alese în ERP din Setări livrare. Diferențele: `$CMS_DEV_DIR/compara/*.diff`. |
+| `compara-cu-baza.sh` (+ `.php`, `lib/diferente-asteptate.php`) | **Implicit, față de codul Bioscem însuși**: scoate cu `git archive` commit-ul „ultimul revizuit” al Bioscem din `docs/de-portat.md` (azi `f5eafa3`) din clona `CMS_DEV_REPO_BS` în `$CMS_DEV_DIR/baza-Nou-site-bioscem-<commit>`, îl pornește pe portul +1 (cu routerul de aici și o copie a pozelor încărcate) și pornește codul curent pe portul +4 cu datele site-ului Bioscem (`site-uri/bioscem/`; Bioscem le are scrise în cod), pe aceeași bază. Compară HTML-ul a peste 70 de pagini-cheie (vizitator, client, patru roluri de admin, o pagină de test cu liste goale scrise de client), plus `/sitemap.xml`, adresa unică (litere mari, „/” final) și fiecare regulă din harta adreselor vechi a Bioscem (cod, `Location`, pagină), fără tokenuri și versiuni de fișiere. Nimic din livrarea 1 SEO nu se mai scoate: Bioscem o are deja. Se scot doar diferențele declarate explicit, fiecare cu pagina și motivul ei (`$deBioscem`, `$porturiBiovitality`, `$porturiVertij`, `$porturiGrafo`, marcajele de port `$marcajePort`); fiecare trebuie găsită exact o dată, pe pagina ei. Altă bază: `--baza-repo=<clonă>@<commit>`. Cu `--licenta=bioscem` pune înainte licența de dezvoltare a Bioscem (fără unealta internă; panoul „Import din backup WordPress” lipsește intenționat și nu se compară) și la final pune la loc „toate”. **Istoric**, `--baza=f5ae5ea`: față de commit-ul dinaintea pluginurilor din acest repo, cu diferențele SEO ale livrării 1 (date structurate, robots.txt, width/height, poza principală, stilurile catalogului, textul „Sitemap XML”) și porturile din Bioscem după el (`$porturiBioscem`) scoase explicit, doar din pagina codului curent. `--autotest`: doar verificarea mecanismului de diferențe. Diferențele: `$CMS_DEV_DIR/compara/*.diff`. |
+| `instantaneu-rute.php` (+ `instantanee/`, `lib/cereri-rute.php`) | Instantaneul rutelor: pentru fiecare licență de test (`toate`, `fara`, cele patru site-uri, cele patru pachete), ce face garda cu fiecare rută (`CONTROLLER`, `MEREU`, `403`, `404`), meniul adminului și cronurile, comparate cu `tools/dev/instantanee/rute-<licența>.txt` din git. O schimbare dă un diff și codul 1; `--actualizeaza` rescrie fișierele, care intră apoi în commit (cine revizuiește vede în `git diff` orice adresă nouă a unui pachet). Plus regulile scrise în script, independente de catalog: fără magazin, coșul, checkout-ul, plățile și comenzile nu ajung niciodată la controller; la fel conturile, recenziile, acordurile GDPR fără pluginul lor; adresele mereu deschise rămân deschise în orice licență; `licente_dev.bioscem` e lista Bioscem de la `4915478`. Fără server și fără bază; rulează în testul de fum și ca secțiunea B0 a testului pluginurilor. |
+| `verifica-php.sh` | `php<php_min> -l` pe tot ce ajunge pe site-uri (`src/`, `views/`, `config/`, `scripts/`, `public/`, `bootstrap.php`; și `tools/verificare/`, `tools/sonda/` când vor exista). |
+| `porti.sh` | Porțile unui pachet de lucru din planul Etapei 1 (tabelul WP → porți e în script; `--lista` îl arată), în ordine, oprindu-se la prima care pică; o poartă a cărei unealtă vine într-un WP următor pică, nu se sare. Raportul: `$CMS_DEV_DIR/porti-<WP>.txt`; rezumatul lui intră în mesajul ultimului commit al WP-ului. |
+| `de-portat.php` | Commit-urile noi de pe ramurile celor patru coduri vechi (`CMS_DEV_REPO_BS`, `_BV`, `_VT`, `_GR`), de după „ultimul commit revizuit” din [de-portat.md](de-portat.md). Doar citește (fără `git fetch`); iese cu 2 dacă sunt commit-uri noi. `--revizuit=<site>` scrie doar commit-ul revizuit (îl folosește `compara-cu-baza.sh`). |
 | `test-seo.php` | Testele SEO ([SEO.md](SEO.md)): excluderile (fiecare adresă mereu deschisă și fiecare rută de plată, cont, admin, API), harta demo și pachetul Bioscem, robots.txt, JSON-LD și sitemap-ul pe fiecare pachet (fiecare adresă din sitemap cerută), gazda canonică pe un al doilea server (`CMS_DEV_PORT`+2, `APP_URL=https://exemplu-demo.test`, inventat: fiecare POST și fiecare cale exclusă pe www răspunde exact ca pe gazda corectă), mentenanța, oprirea de urgență (`CMS_DEV_PORT`+3, `SEO_REDIRECTURI=0`). Rulează și ca secțiunea G din `test-pluginuri.php`. Raport: `$CMS_DEV_DIR/test-seo-raport.txt`. |
 | `site-demo/` | Datele inventate ale site-ului de dezvoltare (`redirecturi.json`, `seo.json`): câte o regulă pentru fiecare caz verificat de `test-seo.php`. `comun.sh` pune `SITE_DATE_DOSAR` aici. |
 | `crawl-pachet.cjs` | Folosit de `test-pluginuri.php`: deschide paginile unui pachet în Chromium (vizitator, client logat cu un produs în coș, admin cu ferestrele comenzilor și ale produselor), întoarce linkurile, formularele și textul vizibil din DOM și erorile JavaScript, fotografiază meniul adminului. |
@@ -138,7 +164,9 @@ Variabile pe care le poți schimba din mediu:
 | `CMS_DEV_DB` | `cms_dev` | baza de test; trebuie să înceapă cu `cms_` (se șterge la fiecare instalare) |
 | `CMS_DEV_SOCK` | `/tmp/claude-0/maria/sock` | socketul MariaDB |
 | `CMS_DEV_DB_USER` / `CMS_DEV_DB_PAROLA` | `root` / gol | utilizatorul bazei |
-| `CMS_DEV_PORT` | `8701` | portul serverului |
+| `CMS_DEV_PORT` | `8701` | portul serverului; uneltele folosesc și porturile următoare: +1 copia de bază, +2/+3 `test-seo.php`, +4 codul curent în `compara-cu-baza.sh` față de un repo vechi |
+| `CMS_DEV_PHP` | `php` | comanda PHP a tuturor uneltelor (de exemplu `php8.0`, PHP-ul minim) |
+| `CMS_DEV_REPO_BS`, `CMS_DEV_REPO_BV`, `CMS_DEV_REPO_VT`, `CMS_DEV_REPO_GR` | `../Nou-site-bioscem`, `../Mutare-Site-Biovitality`, `../vertij-tinitus-refacut`, `../site-nou-grafoanaytis.ro` | clonele codurilor vechi (doar citite), pentru `compara-cu-baza.sh` și `de-portat.php` |
 | `CMS_DEV_DIR` | `storage/logs/dev` | jurnale, emailuri capturate, parola, raportul testului |
 | `SITE_DATE_DOSAR` | `tools/dev/site-demo` | datele site-ului (harta adreselor vechi, regulile SEO); vezi [SEO.md](SEO.md) |
 | `CMS_DEV_CAPTURI` | `$CMS_DEV_DIR/capturi` | unde scrie Playwright PNG-urile |
@@ -158,13 +186,15 @@ Variabile pe care le poți schimba din mediu:
   dezvoltare (`LICENTA_CHEIE_PUBLICA`, cheia privată în
   `storage/logs/dev/licenta-cheie-privata.txt`, niciodată în git) și
   `LICENTA_SITE=demo`; `instaleaza.sh` scrie licența „toate”, deci local site-ul
-  are toate pluginurile pornite, plus unealta internă de migrare (licența reală a
-  Bioscem nu o are: `licenta.php bioscem`; și cu ea paginile ies identice cu
-  Bioscem azi, vezi `compara-cu-baza.sh --licenta=bioscem`). Licența stă în
+  are toate pluginurile pornite, plus unealta internă de migrare (licența de
+  dezvoltare a Bioscem nu o are: `licenta.php bioscem`; și cu ea paginile ies identice
+  cu Bioscem azi, vezi `compara-cu-baza.sh --licenta=bioscem`). Licența stă în
   `storage/licenta/` (ignorat de git), lângă `stare-aplicata.json` (ce a aplicat
   site-ul ultima oară). `comun.sh` pune și
   `CMS_DEV_GARDA_ANTET=1`: garda pluginurilor adaugă atunci antetul
   `X-Andaxi-Garda`, ca testele să știe că a răspuns ea; pe site-uri variabila nu există.
+  La fel `CMS_DEV_MARCAJE_PORT=1`: `App\Support\Dev::marcaj()` scrie atunci marcajele
+  porturilor (mai jos); pe site-uri e un șir gol.
 
 ### Ce nu poate ieși din calculator
 
@@ -226,11 +256,33 @@ Setările de dezvoltare: numele magazinului „Firma Demo”, emailuri doar
 `@exemplu.ro`, plăți/ERP/FAN ca în tabelul de mai sus; restul setărilor rămân
 cele implicite din cod (de exemplu TVA 19%, numerotarea comenzilor de la 203800).
 
+### Bioscem nu se schimbă: cum se dovedește
+
+Până trece pe codul comun, Bioscem merge pe codul lui (`Nou-site-bioscem`). Dovada că
+ANDAXI-CMS face exact ce face Bioscem e comparația cu **codul Bioscem însuși**, nu cu o
+copie veche din acest repo:
+
+- [de-portat.md](de-portat.md) ține, pentru fiecare cod vechi, „ultimul commit revizuit”
+  și starea fiecărui commit de după desprindere. `tools/dev/php.sh tools/dev/de-portat.php`
+  arată ce a apărut nou (verificarea săptămânală). Un commit Bioscem portat mută „ultimul
+  commit revizuit” la el; `compara-cu-baza.sh` se compară apoi cu acel commit.
+- `compara-cu-baza.sh` (cu licența „toate” și cu `--licenta=bioscem`) trebuie să iasă cu 0.
+  O diferență voită se declară în `compara-cu-baza.php`, cu pagina și motivul ei: textele
+  mici în listele `$deBioscem` (ce scrie nucleul altfel decât Bioscem), `$porturiBiovitality`,
+  `$porturiVertij`, `$porturiGrafo`; o bucată mai mare adusă dintr-un site vechi se scrie
+  între marcaje, `<?= Dev::marcaj('bv:nume') ?>…<?= Dev::marcaj('bv:nume', true) ?>`
+  (`App\Support\Dev`), declarate în `$marcajePort`. Un marcaj se scrie la mijlocul rândului
+  (un `?>` de la capăt de rând înghite sfârșitul de rând); fiecare trebuie găsit exact o dată
+  pe pagina lui. Ce vede clientul altfel intră și în `site-uri/bioscem/ce-se-schimba.md`.
+- Ce nu se vede în HTML (scripturile de cron, `install.php`, `diagnostic.php`, un JavaScript
+  care se schimbă doar cu un plugin oprit) e scris în capul lui `compara-cu-baza.sh`.
+
 ### Testul de fum (`tools/dev/smoke.sh`)
 
 Pornește de la o bază goală și verifică, în ordine:
 
-1. instalarea (`install.php` + `seed.php` + date demo);
+1. instalarea (`install.php` + `seed.php` + date demo), apoi, fără server,
+   instantaneul rutelor și mecanismul diferențelor declarate ale comparației cu baza;
 2. site-ul public: acasă, magazin, categorie, marcă, produs cu și fără șablon,
    produs cu oferte BBD, produs la precomandă, căutare, adăugare în coș, coș,
    checkout, login, înregistrare, cont fără login (redirect), blog, articol,
@@ -241,7 +293,9 @@ Pornește de la o bază goală și verifică, în ordine:
 3. o comandă reală, ramburs, plasată ca un client (cu protecția anti-robot):
    redirect la pagina de mulțumire, comanda în bază, emailul capturat;
 4. adresele de confirmare fără semnătură (Stripe, EuPlătesc, BT, ERP): trebuie
-   refuzate (400/401/403), niciodată 404 sau 500;
+   refuzate (400/401/403), niciodată 404 sau 500; adresele pluginurilor care nu sunt în
+   pachet (`/login`, `/register`, `/auth/google`, `/plata/…`, recenziile, `POST /contul-meu/login`)
+   dau 404 cu antetul gărzii;
 5. contul de client (login + istoricul comenzilor);
 6. adminul: login, dashboard, **fiecare intrare din meniu** (citită din
    pagină, nu scrisă de mână), paginile la care se ajunge din butoane, exporturi,
@@ -258,7 +312,8 @@ Raportul: `storage/logs/dev/smoke-raport.txt`. Codul de ieșire e 0 doar dacă
 totul a trecut.
 
 **Pe pachete** (`--pachet=<nume>` sau `--toate-pachetele`): după instalare se
-pune licența pachetului (prezentare, catalog, magazin, asociatie), iar fiecare
+pune licența pachetului (prezentare, catalog, magazin, asociatie; sau, cu `--pachet=`,
+licența de dezvoltare a unui site existent: bioscem, biovitality, vertij, grafoanaytis), iar fiecare
 verificare știe al cui plugin e pagina. Paginile pluginurilor care nu sunt în
 pachet trebuie să dea 404 pe site și „Modulul nu este inclus în abonament” (403)
 în admin; comanda, emailul ei și verificările cronurilor acelor pluginuri sunt
@@ -307,6 +362,14 @@ separate.
    oprea pagina (`TypeError`). Găsit de testul pluginurilor, care cere fiecare
    rută. **Reparat** (al doilea parametru nu se mai trimite); pagina de
    mulțumire reală, `/checkout/succes/<număr>`, nu era afectată.
+
+8. **Securitate formulare: rândurile din aceeași secundă nu au o ordine fixă.** Lista
+   unește jurnalul de înregistrare și pe cel de checkout și le ordonează după
+   `created_at, id`; un rând din fiecare tabel cu aceeași secundă și același id (le scriu
+   testele, câte o cerere în fiecare) apare când într-o ordine, când în alta. Găsit de
+   comparația cu codul Bioscem (are aceeași interogare). Nereparat (schimbă doar ordinea a
+   două rânduri din admin, rar); `compara-cu-baza.php` scoate din baza de test rândurile de
+   checkout care se suprapun așa, înainte de comparare.
 
 De știut (nu sunt erori):
 

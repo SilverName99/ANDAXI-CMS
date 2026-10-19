@@ -9,7 +9,8 @@ declare(strict_types=1);
  *
  *   tools/dev/php.sh tools/dev/licenta.php cheie                 # perechea de chei (o face dacă lipsește)
  *   tools/dev/php.sh tools/dev/licenta.php toate                 # toate pluginurile pornite
- *   tools/dev/php.sh tools/dev/licenta.php bioscem               # ca licența reală a Bioscem: tot ce e portat, fără unealta internă
+ *   tools/dev/php.sh tools/dev/licenta.php bioscem               # licența de dezvoltare a Bioscem (licente_dev, fără unealta internă)
+ *   tools/dev/php.sh tools/dev/licenta.php grafoanaytis          # la fel: biovitality, vertij, grafoanaytis
  *   tools/dev/php.sh tools/dev/licenta.php magazin               # pachetul Magazin
  *   tools/dev/php.sh tools/dev/licenta.php magazin cupoane=pornit magazin=se_opreste
  *   tools/dev/php.sh tools/dev/licenta.php lista blog=pornit     # doar ce scrie (restul oprit)
@@ -17,13 +18,17 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/licenta.php stari                 # starea efectivă a fiecărui plugin
  *   tools/dev/php.sh tools/dev/licenta.php cron                  # cronurile pluginurilor și dacă ar rula acum
  *   tools/dev/php.sh tools/dev/licenta.php arata                 # licența folosită acum și problemele ei
+ *   tools/dev/php.sh tools/dev/licenta.php presetari             # numele licențelor de test (pentru smoke.sh)
  *
  * Opțiuni: --versiune=N (implicit: următoarea), --site=ID (implicit LICENTA_SITE),
  * --redirect=plugin:/cale (adresele publice ale pluginului oprit duc acolo).
  *
  * Pachetele: prezentare, catalog, magazin, asociatie (din config/plugins.php,
  * fără opționale; la Magazin toate cele trei plăți cu cardul), toate (inclusiv
- * unealta internă) și bioscem (toate pluginurile portate, fără unealta internă). Cheia privată stă în $CMS_DEV_DIR (implicit
+ * unealta internă) și licențele de dezvoltare ale celor patru site-uri existente
+ * (bioscem, biovitality, vertij, grafoanaytis: liste scrise explicit în
+ * config/plugins.php → licente_dev, ce are codul vechi al fiecăruia; un plugin portat
+ * mai târziu nu intră singur în ele). Cheia privată stă în $CMS_DEV_DIR (implicit
  * storage/logs/dev), niciodată în git; site-ul primește doar cheia publică, prin
  * LICENTA_CHEIE_PUBLICA (tools/dev/comun.sh o pune singur).
  */
@@ -90,6 +95,12 @@ $versiuneDinFisier = static function (string $fisier): int {
 };
 
 switch ($comanda) {
+    case 'presetari':
+        // Toate numele pe care le înțelege comanda de mai jos (fără „lista”).
+        echo implode("\n", array_merge(['toate', 'fara'], array_keys((array) ($catalog['licente_dev'] ?? [])),
+            array_keys((array) ($catalog['pachete'] ?? [])))), "\n";
+        exit(0);
+
     case 'stari':
         foreach (Plugins::stari() as $cheie => $stare) {
             echo $cheie, ' ', $stare, "\n";
@@ -135,12 +146,13 @@ $chei = array_keys($catalog['pluginuri']);
 $pluginuri = [];
 if ($comanda === 'toate') {
     $pluginuri = array_fill_keys($chei, 'pornit');
-} elseif ($comanda === 'bioscem') {
-    // Licența reală a Bioscem: tot ce are cod, fără unealta internă (nevândută).
-    foreach ($catalog['pluginuri'] as $cheie => $definitie) {
-        if (($definitie['portat'] ?? true) !== false && ($definitie['intern'] ?? false) !== true) {
-            $pluginuri[(string) $cheie] = 'pornit';
+} elseif (isset($catalog['licente_dev'][$comanda])) {
+    // Licența de dezvoltare a unui site existent: lista explicită din catalog.
+    foreach ((array) $catalog['licente_dev'][$comanda] as $cheie) {
+        if (!in_array($cheie, $chei, true)) {
+            $opreste('licente_dev.' . $comanda . ' are pluginul necunoscut „' . $cheie . '”.');
         }
+        $pluginuri[(string) $cheie] = 'pornit';
     }
 } elseif ($comanda === 'lista') {
     // doar perechile date

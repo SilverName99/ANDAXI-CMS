@@ -7,7 +7,10 @@
 #   tools/dev/smoke.sh                       # bază nouă + date demo + verificări + capturi, cu licența „toate”
 #   tools/dev/smoke.sh --fara-capturi        # fără Playwright
 #   tools/dev/smoke.sh --pachet=prezentare   # cu licența unui pachet (prezentare, catalog, magazin, asociatie, toate)
+#   tools/dev/smoke.sh --pachet=grafoanaytis # sau cu licența de dezvoltare a unui site existent (bioscem, biovitality,
+#                                            # vertij, grafoanaytis: config/plugins.php → licente_dev)
 #   tools/dev/smoke.sh --toate-pachetele     # pe rând: toate, magazin, catalog, prezentare, asociatie
+#   CMS_DEV_PHP=php8.0 tools/dev/smoke.sh …  # cu PHP-ul minim (config/app.php → php_min)
 #
 # Cu un pachet, fiecare verificare știe al cui plugin e pagina: dacă pluginul nu
 # e în pachet, așteaptă 404 pe site și „Modulul nu este inclus în abonament” (403)
@@ -49,9 +52,10 @@ if [ "$toate_pachetele" = 1 ]; then
     exit "$cod_total"
 fi
 
-case "$PACHET" in
-    toate|magazin|catalog|prezentare|asociatie) ;;
-    *) die "pachet necunoscut: $PACHET (prezentare, catalog, magazin, asociatie, toate)" ;;
+PRESETARI="$("$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/licenta.php" presetari | grep -vx fara | tr '\n' ' ')"
+case " $PRESETARI " in
+    *" $PACHET "*) ;;
+    *) die "pachet necunoscut: $PACHET ($PRESETARI)" ;;
 esac
 
 RAPORT="$CMS_DEV_DIR/smoke-raport.txt"
@@ -171,7 +175,7 @@ confirma_p() {
 
 : > "$RAPORT"
 scrie "Test de fum ANDAXI-CMS — $(date '+%Y-%m-%d %H:%M:%S')"
-scrie "Commit: $(git -C "$RADACINA" rev-parse --short HEAD 2>/dev/null || echo '?')  Bază: $CMS_DEV_DB  Port: $CMS_DEV_PORT  Licență: $PACHET"
+scrie "Commit: $(git -C "$RADACINA" rev-parse --short HEAD 2>/dev/null || echo '?')  Bază: $CMS_DEV_DB  Port: $CMS_DEV_PORT  Licență: $PACHET  PHP: $("$CMS_DEV_PHP" -r 'echo PHP_VERSION;')"
 scrie ""
 
 # 1. Bază goală -> install -> seed -> date demo (+ licența „toate”)
@@ -187,6 +191,13 @@ if [ "$PACHET" != "toate" ]; then
     "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/licenta.php" "$PACHET" | sed 's/^/  /' | tee -a "$RAPORT"
 fi
 incarca_starile
+
+# Fără server și fără bază: suprafața fiecărei licențe de test față de fișierele din git
+# (tools/dev/instantanee/) și mecanismul diferențelor declarate ale comparației cu baza.
+scrie ""
+scrie "== Instantaneul rutelor și diferențele declarate"
+confirma "instantaneul rutelor (tools/dev/instantaneu-rute.php)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/instantaneu-rute.php"
+confirma "marcajele de port din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
 
 # 2. Serverul
 "$RADACINA/tools/dev/server.sh" > /dev/null
@@ -290,6 +301,28 @@ verifica "webhook Stripe" "400|401|403" - POST /webhook/stripe
 verifica "webhook EuPlătesc" "400|401|403" - POST /webhook/euplatesc
 verifica "webhook BT iPay" "400|401|403" - POST /webhook/bt-ipay
 verifica "notificare ERP" "400|401|403" - POST /api/erp/notificare
+
+# Adresele pluginurilor care lipsesc din licență: răspunde garda (antetul X-Andaxi-Garda),
+# nu controllerul, și dă 404 (testul GR-14b; prinde o rută declarată greșit în catalog).
+scrie ""
+scrie "== Garda: adresele pluginurilor care nu sunt pe site"
+garda_404=0
+while read -r plugin metoda cale; do
+    vizibil "$plugin" && continue
+    garda_404=1
+    verifica "$plugin oprit: garda răspunde" 404 - "$metoda" "$cale"
+    confirma "… cu antetul X-Andaxi-Garda ($metoda $cale)" grep -qi '^X-Andaxi-Garda:' "$TMP/antet"
+done <<GARDA
+conturi_clienti GET /login
+conturi_clienti GET /register
+conturi_clienti GET /auth/google
+conturi_clienti GET /auth/google/callback
+conturi_clienti POST /contul-meu/login
+link_plata GET /plata/x
+recenzii POST /produs/x/review
+recenzii POST /review-form/submit
+GARDA
+[ "$garda_404" = 0 ] && scrie "  SĂRIT toate pluginurile acestor adrese sunt în pachet"
 
 scrie ""
 scrie "== Cont de client"

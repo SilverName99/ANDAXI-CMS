@@ -76,6 +76,8 @@ mt_srand(20261018); // aceleași date la fiecare rulare
 function cheamaPrivat(object $obiect, string $metoda, mixed ...$argumente): mixed
 {
     $m = new ReflectionMethod($obiect, $metoda);
+    // Pe PHP 8.0 (php_min) o metodă privată se cheamă prin Reflection doar după setAccessible.
+    $m->setAccessible(true);
     return $m->invoke($obiect, ...$argumente);
 }
 
@@ -839,6 +841,7 @@ $sumar = [
     'tranzacții puncte' => (int) $db->query('SELECT COUNT(*) FROM loyalty_points_transactions')->fetchColumn(),
 ];
 foreach ($sumar as $ce => $cate) {
-    echo '  ' . mb_str_pad($ce, 20) . $cate . "\n";
+    // Ca mb_str_pad (abia din PHP 8.3), ca uneltele să meargă și cu php_min (8.0).
+    echo '  ' . $ce . str_repeat(' ', max(0, 20 - mb_strlen($ce))) . $cate . "\n";
 }
 echo "Date demo gata. Clienții demo au aceeași parolă ca adminul de test.\n";

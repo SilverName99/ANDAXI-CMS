@@ -321,7 +321,11 @@ $pornesteServer = static function (int $portNou, array $mediu) use ($radacina, $
 $opresteServerele = static function () use (&$serverePornite): void {
     foreach ($serverePornite as $pid) {
         if ($pid > 0) {
-            exec('kill ' . (int) $pid . ' 2>/dev/null');
+            // Cu tot cu procesele de lucru: pe PHP 8.0 nu se opresc odată cu procesul principal.
+            exec('pkill -TERM -P ' . (int) $pid . ' 2>/dev/null; kill ' . (int) $pid . ' 2>/dev/null');
+            for ($i = 0; $i < 50 && trim((string) shell_exec('pgrep -P ' . (int) $pid . ' 2>/dev/null')) !== ''; $i++) {
+                usleep(100000);
+            }
         }
     }
     $serverePornite = [];

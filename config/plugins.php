@@ -247,6 +247,8 @@ return [
             'nume' => 'Legătura cu ERP-ul ANDAXI',
             'descriere' => 'Comenzile și stocul cu ERP-ul, retururile, aprobarea comenzilor din ERP, „client agresiv”.',
             'necesita' => ['magazin'],
+            // Comenzile pleacă în ERP (facturi, încasări): la CRM, ca orice plugin cu bani (OD-36, D7).
+            'bani' => true,
             'rute_admin' => ['/admin/settings/erp', '/admin/orders/{id}/erp-retry'],
             'rute_mereu_deschise' => ['POST /api/erp/notificare', 'POST /api/erp/adrese'],
             'meniu' => [
@@ -580,5 +582,33 @@ return [
             'pluginuri' => ['conturi_clienti', 'plata_stripe', 'donatii', 'membri'],
             'optionale' => ['blog', 'newsletter', 'chat_live'],
         ],
+    ],
+
+    /**
+     * Licențele de dezvoltare ale celor patru site-uri existente, scrise explicit
+     * (tools/dev/licenta.php <site>, compara-cu-baza.sh --licenta=bioscem,
+     * instantaneu-rute.php). Doar pentru teste: ce funcții are codul vechi al
+     * fiecărui site (din repo-ul lui), nu contractul clientului. Contractul îl
+     * hotărăște CRM-ul și nu stă în acest repo.
+     *
+     * Scrise de mână, nu „tot ce e portat”: un plugin portat mai târziu (de exemplu
+     * cereri_oferta din grafoanaytis) nu intră singur în licența Bioscem, deci
+     * comparația cu Bioscem nu-l poate ascunde. Un plugin nou intră aici doar
+     * explicit, cu motivul lui.
+     */
+    'licente_dev' => [
+        // Ce avea codul Bioscem la 4915478 (tot ce era portat, fără unealta internă);
+        // instantaneu-rute.php verifică lista. plata_stripe rămâne până la decizia OD-33.
+        'bioscem' => ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_euplatesc', 'plata_bt', 'link_plata', 'erp',
+            'cupoane', 'fidelitate', 'recenzii', 'precomenzi', 'oferte_bbd', 'produse_promo', 'conturi_clienti', 'blog',
+            'newsletter', 'chat_live', 'manechin', 'acorduri_gdpr'],
+        // Codul Biovitality: fără EuPlătesc, BT și precomenzi; cu pachete, fișiere în cloud și concurența (neportate încă).
+        'biovitality' => ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'link_plata', 'erp', 'cupoane', 'fidelitate',
+            'recenzii', 'oferte_bbd', 'produse_promo', 'pachete_produse', 'conturi_clienti', 'blog', 'newsletter', 'chat_live',
+            'fisiere_cloud', 'concurenta', 'manechin', 'acorduri_gdpr'],
+        // vertij: asociația (conturi, Stripe, donații, membri), blogul și newsletterul; magazinul e adormit.
+        'vertij' => ['conturi_clienti', 'plata_stripe', 'donatii', 'membri', 'blog', 'newsletter'],
+        // grafoanaytis: catalog fără prețuri și cereri de ofertă în locul coșului (pachetul „Catalog”).
+        'grafoanaytis' => ['catalog', 'cereri_oferta'],
     ],
 ];

@@ -16,11 +16,7 @@ PID_FISIER="$CMS_DEV_DIR/server.pid"
 
 opreste() {
     if [ -s "$PID_FISIER" ] && kill -0 "$(cat "$PID_FISIER")" 2>/dev/null; then
-        kill "$(cat "$PID_FISIER")" 2>/dev/null || true
-        for _ in $(seq 1 50); do
-            kill -0 "$(cat "$PID_FISIER")" 2>/dev/null || break
-            sleep 0.1
-        done
+        opreste_server_php "$(cat "$PID_FISIER")"
         echo "Server oprit."
     fi
     rm -f "$PID_FISIER"

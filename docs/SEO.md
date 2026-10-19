@@ -209,10 +209,16 @@ constructorul Bioscem) blocată în robots.txt și exclusă din redirecționări
   corectă, fără buclă pe http, coșul și contul rămân pe www), mentenanța, oprirea de
   urgență;
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;
-- `tools/dev/compara-cu-baza.sh`: diferențele SEO față de codul de dinainte sunt
-  scrise explicit în `compara-cu-baza.php` (datele structurate, unde trebuie să
-  apară; robots.txt; width/height; poza principală; stilurile catalogului; textul
-  „Sitemap XML”); se scot doar ele, restul paginii se compară octet cu octet;
+- `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
+  cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere
+  mari, „/” final, potrivirea aproximativă a unui produs) și fiecare regulă din harta
+  adreselor vechi (cod, `Location`, pagină) ies identic. Singurele diferențe sunt
+  declarate în `$deBioscem` (locul regulii `/cos-cumparaturi` în robots.txt, explicația
+  „Sitemap XML” din admin). Fiecare livrare SEO nouă a Bioscem se dovedește la fel, după
+  ce „ultimul commit revizuit” din `docs/de-portat.md` se mută la ea. Istoric,
+  `--baza=f5ae5ea`: diferențele SEO față de codul de dinainte sunt scrise explicit
+  (datele structurate, unde trebuie să apară; robots.txt; width/height; poza principală;
+  stilurile catalogului; textul „Sitemap XML”) și se scot doar ele;
 - `tools/dev/verifica-rute.php`: fiecare adresă mereu deschisă e exclusă.
 
 ## 9. Ce nu e aici (încă)
