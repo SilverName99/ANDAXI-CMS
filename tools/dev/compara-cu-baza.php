@@ -17,6 +17,8 @@ declare(strict_types=1);
  * Plus, doar din pagina codului curent, diferențele SEO ale livrării 1 (docs/SEO.md),
  * scrise mai jos una câte una ($faraSeo): ce s-a scos se afișează pe pagină, iar
  * datele structurate trebuie să apară exact unde sunt așteptate ($jsonLdAsteptat).
+ * La fel textele schimbărilor portate din Bioscem după codul de bază
+ * ($porturiBioscem): fiecare exact o dată, pe pagina ei.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -249,6 +251,37 @@ $faraSeo = static function (string $cale, string $html, array &$gasite) use ($pr
     );
     return $html;
 };
+/**
+ * Schimbările din Bioscem portate după codul de bază, altele decât SEO: textul
+ * nou, exact cum îl scrie codul, pagina pe care trebuie să apară și ce era în
+ * locul lui. Se pun la loc, ca și cele SEO, doar în pagina codului curent; fiecare
+ * trebuie găsită o singură dată, exact pe pagina ei (altundeva, ori de mai multe
+ * ori, comparația pică). Un port nou care schimbă o pagină se adaugă aici, explicit.
+ */
+$porturiBioscem = [
+    // „AWB: numărul de colete poate fi ales în ERP la aprobare” (Setări livrare, doar cu ERP-ul pe site).
+    [
+        'nume' => 'colete alese în ERP',
+        'cale' => '/admin/settings/shipping',
+        'nou' => "0 = fără împărțire automată. Numărul calculat se poate schimba pe\n"
+            . "            fiecare comandă din ERP, înainte de aprobare.</small>",
+        'vechi' => '0 = fără împărțire automată.</small>',
+    ],
+];
+/** Pune la loc textele porturilor; întoarce pagina și, în $probleme, porturile negăsite sau găsite unde nu trebuie. */
+$faraPorturi = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($porturiBioscem): string {
+    foreach ($porturiBioscem as $port) {
+        $html = str_replace($port['nou'], $port['vechi'], $html, $n);
+        $asteptat = $cale === $port['cale'] ? 1 : 0;
+        if ($n !== $asteptat) {
+            $probleme[] = 'port „' . $port['nume'] . '” găsit de ' . $n . ' ori, așteptat ' . $asteptat;
+        }
+        if ($n > 0) {
+            $gasite['port ' . $port['nume']] = $n;
+        }
+    }
+    return $html;
+};
 /** [cale => tipurile JSON-LD așteptate]; orice altă pagină nu are date structurate. */
 $jsonLdAsteptat = static function (string $cale): array {
     return match (true) {
@@ -383,14 +416,17 @@ $pagini[] = ['viz', '/' . $paginaListe];
 $identice = 0;
 $diferite = [];
 $diferenteSeoAsteptate = [];
+$diferentePorturi = [];
 foreach ($pagini as [$rol, $cale]) {
     $r = [];
     foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
         $r[$eticheta] = $cerere($port, 'GET', $cale, $jaruri[$eticheta][$rol]);
     }
     $gasite = [];
+    $porturiGasite = [];
+    $problemePorturi = [];
     $a = $normalizeaza($r['baza']['corp']);
-    $b = $normalizeaza($faraSeo($cale, $r['curent']['corp'], $gasite));
+    $b = $normalizeaza($faraPorturi($cale, $faraSeo($cale, $r['curent']['corp'], $gasite), $porturiGasite, $problemePorturi));
     $eticheta = str_pad($rol, 13) . $cale;
     // Diferențele SEO așteptate: datele structurate exact unde trebuie, robots.txt cu regulile noi.
     $tipuriJsonLd = (array) ($gasite['JSON-LD'] ?? []);
@@ -410,13 +446,22 @@ foreach ($pagini as [$rol, $cale]) {
     if ($rezumatSeo !== '') {
         $diferenteSeoAsteptate[$eticheta] = $rezumatSeo;
     }
-    if ($problemeSeo === [] && $r['baza']['cod'] === $r['curent']['cod'] && $r['baza']['location'] === $r['curent']['location'] && $a === $b) {
+    $rezumatPorturi = implode('; ', array_keys($porturiGasite));
+    if ($rezumatPorturi !== '') {
+        $diferentePorturi[$eticheta] = $rezumatPorturi;
+    }
+    if ($problemeSeo === [] && $problemePorturi === [] && $r['baza']['cod'] === $r['curent']['cod']
+        && $r['baza']['location'] === $r['curent']['location'] && $a === $b) {
         $identice++;
-        echo '  OK    ', $r['curent']['cod'], '  ', $eticheta, $rezumatSeo !== '' ? '  (SEO: ' . $rezumatSeo . ')' : '', "\n";
+        echo '  OK    ', $r['curent']['cod'], '  ', $eticheta, $rezumatSeo !== '' ? '  (SEO: ' . $rezumatSeo . ')' : '',
+            $rezumatPorturi !== '' ? '  (' . $rezumatPorturi . ')' : '', "\n";
         continue;
     }
     if ($problemeSeo !== []) {
         echo '  SEO   ', $eticheta, ': ', implode('; ', $problemeSeo), "\n";
+    }
+    if ($problemePorturi !== []) {
+        echo '  PORT  ', $eticheta, ': ', implode('; ', $problemePorturi), "\n";
     }
     $nume = preg_replace('/[^a-z0-9]+/i', '_', trim($rol . $cale, '/')) ?: 'pagina';
     file_put_contents($dosarDiff . '/' . $nume . '.baza.html', $a);
@@ -445,5 +490,6 @@ foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
 }
 $db->prepare('DELETE FROM pages WHERE slug = :slug')->execute(['slug' => $paginaListe]);
 echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice, ', count($diferite), ' diferite; ',
-    count($diferenteSeoAsteptate), " pagini cu diferențele SEO așteptate (livrarea 1 SEO, scoase explicit înainte de comparare).\n";
+    count($diferenteSeoAsteptate), ' pagini cu diferențele SEO așteptate (livrarea 1 SEO), ', count($diferentePorturi),
+    " cu porturile din Bioscem; ambele scoase explicit înainte de comparare.\n";
 exit($diferite === [] ? 0 : 1);

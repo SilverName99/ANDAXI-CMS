@@ -554,7 +554,7 @@ $renderCampLocalitate = static function (string $name, string $value, string $nu
                    value="<?= htmlspecialchars((string) ($settings['fan_kg_max_colet'] ?? '13'), ENT_QUOTES) ?>">
             <small>Peste greutatea asta, comanda pleacă în mai multe colete.
             FAN taxează suplimentar coletele declarate sub greutatea reală.
-            0 = fără împărțire automată.</small>
+            0 = fără împărțire automată.<?= \App\Support\Plugins::vizibil('erp') ? " Numărul calculat se poate schimba pe\n            fiecare comandă din ERP, înainte de aprobare." : '' ?></small>
         </div>
         <div class="field">
             <label>Număr plicuri</label>

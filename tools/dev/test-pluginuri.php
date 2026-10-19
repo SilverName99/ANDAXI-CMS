@@ -1465,6 +1465,13 @@ try {
     $verifica('oprit (erp): nicio legătură cu ERP-ul, comanda rămâne doar pe site', ($impins['ok'] ?? true) === false
         && str_contains((string) $impins['message'], 'nu este inclusă în abonament') && \App\Support\ErpClient::fromSettings(['erp_url' => 'x', 'erp_api_key' => 'y']) === null,
         json_encode($impins, JSON_UNESCAPED_UNICODE));
+    // Setări livrare (FAN e pe site) nu mai spune că numărul de colete se schimbă din ERP.
+    @unlink($jar);
+    $cerere('POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parolaAdmin]);
+    $livrareFaraErp = $cerere('GET', '/admin/settings/shipping', $jar);
+    $verifica('oprit (erp): Setări livrare fără fraza despre coletele alese în ERP', $livrareFaraErp['cod'] === 200
+        && str_contains($livrareFaraErp['corp'], "0 = fără împărțire automată.</small>")
+        && !str_contains($livrareFaraErp['corp'], 'fiecare comandă din ERP'), 'cod ' . $livrareFaraErp['cod']);
     $db->prepare('UPDATE orders SET erp_status = :erp_status, erp_last_error = :erp_last_error, erp_next_retry_at = :erp_next_retry_at,
         erp_attempts = :erp_attempts, erp_order_id = :erp_order_id WHERE id = :id')->execute($randErp + ['id' => $idComanda]);
     \App\Support\Settings::save($db, ['erp_enabled' => (string) ($erpVechi['erp_enabled'] ?? '0')]);
@@ -1487,8 +1494,18 @@ try {
         && str_contains($nl['text'], 'programate_pornite=0'), $nl['text']);
     // Magazinul fără livrarea FAN: checkout-ul nu mai cere localitățile FAN și nu
     // oferă FANbox; o comandă cu localitatea scrisă de mână intră ca oricare alta.
+    // Regula coletelor din comanda trimisă în ERP („coleteCalcul”) e a livrării FAN:
+    // pleacă și cât FAN „se oprește” (comenzile existente își fac AWB-ul), lipsește fără FAN.
+    $randComanda = (array) $db->query('SELECT * FROM orders WHERE id = ' . $idComanda)->fetch(PDO::FETCH_ASSOC);
+    $stareFan = Plugins::stare('livrare_fan');
+    $coleteCuFan = \App\Support\ErpSync::buildPayload($db, $randComanda)['coleteCalcul'] ?? null;
     $puneLicenta(array_merge($pachet('toate'), ['livrare_fan' => 'oprit']));
     $cerere('GET', '/health');
+    $payloadFaraFan = \App\Support\ErpSync::buildPayload($db, $randComanda);
+    $verifica('regula coletelor pleacă în ERP doar cu FAN pe site (și cât FAN se oprește)', $stareFan === 'se_opreste'
+        && is_array($coleteCuFan) && array_keys($coleteCuFan) === ['tip', 'kgMaxColet', 'coleteMinim', 'greutateImplicitaKg', 'unSingurAwb']
+        && !array_key_exists('coleteCalcul', $payloadFaraFan) && ($payloadFaraFan['numarSite'] ?? '') !== '',
+        'FAN ' . $stareFan . ', cu FAN ' . json_encode($coleteCuFan) . ', fără FAN ' . (array_key_exists('coleteCalcul', $payloadFaraFan) ? 'are cheia' : 'fără cheie'));
     // Niciun AWB cerut la FAN: nici din aprobarea venită din ERP, nici din acțiunea în masă.
     $adminController = new \App\Http\Controllers\AdminController();
     $creeazaAwb = new ReflectionMethod($adminController, 'createFanAwbInternal');

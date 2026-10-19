@@ -17,7 +17,7 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 | `tools/dev/licenta.php` | Chei și licențe de test (dezvoltare). |
 | `tools/dev/verifica-rute.php` | Verifică că fiecare rută are proprietar, că catalogul corespunde codului și că blocurile pluginurilor din șabloane închid HTML-ul pe care îl deschid. |
 | `tools/dev/test-pluginuri.php` | Testele: licența, garda, fiecare pachet parcurs pagină cu pagină (și cu browserul, inclusiv textul vizibil), „se oprește”, comparația cu codul de bază, la cerere fiecare plugin oprit pe rând. |
-| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența reală a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`); diferențele SEO așteptate sunt scrise explicit și se scot înainte. |
+| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența reală a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`); diferențele așteptate (SEO și schimbările portate din Bioscem) sunt scrise explicit și se scot înainte. |
 | `scripts/diagnostic.php --licenta` | Verificarea dinaintea unui deploy: licența se verifică cu cheia și site-ul din `.env`? Iese cu 1 dacă nu. |
 | `tools/dev/crawl-pachet.cjs` | Trecerea cu Playwright prin paginile unui pachet (DOM și text după JavaScript, ferestrele comenzilor și ale produselor, contul clientului, erori JS, captura meniului). |
 | `tools/dev/test-seo.php` | Testele SEO pe fiecare pachet: sitemap, robots.txt, date structurate, redirecționări (niciodată pe adresele mereu deschise). Vezi [SEO.md](SEO.md). |
@@ -287,8 +287,10 @@ coșul flotant, administratori, emailuri, editorul de pagini, pe patru roluri de
 admin) și pagina pe care ajunge fiecare rol după login se compară cu codul de
 dinainte (`compara-cu-baza.sh`). Singurele diferențe sunt cele ale livrării 1 SEO
 (datele structurate, robots.txt, width/height și poza principală, stilurile
-catalogului, textul „Sitemap XML”), scrise una câte una în `compara-cu-baza.php`
-și scoase explicit înainte de comparare ([SEO.md](SEO.md)).
+catalogului, textul „Sitemap XML”, [SEO.md](SEO.md)) și cele ale schimbărilor
+portate din Bioscem după aceea (fraza despre coletele alese în ERP din Setări
+livrare), scrise una câte una în `compara-cu-baza.php` și scoase explicit înainte
+de comparare.
 
 ## Pluginurile, unul câte unul
 
@@ -358,7 +360,13 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Conține**: Setări livrare (meniul Configurare); în fereastra comenzii: AWB,
   previzualizarea AWB, urmărirea, FANbox; în checkout: alegerea unui FANbox și
   tariful calculat live de FAN; AWB-ul generat automat la comanda plătită sau
-  aprobată și emailul cu AWB; `/api/fan/…`; cronurile `fan-tracking-sync`,
+  aprobată și emailul cu AWB; cu ERP-ul pe site, regula coletelor trimisă cu
+  fiecare comandă (`coleteCalcul`: colet sau plic, kg maxim pe colet, minimul din
+  setări, greutatea implicită, un singur AWB sau câte unul per depozit, cu
+  aceleași valori implicite ca la emiterea AWB-ului) și numărul de colete ales în
+  ERP la aprobare (`coleteAlese`, întreg 1–99; trece pe AWB când comanda pleacă pe
+  un singur AWB; pe AWB-urile per depozit nu se aplică și se notează în jurnalul de
+  activitate); `/api/fan/…`; cronurile `fan-tracking-sync`,
   `fan-lockers-sync`, `fan-nomenclator-sync` (cer „vizibil”). Tabele: `fan_*`,
   `orders.fan_*`.
 - **Are nevoie de**: magazin.
@@ -368,8 +376,10 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Oprit**: nimic FAN în checkout, în comandă sau în meniu; niciun AWB nu se mai
   cere la FAN, de nicăieri: nici automat la plată, nici din aprobarea venită din
   ERP (comanda trece doar în procesare; răspunsul către ERP spune că livrarea nu
-  se face prin FAN de pe site), nici din acțiunea în masă din comenzi („AWB” în
-  masă dă „Modulul nu este inclus în abonament”); datele de acces FAN rămân în
+  se face prin FAN de pe site; un `coleteAlese` venit de acolo se ignoră, iar
+  comenzile trimise în ERP nu mai poartă `coleteCalcul`), nici din acțiunea în
+  masă din comenzi („AWB” în masă dă „Modulul nu este inclus în abonament”);
+  datele de acces FAN rămân în
   setări, nefolosite. Exportul comenzilor fără coloana „AWB”. Cronurile ies cu o linie. În checkout localitatea se scrie de
   mână (nu se mai cere lista de localități FAN; județele rămân din datele
   salvate, altfel câmp liber). Explicațiile despre AWB din Automatizări, din
@@ -434,7 +444,8 @@ dispar, iar linkurile spre el se scot din pagini.
   comenzilor trimise așteaptă pe starea lor; meniul și coloanele ERP dispar;
   cronul iese cu o linie. Explicațiile care spun ce face ERP-ul (în comenzi, în
   Setări plăți, în fișa produsului: „pleacă în ERP”, „factura există deja în
-  ERP”, „aprobarea din ERP”) se scurtează la ce se întâmplă pe site; bifa BT
+  ERP”, „aprobarea din ERP”; în Setări livrare, numărul de colete schimbat din
+  ERP) se scurtează la ce se întâmplă pe site; bifa BT
   „încasează la aprobarea din ERP” se ascunde și își păstrează valoarea; o
   precomandă eliberată doar iese din așteptare. Emailurile BT către magazin
   („aprobând comanda în ERP”, „nu fuseseră aprobate în ERP la timp”) pierd bucata

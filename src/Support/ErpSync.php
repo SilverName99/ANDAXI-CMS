@@ -611,7 +611,7 @@ final class ErpSync
             (string) ($order['billing_email'] ?? ''),
         );
 
-        return [
+        $payload = [
             'numarSite' => (string) $order['order_number'],
             'dataComanda' => self::iso((string) ($order['created_at'] ?? '')),
 
@@ -664,6 +664,46 @@ final class ErpSync
             'observatiiInterne' => self::notaPentruErp($order),
 
             'linii' => self::buildLines($db, $orderId),
+        ];
+
+        // Regula după care site-ul socotește coletele AWB-ului. ERP-ul arată pe
+        // comandă același număr, din liniile lui, și îl lasă schimbat înainte de
+        // aprobare: greutatea nu știe că 10 produse ușoare au plecat în două
+        // cutii. E a livrării FAN: fără pluginul ei pe site nu se face niciun
+        // AWB, deci cheia lipsește (ERP-ul o tratează ca la un magazin vechi).
+        if (Plugins::vizibil('livrare_fan')) {
+            $payload['coleteCalcul'] = self::coleteCalcul(Settings::all($db));
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Setările din care se calculează numărul de colete al AWB-ului, trimise
+     * ERP-ului ca să ajungă la același număr ca site-ul.
+     *
+     * Aceleași valori implicite și aceleași conversii ca la emiterea AWB-ului
+     * (AdminController::buildFanShipmentPayload și fanNumarColete): dacă ar
+     * diferi, ERP-ul ar arăta alt număr decât pleacă pe AWB.
+     *
+     * @return array{tip: string, kgMaxColet: float, coleteMinim: int, greutateImplicitaKg: float, unSingurAwb: bool}
+     */
+    public static function coleteCalcul(array $settings): array
+    {
+        $tip = trim((string) ($settings['fan_shipment_type'] ?? 'parcel'));
+
+        $greutateImplicita = (float) ($settings['fan_default_weight_kg'] ?? 1);
+        if ($greutateImplicita <= 0) {
+            $greutateImplicita = 1.0;
+        }
+
+        return [
+            'tip' => $tip === 'envelope' ? 'plic' : 'colet',
+            // 0 = fără împărțire după greutate.
+            'kgMaxColet' => max(0.0, (float) str_replace(',', '.', (string) ($settings['fan_kg_max_colet'] ?? '13'))),
+            'coleteMinim' => max(1, (int) ($settings['fan_parcel_count'] ?? 1)),
+            'greutateImplicitaKg' => $greutateImplicita,
+            'unSingurAwb' => (string) ($settings['fan_awb_single'] ?? '1') === '1',
         ];
     }
 
