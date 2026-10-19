@@ -16,6 +16,7 @@ declare(strict_types=1);
  *
  * „cale” e pagina comparată (cu parametrii ei, ca în lista de pagini) sau un prefix
  * terminat în „*” („/admin*” = fiecare pagină comparată care începe cu /admin).
+ * Plus anteturile răspunsului, normalizate pentru comparare (diferente_antete).
  * Funcții pure (fără server și fără bază), verificate de diferente_autotest().
  */
 
@@ -112,6 +113,47 @@ function diferente_marcaje(array $marcaje, string $cale, string $html, array &$g
 }
 
 /**
+ * Anteturile unui răspuns, cum se compară (după cod, Location și corp): tot ce trimite
+ * codul (Content-Type, Cache-Control, Expires, Pragma, X-Robots-Tag, Set-Cookie, Vary,
+ * Link, Content-Disposition, Retry-After …), cu numele în litere mici, în ordinea în care
+ * le trimite codul. Nu intră doar ce nu ține de cod:
+ *  - Date (ora cererii) și Connection, Host (serverul `php -S`);
+ *  - Content-Length: urmează corpul, care se compară oricum octet cu octet, după
+ *    scoaterea tokenurilor (care pot avea altă lungime);
+ *  - Location: se compară separat, cu portul serverului înlocuit;
+ *  - X-Andaxi-Garda: îl scrie garda doar pe serverele de dezvoltare (CMS_DEV_GARDA_ANTET),
+ *    nu pe site-uri; codul de stare al răspunsului se compară oricum.
+ * Valorile care se schimbă la fiecare cerere se maschează, dar antetul și restul lui rămân:
+ * Set-Cookie (valoarea cookie-ului și data expirării; numele și atributele se compară),
+ * ETag și Last-Modified. Portul serverului de bază devine cel al codului curent.
+ *
+ * @return list<string>
+ */
+function diferente_antete(string $antet, string $portBaza, string $portCurent): array
+{
+    $linii = [];
+    foreach (preg_split('/\r?\n/', $antet) ?: [] as $linie) {
+        if (!str_contains($linie, ':') || preg_match('#^HTTP/\d#', $linie) === 1) {
+            continue;
+        }
+        [$nume, $valoare] = array_map('trim', explode(':', $linie, 2));
+        $nume = strtolower($nume);
+        if (in_array($nume, ['date', 'connection', 'host', 'content-length', 'location', 'x-andaxi-garda'], true)) {
+            continue;
+        }
+        $valoare = str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $valoare);
+        if ($nume === 'set-cookie') {
+            $valoare = (string) preg_replace('/^([^=;]+)=[^;]*/', '$1=<VALOARE>', $valoare);
+            $valoare = (string) preg_replace('/(;\s*expires=)[^;]*/i', '$1<DATA>', $valoare);
+        } elseif ($nume === 'etag' || $nume === 'last-modified') {
+            $valoare = '<VALOARE>';
+        }
+        $linii[] = $nume . ': ' . $valoare;
+    }
+    return $linii;
+}
+
+/**
  * Verificarea mecanismului, fără server: un marcaj declarat dar lipsă, unul găsit de
  * două ori, unul nedeclarat, unul fără pereche, un text pe altă pagină trebuie să pice;
  * cazurile bune trebuie să treacă și să lase exact pagina de bază.
@@ -168,5 +210,25 @@ function diferente_autotest(): array
     $ruleaza('text declarat fără motiv', static fn (array &$g, array &$p): string
         => diferente_texte(['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => '']]],
             '/magazin', '<b>Text nou</b>', $g, $p), true);
+
+    // Anteturile: ce nu ține de cod (ora, lungimea, valoarea cookie-ului) nu contează; un antet
+    // pierdut, schimbat sau mutat, ori un atribut de cookie schimbat, contează.
+    $antet = static fn (string $port, string $cc, string $extra = '', string $cookie = 'abc123; path=/; HttpOnly; SameSite=Lax'): string
+        => "HTTP/1.1 200 OK\r\nHost: 127.0.0.1:" . $port . "\r\nDate: Mon, 19 Oct 2026 10:00:0" . strlen($cc) % 10 . " GMT\r\n"
+        . 'Set-Cookie: PHPSESSID=' . $cookie . "\r\nContent-Type: application/xml; charset=utf-8\r\nCache-Control: " . $cc . "\r\n"
+        . $extra . 'Content-Length: ' . strlen($cc) . "\r\nLink: <http://127.0.0.1:" . $port . "/>; rel=\"canonical\"\r\n\r\n";
+    $baza = diferente_antete($antet('8702', 'public, max-age=3600', "X-Robots-Tag: noindex\r\n"), '8702', '8705');
+    $cazuriAntete = [
+        'aceleași anteturi, altă oră, alt cookie, alt port' => [$antet('8705', 'public, max-age=3600', "X-Robots-Tag: noindex\r\nX-Andaxi-Garda: 1\r\n", 'zz9; path=/; HttpOnly; SameSite=Lax'), true],
+        'X-Robots-Tag pierdut' => [$antet('8705', 'public, max-age=3600'), false],
+        'Cache-Control schimbat' => [$antet('8705', 'public, max-age=60', "X-Robots-Tag: noindex\r\n"), false],
+        'atribut de cookie schimbat' => [$antet('8705', 'public, max-age=3600', "X-Robots-Tag: noindex\r\n", 'abc123; path=/; SameSite=Lax'), false],
+        'antet în plus' => [$antet('8705', 'public, max-age=3600', "X-Robots-Tag: noindex\r\nVary: Cookie\r\n"), false],
+    ];
+    foreach ($cazuriAntete as $caz => [$curent, $trebuieIdentice]) {
+        if ((diferente_antete($curent, '8702', '8705') === $baza) !== $trebuieIdentice) {
+            $esecuri[] = 'anteturi, ' . $caz . ': ' . ($trebuieIdentice ? 'trebuiau să iasă identice' : 'trebuia să pice și a trecut');
+        }
+    }
     return $esecuri;
 }

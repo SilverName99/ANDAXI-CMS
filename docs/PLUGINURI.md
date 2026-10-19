@@ -745,10 +745,15 @@ O rută nouă (sau un proprietar schimbat) schimbă instantaneul rutelor: se rul
 același commit, ca schimbarea suprafeței fiecărui pachet să se vadă la revizie.
 O acțiune a unui plugin trimisă printr-o rută comună (de exemplu `bulk_action` din
 comenzi) se declară în `rute_impartite`, ca garda s-o oprească; verificarea se
-pune și acolo unde se face lucrul (de exemplu `createFanAwbInternal`).
+pune și acolo unde se face lucrul (de exemplu `createFanAwbInternal`). Instantaneul
+are câte un rând pentru fiecare valoare din fiecare listă a `rute_impartite`, deci
+o valoare mutată la alt plugin se vede în `git diff`.
 O adresă la care răspunde un procesator, ERP-ul sau un link dintr-un email trimis se
 declară în `rute_mereu_deschise`: așa răspunde oricare ar fi starea pluginului și
-nu primește niciodată o redirecționare SEO (vezi [SEO.md](SEO.md)). Paginile publice
+nu primește niciodată o redirecționare SEO (vezi [SEO.md](SEO.md)). Se adaugă și în
+lista fixă `$mereuDeschiseFixe` din `instantaneu-rute.php`, cu metoda ei: o adresă
+mereu deschisă care nu e acolo face instantaneul să pice (și cu `--actualizeaza`),
+ca o adresă a coșului sau a plăților să nu poată ajunge deschisă din catalog. Paginile publice
 noi ale unui plugin intră în harta site-ului doar dacă `App\Support\Sitemap` le
 adaugă, cu verificarea pluginului (`Plugins::vizibil`).
 

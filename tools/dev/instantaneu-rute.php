@@ -27,9 +27,11 @@ declare(strict_types=1);
  * Plus regulile scrise aici, care nu depind de catalog (ar rămâne adevărate chiar dacă
  * cineva greșește proprietarul unei rute): fără magazin, coșul, checkout-ul, plățile și
  * comenzile nu ajung niciodată la controller; la fel conturile fără conturi de clienți,
- * recenziile fără recenzii, acordurile GDPR fără pluginul lor; adresele mereu deschise
- * rămân MEREU în orice licență; licente_dev.bioscem e exact ce avea Bioscem la 4915478.
- * Ele pică și cu --actualizeaza.
+ * recenziile fără recenzii, acordurile GDPR fără pluginul lor (MEREU contează aici tot ca
+ * „ajunge la controller”); adresele mereu deschise rămân MEREU în orice licență și sunt
+ * doar cele din lista fixă $mereuDeschiseFixe (o adresă declarată mereu deschisă doar în
+ * catalog pică); licente_dev.bioscem e exact ce avea Bioscem la 4915478. Ele pică și cu
+ * --actualizeaza.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -147,10 +149,17 @@ $faraPlugin = [
     ['acorduri_gdpr', 'GET', '#^/acorduri-gdpr$#'],
     ['acorduri_gdpr', null, '#^/admin/users/gdpr-agreements#'],
 ];
-// Adresele la care răspund procesatorii, ERP-ul și linkurile din emailurile trimise.
+// Adresele la care răspund procesatorii, ERP-ul și linkurile din emailurile trimise: singurele
+// care au voie să fie MEREU (ajung la controller și fără pluginul lor). Una nouă, declarată în
+// catalog (rute_mereu_deschise), pică până se adaugă și aici, cu metoda ei.
 $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /webhook/bt-ipay', 'GET /checkout/bt/retur',
     'POST /checkout/succes/{orderNumber}', 'POST /api/erp/notificare', 'POST /api/erp/adrese', 'GET /newsletter/unsubscribe/{token}',
     'GET /newsletter/track/open/{campaignId}/{subscriberId}/{token}', 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}'];
+$mereuDeschiseFixeNorm = [];
+foreach ($mereuDeschiseFixe as $adresa) {
+    [$metodaFixa, $tiparFix] = explode(' ', $adresa, 2);
+    $mereuDeschiseFixeNorm[$metodaFixa . ' ' . Plugins::normalizeazaTipar($tiparFix)] = true;
+}
 $mereuDeschiseCatalog = [];
 foreach (array_merge([$catalog['nucleu']], $catalog['pluginuri']) as $definitie) {
     foreach ((array) ($definitie['rute_mereu_deschise'] ?? []) as $text) {
@@ -171,13 +180,21 @@ foreach ($licente as $numeLicenta => $stari) {
         $cale = $afisat($c);
         $rute[] = sprintf('%-4s %s -> %s [%s]', $c['metoda'], $cale, $rezultat, $chei);
         $cheieTipar = $c['metoda'] . ' ' . Plugins::normalizeazaTipar($c['tipar']);
+        // MEREU ajunge și el la controller; e voie doar pentru adresele din lista fixă de mai sus.
+        $mereuFix = isset($mereuDeschiseFixeNorm[$cheieTipar]);
         if ($rezultat === 'MEREU') {
             $gasiteMereu[$cheieTipar] = true;
+            if (!$mereuFix) {
+                $probleme[] = $numeLicenta . ': ' . $c['metoda'] . ' ' . $cale . ' e mereu deschisă (' . $chei . '), dar nu e în lista fixă '
+                    . '$mereuDeschiseFixe din instantaneu-rute.php (o adresă nouă mereu deschisă se adaugă acolo, explicit, cu motivul ei)';
+            }
         }
+        $ajungeLaController = $rezultat === 'CONTROLLER' || ($rezultat === 'MEREU' && !$mereuFix);
         foreach ($faraPlugin as [$plugin, $metoda, $tipar]) {
             if (!Plugins::vizibil($plugin) && ($metoda === null || $metoda === $c['metoda']) && preg_match($tipar, $cale) === 1
-                && $rezultat === 'CONTROLLER') {
-                $probleme[] = $numeLicenta . ': ' . $c['metoda'] . ' ' . $cale . ' ajunge la controller fără pluginul ' . $plugin . ' (proprietar: ' . $chei . ')';
+                && $ajungeLaController) {
+                $probleme[] = $numeLicenta . ': ' . $c['metoda'] . ' ' . $cale . ' ajunge la controller (' . $rezultat . ') fără pluginul '
+                    . $plugin . ' (proprietar: ' . $chei . ')';
             }
         }
     }

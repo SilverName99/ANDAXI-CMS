@@ -2,7 +2,7 @@
 # Pe site: plata_stripe, conturi_clienti, donatii, membri
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (248)
+RUTE (253)
 GET  / -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> 404 [acorduri_gdpr]
 GET  /admin -> CONTROLLER [nucleu]
@@ -27,6 +27,7 @@ GET  /admin/emails/builder?type=ecommerce -> 403 [magazin]
 GET  /admin/emails/newsletters -> 403 [newsletter]
 GET  /admin/emails/newsletters?tab=contact_forms -> CONTROLLER [nucleu]
 GET  /admin/emails/newsletters?tab=ecommerce -> 403 [magazin]
+GET  /admin/emails/newsletters?tab=history -> CONTROLLER [nucleu]
 GET  /admin/emails/{section} -> CONTROLLER [nucleu]
 GET  /admin/gallery -> CONTROLLER [nucleu]
 GET  /admin/login -> CONTROLLER [nucleu]
@@ -128,8 +129,12 @@ POST /admin/coupons -> 403 [cupoane]
 POST /admin/coupons/unique/action -> 403 [cupoane]
 POST /admin/coupons/unique/import -> 403 [cupoane]
 POST /admin/design/save -> CONTROLLER [nucleu]
+POST /admin/emails (section=automation) -> 403 [magazin]
+POST /admin/emails (section=newsletter-ecommerce-save) -> 403 [magazin]
+POST /admin/emails (section=newsletter-ecommerce-send-test) -> 403 [magazin]
 POST /admin/emails (section=newsletter-save) -> 403 [newsletter]
 POST /admin/emails (section=template-single) -> 403 [magazin]
+POST /admin/emails (section=template-toggle) -> 403 [magazin]
 POST /admin/emails -> CONTROLLER [nucleu]
 POST /admin/emails/builder (builder_type=ecommerce) -> 403 [magazin]
 POST /admin/emails/builder -> 403 [newsletter]

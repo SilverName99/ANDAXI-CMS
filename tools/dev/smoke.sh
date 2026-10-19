@@ -197,7 +197,7 @@ incarca_starile
 scrie ""
 scrie "== Instantaneul rutelor și diferențele declarate"
 confirma "instantaneul rutelor (tools/dev/instantaneu-rute.php)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/instantaneu-rute.php"
-confirma "marcajele de port din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
+confirma "diferențele declarate, marcajele de port și anteturile din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
 
 # 2. Serverul
 "$RADACINA/tools/dev/server.sh" > /dev/null

@@ -15,8 +15,10 @@
 # $CMS_DEV_DIR/baza-<repo>-<commit>, dintr-un commit al acestui repo în
 # $CMS_DEV_DIR/baza-<commit>. Pornește pe portul următor ($CMS_DEV_PORT + 1), cu
 # același mediu, aceeași bază și același PHP (CMS_DEV_PHP); ambele servere primesc
-# aceleași cereri (vizitator, client, admin), iar răspunsurile se compară după ce
-# se scot tokenurile și versiunile fișierelor. Diferențele: $CMS_DEV_DIR/compara/<pagina>.diff.
+# aceleași cereri (vizitator, client, admin), iar răspunsurile (codul, Location,
+# anteturile: Content-Type, Cache-Control, X-Robots-Tag, cookie-urile … și corpul) se
+# compară după ce se scot tokenurile și versiunile fișierelor. Diferențele (anteturile
+# în capul fiecărui fișier): $CMS_DEV_DIR/compara/<pagina>.diff.
 # Cod de ieșire 0 doar dacă toate paginile sunt identice.
 #
 # Față de Bioscem (implicit) nu se scoate nimic din livrarea 1 SEO și nimic din

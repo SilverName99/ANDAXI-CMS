@@ -10,7 +10,11 @@ declare(strict_types=1);
  *   php compara-cu-baza.php <port-baza> <eticheta-bazei> <dosarul-copiei-de-baza> <repo|commit> [<port-curent>]
  *   php compara-cu-baza.php --autotest     # doar verificarea mecanismului de diferențe (fără servere)
  *
- * Ce se scoate înainte de comparare (diferă la fiecare cerere, nu ține de cod):
+ * Se compară, pentru fiecare cerere: codul de stare, Location, anteturile răspunsului
+ * (diferente_antete: tot ce trimite codul, fără Date, Content-Length și antetul gărzii
+ * de dezvoltare; valoarea cookie-urilor, ETag și Last-Modified mascate) și corpul.
+ *
+ * Ce se scoate din corp înainte de comparare (diferă la fiecare cerere, nu ține de cod):
  * tokenurile formularelor (checkout, înregistrare, CSRF), momentul randării,
  * versiunea fișierelor CSS/JS (`?v=` = data fișierului pe disc), identificatorii
  * aleși la întâmplare ai formularelor, ora curentă.
@@ -43,7 +47,7 @@ if (in_array('--autotest', $argv, true)) {
     foreach ($esecuri as $esec) {
         echo '  EȘEC  ', $esec, "\n";
     }
-    echo $esecuri === [] ? "Mecanismul diferențelor așteptate (texte, marcaje de port): OK\n" : count($esecuri) . " cazuri greșite.\n";
+    echo $esecuri === [] ? "Mecanismul diferențelor așteptate (texte, marcaje de port, anteturi): OK\n" : count($esecuri) . " cazuri greșite.\n";
     exit($esecuri === [] ? 0 : 1);
 }
 
@@ -127,8 +131,11 @@ $cerere = static function (string $port, string $metoda, string $cale, string $j
     curl_close($c);
     $antet = substr($raspuns, 0, $marimeAntet);
     $location = preg_match('/^Location:\s*(\S+)/mi', $antet, $m) === 1 ? $m[1] : '';
-    return ['cod' => $cod, 'corp' => substr($raspuns, $marimeAntet), 'location' => $location];
+    return ['cod' => $cod, 'corp' => substr($raspuns, $marimeAntet), 'location' => $location, 'antete' => $antet];
 };
+
+// Anteturile răspunsului se compară și ele (tools/dev/lib/diferente-asteptate.php → diferente_antete).
+$normalizeazaAntete = static fn (string $antet): array => diferente_antete($antet, $portBaza, $portCurent);
 
 /** Ce diferă la fiecare cerere, indiferent de cod. */
 $normalizeaza = static function (string $html) use ($portBaza, $portCurent, $dosarBaza, $radacina, $faraUnealtaInterna): string {
@@ -537,6 +544,8 @@ if (!$fataDeCommit) {
 }
 
 $identice = 0;
+// Anteturile (normalizate) în capul fișierelor comparate, ca diff-ul să le arate și pe ele.
+$cuAntete = static fn (array $antete, string $corp): string => "ANTETE\n" . implode("\n", $antete) . "\n\nCORP\n" . $corp;
 $diferite = [];
 $diferenteSeoAsteptate = [];
 $diferentePorturi = [];
@@ -580,8 +589,10 @@ foreach ($pagini as $pagina) {
     }
     // Redirecționările absolute (adresa unică) poartă portul serverului.
     $locatieBaza = str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['baza']['location']);
+    $anteteBaza = $normalizeazaAntete($r['baza']['antete']);
+    $anteteCurente = $normalizeazaAntete($r['curent']['antete']);
     if ($problemeSeo === [] && $problemePorturi === [] && $r['baza']['cod'] === $r['curent']['cod']
-        && $locatieBaza === $r['curent']['location'] && $a === $b) {
+        && $locatieBaza === $r['curent']['location'] && $anteteBaza === $anteteCurente && $a === $b) {
         $identice++;
         if ($grup !== '') {
             $grupuriIdentice[$grup][$r['curent']['cod']] = ($grupuriIdentice[$grup][$r['curent']['cod']] ?? 0) + 1;
@@ -598,16 +609,19 @@ foreach ($pagini as $pagina) {
         echo '  PORT  ', $eticheta, ': ', implode('; ', $problemePorturi), "\n";
     }
     $nume = preg_replace('/[^a-z0-9]+/i', '_', trim($rol . $cale, '/')) ?: 'pagina';
-    file_put_contents($dosarDiff . '/' . $nume . '.baza.html', $a);
-    file_put_contents($dosarDiff . '/' . $nume . '.curent.html', $b);
+    file_put_contents($dosarDiff . '/' . $nume . '.baza.html', $cuAntete($anteteBaza, $a));
+    file_put_contents($dosarDiff . '/' . $nume . '.curent.html', $cuAntete($anteteCurente, $b));
     $diff = (string) shell_exec('diff -u ' . escapeshellarg($dosarDiff . '/' . $nume . '.baza.html') . ' '
         . escapeshellarg($dosarDiff . '/' . $nume . '.curent.html') . ' 2>&1');
     file_put_contents($dosarDiff . '/' . $nume . '.diff', $diff);
     $linii = substr_count($diff, "\n- ") + substr_count($diff, "\n+ ") + preg_match_all('/^[-+](?![-+])/m', $diff);
     $diferite[] = $eticheta;
+    $anteteDiferite = $anteteBaza === $anteteCurente ? '' : '  (antete: doar în bază ['
+        . implode('; ', array_diff($anteteBaza, $anteteCurente)) . '], doar acum [' . implode('; ', array_diff($anteteCurente, $anteteBaza))
+        . ']' . (array_diff($anteteBaza, $anteteCurente) === [] && array_diff($anteteCurente, $anteteBaza) === [] ? ', altă ordine' : '') . ')';
     echo '  DIFERĂ ', $r['baza']['cod'], '→', $r['curent']['cod'], '  ', $eticheta,
         $locatieBaza !== $r['curent']['location'] ? '  (Location: ' . $locatieBaza . ' → ' . $r['curent']['location'] . ')' : '',
-        '  (', $dosarDiff, '/', $nume, '.diff)', "\n";
+        $anteteDiferite, '  (', $dosarDiff, '/', $nume, '.diff)', "\n";
 }
 foreach ($grupuriIdentice as $grup => $coduri) {
     ksort($coduri);
@@ -639,7 +653,7 @@ foreach ($listeDeclarate as $numeLista => $lista) {
 if ($marcajePort !== []) {
     $declarate[] = count($marcajePort) . ' marcaje de port';
 }
-echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice, ', count($diferite), ' diferite; ',
+echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice (cod, Location, anteturi, corp), ', count($diferite), ' diferite; ',
     $fataDeCommit ? count($diferenteSeoAsteptate) . ' pagini cu diferențele SEO așteptate (livrarea 1 SEO), ' : '',
     count($diferentePorturi), ' pagini cu diferențe declarate (', $declarate === [] ? 'nicio declarație' : implode(', ', $declarate),
     "), scoase explicit înainte de comparare.\n";
