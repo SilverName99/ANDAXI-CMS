@@ -68,7 +68,10 @@ final class ResponseCache
         // Consimțământul intră în cheie: paginile diferă prin scripturile de
         // urmărire, iar o variantă „cu Analytics" nu are voie să ajungă la un
         // vizitator care a refuzat.
-        $cacheKey = sha1($path . '|' . $query . '|' . CookieConsent::cheieCache());
+        // Amprenta pluginurilor intră și ea: o pagină randată sub alte stări (de
+        // exemplu cu „Adaugă în coș” chiar când magazinul trecea în „se oprește”)
+        // nu se mai servește după schimbare, chiar dacă s-a salvat după golire.
+        $cacheKey = sha1($path . '|' . $query . '|' . CookieConsent::cheieCache() . '|' . Plugins::amprenta());
         $cacheDir = self::cacheDirectory();
         $cacheFile = $cacheDir . '/' . $cacheKey . '.html';
         $metaFile = $cacheDir . '/' . $cacheKey . '.json';

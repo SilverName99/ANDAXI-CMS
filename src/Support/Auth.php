@@ -18,7 +18,8 @@ final class Auth
     {
         return [
             self::ROLE_GENERAL => 'Administrator General',
-            self::ROLE_STORE => 'Administrator magazin',
+            // Pe un site cu catalog, dar fără magazin, rolul se ocupă doar de produse.
+            self::ROLE_STORE => Plugins::vizibil('magazin') || !Plugins::vizibil('catalog') ? 'Administrator magazin' : 'Administrator produse',
             self::ROLE_BLOG => 'Administrator Blog',
             self::ROLE_EMAILS => 'Administrator email-uri',
         ];

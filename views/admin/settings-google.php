@@ -26,7 +26,7 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
         <div class="settings-card" style="grid-column:1/-1;border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff;">
             <h2 style="margin:0 0 4px;font-size:17px;">Verificare proprietate</h2>
             <p class="muted" style="margin:0 0 14px;font-size:13px;">
-                Pentru Google Search Console și Merchant Center. Lipește aici meta tag-ul întreg
+                Pentru Google Search Console<?= \App\Support\Plugins::vizibil('catalog') ? ' și Merchant Center' : '' ?>. Lipește aici meta tag-ul întreg
                 (<code>&lt;meta name="google-site-verification" content="..."&gt;</code>) sau doar codul — îl curățăm automat.
                 Tag-ul va apărea în <code>&lt;head&gt;</code>-ul tuturor paginilor.
             </p>
@@ -105,7 +105,7 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
             </label>
             <p class="muted" style="margin:0 0 14px;font-size:13px;">
                 ID-ul de conversie (format <code>AW-XXXXXXXXX</code>) încarcă tag-ul global de remarketing pe tot site-ul.
-                Eticheta de conversie (opțională) declanșează evenimentul de conversie pe pagina de mulțumire la finalizarea comenzii.
+                Eticheta de conversie (opțională) declanșează evenimentul de conversie<?= \App\Support\Plugins::vizibil('magazin') ? ' pe pagina de mulțumire la finalizarea comenzii' : '' ?>.
             </p>
             <div style="display:flex;gap:14px;flex-wrap:wrap;">
                 <div class="field" style="margin:0;flex:1;min-width:240px;">

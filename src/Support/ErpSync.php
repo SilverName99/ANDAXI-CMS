@@ -91,10 +91,11 @@ final class ErpSync
         }
 
         // Pluginul „se oprește”: comenzile trimise deja se lucrează mai departe
-        // (modificări, anulări, retururi, AWB), dar cele noi nu mai pleacă.
-        // Comanda stă aici „în așteptare” și pleacă singură dacă pluginul e
-        // pornit din nou; nu consumă din încercări.
-        if (!Plugins::permiteInceput('erp') && !self::aAjunsInErp($order)) {
+        // (modificări, anulări, retururi, AWB), la fel cele plasate înainte de
+        // oprire (plătite sau confirmate abia acum); doar comenzile plasate după
+        // oprire nu mai pleacă. Comanda stă aici „în așteptare” și pleacă singură
+        // dacă pluginul e pornit din nou; nu consumă din încercări.
+        if (!Plugins::permiteInceput('erp') && !self::aAjunsInErp($order) && self::plasataDupaOprireaErp($order)) {
             self::mark($db, $orderId, self::STATUS_PENDING, [
                 'error' => self::MESAJ_PLUGIN_SE_OPRESTE,
                 'retry_in' => self::PAUZA_MODUL_OPRIT,
@@ -815,6 +816,21 @@ final class ErpSync
      * care n-a plecat niciodată și rămânea vie în ERP. Referința din ERP se
      * scrie la prima trimitere reușită și nu se mai șterge.
      */
+    /**
+     * Comanda a fost plasată după ce legătura cu ERP-ul a intrat în „se oprește”?
+     * Dacă ERP-ul se oprește doar pentru că se oprește magazinul (licența îl are
+     * „pornit”), checkout-ul e închis: tot ce e pe site s-a plasat înainte și pleacă.
+     */
+    private static function plasataDupaOprireaErp(array $order): bool
+    {
+        if (!Plugins::seOprestePrinLicenta('erp')) {
+            return false;
+        }
+        $din = Plugins::seOpresteDin('erp');
+        $plasata = strtotime((string) ($order['created_at'] ?? ''));
+        return $din === null || $plasata === false || $plasata >= $din;
+    }
+
     private static function aAjunsInErp(array $order): bool
     {
         $status = strtolower(trim((string) ($order['erp_status'] ?? '')));

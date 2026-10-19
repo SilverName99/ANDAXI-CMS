@@ -550,11 +550,13 @@ $bScheduledAt    = !empty($builder['scheduled_at'])
           <h4>Newsletter</h4>
           <p>Structură completă de newsletter</p>
         </div>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
         <div class="eb-starter-card" onclick="ebApplyStarter('order')">
           <div class="eb-starter-icon">📦</div>
           <h4>Email comandă</h4>
           <p>Template pentru notificări comandă</p>
         </div>
+<?php endif; ?>
         <div class="eb-starter-card" onclick="ebApplyStarter('simple')">
           <div class="eb-starter-icon">✉</div>
           <h4>Simplu</h4>

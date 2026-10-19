@@ -16,10 +16,12 @@ use App\Support\View;
  *
  *  - admin: pagina „Modulul nu este inclus în abonament” (403), în aspectul
  *    adminului; fără login, la pagina de login, ca orice pagină de admin;
- *  - site: pagina 404 a site-ului (sau redirecționarea din licență, dacă există);
+ *  - site: pagina 404 a site-ului (sau redirecționarea din licență, dacă duce
+ *    la o pagină care se vede pe site);
  *    pentru /api/… un 404 scurt, în JSON;
  *  - adresele de confirmare (plăți, ERP, linkuri din emailuri trimise) răspund
- *    MEREU; dacă pluginul e oprit, cererea se notează în jurnal.
+ *    MEREU; dacă pluginul e oprit, prima cerere din zi la fiecare adresă se
+ *    notează în jurnal.
  *
  * Proprietarul fiecărei rute vine din `config/plugins.php` (Plugins::proprietarRuta).
  */
@@ -34,7 +36,10 @@ final class GardaPluginuri
         $chei = implode('|', $proprietar['chei']);
 
         if ($proprietar['mereu_deschis']) {
-            Plugins::jurnal('Cerere ' . $metoda . ' ' . self::cale() . ' primită și procesată, deși pluginul ' . $chei . ' e oprit.');
+            // O dată pe zi pentru fiecare adresă: pixelul unui newsletter vechi sau un
+            // robot pe o adresă de confirmare nu are voie să umple jurnalul.
+            Plugins::jurnalOdataPeZi('mereu-deschisa|' . $chei . '|' . $metoda . ' ' . $tipar, 'Cerere ' . $metoda . ' ' . self::cale()
+                . ' primită și procesată, deși pluginul ' . $chei . ' e oprit (azi nu se mai notează altele la aceeași adresă).');
             return true;
         }
 
@@ -61,11 +66,12 @@ final class GardaPluginuri
             return false;
         }
 
-        // Adresa aleasă în CRM pentru pluginul oprit (de exemplu prima pagină); doar pentru GET.
+        // Adresa aleasă în CRM pentru pluginul oprit (de exemplu prima pagină); doar pentru GET
+        // și doar spre o pagină care se vede pe site (altfel: buclă sau 302 spre un 404).
         if ($metoda === 'GET') {
             foreach ($proprietar['chei'] as $cheie) {
                 $redirectionare = Plugins::redirectionare($cheie);
-                if ($redirectionare !== null && $redirectionare !== self::cale()) {
+                if ($redirectionare !== null && $redirectionare !== self::cale() && Plugins::adresaVizibila($redirectionare)) {
                     header('Location: ' . $redirectionare, true, 302);
                     return false;
                 }

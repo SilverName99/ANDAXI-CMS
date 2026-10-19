@@ -17,7 +17,8 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 | `tools/dev/licenta.php` | Chei și licențe de test (dezvoltare). |
 | `tools/dev/verifica-rute.php` | Verifică că fiecare rută are proprietar, că catalogul corespunde codului și că blocurile pluginurilor din șabloane închid HTML-ul pe care îl deschid. |
 | `tools/dev/test-pluginuri.php` | Testele: licența, garda, fiecare pachet parcurs pagină cu pagină (și cu browserul, inclusiv textul vizibil), „se oprește”, comparația cu codul de bază, la cerere fiecare plugin oprit pe rând. |
-| `tools/dev/compara-cu-baza.sh` | Cu licența „toate”, compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`). |
+| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența reală a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`). |
+| `scripts/diagnostic.php --licenta` | Verificarea dinaintea unui deploy: licența se verifică cu cheia și site-ul din `.env`? Iese cu 1 dacă nu. |
 | `tools/dev/crawl-pachet.cjs` | Trecerea cu Playwright prin paginile unui pachet (DOM și text după JavaScript, ferestrele comenzilor și ale produselor, contul clientului, erori JS, captura meniului). |
 
 ## Stările unui plugin
@@ -69,9 +70,11 @@ unul dintre” (linkul de plată merge cu oricare plată cu cardul).
   oprit, în loc de 404. Doar căi din același site (`/…`).
 - **Semnătura**: Ed25519 (sodium), separată de conținut, peste
   `"andaxi-licenta-v1\n"` + JSON-ul canonic al tuturor câmpurilor în afară de
-  `semnatura`: cheile obiectelor sortate, fără spații, fără escape la `/` și la
-  diacritice (`JSON.stringify` cu cheile sortate dă același lucru). Așa ordinea
-  câmpurilor și spațiile din fișier nu contează, dar orice valoare schimbată da.
+  `semnatura`: cheile obiectelor sortate după octeți (UTF-8), fără spații, fără
+  escape la `/`, la diacritice și la U+2028/U+2029; numerele doar întregi (fără
+  zecimale). Cu aceste reguli, `JSON.stringify` cu cheile sortate dă exact același
+  text (testul compară cu Node, inclusiv o cale cu diacritice și U+2028). Așa
+  ordinea câmpurilor și spațiile din fișier nu contează, dar orice valoare schimbată da.
 - **Cheia publică** a CRM-ului: `LICENTA_CHEIE_PUBLICA` (base64 sau base64url, 32
   de octeți); mai multe, separate prin virgulă, cât timp se schimbă cheia.
   `LICENTA_SITE`: identificatorul site-ului; o licență pentru alt site se respinge.
@@ -82,13 +85,43 @@ Reguli la fiecare cerere (verificarea durează câteva zeci de microsecunde):
    devine `licenta-buna.json`.
 2. Semnătură greșită sau lipsă, alt site, JSON stricat, versiune mai mică → se
    ignoră; rămâne `licenta-buna.json`.
-3. Nicio licență bună, niciodată → doar nucleul, iar în admin apare „Licența
-   lipsește”.
+3. **Nicio licență nu se verifică acum, dar site-ul a avut una** (cheia publică sau
+   `LICENTA_SITE` greșite în `.env`, cheia CRM schimbată fără site, sodium lipsă,
+   fișierele șterse) → site-ul merge mai departe cu **ultima licență aplicată**,
+   ținută în `stare-aplicata.json` (conținutul verificat atunci, fără semnătură).
+   Nimic nu se oprește: magazinul primește comenzi, cronurile BT/ERP/FAN își
+   termină plățile și AWB-urile. Jurnalul spune motivul, iar în admin apare o notă
+   neutră („Licența site-ului nu a putut fi verificată… contactați ANDAXI”).
+4. Nicio licență, niciodată (site nou, fără `stare-aplicata.json`) → doar nucleul,
+   iar în admin apare „Licența lipsește”. Cronurile pluginurilor ies atunci cu
+   **codul 2** (o problemă de rezolvat, vizibilă în monitorizarea cronurilor), nu
+   cu 0 ca atunci când licența oprește un plugin.
+
+**Înainte de a urca o versiune nouă de cod pe un site** (mai ales prima dată, pe
+Bioscem): `php scripts/diagnostic.php --licenta` arată licența, problemele ei și
+stările pluginurilor și iese cu 1 dacă nicio licență nu se verifică cu cheia și
+site-ul din `.env`. Un site nou, cu codul urcat înaintea licenței, ar merge doar
+cu nucleul (magazinul ar da 404).
 
 Fiecare problemă se scrie **o singură dată** în `storage/logs/pluginuri.log`
 (nu la fiecare cerere), la fel orice schimbare de stări. La o schimbare de stări
-se golește memoria rapidă a paginilor. Cererile primite la adresele de confirmare
-ale unui plugin oprit se notează tot acolo.
+se golește memoria rapidă a paginilor; în plus, amprenta stărilor face parte din
+cheia ei, deci o pagină randată sub alte stări (de exemplu chiar în clipa
+schimbării) nu se mai servește. Cererile primite la adresele de confirmare ale
+unui plugin oprit se notează tot acolo, **o dată pe zi pentru fiecare adresă**
+(pixelul unui newsletter vechi sau un robot nu umplu discul); ce s-a notat azi
+stă în `storage/logs/pluginuri-azi.json`.
+
+**Dosarul licenței fără drept de scriere**: stările se aplică oricum (din
+`licenta.json`), dar nu se poate ține minte nimic: problema se scrie în jurnal o
+dată pe zi, în admin apare nota „Licența site-ului nu poate fi salvată pe server”,
+harta site-ului nu se mai reface singură, iar momentul intrării în „se oprește”
+se ia din data emiterii licenței.
+
+**`stare-aplicata.json`** (scris de site, nu de CRM): amprentele stărilor și ale
+mesajelor, stările efective, de când e fiecare plugin în „se oprește”
+(`se_opreste_din`, folosit de ERP) și ultima licență aplicată (pentru regula 3).
+Cine poate scrie în `storage/` poate schimba și codul, deci fișierul nu e semnat.
 
 **Etapa 2** (preluarea de la CRM la 15 minute, cu check-in): se adaugă în
 `Licenta` o metodă care descarcă licența și o dă lui `Licenta::instaleaza()`.
@@ -127,15 +160,26 @@ Fiecare rută din `src/Http/rute.php` are un proprietar în catalog:
   depinde de un parametru (de exemplu `/admin/emails/newsletters?tab=ecommerce` e
   al magazinului, `?tab=templates` al newsletterului, `?tab=contact_forms` al
   nucleului). Se pot da și liste „oricare dintre”: pagina Setări plăți se vede
-  dacă e pe site magazinul sau oricare plată.
+  dacă e pe site magazinul sau oricare plată, Securitate formulare (încercările de
+  înregistrare și de comandă) dacă e pe site magazinul sau conturile de clienți.
+  Acțiunile în masă din comenzi (`POST /admin/orders/bulk`) sunt ale magazinului,
+  dar „AWB” e a livrării FAN, iar „Retrimite în ERP” a ERP-ului.
 
 Ce face garda cu o rută a unui plugin care nu e vizibil:
 
 - admin: „Modulul nu este inclus în abonament” (403), în aspectul adminului;
   nelogat, la login, ca orice pagină de admin;
 - site: pagina 404 a site-ului (pagina „404” din admin, dacă e publicată), sau
-  redirecționarea din licență; `/api/…` primesc un 404 scurt în JSON;
-- adresele mereu deschise: ajung la controller; se notează în jurnal.
+  redirecționarea din licență, doar dacă duce la o pagină care se vede pe site
+  (o redirecționare spre pagina altui plugin oprit dă 404: fără bucle, fără 302
+  spre un 404); `/api/…` primesc un 404 scurt în JSON;
+- adresele mereu deschise: ajung la controller (se notează în jurnal o dată pe zi
+  pe adresă). Controllerul procesează ce vine de la procesator sau dintr-un email
+  trimis (plata semnată, linkul semnat); fără pluginul pe site, unei cereri care
+  nu e a lor îi răspunde cu pagina 404: întoarcerea EuPlătesc
+  (`POST /checkout/succes/…`) fără rezultat semnat, `/checkout/bt/retur` fără
+  plata pornită din sesiunea vizitatorului, dezabonarea și linkul de urmărire din
+  newsletter cu semnătură greșită.
 
 O rută nouă fără proprietar face `tools/dev/verifica-rute.php` să pice.
 
@@ -161,9 +205,12 @@ puse exact în locurile unde începe ceva nou:
   gata făcut, și pe site (antetul, meniul și subsolul scrise de client în
   Design, conținutul paginilor), și în admin (butoanele dintre pagini, tab-urile).
   `Plugins::filtreazaLinkuri()` întreabă routerul cine e proprietarul fiecărei
-  adrese; un `<li>` rămas fără link și o listă rămasă goală dispar și ele.
-  Conținutul din `<script>`, `<style>` și `<textarea>` nu se atinge. Cu toate
-  pluginurile pe site filtrul nici nu rulează.
+  adrese; un `<li>` rămas gol **din cauza filtrului** și o listă golită așa dispar
+  și ele. Listele și elementele goale scrise așa de client (de umplut din
+  JavaScript, separatoare de meniu) rămân neatinse. Conținutul din `<script>`,
+  `<style>` și `<textarea>` nu se atinge. Cu toate pluginurile care au cod pe
+  site filtrul nici nu rulează; uneltele interne (migrarea din WordPress) nu
+  contează aici, deci nici licența reală a Bioscem, fără ele, nu-l pornește.
 - **Codurile din pagini** (`{{shop_catalog}}`, `{{latest_posts:3}}` …) ale unui
   plugin ascuns se scot din pagină (`Plugins::curataTokenuri`, lista lor e în
   catalog la „tokenuri”); în editorul de pagini nu mai apar în lista de coduri.
@@ -176,7 +223,22 @@ puse exact în locurile unde începe ceva nou:
   doar secțiunile pluginurilor de pe site, iar la salvare nu ating setările
   pluginurilor ascunse (bifa și datele lor rămân pentru o repornire).
 - **Cronurile** pluginurilor care nu au voie să ruleze ies imediat, cu cod 0 și o
-  singură linie („Pluginul … nu este pornit pe acest site; nu fac nimic.”).
+  singură linie („Pluginul … nu este pornit pe acest site; nu fac nimic.”); fără
+  nicio licență, cu codul 2 („Licența site-ului lipsește…”).
+- **Editoarele din admin**: editorul de pagini nu mai calculează și nu mai pune în
+  sursa paginii previzualizarea codurilor pluginurilor ascunse (catalogul cu
+  produsele, coșul, checkout-ul cu procesatorii, contul clientului, formularul de
+  recenzii, acordurile GDPR); în previzualizările rămase, punctele, cuponul și
+  procesatorii de card apar doar cu pluginurile lor. Constructorul de șablon de
+  produs nu mai oferă prețul, cantitatea, butonul de coș și nota de sub el fără
+  magazin, nici codurile și tab-ul de recenzii fără recenzii (și previzualizarea
+  nu le mai arată).
+- **API-urile catalogului** (`/api/shop/catalog`, `/api/products/best-sellers`,
+  produsele similare din pagina de produs) nu mai dau numărul și media
+  recenziilor fără recenzii, nici cantitățile vândute fără magazin; fără magazin,
+  „cele mai vândute” vin din ordinea catalogului (etichetele, apoi cele mai noi),
+  iar „Popularitate” nu mai ține cont de vânzări.
+- **robots.txt** pomenește doar adresele pluginurilor de pe site.
 - **Emailurile** unui plugin pleacă doar cu pluginul lui (vezi mai jos).
 - **Textele care pomenesc alt plugin** se adaptează: explicațiile din comenzi, din
   Setări plăți, din fișa produsului sau din pagina ERP care spun „pleacă în ERP”,
@@ -202,7 +264,8 @@ puse exact în locurile unde începe ceva nou:
   ERP” a BT și restricția unui cupon pe utilizatori (fără conturi de clienți)
   rămân în bază neatinse.
 
-Cu licența „toate” nimic din toate acestea nu schimbă vreun octet: paginile-cheie
+Cu licența „toate” și cu licența reală a Bioscem (toate pluginurile portate, fără
+unealta internă) nimic din toate acestea nu schimbă vreun octet: paginile-cheie
 (prima pagină, produs, coș, checkout, contul clientului, linkul de plată,
 dashboard, comenzi cu fereastra comenzii, produse, clienți, cupoane, setări,
 coșul flotant, administratori, emailuri, editorul de pagini, pe patru roluri de
@@ -231,7 +294,10 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Se oprește**: ca pornit (nu începe nimic cu bani; produsele rămân vizibile cât
   magazinul își termină comenzile).
 - **Oprit**: prima pagină fără secțiunile de produse, pagina 404 fără „Vezi toate
-  produsele”, fără produse în harta site-ului și în căutare.
+  produsele” și fără căutarea „poate e un produs vechi” (nici redirecționarea 301
+  spre `/produs/…`, și fără o pagină „404” publicată), fără produse în harta
+  site-ului și în căutare; editorul de pagini nu mai pune catalogul în sursa
+  paginii; Google: fără „Merchant Center”.
 
 ### Magazin online (`magazin`)
 
@@ -257,9 +323,17 @@ dispar, iar linkurile spre el se scot din pagini.
   produse nu mai dau prețuri. Emailurile de comandă nu mai pleacă. Contul
   clientului (dacă are conturi) arată comenzile vechi doar pentru citire, fără
   linkuri spre coș sau plată. Întoarcerea EuPlătesc (`POST /checkout/succes/…`)
-  răspunde mereu. Setări magazin se numește „Setări site” (și tab-ul „Pagini
-  site”, cu lista paginilor care chiar se generează); „Trimite email test” nu mai
-  oferă șabloanele de comandă.
+  răspunde mereu rezultatului semnat al unei plăți (oricui altcuiva: 404). Setări
+  magazin se numește „Setări site” (și tab-ul „Pagini site”, cu lista paginilor
+  care chiar se generează); „Trimite email test” nu mai oferă și nu mai trimite
+  (nici la cerere directă) șabloanele de comandă. Istoricul emailurilor fără
+  coloana „Comandă” și fără „Retrimite toate eșuatele”; fără ferestrele ascunse ale
+  emailurilor ecommerce și fără șablonul de start „Email comandă” în constructorul
+  de newslettere. În API-urile catalogului: fără cantitățile vândute, „cele mai
+  vândute” din ordinea catalogului. Setări magazin, mentenanța și cache-ul nu mai
+  pomenesc plățile, checkout-ul și coșul; Google: conversia fără „finalizarea
+  comenzii”; produsele: „Gestionează produsele tale”, iar rolul „Administrator
+  magazin” se cheamă „Administrator produse” (pe un site cu catalog).
 
 ### Livrare FAN Courier (`livrare_fan`)
 
@@ -273,8 +347,12 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Se oprește**: comenzile noi nu mai primesc FANbox și tarif live (rămân regulile
   de transport generale); comenzile existente își fac AWB-ul, urmărirea și
   emailul cu AWB; cronurile rulează.
-- **Oprit**: nimic FAN în checkout, în comandă sau în meniu; AWB-ul automat nu se
-  mai generează; cronurile ies cu o linie. În checkout localitatea se scrie de
+- **Oprit**: nimic FAN în checkout, în comandă sau în meniu; niciun AWB nu se mai
+  cere la FAN, de nicăieri: nici automat la plată, nici din aprobarea venită din
+  ERP (comanda trece doar în procesare; răspunsul către ERP spune că livrarea nu
+  se face prin FAN de pe site), nici din acțiunea în masă din comenzi („AWB” în
+  masă dă „Modulul nu este inclus în abonament”); datele de acces FAN rămân în
+  setări, nefolosite. Exportul comenzilor fără coloana „AWB”. Cronurile ies cu o linie. În checkout localitatea se scrie de
   mână (nu se mai cere lista de localități FAN; județele rămân din datele
   salvate, altfel câmp liber). Explicațiile despre AWB din Automatizări, din
   pagina ERP și din comenzi dispar; emailurile „Comandă expediată” și „Comandă
@@ -298,8 +376,10 @@ dispar, iar linkurile spre el se scot din pagini.
   cererea directă e refuzată); testele începute se pot anula sau rambursa.
 - **Oprit**: dispare din checkout, din comandă și din Setări plăți (rândul lui din
   tabelul de sus, tab-ul BT); salvarea paginii nu-i atinge setările; adresa de
-  confirmare răspunde în continuare (cererea se notează în
-  `storage/logs/pluginuri.log`). Un link de plată deja trimis prin EuPlătesc se
+  confirmare răspunde în continuare (prima cerere din zi se notează în
+  `storage/logs/pluginuri.log`); fără BT, `/checkout/bt/retur` fără o plată pornită
+  din sesiunea vizitatorului dă 404; editorul de pagini nu mai arată procesatorul
+  în previzualizarea checkout-ului. Un link de plată deja trimis prin EuPlătesc se
   plătește prin BT dacă BT e pe site; dacă procesatorul linkului nu mai e pe site
   deloc, pagina `/plata/…` arată suma și cere clientului să ne contacteze (nu mai
   pornește nicio plată). Textele BT care trimit la EuPlătesc („linkurile rămân pe
@@ -321,11 +401,16 @@ dispar, iar linkurile spre el se scot din pagini.
   adresele `/api/erp/notificare` și `/api/erp/adrese` (mereu deschise). Tabel:
   `orders.erp_*`.
 - **Are nevoie de**: magazin.
-- **Se oprește**: o comandă care n-a ajuns în ERP nu mai pleacă: stă „în
-  așteptare”, cu motivul scris pe ea, și pleacă singură dacă pluginul e pornit din
-  nou (fără să consume din încercări). Comenzile trimise își duc mai departe
-  modificările, anulările, retururile și AWB-ul; stocul se citește în continuare;
-  cronul rulează.
+- **Se oprește**: comenzile plasate **înainte** de oprire pleacă în ERP ca de
+  obicei, oricând li s-ar confirma plata (EuPlătesc, BT, Stripe, OP) sau ar trece
+  prin reîncercările cronului; doar o comandă plasată **după** momentul în care
+  ERP-ul a intrat în „se oprește” (ținut minte în `stare-aplicata.json`) nu mai
+  pleacă: stă „în așteptare”, cu motivul scris pe ea, și pleacă singură dacă
+  pluginul e pornit din nou (fără să consume din încercări). Dacă ERP-ul se
+  oprește doar pentru că se oprește magazinul (licența îl are „pornit”),
+  checkout-ul e închis și toate comenzile de pe site pleacă. Comenzile trimise își
+  duc mai departe modificările, anulările, retururile și AWB-ul; stocul se citește
+  în continuare; cronul rulează.
 - **Oprit**: site-ul nu mai vorbește deloc cu ERP-ul (`ErpClient` nu se mai
   creează): fără trimiteri, fără stoc și gestiuni din ERP; anulările și retururile
   comenzilor trimise așteaptă pe starea lor; meniul și coloanele ERP dispar;
@@ -333,8 +418,11 @@ dispar, iar linkurile spre el se scot din pagini.
   Setări plăți, în fișa produsului: „pleacă în ERP”, „factura există deja în
   ERP”, „aprobarea din ERP”) se scurtează la ce se întâmplă pe site; bifa BT
   „încasează la aprobarea din ERP” se ascunde și își păstrează valoarea; o
-  precomandă eliberată doar iese din așteptare. Cât pluginul e pornit, `ErpModul`
-  (starea modulului din ERP) lucrează exact ca înainte.
+  precomandă eliberată doar iese din așteptare. Emailurile BT către magazin
+  („aprobând comanda în ERP”, „nu fuseseră aprobate în ERP la timp”) pierd bucata
+  despre ERP. „Retrimite în ERP” în masă dă „Modulul nu este inclus în
+  abonament”. Cât pluginul e pornit, `ErpModul` (starea modulului din ERP)
+  lucrează exact ca înainte.
 
 ### Cupoane (`cupoane`)
 
@@ -345,7 +433,8 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Se oprește**: câmpul de cupon dispare, un cupon nu se mai aplică unei comenzi
   noi (cererea directă e refuzată, cu mesaj); comenzile existente își păstrează
   reducerea.
-- **Oprit**: la fel, plus meniul și reducerea cu cupon din comandă.
+- **Oprit**: la fel, plus meniul, reducerea cu cupon din comandă și coloana
+  „Cupon” din exportul comenzilor; previzualizările din editorul de pagini fără cupon.
 
 ### Puncte de fidelitate (`fidelitate`)
 
@@ -358,7 +447,8 @@ dispar, iar linkurile spre el se scot din pagini.
   finalizare, iar la anulare punctele se întorc.
 - **Oprit**: punctele nu se mai văd nicăieri și nu se mai acordă; întoarcerea
   punctelor la anulare merge oricând (banii clientului). Rândurile cu puncte din
-  Setări coș flotant dispar și își păstrează valorile la salvare.
+  Setări coș flotant dispar și își păstrează valorile la salvare. Nici
+  previzualizările coșului și ale contului din editorul de pagini nu le mai arată.
 
 ### Recenzii produse (`recenzii`)
 
@@ -367,7 +457,9 @@ dispar, iar linkurile spre el se scot din pagini.
   `product_reviews`.
 - **Are nevoie de**: catalog.
 - **Se oprește**: recenziile existente se văd, cele noi nu se mai primesc.
-- **Oprit**: nimic despre recenzii pe site sau în admin.
+- **Oprit**: nimic despre recenzii pe site sau în admin: nici codurile și tab-ul
+  „Coduri recenzii” din constructorul de șablon de produs, nici numărul și media
+  recenziilor în API-urile catalogului și în produsele similare.
 
 ### Precomenzi (`precomenzi`)
 
@@ -411,6 +503,8 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (clienții își văd contul și comenzile).
 - **Oprit**: fără conturi pe site (linkurile „Contul meu”/„Autentificare” se scot);
+  Securitate formulare arată doar încercările de comandă (și dispare cu totul fără
+  magazin);
   emailurile de comandă duc la prima pagină în loc de „Comenzile mele”; emailul
   de bun venit nu mai pleacă (nici în „Trimite email test”). La cupoane,
   restricția „Doar pentru utilizatori” dispare și se păstrează la salvare.
@@ -437,8 +531,14 @@ dispar, iar linkurile spre el se scot din pagini.
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile
   programate (rămân programate). Linkurile din newsletterele trimise merg.
 - **Oprit**: nimic din newsletter în admin sau pe site; cronul iese cu o linie;
-  dezabonarea merge în continuare. Pagina Email-uri (emailurile magazinului,
-  formularele de contact, istoricul) își schimbă descrierea.
+  dezabonarea și linkurile din newsletterele trimise merg în continuare (cu
+  semnătura lor); un link de dezabonare sau de urmărire nevalid dă 404. Pagina
+  Email-uri (emailurile magazinului, formularele de contact, istoricul) își
+  schimbă descrierea.
+- **Oricând**: linkul de urmărire a clickurilor duce în afară doar dacă adresa e
+  semnată de noi (era o trambulină spre orice site); altfel, la prima pagină a
+  site-ului (adresa din `APP_URL`, nu bioscem.ro). Un link relativ din newsletter
+  duce în site.
 
 ### Chat live (`chat_live`)
 
@@ -555,15 +655,25 @@ conturilor de clienți).
 - **Șabloanele de email ale magazinului** („Comandă expediată”, „Comandă livrată”)
   rămân în Email-uri ecommerce și fără FAN (sunt textul clientului); nu se mai
   trimit singure (vezi „Livrarea fără FAN”).
+- **Ultima licență aplicată** (`stare-aplicata.json`) nu e semnată: cine poate
+  scrie în `storage/` și șterge licențele poate pune acolo alte stări. Oricum,
+  cine poate scrie acolo poate schimba și codul; în Etapa 2, check-in-ul la CRM va
+  arăta un site care merge fără licență verificabilă.
+- **Prima urcare a codului pe un site existent** (Bioscem): fără `licenta.json` în
+  `storage/licenta/` (dosarul nu e în git) și fără stare aplicată, site-ul merge
+  doar cu nucleul. Verificarea `scripts/diagnostic.php --licenta` se rulează
+  înainte de a muta codul.
 
 ## Dezvoltare
 
-`tools/dev/instaleaza.sh` pune licența „toate” (ca Bioscem azi). Altă licență:
+`tools/dev/instaleaza.sh` pune licența „toate” (toate pluginurile, inclusiv unealta
+internă). Licența reală a Bioscem e „bioscem” (tot ce are cod, fără unealta
+internă). Altă licență:
 
 ```sh
-tools/dev/php.sh tools/dev/licenta.php prezentare            # sau catalog, magazin, asociatie, toate
+tools/dev/php.sh tools/dev/licenta.php prezentare            # sau catalog, magazin, asociatie, toate, bioscem
 tools/dev/php.sh tools/dev/licenta.php magazin cupoane=pornit magazin=se_opreste
-tools/dev/php.sh tools/dev/licenta.php fara                  # fără licență: doar nucleul
+tools/dev/php.sh tools/dev/licenta.php fara                  # fără licență și fără stare aplicată: doar nucleul
 tools/dev/php.sh tools/dev/licenta.php arata                 # ce licență e folosită și ce probleme are
 tools/dev/php.sh tools/dev/verifica-rute.php                 # fiecare rută cu proprietarul ei
 tools/dev/php.sh tools/dev/test-pluginuri.php                # toate testele (pornește singur serverul)
@@ -571,7 +681,9 @@ tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus fiecare 
 tools/dev/php.sh tools/dev/test-pluginuri.php --fara-garda   # fără cererea fiecărei rute (mai repede)
 tools/dev/php.sh tools/dev/test-pluginuri.php --capturi=DIR  # capturile meniului adminului, pe pachete, în DIR
 tools/dev/compara-cu-baza.sh                                 # „toate” = HTML identic cu codul de bază
+tools/dev/compara-cu-baza.sh --licenta=bioscem               # la fel, cu licența reală a Bioscem (fără unealta internă)
 tools/dev/smoke.sh --toate-pachetele                         # testul de fum pe fiecare pachet
+tools/dev/php.sh scripts/diagnostic.php --licenta            # se verifică licența? (ca înaintea unui deploy)
 ```
 
 **Regula pentru cod nou într-un șablon**: tot ce ține de un plugin se pune între
@@ -585,7 +697,12 @@ un `?>` la capăt de rând înghite sfârșitul de rând, deci acolo textul echo
 trebuie să-l conțină (`"…\n"`). O etichetă sau o explicație nouă a unui plugin se
 adaugă și la `$semneText` din `test-pluginuri.php`, ca testul să o caute acolo
 unde pluginul e oprit. Un plugin nou își trece în catalog și codurile
-(„tokenuri”) și paginile din bază („pagini”), ca filtrele să le găsească.
+(„tokenuri”) și paginile din bază („pagini”), ca filtrele să le găsească; dacă
+are coduri în editorul de pagini, previzualizarea lor intră în
+`AdminController::previzualizariEditorPagini` (calculată doar cu pluginul pe site).
+O acțiune a unui plugin trimisă printr-o rută comună (de exemplu `bulk_action` din
+comenzi) se declară în `rute_impartite`, ca garda s-o oprească; verificarea se
+pune și acolo unde se face lucrul (de exemplu `createFanAwbInternal`).
 
 Cheia privată de dezvoltare stă în `storage/logs/dev/licenta-cheie-privata.txt`
 (niciodată în git); `tools/dev/comun.sh` dă aplicației cheia publică. În

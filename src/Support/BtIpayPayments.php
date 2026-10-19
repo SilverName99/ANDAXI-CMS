@@ -3068,7 +3068,8 @@ final class BtIpayPayments
                 . '</tr>';
         }
         $html = '<p><strong>' . count($lista) . ' plăți cu cardul (Banca Transilvania) sunt doar autorizate, încă neîncasate.</strong></p>'
-            . '<p>Banca cere încasarea în cel mult 5 zile de la autorizare. Dacă nu le încasezi până atunci (aprobând comanda în ERP sau cu '
+            . '<p>Banca cere încasarea în cel mult 5 zile de la autorizare. Dacă nu le încasezi până atunci ('
+            . (Plugins::vizibil('erp') ? 'aprobând comanda în ERP sau cu ' : 'cu ')
             . '„Încasează" din comandă), site-ul le încasează singur la termenul din tabel.</p>'
             . '<table cellpadding="6" border="1" style="border-collapse:collapse;font-size:13px;border-color:#e2e8f0;">'
             . '<tr style="background:#f1f5f9;"><th>Comanda</th><th>Client</th><th>Sumă</th><th>Autorizată la</th><th>Încasare automată la</th></tr>'
@@ -3102,7 +3103,8 @@ final class BtIpayPayments
         $html = '<p><strong>Încasare automată BT (ziua ' . (int) ceil($s['ore_incasare_automata'] / 24) . '):</strong> '
             . $reusite . ' din ' . count($rezultate) . ' plăți încasate'
             . ($eliberate > 0 ? ', ' . $eliberate . ' eliberate fără încasare (comanda era deja încasată integral pe alt drum)' : '') . '.</p>'
-            . '<p>Comenzile de mai jos nu fuseseră aprobate în ERP la timp, așa că site-ul a încasat singur sumele blocate, ca plata să nu se piardă. '
+            . '<p>Comenzile de mai jos nu fuseseră ' . (Plugins::vizibil('erp') ? 'aprobate în ERP' : 'încasate')
+            . ' la timp, așa că site-ul a încasat singur sumele blocate, ca plata să nu se piardă. '
             . 'Dacă una dintre ele se anulează ulterior, rambursează din comandă („Rambursează").'
             . ($eliberate > 0 ? ' Unde comanda era deja încasată integral pe alt drum (diferență plătită prin link, încasare înregistrată), '
                 . 'site-ul NU a încasat nimic de pe card: a eliberat suma blocată, ca clientul să nu plătească de două ori.' : '') . '</p>'

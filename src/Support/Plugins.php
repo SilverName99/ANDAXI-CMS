@@ -29,11 +29,15 @@ use Closure;
  *  - un plugin nu poate fi mai „pornit” decât pluginurile de care are nevoie:
  *    dacă una e oprită, e tratat ca oprit; dacă una se oprește, se oprește și el
  *    (altfel livrarea FAN ar dispărea exact când magazinul își termină comenzile);
- *  - fără nicio licență bună, niciodată: doar nucleul, iar în admin apare „Licența lipsește”.
+ *  - nicio licență nu se verifică acum (cheie greșită în .env, licență ștearsă),
+ *    dar site-ul a avut una: merge mai departe cu ultima licență aplicată
+ *    (`stare-aplicata.json`), ca o greșeală de configurare să nu închidă
+ *    magazinul și cronurile care termină plățile; în admin apare o notă neutră;
+ *  - nicio licență, niciodată: doar nucleul, iar în admin apare „Licența lipsește”.
  * Orice problemă (licență respinsă, dependență lipsă) se scrie o singură dată în
  * `storage/logs/pluginuri.log`, nu la fiecare cerere. Când stările se schimbă,
- * se golește memoria rapidă a paginilor, ca nimeni să nu primească o pagină
- * salvată dinainte.
+ * se golește memoria rapidă a paginilor; în plus, amprenta stărilor face parte
+ * din cheia ei, deci o pagină salvată sub alte stări nu se mai servește.
  */
 final class Plugins
 {
@@ -42,13 +46,26 @@ final class Plugins
     public const OPRIT = 'oprit';
     public const NUCLEU = 'nucleu';
     private const FISIER_HARTA_DE_REFACUT = 'harta-site-de-refacut';
+    public const FISIER_STARE = 'stare-aplicata.json';
+    /** Semnul pus de filtru în locul unui element scos (ESC: nu apare în HTML). */
+    private const SCOS = "\x1B";
 
     private const RANG = [self::OPRIT => 0, self::SE_OPRESTE => 1, self::PORNIT => 2];
+
+    /** De unde vin stările: licența verificată, ultima licență aplicată (fără una verificabilă acum) sau doar nucleul. */
+    private const DIN_LICENTA = 'licenta';
+    private const DIN_ULTIMA_APLICATA = 'ultima_aplicata';
+    private const DOAR_NUCLEU = 'nucleu';
 
     private static ?array $catalog = null;
     /** @var array<string, string>|null */
     private static ?array $stari = null;
     private static ?array $licenta = null;
+    private static string $sursa = self::DOAR_NUCLEU;
+    private static string $amprenta = '';
+    /** @var array<string, string> pluginul => momentul (ISO) în care a intrat în „se oprește” */
+    private static array $seOpresteDin = [];
+    private static bool $stareNesalvata = false;
     private static array $mesaje = [];
     private static ?string $jurnal = null;
     /** @var array<string, array> */
@@ -117,18 +134,86 @@ final class Plugins
         return self::$stari ?? [];
     }
 
-    /** Nu există nicio licență bună: site-ul merge doar cu nucleul. */
+    /** Site-ul n-a avut niciodată o licență bună: merge doar cu nucleul. */
     public static function licentaLipseste(): bool
     {
         self::stari();
-        return self::$licenta === null;
+        return self::$sursa === self::DOAR_NUCLEU;
     }
 
-    /** Licența folosită acum (conținutul verificat) sau null. */
+    /**
+     * Nicio licență nu se verifică acum, dar site-ul merge mai departe cu ultima
+     * licență aplicată (vezi regulile de sus).
+     */
+    public static function licentaNeverificata(): bool
+    {
+        self::stari();
+        return self::$sursa === self::DIN_ULTIMA_APLICATA;
+    }
+
+    /**
+     * Nota pentru admin când licența are o problemă pe server (nu spune nimic
+     * despre pluginuri), sau null. „Licența lipsește” are nota ei, separată.
+     */
+    public static function notaLicentaAdmin(): ?string
+    {
+        self::stari();
+        if (self::$sursa === self::DIN_ULTIMA_APLICATA) {
+            return 'Licența site-ului nu a putut fi verificată. Site-ul funcționează în continuare ca până acum. '
+                . 'Vă rugăm să contactați ANDAXI WEB SOLUTIONS.';
+        }
+        if (self::$stareNesalvata) {
+            return 'Licența site-ului nu poate fi salvată pe server (drepturi de scriere). Vă rugăm să contactați ANDAXI WEB SOLUTIONS.';
+        }
+        return null;
+    }
+
+    /** Licența folosită acum (conținutul verificat, sau ultima aplicată) sau null. */
     public static function licenta(): ?array
     {
         self::stari();
         return self::$licenta;
+    }
+
+    /**
+     * Pluginul e în „se oprește” chiar în licență (nu doar pentru că se oprește
+     * un plugin de care are nevoie)? Contează la ERP: dacă se oprește doar
+     * magazinul, checkout-ul e închis și tot ce e pe site s-a plasat înainte.
+     */
+    public static function seOprestePrinLicenta(string $cheie): bool
+    {
+        return (self::licenta()['pluginuri'][$cheie] ?? '') === self::SE_OPRESTE;
+    }
+
+    /**
+     * Momentul (timestamp) din care pluginul e în „se oprește”, ca să se știe ce
+     * a început înainte (se termină) și ce după (nu mai pornește); null dacă nu e
+     * în „se oprește”. Fără stare salvată (dosarul licenței nu se poate scrie):
+     * data emiterii licenței care a cerut oprirea.
+     */
+    public static function seOpresteDin(string $cheie): ?int
+    {
+        if (self::stare($cheie) !== self::SE_OPRESTE) {
+            return null;
+        }
+        $text = (string) (self::$seOpresteDin[$cheie] ?? '');
+        $moment = $text !== '' ? strtotime($text) : false;
+        if ($moment !== false) {
+            return $moment;
+        }
+        $emisa = strtotime((string) (self::$licenta['emisa_la'] ?? ''));
+        return $emisa !== false ? $emisa : time();
+    }
+
+    /**
+     * Amprenta stărilor (stări efective, stările din licență, redirecționări):
+     * se schimbă exact când se schimbă ce vede site-ul. Intră în cheia memoriei
+     * rapide a paginilor.
+     */
+    public static function amprenta(): string
+    {
+        self::stari();
+        return self::$amprenta;
     }
 
     /** Unde duc adresele publice ale pluginului când e oprit (din licență), sau null = pagina 404. */
@@ -149,16 +234,32 @@ final class Plugins
             return;
         }
         $rezultat = Licenta::incarca();
-        self::$licenta = $rezultat['licenta'];
-        $calcul = self::calculeazaStari(self::$licenta['pluginuri'] ?? []);
-        self::$stari = $calcul['stari'];
-
+        $licenta = $rezultat['licenta'];
         $mesaje = $rezultat['probleme'];
-        if (self::$licenta === null) {
-            $mesaje[] = 'Nicio licență bună: site-ul merge doar cu nucleul (în admin apare „Licența lipsește”).';
+        $salvata = self::stareSalvata();
+        self::$sursa = self::DIN_LICENTA;
+        if ($licenta === null) {
+            $ultima = $salvata['licenta'] ?? null;
+            if (is_array($ultima) && is_array($ultima['pluginuri'] ?? null)) {
+                // Site-ul a avut o licență bună, dar acum nu se verifică niciuna (cheia
+                // sau site-ul din .env greșite, sodium lipsă, fișierele șterse): merge
+                // mai departe cu ultima aplicată. Altfel magazinul ar da 404, iar
+                // cronurile care termină plățile (BT, ERP, FAN) s-ar opri pe loc.
+                $licenta = $ultima;
+                self::$sursa = self::DIN_ULTIMA_APLICATA;
+                $mesaje[] = 'Nicio licență nu se poate verifica acum: site-ul merge mai departe cu ultima licență aplicată ('
+                    . (string) ($ultima['site'] ?? '?') . ' v' . (int) ($ultima['versiune'] ?? 0)
+                    . '). Verifică LICENTA_CHEIE_PUBLICA, LICENTA_SITE și fișierele din ' . Licenta::dosar() . '.';
+            } else {
+                self::$sursa = self::DOAR_NUCLEU;
+                $mesaje[] = 'Nicio licență bună: site-ul merge doar cu nucleul (în admin apare „Licența lipsește”).';
+            }
         }
+        self::$licenta = $licenta;
+        $calcul = self::calculeazaStari((array) ($licenta['pluginuri'] ?? []));
+        self::$stari = $calcul['stari'];
         self::$mesaje = array_merge($mesaje, $calcul['mesaje']);
-        self::noteazaSchimbarile();
+        self::noteazaSchimbarile($salvata);
     }
 
     /**
@@ -270,6 +371,23 @@ final class Plugins
             return $cerinta === self::PORNIT ? self::permiteInceput((string) $cheie) : self::vizibil((string) $cheie);
         }
         return true;
+    }
+
+    /**
+     * Ce scrie și cu ce cod iese un cron care nu are voie să ruleze: 0 când
+     * licența îl oprește (o alegere), 2 când site-ul nu are nicio licență (o
+     * problemă de rezolvat: monitorizarea cronurilor trebuie s-o vadă).
+     *
+     * @return array{0: string, 1: int}
+     */
+    public static function cronOprit(string $fisierScript): array
+    {
+        $plugin = (string) self::pluginCron($fisierScript);
+        if (self::licentaLipseste()) {
+            return ['Licența site-ului lipsește: pluginul „' . $plugin . '” nu rulează (site-ul merge doar cu nucleul). '
+                . 'Vezi storage/logs/pluginuri.log.', 2];
+        }
+        return ['Pluginul „' . $plugin . '” nu este pornit pe acest site; nu fac nimic.', 0];
     }
 
     /** Pluginul căruia îi aparține cronul (pentru mesaje), sau null. */
@@ -517,14 +635,18 @@ final class Plugins
     /**
      * Toate pluginurile care au cod sunt pe site (pornite sau „se oprește”)?
      * Atunci nu e nimic de ascuns în pagini: filtrele de mai jos nu se ating de
-     * HTML (cu licența „toate”, paginile ies exact ca înainte de pluginuri).
+     * HTML (cu licența „toate” sau cu licența Bioscem, paginile ies exact ca
+     * înainte de pluginuri). Uneltele interne („intern”, de exemplu migrarea din
+     * WordPress) nu contează: n-au linkuri sau coduri în pagini, doar o rută de
+     * admin (oprită de gardă) și un formular ascuns în șablonul lui.
      */
     public static function nimicAscuns(): bool
     {
         if (self::$nimicAscuns === null) {
             self::$nimicAscuns = true;
             foreach (self::catalog()['pluginuri'] as $cheie => $definitie) {
-                if (($definitie['portat'] ?? true) !== false && !self::vizibil((string) $cheie)) {
+                if (($definitie['portat'] ?? true) !== false && ($definitie['intern'] ?? false) !== true
+                    && !self::vizibil((string) $cheie)) {
                     self::$nimicAscuns = false;
                     break;
                 }
@@ -585,7 +707,9 @@ final class Plugins
      * Scoate din HTML linkurile și formularele care duc la paginile pluginurilor
      * pe care site-ul nu le are: antetul, meniul și subsolul scrise de client în
      * admin, butoanele din paginile adminului, linkurile din conținut. Un `<li>`
-     * rămas fără nimic dispare cu tot cu el, la fel o listă rămasă goală.
+     * rămas gol din cauza filtrului dispare cu tot cu el, la fel o listă rămasă
+     * goală; listele și elementele goale scrise așa de client (de umplut din
+     * JavaScript, separatoare de meniu) rămân neatinse.
      * Conținutul din `<script>`, `<style>` și `<textarea>` nu se atinge (se pune
      * deoparte și se pune la loc la final; un formular cu textarea se scoate tot).
      * Cu toate pluginurile pe site, HTML-ul se întoarce neschimbat; dacă PCRE
@@ -660,12 +784,16 @@ final class Plugins
         return true;
     }
 
-    /** HTML-ul fără scripturi/stiluri: formularele, linkurile și listele rămase goale. */
+    /** HTML-ul fără scripturi/stiluri: formularele, linkurile și listele rămase goale din cauza lor. */
     private static function filtreazaFragment(string $html): string
     {
         if (stripos($html, 'href') === false && stripos($html, 'action') === false) {
             return $html;
         }
+        // În locul fiecărui element scos rămâne un semn, ca la pasul 3 să se știe
+        // ce a golit filtrul. O pagină care are deja caracterul (n-ar trebui) își
+        // pierde doar linkurile, fără strângerea listelor.
+        $semn = str_contains($html, self::SCOS) ? '' : self::SCOS;
         // 1. Formularele trimise la o rută a unui plugin ascuns (cu metoda formularului), întregi.
         $html = self::scoateElemente($html, 'form', static function (string $eticheta): bool {
             if (preg_match('#\baction\s*=\s*(["\'])(.*?)\1#is', $eticheta, $m) !== 1) {
@@ -673,29 +801,35 @@ final class Plugins
             }
             $metoda = preg_match('#\bmethod\s*=\s*["\']?post#i', $eticheta) === 1 ? 'POST' : 'GET';
             return !self::adresaVizibila($m[2], $metoda);
-        });
+        }, $semn);
         // 2. Linkurile.
         $html = self::scoateElemente($html, 'a', static fn (string $eticheta): bool
-            => preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $eticheta, $m) === 1 && !self::adresaVizibila($m[2]));
-        // 3. Elementele de listă și listele rămase goale (un meniu sau submeniu fără nicio intrare).
+            => preg_match('#\bhref\s*=\s*(["\'])(.*?)\1#is', $eticheta, $m) === 1 && !self::adresaVizibila($m[2]), $semn);
+        if ($semn === '' || !str_contains($html, $semn)) {
+            return $html;
+        }
+        // 3. Elementele de listă și listele golite de filtru (un meniu sau submeniu
+        //    fără nicio intrare): doar cele în care au rămas numai semne și spații.
+        $golit = '\s*' . $semn . '[\s' . $semn . ']*';
         for ($pas = 0; $pas < 3; $pas++) {
             $inainte = $html;
-            $html = preg_replace('#<li\b[^>]*>\s*</li>#i', '', $html) ?? $html;
-            $html = preg_replace('#<(ul|ol)\b[^>]*>\s*</\1>#i', '', $html) ?? $html;
+            $html = preg_replace('#<li\b[^>]*>' . $golit . '</li>#i', $semn, $html) ?? $html;
+            $html = preg_replace('#<(ul|ol)\b[^>]*>' . $golit . '</\1>#i', $semn, $html) ?? $html;
             if ($html === $inainte) {
                 break;
             }
         }
-        return $html;
+        return str_replace($semn, '', $html);
     }
 
     /**
      * Scoate elementele `<$nume …>…</$nume>` pentru care $deScos(eticheta de
-     * deschidere) spune da. Parcurge HTML-ul o singură dată, fără expresii care
-     * să se întindă peste toată pagina (pe pagini mari, PCRE ar ceda). Un element
-     * fără închidere pierde doar eticheta de deschidere.
+     * deschidere) spune da și pune $inLoc în locul lor. Parcurge HTML-ul o
+     * singură dată, fără expresii care să se întindă peste toată pagina (pe
+     * pagini mari, PCRE ar ceda). Un element fără închidere pierde doar eticheta
+     * de deschidere.
      */
-    private static function scoateElemente(string $html, string $nume, callable $deScos): string
+    private static function scoateElemente(string $html, string $nume, callable $deScos, string $inLoc = ''): string
     {
         $deschidere = '#<' . $nume . '\b[^>]*>#i';
         $inchidere = '#</' . $nume . '\s*>#i';
@@ -709,7 +843,7 @@ final class Plugins
                 $pozitie = $dupaEticheta;
                 continue;
             }
-            $rezultat .= substr($html, $pozitie, (int) $inceput - $pozitie);
+            $rezultat .= substr($html, $pozitie, (int) $inceput - $pozitie) . $inLoc;
             if (preg_match($inchidere, $html, $i, PREG_OFFSET_CAPTURE, $dupaEticheta) === 1) {
                 $pozitie = (int) $i[0][1] + strlen((string) $i[0][0]);
             } else {
@@ -748,8 +882,36 @@ final class Plugins
     /** O linie în `storage/logs/pluginuri.log`. */
     public static function jurnal(string $mesaj): void
     {
-        $fisier = self::$jurnal ?? dirname(__DIR__, 2) . '/storage/logs/pluginuri.log';
-        @file_put_contents($fisier, '[' . date('Y-m-d H:i:s') . '] ' . $mesaj . "\n", FILE_APPEND | LOCK_EX);
+        @file_put_contents(self::fisierJurnal(), '[' . date('Y-m-d H:i:s') . '] ' . $mesaj . "\n", FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * O linie în jurnal, cel mult o dată pe zi pentru aceeași cheie: cererile
+     * repetate (pixelul unui newsletter vechi, un robot pe o adresă de confirmare)
+     * nu umplu discul. Ce s-a notat azi stă în `pluginuri-azi.json`, lângă jurnal;
+     * fără loc de scris, nu se notează nimic (mai bine tăcere decât o linie pe cerere).
+     */
+    public static function jurnalOdataPeZi(string $cheie, string $mesaj): void
+    {
+        $fisier = dirname(self::fisierJurnal()) . '/pluginuri-azi.json';
+        $azi = date('Y-m-d');
+        $notate = json_decode((string) @file_get_contents($fisier), true);
+        if (!is_array($notate) || ($notate['zi'] ?? '') !== $azi || !is_array($notate['chei'] ?? null)) {
+            $notate = ['zi' => $azi, 'chei' => []];
+        }
+        $amprenta = substr(sha1($cheie), 0, 16);
+        if (isset($notate['chei'][$amprenta]) || count($notate['chei']) >= 500) {
+            return;
+        }
+        $notate['chei'][$amprenta] = 1;
+        if (Licenta::scrieAtomic($fisier, (string) json_encode($notate))) {
+            self::jurnal($mesaj);
+        }
+    }
+
+    private static function fisierJurnal(): string
+    {
+        return self::$jurnal ?? dirname(__DIR__, 2) . '/storage/logs/pluginuri.log';
     }
 
     /** Doar pentru teste: unde scrie jurnalul. */
@@ -763,6 +925,10 @@ final class Plugins
     {
         self::$stari = null;
         self::$licenta = null;
+        self::$sursa = self::DOAR_NUCLEU;
+        self::$amprenta = '';
+        self::$seOpresteDin = [];
+        self::$stareNesalvata = false;
         self::$mesaje = [];
         self::$nimicAscuns = null;
         self::$adreseVizibile = [];
@@ -779,43 +945,86 @@ final class Plugins
     // ---------------------------------------------------------------- intern
 
     /**
+     * Ce a aplicat site-ul ultima oară (`stare-aplicata.json`): amprentele, stările
+     * efective, de când e fiecare plugin în „se oprește” și ultima licență bună
+     * aplicată (conținutul verificat, fără semnătură). Gol dacă lipsește.
+     */
+    private static function stareSalvata(): array
+    {
+        $fisier = Licenta::dosar() . '/' . self::FISIER_STARE;
+        $date = is_file($fisier) ? json_decode((string) @file_get_contents($fisier), true) : null;
+        return is_array($date) ? $date : [];
+    }
+
+    /**
      * Ce s-a schimbat de la cererea precedentă: mesajele noi se scriu în jurnal
      * o singură dată, iar la o schimbare de stare se golește memoria paginilor.
+     * Tot aici se ține minte de când e fiecare plugin în „se oprește” și ultima
+     * licență aplicată (pentru cererile în care nicio licență nu se verifică).
      */
-    private static function noteazaSchimbarile(): void
+    private static function noteazaSchimbarile(array $vechi): void
     {
-        $fisier = Licenta::dosar() . '/stare-aplicata.json';
-        $amprentaStari = sha1((string) json_encode([self::$stari, self::$licenta['redirectionari'] ?? []]));
+        $fisier = Licenta::dosar() . '/' . self::FISIER_STARE;
+        $licenta = self::$licenta;
+        self::$amprenta = sha1((string) json_encode([self::$stari, $licenta['redirectionari'] ?? [], $licenta['pluginuri'] ?? []]));
         $amprentaMesaje = sha1(implode("\n", self::$mesaje));
-        $vechi = is_file($fisier) ? json_decode((string) @file_get_contents($fisier), true) : null;
-        $vechi = is_array($vechi) ? $vechi : [];
-        if (($vechi['stari'] ?? '') === $amprentaStari && ($vechi['mesaje'] ?? '') === $amprentaMesaje) {
+        self::$seOpresteDin = is_array($vechi['se_opreste_din'] ?? null) ? $vechi['se_opreste_din'] : [];
+        if (($vechi['stari'] ?? '') === self::$amprenta && ($vechi['mesaje'] ?? '') === $amprentaMesaje) {
             return;
+        }
+        // De când e fiecare plugin în „se oprește”: momentul trecerii din altă stare;
+        // cât rămâne în „se oprește”, momentul nu se mută.
+        $efectiveVechi = is_array($vechi['efective'] ?? null) ? $vechi['efective'] : [];
+        $acum = date('c');
+        $seOpresteDin = [];
+        foreach ((array) self::$stari as $cheie => $stare) {
+            if ($stare === self::SE_OPRESTE) {
+                $deDinainte = ($efectiveVechi[$cheie] ?? '') === self::SE_OPRESTE ? (string) (self::$seOpresteDin[$cheie] ?? '') : '';
+                $seOpresteDin[$cheie] = $deDinainte !== '' ? $deDinainte : $acum;
+            }
         }
         if (!is_dir(dirname($fisier))) {
             @mkdir(dirname($fisier), 0770, true);
         }
-        $nou = ['stari' => $amprentaStari, 'mesaje' => $amprentaMesaje, 'la' => date('c')];
-        // Fără loc de scris, nu putem ține minte ce am notat: mai bine tăcem
-        // decât să golim memoria și să scriem în jurnal la fiecare cerere.
-        if (!Licenta::scrieAtomic($fisier, (string) json_encode($nou))) {
+        $nou = [
+            'stari' => self::$amprenta,
+            'mesaje' => $amprentaMesaje,
+            'la' => $acum,
+            'efective' => self::$stari,
+            'se_opreste_din' => $seOpresteDin,
+            'licenta' => self::$sursa === self::DOAR_NUCLEU ? null : $licenta,
+        ];
+        if (!Licenta::scrieAtomic($fisier, (string) json_encode($nou, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))) {
+            // Fără loc de scris nu putem ține minte ce am notat. Problemele se scriu
+            // în jurnal o dată pe zi (nu la fiecare cerere), adminul vede o notă,
+            // iar memoria paginilor nu încurcă stările: amprenta e în cheia ei.
+            self::$stareNesalvata = true;
+            self::$seOpresteDin = [];
+            $problema = 'Nu pot scrie ' . $fisier . ' (drepturi de scriere?): licența bună nu avansează, harta site-ului nu se '
+                . 'reface singură, iar momentul intrării în „se oprește” se ia din data licenței.';
+            self::jurnalOdataPeZi('stare-nescrisa', $problema);
+            foreach (self::$mesaje as $mesaj) {
+                self::jurnalOdataPeZi('mesaj|' . $mesaj, $mesaj);
+            }
             return;
         }
+        self::$seOpresteDin = $seOpresteDin;
         if (($vechi['mesaje'] ?? '') !== $amprentaMesaje) {
             foreach (self::$mesaje as $mesaj) {
                 self::jurnal($mesaj);
             }
         }
-        if (($vechi['stari'] ?? '') !== $amprentaStari) {
+        if (($vechi['stari'] ?? '') !== self::$amprenta) {
             $pornite = [];
             foreach (self::$stari as $cheie => $stare) {
                 if ($stare !== self::OPRIT) {
                     $pornite[] = $cheie . ($stare === self::SE_OPRESTE ? ' (se oprește)' : '');
                 }
             }
-            $licenta = self::$licenta;
             self::jurnal('Stările pluginurilor s-au schimbat' . ($licenta !== null
-                    ? ' (licența ' . $licenta['site'] . ' v' . $licenta['versiune'] . ')' : ' (fără licență)')
+                    ? ' (licența ' . $licenta['site'] . ' v' . $licenta['versiune']
+                        . (self::$sursa === self::DIN_ULTIMA_APLICATA ? ', ultima aplicată' : '') . ')'
+                    : ' (fără licență)')
                 . ': ' . ($pornite === [] ? 'doar nucleul' : implode(', ', $pornite)) . '.');
             ResponseCache::purgePageCache();
             // Harta site-ului (fișierul static generat din admin) se reface la

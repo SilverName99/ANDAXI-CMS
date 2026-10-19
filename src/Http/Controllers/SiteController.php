@@ -1426,6 +1426,13 @@ final class SiteController
         // Întoarcerea de la Banca Transilvania trece întâi prin /checkout/bt/retur,
         // care verifică plata la bancă; aici ajunge doar ca să golească coșul.
         $btReturn = isset($_GET['bt']) && (string) $_GET['bt'] === '1';
+        // Fără magazin pe site, adresa răspunde (prin POST) doar întoarcerii semnate
+        // de EuPlătesc, ca plata unui client să se confirme; oricui altcuiva, 404.
+        if (!\App\Support\Plugins::vizibil('magazin') && !($db instanceof PDO && $euplatescReturn && $_POST !== []
+            && EuPlatescGateway::verifyResponse($_POST, (string) (Settings::all($db)['euplatesc_secret_key'] ?? '')))) {
+            $this->paginaNegasita();
+            return;
+        }
         if ($db instanceof PDO && $euplatescReturn && $_POST !== []) {
             try {
                 $this->applyEuPlatescResult($db, $_POST);
@@ -1752,6 +1759,12 @@ final class SiteController
      */
     private function randeazaVerificarePlataBt(string $numar, string $urlReverificare): void
     {
+        // Varianta generică (fără plata acestei sesiuni) e o pagină a pluginului BT:
+        // fără BT pe site, cine ajunge aici fără o plată de-a lui primește 404.
+        if ($numar === '' && $urlReverificare === '' && !\App\Support\Plugins::vizibil('plata_bt')) {
+            $this->paginaNegasita();
+            return;
+        }
         View::render('site/checkout-bt-verificare', [
             'title' => 'Verificăm plata',
             'numar' => $numar,
@@ -1972,7 +1985,11 @@ final class SiteController
     {
         $limit = (int) ($_GET['limit'] ?? 4);
         $limit = max(1, min(24, $limit));
-        $items = array_map([self::class, 'faraPreturiFaraMagazin'], $this->loadBestSellersFromCompletedOrders($limit));
+        // Fără magazin pe site, „cele mai vândute” nu se mai iau din comenzi: ordinea
+        // catalogului (etichetele „best seller”/„popular”, apoi cele mai noi).
+        $items = array_map([self::class, 'faraPreturiFaraMagazin'], \App\Support\Plugins::vizibil('magazin')
+            ? $this->loadBestSellersFromCompletedOrders($limit)
+            : $this->produseRecomandateFaraMagazin($limit));
         $this->jsonResponse([
             'ok' => true,
             'items' => $items,
@@ -2033,21 +2050,51 @@ final class SiteController
     }
 
     /**
-     * Catalog fără magazin (de prezentare): produsele din API-urile publice
-     * pleacă fără prețuri. Cu magazinul pe site, produsul rămâne neatins.
+     * Produsele din API-urile publice, fără datele pluginurilor care nu sunt pe
+     * site: fără magazin, fără prețuri și fără cantitățile vândute; fără recenzii,
+     * fără numărul și media lor. Cu pluginurile pe site, produsul rămâne neatins.
      */
     private static function faraPreturiFaraMagazin(array $produs): array
     {
+        if (!\App\Support\Plugins::vizibil('recenzii')) {
+            unset($produs['reviews_count'], $produs['reviews_average']);
+        }
         if (\App\Support\Plugins::vizibil('magazin')) {
             return $produs;
         }
-        foreach (['price', 'sale_price', 'regular_price', 'base_price', 'price_label', 'regular_price_label', 'discount_value_label'] as $cheie) {
+        foreach (['price', 'sale_price', 'regular_price', 'base_price', 'price_label', 'regular_price_label', 'discount_value_label',
+            'sold_qty'] as $cheie) {
             unset($produs[$cheie]);
         }
         if (array_key_exists('has_sale_price', $produs)) {
             $produs['has_sale_price'] = false;
         }
         return $produs;
+    }
+
+    /**
+     * Produsele pentru „recomandate / cele mai vândute” pe un site fără magazin:
+     * ordinea „Popularitate” a catalogului, fără vânzări (etichetele, apoi cele mai noi).
+     */
+    private function produseRecomandateFaraMagazin(int $limit): array
+    {
+        [$produse] = $this->loadProducts();
+        $produse = array_slice($this->applyShopCatalogSort($this->enrichShopCatalogProducts($this->db(), $produse), 'featured'), 0, $limit);
+        return array_map(static function (array $produs): array {
+            $slug = trim((string) ($produs['slug'] ?? ''));
+            return [
+                'id' => (int) ($produs['id'] ?? 0),
+                'name' => (string) ($produs['name'] ?? 'Produs'),
+                'slug' => $slug,
+                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : '/magazin',
+                'category' => trim((string) ($produs['category'] ?? '')),
+                'short_description' => trim((string) ($produs['short_description'] ?? '')),
+                'image_url' => trim((string) ($produs['image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg',
+                'reviews_count' => max(0, (int) ($produs['reviews_count'] ?? 0)),
+                'reviews_average' => max(0.0, min(5.0, (float) ($produs['reviews_average'] ?? 0.0))),
+                'out_of_stock' => (int) ($produs['out_of_stock'] ?? 0) === 1 ? 1 : 0,
+            ];
+        }, $produse);
     }
 
     public function productSearchApi(): void
@@ -3618,7 +3665,13 @@ final class SiteController
     public function newsletterUnsubscribe(array $params): void
     {
         $token = trim((string) ($params['token'] ?? ''));
+        // Fără newsletter pe site, adresa există doar pentru linkurile din newsletterele trimise.
+        $cuNewsletter = \App\Support\Plugins::vizibil('newsletter');
         if ($token === '') {
+            if (!$cuNewsletter) {
+                $this->paginaNegasita();
+                return;
+            }
             http_response_code(400);
             echo 'Link invalid de dezabonare.';
             return;
@@ -3633,6 +3686,10 @@ final class SiteController
 
         NewsletterService::ensureSchema($db);
         $result = NewsletterService::unsubscribeByToken($db, $token);
+        if (!$result['ok'] && !$cuNewsletter) {
+            $this->paginaNegasita();
+            return;
+        }
         if (!$result['ok']) {
             http_response_code(404);
             echo 'Linkul de dezabonare nu este valid sau a expirat.';
@@ -3671,16 +3728,26 @@ final class SiteController
         $token       = trim((string) ($params['token'] ?? ''));
         $destUrl     = trim((string) ($_GET['url'] ?? ''));
 
-        $fallback = 'https://bioscem.ro';
-        if ($destUrl === '' || !in_array(parse_url($destUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
+        // Fără o adresă semnată de noi, linkul duce doar la prima pagină a site-ului.
+        $fallback = \App\Support\AppUrl::absolut('/');
+        if ($fallback === '') {
+            $fallback = '/';
+        }
+        $db = $this->db();
+        $semnata = null;
+        if ($destUrl !== '' && $db instanceof \PDO && $campaignId > 0 && $subscriberId > 0 && $token !== '') {
+            $semnata = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $destUrl);
+        }
+        if ($semnata === null) {
+            // Un link care nu e dintr-un newsletter trimis: fără newsletter pe site, adresa nu există.
+            if (!\App\Support\Plugins::vizibil('newsletter')) {
+                $this->paginaNegasita();
+                return;
+            }
             header('Location: ' . $fallback);
             return;
         }
-
-        $db = $this->db();
-        if ($db instanceof \PDO && $campaignId > 0 && $subscriberId > 0 && $token !== '') {
-            $destUrl = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $destUrl);
-        }
+        $destUrl = $semnata;
 
         if ($campaignId > 0) {
             setcookie('nl_cid', (string) $campaignId, [
@@ -3691,7 +3758,10 @@ final class SiteController
             ]);
         }
 
-        if (!in_array(parse_url($destUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
+        // Un link relativ din newsletter („/produs/x”) duce în site; altceva decât http(s), la prima pagină.
+        if (preg_match('#^/(?![/\\\\])#', $destUrl) === 1) {
+            $destUrl = \App\Support\AppUrl::absolut($destUrl);
+        } elseif (!in_array(parse_url($destUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
             $destUrl = $fallback;
         }
 
@@ -3769,15 +3839,18 @@ final class SiteController
         if ($page === null) {
             $notFoundPage = $this->findPublishedPageBySlug('404');
             if (!is_array($notFoundPage)) {
-                // Poate fi un link vechi către un produs, fără /produs/ în față.
-                $potrivit = $this->gasesteProdusDupaSlugAproximativ($db, $slug);
+                // Poate fi un link vechi către un produs, fără /produs/ în față
+                // (doar cu catalogul pe site: altfel /produs/… dă oricum 404).
+                $potrivit = \App\Support\Plugins::vizibil('catalog') ? $this->gasesteProdusDupaSlugAproximativ($db, $slug) : null;
                 if ($potrivit !== null && trim((string) ($potrivit['slug'] ?? '')) !== '') {
                     header('Location: /produs/' . rawurlencode((string) $potrivit['slug']), true, 301);
                     return;
                 }
                 $this->renderPagina404(
                     'Pagina nu a fost găsită',
-                    'Este posibil ca linkul să fie vechi. Caută produsul dorit sau vezi tot magazinul.',
+                    \App\Support\Plugins::vizibil('catalog')
+                        ? 'Este posibil ca linkul să fie vechi. Caută produsul dorit sau vezi tot magazinul.'
+                        : 'Este posibil ca linkul să fie vechi.',
                     $db
                 );
                 return;
@@ -5769,8 +5842,9 @@ CSS;
             return $products;
         }
 
-        $reviewMap = $this->loadShopCatalogReviewMap($db, $ids);
-        $soldMap = $this->loadShopCatalogSoldQtyMap($db, $ids);
+        // Recenziile și vânzările intră în „Popularitate” doar cu pluginurile lor pe site.
+        $reviewMap = \App\Support\Plugins::vizibil('recenzii') ? $this->loadShopCatalogReviewMap($db, $ids) : [];
+        $soldMap = \App\Support\Plugins::vizibil('magazin') ? $this->loadShopCatalogSoldQtyMap($db, $ids) : [];
 
         foreach ($products as &$product) {
             if (!is_array($product)) {
@@ -7060,6 +7134,11 @@ CSS;
             '/cos', '/checkout', '/contul-meu', '/login', '/register',
             '/plata/', '/newsletter/', '/gdpr-agreements',
         ];
+        // Adresele pluginurilor care nu sunt pe site nu se mai pomenesc (dau oricum 404).
+        $alCui = ['/cos' => 'magazin', '/checkout' => 'magazin', '/contul-meu' => 'conturi_clienti', '/login' => 'conturi_clienti',
+            '/register' => 'conturi_clienti', '/plata/' => 'link_plata', '/newsletter/' => 'newsletter', '/gdpr-agreements' => 'acorduri_gdpr'];
+        $interzise = array_values(array_filter($interzise, static fn (string $cale): bool
+            => !isset($alCui[$cale]) || \App\Support\Plugins::vizibil($alCui[$cale])));
 
         $linii = ['User-agent: *'];
         foreach ($interzise as $cale) {
@@ -10542,10 +10621,14 @@ CSS;
                 'out_of_stock' => (int) ($candidate['out_of_stock'] ?? 0) === 1
                     && !\App\Support\Precomanda::estePrecomanda($candidate) ? 1 : 0,
             ];
-            // Catalog fără magazin (de prezentare): în pagină nu ajunge niciun preț.
+            // Catalog fără magazin (de prezentare): în pagină nu ajunge niciun preț;
+            // fără recenzii, nici numărul și media lor.
             if (!\App\Support\Plugins::vizibil('magazin')) {
                 $item = array_merge($item, ['price' => 0.0, 'regular_price' => 0.0, 'has_sale_price' => 0,
                     'discount_value_label' => '', 'price_label' => '', 'regular_price_label' => '']);
+            }
+            if (!\App\Support\Plugins::vizibil('recenzii')) {
+                $item = array_merge($item, ['reviews_count' => 0, 'reviews_average' => 0.0]);
             }
             $items[] = $item;
             $itemById[$id] = $item;

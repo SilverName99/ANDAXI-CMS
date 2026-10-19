@@ -16,6 +16,12 @@ $sourceLabels = [
     'register' => 'Înregistrare',
     'checkout' => 'Checkout',
 ];
+// Doar sursele pluginurilor de pe site: înregistrarea e a conturilor de clienți, checkout-ul al magazinului.
+$surseVizibile = array_filter([
+    'register' => \App\Support\Plugins::vizibil('conturi_clienti'),
+    'checkout' => \App\Support\Plugins::vizibil('magazin'),
+]);
+$descriereSurse = implode('/', array_keys($surseVizibile));
 $statusLabels = [
     'allowed' => 'Permis',
     'bot_honeypot' => 'Bot (honeypot)',
@@ -58,7 +64,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
     <div class="section-head">
         <div>
             <h1>Securitate formulare</h1>
-            <p>Monitorizare tentative register/checkout pentru detecție bot/spam.</p>
+            <p>Monitorizare tentative <?= htmlspecialchars($descriereSurse, ENT_QUOTES) ?> pentru detecție bot/spam.</p>
         </div>
     </div>
 
@@ -68,8 +74,12 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                 <span>Sursă</span>
                 <select name="source">
                     <option value="all" <?= $source === 'all' ? 'selected' : '' ?>>Toate</option>
+<?php if (isset($surseVizibile['register'])): ?>
                     <option value="register" <?= $source === 'register' ? 'selected' : '' ?>>Înregistrare</option>
+<?php endif; ?>
+<?php if (isset($surseVizibile['checkout'])): ?>
                     <option value="checkout" <?= $source === 'checkout' ? 'selected' : '' ?>>Checkout</option>
+<?php endif; ?>
                 </select>
             </label>
             <label class="admin-filter-field">

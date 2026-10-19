@@ -388,7 +388,9 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
             <h3 style="margin-top:0;">Mod mentenanță</h3>
             <p style="margin:0 0 10px;color:#64748b;">
                 Cât timp e activ, vizitatorii văd pagina „Revenim în curând", iar tu poți testa
-                site-ul normal. Administrarea, plățile și legătura cu ERP-ul rămân funcționale.
+                site-ul normal. <?= \App\Support\Plugins::oricareVizibil(['magazin', 'plata_stripe', 'plata_euplatesc', 'plata_bt'])
+                    ? 'Administrarea, plățile' . (\App\Support\Plugins::vizibil('erp') ? ' și legătura cu ERP-ul rămân funcționale' : ' rămân funcționale')
+                    : 'Administrarea rămâne funcțională' ?>.
             </p>
 
             <?php if ($maintenanceEnabled): ?>
@@ -615,7 +617,8 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
         <article class="panel store-settings-panel" data-store-settings-panel="caching" <?= $defaultStoreTab !== 'caching' ? 'hidden' : '' ?> style="margin:12px 0;">
             <h3 style="margin-top:0;">Caching (file-based)</h3>
             <p style="margin:0 0 10px;color:#64748b;">
-                Cache public doar pentru pagini GET din whitelist. Checkout/cont/admin/api/cos sunt excluse implicit.
+                Cache public doar pentru pagini GET din whitelist. <?= implode('/', array_keys(array_filter(['Checkout' => \App\Support\Plugins::vizibil('magazin'),
+                    'cont' => \App\Support\Plugins::vizibil('conturi_clienti'), 'admin' => true, 'api' => true, 'cos' => \App\Support\Plugins::vizibil('magazin')]))) ?> sunt excluse implicit.
             </p>
 
             <div class="panel" style="margin:12px 0;background:#f8fafc;border-color:#dbe4ef;">
@@ -728,7 +731,9 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 <div class="panel" style="margin:12px 0;">
                     <h4 style="margin-top:0;">Excluderi custom</h4>
                     <p style="margin:0 0 8px;color:#64748b;">
-                        Excluderile implicite sunt active permanent: /checkout, /contul-meu, /admin, /api/*, /cos, /auth/*.
+                        Excluderile implicite sunt active permanent: <?= implode(', ', array_keys(array_filter(['/checkout' => \App\Support\Plugins::vizibil('magazin'),
+                            '/contul-meu' => \App\Support\Plugins::vizibil('conturi_clienti'), '/admin' => true, '/api/*' => true,
+                            '/cos' => \App\Support\Plugins::vizibil('magazin'), '/auth/*' => \App\Support\Plugins::vizibil('conturi_clienti')]))) ?>.
                     </p>
                     <div class="field">
                         <label for="cache_exclusions_custom">Excluderi suplimentare (un pattern pe rând)</label>

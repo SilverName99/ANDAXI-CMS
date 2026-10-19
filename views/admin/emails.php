@@ -1614,10 +1614,12 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                 </form>
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px;">
                     <p style="margin:0;color:#64748b;">Total email-uri în istoric: <strong><?= (int) $emailSendHistoryTotal ?></strong></p>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
                     <form method="post" action="/admin/emails/history/resend" style="margin:0;"
                           onsubmit="return confirm('Se retrimit toate emailurile eșuate care se pot reconstrui din comandă. Continui?');">
                         <button type="submit" class="btn btn-secondary">Retrimite toate eșuatele</button>
                     </form>
+<?php endif; ?>
                 </div>
                 <div class="users-table-wrap">
                     <table class="table users-table">
@@ -1629,14 +1631,16 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                             <th>Subiect</th>
                             <th>Status</th>
                             <th>Sursă</th>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
                             <th>Comandă</th>
+<?php endif; ?>
                             <th>Eroare</th>
                             <th></th>
                         </tr>
                         </thead>
                         <tbody>
                         <?php if ($emailSendHistory === []): ?>
-                            <tr><td colspan="9">Nu există încă înregistrări în istoric.</td></tr>
+                            <tr><td colspan="<?= \App\Support\Plugins::vizibil('magazin') ? '9' : '8' ?>">Nu există încă înregistrări în istoric.</td></tr>
                         <?php else: ?>
                             <?php foreach ($emailSendHistory as $row): ?>
                                 <?php if (!is_array($row)) continue; ?>
@@ -1664,7 +1668,9 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                                         </span>
                                     </td>
                                     <td><?= htmlspecialchars((string) ($row['source'] ?? ''), ENT_QUOTES) ?></td>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
                                     <td><?= htmlspecialchars($orderNumber !== '' ? $orderNumber : ($orderId > 0 ? ('#' . $orderId) : '-'), ENT_QUOTES) ?></td>
+<?php endif; ?>
                                     <td><?= htmlspecialchars((string) (($row['error_message'] ?? '') !== '' ? $row['error_message'] : '-'), ENT_QUOTES) ?></td>
                                     <td>
                                         <?php if ($poateRetrimite): ?>
@@ -1750,6 +1756,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
             </div>
         </div>
 
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
         <div class="modal-overlay" id="ecommerce-codes-modal">
             <div class="modal-card" style="max-width:760px;">
                 <div class="modal-head">
@@ -1847,6 +1854,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                 </div>
             </div>
         </div>
+<?php endif; ?>
     </section>
 
     <?php

@@ -29,7 +29,8 @@ use Throwable;
  *    și rămâne ultima bună (`licenta-buna.json`);
  *  - „versiune” mai mică decât a ultimei bune → se ignoră (nu se poate da
  *    site-ul înapoi la o listă veche); egală sau mai mare → devine ultima bună;
- *  - nicio licență bună, niciodată → doar nucleul (vezi `Plugins`).
+ *  - nicio licență nu se verifică acum → `Plugins` merge cu ultima licență
+ *    aplicată (`stare-aplicata.json`); nicio licență, niciodată → doar nucleul.
  *
  * Granița pentru Etapa 2: aici stau și memoria (ultima bună) și intrarea
  * licențelor noi (`instaleaza`). Preluarea de la CRM (cererea HTTP la 15 minute,
@@ -302,8 +303,10 @@ final class Licenta
 
     /**
      * JSON canonic: obiectele cu cheile sortate (după octeți), listele în
-     * ordine, fără spații, fără escape la „/” și la diacritice. Obiectele trebuie
-     * să vină ca stdClass (json_decode fără `true`), ca `{}` să rămână `{}`.
+     * ordine, fără spații, fără escape la „/”, la diacritice și la U+2028/U+2029
+     * (exact ca `JSON.stringify` cu cheile sortate). Numerele: doar întregi.
+     * Obiectele trebuie să vină ca stdClass (json_decode fără `true`), ca `{}`
+     * să rămână `{}`.
      */
     public static function jsonCanonic(mixed $valoare): string
     {
@@ -422,7 +425,9 @@ final class Licenta
 
     private static function jsonScalar(mixed $valoare): string
     {
-        return (string) json_encode($valoare, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+        // Ca `JSON.stringify`: nici „/”, nici diacriticele, nici U+2028/U+2029 nu se scriu ca \u….
+        return (string) json_encode($valoare, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_LINE_TERMINATORS
+            | JSON_PRESERVE_ZERO_FRACTION);
     }
 
     /**

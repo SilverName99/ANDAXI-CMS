@@ -1047,13 +1047,21 @@ final class AdminController
         $totalPages = 1;
         try {
             $subqueries = [];
-            if ($source === 'register') {
+            // Doar sursele pluginurilor de pe site (înregistrarea: conturi de clienți; checkout-ul: magazin).
+            $cuInregistrare = \App\Support\Plugins::vizibil('conturi_clienti');
+            $cuCheckout = \App\Support\Plugins::vizibil('magazin');
+            if ($source === 'register' && $cuInregistrare) {
                 $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs';
-            } elseif ($source === 'checkout') {
+            } elseif ($source === 'checkout' && $cuCheckout) {
                 $subqueries[] = 'SELECT "checkout" AS source, id, ip_address, user_agent, status, created_at FROM checkout_submit_logs';
             } else {
-                $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs';
-                $subqueries[] = 'SELECT "checkout" AS source, id, ip_address, user_agent, status, created_at FROM checkout_submit_logs';
+                $source = 'all';
+                if ($cuInregistrare) {
+                    $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs';
+                }
+                if ($cuCheckout) {
+                    $subqueries[] = 'SELECT "checkout" AS source, id, ip_address, user_agent, status, created_at FROM checkout_submit_logs';
+                }
             }
             $unionSql = implode(' UNION ALL ', $subqueries);
 
@@ -7209,7 +7217,17 @@ final class AdminController
             'Produse', 'Subtotal', 'Livrare', 'Discount', 'Total (RON)',
             'Cupon', 'Status', 'Status plată', 'Metodă plată', 'AWB', 'Sursă', 'Note',
         ];
-        fputcsv($out, $headerRow, ',');
+        // Coloanele „Cupon” și „AWB” doar cu pluginurile lor pe site (pozițiile lor în rând).
+        $coloaneScoase = [];
+        if (!\App\Support\Plugins::vizibil('cupoane')) {
+            $coloaneScoase[] = 16;
+        }
+        if (!\App\Support\Plugins::vizibil('livrare_fan')) {
+            $coloaneScoase[] = 20;
+        }
+        $faraColoane = static fn (array $rand): array => $coloaneScoase === []
+            ? $rand : array_values(array_diff_key($rand, array_flip($coloaneScoase)));
+        fputcsv($out, $faraColoane($headerRow), ',', '"', '\\');
 
         foreach ($orders as $o) {
             $oid = (int) ($o['id'] ?? 0);
@@ -7217,7 +7235,7 @@ final class AdminController
             $pstatus = strtolower((string) ($o['payment_status'] ?? ''));
             $adSource = trim((string) ($o['ad_source'] ?? '')) !== '' ? 'Google Ads' : '';
             $address = trim((string) ($o['billing_address_line1'] ?? '') . ' ' . (string) ($o['billing_address_line2'] ?? ''));
-            fputcsv($out, [
+            fputcsv($out, $faraColoane([
                 (string) ($o['order_number'] ?? ''),
                 (string) ($o['created_at'] ?? ''),
                 trim((string) ($o['billing_first_name'] ?? '') . ' ' . (string) ($o['billing_last_name'] ?? '')),
@@ -7241,7 +7259,7 @@ final class AdminController
                 (string) ($o['fan_awb'] ?? ''),
                 $adSource,
                 trim((string) ($o['notes'] ?? '')),
-            ], ',');
+            ]), ',', '"', '\\');
         }
         fclose($out);
     }
@@ -7306,7 +7324,7 @@ final class AdminController
         fputcsv($out, [
             'sku', 'denumire', 'pret_fara_tva', 'pret_site', 'tva_inclus', 'cota_tva',
             'um', 'categorie', 'stoc', 'greutate_g', 'brand', 'etichete', 'activ', 'slug', 'id_site',
-        ], ',');
+        ], ',', '"', '\\');
 
         foreach ($products as $p) {
             $vatPercent = (float) ($p['vat_percent'] ?? 19);
@@ -7337,7 +7355,7 @@ final class AdminController
                 ((int) ($p['is_active'] ?? 1)) === 1 ? '1' : '0',
                 trim((string) ($p['slug'] ?? '')),
                 (string) (int) ($p['id'] ?? 0),
-            ], ',');
+            ], ',', '"', '\\');
         }
         fclose($out);
     }
@@ -7639,6 +7657,12 @@ final class AdminController
         if ($orderId <= 0) {
             return ['ok' => false, 'message' => 'Comanda nu a fost gasita.'];
         }
+        // AWB-ul e al pluginului „Livrare FAN Courier”: fără el pe site nu se cere
+        // nimic de la FAN, oricine ar cere (aprobarea din ERP, acțiunea în masă).
+        // În „se oprește” merge, ca să se termine comenzile în curs.
+        if (!\App\Support\Plugins::vizibil('livrare_fan')) {
+            return ['ok' => false, 'message' => ''];
+        }
         $this->ensureOptionalSchema($db);
 
         $order = $this->loadOrderForFan($db, $orderId);
@@ -7767,6 +7791,10 @@ final class AdminController
     {
         if ($orderId <= 0 || $colete === []) {
             return ['ok' => false, 'message' => 'Comanda nu a fost gasita.'];
+        }
+        // Ca la createFanAwbInternal: fără pluginul FAN pe site, niciun AWB.
+        if (!\App\Support\Plugins::vizibil('livrare_fan')) {
+            return ['ok' => false, 'message' => ''];
         }
         $this->ensureOptionalSchema($db);
         \App\Support\ErpSync::ensureSchema($db);
@@ -8814,7 +8842,9 @@ final class AdminController
 
         $awb = trim((string) ($order['fan_awb'] ?? ''));
         $awbMessage = '';
-        if ($awb === '') {
+        // Fără pluginul FAN pe site, aprobarea doar trece comanda în procesare:
+        // niciun AWB cerut la FAN (datele de acces rămân în setări, dar nu se folosesc).
+        if ($awb === '' && \App\Support\Plugins::vizibil('livrare_fan')) {
             // Un singur AWB per comandă, chiar dacă notificarea vine de două ori.
             //
             // ERP-ul reia notificarea de aprobare când nu primește răspuns în
@@ -8922,7 +8952,9 @@ final class AdminController
             'ok' => true,
             'message' => ($awb !== ''
                 ? 'Comandă aprobată, AWB generat.'
-                : ('Comandă aprobată, dar AWB-ul nu a putut fi generat. ' . $awbMessage)) . $btMesaj,
+                : (\App\Support\Plugins::vizibil('livrare_fan')
+                    ? 'Comandă aprobată, dar AWB-ul nu a putut fi generat. ' . $awbMessage
+                    : 'Comandă aprobată (livrarea nu se face prin FAN Courier de pe site; fără AWB).')) . $btMesaj,
             'awb' => $awb,
             'trackingUrl' => trim((string) ($order['fan_tracking_url'] ?? '')),
         ];
@@ -9733,6 +9765,13 @@ final class AdminController
             return;
         }
 
+        // Doar formularul cantităților ajunge aici; orice altă acțiune (necunoscută)
+        // nu salvează nimic, ca setările pluginurilor ascunse să rămână neatinse.
+        if ($action !== 'save_quantity_controls') {
+            Flash::set('error', 'Acțiune necunoscută; nu am salvat nimic.');
+            header('Location: /admin/settings/store');
+            return;
+        }
         $quantityStyle = in_array((string) ($_POST['store_quantity_control_style'] ?? 'default'), ['default', 'stepper'], true)
             ? (string) ($_POST['store_quantity_control_style'] ?? 'default')
             : 'default';
@@ -10191,7 +10230,7 @@ final class AdminController
 
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['judet', 'localitate'], ',');
+        fputcsv($out, ['judet', 'localitate'], ',', '"', '\\');
         $scrise = 0;
         while (($row = $stmt->fetch()) !== false) {
             $county = trim((string) ($row['county'] ?? ''));
@@ -10199,7 +10238,7 @@ final class AdminController
             if ($county === '' || $locality === '') {
                 continue;
             }
-            fputcsv($out, [$county, $locality], ',');
+            fputcsv($out, [$county, $locality], ',', '"', '\\');
             $scrise++;
         }
         fclose($out);
@@ -10244,11 +10283,11 @@ final class AdminController
 
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['nume'], ',');
+        fputcsv($out, ['nume'], ',', '"', '\\');
         foreach ($rows as $row) {
             $county = trim((string) ($row['county'] ?? ''));
             if ($county !== '') {
-                fputcsv($out, [$county], ',');
+                fputcsv($out, [$county], ',', '"', '\\');
             }
         }
         fclose($out);
@@ -13839,6 +13878,13 @@ final class AdminController
         $settings = Settings::all($db);
         $type = trim((string) ($_POST['template_type'] ?? 'delivered'));
         $to = trim((string) ($_POST['test_email'] ?? ''));
+        // Ca lista din pagină: emailurile de comandă sunt ale magazinului, cel de bun
+        // venit al conturilor de clienți; un șablon al unui plugin care nu e pe site nu pleacă.
+        if ($type !== '' && !\App\Support\Plugins::vizibil($type === 'account_created' ? 'conturi_clienti' : 'magazin')) {
+            Flash::set('error', 'Șablonul ales nu este disponibil.');
+            header('Location: /admin/emails/test');
+            return;
+        }
 
         try {
             if ($type === '') {
@@ -14123,17 +14169,8 @@ final class AdminController
         }
 
         $db = $this->db();
-        $mannequinPreviewHtml = $this->mannequinSectionPreviewHtml($db instanceof PDO ? $db : null);
-        $shopCatalogPreviewHtml = $this->shopCatalogPreviewHtml($db instanceof PDO ? $db : null);
-        $blogPostsPreviewHtml = $this->blogPostsPreviewHtml($db instanceof PDO ? $db : null);
-        $cartFormPreviewHtml = $this->cartFormPreviewHtml($db instanceof PDO ? $db : null);
-        $checkoutFormPreviewHtml = $this->checkoutFormPreviewHtml($db instanceof PDO ? $db : null);
-        $accountSectionPreviewHtml = $this->accountSectionPreviewHtml();
-        $productReviewFormPreviewHtml = $this->reviewFormPreviewHtml($db instanceof PDO ? $db : null);
-        $gdprAgreementsFormPreviewHtml = $this->gdprAgreementsFormPreviewHtml();
-        $checkoutSuccessOrderInfoPreviewHtml = $this->checkoutSuccessOrderInfoPreviewHtml();
 
-        View::render('admin/page-editor', [
+        View::render('admin/page-editor', array_merge([
             'title' => 'Pagină nouă',
             'page' => [
                 'id' => 0,
@@ -14150,27 +14187,44 @@ final class AdminController
                 'canonical_url' => '',
                 'image_url' => '',
             ],
-            'mannequinCode' => $this->mannequinCodeToken(),
-            'mannequinPreviewHtml' => $mannequinPreviewHtml,
-            'shopCatalogCode' => self::SHOP_CATALOG_TOKEN,
-            'shopCatalogPreviewHtml' => $shopCatalogPreviewHtml,
-            'blogPostsCode' => self::BLOG_POSTS_TOKEN,
-            'blogPostsPreviewHtml' => $blogPostsPreviewHtml,
-            'cartFormCode' => self::CART_FORM_TOKEN,
-            'cartFormPreviewHtml' => $cartFormPreviewHtml,
-            'checkoutFormCode' => self::CHECKOUT_FORM_TOKEN,
-            'checkoutFormPreviewHtml' => $checkoutFormPreviewHtml,
-            'accountSectionCode' => self::ACCOUNT_SECTION_TOKEN,
-            'accountSectionPreviewHtml' => $accountSectionPreviewHtml,
-            'authGoogleButtonCode' => self::GOOGLE_AUTH_BUTTON_TOKEN,
-            'authGoogleButtonPreviewHtml' => $this->googleAuthButtonPreviewHtml(),
-            'productReviewFormCode' => self::PRODUCT_REVIEW_FORM_TOKEN,
-            'productReviewFormPreviewHtml' => $productReviewFormPreviewHtml,
-            'gdprAgreementsFormCode' => self::GDPR_AGREEMENTS_FORM_TOKEN,
-            'gdprAgreementsFormPreviewHtml' => $gdprAgreementsFormPreviewHtml,
-            'checkoutSuccessOrderInfoCode' => self::CHECKOUT_SUCCESS_ORDER_INFO_TOKEN,
-            'checkoutSuccessOrderInfoPreviewHtml' => $checkoutSuccessOrderInfoPreviewHtml,
-        ], 'admin/layout');
+        ], $this->previzualizariEditorPagini($db instanceof PDO ? $db : null)), 'admin/layout');
+    }
+
+    /**
+     * Codurile și previzualizările lor din editorul de pagini, doar pentru
+     * pluginurile de pe site. Codul unui plugin ascuns primește '' (scriptul
+     * editorului nu-l mai înlocuiește), iar bucata lui (catalogul, checkout-ul,
+     * formularul de recenzii…) nu se mai calculează și nu ajunge în sursa
+     * paginii. Cu toate pluginurile pe site, exact ce era înainte, în aceeași ordine.
+     */
+    private function previzualizariEditorPagini(?PDO $db): array
+    {
+        $coduri = [
+            // cheia din șablon => [token, codul, previzualizarea]
+            'mannequin' => ['mannequin_section', fn (): string => $this->mannequinCodeToken(),
+                fn (): string => $this->mannequinSectionPreviewHtml($db)],
+            'shopCatalog' => ['shop_catalog', fn (): string => self::SHOP_CATALOG_TOKEN, fn (): string => $this->shopCatalogPreviewHtml($db)],
+            'blogPosts' => ['blog_posts', fn (): string => self::BLOG_POSTS_TOKEN, fn (): string => $this->blogPostsPreviewHtml($db)],
+            'cartForm' => ['cart_form', fn (): string => self::CART_FORM_TOKEN, fn (): string => $this->cartFormPreviewHtml($db)],
+            'checkoutForm' => ['checkout_form', fn (): string => self::CHECKOUT_FORM_TOKEN, fn (): string => $this->checkoutFormPreviewHtml($db)],
+            'accountSection' => ['account_section', fn (): string => self::ACCOUNT_SECTION_TOKEN,
+                fn (): string => $this->accountSectionPreviewHtml()],
+            'authGoogleButton' => ['auth_google_button', fn (): string => self::GOOGLE_AUTH_BUTTON_TOKEN,
+                fn (): string => $this->googleAuthButtonPreviewHtml()],
+            'productReviewForm' => ['product_review_form', fn (): string => self::PRODUCT_REVIEW_FORM_TOKEN,
+                fn (): string => $this->reviewFormPreviewHtml($db)],
+            'gdprAgreementsForm' => ['gdpr_agreements_form', fn (): string => self::GDPR_AGREEMENTS_FORM_TOKEN,
+                fn (): string => $this->gdprAgreementsFormPreviewHtml()],
+            'checkoutSuccessOrderInfo' => ['checkout_success_order_info', fn (): string => self::CHECKOUT_SUCCESS_ORDER_INFO_TOKEN,
+                fn (): string => $this->checkoutSuccessOrderInfoPreviewHtml()],
+        ];
+        $date = [];
+        foreach ($coduri as $cheie => [$token, $cod, $previzualizare]) {
+            $peSite = \App\Support\Plugins::tokenVizibil($token);
+            $date[$cheie . 'Code'] = $peSite ? $cod() : '';
+            $date[$cheie . 'PreviewHtml'] = $peSite ? $previzualizare() : '';
+        }
+        return $date;
     }
 
     public function pageEditForm(array $params): void
@@ -14210,31 +14264,11 @@ final class AdminController
         }
         $pageSeo = $this->loadCustomPageSeoSettings($db, (int) ($page['id'] ?? 0));
 
-        View::render('admin/page-editor', [
+        View::render('admin/page-editor', array_merge([
             'title' => 'Editează pagină',
             'page' => $page,
             'pageSeo' => $pageSeo,
-            'mannequinCode' => $this->mannequinCodeToken(),
-            'mannequinPreviewHtml' => $this->mannequinSectionPreviewHtml($db),
-            'shopCatalogCode' => self::SHOP_CATALOG_TOKEN,
-            'shopCatalogPreviewHtml' => $this->shopCatalogPreviewHtml($db),
-            'blogPostsCode' => self::BLOG_POSTS_TOKEN,
-            'blogPostsPreviewHtml' => $this->blogPostsPreviewHtml($db),
-            'cartFormCode' => self::CART_FORM_TOKEN,
-            'cartFormPreviewHtml' => $this->cartFormPreviewHtml($db),
-            'checkoutFormCode' => self::CHECKOUT_FORM_TOKEN,
-            'checkoutFormPreviewHtml' => $this->checkoutFormPreviewHtml($db),
-            'accountSectionCode' => self::ACCOUNT_SECTION_TOKEN,
-            'accountSectionPreviewHtml' => $this->accountSectionPreviewHtml(),
-            'authGoogleButtonCode' => self::GOOGLE_AUTH_BUTTON_TOKEN,
-            'authGoogleButtonPreviewHtml' => $this->googleAuthButtonPreviewHtml(),
-            'productReviewFormCode' => self::PRODUCT_REVIEW_FORM_TOKEN,
-            'productReviewFormPreviewHtml' => $this->reviewFormPreviewHtml($db),
-            'gdprAgreementsFormCode' => self::GDPR_AGREEMENTS_FORM_TOKEN,
-            'gdprAgreementsFormPreviewHtml' => $this->gdprAgreementsFormPreviewHtml(),
-            'checkoutSuccessOrderInfoCode' => self::CHECKOUT_SUCCESS_ORDER_INFO_TOKEN,
-            'checkoutSuccessOrderInfoPreviewHtml' => $this->checkoutSuccessOrderInfoPreviewHtml(),
-        ], 'admin/layout');
+        ], $this->previzualizariEditorPagini($db)), 'admin/layout');
     }
 
     public function pageSave(): void
@@ -19510,6 +19544,9 @@ HTML;
 
     private function accountSectionPreviewHtml(): string
     {
+        // Comenzile și punctele apar doar cu magazinul și cu fidelitatea pe site.
+        $cuComenzi = \App\Support\Plugins::vizibil('magazin');
+        $cuPuncte = \App\Support\Plugins::vizibil('fidelitate');
         return '<section style="border:1px solid #dbe7df;border-radius:14px;background:#f8fffb;padding:14px;">'
             . '<div style="display:grid;grid-template-columns:220px minmax(0,1fr);gap:12px;align-items:start;">'
             . '<aside style="border:1px solid #d7e6dc;border-radius:12px;background:#fff;overflow:hidden;">'
@@ -19520,8 +19557,8 @@ HTML;
             . '</div></div>'
             . '<div style="padding:10px;display:grid;gap:6px;">'
             . '<div style="padding:8px 10px;border-radius:9px;background:#e9f5ee;color:#1f6a47;font-weight:700;">Profilul meu</div>'
-            . '<div style="padding:8px 10px;border-radius:9px;color:#475569;">Comenzile mele</div>'
-            . '<div style="padding:8px 10px;border-radius:9px;color:#475569;">Punctele mele</div>'
+            . ($cuComenzi ? '<div style="padding:8px 10px;border-radius:9px;color:#475569;">Comenzile mele</div>' : '')
+            . ($cuPuncte ? '<div style="padding:8px 10px;border-radius:9px;color:#475569;">Punctele mele</div>' : '')
             . '</div></aside>'
             . '<div style="display:grid;gap:10px;">'
             . '<div style="border:1px solid #d7e6dc;border-radius:12px;background:#fff;padding:12px;">'
@@ -19532,11 +19569,11 @@ HTML;
             . '<div><strong style="display:block;color:#64748b;font-size:11px;">TELEFON</strong>+40 721 234 567</div>'
             . '<div><strong style="display:block;color:#64748b;font-size:11px;">MEMBRU DIN</strong>Ianuarie 2024</div>'
             . '</div></div>'
-            . '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;">'
-            . '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">12</strong><small>Comenzi</small></div>'
+            . '<div style="display:grid;grid-template-columns:repeat(' . (2 + ($cuComenzi ? 2 : 0) + ($cuPuncte ? 1 : 0) - 1) . ',minmax(0,1fr));gap:8px;">'
+            . ($cuComenzi ? '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">12</strong><small>Comenzi</small></div>' : '')
             . '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">3</strong><small>Adrese</small></div>'
-            . '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">1240</strong><small>Puncte</small></div>'
-            . '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">28 Mar</strong><small>Ultima comandă</small></div>'
+            . ($cuPuncte ? '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">1240</strong><small>Puncte</small></div>' : '')
+            . ($cuComenzi ? '<div style="border:1px solid #d7e6dc;border-radius:10px;background:#fff;padding:10px;text-align:center;"><strong style="display:block;font-size:20px;">28 Mar</strong><small>Ultima comandă</small></div>' : '')
             . '</div></div></div>'
             . '</section>';
     }
@@ -19713,12 +19750,15 @@ HTML;
                 ],
             ],
             'subtotal' => 168.00,
-            'discount' => 15.00,
+            'discount' => \App\Support\Plugins::vizibil('cupoane') ? 15.00 : 0.00,
             'points_discount' => 0.00,
             'shipping' => 15.00,
             'total' => 168.00,
             'county' => 'Bucuresti',
         ];
+        // În preview arătăm toate metodele de card ale site-ului, ca designul să fie vizibil.
+        $cardMethods = array_values(array_filter(['btipay', 'euplatesc', 'stripe'], static fn (string $metoda): bool
+            => \App\Support\Plugins::permiteInceput(['btipay' => 'plata_bt', 'euplatesc' => 'plata_euplatesc', 'stripe' => 'plata_stripe'][$metoda])));
         $values = [
             'billing_first_name' => 'Alexandru',
             'billing_last_name' => 'Popa',
@@ -19730,14 +19770,13 @@ HTML;
             'billing_county' => 'Bucuresti',
             'billing_postcode' => '010101',
             'notes' => '',
-            'payment_method' => 'euplatesc',
+            'payment_method' => in_array('euplatesc', $cardMethods, true) ? 'euplatesc' : ($cardMethods[0] ?? 'cod'),
         ];
 
         return $this->renderPartialPhpView('site/components/checkout-form', [
             'summary' => $summary,
             'values' => $values,
-            // În preview arătăm toate metodele de card, ca designul să fie vizibil.
-            'cardMethods' => ['btipay', 'euplatesc', 'stripe'],
+            'cardMethods' => $cardMethods,
             'isLoggedIn' => true,
             'antiBot' => ['token' => '', 'rendered_at' => 0],
             'previewMode' => true,
@@ -19747,6 +19786,8 @@ HTML;
 
     private function cartFormPreviewHtml(?PDO $db): string
     {
+        // Cuponul și punctele de fidelitate apar doar cu pluginurile lor pe site.
+        $cuCupoane = \App\Support\Plugins::permiteInceput('cupoane');
         $summary = [
             'lines' => [
                 [
@@ -19767,16 +19808,16 @@ HTML;
             'subtotal' => 168.00,
             'subtotal_without_vat' => 141.18,
             'vat' => 26.82,
-            'discount' => 10.00,
+            'discount' => $cuCupoane ? 10.00 : 0.00,
             'points_discount' => 0.00,
             'shipping' => 15.00,
             'total' => 173.00,
             'county' => 'Bucuresti',
             'coupon' => [
-                'code' => 'BUNVENIT10',
+                'code' => $cuCupoane ? 'BUNVENIT10' : '',
             ],
             'points' => [
-                'enabled' => true,
+                'enabled' => \App\Support\Plugins::permiteInceput('fidelitate'),
                 'available' => 240,
                 'requested' => 140,
                 'applied' => 140,

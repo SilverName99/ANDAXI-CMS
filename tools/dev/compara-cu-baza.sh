@@ -4,8 +4,10 @@
 # „toate”: cu toate pluginurile pornite, site-ul trebuie să arate exact ca
 # Bioscem azi.
 #
-#   tools/dev/compara-cu-baza.sh             # față de f5ae5ea (ultimul commit dinaintea pluginurilor)
-#   tools/dev/compara-cu-baza.sh <commit>    # față de alt commit
+#   tools/dev/compara-cu-baza.sh                     # față de f5ae5ea (ultimul commit dinaintea pluginurilor)
+#   tools/dev/compara-cu-baza.sh <commit>            # față de alt commit
+#   tools/dev/compara-cu-baza.sh --licenta=bioscem   # cu licența reală a Bioscem (fără unealta internă),
+#                                                    # pusă înainte; la final se pune la loc „toate”
 #
 # Codul de bază se scoate cu `git archive` în $CMS_DEV_DIR/baza-<commit> și
 # pornește pe portul următor ($CMS_DEV_PORT + 1), cu același mediu și aceeași
@@ -18,7 +20,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul
 exporta_mediul_aplicatiei
 
-COMMIT="${1:-f5ae5ea}"
+COMMIT="f5ae5ea"
+LICENTA_COMPARATIE=""
+for argument in "$@"; do
+    case "$argument" in
+        --licenta=*) LICENTA_COMPARATIE="${argument#--licenta=}" ;;
+        *) COMMIT="$argument" ;;
+    esac
+done
 COMMIT_SCURT="$(git -C "$RADACINA" rev-parse --short "$COMMIT")" || die "commit necunoscut: $COMMIT"
 BAZA_DIR="$CMS_DEV_DIR/baza-$COMMIT_SCURT"
 PORT_BAZA=$((CMS_DEV_PORT + 1))
@@ -42,6 +51,9 @@ opreste_baza() {
 am_pornit_serverul=0
 curata() {
     opreste_baza
+    if [ -n "$LICENTA_COMPARATIE" ]; then
+        "${PHP_DEV[@]}" "$RADACINA/tools/dev/licenta.php" toate >/dev/null 2>&1 || true
+    fi
     [ "$am_pornit_serverul" = 1 ] && "$RADACINA/tools/dev/server.sh" --opreste >/dev/null 2>&1 || true
 }
 trap curata EXIT
@@ -66,4 +78,7 @@ done
 curl -fsS --noproxy '*' "http://127.0.0.1:$PORT_BAZA/health" >/dev/null 2>&1 || die "serverul copiei de bază nu pornește; vezi $CMS_DEV_DIR/server-baza.log"
 
 cd "$RADACINA"
+if [ -n "$LICENTA_COMPARATIE" ]; then
+    "${PHP_DEV[@]}" tools/dev/licenta.php "$LICENTA_COMPARATIE" >/dev/null || die "licența „$LICENTA_COMPARATIE” nu s-a pus"
+fi
 "${PHP_DEV[@]}" tools/dev/compara-cu-baza.php "$PORT_BAZA" "$COMMIT_SCURT" "$BAZA_DIR"

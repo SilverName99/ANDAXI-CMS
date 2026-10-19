@@ -172,6 +172,11 @@ if ($adminFavicon === '') {
                     <strong>Licența lipsește.</strong> Site-ul funcționează doar cu funcțiile de bază. Vă rugăm să contactați ANDAXI WEB SOLUTIONS.
                 </section>
 <?php endif; ?>
+<?php if (($notaLicenta = \App\Support\Plugins::notaLicentaAdmin()) !== null): ?>
+                <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
+                    <?= htmlspecialchars($notaLicenta, ENT_QUOTES) ?>
+                </section>
+<?php endif; ?>
                 <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
                     <section class="panel" style="border-color:#34d399;background:#ecfdf5;color:#065f46;">
                         <?= htmlspecialchars($message, ENT_QUOTES) ?>

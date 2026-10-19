@@ -991,13 +991,19 @@ final class NewsletterService
         return base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
     }
 
-    public static function handleClickTrack(PDO $db, int $campaignId, int $subscriberId, string $token, string $destUrl): string
+    /**
+     * Notează clickul și întoarce adresa la care duce linkul, sau null dacă
+     * semnătura nu se potrivește: adresa din cerere n-a fost pusă de noi în
+     * newsletter și nu are voie să ducă nicăieri (altfel oricine ar face din
+     * site o trambulină spre orice adresă).
+     */
+    public static function handleClickTrack(PDO $db, int $campaignId, int $subscriberId, string $token, string $destUrl): ?string
     {
         $expectedToken = self::base64UrlEncode(
             hash_hmac('sha256', "click|{$campaignId}|{$subscriberId}|{$destUrl}", self::unsubscribeSigningKey(), true)
         );
         if (!hash_equals($expectedToken, $token)) {
-            return $destUrl;
+            return null;
         }
 
         try {

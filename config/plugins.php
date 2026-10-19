@@ -87,7 +87,6 @@ return [
             . 'formularul de contact, administratori cu roluri și jurnal, protecția anti-robot, popupul de anunț.',
         'rute_admin' => [
             '/admin', '/admin/login', '/admin/logout',
-            '/admin/users/security',
             '/admin/settings/store', '/admin/settings/admins', '/admin/settings/google',
             '/admin/activity-log',
             '/admin/pages/*', '/admin/gallery/*', '/admin/design/*',
@@ -99,8 +98,9 @@ return [
                 'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin'])
                     && !$prefix(['/admin/users', '/admin/products', '/admin/categories', '/admin/orders', '/admin/settings',
                         '/admin/pages', '/admin/gallery', '/admin/design', '/admin/emails'])],
+            // Încercările de înregistrare (conturi de clienți) și de comandă (magazin), cu protecția anti-robot.
             ['grup' => 'utilizatori', 'ordine' => 40, 'eticheta' => 'Securitate formulare', 'href' => '/admin/users/security',
-                'icon' => 'shield', 'activ' => ['/admin/users/security']],
+                'icon' => 'shield', 'activ' => ['/admin/users/security'], 'oricare_din' => ['magazin', 'conturi_clienti']],
             // Pagina e a nucleului (SEO, cache, mentenanță…); fără magazin pe site se numește „Setări site”.
             ['grup' => 'configurare', 'ordine' => 10, 'eticheta' => 'Setări magazin', 'href' => '/admin/settings/store',
                 'icon' => 'settings', 'activ' => ['/admin/settings/store'], 'eticheta_fara' => ['magazin' => 'Setări site']],
@@ -534,6 +534,16 @@ return [
         ],
         'POST /admin/emails/builder/preview' => [
             [[], ['newsletter', 'magazin']],
+        ],
+        // Jurnalul anti-robot al formularelor: înregistrarea e a conturilor, checkout-ul al magazinului.
+        'GET /admin/users/security' => [
+            [[], ['magazin', 'conturi_clienti']],
+        ],
+        // Acțiunile în masă din comenzi: AWB-ul e al livrării FAN, retrimiterea în ERP a ERP-ului.
+        'POST /admin/orders/bulk' => [
+            [['post.bulk_action' => ['awb']], 'livrare_fan'],
+            [['post.bulk_action' => ['erp_retry']], 'erp'],
+            [[], 'magazin'],
         ],
         'GET /admin/settings/payments' => [
             [[], ['magazin', 'plata_stripe', 'plata_euplatesc', 'plata_bt']],

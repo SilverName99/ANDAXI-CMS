@@ -185,7 +185,16 @@ $reincarca();
 $verifica('JSON stricat: ignorat, rămâne ultima bună', (Plugins::licenta()['versiune'] ?? 0) === 6 && $contine(Plugins::mesaje(), 'JSON'));
 @unlink($tmp . '/' . Licenta::FISIER_BUN);
 $reincarca();
-$verifica('JSON stricat și nicio ultimă bună: „Licența lipsește”', Plugins::licentaLipseste());
+$verifica('JSON stricat și nicio ultimă bună, dar site-ul a avut licență: merge pe ultima aplicată (v6), nu doar cu nucleul',
+    Plugins::licentaNeverificata() && !Plugins::licentaLipseste() && (Plugins::licenta()['versiune'] ?? 0) === 6
+    && Plugins::activ('catalog') && Plugins::notaLicentaAdmin() !== null && $contine(Plugins::mesaje(), 'ultima licență aplicată'));
+@unlink($tmp . '/' . Plugins::FISIER_STARE);
+$reincarca();
+$verifica('site care n-a avut niciodată licență (fără stare aplicată): „Licența lipsește”, doar nucleul', Plugins::licentaLipseste()
+    && !Plugins::licentaNeverificata() && array_unique(array_values(Plugins::stari())) === ['oprit']);
+[$mesajCron, $codCron] = Plugins::cronOprit('scripts/bt-ipay-sync.php');
+$verifica('fără nicio licență, cronul unui plugin iese cu codul 2 (de văzut în monitorizare), nu 0', $codCron === 2
+    && str_contains($mesajCron, 'Licența site-ului lipsește'), $mesajCron);
 $scrieFisier(Licenta::FISIER, Licenta::semneaza($licenta($toate, 10), $privata));
 Licenta::configureaza(['dosar' => $tmp, 'cheie_publica' => '', 'site' => 'test']);
 $reincarca();
@@ -204,6 +213,36 @@ $scrieFisier(Licenta::FISIER, Licenta::semneaza($licenta($toate, 11), $privata))
 $reincarca();
 $verifica('ultima bună stricată: curenta (v11) se folosește și o înlocuiește', (Plugins::licenta()['versiune'] ?? 0) === 11
     && str_contains((string) file_get_contents($tmp . '/' . Licenta::FISIER_BUN), '"versiune": 11'));
+
+// 12b. Cheia sau site-ul din .env greșite după o licență bună (aici: altă cheie publică):
+//      site-ul merge mai departe cu ultima licență aplicată, cronurile banilor rulează.
+Licenta::configureaza(['dosar' => $tmp, 'cheie_publica' => base64_encode(sodium_crypto_sign_publickey(sodium_crypto_sign_keypair())), 'site' => 'test']);
+$reincarca();
+$verifica('cheia publică schimbată (nicio licență nu se verifică): rămân stările ultimei licențe aplicate (v11, toate pornite)',
+    Plugins::licentaNeverificata() && (Plugins::licenta()['versiune'] ?? 0) === 11 && array_unique(array_values(Plugins::stari())) === ['pornit'],
+    implode(' | ', Plugins::mesaje()));
+$verifica('…și cronurile care termină plățile rulează (BT, ERP, FAN)', Plugins::cronPermis('scripts/bt-ipay-sync.php')
+    && Plugins::cronPermis('scripts/erp-sync.php') && Plugins::cronPermis('scripts/fan-tracking-sync.php'));
+Licenta::configureaza(['dosar' => $tmp, 'cheie_publica' => $publica, 'site' => 'test']);
+$reincarca();
+$verifica('cheia bună la loc: licența se verifică din nou', !Plugins::licentaNeverificata() && Plugins::notaLicentaAdmin() === null);
+
+// 12c. Unealta internă nu pornește filtrele: licența Bioscem (fără migrare_wordpress) lasă HTML-ul neatins.
+$faraIntern = array_filter($toate, static fn (string $s, string $k): bool => ($k !== 'migrare_wordpress'), ARRAY_FILTER_USE_BOTH);
+$scrieFisier(Licenta::FISIER, Licenta::semneaza($licenta($faraIntern, 11), $privata));
+$reincarca();
+$html = '<div class="slider"><ul class="slider-dots" data-dots></ul><ol id="pasi"></ol><ul class="lista"><li class="placeholder"></li><li>Text</li></ul></div>';
+$verifica('licența Bioscem (toate, fără unealta internă): nimic de ascuns, HTML-ul iese neschimbat', Plugins::nimicAscuns()
+    && !Plugins::vizibil('migrare_wordpress') && Plugins::filtreazaLinkuri($html) === $html);
+// Cu un plugin oprit: doar listele golite de filtru dispar, nu și cele scrise goale de client.
+$scrieFisier(Licenta::FISIER, Licenta::semneaza($licenta(array_merge($toate, ['blog' => 'oprit']), 11), $privata));
+$reincarca();
+$html = '<ul id="rezultate-js"></ul><ol class="pasi">' . "\n" . '</ol><ul class="meniu"><li class="divider"></li><li><a href="/blog">Blog</a>'
+    . '<ul class="sub"><li><a href="/blog/x">X</a></li></ul></li><li><a href="/contact">Contact</a></li></ul><ul class="doar-blog"><li> <a href="/blog">B</a> </li></ul>';
+$filtrat = Plugins::filtreazaLinkuri($html);
+$verifica('filtrul scoate doar ce a golit el: listele goale și separatorul scrise de client rămân', !Plugins::nimicAscuns()
+    && $filtrat === '<ul id="rezultate-js"></ul><ol class="pasi">' . "\n" . '</ol><ul class="meniu"><li class="divider"></li><li><a href="/contact">Contact</a></li></ul>',
+    $filtrat);
 
 // 13. Ordinea cheilor și spațiile nu contează (JSON canonic), dar orice valoare da.
 $compact = json_decode(Licenta::semneaza($licenta(['blog' => 'pornit', 'catalog' => 'se_opreste'], 12), $privata), true);
@@ -242,6 +281,14 @@ $verifica('se_opreste: activ=nu, permiteInceput=nu, vizibil=da', !Plugins::activ
     && Plugins::vizibil('magazin') && Plugins::stare('magazin') === 'se_opreste');
 $verifica('pornit: activ=da, permiteInceput=da, vizibil=da', Plugins::activ('blog') && Plugins::permiteInceput('blog') && Plugins::vizibil('blog'));
 $verifica('oprit: activ=nu, vizibil=nu', !Plugins::activ('newsletter') && !Plugins::vizibil('newsletter'));
+$dinMagazin = Plugins::seOpresteDin('magazin');
+$reincarca();
+$stareSalvata = json_decode((string) @file_get_contents($tmp . '/' . Plugins::FISIER_STARE), true);
+$verifica('se_opreste: momentul intrării se ține minte (aceeași valoare la o nouă încărcare, scrisă în stare-aplicata.json)',
+    $dinMagazin !== null && Plugins::seOpresteDin('magazin') === $dinMagazin && isset($stareSalvata['se_opreste_din']['magazin'])
+    && Plugins::seOpresteDin('blog') === null);
+$verifica('se_opreste prin licență (magazin) vs. doar din cauza unei dependențe (FAN nu e în licență, deci oprit)',
+    Plugins::seOprestePrinLicenta('magazin') && !Plugins::seOprestePrinLicenta('catalog'));
 $verifica('cron „pornit” (coș abandonat) nu rulează când magazinul se oprește', !Plugins::cronPermis($radacina . '/scripts/abandoned-cart-emails.php'));
 $verifica('cron „vizibil” al unui plugin oprit (ERP) nu rulează', !Plugins::cronPermis('scripts/erp-sync.php'));
 $verifica('script al nucleului (install.php) rulează mereu', Plugins::cronPermis('scripts/install.php'));
@@ -258,6 +305,24 @@ $scrieFisier(Licenta::FISIER, '{"site": "test"}');
 $reincarca();
 $jurnal = (string) @file_get_contents($tmp . '/jurnal.log');
 $verifica('problemă nouă: scrisă din nou', substr_count($jurnal, 'licenta.json respinsă') === 2);
+foreach ([1, 2, 3] as $_) {
+    Plugins::jurnalOdataPeZi('test|GET /newsletter/track/open', 'Cerere repetată de test');
+}
+Plugins::jurnalOdataPeZi('test|GET /checkout/bt/retur', 'Altă adresă de test');
+$jurnal = (string) @file_get_contents($tmp . '/jurnal.log');
+$verifica('cererile repetate la o adresă mereu deschisă: o linie pe zi și pe adresă', substr_count($jurnal, 'Cerere repetată de test') === 1
+    && substr_count($jurnal, 'Altă adresă de test') === 1);
+// Dosarul licenței fără drept de scriere (aici: stare-aplicata.json e un dosar, deci nu se poate înlocui).
+@unlink($tmp . '/' . Plugins::FISIER_STARE);
+@mkdir($tmp . '/' . Plugins::FISIER_STARE);
+$scrieFisier(Licenta::FISIER, Licenta::semneaza($licenta(['blog' => 'pornit'], 14), $privata));
+$reincarca();
+$reincarca();
+$jurnal = (string) @file_get_contents($tmp . '/jurnal.log');
+$verifica('starea nu se poate salva: adminul vede o notă, jurnalul o linie (nu una pe cerere), stările se aplică oricum',
+    Plugins::activ('blog') && str_contains((string) Plugins::notaLicentaAdmin(), 'nu poate fi salvată')
+    && substr_count($jurnal, 'Nu pot scrie') === 1, trim($jurnal));
+@rmdir($tmp . '/' . Plugins::FISIER_STARE);
 
 // 17. Redirecționările: doar căi din același site.
 $scrieFisier(Licenta::FISIER, Licenta::semneaza($licenta(['blog' => 'pornit'], 20, 'test', ['redirectionari' => [
@@ -280,6 +345,16 @@ $verifica('vector de test: semnătura documentată în docs/PLUGINURI.md', str_c
     (string) @file_get_contents($radacina . '/docs/PLUGINURI.md'),
     $semnaturaVector
 ), 'semnătura calculată: ' . $semnaturaVector . ', cheia publică: ' . base64_encode(sodium_crypto_sign_publickey($perecheFixa)));
+
+$canonic = Licenta::jsonCanonic(json_decode((string) json_encode(['z' => "x\u{2028}y\u{2029}", 'redirectionari' => ['blog' => '/pagină-ăîșț/€']])));
+$asteptat = '{"redirectionari":{"blog":"/pagină-ăîșț/€"},"z":"x' . "\u{2028}" . 'y' . "\u{2029}" . '"}';
+$dinNode = '';
+if (trim((string) shell_exec('command -v node 2>/dev/null')) !== '') {
+    $dinNode = (string) shell_exec('node -e ' . escapeshellarg('const o={redirectionari:{blog:"/pagină-ăîșț/€"},z:"x\u2028y\u2029"};'
+        . 'process.stdout.write(JSON.stringify(o))'));
+}
+$verifica('JSON canonic: U+2028/U+2029 și diacriticele scrise ca JSON.stringify (nu \\u2028)', $canonic === $asteptat
+    && ($dinNode === '' || $dinNode === $canonic), $canonic . ' / node: ' . $dinNode);
 
 // Curățenie A.
 foreach (glob($tmp . '/*') ?: [] as $fisier) {
@@ -469,8 +544,11 @@ $pachet = static function (string $nume) use ($catalog): array {
 $puneLicenta = static function (?array $pluginuri, array $extra = []) use ($cheieDev): void {
     $dosar = Licenta::dosar();
     if ($pluginuri === null) {
+        // Un site care n-a avut niciodată licență: și fără starea aplicată
+        // (altfel ar merge mai departe pe ultima licență aplicată).
         @unlink($dosar . '/' . Licenta::FISIER);
         @unlink($dosar . '/' . Licenta::FISIER_BUN);
+        @unlink($dosar . '/' . Plugins::FISIER_STARE);
     } else {
         $versiune = 0;
         foreach ([Licenta::FISIER, Licenta::FISIER_BUN] as $fisier) {
@@ -544,7 +622,10 @@ try {
                 if ($garda !== null || $fatal || str_contains($r['corp'], 'Modulul nu este inclus în abonament')) {
                     $greseli[] = $eticheta . ': trebuia să ajungă la controller, a răspuns ' . $r['cod'] . ($garda !== null ? ' (garda)' : '');
                 }
-                if ($proprietar['mereu_deschis'] && $c['metoda'] === 'POST' && !in_array($r['cod'], [200, 302, 400, 401, 403], true)) {
+                // Fără pluginul pe site, controllerul răspunde 404 unei cereri care nu e a
+                // procesatorului (fără plată semnată): adresa a răspuns, garda nu s-a amestecat.
+                if ($proprietar['mereu_deschis'] && $c['metoda'] === 'POST'
+                    && !in_array($r['cod'], array_merge([200, 302, 400, 401, 403], $vizibil ? [] : [404]), true)) {
                     $greseli[] = $eticheta . ': adresa de confirmare a răspuns ' . $r['cod'];
                 }
                 continue;
@@ -568,7 +649,8 @@ try {
                 foreach ($proprietar['chei'] as $k) {
                     $redirect ??= Plugins::redirectionare($k);
                 }
-                if ($redirect !== null && $c['metoda'] === 'GET' && !str_starts_with($c['tipar'], '/api/')) {
+                // Redirecționarea se face doar spre o pagină care se vede pe site (altfel 404, nu buclă).
+                if ($redirect !== null && $c['metoda'] === 'GET' && !str_starts_with($c['tipar'], '/api/') && Plugins::adresaVizibila($redirect)) {
                     $rezumat['redirect']++;
                     if ($r['cod'] !== 302 || ($r['antete']['location'] ?? '') !== $redirect) {
                         $greseli[] = $eticheta . ': aștepta redirecționare spre ' . $redirect . ', a primit ' . $r['cod'];
@@ -629,6 +711,12 @@ try {
                     continue;
                 }
                 $rez = $scriptCron($script);
+                if (Plugins::licentaLipseste()) {
+                    // Fără nicio licență: o problemă de rezolvat, deci un cod de ieșire pe care îl vede monitorizarea.
+                    $verifica('cron ' . $script . ' (fără licență): nu rulează (exit 2, o linie)',
+                        $rez['cod'] === 2 && $rez['linii'] === 1 && str_contains($rez['text'], 'Licența site-ului lipsește'), $rez['text']);
+                    continue;
+                }
                 $verifica('cron ' . $script . ' (' . $cheie . ' ' . Plugins::stare($cheie) . '): nu rulează (exit 0, o linie)',
                     $rez['cod'] === 0 && $rez['linii'] === 1 && str_contains($rez['text'], 'nu este pornit pe acest site'), $rez['text']);
             }
@@ -689,7 +777,52 @@ try {
             }
             $verifica('toate pornite: client cu coș și formular de checkout (pentru „se oprește”)', $formularComanda !== []);
         }
+        // Linkul de urmărire din newsletter: doar adresele semnate duc în afară.
+        $clickRau = $cerere('GET', '/newsletter/track/click/1/1/x?url=' . rawurlencode('https://exemplu-rau.test/phish'));
+        $clickGol = $cerere('GET', '/newsletter/track/click/1/1/x');
+        $verifica('linkul de urmărire nesemnat nu duce în afară (' . $clickRau['cod'] . ' ' . ($clickRau['antete']['location'] ?? '') . ')',
+            Plugins::vizibil('newsletter')
+                ? ($clickRau['cod'] === 302 && ($clickRau['antete']['location'] ?? '') === $baza . '/' && ($clickGol['antete']['location'] ?? '') === $baza . '/')
+                : ($clickRau['cod'] === 404 && $clickGol['cod'] === 404));
+        $robots = $cerere('GET', '/robots.txt')['corp'];
+        $verifica('robots.txt pomenește doar adresele pluginurilor de pe site', str_contains($robots, 'Disallow: /cos') === Plugins::vizibil('magazin')
+            && str_contains($robots, 'Disallow: /contul-meu') === Plugins::vizibil('conturi_clienti')
+            && str_contains($robots, 'Disallow: /newsletter/') === Plugins::vizibil('newsletter') && str_contains($robots, 'Disallow: /admin'));
+        if (Plugins::vizibil('catalog')) {
+            $catalogApi = json_decode($cerere('GET', '/api/shop/catalog')['corp'], true);
+            $bestApi = json_decode($cerere('GET', '/api/products/best-sellers?limit=3')['corp'], true);
+            $primul = (array) ($catalogApi['items'][0] ?? []);
+            $primulBest = (array) ($bestApi['items'][0] ?? []);
+            $verifica('API-urile catalogului: fără recenzii și vânzări când pluginurile lor nu sunt pe site',
+                $primul !== [] && $primulBest !== []
+                && array_key_exists('reviews_count', $primul) === Plugins::vizibil('recenzii')
+                && array_key_exists('reviews_count', $primulBest) === Plugins::vizibil('recenzii')
+                && array_key_exists('sold_qty', $primul) === Plugins::vizibil('magazin')
+                && array_key_exists('sold_qty', $primulBest) === Plugins::vizibil('magazin')
+                && array_key_exists('price', $primulBest) === Plugins::vizibil('magazin'),
+                json_encode([$primul, $primulBest], JSON_UNESCAPED_UNICODE));
+        }
+        // „Trimite email test” și Setări magazin nu ating ce ține de pluginurile ascunse.
+        $mailuriInainteTest = glob($dosarDev . '/mail/*') ?: [];
+        $cerere('POST', '/admin/emails/test', $jar, ['template_type' => 'new_order', 'test_email' => 'test-pluginuri@exemplu.ro']);
+        $mailuriTest = array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainteTest);
+        $verifica('„Trimite email test”: șablonul unei comenzi pleacă doar cu magazinul pe site', ($mailuriTest !== []) === Plugins::vizibil('magazin'));
+        array_map('unlink', $mailuriTest);
+        $stilInainte = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'store_quantity_control_style'")->fetchColumn();
+        $cerere('POST', '/admin/settings/store', $jar, ['action' => 'actiune-necunoscuta',
+            'store_quantity_control_style' => $stilInainte === 'stepper' ? 'default' : 'stepper']);
+        $stilDupa = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'store_quantity_control_style'")->fetchColumn();
+        $verifica('Setări magazin: o acțiune necunoscută nu salvează nimic', $stilDupa === $stilInainte, $stilInainte . ' → ' . $stilDupa);
+
         if ($numeScenariu === 'prezentare') {
+            $faraCerere = [
+                'POST /checkout/succes/' . $mostre['comanda_nr'] => $cerere('POST', '/checkout/succes/' . $mostre['comanda_nr'])['cod'],
+                'GET /checkout/bt/retur' => $cerere('GET', '/checkout/bt/retur')['cod'],
+                'GET /newsletter/unsubscribe/abc' => $cerere('GET', '/newsletter/unsubscribe/abc')['cod'],
+            ];
+            $verifica('prezentare: adresele mereu deschise, fără o plată sau un link adevărat, dau 404 ('
+                . implode(', ', array_map(static fn ($k, $v) => $k . ' ' . $v, array_keys($faraCerere), $faraCerere)) . ')',
+                array_unique(array_values($faraCerere)) === [404]);
             $p404 = $cerere('GET', '/magazin');
             $verifica('prezentare: pagina 404 fără „Vezi toate produsele”', $p404['cod'] === 404 && !str_contains($p404['corp'], 'Vezi toate produsele'));
             // Baza găsește paginile și cu alte litere sau fără diacritice; tot 404 trebuie să dea.
@@ -701,6 +834,18 @@ try {
                 . implode(', ', array_map(static fn ($k, $v) => $k . ' ' . $v, array_keys($variante), $variante)) . ')',
                 array_unique(array_values($variante)) === [404]);
         }
+    }
+
+    if ($scenarii !== []) {
+        // Redirecționări din licență care duc la pagini ale altor pluginuri oprite: 404, nu buclă.
+        $scrie('');
+        $scrie('-- Redirecționări în buclă (blog → /magazin, catalog → /blog, ambele oprite)');
+        $puneLicenta($pachet('prezentare'), ['redirectionari' => ['blog' => '/magazin', 'catalog' => '/blog', 'acorduri_gdpr' => '/contact']]);
+        $bucla = [$cerere('GET', '/blog'), $cerere('GET', '/magazin'), $cerere('GET', '/acorduri-gdpr')];
+        $verifica('redirecționarea spre o pagină ascunsă dă 404 (nu buclă), cea spre o pagină vizibilă merge',
+            $bucla[0]['cod'] === 404 && $bucla[1]['cod'] === 404 && $bucla[2]['cod'] === 302
+            && ($bucla[2]['antete']['location'] ?? '') === '/contact',
+            $bucla[0]['cod'] . ' ' . $bucla[1]['cod'] . ' ' . $bucla[2]['cod'] . ' ' . ($bucla[2]['antete']['location'] ?? ''));
     }
 
     // =================================================================
@@ -1141,6 +1286,31 @@ try {
         $verifica('admin: ' . count($paginiMeniu) . ' pagini din meniu se deschid, fără linkuri/formulare spre pluginuri ascunse',
             $paginiMeniu !== [] && $problemeAdmin === [], implode("\n          ", array_slice($problemeAdmin, 0, 30)));
 
+        // Editoarele (pagini, șablon de produs) pun previzualizările codurilor în sursa
+        // paginii, ca date pentru JavaScript: nici acolo nimic din pluginurile oprite
+        // (catalogul întreg, checkout-ul cu procesatorii, punctele, recenziile…).
+        $editoare = ['/admin/pages/new'];
+        if (Plugins::vizibil('catalog')) {
+            $editoare[] = '/admin/products/templates/' . $mostre['sablon_produs'] . '/builder';
+        }
+        $sursePagini = [];
+        foreach ($editoare as $cale) {
+            $r = $cerere('GET', $cale, $jar);
+            // Doar conținutul paginii (meniul și stilurile adminului au verificările lor), fără
+            // ce e de editat (textarea, al clientului), fără stiluri și comentarii; textul demo
+            // al notei de sub butonul de coș e al magazinului, nu al produselor promoționale.
+            $sursa = preg_match('#<main class="admin-content">(.*)</main>#s', $r['corp'], $main) === 1 ? $main[1] : $r['corp'];
+            // (CSS-ul site-ului, pus în pagină pentru previzualizare, are doar nume de clase.)
+            $sursa = (string) preg_replace(['#<textarea\b[^>]*>.*?</textarea>#is', '#<style\b[^>]*>.*?</style>#is', '#/\*.*?\*/#s', '#<!--.*?-->#s',
+                '#const previewAppCssContent = [^\n]*#'], '', $sursa);
+            $sursa = str_replace('Text promoțional sub butonul de comandă', '', $sursa);
+            $sursePagini[] = ['rol' => 'sursa', 'cale' => $cale . ' (' . $r['cod'] . ')', 'text' => html_entity_decode($sursa, ENT_QUOTES | ENT_HTML5, 'UTF-8')];
+        }
+        $faraProduse = Plugins::vizibil('catalog') || !str_contains($sursePagini[0]['text'], 'Ceai de mentă');
+        $text = $problemeText($sursePagini);
+        $verifica('sursa editoarelor (pagini, șablon de produs): fără previzualizările și codurile pluginurilor oprite',
+            $text === [] && $faraProduse, implode("\n          ", array_slice($text, 0, 15)) . ($faraProduse ? '' : ' (catalogul în sursă)'));
+
         // Cu browserul: aceleași linkuri după ce rulează JavaScript-ul, textul vizibil
         // (și în ferestrele comenzilor și ale produselor, și în contul clientului), plus erorile JS.
         if ($areBrowser) {
@@ -1249,17 +1419,38 @@ try {
         $db->exec("DELETE FROM settings WHERE `key` = 'stripe_webhook_secret'");
     }
 
-    // ERP „se oprește”: o comandă care n-a ajuns în ERP nu mai pleacă, stă „în așteptare”.
+    // ERP „se oprește”: comenzile plasate înainte de oprire (plătite sau confirmate
+    // abia acum) pleacă în ERP; doar cele plasate după oprire stau „în așteptare”.
+    // ERP-ul de dezvoltare e gaura neagră (127.0.0.1:9): „a încercat” = eroare de legătură, nu „ținută”.
     \App\Support\ErpSync::ensureSchema($db);
     $erpVechi = $db->query("SELECT `key`, `value` FROM settings WHERE `key` IN ('erp_enabled')")->fetchAll(PDO::FETCH_KEY_PAIR);
-    $randErp = $db->query('SELECT erp_status, erp_last_error, erp_next_retry_at, erp_attempts, erp_order_id FROM orders WHERE id = '
+    $randErp = $db->query('SELECT erp_status, erp_last_error, erp_next_retry_at, erp_attempts, erp_order_id, created_at FROM orders WHERE id = '
         . $idComanda)->fetch(PDO::FETCH_ASSOC);
     \App\Support\Settings::save($db, ['erp_enabled' => '1']);
-    $db->prepare("UPDATE orders SET erp_status = 'pending', erp_order_id = NULL WHERE id = :id")->execute(['id' => $idComanda]);
+    $puneErpDeTrimis = static function () use ($db, $idComanda): void {
+        $db->prepare("UPDATE orders SET erp_status = 'pending', erp_order_id = NULL, erp_next_retry_at = NULL WHERE id = :id")
+            ->execute(['id' => $idComanda]);
+    };
+    $puneErpDeTrimis();
+    $impins = \App\Support\ErpSync::push($db, $idComanda, true);
+    $verifica('se oprește (magazin și erp): o comandă plasată înainte de oprire pleacă în continuare în ERP (nu e ținută)',
+        ($impins['tinuta'] ?? false) === false && !str_contains((string) ($impins['message'] ?? ''), 'se oprește'),
+        json_encode($impins, JSON_UNESCAPED_UNICODE));
+    // Aceeași comandă, ca și cum ar fi fost plasată după trecerea ERP-ului în „se oprește”.
+    $puneErpDeTrimis();
+    $db->prepare('UPDATE orders SET created_at = :c WHERE id = :id')->execute(['c' => date('Y-m-d H:i:s', time() + 1), 'id' => $idComanda]);
     $impins = \App\Support\ErpSync::push($db, $idComanda, true);
     $stareErp = (string) $db->query('SELECT erp_status FROM orders WHERE id = ' . $idComanda)->fetchColumn();
-    $verifica('se oprește (erp): comanda nouă nu mai pleacă în ERP, rămâne „în așteptare”', ($impins['tinuta'] ?? false) === true
+    $verifica('se oprește (erp): o comandă plasată după oprire nu mai pleacă, rămâne „în așteptare”', ($impins['tinuta'] ?? false) === true
         && $stareErp === 'pending' && str_contains((string) $impins['message'], 'se oprește'), json_encode($impins, JSON_UNESCAPED_UNICODE));
+    // Doar magazinul se oprește (ERP-ul e „pornit” în licență): checkout-ul e închis, tot ce e pe site pleacă.
+    $puneLicenta(array_merge($pachet('toate'), ['magazin' => 'se_opreste']));
+    $puneErpDeTrimis();
+    $impins = \App\Support\ErpSync::push($db, $idComanda, true);
+    $verifica('se oprește doar magazinul (ERP pornit în licență): comenzile de pe site pleacă în ERP, oricând ar fi plasate',
+        Plugins::stare('erp') === 'se_opreste' && ($impins['tinuta'] ?? false) === false, json_encode($impins, JSON_UNESCAPED_UNICODE));
+    $db->prepare('UPDATE orders SET created_at = :c WHERE id = :id')->execute(['c' => $randErp['created_at'], 'id' => $idComanda]);
+    unset($randErp['created_at']);
     $puneLicenta($pachet('magazin'));
     $impins = \App\Support\ErpSync::push($db, $idComanda, true);
     $verifica('oprit (erp): nicio legătură cu ERP-ul, comanda rămâne doar pe site', ($impins['ok'] ?? true) === false
@@ -1289,6 +1480,20 @@ try {
     // oferă FANbox; o comandă cu localitatea scrisă de mână intră ca oricare alta.
     $puneLicenta(array_merge($pachet('toate'), ['livrare_fan' => 'oprit']));
     $cerere('GET', '/health');
+    // Niciun AWB cerut la FAN: nici din aprobarea venită din ERP, nici din acțiunea în masă.
+    $adminController = new \App\Http\Controllers\AdminController();
+    $creeazaAwb = new ReflectionMethod($adminController, 'createFanAwbInternal');
+    $creeazaAwb->setAccessible(true);
+    $awbFaraFan = $creeazaAwb->invoke($adminController, $db, $idComanda);
+    @unlink($jar);
+    $cerere('POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parolaAdmin]);
+    $inMasa = $cerere('POST', '/admin/orders/bulk', $jar, ['bulk_action' => 'awb', 'order_ids' => [$idComanda]]);
+    $export = $cerere('GET', '/admin/orders/export', $jar);
+    $antetExport = (string) strtok(ltrim($export['corp'], "\xEF\xBB\xBF"), "\n");
+    $verifica('fără FAN: niciun AWB (aprobarea din ERP nu cere nimic de la FAN, acțiunea în masă dă „Modulul nu este inclus”), exportul fără AWB',
+        ($awbFaraFan['ok'] ?? true) === false && ($awbFaraFan['message'] ?? 'x') === '' && $inMasa['cod'] === 403
+        && str_contains($inMasa['corp'], 'Modulul nu este inclus în abonament') && $export['cod'] === 200 && !str_contains($antetExport, 'AWB')
+        && str_contains($antetExport, 'Cupon'), json_encode($awbFaraFan, JSON_UNESCAPED_UNICODE) . '; bulk ' . $inMasa['cod'] . '; antet ' . $antetExport);
     $jarFaraFan = $dosarDev . '/test-pluginuri-farafan-' . getmypid() . '.txt';
     @unlink($jarFaraFan);
     $cerere('POST', '/cos/adauga/' . $idMenta, $jarFaraFan, ['quantity' => '1']);
@@ -1417,11 +1622,16 @@ try {
 // =====================================================================
 if (!in_array('--fara-baza', $argv, true)) {
     $scrie('');
-    $scrie('== E. Licența „toate”: HTML identic cu codul dinaintea pluginurilor (tools/dev/compara-cu-baza.sh)');
-    exec(escapeshellarg($radacina . '/tools/dev/compara-cu-baza.sh') . ' 2>&1', $iesireBaza, $codBaza);
-    $ultima = trim((string) end($iesireBaza));
-    $diferite = array_filter($iesireBaza, static fn (string $l): bool => !str_starts_with(trim($l), 'OK') && trim($l) !== '');
-    $verifica($ultima !== '' ? $ultima : 'compara-cu-baza', $codBaza === 0, implode("\n          ", array_slice($diferite, 0, 20)));
+    $scrie('== E. Licența „toate” și licența Bioscem: HTML identic cu codul dinaintea pluginurilor (tools/dev/compara-cu-baza.sh)');
+    foreach (['toate' => '', 'bioscem (fără unealta internă)' => ' --licenta=bioscem'] as $numeLicenta => $optiune) {
+        $iesireBaza = [];
+        exec(escapeshellarg($radacina . '/tools/dev/compara-cu-baza.sh') . $optiune . ' 2>&1', $iesireBaza, $codBaza);
+        $ultima = trim((string) end($iesireBaza));
+        $diferite = array_filter($iesireBaza, static fn (string $l): bool => !str_starts_with(trim($l), 'OK') && !str_starts_with(trim($l), 'INFO')
+            && trim($l) !== '');
+        $verifica('licența ' . $numeLicenta . ': ' . ($ultima !== '' ? $ultima : 'compara-cu-baza'), $codBaza === 0,
+            implode("\n          ", array_slice($diferite, 0, 20)));
+    }
 }
 
 $scrie('');

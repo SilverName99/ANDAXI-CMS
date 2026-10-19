@@ -33,8 +33,10 @@ use App\Support\Settings;
 // are (sau, la cronurile care pornesc ceva nou, dacă pluginul se oprește),
 // nu face nimic.
 if (!\App\Support\Plugins::cronPermis(__FILE__)) {
-    echo 'Pluginul „' . \App\Support\Plugins::pluginCron(__FILE__) . '” nu este pornit pe acest site; nu fac nimic.' . "\n";
-    exit(0);
+    // Ieșire 0 când licența oprește pluginul; 2 când site-ul n-are licență (de văzut în monitorizare).
+    [$mesajCron, $codCron] = \App\Support\Plugins::cronOprit(__FILE__);
+    echo $mesajCron . "\n";
+    exit($codCron);
 }
 
 $config = require __DIR__ . '/../config/app.php';

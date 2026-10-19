@@ -91,10 +91,13 @@ tools/dev/server.sh                      # pornește serverul: http://127.0.0.1:
 tools/dev/server.sh --opreste            # îl oprește
 tools/dev/php.sh scripts/erp-sync.php    # orice script sau cron, pe baza de test
 tools/dev/php.sh tools/dev/licenta.php prezentare   # altă licență (pachet sau cheie=stare)
+tools/dev/php.sh tools/dev/licenta.php bioscem      # licența reală a Bioscem: tot ce are cod, fără unealta internă
 tools/dev/php.sh tools/dev/verifica-rute.php        # fiecare rută are proprietar în catalogul pluginurilor
 tools/dev/php.sh tools/dev/test-pluginuri.php       # testele pluginurilor: licența, garda, fiecare pachet, „se oprește”
 tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus, pe rând, fiecare plugin oprit cu restul pornite (~20 min)
 tools/dev/compara-cu-baza.sh                        # cu toate pluginurile, HTML identic cu codul dinaintea pluginurilor
+tools/dev/compara-cu-baza.sh --licenta=bioscem      # la fel, cu licența reală a Bioscem
+tools/dev/php.sh scripts/diagnostic.php --licenta   # licența se verifică? (verificarea dinaintea unui deploy)
 ```
 
 Pluginurile, licența și garda rutelor sunt descrise în [PLUGINURI.md](PLUGINURI.md).
@@ -119,10 +122,10 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | `mail-capturat.sh` | Ține locul lui `sendmail`: fiecare email trimis cu `mail()` se scrie în `storage/logs/dev/mail/*.eml`. |
 | `smoke.sh` | Testul de fum (mai jos), pe pachetul „toate” sau pe oricare pachet. |
 | `capturi.cjs` | Capturile Playwright din admin. |
-| `licenta.php` | Perechea de chei de dezvoltare (în locul celei a CRM-ului) și licențele de test: pachete, `cheie=stare`, fără licență; `stari`, `cron`, `arata` pentru teste. |
+| `licenta.php` | Perechea de chei de dezvoltare (în locul celei a CRM-ului) și licențele de test: pachete, „toate” (cu unealta internă), „bioscem” (ca licența reală a Bioscem, fără unealta internă), `cheie=stare`, fără licență (șterge și starea aplicată); `stari`, `cron`, `arata` pentru teste. |
 | `verifica-rute.php` | Listează fiecare rută cu proprietarul ei (nucleu sau plugin) și pică dacă o rută nu are proprietar, dacă o declarație din catalog nu acoperă nicio rută, dacă meniul și rutele nu se potrivesc, dacă un cron nu are garda, dacă codul întreabă de un plugin inexistent sau dacă un bloc `<?php if (…): ?>` de pe coloana 0 dintr-un șablon nu închide HTML-ul pe care îl deschide (un `endif` pus greșit lasă, cu pluginul oprit, jumătăți de tabel). |
-| `test-pluginuri.php` | Testele mecanismului de pluginuri: licența (A), garda rutelor pe fiecare pachet (B), fiecare pachet parcurs pagină cu pagină pe site, în contul clientului și în tot meniul adminului, plus cu Playwright (C), magazinul „se oprește” cu o comandă existentă dusă la capăt (D), comparația cu codul de bază (E) și, la cerere, fiecare plugin oprit pe rând cu restul pornite (F). În browser se verifică și textul vizibil: nicio etichetă sau explicație a unui plugin oprit, nici în ferestrele comenzilor și ale produselor, în tab-urile setărilor sau în contul clientului. Opțiuni: `--fara-garda`, `--fara-browser`, `--fara-baza`, `--fiecare-plugin`, `--capturi=DIR`. Pornește singur serverul dacă nu merge. |
-| `compara-cu-baza.sh` (+ `.php`) | Scoate codul unui commit (implicit `f5ae5ea`, dinaintea pluginurilor) în `$CMS_DEV_DIR/baza-<commit>`, îl pornește pe portul următor cu aceeași bază și compară HTML-ul a peste 50 de pagini-cheie (vizitator, client, patru roluri de admin), fără tokenuri și versiuni de fișiere. Diferențele: `$CMS_DEV_DIR/compara/*.diff`. |
+| `test-pluginuri.php` | Testele mecanismului de pluginuri: licența (A: și ultima licență aplicată când nicio licență nu se verifică, codul 2 al cronurilor fără licență, momentul intrării în „se oprește”, jurnalul o dată pe zi, dosarul fără drept de scriere, JSON-ul canonic față de Node, filtrul care nu atinge listele goale ale clientului), garda rutelor pe fiecare pachet (B: plus linkul de urmărire din newsletter, robots.txt, API-urile catalogului, „Trimite email test”, acțiunile necunoscute din Setări magazin, adresele mereu deschise fără o plată adevărată, redirecționările în buclă), fiecare pachet parcurs pagină cu pagină pe site, în contul clientului și în tot meniul adminului, plus cu Playwright și sursa editoarelor de pagini și de șablon de produs (C), magazinul „se oprește” cu o comandă existentă dusă la capăt, ERP-ul care trimite comenzile plasate înainte de oprire, FAN oprit fără niciun AWB (D), comparația cu codul de bază, cu licența „toate” și cu cea a Bioscem (E) și, la cerere, fiecare plugin oprit pe rând cu restul pornite (F). În browser se verifică și textul vizibil: nicio etichetă sau explicație a unui plugin oprit, nici în ferestrele comenzilor și ale produselor, în tab-urile setărilor sau în contul clientului. Opțiuni: `--fara-garda`, `--fara-browser`, `--fara-baza`, `--fiecare-plugin`, `--capturi=DIR`. Pornește singur serverul dacă nu merge. |
+| `compara-cu-baza.sh` (+ `.php`) | Scoate codul unui commit (implicit `f5ae5ea`, dinaintea pluginurilor) în `$CMS_DEV_DIR/baza-<commit>`, îl pornește pe portul următor cu aceeași bază și compară HTML-ul a peste 60 de pagini-cheie (vizitator, client, patru roluri de admin, plus o pagină de test cu liste goale scrise de client), fără tokenuri și versiuni de fișiere. Cu `--licenta=bioscem` pune înainte licența reală a Bioscem (fără unealta internă; panoul „Import din backup WordPress” lipsește intenționat și nu se compară) și la final pune la loc „toate”. Diferențele: `$CMS_DEV_DIR/compara/*.diff`. |
 | `crawl-pachet.cjs` | Folosit de `test-pluginuri.php`: deschide paginile unui pachet în Chromium (vizitator, client logat cu un produs în coș, admin cu ferestrele comenzilor și ale produselor), întoarce linkurile, formularele și textul vizibil din DOM și erorile JavaScript, fotografiază meniul adminului. |
 
 Variabile pe care le poți schimba din mediu:
@@ -151,8 +154,11 @@ Variabile pe care le poți schimba din mediu:
   dezvoltare (`LICENTA_CHEIE_PUBLICA`, cheia privată în
   `storage/logs/dev/licenta-cheie-privata.txt`, niciodată în git) și
   `LICENTA_SITE=demo`; `instaleaza.sh` scrie licența „toate”, deci local site-ul
-  are toate pluginurile pornite, ca Bioscem azi. Licența stă în
-  `storage/licenta/` (ignorat de git). `comun.sh` pune și
+  are toate pluginurile pornite, plus unealta internă de migrare (licența reală a
+  Bioscem nu o are: `licenta.php bioscem`; și cu ea paginile ies identice cu
+  Bioscem azi, vezi `compara-cu-baza.sh --licenta=bioscem`). Licența stă în
+  `storage/licenta/` (ignorat de git), lângă `stare-aplicata.json` (ce a aplicat
+  site-ul ultima oară). `comun.sh` pune și
   `CMS_DEV_GARDA_ANTET=1`: garda pluginurilor adaugă atunci antetul
   `X-Andaxi-Garda`, ca testele să știe că a răspuns ea; pe site-uri variabila nu există.
 
@@ -270,7 +276,9 @@ separate.
 2. **`fputcsv()` fără parametrul `$escape`** (exporturile de comenzi, produse
    și localități/județe FAN din `AdminController`): mesaje `Deprecated` doar pe
    PHP 8.4, câte unul pe rând exportat. Pe PHP 8.3 și mai vechi nu apar.
-   Nereparat.
+   **Reparat** (Etapa 1, la exportul fără coloanele pluginurilor oprite): fiecare
+   apel dă explicit valorile implicite de până acum (`'"'`, `'\\'`), deci fișierul
+   iese la fel, fără mesaje.
 3. **Produsele inactive se văd în magazin** (`/magazin`, categorie, marcă) și
    pagina lor răspunde 200; doar sitemap-ul le exclude. E defectul cunoscut din
    analiză (`loadProducts` filtrează doar `deleted_at`; reparația există în

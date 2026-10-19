@@ -13,8 +13,15 @@ declare(strict_types=1);
  * NU afiseaza valori sensibile: pentru parole si chei API scrie doar daca sunt
  * completate si cate caractere au.
  *
+ * Arată și licența: dacă `licenta.json` / `licenta-buna.json` se verifică cu
+ * cheia publică și site-ul din .env și ce stări dau pluginurilor. Înainte de a
+ * urca o versiune nouă de cod pe un site, rulează `--licenta`: iese cu 1 dacă
+ * nicio licență nu se verifică (atunci site-ul ar merge doar pe ultima licență
+ * aplicată sau, pe un site nou, doar cu nucleul).
+ *
  * Rulare:
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php
+ *   /usr/bin/php /cale/catre/scripts/diagnostic.php --licenta    # doar licența (verificarea dinaintea unui deploy)
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -29,9 +36,46 @@ $envCitibil = $envExista && is_readable($envPath);
 require_once __DIR__ . '/../bootstrap.php';
 
 use App\Support\Database;
+use App\Support\Licenta;
+use App\Support\Plugins;
 use App\Support\Settings;
 
 $config = require __DIR__ . '/../config/app.php';
+
+/** Licența: se verifică acum? Întoarce true dacă da. */
+$arataLicenta = static function (): bool {
+    echo "=== Licență ===\n";
+    echo 'dosar        : ' . Licenta::dosar() . "\n";
+    echo 'site (.env)  : ' . (Licenta::site() !== '' ? Licenta::site() : 'LIPSESTE (LICENTA_SITE)') . "\n";
+    $rezultat = Licenta::incarca();
+    $licenta = $rezultat['licenta'];
+    if ($licenta !== null) {
+        echo 'licenta      : ok, ' . $licenta['site'] . ' v' . $licenta['versiune'] . ' din ' . $licenta['emisa_la']
+            . ' (' . (string) $rezultat['sursa'] . ")\n";
+    } else {
+        echo "licenta      : NU SE VERIFICA\n";
+    }
+    foreach ($rezultat['probleme'] as $problema) {
+        echo '  problema   : ' . $problema . "\n";
+    }
+    if (Plugins::licentaNeverificata()) {
+        echo "  site-ul merge pe ultima licenta aplicata (stare-aplicata.json)\n";
+    } elseif (Plugins::licentaLipseste()) {
+        echo "  site-ul merge DOAR CU NUCLEUL (magazinul, platile si cronurile lor sunt oprite)\n";
+    }
+    $pornite = [];
+    foreach (Plugins::stari() as $cheie => $stare) {
+        if ($stare !== 'oprit') {
+            $pornite[] = $cheie . ($stare === 'se_opreste' ? ' (se opreste)' : '');
+        }
+    }
+    echo 'pluginuri    : ' . ($pornite === [] ? 'doar nucleul' : implode(', ', $pornite)) . "\n";
+    return $licenta !== null;
+};
+
+if (in_array('--licenta', $argv, true)) {
+    exit($arataLicenta() ? 0 : 1);
+}
 
 echo "=== Mediu ===\n";
 echo 'radacina aplicatiei : ' . dirname(__DIR__) . "\n";
@@ -105,4 +149,8 @@ try {
     echo 'comenzi: eroare (' . $e->getMessage() . ")\n";
 }
 
+echo "\n";
+$licentaOk = $arataLicenta();
+
 echo "\nGata.\n";
+exit($licentaOk ? 0 : 1);

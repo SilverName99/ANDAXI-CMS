@@ -44,6 +44,25 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
             ['label' => 'Form review', 'token' => '{{product_review_form}}'],
             ['label' => 'Secțiune review completă', 'token' => '{{product_reviews_section}}'],
         ];
+        // Codurile pluginurilor care nu sunt pe site nu se oferă: prețul, cantitatea și
+        // coșul sunt ale magazinului, recenziile ale pluginului de recenzii.
+        $cuMagazin = \App\Support\Plugins::vizibil('magazin');
+        $cuRecenzii = \App\Support\Plugins::vizibil('recenzii');
+        if (!$cuMagazin) {
+            $generalProductTokens = array_values(array_filter($generalProductTokens, static fn (array $item): bool => !in_array($item['token'], [
+                '{{product_price}}', '{{product_price_display}}', '{{product_quantity_input}}', '{{product_add_to_cart_button}}',
+                '{{product_post_cart_note}}',
+            ], true)));
+        }
+        if (!$cuRecenzii) {
+            $reviewTokens = [];
+            foreach ($generalProductTokens as &$item) {
+                if ($item['token'] === '{{product_tabs_section}}') {
+                    $item['label'] = 'Secțiune tab-uri (câmpuri)';
+                }
+            }
+            unset($item);
+        }
         $iconTokens = [
             ['label' => 'Iconiță SVG: leaf', 'token' => '{{product_icon_leaf}}'],
             ['label' => 'Iconiță SVG: truck', 'token' => '{{product_icon_truck}}'],
@@ -129,9 +148,11 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                 <button type="button" class="btn btn-secondary template-token-tab" data-token-tab="extra">
                     Coduri câmpuri suplimentare
                 </button>
+<?php if ($cuRecenzii): ?>
                 <button type="button" class="btn btn-secondary template-token-tab" data-token-tab="reviews">
                     Coduri recenzii
                 </button>
+<?php endif; ?>
                 <button type="button" class="btn btn-secondary template-token-tab" data-token-tab="icons">
                     Iconițe
                 </button>
@@ -169,6 +190,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                 <?php endif; ?>
             </div>
 
+<?php if ($cuRecenzii): ?>
             <div class="template-token-panel" data-token-panel="reviews" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($reviewTokens as $item): ?>
                     <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
@@ -177,6 +199,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                     </div>
                 <?php endforeach; ?>
             </div>
+<?php endif; ?>
 
             <div class="template-token-panel" data-token-panel="icons" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($iconTokens as $item): ?>
@@ -336,14 +359,20 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
     const replacePlaceholders = (content) => {
         const map = {
             '{{product_name}}': 'Produs demo',
+<?php if ($cuMagazin): ?>
             '{{product_price}}': '99.00',
             '{{product_price_display}}': '99.00 lei',
+<?php else: ?>
+            '{{product_price}}': '',
+            '{{product_price_display}}': '',
+<?php endif; ?>
             '{{product_short_description}}': 'Descriere scurtă produs demo',
             '{{product_description}}': 'Descriere detaliată produs demo',
             '{{product_highlights}}': 'Absorbție rapidă; Formula premium; Fără zahăr',
             '{{product_image_url}}': '/assets/img/product-placeholder.svg',
             '{{product_image_gallery}}': '<div style="display:flex;gap:8px;"><img src="/assets/img/product-placeholder.svg" style="width:90px;height:90px;object-fit:cover;border-radius:8px;"><img src="/assets/img/product-placeholder.svg" style="width:90px;height:90px;object-fit:cover;border-radius:8px;"></div>',
             '{{product_image_carousel}}': '<div class="product-carousel" data-product-carousel data-current="0"><div class="product-carousel__viewport" data-carousel-viewport><button type="button" class="product-carousel__fullscreen" data-action="fullscreen" aria-label="Afișează imaginea pe tot ecranul"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4h2V5h3V3zm13 0h-4v2h3v3h2V4a1 1 0 0 0-1-1zM3 16v4a1 1 0 0 0 1 1h4v-2H5v-3H3zm17 0v3h-3v2h4a1 1 0 0 0 1-1v-4h-2z"/></svg></button><div class="product-carousel__track"><figure class="product-carousel__slide" data-slide="0"><img src="/assets/img/product-placeholder.svg" alt="Produs demo" data-carousel-image="1" data-target="0"></figure><figure class="product-carousel__slide" data-slide="1"><img src="/assets/img/product-placeholder.svg" alt="Produs demo" data-carousel-image="1" data-target="1"></figure></div></div><div class="product-carousel__controls"><button type="button" class="product-carousel__nav" data-action="prev">‹</button><div class="product-carousel__thumbs"><button type="button" class="product-carousel__thumb" data-target="0"><img src="/assets/img/product-placeholder.svg" alt="Thumb 1"></button><button type="button" class="product-carousel__thumb" data-target="1"><img src="/assets/img/product-placeholder.svg" alt="Thumb 2"></button></div><button type="button" class="product-carousel__nav" data-action="next">›</button></div></div>',
+<?php if ($cuRecenzii): ?>
             '{{product_reviews_count}}': '10',
             '{{product_reviews_average}}': '4.8',
             '{{product_reviews_stars}}': '<span style="color:#f59e0b;">★★★★★</span>',
@@ -351,8 +380,25 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
             '{{product_reviews_list}}': '<div><article style="padding:8px;border:1px solid #e5e7eb;border-radius:8px;"><strong>Client demo</strong><p style="margin:4px 0 0;">Foarte bun produs.</p></article></div>',
             '{{product_review_form}}': '<form style="display:grid;gap:8px;"><input placeholder="Nume"><textarea placeholder="Review"></textarea><button type="button">Trimite review</button></form>',
             '{{product_reviews_section}}': '<section style="display:grid;gap:8px;"><h3>Review-uri</h3><div><span style="color:#f59e0b;">★★★★★</span> 4.8 (10)</div><article style="padding:8px;border:1px solid #e5e7eb;border-radius:8px;"><strong>Client demo</strong><p style="margin:4px 0 0;">Foarte bun produs.</p></article></section>',
+<?php else: ?>
+            '{{product_reviews_count}}': '',
+            '{{product_reviews_average}}': '',
+            '{{product_reviews_stars}}': '',
+            '{{product_reviews_average_raw}}': '',
+            '{{product_reviews_list}}': '',
+            '{{product_review_form}}': '',
+            '{{product_reviews_section}}': '',
+<?php endif; ?>
+<?php if ($cuRecenzii): ?>
             '{{product_tabs_section}}': '<section class="product-tabs"><div class="product-tabs__nav"><button type="button" class="product-tabs__tab is-active" data-tab="field-mod-administrare">Mod administrare</button><button type="button" class="product-tabs__tab" data-tab="reviews"><span>Recenzii</span></button><button type="button" class="product-tabs__tab" data-tab="write-review"><span>Lasă o recenzie</span></button></div><div class="product-tabs__content"><article class="product-tabs__pane is-active" data-pane="field-mod-administrare"><h3>Mod administrare</h3><p>2 capsule pe zi, după masă, minimum 30 de zile.</p></article><article class="product-tabs__pane" data-pane="reviews"><section id="product-reviews" class="product-reviews"><div class="product-reviews-head"><div class="product-reviews-head__inline"><span style="color:#f59e0b;">★★★★★</span><p>4.8 din 5 · 10 review-uri</p></div></div><div class="product-reviews-list"><article class="product-review-item"><strong>Client demo</strong><p style="margin:6px 0 0;">Foarte bun produs.</p></article></div></section></article><article class="product-tabs__pane" data-pane="write-review"><section id="product-review-form" class="product-reviews"><form style="display:grid;gap:8px;"><input placeholder="Nume"><textarea placeholder="Review"></textarea><button type="button">Trimite review</button></form></section></article></div></section>',
+<?php else: ?>
+            '{{product_tabs_section}}': '<section class="product-tabs"><div class="product-tabs__nav"><button type="button" class="product-tabs__tab is-active" data-tab="field-mod-administrare">Mod administrare</button></div><div class="product-tabs__content"><article class="product-tabs__pane is-active" data-pane="field-mod-administrare"><h3>Mod administrare</h3><p>2 capsule pe zi, după masă, minimum 30 de zile.</p></article></div></section>',
+<?php endif; ?>
+<?php if ($cuMagazin): ?>
             '{{product_similar_products_section}}': '<section class="similar-products" data-similar-products="1"><div class="similar-products__head"><h3>Produse similare</h3></div><div class="similar-products__carousel"><button type="button" class="similar-products__nav" data-action="prev" aria-label="Produse anterioare">‹</button><div class="similar-products__viewport"><div class="similar-products__track" data-similar-track="1"><article class="similar-product-card"><a class="similar-product-card__image-link" href="#"><img src="/assets/img/product-placeholder.svg" alt="Produs demo"></a><div class="similar-product-card__body"><p class="similar-product-card__category">SUPLIMENTE</p><a class="similar-product-card__name" href="#">Produs demo A</a><p class="similar-product-card__price">89.00 lei</p></div></article><article class="similar-product-card"><a class="similar-product-card__image-link" href="#"><img src="/assets/img/product-placeholder.svg" alt="Produs demo"></a><div class="similar-product-card__body"><p class="similar-product-card__category">SUPLIMENTE</p><a class="similar-product-card__name" href="#">Produs demo B</a><p class="similar-product-card__price">99.00 lei</p></div></article></div></div><button type="button" class="similar-products__nav" data-action="next" aria-label="Produse următoare">›</button></div><div class="similar-products__dots" data-similar-dots="1" aria-label="Paginare produse similare"></div><script type="application/json" class="similar-products__data">[{&quot;id&quot;:1,&quot;name&quot;:&quot;Produs demo A&quot;,&quot;url&quot;:&quot;#&quot;,&quot;category&quot;:&quot;SUPLIMENTE&quot;,&quot;image_url&quot;:&quot;/assets/img/product-placeholder.svg&quot;,&quot;price_label&quot;:&quot;89.00 lei&quot;,&quot;short_description&quot;:&quot;&quot;},{&quot;id&quot;:2,&quot;name&quot;:&quot;Produs demo B&quot;,&quot;url&quot;:&quot;#&quot;,&quot;category&quot;:&quot;SUPLIMENTE&quot;,&quot;image_url&quot;:&quot;/assets/img/product-placeholder.svg&quot;,&quot;price_label&quot;:&quot;99.00 lei&quot;,&quot;short_description&quot;:&quot;&quot;}]<\/script></section>',
+<?php else: ?>
+            '{{product_similar_products_section}}': '<section class="similar-products" data-similar-products="1"><div class="similar-products__head"><h3>Produse similare</h3></div><div class="similar-products__carousel"><button type="button" class="similar-products__nav" data-action="prev" aria-label="Produse anterioare">‹</button><div class="similar-products__viewport"><div class="similar-products__track" data-similar-track="1"><article class="similar-product-card"><a class="similar-product-card__image-link" href="#"><img src="/assets/img/product-placeholder.svg" alt="Produs demo"></a><div class="similar-product-card__body"><p class="similar-product-card__category">SUPLIMENTE</p><a class="similar-product-card__name" href="#">Produs demo A</a></div></article><article class="similar-product-card"><a class="similar-product-card__image-link" href="#"><img src="/assets/img/product-placeholder.svg" alt="Produs demo"></a><div class="similar-product-card__body"><p class="similar-product-card__category">SUPLIMENTE</p><a class="similar-product-card__name" href="#">Produs demo B</a></div></article></div></div><button type="button" class="similar-products__nav" data-action="next" aria-label="Produse următoare">›</button></div><div class="similar-products__dots" data-similar-dots="1" aria-label="Paginare produse similare"></div><script type="application/json" class="similar-products__data">[{&quot;id&quot;:1,&quot;name&quot;:&quot;Produs demo A&quot;,&quot;url&quot;:&quot;#&quot;,&quot;category&quot;:&quot;SUPLIMENTE&quot;,&quot;image_url&quot;:&quot;/assets/img/product-placeholder.svg&quot;,&quot;price_label&quot;:&quot;&quot;,&quot;short_description&quot;:&quot;&quot;},{&quot;id&quot;:2,&quot;name&quot;:&quot;Produs demo B&quot;,&quot;url&quot;:&quot;#&quot;,&quot;category&quot;:&quot;SUPLIMENTE&quot;,&quot;image_url&quot;:&quot;/assets/img/product-placeholder.svg&quot;,&quot;price_label&quot;:&quot;&quot;,&quot;short_description&quot;:&quot;&quot;}]<\/script></section>',
+<?php endif; ?>
             '{{product_icon_leaf}}': '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M19.1 5.1c-6 .2-10.4 3.9-10.4 6.5 0 2.9 2 4.9 4.5 4.9 4.2 0 7.7-4 8.2-9.6.1-.9-.6-1.8-2.3-1.8Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.6 20.4c2.1-4.7 6.1-8 11.3-10.2" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round"/></svg>',
             '{{product_icon_truck}}': '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3.5 8h9.8v6.2H3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13.3 10.2h3.6l2.6 2.7v1.3h-6.2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8" cy="18" r="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17.4" cy="18" r="1.8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 14.2h2.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
             '{{product_icon_shield}}': '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3 5 6v6c0 4.4 2.8 7.8 7 9 4.2-1.2 7-4.6 7-9V6l-7-3z"/><path d="m9.5 12 2 2 3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
@@ -362,9 +408,15 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
             '{{product_icon_calendar}}': '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 2h2v3H7V2zm8 0h2v3h-2V2zM4 5h16a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm0 5v10h16V10H4z"/></svg>',
             '{{product_icon_user}}': '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5z"/></svg>',
             '{{product_category_url}}': '/magazin?category=Suplimente',
+<?php if ($cuMagazin): ?>
             '{{product_quantity_input}}': '<div class="qty-stepper" style="display:inline-flex;align-items:center;justify-content:center;gap:0;flex-wrap:nowrap;border:1px solid #d1d9e3;border-radius:999px;background:#fff;padding:1px 2px;height:44px;vertical-align:middle;"><button type="button" class="qty-stepper__btn" data-role="qty-minus" aria-label="Scade cantitatea" style="border:0;background:transparent;border-radius:999px;width:40px;height:40px;line-height:1;font-size:22px;color:#1e293b;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">−</button><input id="quantity" name="quantity" type="number" min="1" value="1" class="qty-stepper__input" style="width:58px;border:0;background:transparent;text-align:center;font-size:16px;font-weight:700;color:#0f172a;padding:0;margin:0;outline:none;line-height:1;height:40px;display:block;-moz-appearance:textfield;"><button type="button" class="qty-stepper__btn" data-role="qty-plus" aria-label="Crește cantitatea" style="border:0;background:transparent;border-radius:999px;width:40px;height:40px;line-height:1;font-size:22px;color:#1e293b;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">+</button></div>',
             '{{product_add_to_cart_button}}': '<button class="btn" type="button" data-product-cart-button="1" data-product-id="1" data-unit-price="99.00" style="display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 24px;border:1px solid #107a4d;background:#107a4d;color:#fff;font-size:16px;font-weight:600;border-radius:999px;"><svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;flex:0 0 auto;"><path d="M3 4h2l1.7 8.1a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.4l1.5-5.2H7.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8.7" cy="19" r="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="17.5" cy="19" r="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;"><span>Adaugă în coș -</span><span data-cart-button-total>99.00 lei</span></span></button>',
             '{{product_post_cart_note}}': '<div style="margin-top:10px;font:500 13px/1.4 \'DM Sans\',Arial,sans-serif;color:#475569;">Text promoțional sub butonul de comandă.</div>',
+<?php else: ?>
+            '{{product_quantity_input}}': '',
+            '{{product_add_to_cart_button}}': '',
+            '{{product_post_cart_note}}': '',
+<?php endif; ?>
             '{{field_cod_camp}}': 'Valoare demo câmp',
             '{{field_mod_administrare}}': '2 capsule pe zi, după masă, minimum 30 de zile.',
         };

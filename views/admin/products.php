@@ -14,7 +14,7 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
     <div class="section-head">
         <div>
             <h1>Produse</h1>
-            <p>Gestionează produsele magazinului tău.</p>
+            <p>Gestionează produsele <?= \App\Support\Plugins::vizibil('magazin') ? 'magazinului tău' : 'tale' ?>.</p>
         </div>
         <div style="display:flex;gap:8px;">
             <a class="btn btn-secondary" href="/admin/products/export" title="Descarcă lista de produse (CSV)<?= $areErpProduse ? ' pentru import în ERP' : '' ?>">⭳ Export produse</a>

@@ -41,11 +41,22 @@ foreach (glob($dosarDiff . '/*') ?: [] as $vechi) {
     @unlink($vechi);
 }
 
-$neoprite = array_filter(Plugins::stari(), static fn (string $s): bool => $s !== 'pornit');
+// Comparația are sens doar cu toate pluginurile care au cod pornite: licența
+// „toate” sau licența Bioscem (fără unealta internă și fără pluginurile neportate).
+$neoprite = array_filter(Plugins::stari(), static function (string $s, string $cheie): bool {
+    $definitie = Plugins::definitie($cheie) ?? [];
+    $areCod = ($definitie['portat'] ?? true) !== false && ($definitie['intern'] ?? false) !== true;
+    return $s !== 'pornit' && $areCod;
+}, ARRAY_FILTER_USE_BOTH);
 if ($neoprite !== []) {
-    fwrite(STDERR, 'Comparația are sens doar cu licența „toate” (pune-o cu: tools/dev/php.sh tools/dev/licenta.php toate). '
+    fwrite(STDERR, 'Comparația are sens doar cu licența „toate” sau „bioscem” (pune-o cu: tools/dev/php.sh tools/dev/licenta.php toate). '
         . 'Acum nu sunt pornite: ' . implode(', ', array_keys($neoprite)) . "\n");
     exit(1);
+}
+$faraUnealtaInterna = !Plugins::vizibil('migrare_wordpress');
+if ($faraUnealtaInterna) {
+    echo '  INFO  licență fără unealta internă migrare_wordpress (ca Bioscem): panoul „Import din backup WordPress” din '
+        . "Utilizatori lipsește intenționat și nu se compară; restul paginilor, octet cu octet.\n";
 }
 
 $app = require $radacina . '/config/app.php';
@@ -84,7 +95,12 @@ $cerere = static function (string $port, string $metoda, string $cale, string $j
 };
 
 /** Ce diferă la fiecare cerere, indiferent de cod. */
-$normalizeaza = static function (string $html) use ($portBaza, $portCurent, $dosarBaza, $radacina): string {
+$normalizeaza = static function (string $html) use ($portBaza, $portCurent, $dosarBaza, $radacina, $faraUnealtaInterna): string {
+    if ($faraUnealtaInterna) {
+        // Panoul importului din backup WordPress (unealta internă), din fereastra de import a utilizatorilor.
+        $html = (string) preg_replace('#(data-admin-simple-panel="import"[^>]*>).*?(<h3[^>]*>Import din fișier CSV/XLSX</h3>)#s',
+            '$1<IMPORT-WORDPRESS>$2', $html);
+    }
     $html = str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $html);
     // Căile de pe disc apar în instrucțiunile de cron din admin.
     if ($dosarBaza !== '') {
@@ -131,6 +147,7 @@ $nrComanda = $unu('SELECT order_number FROM orders WHERE deleted_at IS NULL ORDE
 $idPagina = $unu("SELECT id FROM pages WHERE slug = '' LIMIT 1");
 $tokenLink = $unu('SELECT token FROM order_payment_links ORDER BY id LIMIT 1');
 $idCupon = $unu('SELECT id FROM coupons ORDER BY id LIMIT 1');
+$idSablonProdus = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
 $dupaLogin = [];
 
 foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
@@ -212,7 +229,26 @@ $pagini = [
     ['adm', '/admin/products/new'],
     ['adm', '/admin/coupons?coupon=' . $idCupon],
     ['adm', '/admin/promo-products'],
+    // Paginile atinse de verificarea din Etapa 1, pasul 4 (editoare, texte ale nucleului, robots, API-uri).
+    ['adm', '/admin/pages/new'],
+    ['adm', '/admin/products/templates/' . $idSablonProdus . '/builder'],
+    ['adm', '/admin/users/security'],
+    ['adm', '/admin/emails/builder?type=newsletter'],
+    ['viz', '/robots.txt'],
+    ['viz', '/api/products/best-sellers?limit=3'],
 ];
+
+// O pagină a site-ului (din bază, ca orice pagină scrisă de client) cu liste goale,
+// de umplut din JavaScript, și un separator de meniu: trebuie să iasă neatinsă.
+$paginaListe = 'test-liste-goale-' . getmypid();
+$db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published, created_at, updated_at)
+    VALUES (:title, :slug, :html, \'\', \'\', 1, NOW(), NOW())')->execute([
+    'title' => 'Liste goale',
+    'slug' => $paginaListe,
+    'html' => '<div class="slider"><ul class="slider-dots" data-dots></ul><ol id="pasi"></ol><ul class="lista">'
+        . '<li class="placeholder"></li><li class="divider"></li><li><a href="/contact">Contact</a></li></ul></div>',
+]);
+$pagini[] = ['viz', '/' . $paginaListe];
 
 $identice = 0;
 $diferite = [];
@@ -254,5 +290,6 @@ foreach ($dupaLogin['baza'] ?? [] as $rolAdmin => $locatieBaza) {
 foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
     @unlink($jar);
 }
+$db->prepare('DELETE FROM pages WHERE slug = :slug')->execute(['slug' => $paginaListe]);
 echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice, ', count($diferite), " diferite.\n";
 exit($diferite === [] ? 0 : 1);

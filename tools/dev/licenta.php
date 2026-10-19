@@ -9,10 +9,11 @@ declare(strict_types=1);
  *
  *   tools/dev/php.sh tools/dev/licenta.php cheie                 # perechea de chei (o face dacă lipsește)
  *   tools/dev/php.sh tools/dev/licenta.php toate                 # toate pluginurile pornite
+ *   tools/dev/php.sh tools/dev/licenta.php bioscem               # ca licența reală a Bioscem: tot ce e portat, fără unealta internă
  *   tools/dev/php.sh tools/dev/licenta.php magazin               # pachetul Magazin
  *   tools/dev/php.sh tools/dev/licenta.php magazin cupoane=pornit magazin=se_opreste
  *   tools/dev/php.sh tools/dev/licenta.php lista blog=pornit     # doar ce scrie (restul oprit)
- *   tools/dev/php.sh tools/dev/licenta.php fara                  # șterge licența (site doar cu nucleul)
+ *   tools/dev/php.sh tools/dev/licenta.php fara                  # șterge licența și starea aplicată (site nou: doar nucleul)
  *   tools/dev/php.sh tools/dev/licenta.php stari                 # starea efectivă a fiecărui plugin
  *   tools/dev/php.sh tools/dev/licenta.php cron                  # cronurile pluginurilor și dacă ar rula acum
  *   tools/dev/php.sh tools/dev/licenta.php arata                 # licența folosită acum și problemele ei
@@ -21,8 +22,8 @@ declare(strict_types=1);
  * --redirect=plugin:/cale (adresele publice ale pluginului oprit duc acolo).
  *
  * Pachetele: prezentare, catalog, magazin, asociatie (din config/plugins.php,
- * fără opționale; la Magazin toate cele trei plăți cu cardul) și toate (inclusiv
- * unealta internă). Cheia privată stă în $CMS_DEV_DIR (implicit
+ * fără opționale; la Magazin toate cele trei plăți cu cardul), toate (inclusiv
+ * unealta internă) și bioscem (toate pluginurile portate, fără unealta internă). Cheia privată stă în $CMS_DEV_DIR (implicit
  * storage/logs/dev), niciodată în git; site-ul primește doar cheia publică, prin
  * LICENTA_CHEIE_PUBLICA (tools/dev/comun.sh o pune singur).
  */
@@ -122,7 +123,8 @@ switch ($comanda) {
         exit(0);
 
     case 'fara':
-        foreach ([Licenta::FISIER, Licenta::FISIER_BUN] as $fisier) {
+        // Și starea aplicată: altfel site-ul ar merge mai departe pe ultima licență aplicată.
+        foreach ([Licenta::FISIER, Licenta::FISIER_BUN, Plugins::FISIER_STARE] as $fisier) {
             @unlink($dosarLicenta . '/' . $fisier);
         }
         echo "Licența a fost ștearsă: site-ul merge doar cu nucleul.\n";
@@ -133,6 +135,13 @@ $chei = array_keys($catalog['pluginuri']);
 $pluginuri = [];
 if ($comanda === 'toate') {
     $pluginuri = array_fill_keys($chei, 'pornit');
+} elseif ($comanda === 'bioscem') {
+    // Licența reală a Bioscem: tot ce are cod, fără unealta internă (nevândută).
+    foreach ($catalog['pluginuri'] as $cheie => $definitie) {
+        if (($definitie['portat'] ?? true) !== false && ($definitie['intern'] ?? false) !== true) {
+            $pluginuri[(string) $cheie] = 'pornit';
+        }
+    }
 } elseif ($comanda === 'lista') {
     // doar perechile date
 } elseif (isset($catalog['pachete'][$comanda])) {
