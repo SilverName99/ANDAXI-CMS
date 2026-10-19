@@ -1,11 +1,14 @@
 // Trecerea cu browserul prin paginile unui pachet (pentru tools/dev/test-pluginuri.php):
 // deschide fiecare pagină ca vizitator, iar paginile adminului logat, după ce
-// rulează JavaScript-ul lor, și întoarce linkurile și formularele din DOM plus
-// erorile JavaScript. Opțional fotografiază meniul adminului cu toate grupurile
-// deschise. Orice cerere spre alt server decât cel local e blocată.
+// rulează JavaScript-ul lor, și întoarce linkurile și formularele din DOM, textul
+// vizibil și erorile JavaScript. În admin deschide și ferestrele construite în
+// browser (detaliile și acțiunile câtorva comenzi, fișa câtorva produse), ca
+// textul lor să fie verificat la fel. Opțional fotografiază meniul adminului cu
+// toate grupurile deschise. Orice cerere spre alt server decât cel local e blocată.
 //
 // Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA,
-// CMS_DEV_PAGINI (JSON de intrare: {"public": [...], "admin": [...]}),
+// CMS_DEV_PAGINI (JSON de intrare: {"public": [...], "admin": [...], opțional
+// "ferestre": true și "client": {"email": ..., "pagini": [...], "produs": id}}),
 // CMS_DEV_REZULTAT (JSON de ieșire), CMS_DEV_CAPTURI (folderul pentru PNG; gol =
 // fără capturi), CMS_DEV_CAPTURI_SUFIX. Playwright se ia din NODE_PATH.
 
@@ -62,8 +65,67 @@ async function viziteaza(page, cale, rol) {
     } catch (e) {
         erori.push('DOM: ' + String((e && e.message) || e).split('\n')[0]);
     }
+    let text = '';
+    try {
+        text = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+    } catch (e) {
+        erori.push('text: ' + String((e && e.message) || e).split('\n')[0]);
+    }
     page.off('pageerror', asculta);
-    return { cale, rol, status, erori, linkuri, formulare };
+    return { cale, rol, status, erori, linkuri, formulare, text };
+}
+
+/**
+ * Ferestrele adminului construite în JavaScript (nu au adresă proprie): detaliile
+ * și acțiunile primelor comenzi, fișa primelor produse. Întoarce textul lor
+ * vizibil, ca pagini „virtuale” (cale = pagina + #fereastra).
+ */
+async function ferestreAdmin(page) {
+    const rezultat = [];
+    const deschide = async (cale, selector, idFereastra, cate) => {
+        try {
+            await page.goto(baza + cale, { waitUntil: 'load', timeout: 30000 });
+        } catch (e) {
+            return;
+        }
+        const total = (await page.$$(selector)).length;
+        for (let i = 0; i < Math.min(total, cate); i++) {
+            const erori = [];
+            const asculta = (e) => erori.push(String((e && e.message) || e).split('\n')[0]);
+            page.on('pageerror', asculta);
+            let text = '';
+            let linkuri = [];
+            let formulare = [];
+            try {
+                const buton = (await page.$$(selector))[i];
+                // Clic din pagină: butoanele mici din tabel sunt uneori acoperite de alte celule.
+                await buton.evaluate((el) => el.click());
+                await page.waitForTimeout(150);
+                const fereastra = idFereastra ? await page.$('#' + idFereastra) : await page.$('body');
+                if (fereastra) {
+                    text = await fereastra.evaluate((el) => el.innerText || '');
+                    linkuri = await fereastra.$$eval('a[href]', (noduri) => noduri.map((n) => n.getAttribute('href') || ''));
+                    formulare = await fereastra.$$eval('form[action]', (noduri) => noduri.map((n) => [
+                        n.getAttribute('action') || '',
+                        (n.getAttribute('method') || 'get').toUpperCase(),
+                    ]));
+                }
+                if (idFereastra) {
+                    await page.evaluate((id) => document.getElementById(id)?.classList.remove('open'), idFereastra);
+                } else {
+                    await page.goto(baza + cale, { waitUntil: 'load', timeout: 30000 });
+                }
+            } catch (e) {
+                erori.push('fereastră: ' + String((e && e.message) || e).split('\n')[0]);
+            }
+            page.off('pageerror', asculta);
+            rezultat.push({ cale: cale + '#' + (idFereastra || 'fisa') + '-' + i, rol: 'admin', status: 200, erori, linkuri, formulare, text });
+        }
+    };
+    await deschide('/admin/orders', '.view-order-btn', 'order-modal', 12);
+    await deschide('/admin/orders', '[data-action="open-order-actions"]', 'order-actions-modal', 2);
+    await deschide('/admin/products', '.edit-product-btn', '', 4);
+    return rezultat;
 }
 
 (async () => {
@@ -76,6 +138,29 @@ async function viziteaza(page, cale, rol) {
         rezultat.pagini.push(await viziteaza(paginaViz, cale, 'vizitator'));
     }
     await vizitator.close();
+
+    // Clientul logat (pachetele cu conturi): contul, coșul, checkout-ul.
+    if (intrare.client && (intrare.client.pagini || []).length > 0) {
+        const client = await contextNou(browser);
+        const paginaClient = await client.newPage();
+        await paginaClient.goto(baza + '/login', { waitUntil: 'load' });
+        await paginaClient.evaluate(async ([e, p]) => {
+            const date = new FormData();
+            date.append('email', e);
+            date.append('password', p);
+            await fetch('/login', { method: 'POST', body: date, credentials: 'same-origin' });
+        }, [intrare.client.email, parola]);
+        if (intrare.client.produs) {
+            // Un produs în coș, ca pagina coșului și checkout-ul să aibă tot ce pot arăta.
+            await paginaClient.evaluate(async (id) => {
+                await fetch('/cos/adauga/' + id, { method: 'POST', body: new URLSearchParams({ quantity: '1' }), credentials: 'same-origin' });
+            }, intrare.client.produs);
+        }
+        for (const cale of intrare.client.pagini) {
+            rezultat.pagini.push(await viziteaza(paginaClient, cale, 'client'));
+        }
+        await client.close();
+    }
 
     if ((intrare.admin || []).length > 0 || dosarCapturi) {
         if (!parola) {
@@ -108,6 +193,9 @@ async function viziteaza(page, cale, rol) {
         }
         for (const cale of intrare.admin || []) {
             rezultat.pagini.push(await viziteaza(page, cale, 'admin'));
+        }
+        if (intrare.ferestre) {
+            rezultat.pagini.push(...await ferestreAdmin(page));
         }
         await admin.close();
     }

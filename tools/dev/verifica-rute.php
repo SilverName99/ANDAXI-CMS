@@ -14,7 +14,11 @@ declare(strict_types=1);
  *  5. cronurile din catalog există și au garda; orice script cu gardă e în catalog;
  *  6. dependențele și pachetele folosesc chei cunoscute, fără cerc;
  *  7. cheile pluginurilor sunt exact cele 26 hotărâte + unealta internă;
- *  8. codul întreabă doar de chei care există (Plugins::activ('…') etc.).
+ *  8. codul întreabă doar de chei care există (Plugins::activ('…') etc.);
+ *  9. în șabloane (views/), fiecare bloc `<?php if (…): ?>` … `<?php endif; ?>`
+ *     scris pe coloana 0 (așa se ascunde bucata unui plugin) închide tot ce
+ *     deschide: un `endif` pus greșit ar lăsa, cu pluginul oprit, jumătate de
+ *     rând de tabel sau un `</article>` fără pereche.
  *
  * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
  *
@@ -223,6 +227,14 @@ foreach ($intrari as [$cheie, $intrare]) {
     if (!in_array($intrare['grup'] ?? '', $grupuri, true)) {
         $problema($eticheta . ': grupul „' . ($intrare['grup'] ?? '') . '” nu există în meniu_admin.');
     }
+    // Eticheta / iconița care se schimbă fără un plugin: cheia lui trebuie să existe.
+    foreach (['eticheta_fara', 'icon_fara'] as $cheieFara) {
+        foreach (array_keys((array) ($intrare[$cheieFara] ?? [])) as $pluginLipsa) {
+            if (!in_array((string) $pluginLipsa, $cheiValide, true)) {
+                $problema($eticheta . ': ' . $cheieFara . ' pomenește pluginul necunoscut „' . $pluginLipsa . '”.');
+            }
+        }
+    }
     $gasita = $router->gaseste('GET', $href);
     if ($gasita === null) {
         $problema($eticheta . ': adresa ' . $href . ' nu e o rută.');
@@ -289,6 +301,72 @@ foreach ($fisiere as $fisier) {
     }
 }
 
+// 9. Blocurile de pe coloana 0 din șabloane închid HTML-ul pe care îl deschid.
+// Excepțiile vin din codul Bioscem așa cum era (eticheta tolerată, pe bloc):
+// două blocuri vechi care nu țin de pluginuri și caseta „Facturare” din fișa
+// clientului, al cărei `<article>` nu s-a închis niciodată explicit (browserul
+// îl închide la `</div>`-ul de după; cu magazinul oprit caseta lipsește întreagă).
+$dezechilibrateDinBaza = [
+    'views/admin/emails.php|$currentSection === \'newsletters\'' => ['div'],
+    'views/site/custom-page.php|$registerAntiBot !== []' => ['label'],
+    'views/admin/users.php|$areMagazin' => ['article'],
+];
+$etichete = ['div', 'tr', 'td', 'th', 'table', 'thead', 'tbody', 'article', 'section', 'form', 'ul', 'li', 'p', 'label', 'span',
+    'select', 'optgroup', 'nav', 'button', 'details', 'fieldset', 'small', 'strong', 'a', 'h2', 'h3', 'h4'];
+$dezechilibru = static function (string $html, array $tolerate) use ($etichete): array {
+    $html = (string) preg_replace('/<\?(?:php|=).*?\?>/s', '', $html);
+    $diferente = [];
+    foreach ($etichete as $eticheta) {
+        if (in_array($eticheta, $tolerate, true)) {
+            continue;
+        }
+        $deschise = preg_match_all('/<' . $eticheta . '(?:\s|>)/', $html);
+        $inchise = preg_match_all('/<\/' . $eticheta . '\s*>/', $html);
+        if ($deschise !== $inchise) {
+            $diferente[] = $eticheta . ' ' . $deschise . '/' . $inchise;
+        }
+    }
+    return $diferente;
+};
+$blocuri = 0;
+$iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($radacina . '/views', FilesystemIterator::SKIP_DOTS));
+foreach ($iterator as $fisier) {
+    if (!$fisier->isFile() || !str_ends_with($fisier->getFilename(), '.php')) {
+        continue;
+    }
+    $relativ = substr($fisier->getPathname(), strlen($radacina) + 1);
+    $randuri = explode("\n", (string) file_get_contents($fisier->getPathname()));
+    $stiva = [];
+    foreach ($randuri as $i => $rand) {
+        if (preg_match('/^<\?php if \((.*)\): \?>\s*$/', $rand, $m) === 1) {
+            $stiva[] = ['inceput' => $i, 'else' => null, 'conditie' => $m[1]];
+        } elseif (preg_match('/^<\?php else: \?>\s*$/', $rand) === 1 && $stiva !== []) {
+            $stiva[count($stiva) - 1]['else'] = $i;
+        } elseif (preg_match('/^<\?php endif; \?>\s*$/', $rand) === 1) {
+            if ($stiva === []) {
+                $problema($relativ . ':' . ($i + 1) . ': `endif` pe coloana 0 fără `if`.');
+                continue;
+            }
+            $bloc = array_pop($stiva);
+            $blocuri++;
+            $tolerate = $dezechilibrateDinBaza[$relativ . '|' . $bloc['conditie']] ?? [];
+            $bucati = $bloc['else'] === null
+                ? [[$bloc['inceput'], $i]]
+                : [[$bloc['inceput'], $bloc['else']], [$bloc['else'], $i]];
+            foreach ($bucati as [$de, $pana]) {
+                $diferente = $dezechilibru(implode("\n", array_slice($randuri, $de + 1, $pana - $de - 1)), $tolerate);
+                if ($diferente !== []) {
+                    $problema($relativ . ':' . ($de + 1) . '-' . ($pana + 1) . ': blocul „if (' . $bloc['conditie']
+                        . ')” nu închide ce deschide (deschise/închise: ' . implode(', ', $diferente) . ').');
+                }
+            }
+        }
+    }
+    if ($stiva !== []) {
+        $problema($relativ . ': `if` pe coloana 0 fără `endif`.');
+    }
+}
+
 // Raportul.
 if (!$scurt) {
     echo 'Rutele din router și proprietarul lor (' . count($rute) . "):\n";
@@ -302,7 +380,8 @@ foreach ($rute as $ruta) {
 arsort($numarate);
 echo 'Rute: ' . count($rute) . '; declarații în catalog: ' . count(Plugins::listaDeclaratii())
     . '; reguli împărțite: ' . count($catalog['rute_impartite']) . '; intrări de meniu: ' . count($intrari)
-    . '; cronuri: ' . count($cronuriCatalog) . '; întrebări Plugins::… în cod: ' . $intrebari . "\n";
+    . '; cronuri: ' . count($cronuriCatalog) . '; întrebări Plugins::… în cod: ' . $intrebari
+    . '; blocuri pe coloana 0 în șabloane: ' . $blocuri . "\n";
 $bucati = [];
 foreach ($numarate as $cheie => $n) {
     $bucati[] = $cheie . ' ' . $n;

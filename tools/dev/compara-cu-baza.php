@@ -129,14 +129,18 @@ $slugBlog = $unu('SELECT slug FROM blog_posts WHERE is_published = 1 ORDER BY id
 $idClient = $unu("SELECT id FROM users WHERE email = 'andrei.exemplu@exemplu.ro'");
 $nrComanda = $unu('SELECT order_number FROM orders WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 1');
 $idPagina = $unu("SELECT id FROM pages WHERE slug = '' LIMIT 1");
+$tokenLink = $unu('SELECT token FROM order_payment_links ORDER BY id LIMIT 1');
+$idCupon = $unu('SELECT id FROM coupons ORDER BY id LIMIT 1');
+$dupaLogin = [];
 
 foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, $jaruri[$eticheta]['viz'], ['quantity' => '2']);
     $cerere($port, 'POST', '/admin/login', $jaruri[$eticheta]['adm'], ['email' => $adminEmail, 'password' => $parola]);
     $cerere($port, 'POST', '/login', $jaruri[$eticheta]['cli'], ['email' => 'andrei.exemplu@exemplu.ro', 'password' => $parola]);
-    // Adminii cu rol parțial: meniul lor are alte intrări.
+    // Adminii cu rol parțial: meniul lor are alte intrări, iar după login ajung pe prima pagină a rolului.
     foreach (['magazin', 'blog', 'emailuri'] as $rolAdmin) {
-        $cerere($port, 'POST', '/admin/login', $jaruri[$eticheta]['adm-' . $rolAdmin], ['email' => $rolAdmin . '@exemplu.ro', 'password' => $parola]);
+        $dupaLogin[$eticheta][$rolAdmin] = $cerere($port, 'POST', '/admin/login', $jaruri[$eticheta]['adm-' . $rolAdmin],
+            ['email' => $rolAdmin . '@exemplu.ro', 'password' => $parola])['location'];
     }
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, $jaruri[$eticheta]['cli'], ['quantity' => '1']);
 }
@@ -196,6 +200,18 @@ $pagini = [
     ['adm-blog', '/admin/blog/categories'],
     ['adm-emailuri', '/admin/emails/newsletters?tab=subscribers'],
     ['adm-emailuri', '/admin/emails/sender'],
+    // Paginile atinse de ascunderea textelor pluginurilor (Etapa 1, pasul 3).
+    ['viz', '/plata/' . $tokenLink],
+    ['adm', '/admin/settings/floating-cart'],
+    ['adm', '/admin/settings/admins'],
+    ['adm', '/admin/settings/payments?tab=bt'],
+    ['adm', '/admin/emails/test'],
+    ['adm', '/admin/emails/newsletters?tab=history'],
+    ['adm', '/admin/emails/newsletters?tab=contact_forms'],
+    ['adm', '/admin/users?panel=import'],
+    ['adm', '/admin/products/new'],
+    ['adm', '/admin/coupons?coupon=' . $idCupon],
+    ['adm', '/admin/promo-products'],
 ];
 
 $identice = 0;
@@ -222,6 +238,18 @@ foreach ($pagini as [$rol, $cale]) {
     $linii = substr_count($diff, "\n- ") + substr_count($diff, "\n+ ") + preg_match_all('/^[-+](?![-+])/m', $diff);
     $diferite[] = $eticheta;
     echo '  DIFERĂ ', $r['baza']['cod'], '→', $r['curent']['cod'], '  ', $eticheta, '  (', $dosarDiff, '/', $nume, '.diff)', "\n";
+}
+// Unde ajunge fiecare administrator cu rol parțial după login.
+foreach ($dupaLogin['baza'] ?? [] as $rolAdmin => $locatieBaza) {
+    $locatieCurenta = $dupaLogin['curent'][$rolAdmin] ?? '';
+    $eticheta = str_pad('login', 13) . $rolAdmin . '@exemplu.ro → ' . $locatieCurenta;
+    if ($locatieBaza === $locatieCurenta) {
+        $identice++;
+        echo '  OK    302  ', $eticheta, "\n";
+    } else {
+        $diferite[] = $eticheta;
+        echo '  DIFERĂ 302  ', $eticheta, ' (baza: ', $locatieBaza, ")\n";
+    }
 }
 foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
     @unlink($jar);
