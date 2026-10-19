@@ -12,6 +12,7 @@ declare(strict_types=1);
  *   … --fara-baza      # fără E (comparația cu codul de bază)
  *   … --capturi=DIR    # unde se pun capturile meniului adminului (implicit $CMS_DEV_DIR/capturi)
  *   … --fiecare-plugin # și F: câte un plugin oprit, restul pornite (cu browserul, ~1 minut pe plugin)
+ *   … --fara-seo       # fără G (testul SEO, ~1 minut)
  *
  * A. Licența (fără server, într-un dosar temporar, cu o pereche de chei nouă):
  *    bună, semnătură greșită/lipsă/altă cheie, versiune mai veche, lipsă, chei și
@@ -46,6 +47,10 @@ declare(strict_types=1);
  *    dashboard, comenzi…) au HTML identic cu codul de bază (compara-cu-baza.sh).
  * F. (--fiecare-plugin) Pe rând, fiecare plugin oprit cu restul pornite: aceleași
  *    verificări cu browserul ca la C, pentru pluginul oprit și cele care depind de el.
+ * G. SEO (tools/dev/test-seo.php; sărit cu --fara-seo): adresa unică (www, „/” final,
+ *    majuscule), redirecționările adreselor vechi din datele site-ului, niciodată pe
+ *    POST, plăți, webhook-uri și adresele mereu deschise ale pluginurilor; sitemap-ul,
+ *    robots.txt și datele structurate pe fiecare pachet; oprirea de urgență.
  *
  * Cererile POST de admin se fac nelogat (garda sau loginul răspund înainte de
  * controller), ca testul să nu schimbe setări sau comenzi. La final pune la loc
@@ -925,15 +930,18 @@ try {
     };
     $eroriPhpNoi();
 
-    // Harta site-ului: o facem o dată (cu „toate”); la fiecare schimbare de pachet
-    // site-ul o reface singur, fără ce nu mai e în abonament.
+    // Harta site-ului: /sitemap.xml se construiește din bază la fiecare cerere, doar
+    // cu paginile pluginurilor de pe site (docs/SEO.md); butonul din admin doar
+    // verifică lista și șterge un fișier static vechi.
     $puneLicenta($pachet('toate'));
     $fisierHarta = $radacina . '/public/sitemap.xml';
     $hartaExista = is_file($fisierHarta);
     @unlink($jar);
     $cerere('POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parolaAdmin]);
     $cerere('POST', '/admin/settings/store', $jar, ['action' => 'generate_sitemap', 'sitemap_filename' => 'sitemap.xml']);
-    $verifica('harta site-ului generată pentru test (public/sitemap.xml)', is_file($fisierHarta));
+    $hartaGenerata = $cerere('GET', '/sitemap.xml');
+    $verifica('harta site-ului construită din bază (/sitemap.xml), fără fișier static în public/', !is_file($fisierHarta)
+        && $hartaGenerata['cod'] === 200 && str_contains($hartaGenerata['corp'], '<urlset'));
 
     $nodePath = (string) (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules');
     $areBrowser = !in_array('--fara-browser', $argv, true) && is_dir($nodePath . '/playwright');
@@ -1100,7 +1108,8 @@ try {
         $ascunse = array_keys(array_filter(Plugins::stari(), static fn (string $s): bool => $s === 'oprit'));
         $scrie('  INFO  ascunse: ' . ($ascunse === [] ? 'niciunul' : implode(', ', $ascunse)));
 
-        // Prima cerere reface harta site-ului (semnalul pus la schimbarea licenței).
+        // Harta site-ului ascultă de licență la fiecare cerere (și prima cerere reface
+        // un eventual fișier static, semnalul pus la schimbarea licenței).
         $cerere('GET', '/health');
         $cerere('GET', '/');
         $harta = $cerere('GET', '/sitemap.xml');
@@ -1632,6 +1641,22 @@ if (!in_array('--fara-baza', $argv, true)) {
         $verifica('licența ' . $numeLicenta . ': ' . ($ultima !== '' ? $ultima : 'compara-cu-baza'), $codBaza === 0,
             implode("\n          ", array_slice($diferite, 0, 20)));
     }
+}
+
+// =================================================================
+// G. SEO: adresa unică, redirecționările, sitemap, robots, JSON-LD
+//    (tools/dev/test-seo.php, pe fiecare pachet)
+// =================================================================
+if (!in_array('--fara-seo', $argv, true)) {
+    $scrie('');
+    $scrie('== G. SEO (tools/dev/test-seo.php: adresa unică, harta, sitemap, robots.txt, JSON-LD, pe fiecare pachet)');
+    exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' tools/dev/test-seo.php 2>&1', $iesireSeo, $codSeo);
+    foreach ($iesireSeo as $linie) {
+        if (str_starts_with($linie, '  EȘEC') || str_starts_with($linie, 'Rezultat:') || str_starts_with($linie, 'EROARE')) {
+            $scrie('  ' . trim($linie));
+        }
+    }
+    $verifica('testul SEO (raport: ' . $dosarDev . '/test-seo-raport.txt)', $codSeo === 0);
 }
 
 $scrie('');

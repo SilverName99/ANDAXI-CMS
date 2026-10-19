@@ -19,3 +19,7 @@
 /public/uploads/
 /public/assets/.htaccess
 /public/*.xml
+
+# Datele fiecărui site (redirecționări, reguli SEO): dosarul site/ de pe server
+# (sau SITE_DATE_DOSAR). Pachetele site-urilor existente stau în site-uri/<site>/.
+/site/

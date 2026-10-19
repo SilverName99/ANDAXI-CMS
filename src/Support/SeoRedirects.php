@@ -1,0 +1,727 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Support;
+
+/**
+ * O singură adresă pentru fiecare pagină, plus redirecționările adreselor vechi
+ * ale site-ului.
+ *
+ * Rulează la începutul lui public/index.php, înainte de bootstrap (deci înainte
+ * de sesiune și de autoloader), și se ocupă DOAR de cererile GET/HEAD care nu
+ * țin de coș, plată, cont, admin, API sau confirmările de plată (vezi
+ * caiExcluse(): lista nucleului, plus fiecare adresă „mereu deschisă” din
+ * catalogul pluginurilor, plus ce adaugă site-ul în seo.json). Orice altă
+ * cerere trece exact ca înainte, fără nicio atingere.
+ *
+ * Trei lucruri:
+ *  1. gazda: varianta cu sau fără www a gazdei din APP_URL (pe http sau https)
+ *     → gazda din APP_URL, pe https (nu face nimic dacă APP_URL nu e https sau
+ *     e localhost/IP, deci nici local). Pe gazda corectă nu se redirecționează
+ *     după schemă: http → https îl face găzduirea (marginea Hostinger), iar dacă
+ *     serverul din spatele CDN-ului n-ar vedea https, o regulă de schemă de aici
+ *     ar trimite fiecare pagină la ea însăși. Cine are deja coș sau cont deschis
+ *     pe gazda veche rămâne acolo (cookie-ul de sesiune e legat de gazdă);
+ *     roboții și vizitatorii noi se mută;
+ *  2. calea: „/x/" și „/x//y" → „/x" și „/x/y" (prima pagină rămâne „/");
+ *  3. harta adreselor vechi ale site-ului (`redirecturi.json` din dosarul
+ *     site-ului, vezi DateSite): adresa veche → pagina nouă, cu 301, sau 410
+ *     pentru resturi tehnice. Nucleul nu conține nicio regulă.
+ *
+ * Cum: când o cerere are ceva de reparat, aplicația rulează normal pe calea
+ * curată, cu răspunsul ținut în buffer. La final (funcție de oprire, deci și
+ * după un exit()) se hotărăște:
+ *  - harta se aplică doar dacă aplicația ar fi răspuns 404/410 sau cu o
+ *    redirecționare ghicită (potrivirea aproximativă a produselor); o pagină
+ *    care există nu e acoperită niciodată de hartă; o țintă care e pagina unui
+ *    plugin pe care site-ul nu-l are nu se folosește (rămâne 404);
+ *  - o redirecționare a aplicației devine un singur salt, direct la ținta finală;
+ *  - o pagină care există primește 301 la adresa curată;
+ *  - o pagină inexistentă pe gazda corectă își păstrează 404-ul (fără 301 spre 404).
+ * Rezultatul: un singur 301, fără lanțuri și fără bucle; parametrii din adresă
+ * (gclid, utm_*…) se păstrează. Un 301 nu trimite cookie-uri unui vizitator
+ * fără sesiune (robot, link vechi); pagina la care ajunge îl primește normal.
+ *
+ * Oprire de urgență: SEO_REDIRECTURI=0 în .env dezactivează tot stratul.
+ */
+final class SeoRedirects
+{
+    /**
+     * Căi care nu se redirecționează niciodată, pe orice site (prefixe, fără
+     * diferență între litere mari și mici): coș, plată, cont, admin, API,
+     * confirmări de plată și de ERP, autentificarea Google, newsletter,
+     * fișiere, sănătate. Un prefix care se termină în „/" prinde doar
+     * subcăile; unul fără „/" prinde calea exactă și subcăile ei („/cos" prinde
+     * „/cos" și „/cos/…", dar nu „/cosmetice"). La ele se adaugă adresele
+     * „mereu deschise” din catalogul pluginurilor și `cai_excluse` din seo.json.
+     */
+    public const CAI_EXCLUSE = [
+        '/admin', '/api', '/auth', '/webhook', '/plata', '/checkout',
+        '/cos', '/contul-meu', '/login', '/register',
+        '/newsletter', '/health', '/review-form', '/gdpr-agreements',
+        '/contact/send', '/uploads', '/assets', '/storage', '/feed', '/.well-known',
+        '/cdn-cgi', '/robots.txt', '/sitemap.xml', '/favicon.ico',
+    ];
+
+    /** Codurile la care aplicația „n-a găsit" pagina, deci harta poate răspunde. */
+    private const CODURI_NEGASIT = [404, 410];
+
+    private static bool $activ = false;
+    private static bool $redirectCanonic = false;
+    private static int $nivelBuffer = 0;
+    private static string $caleCurata = '/';
+    private static string $query = '';
+    private static ?string $bazaCanonica = null;
+    private static bool $gazdaGresita = false;
+    private static bool $caleGresita = false;
+    /** @var array{0: ?string, 1: int}|null ținta din hartă și codul */
+    private static ?array $regula = null;
+
+    /** @var array<string, array{0: ?string, 1: int}>|null */
+    private static ?array $harta = null;
+    /** @var list<array{0: string, 1: ?string, 2: int}>|null */
+    private static ?array $prefixe = null;
+    /** @var list<string>|null lista completă (nucleu + catalog + site) */
+    private static ?array $caiExcluse = null;
+
+    /**
+     * Pornește verificarea cererii curente. Nu trimite nimic și nu oprește
+     * nimic: cel mult rescrie REQUEST_URI la calea curată și pune un buffer.
+     */
+    public static function incepe(string $radacina): void
+    {
+        try {
+            self::incepeIntern($radacina);
+        } catch (\Throwable) {
+            // Stratul SEO nu are voie să strice vreo cerere.
+            self::$activ = false;
+        }
+    }
+
+    private static function incepeIntern(string $radacina): void
+    {
+        if (!class_exists(Env::class, false)) {
+            require_once __DIR__ . '/Env.php';
+        }
+        if (!class_exists(DateSite::class, false)) {
+            require_once __DIR__ . '/DateSite.php';
+        }
+        Env::load($radacina . '/.env');
+        if (self::oprit()) {
+            return;
+        }
+
+        $metoda = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($metoda !== 'GET' && $metoda !== 'HEAD') {
+            return;
+        }
+
+        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        [$caleBruta, $query] = self::imparteUri($uri);
+        // Întâi lista fixă (fără să citim catalogul): cele mai multe cereri excluse se opresc aici.
+        if (self::eExclusaDupa(self::CAI_EXCLUSE, $caleBruta)) {
+            return;
+        }
+        $caleCurata = self::curataCale($caleBruta);
+
+        self::$bazaCanonica = self::bazaCanonica();
+        $gazdaGresita = false;
+        if (self::$bazaCanonica !== null) {
+            $gazdaCanonica = (string) parse_url(self::$bazaCanonica, PHP_URL_HOST);
+            $gazda = self::gazdaCerere();
+            // Pe gazda canonică nimic de mutat, oricare ar fi schema (vezi sus).
+            if ($gazda !== $gazdaCanonica && in_array($gazda, self::aliasuriGazda($gazdaCanonica), true)) {
+                $gazdaGresita = true;
+            }
+            // Orice altă gazdă (adresa tehnică a serverului, un IP) nu se
+            // atinge: nu știm sigur că e același site, iar o regulă greșită
+            // aici ar face buclă.
+        }
+        $caleGresita = $caleCurata !== $caleBruta;
+        $regula = self::regulaPentru($caleCurata);
+
+        if (!$gazdaGresita && !$caleGresita && $regula === null) {
+            return;
+        }
+        // Abia acum lista completă (cu adresele de confirmare ale pluginurilor și ale site-ului).
+        if (self::eExclusa($caleBruta) || self::eExclusa($caleCurata)) {
+            return;
+        }
+
+        self::$activ = true;
+        self::$caleCurata = $caleCurata;
+        self::$query = $query;
+        self::$gazdaGresita = $gazdaGresita;
+        self::$caleGresita = $caleGresita;
+        self::$regula = $regula;
+
+        // Aplicația vede cererea pe calea curată: routerul, canonicalul și
+        // cache-ul de pagini lucrează exact ca pentru adresa corectă.
+        $_SERVER['SEO_REQUEST_URI_ORIGINAL'] = $uri;
+        $_SERVER['REQUEST_URI'] = $caleCurata . ($query !== '' ? '?' . $query : '');
+        if ($metoda === 'HEAD') {
+            // Routerul n-are rute HEAD; ca să știm dacă pagina există, o cerem
+            // ca GET. Serverul web nu trimite oricum corpul la HEAD.
+            $_SERVER['SEO_REQUEST_METHOD_ORIGINAL'] = 'HEAD';
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+        }
+
+        ob_start();
+        self::$nivelBuffer = ob_get_level();
+        register_shutdown_function([self::class, 'termina']);
+    }
+
+    /** Rulează la oprirea scriptului: hotărăște ce pleacă spre browser. */
+    public static function termina(): void
+    {
+        if (!self::$activ) {
+            return;
+        }
+        self::$activ = false;
+        try {
+            self::terminaIntern();
+        } catch (\Throwable) {
+            // Lăsăm răspunsul aplicației să plece neatins.
+        }
+    }
+
+    private static function terminaIntern(): void
+    {
+        if (headers_sent() || ob_get_level() < self::$nivelBuffer) {
+            return;
+        }
+
+        // Cine are deja coș sau cont deschis pe gazda veche rămâne acolo: cookie-ul
+        // de sesiune e legat de gazdă, iar pe gazda nouă coșul ar apărea gol.
+        // Roboții și vizitatorii noi n-au sesiune, deci se mută.
+        if (self::$gazdaGresita && self::areSesiuneCuCosSauCont()) {
+            self::$gazdaGresita = false;
+            self::$bazaCanonica = null;
+        }
+
+        $cod = (int) (http_response_code() ?: 200);
+        $locatieAplicatie = self::antet('Location');
+
+        // 1. Harta, doar unde aplicația n-a găsit pagina sau a ghicit-o. Un 301
+        //    spre forma corectă a unei pagini existente (litere mari → mici)
+        //    nu e ghicit: acolo pagina există și harta nu are ce căuta.
+        $aplicatiaAGhicit = $cod >= 300 && $cod < 400 && !self::$redirectCanonic;
+        if (self::$regula !== null && (in_array($cod, self::CODURI_NEGASIT, true) || $aplicatiaAGhicit)) {
+            [$tinta, $codRegula] = self::$regula;
+            if ($codRegula === 410) {
+                if (in_array($cod, self::CODURI_NEGASIT, true)) {
+                    // Pagina „nu există" a aplicației rămâne, doar codul spune „dispărut definitiv".
+                    http_response_code(410);
+                    return;
+                }
+            } elseif ($tinta !== null) {
+                // Un rând adăugat mai târziu poate face lanț (A → B, B → C) sau
+                // buclă (A → B, B → A): lanțul se urmează până la capăt, într-un
+                // singur salt; o buclă nu redirecționează deloc (rămâne 404).
+                $tinta = self::tintaFinala(self::$caleCurata, $tinta);
+                // O țintă care e pagina unui plugin pe care site-ul nu-l are ar da
+                // 404 după redirecționare: atunci adresa veche rămâne 404.
+                if ($tinta !== null && self::tintaVizibila($tinta)) {
+                    self::redirectioneaza(self::adresaCompleta($tinta, self::$query), 301);
+                    return;
+                }
+            }
+        }
+
+        // 2. Redirecționarea aplicației (de exemplu produs găsit după un slug
+        //    vechi), făcută dintr-un singur salt până la ținta finală.
+        if ($cod >= 300 && $cod < 400 && $locatieAplicatie !== '') {
+            if (self::$gazdaGresita || self::$caleGresita) {
+                $tinta = self::locatieCanonica($locatieAplicatie);
+                if ($tinta !== null) {
+                    self::redirectioneaza($tinta, in_array($cod, [301, 308], true) ? 301 : $cod);
+                }
+            }
+            return;
+        }
+
+        // 3. Pagina există: 301 la adresa curată, pe gazda corectă.
+        if ($cod >= 200 && $cod < 300) {
+            if (self::$gazdaGresita || self::$caleGresita) {
+                self::redirectioneaza(self::adresaCompleta(self::$caleCurata, self::$query), 301);
+            }
+            return;
+        }
+
+        // 4. Altceva (404 fără regulă, 503 mentenanță, eroare): pe gazda greșită
+        //    tot mutăm vizitatorul pe gazda corectă; pe gazda corectă lăsăm
+        //    răspunsul așa cum e (fără 301 spre o pagină care nu există).
+        if (self::$gazdaGresita) {
+            self::redirectioneaza(self::adresaCompleta(self::$caleCurata, self::$query), 301);
+        }
+    }
+
+    /**
+     * Ținta unei reguli, urmând lanțul prin alte reguli din hartă (cel mult
+     * 10 pași). Null dacă lanțul se întoarce la o adresă deja văzută (buclă),
+     * dacă ajunge la o regulă 410 sau dacă ținta finală e chiar adresa cerută.
+     */
+    public static function tintaFinala(string $cale, string $tinta): ?string
+    {
+        $vazute = [self::cheie($cale) => true];
+        for ($pas = 0; $pas < 10; $pas++) {
+            $cheie = self::cheie($tinta);
+            if (isset($vazute[$cheie])) {
+                return null;
+            }
+            $vazute[$cheie] = true;
+            $urmatoarea = self::regulaPentru($tinta);
+            if ($urmatoarea === null) {
+                return $tinta;
+            }
+            if ($urmatoarea[1] === 410 || $urmatoarea[0] === null) {
+                return null;
+            }
+            $tinta = $urmatoarea[0];
+        }
+        return null;
+    }
+
+    /**
+     * Ținta e o pagină pe care site-ul o are (nu a unui plugin oprit)? Fără
+     * mecanismul de pluginuri încărcat (n-ar trebui), ținta se folosește.
+     */
+    private static function tintaVizibila(string $tinta): bool
+    {
+        if (!class_exists(Plugins::class)) {
+            return true;
+        }
+        return Plugins::adresaVizibila($tinta);
+    }
+
+    /**
+     * Vizitatorul are o sesiune deja existentă (cookie trimis de browser și
+     * acceptat) cu produse în coș sau cu contul de client deschis?
+     */
+    private static function areSesiuneCuCosSauCont(): bool
+    {
+        if (!self::areSesiuneExistenta()) {
+            return false;
+        }
+        if (!empty($_SESSION['cart']['items'])) {
+            return true;
+        }
+        return class_exists(CustomerAuth::class) && CustomerAuth::check();
+    }
+
+    /**
+     * Browserul a trimis cookie-ul de sesiune și sesiunea lui e cea folosită
+     * acum? (Cu use_strict_mode, un cookie inventat sau expirat primește un id
+     * nou, deci nu contează ca sesiune existentă.)
+     */
+    private static function areSesiuneExistenta(): bool
+    {
+        $trimis = (string) ($_COOKIE[session_name()] ?? '');
+        return $trimis !== '' && $trimis === session_id();
+    }
+
+    /**
+     * Un 301 către un vizitator fără sesiune (robot, link vechi) pleacă fără
+     * cookie-uri: pagina la care ajunge îi pornește sesiunea, ca înainte. Cine
+     * are deja o sesiune își primește cookie-urile neatinse.
+     */
+    private static function faraCookieuriPentruVizitatorNou(): void
+    {
+        if (!headers_sent() && !self::areSesiuneExistenta()) {
+            header_remove('Set-Cookie');
+        }
+    }
+
+    private static function redirectioneaza(string $locatie, int $cod): void
+    {
+        while (ob_get_level() >= self::$nivelBuffer && ob_get_level() > 0) {
+            ob_end_clean();
+        }
+        http_response_code($cod);
+        self::faraCookieuriPentruVizitatorNou();
+        header('Location: ' . $locatie, true);
+        header_remove('Content-Length');
+        header_remove('ETag');
+        header_remove('Last-Modified');
+        header_remove('X-Page-Cache');
+        // Primele săptămâni: browserele nu țin minte redirecționarea, ca o
+        // întoarcere la versiunea anterioară să se vadă imediat.
+        header('Cache-Control: ' . self::cacheControlRedirect(), true);
+        header('Content-Type: text/html; charset=utf-8', true);
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // Reguli, publice pentru controller și pentru teste
+    // ───────────────────────────────────────────────────────────
+
+    /**
+     * 301 de la o variantă a adresei (litere mari, alt fel de scriere) la
+     * adresa corectă a unei pagini care există. Doar la GET/HEAD și doar în
+     * afara căilor excluse. Întoarce true dacă a trimis redirecționarea.
+     */
+    public static function redirectCanonic(string $caleCorecta): bool
+    {
+        $metoda = strtoupper((string) ($_SERVER['SEO_REQUEST_METHOD_ORIGINAL'] ?? $_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($metoda !== 'GET' && $metoda !== 'HEAD') {
+            return false;
+        }
+        if (self::oprit()) {
+            return false;
+        }
+        if ($caleCorecta === '' || self::eExclusa($caleCorecta)) {
+            return false;
+        }
+        [, $query] = self::imparteUri((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+        self::$redirectCanonic = true;
+        self::faraCookieuriPentruVizitatorNou();
+        header('Location: ' . $caleCorecta . ($query !== '' ? '?' . $query : ''), true, 301);
+        header('Cache-Control: ' . self::cacheControlRedirect(), true);
+        return true;
+    }
+
+    /**
+     * Calea e una dintre cele care nu se redirecționează niciodată? Lista
+     * completă: a nucleului, adresele mereu deschise ale pluginurilor și ce
+     * adaugă site-ul (seo.json → cai_excluse).
+     */
+    public static function eExclusa(string $cale): bool
+    {
+        return self::eExclusaDupa(self::caiExcluse(), $cale);
+    }
+
+    /**
+     * Toate căile excluse: lista nucleului, fiecare adresă „mereu deschisă” din
+     * catalogul pluginurilor (webhook-uri, întoarceri de plată, notificări ERP,
+     * linkurile din emailuri; partea dinaintea primului parametru: `GET
+     * /newsletter/unsubscribe/{token}` → `/newsletter/unsubscribe/`) și
+     * `cai_excluse` din seo.json-ul site-ului.
+     *
+     * @return list<string>
+     */
+    public static function caiExcluse(): array
+    {
+        if (self::$caiExcluse !== null) {
+            return self::$caiExcluse;
+        }
+        $lista = self::CAI_EXCLUSE;
+        foreach (self::caiMereuDeschise() as $cale) {
+            $lista[] = $cale;
+        }
+        if (!class_exists(DateSite::class, false)) {
+            require_once __DIR__ . '/DateSite.php';
+        }
+        foreach ((array) DateSite::seo('cai_excluse', []) as $cale) {
+            $cale = strtolower(trim((string) $cale));
+            if ($cale !== '' && $cale[0] === '/') {
+                $lista[] = $cale;
+            }
+        }
+        return self::$caiExcluse = array_values(array_unique($lista));
+    }
+
+    /**
+     * Adresele „mereu deschise” din catalogul pluginurilor (config/plugins.php),
+     * ca prefixe de cale: tot ce stă înaintea primului parametru.
+     *
+     * @return list<string>
+     */
+    public static function caiMereuDeschise(): array
+    {
+        $fisier = dirname(__DIR__, 2) . '/config/plugins.php';
+        $catalog = is_file($fisier) ? require $fisier : [];
+        $definitii = [];
+        if (is_array($catalog['nucleu'] ?? null)) {
+            $definitii[] = $catalog['nucleu'];
+        }
+        foreach ((array) ($catalog['pluginuri'] ?? []) as $definitie) {
+            if (is_array($definitie)) {
+                $definitii[] = $definitie;
+            }
+        }
+        $cai = [];
+        foreach ($definitii as $definitie) {
+            foreach ((array) ($definitie['rute_mereu_deschise'] ?? []) as $text) {
+                $text = trim((string) $text);
+                if (preg_match('#^(?:GET|POST)\s+(/.*)$#', $text, $m) === 1) {
+                    $text = $m[1];
+                }
+                $text = str_replace('\\.', '.', $text);
+                if (str_ends_with($text, '/*')) {
+                    $text = substr($text, 0, -1);
+                }
+                $paranteza = strpos($text, '{');
+                if ($paranteza !== false) {
+                    // Până la ultimul „/” dinaintea parametrului: „/x/{id}” → „/x/”.
+                    $text = substr($text, 0, (int) strrpos(substr($text, 0, $paranteza), '/') + 1);
+                }
+                $text = strtolower($text);
+                if ($text !== '' && $text !== '/' && $text[0] === '/') {
+                    $cai[] = $text;
+                }
+            }
+        }
+        return array_values(array_unique($cai));
+    }
+
+    /** @param list<string> $lista */
+    private static function eExclusaDupa(array $lista, string $cale): bool
+    {
+        $cale = strtolower($cale);
+        if ($cale === '' || $cale[0] !== '/') {
+            $cale = '/' . $cale;
+        }
+        foreach ($lista as $prefix) {
+            if (str_ends_with($prefix, '/')) {
+                if (str_starts_with($cale, $prefix)) {
+                    return true;
+                }
+                continue;
+            }
+            if ($cale === $prefix || str_starts_with($cale, $prefix . '/')) {
+                return true;
+            }
+        }
+        // „//cos" sau „/cos/" ajung la router tot ca „/cos"; „%2F" la fel, decodat.
+        $faraDuble = (string) preg_replace('#/{2,}#', '/', rawurldecode($cale));
+        return $faraDuble !== $cale && self::eExclusaDupa($lista, $faraDuble);
+    }
+
+    /** „/x//y/" → „/x/y"; prima pagină rămâne „/". Codarea literelor rămâne neatinsă. */
+    public static function curataCale(string $cale): string
+    {
+        $cale = (string) preg_replace('#/{2,}#', '/', $cale === '' ? '/' : $cale);
+        if ($cale === '' || $cale[0] !== '/') {
+            $cale = '/' . $cale;
+        }
+        if ($cale !== '/') {
+            $cale = rtrim($cale, '/');
+            if ($cale === '') {
+                $cale = '/';
+            }
+        }
+        return $cale;
+    }
+
+    /** Cheia din hartă: decodată, cu litere mici, fără bare duble sau finale. */
+    public static function cheie(string $cale): string
+    {
+        $cale = rawurldecode(explode('?', $cale, 2)[0]);
+        $cale = function_exists('mb_strtolower') ? mb_strtolower($cale, 'UTF-8') : strtolower($cale);
+        return self::curataCale($cale);
+    }
+
+    /**
+     * Regula din hartă pentru o cale (exactă sau după prefix), sau null.
+     *
+     * @return array{0: ?string, 1: int}|null
+     */
+    public static function regulaPentru(string $cale): ?array
+    {
+        self::incarcaHarta();
+        $cheie = self::cheie($cale);
+        if (isset(self::$harta[$cheie])) {
+            return self::$harta[$cheie];
+        }
+        foreach (self::$prefixe ?? [] as [$prefix, $tinta, $cod]) {
+            if (str_starts_with($cheie, $prefix)) {
+                return [$tinta, $cod];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Toate regulile, cum sunt în `redirecturi.json` din dosarul site-ului
+     * (pentru teste și verificări): [adresa veche, adresa nouă, cod, motiv].
+     *
+     * @return array{exacte: list<array<int, mixed>>, prefixe: list<array<int, mixed>>}
+     */
+    public static function reguli(): array
+    {
+        if (!class_exists(DateSite::class, false)) {
+            require_once __DIR__ . '/DateSite.php';
+        }
+        $date = DateSite::json('redirecturi.json');
+        return [
+            'exacte' => array_values(array_filter((array) ($date['exacte'] ?? []), 'is_array')),
+            'prefixe' => array_values(array_filter((array) ($date['prefixe'] ?? []), 'is_array')),
+        ];
+    }
+
+    /**
+     * O țintă bună: o cale din același site („/…”, nu „//gazdă” și fără schemă),
+     * fără spații sau caractere de control. Altfel rândul se ignoră (o hartă nu
+     * are voie să trimită vizitatorii pe alt site).
+     */
+    public static function tintaValida(string $tinta): bool
+    {
+        return $tinta !== '' && $tinta[0] === '/' && !str_starts_with($tinta, '//') && !str_contains($tinta, '\\')
+            && preg_match('/[\x00-\x20\x7f]/', $tinta) !== 1;
+    }
+
+    private static function incarcaHarta(): void
+    {
+        if (self::$harta !== null) {
+            return;
+        }
+        self::$harta = [];
+        self::$prefixe = [];
+        $reguli = self::reguli();
+        foreach ($reguli['exacte'] as $rand) {
+            if (!isset($rand[0]) || !is_string($rand[0]) || !str_starts_with($rand[0], '/')) {
+                continue;
+            }
+            $cod = (int) ($rand[2] ?? 301);
+            $tinta = isset($rand[1]) && is_string($rand[1]) && $rand[1] !== '' ? $rand[1] : null;
+            if ($cod !== 410 && ($tinta === null || !self::tintaValida($tinta))) {
+                continue;
+            }
+            self::$harta[self::cheie($rand[0])] = [$cod === 410 ? null : $tinta, $cod === 410 ? 410 : 301];
+        }
+        foreach ($reguli['prefixe'] as $rand) {
+            if (!isset($rand[0]) || !is_string($rand[0]) || !str_starts_with($rand[0], '/') || $rand[0] === '/') {
+                continue;
+            }
+            $cod = (int) ($rand[2] ?? 410);
+            $tinta = isset($rand[1]) && is_string($rand[1]) && $rand[1] !== '' ? $rand[1] : null;
+            if ($cod !== 410 && ($tinta === null || !self::tintaValida($tinta))) {
+                continue;
+            }
+            self::$prefixe[] = [strtolower($rand[0]), $cod === 410 ? null : $tinta, $cod === 410 ? 410 : 301];
+        }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // Gazda, schema și adresele
+    // ───────────────────────────────────────────────────────────
+
+    /**
+     * „https://exemplu.ro" din APP_URL, sau null când stratul de gazdă nu are
+     * ce face (APP_URL gol, pe http, localhost sau IP — adică în dezvoltare).
+     */
+    public static function bazaCanonica(): ?string
+    {
+        $appUrl = trim((string) Env::get('APP_URL', ''));
+        if ($appUrl === '') {
+            return null;
+        }
+        $parti = parse_url($appUrl);
+        if (!is_array($parti) || strtolower((string) ($parti['scheme'] ?? '')) !== 'https') {
+            return null;
+        }
+        $gazda = strtolower(rtrim((string) ($parti['host'] ?? ''), '.'));
+        if ($gazda === '' || $gazda === 'localhost' || !str_contains($gazda, '.')
+            || filter_var($gazda, FILTER_VALIDATE_IP) !== false || str_ends_with($gazda, '.localhost')) {
+            return null;
+        }
+        $port = isset($parti['port']) && (int) $parti['port'] !== 443 ? ':' . (int) $parti['port'] : '';
+        return 'https://' . $gazda . $port;
+    }
+
+    /**
+     * Gazdele care se mută pe cea canonică: varianta cu sau fără www, plus ce
+     * e trecut în SEO_GAZDE_ALIAS (separate prin virgulă). Orice altă gazdă
+     * (adresa tehnică de la găzduire, un IP) rămâne neatinsă.
+     *
+     * @return list<string>
+     */
+    private static function aliasuriGazda(string $gazdaCanonica): array
+    {
+        $alias = str_starts_with($gazdaCanonica, 'www.')
+            ? [substr($gazdaCanonica, 4)]
+            : ['www.' . $gazdaCanonica];
+        foreach (explode(',', (string) Env::get('SEO_GAZDE_ALIAS', '')) as $extra) {
+            $extra = strtolower(trim($extra));
+            if ($extra !== '' && $extra !== $gazdaCanonica) {
+                $alias[] = $extra;
+            }
+        }
+        return $alias;
+    }
+
+    private static function gazdaCerere(): string
+    {
+        $gazda = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '')));
+        $gazda = (string) preg_replace('/:\d+$/', '', $gazda);
+        return rtrim($gazda, '.');
+    }
+
+    /** Adresa absolută (pe gazda canonică, dacă există) pentru o cale + query. */
+    private static function adresaCompleta(string $cale, string $query): string
+    {
+        $separator = str_contains($cale, '?') ? '&' : '?';
+        $adresa = $cale . ($query !== '' ? $separator . $query : '');
+        return (self::$bazaCanonica ?? '') . $adresa;
+    }
+
+    /**
+     * Locația dată de aplicație, mutată pe gazda canonică. Null dacă duce în
+     * afara site-ului (atunci o lăsăm cum e).
+     */
+    private static function locatieCanonica(string $locatie): ?string
+    {
+        if (str_starts_with($locatie, '/') && !str_starts_with($locatie, '//')) {
+            [$cale, $query] = self::imparteUri($locatie);
+            return self::adresaCompleta(self::curataCale($cale), $query !== '' ? $query : self::$query);
+        }
+        $parti = parse_url($locatie);
+        if (!is_array($parti) || !isset($parti['host'])) {
+            return null;
+        }
+        $gazda = strtolower(rtrim((string) $parti['host'], '.'));
+        $gazdaCanonica = self::$bazaCanonica !== null ? (string) parse_url(self::$bazaCanonica, PHP_URL_HOST) : self::gazdaCerere();
+        if ($gazda !== $gazdaCanonica && !in_array($gazda, self::aliasuriGazda($gazdaCanonica), true)) {
+            return null;
+        }
+        $query = (string) ($parti['query'] ?? '');
+        return self::adresaCompleta(self::curataCale((string) ($parti['path'] ?? '/')), $query !== '' ? $query : self::$query);
+    }
+
+    /** @return array{0: string, 1: string} calea brută și query-ul, fără parse_url („//x" nu e o gazdă aici) */
+    private static function imparteUri(string $uri): array
+    {
+        if (preg_match('#^https?://[^/]+(/.*)?$#i', $uri, $m) === 1) {
+            $uri = $m[1] ?? '/';
+        }
+        $parti = explode('?', $uri, 2);
+        $cale = (string) ($parti[0] === '' ? '/' : $parti[0]);
+        $cale = (string) preg_replace('/#.*$/', '', $cale);
+        return [$cale, (string) ($parti[1] ?? '')];
+    }
+
+    private static function antet(string $nume): string
+    {
+        $prefix = strtolower($nume) . ':';
+        $valoare = '';
+        foreach (headers_list() as $linie) {
+            if (str_starts_with(strtolower($linie), $prefix)) {
+                $valoare = trim(substr($linie, strlen($prefix)));
+            }
+        }
+        return $valoare;
+    }
+
+    private static function oprit(): bool
+    {
+        $valoare = class_exists(Env::class, false) ? (string) Env::get('SEO_REDIRECTURI', '1') : '1';
+        return in_array(strtolower(trim($valoare)), ['0', 'false', 'off', 'nu'], true);
+    }
+
+    private static function cacheControlRedirect(): string
+    {
+        $valoare = trim((string) Env::get('SEO_REDIRECT_CACHE', ''));
+        return $valoare !== '' ? $valoare : 'no-store';
+    }
+
+    /** Doar pentru teste: uită harta, lista de excluderi și starea cererii. */
+    public static function reseteaza(): void
+    {
+        self::$harta = null;
+        self::$prefixe = null;
+        self::$caiExcluse = null;
+        self::$activ = false;
+        self::$redirectCanonic = false;
+        self::$regula = null;
+    }
+}

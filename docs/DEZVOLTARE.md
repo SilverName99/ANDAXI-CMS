@@ -95,8 +95,9 @@ tools/dev/php.sh tools/dev/licenta.php bioscem      # licența reală a Bioscem:
 tools/dev/php.sh tools/dev/verifica-rute.php        # fiecare rută are proprietar în catalogul pluginurilor
 tools/dev/php.sh tools/dev/test-pluginuri.php       # testele pluginurilor: licența, garda, fiecare pachet, „se oprește”
 tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus, pe rând, fiecare plugin oprit cu restul pornite (~20 min)
-tools/dev/compara-cu-baza.sh                        # cu toate pluginurile, HTML identic cu codul dinaintea pluginurilor
+tools/dev/compara-cu-baza.sh                        # cu toate pluginurile, HTML identic cu codul dinaintea pluginurilor (în afara diferențelor SEO scrise explicit)
 tools/dev/compara-cu-baza.sh --licenta=bioscem      # la fel, cu licența reală a Bioscem
+tools/dev/php.sh tools/dev/test-seo.php             # SEO pe fiecare pachet: adresa unică, harta, sitemap, robots.txt, date structurate (docs/SEO.md)
 tools/dev/php.sh scripts/diagnostic.php --licenta   # licența se verifică? (verificarea dinaintea unui deploy)
 ```
 
@@ -124,8 +125,10 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | `capturi.cjs` | Capturile Playwright din admin. |
 | `licenta.php` | Perechea de chei de dezvoltare (în locul celei a CRM-ului) și licențele de test: pachete, „toate” (cu unealta internă), „bioscem” (ca licența reală a Bioscem, fără unealta internă), `cheie=stare`, fără licență (șterge și starea aplicată); `stari`, `cron`, `arata` pentru teste. |
 | `verifica-rute.php` | Listează fiecare rută cu proprietarul ei (nucleu sau plugin) și pică dacă o rută nu are proprietar, dacă o declarație din catalog nu acoperă nicio rută, dacă meniul și rutele nu se potrivesc, dacă un cron nu are garda, dacă codul întreabă de un plugin inexistent sau dacă un bloc `<?php if (…): ?>` de pe coloana 0 dintr-un șablon nu închide HTML-ul pe care îl deschide (un `endif` pus greșit lasă, cu pluginul oprit, jumătăți de tabel). |
-| `test-pluginuri.php` | Testele mecanismului de pluginuri: licența (A: și ultima licență aplicată când nicio licență nu se verifică, codul 2 al cronurilor fără licență, momentul intrării în „se oprește”, jurnalul o dată pe zi, dosarul fără drept de scriere, JSON-ul canonic față de Node, filtrul care nu atinge listele goale ale clientului), garda rutelor pe fiecare pachet (B: plus linkul de urmărire din newsletter, robots.txt, API-urile catalogului, „Trimite email test”, acțiunile necunoscute din Setări magazin, adresele mereu deschise fără o plată adevărată, redirecționările în buclă), fiecare pachet parcurs pagină cu pagină pe site, în contul clientului și în tot meniul adminului, plus cu Playwright și sursa editoarelor de pagini și de șablon de produs (C), magazinul „se oprește” cu o comandă existentă dusă la capăt, ERP-ul care trimite comenzile plasate înainte de oprire, FAN oprit fără niciun AWB (D), comparația cu codul de bază, cu licența „toate” și cu cea a Bioscem (E) și, la cerere, fiecare plugin oprit pe rând cu restul pornite (F). În browser se verifică și textul vizibil: nicio etichetă sau explicație a unui plugin oprit, nici în ferestrele comenzilor și ale produselor, în tab-urile setărilor sau în contul clientului. Opțiuni: `--fara-garda`, `--fara-browser`, `--fara-baza`, `--fiecare-plugin`, `--capturi=DIR`. Pornește singur serverul dacă nu merge. |
-| `compara-cu-baza.sh` (+ `.php`) | Scoate codul unui commit (implicit `f5ae5ea`, dinaintea pluginurilor) în `$CMS_DEV_DIR/baza-<commit>`, îl pornește pe portul următor cu aceeași bază și compară HTML-ul a peste 60 de pagini-cheie (vizitator, client, patru roluri de admin, plus o pagină de test cu liste goale scrise de client), fără tokenuri și versiuni de fișiere. Cu `--licenta=bioscem` pune înainte licența reală a Bioscem (fără unealta internă; panoul „Import din backup WordPress” lipsește intenționat și nu se compară) și la final pune la loc „toate”. Diferențele: `$CMS_DEV_DIR/compara/*.diff`. |
+| `test-pluginuri.php` | Testele mecanismului de pluginuri: licența (A: și ultima licență aplicată când nicio licență nu se verifică, codul 2 al cronurilor fără licență, momentul intrării în „se oprește”, jurnalul o dată pe zi, dosarul fără drept de scriere, JSON-ul canonic față de Node, filtrul care nu atinge listele goale ale clientului), garda rutelor pe fiecare pachet (B: plus linkul de urmărire din newsletter, robots.txt, API-urile catalogului, „Trimite email test”, acțiunile necunoscute din Setări magazin, adresele mereu deschise fără o plată adevărată, redirecționările în buclă), fiecare pachet parcurs pagină cu pagină pe site, în contul clientului și în tot meniul adminului, plus cu Playwright și sursa editoarelor de pagini și de șablon de produs (C), magazinul „se oprește” cu o comandă existentă dusă la capăt, ERP-ul care trimite comenzile plasate înainte de oprire, FAN oprit fără niciun AWB (D), comparația cu codul de bază, cu licența „toate” și cu cea a Bioscem (E) și, la cerere, fiecare plugin oprit pe rând cu restul pornite (F). În browser se verifică și textul vizibil: nicio etichetă sau explicație a unui plugin oprit, nici în ferestrele comenzilor și ale produselor, în tab-urile setărilor sau în contul clientului. Plus SEO (G: `test-seo.php`, pe fiecare pachet). Opțiuni: `--fara-garda`, `--fara-browser`, `--fara-baza`, `--fara-seo`, `--fiecare-plugin`, `--capturi=DIR`. Pornește singur serverul dacă nu merge. |
+| `compara-cu-baza.sh` (+ `.php`) | Scoate codul unui commit (implicit `f5ae5ea`, dinaintea pluginurilor) în `$CMS_DEV_DIR/baza-<commit>`, îl pornește pe portul următor cu aceeași bază și compară HTML-ul a peste 60 de pagini-cheie (vizitator, client, patru roluri de admin, plus o pagină de test cu liste goale scrise de client), fără tokenuri și versiuni de fișiere. Cu `--licenta=bioscem` pune înainte licența reală a Bioscem (fără unealta internă; panoul „Import din backup WordPress” lipsește intenționat și nu se compară) și la final pune la loc „toate”. Diferențele SEO ale livrării 1 (date structurate, robots.txt, width/height, poza principală, stilurile catalogului, textul „Sitemap XML”) sunt scrise una câte una în `compara-cu-baza.php` și se scot doar din pagina codului curent; datele structurate trebuie să apară exact pe prima pagină, pe produse și pe categorie. O schimbare SEO nouă se adaugă acolo, explicit. Diferențele: `$CMS_DEV_DIR/compara/*.diff`. |
+| `test-seo.php` | Testele SEO ([SEO.md](SEO.md)): excluderile (fiecare adresă mereu deschisă și fiecare rută de plată, cont, admin, API), harta demo și pachetul Bioscem, robots.txt, JSON-LD și sitemap-ul pe fiecare pachet (fiecare adresă din sitemap cerută), gazda canonică pe un al doilea server (`CMS_DEV_PORT`+2, `APP_URL=https://exemplu-demo.test`, inventat: fiecare POST și fiecare cale exclusă pe www răspunde exact ca pe gazda corectă), mentenanța, oprirea de urgență (`CMS_DEV_PORT`+3, `SEO_REDIRECTURI=0`). Rulează și ca secțiunea G din `test-pluginuri.php`. Raport: `$CMS_DEV_DIR/test-seo-raport.txt`. |
+| `site-demo/` | Datele inventate ale site-ului de dezvoltare (`redirecturi.json`, `seo.json`): câte o regulă pentru fiecare caz verificat de `test-seo.php`. `comun.sh` pune `SITE_DATE_DOSAR` aici. |
 | `crawl-pachet.cjs` | Folosit de `test-pluginuri.php`: deschide paginile unui pachet în Chromium (vizitator, client logat cu un produs în coș, admin cu ferestrele comenzilor și ale produselor), întoarce linkurile, formularele și textul vizibil din DOM și erorile JavaScript, fotografiază meniul adminului. |
 
 Variabile pe care le poți schimba din mediu:
@@ -137,6 +140,7 @@ Variabile pe care le poți schimba din mediu:
 | `CMS_DEV_DB_USER` / `CMS_DEV_DB_PAROLA` | `root` / gol | utilizatorul bazei |
 | `CMS_DEV_PORT` | `8701` | portul serverului |
 | `CMS_DEV_DIR` | `storage/logs/dev` | jurnale, emailuri capturate, parola, raportul testului |
+| `SITE_DATE_DOSAR` | `tools/dev/site-demo` | datele site-ului (harta adreselor vechi, regulile SEO); vezi [SEO.md](SEO.md) |
 | `CMS_DEV_CAPTURI` | `$CMS_DEV_DIR/capturi` | unde scrie Playwright PNG-urile |
 | `NODE_PATH`, `PLAYWRIGHT_BROWSERS_PATH` | `/opt/node22/lib/node_modules`, `/opt/pw-browsers` | unde e Playwright |
 
@@ -230,7 +234,10 @@ Pornește de la o bază goală și verifică, în ordine:
 2. site-ul public: acasă, magazin, categorie, marcă, produs cu și fără șablon,
    produs cu oferte BBD, produs la precomandă, căutare, adăugare în coș, coș,
    checkout, login, înregistrare, cont fără login (redirect), blog, articol,
-   contact, pagină legală, `robots.txt`, 404, `/health`;
+   contact, pagină legală, `robots.txt`, 404, `/health`; apoi SEO: `/sitemap.xml`
+   (cu produse doar cu catalogul), robots.txt (regulile coșului doar cu magazinul),
+   datele structurate (ofertă doar cu magazinul pornit), „/” final → 301, o adresă
+   veche din datele site-ului → 301, un POST cu „/” final neatins;
 3. o comandă reală, ramburs, plasată ca un client (cu protecția anti-robot):
    redirect la pagina de mulțumire, comanda în bază, emailul capturat;
 4. adresele de confirmare fără semnătură (Stripe, EuPlătesc, BT, ERP): trebuie
@@ -313,3 +320,6 @@ De știut (nu sunt erori):
   avut oprit.
 - `/admin/users/points/history` fără parametri răspunde 400 (nu e în meniu; se
   deschide cu un client ales).
+- O cerere `HEAD` pe o adresă corectă răspunde 404: routerul are doar rute GET și
+  POST (moștenit din Bioscem, neschimbat). Stratul SEO tratează HEAD ca GET doar
+  când are ceva de reparat (de exemplu „/” final → 301).

@@ -13,6 +13,10 @@ declare(strict_types=1);
  * tokenurile formularelor (checkout, înregistrare, CSRF), momentul randării,
  * versiunea fișierelor CSS/JS (`?v=` = data fișierului pe disc), identificatorii
  * aleși la întâmplare ai formularelor, ora curentă.
+ *
+ * Plus, doar din pagina codului curent, diferențele SEO ale livrării 1 (docs/SEO.md),
+ * scrise mai jos una câte una ($faraSeo): ce s-a scos se afișează pe pagină, iar
+ * datele structurate trebuie să apară exact unde sunt așteptate ($jsonLdAsteptat).
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -127,6 +131,132 @@ $normalizeaza = static function (string $html) use ($portBaza, $portCurent, $dos
         $html = (string) preg_replace($tipar, $cu, $html);
     }
     return $html;
+};
+
+/**
+ * Diferențele SEO ale livrării 1 (docs/SEO.md), scrise aici una câte una și
+ * scoase DOAR din pagina codului curent, ca restul paginii să se compare octet
+ * cu octet cu codul de bază. Fiecare transformare caută exact textul pus de
+ * cod; ce găsește se numără pe pagină, iar la final se verifică unde trebuie
+ * să apară (de exemplu datele structurate doar pe prima pagină, pe produse și
+ * pe categorie). O schimbare SEO nouă trebuie adăugată aici, explicit.
+ *
+ *  1. blocurile <script type="application/ld+json"> din <head>;
+ *  2. robots.txt: „/cos” scris exact (/cos$, /cos?, /cos/) și regulile din
+ *     seo.json-ul site-ului (robots_disallow);
+ *  3. width/height pe pozele produsului și ale cardurilor din catalog;
+ *  4. poza principală a produsului: loading="eager" fetchpriority="high"
+ *     (în loc de loading="lazy") și height:auto în stilul ei;
+ *  5. stilurile cardurilor din catalog, mutate înaintea cardurilor;
+ *  6. aceleași (3, 5) și app.css (height:auto) în previzualizările editorului de pagini;
+ *  7. textul secțiunii „Sitemap XML” din Setări magazin.
+ */
+/** preg_replace_callback care nu întoarce niciodată în tăcere o pagină goală (eroare PCRE = test oprit). */
+$pr = static function (string $tipar, callable $cb, string $html): string {
+    $rezultat = preg_replace_callback($tipar, $cb, $html);
+    if ($rezultat === null) {
+        throw new RuntimeException('PCRE: ' . preg_last_error_msg() . ' la ' . $tipar);
+    }
+    return $rezultat;
+};
+$textCssSeo = "\n    /* Poza are width/height în HTML ca locul ei să fie rezervat înainte să se\n"
+    . "       încarce; înălțimea afișată rămâne cea proporțională, ca până acum. */\n    height: auto;";
+$reguliRobotsSite = array_map('strval', (array) \App\Support\DateSite::seo('robots_disallow', []));
+$faraSeoHtml = static function (string $html, array &$gasite) use ($pr): string {
+    // 5. Stilurile cardurilor, înaintea secțiunii → la loc după ea.
+    $html = $pr(
+        '#<style>\n(\.shop-catalog-v2\{background:\#fff;.*?)</style>\n(<section class="shop-catalog-v2" data-shop-catalog-token="1">.*?</section>\n\n)#s',
+        static function (array $m) use (&$gasite): string {
+            $gasite['stiluri catalog mutate'] = ($gasite['stiluri catalog mutate'] ?? 0) + 1;
+            return $m[2] . "<style>\n" . $m[1] . "</style>\n\n";
+        },
+        $html
+    );
+    // 3. width/height puse imediat după alt, înaintea lui loading.
+    $html = $pr(
+        '#(<img\b[^>]*? alt="[^"]*")( width="\d+" height="\d+")(\s+loading=")#',
+        static function (array $m) use (&$gasite): string {
+            $gasite['poze cu width/height'] = ($gasite['poze cu width/height'] ?? 0) + 1;
+            return $m[1] . $m[3];
+        },
+        $html
+    );
+    // 4. Poza principală: încărcată imediat, cu prioritate.
+    $html = $pr('#loading="eager"\s+fetchpriority="high"#', static function () use (&$gasite): string {
+        $gasite['poza principală eager'] = ($gasite['poza principală eager'] ?? 0) + 1;
+        return 'loading="lazy"';
+    }, $html);
+    $html = str_replace('style="max-width:420px;width:100%;height:auto;border-radius:10px;"',
+        'style="max-width:420px;width:100%;border-radius:10px;"', $html, $inlocuite);
+    if ($inlocuite > 0) {
+        $gasite['height:auto pe poza principală'] = ($gasite['height:auto pe poza principală'] ?? 0) + $inlocuite;
+    }
+    return $html;
+};
+$faraSeo = static function (string $cale, string $html, array &$gasite) use ($pr, $faraSeoHtml, $textCssSeo, $reguliRobotsSite): string {
+    if ($cale === '/robots.txt') {
+        $html = str_replace("Disallow: /cos\$\nDisallow: /cos?\nDisallow: /cos/\n", "Disallow: /cos\n", $html, $n);
+        $gasite['robots: /cos exact'] = $n;
+        foreach ($reguliRobotsSite as $regula) {
+            $html = str_replace('Disallow: ' . $regula . "\n", '', $html, $n);
+            $gasite['robots: regula site-ului ' . $regula] = $n;
+        }
+        return $html;
+    }
+    // 1. Datele structurate: câte un bloc pe linie, în <head>.
+    $html = $pr(
+        '#    <script type="application/ld\+json">(\{[^\n]*?\})</script>\n#',
+        static function (array $m) use (&$gasite): string {
+            $nod = json_decode(str_replace(['<', '>', '&'], ['<', '>', '&'], $m[1]), true);
+            $gasite['JSON-LD'][] = is_array($nod) ? (string) ($nod['@type'] ?? '?') : 'JSON invalid';
+            return '';
+        },
+        $html
+    );
+    $html = $faraSeoHtml($html, $gasite);
+    // 6. Previzualizările din editorul de pagini (șiruri JSON în <script>, scrise cu
+    //    JSON_HEX_QUOT: în interior nu apare niciun " neprotejat, deci șirul se
+    //    termină la primul ghilimel; fără expresii regulate pe sute de KB).
+    $flaguri = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+    foreach (['const shopCatalogSectionHtml = "', 'const previewAppCssContent = "'] as $inceput) {
+        $poz = strpos($html, $inceput);
+        if ($poz === false) {
+            continue;
+        }
+        $deschis = $poz + strlen($inceput) - 1;
+        $inchis = strpos($html, '"', $deschis + 1);
+        $sir = $inchis !== false ? json_decode(substr($html, $deschis, $inchis - $deschis + 1), true) : null;
+        if (!is_string($sir)) {
+            continue;
+        }
+        $nou = $faraSeoHtml($sir, $gasite);
+        $nou = str_replace($textCssSeo, '', $nou, $n);
+        if ($n > 0) {
+            $gasite['app.css: height:auto'] = ($gasite['app.css: height:auto'] ?? 0) + $n;
+        }
+        $html = substr($html, 0, $deschis) . (string) json_encode($nou, $flaguri) . substr($html, (int) $inchis + 1);
+    }
+    // 7. Setări magazin → Sitemap XML.
+    $html = $pr(
+        '#Sitemap-ul se construiește automat din baza de date, la fiecare cerere: [^\n]*\n\s*Nu mai trebuie generat după modificări\.\n'
+            . '\s*Butonul de mai jos verifică lista și șterge un fișier sitemap\.xml vechi rămas pe server\n'
+            . '\s*\(cu alt nume de fișier, scrie o copie statică, de exemplu pentru teste\)\.#',
+        static function () use (&$gasite): string {
+            $gasite['text Sitemap XML'] = 1;
+            return 'Generează sitemap-ul pentru indexare în Google Search Console.';
+        },
+        $html
+    );
+    return $html;
+};
+/** [cale => tipurile JSON-LD așteptate]; orice altă pagină nu are date structurate. */
+$jsonLdAsteptat = static function (string $cale): array {
+    return match (true) {
+        $cale === '/' => ['Organization', 'WebSite'],
+        str_starts_with($cale, '/produs/') => ['Product', 'BreadcrumbList'],
+        str_starts_with($cale, '/categorie/') => ['BreadcrumbList'],
+        default => [],
+    };
 };
 
 // Două sesiuni pe fiecare server: vizitator (cu coș) și admin; plus clientul logat.
@@ -252,18 +382,41 @@ $pagini[] = ['viz', '/' . $paginaListe];
 
 $identice = 0;
 $diferite = [];
+$diferenteSeoAsteptate = [];
 foreach ($pagini as [$rol, $cale]) {
     $r = [];
     foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
         $r[$eticheta] = $cerere($port, 'GET', $cale, $jaruri[$eticheta][$rol]);
     }
+    $gasite = [];
     $a = $normalizeaza($r['baza']['corp']);
-    $b = $normalizeaza($r['curent']['corp']);
+    $b = $normalizeaza($faraSeo($cale, $r['curent']['corp'], $gasite));
     $eticheta = str_pad($rol, 13) . $cale;
-    if ($r['baza']['cod'] === $r['curent']['cod'] && $r['baza']['location'] === $r['curent']['location'] && $a === $b) {
+    // Diferențele SEO așteptate: datele structurate exact unde trebuie, robots.txt cu regulile noi.
+    $tipuriJsonLd = (array) ($gasite['JSON-LD'] ?? []);
+    unset($gasite['JSON-LD']);
+    $problemeSeo = [];
+    if ($rol === 'viz' && $tipuriJsonLd !== $jsonLdAsteptat($cale)) {
+        $problemeSeo[] = 'JSON-LD ' . json_encode($tipuriJsonLd) . ', așteptat ' . json_encode($jsonLdAsteptat($cale));
+    } elseif ($rol !== 'viz' && $tipuriJsonLd !== []) {
+        $problemeSeo[] = 'JSON-LD în admin: ' . json_encode($tipuriJsonLd);
+    }
+    if ($cale === '/robots.txt' && ($gasite['robots: /cos exact'] ?? 0) !== 1) {
+        $problemeSeo[] = 'robots.txt fără regulile exacte pentru /cos';
+    }
+    $seoGasit = array_filter($gasite);
+    $rezumatSeo = ($tipuriJsonLd !== [] ? 'JSON-LD ' . implode('+', $tipuriJsonLd) . ($seoGasit !== [] ? '; ' : '') : '')
+        . implode('; ', array_map(static fn ($k, $v) => $k . ' ' . $v, array_keys($seoGasit), $seoGasit));
+    if ($rezumatSeo !== '') {
+        $diferenteSeoAsteptate[$eticheta] = $rezumatSeo;
+    }
+    if ($problemeSeo === [] && $r['baza']['cod'] === $r['curent']['cod'] && $r['baza']['location'] === $r['curent']['location'] && $a === $b) {
         $identice++;
-        echo '  OK    ', $r['curent']['cod'], '  ', $eticheta, "\n";
+        echo '  OK    ', $r['curent']['cod'], '  ', $eticheta, $rezumatSeo !== '' ? '  (SEO: ' . $rezumatSeo . ')' : '', "\n";
         continue;
+    }
+    if ($problemeSeo !== []) {
+        echo '  SEO   ', $eticheta, ': ', implode('; ', $problemeSeo), "\n";
     }
     $nume = preg_replace('/[^a-z0-9]+/i', '_', trim($rol . $cale, '/')) ?: 'pagina';
     file_put_contents($dosarDiff . '/' . $nume . '.baza.html', $a);
@@ -291,5 +444,6 @@ foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
     @unlink($jar);
 }
 $db->prepare('DELETE FROM pages WHERE slug = :slug')->execute(['slug' => $paginaListe]);
-echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice, ', count($diferite), " diferite.\n";
+echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice, ', count($diferite), ' diferite; ',
+    count($diferenteSeoAsteptate), " pagini cu diferențele SEO așteptate (livrarea 1 SEO, scoase explicit înainte de comparare).\n";
 exit($diferite === [] ? 0 : 1);

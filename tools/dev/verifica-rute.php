@@ -18,7 +18,10 @@ declare(strict_types=1);
  *  9. în șabloane (views/), fiecare bloc `<?php if (…): ?>` … `<?php endif; ?>`
  *     scris pe coloana 0 (așa se ascunde bucata unui plugin) închide tot ce
  *     deschide: un `endif` pus greșit ar lăsa, cu pluginul oprit, jumătate de
- *     rând de tabel sau un `</article>` fără pereche.
+ *     rând de tabel sau un `</article>` fără pereche;
+ * 10. fiecare adresă „mereu deschisă” din catalog (webhook-uri, întoarceri de
+ *     plată, ERP, linkurile din emailuri) e exclusă din redirecționările SEO
+ *     (App\Support\SeoRedirects): o confirmare de plată nu primește niciodată 301.
  *
  * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
  *
@@ -364,6 +367,16 @@ foreach ($iterator as $fisier) {
     }
     if ($stiva !== []) {
         $problema($relativ . ': `if` pe coloana 0 fără `endif`.');
+    }
+}
+
+// 10. Adresele mereu deschise nu se redirecționează niciodată (stratul SEO).
+foreach (array_merge(['nucleu' => $catalog['nucleu']], $pluginuri) as $cheie => $definitie) {
+    foreach ((array) ($definitie['rute_mereu_deschise'] ?? []) as $text) {
+        $cale = (string) preg_replace('#\{[a-zA-Z_][a-zA-Z0-9_]*\*?\}#', 'x', (string) preg_replace('#^(GET|POST)\s+#', '', (string) $text));
+        if (!\App\Support\SeoRedirects::eExclusa($cale)) {
+            $problema('Adresa mereu deschisă ' . $text . ' (' . $cheie . ') nu e exclusă din redirecționările SEO (SeoRedirects::caiExcluse).');
+        }
     }
 }
 

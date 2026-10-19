@@ -1,0 +1,17 @@
+{
+  "_despre": "Regulile SEO ale site-ului Bioscem (livrarea 1, 19 octombrie 2026; planul SEO, deciziile D2 și D3). Vezi docs/SEO.md.",
+  "sitemap": {
+    "_despre": "D2: o etichetă intră în sitemap de la 3 produse active; etichetele mici cu trafic (cel puțin 5 clicuri în Search Console) intră oricum. D3: etichetele cu nume de boli nu se trimit lui Google, oricâte produse au (proprietarul decide redenumirea sau ștergerea lor).",
+    "eticheta_minim_produse": 3,
+    "etichete_pastrate": ["vitamina-d","lacto-fermentate","concentrare","lithothamne","antidepresiv","sistem-imunitar","tulburari-de-somn","cupru","ochi","renofix","proteine-vegetale","alge"],
+    "etichete_excluse": ["alzheimer","parkinson","scleroza-multipla","osteoporoza","antidepresiv","tulburari-de-somn","depresie","anxietate","insomnie","diabet","eczeme","dermatita-atopica","psoriasis","psoriazis","acnee","herpes","paradontoza","viroze","racei"]
+  },
+  "organizatie": {
+    "_despre": "Pentru datele structurate de pe prima pagină: numele (când Setări magazin nu are unul) și pozele încercate ca logo, în ordine; se folosește prima de cel puțin 112×112 px și aproape pătrată, altfel iconița site-ului.",
+    "nume": "Bioscem Shop",
+    "logo": ["/uploads/gallery/bioscem-logo.png","/uploads/gallery/bioscem-logo.webp","/uploads/gallery/bioscem-logo.jpg","/uploads/gallery/bioscem-logo-2.png"]
+  },
+  "_despre_cos_cumparaturi": "/cos-cumparaturi e pagina de coș din constructorul Bioscem: blocată în robots.txt și niciodată redirecționată.",
+  "robots_disallow": ["/cos-cumparaturi"],
+  "cai_excluse": ["/cos-cumparaturi"]
+}

@@ -89,6 +89,9 @@ exporta_mediul_aplicatiei() {
     export LICENTA_CHEIE_PUBLICA
     export LICENTA_SITE="demo"
     unset LICENTA_DOSAR
+    # Datele site-ului (redirecționările adreselor vechi, regulile SEO): pachetul
+    # inventat din tools/dev/site-demo, nu un dosar site/ rămas în rădăcină.
+    export SITE_DATE_DOSAR="${SITE_DATE_DOSAR:-$RADACINA/tools/dev/site-demo}"
     # Garda pluginurilor adaugă antetul X-Andaxi-Garda când ea a răspuns (doar
     # aici; pe site-uri variabila nu există), ca testele să știe cine a răspuns.
     export CMS_DEV_GARDA_ANTET="1"

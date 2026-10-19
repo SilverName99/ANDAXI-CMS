@@ -1,0 +1,14 @@
+{
+  "_despre": "Regulile SEO ale site-ului demo (inventate, pentru teste). Formatul e cel din docs/SEO.md.",
+  "sitemap": {
+    "eticheta_minim_produse": 3,
+    "etichete_pastrate": ["precomanda"],
+    "etichete_excluse": ["reducere"]
+  },
+  "organizatie": {
+    "nume": "Firma Demo din pachet",
+    "logo": ["/uploads/demo/nu-exista.png", "/uploads/demo/ceai-de-menta.png"]
+  },
+  "robots_disallow": ["/pagina-sistem-demo"],
+  "cai_excluse": ["/zona-privata-demo"]
+}

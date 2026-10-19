@@ -56,6 +56,8 @@ final class SiteController
     private const REGISTER_ANTIBOT_MAX_AGE_SECONDS = 7200;
     private const REGISTER_ANTIBOT_MAX_ATTEMPTS_PER_15_MIN = 8;
     private array $cachedSettings = [];
+    /** Blocurile JSON-LD ale paginii curente (de exemplu firimiturile unei categorii). */
+    private array $jsonLdPagina = [];
     public function home(): void
     {
         $homePage = $this->findPublishedRootPage();
@@ -66,6 +68,7 @@ final class SiteController
                 'title' => (string) ($homePage['title'] ?? 'Acasă'),
                 'page' => $homePage,
                 'mannequinSectionHtml' => $this->renderMannequinSection($db, $settings),
+                'jsonLd' => $this->jsonLdAcasa($settings),
             ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $homePage)));
             return;
         }
@@ -81,6 +84,7 @@ final class SiteController
             'categories' => $cuCatalog ? $this->loadShopCatalogCategories($db instanceof PDO ? $db : null) : [],
             'blogPosts' => \App\Support\Plugins::vizibil('blog') ? $this->loadPublishedBlogPosts($db instanceof PDO ? $db : null, 3) : [],
             'title' => 'Acasă',
+            'jsonLd' => $this->jsonLdAcasa($this->cachedSettings($db instanceof PDO ? $db : null)),
         ]);
     }
 
@@ -95,6 +99,18 @@ final class SiteController
 
         if ($categoryName === '') {
             http_response_code(404);
+        } else {
+            // Aceeași categorie scrisă altfel (litere mari): 301 la forma salvată.
+            $slugCorect = $this->slugCanonicCategorie($slug, $categoryName);
+            if ($slugCorect !== '' && $slugCorect !== $slug
+                && \App\Support\SeoRedirects::redirectCanonic('/categorie/' . rawurlencode($slugCorect))) {
+                return;
+            }
+            $baza = rtrim($this->appUrl(), '/');
+            $this->jsonLdPagina = [\App\Support\JsonLd::firimituri([
+                ['name' => 'Acasă', 'url' => $baza . '/'],
+                ['name' => $categoryName, 'url' => $baza . '/categorie/' . rawurlencode($slugCorect !== '' ? $slugCorect : $slug)],
+            ])];
         }
 
         // shop() citește filtrul din query string.
@@ -102,15 +118,69 @@ final class SiteController
         $this->shop();
     }
 
+    /**
+     * Forma salvată a slug-ului unei categorii găsite (cea din product_categories,
+     * altfel cea generată din nume), ca variantele cu litere mari să ducă la ea.
+     * O categorie găsită după numele scris altfel (de exemplu
+     * „vitamine-si-minerale” pentru slug-ul salvat „vitamine-minerale”) duce la
+     * slug-ul salvat, aceeași adresă ca în sitemap și în firimituri.
+     */
+    private function slugCanonicCategorie(string $slugCerut, string $numeCategorie): string
+    {
+        $db = $this->db();
+        if ($db instanceof PDO) {
+            try {
+                $stmt = $db->prepare('SELECT slug FROM product_categories WHERE LOWER(slug) = :slug LIMIT 1');
+                $stmt->execute(['slug' => mb_strtolower(trim($slugCerut))]);
+                $salvat = $stmt->fetchColumn();
+                if (is_string($salvat) && trim($salvat) !== '') {
+                    return trim($salvat);
+                }
+            } catch (Throwable) {
+            }
+        }
+        $salvat = $this->slugCategoriePentruNume($numeCategorie);
+        if ($salvat !== '') {
+            return $salvat;
+        }
+        return $this->slugifyCategoryName($numeCategorie);
+    }
+
+    /**
+     * Slug-ul la care /categorie/{slug} afișează categoria cu numele dat, sau
+     * gol dacă nu există o astfel de pagină (pentru firimiturile produsului).
+     */
+    private function slugCategoriePentruNume(string $numeCategorie): string
+    {
+        $numeCategorie = trim($numeCategorie);
+        if ($numeCategorie === '') {
+            return '';
+        }
+        $db = $this->db();
+        if ($db instanceof PDO) {
+            try {
+                $stmt = $db->prepare('SELECT slug FROM product_categories WHERE LOWER(TRIM(name)) = :nume AND TRIM(COALESCE(slug, "")) <> "" ORDER BY id ASC LIMIT 1');
+                $stmt->execute(['nume' => mb_strtolower($numeCategorie)]);
+                $salvat = $stmt->fetchColumn();
+                if (is_string($salvat) && trim($salvat) !== ''
+                    && mb_strtolower($this->resolveCategoryNameBySlug(trim($salvat))) === mb_strtolower($numeCategorie)) {
+                    return trim($salvat);
+                }
+            } catch (Throwable) {
+            }
+        }
+        $generat = $this->slugifyCategoryName($numeCategorie);
+        if ($generat !== '' && mb_strtolower($this->resolveCategoryNameBySlug($generat)) === mb_strtolower($numeCategorie)) {
+            return $generat;
+        }
+        return '';
+    }
+
     /** Slug simplu, pentru comparat branduri și etichete scrise oricum. */
     private function slugSimplu(string $valoare): string
     {
-        $valoare = mb_strtolower(trim($valoare));
-        $valoare = strtr($valoare, [
-            'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't',
-        ]);
-        $valoare = (string) preg_replace('/[^a-z0-9]+/', '-', $valoare);
-        return trim($valoare, '-');
+        // Aceeași regulă și în sitemap: \App\Support\Slug.
+        return \App\Support\Slug::simplu($valoare);
     }
 
     /**
@@ -218,6 +288,7 @@ final class SiteController
      */
     private function renderListaFiltrata(string $tip, string $slug): void
     {
+        $slugCerut = $slug;
         $slug = $this->slugSimplu($slug);
         $db = $this->db();
         [$toate] = $this->loadProducts();
@@ -241,6 +312,10 @@ final class SiteController
 
         if ($eticheta === '') {
             http_response_code(404);
+        } elseif ($slugCerut !== $slug
+            && \App\Support\SeoRedirects::redirectCanonic(($tip === 'brand' ? '/marca/' : '/eticheta/') . rawurlencode($slug))) {
+            // Aceeași marcă sau etichetă scrisă altfel (litere mari): 301 la forma corectă.
+            return;
         }
 
         $titlu = $eticheta !== ''
@@ -317,17 +392,8 @@ final class SiteController
 
     private function slugifyCategoryName(string $value): string
     {
-        $value = mb_strtolower(trim($value));
-        $value = strtr($value, [
-            'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't',
-        ]);
-        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-        if (is_string($ascii) && $ascii !== '') {
-            $value = $ascii;
-        }
-        $value = (string) preg_replace('/[^a-z0-9]+/', '-', $value);
-
-        return trim($value, '-');
+        // Aceeași regulă și în sitemap: \App\Support\Slug.
+        return \App\Support\Slug::categorie($value);
     }
 
     public function shop(): void
@@ -353,6 +419,7 @@ final class SiteController
                 'shopCatalogHtml' => $this->renderShopCatalogSection($db, $categoryFilter),
                 'shopCategoryLabel' => $shopCategoryLabel,
                 'shopPageTitle' => (string) ($shopPage['title'] ?? 'Magazin'),
+                'jsonLd' => $this->jsonLdPagina,
             ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $shopPage)));
             return;
         }
@@ -362,6 +429,7 @@ final class SiteController
             'products' => $products,
             'title' => 'Magazin',
             'activeCategory' => $categoryFilter,
+            'jsonLd' => $this->jsonLdPagina,
         ]);
     }
 
@@ -502,6 +570,14 @@ final class SiteController
             return;
         }
 
+        // Același produs scris altfel (litere mari, alt fel de codare): 301 la
+        // adresa lui, ca Google să vadă o singură adresă.
+        $slugSalvat = (string) ($product['slug'] ?? '');
+        if ($slugSalvat !== '' && $slugSalvat !== (string) $slug
+            && \App\Support\SeoRedirects::redirectCanonic('/produs/' . rawurlencode($slugSalvat))) {
+            return;
+        }
+
         $product = $this->normalizeProduct($product);
         // Cu ERP-ul conectat, disponibilitatea vine din gestiune, nu din fișa
         // produsului. Dacă ERP-ul nu răspunde, rămâne stocul de pe site.
@@ -542,6 +618,13 @@ final class SiteController
         if ($db instanceof PDO) {
             $productSeoMeta = $this->seoMetaFor($db, 'product', (string) ((int) ($product['id'] ?? 0)));
         }
+        $jsonLd = [];
+        try {
+            $jsonLd = $this->jsonLdProdus($product, $productReviews, is_array($template) ? (string) ($template['html_content'] ?? '') : null);
+        } catch (Throwable) {
+            // Datele structurate nu au voie să strice pagina produsului.
+            $jsonLd = [];
+        }
         View::render('site/product', array_merge([
             'product' => $product,
             'extraFields' => $extraFields,
@@ -558,6 +641,7 @@ final class SiteController
             ],
             'isOutOfStock' => $isOutOfStock,
             'title' => (string) $product['name'],
+            'jsonLd' => $jsonLd,
         ], $productSeoMeta));
     }
 
@@ -3836,6 +3920,13 @@ final class SiteController
             }
         }
 
+        // Aceeași pagină scrisă altfel (litere mari): 301 la adresa ei.
+        $slugSalvat = is_array($page) ? (string) ($page['slug'] ?? '') : '';
+        if ($slugSalvat !== '' && $slugSalvat !== $slug
+            && \App\Support\SeoRedirects::redirectCanonic('/' . implode('/', array_map('rawurlencode', explode('/', $slugSalvat))))) {
+            return;
+        }
+
         if ($page === null) {
             $notFoundPage = $this->findPublishedPageBySlug('404');
             if (!is_array($notFoundPage)) {
@@ -7111,63 +7202,248 @@ CSS;
     }
 
     /**
-     * robots.txt, generat din setări. Blochează zonele private și tranzacționale
-     * (n-au ce căuta în index și consumă degeaba bugetul de crawl) și indică
-     * sitemap-ul, cu numele configurat în Setări → Magazin.
+     * robots.txt: blochează zonele private și tranzacționale ale pluginurilor
+     * de pe site (n-au ce căuta în index și consumă degeaba bugetul de crawl) și
+     * indică sitemap-ul. Regulile stau în \App\Support\Robots.
      */
     public function robots(): void
     {
         header('Content-Type: text/plain; charset=utf-8');
         header('Cache-Control: public, max-age=3600');
 
-        $settings = $this->cachedSettings($this->db());
-        $baseUrl = rtrim($this->appUrl(), '/');
-
-        // În mentenanță nu vrem pagina de „revenim imediat" în index.
-        if ((string) ($settings['maintenance_enabled'] ?? '0') === '1') {
-            echo "User-agent: *\nDisallow: /\n";
-            return;
-        }
-
-        $interzise = [
-            '/admin', '/api/', '/auth/', '/webhook/',
-            '/cos', '/checkout', '/contul-meu', '/login', '/register',
-            '/plata/', '/newsletter/', '/gdpr-agreements',
-        ];
-        // Adresele pluginurilor care nu sunt pe site nu se mai pomenesc (dau oricum 404).
-        $alCui = ['/cos' => 'magazin', '/checkout' => 'magazin', '/contul-meu' => 'conturi_clienti', '/login' => 'conturi_clienti',
-            '/register' => 'conturi_clienti', '/plata/' => 'link_plata', '/newsletter/' => 'newsletter', '/gdpr-agreements' => 'acorduri_gdpr'];
-        $interzise = array_values(array_filter($interzise, static fn (string $cale): bool
-            => !isset($alCui[$cale]) || \App\Support\Plugins::vizibil($alCui[$cale])));
-
-        $linii = ['User-agent: *'];
-        foreach ($interzise as $cale) {
-            $linii[] = 'Disallow: ' . $cale;
-        }
-        $linii[] = '';
-
-        $sitemap = $this->numeSitemap((string) ($settings['store_sitemap_filename'] ?? 'sitemap.xml'));
-        if ($baseUrl !== '') {
-            $linii[] = 'Sitemap: ' . $baseUrl . '/' . $sitemap;
-        }
-
-        echo implode("\n", $linii) . "\n";
+        // Același robots.txt și în modul mentenanță: paginile răspund atunci 503
+        // cu Retry-After (Google înțelege că e temporar), pe când un
+        // „Disallow: /” rămânea ținut minte de Google până la o zi după ce
+        // mentenanța se terminase.
+        echo \App\Support\Robots::text(rtrim($this->appUrl(), '/'));
     }
 
-    /** Numele fișierului de sitemap, curățat la fel ca în admin. */
-    private function numeSitemap(string $value): string
+    /**
+     * /sitemap.xml, construit din baza de date la fiecare cerere, doar cu
+     * paginile pluginurilor de pe site (\App\Support\Sitemap). Un fișier
+     * sitemap.xml vechi din public/ nu-l mai poate acoperi (public/.htaccess
+     * trimite /sitemap.xml mereu aici).
+     */
+    public function sitemap(): void
     {
-        $value = strtolower(trim($value));
-        $value = str_replace(['\\', '/'], '', $value);
-        $value = preg_replace('/[^a-z0-9._-]+/', '-', $value) ?? '';
-        $value = trim($value, '-._');
-        if ($value === '') {
-            $value = 'sitemap';
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            http_response_code(503);
+            header('Retry-After: 600');
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Sitemap indisponibil momentan.';
+            return;
         }
-        if (!str_ends_with($value, '.xml')) {
-            $value .= '.xml';
+        $xml = \App\Support\Sitemap::xml(\App\Support\Sitemap::urls($db, rtrim($this->appUrl(), '/')));
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Cache-Control: public, max-age=3600');
+        header('X-Robots-Tag: noindex');
+        echo $xml;
+    }
+
+    /**
+     * JSON-LD pentru pagina unui produs: Product și firimiturile.
+     *
+     * Offer (prețul afișat, cu reducerea activă; stocul după ERP; precomanda ca
+     * PreOrder) doar cu magazinul pornit: fără magazin pe site nu se văd prețuri,
+     * iar când magazinul se oprește produsul nu se mai poate cumpăra. Stele doar
+     * din recenzii reale aprobate, care se văd pe pagină (pluginul de recenzii).
+     * Un Product fără ofertă și fără recenzii nu se scrie (Google cere una
+     * dintre ele). Produsele inactive nu primesc Product, doar firimituri.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function jsonLdProdus(array $product, array $productReviews, ?string $templateHtml): array
+    {
+        $baza = rtrim($this->appUrl(), '/');
+        $slug = (string) ($product['slug'] ?? '');
+        $nume = trim((string) ($product['name'] ?? ''));
+        if ($baza === '' || $slug === '' || $nume === '') {
+            return [];
         }
-        return $value;
+        $url = $baza . '/produs/' . rawurlencode($slug);
+        $absolut = static function (string $adresa) use ($baza): string {
+            $adresa = trim($adresa);
+            if ($adresa === '' || preg_match('#^https?://#i', $adresa) === 1) {
+                return $adresa;
+            }
+            if (str_starts_with($adresa, '//')) {
+                return 'https:' . $adresa;
+            }
+            return $baza . '/' . ltrim($adresa, '/');
+        };
+
+        $noduri = [];
+        $activ = !array_key_exists('is_active', $product) || (int) $product['is_active'] === 1;
+        if ($activ) {
+            $imagini = [];
+            foreach ($this->extractProductImageUrls($product, true) as $imagine) {
+                if (str_contains((string) $imagine, 'product-placeholder')) {
+                    continue;
+                }
+                $imagini[] = $absolut((string) $imagine);
+            }
+            $descriere = trim((string) ($product['short_description'] ?? ''));
+            if (trim(strip_tags($descriere)) === '') {
+                $descriere = (string) ($product['description'] ?? '');
+            }
+
+            // Oferta: doar cu magazinul pornit (prețul se vede și produsul se poate cumpăra).
+            $cuOferta = \App\Support\Plugins::permiteInceput('magazin');
+            // Precomanda doar cât pluginul ei e pornit (ca pe pagină: Precomanda::estePrecomanda).
+            if (\App\Support\Precomanda::estePrecomanda($product)) {
+                $disponibil = 'PreOrder';
+            } elseif ((int) ($product['out_of_stock'] ?? 0) === 1) {
+                $disponibil = 'OutOfStock';
+            } else {
+                $disponibil = 'InStock';
+            }
+
+            // priceValidUntil doar când reducerea are o dată de final reală
+            // (o perioadă de reducere activă acum), nu pentru „preț redus” fără termen.
+            $panaLa = '';
+            if ($cuOferta && (bool) ($product['has_sale_price'] ?? false)) {
+                $acum = date('Y-m-d H:i:s');
+                foreach ((array) ($product['sale_price_periods'] ?? []) as $perioada) {
+                    if (!is_array($perioada)) {
+                        continue;
+                    }
+                    $start = (string) ($perioada['start_date'] ?? '');
+                    $final = (string) ($perioada['end_date'] ?? '');
+                    if ($start !== '' && $final !== '' && $start <= $acum && $acum <= $final
+                        && abs((float) ($perioada['sale_price'] ?? 0) - (float) ($product['price'] ?? 0)) < 0.005) {
+                        $panaLa = substr($final, 0, 10);
+                        break;
+                    }
+                }
+            }
+
+            // Recenziile apar în pagină în tab-uri (șablon) sau sub produs (fără șablon),
+            // doar cu pluginul lor pe site.
+            $recenziiVizibile = \App\Support\Plugins::vizibil('recenzii') && ($templateHtml === null
+                || preg_match('/\{\{\s*product[_:](tabs_section|reviews|reviews_section|reviews_block|reviews_list)\s*\}\}/', $templateHtml) === 1);
+            $recenzii = ['count' => 0, 'average' => 0.0, 'items' => []];
+            if ($recenziiVizibile && (int) ($productReviews['count'] ?? 0) > 0) {
+                $recenzii = [
+                    'count' => (int) $productReviews['count'],
+                    'average' => (float) ($productReviews['average'] ?? 0),
+                    'items' => (array) ($productReviews['items'] ?? []),
+                ];
+            }
+
+            $nodProdus = \App\Support\JsonLd::produs([
+                'url' => $url,
+                'name' => $nume,
+                'images' => $imagini,
+                'description' => $descriere,
+                'sku' => (string) ($product['sku'] ?? ''),
+                'brand' => (string) ($product['brand'] ?? ''),
+                'oferta' => $cuOferta,
+                'price' => (float) ($product['price'] ?? 0),
+                'availability' => $disponibil,
+                'priceValidUntil' => $panaLa,
+                'reviews' => $recenzii,
+            ]);
+            if ($nodProdus !== []) {
+                $noduri[] = $nodProdus;
+            }
+        }
+
+        $firimituri = [['name' => 'Acasă', 'url' => $baza . '/']];
+        $categorie = trim((string) (($product['category_name'] ?? $product['category']) ?? ''));
+        $slugCategorie = $this->slugCategoriePentruNume($categorie);
+        if ($slugCategorie !== '') {
+            $firimituri[] = ['name' => $categorie, 'url' => $baza . '/categorie/' . rawurlencode($slugCategorie)];
+        }
+        $firimituri[] = ['name' => $nume];
+        $nodFirimituri = \App\Support\JsonLd::firimituri($firimituri);
+        if ($nodFirimituri !== []) {
+            $noduri[] = $nodFirimituri;
+        }
+
+        return $noduri;
+    }
+
+    /**
+     * Organization + WebSite, pe prima pagină (nucleu, pe orice site). Numele:
+     * numele magazinului din setări, altfel cel din seo.json-ul site-ului,
+     * altfel APP_NAME. Emailul și telefonul din setări (sau din linkurile
+     * mailto:/tel: din antet și subsol). Logo doar dacă are cel puțin 112×112 px
+     * (cerința Google) și e aproape pătrat (cel mult 1,5:1; Google îl arată
+     * într-un pătrat): întâi pozele din seo.json → organizatie.logo, apoi iconița
+     * site-ului. sameAs doar cu profiluri sociale reale din antet și subsol.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function jsonLdAcasa(array $settings): array
+    {
+        try {
+            $baza = rtrim($this->appUrl(), '/');
+            if ($baza === '') {
+                return [];
+            }
+            $nume = trim((string) ($settings['store_name'] ?? ''));
+            if ($nume === '') {
+                $nume = trim((string) \App\Support\DateSite::seo('organizatie.nume', ''));
+            }
+            if ($nume === '') {
+                $config = require __DIR__ . '/../../../config/app.php';
+                $nume = trim((string) ($config['name'] ?? ''));
+            }
+            if ($nume === '') {
+                $nume = (string) parse_url($baza, PHP_URL_HOST);
+            }
+            $htmlDesign = (string) ($settings['design_header_html'] ?? '') . "\n"
+                . (string) ($settings['design_menu_html'] ?? '') . "\n"
+                . (string) ($settings['design_footer_html'] ?? '');
+
+            $email = trim((string) ($settings['contact_email'] ?? ''));
+            if ($email === '' && preg_match('#href\s*=\s*["\']mailto:([^"\'?\s]+)#i', $htmlDesign, $m) === 1) {
+                $email = trim(rawurldecode($m[1]));
+            }
+            if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+                $email = '';
+            }
+            $telefon = trim((string) ($settings['contact_phone'] ?? ''));
+            if ($telefon === '' && preg_match('#href\s*=\s*["\']tel:([^"\'\s]+)#i', $htmlDesign, $m) === 1) {
+                $telefon = trim(rawurldecode($m[1]));
+            }
+            if (preg_match('/\d{6,}/', (string) preg_replace('/\D+/', '', $telefon)) !== 1) {
+                $telefon = '';
+            }
+
+            $logo = '';
+            $candidati = array_map('strval', (array) \App\Support\DateSite::seo('organizatie.logo', []));
+            $candidati[] = trim((string) ($settings['store_favicon_url'] ?? ''));
+            foreach ($candidati as $candidat) {
+                $candidat = trim($candidat);
+                if ($candidat === '') {
+                    continue;
+                }
+                $dim = \App\Support\ImageDimensions::pentru($candidat);
+                // Cel puțin 112×112 și aproape pătrat (Google îl arată într-un
+                // pătrat; un banner lat, de exemplu 977×240, ar ieși mărunt).
+                if ($dim !== null && $dim[0] >= 112 && $dim[1] >= 112
+                    && max($dim[0], $dim[1]) <= 1.5 * min($dim[0], $dim[1])) {
+                    $logo = preg_match('#^https?://#i', $candidat) === 1 ? $candidat : $baza . '/' . ltrim($candidat, '/');
+                    break;
+                }
+            }
+
+            return array_values(array_filter([
+                \App\Support\JsonLd::organizatie([
+                    'name' => $nume,
+                    'url' => $baza,
+                    'logo' => $logo,
+                    'email' => $email,
+                    'telephone' => $telefon,
+                    'sameAs' => \App\Support\JsonLd::profiluriSociale($htmlDesign),
+                ]),
+                \App\Support\JsonLd::site($nume, $baza),
+            ]));
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private function appUrl(): string
@@ -10025,7 +10301,9 @@ CSS;
         foreach ($urls as $url) {
             $safeUrl = htmlspecialchars((string) $url, ENT_QUOTES);
             $safeAlt = htmlspecialchars($productName, ENT_QUOTES);
-            $items[] = '<img src="' . $safeUrl . '" alt="' . $safeAlt . '" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';">';
+            // width/height: locul pozei e rezervat înainte să se încarce (fără „săritură”).
+            $dimensiuni = \App\Support\ImageDimensions::atribute((string) $url);
+            $items[] = '<img src="' . $safeUrl . '" alt="' . $safeAlt . '"' . $dimensiuni . ' loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';">';
         }
         return '<div class="product-image-gallery">' . implode('', $items) . '</div>';
     }
@@ -10037,8 +10315,13 @@ CSS;
         foreach ($urls as $index => $url) {
             $safeUrl = htmlspecialchars((string) $url, ENT_QUOTES);
             $safeAlt = htmlspecialchars($productName, ENT_QUOTES);
-            $slides[] = '<figure class="product-carousel__slide" data-slide="' . $index . '"><img src="' . $safeUrl . '" alt="' . $safeAlt . '" loading="lazy" decoding="async" draggable="false" data-carousel-image="1" data-target="' . $index . '" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></figure>';
-            $thumbs[] = '<button type="button" class="product-carousel__thumb" data-target="' . $index . '" aria-label="Imagine ' . ($index + 1) . '"><img src="' . $safeUrl . '" alt="' . $safeAlt . '" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></button>';
+            // width/height: locul pozei e rezervat înainte să se încarce (fără „săritură”).
+            $dimensiuni = \App\Support\ImageDimensions::atribute((string) $url);
+            // Prima poză e elementul principal al paginii (LCP): se încarcă imediat
+            // și cu prioritate; restul rămân „leneșe”.
+            $incarcare = $index === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"';
+            $slides[] = '<figure class="product-carousel__slide" data-slide="' . $index . '"><img src="' . $safeUrl . '" alt="' . $safeAlt . '"' . $dimensiuni . ' ' . $incarcare . ' decoding="async" draggable="false" data-carousel-image="1" data-target="' . $index . '" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></figure>';
+            $thumbs[] = '<button type="button" class="product-carousel__thumb" data-target="' . $index . '" aria-label="Imagine ' . ($index + 1) . '"><img src="' . $safeUrl . '" alt="' . $safeAlt . '"' . $dimensiuni . ' loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></button>';
         }
         $overlayBadges = trim($badgesHtml) !== '' ? $badgesHtml : '';
 

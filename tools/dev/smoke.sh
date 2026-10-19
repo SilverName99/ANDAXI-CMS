@@ -229,6 +229,37 @@ verifica_p nucleu "pagină inexistentă" 404 viz GET /pagina-care-nu-exista
 verifica_p nucleu "health" 200 - GET /health "ok"
 
 scrie ""
+scrie "== SEO (docs/SEO.md; pe larg: tools/dev/test-seo.php)"
+verifica_p nucleu "sitemap.xml construit din bază" 200 - GET /sitemap.xml "<urlset"
+if vizibil catalog; then
+    confirma "sitemap: produsele (catalog)" grep -qF "/produs/ceai-de-menta</loc>" "$TMP/corp"
+else
+    confirma "sitemap: fără produse (catalog nu e în pachet)" bash -c "! grep -qF '/produs/' '$TMP/corp'"
+fi
+verifica_p nucleu "robots.txt cu sitemap-ul" 200 - GET /robots.txt "Sitemap: $B/sitemap.xml"
+if vizibil magazin; then
+    confirma "robots.txt: /cos exact, nu ca prefix" grep -qxF 'Disallow: /cos$' "$TMP/corp"
+else
+    confirma "robots.txt: fără regulile coșului (magazin nu e în pachet)" bash -c "! grep -qF 'Disallow: /cos' '$TMP/corp'"
+fi
+verifica_p nucleu "date structurate pe prima pagină (firma și site-ul)" 200 - GET / '"@type":"Organization"'
+if vizibil catalog; then
+    if [ "${STARI[magazin]:-oprit}" = "pornit" ]; then
+        verifica "date structurate: produs cu ofertă" 200 - GET /produs/ceai-de-menta '"@type":"Offer"'
+    else
+        verifica "date structurate: firimiturile produsului" 200 - GET /produs/ceai-de-menta '"@type":"BreadcrumbList"'
+        confirma "date structurate: fără ofertă (magazinul nu primește comenzi)" bash -c "! grep -qF '\"@type\":\"Offer\"' '$TMP/corp'"
+    fi
+fi
+verifica_p catalog "adresa cu „/” final" 301 - GET /produs/ceai-de-menta/
+if vizibil catalog; then
+    confirma "… duce la /produs/ceai-de-menta" test "$(redirect_ultim)" = "/produs/ceai-de-menta"
+fi
+verifica_p nucleu "adresă veche din datele site-ului" 301 - GET /despre-firma-veche
+confirma "… duce la /contact" test "$(redirect_ultim)" = "/contact"
+verifica "POST cu „/” final nu e redirecționat (webhook)" "400|401|403" - POST /webhook/stripe/
+
+scrie ""
 scrie "== Comandă cu plata la livrare (ramburs), ca un client"
 verifica_p magazin "adaugă în coș" 302 cmd POST "/cos/adauga/$ID_MENTA" "" "quantity=1"
 verifica_p magazin "checkout" 200 cmd GET /checkout 'name="checkout_form_token"'

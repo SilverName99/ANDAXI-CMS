@@ -33,6 +33,14 @@ declare(strict_types=1);
     exit;
 })();
 
+// O singură adresă pentru fiecare pagină (gazda din APP_URL, fără „/” final) și
+// adresele vechi ale site-ului (redirecturi.json din dosarul site-ului, vezi
+// docs/SEO.md). Doar GET/HEAD; niciodată pe coș, plată, cont, admin, API, health,
+// confirmările de plată sau ERP și nici pe adresele „mereu deschise” ale
+// pluginurilor (SeoRedirects::caiExcluse). Rulează înaintea sesiunii.
+require_once __DIR__ . '/../src/Support/SeoRedirects.php';
+\App\Support\SeoRedirects::incepe(dirname(__DIR__));
+
 require_once __DIR__ . '/../bootstrap.php';
 
 use App\Http\GardaPluginuri;

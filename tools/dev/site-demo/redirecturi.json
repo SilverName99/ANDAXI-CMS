@@ -1,0 +1,30 @@
+{
+  "_despre": "Datele inventate ale site-ului demo (tools/dev/comun.sh pune SITE_DATE_DOSAR aici): reguli de test pentru stratul de redirecționări, câte una pentru fiecare caz verificat de tools/dev/test-seo.php. Formatul e cel din docs/SEO.md.",
+  "exacte": [
+    ["/produse", "/magazin", 301, "lista veche de produse -> magazinul (catalog)"],
+    ["/brand/livada-demo", "/marca/livada-demo", 301, "marca, adresa veche"],
+    ["/articol-vechi-despre-ceai", "/categorie/ceaiuri", 301, "articol vechi -> categoria subiectului"],
+    ["/produs/ceai-menta-vechi", "/produs/ceai-de-menta", 301, "același produs, slug schimbat (bate potrivirea aproximativă)"],
+    ["/cart", "/cos", 301, "coșul vechi -> coșul (magazin)"],
+    ["/jurnal-vechi", "/blog", 301, "blogul vechi -> blogul (blog)"],
+    ["/despre-firma-veche", "/contact", 301, "pagină veche -> contact (nucleu)"],
+    ["/lant-a", "/lant-b", 301, "lanț: A -> B"],
+    ["/lant-b", "/magazin", 301, "lanț: B -> magazin (A ajunge direct aici)"],
+    ["/bucla-a", "/bucla-b", 301, "buclă: A -> B"],
+    ["/bucla-b", "/bucla-a", 301, "buclă: B -> A (amândouă rămân 404)"],
+    ["/spre-disparut", "/disparut", 301, "lanț spre o adresă 410 (rămâne 404)"],
+    ["/disparut", null, 410, "rest tehnic"],
+    ["/sine", "/sine", 301, "țintă egală cu adresa (rămâne 404)"],
+    ["/termeni-si-conditii", "/magazin", 301, "regulă peste o pagină care există (nu se aplică acestei pagini)"],
+    ["/tag/js", null, 410, "rest tehnic"],
+    ["/tinta-straina", "https://exemplu-rau.test/x", 301, "țintă pe alt site (ignorată)"],
+    ["/tinta-doua-bare", "//exemplu-rau.test/x", 301, "țintă pe alt site (ignorată)"],
+    ["/checkout/vechi", "/magazin", 301, "sursă exclusă (checkout): nu se aplică niciodată"],
+    ["/zona-privata-demo/pagina", "/magazin", 301, "sursă exclusă de seo.json: nu se aplică niciodată"],
+    ["/Majuscule-Veche/", "/contact", 301, "cheia se normalizează (litere mici, fără / final)"]
+  ],
+  "prefixe": [
+    ["/wp-admin/", null, 410, "rest tehnic WordPress"],
+    ["/wp-content/plugins/", null, 410, "rest tehnic WordPress"]
+  ]
+}

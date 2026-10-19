@@ -92,7 +92,7 @@ return [
             '/admin/pages/*', '/admin/gallery/*', '/admin/design/*',
             '/admin/emails', '/admin/emails/test', '/admin/emails/history/*', '/admin/emails/contact-recipients',
         ],
-        'rute_publice' => ['/', '/health', '/robots\.txt', '/contact/*', '/{slug*}'],
+        'rute_publice' => ['/', '/health', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],
         'meniu' => [
             ['grup' => 'dashboard', 'ordine' => 10, 'eticheta' => 'Dashboard', 'href' => '/admin', 'icon' => 'dashboard',
                 'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin'])

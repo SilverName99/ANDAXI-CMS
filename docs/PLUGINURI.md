@@ -17,9 +17,10 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 | `tools/dev/licenta.php` | Chei și licențe de test (dezvoltare). |
 | `tools/dev/verifica-rute.php` | Verifică că fiecare rută are proprietar, că catalogul corespunde codului și că blocurile pluginurilor din șabloane închid HTML-ul pe care îl deschid. |
 | `tools/dev/test-pluginuri.php` | Testele: licența, garda, fiecare pachet parcurs pagină cu pagină (și cu browserul, inclusiv textul vizibil), „se oprește”, comparația cu codul de bază, la cerere fiecare plugin oprit pe rând. |
-| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența reală a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`). |
+| `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența reală a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului de dinainte de pluginuri (`f5ae5ea`); diferențele SEO așteptate sunt scrise explicit și se scot înainte. |
 | `scripts/diagnostic.php --licenta` | Verificarea dinaintea unui deploy: licența se verifică cu cheia și site-ul din `.env`? Iese cu 1 dacă nu. |
 | `tools/dev/crawl-pachet.cjs` | Trecerea cu Playwright prin paginile unui pachet (DOM și text după JavaScript, ferestrele comenzilor și ale produselor, contul clientului, erori JS, captura meniului). |
+| `tools/dev/test-seo.php` | Testele SEO pe fiecare pachet: sitemap, robots.txt, date structurate, redirecționări (niciodată pe adresele mereu deschise). Vezi [SEO.md](SEO.md). |
 
 ## Stările unui plugin
 
@@ -214,8 +215,21 @@ puse exact în locurile unde începe ceva nou:
 - **Codurile din pagini** (`{{shop_catalog}}`, `{{latest_posts:3}}` …) ale unui
   plugin ascuns se scot din pagină (`Plugins::curataTokenuri`, lista lor e în
   catalog la „tokenuri”); în editorul de pagini nu mai apar în lista de coduri.
-- **Harta site-ului**: la orice schimbare de stări, prima cerere o reface (dacă
-  fișierul există) fără adresele pluginurilor ascunse.
+- **Harta site-ului** (`/sitemap.xml`) se construiește din bază la fiecare cerere,
+  doar cu paginile pluginurilor de pe site: produsele, categoriile, mărcile și
+  etichetele cu catalogul, articolele cu blogul, paginile din bază ale unui plugin
+  (coș, checkout, acorduri GDPR…) doar cu pluginul lor. O copie statică cu alt nume,
+  dacă există, se reface la prima cerere de după o schimbare de stări.
+- **Datele structurate** (JSON-LD): firma și site-ul pe prima pagină (nucleu);
+  firimiturile pe produs și categorie (catalog); `Product` cu `Offer` doar cu
+  magazinul pornit (fără magazin nu se văd prețuri), stele doar cu pluginul de
+  recenzii; un produs fără ofertă și fără recenzii nu primește deloc `Product`
+  (Google l-ar raporta ca eroare). Detalii în [SEO.md](SEO.md).
+- **Redirecționările SEO** (adresa unică, adresele vechi ale site-ului) nu ating
+  niciodată adresele mereu deschise ale pluginurilor: lista lor se ia din catalog
+  (`rute_mereu_deschise`), deci un plugin nou cu un webhook își declară adresa acolo
+  și e exclus automat (`verifica-rute.php` verifică). O adresă veche care ar duce la
+  pagina unui plugin ascuns rămâne 404.
 - **Lista de pagini** din admin și lista „Pagini” din constructorul de meniu nu mai
   arată paginile pluginurilor ascunse (coș, checkout, blog …). Paginile rămân în
   bază, neatinse.
@@ -238,7 +252,8 @@ puse exact în locurile unde începe ceva nou:
   recenziilor fără recenzii, nici cantitățile vândute fără magazin; fără magazin,
   „cele mai vândute” vin din ordinea catalogului (etichetele, apoi cele mai noi),
   iar „Popularitate” nu mai ține cont de vânzări.
-- **robots.txt** pomenește doar adresele pluginurilor de pe site.
+- **robots.txt** pomenește doar adresele pluginurilor de pe site (fiecare regulă din
+  `App\Support\Robots::DISALLOW` are pluginul ei).
 - **Emailurile** unui plugin pleacă doar cu pluginul lui (vezi mai jos).
 - **Textele care pomenesc alt plugin** se adaptează: explicațiile din comenzi, din
   Setări plăți, din fișa produsului sau din pagina ERP care spun „pleacă în ERP”,
@@ -270,7 +285,10 @@ unealta internă) nimic din toate acestea nu schimbă vreun octet: paginile-chei
 dashboard, comenzi cu fereastra comenzii, produse, clienți, cupoane, setări,
 coșul flotant, administratori, emailuri, editorul de pagini, pe patru roluri de
 admin) și pagina pe care ajunge fiecare rol după login se compară cu codul de
-dinainte (`compara-cu-baza.sh`).
+dinainte (`compara-cu-baza.sh`). Singurele diferențe sunt cele ale livrării 1 SEO
+(datele structurate, robots.txt, width/height și poza principală, stilurile
+catalogului, textul „Sitemap XML”), scrise una câte una în `compara-cu-baza.php`
+și scoase explicit înainte de comparare ([SEO.md](SEO.md)).
 
 ## Pluginurile, unul câte unul
 
@@ -703,6 +721,11 @@ are coduri în editorul de pagini, previzualizarea lor intră în
 O acțiune a unui plugin trimisă printr-o rută comună (de exemplu `bulk_action` din
 comenzi) se declară în `rute_impartite`, ca garda s-o oprească; verificarea se
 pune și acolo unde se face lucrul (de exemplu `createFanAwbInternal`).
+O adresă la care răspunde un procesator, ERP-ul sau un link dintr-un email trimis se
+declară în `rute_mereu_deschise`: așa răspunde oricare ar fi starea pluginului și
+nu primește niciodată o redirecționare SEO (vezi [SEO.md](SEO.md)). Paginile publice
+noi ale unui plugin intră în harta site-ului doar dacă `App\Support\Sitemap` le
+adaugă, cu verificarea pluginului (`Plugins::vizibil`).
 
 Cheia privată de dezvoltare stă în `storage/logs/dev/licenta-cheie-privata.txt`
 (niciodată în git); `tools/dev/comun.sh` dă aplicației cheia publică. În
