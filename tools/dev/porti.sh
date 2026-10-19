@@ -48,6 +48,8 @@ poarta G-smoke "testul de fum pe fiecare pachet și pe licența grafoanaytis" \
 poarta G-seo "testele SEO pe fiecare pachet" "tools/dev/php.sh tools/dev/test-seo.php" WP-01
 poarta G-php "PHP-ul minim ($MINIM): sintaxa codului de pe site-uri, testul de fum și testele pluginurilor cu php$MINIM" \
     "CMS_DEV_PHP=php$MINIM tools/dev/verifica-php.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/smoke.sh --toate-pachetele ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-pluginuri.php" WP-01
+poarta G-runner "runner-ul migrărilor pe MariaDB și MySQL 8 (Schema, Amprenta, fiecare cod de ieșire, reluarea), și cu php$MINIM" \
+    "tools/dev/php.sh tools/dev/test-migrari.php --runner ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-migrari.php --runner" WP-02
 poarta G-mig "testele migrărilor (T1–T11) și verificarea fișierelor de migrare" \
     "tools/dev/php.sh tools/dev/test-migrari.php ;; tools/dev/php.sh tools/dev/verifica-migrari.php" WP-04
 poarta G-verif "testele site-ului de verificare, și cu php$MINIM (codul lui rulează pe servere)" \
@@ -62,10 +64,12 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
+# G-runner (testele noi ale WP-02, „New tests”) e și la WP-03; de la WP-04 îl cuprinde G-mig
+# (același fișier, toate secțiunile).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
-    [WP-02]="G-rute G-cmp G-smoke G-php"
-    [WP-03]="G-rute G-cmp G-smoke G-php"
+    [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
+    [WP-03]="G-rute G-runner G-cmp G-smoke G-php"
     [WP-04]="G-rute G-mig G-cmp G-smoke G-php"
     [WP-05]="G-rute G-mig G-cmp G-plug G-smoke G-seo G-php"
     [WP-06]="G-rute G-mig G-cmp G-plug G-smoke G-php"
@@ -115,7 +119,7 @@ WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-mig G-verif G-calc G-vizual G-pachet G-lic G-admin; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-mig G-verif G-calc G-vizual G-pachet G-lic G-admin; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

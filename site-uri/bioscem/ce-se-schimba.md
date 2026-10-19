@@ -16,3 +16,4 @@ dovedit de `tools/dev/compara-cu-baza.sh`, unde e declarat explicit, cu motivul 
 | Unde | Ce se schimbă | De ce |
 |---|---|---|
 | `/robots.txt` | Regula `Disallow: /cos-cumparaturi` e la finalul listei, nu imediat după regulile coșului. Aceleași reguli; pentru motoarele de căutare ordinea nu contează. | Regula e a site-ului Bioscem, deci stă în pachetul lui (`site-uri/bioscem/seo.json`), nu în cod |
+| Cronurile și scripturile de pe server (`storage/sessions`) | Nu mai lasă câte un fișier de sesiune gol la fiecare rulare. Sesiunile vizitatorilor (coșul, contul, adminul) rămân exact ca azi. | Un cron n-are browser, deci n-are ce sesiune să țină; fișierele goale doar ocupau loc până la curățenia de 30 de zile („Erori moștenite” 5 din `docs/DEZVOLTARE.md`). Declarat în capul lui `tools/dev/compara-cu-baza.sh` (nu se vede în HTML) |

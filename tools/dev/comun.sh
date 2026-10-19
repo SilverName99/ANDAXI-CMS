@@ -15,6 +15,12 @@ RADACINA="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 CMS_DEV_DB="${CMS_DEV_DB:-cms_dev}"
 CMS_DEV_SOCK="${CMS_DEV_SOCK:-/tmp/claude-0/maria/sock}"
+# Al doilea server, MySQL 8 (testele runner-ului de migrări rulează pe amândouă: pe Hostinger
+# nu se știe încă dacă e MariaDB sau MySQL). Un mysqld 8 despachetat într-un dosar, cu
+# root/usr/sbin/mysqld, data/ și run/; tools/dev/mysql8.sh îl pornește și îl oprește.
+CMS_DEV_MYSQL8_DIR="${CMS_DEV_MYSQL8_DIR:-/tmp/claude-0/my8}"
+CMS_DEV_SOCK_MYSQL8="${CMS_DEV_SOCK_MYSQL8:-$CMS_DEV_MYSQL8_DIR/run/sock}"
+export CMS_DEV_MYSQL8_DIR CMS_DEV_SOCK_MYSQL8
 CMS_DEV_DB_USER="${CMS_DEV_DB_USER:-root}"
 CMS_DEV_DB_PAROLA="${CMS_DEV_DB_PAROLA:-}"
 CMS_DEV_PORT="${CMS_DEV_PORT:-8701}"

@@ -44,6 +44,13 @@
 #    (pe Bioscem .env există mereu);
 #  - public/assets/js/floating-cart.js: fără câmpul de cupon doar când cupoanele sunt oprite
 #    (cu pluginul pornit, la fel ca Bioscem);
+#  - bootstrap.php: în linia de comandă (cronurile, scripturile) nu mai pornește o sesiune PHP,
+#    deci nu mai lasă câte un fișier gol în storage/sessions la fiecare rulare („Erori moștenite” 5,
+#    site-uri/bioscem/ce-se-schimba.md); paginile (serverul web, și `php -S` de aici) pornesc
+#    sesiunea exact ca Bioscem. Dovada: test-migrari.php (S) și smoke.sh (cronurile) numără
+#    fișierele de sesiune;
+#  - scripts/migreaza.php și src/Support/Migrari/ (runner-ul migrărilor, docs/MIGRARI.md): noi,
+#    doar pentru linia de comandă; nicio pagină și niciun cron nu le folosește încă;
 #  - fișierele scoase la copiere (docs/templates, scripturile unice Bioscem, vezi
 #    docs/DEZVOLTARE.md) și config/redirecturi.php, mutat în site-uri/bioscem/redirecturi.json.
 

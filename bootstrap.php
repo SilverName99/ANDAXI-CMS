@@ -15,8 +15,21 @@ declare(strict_types=1);
  * zile. Coșul rămâne întreg peste pauze și peste închiderea browserului.
  * Partea de administrare are limita ei de nemișcare, în `Auth` — altfel o
  * sesiune de 30 de zile ar ține un admin logat o lună.
+ *
+ * Linia de comandă (cronurile, scripts/migreaza.php, uneltele) n-are cookie, deci
+ * n-are ce sesiune să continue: până acum fiecare rulare lăsa un fișier de sesiune
+ * gol în storage/sessions („Erori moștenite” 5 din docs/DEZVOLTARE.md), care doar
+ * ocupa loc până la curățenia de 30 de zile. Acum, în CLI, `$_SESSION` e doar un
+ * array gol (codul care citește sau scrie în el merge la fel), fără fișier.
+ * Un script CLI care chiar are nevoie de o sesiune PHP definește `ANDAXI_CU_SESIUNE`
+ * înainte de require. Serverul de dezvoltare (`php -S`, SAPI „cli-server”) și
+ * site-urile nu sunt atinse.
  */
-if (session_status() === PHP_SESSION_NONE) {
+if (PHP_SAPI === 'cli' && !defined('ANDAXI_CU_SESIUNE')) {
+    if (!isset($_SESSION) || !is_array($_SESSION)) {
+        $_SESSION = [];
+    }
+} elseif (session_status() === PHP_SESSION_NONE) {
     $viataSesiune = 60 * 60 * 24 * 30; // 30 de zile
 
     $dosarSesiuni = __DIR__ . '/storage/sessions';

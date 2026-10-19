@@ -7,8 +7,9 @@
 #   tools/dev/verifica-php.sh                      # cu php<php_min> (implicit php8.0)
 #   CMS_DEV_PHP=php8.3 tools/dev/verifica-php.sh   # cu altă versiune
 #
-# Dosarele: src/ views/ config/ scripts/ public/ bootstrap.php și, când există,
-# tools/verificare/ și tools/sonda/ (rulează pe servere). Uneltele din tools/dev/
+# Dosarele: src/ views/ config/ scripts/ public/ bootstrap.php, database/ (migrările, pe care
+# le rulează scripts/migreaza.php pe servere) și, când există, tools/verificare/ și tools/sonda/
+# (rulează pe servere). Uneltele din tools/dev/
 # nu ajung pe site-uri; ele se verifică rulându-le cu CMS_DEV_PHP (smoke.sh,
 # test-pluginuri.php). Funcțiile apărute după php_min nu le prinde `-l`; le prind
 # testele rulate cu CMS_DEV_PHP=php<min>.
@@ -27,7 +28,7 @@ command -v "$PHP_LINT" >/dev/null 2>&1 \
     || { echo "EROARE: lipsește $PHP_LINT; îl instalezi cu: tools/dev/instaleaza.sh --php-min" >&2; exit 1; }
 
 tinte=()
-for cale in src views config scripts public bootstrap.php tools/verificare tools/sonda; do
+for cale in src views config scripts public bootstrap.php database tools/verificare tools/sonda; do
     [ -e "$RADACINA/$cale" ] && tinte+=("$RADACINA/$cale")
 done
 

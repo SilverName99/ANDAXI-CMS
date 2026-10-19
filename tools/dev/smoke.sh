@@ -380,6 +380,10 @@ while read -r script plugin stare; do
 done < <("$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/licenta.php" cron)
 scrie ""
 scrie "== Cronuri (o rulare; cererile spre ERP/FAN/bancă se opresc local)"
+# Linia de comandă nu pornește sesiuni (bootstrap.php; „Erori moștenite” 5): cronurile de mai jos
+# și runner-ul migrărilor nu au voie să lase fișiere în storage/sessions.
+numara_sesiuni() { find "$RADACINA/storage/sessions" -maxdepth 1 -type f -name 'sess_*' | wc -l; }
+SESIUNI_INAINTE="$(numara_sesiuni)"
 for cron in "scripts/erp-sync.php" "scripts/bt-ipay-sync.php" "scripts/fan-tracking-sync.php --limit=150" \
     "scripts/fan-lockers-sync.php" "scripts/fan-nomenclator-sync.php" "scripts/newsletter-campaigns.php --seconds=20" \
     "scripts/abandoned-cart-emails.php --limit=100"; do
@@ -400,6 +404,20 @@ if [ "${CRON_RULEAZA[scripts/abandoned-cart-emails.php]:-ruleaza}" = "ruleaza" ]
 else
     scrie "  SĂRIT coș abandonat: emailurile sunt capturate local (magazin nu e în pachet)"
 fi
+# Runner-ul migrărilor pe baza de test (doar citește: --stare, --plan). Până când instalarea trece
+# pe migrări (WP-05), --plan poate găsi migrări de aplicat (10); orice alt cod e o eroare.
+confirma "scripts/migreaza.php --stare pe baza de test" "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --stare
+if "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --plan > "$TMP/migreaza.log" 2>&1; then cod_plan=0; else cod_plan=$?; fi
+if [ "$cod_plan" = 0 ] || [ "$cod_plan" = 10 ]; then
+    TRECUTE=$((TRECUTE + 1))
+    scrie "  OK    scripts/migreaza.php --plan (ieșire $cod_plan): $(tail -1 "$TMP/migreaza.log" | cut -c1-120)"
+else
+    ESECURI=$((ESECURI + 1))
+    scrie "  EȘEC  scripts/migreaza.php --plan (ieșire $cod_plan): $(tr -s '\n' ' ' < "$TMP/migreaza.log" | cut -c1-200)"
+fi
+SESIUNI_DUPA="$(numara_sesiuni)"
+confirma "cronurile și runner-ul migrărilor nu lasă fișiere de sesiune ($SESIUNI_INAINTE înainte, $SESIUNI_DUPA după)" \
+    test "$SESIUNI_DUPA" -eq "$SESIUNI_INAINTE"
 
 # 4. Jurnalul PHP
 scrie ""
