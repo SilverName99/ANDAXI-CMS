@@ -108,6 +108,9 @@ Site-ul poate adăuga reguli (`seo.json` → `robots_disallow`, de exemplu pagin
 de coș din constructor). Linia `Sitemap:` arată mereu `APP_URL/sitemap.xml`.
 **În mentenanță robots.txt rămâne cel normal**: paginile răspund 503 cu
 `Retry-After`, pe când un `Disallow: /` ar fi ținut minte de Google până la o zi.
+**Pe site-ul de verificare** (`SITE_COPIE_VERIFICARE=1`) e invers: poarta răspunde ea
+la `/robots.txt` cu `Disallow: /`, iar fiecare răspuns are
+`X-Robots-Tag: noindex, nofollow, noarchive` ([VERIFICARE.md](VERIFICARE.md)).
 
 ## 4. sitemap.xml
 

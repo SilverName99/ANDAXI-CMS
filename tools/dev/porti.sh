@@ -50,7 +50,8 @@ poarta G-php "PHP-ul minim ($MINIM): sintaxa codului de pe site-uri, testul de f
     "CMS_DEV_PHP=php$MINIM tools/dev/verifica-php.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/smoke.sh --toate-pachetele ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-pluginuri.php" WP-01
 poarta G-mig "testele migrărilor (T1–T11) și verificarea fișierelor de migrare" \
     "tools/dev/php.sh tools/dev/test-migrari.php ;; tools/dev/php.sh tools/dev/verifica-migrari.php" WP-04
-poarta G-verif "testele site-ului de verificare" "tools/dev/php.sh tools/dev/test-verificare.php" WP-08a
+poarta G-verif "testele site-ului de verificare, și cu php$MINIM (codul lui rulează pe servere)" \
+    "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php" WP-08a
 poarta G-calc "calculele (golden master local) față de același cod de bază ca G-cmp" "tools/dev/compara-calcule-local.sh" WP-11
 poarta G-vizual "stilurile calculate ale paginilor publice (capturile, pentru ochi)" "tools/dev/capturi-publice.sh" WP-13
 poarta G-pachet "pachetul Bioscem și pachetul neutru" \

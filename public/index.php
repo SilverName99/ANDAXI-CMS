@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+// Poarta (App\Support\Verificare, docs/VERIFICARE.md), prima, înaintea fișierelor încărcate,
+// a stratului SEO și a sesiunii: un site fără bază configurată (deploy proaspăt, fără .env)
+// răspunde 503 „neconfigurat”, nu paginile aplicației; site-ul de verificare
+// (SITE_COPIE_VERIFICARE=1) cere parola și e noindex. Altfel nu face nimic.
+require_once __DIR__ . '/../src/Support/Verificare.php';
+\App\Support\Verificare::poarta();
+
 // Serve /uploads/ files directly from disk; avoids 502 when nginx forwards missing static files to PHP.
 (static function (): void {
     $reqPath = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '');

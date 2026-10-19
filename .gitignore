@@ -1,5 +1,7 @@
 /vendor/
 /.env
+# Fișierul temporar al tools/verificare/configureaza.php (redenumit imediat în .env).
+/.env.*.tmp
 /.idea/
 /.vscode/
 *.log

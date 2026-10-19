@@ -17,5 +17,6 @@ Pentru programatori: [docs/DEZVOLTARE.md](docs/DEZVOLTARE.md),
 [docs/PLUGINURI.md](docs/PLUGINURI.md) (pluginurile, licența semnată, garda rutelor),
 [docs/SEO.md](docs/SEO.md) (adresa unică, redirecționările adreselor vechi,
 sitemap, robots.txt, date structurate; datele fiecărui site în `site-uri/`),
-[docs/de-portat.md](docs/de-portat.md) (ce trebuie adus din codurile vechi ale site-urilor)
-și [docs/ui/](docs/ui/README.md) (machetele adminului nou).
+[docs/de-portat.md](docs/de-portat.md) (ce trebuie adus din codurile vechi ale site-urilor),
+[docs/VERIFICARE.md](docs/VERIFICARE.md) (site-ul de verificare: poarta, configurarea pe server,
+pașii proprietarului) și [docs/ui/](docs/ui/README.md) (machetele adminului nou).

@@ -37,6 +37,11 @@
 #    are în plus licența și php_min; scripts/diagnostic.php: licența și php_min;
 #  - public/index.php, src/Http/rute.php, src/Http/Router.php: rutele mutate într-un fișier
 #    și garda pluginurilor; public/.htaccess: doar un comentariu;
+#  - public/index.php: poarta (App\Support\Verificare, docs/VERIFICARE.md), prima. Fără nicio
+#    bază configurată (nici .env, nici DB_DATABASE) răspunde 503 „neconfigurat”, unde Bioscem
+#    ar merge fără bază, cu textele implicite; cu SITE_COPIE_VERIFICARE=1 cere parola. Aici ambele
+#    servere au baza și nu au variabila, deci comparația arată doar că, așa, poarta nu face nimic
+#    (pe Bioscem .env există mereu);
 #  - public/assets/js/floating-cart.js: fără câmpul de cupon doar când cupoanele sunt oprite
 #    (cu pluginul pornit, la fel ca Bioscem);
 #  - fișierele scoase la copiere (docs/templates, scripturile unice Bioscem, vezi
