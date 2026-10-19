@@ -2,6 +2,15 @@
 $admins = is_array($admins ?? null) ? $admins : [];
 $roles = is_array($roles ?? null) ? $roles : [];
 $currentAdminId = (int) ($currentAdminId ?? 0);
+// Rolurile legate de un plugin (magazin = catalogul, blog) apar doar pe site-urile
+// care îl au. Un administrator care are deja un astfel de rol îl păstrează la
+// salvare (câmp ascuns), ca la repornirea pluginului să-și regăsească accesul.
+$roluriAscunse = array_keys(array_filter([
+    \App\Support\Auth::ROLE_STORE => !\App\Support\Plugins::vizibil('catalog'),
+    \App\Support\Auth::ROLE_BLOG => !\App\Support\Plugins::vizibil('blog'),
+]));
+$roluriVizibile = array_diff_key($roles, array_flip($roluriAscunse));
+$rolImplicit = array_key_exists(\App\Support\Auth::ROLE_STORE, $roluriVizibile) ? \App\Support\Auth::ROLE_STORE : \App\Support\Auth::ROLE_EMAILS;
 $normalizeRoles = static function (array $admin) use ($roles): array {
     $rawRoles = $admin['roles'] ?? [];
     if (!is_array($rawRoles)) {
@@ -53,13 +62,13 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
             <div class="field">
                 <label>Roluri</label>
                 <div style="display:grid;gap:8px;">
-                    <?php foreach ($roles as $roleKey => $roleLabel): ?>
+                    <?php foreach ($roluriVizibile as $roleKey => $roleLabel): ?>
                         <label style="display:flex;align-items:center;gap:8px;">
                             <input
                                 type="checkbox"
                                 name="roles[]"
                                 value="<?= htmlspecialchars((string) $roleKey, ENT_QUOTES) ?>"
-                                <?= (string) $roleKey === \App\Support\Auth::ROLE_STORE ? 'checked' : '' ?>
+                                <?= (string) $roleKey === $rolImplicit ? 'checked' : '' ?>
                             >
                             <span><?= htmlspecialchars((string) $roleLabel, ENT_QUOTES) ?></span>
                         </label>
@@ -108,7 +117,7 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
                                 <input type="hidden" name="action" value="update_role">
                                 <input type="hidden" name="admin_id" value="<?= $adminId ?>">
                             <div style="display:grid;gap:6px;">
-                                    <?php foreach ($roles as $roleKey => $roleLabel): ?>
+                                    <?php foreach ($roluriVizibile as $roleKey => $roleLabel): ?>
                                         <label style="display:flex;align-items:center;gap:6px;">
                                             <input
                                                 type="checkbox"
@@ -119,6 +128,9 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
                                             <span><?= htmlspecialchars((string) $roleLabel, ENT_QUOTES) ?></span>
                                         </label>
                                     <?php endforeach; ?>
+<?php foreach (array_intersect($adminRoles, $roluriAscunse) as $rolPastrat): ?>
+                                    <input type="hidden" name="roles[]" value="<?= htmlspecialchars((string) $rolPastrat, ENT_QUOTES) ?>">
+<?php endforeach; ?>
                                 </div>
                                 <button class="btn btn-secondary" type="submit">Salvează roluri</button>
                             </form>

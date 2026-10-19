@@ -6,7 +6,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
 <section class="panel">
     <div class="section-head" style="margin-bottom:10px;">
         <div>
-            <h1>Setări magazin</h1>
+            <h1><?= \App\Support\Plugins::vizibil('magazin') ? 'Setări magazin' : 'Setări site' ?></h1>
         </div>
     </div>
 
@@ -53,6 +53,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
             static fn (string $tabMagazin): bool => $taburiPluginuri[$tabMagazin] ?? true
         ));
         $cuMagazin = \App\Support\Plugins::vizibil('magazin');
+        $cuBlog = \App\Support\Plugins::vizibil('blog');
         $cookieBannerEnabled = (string) ($settings['cookie_banner_enabled'] ?? '1') === '1';
         $cookieBannerText = (string) ($settings['cookie_banner_text'] ?? '');
         $cookiePolicyUrl = (string) ($settings['cookie_banner_policy_url'] ?? '');
@@ -96,7 +97,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
         </style>
 
         <div class="store-settings-tabs" data-store-settings-tabs data-default-tab="<?= htmlspecialchars($defaultStoreTab, ENT_QUOTES) ?>">
-            <button class="btn btn-secondary <?= $defaultStoreTab === 'pages' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="pages">Pagini magazin</button>
+            <button class="btn btn-secondary <?= $defaultStoreTab === 'pages' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="pages"><?= $cuMagazin ? 'Pagini magazin' : 'Pagini site' ?></button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'sitemap' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="sitemap">Sitemap XML</button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'branding' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="branding">Favicon</button>
             <button class="btn btn-secondary <?= $defaultStoreTab === 'seo' ? 'is-active' : '' ?>" type="button" data-store-settings-tab="seo">SEO Google</button>
@@ -123,15 +124,15 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
         </div>
 
         <article class="panel store-settings-panel" data-store-settings-panel="pages" <?= $defaultStoreTab !== 'pages' ? 'hidden' : '' ?> style="margin:12px 0;">
-            <h3 style="margin-top:0;">Pagini magazin</h3>
+            <h3 style="margin-top:0;"><?= $cuMagazin ? 'Pagini magazin' : 'Pagini site' ?></h3>
 <?php if ($cuMagazin): ?>
             <p style="margin:0 0 10px;color:#64748b;">
                 Verifică și creează automat paginile necesare pentru fluxul de cumpărare:
-                Acasă, Magazin, Coș, Checkout, Thank you (checkout/succes), Blog, Contact, 404.
+                Acasă, Magazin, Coș, Checkout, Thank you (checkout/succes), <?= $cuBlog ? 'Blog, ' : '' ?>Contact, 404.
             </p>
 <?php else: ?>
             <p style="margin:0 0 10px;color:#64748b;">
-                Verifică și creează automat paginile de bază ale site-ului: Acasă, Contact, 404.
+                Verifică și creează automat paginile de bază ale site-ului: Acasă, <?= $cuBlog ? 'Blog, ' : '' ?>Contact, 404.
             </p>
 <?php endif; ?>
             <form method="post" action="/admin/settings/store">

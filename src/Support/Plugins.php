@@ -318,6 +318,15 @@ final class Plugins
                 if (!self::oricareVizibil($proprietari)) {
                     continue;
                 }
+                // Eticheta sau iconița depind de un plugin („Setări magazin” → „Setări site”,
+                // coșul de lângă „Trimite email test” → plicul, fără magazin).
+                foreach (['eticheta_fara' => 'eticheta', 'icon_fara' => 'icon'] as $cheieFara => $camp) {
+                    foreach ((array) ($intrare[$cheieFara] ?? []) as $pluginLipsa => $altaValoare) {
+                        if (!self::vizibil((string) $pluginLipsa)) {
+                            $intrare[$camp] = (string) $altaValoare;
+                        }
+                    }
+                }
                 $alese[] = $intrare;
             }
             usort($alese, static fn (array $a, array $b): int
@@ -613,7 +622,9 @@ final class Plugins
      * Tokenurile din paginile din bază (`{{shop_catalog}}`, `{{latest_posts:3}}`
      * …) ale pluginurilor care nu sunt pe site se scot, ca pagina să nu
      * arate nici bucata pluginului, nici codul tokenului. Lista lor e în
-     * catalog („tokenuri”).
+     * catalog („tokenuri”). Un titlu pus de client chiar înaintea tokenului
+     * (`<h2>Din blog</h2>{{latest_posts:3}}`, doar spații între ele) e titlul
+     * bucății și pleacă odată cu ea; orice alt text din jur rămâne.
      */
     public static function curataTokenuri(string $html): string
     {
@@ -631,7 +642,8 @@ final class Plugins
         if ($nume === []) {
             return $html;
         }
-        return preg_replace('/\{\{\s*(?:' . implode('|', $nume) . ')\s*(?::[^}]*)?\}\}/i', '', $html) ?? $html;
+        $titlu = '(?:<h([1-6])\b[^>]*>(?:(?!<\/?h[1-6]\b)[^{}]){0,300}?<\/h\1>\s*)?';
+        return preg_replace('/' . $titlu . '\{\{\s*(?:' . implode('|', $nume) . ')\s*(?::[^}]*)?\}\}/i', '', $html) ?? $html;
     }
 
     /**

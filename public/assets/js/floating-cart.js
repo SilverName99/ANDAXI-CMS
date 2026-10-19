@@ -87,6 +87,8 @@
         showCheckoutButton: toBool01(cfg.showCheckoutButton, true),
         quantityControlStyle: String(cfg.quantityControlStyle || "default"),
         quantityControlEnabled: toBool01(cfg.quantityControlEnabled, false),
+        // Pluginul „Cupoane” oprit sau pe cale să se oprească: fără câmpul de cupon.
+        faraCupon: toBool01(cfg.faraCupon, false),
     };
     if (!config.enabled) {
         return;
@@ -539,7 +541,7 @@
             );
         }
         totalsEl.innerHTML = rows.join("");
-        couponWrap.hidden = false;
+        couponWrap.hidden = config.faraCupon;
         const couponCode = String(summary.coupon?.code || "").trim();
         const couponOnlySelectedProducts = summary.coupon?.applies_only_selected_products === true;
         couponInput.value = couponCode;

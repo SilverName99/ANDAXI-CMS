@@ -146,6 +146,7 @@ if (is_array($selectedCoupon)) {
                     </div>
                 </div>
 
+<?php if (\App\Support\Plugins::vizibil('conturi_clienti')): ?>
                 <div class="field coupon-admin-field coupon-admin-span-full">
                     <label>Doar pentru utilizatori (opțional, selecție multiplă)</label>
                     <input
@@ -178,6 +179,12 @@ if (is_array($selectedCoupon)) {
                     <p class="coupon-admin-check-empty" data-coupon-user-empty hidden>Nu există utilizatori pentru căutarea introdusă.</p>
                     <small>Dacă nu selectezi utilizatori, cuponul poate fi folosit de toți.</small>
                 </div>
+<?php else: ?>
+<?php /* Fără conturi de clienți pe site: restricția pe utilizatori nu se arată, dar se păstrează la salvare. */ ?>
+<?php foreach (array_keys($selectedUsersMap) as $utilizatorPastrat): ?>
+                <input type="hidden" name="allowed_user_ids[]" value="<?= (int) $utilizatorPastrat ?>">
+<?php endforeach; ?>
+<?php endif; ?>
 
                 <div class="field coupon-admin-field coupon-admin-span-full">
                     <label class="coupon-admin-active-check">

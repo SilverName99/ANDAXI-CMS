@@ -5829,7 +5829,9 @@ final class AdminController
         ) {
             echo json_encode([
                 'ok' => false,
-                'error' => 'Comanda e procesată — factura există deja în ERP. Corecția se face prin storno, sau deblochează comanda pentru corecție.',
+                'error' => \App\Support\Plugins::vizibil('erp')
+                    ? 'Comanda e procesată — factura există deja în ERP. Corecția se face prin storno, sau deblochează comanda pentru corecție.'
+                    : 'Comanda e procesată. Deblochează comanda pentru corecție.',
             ]);
             return;
         }
@@ -6257,7 +6259,9 @@ final class AdminController
         $statusComanda = strtolower(trim((string) ($order['status'] ?? '')));
         $deblocata = self::comandaDeblocata($order);
         if (in_array($statusComanda, ['processing', 'completed', 'cancelled', 'refunded'], true) && !$deblocata) {
-            echo json_encode(['ok' => false, 'error' => 'Comanda procesată nu mai poate fi modificată. Factura există deja în ERP. Apasă „Deblochează pentru corecție" dacă trebuie corectată.']);
+            echo json_encode(['ok' => false, 'error' => 'Comanda procesată nu mai poate fi modificată.'
+                . (\App\Support\Plugins::vizibil('erp') ? ' Factura există deja în ERP.' : '')
+                . ' Apasă „Deblochează pentru corecție" dacă trebuie corectată.']);
             return;
         }
 
@@ -9109,7 +9113,7 @@ final class AdminController
         }
 
         View::render('admin/settings-store', [
-            'title' => 'Setări magazin',
+            'title' => \App\Support\Plugins::vizibil('magazin') ? 'Setări magazin' : 'Setări site',
             'settings' => $settings,
             'galleryImages' => $galleryImages,
             'sitemapFilename' => $sitemapFilename,
@@ -9161,7 +9165,7 @@ final class AdminController
         $panelWidth = max(320, min(640, (int) ($_POST['floating_cart_panel_width'] ?? 420)));
         $excludedUrls = $this->normalizeFloatingCartExcludedUrls((string) ($_POST['floating_cart_excluded_urls'] ?? ''));
 
-        Settings::save($db, [
+        $setariCos = [
             'floating_cart_enabled' => isset($_POST['floating_cart_enabled']) ? '1' : '0',
             'floating_cart_show_desktop' => (isset($_POST['floating_cart_show_desktop']) || isset($_POST['floating_cart_show_on_desktop'])) ? '1' : '0',
             'floating_cart_show_mobile' => (isset($_POST['floating_cart_show_mobile']) || isset($_POST['floating_cart_show_on_mobile'])) ? '1' : '0',
@@ -9193,7 +9197,16 @@ final class AdminController
             'floating_cart_points_label_prefix' => trim((string) ($_POST['floating_cart_points_label_prefix'] ?? 'Primești')),
             'floating_cart_points_label_suffix' => trim((string) ($_POST['floating_cart_points_label_suffix'] ?? 'puncte la această comandă')),
             'floating_cart_excluded_urls' => $excludedUrls,
-        ]);
+        ];
+        // Fără punctele de fidelitate pe site, rândurile lor nu sunt în formular:
+        // setările lor rămân cum erau (pentru o eventuală repornire).
+        if (!\App\Support\Plugins::vizibil('fidelitate')) {
+            foreach (['floating_cart_show_points_discount', 'floating_cart_show_points_earned', 'floating_cart_points_position',
+                'floating_cart_points_text', 'floating_cart_points_label_prefix', 'floating_cart_points_label_suffix'] as $cheiePuncte) {
+                unset($setariCos[$cheiePuncte]);
+            }
+        }
+        Settings::save($db, $setariCos);
 
         Flash::set('success', 'Setările pentru Coș flotant au fost salvate.');
         header('Location: /admin/settings/floating-cart');
@@ -11042,11 +11055,16 @@ final class AdminController
             'bt_ipay_expire_minutes' => (string) $expirare,
             'bt_ipay_notify_emails' => implode(', ', array_values($emailuri)),
         ];
+        // Fără pluginul ERP, bifa „încasează la aprobarea din ERP” nu e în formular:
+        // setarea rămâne cum era (pentru o eventuală repornire a ERP-ului).
+        if (!\App\Support\Plugins::vizibil('erp')) {
+            unset($valori['bt_ipay_deposit_on_erp']);
+        }
         Settings::save($db, $valori);
         AdminActivityLog::log($db, 'bt_ipay_setari', [
             'activ' => $valori['bt_ipay_enabled'],
             'doar_admin' => $valori['bt_ipay_admin_only'],
-            'incasare_la_aprobare' => $valori['bt_ipay_deposit_on_erp'],
+            'incasare_la_aprobare' => $valori['bt_ipay_deposit_on_erp'] ?? 'neschimbat',
             'ore' => $reamintire . '/' . $automat,
         ]);
 
@@ -11061,8 +11079,10 @@ final class AdminController
             $mesaj .= ' Modul e TEST (sandbox): opțiunea NU apare în checkout (nicio comandă reală nu se plătește pe platforma de test). '
                 . 'Testează cu „Plată de test 1 leu".';
         } elseif ($valori['bt_ipay_enabled'] === '1' && $valori['bt_ipay_admin_only'] === '1') {
-            $mesaj .= ' Opțiunea o văd doar administratorii generali logați (pentru o comandă reală de probă); '
-                . 'linkurile pentru diferență rămân pe EuPlătesc până o deschizi tuturor.';
+            $mesaj .= ' Opțiunea o văd doar administratorii generali logați (pentru o comandă reală de probă)'
+                . (\App\Support\Plugins::vizibil('plata_euplatesc')
+                    ? '; linkurile pentru diferență rămân pe EuPlătesc până o deschizi tuturor.'
+                    : '.');
         }
         Flash::set($tip, $mesaj);
         header('Location: /admin/settings/payments?tab=bt');
@@ -11146,6 +11166,12 @@ final class AdminController
         $inapoi = '/admin/settings/payments?tab=bt#bt-test';
         if (!\App\Support\AdminCsrf::valid()) {
             Flash::set('error', 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.');
+            header('Location: ' . $inapoi);
+            return;
+        }
+        // Pluginul BT „se oprește”: nu mai pornește nicio plată nouă, nici cea de test.
+        if (!\App\Support\Plugins::permiteInceput('plata_bt')) {
+            Flash::set('error', 'Plățile noi prin Banca Transilvania nu mai pornesc pe acest site.');
             header('Location: ' . $inapoi);
             return;
         }
@@ -11330,7 +11356,8 @@ final class AdminController
             && (int) ($tx['in_comanda'] ?? 0) === 1 && (string) ($_POST['confirm_activa'] ?? '') !== '1') {
             echo json_encode([
                 'ok' => false,
-                'error' => 'Comanda e încă activă. Alege „Anulează comanda" (recomandat: suma se eliberează și ERP-ul e anunțat) '
+                'error' => 'Comanda e încă activă. Alege „Anulează comanda" (recomandat: suma se eliberează'
+                    . (\App\Support\Plugins::vizibil('erp') ? ' și ERP-ul e anunțat' : '') . ') '
                     . 'sau confirmă explicit „Doar eliberează suma".',
                 'cere_confirmare' => true,
             ], JSON_UNESCAPED_UNICODE);
@@ -11855,7 +11882,9 @@ final class AdminController
         $rezultat = \App\Support\Precomanda::elibereaza($db, $orderId);
         if ($rezultat['ok']) {
             AdminActivityLog::log($db, 'precomanda_eliberata', ['order_id' => $orderId]);
-            Flash::set('success', 'Precomanda a fost trimisă în ERP. ' . $rezultat['message']);
+            Flash::set('success', \App\Support\Plugins::vizibil('erp')
+                ? 'Precomanda a fost trimisă în ERP. ' . $rezultat['message']
+                : 'Precomanda a fost eliberată.');
         } else {
             // Comanda rămâne eliberată chiar dacă ERP-ul n-a răspuns: marcajul
             // nu se dă înapoi, iar reîncercarea merge pe drumul obișnuit, din

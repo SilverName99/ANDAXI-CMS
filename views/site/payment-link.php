@@ -17,6 +17,8 @@ $esuat = isset($_GET['esuat']);
 $procesatorBt = ($procesator ?? 'euplatesc') === 'btipay';
 $inCurs = (bool) ($inCurs ?? false) && !$platitAcum;
 $urlReverificare = (string) ($urlReverificare ?? '');
+// Procesatorul linkului nu mai e pe site: linkul se vede, dar nu mai pornește o plată.
+$procesorOprit = (bool) ($procesorOprit ?? false) && !$platitAcum && !$inCurs;
 ?>
 <section class="panel" style="max-width:560px;margin-left:auto;margin-right:auto;padding:32px 26px;text-align:center;">
     <?php if ($platitAcum): ?>
@@ -42,6 +44,13 @@ $urlReverificare = (string) ($urlReverificare ?? '');
             </p>
             <script>setTimeout(function () { var a = document.querySelector('[data-reverificare]'); if (a) { window.location.href = a.href; } }, 30000);</script>
         <?php endif; ?>
+    <?php elseif ($procesorOprit): ?>
+        <h1 style="margin:0 0 10px;font-size:24px;color:#0f172a;">Diferență de plată</h1>
+        <p style="margin:0 auto;max-width:440px;color:#475569;font-size:15px;line-height:1.6;">
+            Pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong> a rămas de achitat
+            <strong><?= number_format($suma, 2, ',', '.') ?> lei</strong>. Plata online a acestui link nu mai este
+            disponibilă; te rugăm să ne contactezi pentru altă modalitate de plată.
+        </p>
     <?php else: ?>
         <h1 style="margin:0 0 10px;font-size:24px;color:#0f172a;">Diferență de plată</h1>
         <p style="margin:0 auto 18px;max-width:440px;color:#475569;font-size:15px;line-height:1.6;">

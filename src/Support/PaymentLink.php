@@ -167,7 +167,23 @@ final class PaymentLink
             && self::euPlatescPentruLinkuri($settings, false)) {
             return self::PROCESATOR_EUPLATESC;
         }
+        // Pluginul EuPlătesc scos din licență: un link deja trimis prin el se
+        // plătește prin BT, dacă BT e pe site (altfel linkul nu se mai poate plăti online).
+        if ($procesator === self::PROCESATOR_EUPLATESC
+            && !Plugins::vizibil('plata_euplatesc')
+            && self::btPentruLinkuri($settings, false)) {
+            return self::PROCESATOR_BT;
+        }
         return $procesator;
+    }
+
+    /**
+     * Pluginul procesatorului cu care s-ar plăti linkul nu mai e pe site (licența):
+     * pagina linkului nu mai pornește nicio plată și cere clientului să ne contacteze.
+     */
+    public static function procesorScosDinLicenta(string $procesator): bool
+    {
+        return !Plugins::vizibil($procesator === self::PROCESATOR_BT ? 'plata_bt' : 'plata_euplatesc');
     }
 
     /** Restul de încasat pentru o comandă: total − cât s-a încasat deja. */

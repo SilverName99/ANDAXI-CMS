@@ -160,6 +160,11 @@ $floatingCartConfig = [
         && ((string) ($designSettings['store_quantity_control_style'] ?? 'default') === 'stepper')
     ) ? 1 : 0,
 ];
+// Pluginul „Cupoane”: câmpul de cupon din coșul flotant doar cât pluginul e pornit.
+// Cu cupoanele pe site cheia nu se pune deloc (configurația rămâne cea de dinainte).
+if (!\App\Support\Plugins::permiteInceput('cupoane')) {
+    $floatingCartConfig['faraCupon'] = 1;
+}
 // Sertarul lateral „Oferte” se poate dezactiva din Admin -> Setări magazin.
 // Pluginul „Oferte BBD”: ofertele noi se arată doar cât pluginul e pornit.
 $bbdSidebarEnabled = \App\Support\Plugins::permiteInceput('oferte_bbd') && (string) ($designSettings['store_bbd_sidebar_enabled'] ?? '1') !== '0';

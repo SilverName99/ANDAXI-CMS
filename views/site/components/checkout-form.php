@@ -6,6 +6,10 @@ $previewMode = (bool) ($previewMode ?? false);
 $instanceId = (string) ($checkoutInstanceId ?? ('checkout-' . substr(sha1((string) microtime(true) . '-' . random_int(1000, 9999)), 0, 10)));
 $fanCounties = is_array($fanCounties ?? null) ? $fanCounties : [];
 $localitiesEndpoint = trim((string) ($localitiesEndpoint ?? '/api/fan/localities'));
+// Fără livrarea FAN, localitatea se scrie de mână (nomenclatorul FAN nu e pe site).
+if (!\App\Support\Plugins::vizibil('livrare_fan')) {
+    $localitiesEndpoint = '';
+}
 $shippingQuoteEndpoint = trim((string) ($shippingQuoteEndpoint ?? '/api/checkout/shipping-quote'));
 $subtotal = (float) ($summary['subtotal'] ?? 0);
 $subtotalWithoutVat = (float) ($summary['subtotal_without_vat'] ?? $subtotal);

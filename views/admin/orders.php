@@ -2,6 +2,8 @@
 // Pluginurile din licență: butoanele, coloanele și panourile lor apar doar pe site-urile care le au.
 $areFan = \App\Support\Plugins::vizibil('livrare_fan');
 $areErp = \App\Support\Plugins::vizibil('erp');
+// Textele care pomenesc ERP-ul: pe un site fără pluginul ERP rămâne doar ce se întâmplă pe site.
+$cuErp = static fn (string $text, string $faraErp): string => $areErp ? $text : $faraErp;
 $arePromo = \App\Support\Plugins::vizibil('produse_promo');
 $arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
 $areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
@@ -171,7 +173,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
             <a href="<?= htmlspecialchars($urlTabPrecomanda(''), ENT_QUOTES) ?>"
                style="<?= $tabPrecomanda === '' ? $stilActiv : $stilInactiv ?>">Toate comenzile</a>
             <a href="<?= htmlspecialchars($urlTabPrecomanda('asteptare'), ENT_QUOTES) ?>"
-               title="Comenzi cu produse în precomandă. Nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe fiecare."
+               title="Comenzi cu produse în precomandă. <?= $cuErp('Nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe fiecare.', 'Așteaptă până apeși ▶ pe fiecare.') ?>"
                style="<?= $tabPrecomanda === 'asteptare' ? $stilActiv : $stilInactiv ?>">
                 ⏳ Precomenzi
                 <?php if ($precomenziAsteptare > 0): ?>
@@ -179,7 +181,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                 <?php endif; ?>
             </a>
             <a href="<?= htmlspecialchars($urlTabPrecomanda('eliberata'), ENT_QUOTES) ?>"
-               title="Precomenzi deja trimise în ERP."
+               title="<?= $cuErp('Precomenzi deja trimise în ERP.', 'Precomenzi deja eliberate.') ?>"
                style="<?= $tabPrecomanda === 'eliberata' ? $stilActiv : $stilInactiv ?>">
                 ✅ Precomenzi eliberate
                 <?php if ($precomenziEliberate > 0): ?>
@@ -190,7 +192,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
         <?php if ($tabPrecomanda === 'asteptare'): ?>
             <p style="margin:12px 0 0;color:#64748b;font-size:13px;">
                 Comenzi cu produse bifate „Valabil pentru precomandă". Marfa încă n-a venit, deci
-                comanda nu pleacă în „Comenzi site" din ERP — apasă ▶ pe rândul ei când poți onora.
+                <?= $cuErp('comanda nu pleacă în „Comenzi site" din ERP — apasă', 'comanda așteaptă — apasă') ?> ▶ pe rândul ei când poți onora.
             </p>
         <?php endif; ?>
     <?php endif; ?>
@@ -499,7 +501,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
 <?php endforeach; ?>
                                 <?php if ($ePrecomandaInAsteptare): ?>
                                     <span class="status-pill status-pill--warn"
-                                          title="Precomandă: nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe rândul ei.">
+                                          title="Precomandă: <?= $cuErp('nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe rândul ei.', 'așteaptă până apeși ▶ pe rândul ei.') ?>">
                                         ⏳ Precomandă
                                     </span>
                                 <?php elseif ($precomandaStare === 'eliberata'): ?>
@@ -531,7 +533,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                 ? ''
                                 : "Fără greutate în fișă: " . implode(', ', $faraGreutate)
                                     . " — produsele astea cântăresc zero la AWB, iar FAN recântărește și taxează diferența."
-                                    . " Completează „Greutate (g)” în ERP → Produse.";
+                                    . $cuErp(" Completează „Greutate (g)” în ERP → Produse.", " Completează greutatea în fișa produsului.");
                         ?>
                         <td>
                             <?php if ($areFan && $faraGreutate !== []): ?>
@@ -645,16 +647,16 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
 <?php endif; ?>
                                     <?php if ($paymentMethodKey === 'bank_transfer' && $paymentStatusKey !== 'paid' && !$isCancelled): ?>
                                         <form method="post" action="/admin/orders/<?= $orderId ?>/confirma-plata-op"
-                                              onsubmit="return confirm('Confirmi că banii pentru comanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?> au intrat în cont?\n\nComanda devine plătită și pleacă în ERP.');">
-                                            <button type="submit" class="order-action-btn" title="Confirmă plata OP — comanda devine plătită și pleacă în ERP">💰</button>
+                                              onsubmit="return confirm('Confirmi că banii pentru comanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?> au intrat în cont?\n\nComanda devine plătită<?= $cuErp(' și pleacă în ERP', '') ?>.');">
+                                            <button type="submit" class="order-action-btn" title="Confirmă plata OP — comanda devine plătită<?= $cuErp(' și pleacă în ERP', '') ?>">💰</button>
                                         </form>
                                     <?php endif; ?>
                                     <?php if ($ePrecomandaInAsteptare && !$isCancelled): ?>
                                         <form method="post" action="/admin/orders/<?= $orderId ?>/precomanda-elibereaza"
-                                              onsubmit="return confirm('Eliberezi precomanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>?\n\nPleacă acum în „Comenzi site” din ERP — marfa trebuie să fie disponibilă.');">
+                                              onsubmit="return confirm('Eliberezi precomanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>?\n\n<?= $cuErp('Pleacă acum în „Comenzi site” din ERP — marfa', 'Marfa') ?> trebuie să fie disponibilă.');">
                                             <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
                                             <button type="submit" class="order-action-btn"
-                                                    title="Eliberează precomanda — o trimite în „Comenzi site” din ERP">▶</button>
+                                                    title="Eliberează precomanda<?= $cuErp(' — o trimite în „Comenzi site” din ERP', '') ?>">▶</button>
                                         </form>
                                     <?php endif; ?>
                                     <?php if ($erpEnabled && $erpStatus !== 'skipped' && !$ePrecomandaInAsteptare): ?>
@@ -780,7 +782,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                 <?php if ($statusActions !== []): ?>
                     <p class="muted" style="margin:.4rem 0 0;font-size:.85rem;">
                         „Plătit prin link extern de plată" nu e o stare: marchează comanda încasată,
-                        o scoate din „plată în așteptare" și o trimite în ERP, ca o plată reușită pe site.
+                        o scoate din „plată în așteptare"<?= $cuErp(' și o trimite în ERP', '') ?>, ca o plată reușită pe site.
                     </p>
                 <?php endif; ?>
             </div>
@@ -1225,8 +1227,8 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         <span class="status-pill status-pill--${btClasa}">${esc(p.eticheta)}</span>
                     </div>
                     ${p.necesita_rambursare ? banner('Plată încasată – necesită rambursare. Comanda e închisă, dar banii au fost încasați; rambursarea NU se face automat.') : ''}
-                    ${p.eliberata_comanda_activa && !p.comanda_platita_partial ? banner('Suma blocată a fost eliberată, dar comanda e încă activă: comanda NU mai e plătită. Aprobarea din ERP e refuzată (fără AWB) până o anulezi sau, după ce clientul plătește pe alt drum, o marchezi din „Acțiuni comandă" → „Plătit prin link extern de plată".') : ''}
-                    ${p.eliberata_comanda_activa && p.comanda_platita_partial ? banner(`Suma blocată a fost eliberată, dar comanda e încă activă: comanda NU mai e plătită integral (rest de încasat ${formatRon(p.rest_comanda)}). Aprobarea din ERP e refuzată (fără AWB) până o anulezi sau încasezi restul: „Trimite link de plată pentru diferență” sau, dacă banii au venit altfel, „Înregistrează încasarea”.`) : ''}
+                    ${p.eliberata_comanda_activa && !p.comanda_platita_partial ? banner('Suma blocată a fost eliberată, dar comanda e încă activă: comanda NU mai e plătită. <?= $cuErp('Aprobarea din ERP e refuzată (fără AWB) până o anulezi sau, după ce clientul plătește pe alt drum, o marchezi', 'Anuleaz-o sau, după ce clientul plătește pe alt drum, marcheaz-o') ?> din „Acțiuni comandă" → „Plătit prin link extern de plată".') : ''}
+                    ${p.eliberata_comanda_activa && p.comanda_platita_partial ? banner(`Suma blocată a fost eliberată, dar comanda e încă activă: comanda NU mai e plătită integral (rest de încasat ${formatRon(p.rest_comanda)}). <?= $cuErp('Aprobarea din ERP e refuzată (fără AWB) până o anulezi sau încasezi restul', 'Anuleaz-o sau încasează restul') ?>: „Trimite link de plată pentru diferență” sau, dacă banii au venit altfel, „Înregistrează încasarea”.`) : ''}
                     ${p.aprobare_refuzata && !p.eliberata_comanda_activa ? banner('Aprobarea din ERP a fost refuzată: plata nu acoperă comanda. Comanda NU a trecut în procesare și nu are AWB.') : ''}
                     ${p.plata_test ? banner('Plată făcută pe platforma de TEST: nu se socotește pe comandă.') : ''}
                     <table style="border-collapse:collapse;font-size:13px;margin:0 0 8px;">
@@ -1237,7 +1239,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         ${p.stare === 'authorized' ? btRand('Blocat, încă neîncasat', formatRon(p.autorizat)) : ''}
                         ${Number(p.incasat || 0) > 0 ? btRand('Încasat', formatRon(p.incasat)) : ''}
                         ${Number(p.rambursat || 0) > 0 ? btRand('Rambursat', formatRon(p.rambursat) + (p.referinta_rambursare ? ` <small style="color:#64748b;">ref. ${esc(p.referinta_rambursare)}</small>` : '')) : ''}
-                        ${p.termen ? btRand('Încasare automată', `${esc(p.termen)} <small style="color:#64748b;">(${p.tip === 'link' ? 'dacă încasarea imediată n-a mers' : 'dacă nu e aprobată în ERP înainte'})</small>`) : ''}
+                        ${p.termen ? btRand('Încasare automată', `${esc(p.termen)} <small style="color:#64748b;">(${p.tip === 'link' ? 'dacă încasarea imediată n-a mers' : '<?= $cuErp('dacă nu e aprobată în ERP înainte', 'dacă nu o încasezi înainte') ?>'})</small>`) : ''}
                         ${p.cod_aprobare ? btRand('Cod autorizare', esc(p.cod_aprobare)) : ''}
                         ${p.eroare ? btRand('Ultima problemă', `<span style="color:#b91c1c;">${esc(p.eroare)}</span>`) : ''}
                         ${p.nota ? btRand('Notă', esc(p.nota)) : ''}
@@ -1263,7 +1265,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         </span>` : ''}
                     </div>
                     ${p.cere_confirmare_eliberare ? `<div id="bt-alegere-${btTx}" hidden style="margin:10px 0 0;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;">
-                        <p style="margin:0 0 8px;color:#78350f;font-size:13px;line-height:1.45;"><strong>Comanda e încă activă.</strong> Dacă doar eliberezi suma, comanda rămâne activă dar <strong>NEPLĂTITĂ</strong>, iar în ERP figurează încă plătită: aprobarea ei de acolo va fi refuzată (fără AWB) până se rezolvă plata. <strong>Recomandat:</strong> anulează comanda — suma se eliberează automat, ERP-ul e anunțat, clientul primește emailul de anulare și punctele se întorc.</p>
+                        <p style="margin:0 0 8px;color:#78350f;font-size:13px;line-height:1.45;"><strong>Comanda e încă activă.</strong> Dacă doar eliberezi suma, comanda rămâne activă dar <strong>NEPLĂTITĂ</strong><?= $cuErp(', iar în ERP figurează încă plătită: aprobarea ei de acolo va fi refuzată (fără AWB) până se rezolvă plata', '') ?>. <strong>Recomandat:</strong> anulează comanda — suma se eliberează automat, <?= $cuErp('ERP-ul e anunțat, ', '') ?>clientul primește emailul de anulare și punctele se întorc.</p>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;">
                             <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'anuleaza_comanda')" style="padding:6px 12px;background:#b91c1c;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Anulează comanda și eliberează suma (recomandat)</button>
                             <button type="button" onclick="btActiune(${order.id}, ${btTx}, 'reverse', 0, 0, true)" style="padding:6px 12px;background:#fff;border:1px solid #b45309;border-radius:5px;cursor:pointer;font-size:13px;color:#92400e;">Doar eliberează suma (comanda rămâne neplătită)</button>
@@ -1535,12 +1537,12 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         : ''}
                     ${comandaBlocata
                         ? `<div style="margin:8px 0 0;padding:8px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:13px;">
-                        <p style="margin:0;">🔒 Comanda e procesată — factura există deja în ERP, produsele nu se mai pot modifica.</p>
+                        <p style="margin:0;">🔒 Comanda e procesată — <?= $cuErp('factura există deja în ERP, ', '') ?>produsele nu se mai pot modifica.</p>
                         ${sePoateDebloca ? `<button type="button" onclick="ceruDeblocare(${order.id})" style="margin-top:8px;padding:6px 12px;background:#fff;border:1px solid #d97706;border-radius:5px;cursor:pointer;font-size:13px;color:#92400e;">🔓 Deblochează pentru corecție</button>
                         <div id="order-unlock-form-${order.id}" style="display:none;margin-top:8px;">
                             <p style="margin:0 0 6px;font-size:12px;">Scrie de ce se corectează comanda. Motivul rămâne în jurnal.</p>
                             <input type="text" id="order-unlock-reason-${order.id}" maxlength="500"
-                                   placeholder="ex. produsul X s-a epuizat, scos și de pe factură în ERP"
+                                   placeholder="ex. produsul X s-a epuizat<?= $cuErp(', scos și de pe factură în ERP', '') ?>"
                                    style="width:100%;height:32px;border:1px solid #d97706;border-radius:5px;padding:0 8px;font-size:13px;box-sizing:border-box;">
                             <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap;">
                                 <button type="button" onclick="deblocheazaComanda(${order.id})" style="padding:6px 12px;background:#d97706;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Deblochează</button>
@@ -1552,7 +1554,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         : `${deblocataPtCorectie ? `<div style="margin:8px 0 0;padding:8px 10px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:6px;color:#065f46;font-size:13px;">
                         <p style="margin:0;">🔓 Comandă deblocată pentru corecție${order.edit_unlocked_by ? ' de ' + esc(order.edit_unlocked_by) : ''}${order.edit_unlocked_at ? ' (' + esc(String(order.edit_unlocked_at)) + ')' : ''}.</p>
                         ${order.edit_unlock_reason ? `<p style="margin:4px 0 0;">Motiv: ${esc(order.edit_unlock_reason)}</p>` : ''}
-                        <p style="margin:4px 0 0;">Modificările NU se propagă în ERP — factura se corectează acolo separat. Dacă se schimbă totalul, emite alt AWB (🚚) și anulează-l pe cel vechi în SelfAWB.</p>
+                        <p style="margin:4px 0 0;"><?= $cuErp('Modificările NU se propagă în ERP — factura se corectează acolo separat. ', '') ?><?= $areFan ? 'Dacă se schimbă totalul, emite alt AWB (🚚) și anulează-l pe cel vechi în SelfAWB.' : '' ?></p>
                         <button type="button" onclick="blocheazaComanda(${order.id})" style="margin-top:8px;padding:6px 12px;background:#fff;border:1px solid #059669;border-radius:5px;cursor:pointer;font-size:13px;color:#065f46;">🔒 Blochează la loc</button>
                         <span id="order-unlock-status-${order.id}" style="font-size:13px;margin-left:8px;"></span>
                     </div>` : ''}
@@ -1593,7 +1595,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         <span id="order-notes-status-${order.id}" style="font-size:13px;"></span>
                     </div>
                     <p style="margin:6px 0 0;color:#926a1e;font-size:12px;">
-                        Nu ajunge la client — nici pe factură, nici în emailuri. Se trimite în ERP, pe comandă și pe factura emisă din ea.
+                        Nu ajunge la client — nici pe factură, nici în emailuri.<?= $cuErp(" Se trimite în ERP, pe comandă și pe factura emisă din ea.\n", "\n") ?>
                     </p>
                 </div>
 <?php if ($arePromo): ?>
@@ -2141,12 +2143,12 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
     } else if (actiune === 'reverse') {
         if (confirmActiva) {
             date.append('confirm_activa', '1');
-            confirmare = 'Sigur eliberezi doar suma? Comanda rămâne ACTIVĂ și NEPLĂTITĂ, iar aprobarea ei din ERP va fi refuzată până se rezolvă plata.';
+            confirmare = 'Sigur eliberezi doar suma? Comanda rămâne ACTIVĂ și NEPLĂTITĂ<?= $cuErp(', iar aprobarea ei din ERP va fi refuzată până se rezolvă plata', '') ?>.';
         } else {
             confirmare = 'Anulezi autorizarea? Suma blocată pe cardul clientului se eliberează.';
         }
     } else if (actiune === 'anuleaza_comanda') {
-        confirmare = 'Anulezi comanda? Suma blocată se eliberează, ERP-ul e anunțat, iar clientul primește emailul de anulare.';
+        confirmare = 'Anulezi comanda? Suma blocată se eliberează, <?= $cuErp('ERP-ul e anunțat, iar ', '') ?>clientul primește emailul de anulare.';
     }
     if (confirmare !== '' && !window.confirm(confirmare)) {
         return;

@@ -1,5 +1,7 @@
 <?php
 $settings = is_array($settings ?? null) ? $settings : [];
+// Rândurile cu puncte de fidelitate doar pe site-urile care au pluginul.
+$areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 $isEnabled = (string) ($settings['floating_cart_enabled'] ?? '1') !== '0';
 $showOnMobile = (string) ($settings['floating_cart_show_mobile'] ?? '1') !== '0';
 $showOnDesktop = (string) ($settings['floating_cart_show_desktop'] ?? '1') !== '0';
@@ -168,12 +170,14 @@ if ($panelWidth > 640) {
                     Arată linia „Reducere”
                 </label>
             </div>
+<?php if ($areFidelitate): ?>
             <div class="field">
                 <label style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="floating_cart_show_points_discount_line" <?= $showPointsDiscount ? 'checked' : '' ?>>
                     Arată linia „Reducere puncte”
                 </label>
             </div>
+<?php endif; ?>
             <div class="field">
                 <label style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="floating_cart_show_shipping_line" <?= $showShipping ? 'checked' : '' ?>>
@@ -187,6 +191,7 @@ if ($panelWidth > 640) {
                 </label>
             </div>
 
+<?php if ($areFidelitate): ?>
             <div class="field" style="grid-column:1/-1;">
                 <label style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="floating_cart_show_points_earned" <?= $showPointsEarn ? 'checked' : '' ?>>
@@ -206,6 +211,7 @@ if ($panelWidth > 640) {
                 <label>Text puncte (folosește {points})</label>
                 <input type="text" name="floating_cart_points_text" value="<?= htmlspecialchars($pointsText, ENT_QUOTES) ?>" placeholder="Primești {points} puncte la această comandă.">
             </div>
+<?php endif; ?>
 
             <div class="field" style="grid-column:1/-1;">
                 <button class="btn" type="submit">Salvează setările coșului flotant</button>

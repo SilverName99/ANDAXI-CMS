@@ -238,17 +238,28 @@ final class Auth
         if (in_array(self::ROLE_GENERAL, $roles, true)) {
             return '/admin';
         }
-        if (in_array(self::ROLE_EMAILS, $roles, true)) {
-            return '/admin/emails/newsletters?tab=templates';
-        }
-        if (in_array(self::ROLE_STORE, $roles, true)) {
-            return '/admin/products';
-        }
-        if (in_array(self::ROLE_BLOG, $roles, true)) {
-            return '/admin/blog/posts';
+        // Prima pagină a rolului pe care site-ul o are în licență: un administrator
+        // de magazin pe un site fără catalog (sau de blog fără blog) nu ajunge pe
+        // „Modulul nu este inclus în abonament”. Cu toate pluginurile, ca înainte.
+        $candidati = [
+            self::ROLE_EMAILS => ['/admin/emails/newsletters?tab=templates', '/admin/blog/posts', '/admin/emails/sender'],
+            self::ROLE_STORE => ['/admin/products'],
+            self::ROLE_BLOG => ['/admin/blog/posts', '/admin/gallery'],
+        ];
+        $prima = null;
+        foreach ($candidati as $rol => $cai) {
+            if (!in_array($rol, $roles, true)) {
+                continue;
+            }
+            foreach ($cai as $cale) {
+                $prima ??= $cale;
+                if (Plugins::nimicAscuns() || Plugins::adresaVizibila($cale)) {
+                    return $cale;
+                }
+            }
         }
 
-        return '/admin';
+        return $prima ?? '/admin';
     }
 
     public static function canAccessPath(string $path, string|array $role = ''): bool

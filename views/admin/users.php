@@ -6,6 +6,8 @@ $selectedBilling = is_array($selectedBilling ?? null) ? $selectedBilling : null;
 // Coloanele și cifrele pluginurilor (puncte de fidelitate, comenzi) doar pe site-urile care le au.
 $areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 $areMagazin = \App\Support\Plugins::vizibil('magazin');
+// Importul din backup WordPress e unealta internă de migrare (doar cu ea în licență).
+$areMigrareWp = \App\Support\Plugins::vizibil('migrare_wordpress');
 $search = trim((string) ($search ?? ''));
 $sort = in_array((string) ($sort ?? 'id'), ['id', 'orders', 'total', 'points'], true) ? (string) $sort : 'id';
 $dir = strtolower((string) ($dir ?? 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -107,6 +109,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
         $mb = static fn (int $o): string => number_format($o / 1048576, 1, ',', '.') . ' MB';
         ?>
 
+<?php if ($areMigrareWp): ?>
         <h3 style="margin:0 0 6px;font-size:16px;">Import din backup WordPress</h3>
         <p style="margin:0 0 12px;color:#64748b;font-size:13px;line-height:1.5;">
             Citește direct arhiva bazei de date de la UpdraftPlus (fișierul care se termină în
@@ -195,6 +198,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
         <?php endif; ?>
 
         <hr style="border:none;border-top:1px solid #e2e8f0;margin:18px 0 14px;">
+<?php endif; ?>
 
         <h3 style="margin:0 0 8px;font-size:16px;">Import din fișier CSV/XLSX</h3>
         <form method="post" action="/admin/users/import" enctype="multipart/form-data" class="users-search-row" style="margin-bottom:0;">

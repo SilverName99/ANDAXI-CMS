@@ -42,6 +42,10 @@ $areStripe = (bool) ($procesatoriVizibili['stripe'] ?? true);
 $areBt = (bool) ($procesatoriVizibili['bt'] ?? true);
 $areOrdin = (bool) ($procesatoriVizibili['ordin'] ?? true);
 $areCard = $areEu || $areStripe || $areBt;
+// Cât BT „se oprește”, plata de test de 1 leu nu mai pornește (cele începute se termină).
+$btPoatePorni = \App\Support\Plugins::permiteInceput('plata_bt');
+// Textele care pomenesc ERP-ul doar pe site-urile cu legătura ERP.
+$areErpPlati = \App\Support\Plugins::vizibil('erp');
 $etichetaTabPlati = ucfirst(implode(', ', array_keys(array_filter([
     'EuPlătesc' => $areEu,
     'Stripe' => $areStripe,
@@ -150,13 +154,13 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                     <?php else: ?>
                         <?= $insigna(false, '', $btActiv ? 'nu apare (date incomplete)' : 'oprit') ?>
                     <?php endif; ?>
-<?php endif; ?>
                 </td>
                 <td><?= $insigna($btConfigurat, 'configurat', 'incomplet') ?> <a href="/admin/settings/payments?tab=bt" style="font-size:13px;">Setări BT →</a></td>
             </tr>
 <?php endif; ?>
         </table>
     </article>
+<?php endif; ?>
 
     <form method="post" action="/admin/settings/payments" class="form-grid" autocomplete="off">
         <?= $campCsrf ?>
@@ -226,7 +230,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <h3 style="margin:0;">Ordin de plată (transfer bancar)</h3>
             <p style="margin:6px 0 0;color:#64748b;">
                 Clientul primește datele de plată pe pagina de confirmare și în emailul de comandă,
-                cu numărul comenzii ca referință. Comanda pleacă în ERP abia după ce confirmi plata
+                cu numărul comenzii ca referință. <?= $areErpPlati ? 'Comanda pleacă în ERP abia după ce confirmi' : 'Confirmi' ?> plata
                 din lista de comenzi (butonul „Confirmă plata OP").
             </p>
         </article>
@@ -307,8 +311,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
         <p style="margin:0;color:#475569;">
             Plata cu cardul pe pagina securizată a Băncii Transilvania. Clienții cu <strong>STAR Card</strong> pot plăti acolo
             în <strong>3 rate fără dobândă</strong> sau cu <strong>puncte STAR</strong>; site-ul nu are nimic de setat pentru asta.
-            La comandă banca doar <strong>blochează</strong> suma; banii se <strong>încasează</strong> când comanda e aprobată (facturată)
-            în ERP, din butonul „Încasează" din comandă sau, automat, în ziua 4. Comanda anulată înainte de încasare își eliberează
+            La comandă banca doar <strong>blochează</strong> suma; banii se <strong>încasează</strong> <?= $areErpPlati ? "când comanda e aprobată (facturată)\n            în ERP, din butonul" : 'din butonul' ?> „Încasează" din comandă sau, automat, în ziua 4. Comanda anulată înainte de încasare își eliberează
             singură suma; după încasare, rambursarea se face doar din butonul „Rambursează" din comandă.
         </p>
 
@@ -330,7 +333,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <?php if (!empty($bt['linkuri_bt'])): ?>
                 <span class="pay-badge pay-badge--ok">Linkuri noi pentru diferență: prin BT</span>
             <?php else: ?>
-                <span class="pay-badge pay-badge--off">Linkuri noi pentru diferență: prin EuPlătesc</span>
+                <span class="pay-badge pay-badge--off">Linkuri noi pentru diferență: <?= $areEu ? 'prin EuPlătesc' : 'nu se trimit' ?></span>
             <?php endif; ?>
         </div>
         <?php if ($btActiv && !$btModLive): ?>
@@ -442,8 +445,9 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                     <input type="checkbox" name="bt_ipay_admin_only" value="1" <?= !empty($btSetari['doar_admin']) ? 'checked' : '' ?>>
                     Doar pentru administratorii generali logați (clienții nu văd opțiunea)
                 </label>
-                <small style="color:#64748b;">Doar în modul producție: pentru o comandă reală de probă, plasată din același browser în care ești logat ca administrator general. Cât e bifată, linkurile pentru diferență rămân pe EuPlătesc. În modul test, BT nu apare deloc în checkout.</small>
+                <small style="color:#64748b;">Doar în modul producție: pentru o comandă reală de probă, plasată din același browser în care ești logat ca administrator general. Cât e bifată, linkurile pentru diferență <?= $areEu ? 'rămân pe EuPlătesc' : 'nu se trimit prin BT' ?>. În modul test, BT nu apare deloc în checkout.</small>
             </div>
+<?php if ($areErpPlati): ?>
             <div class="field" style="grid-column:1/-1;">
                 <label style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="bt_ipay_deposit_on_erp" value="1" <?= !empty($btSetari['incaseaza_la_aprobare']) ? 'checked' : '' ?>>
@@ -451,6 +455,7 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                 </label>
                 <small style="color:#64748b;">Suma încasată = cât a mai rămas de încasat pe comandă (totalul de acum minus ce s-a încasat deja altfel: diferențe plătite prin link, încasări înregistrate), cel mult suma blocată. Dacă nu mai e nimic de încasat, suma blocată se eliberează (cu email către magazin).</small>
             </div>
+<?php endif; ?>
             <div class="field">
                 <label for="bt-ore-reamintire">Email de reamintire după (ore)</label>
                 <input type="number" id="bt-ore-reamintire" name="bt_ipay_reminder_hours" min="12" max="109" value="<?= (int) ($btSetari['ore_reamintire'] ?? 72) ?>">
@@ -522,14 +527,17 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
 
         <article class="bt-box" id="bt-test">
             <h3>Plată de test de 1 leu</h3>
-            <p>Pornește o plată de 1 leu care nu ține de nicio comandă: nu trimite emailuri și nu ajunge în ERP. Ești dus pe pagina băncii,
+            <p>Pornește o plată de 1 leu care nu ține de nicio comandă: nu trimite emailuri<?= $areErpPlati ? ' și nu ajunge în ERP' : '' ?>. Ești dus pe pagina băncii,
                 plătești cu un card, iar la întoarcere o poți <strong>anula (reverse)</strong> sau <strong>încasa, apoi rambursa</strong> — așa
                 se verifică toate operațiile. Dacă o lași autorizată, cronul o anulează singur după 30 de minute.
                 <?= $btModLive ? '<strong>Modul e PRODUCȚIE: cardul e debitat real cu 1 leu până la anulare sau rambursare.</strong>' : '' ?></p>
             <form method="post" action="/admin/settings/payments/bt/test-payment" style="margin:0 0 10px;">
                 <?= $campCsrf ?>
-                <button class="btn" type="submit" <?= $btConfigurat ? '' : 'disabled' ?>>Plată de test 1 leu (mod <?= $btModLive ? 'producție' : 'test' ?>)</button>
+                <button class="btn" type="submit" <?= $btConfigurat && $btPoatePorni ? '' : 'disabled' ?>>Plată de test 1 leu (mod <?= $btModLive ? 'producție' : 'test' ?>)</button>
             </form>
+<?php if (!$btPoatePorni): ?>
+            <div class="bt-warn">Plățile noi prin Banca Transilvania nu mai pornesc pe acest site. Plățile de test începute se pot anula sau rambursa mai jos.</div>
+<?php endif; ?>
             <?php if ($teste !== []): ?>
                 <table class="bt-table">
                     <tr><th>Plată</th><th>Pornită</th><th>Stare</th><th>Sume</th><th>Acțiuni</th></tr>

@@ -4,6 +4,9 @@ $stockEnabled = (string) ($settings['erp_stock_enabled'] ?? '0') === '1';
 $apiKey = (string) ($settings['erp_api_key'] ?? '');
 $queue = is_array($queue ?? null) ? $queue : ['pending' => 0, 'failed' => 0, 'sent' => 0];
 $inCurs = (int) ($queue['cancel_pending'] ?? 0) + (int) ($queue['retur_pending'] ?? 0);
+// Explicațiile despre AWB și puncte doar pe site-urile cu livrarea FAN, respectiv cu fidelitatea.
+$cuFan = \App\Support\Plugins::vizibil('livrare_fan');
+$cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 ?>
 
 <?php if (!empty($erpModulBanner)): ?>
@@ -89,7 +92,7 @@ $inCurs = (int) ($queue['cancel_pending'] ?? 0) + (int) ($queue['retur_pending']
                 Retrimite comenzile eșuate
             </button>
             <button class="btn btn-secondary" type="submit" name="action" value="greutati"
-                    title="Ia din ERP greutatea fiecărui produs (câmpul „Greutate (g)” din fișa produsului) și o scrie pe produsele de pe site. Din ea iese kilogramul de pe AWB.">
+                    title="Ia din ERP greutatea fiecărui produs (câmpul „Greutate (g)” din fișa produsului) și o scrie pe produsele de pe site.<?= $cuFan ? ' Din ea iese kilogramul de pe AWB.' : '' ?>">
                 Adu greutățile din ERP
             </button>
             <button class="btn btn-secondary" type="submit" name="action" value="retururi"
@@ -130,16 +133,14 @@ $inCurs = (int) ($queue['cancel_pending'] ?? 0) + (int) ($queue['retur_pending']
     <p>
         Când operatorul aprobă comanda în ERP, ERP-ul emite factura, descarcă stocul
         și anunță site-ul. Site-ul trece comanda în „În procesare", reține numărul
-        facturii, generează AWB-ul FAN (credențialele de curier rămân aici) și trimite
-        clientului emailul cu tracking. Numărul AWB se întoarce apoi în ERP.
+        facturii<?= $cuFan ? ", generează AWB-ul FAN (credențialele de curier rămân aici) și trimite\n        clientului emailul cu tracking. Numărul AWB se întoarce apoi în ERP.\n" : ".\n" ?>
     </p>
     <p>
         Dacă site-ul e indisponibil în momentul aprobării, ERP-ul păstrează
         notificarea, iar cron-ul de mai sus o preia la următoarea rulare — deci nu se
-        pierde nicio aprobare. Anularea din ERP anulează comanda și pe site și
-        returnează punctele de fidelitate; o comandă deja returnată sau rambursată
+        pierde nicio aprobare. Anularea din ERP anulează comanda și pe site<?= $cuFidelitate ? " și\n        returnează punctele de fidelitate" : '' ?>; o comandă deja returnată sau rambursată
         aici rămâne așa. O aprobare care sosește pentru o comandă anulată sau
-        returnată aici nu mai generează AWB: site-ul trimite anularea ori returul
+        returnată aici<?= $cuFan ? ' nu mai generează AWB' : '' ?>: site-ul trimite anularea ori returul
         înapoi în ERP, unde se anulează și factura.
     </p>
 </section>

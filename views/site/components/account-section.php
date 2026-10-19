@@ -51,6 +51,20 @@ $menuItems = [
 if (!$loyaltyEnabled) {
     unset($menuItems['points']);
 }
+// Fără magazin pe site, comenzile și adresele de livrare apar doar clienților
+// care au deja (istoricul lor, doar pentru citire); altfel nu se vorbește de ele.
+$cuMagazinCont = \App\Support\Plugins::vizibil('magazin');
+$arataComenzi = $cuMagazinCont || $orders !== [] || $ordersCount > 0;
+$arataAdrese = $cuMagazinCont || $addresses !== [];
+if (!$arataComenzi) {
+    unset($menuItems['orders']);
+}
+if (!$arataAdrese) {
+    unset($menuItems['addresses']);
+}
+if (($accountSection === 'orders' && !$arataComenzi) || ($accountSection === 'addresses' && !$arataAdrese)) {
+    $accountSection = 'profile';
+}
 $menuIcons = [
     'profile' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5Zm0 2c-4.42 0-8 2.01-8 4.5V21h16v-2.5C20 16.01 16.42 14 12 14Z"/></svg>',
     'orders' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7l8 4 8-4-8-4Zm-8 6 8 4v8l-8-4V9Zm16 0-8 4v8l8-4V9Z"/></svg>',
@@ -140,27 +154,34 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                     </article>
 
                     <div class="account-section-v2__stats">
+<?php if ($arataComenzi): ?>
                         <article class="account-section-v2__card">
                             <strong><?= $ordersCount ?></strong>
                             <span>Comenzi</span>
                         </article>
+<?php endif; ?>
+<?php if ($arataAdrese): ?>
                         <article class="account-section-v2__card">
                             <strong><?= count($addresses) ?></strong>
                             <span>Adrese</span>
                         </article>
+<?php endif; ?>
                         <?php if ($loyaltyEnabled): ?>
                             <article class="account-section-v2__card">
                                 <strong><?= $loyaltyPoints ?></strong>
                                 <span>Puncte</span>
                             </article>
                         <?php endif; ?>
+<?php if ($arataComenzi): ?>
                         <article class="account-section-v2__card">
                             <strong><?= htmlspecialchars($latestOrderDateLabel, ENT_QUOTES) ?></strong>
                             <span>Ultima comandă</span>
                         </article>
+<?php endif; ?>
                     </div>
                 </section>
 
+<?php if ($arataComenzi): ?>
                 <section class="account-section-v2__panel <?= $accountSection === 'orders' ? 'is-active' : '' ?>" data-account-panel="orders">
                     <article class="account-section-v2__section-card">
                         <div class="account-section-v2__profile-head">
@@ -195,7 +216,9 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                         <?php endif; ?>
                     </article>
                 </section>
+<?php endif; ?>
 
+<?php if ($arataAdrese): ?>
                 <section class="account-section-v2__panel <?= $accountSection === 'addresses' ? 'is-active' : '' ?>" data-account-panel="addresses">
                     <article class="account-section-v2__section-card">
                         <div class="account-section-v2__profile-head">
@@ -223,6 +246,7 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                         <?php endif; ?>
                     </article>
                 </section>
+<?php endif; ?>
 
                 <?php if ($loyaltyEnabled): ?>
                 <section class="account-section-v2__panel <?= $accountSection === 'points' ? 'is-active' : '' ?>" data-account-panel="points">
@@ -306,6 +330,7 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
             </div>
         </div>
 
+<?php if ($arataAdrese): ?>
         <div class="account-section-v2__modal-overlay" data-account-address-modal hidden>
             <div class="account-section-v2__modal-card">
                 <div class="account-section-v2__modal-head">
@@ -363,6 +388,7 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                 </form>
             </div>
         </div>
+<?php endif; ?>
     <?php else: ?>
         <div class="account-section-v2__shell">
             <aside class="account-section-v2__side">
@@ -406,10 +432,16 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                     </div>
                 </article>
                 <div class="account-section-v2__stats">
+<?php if ($cuMagazinCont): ?>
                     <article class="account-section-v2__card"><strong>12</strong><span>Comenzi</span></article>
                     <article class="account-section-v2__card"><strong>3</strong><span>Adrese</span></article>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::vizibil('fidelitate')): ?>
                     <article class="account-section-v2__card"><strong>1240</strong><span>Puncte</span></article>
+<?php endif; ?>
+<?php if ($cuMagazinCont): ?>
                     <article class="account-section-v2__card"><strong>28 Mar</strong><span>Ultima comandă</span></article>
+<?php endif; ?>
                 </div>
             </div>
         </div>

@@ -268,6 +268,10 @@ final class Precomanda
             return ['ok' => false, 'message' => 'Nu am putut elibera comanda: ' . $e->getMessage()];
         }
 
+        // Fără pluginul ERP pe site, eliberarea doar scoate comanda din așteptare.
+        if (!Plugins::vizibil('erp')) {
+            return ['ok' => true, 'message' => ''];
+        }
         $rezultat = ErpSync::push($db, $orderId, true);
         return [
             'ok' => (bool) ($rezultat['ok'] ?? false),

@@ -7,6 +7,8 @@ $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
 $areBbd = \App\Support\Plugins::vizibil('oferte_bbd');
 $arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
 $areMagazin = \App\Support\Plugins::vizibil('magazin');
+// Textele care pomenesc ERP-ul doar pe site-urile cu legătura ERP.
+$areErpProduse = \App\Support\Plugins::vizibil('erp');
 ?>
 <section class="panel">
     <div class="section-head">
@@ -15,7 +17,7 @@ $areMagazin = \App\Support\Plugins::vizibil('magazin');
             <p>Gestionează produsele magazinului tău.</p>
         </div>
         <div style="display:flex;gap:8px;">
-            <a class="btn btn-secondary" href="/admin/products/export" title="Descarcă lista de produse (CSV) pentru import în ERP">⭳ Export produse</a>
+            <a class="btn btn-secondary" href="/admin/products/export" title="Descarcă lista de produse (CSV)<?= $areErpProduse ? ' pentru import în ERP' : '' ?>">⭳ Export produse</a>
             <a class="btn btn-secondary" href="/admin/products/trash">Coș produse</a>
             <button class="btn" type="button" id="add-product-btn">+ Adaugă produs</button>
         </div>
@@ -518,7 +520,7 @@ $areMagazin = \App\Support\Plugins::vizibil('magazin');
 <?php if ($arePrecomenzi): ?>
                                 <p class="field-hint" style="margin-top:6px;">
                                     Produsul de precomandă se poate cumpăra și fără stoc. Comenzile
-                                    cu el nu pleacă în ERP până nu le eliberezi din „Precomenzi".
+                                    cu el <?= $areErpProduse ? 'nu pleacă în ERP până nu le eliberezi' : 'așteaptă până le eliberezi' ?> din „Precomenzi".
                                 </p>
 <?php endif; ?>
                             </div>

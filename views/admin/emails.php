@@ -173,7 +173,10 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                     <label>Template (opțional)</label>
                     <select name="template_type">
                         <option value="">Fără template (email simplu)</option>
-                        <?php foreach ($templateRows as $row): ?>
+                        <?php foreach (array_filter($templateRows, static fn (array $rand): bool => \App\Support\Plugins::vizibil(
+                            // Emailurile de comandă sunt ale magazinului, cel de bun venit al conturilor de clienți.
+                            $rand['key'] === 'account_created' ? 'conturi_clienti' : 'magazin'
+                        )) as $row): ?>
                             <option value="<?= htmlspecialchars($row['key'], ENT_QUOTES) ?>"><?= htmlspecialchars($row['label'], ENT_QUOTES) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -190,8 +193,10 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
         <ul style="margin:0;padding-left:18px;line-height:1.8;">
             <li><strong>new_order</strong>: la plasarea comenzii.</li>
             <li><strong>processing</strong>: când statusul devine <code>processing</code>.</li>
+<?php if (\App\Support\Plugins::vizibil('livrare_fan')): ?>
             <li><strong>shipped</strong>: când se generează AWB FAN.</li>
             <li><strong>delivered/finalizat</strong>: când statusul devine <code>completed</code> și există AWB.</li>
+<?php endif; ?>
             <li><strong>cancelled</strong>: când statusul devine <code>cancelled</code>.</li>
             <li><strong>abandoned_cart</strong>: prin cron pe sesiuni cu coș neconvertit și email disponibil.</li>
         </ul>
@@ -344,7 +349,9 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
     <section class="panel">
         <div class="newsletter-page-head">
             <h2 style="margin:0;">Email-uri</h2>
-            <p style="margin:4px 0 0;color:#64748b;">Gestionează template-uri, liste de abonați și formulare opt-in.</p>
+            <p style="margin:4px 0 0;color:#64748b;"><?= \App\Support\Plugins::vizibil('newsletter')
+                ? 'Gestionează template-uri, liste de abonați și formulare opt-in.'
+                : 'Gestionează ' . (\App\Support\Plugins::vizibil('magazin') ? 'emailurile magazinului, ' : '') . 'formularele de contact și istoricul trimiterilor.' ?></p>
         </div>
         <div class="newsletter-tabs">
             <a class="newsletter-tab <?= $newsletterTab === 'templates' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=templates">Template-uri</a>
@@ -1547,7 +1554,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
             <article class="panel" style="margin-top:12px;">
                 <h3 style="margin:0 0 8px;">Istoric trimitere email-uri</h3>
                 <p style="margin:0 0 10px;color:#64748b;">
-                    Aici vezi fiecare email trimis/respins de sistem (inclusiv emailurile automate după AWB/completed).
+                    Aici vezi fiecare email trimis/respins de sistem (inclusiv emailurile automate<?= \App\Support\Plugins::vizibil('livrare_fan') ? ' după AWB/completed' : '' ?>).
                 </p>
                 <?php
                 $buildHistoryUrl = static function (array $params = []) use ($emailSendHistoryFilterQ, $emailSendHistoryFilterStatus, $emailSendHistoryFilterType, $emailSendHistoryPerPage): string {

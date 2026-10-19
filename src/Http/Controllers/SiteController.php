@@ -6467,6 +6467,7 @@ CSS;
             'order' => $order,
             'esteplatit' => $esteplatit,
             'procesator' => $procesator,
+            'procesorOprit' => \App\Support\PaymentLink::procesorScosDinLicenta($procesator),
             'inCurs' => $inCurs || ($urlReverificare !== '' && !$esteplatit),
             'urlReverificare' => $urlReverificare,
         ]);
@@ -6489,6 +6490,12 @@ CSS;
         $settings = Settings::all($db);
         $appUrl = $this->appUrl();
         $numarComanda = (string) ($order['order_number'] ?? '');
+
+        // Procesatorul linkului nu mai e în licența site-ului: nicio plată nouă prin el.
+        if (\App\Support\PaymentLink::procesorScosDinLicenta(\App\Support\PaymentLink::procesorEfectiv($link, $settings))) {
+            header('Location: /plata/' . rawurlencode((string) $link['token']));
+            return;
+        }
 
         if (BtIpayPayments::areTabele($db) && BtIpayPayments::plataLinkInCurs($db, (int) $link['id']) !== null) {
             // Plata BT a acestui link e deja autorizată și se încasează: nu
