@@ -126,7 +126,7 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
 | Metodă | Dacă lipsește | Dacă există |
 |---|---|---|
 | `tabel($t, $corp)` | `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`; cheile străine doar aici | nimic (`coloana()`/`index()` de după aduc structura la zi) |
-| `tabelComplet($t, [coloană => definiție], [chei])` | un singur `CREATE TABLE` cu tot (cheile scrise ca în CREATE TABLE: `PRIMARY KEY (id)`, `UNIQUE KEY nume (…)`, `KEY nume (…)`, `CONSTRAINT nume FOREIGN KEY (…) REFERENCES …`) | fiecare coloană cu `coloana()`, fiecare index cu `index()`/`unic()`: doar ce lipsește; cheia primară și cheile străine nu se adaugă (una lipsă = avertisment). Și dacă tabelul l-a făcut altcineva chiar atunci (codul vechi) |
+| `tabelComplet($t, [coloană => definiție], [chei])` | un singur `CREATE TABLE` cu tot (cheile scrise ca în CREATE TABLE: `PRIMARY KEY (id)`, `UNIQUE KEY nume (…)`, `KEY nume (…)`, `CONSTRAINT nume FOREIGN KEY (…) REFERENCES …`) | fiecare coloană cu `coloana()`, fiecare index cu `index()`/`unic()`: doar ce lipsește; cheia primară și cheile străine nu se adaugă (una lipsă = avertisment). La fel dacă tabelul l-a făcut altcineva chiar atunci (codul vechi): CREATE-ul fără efect (nota 1050) nu e o operație, iar orice lipsește sau diferă (o coloană, un index, cheia primară, o cheie străină, o definiție) se tratează ca la un tabel existent |
 | `coloana($t, $c, $definitie)` | `ADD COLUMN`, la coadă, cu lanțul de clauze | compară tipul, NULL, valoarea implicită: altfel = **avertisment**, coloana nu se schimbă |
 | `schimbaImplicit($t, $c, $valoare)` | eroare | doar valoarea implicită (`ALTER COLUMN … SET DEFAULT`, instant, rândurile neatinse); aceeași deja: nimic. Un pas anume al unei migrări (link_plata/0009), nu „adus la zi” |
 | `index($t, $n, [coloane])`, `unic(…)` | `ADD [UNIQUE] INDEX`, `INPLACE, LOCK=NONE`; `unic` numără întâi valorile repetate (NULL nu se numără) și se oprește cu numărul lor | același nume, sau un index cu aceleași coloane în aceeași ordine și aceeași unicitate (sub orice nume) |
@@ -151,6 +151,10 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
   deci revenirea automată la codul vechi rămâne sigură.
 - **NOT NULL fără DEFAULT** pe un tabel cu rânduri e refuzat: codul vechi n-ar mai putea scrie.
 - **O coloană existentă nu se schimbă niciodată singură**: o definiție diferită e un avertisment.
+- **Fără `CHARACTER SET`/`CHARSET`/`COLLATE` pe o coloană** (refuzate, codul 1, și în corpul lui
+  `tabel()`): coloana ia colația tabelului (`utf8mb4_unicode_ci`). Colația schimbă felul în care se
+  compară textele, deci și ce respinge un index unic; amprenta o arată pe a unei coloane doar când
+  diferă de a tabelului, iar o migrare care ar cere-o n-ar avea cu ce s-o compare.
 - **Fără conținut în migrări** (pagini implicite, lista implicită de newsletter, categorii de blog):
   acelea sunt pașii de activare ai pluginurilor (WP-05).
 - **Fără valori din rânduri** în mesaje, avertismente sau jurnal.
@@ -203,10 +207,14 @@ călătoresc în copia bazei, deci o bază restaurată continuă exact de unde e
 valorile implicite (MariaDB pune textele între ghilimele și scrie `NULL`, MySQL nu; aici: textele între
 ghilimele, numerele fără, cu zecimalele coloanei, expresiile cu litere mici, `current_timestamp`;
 `b'101'` pe o coloană BIT; pe MySQL un text ca `x'y` sau `0x12` pe un VARCHAR rămâne text), `EXTRA`
-fără `DEFAULT_GENERATED`, `NO ACTION` = `RESTRICT`, `utf8mb3` = `utf8`. Ordinea coloanelor nu
-contează. Tabelele `_platforma_*`, `*__sync`, `*__vechi` (copiile de lucru ale sincronizării FAN) și
+fără `DEFAULT_GENERATED`, `NO ACTION` = `RESTRICT`, `utf8mb3` = `utf8`. Colația unei coloane intră
+(`"colatie"`) doar când diferă de a tabelului (de exemplu `utf8mb4_bin` sau alt set de caractere): o
+coloană fără ea are colația tabelului, deci `asteptat.json` de azi n-o are nicăieri. Ordinea coloanelor
+nu contează. Tabelele `_platforma_*`, `*__sync`, `*__vechi` (copiile de lucru ale sincronizării FAN) și
 `#sql*` nu intră. Ce nu se aduce la aceeași formă: valorile implicite ale coloanelor BINARY/VARBINARY
-(MariaDB scrie octeții, MySQL hex); niciun cod de azi nu le folosește.
+(MariaDB scrie octeții, MySQL hex); niciun cod de azi nu le folosește. Ce nu se vede: un `longtext`
+`utf8mb4_bin` (pe MariaDB așa arată o coloană JSON, pe MySQL JSON n-are colație), deci și un LONGTEXT
+COLLATE utf8mb4_bin adevărat; niciun cod de azi nu are.
 
 `asteptat.json` = amprenta unei baze goale după toate migrările (`--aplica`, apoi `--amprenta`). La
 `--verifica` (și la finalul lui `--aplica`): un tabel, o coloană sau un index care lipsește (un index
@@ -253,7 +261,7 @@ să iasă la fel oricare ar fi serverul (de exemplu `explicit_defaults_for_times
 
 | Grupul C (date, o singură dată) | În locul a ce face codul la fiecare cerere |
 |---|---|
-| `nucleu/0020_roluri_admini` | rolurile adminilor aduse la forma de azi (aceeași regulă ca `Auth::rolesFromStorage` + `primaryRole`), în loc de UPDATE-ul pe fiecare admin la fiecare pagină de admin și la fiecare login |
+| `nucleu/0020_roluri_admini` | rolurile adminilor aduse la forma de azi, cu aceiași doi pași: un `role` gol devine `administrator_general` (aceeași condiție, `role IS NULL OR role = ''`, comparată de server), apoi regula lui `Auth::rolesFromStorage` + `primaryRole`; în loc de UPDATE-ul pe fiecare admin la fiecare pagină de admin și la fiecare login |
 | `catalog/0021_coloane_vechi_catalog` | galeria, insignele, câmpurile extra, șabloanele, valorile câmpurilor din coloanele vechi (doar dacă baza le are; pe bucăți de 500) |
 | `cupoane/0022_coloane_vechi_cupoane` | numele gol = codul; limitele din `min_items`/`max_items` |
 | `recenzii/0023_recenzii_vechi` | recenziile din tabelul vechi `reviews` care lipsesc din `product_reviews` (o dată: una ștearsă nu mai revine), apoi sursa celor fără sursă |
@@ -284,13 +292,18 @@ id-ul rândului, deci unică), indexul unic vechi `uniq_fan_streets` iese, iar `
 la urmă. O reluare vede rândurile rămase cu `''`.
 
 **Cum se verifică** (`tools/dev/migrari/genereaza-fixture.php --verifica`, poarta **G-baza** din
-`porti.sh`, pe MariaDB și pe MySQL 8): o bază goală după toate migrările = `asteptat.json`; baseline-ul pe o
-bază goală = schema codului minus excluderile de mai sus (fiecare trebuie să existe în schema codului) și
-colația declarată; pe baza făcută de cod („pe vechi”), planul are în grupul B doar „există deja”, aplicarea
-face 0 operații (toate 19 „detectata”), schema rămâne aceeași, `--verifica` trece (în plus: exact
-excluderile), a doua aplicare n-are nimic de făcut; fixture-ul SQL făcut pe MariaDB se încarcă pe fiecare
-server și dă aceeași amprentă; pe MySQL 8 codul vechi face aceeași schemă ca pe MariaDB. Testul de fum cere
-în plus ca, pe baza de dezvoltare (făcută tot de cod, cu date demo), grupul B să nu aibă nicio operație.
+`porti.sh`, pe MariaDB și pe MySQL 8): o bază goală după toate migrările = `asteptat.json`, fără
+avertismente; baseline-ul pe o bază goală = schema codului minus excluderile de mai sus (fiecare trebuie să
+existe în schema codului) și colația declarată; pe baza făcută de cod („pe vechi”), planul are în grupul B
+doar „există deja”, aplicarea face 0 operații (toate 19 „detectata”), schema rămâne aceeași, `--verifica`
+trece (în plus: exact excluderile), a doua aplicare n-are nimic de făcut; fixture-ul SQL făcut pe MariaDB se
+încarcă pe fiecare server și dă aceeași amprentă; pe MySQL 8 codul vechi face aceeași schemă ca pe MariaDB.
+Pentru grupul C: aceleași rânduri inventate (`GF_RANDURI_GRUP_C`: admini cu role gol, doar din spații, cu
+un tab, roluri necunoscute sau repetate, JSON greșit; o galerie veche; un cupon fără nume; o recenzie din
+`reviews` necopiată și una fără sursă; un articol fără legătura la categoria lui) trec o dată prin funcțiile
+codului și o dată prin migrări, iar rezultatul trebuie să fie același, rând cu rând (fiecare migrare de date
+trebuie să schimbe ceva, altfel cazul nu dovedește nimic). Testul de fum cere în plus ca, pe baza de
+dezvoltare (făcută tot de cod, cu date demo), grupul B să nu aibă nicio operație.
 
 `genereaza-fixture.php` face schema codului pe o **copie** a lui (arborele de lucru copiat, sau
 `--repo=<clonă>@<commit>` cu `git archive`), într-un proces nou pe fază, cu pluginurile toate pornite și
@@ -354,8 +367,11 @@ bucăți și al instrucțiunii de date (pică dacă cursorul sau numărătoarea 
 bucății), bugetul, migrările schimbate, blocante, de contract, parametrii site-ului, lacătele, starea
 neatinsă de un runner refuzat și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan,
 un tabel `#sql-*` rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, mesajele serverului
-cu ghilimele și `\` în valoare (1062, 1366, din `date()` și din `peBucati()`); `tabelComplet` și
-`schimbaImplicit`; plus sesiunile din linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo.
+cu ghilimele și `\` în valoare (1062, 1366, din `date()` și din `peBucati()`); `tabelComplet` (și cursa
+cu codul vechi care face tabelul chiar atunci, fără o coloană, sau cu toate coloanele dar fără indecși și
+fără cheia străină) și `schimbaImplicit`; colația coloanelor (în amprentă doar cea diferită de a
+tabelului, la fel pe ambele servere; CHARACTER SET/COLLATE refuzate într-o migrare); plus sesiunile din
+linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo.
 Raport: `storage/logs/dev/test-migrari-raport.txt`.
 
 Migrările adevărate le verifică, până la testele T1–T11 (WP-04), `genereaza-fixture.php --verifica`

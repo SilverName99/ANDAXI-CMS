@@ -8,14 +8,18 @@ use App\Support\Migrari\Schema;
  * Rolurile administratorilor, aduse o singură dată la forma de azi (role și roles_json).
  *
  * Înlocuiește UPDATE-ul pe care AdminController::ensureOptionalSchema și Auth::ensureSchema îl fac pe
- * fiecare rând din admins, la fiecare pagină de admin și la fiecare încercare de login. Aceeași regulă
- * ca Auth::rolesFromStorage + Auth::primaryRole: rolurile din roles_json (o listă JSON) plus cel din
- * role (NULL = administrator_general), doar cele cunoscute, fiecare o dată, în ordinea lor; dacă nu
- * rămâne niciunul, rolul din role, iar dacă nici el nu e cunoscut, administrator_general; role = primul
- * dintre ele în ordinea general, emailuri, magazin, blog. Cele patru roluri sunt scrise aici (ale lui
- * Auth::roles() la WP-03): o migrare publicată nu se mai schimbă, iar Auth::roles() întreabă și
- * licența (o etichetă), pe care o migrare n-are de ce s-o citească. Se scrie doar un rând care chiar
- * se schimbă, deci a doua rulare nu face nimic.
+ * fiecare rând din admins, la fiecare pagină de admin și la fiecare încercare de login, cu aceiași doi
+ * pași. Întâi un role gol devine administrator_general: aceeași condiție ca UPDATE-ul lor
+ * (role IS NULL OR role = ''), comparată de server, deci cu colația coloanei (la una PAD SPACE, ca
+ * utf8mb4_unicode_ci, și un role doar din spații e gol; unul cu un tab nu e). Apoi regula lui
+ * Auth::rolesFromStorage + Auth::primaryRole: rolurile din roles_json (o listă JSON) plus cel din role,
+ * doar cele cunoscute, fiecare o dată, în ordinea lor; dacă nu rămâne niciunul, rolul din role, iar dacă
+ * nici el nu e cunoscut, administrator_general; role = primul dintre ele în ordinea general, emailuri,
+ * magazin, blog. Cele patru roluri sunt scrise aici (ale lui Auth::roles() la WP-03): o migrare
+ * publicată nu se mai schimbă, iar Auth::roles() întreabă și licența (o etichetă), pe care o migrare
+ * n-are de ce s-o citească. Se scrie doar un rând care chiar se schimbă, deci a doua rulare nu face
+ * nimic. genereaza-fixture.php --verifica (G-baza) trece aceleași rânduri inventate prin codul vechi și
+ * prin migrare și cere același rezultat.
  */
 return [
     'descriere' => 'Rolurile administratorilor, la forma de azi (role și roles_json)',
@@ -26,12 +30,12 @@ return [
             $general = 'administrator_general';
             $cunoscute = [$general, 'administrator_magazin', 'administrator_blog', 'administrator_emailuri'];
             $prioritate = [$general, 'administrator_emailuri', 'administrator_magazin', 'administrator_blog'];
-            $citeste = $db->prepare('SELECT id, role, roles_json FROM admins WHERE id > ? AND id <= ?');
+            $citeste = $db->prepare("SELECT id, role, roles_json, (role IS NULL OR role = '') AS fara_rol FROM admins WHERE id > ? AND id <= ?");
             $citeste->execute([$de, $pana]);
             $scrie = $db->prepare('UPDATE admins SET role = ?, roles_json = ? WHERE id = ?');
             $schimbate = 0;
             foreach ($citeste->fetchAll(PDO::FETCH_ASSOC) as $rand) {
-                $vechi = $rand['role'] === null ? $general : (string) $rand['role'];
+                $vechi = (int) $rand['fara_rol'] === 1 ? $general : (string) $rand['role'];
                 $roluri = [];
                 if (is_string($rand['roles_json']) && trim($rand['roles_json']) !== '') {
                     $decodat = json_decode($rand['roles_json'], true);

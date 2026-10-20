@@ -13,9 +13,9 @@ declare(strict_types=1);
  *   … --doar-mariadb                                                         # fără MySQL 8 (parțial)
  *
  * U. Fără bază: Server (versiuni, ce știe fiecare, lanțul de clauze), Amprenta (aceleași rânduri
- *    în forma MariaDB și în forma MySQL dau aceeași amprentă, inclusiv tinyint(1) unsigned și un
- *    text implicit care începe cu x'; definițiile din migrări; corpul unui CREATE TABLE;
- *    compararea), mesajele fără valori (și cu ghilimele, \ sau „' for key '” în valoare, pe care
+ *    în forma MariaDB și în forma MySQL dau aceeași amprentă, inclusiv tinyint(1) unsigned, un
+ *    text implicit care începe cu x' și colația coloanelor; definițiile din migrări (CHARACTER SET
+ *    și COLLATE semnalate); corpul unui CREATE TABLE; compararea), mesajele fără valori (și cu ghilimele, \ sau „' for key '” în valoare, pe care
  *    serverele nu le dublează), Registru (ordinea, numerele, proprietarii, migrari.lock, pașii
  *    site-ului).
  * Pe fiecare server (MariaDB din CMS_DEV_SOCK, MySQL 8 din CMS_DEV_SOCK_MYSQL8, pornit cu
@@ -26,7 +26,10 @@ declare(strict_types=1);
  *    numărate fără să fie arătate, NOT NULL fără DEFAULT, AFTER, ștergeri doar în „contract”,
  *    schimbarea unui tip refuzată fără voie de blocare); tabelComplet (un CREATE pe o bază nouă; pe un
  *    tabel vechi doar coloanele și indecșii care lipsesc, cheia străină lipsă un avertisment; cursa cu
- *    codul vechi care face tabelul chiar atunci; în simulare) și schimbaImplicit (rândurile neatinse).
+ *    codul vechi care face tabelul chiar atunci, fără o coloană sau cu toate coloanele dar fără indecși
+ *    și fără cheia străină; în simulare) și schimbaImplicit (rândurile neatinse); colația coloanelor
+ *    (în amprentă doar cea diferită de a tabelului, JSON nu; CHARACTER SET/COLLATE refuzate în
+ *    coloana(), tabel(), tabelComplet(); o coloană existentă cu altă colație = avertisment).
  * R. scripts/migreaza.php, cu fiecare cod de ieșire: bază goală fără migrări (0, „nimic de făcut”),
  *    bază străină (4, nimic creat), migrări de jucărie (planul 10, aplicarea, a doua oară nimic,
  *    asteptat.json, baza veche detectată, --pana-la), oprirea după fiecare operație și reluarea
@@ -233,7 +236,6 @@ $cazuri = [
     ["VARCHAR(30) NOT NULL DEFAULT 'it''s' COMMENT 'cu, virgulă'", 'varchar(30)', false, "'it''s'", ''],
     ['SMALLINT NOT NULL DEFAULT -1', 'smallint', false, '-1', ''],
     ['JSON NULL', 'longtext', true, null, ''],
-    ['TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL', 'text', true, null, ''],
     ['DOUBLE PRECISION NOT NULL DEFAULT 0', 'double', false, '0', ''],
     ['BIGINT(20) UNSIGNED', 'bigint unsigned', true, null, ''],
     ['TINYINT(1) UNSIGNED NOT NULL DEFAULT 0', 'tinyint unsigned', false, '0', ''],
@@ -254,6 +256,50 @@ $verifica('Amprenta: definițiile scrise în migrări (' . count($cazuri) . ' fe
 $verifica('Amprenta: AFTER/FIRST, PRIMARY KEY/UNIQUE și cuvintele neînțelese sunt semnalate',
     $def('INT NULL AFTER x')['pozitie'] && $def('INT FIRST')['pozitie'] && $def('INT PRIMARY KEY')['primar']
     && $def('INT UNIQUE')['unic'] && $def('VARCHAR(10) NOT NUL')['necunoscute'] !== []);
+// O coloană dintr-o migrare ia colația tabelului: CHARACTER SET / CHARSET / COLLATE sunt semnalate (Schema le refuză),
+// altfel o colație cerută ar trece pe lângă amprentă și pe lângă compararea cu o coloană existentă.
+$cuColatie = $def('TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
+$verifica('Amprenta: CHARACTER SET, CHARSET și COLLATE într-o definiție sunt semnalate (tipul și NULL rămân înțelese)',
+    $cuColatie['necunoscute'] === ['CHARACTER SET utf8mb4', 'COLLATE utf8mb4_unicode_ci'] && $cuColatie['tip'] === 'text' && $cuColatie['null'] === true
+    && $def('VARCHAR(10) COLLATE utf8mb4_bin NULL')['necunoscute'] === ['COLLATE utf8mb4_bin']
+    && $def('VARCHAR(10) CHARSET latin1 NOT NULL')['necunoscute'] === ['CHARSET latin1'] && $def('VARCHAR(10) BINARY')['necunoscute'] !== [],
+    json_encode([$cuColatie, $def('VARCHAR(10) COLLATE utf8mb4_bin NULL'), $def('VARCHAR(10) CHARSET latin1 NOT NULL')]));
+Amprenta::structuraDinCorp("id INT NOT NULL, email VARCHAR(190) COLLATE utf8mb4_bin NOT NULL, KEY idx_e (email)", $necunoscuteCorp);
+Amprenta::structuraDinCorp("id INT NOT NULL, email VARCHAR(190) NOT NULL, KEY idx_e (email)", $necunoscuteCorpBun);
+$verifica('Amprenta: corpul unui CREATE TABLE întoarce, pe coloană, cuvintele neînțelese (și COLLATE)',
+    $necunoscuteCorp === ['email: COLLATE utf8mb4_bin'] && $necunoscuteCorpBun === [], json_encode([$necunoscuteCorp, $necunoscuteCorpBun]));
+
+// Colația unei coloane: în amprentă doar când diferă de a tabelului; un longtext utf8mb4_bin (JSON pe MariaDB) nu.
+$colatiiCa = static function (string $familie): array {
+    $m = $familie === 'mariadb';
+    $coloana = static fn (string $nume, string $tip, ?string $colatie): array => ['tabel' => 'c', 'coloana' => $nume, 'tip' => $tip,
+        'nul' => 'YES', 'implicit' => $m ? 'NULL' : null, 'extra' => '', 'colatie' => $colatie];
+    return ['tabele' => [['tabel' => 'c', 'motor' => 'InnoDB', 'colatie' => 'utf8mb4_unicode_ci'],
+        ['tabel' => 'v', 'motor' => 'InnoDB', 'colatie' => $m ? 'utf8mb3_general_ci' : 'utf8_general_ci']],
+        'coloane' => [$coloana('id', $m ? 'int(11)' : 'int', null), $coloana('nume', 'varchar(50)', 'utf8mb4_unicode_ci'),
+            $coloana('email', 'varchar(190)', 'utf8mb4_bin'), $coloana('cod', 'varchar(5)', 'latin1_swedish_ci'),
+            $coloana('date_json', $m ? 'longtext' : 'json', $m ? 'utf8mb4_bin' : null), $coloana('vechi', 'varchar(5)', $m ? 'utf8mb3_general_ci' : 'utf8_general_ci'),
+            ['tabel' => 'v', 'coloana' => 'a', 'tip' => 'varchar(5)', 'nul' => 'YES', 'implicit' => null, 'extra' => '', 'colatie' => 'utf8mb3_general_ci'],
+            ['tabel' => 'v', 'coloana' => 'fara_camp', 'tip' => 'varchar(5)', 'nul' => 'YES', 'implicit' => null, 'extra' => '']],
+        'indecsi' => [], 'fk' => []];
+};
+$colM = Amprenta::normalizeaza($colatiiCa('mariadb'), 'mariadb');
+$colY = Amprenta::normalizeaza($colatiiCa('mysql'), 'mysql');
+$cc = $colM['tabele']['c']['coloane'] ?? [];
+$verifica('Amprenta: colația coloanei doar când diferă de a tabelului (utf8mb4_bin, alt set de caractere, utf8mb3 = utf8); JSON nu; la fel pe ambele servere',
+    Amprenta::json($colM) === Amprenta::json($colY) && !isset($cc['id']['colatie']) && !isset($cc['nume']['colatie'])
+    && ($cc['email']['colatie'] ?? null) === 'utf8mb4_bin' && ($cc['cod']['colatie'] ?? null) === 'latin1_swedish_ci'
+    && !isset($cc['date_json']['colatie']) && ($cc['vechi']['colatie'] ?? null) === 'utf8_general_ci'
+    && !isset($colM['tabele']['v']['coloane']['a']['colatie']) && !isset($colM['tabele']['v']['coloane']['fara_camp']['colatie']),
+    Amprenta::json($colM) . "\n---\n" . Amprenta::json($colY));
+$faraColatie = $colM;
+unset($faraColatie['tabele']['c']['coloane']['email']['colatie']);
+$difColatie = Amprenta::compara($faraColatie, $colM);
+$verifica('Amprenta::compara: o coloană cu altă colație decât cea așteptată e un avertisment (colația), nu o lipsă',
+    $difColatie['lipsa'] === [] && count($difColatie['avertismente']) === 1 && str_contains($difColatie['avertismente'][0], 'coloana c.email')
+    && str_contains($difColatie['avertismente'][0], 'COLLATE utf8mb4_bin')
+    && Amprenta::diferenteColoana($colM['tabele']['c']['coloane']['email'], $def('VARCHAR(190) NULL')) === ['colația'],
+    json_encode($difColatie));
 
 $corp = "id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, `key` VARCHAR(20) NOT NULL DEFAULT '',
     a INT NULL, b INT NULL, user_id INT UNSIGNED NULL, UNIQUE KEY uniq_ab (a, b), KEY (b), FULLTEXT KEY ft_key (`key`),
@@ -589,6 +635,23 @@ foreach ($servere as $numeServer => $sock) {
         $diferite === [] && count($citit['coloane']) === 32 && count($citit['indecsi']) === 5, implode("\n", $diferite));
     $amprentePeServer['proba'][$numeServer] = Amprenta::json(Amprenta::citeste($db, $server));
 
+    // Colația coloanelor, citită de pe server: doar cea diferită de a tabelului intră în amprentă (JSON nu).
+    $db->exec("CREATE TABLE colatii (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, nume VARCHAR(50) NULL,
+        email VARCHAR(190) COLLATE utf8mb4_bin NULL, cod VARCHAR(5) CHARACTER SET latin1 NULL, date_json JSON NULL)
+        ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $db->exec("CREATE TABLE colatii_la_fel (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, nume VARCHAR(50) NULL,
+        email VARCHAR(190) NULL, cod VARCHAR(5) NULL, date_json JSON NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $cit = Amprenta::citeste($db, $server, ['colatii', 'colatii_la_fel'])['tabele'];
+    $difCol = Amprenta::compara(['tabele' => ['x' => $cit['colatii_la_fel'] ?? []]], ['tabele' => ['x' => $cit['colatii'] ?? []]]);
+    $verifica('colația coloanelor de pe server: utf8mb4_bin și latin1 intră în amprentă, colația tabelului și JSON nu; '
+        . 'două tabele care diferă doar prin ea au amprente diferite (2 avertismente)',
+        ($cit['colatii']['coloane']['email']['colatie'] ?? null) === 'utf8mb4_bin'
+        && ($cit['colatii']['coloane']['cod']['colatie'] ?? null) === 'latin1_swedish_ci'
+        && !isset($cit['colatii']['coloane']['nume']['colatie']) && !isset($cit['colatii']['coloane']['date_json']['colatie'])
+        && array_column($cit['colatii_la_fel']['coloane'] ?? [], 'colatie') === []
+        && $difCol['lipsa'] === [] && count($difCol['avertismente']) === 2, json_encode($cit) . json_encode($difCol));
+    $amprentePeServer['colatii'][$numeServer] = Amprenta::json(['format' => Amprenta::FORMAT, 'tabele' => $cit]);
+
     // Schema direct, pe bază.
     $executie = static function (string $tip = 'schema', bool $poateBloca = false): Executie {
         $nimic = static function (): void {
@@ -655,6 +718,21 @@ foreach ($servere as $numeServer => $sock) {
     $s6 = new Schema($db, $server, $e6 = $executie());
     $schimbate = $s6->date('nume gol', "UPDATE t SET nume = '' WHERE nume = 'nu-exista'");
     $verifica('Schema: o instrucțiune de date fără rânduri atinse nu e o operație', $schimbate === 0 && $e6->cuEfect === 0);
+    // Colația: o migrare nu cere una (coloana ia colația tabelului); o coloană existentă cu altă colație = avertisment.
+    $ex = $aruncat(static fn () => (new Schema($db, $server, $executie()))->coloana('t', 'cheie_bin', 'VARCHAR(20) COLLATE utf8mb4_bin NULL'));
+    $ex2 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabel('tcol', 'id INT NOT NULL, cod VARCHAR(5) CHARACTER SET latin1 NULL'));
+    $ex3 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tcol', ['id' => 'INT NOT NULL', 'cod' => 'VARCHAR(5) COLLATE utf8mb4_bin NULL']));
+    $verifica('Schema: CHARACTER SET / COLLATE într-o definiție de coloană refuzate (coloana(), tabel(), tabelComplet()), nimic creat',
+        $ex instanceof Eroare && $ex2 instanceof Eroare && $ex3 instanceof Eroare && str_contains($ex->getMessage(), 'colația tabelului')
+        && str_contains($ex2->getMessage(), 'cod: CHARACTER SET latin1') && !(new Schema($db, $server, $executie()))->existaColoana('t', 'cheie_bin')
+        && !(new Schema($db, $server, $executie()))->existaTabel('tcol'),
+        implode(' | ', array_map(static fn (?Throwable $x): string => $x?->getMessage() ?? '-', [$ex, $ex2, $ex3])));
+    $sCol = new Schema($db, $server, $eCol = $executie());
+    $sCol->coloana('colatii', 'email', 'VARCHAR(190) NULL');
+    $verifica('Schema: o coloană existentă cu altă colație decât a tabelului = avertisment (colația), nimic schimbat',
+        $eCol->cuEfect === 0 && count($eCol->avertismente) === 1 && str_contains($eCol->avertismente[0], 'colația')
+        && (Amprenta::citeste($db, $server, ['colatii'])['tabele']['colatii']['coloane']['email']['colatie'] ?? null) === 'utf8mb4_bin',
+        json_encode($eCol->avertismente));
 
     // tabelComplet (baseline-ul, WP-03): pe o bază fără tabel un singur CREATE; pe una veche, doar ce lipsește.
     $coloaneTc = [
@@ -707,6 +785,21 @@ foreach ($servere as $numeServer => $sock) {
     $tcr = Amprenta::citeste($db, $server, ['tcr'])['tabele']['tcr'];
     $verifica('Schema: tabelComplet când codul vechi face tabelul chiar atunci (CREATE IF NOT EXISTS fără efect): restul se adaugă',
         isset($tcr['coloane']['nota'], $tcr['indecsi']['idx_tcr_cod']), json_encode($e9->operatii));
+    // Cursa, cu tabelul vechi complet la coloane, dar fără indecșii secundari și fără cheia străină.
+    $s9b = new Schema($db, $server, $e9b = $executie());
+    $s9b->existaTabel('tcr2');
+    $conectare($sock, $b('d'))->exec("CREATE TABLE tcr2 (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, t_id INT UNSIGNED NULL,
+        cod VARCHAR(20) NOT NULL DEFAULT '') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $s9b->tabelComplet('tcr2', ['id' => 'INT UNSIGNED NOT NULL AUTO_INCREMENT', 't_id' => 'INT UNSIGNED NULL', 'cod' => "VARCHAR(20) NOT NULL DEFAULT ''"],
+        ['PRIMARY KEY (id)', 'KEY idx_tcr2_cod (cod)', 'UNIQUE KEY uniq_tcr2_cod_id (cod, id)', 'KEY fk_tcr2_t (t_id)',
+            'CONSTRAINT fk_tcr2_t FOREIGN KEY (t_id) REFERENCES t (id) ON DELETE SET NULL']);
+    $tcr2 = Amprenta::citeste($db, $server, ['tcr2'])['tabele']['tcr2'];
+    $verifica('Schema: tabelComplet când codul vechi face chiar atunci tabelul cu toate coloanele, dar fără indecși și fără cheia străină: '
+        . 'indecșii se adaugă, cheia străină lipsă e un avertisment, CREATE-ul fără efect nu e o operație',
+        isset($tcr2['indecsi']['idx_tcr2_cod'], $tcr2['indecsi']['uniq_tcr2_cod_id'], $tcr2['indecsi']['fk_tcr2_t']) && $tcr2['fk'] === []
+        && ($e9b->operatii[0]['clasa'] ?? '') === 'fara_efect' && str_contains($e9b->operatii[0]['detaliu'] ?? '', 'între timp')
+        && $e9b->cuEfect === 3 && count($e9b->avertismente) === 1 && str_contains($e9b->avertismente[0], 'cheia străină tcr2.fk_tcr2_t lipsește'),
+        json_encode($e9b->operatii) . json_encode($e9b->avertismente));
     $ex = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL PRIMARY KEY']));
     $ex2 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL'], ['FULLTEXT KEY ft (id)']));
     $ex3 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL'], ['KEY (id)']));

@@ -29,6 +29,11 @@ use WeakMap;
  *  - EXTRA: litere mici, fără `default_generated` (MySQL), `on update current_timestamp`;
  *  - cheile străine: `NO ACTION` = `RESTRICT` (InnoDB le tratează la fel; MySQL scrie unul,
  *    MariaDB celălalt); colațiile `utf8mb3_*` = `utf8_*`;
+ *  - colația unei coloane intră (cheia `colatie`) doar când diferă de a tabelului: o coloană
+ *    `utf8mb4_bin` într-un tabel `utf8mb4_unicode_ci` (alt fel de a compara textele, deci alt
+ *    index unic) sau cu alt set de caractere. Fără ea, coloana are colația tabelului. Excepție:
+ *    un `longtext` `utf8mb4_bin` nu intră (pe MariaDB așa e o coloană JSON; pe MySQL JSON n-are
+ *    colație), deci un LONGTEXT COLLATE utf8mb4_bin adevărat nu se vede; niciun cod nu are;
  *  - ordinea coloanelor nu contează (un `AFTER` eșuat pe un site vechi le-a amestecat);
  *  - tabelele `_platforma_*` (ale runner-ului), `*__sync` și `*__vechi` (copiile de lucru
  *    ale sincronizării FAN) și `#sql*` nu intră deloc.
@@ -68,7 +73,7 @@ final class Amprenta
     /**
      * Rândurile din information_schema, cu nume de câmpuri fixe (aceeași formă o scrie
      * sonda de pe servere): tabele {tabel, motor, colatie}; coloane {tabel, coloana, tip,
-     * nul, implicit, extra}; indecsi {tabel, index, non_unic, pozitie, coloana, parte, tip,
+     * nul, implicit, extra, colatie}; indecsi {tabel, index, non_unic, pozitie, coloana, parte, tip,
      * expresie}; fk {tabel, nume, coloana, pozitie, tabel_referit, coloana_referita,
      * la_actualizare, la_stergere}.
      *
@@ -97,7 +102,7 @@ final class Amprenta
                 FROM information_schema.TABLES
                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'" . $filtru),
             'coloane' => $citeste('SELECT TABLE_NAME AS tabel, COLUMN_NAME AS coloana, COLUMN_TYPE AS tip,
-                    IS_NULLABLE AS nul, COLUMN_DEFAULT AS implicit, EXTRA AS extra
+                    IS_NULLABLE AS nul, COLUMN_DEFAULT AS implicit, EXTRA AS extra, COLLATION_NAME AS colatie
                 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()' . $filtru),
             'indecsi' => $citeste('SELECT TABLE_NAME AS tabel, INDEX_NAME AS `index`, NON_UNIQUE AS non_unic,
                     SEQ_IN_INDEX AS pozitie, COLUMN_NAME AS coloana, SUB_PART AS parte, INDEX_TYPE AS tip, '
@@ -184,7 +189,12 @@ final class Amprenta
             if (!isset($tabele[$t])) {
                 continue;
             }
-            $tabele[$t]['coloane'][(string) $r['coloana']] = self::coloanaDinInformatii($r, $familie);
+            $coloana = self::coloanaDinInformatii($r, $familie);
+            $colatie = self::colatieColoana($r['colatie'] ?? null, $tabele[$t]['colatie'], $coloana['tip']);
+            if ($colatie !== null) {
+                $coloana['colatie'] = $colatie;
+            }
+            $tabele[$t]['coloane'][(string) $r['coloana']] = $coloana;
         }
         $indecsi = [];
         foreach ($brut['indecsi'] ?? [] as $r) {
@@ -412,6 +422,20 @@ final class Amprenta
         return preg_replace('/^utf8mb3_/', 'utf8_', $colatie) ?? $colatie;
     }
 
+    /**
+     * Colația unei coloane, doar dacă diferă de a tabelului (altfel null: coloana o are pe a
+     * tabelului). Un longtext utf8mb4_bin e o coloană JSON pe MariaDB (pe MySQL, JSON n-are
+     * colație): null, ca amprenta să fie aceeași pe ambele servere.
+     */
+    private static function colatieColoana(mixed $colatie, string $colatieTabel, string $tip): ?string
+    {
+        $colatie = self::colatie(trim((string) ($colatie ?? '')));
+        if ($colatie === '' || $colatie === $colatieTabel || ($tip === 'longtext' && $colatie === 'utf8mb4_bin')) {
+            return null;
+        }
+        return $colatie;
+    }
+
     private static function regulaFk(string $regula): string
     {
         $regula = strtoupper(trim($regula));
@@ -445,12 +469,17 @@ final class Amprenta
         if ($c['implicit'] !== null) {
             $text .= ' DEFAULT ' . $c['implicit'];
         }
+        if (($c['colatie'] ?? null) !== null) {
+            $text .= ' COLLATE ' . $c['colatie'];
+        }
         return $text . ($c['extra'] !== '' ? ' ' . $c['extra'] : '');
     }
 
     /**
      * Ce deosebește o coloană existentă de cea cerută (gol = la fel). Nu se compară decât
-     * ce contează pentru cod: tipul, NULL, valoarea implicită, auto_increment / on update.
+     * ce contează pentru cod: tipul, NULL, valoarea implicită, auto_increment / on update și
+     * colația, când una dintre ele n-o are pe a tabelului (o definiție dintr-o migrare n-are
+     * colație: coloana ia colația tabelului).
      *
      * @return list<string>
      */
@@ -469,6 +498,9 @@ final class Amprenta
         if ($existenta['extra'] !== $ceruta['extra']) {
             $diferente[] = 'extra';
         }
+        if (($existenta['colatie'] ?? null) !== ($ceruta['colatie'] ?? null)) {
+            $diferente[] = 'colația';
+        }
         return $diferente;
     }
 
@@ -478,6 +510,8 @@ final class Amprenta
      * O definiție de coloană scrisă într-o migrare („VARCHAR(20) NOT NULL DEFAULT 'pending'”),
      * la forma amprentei. În plus: primar/unic (scrise în definiție), pozitie (AFTER/FIRST,
      * interzise) și necunoscute (cuvintele neînțelese, ca o greșeală de tipar să nu treacă).
+     * CHARACTER SET, CHARSET și COLLATE intră tot la necunoscute (Schema le refuză): o coloană
+     * dintr-o migrare ia colația tabelului, iar amprenta o arată pe a coloanei doar când diferă.
      *
      * @return array{tip: string, null: bool, implicit: ?string, extra: string, primar: bool, unic: bool, pozitie: bool, necunoscute: list<string>}
      */
@@ -534,8 +568,10 @@ final class Amprenta
             } elseif ($c === 'comment') {
                 $i += 2;
             } elseif ($c === 'character' && $cuv($i + 1) === 'set') {
+                $rezultat['necunoscute'][] = implode(' ', array_map(static fn (array $j): string => $j[2], array_slice($jetoane, $i, 3)));
                 $i += 3;
             } elseif ($c === 'charset' || $c === 'collate') {
+                $rezultat['necunoscute'][] = implode(' ', array_map(static fn (array $j): string => $j[2], array_slice($jetoane, $i, 2)));
                 $i += 2;
             } elseif ($c === 'primary' && $cuv($i + 1) === 'key') {
                 $rezultat['primar'] = true;
@@ -623,11 +659,15 @@ final class Amprenta
     /**
      * Corpul unui CREATE TABLE dintr-o migrare (ce e între paranteze), ca structură: pe ea
      * se sprijină planul („coloana există deja în tabelul pe care îl creează migrarea”).
+     * $necunoscute primește, pe coloană, cuvintele neînțelese din definiții (și CHARACTER SET /
+     * COLLATE, ca la coloanaDinDefinitie): „coloana: cuvinte”.
      *
+     * @param list<string>|null $necunoscute
      * @return array{coloane: array<string, array<string, mixed>>, indecsi: array<string, array<string, mixed>>, fk: array<string, array<string, mixed>>}
      */
-    public static function structuraDinCorp(string $corp): array
+    public static function structuraDinCorp(string $corp, ?array &$necunoscute = null): array
     {
+        $necunoscute = [];
         $structura = ['coloane' => [], 'indecsi' => [], 'fk' => []];
         $fkFaraIndex = [];
         foreach (self::impartePeVirgule(self::jetoane($corp)) as $element) {
@@ -709,6 +749,9 @@ final class Amprenta
             $numeColoana = $element[0][1];
             $restul = implode(' ', array_map(static fn (array $j): string => $j[2], array_slice($element, 1)));
             $definitie = self::coloanaDinDefinitie($restul);
+            if ($definitie['necunoscute'] !== []) {
+                $necunoscute[] = $numeColoana . ': ' . implode(' ', $definitie['necunoscute']);
+            }
             $structura['coloane'][$numeColoana] = [
                 'tip' => $definitie['tip'], 'null' => $definitie['null'],
                 'implicit' => $definitie['implicit'], 'extra' => $definitie['extra'],

@@ -131,7 +131,11 @@ final class Schema
         if (preg_match('/\)\s*(ENGINE|DEFAULT\s+CHARSET|CHARSET|COLLATE)\b/i', $corp) === 1) {
             throw new Eroare($this->executie->id . ': tabel(' . $tabel . '): corpul are doar coloanele și cheile; motorul și setul de caractere le pune runner-ul', Eroare::MIGRARE);
         }
-        $structura = Amprenta::structuraDinCorp($corp);
+        $structura = Amprenta::structuraDinCorp($corp, $necunoscute);
+        if ($necunoscute !== []) {
+            throw new Eroare($this->executie->id . ': tabel(' . $tabel . '): nu înțeleg: ' . implode('; ', $necunoscute)
+                . self::faraColatie($necunoscute), Eroare::MIGRARE);
+        }
         if ($this->existaTabel($tabel)) {
             $this->noteaza('fara_efect', 'tabel', $tabel, 'există');
             return;
@@ -144,7 +148,31 @@ final class Schema
             $this->noteaza('creare', 'tabel', $tabel, count($structura['coloane']) . ' coloane');
             return;
         }
-        $this->executa('tabel', $tabel, $tabel, 'creare', $sql);
+        ($this->executie->inainte)();
+        $start = microtime(true);
+        $this->cuReincercari('tabel', $tabel, fn (): int => (int) $this->db->exec($sql));
+        unset($this->cache[$tabel]);
+        if ($this->notaTabelExistent()) {
+            // CREATE TABLE IF NOT EXISTS fără efect: tabelul l-a făcut altcineva între timp (codul
+            // vechi). Nu e o operație a migrării; tabelComplet aduce apoi la zi ce-i lipsește.
+            $this->noteaza('fara_efect', 'tabel', $tabel, 'făcut între timp de altcineva (1050)');
+            return;
+        }
+        $this->cuEfect('tabel', $tabel, 'creare', (microtime(true) - $start) * 1000);
+    }
+
+    /** Nota 1050 („Table … already exists”) a ultimului CREATE TABLE IF NOT EXISTS. */
+    private function notaTabelExistent(): bool
+    {
+        try {
+            foreach ($this->db->query('SHOW WARNINGS')->fetchAll(PDO::FETCH_ASSOC) as $nota) {
+                if ((int) ($nota['Code'] ?? 0) === 1050) {
+                    return true;
+                }
+            }
+        } catch (PDOException) {
+        }
+        return false;
     }
 
     /**
@@ -169,9 +197,10 @@ final class Schema
             throw new Eroare($this->executie->id . ': tabelComplet(' . $tabel . ') fără coloane', Eroare::MIGRARE);
         }
         $parti = [];
+        $cerute = [];
         foreach ($coloane as $coloana => $definitie) {
             $this->numeValid((string) $coloana);
-            $this->definitie($tabel, (string) $coloana, $definitie);
+            $cerute[(string) $coloana] = $this->definitie($tabel, (string) $coloana, $definitie);
             $parti[] = '`' . $coloana . '` ' . trim($definitie);
         }
         $primara = null;
@@ -197,10 +226,12 @@ final class Schema
         $exista = $this->existaTabel($tabel);
         $this->tabel($tabel, implode(",\n", $parti));
         if (!$exista) {
-            // Creat acum. Dacă totuși îi lipsește ceva, l-a creat altcineva chiar atunci (codul
-            // vechi, cu CREATE TABLE IF NOT EXISTS al lui): se aduce la zi ca un tabel existent.
+            // Creat acum. Dacă totuși îi lipsește ceva (o coloană, un index, cheia primară, o cheie
+            // străină) sau o coloană are altă definiție, l-a creat altcineva chiar atunci (codul vechi,
+            // cu CREATE TABLE IF NOT EXISTS al lui): se aduce la zi ca un tabel existent, cu
+            // avertismentele lui.
             $creat = $this->structura($tabel);
-            if ($creat !== null && array_diff(array_keys($coloane), array_keys($creat['coloane'])) === []) {
+            if ($creat !== null && self::eCaCerut($creat, $cerute, $primara, $indecsi, $straine)) {
                 return;
             }
         }
@@ -687,12 +718,23 @@ final class Schema
             $probleme[] = 'cheile se fac cu index()/unic(), nu în definiția coloanei';
         }
         if ($ceruta['necunoscute'] !== []) {
-            $probleme[] = 'nu înțeleg: ' . implode(' ', $ceruta['necunoscute']);
+            $probleme[] = 'nu înțeleg: ' . implode(' ', $ceruta['necunoscute']) . self::faraColatie($ceruta['necunoscute']);
         }
         if ($probleme !== []) {
             throw new Eroare($this->executie->id . ': ' . $tabel . '.' . $coloana . ': ' . implode('; ', $probleme), Eroare::MIGRARE);
         }
         return $ceruta;
+    }
+
+    /** Lămurirea pentru un CHARACTER SET / COLLATE scris într-o definiție de coloană. @param list<string> $necunoscute */
+    private static function faraColatie(array $necunoscute): string
+    {
+        foreach ($necunoscute as $text) {
+            if (preg_match('/\b(character\s+set|charset|collate)\b/i', $text) === 1) {
+                return ' (o coloană ia colația tabelului, utf8mb4_unicode_ci: fără CHARACTER SET/COLLATE în definiție)';
+            }
+        }
+        return '';
     }
 
     private function comparaDefinitia(string $tabel, string $coloana, array $existenta, array $ceruta): void
@@ -702,6 +744,58 @@ final class Schema
             $this->avertisment('coloana ' . $tabel . '.' . $coloana . ' există cu altă definiție (' . implode(', ', $diferente) . '): '
                 . Amprenta::descrieColoana($existenta) . '; migrarea cere ' . Amprenta::descrieColoana(self::doarColoana($ceruta)) . '. Nu se schimbă.');
         }
+    }
+
+    /**
+     * Tabelul abia creat de tabelComplet e exact cel cerut: fiecare coloană, cu definiția ei
+     * (coloanele cheii primare doar să existe, ca pe un tabel existent), cheia primară, fiecare
+     * index (sub același nume, echivalent; altfel unul echivalent sub alt nume) și fiecare cheie
+     * străină (același nume, sau aceleași coloane spre același tabel). Altfel tabelul l-a făcut
+     * altcineva chiar atunci, iar tabelComplet îl aduce la zi ca pe unul existent.
+     *
+     * @param array<string, mixed> $creat
+     * @param array<string, array<string, mixed>> $cerute
+     * @param list<string>|null $primara
+     * @param array<string, array<string, mixed>> $indecsi
+     * @param array<string, array<string, mixed>> $straine
+     */
+    private static function eCaCerut(array $creat, array $cerute, ?array $primara, array $indecsi, array $straine): bool
+    {
+        foreach ($cerute as $coloana => $ceruta) {
+            $existenta = $creat['coloane'][$coloana] ?? null;
+            if ($existenta === null) {
+                return false;
+            }
+            if (($primara === null || !in_array((string) $coloana, $primara, true)) && Amprenta::diferenteColoana($existenta, $ceruta) !== []) {
+                return false;
+            }
+        }
+        if ($primara !== null && !Amprenta::indecsiEchivalenti($creat['indecsi']['PRIMARY'] ?? ['unic' => false, 'coloane' => []], Amprenta::index(true, $primara))) {
+            return false;
+        }
+        foreach ($indecsi as $nume => $index) {
+            if (isset($creat['indecsi'][$nume])) {
+                $gasit = Amprenta::indecsiEchivalenti($creat['indecsi'][$nume], $index);
+            } else {
+                $gasit = false;
+                foreach ($creat['indecsi'] as $existent) {
+                    $gasit = $gasit || Amprenta::indecsiEchivalenti($existent, $index);
+                }
+            }
+            if (!$gasit) {
+                return false;
+            }
+        }
+        foreach ($straine as $nume => $fk) {
+            $gasita = isset($creat['fk'][$nume]);
+            foreach ($creat['fk'] as $alta) {
+                $gasita = $gasita || ($alta['coloane'] === $fk['coloane'] && $alta['tabel'] === $fk['tabel']);
+            }
+            if (!$gasita) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** @return array{tip: string, null: bool, implicit: ?string, extra: string} */
@@ -886,7 +980,7 @@ final class Schema
         ($this->executie->dupa)();
     }
 
-    /** O instrucțiune DDL fără lanț de clauze (CREATE TABLE, DROP TABLE). */
+    /** O instrucțiune DDL fără lanț de clauze (DROP TABLE; CREATE TABLE își are pașii în tabel(), cu nota 1050). */
     private function executa(string $fel, string $tabel, string $obiect, string $clasa, string $sql): void
     {
         ($this->executie->inainte)();

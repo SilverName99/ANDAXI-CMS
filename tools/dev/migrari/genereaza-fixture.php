@@ -30,15 +30,17 @@ declare(strict_types=1);
  *
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica [--server=mariadb|mysql8] [--repo=<clona CMS>@<commit>]
  *       Acceptanța migrărilor de bază (WP-03; poarta G-baza din porti.sh), pe MariaDB și pe MySQL 8
- *       (implicit amândouă): pe o bază goală toate migrările dau exact asteptat.json, iar baseline-ul
- *       (până la GF_ULTIMA_DIN_BAZA) dă schema codului minus excluderile de mai jos (fiecare trebuie să
- *       existe în schema codului, altfel lista e veche) și diferențele declarate; pe baza făcută de cod
- *       („pe vechi”: install.php + funcțiile), planul are în grupul B (0001–0019) doar „există deja”,
- *       baseline-ul face 0 operații (totul „detectata”), schema rămâne aceeași, verificarea trece și
- *       a doua aplicare n-are nimic de făcut; fixture-ul SQL făcut pe MariaDB se încarcă pe fiecare
- *       server și dă înapoi aceeași amprentă; pe MySQL 8, codul vechi face aceeași schemă ca pe
- *       MariaDB (în afară de colațiile declarate). Schema codului e a arborelui de lucru; după ce
- *       install.php trece pe migrări (WP-05), referința e un commit dinainte, cu --repo.
+ *       (implicit amândouă): pe o bază goală toate migrările dau exact asteptat.json, fără avertismente,
+ *       iar baseline-ul (până la GF_ULTIMA_DIN_BAZA) dă schema codului minus excluderile de mai jos
+ *       (fiecare trebuie să existe în schema codului, altfel lista e veche) și diferențele declarate; pe
+ *       baza făcută de cod („pe vechi”: install.php + funcțiile), planul are în grupul B (0001–0019)
+ *       doar „există deja”, baseline-ul face 0 operații (totul „detectata”), schema rămâne aceeași,
+ *       verificarea trece și a doua aplicare n-are nimic de făcut; fixture-ul SQL făcut pe MariaDB se
+ *       încarcă pe fiecare server și dă înapoi aceeași amprentă; pe MySQL 8, codul vechi face aceeași
+ *       schemă ca pe MariaDB (în afară de colațiile declarate); migrările de date (grupul C) lasă pe
+ *       rândurile inventate din GF_RANDURI_GRUP_C exact ce lăsau funcțiile codului. Schema codului e a
+ *       arborelui de lucru; după ce install.php trece pe migrări (WP-05), referința e un commit
+ *       dinainte, cu --repo.
  *
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --compara a-amprenta.json b-amprenta.json …
  *       fiecare amprentă față de prima: tabele, coloane, indecși lipsă / în plus și definițiile diferite.
@@ -93,6 +95,61 @@ const GF_COLATIE_SERVER = ['bt_ipay_log', 'bt_ipay_transactions'];
 
 /** Ultima migrare a baseline-ului (grupurile B și C): schema codului se compară cu migrările până la ea. */
 const GF_ULTIMA_DIN_BAZA = 'blog/0024_legaturi_categorii';
+
+/**
+ * Rândurile inventate pentru migrările de date (grupul C, pasul 6 din --verifica): fiecare caz pe care
+ * codul vechi îl aducea la zi la fiecare cerere. Aceleași rânduri trec o dată prin funcțiile codului și o
+ * dată prin migrări (GF_CITIRI_GRUP_C trebuie să iasă la fel). Doar date inventate (@exemplu.ro).
+ */
+const GF_RANDURI_GRUP_C = [
+    // 0020: rolurile adminilor. role gol + roles_json (revizuirea WP-03), gol, doar spații (gol la colația
+    // PAD SPACE a coloanei), un tab (nu e gol pentru server), cu spațiu la coadă, necunoscut, mai multe
+    // roluri repetate, JSON greșit, un obiect JSON, valori care nu sunt texte, listă goală, deja la zi.
+    "INSERT INTO admins (id, email, password_hash, role, roles_json) VALUES
+        (101, 'rol-gol-blog@exemplu.ro', 'x', '', '[\"administrator_blog\"]'),
+        (102, 'rol-gol@exemplu.ro', 'x', '', NULL),
+        (103, 'rol-spatii@exemplu.ro', 'x', '   ', '[\"administrator_magazin\"]'),
+        (104, 'rol-tab@exemplu.ro', 'x', CHAR(9 USING utf8mb4), '[\"administrator_blog\"]'),
+        (105, 'rol-spatiu-final@exemplu.ro', 'x', 'administrator_blog ', NULL),
+        (106, 'rol-necunoscut@exemplu.ro', 'x', 'necunoscut', '[\"altceva\", 7]'),
+        (107, 'rol-multe@exemplu.ro', 'x', 'administrator_blog', '[\"administrator_magazin\", \"administrator_emailuri\", \"administrator_magazin\"]'),
+        (108, 'rol-json-gresit@exemplu.ro', 'x', 'administrator_general', 'nu e json'),
+        (109, 'rol-obiect@exemplu.ro', 'x', 'administrator_magazin', '{\"a\": \"administrator_blog\"}'),
+        (110, 'rol-amestec@exemplu.ro', 'x', 'administrator_emailuri', '[null, true, 5, \" administrator_blog \"]'),
+        (111, 'rol-lista-goala@exemplu.ro', 'x', '', '[]'),
+        (112, 'rol-la-zi@exemplu.ro', 'x', 'administrator_general', '[\"administrator_general\"]'),
+        (113, 'rol-json-gol@exemplu.ro', 'x', 'administrator_blog', ''),
+        (114, 'rol-json-spatii@exemplu.ro', 'x', 'administrator_emailuri', '  ')",
+    // 0021: galeria din coloana veche gallery_json (singura coloană veche a catalogului din schema codului).
+    "INSERT INTO products (id, name, slug, gallery_json, gallery_images_json) VALUES
+        (401, 'Produs demo', 'produs-demo', '[\"/uploads/demo/a.png\"]', NULL),
+        (402, 'Produs cu galerie', 'produs-cu-galerie', '[\"/uploads/demo/vechi.png\"]', '[\"/uploads/demo/nou.png\"]'),
+        (403, 'Produs cu galerie goala', 'produs-cu-galerie-goala', '[\"/uploads/demo/b.png\"]', '')",
+    // 0022: numele gol al cupoanelor.
+    "INSERT INTO coupons (id, code, name) VALUES (201, 'DEMO-GOL', ''), (202, 'DEMO-NUME', 'Are nume')",
+    // 0023: recenziile din tabelul vechi (una deja copiată, una nu) și sursa celor fără sursă.
+    "INSERT INTO reviews (product_id, user_name, rating, review_text, is_approved, created_at) VALUES
+        (401, 'Client Demo', 5, 'Foarte bun', 1, '2026-01-02 10:00:00'), (401, 'Alt Client', 4, NULL, 0, '2026-01-03 10:00:00')",
+    "INSERT INTO product_reviews (product_id, user_name, rating, review_text, is_approved, created_at, source) VALUES
+        (401, 'Client Demo', 5, 'Foarte bun', 1, '2026-01-02 10:00:00', 'product_page'), (401, 'Fara Sursa', 3, 'ok', 1, '2026-01-04 10:00:00', '')",
+    // 0024: legăturile articol–categorie din categoria principală.
+    "INSERT INTO blog_categories (id, name, slug) VALUES (301, 'Categorie demo', 'categorie-demo'), (302, 'A doua demo', 'a-doua-demo')",
+    "INSERT INTO blog_posts (id, title, slug, content, published_at, category_id) VALUES
+        (311, 'Fara legatura', 'fara-legatura', 'x', '2026-01-01 10:00:00', 301),
+        (312, 'Cu legatura', 'cu-legatura', 'x', '2026-01-01 10:00:00', 302),
+        (313, 'Fara categorie', 'fara-categorie', 'x', '2026-01-01 10:00:00', NULL)",
+    'INSERT INTO blog_post_categories (post_id, category_id) VALUES (312, 302)',
+];
+
+/** Ce se compară după pasul 6 (doar rândurile inventate de mai sus). */
+const GF_CITIRI_GRUP_C = [
+    'admins (0020)' => 'SELECT id, role, roles_json FROM admins WHERE id BETWEEN 101 AND 114 ORDER BY id',
+    'products.gallery_images_json (0021)' => 'SELECT id, gallery_images_json FROM products WHERE id BETWEEN 401 AND 403 ORDER BY id',
+    'coupons.name (0022)' => 'SELECT id, name FROM coupons WHERE id IN (201, 202) ORDER BY id',
+    'product_reviews (0023)' => 'SELECT product_id, user_name, rating, review_text, is_approved, created_at, source FROM product_reviews
+        WHERE product_id = 401 ORDER BY created_at, user_name',
+    'blog_post_categories (0024)' => 'SELECT post_id, category_id FROM blog_post_categories WHERE post_id BETWEEN 311 AND 313 ORDER BY post_id, category_id',
+];
 
 $dosarDev = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/');
 $lucru = $dosarDev . '/fixture-migrari';
@@ -611,10 +668,12 @@ foreach ($servere as $server) {
     $cod = $schemaCodului($copie['dosar'], $sock, 'cms_mig_fx_cod');
     $A = $cod['amprenta'];
     echo '  schema codului ', $copie['eticheta'], ': ', $descrie($A), ' (', implode('; ', $cod['treceri']), ")\n";
+    // Schema codului ca SQL, înainte ca migrările să atingă baza: pentru pasul 6 pe acest server, iar
+    // cea de pe MariaDB și pentru pasul 5 (încărcată pe fiecare server).
+    $fixtureServer = $sqlSchema($conectare($sock, 'cms_mig_fx_cod'), "-- test\n");
     if ($server === 'mariadb') {
-        // Fixture-ul SQL al schemei codului, înainte ca migrările să atingă baza (pasul 5).
         $amprentaCodMaria = $A;
-        $fixtureMaria = $sqlSchema($conectare($sock, 'cms_mig_fx_cod'), "-- test\n");
+        $fixtureMaria = $fixtureServer;
     }
 
     // 2. Toate migrările pe o bază goală = asteptat.json.
@@ -622,9 +681,11 @@ foreach ($servere as $server) {
     [$c, $o] = $migreaza($sock, 'cms_mig_fx_nou', ['--aplica', '--json']);
     $r = json_decode($o, true);
     $s = $stari(is_array($r) ? $r : []);
-    $verifica('o bază goală: --aplica iese cu 0 (grupul B aplicat, grupul C fără nimic de convertit, verificarea față de asteptat.json trecută)',
+    $verifica('o bază goală: --aplica iese cu 0 (grupul B aplicat, grupul C fără nimic de convertit, verificarea față de asteptat.json trecută), fără avertismente',
         $c === 0 && ($s['B'] ?? null) === ['aplicata' => 19] && ($s['C'] ?? null) === ['detectata' => 5]
-        && array_sum((array) ($s['după'] ?? [])) === $dupaBaza, 'cod ' . $c . ', stări ' . json_encode($s) . ': ' . substr((string) ($r['mesaj'] ?? $o), 0, 1500));
+        && array_sum((array) ($s['după'] ?? [])) === $dupaBaza && (array) ($r['avertismente'] ?? ['?']) === [],
+        'cod ' . $c . ', stări ' . json_encode($s) . ': ' . substr((string) ($r['mesaj'] ?? $o), 0, 1500)
+        . "\navertismente: " . implode("\n", array_slice((array) ($r['avertismente'] ?? []), 0, 20)));
     $F = $amprentaBazei($sock, 'cms_mig_fx_nou');
     $verifica('instalarea nouă = asteptat.json (' . $descrie($F) . ')', Amprenta::json($F) === Amprenta::json($asteptat), $diferenteText($asteptat, $F));
     [$c2, $o2] = $migreaza($sock, 'cms_mig_fx_nou', ['--plan']);
@@ -727,6 +788,58 @@ foreach ($servere as $server) {
         };
         $verifica('pe MySQL 8 codul face aceeași schemă ca pe MariaDB (în afară de colația declarată)',
             Amprenta::json($faraColatii($A)) === Amprenta::json($faraColatii($amprentaCodMaria)), $diferenteText($amprentaCodMaria, $A));
+    }
+
+    // 6. Grupul C față de codul vechi: aceleași rânduri inventate (GF_RANDURI_GRUP_C), pe schema codului,
+    //    trec o dată prin funcțiile codului (o trecere, ca la o cerere) și o dată prin migrări (baseline-ul).
+    //    Fiecare migrare de date trebuie să lase exact ce lăsa codul vechi.
+    $eroare = null;
+    try {
+        foreach (['cms_mig_fx_c_cod', 'cms_mig_fx_c_mig'] as $bazaC) {
+            $incarcaSql($sock, $bazaC, $fixtureServer);
+            $dbC = $conectare($sock, $bazaC);
+            foreach (GF_RANDURI_GRUP_C as $sql) {
+                $dbC->exec($sql);
+            }
+        }
+    } catch (Throwable $e) {
+        $eroare = $e->getMessage();
+    }
+    $citesteC = static function (string $baza) use ($conectare, $sock): array {
+        $db = $conectare($sock, $baza);
+        $rezultat = [];
+        foreach (GF_CITIRI_GRUP_C as $ce => $sql) {
+            $rezultat[$ce] = $db->query($sql)->fetchAll(PDO::FETCH_NUM);
+        }
+        return $rezultat;
+    };
+    if ($eroare !== null) {
+        $verifica('grupul C față de codul vechi: rândurile inventate se scriu pe schema codului', false, $eroare);
+    } else {
+        $inainteC = $citesteC('cms_mig_fx_c_mig');
+        $vechi = $copil('helperi', $copie['dosar'], $sock, 'cms_mig_fx_c_cod');
+        [$c6, $o6] = $migreaza($sock, 'cms_mig_fx_c_mig', ['--aplica', '--json', '--pana-la=' . GF_ULTIMA_DIN_BAZA]);
+        $r6 = json_decode($o6, true);
+        $s6 = $stari(is_array($r6) ? $r6 : []);
+        $dinCod = $citesteC('cms_mig_fx_c_cod');
+        $dinMigrari = $citesteC('cms_mig_fx_c_mig');
+        $diferite = [];
+        foreach (GF_CITIRI_GRUP_C as $ce => $_) {
+            if ($dinCod[$ce] !== $dinMigrari[$ce]) {
+                $diferite[] = $ce . "\n    codul vechi: " . json_encode($dinCod[$ce], JSON_UNESCAPED_UNICODE)
+                    . "\n    migrările:   " . json_encode($dinMigrari[$ce], JSON_UNESCAPED_UNICODE);
+            }
+            if ($inainteC[$ce] === $dinMigrari[$ce]) {
+                $diferite[] = $ce . ': nimic schimbat (cazul nu verifică nimic)';
+            }
+        }
+        $randGolBlog = $dinMigrari['admins (0020)'][0] ?? [];
+        $verifica('grupul C față de codul vechi, pe rânduri inventate (' . implode(', ', array_keys(GF_CITIRI_GRUP_C)) . '): '
+            . 'migrările lasă exact ce lăsau funcțiile codului; role gol + roles_json → administrator_general în plus',
+            ($vechi['erori'] ?? []) === [] && $c6 === 0 && ($s6['C'] ?? null) === ['aplicata' => 5] && $diferite === []
+            && array_map('strval', $randGolBlog) === ['101', 'administrator_general', '["administrator_blog","administrator_general"]'],
+            implode('; ', array_slice((array) ($vechi['erori'] ?? []), 0, 3)) . ' cod ' . $c6 . ', stări ' . json_encode($s6) . "\n" . implode("\n", $diferite)
+            . "\n" . substr((string) ($r6['mesaj'] ?? $o6), 0, 600));
     }
 }
 
