@@ -306,8 +306,10 @@ bază, o singură dată, când devine „pornit”, stă în `config/activari.ph
 | `erp` | `prag_trimitere_erp` | setarea `erp_trimite_din` = momentul pornirii, doar dacă lipsește |
 
 Pașii rulează la prima cerere de după ce pluginul a devenit „pornit” (și în
-`scripts/install.php`, `tools/dev/licenta.php`, cronul ERP), o singură dată pe bază:
-ce s-a făcut stă în setarea `activari_pluginuri`. Un plugin trecut în „oprit” iese
+`scripts/install.php`, `tools/dev/licenta.php`, cronul ERP), o singură dată pe bază,
+doar pe o bază la zi cu migrările (pe una încă neadoptată sau în urma codului nu scriu
+nimic și așteaptă `scripts/migreaza.php --aplica`): ce s-a făcut stă în setarea
+`activari_pluginuri`. Un plugin trecut în „oprit” iese
 de acolo, deci o repornire îi rulează pașii din nou; fiecare pas e idempotent (o
 pagină care există nu se mai face, o cheie existentă nu se atinge). „Se oprește” nu
 schimbă nimic. Fiecare pas rulat apare în Jurnal activitate („Plugin pornit: pas de
@@ -743,6 +745,7 @@ tools/dev/php.sh tools/dev/licenta.php prezentare            # sau catalog, maga
 tools/dev/php.sh tools/dev/licenta.php magazin cupoane=pornit magazin=se_opreste
 tools/dev/php.sh tools/dev/licenta.php fara                  # fără licență și fără stare aplicată: doar nucleul
 tools/dev/php.sh tools/dev/licenta.php arata                 # ce licență e folosită și ce probleme are
+tools/dev/php.sh tools/dev/licenta.php activari              # doar pașii de activare ai licenței de acum (baza la zi cu migrările)
 tools/dev/php.sh tools/dev/verifica-rute.php                 # fiecare rută cu proprietarul ei
 tools/dev/php.sh tools/dev/instantaneu-rute.php              # suprafața fiecărei licențe față de tools/dev/instantanee/
 tools/dev/php.sh tools/dev/instantaneu-rute.php --actualizeaza   # după o schimbare voită (fișierele intră în commit)

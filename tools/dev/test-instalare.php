@@ -18,10 +18,13 @@ declare(strict_types=1);
  *  D. Pașii de activare (config/activari.php): fără licență nicio pagină /acorduri-gdpr și niciun prag ERP; licența
  *     pornește pluginurile → la prima cerere pagina (200 pe site) și pragul, câte un rând în jurnalul adminului, o singură
  *     dată (a doua cerere nu schimbă nimic); erp oprit și pornit din nou cu cheia prezentă și goală → neatinsă; o pagină
- *     ștearsă de admin rămâne ștearsă (și după o oprire și o repornire a pluginului).
+ *     ștearsă de admin rămâne ștearsă (și după o oprire și o repornire a pluginului); cu baza în urma codului (in_urma)
+ *     nici cererea, nici cronul ERP nu rulează pașii, iar după aducerea la zi îi rulează prima cerere.
  *  E. Contorul de instrucțiuni (CMS_DEV_NUMARA_SQL=1, App\Support\ContorSql): pe o bază făcută de install.php, cu date
  *     demo, 0 instrucțiuni de schemă pe dashboard, lista de comenzi, pagina de produs și trimiterea unei comenzi; pe una
- *     făcută ca înainte (tools/dev/migrari/pe-vechi.php), dashboard-ul trimite peste 100, iar după baseline 0.
+ *     făcută ca înainte (tools/dev/migrari/pe-vechi.php), dashboard-ul trimite peste 100, iar după baseline 0. Pe aceeași
+ *     bază, înainte de baseline (fara_registru, licența „toate”), cererile și cronul ERP nu rulează pașii de activare
+ *     (fără erp_trimite_din, fără înregistrare); după baseline îi rulează prima cerere.
  *
  * Doar date inventate (@exemplu.ro), pe baze cms_inst_* (făcute și șterse aici), cu licența într-un dosar al testului
  * (CMS_DEV_LICENTA_DOSAR: licența locală nu se atinge) și un server pe CMS_DEV_PORT+8, oprit la final. Doar MariaDB
@@ -227,6 +230,18 @@ $instantaneu = static function (PDO $db): array {
     return $r;
 };
 $schimbate = static fn (array $a, array $b): array => array_keys(array_diff_assoc($b, $a) + array_diff_assoc($a, $b));
+/** Ce lasă pașii de activare într-o bază: pragul ERP (null = cheia lipsește), înregistrarea, rezultatele din jurnal. */
+$urmeActivare = static function (PDO $db): array {
+    $prag = $db->query("SELECT `value` FROM settings WHERE `key` = 'erp_trimite_din'")->fetchColumn();
+    $inregistrare = $db->query("SELECT `value` FROM settings WHERE `key` = '" . Activari::CHEIE_SETARE . "'")->fetchColumn();
+    $jurnal = [];
+    foreach ($db->query("SELECT context_json FROM admin_activity_log WHERE action = '" . Activari::ACTIUNE_JURNAL . "' ORDER BY id")
+        ->fetchAll(PDO::FETCH_COLUMN) as $context) {
+        $jurnal[] = (string) (((array) json_decode((string) $context, true))['rezultat'] ?? '');
+    }
+    return ['prag' => $prag === false ? null : (string) $prag,
+        'inregistrare' => array_keys((array) json_decode($inregistrare === false ? '' : (string) $inregistrare, true)), 'jurnal' => $jurnal];
+};
 $asteptat = json_decode((string) file_get_contents($radacina . '/database/migrari/asteptat.json'), true);
 $asteptatJson = Amprenta::json(is_array($asteptat) ? $asteptat : []);
 $ultimaOrd = (require $radacina . '/database/migrari/ultima.php')['ord'];
@@ -417,6 +432,27 @@ $verifica('erp pornit din nou cu cheia lipsă: erp_trimite_din scris (data de ac
 $inainte = $instantaneu($dbD);
 $rulate = Activari::ruleaza($dbD);
 $verifica('Activari::ruleaza() a doua oară: nimic de rulat, nimic schimbat', $rulate === [] && $instantaneu($dbD) === $inainte, json_encode($rulate));
+// Baza în urma codului (un release urcat înainte de --aplica, o adoptare oprită la jumătate): pașii așteaptă și nu scriu
+// nimic, nici la o cerere, nici în cronul ERP (pragul de acum ar lua-o înaintea înghețării setărilor); după --aplica rulează.
+$licenta(['lista', 'blog=pornit']);
+$cerere('GET', '/');
+$dbD->exec("DELETE FROM settings WHERE `key` = 'erp_trimite_din'");
+$dbD->exec("UPDATE _platforma_stare SET valoare = '" . ($ultimaOrd - 1) . "' WHERE cheie = 'ultima_ord'");
+$licenta(['toate']);
+$urmeInainte = $urmeActivare($dbD);
+$r = $cerere('GET', '/');
+[$codErp, $outErp, $errErp] = $php('cms_inst_fara', ['scripts/erp-sync.php']);
+$verifica('baza în urma codului (in_urma), acorduri_gdpr și erp pornite din nou: o cerere și cronul ERP nu rulează pașii '
+    . '(fără erp_trimite_din, înregistrarea și jurnalul neschimbate)',
+    $r['cod'] === 200 && $codErp === 0 && $urmeInainte['prag'] === null && $urmeInainte['inregistrare'] === []
+    && $urmeActivare($dbD) === $urmeInainte, 'cod ' . $r['cod'] . '/' . $codErp . ' ' . json_encode([$urmeInainte, $urmeActivare($dbD)]) . ' ' . $outErp . $errErp);
+$dbD->exec("UPDATE _platforma_stare SET valoare = '" . $ultimaOrd . "' WHERE cheie = 'ultima_ord'");
+$cerere('GET', '/');
+$urme = $urmeActivare($dbD);
+$verifica('după --aplica (baza din nou la zi): prima cerere rulează pașii (erp_trimite_din scris, acorduri_gdpr și erp în înregistrare, '
+    . 'două rânduri noi în jurnal)',
+    preg_match('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', (string) $urme['prag']) === 1 && $urme['inregistrare'] === ['acorduri_gdpr', 'erp']
+    && count($urme['jurnal']) === count($urmeInainte['jurnal']) + 2, json_encode($urme, JSON_UNESCAPED_UNICODE));
 
 $scrie('');
 $scrie('== C. /health și bannerul din admin');
@@ -504,9 +540,25 @@ $r = $cerere('GET', '/admin', $jarAdmin);
 $inainteDeBaseline = $gaseste($citesteContorul(), 'GET', '/admin');
 $verifica('bannerul schemei pe baza ca înainte: fara_registru, cu --plan și --aplica', $r['cod'] === 200
     && str_contains($r['corp'], 'data-schema="fara_registru"') && str_contains($r['corp'], 'php scripts/migreaza.php --plan'));
+// Codul comun pe o bază de dinainte de adoptare (o copie restaurată fără runner, un release urcat înainte de --aplica),
+// cu ERP și acorduri_gdpr pornite: pașii de activare nu scriu nimic până la baseline, ca pragul ERP să nu ia locul
+// înghețării setărilor (care scrie doar o cheie lipsă).
+$cerere('GET', '/');
+[$codErpV, $outErpV, $errErpV] = $php('cms_inst_vechi', ['scripts/erp-sync.php']);
+$urmeVechi = $urmeActivare($dbV);
+$verifica('pe baza ca înainte (fara_registru), licența „toate”: cererile și cronul ERP nu rulează pașii de activare (fără erp_trimite_din, fără '
+    . Activari::CHEIE_SETARE . ', niciun rând în jurnal)',
+    $codErpV === 0 && $urmeVechi === ['prag' => null, 'inregistrare' => [], 'jurnal' => []],
+    'cod ' . $codErpV . ' ' . json_encode($urmeVechi, JSON_UNESCAPED_UNICODE) . ' ' . $outErpV . $errErpV);
 [$ca, $oa] = $php('cms_inst_vechi', ['scripts/migreaza.php', '--aplica']);
 $cerere('GET', '/admin', $jarAdmin);
 $dupaBaseline = $gaseste($citesteContorul(), 'GET', '/admin');
+$urmeVechi = $urmeActivare($dbV);
+$verifica('după baseline (--aplica), prima cerere rulează pașii: erp_trimite_din scris, acorduri_gdpr și erp în înregistrare, pagina '
+    . '/acorduri-gdpr „exista (neatinsă)” (o făcuseră funcțiile ensure*)',
+    preg_match('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', (string) $urmeVechi['prag']) === 1 && $urmeVechi['inregistrare'] === ['acorduri_gdpr', 'erp']
+    && $urmeVechi['jurnal'] === ['pagina /acorduri-gdpr exista (neatinsă)', 'erp_trimite_din scris (de acum)'],
+    json_encode($urmeVechi, JSON_UNESCAPED_UNICODE));
 $verifica('dashboard-ul pe baza ca înainte: ' . ($inainteDeBaseline['ddl'] ?? '?') . ' instrucțiuni de schemă (din '
     . ($inainteDeBaseline['instructiuni'] ?? '?') . '), după baseline (--aplica, cod ' . $ca . '): ' . ($dupaBaseline['ddl'] ?? '?') . ' (din '
     . ($dupaBaseline['instructiuni'] ?? '?') . ')',

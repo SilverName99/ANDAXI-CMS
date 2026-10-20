@@ -40,8 +40,9 @@ declare(strict_types=1);
  *       parolă anulează cookie-urile vechi.
  *    B4 copie „încărcată” (baza de dezvoltare și o dată de încărcare scrisă de test): cu
  *       parola, paginile aplicației răspund 200, cu noindex și no-store chiar și unde
- *       aplicația pune alt antet (sitemap); fără parolă tot 401; copie expirată, cu dată
- *       de necitit sau din viitor → 503.
+ *       aplicația pune alt antet (sitemap); fără parolă tot 401, în afară de /health, pe
+ *       care îl dă aplicația (schema: la_zi; 503 cu ultima_ord coborât o clipă); copie
+ *       expirată, cu dată de necitit sau din viitor → 503 (/health: din nou „ok” al porții).
  *    B5 SITE_COPIE_VERIFICARE=0: poarta nu face nimic (pagina aplicației, robots-ul ei).
  *    Pe tot parcursul: niciun tabel în baza goală, nicio sesiune pornită de o cerere oprită
  *    la poartă, niciun email, jurnalul PHP al copiei fără avertismente.
@@ -709,6 +710,26 @@ try {
         && str_contains($r['corp'], '<urlset'), ($r['antete']['x-robots-tag'] ?? '-'));
     $r = $cerere('GET', '/robots.txt', ['basic' => $bunaBasic]);
     $verifica('/robots.txt rămâne „Disallow: /” și cu parola', $r['corp'] === "User-agent: *\nDisallow: /\n");
+    // /health, cu copia încărcată: îl dă aplicația (fără parolă), cu starea schemei, ca o repetiție a deploy-ului să vadă
+    // aici ce ar vedea pe site; cu baza în urma codului 503 (ultima_ord coborât o clipă pe baza copiei, apoi pus la loc).
+    $bazaCopiei = '`' . str_replace('`', '', (string) getenv('DB_DATABASE')) . '`';
+    $ultimaDinCod = (int) ((require $radacina . '/database/migrari/ultima.php')['ord'] ?? 0);
+    $r = $cerere('GET', '/health');
+    $verifica('/health fără parolă, cu copia încărcată → aplicația: 200 „ok” + „schema: la_zi”, noindex, no-store '
+        . '(baza de dezvoltare făcută prin migrări, tools/dev/instaleaza.sh)', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi" && $antetPoarta($r),
+        $r['cod'] . ' ' . $r['corp']);
+    $ultimaInBaza = (string) $root->query('SELECT valoare FROM ' . $bazaCopiei . "._platforma_stare WHERE cheie = 'ultima_ord'")->fetchColumn();
+    try {
+        $root->exec('UPDATE ' . $bazaCopiei . "._platforma_stare SET valoare = '" . ($ultimaDinCod - 1) . "' WHERE cheie = 'ultima_ord'");
+        $r = $cerere('GET', '/health');
+    } finally {
+        $root->exec('UPDATE ' . $bazaCopiei . '._platforma_stare SET valoare = ' . $root->quote($ultimaInBaza) . " WHERE cheie = 'ultima_ord'");
+    }
+    $verifica('/health cu copia încărcată și baza în urma codului (o migrare neaplicată) → 503 „schema: in_urma”, fără parolă',
+        $r['cod'] === 503 && str_contains($r['corp'], 'schema: in_urma') && $antetPoarta($r), $r['cod'] . ' ' . $r['corp']);
+    $r = $cerere('HEAD', '/health');
+    $verifica('HEAD /health cu copia încărcată → 200 al porții (routerul aplicației are doar GET și POST)', $r['cod'] === 200 && $antetPoarta($r),
+        (string) $r['cod']);
     $r = $cerere('GET', '/');
     $verifica('fără parolă tot 401, și cu copia încărcată', $r['cod'] === 401);
     file_put_contents($copie . '/storage/verificare/incarcat-la', date('c', time() - 8 * 86400) . "\n");
@@ -716,6 +737,9 @@ try {
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);
     $verifica('copie de 8 zile (și cu VERIFICARE_ZILE_PASTRARE=30: cel mult 7) → 503 „a expirat”', $r['cod'] === 503
         && str_contains($r['corp'], 'a expirat') && $antetPoarta($r));
+    $r = $cerere('GET', '/health');
+    $verifica('/health cu copia expirată → „ok” al porții (fără bază, ca înainte de prima încărcare)', $r['cod'] === 200 && $r['corp'] === 'ok'
+        && $antetPoarta($r), $r['cod'] . ' ' . $r['corp']);
     $scrieEnv(['VERIFICARE_ZILE_PASTRARE' => '7']);
     file_put_contents($copie . '/storage/verificare/incarcat-la', "nu e o dată\n");
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);

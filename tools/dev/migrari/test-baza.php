@@ -901,6 +901,29 @@ foreach ($servere as $numeServer => $sock) {
         && $sortat((array) ($rv['verificare']['avertismente'] ?? [])) === $sortat($avPermise10),
         'cod ' . $cv . ' ' . implode(', ', (array) ($rv['verificare']['in_plus'] ?? [])) . ' | ' . implode(' | ', (array) ($rv['verificare']['avertismente'] ?? [])));
     $helperiNuSchimba($db10, $baza, 'baza făcută ca înainte, după baseline, cu date demo');
+    // Diferențele declarate în site-uri/bioscem/ce-se-schimba.md (WP-05): pe o bază la zi garda oprește și readucerea
+    // datelor șterse de admin. Toate categoriile de blog șterse (ca din Admin → Blog → Categorii) și o recenzie copiată
+    // din tabelul vechi `reviews`, apoi ștearsă din Admin → Recenzii (rândul rămâne în `reviews`, lipsește din
+    // product_reviews): codul comun nu le readuce; codul Bioscem pune la loc cele patru categorii ale lui și recenzia.
+    $db10->exec('UPDATE blog_posts SET category_id = NULL');
+    $db10->exec('DELETE FROM blog_post_categories');
+    $db10->exec('DELETE FROM blog_categories');
+    $idProdus10 = (int) $db10->query('SELECT MIN(id) FROM products')->fetchColumn();
+    $db10->prepare("INSERT INTO reviews (product_id, user_name, rating, review_text, is_approved, created_at)
+        VALUES (:p, 'Recenzent T10 inventat', 4, 'Recenzie veche inventată, ștearsă de admin', 1, '2024-02-03 04:05:06')")->execute(['p' => $idProdus10]);
+    $recenzieT10 = "SELECT COUNT(*) FROM product_reviews WHERE user_name = 'Recenzent T10 inventat'";
+    $S10d = $instantaneu($db10);
+    [$okC10, $rC10] = $helperi($sock, $baza, $codCms);
+    $schimbateC10 = $schimbate($S10d, $instantaneu($db10));
+    [$okB10, $rB10] = $helperi($sock, $baza, $codBs);
+    $schimbateB10 = $sortat($schimbate($S10d, $instantaneu($db10)));
+    $categoriiB10 = implode(',', $db10->query('SELECT slug FROM blog_categories ORDER BY slug')->fetchAll(PDO::FETCH_COLUMN));
+    $verifica('T10: diferențele declarate (ce-se-schimba.md): categoriile de blog șterse toate și o recenzie copiată din `reviews`, apoi '
+        . 'ștearsă, rămân șterse cu codul comun (nimic scris); codul Bioscem ' . $revizuitBs . ' le readuce (cele patru categorii, recenzia)',
+        $idProdus10 > 0 && $okC10 && $schimbateC10 === [] && $okB10 && $schimbateB10 === ['blog_categories', 'product_reviews']
+        && $categoriiB10 === 'evenimente,info-medici,info-pacienti,noutati' && (int) $db10->query($recenzieT10)->fetchColumn() === 1,
+        implode('; ', array_slice(array_merge((array) $rC10['erori'], (array) $rB10['erori']), 0, 3)) . ' comun: ' . implode(', ', $schimbateC10)
+        . '; Bioscem: ' . implode(', ', $schimbateB10) . ' (categorii ' . $categoriiB10 . ')');
 
     // b) Un site nou: scripts/install.php (migrările, seed-ul neutru, setările, pașii de activare, adminul), seed, date demo.
     $bazaI = $b('t10_inst');

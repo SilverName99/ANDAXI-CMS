@@ -13,7 +13,8 @@ făcută de cod (`tools/dev/migrari/genereaza-fixture.php`); din WP-04, **testel
 cinci coduri (și pe cele live, când vine sonda) și **verificarea fișierelor de migrare**
 (`tools/dev/verifica-migrari.php`, în testul de fum); din WP-05, **instalarea prin migrări**, **garda**
 `Garda::stare` (cu `/health` și bannerul din admin), **pașii de activare** ai pluginurilor și **contorul de
-instrucțiuni** din dezvoltare, toate mai jos. Ce vine: pasul de înghețare a setărilor unui site (WP-06).
+instrucțiuni** din dezvoltare, toate mai jos. Ce vine: pasul de înghețare a setărilor unui site (WP-06), care
+trebuie să fi rulat înainte ca garda să spună `la_zi` (pașii de activare, mai jos, îl așteaptă).
 
 ## Pe scurt
 
@@ -394,14 +395,28 @@ Unde se folosește:
   Pe o bază la zi nu mai rulează nimic din ele: nici DDL-ul (131 de instrucțiuni pe dashboard, 175 pe lista de
   comenzi înainte), nici scrierile „de reparat” de la fiecare cerere (rolurile adminilor, galeria veche,
   recenziile din tabelul vechi, legăturile de blog, numele cupoanelor: le fac o singură dată migrările de date
-  0020–0024), nici readucerea paginii `/acorduri-gdpr` (acum pas de activare). Pe `fara_registru`, `in_urma`
+  0020–0024), nici conținutul pe care îl puneau la loc. Pe `fara_registru`, `in_urma`
   sau `eroare` lucrează ca înainte, ca un site încă neadoptat să meargă exact ca azi. `scripts/fan-tracking-sync.php`
   nu mai trimite cele trei ALTER-uri la fiecare rulare. Codul care scrie azi rânduri le scrie complete
   (recenzia cu sursa, adminul cu `roles_json`, cuponul cu nume); un rând scris de codul vechi după ce
   migrările de date au rulat ar cere o migrare de date nouă (pe site-urile vechi codul vechi nu mai rulează
   după adoptare).
+- **Ce ștergea adminul și readuceau funcțiile** (schimbări pentru client, în `site-uri/<site>/ce-se-schimba.md`):
+  pe o bază la zi o ștergere rămâne ștearsă. Pe codul Bioscem, la următoarea pagină din admin (sau de produs):
+  pagina `/acorduri-gdpr` ștearsă revenea (acum: pasul de activare, mai jos, o face doar dacă lipsește cu
+  totul); toate categoriile de blog șterse reveneau ca cele patru ale Bioscem (Noutăți, Evenimente, Info
+  pacienți, Info medici; `ensureOptionalSchema` le punea într-un tabel gol); o recenzie copiată din tabelul
+  vechi `reviews` și ștearsă din admin se copia din nou (acum: o dată, `recenzii/0023`). Altele nu: galeria se
+  reface din `gallery_json` doar într-un câmp gol, iar adminul scrie o galerie golită `[]`; rolurile adminilor,
+  numele cupoanelor, sursa recenziilor și legăturile de blog le scrie codul de azi deja complete; insignele,
+  câmpurile extra, șabloanele, valorile câmpurilor și limitele cupoanelor se mai puteau reface doar din coloane
+  vechi pe care schema codului Bioscem nu le are (`label_popular`, `input_type`, `html_template`, `value_text`,
+  `min_items` …; doar varianta inventată din `variante.sql`). Dacă sonda (WP-10) arată una dintre ele pe un site
+  live, rândul ei intră în „ce se schimbă” al site-ului. Dovada (T10): pe o bază la zi, cu categoriile șterse și
+  o recenzie copiată și ștearsă, funcțiile codului comun nu scriu nimic, iar ale codului Bioscem le readuc.
 - **`/health`**: „ok” și, pe al doilea rând, `schema: <stare>`; cu `in_urma` răspunde **503** („indisponibil”),
-  ca verificarea de după un deploy (`actualizeaza.sh`, Etapa 2) să întoarcă codul la loc.
+  ca verificarea de după un deploy (`actualizeaza.sh`, Etapa 2) să întoarcă codul la loc. La fel pe copia de
+  verificare, cu o copie încărcată (fără copie, poarta răspunde „ok” fără bază; [VERIFICARE.md](VERIFICARE.md)).
 - **Bannerul din admin**: administratorul general vede un banner roșu, cu ce e de făcut, când baza nu e
   `la_zi` (`data-schema="<stare>"`). Ceilalți administratori nu-l văd.
 
@@ -433,7 +448,16 @@ Ce s-a făcut pe o bază stă chiar în ea, în setarea `activari_pluginuri` (pl
 „pornit” care nu e acolo își rulează pașii și intră acolo (la o eroare rămâne pe dinafară și se încearcă din
 nou); unul „oprit” iese, deci o repornire rulează pașii din nou (sunt idempotenți); „se oprește” nu schimbă
 nimic. Fiecare pas rulat scrie un rând în jurnalul de activitate („Plugin pornit: pas de activare”, fără
-administrator). Pașii rulează:
+administrator).
+
+**Doar pe o bază la zi cu migrările** (garda: `la_zi`). Pe una `fara_registru`, `in_urma` sau `eroare` pașii
+nu scriu nimic, nici înregistrarea, și așteaptă prima rulare de după `scripts/migreaza.php --aplica`: o copie
+de dinainte de adoptare restaurată sau încărcată pe verificare fără runner, codul comun urcat înaintea lui
+`--aplica`, o adoptare oprită la jumătate (bugetul de timp). Altfel pasul ERP-ului ar scrie momentul de
+atunci în `erp_trimite_din` înaintea înghețării setărilor site-ului (WP-06), care scrie doar o cheie lipsă și
+nu l-ar mai putea face gol: comenzile ERP încă netrimise de dinainte (Bioscem, Biovitality) n-ar mai pleca
+după WP-12 (E1). Pe o astfel de bază funcțiile `ensure*` lucrează ca înainte și readuc ele pagina
+`/acorduri-gdpr`, deci nu lipsește nimic. Starea gărzii se citește doar când e ceva de făcut. Pașii rulează:
 
 - la **fiecare cerere** (`public/index.php`, după stările pluginurilor): setarea se citește oricum
   (`Settings::all`), deci fără nimic de făcut nu costă nicio interogare; o eroare nu oprește pagina;
@@ -441,7 +465,8 @@ administrator). Pașii rulează:
 - în **cronul ERP** (`scripts/erp-sync.php`), înaintea oricărei trimiteri: o licență care pornește ERP-ul fără
   nicio cerere web după scrie întâi pragul;
 - în **`tools/dev/licenta.php`** (dezvoltare), după fiecare licență pusă, ca la o licență nouă venită de la CRM
-  (Etapa 2: sincronizarea licenței îi cheamă la fel).
+  (Etapa 2: sincronizarea licenței îi cheamă la fel); `licenta.php activari` îi rulează singuri (de exemplu
+  după baseline-ul din `instaleaza.sh --pe-vechi`), iar pe o bază care nu e la zi spune că așteaptă.
 
 **Nu** în `migreaza.php` (planul îl pomenea acolo): runner-ul face doar schema, aceeași oricare ar fi licența,
 iar rezultatul lui nu are voie să depindă de pluginuri (testele T1–T11 îl cer). De ce în bază și nu în

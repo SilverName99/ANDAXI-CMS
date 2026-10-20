@@ -42,7 +42,8 @@ if (!$db instanceof PDO) {
 
 // Pașii de activare (config/activari.php) înaintea oricărei trimiteri: o licență care pornește ERP-ul
 // fără nicio cerere web după (din linia de comandă, noaptea) scrie întâi pragul comenzilor trimise,
-// ca istoricul de dinainte să nu plece în ERP (WP-12 E1 îl citește).
+// ca istoricul de dinainte să nu plece în ERP (WP-12 E1 îl citește). Doar pe o bază la zi cu
+// migrările: pe una neadoptată sau în urma codului nu scrie nimic și așteaptă `migreaza.php --aplica`.
 \App\Support\Activari::ruleaza($db);
 
 $settings = Settings::all($db);

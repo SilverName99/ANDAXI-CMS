@@ -28,6 +28,15 @@ use Throwable;
  * rulare. Setarea se citește oricum la fiecare cerere (Settings::all din public/index.php), deci
  * verificarea nu costă nicio interogare în plus; doar o schimbare scrie ceva.
  *
+ * **Doar pe o bază la zi cu migrările** (Migrari\Garda: `la_zi`). Pe una `fara_registru` (un site
+ * încă neadoptat, o copie de dinainte de adoptare restaurată fără runner), `in_urma` (un release
+ * urcat înainte de `migreaza.php --aplica`, o adoptare oprită la jumătate) sau `eroare` nu se scrie
+ * nimic, nici înregistrarea: pașii așteaptă prima rulare de după `--aplica`. Altfel pragul ERP ar
+ * primi momentul de acum înaintea înghețării setărilor site-ului (WP-06), care scrie doar o cheie
+ * lipsă și nu l-ar mai putea face gol. Pe o astfel de bază funcțiile ensure* lucrează ca înainte
+ * (readuc și pagina /acorduri-gdpr), deci nu lipsește nimic. Starea se citește doar când e ceva de
+ * făcut (o interogare după cheia primară, ținută minte pe conexiune).
+ *
  * Fiecare pas rulat scrie un rând în jurnalul de activitate al adminului (`activare_plugin`, fără
  * administrator: nu e acțiunea cuiva). Nu rulează migrări și nu trimite DDL.
  */
@@ -42,9 +51,11 @@ final class Activari
     /**
      * Pașii pluginurilor pornite care n-au rulat pe această bază; pluginurile oprite ies din
      * înregistrare. `$setari` = Settings::all($db) dacă îl ai deja (altfel se citește doar cheia).
+     * Pe o bază care nu e la zi cu migrările nu face nimic (vezi capul clasei).
      *
      * @param array<string, string>|null $setari
-     * @return list<array{plugin: string, pas: string, rezultat: string}> ce a rulat (gol: nimic de făcut)
+     * @return list<array{plugin: string, pas: string, rezultat: string}> ce a rulat (gol: nimic de făcut,
+     *         sau baza încă nu e la zi, ce spune asteptare())
      */
     public static function ruleaza(?PDO $db, ?array $setari = null): array
     {
@@ -59,16 +70,26 @@ final class Activari
 
         // Doar pluginurile care au pași (un plugin scos din config/activari.php iese și de aici).
         $facute = array_intersect_key($facute, $pasi);
-        $rulate = [];
+        $deRulat = [];
         foreach ($pasi as $plugin => $lista) {
             $stare = Plugins::stare($plugin);
             if ($stare === Plugins::OPRIT) {
                 unset($facute[$plugin]);
                 continue;
             }
-            if ($stare !== Plugins::PORNIT || isset($facute[$plugin])) {
-                continue;
+            if ($stare === Plugins::PORNIT && !isset($facute[$plugin])) {
+                $deRulat[$plugin] = $lista;
             }
+        }
+        if ($deRulat === [] && $facute == $inainte) {
+            return [];
+        }
+        // Ceva de făcut: doar pe o bază la zi cu migrările (garda), altfel nimic, nici înregistrarea.
+        if (self::asteptare($db) !== null) {
+            return [];
+        }
+        $rulate = [];
+        foreach ($deRulat as $plugin => $lista) {
             $toateBune = true;
             foreach ($lista as $nume => $pas) {
                 try {
@@ -107,6 +128,16 @@ final class Activari
         } catch (Throwable) {
             // Se încearcă din nou la următoarea cerere: înregistrarea n-a fost scrisă.
         }
+    }
+
+    /**
+     * De ce așteaptă pașii pe această bază: starea gărzii (`fara_registru`, `in_urma`, `eroare`), sau
+     * null pe o bază la zi cu migrările (pașii pot rula). Pentru mesajele uneltelor (licenta.php).
+     */
+    public static function asteptare(PDO $db): ?string
+    {
+        $stare = Migrari\Garda::stare($db);
+        return $stare === Migrari\Garda::LA_ZI ? null : $stare;
     }
 
     // ------------------------------------------------------------------ pașii

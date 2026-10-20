@@ -18,6 +18,8 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/licenta.php stari                 # starea efectivă a fiecărui plugin
  *   tools/dev/php.sh tools/dev/licenta.php cron                  # cronurile pluginurilor și dacă ar rula acum
  *   tools/dev/php.sh tools/dev/licenta.php arata                 # licența folosită acum și problemele ei
+ *   tools/dev/php.sh tools/dev/licenta.php activari              # doar pașii de activare ai licenței de acum (config/activari.php),
+ *                                                                # pe baza de dezvoltare, dacă e la zi cu migrările
  *   tools/dev/php.sh tools/dev/licenta.php presetari             # numele licențelor de test (pentru smoke.sh)
  *
  * Opțiuni: --versiune=N (implicit: următoarea), --site=ID (implicit LICENTA_SITE),
@@ -89,6 +91,30 @@ foreach ($argumente as $argument) {
 $catalog = Plugins::catalog();
 $dosarLicenta = Licenta::dosar();
 
+// Pașii de activare ai licenței de acum (config/activari.php) pe baza de dezvoltare, dacă răspunde, are
+// schema și e la zi cu migrările (altfel așteaptă, ca pe un site: rulează la prima cerere de după
+// scripts/migreaza.php --aplica). Așa, după schimbarea licenței, prima cerere a unui test nu mai scrie nimic.
+$ruleazaActivari = static function () use ($radacina): void {
+    $app = require $radacina . '/config/app.php';
+    $dbDev = \App\Support\Database::connection((array) ($app['db'] ?? []));
+    if (!$dbDev instanceof PDO) {
+        echo "Notă: baza de dezvoltare nu răspunde; pașii de activare rulează la prima cerere.\n";
+        return;
+    }
+    try {
+        foreach (\App\Support\Activari::ruleaza($dbDev) as $pas) {
+            echo 'Activare ', $pas['plugin'], ': ', $pas['rezultat'], "\n";
+        }
+        $asteapta = \App\Support\Activari::asteptare($dbDev);
+        if ($asteapta !== null) {
+            echo 'Notă: pașii de activare așteaptă migrările (garda: ', $asteapta,
+                "); rulează după scripts/migreaza.php --aplica, la prima cerere (sau: licenta.php activari).\n";
+        }
+    } catch (Throwable $e) {
+        echo 'Notă: pașii de activare n-au rulat acum (', \App\Support\Migrari\Schema::faraValori($e->getMessage()), "); rulează la prima cerere.\n";
+    }
+};
+
 $versiuneDinFisier = static function (string $fisier): int {
     $date = is_file($fisier) ? json_decode((string) file_get_contents($fisier), true) : null;
     return is_array($date) ? (int) ($date['versiune'] ?? 0) : 0;
@@ -131,6 +157,12 @@ switch ($comanda) {
         foreach (Plugins::mesaje() as $mesaj) {
             echo 'Problemă: ', $mesaj, "\n";
         }
+        exit(0);
+
+    case 'activari':
+        // Doar pașii de activare ai licenței de acum, ca prima cerere de după --aplica (de exemplu după
+        // baseline-ul lui instaleaza.sh --pe-vechi).
+        $ruleazaActivari();
         exit(0);
 
     case 'fara':
@@ -218,14 +250,5 @@ foreach (Plugins::mesaje() as $mesaj) {
 }
 
 // Ca la o licență nouă venită de la CRM (Etapa 2): pașii de activare ai pluginurilor pornite acum
-// (config/activari.php: pagina /acorduri-gdpr, pragul ERP), pe baza de dezvoltare, dacă răspunde și
-// are schema. Așa, după schimbarea licenței, prima cerere a unui test nu mai scrie nimic în bază.
-$app = require $radacina . '/config/app.php';
-$dbDev = \App\Support\Database::connection((array) ($app['db'] ?? []));
-try {
-    foreach (\App\Support\Activari::ruleaza($dbDev) as $pas) {
-        echo 'Activare ', $pas['plugin'], ': ', $pas['rezultat'], "\n";
-    }
-} catch (Throwable $e) {
-    echo 'Notă: pașii de activare n-au rulat acum (', \App\Support\Migrari\Schema::faraValori($e->getMessage()), "); rulează la prima cerere.\n";
-}
+// (config/activari.php: pagina /acorduri-gdpr, pragul ERP), pe baza de dezvoltare.
+$ruleazaActivari();

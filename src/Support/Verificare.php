@@ -18,7 +18,9 @@ namespace App\Support;
  * - **`SITE_COPIE_VERIFICARE=1`**: pe fiecare răspuns `X-Robots-Tag: noindex, nofollow,
  *   noarchive` și `Cache-Control: no-store, private` (și peste ce pune aplicația, ca un
  *   CDN să nu păstreze o pagină văzută cu parolă); `/robots.txt` = `Disallow: /` și
- *   `/health` = „ok”, ambele fără parolă și fără bază; orice altceva cere parola porții:
+ *   `/health` = „ok”, ambele fără parolă și fără bază (cu o copie încărcată și neexpirată,
+ *   `GET /health` îl dă aplicația, tot fără parolă: „ok” + „schema: <stare>”, 503 cu baza
+ *   în urma codului, ca pe un site adevărat); orice altceva cere parola porții:
  *   HTTP Basic (citit din `PHP_AUTH_USER`, din antetul `Authorization` sau din
  *   `getallheaders()`) sau, dacă găzduirea nu dă antetul mai departe, formularul din
  *   pagina 401 (cookie semnat, 12 ore). 10 parole greșite de la aceeași adresă în 10
@@ -180,6 +182,13 @@ final class Verificare
             self::raspundeText(200, "User-agent: *\nDisallow: /\n", $metoda);
         }
         if ($citire && $cale === '/health') {
+            // Cu o copie încărcată (și neexpirată) un GET îl dă aplicația, fără parolă, ca pe un site adevărat:
+            // „ok” + „schema: <stare>”, 503 cu baza în urma codului (docs/MIGRARI.md, „Garda”). Așa o
+            // repetiție a deploy-ului vede pe verificare exact ce ar vedea pe site. Fără copie (și la HEAD,
+            // pe care routerul aplicației nu-l are): „ok” de aici.
+            if ($metoda === 'GET' && self::stareCopie()['stare'] === 'ok') {
+                return;
+            }
             self::raspundeText(200, 'ok', $metoda);
         }
         if (self::problemaPoarta() !== null || !self::pregatesteDosar()) {

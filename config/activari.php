@@ -9,7 +9,8 @@ declare(strict_types=1);
  * pe bază, când pluginul devine „pornit” (absent sau „oprit” înainte). Rulează
  * `App\Support\Activari::ruleaza()`: la prima cerere de după schimbare (public/index.php), la
  * instalare (scripts/install.php), în cronul ERP-ului (scripts/erp-sync.php) și în
- * tools/dev/licenta.php. Fiecare pas e idempotent: a doua rulare nu schimbă nimic.
+ * tools/dev/licenta.php, doar pe o bază la zi cu migrările (pe una neadoptată sau în urma codului
+ * așteaptă `scripts/migreaza.php --aplica`). Fiecare pas e idempotent: a doua rulare nu schimbă nimic.
  *
  * Pluginul => [numele pasului => [clasa, metoda]]. Metoda primește PDO-ul și întoarce un text scurt
  * (ce a făcut: „creată”, „exista”…), care intră în jurnalul de activitate al adminului.

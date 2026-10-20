@@ -8,8 +8,8 @@
 #   tools/dev/instaleaza.sh --fara-demo  # doar install + seed
 #   tools/dev/instaleaza.sh --pe-vechi   # bază făcută ca înainte de migrări (tools/dev/migrari/pe-vechi.php:
 #                                        # install.php de atunci + funcțiile ensure*), seed, date demo,
-#                                        # licența, apoi baseline-ul (scripts/migreaza.php --aplica):
-#                                        # baza unui site vechi trecut pe codul comun
+#                                        # licența, apoi baseline-ul (scripts/migreaza.php --aplica) și
+#                                        # pașii de activare: baza unui site vechi trecut pe codul comun
 #   tools/dev/instaleaza.sh --sterge-baza  # doar șterge baza $CMS_DEV_DB (de exemplu una făcută pentru o poartă)
 #   tools/dev/instaleaza.sh --php-min    # doar instalează PHP-ul minim (php_min din config/app.php),
 #                                        # ca testele să ruleze și cu el (CMS_DEV_PHP=php8.3 …); nu atinge baza
@@ -90,6 +90,11 @@ if [ "$pe_vechi" = 1 ]; then
     # Ca la adoptarea unui site vechi: baseline-ul găsește schema, grupul C convertește datele vechi.
     echo "== scripts/migreaza.php --aplica (baseline-ul pe baza făcută ca înainte)"
     "${PHP_DEV[@]}" scripts/migreaza.php --aplica | tail -1
+    # Pașii de activare ai licenței au așteptat baseline-ul (pe o bază fără registru nu scriu nimic,
+    # docs/MIGRARI.md, „Pașii de activare”); pe un site îi rulează prima cerere de după --aplica, aici
+    # chiar acum, ca porțile de după să nu vadă o primă cerere care scrie în bază.
+    echo "== Pașii de activare (după baseline)"
+    "${PHP_DEV[@]}" tools/dev/licenta.php activari
 fi
 
 echo

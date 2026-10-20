@@ -72,9 +72,17 @@
 #    bannerul „Baza de date nu e la zi cu codul” din admin (doar administratorul general, doar
 #    cu baza în urmă sau fără registru: aici nu apare);
 #  - pașii de activare ai pluginurilor (config/activari.php, App\Support\Activari): la prima
-#    cerere după ce un plugin devine „pornit” (și în cronul erp-sync), o singură dată pe bază;
+#    cerere după ce un plugin devine „pornit” (și în cronul erp-sync), o singură dată pe bază,
+#    doar pe o bază la zi cu migrările (înainte de --aplica nu scriu nimic);
 #    pagina /acorduri-gdpr ștearsă nu mai reapare (ensureOptionalSchema o readucea);
 #    erp_trimite_din se scrie doar dacă lipsește (pe Bioscem e înghețat la '' și rămâne);
+#  - tot din garda R1, ștergerile adminului rămân (site-uri/bioscem/ce-se-schimba.md): toate
+#    categoriile de blog șterse nu mai revin ca cele patru ale Bioscem (ensureOptionalSchema le
+#    punea într-un tabel gol), iar o recenzie copiată din tabelul vechi `reviews` și ștearsă nu
+#    se mai copiază din nou (ensureOptionalSchema și ensureProductCustomSchema o copiau la fiecare
+#    cerere; acum o dată, recenzii/0023). Aici nu se văd (datele demo au categorii și nicio
+#    recenzie veche ștearsă); dovada: T10 din test-migrari.php (codul comun nu le readuce, codul
+#    Bioscem da);
 #  - fișierele scoase la copiere (docs/templates, scripturile unice Bioscem, vezi
 #    docs/DEZVOLTARE.md) și config/redirecturi.php, mutat în site-uri/bioscem/redirecturi.json.
 

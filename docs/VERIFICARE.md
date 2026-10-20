@@ -200,7 +200,11 @@ stratului SEO și a sesiunii. Citește `.env` (ca `Env::load`; `.env` are priori
    Fișierele statice din `public/assets` (CSS, JS, icoane din git, fără date) le servește direct serverul
    web, fără antet; `robots.txt` le închide oricum.
 4. Fără parolă: `GET /robots.txt` → `User-agent: *` / `Disallow: /`; `GET /health` → `ok` (fără bază, fără
-   sesiune).
+   sesiune) cât nu e încărcată nicio copie (sau copia a expirat). Cu o copie încărcată, `GET /health` îl dă
+   aplicația, tot fără parolă, ca pe un site adevărat: `ok` și `schema: <stare>`, iar cu baza în urma
+   codului (migrări neaplicate) **503** `schema: in_urma` ([MIGRARI.md](MIGRARI.md), „Garda”). Așa o
+   repetiție a deploy-ului pe verificare vede exact ce ar vedea pe site (o verificare după deploy care
+   cere 200 întoarce codul la loc dacă `migreaza.php --aplica` n-a rulat).
 5. Poarta are nevoie de `VERIFICARE_POARTA_UTILIZATOR`, de un hash valid în `VERIFICARE_POARTA_HASH` și de
    dosarul de lucru; altfel tot 503 „neconfigurat” (motivul îl arată `stare.php`).
 6. Parola: **HTTP Basic**, citit din `PHP_AUTH_USER`/`PHP_AUTH_PW`, din antetul `Authorization`

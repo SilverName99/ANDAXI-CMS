@@ -35,6 +35,7 @@ use App\Support\Activari;
 use App\Support\Auth;
 use App\Support\Migrari\Consola;
 use App\Support\Migrari\Eroare;
+use App\Support\Migrari\Garda;
 use App\Support\Migrari\Registru;
 use App\Support\Migrari\Runner;
 use App\Support\Plugins;
@@ -89,6 +90,9 @@ if ((int) $raport['cod'] !== 0) {
         : 'Instalarea s-a oprit la migrări (raportul de mai sus).'));
 }
 echo 'Migrări: ', $raport['mesaj'], "\n";
+// Baza e acum la zi: garda nu are voie să-și amintească o stare citită înainte de migrări (pașii de
+// activare de la pasul 4 rulează doar pe o bază la zi).
+Garda::uita();
 
 // 2. Seed-ul neutru: doar într-un tabel gol (o categorie ștearsă nu reapare la o rulare din nou).
 if ((int) $db->query('SELECT COUNT(*) FROM blog_categories')->fetchColumn() === 0) {
