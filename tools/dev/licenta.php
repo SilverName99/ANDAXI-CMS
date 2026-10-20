@@ -216,3 +216,16 @@ echo 'Licența v', $versiune, ' pentru „', $licenta['site'], '” (', $comanda
 foreach (Plugins::mesaje() as $mesaj) {
     echo 'Notă: ', $mesaj, "\n";
 }
+
+// Ca la o licență nouă venită de la CRM (Etapa 2): pașii de activare ai pluginurilor pornite acum
+// (config/activari.php: pagina /acorduri-gdpr, pragul ERP), pe baza de dezvoltare, dacă răspunde și
+// are schema. Așa, după schimbarea licenței, prima cerere a unui test nu mai scrie nimic în bază.
+$app = require $radacina . '/config/app.php';
+$dbDev = \App\Support\Database::connection((array) ($app['db'] ?? []));
+try {
+    foreach (\App\Support\Activari::ruleaza($dbDev) as $pas) {
+        echo 'Activare ', $pas['plugin'], ': ', $pas['rezultat'], "\n";
+    }
+} catch (Throwable $e) {
+    echo 'Notă: pașii de activare n-au rulat acum (', \App\Support\Migrari\Schema::faraValori($e->getMessage()), "); rulează la prima cerere.\n";
+}

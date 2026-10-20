@@ -13,6 +13,7 @@ final class EmailAutomation
 {
     public static function ensureSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         OrderMailer::ensureEmailSendHistorySchema($db);
 
         try {

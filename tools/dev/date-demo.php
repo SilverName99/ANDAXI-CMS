@@ -10,13 +10,14 @@ declare(strict_types=1);
  * încep cu DEMO. Se rulează după scripts/install.php și scripts/seed.php, din
  * tools/dev/instaleaza.sh, cu mediul pregătit de tools/dev/comun.sh.
  *
+ * Schema o fac migrările (scripts/install.php, docs/MIGRARI.md) sau, pentru o
+ * bază „ca înainte”, tools/dev/migrari/pe-vechi.php: aici nu se mai cheamă
+ * funcțiile ensure* (pe o bază la zi ele nu mai fac nimic).
+ *
  * Ce face, în ordine:
- *  1. creează toate tabelele și coloanele pe care codul le adaugă „din mers”
- *     (la prima intrare în admin, la primul checkout etc.), ca să existe din
- *     prima clipă, exact ca pe un site deja folosit;
- *  2. pune setările de dezvoltare: plățile, ERP-ul și FAN-ul în mod test sau
+ *  1. pune setările de dezvoltare: plățile, ERP-ul și FAN-ul în mod test sau
  *     oprite, cu date de acces inventate, emailurile doar spre @exemplu.ro;
- *  3. scrie datele demo: categorii, ~40 de produse, clienți, ~60 de comenzi,
+ *  2. scrie datele demo: categorii, ~40 de produse, clienți, ~60 de comenzi,
  *     cupoane, puncte de fidelitate, recenzii, blog, newsletter, pagini.
  *
  * Refuză să ruleze pe o bază al cărei nume nu începe cu „cms_”.
@@ -28,23 +29,11 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../../bootstrap.php';
 
-use App\Http\Controllers\AdminController;
-use App\Http\Controllers\SiteController;
-use App\Support\AdminActivityLog;
-use App\Support\BtIpayPayments;
-use App\Support\CheckoutCalculator;
 use App\Support\Database;
-use App\Support\EmailAutomation;
-use App\Support\ErpSync;
-use App\Support\FanLockers;
 use App\Support\FanNomenclator;
 use App\Support\LoyaltyService;
-use App\Support\NewsletterService;
-use App\Support\OrderMailer;
 use App\Support\OrderNumber;
-use App\Support\PaymentLink;
 use App\Support\Precomanda;
-use App\Support\ProductCategories;
 use App\Support\Settings;
 
 $config = require __DIR__ . '/../../config/app.php';
@@ -72,50 +61,8 @@ if ($produseExistente > 0) {
 
 mt_srand(20261018); // aceleași date la fiecare rulare
 
-/** Cheamă o metodă privată a unui controller (doar aici, în unealta de test). */
-function cheamaPrivat(object $obiect, string $metoda, mixed ...$argumente): mixed
-{
-    $m = new ReflectionMethod($obiect, $metoda);
-    // Pe PHP 8.0 o metodă privată se cheamă prin Reflection doar după setAccessible (scris când minimul era 8.0).
-    $m->setAccessible(true);
-    return $m->invoke($obiect, ...$argumente);
-}
-
 // ---------------------------------------------------------------------------
-// 1. Schema completă
-// ---------------------------------------------------------------------------
-
-echo "Schema: tabelele și coloanele create din mers...\n";
-$admin = new AdminController();
-$site = new SiteController();
-foreach (['ensureOptionalSchema', 'ensurePromoSchema', 'ensureCouponsSchema', 'ensureFormSecurityLogsSchema',
-          'ensureFanLocalitiesSchema', 'ensureFanStreetsSchema', 'ensureFanLocalitiesExtraKmSchema'] as $metoda) {
-    cheamaPrivat($admin, $metoda, $db);
-}
-foreach (['ensureStripeSchema', 'ensureOptionalPageSchema', 'ensureContactFormsSchema', 'ensureGdprAgreementsSchema',
-          'ensureCheckoutAntiBotSchema', 'ensureRegisterAntiBotSchema', 'ensureFanLocalitiesSchema',
-          'ensureCustomerSchema', 'ensureProductCustomSchema'] as $metoda) {
-    cheamaPrivat($site, $metoda, $db);
-}
-AdminActivityLog::ensureSchema($db);
-BtIpayPayments::ensureSchema($db);
-CheckoutCalculator::ensureOrderShippingSchema($db);
-CheckoutCalculator::ensureProductVatSchema($db);
-CheckoutCalculator::ensureCouponsSchema($db);
-EmailAutomation::ensureSchema($db);
-ErpSync::ensureSchema($db);
-FanLockers::ensureSchema($db);
-FanNomenclator::asiguraSchema($db);
-LoyaltyService::ensureSchema($db);
-NewsletterService::ensureSchema($db);
-OrderMailer::ensureEmailSendHistorySchema($db);
-PaymentLink::ensureSchema($db);
-Precomanda::ensureSchema($db);
-ProductCategories::ensureSchema($db);
-
-
-// ---------------------------------------------------------------------------
-// 2. Setări de dezvoltare
+// 1. Setări de dezvoltare
 // ---------------------------------------------------------------------------
 
 echo "Setări de dezvoltare (plăți/ERP/FAN în test sau oprite)...\n";
@@ -187,7 +134,7 @@ Settings::save($db, [
 ]);
 
 // ---------------------------------------------------------------------------
-// 3. Date demo
+// 2. Date demo
 // ---------------------------------------------------------------------------
 
 $acum = time();
@@ -714,8 +661,9 @@ foreach ([1, 2, 3] as $k) {
 // --- Recenzii ----------------------------------------------------------------------
 echo "Recenzii, blog, newsletter, pagini...\n";
 $insRecenzie = $db->prepare(
-    'INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, is_approved, created_at)
-     VALUES (:p, :n, :e, :r, :t, :a, :c)'
+    // Cu sursa scrisă, ca formularul de pe produs (SiteController): pe o bază la zi nimeni n-o mai completează după.
+    'INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved, created_at)
+     VALUES (:p, :n, :e, :r, :t, \'product_page\', :a, :c)'
 );
 $texte = ['Foarte bun, recomand (recenzie demo).', 'Exact cum era descris.', 'Ambalaj frumos, livrare rapidă.', 'Bun, dar aș vrea un gramaj mai mare.', 'Al doilea cumpărat, la fel de bun.'];
 for ($k = 0; $k < 25; $k++) {
@@ -732,6 +680,10 @@ $db->exec("INSERT INTO blog_authors (name, slug, bio, is_active) VALUES
     ('Echipa Demo', 'echipa-demo', 'Autor inventat pentru test.', 1),
     ('Ana Exemplu', 'ana-exemplu', 'Autoare inventată pentru test.', 1)");
 $idAutor = (int) $db->query("SELECT id FROM blog_authors WHERE slug = 'echipa-demo'")->fetchColumn();
+// Categoriile articolelor: „Noutăți” și „Evenimente” din seed-ul neutru al instalării (dacă lipsesc, de
+// exemplu pe o bază făcută doar de migrări, se pun aici) și una a datelor demo.
+$db->exec("INSERT IGNORE INTO blog_categories (name, slug, sort_order) VALUES
+    ('Noutăți', 'noutati', 1), ('Evenimente', 'evenimente', 2), ('Ghiduri demo', 'ghiduri-demo', 5)");
 $catBlog = [];
 foreach ($db->query('SELECT id, slug FROM blog_categories')->fetchAll() as $rand) {
     $catBlog[(string) $rand['slug']] = (int) $rand['id'];
@@ -745,9 +697,9 @@ $insArtCat = $db->prepare('INSERT IGNORE INTO blog_post_categories (post_id, cat
 foreach ([
     ['Cum alegi un ceai pentru seară', 'noutati', 1, null],
     ['Cinci rețete simple cu semințe de chia', 'noutati', 1, null],
-    ['Ce înseamnă „presat la rece”', 'info-pacienti', 1, null],
+    ['Ce înseamnă „presat la rece”', 'ghiduri-demo', 1, null],
     ['Ghid demo: păstrarea mierii', 'noutati', 1, null],
-    ['Întrebări frecvente despre livrare', 'info-pacienti', 1, null],
+    ['Întrebări frecvente despre livrare', 'ghiduri-demo', 1, null],
     ['Noutăți în catalogul demo', 'noutati', 1, null],
     ['Atelier demo de degustare', 'evenimente', 1, [$acum + 20 * $zi, $acum + 20 * $zi, 'Gratuit', 'București, Sala Exemplu']],
     ['Articol în lucru (ciornă)', 'noutati', 0, null],

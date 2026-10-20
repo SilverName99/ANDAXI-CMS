@@ -40,6 +40,7 @@ final class Precomanda
 
     public static function ensureSchema(?PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         if (!$db instanceof PDO || self::$schemaVerificata) {
             return;
         }

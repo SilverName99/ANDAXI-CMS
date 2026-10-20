@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # Reface de la zero baza de test (implicit cms_dev) pe calea normală de
-# instalare a proiectului: scripts/install.php + scripts/seed.php, apoi datele
-# demo inventate din tools/dev/date-demo.php.
+# instalare a proiectului: scripts/install.php (migrările, seed-ul neutru, primul
+# administrator; docs/MIGRARI.md) + scripts/seed.php, apoi datele demo inventate
+# din tools/dev/date-demo.php și licența „toate”.
 #
-#   tools/dev/instaleaza.sh            # bază nouă + date demo
+#   tools/dev/instaleaza.sh              # bază nouă (prin migrări) + date demo
 #   tools/dev/instaleaza.sh --fara-demo  # doar install + seed
+#   tools/dev/instaleaza.sh --pe-vechi   # bază făcută ca înainte de migrări (tools/dev/migrari/pe-vechi.php:
+#                                        # install.php de atunci + funcțiile ensure*), seed, date demo,
+#                                        # licența, apoi baseline-ul (scripts/migreaza.php --aplica):
+#                                        # baza unui site vechi trecut pe codul comun
+#   tools/dev/instaleaza.sh --sterge-baza  # doar șterge baza $CMS_DEV_DB (de exemplu una făcută pentru o poartă)
 #   tools/dev/instaleaza.sh --php-min    # doar instalează PHP-ul minim (php_min din config/app.php),
 #                                        # ca testele să ruleze și cu el (CMS_DEV_PHP=php8.3 …); nu atinge baza
 #
@@ -34,7 +40,19 @@ fi
 verifica_mediul
 
 cu_demo=1
-[ "${1:-}" = "--fara-demo" ] && cu_demo=0
+pe_vechi=0
+for argument in "$@"; do
+    case "$argument" in
+        --fara-demo) cu_demo=0 ;;
+        --pe-vechi) pe_vechi=1 ;;
+        --sterge-baza)
+            mysql_dev -e "DROP DATABASE IF EXISTS \`$CMS_DEV_DB\`;"
+            echo "Baza $CMS_DEV_DB a fost ștearsă."
+            exit 0
+            ;;
+        *) die "argument necunoscut: $argument (vezi începutul fișierului)" ;;
+    esac
+done
 
 # Parolă nouă de admin pentru fiecare bază nouă.
 rm -f "$CMS_DEV_DIR/admin-parola.txt"
@@ -51,8 +69,13 @@ rm -rf "$RADACINA/public/uploads/demo"
 rm -f "$RADACINA"/public/*.xml
 
 cd "$RADACINA"
-echo "== scripts/install.php"
-"${PHP_DEV[@]}" scripts/install.php
+if [ "$pe_vechi" = 1 ]; then
+    echo "== tools/dev/migrari/pe-vechi.php (baza ca înainte de migrări)"
+    "${PHP_DEV[@]}" tools/dev/migrari/pe-vechi.php
+else
+    echo "== scripts/install.php"
+    "${PHP_DEV[@]}" scripts/install.php
+fi
 echo "== scripts/seed.php"
 "${PHP_DEV[@]}" scripts/seed.php
 if [ "$cu_demo" = 1 ]; then
@@ -63,6 +86,11 @@ fi
 # tools/dev/php.sh tools/dev/licenta.php <prezentare|catalog|magazin|asociatie|toate>
 echo "== Licența de test"
 "${PHP_DEV[@]}" tools/dev/licenta.php toate
+if [ "$pe_vechi" = 1 ]; then
+    # Ca la adoptarea unui site vechi: baseline-ul găsește schema, grupul C convertește datele vechi.
+    echo "== scripts/migreaza.php --aplica (baseline-ul pe baza făcută ca înainte)"
+    "${PHP_DEV[@]}" scripts/migreaza.php --aplica | tail -1
+fi
 
 echo
 echo "Gata. Admin: $CMS_DEV_ADMIN_EMAIL / parola în $CMS_DEV_DIR/admin-parola.txt"

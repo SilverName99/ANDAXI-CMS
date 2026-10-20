@@ -7925,6 +7925,7 @@ CSS;
 
     private function ensureStripeSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('ALTER TABLE orders ADD COLUMN stripe_session_id VARCHAR(255) DEFAULT NULL AFTER payment_status');
         } catch (Throwable) {
@@ -7960,6 +7961,7 @@ CSS;
 
     private function ensureOptionalPageSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('ALTER TABLE pages ADD COLUMN css_content LONGTEXT NULL AFTER html_content');
         } catch (Throwable) {
@@ -7991,6 +7993,7 @@ CSS;
 
     private function ensureContactFormsSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS contact_form_messages (
@@ -8015,6 +8018,7 @@ CSS;
 
     private function ensureGdprAgreementsSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS gdpr_agreements (
@@ -8055,6 +8059,7 @@ CSS;
 
     private function ensureCheckoutAntiBotSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS checkout_submit_logs (
@@ -8250,6 +8255,7 @@ CSS;
 
     private function ensureRegisterAntiBotSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS register_submit_logs (
@@ -8406,6 +8412,7 @@ CSS;
 
     private function ensureFanLocalitiesSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS fan_localities (
@@ -8598,6 +8605,7 @@ CSS;
 
     private function ensureCustomerSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS customer_password_resets (
@@ -9481,6 +9489,7 @@ CSS;
 
     private function ensureProductCustomSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         CheckoutCalculator::ensureProductVatSchema($db);
         // Coloanele precomenzii se creează tot de aici: magazinul le citește la
         // fiecare listare, iar pe o bază neatinsă încă interogarea ar cădea pe

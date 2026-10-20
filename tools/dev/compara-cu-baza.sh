@@ -38,11 +38,14 @@
 # Diferențele față de Bioscem care nu se văd în HTML (deci nu le prinde comparația;
 # fiecare e scrisă și în docs/DEZVOLTARE.md sau docs/PLUGINURI.md):
 #  - scripts/fan-tracking-sync.php: fără cele două `use` care scriau avertismente la
-#    fiecare rulare (reparația f5ae5ea, „Erori moștenite” 1);
+#    fiecare rulare (reparația f5ae5ea, „Erori moștenite” 1) și fără cele trei ALTER TABLE
+#    de la fiecare rulare (coloanele le fac migrările, WP-05);
 #  - cronurile (erp-sync, bt-ipay-sync, fan-*, newsletter-campaigns, abandoned-cart-emails):
 #    garda Plugins::cronPermis la început (cu pluginul pornit rulează ca înainte);
-#  - scripts/install.php și config/app.php: fără parola de admin de rezervă; config/app.php
-#    are în plus licența și php_min; scripts/diagnostic.php: licența și php_min;
+#  - scripts/install.php: instalarea prin migrări, seed-ul neutru și pașii de activare, iar pe
+#    o bază care are administratori refuză (iese cu 1, fără să scrie nimic; docs/MIGRARI.md,
+#    „Instalarea”); fără parola de admin de rezervă; config/app.php are în plus licența și
+#    php_min; scripts/diagnostic.php: licența și php_min;
 #  - public/index.php, src/Http/rute.php, src/Http/Router.php: rutele mutate într-un fișier
 #    și garda pluginurilor; public/.htaccess: doar un comentariu;
 #  - public/index.php: poarta (App\Support\Verificare, docs/VERIFICARE.md), prima. Fără nicio
@@ -57,10 +60,21 @@
 #    site-uri/bioscem/ce-se-schimba.md); paginile (serverul web, și `php -S` de aici) pornesc
 #    sesiunea exact ca Bioscem. Dovada: test-migrari.php (S) și smoke.sh (cronurile) numără
 #    fișierele de sesiune;
-#  - scripts/migreaza.php și src/Support/Migrari/ (runner-ul migrărilor, docs/MIGRARI.md): noi,
-#    doar pentru linia de comandă; nicio pagină și niciun cron nu le folosește încă; la fel
+#  - scripts/migreaza.php și src/Support/Migrari/ (runner-ul migrărilor, docs/MIGRARI.md): noi;
 #    database/migrari/ (migrările de bază 0001–0024, WP-03): pe o bază făcută de cod găsesc tot,
 #    fără nicio schimbare de schemă (tools/dev/migrari/genereaza-fixture.php --verifica);
+#  - garda R1 (Migrari\Garda, WP-05) în capul celor 36 de funcții ensure* și asigura*: pe o bază
+#    la zi cu migrările nu mai trimit nicio instrucțiune de schemă, la nicio cerere (dovada:
+#    tools/dev/test-instalare.php și smoke.sh numără instrucțiunile cu ContorSql, doar în
+#    dezvoltare). Ambele servere de aici lucrează pe aceeași bază la zi, deci HTML-ul nu se
+#    schimbă; pe o bază fără registru (Bioscem înainte de adoptare) funcțiile lucrează ca înainte;
+#  - /health: a doua linie „schema: <stare>” și 503 „indisponibil” cu baza în urma codului;
+#    bannerul „Baza de date nu e la zi cu codul” din admin (doar administratorul general, doar
+#    cu baza în urmă sau fără registru: aici nu apare);
+#  - pașii de activare ai pluginurilor (config/activari.php, App\Support\Activari): la prima
+#    cerere după ce un plugin devine „pornit” (și în cronul erp-sync), o singură dată pe bază;
+#    pagina /acorduri-gdpr ștearsă nu mai reapare (ensureOptionalSchema o readucea);
+#    erp_trimite_din se scrie doar dacă lipsește (pe Bioscem e înghețat la '' și rămâne);
 #  - fișierele scoase la copiere (docs/templates, scripturile unice Bioscem, vezi
 #    docs/DEZVOLTARE.md) și config/redirecturi.php, mutat în site-uri/bioscem/redirecturi.json.
 

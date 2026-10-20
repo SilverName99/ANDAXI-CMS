@@ -367,6 +367,7 @@ final class CheckoutCalculator
     /** Coloane pentru adresa de livrare separată de facturare (pe comenzi). */
     public static function ensureOrderShippingSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         if (self::$orderShippingSchemaEnsured) {
             return;
         }
@@ -414,6 +415,7 @@ final class CheckoutCalculator
 
     public static function ensureProductVatSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         if (self::$productSchemaEnsured) {
             return;
         }
@@ -976,6 +978,7 @@ final class CheckoutCalculator
 
     public static function ensureCouponsSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('ALTER TABLE coupons ADD COLUMN product_ids_json LONGTEXT DEFAULT NULL AFTER ends_at');
         } catch (Throwable) {

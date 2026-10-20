@@ -144,7 +144,7 @@ dacă BV live le are, devin CSS de temă BV în Etapa 4), `5ef9706` + anularea `
 | `86ca09b` | — | Fontul Rubik, meniu cu majuscule | WP-13 (GR-07); restul pachetul GR |
 | `94a44db` | — | Banda de clienți, imaginile clientului | pachetul GR; `optimizeaza-imagini` → WP-40 (B5); `mapeaza-imagini` nu se portează |
 | `873383e` | — | Imaginile lipsă arată a machetă (`imagini.js`) | pachetul GR (`js_final`, GR-19) |
-| `9e21659` | — | Banner de proiect, pagina Companie, `install`/`seed` | codurile de ieșire WP-05 (GR-02); restul pachetul GR |
+| `9e21659` | — | Banner de proiect, pagina Companie, `install`/`seed` | codurile de ieșire portate în WP-05 (GR-02: `install.php` și `seed.php` ies cu 1, mesajul pe stderr); restul pachetul GR |
 | `2ec6c26` `6b41718` `69b1852` | — | Inventarul golurilor, documentul pentru client, marcajele „[DE COMPLETAT]” | nu se portează (unelte GR, GR-21) |
 | `b568a9c` | — | Catalog și cereri de ofertă în locul coșului | WP-26 (GR-15); `ModPrezentare` nu se portează (GR-14a, garda o face deja) |
 | `8f51fe4` | — | Serviciu → produsele lui → produsul | WP-19 (GR-16 componenta; GR-17 doar dacă tokenul e folosit) |

@@ -38,19 +38,8 @@ if (isset($argv) && is_array($argv)) {
     }
 }
 
-try {
-    $db->exec('ALTER TABLE orders ADD COLUMN fan_tracking_status VARCHAR(190) DEFAULT NULL AFTER fan_tracking_url');
-} catch (Throwable) {
-}
-try {
-    $db->exec('ALTER TABLE orders ADD COLUMN fan_tracking_last_event_at DATETIME DEFAULT NULL AFTER fan_tracking_status');
-} catch (Throwable) {
-}
-try {
-    $db->exec('ALTER TABLE orders ADD COLUMN fan_tracking_synced_at DATETIME DEFAULT NULL AFTER fan_tracking_last_event_at');
-} catch (Throwable) {
-}
-
+// Coloanele urmăririi (fan_tracking_status, _last_event_at, _synced_at) vin din migrarea livrare_fan/0005;
+// cronul nu mai trimite cele trei ALTER-uri la fiecare rulare (pe o bază veche le are din codul vechi).
 $settings = Settings::all($db);
 $clientId = (int) ($settings['fan_client_id'] ?? 0);
 $username = trim((string) ($settings['fan_api_username'] ?? ''));

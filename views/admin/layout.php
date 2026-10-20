@@ -177,6 +177,11 @@ if ($adminFavicon === '') {
                     <?= htmlspecialchars($notaLicenta, ENT_QUOTES) ?>
                 </section>
 <?php endif; ?>
+<?php if (\App\Support\Auth::isGeneralAdmin() && ($stareSchema = \App\Support\Migrari\Garda::stare($adminDb)) !== \App\Support\Migrari\Garda::LA_ZI): ?>
+                <section class="panel" style="border-color:#fca5a5;background:#fef2f2;color:#991b1b;" data-schema="<?= htmlspecialchars($stareSchema, ENT_QUOTES) ?>">
+                    <strong>Baza de date nu e la zi cu codul.</strong> <?= htmlspecialchars(\App\Support\Migrari\Garda::explicatie($stareSchema), ENT_QUOTES) ?>
+                </section>
+<?php endif; ?>
                 <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
                     <section class="panel" style="border-color:#34d399;background:#ecfdf5;color:#065f46;">
                         <?= htmlspecialchars($message, ENT_QUOTES) ?>

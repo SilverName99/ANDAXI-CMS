@@ -293,6 +293,28 @@ diferențe sunt scrise una câte una, cu motivul lor, în `$deBioscem` din
 „Sitemap XML” din Setări magazin (pomenește și articolele) și locul regulii
 `/cos-cumparaturi` în robots.txt, ambele din portarea generalizată a livrării 1 SEO.
 
+## Pașii de activare
+
+Migrările fac aceeași schemă pe orice site, oricare ar fi pluginurile (OD-02), deci
+un plugin nu-și face tabelele când pornește: le are deja. Ce mai pune un plugin pe
+bază, o singură dată, când devine „pornit”, stă în `config/activari.php` (detaliile
+în [MIGRARI.md](MIGRARI.md), „Pașii de activare ai pluginurilor”):
+
+| Plugin | Pasul | Ce face |
+|---|---|---|
+| `acorduri_gdpr` | `pagina_acorduri_gdpr` | pagina `acorduri-gdpr` cu formularul, doar dacă nu există (nici ștearsă) |
+| `erp` | `prag_trimitere_erp` | setarea `erp_trimite_din` = momentul pornirii, doar dacă lipsește |
+
+Pașii rulează la prima cerere de după ce pluginul a devenit „pornit” (și în
+`scripts/install.php`, `tools/dev/licenta.php`, cronul ERP), o singură dată pe bază:
+ce s-a făcut stă în setarea `activari_pluginuri`. Un plugin trecut în „oprit” iese
+de acolo, deci o repornire îi rulează pașii din nou; fiecare pas e idempotent (o
+pagină care există nu se mai face, o cheie existentă nu se atinge). „Se oprește” nu
+schimbă nimic. Fiecare pas rulat apare în Jurnal activitate („Plugin pornit: pas de
+activare”, fără administrator). Un plugin nou care are conținut de pus pe bază își
+scrie aici pasul, nu într-o migrare (migrările nu scriu conținut) și nu într-o
+funcție chemată la fiecare cerere.
+
 ## Pluginurile, unul câte unul
 
 „Se oprește” și „oprit” descriu ce se schimbă față de „pornit”. Datele nu se
@@ -432,6 +454,10 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Are nevoie de**: magazin. Ține de bani (`'bani' => true` în catalog, ca plățile):
   la CRM trece în „oprit” cel mai devreme după 30 de zile de „se oprește” (OD-36, D7);
   pe site nimic nu citește încă marcajul.
+- **Pornește**: pasul de activare scrie `erp_trimite_din` = momentul pornirii, doar
+  dacă setarea lipsește cu totul (o valoare goală, ca la înghețarea Bioscem,
+  înseamnă „fără prag” și rămâne). Trimiterile o vor respecta din WP-12 (E1):
+  pornit pe un site care nu l-a avut, ERP-ul nu primește tot istoricul „pending”.
 - **Se oprește**: comenzile plasate **înainte** de oprire pleacă în ERP ca de
   obicei, oricând li s-ar confirma plata (EuPlătesc, BT, Stripe, OP) sau ar trece
   prin reîncercările cronului; doar o comandă plasată **după** momentul în care
@@ -598,10 +624,13 @@ dispar, iar linkurile spre el se scot din pagini.
   semnat de medici), `/gdpr-agreements/…`, Utilizatori → Acorduri GDPR (lista și
   exportul Excel). Tabel: `gdpr_agreements`.
 - **Are nevoie de**: nimic.
+- **Pornește**: pasul de activare face pagina `acorduri-gdpr` o singură dată, dacă
+  nu există. O pagină ștearsă de admin rămâne ștearsă (înainte de migrări se
+  readucea la fiecare cerere de admin); o readuce butonul „Generează pagini
+  necesare” din Setări magazin.
 - **Se oprește**: ca pornit.
 - **Oprit**: pagina dă 404 (și scrisă altfel), nu se mai creează la generarea
-  paginilor, nici automat la fiecare cerere de admin; meniul dispare; semnăturile
-  rămân în bază.
+  paginilor; meniul dispare; semnăturile rămân în bază.
 
 ### Neportate încă
 
@@ -646,16 +675,18 @@ conturilor de clienți).
   „Reducere cupon (COD)”, numărul AWB. Fără ele totalurile și istoricul nu s-ar
   mai lega.
 - **Coloana `erp_status`** are implicit „pending”: pornit după luni de pauză,
-  pluginul ERP ar trimite și comenzile vechi, încă netrimise. La repornire trebuie
-  ales de la ce dată se trimit (Etapa 2, la CRM).
+  pluginul ERP ar trimite și comenzile vechi, încă netrimise. Pragul
+  `erp_trimite_din` (pasul de activare, mai sus) se scrie doar o dată, când cheia
+  lipsește; la o repornire după o pauză trebuie ales din nou de la ce dată se
+  trimit (Etapa 2, la CRM).
 - **Precomenzile ținute**: cu pluginul oprit, butonul de eliberare dispare, deci
   precomenzile plasate și neeliberate rămân ținute până la repornire.
 - **Textul implicit al emailului „Comandă livrată”** invită la o recenzie; e text
   editabil de client în Email-uri ecommerce, nu se ascunde singur fără recenzii.
 - **Emailurile tranzacționale și formularele de contact** stau, ca în Bioscem, în
   aceeași pagină cu newsletterul (tab-urile nucleului rămân și fără newsletter).
-- **Schema bazei** (`ensureOptionalSchema` și celelalte `ensure*Schema`) creează și
-  coloanele pluginurilor oprite; nu se văd, dar există.
+- **Schema bazei**: migrările fac pe orice site și tabelele și coloanele
+  pluginurilor oprite (OD-02, [MIGRARI.md](MIGRARI.md)); nu se văd, dar există.
 - **Pagina de prezentare de rezervă** (`views/site/home.php`, folosită când nu e
   nicio pagină „acasă” în admin) are texte Bioscem; linkurile ei spre pluginuri
   ascunse se scot, textul rămâne.

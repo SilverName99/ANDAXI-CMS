@@ -17,6 +17,7 @@ final class LoyaltyService
 
     public static function ensureSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('ALTER TABLE users ADD COLUMN loyalty_points INT NOT NULL DEFAULT 0 AFTER google_id');
         } catch (Throwable) {

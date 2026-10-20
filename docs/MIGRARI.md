@@ -1,19 +1,19 @@
 # Migrările bazei de date
 
 Schema bazei (tabelele, coloanele, indecșii) se schimbă dintr-un singur loc: **`scripts/migreaza.php`**,
-din linia de comandă, la instalare și la fiecare release. Paginile nu trimit DDL. Azi codul (moștenit
-din Bioscem) încă își creează singur coloanele din mers, cu cele 36 de funcții `ensure*Schema`; ele
-rămân până când fiecare site trece pe migrări (garda de la WP-05, apoi ștergerea lor după adoptări).
+din linia de comandă, la instalare (`scripts/install.php` rulează aceleași migrări) și la fiecare release.
+Paginile nu trimit DDL: pe o bază la zi cu migrările, cele 36 de funcții `ensure*Schema` moștenite din
+Bioscem ies pe loc (garda R1, mai jos); corpurile lor rămân doar pentru o bază care n-a văzut încă
+runner-ul (un site de dinainte de adoptare) și se șterg după cele patru adoptări (R2, MIG-11).
 
-Ce există acum: **runner-ul**, cu detectarea, reluarea și codurile de ieșire, plus testele lui
-(WP-02 din planul Etapei 1); din WP-10, **sonda schemei** site-urilor live (mai jos); din WP-03,
-**migrările de bază** `0001`–`0024` (mai jos), cu `asteptat.json`, `migrari.lock`, `ultima.php` și
-unealta care le compară cu schema făcută de cod (`tools/dev/migrari/genereaza-fixture.php`); din WP-04,
-**testele T1–T11** pe schemele celor cinci coduri (și pe cele live, când vine sonda) și **verificarea
-fișierelor de migrare** (`tools/dev/verifica-migrari.php`, în testul de fum), mai jos. Încă nu
-rulează pe niciun site: instalarea și paginile merg ca înainte, cu funcțiile `ensure*`. Ce vine:
-instalarea prin migrări, garda `Garda::stare` și `/health` (WP-05), pasul de înghețare a setărilor
-unui site (WP-06).
+Ce există: **runner-ul**, cu detectarea, reluarea și codurile de ieșire, plus testele lui (WP-02 din
+planul Etapei 1); din WP-10, **sonda schemei** site-urilor live; din WP-03, **migrările de bază**
+`0001`–`0024`, cu `asteptat.json`, `migrari.lock`, `ultima.php` și unealta care le compară cu schema
+făcută de cod (`tools/dev/migrari/genereaza-fixture.php`); din WP-04, **testele T1–T11** pe schemele celor
+cinci coduri (și pe cele live, când vine sonda) și **verificarea fișierelor de migrare**
+(`tools/dev/verifica-migrari.php`, în testul de fum); din WP-05, **instalarea prin migrări**, **garda**
+`Garda::stare` (cu `/health` și bannerul din admin), **pașii de activare** ai pluginurilor și **contorul de
+instrucțiuni** din dezvoltare, toate mai jos. Ce vine: pasul de înghețare a setărilor unui site (WP-06).
 
 ## Pe scurt
 
@@ -23,6 +23,7 @@ php scripts/migreaza.php --aplica      # aplică ce lipsește, apoi verifică ba
 php scripts/migreaza.php --verifica    # baza față de database/migrari/asteptat.json (doar nume de obiecte)
 php scripts/migreaza.php --stare       # ultima_ord, ce lipsește, ce e întrerupt, dacă rulează alt runner
 php scripts/migreaza.php --amprenta    # amprenta schemei acestei baze, JSON (doar structură)
+php scripts/install.php                # un site nou, pe o bază goală: migrările, seed-ul neutru, primul administrator
 tools/dev/php.sh scripts/migreaza.php --plan   # local, pe baza de test
 ```
 
@@ -81,8 +82,11 @@ database/migrari/
   migrari.lock                       {"migrari": {id: sha256}, "retrase": {id: motiv}}: ce s-a publicat
   asteptat.json                      amprenta schemei după toate migrările, pe o bază goală
   ultima.php                         numărul ultimei migrări, pentru garda de la fiecare cerere (WP-05)
-src/Support/Migrari/                 Registru, Runner, Schema, Server, Amprenta, Executie, Eroare, ParametruLipsa
+src/Support/Migrari/                 Registru, Runner, Schema, Server, Amprenta, Executie, Eroare, ParametruLipsa;
+                                     Consola (ce au în comun migreaza.php și install.php), Garda (garda de la fiecare cerere)
 scripts/migreaza.php                 linia de comandă
+scripts/install.php                  o bază nouă: migrările, seed-ul neutru, setările, pașii de activare, primul administrator
+config/activari.php                  pașii de activare ai pluginurilor (src/Support/Activari.php)
 storage/logs/migrari.log             câte un rând pe operație executată (nume de obiecte, clasa, durata)
 tools/sonda/amprenta-schema.php      sonda schemei unui site live (WP-10, MIG-08), rulată de proprietar
 tools/dev/migrari/din-sonda.php      local: sonda → fixture-ul și extra-<cod>.txt, în tools/dev/migrari/vechi/privat/
@@ -92,7 +96,9 @@ tools/dev/migrari/vechi/             fixture-urile testelor: <cod>.sql (schema c
                                      variante.sql + extra-variante.txt (o bază veche, inventată); privat/ = sonda live, în afara git-ului
 tools/dev/migrari/excluderi.php      ce nu primește o instalare nouă din schema codului (folosit de genereaza-fixture și de teste)
 tools/dev/migrari/ddl-din-cod.txt    lista DDL-ului vechi din cod, permis până la R2 (verifica-migrari.php)
+tools/dev/migrari/pe-vechi.php       local: o bază făcută ca înainte de migrări (install.php de atunci + funcțiile ensure*)
 tools/dev/test-migrari.php           testele (runner-ul și T1–T11; T1–T11 stau în tools/dev/migrari/test-baza.php)
+tools/dev/test-instalare.php         testele instalării, ale gărzii, ale pașilor de activare și ale contorului de instrucțiuni
 tools/dev/verifica-migrari.php       verificarea fișierelor de migrare și a DDL-ului din cod (T11, în testul de fum)
 ```
 
@@ -164,7 +170,7 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
   compară textele, deci și ce respinge un index unic; amprenta o arată pe a unei coloane doar când
   diferă de a tabelului, iar o migrare care ar cere-o n-ar avea cu ce s-o compare.
 - **Fără conținut în migrări** (pagini implicite, lista implicită de newsletter, categorii de blog):
-  acelea sunt pașii de activare ai pluginurilor (WP-05).
+  conținutul de pornire e în seed-ul neutru al instalării sau în pașii de activare ai pluginurilor (mai jos).
 - **Fără valori din rânduri** în mesaje, avertismente sau jurnal.
 
 ## Cum rulează `--aplica`
@@ -326,8 +332,10 @@ fără licență, pe o bază `cms_mig_fx_*` inventată (în ea ajung doar setăr
 `gr`) scrie `<cod>.sql` (doar structură, se încarcă pe ambele servere) și `<cod>-amprenta.json` în
 `$CMS_DEV_DIR/fixture-migrari/` (sau `--iesire=`); `--compara <a.json> <b.json> …` arată fiecare amprentă
 față de prima. Azi, BS = CMS; BV și GR primesc 3 tabele și 24 de coloane, VT 8 tabele, 57 de coloane și
-un index. Schema codului e a lui `install.php` de azi: când instalarea trece pe migrări (WP-05),
-referința devine un commit fix (`--verifica --repo=<clona CMS>@<commit>`).
+un index. Din WP-05 `install.php` rulează migrările, deci schema „codului” acestui repo e cea a instalării de
+dinainte: `scripts/install.php` și `database/schema.sql` de la commit-ul din capul lui `vechi/cms.sql`
+(`fc8a5e1`), plus funcțiile `ensure*` din arborele de lucru (cu garda lor, care pe o bază fără registru le
+lasă să lucreze). Așa arată un site vechi pe codul comun, înainte de baseline; `--repo=` ia alt cod, întreg.
 
 **Fixture-urile din git** (`tools/dev/migrari/vechi/`, testul T2): `genereaza-fixture.php --fixture-uri`
 scrie `<cod>.sql` și `extra-<cod>.txt` pentru `cms`, `bs`, `bv`, `vt`, `gr`. Codul vechi al unui site e clona
@@ -343,6 +351,120 @@ schema site-ului. Fixture-urile au doar structură, făcută de cod: nimic dintr
 catalogului și ale cupoanelor, `reviews` cu rânduri, `fan_streets` de dinainte de `row_key` cu indexul unic
 vechi, linkuri de plată fără procesator, copiile unei sincronizări FAN întrerupte, tabelele manechinului în
 cealaltă formă, câteva rânduri inventate; `extra-variante.txt` spune ce rămâne din ele după baseline.
+
+## Instalarea (`scripts/install.php`)
+
+Un site nou se instalează pe o bază **goală** (`DB_*` și `ADMIN_DEFAULT_PASSWORD` în `.env`):
+
+1. **migrările**, exact ca `migreaza.php --aplica` (aceeași conexiune și aceleași opțiuni, din
+   `App\Support\Migrari\Consola`; `SITE_SLUG` din `.env` rulează și pașii acelui site);
+2. **seed-ul neutru**: categoriile de blog „Noutăți” (`noutati`) și „Evenimente” (`evenimente`, pe care o
+   caută `NextEvent`), doar într-un tabel gol. Nimic din conținutul Bioscem: fără „Info pacienți”/„Info
+   medici”, fără lista implicită de newsletter (o face `NewsletterService::defaultListId` la prima abonare);
+3. **setările implicite** (`Settings::DEFAULTS`) scrise în bază;
+4. **pașii de activare** ai pluginurilor pornite de licența de acum (mai jos);
+5. la urmă **primul administrator**, cu rolul în forma de azi (`role` + `roles_json`, cum îl aducea codul
+   vechi la prima pagină de admin și cum îl scrie Setări → Administratori).
+
+Pe o bază care **are deja administratori** refuză: „Baza există (are administratori); nu o instalez din nou
+și n-am scris nimic”, codul 1. Un site existent își aduce schema la zi cu `migreaza.php --aplica`, iar
+setările îi rămân ale lui: scrierea setărilor implicite peste ele, înaintea înghețării (WP-06), ar schimba
+ce vede clientul (DB-23 din planul de-Bioscem). Administratorul se scrie ultimul, deci o instalare oprită la
+jumătate (bugetul de timp al migrărilor, un proces omorât) se rulează din nou și continuă. Orice problemă
+iese cu **1** și mesajul pe stderr (fără parolă, PHP sub `php_min`, baza nu răspunde, o bază străină, o
+migrare care n-a mers: raportul runner-ului); `seed.php` la fel (fără bază sau fără `seed.sql`: 1). Până la
+WP-05 amândouă ieșeau cu 0 la baza căzută („Erori moștenite” 4 din [DEZVOLTARE.md](DEZVOLTARE.md)).
+
+## Garda: nicio cerere nu mai trimite DDL
+
+`App\Support\Migrari\Garda::stare(PDO)` spune, cu o singură citire după cheia primară (ținută minte pe
+conexiune), cum stă baza față de migrările din cod (`database/migrari/ultima.php`):
+
+| Stare | Când |
+|---|---|
+| `la_zi` | `_platforma_stare.ultima_ord` ≥ ultima migrare din cod (și o bază înaintea codului, după o revenire la codul de dinainte: migrările doar adaugă) |
+| `in_urma` | runner-ul a lucrat pe bază, dar n-a ajuns la ultima migrare din cod (cod nou urcat, `--aplica` nerulat sau oprit), sau `_platforma_stare` fără `ultima_ord` |
+| `fara_registru` | baza n-a văzut niciodată runner-ul (fără `_platforma_stare`): un site pe codul vechi, de dinainte de adoptare |
+| `eroare` | fără conexiune, conexiunea căzută, fără drept de citire, sau lipsește `ultima.php` |
+
+Unde se folosește:
+
+- **R1, în capul celor 36 de funcții** `ensure*Schema` / `asigura*Schema*` (cele 16 din cele două
+  controllere și cele 20 din `src/Support`): `if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; }`.
+  Pe o bază la zi nu mai rulează nimic din ele: nici DDL-ul (131 de instrucțiuni pe dashboard, 175 pe lista de
+  comenzi înainte), nici scrierile „de reparat” de la fiecare cerere (rolurile adminilor, galeria veche,
+  recenziile din tabelul vechi, legăturile de blog, numele cupoanelor: le fac o singură dată migrările de date
+  0020–0024), nici readucerea paginii `/acorduri-gdpr` (acum pas de activare). Pe `fara_registru`, `in_urma`
+  sau `eroare` lucrează ca înainte, ca un site încă neadoptat să meargă exact ca azi. `scripts/fan-tracking-sync.php`
+  nu mai trimite cele trei ALTER-uri la fiecare rulare. Codul care scrie azi rânduri le scrie complete
+  (recenzia cu sursa, adminul cu `roles_json`, cuponul cu nume); un rând scris de codul vechi după ce
+  migrările de date au rulat ar cere o migrare de date nouă (pe site-urile vechi codul vechi nu mai rulează
+  după adoptare).
+- **`/health`**: „ok” și, pe al doilea rând, `schema: <stare>`; cu `in_urma` răspunde **503** („indisponibil”),
+  ca verificarea de după un deploy (`actualizeaza.sh`, Etapa 2) să întoarcă codul la loc.
+- **Bannerul din admin**: administratorul general vede un banner roșu, cu ce e de făcut, când baza nu e
+  `la_zi` (`data-schema="<stare>"`). Ceilalți administratori nu-l văd.
+
+Corpurile funcțiilor se șterg după cele patru adoptări (R2, MIG-11), odată cu `tableHasColumn`,
+`BtIpayPayments::areTabele`, căutările în tabelul vechi `reviews` și `database/schema.sql` (azi doar
+documentație: nu-l mai rulează nimeni).
+
+**Contorul de instrucțiuni (doar dezvoltare).** Cu `CMS_DEV_NUMARA_SQL=1` în mediul serverului de dezvoltare,
+`Database::connection` întoarce un `App\Support\ContorSql`: fiecare cerere scrie un rând JSON în
+`$CMS_DEV_DIR/numara-sql.jsonl` (metoda, calea, câte instrucțiuni, câte de schemă și începutul lor, câte
+citiri din `information_schema`). Pe o bază făcută de `install.php`: 0 instrucțiuni de schemă pe dashboard
+(10 instrucțiuni în total), lista de comenzi (19), pagina de produs (18) și trimiterea unei comenzi (26); pe
+o bază făcută ca înainte, dashboard-ul trimite 110 din 144, iar după baseline 0 (`tools/dev/test-instalare.php`,
+E). Testul de fum numără toate cererile lui (pe fiecare pachet): niciuna nu are voie să trimită DDL. Pe
+site-uri variabila nu există.
+
+## Pașii de activare ai pluginurilor
+
+Schema e aceeași pe orice site (decizia OD-02), dar unele pluginuri au nevoie de conținut când pornesc. Acela
+nu stă în migrări și nu se mai pune la fiecare cerere: e un **pas de activare** (`config/activari.php`, rulat
+de `App\Support\Activari::ruleaza`), o singură dată pe bază, când pluginul devine „pornit”:
+
+| Plugin | Pas | Ce face |
+|---|---|---|
+| `acorduri_gdpr` | `pagina_acorduri_gdpr` | pagina `/acorduri-gdpr` cu `{{gdpr_agreements_form}}`, **doar dacă nu există** (nici ștearsă): o pagină ștearsă de admin rămâne ștearsă (codul vechi o readucea la fiecare pagină din admin cât pluginul era vizibil) |
+| `erp` | `prag_trimitere_erp` | `erp_trimite_din` = acum, **doar dacă cheia lipsește cu totul** din `settings`: o valoare goală (înghețarea Bioscem: fără prag) rămâne. Pornit pe un site care nu l-a avut, ERP-ul nu mai primește tot istoricul „pending” (G-M8; îl citește WP-12, E1) |
+
+Ce s-a făcut pe o bază stă chiar în ea, în setarea `activari_pluginuri` (pluginul → momentul): un plugin
+„pornit” care nu e acolo își rulează pașii și intră acolo (la o eroare rămâne pe dinafară și se încearcă din
+nou); unul „oprit” iese, deci o repornire rulează pașii din nou (sunt idempotenți); „se oprește” nu schimbă
+nimic. Fiecare pas rulat scrie un rând în jurnalul de activitate („Plugin pornit: pas de activare”, fără
+administrator). Pașii rulează:
+
+- la **fiecare cerere** (`public/index.php`, după stările pluginurilor): setarea se citește oricum
+  (`Settings::all`), deci fără nimic de făcut nu costă nicio interogare; o eroare nu oprește pagina;
+- la **instalare** (`install.php`, pentru pluginurile licenței de atunci);
+- în **cronul ERP** (`scripts/erp-sync.php`), înaintea oricărei trimiteri: o licență care pornește ERP-ul fără
+  nicio cerere web după scrie întâi pragul;
+- în **`tools/dev/licenta.php`** (dezvoltare), după fiecare licență pusă, ca la o licență nouă venită de la CRM
+  (Etapa 2: sincronizarea licenței îi cheamă la fel).
+
+**Nu** în `migreaza.php` (planul îl pomenea acolo): runner-ul face doar schema, aceeași oricare ar fi licența,
+iar rezultatul lui nu are voie să depindă de pluginuri (testele T1–T11 îl cer). De ce în bază și nu în
+`stare-aplicata.json` (dosarul licenței, unde `Plugins` notează schimbările de stări): o bază nouă, una
+restaurată dintr-o copie mai veche sau una schimbată sub același dosar (dezvoltarea) își primesc pașii la
+prima rulare, iar o cerere care vede schimbarea fără bază (baza căzută) nu-i pierde.
+
+## O migrare nouă, pas cu pas
+
+1. Numărul (NNNN) e cel rezervat pentru pachetul de lucru în planul Etapei 1 (§4.3); dosarul e proprietarul:
+   `nucleu` sau cheia pluginului din `config/plugins.php`, care trebuie să aibă tabelul sau coloana în
+   `tabele` (verificarea fișierelor pică altfel).
+2. Fișierul, cu exact cele patru chei (`descriere`, `tip`, `blocanta`, `sus`) și doar metodele din `Schema`
+   (mai sus): fără SQL de schemă scris de mână, fără `AFTER`, fără colație, nicio ștergere în afara unei
+   migrări „contract”, nicio valoare din rânduri în mesaje.
+3. `tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --asteptat`: `asteptat.json`, `migrari.lock`,
+   `ultima.php` (garda le citește; o migrare publicată nu se mai schimbă, o corectură e o migrare nouă).
+4. O migrare de date își trece tabelele în `$tabeleDate` din `tools/dev/migrari/test-baza.php` (altfel T4 și
+   T10 nu știu ce are voie să schimbe) și are un caz de rânduri inventate; o coloană nouă pe care o citește
+   codul vechi al unui site se face și acolo, adoptiv (detectată, nu creată a doua oară).
+5. Porțile: `tools/dev/porti.sh --wp=<WP>` (G-mig și verificarea fișierelor; G-cmp arată orice schimbare față
+   de Bioscem). În cod nu se adaugă DDL nicăieri: `verifica-migrari.php` pică pe orice text DDL sau definiție
+   de coloană nouă din codul de pe site-uri.
 
 ## Serverele
 
@@ -432,8 +554,19 @@ MariaDB și pe MySQL 8:
 | T7 | pe baza instalată, o copie a migrărilor cu una aplicată schimbată, apoi și cu lacătul rescris, apoi ștearsă, apoi retrasă | 12, 12, 12, apoi 0; baza și starea neatinse |
 | T8 | o migrare de probă cu `MODIFY COLUMN`, declarată neblocantă | `--plan` și `--aplica` 11, nimic aplicat; cu `--permite-blocante`, aplicată |
 | T9 | amprentele din T1, T2, baza veche, T4 | aceleași pe ambele servere |
-| T10 | o bază făcută pe vechi (`install.php`, `seed.php`, `date-demo.php`, cu licența „toate” dintr-un dosar al testului, `CMS_DEV_LICENTA_DOSAR`, ca procesul-copil al funcțiilor: oricare ar fi licența locală, pe care n-o atinge) → baseline; apoi funcțiile `ensure*` ale codului comun și ale codului Bioscem (clona la „ultimul commit revizuit”), pe ea și pe o bază nouă făcută de migrări | baseline-ul nu schimbă schema, datele doar unde declară migrările; `--verifica` 0; funcțiile vechi, fără nicio excepție: pe baza cu date demo nu mai schimbă nimic (schemă, rânduri); pe baza nouă schema rămâne `asteptat.json` și scriu doar rândurile declarate în test (`$randuriHelperiPeBazaNoua`: pagina `/acorduri-gdpr`, cele patru categorii de blog ale Bioscem, lista implicită de newsletter; date pe care migrările nu le scriu, în WP-05 pasul de activare al lui `acorduri_gdpr` și seed-ul neutru). Testele aplicației pe o bază migrată (fum, pluginuri, SEO, comparația cu Bioscem) vin cu instalarea prin migrări (WP-05) |
+| T10 | cu licența „toate” dintr-un dosar al testului (`CMS_DEV_LICENTA_DOSAR`, ca procesul-copil al funcțiilor: oricare ar fi licența locală, pe care n-o atinge): (a) o bază făcută ca înainte (`tools/dev/migrari/pe-vechi.php`, `seed.php`, `date-demo.php`) → baseline; (b) o bază făcută de `install.php`, apoi `seed.php`, `date-demo.php`; (c) o bază făcută doar de migrări; pe fiecare, funcțiile `ensure*` ale codului comun și ale codului Bioscem (clona la „ultimul commit revizuit”) | (a) baseline-ul nu schimbă schema, datele doar unde declară migrările; `--verifica` 0; (b) `install.php` 0: schema = `asteptat.json`, `--plan` 0, seed-ul neutru, pagina `/acorduri-gdpr`, adminul cu `roles_json`, setările, fără listă de newsletter; a doua oară 1, nimic scris; funcțiile Bioscem pe o instalare nouă scriu doar lista implicită de newsletter (`$randuriBioscemPeInstalareNoua`); (a), (b) cu date demo: funcțiile ambelor coduri, fără nicio excepție, nu schimbă nimic (schemă, rânduri); (c) ale codului comun nu scriu nimic (garda), ale Bioscem doar rândurile declarate (`$randuriHelperiPeBazaNoua`: pagina, cele patru categorii ale Bioscem, lista de newsletter). Testele aplicației pe ambele baze (fum, pluginuri, SEO, comparația cu Bioscem): porțile G-inst și G-vechi din `porti.sh` |
 | T11 | `tools/dev/verifica-migrari.php` pe repo și pe o copie cu câte o greșeală (și cu o definiție doar cu tipul, una într-o constantă a clasei, una într-un fișier fără DDL) | 0 pe repo; 1, cu motivul, pe fiecare greșeală (mai jos); 0 pe texte obișnuite care încep cu numele unui tip (`'text'`, `'date'`, „Date invalide.”, `DATE(o.created_at)`) într-o metodă nouă din `AdminController` |
+
+**Instalarea, garda, pașii de activare, contorul** (WP-05): `tools/dev/php.sh tools/dev/test-instalare.php`
+(poarta **G-inst**, și cu PHP-ul minim; doar MariaDB, pe baze `cms_inst_*` făcute și șterse acolo, cu licența
+într-un dosar al testului și un server pe `CMS_DEV_PORT`+8): `install.php` și `seed.php` fără server (1, pe
+stderr), pe o bază goală, a doua oară, oprit la jumătate și reluat, pe o bază străină, fără licență; garda în
+fiecare stare și o singură citire pe conexiune; `/health` și bannerul; pașii de activare (prima cerere după
+licență, o singură dată, pagina ștearsă rămâne ștearsă, ERP oprit și pornit cu cheia goală sau lipsă);
+contorul pe dashboard, comenzi, produs și o comandă trimisă, plus dashboard-ul unei baze ca înainte, înainte și
+după baseline. Raport: `storage/logs/dev/test-instalare-raport.txt`. Poarta **G-vechi** rulează comparația cu
+Bioscem (ambele licențe), testele pluginurilor, SEO și testul de fum pe fiecare pachet pe o bază făcută ca
+înainte și trecută prin baseline (`tools/dev/instaleaza.sh --pe-vechi`, baza `cms_dev_vechi`, ștearsă la final).
 
 ## Verificarea fișierelor de migrare (`tools/dev/verifica-migrari.php`)
 
@@ -458,10 +591,10 @@ spus în rezultat).
    (`'datetime'`) într-o funcție cu DDL. Un tip singur cu litere mici în afara unei funcții cu DDL nu se numără:
    nu se deosebește de tipurile câmpurilor din formulare (`'text'`, `'date'`: peste o sută azi), deci SQL-ul din
    cod se scrie cu majuscule. Lista e pe fișier și funcție (în afara metodelor: „Clasa (clasă)”), de câte ori
-   apare (azi 371 de texte și 26 de definiții în 38 de funcții și fișiere: cele 36 de funcții
-   `ensure*`/`asigura*`, `install.php`, `fan-tracking-sync.php`, `schema.sql`, tabelele de lucru ale
-   sincronizării FAN, care rămân, și tiparul din `WordPressDumpReader`; toate cele 26 de definiții sunt în
-   funcții cu DDL). Unul nou, încă o copie a unuia vechi sau unul mutat în altă funcție = încălcare: o
+   apare (azi 301 de texte și 26 de definiții în 36 de funcții și fișiere: funcțiile `ensure*`/`asigura*`
+   care au DDL, `schema.sql`, tabelele de lucru ale sincronizării FAN, care rămân, și tiparul din
+   `WordPressDumpReader`; toate cele 26 de definiții sunt în funcții cu DDL; din WP-05 `install.php` și
+   `fan-tracking-sync.php` nu mai au DDL: 70 de rânduri scoase cu `--actualizeaza-lista`). Unul nou, încă o copie a unuia vechi sau unul mutat în altă funcție = încălcare: o
    coloană nouă se face cu o migrare (regula 2 din planul Etapei 1). Unul care a ieșit din cod = încălcare până
    la `--actualizeaza-lista`, care doar scoate rânduri (lista nu crește niciodată; `--lista-initiala` a scris-o o
    dată, în WP-04, și refuză o listă existentă).

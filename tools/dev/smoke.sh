@@ -10,6 +10,8 @@
 #   tools/dev/smoke.sh --pachet=grafoanaytis # sau cu licența de dezvoltare a unui site existent (bioscem, biovitality,
 #                                            # vertij, grafoanaytis: config/plugins.php → licente_dev)
 #   tools/dev/smoke.sh --toate-pachetele     # pe rând: toate, magazin, catalog, prezentare, asociatie
+#   tools/dev/smoke.sh --pe-vechi            # pe o bază făcută ca înainte de migrări, apoi trecută prin baseline
+#                                            # (tools/dev/instaleaza.sh --pe-vechi; și cu --toate-pachetele)
 #   CMS_DEV_PHP=php8.3 tools/dev/smoke.sh …  # cu PHP-ul minim (config/app.php → php_min)
 #
 # Cu un pachet, fiecare verificare știe al cui plugin e pagina: dacă pluginul nu
@@ -27,11 +29,13 @@ verifica_mediul
 cu_capturi=1
 PACHET="toate"
 toate_pachetele=0
+pe_vechi=0
 for argument in "$@"; do
     case "$argument" in
         --fara-capturi) cu_capturi=0 ;;
         --pachet=*) PACHET="${argument#--pachet=}" ;;
         --toate-pachetele) toate_pachetele=1 ;;
+        --pe-vechi) pe_vechi=1 ;;
         *) die "argument necunoscut: $argument" ;;
     esac
 done
@@ -43,6 +47,7 @@ if [ "$toate_pachetele" = 1 ]; then
     for p in toate magazin catalog prezentare asociatie; do
         optiuni=("--pachet=$p")
         [ "$cu_capturi" = 0 ] && optiuni+=("--fara-capturi")
+        [ "$pe_vechi" = 1 ] && optiuni+=("--pe-vechi")
         if "$0" "${optiuni[@]}" > /dev/null 2>&1; then rezultat="OK"; else rezultat="EȘEC"; cod_total=1; fi
         fisier="$CMS_DEV_DIR/smoke-raport.txt"
         [ "$p" != "toate" ] && fisier="$CMS_DEV_DIR/smoke-raport-$p.txt"
@@ -175,18 +180,33 @@ confirma_p() {
 
 : > "$RAPORT"
 scrie "Test de fum ANDAXI-CMS — $(date '+%Y-%m-%d %H:%M:%S')"
-scrie "Commit: $(git -C "$RADACINA" rev-parse --short HEAD 2>/dev/null || echo '?')  Bază: $CMS_DEV_DB  Port: $CMS_DEV_PORT  Licență: $PACHET  PHP: $("$CMS_DEV_PHP" -r 'echo PHP_VERSION;')"
+scrie "Commit: $(git -C "$RADACINA" rev-parse --short HEAD 2>/dev/null || echo '?')  Bază: $CMS_DEV_DB$([ "$pe_vechi" = 1 ] && echo ' (pe vechi + baseline)')  Port: $CMS_DEV_PORT  Licență: $PACHET  PHP: $("$CMS_DEV_PHP" -r 'echo PHP_VERSION;')"
 scrie ""
 
 # 1. Bază goală -> install -> seed -> date demo (+ licența „toate”)
-scrie "== Instalare de la zero"
-if ! "$RADACINA/tools/dev/instaleaza.sh" > "$TMP/instalare.log" 2>&1; then
+scrie "== Instalare de la zero$([ "$pe_vechi" = 1 ] && echo ' (ca înainte de migrări, apoi baseline-ul)')"
+optiuni_instalare=()
+[ "$pe_vechi" = 1 ] && optiuni_instalare+=("--pe-vechi")
+if ! "$RADACINA/tools/dev/instaleaza.sh" "${optiuni_instalare[@]}" > "$TMP/instalare.log" 2>&1; then
     cat "$TMP/instalare.log"
     die "instalarea a eșuat (detalii mai sus)"
 fi
 sed -n '/^  /p' "$TMP/instalare.log" | tee -a "$RAPORT"
 exporta_mediul_aplicatiei
 PAROLA="$ADMIN_DEFAULT_PASSWORD"
+# Instalarea prin migrări (docs/MIGRARI.md, „Instalarea”; pe larg: tools/dev/test-instalare.php): fără server iese cu
+# un cod ≠ 0 (înainte ieșea cu 0, „Erori moștenite” 4), iar pe baza deja instalată refuză, fără să scrie nimic.
+if "$CMS_DEV_PHP" -d pdo_mysql.default_socket=/tmp/cms-smoke-nu-exista.sock "$RADACINA/scripts/install.php" > "$TMP/install-fara.log" 2>&1; then
+    cod_fara=0
+else
+    cod_fara=$?
+fi
+confirma "install.php fără server (socket inexistent): ieșire $cod_fara (≠ 0)" test "$cod_fara" -ne 0
+suma_bazei() { mysql_dev -N "$CMS_DEV_DB" -e "CHECKSUM TABLE $(mysql_dev -N -e "SELECT GROUP_CONCAT(TABLE_NAME) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '$CMS_DEV_DB' AND TABLE_TYPE = 'BASE TABLE'")" | md5sum; }
+SUMA_INAINTE="$(suma_bazei)"
+if (cd "$RADACINA" && "${PHP_DEV[@]}" scripts/install.php) > "$TMP/install-din-nou.log" 2>&1; then cod_din_nou=0; else cod_din_nou=$?; fi
+confirma "install.php pe baza instalată: ieșire 1, „Baza există”, nimic scris" \
+    bash -c "[ '$cod_din_nou' = 1 ] && grep -q 'Baza există' '$TMP/install-din-nou.log' && [ '$(suma_bazei)' = '$SUMA_INAINTE' ]"
 if [ "$PACHET" != "toate" ]; then
     "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/licenta.php" "$PACHET" | sed 's/^/  /' | tee -a "$RAPORT"
 fi
@@ -208,8 +228,10 @@ else
     head -20 "$TMP/verifica-migrari.log" | sed 's/^/        /' | tee -a "$RAPORT"
 fi
 
-# 2. Serverul
-"$RADACINA/tools/dev/server.sh" > /dev/null
+# 2. Serverul, cu contorul de instrucțiuni (App\Support\ContorSql): la final, nicio cerere nu trebuie să fi trimis
+# DDL (pe o bază la zi, funcțiile ensure* ies pe loc; garda din docs/MIGRARI.md).
+rm -f "$CMS_DEV_DIR/numara-sql.jsonl"
+CMS_DEV_NUMARA_SQL=1 "$RADACINA/tools/dev/server.sh" > /dev/null
 q() { mysql_dev -N "$CMS_DEV_DB" -e "$1"; }
 ID_MENTA="$(q "SELECT id FROM products WHERE slug = 'ceai-de-menta'")"
 SLUG_BBD="$(q "SELECT slug FROM products WHERE bbd_enabled = 1 AND is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1")"
@@ -246,7 +268,7 @@ verifica_p nucleu "contact" 200 viz GET /contact
 verifica_p nucleu "pagină legală" 200 viz GET /termeni-si-conditii "Firma Demo SRL"
 verifica_p nucleu "robots.txt" 200 viz GET /robots.txt "Sitemap:"
 verifica_p nucleu "pagină inexistentă" 404 viz GET /pagina-care-nu-exista
-verifica_p nucleu "health" 200 - GET /health "ok"
+verifica_p nucleu "health (cu starea schemei)" 200 - GET /health "schema: la_zi"
 
 scrie ""
 scrie "== SEO (docs/SEO.md; pe larg: tools/dev/test-seo.php)"
@@ -413,32 +435,45 @@ if [ "${CRON_RULEAZA[scripts/abandoned-cart-emails.php]:-ruleaza}" = "ruleaza" ]
 else
     scrie "  SĂRIT coș abandonat: emailurile sunt capturate local (magazin nu e în pachet)"
 fi
-# Runner-ul migrărilor pe baza de test (doar citește: --stare, --plan). Până când instalarea trece
-# pe migrări (WP-05), baza de test e făcută „pe vechi” (install.php + funcțiile ensure* din
-# date-demo.php), deci --plan găsește migrări de aplicat (10); orice alt cod e o eroare. Baseline-ul
-# (grupul B, 0001–0019) trebuie însă să găsească tot ce a făcut codul: o singură operație acolo
-# înseamnă o coloană, un index sau un tabel pe care codul îl face și migrările nu (sau invers).
+# Runner-ul migrărilor pe baza de test (doar citește: --stare, --plan). Baza e făcută de scripts/install.php (prin
+# migrări) sau, cu --pe-vechi, ca înainte și apoi trecută prin baseline: în ambele cazuri --plan trebuie să iasă cu 0,
+# fără nimic de făcut. Că baseline-ul găsește pe vechi tot, fără nicio operație în grupul B, verifică
+# genereaza-fixture.php --verifica (G-baza, în T1) și T10 din test-migrari.php.
 confirma "scripts/migreaza.php --stare pe baza de test" "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --stare
 if "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --plan --json > "$TMP/migreaza.log" 2>&1; then cod_plan=0; else cod_plan=$?; fi
-de_facut_b="$("$CMS_DEV_PHP" -r '
-    $r = json_decode((string) file_get_contents($argv[1]), true);
-    if (!is_array($r)) { echo "ieșirea nu e JSON"; exit; }
-    foreach ((array) ($r["migrari"] ?? []) as $m) {
-        foreach ((array) ($m["operatii"] ?? []) as $o) {
-            if ((int) $m["ord"] >= 1 && (int) $m["ord"] <= 19 && $o["clasa"] !== "fara_efect") { echo $m["id"], ": ", $o["clasa"], " ", $o["obiect"], "; "; }
-        }
-    }' "$TMP/migreaza.log" 2>&1)"
 mesaj_plan="$("$CMS_DEV_PHP" -r 'echo (string) (json_decode((string) file_get_contents($argv[1]), true)["mesaj"] ?? "");' "$TMP/migreaza.log" 2>/dev/null)"
-if { [ "$cod_plan" = 0 ] || [ "$cod_plan" = 10 ]; } && [ -z "$de_facut_b" ]; then
+if [ "$cod_plan" = 0 ]; then
     TRECUTE=$((TRECUTE + 1))
-    scrie "  OK    scripts/migreaza.php --plan (ieșire $cod_plan, grupul B fără nicio operație): $(echo "$mesaj_plan" | cut -c1-120)"
+    scrie "  OK    scripts/migreaza.php --plan (ieșire 0, baza e la zi cu migrările): $(echo "$mesaj_plan" | cut -c1-120)"
 else
     ESECURI=$((ESECURI + 1))
-    scrie "  EȘEC  scripts/migreaza.php --plan (ieșire $cod_plan): ${de_facut_b:-$(tr -s '\n' ' ' < "$TMP/migreaza.log" | cut -c1-200)}"
+    scrie "  EȘEC  scripts/migreaza.php --plan (ieșire $cod_plan, aștept 0): $(tr -s '\n' ' ' < "$TMP/migreaza.log" | cut -c1-200)"
 fi
 SESIUNI_DUPA="$(numara_sesiuni)"
 confirma "cronurile și runner-ul migrărilor nu lasă fișiere de sesiune ($SESIUNI_INAINTE înainte, $SESIUNI_DUPA după)" \
     test "$SESIUNI_DUPA" -eq "$SESIUNI_INAINTE"
+
+# Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
+scrie ""
+scrie "== Instrucțiuni de schemă (DDL) pe cerere"
+rezultat_ddl="$("$CMS_DEV_PHP" -r '
+    $cereri = 0; $cu = [];
+    foreach (file($argv[1], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $l) {
+        $r = json_decode($l, true);
+        if (!is_array($r) || $r["metoda"] === "CLI") { continue; }
+        $cereri++;
+        if ($r["ddl"] > 0) { $cu[] = $r["metoda"] . " " . $r["cale"] . " (" . $r["ddl"] . ": " . ($r["ddl_texte"][0] ?? "") . ")"; }
+    }
+    echo $cereri, "\t", implode("; ", array_slice($cu, 0, 5)), "\n";' "$CMS_DEV_DIR/numara-sql.jsonl" 2>&1)"
+cereri_numarate="${rezultat_ddl%%$'\t'*}"
+cu_ddl="${rezultat_ddl#*$'\t'}"
+if [ "${cereri_numarate:-0}" -gt 0 ] 2>/dev/null && [ -z "$cu_ddl" ]; then
+    TRECUTE=$((TRECUTE + 1))
+    scrie "  OK    nicio cerere nu trimite DDL ($cereri_numarate cereri numărate: dashboard, comenzi, produse, checkout, fiecare intrare din meniu)"
+else
+    ESECURI=$((ESECURI + 1))
+    scrie "  EȘEC  cereri cu DDL (din ${cereri_numarate:-?} numărate): ${cu_ddl:-contorul n-a scris nimic}"
+fi
 
 # 4. Jurnalul PHP
 scrie ""

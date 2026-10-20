@@ -5357,6 +5357,7 @@ final class AdminController
     /** Creează idempotent tabelele pentru produsele promoționale (nomenclator + per comandă). */
     private function ensurePromoSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('CREATE TABLE IF NOT EXISTS promotional_products (
                 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -15940,6 +15941,7 @@ final class AdminController
 
     private function ensureCouponsSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('CREATE TABLE IF NOT EXISTS coupons (
                 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -21459,6 +21461,7 @@ HTML;
 
     private function ensureFormSecurityLogsSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS register_submit_logs (
@@ -21491,6 +21494,7 @@ HTML;
 
     private function ensureOptionalSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec('ALTER TABLE orders ADD COLUMN ad_source VARCHAR(50) DEFAULT NULL');
         } catch (Throwable) {
@@ -24217,16 +24221,19 @@ HTML;
     // le copiază structura în tabelele-ciornă, deci trebuie să fie una singură.
     private function ensureFanLocalitiesSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         \App\Support\FanNomenclator::asiguraSchemaLocalitati($db);
     }
 
     private function ensureFanStreetsSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         \App\Support\FanNomenclator::asiguraSchemaStrazi($db);
     }
 
     private function ensureFanLocalitiesExtraKmSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         \App\Support\FanNomenclator::asiguraSchemaKm($db);
     }
 

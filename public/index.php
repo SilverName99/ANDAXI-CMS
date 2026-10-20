@@ -103,6 +103,9 @@ if (\App\Support\Maintenance::intercepteaza(
 // licența s-a schimbat, cache-ul se golește aici, ca nimeni să nu primească o
 // pagină salvată de când pluginul avea altă stare.
 Plugins::incarca();
+// Pașii de activare ai unui plugin pornit de curând (config/activari.php: pagina /acorduri-gdpr,
+// pragul ERP), o singură dată pe bază; fără nicio interogare în plus când nu e nimic de făcut.
+\App\Support\Activari::laCerere($cacheDb, $cacheSettings);
 if (Plugins::hartaSiteDeRefacut()) {
     (new \App\Http\Controllers\AdminController())->refaHartaSiteDupaPluginuri();
 }

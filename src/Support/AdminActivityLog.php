@@ -11,6 +11,7 @@ final class AdminActivityLog
 {
     public static function ensureSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS admin_activity_log (

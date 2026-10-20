@@ -112,6 +112,7 @@ final class FanNomenclator
 
     public static function asiguraSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         self::asiguraSchemaLocalitati($db);
         self::asiguraSchemaKm($db);
         self::asiguraSchemaStrazi($db);
@@ -121,6 +122,7 @@ final class FanNomenclator
     /** Jurnalul sincronizărilor: un rând pe listă, cu cursorul celei în curs. */
     private static function asiguraSchemaJurnal(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS fan_nomenclator_sync (
@@ -147,6 +149,7 @@ final class FanNomenclator
 
     public static function asiguraSchemaLocalitati(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS fan_localities (
@@ -168,6 +171,7 @@ final class FanNomenclator
 
     public static function asiguraSchemaKm(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS fan_localities_extra_km (
@@ -197,6 +201,7 @@ final class FanNomenclator
 
     public static function asiguraSchemaStrazi(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         try {
             $db->exec(
                 'CREATE TABLE IF NOT EXISTS fan_streets (

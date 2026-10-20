@@ -162,6 +162,7 @@ final class BtIpayPayments
      */
     public static function ensureSchema(PDO $db): void
     {
+        if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
         static $gata = false;
         if ($gata) {
             return;

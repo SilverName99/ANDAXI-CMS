@@ -40,6 +40,11 @@ if (!$db instanceof PDO) {
     exit(1);
 }
 
+// Pașii de activare (config/activari.php) înaintea oricărei trimiteri: o licență care pornește ERP-ul
+// fără nicio cerere web după (din linia de comandă, noaptea) scrie întâi pragul comenzilor trimise,
+// ca istoricul de dinainte să nu plece în ERP (WP-12 E1 îl citește).
+\App\Support\Activari::ruleaza($db);
+
 $settings = Settings::all($db);
 if ((string) ($settings['erp_enabled'] ?? '0') !== '1') {
     echo "Integrarea cu ERP-ul este dezactivată; nu fac nimic.\n";

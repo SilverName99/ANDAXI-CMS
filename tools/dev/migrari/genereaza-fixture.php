@@ -39,8 +39,9 @@ declare(strict_types=1);
  *       încarcă pe fiecare server și dă înapoi aceeași amprentă; pe MySQL 8, codul vechi face aceeași
  *       schemă ca pe MariaDB (în afară de colațiile declarate); migrările de date (grupul C) lasă pe
  *       rândurile inventate din GF_RANDURI_GRUP_C exact ce lăsau funcțiile codului. Schema codului e a
- *       arborelui de lucru; după ce install.php trece pe migrări (WP-05), referința e un commit
- *       dinainte, cu --repo.
+ *       arborelui de lucru, cu instalarea de dinainte de migrări: din WP-05 install.php rulează migrările,
+ *       deci scripts/install.php și database/schema.sql vin de la commit-ul din capul lui vechi/cms.sql
+ *       (funcțiile ensure* sunt cele de acum, cu garda lor); --repo=<clonă>@<commit> = alt cod, întreg.
  *
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --compara a-amprenta.json b-amprenta.json …
  *       fiecare amprentă față de prima: tabele, coloane, indecși lipsă / în plus și definițiile diferite.
@@ -386,7 +387,21 @@ $copieCod = static function (?string $repo) use ($radacina, $lucru, $opreste): a
         }
         $head = trim((string) shell_exec('git -C ' . escapeshellarg($radacina) . ' rev-parse --short HEAD 2>/dev/null'));
         $modificat = trim((string) shell_exec('git -C ' . escapeshellarg($radacina) . ' status --porcelain -- src scripts database config 2>/dev/null')) !== '';
-        $eticheta = 'ANDAXI-CMS@' . ($head !== '' ? $head : '?') . ($modificat ? ' (+ modificări necomise)' : '');
+        // Din WP-05 install.php rulează migrările: schema „codului” e cea a instalării de dinainte (install.php și
+        // schema.sql de la commit-ul din capul lui vechi/cms.sql), plus funcțiile ensure* de acum. Așa arată un site
+        // vechi pe codul comun, înainte de baseline (tools/dev/migrari/pe-vechi.php face la fel baza de dezvoltare).
+        $vechi = gf_commitInainteDeMigrari($radacina);
+        if ($vechi === null) {
+            $opreste('nu găsesc „-- sursa: ANDAXI-CMS@<commit>” în capul lui tools/dev/migrari/vechi/cms.sql');
+        }
+        foreach (['scripts/install.php', 'database/schema.sql'] as $fisierVechi) {
+            exec('git -C ' . escapeshellarg($radacina) . ' show ' . escapeshellarg($vechi . ':' . $fisierVechi) . ' > '
+                . escapeshellarg($dosar . '/' . $fisierVechi) . ' 2>/dev/null', $_, $codShow);
+            if ($codShow !== 0) {
+                $opreste('git show ' . $vechi . ':' . $fisierVechi . ' n-a mers');
+            }
+        }
+        $eticheta = 'ANDAXI-CMS@' . ($head !== '' ? $head : '?') . ($modificat ? ' (+ modificări necomise)' : '') . ', install.php de la ' . $vechi;
     }
     foreach (['src', 'scripts/install.php', 'database/schema.sql'] as $necesar) {
         if (!file_exists($dosar . '/' . $necesar)) {
@@ -977,6 +992,13 @@ exit($esuate === 0 ? 0 : 1);
 // ============================================================================================
 // Funcții
 // ============================================================================================
+
+/** Commit-ul codului comun dinaintea migrărilor (instalarea veche): sursa scrisă în capul lui vechi/cms.sql. */
+function gf_commitInainteDeMigrari(string $radacina): ?string
+{
+    $cap = (string) @file_get_contents($radacina . '/tools/dev/migrari/vechi/cms.sql', false, null, 0, 2000);
+    return preg_match('/^-- sursa: ANDAXI-CMS@([0-9a-f]{7,40})$/m', $cap, $m) === 1 ? $m[1] : null;
+}
 
 function gf_sterge(string $cale): void
 {

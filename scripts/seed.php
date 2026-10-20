@@ -9,15 +9,19 @@ use App\Support\Database;
 $config = require __DIR__ . '/../config/app.php';
 $db = Database::connection($config['db']);
 
+// Fără bază sau fără fișier: mesajul pe stderr și codul 1, ca un script automat să nu creadă că
+// a mers (înainte ieșea cu 0; „Erori moștenite” 4 din docs/DEZVOLTARE.md).
 if (!$db instanceof PDO) {
-    exit("Conexiunea la baza de date nu este disponibilă.\n");
+    fwrite(STDERR, "Conexiunea la baza de date nu este disponibilă.\n");
+    exit(1);
 }
 
 $seedPath = __DIR__ . '/../database/seed.sql';
-$seedSql = file_get_contents($seedPath);
+$seedSql = is_readable($seedPath) ? file_get_contents($seedPath) : false;
 
 if ($seedSql === false) {
-    exit("Nu am putut citi fișierul seed.sql.\n");
+    fwrite(STDERR, "Nu am putut citi fișierul seed.sql.\n");
+    exit(1);
 }
 
 $db->exec($seedSql);

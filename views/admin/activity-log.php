@@ -34,6 +34,7 @@ $actionLabels = [
     'bt_ipay_test_deposit' => 'BT test: încasare',
     'bt_ipay_test_refund' => 'BT test: rambursare',
     'bt_ipay_test_deposit_refund' => 'BT test: încasare + rambursare',
+    'activare_plugin' => 'Plugin pornit: pas de activare',
 ];
 $label = static fn(string $a): string => $actionLabels[$a] ?? $a;
 
@@ -52,6 +53,9 @@ $etichetaCamp = static function (string $cheie): string {
         'awb' => 'AWB',
         'comenzi' => 'Comenzi',
         'numar' => 'Număr',
+        'plugin' => 'Plugin',
+        'pas' => 'Pas',
+        'rezultat' => 'Rezultat',
     ];
     return $harta[$cheie] ?? $cheie;
 };

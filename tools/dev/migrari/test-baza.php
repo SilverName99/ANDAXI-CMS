@@ -308,15 +308,20 @@ $asteptatB = [
 /** Ce are voie baseline-ul să scoată de pe o bază veche: indexul unic de dinainte de row_key (pasul vechi din livrare_fan/0005). */
 $scoaseVoit = ['indexul fan_streets.uniq_fan_streets'];
 /**
- * Ce scriu funcțiile ensure* (ale codului comun și ale Bioscem, la fel) pe o bază nouă făcută de migrări, T10: date,
- * nu schemă, pe care migrările nu le scriu. Pagina /acorduri-gdpr (în WP-05: pasul de activare al lui acorduri_gdpr),
- * categoriile de blog ale Bioscem (în WP-05: seed-ul neutru, doar Noutăți și Evenimente) și lista implicită de
- * newsletter (o face și NewsletterService::defaultListId, la nevoie). Tabel (în ordine) → [citirea, rândurile].
+ * Ce scriu funcțiile ensure* pe o bază nouă, T10: date, nu schemă, pe care migrările nu le scriu. Tabel (în ordine) →
+ * [citirea, rândurile]. Ale codului comun: nimic, pe orice bază la zi (garda R1, WP-05). Ale Bioscem (codul vechi, fără
+ * gardă), pe o bază făcută doar de migrări: pagina /acorduri-gdpr (la noi, pasul de activare al lui acorduri_gdpr),
+ * cele patru categorii de blog ale Bioscem (la noi, seed-ul neutru al instalării: Noutăți și Evenimente) și lista
+ * implicită de newsletter (la noi, NewsletterService::defaultListId, la nevoie); pe o bază făcută de scripts/install.php,
+ * doar lista de newsletter: pagina și categoriile le-a pus deja instalarea.
  */
 $randuriHelperiPeBazaNoua = [
     'blog_categories' => ['SELECT slug FROM blog_categories ORDER BY slug', ['evenimente', 'info-medici', 'info-pacienti', 'noutati']],
     'newsletter_lists' => ['SELECT is_default FROM newsletter_lists ORDER BY id', ['1']],
     'pages' => ['SELECT slug FROM pages ORDER BY slug', ['acorduri-gdpr']],
+];
+$randuriBioscemPeInstalareNoua = [
+    'newsletter_lists' => ['SELECT is_default FROM newsletter_lists ORDER BY id', ['1']],
 ];
 $versiuniBs = ["INSERT INTO settings (`key`, `value`) VALUES ('bt_ipay_schema_version', '3'), ('payment_links_schema_version', '2')"];
 $cuProcesatorLipsa = ['bv', 'gr'];
@@ -855,10 +860,25 @@ foreach ($servere as $numeServer => $sock) {
         json_encode([$cp, $ca, $neatinsa, $cb, $titlu]) . ' ' . mb_substr($op . ' | ' . $oa . ' | ' . $ob, 0, 600));
 
     // ------------------------------------------------------------------ T10
-    $scrie('T10. Aplicația pe o bază migrată (la nivelul bazei; testele aplicației pe o bază migrată vin cu WP-05)');
+    $scrie('T10. Aplicația pe o bază migrată: una făcută ca înainte (apoi baseline), una făcută de install.php, una doar de migrări');
+    $avPermise10 = $avPermise;
+    $helperiNuSchimba = static function (PDO $db, string $baza, string $eticheta) use ($sock, $helperi, $amp, $instantaneu, $schimbate, $verifica,
+        $codCms, $codBs, $revizuitBs): void {
+        $A = $amp($db);
+        foreach (['codului comun' => $codCms, 'codului Bioscem ' . $revizuitBs => $codBs] as $al => $dosarCod) {
+            $S = $instantaneu($db);
+            [$okH, $rH] = $helperi($sock, $baza, $dosarCod);
+            $verifica('T10: funcțiile ensure* ale ' . $al . ' pe ' . $eticheta . ': nicio eroare, nicio schimbare de schemă, niciun rând schimbat',
+                $okH && Amprenta::json($amp($db)) === Amprenta::json($A) && $instantaneu($db) === $S,
+                implode('; ', array_slice((array) $rH['erori'], 0, 3)) . ' schimbate: ' . implode(', ', $schimbate($S, $instantaneu($db))));
+        }
+    };
+
+    // a) Ca un site vechi: install.php de dinainte de migrări + funcțiile ensure* (tools/dev/migrari/pe-vechi.php), seed, date
+    //    demo, apoi baseline-ul.
     $baza = $b('t10');
     $db10 = $bazaNoua($sock, $baza);
-    [$ci, $oi] = $phpSh($sock, $baza, ['scripts/install.php']);
+    [$cpv, $opv] = $phpSh($sock, $baza, ['tools/dev/migrari/pe-vechi.php']);
     [$cs] = $phpSh($sock, $baza, ['scripts/seed.php']);
     [$cd, $od] = $phpSh($sock, $baza, ['tools/dev/date-demo.php']);
     $P10 = $amp($db10);
@@ -868,41 +888,86 @@ foreach ($servere as $numeServer => $sock) {
     [$atinse, $nedeclarate] = $tabeleAtinse($ra);
     $Q10 = $amp($db10);
     $schimbate10 = $schimbate($S10, $instantaneu($db10));
-    $verifica('T10: baza făcută pe vechi (install.php, seed.php, date-demo.php): baseline-ul iese cu 0, grupul B „detectata” fără nicio operație, '
+    $verifica('T10: baza făcută ca înainte (pe-vechi.php, seed.php, date-demo.php): baseline-ul iese cu 0, grupul B „detectata” fără nicio operație, '
         . 'schema neschimbată, datele schimbate doar unde declară migrările (' . $operatiiFacute($ra) . ' operații)',
-        $ci === 0 && $cs === 0 && $cd === 0 && $ca === 0 && ($s10['B'] ?? null) === ['detectata' => $numarB] && !isset($operatii($ra)['B'])
+        $cpv === 0 && str_contains($opv, 'garda: fara_registru') && $cs === 0 && $cd === 0 && $ca === 0
+        && ($s10['B'] ?? null) === ['detectata' => $numarB] && !isset($operatii($ra)['B'])
         && Amprenta::json($Q10) === Amprenta::json($P10) && $nedeclarate === [] && array_diff($schimbate10, $atinse) === [],
-        'coduri ' . $ci . '/' . $cs . '/' . $cd . '/' . $ca . ', stări ' . json_encode($s10) . ', schimbate ' . implode(', ', $schimbate10)
-        . ' ' . mb_substr((string) ($ra['mesaj'] ?? ''), 0, 300) . ' ' . mb_substr(trim($oi . ' ' . $od), -300));
+        'coduri ' . $cpv . '/' . $cs . '/' . $cd . '/' . $ca . ', stări ' . json_encode($s10) . ', schimbate ' . implode(', ', $schimbate10)
+        . ' ' . mb_substr((string) ($ra['mesaj'] ?? ''), 0, 300) . ' ' . mb_substr(trim($opv . ' ' . $od), -300));
     [$cv, $rv] = $mig($sock, $baza, ['--verifica', '--json']);
-    $verifica('T10: baza făcută pe vechi, după baseline: --verifica 0, în plus exact excluderile, avertismente doar colația tabelelor BT',
+    $verifica('T10: baza făcută ca înainte, după baseline: --verifica 0, în plus exact excluderile, avertismente doar colația tabelelor BT',
         $cv === 0 && $sortat((array) ($rv['verificare']['in_plus'] ?? [])) === $extraCms
-        && $sortat((array) ($rv['verificare']['avertismente'] ?? [])) === $sortat($avPermise),
+        && $sortat((array) ($rv['verificare']['avertismente'] ?? [])) === $sortat($avPermise10),
         'cod ' . $cv . ' ' . implode(', ', (array) ($rv['verificare']['in_plus'] ?? [])) . ' | ' . implode(' | ', (array) ($rv['verificare']['avertismente'] ?? [])));
-    foreach (['codului comun' => $codCms, 'codului Bioscem ' . $revizuitBs => $codBs] as $al => $dosarCod) {
-        $S = $instantaneu($db10);
-        [$okH, $rH] = $helperi($sock, $baza, $dosarCod);
-        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe baza migrată cu date demo: nicio eroare, nicio schimbare de schemă, niciun rând schimbat',
-            $okH && Amprenta::json($amp($db10)) === Amprenta::json($Q10) && $instantaneu($db10) === $S,
-            implode('; ', array_slice((array) $rH['erori'], 0, 3)) . ' schimbate: ' . implode(', ', $schimbate($S, $instantaneu($db10))));
+    $helperiNuSchimba($db10, $baza, 'baza făcută ca înainte, după baseline, cu date demo');
+
+    // b) Un site nou: scripts/install.php (migrările, seed-ul neutru, setările, pașii de activare, adminul), seed, date demo.
+    $bazaI = $b('t10_inst');
+    $dbI = $bazaNoua($sock, $bazaI);
+    [$ci, $oi] = $phpSh($sock, $bazaI, ['scripts/install.php']);
+    $randuriInstalare = [
+        'categorii' => implode(',', $dbI->query('SELECT slug FROM blog_categories ORDER BY slug')->fetchAll(PDO::FETCH_COLUMN)),
+        'pagini' => implode(',', $dbI->query('SELECT slug FROM pages ORDER BY slug')->fetchAll(PDO::FETCH_COLUMN)),
+        'admini' => json_encode($dbI->query('SELECT email, role, roles_json FROM admins ORDER BY id')->fetchAll(PDO::FETCH_NUM)),
+        'setari' => (int) $dbI->query('SELECT COUNT(*) FROM settings')->fetchColumn(),
+        'liste' => (int) $dbI->query('SELECT COUNT(*) FROM newsletter_lists')->fetchColumn(),
+    ];
+    [$cpI, $rpI] = $mig($sock, $bazaI, ['--plan', '--json']);
+    $verifica('T10: scripts/install.php pe o bază goală: 0, schema = asteptat.json, --plan 0; seed-ul neutru (noutati, evenimente), pagina '
+        . '/acorduri-gdpr (pasul de activare, licența „toate”), adminul cu rolul în forma de azi, setările implicite, fără listă de newsletter',
+        $ci === 0 && Amprenta::json($amp($dbI)) === $asteptatJson && $cpI === 0 && $randuriInstalare['categorii'] === 'evenimente,noutati'
+        && $randuriInstalare['pagini'] === 'acorduri-gdpr'
+        && $randuriInstalare['admini'] === json_encode([['admin@exemplu.ro', 'administrator_general', '["administrator_general"]']])
+        && $randuriInstalare['setari'] >= count(\App\Support\Settings::all(null)) && $randuriInstalare['liste'] === 0,
+        'cod ' . $ci . ', plan ' . $cpI . ' ' . json_encode($randuriInstalare, JSON_UNESCAPED_UNICODE) . ' ' . mb_substr($oi, -400));
+    $SI = $instantaneu($dbI);
+    [$ci2, $oi2] = $phpSh($sock, $bazaI, ['scripts/install.php']);
+    $verifica('T10: scripts/install.php a doua oară, pe baza instalată: 1, „baza există”, nimic scris',
+        $ci2 === 1 && str_contains($oi2, 'Baza există') && $instantaneu($dbI) === $SI, 'cod ' . $ci2 . ' ' . mb_substr($oi2, -300));
+    $NI = $bazaNoua($sock, $b('t10_inst_nou'));
+    [$cn] = $phpSh($sock, $b('t10_inst_nou'), ['scripts/install.php']);
+    $SIN = $instantaneu($NI);
+    [$okBn, $rBn] = $helperi($sock, $b('t10_inst_nou'), $codBs);
+    $schimbateBn = $sortat($schimbate($SIN, $instantaneu($NI)));
+    $randuriBn = [];
+    foreach ($randuriBioscemPeInstalareNoua as $tabel => [$sql, $asteptate]) {
+        $gasite = array_map('strval', $NI->query($sql)->fetchAll(PDO::FETCH_COLUMN));
+        if ($gasite !== $asteptate) {
+            $randuriBn[] = $tabel . ': ' . implode(', ', $gasite) . ' (așteptat ' . implode(', ', $asteptate) . ')';
+        }
+    }
+    $verifica('T10: funcțiile ensure* ale codului Bioscem ' . $revizuitBs . ' pe o bază nouă făcută de install.php (fără date demo): nicio eroare, '
+        . 'schema rămâne asteptat.json; scriu doar ' . implode(', ', array_keys($randuriBioscemPeInstalareNoua))
+        . ' (lista implicită; restul l-a pus instalarea)',
+        $cn === 0 && $okBn && Amprenta::json($amp($NI)) === $asteptatJson && $schimbateBn === array_keys($randuriBioscemPeInstalareNoua) && $randuriBn === [],
+        implode('; ', array_slice((array) $rBn['erori'], 0, 3)) . "\ntabele schimbate: " . implode(', ', $schimbateBn) . "\n" . implode("\n", $randuriBn));
+    [$csI] = $phpSh($sock, $bazaI, ['scripts/seed.php']);
+    [$cdI, $odI] = $phpSh($sock, $bazaI, ['tools/dev/date-demo.php']);
+    $verifica('T10: seed.php și date-demo.php pe baza făcută de install.php', $csI === 0 && $cdI === 0 && str_contains($odI, 'Date demo gata'),
+        mb_substr($odI, -300));
+    $helperiNuSchimba($dbI, $bazaI, 'baza făcută de install.php, cu date demo');
+
+    // c) Doar migrările, fără instalare: ce scriu funcțiile ensure* ale fiecărui cod.
+    foreach (['codului comun' => [$codCms, []], 'codului Bioscem ' . $revizuitBs => [$codBs, $randuriHelperiPeBazaNoua]] as $al => [$dosarCod, $randuriAsteptate]) {
         $bazaNoua($sock, $b('t10_nou'));
         $mig($sock, $b('t10_nou'), ['--aplica']);
         $dbN = $conectare($sock, $b('t10_nou'));
         $SN = $instantaneu($dbN);
         [$okN, $rN] = $helperi($sock, $b('t10_nou'), $dosarCod);
         $An = $amp($dbN);
-        [$cvn, $rvn] = $mig($sock, $b('t10_nou'), ['--verifica', '--json']);
+        [$cvn] = $mig($sock, $b('t10_nou'), ['--verifica', '--json']);
         $schimbateN = $sortat($schimbate($SN, $instantaneu($dbN)));
         $randuriN = [];
-        foreach ($randuriHelperiPeBazaNoua as $tabel => [$sql, $asteptate]) {
+        foreach ($randuriAsteptate as $tabel => [$sql, $asteptate]) {
             $gasite = array_map('strval', $dbN->query($sql)->fetchAll(PDO::FETCH_COLUMN));
             if ($gasite !== $asteptate) {
                 $randuriN[] = $tabel . ': ' . implode(', ', $gasite) . ' (așteptat ' . implode(', ', $asteptate) . ')';
             }
         }
-        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe o bază nouă făcută de migrări: nicio eroare, schema rămâne asteptat.json (nimic adăugat), '
-            . '--verifica 0; rânduri scrise doar cele declarate (' . implode(', ', array_keys($randuriHelperiPeBazaNoua)) . ')',
-            $okN && Amprenta::json($An) === $asteptatJson && $cvn === 0 && $schimbateN === array_keys($randuriHelperiPeBazaNoua) && $randuriN === [],
+        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe o bază nouă făcută doar de migrări: nicio eroare, schema rămâne asteptat.json, '
+            . '--verifica 0; rânduri scrise: ' . ($randuriAsteptate === [] ? 'niciunul (garda R1)' : implode(', ', array_keys($randuriAsteptate))),
+            $okN && Amprenta::json($An) === $asteptatJson && $cvn === 0 && $schimbateN === array_keys($randuriAsteptate) && $randuriN === [],
             implode('; ', array_slice((array) $rN['erori'], 0, 3)) . ' ' . implode('; ', array_slice(array_merge(Amprenta::compara($asteptatReal, $An)['in_plus'],
                 Amprenta::compara($asteptatReal, $An)['avertismente']), 0, 10)) . "\ntabele schimbate: " . implode(', ', $schimbateN) . "\n" . implode("\n", $randuriN));
     }

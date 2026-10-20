@@ -54,6 +54,10 @@ poarta G-baza "migrările de bază față de schema codului: instalarea nouă = 
     "tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica" WP-03
 poarta G-mig "testele migrărilor: runner-ul și migrările adevărate pe schemele celor cinci coduri (T1–T11, cu G-baza în T1), pe MariaDB și MySQL 8, și cu php$MINIM; verificarea fișierelor de migrare și a DDL-ului din cod" \
     "tools/dev/php.sh tools/dev/test-migrari.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-migrari.php ;; tools/dev/php.sh tools/dev/verifica-migrari.php" WP-04
+poarta G-inst "instalarea prin migrări (install.php, seed-ul neutru, adminul), garda și /health, pașii de activare ai pluginurilor, 0 DDL pe cerere; și cu php$MINIM; apoi baza de dezvoltare din nou, prin migrări (pentru porțile de după)" \
+    "tools/dev/php.sh tools/dev/test-instalare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-instalare.php ;; tools/dev/instaleaza.sh" WP-05
+poarta G-vechi "aceleași teste pe o bază făcută ca înainte de migrări și trecută prin baseline (cms_dev_vechi, portul 8711): comparația cu Bioscem (ambele licențe), pluginurile, SEO, fumul pe fiecare pachet; apoi baza se șterge" \
+    "CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/instaleaza.sh --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh --licenta=bioscem ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-pluginuri.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-seo.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/smoke.sh --toate-pachetele --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi tools/dev/instaleaza.sh --sterge-baza" WP-05
 poarta G-verif "testele site-ului de verificare, și cu php$MINIM (codul lui rulează pe servere)" \
     "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php" WP-08a
 poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-sonda): doar citire, nimic scris, nicio valoare personală; și cu php$MINIM" \
@@ -74,15 +78,18 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # nu mai apare separat. WP-10 vine imediat după WP-02 (planul, §3), înaintea lui WP-04, deci are
 # G-runner, nu G-mig (verifica-migrari.php nu exista încă); fixture-urile din sondă le folosește T2-live
 # din WP-04, care are și G-sonde. G-sonde e la fiecare WP care atinge uneltele de pe servere
-# (tools/verificare, tools/sonda) sau fixture-urile făcute din sondă.
+# (tools/verificare, tools/sonda) sau fixture-urile făcute din sondă. G-inst (WP-05) e la WP-urile care
+# ating instalarea, runner-ul sau calea cererii (WP-06, WP-07, WP-41) și reface la final baza de dezvoltare
+# prin migrări, deci G-cmp, G-plug și G-seo de după ea rulează pe o bază migrată; G-vechi (WP-05) le rulează
+# încă o dată pe o bază veche trecută prin baseline (Bioscem neschimbat pe ambele, planul §5 WP-05).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
     [WP-03]="G-rute G-runner G-baza G-cmp G-smoke G-php"
     [WP-04]="G-rute G-mig G-sonde G-cmp G-smoke G-php"
-    [WP-05]="G-rute G-mig G-cmp G-plug G-smoke G-seo G-php"
-    [WP-06]="G-rute G-mig G-cmp G-plug G-smoke G-php"
-    [WP-07]="G-rute G-mig G-cmp G-plug G-smoke G-seo G-php"
+    [WP-05]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-php"
+    [WP-06]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-php"
+    [WP-07]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-seo G-php"
     [WP-08a]="G-rute G-verif G-cmp G-php"
     [WP-08]="G-rute G-verif G-sonde G-cmp G-smoke G-php"
     [WP-09]="G-rute G-verif G-sonde G-cmp G-php"
@@ -119,7 +126,7 @@ declare -A PORTI=(
     [WP-38]="G-rute G-mig G-cmp G-seo G-plug G-php"
     [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"
     [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-seo G-php"
-    [WP-41]="G-rute G-mig G-cmp G-plug G-smoke G-seo G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
+    [WP-41]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
     [WP-R]="G-rute G-cmp G-plug G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b WP-12 WP-12b WP-13 WP-14
@@ -128,7 +135,7 @@ WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-inst G-vechi G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

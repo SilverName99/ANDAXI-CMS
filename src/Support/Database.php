@@ -29,7 +29,9 @@ final class Database
         );
 
         try {
-            self::$connection = new PDO(
+            // Doar în dezvoltare (CMS_DEV_NUMARA_SQL=1): conexiunea numără instrucțiunile cererii (ContorSql).
+            $clasa = (string) Env::get('CMS_DEV_NUMARA_SQL', '') === '1' ? ContorSql::class : PDO::class;
+            self::$connection = new $clasa(
                 $dsn,
                 (string) $config['username'],
                 (string) $config['password'],

@@ -107,8 +107,9 @@ lucru ale lui `php -S` (`PHP_CLI_SERVER_WORKERS`) se opresc explicit (`opreste_s
 tools/dev/smoke.sh                       # totul de la zero: bază, date demo, server, verificări, capturi
 tools/dev/smoke.sh --fara-capturi        # la fel, fără Playwright
 tools/dev/smoke.sh --toate-pachetele     # testul de fum pe fiecare pachet de abonament
-tools/dev/instaleaza.sh                  # doar baza de test, de la zero, cu date demo și licența „toate”
+tools/dev/instaleaza.sh                  # doar baza de test, de la zero (prin migrări), cu date demo și licența „toate”
 tools/dev/instaleaza.sh --fara-demo      # doar install.php + seed.php (+ licența)
+tools/dev/instaleaza.sh --pe-vechi       # baza făcută ca înainte de migrări, cu date demo, apoi baseline-ul (un site vechi adoptat)
 tools/dev/server.sh                      # pornește serverul: http://127.0.0.1:8701
 tools/dev/server.sh --opreste            # îl oprește
 tools/dev/php.sh scripts/erp-sync.php    # orice script sau cron, pe baza de test
@@ -130,6 +131,7 @@ tools/dev/php.sh scripts/migreaza.php --plan         # migrările: ce s-ar face 
 tools/dev/php.sh tools/dev/test-migrari.php          # testele migrărilor: runner-ul și T1–T11 pe schemele celor cinci coduri (MariaDB și MySQL 8)
 tools/dev/php.sh tools/dev/test-migrari.php --runner # doar runner-ul, cu fiecare cod de ieșire (--migrari: doar migrările adevărate)
 tools/dev/php.sh tools/dev/verifica-migrari.php      # fișierele de migrare și DDL-ul din cod (și în testul de fum)
+tools/dev/php.sh tools/dev/test-instalare.php        # instalarea prin migrări, garda, /health, pașii de activare, 0 DDL pe cerere
 tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica   # migrările de bază față de schema făcută de cod (MariaDB și MySQL 8)
 tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --asteptat    # după o migrare nouă: asteptat.json, migrari.lock, ultima.php
 tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --fixture-uri # după ce se mută „ultimul commit revizuit”: tools/dev/migrari/vechi/
@@ -156,8 +158,8 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | Fișier | Ce face |
 |---|---|
 | `comun.sh` | Setările comune: numele bazei, socketul, portul, folderul de jurnale; mediul aplicației (variabile de mediu, nu `.env`); comanda PHP de dezvoltare. |
-| `instaleaza.sh` | Șterge și recreează baza de test, rulează `scripts/install.php`, `scripts/seed.php`, apoi `date-demo.php`. Curăță sesiunile, cache-ul, emailurile capturate și sitemap-ul generat. |
-| `date-demo.php` | Creează din prima clipă toate tabelele/coloanele pe care codul le adaugă „din mers”, pune setările de dezvoltare și scrie datele demo. |
+| `instaleaza.sh` | Șterge și recreează baza de test, rulează `scripts/install.php` (migrările, seed-ul neutru, setările, pașii de activare, adminul; [MIGRARI.md](MIGRARI.md), „Instalarea”), `scripts/seed.php`, apoi `date-demo.php` și licența „toate”. Curăță sesiunile, cache-ul, emailurile capturate și sitemap-ul generat. `--pe-vechi`: baza făcută ca înainte de migrări (`migrari/pe-vechi.php`), seed, date demo, licența, apoi baseline-ul (`migreaza.php --aplica`), ca un site vechi adoptat. `--sterge-baza`: doar șterge baza `CMS_DEV_DB` (o bază făcută pentru o poartă). |
+| `date-demo.php` | Pune setările de dezvoltare și scrie datele demo. Schema o fac migrările (nu mai cheamă funcțiile `ensure*`); categoriile de blog ale articolelor demo: „Noutăți” și „Evenimente” (seed-ul neutru) și „Ghiduri demo”. |
 | `server.sh` | Pornește `php -S` pe `127.0.0.1:$CMS_DEV_PORT`, cu `public/` ca rădăcină și `router.php`. |
 | `router.php` | Face pentru `php -S` ce fac pe Hostinger cele două `.htaccess`: fișierele existente se servesc direct, restul ajunge la `public/index.php`. |
 | `php.sh` | Rulează un script PHP al proiectului cu mediul de dezvoltare (pentru cronuri). |
@@ -171,6 +173,8 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | `instantaneu-rute.php` (+ `instantanee/`, `lib/cereri-rute.php`) | Instantaneul rutelor: pentru fiecare licență de test (`toate`, `fara`, cele patru site-uri, cele patru pachete), ce face garda cu fiecare rută (`CONTROLLER`, `MEREU`, `403`, `404`), meniul adminului și cronurile, comparate cu `tools/dev/instantanee/rute-<licența>.txt` din git. O schimbare dă un diff și codul 1; `--actualizeaza` rescrie fișierele, care intră apoi în commit (cine revizuiește vede în `git diff` orice adresă nouă a unui pachet). Rutele împărțite (`rute_impartite`) apar cu fiecare valoare din fiecare listă (o valoare mutată la alt plugin se vede în diff); aceeași listă de cereri o folosește testul B. Plus regulile scrise în script, independente de catalog: fără magazin, coșul, checkout-ul, plățile și comenzile nu ajung niciodată la controller (nici ca `MEREU`); la fel conturile, recenziile, acordurile GDPR fără pluginul lor; adresele mereu deschise rămân deschise în orice licență și sunt doar cele din lista fixă `$mereuDeschiseFixe` a scriptului (una nouă se adaugă acolo, explicit); `licente_dev.bioscem` e lista Bioscem de la `4915478`. Regulile pică și cu `--actualizeaza`. Fără server și fără bază; rulează în testul de fum și ca secțiunea B0 a testului pluginurilor. |
 | `verifica-php.sh` | `php<php_min> -l` pe tot ce ajunge pe site-uri (`src/`, `views/`, `config/`, `scripts/`, `public/`, `bootstrap.php`, `database/` cu migrările, `tools/verificare/`, `tools/sonda/`). |
 | `test-migrari.php` (+ `migrari/test-baza.php`) | Testele migrărilor ([MIGRARI.md](MIGRARI.md), „Testele”; poarta G-mig, și cu PHP-ul minim; `--runner`: doar runner-ul, poarta G-runner; `--migrari`: doar migrările adevărate). **Runner-ul** pe migrări de jucărie scrise de test: fără bază Server, Amprenta (rândurile din `information_schema` ale MariaDB și ale MySQL dau aceeași amprentă), definițiile și corpul unui CREATE TABLE, Registru; apoi pe MariaDB și pe MySQL 8 detectarea (ce scrie serverul = ce înțelege Amprenta; un tabel sărit de `information_schema` cât altă conexiune îi schimbă structura, 1684, citit din nou), Schema direct (avertisment la altă definiție, index echivalent sub alt nume, cursa cu alt proces, valori repetate numărate fără valori, blocare refuzată; `tabelComplet` și în cursa cu codul vechi care face tabelul cu toate coloanele, dar fără indecși; colația coloanelor, în amprentă doar cea diferită de a tabelului, și CHARACTER SET/COLLATE refuzate într-o migrare) și `scripts/migreaza.php` cu fiecare cod de ieșire: oprit după fiecare operație și reluat (aceeași amprentă, fiecare rând numărat o dată), oprit chiar înainte și chiar după commit-ul fiecărei bucăți (`MIGRARI_TEST_OPRESTE_IN`; pică dacă cursorul ar ieși din tranzacția bucății), bugetul, migrări schimbate, blocante, contract, parametrii site-ului, lacătele (și al sincronizării FAN), starea neatinsă de un runner refuzat (3, 12) și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan, un tabel `#sql-*` rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, `--json`, nicio valoare (nici cu ghilimele sau `\` în ea) și nicio parolă în ieșire; aceeași amprentă pe ambele servere (și pentru `tinyint(1) unsigned`, un text implicit `x'y`); o conexiune care primește id-ul de obiect al alteia; linia de comandă fără fișiere de sesiune. **Migrările adevărate**, T1–T11 (WP-04): instalarea nouă (plus G-baza), baseline-ul pe schema fiecărui cod (`migrari/vechi/<cod>.sql`, cu numerele din migrari.md §2.2) și pe o bază veche cu rânduri inventate (aceleași date ca funcțiile codului), pe schema live când vine sonda (T2-live; altfel SĂRIT, cu motivul) și pe o sondă simulată, a doua aplicare, drumul unui site cu `date-demo.php`, opririle după fiecare operație, codul vechi în paralel, migrări schimbate, o migrare blocantă, aceeași amprentă pe ambele servere, funcțiile `ensure*` (ale codului comun și ale Bioscem, fără nicio excepție) pe o bază migrată, cu licența „toate” dintr-un dosar al testului (`CMS_DEV_LICENTA_DOSAR`; licența locală nu contează), verificarea fișierelor pe greșeli puse într-o copie. Își face și își șterge bazele `cms_mig_t_*`; pornește și oprește MySQL 8 dacă nu mergea (`--doar-mariadb`: fără el, rezultat parțial, spus explicit). Raport: `$CMS_DEV_DIR/test-migrari-raport.txt`. |
+| `test-instalare.php` | Testele trecerii pe migrări (WP-05; [MIGRARI.md](MIGRARI.md), „Instalarea”, „Garda”, „Pașii de activare”; poarta G-inst, și cu PHP-ul minim): `install.php` și `seed.php` fără server (1, pe stderr), pe o bază goală (schema, seed-ul neutru, setările, adminul, pașii licenței), a doua oară (1, nimic scris), oprit la jumătate și reluat, pe o bază străină, fără licență; garda în fiecare stare, o citire pe conexiune; `/health` (503 în urmă) și bannerul (doar adminul general); pașii de activare la prima cerere, o singură dată, pagina ștearsă rămasă ștearsă, ERP oprit și pornit; contorul de instrucțiuni (`CMS_DEV_NUMARA_SQL=1`): 0 DDL pe dashboard, comenzi, produs, o comandă trimisă; o bază ca înainte: peste 100 pe dashboard, după baseline 0. Doar MariaDB; își face și își șterge bazele `cms_inst_*`; server pe `CMS_DEV_PORT`+8. Raport: `$CMS_DEV_DIR/test-instalare-raport.txt`. |
+| `migrari/pe-vechi.php` | O bază făcută ca înainte de migrări (pe o bază goală `cms_*`): `scripts/install.php` și `database/schema.sql` de la commit-ul din capul lui `migrari/vechi/cms.sql` (`fc8a5e1`), apoi fiecare funcție `ensure*`/`asigura*` a codului de acum, o trecere (garda le lasă: baza n-are registru). O folosesc `instaleaza.sh --pe-vechi`, T10 din `test-migrari.php` și `test-instalare.php`. |
 | `verifica-migrari.php` | Verificarea fișierelor de migrare și a DDL-ului din cod ([MIGRARI.md](MIGRARI.md), „Verificarea fișierelor de migrare”; în testul de fum și în G-mig): registrul, `migrari.lock` și `ultima.php` la zi, fără DDL scris de mână, `AFTER`/`FIRST`, `IF NOT EXISTS`, `COLLATE` în migrări, ștergeri doar în „contract”; fiecare DDL și fiecare definiție de coloană din codul de pe site-uri în lista `migrari/ddl-din-cod.txt` (lista doar scade: `--actualizeaza-lista`); pe o bază goală `cms_mig_v_*`, `asteptat.json` la zi și fiecare obiect făcut de o migrare al proprietarului ei în catalog (`config/plugins.php` → `tabele`). `--fara-baza`: fără server (spus în rezultat). |
 | `mysql8.sh` | `porneste`, `opreste`, `stare` pentru un MySQL 8 despachetat în `CMS_DEV_MYSQL8_DIR` (doar socket, fără port TCP). |
 | `test-verificare.php` | Testele site-ului de verificare ([VERIFICARE.md](VERIFICARE.md)): `IpClient`, credențialele Basic, cookie-ul porții, dosarul site-ului (fără server); apoi o copie a codului într-o găzduire simulată (`$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`), servită pe `CMS_DEV_PORT`+7 cu un mediu gol, ca pe Hostinger: fără `.env` 503 la orice; fiecare refuz al `configureaza.php` și configurarea pe o bază goală; poarta (401, 429, limita pe /64 la IPv6, formularul, câmpurile trimise ca liste, sonda); `stare.php` (ieșirea lui în raport); o copie „încărcată” pe baza de dezvoltare și una expirată; `SITE_COPIE_VERIFICARE=0`. Își face și își șterge bazele `cms_verif_gol`, `cms_verif_plina` și utilizatorul `cms_verif_test`. Cu un PHP sub minim instalat (`php7.0` … `php8.2`) verifică și mesajul pentru un PHP prea vechi; cu `python3`, `configureaza.php` într-un terminal adevărat (`lib/terminal.py`: Ctrl-C și SIGTERM în mijlocul unei parole lasă terminalul cu ecou). Poarta G-verif îl rulează și cu PHP-ul minim. Raport: `$CMS_DEV_DIR/test-verificare-raport.txt`. |
@@ -192,10 +196,11 @@ Variabile pe care le poți schimba din mediu:
 | `CMS_DEV_SOCK` | `/tmp/claude-0/maria/sock` | socketul MariaDB |
 | `CMS_DEV_MYSQL8_DIR`, `CMS_DEV_SOCK_MYSQL8` | `/tmp/claude-0/my8`, `…/run/sock` | al doilea server, MySQL 8, pentru `test-migrari.php` (`tools/dev/mysql8.sh`) |
 | `CMS_DEV_DB_USER` / `CMS_DEV_DB_PAROLA` | `root` / gol | utilizatorul bazei |
-| `CMS_DEV_PORT` | `8701` | portul serverului; uneltele folosesc și porturile următoare: +1 copia de bază, +2/+3 `test-seo.php`, +4 codul curent în `compara-cu-baza.sh` față de un repo vechi, +7 copia din `test-verificare.php` |
+| `CMS_DEV_PORT` | `8701` | portul serverului; uneltele folosesc și porturile următoare: +1 copia de bază, +2/+3 `test-seo.php`, +4 codul curent în `compara-cu-baza.sh` față de un repo vechi, +7 copia din `test-verificare.php`, +8 `test-instalare.php`. Poarta G-vechi rulează totul pe `8711` (și următoarele), cu baza `cms_dev_vechi` |
 | `CMS_DEV_PHP` | `php` | comanda PHP a tuturor uneltelor (de exemplu `php8.3`, PHP-ul minim) |
 | `CMS_DEV_REPO_BS`, `CMS_DEV_REPO_BV`, `CMS_DEV_REPO_VT`, `CMS_DEV_REPO_GR` | `../Nou-site-bioscem`, `../Mutare-Site-Biovitality`, `../vertij-tinitus-refacut`, `../site-nou-grafoanaytis.ro` | clonele codurilor vechi (doar citite), pentru `compara-cu-baza.sh` și `de-portat.php` |
 | `CMS_DEV_DIR` | `storage/logs/dev` | jurnale, emailuri capturate, parola, raportul testului |
+| `CMS_DEV_NUMARA_SQL` | gol | `1` în mediul unui server de dezvoltare: fiecare cerere scrie în `$CMS_DEV_DIR/numara-sql.jsonl` câte instrucțiuni SQL a trimis și câte de schemă (`App\Support\ContorSql`; testul de fum și `test-instalare.php` o pun singure) |
 | `CMS_DEV_LICENTA_DOSAR` | gol (= `storage/licenta`) | alt dosar al licenței (devine `LICENTA_DOSAR`), pentru un test care nu vrea să atingă licența locală și nici să depindă de ea (`test-migrari.php`, T4 și T10: licența „toate” în dosarul lui de lucru) |
 | `SITE_DATE_DOSAR` | `tools/dev/site-demo` | datele site-ului (harta adreselor vechi, regulile SEO); vezi [SEO.md](SEO.md) |
 | `CMS_DEV_CAPTURI` | `$CMS_DEV_DIR/capturi` | unde scrie Playwright PNG-urile |
@@ -279,7 +284,8 @@ FAN sunt câteva orașe reale (nomenclator public), lockerele sunt inventate.
 - 10 cupoane (procent, sumă fixă, expirat, oprit, cu limită, 5 coduri unice);
 - puncte de fidelitate pentru comenzile finalizate + o ajustare manuală + o
   regulă; 25 de recenzii (5 nemoderate); 3 coșuri abandonate;
-- blog: 2 autori, 8 articole (o ciornă, un eveniment); newsletter: 2 liste, 30
+- blog: categoriile instalării („Noutăți”, „Evenimente”) și „Ghiduri demo”, 2
+  autori, 8 articole (o ciornă, un eveniment); newsletter: 2 liste, 30
   de abonați (3 dezabonați), o campanie trimisă și o ciornă; 3 mesaje de contact;
 - paginile site-ului cu tokenurile folosite de un site real (`{{shop_catalog}}`,
   `{{cart_form}}`, `{{checkout_form}}`, `{{account_section}}`, `{{blog_posts}}`,
@@ -321,13 +327,15 @@ copie veche din acest repo:
 
 Pornește de la o bază goală și verifică, în ordine:
 
-1. instalarea (`install.php` + `seed.php` + date demo), apoi, fără server,
-   instantaneul rutelor, mecanismul diferențelor declarate ale comparației cu baza și
-   verificarea fișierelor de migrare (`verifica-migrari.php`: și DDL-ul nou din cod);
+1. instalarea (`install.php`, adică migrările, + `seed.php` + date demo; cu `--pe-vechi`,
+   baza ca înainte și baseline-ul), `install.php` fără server (cod ≠ 0) și din nou pe baza
+   instalată (1, nimic scris), apoi, fără server, instantaneul rutelor, mecanismul
+   diferențelor declarate ale comparației cu baza și verificarea fișierelor de migrare
+   (`verifica-migrari.php`: și DDL-ul nou din cod);
 2. site-ul public: acasă, magazin, categorie, marcă, produs cu și fără șablon,
    produs cu oferte BBD, produs la precomandă, căutare, adăugare în coș, coș,
    checkout, login, înregistrare, cont fără login (redirect), blog, articol,
-   contact, pagină legală, `robots.txt`, 404, `/health`; apoi SEO: `/sitemap.xml`
+   contact, pagină legală, `robots.txt`, 404, `/health` (cu `schema: la_zi`); apoi SEO: `/sitemap.xml`
    (cu produse doar cu catalogul), robots.txt (regulile coșului doar cu magazinul),
    datele structurate (ofertă doar cu magazinul pornit), „/” final → 301, o adresă
    veche din datele site-ului → 301, un POST cu „/” final neatins;
@@ -343,9 +351,10 @@ Pornește de la o bază goală și verifică, în ordine:
    generarea sitemap-ului și `/sitemap.xml`, logout; un admin de blog nu intră
    la plăți;
 7. fiecare cron, o dată (cererile lor spre ERP/FAN/bancă trebuie să se oprească
-   local), apoi `scripts/migreaza.php --stare` și `--plan` pe baza de test (făcută încă de
-   cod: migrările de bază trebuie să găsească tot, fără nicio operație în grupul B,
-   0001–0019); niciunul nu lasă un fișier de sesiune nou;
+   local), apoi `scripts/migreaza.php --stare` și `--plan` pe baza de test (făcută prin
+   migrări: `--plan` iese cu 0, nimic de făcut); niciunul nu lasă un fișier de sesiune nou;
+   apoi instrucțiunile SQL ale tuturor cererilor de mai sus (contorul serverului,
+   `CMS_DEV_NUMARA_SQL=1`): niciuna nu are voie să trimită DDL;
 8. jurnalul PHP: niciun `Warning`, `Notice` sau `Fatal` (mesajele `Deprecated`
    se raportează, dar nu opresc testul);
 9. capturi Playwright: dashboard, meniul cu toate grupurile deschise, lista de
@@ -388,10 +397,12 @@ separate.
    pagina lor răspunde 200; doar sitemap-ul le exclude. E defectul cunoscut din
    analiză (`loadProducts` filtrează doar `deleted_at`; reparația există în
    Biovitality, portul C8). Nereparat: schimbă ce văd clienții Bioscem.
-4. **`install.php` și `seed.php` ies cu codul 0 când baza nu e disponibilă**
-   (`exit("mesaj")`), deci un script automat ar crede că instalarea a reușit.
-   Portul „scripturi cu exit 1 la DB căzută” din grafoanaytis o rezolvă.
-   Uneltele de dezvoltare verifică singure baza înainte.
+4. **`install.php` și `seed.php` ieșeau cu codul 0 când baza nu era disponibilă**
+   (`exit("mesaj")`), deci un script automat ar fi crezut că instalarea a reușit.
+   **Reparat** (WP-05, portul GR-02 din grafoanaytis `9e21659`, extins și la fișierul
+   care nu se poate citi): mesajul pe stderr și codul 1; `install.php` iese cu 1 și pe o bază
+   care are deja administratori, fără să scrie nimic ([MIGRARI.md](MIGRARI.md), „Instalarea”).
+   Testul de fum și `test-instalare.php` le verifică.
 5. **Fiecare rulare a unui script CLI (inclusiv cronurile) deschidea o sesiune
    PHP** (`bootstrap.php`) și lăsa un fișier gol în `storage/sessions/`. Pe
    Bioscem, 878 din cele 1.711 fișiere de sesiune din clona locală sunt goale.
@@ -428,8 +439,9 @@ De știut (nu sunt erori):
 - **Coloana `orders.erp_status` are implicit `pending`**, deci și comenzile
   unui magazin fără ERP sunt „de trimis”. Dacă ERP-ul se pornește mai târziu,
   cronul `erp-sync.php` trimite toate comenzile vechi neanulate (inclusiv cele
-  finalizate). De ținut minte la pornirea pluginului `erp` pe un site care l-a
-  avut oprit.
+  finalizate). De la WP-05, pasul de activare al pluginului `erp` scrie pragul
+  `erp_trimite_din` (doar dacă cheia lipsește); WP-12 (E1) îl face respectat de
+  `retryPending`, de numărătorile din admin și de `LucruriInCurs`.
 - `/admin/users/points/history` fără parametri răspunde 400 (nu e în meniu; se
   deschide cu un client ales).
 - O cerere `HEAD` pe o adresă corectă răspunde 404: routerul are doar rute GET și

@@ -17,9 +17,18 @@ use App\Http\Controllers\SiteController;
 use App\Http\Router;
 
 return static function (Router $router): void {
+    // Starea site-ului pentru monitorizare și pentru deploy: „ok” și, pe al doilea rând, schema bazei
+    // față de migrările din cod (App\Support\Migrari\Garda: la_zi, in_urma, fara_registru, eroare).
+    // O bază în urma codului dă 503, ca verificarea de după un deploy să întoarcă codul la loc.
     $router->get('/health', static function (): void {
+        $schema = \App\Support\Migrari\Garda::stareSite();
         header('Content-Type: text/plain; charset=utf-8');
-        echo 'ok';
+        if ($schema === \App\Support\Migrari\Garda::IN_URMA) {
+            http_response_code(503);
+            echo "indisponibil\nschema: " . $schema;
+            return;
+        }
+        echo "ok\nschema: " . $schema;
     });
 
     // robots.txt e servit dinamic (regulile în App\Support\Robots, doar ale

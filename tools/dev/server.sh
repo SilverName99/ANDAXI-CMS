@@ -43,8 +43,11 @@ fi
 nohup "${COMANDA[@]}" >> "$CMS_DEV_DIR/server.log" 2>&1 &
 echo $! > "$PID_FISIER"
 for _ in $(seq 1 50); do
-    if curl -fsS --noproxy '*' "http://127.0.0.1:$CMS_DEV_PORT/health" >/dev/null 2>&1; then
+    cod_health="$(curl -sS --noproxy '*' -o /dev/null -w '%{http_code}' "http://127.0.0.1:$CMS_DEV_PORT/health" 2>/dev/null || true)"
+    if [ "$cod_health" = 200 ] || [ "$cod_health" = 503 ]; then
         echo "Server pornit: http://127.0.0.1:$CMS_DEV_PORT  (admin: /admin, $CMS_DEV_ADMIN_EMAIL, parola în $CMS_DEV_DIR/admin-parola.txt)"
+        # 503 = baza e în urma migrărilor din cod (docs/MIGRARI.md, „Garda”): serverul merge, dar baza trebuie adusă la zi.
+        [ "$cod_health" = 503 ] && echo "ATENȚIE: baza $CMS_DEV_DB e în urma migrărilor din cod: tools/dev/php.sh scripts/migreaza.php --aplica"
         exit 0
     fi
     sleep 0.2
