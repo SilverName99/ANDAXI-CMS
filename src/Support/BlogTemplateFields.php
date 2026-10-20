@@ -41,7 +41,7 @@ final class BlogTemplateFields
                 'tokens' => ['{{blog_image_url}}'],
             ],
             'video' => [
-                'label' => 'Video (MP4)',
+                'label' => 'Video (YouTube, Vimeo sau fișier)',
                 'type' => 'video_url',
                 'tokens' => ['{{blog_video}}', '{{blog_video_url}}'],
             ],

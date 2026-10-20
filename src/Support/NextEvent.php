@@ -54,10 +54,7 @@ final class NextEvent
             $period = $startLabel;
         }
 
-        $video = trim((string) ($row['video_url'] ?? ''));
-        $videoEmbed = $video !== ''
-            ? '<video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;"><source src="' . htmlspecialchars($video, ENT_QUOTES) . '" type="video/mp4">Browserul tău nu suportă redarea video.</video>'
-            : '';
+        $videoEmbed = VideoEmbed::render(trim((string) ($row['video_url'] ?? '')));
 
         return [
             '{{next_event_image}}' => $image !== '' ? $image : '/assets/img/product-placeholder.svg',

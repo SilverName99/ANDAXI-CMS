@@ -1,7 +1,7 @@
 -- Fixture-ul migrărilor pentru vertij (cod vt): schema pe care o face codul vechi pe o bază goală:
 -- scripts/install.php, apoi funcțiile ensure…/asigura… până nu se mai schimbă (MariaDB 10.11.14-MariaDB-0ubuntu0.24.04.1).
 -- Doar structură, niciun rând; nimic din datele unui site. Îl încarcă tools/dev/test-migrari.php (T2).
--- sursa: vertij-tinitus-refacut@ca1120c
+-- sursa: vertij-tinitus-refacut@0fc2b2c
 -- Generat de tools/dev/migrari/genereaza-fixture.php --fixture-uri; nu se editează de mână.
 SET FOREIGN_KEY_CHECKS = 0;
 

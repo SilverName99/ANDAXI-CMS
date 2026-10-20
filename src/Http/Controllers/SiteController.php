@@ -21,6 +21,7 @@ use App\Support\OrderMailer;
 use App\Support\OrderNumber;
 use App\Support\PaymentMethods;
 use App\Support\Settings;
+use App\Support\VideoEmbed;
 use App\Support\EuPlatescGateway;
 use App\Support\StripeGateway;
 use App\Support\View;
@@ -5874,9 +5875,7 @@ HTML;
         $eventTicketUrl = trim((string) ($post['event_ticket_url'] ?? ''));
         $eventLocation = trim((string) ($post['event_location'] ?? ''));
         $videoUrl = trim((string) ($post['video_url'] ?? ''));
-        $videoEmbed = $videoUrl !== ''
-            ? '<video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;"><source src="' . htmlspecialchars($videoUrl, ENT_QUOTES) . '" type="video/mp4">Browserul tău nu suportă redarea video.</video>'
-            : '';
+        $videoEmbed = VideoEmbed::render($videoUrl);
 
         $templateHtml = trim((string) ($post['template_html_content'] ?? ''));
         if ($templateHtml === '') {

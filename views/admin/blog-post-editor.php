@@ -108,9 +108,12 @@ $returnParam = $postId > 0 ? (string) $postId : 'new';
         </div>
 
         <div class="field" data-field="video" style="grid-column:1/-1;<?= $showField('video') ? '' : 'display:none;' ?>">
-            <label>Video (fișier MP4)</label>
-            <input type="text" name="video_url" placeholder="/uploads/gallery/nume-video.mp4" value="<?= htmlspecialchars((string) ($editingPost['video_url'] ?? ''), ENT_QUOTES) ?>">
-            <small class="muted">Încarcă fișierul .mp4 în Galerie, apoi pune aici calea (ex: <code>/uploads/gallery/nume.mp4</code>).</small>
+            <label>Video</label>
+            <input type="text" name="video_url" placeholder="https://www.youtube.com/watch?v=..." value="<?= htmlspecialchars((string) ($editingPost['video_url'] ?? ''), ENT_QUOTES) ?>">
+            <small class="muted">
+                Lipește linkul de pe YouTube sau Vimeo, exact cum îl copiezi din bara browserului.
+                Merge și un fișier urcat în Galerie (<code>/uploads/gallery/nume.mp4</code>).
+            </small>
         </div>
 
         <div class="field" data-field="event_dates" style="grid-column:1/-1;<?= $showField('event_dates') ? '' : 'display:none;' ?>">
