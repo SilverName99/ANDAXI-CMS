@@ -104,7 +104,7 @@ final class Server
      * Șirul gol = fără clauză, adică „cum vrea serverul”, deci posibil o copie a tabelului
      * cu scrierile oprite: doar dacă migrarea are voie să blocheze.
      *
-     * @param string $operatie coloana | index | sterge_index | sterge_coloana | modifica
+     * @param string $operatie coloana | implicit | index | sterge_index | sterge_coloana | modifica
      * @return list<string>
      */
     public function lantClauze(string $operatie, bool $poateBloca): array
@@ -116,7 +116,8 @@ final class Server
             'sterge_coloana' => $this->stergereColoanaInstant()
                 ? ['ALGORITHM=INSTANT', 'ALGORITHM=INPLACE, LOCK=NONE']
                 : ['ALGORITHM=INPLACE, LOCK=NONE'],
-            'modifica' => ['ALGORITHM=INSTANT', 'ALGORITHM=INPLACE, LOCK=NONE'],
+            // implicit = ALTER COLUMN … SET DEFAULT: doar definiția tabelului, fără rânduri atinse.
+            'modifica', 'implicit' => ['ALGORITHM=INSTANT', 'ALGORITHM=INPLACE, LOCK=NONE'],
             default => ['ALGORITHM=INPLACE, LOCK=NONE'],
         };
         if ($poateBloca) {
@@ -135,6 +136,7 @@ final class Server
             'coloana' => $this->coloanaNouaInstant() ? 'instant' : 'inplace',
             'sterge_coloana' => $this->stergereColoanaInstant() ? 'instant' : 'inplace',
             'modifica' => 'copie',
+            'implicit' => 'instant',
             default => 'inplace',
         };
     }

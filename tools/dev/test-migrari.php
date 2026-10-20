@@ -3,9 +3,10 @@
 declare(strict_types=1);
 
 /**
- * Testele migrărilor (docs/MIGRARI.md). Partea de azi (WP-02) e runner-ul însuși, pe migrări
- * de jucărie scrise de test; testele bazei (T1–T11, pe migrările adevărate) vin cu WP-04 în
- * același fișier.
+ * Testele migrărilor (docs/MIGRARI.md). Partea de azi (WP-02, WP-03) e runner-ul însuși, pe
+ * migrări de jucărie scrise de test; testele bazei (T1–T11, pe migrările adevărate) vin cu WP-04
+ * în același fișier. Până atunci, migrările adevărate (0001–0024) le verifică
+ * tools/dev/migrari/genereaza-fixture.php --verifica (poarta G-baza).
  *
  *   tools/dev/php.sh tools/dev/test-migrari.php --runner
  *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-migrari.php --runner   # cu PHP-ul minim
@@ -23,7 +24,9 @@ declare(strict_types=1);
  *    Amprenta din corpul lui; Schema direct (creare, „există”, altă definiție = avertisment, index
  *    echivalent sub alt nume, cursa cu alt proces acceptată, valori repetate sub un index unic
  *    numărate fără să fie arătate, NOT NULL fără DEFAULT, AFTER, ștergeri doar în „contract”,
- *    schimbarea unui tip refuzată fără voie de blocare).
+ *    schimbarea unui tip refuzată fără voie de blocare); tabelComplet (un CREATE pe o bază nouă; pe un
+ *    tabel vechi doar coloanele și indecșii care lipsesc, cheia străină lipsă un avertisment; cursa cu
+ *    codul vechi care face tabelul chiar atunci; în simulare) și schimbaImplicit (rândurile neatinse).
  * R. scripts/migreaza.php, cu fiecare cod de ieșire: bază goală fără migrări (0, „nimic de făcut”),
  *    bază străină (4, nimic creat), migrări de jucărie (planul 10, aplicarea, a doua oară nimic,
  *    asteptat.json, baza veche detectată, --pana-la), oprirea după fiecare operație și reluarea
@@ -139,12 +142,13 @@ $verifica('Server: coloană nouă instant de la MariaDB 10.3.2 / MySQL 8.0.12; �
     $maria->coloanaNouaInstant() && !$mariaVeche->coloanaNouaInstant() && $mysql->coloanaNouaInstant() && !$mysqlVechi->coloanaNouaInstant()
     && $maria->stergereColoanaInstant() && !Server::dinVersiune('10.3.39-MariaDB')->stergereColoanaInstant()
     && !Server::dinVersiune('8.0.28')->stergereColoanaInstant() && $mysql->stergereColoanaInstant());
-$verifica('Server: lanțul de clauze (INSTANT, INPLACE + LOCK=NONE; fără clauză doar cu voie de blocare)',
+$verifica('Server: lanțul de clauze (INSTANT, INPLACE + LOCK=NONE; fără clauză doar cu voie de blocare; valoarea implicită instant)',
     $maria->lantClauze('coloana', false) === ['ALGORITHM=INSTANT', 'ALGORITHM=INPLACE, LOCK=NONE']
     && $mysqlVechi->lantClauze('coloana', false) === ['ALGORITHM=INPLACE, LOCK=NONE']
     && $maria->lantClauze('index', false) === ['ALGORITHM=INPLACE, LOCK=NONE']
     && $maria->lantClauze('index', true) === ['ALGORITHM=INPLACE, LOCK=NONE', '']
-    && $maria->clasaEstimata('modifica') === 'copie' && $mysqlVechi->clasaEstimata('coloana') === 'inplace');
+    && $maria->clasaEstimata('modifica') === 'copie' && $mysqlVechi->clasaEstimata('coloana') === 'inplace'
+    && $mysqlVechi->lantClauze('implicit', false) === ['ALGORITHM=INSTANT', 'ALGORITHM=INPLACE, LOCK=NONE'] && $maria->clasaEstimata('implicit') === 'instant');
 
 // Aceleași coloane, cum le scrie information_schema pe fiecare server (citite pe MariaDB 10.11 și MySQL 8.0.46).
 $randuriCa = static function (string $familie): array {
@@ -651,6 +655,96 @@ foreach ($servere as $numeServer => $sock) {
     $s6 = new Schema($db, $server, $e6 = $executie());
     $schimbate = $s6->date('nume gol', "UPDATE t SET nume = '' WHERE nume = 'nu-exista'");
     $verifica('Schema: o instrucțiune de date fără rânduri atinse nu e o operație', $schimbate === 0 && $e6->cuEfect === 0);
+
+    // tabelComplet (baseline-ul, WP-03): pe o bază fără tabel un singur CREATE; pe una veche, doar ce lipsește.
+    $coloaneTc = [
+        'id' => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
+        't_id' => 'INT UNSIGNED NULL',
+        'cod' => "VARCHAR(20) NOT NULL DEFAULT ''",
+        'stare' => "VARCHAR(20) NOT NULL DEFAULT 'nou'",
+        'nota' => 'TEXT NULL',
+        'creat_la' => 'TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP',
+    ];
+    $cheiTc = ['PRIMARY KEY (id)', 'UNIQUE KEY uniq_tc_cod (cod)', 'KEY idx_tc_stare (stare, creat_la)', 'KEY fk_tc_t (t_id)',
+        'CONSTRAINT fk_tc_t FOREIGN KEY (t_id) REFERENCES t (id) ON DELETE SET NULL'];
+    $s7 = new Schema($db, $server, $e7 = $executie());
+    $s7->tabelComplet('tc', $coloaneTc, $cheiTc);
+    $tc = Amprenta::citeste($db, $server, ['tc'])['tabele']['tc'] ?? null;
+    $verifica('Schema: tabelComplet pe o bază fără tabel = un singur CREATE TABLE, cu coloanele, indecșii și cheia străină',
+        array_column($e7->operatii, 'clasa') === ['creare'] && $e7->cuEfect === 1 && $e7->avertismente === []
+        && array_keys($tc['coloane'] ?? []) === ['cod', 'creat_la', 'id', 'nota', 'stare', 't_id']
+        && array_keys($tc['indecsi'] ?? []) === ['PRIMARY', 'fk_tc_t', 'idx_tc_stare', 'uniq_tc_cod'] && isset($tc['fk']['fk_tc_t'])
+        && ($tc['colatie'] ?? '') === 'utf8mb4_unicode_ci', json_encode($e7->operatii) . json_encode($tc));
+    $s7b = new Schema($db, $server, $e7b = $executie());
+    $s7b->tabelComplet('tc', $coloaneTc, $cheiTc);
+    $verifica('Schema: tabelComplet a doua oară: fiecare coloană și fiecare index „există”, nimic făcut',
+        $e7b->cuEfect === 0 && array_unique(array_column($e7b->operatii, 'clasa')) === ['fara_efect'] && $e7b->avertismente === []
+        && count($e7b->operatii) === 1 + 5 + 3, json_encode($e7b->operatii));
+    // „Codul vechi”: același tabel, fără două coloane, cu un index sub alt nume, fără cheia străină, cu altă definiție la nota.
+    $db->exec("CREATE TABLE tcv (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, t_id INT UNSIGNED NULL, cod VARCHAR(20) NOT NULL DEFAULT '',
+        nota MEDIUMTEXT NULL, UNIQUE KEY cod_vechi (cod)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $db->exec("INSERT INTO tcv (cod) VALUES ('a'), ('b')");
+    $s8 = new Schema($db, $server, $e8 = $executie());
+    $s8->tabelComplet('tcv', $coloaneTc, str_replace(['uniq_tc_cod', 'idx_tc_stare', 'fk_tc_t'], ['uniq_tcv_cod', 'idx_tcv_stare', 'fk_tcv_t'], $cheiTc));
+    $tcv = Amprenta::citeste($db, $server, ['tcv'])['tabele']['tcv'];
+    $faraEfectTcv = array_column(array_filter($e8->operatii, static fn (array $o): bool => $o['clasa'] === 'fara_efect'), 'obiect');
+    $verifica('Schema: tabelComplet pe un tabel vechi: adaugă doar coloanele (instant) și indecșii (inplace) care lipsesc; '
+        . 'indexul unic sub alt nume ajunge; cheia străină lipsă și definiția diferită = avertismente, nimic schimbat',
+        $e8->cuEfect === 4 && array_values(array_filter(array_column($e8->operatii, 'clasa'), static fn (string $c): bool => $c !== 'fara_efect'))
+            === ['instant', 'instant', 'inplace', 'inplace']
+        && in_array('tcv.uniq_tcv_cod', $faraEfectTcv, true) && !isset($tcv['indecsi']['uniq_tcv_cod']) && isset($tcv['indecsi']['cod_vechi'])
+        && isset($tcv['coloane']['stare'], $tcv['coloane']['creat_la'], $tcv['indecsi']['idx_tcv_stare'], $tcv['indecsi']['fk_tcv_t'])
+        && $tcv['fk'] === [] && $tcv['coloane']['nota']['tip'] === 'mediumtext' && count($e8->avertismente) === 2
+        && str_contains(implode("\n", $e8->avertismente), 'cheia străină tcv.fk_tcv_t lipsește')
+        && str_contains(implode("\n", $e8->avertismente), 'coloana tcv.nota există cu altă definiție')
+        && (int) $db->query("SELECT COUNT(*) FROM tcv WHERE stare = 'nou'")->fetchColumn() === 2, json_encode($e8->operatii) . json_encode($e8->avertismente));
+    // Cursa: codul vechi creează tabelul (parțial) chiar după ce migrarea a văzut că lipsește.
+    $s9 = new Schema($db, $server, $e9 = $executie());
+    $s9->existaTabel('tcr');
+    $conectare($sock, $b('d'))->exec("CREATE TABLE tcr (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, cod VARCHAR(20) NOT NULL DEFAULT '')");
+    $s9->tabelComplet('tcr', ['id' => 'INT UNSIGNED NOT NULL AUTO_INCREMENT', 'cod' => "VARCHAR(20) NOT NULL DEFAULT ''", 'nota' => 'TEXT NULL'],
+        ['PRIMARY KEY (id)', 'KEY idx_tcr_cod (cod)']);
+    $tcr = Amprenta::citeste($db, $server, ['tcr'])['tabele']['tcr'];
+    $verifica('Schema: tabelComplet când codul vechi face tabelul chiar atunci (CREATE IF NOT EXISTS fără efect): restul se adaugă',
+        isset($tcr['coloane']['nota'], $tcr['indecsi']['idx_tcr_cod']), json_encode($e9->operatii));
+    $ex = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL PRIMARY KEY']));
+    $ex2 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL'], ['FULLTEXT KEY ft (id)']));
+    $ex3 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL'], ['KEY (id)']));
+    $ex4 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->tabelComplet('tx', ['id' => 'INT NOT NULL', 'a' => 'INT NULL AFTER id']));
+    $verifica('Schema: tabelComplet refuză o cheie în definiția coloanei, o cheie neînțeleasă sau fără nume, AFTER (și nu creează nimic)',
+        $ex instanceof Eroare && $ex2 instanceof Eroare && $ex3 instanceof Eroare && $ex4 instanceof Eroare
+        && !(new Schema($db, $server, $executie()))->existaTabel('tx'), implode(' | ', array_map(static fn (?Throwable $x): string => $x?->getMessage() ?? '-', [$ex, $ex2, $ex3, $ex4])));
+    // În simulare: tabelul intră în model, iar ce urmează îl vede.
+    $sim = new Executie('test/sim', 'schema', true, false, '', static function (): void {
+    }, static function (int $d, ?array $c): void {
+    }, static function (): void {
+    }, static function (string $f, string $o, string $c, float $ms): void {
+    });
+    $sim->model = new ArrayObject();
+    $s10 = new Schema($db, $server, $sim);
+    $s10->tabelComplet('tsim', ['id' => 'INT UNSIGNED NOT NULL AUTO_INCREMENT', 'a' => 'INT NULL'], ['PRIMARY KEY (id)']);
+    $s10->coloana('tsim', 'b', 'INT NULL');
+    $s10->coloana('tsim', 'a', 'INT NULL');
+    $verifica('Schema: tabelComplet în simulare: o singură „creare”, nimic trimis; coloana() de după vede tabelul din model',
+        array_column($sim->operatii, 'clasa') === ['creare', 'instant', 'fara_efect'] && !(new Schema($db, $server, $executie()))->existaTabel('tsim'),
+        json_encode($sim->operatii));
+
+    // schimbaImplicit: doar valoarea implicită, rândurile neatinse (link_plata/0009).
+    $db->exec("ALTER TABLE tcv ADD COLUMN procesator VARCHAR(20) NOT NULL DEFAULT 'stripe'");
+    $s11 = new Schema($db, $server, $e11 = $executie());
+    $s11->schimbaImplicit('tcv', 'procesator', "'euplatesc'");
+    $s11->schimbaImplicit('tcv', 'procesator', "'euplatesc'");
+    $db->exec("INSERT INTO tcv (cod) VALUES ('c')");
+    $procesatori = $db->query('SELECT cod, procesator FROM tcv ORDER BY cod')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $verifica('Schema: schimbaImplicit schimbă instant doar valoarea implicită (rândurile vechi rămân), a doua oară „există”',
+        array_column($e11->operatii, 'clasa') === ['instant', 'fara_efect'] && $e11->cuEfect === 1
+        && $procesatori === ['a' => 'stripe', 'b' => 'stripe', 'c' => 'euplatesc']
+        && Amprenta::citeste($db, $server, ['tcv'])['tabele']['tcv']['coloane']['procesator']['implicit'] === "'euplatesc'",
+        json_encode($e11->operatii) . json_encode($procesatori));
+    $ex = $aruncat(static fn () => (new Schema($db, $server, $executie()))->schimbaImplicit('tcv', 'procesator', "'x'; DROP TABLE t"));
+    $ex2 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->schimbaImplicit('tcv', 'nu_exista', '0'));
+    $verifica('Schema: schimbaImplicit refuză altceva decât un text simplu sau un număr, și o coloană care lipsește',
+        $ex instanceof Eroare && $ex2 instanceof Eroare && isset(Amprenta::citeste($db, $server, ['t'])['tabele']['t']));
 
     // ---------------------------------------------------------------- R
     $scrie('R. scripts/migreaza.php');

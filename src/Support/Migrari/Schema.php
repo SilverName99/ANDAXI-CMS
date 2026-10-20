@@ -148,6 +148,96 @@ final class Schema
     }
 
     /**
+     * Un tabel întreg, cum îl vrea codul: coloanele (nume => definiție, ca la coloana()) și cheile,
+     * scrise ca în CREATE TABLE („PRIMARY KEY (id)”, „UNIQUE KEY nume (a, b)”, „KEY nume (a)”,
+     * „CONSTRAINT fk_x FOREIGN KEY (a) REFERENCES t (id) ON DELETE SET NULL”). Pe o bază fără
+     * tabel: un singur CREATE TABLE cu tot. Pe una care îl are (o bază veche, sau creat chiar
+     * atunci de codul vechi): fiecare coloană se caută și se adaugă doar dacă lipsește (coloana()),
+     * apoi fiecare index (index(), unic(): același nume sau unul echivalent ajunge). Cheia primară
+     * și cheile străine nu se adaugă niciodată peste un tabel existent (o cheie străină pică pe
+     * rânduri orfane și, pe MySQL, copiază tabelul): una care lipsește e un avertisment, iar
+     * --verifica o arată. În chei, un nume de coloană rezervat se scrie între apostroafe inverse
+     * („PRIMARY KEY (`key`)”); în lista coloanelor le pune runner-ul.
+     *
+     * @param array<string, string> $coloane
+     * @param list<string> $chei
+     */
+    public function tabelComplet(string $tabel, array $coloane, array $chei = []): void
+    {
+        $this->numeValid($tabel);
+        if ($coloane === []) {
+            throw new Eroare($this->executie->id . ': tabelComplet(' . $tabel . ') fără coloane', Eroare::MIGRARE);
+        }
+        $parti = [];
+        foreach ($coloane as $coloana => $definitie) {
+            $this->numeValid((string) $coloana);
+            $this->definitie($tabel, (string) $coloana, $definitie);
+            $parti[] = '`' . $coloana . '` ' . trim($definitie);
+        }
+        $primara = null;
+        $indecsi = [];
+        $straine = [];
+        foreach ($chei as $cheie) {
+            $structura = Amprenta::structuraDinCorp($cheie);
+            if ($structura['coloane'] !== []) {
+                throw new Eroare($this->executie->id . ': tabelComplet(' . $tabel . '): „' . $cheie . '” nu e o cheie (coloanele stau în lista lor)', Eroare::MIGRARE);
+            }
+            if ($structura['fk'] !== []) {
+                $straine += $structura['fk'];
+            } elseif (count($structura['indecsi']) === 1 && isset($structura['indecsi']['PRIMARY'])) {
+                $primara = $structura['indecsi']['PRIMARY']['coloane'];
+            } elseif (count($structura['indecsi']) === 1 && preg_match('/^\s*(UNIQUE\s+)?(KEY|INDEX)\s+`?[A-Za-z0-9_]+`?\s*\(/i', $cheie) === 1) {
+                $indecsi += $structura['indecsi'];
+            } else {
+                throw new Eroare($this->executie->id . ': tabelComplet(' . $tabel . '): nu înțeleg cheia „' . $cheie
+                    . '” (PRIMARY KEY (…), UNIQUE KEY nume (…), KEY nume (…), CONSTRAINT nume FOREIGN KEY (…) REFERENCES …)', Eroare::MIGRARE);
+            }
+            $parti[] = trim($cheie);
+        }
+        $exista = $this->existaTabel($tabel);
+        $this->tabel($tabel, implode(",\n", $parti));
+        if (!$exista) {
+            // Creat acum. Dacă totuși îi lipsește ceva, l-a creat altcineva chiar atunci (codul
+            // vechi, cu CREATE TABLE IF NOT EXISTS al lui): se aduce la zi ca un tabel existent.
+            $creat = $this->structura($tabel);
+            if ($creat !== null && array_diff(array_keys($coloane), array_keys($creat['coloane'])) === []) {
+                return;
+            }
+        }
+        foreach ($coloane as $coloana => $definitie) {
+            if ($primara !== null && in_array((string) $coloana, $primara, true)) {
+                if (!$this->existaColoana($tabel, (string) $coloana)) {
+                    $this->avertisment('tabelul ' . $tabel . ' nu are coloana cheii primare ' . $coloana . '; nu se adaugă peste un tabel existent');
+                }
+                continue;
+            }
+            $this->coloana($tabel, (string) $coloana, $definitie);
+        }
+        $existente = $this->structura($tabel)['indecsi'] ?? [];
+        if ($primara !== null && !Amprenta::indecsiEchivalenti($existente['PRIMARY'] ?? ['unic' => false, 'coloane' => []], Amprenta::index(true, $primara))) {
+            $this->avertisment('tabelul ' . $tabel . ' are altă cheie primară decât (' . implode(', ', $primara) . '); nu se schimbă');
+        }
+        foreach ($indecsi as $nume => $index) {
+            if ($index['unic']) {
+                $this->unic($tabel, (string) $nume, $index['coloane']);
+            } else {
+                $this->index($tabel, (string) $nume, $index['coloane']);
+            }
+        }
+        $fkExistente = $this->structura($tabel)['fk'] ?? [];
+        foreach ($straine as $nume => $fk) {
+            $gasita = isset($fkExistente[$nume]);
+            foreach ($fkExistente as $alta) {
+                $gasita = $gasita || ($alta['coloane'] === $fk['coloane'] && $alta['tabel'] === $fk['tabel']);
+            }
+            if (!$gasita) {
+                $this->avertisment('cheia străină ' . $tabel . '.' . $nume . ' lipsește; nu se adaugă peste un tabel existent (rânduri orfane, '
+                    . 'copierea tabelului pe MySQL)');
+            }
+        }
+    }
+
+    /**
      * O coloană nouă, la coada tabelului. Dacă există: nimic; cu altă definiție: avertisment
      * (nu se schimbă niciodată singură). NOT NULL fără DEFAULT pe un tabel cu rânduri e
      * refuzat: codul vechi, care nu știe de coloană, n-ar mai putea scrie rânduri.
@@ -179,6 +269,43 @@ final class Schema
         }
         $this->alter('coloana', $tabel, $tabel . '.' . $coloana, $sql,
             fn (): bool => $this->existaColoana($tabel, $coloana));
+    }
+
+    /**
+     * Doar valoarea implicită a unei coloane existente (ALTER COLUMN … SET DEFAULT): rândurile
+     * nu se ating, iar serverul o face instant (doar în definiția tabelului). Pentru un pas
+     * anume al unei migrări, nu pentru „adus la zi”: o coloană existentă cu altă definiție rămâne
+     * altfel un avertisment. $valoare: un text între ghilimele simple sau un număr. Aceeași
+     * valoare deja: nimic.
+     */
+    public function schimbaImplicit(string $tabel, string $coloana, string $valoare): void
+    {
+        $this->numeValid($tabel);
+        $this->numeValid($coloana);
+        $valoare = trim($valoare);
+        if (preg_match("/^('[A-Za-z0-9_ .,:\\/@-]*'|-?[0-9]+(\\.[0-9]+)?)$/", $valoare) !== 1) {
+            throw new Eroare($this->executie->id . ': schimbaImplicit(' . $tabel . '.' . $coloana . '): valoarea e un text simplu între ghilimele sau un număr', Eroare::MIGRARE);
+        }
+        $structura = $this->structuraObligatorie($tabel, 'schimbaImplicit');
+        $existenta = $structura['coloane'][$coloana] ?? null;
+        if ($existenta === null) {
+            throw new Eroare($this->executie->id . ': schimbaImplicit: ' . $tabel . '.' . $coloana . ' nu există', Eroare::MIGRARE);
+        }
+        $ceruta = Amprenta::coloanaDinDefinitie($existenta['tip'] . ' DEFAULT ' . $valoare)['implicit'];
+        if ($existenta['implicit'] === $ceruta) {
+            $this->noteaza('fara_efect', 'implicit', $tabel . '.' . $coloana, 'are deja valoarea implicită ' . $valoare);
+            return;
+        }
+        if ($this->executie->simulare) {
+            $this->modifica($tabel, static function (array $s) use ($coloana, $ceruta): array {
+                $s['coloane'][$coloana]['implicit'] = $ceruta;
+                return $s;
+            });
+            $this->noteaza($this->server->clasaEstimata('implicit'), 'implicit', $tabel . '.' . $coloana, 'DEFAULT ' . $valoare, $tabel);
+            return;
+        }
+        $this->alter('implicit', $tabel, $tabel . '.' . $coloana, 'ALTER TABLE `' . $tabel . '` ALTER COLUMN `' . $coloana . '` SET DEFAULT ' . $valoare,
+            fn (): bool => ($this->structura($tabel)['coloane'][$coloana]['implicit'] ?? null) === $ceruta);
     }
 
     /**
