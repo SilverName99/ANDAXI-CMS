@@ -13,6 +13,10 @@ date scrise în cod).
 | `bioscem/redirecturi.json` | adresele vechi ale Bioscem: 127 de reguli exacte (117 × 301, 10 × 410) și 6 prefixe 410, adică cele 113 ale livrării 1 SEO și cele 14 × 301 aprobate de proprietar pe 19 octombrie 2026 (Bioscem `9f59e79`) |
 | `bioscem/seo.json` | etichetele din sitemap (D2/D3), numele și logo-urile pentru Google, `/cos-cumparaturi` |
 | `bioscem/ce-se-schimba.md` | ce vede altfel clientul când trece pe codul comun (se predă la adoptare); fiecare rând e declarat și în `tools/dev/compara-cu-baza.php` |
+| `<site>/setari-inghetate.json` | înghețarea setărilor (WP-06): valorile codului vechi al site-ului acolo unde codul comun ar folosi altceva, scrise o singură dată, la adoptare, doar unde lipsesc (pasul `site/<site>/setari-inghetate` al migrărilor). Bioscem din `9f59e79`; Biovitality, vertij și grafoanaytis provizorii până la raportul „live față de repo” din Etapa 0. Generat de `tools/inghetare/genereaza-setari.php`, verificat de `tools/inghetare/verifica-inghetare.php` |
+| `<site>/migrari.json` | parametrii migrărilor pe care îi știe doar site-ul (`Schema::parametruSite`), de exemplu procesatorul linkurilor de plată vechi |
+| `<site>/privat/` | valorile private ale înghețării (adrese, telefoane: decizia OD-49, repo-ul e public); **ignorat de git**, scris de generator local și copiat de mână pe server lângă pachet |
+| `vertij/ce-se-schimba.md` | ca la Bioscem; începută odată cu înghețarea (bannerul de cookie-uri) |
 
-Formatul și regulile: [docs/SEO.md](../docs/SEO.md). Pachetul inventat al site-ului
+Formatul și regulile: [docs/SEO.md](../docs/SEO.md) (harta adreselor, SEO) și [docs/MIGRARI.md](../docs/MIGRARI.md), „Înghețarea setărilor” și „Parametrii site-ului”. Pachetul inventat al site-ului
 de dezvoltare stă în `tools/dev/site-demo/`.

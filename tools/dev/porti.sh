@@ -52,8 +52,8 @@ poarta G-runner "runner-ul migrărilor pe MariaDB și MySQL 8 (Schema, Amprenta,
     "tools/dev/php.sh tools/dev/test-migrari.php --runner ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-migrari.php --runner" WP-02
 poarta G-baza "migrările de bază față de schema codului: instalarea nouă = asteptat.json = schema codului (install.php + ensure*) minus excluderile; pe baza făcută de cod 0 operații în grupul B; MariaDB și MySQL 8, și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica" WP-03
-poarta G-mig "testele migrărilor: runner-ul și migrările adevărate pe schemele celor cinci coduri (T1–T11, cu G-baza în T1), pe MariaDB și MySQL 8, și cu php$MINIM; verificarea fișierelor de migrare și a DDL-ului din cod" \
-    "tools/dev/php.sh tools/dev/test-migrari.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-migrari.php ;; tools/dev/php.sh tools/dev/verifica-migrari.php" WP-04
+poarta G-mig "testele migrărilor: runner-ul și migrările adevărate pe schemele celor cinci coduri (T1–T11, cu G-baza în T1), pe MariaDB și MySQL 8, și cu php$MINIM; verificarea fișierelor de migrare și a DDL-ului din cod; de la WP-06 și înghețarea setărilor (testele, cu php$MINIM, și verifica-inghetare.php: completă, fără date private, reproductibilă din clone)" \
+    "tools/dev/php.sh tools/dev/test-migrari.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-migrari.php ;; tools/dev/php.sh tools/dev/verifica-migrari.php ;; tools/dev/php.sh tools/dev/test-inghetare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-inghetare.php ;; tools/dev/php.sh tools/inghetare/verifica-inghetare.php" WP-04
 poarta G-inst "instalarea prin migrări (install.php, seed-ul neutru, adminul), garda și /health, pașii de activare ai pluginurilor, 0 DDL pe cerere; și cu php$MINIM; apoi baza de dezvoltare din nou, prin migrări (pentru porțile de după)" \
     "tools/dev/php.sh tools/dev/test-instalare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-instalare.php ;; tools/dev/instaleaza.sh" WP-05
 poarta G-vechi "aceleași teste pe o bază făcută ca înainte de migrări și trecută prin baseline (cms_dev_vechi, portul 8711): comparația cu Bioscem (ambele licențe), pluginurile, SEO, fumul pe fiecare pachet; apoi baza se șterge" \
@@ -82,6 +82,9 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # ating instalarea, runner-ul sau calea cererii (WP-06, WP-07, WP-41) și reface la final baza de dezvoltare
 # prin migrări, deci G-cmp, G-plug și G-seo de după ea rulează pe o bază migrată; G-vechi (WP-05) le rulează
 # încă o dată pe o bază veche trecută prin baseline (Bioscem neschimbat pe ambele, planul §5 WP-05).
+# De la WP-06, G-mig cuprinde și înghețarea setărilor (test-inghetare.php, verifica-inghetare.php):
+# fiecare WP cu G-mig verifică deci că înghețările sunt complete față de codul lui (amprenta nucleului);
+# un WP care schimbă DEFAULTS sau o valoare de rezervă le regenerează (genereaza-setari.php --toate).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"

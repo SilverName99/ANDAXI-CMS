@@ -1,0 +1,231 @@
+{
+    "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
+    "format": 2,
+    "site": "grafoanaytis",
+    "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
+    "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
+    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "setari": {
+        "contact_form_recipients": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "privat": true,
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol sau fără nicio adresă validă: codul vechi trimite la adresa lui (SiteController::destinatariFormularContact), codul comun la a Bioscem; de aici lipsa_sau_gol"
+        },
+        "cookie_banner_text": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['cookie_banner_text'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_first_name": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_first_name'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_last_name": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_last_name'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_phone": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_phone'] ?? … (rezerva din cod)"
+        },
+        "design_menu_html": {
+            "valoare": "<a href=\"/\">Acasă</a><a href=\"/companie\">Companie</a><a href=\"/produse\">Produse</a><a href=\"/servicii\">Servicii</a><a href=\"/certificari\">Certificări</a><a href=\"/contact\">Contact</a>",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "fan_kg_max_colet": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "GR (din BV 88b7f4d) nu împarte comanda în colete după greutate: fără cheie, fără împărțire (ca BV, decizia OD-09)",
+            "vechi": "lipsește",
+            "nucleu": "cod \"13\""
+        },
+        "gdpr_operator_email": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa",
+            "din": "implicit",
+            "privat": true,
+            "sursa": "Settings::DEFAULTS"
+        },
+        "gdpr_operator_marca": {
+            "valoare": "Grafoanaytis",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "gdpr_operator_sediu": {
+            "valoare": "Str. Văleni nr. 141 (incinta Romfarmachim), Ploiești, România",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "gdpr_operator_telefon": {
+            "valoare": "0700 000 001",
+            "mod": "lipsa",
+            "din": "implicit",
+            "privat": true,
+            "sursa": "Settings::DEFAULTS"
+        },
+        "gdpr_scop": {
+            "valoare": "primirii de oferte și comunicări comerciale",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "maintenance_message": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['maintenance_message'] ?? … (rezerva din cod)"
+        },
+        "maintenance_title": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['maintenance_title'] ?? … (rezerva din cod)"
+        },
+        "order_email_from_address": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa",
+            "din": "implicit",
+            "privat": true,
+            "sursa": "Settings::DEFAULTS"
+        },
+        "order_email_from_name": {
+            "valoare": "Grafoanaytis",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol în bază: codul comun pune „Bioscem” (EmailAutomation, emailul linkului de plată), codul vechi numele lui la linkul de plată; de aici lipsa_sau_gol"
+        },
+        "order_number_mode": {
+            "valoare": "legacy",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "GR src/Support/OrderNumber.php: MOD_IMPLICIT = MOD_VECHI (numerele „BV” + data + aleator); port-grafoanaytis.md §9",
+            "vechi": "cod expresie",
+            "nucleu": "implicit \"sequential\""
+        },
+        "order_number_next": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['order_number_next'] ?? … (rezerva din cod)"
+        },
+        "presentation_mode_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "store_name": {
+            "valoare": "Grafoanaytis",
+            "mod": "lipsa_sau_gol",
+            "din": "cod",
+            "sursa": "$settings['store_name'] ?? … (rezerva din cod)",
+            "nota": "Gol în bază: codul vechi pune numele lui în titlul paginilor (views/layout.php), codul comun „Bioscem Shop”; de aici lipsa_sau_gol"
+        },
+        "welcome_popup_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "GR n-are fereastra de bun venit (nicio cheie welcome_popup_* în codul vechi); port-grafoanaytis.md §9",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        }
+    },
+    "fara_inghetare": {
+        "bank_transfer_enabled": {
+            "motiv": "Plata prin transfer bancar e nouă în codul comun: fără rând e oprită (rezerva „0”)",
+            "vechi": "lipsește",
+            "nucleu": "cod \"0\""
+        },
+        "bt_ipay_admin_only": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "bt_ipay_autodeposit_hours": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"96\""
+        },
+        "bt_ipay_cron_max_apeluri": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "cod expresie"
+        },
+        "bt_ipay_deposit_on_erp": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "bt_ipay_enabled": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "bt_ipay_expire_minutes": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"60\""
+        },
+        "bt_ipay_reminder_hours": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"72\""
+        },
+        "contact_email": {
+            "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: JSON-LD-ul codului comun lasă emailul afară dacă e gol, iar Maintenance.php cade pe order_email_from_email, o cheie care nu există",
+            "vechi": "cod expresie",
+            "nucleu": "cod \"\" | expresie"
+        },
+        "euplatesc_currency": {
+            "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"RON\""
+        },
+        "euplatesc_enabled": {
+            "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "fan_awb_single": {
+            "motiv": "GR nu are magazin (licența GR: catalog și cereri de ofertă, OD-23): livrarea FAN nu rulează pe GR; dacă pornește vreodată, se decide atunci",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "stripe_enabled": {
+            "motiv": "GR nu are magazin (licența GR: catalog și cereri de ofertă, OD-23): plata nu apare nicăieri, iar cheile Stripe trebuie să fie goale pe GR (port-grafoanaytis.md GR-22)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "welcome_popup_body": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit sha256:566998599b36315d (659 caractere)"
+        },
+        "welcome_popup_title": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Bine ați venit pe noul site BIOSCEM!\""
+        },
+        "welcome_popup_version": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        }
+    }
+}

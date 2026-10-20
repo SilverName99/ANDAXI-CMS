@@ -1,0 +1,532 @@
+{
+    "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
+    "format": 2,
+    "site": "vertij",
+    "sursa": "vertij-tinitus-refacut@ca1120c",
+    "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
+    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "setari": {
+        "account_activation_active_text": {
+            "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_activation_button": {
+            "valoare": "Activează contul",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_activation_durations": {
+            "valoare": "1,3,6,12",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_activation_intro": {
+            "valoare": "Contul tău a fost verificat și aprobat. Pentru a avea acces la conținutul dedicat profesioniștilor, activează-l pentru un an.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_activation_renew_button": {
+            "valoare": "Reactivează contul",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_activation_title": {
+            "valoare": "Activează contul",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_avatar_folder": {
+            "valoare": "Poze de profil",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_avatar_max_mb": {
+            "valoare": "3",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_gdpr_label": {
+            "valoare": "Am citit și sunt de acord cu politica de confidențialitate și cu prelucrarea datelor mele.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_gdpr_url": {
+            "valoare": "/politica-de-confidentialitate",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_member_code_prefix": {
+            "valoare": "SVTH",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_registration_intro": {
+            "valoare": "Alege tipul de cont pe care vrei să îl creezi. În funcție de alegere îți vom cere documentele necesare pentru validare.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_upload_allowed_ext": {
+            "valoare": "pdf,jpg,jpeg,png,webp",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_upload_max_files": {
+            "valoare": "10",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "account_upload_max_mb": {
+            "valoare": "8",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "checkout_cod_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "contact_form_recipients": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa",
+            "din": "extras",
+            "privat": true,
+            "sursa": "VT SiteController (formularul de contact): primul dintre contact_recipient_email, admin_email și order_email_from_address care e o adresă validă, altfel adresa scrisă în cod; implicitul VT order_email_from_address (no-reply@localhost) nu e valid, deci adresa din cod. Codul comun ar trimite la a Bioscem",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/\\$to = '([^']+@[^']+)';/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit privat (18 caractere)",
+            "nota": "Dacă baza VT are o altă adresă validă într-una dintre cele trei chei, azi mesajele merg acolo: o arată verificarea pachetului pe verificare (DB-24), înainte de adoptare"
+        },
+        "customer_registration_field_first_name": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_first_name'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_last_name": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_last_name'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_phone": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_phone'] ?? … (rezerva din cod)"
+        },
+        "default_vat_percent": {
+            "valoare": "19",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "VT scrie 19 % în cod (AdminController la salvarea produsului, CheckoutCalculator); înghețat ca TVA-ul să nu se schimbe singur (invariantul I4 din de-bioscem.md, OD-07)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"19\""
+        },
+        "donations_amounts": {
+            "valoare": "1000,500,250,100,50,25",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_amounts'] ?? … (rezerva din cod)"
+        },
+        "donations_campaign_title": {
+            "valoare": "Susține misiunea noastră!",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_campaign_title'] ?? … (rezerva din cod)"
+        },
+        "donations_cover_fees_enabled": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_cover_fees_enabled'] ?? … (rezerva din cod)"
+        },
+        "donations_cover_fees_fixed": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_cover_fees_fixed'] ?? … (rezerva din cod)"
+        },
+        "donations_cover_fees_percent": {
+            "valoare": "2.9",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_cover_fees_percent'] ?? … (rezerva din cod)"
+        },
+        "donations_demo_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_demo_enabled'] ?? … (rezerva din cod)"
+        },
+        "donations_designations": {
+            "valoare": "Unde e nevoie mai mult\nCercetare\nEducația pacienților\nEvenimente și conferințe",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_designations'] ?? … (rezerva din cod)"
+        },
+        "donations_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_enabled'] ?? … (rezerva din cod)"
+        },
+        "donations_min": {
+            "valoare": "5",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_min'] ?? … (rezerva din cod)"
+        },
+        "donations_monthly_enabled": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_monthly_enabled'] ?? … (rezerva din cod)"
+        },
+        "donations_thanks_text": {
+            "valoare": "Îți mulțumim din suflet pentru sprijin! Contribuția ta contează enorm.",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['donations_thanks_text'] ?? … (rezerva din cod)"
+        },
+        "email_logo_url": {
+            "valoare": "/uploads/gallery/logo-vertij-tinitus.png",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "header_account_label": {
+            "valoare": "Contul meu",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "order_email_from_name": {
+            "valoare": "Societatea de Vertij, Tinitus și Hipoacuzie",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol în bază: codul vechi ia numele societății (BrandedEmail::brandName), codul comun pune „Bioscem”; de aici lipsa_sau_gol"
+        },
+        "order_number_mode": {
+            "valoare": "legacy",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "VT SiteController::generateOrderNumber: „BV” + data + aleator (fără OrderNumber, cod din BV b792224)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"sequential\""
+        },
+        "restricted_awaiting_email_text": {
+            "valoare": "Ți-am trimis un email de confirmare. Confirmă adresa pentru ca cererea ta să ajungă la echipa noastră.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "restricted_expired_text": {
+            "valoare": "Abonamentul contului tău a expirat. Reactivează-l pentru a avea din nou acces la acest conținut.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "restricted_guest_text": {
+            "valoare": "Această pagină este disponibilă doar membrilor cu cont activ. Creează-ți un cont profesional sau autentifică-te pentru a continua.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "restricted_inactive_text": {
+            "valoare": "Contul tău este aprobat, dar nu este activat. Activează-l pentru a avea acces la acest conținut.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "restricted_page_title": {
+            "valoare": "Conținut dedicat profesioniștilor",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "restricted_pending_text": {
+            "valoare": "Cererea ta este în curs de verificare de către echipa noastră. Te anunțăm pe email imediat ce contul este aprobat.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "restricted_rejected_text": {
+            "valoare": "Cererea ta nu a putut fi aprobată. Scrie-ne dacă vrei să reiei procesul cu documente actualizate.",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "store_bbd_sidebar_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "VT n-are sertarul ofertelor BBD (codul vechi, din BV b792224, nu-l avea)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "store_name": {
+            "valoare": "Societatea de Vertij, Tinitus și Hipoacuzie",
+            "mod": "lipsa_sau_gol",
+            "din": "extras",
+            "sursa": "VT views/layout.php: un store_name gol (implicitul VT) ia numele din BrandedEmail::brandName (email_brand_name, apoi order_email_from_name, apoi numele societății scris în cod); codul comun pune „Bioscem Shop” pe gol",
+            "extrage": {
+                "apel": "App\\Support\\BrandedEmail::brandName",
+                "argumente": [
+                    []
+                ]
+            },
+            "vechi": "implicit \"\"",
+            "nucleu": "cod \"\" | \"Bioscem Shop\"",
+            "nota": "Dacă baza VT are alt email_brand_name sau order_email_from_name, titlul de azi îl folosește pe acela: îl arată verificarea pachetului pe verificare (DB-24), iar WP-16 (Brand::numeSite) revede decizia"
+        },
+        "stripe_enabled": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "VT (din BV b792224) oferă Stripe la plată fără comutator, doar cu cheia secretă; codul comun cere stripe_enabled = 1 și cheia, deci aceeași condiție",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "welcome_popup_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "VT n-are fereastra de bun venit (nicio cheie welcome_popup_* în codul vechi); port-vertij.md §8",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        }
+    },
+    "fara_inghetare": {
+        "bank_transfer_enabled": {
+            "motiv": "Plata prin transfer bancar e nouă în codul comun: fără rând e oprită (rezerva „0”)",
+            "vechi": "lipsește",
+            "nucleu": "cod \"0\""
+        },
+        "bt_ipay_admin_only": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "bt_ipay_autodeposit_hours": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"96\""
+        },
+        "bt_ipay_cron_max_apeluri": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "cod expresie"
+        },
+        "bt_ipay_deposit_on_erp": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "bt_ipay_enabled": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "bt_ipay_expire_minutes": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"60\""
+        },
+        "bt_ipay_reminder_hours": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"72\""
+        },
+        "contact_email": {
+            "motiv": "Codul vechi n-o folosea; în codul comun, goală = fără email în JSON-LD și în pagina de mentenanță",
+            "vechi": "lipsește",
+            "nucleu": "cod \"\" | expresie"
+        },
+        "cookie_banner_enabled": {
+            "motiv": "VT n-avea banner de cookie-uri; în codul comun Microsoft Clarity se încarcă doar după acord, deci bannerul apare (schimbare acceptată în port-vertij.md §8, „Clarity only with consent”; rândul ei în site-uri/vertij/ce-se-schimba.md)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "cookie_banner_text": {
+            "motiv": "Textul bannerului de cookie-uri (vezi cookie_banner_enabled): textul neutru al codului comun",
+            "vechi": "lipsește",
+            "nucleu": "implicit sha256:ab965d24798c193e (160 caractere)"
+        },
+        "donations_currency": {
+            "motiv": "Pluginul donatii (Etapa 4, VT-D1) își aduce setările; înghețarea lor vine atunci",
+            "vechi": "cod expresie",
+            "nucleu": "lipsește"
+        },
+        "erp_enabled": {
+            "motiv": "ERP-ul e nou pentru VT (codul vechi nu-l avea): fără rând e oprit (erp_enabled = 0), iar erp nu e în licența VT",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "erp_stock_enabled": {
+            "motiv": "ERP-ul e nou pentru VT (codul vechi nu-l avea): fără rând e oprit (erp_enabled = 0), iar erp nu e în licența VT",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "erp_timeout": {
+            "motiv": "ERP-ul e nou pentru VT (codul vechi nu-l avea): fără rând e oprit (erp_enabled = 0), iar erp nu e în licența VT",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"20\""
+        },
+        "euplatesc_currency": {
+            "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"RON\""
+        },
+        "euplatesc_enabled": {
+            "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "fan_awb_single": {
+            "motiv": "Livrarea FAN nu rulează: magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8); dacă magazinul repornește, se decide atunci",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "fan_kg_max_colet": {
+            "motiv": "Livrarea FAN nu rulează: magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8); dacă magazinul repornește, se decide atunci",
+            "vechi": "lipsește",
+            "nucleu": "cod \"13\""
+        },
+        "fan_service_type_fanbox": {
+            "motiv": "Livrarea FAN nu rulează: magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8); dacă magazinul repornește, se decide atunci",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"FANbox\""
+        },
+        "fan_service_type_fanbox_ramburs": {
+            "motiv": "Livrarea FAN nu rulează: magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8); dacă magazinul repornește, se decide atunci",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"FANbox Cont Colector\""
+        },
+        "fan_service_type_ramburs": {
+            "motiv": "Livrarea FAN nu rulează: magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8); dacă magazinul repornește, se decide atunci",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Cont Colector\""
+        },
+        "google_ads_enabled": {
+            "motiv": "Etichetele Google din setări sunt noi pentru VT: fără rând sunt oprite",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "google_analytics_enabled": {
+            "motiv": "Etichetele Google din setări sunt noi pentru VT: fără rând sunt oprite",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "google_tag_manager_enabled": {
+            "motiv": "Etichetele Google din setări sunt noi pentru VT: fără rând sunt oprite",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "maintenance_enabled": {
+            "motiv": "Modul mentenanță e nou pentru VT: fără rând e oprit (maintenance_enabled = 0), iar textele lui se văd doar cu el pornit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "maintenance_message": {
+            "motiv": "Modul mentenanță e nou pentru VT: fără rând e oprit (maintenance_enabled = 0), iar textele lui se văd doar cu el pornit",
+            "vechi": "lipsește",
+            "nucleu": "implicit sha256:71f46823e4a9f1f4 (63 caractere)"
+        },
+        "maintenance_title": {
+            "motiv": "Modul mentenanță e nou pentru VT: fără rând e oprit (maintenance_enabled = 0), iar textele lui se văd doar cu el pornit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Revenim în curând\""
+        },
+        "order_number_next": {
+            "motiv": "Cu numerotarea „legacy” (order_number_mode, mai sus) contorul nu se folosește",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"203800\""
+        },
+        "shipping_fixed_base": {
+            "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "shipping_fixed_enabled": {
+            "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "shipping_fixed_extra_km": {
+            "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "shipping_fixed_fanbox": {
+            "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "shipping_fixed_fanbox_enabled": {
+            "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "tawk_enabled": {
+            "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "tawk_offset_y": {
+            "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"18\""
+        },
+        "tawk_position": {
+            "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"br\""
+        },
+        "tawk_requires_consent": {
+            "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "tawk_widget_id": {
+            "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"default\""
+        },
+        "welcome_popup_body": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit sha256:566998599b36315d (659 caractere)"
+        },
+        "welcome_popup_title": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Bine ați venit pe noul site BIOSCEM!\""
+        },
+        "welcome_popup_version": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        }
+    }
+}

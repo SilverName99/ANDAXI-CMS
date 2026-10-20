@@ -13,8 +13,10 @@ use Throwable;
  * unui plugin din config/plugins.php: dosarul spune doar al cui e codul; migrarea rulează pe
  * orice site, oricare ar fi starea pluginului (docs/MIGRARI.md).
  *
- * Pașii unui singur site: `database/migrari/site/<site>/<nume>.php` (id `site/<site>/<nume>`),
- * doar cu --site=<site>, după toate migrările, în ordinea numelui.
+ * Pașii unui singur site, doar cu --site=<site>, după toate migrările: întâi înghețarea setărilor din
+ * pachetul site-ului (`<SITE_DATE_DOSAR>/setari-inghetate.json`, apoi corecturile `-2`, `-3` …; id
+ * `site/<site>/setari-inghetate[-N]`, sha256 = al fișierului; clasa Inghetare), apoi
+ * `database/migrari/site/<site>/<nume>.php` (id `site/<site>/<nume>`), în ordinea numelui.
  *
  * Fișierele de lângă ele (generate, în git):
  *  - `migrari.lock`: {"migrari": {id: sha256}, "retrase": {id: motiv}}: o migrare publicată
@@ -30,6 +32,8 @@ final class Registru
     public const TIPURI = ['schema', 'date', 'contract'];
     private const CHEI = ['descriere', 'tip', 'blocanta', 'sus'];
     private const FISIERE_RADACINA = ['migrari.lock', 'asteptat.json', 'ultima.php', 'README.md', '.gitkeep'];
+    /** Un fișier PHP al site-ului nu poate lua numele pasului de înghețare (acela vine din pachet). */
+    private const TIPAR_INGHETARE_PHP = '/^setari-inghetate(?:-[^.]*)?\.php$/';
 
     /** @var list<array<string, mixed>>|null */
     private ?array $migrari = null;
@@ -103,16 +107,41 @@ final class Registru
     }
 
     /**
-     * Pașii site-ului dat, în ordinea numelui (ord 0).
+     * Pașii site-ului dat (ord 0): înghețarea setărilor din pachetul site-ului ($dosarSite =
+     * SITE_DATE_DOSAR), apoi fișierele PHP ale site-ului, în ordinea numelui. Un pachet cu înghețarea
+     * altui site → codul 2.
      *
      * @return list<array<string, mixed>>
      */
-    public function pasiSite(string $site): array
+    public function pasiSite(string $site, string $dosarSite = ''): array
     {
-        if (isset($this->pasiSite[$site])) {
-            return $this->pasiSite[$site];
+        $cheieMemo = $site . "\0" . $dosarSite;
+        if (isset($this->pasiSite[$cheieMemo])) {
+            return $this->pasiSite[$cheieMemo];
         }
         $pasi = [];
+        foreach ($this->fisiereInghetare($dosarSite) as $nume => $fisier) {
+            $inghetare = Inghetare::dinFisier($fisier);
+            if ($inghetare->site() !== $site) {
+                throw new Eroare('dosarul site-ului (SITE_DATE_DOSAR) are înghețarea setărilor site-ului „' . $inghetare->site()
+                    . '” (' . $nume . '.json), nu a lui „' . $site . '”; refuz să rulez pașii altui site', Eroare::CONFIGURARE);
+            }
+            $id = 'site/' . $site . '/' . $nume;
+            $pasi[] = [
+                'id' => $id,
+                'ord' => 0,
+                'proprietar' => 'site',
+                'tip' => 'site',
+                'blocanta' => false,
+                'descriere' => 'Înghețarea setărilor (' . $nume . '.json: ' . count($inghetare->setari()) . ' setări, din '
+                    . $inghetare->sursa() . ($inghetare->provizoriu() !== null ? ', PROVIZORIE' : '') . ')',
+                'sus' => static function (Schema $s) use ($inghetare, $id): void {
+                    $inghetare->aplica($s, $id);
+                },
+                'sha256' => $inghetare->sha256(),
+                'fisier' => $fisier,
+            ];
+        }
         $dosar = $this->dosar . '/site/' . $site;
         if (is_dir($dosar)) {
             foreach ($this->intrari($dosar) as $fisier) {
@@ -122,33 +151,97 @@ final class Registru
                 if (preg_match('/^[a-z0-9][a-z0-9_-]*\.php$/', $fisier) !== 1) {
                     throw new Eroare('registrul migrărilor: site/' . $site . '/' . $fisier . ' nu are un nume valid (litere mici, cifre, _ și -)', Eroare::CONFIGURARE);
                 }
+                if (preg_match(self::TIPAR_INGHETARE_PHP, $fisier) === 1) {
+                    throw new Eroare('registrul migrărilor: site/' . $site . '/' . $fisier . ' are numele pasului de înghețare a setărilor, '
+                        . 'care vine din pachetul site-ului (setari-inghetate.json); alt nume', Eroare::CONFIGURARE);
+                }
                 $pasi[] = $this->incarca($dosar . '/' . $fisier, 'site/' . $site . '/' . substr($fisier, 0, -4), 0, 'site', true);
             }
         }
-        return $this->pasiSite[$site] = $pasi;
+        return $this->pasiSite[$cheieMemo] = $pasi;
     }
 
     /**
-     * Toate id-urile cu fișier pe disc (migrările și pașii tuturor site-urilor) și sha-ul lor,
-     * fără să le încarce: pentru „o migrare aplicată a dispărut”.
+     * Fișierele de înghețare din pachetul unui site, în ordinea aplicării: `setari-inghetate.json`, apoi
+     * `setari-inghetate-2.json`, `-3` … Un alt nume `setari-inghetate*.json` → codul 2 (alte fișiere, de exemplu
+     * o notă `.md`, nu contează).
+     *
+     * @return array<string, string> numele pasului (fără .json) → calea fișierului
+     */
+    public function fisiereInghetare(string $dosarSite): array
+    {
+        if ($dosarSite === '' || !is_dir($dosarSite)) {
+            return [];
+        }
+        $fisiere = [];
+        foreach ($this->intrari($dosarSite) as $nume) {
+            if (!str_starts_with($nume, 'setari-inghetate') || !str_ends_with($nume, '.json') || !is_file($dosarSite . '/' . $nume)) {
+                continue;
+            }
+            if (preg_match(Inghetare::TIPAR_FISIER, $nume, $m) !== 1) {
+                throw new Eroare('pachetul site-ului: ' . $nume . ' nu e un nume de înghețare (setari-inghetate.json, setari-inghetate-2.json …)',
+                    Eroare::CONFIGURARE);
+            }
+            $fisiere[(int) ($m[1] ?? 1)] = $nume;
+        }
+        ksort($fisiere);
+        $rezultat = [];
+        foreach ($fisiere as $nume) {
+            $rezultat[substr($nume, 0, -5)] = rtrim($dosarSite, '/') . '/' . $nume;
+        }
+        return $rezultat;
+    }
+
+    /**
+     * Site-ul al cărui pachet e în $dosarSite, după înghețarea lui (null = pachet fără înghețare).
+     * Toate fișierele de înghețare trebuie să fie ale aceluiași site (altfel codul 2).
+     */
+    public function sitePachet(string $dosarSite): ?string
+    {
+        $site = null;
+        foreach ($this->fisiereInghetare($dosarSite) as $nume => $fisier) {
+            $alSau = Inghetare::dinFisier($fisier)->site();
+            if ($site !== null && $alSau !== $site) {
+                throw new Eroare('pachetul site-ului are înghețări pentru două site-uri („' . $site . '”, „' . $alSau . '” în ' . $nume . '.json)',
+                    Eroare::CONFIGURARE);
+            }
+            $site = $alSau;
+        }
+        return $site;
+    }
+
+    /** Site-ul unui pas de înghețare a setărilor (id `site/<site>/setari-inghetate[-N]`), sau null pentru orice alt id. */
+    public static function pasInghetare(string $id): ?string
+    {
+        return preg_match('#^site/([a-z0-9][a-z0-9-]*)/setari-inghetate(?:-([2-9]|[1-9]\d+))?$#', $id, $m) === 1 ? $m[1] : null;
+    }
+
+    /**
+     * Toate id-urile cu fișier pe disc (migrările și pașii tuturor site-urilor; înghețarea doar a site-ului
+     * dat, din pachetul lui) și sha-ul lor, fără să le încarce: pentru „o migrare aplicată a dispărut”.
      *
      * @return array<string, string>
      */
-    public function fisiere(): array
+    public function fisiere(?string $site = null, string $dosarSite = ''): array
     {
         $fisiere = [];
         foreach ($this->migrari() as $m) {
             $fisiere[$m['id']] = $m['sha256'];
         }
-        $dosarSite = $this->dosar . '/site';
-        if (is_dir($dosarSite)) {
-            foreach ($this->intrari($dosarSite) as $site) {
-                if (!is_dir($dosarSite . '/' . $site)) {
+        if ($site !== null) {
+            foreach ($this->pasiSite($site, $dosarSite) as $pas) {
+                $fisiere[$pas['id']] = $pas['sha256'];
+            }
+        }
+        $dosarPasi = $this->dosar . '/site';
+        if (is_dir($dosarPasi)) {
+            foreach ($this->intrari($dosarPasi) as $alCui) {
+                if (!is_dir($dosarPasi . '/' . $alCui)) {
                     continue;
                 }
-                foreach ($this->intrari($dosarSite . '/' . $site) as $fisier) {
+                foreach ($this->intrari($dosarPasi . '/' . $alCui) as $fisier) {
                     if (str_ends_with($fisier, '.php')) {
-                        $fisiere['site/' . $site . '/' . substr($fisier, 0, -4)] = self::sha($dosarSite . '/' . $site . '/' . $fisier);
+                        $fisiere['site/' . $alCui . '/' . substr($fisier, 0, -4)] = self::sha($dosarPasi . '/' . $alCui . '/' . $fisier);
                     }
                 }
             }

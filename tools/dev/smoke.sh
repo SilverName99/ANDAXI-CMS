@@ -213,10 +213,11 @@ fi
 incarca_starile
 
 # Fără server: suprafața fiecărei licențe de test față de fișierele din git (tools/dev/instantanee/),
-# mecanismul diferențelor declarate ale comparației cu baza și verificarea fișierelor de migrare
-# (plus DDL-ul din cod față de lista celui vechi; asteptat.json și proprietarii, pe o bază goală cms_mig_v_*).
+# mecanismul diferențelor declarate ale comparației cu baza, verificarea fișierelor de migrare
+# (plus DDL-ul din cod față de lista celui vechi; asteptat.json și proprietarii, pe o bază goală cms_mig_v_*)
+# și înghețarea setărilor site-urilor vechi.
 scrie ""
-scrie "== Instantaneul rutelor, diferențele declarate și fișierele de migrare"
+scrie "== Instantaneul rutelor, diferențele declarate, fișierele de migrare și înghețarea setărilor"
 confirma "instantaneul rutelor (tools/dev/instantaneu-rute.php)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/instantaneu-rute.php"
 confirma "diferențele declarate, marcajele de port și anteturile din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
 if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/verifica-migrari.php" > "$TMP/verifica-migrari.log" 2>&1; then
@@ -226,6 +227,16 @@ else
     ESECURI=$((ESECURI + 1))
     scrie "  EȘEC  fișierele de migrare și DDL-ul din cod (tools/dev/verifica-migrari.php):"
     head -20 "$TMP/verifica-migrari.log" | sed 's/^/        /' | tee -a "$RAPORT"
+fi
+# Înghețarea setărilor site-urilor vechi (WP-06): o setare nouă sau schimbată în codul comun fără decizia ei pentru
+# Bioscem, Biovitality, vertij și grafoanaytis pică aici (docs/MIGRARI.md, „Înghețarea setărilor”).
+if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/inghetare/verifica-inghetare.php" > "$TMP/verifica-inghetare.log" 2>&1; then
+    TRECUTE=$((TRECUTE + 1))
+    scrie "  OK    înghețarea setărilor site-urilor vechi (tools/inghetare/verifica-inghetare.php): $(tail -1 "$TMP/verifica-inghetare.log" | sed 's/^verifica-inghetare: //')"
+else
+    ESECURI=$((ESECURI + 1))
+    scrie "  EȘEC  înghețarea setărilor site-urilor vechi (tools/inghetare/verifica-inghetare.php):"
+    grep -E 'EȘEC|EROARE' "$TMP/verifica-inghetare.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
 fi
 
 # 2. Serverul, cu contorul de instrucțiuni (App\Support\ContorSql): la final, nicio cerere nu trebuie să fi trimis

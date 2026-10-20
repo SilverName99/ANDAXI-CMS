@@ -259,6 +259,7 @@ rețeaua lui în `IP_PROXY_DE_INCREDERE`. O limită numără pe `IpClient::cheie
 | `BT_IPAY_MODE`, `BT_IPAY_TEST_*`, `BT_IPAY_LIVE_*` | `test`, gol, gol | aplicația (doar modul de test) |
 | `LICENTA_SITE`, `LICENTA_CHEIE_PUBLICA` | `verificare`, gol (cheia o face WP-08) | licența |
 | `SITE_DATE_DOSAR` | `<dosarul codului>/site-uri/bioscem` | harta adreselor vechi și regulile SEO |
+| `SITE_SLUG` | `bioscem` | `scripts/migreaza.php` (pașii site-ului: înghețarea setărilor din pachet; fără el, cu pachetul Bioscem, migrările se opresc cu codul 2). Un `.env` scris înainte (fără cheie) o primește de mână sau cu `--rescrie` ([MIGRARI.md](MIGRARI.md), „Înghețarea setărilor”) |
 | `ADMIN_DEFAULT_PASSWORD` | gol | nefolosit (adminul îl face încărcarea) |
 
 `configureaza.php` scrie fișierul atomic (temporar 0600, apoi `rename`) și verifică înainte că fiecare

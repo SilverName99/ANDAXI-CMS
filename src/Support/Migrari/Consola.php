@@ -178,6 +178,10 @@ final class Consola
                 $iesire[] = 'întrerupte: ' . implode(', ', $r['in_curs']);
             }
             $iesire[] = 'runner activ acum: ' . ($r['runner_activ'] ? 'da' : 'nu');
+            if (isset($r['stare'][Runner::CHEIE_PASI_SITE])) {
+                $iesire[] = 'pașii site-ului „' . $r['stare'][Runner::CHEIE_PASI_SITE] . '” (înghețarea setărilor) n-au terminat: garda spune in_urma '
+                    . 'până la --aplica --site=' . $r['stare'][Runner::CHEIE_PASI_SITE];
+            }
             if (isset($r['stare']['ultima_rulare'])) {
                 $iesire[] = 'ultima rulare: ' . $r['stare']['ultima_rulare'];
             }

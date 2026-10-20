@@ -17,6 +17,8 @@ declare(strict_types=1);
  * Opțiuni: --json (ieșire pentru mașini: actualizeaza.sh, CRM-ul); --permite-blocante
  * (migrările care pot opri scrierile într-un tabel; doar cu site-ul în MENTENANTA);
  * --permite-contract (ștergeri, la un release după ce niciun cod nu mai folosește obiectul);
+ * --permite-provizoriu (o înghețare a setărilor sau un parametru al site-ului încă neconfirmat:
+ * doar pe verificare, la repetiția adoptării);
  * --buget=300 (secunde; după ele nu mai începe nicio operație: codul 13, se rulează din nou);
  * --asteptare-lacat=5 (secunde de așteptat după un tabel ocupat, apoi se reîncearcă);
  * --pana-la=<id> (se oprește după migrarea dată); --site=<site> (implicit SITE_SLUG din
@@ -27,7 +29,7 @@ declare(strict_types=1);
  * lacătul; 4 baza nu e a unui site ANDAXI; 10 (--plan) migrări de aplicat; 11 migrări blocante
  * sau de tip contract fără --permite-…; 12 o migrare aplicată s-a schimbat sau a dispărut;
  * 13 bugetul de timp s-a terminat; 14 verificarea a găsit un obiect lipsă; 15 lipsește un
- * parametru al site-ului.
+ * parametru al site-ului (sau valorile private ale înghețării setărilor, sau unul e provizoriu).
  *
  * Nu afișează niciodată parole, DSN-uri sau valori din rânduri: doar nume de obiecte și numere.
  * Rulează fără sesiune PHP (bootstrap.php, în linia de comandă).
@@ -52,8 +54,8 @@ $config = require $radacina . '/config/app.php';
 
 $ajutor = <<<TEXT
 Folosire: php scripts/migreaza.php --plan|--aplica|--verifica|--stare|--amprenta [opțiuni]
-  --json  --permite-blocante  --permite-contract  --buget=300  --asteptare-lacat=5
-  --pana-la=<id>  --site=<site>
+  --json  --permite-blocante  --permite-contract  --permite-provizoriu  --buget=300
+  --asteptare-lacat=5  --pana-la=<id>  --site=<site>
 Pe larg: docs/MIGRARI.md
 TEXT;
 
@@ -74,6 +76,8 @@ foreach (array_slice($argv, 1) as $argument) {
         $optiuni['permite_blocante'] = true;
     } elseif ($argument === '--permite-contract') {
         $optiuni['permite_contract'] = true;
+    } elseif ($argument === '--permite-provizoriu') {
+        $optiuni['permite_provizoriu'] = true;
     } elseif (preg_match('/^--buget=(\d+(\.\d+)?)$/', $argument, $m) === 1) {
         $optiuni['buget'] = (float) $m[1];
     } elseif (preg_match('/^--asteptare-lacat=(\d+)$/', $argument, $m) === 1 && (int) $m[1] >= 1) {

@@ -62,6 +62,12 @@ final class Schema
         return $this->executie->simulare;
     }
 
+    /** --permite-provizoriu (doar pe verificare): o înghețare sau un parametru provizoriu al site-ului se aplică totuși. */
+    public function permiteProvizoriu(): bool
+    {
+        return $this->executie->permiteProvizoriu;
+    }
+
     // ------------------------------------------------------------ inspectare
 
     public function existaTabel(string $tabel): bool
@@ -558,6 +564,69 @@ final class Schema
     }
 
     /**
+     * O setare a site-ului (tabelul `settings`), doar într-un pas al site-ului (înghețarea setărilor,
+     * Inghetare::aplica): `lipsa` o scrie doar dacă lipsește (INSERT IGNORE), `lipsa_sau_gol` și peste o
+     * valoare goală (UPDATE … WHERE TRIM(value) = ''). O setare care există rămâne a clientului. Planul
+     * arată ce s-ar scrie ($arata: valoarea scurtată, sau „valoare privată”) și ce există deja; jurnalul
+     * doar cheia. Instrucțiunea și numărătoarea ei, în aceeași tranzacție (ca la date()).
+     */
+    public function setare(string $cheie, string $valoare, string $mod, string $arata): void
+    {
+        if ($this->executie->tip !== 'site') {
+            throw new Eroare($this->executie->id . ': setare() merge doar într-un pas al site-ului (înghețarea setărilor)', Eroare::MIGRARE);
+        }
+        if (preg_match('/^[a-z0-9][a-z0-9_]{0,119}$/', $cheie) !== 1 || !in_array($mod, ['lipsa', 'lipsa_sau_gol'], true)) {
+            throw new Eroare($this->executie->id . ': setare(): cheie (litere mici, cifre, _) și mod lipsa | lipsa_sau_gol', Eroare::MIGRARE);
+        }
+        $obiect = 'settings.' . $cheie . ' (' . $mod . ')';
+        // În simulare, pe o bază nouă tabelul vine abia din nucleu/0001: citeste() dă gol, deci „se scrie”.
+        $rand = $this->citeste('SELECT `value` FROM settings WHERE `key` = ?', [$cheie]);
+        $exista = $rand !== [];
+        // TRIM al serverului taie doar spațiile (nu și tab-uri sau rânduri noi): aceeași regulă și aici.
+        $goala = $exista && trim((string) $rand[0]['value'], ' ') === '';
+        if ($exista && !($mod === 'lipsa_sau_gol' && $goala)) {
+            $this->noteaza('fara_efect', 'setare', $obiect, 'există');
+            return;
+        }
+        if ($this->executie->simulare) {
+            $this->noteaza('date', 'setare', $obiect, ($exista ? 'se completează (e goală): ' : 'se scrie: ') . $arata);
+            return;
+        }
+        ($this->executie->inainte)();
+        $start = microtime(true);
+        $randuri = $this->cuReincercari('setare', $obiect, function () use ($cheie, $valoare, $mod): int {
+            $this->db->beginTransaction();
+            try {
+                $stmt = $this->db->prepare('INSERT IGNORE INTO settings (`key`, `value`) VALUES (?, ?)');
+                $stmt->execute([$cheie, $valoare]);
+                $randuri = $stmt->rowCount();
+                if ($randuri === 0 && $mod === 'lipsa_sau_gol') {
+                    $stmt = $this->db->prepare("UPDATE settings SET `value` = ? WHERE `key` = ? AND TRIM(`value`) = ''");
+                    $stmt->execute([$valoare, $cheie]);
+                    $randuri = $stmt->rowCount();
+                }
+                if ($randuri > 0) {
+                    ($this->executie->progres)(1, null);
+                }
+                $this->comite('date');
+                return $randuri;
+            } catch (Throwable $e) {
+                if ($this->db->inTransaction()) {
+                    $this->db->rollBack();
+                }
+                throw $e;
+            }
+        });
+        $ms = (microtime(true) - $start) * 1000;
+        if ($randuri > 0) {
+            $this->cuEfect('setare', $obiect, 'date', $ms, false);
+        } else {
+            // Între citire și scriere a pus-o altcineva (codul vechi, în timpul adoptării): rămâne a lui.
+            $this->noteaza('fara_efect', 'setare', $obiect, 'există');
+        }
+    }
+
+    /**
      * O schimbare de date pe tot tabelul, pe bucăți după cheia primară (numerică): $pas($db, $de, $pana)
      * face rândurile cu $de < pk <= $pana și poate întoarce câte a schimbat. Fiecare bucată și
      * cursorul ei se scriu în aceeași tranzacție, deci după o întrerupere (sau la capătul
@@ -636,7 +705,9 @@ final class Schema
     /**
      * Un răspuns pe care îl știe doar site-ul, din `migrari.json` din dosarul site-ului
      * (SITE_DATE_DOSAR; în repo: site-uri/<site>/migrari.json). Lipsește → codul 15, înainte
-     * să se schimbe ceva (planul o vede deja).
+     * să se schimbe ceva (planul o vede deja). Un parametru trecut la `_provizoriu` ({cheie: motiv},
+     * un răspuns încă neconfirmat de proprietar) e tot codul 15, afară de --permite-provizoriu
+     * (repetiția pe verificare).
      */
     public function parametruSite(string $cheie): string
     {
@@ -648,6 +719,12 @@ final class Schema
         if (!is_array($date) || !array_key_exists($cheie, $date) || !is_scalar($date[$cheie]) || (string) $date[$cheie] === '') {
             throw new ParametruLipsa($this->executie->id . ': lipsește parametrul site-ului „' . $cheie . '” (migrari.json din dosarul site-ului'
                 . (is_file($fisier) ? '' : ', care nu există') . ')');
+        }
+        $provizorii = is_array($date['_provizoriu'] ?? null) ? $date['_provizoriu'] : [];
+        if (array_key_exists($cheie, $provizorii) && !$this->executie->permiteProvizoriu) {
+            throw new ParametruLipsa($this->executie->id . ': parametrul site-ului „' . $cheie . '” e provizoriu ('
+                . (is_string($provizorii[$cheie]) ? $provizorii[$cheie] : 'neconfirmat') . '); după confirmare se scoate din „_provizoriu” '
+                . 'în migrari.json; pe verificare, --permite-provizoriu');
         }
         return (string) $date[$cheie];
     }
@@ -1046,7 +1123,7 @@ final class Schema
                 return $operatie();
             } catch (PDOException $e) {
                 if (!in_array(self::cod($e), self::REINCERCARI, true)) {
-                    if ($fel === 'date' || $fel === 'pe_bucati' || $fel === 'tabel' || $fel === 'sterge_tabel') {
+                    if ($fel === 'date' || $fel === 'setare' || $fel === 'pe_bucati' || $fel === 'tabel' || $fel === 'sterge_tabel') {
                         throw $this->eroare($fel, $obiect, $e);
                     }
                     throw $e;

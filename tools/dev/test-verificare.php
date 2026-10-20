@@ -509,14 +509,15 @@ try {
     $verifica('configurarea pe baza goală: cod 0, „Gata”', $r['cod'] === 0 && str_contains($r['iesire'], 'Gata. Pasul următor:'), trim($r['iesire']));
     $verifica('.env doar pentru proprietar (0600), fără fișiere temporare rămase', is_file($copie . '/.env')
         && (fileperms($copie . '/.env') & 0777) === 0600 && glob($copie . '/.env.*') === []);
-    $verifica('.env are cheile copiei (SITE_COPIE_VERIFICARE=1, APP_URL din dosar, baza, poarta, plăți de test, licența verificare)',
+    $verifica('.env are cheile copiei (SITE_COPIE_VERIFICARE=1, APP_URL din dosar, baza, poarta, plăți de test, licența verificare, pachetul și SITE_SLUG bioscem)',
         ($cheiEnv['SITE_COPIE_VERIFICARE'] ?? '') === '1' && ($cheiEnv['APP_URL'] ?? '') === 'https://' . $gazda
         && ($cheiEnv['APP_ENV'] ?? '') === 'verificare' && ($cheiEnv['APP_DEBUG'] ?? '') === 'false'
         && ($cheiEnv['DB_DATABASE'] ?? '') === 'cms_verif_gol' && ($cheiEnv['DB_PASSWORD'] ?? '') === $parolaDb
         && ($cheiEnv['VERIFICARE_POARTA_UTILIZATOR'] ?? '') === 'verificare' && ($cheiEnv['BT_IPAY_MODE'] ?? '') === 'test'
         && ($cheiEnv['BT_IPAY_LIVE_PASS'] ?? 'x') === '' && ($cheiEnv['LICENTA_SITE'] ?? '') === 'verificare'
         && ($cheiEnv['VERIFICARE_ZILE_PASTRARE'] ?? '') === '7' && ($cheiEnv['VERIFICARE_EMAIL'] ?? '') === $emailProprietar
-        && ($cheiEnv['SITE_DATE_DOSAR'] ?? '') === realpath($copie) . '/site-uri/bioscem', json_encode(array_keys($cheiEnv)) ?: '');
+        && ($cheiEnv['SITE_DATE_DOSAR'] ?? '') === realpath($copie) . '/site-uri/bioscem' && ($cheiEnv['SITE_SLUG'] ?? '') === 'bioscem',
+        json_encode(array_keys($cheiEnv)) ?: '');
     $verifica('parola porții doar ca hash în .env', !str_contains($textEnv, $parolaPoarta)
         && password_verify($parolaPoarta, (string) ($cheiEnv['VERIFICARE_POARTA_HASH'] ?? '')));
     $secrete[] = (string) ($cheiEnv['VERIFICARE_POARTA_HASH'] ?? '');

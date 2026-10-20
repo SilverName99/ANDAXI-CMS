@@ -421,6 +421,8 @@ $sectiuni = array(
         'LICENTA_SITE' => 'verificare',
         'LICENTA_CHEIE_PUBLICA' => '',
         'SITE_DATE_DOSAR' => $radacinaReala . '/site-uri/bioscem',
+        // Pachetul are înghețarea setărilor: migreaza.php cere site-ul (docs/MIGRARI.md, „Înghețarea setărilor”).
+        'SITE_SLUG' => 'bioscem',
         'ADMIN_DEFAULT_PASSWORD' => '',
     ),
 );

@@ -1,0 +1,231 @@
+{
+    "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
+    "format": 2,
+    "site": "biovitality",
+    "sursa": "Mutare-Site-Biovitality@cc231e4",
+    "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
+    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "setari": {
+        "bunny_app_download_path": {
+            "valoare": "aplicatie/BiovitalityFiles.exe",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_gallery_folder": {
+            "valoare": "galerie",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_lock_expire_hours": {
+            "valoare": "24",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_timeout": {
+            "valoare": "20",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_upload_target": {
+            "valoare": "local",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_versions_keep": {
+            "valoare": "10",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "bunny_work_folder": {
+            "valoare": "documente",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "contact_form_recipients": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "privat": true,
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol sau fără nicio adresă validă: codul vechi trimite la adresa lui (SiteController::destinatariFormularContact), codul comun la a Bioscem; de aici lipsa_sau_gol"
+        },
+        "cookie_banner_text": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['cookie_banner_text'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_first_name": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_first_name'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_last_name": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_last_name'] ?? … (rezerva din cod)"
+        },
+        "customer_registration_field_phone": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['customer_registration_field_phone'] ?? … (rezerva din cod)"
+        },
+        "fan_kg_max_colet": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "BV cc231e4: ErpSync::coleteCalcul trimite kgMaxColet = 0.0 (comanda nu se împarte în colete după greutate); port-biovitality.md §7, decizia OD-09",
+            "vechi": "lipsește",
+            "nucleu": "cod \"13\""
+        },
+        "maintenance_message": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['maintenance_message'] ?? … (rezerva din cod)"
+        },
+        "maintenance_title": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['maintenance_title'] ?? … (rezerva din cod)"
+        },
+        "order_email_from_name": {
+            "valoare": "Biovitality",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol în bază: codul comun pune „Bioscem” (EmailAutomation, emailul linkului de plată), codul vechi numele lui la linkul de plată; de aici lipsa_sau_gol"
+        },
+        "order_number_mode": {
+            "valoare": "legacy",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "BV src/Support/OrderNumber.php: MOD_IMPLICIT = MOD_VECHI (numerele „BV” + data + aleator) cât timp nimeni n-a ales din panou; port-biovitality.md §7",
+            "vechi": "cod expresie",
+            "nucleu": "implicit \"sequential\""
+        },
+        "order_number_next": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['order_number_next'] ?? … (rezerva din cod)"
+        },
+        "store_name": {
+            "valoare": "Biovitality Shop",
+            "mod": "lipsa_sau_gol",
+            "din": "cod",
+            "sursa": "$settings['store_name'] ?? … (rezerva din cod)",
+            "nota": "Gol în bază: codul vechi pune numele lui în titlul paginilor (views/layout.php), codul comun „Bioscem Shop”; de aici lipsa_sau_gol"
+        },
+        "stripe_enabled": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "BV oferă plata cu cardul prin Stripe fără comutator, doar cu stripe_secret_key (SiteController); codul comun arată Stripe doar cu stripe_enabled = 1 și cheia secretă, deci aceeași condiție; port-biovitality.md §7",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "welcome_popup_enabled": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "BV n-are fereastra de bun venit (nicio cheie welcome_popup_* în codul vechi); rezerva codului comun e tot „0” (views/layout.php)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        }
+    },
+    "fara_inghetare": {
+        "bank_transfer_enabled": {
+            "motiv": "Plata prin transfer bancar e nouă în codul comun: fără rând e oprită (rezerva „0”)",
+            "vechi": "lipsește",
+            "nucleu": "cod \"0\""
+        },
+        "bt_ipay_admin_only": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "bt_ipay_autodeposit_hours": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"96\""
+        },
+        "bt_ipay_cron_max_apeluri": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "cod expresie"
+        },
+        "bt_ipay_deposit_on_erp": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "bt_ipay_enabled": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "bt_ipay_expire_minutes": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"60\""
+        },
+        "bt_ipay_reminder_hours": {
+            "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"72\""
+        },
+        "contact_email": {
+            "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: JSON-LD-ul codului comun lasă emailul afară dacă e gol, iar Maintenance.php cade pe order_email_from_email, o cheie care nu există",
+            "vechi": "cod expresie",
+            "nucleu": "cod \"\" | expresie"
+        },
+        "euplatesc_currency": {
+            "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"RON\""
+        },
+        "euplatesc_enabled": {
+            "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
+        "fan_awb_single": {
+            "motiv": "BV face deja un singur AWB pe comandă (cc231e4: unSingurAwb = true în ErpSync::coleteCalcul): același comportament ca implicitul codului comun",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "welcome_popup_body": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit sha256:566998599b36315d (659 caractere)"
+        },
+        "welcome_popup_title": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Bine ați venit pe noul site BIOSCEM!\""
+        },
+        "welcome_popup_version": {
+            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        }
+    }
+}

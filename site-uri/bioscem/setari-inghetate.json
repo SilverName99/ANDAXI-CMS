@@ -1,0 +1,19 @@
+{
+    "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
+    "format": 2,
+    "site": "bioscem",
+    "sursa": "Nou-site-bioscem@9f59e79",
+    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "setari": {
+        "erp_trimite_din": {
+            "valoare": "",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizia G-M8 (planul Etapei 1, OD-50): Bioscem trimite de mult comenzile în ERP, deci fără prag; pasul de activare al pluginului erp (WP-05) scrie data de acum doar dacă cheia lipsește cu totul",
+            "vechi": "lipsește",
+            "nucleu": "lipsește",
+            "nota": "Fără rândul gol, prima cerere de după adoptare ar pune pragul la data adoptării, iar comenzile Bioscem încă netrimise în ERP n-ar mai pleca (WP-12, E1)"
+        }
+    },
+    "fara_inghetare": {}
+}

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 /**
  * Testele migrărilor (docs/MIGRARI.md, „Testele”): runner-ul însuși, pe migrări de jucărie scrise de
- * test (WP-02, WP-03: secțiunile U, D, R, T, S), și migrările adevărate din database/migrari pe
+ * test (WP-02, WP-03: secțiunile U, D, R, T, S; WP-06: I), și migrările adevărate din database/migrari pe
  * schemele celor cinci coduri, T1–T11 (WP-04: secțiunea M).
  *
  *   tools/dev/php.sh tools/dev/test-migrari.php                # tot (poarta G-mig din porti.sh)
- *   tools/dev/php.sh tools/dev/test-migrari.php --runner       # doar runner-ul (U, D, R, T, S; poarta G-runner)
+ *   tools/dev/php.sh tools/dev/test-migrari.php --runner       # doar runner-ul (U, D, R, I, T, S; poarta G-runner)
  *   tools/dev/php.sh tools/dev/test-migrari.php --migrari      # doar migrările adevărate (U, M, S; fără D și R)
  *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-migrari.php   # cu PHP-ul minim
  *   … --doar-mariadb                                           # fără MySQL 8 (parțial, spus în rezultat)
@@ -44,6 +44,11 @@ declare(strict_types=1);
  *    #sql-* rămas, sql_mode în ieșire și în jurnal, verificarea (14), configurarea (2), pașii
  *    site-ului, --json, nicio valoare din rânduri (nici cu ghilimele sau \ în ea, din date(),
  *    peBucati(), 1062 și 1366) și nicio parolă în ieșire.
+ * I. Pasul de înghețare a setărilor (WP-06; în tools/dev/migrari/test-inghetare-runner.php): pachetul fără --site
+ *    sau al altui site (2), fără fișierul privat (15), planul, aplicarea (lipsa, lipsa_sau_gol, o valoare prezentă
+ *    neatinsă, TRIM doar pe spații), a doua oară nimic, fișierul aplicat schimbat (12), corectura -2, provizoriu
+ *    (15, apoi cu --permite-provizoriu), pasi_site în _platforma_stare până termină pașii site-ului, setare() doar
+ *    în pașii site-ului.
  * T. Aceeași amprentă pe MariaDB și pe MySQL 8 după aceleași migrări; o conexiune MariaDB care
  *    primește id-ul de obiect al uneia MySQL eliberate (Amprenta nu-și amintește serverul vechi).
  * S. Linia de comandă nu mai lasă fișiere de sesiune (bootstrap.php): 3 rulări ale lui
@@ -1357,6 +1362,9 @@ PHP);
         $cod === 0 && $faraSite === ['nucleu/0001_note'] && $cod2 === 0 && ($r['site/demo/nota-demo']['rezultat'] ?? '') === 'aplicata'
         && (int) $r['site/demo/nota-demo']['ord'] === 0 && $sb->query('SELECT text FROM note')->fetchColumn() === 'demo' && $cod3 === 0
         && $sb->query("SELECT valoare FROM _platforma_stare WHERE cheie = 'ultima_ord'")->fetchColumn() === '1', $out . $out2 . json_encode($r));
+
+    // ---------------------------------------------------------------- I
+    require __DIR__ . '/migrari/test-inghetare-runner.php';
 }
 
 // =====================================================================

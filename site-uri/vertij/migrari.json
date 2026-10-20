@@ -1,0 +1,4 @@
+{
+    "_despre": "Parametrii migrărilor pentru acest site: răspunsurile pe care le știe doar site-ul, citite de Schema::parametruSite (docs/MIGRARI.md, „Parametrii site-ului”). Un parametru încă neconfirmat stă și în „_provizoriu” (cheie → motiv): fără --permite-provizoriu migrarea se oprește cu codul 15.",
+    "_nota": "vertij nu are nevoie de niciun parametru: schema codului VT n-are tabelul linkurilor de plată, deci link_plata/0009 îl face nou, fără linkuri vechi."
+}

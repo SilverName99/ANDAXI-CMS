@@ -25,6 +25,11 @@ declare(strict_types=1);
  *     făcută ca înainte (tools/dev/migrari/pe-vechi.php), dashboard-ul trimite peste 100, iar după baseline 0. Pe aceeași
  *     bază, înainte de baseline (fara_registru, licența „toate”), cererile și cronul ERP nu rulează pașii de activare
  *     (fără erp_trimite_din, fără înregistrare); după baseline îi rulează prima cerere.
+ *  F. Înghețarea setărilor (WP-06), cu un pachet de site inventat: install.php cu SITE_SLUG o aplică înaintea setărilor
+ *     implicite (valorile ei rămân, cea privată din privat/, pragul ERP gol neatins de pasul de activare); cu pachetul și fără
+ *     SITE_SLUG 1, baza neatinsă; o adoptare oprită între ultima migrare și înghețare lasă garda in_urma (pasi_site), deci
+ *     cererile și cronul ERP nu scriu pragul; după --aplica înghețarea scrie doar ce lipsește, iar pasul ERP găsește pragul gol.
+ *     În A și garda cu pasi_site.
  *
  * Doar date inventate (@exemplu.ro), pe baze cms_inst_* (făcute și șterse aici), cu licența într-un dosar al testului
  * (CMS_DEV_LICENTA_DOSAR: licența locală nu se atinge) și un server pe CMS_DEV_PORT+8, oprit la final. Doar MariaDB
@@ -349,6 +354,13 @@ $dbB->exec("UPDATE _platforma_stare SET valoare = '" . $ultimaOrd . "' WHERE che
 $dbI->exec("DELETE FROM _platforma_stare WHERE cheie = 'ultima_ord'");
 Garda::uita();
 $verifica('_platforma_stare fără rândul ultima_ord: in_urma', Garda::stare($conectare('cms_inst_intrerupt')) === Garda::IN_URMA);
+$dbB->exec("INSERT INTO _platforma_stare (cheie, valoare, actualizata_la) VALUES ('pasi_site', 'proba', NOW())");
+Garda::uita();
+$cuPasi = Garda::stare($conectare('cms_inst_b'));
+$dbB->exec("DELETE FROM _platforma_stare WHERE cheie = 'pasi_site'");
+Garda::uita();
+$verifica('pașii site-ului neterminați (pasi_site, WP-06), cu ultima_ord la zi: in_urma; fără rândul lor: la_zi',
+    $cuPasi === Garda::IN_URMA && Garda::stare($conectare('cms_inst_b')) === Garda::LA_ZI, $cuPasi);
 Garda::uita();
 $verifica('fără conexiune: eroare', Garda::stare(null) === Garda::EROARE);
 $dbK = $conectare('cms_inst_b');
@@ -563,6 +575,81 @@ $verifica('dashboard-ul pe baza ca înainte: ' . ($inainteDeBaseline['ddl'] ?? '
     . ($inainteDeBaseline['instructiuni'] ?? '?') . '), după baseline (--aplica, cod ' . $ca . '): ' . ($dupaBaseline['ddl'] ?? '?') . ' (din '
     . ($dupaBaseline['instructiuni'] ?? '?') . ')',
     $ok && $ca === 0 && ($inainteDeBaseline['ddl'] ?? 0) > 100 && ($dupaBaseline['ddl'] ?? -1) === 0, $oa);
+$opresteServerul();
+
+// =====================================================================
+// F. Înghețarea setărilor la adoptare (WP-06)
+// =====================================================================
+$scrie('');
+$scrie('== F. Înghețarea setărilor (pasul site/<site>/setari-inghetate, WP-06)');
+// Un pachet de site inventat („proba”): pragul ERP gol (ca Bioscem), un nume, o adresă privată (domeniul rezervat .test).
+$pachetF = $lucru . '/pachet-proba';
+@mkdir($pachetF . '/privat', 0770, true);
+$textF = json_encode(['_despre' => 'Test', 'format' => 2, 'site' => 'proba', 'sursa' => 'cod-vechi-proba@abc1234', 'setari' => [
+    'contact_form_recipients' => ['valoare' => 'adresa1@exemplu.ro', 'mod' => 'lipsa_sau_gol', 'din' => 'implicit', 'privat' => true, 'sursa' => 'test'],
+    'erp_trimite_din' => ['valoare' => '', 'mod' => 'lipsa', 'din' => 'manual', 'sursa' => 'test: fără prag, ca Bioscem'],
+    'store_name' => ['valoare' => 'Magazin Proba', 'mod' => 'lipsa_sau_gol', 'din' => 'manual', 'sursa' => 'test'],
+    'welcome_popup_enabled' => ['valoare' => '0', 'mod' => 'lipsa', 'din' => 'manual', 'sursa' => 'test'],
+], 'fara_inghetare' => new stdClass()], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+file_put_contents($pachetF . '/setari-inghetate.json', $textF);
+$adresaF = 'birou.proba@client-inventat.test';
+file_put_contents($pachetF . '/privat/setari-inghetate.json', json_encode(['site' => 'proba', 'sursa' => 'cod-vechi-proba@abc1234',
+    'pentru' => hash('sha256', $textF), 'setari' => ['contact_form_recipients' => $adresaF]]));
+$cuPachetF = ['SITE_DATE_DOSAR' => $pachetF];
+$setareF = static fn (PDO $db, string $cheie): ?string => ($v = $db->query("SELECT `value` FROM settings WHERE `key` = " . $db->quote($cheie))->fetchColumn()) === false
+    ? null : (string) $v;
+$licenta(['toate']);
+
+// Un site nou instalat cu pachetul lui: înghețarea rulează în migrări, înaintea setărilor implicite, deci valorile ei rămân.
+$dbN = $bazaNoua('cms_inst_pachet');
+[$cn, $on, $en] = $php('cms_inst_pachet', ['scripts/install.php'], $cuPachetF + ['SITE_SLUG' => 'proba']);
+Garda::uita();
+$verifica('install.php cu pachetul site-ului (SITE_SLUG=proba): 0; înghețarea aplicată înaintea setărilor implicite (contact_form_recipients '
+    . 'are valoarea privată, nu implicitul nucleului; welcome_popup_enabled 0, nu 1); pragul ERP gol rămas gol la pașii de activare; garda la_zi; '
+    . 'valoarea privată nicăieri în ieșire',
+    $cn === 0 && $setareF($dbN, 'contact_form_recipients') === $adresaF && $setareF($dbN, 'welcome_popup_enabled') === '0'
+    && $setareF($dbN, 'store_name') === 'Magazin Proba' && $setareF($dbN, 'erp_trimite_din') === ''
+    && str_contains($on, 'Activare erp: erp_trimite_din exista (neatins)')
+    && $unu($dbN, "SELECT rezultat FROM _platforma_migrari WHERE id = 'site/proba/setari-inghetate'") === 'aplicata'
+    && Garda::stare($dbN) === Garda::LA_ZI && !str_contains($on . $en, 'client-inventat'), 'cod ' . $cn . ' | ' . $on . $en);
+$dbN2 = $bazaNoua('cms_inst_pachet_fara_site');
+[$cn2, $on2, $en2] = $php('cms_inst_pachet_fara_site', ['scripts/install.php'], $cuPachetF + ['SITE_SLUG' => null]);
+$verifica('install.php cu pachetul unui site dar fără SITE_SLUG: 1 (înghețarea n-ar rula), baza neatinsă',
+    $cn2 === 1 && str_contains($on2 . $en2, '--site=proba') && $unu($dbN2, 'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()') === '0',
+    'cod ' . $cn2 . ' | ' . $on2 . $en2);
+
+// Adoptarea unui site vechi: baseline-ul oprit între ultima migrare și înghețare (aici --pana-la; pe server bugetul de timp sau
+// un proces omorât). Garda spune in_urma până termină pașii site-ului, deci pasul ERP nu scrie pragul înaintea înghețării.
+$dbA = $bazaNoua('cms_inst_adoptare');
+[$cpv, $opv] = $php('cms_inst_adoptare', ['tools/dev/migrari/pe-vechi.php']);
+[$ca1, $oa1] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba', '--pana-la=blog/0024_legaturi_categorii'], $cuPachetF);
+Garda::uita();
+$stareA1 = Garda::stare($dbA);
+$verifica('baza ca înainte, baseline cu --site=proba oprit înaintea înghețării: 0, ultima_ord la zi, dar pasi_site rămâne și garda spune in_urma',
+    $cpv === 0 && $ca1 === 0 && $unu($dbA, "SELECT valoare FROM _platforma_stare WHERE cheie = 'ultima_ord'") === (string) $ultimaOrd
+    && $unu($dbA, "SELECT valoare FROM _platforma_stare WHERE cheie = 'pasi_site'") === 'proba' && $stareA1 === Garda::IN_URMA,
+    $stareA1 . ' ' . $opv . $oa1);
+$verifica('serverul testului pe baza în adoptare', $pornesteServerul('cms_inst_adoptare'));
+$cerere('GET', '/');
+[$codErpA, $outErpA, $errErpA] = $php('cms_inst_adoptare', ['scripts/erp-sync.php']);
+$urmeA = $urmeActivare($dbA);
+$verifica('cât pașii site-ului n-au terminat, o cerere și cronul ERP nu rulează pașii de activare (fără erp_trimite_din, fără înregistrare)',
+    $codErpA === 0 && $urmeA === ['prag' => null, 'inregistrare' => [], 'jurnal' => []], json_encode($urmeA) . $outErpA . $errErpA);
+$contactInainte = $setareF($dbA, 'contact_form_recipients');
+$popupInainte = $setareF($dbA, 'welcome_popup_enabled');
+[$ca2, $oa2, $ea2] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba'], $cuPachetF);
+Garda::uita();
+$verifica('--aplica --site=proba din nou: înghețarea aplicată doar unde lipsește (erp_trimite_din gol, store_name), setările deja în baza '
+    . 'veche (contact_form_recipients, welcome_popup_enabled) neatinse; pasi_site ștearsă, garda la_zi',
+    $ca2 === 0 && $setareF($dbA, 'erp_trimite_din') === '' && $setareF($dbA, 'store_name') === 'Magazin Proba'
+    && $contactInainte !== null && $setareF($dbA, 'contact_form_recipients') === $contactInainte && $setareF($dbA, 'welcome_popup_enabled') === $popupInainte
+    && $unu($dbA, "SELECT COUNT(*) FROM _platforma_stare WHERE cheie = 'pasi_site'") === '0' && Garda::stare($dbA) === Garda::LA_ZI
+    && !str_contains($oa2 . $ea2, 'client-inventat'), $oa2 . $ea2);
+$cerere('GET', '/');
+$urmeA = $urmeActivare($dbA);
+$verifica('prima cerere de după: pașii de activare rulează, pasul ERP găsește pragul gol al înghețării și nu-l atinge (fără prag, ca Bioscem)',
+    $urmeA['prag'] === '' && $urmeA['inregistrare'] === ['acorduri_gdpr', 'erp'] && in_array('erp_trimite_din exista (neatins)', $urmeA['jurnal'], true),
+    json_encode($urmeA, JSON_UNESCAPED_UNICODE));
 $opresteServerul();
 
 $scrie('');

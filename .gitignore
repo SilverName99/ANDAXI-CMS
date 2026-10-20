@@ -31,3 +31,8 @@
 # cât repo-ul e public (decizia OD-49). Pe server, rezultatele stau în storage/verificare/sonde/
 # (ignorat mai sus, ca tot storage/).
 /tools/dev/migrari/vechi/privat/
+
+# Valorile private ale înghețării setărilor unui site (adresele de email, telefoanele, numele clientului:
+# tools/inghetare/genereaza-setari.php le scrie aici, în fișierul din git rămân înlocuitori @exemplu.ro).
+# Cât repo-ul e public nu intră în git (decizia OD-49); pe server stau lângă pachetul site-ului.
+/site-uri/*/privat/

@@ -1,0 +1,8 @@
+{
+    "_despre": "Parametrii migrărilor pentru acest site: răspunsurile pe care le știe doar site-ul, citite de Schema::parametruSite (docs/MIGRARI.md, „Parametrii site-ului”). Un parametru încă neconfirmat stă și în „_provizoriu” (cheie → motiv): fără --permite-provizoriu migrarea se oprește cu codul 15.",
+    "_nota": "link_plata.procesator_linkuri_existente: codul GR e al BV (linkuri doar cu Stripe); dacă GR a trimis vreodată linkuri o spune numărătoarea de pe server (G2), decizia OD-11.",
+    "link_plata.procesator_linkuri_existente": "stripe",
+    "_provizoriu": {
+        "link_plata.procesator_linkuri_existente": "OD-11 nu e încă răspunsă: recomandarea e „stripe” (codul BV) dacă numărătoarea G2 arată 0 linkuri; cu linkuri, procesatorul lor"
+    }
+}

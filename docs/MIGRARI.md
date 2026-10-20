@@ -13,8 +13,10 @@ făcută de cod (`tools/dev/migrari/genereaza-fixture.php`); din WP-04, **testel
 cinci coduri (și pe cele live, când vine sonda) și **verificarea fișierelor de migrare**
 (`tools/dev/verifica-migrari.php`, în testul de fum); din WP-05, **instalarea prin migrări**, **garda**
 `Garda::stare` (cu `/health` și bannerul din admin), **pașii de activare** ai pluginurilor și **contorul de
-instrucțiuni** din dezvoltare, toate mai jos. Ce vine: pasul de înghețare a setărilor unui site (WP-06), care
-trebuie să fi rulat înainte ca garda să spună `la_zi` (pașii de activare, mai jos, îl așteaptă).
+instrucțiuni** din dezvoltare; din WP-06, **înghețarea setărilor** fiecărui site vechi (pasul
+`site/<site>/setari-inghetate`, cu generatorul și verificarea lui din `tools/inghetare/`) și **parametrii
+site-ului** (`migrari.json`), toate mai jos. Garda spune `la_zi` doar după pașii site-ului, deci pașii de
+activare (mai jos) așteaptă și înghețarea.
 
 ## Pe scurt
 
@@ -38,7 +40,8 @@ Opțiuni:
 | `--buget=300` | secunde; după ele nu mai începe nicio operație (codul 13), iar rularea următoare continuă. Hostinger poate opri procesele lungi |
 | `--asteptare-lacat=5` | secunde de așteptat după un tabel ocupat (`lock_wait_timeout`), apoi se reîncearcă după 2, 4, 8, 16, 30 s. Pe server, implicit e o zi întreagă, timp în care coada cererilor site-ului ar sta în spatele ALTER-ului |
 | `--pana-la=<id>` | se oprește după migrarea dată (repetiții, teste); verificarea finală se sare, fiindcă schema e voit incompletă |
-| `--site=<site>` | rulează și pașii acelui site (`database/migrari/site/<site>/`); implicit `SITE_SLUG` din `.env` (în `.env.example`). Cele două nu au voie să difere |
+| `--site=<site>` | rulează și pașii acelui site (`database/migrari/site/<site>/` și înghețarea din pachetul lui, `SITE_DATE_DOSAR`); implicit `SITE_SLUG` din `.env` (în `.env.example`). Cele două nu au voie să difere. Un pachet cu înghețare fără site ales, sau pachetul altui site: codul 2 |
+| `--permite-provizoriu` | doar pe verificare (repetiția adoptării): aplică și o înghețare `provizoriu` sau un parametru din `_provizoriu` (mai jos, „Înghețarea setărilor”); fără ea, codul 15 înainte de orice schimbare |
 
 Ieșirea nu conține niciodată parole, DSN-uri sau valori din rânduri, doar nume de obiecte și numere.
 Un mesaj al serverului care ar arăta o valoare („Duplicate entry 'x@y.ro' for key 'uniq_email'”) se
@@ -63,15 +66,15 @@ sub 10.6): nu intră în amprentă și se șterg de mână, după o copie a baze
 |---|---|---|
 | 0 | nimic de făcut (`--plan`), totul aplicat și verificat (`--aplica`), verificarea trecută | — |
 | 1 | eroare într-o migrare (mesajul spune migrarea și operația), sau un tabel ocupat după toate reîncercările | citești mesajul; rularea din nou e sigură |
-| 2 | configurare: fără `DB_DATABASE`, conexiune refuzată, server prea vechi, PHP sub `php_min`, registru greșit (număr folosit de două ori, dosar care nu e un proprietar, fișier fără forma cerută), argument greșit | repari configurarea sau codul |
+| 2 | configurare: fără `DB_DATABASE`, conexiune refuzată, server prea vechi, PHP sub `php_min`, registru greșit (număr folosit de două ori, dosar care nu e un proprietar, fișier fără forma cerută), argument greșit; o înghețare fără forma cerută, al altui site decât `--site`, sau un pachet cu înghețare fără `--site`/`SITE_SLUG` | repari configurarea, codul sau pachetul site-ului |
 | 3 | alt runner aplică migrări pe aceeași bază, sincronizarea FAN ține tabelele FAN (`lacatFan`), sau `information_schema` tot nu arată un tabel pe care altă conexiune îl schimbă chiar atunci (mai jos, la amprentă) | rulezi din nou mai târziu |
 | 4 | baza nu e a unui site ANDAXI (are tabele, dar nu `settings` + `admins` + `pages` și nici `_platforma_migrari`; de exemplu un WordPress) | verifici `DB_DATABASE`; nimic n-a fost atins |
 | 10 | `--plan`: sunt migrări de aplicat, toate fără blocare | `--aplica` cu site-ul pornit |
 | 11 | sunt migrări blocante sau de tip contract (`--plan`), refuzate fără `--permite-blocante` / `--permite-contract` (`--aplica`, cu baza neatinsă) | fereastra de mentenanță |
-| 12 | o migrare aplicată pe această bază s-a schimbat în cod, a dispărut din cod, sau nu se potrivește cu `migrari.lock` | o schimbare se face într-o migrare nouă; una retrasă se trece la `retrase` |
+| 12 | o migrare aplicată pe această bază s-a schimbat în cod, a dispărut din cod, sau nu se potrivește cu `migrari.lock`; o înghețare aplicată s-a schimbat sau lipsește din pachet | o schimbare se face într-o migrare nouă; una retrasă se trece la `retrase`; o corectură a înghețării e `setari-inghetate-2.json` |
 | 13 | bugetul de timp s-a terminat; starea e consecventă | rulezi din nou (continuă de unde a rămas) |
 | 14 | după aplicare (sau la `--verifica`) lipsește un obiect cerut de `asteptat.json`, ori `asteptat.json` lipsește deși există migrări | citești lista `LIPSĂ` |
-| 15 | lipsește un parametru al site-ului (`migrari.json` din dosarul site-ului) | îl scrii în pachetul site-ului |
+| 15 | lipsește un parametru al site-ului (`migrari.json` din dosarul site-ului), sau e încă provizoriu; înghețarea e provizorie, sau îi lipsesc valorile private (`privat/setari-inghetate.json`, ori e al altui fișier) | îl scrii în pachetul site-ului; provizoriu: îl confirmi (pe verificare, `--permite-provizoriu`); privat: copiezi fișierul privat lângă pachet |
 
 ## Fișierele
 
@@ -83,8 +86,13 @@ database/migrari/
   migrari.lock                       {"migrari": {id: sha256}, "retrase": {id: motiv}}: ce s-a publicat
   asteptat.json                      amprenta schemei după toate migrările, pe o bază goală
   ultima.php                         numărul ultimei migrări, pentru garda de la fiecare cerere (WP-05)
+site-uri/<site>/setari-inghetate.json   înghețarea setărilor site-ului (pasul site/<site>/setari-inghetate, WP-06);
+                                     corecturile de după adoptare: setari-inghetate-2.json, -3 …
+site-uri/<site>/migrari.json         parametrii site-ului (Schema::parametruSite)
+site-uri/<site>/privat/              valorile private ale înghețării (OD-49), în afara git-ului
 src/Support/Migrari/                 Registru, Runner, Schema, Server, Amprenta, Executie, Eroare, ParametruLipsa;
-                                     Consola (ce au în comun migreaza.php și install.php), Garda (garda de la fiecare cerere)
+                                     Consola (ce au în comun migreaza.php și install.php), Garda (garda de la fiecare cerere),
+                                     Inghetare (fișierul înghețării: forma, valorile private, aplicarea)
 scripts/migreaza.php                 linia de comandă
 scripts/install.php                  o bază nouă: migrările, seed-ul neutru, setările, pașii de activare, primul administrator
 config/activari.php                  pașii de activare ai pluginurilor (src/Support/Activari.php)
@@ -101,6 +109,9 @@ tools/dev/migrari/pe-vechi.php       local: o bază făcută ca înainte de migr
 tools/dev/test-migrari.php           testele (runner-ul și T1–T11; T1–T11 stau în tools/dev/migrari/test-baza.php)
 tools/dev/test-instalare.php         testele instalării, ale gărzii, ale pașilor de activare și ale contorului de instrucțiuni
 tools/dev/verifica-migrari.php       verificarea fișierelor de migrare și a DDL-ului din cod (T11, în testul de fum)
+tools/inghetare/genereaza-setari.php generatorul înghețărilor (WP-06); lib/ = comparația și cititorul unui cod
+tools/inghetare/verifica-inghetare.php   verificarea înghețărilor (în testul de fum și în G-mig)
+tools/dev/test-inghetare.php         testele generatorului și ale verificării (pasul în runner: secțiunea I din test-migrari.php)
 ```
 
 - **id** = `<proprietar>/<NNNN>_<nume>`. **NNNN** e unic în tot dosarul (oricare proprietar) și dă
@@ -152,7 +163,7 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
 | `peBucati($t, $pk, $marime, $pas)` | `$pas($db, $de, $pana)` pe intervale ale cheii primare; fiecare bucată și cursorul ei se scriu în aceeași tranzacție, deci după o întrerupere nicio bucată nu se face de două ori; pauză între bucăți; se oprește la capătul bugetului. Fără DDL în pas | |
 | `existaTabel/existaColoana/existaIndex`, `dacaTabel($t, fn)`, `dacaColoana($t, $c, fn)` | pentru pașii peste obiecte vechi (o coloană veche de copiat) | |
 | `citeste($sql, $parametri)` | doar SELECT/SHOW | |
-| `parametruSite($cheie)` | codul 15, înainte de orice schimbare | valoarea din `migrari.json` din dosarul site-ului (`SITE_DATE_DOSAR`) |
+| `parametruSite($cheie)` | codul 15, înainte de orice schimbare | valoarea din `migrari.json` din dosarul site-ului (`SITE_DATE_DOSAR`; mai jos, „Parametrii site-ului”); una din `_provizoriu`: codul 15, afară de `--permite-provizoriu` |
 | `lacatFan('localitati'\|'strazi', 60)` | | ia lacătul sincronizării FAN (același nume ca `FanNomenclator`) până la finalul migrării; neobținut → codul 3 |
 | `avertisment($text)` | un rând în plan și la aplicare (doar structură și numere) | |
 
@@ -187,7 +198,9 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
    O migrare blocantă (declarată, sau cu o operație clasată „copie”) sau de tip contract fără voie →
    codul 11 **înainte de orice schimbare** (nici tabelele de urmărire nu se creează).
 5. Tabelele de urmărire (singurul DDL în afara migrărilor).
-6. Fiecare migrare: întâi cele întrerupte, apoi cele noi, după număr; pașii site-ului la urmă.
+6. Fiecare migrare: întâi cele întrerupte, apoi cele noi, după număr; pașii site-ului la urmă (întâi
+   înghețarea setărilor, apoi corecturile ei, apoi pașii PHP ai site-ului). Cât timp un pas al site-ului n-a
+   terminat, `_platforma_stare.pasi_site` spune asta gărzii (mai jos, „Înghețarea setărilor”).
    Rândul ei e `in_curs`, apoi `aplicata` (a schimbat ceva) sau `detectata` (totul exista deja: o
    bază veche, sau o copie restaurată fără rândurile de urmărire). Fiecare ALTER încearcă
    `ALGORITHM=INSTANT`, apoi `ALGORITHM=INPLACE, LOCK=NONE`; fără clauză (copierea tabelului) doar cu
@@ -211,8 +224,9 @@ starea, sub lacăt, cu codul ei.
 `cursor_json`, `cod_versiune`, `server_versiune`, `inceputa_la`, `terminata_la`, `durata_ms`) și
 `_platforma_stare` (`ultima_ord` = cea mai mare ord până la care toate migrările din cod sunt
 aplicate sau detectate; `amprenta` = sha256 al listei „id:sha” a codului care a rulat; `server`;
-`ultima_rulare`). Prefixul `_platforma_` e al runner-ului; tabelele lui nu intră în amprentă. Ele
-călătoresc în copia bazei, deci o bază restaurată continuă exact de unde era.
+`ultima_rulare`; `pasi_site` = site-ul ai cărui pași n-au terminat, doar cât există așa ceva). Prefixul
+`_platforma_` e al runner-ului; tabelele lui nu intră în amprentă. Ele călătoresc în copia bazei, deci o bază
+restaurată continuă exact de unde era.
 
 ## Amprenta și `asteptat.json`
 
@@ -369,8 +383,11 @@ Un site nou se instalează pe o bază **goală** (`DB_*` și `ADMIN_DEFAULT_PASS
 
 Pe o bază care **are deja administratori** refuză: „Baza există (are administratori); nu o instalez din nou
 și n-am scris nimic”, codul 1. Un site existent își aduce schema la zi cu `migreaza.php --aplica`, iar
-setările îi rămân ale lui: scrierea setărilor implicite peste ele, înaintea înghețării (WP-06), ar schimba
-ce vede clientul (DB-23 din planul de-Bioscem). Administratorul se scrie ultimul, deci o instalare oprită la
+setările îi rămân ale lui: scrierea setărilor implicite peste ele, înaintea înghețării (mai jos), ar schimba
+ce vede clientul (DB-23 din planul de-Bioscem). Cu un pachet care are înghețare (`SITE_DATE_DOSAR`),
+`SITE_SLUG` e obligatoriu (fără el: codul 1, cu motivul runner-ului), iar înghețarea rulează la pasul 1, înaintea
+setărilor implicite: pe o bază nouă a unui site vechi (de exemplu repetiția de pe verificare) valorile codului
+vechi câștigă. Administratorul se scrie ultimul, deci o instalare oprită la
 jumătate (bugetul de timp al migrărilor, un proces omorât) se rulează din nou și continuă. Orice problemă
 iese cu **1** și mesajul pe stderr (fără parolă, PHP sub `php_min`, baza nu răspunde, o bază străină, o
 migrare care n-a mers: raportul runner-ului); `seed.php` la fel (fără bază sau fără `seed.sql`: 1). Până la
@@ -384,7 +401,7 @@ conexiune), cum stă baza față de migrările din cod (`database/migrari/ultima
 | Stare | Când |
 |---|---|
 | `la_zi` | `_platforma_stare.ultima_ord` ≥ ultima migrare din cod (și o bază înaintea codului, după o revenire la codul de dinainte: migrările doar adaugă) |
-| `in_urma` | runner-ul a lucrat pe bază, dar n-a ajuns la ultima migrare din cod (cod nou urcat, `--aplica` nerulat sau oprit), sau `_platforma_stare` fără `ultima_ord` |
+| `in_urma` | runner-ul a lucrat pe bază, dar n-a ajuns la ultima migrare din cod (cod nou urcat, `--aplica` nerulat sau oprit), `_platforma_stare` fără `ultima_ord`, sau pașii site-ului (înghețarea) n-au terminat (`pasi_site`) |
 | `fara_registru` | baza n-a văzut niciodată runner-ul (fără `_platforma_stare`): un site pe codul vechi, de dinainte de adoptare |
 | `eroare` | fără conexiune, conexiunea căzută, fără drept de citire, sau lipsește `ultima.php` |
 
@@ -453,9 +470,10 @@ administrator).
 **Doar pe o bază la zi cu migrările** (garda: `la_zi`). Pe una `fara_registru`, `in_urma` sau `eroare` pașii
 nu scriu nimic, nici înregistrarea, și așteaptă prima rulare de după `scripts/migreaza.php --aplica`: o copie
 de dinainte de adoptare restaurată sau încărcată pe verificare fără runner, codul comun urcat înaintea lui
-`--aplica`, o adoptare oprită la jumătate (bugetul de timp). Altfel pasul ERP-ului ar scrie momentul de
-atunci în `erp_trimite_din` înaintea înghețării setărilor site-ului (WP-06), care scrie doar o cheie lipsă și
-nu l-ar mai putea face gol: comenzile ERP încă netrimise de dinainte (Bioscem, Biovitality) n-ar mai pleca
+`--aplica`, o adoptare oprită la jumătate (bugetul de timp), inclusiv una oprită între ultima migrare și
+înghețarea setărilor (`pasi_site`, mai jos). Altfel pasul ERP-ului ar scrie momentul de atunci în
+`erp_trimite_din` înaintea înghețării setărilor site-ului, care scrie doar o cheie lipsă și nu l-ar mai putea
+face gol: comenzile ERP încă netrimise de dinainte (Bioscem, Biovitality) n-ar mai pleca
 după WP-12 (E1). Pe o astfel de bază funcțiile `ensure*` lucrează ca înainte și readuc ele pagina
 `/acorduri-gdpr`, deci nu lipsește nimic. Starea gărzii se citește doar când e ceva de făcut. Pașii rulează:
 
@@ -473,6 +491,157 @@ iar rezultatul lui nu are voie să depindă de pluginuri (testele T1–T11 îl c
 `stare-aplicata.json` (dosarul licenței, unde `Plugins` notează schimbările de stări): o bază nouă, una
 restaurată dintr-o copie mai veche sau una schimbată sub același dosar (dezvoltarea) își primesc pașii la
 prima rulare, iar o cerere care vede schimbarea fără bază (baza căzută) nu-i pierde.
+
+## Înghețarea setărilor (WP-06, MIG-09, DB-02)
+
+O setare care lipsește din tabelul `settings` al unui site ia valoarea din cod: `Settings::DEFAULTS` sau rezerva
+scrisă lângă citire (`$settings['x'] ?? 'y'`). Codul comun nu are aceleași valori ca codul vechi al fiecărui site
+(fereastra de bun venit pornită, destinatarii formularului de contact ai Bioscem, numele magazinului …), deci la
+adoptare un site ar vedea altceva exact unde n-a scris niciodată o valoare. **Înghețarea** scrie, o singură dată, la
+adoptare, valorile pe care codul vechi le folosea efectiv, doar acolo unde codul comun ar folosi altceva și doar unde
+baza n-are deja rândul: o setare pe care site-ul o are e a clientului și nu se atinge.
+
+### Fișierul: `site-uri/<site>/setari-inghetate.json`
+
+Pe server stă în pachetul site-ului (`SITE_DATE_DOSAR`). Îl scrie generatorul (mai jos), determinist; îl citește
+`App\Support\Migrari\Inghetare` (runner-ul, generatorul și verificarea folosesc aceeași clasă). Formatul 2:
+
+```json
+{
+    "_despre": "…",
+    "format": 2,
+    "site": "biovitality",
+    "sursa": "Mutare-Site-Biovitality@cc231e4",
+    "provizoriu": "de ce sursa nu e încă cea confirmată (lipsește după confirmare)",
+    "amprenta_nucleu": "<sha256 al valorilor codului comun la generare>",
+    "setari": {
+        "store_name": {"valoare": "Biovitality Shop", "mod": "lipsa_sau_gol", "din": "cod", "sursa": "…", "nota": "…"},
+        "contact_form_recipients": {"valoare": "adresa1@exemplu.ro", "mod": "lipsa_sau_gol", "din": "implicit", "privat": true, "sursa": "Settings::DEFAULTS"},
+        "welcome_popup_enabled": {"valoare": "0", "mod": "lipsa", "din": "manual", "sursa": "…", "vechi": "lipsește", "nucleu": "implicit \"1\""}
+    },
+    "fara_inghetare": {
+        "bt_ipay_enabled": "de ce nu se îngheață (forma scurtă)",
+        "contact_email": {"motiv": "…", "vechi": "…", "nucleu": "…"}
+    }
+}
+```
+
+| Câmp | Ce înseamnă |
+|---|---|
+| `mod` | `lipsa` (implicit; și forma scurtă `"cheie": "valoare"`): se scrie doar dacă rândul lipsește (`INSERT IGNORE`). `lipsa_sau_gol`: și peste o valoare goală (`TRIM(value) = ''`, doar spații, ca `TRIM` al serverului), unde codul vechi cădea tot pe valoarea lui când găsea gol |
+| `din` | `implicit` (din `Settings::DEFAULTS` al codului vechi) și `cod` (o singură rezervă în codul vechi) le scrie generatorul; `manual` (valoarea scrisă de mână) și `extras` (scoasă din codul vechi prin `extrage`) sunt decizii |
+| `privat` | valoarea adevărată e o dată a clientului (o adresă de email, un telefon, un nume): în git e un înlocuitor inventat (`adresa1@exemplu.ro`, `0700 000 001`, `Valoare demo`), iar valoarea adevărată stă în `privat/setari-inghetate.json` (mai jos; decizia OD-49) |
+| `sursa` | de unde vine valoarea (pentru om); la o decizie e obligatorie |
+| `vechi`, `nucleu` | ce arătau cele două coduri când s-a luat decizia (mai jos, „Deciziile”) |
+| `nota` | o explicație, păstrată de la o generare la alta |
+| `fara_inghetare` | cheile la care codurile diferă, dar nu se îngheață nimic, fiecare cu motivul (o funcție nouă oprită oricum, un text care nu se arată, aceeași comportare) |
+| `provizoriu` | sursa nu e încă cea confirmată ca live (raportul „live față de repo” din Etapa 0): pasul se oprește cu codul **15**, afară de `--permite-provizoriu` (doar repetiția pe verificare) |
+| `inchis` | fișierul pleacă pe site-ul live (se pune înaintea adoptării, nu după: ar schimba sha-ul); generatorul nu-l mai rescrie, verificarea nu-l mai cere reprodus |
+
+Valorile private, `privat/setari-inghetate.json` lângă fișier (ignorat de git: `/site-uri/*/privat/` în
+`.gitignore`), au forma `{"_despre", "site", "sursa", "pentru": "<sha256 al fișierului de mai sus>", "setari":
+{cheie: valoarea adevărată}}`. Le scrie generatorul (refuză o cale din repo pe care git n-o ignoră); pe server se
+copiază de mână lângă pachet, ca `.env` (nu vin din git). Fără ele, sau cu `pentru` al altui fișier (generat din nou
+de atunci), pasul se oprește cu codul **15** înainte de orice scriere: nu se scrie niciodată un înlocuitor pe un site.
+
+### Pasul `site/<site>/setari-inghetate`
+
+Cu `--site=<site>` (sau `SITE_SLUG`), registrul face din fișierul pachetului un pas al site-ului, ca unul din
+`database/migrari/site/<site>/`: id `site/<site>/setari-inghetate`, tip `site`, sha256 al fișierului (cu sfârșituri
+de rând LF; fișierul privat nu intră, el poate lipsi după adoptare). Rulează înaintea pașilor PHP ai site-ului, după
+toate migrările (tabelul `settings` îl face `nucleu/0001`). Pentru fiecare cheie, `Schema::setare` (doar în pașii
+site-ului) se uită întâi în `settings`: planul arată `se scrie: „…”`, `se completează (e goală): „…”` sau `există`
+(o valoare privată apare doar ca „valoare privată”), iar aplicarea face exact atât, cu un rând de jurnal pe cheie.
+Rândul din `_platforma_migrari` e `aplicata` (a scris ceva) sau `detectata` (totul exista).
+
+- **Aplicat o dată, neschimbat după:** un fișier cu alt sha decât cel aplicat, sau care lipsește din pachet, oprește
+  runner-ul cu codul **12**. O corectură de după adoptare e un fișier nou, `setari-inghetate-2.json` (apoi `-3` …),
+  scris de mână, în aceeași formă: pasul lui, `site/<site>/setari-inghetate-2`, rulează după cel de bază.
+- **Pachetul și site-ul se potrivesc:** fișierul altui site (`"site"` altul decât `--site`) = codul **2**; un pachet
+  cu înghețare, dar fără `--site`/`SITE_SLUG` = codul **2** (altfel adoptarea ar trece fără înghețare). Un pas PHP
+  cu numele `setari-inghetate*.php` = codul 2 (numele e al pasului din pachet).
+- **Garda așteaptă pașii site-ului:** cât timp un pas al site-ului nu e terminat, rularea scrie, înaintea primei
+  migrări, `_platforma_stare.pasi_site` (numele site-ului) și o șterge când toți sunt `aplicata`/`detectata` (o rulare fără
+  site n-o atinge). Garda citește
+  rândul în aceeași interogare cu `ultima_ord` și spune `in_urma` cât există. O adoptare oprită de bugetul de timp
+  între ultima migrare și înghețare rămâne deci `in_urma`: pașii de activare (pragul ERP) nu scriu nimic înaintea
+  înghețării, iar `/health` răspunde 503 până la `--aplica` din nou. `--stare` arată rândul.
+- **Instalarea** (`install.php`, cu `SITE_SLUG`) rulează pasul ca orice migrare, înaintea setărilor implicite.
+
+### Generatorul (`tools/inghetare/genereaza-setari.php`)
+
+```sh
+tools/dev/php.sh tools/inghetare/genereaza-setari.php --toate               # cele patru site-uri, din clonele lor
+tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=bioscem
+tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=vertij --repo=<clonă>@<commit>
+tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=biovitality --provizoriu="<motiv>"   # sau --confirmat
+tools/dev/php.sh tools/inghetare/genereaza-setari.php --toate --verifica    # nu scrie: e la zi?
+```
+
+Codul vechi e clona site-ului (`CMS_DEV_REPO_BS`, `_BV`, `_VT`, `_GR` din `tools/dev/comun.sh`) la „ultimul commit
+revizuit” din [de-portat.md](de-portat.md), copiat cu `git archive` în `$CMS_DEV_DIR/inghetare/` (clona nu se
+atinge). Fiecare cod (cel vechi și acesta) se citește într-un proces PHP separat (`lib/citeste-cod.php`):
+`Settings::DEFAULTS` și, cu tokenizer-ul, fiecare rezervă `$settings['x'] ?? <text>` (și `$xxxSettings[…]`,
+`$this->settings[…]`) din `src/`, `views/`, `scripts/`, `config/`, `public/` și `bootstrap.php`. Valoarea efectivă a
+unei chei într-un cod e: implicitul, altfel rezerva (una singură), altfel „ambiguu” (mai multe rezerve diferite sau o
+expresie), altfel lipsă; lipsa și textul gol sunt același lucru. Unde cele două coduri diferă:
+
+- **codul vechi are o valoare sigură** (implicit sau o singură rezervă): intrarea o scrie generatorul, cu valoarea lui
+  (`din`: `implicit`/`cod`); modul și nota se păstrează de la o generare la alta;
+- **altfel** (codul vechi nu avea setarea, sau o citea cu rezerve diferite): o **decizie**, scrisă de mână în fișier:
+  o setare `din: manual` (cu `valoare`), `din: extras` (cu `extrage`: `{"fisier": "<cale în codul vechi>", "tipar":
+  "<regex cu un grup>"}` sau `{"apel": "App\\…::metoda", "argumente": […], "cale": "…", "json": true}`, rulat în
+  procesul codului vechi), sau o intrare în `fara_inghetare` cu motivul. O decizie lipsă = eroare, fișierul nu se scrie.
+
+**Deciziile** sunt legate de ce arătau atunci cele două coduri (`vechi`, `nucleu`, scrise de generator): o valoare
+nouă a codului comun sau alt commit al codului vechi face din decizie o eroare („decizie de refăcut”, cu valorile de
+atunci și de acum). Se confirmă ștergând `vechi`/`nucleu` din intrare (generatorul le scrie din nou) sau se schimbă.
+
+**Datele private (OD-49):** o valoare cu o adresă de email care nu e `@exemplu.ro` sau cu un număr de telefon, ori o
+intrare marcată `privat`, intră în git cu un înlocuitor, iar valoarea adevărată în `privat/`. O valoare scrisă de mână
+nu poate fi privată (ar sta în git): vine din codul vechi, cu `extras`. Nicio valoare privată nu apare în ieșirea
+uneltelor.
+
+**`amprenta_nucleu`** = sha256 al valorilor codului comun (implicitele și rezervele) la generare. **Orice schimbare a
+lui `Settings::DEFAULTS` sau a unei rezerve din codul comun cere `genereaza-setari.php --toate`** în același commit
+(cu deciziile noi, dacă le cere): verificarea, în testul de fum și în G-mig, pică altfel, chiar fără clonele codurilor
+vechi. Un fișier `inchis` nu se mai generează: `--toate` îl sare (`SĂRIT`), `--site=<el>` e o eroare.
+
+Azi: **Bioscem** din `9f59e79` (implicitele codului Bioscem sunt exact ale codului comun: doar `erp_trimite_din` = gol,
+decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă); **Biovitality**, **vertij** și **grafoanaytis** din
+capetele ramurilor din de-portat.md, `provizoriu` până la raportul „live față de repo” din Etapa 0 (apoi `--confirmat`,
+eventual cu `--repo=` pe commit-ul confirmat, trecut întâi în de-portat.md).
+
+### Verificarea (`tools/inghetare/verifica-inghetare.php`)
+
+În testul de fum (`smoke.sh`, la început) și în poarta G-mig; `--fara-clone` sare doar reproducerea, spus în rezumat
+(fără ea, o clonă lipsă e un eșec). Pentru fiecare site: (1) fișierul și corecturile lui se citesc ca în runner și
+sunt ale acelui site; (2) nicio dată privată în git (nicio adresă în afara `@exemplu.ro`, niciun telefon, fiecare
+valoare `privat` e un înlocuitor); (3) `sursa` = „ultimul commit revizuit” din de-portat.md; (4) `amprenta_nucleu` =
+valorile de acum ale codului comun; (5) generatorul dă acum exact același fișier (și același fișier privat, dacă există
+local), deci nicio decizie nu lipsește și niciuna nu e veche; (6) `migrari.json`, mai jos. Un fișier `inchis` nu face
+(4) și (5).
+
+### Parametrii site-ului (`site-uri/<site>/migrari.json`)
+
+Răspunsurile pe care le știe doar site-ul, citite de o migrare cu `Schema::parametruSite('<cheie>')`: lipsa lor oprește
+runner-ul cu codul **15** în simulare, înainte de orice schimbare. Cheile cu `_` sunt note. Un parametru încă
+neconfirmat stă și în `_provizoriu` (cheie → motiv): codul 15, afară de `--permite-provizoriu`. Verificarea cere JSON,
+doar chei citite de migrările din `database/migrari/`, valori permise și chei din `_provizoriu` care există.
+
+| Parametru | Migrarea | Valori | Site-uri |
+|---|---|---|---|
+| `link_plata.procesator_linkuri_existente` | `link_plata/0009`: procesatorul linkurilor de plată vechi, pus în același ALTER care adaugă coloana | `euplatesc`, `btipay`, `stripe` | Biovitality `stripe` (codul BV face linkuri doar cu Stripe); grafoanaytis `stripe`, provizoriu până la OD-11 (numărătoarea G2); Bioscem și vertij nu-l cer (Bioscem are coloana, VT n-are tabelul) |
+
+### Pe server, la adoptare
+
+1. Pachetul site-ului (cu `setari-inghetate.json` și `migrari.json`) în `SITE_DATE_DOSAR`, iar `privat/` lângă el,
+   copiat de mână din dezvoltare (deploy-ul din Etapa 2 nu are voie să-l șteargă); `SITE_SLUG` în `.env`.
+2. Repetiția pe verificare, pe o copie a bazei live: `php scripts/migreaza.php --plan --permite-provizoriu`, apoi
+   `--aplica --permite-provizoriu`; planul arată fiecare cheie scrisă. Copia o încarcă încărcarea din WP-08
+   ([VERIFICARE.md](VERIFICARE.md); `configureaza.php` scrie deja `SITE_SLUG=bioscem` lângă pachetul Bioscem).
+3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe site-ul live `--plan`, apoi `--aplica` (fără
+   `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12): o corectură e `setari-inghetate-2.json`.
 
 ## O migrare nouă, pas cu pas
 
@@ -592,6 +761,21 @@ contorul pe dashboard, comenzi, produs și o comandă trimisă, plus dashboard-u
 după baseline. Raport: `storage/logs/dev/test-instalare-raport.txt`. Poarta **G-vechi** rulează comparația cu
 Bioscem (ambele licențe), testele pluginurilor, SEO și testul de fum pe fiecare pachet pe o bază făcută ca
 înainte și trecută prin baseline (`tools/dev/instaleaza.sh --pe-vechi`, baza `cms_dev_vechi`, ștearsă la final).
+Din WP-06, secțiunea F: `install.php` cu un pachet de site inventat (înghețarea înaintea setărilor implicite, valorile
+private din `privat/`), fără `SITE_SLUG` (1, baza neatinsă), o adoptare oprită între ultima migrare și înghețare
+(`--pana-la`: garda `in_urma`, pasul de activare al ERP-ului nu scrie, iar după `--aplica` găsește cheia goală).
+
+**Înghețarea** (WP-06): în runner, secțiunea I din `test-migrari.php` (pe MariaDB și MySQL 8): a doua aplicare nu
+face nimic, o valoare existentă nu se suprascrie niciodată, `lipsa_sau_gol` completează doar textul gol (din spații),
+planul cu fiecare cheie, fișierul schimbat după aplicare sau scos din pachet (12), corectura `-2` după cea de bază,
+pachetul altui site sau fără site (2), provizoriu și valorile private lipsă sau ale altui fișier (15, nimic scris),
+`pasi_site` scris și șters. Generatorul și verificarea: `tools/dev/php.sh tools/dev/test-inghetare.php` (în G-mig,
+și cu PHP-ul minim; fără bază): formatul pe fișiere greșite, fișierul privat și datele private (F: emailuri,
+telefoane, nu și bucăți dintr-un sha în hex), registrul (R: ordinea corecturilor, numele greșite, pachetul altui
+site), cititorul de cod (C: implicitele, rezervele, expresiile, `extrage`), generatorul pe un cod vechi inventat (G:
+deciziile cerute și legate de valori, privat/, provizoriu, fișierul închis, determinismul) și verificarea pe
+pachetele din repo și pe copii stricate (V: date private, sursa, `migrari.json`, un fișier închis, o setare nouă în
+codul comun, clona lipsă).
 
 ## Verificarea fișierelor de migrare (`tools/dev/verifica-migrari.php`)
 

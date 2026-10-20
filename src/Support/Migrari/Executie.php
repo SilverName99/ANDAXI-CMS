@@ -50,6 +50,12 @@ final class Executie
     public ?Closure $punctTest = null;
 
     /**
+     * --permite-provizoriu: o înghețare a setărilor sau un parametru al site-ului încă provizoriu (sursa
+     * neconfirmată) se aplică totuși. Doar pentru repetiția pe verificare; altfel codul 15.
+     */
+    public bool $permiteProvizoriu = false;
+
+    /**
      * @param Closure(): void $inainte chemat înaintea fiecărei operații care schimbă ceva (bugetul de timp)
      * @param Closure(int, ?array): void $progres o operație cu efect (+ cursorul nou, în tranzacția bucății)
      * @param Closure(): void $dupa chemat după fiecare operație cu efect (oprirea de test)

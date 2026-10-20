@@ -14,12 +14,14 @@ use Throwable;
  *    (`database/migrari/ultima.php`). O bază înaintea codului (după o revenire la codul de
  *    dinainte) e tot la zi: migrările doar adaugă, deci codul vechi merge pe schema nouă;
  *  - `in_urma`: runner-ul a lucrat pe bază, dar nu a ajuns la ultima migrare din cod (codul nou
- *    a fost urcat, `scripts/migreaza.php --aplica` încă nu a rulat sau s-a oprit);
+ *    a fost urcat, `scripts/migreaza.php --aplica` încă nu a rulat sau s-a oprit), sau pașii
+ *    site-ului (înghețarea setărilor, `_platforma_stare.pasi_site`) n-au terminat;
  *  - `fara_registru`: baza n-a văzut niciodată runner-ul (fără `_platforma_stare`): un site pe
  *    codul vechi, de dinainte de adoptare;
  *  - `eroare`: fără bază, sau citirea n-a mers (conexiunea căzută, fără drept de citire).
  *
- * O singură citire după cheia primară, ținută minte pe toată cererea (pe conexiune). O folosesc
+ * O singură citire după cheia primară (rândurile `ultima_ord` și `pasi_site`), ținută minte pe toată
+ * cererea (pe conexiune). O folosesc
  * `/health` (câmpul `schema`; 503 când e `in_urma`), bannerul din admin și cele 36 de funcții
  * `ensure*Schema`/`asigura*Schema` ale codului moștenit (regula R1): pe o bază `la_zi` ele ies pe
  * loc, deci nicio cerere nu mai trimite DDL; pe una `fara_registru`, `in_urma` sau `eroare` fac ce
@@ -60,8 +62,9 @@ final class Garda
     public static function explicatie(string $stare): string
     {
         return match ($stare) {
-            self::IN_URMA => 'Codul are migrări care n-au rulat încă pe această bază. Rulează pe server: '
-                . 'php scripts/migreaza.php --aplica (docs/MIGRARI.md). Până atunci site-ul își face singur coloanele, ca înainte.',
+            self::IN_URMA => 'Codul are migrări (sau pașii site-ului, de exemplu înghețarea setărilor) care n-au rulat încă pe această bază. '
+                . 'Rulează pe server: php scripts/migreaza.php --aplica (cu SITE_SLUG din .env; docs/MIGRARI.md). '
+                . 'Până atunci site-ul își face singur coloanele, ca înainte.',
             self::FARA_REGISTRU => 'Baza n-a trecut încă prin migrări (un site de dinainte de codul comun). Rulează pe server: '
                 . 'php scripts/migreaza.php --plan, apoi --aplica (docs/MIGRARI.md). Până atunci site-ul merge ca înainte.',
             self::EROARE => 'Starea migrărilor nu se poate citi (baza nu răspunde sau lipsește database/migrari/ultima.php).',
@@ -97,16 +100,25 @@ final class Garda
             return self::EROARE;
         }
         try {
-            $stmt = $db->query("SELECT valoare FROM " . Runner::TABEL_STARE . " WHERE cheie = 'ultima_ord'");
+            $stmt = $db->query("SELECT cheie, valoare FROM " . Runner::TABEL_STARE . " WHERE cheie IN ('ultima_ord', '"
+                . Runner::CHEIE_PASI_SITE . "')");
             if ($stmt === false) {
                 // O conexiune fără excepții (ERRMODE_SILENT): codul erorii spune dacă lipsește tabelul.
                 return (int) ($db->errorInfo()[1] ?? 0) === 1146 ? self::FARA_REGISTRU : self::EROARE;
             }
-            $valoare = $stmt->fetchColumn();
+            $randuri = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         } catch (Throwable $e) {
             $cod = $e instanceof \PDOException ? (int) ($e->errorInfo[1] ?? 0) : 0;
             return $cod === 1146 ? self::FARA_REGISTRU : self::EROARE;
         }
+        if (!is_array($randuri)) {
+            return self::EROARE;
+        }
+        // Pașii site-ului (înghețarea setărilor) au început și n-au terminat: nimic nu scrie încă setări (pașii de activare).
+        if (isset($randuri[Runner::CHEIE_PASI_SITE])) {
+            return self::IN_URMA;
+        }
+        $valoare = $randuri['ultima_ord'] ?? false;
         // Tabelul există, dar fără rând (runner-ul s-a oprit înainte să scrie starea): în urmă.
         if ($valoare === false || !is_string($valoare) || preg_match('/^\d+$/', $valoare) !== 1) {
             return self::IN_URMA;
