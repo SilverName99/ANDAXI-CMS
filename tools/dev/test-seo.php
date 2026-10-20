@@ -151,8 +151,8 @@ SeoRedirects::reseteaza();
 $reguli = SeoRedirects::reguli();
 $coduri = array_count_values(array_map(static fn (array $r): int => (int) ($r[2] ?? 0), $reguli['exacte']));
 $verifica('Bioscem: ' . count($reguli['exacte']) . ' reguli exacte (' . ($coduri[301] ?? 0) . ' × 301, ' . ($coduri[410] ?? 0) . ' × 410) și '
-    . count($reguli['prefixe']) . ' prefixe 410, ca în livrarea Bioscem (113 = 103 + 10, 6 prefixe)',
-    count($reguli['exacte']) === 113 && ($coduri[301] ?? 0) === 103 && ($coduri[410] ?? 0) === 10 && count($reguli['prefixe']) === 6);
+    . count($reguli['prefixe']) . ' prefixe 410, ca în Bioscem 9f59e79 (127 = 117 + 10: livrarea 1 și cele 14 reguli din 19 oct; 6 prefixe)',
+    count($reguli['exacte']) === 127 && ($coduri[301] ?? 0) === 117 && ($coduri[410] ?? 0) === 10 && count($reguli['prefixe']) === 6);
 $surse = [];
 $probleme = [];
 foreach ($reguli['exacte'] as $r) {

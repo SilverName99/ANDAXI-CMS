@@ -194,8 +194,10 @@ produs, logo-ul = iconița). Un fișier stricat se ignoră (o linie în jurnalul
 ```
 
 **Pachetele site-urilor** stau în `site-uri/<site>/` și se copiază în dosarul site-ului
-la instalare (sau la adoptarea codului comun). `site-uri/bioscem/`: cele 113 reguli
-ale livrării 1 (103 × 301, 10 × 410, plus 6 prefixe 410), regulile etichetelor D2/D3
+la instalare (sau la adoptarea codului comun). `site-uri/bioscem/`: 127 de reguli exacte, adică
+cele 113 ale livrării 1 (103 × 301, 10 × 410) și cele 14 × 301 aprobate de proprietar pe
+19 octombrie (Bioscem `9f59e79`: produse și etichete șterse, spre înlocuitorul verificat), plus
+6 prefixe 410; regulile etichetelor D2/D3
 (minim 3 produse, 12 etichete mici păstrate, 19 cu nume de boli scoase), numele
 „Bioscem Shop” și logo-urile încercate, `/cos-cumparaturi` (pagina de coș din
 constructorul Bioscem) blocată în robots.txt și exclusă din redirecționări.

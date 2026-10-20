@@ -15,10 +15,10 @@ mută rândul de mai jos la el, apoi comparația trebuie să iasă cu 0 fără n
 
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|
-| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `f5eafa3` (19.10.2026) | CMS pornește din `11b1040` |
-| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `cc231e4` (19.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
-| vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `ca1120c` (19.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
-| grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (19.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |
+| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `9f59e79` (20.10.2026) | CMS pornește din `11b1040` |
+| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `cc231e4` (20.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
+| vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `ca1120c` (20.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
+| grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (20.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |
 
 ## Bioscem (de la `11b1040`)
 
@@ -27,11 +27,21 @@ mută rândul de mai jos la el, apoi comparația trebuie să iasă cu 0 fără n
 | `de5c2b0` | 19.10 | AWB: numărul de colete poate fi ales în ERP la aprobare | portat (`4915478`) |
 | `80bb4a4` `678b3ac` `12a999d` `665f1da` `0df9b00` `bdec166` `6d29b37` | 19.10 | SEO livrarea 1 (robots, sitemap, adresa unică, redirecționări, date structurate, viteză, remedieri) | portat (`c2b9331`) |
 | `f5eafa3` | 19.10 | Unire ramura de pe server cu remedierile SEO | portat (unire, fără cod nou) |
+| `b632294` | 19.10 | Oferte BBD: cheia ofertei rămâne la salvarea produsului (Etapa 0b, C1, decizia OD-14) | portat (`62349a2`) |
+| `89dcc4e` | 19.10 | Blog: editorul nu mai pierde categoriile postării; duplicarea le copiază (Etapa 0b, X1, decizia OD-14) | portat (`1df3771`) |
+| `b3781a4` | 19.10 | Blog: categoria principală rămâne aceeași la re-salvare | portat (`dbd218c`) |
+| `9f59e79` | 19.10 | Redirecționări: deciziile proprietarului („da la toate”), 14 reguli 301 | portat (`site-uri/bioscem/redirecturi.json`, în commit-ul care mută aici „ultimul commit revizuit”) |
+| — | — | Contul arată doar comenzile legate de cont, nu și pe cele fără cont cu același email | nu se face pe Bioscem (decizia OD-47, 19.10): doar în codul comun, regula nucleului din WP-25; la trecere intră în `site-uri/bioscem/ce-se-schimba.md` |
 | — | 27.10 | SEO livrarea 2 (categorii pe cale, titluri, descrieri, câmpuri SEO categorii, poza principală, logo) | de portat (WP-R, A12) când apare |
 | — | 29.10 | SEO livrarea 3 (restul redirecționărilor, livrare/retur în date structurate, og:image, flux Merchant) | de portat (WP-R, A12) |
 | — | 05.11 | SEO livrarea 4 (dimensiuni poze, linkuri, noindex, H1, linkuri interne) | de portat (WP-R, A12) |
-| — | Etapa 0b | Cheia ofertei BBD păstrată la salvare (C1); categoriile articolului păstrate la salvare (X1) | dacă se fac pe Bioscem: portat prin WP-12 |
-| — | Etapa 0b | Contul arată doar comenzile legate de cont, nu și pe cele fără cont cu același email (dacă OD-47 = da) | portat prin regula nucleului din WP-25 (comenzile vechi apar după confirmarea adresei) |
+
+`b632294` și `b3781a4` merg mai departe decât Biovitality: cheile de ofertă care s-ar ciocni (o ofertă
+nouă care ar primi cheia păstrată a alteia, o cheie dublată) primesc altă variantă, o cheie care nu e
+text nu strică salvarea, iar categoria principală a unei postări existente rămâne aceeași cât timp e
+bifată. BV nu le are (`c64fc2d`, `3ea6a31`); le primește odată cu codul comun, la adoptare (rândurile
+din secțiunea Biovitality). Dovada: `tools/dev/compara-cu-baza.sh` (salvările din admin, față de
+Bioscem `9f59e79`).
 
 ## Biovitality (de la `f7d15ba`)
 
@@ -56,7 +66,7 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 | `4f65fd9` | 20.08 | Galeria din selectoare nu se mai descarcă la fiecare pagină | de portat (WP-12, C7) |
 | `0c682b3` | 21.08 | Recenzii: detectorul prinde injecțiile boolean | de portat (WP-21, C10) |
 | `855dab2` | 21.08 | Popup newsletter: CSS și JS în fișiere | de portat (WP-21, C11e) |
-| `c64fc2d` | 21.08 | Ofertele nu mai reînvie; salvarea nu mai așteaptă ERP-ul | de portat (WP-12: C1, C2, C3, C6); C5 nu se portează (înlocuit de migrări, WP-05) |
+| `c64fc2d` | 21.08 | Ofertele nu mai reînvie; salvarea nu mai așteaptă ERP-ul | C1 portat prin Bioscem `b632294` (`62349a2`; varianta Bioscem tratează în plus cheile care se ciocnesc, BV o primește la adoptare); de portat C2, C3, C6 (WP-12); C5 nu se portează (înlocuit de migrări, WP-05) |
 | `d19a8ca` | 25.08 | Panoul de căutare peste benzile de anunț | nu se portează (anulat de `6583720` în aceeași zi; BV = CMS) |
 | `6583720` | 25.08 | Revine la straturile de dinainte în layout | nu se portează (anulează `d19a8ca`) |
 | `f5486ee` `6ee0f79` `e5c2b11` `375c36b` `9945580` `282f24f` `74fd7e4` `e2de3cb` `b43ade2` `771bfa2` `5ef9fe7` `5f1abee` `168e78d` `a59d950` `9c1286b` `370f97d` `274bddd` `f9b4d78` | 26–31.08 | bunny.net, fișiere de lucru, rolul „Cloud user”, parole pe foldere, aplicația Windows | pluginul `fisiere_cloud` (Etapa 4, P1); aplicația C# în repo separat (P2) |
@@ -69,7 +79,7 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 | `49c4f5b` | 03.09 | Blog: previzualizare desktop/telefon, card Google | de portat (WP-23 B4; cardul Google în WP-37) |
 | `84e29a9` | 03.09 | Parteneri care curg, bulină la recenzii, bloc video în newslettere | bulina WP-21 (C10), video WP-21 (C11d); partenerii pachetul BV (P5) |
 | `f5295b5` | 03.09 | Căutare mai rapidă în blog + documentație | de portat (WP-22, B3, X12 `Slug`) |
-| `3ea6a31` | 03.09 | Editorul reține categoriile, etichetele și referințele | de portat (WP-12 X1; WP-23 B4) |
+| `3ea6a31` | 03.09 | Editorul reține categoriile, etichetele și referințele | X1 (categoriile) portat prin Bioscem `89dcc4e` (`1df3771`), plus regula categoriei principale din Bioscem `b3781a4` (`dbd218c`), pe care BV nu o are și o primește la adoptare; etichetele și referințele de portat (WP-23, B4) |
 | `e2c33d3` | 03.09 | Paginarea postărilor nu mai sare în capul listei | de portat (WP-23, B4) |
 | `6ea2cb1` | 03.09 | Banda cu parteneri pe desktop + derulare lină din cuprins | `blog-anchors.js` în WP-22 (doar pe `/blog/{slug}`); partenerii pachetul BV |
 | `b9fcaf8` | 03.09 | Coloanele: culoarea coloanei nu mai e acoperită | de portat (WP-21, C11c) |
@@ -84,7 +94,7 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 | `222ed71` | 12.10 | Cupoane unice: produsele se schimbă în masă | de portat (WP-21, C12) |
 | `aed0cee` | 15.10 | Codul de cupon acceptat cu spații | de portat (WP-20, C9) |
 | `cc231e4` | 19.10 | AWB: numărul de colete ales în ERP la aprobare | portat (`4915478`, din Bioscem `de5c2b0`); la trecerea BV înghețare `fan_kg_max_colet=0` |
-| — | Etapa 0b | Contul arată doar comenzile legate de cont (dacă OD-47 = da) | portat prin regula nucleului din WP-25 |
+| — | — | Contul arată doar comenzile legate de cont | nu se face pe BV (decizia OD-47, 19.10): doar în codul comun, regula nucleului din WP-25; la trecere intră în „ce se schimbă” al BV |
 
 **Ramuri BV neunite în ramura de lucru** (de verificat cu raportul „live vs repo” din Etapa 0; implicit nu se portează):
 `claude/migrate-two-sites-backend-gl3heg` → `a5cceb7` (setarea sertarului de oferte; echivalentul a intrat prin
