@@ -14,6 +14,9 @@ declare(strict_types=1);
  *    singură dată, cu pagina lui, și trebuie găsit exact o dată pe ea; un marcaj
  *    nedeclarat, desperecheat sau găsit pe altă pagină face comparația să pice.
  *
+ *  - coduri de stare declarate (diferente_coduri): o pagină care în codul de bază cade
+ *    (500) și aici merge; se verifică ambele coduri și un text al paginii curente.
+ *
  * „cale” e pagina comparată (cu parametrii ei, ca în lista de pagini) sau un prefix
  * terminat în „*” („/admin*” = fiecare pagină comparată care începe cu /admin).
  * Plus anteturile răspunsului, normalizate pentru comparare (diferente_antete).
@@ -113,6 +116,50 @@ function diferente_marcaje(array $marcaje, string $cale, string $html, array &$g
 }
 
 /**
+ * Paginile la care codul de stare diferă voit: o eroare a codului de bază, reparată aici
+ * (de exemplu o pagină care în bază cade cu 500). Declarația: [nume, cale, cod_baza,
+ * cod_curent, text, motiv]. O astfel de pagină nu se poate compara octet cu octet (codul de
+ * bază nu dă pagina), deci trece doar dacă ambele coduri sunt exact cele declarate, iar
+ * „text” (scris de codul curent) apare pe pagina curentă și lipsește din răspunsul bazei.
+ * Când și codul de bază se repară, declarația pică (alt cod) și trebuie scoasă.
+ *
+ * @param array<string, list<array{nume?: string, cale?: string, cod_baza?: int, cod_curent?: int, text?: string, motiv?: string}>> $liste
+ * @param list<string> $probleme
+ * @return string|null eticheta declarației care acoperă pagina, sau null dacă nicio declarație nu o acoperă
+ */
+function diferente_coduri(array $liste, string $cale, int $codBaza, string $corpBaza, int $codCurent, string $corpCurent, array &$probleme): ?string
+{
+    $acoperita = null;
+    foreach ($liste as $numeLista => $lista) {
+        foreach ($lista as $intrare) {
+            $eticheta = $numeLista . ' „' . (string) ($intrare['nume'] ?? '') . '”';
+            if (!diferenta_pe_pagina((string) ($intrare['cale'] ?? ''), $cale)) {
+                continue;
+            }
+            $acoperita = $eticheta;
+            foreach (['nume', 'cale', 'text', 'motiv'] as $camp) {
+                if (trim((string) ($intrare[$camp] ?? '')) === '') {
+                    $probleme[] = $eticheta . ': lipsește „' . $camp . '” (fiecare diferență se declară cu pagina și motivul ei)';
+                    continue 2;
+                }
+            }
+            if ($codBaza !== (int) ($intrare['cod_baza'] ?? 0) || $codCurent !== (int) ($intrare['cod_curent'] ?? 0)) {
+                $probleme[] = $eticheta . ': coduri ' . $codBaza . '→' . $codCurent . ', declarat '
+                    . (int) ($intrare['cod_baza'] ?? 0) . '→' . (int) ($intrare['cod_curent'] ?? 0)
+                    . ' (dacă și codul de bază s-a reparat, declarația se scoate)';
+            }
+            if (!str_contains($corpCurent, (string) $intrare['text'])) {
+                $probleme[] = $eticheta . ': textul declarat lipsește de pe pagina codului curent';
+            }
+            if (str_contains($corpBaza, (string) $intrare['text'])) {
+                $probleme[] = $eticheta . ': textul declarat e și în răspunsul codului de bază';
+            }
+        }
+    }
+    return $acoperita;
+}
+
+/**
  * Anteturile unui răspuns, cum se compară (după cod, Location și corp): tot ce trimite
  * codul (Content-Type, Cache-Control, Expires, Pragma, X-Robots-Tag, Set-Cookie, Vary,
  * Link, Content-Disposition, Retry-After …), cu numele în litere mici, în ordinea în care
@@ -155,8 +202,9 @@ function diferente_antete(string $antet, string $portBaza, string $portCurent): 
 
 /**
  * Verificarea mecanismului, fără server: un marcaj declarat dar lipsă, unul găsit de
- * două ori, unul nedeclarat, unul fără pereche, un text pe altă pagină trebuie să pice;
- * cazurile bune trebuie să treacă și să lase exact pagina de bază.
+ * două ori, unul nedeclarat, unul fără pereche, un text pe altă pagină, un cod de stare
+ * declarat care nu mai e cel primit trebuie să pice; cazurile bune trebuie să treacă și
+ * să lase exact pagina de bază.
  *
  * @return list<string> ce nu a mers (gol = totul în regulă)
  */
@@ -210,6 +258,35 @@ function diferente_autotest(): array
     $ruleaza('text declarat fără motiv', static fn (array &$g, array &$p): string
         => diferente_texte(['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => '']]],
             '/magazin', '<b>Text nou</b>', $g, $p), true);
+
+    // Codurile de stare declarate: doar exact codurile declarate, cu textul doar pe pagina curentă.
+    $coduri = ['$coduriDeBioscem' => [['nume' => 'c', 'cale' => '/checkout/succes', 'cod_baza' => 500, 'cod_curent' => 200,
+        'text' => '<h1>Mulțumim</h1>', 'motiv' => 'test']]];
+    $cazuriCoduri = [
+        'cod declarat, coduri exacte, textul doar pe pagina curentă' => ['/checkout/succes', 500, '', 200, '<h1>Mulțumim</h1>', false],
+        'codul de bază s-a reparat (200)' => ['/checkout/succes', 200, '<h1>Mulțumim</h1>', 200, '<h1>Mulțumim</h1>', true],
+        'codul de bază alt cod de eroare (404)' => ['/checkout/succes', 404, '', 200, '<h1>Mulțumim</h1>', true],
+        'codul curent cade și el (500)' => ['/checkout/succes', 500, '', 500, '', true],
+        'pagina curentă fără textul declarat' => ['/checkout/succes', 500, '', 200, '<h1>Altceva</h1>', true],
+        'textul declarat și în răspunsul bazei' => ['/checkout/succes', 500, '<h1>Mulțumim</h1>', 200, '<h1>Mulțumim</h1>', true],
+    ];
+    foreach ($cazuriCoduri as $caz => [$cale, $codBaza, $corpBaza, $codCurent, $corpCurent, $trebuiePica]) {
+        $probleme = [];
+        $acoperita = diferente_coduri($coduri, $cale, $codBaza, $corpBaza, $codCurent, $corpCurent, $probleme);
+        if ($acoperita === null || ($probleme !== []) !== $trebuiePica) {
+            $esecuri[] = 'coduri, ' . $caz . ': ' . ($trebuiePica ? 'trebuia să pice și a trecut' : 'a picat: ' . implode('; ', $probleme));
+        }
+    }
+    $probleme = [];
+    if (diferente_coduri($coduri, '/checkout', 200, '', 200, '', $probleme) !== null || $probleme !== []) {
+        $esecuri[] = 'coduri, altă pagină: nu trebuia acoperită de declarație';
+    }
+    $probleme = [];
+    diferente_coduri(['$coduriDeBioscem' => [['nume' => 'c', 'cale' => '/checkout/succes', 'cod_baza' => 500, 'cod_curent' => 200,
+        'text' => '<h1>Mulțumim</h1>']]], '/checkout/succes', 500, '', 200, '<h1>Mulțumim</h1>', $probleme);
+    if ($probleme === []) {
+        $esecuri[] = 'coduri, declarație fără motiv: trebuia să pice și a trecut';
+    }
 
     // Anteturile: ce nu ține de cod (ora, lungimea, valoarea cookie-ului) nu contează; un antet
     // pierdut, schimbat sau mutat, ori un atribut de cookie schimbat, contează.

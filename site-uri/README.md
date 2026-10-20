@@ -10,7 +10,7 @@ date scrise în cod).
 
 | Pachet | Ce conține |
 |---|---|
-| `bioscem/redirecturi.json` | adresele vechi ale Bioscem (livrarea 1 SEO, 19 octombrie 2026): 113 reguli (103 × 301, 10 × 410) și 6 prefixe 410 |
+| `bioscem/redirecturi.json` | adresele vechi ale Bioscem: 127 de reguli exacte (117 × 301, 10 × 410) și 6 prefixe 410, adică cele 113 ale livrării 1 SEO și cele 14 × 301 aprobate de proprietar pe 19 octombrie 2026 (Bioscem `9f59e79`) |
 | `bioscem/seo.json` | etichetele din sitemap (D2/D3), numele și logo-urile pentru Google, `/cos-cumparaturi` |
 | `bioscem/ce-se-schimba.md` | ce vede altfel clientul când trece pe codul comun (se predă la adoptare); fiecare rând e declarat și în `tools/dev/compara-cu-baza.php` |
 

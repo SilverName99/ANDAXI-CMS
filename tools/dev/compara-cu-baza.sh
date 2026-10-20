@@ -25,7 +25,9 @@
 # $porturiBioscem: codul Bioscem le are deja, deci trebuie să iasă octet cu octet.
 # Se scot doar diferențele declarate explicit, cu motivul lor, în compara-cu-baza.php
 # ($deBioscem, $porturiBiovitality, $porturiVertij, $porturiGrafo și marcajele
-# <!--port:…-->), în ambele moduri.
+# <!--port:…-->), în ambele moduri. O pagină care în codul de bază cade și aici merge
+# ($coduriDeBioscem, de exemplu /checkout/succes deschis direct) trece doar cu exact
+# codurile declarate și cu textul declarat pe pagina curentă.
 #
 # Tot față de un repo vechi: harta adreselor vechi se cere din pachetul site-ului și din
 # cea scrisă în codul de bază (config/redirecturi.php), iar cele două liste trebuie să fie

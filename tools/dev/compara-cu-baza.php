@@ -37,6 +37,8 @@ declare(strict_types=1);
  * În ambele moduri, tot doar din pagina codului curent: diferențele declarate
  * explicit, cu pagina și motivul lor ($deBioscem, $porturiBiovitality,
  * $porturiVertij, $porturiGrafo) și blocurile marcate cu <!--port:…--> ($marcajePort).
+ * Plus paginile care în codul de bază cad și aici merg ($coduriDeBioscem): trec doar cu
+ * exact codurile declarate și cu textul declarat pe pagina curentă.
  * Contractul lor e în tools/dev/lib/diferente-asteptate.php.
  */
 
@@ -51,7 +53,7 @@ if (in_array('--autotest', $argv, true)) {
     foreach ($esecuri as $esec) {
         echo '  EȘEC  ', $esec, "\n";
     }
-    echo $esecuri === [] ? "Mecanismul diferențelor așteptate (texte, marcaje de port, anteturi): OK\n" : count($esecuri) . " cazuri greșite.\n";
+    echo $esecuri === [] ? "Mecanismul diferențelor așteptate (texte, marcaje de port, coduri de stare, anteturi): OK\n" : count($esecuri) . " cazuri greșite.\n";
     exit($esecuri === [] ? 0 : 1);
 }
 
@@ -361,6 +363,25 @@ $deBioscem = [
         'mod' => 'repo',
     ],
 ];
+/**
+ * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
+ * eroare a Bioscem reparată în nucleu; contractul: diferente_coduri). Pagina se cere ca
+ * oricare alta și trece doar cu exact codurile declarate și cu textul ei pe pagina curentă
+ * (lipsă din răspunsul Bioscem). Fiecare intră și în site-uri/bioscem/ce-se-schimba.md.
+ */
+$coduriDeBioscem = [
+    // WP-R (20 oct): găsită din nou la revizuirea Bioscem 9f59e79 (DEZVOLTARE, „Erori moștenite” 7).
+    [
+        'nume' => '/checkout/succes deschis direct: pagina, nu eroarea 500',
+        'cale' => '/checkout/succes',
+        'cod_baza' => 500,
+        'cod_curent' => 200,
+        'text' => '<h1>Mulțumim pentru comandă!</h1>',
+        'motiv' => 'Bioscem trimite starea comenzii (text) pe locul totalului (număr) și pagina din bază cu tokenul '
+            . '{{checkout_success_order_info}} cade cu TypeError; reparat în nucleu în 5d808ea. Pagina de mulțumire de după '
+            . 'comandă, /checkout/succes/<număr>, are alt drum și e aceeași.',
+    ],
+];
 $porturiBiovitality = [
 ];
 $porturiVertij = [
@@ -380,10 +401,17 @@ if ($fataDeCommit) {
     $listeDeclarate = ['$porturiBioscem' => $porturiBioscem] + $listeDeclarate;
 }
 // Intrările legate de un singur mod ('mod' => 'repo' sau 'commit') se verifică doar în el.
-foreach ($listeDeclarate as $numeLista => $lista) {
-    $listeDeclarate[$numeLista] = array_values(array_filter($lista,
-        static fn (array $intrare): bool => !isset($intrare['mod']) || $intrare['mod'] === $modBaza));
-}
+$doarInModulBazei = static function (array $liste) use ($modBaza): array {
+    foreach ($liste as $numeLista => $lista) {
+        $liste[$numeLista] = array_values(array_filter($lista,
+            static fn (array $intrare): bool => !isset($intrare['mod']) || $intrare['mod'] === $modBaza));
+    }
+    return $liste;
+};
+$listeDeclarate = $doarInModulBazei($listeDeclarate);
+$listeCoduri = $doarInModulBazei(['$coduriDeBioscem' => $coduriDeBioscem]);
+// Eticheta fiecărei declarații de cod => de câte ori i s-a cerut pagina (trebuie exact o dată).
+$coduriGasite = [];
 /** Scoate din pagina curentă tot ce e declarat (marcaje, apoi texte); problemele în $probleme. */
 $faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort): string {
     $html = diferente_marcaje($marcajePort, $cale, $html, $gasite, $probleme);
@@ -506,6 +534,8 @@ $pagini = [
     ['adm', '/admin/emails/builder?type=newsletter'],
     ['viz', '/robots.txt'],
     ['viz', '/api/products/best-sellers?limit=3'],
+    // Pagina din bază „checkout/succes” deschisă direct (cod de stare declarat în $coduriDeBioscem).
+    ['anon', '/checkout/succes'],
 ];
 
 // O pagină a site-ului (din bază, ca orice pagină scrisă de client) cu liste goale,
@@ -579,6 +609,23 @@ foreach ($pagini as $pagina) {
     foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
         $r[$eticheta] = $cerere($port, 'GET', $cale, $jaruri[$eticheta][$rol]);
     }
+    // O pagină cu codul de stare declarat ($coduriDeBioscem): doar codurile și textul ei.
+    $problemeCod = [];
+    $declaratieCod = diferente_coduri($listeCoduri, $cale, $r['baza']['cod'], $r['baza']['corp'], $r['curent']['cod'],
+        $r['curent']['corp'], $problemeCod);
+    if ($declaratieCod !== null) {
+        $coduriGasite[$declaratieCod] = ($coduriGasite[$declaratieCod] ?? 0) + 1;
+        $eticheta = str_pad($rol, 13) . $cale;
+        if ($problemeCod === []) {
+            $identice++;
+            $diferentePorturi[$eticheta] = $declaratieCod;
+            echo '  OK    ', $r['baza']['cod'], '→', $r['curent']['cod'], '  ', $eticheta, '  (', $declaratieCod, ")\n";
+        } else {
+            $diferite[] = $eticheta;
+            echo '  DIFERĂ ', $r['baza']['cod'], '→', $r['curent']['cod'], '  ', $eticheta, ': ', implode('; ', $problemeCod), "\n";
+        }
+        continue;
+    }
     $gasite = [];
     $porturiGasite = [];
     $problemePorturi = [];
@@ -650,6 +697,17 @@ foreach ($grupuriIdentice as $grup => $coduri) {
     echo '  OK    ', str_pad('anon', 13), $grup, ': ', array_sum($coduri), ' adrese identice (',
         implode(', ', array_map(static fn ($cod, $n) => $n . ' × ' . $cod, array_keys($coduri), $coduri)), ")\n";
 }
+// Fiecare cod de stare declarat: pagina lui cerută exact o dată (altfel declarația nu dovedește nimic).
+foreach ($listeCoduri as $numeLista => $lista) {
+    foreach ($lista as $intrare) {
+        $eticheta = $numeLista . ' „' . (string) ($intrare['nume'] ?? '') . '”';
+        if (($coduriGasite[$eticheta] ?? 0) !== 1) {
+            $diferite[] = $eticheta;
+            echo '  DIFERĂ ', $eticheta, ': pagina ', (string) ($intrare['cale'] ?? ''), ' cerută de ', $coduriGasite[$eticheta] ?? 0,
+                " ori, așteptat o dată (adaug-o în lista de pagini)\n";
+        }
+    }
+}
 // Unde ajunge fiecare administrator cu rol parțial după login.
 foreach ($dupaLogin['baza'] ?? [] as $rolAdmin => $locatieBaza) {
     $locatieCurenta = $dupaLogin['curent'][$rolAdmin] ?? '';
@@ -699,8 +757,15 @@ if (is_array($hartaBaza)) {
  * după un POST) nu le atinge. Fiecare caz pregătește câteva rânduri, apoi trimite aceeași
  * cerere întâi codului de bază, apoi codului curent, cu baza pusă la loc înainte de fiecare și
  * la final; se compară răspunsurile (cod, Location, pagina) și rândurile atinse. „verifica” se
- * uită la rezultatul codului de bază: cazul trebuie să arate schimbarea pentru care există
- * (commit-ul „din”), altfel pică, în loc să treacă în gol.
+ * uită la rezultatul codului de bază, ca un caz să nu poată trece în gol:
+ *  - fiecare salvare trebuie să se vadă în bază: POST-ul schimbă și un câmp pe care altfel nu-l
+ *    atinge nimic (rezumatul postării; ofertele noi și cheile lor), deci o salvare care nu scrie
+ *    nimic (aceeași redirecționare, rândurile pregătite neatinse) pică;
+ *  - un caz de tip „schimbare” (implicit) trebuie să arate schimbarea commit-ului „din”: fără
+ *    acel commit, rezultatul codului de bază ar fi altul;
+ *  - un caz de tip „regresie” cere rezultatul de pe o ramură pe care commit-ul „din” nu o
+ *    schimbă (același înainte și după el); o ramură atinsă greșit la portare o prinde
+ *    comparația cu codul curent, o schimbare a ei în Bioscem o prinde „verifica”.
  */
 if (!$fataDeCommit && $siteBaza === 'bioscem') {
     require_once __DIR__ . '/lib/salvari-admin.php';
@@ -783,12 +848,19 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 $citeste('SELECT category_id FROM blog_post_categories WHERE post_id = :id ORDER BY category_id', ['id' => $id]), 'category_id')),
         ];
     };
+    // Re-salvarea schimbă și rezumatul: așa se vede că salvarea a ajuns în bază (handler-ul
+    // redirecționează la fel și când UPDATE-ul nu reușește, iar categoriile pregătite pot fi
+    // exact cele așteptate și fără nicio salvare).
+    $rezumatSalvat = 'Rezumat schimbat la re-salvare (compara-cu-baza)';
+    $salvata = static fn (array $stare): array => ($stare['postare']['excerpt'] ?? null) === $rezumatSalvat
+        ? [] : ['salvarea nu a ajuns în bază: rezumatul postării nu e cel trimis ('
+            . json_encode($stare['postare']['excerpt'] ?? null, JSON_UNESCAPED_UNICODE) . ')'];
     $corpPostare = static fn (array $categorii, array $extra = []): array => [
         'action' => 'save',
         'id' => (string) $idPostare,
         'title' => (string) ($postare['title'] ?? ''),
         'slug' => (string) ($postare['slug'] ?? ''),
-        'excerpt' => (string) ($postare['excerpt'] ?? ''),
+        'excerpt' => $rezumatSalvat,
         'content' => (string) ($postare['content'] ?? ''),
         'reading_minutes' => (string) ($postare['reading_minutes'] ?? '1'),
         'published_at' => (string) ($postare['published_at'] ?? ''),
@@ -865,34 +937,41 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             },
         ],
         [
+            // Fără b3781a4, principala ar deveni prima bifată ($cat1).
             'nume' => 'blog: re-salvarea păstrează categoriile și categoria principală',
             'din' => 'b3781a4',
             'tabele' => $tabelePostare,
             'pregateste' => $pregatestePostarea,
             'cereri' => [['POST', '/admin/blog/posts', $corpPostare([$cat1, $cat2, $cat3])]],
             'stare' => static fn (PDO $db): array => $starePostare($db, $idPostare),
-            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat2
-                && $stare['categorii'] === [$cat1, $cat2, $cat3] ? [] : ['principala sau categoriile s-au schimbat: ' . json_encode($stare)],
+            'verifica' => static fn (array $stare): array => array_merge($salvata($stare),
+                (int) ($stare['postare']['category_id'] ?? 0) === $cat2 && $stare['categorii'] === [$cat1, $cat2, $cat3]
+                    ? [] : ['principala sau categoriile s-au schimbat: ' . json_encode($stare)]),
         ],
         [
+            // Ramură pe care b3781a4 nu o schimbă: principala nu mai e bifată.
             'nume' => 'blog: principala debifată, principala devine prima bifată',
             'din' => 'b3781a4',
+            'tip' => 'regresie',
             'tabele' => $tabelePostare,
             'pregateste' => $pregatestePostarea,
             'cereri' => [['POST', '/admin/blog/posts', $corpPostare([$cat1, $cat3])]],
             'stare' => static fn (PDO $db): array => $starePostare($db, $idPostare),
-            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat1
-                && $stare['categorii'] === [$cat1, $cat3] ? [] : ['așteptam principala ' . $cat1 . ': ' . json_encode($stare)],
+            'verifica' => static fn (array $stare): array => array_merge($salvata($stare),
+                (int) ($stare['postare']['category_id'] ?? 0) === $cat1 && $stare['categorii'] === [$cat1, $cat3]
+                    ? [] : ['așteptam principala ' . $cat1 . ': ' . json_encode($stare)]),
         ],
         [
+            // Ramură pe care b3781a4 nu o schimbă: formularul trimite category_id (principala păstrată ar fi $cat2).
             'nume' => 'blog: categoria trimisă explicit (category_id) devine principala',
             'din' => 'b3781a4',
+            'tip' => 'regresie',
             'tabele' => $tabelePostare,
             'pregateste' => $pregatestePostarea,
             'cereri' => [['POST', '/admin/blog/posts', $corpPostare([$cat1, $cat2, $cat3], ['category_id' => (string) $cat3])]],
             'stare' => static fn (PDO $db): array => $starePostare($db, $idPostare),
-            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat3
-                ? [] : ['așteptam principala ' . $cat3 . ': ' . json_encode($stare)],
+            'verifica' => static fn (array $stare): array => array_merge($salvata($stare),
+                (int) ($stare['postare']['category_id'] ?? 0) === $cat3 ? [] : ['așteptam principala ' . $cat3 . ': ' . json_encode($stare)]),
         ],
         [
             'nume' => 'blog: duplicarea copiază categoriile și categoria principală',
@@ -914,7 +993,8 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
     ];
 
     foreach ($salvari as $caz) {
-        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (Bioscem ' . $caz['din'] . ')';
+        $regresie = ($caz['tip'] ?? 'schimbare') === 'regresie';
+        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (Bioscem ' . $caz['din'] . ($regresie ? ', regresie' : '') . ')';
         $original = salvari_instantaneu($db, $caz['tabele']);
         $rezultate = [];
         $probleme = [];
@@ -957,7 +1037,9 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             $probleme[] = 'baza nu a putut fi pusă la loc exact (tools/dev/lib/salvari-admin.php)';
         }
         foreach (($caz['verifica'])($rezultate['baza']['stare'], $rezultate['baza']['raspunsuri']) as $problema) {
-            $probleme[] = 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ' . $problema;
+            $probleme[] = ($regresie
+                ? 'codul de bază nu dă rezultatul de pe ramura pe care ' . $caz['din'] . ' nu o schimbă: '
+                : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ') . $problema;
         }
         $diferente = salvari_diferente($rezultate['baza']['stare'], $rezultate['curent']['stare'], 'bază: ');
         foreach ($rezultate['baza']['raspunsuri'] as $n => $rBaza) {
@@ -993,7 +1075,7 @@ foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
 }
 $db->prepare('DELETE FROM pages WHERE slug = :slug')->execute(['slug' => $paginaListe]);
 $declarate = [];
-foreach ($listeDeclarate as $numeLista => $lista) {
+foreach ($listeDeclarate + $listeCoduri as $numeLista => $lista) {
     if ($lista !== []) {
         $declarate[] = $numeLista . ' ' . count($lista);
     }

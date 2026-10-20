@@ -10,7 +10,9 @@ declare(strict_types=1);
  * salvări; GET-ul editorului, unde contează ce e bifat) și starea rândurilor atinse.
  * Cazul rulează întâi pe codul de bază, apoi pe codul curent; înainte de fiecare
  * server baza e pusă la loc exact cum era (instantaneul tabelelor cazului), iar după
- * ultimul, la fel. Se compară răspunsurile (cod, Location, pagina) și starea.
+ * ultimul, la fel. Se compară răspunsurile (cod, Location, pagina) și starea. Ce trebuie
+ * să arate rezultatul codului de bază (salvarea ajunsă în bază; schimbarea commit-ului sau,
+ * la un caz de tip „regresie”, ramura pe care commit-ul nu o schimbă) scrie la $salvari.
  *
  * Funcțiile de aici doar citesc și pun la loc rânduri; cererile și normalizarea
  * paginilor sunt ale lui compara-cu-baza.php.
