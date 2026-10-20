@@ -192,12 +192,21 @@ if [ "$PACHET" != "toate" ]; then
 fi
 incarca_starile
 
-# Fără server și fără bază: suprafața fiecărei licențe de test față de fișierele din git
-# (tools/dev/instantanee/) și mecanismul diferențelor declarate ale comparației cu baza.
+# Fără server: suprafața fiecărei licențe de test față de fișierele din git (tools/dev/instantanee/),
+# mecanismul diferențelor declarate ale comparației cu baza și verificarea fișierelor de migrare
+# (plus DDL-ul din cod față de lista celui vechi; asteptat.json și proprietarii, pe o bază goală cms_mig_v_*).
 scrie ""
-scrie "== Instantaneul rutelor și diferențele declarate"
+scrie "== Instantaneul rutelor, diferențele declarate și fișierele de migrare"
 confirma "instantaneul rutelor (tools/dev/instantaneu-rute.php)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/instantaneu-rute.php"
 confirma "diferențele declarate, marcajele de port și anteturile din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
+if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/verifica-migrari.php" > "$TMP/verifica-migrari.log" 2>&1; then
+    TRECUTE=$((TRECUTE + 1))
+    scrie "  OK    fișierele de migrare și DDL-ul din cod (tools/dev/verifica-migrari.php): $(tail -1 "$TMP/verifica-migrari.log" | sed 's/^verifica-migrari: //')"
+else
+    ESECURI=$((ESECURI + 1))
+    scrie "  EȘEC  fișierele de migrare și DDL-ul din cod (tools/dev/verifica-migrari.php):"
+    head -20 "$TMP/verifica-migrari.log" | sed 's/^/        /' | tee -a "$RAPORT"
+fi
 
 # 2. Serverul
 "$RADACINA/tools/dev/server.sh" > /dev/null

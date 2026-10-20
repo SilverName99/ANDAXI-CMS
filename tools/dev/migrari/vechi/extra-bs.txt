@@ -1,0 +1,7 @@
+# Obiectele pe care schema codului Nou-site-bioscem@9f59e79 (fixture-ul bs.sql) le are în plus față de
+# database/migrari/asteptat.json: rămân pe site după baseline (migrările nu le ating). Testul T2 cere
+# exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.
+coloana products.gallery_json
+tabelul mannequin_point_products
+tabelul mannequin_points
+tabelul reviews

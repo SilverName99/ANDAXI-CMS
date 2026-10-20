@@ -1,0 +1,394 @@
+# DDL-ul vechi din codul de pe site-uri, permis până la R2 (MIG-11; docs/MIGRARI.md, „Verificarea fișierelor”).
+# Un rând: fișierul, funcția, felul (ddl = un text cu CREATE/ALTER/DROP/RENAME/TRUNCATE; definitie = o definiție de
+# coloană dintr-o funcție cu DDL), sha1 al textului normalizat (12 caractere), de câte ori apare, începutul textului.
+# Scris de tools/dev/verifica-migrari.php. Se schimbă doar cu --actualizeaza-lista, care doar scoate rânduri:
+# un DDL nou în cod nu intră aici niciodată, ci într-o migrare (database/migrari/).
+database/schema.sql	(schema.sql)	ddl	009582c3cbb8	1	CREATE TABLE IF NOT EXISTS user_addresses ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, us
+database/schema.sql	(schema.sql)	ddl	0c1706035a1d	1	CREATE TABLE IF NOT EXISTS email_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_
+database/schema.sql	(schema.sql)	ddl	1235410b7ce2	1	CREATE TABLE IF NOT EXISTS newsletter_lists ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+database/schema.sql	(schema.sql)	ddl	1396b6635570	1	CREATE TABLE IF NOT EXISTS newsletter_campaigns ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+database/schema.sql	(schema.sql)	ddl	215ef03e5fb3	1	CREATE TABLE IF NOT EXISTS gallery_images ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ti
+database/schema.sql	(schema.sql)	ddl	29554746d8f2	1	CREATE TABLE IF NOT EXISTS loyalty_points_rules ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+database/schema.sql	(schema.sql)	ddl	2a3db2b9cb7d	1	CREATE TABLE IF NOT EXISTS seo_pages ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, page_ty
+database/schema.sql	(schema.sql)	ddl	2f25ee736e68	1	CREATE TABLE IF NOT EXISTS register_submit_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+database/schema.sql	(schema.sql)	ddl	3a94a85e1936	1	CREATE TABLE IF NOT EXISTS checkout_submit_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+database/schema.sql	(schema.sql)	ddl	4b2829031baa	1	CREATE TABLE IF NOT EXISTS settings ( `key` VARCHAR(120) PRIMARY KEY, `value` LONGTEXT NOT
+database/schema.sql	(schema.sql)	ddl	4bf7ebc8a4c2	1	CREATE TABLE IF NOT EXISTS email_send_history ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
+database/schema.sql	(schema.sql)	ddl	55e5fd23dbb0	1	CREATE TABLE IF NOT EXISTS newsletter_optin_forms ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+database/schema.sql	(schema.sql)	ddl	5cca7a515d1d	1	CREATE TABLE IF NOT EXISTS newsletter_list_subscribers ( list_id INT UNSIGNED NOT NULL, su
+database/schema.sql	(schema.sql)	ddl	5d4d0129feec	1	CREATE TABLE IF NOT EXISTS newsletter_campaign_sends ( id INT UNSIGNED AUTO_INCREMENT PRIM
+database/schema.sql	(schema.sql)	ddl	642b774ff288	1	CREATE TABLE IF NOT EXISTS order_items ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order
+database/schema.sql	(schema.sql)	ddl	6b0251077ad8	1	CREATE TABLE IF NOT EXISTS cart_abandonments ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+database/schema.sql	(schema.sql)	ddl	6f1004db3d81	1	CREATE TABLE IF NOT EXISTS product_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+database/schema.sql	(schema.sql)	ddl	767ce1fd56b3	1	CREATE TABLE IF NOT EXISTS coupons ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARC
+database/schema.sql	(schema.sql)	ddl	7926d62afc0e	1	CREATE TABLE IF NOT EXISTS newsletter_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+database/schema.sql	(schema.sql)	ddl	8717cdbdd9f0	1	CREATE TABLE IF NOT EXISTS product_extra_field_values ( id INT UNSIGNED AUTO_INCREMENT PRI
+database/schema.sql	(schema.sql)	ddl	9091dba0aeb2	1	CREATE TABLE IF NOT EXISTS mannequin_points ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+database/schema.sql	(schema.sql)	ddl	96a95412b0ac	1	CREATE TABLE IF NOT EXISTS users ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, first_name
+database/schema.sql	(schema.sql)	ddl	a2764270aa02	1	CREATE TABLE IF NOT EXISTS loyalty_points_transactions ( id INT UNSIGNED AUTO_INCREMENT PR
+database/schema.sql	(schema.sql)	ddl	a5663c7e766c	1	CREATE TABLE IF NOT EXISTS gallery_folders ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, n
+database/schema.sql	(schema.sql)	ddl	ab44c5d3271a	1	CREATE TABLE IF NOT EXISTS product_extra_fields ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+database/schema.sql	(schema.sql)	ddl	ac81f94474a6	1	CREATE TABLE IF NOT EXISTS products ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VAR
+database/schema.sql	(schema.sql)	ddl	ae874c271806	1	CREATE TABLE IF NOT EXISTS pages ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCH
+database/schema.sql	(schema.sql)	ddl	b2f733ee760b	1	CREATE TABLE IF NOT EXISTS customer_password_resets ( id INT UNSIGNED AUTO_INCREMENT PRIMA
+database/schema.sql	(schema.sql)	ddl	b6ed9e2885cd	1	CREATE TABLE IF NOT EXISTS product_reviews ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, p
+database/schema.sql	(schema.sql)	ddl	bb45a66fafda	1	CREATE TABLE IF NOT EXISTS product_category_links ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+database/schema.sql	(schema.sql)	ddl	c4a16d3c97c5	1	CREATE TABLE IF NOT EXISTS admins ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, email VARC
+database/schema.sql	(schema.sql)	ddl	c5d8bc616594	1	CREATE TABLE IF NOT EXISTS product_categories ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
+database/schema.sql	(schema.sql)	ddl	c71826edf9c3	1	CREATE TABLE IF NOT EXISTS mannequin_point_products ( id INT UNSIGNED AUTO_INCREMENT PRIMA
+database/schema.sql	(schema.sql)	ddl	ca9a60bc94b4	1	CREATE TABLE IF NOT EXISTS orders ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_numb
+database/schema.sql	(schema.sql)	ddl	d2e8a715b644	1	CREATE TABLE IF NOT EXISTS product_template_fields ( template_id INT UNSIGNED NOT NULL, fi
+database/schema.sql	(schema.sql)	ddl	dc0560747e08	1	CREATE TABLE IF NOT EXISTS reviews ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, product_i
+database/schema.sql	(schema.sql)	ddl	ffbca893cb7c	1	CREATE TABLE IF NOT EXISTS newsletter_subscribers ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+scripts/fan-tracking-sync.php	(fișier)	ddl	609a57f8b1b0	1	ALTER TABLE orders ADD COLUMN fan_tracking_synced_at DATETIME DEFAULT NULL AFTER fan_track
+scripts/fan-tracking-sync.php	(fișier)	ddl	7826f68605c5	1	ALTER TABLE orders ADD COLUMN fan_tracking_last_event_at DATETIME DEFAULT NULL AFTER fan_t
+scripts/fan-tracking-sync.php	(fișier)	ddl	7acfbd2f2b7e	1	ALTER TABLE orders ADD COLUMN fan_tracking_status VARCHAR(190) DEFAULT NULL AFTER fan_trac
+scripts/install.php	(fișier)	ddl	0363c50a5151	1	ALTER TABLE products ADD COLUMN product_template_id INT UNSIGNED DEFAULT NULL AFTER catego
+scripts/install.php	(fișier)	ddl	0c1706035a1d	1	CREATE TABLE IF NOT EXISTS email_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_
+scripts/install.php	(fișier)	ddl	0d1136db256b	1	ALTER TABLE orders ADD COLUMN loyalty_points_used INT NOT NULL DEFAULT 0 AFTER discount_to
+scripts/install.php	(fișier)	ddl	11200a76a2e3	1	ALTER TABLE orders ADD COLUMN euplatesc_approval VARCHAR(64) DEFAULT NULL AFTER euplatesc_
+scripts/install.php	(fișier)	ddl	1a3b4249686e	1	ALTER TABLE order_items ADD COLUMN bbd_key VARCHAR(64) DEFAULT NULL AFTER product_name
+scripts/install.php	(fișier)	ddl	1cec92643cba	1	ALTER TABLE products ADD COLUMN badge_popular TINYINT(1) NOT NULL DEFAULT 0 AFTER gallery_
+scripts/install.php	(fișier)	ddl	205d4bdc8ca0	1	ALTER TABLE admins ADD COLUMN roles_json LONGTEXT DEFAULT NULL AFTER role
+scripts/install.php	(fișier)	ddl	209bdc40a1ce	1	ALTER TABLE pages ADD COLUMN css_content LONGTEXT NULL AFTER html_content
+scripts/install.php	(fișier)	ddl	23b29fd18130	1	ALTER TABLE coupons ADD COLUMN apply_only_selected_products TINYINT(1) NOT NULL DEFAULT 0
+scripts/install.php	(fișier)	ddl	2946bc9bea03	1	ALTER TABLE orders ADD COLUMN ad_click_id VARCHAR(255) DEFAULT NULL
+scripts/install.php	(fișier)	ddl	2b0fadc72c9e	1	ALTER TABLE orders ADD COLUMN fan_awb VARCHAR(100) DEFAULT NULL AFTER billing_postcode
+scripts/install.php	(fișier)	ddl	2d006b87c653	1	ALTER TABLE products ADD COLUMN weight_grams INT DEFAULT NULL AFTER stock
+scripts/install.php	(fișier)	ddl	2e0c93480522	1	ALTER TABLE products ADD COLUMN post_cart_note_text TEXT DEFAULT NULL AFTER post_cart_note
+scripts/install.php	(fișier)	ddl	34ae8837fee4	1	ALTER TABLE orders ADD COLUMN stripe_payment_intent_id VARCHAR(255) DEFAULT NULL AFTER str
+scripts/install.php	(fișier)	ddl	37ffc591dbc4	1	CREATE TABLE IF NOT EXISTS mannequin_points ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+scripts/install.php	(fișier)	ddl	3db6e8023510	1	ALTER TABLE orders ADD COLUMN paid_at DATETIME DEFAULT NULL AFTER stripe_payment_intent_id
+scripts/install.php	(fișier)	ddl	3f55e00e01ed	1	ALTER TABLE products ADD COLUMN deleted_at DATETIME DEFAULT NULL AFTER is_active
+scripts/install.php	(fișier)	ddl	40575625fecd	1	ALTER TABLE users ADD COLUMN gender VARCHAR(20) DEFAULT NULL AFTER birth_date
+scripts/install.php	(fișier)	ddl	43ddf46c5703	1	ALTER TABLE orders ADD COLUMN loyalty_points_awarded INT NOT NULL DEFAULT 0 AFTER loyalty_
+scripts/install.php	(fișier)	ddl	457c709c77b7	1	ALTER TABLE products ADD COLUMN product_highlights TEXT DEFAULT NULL AFTER description
+scripts/install.php	(fișier)	ddl	4e93f5615c2f	1	ALTER TABLE pages ADD COLUMN deleted_at DATETIME DEFAULT NULL AFTER is_published
+scripts/install.php	(fișier)	ddl	51011e86ed04	1	CREATE TABLE IF NOT EXISTS product_reviews ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, p
+scripts/install.php	(fișier)	ddl	51c0d702d01d	1	ALTER TABLE gallery_images ADD COLUMN media_type VARCHAR(20) NOT NULL DEFAULT 'image' AFTE
+scripts/install.php	(fișier)	ddl	5509a320fa13	1	ALTER TABLE orders ADD COLUMN billing_company_tax_id VARCHAR(120) DEFAULT NULL AFTER billi
+scripts/install.php	(fișier)	ddl	58b6f4e6a87d	1	ALTER TABLE users ADD COLUMN loyalty_points INT NOT NULL DEFAULT 0 AFTER google_id
+scripts/install.php	(fișier)	ddl	5cca9582c53f	1	ALTER TABLE orders ADD COLUMN ad_source VARCHAR(50) DEFAULT NULL
+scripts/install.php	(fișier)	ddl	5f32d6a24934	1	ALTER TABLE products ADD COLUMN vat_percent DECIMAL(5,2) NOT NULL DEFAULT 19.00 AFTER pric
+scripts/install.php	(fișier)	ddl	609a57f8b1b0	1	ALTER TABLE orders ADD COLUMN fan_tracking_synced_at DATETIME DEFAULT NULL AFTER fan_track
+scripts/install.php	(fișier)	ddl	67082cfdea0c	1	ALTER TABLE orders ADD COLUMN billing_is_company TINYINT(1) NOT NULL DEFAULT 0 AFTER billi
+scripts/install.php	(fișier)	ddl	6b0251077ad8	1	CREATE TABLE IF NOT EXISTS cart_abandonments ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+scripts/install.php	(fișier)	ddl	6f1004db3d81	1	CREATE TABLE IF NOT EXISTS product_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+scripts/install.php	(fișier)	ddl	7826f68605c5	1	ALTER TABLE orders ADD COLUMN fan_tracking_last_event_at DATETIME DEFAULT NULL AFTER fan_t
+scripts/install.php	(fișier)	ddl	78a5843ac97e	1	CREATE TABLE IF NOT EXISTS mannequin_point_products ( point_id INT UNSIGNED NOT NULL, prod
+scripts/install.php	(fișier)	ddl	7926d62afc0e	1	CREATE TABLE IF NOT EXISTS newsletter_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+scripts/install.php	(fișier)	ddl	7acfbd2f2b7e	1	ALTER TABLE orders ADD COLUMN fan_tracking_status VARCHAR(190) DEFAULT NULL AFTER fan_trac
+scripts/install.php	(fișier)	ddl	7af0c72d333f	1	ALTER TABLE users ADD COLUMN birth_date DATE DEFAULT NULL AFTER phone
+scripts/install.php	(fișier)	ddl	866a0e384c8d	1	ALTER TABLE orders ADD COLUMN billing_company_name VARCHAR(255) DEFAULT NULL AFTER billing
+scripts/install.php	(fișier)	ddl	8717cdbdd9f0	1	CREATE TABLE IF NOT EXISTS product_extra_field_values ( id INT UNSIGNED AUTO_INCREMENT PRI
+scripts/install.php	(fișier)	ddl	8c460643d9d8	1	ALTER TABLE products ADD COLUMN bbd_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER sale_price
+scripts/install.php	(fișier)	ddl	937f19e0400b	1	ALTER TABLE orders ADD COLUMN loyalty_points_awarded_at DATETIME DEFAULT NULL AFTER loyalt
+scripts/install.php	(fișier)	ddl	95bfa1022a06	1	ALTER TABLE products ADD COLUMN post_cart_note_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER
+scripts/install.php	(fișier)	ddl	9b40b0f4417a	1	ALTER TABLE orders ADD COLUMN stripe_session_id VARCHAR(255) DEFAULT NULL AFTER payment_st
+scripts/install.php	(fișier)	ddl	9c6f88072967	1	ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(100) DEFAULT NULL AFTER discount_total
+scripts/install.php	(fișier)	ddl	9eb64bc5c995	1	ALTER TABLE products ADD COLUMN bbd_entries_json LONGTEXT DEFAULT NULL AFTER bbd_enabled
+scripts/install.php	(fișier)	ddl	a30ec45a3e8c	1	ALTER TABLE orders ADD COLUMN payment_error TEXT DEFAULT NULL AFTER paid_at
+scripts/install.php	(fișier)	ddl	a66286a1a2af	1	ALTER TABLE products ADD COLUMN sale_price DECIMAL(10,2) DEFAULT NULL AFTER price
+scripts/install.php	(fișier)	ddl	a889c361cd6a	1	ALTER TABLE products ADD COLUMN category_id INT UNSIGNED DEFAULT NULL AFTER category
+scripts/install.php	(fișier)	ddl	ab44c5d3271a	1	CREATE TABLE IF NOT EXISTS product_extra_fields ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+scripts/install.php	(fișier)	ddl	b2871a586f4f	1	ALTER TABLE products ADD COLUMN badge_best_seller TINYINT(1) NOT NULL DEFAULT 0 AFTER badg
+scripts/install.php	(fișier)	ddl	b2f733ee760b	1	CREATE TABLE IF NOT EXISTS customer_password_resets ( id INT UNSIGNED AUTO_INCREMENT PRIMA
+scripts/install.php	(fișier)	ddl	baab0ad6dca9	1	ALTER TABLE products ADD COLUMN gallery_images_json LONGTEXT DEFAULT NULL AFTER image_url
+scripts/install.php	(fișier)	ddl	c327ca43327b	1	ALTER TABLE orders ADD COLUMN loyalty_points_discount DECIMAL(10,2) NOT NULL DEFAULT 0 AFT
+scripts/install.php	(fișier)	ddl	c53473e36c7c	1	CREATE TABLE IF NOT EXISTS user_addresses ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, us
+scripts/install.php	(fișier)	ddl	c783f9c41a3a	1	ALTER TABLE products ADD COLUMN sku VARCHAR(80) DEFAULT NULL AFTER name
+scripts/install.php	(fișier)	ddl	cbfbf4edc1d1	1	ALTER TABLE orders ADD COLUMN completed_awb_email_sent_at DATETIME DEFAULT NULL AFTER fan_
+scripts/install.php	(fișier)	ddl	d0c5174cfa37	1	ALTER TABLE products ADD COLUMN category VARCHAR(120) DEFAULT NULL AFTER sku
+scripts/install.php	(fișier)	ddl	d9277aa92f88	1	ALTER TABLE products ADD COLUMN sale_price_periods_json LONGTEXT DEFAULT NULL AFTER sale_p
+scripts/install.php	(fișier)	ddl	dbced819f25c	1	ALTER TABLE orders ADD COLUMN completed_awb_email_error TEXT DEFAULT NULL AFTER completed_
+scripts/install.php	(fișier)	ddl	e034d6c29bbc	1	ALTER TABLE gallery_images ADD COLUMN folder_id INT UNSIGNED DEFAULT NULL AFTER image_url
+scripts/install.php	(fișier)	ddl	e5ac7c68e50b	1	ALTER TABLE orders ADD COLUMN euplatesc_ep_id VARCHAR(64) DEFAULT NULL AFTER payment_error
+scripts/install.php	(fișier)	ddl	e96bbf387523	1	ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT NULL
+scripts/install.php	(fișier)	ddl	e97625b9817d	1	ALTER TABLE orders ADD COLUMN fan_tracking_url TEXT DEFAULT NULL AFTER fan_awb
+scripts/install.php	(fișier)	ddl	eaedc4e4a9bb	1	ALTER TABLE orders ADD COLUMN billing_company_registration_no VARCHAR(120) DEFAULT NULL AF
+scripts/install.php	(fișier)	ddl	f0ee0051947a	1	ALTER TABLE pages ADD COLUMN js_content LONGTEXT NULL AFTER css_content
+scripts/install.php	(fișier)	ddl	f4c952369b4f	1	ALTER TABLE products ADD COLUMN gallery_json LONGTEXT DEFAULT NULL AFTER image_url
+scripts/install.php	(fișier)	ddl	f628387a6bb8	1	ALTER TABLE products ADD COLUMN badge_seasonal TINYINT(1) NOT NULL DEFAULT 0 AFTER badge_b
+scripts/install.php	(fișier)	ddl	fe402c6d229d	1	CREATE TABLE IF NOT EXISTS loyalty_points_rules ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	0d9ceecf9106	1	ALTER TABLE coupons ADD COLUMN min_items_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER ends_
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	23b29fd18130	1	ALTER TABLE coupons ADD COLUMN apply_only_selected_products TINYINT(1) NOT NULL DEFAULT 0
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	24303d70b759	1	ALTER TABLE coupons ADD COLUMN stacks_with_discounts TINYINT(1) NOT NULL DEFAULT 1 AFTER a
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	26e6ce85c0e9	1	ALTER TABLE coupons ADD COLUMN category_ids_json LONGTEXT DEFAULT NULL AFTER product_ids_j
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	2dd56ca622df	1	ALTER TABLE coupons ADD COLUMN used_at DATETIME DEFAULT NULL AFTER is_unique
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	4c695176bb08	1	ALTER TABLE coupons ADD COLUMN name VARCHAR(190) DEFAULT NULL AFTER code
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	621496dbf84b	1	ALTER TABLE coupons ADD COLUMN max_uses_total INT UNSIGNED DEFAULT NULL AFTER max_items_co
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	79bee9a07c35	1	ALTER TABLE coupons ADD COLUMN is_unique TINYINT(1) NOT NULL DEFAULT 0 AFTER apply_only_se
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	b8e6c7280702	1	ALTER TABLE coupons ADD COLUMN import_batch VARCHAR(190) DEFAULT NULL AFTER used_at
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	bc4df21a2610	1	ALTER TABLE coupons ADD COLUMN allowed_user_ids_json LONGTEXT DEFAULT NULL AFTER max_uses_
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	f9a396381fa1	1	ALTER TABLE coupons ADD COLUMN max_items_count INT UNSIGNED DEFAULT NULL AFTER min_items_c
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	fab2d7aa6c91	1	ALTER TABLE coupons ADD COLUMN product_ids_json LONGTEXT DEFAULT NULL AFTER max_items_coun
+src/Http/Controllers/AdminController.php	AdminController::ensureCouponsSchema	ddl	fdd5370e1ea8	1	CREATE TABLE IF NOT EXISTS coupons ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARC
+src/Http/Controllers/AdminController.php	AdminController::ensureFormSecurityLogsSchema	ddl	d955b33b30f4	1	CREATE TABLE IF NOT EXISTS checkout_submit_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/AdminController.php	AdminController::ensureFormSecurityLogsSchema	ddl	e453a1e366e3	1	CREATE TABLE IF NOT EXISTS register_submit_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	000a3de257df	1	ALTER TABLE product_extra_fields ADD COLUMN name VARCHAR(190) DEFAULT NULL AFTER id
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	0363c50a5151	1	ALTER TABLE products ADD COLUMN product_template_id INT UNSIGNED DEFAULT NULL AFTER catego
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	1281d6f41ad7	1	ALTER TABLE blog_posts ADD COLUMN event_end_date DATE DEFAULT NULL AFTER event_start_date
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	14a70de1af32	1	ALTER TABLE products ADD COLUMN brand VARCHAR(120) DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	17fdd449401b	1	CREATE TABLE IF NOT EXISTS product_extra_fields ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	1cec92643cba	1	ALTER TABLE products ADD COLUMN badge_popular TINYINT(1) NOT NULL DEFAULT 0 AFTER gallery_
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	1cf24169aa03	1	ALTER TABLE orders ADD COLUMN manual_discount_reason VARCHAR(190) DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	205d4bdc8ca0	1	ALTER TABLE admins ADD COLUMN roles_json LONGTEXT DEFAULT NULL AFTER role
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	209bdc40a1ce	1	ALTER TABLE pages ADD COLUMN css_content LONGTEXT NULL AFTER html_content
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	248e84d4c2da	1	ALTER TABLE products ADD COLUMN out_of_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER stock
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	2946bc9bea03	1	ALTER TABLE orders ADD COLUMN ad_click_id VARCHAR(255) DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	2a3db2b9cb7d	1	CREATE TABLE IF NOT EXISTS seo_pages ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, page_ty
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	2b0fadc72c9e	1	ALTER TABLE orders ADD COLUMN fan_awb VARCHAR(100) DEFAULT NULL AFTER billing_postcode
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	2cf47de7c870	1	CREATE TABLE IF NOT EXISTS blog_categories ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, n
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	2e0c93480522	1	ALTER TABLE products ADD COLUMN post_cart_note_text TEXT DEFAULT NULL AFTER post_cart_note
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	40575625fecd	1	ALTER TABLE users ADD COLUMN gender VARCHAR(20) DEFAULT NULL AFTER birth_date
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	40bf3f5200d8	1	ALTER TABLE product_extra_field_values ADD COLUMN `value` LONGTEXT DEFAULT NULL AFTER fiel
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	44324ab5ff7d	1	ALTER TABLE product_reviews ADD COLUMN source VARCHAR(50) DEFAULT NULL AFTER is_approved
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	457c709c77b7	1	ALTER TABLE products ADD COLUMN product_highlights TEXT DEFAULT NULL AFTER description
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	4dea6fb19658	1	ALTER TABLE products ADD COLUMN tags_json TEXT DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	51c0d702d01d	1	ALTER TABLE gallery_images ADD COLUMN media_type VARCHAR(20) NOT NULL DEFAULT 'image' AFTE
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	5509a320fa13	1	ALTER TABLE orders ADD COLUMN billing_company_tax_id VARCHAR(120) DEFAULT NULL AFTER billi
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	5c975ea25aa7	1	ALTER TABLE product_templates ADD COLUMN description VARCHAR(255) DEFAULT NULL AFTER slug
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	5cca9582c53f	1	ALTER TABLE orders ADD COLUMN ad_source VARCHAR(50) DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	5f32d6a24934	1	ALTER TABLE products ADD COLUMN vat_percent DECIMAL(5,2) NOT NULL DEFAULT 19.00 AFTER pric
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	6052f35f8c70	1	ALTER TABLE product_extra_fields ADD COLUMN placeholder VARCHAR(255) DEFAULT NULL AFTER fi
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	609a57f8b1b0	1	ALTER TABLE orders ADD COLUMN fan_tracking_synced_at DATETIME DEFAULT NULL AFTER fan_track
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	61e5e4b9a858	1	ALTER TABLE product_extra_fields ADD COLUMN is_required TINYINT(1) NOT NULL DEFAULT 0 AFTE
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	67082cfdea0c	1	ALTER TABLE orders ADD COLUMN billing_is_company TINYINT(1) NOT NULL DEFAULT 0 AFTER billi
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	6f1004db3d81	1	CREATE TABLE IF NOT EXISTS product_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	71040d72e534	1	CREATE TABLE IF NOT EXISTS contact_form_messages ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	725b80328142	1	ALTER TABLE blog_posts ADD COLUMN event_start_date DATE DEFAULT NULL AFTER category
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	73ca42bfd747	1	ALTER TABLE product_extra_fields ADD COLUMN default_value LONGTEXT DEFAULT NULL AFTER plac
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	7826f68605c5	1	ALTER TABLE orders ADD COLUMN fan_tracking_last_event_at DATETIME DEFAULT NULL AFTER fan_t
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	78fd7394cd17	1	ALTER TABLE blog_posts ADD COLUMN category VARCHAR(190) DEFAULT NULL AFTER excerpt
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	7a910cbe4eea	1	ALTER TABLE product_templates ADD COLUMN css_content LONGTEXT NULL AFTER html_content
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	7acfbd2f2b7e	1	ALTER TABLE orders ADD COLUMN fan_tracking_status VARCHAR(190) DEFAULT NULL AFTER fan_trac
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	7af0c72d333f	1	ALTER TABLE users ADD COLUMN birth_date DATE DEFAULT NULL AFTER phone
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	866a0e384c8d	1	ALTER TABLE orders ADD COLUMN billing_company_name VARCHAR(255) DEFAULT NULL AFTER billing
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	8717cdbdd9f0	1	CREATE TABLE IF NOT EXISTS product_extra_field_values ( id INT UNSIGNED AUTO_INCREMENT PRI
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	8bda7d55e7c1	1	ALTER TABLE admins ADD COLUMN role VARCHAR(50) NOT NULL DEFAULT "administrator_general" AF
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	8c460643d9d8	1	ALTER TABLE products ADD COLUMN bbd_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER sale_price
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	8e1d099b8bef	1	ALTER TABLE product_templates ADD COLUMN js_content LONGTEXT NULL AFTER css_content
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	8ed9ebd1a94f	1	ALTER TABLE blog_posts ADD COLUMN video_url VARCHAR(500) DEFAULT NULL AFTER featured_image
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	95bfa1022a06	1	ALTER TABLE products ADD COLUMN post_cart_note_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	96ffeb80e76c	1	CREATE TABLE IF NOT EXISTS blog_posts ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	9e2740aec6ac	1	ALTER TABLE products ADD COLUMN similar_products_json LONGTEXT DEFAULT NULL AFTER gallery_
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	9eb64bc5c995	1	ALTER TABLE products ADD COLUMN bbd_entries_json LONGTEXT DEFAULT NULL AFTER bbd_enabled
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	a524da9a2f66	1	ALTER TABLE blog_posts ADD COLUMN event_ticket_url VARCHAR(500) DEFAULT NULL AFTER event_p
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	a5663c7e766c	1	CREATE TABLE IF NOT EXISTS gallery_folders ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, n
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	a77c5be8bbb0	1	ALTER TABLE orders ADD COLUMN deleted_at DATETIME DEFAULT NULL AFTER completed_awb_email_e
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	a889c361cd6a	1	ALTER TABLE products ADD COLUMN category_id INT UNSIGNED DEFAULT NULL AFTER category
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	aa4953c420c8	1	ALTER TABLE orders ADD COLUMN manual_discount DECIMAL(10,2) NOT NULL DEFAULT 0
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	ab5c1cbe7ef1	1	ALTER TABLE blog_posts ADD COLUMN event_location VARCHAR(190) DEFAULT NULL AFTER event_tic
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	b2871a586f4f	1	ALTER TABLE products ADD COLUMN badge_best_seller TINYINT(1) NOT NULL DEFAULT 0 AFTER badg
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	baa7377e13bf	1	ALTER TABLE product_extra_fields ADD COLUMN field_type VARCHAR(30) NOT NULL DEFAULT "texta
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	baab0ad6dca9	1	ALTER TABLE products ADD COLUMN gallery_images_json LONGTEXT DEFAULT NULL AFTER image_url
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	bc5f405c9bd5	1	CREATE TABLE IF NOT EXISTS email_send_history ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	c065c99f5699	1	CREATE TABLE IF NOT EXISTS gdpr_agreements ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, s
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	c5d8bc616594	1	CREATE TABLE IF NOT EXISTS product_categories ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	cbfbf4edc1d1	1	ALTER TABLE orders ADD COLUMN completed_awb_email_sent_at DATETIME DEFAULT NULL AFTER fan_
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	ce43fcf8dce8	1	ALTER TABLE orders ADD COLUMN fan_awb_inlocuite TEXT DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	d0440d0b6c21	1	CREATE TABLE IF NOT EXISTS blog_authors ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	d736de5188a1	1	ALTER TABLE blog_posts ADD COLUMN category_id INT UNSIGNED DEFAULT NULL AFTER category
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	d82b2584b456	1	CREATE TABLE IF NOT EXISTS blog_post_categories ( post_id INT UNSIGNED NOT NULL, category_
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	d9277aa92f88	1	ALTER TABLE products ADD COLUMN sale_price_periods_json LONGTEXT DEFAULT NULL AFTER sale_p
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	dbced819f25c	1	ALTER TABLE orders ADD COLUMN completed_awb_email_error TEXT DEFAULT NULL AFTER completed_
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	dd1d30ec73f0	1	ALTER TABLE seo_pages ADD COLUMN image_url VARCHAR(255) DEFAULT NULL AFTER canonical_url
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	e034d6c29bbc	1	ALTER TABLE gallery_images ADD COLUMN folder_id INT UNSIGNED DEFAULT NULL AFTER image_url
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	e6175bc907b5	1	ALTER TABLE product_templates ADD COLUMN html_content LONGTEXT NULL AFTER description
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	e96bbf387523	1	ALTER TABLE orders ADD COLUMN notes TEXT DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	e97625b9817d	1	ALTER TABLE orders ADD COLUMN fan_tracking_url TEXT DEFAULT NULL AFTER fan_awb
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	eaedc4e4a9bb	1	ALTER TABLE orders ADD COLUMN billing_company_registration_no VARCHAR(120) DEFAULT NULL AF
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	eccdf04d9d8b	1	ALTER TABLE orders ADD COLUMN manual_discount_percent DECIMAL(5,2) DEFAULT NULL
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	f06d26791aa3	1	ALTER TABLE products ADD COLUMN vat_included TINYINT(1) NOT NULL DEFAULT 1 AFTER vat_perce
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	f0ee0051947a	1	ALTER TABLE pages ADD COLUMN js_content LONGTEXT NULL AFTER css_content
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	f1992466e6e5	1	CREATE TABLE IF NOT EXISTS product_reviews ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, p
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	f1b82a5c8fda	1	CREATE TABLE IF NOT EXISTS blog_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, na
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	f628387a6bb8	1	ALTER TABLE products ADD COLUMN badge_seasonal TINYINT(1) NOT NULL DEFAULT 0 AFTER badge_b
+src/Http/Controllers/AdminController.php	AdminController::ensureOptionalSchema	ddl	f7a0fdc481c0	1	ALTER TABLE blog_posts ADD COLUMN event_price VARCHAR(120) DEFAULT NULL AFTER event_end_da
+src/Http/Controllers/AdminController.php	AdminController::ensurePromoSchema	ddl	53f9f14df790	1	CREATE TABLE IF NOT EXISTS promotional_products ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/AdminController.php	AdminController::ensurePromoSchema	ddl	ef3cf91f77a8	1	CREATE TABLE IF NOT EXISTS order_promo_items ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+src/Http/Controllers/SiteController.php	SiteController::ensureCheckoutAntiBotSchema	ddl	d955b33b30f4	1	CREATE TABLE IF NOT EXISTS checkout_submit_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/SiteController.php	SiteController::ensureContactFormsSchema	ddl	71040d72e534	1	CREATE TABLE IF NOT EXISTS contact_form_messages ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	306fb507537a	1	ALTER TABLE user_addresses ADD COLUMN street VARCHAR(190) DEFAULT NULL AFTER phone
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	40575625fecd	1	ALTER TABLE users ADD COLUMN gender VARCHAR(20) DEFAULT NULL AFTER birth_date
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	7af0c72d333f	1	ALTER TABLE users ADD COLUMN birth_date DATE DEFAULT NULL AFTER phone
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	a12c3668f5ad	1	ALTER TABLE users ADD UNIQUE KEY uniq_users_google_id (google_id)
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	b2f733ee760b	1	CREATE TABLE IF NOT EXISTS customer_password_resets ( id INT UNSIGNED AUTO_INCREMENT PRIMA
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	cc6b8b991e23	1	CREATE TABLE IF NOT EXISTS user_addresses ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, us
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	d0f5502f1d3b	1	ALTER TABLE user_addresses ADD COLUMN street_no VARCHAR(40) DEFAULT NULL AFTER street
+src/Http/Controllers/SiteController.php	SiteController::ensureCustomerSchema	ddl	fe322ca80dee	1	ALTER TABLE users ADD COLUMN google_id VARCHAR(120) DEFAULT NULL AFTER password_hash
+src/Http/Controllers/SiteController.php	SiteController::ensureFanLocalitiesSchema	ddl	927d0736b84b	1	CREATE TABLE IF NOT EXISTS fan_localities ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, co
+src/Http/Controllers/SiteController.php	SiteController::ensureGdprAgreementsSchema	ddl	c065c99f5699	1	CREATE TABLE IF NOT EXISTS gdpr_agreements ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, s
+src/Http/Controllers/SiteController.php	SiteController::ensureOptionalPageSchema	ddl	209bdc40a1ce	1	ALTER TABLE pages ADD COLUMN css_content LONGTEXT NULL AFTER html_content
+src/Http/Controllers/SiteController.php	SiteController::ensureOptionalPageSchema	ddl	2a3db2b9cb7d	1	CREATE TABLE IF NOT EXISTS seo_pages ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, page_ty
+src/Http/Controllers/SiteController.php	SiteController::ensureOptionalPageSchema	ddl	dd1d30ec73f0	1	ALTER TABLE seo_pages ADD COLUMN image_url VARCHAR(255) DEFAULT NULL AFTER canonical_url
+src/Http/Controllers/SiteController.php	SiteController::ensureOptionalPageSchema	ddl	f0ee0051947a	1	ALTER TABLE pages ADD COLUMN js_content LONGTEXT NULL AFTER css_content
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	000a3de257df	1	ALTER TABLE product_extra_fields ADD COLUMN name VARCHAR(190) DEFAULT NULL AFTER id
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	0363c50a5151	1	ALTER TABLE products ADD COLUMN product_template_id INT UNSIGNED DEFAULT NULL AFTER catego
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	14a70de1af32	1	ALTER TABLE products ADD COLUMN brand VARCHAR(120) DEFAULT NULL
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	1a3b4249686e	1	ALTER TABLE order_items ADD COLUMN bbd_key VARCHAR(64) DEFAULT NULL AFTER product_name
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	1cec92643cba	1	ALTER TABLE products ADD COLUMN badge_popular TINYINT(1) NOT NULL DEFAULT 0 AFTER gallery_
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	2033bb2c1cd3	1	CREATE TABLE IF NOT EXISTS product_templates ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	248e84d4c2da	1	ALTER TABLE products ADD COLUMN out_of_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER stock
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	2e0c93480522	1	ALTER TABLE products ADD COLUMN post_cart_note_text TEXT DEFAULT NULL AFTER post_cart_note
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	32d361df85cc	1	CREATE TABLE IF NOT EXISTS product_extra_field_values ( id INT UNSIGNED AUTO_INCREMENT PRI
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	40bf3f5200d8	1	ALTER TABLE product_extra_field_values ADD COLUMN `value` LONGTEXT DEFAULT NULL AFTER fiel
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	44324ab5ff7d	1	ALTER TABLE product_reviews ADD COLUMN source VARCHAR(50) DEFAULT NULL AFTER is_approved
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	457c709c77b7	1	ALTER TABLE products ADD COLUMN product_highlights TEXT DEFAULT NULL AFTER description
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	4dea6fb19658	1	ALTER TABLE products ADD COLUMN tags_json TEXT DEFAULT NULL
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	5c975ea25aa7	1	ALTER TABLE product_templates ADD COLUMN description VARCHAR(255) DEFAULT NULL AFTER slug
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	5f32d6a24934	1	ALTER TABLE products ADD COLUMN vat_percent DECIMAL(5,2) NOT NULL DEFAULT 19.00 AFTER pric
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	61e5e4b9a858	1	ALTER TABLE product_extra_fields ADD COLUMN is_required TINYINT(1) NOT NULL DEFAULT 0 AFTE
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	6dfbb3dd841f	1	CREATE TABLE IF NOT EXISTS product_extra_fields ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	73ca42bfd747	1	ALTER TABLE product_extra_fields ADD COLUMN default_value LONGTEXT DEFAULT NULL AFTER plac
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	7a910cbe4eea	1	ALTER TABLE product_templates ADD COLUMN css_content LONGTEXT NULL AFTER html_content
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	8c460643d9d8	1	ALTER TABLE products ADD COLUMN bbd_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER sale_price
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	8e1d099b8bef	1	ALTER TABLE product_templates ADD COLUMN js_content LONGTEXT NULL AFTER css_content
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	95bfa1022a06	1	ALTER TABLE products ADD COLUMN post_cart_note_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	9e2740aec6ac	1	ALTER TABLE products ADD COLUMN similar_products_json LONGTEXT DEFAULT NULL AFTER gallery_
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	9eb64bc5c995	1	ALTER TABLE products ADD COLUMN bbd_entries_json LONGTEXT DEFAULT NULL AFTER bbd_enabled
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	b2871a586f4f	1	ALTER TABLE products ADD COLUMN badge_best_seller TINYINT(1) NOT NULL DEFAULT 0 AFTER badg
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	baa7377e13bf	1	ALTER TABLE product_extra_fields ADD COLUMN field_type VARCHAR(30) NOT NULL DEFAULT "texta
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	baab0ad6dca9	1	ALTER TABLE products ADD COLUMN gallery_images_json LONGTEXT DEFAULT NULL AFTER image_url
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	d9277aa92f88	1	ALTER TABLE products ADD COLUMN sale_price_periods_json LONGTEXT DEFAULT NULL AFTER sale_p
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	e6175bc907b5	1	ALTER TABLE product_templates ADD COLUMN html_content LONGTEXT NULL AFTER description
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	f06d26791aa3	1	ALTER TABLE products ADD COLUMN vat_included TINYINT(1) NOT NULL DEFAULT 1 AFTER vat_perce
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	f1992466e6e5	1	CREATE TABLE IF NOT EXISTS product_reviews ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, p
+src/Http/Controllers/SiteController.php	SiteController::ensureProductCustomSchema	ddl	f628387a6bb8	1	ALTER TABLE products ADD COLUMN badge_seasonal TINYINT(1) NOT NULL DEFAULT 0 AFTER badge_b
+src/Http/Controllers/SiteController.php	SiteController::ensureRegisterAntiBotSchema	ddl	e453a1e366e3	1	CREATE TABLE IF NOT EXISTS register_submit_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Http/Controllers/SiteController.php	SiteController::ensureStripeSchema	ddl	11200a76a2e3	1	ALTER TABLE orders ADD COLUMN euplatesc_approval VARCHAR(64) DEFAULT NULL AFTER euplatesc_
+src/Http/Controllers/SiteController.php	SiteController::ensureStripeSchema	ddl	34ae8837fee4	1	ALTER TABLE orders ADD COLUMN stripe_payment_intent_id VARCHAR(255) DEFAULT NULL AFTER str
+src/Http/Controllers/SiteController.php	SiteController::ensureStripeSchema	ddl	3db6e8023510	1	ALTER TABLE orders ADD COLUMN paid_at DATETIME DEFAULT NULL AFTER stripe_payment_intent_id
+src/Http/Controllers/SiteController.php	SiteController::ensureStripeSchema	ddl	9b40b0f4417a	1	ALTER TABLE orders ADD COLUMN stripe_session_id VARCHAR(255) DEFAULT NULL AFTER payment_st
+src/Http/Controllers/SiteController.php	SiteController::ensureStripeSchema	ddl	a30ec45a3e8c	1	ALTER TABLE orders ADD COLUMN payment_error TEXT DEFAULT NULL AFTER paid_at
+src/Http/Controllers/SiteController.php	SiteController::ensureStripeSchema	ddl	e5ac7c68e50b	1	ALTER TABLE orders ADD COLUMN euplatesc_ep_id VARCHAR(64) DEFAULT NULL AFTER payment_error
+src/Support/AdminActivityLog.php	AdminActivityLog::ensureSchema	ddl	ecf6fc14a7a7	1	CREATE TABLE IF NOT EXISTS admin_activity_log ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
+src/Support/Auth.php	Auth::ensureSchema	ddl	205d4bdc8ca0	1	ALTER TABLE admins ADD COLUMN roles_json LONGTEXT DEFAULT NULL AFTER role
+src/Support/Auth.php	Auth::ensureSchema	ddl	8bda7d55e7c1	1	ALTER TABLE admins ADD COLUMN role VARCHAR(50) NOT NULL DEFAULT "administrator_general" AF
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	ddl	08b5aa822f77	1	ALTER TABLE bt_ipay_transactions ADD KEY idx_bt_ipay_tx_link (link_id)
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	ddl	27bfd3487116	1	CREATE TABLE IF NOT EXISTS bt_ipay_transactions ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	ddl	43605ac2b222	1	CREATE TABLE IF NOT EXISTS bt_ipay_log ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, tx_id
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	ddl	5fe5087a0282	1	ALTER TABLE bt_ipay_transactions ADD COLUMN
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	ddl	b7bb3cd876cc	1	ALTER TABLE orders ADD COLUMN
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	037590dca04a	1	INT UNSIGNED DEFAULT NULL AFTER order_id
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	0569aada0b07	1	DATETIME DEFAULT NULL AFTER public_checked_at
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	252d8af5a151	1	INT UNSIGNED DEFAULT NULL AFTER deposit_requested_at
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	4fe7bb8890b0	1	DATETIME DEFAULT NULL
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	7f3efa5e4095	1	DATETIME DEFAULT NULL AFTER last_checked_at
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	9b63756649e8	1	VARCHAR(1000) DEFAULT NULL AFTER bt_order_id
+src/Support/BtIpayPayments.php	BtIpayPayments::migreaza	definitie	f1927cf6c688	1	TEXT DEFAULT NULL
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	23b29fd18130	1	ALTER TABLE coupons ADD COLUMN apply_only_selected_products TINYINT(1) NOT NULL DEFAULT 0
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	24303d70b759	1	ALTER TABLE coupons ADD COLUMN stacks_with_discounts TINYINT(1) NOT NULL DEFAULT 1 AFTER a
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	26e6ce85c0e9	1	ALTER TABLE coupons ADD COLUMN category_ids_json LONGTEXT DEFAULT NULL AFTER product_ids_j
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	2dd56ca622df	1	ALTER TABLE coupons ADD COLUMN used_at DATETIME DEFAULT NULL AFTER is_unique
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	47b34710e3b5	1	ALTER TABLE coupons ADD COLUMN product_ids_json LONGTEXT DEFAULT NULL AFTER ends_at
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	621496dbf84b	1	ALTER TABLE coupons ADD COLUMN max_uses_total INT UNSIGNED DEFAULT NULL AFTER max_items_co
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	79bee9a07c35	1	ALTER TABLE coupons ADD COLUMN is_unique TINYINT(1) NOT NULL DEFAULT 0 AFTER apply_only_se
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	9843a6e9a2e5	1	ALTER TABLE coupons ADD COLUMN min_items_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER categ
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	ae7ff5c02aeb	1	ALTER TABLE coupons ADD COLUMN allowed_user_ids_json LONGTEXT DEFAULT NULL AFTER category_
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	b8e6c7280702	1	ALTER TABLE coupons ADD COLUMN import_batch VARCHAR(190) DEFAULT NULL AFTER used_at
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureCouponsSchema	ddl	f9a396381fa1	1	ALTER TABLE coupons ADD COLUMN max_items_count INT UNSIGNED DEFAULT NULL AFTER min_items_c
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	00fcf26bf123	1	ALTER TABLE orders ADD COLUMN shipping_last_name VARCHAR(190) DEFAULT NULL AFTER shipping_
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	12eea23fd1c1	1	ALTER TABLE orders ADD COLUMN shipping_postcode VARCHAR(20) DEFAULT NULL AFTER shipping_co
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	16e1e9c09923	1	ALTER TABLE orders ADD COLUMN shipping_county VARCHAR(190) DEFAULT NULL AFTER shipping_cit
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	1953049cdad2	1	ALTER TABLE orders ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	617935191010	1	ALTER TABLE orders ADD COLUMN shipping_same_as_billing TINYINT(1) NOT NULL DEFAULT 1 AFTER
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	68d89ef30941	1	ALTER TABLE orders ADD COLUMN fan_locker_address VARCHAR(255) DEFAULT NULL AFTER fan_locke
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	70515693dcd2	1	ALTER TABLE orders ADD COLUMN fan_locker_name VARCHAR(190) DEFAULT NULL AFTER fan_locker_i
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	984c3f718478	1	ALTER TABLE orders ADD COLUMN shipping_address_line2 VARCHAR(255) DEFAULT NULL AFTER shipp
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	98cbdd3209f5	1	ALTER TABLE orders ADD COLUMN shipping_phone VARCHAR(50) DEFAULT NULL AFTER shipping_last_
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	99e645e79ed2	1	ALTER TABLE orders ADD COLUMN shipping_first_name VARCHAR(190) DEFAULT NULL AFTER shipping
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	a9795a1872d6	1	ALTER TABLE orders ADD COLUMN shipping_city VARCHAR(190) DEFAULT NULL AFTER shipping_addre
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	ad694c37d54a	1	ALTER TABLE orders ADD COLUMN fan_locker_county VARCHAR(190) DEFAULT NULL AFTER fan_locker
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	d83ac5315ae8	1	ALTER TABLE orders ADD COLUMN fan_locker_postcode VARCHAR(20) DEFAULT NULL AFTER fan_locke
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	dc922750324a	1	ALTER TABLE orders ADD COLUMN fan_locker_id INT UNSIGNED DEFAULT NULL AFTER shipping_postc
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	df685e484b06	1	ALTER TABLE orders ADD COLUMN shipping_address_line1 VARCHAR(255) DEFAULT NULL AFTER shipp
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	e99a427d1183	1	ALTER TABLE orders ADD COLUMN shipping_manual TINYINT(1) NOT NULL DEFAULT 0 AFTER shipping
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureOrderShippingSchema	ddl	f67447de2fd7	1	ALTER TABLE orders ADD COLUMN fan_locker_city VARCHAR(190) DEFAULT NULL AFTER fan_locker_a
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	248e84d4c2da	1	ALTER TABLE products ADD COLUMN out_of_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER stock
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	5f32d6a24934	1	ALTER TABLE products ADD COLUMN vat_percent DECIMAL(5,2) NOT NULL DEFAULT 19.00 AFTER pric
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	7d4c7a9763e7	1	ALTER TABLE products ADD COLUMN discount_badge_mode VARCHAR(10) NOT NULL DEFAULT 'percent'
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	8c460643d9d8	1	ALTER TABLE products ADD COLUMN bbd_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER sale_price
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	9eb64bc5c995	1	ALTER TABLE products ADD COLUMN bbd_entries_json LONGTEXT DEFAULT NULL AFTER bbd_enabled
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	d9277aa92f88	1	ALTER TABLE products ADD COLUMN sale_price_periods_json LONGTEXT DEFAULT NULL AFTER sale_p
+src/Support/CheckoutCalculator.php	CheckoutCalculator::ensureProductVatSchema	ddl	f06d26791aa3	1	ALTER TABLE products ADD COLUMN vat_included TINYINT(1) NOT NULL DEFAULT 1 AFTER vat_perce
+src/Support/EmailAutomation.php	EmailAutomation::ensureSchema	ddl	0c1706035a1d	1	CREATE TABLE IF NOT EXISTS email_logs ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_
+src/Support/EmailAutomation.php	EmailAutomation::ensureSchema	ddl	6b0251077ad8	1	CREATE TABLE IF NOT EXISTS cart_abandonments ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+src/Support/ErpSync.php	ErpSync::ensureSchema	ddl	40e23fbd7933	1	CREATE INDEX idx_orders_erp_status ON orders (erp_status, erp_next_retry_at)
+src/Support/ErpSync.php	ErpSync::ensureSchema	ddl	b7bb3cd876cc	1	ALTER TABLE orders ADD COLUMN
+src/Support/ErpSync.php	ErpSync::ensureSchema	ddl	d7c296502c67	1	ALTER TABLE order_items ADD COLUMN
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	0facfec62c7e	1	DECIMAL(5,2) DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	1a80c3c539a4	1	VARCHAR(32) DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	1d73381393a8	1	INT NOT NULL DEFAULT 0
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	498fc40394e7	1	VARCHAR(190) DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	4a4a4785dc9b	1	VARCHAR(20) NOT NULL DEFAULT 'pending'
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	4fe7bb8890b0	4	DATETIME DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	62cbead551d7	1	TINYINT(1) DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	92bde8927abc	1	VARCHAR(500) DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	d017d341b8fb	1	BIGINT DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	f1927cf6c688	4	TEXT DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	fab034b720d3	2	DECIMAL(10,2) DEFAULT NULL
+src/Support/ErpSync.php	ErpSync::ensureSchema	definitie	fb5a095900ce	1	VARCHAR(40) DEFAULT NULL
+src/Support/FanLockers.php	FanLockers::ensureSchema	ddl	1aae8c71912d	1	ALTER TABLE fan_lockers ADD COLUMN lat DECIMAL(10, 7) DEFAULT NULL AFTER postcode
+src/Support/FanLockers.php	FanLockers::ensureSchema	ddl	23c1a3187667	1	ALTER TABLE fan_lockers ADD COLUMN postcode VARCHAR(20) NOT NULL DEFAULT "" AFTER address
+src/Support/FanLockers.php	FanLockers::ensureSchema	ddl	3ff7e8958465	1	ALTER TABLE fan_lockers ADD COLUMN lng DECIMAL(10, 7) DEFAULT NULL AFTER lat
+src/Support/FanLockers.php	FanLockers::ensureSchema	ddl	fa83b53f3504	1	ALTER TABLE fan_lockers ADD COLUMN fan_id VARCHAR(60) NOT NULL DEFAULT "" AFTER code
+src/Support/FanLockers.php	FanLockers::ensureSchema	ddl	fd303bce2959	1	CREATE TABLE IF NOT EXISTS fan_lockers ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, code
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaJurnal	ddl	af96048ac2be	1	CREATE TABLE IF NOT EXISTS fan_nomenclator_sync ( lista VARCHAR(20) NOT NULL PRIMARY KEY,
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaKm	ddl	5fdc42344822	1	CREATE TABLE IF NOT EXISTS fan_localities_extra_km ( id INT UNSIGNED AUTO_INCREMENT PRIMAR
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaKm	ddl	e1b65dc721f3	1	ALTER TABLE fan_localities_extra_km ADD COLUMN exterior_km DECIMAL(8, 2) DEFAULT NULL AFTE
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaLocalitati	ddl	927d0736b84b	1	CREATE TABLE IF NOT EXISTS fan_localities ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, co
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	2944bfa2f49c	1	ALTER TABLE fan_streets ADD UNIQUE KEY uniq_fan_streets_row (row_key)
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	38f123cb644e	1	CREATE TABLE IF NOT EXISTS fan_streets ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, count
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	3b0b0a46634d	1	ALTER TABLE fan_streets ADD COLUMN range_from VARCHAR(40) NOT NULL DEFAULT "" AFTER street
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	4612a6fca11b	1	ALTER TABLE fan_streets ADD COLUMN street VARCHAR(255) NOT NULL AFTER locality
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	55ea2592dbe4	1	ALTER TABLE fan_streets ADD COLUMN row_key CHAR(40) NOT NULL DEFAULT "" AFTER street_norm
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	77d733a43937	1	ALTER TABLE fan_streets ADD COLUMN street_id VARCHAR(64) NOT NULL DEFAULT "" AFTER street
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	8af9bf50a610	1	ALTER TABLE fan_streets ADD COLUMN range_to VARCHAR(40) NOT NULL DEFAULT "" AFTER range_fr
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	9c3af15ec5cd	1	ALTER TABLE fan_streets ADD COLUMN agency VARCHAR(160) NOT NULL DEFAULT "" AFTER street_ty
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	9e3ef6c0ec0b	1	ALTER TABLE fan_streets ADD COLUMN parity VARCHAR(32) NOT NULL DEFAULT "" AFTER range_to
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	e002404c875c	1	ALTER TABLE fan_streets ADD COLUMN postal_code VARCHAR(32) NOT NULL DEFAULT "" AFTER parit
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	f309127b2b9f	1	ALTER TABLE fan_streets ADD COLUMN street_type VARCHAR(80) NOT NULL DEFAULT "" AFTER posta
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	fa0693b6c803	1	ALTER TABLE fan_streets DROP INDEX uniq_fan_streets
+src/Support/FanNomenclator.php	FanNomenclator::asiguraSchemaStrazi	ddl	fbe02a70b8e5	1	ALTER TABLE fan_streets ADD COLUMN street_norm VARCHAR(255) NOT NULL AFTER locality_norm
+src/Support/FanNomenclator.php	FanNomenclator::inlocuiesteTabele	ddl	2f421d81cb8f	1	RENAME TABLE
+src/Support/FanNomenclator.php	FanNomenclator::inlocuiesteTabele	ddl	6b81804ffa26	2	DROP TABLE IF EXISTS
+src/Support/FanNomenclator.php	FanNomenclator::jobDeLucru	ddl	6b81804ffa26	1	DROP TABLE IF EXISTS
+src/Support/FanNomenclator.php	FanNomenclator::jobDeLucru	ddl	979ae29e43d6	1	CREATE TABLE
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	0d1136db256b	1	ALTER TABLE orders ADD COLUMN loyalty_points_used INT NOT NULL DEFAULT 0 AFTER discount_to
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	29554746d8f2	1	CREATE TABLE IF NOT EXISTS loyalty_points_rules ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	43ddf46c5703	1	ALTER TABLE orders ADD COLUMN loyalty_points_awarded INT NOT NULL DEFAULT 0 AFTER loyalty_
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	58b6f4e6a87d	1	ALTER TABLE users ADD COLUMN loyalty_points INT NOT NULL DEFAULT 0 AFTER google_id
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	937f19e0400b	1	ALTER TABLE orders ADD COLUMN loyalty_points_awarded_at DATETIME DEFAULT NULL AFTER loyalt
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	a2764270aa02	1	CREATE TABLE IF NOT EXISTS loyalty_points_transactions ( id INT UNSIGNED AUTO_INCREMENT PR
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	c327ca43327b	1	ALTER TABLE orders ADD COLUMN loyalty_points_discount DECIMAL(10,2) NOT NULL DEFAULT 0 AFT
+src/Support/LoyaltyService.php	LoyaltyService::ensureSchema	ddl	eb199279d5db	1	ALTER TABLE orders ADD COLUMN loyalty_points_pending_claim INT NOT NULL DEFAULT 0 AFTER lo
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	0b7dfd6cbd20	1	CREATE TABLE IF NOT EXISTS newsletter_campaigns ( id INT UNSIGNED AUTO_INCREMENT PRIMARY K
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	1235410b7ce2	1	CREATE TABLE IF NOT EXISTS newsletter_lists ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	16c9e7c94c4a	1	ALTER TABLE newsletter_campaign_sends ADD COLUMN open_count INT UNSIGNED DEFAULT 0
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	276ccef18ab8	1	ALTER TABLE orders ADD INDEX idx_nl_campaign_id (nl_campaign_id)
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	3c18c5b4baa9	1	ALTER TABLE newsletter_campaigns ADD COLUMN total_opens INT UNSIGNED DEFAULT 0
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	5cca7a515d1d	1	CREATE TABLE IF NOT EXISTS newsletter_list_subscribers ( list_id INT UNSIGNED NOT NULL, su
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	60223c9b73d0	1	CREATE TABLE IF NOT EXISTS newsletter_campaign_opens ( id INT UNSIGNED AUTO_INCREMENT PRIM
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	71713ebe91c9	1	ALTER TABLE newsletter_campaign_sends ADD COLUMN click_count INT UNSIGNED DEFAULT 0
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	71bd7378dd62	1	ALTER TABLE newsletter_campaigns ADD COLUMN subscriber_list_ids TEXT DEFAULT NULL AFTER su
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	73679268ec2e	1	CREATE TABLE IF NOT EXISTS newsletter_subscribers ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	826c6af1c37f	1	CREATE TABLE IF NOT EXISTS newsletter_campaign_sends ( id INT UNSIGNED AUTO_INCREMENT PRIM
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	8b321dd787b4	1	ALTER TABLE newsletter_campaigns ADD COLUMN blocks_json LONGTEXT DEFAULT NULL AFTER subjec
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	8dd08ffbedb0	1	ALTER TABLE newsletter_campaigns ADD COLUMN total_clicks INT UNSIGNED DEFAULT 0
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	9a6b78669df0	1	CREATE TABLE IF NOT EXISTS newsletter_campaign_clicks ( id INT UNSIGNED AUTO_INCREMENT PRI
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	ab06eceb05fa	1	ALTER TABLE newsletter_campaign_sends ADD COLUMN clicked_at DATETIME DEFAULT NULL
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	b724b6c64265	1	CREATE TABLE IF NOT EXISTS newsletter_optin_forms ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	ca80809c2255	1	ALTER TABLE orders ADD COLUMN nl_campaign_id INT UNSIGNED DEFAULT NULL
+src/Support/NewsletterService.php	NewsletterService::ensureSchema	ddl	e44e99e62b21	1	ALTER TABLE newsletter_campaign_sends ADD COLUMN opened_at DATETIME DEFAULT NULL
+src/Support/OrderMailer.php	OrderMailer::ensureEmailSendHistorySchema	ddl	bc5f405c9bd5	1	CREATE TABLE IF NOT EXISTS email_send_history ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY
+src/Support/PaymentLink.php	PaymentLink::ensureSchema	ddl	c669757407bc	1	ALTER TABLE order_payment_links ADD COLUMN procesator VARCHAR(20) NOT NULL DEFAULT "euplat
+src/Support/PaymentLink.php	PaymentLink::ensureSchema	ddl	dc35ead2108b	1	CREATE TABLE IF NOT EXISTS order_payment_links ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KE
+src/Support/Precomanda.php	Precomanda::ensureSchema	ddl	0d49b6a1c4f5	1	ALTER TABLE orders ADD COLUMN preorder_released_at DATETIME DEFAULT NULL AFTER preorder_st
+src/Support/Precomanda.php	Precomanda::ensureSchema	ddl	2b8ebdc147dc	1	ALTER TABLE products ADD COLUMN preorder_max_total INT UNSIGNED DEFAULT NULL AFTER preorde
+src/Support/Precomanda.php	Precomanda::ensureSchema	ddl	39f2467113a9	1	ALTER TABLE products ADD COLUMN preorder_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER out_o
+src/Support/Precomanda.php	Precomanda::ensureSchema	ddl	6a231db954d2	1	ALTER TABLE orders ADD COLUMN preorder_status VARCHAR(12) DEFAULT NULL AFTER status
+src/Support/Precomanda.php	Precomanda::ensureSchema	ddl	c7d5cdc8b3d5	1	ALTER TABLE products ADD COLUMN preorder_max_per_order INT UNSIGNED DEFAULT NULL AFTER pre
+src/Support/ProductCategories.php	ProductCategories::ensureSchema	ddl	5ef4c910d328	1	CREATE TABLE IF NOT EXISTS product_category_links ( id INTEGER PRIMARY KEY AUTOINCREMENT,
+src/Support/ProductCategories.php	ProductCategories::ensureSchema	ddl	bb45a66fafda	1	CREATE TABLE IF NOT EXISTS product_category_links ( id INT UNSIGNED AUTO_INCREMENT PRIMARY
+src/Support/WordPressDumpReader.php	WordPressDumpReader::citeste	ddl	c3e464d1f89d	1	/^\s*CREATE TABLE (?:IF NOT EXISTS )?`([^`]+)`/i

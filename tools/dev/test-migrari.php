@@ -3,14 +3,15 @@
 declare(strict_types=1);
 
 /**
- * Testele migrărilor (docs/MIGRARI.md). Partea de azi (WP-02, WP-03) e runner-ul însuși, pe
- * migrări de jucărie scrise de test; testele bazei (T1–T11, pe migrările adevărate) vin cu WP-04
- * în același fișier. Până atunci, migrările adevărate (0001–0024) le verifică
- * tools/dev/migrari/genereaza-fixture.php --verifica (poarta G-baza).
+ * Testele migrărilor (docs/MIGRARI.md, „Testele”): runner-ul însuși, pe migrări de jucărie scrise de
+ * test (WP-02, WP-03: secțiunile U, D, R, T, S), și migrările adevărate din database/migrari pe
+ * schemele celor cinci coduri, T1–T11 (WP-04: secțiunea M).
  *
- *   tools/dev/php.sh tools/dev/test-migrari.php --runner
- *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-migrari.php --runner   # cu PHP-ul minim
- *   … --doar-mariadb                                                         # fără MySQL 8 (parțial)
+ *   tools/dev/php.sh tools/dev/test-migrari.php                # tot (poarta G-mig din porti.sh)
+ *   tools/dev/php.sh tools/dev/test-migrari.php --runner       # doar runner-ul (U, D, R, T, S; poarta G-runner)
+ *   tools/dev/php.sh tools/dev/test-migrari.php --migrari      # doar migrările adevărate (U, M, S; fără D și R)
+ *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-migrari.php   # cu PHP-ul minim
+ *   … --doar-mariadb                                           # fără MySQL 8 (parțial, spus în rezultat)
  *
  * U. Fără bază: Server (versiuni, ce știe fiecare, lanțul de clauze), Amprenta (aceleași rânduri
  *    în forma MariaDB și în forma MySQL dau aceeași amprentă, inclusiv tinyint(1) unsigned, un
@@ -48,6 +49,44 @@ declare(strict_types=1);
  * S. Linia de comandă nu mai lasă fișiere de sesiune (bootstrap.php): 3 rulări ale lui
  *    migreaza.php și una a lui diagnostic.php, numărul fișierelor din storage/sessions neschimbat;
  *    ANDAXI_CU_SESIUNE pornește totuși o sesiune.
+ * M. Migrările adevărate (database/migrari), testele T1–T11 din migrari.md §4:
+ *    T1  instalarea nouă: o bază goală → --aplica = asteptat.json, fără avertismente; plus
+ *        genereaza-fixture.php --verifica (G-baza: baseline-ul = schema codului minus excluderile,
+ *        grupul C = ce lăsau funcțiile codului pe aceleași rânduri inventate).
+ *    T2  baseline-ul pe schema fiecărui cod (tools/dev/migrari/vechi/<cod>.sql, făcută din codul lui:
+ *        cms, bs, bv, vt, gr; la zi cu codul, genereaza-fixture.php --verifica-fixture-uri): planul
+ *        are în grupul B exact numerele din migrari.md §2.2 (BS: nimic), aplicarea face exact ce arată
+ *        planul, nu șterge și nu schimbă nimic din ce exista, ce rămâne în plus = extra-<cod>.txt,
+ *        avertismentele = diferențele de definiție de dinainte; BV și GR fără parametrul procesatorului:
+ *        codul 15, baza neatinsă. Plus baza veche (cms.sql + variante.sql: coloane, indecși, tabele și
+ *        rânduri vechi, inventate): migrările lasă exact ce lăsau funcțiile codului (în afară de
+ *        procesatorul linkurilor, care vine din parametrul site-ului).
+ *    T2-live aceleași verificări pe schema site-urilor live (sonda, docs/VERIFICARE.md pasul 5:
+ *        tools/dev/migrari/vechi/privat/<cod>-live.sql și extra-<cod>.txt, făcute de din-sonda.php, în
+ *        afara git-ului); fără ele, SĂRIT cu motivul. Calea e verificată oricum, pe o sondă simulată
+ *        (aceeași formă, din schema bs + variante), trecută prin din-sonda.php.
+ *    T3  a doua aplicare nu face nimic (nicio migrare rulată, aceleași rânduri), --plan iese cu 0.
+ *    T4  drumul unui site: migrările până la penultima (și până la finalul grupului B), apoi seed.php
+ *        și tools/dev/date-demo.php, apoi restul: amprenta = asteptat.json, datele demo neschimbate în
+ *        afară de tabelele pe care migrările rămase le declară.
+ *    T5  oprit (MIGRARI_TEST_OPRESTE_DUPA) după fiecare operație a instalării noi și a bazei vechi, și
+ *        după o bucată de date (MIGRARI_TEST_OPRESTE_IN), apoi reluat: aceeași amprentă, aceleași date,
+ *        nimic „in_curs”, fiecare operație numărată o dată.
+ *    T6  codul vechi în paralel: funcțiile ensure* ale codului rulează înainte de baseline (după
+ *        primele 4 migrări) și în același timp cu --aplica: nicio eroare, baza la final completă.
+ *    T7  o migrare aplicată, schimbată sau ștearsă într-o copie: codul 12, baza neatinsă.
+ *    T8  o migrare de probă cu MODIFY COLUMN declarată neblocantă: 11 fără nimic aplicat; cu
+ *        --permite-blocante se aplică.
+ *    T9  aceeași amprentă pe MariaDB și pe MySQL 8 după T1, T2, baza veche și T4.
+ *    T10 aplicația pe o bază migrată, la nivelul bazei: o bază făcută „pe vechi” (install.php, seed.php,
+ *        date-demo.php) primește baseline-ul fără nicio schimbare de schemă și cu datele schimbate doar
+ *        unde declară migrările de date; apoi funcțiile ensure* ale codului comun și ale codului Bioscem
+ *        nu mai schimbă nimic, nici pe ea, nici pe o bază nouă făcută de migrări. Testele aplicației
+ *        (fum, pluginuri, SEO, comparația cu Bioscem) pe o bază migrată vin cu instalarea prin migrări (WP-05).
+ *    T11 tools/dev/verifica-migrari.php trece pe repo și pică pe fiecare greșeală pusă într-o copie
+ *        (număr dublat, migrare netrecută în migrari.lock, AFTER, IF NOT EXISTS, COLLATE, DDL scris de
+ *        mână, ștergere în afara unei migrări „contract”, DDL nou în cod, o definiție de coloană nouă
+ *        într-o funcție ensure*, DDL ieșit din cod, asteptat.json vechi, o coloană a altui proprietar).
  *
  * Bazele (cms_mig_t_*) și dosarul de lucru ($CMS_DEV_DIR/test-migrari) se fac și se șterg aici;
  * MySQL 8 se oprește la final dacă l-a pornit testul. Doar date inventate. Raportul:
@@ -71,12 +110,18 @@ use App\Support\Migrari\Server;
 
 $argumente = array_slice($argv, 1);
 foreach ($argumente as $argument) {
-    if (!in_array($argument, ['--runner', '--doar-mariadb'], true)) {
-        fwrite(STDERR, 'argument necunoscut: ' . $argument . " (--runner, --doar-mariadb)\n");
+    if (!in_array($argument, ['--runner', '--migrari', '--doar-mariadb'], true)) {
+        fwrite(STDERR, 'argument necunoscut: ' . $argument . " (--runner, --migrari, --doar-mariadb)\n");
         exit(2);
     }
 }
 $doarMariaDb = in_array('--doar-mariadb', $argumente, true);
+$cuRunner = !in_array('--migrari', $argumente, true);
+$cuMigrari = !in_array('--runner', $argumente, true);
+if (!$cuRunner && !$cuMigrari) {
+    fwrite(STDERR, "--runner și --migrari nu merg împreună (fără niciunul: tot)\n");
+    exit(2);
+}
 
 $dosarDev = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/');
 $lucru = $dosarDev . '/test-migrari';
@@ -122,7 +167,8 @@ $sterge = static function (string $cale) use (&$sterge): void {
 $sterge($lucru);
 mkdir($lucru . '/site-gol', 0777, true);
 
-$scrie('Test migrări ANDAXI-CMS (runner, WP-02) — ' . date('Y-m-d H:i:s') . ', PHP ' . PHP_VERSION);
+$scrie('Test migrări ANDAXI-CMS (' . ($cuRunner && $cuMigrari ? 'runner și migrările adevărate' : ($cuRunner ? 'doar runner-ul' : 'doar migrările adevărate'))
+    . ') — ' . date('Y-m-d H:i:s') . ', PHP ' . PHP_VERSION);
 
 // =====================================================================
 // U. Fără bază
@@ -595,7 +641,8 @@ $operatiiJucarii = 13; // 5 + 2 + 1 INSERT + 5 bucăți (id 1–9, câte 2)
 
 $amprentePeServer = [];
 $cheiServer = 0;
-foreach ($servere as $numeServer => $sock) {
+// D și R (runner-ul, pe migrări de jucărie): sărite doar cu --migrari.
+foreach ($cuRunner ? $servere : [] as $numeServer => $sock) {
     $cheiServer++;
     $b = static fn (string $nume): string => 'cms_mig_t_' . $nume;
     $scrie('');
@@ -651,6 +698,37 @@ foreach ($servere as $numeServer => $sock) {
         && array_column($cit['colatii_la_fel']['coloane'] ?? [], 'colatie') === []
         && $difCol['lipsa'] === [] && count($difCol['avertismente']) === 2, json_encode($cit) . json_encode($difCol));
     $amprentePeServer['colatii'][$numeServer] = Amprenta::json(['format' => Amprenta::FORMAT, 'tabele' => $cit]);
+
+    // information_schema care sare un tabel schimbat chiar atunci de alt DDL (MariaDB, avertismentul 1684; găsit de T6):
+    // Amprenta citește totul din nou; dacă tabelul tot lipsește după pauze, codul 3 (rulează din nou), nu „tabelul lipsește”.
+    $sare = new class ('mysql:unix_socket=' . $sock . ';dbname=' . $b('d') . ';charset=utf8mb4', $utilizator, $parola,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]) extends PDO {
+        public int $deSarit = 0;
+
+        public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false
+        {
+            if ($query === 'SHOW WARNINGS' && $this->deSarit > 0) {
+                $this->deSarit--;
+                return parent::query("SELECT 'Warning' AS Level, 1684 AS Code, 'Table ''cms_mig_t_d''.''proba'' was skipped since its "
+                    . "definition is being modified by concurrent DDL statement' AS Message");
+            }
+            return $fetchMode === null ? parent::query($query) : parent::query($query, $fetchMode, ...$fetchModeArgs);
+        }
+    };
+    $pauzeVechi = Amprenta::$pauzeSarite;
+    Amprenta::$pauzeSarite = [0.01, 0.01, 0.01];
+    $sare->deSarit = 2;
+    $cititSarit = Amprenta::citeste($sare, $server, ['proba']);
+    $consumat = $sare->deSarit;
+    $sare->deSarit = 1000;
+    $ex = $aruncat(static fn () => Amprenta::citeste($sare, $server, ['proba']));
+    Amprenta::$pauzeSarite = $pauzeVechi;
+    $verifica('Amprenta: un tabel sărit de information_schema (1684, DDL în curs pe altă conexiune) se citește din nou; '
+        . 'sărit mereu: codul 3, cu numele tabelului, nu „lipsește”',
+        Amprenta::json($cititSarit) === Amprenta::json(Amprenta::citeste($db, $server, ['proba'])) && $consumat === 0
+        && $ex instanceof Eroare && $ex->getCode() === Eroare::LACAT && str_contains($ex->getMessage(), 'tabelul proba'),
+        $consumat . ' ' . ($ex?->getMessage() ?? 'nimic aruncat'));
+    unset($sare);
 
     // Schema direct, pe bază.
     $executie = static function (string $tip = 'schema', bool $poateBloca = false): Executie {
@@ -1279,7 +1357,9 @@ PHP);
 // =====================================================================
 $scrie('');
 $scrie('T. MariaDB și MySQL 8');
-if (count($servere) === 2) {
+if (!$cuRunner) {
+    $scrie('  SĂRIT runner-ul (--migrari)');
+} elseif (count($servere) === 2) {
     foreach ($amprentePeServer as $ce => $amprente) {
         $valori = array_values($amprente);
         $verifica('aceeași amprentă pe ambele servere: ' . $ce, count($valori) === 2 && $valori[0] === $valori[1],
@@ -1331,8 +1411,18 @@ if ($idCu !== '' && preg_match('/^[A-Za-z0-9,-]+$/', $idCu) === 1) {
     @unlink($dosarSesiuni . '/sess_' . $idCu);
 }
 
+// =====================================================================
+// M. Migrările adevărate: T1–T11 (migrari.md §4; WP-04)
+// =====================================================================
+$saritLive = [];
+if ($cuMigrari) {
+    require __DIR__ . '/migrari/test-baza.php';
+}
+
 $scrie('');
 $total = 'test-migrari: ' . $trecute . ' trecute, ' . $esuate . ' eșuate'
-    . (count($servere) === 2 ? ' (MariaDB și MySQL 8)' : ' (DOAR MariaDB: parțial)') . ', PHP ' . PHP_VERSION . '.';
+    . (count($servere) === 2 ? ' (MariaDB și MySQL 8)' : ' (DOAR MariaDB: parțial)') . ', PHP ' . PHP_VERSION
+    . (!$cuMigrari ? ', doar runner-ul' : '') . (!$cuRunner ? ', fără D și R' : '')
+    . ($saritLive !== [] ? '; T2-live sărit pentru ' . implode(', ', array_keys($saritLive)) . ' (sonda live n-a venit încă)' : '') . '.';
 $scrie($total);
 exit($esuate === 0 && (count($servere) === 2 || $doarMariaDb) ? 0 : 1);

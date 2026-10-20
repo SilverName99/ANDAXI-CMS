@@ -1,0 +1,17 @@
+# Obiectele pe care variante.sql le adaugă peste cms.sql și care rămân pe site după baseline: coloanele vechi ale
+# catalogului și ale cupoanelor (0021 și 0022 le copiază o dată în coloanele de azi; ies abia în faza „contract”).
+# Indexul vechi fan_streets.uniq_fan_streets nu e aici: 0005 îl înlocuiește cu uniq_fan_streets_row. Tabelele
+# fan_streets__sync și fan_localities__vechi nu intră în amprentă. Scris de mână, cu variante.sql; testul T2 (baza
+# veche) cere după --aplica exact extra-cms.txt plus lista asta.
+coloana coupons.max_items
+coloana coupons.min_items
+coloana product_extra_field_values.value_text
+coloana product_extra_fields.input_type
+coloana product_extra_fields.label
+coloana product_templates.css_template
+coloana product_templates.html_template
+coloana product_templates.js_template
+coloana products.image_gallery_json
+coloana products.label_best_seller
+coloana products.label_popular
+coloana products.label_seasonal

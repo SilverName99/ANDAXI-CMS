@@ -8,10 +8,12 @@ rămân până când fiecare site trece pe migrări (garda de la WP-05, apoi șt
 Ce există acum: **runner-ul**, cu detectarea, reluarea și codurile de ieșire, plus testele lui
 (WP-02 din planul Etapei 1); din WP-10, **sonda schemei** site-urilor live (mai jos); din WP-03,
 **migrările de bază** `0001`–`0024` (mai jos), cu `asteptat.json`, `migrari.lock`, `ultima.php` și
-unealta care le compară cu schema făcută de cod (`tools/dev/migrari/genereaza-fixture.php`). Încă nu
+unealta care le compară cu schema făcută de cod (`tools/dev/migrari/genereaza-fixture.php`); din WP-04,
+**testele T1–T11** pe schemele celor cinci coduri (și pe cele live, când vine sonda) și **verificarea
+fișierelor de migrare** (`tools/dev/verifica-migrari.php`, în testul de fum), mai jos. Încă nu
 rulează pe niciun site: instalarea și paginile merg ca înainte, cu funcțiile `ensure*`. Ce vine:
-testele pe schemele celor cinci coduri și verificarea fișierelor de migrare (WP-04), instalarea prin
-migrări, garda `Garda::stare` și `/health` (WP-05), pasul de înghețare a setărilor unui site (WP-06).
+instalarea prin migrări, garda `Garda::stare` și `/health` (WP-05), pasul de înghețare a setărilor
+unui site (WP-06).
 
 ## Pe scurt
 
@@ -60,7 +62,7 @@ sub 10.6): nu intră în amprentă și se șterg de mână, după o copie a baze
 | 0 | nimic de făcut (`--plan`), totul aplicat și verificat (`--aplica`), verificarea trecută | — |
 | 1 | eroare într-o migrare (mesajul spune migrarea și operația), sau un tabel ocupat după toate reîncercările | citești mesajul; rularea din nou e sigură |
 | 2 | configurare: fără `DB_DATABASE`, conexiune refuzată, server prea vechi, PHP sub `php_min`, registru greșit (număr folosit de două ori, dosar care nu e un proprietar, fișier fără forma cerută), argument greșit | repari configurarea sau codul |
-| 3 | alt runner aplică migrări pe aceeași bază, sau sincronizarea FAN ține tabelele FAN (`lacatFan`) | rulezi din nou mai târziu |
+| 3 | alt runner aplică migrări pe aceeași bază, sincronizarea FAN ține tabelele FAN (`lacatFan`), sau `information_schema` tot nu arată un tabel pe care altă conexiune îl schimbă chiar atunci (mai jos, la amprentă) | rulezi din nou mai târziu |
 | 4 | baza nu e a unui site ANDAXI (are tabele, dar nu `settings` + `admins` + `pages` și nici `_platforma_migrari`; de exemplu un WordPress) | verifici `DB_DATABASE`; nimic n-a fost atins |
 | 10 | `--plan`: sunt migrări de aplicat, toate fără blocare | `--aplica` cu site-ul pornit |
 | 11 | sunt migrări blocante sau de tip contract (`--plan`), refuzate fără `--permite-blocante` / `--permite-contract` (`--aplica`, cu baza neatinsă) | fereastra de mentenanță |
@@ -85,7 +87,13 @@ storage/logs/migrari.log             câte un rând pe operație executată (num
 tools/sonda/amprenta-schema.php      sonda schemei unui site live (WP-10, MIG-08), rulată de proprietar
 tools/dev/migrari/din-sonda.php      local: sonda → fixture-ul și extra-<cod>.txt, în tools/dev/migrari/vechi/privat/
 tools/dev/migrari/genereaza-fixture.php   local: schema pe care o face codul unui site; asteptat.json, migrari.lock,
-                                     ultima.php; verificarea migrărilor de bază față de cod (mai jos)
+                                     ultima.php; verificarea migrărilor de bază față de cod; fixture-urile din vechi/ (mai jos)
+tools/dev/migrari/vechi/             fixture-urile testelor: <cod>.sql (schema codului cms, bs, bv, vt, gr), extra-<cod>.txt,
+                                     variante.sql + extra-variante.txt (o bază veche, inventată); privat/ = sonda live, în afara git-ului
+tools/dev/migrari/excluderi.php      ce nu primește o instalare nouă din schema codului (folosit de genereaza-fixture și de teste)
+tools/dev/migrari/ddl-din-cod.txt    lista DDL-ului vechi din cod, permis până la R2 (verifica-migrari.php)
+tools/dev/test-migrari.php           testele (runner-ul și T1–T11; T1–T11 stau în tools/dev/migrari/test-baza.php)
+tools/dev/verifica-migrari.php       verificarea fișierelor de migrare și a DDL-ului din cod (T11, în testul de fum)
 ```
 
 - **id** = `<proprietar>/<NNNN>_<nume>`. **NNNN** e unic în tot dosarul (oricare proprietar) și dă
@@ -207,7 +215,13 @@ călătoresc în copia bazei, deci o bază restaurată continuă exact de unde e
 valorile implicite (MariaDB pune textele între ghilimele și scrie `NULL`, MySQL nu; aici: textele între
 ghilimele, numerele fără, cu zecimalele coloanei, expresiile cu litere mici, `current_timestamp`;
 `b'101'` pe o coloană BIT; pe MySQL un text ca `x'y` sau `0x12` pe un VARCHAR rămâne text), `EXTRA`
-fără `DEFAULT_GENERATED`, `NO ACTION` = `RESTRICT`, `utf8mb3` = `utf8`. Colația unei coloane intră
+fără `DEFAULT_GENERATED`, `NO ACTION` = `RESTRICT`, `utf8mb3` = `utf8`. MariaDB sare din `information_schema`
+un tabel pe care altă conexiune îi schimbă chiar atunci structura (avertismentul 1684, „was skipped since its
+definition is being modified by concurrent DDL statement”): fără grijă, tabelul ar părea că lipsește (o
+coloană de adăugat la un tabel „inexistent”, un `LIPSĂ` fals la verificare). `Amprenta` se uită după fiecare
+citire la avertismente și, dacă un tabel a fost sărit, citește totul din nou după o pauză scurtă (în total
+~3 s), apoi se oprește cu codul 3 (rulează din nou). S-a văzut în testul T6, cu codul vechi care își face
+tabelele în același timp cu `--aplica`. Colația unei coloane intră
 (`"colatie"`) doar când diferă de a tabelului (de exemplu `utf8mb4_bin` sau alt set de caractere): o
 coloană fără ea are colația tabelului, deci `asteptat.json` de azi n-o are nicăieri. Ordinea coloanelor
 nu contează. Tabelele `_platforma_*`, `*__sync`, `*__vechi` (copiile de lucru ale sincronizării FAN) și
@@ -292,7 +306,7 @@ id-ul rândului, deci unică), indexul unic vechi `uniq_fan_streets` iese, iar `
 la urmă. O reluare vede rândurile rămase cu `''`.
 
 **Cum se verifică** (`tools/dev/migrari/genereaza-fixture.php --verifica`, poarta **G-baza** din
-`porti.sh`, pe MariaDB și pe MySQL 8): o bază goală după toate migrările = `asteptat.json`, fără
+`porti.sh`, pe MariaDB și pe MySQL 8; de la WP-04 o rulează testul T1, deci și poarta G-mig): o bază goală după toate migrările = `asteptat.json`, fără
 avertismente; baseline-ul pe o bază goală = schema codului minus excluderile de mai sus (fiecare trebuie să
 existe în schema codului) și colația declarată; pe baza făcută de cod („pe vechi”), planul are în grupul B
 doar „există deja”, aplicarea face 0 operații (toate 19 „detectata”), schema rămâne aceeași, `--verifica`
@@ -314,6 +328,21 @@ fără licență, pe o bază `cms_mig_fx_*` inventată (în ea ajung doar setăr
 față de prima. Azi, BS = CMS; BV și GR primesc 3 tabele și 24 de coloane, VT 8 tabele, 57 de coloane și
 un index. Schema codului e a lui `install.php` de azi: când instalarea trece pe migrări (WP-05),
 referința devine un commit fix (`--verifica --repo=<clona CMS>@<commit>`).
+
+**Fixture-urile din git** (`tools/dev/migrari/vechi/`, testul T2): `genereaza-fixture.php --fixture-uri`
+scrie `<cod>.sql` și `extra-<cod>.txt` pentru `cms`, `bs`, `bv`, `vt`, `gr`. Codul vechi al unui site e clona
+lui (`CMS_DEV_REPO_BS`, `_BV`, `_VT`, `_GR`) la „ultimul commit revizuit” din [de-portat.md](de-portat.md);
+`cms` e acest repo la commit-ul scris în capul lui `cms.sql` (`fc8a5e1`, ultimul înainte de migrări;
+`--cms=<commit>` îl schimbă): schema pe care o face codul comun pe vechi. Sursa stă în capul fișierului
+(`-- sursa: <repo>@<commit>`). `--verifica-fixture-uri` (rulat de T2) reface schema din fiecare sursă și cere
+aceeași amprentă ca fișierul din git, `extra-<cod>.txt` la zi cu `asteptat.json`, iar sursa unui site vechi
+egală cu „ultimul commit revizuit” al lui: când WP-R mută acel commit (o livrare SEO a Bioscem care adaugă o
+coloană din mers, de exemplu), testul pică până la `--fixture-uri`, iar diff-ul arată ce s-a schimbat în
+schema site-ului. Fixture-urile au doar structură, făcută de cod: nimic dintr-o bază live (OD-49).
+`variante.sql` (scris de mână, peste `cms.sql`) face din ea baza unui site vechi: coloanele vechi ale
+catalogului și ale cupoanelor, `reviews` cu rânduri, `fan_streets` de dinainte de `row_key` cu indexul unic
+vechi, linkuri de plată fără procesator, copiile unei sincronizări FAN întrerupte, tabelele manechinului în
+cealaltă formă, câteva rânduri inventate; `extra-variante.txt` spune ce rămâne din ele după baseline.
 
 ## Serverele
 
@@ -345,9 +374,19 @@ Local, `tools/dev/php.sh tools/dev/migrari/din-sonda.php <amprenta-<site>-….js
 `CREATE TABLE`, cu coloanele în ordinea lor, colațiile, indecșii și cheile străine; încărcată, dă aceeași
 amprentă, pe MariaDB și pe MySQL 8), `extra-<cod>.txt` (obiectele în plus față de `asteptat.json`, pentru
 testul T2) și `<cod>-fata-de-asteptat.txt` (ce lipsește sau diferă). Fixture-urile din git rămân cele făcute
-din cod (WP-04), potrivite de mână după structura sondei, niciodată după numerele ei. `din-sonda.php` refuză
-o intrare sau o ieșire din repo pe care git nu o ignoră, și cu căi relative (le face absolute față de dosarul
-curent înainte de verificare; `tools/dev/php.sh` pornește din rădăcina repo-ului).
+din cod (WP-04), potrivite de mână după structura sondei, niciodată după numerele ei (până vine prima
+sondă nu e nimic de potrivit). `din-sonda.php` refuză o intrare sau o ieșire din repo pe care git nu o
+ignoră, și cu căi relative (le face absolute față de dosarul curent înainte de verificare; `tools/dev/php.sh`
+pornește din rădăcina repo-ului).
+
+**T2-live.** Cât timp `tools/dev/migrari/vechi/privat/<cod>-live.sql` lipsește, `test-migrari.php` scrie
+`SĂRIT T2-live <cod>` cu motivul (și în rândul final). Când fișierele există (`din-sonda.php` pe sonda
+trimisă de proprietar), T2-live le ia singur: schema live se încarcă pe MariaDB și pe MySQL 8, iar baseline-ul
+trebuie să treacă la fel ca pe fixture-urile din cod (planul fără nicio copiere de tabel, aplicarea exact cum
+arăta planul, nimic șters sau schimbat din ce exista în afară de indexul vechi `uniq_fan_streets`, în plus
+exact `extra-<cod>.txt`, avertismentele = cele de dinainte). Parametrul procesatorului linkurilor vechi (BV, GR)
+e cel de test (`stripe`): baza refăcută nu are rânduri. Calea e verificată și fără sonda reală, pe o sondă
+simulată (schema `bs` + variantele, citită în forma sondei și trecută prin `din-sonda.php`).
 
 ## Linia de comandă fără sesiune
 
@@ -358,24 +397,72 @@ SAPI „cli-server”) pornesc sesiunea ca până acum.
 
 ## Testele
 
-`tools/dev/php.sh tools/dev/test-migrari.php --runner` (poarta **G-runner** din `porti.sh`, și cu PHP-ul
-minim): fără bază (Server, Amprenta pe rândurile ambelor servere, definițiile, corpul unui CREATE
-TABLE, compararea, registrul), apoi pe fiecare server detectarea, Schema direct și fiecare cod de
-ieșire al lui `scripts/migreaza.php` pe migrări de jucărie: oprirea după fiecare operație și reluarea
-(aceeași amprentă, fiecare rând numărat o dată), oprirea chiar înainte și chiar după commit-ul fiecărei
-bucăți și al instrucțiunii de date (pică dacă cursorul sau numărătoarea ar ieși din tranzacția
-bucății), bugetul, migrările schimbate, blocante, de contract, parametrii site-ului, lacătele, starea
-neatinsă de un runner refuzat și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan,
-un tabel `#sql-*` rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, mesajele serverului
-cu ghilimele și `\` în valoare (1062, 1366, din `date()` și din `peBucati()`); `tabelComplet` (și cursa
-cu codul vechi care face tabelul chiar atunci, fără o coloană, sau cu toate coloanele dar fără indecși și
-fără cheia străină) și `schimbaImplicit`; colația coloanelor (în amprentă doar cea diferită de a
-tabelului, la fel pe ambele servere; CHARACTER SET/COLLATE refuzate într-o migrare); plus sesiunile din
-linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo.
-Raport: `storage/logs/dev/test-migrari-raport.txt`.
+`tools/dev/php.sh tools/dev/test-migrari.php` (poarta **G-mig** din `porti.sh`, și cu PHP-ul minim; `--runner`
+= doar runner-ul, poarta **G-runner**; `--migrari` = doar migrările adevărate, fără D și R; `--doar-mariadb` =
+fără MySQL 8, rezultat parțial, spus explicit). Raport: `storage/logs/dev/test-migrari-raport.txt`. Bazele
+`cms_mig_t_*` și dosarul de lucru se fac și se șterg acolo; MySQL 8 se oprește la final dacă l-a pornit testul.
 
-Migrările adevărate le verifică, până la testele T1–T11 (WP-04), `genereaza-fixture.php --verifica`
-(poarta **G-baza**, mai sus). Bazele lui, `cms_mig_fx_*`, se fac și se șterg acolo.
+**Runner-ul** (U, D, R, T, S; WP-02, WP-03): fără bază (Server, Amprenta pe rândurile ambelor servere,
+definițiile, corpul unui CREATE TABLE, compararea, registrul), apoi pe fiecare server detectarea, Schema direct
+și fiecare cod de ieșire al lui `scripts/migreaza.php` pe migrări de jucărie: oprirea după fiecare operație și
+reluarea (aceeași amprentă, fiecare rând numărat o dată), oprirea chiar înainte și chiar după commit-ul
+fiecărei bucăți și al instrucțiunii de date (pică dacă cursorul sau numărătoarea ar ieși din tranzacția
+bucății), bugetul, migrările schimbate, blocante, de contract, parametrii site-ului, lacătele, starea neatinsă
+de un runner refuzat și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan, un tabel `#sql-*`
+rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, mesajele serverului cu ghilimele și `\` în
+valoare (1062, 1366, din `date()` și din `peBucati()`); `tabelComplet` (și cursa cu codul vechi care face
+tabelul chiar atunci, fără o coloană, sau cu toate coloanele dar fără indecși și fără cheia străină) și
+`schimbaImplicit`; colația coloanelor (în amprentă doar cea diferită de a tabelului, la fel pe ambele servere;
+CHARACTER SET/COLLATE refuzate într-o migrare); un tabel sărit de `information_schema` (1684) citit din nou,
+iar sărit mereu, codul 3; plus sesiunile din linia de comandă.
+
+**Migrările adevărate** (M, T1–T11 din migrari.md §4; WP-04; în `tools/dev/migrari/test-baza.php`), pe
+MariaDB și pe MySQL 8:
+
+| Test | Ce face | Trece când |
+|---|---|---|
+| T1 | o bază goală → `--plan`, `--aplica`; plus `genereaza-fixture.php --verifica` (G-baza, mai sus) | planul 10 fără avertismente, nimic scris; aplicarea 0 (grupul B „aplicata”, C „detectata”), fără avertismente; amprenta = `asteptat.json`; `_platforma_stare` la zi; G-baza trece |
+| T2 | fiecare `vechi/<cod>.sql` (cms și bs cu versiunile de schemă pe care le scrie codul Bioscem) → `--plan`, `--aplica`, `--verifica`; plus `--verifica-fixture-uri` | grupul B are exact numerele din migrari.md §2.2 (cms, bs: nimic; bv, gr: 3 tabele, 24 de coloane, valoarea implicită a procesatorului; vt: 8 tabele, 57 de coloane, un index), nicio copiere de tabel; aplicarea face exact ce arăta planul; nimic șters sau schimbat din ce exista, adăugat exact ce lipsea; în plus exact `extra-<cod>.txt`; avertismentele = diferențele de definiție de dinainte; bv și gr fără parametrul procesatorului: 15, baza neatinsă |
+| T2, baza veche | `cms.sql` + `variante.sql`, o dată prin funcțiile `ensure*` ale codului (o trecere, ca o cerere), o dată prin migrări | datele (roluri, galerie, insigne, câmpuri extra, șabloane, valori, cupoane, recenzii, legături de blog, `row_key`-ul străzilor, versiunile de schemă) ies la fel, fiecare citire schimbată; procesatorul linkurilor = parametrul site-ului; în plus exact `extra-cms` + `extra-variante`; scos doar `uniq_fan_streets`; copiile sincronizării FAN neatinse |
+| T2-live | schema live (sonda, mai sus) sau sonda simulată | ca T2, fără numerele fixe ale planului |
+| T3 | a doua aplicare, după T1 și după fiecare T2 | nicio migrare rulată, aceleași rânduri (CHECKSUM TABLE), aceeași amprentă; `--plan` 0 |
+| T4 | migrările până la penultima (și până la finalul grupului B), `seed.php` și `tools/dev/date-demo.php` (prin `tools/dev/php.sh`, pe baza testului), apoi restul | amprenta = `asteptat.json`; tabelele schimbate ⊆ tabelele migrărilor rămase (o migrare de date nouă își trece tabelele în `$tabeleDate` din test) |
+| T5 | oprit (`MIGRARI_TEST_OPRESTE_DUPA`) după fiecare operație a instalării noi și a bazei vechi, și chiar în/după commit-ul unor bucăți și instrucțiuni de date (`MIGRARI_TEST_OPRESTE_IN`), apoi reluat (câte 4 în paralel, pe baze separate) | aceeași amprentă, aceleași date, nimic „in_curs”, fiecare operație numărată o dată |
+| T6 | funcțiile `ensure*` ale codului după primele 4 migrări, și în același timp cu `--aplica` (1, 2, 3 procese; `--aplica` cu pauzele de pe site-uri la 1205/1213, pe MySQL 8 un ALTER al codului și unul al migrării dau uneori deadlock de câteva ori la rând) | `--aplica` 0 (cursele acceptate: aici s-a găsit 1684), baza completă; în plus doar excluderile; avertismente doar colația tabelelor BT și cheile străine ale tabelelor făcute întâi de cod |
+| T7 | pe baza instalată, o copie a migrărilor cu una aplicată schimbată, apoi și cu lacătul rescris, apoi ștearsă, apoi retrasă | 12, 12, 12, apoi 0; baza și starea neatinse |
+| T8 | o migrare de probă cu `MODIFY COLUMN`, declarată neblocantă | `--plan` și `--aplica` 11, nimic aplicat; cu `--permite-blocante`, aplicată |
+| T9 | amprentele din T1, T2, baza veche, T4 | aceleași pe ambele servere |
+| T10 | o bază făcută pe vechi (`install.php`, `seed.php`, `date-demo.php`) → baseline; apoi funcțiile `ensure*` ale codului comun și ale codului Bioscem (clona la „ultimul commit revizuit”), pe ea și pe o bază nouă făcută de migrări | baseline-ul nu schimbă schema, datele doar unde declară migrările; `--verifica` 0; funcțiile vechi nu mai schimbă nimic (schemă, rânduri). Testele aplicației pe o bază migrată (fum, pluginuri, SEO, comparația cu Bioscem) vin cu instalarea prin migrări (WP-05) |
+| T11 | `tools/dev/verifica-migrari.php` pe repo și pe o copie cu câte o greșeală | 0 pe repo; 1, cu motivul, pe fiecare greșeală (mai jos) |
+
+## Verificarea fișierelor de migrare (`tools/dev/verifica-migrari.php`)
+
+Rulează în testul de fum (`smoke.sh`, la început, pe fiecare pachet) și în poarta G-mig: nu există CI, deci
+aici se oprește o migrare greșită sau un DDL nou în cod. Fără server: `--fara-baza` (punctele 6 și 7 nu se fac,
+spus în rezultat).
+
+1. Registrul: forma fiecărui fișier, numărul NNNN unic în tot dosarul, dosarul = `nucleu` sau un plugin.
+2. `migrari.lock` are exact migrările din cod, cu sha-ul lor (una nouă se trece cu `genereaza-fixture.php
+   --asteptat`), o migrare retrasă are motivul; `ultima.php` e la zi.
+3. În fișierele de migrare: niciun DDL scris de mână (totul prin `Schema`); în definiții niciun `AFTER`/`FIRST`,
+   `IF [NOT] EXISTS`, `CHARACTER SET`/`CHARSET`/`COLLATE`; `stergeColoana`/`stergeTabel` doar în „contract”.
+   Runner-ul le refuză și el, dar doar pe ramura care rulează; aici se văd și cele de pe ramurile pentru
+   obiecte vechi (`dacaColoana`).
+4. **DDL-ul din codul de pe site-uri** (`src/` fără `src/Support/Migrari/`, `scripts/`, `public/`, `views/`,
+   `config/`, `bootstrap.php`, `database/schema.sql`): fiecare text DDL și fiecare definiție de coloană dintr-o
+   funcție cu DDL (listele de coloane din `ErpSync::ensureSchema`, `BtIpayPayments::migreaza`) trebuie să fie
+   în `tools/dev/migrari/ddl-din-cod.txt`, pe fișier și funcție, de câte ori apare (azi 371 de texte și 26 de
+   definiții în 38 de funcții și fișiere: cele 36 de funcții `ensure*`/`asigura*`, `install.php`,
+   `fan-tracking-sync.php`, `schema.sql`, tabelele de lucru ale sincronizării FAN, care rămân, și tiparul din
+   `WordPressDumpReader`). Unul nou, încă o copie a unuia vechi sau unul mutat în altă funcție = încălcare: o
+   coloană nouă se face cu o migrare (regula 2 din planul Etapei 1). Unul care a ieșit din cod = încălcare până
+   la `--actualizeaza-lista`, care doar scoate rânduri (lista nu crește niciodată; `--lista-initiala` a scris-o o
+   dată, în WP-04, și refuză o listă existentă).
+5. `asteptat.json` există și are forma lui `Amprenta`.
+6. Pe o bază goală (MariaDB, `cms_mig_v_*`): `asteptat.json` = amprenta după toate migrările.
+7. Din planul unei baze goale: fiecare tabel, coloană și index pe care îl face o migrare e, în catalog
+   (`config/plugins.php` → `tabele`, „tabel” sau „tabel.coloană*”), al proprietarului ei (un index: al
+   tabelului sau al uneia dintre coloanele lui); fiecare tabel din `asteptat.json` are un proprietar.
 
 Variabile doar pentru teste (pe site-uri nu există): `MIGRARI_TEST_DOSAR` (alt dosar de migrări),
 `MIGRARI_TEST_OPRESTE_DUPA=k` (oprire ca un proces omorât după k operații),

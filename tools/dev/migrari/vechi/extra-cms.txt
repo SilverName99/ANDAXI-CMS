@@ -1,0 +1,7 @@
+# Obiectele pe care schema codului ANDAXI-CMS@fc8a5e1 (fixture-ul cms.sql) le are în plus față de
+# database/migrari/asteptat.json: rămân pe site după baseline (migrările nu le ating). Testul T2 cere
+# exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.
+coloana products.gallery_json
+tabelul mannequin_point_products
+tabelul mannequin_points
+tabelul reviews

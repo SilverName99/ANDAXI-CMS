@@ -39,7 +39,8 @@ declare(strict_types=1);
  *       drepturile, agregatele; --stdout nu scrie nimic.
  *    B6 din-sonda.php: schema refăcută se încarcă și dă aceeași amprentă pe MariaDB și pe MySQL 8;
  *       extra-<cod>.txt are obiectele în plus; refuză un fișier sau un dosar neignorat de git, și
- *       cu căi relative (din rădăcină și din tools/dev, un dosar nou, „..”), fără să lase ceva.
+ *       cu căi relative (din rădăcină și din tools/dev, un dosar nou, „..”), fără să lase ceva
+ *       (fixture-urile din git din tools/dev/migrari/vechi/ rămân neschimbate, octet cu octet).
  *    B7 pe MySQL 8 (aceeași bază, copiată): fiecare set dă aceleași rânduri ca pe MariaDB.
  *    B8 --buget=0: totul SĂRIT, cod 1.
  *    B9 texte lungi cu memoria PHP mică: 40 de articole de 1 MB se citesc pe bucăți la
@@ -958,6 +959,17 @@ try {
     // Aceleași refuzuri cu căi relative (față de dosarul curent): dosarul fixture-urilor din git, din rădăcină
     // și din tools/dev, un dosar nou din repo (nefăcut), o cale cu „..” printr-un dosar inexistent, intrarea relativă.
     $fisierSonda = $dosarPrivat . '/amprenta-bioscem.json';
+    // Fixture-urile din git (WP-04: vechi/<cod>.sql, extra-<cod>.txt) stau chiar în dosarul refuzat: se compară
+    // conținutul lor înainte și după (nu doar existența), iar ce era acolo nu se șterge niciodată.
+    $dosarVechiGit = $radacina . '/tools/dev/migrari/vechi';
+    $continutVechi = static function () use ($dosarVechiGit): array {
+        $fisiere = [];
+        foreach (is_dir($dosarVechiGit) ? array_diff(scandir($dosarVechiGit) ?: [], ['.', '..', 'privat']) : [] as $nume) {
+            $fisiere[$dosarVechiGit . '/' . $nume] = is_file($dosarVechiGit . '/' . $nume) ? (string) file_get_contents($dosarVechiGit . '/' . $nume) : null;
+        }
+        return $fisiere;
+    };
+    $vechiInainte = $continutVechi();
     $relative = [
         'din rădăcină, --iesire=tools/dev/migrari/vechi' => $convertor([$fisierSonda, '--iesire=tools/dev/migrari/vechi']),
         'din tools/dev, --iesire=migrari/vechi' => $convertor([$fisierSonda, '--iesire=migrari/vechi'], $radacina . '/tools/dev'),
@@ -967,11 +979,21 @@ try {
     copy($fisierSonda, $neignorat);
     $relative['intrarea relativă tools/dev/sonda-test-….json'] = $convertor(['tools/dev/sonda-test-' . $m . '.json', '--iesire=' . $dosarPrivat]);
     unlink($neignorat);
-    $lasate = array_values(array_filter([$radacina . '/tools/dev/migrari/vechi/bs-live.sql', $radacina . '/tools/dev/migrari/vechi/extra-bs.txt',
-        $radacina . '/tools/dev/migrari/vechi/bs-fata-de-asteptat.txt', $radacina . '/tools/dev/sonda-nou-' . $m, $radacina . '/tools/dev/x-' . $m], 'file_exists'));
+    $vechiDupa = $continutVechi();
+    $lasate = array_values(array_merge(array_keys(array_diff_key($vechiDupa, $vechiInainte)),
+        array_filter([$radacina . '/tools/dev/sonda-nou-' . $m, $radacina . '/tools/dev/x-' . $m], 'file_exists')));
     foreach ($lasate as $cale) {
         // Ce ar fi lăsat un convertor stricat nu rămâne în repo (ar putea intra într-un commit).
         exec('rm -rf ' . escapeshellarg($cale));
+    }
+    foreach ($vechiInainte as $cale => $continut) {
+        if (!array_key_exists($cale, $vechiDupa) || $vechiDupa[$cale] !== $continut) {
+            // Un fixture din git rescris sau șters: pus la loc, și testul pică.
+            $lasate[] = $cale . ' (schimbat)';
+            if ($continut !== null) {
+                file_put_contents($cale, $continut);
+            }
+        }
     }
     $verifica('din-sonda refuză și cu căi relative (cod 1, nimic scris, niciun dosar făcut): ' . implode('; ', array_keys($relative)),
         array_filter($relative, static fn (array $r): bool => $r['cod'] !== 1) === [] && $lasate === [],

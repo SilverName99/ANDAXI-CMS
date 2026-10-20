@@ -37,11 +37,14 @@ declare(strict_types=1);
  *    adresă, iconiță, regula „activ”: listă de prefixe sau o funcție);
  *  - cron: scripturile lui programate și ce stare cer: „vizibil” (pornit sau se
  *    oprește: termină ce e în curs) sau „pornit” (pornește ceva nou);
- *  - tabele: informativ, unde stau datele lui (nu se șterg niciodată).
+ *  - tabele: unde stau datele lui (nu se șterg niciodată): „tabel” sau
+ *    „tabel.coloană*” (coloanele unui plugin pe tabelul altuia, ex. `orders.fan_*`).
  *
  * Verificare: `tools/dev/verifica-rute.php` cere ca fiecare rută din router să
  * aibă aici un proprietar (nucleu sau plugin) și fiecare declarație să
- * corespundă unei rute.
+ * corespundă unei rute. `tools/dev/verifica-migrari.php` cere ca fiecare tabel,
+ * coloană și index pe care îl face o migrare să fie, după `tabele`, al
+ * proprietarului ei (dosarul ei din database/migrari/).
  */
 
 // Regula „activ” pentru intrările din meniu care nu sunt simple prefixe.

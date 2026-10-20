@@ -388,7 +388,10 @@ refuză un fișier de intrare sau un dosar de ieșire din repo pe care git nu-l 
 de dosarul curent (`tools/dev/php.sh` pornește din rădăcina repo-ului) și se fac absolute, cu legăturile
 rezolvate, înainte de verificare, și pentru un dosar care nu există încă; aceeași cale se verifică și se scrie
 (o cale cu „..” printr-un dosar inexistent e refuzată). Fixture-urile din git
-(WP-04) rămân cele din cod, potrivite de mână după structura sondei, niciodată după numerele ei.
+(WP-04) rămân cele din cod, potrivite de mână după structura sondei, niciodată după numerele ei. Cu
+`privat/<cod>-live.sql` și `privat/extra-<cod>.txt` scrise, `tools/dev/php.sh tools/dev/test-migrari.php`
+rulează singur testul T2-live: baseline-ul pe schema live a site-ului, pe MariaDB și pe MySQL 8
+([MIGRARI.md](MIGRARI.md), „Testele”); fără ele îl sare, cu motivul („sonda live n-a venit încă”).
 
 ### Ce urmează
 

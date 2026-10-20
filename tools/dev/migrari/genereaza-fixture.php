@@ -45,8 +45,22 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --compara a-amprenta.json b-amprenta.json …
  *       fiecare amprentă față de prima: tabele, coloane, indecși lipsă / în plus și definițiile diferite.
  *
+ *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --fixture-uri [--cms=<commit>]
+ *       Fixture-urile din git ale testului T2 (WP-04): tools/dev/migrari/vechi/<cod>.sql (doar structură) și
+ *       extra-<cod>.txt (ce are acea schemă în plus față de asteptat.json), pentru cms, bs, bv, vt, gr. Codul
+ *       vechi al unui site (bs, bv, vt, gr) e clona lui (CMS_DEV_REPO_BS, _BV, _VT, _GR) la „ultimul commit
+ *       revizuit” din docs/de-portat.md: când acela se mută (un commit nou portat), fixture-ul se reface aici
+ *       și T2 arată ce s-a schimbat. cms e acest repo la commit-ul scris în capul lui cms.sql (implicit HEAD la
+ *       prima generare; --cms=<commit> îl schimbă): schema pe care o făcea codul comun înainte de migrări.
+ *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica-fixture-uri
+ *       Fără să scrie nimic: fiecare fixture din git are amprenta schemei pe care o face codul din capul lui
+ *       (refăcută acum, pe MariaDB), extra-<cod>.txt e la zi cu asteptat.json, iar sursa unui site vechi e
+ *       „ultimul commit revizuit” al lui. Îl rulează tools/dev/test-migrari.php (T2).
+ *
  * Căile relative sunt față de rădăcina repo-ului (tools/dev/php.sh pornește de acolo).
  * Bazele (cms_mig_fx_*) se fac și se șterg aici. Ieșirea are doar nume de obiecte și numere.
+ * Procesul-copil (`--copil --faza=install|helperi`) primește și baze cms_mig_t_* (testele T6, T10 din
+ * tools/dev/test-migrari.php rulează funcțiile codului vechi pe bazele lor).
  * Cod de ieșire 0 doar dacă totul a mers (la --verifica: dacă fiecare verificare a trecut).
  */
 
@@ -74,24 +88,21 @@ use App\Support\Migrari\Registru;
 use App\Support\Migrari\Server;
 
 /**
- * Ce NU primește o instalare nouă din schema de azi a codului (planul Etapei 1, WP-03; migrari.md
- * §5 B și recomandarea OD-06): obiectele vechi rămân doar pe site-urile care le au, până la faza
- * „contract”. Fiecare trebuie să existe în schema codului (altfel lista e veche: --verifica pică).
+ * Ce NU primește o instalare nouă din schema de azi a codului (GF_EXCLUSE) și tabelele cu colația
+ * serverului (GF_COLATIE_SERVER): tools/dev/migrari/excluderi.php (aceeași listă în test-migrari.php).
  */
-const GF_EXCLUSE = [
-    'tabelul reviews' => 'tabelul de dinainte de product_reviews; 0023 îl copiază o singură dată pe site-urile care îl au',
-    'tabelul mannequin_points' => 'nefolosit: pluginul manechin ține punctele în settings.mannequin_points_json (schema.sql și install.php îl definesc diferit)',
-    'tabelul mannequin_point_products' => 'nefolosit, ca mannequin_points',
-    'coloana products.gallery_json' => 'galeria veche (install.php o crea la fiecare instalare și ținea un UPDATE la fiecare cerere); 0021 o copiază o dată în gallery_images_json',
-];
+$gfExcluderi = require __DIR__ . '/excluderi.php';
+define('GF_EXCLUSE', $gfExcluderi['excluse']);
+define('GF_COLATIE_SERVER', $gfExcluderi['colatie_server']);
 
-/**
- * Tabelele pe care codul le face cu `DEFAULT CHARSET=utf8mb4` fără colație (BtIpayPayments), deci cu
- * colația implicită a serverului (MariaDB utf8mb4_general_ci, MySQL 8 utf8mb4_0900_ai_ci). Migrările
- * fac orice tabel cu utf8mb4_unicode_ci (Schema::tabel); pe o bază veche colația rămâne cum e (un
- * avertisment la --verifica, nu o operație).
- */
-const GF_COLATIE_SERVER = ['bt_ipay_log', 'bt_ipay_transactions'];
+/** Fixture-urile din git (tools/dev/migrari/vechi/): codul → [titlu, site-ul din docs/de-portat.md, variabila clonei]. */
+const GF_FIXTURE = [
+    'cms' => ['ANDAXI-CMS (acest repo)', null, null],
+    'bs' => ['Bioscem', 'bioscem', 'CMS_DEV_REPO_BS'],
+    'bv' => ['Biovitality', 'biovitality', 'CMS_DEV_REPO_BV'],
+    'vt' => ['vertij', 'vertij', 'CMS_DEV_REPO_VT'],
+    'gr' => ['grafoanaytis', 'grafoanaytis', 'CMS_DEV_REPO_GR'],
+];
 
 /** Ultima migrare a baseline-ului (grupurile B și C): schema codului se compară cu migrările până la ea. */
 const GF_ULTIMA_DIN_BAZA = 'blog/0024_legaturi_categorii';
@@ -173,12 +184,15 @@ $iesire = $lucru;
 $pastreaza = false;
 $rescrieLacatul = false;
 $deComparat = [];
+$commitCms = null;
 foreach (array_slice($argv, 1) as $argument) {
-    if (in_array($argument, ['--asteptat', '--verifica', '--compara'], true)) {
+    if (in_array($argument, ['--asteptat', '--verifica', '--compara', '--fixture-uri', '--verifica-fixture-uri'], true)) {
         if ($comanda !== null) {
-            $opreste('o singură comandă odată (--cod, --asteptat, --verifica, --compara)');
+            $opreste('o singură comandă odată (--cod, --asteptat, --verifica, --compara, --fixture-uri, --verifica-fixture-uri)');
         }
         $comanda = substr($argument, 2);
+    } elseif (preg_match('/^--cms=([0-9a-f]{7,40})$/', $argument, $m) === 1) {
+        $commitCms = $m[1];
     } elseif (preg_match('/^--cod=([a-z][a-z0-9]{0,9})$/', $argument, $m) === 1) {
         if ($comanda !== null && $comanda !== 'cod') {
             $opreste('o singură comandă odată (--cod, --asteptat, --verifica, --compara)');
@@ -209,6 +223,9 @@ if ($comanda === null) {
 }
 if ($repo !== null && !in_array($comanda, ['cod', 'verifica'], true)) {
     $opreste('--repo merge doar cu --cod=<cod> și --verifica');
+}
+if ($commitCms !== null && $comanda !== 'fixture-uri') {
+    $opreste('--cms=<commit> merge doar cu --fixture-uri');
 }
 
 // ------------------------------------------------------------------------- --compara (fără bază)
@@ -498,6 +515,117 @@ if ($comanda === 'cod') {
     file_put_contents($iesire . '/' . $cod . '-amprenta.json', Amprenta::json($rezultat['amprenta']));
     echo 'genereaza-fixture ', $cod, ': ', $descrie($rezultat['amprenta']), '; scrise: ', $iesire, '/', $cod, '.sql, ', $cod, "-amprenta.json\n";
     exit(0);
+}
+
+// ================================================================ --fixture-uri, --verifica-fixture-uri
+if ($comanda === 'fixture-uri' || $comanda === 'verifica-fixture-uri') {
+    $scrieFisiere = $comanda === 'fixture-uri';
+    $sock = $socket['mariadb'];
+    $dosarVechi = $radacina . '/tools/dev/migrari/vechi';
+    $asteptatFix = is_file($dosarMigrari . '/asteptat.json') ? json_decode((string) file_get_contents($dosarMigrari . '/asteptat.json'), true) : null;
+    if (!is_array($asteptatFix) || !is_array($asteptatFix['tabele'] ?? null)) {
+        $opreste('database/migrari/asteptat.json lipsește sau nu e o amprentă (genereaza-fixture.php --asteptat)');
+    }
+    /** „Ultimul commit revizuit” al unui site vechi, din docs/de-portat.md (tools/dev/de-portat.php --revizuit). */
+    $revizuit = static function (string $site) use ($radacina, $opreste): string {
+        exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($radacina . '/tools/dev/de-portat.php') . ' --revizuit=' . escapeshellarg($site) . ' 2>&1', $iesire, $cod);
+        $commit = trim(implode('', $iesire));
+        if ($cod !== 0 || preg_match('/^[0-9a-f]{7,40}$/', $commit) !== 1) {
+            $opreste('nu găsesc „ultimul commit revizuit” al ' . $site . ' în docs/de-portat.md: ' . $commit);
+        }
+        return $commit;
+    };
+    /** Sursa scrisă în capul unui fixture: [eticheta, commit] sau null. */
+    $sursaFixture = static function (string $fisier): ?array {
+        $cap = (string) @file_get_contents($fisier, false, null, 0, 2000);
+        return preg_match('/^-- sursa: (\S+)@([0-9a-f]{7,40})$/m', $cap, $m) === 1 ? [$m[1], $m[2]] : null;
+    };
+    $implicite = ['CMS_DEV_REPO_BS' => 'Nou-site-bioscem', 'CMS_DEV_REPO_BV' => 'Mutare-Site-Biovitality',
+        'CMS_DEV_REPO_VT' => 'vertij-tinitus-refacut', 'CMS_DEV_REPO_GR' => 'site-nou-grafoanaytis.ro'];
+    $extraText = static function (string $cod, array $inPlus, string $sursa): string {
+        sort($inPlus);
+        return '# Obiectele pe care schema codului ' . $sursa . ' (fixture-ul ' . $cod . ".sql) le are în plus față de\n"
+            . "# database/migrari/asteptat.json: rămân pe site după baseline (migrările nu le ating). Testul T2 cere\n"
+            . "# exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.\n"
+            . implode("\n", $inPlus) . ($inPlus !== [] ? "\n" : '');
+    };
+    $trecuteF = 0;
+    $esuateF = 0;
+    $verificaF = static function (string $eticheta, bool $ok, string $detalii = '') use (&$trecuteF, &$esuateF): void {
+        if ($ok) {
+            $trecuteF++;
+            echo '  OK    ', $eticheta, "\n";
+        } else {
+            $esuateF++;
+            echo '  EȘEC  ', $eticheta, ($detalii !== '' ? ': ' . trim(substr($detalii, 0, 2000)) : ''), "\n";
+        }
+    };
+    if ($scrieFisiere && !is_dir($dosarVechi)) {
+        mkdir($dosarVechi, 0777, true);
+    }
+    $versiune = (string) $conectare($sock)->query('SELECT VERSION()')->fetchColumn();
+    foreach (GF_FIXTURE as $codF => [$titlu, $site, $variabila]) {
+        $fisierSql = $dosarVechi . '/' . $codF . '.sql';
+        $fisierExtra = $dosarVechi . '/extra-' . $codF . '.txt';
+        $dinCap = $sursaFixture($fisierSql);
+        if ($variabila === null) {
+            $clona = $radacina;
+            $eticheta = 'ANDAXI-CMS';
+            $commit = $scrieFisiere ? ($commitCms ?? $dinCap[1] ?? trim((string) shell_exec('git -C ' . escapeshellarg($radacina) . ' rev-parse --short HEAD'))) : ($dinCap[1] ?? '');
+        } else {
+            $clona = (string) (getenv($variabila) ?: dirname($radacina) . '/' . $implicite[$variabila]);
+            $eticheta = basename($clona);
+            $deAcum = $revizuit($site);
+            $commit = $scrieFisiere ? $deAcum : ($dinCap[1] ?? '');
+            if (!$scrieFisiere) {
+                $verificaF($codF . '.sql e făcut din „ultimul commit revizuit” al ' . $titlu . ' (' . $deAcum . ', docs/de-portat.md)',
+                    $commit !== '' && (str_starts_with($deAcum, $commit) || str_starts_with($commit, $deAcum)),
+                    'în capul fixture-ului: ' . ($commit !== '' ? $commit : 'fără sursă') . '. Codul vechi a avansat: '
+                    . 'tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --fixture-uri, apoi T2 (test-migrari.php) arată ce s-a schimbat');
+            }
+        }
+        if ($commit === '') {
+            $verificaF($codF . '.sql există și are sursa în cap (-- sursa: <repo>@<commit>)', false, 'tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --fixture-uri');
+            continue;
+        }
+        $copieF = $copieCod($clona . '@' . $commit);
+        $rezultat = $schemaCodului($copieF['dosar'], $sock, 'cms_mig_fx_' . $codF);
+        $A = $rezultat['amprenta'];
+        $inPlus = Amprenta::compara($asteptatFix, $A)['in_plus'];
+        $sursa = $eticheta . '@' . substr($copieF['eticheta'], strrpos($copieF['eticheta'], '@') + 1);
+        if ($scrieFisiere) {
+            $antet = '-- Fixture-ul migrărilor pentru ' . $titlu . ' (cod ' . $codF . '): schema pe care o face codul vechi pe o bază goală:'
+                . "\n-- scripts/install.php, apoi funcțiile ensure…/asigura… până nu se mai schimbă (MariaDB " . $versiune . ").\n"
+                . "-- Doar structură, niciun rând; nimic din datele unui site. Îl încarcă tools/dev/test-migrari.php (T2).\n"
+                . '-- sursa: ' . $sursa . "\n"
+                . "-- Generat de tools/dev/migrari/genereaza-fixture.php --fixture-uri; nu se editează de mână.\n";
+            file_put_contents($fisierSql, $sqlSchema($conectare($sock, 'cms_mig_fx_' . $codF), $antet));
+            file_put_contents($fisierExtra, $extraText($codF, $inPlus, $sursa));
+            echo 'fixture ', $codF, ' (', $sursa, '): ', $descrie($A), ', ', count($inPlus), " obiecte în plus față de asteptat.json\n";
+            continue;
+        }
+        $eroare = null;
+        try {
+            $incarcaSql($sock, 'cms_mig_fx_' . $codF . '_git', (string) file_get_contents($fisierSql));
+        } catch (Throwable $e) {
+            $eroare = $e->getMessage();
+        }
+        $G = $eroare === null ? $amprentaBazei($sock, 'cms_mig_fx_' . $codF . '_git') : ['tabele' => []];
+        $d = Amprenta::compara($A, $G);
+        $verificaF($codF . '.sql (din git) = schema pe care o face acum codul ' . $sursa . ' (' . $descrie($A) . ')',
+            $eroare === null && Amprenta::json($G) === Amprenta::json($A), (string) ($eroare ?? implode('; ', array_slice(array_merge(
+                array_map(static fn (string $o): string => 'lipsește din fixture ' . $o, $d['lipsa']),
+                array_map(static fn (string $o): string => 'în plus în fixture ' . $o, $d['in_plus']), $d['avertismente']), 0, 20))
+                . ' — tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --fixture-uri'));
+        $verificaF('extra-' . $codF . '.txt e la zi (' . count($inPlus) . ' obiecte în plus față de asteptat.json)',
+            is_file($fisierExtra) && (string) file_get_contents($fisierExtra) === $extraText($codF, $inPlus, $sursa),
+            'tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --fixture-uri');
+    }
+    if ($scrieFisiere) {
+        exit(0);
+    }
+    echo 'genereaza-fixture --verifica-fixture-uri: ', $trecuteF, ' trecute, ', $esuateF, " eșuate\n";
+    exit($esuateF === 0 ? 0 : 1);
 }
 
 // ============================================================================== --asteptat
@@ -900,7 +1028,7 @@ function gf_copil(array $argumente): void
     $dosar = (string) ($optiuni['dosar'] ?? '');
     $baza = (string) ($optiuni['baza'] ?? '');
     $faza = (string) ($optiuni['faza'] ?? '');
-    if (!in_array($faza, ['install', 'helperi'], true) || preg_match('/^cms_mig_fx_[a-z0-9_]+$/', $baza) !== 1 || !is_dir($dosar . '/src')) {
+    if (!in_array($faza, ['install', 'helperi'], true) || preg_match('/^cms_mig_(fx|t)_[a-z0-9_]+$/', $baza) !== 1 || !is_dir($dosar . '/src')) {
         fwrite(STDERR, "copil: argumente greșite\n");
         exit(2);
     }

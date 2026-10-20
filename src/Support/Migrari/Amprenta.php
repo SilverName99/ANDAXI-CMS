@@ -51,6 +51,14 @@ final class Amprenta
     /** Coloanele pe care b'…', x'…' și 0x… sunt literali binari (pe celelalte, pe MySQL, sunt textul valorii). */
     private const BINARE = ['bit', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob'];
 
+    /**
+     * Pauzele (secunde) dintre citirile din nou, când information_schema a sărit un tabel schimbat chiar atunci
+     * de alt DDL (citesteBrut); în total ~3 s, apoi codul 3. Testele le scurtează.
+     *
+     * @var list<float>
+     */
+    public static array $pauzeSarite = [0.05, 0.1, 0.2, 0.4, 0.8, 1.6];
+
     public static function ignorat(string $tabel): bool
     {
         return str_starts_with($tabel, '_platforma_') || str_starts_with($tabel, '#sql')
@@ -91,10 +99,44 @@ final class Amprenta
             $filtru = ' AND TABLE_NAME IN (' . implode(', ', array_fill(0, count($doarTabele), '?')) . ')';
             $parametri = array_values($doarTabele);
         }
-        $citeste = static function (string $sql) use ($db, $parametri): array {
+        // MariaDB sare din information_schema un tabel pe care altă conexiune îi schimbă chiar atunci structura
+        // (avertismentul 1684, „was skipped since its definition is being modified by concurrent DDL statement”):
+        // fără avertisment, tabelul ar părea că lipsește (codul vechi care face DDL în timpul baseline-ului, testul T6).
+        // Atunci totul se citește din nou, după o pauză scurtă; dacă tot lipsește, oprire cu codul 3 (rulează din nou).
+        for ($incercare = 0; ; $incercare++) {
+            $sarite = [];
+            $brut = self::citesteO($db, $filtru, $parametri, $sarite);
+            if ($sarite === []) {
+                return $brut;
+            }
+            if ($incercare >= count(self::$pauzeSarite)) {
+                throw new Eroare('information_schema nu arată ' . (count($sarite) === 1 ? 'tabelul ' : 'tabelele ') . implode(', ', array_keys($sarite))
+                    . ': altă conexiune îi schimbă structura chiar acum (MariaDB, avertismentul 1684); rulează din nou peste puțin', Eroare::LACAT);
+            }
+            usleep((int) round(self::$pauzeSarite[$incercare] * 1_000_000));
+        }
+    }
+
+    /**
+     * O citire a rândurilor din information_schema; în $sarite, tabelele pe care serverul le-a sărit (1684).
+     *
+     * @param array<string, true> $sarite
+     * @return array{tabele: list<array<string, mixed>>, coloane: list<array<string, mixed>>, indecsi: list<array<string, mixed>>, fk: list<array<string, mixed>>}
+     */
+    private static function citesteO(PDO $db, string $filtru, array $parametri, array &$sarite): array
+    {
+        $citeste = static function (string $sql) use ($db, $parametri, &$sarite): array {
             $stmt = $db->prepare($sql);
             $stmt->execute($parametri);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $randuri = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+            foreach ($db->query('SHOW WARNINGS')->fetchAll(PDO::FETCH_ASSOC) as $avertisment) {
+                if ((int) ($avertisment['Code'] ?? 0) === 1684) {
+                    $tabel = preg_match("/'[^']*'\\.'([^']+)'/", (string) ($avertisment['Message'] ?? ''), $m) === 1 ? $m[1] : '?';
+                    $sarite[$tabel] = true;
+                }
+            }
+            return $randuri;
         };
         $existaExpresie = self::areColoanaExpresie($db);
         return [

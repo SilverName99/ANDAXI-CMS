@@ -1,0 +1,23 @@
+# Obiectele pe care schema codului vertij-tinitus-refacut@ca1120c (fixture-ul vt.sql) le are în plus față de
+# database/migrari/asteptat.json: rămân pe site după baseline (migrările nu le ating). Testul T2 cere
+# exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.
+coloana blog_posts.requires_active_account
+coloana pages.requires_active_account
+coloana products.gallery_json
+coloana users.account_active_until
+coloana users.account_status
+coloana users.avatar_url
+coloana users.member_code
+coloana users.profession_id
+coloana users.stripe_customer_id
+indexul users.member_code
+indexul users.uniq_users_member_code
+tabelul account_activations
+tabelul account_verification_documents
+tabelul account_verifications
+tabelul donations
+tabelul mannequin_point_products
+tabelul mannequin_points
+tabelul profession_fields
+tabelul professions
+tabelul reviews
