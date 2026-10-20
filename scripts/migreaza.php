@@ -165,10 +165,14 @@ if (!$server->suportat()) {
 $pdo->exec('SET SESSION lock_wait_timeout = ' . $asteptare . ', SESSION innodb_lock_wait_timeout = ' . $asteptare);
 
 // Doar pentru teste (tools/dev/test-migrari.php): alt dosar de migrări, oprirea „ca un proces
-// omorât” după k operații, pauze scurte. Pe site-uri variabilele nu există.
+// omorât” după k operații sau la a k-a trecere printr-un punct din Schema (în tranzacția unei
+// bucăți, chiar după commit-ul ei), pauze scurte. Pe site-uri variabilele nu există.
 $dosarMigrari = getenv('MIGRARI_TEST_DOSAR') ?: $radacina . '/database/migrari';
 if (($k = getenv('MIGRARI_TEST_OPRESTE_DUPA')) !== false && ctype_digit($k) && (int) $k > 0) {
     $optiuni['opreste_dupa'] = (int) $k;
+}
+if (($punct = getenv('MIGRARI_TEST_OPRESTE_IN')) !== false && preg_match('/^[a-z_]+:[1-9]\d*$/', $punct) === 1) {
+    $optiuni['opreste_in'] = $punct;
 }
 if (($pauze = getenv('MIGRARI_TEST_PAUZE')) !== false && preg_match('/^\d+(\.\d+)?(,\d+(\.\d+)?)*$/', $pauze) === 1) {
     $optiuni['pauze'] = array_map('floatval', explode(',', $pauze));
@@ -216,6 +220,9 @@ function migreaza_text(array $r): string
     if (isset($r['registru'])) {
         $iesire[] = 'În cod: ' . $r['registru']['migrari'] . ' migrări (ultima ' . sprintf('%04d', $r['registru']['ultima_ord']) . ')'
             . ($r['site'] !== null ? ', ' . $r['registru']['pasi_site'] . ' pași ai site-ului' : '');
+    }
+    if ($r['comanda'] === 'aplica' && isset($r['sql_mode'])) {
+        $iesire[] = 'sql_mode: ' . ($r['sql_mode'] !== '' ? $r['sql_mode'] : '(gol)') . ' (al serverului, neschimbat)';
     }
     foreach ($r['migrari'] ?? [] as $m) {
         if ($r['comanda'] === 'aplica' && isset($m['operatii_acum'])) {

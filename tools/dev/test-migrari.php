@@ -12,9 +12,11 @@ declare(strict_types=1);
  *   … --doar-mariadb                                                         # fără MySQL 8 (parțial)
  *
  * U. Fără bază: Server (versiuni, ce știe fiecare, lanțul de clauze), Amprenta (aceleași rânduri
- *    în forma MariaDB și în forma MySQL dau aceeași amprentă; definițiile din migrări; corpul
- *    unui CREATE TABLE; compararea), mesajele fără valori, Registru (ordinea, numerele, proprietarii,
- *    migrari.lock, pașii site-ului).
+ *    în forma MariaDB și în forma MySQL dau aceeași amprentă, inclusiv tinyint(1) unsigned și un
+ *    text implicit care începe cu x'; definițiile din migrări; corpul unui CREATE TABLE;
+ *    compararea), mesajele fără valori (și cu ghilimele, \ sau „' for key '” în valoare, pe care
+ *    serverele nu le dublează), Registru (ordinea, numerele, proprietarii, migrari.lock, pașii
+ *    site-ului).
  * Pe fiecare server (MariaDB din CMS_DEV_SOCK, MySQL 8 din CMS_DEV_SOCK_MYSQL8, pornit cu
  * tools/dev/mysql8.sh dacă nu merge):
  * D. Detectarea: un tabel cu toate felurile de coloane și chei, citit înapoi, e exact ce înțelege
@@ -25,13 +27,18 @@ declare(strict_types=1);
  * R. scripts/migreaza.php, cu fiecare cod de ieșire: bază goală fără migrări (0, „nimic de făcut”),
  *    bază străină (4, nimic creat), migrări de jucărie (planul 10, aplicarea, a doua oară nimic,
  *    asteptat.json, baza veche detectată, --pana-la), oprirea după fiecare operație și reluarea
- *    (amprenta finală aceeași, fiecare rând numărat o dată: cursorul și bucata în aceeași
- *    tranzacție), bugetul de timp (13, „partiala”, apoi gata), migrări schimbate sau dispărute
- *    (12), blocante și contract fără voie (11, baza neatinsă), parametrii site-ului (15), lacătele
- *    (3, inclusiv al sincronizării FAN), un tabel ocupat (reîncercări, apoi 1 și reluare),
- *    verificarea (14), configurarea (2), pașii site-ului, --json, nicio valoare din rânduri și
- *    nicio parolă în ieșire.
- * T. Aceeași amprentă pe MariaDB și pe MySQL 8 după aceleași migrări.
+ *    (amprenta finală aceeași, fiecare rând numărat o dată), oprirea chiar în tranzacția unei
+ *    bucăți sau a unei instrucțiuni de date și chiar după commit-ul ei (MIGRARI_TEST_OPRESTE_IN:
+ *    pică dacă cursorul sau numărătoarea ar ieși din tranzacția bucății), bugetul de timp (13,
+ *    „partiala”, apoi gata), migrări schimbate sau dispărute (12), blocante și contract fără voie
+ *    (11, baza neatinsă), parametrii site-ului (15), lacătele (3, inclusiv al sincronizării FAN),
+ *    starea (_platforma_stare) neatinsă de un runner refuzat (3, 12) și scrisă cu codul final (0,
+ *    14), un tabel ocupat (reîncercări, apoi 1 și reluare), mărimea tabelelor în plan, un tabel
+ *    #sql-* rămas, sql_mode în ieșire și în jurnal, verificarea (14), configurarea (2), pașii
+ *    site-ului, --json, nicio valoare din rânduri (nici cu ghilimele sau \ în ea, din date(),
+ *    peBucati(), 1062 și 1366) și nicio parolă în ieșire.
+ * T. Aceeași amprentă pe MariaDB și pe MySQL 8 după aceleași migrări; o conexiune MariaDB care
+ *    primește id-ul de obiect al uneia MySQL eliberate (Amprenta nu-și amintește serverul vechi).
  * S. Linia de comandă nu mai lasă fișiere de sesiune (bootstrap.php): 3 rulări ale lui
  *    migreaza.php și una a lui diagnostic.php, numărul fișierelor din storage/sessions neschimbat;
  *    ANDAXI_CU_SESIUNE pornește totuși o sesiune.
@@ -161,6 +168,12 @@ $randuriCa = static function (string $familie): array {
         ['s', $m ? 'smallint(6)' : 'smallint', 'NO', '-1', ''],
         ['t', 'date', 'YES', $m ? "'2020-01-01'" : '2020-01-01', ''],
         ['u', 'varchar(10)', 'NO', $m ? "''" : '', ''],
+        // MySQL păstrează lățimea doar la tinyint(1) cu semn; un text care începe cu x' sau 0x e text.
+        ['v', $m ? 'tinyint(1) unsigned' : 'tinyint unsigned', 'NO', '0', ''],
+        ['w', 'varchar(10)', 'NO', $m ? "'x''y'" : "x'y", ''],
+        ['x', 'varchar(10)', 'NO', $m ? "'0x12'" : '0x12', ''],
+        ['y', 'bit(3)', 'YES', "b'101'", ''],
+        ['z', 'tinyint(1) unsigned zerofill', 'YES', $m ? 'NULL' : null, ''],
     ];
     return [
         'tabele' => [['tabel' => 'p', 'motor' => 'InnoDB', 'colatie' => $m ? 'utf8mb3_general_ci' : 'utf8_general_ci'],
@@ -183,13 +196,16 @@ $ampY = Amprenta::normalizeaza($randuriCa('mysql'), 'mysql');
 $verifica('Amprenta: rândurile MariaDB și MySQL ale acelorași coloane dau aceeași amprentă', Amprenta::json($ampM) === Amprenta::json($ampY),
     Amprenta::json($ampM) . "\n---\n" . Amprenta::json($ampY));
 $p = $ampM['tabele']['p'] ?? [];
-$verifica('Amprenta: forma comună (int fără lățime, tinyint(1), year, json = longtext, texte între ghilimele, numere fără, expresii)',
+$verifica('Amprenta: forma comună (int fără lățime, tinyint(1) doar cu semn, year, json = longtext, texte între ghilimele — și x\'y, 0x12 —, numere fără, b\'…\' pe BIT, expresii)',
     ($p['coloane']['id']['tip'] ?? '') === 'int unsigned' && ($p['coloane']['a']['implicit'] ?? '') === '0'
     && $p['coloane']['b']['implicit'] === null && $p['coloane']['c']['implicit'] === "'pending'" && $p['coloane']['e']['implicit'] === '0.00'
     && $p['coloane']['f']['tip'] === 'tinyint(1)' && $p['coloane']['g']['implicit'] === 'current_timestamp'
     && $p['coloane']['h']['extra'] === 'on update current_timestamp' && $p['coloane']['j']['implicit'] === "'0'"
     && $p['coloane']['n']['implicit'] === "'it''s'" && $p['coloane']['q']['tip'] === 'year' && $p['coloane']['r']['tip'] === 'longtext'
-    && $p['coloane']['u']['implicit'] === "''" && $p['coloane']['l']['tip'] === "enum('x','Y')", json_encode($p));
+    && $p['coloane']['u']['implicit'] === "''" && $p['coloane']['l']['tip'] === "enum('x','Y')"
+    && $p['coloane']['v']['tip'] === 'tinyint unsigned' && $p['coloane']['w']['implicit'] === "'x''y'"
+    && $p['coloane']['x']['implicit'] === "'0x12'" && $p['coloane']['y']['implicit'] === "b'101'"
+    && $p['coloane']['z']['tip'] === 'tinyint unsigned zerofill', json_encode($p));
 $verifica('Amprenta: indecși în ordinea coloanelor, cu prefix; NO ACTION = RESTRICT; utf8mb3 = utf8; _platforma_* și *__sync lipsesc',
     ($p['indecsi']['uniq_c'] ?? null) === ['unic' => true, 'coloane' => ['c', 'e']]
     && ($p['indecsi']['idx_n'] ?? null) === ['unic' => false, 'coloane' => ['n(5)']]
@@ -216,6 +232,12 @@ $cazuri = [
     ['TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL', 'text', true, null, ''],
     ['DOUBLE PRECISION NOT NULL DEFAULT 0', 'double', false, '0', ''],
     ['BIGINT(20) UNSIGNED', 'bigint unsigned', true, null, ''],
+    ['TINYINT(1) UNSIGNED NOT NULL DEFAULT 0', 'tinyint unsigned', false, '0', ''],
+    ['TINYINT(1) ZEROFILL NULL', 'tinyint unsigned zerofill', true, null, ''],
+    ['INT(5) ZEROFILL UNSIGNED', 'int unsigned zerofill', true, null, ''],
+    ['TINYINT(1) SIGNED NOT NULL', 'tinyint(1)', false, null, ''],
+    ["BIT(3) DEFAULT b'101'", 'bit(3)', true, "b'101'", ''],
+    ["VARCHAR(10) NOT NULL DEFAULT 'x''y'", 'varchar(10)', false, "'x''y'", ''],
 ];
 $gresite = [];
 foreach ($cazuri as [$text, $tip, $nul, $implicit, $extra]) {
@@ -257,9 +279,40 @@ $verifica('Amprenta::compara: lipsă = tabel/coloană/index (un index echivalent
 unset($curent['tabele']['t']['coloane']['c']);
 $verifica('Amprenta::compara: o coloană lipsă e lipsă', in_array('coloana t.c', Amprenta::compara($asteptat, $curent)['lipsa'], true));
 
-$verifica('Mesajele serverului fără valorile din rânduri',
-    Schema::faraValori("Duplicate entry 'ana@exemplu.ro' for key 'email'") === "Duplicate entry '…' for key '…'"
-    && Schema::faraValori("Incorrect value: 'it''s' and \"x y\"") === "Incorrect value: '…' and \"…\"");
+// Mesajele, cum le scriu MariaDB 10.11 și MySQL 8.0 (citite pe ambele): o ghilimea din valoare nu se dublează.
+$ciudat = "o'brien\\ion' for key 'x.exemplu@exemplu.ro";
+$mesaje = [
+    "Duplicate entry 'ana@exemplu.ro' for key 'email'" => "Duplicate entry '…' for key 'email'",
+    "Duplicate entry '$ciudat' for key 'uniq_c_email'" => "Duplicate entry '…' for key 'uniq_c_email'",
+    "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry '$ciudat' for key 'c.uniq_c_email'"
+        => "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry '…' for key 'c.uniq_c_email'",
+    "Duplicate entry 'x'y-z\\w' for key 'm.uniq_ab'" => "Duplicate entry '…' for key 'm.uniq_ab'",
+    "Incorrect integer value: '$ciudat' for column `cms_t`.`c`.`n` at row 1" => "Incorrect integer value: '…' for column `cms_t`.`c`.`n` at row 1",
+    "Incorrect date value: 'o'brien' for column 'd' at row 1" => "Incorrect date value: '…' for column 'd' at row 1",
+    "Truncated incorrect DOUBLE value: 'o'brien'" => "Truncated incorrect DOUBLE value: '…'",
+    "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'o'brien' WHERE id = 1' at line 1"
+        => "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '…' at line 1",
+    "Duplicate entry '\xE9a'b' for key 'k'" => "Duplicate entry '…' for key 'k'",
+    "Upholding foreign key constraints for table 't', entry 'o'brien', key 2 would lead to a duplicate entry"
+        => "Upholding foreign key constraints for table '…', key 2 would lead to a duplicate entry",
+    "Altă formă 'a' b 'c' d" => "Altă formă '…' d",
+    // Doar nume: rămân cum sunt.
+    "Unknown column 'nu_exista' in 'field list'" => "Unknown column 'nu_exista' in 'field list'",
+    "Can't DROP 'nu_exista'; check that column/key exists" => "Can't DROP 'nu_exista'; check that column/key exists",
+    "Can't DROP COLUMN `nu_exista`; check that it exists" => "Can't DROP COLUMN `nu_exista`; check that it exists",
+    "Table 'cms_t.nu_exista' doesn't exist" => "Table 'cms_t.nu_exista' doesn't exist",
+    "Data too long for column 'scurt' at row 1" => "Data too long for column 'scurt' at row 1",
+    "Lock wait timeout exceeded; try restarting transaction" => "Lock wait timeout exceeded; try restarting transaction",
+];
+$gresite = [];
+foreach ($mesaje as $mesaj => $asteptatMesaj) {
+    $iesit = Schema::faraValori($mesaj);
+    if ($iesit !== $asteptatMesaj || preg_match('/brien|exemplu|ana@|\\\\ion|z\\\\w|\xE9/', $iesit) === 1) {
+        $gresite[] = $mesaj . ' → ' . $iesit;
+    }
+}
+$verifica('Mesajele serverului fără valorile din rânduri (' . count($mesaje) . ' forme; și cu ghilimele, \\ sau „\' for key \'” în valoare)',
+    $gresite === [], implode("\n", $gresite));
 
 // Registrul, pe dosare scrise aici.
 $scrieMigrare = static function (string $dosar, string $id, string $sus, string $tip = 'schema', bool $blocanta = false): void {
@@ -436,6 +489,15 @@ $randuri = static function (PDO $db): array {
     }
 };
 $tabele = static fn (PDO $db): array => $db->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME")->fetchAll(PDO::FETCH_COLUMN);
+/** _platforma_stare: cheie → valoare (gol dacă tabelul lipsește). */
+$stareBaza = static function (PDO $db): array {
+    try {
+        return $db->query('SELECT cheie, valoare FROM _platforma_stare ORDER BY cheie')->fetchAll(PDO::FETCH_KEY_PAIR);
+    } catch (PDOException) {
+        return [];
+    }
+};
+$codUltimaRulare = static fn (PDO $db): ?int => json_decode((string) ($stareBaza($db)['ultima_rulare'] ?? ''), true)['cod'] ?? null;
 $amprenta = static fn (PDO $db): string => Amprenta::json(Amprenta::citeste($db, Server::detecteaza($db)));
 
 /** asteptat.json al unui registru de test: migrările aplicate pe o bază goală, apoi amprenta ei. */
@@ -501,6 +563,9 @@ foreach ($servere as $numeServer => $sock) {
         n VARCHAR(30) NOT NULL DEFAULT 'it''s', o DOUBLE NOT NULL DEFAULT 0, q YEAR NULL, r JSON NULL,
         s SMALLINT NOT NULL DEFAULT -1, t DATE NULL DEFAULT '2020-01-01', u VARCHAR(10) NOT NULL DEFAULT '',
         v BOOLEAN NOT NULL DEFAULT FALSE, w DECIMAL(5,1) DEFAULT '2.5', x DATETIME DEFAULT NULL, `key` INT,
+        y TINYINT(1) UNSIGNED NOT NULL DEFAULT 0, z VARCHAR(10) NOT NULL DEFAULT 'x''y', aa VARCHAR(10) NOT NULL DEFAULT '0x12',
+        ab VARCHAR(10) NOT NULL DEFAULT 'b''01''', ac BIT(3) NULL DEFAULT b'101', ad TINYINT(1) ZEROFILL NULL,
+        ae INT(5) UNSIGNED ZEROFILL NULL,
         UNIQUE KEY uniq_c (c, d), KEY idx_m (m(5)), KEY (a, b), FULLTEXT KEY ft_i (i)";
     $db->exec('CREATE TABLE proba (' . $corpProba . ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
     $citit = Amprenta::citeste($db, $server)['tabele']['proba'];
@@ -516,8 +581,8 @@ foreach ($servere as $numeServer => $sock) {
             $diferite[] = 'indexul ' . $i;
         }
     }
-    $verifica('ce scrie serverul despre un tabel = ce înțelege Amprenta din corpul lui (25 de coloane, 5 indecși)',
-        $diferite === [] && count($citit['coloane']) === 25 && count($citit['indecsi']) === 5, implode("\n", $diferite));
+    $verifica('ce scrie serverul despre un tabel = ce înțelege Amprenta din corpul lui (32 de coloane, 5 indecși)',
+        $diferite === [] && count($citit['coloane']) === 32 && count($citit['indecsi']) === 5, implode("\n", $diferite));
     $amprentePeServer['proba'][$numeServer] = Amprenta::json(Amprenta::citeste($db, $server));
 
     // Schema direct, pe bază.
@@ -618,8 +683,9 @@ foreach ($servere as $numeServer => $sock) {
         $cod === 10 && str_contains($out, 'creare    tabel jucarii') && str_contains($out, 'instant   coloana jucarii.culoare')
         && str_contains($out, 'inplace   unic jucarii.uniq_jucarii_cod') && str_contains($out, 'date      pe_bucati jucarii'), $out . $err);
     [$cod, $out, $err] = $ruleaza($sock, $b('gen'), $jucarii, ['--aplica']);
-    $verifica('--aplica fără asteptat.json: aplică, apoi 14 („nu pot spune dacă baza e completă”)',
-        $cod === 14 && str_contains($out, 'lipsește') && count($randuri($gen)) === 3 && $faraAvertismentePhp($err), $out . $err);
+    $verifica('--aplica fără asteptat.json: aplică, apoi 14 („nu pot spune dacă baza e completă”), iar ultima rulare are codul 14, nu 0',
+        $cod === 14 && str_contains($out, 'lipsește') && count($randuri($gen)) === 3 && $faraAvertismentePhp($err)
+        && $codUltimaRulare($gen) === 14 && ($stareBaza($gen)['ultima_ord'] ?? '') === '3', $out . $err . json_encode($stareBaza($gen)));
     [$cod, $json] = $ruleaza($sock, $b('gen'), $jucarii, ['--amprenta']);
     file_put_contents($jucarii . '/asteptat.json', $json);
     $verifica('--amprenta scrie amprenta (doar structură): 2 tabele de jucărie',
@@ -633,10 +699,15 @@ foreach ($servere as $numeServer => $sock) {
         $cod === 0 && array_column($r, 'rezultat') === ['aplicata', 'aplicata', 'aplicata']
         && array_sum(array_map('intval', array_column($r, 'operatii'))) === $operatiiJucarii && str_contains($out, 'baza are tot ce cer migrările')
         && $faraAvertismentePhp($err), $out . $err . json_encode($r));
-    $verifica('… fiecare jucărie numărată o dată, ultima_ord 3, amprenta = asteptat.json',
+    $verifica('… fiecare jucărie numărată o dată, ultima_ord 3, ultima rulare cu codul 0, amprenta = asteptat.json',
         (int) $a->query('SELECT COUNT(*) FROM jucarii WHERE contor = 1')->fetchColumn() === 9
         && $a->query("SELECT valoare FROM _platforma_stare WHERE cheie = 'ultima_ord'")->fetchColumn() === '3'
-        && $amprenta($a) === $json);
+        && $codUltimaRulare($a) === 0 && $amprenta($a) === $json);
+    $sqlMode = (string) $a->query('SELECT @@GLOBAL.sql_mode')->fetchColumn();
+    $jurnalTest = (string) @file_get_contents($lucru . '/jurnal.log');
+    $verifica('--aplica scrie sql_mode-ul serverului (neschimbat) în ieșire și în migrari.log',
+        str_contains($out, 'sql_mode: ' . ($sqlMode !== '' ? $sqlMode : '(gol)')) && str_contains($jurnalTest, '--aplica: 3 de aplicat')
+        && str_contains($jurnalTest, 'sql_mode ' . ($sqlMode !== '' ? $sqlMode : '(gol)')), $out . "\n" . $jurnalTest);
     [$cod, $out] = $ruleaza($sock, $b('a'), $jucarii, ['--aplica']);
     [$codPlan, $outPlan] = $ruleaza($sock, $b('a'), $jucarii, ['--plan']);
     $verifica('a doua oară: --aplica „nimic de făcut” (0 operații), --plan 0',
@@ -697,6 +768,43 @@ foreach ($servere as $numeServer => $sock) {
     }
     $verifica('oprit (ca un proces omorât) după fiecare din cele ' . $operatiiJucarii . ' operații, apoi reluat: 0, nimic „in_curs”, amprenta '
         . 'aceeași, fiecare jucărie numărată exact o dată, operațiile numărate o dată', $esecuriOprire === [], implode("\n", $esecuriOprire));
+
+    // Oprit chiar înainte de commit-ul unei bucăți (sau al instrucțiunii de date) și chiar după el. Înainte:
+    // serverul anulează tot, bucata se reface. După: bucata, cursorul și numărătoarea au rămas împreună, deci
+    // nu se reface. Dacă cursorul sau numărătoarea ar ieși din tranzacție, aici o jucărie ar ajunge la
+    // contor 2 sau o operație n-ar fi numărată.
+    $jucariiNumarate = static fn (PDO $o, string $conditie): int => (int) $o->query('SELECT COUNT(*) FROM jucarii WHERE ' . $conditie)->fetchColumn();
+    $puncte = [
+        ['date_in_tranzactie', 1, static fn (PDO $o, array $r): bool => $jucariiNumarate($o, '1') === 0],
+        ['date_dupa_commit', 1, static fn (PDO $o, array $r): bool => $jucariiNumarate($o, '1') === 9
+            && (int) ($r['catalog/0003_contor']['operatii'] ?? -1) === 1],
+    ];
+    for ($k = 1; $k <= 5; $k++) {
+        $puncte[] = ['bucata_in_tranzactie', $k, static fn (PDO $o, array $r): bool => $jucariiNumarate($o, 'contor = 1') === 2 * ($k - 1)
+            && $jucariiNumarate($o, 'contor > 1') === 0];
+        $puncte[] = ['bucata_dupa_commit', $k, static fn (PDO $o, array $r): bool => $jucariiNumarate($o, 'contor = 1') === min(2 * $k, 9)
+            && str_ends_with((string) ($r['catalog/0003_contor']['cursor_json'] ?? ''), ':' . min(2 * $k, 9) . '}')
+            && (int) ($r['catalog/0003_contor']['operatii'] ?? -1) === 1 + $k];
+    }
+    $esecuriPuncte = [];
+    foreach ($puncte as [$punct, $k, $dupaOprire]) {
+        $o = $bazaNoua($sock, $b('oprire'));
+        [$cod, $out, $err] = $ruleaza($sock, $b('oprire'), $jucarii, ['--aplica'], ['MIGRARI_TEST_OPRESTE_IN' => $punct . ':' . $k]);
+        if ($cod !== 1 || !str_contains($err, 'oprire de test la ' . $punct . ' #' . $k) || !$dupaOprire($o, $randuri($o))) {
+            $esecuriPuncte[] = $punct . ':' . $k . ': oprirea a dat ' . $cod . ', ' . json_encode($randuri($o)) . ', contor ' . json_encode($o->query('SELECT contor, COUNT(*) n FROM jucarii GROUP BY contor')->fetchAll()) . ' ' . trim($err . $out);
+            continue;
+        }
+        [$cod, $out, $err] = $ruleaza($sock, $b('oprire'), $jucarii, ['--aplica']);
+        $r = $randuri($o);
+        $ramase = array_filter($r, static fn (array $x): bool => !in_array($x['rezultat'], ['aplicata', 'detectata'], true));
+        if ($cod !== 0 || $ramase !== [] || count($r) !== 3 || $amprenta($o) !== $json || $jucariiNumarate($o, '1') !== 9
+            || $jucariiNumarate($o, 'contor = 1') !== 9 || array_sum(array_map('intval', array_column($r, 'operatii'))) !== $operatiiJucarii) {
+            $esecuriPuncte[] = $punct . ':' . $k . ': reluarea ' . $cod . ', ' . json_encode($r) . ', contor ' . json_encode($o->query('SELECT contor, COUNT(*) n FROM jucarii GROUP BY contor')->fetchAll()) . ' ' . $out . $err;
+        }
+    }
+    $verifica('oprit chiar înainte și chiar după commit-ul instrucțiunii de date și al fiecăreia din cele 5 bucăți (' . count($puncte) . ' opriri), '
+        . 'apoi reluat: înainte nu rămâne nimic, după rămân bucata, cursorul și numărătoarea; la final fiecare jucărie numărată o dată, '
+        . $operatiiJucarii . ' operații', $esecuriPuncte === [], implode("\n", $esecuriPuncte));
 
     // Bugetul de timp.
     $buget = $lucru . '/buget-' . $cheiServer;
@@ -810,15 +918,29 @@ PHP);
     $verifica('cu migrari.json în dosarul site-ului: aplicată, cu valoarea lui',
         $cod === 0 && $pb->query('SELECT procesator FROM linkuri')->fetchColumn() === 'stripe', $out);
 
-    // 3: lacătele.
+    // 3: lacătele. Un runner refuzat nu atinge starea: nici cel care găsește lacătul ținut, nici codul mai vechi decât baza (12).
+    $jucariiVechi = $lucru . '/jucarii-vechi-' . $cheiServer;
+    @mkdir($jucariiVechi . '/nucleu', 0777, true);
+    copy($jucarii . '/nucleu/0001_jucarii.php', $jucariiVechi . '/nucleu/0001_jucarii.php');
+    $a->exec("UPDATE _platforma_stare SET valoare = 'santinela' WHERE cheie = 'ultima_rulare'");
+    $stareInainte = $stareBaza($a);
     $tinut = $conectare($sock, $b('a'));
     $tinut->query("SELECT GET_LOCK(CONCAT('platforma_migrari:', MD5(DATABASE())), 0)")->fetchColumn();
     [$cod, $out] = $ruleaza($sock, $b('a'), $jucarii, ['--aplica']);
+    [$codVechi, $outVechi] = $ruleaza($sock, $b('a'), $jucariiVechi, ['--aplica']);
     [$codStare, $outStare] = $ruleaza($sock, $b('a'), $jucarii, ['--stare']);
+    $stareCuLacat = $stareBaza($a);
     $tinut->query("SELECT RELEASE_LOCK(CONCAT('platforma_migrari:', MD5(DATABASE())))");
+    [$codVechi2, $outVechi2] = $ruleaza($sock, $b('a'), $jucariiVechi, ['--aplica']);
+    $stareDupaVechi = $stareBaza($a);
     [$cod2] = $ruleaza($sock, $b('a'), $jucarii, ['--aplica']);
     $verifica('alt runner ține lacătul: --aplica 3 (--stare arată „runner activ”); eliberat: 0',
         $cod === 3 && str_contains($out, 'alt runner') && str_contains($outStare, 'runner activ acum: da') && $cod2 === 0, $out . $outStare);
+    $verifica('un runner refuzat nu atinge _platforma_stare: lacătul ținut (3, și cu cod mai vechi), cod mai vechi decât baza (12); '
+        . 'ultima_ord rămâne 3, amprenta și ultima rulare la fel; apoi o rulare bună o scrie (codul 0)',
+        $codVechi === 3 && $codVechi2 === 12 && $stareCuLacat === $stareInainte && $stareDupaVechi === $stareInainte
+        && ($stareInainte['ultima_ord'] ?? '') === '3' && $codUltimaRulare($a) === 0,
+        $outVechi . $outVechi2 . json_encode([$stareInainte, $stareCuLacat, $stareDupaVechi, $stareBaza($a)]));
     $fan = $lucru . '/fan-' . $cheiServer;
     $scrieMigrare($fan, 'livrare_fan/0001_strazi', <<<'PHP'
         $s->lacatFan('strazi', 1);
@@ -846,6 +968,12 @@ PHP);
     $ruleaza($sock, $b('ocupat'), $ocupat, ['--aplica', '--pana-la=nucleu/0001_tabel']);
     $blocheaza = $conectare($sock, $b('ocupat'));
     $blocheaza->exec("INSERT INTO ocupat VALUES (1)");
+    [$codP, $outP] = $ruleaza($sock, $b('ocupat'), $ocupat, ['--plan']);
+    [, $jsonP] = $ruleaza($sock, $b('ocupat'), $ocupat, ['--plan', '--json']);
+    $opP = json_decode($jsonP, true)['migrari'][0]['operatii'][0] ?? [];
+    $verifica('--plan pe un tabel care există: ALTER-ul are mărimea tabelului (rânduri și octeți, după information_schema; și în --json)',
+        $codP === 10 && preg_match('/coloana ocupat\.nota \(~\d+ rânduri, \d+ KB\)/', $outP) === 1
+        && is_int($opP['randuri'] ?? null) && is_int($opP['octeti'] ?? null) && $opP['octeti'] > 0, $outP . $jsonP);
     $blocheaza->beginTransaction();
     $blocheaza->query('SELECT * FROM ocupat')->fetchAll();
     [$comanda, $env] = $comandaRunner($sock, $b('ocupat'), $ocupat, ['--aplica', '--asteptare-lacat=1'],
@@ -868,6 +996,14 @@ PHP);
     [$cod2] = $ruleaza($sock, $b('ocupat'), $ocupat, ['--aplica']);
     $verifica('… ocupat tot timpul: 1, migrarea „in_curs”; rulată din nou după: aplicată',
         $cod === 1 && str_contains($out, 'a rămas ocupat') && $rand === 'in_curs' && $cod2 === 0, $out . ' ' . $rand);
+
+    // Un tabel #sql-* rămas de la un ALTER omorât (servere fără DDL atomic): planul îl arată, amprenta nu-l vede.
+    $a->exec('CREATE TABLE `#sql-proba_1` (id INT) ENGINE=InnoDB');
+    [$cod, $out] = $ruleaza($sock, $b('a'), $jucarii, ['--plan']);
+    [$codA, $jsonA] = $ruleaza($sock, $b('a'), $jucarii, ['--amprenta']);
+    $a->exec('DROP TABLE `#sql-proba_1`');
+    $verifica('un tabel #sql-* rămas de la un ALTER întrerupt: --plan îl arată (avertisment, tot 0), amprenta nu-l vede',
+        $cod === 0 && str_contains($out, 'tabelul #sql-proba_1 a rămas') && $codA === 0 && $jsonA === $json, $out);
 
     // 14: verificarea.
     $a->exec('ALTER TABLE culori DROP COLUMN cod');
@@ -909,6 +1045,30 @@ PHP);
     [$cod, $out, $err] = $ruleaza($sock, $b('pers'), $personale, ['--aplica']);
     $verifica('o eroare SQL cu o valoare în mesaj (Duplicate entry …): 1, mesajul fără valoare',
         $cod === 1 && str_contains($out, '1062') && !str_contains($out . $err, '@exemplu.ro'), $out . $err);
+    // Valori cu ghilimele și \ în ele: serverele nu le dublează în mesaj, iar valoarea poate conține chiar „' for key '”.
+    $pe->prepare('UPDATE clienti SET email = ? WHERE id = 3')->execute(['o\'brien\\ion\' for key \'x.exemplu@exemplu.ro']);
+    $cazuriCiudate = [
+        'date(), INSERT, 1062' => ["        \$s->date('o dublură', 'INSERT INTO clienti (email) SELECT email FROM clienti WHERE id = 3');", '1062', 'uniq_clienti_email'],
+        'peBucati(), UPDATE, 1062' => ["        \$s->peBucati('clienti', 'id', 10, static function (PDO \$db, int \$de, int \$pana): int {\n"
+            . "            \$valoare = \$db->query('SELECT email FROM clienti WHERE id = 3')->fetchColumn();\n"
+            . "            \$stmt = \$db->prepare('UPDATE clienti SET email = ? WHERE id = 1');\n"
+            . "            \$stmt->execute([\$valoare]);\n            return \$stmt->rowCount();\n        });", '1062', 'uniq_clienti_email'],
+        'date(), text într-un INT, 1366' => ["        \$s->tabel('numere', 'id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, n INT NULL');\n"
+            . "        \$s->date('numere', 'INSERT INTO numere (n) SELECT email FROM clienti WHERE id = 3');", '1366', ''],
+    ];
+    $esecuriCiudate = [];
+    foreach ($cazuriCiudate as $eticheta => [$sus, $errno, $index]) {
+        $scrieMigrare($personale, 'nucleu/0002_unic', $sus);
+        [$cod, $out, $err] = $ruleaza($sock, $b('pers'), $personale, ['--aplica']);
+        [$codJ, $outJ, $errJ] = $ruleaza($sock, $b('pers'), $personale, ['--aplica', '--json']);
+        $tot = $out . $err . $outJ . $errJ;
+        if ($cod !== 1 || $codJ !== 1 || !str_contains($out, 'eroare SQL ' . $errno) || ($index !== '' && !str_contains($out, $index))
+            || preg_match('/brien|exemplu|\\\\ion/', $tot) === 1) {
+            $esecuriCiudate[] = $eticheta . ': ' . $cod . '/' . $codJ . ' ' . $out . $err;
+        }
+    }
+    $verifica('valori cu ghilimele și \\ (și „\' for key \'”) în mesajul serverului — date() și peBucati() cu 1062, 1366: 1, cu errno '
+        . 'și numele indexului, fără nicio bucată din valoare, nici în --json', $esecuriCiudate === [], implode("\n", $esecuriCiudate));
 
     // Pașii site-ului.
     $siteR = $lucru . '/site-' . $cheiServer;
@@ -938,6 +1098,18 @@ if (count($servere) === 2) {
         $verifica('aceeași amprentă pe ambele servere: ' . $ce, count($valori) === 2 && $valori[0] === $valori[1],
             count($valori) === 2 ? implode("\n---\n", $valori) : 'lipsește un server');
     }
+    // O conexiune MariaDB nouă primește id-ul de obiect al uneia MySQL 8 tocmai eliberate (PHP refolosește
+    // id-urile): Amprenta nu are voie să-și amintească de la cea veche că serverul are STATISTICS.EXPRESSION.
+    $pdoMy = $conectare($servere['MySQL 8']);
+    $idVechi = spl_object_id($pdoMy);
+    Amprenta::citeste($pdoMy, Server::detecteaza($pdoMy));
+    unset($pdoMy);
+    $pdoMaria = $conectare($servere['MariaDB']);
+    $acelasiId = spl_object_id($pdoMaria) === $idVechi;
+    $ex = $aruncat(static fn () => Amprenta::citeste($pdoMaria, Server::detecteaza($pdoMaria)));
+    $verifica('o conexiune MariaDB cu id-ul de obiect al uneia MySQL 8 eliberate: Amprenta citește fără eroare',
+        $acelasiId && $ex === null, ($acelasiId ? '' : 'id-ul nu s-a refolosit (testul n-ar dovedi nimic); ') . ($ex?->getMessage() ?? ''));
+    unset($pdoMaria);
 } else {
     $scrie('  SĂRIT doar MariaDB (' . ($doarMariaDb ? '--doar-mariadb' : 'MySQL 8 nu merge') . '): rezultatul e parțial');
 }

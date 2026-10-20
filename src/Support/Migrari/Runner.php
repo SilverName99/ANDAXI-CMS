@@ -28,8 +28,13 @@ use Throwable;
  *  6. fiecare migrare, în ordine (întâi cele întrerupte): rândul ei „in_curs”, apoi „aplicata”
  *     (a schimbat ceva) sau „detectata” (totul exista deja); la capătul bugetului de timp,
  *     „partiala” și codul 13 (rularea următoare continuă);
- *  7. starea (ultima_ord, amprenta codului, serverul, ultima rulare) și verificarea față de
- *     asteptat.json: un obiect lipsă → codul 14.
+ *  7. verificarea față de asteptat.json (un obiect lipsă → codul 14), apoi starea (ultima_ord,
+ *     amprenta codului, serverul, ultima rulare cu codul ei final).
+ *
+ * Starea (_platforma_stare) o scrie doar un runner care a început să aplice: ține lacătul, iar
+ * codul lui se potrivește cu baza (pasul 3) și a trecut de simulare. Unul refuzat (lacătul ținut
+ * de altul: 3, cod mai vechi decât baza sau o migrare schimbată: 12, bază străină: 4, simularea
+ * oprită: 1/11/15, configurarea: 2) n-o atinge: ultima_ord e citită de gardă (/health) și de CRM.
  */
 final class Runner
 {
@@ -42,14 +47,18 @@ final class Runner
     private int $cuEfectRulare = 0;
     private bool $jurnalScris = true;
 
+    /** @var array<string, int> de câte ori s-a trecut prin fiecare punct de test (opreste_in) */
+    private array $puncteAtinse = [];
+
     /** @var array<string, mixed> */
     private array $optiuni;
 
     /**
      * Opțiunile: permite_blocante, permite_contract (bool); buget (secunde); pana_la (id);
      * site (slug); dosar_site (unde e migrari.json); opreste_dupa (test: oprire ca un proces
-     * omorât după atâtea operații); pauze (secundele reîncercărilor); pauza_bucati_ms;
-     * jurnal (fișierul cu câte un rând pe operație); cod_versiune.
+     * omorât după atâtea operații); opreste_in (test: „punct:k”, oprire la a k-a trecere prin
+     * punctul acela din Schema, de exemplu în tranzacția unei bucăți); pauze (secundele
+     * reîncercărilor); pauza_bucati_ms; jurnal (fișierul cu câte un rând pe operație); cod_versiune.
      *
      * @param array<string, mixed> $optiuni
      */
@@ -68,6 +77,7 @@ final class Runner
             'site' => null,
             'dosar_site' => '',
             'opreste_dupa' => null,
+            'opreste_in' => null,
             'pauze' => [2.0, 4.0, 8.0, 16.0, 30.0],
             'pauza_bucati_ms' => 50,
             'jurnal' => null,
@@ -85,10 +95,12 @@ final class Runner
         $this->verificaSchimbari($randuri);
         $deAplicat = $this->deAplicat($randuri);
         $raport = $this->raport('plan');
+        $ramase = $this->tabeleRamase();
         if ($deAplicat === []) {
-            return $raport + ['cod' => 0, 'mesaj' => 'Nimic de făcut: baza e la zi cu migrările din cod.', 'migrari' => [], 'avertismente' => []];
+            return $raport + ['cod' => 0, 'mesaj' => 'Nimic de făcut: baza e la zi cu migrările din cod.', 'migrari' => [], 'avertismente' => $ramase];
         }
         [$simulate, $avertismente] = $this->simuleaza($deAplicat, $randuri);
+        $avertismente = array_merge($ramase, $avertismente);
         $nepermise = array_filter($simulate, static fn (array $m): bool => $m['blocanta_efectiv'] || $m['tip'] === 'contract');
         $cod = $nepermise !== [] ? Eroare::NEPERMISA : Eroare::DE_APLICAT;
         $mesaj = count($simulate) . ' ' . (count($simulate) === 1 ? 'migrare' : 'migrări') . ' de aplicat';
@@ -103,6 +115,9 @@ final class Runner
         $aplicate = [];
         $avertismente = [];
         $areLacat = false;
+        // Starea se scrie doar după ce rularea a trecut de toate verificările și a început să aplice
+        // (vezi capul clasei): un runner refuzat nu-i schimbă ultima_ord, amprenta sau ultima rulare.
+        $scrieStarea = false;
         try {
             $this->paznic();
             $areLacat = (int) $this->db->query('SELECT GET_LOCK(' . self::LACAT . ', 0)')->fetchColumn() === 1;
@@ -112,8 +127,10 @@ final class Runner
             $randuri = $this->randuri();
             $this->verificaSchimbari($randuri);
             $deAplicat = $this->deAplicat($randuri);
+            $avertismente = $this->tabeleRamase();
             if ($deAplicat !== []) {
-                [$simulate, $avertismente] = $this->simuleaza($deAplicat, $randuri);
+                [$simulate, $deLaSimulare] = $this->simuleaza($deAplicat, $randuri);
+                $avertismente = array_merge($avertismente, $deLaSimulare);
                 $refuzate = [];
                 foreach ($simulate as $m) {
                     if ($m['blocanta_efectiv'] && !$this->optiuni['permite_blocante']) {
@@ -128,7 +145,12 @@ final class Runner
                             . 'sau --permite-contract. Planul e mai sus; baza n-a fost atinsă.'];
                 }
             }
+            $scrieStarea = true;
             $this->creeazaTabeleleDeUrmarire();
+            if ($deAplicat !== []) {
+                $this->scrieRandJurnal('--aplica: ' . count($deAplicat) . ' de aplicat, ' . $this->server->nume()
+                    . ', sql_mode ' . ($raport['sql_mode'] !== '' ? $raport['sql_mode'] : '(gol)'));
+            }
             foreach ($deAplicat as $m) {
                 if ($this->timpScurs() >= (float) $this->optiuni['buget']) {
                     throw new Eroare('bugetul de timp (' . $this->optiuni['buget'] . ' s) s-a terminat înainte de ' . $m['id']
@@ -137,22 +159,26 @@ final class Runner
                 $aplicate[] = $this->aplicaUna($m, $randuri[$m['id']] ?? null, $avertismente);
             }
             $randuri = $this->randuri();
-            $this->inregistreazaStarea($randuri, 0);
             // Cu --pana-la oprit înainte de capăt, schema e voit incompletă: verificarea ar pica degeaba.
             $verificare = $this->optiuni['pana_la'] !== null && $this->deAplicat($randuri, false) !== []
                 ? ['lipsa' => [], 'avertismente' => [], 'in_plus' => [], 'fara_asteptat' => false,
                     'mesaj' => 'sărită: --pana-la a oprit înainte de ultima migrare.']
                 : $this->verificaDupaAplicare();
             $cod = $verificare['lipsa'] !== [] || $verificare['fara_asteptat'] ? Eroare::VERIFICARE : 0;
+            $this->inregistreazaStarea($randuri, $cod);
             $mesaj = $aplicate === [] ? 'Nimic de făcut: baza era la zi.' : $this->rezumat($aplicate);
             $mesaj .= $cod === 0 ? ' Verificarea: ' . $verificare['mesaj'] : ' VERIFICAREA A PICAT: ' . $verificare['mesaj'];
             return $raport + ['cod' => $cod, 'mesaj' => $mesaj, 'migrari' => $aplicate, 'avertismente' => $avertismente,
                 'verificare' => $verificare, 'ultima_ord' => $this->ultimaOrd($randuri)];
         } catch (Eroare $e) {
-            $this->inregistreazaStareaDacaSe($e->getCode());
+            if ($scrieStarea) {
+                $this->inregistreazaStareaDacaSe($e->getCode());
+            }
             return $raport + ['cod' => $e->getCode(), 'mesaj' => $e->getMessage(), 'migrari' => $aplicate, 'avertismente' => $avertismente];
         } catch (Throwable $e) {
-            $this->inregistreazaStareaDacaSe(Eroare::MIGRARE);
+            if ($scrieStarea) {
+                $this->inregistreazaStareaDacaSe(Eroare::MIGRARE);
+            }
             return $raport + ['cod' => Eroare::MIGRARE, 'mesaj' => 'eroare neașteptată: ' . Schema::faraValori($e->getMessage()),
                 'migrari' => $aplicate, 'avertismente' => $avertismente];
         } finally {
@@ -220,7 +246,6 @@ final class Runner
         return $raport + [
             'cod' => 0,
             'mesaj' => $mesaj,
-            'sql_mode' => (string) $this->db->query('SELECT @@SESSION.sql_mode')->fetchColumn(),
             'lock_wait_timeout' => (int) $this->db->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn(),
             'ultima_ord' => $this->ultimaOrd($randuri),
             'ultima_migrare' => $ultima['id'] ?? null,
@@ -296,6 +321,7 @@ final class Runner
             (int) $this->optiuni['pauza_bucati_ms'],
         );
         $executie->cursor = is_array($cursor) ? $cursor : [];
+        $executie->punctTest = $this->punctTest();
         $schema = new Schema($this->db, $this->server, $executie);
         $start = microtime(true);
         $durata = static fn (): int => (int) round((microtime(true) - $start) * 1000);
@@ -358,13 +384,45 @@ final class Runner
         }
     }
 
+    /**
+     * Doar pentru teste (opreste_in = „punct:k”): la a k-a trecere prin punctul dat din Schema,
+     * procesul se oprește ca unul omorât (exit, fără finally și fără nicio scriere în plus;
+     * serverul anulează tranzacția deschisă).
+     *
+     * @return (\Closure(string): void)|null
+     */
+    private function punctTest(): ?\Closure
+    {
+        $oprire = $this->optiuni['opreste_in'];
+        if (!is_string($oprire) || preg_match('/^([a-z_]+):([1-9]\d*)$/', $oprire, $m) !== 1) {
+            return null;
+        }
+        [, $punct, $k] = $m;
+        return function (string $atins) use ($punct, $k): void {
+            if ($atins !== $punct) {
+                return;
+            }
+            $this->puncteAtinse[$punct] = ($this->puncteAtinse[$punct] ?? 0) + 1;
+            if ($this->puncteAtinse[$punct] >= (int) $k) {
+                fwrite(STDERR, 'oprire de test la ' . $punct . ' #' . $this->puncteAtinse[$punct] . " (MIGRARI_TEST_OPRESTE_IN)\n");
+                exit(1);
+            }
+        };
+    }
+
     private function scrieJurnal(string $id, string $fel, string $obiect, string $clasa, float $ms): void
+    {
+        $this->scrieRandJurnal($id . ' ' . $fel . ' ' . $obiect . ' ' . $clasa . ' ' . (int) round($ms) . 'ms');
+    }
+
+    /** Un rând în storage/logs/migrari.log, cu data în față (doar nume de obiecte și numere). */
+    private function scrieRandJurnal(string $text): void
     {
         $fisier = $this->optiuni['jurnal'];
         if (!is_string($fisier) || $fisier === '' || !$this->jurnalScris) {
             return;
         }
-        $linie = date('Y-m-d H:i:s') . ' ' . $id . ' ' . $fel . ' ' . $obiect . ' ' . $clasa . ' ' . (int) round($ms) . "ms\n";
+        $linie = date('Y-m-d H:i:s') . ' ' . $text . "\n";
         $dosar = dirname($fisier);
         if ((!is_dir($dosar) && !@mkdir($dosar, 0770, true)) || @file_put_contents($fisier, $linie, FILE_APPEND | LOCK_EX) === false) {
             $this->jurnalScris = false;
@@ -620,6 +678,21 @@ final class Runner
         }
     }
 
+    /**
+     * Tabelele `#sql-*` rămase de la un ALTER omorât la jumătate (pe serverele fără DDL atomic:
+     * MariaDB < 10.6). Nu intră în amprentă; planul le arată ca să fie șterse de mână, după o
+     * copie a bazei. Doar numele lor (information_schema.TABLES).
+     *
+     * @return list<string>
+     */
+    private function tabeleRamase(): array
+    {
+        $nume = $this->db->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()
+            AND (TABLE_NAME LIKE '#sql%' OR TABLE_NAME LIKE '#mysql50##sql%') ORDER BY TABLE_NAME")->fetchAll(PDO::FETCH_COLUMN);
+        return array_map(static fn (string $tabel): string => 'tabelul ' . $tabel . ' a rămas de la un ALTER întrerupt (nu intră în amprentă; '
+            . 'se șterge de mână, după o copie a bazei)', array_map('strval', $nume));
+    }
+
     // ------------------------------------------------------------- mărunțișuri
 
     private function tabelExista(string $tabel): bool
@@ -642,6 +715,8 @@ final class Runner
             'comanda' => $comanda,
             'server' => ['familie' => $this->server->familie(), 'versiune' => $this->server->versiune(), 'text' => $this->server->text()],
             'baza' => (string) $this->db->query('SELECT DATABASE()')->fetchColumn(),
+            // Se scrie, nu se schimbă: migrările rulează cu sql_mode-ul serverului, ca site-ul.
+            'sql_mode' => (string) $this->db->query('SELECT @@SESSION.sql_mode')->fetchColumn(),
             'site' => $this->optiuni['site'],
             'registru' => [
                 'migrari' => count($this->registru->migrari()),

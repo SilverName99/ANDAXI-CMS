@@ -6,6 +6,7 @@ namespace App\Support\Migrari;
 
 use PDO;
 use RuntimeException;
+use WeakMap;
 
 /**
  * Amprenta schemei: tabelele, coloanele, indecșii și cheile străine ale unei baze, scrise
@@ -14,13 +15,17 @@ use RuntimeException;
  *
  * Ce se aduce la aceeași formă (docs/MIGRARI.md, „Amprenta”):
  *  - lățimea afișată a întregilor: MariaDB scrie `int(11)`, MySQL ≥ 8.0.19 `int`; rămâne
- *    doar `tinyint(1)` (ambele îl păstrează); `year(4)` → `year`; `json` → `longtext`
- *    (pe MariaDB JSON e un longtext);
+ *    doar `tinyint(1)` cu semn (MySQL o păstrează numai la el: `tinyint(1) unsigned` devine
+ *    `tinyint unsigned`); `zerofill` înseamnă și `unsigned`; `year(4)` → `year`; `json` →
+ *    `longtext` (pe MariaDB JSON e un longtext);
  *  - valoarea implicită: MariaDB ≥ 10.2.7 scrie un text între ghilimele (`'pending'`) și
  *    „fără valoare” ca `NULL`; MySQL scrie textul fără ghilimele și NULL adevărat. Aici:
  *    null = fără valoare sau NULL; un text = între ghilimele simple; un număr (pe o coloană
  *    numerică) = fără ghilimele, cu zecimalele coloanei; o expresie = cu litere mici,
- *    `current_timestamp()`/`CURRENT_TIMESTAMP`/`now()` → `current_timestamp`;
+ *    `current_timestamp()`/`CURRENT_TIMESTAMP`/`now()` → `current_timestamp`; `b'101'` rămâne
+ *    așa pe o coloană BIT (pe MySQL, un text ca `x'y` pe un VARCHAR e chiar textul, nu un
+ *    literal); valorile implicite ale coloanelor BINARY/VARBINARY nu se aduc la aceeași formă
+ *    (MariaDB scrie octeții, MySQL hex; niciun cod nu le folosește);
  *  - EXTRA: litere mici, fără `default_generated` (MySQL), `on update current_timestamp`;
  *  - cheile străine: `NO ACTION` = `RESTRICT` (InnoDB le tratează la fel; MySQL scrie unul,
  *    MariaDB celălalt); colațiile `utf8mb3_*` = `utf8_*`;
@@ -38,6 +43,8 @@ final class Amprenta
 
     private const INTREGI = ['tinyint', 'smallint', 'mediumint', 'int', 'bigint'];
     private const NUMERICE = ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'decimal', 'float', 'double'];
+    /** Coloanele pe care b'…', x'…' și 0x… sunt literali binari (pe celelalte, pe MySQL, sunt textul valorii). */
+    private const BINARE = ['bit', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob'];
 
     public static function ignorat(string $tabel): bool
     {
@@ -131,17 +138,23 @@ final class Amprenta
         return $rezultat;
     }
 
-    /** STATISTICS.EXPRESSION (indecșii pe expresii) există doar pe MySQL ≥ 8.0.13. */
+    /**
+     * STATISTICS.EXPRESSION (indecșii pe expresii) există doar pe MySQL ≥ 8.0.13. Ținut minte
+     * pe conexiune într-un WeakMap: un id de obiect (spl_object_id) se refolosește după ce
+     * conexiunea e eliberată, iar o conexiune MariaDB deschisă după una MySQL ar fi primit
+     * răspunsul celei vechi (și eroarea 1054).
+     */
     private static function areColoanaExpresie(PDO $db): bool
     {
-        static $memorat = [];
-        $cheie = spl_object_id($db);
-        if (!isset($memorat[$cheie])) {
+        /** @var WeakMap<PDO, bool>|null $memorat */
+        static $memorat = null;
+        $memorat ??= new WeakMap();
+        if (!isset($memorat[$db])) {
             $stmt = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = 'information_schema' AND TABLE_NAME = 'STATISTICS' AND COLUMN_NAME = 'EXPRESSION'");
-            $memorat[$cheie] = (int) $stmt->fetchColumn() > 0;
+            $memorat[$db] = (int) $stmt->fetchColumn() > 0;
         }
-        return $memorat[$cheie];
+        return $memorat[$db];
     }
 
     // ------------------------------------------------------------ normalizare
@@ -255,9 +268,11 @@ final class Amprenta
                     && preg_match('/^(current_timestamp|now|localtime|localtimestamp)\b/i', $brut) === 1)) {
                 // MySQL < 8.0.13 nu scrie DEFAULT_GENERATED nici la CURRENT_TIMESTAMP.
                 $implicit = self::expresie($brut);
-            } elseif (preg_match("/^(b|x)'/i", $brut) === 1 || str_starts_with(strtolower($brut), '0x')) {
+            } elseif (in_array(self::bazaTip($tip), self::BINARE, true)
+                && (preg_match("/^(b|x)'/i", $brut) === 1 || str_starts_with(strtolower($brut), '0x'))) {
                 $implicit = $brut;
             } else {
+                // MySQL scrie textul fără ghilimele: pe un VARCHAR, „x'y” sau „0x12” e chiar textul.
                 $implicit = self::literal($brut, $tip);
             }
         }
@@ -291,8 +306,15 @@ final class Amprenta
         foreach ($inlocuiri as $model => $cu) {
             $tip = preg_replace($model, $cu, $tip) ?? $tip;
         }
+        // Atributele numerice, într-o singură formă: zerofill înseamnă și unsigned; signed e implicit.
+        if (preg_match('/^([a-z]+(?:\([0-9,]*\))?)((?: (?:unsigned|signed|zerofill))+)$/', $tip, $m) === 1 && self::tipNumeric($m[1])) {
+            $atribute = explode(' ', trim($m[2]));
+            $zerofill = in_array('zerofill', $atribute, true);
+            $tip = $m[1] . ($zerofill || in_array('unsigned', $atribute, true) ? ' unsigned' : '') . ($zerofill ? ' zerofill' : '');
+        }
+        // Lățimea întregilor: doar tinyint(1) cu semn o păstrează (așa face și MySQL ≥ 8.0.19).
         if (preg_match('/^(tinyint|smallint|mediumint|int|bigint)\((\d+)\)(.*)$/', $tip, $m) === 1
-            && !($m[1] === 'tinyint' && $m[2] === '1')) {
+            && !($m[1] === 'tinyint' && $m[2] === '1' && $m[3] === '')) {
             $tip = $m[1] . $m[3];
         }
         if (preg_match('/^decimal(?!\()(.*)$/', $tip, $m) === 1) {

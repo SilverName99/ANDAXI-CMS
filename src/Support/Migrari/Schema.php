@@ -42,6 +42,9 @@ final class Schema
     /** @var array<string, ?array> structura tabelelor din bază, citită la nevoie */
     private array $cache = [];
 
+    /** @var array<string, ?array{randuri: int, octeti: int}> mărimea tabelelor din bază (doar pentru plan) */
+    private array $marimi = [];
+
     public function __construct(
         private PDO $db,
         private Server $server,
@@ -171,7 +174,7 @@ final class Schema
                 $s['coloane'][$coloana] = self::doarColoana($ceruta);
                 return $s;
             });
-            $this->noteaza($this->server->clasaEstimata('coloana'), 'coloana', $tabel . '.' . $coloana);
+            $this->noteaza($this->server->clasaEstimata('coloana'), 'coloana', $tabel . '.' . $coloana, '', $tabel);
             return;
         }
         $this->alter('coloana', $tabel, $tabel . '.' . $coloana, $sql,
@@ -203,7 +206,7 @@ final class Schema
                 return $s;
             });
             $this->noteaza('copie', 'modifica', $tabel . '.' . $coloana, Amprenta::descrieColoana($structura['coloane'][$coloana])
-                . ' → ' . Amprenta::descrieColoana(self::doarColoana($ceruta)));
+                . ' → ' . Amprenta::descrieColoana(self::doarColoana($ceruta)), $tabel);
             return;
         }
         $this->alter('modifica', $tabel, $tabel . '.' . $coloana, $sql,
@@ -244,7 +247,7 @@ final class Schema
                 unset($s['indecsi'][$index]);
                 return $s;
             });
-            $this->noteaza('inplace', 'sterge_index', $tabel . '.' . $index);
+            $this->noteaza('inplace', 'sterge_index', $tabel . '.' . $index, '', $tabel);
             return;
         }
         $this->alter('sterge_index', $tabel, $tabel . '.' . $index, 'ALTER TABLE `' . $tabel . '` DROP INDEX `' . $index . '`',
@@ -299,7 +302,7 @@ final class Schema
                 $s['indecsi'][$index] = $dorit;
                 return $s;
             });
-            $this->noteaza('inplace', $fel, $tabel . '.' . $index);
+            $this->noteaza('inplace', $fel, $tabel . '.' . $index, '', $tabel);
             return;
         }
         $this->alter('index', $tabel, $tabel . '.' . $index, $sql, function () use ($tabel, $index, $dorit): bool {
@@ -328,7 +331,7 @@ final class Schema
                 unset($s['coloane'][$coloana]);
                 return $s;
             });
-            $this->noteaza('sterge', 'sterge_coloana', $tabel . '.' . $coloana);
+            $this->noteaza('sterge', 'sterge_coloana', $tabel . '.' . $coloana, '', $tabel);
             return;
         }
         $this->alter('sterge_coloana', $tabel, $tabel . '.' . $coloana, 'ALTER TABLE `' . $tabel . '` DROP COLUMN `' . $coloana . '`',
@@ -378,7 +381,7 @@ final class Schema
                 if ($randuri > 0) {
                     ($this->executie->progres)(1, null);
                 }
-                $this->db->commit();
+                $this->comite('date');
                 return $randuri;
             } catch (Throwable $e) {
                 if ($this->db->inTransaction()) {
@@ -417,9 +420,8 @@ final class Schema
             return;
         }
         if ($this->executie->simulare) {
-            $randuri = $this->existaInBaza($tabel) ? $this->randuriEstimate($tabel) : 0;
-            $this->noteaza('date', 'pe_bucati', $obiect, 'bucăți de ' . $marime . ', ~' . $randuri . ' rânduri'
-                . (isset($this->executie->cursor[$cheie]) ? ', reluat după ' . $pk . ' ' . $this->executie->cursor[$cheie] : ''));
+            $this->noteaza('date', 'pe_bucati', $obiect, 'bucăți de ' . $marime
+                . (isset($this->executie->cursor[$cheie]) ? ', reluat după ' . $pk . ' ' . $this->executie->cursor[$cheie] : ''), $tabel);
             return;
         }
         if (!$this->existaTabel($tabel)) {
@@ -443,7 +445,7 @@ final class Schema
                     $cursor = $this->executie->cursor;
                     $cursor[$cheie] = $pana;
                     ($this->executie->progres)(is_int($rezultat) && $rezultat === 0 ? 0 : 1, $cursor);
-                    $this->db->commit();
+                    $this->comite('bucata');
                     $this->executie->cursor = $cursor;
                     return $rezultat;
                 } catch (Throwable $e) {
@@ -643,11 +645,29 @@ final class Schema
         return $this->db->query('SELECT 1 FROM `' . $tabel . '` LIMIT 1')->fetchColumn() !== false;
     }
 
-    private function randuriEstimate(string $tabel): int
+    /**
+     * Cât de mare e un tabel din bază, după estimarea serverului (information_schema.TABLES:
+     * TABLE_ROWS, DATA_LENGTH + INDEX_LENGTH), pentru plan: un ALTER care copiază tabelul ține
+     * cât copierea acestor octeți (regula „sub 60 s” a migrărilor blocante, docs/MIGRARI.md).
+     * Null pentru un tabel care nu e (încă) în bază.
+     *
+     * @return array{randuri: int, octeti: int}|null
+     */
+    private function marime(string $tabel): ?array
     {
-        $stmt = $this->db->prepare('SELECT TABLE_ROWS FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
-        $stmt->execute([$tabel]);
-        return (int) $stmt->fetchColumn();
+        if (!array_key_exists($tabel, $this->marimi)) {
+            $stmt = $this->db->prepare('SELECT TABLE_ROWS, COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)
+                FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+            $stmt->execute([$tabel]);
+            $rand = $stmt->fetch(PDO::FETCH_NUM);
+            $this->marimi[$tabel] = $rand === false ? null : ['randuri' => (int) $rand[0], 'octeti' => (int) $rand[1]];
+        }
+        return $this->marimi[$tabel];
+    }
+
+    private static function octeti(int $octeti): string
+    {
+        return $octeti >= 1048576 ? number_format($octeti / 1048576, 1, ',', '') . ' MB' : (int) round($octeti / 1024) . ' KB';
     }
 
     /**
@@ -691,9 +711,41 @@ final class Schema
         return (int) $this->db->query($sql)->fetchColumn();
     }
 
-    private function noteaza(string $clasa, string $fel, string $obiect, string $detaliu = ''): void
+    /**
+     * O operație a planului (sau una făcută). Cu $tabel (în simulare, pentru ALTER-uri și bucăți
+     * pe un tabel care există deja în bază): și mărimea lui, în text și ca numere (randuri,
+     * octeti) în --json.
+     */
+    private function noteaza(string $clasa, string $fel, string $obiect, string $detaliu = '', ?string $tabel = null): void
     {
-        $this->executie->operatii[] = ['clasa' => $clasa, 'fel' => $fel, 'obiect' => $obiect, 'detaliu' => $detaliu];
+        $operatie = ['clasa' => $clasa, 'fel' => $fel, 'obiect' => $obiect, 'detaliu' => $detaliu];
+        $marime = $tabel !== null && $this->executie->simulare ? $this->marime($tabel) : null;
+        if ($marime !== null) {
+            $operatie['detaliu'] .= ($detaliu !== '' ? '; ' : '') . '~' . $marime['randuri'] . ' rânduri, ' . self::octeti($marime['octeti']);
+            $operatie += $marime;
+        }
+        $this->executie->operatii[] = $operatie;
+    }
+
+    /**
+     * Commit-ul unei instrucțiuni de date sau al unei bucăți, cu numărătoarea (și cursorul) ei
+     * deja scrise în aceeași tranzacție. Cele două puncte sunt pentru teste
+     * (MIGRARI_TEST_OPRESTE_IN): oprire ca un proces omorât chiar înainte de commit (totul se
+     * anulează) și chiar după el (totul a rămas); în ambele cazuri rularea următoare trebuie
+     * să numere fiecare rând o singură dată.
+     */
+    private function comite(string $fel): void
+    {
+        $this->punctTest($fel . '_in_tranzactie');
+        $this->db->commit();
+        $this->punctTest($fel . '_dupa_commit');
+    }
+
+    private function punctTest(string $punct): void
+    {
+        if ($this->executie->punctTest !== null) {
+            ($this->executie->punctTest)($punct);
+        }
     }
 
     private function cuEfect(string $fel, string $obiect, string $clasa, float $ms, bool $numara = true): void
@@ -790,8 +842,10 @@ final class Schema
 
     private function eroare(string $fel, string $obiect, PDOException $e): Eroare
     {
+        $stare = (string) ($e->errorInfo[0] ?? '');
         return new Eroare($this->executie->id . ': ' . $fel . ($obiect !== '' ? ' ' . $obiect : '') . ': eroare SQL '
-            . self::cod($e) . ': ' . self::faraValori((string) ($e->errorInfo[2] ?? $e->getMessage())), Eroare::MIGRARE);
+            . self::cod($e) . (preg_match('/^[0-9A-Z]{5}$/', $stare) === 1 ? ' (' . $stare . ')' : '') . ': '
+            . self::faraValori((string) ($e->errorInfo[2] ?? $e->getMessage())), Eroare::MIGRARE);
     }
 
     public static function cod(PDOException $e): int
@@ -800,12 +854,76 @@ final class Schema
     }
 
     /**
-     * Un mesaj al serverului fără valorile din el: „Duplicate entry 'x@y.ro' for key 'email'”
-     * → „Duplicate entry '…' for key '…'”. Contextul (migrarea, tabelul, coloana) îl pune runner-ul.
+     * Un mesaj al serverului (sau al unei PDOException, cu „SQLSTATE[…]: …: <errno>” în față)
+     * fără valorile din rânduri, doar cu numele obiectelor: „Duplicate entry 'x@y.ro' for key
+     * 'uniq_email'” → „Duplicate entry '…' for key 'uniq_email'”. Contextul (migrarea, tabelul,
+     * coloana) îl pune runner-ul.
+     *
+     * MariaDB și MySQL nu dublează ghilimelele unei valori în mesaj („Duplicate entry 'o'brien'
+     * …”), deci perechile de ghilimele nu spun unde se termină valoarea. De aceea:
+     *  1. formele cu o valoare (1062, 1366/1292, „near … at line”): valoarea e tot ce stă între
+     *     începutul și sfârșitul fixe ale mesajului, oricât de ciudată ar fi (ghilimele, \, chiar
+     *     „' for key '” în ea);
+     *  2. un mesaj fără nicio ghilimea rămâne cum e (cele cu `nume` între apostroafe inverse nu
+     *     au valori);
+     *  3. formele cunoscute care au doar nume (1050, 1054, 1060, 1061, 1091, 1048, 1364, 1406 …)
+     *     rămân cum sunt;
+     *  4. orice altă formă: tot ce e între prima și ultima ghilimea devine '…'.
+     * Fără /u: un mesaj cu octeți care nu sunt UTF-8 se ascunde la fel (nu scapă întreg).
      */
     public static function faraValori(string $mesaj): string
     {
-        $mesaj = preg_replace("/'(?:[^'\\\\]|\\\\.|'')*'/u", "'…'", $mesaj) ?? $mesaj;
-        return preg_replace('/"(?:[^"\\\\]|\\\\.)*"/u', '"…"', $mesaj) ?? $mesaj;
+        $cap = '';
+        if (preg_match('/^(SQLSTATE\[[0-9A-Z]{5}\]: [^:\'"]*: (?:\d+ )?)(.*)$/s', $mesaj, $m) === 1) {
+            $cap = $m[1];
+            $mesaj = $m[2];
+        }
+        return $cap . self::mesajFaraValori($mesaj);
+    }
+
+    private static function mesajFaraValori(string $mesaj): string
+    {
+        $nume = '\'[A-Za-z0-9_$#.\-]*\'';
+        $intreg = '`[A-Za-z0-9_$#\-]*`';
+        $coloana = '(?:' . $nume . '|' . $intreg . '(?:\.' . $intreg . ')*)';
+        $cuValoare = [
+            '/^(Duplicate entry )\'.*\'( for key ' . $nume . ')$/s',
+            '/^((?:Incorrect|Truncated incorrect) [A-Za-z0-9_ ]+ value: )\'.*\'((?: for column ' . $coloana . ' at row \d+)?)$/s',
+            '/^([^\'"]* near )\'.*\'( at line \d+)$/s',
+        ];
+        foreach ($cuValoare as $forma) {
+            if (preg_match($forma, $mesaj, $m) === 1) {
+                return $m[1] . "'…'" . $m[2];
+            }
+        }
+        if (strpbrk($mesaj, '\'"') === false) {
+            return $mesaj;
+        }
+        $doarNume = [
+            '/^Table ' . $nume . ' (?:already exists|doesn\'t exist)$/',
+            '/^Unknown column ' . $nume . ' in \'[A-Za-z ]+\'$/',
+            '/^Duplicate (?:column|key) name ' . $nume . '$/',
+            '/^Can\'t DROP (?:(?:COLUMN|INDEX|CONSTRAINT|FOREIGN KEY|CHECK) )?(?:' . $nume . '|' . $intreg . '); check that (?:it|column\/key) exists$/',
+            '/^Column ' . $coloana . ' cannot be null$/',
+            '/^Field ' . $nume . ' doesn\'t have a default value$/',
+            '/^(?:Data too long|Data truncated|Out of range value) for column ' . $coloana . ' at row \d+$/',
+            '/^Key column ' . $nume . ' doesn\'t exist in table$/',
+            '/^Invalid default value for ' . $nume . '$/',
+            '/^BLOB\/TEXT column ' . $nume . ' used in key specification without a key length$/',
+            '/^(?:BLOB|BLOB, TEXT, GEOMETRY or JSON|JSON) column ' . $nume . ' can\'t have a default value$/',
+            '/^Can\'t create table ' . $intreg . '\.' . $intreg . ' \(errno: \d+ "[A-Za-z ]+"\)$/',
+            '/^Failed to open the referenced table ' . $nume . '$/',
+            '/^Referencing column ' . $nume . ' and referenced column ' . $nume . ' in foreign key constraint ' . $nume . ' are incompatible\.$/',
+            '/^Check constraint ' . $nume . ' is violated\.$/',
+            '/^Invalid JSON text(?: in argument \d+ to function [a-z_.]+)?: "[^"]*" at position \d+ in value for column ' . $nume . '\.$/',
+        ];
+        foreach ($doarNume as $forma) {
+            if (preg_match($forma, $mesaj) === 1) {
+                return $mesaj;
+            }
+        }
+        $prima = strcspn($mesaj, '\'"');
+        $ultima = max((int) strrpos($mesaj, "'"), (int) strrpos($mesaj, '"'));
+        return substr($mesaj, 0, $prima) . "'…'" . substr($mesaj, $ultima + 1);
     }
 }

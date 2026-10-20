@@ -41,6 +41,15 @@ final class Executie
     public ?\ArrayObject $model = null;
 
     /**
+     * Doar pentru teste (MIGRARI_TEST_OPRESTE_IN): chemat cu numele punctului din Schema
+     * (`date_in_tranzactie`, `date_dupa_commit`, `bucata_in_tranzactie`, `bucata_dupa_commit`),
+     * ca testul să poată opri procesul exact acolo. Null pe site-uri.
+     *
+     * @var (Closure(string): void)|null
+     */
+    public ?Closure $punctTest = null;
+
+    /**
      * @param Closure(): void $inainte chemat înaintea fiecărei operații care schimbă ceva (bugetul de timp)
      * @param Closure(int, ?array): void $progres o operație cu efect (+ cursorul nou, în tranzacția bucății)
      * @param Closure(): void $dupa chemat după fiecare operație cu efect (oprirea de test)

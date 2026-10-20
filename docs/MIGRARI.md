@@ -31,10 +31,24 @@ Opțiuni:
 | `--buget=300` | secunde; după ele nu mai începe nicio operație (codul 13), iar rularea următoare continuă. Hostinger poate opri procesele lungi |
 | `--asteptare-lacat=5` | secunde de așteptat după un tabel ocupat (`lock_wait_timeout`), apoi se reîncearcă după 2, 4, 8, 16, 30 s. Pe server, implicit e o zi întreagă, timp în care coada cererilor site-ului ar sta în spatele ALTER-ului |
 | `--pana-la=<id>` | se oprește după migrarea dată (repetiții, teste); verificarea finală se sare, fiindcă schema e voit incompletă |
-| `--site=<site>` | rulează și pașii acelui site (`database/migrari/site/<site>/`); implicit `SITE_SLUG` din `.env`. Cele două nu au voie să difere |
+| `--site=<site>` | rulează și pașii acelui site (`database/migrari/site/<site>/`); implicit `SITE_SLUG` din `.env` (în `.env.example`). Cele două nu au voie să difere |
 
 Ieșirea nu conține niciodată parole, DSN-uri sau valori din rânduri, doar nume de obiecte și numere.
-Un mesaj al serverului care ar arăta o valoare („Duplicate entry 'x@y.ro' …”) se scrie cu `'…'`.
+Un mesaj al serverului care ar arăta o valoare („Duplicate entry 'x@y.ro' for key 'uniq_email'”) se
+scrie cu `'…'` în locul valorii („Duplicate entry '…' for key 'uniq_email'”). MariaDB și MySQL nu
+dublează ghilimelele unei valori în mesaj (`'o'brien'`), deci `Schema::faraValori` nu caută perechi de
+ghilimele: la formele cunoscute cu o valoare (1062, 1366/1292, „near … at line”) valoarea e tot ce stă
+între începutul și sfârșitul fixe ale mesajului; formele cunoscute care au doar nume (1050, 1054,
+1060, 1061, 1091, 1048, 1364, 1406 …) rămân cum sunt; din orice altă formă cu ghilimele se ascunde tot
+ce e între prima și ultima ghilimea. Mesajul are în față codul erorii și SQLSTATE-ul
+(`eroare SQL 1062 (23000): …`).
+
+Planul (`--plan`, și simularea dinaintea lui `--aplica`) arată la fiecare ALTER pe un tabel care există
+mărimea lui, după estimarea serverului (`information_schema.TABLES`: `~N rânduri, X MB`; în `--json`
+câmpurile `randuri` și `octeti`): o copiere a tabelului durează cât copierea acestor octeți. Tot planul
+arată tabelele `#sql-*` rămase de la un ALTER omorât la jumătate (pe serverele fără DDL atomic, MariaDB
+sub 10.6): nu intră în amprentă și se șterg de mână, după o copie a bazei. `--aplica` scrie
+`sql_mode`-ul serverului (pe care nu-l schimbă) în ieșire și în `storage/logs/migrari.log`.
 
 ## Codurile de ieșire
 
@@ -135,7 +149,8 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
 ## Cum rulează `--aplica`
 
 1. Conexiunea, cu setările lui `Database::connection` (utf8mb4, fusul orar al aplicației), și
-   `lock_wait_timeout` scurt. Serverul sub MariaDB 10.3 / MySQL 8.0 → codul 2.
+   `lock_wait_timeout` scurt. Serverul sub MariaDB 10.3 / MySQL 8.0 → codul 2. `sql_mode` rămâne al
+   serverului (cel cu care scrie și site-ul) și se scrie în raport și în jurnal.
 2. Baza e a unui site ANDAXI (codul 4 altfel), apoi lacătul `platforma_migrari:<MD5(baza)>`
    (serverul e împărțit între site-uri; codul 3 dacă îl ține altcineva).
 3. Registrul și `migrari.lock`; o migrare aplicată schimbată sau dispărută → codul 12.
@@ -151,7 +166,15 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
    `--permite-blocante`. Erorile 1050/1060/1061/1091 (obiectul a apărut între timp, de exemplu creat
    de codul vechi în aceeași clipă) se acceptă dacă baza e acum cum trebuie; 1205/1213 se reîncearcă.
    La capătul bugetului: `partiala` și codul 13.
-7. Starea (`ultima_ord`, `amprenta`, `server`, `ultima_rulare`) și verificarea față de `asteptat.json`.
+7. Verificarea față de `asteptat.json`, apoi starea (`ultima_ord`, `amprenta`, `server`,
+   `ultima_rulare` cu codul final al rulării, de exemplu 14).
+
+**Starea o scrie doar un runner care a început să aplice:** ține lacătul, codul lui se potrivește cu
+baza (pasul 3) și a trecut de simulare (pasul 4). Unul refuzat n-o atinge: lacătul ținut de altul (3),
+cod mai vechi decât baza sau o migrare schimbată (12), bază străină (4), simularea oprită (1, 11, 15),
+configurarea (2). Altfel, un cod vechi pornit din greșeală ar coborî `ultima_ord`, pe care o citesc
+garda (`/health`, WP-05) și CRM-ul. O eroare în timpul aplicării (1, 3 de la lacătul FAN, 13) scrie
+starea, sub lacăt, cu codul ei.
 
 ### Tabelele de urmărire
 
@@ -166,12 +189,15 @@ călătoresc în copia bazei, deci o bază restaurată continuă exact de unde e
 ## Amprenta și `asteptat.json`
 
 `Amprenta` citește structura unei baze și o scrie la fel pe MariaDB și pe MySQL: lățimea întregilor
-(`int(11)` = `int`, rămâne doar `tinyint(1)`), `year(4)` = `year`, `json` = `longtext`, valorile
-implicite (MariaDB pune textele între ghilimele și scrie `NULL`, MySQL nu; aici: textele între
-ghilimele, numerele fără, cu zecimalele coloanei, expresiile cu litere mici, `current_timestamp`),
-`EXTRA` fără `DEFAULT_GENERATED`, `NO ACTION` = `RESTRICT`, `utf8mb3` = `utf8`. Ordinea coloanelor
-nu contează. Tabelele `_platforma_*`, `*__sync`, `*__vechi` (copiile de lucru ale sincronizării FAN)
-și `#sql*` nu intră.
+(`int(11)` = `int`; rămâne doar la `tinyint(1)` cu semn, ca la MySQL: `tinyint(1) unsigned` =
+`tinyint unsigned`), `zerofill` înseamnă și `unsigned`, `year(4)` = `year`, `json` = `longtext`,
+valorile implicite (MariaDB pune textele între ghilimele și scrie `NULL`, MySQL nu; aici: textele între
+ghilimele, numerele fără, cu zecimalele coloanei, expresiile cu litere mici, `current_timestamp`;
+`b'101'` pe o coloană BIT; pe MySQL un text ca `x'y` sau `0x12` pe un VARCHAR rămâne text), `EXTRA`
+fără `DEFAULT_GENERATED`, `NO ACTION` = `RESTRICT`, `utf8mb3` = `utf8`. Ordinea coloanelor nu
+contează. Tabelele `_platforma_*`, `*__sync`, `*__vechi` (copiile de lucru ale sincronizării FAN) și
+`#sql*` nu intră. Ce nu se aduce la aceeași formă: valorile implicite ale coloanelor BINARY/VARBINARY
+(MariaDB scrie octeții, MySQL hex); niciun cod de azi nu le folosește.
 
 `asteptat.json` = amprenta unei baze goale după toate migrările (`--aplica`, apoi `--amprenta`). La
 `--verifica` (și la finalul lui `--aplica`): un tabel, o coloană sau un index care lipsește (un index
@@ -204,11 +230,17 @@ SAPI „cli-server”) pornesc sesiunea ca până acum.
 minim): fără bază (Server, Amprenta pe rândurile ambelor servere, definițiile, corpul unui CREATE
 TABLE, compararea, registrul), apoi pe fiecare server detectarea, Schema direct și fiecare cod de
 ieșire al lui `scripts/migreaza.php` pe migrări de jucărie: oprirea după fiecare operație și reluarea
-(aceeași amprentă, fiecare rând numărat o dată), bugetul, migrările schimbate, blocante, de contract,
-parametrii site-ului, lacătele, un tabel ocupat, verificarea, configurarea, pașii site-ului; plus
-sesiunile din linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo. Raport:
+(aceeași amprentă, fiecare rând numărat o dată), oprirea chiar înainte și chiar după commit-ul fiecărei
+bucăți și al instrucțiunii de date (pică dacă cursorul sau numărătoarea ar ieși din tranzacția
+bucății), bugetul, migrările schimbate, blocante, de contract, parametrii site-ului, lacătele, starea
+neatinsă de un runner refuzat și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan,
+un tabel `#sql-*` rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, mesajele serverului
+cu ghilimele și `\` în valoare (1062, 1366, din `date()` și din `peBucati()`); plus sesiunile din
+linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo. Raport:
 `storage/logs/dev/test-migrari-raport.txt`.
 
 Variabile doar pentru teste (pe site-uri nu există): `MIGRARI_TEST_DOSAR` (alt dosar de migrări),
-`MIGRARI_TEST_OPRESTE_DUPA=k` (oprire ca un proces omorât după k operații), `MIGRARI_TEST_PAUZE`
-(secundele reîncercărilor, de exemplu `0.1,0.1`), `MIGRARI_TEST_PAUZA_BUCATI_MS`, `MIGRARI_TEST_JURNAL`.
+`MIGRARI_TEST_OPRESTE_DUPA=k` (oprire ca un proces omorât după k operații),
+`MIGRARI_TEST_OPRESTE_IN=<punct>:k` (oprire la a k-a trecere prin `date_in_tranzactie`,
+`date_dupa_commit`, `bucata_in_tranzactie` sau `bucata_dupa_commit`), `MIGRARI_TEST_PAUZE` (secundele
+reîncercărilor, de exemplu `0.1,0.1`), `MIGRARI_TEST_PAUZA_BUCATI_MS`, `MIGRARI_TEST_JURNAL`.
