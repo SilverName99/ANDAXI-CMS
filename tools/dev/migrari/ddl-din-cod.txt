@@ -1,6 +1,6 @@
 # DDL-ul vechi din codul de pe site-uri, permis până la R2 (MIG-11; docs/MIGRARI.md, „Verificarea fișierelor”).
 # Un rând: fișierul, funcția, felul (ddl = un text cu CREATE/ALTER/DROP/RENAME/TRUNCATE; definitie = o definiție de
-# coloană dintr-o funcție cu DDL), sha1 al textului normalizat (12 caractere), de câte ori apare, începutul textului.
+# coloană, oriunde în cod, ca 'VARCHAR(40) NULL'), sha1 al textului normalizat (12 caractere), de câte ori apare, începutul textului.
 # Scris de tools/dev/verifica-migrari.php. Se schimbă doar cu --actualizeaza-lista, care doar scoate rânduri:
 # un DDL nou în cod nu intră aici niciodată, ci într-o migrare (database/migrari/).
 database/schema.sql	(schema.sql)	ddl	009582c3cbb8	1	CREATE TABLE IF NOT EXISTS user_addresses ( id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, us

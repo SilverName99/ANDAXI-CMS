@@ -24,9 +24,14 @@ declare(strict_types=1);
  *     stergeTabel) doar într-o migrare de tip „contract”. Runner-ul le refuză oricum la rulare, dar doar pe
  *     ramura care rulează; aici se văd și cele de pe ramurile pentru obiecte vechi.
  *  4. DDL-ul din codul care ajunge pe site-uri (src/ fără src/Support/Migrari/, scripts/, public/, views/,
- *     config/, bootstrap.php, database/schema.sql): fiecare text DDL și fiecare definiție de coloană dintr-o
- *     funcție care are DDL (ca listele de coloane din ErpSync::ensureSchema, BtIpayPayments::migreaza) trebuie
- *     să fie în tools/dev/migrari/ddl-din-cod.txt: cele de azi, din cele 36 de funcții ensure…Schema și
+ *     config/, bootstrap.php, database/schema.sql): fiecare text DDL și fiecare definiție de coloană (ca listele
+ *     de coloane din ErpSync::ensureSchema, BtIpayPayments::migreaza) trebuie să fie în
+ *     tools/dev/migrari/ddl-din-cod.txt. O definiție = un tip SQL urmat de lungime sau de un atribut
+ *     ('VARCHAR(40) NULL', 'INT NOT NULL DEFAULT 0'), oriunde în acest cod (și într-o constantă, o proprietate,
+ *     altă metodă sau alt fișier decât DDL-ul care o folosește), sau doar tipul: cu majuscule ('DATETIME')
+ *     oriunde, cu orice litere ('datetime') într-o funcție cu DDL. Un tip singur cu litere mici în afara unei
+ *     funcții cu DDL nu se numără: nu se deosebește de tipurile câmpurilor din formulare ('text', 'date');
+ *     SQL-ul din cod se scrie cu majuscule. În listă: cele de azi, din cele 36 de funcții ensure…Schema și
  *     asigura…Schema, install.php, schema.sql și tabelele de lucru ale sincronizării FAN, care rămân până la R2 (MIG-11). Unul nou
  *     (sau încă o copie a unuia vechi, sau unul mutat în altă funcție) = încălcare: o coloană nouă se face cu o
  *     migrare (regula 2 din planul Etapei 1). Unul care a ieșit din cod = lista se actualizează (--actualizeaza-lista,
@@ -199,7 +204,8 @@ $literale = static function (string $fisier): array {
         } elseif ($text === ';' && $deschide !== null && $deschide[0] === 'functie') {
             $deschide = null; // o metodă abstractă
         }
-        $functie = $stiva !== [] ? end($stiva)[0] : '(fișier)';
+        // În afara metodelor, dar în corpul unei clase (constante, proprietăți): „Clasa (clasă)”.
+        $functie = $stiva !== [] ? end($stiva)[0] : ($clasa !== null && $clasaAdancime > 0 ? $clasa . ' (clasă)' : '(fișier)');
         if ($tip === T_CONSTANT_ENCAPSED_STRING) {
             $sir = $text;
             $sir = $sir[0] === "'" ? str_replace(["\\'", '\\\\'], ["'", '\\'], substr($sir, 1, -1)) : stripcslashes(substr($sir, 1, -1));
@@ -232,9 +238,20 @@ $literale = static function (string $fisier): array {
 
 const VM_DDL = '/\b(CREATE\s+(TEMPORARY\s+)?TABLE|ALTER\s+TABLE|CREATE\s+(UNIQUE\s+|FULLTEXT\s+|SPATIAL\s+)?INDEX|DROP\s+(TEMPORARY\s+)?TABLE'
     . '|DROP\s+INDEX|DROP\s+COLUMN|RENAME\s+TABLE|TRUNCATE\s+(TABLE\s+)?[`a-z_{]|(CREATE|ALTER|DROP)\s+(DATABASE|SCHEMA|VIEW|TRIGGER|PROCEDURE|FUNCTION|EVENT))\b/i';
-const VM_DEFINITIE = '/^(TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT|DECIMAL|NUMERIC|FLOAT|DOUBLE|REAL|BOOLEAN|BOOL|BIT|CHAR|VARCHAR|BINARY'
-    . '|VARBINARY|TINYTEXT|TEXT|MEDIUMTEXT|LONGTEXT|TINYBLOB|BLOB|MEDIUMBLOB|LONGBLOB|ENUM|SET|DATE|DATETIME|TIMESTAMP|TIME|YEAR|JSON)\b'
-    . '\s*(\(|UNSIGNED\b|SIGNED\b|ZEROFILL\b|NOT\s+NULL|NULL\b|DEFAULT\b|AUTO_INCREMENT|CHARACTER\s+SET|CHARSET|COLLATE)/i';
+const VM_TIPURI = 'TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT|DECIMAL|NUMERIC|FLOAT|DOUBLE|REAL|BOOLEAN|BOOL|BIT|CHAR|VARCHAR|BINARY'
+    . '|VARBINARY|TINYTEXT|TEXT|MEDIUMTEXT|LONGTEXT|TINYBLOB|BLOB|MEDIUMBLOB|LONGBLOB|ENUM|SET|DATE|DATETIME|TIMESTAMP|TIME|YEAR|JSON';
+// Tipurile care pot avea o lungime în paranteză (fără DATE, YEAR, JSON, *TEXT/*BLOB cu prefix, BOOL: acolo
+// o paranteză e o funcție SQL, 'DATE({…})').
+const VM_TIPURI_CU_LUNGIME = 'TINYINT|SMALLINT|MEDIUMINT|INT|INTEGER|BIGINT|DECIMAL|NUMERIC|FLOAT|DOUBLE|REAL|BIT|CHAR|VARCHAR|BINARY'
+    . '|VARBINARY|TEXT|BLOB|ENUM|SET|DATETIME|TIMESTAMP|TIME';
+// O definiție de coloană: tipul, apoi un atribut, sau lungimea (o cifră, valorile unui ENUM/SET, o variabilă sau
+// capătul textului: 'VARCHAR(' . $n . ')'). Nu și o funcție SQL cu o coloană în paranteză ('DATE(o.created_at) >= ?').
+const VM_DEFINITIE = '/^((' . VM_TIPURI . ')\b\s*(UNSIGNED\b|SIGNED\b|ZEROFILL\b|NOT\s+NULL|NULL\b|DEFAULT\b|AUTO_INCREMENT|CHARACTER\s+SET|CHARSET|COLLATE)'
+    . '|(' . VM_TIPURI_CU_LUNGIME . ')\s*\(\s*([\d\'"{]|$))/i';
+// Doar tipul, nimic după ('DATETIME', 'TEXT'): cu majuscule, oriunde; cu orice litere, doar într-o funcție cu DDL
+// (în rest 'text', 'date', 'json' sunt tipuri de câmpuri, chei și formate, nu SQL).
+const VM_DOAR_TIP = '/^(' . VM_TIPURI . ')$/';
+const VM_DOAR_TIP_ORICE = '/^(' . VM_TIPURI . ')$/i';
 const VM_DML = '/^\s*(INSERT|UPDATE|DELETE|REPLACE|SELECT|WITH|SHOW)\b/i';
 
 foreach ($migrari as $m) {
@@ -304,10 +321,13 @@ $ddlDinCod = static function () use ($radacina, $literale, $relativ): array {
                 $cuDdl[$functie] = true;
             }
         }
+        // O definiție de coloană se numără oriunde în cod, nu doar lângă DDL: o listă de coloane ținută într-o
+        // constantă, o proprietate, altă metodă sau alt fișier ajunge la fel la un ALTER din altă parte.
         foreach ($toate as [$text, , $functie]) {
             if (preg_match(VM_DDL, $text) === 1) {
                 $adauga($fisier, $functie, 'ddl', $text);
-            } elseif (isset($cuDdl[$functie]) && preg_match(VM_DEFINITIE, $text) === 1) {
+            } elseif (preg_match(VM_DEFINITIE, $text) === 1 || preg_match(VM_DOAR_TIP, $text) === 1
+                || (isset($cuDdl[$functie]) && preg_match(VM_DOAR_TIP_ORICE, $text) === 1)) {
                 $adauga($fisier, $functie, 'definitie', $text);
             }
         }
@@ -330,7 +350,7 @@ $gasite = $ddlDinCod();
 
 $antetLista = "# DDL-ul vechi din codul de pe site-uri, permis până la R2 (MIG-11; docs/MIGRARI.md, „Verificarea fișierelor”).\n"
     . "# Un rând: fișierul, funcția, felul (ddl = un text cu CREATE/ALTER/DROP/RENAME/TRUNCATE; definitie = o definiție de\n"
-    . "# coloană dintr-o funcție cu DDL), sha1 al textului normalizat (12 caractere), de câte ori apare, începutul textului.\n"
+    . "# coloană, oriunde în cod, ca 'VARCHAR(40) NULL'), sha1 al textului normalizat (12 caractere), de câte ori apare, începutul textului.\n"
     . "# Scris de tools/dev/verifica-migrari.php. Se schimbă doar cu --actualizeaza-lista, care doar scoate rânduri:\n"
     . "# un DDL nou în cod nu intră aici niciodată, ci într-o migrare (database/migrari/).\n";
 $scrieLista = static function (array $intrari) use ($fisierLista, $antetLista): void {

@@ -426,14 +426,14 @@ MariaDB și pe MySQL 8:
 | T2, baza veche | `cms.sql` + `variante.sql`, o dată prin funcțiile `ensure*` ale codului (o trecere, ca o cerere), o dată prin migrări | datele (roluri, galerie, insigne, câmpuri extra, șabloane, valori, cupoane, recenzii, legături de blog, `row_key`-ul străzilor, versiunile de schemă) ies la fel, fiecare citire schimbată; procesatorul linkurilor = parametrul site-ului; în plus exact `extra-cms` + `extra-variante`; scos doar `uniq_fan_streets`; copiile sincronizării FAN neatinse |
 | T2-live | schema live (sonda, mai sus) sau sonda simulată | ca T2, fără numerele fixe ale planului |
 | T3 | a doua aplicare, după T1 și după fiecare T2 | nicio migrare rulată, aceleași rânduri (CHECKSUM TABLE), aceeași amprentă; `--plan` 0 |
-| T4 | migrările până la penultima (și până la finalul grupului B), `seed.php` și `tools/dev/date-demo.php` (prin `tools/dev/php.sh`, pe baza testului), apoi restul | amprenta = `asteptat.json`; tabelele schimbate ⊆ tabelele migrărilor rămase (o migrare de date nouă își trece tabelele în `$tabeleDate` din test) |
-| T5 | oprit (`MIGRARI_TEST_OPRESTE_DUPA`) după fiecare operație a instalării noi și a bazei vechi, și chiar în/după commit-ul unor bucăți și instrucțiuni de date (`MIGRARI_TEST_OPRESTE_IN`), apoi reluat (câte 4 în paralel, pe baze separate) | aceeași amprentă, aceleași date, nimic „in_curs”, fiecare operație numărată o dată |
-| T6 | funcțiile `ensure*` ale codului după primele 4 migrări, și în același timp cu `--aplica` (1, 2, 3 procese; `--aplica` cu pauzele de pe site-uri la 1205/1213, pe MySQL 8 un ALTER al codului și unul al migrării dau uneori deadlock de câteva ori la rând) | `--aplica` 0 (cursele acceptate: aici s-a găsit 1684), baza completă; în plus doar excluderile; avertismente doar colația tabelelor BT și cheile străine ale tabelelor făcute întâi de cod |
+| T4 | migrările până la penultima (și până la finalul grupului B), `seed.php` și `tools/dev/date-demo.php` (prin `tools/dev/php.sh`, pe baza testului, cu licența „toate” a testului, ca în T10), apoi restul | amprenta = `asteptat.json`; tabelele schimbate ⊆ tabelele migrărilor rămase (o migrare de date nouă își trece tabelele în `$tabeleDate` din test) |
+| T5 | oprit (`MIGRARI_TEST_OPRESTE_DUPA`) după fiecare operație a instalării noi și a bazei vechi, și chiar în/după commit-ul unor bucăți și instrucțiuni de date (`MIGRARI_TEST_OPRESTE_IN`), apoi reluat o singură dată (câte 4 în paralel, pe baze separate) | reluarea iese cu 0 (fără a doua încercare); aceeași amprentă, aceleași date, nimic „in_curs”, fiecare operație numărată o dată |
+| T6 | funcțiile `ensure*` ale codului după primele 4 migrări, și în același timp cu `--aplica` (1, 2, 3 procese; `--aplica` cu pauzele de pe site-uri la 1205/1213, pe MySQL 8 un ALTER al codului și unul al migrării dau uneori deadlock de câteva ori la rând) | `--aplica` 0 (cursele acceptate: aici s-a găsit 1684); fiecare trecere a funcțiilor iese cu 0 și fără nicio excepție (procesul-copil le prinde în „erori”; pe un site ar fi o cerere a codului vechi căzută); baza completă; în plus doar excluderile; avertismente doar colația tabelelor BT și cheile străine ale tabelelor făcute întâi de cod |
 | T7 | pe baza instalată, o copie a migrărilor cu una aplicată schimbată, apoi și cu lacătul rescris, apoi ștearsă, apoi retrasă | 12, 12, 12, apoi 0; baza și starea neatinse |
 | T8 | o migrare de probă cu `MODIFY COLUMN`, declarată neblocantă | `--plan` și `--aplica` 11, nimic aplicat; cu `--permite-blocante`, aplicată |
 | T9 | amprentele din T1, T2, baza veche, T4 | aceleași pe ambele servere |
-| T10 | o bază făcută pe vechi (`install.php`, `seed.php`, `date-demo.php`) → baseline; apoi funcțiile `ensure*` ale codului comun și ale codului Bioscem (clona la „ultimul commit revizuit”), pe ea și pe o bază nouă făcută de migrări | baseline-ul nu schimbă schema, datele doar unde declară migrările; `--verifica` 0; funcțiile vechi nu mai schimbă nimic (schemă, rânduri). Testele aplicației pe o bază migrată (fum, pluginuri, SEO, comparația cu Bioscem) vin cu instalarea prin migrări (WP-05) |
-| T11 | `tools/dev/verifica-migrari.php` pe repo și pe o copie cu câte o greșeală | 0 pe repo; 1, cu motivul, pe fiecare greșeală (mai jos) |
+| T10 | o bază făcută pe vechi (`install.php`, `seed.php`, `date-demo.php`, cu licența „toate” dintr-un dosar al testului, `CMS_DEV_LICENTA_DOSAR`, ca procesul-copil al funcțiilor: oricare ar fi licența locală, pe care n-o atinge) → baseline; apoi funcțiile `ensure*` ale codului comun și ale codului Bioscem (clona la „ultimul commit revizuit”), pe ea și pe o bază nouă făcută de migrări | baseline-ul nu schimbă schema, datele doar unde declară migrările; `--verifica` 0; funcțiile vechi, fără nicio excepție: pe baza cu date demo nu mai schimbă nimic (schemă, rânduri); pe baza nouă schema rămâne `asteptat.json` și scriu doar rândurile declarate în test (`$randuriHelperiPeBazaNoua`: pagina `/acorduri-gdpr`, cele patru categorii de blog ale Bioscem, lista implicită de newsletter; date pe care migrările nu le scriu, în WP-05 pasul de activare al lui `acorduri_gdpr` și seed-ul neutru). Testele aplicației pe o bază migrată (fum, pluginuri, SEO, comparația cu Bioscem) vin cu instalarea prin migrări (WP-05) |
+| T11 | `tools/dev/verifica-migrari.php` pe repo și pe o copie cu câte o greșeală (și cu o definiție doar cu tipul, una într-o constantă a clasei, una într-un fișier fără DDL) | 0 pe repo; 1, cu motivul, pe fiecare greșeală (mai jos); 0 pe texte obișnuite care încep cu numele unui tip (`'text'`, `'date'`, „Date invalide.”, `DATE(o.created_at)`) într-o metodă nouă din `AdminController` |
 
 ## Verificarea fișierelor de migrare (`tools/dev/verifica-migrari.php`)
 
@@ -449,12 +449,19 @@ spus în rezultat).
    Runner-ul le refuză și el, dar doar pe ramura care rulează; aici se văd și cele de pe ramurile pentru
    obiecte vechi (`dacaColoana`).
 4. **DDL-ul din codul de pe site-uri** (`src/` fără `src/Support/Migrari/`, `scripts/`, `public/`, `views/`,
-   `config/`, `bootstrap.php`, `database/schema.sql`): fiecare text DDL și fiecare definiție de coloană dintr-o
-   funcție cu DDL (listele de coloane din `ErpSync::ensureSchema`, `BtIpayPayments::migreaza`) trebuie să fie
-   în `tools/dev/migrari/ddl-din-cod.txt`, pe fișier și funcție, de câte ori apare (azi 371 de texte și 26 de
-   definiții în 38 de funcții și fișiere: cele 36 de funcții `ensure*`/`asigura*`, `install.php`,
-   `fan-tracking-sync.php`, `schema.sql`, tabelele de lucru ale sincronizării FAN, care rămân, și tiparul din
-   `WordPressDumpReader`). Unul nou, încă o copie a unuia vechi sau unul mutat în altă funcție = încălcare: o
+   `config/`, `bootstrap.php`, `database/schema.sql`): fiecare text DDL și fiecare definiție de coloană (listele
+   de coloane din `ErpSync::ensureSchema`, `BtIpayPayments::migreaza`) trebuie să fie în
+   `tools/dev/migrari/ddl-din-cod.txt`. O definiție e un tip SQL urmat de lungime sau de un atribut
+   (`'VARCHAR(40) NULL'`, `'INT NOT NULL DEFAULT 0'`; nu o funcție SQL, `'DATE(o.created_at) >= ?'`), numărată
+   oriunde în acest cod, nu doar lângă DDL (o listă de coloane ținută într-o constantă, o proprietate, altă metodă
+   sau alt fișier ajunge la fel la un ALTER), sau doar tipul: cu majuscule (`'DATETIME'`) oriunde, cu orice litere
+   (`'datetime'`) într-o funcție cu DDL. Un tip singur cu litere mici în afara unei funcții cu DDL nu se numără:
+   nu se deosebește de tipurile câmpurilor din formulare (`'text'`, `'date'`: peste o sută azi), deci SQL-ul din
+   cod se scrie cu majuscule. Lista e pe fișier și funcție (în afara metodelor: „Clasa (clasă)”), de câte ori
+   apare (azi 371 de texte și 26 de definiții în 38 de funcții și fișiere: cele 36 de funcții
+   `ensure*`/`asigura*`, `install.php`, `fan-tracking-sync.php`, `schema.sql`, tabelele de lucru ale
+   sincronizării FAN, care rămân, și tiparul din `WordPressDumpReader`; toate cele 26 de definiții sunt în
+   funcții cu DDL). Unul nou, încă o copie a unuia vechi sau unul mutat în altă funcție = încălcare: o
    coloană nouă se face cu o migrare (regula 2 din planul Etapei 1). Unul care a ieșit din cod = încălcare până
    la `--actualizeaza-lista`, care doar scoate rânduri (lista nu crește niciodată; `--lista-initiala` a scris-o o
    dată, în WP-04, și refuză o listă existentă).

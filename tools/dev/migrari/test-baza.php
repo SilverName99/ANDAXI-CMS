@@ -242,16 +242,39 @@ $comandaHelperi = static function (string $sock, string $baza, string $dosarCod)
     return [[PHP_BINARY, '-d', 'memory_limit=512M', '-d', 'display_errors=stderr', '-d', 'log_errors=0', '-d', 'error_reporting=E_ALL',
         '-d', 'allow_url_fopen=0', $genereazaFixture, '--copil', '--faza=helperi', '--dosar=' . $dosarCod, '--sock=' . $sock, '--baza=' . $baza], $env];
 };
-$helperi = static function (string $sock, string $baza, string $dosarCod) use ($comandaHelperi, $inParalel): array {
-    [$r] = $inParalel([$comandaHelperi($sock, $baza, $dosarCod)], 1);
+/**
+ * Rezultatul unui proces-copil al funcțiilor ensure* ([cod, stdout, stderr]): [bun, JSON-ul lui]. Bun = cod 0, JSON
+ * citit și nicio eroare: copilul prinde excepția fiecărei funcții în „erori” și iese tot cu 0, iar pe un site o
+ * excepție a unei funcții ensure* e o cerere a codului vechi căzută (500).
+ */
+$rezultatHelperi = static function (array $r): array {
     $json = json_decode($r[1], true);
-    return [$r[0] === 0 && is_array($json), is_array($json) ? $json : ['erori' => [trim($r[1] . $r[2])]]];
+    if (!is_array($json)) {
+        return [false, ['erori' => ['copilul a ieșit cu ' . $r[0] . ', fără JSON: ' . mb_substr(trim($r[1] . ' ' . $r[2]), 0, 300)]]];
+    }
+    $erori = array_key_exists('erori', $json) ? (array) $json['erori'] : ['fără „erori” în JSON'];
+    if ($r[0] !== 0) {
+        $erori[] = 'copilul a ieșit cu ' . $r[0] . ': ' . mb_substr(trim($r[2]), 0, 300);
+    }
+    $json['erori'] = $erori;
+    return [$erori === [], $json];
 };
-/** Un script al proiectului prin tools/dev/php.sh, pe o bază de test (seed.php, date-demo.php, install.php). */
-$phpSh = static function (string $sock, string $baza, array $script) use ($radacina): array {
+$helperi = static function (string $sock, string $baza, string $dosarCod) use ($comandaHelperi, $inParalel, $rezultatHelperi): array {
+    [$r] = $inParalel([$comandaHelperi($sock, $baza, $dosarCod)], 1);
+    return $rezultatHelperi($r);
+};
+/**
+ * Un script al proiectului prin tools/dev/php.sh, pe o bază de test (seed.php, date-demo.php, install.php), cu licența
+ * „toate” dintr-un dosar al testului (CMS_DEV_LICENTA_DOSAR): ca procesul-copil al funcțiilor ensure* (toate
+ * pluginurile pornite) și oricare ar fi licența locală din storage/licenta, pe care n-o atinge.
+ */
+$dosarLicenta = $lucru . '/licenta-toate';
+@mkdir($dosarLicenta, 0777, true);
+$phpSh = static function (string $sock, string $baza, array $script) use ($radacina, $dosarLicenta): array {
     $env = getenv();
     $env['CMS_DEV_DB'] = $baza;
     $env['CMS_DEV_SOCK'] = $sock;
+    $env['CMS_DEV_LICENTA_DOSAR'] = $dosarLicenta;
     $p = proc_open(array_merge([$radacina . '/tools/dev/php.sh'], $script), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipe, $radacina, $env);
     $out = (string) stream_get_contents($pipe[1]);
     $err = (string) stream_get_contents($pipe[2]);
@@ -259,6 +282,17 @@ $phpSh = static function (string $sock, string $baza, array $script) use ($radac
     fclose($pipe[2]);
     return [proc_close($p), $out . $err];
 };
+$licentaLocala = static function () use ($radacina): array {
+    $r = [];
+    foreach (glob($radacina . '/storage/licenta/*.json') ?: [] as $f) {
+        $r[basename($f)] = sha1((string) file_get_contents($f));
+    }
+    return $r;
+};
+$licentaLocalaInainte = $licentaLocala();
+[$codLic, $outLic] = $phpSh($sockMaria, 'cms_mig_t_licenta', ['tools/dev/licenta.php', 'toate']);
+$verifica('T4, T10: licența „toate” într-un dosar al testului (' . trim($outLic) . '), nu în storage/licenta',
+    $codLic === 0 && is_file($dosarLicenta . '/licenta.json') && $licentaLocala() === $licentaLocalaInainte, $outLic);
 
 // Ce trebuie să facă baseline-ul (grupul B) pe schema fiecărui cod: numerele din migrari.md §2.2 (BS = CMS:
 // nimic; BV și GR: 3 tabele, 24 de coloane, valoarea implicită a procesatorului; VT: 8 tabele, 57 de coloane,
@@ -273,6 +307,17 @@ $asteptatB = [
 ];
 /** Ce are voie baseline-ul să scoată de pe o bază veche: indexul unic de dinainte de row_key (pasul vechi din livrare_fan/0005). */
 $scoaseVoit = ['indexul fan_streets.uniq_fan_streets'];
+/**
+ * Ce scriu funcțiile ensure* (ale codului comun și ale Bioscem, la fel) pe o bază nouă făcută de migrări, T10: date,
+ * nu schemă, pe care migrările nu le scriu. Pagina /acorduri-gdpr (în WP-05: pasul de activare al lui acorduri_gdpr),
+ * categoriile de blog ale Bioscem (în WP-05: seed-ul neutru, doar Noutăți și Evenimente) și lista implicită de
+ * newsletter (o face și NewsletterService::defaultListId, la nevoie). Tabel (în ordine) → [citirea, rândurile].
+ */
+$randuriHelperiPeBazaNoua = [
+    'blog_categories' => ['SELECT slug FROM blog_categories ORDER BY slug', ['evenimente', 'info-medici', 'info-pacienti', 'noutati']],
+    'newsletter_lists' => ['SELECT is_default FROM newsletter_lists ORDER BY id', ['1']],
+    'pages' => ['SELECT slug FROM pages ORDER BY slug', ['acorduri-gdpr']],
+];
 $versiuniBs = ["INSERT INTO settings (`key`, `value`) VALUES ('bt_ipay_schema_version', '3'), ('payment_links_schema_version', '2')"];
 $cuProcesatorLipsa = ['bv', 'gr'];
 
@@ -451,9 +496,9 @@ $citesteVechi = static function (PDO $db) use ($citiriVechi): array {
 $extraVariante = $liniiObiecte($dosarVechi . '/extra-variante.txt') ?? [];
 $fisiereVechi = [$dosarVechi . '/cms.sql', $dosarVechi . '/variante.sql'];
 
-/** Oprit după fiecare k (1..$total) pe baze pregătite de $pregateste, reluat; $final(PDO, k) → null sau ce nu e bine. */
+/** Oprit după fiecare k (1..$total) pe baze pregătite de $pregateste, reluat o dată; $final(PDO, k) → null sau ce nu e bine. */
 $opritSiReluat = static function (string $sock, string $prefix, int $total, callable $pregateste, callable $final, callable $mediuOprire)
-    use ($comandaRunner, $inParalel, $conectare, $dosarReal, $cuParametru, $ruleaza): array {
+    use ($comandaRunner, $inParalel, $conectare, $dosarReal, $cuParametru): array {
     $rele = [];
     $lot = 8;
     for ($start = 1; $start <= $total; $start += $lot) {
@@ -475,10 +520,8 @@ $opritSiReluat = static function (string $sock, string $prefix, int $total, call
         $rezultate = $inParalel($reluari);
         foreach ($ks as $i => $k) {
             $baza = 'cms_mig_t_' . $prefix . '_' . $i;
+            // O singură reluare trebuie să termine (pe un site: un pas de deploy care nu raportează nicio eroare).
             $cod = $rezultate[$i][0];
-            for ($r = 0; $cod !== 0 && $r < 2; $r++) {
-                [$cod] = $ruleaza($sock, $baza, $dosarReal, ['--aplica'], $cuParametru);
-            }
             $problema = $cod !== 0 ? 'reluarea a dat ' . $cod . ' ' . mb_substr(trim($rezultate[$i][1] . $rezultate[$i][2]), 0, 300) : $final($conectare($sock, $baza), $k);
             if ($problema !== null) {
                 $rele[] = 'k=' . $k . ': ' . $problema;
@@ -724,12 +767,12 @@ foreach ($servere as $numeServer => $sock) {
     $avT6 = static fn (array $av): array => array_values(array_filter(array_diff($av, $avPermise),
         static fn (string $a): bool => preg_match('/^cheia străină [a-z0-9_]+\.[a-z0-9_]+ lipsește/', $a) !== 1));
     $inPlus6 = (array) ($rv['verificare']['in_plus'] ?? []);
-    $verifica('T6: funcțiile ensure* ale codului după primele 4 migrări (codul vechi servește în timpul adoptării), apoi --aplica: 0; '
+    $verifica('T6: funcțiile ensure* ale codului după primele 4 migrări (codul vechi servește în timpul adoptării): nicio eroare; apoi --aplica: 0; '
         . '--verifica 0, în plus doar excluderile, avertismente doar colația tabelelor BT și cheile străine ale tabelelor făcute de cod',
         $c1 === 0 && $okH && $ca === 0 && $cv === 0 && (array) ($rv['verificare']['lipsa'] ?? ['?']) === []
         && array_diff($inPlus6, $extraCms) === [] && $avT6((array) ($rv['verificare']['avertismente'] ?? [])) === [],
-        'coduri ' . $c1 . '/' . $ca . '/' . $cv . ' ' . mb_substr((string) ($ra['mesaj'] ?? ''), 0, 300) . "\nîn plus: " . implode(', ', $inPlus6)
-        . "\navertismente: " . implode(' | ', (array) ($rv['verificare']['avertismente'] ?? [])));
+        'coduri ' . $c1 . '/' . $ca . '/' . $cv . ' ' . mb_substr((string) ($ra['mesaj'] ?? ''), 0, 300) . "\nerorile funcțiilor: " . implode('; ', array_slice((array) $rH['erori'], 0, 3))
+        . "\nîn plus: " . implode(', ', $inPlus6) . "\navertismente: " . implode(' | ', (array) ($rv['verificare']['avertismente'] ?? [])));
     $releT6 = [];
     for ($runda = 1; $runda <= 3; $runda++) {
         $bazaNoua($sock, $baza);
@@ -741,18 +784,28 @@ foreach ($servere as $numeServer => $sock) {
             $comenzi[] = $comandaHelperi($sock, $baza, $codCms);
         }
         $rez = $inParalel($comenzi, count($comenzi));
+        // Fiecare trecere a codului vechi: cod 0 și nicio excepție (pe un site, o cerere căzută în timpul baseline-ului).
+        $eroriH = [];
+        foreach (array_slice($rez, 1) as $h => $rh) {
+            [$bunH, $jsonH] = $rezultatHelperi($rh);
+            if (!$bunH) {
+                $eroriH[] = 'trecerea ' . ($h + 1) . ': ' . implode('; ', array_slice((array) $jsonH['erori'], 0, 3));
+            }
+        }
         [$ca2] = $mig($sock, $baza, ['--aplica']);
         [$cv2, $rv2] = $mig($sock, $baza, ['--verifica', '--json']);
         $inPlus = (array) ($rv2['verificare']['in_plus'] ?? []);
         $av = (array) ($rv2['verificare']['avertismente'] ?? []);
-        if ($rez[0][0] !== 0 || $ca2 !== 0 || $cv2 !== 0 || (array) ($rv2['verificare']['lipsa'] ?? ['?']) !== [] || array_diff($inPlus, $extraCms) !== []
+        if ($rez[0][0] !== 0 || $eroriH !== [] || $ca2 !== 0 || $cv2 !== 0 || (array) ($rv2['verificare']['lipsa'] ?? ['?']) !== [] || array_diff($inPlus, $extraCms) !== []
             || $avT6($av) !== []) {
             $releT6[] = 'runda ' . $runda . ': --aplica în paralel ' . $rez[0][0] . ' (' . mb_substr((string) (json_decode($rez[0][1], true)['mesaj'] ?? $rez[0][1] . $rez[0][2]), 0, 300)
-                . '), apoi ' . $ca2 . ', --verifica ' . $cv2 . '; în plus ' . implode(', ', array_diff($inPlus, $extraCms)) . '; avertismente ' . implode(' | ', $avT6($av));
+                . '), funcțiile codului: ' . ($eroriH === [] ? 'fără erori' : implode(' | ', $eroriH))
+                . ', apoi ' . $ca2 . ', --verifica ' . $cv2 . '; în plus ' . implode(', ', array_diff($inPlus, $extraCms)) . '; avertismente ' . implode(' | ', $avT6($av));
         }
     }
     $verifica('T6: --aplica pe o bază goală în același timp cu 1, 2, 3 treceri ale funcțiilor ensure* ale codului: --aplica 0 (cursele acceptate), '
-        . 'baza completă la final, în plus doar excluderile (information_schema care sare un tabel schimbat chiar atunci: citit din nou)', $releT6 === [], implode("\n", $releT6));
+        . 'fiecare trecere a codului fără nicio eroare, baza completă la final, în plus doar excluderile (information_schema care sare un tabel '
+        . 'schimbat chiar atunci: citit din nou)', $releT6 === [], implode("\n", $releT6));
 
     // ------------------------------------------------------------------ T7
     $scrie('T7. O migrare aplicată nu se schimbă');
@@ -826,23 +879,36 @@ foreach ($servere as $numeServer => $sock) {
         $cv === 0 && $sortat((array) ($rv['verificare']['in_plus'] ?? [])) === $extraCms
         && $sortat((array) ($rv['verificare']['avertismente'] ?? [])) === $sortat($avPermise),
         'cod ' . $cv . ' ' . implode(', ', (array) ($rv['verificare']['in_plus'] ?? [])) . ' | ' . implode(' | ', (array) ($rv['verificare']['avertismente'] ?? [])));
-    foreach (['codul comun' => $codCms, 'codul Bioscem ' . $revizuitBs => $codBs] as $al => $dosarCod) {
+    foreach (['codului comun' => $codCms, 'codului Bioscem ' . $revizuitBs => $codBs] as $al => $dosarCod) {
         $S = $instantaneu($db10);
         [$okH, $rH] = $helperi($sock, $baza, $dosarCod);
-        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe baza migrată cu date demo: nicio schimbare de schemă, niciun rând schimbat',
+        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe baza migrată cu date demo: nicio eroare, nicio schimbare de schemă, niciun rând schimbat',
             $okH && Amprenta::json($amp($db10)) === Amprenta::json($Q10) && $instantaneu($db10) === $S,
-            implode('; ', array_slice((array) ($rH['erori'] ?? []), 0, 3)) . ' schimbate: ' . implode(', ', $schimbate($S, $instantaneu($db10))));
+            implode('; ', array_slice((array) $rH['erori'], 0, 3)) . ' schimbate: ' . implode(', ', $schimbate($S, $instantaneu($db10))));
         $bazaNoua($sock, $b('t10_nou'));
         $mig($sock, $b('t10_nou'), ['--aplica']);
+        $dbN = $conectare($sock, $b('t10_nou'));
+        $SN = $instantaneu($dbN);
         [$okN, $rN] = $helperi($sock, $b('t10_nou'), $dosarCod);
-        $An = $amp($conectare($sock, $b('t10_nou')));
+        $An = $amp($dbN);
         [$cvn, $rvn] = $mig($sock, $b('t10_nou'), ['--verifica', '--json']);
-        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe o bază nouă făcută de migrări: schema rămâne asteptat.json (nimic adăugat), --verifica 0',
-            $okN && Amprenta::json($An) === $asteptatJson && $cvn === 0,
-            implode('; ', array_slice((array) ($rN['erori'] ?? []), 0, 3)) . ' ' . implode('; ', array_slice(array_merge(Amprenta::compara($asteptatReal, $An)['in_plus'],
-                Amprenta::compara($asteptatReal, $An)['avertismente']), 0, 10)));
+        $schimbateN = $sortat($schimbate($SN, $instantaneu($dbN)));
+        $randuriN = [];
+        foreach ($randuriHelperiPeBazaNoua as $tabel => [$sql, $asteptate]) {
+            $gasite = array_map('strval', $dbN->query($sql)->fetchAll(PDO::FETCH_COLUMN));
+            if ($gasite !== $asteptate) {
+                $randuriN[] = $tabel . ': ' . implode(', ', $gasite) . ' (așteptat ' . implode(', ', $asteptate) . ')';
+            }
+        }
+        $verifica('T10: funcțiile ensure* ale ' . $al . ' pe o bază nouă făcută de migrări: nicio eroare, schema rămâne asteptat.json (nimic adăugat), '
+            . '--verifica 0; rânduri scrise doar cele declarate (' . implode(', ', array_keys($randuriHelperiPeBazaNoua)) . ')',
+            $okN && Amprenta::json($An) === $asteptatJson && $cvn === 0 && $schimbateN === array_keys($randuriHelperiPeBazaNoua) && $randuriN === [],
+            implode('; ', array_slice((array) $rN['erori'], 0, 3)) . ' ' . implode('; ', array_slice(array_merge(Amprenta::compara($asteptatReal, $An)['in_plus'],
+                Amprenta::compara($asteptatReal, $An)['avertismente']), 0, 10)) . "\ntabele schimbate: " . implode(', ', $schimbateN) . "\n" . implode("\n", $randuriN));
     }
 }
+
+$verifica('T4, T10: licența locală (storage/licenta) neatinsă de scripturile rulate cu licența testului', $licentaLocala() === $licentaLocalaInainte);
 
 // ------------------------------------------------------------------ T9
 $scrie('');
@@ -921,6 +987,16 @@ $cazuriLint = [
         "        try {\n            \$db->exec('ALTER TABLE orders ADD COLUMN proba_t11 INT NULL');\n        } catch (Throwable) {\n        }\n        try {\n            \$db->exec('CREATE INDEX idx_orders_erp_status", (string) $x), 'DDL nou'],
     'o definiție de coloană nouă în lista din ErpSync::ensureSchema' => ['src/Support/ErpSync.php', static fn (?string $x): string => str_replace("            'erp_status' => \"VARCHAR(20) NOT NULL DEFAULT 'pending'\",",
         "            'erp_status' => \"VARCHAR(20) NOT NULL DEFAULT 'pending'\",\n            'proba_t11' => 'MEDIUMINT NULL',", (string) $x), 'definiție de coloană nouă'],
+    'definiții doar cu tipul (DATETIME, TEXT) în lista din ErpSync::ensureSchema' => ['src/Support/ErpSync.php', static fn (?string $x): string => str_replace("            'erp_status' => \"VARCHAR(20) NOT NULL DEFAULT 'pending'\",",
+        "            'erp_status' => \"VARCHAR(20) NOT NULL DEFAULT 'pending'\",\n            'proba_t11' => 'DATETIME',\n            'proba_t11_2' => 'TEXT',", (string) $x), ['definiție de coloană nouă („DATETIME', 'definiție de coloană nouă („TEXT']],
+    'un tip singur cu litere mici într-o funcție cu DDL' => ['src/Support/ErpSync.php', static fn (?string $x): string => str_replace("            'erp_status' => \"VARCHAR(20) NOT NULL DEFAULT 'pending'\",",
+        "            'erp_status' => \"VARCHAR(20) NOT NULL DEFAULT 'pending'\",\n            'proba_t11' => 'datetime',", (string) $x), 'definiție de coloană nouă („datetime'],
+    'o definiție într-o constantă a clasei, adăugată la lista din ErpSync::ensureSchema' => ['src/Support/ErpSync.php', static fn (?string $x): string => str_replace(
+        ["final class ErpSync\n{\n", '        foreach ($columns as $name => $definition) {'],
+        ["final class ErpSync\n{\n    private const COLOANE_T11 = ['proba_t11' => 'VARCHAR(40) NULL'];\n\n", '        foreach (array_merge($columns, self::COLOANE_T11) as $name => $definition) {'],
+        (string) $x), 'ErpSync (clasă): definiție de coloană nouă'],
+    'o listă de coloane într-un fișier fără DDL' => ['src/Support/ColoaneProbaT11.php', static fn (?string $x): string => "<?php\n\nnamespace App\\Support;\n\nfinal class ColoaneProbaT11\n{\n"
+        . "    public const COLOANE = ['proba_t11' => 'INT NOT NULL DEFAULT 0'];\n}\n", 'ColoaneProbaT11 (clasă): definiție de coloană nouă'],
     'DDL într-o clasă nouă din src/' => ['src/Support/ProbaT11.php', static fn (?string $x): string => "<?php\n\nnamespace App\\Support;\n\nfinal class ProbaT11\n{\n    public static function f(\\PDO \$db): void\n    {\n        \$db->exec(\"CREATE TABLE proba_t11 (id INT)\");\n    }\n}\n", 'DDL nou'],
     'DDL în schema.sql' => ['database/schema.sql', static fn (?string $x): string => (string) $x . "\nCREATE TABLE IF NOT EXISTS proba_t11 (id INT);\n", 'DDL nou'],
     'DDL vechi ieșit din cod (lista nu e actualizată)' => ['src/Support/AdminActivityLog.php', $faraDdlActivitate, 'a ieșit din cod'],
@@ -932,11 +1008,22 @@ $cazuriLint = [
 ];
 foreach ($cazuriLint as $eticheta => [$fisier, $schimba, $mesaj]) {
     [$c, $o] = $cuSchimbare($fisier, $schimba, static fn (): array => $lint(['--radacina=' . $copieL]));
-    $mutatii[$eticheta] = $c === 1 && str_contains($o, $mesaj) ? null : 'cod ' . $c . ': ' . mb_substr($o, 0, 500);
+    $toateMesajele = array_filter((array) $mesaj, static fn (string $m): bool => str_contains($o, $m)) === (array) $mesaj;
+    $mutatii[$eticheta] = $c === 1 && $toateMesajele ? null : 'cod ' . $c . ': ' . mb_substr($o, 0, 500);
 }
 $rele = array_filter($mutatii);
 $verifica('T11: verifica-migrari.php pică (1, cu motivul) pe fiecare greșeală pusă în copie: ' . implode('; ', array_keys($cazuriLint)),
     $rele === [], implode("\n", array_map(static fn (string $k, string $v): string => $k . ' → ' . $v, array_keys($rele), $rele)));
+// Și invers: textele obișnuite din cod care încep cu numele unui tip (tipuri de câmpuri, mesaje, funcții SQL) nu sunt
+// definiții, altfel orice cod nou din AdminController (care are DDL) ar pica fără motiv.
+[$cn, $on] = $cuSchimbare('src/Http/Controllers/AdminController.php', static fn (?string $x): string => str_replace("    public function dashboard(): void\n",
+    "    private function probaT11Texte(PDO \$db): array\n    {\n"
+    . "        \$campuri = [['type' => 'text'], ['type' => 'date'], ['type' => 'json'], ['format' => 'year'], 'Text'];\n"
+    . "        \$conditii = ['DATE(o.created_at) >= ?', 'YEAR(o.created_at) = ?', \"DATE({\$db->quote('x')})\"];\n"
+    . "        return [\$campuri, \$conditii, 'Date invalide.', 'Text sub buton', 'Timestamp invalid', 'Set implicit'];\n    }\n\n"
+    . "    public function dashboard(): void\n", (string) $x), static fn (): array => $lint(['--radacina=' . $copieL, '--fara-baza']));
+$verifica('T11: texte obișnuite care încep cu numele unui tip, într-o metodă nouă din AdminController (\'text\', \'date\', \'Date invalide.\', '
+    . '\'DATE(o.created_at) >= ?\', "DATE({…})"): nicio încălcare', $cn === 0, $on);
 // Proprietarul: o coloană a magazinului adăugată de o migrare a catalogului (cu lock, ultima.php și asteptat.json la zi).
 $proprietarGresit = static function () use ($copieL, $migrareNoua, $lint, $bazaNoua, $ruleaza, $sockMaria, $proprietari, $conectare): array {
     file_put_contents($copieL . '/database/migrari/catalog/0098_proba.php', $migrareNoua("        \$s->coloana('orders', 'proba_t11', 'INT NULL');"));

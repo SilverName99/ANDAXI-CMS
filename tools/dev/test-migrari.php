@@ -68,25 +68,32 @@ declare(strict_types=1);
  *    T3  a doua aplicare nu face nimic (nicio migrare rulată, aceleași rânduri), --plan iese cu 0.
  *    T4  drumul unui site: migrările până la penultima (și până la finalul grupului B), apoi seed.php
  *        și tools/dev/date-demo.php, apoi restul: amprenta = asteptat.json, datele demo neschimbate în
- *        afară de tabelele pe care migrările rămase le declară.
+ *        afară de tabelele pe care migrările rămase le declară. Scripturile (aici și în T10) rulează cu
+ *        licența „toate” dintr-un dosar al testului (CMS_DEV_LICENTA_DOSAR): licența locală nu contează
+ *        și rămâne neatinsă.
  *    T5  oprit (MIGRARI_TEST_OPRESTE_DUPA) după fiecare operație a instalării noi și a bazei vechi, și
- *        după o bucată de date (MIGRARI_TEST_OPRESTE_IN), apoi reluat: aceeași amprentă, aceleași date,
- *        nimic „in_curs”, fiecare operație numărată o dată.
+ *        după o bucată de date (MIGRARI_TEST_OPRESTE_IN), apoi reluat o singură dată: reluarea iese cu 0,
+ *        aceeași amprentă, aceleași date, nimic „in_curs”, fiecare operație numărată o dată.
  *    T6  codul vechi în paralel: funcțiile ensure* ale codului rulează înainte de baseline (după
- *        primele 4 migrări) și în același timp cu --aplica: nicio eroare, baza la final completă.
+ *        primele 4 migrări) și în același timp cu --aplica: nicio eroare (nici --aplica, nici o excepție
+ *        a vreunei funcții, pe care procesul-copil o prinde în „erori”), baza la final completă.
  *    T7  o migrare aplicată, schimbată sau ștearsă într-o copie: codul 12, baza neatinsă.
  *    T8  o migrare de probă cu MODIFY COLUMN declarată neblocantă: 11 fără nimic aplicat; cu
  *        --permite-blocante se aplică.
  *    T9  aceeași amprentă pe MariaDB și pe MySQL 8 după T1, T2, baza veche și T4.
  *    T10 aplicația pe o bază migrată, la nivelul bazei: o bază făcută „pe vechi” (install.php, seed.php,
  *        date-demo.php) primește baseline-ul fără nicio schimbare de schemă și cu datele schimbate doar
- *        unde declară migrările de date; apoi funcțiile ensure* ale codului comun și ale codului Bioscem
- *        nu mai schimbă nimic, nici pe ea, nici pe o bază nouă făcută de migrări. Testele aplicației
+ *        unde declară migrările de date; apoi funcțiile ensure* ale codului comun și ale codului Bioscem,
+ *        fără nicio excepție, nu mai schimbă nimic pe ea, iar pe o bază nouă făcută de migrări nu schimbă
+ *        schema și scriu doar rândurile declarate (pagina GDPR, categoriile de blog, lista de newsletter
+ *        implicită: $randuriHelperiPeBazaNoua din migrari/test-baza.php). Testele aplicației
  *        (fum, pluginuri, SEO, comparația cu Bioscem) pe o bază migrată vin cu instalarea prin migrări (WP-05).
  *    T11 tools/dev/verifica-migrari.php trece pe repo și pică pe fiecare greșeală pusă într-o copie
  *        (număr dublat, migrare netrecută în migrari.lock, AFTER, IF NOT EXISTS, COLLATE, DDL scris de
  *        mână, ștergere în afara unei migrări „contract”, DDL nou în cod, o definiție de coloană nouă
- *        într-o funcție ensure*, DDL ieșit din cod, asteptat.json vechi, o coloană a altui proprietar).
+ *        într-o funcție ensure*, una doar cu tipul, una într-o constantă a clasei, una într-un fișier fără
+ *        DDL, DDL ieșit din cod, asteptat.json vechi, o coloană a altui proprietar) și trece pe texte
+ *        obișnuite care încep cu numele unui tip ('text', 'Date invalide.', 'DATE(o.created_at) >= ?').
  *
  * Bazele (cms_mig_t_*) și dosarul de lucru ($CMS_DEV_DIR/test-migrari) se fac și se șterg aici;
  * MySQL 8 se oprește la final dacă l-a pornit testul. Doar date inventate. Raportul:

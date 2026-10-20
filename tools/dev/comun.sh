@@ -108,7 +108,13 @@ exporta_mediul_aplicatiei() {
     LICENTA_CHEIE_PUBLICA="$("$CMS_DEV_PHP" "$RADACINA/tools/dev/licenta.php" cheie)"
     export LICENTA_CHEIE_PUBLICA
     export LICENTA_SITE="demo"
-    unset LICENTA_DOSAR
+    # Licența stă în storage/licenta. Un test care nu vrea s-o atingă și nici să depindă de ea (test-migrari.php,
+    # T4 și T10: licența „toate”, oricare ar fi cea locală) își dă dosarul lui: CMS_DEV_LICENTA_DOSAR.
+    if [ -n "${CMS_DEV_LICENTA_DOSAR:-}" ]; then
+        export LICENTA_DOSAR="$CMS_DEV_LICENTA_DOSAR"
+    else
+        unset LICENTA_DOSAR
+    fi
     # Datele site-ului (redirecționările adreselor vechi, regulile SEO): pachetul
     # inventat din tools/dev/site-demo, nu un dosar site/ rămas în rădăcină.
     export SITE_DATE_DOSAR="${SITE_DATE_DOSAR:-$RADACINA/tools/dev/site-demo}"
