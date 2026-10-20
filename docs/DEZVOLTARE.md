@@ -81,20 +81,25 @@ Node + Playwright (pentru capturi) și `python3` (`test-verificare.php` rulează
 `configureaza.php` și într-un terminal adevărat). Pentru testele migrărilor, și un
 MySQL 8 lângă MariaDB (`tools/dev/mysql8.sh`; pe Hostinger nu se știe încă ce server e).
 
-**PHP-ul minim** (`php_min` în `config/app.php`): **8.0** până la decizia OD-48 (cea mai
-prudentă alegere: serverele pot fi încă pe 8.0). Codul care ajunge pe site-uri nu are voie
-să folosească nimic mai nou (enum, `readonly`, `array_is_list`, `mb_str_pad`…). Se verifică
-așa: `tools/dev/instaleaza.sh --php-min` instalează `php8.0` (din depozitul ondrej/php deja
-configurat; `php` rămâne cel implicit), `tools/dev/verifica-php.sh` verifică sintaxa
-fiecărui fișier de pe site cu el, iar `CMS_DEV_PHP=php8.0` pornește orice unealtă (serverul,
-copia de bază, testul de fum, testele pluginurilor) cu PHP-ul minim.
+**PHP-ul minim** (`php_min` în `config/app.php`): **8.3** (decizia OD-48, 19 octombrie 2026):
+toate cele patru site-uri live și site-ul de verificare rulează PHP 8.3, deci trecerea unui site
+pe codul comun nu-i schimbă versiunea, iar întoarcerea la codul vechi rămâne sigură. Versiunea
+se ridică pentru toate site-urile odată, după cele patru adoptări. Codul care ajunge pe site-uri
+nu are voie să folosească nimic mai nou decât 8.3 (din 8.4: proprietăți cu `get`/`set`,
+vizibilitate asimetrică, `new X()->m()` fără paranteze, `array_find`, `mb_trim`,
+`#[\Deprecated]`…). Se verifică așa: `tools/dev/instaleaza.sh --php-min` instalează `php8.3`
+(din depozitul ondrej/php deja configurat; `php` rămâne cel implicit), `tools/dev/verifica-php.sh`
+verifică sintaxa fiecărui fișier de pe site cu el, iar `CMS_DEV_PHP=php8.3` pornește orice
+unealtă (serverul, copia de bază, testul de fum, testele pluginurilor) cu PHP-ul minim.
 `scripts/diagnostic.php` iese cu 1 dacă PHP-ul liniei de comandă e mai vechi decât minimul.
-Ce s-a găsit rulând uneltele cu 8.0 (și e bine de știut când scrii unelte noi):
-`mb_str_pad` nu există (8.3); o metodă privată se cheamă prin Reflection doar după
-`setAccessible(true)`; `escapeshellarg` scoate literele cu diacritice (localul C), deci un
-text cu diacritice nu se dă prin linia de comandă, ci printr-un fișier; procesele de lucru
-ale lui `php -S` (`PHP_CLI_SERVER_WORKERS`) nu se opresc odată cu procesul principal, așa că
-uneltele le opresc explicit (`opreste_server_php` din `comun.sh`).
+Până la decizie minimul provizoriu a fost 8.0; codul scris atunci (de exemplu `esteLista` în
+locul lui `array_is_list`, clasele migrărilor fără `readonly`) rămâne cum e. Ce s-a găsit
+atunci rulând uneltele cu 8.0 nu mai e o limită, dar explică unele ocolișuri din unelte:
+`mb_str_pad` nu exista (8.3); o metodă privată se chema prin Reflection doar după
+`setAccessible(true)`; `escapeshellarg` scotea literele cu diacritice (localul C), deci textele
+cu diacritice se dau printr-un fișier, nu prin linia de comandă. Rămâne valabil: procesele de
+lucru ale lui `php -S` (`PHP_CLI_SERVER_WORKERS`) se opresc explicit (`opreste_server_php` din
+`comun.sh`), pentru că pe 8.0 nu se opreau odată cu procesul principal.
 
 ### Pe scurt
 
@@ -123,7 +128,7 @@ tools/dev/php.sh scripts/migreaza.php --plan         # migrările: ce s-ar face 
 tools/dev/php.sh tools/dev/test-migrari.php --runner # runner-ul migrărilor pe MariaDB și MySQL 8, cu fiecare cod de ieșire
 tools/dev/mysql8.sh porneste                         # al doilea server de test, MySQL 8 (opreste, stare)
 tools/dev/verifica-php.sh                           # sintaxa codului de pe site-uri cu PHP-ul minim (php_min)
-CMS_DEV_PHP=php8.0 tools/dev/smoke.sh --toate-pachetele   # orice unealtă, cu PHP-ul minim
+CMS_DEV_PHP=php8.3 tools/dev/smoke.sh --toate-pachetele   # orice unealtă, cu PHP-ul minim
 tools/dev/porti.sh --wp=WP-01                       # porțile unui pachet de lucru din planul Etapei 1, în ordine
 tools/dev/php.sh tools/dev/de-portat.php            # commit-urile noi din codurile vechi, de trecut în docs/de-portat.md
 tools/dev/php.sh scripts/diagnostic.php --licenta   # licența se verifică? PHP-ul e destul de nou? (verificarea dinaintea unui deploy)
@@ -160,7 +165,7 @@ Conturi (toate inventate, aceeași parolă, nouă la fiecare bază, în
 | `verifica-php.sh` | `php<php_min> -l` pe tot ce ajunge pe site-uri (`src/`, `views/`, `config/`, `scripts/`, `public/`, `bootstrap.php`, `database/` cu migrările, `tools/verificare/`; și `tools/sonda/` când va exista). |
 | `test-migrari.php` | Testele migrărilor ([MIGRARI.md](MIGRARI.md)); azi (`--runner`, poarta G-runner) runner-ul însuși, pe migrări de jucărie scrise de test: fără bază Server, Amprenta (rândurile din `information_schema` ale MariaDB și ale MySQL dau aceeași amprentă), definițiile și corpul unui CREATE TABLE, Registru; apoi pe MariaDB și pe MySQL 8 detectarea (ce scrie serverul = ce înțelege Amprenta), Schema direct (avertisment la altă definiție, index echivalent sub alt nume, cursa cu alt proces, valori repetate numărate fără valori, blocare refuzată) și `scripts/migreaza.php` cu fiecare cod de ieșire: oprit după fiecare operație și reluat (aceeași amprentă, fiecare rând numărat o dată), oprit chiar înainte și chiar după commit-ul fiecărei bucăți (`MIGRARI_TEST_OPRESTE_IN`; pică dacă cursorul ar ieși din tranzacția bucății), bugetul, migrări schimbate, blocante, contract, parametrii site-ului, lacătele (și al sincronizării FAN), starea neatinsă de un runner refuzat (3, 12) și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan, un tabel `#sql-*` rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, `--json`, nicio valoare (nici cu ghilimele sau `\` în ea) și nicio parolă în ieșire; aceeași amprentă pe ambele servere (și pentru `tinyint(1) unsigned`, un text implicit `x'y`); o conexiune care primește id-ul de obiect al alteia; linia de comandă fără fișiere de sesiune. Testele T1–T11 pe migrările adevărate vin cu WP-04 în același fișier. Își face și își șterge bazele `cms_mig_t_*`; pornește și oprește MySQL 8 dacă nu mergea (`--doar-mariadb`: fără el, rezultat parțial, spus explicit). Raport: `$CMS_DEV_DIR/test-migrari-raport.txt`. |
 | `mysql8.sh` | `porneste`, `opreste`, `stare` pentru un MySQL 8 despachetat în `CMS_DEV_MYSQL8_DIR` (doar socket, fără port TCP). |
-| `test-verificare.php` | Testele site-ului de verificare ([VERIFICARE.md](VERIFICARE.md)): `IpClient`, credențialele Basic, cookie-ul porții, dosarul site-ului (fără server); apoi o copie a codului într-o găzduire simulată (`$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`), servită pe `CMS_DEV_PORT`+7 cu un mediu gol, ca pe Hostinger: fără `.env` 503 la orice; fiecare refuz al `configureaza.php` și configurarea pe o bază goală; poarta (401, 429, limita pe /64 la IPv6, formularul, câmpurile trimise ca liste, sonda); `stare.php` (ieșirea lui în raport); o copie „încărcată” pe baza de dezvoltare și una expirată; `SITE_COPIE_VERIFICARE=0`. Își face și își șterge bazele `cms_verif_gol`, `cms_verif_plina` și utilizatorul `cms_verif_test`. Cu `php7.0`/`php7.4` instalat verifică și mesajul pentru un PHP prea vechi; cu `python3`, `configureaza.php` într-un terminal adevărat (`lib/terminal.py`: Ctrl-C și SIGTERM în mijlocul unei parole lasă terminalul cu ecou). Poarta G-verif îl rulează și cu PHP-ul minim. Raport: `$CMS_DEV_DIR/test-verificare-raport.txt`. |
+| `test-verificare.php` | Testele site-ului de verificare ([VERIFICARE.md](VERIFICARE.md)): `IpClient`, credențialele Basic, cookie-ul porții, dosarul site-ului (fără server); apoi o copie a codului într-o găzduire simulată (`$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`), servită pe `CMS_DEV_PORT`+7 cu un mediu gol, ca pe Hostinger: fără `.env` 503 la orice; fiecare refuz al `configureaza.php` și configurarea pe o bază goală; poarta (401, 429, limita pe /64 la IPv6, formularul, câmpurile trimise ca liste, sonda); `stare.php` (ieșirea lui în raport); o copie „încărcată” pe baza de dezvoltare și una expirată; `SITE_COPIE_VERIFICARE=0`. Își face și își șterge bazele `cms_verif_gol`, `cms_verif_plina` și utilizatorul `cms_verif_test`. Cu un PHP sub minim instalat (`php7.0` … `php8.2`) verifică și mesajul pentru un PHP prea vechi; cu `python3`, `configureaza.php` într-un terminal adevărat (`lib/terminal.py`: Ctrl-C și SIGTERM în mijlocul unei parole lasă terminalul cu ecou). Poarta G-verif îl rulează și cu PHP-ul minim. Raport: `$CMS_DEV_DIR/test-verificare-raport.txt`. |
 | `porti.sh` | Porțile unui pachet de lucru din planul Etapei 1 (tabelul WP → porți e în script; `--lista` îl arată), în ordine, oprindu-se la prima care pică; o poartă a cărei unealtă vine într-un WP următor pică, nu se sare. Raportul: `$CMS_DEV_DIR/porti-<WP>.txt`; rezumatul lui intră în mesajul ultimului commit al WP-ului. |
 | `de-portat.php` | Commit-urile noi de pe ramurile celor patru coduri vechi (`CMS_DEV_REPO_BS`, `_BV`, `_VT`, `_GR`), de după „ultimul commit revizuit” din [de-portat.md](de-portat.md). Doar citește (fără `git fetch`); iese cu 2 dacă sunt commit-uri noi. `--revizuit=<site>` scrie doar commit-ul revizuit (îl folosește `compara-cu-baza.sh`). |
 | `test-seo.php` | Testele SEO ([SEO.md](SEO.md)): excluderile (fiecare adresă mereu deschisă și fiecare rută de plată, cont, admin, API), harta demo și pachetul Bioscem, robots.txt, JSON-LD și sitemap-ul pe fiecare pachet (fiecare adresă din sitemap cerută), gazda canonică pe un al doilea server (`CMS_DEV_PORT`+2, `APP_URL=https://exemplu-demo.test`, inventat: fiecare POST și fiecare cale exclusă pe www răspunde exact ca pe gazda corectă), mentenanța, oprirea de urgență (`CMS_DEV_PORT`+3, `SEO_REDIRECTURI=0`). Rulează și ca secțiunea G din `test-pluginuri.php`. Raport: `$CMS_DEV_DIR/test-seo-raport.txt`. |
@@ -176,7 +181,7 @@ Variabile pe care le poți schimba din mediu:
 | `CMS_DEV_MYSQL8_DIR`, `CMS_DEV_SOCK_MYSQL8` | `/tmp/claude-0/my8`, `…/run/sock` | al doilea server, MySQL 8, pentru `test-migrari.php` (`tools/dev/mysql8.sh`) |
 | `CMS_DEV_DB_USER` / `CMS_DEV_DB_PAROLA` | `root` / gol | utilizatorul bazei |
 | `CMS_DEV_PORT` | `8701` | portul serverului; uneltele folosesc și porturile următoare: +1 copia de bază, +2/+3 `test-seo.php`, +4 codul curent în `compara-cu-baza.sh` față de un repo vechi, +7 copia din `test-verificare.php` |
-| `CMS_DEV_PHP` | `php` | comanda PHP a tuturor uneltelor (de exemplu `php8.0`, PHP-ul minim) |
+| `CMS_DEV_PHP` | `php` | comanda PHP a tuturor uneltelor (de exemplu `php8.3`, PHP-ul minim) |
 | `CMS_DEV_REPO_BS`, `CMS_DEV_REPO_BV`, `CMS_DEV_REPO_VT`, `CMS_DEV_REPO_GR` | `../Nou-site-bioscem`, `../Mutare-Site-Biovitality`, `../vertij-tinitus-refacut`, `../site-nou-grafoanaytis.ro` | clonele codurilor vechi (doar citite), pentru `compara-cu-baza.sh` și `de-portat.php` |
 | `CMS_DEV_DIR` | `storage/logs/dev` | jurnale, emailuri capturate, parola, raportul testului |
 | `SITE_DATE_DOSAR` | `tools/dev/site-demo` | datele site-ului (harta adreselor vechi, regulile SEO); vezi [SEO.md](SEO.md) |
@@ -384,7 +389,9 @@ separate.
    comenzii (text) în locul totalului (număr), iar PHP-ul cu tipuri stricte
    oprea pagina (`TypeError`). Găsit de testul pluginurilor, care cere fiecare
    rută. **Reparat** (al doilea parametru nu se mai trimite); pagina de
-   mulțumire reală, `/checkout/succes/<număr>`, nu era afectată.
+   mulțumire reală, `/checkout/succes/<număr>`, nu era afectată. Bioscem live are
+   încă eroarea: la trecere e o diferență vizibilă, care se declară în comparația
+   paginilor de rezervă din WP-14 și intră în `site-uri/bioscem/ce-se-schimba.md`.
 
 8. **Securitate formulare: rândurile din aceeași secundă nu au o ordine fixă.** Lista
    unește jurnalul de înregistrare și pe cel de checkout și le ordonează după

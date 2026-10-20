@@ -432,7 +432,7 @@ final class Licenta
 
     /**
      * Tabloul are cheile 0, 1, 2… în ordine? (Ca `array_is_list`, care există
-     * abia din PHP 8.1; site-urile pot rula încă pe 8.0.)
+     * abia din PHP 8.1; scris când PHP-ul minim era 8.0, acum 8.3.)
      */
     private static function esteLista(array $date): bool
     {

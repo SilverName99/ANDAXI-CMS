@@ -7,7 +7,7 @@ declare(strict_types=1);
  * configurarea, starea și adresa vizitatorului.
  *
  *   tools/dev/php.sh tools/dev/test-verificare.php
- *   CMS_DEV_PHP=php8.0 tools/dev/php.sh tools/dev/test-verificare.php   # cu PHP-ul minim
+ *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-verificare.php   # cu PHP-ul minim
  *
  * A. Fără server: `IpClient` (X-Forwarded-For inventat de vizitator ignorat, lanțul de
  *    proxy-uri de încredere, porturi, IPv6, rețele, clase), credențialele HTTP Basic din
@@ -183,12 +183,14 @@ $env = Verificare::citesteEnv("# comentariu\nA=\"x\"\n  B = y  \n#C=1\nD=a=b\nE=
 $verifica('.env citit ca Env::load (ghilimele și spații tăiate, comentarii sărite, „=” în valoare, „$” neatins)',
     $env === ['A' => 'x', 'B' => 'y', 'D' => 'a=b', 'E' => '$2y$10$abc/.', 'F' => ''], json_encode($env) ?: '');
 
-// Un PHP prea vechi pe server (de exemplu `php` implicit al contului): cele două scripturi trebuie să
-// spună asta singure, nu să cadă cu o eroare de sintaxă. Doar dacă e instalat un PHP 7 (opțional).
-$phpVechi = array_values(array_filter(['php7.0', 'php7.4'], static fn (string $b): bool
-    => trim((string) shell_exec('command -v ' . $b . ' 2>/dev/null')) !== ''));
+// Un PHP prea vechi pe server (de exemplu `php` implicit al contului, sau un 8.2 când minimul e 8.3):
+// cele două scripturi trebuie să spună asta singure, nu să cadă cu o eroare de sintaxă. Cu fiecare
+// PHP instalat sub php_min (opțional: un PHP 7 arată și că scripturile n-au sintaxă mai nouă de 7.0).
+$phpMinim = preg_match("/'php_min'\\s*=>\\s*'([0-9.]+)'/", (string) file_get_contents($radacina . '/config/app.php'), $m) === 1 ? $m[1] : '';
+$phpVechi = array_values(array_filter(['php7.0', 'php7.4', 'php8.0', 'php8.1', 'php8.2'], static fn (string $b): bool
+    => version_compare(substr($b, 3), $phpMinim, '<') && trim((string) shell_exec('command -v ' . $b . ' 2>/dev/null')) !== ''));
 if ($phpVechi === []) {
-    $scrie('  INFO  niciun PHP 7 instalat (apt-get install php7.0-cli): mesajul pentru un PHP prea vechi nu s-a verificat acum');
+    $scrie('  INFO  niciun PHP sub minimul ' . $phpMinim . ' instalat (apt-get install php7.0-cli): mesajul pentru un PHP prea vechi nu s-a verificat acum');
 }
 foreach ($phpVechi as $binar) {
     foreach (['configureaza.php', 'stare.php'] as $script) {

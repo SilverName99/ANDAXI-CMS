@@ -107,7 +107,7 @@ $opreste = static function (int $cod, string $mesaj, string $comanda) use ($term
     $termina(['comanda' => $comanda, 'cod' => $cod, 'mesaj' => $mesaj, 'migrari' => [], 'avertismente' => []]);
 };
 
-$phpMin = (string) ($config['php_min'] ?? '8.0');
+$phpMin = (string) ($config['php_min'] ?? '8.3');
 if (version_compare(PHP_VERSION, $phpMin, '<')) {
     $opreste(Eroare::CONFIGURARE, 'PHP ' . PHP_VERSION . ' e mai vechi decât minimul codului (' . $phpMin . ', config/app.php php_min).', $comanda);
 }

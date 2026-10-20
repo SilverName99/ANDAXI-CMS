@@ -11,7 +11,7 @@ use Closure;
  * nu, ce are voie, bugetul, cursorul lui peBucati) și ce strânge Schema (operațiile
  * planului, avertismentele, câte operații au schimbat ceva).
  *
- * Fără `readonly` (PHP 8.1): codul rulează și pe PHP-ul minim, 8.0.
+ * Fără `readonly` (PHP 8.1): scris când PHP-ul minim era 8.0 (acum 8.3, decizia OD-48).
  */
 final class Executie
 {

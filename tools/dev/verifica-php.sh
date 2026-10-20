@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Verifică sintaxa fiecărui fișier PHP care ajunge pe un site cu PHP-ul minim
-# suportat (`php_min` din config/app.php; decizia OD-48 e încă deschisă, până
-# atunci 8.0): o construcție mai nouă (enum, readonly, `new X()->m()`, funcții
-# apărute după) pică aici înainte să pice pe server.
+# suportat (`php_min` din config/app.php: 8.3, decizia OD-48): o construcție mai
+# nouă (din 8.4: proprietăți cu get/set, vizibilitate asimetrică, `new X()->m()`
+# fără paranteze, funcții apărute după) pică aici înainte să pice pe server.
 #
-#   tools/dev/verifica-php.sh                      # cu php<php_min> (implicit php8.0)
-#   CMS_DEV_PHP=php8.3 tools/dev/verifica-php.sh   # cu altă versiune
+#   tools/dev/verifica-php.sh                      # cu php<php_min> (php8.3)
+#   CMS_DEV_PHP=php8.4 tools/dev/verifica-php.sh   # cu altă versiune
 #
 # Dosarele: src/ views/ config/ scripts/ public/ bootstrap.php, database/ (migrările, pe care
 # le rulează scripts/migreaza.php pe servere) și, când există, tools/verificare/ și tools/sonda/
@@ -21,7 +21,7 @@ RADACINA="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MINIM="$(sed -n "s/^[[:space:]]*'php_min' => '\([0-9][0-9.]*\)'.*/\1/p" "$RADACINA/config/app.php" | head -1)"
 [ -n "$MINIM" ] || { echo "EROARE: nu găsesc 'php_min' în config/app.php" >&2; exit 1; }
 # Implicit PHP-ul minim, chiar dacă uneltele au pus CMS_DEV_PHP=php (comun.sh); altă
-# versiune doar cerută anume, de exemplu CMS_DEV_PHP=php8.3.
+# versiune doar cerută anume, de exemplu CMS_DEV_PHP=php8.4.
 PHP_LINT="${CMS_DEV_PHP:-php}"
 [ "$PHP_LINT" = "php" ] && PHP_LINT="php$MINIM"
 command -v "$PHP_LINT" >/dev/null 2>&1 \

@@ -10,8 +10,8 @@ site doar din CRM, după contract.
 
 Punctul de plecare este codul site-ului Bioscem.
 
-Cerință: PHP 8.0 sau mai nou (`php_min` în `config/app.php`; versiunea minimă finală e
-decizia OD-48, până atunci 8.0), MariaDB sau MySQL.
+Cerință: PHP 8.3 sau mai nou (`php_min` în `config/app.php`, decizia OD-48: versiunea celor
+patru site-uri live și a site-ului de verificare), MariaDB sau MySQL.
 
 Pentru programatori: [docs/DEZVOLTARE.md](docs/DEZVOLTARE.md),
 [docs/PLUGINURI.md](docs/PLUGINURI.md) (pluginurile, licența semnată, garda rutelor),

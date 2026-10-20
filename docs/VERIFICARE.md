@@ -22,8 +22,8 @@ banner) vin în WP-08, încărcarea anonimizată în WP-09. Până atunci site-u
 ### 1. O dată, în hPanel (aproximativ 10 minute)
 
 1. Websites → site-ul nou → **SSL**: instalează certificatul gratuit.
-2. Advanced → **PHP Configuration**: aceeași versiune ca la Bioscem (versiunea minimă finală e decizia
-   OD-48; până atunci cea a Bioscem). Notează-o.
+2. Advanced → **PHP Configuration**: **PHP 8.3**, aceeași versiune ca la cele patru site-uri live
+   (decizia OD-48: `php_min` = 8.3).
 3. Advanced → **SSH Access**: pornește accesul și notează rândul afișat (`ssh -p 65002 u…@…`).
 4. **Databases**: creează o bază de date nouă, goală, cu utilizatorul ei. Notează numele bazei și al
    utilizatorului (de forma `u123456789_verif`). Parola o păstrezi doar tu: o scrii direct pe server, la
@@ -35,7 +35,13 @@ banner) vin în WP-08, încărcarea anonimizată în WP-09. Până atunci site-u
 
 Site-ul trebuie să fie un **site separat** (Websites → Add website), cu dosarul lui
 `~/domains/<domeniul-verificare>/public_html`. Un subdomeniu pus de hPanel în dosarul altui site
-(`~/domains/<alt-site>/public_html/<sub>`) nu e acceptat de `configureaza.php`.
+(`~/domains/<alt-site>/public_html/<sub>`) nu e acceptat de `configureaza.php`. Poate rămâne pe
+domeniul temporar dat de Hostinger (`….hostingersite.com`), cum e acum.
+
+**Contul SSH e același cu al site-urilor live.** Comenzile de mai jos se dau doar din dosarul
+site-ului de verificare (`cd ~/domains/<domeniul-verificare>/public_html`), niciodată din dosarul
+unui site live; `configureaza.php` refuză oricum alt dosar decât `public_html`-ul site-ului lui, iar
+o bază de date cu tabele care nu e o copie de verificare.
 
 Ne trimiți: domeniul, versiunea PHP, rândul SSH și versiunea PHP a fiecăruia dintre cele 4 site-uri live
 (hPanel → PHP Configuration). **Fără parole.**
@@ -44,12 +50,12 @@ Ne trimiți: domeniul, versiunea PHP, rândul SSH și versiunea PHP a fiecăruia
 
 Websites → site-ul nou → Advanced → **GIT** → Create a New Repository:
 
-- **Repository**, după decizia OD-49 (încă deschisă):
-  - dacă `ANDAXI-CMS` e încă **public**: `https://github.com/SilverName99/ANDAXI-CMS.git` (nu trebuie
-    nicio cheie);
-  - dacă l-ai făcut **privat**: `git@github.com:SilverName99/ANDAXI-CMS.git`. hPanel îți arată atunci o
-    cheie SSH a site-ului (Generate SSH key / SSH key). O adaugi în GitHub → `ANDAXI-CMS` → Settings →
-    Deploy keys → Add deploy key, **fără** „Allow write access” (doar citire).
+- **Repository**: `https://github.com/SilverName99/ANDAXI-CMS.git` (nu trebuie nicio cheie). Decizia
+  OD-49: repo-urile rămân **publice** deocamdată, deci în ele nu intră nicio dată personală a
+  clienților și nimic scos din datele site-urilor live.
+  - Când îl faci **privat** (după ce e gata noul backend): `git@github.com:SilverName99/ANDAXI-CMS.git`.
+    hPanel îți arată atunci o cheie SSH a site-ului (Generate SSH key / SSH key). O adaugi în GitHub →
+    `ANDAXI-CMS` → Settings → Deploy keys → Add deploy key, **fără** „Allow write access” (doar citire).
 - **Branch**: `claude/etapa1-cod-comun`
 - **Directory**: gol (adică `public_html`)
 - **Create**, apoi **Deploy**.
@@ -68,7 +74,8 @@ $PHP tools/verificare/stare.php
 #   înainte de configurare, ultimul rând: „NECONFIGURAT: site-ul e închis publicului (503) …”
 $PHP tools/verificare/configureaza.php
 #   întreabă: numele bazei, utilizatorul bazei, parola bazei (nu se vede când scrii),
-#   emailul tău, căsuța de trimitere și parola ei (Enter = fără căsuță),
+#   emailul tău (emailurile de test merg doar acolo; adresa stă doar în .env-ul de pe server,
+#   niciodată în git), căsuța de trimitere și parola ei (Enter = fără căsuță),
 #   parola porții (de două ori, cel puțin 12 caractere, alta decât parola bazei);
 #   Ctrl-C oprește oricând, fără să scrie nimic
 $PHP tools/verificare/stare.php
@@ -235,7 +242,7 @@ simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public
 429, formularul, cookie-ul, sonda, modul formular), `stare.php` în ambele stări (ieșirea lui întreagă
 intră în raport), o copie „încărcată” pe baza de dezvoltare (paginile 200, cu noindex și no-store) și una
 expirată, apoi `SITE_COPIE_VERIFICARE=0` (poarta nu face nimic). Bazele `cms_verif_gol`, `cms_verif_plina`
-și utilizatorul `cms_verif_test` se fac și se șterg acolo. Cu un PHP 7 instalat (`php7.0`, `php7.4`)
+și utilizatorul `cms_verif_test` se fac și se șterg acolo. Cu un PHP sub minim instalat (`php7.0` … `php8.2`)
 verifică și mesajul pentru un PHP prea vechi. Cu `python3` rulează `configureaza.php` și într-un
 terminal adevărat (`tools/dev/lib/terminal.py`, un pty): Ctrl-C în mijlocul unei parole, cu și fără
 pcntl, și SIGTERM lasă terminalul cu ecou; parola nu apare pe ecran, iar Backspace o corectează. Limita

@@ -29,7 +29,7 @@ CMS_DEV_DIR="${CMS_DEV_DIR:-$RADACINA/storage/logs/dev}"
 CMS_DEV_ADMIN_EMAIL="${CMS_DEV_ADMIN_EMAIL:-admin@exemplu.ro}"
 # Comanda PHP a tuturor uneltelor, a serverului de dezvoltare și a copiei de bază.
 # Implicit `php`; pentru versiunea minimă suportată (config/app.php → php_min):
-#   CMS_DEV_PHP=php8.0 tools/dev/smoke.sh --toate-pachetele
+#   CMS_DEV_PHP=php8.3 tools/dev/smoke.sh --toate-pachetele
 CMS_DEV_PHP="${CMS_DEV_PHP:-php}"
 export CMS_DEV_PHP
 # Clonele codurilor vechi (doar citite: compara-cu-baza.sh --baza-repo, de-portat.php).

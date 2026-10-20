@@ -47,7 +47,7 @@ use App\Support\Settings;
 $config = require __DIR__ . '/../config/app.php';
 
 // PHP-ul minim pe care trebuie să meargă codul (config/app.php → php_min).
-$phpMin = (string) ($config['php_min'] ?? '8.0');
+$phpMin = (string) ($config['php_min'] ?? '8.3');
 $phpPreaVechi = version_compare(PHP_VERSION, $phpMin, '<');
 $arataPhp = static function () use ($phpMin, $phpPreaVechi): void {
     echo 'versiune PHP (CLI)  : ' . PHP_VERSION . ', minim ' . $phpMin

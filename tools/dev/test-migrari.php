@@ -8,7 +8,7 @@ declare(strict_types=1);
  * același fișier.
  *
  *   tools/dev/php.sh tools/dev/test-migrari.php --runner
- *   CMS_DEV_PHP=php8.0 tools/dev/php.sh tools/dev/test-migrari.php --runner   # cu PHP-ul minim
+ *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-migrari.php --runner   # cu PHP-ul minim
  *   … --doar-mariadb                                                         # fără MySQL 8 (parțial)
  *
  * U. Fără bază: Server (versiuni, ce știe fiecare, lanțul de clauze), Amprenta (aceleași rânduri

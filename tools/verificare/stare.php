@@ -114,7 +114,7 @@ echo 'Starea site-ului de verificare — ' . date('Y-m-d H:i') . "\n";
 // ── PHP-ul liniei de comandă ──
 
 $textConfig = (string) @file_get_contents($radacina . '/config/app.php');
-$phpMin = preg_match("/'php_min'\\s*=>\\s*'([0-9.]+)'/", $textConfig, $m) === 1 ? $m[1] : '8.0';
+$phpMin = preg_match("/'php_min'\\s*=>\\s*'([0-9.]+)'/", $textConfig, $m) === 1 ? $m[1] : '8.3';
 stare_titlu('PHP (linia de comandă)');
 stare_info('PHP CLI: ' . PHP_VERSION . ' (' . PHP_BINARY . ')');
 $phpBun = version_compare(PHP_VERSION, $phpMin, '>=');

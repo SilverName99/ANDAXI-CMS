@@ -10,10 +10,10 @@ return [
     'debug' => filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL),
     'url' => Env::get('APP_URL', ''),
     'timezone' => Env::get('APP_TIMEZONE', 'Europe/Bucharest'),
-    // Cea mai veche versiune de PHP pe care trebuie să meargă codul (decizia OD-48 e încă
-    // deschisă; până atunci 8.0, cea mai prudentă). Testele de dezvoltare rulează și cu ea
-    // (tools/dev/verifica-php.sh, CMS_DEV_PHP=php8.0); scripts/diagnostic.php iese cu 1 sub ea.
-    'php_min' => '8.0',
+    // Cea mai veche versiune de PHP pe care trebuie să meargă codul: 8.3, versiunea celor patru
+    // site-uri live și a site-ului de verificare (decizia OD-48). Testele de dezvoltare rulează
+    // și cu ea (tools/dev/verifica-php.sh, CMS_DEV_PHP=php8.3); scripts/diagnostic.php iese cu 1 sub ea.
+    'php_min' => '8.3',
     'db' => [
         'host' => Env::get('DB_HOST', '127.0.0.1'),
         'port' => (int) Env::get('DB_PORT', 3306),

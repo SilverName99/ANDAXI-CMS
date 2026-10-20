@@ -10,7 +10,7 @@
 #   tools/dev/smoke.sh --pachet=grafoanaytis # sau cu licența de dezvoltare a unui site existent (bioscem, biovitality,
 #                                            # vertij, grafoanaytis: config/plugins.php → licente_dev)
 #   tools/dev/smoke.sh --toate-pachetele     # pe rând: toate, magazin, catalog, prezentare, asociatie
-#   CMS_DEV_PHP=php8.0 tools/dev/smoke.sh …  # cu PHP-ul minim (config/app.php → php_min)
+#   CMS_DEV_PHP=php8.3 tools/dev/smoke.sh …  # cu PHP-ul minim (config/app.php → php_min)
 #
 # Cu un pachet, fiecare verificare știe al cui plugin e pagina: dacă pluginul nu
 # e în pachet, așteaptă 404 pe site și „Modulul nu este inclus în abonament” (403)

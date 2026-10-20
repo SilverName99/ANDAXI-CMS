@@ -54,7 +54,7 @@ function verificare_spune($text)
 function verificare_php_min($radacina)
 {
     $text = (string) @file_get_contents($radacina . '/config/app.php');
-    return preg_match("/'php_min'\\s*=>\\s*'([0-9.]+)'/", $text, $m) === 1 ? $m[1] : '8.0';
+    return preg_match("/'php_min'\\s*=>\\s*'([0-9.]+)'/", $text, $m) === 1 ? $m[1] : '8.3';
 }
 
 $phpMin = verificare_php_min($radacina);

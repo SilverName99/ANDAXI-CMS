@@ -21,7 +21,7 @@ final class Server
     public const MARIADB = 'mariadb';
     public const MYSQL = 'mysql';
 
-    // Fără `readonly` (PHP 8.1): codul rulează și pe PHP-ul minim, 8.0.
+    // Fără `readonly` (PHP 8.1): scris când PHP-ul minim era 8.0 (acum 8.3, decizia OD-48).
     private function __construct(
         private string $familie,
         private string $versiune,

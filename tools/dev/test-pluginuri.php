@@ -360,7 +360,7 @@ $canonic = Licenta::jsonCanonic(json_decode((string) json_encode(['z' => "x\u{20
 $asteptat = '{"redirectionari":{"blog":"/pagină-ăîșț/€"},"z":"x' . "\u{2028}" . 'y' . "\u{2029}" . '"}';
 $dinNode = '';
 if (trim((string) shell_exec('command -v node 2>/dev/null')) !== '') {
-    // Scriptul stă într-un fișier: pe PHP 8.0 (php_min), escapeshellarg scoate literele cu diacritice.
+    // Scriptul stă într-un fișier: pe PHP 8.0 (minimul de atunci), escapeshellarg scoate literele cu diacritice.
     file_put_contents($tmp . '/canonic.cjs', 'const o={redirectionari:{blog:"/pagină-ăîșț/€"},z:"x\u2028y\u2029"};'
         . 'process.stdout.write(JSON.stringify(o))');
     $dinNode = (string) shell_exec('node ' . escapeshellarg($tmp . '/canonic.cjs'));

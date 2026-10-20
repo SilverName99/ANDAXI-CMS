@@ -6,7 +6,7 @@
 #   tools/dev/instaleaza.sh            # bază nouă + date demo
 #   tools/dev/instaleaza.sh --fara-demo  # doar install + seed
 #   tools/dev/instaleaza.sh --php-min    # doar instalează PHP-ul minim (php_min din config/app.php),
-#                                        # ca testele să ruleze și cu el (CMS_DEV_PHP=php8.0 …); nu atinge baza
+#                                        # ca testele să ruleze și cu el (CMS_DEV_PHP=php8.3 …); nu atinge baza
 #
 # ATENȚIE: șterge baza $CMS_DEV_DB (doar dacă numele începe cu cms_).
 
