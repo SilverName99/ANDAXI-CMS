@@ -30,10 +30,13 @@ use Throwable;
  *     „partiala” și codul 13 (rularea următoare continuă);
  *  7. verificarea față de asteptat.json (un obiect lipsă → codul 14), apoi starea (ultima_ord,
  *     amprenta codului, serverul, ultima rulare cu codul ei final; `pasi_site` cât pașii site-ului,
- *     de exemplu înghețarea setărilor, n-au terminat: scrisă înaintea primei migrări, ștearsă la final).
+ *     de exemplu înghețarea setărilor, n-au terminat: {site, pasi}, scrisă înaintea primei migrări,
+ *     ștearsă abia când fiecare pas din ea e aplicat sau detectat).
  *
- * Pachetul site-ului (SITE_DATE_DOSAR) cu înghețarea unui site cere rularea cu acel site (--site sau
- * SITE_SLUG), altfel codul 2: fără el înghețarea n-ar rula, iar baza ar ajunge la zi fără ea.
+ * Pachetul site-ului (SITE_DATE_DOSAR) și site-ul rulării se potrivesc, altfel codul 2, înainte de orice
+ * scriere: un pachet cu înghețare cere rularea cu acel site (--site sau SITE_SLUG), iar cu --site dosarul
+ * pachetului trebuie să existe, să aibă înghețarea pe care o are codul în site-uri/<site>/ și fiecare pas
+ * pe care baza îl așteaptă (`pasi_site`). Altfel înghețarea n-ar rula, iar baza ar ajunge la zi fără ea.
  *
  * Starea (_platforma_stare) o scrie doar un runner care a început să aplice: ține lacătul, iar
  * codul lui se potrivește cu baza (pasul 3) și a trecut de simulare. Unul refuzat (lacătul ținut
@@ -46,9 +49,11 @@ final class Runner
     public const TABEL_STARE = '_platforma_stare';
     /**
      * Cheia din _platforma_stare care spune că pașii site-ului (înghețarea setărilor) n-au terminat:
-     * scrisă de un --aplica cu --site înaintea primei migrări, ștearsă când toți pașii acelui site sunt
-     * gata. Cât există, garda spune `in_urma`, deci pașii de activare ai pluginurilor așteaptă (altfel
-     * pasul ERP-ului ar scrie `erp_trimite_din` înaintea înghețării, care scrie doar o cheie lipsă).
+     * `{"site": "<site>", "pasi": [id-urile pașilor așteptați]}`, scrisă de un --aplica cu --site înaintea
+     * primei migrări și ștearsă abia când fiecare pas din listă e aplicat sau detectat (nu doar când rularea
+     * de acum nu mai vede niciunul: un pachet lipsă sau mutat nu are voie s-o șteargă). Cât există, garda
+     * spune `in_urma`, deci pașii de activare ai pluginurilor așteaptă (altfel pasul ERP-ului ar scrie
+     * `erp_trimite_din` înaintea înghețării, care scrie doar o cheie lipsă).
      */
     public const CHEIE_PASI_SITE = 'pasi_site';
     private const LACAT = "CONCAT('platforma_migrari:', MD5(DATABASE()))";
@@ -65,8 +70,10 @@ final class Runner
     private array $optiuni;
 
     /**
-     * Opțiunile: permite_blocante, permite_contract, permite_provizoriu (bool); buget (secunde); pana_la (id);
-     * site (slug); dosar_site (pachetul site-ului: migrari.json, setari-inghetate.json); opreste_dupa (test: oprire ca un proces
+     * Opțiunile: permite_blocante, permite_contract, permite_provizoriu (bool); copie_verificare (bool: baza e a
+     * copiei de verificare, SITE_COPIE_VERIFICARE=1; doar acolo merge permite_provizoriu); buget (secunde); pana_la (id);
+     * site (slug); dosar_site (pachetul site-ului: migrari.json, setari-inghetate.json); dosar_pachete (pachetele din
+     * cod, site-uri/: o înghețare de acolo trebuie să fie și în dosar_site); opreste_dupa (test: oprire ca un proces
      * omorât după atâtea operații); opreste_in (test: „punct:k”, oprire la a k-a trecere prin
      * punctul acela din Schema, de exemplu în tranzacția unei bucăți); pauze (secundele
      * reîncercărilor); pauza_bucati_ms; jurnal (fișierul cu câte un rând pe operație); cod_versiune.
@@ -84,10 +91,12 @@ final class Runner
             'permite_blocante' => false,
             'permite_contract' => false,
             'permite_provizoriu' => false,
+            'copie_verificare' => false,
             'buget' => 300.0,
             'pana_la' => null,
             'site' => null,
             'dosar_site' => '',
+            'dosar_pachete' => '',
             'opreste_dupa' => null,
             'opreste_in' => null,
             'pauze' => [2.0, 4.0, 8.0, 16.0, 30.0],
@@ -106,9 +115,10 @@ final class Runner
         $this->verificaPachetul();
         $randuri = $this->randuri();
         $this->verificaSchimbari($randuri);
+        $this->verificaMarcajul($randuri);
         $deAplicat = $this->deAplicat($randuri);
         $raport = $this->raport('plan');
-        $ramase = $this->tabeleRamase();
+        $ramase = array_merge($this->tabeleRamase(), $this->avertismentMarcaj());
         if ($deAplicat === []) {
             return $raport + ['cod' => 0, 'mesaj' => 'Nimic de făcut: baza e la zi cu migrările din cod.', 'migrari' => [], 'avertismente' => $ramase];
         }
@@ -124,7 +134,9 @@ final class Runner
     /** --aplica: aplică migrările care lipsesc, apoi verifică baza. Întoarce mereu un raport. */
     public function aplica(): array
     {
-        $raport = $this->raport('aplica');
+        // Raportul citește și pachetul site-ului (care poate fi greșit: codul 2), deci se face în try; până
+        // atunci un refuz are doar comanda și site-ul (install.php îl scrie pe stderr, ca pe orice refuz).
+        $raport = ['comanda' => 'aplica', 'site' => $this->optiuni['site']];
         $aplicate = [];
         $avertismente = [];
         $areLacat = false;
@@ -132,6 +144,7 @@ final class Runner
         // (vezi capul clasei): un runner refuzat nu-i schimbă ultima_ord, amprenta sau ultima rulare.
         $scrieStarea = false;
         try {
+            $raport = $this->raport('aplica');
             $this->paznic();
             $this->verificaPachetul();
             $areLacat = (int) $this->db->query('SELECT GET_LOCK(' . self::LACAT . ', 0)')->fetchColumn() === 1;
@@ -140,8 +153,9 @@ final class Runner
             }
             $randuri = $this->randuri();
             $this->verificaSchimbari($randuri);
+            $this->verificaMarcajul($randuri);
             $deAplicat = $this->deAplicat($randuri);
-            $avertismente = $this->tabeleRamase();
+            $avertismente = array_merge($this->tabeleRamase(), $this->avertismentMarcaj());
             if ($deAplicat !== []) {
                 [$simulate, $deLaSimulare] = $this->simuleaza($deAplicat, $randuri);
                 $avertismente = array_merge($avertismente, $deLaSimulare);
@@ -163,9 +177,7 @@ final class Runner
             $this->creeazaTabeleleDeUrmarire();
             // Pașii site-ului vin după toate migrările: până termină, garda spune `in_urma` (chiar dacă rularea
             // e oprită de buget sau omorâtă între ultima migrare și înghețare), deci nimic nu scrie setări înaintea ei.
-            if ($this->pasiSiteNeterminati($randuri) !== []) {
-                $this->scrieCheiaStarii(self::CHEIE_PASI_SITE, (string) $this->optiuni['site']);
-            }
+            $this->actualizeazaMarcajul($randuri, false);
             if ($deAplicat !== []) {
                 $this->scrieRandJurnal('--aplica: ' . count($deAplicat) . ' de aplicat, ' . $this->server->nume()
                     . ', sql_mode ' . ($raport['sql_mode'] !== '' ? $raport['sql_mode'] : '(gol)'));
@@ -342,7 +354,8 @@ final class Runner
         );
         $executie->cursor = is_array($cursor) ? $cursor : [];
         $executie->punctTest = $this->punctTest();
-        $executie->permiteProvizoriu = (bool) $this->optiuni['permite_provizoriu'];
+        $executie->permiteProvizoriu = $this->provizoriuPermis();
+        $executie->provizoriuCerut = (bool) $this->optiuni['permite_provizoriu'];
         $schema = new Schema($this->db, $this->server, $executie);
         $start = microtime(true);
         $durata = static fn (): int => (int) round((microtime(true) - $start) * 1000);
@@ -481,7 +494,8 @@ final class Runner
                 },
             );
             $executie->model = $model;
-            $executie->permiteProvizoriu = (bool) $this->optiuni['permite_provizoriu'];
+            $executie->permiteProvizoriu = $this->provizoriuPermis();
+            $executie->provizoriuCerut = (bool) $this->optiuni['permite_provizoriu'];
             if ($rand !== null && $rand['sha256'] === $m['sha256']) {
                 $executie->cursor = json_decode((string) ($rand['cursor_json'] ?? ''), true) ?: [];
             }
@@ -527,17 +541,79 @@ final class Runner
     }
 
     /**
-     * Codul 2: dosarul site-ului (SITE_DATE_DOSAR) are înghețarea setărilor unui site, dar rularea e fără
-     * site (fără --site și fără SITE_SLUG): înghețarea n-ar rula, iar baza ar ajunge `la_zi` fără ea.
+     * Codul 2, înainte de orice scriere: pachetul site-ului (SITE_DATE_DOSAR) nu se potrivește cu rularea, deci
+     * înghețarea n-ar rula, iar baza ar ajunge `la_zi` fără ea:
+     *  - pachetul are înghețarea unui site, dar rularea e fără site (fără --site și fără SITE_SLUG);
+     *  - rularea e cu un site, dar dosarul pachetului nu există (o cale greșită, un pachet mutat);
+     *  - codul are înghețarea acelui site (`site-uri/<site>/setari-inghetate.json`), dar pachetul din
+     *    SITE_DATE_DOSAR n-o are (alt dosar, un pachet incomplet).
      * (Un pachet al altui site decât --site îl oprește Registru::pasiSite, tot cu 2.)
      */
     private function verificaPachetul(): void
     {
-        $sitePachet = $this->registru->sitePachet((string) $this->optiuni['dosar_site']);
-        if ($sitePachet !== null && $this->optiuni['site'] === null) {
+        $dosar = (string) $this->optiuni['dosar_site'];
+        $site = $this->optiuni['site'];
+        $sitePachet = $this->registru->sitePachet($dosar);
+        if ($sitePachet !== null && $site === null) {
             throw new Eroare('dosarul site-ului (SITE_DATE_DOSAR) are înghețarea setărilor site-ului „' . $sitePachet . '”, dar rularea e fără '
                 . 'site: rulează cu --site=' . $sitePachet . ' (sau SITE_SLUG=' . $sitePachet . ' în .env), altfel înghețarea n-ar rula', Eroare::CONFIGURARE);
         }
+        if ($site === null) {
+            return;
+        }
+        if ($dosar === '' || !is_dir($dosar)) {
+            throw new Eroare('--site=' . $site . ', dar dosarul site-ului (SITE_DATE_DOSAR) nu există: ' . ($dosar !== '' ? $dosar : '(gol)')
+                . '; pachetul site-ului (setari-inghetate.json, migrari.json) trebuie să fie acolo, altfel pașii lui n-ar rula', Eroare::CONFIGURARE);
+        }
+        $dinCod = rtrim((string) $this->optiuni['dosar_pachete'], '/') . '/' . $site . '/' . Inghetare::FISIER;
+        if ($sitePachet === null && $this->optiuni['dosar_pachete'] !== '' && is_file($dinCod)) {
+            throw new Eroare('--site=' . $site . ': codul are înghețarea setărilor acestui site (site-uri/' . $site . '/' . Inghetare::FISIER
+                . '), dar dosarul site-ului (SITE_DATE_DOSAR: ' . $dosar . ') n-o are; pune acolo pachetul site-ului, altfel înghețarea n-ar rula',
+                Eroare::CONFIGURARE);
+        }
+    }
+
+    /**
+     * Codul 2, înainte de orice scriere: baza așteaptă pașii unui site (`pasi_site`), iar rularea cu --site nu-i
+     * poate face: e alt site, sau pachetul (SITE_DATE_DOSAR) nu mai are un pas din listă (un dosar greșit, un
+     * fișier scos). Fără refuz, rularea ar ajunge la capăt fără ei și ar șterge cheia, deci garda ar spune
+     * `la_zi` fără înghețare. Fără --site nu se refuză nimic (cheia rămâne; avertismentul o spune).
+     */
+    private function verificaMarcajul(array $randuri): void
+    {
+        $marcaj = $this->citesteMarcajul();
+        $site = $this->optiuni['site'];
+        if ($marcaj === null || $site === null) {
+            return;
+        }
+        if ($marcaj['site'] !== $site) {
+            throw new Eroare('baza așteaptă pașii site-ului „' . $marcaj['site'] . '” (_platforma_stare.pasi_site), nu ai lui „' . $site
+                . '”; refuz să rulez pașii altui site', Eroare::CONFIGURARE);
+        }
+        $vazute = array_column($this->registru->pasiSite((string) $site, (string) $this->optiuni['dosar_site']), 'id');
+        $lipsa = [];
+        foreach ($marcaj['pasi'] ?? [] as $id) {
+            if (!in_array($randuri[$id]['rezultat'] ?? '', self::TERMINATE, true) && !in_array($id, $vazute, true)) {
+                $lipsa[] = $id;
+            }
+        }
+        // O cheie fără listă (forma de dinainte, doar numele site-ului): rularea trebuie să vadă măcar un pas al site-ului.
+        if ($marcaj['pasi'] === null && $vazute === []) {
+            $lipsa[] = 'pașii site-ului „' . $site . '”';
+        }
+        if ($lipsa !== []) {
+            throw new Eroare('baza așteaptă ' . implode(', ', $lipsa) . ' (_platforma_stare.pasi_site), dar pachetul site-ului (SITE_DATE_DOSAR: '
+                . $this->optiuni['dosar_site'] . ') ' . (count($lipsa) === 1 ? 'nu-l are' : 'nu-i are') . '; pune pachetul la loc (un pas '
+                . 'așteptat nu se scoate din pachet), altfel baza ar ajunge la zi fără înghețare', Eroare::CONFIGURARE);
+        }
+    }
+
+    /** @return list<string> avertismentul unei rulări fără --site pe o bază care așteaptă pașii unui site */
+    private function avertismentMarcaj(): array
+    {
+        $marcaj = $this->optiuni['site'] === null ? $this->citesteMarcajul() : null;
+        return $marcaj === null ? [] : ['baza așteaptă pașii site-ului „' . $marcaj['site'] . '” (' . implode(', ', $marcaj['pasi'] ?? ['?'])
+            . '): garda spune in_urma până la --aplica --site=' . $marcaj['site']];
     }
 
     /** Codul 12: o migrare aplicată s-a schimbat sau a dispărut din cod (o înghețare: din pachetul site-ului). */
@@ -711,25 +787,66 @@ final class Runner
         foreach ($valori as $cheie => $valoare) {
             $this->scrieCheiaStarii($cheie, $valoare);
         }
-        // Pașii site-ului: cheia rămâne cât mai e unul neterminat; fără site (rularea fără --site) nu se atinge.
-        if ($this->optiuni['site'] !== null) {
-            if ($this->pasiSiteNeterminati($randuri) !== []) {
-                $this->scrieCheiaStarii(self::CHEIE_PASI_SITE, (string) $this->optiuni['site']);
-            } else {
-                $this->db->prepare('DELETE FROM ' . self::TABEL_STARE . ' WHERE cheie = ?')->execute([self::CHEIE_PASI_SITE]);
-            }
+        $this->actualizeazaMarcajul($randuri, true);
+    }
+
+    /**
+     * `pasi_site`: lista pașilor așteptați = cei din cheia de până acum (același site) plus cei pe care rularea îi vede
+     * în pachet, fără cei aplicați sau detectați. Nevidă → scrisă; goală → ștearsă (doar la final, $sterge), deci
+     * cheia dispare abia când fiecare pas din ea e gata. Fără site (rularea fără --site) nu se atinge.
+     */
+    private function actualizeazaMarcajul(array $randuri, bool $sterge): void
+    {
+        $site = $this->optiuni['site'];
+        if ($site === null) {
+            return;
+        }
+        $marcaj = $this->citesteMarcajul();
+        $ids = $marcaj !== null && $marcaj['site'] === $site ? ($marcaj['pasi'] ?? []) : [];
+        foreach ($this->registru->pasiSite((string) $site, (string) $this->optiuni['dosar_site']) as $pas) {
+            $ids[] = $pas['id'];
+        }
+        $asteptate = array_values(array_unique(array_filter($ids,
+            static fn (string $id): bool => !in_array($randuri[$id]['rezultat'] ?? '', self::TERMINATE, true))));
+        if ($asteptate !== []) {
+            $this->scrieCheiaStarii(self::CHEIE_PASI_SITE, (string) json_encode(['site' => $site, 'pasi' => $asteptate],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        } elseif ($sterge && $marcaj !== null) {
+            $this->db->prepare('DELETE FROM ' . self::TABEL_STARE . ' WHERE cheie = ?')->execute([self::CHEIE_PASI_SITE]);
         }
     }
 
-    /** @return list<string> id-urile pașilor site-ului (--site) care nu sunt aplicați sau detectați pe această bază */
-    private function pasiSiteNeterminati(array $randuri): array
+    /** @return array{site: string, pasi: list<string>|null}|null `pasi_site` de pe această bază (null: nu există) */
+    private function citesteMarcajul(): ?array
     {
-        if ($this->optiuni['site'] === null) {
-            return [];
+        if (!$this->tabelExista(self::TABEL_STARE)) {
+            return null;
         }
-        $pasi = $this->registru->pasiSite((string) $this->optiuni['site'], (string) $this->optiuni['dosar_site']);
-        return array_values(array_map(static fn (array $m): string => $m['id'],
-            array_filter($pasi, static fn (array $m): bool => !in_array($randuri[$m['id']]['rezultat'] ?? '', self::TERMINATE, true))));
+        $stmt = $this->db->prepare('SELECT valoare FROM ' . self::TABEL_STARE . ' WHERE cheie = ?');
+        $stmt->execute([self::CHEIE_PASI_SITE]);
+        $valoare = $stmt->fetchColumn();
+        return $valoare === false ? null : self::marcaj((string) $valoare);
+    }
+
+    /**
+     * Valoarea lui `pasi_site`, citită: {site, pasi}. Un text care nu e în forma aceasta (forma de dinainte: doar
+     * numele site-ului) dă site-ul, cu lista neștiută (`pasi` = null).
+     *
+     * @return array{site: string, pasi: list<string>|null}
+     */
+    public static function marcaj(string $valoare): array
+    {
+        $date = json_decode($valoare, true);
+        if (is_array($date) && is_string($date['site'] ?? null) && is_array($date['pasi'] ?? null)) {
+            return ['site' => $date['site'], 'pasi' => array_values(array_map('strval', $date['pasi']))];
+        }
+        return ['site' => trim($valoare), 'pasi' => null];
+    }
+
+    /** --permite-provizoriu are efect doar pe copia de verificare (SITE_COPIE_VERIFICARE=1); altfel provizoriul rămâne codul 15. */
+    private function provizoriuPermis(): bool
+    {
+        return (bool) $this->optiuni['permite_provizoriu'] && (bool) $this->optiuni['copie_verificare'];
     }
 
     private function scrieCheiaStarii(string $cheie, string $valoare): void

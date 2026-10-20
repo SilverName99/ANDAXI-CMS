@@ -62,10 +62,18 @@ final class Schema
         return $this->executie->simulare;
     }
 
-    /** --permite-provizoriu (doar pe verificare): o înghețare sau un parametru provizoriu al site-ului se aplică totuși. */
+    /** --permite-provizoriu pe copia de verificare: o înghețare sau un parametru provizoriu al site-ului se aplică totuși. */
     public function permiteProvizoriu(): bool
     {
         return $this->executie->permiteProvizoriu;
+    }
+
+    /** Ce e de făcut cu un pas provizoriu refuzat (sfârșitul mesajului codului 15). */
+    public function cumSeRepetaProvizoriu(): string
+    {
+        return $this->executie->provizoriuCerut
+            ? '--permite-provizoriu merge doar pe copia de verificare (SITE_COPIE_VERIFICARE=1), nu aici'
+            : 'pe copia de verificare, --permite-provizoriu';
     }
 
     // ------------------------------------------------------------ inspectare
@@ -706,8 +714,8 @@ final class Schema
      * Un răspuns pe care îl știe doar site-ul, din `migrari.json` din dosarul site-ului
      * (SITE_DATE_DOSAR; în repo: site-uri/<site>/migrari.json). Lipsește → codul 15, înainte
      * să se schimbe ceva (planul o vede deja). Un parametru trecut la `_provizoriu` ({cheie: motiv},
-     * un răspuns încă neconfirmat de proprietar) e tot codul 15, afară de --permite-provizoriu
-     * (repetiția pe verificare).
+     * un răspuns încă neconfirmat de proprietar) e tot codul 15, afară de --permite-provizoriu pe copia
+     * de verificare (SITE_COPIE_VERIFICARE=1; repetiția adoptării).
      */
     public function parametruSite(string $cheie): string
     {
@@ -724,7 +732,7 @@ final class Schema
         if (array_key_exists($cheie, $provizorii) && !$this->executie->permiteProvizoriu) {
             throw new ParametruLipsa($this->executie->id . ': parametrul site-ului „' . $cheie . '” e provizoriu ('
                 . (is_string($provizorii[$cheie]) ? $provizorii[$cheie] : 'neconfirmat') . '); după confirmare se scoate din „_provizoriu” '
-                . 'în migrari.json; pe verificare, --permite-provizoriu');
+                . 'în migrari.json; ' . $this->cumSeRepetaProvizoriu());
         }
         return (string) $date[$cheie];
     }

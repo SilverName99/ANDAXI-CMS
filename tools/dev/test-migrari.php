@@ -47,8 +47,9 @@ declare(strict_types=1);
  * I. Pasul de înghețare a setărilor (WP-06; în tools/dev/migrari/test-inghetare-runner.php): pachetul fără --site
  *    sau al altui site (2), fără fișierul privat (15), planul, aplicarea (lipsa, lipsa_sau_gol, o valoare prezentă
  *    neatinsă, TRIM doar pe spații), a doua oară nimic, fișierul aplicat schimbat (12), corectura -2, provizoriu
- *    (15, apoi cu --permite-provizoriu), pasi_site în _platforma_stare până termină pașii site-ului, setare() doar
- *    în pașii site-ului.
+ *    (15, și cu --permite-provizoriu în afara copiei de verificare; pe copie aplicat), pasi_site ({site, pasi}) în
+ *    _platforma_stare până termină pașii din ea (o rulare cu --site care nu-i vede: 2, cheia neatinsă), dosarul
+ *    pachetului lipsă sau fără înghețarea din site-uri/<site>/ (2), setare() doar în pașii site-ului.
  * T. Aceeași amprentă pe MariaDB și pe MySQL 8 după aceleași migrări; o conexiune MariaDB care
  *    primește id-ul de obiect al uneia MySQL eliberate (Amprenta nu-și amintește serverul vechi).
  * S. Linia de comandă nu mai lasă fișiere de sesiune (bootstrap.php): 3 rulări ale lui

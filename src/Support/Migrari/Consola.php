@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Migrari;
 
 use App\Support\DateSite;
+use App\Support\Verificare;
 use PDO;
 use PDOException;
 
@@ -100,7 +101,8 @@ final class Consola
     }
 
     /**
-     * Opțiunile runner-ului care vin din mediu: jurnalul, dosarul site-ului (migrari.json),
+     * Opțiunile runner-ului care vin din mediu: jurnalul, dosarul site-ului (migrari.json), pachetele din
+     * cod (site-uri/), copia de verificare (SITE_COPIE_VERIFICARE=1),
      * versiunea codului și, doar pentru teste (tools/dev/test-migrari.php), oprirea „ca un proces
      * omorât” după k operații sau la a k-a trecere printr-un punct din Schema, pauzele scurte. Pe
      * site-uri variabilele de test nu există.
@@ -124,6 +126,10 @@ final class Consola
         }
         $optiuni['jurnal'] = getenv('MIGRARI_TEST_JURNAL') ?: $radacina . '/storage/logs/migrari.log';
         $optiuni['dosar_site'] = DateSite::dosar();
+        // Pachetele din cod: o înghețare din site-uri/<site>/ trebuie să fie și în dosarul site-ului (Runner, codul 2).
+        $optiuni['dosar_pachete'] = $radacina . '/site-uri';
+        // --permite-provizoriu are efect doar pe copia de verificare (docs/VERIFICARE.md).
+        $optiuni['copie_verificare'] = Verificare::activ();
         $versiune = is_file($radacina . '/VERSION') ? trim((string) file_get_contents($radacina . '/VERSION')) : '';
         $optiuni['cod_versiune'] = $versiune !== '' ? substr($versiune, 0, 40) : null;
         return $optiuni;
@@ -179,8 +185,9 @@ final class Consola
             }
             $iesire[] = 'runner activ acum: ' . ($r['runner_activ'] ? 'da' : 'nu');
             if (isset($r['stare'][Runner::CHEIE_PASI_SITE])) {
-                $iesire[] = 'pașii site-ului „' . $r['stare'][Runner::CHEIE_PASI_SITE] . '” (înghețarea setărilor) n-au terminat: garda spune in_urma '
-                    . 'până la --aplica --site=' . $r['stare'][Runner::CHEIE_PASI_SITE];
+                $marcaj = Runner::marcaj((string) $r['stare'][Runner::CHEIE_PASI_SITE]);
+                $iesire[] = 'pașii site-ului „' . $marcaj['site'] . '” (' . implode(', ', $marcaj['pasi'] ?? ['înghețarea setărilor'])
+                    . ') n-au terminat: garda spune in_urma până la --aplica --site=' . $marcaj['site'];
             }
             if (isset($r['stare']['ultima_rulare'])) {
                 $iesire[] = 'ultima rulare: ' . $r['stare']['ultima_rulare'];

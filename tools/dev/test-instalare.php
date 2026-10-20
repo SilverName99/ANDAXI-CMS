@@ -27,8 +27,10 @@ declare(strict_types=1);
  *     (fără erp_trimite_din, fără înregistrare); după baseline îi rulează prima cerere.
  *  F. Înghețarea setărilor (WP-06), cu un pachet de site inventat: install.php cu SITE_SLUG o aplică înaintea setărilor
  *     implicite (valorile ei rămân, cea privată din privat/, pragul ERP gol neatins de pasul de activare); cu pachetul și fără
- *     SITE_SLUG 1, baza neatinsă; o adoptare oprită între ultima migrare și înghețare lasă garda in_urma (pasi_site), deci
- *     cererile și cronul ERP nu scriu pragul; după --aplica înghețarea scrie doar ce lipsește, iar pasul ERP găsește pragul gol.
+ *     SITE_SLUG, cu pachetul altui site sau cu un fișier de înghețare stricat 1, cu motivul pe stderr, baza neatinsă; o adoptare
+ *     oprită între ultima migrare și înghețare lasă garda in_urma (pasi_site), deci cererile și cronul ERP nu scriu pragul;
+ *     --aplica --site cu dosarul pachetului lipsă sau fără înghețare e refuzat (2), cheia rămâne, iar licenta.php activari tot
+ *     nu scrie pragul; după --aplica cu pachetul înghețarea scrie doar ce lipsește, iar pasul ERP găsește pragul gol.
  *     În A și garda cu pasi_site.
  *
  * Doar date inventate (@exemplu.ro), pe baze cms_inst_* (făcute și șterse aici), cu licența într-un dosar al testului
@@ -617,6 +619,20 @@ $dbN2 = $bazaNoua('cms_inst_pachet_fara_site');
 $verifica('install.php cu pachetul unui site dar fără SITE_SLUG: 1 (înghețarea n-ar rula), baza neatinsă',
     $cn2 === 1 && str_contains($on2 . $en2, '--site=proba') && $unu($dbN2, 'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()') === '0',
     'cod ' . $cn2 . ' | ' . $on2 . $en2);
+// Pachetul altui site și o corectură scrisă de mână cu o greșeală de JSON: refuzul runner-ului (codul 2) iese pe stderr, cu 1
+// (nu 255 fără niciun cuvânt), înainte să se atingă baza.
+$pachetStricat = $lucru . '/pachet-proba-stricat';
+@mkdir($pachetStricat, 0770, true);
+copy($pachetF . '/setari-inghetate.json', $pachetStricat . '/setari-inghetate.json');
+file_put_contents($pachetStricat . '/setari-inghetate-2.json', '{"format": 2, "site": "proba", "setari": {"store_name": "x",}}');
+$tabeleBazei = static fn (PDO $db): string => $unu($db, 'SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()');
+$dbN3 = $bazaNoua('cms_inst_pachet_alt_site');
+[$cn3, $on3, $en3] = $php('cms_inst_pachet_alt_site', ['scripts/install.php'], $cuPachetF + ['SITE_SLUG' => 'altul']);
+[$cn4, $on4, $en4] = $php('cms_inst_pachet_alt_site', ['scripts/install.php'], ['SITE_DATE_DOSAR' => $pachetStricat, 'SITE_SLUG' => 'proba']);
+$verifica('install.php cu pachetul altui site (SITE_SLUG=altul) și cu o corectură setari-inghetate-2.json stricată: 1 de fiecare dată, '
+    . 'cu motivul pe stderr, baza neatinsă',
+    $cn3 === 1 && str_contains($en3, 'altui site') && $cn4 === 1 && str_contains($en4, 'setari-inghetate-2.json')
+    && $tabeleBazei($dbN3) === '0', 'cod ' . $cn3 . '/' . $cn4 . ' | ' . $on3 . $en3 . $on4 . $en4);
 
 // Adoptarea unui site vechi: baseline-ul oprit între ultima migrare și înghețare (aici --pana-la; pe server bugetul de timp sau
 // un proces omorât). Garda spune in_urma până termină pașii site-ului, deci pasul ERP nu scrie pragul înaintea înghețării.
@@ -627,7 +643,8 @@ Garda::uita();
 $stareA1 = Garda::stare($dbA);
 $verifica('baza ca înainte, baseline cu --site=proba oprit înaintea înghețării: 0, ultima_ord la zi, dar pasi_site rămâne și garda spune in_urma',
     $cpv === 0 && $ca1 === 0 && $unu($dbA, "SELECT valoare FROM _platforma_stare WHERE cheie = 'ultima_ord'") === (string) $ultimaOrd
-    && $unu($dbA, "SELECT valoare FROM _platforma_stare WHERE cheie = 'pasi_site'") === 'proba' && $stareA1 === Garda::IN_URMA,
+    && json_decode($unu($dbA, "SELECT valoare FROM _platforma_stare WHERE cheie = 'pasi_site'"), true) === ['site' => 'proba',
+        'pasi' => ['site/proba/setari-inghetate']] && $stareA1 === Garda::IN_URMA,
     $stareA1 . ' ' . $opv . $oa1);
 $verifica('serverul testului pe baza în adoptare', $pornesteServerul('cms_inst_adoptare'));
 $cerere('GET', '/');
@@ -635,6 +652,21 @@ $cerere('GET', '/');
 $urmeA = $urmeActivare($dbA);
 $verifica('cât pașii site-ului n-au terminat, o cerere și cronul ERP nu rulează pașii de activare (fără erp_trimite_din, fără înregistrare)',
     $codErpA === 0 && $urmeA === ['prag' => null, 'inregistrare' => [], 'jurnal' => []], json_encode($urmeA) . $outErpA . $errErpA);
+// Rulat din nou cu --site, dar fără pachet (o cale greșită, un pachet mutat) sau cu un dosar fără înghețare: refuzat, cheia rămâne,
+// deci garda tot in_urma și pragul ERP tot nescris (altfel rularea ar ajunge la capăt fără înghețare și ar șterge cheia).
+$faraInghetare = $lucru . '/pachet-fara-inghetare';
+@mkdir($faraInghetare, 0770, true);
+[$cr1, $or1] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba'], ['SITE_DATE_DOSAR' => $lucru . '/pachet-care-nu-exista']);
+[$cr2, $or2] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba'], ['SITE_DATE_DOSAR' => $faraInghetare]);
+$activariR = $licenta(['activari'], 'cms_inst_adoptare');
+Garda::uita();
+$urmeR = $urmeActivare($dbA);
+$verifica('--aplica --site=proba cu dosarul pachetului lipsă și cu un dosar fără înghețare: 2 (baza așteaptă pasul), pasi_site rămâne, garda '
+    . 'in_urma; licenta.php activari (ca prima cerere sau cronul ERP) tot nu scrie pragul',
+    $cr1 === 2 && str_contains($or1, 'nu există') && $cr2 === 2 && str_contains($or2, 'baza așteaptă site/proba/setari-inghetate')
+    && $unu($dbA, "SELECT COUNT(*) FROM _platforma_stare WHERE cheie = 'pasi_site'") === '1' && Garda::stare($dbA) === Garda::IN_URMA
+    && str_contains($activariR, 'așteaptă migrările') && $urmeR === ['prag' => null, 'inregistrare' => [], 'jurnal' => []],
+    $or1 . $or2 . $activariR . json_encode($urmeR));
 $contactInainte = $setareF($dbA, 'contact_form_recipients');
 $popupInainte = $setareF($dbA, 'welcome_popup_enabled');
 [$ca2, $oa2, $ea2] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba'], $cuPachetF);

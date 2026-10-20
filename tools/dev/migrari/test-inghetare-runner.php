@@ -19,9 +19,12 @@ declare(strict_types=1);
  *  - fișierul aplicat schimbat: 12, baza neatinsă; o corectură setari-inghetate-2.json se aplică după; fișierul
  *    privat șters după aplicare nu contează; o înghețare aplicată care lipsește din pachet: 12 (doar cu --site);
  *  - provizoriu (fișierul, sau un parametru în migrari.json `_provizoriu`): 15 fără --permite-provizoriu, nimic
- *    scris; cu el, aplicat;
- *  - `pasi_site` în _platforma_stare cât pașii site-ului n-au terminat: după --pana-la înaintea lor și după un
- *    proces omorât între migrări și înghețare; ștearsă după ce s-au aplicat;
+ *    scris; tot 15 cu el în afara copiei de verificare (fără SITE_COPIE_VERIFICARE=1), cu motivul; pe copie, aplicat;
+ *  - `pasi_site` ({site, pasi}) în _platforma_stare cât pașii site-ului n-au terminat: după --pana-la înaintea lor
+ *    și după un proces omorât între migrări și înghețare; o rulare cu --site care nu vede pașii așteptați (dosarul
+ *    pachetului lipsă, alt dosar, alt site) sau o primă adoptare fără pachet: 2, cheia neatinsă; fără --site: 0, cu
+ *    avertisment, cheia neatinsă; ștearsă abia după ce s-au aplicat; forma veche (doar numele site-ului);
+ *  - --site al unui site cu înghețarea în cod (site-uri/bioscem/) și un pachet fără ea: 2, baza neatinsă;
  *  - setare() într-o migrare care nu e pas al site-ului: 1.
  */
 
@@ -147,38 +150,79 @@ $regParam = $lucru . '/inghetare-reg-param-' . $cheiServer;
 $scrieMigrare($regParam, 'nucleu/0001_setari', "        \$s->tabel('settings', '`key` VARCHAR(120) NOT NULL, `value` LONGTEXT NOT NULL, PRIMARY KEY (`key`)');");
 $scrieMigrare($regParam, 'nucleu/0002_param', "        \$s->tabel('param_' . \$s->parametruSite('test.proc'), 'id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY');");
 file_put_contents($pachetProv . '/migrari.json', json_encode(['test.proc' => 'stripe', '_provizoriu' => ['test.proc' => 'OD de test']]));
-$genereazaAsteptat($sock, $regParam, ['--site=demo', '--permite-provizoriu'], ['SITE_DATE_DOSAR' => $pachetProv]);
+// --permite-provizoriu are efect doar pe copia de verificare (SITE_COPIE_VERIFICARE=1).
+$peCopie = ['SITE_DATE_DOSAR' => $pachetProv, 'SITE_COPIE_VERIFICARE' => '1'];
+$nuPeCopie = ['SITE_DATE_DOSAR' => $pachetProv, 'SITE_COPIE_VERIFICARE' => null];
+$genereazaAsteptat($sock, $regParam, ['--site=demo', '--permite-provizoriu'], $peCopie);
 $pb = $bazaNoua($sock, $b('ingprov'));
-// 1. doar parametrul provizoriu; 2. doar înghețarea provizorie; 3. amândouă, cu --permite-provizoriu.
+// 1. doar parametrul provizoriu; 2. doar înghețarea provizorie; fiecare și cu --permite-provizoriu în afara copiei de
+// verificare; 3. amândouă, cu --permite-provizoriu pe copia de verificare.
 $pachetIng($pachetProv, ['a_lipsa' => 'nouă']);
-[$cP1, $oP1] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetProv]);
+[$cP1, $oP1] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo'], $nuPeCopie);
+[$cP1v, $oP1v] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo', '--permite-provizoriu'], $nuPeCopie);
 $tabeleP1 = $tabele($pb);
 $pachetIng($pachetProv, ['a_lipsa' => 'nouă'], [], ['provizoriu' => 'sursa neconfirmată (test)']);
 file_put_contents($pachetProv . '/migrari.json', json_encode(['test.proc' => 'stripe']));
-[$cP2, $oP2] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetProv]);
+[$cP2, $oP2] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo'], $nuPeCopie);
+[$cP2v, $oP2v] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo', '--permite-provizoriu'], $nuPeCopie);
 $tabeleP2 = $tabele($pb);
 file_put_contents($pachetProv . '/migrari.json', json_encode(['test.proc' => 'stripe', '_provizoriu' => ['test.proc' => 'OD de test']]));
-[$cP3, $oP3] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo', '--permite-provizoriu'], ['SITE_DATE_DOSAR' => $pachetProv]);
+[$cP3, $oP3] = $ruleaza($sock, $b('ingprov'), $regParam, ['--aplica', '--site=demo', '--permite-provizoriu'], $peCopie);
+$doarPeCopie = 'merge doar pe copia de verificare';
 $verifica('provizoriu: un parametru din migrari.json „_provizoriu” și, separat, o înghețare „provizoriu” dau fiecare 15 fără '
-    . '--permite-provizoriu, baza neatinsă (planul se oprește înaintea oricărei scrieri); cu el se aplică (doar repetiția pe verificare)',
-    $cP1 === 15 && str_contains($oP1, 'test.proc') && str_contains($oP1, 'provizoriu') && $tabeleP1 === []
-    && $cP2 === 15 && str_contains($oP2, 'înghețarea e provizorie') && $tabeleP2 === [] && $cP3 === 0
-    && $pb->query("SELECT `value` FROM settings WHERE `key` = 'a_lipsa'")->fetchColumn() === 'nouă', $oP1 . $oP2 . $oP3);
+    . '--permite-provizoriu, și tot 15 cu el în afara copiei de verificare (fără SITE_COPIE_VERIFICARE=1, cu motivul), baza neatinsă '
+    . '(planul se oprește înaintea oricărei scrieri); pe copia de verificare, cu el, se aplică (repetiția adoptării)',
+    $cP1 === 15 && str_contains($oP1, 'test.proc') && str_contains($oP1, 'provizoriu') && !str_contains($oP1, $doarPeCopie)
+    && $cP1v === 15 && str_contains($oP1v, 'test.proc') && str_contains($oP1v, $doarPeCopie) && $tabeleP1 === []
+    && $cP2 === 15 && str_contains($oP2, 'înghețarea e provizorie') && !str_contains($oP2, $doarPeCopie)
+    && $cP2v === 15 && str_contains($oP2v, 'înghețarea e provizorie') && str_contains($oP2v, $doarPeCopie) && $tabeleP2 === [] && $cP3 === 0
+    && $pb->query("SELECT `value` FROM settings WHERE `key` = 'a_lipsa'")->fetchColumn() === 'nouă', $oP1 . $oP1v . $oP2 . $oP2v . $oP3);
 
 // pasi_site: pașii site-ului au început și n-au terminat.
+$marcajDemo = ['site' => 'demo', 'pasi' => ['site/demo/setari-inghetate']];
+$marcajCitit = static fn (array $stare): ?array => isset($stare['pasi_site']) ? json_decode((string) $stare['pasi_site'], true) : null;
 $mb = $bazaNoua($sock, $b('ingmarcaj'));
 $pachetMarcaj = $lucru . '/inghetare-marcaj-' . $cheiServer;
 $pachetIng($pachetMarcaj, ['a_lipsa' => 'nouă']);
 [$cM1] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--aplica', '--site=demo', '--pana-la=nucleu/0002_alt'], ['SITE_DATE_DOSAR' => $pachetMarcaj]);
 $stareM1 = $stareBaza($mb);
 [$cS, $oS] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--stare', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetMarcaj]);
+$verifica('pasi_site: după --pana-la înaintea pașilor site-ului cheia stă în _platforma_stare cu pașii așteptați ({site, pasi}; ultima_ord '
+    . '2 = toate migrările; --stare o spune)',
+    $cM1 === 0 && $marcajCitit($stareM1) === $marcajDemo && ($stareM1['ultima_ord'] ?? '') === '2' && $cS === 0
+    && str_contains($oS, 'pașii site-ului „demo” (site/demo/setari-inghetate)'), json_encode($stareM1) . $oS);
+
+// Rulări care nu văd pașii așteptați: refuzate înainte de orice scriere, cheia rămâne (altfel garda ar spune la_zi fără înghețare).
+$lipsaDosar = $lucru . '/inghetare-pachet-care-nu-exista';
+[$cR1, $oR1] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $lipsaDosar]);
+[$cR2, $oR2] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--aplica', '--site=demo']);
+[$cR3, $oR3] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--plan', '--site=demo']);
+[$cR4, $oR4] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--aplica', '--site=alt']);
+[$cR5, $oR5] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--aplica']);
+$stareR = $stareBaza($mb);
+$verifica('baza așteaptă înghețarea: --aplica --site=demo cu dosarul pachetului lipsă (2), cu alt dosar, fără înghețare (2; și --plan), '
+    . '--site=alt (2, „altui site”); fără --site: 0 și avertismentul; cheia pasi_site neatinsă, înghețarea neaplicată',
+    $cR1 === 2 && str_contains($oR1, 'nu există') && $cR2 === 2 && str_contains($oR2, 'baza așteaptă site/demo/setari-inghetate')
+    && $cR3 === 2 && str_contains($oR3, 'baza așteaptă site/demo/setari-inghetate') && $cR4 === 2 && str_contains($oR4, 'altui site')
+    && $cR5 === 0 && str_contains($oR5, 'baza așteaptă pașii site-ului „demo”') && $marcajCitit($stareR) === $marcajDemo
+    && ($stareR['ultima_ord'] ?? '') === '2' && !isset($randuri($mb)['site/demo/setari-inghetate']),
+    json_encode([$cR1, $cR2, $cR3, $cR4, $cR5, $stareR]) . $oR1 . $oR2 . $oR3 . $oR4 . $oR5);
 [$cM2] = $ruleaza($sock, $b('ingmarcaj'), $regIng, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetMarcaj]);
 $stareM2 = $stareBaza($mb);
-$verifica('pasi_site: după --pana-la înaintea pașilor site-ului cheia stă în _platforma_stare (ultima_ord 2 = toate migrările; --stare o '
-    . 'spune), iar după aplicarea lor e ștearsă',
-    $cM1 === 0 && ($stareM1['pasi_site'] ?? '') === 'demo' && ($stareM1['ultima_ord'] ?? '') === '2' && $cS === 0
-    && str_contains($oS, 'pașii site-ului „demo”') && $cM2 === 0 && !isset($stareM2['pasi_site']),
-    json_encode([$stareM1, $stareM2]) . $oS);
+$verifica('cu pachetul la loc: înghețarea aplicată, cheia pasi_site ștearsă abia acum',
+    $cM2 === 0 && !isset($stareM2['pasi_site']) && ($randuri($mb)['site/demo/setari-inghetate']['rezultat'] ?? '') === 'aplicata',
+    json_encode($stareM2));
+// Forma veche a cheii (doar numele site-ului, lista neștiută): rularea trebuie să vadă măcar un pas al site-ului.
+$vb = $bazaNoua($sock, $b('ingvechi'));
+$ruleaza($sock, $b('ingvechi'), $regIng, ['--aplica', '--site=demo', '--pana-la=nucleu/0002_alt'], ['SITE_DATE_DOSAR' => $pachetMarcaj]);
+$vb->exec("UPDATE _platforma_stare SET valoare = 'demo' WHERE cheie = 'pasi_site'");
+[$cV1, $oV1] = $ruleaza($sock, $b('ingvechi'), $regIng, ['--aplica', '--site=demo']);
+$stareV1 = $stareBaza($vb);
+[$cV2] = $ruleaza($sock, $b('ingvechi'), $regIng, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetMarcaj]);
+$verifica('pasi_site în forma veche (doar „demo”): fără pașii site-ului în pachet 2, cheia neatinsă; cu pachetul înghețarea aplicată, cheia ștearsă',
+    $cV1 === 2 && str_contains($oV1, 'pașii site-ului „demo”') && ($stareV1['pasi_site'] ?? '') === 'demo' && $cV2 === 0
+    && !isset($stareBaza($vb)['pasi_site']) && ($randuri($vb)['site/demo/setari-inghetate']['rezultat'] ?? '') === 'aplicata', $oV1);
+
 $kb = $bazaNoua($sock, $b('ingomorat'));
 [$cK1, , $eK1] = $ruleaza($sock, $b('ingomorat'), $regIng, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetMarcaj, 'MIGRARI_TEST_OPRESTE_DUPA' => '2']);
 $stareK1 = $stareBaza($kb);
@@ -186,9 +230,19 @@ $randK1 = $randuri($kb);
 [$cK2] = $ruleaza($sock, $b('ingomorat'), $regIng, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $pachetMarcaj]);
 $verifica('proces omorât după ultima migrare, înaintea înghețării: pasi_site rămâne (scrisă înaintea primei migrări, fără ultima_ord: '
     . 'garda spune in_urma); rulat din nou: înghețarea aplicată, cheia ștearsă',
-    $cK1 === 1 && str_contains($eK1, 'MIGRARI_TEST_OPRESTE_DUPA') && ($stareK1['pasi_site'] ?? '') === 'demo' && !isset($stareK1['ultima_ord'])
+    $cK1 === 1 && str_contains($eK1, 'MIGRARI_TEST_OPRESTE_DUPA') && $marcajCitit($stareK1) === $marcajDemo && !isset($stareK1['ultima_ord'])
     && !isset($randK1['site/demo/setari-inghetate']) && $cK2 === 0 && !isset($stareBaza($kb)['pasi_site'])
     && ($randuri($kb)['site/demo/setari-inghetate']['rezultat'] ?? '') === 'aplicata', json_encode([$stareK1, array_keys($randK1)]));
+
+// O primă adoptare cu un pachet greșit: fără dosar, sau un site cu înghețarea în cod (site-uri/bioscem/) și un pachet fără ea.
+$nb = $bazaNoua($sock, $b('ingnou'));
+[$cN1, $oN1] = $ruleaza($sock, $b('ingnou'), $regIng, ['--aplica', '--site=demo'], ['SITE_DATE_DOSAR' => $lipsaDosar]);
+[$cN2, $oN2] = $ruleaza($sock, $b('ingnou'), $regIng, ['--aplica', '--site=bioscem']);
+[$cN3, $oN3] = $ruleaza($sock, $b('ingnou'), $regIng, ['--plan', '--site=bioscem']);
+$verifica('prima adoptare cu --site și dosarul pachetului lipsă: 2; --site=bioscem cu un pachet fără înghețare, deși codul o are '
+    . '(site-uri/bioscem/setari-inghetate.json): 2 (și --plan); baza neatinsă',
+    $cN1 === 2 && str_contains($oN1, 'nu există') && $cN2 === 2 && str_contains($oN2, 'site-uri/bioscem/setari-inghetate.json')
+    && $cN3 === 2 && $tabele($nb) === [], $oN1 . $oN2 . $oN3);
 
 // setare() doar în pașii site-ului.
 $regGresit = $lucru . '/inghetare-reg-gresit-' . $cheiServer;

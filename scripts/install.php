@@ -38,6 +38,7 @@ use App\Support\Migrari\Eroare;
 use App\Support\Migrari\Garda;
 use App\Support\Migrari\Registru;
 use App\Support\Migrari\Runner;
+use App\Support\Migrari\Schema;
 use App\Support\Plugins;
 use App\Support\Settings;
 
@@ -83,7 +84,14 @@ if ($areAdmini) {
 // 1. Migrările.
 $registru = new Registru(Consola::dosarMigrari($radacina), array_merge(['nucleu'], Plugins::chei()));
 $runner = new Runner($db, $server, $registru, Consola::optiuniDinMediu($radacina, ['site' => $site]));
-$raport = $runner->aplica();
+// aplica() întoarce orice refuz ca raport (de exemplu pachetul altui site sau o înghețare stricată: codul 2); o excepție
+// care ar scăpa totuși (o eroare a registrului) iese tot cu 1 și mesajul pe stderr, nu cu 255 fără niciun cuvânt.
+try {
+    $raport = $runner->aplica();
+} catch (Throwable $e) {
+    $esec('Instalarea s-a oprit la migrări: ' . ($e instanceof Eroare ? $e->getMessage() : 'eroare neașteptată: '
+        . Schema::faraValori($e->getMessage())) . '.');
+}
 if ((int) $raport['cod'] !== 0) {
     $esec(Consola::text($raport) . ((int) $raport['cod'] === Eroare::BUGET
         ? 'Instalarea nu e terminată: rulează din nou php scripts/install.php (continuă de unde a rămas).'

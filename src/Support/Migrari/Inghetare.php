@@ -28,7 +28,8 @@ namespace App\Support\Migrari;
  *   (`@exemplu.ro`), iar valoarea adevărată stă în `privat/setari-inghetate.json`, lângă el, în afara
  *   git-ului. Fără el pasul se oprește cu codul 15, înainte de orice scriere;
  * - `provizoriu`: sursa nu e încă cea confirmată (raportul „live față de repo” din Etapa 0); pasul
- *   se oprește cu codul 15, afară de `--permite-provizoriu` (repetiția pe verificare);
+ *   se oprește cu codul 15, afară de `--permite-provizoriu` pe copia de verificare (SITE_COPIE_VERIFICARE=1,
+ *   repetiția adoptării; pe orice alt site opțiunea nu are efect);
  * - `din`, `sursa`, `extrage`, `vechi`, `nucleu`, `nota`, `fara_inghetare` și `amprenta_nucleu` sunt
  *   ale generatorului și ale verificării (tools/inghetare/); runner-ul le citește doar ca să le
  *   valideze forma.
@@ -56,10 +57,12 @@ final class Inghetare
     private const TIPAR_CHEIE = '/^[a-z0-9][a-z0-9_]{0,119}$/';
     private const TIPAR_EMAIL = '/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/';
     /**
-     * Un număr de telefon românesc (fix sau mobil, cu sau fără +40, cu spații, puncte sau liniuțe), ca
-     * un cuvânt întreg: nu o bucată dintr-un număr mai lung sau dintr-un sha256 scris în hex.
+     * Un număr de telefon românesc (fix sau mobil, cu sau fără +40, cu spații, puncte, liniuțe, bare sau paranteze
+     * între grupuri, câte cel mult trei: „(0244) 510 507”, „+40 (244) 510 507”, „0244 / 510 507”; și cu o cifră în
+     * plus, „0721 234 5678”), ca un cuvânt întreg: nu o bucată dintr-un număr mai lung sau dintr-un sha256 scris în
+     * hex. E plasa de siguranță a datelor private (OD-49), deci prinde mai mult decât numerele bine scrise.
      */
-    private const TIPAR_TELEFON = '/(?<![\w+])(?:\+40|0040|0)[\s.\/-]?[1-9](?:[\s.\/-]?\d){8}(?!\w)/';
+    private const TIPAR_TELEFON = '/(?<![\w+])(?:\+40|0040|\(?0)[\s.\/()-]{0,3}[1-9](?:[\s.\/()-]{0,3}\d){8,9}(?!\w)/';
 
     /**
      * @param array<string, mixed> $date
@@ -320,7 +323,7 @@ final class Inghetare
         $provizoriu = $this->provizoriu();
         if ($provizoriu !== null && !$s->permiteProvizoriu()) {
             throw new ParametruLipsa($id . ': înghețarea e provizorie (' . $provizoriu . '); se aplică doar după ce sursa e confirmată '
-                . '(scoate „provizoriu” din fișier, cu generatorul) sau, pe verificare, cu --permite-provizoriu');
+                . '(scoate „provizoriu” din fișier, cu generatorul); ' . $s->cumSeRepetaProvizoriu());
         }
         $private = $this->valoriPrivate($id);
         foreach ($this->setari as $cheie => $intrare) {

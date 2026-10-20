@@ -50,10 +50,13 @@ final class Executie
     public ?Closure $punctTest = null;
 
     /**
-     * --permite-provizoriu: o înghețare a setărilor sau un parametru al site-ului încă provizoriu (sursa
-     * neconfirmată) se aplică totuși. Doar pentru repetiția pe verificare; altfel codul 15.
+     * --permite-provizoriu pe copia de verificare (SITE_COPIE_VERIFICARE=1): o înghețare a setărilor sau un parametru
+     * al site-ului încă provizoriu (sursa neconfirmată) se aplică totuși, la repetiția adoptării; altfel codul 15.
      */
     public bool $permiteProvizoriu = false;
+
+    /** --permite-provizoriu a fost cerut (și pe un site care nu e copia de verificare, unde nu are efect: mesajul o spune). */
+    public bool $provizoriuCerut = false;
 
     /**
      * @param Closure(): void $inainte chemat înaintea fiecărei operații care schimbă ceva (bugetul de timp)

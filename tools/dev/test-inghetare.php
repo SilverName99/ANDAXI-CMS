@@ -9,7 +9,8 @@ declare(strict_types=1);
  *  F. Formatul (App\Support\Migrari\Inghetare): forma scurtă = lipsa, fiecare greșeală de formă = codul 2,
  *     sha256 pe fișierul cu LF, fișierul privat (lipsă, alt site, altă sursă, făcut pentru altă versiune, alte
  *     chei, o valoare care nu e text: codul 15, fără nicio valoare în mesaj); datele private (emailuri în afara
- *     @exemplu.ro, telefoane, nu și bucăți dintr-un sha256 sau dintr-un număr lung) și înlocuitorii lor.
+ *     @exemplu.ro, telefoane și cu paranteze, bare sau mai mulți separatori la rând, nu și bucăți dintr-un sha256 sau
+ *     dintr-un număr lung) și înlocuitorii lor.
  *  R. Registrul: fișierele de înghețare ale pachetului în ordinea lor (-2 înainte de -10), un nume greșit, un pas
  *     PHP cu numele înghețării, pachetul altui site, două site-uri într-un pachet: codul 2; id-urile pașilor.
  *  C. Citirea unui cod (tools/inghetare/lib/citeste-cod.php): DEFAULTS prin Reflection, rezervele `?? <literal>`
@@ -192,10 +193,17 @@ $verifica('calea fișierului privat: privat/<nume> lângă fișier', Inghetare::
 $verifica('emailurile reale: orice adresă în afara @exemplu.ro (și cu majuscule la domeniu: tot demo)',
     Inghetare::emailuriReale('a@exemplu.ro, B@EXEMPLU.RO; contact@client-inventat.test') === ['contact@client-inventat.test']
     && Inghetare::emailuriReale('no-reply@localhost (fără punct în domeniu)') === []);
-$telefoane = ['0244 510 507', '0756.195.323', '+40 744 123 456', '0040-721-000-111', '0212345678'];
-$nuTelefoane = ['203800', 'J2006017724407', '2026-10-20 10:00:00', 'RO49AAAA1B31007593840000',
-    'amprenta ' . hash('sha256', 'x') . ' ' . str_repeat('ab0712345678cd', 3), '0700 000 001', '19166493'];
-$verifica('telefoanele: fix și mobil, cu spații, puncte, liniuțe, +40/0040 (nu un număr lung, o dată, un cont, un sha256 sau înlocuitorul)',
+$telefoane = ['0244 510 507', '0756.195.323', '+40 744 123 456', '0040-721-000-111', '0212345678', '(0244) 510 507',
+    '+40 (244) 510 507', '0244 / 510 507', '0721 234 5678', '+40722123456', '(0244)-510-507'];
+$shaHex = [];
+for ($i = 0; $i < 2000; $i++) {
+    $shaHex[] = hash('sha256', 'proba-' . $i);
+}
+$nuTelefoane = array_merge(['203800', 'J2006017724407', '2026-10-20 10:00:00', 'RO49AAAA1B31007593840000',
+    'amprenta ' . hash('sha256', 'x') . ' ' . str_repeat('ab0712345678cd', 3), '0700 000 001', '19166493', '07212345678901',
+    '0244 510 50712', 'x0244510507'], $shaHex, array_map('strtoupper', array_slice($shaHex, 0, 200)));
+$verifica('telefoanele: fix și mobil, cu spații, puncte, liniuțe, bare, paranteze (și câte trei la rând), +40/0040, cu o cifră în plus '
+    . '(nu un număr mai lung, o dată, un cont, 2200 de sha256 în hex sau înlocuitorul)',
     array_filter($telefoane, static fn (string $t): bool => Inghetare::telefoane('tel. ' . $t . '.') === []) === []
     && array_filter($nuTelefoane, static fn (string $t): bool => Inghetare::telefoane($t) !== []) === [],
     json_encode([array_map([Inghetare::class, 'telefoane'], $telefoane), array_map([Inghetare::class, 'telefoane'], $nuTelefoane)]));

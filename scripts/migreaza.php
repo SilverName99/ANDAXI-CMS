@@ -18,14 +18,16 @@ declare(strict_types=1);
  * (migrările care pot opri scrierile într-un tabel; doar cu site-ul în MENTENANTA);
  * --permite-contract (ștergeri, la un release după ce niciun cod nu mai folosește obiectul);
  * --permite-provizoriu (o înghețare a setărilor sau un parametru al site-ului încă neconfirmat:
- * doar pe verificare, la repetiția adoptării);
+ * doar pe copia de verificare, SITE_COPIE_VERIFICARE=1, la repetiția adoptării; în altă parte nu are
+ * efect, iar provizoriul rămâne codul 15);
  * --buget=300 (secunde; după ele nu mai începe nicio operație: codul 13, se rulează din nou);
  * --asteptare-lacat=5 (secunde de așteptat după un tabel ocupat, apoi se reîncearcă);
  * --pana-la=<id> (se oprește după migrarea dată); --site=<site> (implicit SITE_SLUG din
- * .env; rulează și pașii acelui site).
+ * .env; rulează și pașii acelui site, din pachetul lui, SITE_DATE_DOSAR, care trebuie să existe).
  *
  * Codurile de ieșire: 0 nimic de făcut / totul aplicat și verificat; 1 eroare într-o migrare;
- * 2 configurare, conexiune sau server nesuportat; 3 alt runner (sau sincronizarea FAN) ține
+ * 2 configurare (și pachetul site-ului care nu se potrivește cu rularea), conexiune sau server
+ * nesuportat; 3 alt runner (sau sincronizarea FAN) ține
  * lacătul; 4 baza nu e a unui site ANDAXI; 10 (--plan) migrări de aplicat; 11 migrări blocante
  * sau de tip contract fără --permite-…; 12 o migrare aplicată s-a schimbat sau a dispărut;
  * 13 bugetul de timp s-a terminat; 14 verificarea a găsit un obiect lipsă; 15 lipsește un
