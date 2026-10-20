@@ -405,15 +405,27 @@ else
     scrie "  SĂRIT coș abandonat: emailurile sunt capturate local (magazin nu e în pachet)"
 fi
 # Runner-ul migrărilor pe baza de test (doar citește: --stare, --plan). Până când instalarea trece
-# pe migrări (WP-05), --plan poate găsi migrări de aplicat (10); orice alt cod e o eroare.
+# pe migrări (WP-05), baza de test e făcută „pe vechi” (install.php + funcțiile ensure* din
+# date-demo.php), deci --plan găsește migrări de aplicat (10); orice alt cod e o eroare. Baseline-ul
+# (grupul B, 0001–0019) trebuie însă să găsească tot ce a făcut codul: o singură operație acolo
+# înseamnă o coloană, un index sau un tabel pe care codul îl face și migrările nu (sau invers).
 confirma "scripts/migreaza.php --stare pe baza de test" "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --stare
-if "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --plan > "$TMP/migreaza.log" 2>&1; then cod_plan=0; else cod_plan=$?; fi
-if [ "$cod_plan" = 0 ] || [ "$cod_plan" = 10 ]; then
+if "$RADACINA/tools/dev/php.sh" "$RADACINA/scripts/migreaza.php" --plan --json > "$TMP/migreaza.log" 2>&1; then cod_plan=0; else cod_plan=$?; fi
+de_facut_b="$("$CMS_DEV_PHP" -r '
+    $r = json_decode((string) file_get_contents($argv[1]), true);
+    if (!is_array($r)) { echo "ieșirea nu e JSON"; exit; }
+    foreach ((array) ($r["migrari"] ?? []) as $m) {
+        foreach ((array) ($m["operatii"] ?? []) as $o) {
+            if ((int) $m["ord"] >= 1 && (int) $m["ord"] <= 19 && $o["clasa"] !== "fara_efect") { echo $m["id"], ": ", $o["clasa"], " ", $o["obiect"], "; "; }
+        }
+    }' "$TMP/migreaza.log" 2>&1)"
+mesaj_plan="$("$CMS_DEV_PHP" -r 'echo (string) (json_decode((string) file_get_contents($argv[1]), true)["mesaj"] ?? "");' "$TMP/migreaza.log" 2>/dev/null)"
+if { [ "$cod_plan" = 0 ] || [ "$cod_plan" = 10 ]; } && [ -z "$de_facut_b" ]; then
     TRECUTE=$((TRECUTE + 1))
-    scrie "  OK    scripts/migreaza.php --plan (ieșire $cod_plan): $(tail -1 "$TMP/migreaza.log" | cut -c1-120)"
+    scrie "  OK    scripts/migreaza.php --plan (ieșire $cod_plan, grupul B fără nicio operație): $(echo "$mesaj_plan" | cut -c1-120)"
 else
     ESECURI=$((ESECURI + 1))
-    scrie "  EȘEC  scripts/migreaza.php --plan (ieșire $cod_plan): $(tr -s '\n' ' ' < "$TMP/migreaza.log" | cut -c1-200)"
+    scrie "  EȘEC  scripts/migreaza.php --plan (ieșire $cod_plan): ${de_facut_b:-$(tr -s '\n' ' ' < "$TMP/migreaza.log" | cut -c1-200)}"
 fi
 SESIUNI_DUPA="$(numara_sesiuni)"
 confirma "cronurile și runner-ul migrărilor nu lasă fișiere de sesiune ($SESIUNI_INAINTE înainte, $SESIUNI_DUPA după)" \

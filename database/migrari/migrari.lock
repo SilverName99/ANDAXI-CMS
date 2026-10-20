@@ -1,0 +1,29 @@
+{
+    "migrari": {
+        "nucleu/0001_baza_nucleu": "35edba64fec24c49fd304b54262df2ef56112a43cfe21c9faf14d127846f3450",
+        "catalog/0002_baza_catalog": "2410b6a9cb2636c64e1448cea5bea92de530bfc3dc355ef86b13a029872df84c",
+        "conturi_clienti/0003_baza_conturi": "a9fe0bc4fc9291a81550d31c1ff99abfc8a3882df4c0912f231a7779bab24f1b",
+        "magazin/0004_baza_magazin": "8f297b610b4280d8df091d42ab7ffa336a1db8f48e03675421af89481ecd7879",
+        "livrare_fan/0005_baza_fan": "e2166502dd20cc1481decacdb4112e21b51595746692fd07991d41b2909ff079",
+        "plata_stripe/0006_baza_stripe": "71f6a081e56ffdc97ab5fcf33bde976c44049c77cbe9cd7856cd7078d5091200",
+        "plata_euplatesc/0007_baza_euplatesc": "d42925fbd2a252a2921bd14dafbcb3a45799d83e3bd2484d4d3243098190f6f3",
+        "plata_bt/0008_baza_bt": "195ca5fa6743fe529673d4e6abe34f3c92b22dcc4e4dc5712dc2175650e11cad",
+        "link_plata/0009_baza_link_plata": "5f13cbd45d3bbc3d142a990e0442cbe1b5a4cf730b479c08545fa818d39c7b45",
+        "erp/0010_baza_erp": "4183c59f462ed7cfb5264a9ea7045d925837ca171bcb01ba5be5ed0a635618f1",
+        "cupoane/0011_baza_cupoane": "cda8241d5464e66087aff80b5306abcbfca2bc9d5be1907a4dfec918db5ac42c",
+        "fidelitate/0012_baza_fidelitate": "bba287e37ba3b40134ef25900cfe553bb03c84b54a9e63e57e128358c0b0e583",
+        "recenzii/0013_baza_recenzii": "8f01d0d85715d7fb03fefd014b9f99c6649538055a11735fa631942061ea236b",
+        "precomenzi/0014_baza_precomenzi": "bea0673e90cbc4871abf18e3f778c777ee936cc508fe0799f1982969bd2e3684",
+        "oferte_bbd/0015_baza_bbd": "221bfa5b259bd287d1630e80e0583fc4af62b43439e650bc97dcbf05698e2b71",
+        "produse_promo/0016_baza_promo": "f4a3d30d9722610a4e6ddd2b560895925f471aa77f09180aaeef6e555873ec69",
+        "blog/0017_baza_blog": "ece14b69c955523b75843ee79c7dca0e70ae712a0daeea79de14897fb515c417",
+        "newsletter/0018_baza_newsletter": "a8bb830e59be8a037d75bac4e5ed2c4713316a73ebb9e2b0302d966789b9fd57",
+        "acorduri_gdpr/0019_baza_gdpr": "ab5e96123016317ced7d7eb5c3ce3303cdedbaf8b0f50c79da42a863857794c9",
+        "nucleu/0020_roluri_admini": "b2a441c5aa0c7dba66bed93877a7135e6008d72d8c3017f5038362562a5e6ec0",
+        "catalog/0021_coloane_vechi_catalog": "cbe194ff34b9bfdc727f532b029c62457d8a2e4d4e74ba21a10056eb72dcc801",
+        "cupoane/0022_coloane_vechi_cupoane": "44630393447bef6871cb6a12999527bb85f53660b4d89a7230b0c598b68df7a0",
+        "recenzii/0023_recenzii_vechi": "6ac8ea9a308b2e17e12a5841091157e7fcafc174eebe1c630ddb25063fc54853",
+        "blog/0024_legaturi_categorii": "bd1327b527772d2efa591f902403f982ff2e1c8a6dbbcd90dc1485172bb3f7e1"
+    },
+    "retrase": {}
+}

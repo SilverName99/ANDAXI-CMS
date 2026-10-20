@@ -5,11 +5,13 @@ din linia de comandă, la instalare și la fiecare release. Paginile nu trimit D
 din Bioscem) încă își creează singur coloanele din mers, cu cele 36 de funcții `ensure*Schema`; ele
 rămân până când fiecare site trece pe migrări (garda de la WP-05, apoi ștergerea lor după adoptări).
 
-Ce există acum (WP-02 din planul Etapei 1): **runner-ul**, cu detectarea, reluarea și codurile de
-ieșire, plus testele lui; din WP-10, **sonda schemei** site-urilor live (mai jos), din care se fac
-fixture-urile testelor. Ce vine: migrările de bază `0001`–`0024` și `asteptat.json` (WP-03), testele
-pe schemele celor cinci coduri și verificarea fișierelor de migrare (WP-04), instalarea prin migrări,
-garda `Garda::stare` și `/health` (WP-05), pasul de înghețare a setărilor unui site (WP-06).
+Ce există acum: **runner-ul**, cu detectarea, reluarea și codurile de ieșire, plus testele lui
+(WP-02 din planul Etapei 1); din WP-10, **sonda schemei** site-urilor live (mai jos); din WP-03,
+**migrările de bază** `0001`–`0024` (mai jos), cu `asteptat.json`, `migrari.lock`, `ultima.php` și
+unealta care le compară cu schema făcută de cod (`tools/dev/migrari/genereaza-fixture.php`). Încă nu
+rulează pe niciun site: instalarea și paginile merg ca înainte, cu funcțiile `ensure*`. Ce vine:
+testele pe schemele celor cinci coduri și verificarea fișierelor de migrare (WP-04), instalarea prin
+migrări, garda `Garda::stare` și `/health` (WP-05), pasul de înghețare a setărilor unui site (WP-06).
 
 ## Pe scurt
 
@@ -82,6 +84,8 @@ scripts/migreaza.php                 linia de comandă
 storage/logs/migrari.log             câte un rând pe operație executată (nume de obiecte, clasa, durata)
 tools/sonda/amprenta-schema.php      sonda schemei unui site live (WP-10, MIG-08), rulată de proprietar
 tools/dev/migrari/din-sonda.php      local: sonda → fixture-ul și extra-<cod>.txt, în tools/dev/migrari/vechi/privat/
+tools/dev/migrari/genereaza-fixture.php   local: schema pe care o face codul unui site; asteptat.json, migrari.lock,
+                                     ultima.php; verificarea migrărilor de bază față de cod (mai jos)
 ```
 
 - **id** = `<proprietar>/<NNNN>_<nume>`. **NNNN** e unic în tot dosarul (oricare proprietar) și dă
@@ -122,7 +126,9 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
 | Metodă | Dacă lipsește | Dacă există |
 |---|---|---|
 | `tabel($t, $corp)` | `CREATE TABLE IF NOT EXISTS … ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`; cheile străine doar aici | nimic (`coloana()`/`index()` de după aduc structura la zi) |
+| `tabelComplet($t, [coloană => definiție], [chei])` | un singur `CREATE TABLE` cu tot (cheile scrise ca în CREATE TABLE: `PRIMARY KEY (id)`, `UNIQUE KEY nume (…)`, `KEY nume (…)`, `CONSTRAINT nume FOREIGN KEY (…) REFERENCES …`) | fiecare coloană cu `coloana()`, fiecare index cu `index()`/`unic()`: doar ce lipsește; cheia primară și cheile străine nu se adaugă (una lipsă = avertisment). Și dacă tabelul l-a făcut altcineva chiar atunci (codul vechi) |
 | `coloana($t, $c, $definitie)` | `ADD COLUMN`, la coadă, cu lanțul de clauze | compară tipul, NULL, valoarea implicită: altfel = **avertisment**, coloana nu se schimbă |
+| `schimbaImplicit($t, $c, $valoare)` | eroare | doar valoarea implicită (`ALTER COLUMN … SET DEFAULT`, instant, rândurile neatinse); aceeași deja: nimic. Un pas anume al unei migrări (link_plata/0009), nu „adus la zi” |
 | `index($t, $n, [coloane])`, `unic(…)` | `ADD [UNIQUE] INDEX`, `INPLACE, LOCK=NONE`; `unic` numără întâi valorile repetate (NULL nu se numără) și se oprește cu numărul lor | același nume, sau un index cu aceleași coloane în aceeași ordine și aceeași unicitate (sub orice nume) |
 | `stergeIndex($t, $n)` | nimic | `DROP INDEX` (un index nu ține date) |
 | `modificaColoana($t, $c, $definitie)` | eroare (coloana nouă se face cu `coloana()`) | `MODIFY COLUMN`, clasat mereu „copie”: refuzat fără `--permite-blocante` |
@@ -207,6 +213,95 @@ contează. Tabelele `_platforma_*`, `*__sync`, `*__vechi` (copiile de lucru ale 
 echivalent sub alt nume ajunge) = codul 14; o definiție diferită, o cheie străină lipsă (nu se adaugă
 niciodată singură peste date existente) = avertisment; ce are baza în plus = doar informație.
 
+După orice schimbare a migrărilor (o migrare nouă; înainte de prima publicare, și una schimbată):
+
+```sh
+tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --asteptat           # asteptat.json, migrari.lock, ultima.php
+tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --asteptat --rescrie-lacatul   # doar înainte de prima publicare
+```
+
+`--asteptat` aplică toate migrările pe o bază goală (`cms_mig_fx_asteptat`), scrie amprenta ei, o verifică
+și scrie `ultima.php`. O migrare care e deja în `migrari.lock` cu alt sha e refuzată (o migrare publicată nu
+se schimbă: o schimbare înseamnă o migrare nouă); o eroare lasă cele trei fișiere cum erau.
+
+## Migrările de bază (baseline): 0001–0024
+
+Primele migrări sunt schema de azi a codului, împărțită pe proprietari, plus conversiile de date pe care
+codul le face azi la fiecare cerere. Pe o bază goală **creează** schema; pe o bază veche (oricare dintre
+cele patru site-uri) **găsesc** fiecare obiect și adaugă doar ce lipsește. Nu există un mod „marchează ca
+aplicat”: o bază veche ajunge „detectata” pentru că totul e acolo, verificat unul câte unul.
+
+**De unde vin definițiile.** Din schema pe care o face codul pe o bază goală: `scripts/install.php`
+(`database/schema.sql` plus ALTER-urile lui), apoi fiecare funcție `ensure*Schema`/`asigura*Schema`,
+până nu mai schimbă nimic (`tools/dev/migrari/genereaza-fixture.php --cod=cms`: 57 de tabele, 665 de
+coloane, 146 de indecși, 6 chei străine; prima trecere prin funcții trimite 391 de instrucțiuni, din care
+240 eșuează, fiecare trecere de după 387, din care 287 eșuează). Fiecare tabel e un `tabelComplet()`, cu
+definiția fiecărei coloane scrisă explicit (`NULL`/`NOT NULL`, valoarea implicită), ca o instalare nouă
+să iasă la fel oricare ar fi serverul (de exemplu `explicit_defaults_for_timestamp`).
+
+| Grupul B (schemă) | Ce conține |
+|---|---|
+| `nucleu/0001_baza_nucleu` | adminii, setările, paginile, `seo_pages`, galeria, mesajele de contact, istoricul emailurilor, jurnalul adminului, jurnalele formularelor |
+| `catalog/0002_baza_catalog` | produsele (fără coloanele precomenzii și ale ofertelor BBD), categoriile, câmpurile extra, șabloanele de produs |
+| `conturi_clienti/0003_baza_conturi` | `users` (fără punctele de fidelitate), adresele, resetările de parolă; înaintea magazinului, pentru că `orders` are o cheie străină spre `users` |
+| `magazin/0004_baza_magazin` | comenzile (coloanele magazinului), liniile, emailurile comenzilor, coșurile abandonate |
+| `livrare_fan/0005_baza_fan` | tabelele FAN, coloanele FAN și de AWB ale comenzilor; ține lacătele sincronizării nomenclatorului; pasul vechi al străzilor (mai jos) |
+| `plata_stripe/0006`, `plata_euplatesc/0007` | coloanele plăților pe comenzi |
+| `plata_bt/0008_baza_bt` | tabelele BT iPay; `bt_ipay_schema_version` = `3` în setări, dacă nu e deja |
+| `link_plata/0009_baza_link_plata` | linkurile de plată, cu procesatorul linkurilor vechi (mai jos); `payment_links_schema_version` = `2` |
+| `erp/0010` … `acorduri_gdpr/0019` | ERP, cupoane, fidelitate, recenzii, precomenzi, oferte BBD, produse promoționale, blog, newsletter, acorduri GDPR |
+
+| Grupul C (date, o singură dată) | În locul a ce face codul la fiecare cerere |
+|---|---|
+| `nucleu/0020_roluri_admini` | rolurile adminilor aduse la forma de azi (aceeași regulă ca `Auth::rolesFromStorage` + `primaryRole`), în loc de UPDATE-ul pe fiecare admin la fiecare pagină de admin și la fiecare login |
+| `catalog/0021_coloane_vechi_catalog` | galeria, insignele, câmpurile extra, șabloanele, valorile câmpurilor din coloanele vechi (doar dacă baza le are; pe bucăți de 500) |
+| `cupoane/0022_coloane_vechi_cupoane` | numele gol = codul; limitele din `min_items`/`max_items` |
+| `recenzii/0023_recenzii_vechi` | recenziile din tabelul vechi `reviews` care lipsesc din `product_reviews` (o dată: una ștearsă nu mai revine), apoi sursa celor fără sursă |
+| `blog/0024_legaturi_categorii` | legăturile articol–categorie din categoria principală a articolelor vechi |
+
+**Ce nu primește o instalare nouă** (doar site-urile care le au le păstrează, până la faza „contract”):
+tabelul vechi `reviews`, tabelele moarte `mannequin_points`/`mannequin_point_products` (pluginul manechin
+ține punctele în setări), coloana veche `products.gallery_json`; nici conținutul pe care îl punea codul la
+prima creare: categoriile de blog Bioscem, lista implicită de newsletter (o face
+`NewsletterService::defaultListId` când e nevoie), pagina `/acorduri-gdpr` (pasul de activare al
+pluginului, WP-05). Singura altă diferență față de schema codului: `bt_ipay_transactions` și `bt_ipay_log`
+au la cod colația implicită a serverului (`DEFAULT CHARSET=utf8mb4` fără colație), la migrări
+`utf8mb4_unicode_ci`, ca toate tabelele; pe o bază veche rămân cum sunt (un avertisment la `--verifica`).
+Valorile implicite rămân cele de azi (TVA-ul produselor 19.00, `orders.payment_method` = `euplatesc`); pe
+Biovitality, vertij și grafoanaytis, `payment_method` are alt implicit (`stripe`): un avertisment, nu o
+schimbare.
+
+**Linkurile de plată fără procesator** (codul Biovitality și grafoanaytis): procesatorul linkurilor vechi îl
+știe doar site-ul, din `link_plata.procesator_linkuri_existente` în `migrari.json` al site-ului (`euplatesc`,
+`btipay` sau `stripe`; lipsă sau altă valoare → codul 15, înainte de orice schimbare). Coloana se adaugă cu
+el ca valoare implicită, deci fiecare link existent îl primește în același ALTER, iar apoi valoarea
+implicită devine `euplatesc` (`schimbaImplicit`). Oricând s-ar opri rularea, niciun link vechi nu rămâne cu
+alt procesator, iar reluarea termină pasul.
+
+**Străzile FAN de dinainte de `row_key`** (pasul vechi din `FanNomenclator::asiguraSchemaStrazi`):
+`row_key` vine cu `''` (cum o adăuga codul), rândurile își primesc cheia pe bucăți, cu formula de acolo (cu
+id-ul rândului, deci unică), indexul unic vechi `uniq_fan_streets` iese, iar `uniq_fan_streets_row` vine abia
+la urmă. O reluare vede rândurile rămase cu `''`.
+
+**Cum se verifică** (`tools/dev/migrari/genereaza-fixture.php --verifica`, poarta **G-baza** din
+`porti.sh`, pe MariaDB și pe MySQL 8): o bază goală după toate migrările = `asteptat.json`; baseline-ul pe o
+bază goală = schema codului minus excluderile de mai sus (fiecare trebuie să existe în schema codului) și
+colația declarată; pe baza făcută de cod („pe vechi”), planul are în grupul B doar „există deja”, aplicarea
+face 0 operații (toate 19 „detectata”), schema rămâne aceeași, `--verifica` trece (în plus: exact
+excluderile), a doua aplicare n-are nimic de făcut; fixture-ul SQL făcut pe MariaDB se încarcă pe fiecare
+server și dă aceeași amprentă; pe MySQL 8 codul vechi face aceeași schemă ca pe MariaDB. Testul de fum cere
+în plus ca, pe baza de dezvoltare (făcută tot de cod, cu date demo), grupul B să nu aibă nicio operație.
+
+`genereaza-fixture.php` face schema codului pe o **copie** a lui (arborele de lucru copiat, sau
+`--repo=<clonă>@<commit>` cu `git archive`), într-un proces nou pe fază, cu pluginurile toate pornite și
+fără licență, pe o bază `cms_mig_fx_*` inventată (în ea ajung doar setările implicite și un admin
+`@exemplu.ro`). Pentru celelalte coduri: `--cod=bs --repo=../Nou-site-bioscem@<commit>` (la fel `bv`, `vt`,
+`gr`) scrie `<cod>.sql` (doar structură, se încarcă pe ambele servere) și `<cod>-amprenta.json` în
+`$CMS_DEV_DIR/fixture-migrari/` (sau `--iesire=`); `--compara <a.json> <b.json> …` arată fiecare amprentă
+față de prima. Azi, BS = CMS; BV și GR primesc 3 tabele și 24 de coloane, VT 8 tabele, 57 de coloane și
+un index. Schema codului e a lui `install.php` de azi: când instalarea trece pe migrări (WP-05),
+referința devine un commit fix (`--verifica --repo=<clona CMS>@<commit>`).
+
 ## Serverele
 
 Pe Hostinger nu se știe încă dacă e MariaDB sau MySQL (o spune sonda). Runner-ul nu presupune nimic:
@@ -259,9 +354,12 @@ bucăți și al instrucțiunii de date (pică dacă cursorul sau numărătoarea 
 bucății), bugetul, migrările schimbate, blocante, de contract, parametrii site-ului, lacătele, starea
 neatinsă de un runner refuzat și scrisă cu codul final, un tabel ocupat, mărimea tabelelor în plan,
 un tabel `#sql-*` rămas, `sql_mode`, verificarea, configurarea, pașii site-ului, mesajele serverului
-cu ghilimele și `\` în valoare (1062, 1366, din `date()` și din `peBucati()`); plus sesiunile din
-linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo. Raport:
-`storage/logs/dev/test-migrari-raport.txt`.
+cu ghilimele și `\` în valoare (1062, 1366, din `date()` și din `peBucati()`); `tabelComplet` și
+`schimbaImplicit`; plus sesiunile din linia de comandă. Bazele `cms_mig_t_*` se fac și se șterg acolo.
+Raport: `storage/logs/dev/test-migrari-raport.txt`.
+
+Migrările adevărate le verifică, până la testele T1–T11 (WP-04), `genereaza-fixture.php --verifica`
+(poarta **G-baza**, mai sus). Bazele lui, `cms_mig_fx_*`, se fac și se șterg acolo.
 
 Variabile doar pentru teste (pe site-uri nu există): `MIGRARI_TEST_DOSAR` (alt dosar de migrări),
 `MIGRARI_TEST_OPRESTE_DUPA=k` (oprire ca un proces omorât după k operații),

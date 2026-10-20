@@ -369,7 +369,7 @@ dispar, iar linkurile spre el se scot din pagini.
   un singur AWB; pe AWB-urile per depozit nu se aplică și se notează în jurnalul de
   activitate); `/api/fan/…`; cronurile `fan-tracking-sync`,
   `fan-lockers-sync`, `fan-nomenclator-sync` (cer „vizibil”). Tabele: `fan_*`,
-  `orders.fan_*`.
+  `orders.fan_*`, `orders.completed_awb_email_*` (emailul cu AWB-ul la finalizare).
 - **Are nevoie de**: magazin.
 - **Se oprește**: comenzile noi nu mai primesc FANbox și tarif live (rămân regulile
   de transport generale); comenzile existente își fac AWB-ul, urmărirea și
@@ -427,8 +427,8 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Conține**: Setări → ERP ANDAXI; în comenzi: starea ERP, „Retrimite în ERP”,
   bannerul modulului „Magazin online” din ERP; stocul din ERP pe produse și în
   coș; expeditorul FAN pe gestiuni; cronul `scripts/erp-sync.php` („vizibil”);
-  adresele `/api/erp/notificare` și `/api/erp/adrese` (mereu deschise). Tabel:
-  `orders.erp_*`.
+  adresele `/api/erp/notificare` și `/api/erp/adrese` (mereu deschise). Tabele:
+  `orders.erp_*`, `order_items.erp_*`.
 - **Are nevoie de**: magazin. Ține de bani (`'bani' => true` în catalog, ca plățile):
   la CRM trece în „oprit” cel mai devreme după 30 de zile de „se oprește” (OD-36, D7);
   pe site nimic nu citește încă marcajul.

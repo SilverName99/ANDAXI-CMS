@@ -58,7 +58,9 @@
 #    sesiunea exact ca Bioscem. Dovada: test-migrari.php (S) și smoke.sh (cronurile) numără
 #    fișierele de sesiune;
 #  - scripts/migreaza.php și src/Support/Migrari/ (runner-ul migrărilor, docs/MIGRARI.md): noi,
-#    doar pentru linia de comandă; nicio pagină și niciun cron nu le folosește încă;
+#    doar pentru linia de comandă; nicio pagină și niciun cron nu le folosește încă; la fel
+#    database/migrari/ (migrările de bază 0001–0024, WP-03): pe o bază făcută de cod găsesc tot,
+#    fără nicio schimbare de schemă (tools/dev/migrari/genereaza-fixture.php --verifica);
 #  - fișierele scoase la copiere (docs/templates, scripturile unice Bioscem, vezi
 #    docs/DEZVOLTARE.md) și config/redirecturi.php, mutat în site-uri/bioscem/redirecturi.json.
 

@@ -1,0 +1,5278 @@
+{
+    "format": 1,
+    "tabele": {
+        "admin_activity_log": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "action": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "admin_email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "admin_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "context_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(45)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_action": {
+                    "coloane": [
+                        "action"
+                    ],
+                    "unic": false
+                },
+                "idx_created_at": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "admins": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "password_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "role": {
+                    "extra": "",
+                    "implicit": "'administrator_general'",
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "roles_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "email": {
+                    "coloane": [
+                        "email"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "blog_authors": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "avatar_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "bio": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "blog_categories": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(150)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(170)"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "name": {
+                    "coloane": [
+                        "name"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "blog_post_categories": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "category_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "post_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "post_id",
+                        "category_id"
+                    ],
+                    "unic": true
+                },
+                "idx_bpc_category": {
+                    "coloane": [
+                        "category_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "blog_posts": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "author_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "category": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "category_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "deleted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "event_end_date": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "event_location": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "event_price": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(120)"
+                },
+                "event_start_date": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "event_ticket_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "excerpt": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "featured_image_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_published": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "published_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "reading_minutes": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "template_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "title": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "video_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_blog_posts_deleted": {
+                    "coloane": [
+                        "deleted_at"
+                    ],
+                    "unic": false
+                },
+                "idx_blog_posts_published": {
+                    "coloane": [
+                        "is_published",
+                        "published_at"
+                    ],
+                    "unic": false
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "blog_templates": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "css_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "html_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "js_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "bt_ipay_log": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "action": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "duration_ms": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "error_code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "http_code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "smallint"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "message": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "mode": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(4)"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "request_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "response_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "source": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(30)"
+                },
+                "tx_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_bt_ipay_log_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_bt_ipay_log_tx": {
+                    "coloane": [
+                        "tx_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "bt_ipay_transactions": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "action_code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int"
+                },
+                "action_desc": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "alerts_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "amount_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "approval_code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "approved_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "authorized_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "bt_order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "bt_order_number": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "bt_status": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "tinyint"
+                },
+                "callback_checked_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "currency": {
+                    "extra": "",
+                    "implicit": "946",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "deposit_attempts": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "deposit_requested_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "deposit_requested_minor": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "deposited_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "deposited_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "form_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(1000)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "in_comanda": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "kind": {
+                    "extra": "",
+                    "implicit": "'order'",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "last_checked_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "last_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "last_status_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "link_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "loy_deposited_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "loy_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "loy_order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "loy_refunded_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "loy_status": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "tinyint"
+                },
+                "mode": {
+                    "extra": "",
+                    "implicit": "'test'",
+                    "null": false,
+                    "tip": "varchar(4)"
+                },
+                "op_pending": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "public_checked_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "refund_reference": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "refunded_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "refunded_minor": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "reminder_sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "reversed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "state": {
+                    "extra": "",
+                    "implicit": "'registered'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_bt_ipay_tx_link": {
+                    "coloane": [
+                        "link_id"
+                    ],
+                    "unic": false
+                },
+                "idx_bt_ipay_tx_order": {
+                    "coloane": [
+                        "order_id"
+                    ],
+                    "unic": false
+                },
+                "idx_bt_ipay_tx_state": {
+                    "coloane": [
+                        "state",
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "uq_bt_ipay_tx_bt_id": {
+                    "coloane": [
+                        "bt_order_id"
+                    ],
+                    "unic": true
+                },
+                "uq_bt_ipay_tx_number": {
+                    "coloane": [
+                        "bt_order_number"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "cart_abandonments": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "abandoned_email_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "abandoned_email_sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "cart_snapshot": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "converted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "customer_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "last_seen_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "session_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "session_id": {
+                    "coloane": [
+                        "session_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "checkout_submit_logs": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip_address": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'allowed'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "user_agent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_checkout_submit_logs_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_checkout_submit_logs_ip_created": {
+                    "coloane": [
+                        "ip_address",
+                        "created_at"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "contact_form_messages": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip_address": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "message": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "phone": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(60)"
+                },
+                "source_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'new'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "subject": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "user_agent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_contact_form_messages_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_contact_form_messages_status": {
+                    "coloane": [
+                        "status"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "coupons": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "allowed_user_ids_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "apply_only_selected_products": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "category_ids_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "ends_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "import_batch": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "is_unique": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "max_items_count": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "max_uses_total": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "min_items_count": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "product_ids_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "stacks_with_discounts": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "starts_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "type": {
+                    "extra": "",
+                    "implicit": "'fixed'",
+                    "null": false,
+                    "tip": "enum('fixed','percent')"
+                },
+                "used_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "value": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "code": {
+                    "coloane": [
+                        "code"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "customer_password_resets": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "expires_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "token_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(128)"
+                },
+                "used_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "token_hash": {
+                    "coloane": [
+                        "token_hash"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "email_logs": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email_type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(80)"
+                },
+                "error_message": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "recipient": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'sent'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "subject": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_order_email_type": {
+                    "coloane": [
+                        "order_id",
+                        "email_type"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "email_send_history": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email_type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(80)"
+                },
+                "error_message": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "meta_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "provider": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(30)"
+                },
+                "recipient": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "source": {
+                    "extra": "",
+                    "implicit": "'system'",
+                    "null": false,
+                    "tip": "varchar(80)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'sent'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "subject": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_email_send_history_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_email_send_history_order": {
+                    "coloane": [
+                        "order_id"
+                    ],
+                    "unic": false
+                },
+                "idx_email_send_history_status": {
+                    "coloane": [
+                        "status"
+                    ],
+                    "unic": false
+                },
+                "idx_email_send_history_type": {
+                    "coloane": [
+                        "email_type"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "fan_localities": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "county_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "locality": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "locality_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_fan_localities_county": {
+                    "coloane": [
+                        "county_norm"
+                    ],
+                    "unic": false
+                },
+                "idx_fan_localities_locality": {
+                    "coloane": [
+                        "locality_norm"
+                    ],
+                    "unic": false
+                },
+                "uniq_fan_localities": {
+                    "coloane": [
+                        "county_norm",
+                        "locality_norm"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "fan_localities_extra_km": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "county_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "exterior_km": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(8,2)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "locality": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "locality_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_fan_localities_extra_km_county": {
+                    "coloane": [
+                        "county_norm"
+                    ],
+                    "unic": false
+                },
+                "idx_fan_localities_extra_km_locality": {
+                    "coloane": [
+                        "locality_norm"
+                    ],
+                    "unic": false
+                },
+                "uniq_fan_localities_extra_km": {
+                    "coloane": [
+                        "county_norm",
+                        "locality_norm"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "fan_lockers": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "address": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(60)"
+                },
+                "county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "county_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "fan_id": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(60)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "lat": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,7)"
+                },
+                "lng": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,7)"
+                },
+                "locality": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "locality_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "postcode": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_fan_lockers_county": {
+                    "coloane": [
+                        "county_norm"
+                    ],
+                    "unic": false
+                },
+                "idx_fan_lockers_locality": {
+                    "coloane": [
+                        "county_norm",
+                        "locality_norm"
+                    ],
+                    "unic": false
+                },
+                "uniq_fan_lockers_code": {
+                    "coloane": [
+                        "code"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "fan_nomenclator_sync": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "activ_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "cursor_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "eroare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "eroare_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "lista": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "pas": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "pasi_total": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "pornit_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "randuri": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "reusit_detalii": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "reusit_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "reusit_randuri": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "reusit_sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "stare": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "lista"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "fan_streets": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "agency": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(160)"
+                },
+                "county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "county_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "locality": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "locality_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "parity": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(32)"
+                },
+                "postal_code": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(32)"
+                },
+                "range_from": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "range_to": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "row_key": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(40)"
+                },
+                "street": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "street_id": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(64)"
+                },
+                "street_norm": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "street_type": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(80)"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_fan_streets_county": {
+                    "coloane": [
+                        "county_norm"
+                    ],
+                    "unic": false
+                },
+                "idx_fan_streets_locality": {
+                    "coloane": [
+                        "locality_norm"
+                    ],
+                    "unic": false
+                },
+                "idx_fan_streets_street": {
+                    "coloane": [
+                        "street_norm"
+                    ],
+                    "unic": false
+                },
+                "uniq_fan_streets_row": {
+                    "coloane": [
+                        "row_key"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "gallery_folders": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(140)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "name": {
+                    "coloane": [
+                        "name"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "gallery_images": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "alt_text": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "folder_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "image_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "media_type": {
+                    "extra": "",
+                    "implicit": "'image'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "title": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "gdpr_agreements": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "adresa_corespondenta": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "ci_data_eliberare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "ci_emitent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "ci_numar": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "ci_serie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(30)"
+                },
+                "cnp": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "cuim": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "data_semnare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "institutie_activitate": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "institutie_activitate_adresa": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "institutie_adresa": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "institutie_medicala": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "ip_address": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "nume": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "nume_semnatura": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "prenume": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "signature_data_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "source_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "specializare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "subiect_nume_complet": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "telefon": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(60)"
+                },
+                "tip_medic": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "user_agent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_gdpr_agreements_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_gdpr_agreements_email": {
+                    "coloane": [
+                        "email"
+                    ],
+                    "unic": false
+                },
+                "idx_gdpr_agreements_name": {
+                    "coloane": [
+                        "nume",
+                        "prenume"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "loyalty_points_rules": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "category_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "ends_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "min_order_total": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "multiplier": {
+                    "extra": "",
+                    "implicit": "1.00",
+                    "null": false,
+                    "tip": "decimal(6,2)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "starts_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_rules_active_window": {
+                    "coloane": [
+                        "is_active",
+                        "starts_at",
+                        "ends_at"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "loyalty_points_transactions": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "admin_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "balance_after": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "meta_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "points_delta": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int"
+                },
+                "reason": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "tx_type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_order_type": {
+                    "coloane": [
+                        "order_id",
+                        "tx_type"
+                    ],
+                    "unic": false
+                },
+                "idx_user_created": {
+                    "coloane": [
+                        "user_id",
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "uniq_user_order_type": {
+                    "coloane": [
+                        "user_id",
+                        "order_id",
+                        "tx_type"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_campaign_clicks": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "campaign_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "clicked_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "subscriber_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(2048)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_campaign_id": {
+                    "coloane": [
+                        "campaign_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_campaign_opens": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "campaign_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "opened_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "send_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_campaign_id": {
+                    "coloane": [
+                        "campaign_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_campaign_sends": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "campaign_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "click_count": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "clicked_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "error_message": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "open_count": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "opened_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'sent'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "subscriber_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_campaign_subscriber": {
+                    "coloane": [
+                        "campaign_id",
+                        "subscriber_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_campaigns": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "blocks_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "html_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "scheduled_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'draft'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "subject": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "subscriber_list_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "subscriber_list_ids": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "template_ref": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "template_type": {
+                    "extra": "",
+                    "implicit": "'newsletter'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "total_clicks": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "total_failed": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "total_opens": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "total_recipients": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "total_sent": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_list_subscribers": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "list_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "subscriber_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "list_id",
+                        "subscriber_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_lists": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_default": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "name": {
+                    "coloane": [
+                        "name"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_optin_forms": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "button_label": {
+                    "extra": "",
+                    "implicit": "'Ma abonez'",
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "fields_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "list_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "success_message": {
+                    "extra": "",
+                    "implicit": "'Te-ai abonat cu succes.'",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_subscribers": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'active'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "email": {
+                    "coloane": [
+                        "email"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_templates": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "blocks_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "html_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "subject": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "order_items": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "bbd_key": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "erp_discount_percent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(5,2)"
+                },
+                "erp_price_before": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "line_total": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "product_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "quantity": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "int"
+                },
+                "unit_price": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                }
+            },
+            "fk": {
+                "fk_order_items_order": {
+                    "coloane": [
+                        "order_id"
+                    ],
+                    "la_actualizare": "RESTRICT",
+                    "la_stergere": "CASCADE",
+                    "referite": [
+                        "id"
+                    ],
+                    "tabel": "orders"
+                },
+                "fk_order_items_product": {
+                    "coloane": [
+                        "product_id"
+                    ],
+                    "la_actualizare": "RESTRICT",
+                    "la_stergere": "SET NULL",
+                    "referite": [
+                        "id"
+                    ],
+                    "tabel": "products"
+                }
+            },
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "fk_order_items_order": {
+                    "coloane": [
+                        "order_id"
+                    ],
+                    "unic": false
+                },
+                "fk_order_items_product": {
+                    "coloane": [
+                        "product_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "order_payment_links": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "amount": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "approval": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "ep_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "expires_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "paid_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "procesator": {
+                    "extra": "",
+                    "implicit": "'euplatesc'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "referinta": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(60)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'pending'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "token": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(64)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_order_payment_links_order": {
+                    "coloane": [
+                        "order_id",
+                        "status"
+                    ],
+                    "unic": false
+                },
+                "uq_order_payment_links_referinta": {
+                    "coloane": [
+                        "referinta"
+                    ],
+                    "unic": true
+                },
+                "uq_order_payment_links_token": {
+                    "coloane": [
+                        "token"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "order_promo_items": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "promo_product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "quantity": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_opi_order": {
+                    "coloane": [
+                        "order_id"
+                    ],
+                    "unic": false
+                },
+                "idx_opi_promo": {
+                    "coloane": [
+                        "promo_product_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "orders": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "ad_click_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "ad_source": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(50)"
+                },
+                "admin_notes": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "billing_address_line1": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "billing_address_line2": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "billing_city": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "billing_company_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "billing_company_registration_no": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(120)"
+                },
+                "billing_company_tax_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(120)"
+                },
+                "billing_county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "billing_email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "billing_first_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "billing_is_company": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "billing_last_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "billing_phone": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(30)"
+                },
+                "billing_postcode": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "completed_awb_email_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "completed_awb_email_sent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "coupon_code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(100)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "deleted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "discount_total": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "edit_unlock_reason": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "edit_unlocked_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "edit_unlocked_by": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "erp_attempts": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "erp_client_agresiv": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "tinyint(1)"
+                },
+                "erp_client_agresiv_versiune": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "bigint"
+                },
+                "erp_factura_numar": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(40)"
+                },
+                "erp_last_attempt_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "erp_last_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "erp_next_retry_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "erp_order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(32)"
+                },
+                "erp_problems": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "erp_status": {
+                    "extra": "",
+                    "implicit": "'pending'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "erp_synced_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "euplatesc_approval": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "euplatesc_ep_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "fan_awb": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(100)"
+                },
+                "fan_awb_inlocuite": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "fan_awb_list": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "fan_locker_address": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "fan_locker_city": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "fan_locker_county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "fan_locker_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "fan_locker_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "fan_locker_postcode": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "fan_tracking_last_event_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "fan_tracking_status": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "fan_tracking_synced_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "fan_tracking_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "loyalty_points_awarded": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "loyalty_points_awarded_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "loyalty_points_discount": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "loyalty_points_pending_claim": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "loyalty_points_used": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "manual_discount": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "manual_discount_percent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(5,2)"
+                },
+                "manual_discount_reason": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "nl_campaign_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "notes": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "order_number": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "paid_amount": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "paid_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "payment_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "payment_method": {
+                    "extra": "",
+                    "implicit": "'euplatesc'",
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "payment_status": {
+                    "extra": "",
+                    "implicit": "'unpaid'",
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "preorder_released_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "preorder_status": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(12)"
+                },
+                "shipping_address_line1": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "shipping_address_line2": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "shipping_city": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "shipping_cost": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "shipping_county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "shipping_first_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "shipping_last_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "shipping_manual": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "shipping_method": {
+                    "extra": "",
+                    "implicit": "'fan_courier'",
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "shipping_phone": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(50)"
+                },
+                "shipping_postcode": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "shipping_same_as_billing": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'pending'",
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "stripe_payment_intent_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "stripe_session_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "subtotal": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "terms_accepted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "total": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": {
+                "fk_orders_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "la_actualizare": "RESTRICT",
+                    "la_stergere": "SET NULL",
+                    "referite": [
+                        "id"
+                    ],
+                    "tabel": "users"
+                }
+            },
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "fk_orders_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "unic": false
+                },
+                "idx_nl_campaign_id": {
+                    "coloane": [
+                        "nl_campaign_id"
+                    ],
+                    "unic": false
+                },
+                "idx_orders_erp_status": {
+                    "coloane": [
+                        "erp_status",
+                        "erp_next_retry_at"
+                    ],
+                    "unic": false
+                },
+                "order_number": {
+                    "coloane": [
+                        "order_number"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "pages": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "css_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "deleted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "html_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_published": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "js_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "title": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_categories": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(140)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "name": {
+                    "coloane": [
+                        "name"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_category_links": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "category_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_pcl_category": {
+                    "coloane": [
+                        "category_id"
+                    ],
+                    "unic": false
+                },
+                "uniq_product_category": {
+                    "coloane": [
+                        "product_id",
+                        "category_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_extra_field_values": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "field_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "value": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_product_field": {
+                    "coloane": [
+                        "product_id",
+                        "field_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_extra_fields": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "default_value": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "field_key": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "field_type": {
+                    "extra": "",
+                    "implicit": "'textarea'",
+                    "null": false,
+                    "tip": "varchar(30)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "is_required": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "placeholder": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "field_key": {
+                    "coloane": [
+                        "field_key"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_reviews": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_approved": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "rating": {
+                    "extra": "",
+                    "implicit": "5",
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
+                "review_text": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "source": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(50)"
+                },
+                "user_email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "user_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                }
+            },
+            "fk": {
+                "fk_product_reviews_product": {
+                    "coloane": [
+                        "product_id"
+                    ],
+                    "la_actualizare": "RESTRICT",
+                    "la_stergere": "CASCADE",
+                    "referite": [
+                        "id"
+                    ],
+                    "tabel": "products"
+                }
+            },
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_product_reviews_approved": {
+                    "coloane": [
+                        "is_approved"
+                    ],
+                    "unic": false
+                },
+                "idx_product_reviews_product": {
+                    "coloane": [
+                        "product_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_template_fields": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "field_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "template_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "template_id",
+                        "field_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_templates": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "css_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "html_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "js_content": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "products": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "badge_best_seller": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "badge_popular": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "badge_seasonal": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "bbd_enabled": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "bbd_entries_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "brand": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(120)"
+                },
+                "category": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(120)"
+                },
+                "category_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "deleted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "discount_badge_mode": {
+                    "extra": "",
+                    "implicit": "'percent'",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "gallery_images_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "image_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "out_of_stock": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "post_cart_note_enabled": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "post_cart_note_text": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "preorder_enabled": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "preorder_max_per_order": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "preorder_max_total": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "price": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "product_highlights": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "product_template_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "sale_price": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "sale_price_periods_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "short_description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "similar_products_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "sku": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(80)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "stock": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "tags_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "vat_included": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "vat_percent": {
+                    "extra": "",
+                    "implicit": "19.00",
+                    "null": false,
+                    "tip": "decimal(5,2)"
+                },
+                "weight_grams": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "promotional_products": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "notes": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "register_submit_logs": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip_address": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'allowed'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "user_agent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_register_submit_logs_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_register_submit_logs_ip_created": {
+                    "coloane": [
+                        "ip_address",
+                        "created_at"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "seo_pages": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "canonical_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "image_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "page_ref": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "page_type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(50)"
+                },
+                "title": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_page_ref": {
+                    "coloane": [
+                        "page_type",
+                        "page_ref"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "settings": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "key": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "value": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longtext"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "key"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "user_addresses": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "address_line1": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "address_line2": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "city": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "county": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(120)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "full_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_default": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "label": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(100)"
+                },
+                "phone": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(30)"
+                },
+                "postcode": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "street": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "street_no": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(40)"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": {
+                "fk_user_addresses_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "la_actualizare": "RESTRICT",
+                    "la_stergere": "CASCADE",
+                    "referite": [
+                        "id"
+                    ],
+                    "tabel": "users"
+                }
+            },
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "fk_user_addresses_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "users": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "birth_date": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "first_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "gender": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "google_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(120)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "last_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "loyalty_points": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "password_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "phone": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(30)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "email": {
+                    "coloane": [
+                        "email"
+                    ],
+                    "unic": true
+                },
+                "uniq_users_google_id": {
+                    "coloane": [
+                        "google_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        }
+    }
+}

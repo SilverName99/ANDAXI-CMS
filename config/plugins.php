@@ -199,7 +199,8 @@ return [
                 'scripts/fan-lockers-sync.php' => 'vizibil',
                 'scripts/fan-nomenclator-sync.php' => 'vizibil',
             ],
-            'tabele' => ['fan_lockers', 'fan_localities', 'fan_localities_extra_km', 'fan_streets', 'fan_nomenclator_sync', 'orders.fan_*'],
+            'tabele' => ['fan_lockers', 'fan_localities', 'fan_localities_extra_km', 'fan_streets', 'fan_nomenclator_sync', 'orders.fan_*',
+                'orders.completed_awb_email_*'],
         ],
 
         'plata_stripe' => [
@@ -256,7 +257,7 @@ return [
                     'icon' => 'settings', 'activ' => ['/admin/settings/erp']],
             ],
             'cron' => ['scripts/erp-sync.php' => 'vizibil'],
-            'tabele' => ['orders.erp_*'],
+            'tabele' => ['orders.erp_*', 'order_items.erp_*'],
         ],
 
         'cupoane' => [
