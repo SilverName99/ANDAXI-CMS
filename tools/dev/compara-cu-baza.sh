@@ -27,6 +27,12 @@
 # ($deBioscem, $porturiBiovitality, $porturiVertij, $porturiGrafo și marcajele
 # <!--port:…-->), în ambele moduri.
 #
+# Tot față de un repo vechi: harta adreselor vechi se cere din pachetul site-ului și din
+# cea scrisă în codul de bază (config/redirecturi.php), iar cele două liste trebuie să fie
+# aceleași. Față de Bioscem, și salvările din admin (ce rămâne în bază după un POST: cheia
+# ofertelor BBD, categoriile unei postări, duplicarea): aceeași cerere pe ambele servere,
+# pe rând, cu baza pusă la loc înainte de fiecare și la final (tools/dev/lib/salvari-admin.php).
+#
 # Diferențele față de Bioscem care nu se văd în HTML (deci nu le prinde comparația;
 # fiecare e scrisă și în docs/DEZVOLTARE.md sau docs/PLUGINURI.md):
 #  - scripts/fan-tracking-sync.php: fără cele două `use` care scriau avertismente la
@@ -203,4 +209,4 @@ if [ -n "$LICENTA_COMPARATIE" ]; then
     "${PHP_DEV[@]}" tools/dev/licenta.php "$LICENTA_COMPARATIE" >/dev/null || die "licența „$LICENTA_COMPARATIE” nu s-a pus"
 fi
 [ "$MOD" = "repo" ] && echo "  INFO  bază $ETICHETA_BAZA (port $PORT_BAZA), cod curent pe portul $PORT_CURENT, datele site-ului: ${SITE_DATE_DOSAR#"$RADACINA"/}"
-"${PHP_DEV[@]}" tools/dev/compara-cu-baza.php "$PORT_BAZA" "$ETICHETA_BAZA" "$BAZA_DIR" "$MOD" "$PORT_CURENT"
+"${PHP_DEV[@]}" tools/dev/compara-cu-baza.php "$PORT_BAZA" "$ETICHETA_BAZA" "$BAZA_DIR" "$MOD" "$PORT_CURENT" "${SITE_BAZA:-}"

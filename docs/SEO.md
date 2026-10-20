@@ -217,7 +217,10 @@ constructorul Bioscem) blocată în robots.txt și exclusă din redirecționări
 - `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
   cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere
   mari, „/” final, potrivirea aproximativă a unui produs) și fiecare regulă din harta
-  adreselor vechi (cod, `Location`, anteturi, pagină) ies identic; anteturile includ
+  adreselor vechi (cod, `Location`, anteturi, pagină) ies identic. Se cer regulile din
+  pachet și cele din `config/redirecturi.php` al codului Bioscem, iar cele două liste
+  trebuie să fie aceleași (adresa veche, ținta, codul), deci o regulă nouă a Bioscem
+  neportată pică; anteturile includ
   `X-Robots-Tag: noindex` și `Cache-Control` ale sitemap-ului și ale redirecționărilor
   301/410, deci și ele se dovedesc la fiecare livrare portată. Singurele diferențe sunt
   declarate în `$deBioscem` (locul regulii `/cos-cumparaturi` în robots.txt, explicația

@@ -7,7 +7,7 @@ declare(strict_types=1);
  * aceleași cereri spre serverul curent și spre copia de bază, apoi compararea
  * răspunsurilor normalizate.
  *
- *   php compara-cu-baza.php <port-baza> <eticheta-bazei> <dosarul-copiei-de-baza> <repo|commit> [<port-curent>]
+ *   php compara-cu-baza.php <port-baza> <eticheta-bazei> <dosarul-copiei-de-baza> <repo|commit> [<port-curent>] [<site-ul-bazei>]
  *   php compara-cu-baza.php --autotest     # doar verificarea mecanismului de diferențe (fără servere)
  *
  * Se compară, pentru fiecare cerere: codul de stare, Location, anteturile răspunsului
@@ -21,7 +21,11 @@ declare(strict_types=1);
  *
  * Baza „repo” (implicit: codul Bioscem însuși, la ultimul commit revizuit): nimic
  * altceva; livrarea 1 SEO și porturile din Bioscem sunt deja în codul de bază, deci
- * trebuie să iasă octet cu octet.
+ * trebuie să iasă octet cu octet. Tot doar în acest mod: harta site-ului, adresa unică,
+ * fiecare regulă din harta adreselor vechi (din pachetul site-ului și din harta scrisă
+ * în codul de bază, care trebuie să fie aceeași listă) și, față de Bioscem, salvările
+ * din admin (aceeași cerere pe ambele servere, pe rând, cu baza pusă la loc între ele;
+ * tools/dev/lib/salvari-admin.php).
  *
  * Baza „commit” (un commit din acest repo, de exemplu f5ae5ea, dinaintea pluginurilor;
  * doar pentru istoric): în plus, doar din pagina codului curent, diferențele SEO ale
@@ -63,6 +67,8 @@ $dosarBaza = rtrim((string) ($argv[3] ?? ''), '/');
 // „repo”: codul unui site vechi (Bioscem); „commit”: un commit din acest repo (istoric).
 $modBaza = (string) ($argv[4] ?? 'commit');
 $fataDeCommit = $modBaza === 'commit';
+// Al cărui site e codul de bază (doar în modul „repo”: bioscem, biovitality …; gol altfel).
+$siteBaza = (string) ($argv[6] ?? '');
 if ($portBaza === '' || !in_array($modBaza, ['repo', 'commit'], true)) {
     fwrite(STDERR, "Folosește tools/dev/compara-cu-baza.sh\n");
     exit(1);
@@ -527,19 +533,35 @@ $db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_cont
 $pagini[] = ['viz', '/' . $paginaListe];
 
 // Doar față de codul Bioscem (care are deja livrarea 1 SEO): harta site-ului, adresa unică
-// și fiecare regulă din harta adreselor vechi a site-ului (pachetul lui din site-uri/), cerute
-// de un vizitator nou, fără sesiune. Rezultatul lor se rezumă într-o linie, dacă e identic.
+// și fiecare regulă din harta adreselor vechi a site-ului, cerute de un vizitator nou, fără
+// sesiune. Rezultatul lor se rezumă într-o linie, dacă e identic. Regulile vin din pachetul
+// site-ului (site-uri/<site>/redirecturi.json) și din harta scrisă în codul de bază
+// (Bioscem: config/redirecturi.php): o regulă nouă a Bioscem pe care pachetul n-o are se
+// cere și ea, deci se vede (404 față de 301). Mai jos, după pagini, se verifică și că cele
+// două liste sunt aceleași.
+$hartaPachet = [];
+$hartaBaza = null;
 if (!$fataDeCommit) {
     $pagini[] = ['anon', '/sitemap.xml'];
     foreach (['/Magazin', '/produs/ceai-de-menta/', '/categorie/Ceaiuri', '/produs/ceai-de-ment', '/blog/', '/magazin?utm_source=test'] as $cale) {
         $pagini[] = ['anon', $cale, 'adresa unică'];
     }
-    $harta = \App\Support\DateSite::json('redirecturi.json');
-    foreach ((array) ($harta['exacte'] ?? []) as $regula) {
-        $pagini[] = ['anon', (string) ($regula[0] ?? '/'), 'harta adreselor vechi'];
+    $hartaPachet = (array) \App\Support\DateSite::json('redirecturi.json');
+    $fisierHartaBaza = $dosarBaza . '/config/redirecturi.php';
+    if (is_file($fisierHartaBaza)) {
+        $hartaBaza = (array) (require $fisierHartaBaza);
     }
-    foreach ((array) ($harta['prefixe'] ?? []) as $regula) {
-        $pagini[] = ['anon', rtrim((string) ($regula[0] ?? '/'), '/') . '/test', 'harta adreselor vechi'];
+    $cereriHarta = [];
+    foreach ([$hartaPachet, (array) $hartaBaza] as $harta) {
+        foreach ((array) ($harta['exacte'] ?? []) as $regula) {
+            $cereriHarta[(string) ($regula[0] ?? '/')] = true;
+        }
+        foreach ((array) ($harta['prefixe'] ?? []) as $regula) {
+            $cereriHarta[rtrim((string) ($regula[0] ?? '/'), '/') . '/test'] = true;
+        }
+    }
+    foreach (array_keys($cereriHarta) as $cale) {
+        $pagini[] = ['anon', (string) $cale, 'harta adreselor vechi'];
     }
 }
 
@@ -640,6 +662,332 @@ foreach ($dupaLogin['baza'] ?? [] as $rolAdmin => $locatieBaza) {
         echo '  DIFERĂ 302  ', $eticheta, ' (baza: ', $locatieBaza, ")\n";
     }
 }
+// Harta adreselor vechi scrisă în codul de bază și cea din pachetul site-ului: aceeași listă
+// (adresa veche, ținta, codul; motivul e doar o notă). Cererile de mai sus arată ce face
+// fiecare regulă; aici se vede și o regulă care ar lipsi dintr-o parte fără să se vadă în
+// răspunsuri (de exemplu una spre o pagină care între timp există).
+if (is_array($hartaBaza)) {
+    $triplete = static function (array $harta, string $tip): array {
+        $rezultat = [];
+        foreach ((array) ($harta[$tip] ?? []) as $regula) {
+            $regula = array_values((array) $regula);
+            $rezultat[] = json_encode([(string) ($regula[0] ?? ''), $regula[1] ?? null, (int) ($regula[2] ?? 0)],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        sort($rezultat);
+        return $rezultat;
+    };
+    foreach (['exacte', 'prefixe'] as $tip) {
+        $inBaza = $triplete($hartaBaza, $tip);
+        $inPachet = $triplete($hartaPachet, $tip);
+        $eticheta = str_pad('harta', 13) . 'reguli ' . $tip . ': config/redirecturi.php din bază = redirecturi.json din pachet';
+        if ($inBaza === $inPachet) {
+            $identice++;
+            echo '  OK    ', $eticheta, ' (', count($inBaza), ")\n";
+            continue;
+        }
+        $diferite[] = $eticheta;
+        echo '  DIFERĂ ', $eticheta, ': doar în bază [', implode(', ', array_diff($inBaza, $inPachet)), '], doar în pachet [',
+            implode(', ', array_diff($inPachet, $inBaza)), ']', count($inBaza) !== count(array_unique($inBaza))
+            || count($inPachet) !== count(array_unique($inPachet)) ? ' (reguli scrise de două ori)' : '', "\n";
+    }
+}
+
+/**
+ * Doar față de codul Bioscem: salvările din admin (tools/dev/lib/salvari-admin.php). Paginile de
+ * mai sus sunt doar GET-uri, deci o schimbare care se vede abia la salvare (ce rămâne în bază
+ * după un POST) nu le atinge. Fiecare caz pregătește câteva rânduri, apoi trimite aceeași
+ * cerere întâi codului de bază, apoi codului curent, cu baza pusă la loc înainte de fiecare și
+ * la final; se compară răspunsurile (cod, Location, pagina) și rândurile atinse. „verifica” se
+ * uită la rezultatul codului de bază: cazul trebuie să arate schimbarea pentru care există
+ * (commit-ul „din”), altfel pică, în loc să treacă în gol.
+ */
+if (!$fataDeCommit && $siteBaza === 'bioscem') {
+    require_once __DIR__ . '/lib/salvari-admin.php';
+    $citeste = static function (string $sql, array $param = []) use ($db): array {
+        $stmt = $db->prepare($sql);
+        $stmt->execute($param);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    };
+    $tokenCache = ['tabel' => 'settings', 'unde' => '`key` = \'cache_assets_version_token\'', 'cheie' => 'key'];
+
+    // Oferte BBD (Bioscem b632294): cheia primită se păstrează; o ofertă nouă care ar primi cheia
+    // păstrată a alteia (sau o cheie dublată) primește alta; o cheie care nu e text nu strică nimic.
+    $idProdusBbd = (int) $unu('SELECT id FROM products WHERE bbd_enabled = 1 AND is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1');
+    $produsBbd = $citeste('SELECT * FROM products WHERE id = :id', ['id' => $idProdusBbd])[0] ?? [];
+    $cheieCalculata = static fn (string $data, string $lot, string $pret): string => substr(sha1($data . '|' . $lot . '|' . $pret), 0, 20);
+    $cheie1 = $cheieCalculata('2027-03-01', 'LDEMO1', '11.90');
+    $cheie2 = $cheieCalculata('2027-05-01', 'LDEMO2', '14.00');
+    $oferteSalvate = [
+        ['key' => $cheie1, 'date' => '2027-03-01', 'lot' => 'LDEMO1', 'label' => 'Expiră la data de: 01.03.2027', 'reduced_price' => 11.9, 'stock' => 8],
+        ['key' => $cheie2, 'date' => '2027-05-01', 'lot' => 'LDEMO2', 'label' => 'Expiră la data de: 01.05.2027', 'reduced_price' => 14.0, 'stock' => 15],
+    ];
+    $oferteTrimise = [
+        // Prețul redus schimbat (11,90 → 12,50): cheia rămâne, deci și rezervările comenzilor.
+        ['key' => $cheie1, 'date' => '2027-03-01', 'lot' => 'LDEMO1', 'reduced_price' => '12.50', 'stock' => '8'],
+        ['key' => $cheie2, 'date' => '2027-05-01', 'lot' => 'LDEMO2', 'reduced_price' => '14.00', 'stock' => '15'],
+        // Ofertă nouă cu datele vechi ale primei: cheia calculată ar fi exact cea păstrată a primei.
+        ['date' => '2027-03-01', 'lot' => 'LDEMO1', 'reduced_price' => '11.90', 'stock' => '3'],
+        ['key' => $cheie2, 'date' => '2027-06-01', 'lot' => 'LDEMO3', 'reduced_price' => '9.00', 'stock' => '2'],
+        ['key' => ['nu', 'e', 'text'], 'date' => '2027-07-01', 'lot' => 'LDEMO4', 'reduced_price' => '8.00', 'stock' => '1'],
+        ['key' => 'ABCdef123', 'date' => '2027-08-01', 'lot' => 'LDEMO5', 'reduced_price' => '7.00', 'stock' => '1'],
+        ['key' => 'nu-e-buna', 'date' => '2027-09-01', 'lot' => 'LDEMO6', 'reduced_price' => '6.00', 'stock' => '1'],
+    ];
+    $corpProdus = [
+        'name' => (string) ($produsBbd['name'] ?? ''),
+        'slug' => (string) ($produsBbd['slug'] ?? ''),
+        'sku' => (string) ($produsBbd['sku'] ?? ''),
+        'category_id' => (string) ($produsBbd['category_id'] ?? ''),
+        'product_template_id' => (string) ($produsBbd['product_template_id'] ?? ''),
+        'price' => (string) ($produsBbd['price'] ?? '0'),
+        'stock' => (string) ($produsBbd['stock'] ?? '0'),
+        'vat_percent' => (string) ($produsBbd['vat_percent'] ?? '19'),
+        'vat_included' => (string) ($produsBbd['vat_included'] ?? '1'),
+        'weight_grams' => (string) ($produsBbd['weight_grams'] ?? ''),
+        'brand' => (string) ($produsBbd['brand'] ?? ''),
+        'short_description' => (string) ($produsBbd['short_description'] ?? ''),
+        'description' => (string) ($produsBbd['description'] ?? ''),
+        'image_url' => (string) ($produsBbd['image_url'] ?? ''),
+        'is_active' => '1',
+        'bbd_enabled' => '1',
+        'bbd_entries_json' => (string) json_encode($oferteTrimise, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+    ];
+
+    // Blog (Bioscem 89dcc4e, b3781a4): o postare în trei categorii, cu principala a doua din listă.
+    $idPostare = (int) $unu('SELECT id FROM blog_posts WHERE deleted_at IS NULL ORDER BY id LIMIT 1');
+    $categoriiBlog = array_map('intval', array_column($citeste('SELECT id FROM blog_categories ORDER BY id LIMIT 3'), 'id'));
+    [$cat1, $cat2, $cat3] = array_pad($categoriiBlog, 3, 0);
+    $numeCat2 = $unu('SELECT name FROM blog_categories WHERE id = ' . (int) $cat2);
+    $idMaxPostari = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_posts');
+    $postare = $citeste('SELECT * FROM blog_posts WHERE id = :id', ['id' => $idPostare])[0] ?? [];
+    $tabelePostare = [
+        ['tabel' => 'blog_posts', 'unde' => 'id = :p1 OR id > :m1', 'param' => ['p1' => $idPostare, 'm1' => $idMaxPostari], 'cheie' => 'id'],
+        ['tabel' => 'blog_post_categories', 'unde' => 'post_id = :p2 OR post_id > :m2', 'param' => ['p2' => $idPostare, 'm2' => $idMaxPostari]],
+        ['tabel' => 'seo_pages', 'unde' => 'page_type = \'blog_post\' AND (page_ref = :p3 OR CAST(page_ref AS UNSIGNED) > :m3)',
+            'param' => ['p3' => (string) $idPostare, 'm3' => $idMaxPostari], 'cheie' => 'id'],
+        $tokenCache,
+    ];
+    $pregatestePostarea = static function (PDO $db) use ($idPostare, $cat1, $cat2, $cat3, $numeCat2): void {
+        $db->prepare('UPDATE blog_posts SET category_id = :c, category = :n WHERE id = :id')
+            ->execute(['c' => $cat2, 'n' => $numeCat2, 'id' => $idPostare]);
+        $db->prepare('DELETE FROM blog_post_categories WHERE post_id = :id')->execute(['id' => $idPostare]);
+        foreach ([$cat1, $cat2, $cat3] as $cid) {
+            $db->prepare('INSERT INTO blog_post_categories (post_id, category_id) VALUES (:p, :c)')->execute(['p' => $idPostare, 'c' => $cid]);
+        }
+    };
+    $starePostare = static function (PDO $db, int $id) use ($citeste): array {
+        $rand = $citeste('SELECT * FROM blog_posts WHERE id = :id', ['id' => $id])[0] ?? [];
+        return [
+            'postare' => salvari_fara_coloane($rand),
+            'categorii' => array_map('intval', array_column(
+                $citeste('SELECT category_id FROM blog_post_categories WHERE post_id = :id ORDER BY category_id', ['id' => $id]), 'category_id')),
+        ];
+    };
+    $corpPostare = static fn (array $categorii, array $extra = []): array => [
+        'action' => 'save',
+        'id' => (string) $idPostare,
+        'title' => (string) ($postare['title'] ?? ''),
+        'slug' => (string) ($postare['slug'] ?? ''),
+        'excerpt' => (string) ($postare['excerpt'] ?? ''),
+        'content' => (string) ($postare['content'] ?? ''),
+        'reading_minutes' => (string) ($postare['reading_minutes'] ?? '1'),
+        'published_at' => (string) ($postare['published_at'] ?? ''),
+        'author_id' => (string) ($postare['author_id'] ?? ''),
+        'template_id' => (string) ($postare['template_id'] ?? ''),
+        'featured_image_url' => (string) ($postare['featured_image_url'] ?? ''),
+        'category_ids' => array_map('strval', $categorii),
+    ] + ((int) ($postare['is_published'] ?? 0) === 1 ? ['is_published' => '1'] : []) + $extra;
+
+    $salvari = [
+        [
+            'nume' => 'oferte BBD: cheia ofertei rămâne la salvarea produsului',
+            'din' => 'b632294',
+            'tabele' => [
+                ['tabel' => 'products', 'unde' => 'id = :p1', 'param' => ['p1' => $idProdusBbd], 'cheie' => 'id'],
+                ['tabel' => 'product_category_links', 'unde' => 'product_id = :p2', 'param' => ['p2' => $idProdusBbd], 'cheie' => 'id'],
+                ['tabel' => 'product_extra_field_values', 'unde' => 'product_id = :p3', 'param' => ['p3' => $idProdusBbd], 'cheie' => 'id'],
+                ['tabel' => 'seo_pages', 'unde' => 'page_type = \'product\' AND page_ref = :p4', 'param' => ['p4' => (string) $idProdusBbd], 'cheie' => 'id'],
+                $tokenCache,
+            ],
+            'pregateste' => static function (PDO $db) use ($idProdusBbd, $oferteSalvate): void {
+                $db->prepare('UPDATE products SET bbd_enabled = 1, bbd_entries_json = :j WHERE id = :id')->execute([
+                    'j' => json_encode($oferteSalvate, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 'id' => $idProdusBbd]);
+            },
+            'cereri' => [['POST', '/admin/products/' . $idProdusBbd . '/update', $corpProdus]],
+            'stare' => static function (PDO $db) use ($citeste, $idProdusBbd): array {
+                $rand = $citeste('SELECT * FROM products WHERE id = :id', ['id' => $idProdusBbd])[0] ?? [];
+                return [
+                    'produs' => salvari_fara_coloane($rand),
+                    'categorii' => array_map('intval', array_column(
+                        $citeste('SELECT category_id FROM product_category_links WHERE product_id = :id ORDER BY category_id', ['id' => $idProdusBbd]), 'category_id')),
+                ];
+            },
+            'verifica' => static function (array $stare) use ($cheie1): array {
+                $oferte = json_decode((string) ($stare['produs']['bbd_entries_json'] ?? ''), true);
+                if (!is_array($oferte)) {
+                    return ['bbd_entries_json nu e JSON'];
+                }
+                $cheie = static function (string $lot, float $pret) use ($oferte): ?string {
+                    foreach ($oferte as $oferta) {
+                        if (($oferta['lot'] ?? '') === $lot && abs((float) ($oferta['reduced_price'] ?? 0) - $pret) < 0.001) {
+                            return (string) ($oferta['key'] ?? '');
+                        }
+                    }
+                    return null;
+                };
+                $chei = array_map(static fn ($o): string => (string) ($o['key'] ?? ''), $oferte);
+                $probleme = [];
+                if ($cheie('LDEMO1', 12.5) !== $cheie1) {
+                    $probleme[] = 'oferta cu prețul schimbat nu și-a păstrat cheia';
+                }
+                if (in_array($cheie('LDEMO1', 11.9), [null, '', $cheie1], true)) {
+                    $probleme[] = 'oferta nouă cu datele vechi are cheia celei păstrate (sau niciuna)';
+                }
+                if (count($oferte) !== 7 || count(array_unique($chei)) !== 7 || in_array('', $chei, true)) {
+                    $probleme[] = 'așteptam 7 oferte cu 7 chei diferite: ' . json_encode($chei);
+                }
+                if ($cheie('LDEMO5', 7.0) !== 'abcdef123') {
+                    $probleme[] = 'cheia „ABCdef123” nu a devenit „abcdef123”';
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'blog: editorul bifează toate categoriile postării',
+            'din' => '89dcc4e',
+            'tabele' => $tabelePostare,
+            'pregateste' => $pregatestePostarea,
+            'cereri' => [['GET', '/admin/blog/posts/editor?post=' . $idPostare, []]],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static function (array $stare, array $raspunsuri): array {
+                $bifate = preg_match_all('#name="category_ids\[\]" value="\d+" checked#', (string) ($raspunsuri[0]['corp'] ?? ''));
+                return $bifate === 3 ? [] : ['editorul bifează ' . $bifate . ' categorii din 3'];
+            },
+        ],
+        [
+            'nume' => 'blog: re-salvarea păstrează categoriile și categoria principală',
+            'din' => 'b3781a4',
+            'tabele' => $tabelePostare,
+            'pregateste' => $pregatestePostarea,
+            'cereri' => [['POST', '/admin/blog/posts', $corpPostare([$cat1, $cat2, $cat3])]],
+            'stare' => static fn (PDO $db): array => $starePostare($db, $idPostare),
+            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat2
+                && $stare['categorii'] === [$cat1, $cat2, $cat3] ? [] : ['principala sau categoriile s-au schimbat: ' . json_encode($stare)],
+        ],
+        [
+            'nume' => 'blog: principala debifată, principala devine prima bifată',
+            'din' => 'b3781a4',
+            'tabele' => $tabelePostare,
+            'pregateste' => $pregatestePostarea,
+            'cereri' => [['POST', '/admin/blog/posts', $corpPostare([$cat1, $cat3])]],
+            'stare' => static fn (PDO $db): array => $starePostare($db, $idPostare),
+            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat1
+                && $stare['categorii'] === [$cat1, $cat3] ? [] : ['așteptam principala ' . $cat1 . ': ' . json_encode($stare)],
+        ],
+        [
+            'nume' => 'blog: categoria trimisă explicit (category_id) devine principala',
+            'din' => 'b3781a4',
+            'tabele' => $tabelePostare,
+            'pregateste' => $pregatestePostarea,
+            'cereri' => [['POST', '/admin/blog/posts', $corpPostare([$cat1, $cat2, $cat3], ['category_id' => (string) $cat3])]],
+            'stare' => static fn (PDO $db): array => $starePostare($db, $idPostare),
+            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat3
+                ? [] : ['așteptam principala ' . $cat3 . ': ' . json_encode($stare)],
+        ],
+        [
+            'nume' => 'blog: duplicarea copiază categoriile și categoria principală',
+            'din' => '89dcc4e',
+            'tabele' => $tabelePostare,
+            'pregateste' => $pregatestePostarea,
+            'cereri' => [['POST', '/admin/blog/posts', ['action' => 'duplicate', 'id' => (string) $idPostare]]],
+            'stare' => static function (PDO $db) use ($idMaxPostari, $starePostare, $unu): array {
+                // Id-ul copiei crește la fiecare rulare: se compară fără el (și fără ora copierii).
+                $idCopie = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_posts WHERE id > ' . $idMaxPostari);
+                $stare = $starePostare($db, $idCopie);
+                $stare['postare'] = salvari_fara_coloane($stare['postare'], ['id', 'published_at']);
+                $stare['_inlocuiri'] = $idCopie > 0 ? ['post=' . $idCopie => 'post=<COPIA>'] : [];
+                return $stare;
+            },
+            'verifica' => static fn (array $stare): array => (int) ($stare['postare']['category_id'] ?? 0) === $cat2
+                && $stare['categorii'] === [$cat1, $cat2, $cat3] ? [] : ['copia nu are categoriile originalului: ' . json_encode($stare)],
+        ],
+    ];
+
+    foreach ($salvari as $caz) {
+        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (Bioscem ' . $caz['din'] . ')';
+        $original = salvari_instantaneu($db, $caz['tabele']);
+        $rezultate = [];
+        $probleme = [];
+        try {
+            foreach (['baza' => $portBaza, 'curent' => $portCurent] as $server => $port) {
+                salvari_pune_la_loc($db, $caz['tabele'], $original);
+                ($caz['pregateste'])($db);
+                $jar = $dosarDiff . '/jar-' . $server . '-salvare.txt';
+                @unlink($jar);
+                $cerere($port, 'POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parola]);
+                $raspunsuri = [];
+                foreach ($caz['cereri'] as [$metoda, $cale, $date]) {
+                    $raspunsuri[] = $cerere($port, $metoda, $cale, $jar, $date);
+                }
+                $stare = ($caz['stare'])($db);
+                $inlocuiri = (array) ($stare['_inlocuiri'] ?? []);
+                unset($stare['_inlocuiri']);
+                foreach ($raspunsuri as $n => $r) {
+                    $corp = strtr($r['corp'], $inlocuiri);
+                    // Diferențele declarate se scot, ca în lista de pagini, doar din paginile cerute cu GET.
+                    if ($server === 'curent' && $caz['cereri'][$n][0] === 'GET') {
+                        $gasiteSalvare = [];
+                        $corp = $faraDeclarate((string) $caz['cereri'][$n][1], $corp, $gasiteSalvare, $probleme);
+                    }
+                    $raspunsuri[$n] = [
+                        'cod' => $r['cod'],
+                        'location' => strtr(str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['location']), $inlocuiri),
+                        'antete' => $normalizeazaAntete($r['antete']),
+                        'corp' => $normalizeaza($corp),
+                    ];
+                }
+                $rezultate[$server] = ['raspunsuri' => $raspunsuri, 'stare' => $stare];
+            }
+        } finally {
+            salvari_pune_la_loc($db, $caz['tabele'], $original);
+            @unlink($dosarDiff . '/jar-baza-salvare.txt');
+            @unlink($dosarDiff . '/jar-curent-salvare.txt');
+        }
+        if (salvari_instantaneu($db, $caz['tabele']) !== $original) {
+            $probleme[] = 'baza nu a putut fi pusă la loc exact (tools/dev/lib/salvari-admin.php)';
+        }
+        foreach (($caz['verifica'])($rezultate['baza']['stare'], $rezultate['baza']['raspunsuri']) as $problema) {
+            $probleme[] = 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ' . $problema;
+        }
+        $diferente = salvari_diferente($rezultate['baza']['stare'], $rezultate['curent']['stare'], 'bază: ');
+        foreach ($rezultate['baza']['raspunsuri'] as $n => $rBaza) {
+            $rCurent = $rezultate['curent']['raspunsuri'][$n];
+            foreach (['cod', 'location', 'antete', 'corp'] as $camp) {
+                if ($rBaza[$camp] !== $rCurent[$camp]) {
+                    $diferente[] = 'cererea ' . ($n + 1) . ': ' . $camp . ' diferă';
+                }
+            }
+            if ($rBaza['corp'] !== $rCurent['corp'] || $rBaza['antete'] !== $rCurent['antete']) {
+                $nume = 'salvare_' . (preg_replace('/[^a-z0-9]+/i', '_', $caz['nume']) ?: 'caz') . '_' . ($n + 1);
+                file_put_contents($dosarDiff . '/' . $nume . '.baza.html', $cuAntete($rBaza['antete'], $rBaza['corp']));
+                file_put_contents($dosarDiff . '/' . $nume . '.curent.html', $cuAntete($rCurent['antete'], $rCurent['corp']));
+                file_put_contents($dosarDiff . '/' . $nume . '.diff', (string) shell_exec('diff -u '
+                    . escapeshellarg($dosarDiff . '/' . $nume . '.baza.html') . ' ' . escapeshellarg($dosarDiff . '/' . $nume . '.curent.html') . ' 2>&1'));
+            }
+        }
+        if ($probleme === [] && $diferente === []) {
+            $identice++;
+            echo '  OK    ', $rezultate['curent']['raspunsuri'][0]['cod'], '  ', $eticheta, "\n";
+            continue;
+        }
+        $diferite[] = $eticheta;
+        echo '  DIFERĂ ', $eticheta, "\n";
+        foreach (array_merge($probleme, array_slice($diferente, 0, 12)) as $rand) {
+            echo '          ', mb_substr($rand, 0, 400), "\n";
+        }
+    }
+}
+
 foreach (glob($dosarDiff . '/jar-*') ?: [] as $jar) {
     @unlink($jar);
 }
