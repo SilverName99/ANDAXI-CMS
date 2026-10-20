@@ -6,7 +6,8 @@ din Bioscem) încă își creează singur coloanele din mers, cu cele 36 de func
 rămân până când fiecare site trece pe migrări (garda de la WP-05, apoi ștergerea lor după adoptări).
 
 Ce există acum (WP-02 din planul Etapei 1): **runner-ul**, cu detectarea, reluarea și codurile de
-ieșire, plus testele lui. Ce vine: migrările de bază `0001`–`0024` și `asteptat.json` (WP-03), testele
+ieșire, plus testele lui; din WP-10, **sonda schemei** site-urilor live (mai jos), din care se fac
+fixture-urile testelor. Ce vine: migrările de bază `0001`–`0024` și `asteptat.json` (WP-03), testele
 pe schemele celor cinci coduri și verificarea fișierelor de migrare (WP-04), instalarea prin migrări,
 garda `Garda::stare` și `/health` (WP-05), pasul de înghețare a setărilor unui site (WP-06).
 
@@ -79,6 +80,8 @@ database/migrari/
 src/Support/Migrari/                 Registru, Runner, Schema, Server, Amprenta, Executie, Eroare, ParametruLipsa
 scripts/migreaza.php                 linia de comandă
 storage/logs/migrari.log             câte un rând pe operație executată (nume de obiecte, clasa, durata)
+tools/sonda/amprenta-schema.php      sonda schemei unui site live (WP-10, MIG-08), rulată de proprietar
+tools/dev/migrari/din-sonda.php      local: sonda → fixture-ul și extra-<cod>.txt, în tools/dev/migrari/vechi/privat/
 ```
 
 - **id** = `<proprietar>/<NNNN>_<nume>`. **NNNN** e unic în tot dosarul (oricare proprietar) și dă
@@ -216,6 +219,27 @@ Pe Hostinger nu se știe încă dacă e MariaDB sau MySQL (o spune sonda). Runne
 
 Testele rulează pe MariaDB 10.11 și pe MySQL 8.0 (`tools/dev/mysql8.sh` pornește al doilea server,
 doar pe socket) și cer aceeași amprentă pe amândouă.
+
+## Sonda schemei de pe site-urile live (WP-10, MIG-08)
+
+Schema pe care o produce codul unui site nu e neapărat cea din baza lui live (coloane vechi, părți
+niciodată create, altă colație, tabele lăsate de scripturi unice; MIG-08 din planul Etapei 1). Sonda o citește:
+`$PHP tools/sonda/amprenta-schema.php --site=<bioscem|grafoanaytis|biovitality|vertij>`, rulată de
+proprietar, noaptea, din dosarul site-ului de verificare (pașii în [VERIFICARE.md](VERIFICARE.md), pasul 5),
+strict în citire. Scrie un JSON cu rândurile din `information_schema` în forma lui `Amprenta::citesteBrut()`
+(deci `Amprenta::normalizeaza()` le aduce la aceeași amprentă ca orice bază locală), valorile serverului
+(`sql_mode`, `lock_wait_timeout`, motorul și formatul implicit al rândurilor…), drepturile utilizatorului
+bazei (pentru runner: are ALTER și INDEX?), numele cheilor din `settings`, rândurile fiecărui tabel și
+numerele pe care le citesc migrările de date. Niciun rând de date, nicio parolă.
+
+Local, `tools/dev/php.sh tools/dev/migrari/din-sonda.php <amprenta-<site>-….json>` scrie în
+`tools/dev/migrari/vechi/privat/` (ignorat de git: repo-ul e public, OD-49) `<cod>-live.sql` (schema ca
+`CREATE TABLE`, cu coloanele în ordinea lor, colațiile, indecșii și cheile străine; încărcată, dă aceeași
+amprentă, pe MariaDB și pe MySQL 8), `extra-<cod>.txt` (obiectele în plus față de `asteptat.json`, pentru
+testul T2) și `<cod>-fata-de-asteptat.txt` (ce lipsește sau diferă). Fixture-urile din git rămân cele făcute
+din cod (WP-04), potrivite de mână după structura sondei, niciodată după numerele ei. `din-sonda.php` refuză
+o intrare sau o ieșire din repo pe care git nu o ignoră, și cu căi relative (le face absolute față de dosarul
+curent înainte de verificare; `tools/dev/php.sh` pornește din rădăcina repo-ului).
 
 ## Linia de comandă fără sesiune
 

@@ -25,3 +25,9 @@
 # Datele fiecărui site (redirecționări, reguli SEO): dosarul site/ de pe server
 # (sau SITE_DATE_DOSAR). Pachetele site-urilor existente stau în site-uri/<site>/.
 /site/
+
+# Ce trimite proprietarul de pe site-urile live (WP-10: sonda schemei, verificările agregate) și
+# fixture-urile făcute din ele: numere și structură scoase din datele live, deci niciodată în git
+# cât repo-ul e public (decizia OD-49). Pe server, rezultatele stau în storage/verificare/sonde/
+# (ignorat mai sus, ca tot storage/).
+/tools/dev/migrari/vechi/privat/
