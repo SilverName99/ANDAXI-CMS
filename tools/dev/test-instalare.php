@@ -636,9 +636,22 @@ $verifica('install.php cu pachetul altui site (SITE_SLUG=altul) și cu o corectu
 
 // Adoptarea unui site vechi: baseline-ul oprit între ultima migrare și înghețare (aici --pana-la; pe server bugetul de timp sau
 // un proces omorât). Garda spune in_urma până termină pașii site-ului, deci pasul ERP nu scrie pragul înaintea înghețării.
+// Ultima migrare din cod, după număr (de la WP-R, una de după baseline: magazin/0032), ca --pana-la să le ia pe toate.
+$ultimaMigrare = (static function () use ($radacina): string {
+    $ultima = '';
+    $ord = -1;
+    foreach (glob($radacina . '/database/migrari/*/[0-9][0-9][0-9][0-9]_*.php') ?: [] as $fisier) {
+        $numar = (int) substr(basename($fisier), 0, 4);
+        if ($numar > $ord) {
+            $ord = $numar;
+            $ultima = basename(dirname($fisier)) . '/' . basename($fisier, '.php');
+        }
+    }
+    return $ultima;
+})();
 $dbA = $bazaNoua('cms_inst_adoptare');
 [$cpv, $opv] = $php('cms_inst_adoptare', ['tools/dev/migrari/pe-vechi.php']);
-[$ca1, $oa1] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba', '--pana-la=blog/0024_legaturi_categorii'], $cuPachetF);
+[$ca1, $oa1] = $php('cms_inst_adoptare', ['scripts/migreaza.php', '--aplica', '--site=proba', '--pana-la=' . $ultimaMigrare], $cuPachetF);
 Garda::uita();
 $stareA1 = Garda::stare($dbA);
 $verifica('baza ca înainte, baseline cu --site=proba oprit înaintea înghețării: 0, ultima_ord la zi, dar pasi_site rămâne și garda spune in_urma',

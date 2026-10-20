@@ -25,11 +25,18 @@ declare(strict_types=1);
  * înainte de require. Serverul de dezvoltare (`php -S`, SAPI „cli-server”) și
  * site-urile nu sunt atinse.
  */
+// Fluxul de produse pentru Google (/feed/google-merchant.xml) e doar citire și
+// îl cere un robot o dată pe zi: fără sesiune, deci fără cookie și fără un
+// fișier de sesiune nou la fiecare preluare. Doar calea exactă, doar GET/HEAD.
+$faraSesiune = PHP_SAPI !== 'cli'
+    && in_array(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? '')), ['GET', 'HEAD'], true)
+    && (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '') === '/feed/google-merchant.xml';
+
 if (PHP_SAPI === 'cli' && !defined('ANDAXI_CU_SESIUNE')) {
     if (!isset($_SESSION) || !is_array($_SESSION)) {
         $_SESSION = [];
     }
-} elseif (session_status() === PHP_SESSION_NONE) {
+} elseif (session_status() === PHP_SESSION_NONE && !$faraSesiune) {
     $viataSesiune = 60 * 60 * 24 * 30; // 30 de zile
 
     $dosarSesiuni = __DIR__ . '/storage/sessions';

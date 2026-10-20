@@ -158,11 +158,12 @@ return [
         'magazin' => [
             'nume' => 'Magazin online',
             'descriere' => 'Coș, finalizarea comenzii (checkout), comenzi, plata ramburs și prin ordin de plată, emailurile de comandă, '
-                . 'coșul abandonat și coșul flotant.',
+                . 'coșul abandonat și coșul flotant, avertismentul pe produs (ex. refrigerat) și fluxul de produse pentru Google Merchant Center.',
             'necesita' => ['catalog'],
             'bani' => true,
             'rute_admin' => ['/admin/orders/*', '/admin/settings/floating-cart'],
-            'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*'],
+            // Fluxul Merchant Center are prețuri și disponibilitate: e al magazinului, nu al catalogului (WP-R).
+            'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*', '/feed/google-merchant\.xml'],
             // EuPlătesc trimite clientul înapoi prin POST, cu rezultatul semnat al plății.
             'rute_mereu_deschise' => ['POST /checkout/succes/{orderNumber}'],
             'pagini' => ['checkout/succes'],
@@ -183,7 +184,8 @@ return [
             ],
             // Emailurile de coș abandonat invită clientul să termine comanda: nu și cu checkout-ul închis.
             'cron' => ['scripts/abandoned-cart-emails.php' => 'pornit'],
-            'tabele' => ['orders', 'order_items', 'email_logs', 'cart_abandonments'],
+            // Avertismentul pe produs (WP-R, din Bioscem 0582ce9): textele pe produs și ce a confirmat clientul pe comandă.
+            'tabele' => ['orders', 'order_items', 'email_logs', 'cart_abandonments', 'product_warnings', 'order_product_warnings'],
         ],
 
         'livrare_fan' => [

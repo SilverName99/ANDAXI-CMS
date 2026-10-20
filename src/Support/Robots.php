@@ -23,6 +23,18 @@ namespace App\Support;
  */
 final class Robots
 {
+    /**
+     * Adrese spuse explicit „voie” (nimic nu le blochează, dar Merchant Center
+     * verifică robots.txt înainte să preia fluxul de produse). Fluxul nu e
+     * legat din nicio pagină și nu intră în sitemap. Ca la DISALLOW, fiecare cu
+     * pluginul ei: fără magazin pe site, fluxul dă 404 și linia lipsește.
+     *
+     * @var array<string, string> adresa => al cui e
+     */
+    public const ALLOW = [
+        '/feed/google-merchant.xml' => 'magazin',
+    ];
+
     /** @var array<string, string> regula => al cui e („nucleu” sau cheia pluginului) */
     public const DISALLOW = [
         '/admin' => 'nucleu',
@@ -65,6 +77,11 @@ final class Robots
     public static function text(string $baseUrl): string
     {
         $linii = ['User-agent: *'];
+        foreach (self::ALLOW as $regula => $plugin) {
+            if ($plugin === 'nucleu' || Plugins::vizibil($plugin)) {
+                $linii[] = 'Allow: ' . $regula;
+            }
+        }
         foreach (self::reguli() as $regula) {
             $linii[] = 'Disallow: ' . $regula;
         }

@@ -2,7 +2,7 @@
 # Pe site: catalog, magazin, livrare_fan, plata_stripe, link_plata, erp, cupoane, fidelitate, recenzii, oferte_bbd, produse_promo, pachete_produse, conturi_clienti, blog, newsletter, chat_live, fisiere_cloud, concurenta, manechin, acorduri_gdpr
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (253)
+RUTE (256)
 GET  / -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> CONTROLLER [acorduri_gdpr]
 GET  /admin -> CONTROLLER [nucleu]
@@ -77,6 +77,7 @@ GET  /admin/users/settings -> CONTROLLER [conturi_clienti]
 GET  /admin/users/{id} -> CONTROLLER [conturi_clienti]
 GET  /api/blog/posts -> CONTROLLER [blog]
 GET  /api/blog/posts/{slug} -> CONTROLLER [blog]
+GET  /api/cart/avertismente -> CONTROLLER [magazin]
 GET  /api/cart/summary -> CONTROLLER [magazin]
 GET  /api/checkout/shipping-quote -> CONTROLLER [magazin]
 GET  /api/fan/localities -> CONTROLLER [livrare_fan]
@@ -99,6 +100,7 @@ GET  /contul-meu/resetare-parola -> CONTROLLER [conturi_clienti]
 GET  /contul-meu/resetare-parola/{token} -> CONTROLLER [conturi_clienti]
 GET  /cos -> CONTROLLER [magazin]
 GET  /eticheta/{slug} -> CONTROLLER [catalog]
+GET  /feed/google-merchant.xml -> CONTROLLER [magazin]
 GET  /gdpr-agreements/success -> CONTROLLER [acorduri_gdpr]
 GET  /health -> CONTROLLER [nucleu]
 GET  /login -> CONTROLLER [conturi_clienti]
@@ -123,6 +125,7 @@ POST /admin/blog/posts/image-upload -> CONTROLLER [blog]
 POST /admin/blog/posts/import -> CONTROLLER [blog]
 POST /admin/blog/templates -> CONTROLLER [blog]
 POST /admin/categories -> CONTROLLER [catalog]
+POST /admin/categories/brand-seo -> CONTROLLER [catalog]
 POST /admin/categories/{id}/delete -> CONTROLLER [catalog]
 POST /admin/categories/{id}/update -> CONTROLLER [catalog]
 POST /admin/coupons -> CONTROLLER [cupoane]

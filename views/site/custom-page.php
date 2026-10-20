@@ -116,6 +116,12 @@ $pageHtml = (string) preg_replace_callback(
     },
     $pageHtml
 );
+// Linkurile de categorie scrise în pagină (/magazin?category=…) duc la
+// /categorie/{slug}; textul paginii din baza de date rămâne neatins. Doar cu
+// catalogul pe site (fără el, filtrul pluginurilor scoate oricum linkurile).
+if (\App\Support\Plugins::vizibil('catalog')) {
+    $pageHtml = \App\Support\LinkuriCategorii::rescrieInPagina($pageHtml, $nextEventDb instanceof \PDO ? $nextEventDb : null);
+}
 ?>
 <?php if (trim($pageCss) !== ''): ?>
     <style>

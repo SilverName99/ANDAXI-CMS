@@ -72,6 +72,8 @@ final class SeoRedirects
     private static int $nivelBuffer = 0;
     private static string $caleCurata = '/';
     private static string $query = '';
+    /** Query-ul ales de redirectCanonic() (poate fi gol: „?category=” mutat în cale); null dacă n-a fost apelat. */
+    private static ?string $queryCanonic = null;
     private static ?string $bazaCanonica = null;
     private static bool $gazdaGresita = false;
     private static bool $caleGresita = false;
@@ -359,8 +361,10 @@ final class SeoRedirects
      * 301 de la o variantă a adresei (litere mari, alt fel de scriere) la
      * adresa corectă a unei pagini care există. Doar la GET/HEAD și doar în
      * afara căilor excluse. Întoarce true dacă a trimis redirecționarea.
+     * Fără $query, parametrii din adresă se păstrează întocmai; cu $query
+     * (de exemplu fără ?category=, mutat în cale), pleacă exact acela.
      */
-    public static function redirectCanonic(string $caleCorecta): bool
+    public static function redirectCanonic(string $caleCorecta, ?string $query = null): bool
     {
         $metoda = strtoupper((string) ($_SERVER['SEO_REQUEST_METHOD_ORIGINAL'] ?? $_SERVER['REQUEST_METHOD'] ?? 'GET'));
         if ($metoda !== 'GET' && $metoda !== 'HEAD') {
@@ -372,8 +376,14 @@ final class SeoRedirects
         if ($caleCorecta === '' || self::eExclusa($caleCorecta)) {
             return false;
         }
-        [, $query] = self::imparteUri((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+        if ($query === null) {
+            [, $query] = self::imparteUri((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+        }
         self::$redirectCanonic = true;
+        // Pe www, cu „/” final sau „//”, saltul final îl face termina(): acolo
+        // trebuie să plece tot acest query, nu cel original (altfel „?category=X”
+        // s-ar lipi înapoi la /categorie/x).
+        self::$queryCanonic = $query;
         self::faraCookieuriPentruVizitatorNou();
         header('Location: ' . $caleCorecta . ($query !== '' ? '?' . $query : ''), true, 301);
         header('Cache-Control: ' . self::cacheControlRedirect(), true);
@@ -657,13 +667,16 @@ final class SeoRedirects
 
     /**
      * Locația dată de aplicație, mutată pe gazda canonică. Null dacă duce în
-     * afara site-ului (atunci o lăsăm cum e).
+     * afara site-ului (atunci o lăsăm cum e). Fără query în locație, rămân
+     * parametrii cererii; dar dacă aplicația a ales ea query-ul (redirectCanonic),
+     * pleacă exact acela, chiar și gol.
      */
     private static function locatieCanonica(string $locatie): ?string
     {
+        $queryImplicit = self::$queryCanonic ?? self::$query;
         if (str_starts_with($locatie, '/') && !str_starts_with($locatie, '//')) {
             [$cale, $query] = self::imparteUri($locatie);
-            return self::adresaCompleta(self::curataCale($cale), $query !== '' ? $query : self::$query);
+            return self::adresaCompleta(self::curataCale($cale), $query !== '' ? $query : $queryImplicit);
         }
         $parti = parse_url($locatie);
         if (!is_array($parti) || !isset($parti['host'])) {
@@ -675,7 +688,7 @@ final class SeoRedirects
             return null;
         }
         $query = (string) ($parti['query'] ?? '');
-        return self::adresaCompleta(self::curataCale((string) ($parti['path'] ?? '/')), $query !== '' ? $query : self::$query);
+        return self::adresaCompleta(self::curataCale((string) ($parti['path'] ?? '/')), $query !== '' ? $query : $queryImplicit);
     }
 
     /** @return array{0: string, 1: string} calea brută și query-ul, fără parse_url („//x" nu e o gazdă aici) */

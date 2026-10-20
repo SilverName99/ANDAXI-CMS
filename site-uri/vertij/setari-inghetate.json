@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@ca1120c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -289,7 +289,7 @@
             "valoare": "Societatea de Vertij, Tinitus și Hipoacuzie",
             "mod": "lipsa_sau_gol",
             "din": "extras",
-            "sursa": "VT views/layout.php: un store_name gol (implicitul VT) ia numele din BrandedEmail::brandName (email_brand_name, apoi order_email_from_name, apoi numele societății scris în cod); codul comun pune „Bioscem Shop” pe gol",
+            "sursa": "VT views/layout.php: un store_name gol (implicitul VT) ia numele din BrandedEmail::brandName (email_brand_name, apoi order_email_from_name, apoi numele societății scris în cod); codul comun pune pe gol numele implicit al site-ului (SeoMeta::numeMagazinImplicit: seo.json → organizatie.nume, apoi APP_NAME; din livrarea 2 SEO, WP-R 20 oct 2026), pe care pachetul VT nu-l are",
             "extrage": {
                 "apel": "App\\Support\\BrandedEmail::brandName",
                 "argumente": [
@@ -297,7 +297,7 @@
                 ]
             },
             "vechi": "implicit \"\"",
-            "nucleu": "cod \"\" | \"Bioscem Shop\"",
+            "nucleu": "lipsește",
             "nota": "Dacă baza VT are alt email_brand_name sau order_email_from_name, titlul de azi îl folosește pe acela: îl arată verificarea pachetului pe verificare (DB-24), iar WP-16 (Brand::numeSite) revede decizia"
         },
         "stripe_enabled": {

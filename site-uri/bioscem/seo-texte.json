@@ -1,0 +1,203 @@
+{
+  "_despre": "Textele Google ale Bioscem din livrarea 2 SEO (Bioscem 7c561fa și 0250480, 20 oct 2026): titlul și descrierea primei pagini, ale celor 3 categorii și ale celor 20 de produse din planul SEO (§3.1), plus numele magazinului din titluri („Bioscem”, decizia proprietarului din 20 oct). Le scrie în bază scripts/seo-texte.php (--plan, --aplica, --restaureaza), din dosarul site-ului. Conținut public al site-ului. Motivele fiecărui text (cu cifre din Search Console) rămân doar în repo-ul Bioscem (scripts/seo-texte.json): nimic derivat din date live nu intră aici (decizia OD-49).",
+  "nume_magazin": "Bioscem",
+  "asteptat": {
+    "home": 1,
+    "categorie": 3,
+    "produs": 20
+  },
+  "texte": [
+    {
+      "tip": "home",
+      "slug": "",
+      "titlu_vechi": "Acasa | Bioscem Shop",
+      "titlu_nou": "Bioscem",
+      "descriere_veche": "",
+      "descriere_noua": "Magazin online cu plasmă marină Quinton, siliciu organic, dispozitive CMO și suplimente naturale."
+    },
+    {
+      "tip": "categorie",
+      "slug": "plasma-quinton",
+      "titlu_vechi": "Plasma Quinton | Bioscem Shop",
+      "titlu_nou": "Plasma Quinton: Hipertonic, Izotonic și spray-uri | Bioscem",
+      "descriere_veche": "",
+      "descriere_noua": "Plasma Quinton: fiole Hipertonic și Izotonic de 10 ml, Totum Sport în plicuri, spray-uri nazale Daily, Plus și Pediatric, Quinton Ocular și Dermo Action."
+    },
+    {
+      "tip": "categorie",
+      "slug": "siliciu-organic",
+      "titlu_vechi": "Siliciu Organic | Bioscem Shop",
+      "titlu_nou": "Siliciu organic – Silicium G7, Orgono și Living Silica",
+      "descriere_veche": "",
+      "descriere_noua": "Siliciu organic lichid, în capsule, gel sau cremă: Silicium G7 Original și Siliplant Dinamizat de 1 L, gama Orgono, Living Silica și peptide de colagen."
+    },
+    {
+      "tip": "categorie",
+      "slug": "dispozitive-cmo",
+      "titlu_vechi": "Dispozitive CMO | Bioscem Shop",
+      "titlu_nou": "Dispozitive CMO Comosystems – Traveller, Harmony, Easycall",
+      "descriere_veche": "",
+      "descriere_noua": "Dispozitive CMO Comosystems: Easycall pentru telefon mobil, PCZone pentru laptop și computer, Harmony pentru casă sau birou, Traveller pentru călătorii."
+    },
+    {
+      "tip": "produs",
+      "slug": "sare-celtica-fina-500g",
+      "titlu_vechi": "Sare celtică fină 500g",
+      "titlu_nou": "Sare celtică fină 500 g – sare de mare nerafinată | Bioscem",
+      "descriere_veche": "Sare celtică fină este bogată în minerale esențiale, obținută din mlaștinile sărate ale oceanului, prin metode tradiționale, fără adaosuri chimice sau procese de rafinare.",
+      "descriere_noua": "Sare celtică fină din Franța, recoltată manual prin metode tradiționale, nerafinată și fără adaosuri chimice. Pentru gătit, salate și murături. 500 g."
+    },
+    {
+      "tip": "produs",
+      "slug": "vitamina-c-acid-ascorbic-500g",
+      "titlu_vechi": "Vitamina C (acid ascorbic) 500g - BIOSCEM",
+      "titlu_nou": "Acid ascorbic (vitamina C) pudră, pungă de 500 g | Bioscem",
+      "descriere_veche": "Vitamina C (acid ascorbic) - un important antioxidant ce ajută la: oxigenarea celulelor, producerea colagenului, scăderea colesterolului, absorbția fierului",
+      "descriere_noua": "Acid ascorbic pudră, 100% acid L-ascorbic: vitamina C fără alte ingrediente, care se dizolvă în apă. Pungă de 500 g. Există și varianta alcalină."
+    },
+    {
+      "tip": "produs",
+      "slug": "quinton-hipertonic",
+      "titlu_vechi": "QUINTON HIPERTONIC fiole 300 ml | Laboratories Quinton",
+      "titlu_nou": "Plasma Quinton Hipertonic – 30 fiole x 10 ml | Bioscem",
+      "descriere_veche": "Plasma QUINTON Hipertonic - Supliment nutrițional mineralizant, 30 fiole x 10 ml",
+      "descriere_noua": "Plasma Quinton Hipertonic, Laboratories Quinton (Spania): apă de mare dublu microfiltrată la rece, fără aditivi, pentru uz oral. 30 de fiole de 10 ml."
+    },
+    {
+      "tip": "produs",
+      "slug": "clorura-magneziu-sare-nigari",
+      "titlu_vechi": "Clorura de magneziu (Sare Nigari) 1 kg",
+      "titlu_nou": "Clorură de magneziu (sare Nigari) cristale, 1 kg | Bioscem",
+      "descriere_veche": "Clorura de magneziu obținută din apă de mare are o mulţime de întrebuinţări în ce priveşte sănătatea și frumuseţea, cât şi pentru grădină sau animale.",
+      "descriere_noua": "Clorură de magneziu hexahidrată (MgCl2·6H2O), puritate de minimum 99%, în cristale. Pungă de 1 kg, pentru uz intern sau pentru băi de corp și de picioare."
+    },
+    {
+      "tip": "produs",
+      "slug": "vitamina-c-lipozomala-quicksilver",
+      "titlu_vechi": "Vitamina C Lipozomală QuickSilver 1000 mg | Quicksilver",
+      "titlu_nou": "Vitamina C lipozomală 1000 mg, 120 ml – Quicksilver",
+      "descriere_veche": "Vitamina C Lipozomală QuickSilver 1000 mg asigură o absorbție rapidă a vitaminei C şi o biodisponibilitate superioară, cu efect imediat.",
+      "descriere_noua": "Vitamina C lipozomală lichidă de la Quicksilver Scientific: 1000 mg vitamina C în 5 ml, cu lecitină din floarea-soarelui. Sticlă de 120 ml, 24 de doze."
+    },
+    {
+      "tip": "produs",
+      "slug": "vitamina-b12-metilcobalamina-hsn",
+      "titlu_vechi": "Vitamina B12 Metilcobalamină HSN 120 caps. - BIOSCEM",
+      "titlu_nou": "Vitamina B12 metilcobalamină 1000 µg, 120 capsule – HSN",
+      "descriere_veche": "Vitamina B12 Metilcobalamină de la HSN Essentials este un nutrient esenţial pentru organism, livrat în forma sa naturală, biodisponibilă.",
+      "descriere_noua": "Vitamina B12 sub formă de metilcobalamină, 1000 µg per capsulă, de la HSN (Spania). 120 de capsule vegetale, potrivite pentru vegani; o capsulă pe zi."
+    },
+    {
+      "tip": "produs",
+      "slug": "quinton-izotonic",
+      "titlu_vechi": "QUINTON IZOTONIC fiole 300 ml | Laboratories Quinton",
+      "titlu_nou": "Plasma Quinton Izotonic – 30 fiole x 10 ml | Bioscem",
+      "descriere_veche": "Plasma Quinton Izotonic - Supliment nutrițional mineralizant",
+      "descriere_noua": "Plasma Quinton Izotonic, Laboratories Quinton: 29% apă de mare dublu microfiltrată la rece și 71% apă minerală slab mineralizată. 30 de fiole de 10 ml."
+    },
+    {
+      "tip": "produs",
+      "slug": "ulei-neem-nerafinat-presat-rece",
+      "titlu_vechi": "Ulei de NEEM nerafinat presat la rece 100 ml",
+      "titlu_nou": "Ulei de neem nerafinat, presat la rece, 100 ml – uz extern",
+      "descriere_veche": "Ulei de NEEM nerafinat presat la rece este: antibacterian, antifungic, antiinflamator, antiparazitar cutanat, emolient și regenerant cutanat, repelent contra insectelor.",
+      "descriere_noua": "Ulei de neem nerafinat, presat la rece, numai pentru uz extern, 100 ml. Se aplică pur sau amestecat cu alte uleiuri vegetale. Are miros puternic, specific."
+    },
+    {
+      "tip": "produs",
+      "slug": "zeolit-spectrum-200caps",
+      "titlu_vechi": "ZEOLIT Spectrum 200 caps. | Novo Biomedics",
+      "titlu_nou": "Zeolit Spectrum 200 capsule – Novo Biomedics | Bioscem",
+      "descriere_veche": "ZEOLIT Spectrum 200 caps. conține 100% zeolit pur dublu activat de calitate farmaceutică. Tehnologie patentată. Fabricat în Austria.",
+      "descriere_noua": "Zeolit Spectrum, flaconul mare: 200 de capsule vegetale cu 410 mg micro-zeolit dublu activat, 100 g net. Fabricat în Austria pentru Novo Biomedics."
+    },
+    {
+      "tip": "produs",
+      "slug": "zeolit-spectrum-100caps",
+      "titlu_vechi": "ZEOLIT Spectrum 100 caps. | Novo Biomedics",
+      "titlu_nou": "Zeolit Spectrum 100 capsule, flacon de 50 g – Novo Biomedics",
+      "descriere_veche": "ZEOLIT Spectrum 100 caps. conține 100% zeolit pur dublu activat de calitate farmaceutică. Tehnologie patentată. Fabricat în Austria.",
+      "descriere_noua": "Zeolit Spectrum, flaconul mic: 100 de capsule vegetale (50 g net) cu 410 mg micro-zeolit dublu activat fiecare. Există și flaconul de 200 de capsule."
+    },
+    {
+      "tip": "produs",
+      "slug": "vitamina-c-ascorbat-sodiu",
+      "titlu_vechi": "Vitamina C alcalină (ascorbat de sodiu) 1 kg",
+      "titlu_nou": "Vitamina C alcalină (ascorbat de sodiu) pudră 1 kg | Bioscem",
+      "descriere_veche": "Vitamina C alcalină (ascorbat de sodiu) este sarea de sodiu a acidului ascorbic.",
+      "descriere_noua": "Ascorbat de sodiu, sarea de sodiu a acidului ascorbic: vitamina C alcalină, pudră cristalină, 1 kg. Se dizolvă în apă plată; maximum ½ linguriță pe zi."
+    },
+    {
+      "tip": "produs",
+      "slug": "gaba-hsn-500mg",
+      "titlu_vechi": "GABA cu vitaminele B5 şi B6 HSN 500 mg 120 caps. - BIOSCEM",
+      "titlu_nou": "GABA 500 mg cu vitaminele B5 și B6 – HSN, 120 capsule",
+      "descriere_veche": "GABA (Gamma-AminoButyric Acid) - ajută la reducerea anxietăţii, a stresului, la obţinerea relaxării şi a unui somn odihnitor.",
+      "descriere_noua": "Acid gama-aminobutiric (GABA), 500 mg per capsulă, cu vitaminele B5 și B6, de la HSN (Spania). 120 de capsule vegetale, potrivite pentru vegani."
+    },
+    {
+      "tip": "produs",
+      "slug": "glutathione-liposomal-quicksilver",
+      "titlu_vechi": "Glutathione Liposomal QuickSilver 50 ml | Quicksilver",
+      "titlu_nou": "Glutation lipozomal spray 50 ml – Quicksilver Scientific",
+      "descriere_veche": "Glutathione Liposomal QuickSilver este aliatul de încredere în detoxifiere, anti-ageing și susținerea imunității.",
+      "descriere_noua": "Glutathione Liposomal Quicksilver: 100 mg glutation Opitac la 1 ml (2 pulverizări). Spray de 50 ml cu 100 de pulverizări, aromă de lămâie și mentă."
+    },
+    {
+      "tip": "produs",
+      "slug": "peptide-colagen-hidrolizat-siliciu-organic-330g",
+      "titlu_vechi": "Peptide de colagen hidrolizat cu siliciu organic LIVING",
+      "titlu_nou": "Peptide de colagen cu siliciu organic Living Silica, 330 g",
+      "descriere_veche": "Peptide de colagen hidrolizat cu siliciu organic este combinația perfectă anti-îmbătrânire, ce include și vitamina C naturală din acerola, biotină, acid hialuronic și extract de acacia.",
+      "descriere_noua": "Living Silica, Silicium Laboratories: 8 g colagen hidrolizat, 40 mg siliciu, acid hialuronic, vitamina C și biotină la 11 g. Borcan de 330 g, 30 de porții."
+    },
+    {
+      "tip": "produs",
+      "slug": "lizina-pudra-hsn-150g",
+      "titlu_vechi": "LIZINĂ pudră HSN 150g | HSN - Harrison Sport Nutrition",
+      "titlu_nou": "Lizină pudră 150 g, L-lizină HCl vegană – HSN | Bioscem",
+      "descriere_veche": "LIZINĂ pudră HSN este un supliment nutritiv vegan sub formă de pudră, pe bază de Clorhidrat de L-lizină fermentată din legume.",
+      "descriere_noua": "L-lizină sub formă de clorhidrat (L-lizină HCl), obținută prin fermentare vegetală, de la HSN (Spania). Pudră solubilă de 150 g, vegană, fără îndulcitori."
+    },
+    {
+      "tip": "produs",
+      "slug": "gel-salvie-propolis-tisodent",
+      "titlu_vechi": "Gel cu salvie și propolis cicatrizant TISODENT 20 ml",
+      "titlu_nou": "Gel cu salvie și propolis Tisodent 20 ml – TIS Farmaceutic",
+      "descriere_veche": "Gel cu salvie și propolis cicatrizant TISODENT protejează şi reface mucoasa bucală, având efect cicatrizant, antibacterian, antiinflamator, anestezic.",
+      "descriere_noua": "Gel Tisodent pentru mucoasa bucală, cu extracte naturale de propolis și salvie, de la TIS Farmaceutic. Tub de 20 ml, produs în laborator certificat GMP."
+    },
+    {
+      "tip": "produs",
+      "slug": "vitamina-b9-lipozomala-novo-biomedics",
+      "titlu_vechi": "Vitamina B9 Lipozomală Folate-Power Novo Biomedics 45 caps.",
+      "titlu_nou": "Vitamina B9 lipozomală 0,8 mg, 45 capsule – Novo Biomedics",
+      "descriere_veche": "formarea celulelor sanguine sănătatea cardiovasculară protecția dezvoltării fetale",
+      "descriere_noua": "Folate-Power, Novo Biomedics: vitamina B9 (acid folic) lipozomală, 0,8 mg per capsulă. 45 de capsule vegetale, o capsulă pe zi. Produs în Franța."
+    },
+    {
+      "tip": "produs",
+      "slug": "magneziu-chelat-bisglicinat-hsn",
+      "titlu_vechi": "MAGNEZIU chelat (bisglicinat) HSN vegan 175 mg 30 caps. |",
+      "titlu_nou": "Magneziu chelat (bisglicinat) 175 mg, 30 capsule – HSN",
+      "descriere_veche": "MAGNEZIU chelat (bisglicinat) HSN este conceput pentru cei care doresc să adauge magneziu în rutina lor într-un mod ușor, convenabil și practic.",
+      "descriere_noua": "Bisglicinat de magneziu HSN, gama EssentialSeries: 175 mg magneziu per capsulă, fără gust. 30 de capsule vegetale, 15 doze zilnice, potrivit pentru vegani."
+    },
+    {
+      "tip": "produs",
+      "slug": "em-x-gold-probiotic",
+      "titlu_vechi": "EM-X GOLD Probiotic 500 ml",
+      "titlu_nou": "EM-X Gold 500 ml – băutură lacto-fermentată | Bioscem",
+      "descriere_veche": "EM-X GOLD Probiotic este o băutură obținută printr-un proces de lacto-fermentație, frecvent utilizată pentru alimentele tradiționale japoneze.",
+      "descriere_noua": "EM-X Gold, băutură obținută prin lacto-fermentație, după cercetările lui Teruo Higa despre microorganismele eficiente (EM). Fabricată în Germania, 500 ml."
+    },
+    {
+      "tip": "produs",
+      "slug": "spirulina-bio-mgd-pudra-200g",
+      "titlu_vechi": "SPIRULINĂ BIO MGD pudră 200 g | MGD Nature",
+      "titlu_nou": "Spirulină bio pudră 200 g – MGD Nature | Bioscem",
+      "descriere_veche": "SPIRULINA BIO MGD pudră este un super-aliment recomandat pentru întărirea organismului, datorită aportului său mare de nutrienți esențiali.",
+      "descriere_noua": "Spirulină bio (Spirulina platensis) pudră de la MGD Nature, uscată la temperatură joasă; 60 g proteine la 100 g. Pungă de 200 g, pentru 40 de zile."
+    }
+  ]
+}

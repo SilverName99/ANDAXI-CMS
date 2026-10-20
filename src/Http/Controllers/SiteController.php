@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Support\Auth;
+use App\Support\AvertismentProduse;
 use App\Support\BtIpayGateway;
 use App\Support\BtIpayPayments;
 use App\Support\Cart;
@@ -113,9 +114,14 @@ final class SiteController
             ])];
         }
 
-        // shop() citește filtrul din query string.
+        // Aceeași listă ca magazinul filtrat; filtrul vine din adresă, nu din query
+        // string. $_GET['categorie'] rămâne setat pentru codul care îl citește
+        // direct (de exemplu JavaScript-ul din pagina „magazin”).
         $_GET['categorie'] = $categoryName;
-        $this->shop();
+        $this->randeazaMagazin(
+            $categoryName,
+            $categoryName !== '' ? '/categorie/' . rawurlencode($slugCorect !== '' ? $slugCorect : $slug) : ''
+        );
     }
 
     /**
@@ -152,28 +158,9 @@ final class SiteController
      */
     private function slugCategoriePentruNume(string $numeCategorie): string
     {
-        $numeCategorie = trim($numeCategorie);
-        if ($numeCategorie === '') {
-            return '';
-        }
+        // Aceeași regulă și pentru linkurile din meniu, liste și pagini.
         $db = $this->db();
-        if ($db instanceof PDO) {
-            try {
-                $stmt = $db->prepare('SELECT slug FROM product_categories WHERE LOWER(TRIM(name)) = :nume AND TRIM(COALESCE(slug, "")) <> "" ORDER BY id ASC LIMIT 1');
-                $stmt->execute(['nume' => mb_strtolower($numeCategorie)]);
-                $salvat = $stmt->fetchColumn();
-                if (is_string($salvat) && trim($salvat) !== ''
-                    && mb_strtolower($this->resolveCategoryNameBySlug(trim($salvat))) === mb_strtolower($numeCategorie)) {
-                    return trim($salvat);
-                }
-            } catch (Throwable) {
-            }
-        }
-        $generat = $this->slugifyCategoryName($numeCategorie);
-        if ($generat !== '' && mb_strtolower($this->resolveCategoryNameBySlug($generat)) === mb_strtolower($numeCategorie)) {
-            return $generat;
-        }
-        return '';
+        return \App\Support\LinkuriCategorii::slugPentruNume($db instanceof PDO ? $db : null, $numeCategorie);
     }
 
     /** Slug simplu, pentru comparat branduri și etichete scrise oricum. */
@@ -321,10 +308,14 @@ final class SiteController
         $titlu = $eticheta !== ''
             ? ($tip === 'brand' ? $eticheta : 'Produse: ' . $eticheta)
             : 'Nu am găsit produse';
+        $produseAfisate = [];
         $catalog = $this->renderShopCatalogSection(
             $db instanceof PDO ? $db : null,
             '',
-            ['tip' => $tip, 'slug' => $slug]
+            ['tip' => $tip, 'slug' => $slug],
+            // Sortarea rămâne pe pagina mărcii sau a etichetei.
+            $eticheta !== '' ? ($tip === 'brand' ? '/marca/' : '/eticheta/') . rawurlencode($slug) : '/magazin',
+            $produseAfisate
         );
 
         $shopPage = $this->findPublishedPageBySlug('magazin');
@@ -337,7 +328,7 @@ final class SiteController
                 'shopCatalogHtml' => $catalog,
                 'shopCategoryLabel' => $titlu,
                 'shopPageTitle' => $titlu,
-            ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $shopPage)));
+            ], $this->seoListaFiltrata($db instanceof PDO ? $db : null, $tip, $slug, $eticheta, $produseAfisate, $shopPage)));
             return;
         }
 
@@ -347,6 +338,43 @@ final class SiteController
             'activeCategory' => '',
             'shopCatalogHtml' => $catalog,
         ]);
+    }
+
+    /**
+     * SEO-ul paginii unei mărci sau etichete: titlul și descrierea scrise
+     * pentru marcă (Admin → Categorii → Mărci), altfel o descriere automată din
+     * produsele ei. Nu mai moștenește SEO-ul paginii „Magazin”. Etichetele scoase
+     * de site din Google (seo.json → sitemap.etichete_excluse; la Bioscem cele cu
+     * nume de boli, D3, încă nedecis) nu primesc descriere automată.
+     *
+     * @param list<array<string, mixed>> $produseAfisate
+     */
+    private function seoListaFiltrata(?PDO $db, string $tip, string $slug, string $eticheta, array $produseAfisate, array $shopPage): array
+    {
+        if (!\App\Support\SeoMeta::activ()) {
+            // Ca înainte de livrarea 2.
+            return $this->customPageSeoMeta($db, $shopPage);
+        }
+        if ($eticheta === '') {
+            return [];
+        }
+        $seo = [];
+        if ($tip === 'brand' && $db instanceof PDO) {
+            $seo = $this->seoMetaFor($db, 'brand', $slug);
+            unset($seo['metaCanonicalUrl']);
+        }
+        if (trim((string) ($seo['metaDescription'] ?? '')) === ''
+            && !($tip !== 'brand' && \App\Support\Sitemap::etichetaExclusa($slug))) {
+            $seo['metaDescription'] = \App\Support\SeoMeta::descriereLista(
+                $tip === 'brand' ? 'marca' : 'eticheta',
+                $eticheta,
+                $produseAfisate,
+                \App\Support\SeoMeta::numeMagazin($this->cachedSettings($db)),
+                // Fără magazin (catalog de prezentare) produsele n-au preț pe pagină: nici în descriere.
+                \App\Support\Plugins::vizibil('magazin')
+            );
+        }
+        return $seo;
     }
 
     /**
@@ -398,17 +426,50 @@ final class SiteController
 
     public function shop(): void
     {
+        // /magazin?category=X (sau ?categorie=X) e de fapt pagina categoriei: 301
+        // la /categorie/{slug}, cu sortarea și parametrii de reclamă păstrați.
+        // Doar când categoria e toată cererea (vezi LinkuriCategorii); altfel
+        // pagina se afișează ca înainte, cu canonical spre categorie.
+        $db = $this->db();
+        $query = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY) ?? '');
+        $tinta = \App\Support\LinkuriCategorii::tintaPentruMagazin($db instanceof PDO ? $db : null, $query);
+        if ($tinta !== null && \App\Support\SeoRedirects::redirectCanonic($tinta['cale'], $tinta['query'])) {
+            return;
+        }
+        $this->randeazaMagazin($this->requestCategoryFilter(), '');
+    }
+
+    /**
+     * Magazinul: tot catalogul sau o categorie. $caleCategorie e adresa paginii
+     * de categorie când lista e afișată de /categorie/{slug} (atunci sortarea
+     * rămâne pe acea adresă); gol pentru /magazin.
+     */
+    private function randeazaMagazin(string $categoryFilter, string $caleCategorie): void
+    {
         $shopPage = $this->findPublishedPageBySlug('magazin');
-        $categoryFilter = $this->requestCategoryFilter();
+        $db = $this->db();
+        $pdo = $db instanceof PDO ? $db : null;
+        $shopCategoryLabel = $this->normalizeShopCategoryFilter(
+            $categoryFilter,
+            $this->loadShopCatalogCategories($pdo)
+        );
+        if ($shopCategoryLabel !== '' && $caleCategorie === '') {
+            $caleCategorie = \App\Support\LinkuriCategorii::cale($pdo, $shopCategoryLabel);
+        }
+        $produseAfisate = [];
+        $catalogHtml = $this->renderShopCatalogSection(
+            $db,
+            $categoryFilter,
+            null,
+            $shopCategoryLabel !== '' && $caleCategorie !== '' ? $caleCategorie : '/magazin',
+            $produseAfisate
+        );
+        $seoLista = $this->seoListaMagazin($pdo, $shopCategoryLabel, $caleCategorie, $produseAfisate, $shopPage);
+
         if (is_array($shopPage)) {
-            $db = $this->db();
             $settings = $this->cachedSettings($db);
             // Categoria validată (goală dacă filtrul din URL nu există),
             // ca pagina să poată afișa titlul categoriei curente.
-            $shopCategoryLabel = $this->normalizeShopCategoryFilter(
-                $categoryFilter,
-                $this->loadShopCatalogCategories($db instanceof PDO ? $db : null)
-            );
             $pageTitle = $shopCategoryLabel !== ''
                 ? $shopCategoryLabel
                 : (string) ($shopPage['title'] ?? 'Magazin');
@@ -416,21 +477,98 @@ final class SiteController
                 'title' => $pageTitle,
                 'page' => $shopPage,
                 'mannequinSectionHtml' => $this->renderMannequinSection($db, $settings),
-                'shopCatalogHtml' => $this->renderShopCatalogSection($db, $categoryFilter),
+                'shopCatalogHtml' => $catalogHtml,
                 'shopCategoryLabel' => $shopCategoryLabel,
                 'shopPageTitle' => (string) ($shopPage['title'] ?? 'Magazin'),
                 'jsonLd' => $this->jsonLdPagina,
-            ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $shopPage)));
+            ], $seoLista));
             return;
         }
 
         [$products] = $this->loadProducts(categoryFilter: $categoryFilter);
-        View::render('site/shop', [
+        View::render('site/shop', array_merge([
             'products' => $products,
             'title' => 'Magazin',
             'activeCategory' => $categoryFilter,
             'jsonLd' => $this->jsonLdPagina,
-        ]);
+        ], $seoLista));
+    }
+
+    /**
+     * Titlul, descrierea și canonicalul magazinului sau ale unei categorii.
+     *
+     * Categoria are câmpurile ei (Admin → Categorii → SEO Google) și o
+     * descriere automată din produsele ei; nu mai moștenește SEO-ul paginii
+     * „Magazin” (un titlu sau un canonical pus pe Magazin s-ar fi copiat pe
+     * toate categoriile). Magazinul fără filtru păstrează SEO-ul paginii lui.
+     *
+     * @param list<array<string, mixed>> $produseAfisate
+     */
+    private function seoListaMagazin(?PDO $db, string $categorie, string $caleCategorie, array $produseAfisate, ?array $shopPage): array
+    {
+        $activ = \App\Support\SeoMeta::activ();
+        if ($categorie === '') {
+            $seo = is_array($shopPage) ? $this->customPageSeoMeta($db, $shopPage) : [];
+            if ($activ && trim((string) ($seo['metaDescription'] ?? '')) === '') {
+                $seo['metaDescription'] = \App\Support\SeoMeta::descriereLista(
+                    'magazin',
+                    'Magazinul ' . \App\Support\SeoMeta::numeMagazin($this->cachedSettings($db)),
+                    $produseAfisate,
+                    \App\Support\SeoMeta::numeMagazin($this->cachedSettings($db)),
+                    // Fără magazin (catalog de prezentare) produsele n-au preț pe pagină: nici în descriere.
+                    \App\Support\Plugins::vizibil('magazin')
+                );
+            }
+            return $seo;
+        }
+        if (!$activ) {
+            // Ca înainte de livrarea 2: categoria primea SEO-ul paginii „Magazin”.
+            return is_array($shopPage) ? $this->customPageSeoMeta($db, $shopPage) : [];
+        }
+        $seo = [];
+        $idCategorie = $this->idCategoriePentruNume($db, $categorie);
+        if ($db instanceof PDO && $idCategorie > 0) {
+            $seo = $this->seoMetaFor($db, 'category', (string) $idCategorie);
+            unset($seo['metaCanonicalUrl']);
+        }
+        if (trim((string) ($seo['metaDescription'] ?? '')) === '') {
+            $seo['metaDescription'] = \App\Support\SeoMeta::descriereLista(
+                'categorie',
+                $categorie,
+                $produseAfisate,
+                \App\Support\SeoMeta::numeMagazin($this->cachedSettings($db)),
+                // Fără magazin (catalog de prezentare) produsele n-au preț pe pagină: nici în descriere.
+                \App\Support\Plugins::vizibil('magazin')
+            );
+        }
+        if ($caleCategorie !== '') {
+            $seo['metaCanonicalUrl'] = rtrim($this->appUrl(), '/') . $caleCategorie;
+        }
+        return $seo;
+    }
+
+    /** ID-ul din product_categories al categoriei cu numele dat (0 dacă nu are rând). */
+    private function idCategoriePentruNume(?PDO $db, string $nume): int
+    {
+        if (!$db instanceof PDO || trim($nume) === '') {
+            return 0;
+        }
+        try {
+            $slug = \App\Support\LinkuriCategorii::slugPentruNume($db, $nume);
+            if ($slug !== '') {
+                $stmt = $db->prepare('SELECT id FROM product_categories WHERE LOWER(slug) = :slug ORDER BY id ASC LIMIT 1');
+                $stmt->execute(['slug' => mb_strtolower($slug)]);
+                $id = (int) ($stmt->fetchColumn() ?: 0);
+                if ($id > 0) {
+                    return $id;
+                }
+            }
+            $stmt = $db->prepare('SELECT id FROM product_categories WHERE LOWER(TRIM(name)) = :nume ORDER BY id ASC LIMIT 1');
+            $stmt->execute(['nume' => mb_strtolower(trim($nume))]);
+            return (int) ($stmt->fetchColumn() ?: 0);
+        } catch (Throwable) {
+            return 0;
+        }
     }
 
     public function blog(): void
@@ -618,6 +756,34 @@ final class SiteController
         if ($db instanceof PDO) {
             $productSeoMeta = $this->seoMetaFor($db, 'product', (string) ((int) ($product['id'] ?? 0)));
         }
+        if (\App\Support\SeoMeta::activ()) {
+            // O singură regulă pentru titlul de produs (vezi SeoMeta::titluProdus):
+            // titlul scris rămâne, cel care doar repetă numele se face din nume și
+            // marcă. Fără descriere scrisă: descrierea scurtă a produsului.
+            $productSeoMeta['metaTitle'] = \App\Support\SeoMeta::titluProdus(
+                (string) ($product['name'] ?? ''),
+                (string) ($product['brand'] ?? ''),
+                (string) ($productSeoMeta['metaTitle'] ?? ''),
+                \App\Support\SeoMeta::numeMagazin($settings !== [] ? $settings : $this->cachedSettings($db))
+            );
+            if (trim((string) ($productSeoMeta['metaDescription'] ?? '')) === '') {
+                $productSeoMeta['metaDescription'] = \App\Support\SeoMeta::descriereProdus(
+                    (string) ($product['short_description'] ?? ''),
+                    (string) ($product['description'] ?? '')
+                );
+            }
+        }
+        // Poza la distribuire (og:image): poza scrisă la SEO, altfel poza
+        // principală a produsului; layout-ul face din ea varianta 1200×630.
+        if (trim((string) ($productSeoMeta['metaImageUrl'] ?? '')) === '') {
+            foreach ($this->extractProductImageUrls($product, true) as $imagineProdus) {
+                if (!str_contains((string) $imagineProdus, 'product-placeholder')) {
+                    $productSeoMeta['metaImageUrl'] = (string) $imagineProdus;
+                    break;
+                }
+            }
+        }
+        $productSeoMeta['metaImageAlt'] = (string) ($product['name'] ?? '');
         $jsonLd = [];
         try {
             $jsonLd = $this->jsonLdProdus($product, $productReviews, is_array($template) ? (string) ($template['html_content'] ?? '') : null);
@@ -1063,6 +1229,8 @@ final class SiteController
         $cartState = $this->buildCartRenderState($db);
         $summary = $cartState['summary'];
         $quantityUi = $cartState['quantity_ui'];
+        // Fereastra avertismentului pentru produsul abia adăugat pe drumul clasic.
+        $avertismenteDeAratat = AvertismentProduse::preiaDeAratat($db);
 
         $cartPage = $this->findPublishedPageBySlug('cos');
         if (is_array($cartPage)) {
@@ -1072,6 +1240,7 @@ final class SiteController
                 'page' => $cartPage,
                 'mannequinSectionHtml' => $this->renderMannequinSection($db, $settings),
                 'cartFormHtml' => $this->renderCartSection($summary, $quantityUi, (bool) ($cartState['is_logged_in'] ?? false)),
+                'avertismenteDeAratat' => $avertismenteDeAratat,
             ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $cartPage)));
             return;
         }
@@ -1080,6 +1249,7 @@ final class SiteController
             'title' => 'Coș',
             'summary' => $summary,
             'quantityUi' => $quantityUi,
+            'avertismenteDeAratat' => $avertismenteDeAratat,
         ]);
     }
 
@@ -1240,6 +1410,18 @@ final class SiteController
             }
         }
 
+        // Produsele cu avertisment (ex. refrigerate) cer bifa de sub casetă,
+        // verificată pe coșul de ACUM: între afișare și trimitere coșul se
+        // putea schimba din alt tab. Fără ea, comanda nu se creează.
+        $avertismente = AvertismentProduse::pentruCos($db, $summary['lines']);
+        $eroareAvertisment = AvertismentProduse::verificaBifele($avertismente, $_POST);
+        if ($eroareAvertisment !== null) {
+            Flash::set('error', $eroareAvertisment);
+            header('Location: /checkout');
+            return;
+        }
+        // Tabelul confirmărilor îl face migrarea magazin/0032 (Bioscem îl crea aici, din mers).
+
         $orderNumber = $this->generateOrderNumber($db, $settings);
         // Cardul și OP-ul așteaptă banii înainte de procesare; doar rambursul
         // intră direct în lucru.
@@ -1397,6 +1579,9 @@ final class SiteController
                     'line_total' => $line['line_total'],
                 ]);
             }
+            // Ce a confirmat clientul rămâne pe comandă, chiar dacă textul
+            // produsului se schimbă mai târziu.
+            AvertismentProduse::salveazaConfirmari($db, $orderId, $avertismente, $now);
             if ($customerUserId > 0 && $pointsApplied > 0) {
                 $consumed = LoyaltyService::consumePointsForOrder(
                     $db,
@@ -2065,6 +2250,33 @@ final class SiteController
         $this->jsonResponse($payload);
     }
 
+    /**
+     * Casetele și bifele avertismentelor (ex. produs refrigerat) pentru coșul de
+     * ACUM, ca HTML gata de pus deasupra butonului de plasare. Pagina /checkout
+     * le cere când coșul se schimbă fără reîncărcare (coșul plutitor, alt tab):
+     * produsul scos nu mai cere bifă. Coș fără avertismente = html gol.
+     */
+    public function cartAvertismenteApi(): void
+    {
+        $db = $this->db();
+        $summary = CheckoutCalculator::buildSummary($db, Settings::all($db));
+        $avertismente = AvertismentProduse::pentruCos($db, (array) ($summary['lines'] ?? []));
+        $instanta = is_string($_GET['instanta'] ?? null) ? $_GET['instanta'] : '';
+        if (preg_match('/^[a-z0-9_-]{1,40}$/', $instanta) !== 1) {
+            $instanta = 'checkout-live';
+        }
+        header('Cache-Control: no-store, no-cache, must-revalidate');
+        $this->jsonResponse([
+            'ok' => true,
+            'chei' => AvertismentProduse::cheiBife($avertismente),
+            'html' => $avertismente === [] ? '' : $this->renderPhpView('site/components/checkout-avertismente', [
+                'avertismente' => $avertismente,
+                'instanceId' => $instanta,
+                'previewMode' => false,
+            ]),
+        ]);
+    }
+
     public function bestSellersApi(): void
     {
         $limit = (int) ($_GET['limit'] ?? 4);
@@ -2338,6 +2550,12 @@ final class SiteController
         $db = $this->db();
         $response = $this->buildFloatingCartPayload($db);
         $response['message'] = 'Produs adăugat în coș.';
+        // Produsul cu avertisment (ex. refrigerat): fereastra vine în acest
+        // răspuns (POST, necacheabil), nu în HTML-ul paginii.
+        $avertisment = AvertismentProduse::pentruFereastra($db, $productId);
+        if ($avertisment !== null) {
+            $response['avertisment'] = $avertisment;
+        }
         $this->jsonResponse($response);
     }
 
@@ -2504,6 +2722,11 @@ final class SiteController
 
         Cart::add($productId, $quantity, (string) ($selectedBbd['key'] ?? ''));
         Flash::set('success', 'Produs adăugat în coș.');
+        // Drumul fără JS-ul coșului: fereastra avertismentului apare pe /cos,
+        // pagină care nu intră niciodată în cache.
+        if (AvertismentProduse::pentruFereastra($this->db(), $productId) !== null) {
+            AvertismentProduse::tineMinteDeAratat($productId);
+        }
         header('Location: /cos');
     }
 
@@ -3922,9 +4145,24 @@ final class SiteController
 
         // Aceeași pagină scrisă altfel (litere mari): 301 la adresa ei.
         $slugSalvat = is_array($page) ? (string) ($page['slug'] ?? '') : '';
-        if ($slugSalvat !== '' && $slugSalvat !== $slug
-            && \App\Support\SeoRedirects::redirectCanonic('/' . implode('/', array_map('rawurlencode', explode('/', $slugSalvat))))) {
-            return;
+        if ($slugSalvat !== '' && $slugSalvat !== $slug) {
+            $caleCorecta = '/' . implode('/', array_map('rawurlencode', explode('/', $slugSalvat)));
+            $queryCorect = null;
+            if ($slugSalvat === 'magazin') {
+                // /Magazin?category=X: direct la /categorie/{slug}, într-un singur
+                // salt (nu prin /magazin?category=X), după aceeași regulă ca shop().
+                $tinta = \App\Support\LinkuriCategorii::tintaPentruMagazin(
+                    $db,
+                    (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY) ?? '')
+                );
+                if ($tinta !== null) {
+                    $caleCorecta = $tinta['cale'];
+                    $queryCorect = $tinta['query'];
+                }
+            }
+            if (\App\Support\SeoRedirects::redirectCanonic($caleCorecta, $queryCorect)) {
+                return;
+            }
         }
 
         if ($page === null) {
@@ -4028,7 +4266,30 @@ final class SiteController
             'productReviewFormHtml' => $productReviewFormHtml,
             'gdprAgreementsFormHtml' => $gdprAgreementsFormHtml,
             'checkoutSuccessOrderInfoHtml' => $checkoutSuccessOrderInfoHtml,
-        ], $this->customPageSeoMeta($db, $page)));
+        ], $this->seoPagina($db, $page, $slug)));
+    }
+
+    /**
+     * SEO-ul unei pagini din constructor: cel scris în editor; fără descriere
+     * scrisă, primul paragraf al paginii. Paginile de sistem (coș, comandă,
+     * cont, login) și cele blocate în robots.txt rămân exact ca înainte.
+     */
+    private function seoPagina(PDO $db, array $page, string $slug): array
+    {
+        $seo = $this->customPageSeoMeta($db, $page);
+        $slugMic = mb_strtolower(trim($slug, '/'));
+        if (!\App\Support\SeoMeta::activ()
+            || trim((string) ($seo['metaDescription'] ?? '')) !== ''
+            || in_array($slugMic, \App\Support\Sitemap::PAGINI_SISTEM, true)
+            || str_contains($slugMic, '/')
+            || \App\Support\Robots::blocheaza('/' . $slugMic)) {
+            return $seo;
+        }
+        $descriere = \App\Support\SeoMeta::descrierePagina((string) ($page['html_content'] ?? ''));
+        if ($descriere !== '') {
+            $seo['metaDescription'] = $descriere;
+        }
+        return $seo;
     }
 
     /**
@@ -4362,7 +4623,7 @@ final class SiteController
     private function normalizeSeoPageType(string $pageType): string
     {
         $pageType = trim($pageType);
-        if (!in_array($pageType, ['custom_page', 'product', 'blog_post'], true)) {
+        if (!in_array($pageType, ['custom_page', 'product', 'blog_post', 'category', 'brand'], true)) {
             return '';
         }
         return $pageType;
@@ -4421,7 +4682,9 @@ final class SiteController
     private function renderShopCatalogSection(
         ?PDO $db,
         string $categoryFilter = '',
-        ?array $filtruExtra = null
+        ?array $filtruExtra = null,
+        string $baseUrl = '/magazin',
+        ?array &$produseAfisate = null
     ): string {
         $categoryFilter = trim($categoryFilter);
         $sort = $this->requestShopCatalogSort();
@@ -4452,13 +4715,23 @@ final class SiteController
             ));
         }
         $products = $this->applyShopCatalogSort($products, $sort);
+        $produseAfisate = $products;
+        // Fiecare categorie din filtru duce la pagina ei, /categorie/{slug}.
+        $categoryUrls = [];
+        foreach ($categories as $category) {
+            $value = trim((string) ($category['value'] ?? ''));
+            if ($value !== '') {
+                $categoryUrls[$value] = \App\Support\LinkuriCategorii::url($db, $value);
+            }
+        }
         return $this->renderPhpView('site/components/shop-catalog', [
             'products' => $products,
             'categories' => $categories,
+            'categoryUrls' => $categoryUrls,
             'activeCategory' => $categoryFilter,
             'sort' => $sort,
             'sortOptions' => $this->shopCatalogSortOptions(),
-            'baseUrl' => '/magazin',
+            'baseUrl' => $baseUrl !== '' ? $baseUrl : '/magazin',
         ]);
     }
 
@@ -5308,6 +5581,8 @@ HTML;
             'fanboxGratuit' => $this->fanboxGratuit($summary),
             'previewMode' => false,
             'checkoutInstanceId' => 'checkout-live',
+            // Caseta + bifa obligatorie pentru produsele cu avertisment; gol = nimic în pagină.
+            'avertismente' => AvertismentProduse::pentruCos($this->db(), (array) ($summary['lines'] ?? [])),
         ]);
     }
 
@@ -7242,6 +7517,168 @@ CSS;
     }
 
     /**
+     * /feed/google-merchant.xml: produsele active pentru Google Merchant Center
+     * (vezi FluxGoogleMerchant). Doar citire, fără sesiune, ținut 15 minute în
+     * cache. Nu e legat din site și nu intră în sitemap.
+     */
+    public function fluxGoogleMerchant(): void
+    {
+        // Cât magazinul se oprește nu se mai poate cumpăra nimic: canalul rămâne, fără produse,
+        // imediat (nu după cele 15 minute ale cache-ului, care ține doar fluxul cu produse).
+        $cuProduse = \App\Support\Plugins::permiteInceput('magazin');
+        $xml = $cuProduse ? \App\Support\FluxGoogleMerchant::dinCache() : null;
+        if ($xml === null) {
+            $db = $this->db();
+            if (!$db instanceof PDO) {
+                http_response_code(503);
+                header('Retry-After: 600');
+                header('Content-Type: text/plain; charset=utf-8');
+                header('Cache-Control: no-store');
+                echo 'Fluxul de produse e indisponibil momentan.';
+                return;
+            }
+            $settings = $this->cachedSettings($db);
+            $xml = \App\Support\FluxGoogleMerchant::xml(
+                $cuProduse ? $this->produsePentruFlux($db, $settings) : [],
+                rtrim($this->appUrl(), '/'),
+                \App\Support\SeoMeta::numeMagazin($settings)
+            );
+            if ($cuProduse) {
+                \App\Support\FluxGoogleMerchant::salveaza($xml);
+            }
+        }
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Cache-Control: public, max-age=' . \App\Support\FluxGoogleMerchant::DURATA_CACHE);
+        header('X-Robots-Tag: noindex');
+        echo $xml;
+    }
+
+    /**
+     * Produsele active pentru flux, cu aceleași reguli ca pagina produsului și
+     * datele ei structurate: prețul cu reducerea activă, disponibilitatea după
+     * ERP (o singură cerere pentru toate, ca în /magazin), precomanda, pozele
+     * reale (fără poza goală), livrarea din PoliticaLivrare.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function produsePentruFlux(PDO $db, array $settings): array
+    {
+        try {
+            $rows = $db->query('SELECT * FROM products WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id ASC')->fetchAll() ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+        \App\Support\ErpStock::applyToProducts($db, $rows);
+
+        $baza = rtrim($this->appUrl(), '/');
+        $absolut = static function (string $adresa) use ($baza): string {
+            $adresa = trim($adresa);
+            if ($adresa === '') {
+                return '';
+            }
+            if (str_starts_with($adresa, '//')) {
+                return 'https:' . $adresa;
+            }
+            if (preg_match('#^https?://#i', $adresa) === 1) {
+                return $adresa;
+            }
+            // Calea, codată bucată cu bucată (spațiile și diacriticele din numele fișierelor).
+            $cale = implode('/', array_map(
+                static fn (string $bucata): string => rawurlencode(rawurldecode($bucata)),
+                explode('/', '/' . ltrim($adresa, '/'))
+            ));
+            return $baza . $cale;
+        };
+
+        $skuVazute = [];
+        foreach ($rows as $row) {
+            $sku = strtoupper(trim((string) ($row['sku'] ?? '')));
+            if ($sku !== '') {
+                $skuVazute[$sku] = ($skuVazute[$sku] ?? 0) + 1;
+            }
+        }
+
+        $produse = [];
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $product = $this->normalizeProduct($row);
+            $slug = trim((string) ($product['slug'] ?? ''));
+            if ($slug === '') {
+                continue;
+            }
+            $imagini = [];
+            foreach ($this->extractProductImageUrls($product, true) as $imagine) {
+                if (!str_contains((string) $imagine, 'product-placeholder')) {
+                    $imagini[] = $absolut((string) $imagine);
+                }
+            }
+            $imagini = array_values(array_unique(array_filter($imagini)));
+
+            if (\App\Support\Precomanda::estePrecomanda($product)) {
+                $disponibil = 'PreOrder';
+            } elseif ((int) ($product['out_of_stock'] ?? 0) === 1) {
+                $disponibil = 'OutOfStock';
+            } else {
+                $disponibil = 'InStock';
+            }
+
+            // Reducerea: prețul redus și perioada lui (doar perioada activă acum,
+            // ca priceValidUntil din datele structurate).
+            $redusa = (bool) ($product['has_sale_price'] ?? false);
+            $deLa = '';
+            $panaLa = '';
+            if ($redusa) {
+                $acum = date('Y-m-d H:i:s');
+                foreach ((array) ($product['sale_price_periods'] ?? []) as $perioada) {
+                    if (!is_array($perioada)) {
+                        continue;
+                    }
+                    $start = (string) ($perioada['start_date'] ?? '');
+                    $final = (string) ($perioada['end_date'] ?? '');
+                    if ($start !== '' && $final !== '' && $start <= $acum && $acum <= $final
+                        && abs((float) ($perioada['sale_price'] ?? 0) - (float) ($product['price'] ?? 0)) < 0.005) {
+                        $deLa = $start;
+                        $panaLa = $final;
+                        break;
+                    }
+                }
+            }
+
+            $sku = trim((string) ($product['sku'] ?? ''));
+            $id = ($sku !== '' && ($skuVazute[strtoupper($sku)] ?? 0) === 1 && mb_strlen($sku) <= 50)
+                ? $sku
+                : \App\Support\FluxGoogleMerchant::prefixId() . (int) ($product['id'] ?? 0);
+            $descriere = trim(strip_tags((string) ($product['short_description'] ?? ''))) !== ''
+                ? (string) $product['short_description']
+                : (string) ($product['description'] ?? '');
+            $descriere = (string) preg_replace('/\{\{.*?\}\}/s', ' ', $descriere);
+            $pretAfisat = (float) ($product['price'] ?? 0);
+
+            $produse[] = [
+                'id' => $id,
+                'titlu' => (string) ($product['name'] ?? ''),
+                'descriere' => $descriere,
+                'link' => $baza . '/produs/' . rawurlencode($slug),
+                'imagine' => $imagini[0] ?? '',
+                'imagini_extra' => array_slice($imagini, 1),
+                'disponibilitate' => $disponibil,
+                'pret' => $redusa ? (float) ($product['base_price'] ?? $pretAfisat) : $pretAfisat,
+                'pret_redus' => $redusa ? $pretAfisat : null,
+                'reducere_de_la' => $deLa,
+                'reducere_pana_la' => $panaLa,
+                'marca' => (string) ($product['brand'] ?? ''),
+                'categorie' => trim((string) (($product['category_name'] ?? $product['category']) ?? '')),
+                // Coloana EAN nu există încă; când apare (B4), intră singură.
+                'gtin' => (string) ($product['gtin'] ?? $product['ean'] ?? ''),
+                'livrare' => \App\Support\PoliticaLivrare::optiuni($settings, $pretAfisat, $redusa),
+            ];
+        }
+        return $produse;
+    }
+
+    /**
      * JSON-LD pentru pagina unui produs: Product și firimiturile.
      *
      * Offer (prețul afișat, cu reducerea activă; stocul după ERP; precomanda ca
@@ -7250,6 +7687,8 @@ CSS;
      * din recenzii reale aprobate, care se văd pe pagină (pluginul de recenzii).
      * Un Product fără ofertă și fără recenzii nu se scrie (Google cere una
      * dintre ele). Produsele inactive nu primesc Product, doar firimituri.
+     * Oferta are și livrarea (prețurile fixe din Setări livrare) și politica de
+     * retur a site-ului (vezi PoliticaLivrare).
      *
      * @return list<array<string, mixed>>
      */
@@ -7331,6 +7770,15 @@ CSS;
                 ];
             }
 
+            // Livrarea și returul (A5 din planul SEO): costul transportului pentru
+            // produsul comandat singur, din prețurile fixe ale checkout-ului, și
+            // politica de retur din termeni. Vezi PoliticaLivrare.
+            $livrare = \App\Support\PoliticaLivrare::optiuni(
+                $this->cachedSettings($this->db()),
+                (float) ($product['price'] ?? 0),
+                (bool) ($product['has_sale_price'] ?? false)
+            );
+
             $nodProdus = \App\Support\JsonLd::produs([
                 'url' => $url,
                 'name' => $nume,
@@ -7343,6 +7791,8 @@ CSS;
                 'availability' => $disponibil,
                 'priceValidUntil' => $panaLa,
                 'reviews' => $recenzii,
+                'shipping' => $livrare,
+                'returnPolicy' => \App\Support\PoliticaLivrare::activ() ? \App\Support\JsonLd::politicaRetur($baza) : [],
             ]);
             if ($nodProdus !== []) {
                 $noduri[] = $nodProdus;
@@ -7365,13 +7815,15 @@ CSS;
     }
 
     /**
-     * Organization + WebSite, pe prima pagină (nucleu, pe orice site). Numele:
-     * numele magazinului din setări, altfel cel din seo.json-ul site-ului,
-     * altfel APP_NAME. Emailul și telefonul din setări (sau din linkurile
+     * Organization + WebSite, pe prima pagină (nucleu, pe orice site). Numele e
+     * cel din titlurile paginilor (SeoMeta::numeMagazin: numele magazinului din
+     * setări, altfel cel din seo.json-ul site-ului, altfel APP_NAME). Emailul și telefonul din setări (sau din linkurile
      * mailto:/tel: din antet și subsol). Logo doar dacă are cel puțin 112×112 px
      * (cerința Google) și e aproape pătrat (cel mult 1,5:1; Google îl arată
      * într-un pătrat): întâi pozele din seo.json → organizatie.logo, apoi iconița
      * site-ului. sameAs doar cu profiluri sociale reale din antet și subsol.
+     * Cu magazinul pe site, și politica de retur a magazinului (aceeași ca pe
+     * produse, vezi PoliticaLivrare).
      *
      * @return list<array<string, mixed>>
      */
@@ -7382,17 +7834,8 @@ CSS;
             if ($baza === '') {
                 return [];
             }
-            $nume = trim((string) ($settings['store_name'] ?? ''));
-            if ($nume === '') {
-                $nume = trim((string) \App\Support\DateSite::seo('organizatie.nume', ''));
-            }
-            if ($nume === '') {
-                $config = require __DIR__ . '/../../../config/app.php';
-                $nume = trim((string) ($config['name'] ?? ''));
-            }
-            if ($nume === '') {
-                $nume = (string) parse_url($baza, PHP_URL_HOST);
-            }
+            // Același nume ca în titluri și în og:site_name (Admin → Setări magazin → SEO Google).
+            $nume = \App\Support\SeoMeta::numeMagazin($settings);
             $htmlDesign = (string) ($settings['design_header_html'] ?? '') . "\n"
                 . (string) ($settings['design_menu_html'] ?? '') . "\n"
                 . (string) ($settings['design_footer_html'] ?? '');
@@ -7438,6 +7881,9 @@ CSS;
                     'email' => $email,
                     'telephone' => $telefon,
                     'sameAs' => \App\Support\JsonLd::profiluriSociale($htmlDesign),
+                    // Politica de retur e a magazinului: fără el (sau cu el oprindu-se), nu se scrie.
+                    'returnPolicy' => \App\Support\Plugins::permiteInceput('magazin') && \App\Support\PoliticaLivrare::activ()
+                        ? \App\Support\JsonLd::politicaRetur($baza) : [],
                 ]),
                 \App\Support\JsonLd::site($nume, $baza),
             ]));
@@ -9857,10 +10303,9 @@ CSS;
         $productBasePrice = (float) ($product['base_price'] ?? $productPrice);
         $productSalePrice = (float) (($product['sale_price'] ?? 0) ?: 0);
         $productCategory = (string) (($product['category_name'] ?? $product['category']) ?? '');
-        $productCategoryUrl = '/magazin';
-        if (trim($productCategory) !== '') {
-            $productCategoryUrl .= '?category=' . rawurlencode(trim($productCategory));
-        }
+        // Firimiturile și eticheta de categorie duc la pagina categoriei.
+        $productCategoryDb = $this->db();
+        $productCategoryUrl = \App\Support\LinkuriCategorii::url($productCategoryDb instanceof PDO ? $productCategoryDb : null, $productCategory);
         $hasSaleForTemplate = $productSalePrice > 0
             && $productBasePrice > 0
             && $productPrice > 0
@@ -10059,6 +10504,8 @@ CSS;
             $css = str_replace($placeholder, $value, $css);
             $js = str_replace($placeholder, $value, $js);
         }
+        // Linkurile de categorie scrise în șablon sau în descriere duc la /categorie/{slug}.
+        $html = \App\Support\LinkuriCategorii::rescrie($html, $productCategoryDb instanceof PDO ? $productCategoryDb : null);
 
         return [
             'html' => $html,

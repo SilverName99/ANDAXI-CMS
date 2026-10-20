@@ -943,7 +943,9 @@ try {
     // „Reducere cupon (COD)” pe o comandă veche, ca totalul să se lege).
     $semneText = [
         'catalog' => ['/Categorii produse/u', '/Vezi toate produsele/u', '/Câmpuri suplimentare/u'],
-        'magazin' => ['/Adaugă în coș/u', '/Finalizează comanda/u', '/Comenzi recente/u', '/Numerotare comenzi/u', '/Coș flotant/u'],
+        // Avertismentul pe produs (Bioscem 333ba9e, fa76c4f): cardul din editorul produsului și codul din emailuri.
+        'magazin' => ['/Adaugă în coș/u', '/Finalizează comanda/u', '/Comenzi recente/u', '/Numerotare comenzi/u', '/Coș flotant/u',
+            '/Avertisment la coș/u', '/Avertismentele confirmate/u', '/Comandă online pe/u'],
         'livrare_fan' => ['/FAN Courier/u', '/FANbox/u', '/\bAWB\b/u', '/Setări livrare/u'],
         // Procesatorii: textele lor, nu datele comenzilor vechi („euplatesc” ca metodă,
         // „ID tranzacție EuPlătesc”, „Card BT” rămân pe comenzile plătite așa).

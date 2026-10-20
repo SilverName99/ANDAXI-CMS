@@ -40,6 +40,15 @@ require_once __DIR__ . '/../src/Support/Verificare.php';
     exit;
 })();
 
+// Poza pentru distribuire pe Facebook / WhatsApp (og:image, 1200×630):
+// /og/{versiune}/uploads/… . Înaintea sesiunii și a redirecționărilor, ca o poză
+// să nu trimită cookie-uri; vezi App\Support\ImagineDistribuire (nucleu: orice
+// site, doar pozele din /uploads/products și /uploads/gallery).
+if (str_starts_with((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? ''), '/og/')) {
+    require_once __DIR__ . '/../src/Support/ImagineDistribuire.php';
+    \App\Support\ImagineDistribuire::raspunde(dirname(__DIR__));
+}
+
 // O singură adresă pentru fiecare pagină (gazda din APP_URL, fără „/” final) și
 // adresele vechi ale site-ului (redirecturi.json din dosarul site-ului, vezi
 // docs/SEO.md). Doar GET/HEAD; niciodată pe coș, plată, cont, admin, API, health,

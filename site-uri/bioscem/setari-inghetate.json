@@ -2,8 +2,8 @@
     "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
     "format": 2,
     "site": "bioscem",
-    "sursa": "Nou-site-bioscem@9f59e79",
-    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "sursa": "Nou-site-bioscem@4254ca4",
+    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
     "setari": {
         "erp_trimite_din": {
             "valoare": "",

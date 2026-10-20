@@ -1,0 +1,14 @@
+{
+  "_despre": "Avertismentul „ATENȚIE – PRODUS REFRIGERAT” pe cele 3 produse refrigerate ale Bioscem (decizia proprietarului din 20 oct 2026; Bioscem 0f5f568): Vivomixx Neo 115 și 460, Actinovo Vitamina C lipozomală. Textele sunt cele aprobate, cuvânt cu cuvânt („{produs}” devine numele din „produse”). Le scrie în bază scripts/avertisment-produse.php (--plan, --aplica, --restaureaza), din dosarul site-ului; ajung în cele trei câmpuri din Admin → Produse → „Avertisment la coș și la finalizarea comenzii”.",
+  "titlu": "ATENȚIE – PRODUS REFRIGERAT",
+  "eticheta": "Am citit și am înțeles condițiile pentru produsul refrigerat",
+  "paragrafe": [
+    "Produsul {produs} necesită păstrare la frigider, la temperatura de +2°C până la +8°C. Comanda este expediată în ambalaj special, cu elemente frigorifice. Vă rugăm să asigurați recepționarea coletului și depozitarea imediată la frigider.",
+    "Neridicarea coletului poate conduce la compromiterea produsului și la solicitarea recuperării prejudiciilor efectiv dovedite de către SC BIOSCEM SRL, în condițiile legii."
+  ],
+  "produse": {
+    "vivomixx-neo-115": "Vivomixx",
+    "vivomixx-neo-460": "Vivomixx",
+    "actinovo-vitamina-c-lipozomala": "Actinovo"
+  }
+}

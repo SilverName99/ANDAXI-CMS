@@ -23,7 +23,8 @@
         "catalog/0021_coloane_vechi_catalog": "cbe194ff34b9bfdc727f532b029c62457d8a2e4d4e74ba21a10056eb72dcc801",
         "cupoane/0022_coloane_vechi_cupoane": "44630393447bef6871cb6a12999527bb85f53660b4d89a7230b0c598b68df7a0",
         "recenzii/0023_recenzii_vechi": "6ac8ea9a308b2e17e12a5841091157e7fcafc174eebe1c630ddb25063fc54853",
-        "blog/0024_legaturi_categorii": "bd1327b527772d2efa591f902403f982ff2e1c8a6dbbcd90dc1485172bb3f7e1"
+        "blog/0024_legaturi_categorii": "bd1327b527772d2efa591f902403f982ff2e1c8a6dbbcd90dc1485172bb3f7e1",
+        "magazin/0032_avertismente_produse": "d417010739268abcf7b02a2320ae335f46da1db78ad6c79c6156c47dda06a853"
     },
     "retrase": {}
 }

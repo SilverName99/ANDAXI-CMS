@@ -13,5 +13,31 @@
   },
   "_despre_cos_cumparaturi": "/cos-cumparaturi e pagina de coș din constructorul Bioscem: blocată în robots.txt și niciodată redirecționată.",
   "robots_disallow": ["/cos-cumparaturi"],
-  "cai_excluse": ["/cos-cumparaturi"]
+  "cai_excluse": ["/cos-cumparaturi"],
+  "titluri": {
+    "_despre": "Livrarea 2 SEO (Bioscem 93d803f): „ - BIOSCEM” la finalul titlurilor e restul vechi din importul WordPress (Yoast) și se scoate (exact cu aceste litere); „harrison” nu deosebește o marcă (din „HSN - Harrison Sport Nutrition”). Numele din titluri când Setări magazin nu are unul e organizatie.nume („Bioscem Shop”, cel de la lansare).",
+    "sufixe_vechi": ["BIOSCEM"],
+    "cuvinte_generice_marca": ["harrison"]
+  },
+  "logo_antet": {
+    "_despre": "Livrarea 2 SEO (Bioscem a14e803): logo-ul din antet (977×240, circa 154 KB) primește două variante WebP făcute o dată din el; fișierele stau în public/assets/img/ din acest pachet și se copiază peste public/ al site-ului la adoptare (site-uri/README.md). Alt logo în galerie (alte dimensiuni) = antetul neschimbat.",
+    "png": "/uploads/gallery/bioscem-logo-2.png",
+    "dimensiuni": [977, 240],
+    "webp_1x": "/assets/img/bioscem-logo-2-212.webp",
+    "webp_2x": "/assets/img/bioscem-logo-2-423.webp"
+  },
+  "distribuire": {
+    "_despre": "Livrarea 2 SEO (Bioscem 7455b77): poza de distribuire (og:image) a paginilor fără poză proprie, când Setări magazin → SEO Google nu are una: logo-ul din antet.",
+    "logo": "/uploads/gallery/bioscem-logo-2.png"
+  },
+  "livrare_retur": {
+    "_despre": "Livrarea 2 SEO (Bioscem dfcf6bd, 1e46f9f): condițiile confirmate de proprietar pentru Google. Livrarea la adresă prin FAN Courier (prețul din Setări livrare → prețuri fixe); termenul de livrare nehotărât încă (null); returul din /termeni-conditii: 14 zile de la primire, transportul înapoi plătit de client.",
+    "serviciu": "FAN Courier",
+    "termen_livrare": null,
+    "retur": {"zile": 14, "pagina": "/termeni-conditii", "taxe": "client"}
+  },
+  "flux_merchant": {
+    "_despre": "Livrarea 2 SEO (Bioscem d277727): id-ul unui produs fără cod SKU unic în fluxul Merchant Center e „BS-{id}” (nu se schimbă după ce produsele au intrat în Merchant Center).",
+    "prefix_id": "BS-"
+  }
 }

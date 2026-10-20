@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
     "setari": {
         "contact_form_recipients": {
             "valoare": "adresa1@exemplu.ro",
@@ -135,7 +135,7 @@
             "mod": "lipsa_sau_gol",
             "din": "cod",
             "sursa": "$settings['store_name'] ?? … (rezerva din cod)",
-            "nota": "Gol în bază: codul vechi pune numele lui în titlul paginilor (views/layout.php), codul comun „Bioscem Shop”; de aici lipsa_sau_gol"
+            "nota": "Gol în bază: codul vechi pune numele lui în titlul paginilor (views/layout.php), codul comun numele implicit al site-ului (SeoMeta::numeMagazinImplicit: seo.json → organizatie.nume, apoi APP_NAME; până la livrarea 2 SEO, „Bioscem Shop”); de aici lipsa_sau_gol"
         },
         "welcome_popup_enabled": {
             "valoare": "0",

@@ -15,7 +15,7 @@ mută rândul de mai jos la el, apoi comparația trebuie să iasă cu 0 fără n
 
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|
-| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `9f59e79` (20.10.2026) | CMS pornește din `11b1040` |
+| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `4254ca4` (20.10.2026) | CMS pornește din `11b1040` |
 | Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `cc231e4` (20.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
 | vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `ca1120c` (20.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
 | grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (20.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |

@@ -27,6 +27,21 @@ $designFooterCss = (string) ($designSettings['design_footer_css'] ?? '');
 $designFooterJs = (string) ($designSettings['design_footer_js'] ?? '');
 $designMenuCss = (string) ($designSettings['design_menu_css'] ?? '');
 $designMenuJs = (string) ($designSettings['design_menu_js'] ?? '');
+// Antetul, meniul și subsolul sunt HTML salvat în baza de date. La afișare,
+// linkurile de categorie /magazin?category=… devin /categorie/{slug} (adresele
+// din Google și din sitemap), iar logo-ul din antet vine ca WebP mic, cu PNG-ul
+// ca rezervă. Baza de date rămâne neatinsă. Paginile de coș, comandă, plată și
+// cont rămân exact ca înainte (vezi LinkuriCategorii::paginaCurentaExclusa).
+// Paginile categoriilor sunt ale catalogului: fără el pe site, linkurile spre
+// magazin le scoate oricum filtrul pluginurilor, deci nu se mai citesc categoriile.
+if (!\App\Support\LinkuriCategorii::paginaCurentaExclusa()) {
+    if ($areCatalog) {
+        $designHeader = \App\Support\LinkuriCategorii::rescrie($designHeader, $db instanceof \PDO ? $db : null);
+        $designMenu = \App\Support\LinkuriCategorii::rescrie($designMenu, $db instanceof \PDO ? $db : null);
+        $designFooter = \App\Support\LinkuriCategorii::rescrie($designFooter, $db instanceof \PDO ? $db : null);
+    }
+    $designHeader = \App\Support\LogoAntet::webp($designHeader);
+}
 // Fără consimțământ, niciun script de analiză/marketing nu ajunge în pagină.
 $acceptaUrmarire = \App\Support\CookieConsent::permiteUrmarire();
 $chatActiv = \App\Support\ChatLive::activ($designSettings);
@@ -179,14 +194,27 @@ $requestPath = rtrim($requestPath, '/');
 if ($requestPath === '') {
     $requestPath = '/';
 }
-$siteBaseTitle = trim((string) ($designSettings['store_name'] ?? 'Bioscem Shop'));
-if ($siteBaseTitle === '') {
-    $siteBaseTitle = 'Bioscem Shop';
-}
+// Numele magazinului din titluri: Admin → Setări magazin → SEO Google; gol = seo.json →
+// organizatie.nume al site-ului, altfel APP_NAME (SeoMeta::numeMagazin).
+$siteBaseTitle = \App\Support\SeoMeta::numeMagazin($designSettings);
 $pageTitle = trim((string) ($title ?? ''));
 $homeSeoTitle = trim((string) ($designSettings['store_seo_home_title'] ?? ''));
+$homeSeoDescription = trim((string) ($designSettings['store_seo_home_description'] ?? ''));
 $metaTitleFinal = trim((string) ($metaTitle ?? ''));
-if ($metaTitleFinal === '') {
+$metaDescriptionFinal = trim((string) ($metaDescription ?? ''));
+if (\App\Support\SeoMeta::activ()) {
+    // Prima pagină: titlul și descrierea din Setări magazin → SEO Google au
+    // întâietate (acolo le caută proprietarul); apoi cele din pagina „Acasă”.
+    if ($requestPath === '/' && $homeSeoTitle !== '') {
+        $metaTitleFinal = $homeSeoTitle;
+    }
+    if ($requestPath === '/' && $homeSeoDescription !== '') {
+        $metaDescriptionFinal = $homeSeoDescription;
+    }
+    // Aceeași regulă peste tot: titlul scris, altfel „{titlul paginii} | {magazin}”,
+    // fără „|”, „–” sau „-” rămase la final.
+    $metaTitleFinal = \App\Support\SeoMeta::titluPagina($metaTitleFinal, $pageTitle, $siteBaseTitle);
+} elseif ($metaTitleFinal === '') {
     if ($requestPath === '/' && $homeSeoTitle !== '') {
         $metaTitleFinal = $homeSeoTitle;
     } elseif ($pageTitle === '' || strcasecmp($pageTitle, $siteBaseTitle) === 0) {
@@ -195,10 +223,9 @@ if ($metaTitleFinal === '') {
         $metaTitleFinal = $pageTitle . ' | ' . $siteBaseTitle;
     }
 }
-$metaDescriptionFinal = trim((string) ($metaDescription ?? ''));
 if ($metaDescriptionFinal === '') {
     if ($requestPath === '/') {
-        $metaDescriptionFinal = trim((string) ($designSettings['store_seo_home_description'] ?? ''));
+        $metaDescriptionFinal = $homeSeoDescription;
     }
     if ($metaDescriptionFinal === '') {
         $metaDescriptionFinal = trim((string) ($designSettings['store_seo_default_description'] ?? ''));
@@ -216,6 +243,32 @@ if ($canonicalUrlFinal === '') {
     $canonicalUrlFinal = $appUrl . ($requestPath === '/' ? '/' : $requestPath);
 }
 $metaImageUrlFinal = trim((string) ($metaImageUrl ?? ''));
+// Poza de distribuire (Facebook, WhatsApp, X): varianta 1200×630 a pozei
+// paginii (produsul: poza lui principală), altfel cea implicită din Setări
+// magazin → SEO Google, altfel logo-ul. Vezi App\Support\ImagineDistribuire.
+// Paginile de coș, comandă, plată și cont rămân exact ca înainte.
+$distribuireNoua = !\App\Support\LinkuriCategorii::paginaCurentaExclusa();
+$imagineDistribuire = null;
+if ($distribuireNoua) {
+    if ($metaImageUrlFinal !== '') {
+        $imagineDistribuire = \App\Support\ImagineDistribuire::pentru($metaImageUrlFinal, $appUrl);
+    }
+    if ($imagineDistribuire !== null) {
+        // Poza paginii (produsul: numele lui; altfel titlul paginii).
+        $imagineDistribuireAlt = trim((string) ($metaImageAlt ?? ''));
+        if ($imagineDistribuireAlt === '') {
+            $imagineDistribuireAlt = $pageTitle !== '' ? $pageTitle : $siteBaseTitle;
+        }
+    } else {
+        // Poza implicită (logo-ul sau cea din setări) nu arată pagina: textul
+        // alternativ o descrie pe ea („Logo Bioscem”), nu titlul paginii.
+        $imagineDistribuire = \App\Support\ImagineDistribuire::implicita($designSettings, $appUrl);
+        $imagineDistribuireAlt = is_array($imagineDistribuire)
+            ? \App\Support\ImagineDistribuire::altImplicit($imagineDistribuire, $siteBaseTitle)
+            : $siteBaseTitle;
+    }
+    $metaImageUrlFinal = (string) ($imagineDistribuire['url'] ?? '');
+}
 if ($metaImageUrlFinal === '') {
     $metaImageUrlFinal = trim((string) ($designSettings['store_seo_default_image_url'] ?? ''));
 }
@@ -306,6 +359,12 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
     <?php if ($canonicalUrlFinal !== ''): ?>
         <link rel="canonical" href="<?= htmlspecialchars($canonicalUrlFinal, ENT_QUOTES) ?>">
     <?php endif; ?>
+<?php /* Loc pregătit pentru „noindex” (deciziile D2 etichete mici, D3 etichete cu nume de boli
+și D7 /blog gol nu sunt încă luate): un controller poate trimite $metaRobots, de exemplu
+„noindex,follow”. Azi niciun controller nu o trimite, deci nu apare nimic în pagină. */
+if (isset($metaRobots) && preg_match('/^[a-z ,-]+$/i', trim((string) $metaRobots)) === 1) {
+    echo '    <meta name="robots" content="', htmlspecialchars(trim((string) $metaRobots), ENT_QUOTES), '">', "\n";
+} ?>
 <?php /* Date structurate (produs, firimituri, firmă, site): un bloc <script> pentru fiecare tip. */
 foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     $jsonLdScript = is_array($jsonLdNod) ? \App\Support\JsonLd::script($jsonLdNod) : '';
@@ -314,6 +373,10 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     }
 } ?>
     <meta property="og:type" content="website">
+<?php if ($distribuireNoua): ?>
+    <meta property="og:site_name" content="<?= htmlspecialchars($siteBaseTitle, ENT_QUOTES) ?>">
+    <meta property="og:locale" content="ro_RO">
+<?php endif; ?>
     <meta property="og:title" content="<?= htmlspecialchars($metaTitleFinal, ENT_QUOTES) ?>">
     <?php if ($metaDescriptionFinal !== ''): ?>
         <meta property="og:description" content="<?= htmlspecialchars($metaDescriptionFinal, ENT_QUOTES) ?>">
@@ -323,8 +386,21 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     <?php endif; ?>
     <?php if ($metaImageUrlFinal !== ''): ?>
         <meta property="og:image" content="<?= htmlspecialchars($metaImageUrlFinal, ENT_QUOTES) ?>">
+<?php if ($distribuireNoua && is_array($imagineDistribuire)): ?>
+<?php if ((string) ($imagineDistribuire['tip'] ?? '') !== ''): ?>
+        <meta property="og:image:type" content="<?= htmlspecialchars((string) $imagineDistribuire['tip'], ENT_QUOTES) ?>">
+<?php endif; ?>
+<?php if ((int) ($imagineDistribuire['latime'] ?? 0) > 0 && (int) ($imagineDistribuire['inaltime'] ?? 0) > 0): ?>
+        <meta property="og:image:width" content="<?= (int) $imagineDistribuire['latime'] ?>">
+        <meta property="og:image:height" content="<?= (int) $imagineDistribuire['inaltime'] ?>">
+<?php endif; ?>
+        <meta property="og:image:alt" content="<?= htmlspecialchars($imagineDistribuireAlt, ENT_QUOTES) ?>">
+<?php endif; ?>
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="<?= htmlspecialchars($metaImageUrlFinal, ENT_QUOTES) ?>">
+<?php if ($distribuireNoua && is_array($imagineDistribuire)): ?>
+        <meta name="twitter:image:alt" content="<?= htmlspecialchars($imagineDistribuireAlt, ENT_QUOTES) ?>">
+<?php endif; ?>
     <?php else: ?>
         <meta name="twitter:card" content="summary">
     <?php endif; ?>
@@ -1115,7 +1191,15 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
         </script>
     <?php endif; ?>
 <?php if ($areMagazin): ?>
-    <script src="/assets/js/qty-stoc.js?v=<?= $qtyStocJsVersion ?><?= $assetVersionQuery ?>" defer></script>
+    <?php
+    // Avertismentul produsului abia adăugat pe drumul clasic (POST → /cos).
+    // Doar pe /cos, care nu intră în cache; în rest fereastra vine din JSON.
+    // „endif” lipit de <script>: fără avertisment, pagina rămâne octet cu octet aceeași.
+    $avertismenteDeAratat = is_array($avertismenteDeAratat ?? null) ? $avertismenteDeAratat : [];
+    if ($avertismenteDeAratat !== []): ?>
+        <script type="application/json" id="avertisment-produs-date"><?= json_encode($avertismenteDeAratat, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+        <script src="<?= htmlspecialchars(\App\Support\AvertismentProduse::urlScript(), ENT_QUOTES) ?>" defer></script>
+    <?php endif; ?><script src="/assets/js/qty-stoc.js?v=<?= $qtyStocJsVersion ?><?= $assetVersionQuery ?>" defer></script>
 <?php endif; ?>
     <?php if ($floatingCartEnabled): ?>
         <script>

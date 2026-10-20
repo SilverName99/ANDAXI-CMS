@@ -42,12 +42,17 @@ $radacina = dirname(__DIR__, 2);
 require_once $radacina . '/bootstrap.php';
 
 use App\Http\Router;
+use App\Support\AvertismentProduse;
 use App\Support\Database;
 use App\Support\DateSite;
+use App\Support\FluxGoogleMerchant;
 use App\Support\JsonLd;
+use App\Support\LogoAntet;
 use App\Support\Plugins;
+use App\Support\PoliticaLivrare;
 use App\Support\ResponseCache;
 use App\Support\Robots;
+use App\Support\SeoMeta;
 use App\Support\SeoRedirects;
 use App\Support\Settings;
 use App\Support\Sitemap;
@@ -151,8 +156,9 @@ SeoRedirects::reseteaza();
 $reguli = SeoRedirects::reguli();
 $coduri = array_count_values(array_map(static fn (array $r): int => (int) ($r[2] ?? 0), $reguli['exacte']));
 $verifica('Bioscem: ' . count($reguli['exacte']) . ' reguli exacte (' . ($coduri[301] ?? 0) . ' × 301, ' . ($coduri[410] ?? 0) . ' × 410) și '
-    . count($reguli['prefixe']) . ' prefixe 410, ca în Bioscem 9f59e79 (127 = 117 + 10: livrarea 1 și cele 14 reguli din 19 oct; 6 prefixe)',
-    count($reguli['exacte']) === 127 && ($coduri[301] ?? 0) === 117 && ($coduri[410] ?? 0) === 10 && count($reguli['prefixe']) === 6);
+    . count($reguli['prefixe']) . ' prefixe 410, ca în Bioscem 4254ca4 (128 = 118 + 10: livrarea 1, cele 14 reguli din 19 oct și '
+    . '/retur-garantie din 20 oct; 6 prefixe)',
+    count($reguli['exacte']) === 128 && ($coduri[301] ?? 0) === 118 && ($coduri[410] ?? 0) === 10 && count($reguli['prefixe']) === 6);
 $surse = [];
 $probleme = [];
 foreach ($reguli['exacte'] as $r) {
@@ -228,6 +234,82 @@ $verifica('JSON-LD: cu ofertă: Offer în RON, PreOrder, NewCondition', ($cuOfer
     && ($cuOferta['offers']['priceCurrency'] ?? '') === 'RON' && ($cuOferta['offers']['availability'] ?? '') === 'https://schema.org/PreOrder');
 $verifica('JSON-LD: textul nu poate închide eticheta <script>', !str_contains(JsonLd::script($cuOferta), '</script><b>')
     && substr_count(JsonLd::script($cuOferta), '</script>') === 1);
+
+// A6. Livrarea 2 SEO (Bioscem 6c8c789 … 0250480): ce era scris în codul Bioscem stă acum în datele
+// site-ului (seo.json); un site fără ele nu declară nimic. Comparația cu codul Bioscem dovedește
+// Bioscem; aici, că datele chiar vin din pachet și că un pachet fără ele e neutru.
+$setariLivrare = ['shipping_fixed_enabled' => '1', 'shipping_fixed_base' => '19.99', 'shipping_free_bucharest' => '80',
+    'shipping_free_province' => '80'];
+DateSite::reseteaza($radacina . '/site-uri/bioscem');
+$verifica('Bioscem: numele implicit din seo.json, sufixul vechi „BIOSCEM” scos din titluri, prefixul id-urilor din flux',
+    SeoMeta::numeMagazinImplicit() === 'Bioscem Shop' && SeoMeta::curataTitlu('Ceai de mentă | BIOSCEM') === 'Ceai de mentă'
+    && FluxGoogleMerchant::prefixId() === 'BS-', SeoMeta::curataTitlu('Ceai de mentă | BIOSCEM') . ' / ' . FluxGoogleMerchant::prefixId());
+$verifica('Bioscem: returul din seo.json (14 zile, /termeni-conditii, transportul înapoi plătit de client), FAN Courier, fără termen de livrare',
+    PoliticaLivrare::activ() && PoliticaLivrare::retur() === ['zile' => 14, 'pagina' => '/termeni-conditii', 'taxe' => 'client']
+    && PoliticaLivrare::serviciuAdresa() === 'FAN Courier' && PoliticaLivrare::termenLivrare() === null
+    && PoliticaLivrare::linkRetur('https://exemplu.test/') === 'https://exemplu.test/termeni-conditii');
+$verifica('Bioscem: livrarea cu prețuri fixe: sub prag tariful la adresă, peste prag gratuit, la reducere sau între praguri nimic',
+    PoliticaLivrare::optiuni($setariLivrare, 14.5, false) === [['serviciu' => 'FAN Courier', 'pret' => 19.99]]
+    && PoliticaLivrare::optiuni($setariLivrare, 89.0, false) === [['serviciu' => 'FAN Courier', 'pret' => 0.0]]
+    && PoliticaLivrare::optiuni($setariLivrare, 169.0, true) === []
+    && PoliticaLivrare::optiuni(['shipping_free_province' => '150'] + $setariLivrare, 100.0, false) === []
+    && PoliticaLivrare::optiuni(['shipping_fixed_enabled' => '0'] + $setariLivrare, 14.5, false) === []);
+$opriri = (static function (): array {
+    putenv('SEO_LIVRARE_RETUR=0');
+    $livrare = PoliticaLivrare::activ() || PoliticaLivrare::retur() !== [];
+    putenv('SEO_LIVRARE_RETUR');
+    putenv('AVERTISMENT_PRODUSE=0');
+    $avertisment = AvertismentProduse::activ();
+    putenv('AVERTISMENT_PRODUSE');
+    return [$livrare, $avertisment, PoliticaLivrare::activ(), AvertismentProduse::activ()];
+})();
+$verifica('opririle de urgență: SEO_LIVRARE_RETUR=0 scoate livrarea și returul, AVERTISMENT_PRODUSE=0 avertismentul; fără ele, pornite',
+    $opriri === [false, false, true, true], json_encode($opriri));
+// Logo-ul din antet: variantele WebP doar cu PNG-ul de exact mărimea din seo.json și cu ambele fișiere.
+$dosarLogo = sys_get_temp_dir() . '/test-seo-logo-' . getmypid();
+$antetLogo = '<header><a href="/"><img src="/uploads/gallery/bioscem-logo-2.png" alt="Bioscem" width="212" height="52"></a></header>';
+$logo = (static function () use ($dosarLogo, $antetLogo, $radacina): array {
+    @mkdir($dosarLogo . '/uploads/gallery', 0700, true);
+    @mkdir($dosarLogo . '/assets/img', 0700, true);
+    foreach (['bioscem-logo-2-212.webp', 'bioscem-logo-2-423.webp'] as $fisier) {
+        copy($radacina . '/site-uri/bioscem/public/assets/img/' . $fisier, $dosarLogo . '/assets/img/' . $fisier);
+    }
+    $png = static function (int $l, int $i) use ($dosarLogo): void {
+        $imagine = imagecreatetruecolor($l, $i);
+        imagepng($imagine, $dosarLogo . '/uploads/gallery/bioscem-logo-2.png');
+    };
+    $png(977, 240);
+    $cuWebp = LogoAntet::webp($antetLogo, $dosarLogo);
+    $png(500, 240);
+    $altLogo = LogoAntet::webp($antetLogo, $dosarLogo);
+    $png(977, 240);
+    unlink($dosarLogo . '/assets/img/bioscem-logo-2-423.webp');
+    $faraVarianta = LogoAntet::webp($antetLogo, $dosarLogo);
+    array_map('unlink', glob($dosarLogo . '/*/*/*') ?: []);
+    @rmdir($dosarLogo . '/uploads/gallery');
+    @rmdir($dosarLogo . '/uploads');
+    @rmdir($dosarLogo . '/assets/img');
+    @rmdir($dosarLogo . '/assets');
+    @rmdir($dosarLogo);
+    return [$cuWebp, $altLogo, $faraVarianta];
+})();
+$verifica('Bioscem: logo-ul din antet primește <picture> cu cele două WebP; alt PNG sau o variantă lipsă îl lasă neatins',
+    str_contains($logo[0], '<picture style="display:contents"><source type="image/webp" srcset="/assets/img/bioscem-logo-2-212.webp?v=')
+    && str_contains($logo[0], ' 2x"><img src="/uploads/gallery/bioscem-logo-2.png"') && $logo[1] === $antetLogo && $logo[2] === $antetLogo,
+    $logo[0]);
+DateSite::reseteaza();
+$verifica('pachetul demo (fără livrare_retur, logo_antet, flux_merchant): nimic declarat, prefixul implicit „P-”, numele din seo.json',
+    !PoliticaLivrare::activ() && PoliticaLivrare::retur() === [] && PoliticaLivrare::optiuni($setariLivrare, 14.5, false) === []
+    && FluxGoogleMerchant::prefixId() === 'P-' && LogoAntet::webp($antetLogo) === $antetLogo
+    && SeoMeta::numeMagazinImplicit() === 'Firma Demo din pachet' && SeoMeta::curataTitlu('Ceai | BIOSCEM') === 'Ceai | BIOSCEM');
+$verifica('fără datele unui site: numele implicit din config (APP_NAME), nu „Bioscem Shop”', (static function () use ($radacina): bool {
+    DateSite::reseteaza($radacina . '/storage/nu-exista-' . getmypid());
+    $config = require $radacina . '/config/app.php';
+    $ok = SeoMeta::numeMagazinImplicit() === trim((string) ($config['name'] ?? '')) && !PoliticaLivrare::activ()
+        && \App\Support\ImagineDistribuire::implicita([], 'https://exemplu.test') === null;
+    DateSite::reseteaza();
+    return $ok;
+})());
 
 // =====================================================================
 // Serverul de dezvoltare și cererile
@@ -601,6 +683,23 @@ try {
         $asteptate[] = 'Disallow: /pagina-sistem-demo';
         $verifica('robots.txt: exact regulile pluginurilor de pe site + cea din seo.json, Sitemap: …/sitemap.xml', $linii === $asteptate
             && str_contains($robots, "\nSitemap: http://127.0.0.1:" . $port . "/sitemap.xml\n"), implode(' | ', $linii));
+        // Livrarea 2 SEO: fluxul Merchant Center (magazin) și adresele vechi ale categoriilor (catalog).
+        $permise = array_values(array_filter(explode("\n", $robots), static fn ($l) => str_starts_with($l, 'Allow: ')));
+        $cuMagazin = Plugins::vizibil('magazin');
+        $verifica('robots.txt: „Allow: /feed/google-merchant.xml” ' . ($cuMagazin ? 'da, înaintea regulilor Disallow' : 'nu (fără magazin)'),
+            $permise === ($cuMagazin ? ['Allow: /feed/google-merchant.xml'] : [])
+            && (!$cuMagazin || strpos($robots, 'Allow: ') < strpos($robots, 'Disallow: ')), implode(' | ', $permise));
+        $flux = $cerere($port, 'GET', '/feed/google-merchant.xml');
+        preg_match_all('#<item>#', $flux['corp'], $itemi);
+        $verifica('fluxul Merchant Center: ' . ($cuMagazin ? '200, XML, noindex, ' . count($itemi[0]) . ' produse' . ($cuOferta ? '' : ' (magazinul se oprește: niciunul)')
+            : '404 (fără magazin)'), $cuMagazin
+            ? $flux['cod'] === 200 && str_starts_with((string) ($flux['antete']['content-type'] ?? ''), 'application/xml')
+                && ($cuOferta ? count($itemi[0]) > 0 : count($itemi[0]) === 0)
+            : $flux['cod'] === 404, $flux['cod'] . ' ' . ($flux['antete']['content-type'] ?? '-'));
+        $veche = $cerere($port, 'GET', '/magazin?category=Ceaiuri&sort=price_asc&gclid=TestSeo3');
+        $verifica('/magazin?category=Ceaiuri: ' . ($cuCatalog ? 'un 301 la /categorie/ceaiuri (cu sortarea și gclid)' : '404 (fără catalog)'),
+            $cuCatalog ? $veche['cod'] === 301 && $locatie($veche) === '/categorie/ceaiuri?sort=price_asc&gclid=TestSeo3' : $veche['cod'] === 404,
+            $veche['cod'] . ' ' . $locatie($veche));
 
         // JSON-LD: prima pagină (nucleu).
         $acasa = $jsonLd($cerere($port, 'GET', '/')['corp']);
@@ -685,6 +784,10 @@ try {
         ['www + produs găsit aproximativ', $www, '/produs/ceai-menta', null, null],
         ['www + pagină inexistentă', $www, '/nu-exista-asa-ceva', $canonic . '/nu-exista-asa-ceva', 404],
         ['gazda corectă + „/” final', $corectHttp, '/magazin/', $canonic . '/magazin', 200],
+        // Bioscem 919357a: categoria veche pe www sau cu „/” final, într-un singur salt, fără ?category= lipit înapoi.
+        ['www + categorie veche', $www, '/magazin?category=Ceaiuri', $canonic . '/categorie/ceaiuri', 200],
+        ['www + categorie veche + „/” final + gclid', $www, '/magazin/?category=Ceaiuri&gclid=TeSt2',
+            $canonic . '/categorie/ceaiuri?gclid=TeSt2', 200],
     ];
     $gresite = [];
     foreach ($gazde as [$eticheta, $antete, $cale, $spre, $codFinal]) {

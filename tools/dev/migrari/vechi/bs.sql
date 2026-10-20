@@ -1,7 +1,7 @@
 -- Fixture-ul migrărilor pentru Bioscem (cod bs): schema pe care o face codul vechi pe o bază goală:
 -- scripts/install.php, apoi funcțiile ensure…/asigura… până nu se mai schimbă (MariaDB 10.11.14-MariaDB-0ubuntu0.24.04.1).
 -- Doar structură, niciun rând; nimic din datele unui site. Îl încarcă tools/dev/test-migrari.php (T2).
--- sursa: Nou-site-bioscem@9f59e79
+-- sursa: Nou-site-bioscem@4254ca4
 -- Generat de tools/dev/migrari/genereaza-fixture.php --fixture-uri; nu se editează de mână.
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -749,6 +749,20 @@ CREATE TABLE `order_payment_links` (
   KEY `idx_order_payment_links_order` (`order_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `order_product_warnings` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `order_id` int(10) unsigned NOT NULL,
+  `title` varchar(255) NOT NULL DEFAULT '',
+  `body` text NOT NULL,
+  `checkbox_label` text NOT NULL,
+  `checkbox_ticked` tinyint(1) NOT NULL DEFAULT 1,
+  `product_ids_json` text NOT NULL,
+  `product_names_json` text NOT NULL,
+  `confirmed_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_order_product_warnings_order` (`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE `order_promo_items` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `order_id` int(10) unsigned NOT NULL,
@@ -903,6 +917,15 @@ CREATE TABLE `product_template_fields` (
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`template_id`,`field_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `product_warnings` (
+  `product_id` int(10) unsigned NOT NULL,
+  `title` varchar(255) NOT NULL DEFAULT '',
+  `body` text DEFAULT NULL,
+  `checkbox_label` varchar(500) NOT NULL DEFAULT '',
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE `promotional_products` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,

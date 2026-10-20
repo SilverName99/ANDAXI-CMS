@@ -280,5 +280,16 @@ return static function (Router $router): void {
     $router->get('/admin/design', [AdminController::class, 'designSite']);
     $router->post('/admin/design/save', [AdminController::class, 'designSiteSave']);
 
+    // WP-R (20 oct 2026, Bioscem 9f59e79..4254ca4): livrarea 2 SEO și avertismentul pe produs.
+    // Titlul și descrierea Google ale unei mărci (Admin → Categorii → Mărci; catalogul).
+    $router->post('/admin/categories/brand-seo', [AdminController::class, 'brandSeoUpdate']);
+    // Fluxul de produse pentru Google Merchant Center (doar citire, fără sesiune: excepția e
+    // în bootstrap.php; al magazinului). Nu e legat din nicio pagină; îl adaugă proprietarul
+    // în Merchant Center.
+    $router->get('/feed/google-merchant\.xml', [SiteController::class, 'fluxGoogleMerchant']);
+    // Casetele avertismentelor (ex. produs refrigerat) pentru coșul de acum; pagina /checkout le
+    // reface după o schimbare a coșului.
+    $router->get('/api/cart/avertismente', [SiteController::class, 'cartAvertismenteApi']);
+
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

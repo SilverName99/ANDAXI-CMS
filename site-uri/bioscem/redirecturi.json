@@ -1,5 +1,5 @@
 {
-  "_despre": "Adresele vechi ale site-ului Bioscem (WordPress/WooCommerce, produse șterse): [adresa veche, adresa nouă, cod, motiv]. Cod 301 = mutare permanentă (parametrii din adresă se păstrează), 410 = dispărut definitiv (adresa nouă = null). Se aplică doar când site-ul ar răspunde 404. Sursa: config/redirecturi.php din Bioscem, adică livrarea 1 SEO (19 octombrie 2026, commit f5eafa3) plus deciziile proprietarului din aceeași zi (commit 9f59e79: 14 reguli 301 pentru produse și etichete șterse, spre înlocuitorul verificat); lista completă și deciziile rămase la proprietar sunt în notele livrării. compara-cu-baza.sh verifică că lista de aici e aceeași cu cea din codul Bioscem. Vezi docs/SEO.md.",
+  "_despre": "Adresele vechi ale site-ului Bioscem (WordPress/WooCommerce, produse șterse): [adresa veche, adresa nouă, cod, motiv]. Cod 301 = mutare permanentă (parametrii din adresă se păstrează), 410 = dispărut definitiv (adresa nouă = null). Se aplică doar când site-ul ar răspunde 404. Sursa: config/redirecturi.php din Bioscem, adică livrarea 1 SEO (19 octombrie 2026, commit f5eafa3) plus deciziile proprietarului din aceeași zi (commit 9f59e79: 14 reguli 301 pentru produse și etichete șterse, spre înlocuitorul verificat) și din 20 octombrie (commit 8c074f1: /retur-garantie → /termeni-conditii); lista completă și deciziile rămase la proprietar sunt în notele livrării. compara-cu-baza.sh verifică că lista de aici e aceeași cu cea din codul Bioscem. Vezi docs/SEO.md.",
   "exacte": [
     ["/cart","/cos",301,"coșul WooCommerce -> coșul nou (pentru vizitatori; 0 clicuri; /cos e închis pentru Google, deci regula nu aduce nimic în Google, dar nici nu strică)"],
     ["/index.php","/",301,"prima pagină WordPress"],
@@ -118,6 +118,7 @@
     ["/eticheta/ascolip","/produs/vitamina-c-lipozomala-quicksilver",301,"eticheta Ascolip (marca nu mai există) -> vitamina C lipozomală Quicksilver"],
     ["/eticheta/oferte","/categorie/promotii",301,"eticheta Oferte -> categoria PROMOTII (/categorie/promotii)"],
     ["/eticheta/sistem-respirator","/categorie/respiro",301,"eticheta sistem respirator -> categoria Respiro"],
+    ["/retur-garantie","/termeni-conditii",301,"pagina Retur și Garanție nu există; dreptul de retragere de 14 zile e în termeni și condiții (decizia proprietarului din 20 oct 2026, Bioscem 8c074f1)"],
     ["/*",null,410,"rest tehnic WordPress"],
     ["/tag/icons",null,410,"rest tehnic WordPress"],
     ["/tag/js",null,410,"rest tehnic WordPress"],

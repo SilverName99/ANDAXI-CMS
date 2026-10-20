@@ -81,6 +81,9 @@ $fanboxGratuit = (bool) ($fanboxGratuit ?? false);
 $antiBot = is_array($antiBot ?? null) ? $antiBot : [];
 $antiBotToken = trim((string) ($antiBot['token'] ?? ''));
 $antiBotRenderedAt = (int) ($antiBot['rendered_at'] ?? 0);
+// Produsele cu avertisment (ex. refrigerate): caseta cu textul și bifa
+// obligatorie, deasupra butonului (vezi App\Support\AvertismentProduse).
+$avertismente = is_array($avertismente ?? null) ? $avertismente : [];
 ?>
 
 <section class="bv-checkout-v3" data-checkout-instance="<?= htmlspecialchars($instanceId, ENT_QUOTES) ?>" data-preview-mode="<?= $previewMode ? '1' : '0' ?>">
@@ -573,7 +576,83 @@ $antiBotRenderedAt = (int) ($antiBot['rendered_at'] ?? 0);
                         așteaptă și restul produselor. Te anunțăm pe email în momentul expedierii.
                     </div>
                 <?php endif; ?>
-                <button type="submit" class="bv-checkout-v3__submit" form="<?= htmlspecialchars($instanceId, ENT_QUOTES) ?>-form" data-checkout-submit>
+                <?php if ($avertismente !== []): ?>
+                    <div data-avertismente-checkout data-instanta="<?= htmlspecialchars($instanceId, ENT_QUOTES) ?>" data-numar-produse="<?= (int) \App\Support\Cart::countItems() ?>">
+                        <?php require __DIR__ . '/checkout-avertismente.php'; ?>
+                    </div>
+                    <script>
+                        (() => {
+                            const bloc = document.querySelector('[data-avertismente-checkout]');
+                            if (!bloc) {
+                                return;
+                            }
+                            // Ca la bifa de termeni: arată DE CE nu pleacă formularul. Ascultătorii
+                            // stau pe container: sincronizarea de mai jos îi înlocuiește conținutul.
+                            bloc.addEventListener('invalid', (e) => {
+                                const rand = e.target instanceof Element ? e.target.closest('.bv-checkout-v3__terms') : null;
+                                if (rand) rand.classList.add('is-missing');
+                            }, true);
+                            bloc.addEventListener('change', (e) => {
+                                const bifa = e.target;
+                                if (bifa instanceof HTMLInputElement && bifa.matches('[data-avertisment-bifa]') && bifa.checked) {
+                                    bifa.closest('.bv-checkout-v3__terms')?.classList.remove('is-missing');
+                                }
+                            });
+
+                            // Coșul se poate schimba fără reîncărcarea paginii (coșul plutitor de pe
+                            // această pagină, alt tab): casetele și bifele se refac după coșul de ACUM,
+                            // ca să nu ceară bifa pentru un produs scos. Serverul verifică oricum la trimitere.
+                            const chei = () => [...bloc.querySelectorAll('[data-avertisment-bifa]')].map((b) => b.name);
+                            let cerere = 0;
+                            const sincronizeaza = async () => {
+                                const aceasta = ++cerere;
+                                try {
+                                    const raspuns = await fetch('/api/cart/avertismente?instanta=' + encodeURIComponent(bloc.dataset.instanta || ''), {
+                                        credentials: 'same-origin',
+                                        cache: 'no-store',
+                                        headers: { Accept: 'application/json' },
+                                    });
+                                    const date = await raspuns.json();
+                                    if (aceasta !== cerere || !date || date.ok !== true || typeof date.html !== 'string' || !Array.isArray(date.chei)) {
+                                        return;
+                                    }
+                                    const acum = date.chei.map((c) => '<?= \App\Support\AvertismentProduse::CAMP_BIFA ?>[' + c + ']');
+                                    if (JSON.stringify(acum) === JSON.stringify(chei())) {
+                                        return;
+                                    }
+                                    const bifate = new Set([...bloc.querySelectorAll('[data-avertisment-bifa]')].filter((b) => b.checked).map((b) => b.name));
+                                    bloc.innerHTML = date.html;
+                                    bloc.querySelectorAll('[data-avertisment-bifa]').forEach((b) => {
+                                        b.checked = bifate.has(b.name);
+                                    });
+                                } catch (_) {
+                                    // Fără răspuns: rămân casetele de acum; serverul verifică la trimitere.
+                                }
+                            };
+                            // Numărul de produse la afișare: coșul plutitor îl anunță și când se încarcă.
+                            let numar = Number.parseInt(bloc.dataset.numarProduse || '', 10);
+                            if (!Number.isFinite(numar)) {
+                                numar = null;
+                            }
+                            window.addEventListener('cart:count-updated', (e) => {
+                                const n = Number(e && e.detail ? (e.detail.items_count ?? e.detail.count) : NaN);
+                                if (!Number.isFinite(n)) {
+                                    return;
+                                }
+                                const schimbat = numar !== null && numar !== n;
+                                numar = n;
+                                if (schimbat) {
+                                    sincronizeaza();
+                                }
+                            });
+                            document.addEventListener('visibilitychange', () => {
+                                if (document.visibilityState === 'visible') {
+                                    sincronizeaza();
+                                }
+                            });
+                        })();
+                    </script>
+                <?php /* „endif” lipit de buton: fără avertismente, HTML-ul rămâne octet cu octet cel de dinainte. */ ?><?php endif; ?><button type="submit" class="bv-checkout-v3__submit" form="<?= htmlspecialchars($instanceId, ENT_QUOTES) ?>-form" data-checkout-submit>
                     <?= $previewMode ? 'Preview checkout' : (\App\Support\PaymentMethods::esteCard($paymentMethod) ? 'Către plată' : 'Plasează comanda') ?>
                 </button>
                 <p class="bv-checkout-v3__shipping-error" data-checkout-shipping-error></p>

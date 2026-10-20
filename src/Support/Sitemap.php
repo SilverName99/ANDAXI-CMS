@@ -31,16 +31,25 @@ use Throwable;
 final class Sitemap
 {
     /** Pagini de sistem: există ca rânduri în `pages`, dar n-au ce căuta în Google. */
-    private const PAGINI_SISTEM = [
+    public const PAGINI_SISTEM = [
         '', 'acasa', 'home', '404', 'cos', 'checkout', 'contul-meu',
         'login', 'register', 'acorduri-gdpr',
     ];
 
+    /**
+     * Eticheta e scoasă de site din Google (seo.json → sitemap.etichete_excluse,
+     * de exemplu etichetele cu nume de boli ale Bioscem, decizia D3)? Paginile lor
+     * nu primesc nici descriere automată (SiteController::seoListaFiltrata).
+     */
+    public static function etichetaExclusa(string $slug): bool
+    {
+        return in_array($slug, array_map('strval', (array) DateSite::seo('sitemap.etichete_excluse', [])), true);
+    }
+
     /** Eticheta merge în sitemap? (după numărul de produse active și regulile site-ului) */
     public static function etichetaInSitemap(string $slug, int $produseActive): bool
     {
-        $excluse = array_map('strval', (array) DateSite::seo('sitemap.etichete_excluse', []));
-        if ($slug === '' || $produseActive < 1 || in_array($slug, $excluse, true)) {
+        if ($slug === '' || $produseActive < 1 || self::etichetaExclusa($slug)) {
             return false;
         }
         $minim = max(1, (int) DateSite::seo('sitemap.eticheta_minim_produse', 1));

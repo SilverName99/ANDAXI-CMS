@@ -3429,6 +3429,81 @@
             },
             "motor": "InnoDB"
         },
+        "order_product_warnings": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "body": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "checkbox_label": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "checkbox_ticked": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "confirmed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "order_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "product_ids_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "product_names_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "title": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_order_product_warnings_order": {
+                    "coloane": [
+                        "order_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "order_promo_items": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -4609,6 +4684,51 @@
                 "slug": {
                     "coloane": [
                         "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_warnings": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "body": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "checkbox_label": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(500)"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "title": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "product_id"
                     ],
                     "unic": true
                 }

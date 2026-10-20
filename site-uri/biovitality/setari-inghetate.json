@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@cc231e4",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "6b0a954716de1399556a02ee5ec9f40e54d38179542e451bb591bc066c344a97",
+    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
     "setari": {
         "bunny_app_download_path": {
             "valoare": "aplicatie/BiovitalityFiles.exe",
@@ -132,7 +132,7 @@
             "mod": "lipsa_sau_gol",
             "din": "cod",
             "sursa": "$settings['store_name'] ?? … (rezerva din cod)",
-            "nota": "Gol în bază: codul vechi pune numele lui în titlul paginilor (views/layout.php), codul comun „Bioscem Shop”; de aici lipsa_sau_gol"
+            "nota": "Gol în bază: codul vechi pune numele lui în titlul paginilor (views/layout.php), codul comun numele implicit al site-ului (SeoMeta::numeMagazinImplicit: seo.json → organizatie.nume, apoi APP_NAME; până la livrarea 2 SEO, „Bioscem Shop”); de aici lipsa_sau_gol"
         },
         "stripe_enabled": {
             "valoare": "1",
