@@ -168,8 +168,8 @@ $normalizeaza = static function (string $html) use ($portBaza, $portCurent, $dos
         '/(String\()"[0-9a-f]{16,}"/' => '$1"<TOKEN>"',
         '/(Number\()\d{9,}/' => '$1<MOMENT>',
         '/(window\.BT_CSRF\s*=\s*)"[^"]*"/' => '$1"<TOKEN>"',
-        // Versiunea fișierelor statice = data fișierului pe disc.
-        '/(\.(?:css|js)\?v=)\d+/' => '$1<V>',
+        // Versiunea fișierelor statice = data fișierului pe disc (și variantele WebP ale logo-ului din antet).
+        '/(\.(?:css|js|webp)\?v=)\d+/' => '$1<V>',
         // Identificatori aleși la întâmplare (formularele de checkout/cont).
         '/\b(bv-checkout-[a-z0-9-]*?)[0-9a-f]{6,}\b/' => '$1<ID>',
         '/\b([a-z]+-)[0-9a-f]{12,}\b/' => '$1<ID>',
@@ -385,6 +385,26 @@ $coduriDeBioscem = [
 $porturiBiovitality = [
 ];
 $porturiVertij = [
+    // WP-R (20 oct 2026): vertij 0fc2b2c, câmpul de video al postării acceptă și linkuri YouTube și Vimeo
+    // (App\Support\VideoEmbed); textul din editor spune asta (site-uri/bioscem/ce-se-schimba.md).
+    [
+        'nume' => 'editorul postării: câmpul de video, eticheta și exemplul',
+        'cale' => '/admin/blog/posts/editor*',
+        'nou' => "<label>Video</label>\n            <input type=\"text\" name=\"video_url\" placeholder=\"https://www.youtube.com/watch?v=...\"",
+        'vechi' => "<label>Video (fișier MP4)</label>\n            <input type=\"text\" name=\"video_url\" placeholder=\"/uploads/gallery/nume-video.mp4\"",
+        'motiv' => 'vertij 0fc2b2c: un link YouTube sau Vimeo devine playerul lor (înainte, o casetă video neagră); '
+            . 'fișierele .mp4 urcate în Galerie rămân <video>, ca înainte.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'editorul postării: câmpul de video, explicația',
+        'cale' => '/admin/blog/posts/editor*',
+        'nou' => "<small class=\"muted\">\n                Lipește linkul de pe YouTube sau Vimeo, exact cum îl copiezi din bara browserului.\n"
+            . "                Merge și un fișier urcat în Galerie (<code>/uploads/gallery/nume.mp4</code>).\n            </small>",
+        'vechi' => '<small class="muted">Încarcă fișierul .mp4 în Galerie, apoi pune aici calea (ex: <code>/uploads/gallery/nume.mp4</code>).</small>',
+        'motiv' => 'perechea rândului de mai sus (vertij 0fc2b2c).',
+        'mod' => 'repo',
+    ],
 ];
 $porturiGrafo = [
 ];
@@ -576,6 +596,51 @@ if (!$fataDeCommit) {
     foreach (['/Magazin', '/produs/ceai-de-menta/', '/categorie/Ceaiuri', '/produs/ceai-de-ment', '/blog/', '/magazin?utm_source=test'] as $cale) {
         $pagini[] = ['anon', $cale, 'adresa unică'];
     }
+    // Livrarea 2 SEO (Bioscem 6c8c789, 919357a): adresele vechi ale categoriilor duc printr-un
+    // singur 301 la /categorie/{slug} (cu sortarea și căutarea păstrate, fără parametrii de
+    // reclamă); o categorie care nu există, două categorii sau o adresă WordPress veche rămân
+    // cum erau.
+    foreach ([
+        '/magazin?category=Ceaiuri',
+        '/magazin?categorie=ceaiuri&sort=price_asc&gclid=test',
+        '/magazin?category=Ceaiuri&q=menta',
+        '/magazin/?category=Ceaiuri',
+        '/Magazin?category=Ceaiuri',
+        '/MAGAZIN/?categorie=Ceaiuri',
+        '/magazin?category=Nu-exista',
+        '/magazin?category=Ceaiuri&categorie=altceva',
+        '/magazin?category[]=Ceaiuri',
+        '/produse?category=Ceaiuri',
+        '/categorie/ceaiuri?category=Ceaiuri',
+    ] as $cale) {
+        $pagini[] = ['anon', $cale, 'adresa unică'];
+    }
+    // Sortarea și filtrul pe pagina categoriei, catalogul din JavaScript, câmpurile SEO ale
+    // categoriilor și mărcilor din admin (6c8c789, 93d803f); fluxul Merchant Center (d277727,
+    // 1e46f9f); avertismentele coșului (b874cf0, 865630f: coșul vizitatorului nu are niciunul).
+    array_push($pagini,
+        ['viz', '/categorie/ceaiuri?sort=price_asc'],
+        ['viz', '/categorie/ceaiuri?sort=name_desc&q=ceai'],
+        ['viz', '/api/shop/catalog?categorie=ceaiuri'],
+        ['adm', '/admin/categories'],
+        ['anon', '/feed/google-merchant.xml'],
+        ['anon', '/feed/google-merchant.xml/'],
+        ['viz', '/api/cart/avertismente'],
+    );
+    // Poza de distribuire (7455b77): varianta 1200×630 a pozei implicite (logo-ul din antet,
+    // pus de compara-cu-baza.sh), făcută de codul fiecărui server; o adresă cu altă versiune
+    // sau în afara încărcărilor nu există.
+    $pozaImplicita = \App\Support\ImagineDistribuire::implicita([], 'http://127.0.0.1:' . $portCurent);
+    $caleOg = is_array($pozaImplicita) ? (string) parse_url((string) $pozaImplicita['url'], PHP_URL_PATH) : '';
+    if (str_starts_with($caleOg, '/og/')) {
+        $pagini[] = ['anon', $caleOg];
+        $pagini[] = ['anon', (string) preg_replace('#^/og/[0-9a-f]{12}/#', '/og/000000000000/', $caleOg)];
+    } elseif (is_array(\App\Support\DateSite::seo('logo_antet', null))) {
+        $diferiteInainte[] = 'pagini        poza de distribuire implicită';
+        echo '  DIFERĂ poza de distribuire implicită: nu are adresa /og/… (', json_encode($pozaImplicita), "); "
+            . "logo-ul de test lipsește? (compara-cu-baza.sh)\n";
+    }
+    $pagini[] = ['anon', '/og/0123456789ab/etc/passwd'];
     $hartaPachet = (array) \App\Support\DateSite::json('redirecturi.json');
     $fisierHartaBaza = $dosarBaza . '/config/redirecturi.php';
     if (is_file($fisierHartaBaza)) {
@@ -598,7 +663,7 @@ if (!$fataDeCommit) {
 $identice = 0;
 // Anteturile (normalizate) în capul fișierelor comparate, ca diff-ul să le arate și pe ele.
 $cuAntete = static fn (array $antete, string $corp): string => "ANTETE\n" . implode("\n", $antete) . "\n\nCORP\n" . $corp;
-$diferite = [];
+$diferite = $diferiteInainte ?? [];
 $diferenteSeoAsteptate = [];
 $diferentePorturi = [];
 $grupuriIdentice = [];
@@ -766,6 +831,13 @@ if (is_array($hartaBaza)) {
  *  - un caz de tip „regresie” cere rezultatul de pe o ramură pe care commit-ul „din” nu o
  *    schimbă (același înainte și după el); o ramură atinsă greșit la portare o prinde
  *    comparația cu codul curent, o schimbare a ei în Bioscem o prinde „verifica”.
+ * O cerere e [metodă, cale, date, rol, 'pauza' => secunde]: rolul „adm” (implicit, logat la
+ * începutul cazului) sau „viz” (un vizitator nou, de exemplu pentru coș și comandă); „pauza”
+ * așteaptă înainte (garda anti-robot a checkout-ului). Ea poate fi și o funcție care o face din
+ * răspunsurile de până atunci (tokenul formularului, numărul comenzii). „curata” scoate din
+ * răspunsuri ce diferă de la o rulare la alta (ora unei comenzi), „la_final” curăță după caz
+ * (de exemplu cache-ul fluxului), „sursa” spune al cui e commit-ul (implicit Bioscem; vertij
+ * pentru un port din vertij, cu rezultatul cerut tot pe codul Bioscem).
  */
 if (!$fataDeCommit && $siteBaza === 'bioscem') {
     require_once __DIR__ . '/lib/salvari-admin.php';
@@ -992,36 +1064,552 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         ],
     ];
 
+    // ── Livrarea 2 SEO și avertismentul pe produs (WP-R, 20 oct 2026: Bioscem 6c8c789 … 4254ca4) ──
+    // Paginile de mai sus le văd cu datele demo; aici, cu rândurile pregătite: un antet cu
+    // logo-ul și linkuri vechi spre categorii, câmpurile SEO ale categoriilor și mărcilor,
+    // numele magazinului, livrarea cu prețuri fixe, avertismentul unui produs, o comandă.
+    $idMentaInt = (int) $idMenta;
+    $produsMenta = $citeste('SELECT * FROM products WHERE id = :id', ['id' => $idMentaInt])[0] ?? [];
+    $corpPentru = static fn (array $produs, array $extra = []): array => $extra + [
+        'name' => (string) ($produs['name'] ?? ''),
+        'slug' => (string) ($produs['slug'] ?? ''),
+        'sku' => (string) ($produs['sku'] ?? ''),
+        'category_id' => (string) ($produs['category_id'] ?? ''),
+        'product_template_id' => (string) ($produs['product_template_id'] ?? ''),
+        'price' => (string) ($produs['price'] ?? '0'),
+        'stock' => (string) ($produs['stock'] ?? '0'),
+        'vat_percent' => (string) ($produs['vat_percent'] ?? '19'),
+        'vat_included' => (string) ($produs['vat_included'] ?? '1'),
+        'weight_grams' => (string) ($produs['weight_grams'] ?? ''),
+        'brand' => (string) ($produs['brand'] ?? ''),
+        'short_description' => (string) ($produs['short_description'] ?? ''),
+        'description' => (string) ($produs['description'] ?? ''),
+        'image_url' => (string) ($produs['image_url'] ?? ''),
+        'is_active' => '1',
+    ];
+    $tabeleProdus = static fn (int $id): array => [
+        ['tabel' => 'products', 'unde' => 'id = :p1', 'param' => ['p1' => $id], 'cheie' => 'id'],
+        ['tabel' => 'product_category_links', 'unde' => 'product_id = :p2', 'param' => ['p2' => $id], 'cheie' => 'id'],
+        ['tabel' => 'product_extra_field_values', 'unde' => 'product_id = :p3', 'param' => ['p3' => $id], 'cheie' => 'id'],
+        ['tabel' => 'seo_pages', 'unde' => 'page_type = \'product\' AND page_ref = :p4', 'param' => ['p4' => (string) $id], 'cheie' => 'id'],
+        ['tabel' => 'product_warnings', 'unde' => 'product_id = :p5', 'param' => ['p5' => $id], 'cheie' => 'product_id'],
+    ];
+    $titluAvertisment = 'ATENȚIE – PRODUS DE TEST';
+    $etichetaAvertisment = 'Am citit avertismentul de test';
+    $punAvertisment = static function (PDO $db, int $id) use ($titluAvertisment, $etichetaAvertisment): void {
+        $db->prepare('DELETE FROM product_warnings WHERE product_id = ?')->execute([$id]);
+        $db->prepare('INSERT INTO product_warnings (product_id, title, body, checkbox_label, updated_at) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$id, $titluAvertisment, "Primul paragraf al avertismentului de test.\n\nAl doilea paragraf: produsul se păstrează la rece.",
+                $etichetaAvertisment, '2026-10-20 10:00:00']);
+    };
+    $starePrimuluiAvertisment = static function (PDO $db, int $id) use ($citeste): array {
+        $rand = $citeste('SELECT * FROM product_warnings WHERE product_id = :id', ['id' => $id])[0] ?? null;
+        return is_array($rand) ? salvari_fara_coloane($rand) : [];
+    };
+
+    // Antetul, meniul și subsolul (HTML salvat în setări): linkurile vechi spre categorii și logo-ul.
+    $setariDesign = ['design_header_html', 'design_menu_html', 'design_footer_html'];
+    $tabeleDesign = [
+        ['tabel' => 'settings', 'unde' => '`key` IN (\'' . implode('\', \'', $setariDesign) . '\')', 'cheie' => 'key'],
+        $tokenCache,
+    ];
+    $logoAntet = (array) \App\Support\DateSite::seo('logo_antet', []);
+    $caleLogo = (string) ($logoAntet['png'] ?? '/uploads/gallery/logo.png');
+    $antetDeTest = '<header class="antet-test"><a href="/"><img src="' . $caleLogo . '" alt="Logo" class="logo-antet"></a>'
+        . '<nav><a href="/magazin?category=Ceaiuri">Ceaiuri</a> <a href="https://' . (string) parse_url((string) \App\Support\Env::get('APP_URL', ''), PHP_URL_HOST)
+        . '/magazin?categorie=miere&amp;sort=price_asc">Miere</a> <a href="/magazin?category=Nu-exista">Altceva</a></nav>{{menu}}</header>';
+    $meniuDeTest = '<ul class="meniu-test"><li><a href="/magazin?category=Suplimente">Suplimente</a></li><li><a href="/magazin">Magazin</a></li></ul>';
+    $subsolDeTest = '<footer class="subsol-test"><a href="/magazin/?category=Cadouri">Cadouri</a> <a href="/magazin?category=Ceaiuri&amp;q=menta">Căutare</a></footer>';
+
+    // Livrarea cu prețuri fixe (Setări livrare): tariful la adresă și pragul de gratuitate.
+    $setariLivrare = ['shipping_fixed_enabled' => '1', 'shipping_fixed_base' => '19.99', 'shipping_fixed_fanbox' => '12.50',
+        'shipping_fixed_fanbox_enabled' => '1', 'shipping_free_bucharest' => '80', 'shipping_free_province' => '80'];
+    $tabeleLivrare = [
+        ['tabel' => 'settings', 'unde' => '`key` IN (\'' . implode('\', \'', array_keys($setariLivrare)) . '\')', 'cheie' => 'key'],
+        $tokenCache,
+    ];
+    $stergeFluxul = static function () use ($radacina, $dosarBaza): void {
+        foreach ([$radacina, $dosarBaza] as $dosar) {
+            @unlink($dosar . '/storage/cache/feed-google-merchant.xml');
+        }
+    };
+
+    // Comanda: tot ce scrie plasarea ei (setările cu numărul comenzii, comanda, liniile, confirmările,
+    // emailurile, jurnalul anti-robot, coșul abandonat), pus la loc după fiecare server.
+    $idMaxComenzi = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM orders');
+    $idMaxEmailuri = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_logs');
+    $idMaxCosuri = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM cart_abandonments');
+    $idMaxJurnal = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM checkout_submit_logs');
+    // Încercările din ultimele minute (scrise de testele de dinainte) ar putea atinge limita
+    // anti-robot (aceeași adresă IP): se scot pe durata cazului și se pun la loc la final.
+    $deLaJurnal = date('Y-m-d H:i:s', time() - 30 * 60);
+    $tabeleComanda = array_merge($tabeleProdus($idMentaInt), [
+        ['tabel' => 'settings', 'unde' => '1 = 1', 'cheie' => 'key'],
+        ['tabel' => 'orders', 'unde' => 'id > :o1', 'param' => ['o1' => $idMaxComenzi], 'cheie' => 'id'],
+        ['tabel' => 'order_items', 'unde' => 'order_id > :o2', 'param' => ['o2' => $idMaxComenzi], 'cheie' => 'id'],
+        ['tabel' => 'order_product_warnings', 'unde' => 'order_id > :o3', 'param' => ['o3' => $idMaxComenzi], 'cheie' => 'id'],
+        ['tabel' => 'email_logs', 'unde' => 'id > :e1', 'param' => ['e1' => $idMaxEmailuri], 'cheie' => 'id'],
+        ['tabel' => 'cart_abandonments', 'unde' => 'id > :c1', 'param' => ['c1' => $idMaxCosuri], 'cheie' => 'id'],
+        ['tabel' => 'checkout_submit_logs', 'unde' => 'id > :j1 OR created_at >= :j2', 'param' => ['j1' => $idMaxJurnal, 'j2' => $deLaJurnal], 'cheie' => 'id'],
+    ]);
+    $dosarMail = $dosarDev . '/mail';
+    $mailInainte = [];
+    $pregatesteComanda = static function (PDO $db) use ($punAvertisment, $idMentaInt, $deLaJurnal, $dosarMail, &$mailInainte): void {
+        $punAvertisment($db, $idMentaInt);
+        $db->prepare('DELETE FROM checkout_submit_logs WHERE created_at >= ?')->execute([$deLaJurnal]);
+        $mailInainte = glob($dosarMail . '/*.eml') ?: [];
+    };
+    $tokenDin = static function (string $corp): array {
+        preg_match('/name="checkout_form_token"\s+value="([^"]*)"/', $corp, $t);
+        preg_match('/name="checkout_form_rendered_at"\s+value="([^"]*)"/', $corp, $m);
+        return ['checkout_form_token' => (string) ($t[1] ?? ''), 'checkout_form_rendered_at' => (string) ($m[1] ?? '')];
+    };
+    $dateComanda = [
+        'billing_first_name' => 'Test', 'billing_last_name' => 'Avertisment', 'billing_phone' => '0700000777',
+        'billing_email' => 'avertisment@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '7',
+        'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400000',
+        'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+    ];
+    // Ora apare în pagini și emailuri (comanda se plasează pe rând, pe cele două servere).
+    $faraOra = static fn (string $text): string => (string) preg_replace('/\b([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?\b/', '<ORA>', $text);
+    $stareComanda = static function (PDO $db) use ($citeste, $idMaxComenzi, $idMaxEmailuri, $idMaxJurnal, $dosarMail, &$mailInainte, $faraOra): array {
+        $comenzi = $citeste('SELECT * FROM orders WHERE id > :id ORDER BY id', ['id' => $idMaxComenzi]);
+        $inlocuiri = [];
+        foreach ($comenzi as $comanda) {
+            $id = (int) $comanda['id'];
+            // Id-ul comenzii crește la fiecare plasare (codul de bază, apoi cel curent): se compară fără el.
+            foreach (['"id":' . $id . ',', '"order_id":' . $id . ',', '&quot;id&quot;:' . $id . ',', '&quot;order_id&quot;:' . $id . ',',
+                'data-order-id="' . $id . '"', 'data-awb-comanda="' . $id . '"', '#' . $id . ' /', '/admin/orders/' . $id . '/',
+                'order=' . $id . '"', 'order=' . $id . '&', 'comanda=' . $id . '"'] as $text) {
+                $inlocuiri[$text] = str_replace((string) $id, '<COMANDA>', $text);
+            }
+        }
+        // Fără id-uri și cu momentele (ora plasării, acceptarea termenilor …) doar ca „<MOMENT>”.
+        $fara = static fn (array $randuri, array $coloane): array => array_map(
+            static fn (array $r): array => array_map(
+                static fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $v) === 1 ? '<MOMENT>' : $v,
+                salvari_fara_coloane($r, $coloane)), $randuri);
+        $emailuri = [];
+        foreach (array_diff(glob($dosarMail . '/*.eml') ?: [], $mailInainte) as $fisier) {
+            $text = (string) @file_get_contents($fisier);
+            @unlink($fisier);
+            $emailuri[] = $faraOra(strtr($text, $inlocuiri));
+        }
+        sort($emailuri);
+        return [
+            'comenzi' => $fara($comenzi, ['id', 'placed_at', 'paid_at']),
+            'linii' => $fara($citeste('SELECT * FROM order_items WHERE order_id > :id ORDER BY id', ['id' => $idMaxComenzi]), ['id', 'order_id']),
+            'confirmari' => $fara($citeste('SELECT * FROM order_product_warnings WHERE order_id > :id ORDER BY id', ['id' => $idMaxComenzi]),
+                ['id', 'order_id', 'confirmed_at']),
+            'jurnal_emailuri' => $fara($citeste('SELECT * FROM email_logs WHERE id > :id ORDER BY id', ['id' => $idMaxEmailuri]),
+                ['id', 'order_id', 'sent_at']),
+            'anti_robot' => array_column($citeste('SELECT status FROM checkout_submit_logs WHERE id > :id ORDER BY id', ['id' => $idMaxJurnal]), 'status'),
+            'emailuri' => $emailuri,
+            '_inlocuiri' => $inlocuiri,
+        ];
+    };
+    $cerereComanda = static fn (bool $cuBifa) => static function (array $raspunsuri) use ($tokenDin, $dateComanda, $cuBifa): array {
+        $corp = (string) ($raspunsuri[1]['corp'] ?? '');
+        $bife = [];
+        if ($cuBifa && preg_match_all('/name="' . preg_quote(\App\Support\AvertismentProduse::CAMP_BIFA, '/') . '\[([0-9a-f]{16})\]"/', $corp, $m) > 0) {
+            foreach (array_unique($m[1]) as $cheie) {
+                $bife[$cheie] = '1';
+            }
+        }
+        return ['POST', '/checkout', $tokenDin($corp) + $dateComanda + ($bife !== [] ? [\App\Support\AvertismentProduse::CAMP_BIFA => $bife] : []),
+            'viz', 'pauza' => 3];
+    };
+    $contine = static fn (array $raspuns, string $text): bool => str_contains((string) ($raspuns['corp'] ?? ''), $text);
+
+    array_push($salvari,
+        [
+            'nume' => 'antet, meniu și subsol: linkurile vechi duc la /categorie/{slug}, logo-ul ca WebP',
+            'din' => '6c8c789, a14e803',
+            'tabele' => $tabeleDesign,
+            'pregateste' => static function (PDO $db) use ($antetDeTest, $meniuDeTest, $subsolDeTest): void {
+                $stmt = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+                $stmt->execute(['design_header_html', $antetDeTest]);
+                $stmt->execute(['design_menu_html', $meniuDeTest]);
+                $stmt->execute(['design_footer_html', $subsolDeTest]);
+            },
+            'cereri' => [
+                ['GET', '/', [], 'viz'],
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['GET', '/categorie/ceaiuri', [], 'viz'],
+                // Coșul și contul rămân exact ca înainte (paginile închise pentru Google).
+                ['GET', '/cos', [], 'viz'],
+                ['GET', '/login', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+                $probleme = [];
+                foreach ([0, 1, 2] as $n) {
+                    if (!$contine($raspunsuri[$n], 'href="/categorie/ceaiuri"') || !$contine($raspunsuri[$n], 'href="/categorie/suplimente"')) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ': linkurile spre categorii nu sunt /categorie/{slug}';
+                    }
+                    if (!$contine($raspunsuri[$n], '<picture style="display:contents"><source type="image/webp"')) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ': logo-ul nu are varianta WebP';
+                    }
+                }
+                if (!$contine($raspunsuri[3], 'href="/magazin?category=Ceaiuri"')) {
+                    $probleme[] = 'coșul nu mai are linkurile exact ca înainte';
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'categorie: titlul și descrierea pentru Google se salvează și apar pe pagina categoriei',
+            'din' => '93d803f',
+            'tabele' => [
+                ['tabel' => 'product_categories', 'unde' => 'id = 7', 'cheie' => 'id'],
+                ['tabel' => 'products', 'unde' => 'category_id = 7', 'cheie' => 'id'],
+                ['tabel' => 'seo_pages', 'unde' => 'page_type = \'category\' AND page_ref = \'7\'', 'cheie' => 'id'],
+                $tokenCache,
+            ],
+            'pregateste' => static function (PDO $db): void {
+                $db->exec("DELETE FROM seo_pages WHERE page_type = 'category' AND page_ref = '7'");
+            },
+            'cereri' => [
+                ['POST', '/admin/categories/7/update', ['name' => 'Ceaiuri', 'slug' => 'ceaiuri',
+                    'seo_title' => '  Ceaiuri   din plante, de test ', 'seo_description' => "Descrierea\nde test a categoriei de ceaiuri."]],
+                ['GET', '/categorie/ceaiuri', [], 'viz'],
+                ['GET', '/admin/categories', []],
+            ],
+            'stare' => static fn (PDO $db): array => ['seo' => array_map(static fn (array $r): array => salvari_fara_coloane($r, ['id']),
+                $citeste("SELECT * FROM seo_pages WHERE page_type = 'category' AND page_ref = '7'"))],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                ($stare['seo'][0]['title'] ?? null) === 'Ceaiuri din plante, de test' ? [] : ['titlul salvat: ' . json_encode($stare['seo'], JSON_UNESCAPED_UNICODE)],
+                $contine($raspunsuri[1], '<title>Ceaiuri din plante, de test') ? [] : ['pagina categoriei nu are titlul salvat']),
+        ],
+        [
+            'nume' => 'marcă: titlul și descrierea pentru Google se salvează și apar pe pagina mărcii',
+            'din' => '93d803f',
+            'tabele' => [
+                ['tabel' => 'seo_pages', 'unde' => 'page_type = \'brand\'', 'cheie' => 'id'],
+                $tokenCache,
+            ],
+            'pregateste' => static function (PDO $db): void {
+                $db->exec("DELETE FROM seo_pages WHERE page_type = 'brand'");
+            },
+            'cereri' => [
+                ['POST', '/admin/categories/brand-seo', ['brand_slug' => 'Livada-Demo', 'seo_title' => 'Livada Demo: ceaiuri și uleiuri de test',
+                    'seo_description' => 'Descrierea de test a mărcii.']],
+                ['POST', '/admin/categories/brand-seo', ['brand_slug' => '', 'seo_title' => 'Fără marcă']],
+                ['GET', '/marca/livada-demo', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => ['seo' => array_map(static fn (array $r): array => salvari_fara_coloane($r, ['id']),
+                $citeste("SELECT * FROM seo_pages WHERE page_type = 'brand' ORDER BY page_ref"))],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                count($stare['seo']) === 1 && ($stare['seo'][0]['page_ref'] ?? '') === 'livada-demo'
+                    && ($stare['seo'][0]['title'] ?? '') === 'Livada Demo: ceaiuri și uleiuri de test'
+                    ? [] : ['SEO-ul mărcii: ' . json_encode($stare['seo'], JSON_UNESCAPED_UNICODE)],
+                $contine($raspunsuri[2], '<title>Livada Demo: ceaiuri și uleiuri de test') ? [] : ['pagina mărcii nu are titlul salvat']),
+        ],
+        [
+            'nume' => 'numele magazinului din titluri: se salvează din Setări magazin → SEO',
+            'din' => '93d803f, 0250480',
+            'tabele' => [
+                ['tabel' => 'settings', 'unde' => '`key` = \'store_name\'', 'cheie' => 'key'],
+                $tokenCache,
+            ],
+            'pregateste' => static function (PDO $db): void {
+                $db->exec("DELETE FROM settings WHERE `key` = 'store_name'");
+            },
+            'cereri' => [
+                ['POST', '/admin/settings/store', ['action' => 'save_store_name', 'store_name' => '  Magazinul   de Test ']],
+                ['GET', '/', [], 'viz'],
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['GET', '/admin/settings/store', []],
+            ],
+            'stare' => static fn (PDO $db): array => ['nume' => $citeste("SELECT `value` FROM settings WHERE `key` = 'store_name'")],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                ($stare['nume'][0]['value'] ?? null) === 'Magazinul de Test' ? [] : ['numele salvat: ' . json_encode($stare['nume'], JSON_UNESCAPED_UNICODE)],
+                $contine($raspunsuri[2], 'Magazinul de Test</title>') ? [] : ['titlul produsului nu are numele magazinului']),
+        ],
+        [
+            'nume' => 'livrarea cu prețuri fixe: în datele structurate ale produselor și în fluxul Merchant Center',
+            'din' => 'dfcf6bd, 1e46f9f',
+            'tabele' => $tabeleLivrare,
+            'pregateste' => static function (PDO $db) use ($setariLivrare, $stergeFluxul): void {
+                $stmt = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+                foreach ($setariLivrare as $cheie => $valoare) {
+                    $stmt->execute([$cheie, $valoare]);
+                }
+                $stergeFluxul();
+            },
+            'la_final' => static fn () => $stergeFluxul(),
+            'cereri' => [
+                // Sub prag: tariful la adresă; peste prag, la preț întreg: gratuit; la reducere: nimic.
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['GET', '/produs/omega-3-din-alge', [], 'viz'],
+                ['GET', '/produs/miere-de-manuka-mgo-400', [], 'viz'],
+                ['GET', '/feed/google-merchant.xml', [], 'viz'],
+                ['GET', '/', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+                $probleme = [];
+                if (!$contine($raspunsuri[0], '"shippingDetails"') || !$contine($raspunsuri[0], '19.99')) {
+                    $probleme[] = 'produsul sub prag nu are livrarea de 19,99 lei în datele structurate';
+                }
+                if (!$contine($raspunsuri[1], '"shippingDetails"')) {
+                    $probleme[] = 'produsul peste prag nu are livrarea gratuită în datele structurate';
+                }
+                if ($contine($raspunsuri[2], '"shippingDetails"')) {
+                    $probleme[] = 'produsul la reducere are livrare în datele structurate';
+                }
+                if (!$contine($raspunsuri[0], '"hasMerchantReturnPolicy"') || !$contine($raspunsuri[4], '"hasMerchantReturnPolicy"')) {
+                    $probleme[] = 'returul lipsește din datele structurate (produs sau firmă)';
+                }
+                if (!$contine($raspunsuri[3], '<g:shipping>') || !$contine($raspunsuri[3], '<g:service>FAN Courier</g:service>')) {
+                    $probleme[] = 'fluxul nu are livrarea';
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'avertisment: cele trei câmpuri se salvează din Admin → Produse și apar în editor',
+            'din' => '333ba9e',
+            'tabele' => array_merge($tabeleProdus($idMentaInt), [$tokenCache]),
+            'pregateste' => static function (PDO $db) use ($idMentaInt): void {
+                $db->prepare('DELETE FROM product_warnings WHERE product_id = ?')->execute([$idMentaInt]);
+            },
+            'cereri' => [
+                ['POST', '/admin/products/' . $idMentaInt . '/update', $corpPentru($produsMenta, [
+                    'avertisment_titlu' => '  ATENȚIE –   PRODUS DE TEST  ',
+                    'avertisment_text' => "Primul rând <b>fără HTML</b>.\r\n\r\n\r\n\r\nAl doilea paragraf.   ",
+                    'avertisment_eticheta' => ' Am citit ',
+                ])],
+                ['GET', '/admin/products', []],
+            ],
+            'stare' => static fn (PDO $db): array => ['avertisment' => $starePrimuluiAvertisment($db, $idMentaInt)],
+            'verifica' => static fn (array $stare): array => ($stare['avertisment']['title'] ?? null) !== null
+                && str_contains((string) ($stare['avertisment']['body'] ?? ''), 'Al doilea paragraf')
+                ? [] : ['avertismentul nu s-a salvat: ' . json_encode($stare, JSON_UNESCAPED_UNICODE)],
+        ],
+        [
+            // Alt formular care salvează produsul (fără cele trei câmpuri) nu atinge avertismentul.
+            'nume' => 'avertisment: o salvare a produsului fără câmpurile avertismentului îl lasă neatins',
+            'din' => '333ba9e',
+            'tabele' => array_merge($tabeleProdus($idMentaInt), [$tokenCache]),
+            'pregateste' => static fn (PDO $db) => $punAvertisment($db, $idMentaInt),
+            'cereri' => [
+                ['POST', '/admin/products/' . $idMentaInt . '/update', $corpPentru($produsMenta, ['short_description' => 'Rezumat schimbat (compara-cu-baza)'])],
+                ['POST', '/api/cart/items/' . $idMentaInt . '/add', ['quantity' => '1'], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [
+                'avertisment' => $starePrimuluiAvertisment($db, $idMentaInt),
+                'rezumat' => $citeste('SELECT short_description FROM products WHERE id = :id', ['id' => $idMentaInt])[0]['short_description'] ?? null,
+            ],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                ($stare['avertisment']['title'] ?? null) === $titluAvertisment && str_contains((string) ($stare['avertisment']['body'] ?? ''), 'la rece')
+                    ? [] : ['avertismentul s-a schimbat: ' . json_encode($stare['avertisment'], JSON_UNESCAPED_UNICODE)],
+                str_contains((string) $stare['rezumat'], 'Rezumat schimbat (compara-cu-baza)') ? [] : ['salvarea produsului nu a ajuns în bază'],
+                $contine($raspunsuri[1], '"avertisment"') ? [] : ['adăugarea în coș nu mai are fereastra avertismentului']),
+        ],
+        [
+            // Doar textul gol: rândul rămâne, fără fereastră; toate trei goale: rândul dispare.
+            'nume' => 'avertisment: fără text nu mai apare; cu toate câmpurile goale se șterge',
+            'din' => '333ba9e',
+            'tabele' => array_merge($tabeleProdus($idMentaInt), [$tokenCache]),
+            'pregateste' => static fn (PDO $db) => $punAvertisment($db, $idMentaInt),
+            'cereri' => [
+                ['POST', '/admin/products/' . $idMentaInt . '/update', $corpPentru($produsMenta, [
+                    'avertisment_titlu' => $titluAvertisment, 'avertisment_text' => " \r\n ", 'avertisment_eticheta' => $etichetaAvertisment])],
+                ['POST', '/api/cart/items/' . $idMentaInt . '/add', ['quantity' => '1'], 'viz'],
+                ['GET', '/admin/products', []],
+                ['POST', '/admin/products/' . $idMentaInt . '/update', $corpPentru($produsMenta, [
+                    'short_description' => 'Rezumat schimbat (compara-cu-baza)',
+                    'avertisment_titlu' => ' ', 'avertisment_text' => '', 'avertisment_eticheta' => ''])],
+            ],
+            'stare' => static fn (PDO $db): array => [
+                'avertisment' => $starePrimuluiAvertisment($db, $idMentaInt),
+                'rezumat' => $citeste('SELECT short_description FROM products WHERE id = :id', ['id' => $idMentaInt])[0]['short_description'] ?? null,
+            ],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $stare['avertisment'] === [] ? [] : ['avertismentul cu toate câmpurile goale a rămas: ' . json_encode($stare['avertisment'], JSON_UNESCAPED_UNICODE)],
+                str_contains((string) $stare['rezumat'], 'Rezumat schimbat (compara-cu-baza)') ? [] : ['salvarea produsului nu a ajuns în bază'],
+                $contine($raspunsuri[1], '"avertisment"') ? ['un avertisment fără text are fereastră la adăugarea în coș'] : []),
+        ],
+        [
+            'nume' => 'avertisment: fereastra la adăugarea în coș, caseta din coș și de la finalizarea comenzii',
+            'din' => 'b874cf0, 233cc7d, 865630f, 4254ca4',
+            'tabele' => array_merge($tabeleProdus($idMentaInt), [
+                ['tabel' => 'cart_abandonments', 'unde' => 'id > :c1', 'param' => ['c1' => $idMaxCosuri], 'cheie' => 'id'],
+                $tokenCache,
+            ]),
+            'pregateste' => static fn (PDO $db) => $punAvertisment($db, $idMentaInt),
+            'cereri' => [
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['POST', '/api/cart/items/' . $idMentaInt . '/add', ['quantity' => '1'], 'viz'],
+                ['GET', '/api/cart/avertismente?instanta=checkout-live', [], 'viz'],
+                ['GET', '/api/cart/avertismente?instanta=..%2Fnu', [], 'viz'],
+                // Adăugarea clasică (fără JavaScript): fereastra apare o dată, pe pagina coșului.
+                ['POST', '/cos/adauga/' . $idMentaInt, ['quantity' => '1'], 'viz'],
+                ['GET', '/cos', [], 'viz'],
+                ['GET', '/cos', [], 'viz'],
+                ['GET', '/checkout', [], 'viz'],
+                ['GET', '/api/cart/summary', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $titluAvertisment, $etichetaAvertisment): array {
+                $probleme = [];
+                $adaugat = json_decode((string) ($raspunsuri[1]['corp'] ?? ''), true);
+                if (!is_array($adaugat) || !is_array($adaugat['avertisment'] ?? null)) {
+                    $probleme[] = 'adăugarea în coș nu întoarce avertismentul: ' . mb_substr((string) ($raspunsuri[1]['corp'] ?? ''), 0, 200);
+                }
+                $lista = json_decode((string) ($raspunsuri[2]['corp'] ?? ''), true);
+                if (!is_array($lista) || count((array) ($lista['chei'] ?? [])) !== 1 || !str_contains((string) ($lista['html'] ?? ''), $etichetaAvertisment)) {
+                    $probleme[] = 'avertismentele coșului: ' . mb_substr((string) ($raspunsuri[2]['corp'] ?? ''), 0, 200);
+                }
+                if (!$contine($raspunsuri[5], $titluAvertisment)) {
+                    $probleme[] = 'coșul nu arată fereastra după adăugarea clasică';
+                }
+                if (!$contine($raspunsuri[7], 'name="' . \App\Support\AvertismentProduse::CAMP_BIFA . '[')) {
+                    $probleme[] = 'finalizarea comenzii nu are bifa avertismentului';
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'avertisment: comanda fără bifă e refuzată, cu mesaj, și nu se creează',
+            'din' => '5f2e483, 233cc7d',
+            'tabele' => $tabeleComanda,
+            'pregateste' => $pregatesteComanda,
+            'cereri' => [
+                ['POST', '/cos/adauga/' . $idMentaInt, ['quantity' => '1'], 'viz'],
+                ['GET', '/checkout', [], 'viz'],
+                $cerereComanda(false),
+                ['GET', '/checkout', [], 'viz'],
+            ],
+            'curata' => $faraOra,
+            'stare' => $stareComanda,
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $stare['comenzi'] === [] && $stare['confirmari'] === [] ? [] : ['s-a creat o comandă fără bifă'],
+                $stare['anti_robot'] === ['allowed'] ? [] : ['comanda nu a trecut de filtrul anti-robot: ' . json_encode($stare['anti_robot'])],
+                str_ends_with((string) ($raspunsuri[2]['location'] ?? ''), '/checkout') ? [] : ['refuzul nu duce înapoi la /checkout'],
+                $contine($raspunsuri[3], 'bifează „' . $etichetaAvertisment . '”') ? [] : ['mesajul refuzului lipsește de pe /checkout']),
+        ],
+        [
+            'nume' => 'avertisment: comanda cu bifă ține minte confirmarea; emailul și Admin → Comenzi o arată',
+            'din' => '5f2e483, fa76c4f, 233cc7d',
+            'tabele' => $tabeleComanda,
+            'pregateste' => $pregatesteComanda,
+            'cereri' => [
+                ['POST', '/cos/adauga/' . $idMentaInt, ['quantity' => '2'], 'viz'],
+                ['GET', '/checkout', [], 'viz'],
+                $cerereComanda(true),
+                static fn (array $raspunsuri): array => ['GET', '/admin/orders?search='
+                    . rawurlencode((string) preg_replace('#^.*/checkout/succes/#', '', (string) ($raspunsuri[2]['location'] ?? ''))), []],
+            ],
+            'curata' => $faraOra,
+            'stare' => $stareComanda,
+            'verifica' => static function (array $stare, array $raspunsuri) use ($titluAvertisment, $etichetaAvertisment, $contine): array {
+                $probleme = [];
+                if (count($stare['comenzi']) !== 1) {
+                    $probleme[] = 'așteptam o comandă nouă, sunt ' . count($stare['comenzi']);
+                }
+                $confirmare = $stare['confirmari'][0] ?? [];
+                if (count($stare['confirmari']) !== 1 || ($confirmare['title'] ?? '') !== $titluAvertisment
+                    || (int) ($confirmare['checkbox_ticked'] ?? 0) !== 1 || !str_contains((string) ($confirmare['checkbox_label'] ?? ''), $etichetaAvertisment)
+                    || !str_contains((string) ($confirmare['product_names_json'] ?? ''), 'Ceai de ment')) {
+                    $probleme[] = 'confirmarea de pe comandă: ' . json_encode($stare['confirmari'], JSON_UNESCAPED_UNICODE);
+                }
+                $emailCuAvertisment = array_filter($stare['emailuri'], static fn (string $e): bool => str_contains(
+                    quoted_printable_decode($e), $titluAvertisment) || str_contains($e, $titluAvertisment));
+                if ($emailCuAvertisment === []) {
+                    $probleme[] = 'niciun email al comenzii nu are avertismentul (' . count($stare['emailuri']) . ' emailuri)';
+                }
+                if (!$contine($raspunsuri[3], 'avertismente_confirmate') || !$contine($raspunsuri[3], 'ATEN')) {
+                    $probleme[] = 'Admin → Comenzi nu are confirmarea comenzii';
+                }
+                return $probleme;
+            },
+        ],
+        [
+            // Port din vertij (0fc2b2c, App\Support\VideoEmbed): ramura pe care portul nu o schimbă pentru Bioscem,
+            // un fișier .mp4 urcat în Galerie rămâne <video> exact ca înainte. Linkurile YouTube și Vimeo (playerul
+            // lor în loc de caseta neagră) sunt schimbarea declarată în site-uri/bioscem/ce-se-schimba.md.
+            'nume' => 'blog: videoul postării dintr-un fișier .mp4 rămâne <video>, ca înainte',
+            'sursa' => 'vertij',
+            'din' => '0fc2b2c',
+            'tip' => 'regresie',
+            'tabele' => [
+                ['tabel' => 'blog_posts', 'unde' => 'id = :p1', 'param' => ['p1' => $idPostare], 'cheie' => 'id'],
+                ['tabel' => 'blog_templates', 'unde' => 'id > :t1', 'param' => ['t1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_templates')],
+                    'cheie' => 'id'],
+            ],
+            'pregateste' => static function (PDO $db) use ($idPostare): void {
+                $db->prepare('INSERT INTO blog_templates (name, slug, description, html_content, css_content, js_content, is_active)
+                    VALUES (?, ?, ?, ?, \'\', \'\', 1)')->execute(['Articol cu video (test)', 'articol-cu-video-test-' . getmypid(), '',
+                    '<article class="video-test"><h1>{{blog_title}}</h1><div class="video-test__player">{{blog_video}}</div>'
+                    . '<p class="video-test__link">{{blog_video_url}}</p>{{blog_content}}</article>']);
+                $db->prepare('UPDATE blog_posts SET template_id = :t, video_url = :v WHERE id = :id')->execute([
+                    't' => (int) $db->lastInsertId(), 'v' => '/uploads/gallery/film-de-test.mp4', 'id' => $idPostare]);
+            },
+            'cereri' => [['GET', '/blog/' . (string) ($postare['slug'] ?? ''), [], 'viz']],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[0],
+                '<div class="video-test__player"><video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;">'
+                . '<source src="/uploads/gallery/film-de-test.mp4" type="video/mp4">Browserul tău nu suportă redarea video.</video></div>')
+                ? [] : ['postarea nu are videoul .mp4 în <video>'],
+        ],
+    );
+
     foreach ($salvari as $caz) {
         $regresie = ($caz['tip'] ?? 'schimbare') === 'regresie';
-        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (Bioscem ' . $caz['din'] . ($regresie ? ', regresie' : '') . ')';
+        // „sursa”: al cui commit e cazul (implicit Bioscem; un port din alt site vechi, de exemplu vertij).
+        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (' . ($caz['sursa'] ?? 'Bioscem') . ' ' . $caz['din']
+            . ($regresie ? ', regresie' : '') . ')';
         $original = salvari_instantaneu($db, $caz['tabele']);
         $rezultate = [];
         $probleme = [];
+        $cereriFacute = [];
         try {
             foreach (['baza' => $portBaza, 'curent' => $portCurent] as $server => $port) {
                 salvari_pune_la_loc($db, $caz['tabele'], $original);
-                ($caz['pregateste'])($db);
-                $jar = $dosarDiff . '/jar-' . $server . '-salvare.txt';
-                @unlink($jar);
-                $cerere($port, 'POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parola]);
-                $raspunsuri = [];
-                foreach ($caz['cereri'] as [$metoda, $cale, $date]) {
-                    $raspunsuri[] = $cerere($port, $metoda, $cale, $jar, $date);
+                ($caz['pregateste'])($db, $server);
+                // Două sesiuni pe server: administratorul (logat aici) și un vizitator nou.
+                $jaruriCaz = [
+                    'adm' => $dosarDiff . '/jar-' . $server . '-salvare.txt',
+                    'viz' => $dosarDiff . '/jar-' . $server . '-salvare-viz.txt',
+                ];
+                foreach ($jaruriCaz as $jarCaz) {
+                    @unlink($jarCaz);
                 }
-                $stare = ($caz['stare'])($db);
+                $cerere($port, 'POST', '/admin/login', $jaruriCaz['adm'], ['email' => $adminEmail, 'password' => $parola]);
+                // O cerere e [metodă, cale, date, rol = 'adm' | 'viz', 'pauza' => secunde înainte] sau o
+                // funcție care o face din răspunsurile de până atunci (de exemplu tokenul formularului).
+                $raspunsuriBrute = [];
+                $cereriFacute[$server] = [];
+                foreach ($caz['cereri'] as $cerereCaz) {
+                    if (is_callable($cerereCaz)) {
+                        $cerereCaz = $cerereCaz($raspunsuriBrute, $server);
+                    }
+                    [$metoda, $cale, $date] = $cerereCaz;
+                    if ((float) ($cerereCaz['pauza'] ?? 0) > 0) {
+                        usleep((int) ((float) $cerereCaz['pauza'] * 1000000));
+                    }
+                    $cereriFacute[$server][] = [$metoda, $cale];
+                    $raspunsuriBrute[] = $cerere($port, $metoda, $cale, $jaruriCaz[(string) ($cerereCaz[3] ?? 'adm')], $date);
+                }
+                $stare = ($caz['stare'])($db, $server);
                 $inlocuiri = (array) ($stare['_inlocuiri'] ?? []);
                 unset($stare['_inlocuiri']);
-                foreach ($raspunsuri as $n => $r) {
-                    $corp = strtr($r['corp'], $inlocuiri);
+                $curata = $caz['curata'] ?? static fn (string $text): string => $text;
+                $raspunsuri = [];
+                foreach ($raspunsuriBrute as $n => $r) {
+                    // O salvare din admin face un token nou, la întâmplare, pentru versiunea fișierelor
+                    // statice (ResponseCache::generateAssetVersionToken): diferă de la un server la altul.
+                    $corp = (string) preg_replace('/(&(?:amp;)?v=)[0-9a-f]{12}\b/', '$1<TOKEN-CACHE>', $curata(strtr($r['corp'], $inlocuiri)));
                     // Diferențele declarate se scot, ca în lista de pagini, doar din paginile cerute cu GET.
-                    if ($server === 'curent' && $caz['cereri'][$n][0] === 'GET') {
+                    if ($server === 'curent' && $cereriFacute[$server][$n][0] === 'GET') {
                         $gasiteSalvare = [];
-                        $corp = $faraDeclarate((string) $caz['cereri'][$n][1], $corp, $gasiteSalvare, $probleme);
+                        $corp = $faraDeclarate((string) $cereriFacute[$server][$n][1], $corp, $gasiteSalvare, $probleme);
                     }
                     $raspunsuri[$n] = [
                         'cod' => $r['cod'],
-                        'location' => strtr(str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['location']), $inlocuiri),
+                        'location' => $curata(strtr(str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['location']), $inlocuiri)),
                         'antete' => $normalizeazaAntete($r['antete']),
                         'corp' => $normalizeaza($corp),
                     ];
@@ -1030,8 +1618,12 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             }
         } finally {
             salvari_pune_la_loc($db, $caz['tabele'], $original);
-            @unlink($dosarDiff . '/jar-baza-salvare.txt');
-            @unlink($dosarDiff . '/jar-curent-salvare.txt');
+            if (isset($caz['la_final'])) {
+                ($caz['la_final'])($db);
+            }
+            foreach (glob($dosarDiff . '/jar-*-salvare*.txt') ?: [] as $jarCaz) {
+                @unlink($jarCaz);
+            }
         }
         if (salvari_instantaneu($db, $caz['tabele']) !== $original) {
             $probleme[] = 'baza nu a putut fi pusă la loc exact (tools/dev/lib/salvari-admin.php)';
@@ -1042,8 +1634,11 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ') . $problema;
         }
         $diferente = salvari_diferente($rezultate['baza']['stare'], $rezultate['curent']['stare'], 'bază: ');
+        if (count($rezultate['baza']['raspunsuri'] ?? []) !== count($rezultate['curent']['raspunsuri'] ?? [])) {
+            $diferente[] = 'alt număr de cereri pe cele două servere';
+        }
         foreach ($rezultate['baza']['raspunsuri'] as $n => $rBaza) {
-            $rCurent = $rezultate['curent']['raspunsuri'][$n];
+            $rCurent = $rezultate['curent']['raspunsuri'][$n] ?? ['cod' => 0, 'location' => '', 'antete' => [], 'corp' => ''];
             foreach (['cod', 'location', 'antete', 'corp'] as $camp) {
                 if ($rBaza[$camp] !== $rCurent[$camp]) {
                     $diferente[] = 'cererea ' . ($n + 1) . ': ' . $camp . ' diferă';

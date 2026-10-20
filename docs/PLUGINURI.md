@@ -225,7 +225,16 @@ puse exact în locurile unde începe ceva nou:
   firimiturile pe produs și categorie (catalog); `Product` cu `Offer` doar cu
   magazinul pornit (fără magazin nu se văd prețuri), stele doar cu pluginul de
   recenzii; un produs fără ofertă și fără recenzii nu primește deloc `Product`
-  (Google l-ar raporta ca eroare). Detalii în [SEO.md](SEO.md).
+  (Google l-ar raporta ca eroare); livrarea și returul doar cu magazinul pornit și cu
+  condițiile din datele site-ului. Detalii în [SEO.md](SEO.md).
+- **Livrarea 2 SEO** (WP-R, de ce stă unde stă): titlurile, numele magazinului din titluri
+  (Setări magazin → SEO Google), etichetele de distribuire (`og:*`, `twitter:card`), poza
+  de distribuire `/og/…` și logo-ul WebP din antet sunt ale **nucleului**, fiindcă orice
+  site are pagini și antet; adresele `/categorie/{slug}`, rescrierea linkurilor vechi spre
+  categorii și câmpurile SEO ale categoriilor și mărcilor sunt ale **catalogului** (fără
+  catalog, linkurile din antet rămân cum le-a scris adminul); fluxul Merchant, livrarea și
+  returul pentru Google și avertismentul pe produs sunt ale **magazinului** (au prețuri sau
+  țin de coș și de comandă).
 - **Redirecționările SEO** (adresa unică, adresele vechi ale site-ului) nu ating
   niciodată adresele mereu deschise ale pluginurilor: lista lor se ia din catalog
   (`rute_mereu_deschise`), deci un plugin nou cu un webhook își declară adresa acolo
@@ -332,7 +341,12 @@ dispar, iar linkurile spre el se scot din pagini.
   `/eticheta/…`, `/produs/…`, căutarea și API-urile de produse; codurile
   `{{shop_catalog}}`, `{{shop_category}}`, `{{shop_title}}`,
   `{{featured_products}}`, `{{product_categories}}`; cardul „Produse” din
-  dashboard; tab-ul „TVA” din Setări magazin. Tabele: `products`,
+  dashboard; tab-ul „TVA” din Setări magazin; din livrarea 2 SEO (WP-R): adresele
+  `/categorie/{slug}` ale categoriilor și 301-ul de la `/magazin?category=…`, rescrierea
+  linkurilor vechi spre categorii din pagini, antet, meniu și subsol
+  (`LinkuriCategorii`), câmpurile SEO (titlu, descriere) ale categoriilor și mărcilor
+  din Admin → Categorii (`POST /admin/categories/brand-seo`) și descrierile automate ale
+  listelor de produse (`SeoMeta`). Tabele: `products`,
   `product_categories`, `product_category_links`, `product_extra_*`,
   `product_template*`.
 - **Are nevoie de**: nimic.
@@ -353,8 +367,20 @@ dispar, iar linkurile spre el se scot din pagini.
   OP); cronul `scripts/abandoned-cart-emails.php`; numerotarea comenzilor și
   cantitățile din Setări magazin; dashboard: „Comenzi” și „Comenzi recente”;
   codurile `{{cart_form}}`, `{{checkout_form}}`, `{{checkout_success_order_info}}`,
-  `{{cart_count}}`. Tabele: `orders`, `order_items`, `email_logs`,
-  `cart_abandonments`.
+  `{{cart_count}}`; din livrarea 2 SEO (WP-R): fluxul `/feed/google-merchant.xml` (are
+  prețuri; `FluxGoogleMerchant`, cu `Allow` în robots.txt) și livrarea și returul din datele
+  structurate (`PoliticaLivrare`); **avertismentul pe produs** (Bioscem `0582ce9` …
+  `4254ca4`, de exemplu „ATENȚIE – PRODUS REFRIGERAT”): cardul „Avertisment la coș și la
+  finalizarea comenzii” din editorul produsului (titlu, text, eticheta bifei; toate goale =
+  fără avertisment), fereastra de la adăugarea în coș, caseta și bifa obligatorie de deasupra
+  butonului de plasare (verificată și la trimitere, pe coșul de atunci; `/api/cart/avertismente`
+  reface caseta când coșul se schimbă fără reîncărcare), confirmarea pe comandă (Admin →
+  Comenzi) și blocul din emailul de confirmare (`{{avertismente_produse}}`, sau singur sub
+  produse); oprire de urgență `AVERTISMENT_PRODUSE=0` (textele și confirmările rămân);
+  `scripts/avertisment-produse.php` pune textele unui site din `avertismente-produse.json`
+  din dosarul lui (Bioscem: cele trei produse refrigerate). Tabele: `orders`, `order_items`,
+  `email_logs`, `cart_abandonments`, `product_warnings`, `order_product_warnings` (migrarea
+  `magazin/0032`).
 - **Are nevoie de**: catalog.
 - **Se oprește**: checkout-ul și coșul arată „Momentan nu se mai pot plasa comenzi
   online.”; „Adaugă în coș” dispare de pe produse (cu același mesaj) și e refuzat
@@ -378,7 +404,12 @@ dispar, iar linkurile spre el se scot din pagini.
   vândute” din ordinea catalogului. Setări magazin, mentenanța și cache-ul nu mai
   pomenesc plățile, checkout-ul și coșul; Google: conversia fără „finalizarea
   comenzii”; produsele: „Gestionează produsele tale”, iar rolul „Administrator
-  magazin” se cheamă „Administrator produse” (pe un site cu catalog).
+  magazin” se cheamă „Administrator produse” (pe un site cu catalog). Fără fluxul
+  Merchant (404) și regula lui din robots.txt, fără livrare și retur în datele
+  structurate, descrierile listelor fără prețuri și fără „Comandă online”; fără
+  cardul avertismentului (un avertisment salvat rămâne în bază, neatins la salvarea
+  produsului), fără fereastră, casetă și bifă. **Se oprește**, în plus: fluxul rămâne,
+  fără produse, imediat (nu din cache-ul de 15 minute).
 
 ### Livrare FAN Courier (`livrare_fan`)
 
@@ -573,7 +604,8 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: `/blog`, articolele, API-ul blogului, codurile `{{blog_posts}}`,
   `{{latest_posts}}`, `{{category_*}}`, `{{next_event_*}}`, articolele de pe prima
-  pagină, meniul Blog. Tabele: `blog_*`.
+  pagină, meniul Blog; videoul postării și al evenimentului următor (`VideoEmbed`, din
+  vertij `0fc2b2c`: YouTube, Vimeo sau un fișier video urcat în Galerie). Tabele: `blog_*`.
 - **Are nevoie de**: nimic. **Se oprește**: ca pornit. **Oprit**: nimic din blog
   pe site, în pagini, în meniu sau în harta site-ului; titlul pus chiar înaintea
   codului (`<h2>Din blog</h2>`) pleacă odată cu el; rolul „Administrator Blog” nu

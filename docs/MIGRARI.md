@@ -305,6 +305,15 @@ să iasă la fel oricare ar fi serverul (de exemplu `explicit_defaults_for_times
 | `recenzii/0023_recenzii_vechi` | recenziile din tabelul vechi `reviews` care lipsesc din `product_reviews` (o dată: una ștearsă nu mai revine), apoi sursa celor fără sursă |
 | `blog/0024_legaturi_categorii` | legăturile articol–categorie din categoria principală a articolelor vechi |
 
+| După baseline (pachetele de lucru, în numerele lor din planul Etapei 1) | Ce conține |
+|---|---|
+| `magazin/0032_avertismente_produse` (WP-R, 20 octombrie) | avertismentul pe produs, din Bioscem `0582ce9`: `product_warnings` (titlul, textul și eticheta bifei pe produs) și `order_product_warnings` (ce a confirmat clientul pe comandă), `product_warnings_schema_version` = `1` în setări, dacă nu e deja; **adoptivă**: pe Bioscem tabelele le face codul la prima salvare a unui avertisment, deci migrarea le găsește coloană cu coloană; colația ca la tabelele BT (la cod, a serverului; la migrare `utf8mb4_unicode_ci`) |
+
+O migrare de după baseline e o migrare obișnuită: pe o bază nouă o aplică `--aplica` după baseline, pe un site
+vechi la adoptare, odată cu baseline-ul. Testele o știu: T4 și T10 (`tools/dev/migrari/test-baza.php`) cer schema
+neschimbată pe o bază făcută de codul de dinainte de migrări, în afară de tabelele noi ale migrărilor de după
+baseline, iar `genereaza-fixture.php --verifica` le aplică după baseline pe baza făcută de cod.
+
 **Ce nu primește o instalare nouă** (doar site-urile care le au le păstrează, până la faza „contract”):
 tabelul vechi `reviews`, tabelele moarte `mannequin_points`/`mannequin_point_products` (pluginul manechin
 ține punctele în setări), coloana veche `products.gallery_json`; nici conținutul pe care îl punea codul la
@@ -617,7 +626,7 @@ lui `Settings::DEFAULTS` sau a unei rezerve din codul comun cere `genereaza-seta
 (cu deciziile noi, dacă le cere): verificarea, în testul de fum și în G-mig, pică altfel, chiar fără clonele codurilor
 vechi. Un fișier `inchis` nu se mai generează: `--toate` îl sare (`SĂRIT`), `--site=<el>` e o eroare.
 
-Azi: **Bioscem** din `9f59e79` (implicitele codului Bioscem sunt exact ale codului comun: doar `erp_trimite_din` = gol,
+Azi: **Bioscem** din `4254ca4` (implicitele codului Bioscem sunt exact ale codului comun: doar `erp_trimite_din` = gol,
 decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă); **Biovitality**, **vertij** și **grafoanaytis** din
 capetele ramurilor din de-portat.md, `provizoriu` până la raportul „live față de repo” din Etapa 0 (apoi `--confirmat`,
 eventual cu `--repo=` pe commit-ul confirmat, trecut întâi în de-portat.md).

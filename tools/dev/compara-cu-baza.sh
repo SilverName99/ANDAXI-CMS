@@ -84,7 +84,18 @@
 #    recenzie veche ștearsă); dovada: T10 din test-migrari.php (codul comun nu le readuce, codul
 #    Bioscem da);
 #  - fișierele scoase la copiere (docs/templates, scripturile unice Bioscem, vezi
-#    docs/DEZVOLTARE.md) și config/redirecturi.php, mutat în site-uri/bioscem/redirecturi.json.
+#    docs/DEZVOLTARE.md) și config/redirecturi.php, mutat în site-uri/bioscem/redirecturi.json;
+#  - livrarea 2 SEO și avertismentul pe produs (WP-R, Bioscem 6c8c789 … 4254ca4): tabelele
+#    avertismentului le face migrarea magazin/0032, nu AvertismentProduse::ensureSchema (scos);
+#    scripts/seo-texte.php și scripts/avertisment-produse.php sunt generice, cu textele și produsele
+#    Bioscem în site-uri/bioscem/ (seo-texte.json, avertismente-produse.json), iar al doilea refuză
+#    fără tabelele migrării (în loc să le facă); ce era scris pentru Bioscem în SeoMeta, LogoAntet,
+#    PoliticaLivrare, ImagineDistribuire și FluxGoogleMerchant vine din site-uri/bioscem/seo.json
+#    (aceleași valori, deci aceleași pagini); variantele WebP ale logo-ului sunt fișiere ale pachetului
+#    (site-uri/bioscem/public/, copiate peste public/ la adoptare și, aici, pe durata comparației);
+#    schimbările din docs/templates (6c8c789, df21b30) nu se portează (decizia OD-34);
+#  - din alt site vechi: videoul postărilor (vertij 0fc2b2c, App\Support\VideoEmbed), cu textul
+#    editorului declarat în $porturiVertij și rândul din site-uri/bioscem/ce-se-schimba.md.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul
@@ -162,6 +173,66 @@ fi
 # Sesiunile și cache-ul de pagini ale copiei de bază, de la rularea trecută.
 find "$BAZA_DIR/storage/sessions" -maxdepth 1 -type f -name 'sess_*' -delete 2>/dev/null || true
 find "$BAZA_DIR/storage/cache" -mindepth 1 -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+# Fluxul Merchant Center al codului curent stă 15 minute în cache: o rulare veche nu răspunde în locul codului.
+rm -f "$RADACINA/storage/cache/feed-google-merchant.xml"
+
+# Ce pun aici în public/ (și scot la final): logo-ul din antet și fișierele publice ale pachetului.
+FISIERE_PUSE=()
+DOSARE_PUSE=()
+scoate_fisierele_puse() {
+    local f d i
+    for f in "${FISIERE_PUSE[@]}"; do rm -f "$f"; done
+    for (( i=${#DOSARE_PUSE[@]}-1; i>=0; i-- )); do
+        d="${DOSARE_PUSE[$i]}"
+        rmdir "$d" 2>/dev/null || true
+    done
+    FISIERE_PUSE=()
+    DOSARE_PUSE=()
+}
+trap scoate_fisierele_puse EXIT
+if [ "$MOD" = "repo" ] && [ -n "${SITE_DATE_DOSAR:-}" ]; then
+    # Logo-ul din antet al site-ului (seo.json → logo_antet.png, de exemplu la Bioscem
+    # /uploads/gallery/bioscem-logo-2.png, 977×240): datele demo nu-l au, iar fără el nici
+    # codul de bază, nici cel curent nu pun variantele WebP și nici poza de distribuire
+    # implicită (Bioscem a14e803, 7455b77). O poză inventată, de exact acea mărime, doar pe
+    # durata comparației (încărcările se copiază mai jos și în codul de bază).
+    LOGO_ANTET="$("${PHP_DEV[@]}" -r '$j = json_decode((string) @file_get_contents($argv[1] . "/seo.json"), true);
+        $l = is_array($j) ? ($j["logo_antet"] ?? null) : null;
+        if (is_array($l) && is_string($l["png"] ?? null) && is_array($l["dimensiuni"] ?? null)) {
+            echo $l["png"], " ", (int) $l["dimensiuni"][0], " ", (int) $l["dimensiuni"][1];
+        }' "$SITE_DATE_DOSAR")"
+    if [ -n "$LOGO_ANTET" ]; then
+        read -r LOGO_CALE LOGO_LATIME LOGO_INALTIME <<< "$LOGO_ANTET"
+        case "$LOGO_CALE" in /uploads/*) ;; *) die "seo.json → logo_antet.png nu e în /uploads/: $LOGO_CALE" ;; esac
+        LOGO_FISIER="$RADACINA/public$LOGO_CALE"
+        if [ ! -e "$LOGO_FISIER" ]; then
+            LOGO_DOSAR="$(dirname "$LOGO_FISIER")"
+            [ -d "$LOGO_DOSAR" ] || { mkdir -p "$LOGO_DOSAR"; DOSARE_PUSE+=("$LOGO_DOSAR"); }
+            "${PHP_DEV[@]}" -r '$i = imagecreatetruecolor((int) $argv[2], (int) $argv[3]);
+                imagefill($i, 0, 0, imagecolorallocate($i, 30, 110, 60));
+                imagepng($i, $argv[1]) || exit(1);' "$LOGO_FISIER" "$LOGO_LATIME" "$LOGO_INALTIME" \
+                || die "nu pot face logo-ul de test $LOGO_FISIER"
+            FISIERE_PUSE+=("$LOGO_FISIER")
+        fi
+    fi
+    # Fișierele publice ale pachetului (site-uri/<site>/public/, de exemplu variantele WebP ale
+    # logo-ului) se copiază la adoptare peste public/ (site-uri/README.md); aici, la fel, doar
+    # pe durata comparației. Unul care există deja în public/ cu alt conținut oprește comparația.
+    if [ -d "$SITE_DATE_DOSAR/public" ]; then
+        while IFS= read -r -d '' sursa; do
+            relativ="${sursa#"$SITE_DATE_DOSAR/public/"}"
+            tinta="$RADACINA/public/$relativ"
+            if [ -e "$tinta" ]; then
+                cmp -s "$sursa" "$tinta" || die "public/$relativ există deja și diferă de cel din pachet ($sursa)"
+                continue
+            fi
+            dosar_tinta="$(dirname "$tinta")"
+            [ -d "$dosar_tinta" ] || { mkdir -p "$dosar_tinta"; DOSARE_PUSE+=("$dosar_tinta"); }
+            cp -p "$sursa" "$tinta"
+            FISIERE_PUSE+=("$tinta")
+        done < <(find "$SITE_DATE_DOSAR/public" -type f -print0)
+    fi
+fi
 # Aceleași fișiere încărcate ca site-ul curent (pozele demo, refăcute la fiecare instalare):
 # codul de bază își calculează și el width/height din fișiere. Copie, nu legătură: ca și
 # codul curent, nu citește poze din afara dosarului lui public/.
@@ -183,6 +254,7 @@ am_pornit_serverul=0
 curata() {
     opreste_pid "$PID_BAZA"
     opreste_pid "$PID_CURENT"
+    scoate_fisierele_puse
     if [ -n "$LICENTA_COMPARATIE" ]; then
         "${PHP_DEV[@]}" "$RADACINA/tools/dev/licenta.php" toate >/dev/null 2>&1 || true
     fi
