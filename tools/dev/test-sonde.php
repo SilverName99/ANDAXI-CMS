@@ -423,7 +423,9 @@ try {
     }
     @mkdir($verif . '/src/Support', 0770, true);
     @mkdir($verif . '/config', 0770, true);
+    // Verificare și căile site-ului pe care le cere (Paths: .env, storage/verificare; WP-07).
     copy($radacina . '/src/Support/Verificare.php', $verif . '/src/Support/Verificare.php');
+    copy($radacina . '/src/Support/Paths.php', $verif . '/src/Support/Paths.php');
     copy($radacina . '/config/app.php', $verif . '/config/app.php');
     $scrieEnv($verif, ['APP_URL' => 'https://verificare.exemplu.test', 'SITE_COPIE_VERIFICARE' => '1', 'DB_HOST' => 'localhost', 'DB_DATABASE' => 'cms_verif_inexistenta']);
 
@@ -465,7 +467,7 @@ try {
     exec('mkdir -p ' . escapeshellarg($live['biovitality'] . '/tools') . ' && cp -r ' . escapeshellarg($verif . '/tools/verificare') . ' '
         . escapeshellarg($live['biovitality'] . '/tools/') . ' && mkdir -p ' . escapeshellarg($live['biovitality'] . '/src/Support') . ' '
         . escapeshellarg($live['biovitality'] . '/config') . ' && cp ' . escapeshellarg($verif . '/src/Support/Verificare.php') . ' '
-        . escapeshellarg($live['biovitality'] . '/src/Support/') . ' && cp ' . escapeshellarg($verif . '/config/app.php') . ' ' . escapeshellarg($live['biovitality'] . '/config/'));
+        . escapeshellarg($verif . '/src/Support/Paths.php') . ' ' . escapeshellarg($live['biovitality'] . '/src/Support/') . ' && cp ' . escapeshellarg($verif . '/config/app.php') . ' ' . escapeshellarg($live['biovitality'] . '/config/'));
     $r = $ruleaza('tools/verificare/agregate.php', ['--set=bioscem'], ['cod' => $live['biovitality']]);
     exec('rm -rf ' . escapeshellarg($live['biovitality'] . '/tools') . ' ' . escapeshellarg($live['biovitality'] . '/src') . ' ' . escapeshellarg($live['biovitality'] . '/config'));
     $verifica('din dosarul unui site live → refuzat', $faraBaza($r) && str_contains($r['erori'], 'pe un site live'), $r['tot']);
@@ -625,6 +627,12 @@ try {
     $ins('newsletter_subscribers', [['email' => 'abonat.' . $m . '@exemplu.ro', 'name' => 'Abonat ' . $m, 'status' => 'active']]);
     $ins('product_reviews', [['product_id' => $produsBbd, 'user_name' => 'Recenzent ' . $m, 'user_email' => 'recenzent.' . $m . '@exemplu.ro', 'rating' => 5,
         'review_text' => 'Text ' . $m, 'is_approved' => 0]]);
+    // Tabelul vechi de recenzii al Bioscem (ca în tools/dev/migrari/vechi/bs.sql): o bază făcută prin migrări nu-l mai are
+    // (recenzii/0013; 0023 îl copiază, unde există, în product_reviews), un site live încă neadoptat da.
+    $db->exec('CREATE TABLE IF NOT EXISTS reviews (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, product_id INT UNSIGNED NOT NULL,
+        user_name VARCHAR(120) NOT NULL, rating TINYINT UNSIGNED NOT NULL DEFAULT 5, review_text TEXT NULL, is_approved TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, KEY fk_reviews_product (product_id),
+        CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE)');
     $ins('reviews', [['product_id' => $produsBbd, 'user_name' => 'Vechi ' . $m, 'rating' => 4, 'review_text' => 'Vechi ' . $m, 'is_approved' => 1, 'created_at' => '2024-01-01 10:00:00']]);
     $ins('fan_streets', [['county' => 'Cluj', 'locality' => 'Cluj-Napoca', 'street' => 'Strada test', 'county_norm' => 'cluj', 'locality_norm' => 'cluj-napoca',
         'street_norm' => 'strada test', 'row_key' => '', 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]]);
@@ -1018,6 +1026,11 @@ try {
         $db->exec("SET time_zone = '+00:00'");
         $dbMy8->exec("SET time_zone = '+00:00'");
         foreach ($db->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $tabel) {
+            // Tabelele runner-ului (_platforma_*, pe care le are o bază făcută prin migrări) nu sunt în sondă (Amprenta le
+            // sare), deci nici în schema de pe MySQL 8; verificările nu le citesc.
+            if (Amprenta::ignorat((string) $tabel)) {
+                continue;
+            }
             $randuri = $db->query('SELECT * FROM `' . $tabel . '`')->fetchAll(PDO::FETCH_ASSOC);
             foreach (array_chunk($randuri, 200) as $bucata) {
                 $coloane = array_keys($bucata[0]);

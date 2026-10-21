@@ -70,7 +70,7 @@ final class Agregate
         $grupCurent = null;
         // Rezultatul: pe ecran și în storage/verificare/sonde/. Și după o eroare fatală (lib/intrare.php),
         // cu verificările de până acolo și grupul oprit ca EROARE.
-        $termina = static function (?string $oprit) use (&$grupCurent, $raport, $citire, $site, $set, $start, $faraFisier, $radacina): int {
+        $termina = static function (?string $oprit) use (&$grupCurent, $raport, $citire, $site, $set, $start, $faraFisier): int {
             if ($oprit !== null) {
                 $raport->eroare($grupCurent ?? 'verificare', 'rularea s-a oprit: ' . $oprit);
             }
@@ -94,7 +94,7 @@ final class Agregate
                 echo $final . ' Nimic scris (--fara-fisier).' . "\n";
             } else {
                 try {
-                    $cale = Rulare::salveaza($radacina, 'agregate-' . $set . '-' . date('Ymd-His') . '.txt', $text . $final . "\n");
+                    $cale = Rulare::salveaza('agregate-' . $set . '-' . date('Ymd-His') . '.txt', $text . $final . "\n");
                     echo $final . ' Rezultatul e și în ' . $cale . ': trimite-ni-l (are doar numere).' . "\n";
                 } catch (Refuz $e) {
                     echo $final . "\n";

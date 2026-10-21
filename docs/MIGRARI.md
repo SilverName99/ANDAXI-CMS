@@ -96,7 +96,8 @@ src/Support/Migrari/                 Registru, Runner, Schema, Server, Amprenta,
 scripts/migreaza.php                 linia de comandă
 scripts/install.php                  o bază nouă: migrările, seed-ul neutru, setările, pașii de activare, primul administrator
 config/activari.php                  pașii de activare ai pluginurilor (src/Support/Activari.php)
-storage/logs/migrari.log             câte un rând pe operație executată (nume de obiecte, clasa, durata)
+storage/logs/migrari.log             câte un rând pe operație executată (nume de obiecte, clasa, durata); al site-ului
+                                     (App\Support\Paths: în așezarea din Etapa 2, site/storage/logs/migrari.log)
 tools/sonda/amprenta-schema.php      sonda schemei unui site live (WP-10, MIG-08), rulată de proprietar
 tools/dev/migrari/din-sonda.php      local: sonda → fixture-ul și extra-<cod>.txt, în tools/dev/migrari/vechi/privat/
 tools/dev/migrari/genereaza-fixture.php   local: schema pe care o face codul unui site; asteptat.json, migrari.lock,
@@ -454,6 +455,10 @@ Unde se folosește:
 - **`/health`**: „ok” și, pe al doilea rând, `schema: <stare>`; cu `in_urma` răspunde **503** („indisponibil”),
   ca verificarea de după un deploy (`actualizeaza.sh`, Etapa 2) să întoarcă codul la loc. La fel pe copia de
   verificare, cu o copie încărcată (fără copie, poarta răspunde „ok” fără bază; [VERIFICARE.md](VERIFICARE.md)).
+- **`/_andaxi/ping`** (WP-07, `App\Support\Ping`; [DEZVOLTARE.md](DEZVOLTARE.md), „Unde scrie codul”): JSON cu
+  `"schema": "<stare>"` (aceeași gardă, pe conexiunea lui, limitată la 2 secunde) și versiunea codului; răspunde
+  200 și cu `in_urma` (site-ul merge), 503 doar fără bază. E pentru monitorul CRM-ului; cine decide un deploy
+  citește `schema` sau `/health`.
 - **Bannerul din admin**: administratorul general vede un banner roșu, cu ce e de făcut, când baza nu e
   `la_zi` (`data-schema="<stare>"`). Ceilalți administratori nu-l văd.
 

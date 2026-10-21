@@ -2,8 +2,9 @@
 # Pe site: catalog, magazin, livrare_fan, plata_stripe, plata_euplatesc, plata_bt, link_plata, erp, cupoane, fidelitate, recenzii, precomenzi, oferte_bbd, produse_promo, conturi_clienti, blog, newsletter, chat_live, manechin, acorduri_gdpr
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (256)
+RUTE (257)
 GET  / -> CONTROLLER [nucleu]
+GET  /_andaxi/ping -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> CONTROLLER [acorduri_gdpr]
 GET  /admin -> CONTROLLER [nucleu]
 GET  /admin/activity-log -> CONTROLLER [nucleu]

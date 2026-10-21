@@ -58,6 +58,8 @@ poarta G-inst "instalarea prin migrări (install.php, seed-ul neutru, adminul), 
     "tools/dev/php.sh tools/dev/test-instalare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-instalare.php ;; tools/dev/instaleaza.sh" WP-05
 poarta G-vechi "aceleași teste pe o bază făcută ca înainte de migrări și trecută prin baseline (cms_dev_vechi, portul 8711): comparația cu Bioscem (ambele licențe), pluginurile, SEO, fumul pe fiecare pachet; apoi baza se șterge" \
     "CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/instaleaza.sh --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh --licenta=bioscem ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-pluginuri.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-seo.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/smoke.sh --toate-pachetele --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi tools/dev/instaleaza.sh --sterge-baza" WP-05
+poarta G-paths "căile site-ului (App\\Support\\Paths): așezarea de azi și cea din Etapa 2 pe o găzduire simulată (stub-ul, MENTENANTA, sesiunile, jurnalele și pozele fiecărui site, pingul /_andaxi/ping), nicio cale construită în afara Paths; și cu php$MINIM" \
+    "tools/dev/php.sh tools/dev/test-paths.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-paths.php" WP-07
 poarta G-verif "testele site-ului de verificare, și cu php$MINIM (codul lui rulează pe servere)" \
     "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php" WP-08a
 poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-sonda): doar citire, nimic scris, nicio valoare personală; și cu php$MINIM" \
@@ -85,6 +87,9 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # De la WP-06, G-mig cuprinde și înghețarea setărilor (test-inghetare.php, verifica-inghetare.php):
 # fiecare WP cu G-mig verifică deci că înghețările sunt complete față de codul lui (amprenta nucleului);
 # un WP care schimbă DEFAULTS sau o valoare de rezervă le regenerează (genereaza-setari.php --toate).
+# G-paths (WP-07, „New tests” și acceptanța: test-paths.php) e la WP-07 și la WP-41; căutarea căilor construite
+# în afara Paths (test-paths.php --doar-cai) rulează oricum în testul de fum, deci la fiecare WP cu G-smoke. WP-07
+# atinge și poarta site-ului de verificare (pingul fără parolă) și uneltele lui, deci rulează și G-verif și G-sonde.
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -92,7 +97,7 @@ declare -A PORTI=(
     [WP-04]="G-rute G-mig G-sonde G-cmp G-smoke G-php"
     [WP-05]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-php"
     [WP-06]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-php"
-    [WP-07]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-seo G-php"
+    [WP-07]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-verif G-sonde G-php"
     [WP-08a]="G-rute G-verif G-cmp G-php"
     [WP-08]="G-rute G-verif G-sonde G-cmp G-smoke G-php"
     [WP-09]="G-rute G-verif G-sonde G-cmp G-php"
@@ -129,7 +134,7 @@ declare -A PORTI=(
     [WP-38]="G-rute G-mig G-cmp G-seo G-plug G-php"
     [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"
     [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-seo G-php"
-    [WP-41]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
+    [WP-41]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
     [WP-R]="G-rute G-cmp G-plug G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b WP-12 WP-12b WP-13 WP-14
@@ -138,7 +143,7 @@ WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-inst G-vechi G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

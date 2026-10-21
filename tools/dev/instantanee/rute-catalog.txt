@@ -2,8 +2,9 @@
 # Pe site: catalog
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (256)
+RUTE (257)
 GET  / -> CONTROLLER [nucleu]
+GET  /_andaxi/ping -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> 404 [acorduri_gdpr]
 GET  /admin -> CONTROLLER [nucleu]
 GET  /admin/activity-log -> CONTROLLER [nucleu]

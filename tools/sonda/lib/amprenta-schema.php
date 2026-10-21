@@ -157,7 +157,7 @@ final class AmprentaSchema
             echo '  EROARE  ' . $eroare . "\n";
         }
         try {
-            $cale = Rulare::salveaza($radacina, 'amprenta-' . $nume . '-' . date('Ymd-His') . '.json', $json);
+            $cale = Rulare::salveaza('amprenta-' . $nume . '-' . date('Ymd-His') . '.json', $json);
         } catch (Refuz $e) {
             fwrite(STDERR, 'EROARE: ' . $e->getMessage() . "\n");
             return 1;

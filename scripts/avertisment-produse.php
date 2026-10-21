@@ -46,9 +46,11 @@ require_once __DIR__ . '/../bootstrap.php';
 use App\Support\AvertismentProduse;
 use App\Support\Database;
 use App\Support\DateSite;
+use App\Support\Paths;
 use App\Support\ResponseCache;
 
-const DOSAR_COPII = __DIR__ . '/../storage';
+// Copiile valorilor de dinainte stau în storage/ al site-ului (Paths).
+define('DOSAR_COPII', Paths::stocare());
 const PREFIX_COPIE = 'avertisment-produse-copie-';
 
 /**

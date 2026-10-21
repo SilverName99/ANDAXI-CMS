@@ -17,7 +17,8 @@ namespace App\Support;
  *
  * Varianta se face o singură dată, la prima cerere a adresei /og/{versiune}/uploads/…
  * (de obicei robotul Facebook sau WhatsApp, nu un client), și se ține în
- * storage/cache/og/. Versiunea din adresă se schimbă când se schimbă poza, ca
+ * storage/cache/og/ al site-ului (`Paths`; pozele vin din `uploads/` al
+ * docroot-ului lui). Versiunea din adresă se schimbă când se schimbă poza, ca
  * rețelele să nu arate una veche. Răspunsul nu pornește sesiunea (rulează din
  * public/index.php, înaintea ei) și nu trece prin redirecționări.
  *
@@ -58,10 +59,10 @@ final class ImagineDistribuire
      *
      * @return array{url: string, latime: ?int, inaltime: ?int, tip: string}|null
      */
-    public static function pentru(string $imagine, string $baseUrl, ?string $radacina = null): ?array
+    public static function pentru(string $imagine, string $baseUrl): ?array
     {
         try {
-            return self::pentruIntern(trim(html_entity_decode($imagine, ENT_QUOTES | ENT_HTML5, 'UTF-8')), rtrim($baseUrl, '/'), $radacina ?? dirname(__DIR__, 2));
+            return self::pentruIntern(trim(html_entity_decode($imagine, ENT_QUOTES | ENT_HTML5, 'UTF-8')), rtrim($baseUrl, '/'));
         } catch (\Throwable) {
             return null;
         }
@@ -75,17 +76,17 @@ final class ImagineDistribuire
      *
      * @return array{url: string, latime: ?int, inaltime: ?int, tip: string, sursa: string}|null
      */
-    public static function implicita(array $setari, string $baseUrl, ?string $radacina = null): ?array
+    public static function implicita(array $setari, string $baseUrl): ?array
     {
         $setata = trim((string) ($setari['store_seo_default_image_url'] ?? ''));
         if ($setata !== '') {
-            $poza = self::pentru($setata, $baseUrl, $radacina);
+            $poza = self::pentru($setata, $baseUrl);
             if ($poza !== null) {
                 return $poza + ['sursa' => 'setari'];
             }
         }
         $logoSite = trim((string) DateSite::seo('distribuire.logo', ''));
-        $logo = $logoSite !== '' ? self::pentru($logoSite, $baseUrl, $radacina) : null;
+        $logo = $logoSite !== '' ? self::pentru($logoSite, $baseUrl) : null;
         return $logo !== null ? $logo + ['sursa' => 'logo'] : null;
     }
 
@@ -98,7 +99,7 @@ final class ImagineDistribuire
         return ($poza['sursa'] ?? '') === 'logo' ? 'Logo ' . $numeMagazin : $numeMagazin;
     }
 
-    private static function pentruIntern(string $imagine, string $baza, string $radacina): ?array
+    private static function pentruIntern(string $imagine, string $baza): ?array
     {
         if ($imagine === '' || $baza === '') {
             return null;
@@ -114,7 +115,7 @@ final class ImagineDistribuire
             }
             return null;
         }
-        $fisier = self::fisierSursa($radacina, $relativ);
+        $fisier = self::fisierSursa($relativ);
         if ($fisier === null) {
             return null;
         }
@@ -157,7 +158,7 @@ final class ImagineDistribuire
      * Dacă cererea e pentru /og/…, o servește și oprește scriptul. Altfel nu
      * face nimic. Doar GET și HEAD; orice altceva trece mai departe, ca înainte.
      */
-    public static function raspunde(string $radacina): void
+    public static function raspunde(): void
     {
         $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '');
         if (!str_starts_with($cale, self::PREFIX)) {
@@ -168,14 +169,17 @@ final class ImagineDistribuire
             return;
         }
         try {
-            self::raspundeIntern($radacina, $cale, $metoda === 'HEAD');
+            if (!class_exists(Paths::class, false)) {
+                require_once __DIR__ . '/Paths.php';
+            }
+            self::raspundeIntern($cale, $metoda === 'HEAD');
         } catch (\Throwable) {
             self::negasit();
         }
         exit;
     }
 
-    private static function raspundeIntern(string $radacina, string $cale, bool $doarAntete): void
+    private static function raspundeIntern(string $cale, bool $doarAntete): void
     {
         if (preg_match('#^/og/([0-9a-f]{12})(/uploads/[^?\#]+)$#', $cale, $m) !== 1) {
             self::negasit();
@@ -186,13 +190,13 @@ final class ImagineDistribuire
             self::negasit();
             return;
         }
-        $sursa = self::fisierSursa($radacina, $relativ);
+        $sursa = self::fisierSursa($relativ);
         if ($sursa === null) {
             self::negasit();
             return;
         }
 
-        $dosar = $radacina . '/storage/cache/og';
+        $dosar = Paths::stocare('cache/og');
         $cache = $dosar . '/' . sha1(self::VERSIUNE_ALGORITM . '|' . $relativ . '|' . (int) @filemtime($sursa) . '|' . (int) @filesize($sursa)) . '.jpg';
         $date = is_file($cache) ? @file_get_contents($cache) : false;
         if (!is_string($date) || $date === '') {
@@ -335,14 +339,14 @@ final class ImagineDistribuire
         return $inDosar && in_array(strtolower(pathinfo($relativ, PATHINFO_EXTENSION)), self::EXTENSII, true);
     }
 
-    /** Fișierul de pe disc pentru o cale acceptată, doar din public/uploads; altfel null. */
-    private static function fisierSursa(string $radacina, string $relativ): ?string
+    /** Fișierul de pe disc pentru o cale acceptată, doar din uploads/ al docroot-ului (`Paths::uploads()`); altfel null. */
+    private static function fisierSursa(string $relativ): ?string
     {
         if (!self::caleAcceptata($relativ)) {
             return null;
         }
-        $uploads = realpath($radacina . '/public/uploads');
-        $fisier = realpath($radacina . '/public' . $relativ);
+        $uploads = realpath(Paths::uploads());
+        $fisier = realpath(Paths::public() . $relativ);
         if ($uploads === false || $fisier === false || !str_starts_with($fisier, $uploads . DIRECTORY_SEPARATOR) || !is_file($fisier)) {
             return null;
         }

@@ -35,6 +35,8 @@ final class Maintenance
         '/favicon',
         '/robots.txt',
         '/sitemap',
+        // Adresele platformei: pingul monitorizării (App\Support\Ping), în Etapa 2 și preluarea licenței.
+        '/_andaxi/',
     ];
 
     /**

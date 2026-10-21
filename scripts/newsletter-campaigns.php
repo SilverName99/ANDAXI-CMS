@@ -27,6 +27,7 @@ require_once __DIR__ . '/../bootstrap.php';
 
 use App\Support\Database;
 use App\Support\NewsletterService;
+use App\Support\Paths;
 use App\Support\Settings;
 
 // Cronul e al unui plugin (config/plugins.php). Dacă licența site-ului nu-l
@@ -76,7 +77,7 @@ foreach ((array) ($argv ?? []) as $argument) {
 // Două rulări suprapuse ar trimite de două ori acelorași oameni în fereastra
 // dintre selecție și marcarea ca trimis. Lacătul e pe fișier: dacă rularea
 // precedentă încă lucrează, aceasta iese fără să facă nimic.
-$lockPath = dirname(__DIR__) . '/storage/newsletter-cron.lock';
+$lockPath = Paths::stocare('newsletter-cron.lock');
 $lock = @fopen($lockPath, 'c');
 if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
     echo "Newsletter cron: ruleaza deja, ies.\n";

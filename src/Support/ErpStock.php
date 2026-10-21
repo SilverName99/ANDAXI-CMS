@@ -238,6 +238,6 @@ final class ErpStock
 
     private static function cacheFile(): string
     {
-        return dirname(__DIR__, 2) . '/storage/cache/erp-stock.json';
+        return Paths::stocare('cache/erp-stock.json');
     }
 }

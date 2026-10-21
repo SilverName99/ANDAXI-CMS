@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Migrari;
 
 use App\Support\DateSite;
+use App\Support\Paths;
 use App\Support\Verificare;
 use PDO;
 use PDOException;
@@ -101,8 +102,8 @@ final class Consola
     }
 
     /**
-     * Opțiunile runner-ului care vin din mediu: jurnalul, dosarul site-ului (migrari.json), pachetele din
-     * cod (site-uri/), copia de verificare (SITE_COPIE_VERIFICARE=1),
+     * Opțiunile runner-ului care vin din mediu: jurnalul (al site-ului, `Paths::stocare('logs/migrari.log')`),
+     * dosarul site-ului (migrari.json), pachetele din cod (site-uri/), copia de verificare (SITE_COPIE_VERIFICARE=1),
      * versiunea codului și, doar pentru teste (tools/dev/test-migrari.php), oprirea „ca un proces
      * omorât” după k operații sau la a k-a trecere printr-un punct din Schema, pauzele scurte. Pe
      * site-uri variabilele de test nu există.
@@ -124,7 +125,7 @@ final class Consola
         if (($pauza = getenv('MIGRARI_TEST_PAUZA_BUCATI_MS')) !== false && ctype_digit($pauza)) {
             $optiuni['pauza_bucati_ms'] = (int) $pauza;
         }
-        $optiuni['jurnal'] = getenv('MIGRARI_TEST_JURNAL') ?: $radacina . '/storage/logs/migrari.log';
+        $optiuni['jurnal'] = getenv('MIGRARI_TEST_JURNAL') ?: Paths::stocare('logs/migrari.log');
         $optiuni['dosar_site'] = DateSite::dosar();
         // Pachetele din cod: o înghețare din site-uri/<site>/ trebuie să fie și în dosarul site-ului (Runner, codul 2).
         $optiuni['dosar_pachete'] = $radacina . '/site-uri';

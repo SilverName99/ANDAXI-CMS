@@ -183,8 +183,9 @@ sunt în git, deci rămân neatinse.
 
 ### Poarta
 
-`App\Support\Verificare::poarta()` rulează prima în `public/index.php`, înaintea fișierelor încărcate, a
-stratului SEO și a sesiunii. Citește `.env` (ca `Env::load`; `.env` are prioritate față de mediu):
+`App\Support\Verificare::poarta()` rulează prima în `public/index.php` (înaintea ei doar `App\Support\Paths` alege
+jurnalul erorilor PHP), înaintea fișierelor încărcate, a stratului SEO și a sesiunii. Citește `.env`-ul site-ului
+(`Paths::env()`; ca `Env::load`, deci `.env` are prioritate față de mediu):
 
 1. **Fără bază configurată** (`DB_DATABASE` gol: nici `.env`, nici variabila în mediu) → **503 „Site
    neconfigurat”**, pentru orice cerere, oricare ar fi restul. Regula e a oricărui site: fără ea, un deploy
@@ -204,7 +205,10 @@ stratului SEO și a sesiunii. Citește `.env` (ca `Env::load`; `.env` are priori
    aplicația, tot fără parolă, ca pe un site adevărat: `ok` și `schema: <stare>`, iar cu baza în urma
    codului (migrări neaplicate) **503** `schema: in_urma` ([MIGRARI.md](MIGRARI.md), „Garda”). Așa o
    repetiție a deploy-ului pe verificare vede exact ce ar vedea pe site (o verificare după deploy care
-   cere 200 întoarce codul la loc dacă `migreaza.php --aplica` n-a rulat).
+   cere 200 întoarce codul la loc dacă `migreaza.php --aplica` n-a rulat). Tot fără parolă, `GET`/`HEAD
+   /_andaxi/ping` (pingul monitorizării, `App\Support\Ping`, WP-07): îl dă mereu aplicația, care la el face doar
+   `SELECT 1` și citește garda, înaintea oricărui alt cod, deci și pe baza goală dinaintea primei încărcări
+   (`"schema":"fara_registru"`, niciun tabel făcut). Un POST pe ping și orice altă adresă `/_andaxi/…` cer parola.
 5. Poarta are nevoie de `VERIFICARE_POARTA_UTILIZATOR`, de un hash valid în `VERIFICARE_POARTA_HASH` și de
    dosarul de lucru; altfel tot 503 „neconfigurat” (motivul îl arată `stare.php`).
 6. Parola: **HTTP Basic**, citit din `PHP_AUTH_USER`/`PHP_AUTH_PW`, din antetul `Authorization`
@@ -282,9 +286,11 @@ sesiuni (nu încarcă `bootstrap.php`).
 
 ### Dosarul de lucru
 
-`Verificare::dosar()` = `storage/verificare/` din rădăcina codului (temporar: în WP-07 devine
-`Paths::stocareSite('verificare')`, iar `.env` `Paths::env()`), cu un `.htaccess` „Require all denied”
-(rădăcina trimite oricum totul în `public/`):
+`Verificare::dosar()` = `Paths::stocareSite('verificare')`: azi `storage/verificare/` din rădăcina codului, în
+așezarea din Etapa 2 `site/storage/verificare/` ([DEZVOLTARE.md](DEZVOLTARE.md), „Unde scrie codul”), făcut la
+nevoie cu un `.htaccess` „Require all denied” (rădăcina trimite oricum totul în `public/`). `.env` e
+`Paths::env()`; uneltele de pe server (`configureaza.php`, `stare.php`, verificările pe site-urile live) le iau tot
+de acolo:
 
 | Fișier | Ce e |
 |---|---|
@@ -405,7 +411,6 @@ rulează singur testul T2-live: baseline-ul pe schema live a site-ului, pe Maria
   oprit; pozele 302 spre `VERIFICARE_UPLOADS_DIN`; bannerul), cheia licenței de verificare în
   `configureaza.php`, `licenta.php`, `sterge.php`; `stare.php` termină cu „GATA”.
 - **WP-09**: `incarca.php` (copia anonimizată, `incarcat-la`).
-- **WP-07**: `Paths` în locul căilor de mai sus; `GET /_andaxi/ping` fără parolă.
 
 ### Testele
 
@@ -414,7 +419,7 @@ PHP-ul minim): face o copie a codului (fișierele din git, cu modificările neco
 simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`, o servește cu
 `php -S` pe `CMS_DEV_PORT`+7 cu un mediu gol (ca pe Hostinger, totul din `.env`) și parcurge: deploy fără
 `.env` (503 la orice), fiecare refuz al `configureaza.php` și configurarea pe o bază goală, poarta (401,
-429, formularul, cookie-ul, sonda, modul formular), `stare.php` în ambele stări (ieșirea lui întreagă
+429, formularul, cookie-ul, sonda, modul formular, pingul fără parolă), `stare.php` în ambele stări (ieșirea lui întreagă
 intră în raport), o copie „încărcată” pe baza de dezvoltare (paginile 200, cu noindex și no-store) și una
 expirată, apoi `SITE_COPIE_VERIFICARE=0` (poarta nu face nimic). Bazele `cms_verif_gol`, `cms_verif_plina`
 și utilizatorul `cms_verif_test` se fac și se șterg acolo. Cu un PHP sub minim instalat (`php7.0` … `php8.2`)

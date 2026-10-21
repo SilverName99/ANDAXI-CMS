@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+// Căile site-ului (.env, storage/, docroot-ul cu uploads/): App\Support\Paths, încărcat aici fiindcă tot ce urmează
+// până la bootstrap.php rulează înaintea autoloader-ului. În așezarea din Etapa 2 sunt ale dosarului site-ului și ale
+// public_html/ lui (stub-ul din deploy/stub/), nu ale versiunii de cod. Întâi jurnalul erorilor PHP al site-ului
+// (storage/logs/php.log, dacă serverul nu are deja unul), ca și erorile de dinaintea bootstrap-ului să ajungă în el.
+require_once __DIR__ . '/../src/Support/Paths.php';
+\App\Support\Paths::alegeJurnalulPhp();
+
 // Poarta (App\Support\Verificare, docs/VERIFICARE.md), prima, înaintea fișierelor încărcate,
 // a stratului SEO și a sesiunii: un site fără bază configurată (deploy proaspăt, fără .env)
 // răspunde 503 „neconfigurat”, nu paginile aplicației; site-ul de verificare
@@ -16,8 +23,8 @@ require_once __DIR__ . '/../src/Support/Verificare.php';
         return;
     }
     // Prevent path traversal
-    $resolved = realpath(__DIR__ . $reqPath);
-    $uploadsRoot = realpath(__DIR__ . '/uploads');
+    $resolved = realpath(\App\Support\Paths::public() . $reqPath);
+    $uploadsRoot = realpath(\App\Support\Paths::uploads());
     if ($resolved === false || $uploadsRoot === false || !str_starts_with($resolved, $uploadsRoot . DIRECTORY_SEPARATOR)) {
         http_response_code(404);
         exit;
@@ -46,7 +53,7 @@ require_once __DIR__ . '/../src/Support/Verificare.php';
 // site, doar pozele din /uploads/products și /uploads/gallery).
 if (str_starts_with((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? ''), '/og/')) {
     require_once __DIR__ . '/../src/Support/ImagineDistribuire.php';
-    \App\Support\ImagineDistribuire::raspunde(dirname(__DIR__));
+    \App\Support\ImagineDistribuire::raspunde();
 }
 
 // O singură adresă pentru fiecare pagină (gazda din APP_URL, fără „/” final) și
@@ -55,9 +62,17 @@ if (str_starts_with((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '')
 // confirmările de plată sau ERP și nici pe adresele „mereu deschise” ale
 // pluginurilor (SeoRedirects::caiExcluse). Rulează înaintea sesiunii.
 require_once __DIR__ . '/../src/Support/SeoRedirects.php';
-\App\Support\SeoRedirects::incepe(dirname(__DIR__));
+\App\Support\SeoRedirects::incepe();
 
 require_once __DIR__ . '/../bootstrap.php';
+
+// Pingul monitorizării și al deploy-ului (GET/HEAD /_andaxi/ping, App\Support\Ping): imediat după bootstrap (fără
+// sesiune), cu conexiunea lui, limitată la 2 secunde, înaintea setărilor, a pluginurilor, a pașilor de activare și a
+// cache-ului de pagini. Nimic altceva nu rulează și nu așteaptă baza.
+if (\App\Support\Ping::eCererea()) {
+    \App\Support\Ping::raspunde();
+    return;
+}
 
 use App\Http\GardaPluginuri;
 use App\Http\Router;

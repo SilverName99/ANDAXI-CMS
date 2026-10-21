@@ -291,5 +291,13 @@ return static function (Router $router): void {
     // reface după o schimbare a coșului.
     $router->get('/api/cart/avertismente', [SiteController::class, 'cartAvertismenteApi']);
 
+    // WP-07 (infra, punctul A): pingul monitorizării (CRM-ul, la 5 minute) și al verificării de după un deploy. JSON cu
+    // baza (SELECT 1 în cel mult 2 secunde), versiunea codului și starea schemei; 503 fără bază; Cache-Control: no-store,
+    // fără sesiune (App\Support\Ping; al nucleului, catalogul: /_andaxi/*). public/index.php îl servește chiar după
+    // bootstrap, înaintea restului aplicației; ruta e aici pentru catalog, unelte și orice altă cale de intrare.
+    $router->get('/_andaxi/ping', static function (): void {
+        \App\Support\Ping::raspunde();
+    });
+
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

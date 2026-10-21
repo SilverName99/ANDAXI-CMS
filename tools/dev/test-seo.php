@@ -116,7 +116,7 @@ $verifica(count($mereuDeschise) . ' adrese „mereu deschise” din catalog (web
     . 'și cu „/” final, majuscule, „//”', $mereuDeschise !== [] && $neexcluse === [], implode(', ', $neexcluse));
 
 $prefixeSensibile = ['/admin', '/api/', '/webhook/', '/auth/', '/plata/', '/checkout', '/cos', '/contul-meu', '/login', '/register',
-    '/newsletter/', '/health', '/robots.txt', '/sitemap.xml', '/review-form/', '/gdpr-agreements/', '/contact/send'];
+    '/newsletter/', '/health', '/robots.txt', '/sitemap.xml', '/review-form/', '/gdpr-agreements/', '/contact/send', '/_andaxi/'];
 $ruteSensibile = 0;
 $neexcluse = [];
 foreach ($router->rute() as $ruta) {
@@ -131,10 +131,10 @@ foreach ($router->rute() as $ruta) {
         }
     }
 }
-$verifica($ruteSensibile . ' rute de plată, coș, cont, admin, API, health, robots, sitemap: toate excluse', $neexcluse === [],
+$verifica($ruteSensibile . ' rute de plată, coș, cont, admin, API, health, ping, robots, sitemap: toate excluse', $neexcluse === [],
     implode(', ', $neexcluse));
 $exclusDa = ['/cos', '/cos/', '//cos', '/COS', '/%63os', '/cos/adauga/1', '/checkout/bt/retur', '/webhook/stripe/', '/api/erp/notificare',
-    '/admin/orders', '/newsletter/track/click/1/1/x', '/zona-privata-demo', '/zona-privata-demo/pagina'];
+    '/admin/orders', '/newsletter/track/click/1/1/x', '/zona-privata-demo', '/zona-privata-demo/pagina', '/_andaxi/ping', '/_andaxi/ping/'];
 $exclusNu = ['/', '/cosmetice', '/cos-de-cadouri', '/checkouts', '/produs/ceai-de-menta', '/magazin', '/plata-la-livrare', '/administrare-ceai'];
 $verifica('excluse: ' . implode(' ', $exclusDa), array_filter($exclusDa, static fn ($c) => !SeoRedirects::eExclusa($c)) === []);
 $verifica('neexcluse: ' . implode(' ', $exclusNu), array_filter($exclusNu, static fn ($c) => SeoRedirects::eExclusa($c)) === []);
@@ -577,6 +577,7 @@ try {
     $slashM = $cerere($port, 'GET', '/produs/ceai-de-menta/');
     $sitemapM = $cerere($port, 'GET', '/sitemap.xml');
     $webhookM = $cerere($port, 'POST', '/webhook/stripe');
+    $pingM = $cerere($port, 'GET', '/_andaxi/ping');
     Settings::save($db, ['maintenance_enabled' => $mentenantaInainte]);
     ResponseCache::purgePageCache();
     $verifica('mentenanță: robots.txt rămâne cel normal (nu „Disallow: /”)', $robotsM['cod'] === 200
@@ -585,6 +586,8 @@ try {
         $acasaM['cod'] === 503 && isset($acasaM['antete']['retry-after']) && $slashM['cod'] === 503 && $sitemapM['cod'] === 200
         && in_array($webhookM['cod'], [400, 401, 403], true),
         $acasaM['cod'] . ' ' . $slashM['cod'] . ' ' . $sitemapM['cod'] . ' ' . $webhookM['cod']);
+    $verifica('mentenanță: pingul monitorizării (/_andaxi/ping) răspunde 200, cu baza și schema', $pingM['cod'] === 200
+        && str_contains($pingM['corp'], '"ok":true,"db":true') && str_contains($pingM['corp'], '"schema":"la_zi"'), $pingM['cod'] . ' ' . $pingM['corp']);
 
     // ----- Pe fiecare pachet: sitemap, robots, JSON-LD, harta cu ținte ascunse -----
     $produseActive = array_map('strval', $db->query("SELECT slug FROM products WHERE is_active = 1 AND deleted_at IS NULL AND TRIM(COALESCE(slug,'')) <> ''")
@@ -674,7 +677,7 @@ try {
         // robots.txt.
         $robots = $cerere($port, 'GET', '/robots.txt')['corp'];
         $linii = array_values(array_filter(explode("\n", $robots), static fn ($l) => str_starts_with($l, 'Disallow: ')));
-        $asteptate = ['Disallow: /admin', 'Disallow: /api/', 'Disallow: /auth/', 'Disallow: /webhook/'];
+        $asteptate = ['Disallow: /admin', 'Disallow: /api/', 'Disallow: /auth/', 'Disallow: /webhook/', 'Disallow: /_andaxi/'];
         if (Plugins::vizibil('magazin')) {
             array_push($asteptate, 'Disallow: /cos$', 'Disallow: /cos?', 'Disallow: /cos/', 'Disallow: /checkout');
         }

@@ -72,7 +72,7 @@ final class FluxGoogleMerchant
 
     public static function fisierCache(): string
     {
-        return dirname(__DIR__, 2) . '/storage/cache/feed-google-merchant.xml';
+        return Paths::stocare('cache/feed-google-merchant.xml');
     }
 
     /** Fluxul din cache, dacă e mai nou de 15 minute; altfel null. */

@@ -51,10 +51,11 @@ final class SeoRedirects
      * Căi care nu se redirecționează niciodată, pe orice site (prefixe, fără
      * diferență între litere mari și mici): coș, plată, cont, admin, API,
      * confirmări de plată și de ERP, autentificarea Google, newsletter,
-     * fișiere, sănătate. Un prefix care se termină în „/" prinde doar
-     * subcăile; unul fără „/" prinde calea exactă și subcăile ei („/cos" prinde
-     * „/cos" și „/cos/…", dar nu „/cosmetice"). La ele se adaugă adresele
-     * „mereu deschise” din catalogul pluginurilor și `cai_excluse` din seo.json.
+     * fișiere, sănătate, adresele platformei (/_andaxi/…). Un prefix care se
+     * termină în „/" prinde doar subcăile; unul fără „/" prinde calea exactă și
+     * subcăile ei („/cos" prinde „/cos" și „/cos/…", dar nu „/cosmetice"). La
+     * ele se adaugă adresele „mereu deschise” din catalogul pluginurilor și
+     * `cai_excluse` din seo.json.
      */
     public const CAI_EXCLUSE = [
         '/admin', '/api', '/auth', '/webhook', '/plata', '/checkout',
@@ -62,6 +63,8 @@ final class SeoRedirects
         '/newsletter', '/health', '/review-form', '/gdpr-agreements',
         '/contact/send', '/uploads', '/assets', '/storage', '/feed', '/.well-known',
         '/cdn-cgi', '/robots.txt', '/sitemap.xml', '/favicon.ico',
+        // Adresele platformei (pingul monitorizării, App\Support\Ping; în Etapa 2 și preluarea licenței).
+        '/_andaxi',
     ];
 
     /** Codurile la care aplicația „n-a găsit" pagina, deci harta poate răspunde. */
@@ -91,25 +94,28 @@ final class SeoRedirects
      * Pornește verificarea cererii curente. Nu trimite nimic și nu oprește
      * nimic: cel mult rescrie REQUEST_URI la calea curată și pune un buffer.
      */
-    public static function incepe(string $radacina): void
+    public static function incepe(): void
     {
         try {
-            self::incepeIntern($radacina);
+            self::incepeIntern();
         } catch (\Throwable) {
             // Stratul SEO nu are voie să strice vreo cerere.
             self::$activ = false;
         }
     }
 
-    private static function incepeIntern(string $radacina): void
+    private static function incepeIntern(): void
     {
         if (!class_exists(Env::class, false)) {
             require_once __DIR__ . '/Env.php';
         }
+        if (!class_exists(Paths::class, false)) {
+            require_once __DIR__ . '/Paths.php';
+        }
         if (!class_exists(DateSite::class, false)) {
             require_once __DIR__ . '/DateSite.php';
         }
-        Env::load($radacina . '/.env');
+        Env::load(Paths::env());
         if (self::oprit()) {
             return;
         }

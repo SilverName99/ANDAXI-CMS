@@ -41,6 +41,8 @@ final class Robots
         '/api/' => 'nucleu',
         '/auth/' => 'nucleu',
         '/webhook/' => 'nucleu',
+        // Adresele platformei (pingul monitorizării, App\Support\Ping): nu sunt pagini.
+        '/_andaxi/' => 'nucleu',
         '/cos$' => 'magazin',
         '/cos?' => 'magazin',
         '/cos/' => 'magazin',

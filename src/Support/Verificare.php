@@ -8,8 +8,8 @@ namespace App\Support;
  * Site-ul de verificare (docs/VERIFICARE.md): copia pe care se încearcă codul nou înainte
  * să ajungă la un client. E închis publicului din prima cerere după deploy.
  *
- * `poarta()` rulează prima în `public/index.php`, înaintea fișierelor încărcate, a
- * stratului SEO și a sesiunii:
+ * `poarta()` rulează prima în `public/index.php` (înaintea ei doar `Paths` alege jurnalul erorilor PHP),
+ * înaintea fișierelor încărcate, a stratului SEO și a sesiunii:
  *
  * - **Fără bază configurată** (nici `.env`, nici `DB_DATABASE` în mediu: un deploy proaspăt)
  *   orice cerere primește 503 „neconfigurat”. Altfel aplicația ar merge fără bază, cu
@@ -30,10 +30,13 @@ namespace App\Support;
  *   apoi cererea ajunge la aplicație.
  * - Altfel nu face nimic: nicio ieșire, niciun antet.
  *
+ * Fără parolă trec doar `/robots.txt`, `/health` și pingul monitorizării (`GET`/`HEAD /_andaxi/ping`,
+ * `Ping`): pingul îl dă aplicația, care la el face doar `SELECT 1` și citește garda migrărilor, deci și
+ * pe baza goală dinaintea primei încărcări (`schema: fara_registru`).
+ *
  * Gărzile din cod (emailuri, plăți, ERP, FAN, etichete de urmărire, banner) vin în WP-08,
- * tot aici (`destinatar()` …). Fișierele de lucru stau în `dosar()`: deocamdată
- * `storage/verificare` din rădăcina codului; WP-07 îl mută în `Paths::stocareSite()`, iar
- * calea `.env` în `Paths::env()`.
+ * tot aici (`destinatar()` …). Fișierele de lucru stau în `dosar()` = `Paths::stocareSite('verificare')`
+ * (azi `storage/verificare` din rădăcina codului), `.env` e `Paths::env()`.
  */
 final class Verificare
 {
@@ -73,39 +76,35 @@ final class Verificare
         return trim((string) Env::get('DB_DATABASE', '')) !== '';
     }
 
+    /** Rădăcina codului (`Paths::radacina()`). */
     public static function radacina(): string
     {
-        return dirname(__DIR__, 2);
+        self::incarcaPaths();
+        return Paths::radacina();
     }
 
-    /** Fișierul `.env` al site-ului (WP-07: `Paths::env()`). */
+    /** Fișierul `.env` al site-ului (`Paths::env()`). */
     public static function caleEnv(): string
     {
-        return self::radacina() . '/.env';
+        self::incarcaPaths();
+        return Paths::env();
     }
 
-    /** Dosarul de lucru al copiei (temporar; WP-07: `Paths::stocareSite('verificare')`). */
+    /**
+     * Dosarul de lucru al copiei: `Paths::stocareSite('verificare')`, azi `storage/verificare` din rădăcina codului.
+     * Îl face dacă lipsește, cu gardul `.htaccess` (rădăcina trimite oricum totul în public/).
+     */
     public static function dosar(): string
     {
-        return dirname(__DIR__, 2) . '/storage/verificare';
+        self::incarcaPaths();
+        return Paths::stocareSite('verificare');
     }
 
-    /** Face dosarul de lucru (cu gardul `.htaccess`) dacă lipsește; întoarce dacă se poate scrie în el. */
+    /** Dosarul de lucru există și se poate scrie în el? (îl face, cu gardul lui, dacă lipsește) */
     public static function pregatesteDosar(): bool
     {
         $dosar = self::dosar();
-        if (!is_dir($dosar)) {
-            @mkdir($dosar, 0770, true);
-        }
-        if (!is_dir($dosar) || !is_writable($dosar)) {
-            return false;
-        }
-        // .htaccess-ul din rădăcină trimite deja totul în public/; un gard în plus nu strică.
-        $gard = $dosar . '/.htaccess';
-        if (!is_file($gard)) {
-            @file_put_contents($gard, "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
-        }
-        return true;
+        return is_dir($dosar) && is_writable($dosar);
     }
 
     /**
@@ -153,6 +152,14 @@ final class Verificare
     // Poarta
     // ───────────────────────────────────────────────────────────
 
+    /** `Paths` rulează și înaintea autoloader-ului (poarta e prima din public/index.php; uneltele de pe server). */
+    private static function incarcaPaths(): void
+    {
+        if (!class_exists(Paths::class, false)) {
+            require_once __DIR__ . '/Paths.php';
+        }
+    }
+
     /** Rulează prima în public/index.php (vezi capul clasei). */
     public static function poarta(): void
     {
@@ -174,12 +181,20 @@ final class Verificare
         if (!class_exists(IpClient::class, false)) {
             require_once __DIR__ . '/IpClient.php';
         }
+        if (!class_exists(Ping::class, false)) {
+            require_once __DIR__ . '/Ping.php';
+        }
         self::forteazaAntete();
 
         $cale = self::cale();
         $citire = $metoda === 'GET' || $metoda === 'HEAD';
         if ($citire && $cale === '/robots.txt') {
             self::raspundeText(200, "User-agent: *\nDisallow: /\n", $metoda);
+        }
+        if ($citire && $cale === Ping::CALE) {
+            // Pingul monitorizării, fără parolă, ca /health: îl dă aplicația (public/index.php, imediat după
+            // bootstrap: doar SELECT 1 și garda migrărilor), cu antetele porții peste ale lui.
+            return;
         }
         if ($citire && $cale === '/health') {
             // Cu o copie încărcată (și neexpirată) un GET îl dă aplicația, fără parolă, ca pe un site adevărat:

@@ -6,9 +6,6 @@ namespace App\Support;
 
 final class ResponseCache
 {
-    private const PAGE_CACHE_DIR = __DIR__ . '/../../storage/cache/pages';
-    private const ASSET_CACHE_DIR = __DIR__ . '/../../storage/cache/assets';
-
     /**
      * @return list<string>
      */
@@ -388,12 +385,12 @@ final class ResponseCache
 
     public static function cacheDirectory(): string
     {
-        return self::PAGE_CACHE_DIR;
+        return Paths::stocare('cache/pages');
     }
 
     public static function assetCacheDirectory(): string
     {
-        return self::ASSET_CACHE_DIR;
+        return Paths::stocare('cache/assets');
     }
 
     public static function purgeAssetCache(): int

@@ -398,7 +398,7 @@ final class Licenta
 
     private static function dosarImplicit(): string
     {
-        return dirname(__DIR__, 2) . '/storage/licenta';
+        return Paths::stocare('licenta');
     }
 
     private static function citeste(string $cale): ?string

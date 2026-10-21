@@ -33,7 +33,10 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-$envPath = dirname(__DIR__) . '/.env';
+// .env-ul site-ului (App\Support\Paths: azi în rădăcina codului, în Etapa 2 în dosarul site-ului), văzut înainte
+// ca bootstrap.php să-l citească.
+require_once __DIR__ . '/../src/Support/Paths.php';
+$envPath = App\Support\Paths::env();
 $envExista = is_file($envPath);
 $envCitibil = $envExista && is_readable($envPath);
 
@@ -41,6 +44,7 @@ require_once __DIR__ . '/../bootstrap.php';
 
 use App\Support\Database;
 use App\Support\Licenta;
+use App\Support\Paths;
 use App\Support\Plugins;
 use App\Support\Settings;
 
@@ -92,9 +96,11 @@ if (in_array('--licenta', $argv, true)) {
 }
 
 echo "=== Mediu ===\n";
-echo 'radacina aplicatiei : ' . dirname(__DIR__) . "\n";
+echo 'radacina aplicatiei : ' . Paths::radacina() . "\n";
 echo 'fisier .env         : ' . ($envExista ? $envPath : 'LIPSESTE') . "\n";
 echo 'citibil             : ' . ($envCitibil ? 'da' : 'NU (cronul ruleaza cu alt utilizator?)') . "\n";
+echo 'dosarul storage     : ' . Paths::stocare() . "\n";
+echo 'jurnal erori PHP    : ' . ((string) ini_get('error_log') !== '' ? (string) ini_get('error_log') : 'al serverului (fara fisier ales)') . "\n";
 echo 'utilizator sistem   : ' . (function_exists('posix_geteuid') ? (string) posix_geteuid() : 'necunoscut') . "\n";
 $arataPhp();
 

@@ -38,7 +38,7 @@ final class LogoAntet
         if ($config === null || $html === '' || !str_contains($html, $config['png']) || stripos($html, '<picture') !== false) {
             return $html;
         }
-        $radacinaPublic ??= dirname(__DIR__, 2) . '/public';
+        $radacinaPublic ??= Paths::public();
         $png = $radacinaPublic . $config['png'];
         if (!is_file($radacinaPublic . $config['webp_1x']) || !is_file($radacinaPublic . $config['webp_2x']) || !is_file($png)) {
             return $html;

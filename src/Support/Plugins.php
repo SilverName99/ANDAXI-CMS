@@ -911,7 +911,7 @@ final class Plugins
 
     private static function fisierJurnal(): string
     {
-        return self::$jurnal ?? dirname(__DIR__, 2) . '/storage/logs/pluginuri.log';
+        return self::$jurnal ?? Paths::stocare('logs/pluginuri.log');
     }
 
     /** Doar pentru teste: unde scrie jurnalul. */

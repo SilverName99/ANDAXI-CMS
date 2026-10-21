@@ -237,7 +237,7 @@ final class AvertismentProduse
     /** Scriptul ferestrei, cu versiunea fișierului (cache-ul browserului îl reîmprospătează singur). */
     public static function urlScript(): string
     {
-        $versiune = @filemtime(__DIR__ . '/../../public/assets/js/avertisment-produs.js') ?: 0;
+        $versiune = @filemtime(Paths::public('assets/js/avertisment-produs.js')) ?: 0;
         return '/assets/js/avertisment-produs.js?v=' . $versiune;
     }
 

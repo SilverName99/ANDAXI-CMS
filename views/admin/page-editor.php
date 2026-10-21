@@ -30,9 +30,9 @@ $gdprAgreementsFormCodeToken = (string) ($gdprAgreementsFormCode ?? '{{gdpr_agre
 $gdprAgreementsFormPreviewHtml = (string) ($gdprAgreementsFormPreviewHtml ?? '');
 $checkoutSuccessOrderInfoCodeToken = (string) ($checkoutSuccessOrderInfoCode ?? '{{checkout_success_order_info}}');
 $checkoutSuccessOrderInfoPreviewHtml = (string) ($checkoutSuccessOrderInfoPreviewHtml ?? '');
-$previewAppCssVersion = @filemtime(__DIR__ . '/../../public/assets/css/app.css') ?: time();
+$previewAppCssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time();
 $previewAppCssHref = '/assets/css/app.css?v=' . $previewAppCssVersion;
-$previewAppCssContent = @file_get_contents(__DIR__ . '/../../public/assets/css/app.css');
+$previewAppCssContent = @file_get_contents(\App\Support\Paths::public('assets/css/app.css'));
 if (!is_string($previewAppCssContent)) {
     $previewAppCssContent = '';
 }

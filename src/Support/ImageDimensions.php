@@ -29,7 +29,7 @@ final class ImageDimensions
             if ($relativ === null) {
                 return null;
             }
-            $radacinaPublica = dirname(__DIR__, 2) . '/public';
+            $radacinaPublica = Paths::public();
             $fisier = $radacinaPublica . $relativ;
             $real = realpath($fisier);
             $realRadacina = realpath($radacinaPublica);
@@ -101,7 +101,7 @@ final class ImageDimensions
 
     private static function fisierCache(): string
     {
-        return dirname(__DIR__, 2) . '/storage/cache/image-dimensions.json';
+        return Paths::stocare('cache/image-dimensions.json');
     }
 
     private static function incarca(): void

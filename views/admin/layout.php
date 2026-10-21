@@ -23,7 +23,7 @@ if ($adminFavicon === '') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= htmlspecialchars(($title ?? 'Admin') . ' | Admin Bioscem', ENT_QUOTES) ?></title>
     <link rel="icon" href="<?= htmlspecialchars($adminFavicon, ENT_QUOTES) ?>">
-    <?php $cssVersion = @filemtime(__DIR__ . '/../../public/assets/css/app.css') ?: time(); ?>
+    <?php $cssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time(); ?>
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= $cssVersion ?><?= $adminAssetVersionQuery ?>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.min.css">

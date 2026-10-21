@@ -38,7 +38,10 @@ final class AdminController
     private const FAN_LOCALITIES_UPLOAD_MAX_SIZE = 12_000_000;
     private const USERS_IMPORT_UPLOAD_MAX_SIZE = 12_000_000;
 
-    /** Unde se pun arhivele de backup WordPress, urcate prin FTP/File Manager. */
+    /**
+     * Unde se pun arhivele de backup WordPress, urcate prin FTP/File Manager: dosarul `storage/import` al site-ului
+     * (`Paths::stocare('import')`); constanta e doar textul arătat în admin.
+     */
     private const WP_DUMP_DIR = '/storage/import';
     private const LOYALTY_POINTS_IMPORT_UPLOAD_MAX_SIZE = 12_000_000;
     private const BLOG_POSTS_IMPORT_UPLOAD_MAX_SIZE = 12_000_000;
@@ -206,7 +209,7 @@ final class AdminController
         ignore_user_abort(true);
 
         try {
-            $date = WordPressDumpReader::citeste(dirname(__DIR__, 3) . self::WP_DUMP_DIR . '/' . $nume);
+            $date = WordPressDumpReader::citeste(\App\Support\Paths::stocare('import') . '/' . $nume);
         } catch (Throwable $e) {
             Flash::set('error', 'Nu am putut citi arhiva: ' . $e->getMessage());
             header('Location: /admin/users?panel=import');
@@ -1208,7 +1211,7 @@ final class AdminController
      */
     private function wordpressDumpFiles(): array
     {
-        $dir = dirname(__DIR__, 3) . self::WP_DUMP_DIR;
+        $dir = \App\Support\Paths::stocare('import');
         if (!is_dir($dir)) {
             return [];
         }
@@ -15011,7 +15014,7 @@ final class AdminController
             }
         }
 
-        $publicRoot = __DIR__ . '/../../../public';
+        $publicRoot = \App\Support\Paths::public();
         $images = array_map(static function (array $img) use ($publicRoot): array {
             $url = (string) ($img['image_url'] ?? '');
             if (str_starts_with($url, '/') && !str_contains($url, '://')) {
@@ -18894,7 +18897,7 @@ HTML;
         try {
             $settings = Settings::all($db);
             $nume = $this->normalizeSitemapFilename((string) ($settings['store_sitemap_filename'] ?? 'sitemap.xml'));
-            if (is_file(__DIR__ . '/../../../public/' . $nume)) {
+            if (is_file(\App\Support\Paths::sitemap($nume))) {
                 $rezultat = $this->generateSitemap($db, $nume);
                 \App\Support\Plugins::jurnal('Harta site-ului (' . $nume . ') refăcută după schimbarea pluginurilor: '
                     . (string) ($rezultat['message'] ?? ($rezultat['ok'] ?? false ? 'ok' : 'eroare')));
@@ -18907,7 +18910,7 @@ HTML;
     private function generateSitemap(PDO $db, string $sitemapFilename = 'sitemap.xml'): array
     {
         $sitemapFilename = $this->normalizeSitemapFilename($sitemapFilename);
-        $publicPath = __DIR__ . '/../../../public/' . $sitemapFilename;
+        $publicPath = \App\Support\Paths::sitemap($sitemapFilename);
         $baseUrl = rtrim($this->appUrl(), '/');
         if ($baseUrl === '') {
             return ['ok' => false, 'message' => 'URL-ul aplicației nu este configurat.'];
@@ -22422,8 +22425,8 @@ HTML;
 
     private function syncAssetCacheHtaccess(array $settings): void
     {
-        $assetsDir = __DIR__ . '/../../../public/assets';
-        $uploadsDir = __DIR__ . '/../../../public/uploads';
+        $assetsDir = \App\Support\Paths::public('assets');
+        $uploadsDir = \App\Support\Paths::uploads();
         $assetsTtl = ResponseCache::normalizeTtlSeconds($settings['cache_assets_ttl_seconds'] ?? 86400, 86400);
         $uploadsTtl = ResponseCache::normalizeTtlSeconds($settings['cache_uploads_ttl_seconds'] ?? 604800, 604800);
         $versioningMode = ResponseCache::normalizeAssetVersioningMode((string) ($settings['cache_assets_versioning_mode'] ?? 'none'));
@@ -25113,7 +25116,7 @@ HTML;
             return null;
         }
 
-        $publicDir = __DIR__ . '/../../../public/uploads/' . $namespace;
+        $publicDir = \App\Support\Paths::uploads() . '/' . $namespace;
         if (!is_dir($publicDir)) {
             @mkdir($publicDir, 0775, true);
         }
@@ -25208,7 +25211,7 @@ HTML;
             return;
         }
 
-        $absolute = __DIR__ . '/../../../public/' . $relativePath;
+        $absolute = \App\Support\Paths::public() . '/' . $relativePath;
         if (is_file($absolute)) {
             @unlink($absolute);
         }

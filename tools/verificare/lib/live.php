@@ -113,7 +113,8 @@ final class Locul
         if ($home !== '' && realpath($home) !== false && realpath($home) !== $acasa) {
             throw new Refuz('dosarul codului nu e în contul tău (HOME nu e dosarul de deasupra lui domains/)');
         }
-        $env = self::citesteEnv($radacina . '/.env');
+        // .env-ul codului care rulează (Paths::env(): azi lângă cod, în Etapa 2 în dosarul site-ului).
+        $env = self::citesteEnv(\App\Support\Verificare::caleEnv());
         if ($env === null || trim($env['SITE_COPIE_VERIFICARE'] ?? '') !== '1') {
             throw new Refuz('rulează doar din dosarul site-ului de verificare: aici .env lipsește sau nu are SITE_COPIE_VERIFICARE=1 '
                 . '(pe un site live aceste unelte nu rulează)');
@@ -1164,24 +1165,20 @@ final class Rulare
     }
 
     /**
-     * Scrie rezultatul în storage/verificare/sonde/ al site-ului de verificare (în afara git-ului
-     * și a site-ului public), doar pentru proprietar (0600). Întoarce calea relativă la cod.
+     * Scrie rezultatul în storage/verificare/sonde/ al site-ului de verificare (`Verificare::dosar()`, în afara
+     * git-ului și a site-ului public), doar pentru proprietar (0600). Întoarce calea, scrisă față de dosarul site-ului.
      */
-    public static function salveaza(string $radacina, string $nume, string $continut): string
+    public static function salveaza(string $nume, string $continut): string
     {
         if (preg_match('/^[a-z0-9][a-z0-9._-]{0,120}\.(txt|json)$/', $nume) !== 1) {
             throw new Refuz('nume de fișier de rezultat nepermis');
         }
-        $dosarLucru = $radacina . '/storage/verificare';
-        $dosar = $dosarLucru . '/sonde';
         $umask = umask(0077);
         try {
+            // Dosarul de lucru, cu gardul .htaccess (Paths::stocareSite), apoi sonde/ doar pentru proprietar.
+            $dosar = \App\Support\Verificare::dosar() . '/sonde';
             if (!is_dir($dosar) && !@mkdir($dosar, 0700, true) && !is_dir($dosar)) {
                 throw new Refuz('nu pot face dosarul storage/verificare/sonde');
-            }
-            $gard = $dosarLucru . '/.htaccess';
-            if (!is_file($gard)) {
-                @file_put_contents($gard, "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
             }
             $cale = $dosar . '/' . $nume;
             if (@file_put_contents($cale, $continut) === false) {

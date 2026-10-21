@@ -362,6 +362,16 @@ $deBioscem = [
             . 'pomenește și articolele, pe care sitemap-ul Bioscem le are deja. Sitemap-ul e același (comparat mai jos).',
         'mod' => 'repo',
     ],
+    // WP-07 (infra, punctul A): adresele platformei (/_andaxi/ping, App\Support\Ping) nu sunt pagini. Și față de
+    // f5ae5ea (ambele moduri); site-uri/bioscem/ce-se-schimba.md.
+    [
+        'nume' => 'robots.txt: adresele platformei (/_andaxi/)',
+        'cale' => '/robots.txt',
+        'nou' => "Disallow: /webhook/\nDisallow: /_andaxi/\n",
+        'vechi' => "Disallow: /webhook/\n",
+        'motiv' => 'pingul monitorizării (GET /_andaxi/ping) e o adresă tehnică, ca /webhook/: robots.txt o închide '
+            . 'motoarelor de căutare. Celelalte reguli și ordinea lor rămân.',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
@@ -380,6 +390,17 @@ $coduriDeBioscem = [
         'motiv' => 'Bioscem trimite starea comenzii (text) pe locul totalului (număr) și pagina din bază cu tokenul '
             . '{{checkout_success_order_info}} cade cu TypeError; reparat în nucleu în 5d808ea. Pagina de mulțumire de după '
             . 'comandă, /checkout/succes/<număr>, are alt drum și e aceeași.',
+    ],
+    // WP-07 (infra, punctul A): adresă nouă a nucleului; în Bioscem nu există (404, pagina de eroare a site-ului).
+    [
+        'nume' => '/_andaxi/ping: pingul monitorizării, nou',
+        'cale' => '/_andaxi/ping',
+        'cod_baza' => 404,
+        'cod_curent' => 200,
+        'text' => '{"ok":true,"db":true,"cod":null,"schema":"la_zi"}',
+        'motiv' => 'App\\Support\\Ping (planul Etapei 1, WP-07): monitorul CRM-ului și verificarea de după un deploy întreabă '
+            . 'dacă baza răspunde (SELECT 1 în cel mult 2 secunde) și dacă schema e la zi; JSON, Cache-Control: no-store, '
+            . 'fără sesiune. Pe Bioscem adresa dă azi pagina 404; nicio pagină a site-ului nu se schimbă.',
     ],
 ];
 $porturiBiovitality = [
@@ -600,6 +621,8 @@ $pagini = [
     ['viz', '/api/products/best-sellers?limit=3'],
     // Pagina din bază „checkout/succes” deschisă direct (cod de stare declarat în $coduriDeBioscem).
     ['anon', '/checkout/succes'],
+    // Pingul monitorizării (WP-07, nou; declarat în $coduriDeBioscem).
+    ['anon', '/_andaxi/ping'],
 ];
 
 // O pagină a site-ului (din bază, ca orice pagină scrisă de client) cu liste goale,

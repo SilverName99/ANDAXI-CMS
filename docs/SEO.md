@@ -71,8 +71,9 @@ același comportament, dar fără nimic scris pentru un anumit site:
   `/cos`, `/contul-meu`, `/login`, `/register`, `/newsletter`, `/health`,
   `/review-form`, `/gdpr-agreements`, `/contact/send`, fișierele (`/uploads`,
   `/assets`, `/storage`), `/feed`, `/.well-known`, `/cdn-cgi`, `/robots.txt`,
-  `/sitemap.xml`, `/favicon.ico` (prefixe: `/cos` prinde `/cos` și `/cos/…`, nu și
-  `/cosmetice`);
+  `/sitemap.xml`, `/favicon.ico`, `/_andaxi` (adresele platformei, de exemplu
+  pingul monitorizării); prefixe: `/cos` prinde `/cos` și `/cos/…`, nu și
+  `/cosmetice`;
 - **fiecare adresă „mereu deschisă” din catalogul pluginurilor**
   (`rute_mereu_deschise` din `config/plugins.php`, partea dinaintea primului
   parametru), oricare ar fi starea pluginului: webhook-urile Stripe, EuPlătesc, BT,
@@ -125,7 +126,10 @@ Reguli exacte (`Robots::DISALLOW`), fiecare cu pluginul ei: robots.txt pomeneșt
 doar adresele pluginurilor de pe site. Coșul e blocat prin căile lui reale
 (`/cos$`, `/cos?`, `/cos/`), nu cu prefixul `/cos`, care ar bloca și `/cosmetice`.
 Site-ul poate adăuga reguli (`seo.json` → `robots_disallow`, de exemplu pagina lui
-de coș din constructor). Linia `Sitemap:` arată mereu `APP_URL/sitemap.xml`.
+de coș din constructor). Ale nucleului, pe orice site: `/admin`, `/api/`, `/auth/`,
+`/webhook/` și `/_andaxi/` (adresele platformei, de la WP-07; pentru Bioscem e o
+diferență declarată, `site-uri/bioscem/ce-se-schimba.md`). Linia `Sitemap:` arată mereu
+`APP_URL/sitemap.xml`.
 Înaintea regulilor stă `Allow: /feed/google-merchant.xml` (`Robots::ALLOW`, doar cu pluginul
 magazin): fluxul pentru Merchant Center e sub `/feed`, pe care altfel nu-l blochează nimic,
 dar regula îl lasă explicit deschis robotului Google.

@@ -17,7 +17,7 @@ declare(strict_types=1);
  * B. O copie a codului (fișierele din git, cu modificările necomise) într-o găzduire
  *    simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`,
  *    servită de `php -S` pe CMS_DEV_PORT+7 cu un mediu gol (ca pe Hostinger: totul din .env):
- *    B1 fără .env: orice cerere (pagini, admin, POST, robots, health, fișiere, .env, .git,
+ *    B1 fără .env: orice cerere (pagini, admin, POST, robots, health, ping, fișiere, .env, .git,
  *       sonda) → 503 „neconfigurat”, noindex, no-store, fără sesiune; stare.php →
  *       „NECONFIGURAT” și „503 = DA”.
  *    B2 configureaza.php: refuzurile (dosar greșit, bază cu tabele, parola bazei greșită,
@@ -30,7 +30,9 @@ declare(strict_types=1);
  *       parola nu apare pe ecran, Backspace o corectează; Ctrl-C la o întrebare obișnuită
  *       oprește pe loc.
  *    B3 poarta: 401 fără parolă (Basic și formularul în pagină) pe orice adresă și metodă;
- *       robots „Disallow: /” și health fără parolă; parola bună → 503 „copia lipsește”;
+ *       robots „Disallow: /”, health și pingul (`/_andaxi/ping`, al aplicației: „fara_registru” pe
+ *       baza goală, niciun tabel; POST și alte adrese /_andaxi/ cer parola) fără parolă; parola
+ *       bună → 503 „copia lipsește”;
  *       parola greșită → 401; a 11-a încercare greșită în 10 minute → 429 (și cu parola
  *       bună), cu amprente în loc de adrese pe disc; IPv6 numărat pe rețeaua /64 (10 adrese
  *       din același /64 → 429 pentru tot /64-ul); formularul (cookie, întoarcerea doar pe o
@@ -41,7 +43,8 @@ declare(strict_types=1);
  *    B4 copie „încărcată” (baza de dezvoltare și o dată de încărcare scrisă de test): cu
  *       parola, paginile aplicației răspund 200, cu noindex și no-store chiar și unde
  *       aplicația pune alt antet (sitemap); fără parolă tot 401, în afară de /health, pe
- *       care îl dă aplicația (schema: la_zi; 503 cu ultima_ord coborât o clipă); copie
+ *       care îl dă aplicația (schema: la_zi; 503 cu ultima_ord coborât o clipă), și de ping
+ *       („la_zi”); copie
  *       expirată, cu dată de necitit sau din viitor → 503 (/health: din nou „ok” al porții).
  *    B5 SITE_COPIE_VERIFICARE=0: poarta nu face nimic (pagina aplicației, robots-ul ei).
  *    Pe tot parcursul: niciun tabel în baza goală, nicio sesiune pornită de o cerere oprită
@@ -414,7 +417,7 @@ try {
     foreach ([['GET', '/'], ['GET', '/magazin'], ['GET', '/admin'], ['GET', '/admin/login'], ['POST', '/checkout'], ['POST', '/admin/login'],
         ['GET', '/robots.txt'], ['GET', '/health'], ['GET', '/sitemap.xml'], ['HEAD', '/'], ['GET', '/uploads/demo/x.png'], ['GET', '/.env'],
         ['GET', '/.git/config'], ['GET', '/tools/verificare/stare.php'], ['GET', Verificare::CALE_SONDA . '?sonda=' . str_repeat('a', 64)],
-        ['PUT', '/'], ['GET', '/nu-exista']] as [$metoda, $cale]) {
+        ['PUT', '/'], ['GET', '/nu-exista'], ['GET', '/_andaxi/ping']] as [$metoda, $cale]) {
         $r = $cerere($metoda, $cale, $metoda === 'POST' ? ['post' => ['email' => 'x@exemplu.ro']] : []);
         $bun = $r['cod'] === 503 && $antetPoarta($r) && $r['cookies'] === [] && ($metoda === 'HEAD' ? $r['corp'] === '' : str_contains($r['corp'], 'Site neconfigurat'));
         if (!$bun) {
@@ -422,7 +425,7 @@ try {
             $detalii[] = $metoda . ' ' . $cale . ' → ' . $r['cod'];
         }
     }
-    $verifica('orice cerere → 503 „Site neconfigurat”, noindex, no-store, fără cookie (17 cereri)', $toate503, implode('; ', $detalii));
+    $verifica('orice cerere → 503 „Site neconfigurat”, noindex, no-store, fără cookie (18 cereri, și pingul)', $toate503, implode('; ', $detalii));
     $verifica('nicio sesiune pornită', $sesiuni() === 0, (string) $sesiuni());
     $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '');
     $ultimul = trim((string) strrchr("\n" . trim($s['iesire']), "\n"));
@@ -550,14 +553,15 @@ try {
     foreach ([['GET', '/magazin'], ['GET', '/admin'], ['POST', '/admin/login'], ['POST', '/checkout'], ['GET', '/sitemap.xml'], ['GET', '/uploads/demo/x.png'],
         ['GET', '/.env'], ['GET', '/.git/config'], ['GET', '/tools/verificare/stare.php'], ['GET', '/storage/verificare/poarta-esecuri.json'],
         ['GET', '/ROBOTS.TXT'], ['GET', '/health/'], ['GET', '/robots.txt/'], ['PUT', '/'], ['GET', Verificare::CALE_SONDA],
-        ['GET', Verificare::CALE_SONDA . '?sonda=' . str_repeat('b', 64)]] as [$metoda, $cale]) {
+        ['GET', Verificare::CALE_SONDA . '?sonda=' . str_repeat('b', 64)], ['POST', '/_andaxi/ping'], ['GET', '/_andaxi/ping/'],
+        ['GET', '/_andaxi/licenta']] as [$metoda, $cale]) {
         $r = $cerere($metoda, $cale, $metoda === 'POST' ? ['post' => ['email' => 'x@exemplu.ro']] : []);
         if ($r['cod'] !== 401 || !$antetPoarta($r) || $r['cookies'] !== []) {
             $toate401 = false;
             $detalii[] = $metoda . ' ' . $cale . ' → ' . $r['cod'];
         }
     }
-    $verifica('fără parolă, orice altă adresă sau metodă → 401 (16 cereri)', $toate401, implode('; ', $detalii));
+    $verifica('fără parolă, orice altă adresă sau metodă → 401 (19 cereri: și POST pe ping, alte adrese /_andaxi/)', $toate401, implode('; ', $detalii));
     $r = $cerere('HEAD', '/');
     $verifica('HEAD / → 401 fără corp', $r['cod'] === 401 && $r['corp'] === '' && $antetPoarta($r));
     $r = $cerere('GET', '/robots.txt');
@@ -565,6 +569,14 @@ try {
         && $r['corp'] === "User-agent: *\nDisallow: /\n" && $antetPoarta($r));
     $r = $cerere('GET', '/health');
     $verifica('/health fără parolă → 200 „ok” (fără bază, fără sesiune)', $r['cod'] === 200 && $r['corp'] === 'ok' && $antetPoarta($r) && $r['cookies'] === []);
+    // Pingul monitorizării (App\Support\Ping): fără parolă, îl dă aplicația: doar SELECT 1 și garda, deci pe baza goală
+    // dinaintea primei încărcări „fara_registru”, fără niciun tabel făcut.
+    $r = $cerere('GET', '/_andaxi/ping');
+    $rHead = $cerere('HEAD', '/_andaxi/ping');
+    $verifica('/_andaxi/ping fără parolă → 200 JSON al aplicației (baza goală: „fara_registru”), noindex, no-store, fără cookie, niciun tabel; '
+        . 'HEAD fără corp', $r['cod'] === 200 && $r['corp'] === '{"ok":true,"db":true,"cod":null,"schema":"fara_registru"}' && $antetPoarta($r)
+        && $r['cookies'] === [] && $tabeleIn('cms_verif_gol') === 0 && $rHead['cod'] === 200 && $rHead['corp'] === '' && $antetPoarta($rHead),
+        $r['cod'] . ' ' . $r['corp'] . ' | HEAD ' . $rHead['cod']);
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);
     $verifica('parola bună (Basic) → 503 „Copia de verificare lipsește”, fără sesiune', $r['cod'] === 503
         && str_contains($r['corp'], 'Copia de verificare lipsește') && $antetPoarta($r) && $r['cookies'] === []);
@@ -731,6 +743,9 @@ try {
     $r = $cerere('HEAD', '/health');
     $verifica('HEAD /health cu copia încărcată → 200 al porții (routerul aplicației are doar GET și POST)', $r['cod'] === 200 && $antetPoarta($r),
         (string) $r['cod']);
+    $r = $cerere('GET', '/_andaxi/ping');
+    $verifica('/_andaxi/ping fără parolă, cu copia încărcată → 200, „schema”: „la_zi”, noindex, no-store, fără cookie', $r['cod'] === 200
+        && $r['corp'] === '{"ok":true,"db":true,"cod":null,"schema":"la_zi"}' && $antetPoarta($r) && $r['cookies'] === [], $r['cod'] . ' ' . $r['corp']);
     $r = $cerere('GET', '/');
     $verifica('fără parolă tot 401, și cu copia încărcată', $r['cod'] === 401);
     file_put_contents($copie . '/storage/verificare/incarcat-la', date('c', time() - 8 * 86400) . "\n");

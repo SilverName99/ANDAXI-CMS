@@ -10,8 +10,11 @@ namespace App\Support;
  * niciodată în codul comun.
  *
  * Dosarul: `SITE_DATE_DOSAR` din .env (cale absolută sau relativă la rădăcina
- * codului); gol = `<rădăcină>/site` (ignorat de git, ca `storage/`). Un site
- * fără dosar sau fără fișiere merge cu valorile implicite ale nucleului.
+ * codului, `Paths::radacina()`: pachetele din `site-uri/` vin cu codul); gol =
+ * `<rădăcină>/site` (ignorat de git, ca `storage/`). Un site fără dosar sau
+ * fără fișiere merge cu valorile implicite ale nucleului. În așezarea din
+ * Etapa 2 (o versiune de cod comună mai multor site-uri) `.env`-ul fiecărui
+ * site îl scrie explicit.
  *
  * Fișierele de azi (vezi docs/SEO.md):
  *  - `redirecturi.json`: adresele vechi ale site-ului (301 sau 410);
@@ -22,7 +25,7 @@ namespace App\Support;
  * `site-uri/bioscem/`) și se copiază în dosarul site-ului la instalare.
  *
  * Rulează și înainte de autoloader (din SeoRedirects), deci nu folosește alte
- * clase în afară de Env.
+ * clase în afară de Env și Paths.
  */
 final class DateSite
 {
@@ -37,7 +40,10 @@ final class DateSite
             if (!class_exists(Env::class, false)) {
                 require_once __DIR__ . '/Env.php';
             }
-            $radacina = dirname(__DIR__, 2);
+            if (!class_exists(Paths::class, false)) {
+                require_once __DIR__ . '/Paths.php';
+            }
+            $radacina = Paths::radacina();
             $ales = trim((string) Env::get('SITE_DATE_DOSAR', ''));
             if ($ales === '') {
                 $ales = $radacina . '/site';

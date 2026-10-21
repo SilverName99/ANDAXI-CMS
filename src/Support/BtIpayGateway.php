@@ -154,11 +154,12 @@ final class BtIpayGateway
         return $rez;
     }
 
-    /** Calea absolută a fișierului `.env` citit de site (bootstrap.php). */
+    /** Calea absolută a fișierului `.env` citit de site (bootstrap.php, `Paths::env()`). */
     public static function caleEnv(): string
     {
-        $radacina = realpath(dirname(__DIR__, 2));
-        return ($radacina !== false ? $radacina : dirname(__DIR__, 2)) . DIRECTORY_SEPARATOR . '.env';
+        $env = Paths::env();
+        $dosar = realpath(dirname($env));
+        return ($dosar !== false ? $dosar : dirname($env)) . DIRECTORY_SEPARATOR . basename($env);
     }
 
     /**

@@ -219,7 +219,7 @@ incarca_starile
 # (plus DDL-ul din cod față de lista celui vechi; asteptat.json și proprietarii, pe o bază goală cms_mig_v_*)
 # și înghețarea setărilor site-urilor vechi.
 scrie ""
-scrie "== Instantaneul rutelor, diferențele declarate, fișierele de migrare și înghețarea setărilor"
+scrie "== Instantaneul rutelor, diferențele declarate, fișierele de migrare, căile site-ului și înghețarea setărilor"
 confirma "instantaneul rutelor (tools/dev/instantaneu-rute.php)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/instantaneu-rute.php"
 confirma "diferențele declarate, marcajele de port și anteturile din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
 if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/verifica-migrari.php" > "$TMP/verifica-migrari.log" 2>&1; then
@@ -229,6 +229,16 @@ else
     ESECURI=$((ESECURI + 1))
     scrie "  EȘEC  fișierele de migrare și DDL-ul din cod (tools/dev/verifica-migrari.php):"
     head -20 "$TMP/verifica-migrari.log" | sed 's/^/        /' | tee -a "$RAPORT"
+fi
+# Căile site-ului (WP-07): nicio cale storage/, uploads/, sessions/, .env sau public/ construită în afara App\Support\Paths
+# (o construcție nouă ar scrie, în așezarea din Etapa 2, în versiunea de cod comună; pe larg: tools/dev/test-paths.php).
+if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-paths.php" --doar-cai > "$TMP/test-paths.log" 2>&1; then
+    TRECUTE=$((TRECUTE + 1))
+    scrie "  OK    căile site-ului doar prin App\\Support\\Paths (tools/dev/test-paths.php --doar-cai): $(tail -1 "$TMP/test-paths.log")"
+else
+    ESECURI=$((ESECURI + 1))
+    scrie "  EȘEC  căile site-ului doar prin App\\Support\\Paths (tools/dev/test-paths.php --doar-cai):"
+    grep -E 'EȘEC' -A20 "$TMP/test-paths.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
 fi
 # Înghețarea setărilor site-urilor vechi (WP-06): o setare nouă sau schimbată în codul comun fără decizia ei pentru
 # Bioscem, Biovitality, vertij și grafoanaytis pică aici (docs/MIGRARI.md, „Înghețarea setărilor”).
@@ -282,6 +292,14 @@ verifica_p nucleu "pagină legală" 200 viz GET /termeni-si-conditii "Firma Demo
 verifica_p nucleu "robots.txt" 200 viz GET /robots.txt "Sitemap:"
 verifica_p nucleu "pagină inexistentă" 404 viz GET /pagina-care-nu-exista
 verifica_p nucleu "health (cu starea schemei)" 200 - GET /health "schema: la_zi"
+# Pingul monitorizării (App\Support\Ping; pe larg și pe o găzduire simulată: tools/dev/test-paths.php).
+verifica_p nucleu "ping: baza, versiunea codului, schema" 200 - GET /_andaxi/ping '"ok":true,"db":true,"cod":null,"schema":"la_zi"'
+confirma "ping: JSON, Cache-Control: no-store, fără cookie de sesiune" \
+    bash -c "tr -d '\r' < '$TMP/antet' | grep -qix 'cache-control: no-store' && tr -d '\r' < '$TMP/antet' | grep -qi '^content-type: application/json' && ! grep -qi '^set-cookie:' '$TMP/antet'"
+SESIUNI_PING="$(find "$RADACINA/storage/sessions" -maxdepth 1 -type f -name 'sess_*' | wc -l)"
+for _ in 1 2 3; do curl -s --noproxy '*' -o /dev/null "$B/_andaxi/ping" || true; done
+confirma "ping: nicio sesiune nouă în storage/sessions (3 cereri)" \
+    bash -c "[ \"\$(find '$RADACINA/storage/sessions' -maxdepth 1 -type f -name 'sess_*' | wc -l)\" = '$SESIUNI_PING' ]"
 
 scrie ""
 scrie "== SEO (docs/SEO.md; pe larg: tools/dev/test-seo.php)"
@@ -292,6 +310,7 @@ else
     confirma "sitemap: fără produse (catalog nu e în pachet)" bash -c "! grep -qF '/produs/' '$TMP/corp'"
 fi
 verifica_p nucleu "robots.txt cu sitemap-ul" 200 - GET /robots.txt "Sitemap: $B/sitemap.xml"
+confirma "robots.txt: adresele platformei închise (Disallow: /_andaxi/)" grep -qxF 'Disallow: /_andaxi/' "$TMP/corp"
 if vizibil magazin; then
     confirma "robots.txt: /cos exact, nu ca prefix" grep -qxF 'Disallow: /cos$' "$TMP/corp"
 else

@@ -263,7 +263,9 @@ puse exact în locurile unde începe ceva nou:
   „cele mai vândute” vin din ordinea catalogului (etichetele, apoi cele mai noi),
   iar „Popularitate” nu mai ține cont de vânzări.
 - **robots.txt** pomenește doar adresele pluginurilor de pe site (fiecare regulă din
-  `App\Support\Robots::DISALLOW` are pluginul ei).
+  `App\Support\Robots::DISALLOW` are pluginul ei; ale nucleului, inclusiv `/_andaxi/`, sunt pe orice site).
+- **Adresele platformei** (`/_andaxi/*`, azi pingul `GET /_andaxi/ping`; [DEZVOLTARE.md](DEZVOLTARE.md), „Unde
+  scrie codul”) sunt ale nucleului (`nucleu.rute_publice`), deci răspund în orice licență.
 - **Emailurile** unui plugin pleacă doar cu pluginul lui (vezi mai jos).
 - **Textele care pomenesc alt plugin** se adaptează: explicațiile din comenzi, din
   Setări plăți, din fișa produsului sau din pagina ERP care spun „pleacă în ERP”,
@@ -300,7 +302,9 @@ vechi se compară cu **codul Bioscem însuși**, la ultimul commit revizuit
 diferențe sunt scrise una câte una, cu motivul lor, în `$deBioscem` din
 `compara-cu-baza.php` și în `site-uri/bioscem/ce-se-schimba.md`: azi explicația
 „Sitemap XML” din Setări magazin (pomenește și articolele) și locul regulii
-`/cos-cumparaturi` în robots.txt, ambele din portarea generalizată a livrării 1 SEO.
+`/cos-cumparaturi` în robots.txt, ambele din portarea generalizată a livrării 1 SEO, plus
+rândul `Disallow: /_andaxi/` din robots.txt (WP-07); adresa nouă `/_andaxi/ping` e declarată în
+`$coduriDeBioscem` (404 în Bioscem).
 
 ## Pașii de activare
 

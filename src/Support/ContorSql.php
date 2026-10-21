@@ -62,7 +62,7 @@ final class ContorSql extends PDO
     /** Rândul cererii, la final (register_shutdown_function). */
     public static function scrie(): void
     {
-        $dosar = rtrim((string) (getenv('CMS_DEV_DIR') ?: dirname(__DIR__, 2) . '/storage/logs/dev'), '/');
+        $dosar = rtrim((string) (getenv('CMS_DEV_DIR') ?: Paths::stocare('logs/dev')), '/');
         $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '');
         $rand = [
             'metoda' => PHP_SAPI === 'cli' ? 'CLI' : (string) ($_SERVER['REQUEST_METHOD'] ?? ''),

@@ -445,7 +445,8 @@ foreach ($valori as $cheie => $valoare) {
     }
 }
 
-$temporar = $radacina . '/.env.' . bin2hex(random_bytes(6)) . '.tmp';
+// Lângă .env (în același dosar, ca rename să fie atomic): azi rădăcina codului (Paths::env()).
+$temporar = dirname($caleEnv) . '/.env.' . bin2hex(random_bytes(6)) . '.tmp';
 $umaskVechi = umask(0077);
 $scris = @file_put_contents($temporar, $text, LOCK_EX);
 umask($umaskVechi);

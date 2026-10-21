@@ -71,7 +71,7 @@ $mobileMenuTokenPattern = '/\{\{\s*mobile_menu\s*\}\}/i';
 // Logo pentru sertarul de meniu mobil; se ia primul fișier existent din galerie.
 $mobileMenuLogoPath = '/uploads/gallery/bioscem-logo.png';
 foreach (['bioscem-logo.webp', 'bioscem-logo.png', 'bioscem-logo.jpg', 'bioscem-logo.svg'] as $logoCandidate) {
-    if (is_file(__DIR__ . '/../public/uploads/gallery/' . $logoCandidate)) {
+    if (is_file(\App\Support\Paths::uploads('gallery') . '/' . $logoCandidate)) {
         $mobileMenuLogoPath = '/uploads/gallery/' . $logoCandidate;
         break;
     }
@@ -414,7 +414,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-    <?php $cssVersion = @filemtime(__DIR__ . '/../public/assets/css/app.css') ?: time(); ?>
+    <?php $cssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time(); ?>
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= $cssVersion ?><?= $assetVersionQuery ?>">
     <?php
     $designCss = trim(implode("\n", array_filter([
@@ -1078,8 +1078,8 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
         $designFooterJs,
     ], static fn (string $part): bool => trim($part) !== '')));
     $designJs = str_replace('</script>', '<\/script>', $designJs);
-    $floatingCartJsVersion = @filemtime(__DIR__ . '/../public/assets/js/floating-cart.js') ?: time();
-    $qtyStocJsVersion = @filemtime(__DIR__ . '/../public/assets/js/qty-stoc.js') ?: time();
+    $floatingCartJsVersion = @filemtime(\App\Support\Paths::public('assets/js/floating-cart.js')) ?: time();
+    $qtyStocJsVersion = @filemtime(\App\Support\Paths::public('assets/js/qty-stoc.js')) ?: time();
     ?>
     <?php
     // Banner de cookies (Admin → Setări magazin → Cookies). Apare cât timp

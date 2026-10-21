@@ -257,6 +257,6 @@ final class ErpShipping
 
     private static function cacheFile(): string
     {
-        return dirname(__DIR__, 2) . '/storage/cache/erp-gestiuni.json';
+        return Paths::stocare('cache/erp-gestiuni.json');
     }
 }
