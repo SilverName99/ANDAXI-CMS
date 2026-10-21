@@ -78,6 +78,10 @@ final class Robots
     /** Textul complet al robots.txt. Același și în modul mentenanță. */
     public static function text(string $baseUrl): string
     {
+        // Site-ul de verificare (docs/VERIFICARE.md): nimic de indexat (poarta răspunde la fel, înaintea aplicației).
+        if (Verificare::activ()) {
+            return "User-agent: *\nDisallow: /\n";
+        }
         $linii = ['User-agent: *'];
         foreach (self::ALLOW as $regula => $plugin) {
             if ($plugin === 'nucleu' || Plugins::vizibil($plugin)) {

@@ -623,6 +623,14 @@ HTML;
     private static function sendHtmlEmail(string $to, string $subject, string $html, array $settings): void
     {
         $fromName = self::sanitizeHeader((string) ($settings['order_email_from_name'] ?? 'Bioscem'));
+        // Site-ul de verificare (docs/VERIFICARE.md): orice email doar la proprietar, cu „[VERIFICARE]”, prin căsuța
+        // copiei sau ca fișier, cel mult 100 pe zi; SMTP-ul, SendGrid-ul și adresa expeditorului din setări nu se folosesc.
+        if (Verificare::activ()) {
+            Verificare::trimiteEmail($to, self::sanitizeHeader($subject), $html, $fromName,
+                static fn (string $catre, string $subiect, string $corp, string $nume, string $adresa, array $smtp)
+                    => self::sendWithSmtp($catre, $subiect, $corp, $nume, $adresa, $smtp));
+            return;
+        }
         $fromAddress = trim((string) ($settings['order_email_from_address'] ?? 'no-reply@localhost'));
         if (!filter_var($fromAddress, FILTER_VALIDATE_EMAIL)) {
             $fromAddress = 'no-reply@localhost';

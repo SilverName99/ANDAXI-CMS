@@ -84,6 +84,10 @@ final class ChatLive
      */
     public static function activ(array $settings): bool
     {
+        // Site-ul de verificare (docs/VERIFICARE.md): fără widgetul tawk.to, orice ar scrie în setări.
+        if (!Verificare::eticheteTertePermise()) {
+            return false;
+        }
         // Pluginul „Chat live” din licență: fără el (sau când se oprește) bulina nu mai apare.
         if (!Plugins::permiteInceput('chat_live') || !self::configurat($settings)) {
             return false;

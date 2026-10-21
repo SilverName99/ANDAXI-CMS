@@ -26,6 +26,10 @@ require_once __DIR__ . '/../src/Support/Verificare.php';
     $resolved = realpath(\App\Support\Paths::public() . $reqPath);
     $uploadsRoot = realpath(\App\Support\Paths::uploads());
     if ($resolved === false || $uploadsRoot === false || !str_starts_with($resolved, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+        // Site-ul de verificare (docs/VERIFICARE.md): pozele nu se copiază; una care lipsește → 302 spre site-ul sursă.
+        if ($resolved === false) {
+            \App\Support\Verificare::redirectUploadLipsa($reqPath);
+        }
         http_response_code(404);
         exit;
     }

@@ -5,7 +5,10 @@ declare(strict_types=1);
 /**
  * Configurarea site-ului de verificare, o dată, pe server, prin SSH (docs/VERIFICARE.md):
  * scrie `.env`-ul site-ului, doar pentru proprietar (0600), cu baza de date, poarta cu
- * parolă și regulile copiei. Nu creează și nu schimbă niciun tabel din bază.
+ * parolă și regulile copiei, și face perechea de chei a licenței de verificare (cheia
+ * privată în `storage/licenta/verificare-cheie-privata.txt`, 0600; cea publică în .env,
+ * `LICENTA_CHEIE_PUBLICA`; cu `--rescrie` rămâne cea de dinainte). Nu creează și nu
+ * schimbă niciun tabel din bază.
  *
  *   $PHP tools/verificare/configureaza.php            # prima dată
  *   $PHP tools/verificare/configureaza.php --rescrie  # din nou (altă parolă a porții, altă bază)
@@ -22,14 +25,16 @@ declare(strict_types=1);
  * - `.env` există (cu `--rescrie` doar dacă e deja al unei copii de verificare,
  *   `SITE_COPIE_VERIFICARE=1`: niciodată peste `.env`-ul unui site adevărat);
  * - baza nu se deschide cu datele scrise, sau are tabele fără să fie o copie de
- *   verificare (tabelul `_verificare`): pare baza unui site;
+ *   verificare (tabelul `_verificare`): pare baza unui site; sau e scrisă în `.env`-ul
+ *   altui site din cont (`~/public_html`, `~/domains/<d>/public_html`), chiar goală;
  * - o valoare nu s-ar citi înapoi la fel din .env (o parolă care începe sau se termină cu
  *   ghilimele sau spațiu: `App\Support\Env` le taie);
  * - parolele nu se pot ascunde (terminal fără stty).
  *
  * Fișierul folosește doar sintaxa PHP 7.0, ca un PHP prea vechi să primească mesajul de
- * mai sus, nu o eroare de sintaxă. Cheia licenței de verificare o adaugă configurarea din
- * WP-08; până atunci site-ul are doar nucleul (și oricum nu arată nimic fără o copie).
+ * mai sus, nu o eroare de sintaxă. Licența (pachetul de pluginuri al copiei) o pune apoi
+ * tools/verificare/licenta.php (sau încărcarea copiei, WP-09); până atunci site-ul are doar
+ * nucleul (și oricum nu arată nimic fără o copie).
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -70,6 +75,7 @@ foreach (array('pdo_mysql', 'sodium') as $extensie) {
 
 require_once $radacina . '/src/Support/Env.php';
 require_once $radacina . '/src/Support/Verificare.php';
+require_once $radacina . '/tools/verificare/lib/cont.php';
 
 use App\Support\Verificare;
 
@@ -338,6 +344,13 @@ if ($tabele > 0 && !$copieVeche) {
     verificare_opreste('pare baza unui site. Creează în hPanel → Databases o bază nouă, goală, doar pentru verificare. Nu am scris nimic.');
 }
 verificare_spune($tabele === 0 ? '  DA    baza e goală' : '  DA    baza are o copie de verificare de dinainte (tabelul _verificare)');
+// Contul SSH e comun cu site-urile live: o bază pe care o folosește alt site (din .env-ul lui) nu se primește, nici goală.
+$altSite = \Unelte\Verificare\Cont::bazaAltuiSite($acasa, $dbNume);
+if ($altSite !== null) {
+    verificare_spune('  NU    baza nu e a altui site din cont (o folosește ' . $altSite . ')');
+    verificare_opreste('baza e scrisă în .env-ul altui site. Creează în hPanel → Databases o bază nouă, doar pentru verificare. Nu am scris nimic.');
+}
+verificare_spune('  DA    baza nu e a altui site din cont');
 
 // ── Emailuri ──
 
@@ -370,6 +383,23 @@ if (hash_equals($poarta, $dbParola) || ($casutaParola !== '' && hash_equals($poa
 $poartaDinNou = verificare_intreaba('Parola porții, încă o dată: ', true);
 if (!hash_equals($poarta, $poartaDinNou)) {
     verificare_opreste('cele două parole ale porții nu sunt la fel. Nu am scris nimic.');
+}
+
+// ── Cheia licenței de verificare ──
+// Perechea de chei Ed25519 a licenței, făcută aici, pe server: cheia privată rămâne în storage/licenta/ (0600, niciodată
+// în git), cheia publică intră în .env (LICENTA_CHEIE_PUBLICA). Cu ea semnează tools/verificare/licenta.php pachetele de
+// pluginuri ale copiei; niciun site adevărat nu are această cheie publică. La --rescrie rămâne cheia de dinainte (o
+// licență pusă cu ea rămâne bună).
+$fisierCheie = Verificare::fisierCheieLicenta();
+if (is_link($fisierCheie) || (file_exists($fisierCheie) && !is_file($fisierCheie))) {
+    verificare_opreste('storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA . ' nu e un fișier obișnuit; nu-l ating. Nu am scris nimic.');
+}
+$cheiePublica = null;
+$cheiePrivata = Verificare::cheiePrivataLicenta($cheiePublica);
+$cheieNoua = $cheiePrivata === null;
+if ($cheieNoua) {
+    $cheiePrivata = sodium_crypto_sign_secretkey(sodium_crypto_sign_keypair());
+    $cheiePublica = base64_encode(sodium_crypto_sign_publickey_from_secretkey($cheiePrivata));
 }
 
 // ── .env ──
@@ -419,7 +449,7 @@ $sectiuni = array(
     ),
     'Licența și datele site-ului' => array(
         'LICENTA_SITE' => 'verificare',
-        'LICENTA_CHEIE_PUBLICA' => '',
+        'LICENTA_CHEIE_PUBLICA' => $cheiePublica,
         'SITE_DATE_DOSAR' => $radacinaReala . '/site-uri/bioscem',
         // Pachetul are înghețarea setărilor: migreaza.php cere site-ul (docs/MIGRARI.md, „Înghețarea setărilor”).
         'SITE_SLUG' => 'bioscem',
@@ -445,6 +475,21 @@ foreach ($valori as $cheie => $valoare) {
     }
 }
 
+// Întâi cheia privată nouă (dacă e cazul), tot printr-un fișier temporar 0600 și rename, apoi .env. Dacă .env nu se
+// poate scrie, cheia nouă se șterge la loc: nu rămâne nimic scris.
+if ($cheieNoua) {
+    \App\Support\Paths::stocareSite('licenta');
+    $temporarCheie = dirname($fisierCheie) . '/.' . Verificare::FISIER_CHEIE_LICENTA . '.' . bin2hex(random_bytes(6)) . '.tmp';
+    $continutCheie = base64_encode($cheiePrivata) . "\n";
+    $umaskVechi = umask(0077);
+    $scris = @file_put_contents($temporarCheie, $continutCheie, LOCK_EX);
+    umask($umaskVechi);
+    if ($scris !== strlen($continutCheie) || !@chmod($temporarCheie, 0600) || !@rename($temporarCheie, $fisierCheie)) {
+        @unlink($temporarCheie);
+        verificare_opreste('nu pot scrie cheia licenței în storage/licenta. Nu am scris nimic.');
+    }
+}
+
 // Lângă .env (în același dosar, ca rename să fie atomic): azi rădăcina codului (Paths::env()).
 $temporar = dirname($caleEnv) . '/.env.' . bin2hex(random_bytes(6)) . '.tmp';
 $umaskVechi = umask(0077);
@@ -452,17 +497,25 @@ $scris = @file_put_contents($temporar, $text, LOCK_EX);
 umask($umaskVechi);
 if ($scris !== strlen($text) || !@chmod($temporar, 0600) || !@rename($temporar, $caleEnv)) {
     @unlink($temporar);
+    if ($cheieNoua) {
+        @unlink($fisierCheie);
+    }
     verificare_opreste('nu pot scrie .env în dosarul codului. Nu am scris nimic.');
 }
 clearstatcache();
 $doarTu = (fileperms($caleEnv) & 0777) === 0600;
 verificare_spune(($doarTu ? '  DA' : '  NU') . '    .env scris, doar pentru tine (0600)');
+$cheieVerificata = null;
+$cheieBuna = Verificare::cheiePrivataLicenta($cheieVerificata) !== null && $cheieVerificata === $cheiePublica
+    && (fileperms($fisierCheie) & 0777) === 0600;
+verificare_spune(($cheieBuna ? '  DA' : '  NU') . '    cheia licenței de verificare ' . ($cheieNoua ? 'făcută acum' : 'de dinainte, păstrată')
+    . ' (cheia privată doar pe server, storage/licenta, 0600)');
 $dosarBun = Verificare::pregatesteDosar();
 verificare_spune(($dosarBun ? '  DA' : '  NU') . '    dosarul de lucru storage/verificare');
 verificare_spune('  INFO  adresa site-ului: https://' . $gazda . '; utilizatorul porții: ' . Verificare::UTILIZATOR_IMPLICIT);
 verificare_spune('  INFO  emailurile: ' . ($casuta !== '' ? 'prin căsuța ta, doar spre adresa ta' : 'doar fișiere pe server (fără căsuță)'));
 verificare_spune('');
-if (!$doarTu || !$dosarBun) {
+if (!$doarTu || !$dosarBun || !$cheieBuna) {
     verificare_opreste('.env e scris, dar ceva de mai sus a ieșit NU. Trimite-ne textul acesta (nu conține parole).');
 }
 verificare_spune('Gata. Pasul următor: ' . PHP_BINARY . ' tools/verificare/stare.php');

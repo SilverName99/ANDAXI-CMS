@@ -71,6 +71,8 @@ final class StripeGateway
         if ($secretKey === '') {
             throw new RuntimeException('Cheia Stripe secret lipsește.');
         }
+        // Site-ul de verificare (docs/VERIFICARE.md): doar o cheie de test (sk_test_…).
+        Verificare::verificaCheieStripe($secretKey);
 
         $url = self::API_BASE . $path;
         $payload = http_build_query($fields);

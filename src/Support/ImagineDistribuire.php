@@ -192,6 +192,10 @@ final class ImagineDistribuire
         }
         $sursa = self::fisierSursa($relativ);
         if ($sursa === null) {
+            // Site-ul de verificare (docs/VERIFICARE.md): pozele nu se copiază; poza de distribuire vine de pe site-ul sursă.
+            if (class_exists(Verificare::class, false)) {
+                Verificare::redirectUploadLipsa($cale);
+            }
             self::negasit();
             return;
         }

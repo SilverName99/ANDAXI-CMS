@@ -106,6 +106,13 @@
 #    bootstrap.php pornește sesiunea după autoloader (același dosar, aceleași cookie-uri);
 #  - GET /_andaxi/ping și /_andaxi/ping/ (App\Support\Ping, nou: în Bioscem 404), fără sesiune și fără
 #    cookie: declarate în $coduriDeBioscem; robots.txt are în plus „Disallow: /_andaxi/” ($deBioscem).
+#  - gărzile site-ului de verificare (WP-08, App\Support\Verificare, docs/VERIFICARE.md, „Gărzile
+#    copiei”): câte o linie în OrderMailer, ErpClient, FanCourierGateway, StripeGateway, BtIpayGateway,
+#    EuPlatescGateway, ChatLive, Robots, ImagineDistribuire, SiteController (Google), public/index.php
+#    (/uploads/ lipsă, webhookurile) și în cele două layouturi (etichetele terților, bannerul). Fără
+#    SITE_COPIE_VERIFICARE=1 nu fac nimic (aici ambele servere sunt fără variabilă, deci aceleași
+#    pagini); cu ea le verifică tools/dev/test-verificare.php, cu o „gaură neagră” care numără orice
+#    conexiune spre afară.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul

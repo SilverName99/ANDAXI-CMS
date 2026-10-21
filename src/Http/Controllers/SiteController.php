@@ -7909,9 +7909,11 @@ CSS;
     {
         $clientId = trim((string) ($settings['customer_google_client_id'] ?? ''));
         $clientSecret = trim((string) ($settings['customer_google_client_secret'] ?? ''));
+        // Pe site-ul de verificare login-ul cu Google e oprit, orice ar scrie în setări (docs/VERIFICARE.md).
         $enabled = (string) ($settings['customer_google_auth_enabled'] ?? '0') === '1'
             && $clientId !== ''
-            && $clientSecret !== '';
+            && $clientSecret !== ''
+            && \App\Support\Verificare::loginGooglePermis();
 
         return [
             'enabled' => $enabled,

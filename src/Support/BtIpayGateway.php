@@ -93,6 +93,10 @@ final class BtIpayGateway
     /** Modul curent: „live" doar dacă e cerut explicit; orice altceva e test. */
     public static function mod(): string
     {
+        // Site-ul de verificare (docs/VERIFICARE.md): mereu modul de test, orice ar scrie în .env.
+        if (!Verificare::btLivePermis()) {
+            return self::MOD_TEST;
+        }
         $valoare = strtolower(trim((string) Env::get(self::ENV_MOD, '')));
         return in_array($valoare, ['live', 'productie', 'producție', 'production', 'prod'], true)
             ? self::MOD_LIVE
@@ -114,6 +118,10 @@ final class BtIpayGateway
     /** @return array{user: string, pass: string, cheie: string} */
     private static function credentiale(string $mod): array
     {
+        // Pe site-ul de verificare datele de producție nu se citesc niciodată.
+        if (self::modValid($mod) === self::MOD_LIVE && !Verificare::btLivePermis()) {
+            return ['user' => '', 'pass' => '', 'cheie' => ''];
+        }
         $nume = self::ENV_VARIABILE[self::modValid($mod)];
         return [
             'user' => trim((string) Env::get($nume['user'], '')),
@@ -257,6 +265,10 @@ final class BtIpayGateway
 
         if (!isset(self::ACTIUNI[$actiune])) {
             $rezultat['eroare'] = 'Operație BT necunoscută.';
+            return $rezultat;
+        }
+        if ($mod === self::MOD_LIVE && !Verificare::btLivePermis()) {
+            $rezultat['eroare'] = 'Plățile BT live sunt oprite pe site-ul de verificare (doar modul de test); cererea nu a plecat.';
             return $rezultat;
         }
         if (!function_exists('curl_init')) {

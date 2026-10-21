@@ -93,6 +93,10 @@ final class EuPlatescGateway
      */
     public static function buildRequest(array $settings, array $order): array
     {
+        // Site-ul de verificare (docs/VERIFICARE.md): EuPlătesc oprit, în afară de un cont de test.
+        if (!Verificare::euplatescPermis()) {
+            throw new RuntimeException('EuPlătesc e oprit pe site-ul de verificare; plata nu a pornit.');
+        }
         $merchantId = trim((string) ($settings['euplatesc_merchant_id'] ?? ''));
         $secretKey = trim((string) ($settings['euplatesc_secret_key'] ?? ''));
         if ($merchantId === '' || $secretKey === '') {
@@ -283,6 +287,10 @@ final class EuPlatescGateway
     /** Metoda de plată cu cardul e disponibilă în checkout? */
     public static function isEnabled(array $settings): bool
     {
+        // Site-ul de verificare: oprit, orice ar scrie în setări (în afară de un cont de test).
+        if (!Verificare::euplatescPermis()) {
+            return false;
+        }
         return (string) ($settings['euplatesc_enabled'] ?? '0') === '1'
             && self::isConfigured($settings);
     }

@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Testele site-ului de verificare (docs/VERIFICARE.md), partea din WP-08a: poarta,
- * configurarea, starea și adresa vizitatorului.
+ * Testele site-ului de verificare (docs/VERIFICARE.md): poarta, configurarea, starea, adresa
+ * vizitatorului (WP-08a), cele 14 gărzi ale copiei, licența și ștergerea copiei (WP-08).
  *
  *   tools/dev/php.sh tools/dev/test-verificare.php
  *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-verificare.php   # cu PHP-ul minim
@@ -13,7 +13,12 @@ declare(strict_types=1);
  *    proxy-uri de încredere, porturi, IPv6, rețele, clase), credențialele HTTP Basic din
  *    fiecare loc în care le poate lăsa serverul web, cookie-ul semnat al porții, dosarul
  *    site-ului (`~/domains/<gazdă>/public_html`, nu `~/public_html`, nu un subdosar),
- *    citirea unui .env exact ca `Env::load`.
+ *    citirea unui .env exact ca `Env::load`; gărzile ca funcții (destinatarul și subiectul
+ *    emailurilor, nota destinatarului, ERP-ul doar spre *-verif.erp.andaxi.ro, Stripe doar
+ *    sk_test_, BT doar test, EuPlătesc și FAN oprite, etichetele, login-ul Google, adresa
+ *    pozelor lipsă cu fiecare cale rea refuzată, bannerul, webhook-urile, expirarea), fiecare
+ *    și în afara copiei (nu schimbă nimic). PHP-urile sub minim: configureaza.php, stare.php,
+ *    licenta.php și sterge.php spun singure că PHP-ul e prea vechi (cod 1).
  * B. O copie a codului (fișierele din git, cu modificările necomise) într-o găzduire
  *    simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`,
  *    servită de `php -S` pe CMS_DEV_PORT+7 cu un mediu gol (ca pe Hostinger: totul din .env):
@@ -29,6 +34,8 @@ declare(strict_types=1);
  *       parole → cod 130 și terminalul înapoi cu ecou, cu și fără pcntl; SIGTERM la fel;
  *       parola nu apare pe ecran, Backspace o corectează; Ctrl-C la o întrebare obișnuită
  *       oprește pe loc.
+ *       Plus (WP-08): o bază scrisă în .env-ul altui site din cont → refuz; perechea de chei a
+ *       licenței (cheia privată 0600, potrivită cu LICENTA_CHEIE_PUBLICA), păstrată la --rescrie.
  *    B3 poarta: 401 fără parolă (Basic și formularul în pagină) pe orice adresă și metodă;
  *       robots „Disallow: /”, health și pingul (`/_andaxi/ping`, al aplicației: „fara_registru” pe
  *       baza goală, niciun tabel; POST și alte adrese /_andaxi/ cer parola) fără parolă; parola
@@ -37,21 +44,44 @@ declare(strict_types=1);
  *       bună), cu amprente în loc de adrese pe disc; IPv6 numărat pe rețeaua /64 (10 adrese
  *       din același /64 → 429 pentru tot /64-ul); formularul (cookie, întoarcerea doar pe o
  *       cale locală), cookie falsificat, câmpuri trimise ca liste (tot închis, nimic în
- *       jurnal), ieșirea, HEAD, modul „formular”; sonda (un jeton, o dată); stare.php →
- *       „PREGĂTIT PENTRU CONFIGURARE, NU PENTRU DATE”, fără secrete; --rescrie cu altă
- *       parolă anulează cookie-urile vechi.
- *    B4 copie „încărcată” (baza de dezvoltare și o dată de încărcare scrisă de test): cu
- *       parola, paginile aplicației răspund 200, cu noindex și no-store chiar și unde
- *       aplicația pune alt antet (sitemap); fără parolă tot 401, în afară de /health, pe
- *       care îl dă aplicația (schema: la_zi; 503 cu ultima_ord coborât o clipă), și de ping
- *       („la_zi”); copie
- *       expirată, cu dată de necitit sau din viitor → 503 (/health: din nou „ok” al porții).
- *    B5 SITE_COPIE_VERIFICARE=0: poarta nu face nimic (pagina aplicației, robots-ul ei).
- *    Pe tot parcursul: niciun tabel în baza goală, nicio sesiune pornită de o cerere oprită
- *    la poartă, niciun email, jurnalul PHP al copiei fără avertismente.
+ *       jurnal), ieșirea, HEAD, modul „formular”; webhook-urile (doar POST, doar cu
+ *       VERIFICARE_WEBHOOKURI_DESCHISE=1 și doar cu o copie); sonda (un jeton, o dată, cu
+ *       gărzile văzute de PHP-ul site-ului); stare.php → „GATA: …”, cele 14 gărzi DA, fără
+ *       secrete; apoi fiecare gardă stricată pe rând în copia codului (14 mutații) → rândul
+ *       ei NU și fără „GATA”; --rescrie cu altă parolă anulează cookie-urile vechi.
+ *    B4 copie „încărcată” (cms_verif_copie: o copie a bazei de dezvoltare, cu _verificare, și
+ *       licența pusă de tools/verificare/licenta.php toate): cu parola, paginile aplicației
+ *       răspund 200, cu noindex și no-store chiar și unde aplicația pune alt antet (sitemap);
+ *       fără parolă tot 401, în afară de /health, pe care îl dă aplicația (schema: la_zi; 503
+ *       cu ultima_ord coborât o clipă), și de ping („la_zi”); copie expirată, cu dată de
+ *       necitit sau din viitor → 503 (/health: din nou „ok” al porții).
+ *    B5 gărzile, cu setările unui site adevărat lăsate în baza copiei (SMTP, Stripe live,
+ *       EuPlătesc, ERP, FAN, BT live în .env, GA/GTM/Ads/Clarity/tawk.to, login Google):
+ *       bannerul (adresa ascunsă pe site, întreagă în admin), nicio etichetă a terților chiar cu
+ *       „Accept toate”, pozele lipsă → 302 spre VERIFICARE_UPLOADS_DIN (și poza de distribuire),
+ *       căile rele 404, fluxul Merchant doar cu parola și noindex, robots fără „Allow”, login-ul
+ *       Google oprit, checkout-ul fără EuPlătesc și BT, plata Stripe și tariful FAN refuzate, o
+ *       comandă cu produsul refrigerat: emailurile (clientului și adminului, cu blocul
+ *       avertismentului) doar la proprietar, cu „[VERIFICARE]”, prin căsuța copiei (serverul SMTP
+ *       al testului), niciunul la SMTP-ul din setări; limita de 100 pe zi (sărit, nimic trimis);
+ *       fără căsuță, fișier .eml 0600; din linia de comandă fiecare loc din cod refuză, iar
+ *       drumurile permise (sk_test_, o copie *-verif a ERP-ului, contul FAN și BT de test)
+ *       ajung la plasa de siguranță, ca să se vadă că ea chiar numără.
+ *    B6 SITE_COPIE_VERIFICARE=0, cu aceleași setări: poarta și gărzile nu fac nimic (pagina
+ *       aplicației cu etichetele terților, login-ul Google, EuPlătesc și BT în checkout, robots-ul
+ *       aplicației, fără banner), deci testul vede ce ar opri gărzile.
+ *    B7 tools/verificare/licenta.php (refuzurile, un pachet cu un plugin oprit, înapoi la
+ *       „toate”) și tools/verificare/sterge.php (refuzurile: alt dosar, „nu”, baza altui site,
+ *       o bază fără _verificare, un .env fără DB_DATABASE; apoi ștergerea: tabelele, incarcat-la, emailurile, temporarele,
+ *       cache-ul, sesiunile, cod-vechi/ fără să urmeze o legătură spre afară; rămân .gitkeep,
+ *       sondele, .env, licența).
+ *    Pe tot parcursul: proxy-ul copiei e „gaura neagră cu contoare” (tools/dev/lib/gaura-neagra.php,
+ *       CMS_DEV_PORT+12; SMTP-ul copiei +13; adresele interzise, SMTP-ul și ERP-ul din setări, FAN_API_BASE,
+ *       banca: +14): la final doar ieșirile permise de mai sus; niciun tabel în baza goală, nicio sesiune
+ *       pornită de o cerere oprită la poartă, niciun email prin mail(), jurnalul PHP al copiei fără avertismente.
  *
- * Baza goală (cms_verif_gol), baza „unui site” (cms_verif_plina) și utilizatorul lor se fac
- * și se șterg aici; copia și serverul ei se șterg la final. Raportul:
+ * Bazele cms_verif_gol, cms_verif_plina, cms_verif_copie și utilizatorul lor se fac și se șterg
+ * aici; copia, serverul ei și gaura neagră se opresc și se șterg la final. Raportul:
  * $CMS_DEV_DIR/test-verificare-raport.txt; cod de ieșire 0 doar dacă totul a trecut.
  */
 
@@ -187,8 +217,140 @@ $env = Verificare::citesteEnv("# comentariu\nA=\"x\"\n  B = y  \n#C=1\nD=a=b\nE=
 $verifica('.env citit ca Env::load (ghilimele și spații tăiate, comentarii sărite, „=” în valoare, „$” neatins)',
     $env === ['A' => 'x', 'B' => 'y', 'D' => 'a=b', 'E' => '$2y$10$abc/.', 'F' => ''], json_encode($env) ?: '');
 
+// Gărzile ca funcții (WP-08), cu .env-ul copiei pus în mediu pe rând și apoi scos (Env::get citește $_ENV și getenv).
+$cuMediu = static function (array $valori, callable $f) {
+    $vechi = [];
+    foreach ($valori as $cheie => $valoare) {
+        $vechi[$cheie] = [array_key_exists($cheie, $_ENV) ? $_ENV[$cheie] : null, getenv($cheie)];
+        if ($valoare === null) {
+            unset($_ENV[$cheie]);
+            putenv($cheie);
+        } else {
+            $_ENV[$cheie] = $valoare;
+            putenv($cheie . '=' . $valoare);
+        }
+    }
+    try {
+        return $f();
+    } finally {
+        foreach ($vechi as $cheie => [$dinEnv, $dinMediu]) {
+            if ($dinEnv === null) {
+                unset($_ENV[$cheie]);
+            } else {
+                $_ENV[$cheie] = $dinEnv;
+            }
+            $dinMediu === false ? putenv($cheie) : putenv($cheie . '=' . $dinMediu);
+        }
+    }
+};
+$copieDeTest = ['SITE_COPIE_VERIFICARE' => '1', 'VERIFICARE_EMAIL' => 'proprietar.verificare@exemplu.ro', 'VERIFICARE_ERP_URL' => null,
+    'VERIFICARE_ERP_CHEIE' => null, 'VERIFICARE_FAN_TEST' => null, 'VERIFICARE_EUPLATESC_TEST' => null,
+    'VERIFICARE_UPLOADS_DIN' => 'https://bioscem.exemplu.test', 'VERIFICARE_WEBHOOKURI_DESCHISE' => null];
+$refuza = static function (callable $f, string $text): bool {
+    try {
+        $f();
+    } catch (RuntimeException $e) {
+        return str_contains($e->getMessage(), $text);
+    }
+    return false;
+};
+$faraCopie = $cuMediu(['SITE_COPIE_VERIFICARE' => null, 'VERIFICARE_EMAIL' => 'proprietar.verificare@exemplu.ro',
+    'VERIFICARE_UPLOADS_DIN' => 'https://bioscem.exemplu.test'], static fn (): array => [
+    'destinatar' => Verificare::destinatar('client@exemplu.ro'), 'subiect' => Verificare::subiect('Comanda 1'),
+    'erp' => Verificare::erp(), 'erp_url' => Verificare::adresaErpPermisa('http://127.0.0.1:9'), 'fan' => Verificare::fanPermis(),
+    'stripe' => Verificare::cheieStripePermisa('sk_live_x'), 'bt' => Verificare::btLivePermis(), 'eu' => Verificare::euplatescPermis(),
+    'etichete' => Verificare::eticheteTertePermise(), 'google' => Verificare::loginGooglePermis(),
+    'upload' => Verificare::adresaUpload('/uploads/x.png'), 'banner' => Verificare::banner('site') . Verificare::banner('admin'),
+]);
+$verifica('gărzile în afara copiei (SITE_COPIE_VERIFICARE lipsă): nu schimbă nimic (destinatarul, subiectul, ERP, FAN, Stripe, BT, '
+    . 'EuPlătesc, etichete, Google, poze, banner)', $faraCopie === ['destinatar' => 'client@exemplu.ro', 'subiect' => 'Comanda 1',
+    'erp' => null, 'erp_url' => false, 'fan' => true, 'stripe' => true, 'bt' => true, 'eu' => true, 'etichete' => true, 'google' => true,
+    'upload' => null, 'banner' => ''], json_encode($faraCopie, JSON_UNESCAPED_UNICODE) ?: '');
+$cuMediu($copieDeTest, static function () use ($verifica, $refuza, $cuMediu): void {
+    $verifica('emailuri: destinatarul e mereu proprietarul, subiectul cu „[VERIFICARE] ” (o singură dată)',
+        Verificare::destinatar('client@exemplu.ro') === 'proprietar.verificare@exemplu.ro'
+        && Verificare::subiect('Comanda 1') === '[VERIFICARE] Comanda 1' && Verificare::subiect('[VERIFICARE] Comanda 1') === '[VERIFICARE] Comanda 1');
+    $verifica('emailuri: fără VERIFICARE_EMAIL (sau cu o adresă stricată) nu pleacă nimic',
+        $cuMediu(['VERIFICARE_EMAIL' => 'nu-e-adresa'], static fn (): bool => $refuza(static fn () => Verificare::destinatar('x@exemplu.ro'), 'VERIFICARE_EMAIL')));
+    Verificare::simuleazaEmailuri(true);
+    Verificare::trimiteEmail('u1a2b3c4d5e6f@verificare.invalid', 'Comanda 2', '<html><body class="x"><p>Corp</p></body></html>', 'Firma Demo',
+        static function (): void {
+            throw new RuntimeException('nu trebuia chemat');
+        });
+    Verificare::trimiteEmail('client.real@exemplu.ro', 'Comanda 3', '<p>Fără body</p>', 'VERIFICARE Firma', static function (): void {
+    });
+    $notate = Verificare::simuleazaEmailuri(false);
+    $verifica('emailuri (simulate): nota „pe site ar fi plecat la …” arată doar o adresă @verificare.invalid, altfel „din afara copiei”; '
+        . 'fără căsuță → fișier .eml', count($notate) === 2 && $notate[0]['catre'] === 'proprietar.verificare@exemplu.ro'
+        && $notate[0]['cale'] === 'eml' && str_contains($notate[0]['html'], '<body class="x"><div')
+        && str_contains($notate[0]['html'], 'ar fi plecat la u1a2b3c4d5e6f@verificare.invalid')
+        && str_contains($notate[1]['html'], 'o adresă din afara copiei anonimizate') && !str_contains($notate[1]['html'], 'client.real@')
+        && str_starts_with($notate[1]['html'], '<div') && $notate[1]['subiect'] === '[VERIFICARE] Comanda 3'
+        && Verificare::simuleazaEmailuri(false) === [], json_encode($notate, JSON_UNESCAPED_UNICODE) ?: '');
+    $smtp = $cuMediu(['VERIFICARE_SMTP_HOST' => 'smtp.hostinger.com', 'VERIFICARE_SMTP_PORT' => '', 'VERIFICARE_SMTP_UTILIZATOR' => 'verificare@exemplu.ro',
+        'VERIFICARE_SMTP_PAROLA' => 'p', 'VERIFICARE_SMTP_CRIPTARE' => null], static fn (): ?array => Verificare::setariSmtp());
+    $verifica('emailuri: căsuța copiei din VERIFICARE_SMTP_* (portul implicit 465, criptarea ssl), fără gazdă → fără SMTP',
+        ($smtp['smtp_host'] ?? '') === 'smtp.hostinger.com' && ($smtp['smtp_port'] ?? '') === '465' && ($smtp['smtp_encryption'] ?? '') === 'ssl'
+        && ($smtp['email_delivery_method'] ?? '') === 'smtp' && Verificare::setariSmtp() === null, json_encode($smtp) ?: '');
+    $verifica('ERP: doar https pe *-verif.erp.andaxi.ro (nu erp.andaxi.ro, http, alt domeniu, cu utilizator în adresă)',
+        Verificare::adresaErpPermisa('https://bioscem-verif.erp.andaxi.ro') && Verificare::adresaErpPermisa('https://bioscem-verif.erp.andaxi.ro/api/')
+        && !Verificare::adresaErpPermisa('https://erp.andaxi.ro') && !Verificare::adresaErpPermisa('http://bioscem-verif.erp.andaxi.ro')
+        && !Verificare::adresaErpPermisa('https://bioscem-verif.erp.andaxi.ro.rau.test') && !Verificare::adresaErpPermisa('https://x@bioscem-verif.erp.andaxi.ro')
+        && !Verificare::adresaErpPermisa('https://-verif.erp.andaxi.ro') && !Verificare::adresaErpPermisa(''));
+    $verifica('ERP: oprit fără VERIFICARE_ERP_URL/_CHEIE, doar cu amândouă bune; ErpClient refuză orice altă adresă',
+        Verificare::erp() === null && $cuMediu(['VERIFICARE_ERP_URL' => 'https://bioscem-verif.erp.andaxi.ro/', 'VERIFICARE_ERP_CHEIE' => 'k'],
+            static fn (): ?array => Verificare::erp()) === ['url' => 'https://bioscem-verif.erp.andaxi.ro', 'cheie' => 'k']
+        && $cuMediu(['VERIFICARE_ERP_URL' => 'https://erp.andaxi.ro', 'VERIFICARE_ERP_CHEIE' => 'k'], static fn (): ?array => Verificare::erp()) === null
+        && $refuza(static fn () => Verificare::verificaAdresaErp('http://127.0.0.1:9'), 'ERP-ul e oprit pe site-ul de verificare'));
+    $verifica('FAN: oprit (AWB și orice cerere), doar cu VERIFICARE_FAN_TEST=1 pornit',
+        !Verificare::fanPermis() && $refuza(static fn () => Verificare::verificaFan(true), 'AWB-urile sunt oprite')
+        && $refuza(static fn () => Verificare::verificaFan(), 'FAN Courier e oprit')
+        && $cuMediu(['VERIFICARE_FAN_TEST' => '1'], static fn (): bool => Verificare::fanPermis()));
+    $verifica('Stripe doar sk_test_ (nu sk_live_, rk_live_, gol); BT doar test; EuPlătesc oprit (doar cu VERIFICARE_EUPLATESC_TEST=1)',
+        Verificare::cheieStripePermisa(' sk_test_abc') && !Verificare::cheieStripePermisa('sk_live_abc') && !Verificare::cheieStripePermisa('rk_live_abc')
+        && !Verificare::cheieStripePermisa('') && $refuza(static fn () => Verificare::verificaCheieStripe('sk_live_x'), 'doar o cheie de test')
+        && !Verificare::btLivePermis() && !Verificare::euplatescPermis()
+        && $cuMediu(['VERIFICARE_EUPLATESC_TEST' => '1'], static fn (): bool => Verificare::euplatescPermis()));
+    $verifica('etichetele terților și login-ul cu Google: oprite', !Verificare::eticheteTertePermise() && !Verificare::loginGooglePermis());
+    $caiRele = ['/uploads/../.env', '/uploads/%2e%2e/.env', '/uploads/a/%2E%2E/%2E%2E/x', '/uploads//x.png', '/uploads/x\\y.png', "/uploads/x\ny",
+        '/uploads/a b.png', '/uploads/x.png?y=1', '/uploads/x%00.png', '/uploads/x%0a.png', '/alt/x.png', '/uploads', '/og/../uploads/x.png',
+        '/uploads/x"onload.png', '/uploads/x%5c..%5cy'];
+    $rele = array_values(array_filter($caiRele, static fn (string $c): bool => Verificare::adresaUpload($c) !== null));
+    $verifica('pozele lipsă: 302 spre VERIFICARE_UPLOADS_DIN + aceeași cale (și /og/…); fiecare cale rea (.., %2e%2e, //, \\, spațiu, '
+        . 'parametri, NUL, alt dosar) → nimic', Verificare::adresaUpload('/uploads/products/x%20y.webp') === 'https://bioscem.exemplu.test/uploads/products/x%20y.webp'
+        && Verificare::adresaUpload('/og/abcdef012345/uploads/products/x.webp') === 'https://bioscem.exemplu.test/og/abcdef012345/uploads/products/x.webp'
+        && $rele === [], implode(' ', $rele));
+    $verifica('pozele lipsă: fără VERIFICARE_UPLOADS_DIN, cu http, cu utilizator sau cu ghilimele în adresă → nimic (404-ul obișnuit)',
+        $cuMediu(['VERIFICARE_UPLOADS_DIN' => null], static fn (): ?string => Verificare::adresaUpload('/uploads/x.png')) === null
+        && $cuMediu(['VERIFICARE_UPLOADS_DIN' => 'http://bioscem.ro'], static fn (): ?string => Verificare::adresaUpload('/uploads/x.png')) === null
+        && $cuMediu(['VERIFICARE_UPLOADS_DIN' => 'https://u:p@bioscem.ro'], static fn (): ?string => Verificare::adresaUpload('/uploads/x.png')) === null
+        && $cuMediu(['VERIFICARE_UPLOADS_DIN' => 'https://bioscem.ro/"x'], static fn (): ?string => Verificare::adresaUpload('/uploads/x.png')) === null
+        && $cuMediu(['VERIFICARE_UPLOADS_DIN' => 'https://bioscem.ro/'], static fn (): ?string => Verificare::adresaUpload('/uploads/x.png')) === 'https://bioscem.ro/uploads/x.png');
+    $site = Verificare::banner('site');
+    $admin = Verificare::banner('admin');
+    $verifica('bannerul: pe site adresa ascunsă („pr…@ex…ro”), în admin întreagă; id-ul lui; textul escapat',
+        str_contains($site, 'id="' . Verificare::ID_BANNER . '"') && str_contains($site, 'SITE DE VERIFICARE')
+        && str_contains($site, 'pr…@ex…ro') && !str_contains($site, 'proprietar.verificare@') && str_contains($admin, 'proprietar.verificare@exemplu.ro')
+        && $cuMediu(['VERIFICARE_EMAIL' => '"><script>@x.ro'], static fn (): bool => !str_contains(Verificare::banner('admin'), '<script>')),
+        Verificare::emailAscuns('proprietar.verificare@exemplu.ro'));
+    $verifica('webhook-urile: doar cu VERIFICARE_WEBHOOKURI_DESCHISE=1 și doar /webhook/<nume>',
+        !Verificare::webhookDeschis('/webhook/stripe') && $cuMediu(['VERIFICARE_WEBHOOKURI_DESCHISE' => '1'], static fn (): bool
+            => Verificare::webhookDeschis('/webhook/stripe') && Verificare::webhookDeschis('/webhook/bt-ipay')
+            && !Verificare::webhookDeschis('/webhook/') && !Verificare::webhookDeschis('/webhook//x') && !Verificare::webhookDeschis('/webhooks/x')
+            && !Verificare::webhookDeschis('/admin/webhook/x') && !Verificare::webhookDeschis('/webhook/../admin')));
+    $acum = time();
+    $verifica('expirarea: 7 zile și un minut → expirată; o oră → ok; 8 zile cu VERIFICARE_ZILE_PASTRARE=30 → expirată (cel mult 7)',
+        Verificare::stareDinRand((string) ($acum - 7 * 86400 - 60), $acum, 7)['stare'] === 'expirata'
+        && Verificare::stareDinRand((string) ($acum - 3600), $acum, 7)['stare'] === 'ok'
+        && Verificare::stareDinRand(date('c', $acum - 8 * 86400), $acum, 30)['stare'] === 'expirata'
+        && Verificare::stareDinRand('nu e o dată', $acum, 7)['stare'] === 'expirata'
+        && Verificare::stareDinRand((string) ($acum + 2 * 86400), $acum, 7)['stare'] === 'expirata'
+        && $cuMediu(['VERIFICARE_ZILE_PASTRARE' => '30'], static fn (): int => Verificare::zilePastrare()) === 7
+        && $cuMediu(['VERIFICARE_ZILE_PASTRARE' => '3'], static fn (): int => Verificare::zilePastrare()) === 3);
+});
+
 // Un PHP prea vechi pe server (de exemplu `php` implicit al contului, sau un 8.2 când minimul e 8.3):
-// cele două scripturi trebuie să spună asta singure, nu să cadă cu o eroare de sintaxă. Cu fiecare
+// cele patru scripturi trebuie să spună asta singure, nu să cadă cu o eroare de sintaxă. Cu fiecare
 // PHP instalat sub php_min (opțional: un PHP 7 arată și că scripturile n-au sintaxă mai nouă de 7.0).
 $phpMinim = preg_match("/'php_min'\\s*=>\\s*'([0-9.]+)'/", (string) file_get_contents($radacina . '/config/app.php'), $m) === 1 ? $m[1] : '';
 $phpVechi = array_values(array_filter(['php7.0', 'php7.4', 'php8.0', 'php8.1', 'php8.2'], static fn (string $b): bool
@@ -197,7 +359,7 @@ if ($phpVechi === []) {
     $scrie('  INFO  niciun PHP sub minimul ' . $phpMinim . ' instalat (apt-get install php7.0-cli): mesajul pentru un PHP prea vechi nu s-a verificat acum');
 }
 foreach ($phpVechi as $binar) {
-    foreach (['configureaza.php', 'stare.php'] as $script) {
+    foreach (['configureaza.php', 'stare.php', 'licenta.php', 'sterge.php'] as $script) {
         $iesire = [];
         exec(escapeshellarg($binar) . ' ' . escapeshellarg($radacina . '/tools/verificare/' . $script) . ' 2>&1', $iesire, $cod);
         $verifica($binar . ': ' . $script . ' spune că PHP-ul e prea vechi (cod 1, fără eroare de sintaxă)', $cod === 1
@@ -215,7 +377,16 @@ $gazda = 'verificare.exemplu.test';
 $copie = $acasa . '/domains/' . $gazda . '/public_html';
 $jurnalErori = $dosarTest . '/php-erori.log';
 $dosarMail = $dosarTest . '/mail';
-$gauraNeagra = 'http://127.0.0.1:9';
+// Plasa de siguranță spre internet: „gaura neagră cu contoare” (tools/dev/lib/gaura-neagra.php). Proxy-ul copiei
+// (+12) notează orice cerere care încearcă să plece; SMTP-ul copiei (+13) e căsuța de trimitere a copiei; +14 e adresa
+// „interzisă”: SMTP-ul și ERP-ul din setări, FAN_API_BASE, banca. La final se numără ce a ajuns la fiecare.
+$portProxy = $port + 5;
+$portSmtp = $port + 6;
+$portInterzis = $port + 7;
+$dosarGaura = $dosarTest . '/gaura';
+$gauraNeagra = 'http://127.0.0.1:' . $portProxy;
+$pidGaura = 0;
+$bazaCopie = 'cms_verif_copie';
 $utilizatorDb = 'cms_verif_test';
 $parolaDb = 'Db-' . bin2hex(random_bytes(8));
 $parolaPoarta = 'Poarta-' . bin2hex(random_bytes(8));
@@ -240,11 +411,22 @@ $opresteServerul = static function () use (&$pidServer): void {
     }
     $pidServer = 0;
 };
-$curata = static function () use ($opresteServerul, $root, $utilizatorDb, $dosarTest, $dosarDev): void {
+$opresteGaura = static function () use (&$pidGaura): void {
+    if ($pidGaura > 0) {
+        exec('kill ' . $pidGaura . ' 2>/dev/null');
+        for ($i = 0; $i < 30 && trim((string) shell_exec('kill -0 ' . $pidGaura . ' 2>/dev/null && echo x')) !== ''; $i++) {
+            usleep(100000);
+        }
+    }
+    $pidGaura = 0;
+};
+$curata = static function () use ($opresteServerul, $opresteGaura, $root, $utilizatorDb, $dosarTest, $dosarDev, $bazaCopie): void {
     $opresteServerul();
+    $opresteGaura();
     try {
         $root->exec('DROP DATABASE IF EXISTS cms_verif_gol');
         $root->exec('DROP DATABASE IF EXISTS cms_verif_plina');
+        $root->exec('DROP DATABASE IF EXISTS ' . $bazaCopie);
         $root->exec("DROP USER IF EXISTS '" . $utilizatorDb . "'@'localhost'");
     } catch (Throwable) {
     }
@@ -272,6 +454,8 @@ $ini = static function () use ($jurnalErori, $copie): array {
         '-d', 'error_reporting=E_ALL', '-d', 'display_errors=0', '-d', 'log_errors=1',
         '-d', 'error_log=' . $jurnalErori, '-d', 'sendmail_path=' . $copie . '/tools/dev/mail-capturat.sh',
         '-d', 'memory_limit=512M', '-d', 'allow_url_fopen=0',
+        // Fără cache de cod: mutațiile din B3 schimbă fișiere de cod sub serverul pornit (revalidate_freq ar ține 2 s versiunea veche).
+        '-d', 'opcache.enable=0',
     ];
 };
 /** Un script din copie (configureaza.php, stare.php), cu intrarea dată pe stdin (nu e terminal). */
@@ -320,6 +504,11 @@ $cerere = static function (string $metoda, string $cale, array $optiuni = []) us
     if (isset($optiuni['cookie'])) {
         curl_setopt($c, CURLOPT_COOKIE, $optiuni['cookie']);
     }
+    if (isset($optiuni['jar'])) {
+        // Cookie-urile aplicației (sesiunea, coșul), ca un browser.
+        curl_setopt($c, CURLOPT_COOKIEFILE, $optiuni['jar']);
+        curl_setopt($c, CURLOPT_COOKIEJAR, $optiuni['jar']);
+    }
     if (isset($optiuni['post'])) {
         curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($optiuni['post']));
     }
@@ -346,6 +535,27 @@ $pornesteServerul = static function () use (&$pidServer, &$port, $copie, $mediu,
     }
     return false;
 };
+/**
+ * Cod PHP rulat în linia de comandă cu aplicația copiei (bootstrap.php-ul ei, deci și .env-ul ei), ca un cron: ce
+ * întoarce `$cod` (o expresie, cu `return`) iese ca JSON. Fișierul stă în dosarul testului, nu în copie.
+ */
+$inCopie = static function (string $cod) use ($copie, $acasa, $mediu, $ini, $dosarTest): mixed {
+    $fisier = $dosarTest . '/in-copie-' . bin2hex(random_bytes(4)) . '.php';
+    file_put_contents($fisier, '<?php declare(strict_types=1); require ' . var_export($copie . '/bootstrap.php', true) . ";\n"
+        . '$rezultat = (static function () { ' . $cod . " })();\n"
+        . 'echo "\n@@REZULTAT@@", json_encode($rezultat, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);' . "\n");
+    $proces = proc_open(array_merge([PHP_BINARY], $ini(), [$fisier]), [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1]], $tevi, $copie, $mediu($acasa));
+    fclose($tevi[0]);
+    $iesire = (string) stream_get_contents($tevi[1]);
+    fclose($tevi[1]);
+    proc_close($proces);
+    @unlink($fisier);
+    $pozitie = strrpos($iesire, '@@REZULTAT@@');
+    return $pozitie === false ? ['eroare' => trim($iesire)] : json_decode(substr($iesire, $pozitie + 12), true);
+};
+$conexiuni = static fn (int $portul): array => is_file($dosarGaura . '/conexiuni-' . $portul . '.txt')
+    ? (file($dosarGaura . '/conexiuni-' . $portul . '.txt', FILE_IGNORE_NEW_LINES) ?: []) : [];
+$mesajeSmtp = static fn (): array => glob($dosarGaura . '/smtp-*.eml') ?: [];
 $sesiuni = static fn (): int => count(glob($copie . '/storage/sessions/sess_*') ?: []);
 $emailuri = static fn (): int => count(glob($dosarMail . '/*.eml') ?: []);
 $scrieEnv = static function (array $schimbari) use ($copie): void {
@@ -374,6 +584,17 @@ try {
     if ($cerere('GET', '/health')['cod'] !== 0) {
         throw new RuntimeException('pe portul ' . $port . ' răspunde deja un server; oprește-l întâi');
     }
+
+    // ── Plasa de siguranță cu contoare ──
+    mkdir($dosarGaura, 0770, true);
+    $pidGaura = (int) trim((string) shell_exec('nohup ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($radacina . '/tools/dev/lib/gaura-neagra.php')
+        . ' --dosar=' . escapeshellarg($dosarGaura) . ' --http=' . $portProxy . ',' . $portInterzis . ' --smtp=' . $portSmtp
+        . ' >> ' . escapeshellarg($dosarTest . '/gaura.log') . ' 2>&1 & echo $!'));
+    for ($i = 0; $i < 50 && !is_file($dosarGaura . '/gata'); $i++) {
+        usleep(100000);
+    }
+    $verifica('plasa de siguranță ascultă (proxy ' . $portProxy . ', SMTP-ul copiei ' . $portSmtp . ', adresa interzisă ' . $portInterzis . ')',
+        is_file($dosarGaura . '/gata'), (string) @file_get_contents($dosarTest . '/gaura.log'));
 
     // ── Copia codului ──
     mkdir($copie, 0770, true);
@@ -417,7 +638,7 @@ try {
     foreach ([['GET', '/'], ['GET', '/magazin'], ['GET', '/admin'], ['GET', '/admin/login'], ['POST', '/checkout'], ['POST', '/admin/login'],
         ['GET', '/robots.txt'], ['GET', '/health'], ['GET', '/sitemap.xml'], ['HEAD', '/'], ['GET', '/uploads/demo/x.png'], ['GET', '/.env'],
         ['GET', '/.git/config'], ['GET', '/tools/verificare/stare.php'], ['GET', Verificare::CALE_SONDA . '?sonda=' . str_repeat('a', 64)],
-        ['PUT', '/'], ['GET', '/nu-exista'], ['GET', '/_andaxi/ping']] as [$metoda, $cale]) {
+        ['PUT', '/'], ['GET', '/nu-exista'], ['GET', '/_andaxi/ping'], ['POST', '/webhook/stripe']] as [$metoda, $cale]) {
         $r = $cerere($metoda, $cale, $metoda === 'POST' ? ['post' => ['email' => 'x@exemplu.ro']] : []);
         $bun = $r['cod'] === 503 && $antetPoarta($r) && $r['cookies'] === [] && ($metoda === 'HEAD' ? $r['corp'] === '' : str_contains($r['corp'], 'Site neconfigurat'));
         if (!$bun) {
@@ -425,7 +646,7 @@ try {
             $detalii[] = $metoda . ' ' . $cale . ' → ' . $r['cod'];
         }
     }
-    $verifica('orice cerere → 503 „Site neconfigurat”, noindex, no-store, fără cookie (18 cereri, și pingul)', $toate503, implode('; ', $detalii));
+    $verifica('orice cerere → 503 „Site neconfigurat”, noindex, no-store, fără cookie (19 cereri, și pingul și un webhook)', $toate503, implode('; ', $detalii));
     $verifica('nicio sesiune pornită', $sesiuni() === 0, (string) $sesiuni());
     $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '');
     $ultimul = trim((string) strrchr("\n" . trim($s['iesire']), "\n"));
@@ -461,6 +682,14 @@ try {
     $verifica('refuză o adresă de email invalidă', $r['cod'] === 1 && $fara());
     $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare(array_slice($bune, 0, 3)));
     $verifica('intrare încheiată înainte de răspunsuri → nimic scris', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'intrarea s-a încheiat'));
+    // Contul SSH e comun cu site-urile live: o bază scrisă în .env-ul altui site e refuzată, chiar goală (WP-08).
+    @mkdir($acasa . '/domains/alt-site.exemplu.test/public_html', 0770, true);
+    file_put_contents($acasa . '/domains/alt-site.exemplu.test/public_html/.env', "APP_URL=https://alt-site.exemplu.test\nDB_HOST=localhost\nDB_DATABASE=cms_verif_gol\n");
+    $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare($bune));
+    $verifica('refuză o bază scrisă în .env-ul altui site din cont (chiar goală), cu domeniul lui, fără numele bazei', $r['cod'] === 1 && $fara()
+        && str_contains($r['iesire'], 'NU    baza nu e a altui site din cont (o folosește alt-site.exemplu.test)')
+        && !str_contains($r['iesire'], 'cms_verif_gol') && !is_file($copie . '/storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA), trim($r['iesire']));
+    unlink($acasa . '/domains/alt-site.exemplu.test/public_html/.env');
     $verifica('refuzurile n-au creat niciun tabel', $tabeleIn('cms_verif_gol') === 0);
 
     // În terminal (pty): doar acolo se ascund parolele și doar acolo se vede ce lasă Ctrl-C în urmă.
@@ -526,6 +755,16 @@ try {
     $secrete[] = (string) ($cheiEnv['VERIFICARE_POARTA_HASH'] ?? '');
     $verifica('pe ecran: nicio parolă, niciun hash, nicio adresă de email', $faraSecrete($r['iesire']) === '', $faraSecrete($r['iesire']));
     $verifica('configurarea n-a creat niciun tabel', $tabeleIn('cms_verif_gol') === 0);
+    // Perechea de chei a licenței de verificare (WP-08): cea privată doar pe server, cea publică în .env.
+    $fisierCheie = $copie . '/storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA;
+    $textCheie = trim((string) @file_get_contents($fisierCheie));
+    $cheiePrivata = base64_decode($textCheie, true);
+    $verifica('cheia licenței de verificare: privată în storage/licenta (0600, cu gardul dosarului), publică în .env, aceeași pereche; „DA” pe ecran',
+        is_string($cheiePrivata) && strlen($cheiePrivata) === SODIUM_CRYPTO_SIGN_SECRETKEYBYTES && (fileperms($fisierCheie) & 0777) === 0600
+        && base64_encode(sodium_crypto_sign_publickey_from_secretkey($cheiePrivata)) === (string) ($cheiEnv['LICENTA_CHEIE_PUBLICA'] ?? '')
+        && is_file($copie . '/storage/licenta/.htaccess') && glob($copie . '/storage/licenta/.*.tmp') === []
+        && str_contains($r['iesire'], 'DA    cheia licenței de verificare făcută acum'), trim($r['iesire']));
+    $secrete[] = $textCheie;
     $verifica('dosarul de lucru storage/verificare, cu gardul .htaccess', is_dir($copie . '/storage/verificare')
         && str_contains((string) @file_get_contents($copie . '/storage/verificare/.htaccess'), 'Require all denied'));
     $amprentaEnv = sha1($textEnv);
@@ -648,6 +887,16 @@ try {
     $verifica('modul „formular”: 401 fără fereastra Basic, cu formularul', $r['cod'] === 401 && !isset($r['antete']['www-authenticate'])
         && str_contains($r['corp'], Verificare::CALE_INTRARE));
     $scrieEnv(['VERIFICARE_POARTA_MOD' => 'basic']);
+    // Confirmările de plată (WP-08): fără parolă doar POST /webhook/…, doar cu VERIFICARE_WEBHOOKURI_DESCHISE=1 și doar cu o copie.
+    $r = $cerere('POST', '/webhook/stripe', ['post' => ['x' => '1']]);
+    $scrieEnv(['VERIFICARE_WEBHOOKURI_DESCHISE' => '1']);
+    $r2 = $cerere('POST', '/webhook/stripe', ['post' => ['x' => '1']]);
+    $r3 = $cerere('GET', '/webhook/stripe');
+    $r4 = $cerere('POST', '/webhook/../admin', ['post' => ['x' => '1']]);
+    $scrieEnv(['VERIFICARE_WEBHOOKURI_DESCHISE' => '0']);
+    $verifica('webhook-urile: POST /webhook/… fără parolă → 401; cu VERIFICARE_WEBHOOKURI_DESCHISE=1 dar fără copie → 503 „lipsește”; '
+        . 'GET și o cale ciudată tot 401', $r['cod'] === 401 && $r2['cod'] === 503 && str_contains($r2['corp'], 'lipsește') && $antetPoarta($r2)
+        && $r3['cod'] === 401 && $r4['cod'] === 401, $r['cod'] . ' / ' . $r2['cod'] . ' / ' . $r3['cod'] . ' / ' . $r4['cod']);
 
     $jeton = bin2hex(random_bytes(32));
     file_put_contents($copie . '/storage/verificare/sonda.json', json_encode(['amprenta' => hash('sha256', $jeton), 'expira' => time() + 60]));
@@ -674,23 +923,79 @@ try {
     // Ieșirea întreagă în raport: așa arată textul pe care îl trimite proprietarul (aici, cu date inventate).
     file_put_contents($fisierRaport, '        | ' . str_replace("\n", "\n        | ", rtrim($s['iesire'])) . "\n", FILE_APPEND);
     $ultimul = trim((string) strrchr("\n" . trim($s['iesire']), "\n"));
-    $verifica('stare.php configurat: ultimul rând „PREGĂTIT PENTRU CONFIGURARE, NU PENTRU DATE”, cod 0', $s['cod'] === 0
-        && $ultimul === 'PREGĂTIT PENTRU CONFIGURARE, NU PENTRU DATE', $ultimul . ' | ' . implode(' | ', array_filter(explode("\n", $s['iesire']), static fn (string $l): bool => str_contains($l, '  NU '))));
+    $randuriNu = static fn (string $iesire): string => implode(' | ', array_filter(explode("\n", $iesire), static fn (string $l): bool => str_contains($l, '  NU ')));
+    $verifica('stare.php configurat: ultimul rând „GATA: site-ul de verificare e pregătit (toate verificările DA)”, cod 0', $s['cod'] === 0
+        && $ultimul === 'GATA: site-ul de verificare e pregătit (toate verificările DA)', $ultimul . ' | ' . $randuriNu($s['iesire']));
     foreach (['DA    fără parolă, / răspunde 401', 'DA    X-Robots-Tag: noindex pe răspuns', 'DA    /robots.txt: „Disallow: /”',
         'DA    /.env nu se vede din browser', 'DA    /.git/config nu se vede din browser', 'DA    sonda răspunde',
         'DA    antetul HTTP Basic ajunge la PHP', 'DA    cookie-urile ajung la PHP', 'DA    baza e goală', 'INFO  serverul bazei: MariaDB',
         'INFO  PHP web: ' . PHP_VERSION, 'INFO  REMOTE_ADDR: loopback', 'DA    .env doar pentru tine (0600)', 'domeniul ' . $gazda,
-        'INFO  codul din git: claude/etapa1-cod-comun aaaaaaa', 'INFO  copia de verificare: lipsește'] as $asteptat) {
+        'INFO  codul din git: claude/etapa1-cod-comun aaaaaaa', 'INFO  copia de verificare: lipsește', 'DA    LICENTA_SITE începe cu „verificare”',
+        'DA    cheia privată a licenței de verificare, doar pe server', 'DA    LICENTA_CHEIE_PUBLICA din .env e cheia ei publică',
+        'DA    baza nu e a altui site din cont', 'DA    /storage/licenta/ (cheia licenței) nu se vede din browser',
+        'INFO  licența copiei: încă niciuna', 'INFO  emailuri azi: 0 plecate din 100 pe zi', 'DA    emailul proprietarului e scris'] as $asteptat) {
         if (!str_contains($s['iesire'], $asteptat)) {
             $verifica('stare.php arată „' . $asteptat . '”', false);
         }
     }
-    $verifica('stare.php: nicio parolă, niciun hash, nicio adresă de email, numele bazei nu apar', $faraSecrete($s['iesire']) === ''
+    preg_match_all('/^  DA    (\d+)\. /m', $s['iesire'], $garziDa);
+    $verifica('stare.php: cele 14 gărzi, fiecare DA (în linia de comandă, în PHP-ul site-ului și la locul ei din cod)',
+        array_map('intval', $garziDa[1]) === range(1, 14), implode(',', $garziDa[1]));
+    $verifica('stare.php: nicio parolă, niciun hash, nicio cheie, nicio adresă de email, numele bazei nu apar', $faraSecrete($s['iesire']) === ''
         && !str_contains($s['iesire'], 'cms_verif_gol') && !str_contains($s['iesire'], $utilizatorDb), $faraSecrete($s['iesire']));
     $verifica('stare.php nu lasă jetonul sondei pe disc', !is_file($copie . '/storage/verificare/sonda.json'));
+    $verifica('stare.php n-a trimis și n-a scris niciun email (cel de probă e doar simulat), nicio ieșire spre plasa de siguranță',
+        $emailuri() === 0 && $mesajeSmtp() === [] && glob($copie . '/storage/verificare/mail/*.eml') === [] && $conexiuni($portProxy) === []
+        && $conexiuni($portInterzis) === [] && !is_file($copie . '/storage/verificare/emailuri-azi.json'));
+
+    // Fiecare gardă stricată pe rând în copia codului: stare.php trebuie să-i arate rândul NU și să nu mai spună „GATA”.
+    $mutatii = [
+        1 => ['src/Support/Verificare.php', '$rezultat = self::autentificare();', "\$rezultat = 'ok';"],
+        2 => ['src/Support/Verificare.php', "public const ROBOTI = 'noindex, nofollow, noarchive';", "public const ROBOTI = 'all';"],
+        3 => ['src/Support/Verificare.php', '|| $acum - $moment > $zile * 86400) {', ') {'],
+        4 => ['src/Support/Robots.php', 'if (Verificare::activ()) {', 'if (false) {'],
+        5 => ['src/Support/OrderMailer.php', 'if (Verificare::activ()) {', 'if (false) {'],
+        6 => ['src/Support/ErpClient.php', 'Verificare::verificaAdresaErp($this->baseUrl);', ''],
+        7 => ['src/Support/FanCourierGateway.php', 'Verificare::verificaFan(true);', ''],
+        8 => ['src/Support/StripeGateway.php', 'Verificare::verificaCheieStripe($secretKey);', ''],
+        9 => ['src/Support/BtIpayGateway.php', "if (!Verificare::btLivePermis()) {\n            return self::MOD_TEST;", "if (false) {\n            return self::MOD_TEST;"],
+        10 => ['src/Support/EuPlatescGateway.php', "if (!Verificare::euplatescPermis()) {\n            return false;", "if (false) {\n            return false;"],
+        11 => ['views/layout.php', '\App\Support\CookieConsent::permiteUrmarire() && \App\Support\Verificare::eticheteTertePermise()', '\App\Support\CookieConsent::permiteUrmarire()'],
+        12 => ['src/Http/Controllers/SiteController.php', '&& \App\Support\Verificare::loginGooglePermis();', ';'],
+        13 => ['public/index.php', '\App\Support\Verificare::redirectUploadLipsa($reqPath);', ''],
+        14 => ['views/layout.php', "echo \App\Support\Verificare::banner('site'); ", ''],
+    ];
+    $prinse = [];
+    $scapate = [];
+    foreach ($mutatii as $numar => [$fisierMutat, $din, $in]) {
+        $original = (string) file_get_contents($copie . '/' . $fisierMutat);
+        if (substr_count($original, $din) !== 1) {
+            $scapate[] = $numar . ' (textul de stricat nu e o singură dată în ' . $fisierMutat . ')';
+            continue;
+        }
+        try {
+            file_put_contents($copie . '/' . $fisierMutat, str_replace($din, $in, $original));
+            $sm = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '');
+        } finally {
+            file_put_contents($copie . '/' . $fisierMutat, $original);
+        }
+        $ultimulM = trim((string) strrchr("\n" . trim($sm['iesire']), "\n"));
+        if ($sm['cod'] === 1 && str_starts_with($ultimulM, 'NU E GATA:') && preg_match('/^  NU    ' . $numar . '\. /m', $sm['iesire']) === 1) {
+            $prinse[] = $numar;
+        } else {
+            $scapate[] = $numar . ' (cod ' . $sm['cod'] . ', ' . $ultimulM . ')';
+        }
+    }
+    $verifica('stare.php prinde fiecare gardă stricată (14 mutații în copia codului: rândul ei NU, fără „GATA”)', $scapate === []
+        && $prinse === range(1, 14), implode('; ', $scapate));
+    $verifica('mutațiile n-au lăsat nimic să plece (plasa de siguranță a lui stare.php e 127.0.0.1:9) și nici email scris',
+        $conexiuni($portProxy) === [] && $conexiuni($portInterzis) === [] && $mesajeSmtp() === [] && glob($copie . '/storage/verificare/mail/*.eml') === []);
 
     $r = $ruleaza('tools/verificare/configureaza.php', ['--rescrie'], $intrare(array_replace($bune, [5 => $parolaPoarta2, 6 => $parolaPoarta2])));
     $verifica('--rescrie pe copia de verificare, cu altă parolă a porții → cod 0', $r['cod'] === 0, trim($r['iesire']));
+    $verifica('--rescrie păstrează cheia licenței (același fișier, aceeași cheie publică în .env)', trim((string) @file_get_contents($fisierCheie)) === $textCheie
+        && (Verificare::citesteEnv((string) file_get_contents($copie . '/.env'))['LICENTA_CHEIE_PUBLICA'] ?? '') === (string) ($cheiEnv['LICENTA_CHEIE_PUBLICA'] ?? '')
+        && str_contains($r['iesire'], 'DA    cheia licenței de verificare de dinainte, păstrată'), trim($r['iesire']));
     $r = $cerere('GET', '/', ['cookie' => Verificare::COOKIE . '=' . $cookiePoarta]);
     $r2 = $cerere('GET', '/', ['basic' => 'verificare:' . $parolaPoarta2]);
     $verifica('după parola nouă: cookie-ul vechi nu mai trece (401), parola nouă da', $r['cod'] === 401 && $r2['cod'] === 503);
@@ -700,18 +1005,28 @@ try {
 
     // ── B4. Copie „încărcată” ──
     $scrie('');
-    $scrie('B4. Copie încărcată (baza de dezvoltare, dată de încărcare scrisă de test)');
-    $scrieEnv([
-        'DB_DATABASE' => (string) getenv('DB_DATABASE'),
-        'DB_USERNAME' => (string) getenv('DB_USERNAME'),
-        'DB_PASSWORD' => (string) getenv('DB_PASSWORD'),
-        'LICENTA_CHEIE_PUBLICA' => (string) getenv('LICENTA_CHEIE_PUBLICA'),
-        'LICENTA_SITE' => (string) getenv('LICENTA_SITE'),
-    ]);
-    $licenta = $radacina . '/storage/licenta/licenta.json';
-    if (is_file($licenta)) {
-        copy($licenta, $copie . '/storage/licenta/licenta.json');
+    $scrie('B4. Copie încărcată (cms_verif_copie: o copie a bazei de dezvoltare, cu _verificare; licența pusă de licenta.php)');
+    $bazaDev = (string) getenv('DB_DATABASE');
+    if (preg_match('/^cms_[a-z0-9_]+$/', $bazaDev) !== 1) {
+        throw new RuntimeException('baza de dezvoltare (DB_DATABASE) nu e o bază cms_*');
     }
+    $root->exec('DROP DATABASE IF EXISTS ' . $bazaCopie);
+    $root->exec('CREATE DATABASE ' . $bazaCopie . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+    $tabeleDev = $root->query('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ' . $root->quote($bazaDev)
+        . " AND TABLE_TYPE = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($tabeleDev as $tabel) {
+        $t = '`' . str_replace('`', '``', (string) $tabel) . '`';
+        $root->exec('CREATE TABLE `' . $bazaCopie . '`.' . $t . ' LIKE `' . $bazaDev . '`.' . $t);
+        $root->exec('INSERT INTO `' . $bazaCopie . '`.' . $t . ' SELECT * FROM `' . $bazaDev . '`.' . $t);
+    }
+    $root->exec('CREATE TABLE `' . $bazaCopie . '`._verificare (sursa VARCHAR(40) NOT NULL, incarcat_la DATETIME NOT NULL, anonimizat TINYINT(1) NOT NULL)');
+    $root->exec('INSERT INTO `' . $bazaCopie . "`._verificare VALUES ('test', NOW(), 1)");
+    $verifica('copia bazei de dezvoltare: ' . count($tabeleDev) . ' tabele, plus _verificare', $tabeleIn($bazaCopie) === count($tabeleDev) + 1);
+    $scrieEnv(['DB_DATABASE' => $bazaCopie, 'DB_USERNAME' => (string) getenv('DB_USERNAME'), 'DB_PASSWORD' => (string) getenv('DB_PASSWORD')]);
+    $r = $ruleaza('tools/verificare/licenta.php', ['toate'], '');
+    $verifica('licenta.php toate → licența copiei, semnată cu cheia de pe server (site „verificare”), cod 0', $r['cod'] === 0
+        && str_contains($r['iesire'], 'pentru „verificare” (toate)') && is_file($copie . '/storage/licenta/licenta.json')
+        && !is_file($copie . '/storage/licenta/stare-aplicata.json.tmp'), trim($r['iesire']));
     file_put_contents($copie . '/storage/verificare/incarcat-la', date('c') . "\n");
     $r = $cerere('GET', '/', ['basic' => $bunaBasic]);
     $verifica('cu parola, prima pagină a aplicației → 200, noindex, no-store', $r['cod'] === 200 && str_contains($r['corp'], '</html>') && $antetPoarta($r),
@@ -725,11 +1040,11 @@ try {
     $verifica('/robots.txt rămâne „Disallow: /” și cu parola', $r['corp'] === "User-agent: *\nDisallow: /\n");
     // /health, cu copia încărcată: îl dă aplicația (fără parolă), cu starea schemei, ca o repetiție a deploy-ului să vadă
     // aici ce ar vedea pe site; cu baza în urma codului 503 (ultima_ord coborât o clipă pe baza copiei, apoi pus la loc).
-    $bazaCopiei = '`' . str_replace('`', '', (string) getenv('DB_DATABASE')) . '`';
+    $bazaCopiei = '`' . $bazaCopie . '`';
     $ultimaDinCod = (int) ((require $radacina . '/database/migrari/ultima.php')['ord'] ?? 0);
     $r = $cerere('GET', '/health');
     $verifica('/health fără parolă, cu copia încărcată → aplicația: 200 „ok” + „schema: la_zi”, noindex, no-store '
-        . '(baza de dezvoltare făcută prin migrări, tools/dev/instaleaza.sh)', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi" && $antetPoarta($r),
+        . '(copia bazei de dezvoltare, făcută prin migrări de tools/dev/instaleaza.sh)', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi" && $antetPoarta($r),
         $r['cod'] . ' ' . $r['corp']);
     $ultimaInBaza = (string) $root->query('SELECT valoare FROM ' . $bazaCopiei . "._platforma_stare WHERE cheie = 'ultima_ord'")->fetchColumn();
     try {
@@ -765,18 +1080,374 @@ try {
     $r3 = $cerere('GET', '/', ['basic' => $bunaBasic]);
     $verifica('dată de necitit sau din viitor → expirată; secunde Unix de acum o oră → ok', $r['cod'] === 503 && $r2['cod'] === 503 && $r3['cod'] === 200);
 
-    // ── B5. Fără SITE_COPIE_VERIFICARE ──
+    // ── B5. Gărzile copiei ──
     $scrie('');
-    $scrie('B5. SITE_COPIE_VERIFICARE=0 (un site obișnuit cu .env)');
+    $scrie('B5. Gărzile copiei (setările unui site adevărat lăsate în baza copiei; plasa de siguranță numără orice ieșire)');
+    $setari = static function (array $valori) use ($root, $bazaCopie): void {
+        $s = $root->prepare('INSERT INTO `' . $bazaCopie . '`.settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+        foreach ($valori as $cheie => $valoare) {
+            $s->execute([(string) $cheie, (string) $valoare]);
+        }
+    };
+    $casutaCopiei = 'verificare@' . $gazda;
+    $parolaCasutei = 'Casuta-' . bin2hex(random_bytes(6));
+    $secrete[] = $parolaCasutei;
+    $scrieEnv([
+        'VERIFICARE_SMTP_HOST' => '127.0.0.1', 'VERIFICARE_SMTP_PORT' => (string) $portSmtp, 'VERIFICARE_SMTP_UTILIZATOR' => $casutaCopiei,
+        'VERIFICARE_SMTP_PAROLA' => $parolaCasutei, 'VERIFICARE_SMTP_CRIPTARE' => 'niciuna', 'VERIFICARE_UPLOADS_DIN' => 'https://bioscem.exemplu.test',
+        // Datele BT de producție (n-au voie să fie citite) și adresa băncii: cea interzisă.
+        'BT_IPAY_MODE' => 'live', 'BT_IPAY_LIVE_USER' => 'bt-live-inventat', 'BT_IPAY_LIVE_PASS' => 'bt-live-parola-inventata',
+        'BT_IPAY_LIVE_CALLBACK_KEY' => 'YmFzZTY0LWludmVudGF0', 'BT_IPAY_TEST_USER' => 'bt-test-inventat', 'BT_IPAY_TEST_PASS' => 'bt-test-parola',
+        'BT_IPAY_BASE_URL_OVERRIDE' => 'http://127.0.0.1:' . $portInterzis, 'FAN_API_BASE' => 'http://127.0.0.1:' . $portInterzis,
+    ]);
+    $setari([
+        'cache_pages_enabled' => '0',
+        // SMTP-ul site-ului (n-are voie să fie folosit) și destinatarii adminului.
+        'email_delivery_method' => 'smtp', 'smtp_host' => '127.0.0.1', 'smtp_port' => (string) $portInterzis, 'smtp_encryption' => 'none',
+        'smtp_username' => 'smtp.site@exemplu.ro', 'smtp_password' => 'smtp-parola-inventata', 'order_email_from_address' => 'comenzi@exemplu.ro',
+        'email_template_new_order_admin_recipients' => 'comenzi.admin@exemplu.ro', 'email_template_new_order_recipient_mode' => 'client_admin',
+        'stripe_enabled' => '1', 'stripe_secret_key' => 'sk_live_inventat0000000000', 'stripe_publishable_key' => 'pk_live_inventat0000000000',
+        'euplatesc_enabled' => '1', 'euplatesc_merchant_id' => '44840000000', 'euplatesc_secret_key' => '00112233445566778899AABBCCDDEEFF',
+        'bt_ipay_enabled' => '1', 'bt_ipay_admin_only' => '0',
+        'erp_enabled' => '1', 'erp_stock_enabled' => '1', 'erp_url' => 'http://127.0.0.1:' . $portInterzis, 'erp_api_key' => 'cheie-erp-inventata',
+        'fan_client_id' => '123456', 'fan_api_username' => 'fan.inventat', 'fan_api_password' => 'fan-parola-inventata', 'fan_awb_auto' => '1',
+        'fan_live_tariff_enabled' => '0', 'shipping_fixed_enabled' => '0',
+        'google_analytics_enabled' => '1', 'google_analytics_id' => 'G-VERIFTEST1', 'google_tag_manager_enabled' => '1', 'google_tag_manager_id' => 'GTM-VERIF01',
+        'google_ads_enabled' => '1', 'google_ads_conversion_id' => 'AW-12345678', 'microsoft_clarity_enabled' => '1', 'microsoft_clarity_project_id' => 'clarityverif',
+        'tawk_enabled' => '1', 'tawk_property_id' => 'tawkverif123', 'tawk_requires_consent' => '1',
+        'customer_google_auth_enabled' => '1', 'customer_google_client_id' => 'id-inventat.apps.googleusercontent.com',
+        'customer_google_client_secret' => 'secret-google-inventat', 'google_site_verification' => 'verificaregoogletest',
+    ]);
+    $consimtamant = 'bioscem_cookie_consent=all';
+    $etichete = ['googletagmanager.com', 'clarity.ms', 'embed.tawk.to', 'name="google-site-verification"', "gtag('config'"];
+    $cuEtichete = static fn (string $corp): array => array_values(array_filter($etichete, static fn (string $e): bool => str_contains($corp, $e)));
+    $r = $cerere('GET', '/', ['basic' => $bunaBasic, 'cookie' => $consimtamant]);
+    $verifica('pagina, cu „Accept toate” și GA, GTM, Ads, Clarity, tawk.to pornite în setări: nicio etichetă a terților, nici google-site-verification',
+        $r['cod'] === 200 && $cuEtichete($r['corp']) === [], $r['cod'] . ' ' . implode(', ', $cuEtichete($r['corp'])));
+    $verifica('bannerul pe site, primul în <body>, cu adresa proprietarului ascunsă pe jumătate', str_contains($r['corp'],
+        '<body class="site-shell">' . "\n    " . '<div id="' . Verificare::ID_BANNER . '"') && str_contains($r['corp'], Verificare::emailAscuns($emailProprietar))
+        && !str_contains($r['corp'], $emailProprietar));
+    $jarAdmin = $dosarTest . '/jar-admin.txt';
+    $parolaAdmin = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
+    $r = $cerere('POST', '/admin/login', ['basic' => $bunaBasic, 'jar' => $jarAdmin,
+        'post' => ['email' => (string) (getenv('ADMIN_DEFAULT_EMAIL') ?: 'admin@exemplu.ro'), 'password' => $parolaAdmin]]);
+    $r = $cerere('GET', (string) ($r['antete']['location'] ?? '/admin'), ['basic' => $bunaBasic, 'jar' => $jarAdmin]);
+    $verifica('bannerul în admin (după login), cu adresa proprietarului întreagă', $r['cod'] === 200
+        && str_contains($r['corp'], '<div id="' . Verificare::ID_BANNER . '"') && str_contains($r['corp'], $emailProprietar)
+        && str_contains($r['corp'], '/admin/logout'), (string) $r['cod']);
+    // Pozele nu se copiază: o poză lipsă → 302 spre site-ul sursă; căile rele nu.
+    @mkdir($copie . '/public/uploads/demo', 0770, true);
+    file_put_contents($copie . '/public/uploads/demo/exista.png', "\x89PNG\r\n\x1a\nproba");
+    $r = $cerere('GET', '/uploads/products/nu-exista.webp', ['basic' => $bunaBasic]);
+    $r2 = $cerere('GET', '/og/abcdef012345/uploads/products/nu-exista.webp', ['basic' => $bunaBasic]);
+    $r3 = $cerere('GET', '/uploads/demo/exista.png', ['basic' => $bunaBasic]);
+    $verifica('pozele: una lipsă → 302 spre VERIFICARE_UPLOADS_DIN + aceeași cale (și poza de distribuire /og/…), no-store; una existentă → 200',
+        $r['cod'] === 302 && ($r['antete']['location'] ?? '') === 'https://bioscem.exemplu.test/uploads/products/nu-exista.webp' && $antetPoarta($r)
+        && $r2['cod'] === 302 && ($r2['antete']['location'] ?? '') === 'https://bioscem.exemplu.test/og/abcdef012345/uploads/products/nu-exista.webp'
+        && $r3['cod'] === 200 && str_contains($r3['corp'], 'proba'),
+        $r['cod'] . ' ' . ($r['antete']['location'] ?? '-') . ' | ' . $r2['cod'] . ' ' . ($r2['antete']['location'] ?? '-') . ' | ' . $r3['cod']);
+    $rele = [];
+    foreach (['/uploads/../../.env', '/uploads/%2e%2e/%2e%2e/.env', '/uploads//x.png', '/uploads/x%00.png', '/uploads/a%5c..%5cb.png'] as $caleRea) {
+        $r = $cerere('GET', $caleRea, ['basic' => $bunaBasic]);
+        if ($r['cod'] !== 404 || isset($r['antete']['location']) || str_contains($r['corp'], 'DB_')) {
+            $rele[] = $caleRea . ' → ' . $r['cod'] . ' ' . ($r['antete']['location'] ?? '');
+        }
+    }
+    $r = $cerere('GET', '/uploads/products/nu-exista.webp');
+    $verifica('pozele: căile rele (.., %2e%2e, //, NUL, \\) → 404 fără redirect; fără parolă tot 401', $rele === [] && $r['cod'] === 401, implode('; ', $rele));
+    // Fluxul Merchant (WP-R): doar cu parola, noindex; robots.txt nu-l mai lasă (fără „Allow”).
+    $r = $cerere('GET', '/feed/google-merchant.xml');
+    $r2 = $cerere('GET', '/feed/google-merchant.xml', ['basic' => $bunaBasic]);
+    $r3 = $cerere('GET', '/robots.txt');
+    $verifica('fluxul Google Merchant: fără parolă 401 (Google nu-l poate prelua), cu parola 200 cu noindex și no-store; robots.txt fără „Allow:”',
+        $r['cod'] === 401 && $r2['cod'] === 200 && str_contains($r2['corp'], '<rss') && $antetPoarta($r2)
+        && $r3['corp'] === "User-agent: *\nDisallow: /\n", $r['cod'] . ' / ' . $r2['cod'] . ' / ' . json_encode($r3['corp']));
+    // Login-ul cu Google: oprit, deși e pornit și configurat în setări.
+    $r = $cerere('GET', '/auth/google', ['basic' => $bunaBasic]);
+    $verifica('login-ul cu Google: /auth/google → înapoi la /login (nu la accounts.google.com)',
+        $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/login', $r['cod'] . ' ' . ($r['antete']['location'] ?? '-'));
+
+    // Checkout-ul: metodele de plată, Stripe live, tariful FAN, apoi o comandă cu produsul refrigerat.
+    $idMenta = (int) $root->query('SELECT id FROM ' . $bazaCopiei . ".products WHERE slug = 'ceai-de-menta'")->fetchColumn();
+    $jarClient = $dosarTest . '/jar-client.txt';
+    $optClient = ['basic' => $bunaBasic, 'jar' => $jarClient];
+    $formular = static function () use ($cerere, $optClient, $root, $bazaCopiei): array {
+        $root->exec('DELETE FROM ' . $bazaCopiei . '.checkout_submit_logs');
+        $r = $cerere('GET', '/checkout', $optClient);
+        preg_match('/name="checkout_form_token"\s+value="([^"]*)"/', $r['corp'], $t);
+        preg_match('/name="checkout_form_rendered_at"\s+value="([^"]*)"/', $r['corp'], $m);
+        $bife = [];
+        if (preg_match_all('/name="avertisment_bifa\[([0-9a-f]{16})\]"/', $r['corp'], $b) > 0) {
+            foreach (array_unique($b[1]) as $cheie) {
+                $bife[$cheie] = '1';
+            }
+        }
+        preg_match_all('/name="payment_method"[^>]*value="([a-z_]+)"/', $r['corp'], $metode);
+        return ['pagina' => $r, 'campuri' => ['checkout_form_token' => (string) ($t[1] ?? ''), 'checkout_form_rendered_at' => (string) ($m[1] ?? '')]
+            + ($bife !== [] ? ['avertisment_bifa' => $bife] : []), 'metode' => array_values(array_unique($metode[1]))];
+    };
+    $client = ['billing_first_name' => 'Test', 'billing_last_name' => 'Verificare', 'billing_phone' => '0700000999',
+        'billing_email' => 'client.copie@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '9', 'billing_city' => 'Cluj-Napoca',
+        'billing_county' => 'Cluj', 'billing_postcode' => '400000', 'shipping_same_as_billing' => '1', 'accept_terms' => '1'];
+    $cerere('POST', '/cos/adauga/' . $idMenta, $optClient + ['post' => ['quantity' => '1']]);
+    $f = $formular();
+    $verifica('checkout: fără EuPlătesc (pornit în setări) și fără BT (BT_IPAY_MODE=live, cu date de producție în .env): pe copie doar modul de test',
+        $f['pagina']['cod'] === 200 && in_array('cod', $f['metode'], true) && !in_array('euplatesc', $f['metode'], true)
+        && !in_array('btipay', $f['metode'], true), json_encode($f['metode']) ?: '');
+    $proxyInainte = count($conexiuni($portProxy));
+    $interzisInainte = count($conexiuni($portInterzis));
+    sleep(3); // protecția anti-robot refuză un formular trimis la mai puțin de 2 secunde
+    $r = $cerere('POST', '/checkout', $optClient + ['post' => $f['campuri'] + $client + ['payment_method' => 'stripe']]);
+    $r2 = $cerere('GET', '/checkout', $optClient);
+    $verifica('plata cu Stripe cu o cheie live în setări: refuzată înainte de orice cerere (înapoi la /checkout, cu motivul), nicio ieșire',
+        $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/checkout' && str_contains($r2['corp'], 'doar o cheie de test')
+        && count($conexiuni($portProxy)) === $proxyInainte && count($conexiuni($portInterzis)) === $interzisInainte,
+        $r['cod'] . ' ' . ($r['antete']['location'] ?? '-'));
+    $setari(['fan_live_tariff_enabled' => '1']);
+    $cerere('POST', '/cos/adauga/' . $idMenta, $optClient + ['post' => ['quantity' => '1']]);
+    $f = $formular();
+    sleep(3);
+    $r = $cerere('POST', '/checkout', $optClient + ['post' => $f['campuri'] + $client + ['payment_method' => 'cod']]);
+    $verifica('tariful FAN live pornit în setări: cererea spre FAN nu pleacă (comanda e refuzată, înapoi la /checkout), nicio ieșire',
+        $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/checkout' && count($conexiuni($portInterzis)) === $interzisInainte
+        && count($conexiuni($portProxy)) === $proxyInainte, $r['cod'] . ' ' . ($r['antete']['location'] ?? '-'));
+    $setari(['fan_live_tariff_enabled' => '0']);
+    // Comanda cu produsul refrigerat (avertismentul pe produs, WP-R): emailurile ei, cu blocul avertismentului.
+    $titluAvertisment = 'ATENȚIE – PRODUS REFRIGERAT DE TEST';
+    $root->prepare('DELETE FROM ' . $bazaCopiei . '.product_warnings WHERE product_id = ?')->execute([$idMenta]);
+    $root->prepare('INSERT INTO ' . $bazaCopiei . '.product_warnings (product_id, title, body, checkbox_label, updated_at) VALUES (?, ?, ?, ?, NOW())')
+        ->execute([$idMenta, $titluAvertisment, "Se păstrează la rece.\n\nAl doilea paragraf.", 'Am citit avertismentul de test']);
+    $idMaxComenzi = (int) $root->query('SELECT COALESCE(MAX(id), 0) FROM ' . $bazaCopiei . '.orders')->fetchColumn();
+    $f = $formular();
+    sleep(3);
+    $r = $cerere('POST', '/checkout', $optClient + ['post' => $f['campuri'] + $client + ['payment_method' => 'cod']]);
+    $numarComanda = (string) preg_replace('#^.*/checkout/succes/#', '', (string) ($r['antete']['location'] ?? ''));
+    $verifica('comanda ramburs cu produsul refrigerat (bifa avertismentului) → plasată, cu confirmarea avertismentului în bază',
+        $r['cod'] === 302 && str_contains((string) ($r['antete']['location'] ?? ''), '/checkout/succes/') && isset($f['campuri']['avertisment_bifa'])
+        && (int) $root->query('SELECT COUNT(*) FROM ' . $bazaCopiei . '.order_product_warnings WHERE order_id > ' . $idMaxComenzi)->fetchColumn() === 1,
+        $r['cod'] . ' ' . ($r['antete']['location'] ?? '-'));
+    $mesaje = [];
+    foreach ($mesajeSmtp() as $fisierMesaj) {
+        $text = (string) file_get_contents($fisierMesaj);
+        $antet = static fn (string $nume): string => preg_match('/^' . $nume . ': (.*)$/mi', $text, $m) === 1 ? trim($m[1]) : '';
+        $html = '';
+        if (preg_match('#Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n(.*?)\r\n--#s', $text, $m) === 1) {
+            $html = (string) base64_decode((string) preg_replace('/\s+/', '', $m[1]));
+        }
+        $mesaje[] = ['autentificare' => $antet('X-Plic-Autentificare'), 'catre' => $antet('X-Plic-Catre'), 'to' => $antet('To'),
+            'subiect' => (string) iconv_mime_decode($antet('Subject'), 0, 'UTF-8'), 'html' => $html, 'text' => $text];
+    }
+    $toateLaProprietar = $mesaje !== [] && array_filter($mesaje, static fn (array $m): bool => $m['catre'] !== '<' . $emailProprietar . '>'
+        || $m['to'] !== '<' . $emailProprietar . '>' || $m['autentificare'] !== $casutaCopiei) === [];
+    $verifica('emailurile comenzii (clientul și adminul): ' . count($mesaje) . ', toate doar la proprietar, prin căsuța copiei (serverul SMTP al testului)',
+        count($mesaje) === 2 && $toateLaProprietar, json_encode(array_map(static fn (array $m): array => array_intersect_key($m,
+            array_flip(['autentificare', 'catre', 'to', 'subiect'])), $mesaje), JSON_UNESCAPED_UNICODE) ?: '');
+    $verifica('emailurile comenzii: „[VERIFICARE]” în subiect, nota „pe site … ar fi plecat la o adresă din afara copiei”, blocul avertismentului '
+        . 'refrigerat; nicio adresă a clientului sau a adminului în destinatari', $mesaje !== [] && array_filter($mesaje, static fn (array $m): bool
+            => !str_starts_with($m['subiect'], '[VERIFICARE] ') || !str_contains($m['html'], 'ar fi plecat la o adresă din afara copiei')
+            || !str_contains($m['html'], $titluAvertisment) || str_contains($m['catre'] . $m['to'], 'exemplu.ro>') && $m['catre'] !== '<' . $emailProprietar . '>') === []
+        && str_contains(implode(' ', array_column($mesaje, 'subiect')), $numarComanda), implode(' | ', array_column($mesaje, 'subiect')));
+    $verifica('nicio conexiune la SMTP-ul, ERP-ul, FAN-ul sau banca din setări (adresa interzisă) și nimic prin proxy, la comandă și la paginile de mai sus',
+        $conexiuni($portInterzis) === [] && $conexiuni($portProxy) === [], implode(' | ', array_merge($conexiuni($portInterzis), $conexiuni($portProxy))));
+    $azi = json_decode((string) @file_get_contents($copie . '/storage/verificare/emailuri-azi.json'), true);
+    $verifica('contorul zilei: 2 emailuri plecate, 0 sărite (emailuri-azi.json, 0600)', is_array($azi) && ($azi['trimise'] ?? 0) === 2
+        && ($azi['sarite'] ?? -1) === 0 && (fileperms($copie . '/storage/verificare/emailuri-azi.json') & 0777) === 0600, json_encode($azi) ?: '');
+
+    // Limita de 100 pe zi și emailurile fără căsuță, din linia de comandă (ca un cron).
+    file_put_contents($copie . '/storage/verificare/emailuri-azi.json', json_encode(['zi' => date('Y-m-d'), 'trimise' => 100, 'sarite' => 0]));
+    $mesajeInainte = count($mesajeSmtp());
+    $rez = $inCopie('try { \App\Support\OrderMailer::sendCustom("abonat.newsletter@exemplu.ro", "Newsletter", "<p>Corp</p>", \App\Support\Settings::all(\App\Support\Database::connection((require "' . $copie . '/config/app.php")["db"])), null); return "trimis"; } catch (Throwable $e) { return $e->getMessage(); }');
+    $azi = json_decode((string) @file_get_contents($copie . '/storage/verificare/emailuri-azi.json'), true);
+    $verifica('al 101-lea email al zilei: nu pleacă (excepție „sărit”, deci „eșuat” în istoric), se numără ca sărit, nimic la SMTP',
+        is_string($rez) && str_contains($rez, 'sărit') && count($mesajeSmtp()) === $mesajeInainte && ($azi['sarite'] ?? 0) === 1
+        && ($azi['trimise'] ?? 0) === 100, json_encode([$rez, $azi], JSON_UNESCAPED_UNICODE) ?: '');
+    @unlink($copie . '/storage/verificare/emailuri-azi.json');
+    $scrieEnv(['VERIFICARE_SMTP_HOST' => '']);
+    $rez = $inCopie('\App\Support\OrderMailer::sendCustom("client.cron@exemplu.ro", "Coș abandonat", "<p>Corp cron</p>", ["email_delivery_method" => "sendgrid", "sendgrid_api_key" => "SG.inventat"], null); return glob("' . $copie . '/storage/verificare/mail/*.eml") ?: [];');
+    $eml = is_array($rez) && count($rez) === 1 ? (string) file_get_contents((string) $rez[0]) : '';
+    $verifica('fără căsuța copiei: emailul devine fișier .eml (0600) în storage/verificare/mail, doar la proprietar, cu „[VERIFICARE]”; nici SendGrid, nici SMTP',
+        $eml !== '' && (fileperms((string) $rez[0]) & 0777) === 0600 && str_contains($eml, 'To: <' . $emailProprietar . '>')
+        && str_starts_with((string) iconv_mime_decode((string) (preg_match('/^Subject: (.*)$/m', $eml, $m) === 1 ? trim($m[1]) : ''), 0, 'UTF-8'), '[VERIFICARE] Coș abandonat')
+        && str_contains((string) base64_decode((string) preg_replace('/\s+/', '', substr($eml, (int) strpos($eml, "\r\n\r\n")))), 'Corp cron')
+        && count($mesajeSmtp()) === $mesajeInainte && $conexiuni($portProxy) === [], json_encode($rez, JSON_UNESCAPED_UNICODE) ?: '');
+    $scrieEnv(['VERIFICARE_SMTP_HOST' => '127.0.0.1']);
+
+    // Fiecare loc din cod, din linia de comandă (cum îl cheamă un cron), cu setările de mai sus; apoi drumurile permise.
+    $rez = $inCopie(<<<'COD'
+        $s = \App\Support\Settings::all(\App\Support\Database::connection((require \App\Support\Paths::radacina() . '/config/app.php')['db']));
+        $refuza = static function (callable $f): string { try { $f(); return 'nerefuzat'; } catch (Throwable $e) { return $e->getMessage(); } };
+        $fan = ['client_id' => 123456, 'username' => 'fan.inventat', 'password' => 'fan-parola-inventata'];
+        return [
+            'erp_din_setari' => \App\Support\ErpClient::fromSettings($s) === null && \App\Support\ErpClient::fromDb(\App\Support\Database::connection((require \App\Support\Paths::radacina() . '/config/app.php')['db'])) === null,
+            'erp_direct' => $refuza(static fn () => (new \App\Support\ErpClient('http://127.0.0.1:9', 'k'))->ping()),
+            'stripe_live' => $refuza(static fn () => \App\Support\StripeGateway::createCheckoutSession((string) $s['stripe_secret_key'], [])),
+            'fan_awb' => $refuza(static fn () => \App\Support\FanCourierGateway::createInternalAwb($fan, [])),
+            'fan_lockere' => $refuza(static fn () => \App\Support\FanCourierGateway::pickupPoints($fan)),
+            'bt_mod' => \App\Support\BtIpayGateway::mod(),
+            'bt_live' => \App\Support\BtIpayGateway::apel('live', 'getOrderStatusExtended', ['orderId' => 'x'])['eroare'],
+            'bt_live_configurat' => \App\Support\BtIpayGateway::esteConfigurat('live'),
+            'eu' => \App\Support\EuPlatescGateway::isEnabled($s),
+            'eu_cerere' => $refuza(static fn () => \App\Support\EuPlatescGateway::buildRequest($s, ['order_number' => 'x', 'amount' => 1])),
+            'tawk' => \App\Support\ChatLive::activ($s),
+            'robots' => \App\Support\Robots::text('https://exemplu.test'),
+        ];
+        COD);
+    $asteptat = is_array($rez) && ($rez['erp_din_setari'] ?? false) === true && str_contains((string) ($rez['erp_direct'] ?? ''), 'ERP-ul e oprit')
+        && str_contains((string) ($rez['stripe_live'] ?? ''), 'doar o cheie de test') && str_contains((string) ($rez['fan_awb'] ?? ''), 'AWB-urile sunt oprite')
+        && str_contains((string) ($rez['fan_lockere'] ?? ''), 'FAN Courier e oprit') && ($rez['bt_mod'] ?? '') === 'test'
+        && str_contains((string) ($rez['bt_live'] ?? ''), 'oprite pe site-ul de verificare') && ($rez['bt_live_configurat'] ?? true) === false
+        && ($rez['eu'] ?? true) === false && str_contains((string) ($rez['eu_cerere'] ?? ''), 'EuPlătesc e oprit') && ($rez['tawk'] ?? true) === false
+        && ($rez['robots'] ?? '') === "User-agent: *\nDisallow: /\n";
+    $verifica('linia de comandă (ca un cron), cu setările site-ului adevărat: ERP null, Stripe live, AWB, lockere FAN, BT live, EuPlătesc, tawk.to, '
+        . 'robots — fiecare oprit la locul lui, nicio ieșire', $asteptat && $conexiuni($portInterzis) === [] && $conexiuni($portProxy) === [],
+        json_encode($rez, JSON_UNESCAPED_UNICODE) ?: '');
+    // Drumurile permise ajung la plasa de siguranță (deci ea chiar numără): o cheie sk_test_, o copie *-verif a ERP-ului,
+    // contul FAN de test, BT în modul de test.
+    $rez = $inCopie(<<<'COD'
+        $incearca = static function (callable $f): string { try { $f(); return 'fără eroare'; } catch (Throwable $e) { return $e->getMessage(); } };
+        $pune = static function (string $cheie, string $valoare): void { $_ENV[$cheie] = $valoare; putenv($cheie . '=' . $valoare); };
+        $stripe = $incearca(static fn () => \App\Support\StripeGateway::createCheckoutSession('sk_test_inventat', []));
+        $pune('VERIFICARE_ERP_URL', 'https://copie-verif.erp.andaxi.ro');
+        $pune('VERIFICARE_ERP_CHEIE', 'cheie-copie-erp');
+        $client = \App\Support\ErpClient::fromSettings(['erp_url' => 'http://127.0.0.1:9', 'erp_api_key' => 'k']);
+        $erp = $client === null ? 'null' : $incearca(static fn () => $client->ping());
+        $pune('VERIFICARE_FAN_TEST', '1');
+        $fan = $incearca(static fn () => \App\Support\FanCourierGateway::pickupPoints(['client_id' => 1, 'username' => 'fan.test', 'password' => 'p']));
+        $bt = \App\Support\BtIpayGateway::apel('test', 'getOrderStatusExtended', ['orderId' => 'x'])['eroare'];
+        return ['stripe' => $stripe, 'erp' => $erp, 'fan' => $fan, 'bt' => $bt];
+        COD);
+    $laProxy = $conexiuni($portProxy);
+    $laInterzis = $conexiuni($portInterzis);
+    $verifica('drumurile permise ajung la plasa de siguranță (deci ea chiar numără): sk_test_ → api.stripe.com, copia *-verif a ERP-ului, contul FAN '
+        . 'de test și BT de test → adresele lor', is_array($rez) && !str_contains((string) ($rez['stripe'] ?? ''), 'doar o cheie de test')
+        && ($rez['erp'] ?? 'null') !== 'null' && !str_contains((string) ($rez['fan'] ?? ''), 'FAN Courier e oprit')
+        && !str_contains((string) ($rez['bt'] ?? ''), 'oprite pe site-ul de verificare')
+        && count($laProxy) === 2 && str_starts_with($laProxy[0], 'CONNECT api.stripe.com:443') && str_starts_with($laProxy[1], 'CONNECT copie-verif.erp.andaxi.ro:443')
+        // FAN: autentificarea cu POST, apoi (502) încă o dată cu GET, ca FanCourierGateway::token; apoi banca.
+        && count($laInterzis) === 3 && str_starts_with($laInterzis[0], 'POST /login?') && str_starts_with($laInterzis[1], 'GET /login?')
+        && str_starts_with($laInterzis[2], 'POST /payment/rest/getOrderStatusExtended.do'),
+        json_encode(['rez' => $rez, 'proxy' => $laProxy, 'interzis' => $laInterzis], JSON_UNESCAPED_UNICODE) ?: '');
+    $iesiriPermise = [$laProxy, $laInterzis];
+
+    // Confirmările de plată, cu copia încărcată: fără parolă doar cu VERIFICARE_WEBHOOKURI_DESCHISE=1.
+    $r = $cerere('POST', '/webhook/stripe', ['post' => ['x' => '1']]);
+    $scrieEnv(['VERIFICARE_WEBHOOKURI_DESCHISE' => '1']);
+    $r2 = $cerere('POST', '/webhook/stripe', ['post' => ['x' => '1']]);
+    $scrieEnv(['VERIFICARE_WEBHOOKURI_DESCHISE' => '0']);
+    $verifica('webhook-urile cu copia încărcată: 401 fără parolă; cu VERIFICARE_WEBHOOKURI_DESCHISE=1 ajung la aplicație (semnătura lipsă → 400), noindex',
+        $r['cod'] === 401 && $r2['cod'] === 400 && $antetPoarta($r2), $r['cod'] . ' / ' . $r2['cod']);
+
+    // ── B6. Fără SITE_COPIE_VERIFICARE ──
+    $scrie('');
+    $scrie('B6. SITE_COPIE_VERIFICARE=0 (un site obișnuit cu .env), cu aceleași setări: ce ar fi oprit gărzile');
+    // ERP-ul ar cere stocul pe pagini (adresa interzisă): aici doar paginile, deci ERP-ul oprit în setări.
+    $setari(['erp_enabled' => '0', 'erp_stock_enabled' => '0']);
     $scrieEnv(['SITE_COPIE_VERIFICARE' => '0']);
     $r = $cerere('GET', '/');
     $verifica('fără parolă → pagina aplicației, fără antetele porții', $r['cod'] === 200 && !isset($r['antete']['x-robots-tag'])
         && ($r['antete']['cache-control'] ?? '') !== Verificare::CACHE && !isset($r['antete']['www-authenticate']));
+    $r = $cerere('GET', '/', ['cookie' => $consimtamant]);
+    $verifica('cu „Accept toate”: etichetele terților din setări apar (GTM, Clarity, tawk.to, google-site-verification, gtag), fără banner',
+        count($cuEtichete($r['corp'])) === count($etichete) && !str_contains($r['corp'], Verificare::ID_BANNER), implode(', ', $cuEtichete($r['corp'])));
     $r = $cerere('GET', '/robots.txt');
-    $verifica('/robots.txt e cel al aplicației (cu Sitemap:)', $r['cod'] === 200 && str_contains($r['corp'], 'Sitemap:'));
+    $verifica('/robots.txt e cel al aplicației (cu Sitemap: și Allow: pentru fluxul de produse)', $r['cod'] === 200 && str_contains($r['corp'], 'Sitemap:')
+        && str_contains($r['corp'], 'Allow: /feed/google-merchant.xml'));
+    $r = $cerere('GET', '/auth/google');
+    $verifica('login-ul cu Google pornit: /auth/google → accounts.google.com (doar o redirecționare a browserului)', $r['cod'] === 302
+        && str_starts_with((string) ($r['antete']['location'] ?? ''), 'https://accounts.google.com/'), $r['cod'] . ' ' . ($r['antete']['location'] ?? '-'));
+    $r = $cerere('GET', '/uploads/products/nu-exista.webp');
+    $verifica('o poză lipsă → 404 (fără redirect)', $r['cod'] === 404 && !isset($r['antete']['location']), (string) $r['cod']);
+    $jarFara = $dosarTest . '/jar-fara.txt';
+    $cerere('POST', '/cos/adauga/' . $idMenta, ['jar' => $jarFara, 'post' => ['quantity' => '1']]);
+    $r = $cerere('GET', '/checkout', ['jar' => $jarFara]);
+    preg_match_all('/name="payment_method"[^>]*value="([a-z_]+)"/', $r['corp'], $metode);
+    $verifica('checkout-ul are EuPlătesc și BT (modul live din .env), deci testul de mai sus vede ce opresc gărzile',
+        in_array('euplatesc', $metode[1], true) && in_array('btipay', $metode[1], true), json_encode(array_values(array_unique($metode[1]))) ?: '');
+    $verifica('nici fără gărzi, paginile de mai sus n-au trimis nimic în afară', $conexiuni($portInterzis) === $iesiriPermise[1]
+        && $conexiuni($portProxy) === $iesiriPermise[0], implode(' | ', array_merge($conexiuni($portInterzis), $conexiuni($portProxy))));
     $scrieEnv(['SITE_COPIE_VERIFICARE' => '1']);
 
-    $verifica('niciun email trimis de copie', $emailuri() === 0, (string) $emailuri());
+    // ── B7. licenta.php și sterge.php ──
+    $scrie('');
+    $scrie('B7. tools/verificare/licenta.php și tools/verificare/sterge.php');
+    $r = $ruleaza('tools/verificare/licenta.php', ['bioscem'], '', $dosarTest . '/alt-acasa');
+    $verifica('licenta.php în afara site-ului de verificare (alt dosar) → refuz, cod 1', $r['cod'] === 1
+        && str_contains($r['iesire'], 'rulează doar din dosarul site-ului de verificare'), trim($r['iesire']));
+    $scrieEnv(['LICENTA_SITE' => 'bioscem']);
+    $r = $ruleaza('tools/verificare/licenta.php', ['bioscem'], '');
+    $scrieEnv(['LICENTA_SITE' => 'verificare']);
+    $r2 = $ruleaza('tools/verificare/licenta.php', ['nu-exista'], '');
+    $r3 = $ruleaza('tools/verificare/licenta.php', ['bioscem', 'nu_exista=oprit'], '');
+    $verifica('licenta.php refuză: LICENTA_SITE care nu începe cu „verificare”, un pachet sau un plugin necunoscut', $r['cod'] === 1
+        && str_contains($r['iesire'], 'nu începe cu „verificare”') && $r2['cod'] === 1 && $r3['cod'] === 1, trim($r['iesire'] . ' | ' . $r2['iesire'] . ' | ' . $r3['iesire']));
+    $r = $ruleaza('tools/verificare/licenta.php', ['presetari'], '');
+    $verifica('licenta.php presetari: din catalogul codului (toate, bioscem, grafoanaytis, magazin …)', $r['cod'] === 0
+        && count(array_intersect(['toate', 'bioscem', 'biovitality', 'vertij', 'grafoanaytis', 'prezentare', 'catalog', 'magazin', 'asociatie'],
+            explode("\n", trim($r['iesire'])))) === 9, trim($r['iesire']));
+    $r = $ruleaza('tools/verificare/licenta.php', ['bioscem', 'blog=oprit'], '');
+    $r2 = $cerere('GET', '/blog', ['basic' => $bunaBasic]);
+    $r3 = $cerere('GET', '/magazin', ['basic' => $bunaBasic]);
+    $verifica('licenta.php bioscem blog=oprit (o versiune mai mică decât cea de dinainte nu contează: licența bună se șterge) → /blog 404, /magazin 200',
+        $r['cod'] === 0 && str_contains($r['iesire'], '(bioscem)') && !str_contains($r['iesire'], 'blog,') && $r2['cod'] === 404 && $r3['cod'] === 200,
+        trim($r['iesire']) . ' | ' . $r2['cod'] . ' ' . $r3['cod']);
+    $r = $ruleaza('tools/verificare/licenta.php', ['toate'], '');
+    $r2 = $cerere('GET', '/blog', ['basic' => $bunaBasic]);
+    $r3 = $ruleaza('tools/verificare/licenta.php', ['arata'], '');
+    $verifica('licenta.php toate → /blog din nou 200; arata: licența „verificare”, blog pornit', $r['cod'] === 0 && $r2['cod'] === 200
+        && str_contains($r3['iesire'], 'Licența „verificare”') && preg_match('/^\s+blog\s+pornit$/m', $r3['iesire']) === 1, trim($r3['iesire']));
+
+    // sterge.php: ce trebuie să rămână și ce trebuie să plece.
+    $santinela = $dosarTest . '/santinela-in-afara.txt';
+    file_put_contents($santinela, 'nu se șterge');
+    @mkdir($acasa . '/domains/' . $gazda . '/cod-vechi/bioscem/src', 0770, true);
+    file_put_contents($acasa . '/domains/' . $gazda . '/cod-vechi/bioscem/src/Vechi.php', '<?php // codul vechi');
+    symlink($santinela, $acasa . '/domains/' . $gazda . '/cod-vechi/bioscem/legatura-in-afara.txt');
+    @mkdir($copie . '/storage/verificare/tmp', 0770, true);
+    file_put_contents($copie . '/storage/verificare/tmp/bucata.sql', 'x');
+    file_put_contents($copie . '/storage/cache/pages/pagina-test.html', 'x');
+    @mkdir($copie . '/storage/verificare/sonde', 0700, true);
+    file_put_contents($copie . '/storage/verificare/sonde/agregate-test.txt', 'x');
+    file_put_contents($copie . '/storage/sessions/sess_test', 'x');
+    $tabeleInainte = $tabeleIn($bazaCopie);
+    $r = $ruleaza('tools/verificare/sterge.php', ['--da'], '', $dosarTest . '/alt-acasa');
+    $r2 = $ruleaza('tools/verificare/sterge.php', [], "nu\n");
+    $verifica('sterge.php în alt dosar → refuz; fără „da” → nimic șters (cod 1)', $r['cod'] === 1 && str_contains($r['iesire'], 'Nu am șters nimic')
+        && $r2['cod'] === 1 && str_contains($r2['iesire'], 'Nu am șters nimic') && $tabeleIn($bazaCopie) === $tabeleInainte
+        && is_file($copie . '/storage/verificare/incarcat-la') && is_file($copie . '/storage/verificare/tmp/bucata.sql'), trim($r['iesire'] . ' | ' . $r2['iesire']));
+    file_put_contents($acasa . '/domains/alt-site.exemplu.test/public_html/.env', 'DB_DATABASE=' . $bazaCopie . "\n");
+    $r = $ruleaza('tools/verificare/sterge.php', ['--da'], '');
+    unlink($acasa . '/domains/alt-site.exemplu.test/public_html/.env');
+    $scrieEnv(['DB_DATABASE' => 'cms_verif_plina']);
+    $r2 = $ruleaza('tools/verificare/sterge.php', ['--da'], '');
+    $scrieEnv(['DB_DATABASE' => '']);
+    $r3 = $ruleaza('tools/verificare/sterge.php', ['--da'], '');
+    $scrieEnv(['DB_DATABASE' => $bazaCopie]);
+    $verifica('sterge.php refuză o bază scrisă în .env-ul altui site, o bază cu tabele fără _verificare și un .env fără DB_DATABASE (nimic șters)',
+        $r['cod'] === 1 && str_contains($r['iesire'], 'alt-site.exemplu.test') && $r2['cod'] === 1 && str_contains($r2['iesire'], 'nu e o copie de verificare')
+        && $r3['cod'] === 1 && str_contains($r3['iesire'], 'DB_DATABASE lipsește') && is_file($copie . '/storage/verificare/incarcat-la')
+        && $tabeleIn($bazaCopie) === $tabeleInainte && $tabeleIn('cms_verif_plina') === 2, trim($r['iesire'] . ' | ' . $r2['iesire'] . ' | ' . $r3['iesire']));
+    $r = $ruleaza('tools/verificare/sterge.php', [], "da\n");
+    $rPagina = $cerere('GET', '/', ['basic' => $bunaBasic]);
+    $verifica('sterge.php cu „da”: GATA, baza goală, incarcat-la, emailurile, temporarele, cache-ul, sesiunile și cod-vechi/ șterse; poarta arată „lipsește”',
+        $r['cod'] === 0 && str_contains($r['iesire'], 'GATA: copia a fost ștearsă') && $tabeleIn($bazaCopie) === 0
+        && !is_file($copie . '/storage/verificare/incarcat-la') && glob($copie . '/storage/verificare/mail/*.eml') === []
+        && !is_file($copie . '/storage/verificare/tmp/bucata.sql') && !is_file($copie . '/storage/cache/pages/pagina-test.html')
+        && !is_file($copie . '/storage/sessions/sess_test') && !file_exists($acasa . '/domains/' . $gazda . '/cod-vechi')
+        && $rPagina['cod'] === 503 && str_contains($rPagina['corp'], 'lipsește'), trim($r['iesire']));
+    $verifica('sterge.php: legătura din cod-vechi/ ștearsă fără să urmeze (fișierul de afară rămâne); .gitkeep, sondele, .env, licența și cheia rămân; '
+        . 'sondele amintite', is_file($santinela) && is_file($copie . '/storage/cache/pages/.gitkeep') && is_file($copie . '/storage/verificare/sonde/agregate-test.txt')
+        && is_file($copie . '/.env') && is_file($copie . '/storage/licenta/licenta.json') && is_file($fisierCheie)
+        && str_contains($r['iesire'], 'storage/verificare/sonde/ mai sunt 1 fișiere'), trim($r['iesire']));
+    $r = $ruleaza('tools/verificare/sterge.php', ['--da'], '');
+    $verifica('sterge.php a doua oară, pe baza goală → tot GATA, 0 tabele', $r['cod'] === 0 && str_contains($r['iesire'], '0 tabele')
+        && str_contains($r['iesire'], 'GATA'), trim($r['iesire']));
+    $verifica('ieșirile lui licenta.php și sterge.php: nicio parolă, cheie sau adresă de email; numele bazei nu apare', $faraSecrete($r['iesire']) === ''
+        && !str_contains($r['iesire'], $bazaCopie));
+
+    $verifica('la final, plasa de siguranță: doar ieșirile permise de mai sus (Stripe de test, copia ERP, contul FAN și BT de test), niciun alt email',
+        $conexiuni($portProxy) === $iesiriPermise[0] && $conexiuni($portInterzis) === $iesiriPermise[1] && count($mesajeSmtp()) === 2,
+        implode(' | ', array_merge($conexiuni($portProxy), $conexiuni($portInterzis))));
+    $verifica('niciun email trimis de copie prin mail()', $emailuri() === 0, (string) $emailuri());
     $verifica('baza goală a rămas goală', $tabeleIn('cms_verif_gol') === 0);
 } catch (Throwable $e) {
     $verifica('testul a mers până la capăt', false, $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')');

@@ -36,6 +36,15 @@ final class ErpClient
     /** Construiește clientul din setările salvate în admin. */
     public static function fromSettings(array $settings): ?self
     {
+        // Site-ul de verificare (docs/VERIFICARE.md): ERP oprit, sau doar copia de verificare a ERP-ului din .env
+        // (VERIFICARE_ERP_URL/_CHEIE); adresa și cheia din setări nu se folosesc niciodată acolo.
+        if (Verificare::activ()) {
+            $erpCopie = Verificare::erp();
+            if ($erpCopie === null) {
+                return null;
+            }
+            $settings = ['erp_url' => $erpCopie['url'], 'erp_api_key' => $erpCopie['cheie']] + $settings;
+        }
         // Fără pluginul „Legătura cu ERP-ul” în licență, site-ul nu vorbește cu
         // ERP-ul deloc (setările rămân, pentru repornire). Cât „se oprește”,
         // legătura merge mai departe: doar comenzile noi nu mai pleacă (ErpSync::push).
@@ -280,6 +289,8 @@ final class ErpClient
         if ($this->baseUrl === '' || $this->apiKey === '') {
             throw new RuntimeException('Integrarea cu ERP-ul nu este configurată complet.');
         }
+        // Site-ul de verificare: nicio cerere spre alt ERP decât copia lui de verificare.
+        Verificare::verificaAdresaErp($this->baseUrl);
         if (!function_exists('curl_init')) {
             throw new RuntimeException('Extensia cURL lipsește pe server; nu pot contacta ERP-ul.');
         }

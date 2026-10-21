@@ -152,6 +152,8 @@ final class FanCourierGateway
 
     public static function createInternalAwb(array $credentials, array $payload): array
     {
+        // Site-ul de verificare (docs/VERIFICARE.md): niciun AWB, în afară de un cont FAN de test.
+        Verificare::verificaFan(true);
         $response = self::request('POST', '/intern-awb', $credentials, $payload);
         $data = self::extractData($response);
 
@@ -690,6 +692,8 @@ final class FanCourierGateway
 
     private static function rawRequest(string $method, string $url, array $headers, ?string $body): array
     {
+        // Site-ul de verificare: nicio cerere spre FAN (autentificare, tarif, urmărire, lockere, nomenclator).
+        Verificare::verificaFan();
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);

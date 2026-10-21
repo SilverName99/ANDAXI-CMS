@@ -42,13 +42,15 @@ if (!\App\Support\LinkuriCategorii::paginaCurentaExclusa()) {
     }
     $designHeader = \App\Support\LogoAntet::webp($designHeader);
 }
-// Fără consimțământ, niciun script de analiză/marketing nu ajunge în pagină.
-$acceptaUrmarire = \App\Support\CookieConsent::permiteUrmarire();
+// Fără consimțământ, niciun script de analiză/marketing nu ajunge în pagină; pe site-ul de verificare
+// niciodată (docs/VERIFICARE.md), orice ar scrie în setări.
+$acceptaUrmarire = \App\Support\CookieConsent::permiteUrmarire() && \App\Support\Verificare::eticheteTertePermise();
 $chatActiv = \App\Support\ChatLive::activ($designSettings);
 $chatUrcaCosul = \App\Support\ChatLive::suprapunePestecos($designSettings);
 $clarityEnabled = $acceptaUrmarire && (string) ($designSettings['microsoft_clarity_enabled'] ?? '0') === '1';
 $clarityProjectId = preg_replace('/[^a-zA-Z0-9]/', '', trim((string) ($designSettings['microsoft_clarity_project_id'] ?? ''))) ?? '';
-$googleSiteVerification = preg_replace('/[^A-Za-z0-9_\-]/', '', trim((string) ($designSettings['google_site_verification'] ?? ''))) ?? '';
+$googleSiteVerification = \App\Support\Verificare::eticheteTertePermise()
+    ? (preg_replace('/[^A-Za-z0-9_\-]/', '', trim((string) ($designSettings['google_site_verification'] ?? ''))) ?? '') : '';
 $gaEnabled = $acceptaUrmarire && (string) ($designSettings['google_analytics_enabled'] ?? '0') === '1';
 $gaId = preg_replace('/[^A-Za-z0-9\-]/', '', trim((string) ($designSettings['google_analytics_id'] ?? ''))) ?? '';
 $gtmEnabled = $acceptaUrmarire && (string) ($designSettings['google_tag_manager_enabled'] ?? '0') === '1';
@@ -949,7 +951,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     </style>
 </head>
 <body class="site-shell">
-    <?php if ($gtmEnabled && $gtmBodyCode !== ''): ?>
+    <?php echo \App\Support\Verificare::banner('site'); /* bannerul copiei de verificare; gol în rest */ if ($gtmEnabled && $gtmBodyCode !== ''): ?>
     <?= $gtmBodyCode ?>
     <?php elseif ($gtmEnabled && $gtmId !== ''): ?>
     <!-- Google Tag Manager (noscript) -->
