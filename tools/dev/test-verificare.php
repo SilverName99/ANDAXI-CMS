@@ -391,7 +391,8 @@ $pidGaura = 0;
 $bazaCopie = 'cms_verif_copie';
 $utilizatorDb = 'cms_verif_test';
 $parolaDb = 'Db-' . bin2hex(random_bytes(8));
-$parolaPoarta = 'Poarta-' . bin2hex(random_bytes(8));
+// Exact 10 caractere, doar litere și cifre: configurarea de mai jos dovedește că minimul e 10, fără semne cerute.
+$parolaPoarta = 'Poarta' . bin2hex(random_bytes(2));
 $parolaPoarta2 = 'Poarta2-' . bin2hex(random_bytes(8));
 $emailProprietar = 'proprietar.verificare@exemplu.ro';
 $secrete = [$parolaDb, $parolaPoarta, $parolaPoarta2, $emailProprietar];
@@ -689,7 +690,10 @@ try {
     $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare(array_replace($bune, [6 => $parolaPoarta . 'x'])));
     $verifica('refuză două parole ale porții diferite', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'nu sunt la fel'));
     $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare(array_replace($bune, [5 => 'scurta', 6 => 'scurta'])));
-    $verifica('refuză o parolă a porții sub 12 caractere', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'sub 12 caractere'));
+    $verifica('refuză o parolă a porții sub 10 caractere', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'sub 10 caractere'));
+    // 9 caractere, dintre care 3 cu diacritice (2 octeți fiecare): numără literele, nu octeții.
+    $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare(array_replace($bune, [5 => 'ăîșpoarta', 6 => 'ăîșpoarta'])));
+    $verifica('refuză 9 litere cu diacritice (se numără literele, nu octeții)', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'sub 10 caractere'));
     $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare(array_replace($bune, [5 => $parolaDb, 6 => $parolaDb])));
     $verifica('refuză parola porții egală cu parola bazei', $r['cod'] === 1 && $fara() && str_contains($r['iesire'], 'alta decât parola bazei'));
     $r = $ruleaza('tools/verificare/configureaza.php', [], $intrare(array_replace($bune, [3 => 'nu-e-email'])));

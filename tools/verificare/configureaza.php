@@ -199,9 +199,10 @@ if ($casuta !== '') {
 
 // ── Poarta ──
 
-$poarta = verificare_intreaba('Parola porții (cel puțin 12 caractere; o scrii în browser la intrarea pe site; nu se vede): ', true);
-if (strlen($poarta) < 12) {
-    verificare_opreste('parola porții are sub 12 caractere. Nu am scris nimic.');
+// Cel puțin 10 caractere (decizia proprietarului, 21 oct 2026), fără alte reguli (nu se cer cifre sau semne).
+$poarta = verificare_intreaba('Parola porții (cel puțin 10 caractere; o scrii în browser la intrarea pe site; nu se vede): ', true);
+if (mb_strlen($poarta, 'UTF-8') < 10) {
+    verificare_opreste('parola porții are sub 10 caractere. Nu am scris nimic.');
 }
 if (hash_equals($poarta, $dbParola) || ($casutaParola !== '' && hash_equals($poarta, $casutaParola))) {
     verificare_opreste('parola porții trebuie să fie alta decât parola bazei și a căsuței. Nu am scris nimic.');

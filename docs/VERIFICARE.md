@@ -100,7 +100,7 @@ $PHP tools/verificare/configureaza.php
 #   întreabă: numele bazei, utilizatorul bazei, parola bazei (nu se vede când scrii),
 #   emailul tău (emailurile de test merg doar acolo; adresa stă doar în .env-ul de pe server,
 #   niciodată în git), căsuța de trimitere și parola ei (Enter = fără căsuță),
-#   parola porții (de două ori, cel puțin 12 caractere, alta decât parola bazei);
+#   parola porții (de două ori, cel puțin 10 caractere, alta decât parola bazei; nu trebuie semne sau cifre);
 #   Ctrl-C oprește oricând, fără să scrie nimic
 #   pe ecran doar DA/NU: legătura cu baza, „baza e goală”, „baza nu e a altui site din cont”,
 #   „.env scris, doar pentru tine (0600)”, „cheia licenței de verificare făcută acum”, apoi „Gata.”
@@ -820,7 +820,7 @@ Refuză fără să scrie nimic: un dosar care nu e `~/domains/<gazdă>/public_ht
 `--rescrie`, doar unul cu `SITE_COPIE_VERIFICARE=1`), o bază care nu se deschide, are tabele fără
 `_verificare` sau e scrisă în `.env`-ul altui site din cont (`~/public_html`, `~/domains/<d>/public_html`,
 `~/domains/<d>/site`; doar `DB_DATABASE`/`DB_HOST` citite, în memorie, și pe ecran doar domeniul), parole ale
-porții diferite, scurte (sub 12) sau egale cu parola bazei sau a căsuței, un terminal în care parola nu se poate
+porții diferite, scurte (sub 10) sau egale cu parola bazei sau a căsuței, un terminal în care parola nu se poate
 ascunde. Cheia privată nouă se scrie înainte de `.env` și se șterge la loc dacă `.env` nu se poate scrie. Nu
 creează niciun tabel.
 
