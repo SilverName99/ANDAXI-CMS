@@ -43,7 +43,7 @@ $cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
     </div>
 <?php if ($pragErp['stare'] === 'data'): ?>
     <p class="muted" data-prag-erp="data" style="margin:0 0 16px;">
-        Comenzile plasate înainte de <strong><?= htmlspecialchars(date('d.m.Y H:i', (int) strtotime((string) $pragErp['din'])), ENT_QUOTES) ?></strong>, momentul legării site-ului cu ERP-ul, nu se trimit automat (<?= $inainteDePrag ?> netrimise; nu intră în „În așteptare” și „Eșuate”). Una anume se trimite din Comenzi, cu 🔄.
+        Comenzile plasate înainte de <strong><?= htmlspecialchars(date('d.m.Y H:i', (int) strtotime((string) $pragErp['din'])), ENT_QUOTES) ?></strong>, momentul legării site-ului cu ERP-ul, pe care ERP-ul nu le-a primit niciodată, nu se trimit automat (<?= $inainteDePrag ?> netrimise; nu intră în „În așteptare” și „Eșuate”). Una anume se trimite din Comenzi, cu 🔄; de atunci e ca oricare alta: o trimitere eșuată se reîncearcă singură.
     </p>
 <?php endif; ?>
 <?php if ($pragErp['stare'] === 'lipsa' || $pragErp['stare'] === 'gresit'): ?>

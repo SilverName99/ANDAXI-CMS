@@ -4592,9 +4592,11 @@ final class AdminController
         // Câmpurile pluginurilor pe care site-ul nu le are lipsesc din formular;
         // valorile lor rămân cele din bază (la repornire, produsul își regăsește
         // ofertele BBD, plafoanele de precomandă și nota de după coș). La fel ofertele
-        // BBD când câmpul lor lipsește cu totul din formular (JavaScript-ul paginii căzut,
-        // formular trimis înainte să se completeze): asta nu înseamnă „șterge ofertele”, ci
-        // „nu am ce salva”; un „[]” trimis rămâne o ștergere voită (WP-12 C2, din Biovitality c64fc2d).
+        // BBD când câmpul lor lipsește cu totul din cerere: formularul din Produse îl
+        // trimite mereu (ascuns, „[]” cât fereastra n-a încărcat ofertele), deci lipsa vine
+        // doar de la o salvare care nu-l trimite deloc (alt formular, o unealtă). Asta nu
+        // înseamnă „șterge ofertele”, ci „nu am ce salva”; un „[]” trimis rămâne o ștergere
+        // (WP-12 C2, din Biovitality c64fc2d).
         $faraOferteInFormular = !array_key_exists('bbd_entries_json', $_POST);
         if (!\App\Support\Plugins::vizibil('oferte_bbd') || !\App\Support\Plugins::vizibil('precomenzi')
             || !\App\Support\Plugins::vizibil('magazin') || $faraOferteInFormular) {
@@ -5295,6 +5297,13 @@ final class AdminController
         }
 
         $setariComenzi = Settings::all($db);
+        // Pragul trimiterii în ERP (WP-12 E1): comenzile din listă pe care pragul le ține deoparte (de dinainte, nevăzute
+        // niciodată de ERP) arată „înainte de legare”; regula e chiar filtrul cronului (ErpSync::comenziTinuteDePrag).
+        $pragErp = \App\Support\Plugins::vizibil('erp') && $db instanceof PDO
+            ? \App\Support\ErpSync::pragTrimitere($db) : ['stare' => 'fara', 'din' => null];
+        $erpTinuteDePrag = $db instanceof PDO
+            ? \App\Support\ErpSync::comenziTinuteDePrag($db, $pragErp, array_map(static fn (array $o): int => (int) ($o['id'] ?? 0), $orders))
+            : [];
         View::render('admin/orders', [
             'title' => 'Comenzi',
             'arePrecomanda' => $arePrecomanda,
@@ -5313,9 +5322,7 @@ final class AdminController
             'orderPaymentStatusLabels' => $orderPaymentStatusLabels,
             'orderPaymentMethodLabels' => $orderPaymentMethodLabels,
             'settings' => $setariComenzi,
-            // Pragul trimiterii în ERP (WP-12 E1): comenzile de dinainte arată „înainte de legare”.
-            'pragErp' => \App\Support\Plugins::vizibil('erp') && $db instanceof PDO
-                ? \App\Support\ErpSync::pragTrimitere($db) : ['stare' => 'fara', 'din' => null],
+            'erpTinuteDePrag' => $erpTinuteDePrag,
             'erpModulBanner' => \App\Support\Plugins::vizibil('erp') ? \App\Support\ErpModul::banner($db, $setariComenzi) : '',
         ], 'admin/layout');
     }
@@ -11784,7 +11791,8 @@ final class AdminController
                     }
                 }
                 // Pragul trimiterii (erp_trimite_din, WP-12 E1): „În așteptare” și „Eșuate” numără doar ce poate
-                // pleca automat, cu același filtru ca retryPending; comenzile de dinainte se numără separat.
+                // pleca automat, cu același filtru ca retryPending; comenzile de dinainte pe care ERP-ul nu le-a văzut
+                // niciodată se numără separat (cele ajunse în ERP sau încercate de la prag rămân în „Eșuate”).
                 $pragErp = \App\Support\ErpSync::pragTrimitere($db);
                 if ($pragErp['stare'] !== 'fara') {
                     [$sqlPrag, $parametriPrag] = \App\Support\ErpSync::filtruPrag($pragErp);
@@ -11946,7 +11954,7 @@ final class AdminController
             $notaPrag = '';
             if ($rezultat['prag'] === 'data') {
                 $notaPrag = ' Comenzile plasate înainte de ' . date('d.m.Y H:i', (int) strtotime((string) $rezultat['prag_din']))
-                    . ' (legarea cu ERP-ul) nu se retrimit de aici; una anume se trimite din Comenzi, cu 🔄.';
+                    . ' (legarea cu ERP-ul) pe care ERP-ul nu le-a primit niciodată nu se trimit de aici; una anume se trimite din Comenzi, cu 🔄.';
             } elseif ($rezultat['prag'] === 'gresit') {
                 $notaPrag = ' Pragul trimiterii (erp_trimite_din) nu e o dată (AAAA-LL-ZZ HH:MM:SS), deci nicio comandă nu pleacă automat '
                     . 'până nu se corectează.';

@@ -83,7 +83,7 @@ printf(
 );
 // Pragul trimiterii (erp_trimite_din, WP-12 E1): fără prag nimic de spus (ca până acum).
 if ($rezultat['prag'] === 'data') {
-    echo 'Comenzile plasate înainte de ', $rezultat['prag_din'], " (legarea cu ERP-ul) nu se trimit automat.\n";
+    echo 'Comenzile plasate înainte de ', $rezultat['prag_din'], " (legarea cu ERP-ul) pe care ERP-ul nu le-a primit niciodată nu se trimit automat.\n";
 } elseif ($rezultat['prag'] !== 'fara') {
     echo 'Pragul trimiterii (erp_trimite_din) ', $rezultat['prag'] === 'lipsa' ? 'lipsește' : 'nu e o dată',
         ": nicio comandă nu se trimite automat până nu-l scrie pasul de activare al ERP-ului (docs/MIGRARI.md).\n";

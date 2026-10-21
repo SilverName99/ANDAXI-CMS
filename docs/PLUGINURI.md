@@ -498,11 +498,15 @@ dispar, iar linkurile spre el se scot din pagini.
   înseamnă „fără prag” și rămâne). Trimiterile o respectă din WP-12 (E1;
   `ErpSync::pragTrimitere` și `filtruPrag`): pornit pe un site care nu l-a avut, ERP-ul nu
   primește tot istoricul „pending”. Cronul `erp-sync.php` și „Retrimite” din Setări → ERP ANDAXI
-  trimit doar comenzile plasate de la prag (cronul scrie de ce nu și pe celelalte), contoarele
-  „În așteptare” și „Eșuate” le numără la fel (cele de dinainte separat, cu o notă), iar Admin →
-  Comenzi le arată pe cele de dinainte cu „ERP: înainte de legare”; 🔄 trimite una anume de mână,
-  cu confirmare, iar plata, anularea sau returul unei comenzi trimise merg ca înainte
-  (`ErpSync::push`). Cheia goală: fără prag, ca înainte; cheia lipsă (pasul de activare n-a rulat,
+  nu trimit istoricul pe care ERP-ul nu l-a văzut niciodată: comenzile plasate înainte de prag,
+  netrimise și neîncercate de atunci (cronul scrie de ce); contoarele „În așteptare” și „Eșuate”
+  le numără la fel (pe acestea separat, cu o notă), iar Admin → Comenzi le arată cu „ERP: înainte
+  de legare” (`ErpSync::comenziTinuteDePrag`, același filtru); 🔄 trimite una anume de mână, cu
+  confirmare. O comandă de dinainte ajunsă în ERP, sau a cărei trimitere a pornit de la prag (🔄,
+  plata, confirmarea OP, o modificare din admin; ținută și de modulul „Magazin online” oprit în
+  ERP), e ca oricare alta (`ErpSync::filtruPrag`): o trimitere eșuată a ei se reîncearcă automat,
+  cum spune fereastra comenzii („se reîncearcă automat”), iar plata, anularea sau returul unei
+  comenzi trimise merg ca înainte (`ErpSync::push`). Cheia goală: fără prag, ca înainte; cheia lipsă (pasul de activare n-a rulat,
   de exemplu baza nu e la zi cu migrările) sau o valoare care nu e o dată: nicio comandă nu pleacă
   automat până la scrierea pragului.
 - **Stocul din ERP** (WP-12, C3, din Biovitality): pe paginile magazinului ERP-ul e întrebat cu un

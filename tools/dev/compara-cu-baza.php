@@ -322,6 +322,9 @@ $idPagina = $unu("SELECT id FROM pages WHERE slug = '' LIMIT 1");
 $tokenLink = $unu('SELECT token FROM order_payment_links ORDER BY id LIMIT 1');
 $idCupon = $unu('SELECT id FROM coupons ORDER BY id LIMIT 1');
 $idSablonProdus = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
+// WP-12 (C6): al patrulea editor de cod, al șabloanelor de blog. Datele demo n-au niciun șablon de blog, deci cazul de
+// salvare „editorul șabloanelor de blog” face unul, cu acest id (același pe ambele servere), și îl scoate după.
+$idSablonBlogEditor = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_templates') + 9000;
 // Pagina din bază cu liste goale (o face scriptul mai jos, la cereri).
 $paginaListe = 'test-liste-goale-' . getmypid();
 // WP-12 (X1b): postarea demo importată cu categoria doar ca text (tools/dev/date-demo.php) și o a doua postare, căreia
@@ -863,10 +866,12 @@ $porturiBiovitality = [
     [
         'nume' => 'adminul: CodeMirror și js-beautify doar în cele patru editoare de cod',
         'cale' => '/admin*',
-        // Editoarele (design-site, page-editor, product-template-editor; blog-template-editor nu se cere aici) le
-        // încarcă în continuare, deci acolo pagina e cea a Bioscem.
+        // Editoarele (design-site, page-editor, product-template-editor și blog-template-editor, acesta cerut de cazul de
+        // salvare „editorul șabloanelor de blog”, pe un șablon făcut acolo) le încarcă în continuare, deci acolo pagina e
+        // cea a Bioscem.
         'fara_pagini' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit',
-            '/admin/products/templates/' . $idSablonProdus . '/builder', '/admin/design'],
+            '/admin/products/templates/' . $idSablonProdus . '/builder', '/admin/design',
+            '/admin/blog/templates/' . $idSablonBlogEditor . '/builder'],
         'nou' => "\">\n</head>",
         'vechi' => "\">\n" . $cdnEditoare . '</head>',
         'motiv' => 'Biovitality c64fc2d (WP-12 C6): cele 15 fișiere de pe CDN se încărcau, fără defer, pe fiecare pagină de admin, '
@@ -874,13 +879,14 @@ $porturiBiovitality = [
     ],
     [
         'nume' => 'selectoarele de imagini din galerie: pozele se încarcă abia când se deschide selectorul',
-        'cale' => ['/admin/products', '/admin/settings/store', '/admin/emails/newsletters*', '/admin/blog/posts/editor*'],
+        'cale' => ['/admin/products', '/admin/settings/store', '/admin/emails/newsletters*', '/admin/blog/posts/editor*', '/admin/blog/authors'],
         'ori' => max(1, $pozeSelectorImagine),
         'ori_pe_pagina' => [
             // Setări magazin are două selectoare (favicon și imaginea SEO implicită).
             '/admin/settings/store' => max(1, 2 * $pozeSelectorImagine),
             '/admin/emails/newsletters*' => max(1, $pozeSelectorSauFaraTip),
             '/admin/blog/posts/editor*' => max(1, $pozeSelectorSauFaraTip),
+            '/admin/blog/authors' => max(1, $pozeSelectorSauFaraTip),
         ],
         'nou' => '<img loading="lazy" decoding="async" src="',
         'vechi' => '<img src="',
@@ -1073,6 +1079,8 @@ $pagini = [
     ['adm', '/admin/design'],
     ['adm', '/admin/settings/google'],
     ['adm', '/admin/blog/posts'],
+    // WP-12 (C7): al șaselea selector de imagini, avatarul autorilor blogului.
+    ['adm', '/admin/blog/authors'],
     ['adm-magazin', '/admin'],
     ['adm-magazin', '/admin/orders'],
     ['adm-magazin', '/admin/settings/payments'],
@@ -2205,6 +2213,31 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         },
     ];
 
+    // WP-12 (C6, Biovitality c64fc2d): ramura pe care portul nu o schimbă. Al patrulea editor de cod, al șabloanelor de
+    // blog, încarcă CodeMirror și js-beautify ca înainte; datele demo n-au niciun șablon de blog, deci cazul face unul (cu
+    // același id pe ambele servere, scos după) și cere editorul lui. Pagina e în „fara_pagini” a declarației C6, deci pe
+    // codul curent trebuie să fie exact cea a Bioscem.
+    $salvari[] = [
+        'nume' => 'adminul: editorul șabloanelor de blog încarcă în continuare CodeMirror și js-beautify',
+        'sursa' => 'Biovitality',
+        'din' => 'c64fc2d',
+        'tip' => 'regresie',
+        'tabele' => [
+            ['tabel' => 'blog_templates', 'unde' => 'id = :t1', 'param' => ['t1' => $idSablonBlogEditor], 'cheie' => 'id'],
+        ],
+        'pregateste' => static function (PDO $db) use ($idSablonBlogEditor): void {
+            $db->prepare('INSERT INTO blog_templates (id, name, slug, description, html_content, css_content, js_content, is_active)
+                VALUES (?, ?, ?, ?, ?, \'\', \'\', 1)')->execute([$idSablonBlogEditor, 'Șablon de blog (compara-cu-baza)',
+                'sablon-blog-compara-' . getmypid(), '', '<article><h1>{{blog_title}}</h1>{{blog_content}}</article>']);
+        },
+        'cereri' => [['GET', '/admin/blog/templates/' . $idSablonBlogEditor . '/builder', []]],
+        'stare' => static fn (PDO $db): array => [],
+        'verifica' => static fn (array $stare, array $raspunsuri): array => ($raspunsuri[0]['cod'] ?? 0) === 200
+            && $contine($raspunsuri[0], 'https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js')
+            && $contine($raspunsuri[0], 'https://cdn.jsdelivr.net/npm/js-beautify@1.15.1/js/lib/beautify-html.min.js')
+            ? [] : ['editorul șablonului de blog nu încarcă CodeMirror și js-beautify (cod ' . (int) ($raspunsuri[0]['cod'] ?? 0) . ')'],
+    ];
+
     // ── Reparațiile WP-12 (tip „reparatie”): un defect al Bioscem pe care codul comun îl repară voit. „verifica” cere
     // defectul pe rezultatul codului Bioscem (cazul ajunge chiar pe ramura reparată), „verifica_curent” reparația pe
     // rezultatul codului curent, iar starea diferă exact prin „diferente” (rândurile lui salvari_diferente, în orice
@@ -2250,7 +2283,8 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
     $oferteSalvateJson = (string) json_encode($oferteSalvate, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $descriereScurtaReparatie = 'Descriere scurtă schimbată (compara-cu-baza, WP-12)';
     $salvari[] = [
-        'nume' => 'oferte BBD: salvarea produsului fără câmpul ofertelor (JavaScript căzut) le păstrează',
+        // Formularul din Produse trimite mereu câmpul (ascuns); îl omite doar o salvare din alt formular sau dintr-o unealtă.
+        'nume' => 'oferte BBD: o salvare care nu trimite deloc câmpul ofertelor (alt formular, o unealtă) le păstrează',
         'tip' => 'reparatie',
         'reparatie' => 'WP-12 C2, din Biovitality c64fc2d',
         'tabele' => [

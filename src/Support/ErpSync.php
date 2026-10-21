@@ -263,9 +263,11 @@ final class ErpSync
      *  - `fara`: cheia există și e goală: fără prag, ca până acum (înghețarea Bioscem, un site legat
      *    de mult de ERP);
      *  - `data`: o dată (`Y-m-d H:i:s`, scrisă de pasul de activare al pluginului `erp` când pornește pe
-     *    un site care nu l-a avut): comenzile plasate înainte nu se trimit automat; una anume se poate
-     *    trimite din admin (🔄 în Comenzi), iar evenimentele unei comenzi trimise (plata, anularea, returul)
-     *    merg ca înainte;
+     *    un site care nu l-a avut): istoricul pe care ERP-ul nu l-a văzut niciodată (comenzile plasate
+     *    înainte, netrimise și neîncercate de atunci; filtruPrag) nu se trimite automat; una anume se poate
+     *    trimite din admin (🔄 în Comenzi). O comandă de dinainte care a ajuns în ERP, sau a cărei trimitere
+     *    a pornit de la prag (🔄, plata, o modificare din admin), e în fluxul obișnuit: o trimitere eșuată a
+     *    ei se reîncearcă automat, ca la oricare alta;
      *  - `lipsa`: cheia lipsește cu totul: pasul de activare n-a rulat încă (baza nu e la zi cu migrările,
      *    `docs/MIGRARI.md`, „Pașii de activare”), deci pragul nu se știe și istoricul nu pleacă încă;
      *  - `gresit`: altă valoare (scrisă de mână): ca `lipsa`, până se corectează.
@@ -301,39 +303,84 @@ final class ErpSync
     /**
      * Condiția pragului pentru o interogare pe `orders` (WP-12 E1): același filtru în `retryPending`, în
      * numărătorile din Setări → ERP ANDAXI și în contorul `erp` al `LucruriInCurs` (WP-27, Etapa 2), ca
-     * cifrele să spună exact ce va pleca. Fără prag: nimic; cu o dată: comenzile plasate de atunci; cu
-     * pragul încă nescris sau greșit: nicio comandă.
+     * cifrele să spună exact ce va pleca. Fără prag: nimic; cu pragul încă nescris sau greșit: nicio comandă;
+     * cu o dată: comenzile plasate de atunci și cele de dinainte care sunt deja în fluxul ERP-ului: ERP-ul le are
+     * (referința lui sau ora trimiterii), trimiterea lor a fost încercată de la prag ori le ține modulul „Magazin
+     * online” oprit în ERP.
+     * Pragul ține deoparte doar istoricul pe care ERP-ul nu l-a văzut niciodată: o comandă de dinainte trimisă
+     * de mână (🔄) sau la un eveniment al ei (plata, confirmarea OP, o modificare din admin) și căreia i-a eșuat
+     * apoi o trimitere se reîncearcă automat, cum îi promite mesajul din fereastra comenzii („se reîncearcă
+     * automat”), iar ERP-ul nu rămâne cu o adresă sau o plată veche.
      *
      * @param array{stare: string, din: ?string} $prag din pragTrimitere()
+     * @param string $tabel aliasul tabelului `orders` din interogare (gol: fără alias)
      * @return array{0: string, 1: array<string, string>} fragmentul SQL (începe cu „ AND ”) și parametrii lui
      */
-    public static function filtruPrag(array $prag, string $coloana = 'created_at'): array
+    public static function filtruPrag(array $prag, string $tabel = ''): array
     {
+        $c = $tabel !== '' ? $tabel . '.' : '';
         return match ($prag['stare'] ?? 'lipsa') {
             'fara' => ['', []],
-            'data' => [' AND ' . $coloana . ' >= :erp_trimite_din', ['erp_trimite_din' => (string) $prag['din']]],
+            'data' => [
+                ' AND (' . $c . 'created_at >= :erp_trimite_din'
+                    // ERP-ul o are: referința lui (scrisă la prima trimitere reușită, nu se mai șterge) sau ora trimiterii.
+                    . " OR COALESCE(" . $c . "erp_order_id, '') <> '' OR " . $c . 'erp_synced_at IS NOT NULL'
+                    // Trimiterea ei a fost încercată de la prag (o eroare a ERP-ului, adresa sau cheia lipsă).
+                    . ' OR ' . $c . 'erp_last_attempt_at >= :erp_trimite_din_incercare'
+                    // Ținută de modulul „Magazin online” oprit în ERP: pleacă singură la repornire (ErpModul::mesaj).
+                    . ' OR (' . $c . "erp_status = 'pending' AND " . $c . 'erp_last_error LIKE :erp_tinuta_de_modul))',
+                [
+                    'erp_trimite_din' => (string) $prag['din'],
+                    'erp_trimite_din_incercare' => (string) $prag['din'],
+                    'erp_tinuta_de_modul' => ErpModul::PREFIX . '%',
+                ],
+            ],
             default => [' AND 1 = 0', []],
         };
     }
 
     /**
-     * Comanda e de dinainte de pragul trimiterii (WP-12 E1)? Doar cu un prag dat; atunci nu pleacă
-     * automat, dar se poate trimite de mână.
+     * Comenzile pe care pragul trimiterii le ține deoparte (WP-12 E1), dintre cele date: doar cu un prag dat, cele
+     * „în așteptare” sau „eșuate” pe care filtruPrag nu le lasă să plece (de dinainte, nevăzute niciodată de ERP).
+     * Admin → Comenzi le arată cu „ERP: înainte de legare”; una se poate trimite de mână (🔄). Regula e chiar
+     * filtrul cronului, deci eticheta spune exact ce nu pleacă automat.
      *
-     * @param array{stare: string, din: ?string} $prag
+     * @param array{stare: string, din: ?string} $prag din pragTrimitere()
+     * @param list<int> $ids
+     * @return array<int, true> id => true
      */
-    public static function inainteDePrag(array $prag, string $creata): bool
+    public static function comenziTinuteDePrag(PDO $db, array $prag, array $ids): array
     {
-        return ($prag['stare'] ?? '') === 'data' && trim($creata) !== '' && trim($creata) < (string) $prag['din'];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0)));
+        if (($prag['stare'] ?? '') !== 'data' || $ids === []) {
+            return [];
+        }
+        [$sqlPrag, $parametriPrag] = self::filtruPrag($prag);
+        $tinute = [];
+        try {
+            // COALESCE: o condiție necunoscută (NULL) a filtrului înseamnă „nu pleacă”, ca în retryPending.
+            $stmt = $db->prepare(
+                'SELECT id FROM orders WHERE id IN (' . implode(', ', $ids) . ") AND erp_status IN ('pending', 'failed')
+                   AND COALESCE((1 = 1" . $sqlPrag . '), 0) = 0'
+            );
+            $stmt->execute($parametriPrag);
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) ?: [] as $id) {
+                $tinute[(int) $id] = true;
+            }
+        } catch (Throwable) {
+            // Eticheta e informativă; lista comenzilor se afișează oricum.
+        }
+        return $tinute;
     }
 
     /**
      * Reîncearcă comenzile eșuate al căror termen a venit. Rulează din cron.
      *
      * `tinute` sunt comenzile refuzate fiindcă modulul „Magazin online” e
-     * oprit în ERP: nu sunt eșecuri, așteaptă repornirea. Doar comenzile de la
-     * pragul trimiterii (`erp_trimite_din`, pragTrimitere): cele de dinainte nu
-     * pleacă automat; fără prag scris încă, niciuna (`prag` spune care e cazul).
+     * oprit în ERP: nu sunt eșecuri, așteaptă repornirea. Pragul trimiterii
+     * (`erp_trimite_din`, pragTrimitere, filtruPrag): istoricul de dinainte pe care
+     * ERP-ul nu l-a văzut niciodată nu pleacă automat; fără prag scris încă,
+     * nicio comandă (`prag` spune care e cazul).
      *
      * @return array{incercate: int, reusite: int, esuate: int, tinute: int, prag: string, prag_din: ?string}
      */

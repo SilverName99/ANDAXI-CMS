@@ -9,13 +9,14 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/test-reparatii.php
  *
  * A. Ofertele BBD în admin: rezervările comenzilor demo pe o ofertă (Admin → Produse, fereastra produsului) se
- *    numără și după ce i se schimbă prețul redus (cheia rămâne; C1, din WP-R); o salvare a produsului fără câmpul
- *    ofertelor (JavaScript căzut) le păstrează (C2).
+ *    numără și după ce i se schimbă prețul redus (cheia rămâne; C1, din WP-R); o salvare a produsului care nu trimite
+ *    deloc câmpul ofertelor (alt formular, o unealtă; formularul din Produse îl trimite mereu) le păstrează (C2).
  * B. Postarea importată cu categoria doar ca text (X1b): editorul o arată ca notă și o trimite înapoi, re-salvarea
  *    o păstrează; o categorie din listă cu același nume, cu numele scris altfel (fără diacritice, alte litere mari)
  *    sau cu slug-ul textului e bifată, iar re-salvarea o leagă.
- * C. Adminul: CodeMirror și js-beautify doar în cele patru editoare de cod (C6); pozele selectoarelor de imagini
- *    se încarcă leneș (C7).
+ * C. Adminul: CodeMirror și js-beautify doar în cele patru editoare de cod (C6; al patrulea, șablonul de blog, pe un
+ *    șablon făcut aici, fiindcă datele demo n-au niciunul); pozele celor șase selectoare de imagini (produse, Setări
+ *    magazin, newslettere, editorul postării, autorii blogului) se încarcă leneș (C7).
  * D. Garda pluginurilor pe /api/…, cu licența „prezentare” (fără magazin): JSON-ul are și `error` (X6).
  * E. Stocul din ERP (C3), cu ERP-ul fals: un SKU necunoscut în ERP se întreabă o dată la 60 de secunde, nu la
  *    fiecare afișare (și din nou după 60 de secunde); un ERP care răspunde cu eroare nu mai e întrebat 60 de
@@ -25,8 +26,11 @@ declare(strict_types=1);
  *    unui produs (care ține sesiunea) o ține în loc, deci măsurătoarea vede o serializare.
  * G. Pragul trimiterii în ERP (E1, `erp_trimite_din`): cu o dată, cronul trimite doar comanda de după prag, scrie
  *    de ce și numărătorile din Setări → ERP ANDAXI spun același lucru; Admin → Comenzi arată comanda de dinainte
- *    („ERP: înainte de legare”, 🔄 cu confirmare) și o trimite de mână; cu `''` totul ca până acum; cu cheia
- *    lipsă sau greșită, nimic nu pleacă automat.
+ *    („ERP: înainte de legare”, 🔄 cu confirmare) și o trimite de mână. O comandă de dinainte deja în fluxul
+ *    ERP-ului (ajunsă acolo, trimisă o dată, încercată de la prag cu ERP-ul căzut, ținută de modulul oprit în ERP)
+ *    nu e ținută de prag: o trimitere eșuată se reîncearcă automat, contoarele o numără la „Eșuate”, fără eticheta
+ *    „înainte de legare” (fiecare urmă pe rând). Cu `''` totul ca până acum; cu cheia lipsă sau greșită, nimic nu
+ *    pleacă automat.
  *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
  * stocului din ERP și sesiunile făcute aici. Serverul de dezvoltare se oprește la final dacă l-a pornit testul, ERP-ul
@@ -427,18 +431,32 @@ $scrie('== C. Adminul: CodeMirror doar în editoarele de cod (C6), pozele select
 $cdn = 'https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js';
 $idPagina = $unu('SELECT id FROM pages ORDER BY id LIMIT 1');
 $idSablon = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
+// Al patrulea editor de cod, al șabloanelor de blog: datele demo n-au niciun șablon de blog, deci testul face unul
+// (baza se pune la loc la final).
+$db->prepare('INSERT INTO blog_templates (name, slug, description, html_content, css_content, js_content, is_active)
+    VALUES (?, ?, ?, ?, \'\', \'\', 1)')->execute(['Șablon de test (test-reparatii)', 'sablon-test-reparatii-' . getmypid(), '',
+    '<article><h1>{{blog_title}}</h1>{{blog_content}}</article>']);
+$idSablonBlog = (int) $db->lastInsertId();
 foreach (['/admin/design' => true, '/admin/pages/' . $idPagina . '/edit' => true, '/admin/pages/new' => true,
-    '/admin/products/templates/' . $idSablon . '/builder' => true, '/admin' => false, '/admin/products' => false,
-    '/admin/orders' => false, '/admin/blog/posts/editor?post=' . $idPostare => false, '/admin/settings/store' => false] as $cale => $cuEditor) {
+    '/admin/products/templates/' . $idSablon . '/builder' => true, '/admin/blog/templates/' . $idSablonBlog . '/builder' => true,
+    '/admin' => false, '/admin/products' => false, '/admin/orders' => false, '/admin/blog/posts/editor?post=' . $idPostare => false,
+    '/admin/settings/store' => false, '/admin/blog/templates' => false, '/admin/blog/authors' => false] as $cale => $cuEditor) {
     $r = $cerere('GET', $cale, $jarAdmin);
     $verifica($cale . ': ' . ($cuEditor ? 'încarcă' : 'nu încarcă') . ' CodeMirror și js-beautify',
         $r['cod'] === 200 && str_contains($r['corp'], $cdn) === $cuEditor && str_contains($r['corp'], 'beautify-html.min.js') === $cuEditor,
         'cod ' . $r['cod']);
 }
-foreach (['/admin/products', '/admin/settings/store', '/admin/blog/posts/editor?post=' . $idPostare] as $cale) {
+// Câte poze are fiecare selector (galeria demo, cu filtrul și limita controllerului, ca în compara-cu-baza.php): produse
+// și Setări magazin doar „image” (300; Setări magazin are două selectoare), celelalte „image” sau fără tip (500).
+$pozeImagine = min(300, (int) $unu("SELECT COUNT(*) FROM gallery_images WHERE media_type = 'image'"));
+$pozeSauFaraTip = min(500, (int) $unu("SELECT COUNT(*) FROM gallery_images WHERE media_type = 'image' OR media_type IS NULL"));
+foreach (['/admin/products' => $pozeImagine, '/admin/settings/store' => 2 * $pozeImagine,
+    '/admin/emails/newsletters?tab=campaigns' => $pozeSauFaraTip, '/admin/blog/posts/editor?post=' . $idPostare => $pozeSauFaraTip,
+    '/admin/blog/authors' => $pozeSauFaraTip] as $cale => $pozeAsteptate) {
     $r = $cerere('GET', $cale, $jarAdmin);
-    $verifica($cale . ': pozele selectorului de imagini au loading="lazy" decoding="async"',
-        $r['cod'] === 200 && substr_count($r['corp'], '<img loading="lazy" decoding="async" src=') >= 1, 'cod ' . $r['cod']);
+    $lenese = substr_count($r['corp'], '<img loading="lazy" decoding="async" src="');
+    $verifica($cale . ': fiecare poză a selectorului de imagini (' . $pozeAsteptate . ') are loading="lazy" decoding="async"',
+        $r['cod'] === 200 && $pozeAsteptate >= 1 && $lenese === $pozeAsteptate, 'cod ' . $r['cod'] . ', găsite ' . $lenese);
 }
 
 // =====================================================================
@@ -622,10 +640,11 @@ if (count($comenzi) < 2) {
     $prag = date('Y-m-d H:i:s', time() - 3600);
     $puneDeTrimis = static function () use ($db, $veche, $noua, $prag): void {
         $db->exec("UPDATE orders SET erp_status = 'sent' WHERE deleted_at IS NULL");
-        $db->prepare("UPDATE orders SET erp_status = 'pending', erp_attempts = 0, erp_next_retry_at = NULL, erp_order_id = NULL,
-            erp_last_error = NULL, created_at = :c WHERE id = :id")->execute(['c' => date('Y-m-d H:i:s', strtotime($prag) - 2 * 86400), 'id' => $veche['id']]);
-        $db->prepare("UPDATE orders SET erp_status = 'pending', erp_attempts = 0, erp_next_retry_at = NULL, erp_order_id = NULL,
-            erp_last_error = NULL, created_at = :c WHERE id = :id")->execute(['c' => date('Y-m-d H:i:s', strtotime($prag) + 600), 'id' => $noua['id']]);
+        // Netrimise și neîncercate niciodată (nicio urmă a ERP-ului): cea veche e istoricul pe care pragul îl ține deoparte.
+        $faraUrme = "UPDATE orders SET erp_status = 'pending', erp_attempts = 0, erp_next_retry_at = NULL, erp_order_id = NULL,
+            erp_last_error = NULL, erp_synced_at = NULL, erp_last_attempt_at = NULL, created_at = :c WHERE id = :id";
+        $db->prepare($faraUrme)->execute(['c' => date('Y-m-d H:i:s', strtotime($prag) - 2 * 86400), 'id' => $veche['id']]);
+        $db->prepare($faraUrme)->execute(['c' => date('Y-m-d H:i:s', strtotime($prag) + 600), 'id' => $noua['id']]);
     };
     $cereriComenzi = static fn (): array => array_values(array_map(static fn (array $r): string => (string) ($r['numar'] ?? ''),
         array_filter($cereriErp(), static fn (array $r): bool => ($r['cale'] ?? '') === '/api/comenzi-site/ingest')));
@@ -661,7 +680,8 @@ if (count($comenzi) < 2) {
     $textCron = implode("\n", $iesireCron);
     $verifica('cronul erp-sync.php trimite doar comanda de după prag (' . $noua['order_number'] . ') și spune de ce nu și pe cealaltă',
         $codCron === 0 && str_contains($textCron, 'Comenzi încercate: 1 — trimise: 1, eșuate: 0')
-        && str_contains($textCron, 'Comenzile plasate înainte de ' . $prag . ' (legarea cu ERP-ul) nu se trimit automat.')
+        && str_contains($textCron, 'Comenzile plasate înainte de ' . $prag . ' (legarea cu ERP-ul) pe care ERP-ul nu le-a primit niciodată '
+            . 'nu se trimit automat.')
         && $cereriComenzi() === [(string) $noua['order_number']],
         'cod ' . $codCron . ', ' . $textCron . ', ERP-ul a primit: ' . json_encode($cereriComenzi()));
     $stari = $db->query('SELECT id, erp_status, erp_order_id FROM orders WHERE id IN (' . (int) $veche['id'] . ', ' . (int) $noua['id'] . ') ORDER BY id')
@@ -677,13 +697,63 @@ if (count($comenzi) < 2) {
         'erp_api_key' => '', 'erp_timeout' => '20']);
     $flash = $cerere('GET', '/admin/settings/erp', $jarAdmin)['corp'];
     $verifica('„Retrimite” din Setări → ERP: nimic de retrimis, cu nota pragului', $r['cod'] === 302
-        && str_contains($flash, 'Nu există comenzi de retrimis acum.') && str_contains($flash, '(legarea cu ERP-ul) nu se retrimit de aici')
+        && str_contains($flash, 'Nu există comenzi de retrimis acum.')
+        && str_contains($flash, '(legarea cu ERP-ul) pe care ERP-ul nu le-a primit niciodată nu se trimit de aici')
         && count($cereriComenzi()) === 1, 'cod ' . $r['cod']);
     $r = $cerere('POST', '/admin/orders/' . (int) $veche['id'] . '/erp-retry', $jarAdmin);
     $verifica('🔄 pe comanda de dinainte o trimite de mână', $r['cod'] === 302
         && $unu('SELECT erp_status FROM orders WHERE id = ' . (int) $veche['id']) === 'sent'
         && $cereriComenzi() === [(string) $noua['order_number'], (string) $veche['order_number']], 'cod ' . $r['cod'] . ', ERP-ul a primit '
         . json_encode($cereriComenzi()) . ', eroarea: ' . $unu('SELECT erp_last_error FROM orders WHERE id = ' . (int) $veche['id']));
+
+    // Comanda de dinainte deja în fluxul ERP-ului (revizuirea WP-12): pragul ține deoparte doar istoricul pe care ERP-ul nu
+    // l-a văzut niciodată. Cu fiecare urmă pe rând, pe comanda de dinainte (cea de după prag rămâne de trimis): contoarele o
+    // numără la „Eșuate” sau „În așteptare”, nu la cele de dinainte, rândul ei din Comenzi n-are „înainte de legare”, iar
+    // retryPending le trimite pe amândouă. Urma „încercată de la prag” e făcută chiar de 🔄, cu ERP-ul fals căzut.
+    $urme = [
+        'ajunsă în ERP (referința erp_order_id), cu o modificare eșuată' => ['failed', static function () use ($db, $veche): void {
+            $db->prepare("UPDATE orders SET erp_status = 'failed', erp_order_id = :ref, erp_attempts = 2,
+                erp_last_error = 'ERP-ul nu a răspuns (test-reparatii).' WHERE id = :id")
+                ->execute(['ref' => 'FALS-' . $veche['order_number'], 'id' => $veche['id']]);
+        }],
+        'trimisă o dată (erp_synced_at), fără referință, cu o modificare eșuată' => ['failed', static function () use ($db, $veche, $prag): void {
+            $db->prepare("UPDATE orders SET erp_status = 'failed', erp_synced_at = :la, erp_attempts = 2,
+                erp_last_error = 'ERP-ul nu a răspuns (test-reparatii).' WHERE id = :id")
+                ->execute(['la' => date('Y-m-d H:i:s', strtotime($prag) - 86400), 'id' => $veche['id']]);
+        }],
+        'trimisă de mână (🔄) de la prag, cu ERP-ul căzut' => ['failed', static function () use ($db, $veche, $cerere, $jarAdmin, $scrieErp, $unu, $verifica): void {
+            $scrieErp('mod', '500');
+            $cerere('POST', '/admin/orders/' . (int) $veche['id'] . '/erp-retry', $jarAdmin);
+            $scrieErp('mod', 'normal');
+            $verifica('… 🔄 cu ERP-ul căzut: comanda e „eșuată”, cu încercarea notată', $unu('SELECT CONCAT(erp_status, \'/\', erp_attempts, \'/\',
+                erp_last_attempt_at IS NOT NULL) FROM orders WHERE id = ' . (int) $veche['id']) === 'failed/1/1');
+            // Termenul reîncercării (backoff) a venit.
+            $db->prepare('UPDATE orders SET erp_next_retry_at = NULL WHERE id = :id')->execute(['id' => $veche['id']]);
+        }],
+        'ținută de modulul „Magazin online” oprit în ERP (repornit între timp)' => ['pending', static function () use ($db, $veche): void {
+            $db->prepare("UPDATE orders SET erp_status = 'pending', erp_last_error = :e WHERE id = :id")
+                ->execute(['e' => \App\Support\ErpModul::mesaj(\App\Support\ErpModul::OPRIT), 'id' => $veche['id']]);
+        }],
+    ];
+    foreach ($urme as $descriere => [$stareErp, $pregateste]) {
+        $scrieErp('cereri.jsonl', '');
+        $puneDeTrimis();
+        $pregateste();
+        $scrieErp('cereri.jsonl', '');
+        $c = $contoare();
+        $verifica('comanda de dinainte ' . $descriere . ': contoarele o numără la „' . ($stareErp === 'failed' ? 'Eșuate' : 'În așteptare')
+            . '”, 0 de dinainte', $c['in_asteptare'] === ($stareErp === 'failed' ? 1 : 2) && $c['esuate'] === ($stareErp === 'failed' ? 1 : 0)
+            && $c['prag'] === 'data' && $c['inainte_de_prag'] === 0, json_encode(array_diff_key($c, ['corp' => 1])));
+        $html = $randComanda((string) $veche['order_number']);
+        $verifica('… în Comenzi fără „ERP: înainte de legare” și fără confirmarea ei',
+            !str_contains($html, 'ERP: înainte de legare') && !str_contains($html, 'e de dinainte de legarea cu ERP-ul'));
+        $rezultat = ErpSync::retryPending($db);
+        $verifica('… retryPending o reîncearcă (și pe cea de după prag): ERP-ul le primește pe amândouă, cea veche e trimisă',
+            $rezultat['incercate'] === 2 && $rezultat['reusite'] === 2
+            && $cereriComenzi() === [(string) $veche['order_number'], (string) $noua['order_number']]
+            && $unu('SELECT erp_status FROM orders WHERE id = ' . (int) $veche['id']) === 'sent',
+            json_encode($rezultat) . ', ERP-ul a primit ' . json_encode($cereriComenzi()));
+    }
 
     // Fără prag (''): ca până acum.
     $scrieErp('cereri.jsonl', '');

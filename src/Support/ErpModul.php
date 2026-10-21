@@ -31,9 +31,10 @@ final class ErpModul
 
     /**
      * Începutul mesajului pus pe comenzile ținute pe site din cauza modulului.
-     * După el le găsește repornirea, ca să le scoată din pauză.
+     * După el le găsește repornirea, ca să le scoată din pauză, și pragul
+     * trimiterii (ErpSync::filtruPrag), ca să nu le țină pe cele de dinainte.
      */
-    private const PREFIX = 'Modulul „Magazin online” ';
+    public const PREFIX = 'Modulul „Magazin online” ';
 
     private const SETARE_STARE = 'erp_modul_magazin';
     private const SETARE_LA = 'erp_modul_magazin_la';

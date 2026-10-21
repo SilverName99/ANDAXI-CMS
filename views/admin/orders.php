@@ -4,8 +4,8 @@ $areFan = \App\Support\Plugins::vizibil('livrare_fan');
 $areErp = \App\Support\Plugins::vizibil('erp');
 // Textele care pomenesc ERP-ul: pe un site fără pluginul ERP rămâne doar ce se întâmplă pe site.
 $cuErp = static fn (string $text, string $faraErp): string => $areErp ? $text : $faraErp;
-// Pragul trimiterii în ERP (erp_trimite_din, WP-12 E1): comenzile de dinainte nu pleacă automat.
-$pragErp = is_array($pragErp ?? null) ? $pragErp : ['stare' => 'fara', 'din' => null];
+// Pragul trimiterii în ERP (erp_trimite_din, WP-12 E1): id-urile comenzilor pe care pragul le ține deoparte.
+$erpTinuteDePrag = is_array($erpTinuteDePrag ?? null) ? $erpTinuteDePrag : [];
 $arePromo = \App\Support\Plugins::vizibil('produse_promo');
 $arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
 $areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
@@ -427,9 +427,10 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                         ][$erpStatus] ?? 'warn';
                         $erpEticheta = (string) ($erpLabels[$erpStatus] ?? $erpStatus);
                         $erpTitluStare = $erpError !== '' ? $erpError : ($erpProblems !== '' ? 'De rezolvat în ERP: ' . $erpProblems : '');
-                        // Comanda de dinainte de pragul trimiterii (erp_trimite_din, WP-12 E1): nu pleacă automat.
+                        // Comanda de dinainte de pragul trimiterii (erp_trimite_din, WP-12 E1), pe care ERP-ul n-a văzut-o
+                        // niciodată: nu pleacă automat. Una ajunsă în ERP sau încercată de la prag își arată starea ERP.
                         $erpInainteDePrag = $erpEnabled && in_array($erpStatus, ['pending', 'failed'], true)
-                            && \App\Support\ErpSync::inainteDePrag($pragErp, (string) ($order['created_at'] ?? ''));
+                            && isset($erpTinuteDePrag[(int) ($order['id'] ?? 0)]);
                         if ($erpInainteDePrag) {
                             $erpPill = 'muted';
                             $erpEticheta = 'ERP: înainte de legare';

@@ -681,6 +681,12 @@ doar chei citite de migrările din `database/migrari/`, valori permise și chei 
    se pun la loc valorile Bioscem.
 3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe site-ul live `--plan`, apoi `--aplica` (fără
    `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12): o corectură e `setari-inghetate-2.json`.
+4. Pe site-ul live, `--aplica` rulează **imediat după urcarea codului comun** și se reia până termină (codul 13,
+   bugetul de timp: rulezi din nou). Până la pasul site-ului (înghețarea setărilor) cheia `erp_trimite_din` lipsește,
+   iar fără ea ERP-ul nu primește nimic automat (WP-12 E1; [PLUGINURI.md](PLUGINURI.md), `erp`): comenzile noi pleacă
+   la plasare, ca înainte, dar cronul `erp-sync.php` și „Retrimite” nu reîncearcă nicio trimitere eșuată (cronul scrie
+   „Pragul trimiterii (erp_trimite_din) lipsește”, Setări → ERP ANDAXI arată nota „nu e încă scris”). După `--aplica`
+   cheia e scrisă (gol la Bioscem) și cele rămase pleacă la rularea următoare a cronului.
 
 Comparația calculelor de pe copie (`tools/verificare/compara-calcule.php`, WP-11; [VERIFICARE.md](VERIFICARE.md),
 „Comparația calculelor”) cere baza la zi cu codul comun: dacă garda spune `in_urma` (cod nou urcat după încărcare),
