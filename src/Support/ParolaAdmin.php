@@ -11,7 +11,9 @@ namespace App\Support;
  * verifică, rând cu rând, că SQL-ul și `fel()` spun același lucru).
  *
  * - `hash`: un hash pe care PHP-ul îl recunoaște (`password_get_info()['algo'] !== null`: bcrypt `$2y$` de 60 de
- *   octeți, argon2i, argon2id). Se verifică doar cu `password_verify`; la logare se reface după `deRefacut()`.
+ *   octeți, argon2i, argon2id) și care începe chiar cu `$2y$`, `$argon2i$` sau `$argon2id$` (`password_get_info` nu
+ *   se uită la primul caracter al unui argon2: „xargon2id$…” e un text, nu un hash). Se verifică doar cu
+ *   `password_verify`; la logare se reface după `deRefacut()`.
  * - `bcrypt_vechi`: bcrypt `$2a$` sau `$2b$` de 60 de octeți. `password_get_info` nu le recunoaște, dar
  *   `password_verify` le verifică, ca și codul de dinainte (care se uita doar la începutul valorii); la prima
  *   logare devin `$2y$`. Fără regula asta, un astfel de admin ar fi ajuns la comparația în clar și n-ar mai fi
@@ -62,7 +64,10 @@ final class ParolaAdmin
         if ($stocat === '') {
             return self::GOL;
         }
-        if (password_get_info($stocat)['algo'] !== null) {
+        // password_get_info citește numele algoritmului de la al doilea caracter, iar la argon2 nu se uită la primul:
+        // „xargon2id$…” ar fi un argon2id. Un hash începe deci și cu unul dintre începuturile de mai sus (aceleași ca
+        // în SQL-ul numărătorii WP-10).
+        if (self::incepeCaHashCunoscut($stocat) && password_get_info($stocat)['algo'] !== null) {
             return self::HASH;
         }
         foreach (self::PREFIXE_BCRYPT_VECHI as $prefix) {
@@ -74,6 +79,17 @@ final class ParolaAdmin
             return self::HASH_STRICAT;
         }
         return self::TEXT_CLAR;
+    }
+
+    /** Începe valoarea cu `PREFIX_BCRYPT` sau cu unul dintre `PREFIXE_ARGON` (comparat ca octeți)? */
+    private static function incepeCaHashCunoscut(string $stocat): bool
+    {
+        foreach (array_merge([self::PREFIX_BCRYPT], self::PREFIXE_ARGON) as $prefix) {
+            if (str_starts_with($stocat, $prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

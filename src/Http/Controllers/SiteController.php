@@ -20,6 +20,7 @@ use App\Support\NewsletterService;
 use App\Support\OrderMailer;
 use App\Support\OrderNumber;
 use App\Support\PaymentMethods;
+use App\Support\Sesiune;
 use App\Support\Settings;
 use App\Support\VideoEmbed;
 use App\Support\EuPlatescGateway;
@@ -1704,7 +1705,7 @@ final class SiteController
         // pentru reîncercare și clientul nu vede nicio eroare. Precomenzile se
         // opresc singure în `ErpSync`, până la butonul din „Precomenzi".
         \App\Support\ErpSync::push($db, $orderId);
-        EmailAutomation::markCartConverted($db, session_id());
+        EmailAutomation::markCartConverted($db, Sesiune::cheieCosAbandonat());
         Cart::clear();
         unset($_SESSION['checkout_form']);
 
@@ -1749,7 +1750,7 @@ final class SiteController
         // EuPlătesc — procesatorul implicit — rămâneau cu coșul „abandonat" și
         // primeau ulterior emailul „ați uitat produse în coș", deși plătiseră.
         if ($db instanceof PDO && ($stripeReturn || $euplatescReturn || $btReturn)) {
-            EmailAutomation::markCartConverted($db, session_id());
+            EmailAutomation::markCartConverted($db, Sesiune::cheieCosAbandonat());
         }
 
         $paymentStatus = null;
@@ -2220,7 +2221,7 @@ final class SiteController
         $settings = Settings::all($db);
         $summary = CheckoutCalculator::buildSummary($db, $settings);
         if (($summary['lines'] ?? []) === []) {
-            EmailAutomation::markCartConverted($db, session_id());
+            EmailAutomation::markCartConverted($db, Sesiune::cheieCosAbandonat());
             http_response_code(204);
             return;
         }
@@ -2267,7 +2268,10 @@ final class SiteController
         }
         $cartSnapshot = implode("\n", $parts);
 
-        EmailAutomation::touchCartAbandonment($db, session_id(), [
+        // Cheia rândului e id-ul sesiunii de dinainte de prima logare (WP-12b, Sesiune::cheieCosAbandonat): un
+        // browser are un singur rând, ca înainte ca logarea să schimbe id-ul; în sesiunea înlocuită la logare e
+        // goală, deci nu se scrie nimic.
+        EmailAutomation::touchCartAbandonment($db, Sesiune::cheieCosAbandonat(), [
             'email' => $email,
             'customer_name' => $customerName,
             'cart_snapshot' => $cartSnapshot,
@@ -6458,7 +6462,7 @@ CSS;
      * nimic de păstrat în ea: superglobala rămâne citibilă, dar ce se mai scrie nu se mai salvează
      * (verificat: sumarul nu scrie coșul; `Cart` normalizează doar ce citește; `CustomerAuth::user`
      * deloghează un cont șters, iar pierderea acelei scrieri e fără urmări, cererea următoare o
-     * face din nou). `session_id()` merge în continuare.
+     * face din nou). `session_id()` și `Sesiune::cheieCosAbandonat()` merg în continuare.
      */
     private function elibereazaSesiunea(): void
     {

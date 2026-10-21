@@ -12,12 +12,16 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/test-securitate.php
  *
  * A. Fără server: regula parolelor salvate (`App\Support\ParolaAdmin::fel`) pe fiecare fel de valoare (și pe cele la
- *    care s-ar putea greși: bcrypt de altă lungime, argon2, alte hash-uri ca `$6$`, `$1$`, `$2x$`, `$P$`, `$wp$`, un
- *    spațiu, texte cu `$`); orice algoritm al PHP-ului de acum dă un hash pe care regula nu-l ia drept text clar;
- *    refacerea după logare (`ParolaAdmin::deRefacut`: nu coboară costul); `Auth::attempt` refuză o parolă goală
- *    salvată (și cu parola goală) și nu atinge rândul la o parolă greșită; id-ul nou de sesiune nu face nimic în linia de comandă;
- *    condiția SQL a limitelor (`IpClient::conditieLimita`: IPv6 pe /64, IPv4 exact) numără la fel pe MariaDB și pe
- *    MySQL 8 (pornit și oprit aici dacă nu mergea), și pe valori scrise de codul vechi.
+ *    care s-ar putea greși: bcrypt de altă lungime, argon2, argon2 fără `$` în față, alte hash-uri ca `$6$`, `$1$`,
+ *    `$2x$`, `$P$`, `$wp$`, un spațiu, texte cu `$`); orice algoritm al PHP-ului de acum dă un hash pe care regula nu-l
+ *    ia drept text clar; refacerea după logare (`ParolaAdmin::deRefacut`: nu coboară costul); `Auth::attempt` refuză o
+ *    parolă goală salvată (și cu parola goală) și nu atinge rândul la o parolă greșită; id-ul nou de sesiune nu face
+ *    nimic în linia de comandă, iar pe fișiere de sesiune adevărate (un PHP separat) lasă în fișierul id-ului de
+ *    dinainte coșul, fără nicio logare, însemnat ca înlocuit, și dă sesiunii noi logările și cheia coșului abandonat;
+ *    o adresă IPv6 în `REMOTE_ADDR` (cu un `X-Forwarded-For` inventat) și un `X-Forwarded-For` IPv6 fără paranteze, care
+ *    se termină în cifre, de la un proxy de încredere (predarea primei rulări pe Hostinger); condiția SQL a limitelor
+ *    (`IpClient::conditieLimita`: IPv6 pe /64, IPv4 exact) numără la fel pe MariaDB și pe MySQL 8 (pornit și oprit aici
+ *    dacă nu mergea), și pe valori scrise de codul vechi.
  *    Căutarea în cod: adresa vizitatorului (`REMOTE_ADDR`, `X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`,
  *    `Client-IP`, `Forwarded`) se citește doar în `IpClient` și în sonda copiei de verificare; cine s-a logat se scrie
  *    în sesiune doar în `Auth::attempt` și `CustomerAuth::login`, fiecare după id-ul nou. Căutarea pică pe un text
@@ -32,7 +36,12 @@ declare(strict_types=1);
  * C. Id-ul sesiunii (N15): la logarea adminului, a clientului (parola) și la contul nou, cookie-ul primește alt id; cu
  *    id-ul de dinainte (ca un atacator care l-a fixat) nu e nimeni logat, dar coșul de dinainte e acolo; cu id-ul nou
  *    coșul a trecut și logarea e acolo; un id inventat nu e primit (strict mode); adminul logat peste un client logat
- *    păstrează și clientul, și coșul.
+ *    păstrează și clientul, și coșul, iar clientul peste un admin la fel; în ambele cazuri id-ul de dinainte (un cookie
+ *    copiat) nu mai are nicio logare, deci după ieșirea din cont nu mai deschide nici /admin, nici Contul meu. Coșul
+ *    abandonat: musafirul care își scrie emailul, se loghează și pleacă are un singur rând (cheia de dinainte de logare)
+ *    și primește un singur email de la cron (`scripts/abandoned-cart-emails.php`); cel care comandă după logare nu
+ *    primește niciunul, nici pe emailul scris înainte; id-ul înlocuit nu mai scrie nimic. Jurnalele limitelor se golesc
+ *    la început (încercările altor teste din ultimele 15 minute ar opri înregistrarea).
  * D. Adresa vizitatorului (G-m2): pe serverul obișnuit, un `X-Forwarded-For` (și `X-Real-IP`, `CF-Connecting-IP`)
  *    schimbat la fiecare cerere nu ocolește limita checkout-ului (10 în 15 minute) și nici pe a înregistrării (8),
  *    rândurile au adresa reală; pe serverul din spatele proxy-ului de încredere: adresa e prima din dreapta care nu e
@@ -102,6 +111,11 @@ $cazuriFel = [
     '$2a$ de altă lungime' => ['$2a$10$scurt', ParolaAdmin::HASH_STRICAT],
     // password_get_info se uită doar la începutul unui argon2: e un hash (password_verify nu-l potrivește cu nimic).
     '$argon2id$ cu restul stricat' => ['$argon2id$nimic', ParolaAdmin::HASH],
+    // … și nici la primul lui caracter („xargon2id$…” îi pare argon2id): fără „$” în față e un text, comparat în clar
+    // (și numărat ca text clar în SQL-ul WP-10), nu un hash la care nu intră nimeni.
+    'xargon2id$… (argon2id fără „$” în față)' => ['xargon2id$v=19$m=65536,t=4,p=1$Parola', ParolaAdmin::TEXT_CLAR],
+    'Xargon2i$… (argon2i fără „$” în față)' => ['Xargon2i$v=19$m=1', ParolaAdmin::TEXT_CLAR],
+    'X2y$… de 60 de octeți (bcrypt fără „$” în față)' => ['X' . substr($bcrypt, 1), ParolaAdmin::TEXT_CLAR],
     // Alte hash-uri (password_verify știe unele, dar logarea adminului nu le verifică): niciodată în clar.
     '$2x$ (bcrypt-ul cu defect)' => ['$2x$' . substr($bcrypt, 4), ParolaAdmin::HASH_STRICAT],
     'SHA-512 crypt ($6$)' => [crypt('x', '$6$rounds=5000$saredemo$'), ParolaAdmin::HASH_STRICAT],
@@ -173,6 +187,95 @@ $verifica('ParolaAdmin::deRefacut: bcrypt vechi, argon2 și un cost mic se refac
     $gresite === [], implode('; ', $gresite));
 $verifica('Sesiune::idNouLaLogare în linia de comandă (fără sesiune): nu face nimic', Sesiune::idNouLaLogare() === false && session_status() !== PHP_SESSION_ACTIVE);
 
+// Sesiune::idNouLaLogare pe fișiere de sesiune adevărate, într-un PHP separat (aici antetele au plecat odată cu primul
+// rând al raportului): ce rămâne în fișierul id-ului de dinainte și ce trece în cel nou. Așa se vede și ce nu se poate
+// vedea prin server: o cerere care citește id-ul de dinainte după logare (heartbeat-ul care aștepta lacătul) îl găsește
+// însemnat, deci nu atinge coșul abandonat, iar cheia coșului din sesiunea nouă e chiar id-ul de dinainte (cea pe care
+// scrie un heartbeat care citise sesiunea chiar înainte de logare).
+$dosarSesiuneTest = $dosarDev . '/test-securitate-sesiuni-' . getmypid();
+@mkdir($dosarSesiuneTest, 0700, true);
+$scriptSesiune = $dosarSesiuneTest . '/sesiune.php';
+file_put_contents($scriptSesiune, <<<'PHP'
+<?php
+declare(strict_types=1);
+ob_start();
+require $argv[1] . '/bootstrap.php';
+use App\Support\Sesiune;
+ini_set('session.save_handler', 'files');
+ini_set('session.save_path', $argv[2]);
+ini_set('session.use_cookies', '0');
+ini_set('session.use_only_cookies', '0');
+ini_set('session.use_strict_mode', '1');
+ini_set('session.cache_limiter', '');
+$citeste = static function (string $id): array {
+    session_id($id);
+    session_start();
+    $date = $_SESSION;
+    session_write_close();
+    return $date;
+};
+session_start();
+$a = session_id();
+$_SESSION = ['cart' => ['items' => [7 => 1]], 'checkout_form' => ['billing_email' => 'musafir@exemplu.ro'], 'admin_id' => 3,
+    'admin_roles' => ['administrator_general'], 'admin_role' => 'administrator_general', 'admin_last_seen' => 1, 'customer_user_id' => 5];
+session_write_close();
+session_id($a);
+session_start();
+$cheieInainte = Sesiune::cheieCosAbandonat();
+$schimbat = Sesiune::idNouLaLogare();
+$_SESSION['customer_user_id'] = 9;
+$b = session_id();
+$cheieNoua = Sesiune::cheieCosAbandonat();
+session_write_close();
+$vechi = $citeste($a);
+$nou = $citeste($b);
+session_id($a);
+session_start();
+$cheieInlocuita = Sesiune::cheieCosAbandonat();
+$schimbatPeInlocuita = Sesiune::idNouLaLogare();
+$c = session_id();
+$cheiePeInlocuita = Sesiune::cheieCosAbandonat();
+session_write_close();
+$dupaA = $citeste($a);
+ob_end_clean();
+fwrite(STDOUT, json_encode(compact('a', 'b', 'c', 'cheieInainte', 'schimbat', 'cheieNoua', 'vechi', 'nou', 'cheieInlocuita',
+    'schimbatPeInlocuita', 'cheiePeInlocuita', 'dupaA')));
+PHP);
+$rezultatSesiune = json_decode((string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($scriptSesiune) . ' '
+    . escapeshellarg($radacina) . ' ' . escapeshellarg($dosarSesiuneTest) . ' 2>&1'), true);
+foreach (glob($dosarSesiuneTest . '/*') ?: [] as $fisierSesiune) {
+    @unlink($fisierSesiune);
+}
+@rmdir($dosarSesiuneTest);
+$rs = is_array($rezultatSesiune) ? $rezultatSesiune : [];
+$fara = static fn (array $date): bool => array_intersect(Sesiune::CHEI_LOGARE, array_keys($date)) === [];
+$verifica('Sesiune::idNouLaLogare pe fișiere: id nou; în fișierul id-ului de dinainte rămân coșul și formularul, fără nicio logare (admin_*, customer_user_id), cu însemnul „înlocuită” și cheia coșului = id-ul de dinainte',
+    ($rs['schimbat'] ?? null) === true && ($rs['a'] ?? '') !== '' && ($rs['b'] ?? '') !== '' && $rs['a'] !== $rs['b'] && $fara($rs['vechi'] ?? ['admin_id' => 1])
+    && ($rs['vechi']['cart'] ?? null) === ['items' => [7 => 1]] && ($rs['vechi']['checkout_form']['billing_email'] ?? '') === 'musafir@exemplu.ro'
+    && isset($rs['vechi'][Sesiune::CHEIE_INLOCUITA]) && ($rs['vechi'][Sesiune::CHEIE_COS_ABANDONAT] ?? '') === $rs['a'],
+    json_encode($rezultatSesiune));
+$verifica('… în sesiunea nouă: coșul, logările de dinainte (adminul, clientul) și cea nouă, fără însemn; cheia coșului abandonat rămâne id-ul de dinainte (un singur rând pe browser)',
+    ($rs['nou']['cart'] ?? null) === ['items' => [7 => 1]] && ($rs['nou']['admin_id'] ?? null) === 3 && ($rs['nou']['customer_user_id'] ?? null) === 9
+    && !isset($rs['nou'][Sesiune::CHEIE_INLOCUITA]) && ($rs['cheieInainte'] ?? '') === ($rs['a'] ?? '-') && ($rs['cheieNoua'] ?? '') === ($rs['a'] ?? '-'),
+    json_encode($rezultatSesiune));
+$verifica('… cu id-ul de dinainte: cheia coșului e goală (nu atinge rândul); o logare pe el dă alt id, cu o cheie nouă (nu ia rândul celui care s-a logat întâi), iar fișierul lui rămâne însemnat',
+    ($rs['cheieInlocuita'] ?? null) === '' && ($rs['schimbatPeInlocuita'] ?? null) === true && ($rs['c'] ?? '') !== '' && $rs['c'] !== $rs['a']
+    && ($rs['cheiePeInlocuita'] ?? '') === $rs['c'] && isset($rs['dupaA'][Sesiune::CHEIE_INLOCUITA]) && $fara($rs['dupaA'] ?? ['admin_id' => 1]),
+    json_encode($rezultatSesiune));
+
+// Predarea primei rulări pe Hostinger (WP-08a): o adresă IPv6 în REMOTE_ADDR (cu un X-Forwarded-For inventat, fără proxy
+// de încredere) și un X-Forwarded-For IPv6 fără paranteze care se termină în cifre, de la un proxy de încredere (nu e un
+// port). Adresa IPv6 intră mai jos și în condiția limitelor, pe ambele servere (numărată cu rețeaua ei /64).
+$serverInainte = $_SERVER;
+$_SERVER['REMOTE_ADDR'] = '2001:DB8:1:2:0:0:0:1234';
+$_SERVER['HTTP_X_FORWARDED_FOR'] = '2001:db8:9::1';
+$adresaV6 = \App\Support\IpClient::adresa();
+$_SERVER = $serverInainte;
+$dinProxyV6 = \App\Support\IpClient::dinCerere(['REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.9, 2001:db8:1:2::1234'], '10.0.0.0/8');
+$verifica('IPv6: REMOTE_ADDR 2001:DB8:1:2:0:0:0:1234 cu un X-Forwarded-For inventat dă 2001:db8:1:2::1234 (cheia limitei: 2001:db8:1:2::/64); de la un proxy de încredere, X-Forwarded-For „…, 2001:db8:1:2::1234” rămâne întreg',
+    $adresaV6 === '2001:db8:1:2::1234' && \App\Support\IpClient::cheieLimita($adresaV6) === '2001:db8:1:2::/64' && $dinProxyV6 === '2001:db8:1:2::1234',
+    $adresaV6 . ' / ' . $dinProxyV6);
+
 // Condiția SQL a limitelor (IpClient::conditieLimita), pe MariaDB și pe MySQL 8 (pe Hostinger nu se știe încă ce
 // server e): același număr de rânduri pe ambele, pe valori scrise de codul de acum și de cel vechi.
 $sockMaria = (string) (getenv('CMS_DEV_SOCK') ?: '/tmp/claude-0/maria/sock');
@@ -193,7 +296,8 @@ if ($conectare($sockMy8) === null) {
 $valoriSalvate = ['2001:db8:1:2::1', '2001:db8:1:2:ffff:ffff:ffff:ff', '2001:0db8:0001:0002::9', '2001:db8:1:3::1', '198.51.100.7', '198.51.100.70',
     '::ffff:198.51.100.7', '203.0.113.5, 198.51.100.7', 'unknown', '', null];
 $tabelValori = '(' . implode(' UNION ALL ', array_map(static fn ($v): string => 'SELECT ' . ($v === null ? 'NULL' : "'" . $v . "'") . ' AS ip_address', $valoriSalvate)) . ') t';
-$cazuriLimita = ['2001:db8:1:2::abc' => 3, '2001:DB8:1:2:0:0:0:1' => 3, '2001:db8:1:3::ffff' => 1, '2001:db8:9::1' => 0, '198.51.100.7' => 1, '198.51.100.8' => 0];
+$cazuriLimita = ['2001:db8:1:2::abc' => 3, '2001:DB8:1:2:0:0:0:1' => 3, '2001:db8:1:3::ffff' => 1, '2001:db8:9::1' => 0, '198.51.100.7' => 1, '198.51.100.8' => 0,
+    $adresaV6 => 3];
 $rezultateServere = [];
 foreach (['MariaDB' => $sockMaria, 'MySQL 8' => $sockMy8] as $numeServer => $sock) {
     $pdo = $conectare($sock);
@@ -230,12 +334,15 @@ $tiparAdresa = '/\b(REMOTE_ADDR|HTTP_X_FORWARDED_FOR|HTTP_X_REAL_IP|HTTP_CF_CONN
 // Citirile permise: IpClient însuși și sonda copiei de verificare (spune doar ce sosește, ca DA/NU și clasa adresei).
 $permise = [
     'src/Support/IpClient.php' => null,
+    // Liniile exacte ale sondei (`Verificare::raspundeSonda`), și comentariul care numește REMOTE_ADDR.
     'src/Support/Verificare.php' => [
         "\$remote = (string) (\$_SERVER['REMOTE_ADDR'] ?? '');",
         "\$xff = trim((string) (\$_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));",
-        "'x_real_ip' => trim((string) (\$_SERVER['HTTP_X_REAL_IP'] ?? '')) !== '',",
+        "\$xRealIp = trim((string) (\$_SERVER['HTTP_X_REAL_IP'] ?? ''));",
         "'cf_connecting_ip' => trim((string) (\$_SERVER['HTTP_CF_CONNECTING_IP'] ?? '')) !== '',",
         "'forwarded' => trim((string) (\$_SERVER['HTTP_FORWARDED'] ?? '')) !== '',",
+        '// Doar DA/NU, nicio adresă: ultima adresă din X-Forwarded-For și X-Real-IP sunt chiar REMOTE_ADDR? (pe Hostinger, prin',
+        '// CDN-ul hcdn: spune dacă REMOTE_ADDR e vizitatorul; intrare pentru IpClient, WP-12b)',
     ],
 ];
 $cautaAdresa = static function (string $relativ, string $text) use ($tiparAdresa, $permise): array {
@@ -586,6 +693,14 @@ $verifica('bcrypt cu costul ' . ($costServer + 1) . ' (peste cel implicit al ser
 $scrie('');
 $scrie('== C. Id-ul sesiunii: nou la fiecare logare; cu id-ul vechi nu e nimeni logat; coșul trece');
 
+// Jurnalele limitelor (checkout 10, înregistrare 8 în 15 minute, de pe 127.0.0.1) se golesc înainte de C: încercările
+// lăsate de alte teste în ultimele 15 minute ar opri înregistrarea de mai jos (rândurile se pun la loc la final).
+$golesteJurnale = static function () use ($db): void {
+    $db->exec('DELETE FROM checkout_submit_logs');
+    $db->exec('DELETE FROM register_submit_logs');
+};
+$golesteJurnale();
+
 $idMenta = (int) $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'");
 $numeMenta = htmlspecialchars($unu('SELECT name FROM products WHERE id = :id', ['id' => $idMenta]), ENT_QUOTES);
 $areCos = static fn (string $jarul): bool => str_contains($cerere('GET', '/cos', $jarul)['corp'], $numeMenta);
@@ -617,12 +732,33 @@ $verifica('clientul (parola): logarea trimite alt id de sesiune', $r['cod'] === 
 $verifica('… cu id-ul nou clientul e logat și coșul e acolo', $eClient($jar('cli')) && $areCos($jar('cli')));
 $verifica('… cu id-ul de dinainte nu e logat, coșul de dinainte e acolo', !$eClient($jar('cli-atacator')) && $areCos($jar('cli-atacator')));
 
-// Adminul peste clientul logat (același browser): ambele rămân, în sesiunea nouă.
+// Adminul peste clientul logat (același browser): ambele rămân, în sesiunea nouă; id-ul de dinainte nu mai are nicio
+// logare (nici clientul), deci ieșirea din cont în sesiunea nouă închide tot ce era logat în browser.
 copy($jar('cli'), $jar('cli-inainte-de-admin'));
 $r = $logare('acum.wp12b@exemplu.ro', 'Parola-Acum-Demo', $jar('cli'));
-$verifica('adminul logat peste un client logat: alt id, cu clientul, adminul și coșul în el; id-ul de dinainte rămâne doar cu clientul',
+$verifica('adminul logat peste un client logat: alt id, cu clientul, adminul și coșul în el; id-ul de dinainte nu mai are nicio logare (nici clientul), doar coșul',
     $aIntrat($r) && $idSesiune($jar('cli')) !== $idDupa && $eAdmin($jar('cli')) && $eClient($jar('cli')) && $areCos($jar('cli'))
-    && !$eAdmin($jar('cli-inainte-de-admin')) && $eClient($jar('cli-inainte-de-admin')));
+    && !$eAdmin($jar('cli-inainte-de-admin')) && !$eClient($jar('cli-inainte-de-admin')) && $areCos($jar('cli-inainte-de-admin')));
+$cerere('POST', '/contul-meu/logout', $jar('cli'));
+$verifica('… clientul iese din cont (POST /contul-meu/logout): nici sesiunea nouă, nici id-ul de dinainte nu mai deschid Contul meu; adminul rămâne logat',
+    !$eClient($jar('cli')) && !$eClient($jar('cli-inainte-de-admin')) && $eAdmin($jar('cli')));
+
+// Clientul peste adminul logat (un cookie copiat cât era logat adminul: un calculator comun, un cookie furat). Codul de
+// dinainte de această reparație lăsa logarea adminului pe id-ul copiat, iar ieșirea adminului (în sesiunea nouă) n-o
+// mai închidea: /admin rămânea deschis cu el, iar fiecare cerere îi împrospăta ceasul de 12 ore.
+$cerere('GET', '/admin/login', $jar('adm-cli'));
+$r = $logare('acum.wp12b@exemplu.ro', 'Parola-Acum-Demo', $jar('adm-cli'));
+copy($jar('adm-cli'), $jar('adm-cli-copiat'));
+$idAdmin = $idSesiune($jar('adm-cli'));
+$rClient = $cerere('POST', '/contul-meu/login', $jar('adm-cli'), ['email' => $emailClient, 'password' => $parolaDemo]);
+$verifica('clientul logat peste un admin logat: alt id, cu amândoi; cu id-ul copiat cât era logat adminul nu se mai deschide /admin, nici /admin/orders',
+    $aIntrat($r) && $rClient['cod'] === 302 && $idSesiune($jar('adm-cli')) !== $idAdmin && $eAdmin($jar('adm-cli')) && $eClient($jar('adm-cli'))
+    && !$eAdmin($jar('adm-cli-copiat')) && $cerere('GET', '/admin/orders', $jar('adm-cli-copiat'))['cod'] !== 200 && !$eClient($jar('adm-cli-copiat')),
+    $idAdmin . ' → ' . $idSesiune($jar('adm-cli')));
+$cerere('POST', '/admin/logout', $jar('adm-cli'));
+$verifica('… adminul iese din cont (POST /admin/logout): /admin și /admin/orders nu se mai deschid nici cu sesiunea nouă, nici cu id-ul copiat; clientul rămâne logat',
+    !$eAdmin($jar('adm-cli')) && !$eAdmin($jar('adm-cli-copiat')) && $cerere('GET', '/admin/orders', $jar('adm-cli-copiat'))['cod'] !== 200
+    && $eClient($jar('adm-cli')));
 
 // Un id inventat de atacator nu e primit (session.use_strict_mode), deci nu poate fi „fixat” dinainte.
 $inventat = str_repeat('a1', 16);
@@ -651,16 +787,102 @@ $verifica('contul nou: înregistrarea (cu protecția anti-robot) loghează pe al
     && $eClient($jar('reg')) && $areCos($jar('reg')) && !$eClient($jar('reg-atacator')) && $areCos($jar('reg-atacator')),
     $r['cod'] . ' ' . $r['location'] . ' token ' . (($tok[1] ?? '') !== '' ? 'da' : 'nu'));
 
+// Coșul abandonat („Ai uitat produse în coș”, cart_abandonments, cheia: sesiunea): un singur rând și un singur email pe
+// browser, ca în codul de dinainte, care nu schimba id-ul la logare. Fără cheia păstrată (Sesiune::cheieCosAbandonat),
+// rândul de dinainte de logare și cel de după ar fi trimis două emailuri, iar o comandă după logare ar fi lăsat rândul
+// de dinainte „abandonat”, cu email cu tot.
+$parolaCos = 'Parola-Cos-Demo-12b';
+$clientCos = static function (string $email) use ($db, $parolaCos): void {
+    $db->prepare('INSERT INTO users (first_name, last_name, email, password_hash) VALUES (:f, :l, :e, :h)')
+        ->execute(['f' => 'Demo', 'l' => 'Cos', 'e' => $email, 'h' => password_hash($parolaCos, PASSWORD_BCRYPT)]);
+};
+$batai = static fn (string $jarul, array $date): array => $cerere('POST', '/api/cart/heartbeat', $jarul, [], [],
+    json_encode($date, JSON_UNESCAPED_UNICODE) ?: '{}');
+/** Rândurile coșului abandonat cu unul dintre emailuri sau pe una dintre chei (id-uri de sesiune). */
+$randuriCos = static function (array $emailuri, array $sesiuni) use ($db): array {
+    $param = [];
+    foreach (array_values($emailuri) as $i => $e) {
+        $param['e' . $i] = $e;
+    }
+    foreach (array_values(array_filter($sesiuni, static fn (string $sid): bool => $sid !== '')) as $i => $sid) {
+        $param['s' . $i] = $sid;
+    }
+    $locuri = static fn (string $litera): string => implode(', ', array_map(static fn (string $k): string => ':' . $k,
+        array_filter(array_keys($param), static fn (string $k): bool => $k[0] === $litera))) ?: 'NULL';
+    $stmt = $db->prepare('SELECT id, session_id, email, converted_at FROM cart_abandonments WHERE email IN (' . $locuri('e') . ')
+        OR session_id IN (' . $locuri('s') . ') ORDER BY id');
+    $stmt->execute($param);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+};
+
+// Musafirul își scrie emailul în checkout, se loghează, apoi coșul bate din /cos; cineva cu id-ul de dinainte bate și el.
+$emailCos = 'cos-abandonat.wp12b@exemplu.ro';
+$emailAlt = 'cos-alt.wp12b@exemplu.ro';
+$clientCos($emailCos);
+$cerere('POST', '/cos/adauga/' . $idMenta, $jar('cos'), ['quantity' => '1']);
+$batai($jar('cos'), ['page' => 'checkout', 'email' => $emailCos, 'customer_name' => 'Demo Cos']);
+$idCosInainte = $idSesiune($jar('cos'));
+$randInainte = $randuriCos([$emailCos], [$idCosInainte]);
+copy($jar('cos'), $jar('cos-vechi'));
+$r = $cerere('POST', '/contul-meu/login', $jar('cos'), ['email' => $emailCos, 'password' => $parolaCos]);
+$idCosDupa = $idSesiune($jar('cos'));
+$batai($jar('cos'), ['page' => 'cart']);
+$batai($jar('cos-vechi'), ['page' => 'checkout', 'email' => $emailAlt, 'customer_name' => 'Alt Demo']);
+$randDupa = $randuriCos([$emailCos, $emailAlt], [$idCosInainte, $idCosDupa]);
+$verifica('coșul abandonat: musafirul cu emailul scris, logat apoi (alt id) și cu coșul bătând din /cos are tot un singur rând, același, pe cheia de dinainte de logare; id-ul de dinainte (înlocuit) nu mai scrie nimic',
+    $r['cod'] === 302 && $idCosDupa !== '' && $idCosDupa !== $idCosInainte && count($randInainte) === 1 && count($randDupa) === 1
+    && (int) $randDupa[0]['id'] === (int) $randInainte[0]['id'] && $randDupa[0]['session_id'] === $idCosInainte && $randDupa[0]['email'] === $emailCos
+    && $randDupa[0]['converted_at'] === null, json_encode(['inainte' => $randInainte, 'dupa' => $randDupa]));
+
+// Alt musafir scrie un email, se loghează cu alt cont și comandă după logare: rândul (cu emailul de dinainte) se închide.
+$emailComanda = 'cos-comanda.wp12b@exemplu.ro';
+$emailScris = 'cos-scris-inainte.wp12b@exemplu.ro';
+$clientCos($emailComanda);
+$cerere('POST', '/cos/adauga/' . $idMenta, $jar('cos2'), ['quantity' => '1']);
+$batai($jar('cos2'), ['page' => 'checkout', 'email' => $emailScris, 'customer_name' => 'Demo Scris']);
+$idCos2 = $idSesiune($jar('cos2'));
+$cerere('POST', '/contul-meu/login', $jar('cos2'), ['email' => $emailComanda, 'password' => $parolaCos]);
+$pagina = $cerere('GET', '/checkout', $jar('cos2'));
+preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagina['corp'], $tokCos);
+preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagina['corp'], $randatCos);
+sleep(3); // protecția anti-robot refuză comenzile trimise la mai puțin de 2 secunde
+$comanda = $cerere('POST', '/checkout', $jar('cos2'), [
+    'checkout_form_token' => $tokCos[1] ?? '', 'checkout_form_rendered_at' => $randatCos[1] ?? '',
+    'billing_first_name' => 'Demo', 'billing_last_name' => 'Cos', 'billing_phone' => '0700000712', 'billing_email' => $emailComanda,
+    'billing_street' => 'Strada Exemplului', 'billing_street_no' => '12', 'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj',
+    'billing_postcode' => '400000', 'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+]);
+$randComanda = $randuriCos([$emailScris, $emailComanda], [$idCos2, $idSesiune($jar('cos2'))]);
+$verifica('… musafirul cu alt email scris înainte, logat și comandând după logare: comanda trece, iar singurul lui rând (cel cu emailul de dinainte) e închis ca făcut comandă',
+    str_contains($comanda['location'], '/checkout/succes/') && count($randComanda) === 1 && $randComanda[0]['session_id'] === $idCos2
+    && $randComanda[0]['email'] === $emailScris && $randComanda[0]['converted_at'] !== null,
+    $comanda['cod'] . ' ' . $comanda['location'] . ' ' . json_encode($randComanda));
+
+// Cronul emailurilor (scripts/abandoned-cart-emails.php), cu rândurile de mai sus mai vechi decât pragul.
+$db->prepare('UPDATE cart_abandonments SET last_seen_at = NOW() - INTERVAL 1 DAY WHERE email IN (:a, :b, :c)')
+    ->execute(['a' => $emailCos, 'b' => $emailAlt, 'c' => $emailScris]);
+$emailuriCronInainte = glob($dosarDev . '/mail/*.eml') ?: [];
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/scripts/abandoned-cart-emails.php') . ' 2>&1', $iesireCron, $codCron);
+$catre = static function (string $email) use ($dosarDev, $emailuriCronInainte): int {
+    $n = 0;
+    foreach (array_diff(glob($dosarDev . '/mail/*.eml') ?: [], $emailuriCronInainte) as $fisierEml) {
+        if (preg_match('/^To:.*' . preg_quote($email, '/') . '/mi', (string) file_get_contents($fisierEml)) === 1) {
+            $n++;
+        }
+    }
+    return $n;
+};
+$verifica('… cronul „Ai uitat produse în coș” trimite un singur email musafirului logat, niciunul celui care a comandat după logare, niciunul adresei scrise pe id-ul înlocuit',
+    $codCron === 0 && $catre($emailCos) === 1 && $catre($emailScris) === 0 && $catre($emailComanda) === 0 && $catre($emailAlt) === 0,
+    $codCron . ' ' . implode(' ', $iesireCron) . ' → ' . json_encode([$emailCos => $catre($emailCos), $emailScris => $catre($emailScris),
+        $emailComanda => $catre($emailComanda), $emailAlt => $catre($emailAlt)]));
+
 // =====================================================================
 // D. Adresa vizitatorului (G-m2)
 // =====================================================================
 $scrie('');
 $scrie('== D. Adresa vizitatorului: X-Forwarded-For scris de vizitator nu ocolește limitele; de la un proxy de încredere, vizitatorul real');
 
-$golesteJurnale = static function () use ($db): void {
-    $db->exec('DELETE FROM checkout_submit_logs');
-    $db->exec('DELETE FROM register_submit_logs');
-};
 $stariCheckout = static fn (): array => $db->query('SELECT ip_address, status FROM checkout_submit_logs ORDER BY id')->fetchAll(PDO::FETCH_NUM);
 $stariInregistrare = static fn (): array => $db->query('SELECT ip_address, status FROM register_submit_logs ORDER BY id')->fetchAll(PDO::FETCH_NUM);
 $ultima = static fn (array $randuri): array => $randuri === [] ? ['', ''] : $randuri[count($randuri) - 1];

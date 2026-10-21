@@ -8,7 +8,8 @@ use PDO;
 
 final class CustomerAuth
 {
-    private const SESSION_KEY = 'customer_user_id';
+    /** Cheia sesiunii cu clientul logat (și în `Sesiune::CHEI_LOGARE`). */
+    public const SESSION_KEY = 'customer_user_id';
 
     public static function check(): bool
     {
@@ -24,7 +25,7 @@ final class CustomerAuth
     {
         if ($userId > 0) {
             // Id nou de sesiune înainte de logare (N15, WP-12b): coșul trece în sesiunea nouă, iar cine avea id-ul
-            // de dinainte nu primește logarea (Sesiune::idNouLaLogare).
+            // de dinainte nu primește nicio logare, nici pe asta, nici una de dinainte (Sesiune::idNouLaLogare).
             Sesiune::idNouLaLogare();
             $_SESSION[self::SESSION_KEY] = $userId;
         }

@@ -132,7 +132,8 @@
 #    din smoke.sh, și G-sonde pentru numărătoarea parolelor): logarea adminului (App\Support\ParolaAdmin) verifică
 #    un hash doar ca hash (și argon2, și bcrypt-ul vechi $2a$/$2b$; alt hash, ca $6$ sau $P$, nu intră deloc), compară
 #    în clar doar o parolă salvată necriptat și o criptează la prima logare, cu un rând „parola_convertita” în Jurnal
-#    activitate, iar un hash cu un cost mai mic decât cel implicit îl reface (nu coboară costul); la fiecare logare (adminul, clientul) sesiunea primește alt id (App\Support\Sesiune), deci cookie-ul
+#    activitate, iar un hash cu un cost mai mic decât cel implicit îl reface (nu coboară costul); la fiecare logare (adminul, clientul) sesiunea primește alt id (App\Support\Sesiune;
+#    id-ul de dinainte rămâne fără nicio logare, iar coșul abandonat își păstrează cheia de dinainte de logare), deci cookie-ul
 #    răspunsului la POST /admin/login și POST /login e altul (comparația nu compară răspunsurile login-ului, doar
 #    unde duce, iar borcanele de cookie-uri iau id-ul nou); adresa vizitatorului vine doar din App\Support\IpClient
 #    (limitele checkout-ului și ale înregistrării, cu IPv6 pe /64, jurnalul adminului, GDPR, contactul, newsletterul,

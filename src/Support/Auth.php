@@ -124,7 +124,8 @@ final class Auth
             (string) ($admin['role'] ?? self::ROLE_GENERAL),
             $admin['roles_json'] ?? null
         );
-        // Id nou de sesiune înainte de logare (N15): cine avea id-ul de dinainte nu primește logarea.
+        // Id nou de sesiune înainte de logare (N15): cine avea id-ul de dinainte nu primește nicio logare, nici pe
+        // asta, nici una de dinainte din același browser (Sesiune::idNouLaLogare).
         Sesiune::idNouLaLogare();
         $_SESSION['admin_id'] = $id;
         $_SESSION['admin_roles'] = $roles;

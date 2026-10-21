@@ -615,7 +615,8 @@ try {
     $hash = password_hash('x', PASSWORD_BCRYPT);
     // Parolele adminilor (WP-12b, App\Support\ParolaAdmin): câte una de fiecare fel, plus cazurile în care SQL-ul s-ar
     // putea despărți de regula din PHP (lungimea în octeți față de caractere, un spațiu față de gol, alte hash-uri: $6$,
-    // $P$, litere mari; forma hash-ului fără nume de algoritm sau cu un nume care nu e ASCII).
+    // $P$, litere mari; forma hash-ului fără nume de algoritm sau cu un nume care nu e ASCII; argon2 fără „$” în față,
+    // pe care password_get_info îl recunoaște).
     $ins('admins', [['email' => 'admin1.' . $m . '@exemplu.ro', 'password_hash' => 'parola-' . $m], ['email' => 'admin2.' . $m . '@exemplu.ro', 'password_hash' => '$2a$' . substr($hash, 4)],
         ['email' => 'admin3.' . $m . '@exemplu.ro', 'password_hash' => ''],
         ['email' => 'admin4.' . $m . '@exemplu.ro', 'password_hash' => password_hash('x', PASSWORD_ARGON2ID)],
@@ -627,7 +628,10 @@ try {
         ['email' => 'admin10.' . $m . '@exemplu.ro', 'password_hash' => '$P$B' . str_repeat('a', 30)],
         ['email' => 'admin11.' . $m . '@exemplu.ro', 'password_hash' => '$$dublu'],
         ['email' => 'admin12.' . $m . '@exemplu.ro', 'password_hash' => '$ARGON2ID$v=19$x'],
-        ['email' => 'admin13.' . $m . '@exemplu.ro', 'password_hash' => '$ă$x']]);
+        ['email' => 'admin13.' . $m . '@exemplu.ro', 'password_hash' => '$ă$x'],
+        // password_get_info nu se uită la primul caracter al unui argon2: fără „$” în față e un text, nu un hash.
+        ['email' => 'admin14.' . $m . '@exemplu.ro', 'password_hash' => 'xargon2id$v=19$m=65536,t=4,p=1$Parola'],
+        ['email' => 'admin15.' . $m . '@exemplu.ro', 'password_hash' => 'Xargon2i$v=19$m=1']]);
     $client = $ins('users', [['first_name' => 'Prenume' . $m, 'last_name' => 'Nume' . $m, 'email' => 'client.' . $m . '@exemplu.ro', 'phone' => $telefon, 'password_hash' => $hash]]);
     $bbd = json_encode([['date' => '2027-01-01', 'lot' => 'L1', 'price' => '10', 'stock' => 5, 'key' => 'abc123'], ['date' => '2027-02-01', 'lot' => 'L2', 'price' => '9', 'stock' => 5]]);
     $produsBbd = $ins('products', [['name' => 'Produs BBD test', 'slug' => 'produs-bbd-test', 'is_active' => 1, 'bbd_enabled' => 1, 'bbd_entries_json' => $bbd,
@@ -767,7 +771,7 @@ try {
     $numar = static fn (array $rulare, string $cheie): int => (int) ($rulare[$cheie][1] ?? 0);
     // [set, cheie, schimbarea] (delta față de rularea 1) sau [set, cheie, '=', valoarea] sau [set, cheie, 'are', element] (într-o listă).
     $asteptari = [
-        ['bioscem', 'admini.total', 13], ['bioscem', 'admini.parola_necunoscuta', 4], ['bioscem', 'admini.parola_bcrypt_2a_2b', 2], ['bioscem', 'admini.parola_goala', 1],
+        ['bioscem', 'admini.total', 15], ['bioscem', 'admini.parola_necunoscuta', 6], ['bioscem', 'admini.parola_bcrypt_2a_2b', 2], ['bioscem', 'admini.parola_goala', 1],
         ['bioscem', 'admini.parola_hash_cunoscut', 1], ['bioscem', 'admini.parola_hash_stricat', 5],
         ['bioscem', 'erp.de_trimis.peste_1_an', 1], ['bioscem', 'erp.de_trimis.7_30_zile', 1], ['bioscem', 'erp.de_trimis.sub_7_zile', 0],
         ['bioscem', 'erp.status.pending', 2], ['bioscem', 'erp.status.failed', 1], ['bioscem', 'erp.status.sent', '=', '1'],

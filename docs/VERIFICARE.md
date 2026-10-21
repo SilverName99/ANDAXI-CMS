@@ -1048,7 +1048,8 @@ Ce garantează amândouă (capul lui `tools/verificare/lib/live.php`; le verific
   oprește verificarea ei („valoare refuzată”), nu ajunge pe ecran. O coloană cu nume de date personale
   (`CitireLive::TIPAR_PERSONAL`, același tipar ca la încărcarea anonimizată din WP-09) nu poate fi citită deloc.
   Numerele se calculează în SQL (parolele adminilor se clasează în SQL, ca text, fără să fie citite, după aceeași
-  regulă ca logarea, `App\Support\ParolaAdmin`, din WP-12b: hash cunoscut, bcrypt `$2a$`/`$2b$`, hash stricat (forma
+  regulă ca logarea, `App\Support\ParolaAdmin`, din WP-12b: hash cunoscut (începe chiar cu `$2y$`, `$argon2i$` sau
+  `$argon2id$`), bcrypt `$2a$`/`$2b$`, hash stricat (forma
   unui hash, `$`, numele algoritmului, `$`, dar nu unul de mai sus: tăiat, `$6$`, `$1$`, WordPress `$P$`; nu se loghează
   cu nicio parolă, deci ATENȚIE peste 0), goală, text clar; `admini.parola_necunoscuta` = exact adminii pe care logarea îi compară în clar, deci trebuie să fie 0 pe
   toate cele patru site-uri înainte ca ramura aceea să fie ștearsă, în R2);
@@ -1149,8 +1150,8 @@ datele personale cu un marcaj aleator). Baza de dezvoltare nu-i trebuie. Verific
 locului (cod 2, nimic citit), fiecare număr al fiecărui set (cât se schimbă după rândurile inventate; numerele
 parolelor adminilor sunt, pe toate rândurile, cele date de `ParolaAdmin::fel`, și pe valorile la care SQL-ul s-ar putea
 despărți de regulă: lungimea în octeți față de caractere, un spațiu față de gol, argon2, `$2a$`/`$2b$`, alte hash-uri
-(`$6$`, `$P$`, litere mari), forma hash-ului fără nume de algoritm sau cu un nume care nu e ASCII, pe MariaDB și pe
-MySQL 8), că
+(`$6$`, `$P$`, litere mari), forma hash-ului fără nume de algoritm sau cu un nume care nu e ASCII, argon2 fără `$` în
+față (`password_get_info` îl recunoaște, regula nu), pe MariaDB și pe MySQL 8), că
 serverul refuză scrierile din sesiune, că un ALTER din altă conexiune pe un tabel deja citit nu așteaptă în
 mijlocul unui grup, că un utilizator doar cu SELECT ajunge, sonda (amprenta ei = a bazei), `din-sonda.php`
 (schema refăcută dă aceeași amprentă pe MariaDB și pe MySQL 8; refuzurile și cu căi relative), aceleași
