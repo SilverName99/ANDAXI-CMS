@@ -54,6 +54,11 @@ declare(strict_types=1);
  * Cod de ieșire: 0 „REZULTAT: TRECE” (niciun caz diferit nedeclarat, nicio declarație nepotrivită, nicio eroare în niciun
  * cod); 1 „REZULTAT: PICĂ” (sau o oprire după ce cupoanele au fost schimbate, puse la loc); 2 refuzat, nimic schimbat.
  *
+ * Procesele copil (lucrătorii, `scripts/migreaza.php`) primesc aceleași extensii ca procesul comparației: unde PHP-ul lor
+ * pornit simplu nu încarcă una (pe Hostinger, sodium în /opt/alt/php83, pornit de proprietar cu `$PHP`, adică cu
+ * `-d extension=sodium.so`), primesc `-d extension=<nume>.so` (o sondă pe PHP, lib/php-cli.php), iar textul spune într-un rând ce
+ * s-a adăugat.
+ *
  * Sintaxa e PHP 8.3 (php_min); punctul de intrare verifică versiunea cu sintaxă PHP 7.0.
  */
 
@@ -61,6 +66,9 @@ namespace Unelte\Verificare;
 
 use PDO;
 use Throwable;
+
+// Extensiile proceselor copil (lucrătorii, migrările): aceleași ca ale comenzii, și unde PHP_BINARY singur nu le încarcă.
+require_once __DIR__ . '/php-cli.php';
 
 final class ComparaCalcule
 {
@@ -112,6 +120,8 @@ final class ComparaCalcule
     private string $fisierCupoane = '';
     /** @var list<array{comanda: int, campuri: list<string>, motiv: string}>|null Diferențele voite (--declarate, doar local). */
     private ?array $declarate = null;
+    /** @var array<string, list<string>> argumentele `-d extension=…` ale fiecărui PHP copil, după sonda lui (o dată pe PHP) */
+    private array $extensiiCopil = [];
 
     private function __construct(string $radacina)
     {
@@ -460,7 +470,7 @@ final class ComparaCalcule
             throw new Refuz('baza copiei e „' . $stare . '” față de migrările codului comun (încărcarea o lasă la zi): '
                 . '$PHP scripts/migreaza.php --stare și trimite-ne textul');
         }
-        $r = Proces::ruleaza(array_merge([PHP_BINARY, '-d', 'display_errors=stderr'], self::iniSocket(), [$this->radacina . '/scripts/migreaza.php', '--aplica',
+        $r = Proces::ruleaza(array_merge($this->php(PHP_BINARY), ['-d', 'display_errors=stderr'], self::iniSocket(), [$this->radacina . '/scripts/migreaza.php', '--aplica',
             '--site=' . $this->profil]),
             $this->mediu(), $this->radacina, '', $this->dosarTmp, false, 1800);
         \App\Support\Migrari\Garda::uita();
@@ -740,8 +750,8 @@ final class ComparaCalcule
     {
         $php = $care === 'vechi' ? $this->phpVechi : $this->phpNou;
         $cod = $care === 'vechi' ? $this->codVechi : $this->codNou;
-        $comanda = [$php, '-d', 'allow_url_fopen=0', '-d', 'display_errors=0', '-d', 'log_errors=0', '-d', 'error_reporting=' . E_ALL,
-            '-d', 'session.auto_start=0', '-d', 'opcache.enable_cli=0', '-d', 'memory_limit=' . self::memorie()];
+        $comanda = array_merge($this->php($php), ['-d', 'allow_url_fopen=0', '-d', 'display_errors=0', '-d', 'log_errors=0', '-d', 'error_reporting=' . E_ALL,
+            '-d', 'session.auto_start=0', '-d', 'opcache.enable_cli=0', '-d', 'memory_limit=' . self::memorie()]);
         $comanda = array_merge($comanda, self::iniSocket());
         $comanda[] = $this->radacina . '/tools/verificare/lucrator-calcule.php';
         $comanda[] = '--cod=' . $cod;
@@ -788,6 +798,48 @@ final class ComparaCalcule
     }
 
     /** Socketul bazei dat PHP-ului acestui proces (`pdo_mysql.default_socket`), dat mai departe proceselor copil. @return list<string> */
+    /**
+     * Un PHP copil (lucrătorul, migrările), cu aceleași extensii ca procesul de acum (lib/php-cli.php): pe Hostinger
+     * /opt/alt/php83/usr/bin/php nu încarcă sodium singur, iar comanda proprietarului (`$PHP`, cu `-d extension=sodium.so`)
+     * nu ajunge la PHP_BINARY. Sonda copilului rulează o dată pe PHP, cu mediul și felul lucrătorilor (țevi sau fișiere);
+     * pentru fiecare extensie din PhpCli::EXTENSII pe care o avem aici, iar copilul pornit simplu nu, `-d extension=<nume>.so`
+     * dacă modulul e în extension_dir-ul lui. Ce s-a adăugat se spune într-un rând (fără calea PHP-ului).
+     *
+     * @return list<string> executabilul și argumentele `-d extension=…`
+     */
+    private function php(string $php): array
+    {
+        if (!isset($this->extensiiCopil[$php])) {
+            $sonda = $this->sondaPhp([$php]);
+            $c = $sonda === null ? ['argumente' => [], 'adaugate' => [], 'lipsa' => []] : PhpCli::pentruCopil($sonda);
+            $this->extensiiCopil[$php] = $c['argumente'];
+            if ($c['argumente'] !== []) {
+                // Verificat: cu -d, copilul chiar le are.
+                $dupa = $this->sondaPhp(array_merge([$php], $c['argumente']));
+                $tot = array_values(array_filter($c['adaugate'], static fn (string $e): bool => $dupa === null || empty($dupa['ext'][$e])));
+                $this->spune('  extensiile PHP-ului ' . ($php === PHP_BINARY ? 'acestei comenzi' : 'codului vechi (--php-vechi)') . ' în procesele copil: '
+                    . implode(', ', $c['adaugate']) . ' doar cu ' . implode(' ', $c['argumente']) . ($tot !== [] ? ' (tot lipsesc: ' . implode(', ', $tot) . ')' : ''));
+            }
+        }
+        return array_merge([$php], $this->extensiiCopil[$php]);
+    }
+
+    /**
+     * @param list<string> $comanda
+     * @return array{dir: string, ext: array<string, bool>}|null
+     */
+    private function sondaPhp(array $comanda): ?array
+    {
+        try {
+            $r = Proces::ruleaza(array_merge($comanda, ['-r', PhpCli::codSonda()]), $this->mediu(), $this->radacina, '', $this->dosarTmp, $this->prinFisiere, 60);
+        } catch (Refuz $e) {
+            throw $e;
+        } catch (Throwable) {
+            return null;
+        }
+        return PhpCli::citesteSonda($r['iesire']);
+    }
+
     private static function iniSocket(): array
     {
         $socket = (string) ini_get('pdo_mysql.default_socket');

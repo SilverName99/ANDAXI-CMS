@@ -22,7 +22,8 @@ declare(strict_types=1);
  * oprește aici, cu versiunea, cod 1), dosarul site-ului, .env (0600), poarta, cheia
  * licenței de verificare, baza (serverul, dacă e goală, că nu e a altui site din cont),
  * apoi, cu cereri spre site: fără parolă 401, noindex și no-store pe răspuns, robots.txt
- * „Disallow: /”, .env, .git și tools/ de neatins din browser, sonda; la urmă cele 14 gărzi
+ * „Disallow: /” (pe un domeniu temporar Hostinger, textul CDN-ului găzduirii e un rând INFO, nu NU, doar cu tot ce ține
+ * site-ul închis: lib/roboti-gazda.php), .env, .git și tools/ de neatins din browser, sonda; la urmă cele 14 gărzi
  * (docs/VERIFICARE.md, „Gărzile”): fiecare cum o vede linia de comandă, cum o vede PHP-ul
  * site-ului (sonda) și la locul ei din cod, chemat cu date inventate (un email simulat,
  * o cheie Stripe live inventată, un AWB, ERP-ul la o adresă inventată …). Cât le cheamă,
@@ -35,6 +36,10 @@ declare(strict_types=1);
  * - „NECONFIGURAT: …” (cod 1): încă nu s-a rulat configureaza.php; site-ul trebuie să
  *   răspundă 503 tuturor;
  * - „NU E GATA: …” (cod 1): ceva de mai sus a ieșit NU.
+ *
+ * O extensie cerută (pdo_mysql, sodium) care lipsește din PHP-ul liniei de comandă, deși modulul ei e pe server (pe
+ * Hostinger, sodium în /opt/alt/php83), primește un rând INFO cu reparația exactă: `PHP="<PHP_BINARY> -d
+ * extension=sodium.so"` și aceeași comandă cu `$PHP` (lib/php-cli.php); „Pasul următor” e tot în forma cu `$PHP`.
  *
  * Fișierul folosește doar sintaxa PHP 7.0, ca un PHP prea vechi să-și vadă versiunea.
  */
@@ -164,10 +169,24 @@ require_once $radacina . '/src/Support/Env.php';
 require_once $radacina . '/src/Support/IpClient.php';
 require_once $radacina . '/src/Support/Verificare.php';
 require_once $radacina . '/tools/verificare/lib/cont.php';
+require_once $radacina . '/tools/verificare/lib/php-cli.php';
+require_once $radacina . '/tools/verificare/lib/roboti-gazda.php';
 
 use App\Support\Env;
 use App\Support\IpClient;
 use App\Support\Verificare;
+use Unelte\Verificare\PhpCli;
+use Unelte\Verificare\RobotiGazda;
+
+// Clasele aplicației (Robots::text mai jos, gărzile la urmă), din src/; încărcarea lor nu trimite nimic.
+spl_autoload_register(function ($clasa) use ($radacina) {
+    if (strpos($clasa, 'App\\') === 0) {
+        $fisier = $radacina . '/src/' . str_replace('\\', '/', substr($clasa, 4)) . '.php';
+        if (is_file($fisier)) {
+            require_once $fisier;
+        }
+    }
+});
 
 stare_info('max_execution_time (CLI): ' . ini_get('max_execution_time') . '; memory_limit (CLI): ' . ini_get('memory_limit'));
 stare_rand(!stare_oprita('proc_open'), 'proc_open pornit (CLI)', false);
@@ -175,6 +194,15 @@ stare_rand(!stare_oprita('exec') && !stare_oprita('shell_exec'), 'exec și shell
 stare_rand(!stare_oprita('symlink'), 'symlink() pornit (CLI)', false);
 foreach (array('pdo_mysql', 'sodium') as $extensie) {
     stare_rand(extension_loaded($extensie), 'extensia ' . $extensie . ' (CLI)');
+}
+// Pe Hostinger /opt/alt/php83/usr/bin/php poate să nu încarce sodium deși modulul e pe disc: reparația exactă (-d extension=…).
+$reparatieExtensii = PhpCli::lipsa(array('pdo_mysql', 'sodium'), 'tools/verificare/stare.php');
+$formaPhp = PhpCli::reparatie()['forma'];
+if ($reparatieExtensii !== null) {
+    stare_info(ucfirst($reparatieExtensii));
+} elseif ($formaPhp !== null) {
+    stare_info('PHP-ul liniei de comandă încarcă ' . implode(', ', PhpCli::reparatie()['adaugate']) . ' doar cu -d (pornit simplu, ' . PHP_BINARY
+        . ' nu): comenzile se dau cu $PHP, PHP="' . $formaPhp . '"; procesele PHP pornite de unelte primesc singure aceleași -d extension=…');
 }
 $lipsa = array();
 foreach (array('curl', 'mbstring', 'gd', 'intl', 'openssl', 'zip') as $extensie) {
@@ -312,7 +340,18 @@ stare_titlu('Site-ul, văzut din afară' . ($baza !== '' ? ' (' . $baza . ')' : 
 $inchis = false;
 $noindexPe = false;
 $robotiPe = false;
+$robotiCdn = false;
 $fapte = null;
+// robots.txt-ul codului (Robots::text, garda 4): pe copie „Disallow: /”, oricare ar fi pachetul.
+$textRoboti = '';
+if ($activ) {
+    try {
+        $textRoboti = \App\Support\Robots::text('https://proba.invalid');
+    } catch (Throwable $e) {
+        $textRoboti = '';
+    }
+}
+$robotiDinCod = $textRoboti === "User-agent: *\nDisallow: /\n";
 if ($baza === '') {
     stare_rand(false, 'nu știu adresa site-ului (nici APP_URL, nici dosarul ~/domains/<domeniu>)');
 } else {
@@ -337,9 +376,21 @@ if ($baza === '') {
         if ($envExista) {
             $robotiPe = $roboti['cod'] === 200 && preg_match('/^Disallow: \/\s*$/m', $roboti['corp']) === 1
                 && preg_match('/^(Allow|Sitemap):/mi', $roboti['corp']) !== 1;
-            stare_rand($robotiPe, '/robots.txt: „Disallow: /”');
+            $textRobotiPe = '/robots.txt: „Disallow: /”';
         } else {
-            stare_rand($roboti['cod'] === 503, '/robots.txt răspunde 503 (Google nu citește nimic cât e așa)');
+            $robotiPe = $roboti['cod'] === 503;
+            $textRobotiPe = '/robots.txt răspunde 503 (Google nu citește nimic cât e așa)';
+        }
+        // Pe un domeniu temporar Hostinger /robots.txt îl dă CDN-ul găzduirii, nu site-ul (lib/roboti-gazda.php): INFO doar
+        // dacă e exact acel răspuns și site-ul rămâne închis; orice alt răspuns e NU, cu motivul.
+        $motivRoboti = $robotiPe ? '' : RobotiGazda::cdnHostinger($roboti,
+            $envExista ? ($gazda !== null && $appUrl === 'https://' . $gazda ? $gazda : null) : $gazda,
+            $inchis, $noindexPe, $envExista ? $robotiDinCod : true);
+        if ($motivRoboti === null) {
+            $robotiCdn = true;
+            stare_info(RobotiGazda::textInfo($envExista));
+        } else {
+            stare_rand($robotiPe, $textRobotiPe . ($motivRoboti !== '' ? ' (' . $motivRoboti . ')' : ''));
         }
         $env = stare_cerere($baza . '/.env', array());
         stare_rand(!($env['cod'] === 200 && strpos($env['corp'], 'DB_') !== false), '/.env nu se vede din browser');
@@ -380,8 +431,12 @@ if ($baza === '') {
             }
             stare_rand((bool) $fapte['antet'], 'un antet propriu (X-Verificare-Sonda) ajunge la PHP', false);
             stare_info('REMOTE_ADDR: ' . (string) $fapte['remote_addr'] . '; e adresa serverului (SERVER_ADDR): ' . ($fapte['remote_addr_e_server'] ? 'DA' : 'NU'));
-            stare_info('X-Forwarded-For: ' . ((int) $fapte['xff'] === 0 ? 'nu sosește' : (int) $fapte['xff'] . ' adrese, ultima ' . (string) $fapte['xff_ultima'])
-                . '; X-Real-IP: ' . ($fapte['x_real_ip'] ? 'DA' : 'NU') . '; CF-Connecting-IP: ' . ($fapte['cf_connecting_ip'] ? 'DA' : 'NU')
+            $egalRemote = function ($cheie) use ($fapte) {
+                return isset($fapte[$cheie]) ? ' (= REMOTE_ADDR: ' . ($fapte[$cheie] ? 'DA' : 'NU') . ')' : '';
+            };
+            stare_info('X-Forwarded-For: ' . ((int) $fapte['xff'] === 0 ? 'nu sosește' : (int) $fapte['xff'] . ' adrese, ultima ' . (string) $fapte['xff_ultima']
+                . $egalRemote('xff_ultima_e_remote'))
+                . '; X-Real-IP: ' . ($fapte['x_real_ip'] ? 'DA' . $egalRemote('x_real_ip_e_remote') : 'NU') . '; CF-Connecting-IP: ' . ($fapte['cf_connecting_ip'] ? 'DA' : 'NU')
                 . '; Forwarded: ' . ($fapte['forwarded'] ? 'DA' : 'NU'));
             stare_info('HTTPS văzut de PHP: ' . ($fapte['https'] ? 'DA' : 'NU') . '; X-Forwarded-Proto: ' . ((string) $fapte['x_forwarded_proto'] !== '' ? (string) $fapte['x_forwarded_proto'] : 'nu sosește'));
             stare_info('max_execution_time (web): ' . (string) $fapte['max_execution_time'] . '; memory_limit (web): ' . (string) $fapte['memory_limit']);
@@ -390,6 +445,10 @@ if ($baza === '') {
             }
             foreach ((array) $fapte['extensii'] as $extensie => $are) {
                 stare_rand((bool) $are, 'extensia ' . $extensie . ' (web)', in_array($extensie, array('pdo_mysql', 'sodium'), true));
+                if (!$are && in_array($extensie, array('pdo_mysql', 'sodium'), true)) {
+                    stare_info('pentru site (web): hPanel → Advanced → PHP Configuration → PHP extensions → bifează ' . $extensie
+                        . ' → Save, apoi stare.php din nou (PHP-ul liniei de comandă nu se schimbă de aici)');
+                }
             }
             stare_rand((bool) $fapte['imagewebp'], 'GD cu WebP (imagewebp, web)', false);
         }
@@ -409,14 +468,6 @@ if ($activ) {
     }
     putenv('NO_PROXY=');
     putenv('no_proxy=');
-    spl_autoload_register(function ($clasa) use ($radacina) {
-        if (strpos($clasa, 'App\\') === 0) {
-            $fisier = $radacina . '/src/' . str_replace('\\', '/', substr($clasa, 4)) . '.php';
-            if (is_file($fisier)) {
-                require_once $fisier;
-            }
-        }
-    });
     $garziCli = Verificare::garzi();
     $garziWeb = is_array($fapte) && isset($fapte['garzi']) && is_array($fapte['garzi']) ? $fapte['garzi'] : null;
     $proprietar = trim((string) Env::get('VERIFICARE_EMAIL', ''));
@@ -429,12 +480,8 @@ if ($activ) {
     $locuri['noindex'] = $noindexPe ? true : 'răspunsul n-are noindex și no-store (mai sus)';
     $locuri['expirare'] = stare_cheama($radacina, 'src/Support/Verificare.php', "\$copie['stare'] === 'expirata'")
         ? true : 'poarta nu mai închide o copie expirată';
-    try {
-        $textRoboti = \App\Support\Robots::text('https://proba.invalid');
-    } catch (Throwable $e) {
-        $textRoboti = '';
-    }
-    $locuri['robots'] = $textRoboti === "User-agent: *\nDisallow: /\n" && $robotiPe ? true : 'Robots::text sau /robots.txt nu dau „Disallow: /”';
+    // Din afară, „Disallow: /” al porții sau (pe domeniul temporar Hostinger) răspunsul CDN-ului recunoscut mai sus.
+    $locuri['robots'] = $robotiDinCod && ($robotiPe || $robotiCdn) ? true : 'Robots::text sau /robots.txt nu dau „Disallow: /”';
     // Un email „trimis” prin drumul obișnuit al aplicației, cu SendGrid și un SMTP inventat în setări: pe copie trebuie
     // să ajungă la garda emailurilor (simulată: nu pleacă, nu se scrie, nu se numără).
     Verificare::simuleazaEmailuri(true);
@@ -510,7 +557,8 @@ if ($activ) {
         if ($loc !== true) {
             $probleme[] = (string) $loc;
         }
-        stare_rand($probleme === array(), $numar . '. ' . $garda['text'] . ($probleme !== array() ? ' — ' . implode('; ', $probleme) : ''));
+        $nota = $cheie === 'robots' && $robotiCdn && $probleme === array() ? ' (în cod; din afară /robots.txt îl dă CDN-ul Hostinger, INFO mai sus)' : '';
+        stare_rand($probleme === array(), $numar . '. ' . $garda['text'] . $nota . ($probleme !== array() ? ' — ' . implode('; ', $probleme) : ''));
     }
 }
 
@@ -519,7 +567,7 @@ if (!$envExista) {
     if ($inchis && $GLOBALS['stare_nu'] === 1) {
         // Singurul NU e chiar lipsa .env.
         echo "Trimite-ne tot textul de mai sus (nu conține parole).\n";
-        echo 'NECONFIGURAT: site-ul e închis publicului (503). Pasul următor: ' . PHP_BINARY . " tools/verificare/configureaza.php\n";
+        echo 'NECONFIGURAT: site-ul e închis publicului (503). Pasul următor: ' . PhpCli::comanda('tools/verificare/configureaza.php') . "\n";
         exit(1);
     }
     echo 'NU E GATA: ' . $GLOBALS['stare_nu'] . " verificări au ieșit NU (mai sus). Trimite-ne tot textul (nu conține parole).\n";

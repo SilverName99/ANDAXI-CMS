@@ -1107,6 +1107,22 @@ final class Verificare
         return $jeton;
     }
 
+    /**
+     * O adresă dintr-un antet, fără port: `[v6]:port` → v6, `a.b.c.d:port` → a.b.c.d; altfel cum e (o adresă IPv6 fără
+     * paranteze se termină adesea în cifre, care nu sunt un port). La fel ca în IpClient.
+     */
+    private static function faraPortHop(string $hop): string
+    {
+        $hop = trim($hop);
+        if (preg_match('/^\[([0-9a-fA-F:.]+)\](?::\d+)?$/', $hop, $m) === 1) {
+            return $m[1];
+        }
+        if (preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $hop, $m) === 1) {
+            return $m[1];
+        }
+        return $hop;
+    }
+
     /** Faptele găzduirii văzute de PHP-ul site-ului: doar da/nu, versiuni și clase de adrese. */
     private static function raspundeSonda(string $jeton): void
     {
@@ -1115,6 +1131,8 @@ final class Verificare
         $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
         $xff = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
         $hopuri = $xff === '' ? [] : array_map('trim', explode(',', $xff));
+        $ultimaXff = $hopuri === [] ? '' : self::faraPortHop((string) end($hopuri));
+        $xRealIp = trim((string) ($_SERVER['HTTP_X_REAL_IP'] ?? ''));
         $oprite = array_map('trim', explode(',', (string) ini_get('disable_functions')));
         $functii = [];
         foreach (['proc_open', 'exec', 'shell_exec', 'symlink', 'set_time_limit'] as $functie) {
@@ -1135,8 +1153,12 @@ final class Verificare
             'remote_addr' => IpClient::clasa($remote),
             'remote_addr_e_server' => $remote !== '' && $remote === (string) ($_SERVER['SERVER_ADDR'] ?? ''),
             'xff' => count($hopuri),
-            'xff_ultima' => $hopuri === [] ? '' : IpClient::clasa((string) preg_replace('/:\d+$/', '', (string) end($hopuri))),
-            'x_real_ip' => trim((string) ($_SERVER['HTTP_X_REAL_IP'] ?? '')) !== '',
+            'xff_ultima' => $hopuri === [] ? '' : IpClient::clasa($ultimaXff),
+            // Doar DA/NU, nicio adresă: ultima adresă din X-Forwarded-For și X-Real-IP sunt chiar REMOTE_ADDR? (pe Hostinger, prin
+            // CDN-ul hcdn: spune dacă REMOTE_ADDR e vizitatorul; intrare pentru IpClient, WP-12b)
+            'xff_ultima_e_remote' => $ultimaXff !== '' && $remote !== '' && strcasecmp($ultimaXff, $remote) === 0,
+            'x_real_ip' => $xRealIp !== '',
+            'x_real_ip_e_remote' => $xRealIp !== '' && $remote !== '' && strcasecmp(self::faraPortHop($xRealIp), $remote) === 0,
             'cf_connecting_ip' => trim((string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? '')) !== '',
             'forwarded' => trim((string) ($_SERVER['HTTP_FORWARDED'] ?? '')) !== '',
             'https' => (($_SERVER['HTTPS'] ?? '') !== '' && strtolower((string) ($_SERVER['HTTPS'] ?? '')) !== 'off'),

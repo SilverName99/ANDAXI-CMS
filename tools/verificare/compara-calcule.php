@@ -42,8 +42,11 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
         . "de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php). Nu am atins nimic.\n");
     exit(1);
 }
-if (!extension_loaded('pdo_mysql')) {
-    fwrite(STDERR, "EROARE: lipsește extensia PHP pdo_mysql (hPanel → PHP Configuration → PHP extensions). Nu am atins nimic.\n");
+// O extensie lipsă cu modulul pe server primește reparația exactă (-d extension=…); procesele copil primesc singure aceleași -d.
+require_once __DIR__ . '/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('pdo_mysql'), 'tools/verificare/compara-calcule.php');
+if ($lipsaExtensii !== null) {
+    fwrite(STDERR, 'EROARE: ' . $lipsaExtensii . ". Nu am atins nimic.\n");
     exit(1);
 }
 

@@ -57,11 +57,12 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
         . "de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php). Nu am atins nimic.\n");
     exit(1);
 }
-foreach (array('pdo_mysql', 'sodium') as $extensie) {
-    if (!extension_loaded($extensie)) {
-        fwrite(STDERR, 'EROARE: lipsește extensia PHP ' . $extensie . " (hPanel → PHP Configuration → PHP extensions). Nu am atins nimic.\n");
-        exit(1);
-    }
+// O extensie lipsă cu modulul pe server (pe Hostinger: sodium în /opt/alt/php83) primește reparația exactă, -d extension=….
+require_once __DIR__ . '/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('pdo_mysql', 'sodium'), 'tools/verificare/incarca.php');
+if ($lipsaExtensii !== null) {
+    fwrite(STDERR, 'EROARE: ' . $lipsaExtensii . ". Nu am atins nimic.\n");
+    exit(1);
 }
 
 require_once __DIR__ . '/lib/intrebari.php';

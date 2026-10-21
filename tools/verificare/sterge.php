@@ -61,8 +61,10 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
     sterge_opreste('PHP ' . PHP_VERSION . ' e mai vechi decât minimul codului (' . $phpMin . '). Rulează cu un PHP mai nou, '
         . 'de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php). Nu am șters nimic.');
 }
-if (!extension_loaded('pdo_mysql')) {
-    sterge_opreste('lipsește extensia PHP pdo_mysql. Nu am șters nimic.');
+require_once $radacina . '/tools/verificare/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('pdo_mysql'), 'tools/verificare/sterge.php');
+if ($lipsaExtensii !== null) {
+    sterge_opreste($lipsaExtensii . '. Nu am șters nimic.');
 }
 
 $faraIntrebare = false;

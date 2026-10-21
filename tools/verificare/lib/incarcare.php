@@ -36,6 +36,7 @@ use Throwable;
 
 require_once __DIR__ . '/live.php';
 require_once __DIR__ . '/cont.php';
+require_once __DIR__ . '/php-cli.php';
 
 /** Încărcarea a pornit și s-a oprit: copia se șterge singură (cod 1). Mesajul nu are valori din rânduri. */
 final class EsecIncarcare extends RuntimeException
@@ -1200,8 +1201,8 @@ final class Incarcare
         } catch (Intrerupere $e) {
             $incarcare->spune('');
             $incarcare->incheie('ÎNTRERUPT: ' . $incarcare->faraNumeBaza($e->getMessage()) . '. Copia neterminată rămâne închisă (fără incarcat-la). '
-                . ($incarcare->sursaNume === 'demo' ? 'Fă-o din nou cu: ' . PHP_BINARY . ' tools/verificare/incarca.php --demo --reincarca'
-                    : 'Continuă cu: ' . PHP_BINARY . ' tools/verificare/incarca.php --din=' . $incarcare->sursaNume . ' --reia'));
+                . ($incarcare->sursaNume === 'demo' ? 'Fă-o din nou cu: ' . PhpCli::comanda('tools/verificare/incarca.php --demo --reincarca')
+                    : 'Continuă cu: ' . PhpCli::comanda('tools/verificare/incarca.php --din=' . $incarcare->sursaNume . ' --reia')));
             return self::COD_REIA;
         } catch (Throwable $e) {
             $motiv = $e instanceof EsecIncarcare || $e instanceof InstructiuneRefuzata ? $e->getMessage()
@@ -1274,7 +1275,7 @@ final class Incarcare
         $this->incheie($sters
             ? 'OPRIT: încărcarea nu s-a terminat, iar copia a fost ștearsă singură (baza goală, fără incarcat-la, fără codul vechi). '
                 . 'Trimite-ne textul de mai sus (nu conține date de clienți).'
-            : 'OPRIT: încărcarea nu s-a terminat și copia NU s-a putut șterge singură: rulează ' . PHP_BINARY . ' tools/verificare/sterge.php, '
+            : 'OPRIT: încărcarea nu s-a terminat și copia NU s-a putut șterge singură: rulează ' . PhpCli::comanda('tools/verificare/sterge.php') . ', '
                 . 'apoi trimite-ne textul de mai sus.');
         return self::COD_STEARSA;
     }
@@ -1441,7 +1442,7 @@ final class Incarcare
         $cheiePublica = null;
         if (\App\Support\Verificare::cheiePrivataLicenta($cheiePublica) === null || trim($this->env['LICENTA_CHEIE_PUBLICA'] ?? '') !== $cheiePublica) {
             throw new Refuz('lipsește cheia licenței de verificare sau nu e perechea celei din .env (un .env de dinainte de WP-08): '
-                . PHP_BINARY . ' tools/verificare/configureaza.php --rescrie');
+                . PhpCli::comanda('tools/verificare/configureaza.php --rescrie'));
         }
         $this->spune('Încărcarea copiei pe site-ul de verificare https://' . $this->gazda . ' — ' . date('Y-m-d H:i'));
 

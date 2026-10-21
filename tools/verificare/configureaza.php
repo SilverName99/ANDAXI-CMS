@@ -19,7 +19,8 @@ declare(strict_types=1);
  * Ctrl-C la o parolă pune terminalul înapoi (cu ecou) și oprește scriptul fără să scrie nimic.
  *
  * Refuză (cod 1, fără să scrie nimic) dacă:
- * - PHP-ul e mai vechi decât `php_min` (config/app.php) sau lipsesc pdo_mysql/sodium;
+ * - PHP-ul e mai vechi decât `php_min` (config/app.php) sau lipsesc pdo_mysql/sodium (cu modulul pe server, mesajul dă
+ *   reparația exactă: `PHP="<PHP_BINARY> -d extension=sodium.so"` și aceeași comandă cu `$PHP`; lib/php-cli.php);
  * - codul nu e exact în `~/domains/<domeniu>/public_html` (un site separat în hPanel;
  *   nu `~/public_html` și nici un subdosar din `public_html`-ul altui site);
  * - `.env` există (cu `--rescrie` doar dacă e deja al unei copii de verificare,
@@ -67,10 +68,11 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
     verificare_opreste('PHP ' . PHP_VERSION . ' e mai vechi decât minimul codului (' . $phpMin . '). Rulează cu un PHP mai nou, '
         . 'de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php).');
 }
-foreach (array('pdo_mysql', 'sodium') as $extensie) {
-    if (!extension_loaded($extensie)) {
-        verificare_opreste('lipsește extensia PHP ' . $extensie . ' (hPanel → PHP Configuration → PHP extensions).');
-    }
+// O extensie lipsă cu modulul pe server (pe Hostinger: sodium în /opt/alt/php83) primește reparația exactă, -d extension=….
+require_once $radacina . '/tools/verificare/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('pdo_mysql', 'sodium'), 'tools/verificare/configureaza.php');
+if ($lipsaExtensii !== null) {
+    verificare_opreste($lipsaExtensii . '. Nu am scris nimic.');
 }
 
 require_once $radacina . '/src/Support/Env.php';
@@ -119,7 +121,7 @@ $caleEnv = Verificare::caleEnv();
 if (file_exists($caleEnv) || is_link($caleEnv)) {
     if (!$rescrie) {
         verificare_opreste('.env există deja: site-ul e configurat. Ca să-l configurezi din nou (altă parolă a porții, altă bază): '
-            . PHP_BINARY . ' tools/verificare/configureaza.php --rescrie');
+            . \Unelte\Verificare\PhpCli::comanda('tools/verificare/configureaza.php --rescrie'));
     }
     $vechi = Verificare::citesteEnv((string) @file_get_contents($caleEnv));
     if (is_link($caleEnv) || trim((string) (isset($vechi['SITE_COPIE_VERIFICARE']) ? $vechi['SITE_COPIE_VERIFICARE'] : '')) !== '1') {
@@ -345,4 +347,4 @@ verificare_spune('');
 if (!$doarTu || !$dosarBun || !$cheieBuna) {
     verificare_opreste('.env e scris, dar ceva de mai sus a ieșit NU. Trimite-ne textul acesta (nu conține parole).');
 }
-verificare_spune('Gata. Pasul următor: ' . PHP_BINARY . ' tools/verificare/stare.php');
+verificare_spune('Gata. Pasul următor: ' . \Unelte\Verificare\PhpCli::comanda('tools/verificare/stare.php'));

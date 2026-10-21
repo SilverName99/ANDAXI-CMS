@@ -46,11 +46,11 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
         . "de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php). Nu am cerut nimic.\n");
     exit(1);
 }
-foreach (array('curl', 'dom') as $extensie) {
-    if (!extension_loaded($extensie)) {
-        fwrite(STDERR, 'EROARE: lipsește extensia PHP ' . $extensie . ". Nu am cerut nimic.\n");
-        exit(1);
-    }
+require_once __DIR__ . '/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('curl', 'dom'), 'tools/verificare/amprenta-site.php');
+if ($lipsaExtensii !== null) {
+    fwrite(STDERR, 'EROARE: ' . $lipsaExtensii . ". Nu am cerut nimic.\n");
+    exit(1);
 }
 
 require_once __DIR__ . '/lib/amprenta.php';

@@ -32,12 +32,14 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 | `tools/verificare/reguli/bioscem.php` | Regulile anonimizării Bioscem: pentru fiecare tabel și fiecare coloană, păstrată, schimbată (cum) sau doar structura |
 | `tools/verificare/lib/licenta-copie.php`, `lib/intrebari.php` | Licența copiei (folosită de `licenta.php` și de încărcare) și întrebările din terminal (de `configureaza.php` și de încărcare) |
 | `tools/verificare/lib/cont.php` | Contul SSH e comun cu site-urile live: o bază scrisă în `.env`-ul altui site e refuzată de toate uneltele de mai sus |
+| `tools/verificare/lib/php-cli.php` | PHP-ul liniei de comandă și extensiile lui: o extensie cu modulul pe disc, dar neîncărcată (sodium în `/opt/alt/php83` pe Hostinger), primește reparația exactă (`PHP="… -d extension=sodium.so"`); „Pasul următor” în forma cu `$PHP`; procesele copil primesc aceleași `-d` (mai jos) |
+| `tools/verificare/lib/roboti-gazda.php` | robots.txt-ul CDN-ului Hostinger pe domeniul temporar: recunoscut exact, rând INFO în `stare.php` (mai jos) |
 | `tools/verificare/agregate.php` (+ `seturi/`, `lib/`) | Verificările agregate pe un site live (WP-10, mai jos) |
 | `tools/sonda/amprenta-schema.php` (+ `lib/`) | Sonda schemei unui site live (WP-10, MIG-08) |
 | `tools/verificare/compara-calcule.php` (+ `lucrator-calcule.php`, `lib/calcule.php`) | Comparația calculelor (golden master, WP-11): codul vechi din `cod-vechi/` și codul comun, pe copie, pentru aceleași comenzi; doar numere (mai jos) |
 | `tools/verificare/amprenta-site.php` (+ `lib/amprenta.php`, `tools/dev/lib/normalizeaza-html.php`) | Amprenta paginilor unui site, live sau de verificare (WP-11): pentru fiecare adresă publică codul, unde trimite, titlul, robots, canonical, H1, JSON-LD…; două amprente se compară (mai jos) |
 | `tools/dev/test-calcule.php`, `tools/dev/test-amprenta-site.php` (prin `tools/dev/compara-calcule-local.sh`) | Testele lor (poarta G-calc): local, față de codul Bioscem însuși, și pe un site de verificare simulat |
-| `tools/dev/test-verificare.php` (+ `lib/gaura-neagra.php`) | Testele (poarta G-verif), pe o găzduire simulată local, cu o plasă de siguranță care numără orice cerere spre afară |
+| `tools/dev/test-verificare.php` (+ `lib/gaura-neagra.php`, `lib/cdn-simulat.php`, `lib/php-fara-extensii.php`) | Testele (poarta G-verif), pe o găzduire simulată local, cu o plasă de siguranță care numără orice cerere spre afară, un CDN Hostinger simulat și un PHP care nu încarcă singur o extensie |
 | `tools/dev/test-sonde.php` | Testele verificărilor pe site-urile live (poarta G-sonde), tot pe o găzduire simulată |
 | `tools/dev/test-incarcare.php` | Testele încărcării copiei (tot poarta G-verif), pe o găzduire simulată cu un Bioscem „live” inventat, pe MariaDB și MySQL 8 |
 
@@ -47,7 +49,7 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 
 1. Websites → site-ul nou → **SSL**: instalează certificatul gratuit.
 2. Advanced → **PHP Configuration**: **PHP 8.3**, aceeași versiune ca la cele patru site-uri live
-   (decizia OD-48: `php_min` = 8.3).
+   (decizia OD-48: `php_min` = 8.3); în fila **PHP extensions** bifezi **sodium** (licența copiei îl cere pe site), Save.
 3. Advanced → **SSH Access**: pornește accesul și notează rândul afișat (`ssh -p 65002 u…@…`).
 4. **Databases**: creează o bază de date nouă, goală, cu utilizatorul ei. Notează numele bazei și al
    utilizatorului (de forma `u123456789_verif`). Parola o păstrezi doar tu: o scrii direct pe server, la
@@ -60,7 +62,9 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 Site-ul trebuie să fie un **site separat** (Websites → Add website), cu dosarul lui
 `~/domains/<domeniul-verificare>/public_html`. Un subdomeniu pus de hPanel în dosarul altui site
 (`~/domains/<alt-site>/public_html/<sub>`) nu e acceptat de `configureaza.php`. Poate rămâne pe
-domeniul temporar dat de Hostinger (`….hostingersite.com`), cum e acum.
+domeniul temporar dat de Hostinger (`….hostingersite.com`), cum e acum. Pe domeniul temporar
+**CDN-ul Hostinger nu se poate opri** și răspunde el la `/robots.txt` (vezi „robots.txt pe domeniul
+temporar”, mai jos): `stare.php` știe asta și îți arată un rând INFO, nu NU.
 
 **Contul SSH e același cu al site-urilor live.** Comenzile de mai jos se dau doar din dosarul
 site-ului de verificare (`cd ~/domains/<domeniul-verificare>/public_html`), niciodată din dosarul
@@ -70,9 +74,23 @@ o bază de date cu tabele care nu e o copie de verificare.
 Ne trimiți: domeniul, versiunea PHP, rândul SSH și versiunea PHP a fiecăruia dintre cele 4 site-uri live
 (hPanel → PHP Configuration). **Fără parole.**
 
-### 2. Codul, cu hPanel → GIT (după ce îți scriem că poarta e pe GitHub)
+### 2. Codul, cu hPanel → GIT sau prin SSH (după ce îți scriem că poarta e pe GitHub)
 
-Websites → site-ul nou → Advanced → **GIT** → Create a New Repository:
+Două feluri, oricare (rezultatul e același: codul din git în `public_html`).
+
+**a) Prin SSH** (așa l-ai adus pe 21 oct 2026), în `public_html`-ul gol de la pasul 1.6:
+
+```sh
+ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
+cd ~/domains/<domeniul-verificare>/public_html
+ls -A                                # trebuie să nu arate nimic (pasul 1.6)
+git clone --branch claude/etapa1-cod-comun --single-branch https://github.com/SilverName99/ANDAXI-CMS.git .
+#   punctul de la sfârșit: codul vine chiar în public_html, nu într-un subdosar
+```
+
+Codul nou, mai târziu: `git pull --ff-only` din același dosar (mai jos, „Codul nou, mai târziu”).
+
+**b) Cu hPanel → GIT:** Websites → site-ul nou → Advanced → **GIT** → Create a New Repository:
 
 - **Repository**: `https://github.com/SilverName99/ANDAXI-CMS.git` (nu trebuie nicio cheie). Decizia
   OD-49: repo-urile rămân **publice** deocamdată, deci în ele nu intră nicio dată personală a
@@ -96,6 +114,11 @@ ls /opt/alt | grep php              # versiunile PHP; alege-o pe cea de la pasul
 PHP=/opt/alt/php83/usr/bin/php
 $PHP tools/verificare/stare.php
 #   înainte de configurare, ultimul rând: „NECONFIGURAT: site-ul e închis publicului (503) …”
+#   dacă arată „NU    extensia sodium (CLI)” și dedesubt „INFO  Lipsește extensia PHP sodium … PHP="…"”:
+#   PHP-ul acesta nu încarcă singur sodium, deși îl are pe disc (așa e pe Hostinger). Scrii rândul din INFO:
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
+$PHP tools/verificare/stare.php
+#   acum „DA    extensia sodium (CLI)”; de aici încolo toate comenzile cu acest $PHP (și la pașii 5–8)
 $PHP tools/verificare/configureaza.php
 #   întreabă: numele bazei, utilizatorul bazei, parola bazei (nu se vede când scrii),
 #   emailul tău (emailurile de test merg doar acolo; adresa stă doar în .env-ul de pe server,
@@ -104,9 +127,24 @@ $PHP tools/verificare/configureaza.php
 #   Ctrl-C oprește oricând, fără să scrie nimic
 #   pe ecran doar DA/NU: legătura cu baza, „baza e goală”, „baza nu e a altui site din cont”,
 #   „.env scris, doar pentru tine (0600)”, „cheia licenței de verificare făcută acum”, apoi „Gata.”
+#   „Pasul următor” îți arată comanda; cu sodium prin -d, în forma PHP="…"; $PHP tools/verificare/stare.php
 $PHP tools/verificare/stare.php
 #   ultimul rând trebuie să fie: „GATA: site-ul de verificare e pregătit (toate verificările DA)”
+#   pe domeniul temporar, un rând „INFO  /robots.txt îl dă CDN-ul Hostinger (server: hcdn) …”: așa trebuie (mai jos)
 ```
+
+**Sodium pentru site (web):** dacă `stare.php` arată „NU    extensia sodium (web)”: hPanel → Advanced → **PHP
+Configuration** → **PHP extensions** → bifezi **sodium** → Save, apoi `$PHP tools/verificare/stare.php` din nou. Bifa
+schimbă doar PHP-ul site-ului; pentru linia de comandă rămâne `$PHP` cu `-d extension=sodium.so` de mai sus.
+
+**robots.txt pe domeniul temporar.** Pe `….hostingersite.com` CDN-ul Hostinger (`server: hcdn`) răspunde singur la
+`/robots.txt`, fără să ajungă la site: „User-agent: Googlebot / Disallow: /”, apoi „User-agent: * / Allow: /”. Pe un
+domeniu temporar CDN-ul nu se poate opri. Site-ul rămâne închis: Googlebot e oprit chiar de găzduire, iar orice alt robot
+primește 401 la poartă (fără parolă nu vede nimic), cu `noindex` pe fiecare răspuns. `stare.php` recunoaște exact acest
+răspuns (textul CDN-ului, `server: hcdn`, fără antetele site-ului, domeniu temporar, poarta 401, `noindex` și `no-store`,
+robots.txt-ul site-ului tot „Disallow: /”) și îl arată ca rând INFO; garda 4 rămâne DA. Orice alt răspuns e tot NU, cu
+motivul în paranteză: alt text, alt server, site-ul care ar răspunde altceva, sau un **domeniu propriu** (acolo CDN-ul se
+oprește din hPanel; după ce îl oprești, `stare.php` din nou).
 
 `configureaza.php` face și **cheia licenței de verificare**: o pereche de chei pe care o are doar acest
 server (cheia privată în `storage/licenta/`, doar pentru tine; cea publică în `.env`). Cu ea se pune pe
@@ -143,7 +181,7 @@ durează sub un minut.
 ```sh
 ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
 cd ~/domains/<domeniul-verificare>/public_html
-PHP=/opt/alt/php83/usr/bin/php
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
 #   întâi codul nou: hPanel → GIT → Deploy (sau git pull --ff-only, ca la „Codul nou, mai târziu”)
 $PHP tools/verificare/agregate.php --set=bioscem
 $PHP tools/verificare/agregate.php --set=grafoanaytis
@@ -193,7 +231,7 @@ minute.
 ```sh
 ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
 cd ~/domains/<domeniul-verificare>/public_html
-PHP=/opt/alt/php83/usr/bin/php
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
 #   întâi codul nou: hPanel → GIT → Deploy (sau git pull --ff-only, ca la „Codul nou, mai târziu”)
 
 # a) doar dacă .env-ul e de dinainte de licența de verificare (din WP-08a): îl scrie din nou, cu cheia licenței
@@ -304,7 +342,7 @@ pachetul site-ului copiat; comanda de mai jos e pentru încercări:
 
 ```sh
 cd ~/domains/<domeniul-verificare>/public_html
-PHP=/opt/alt/php83/usr/bin/php
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
 $PHP tools/verificare/licenta.php presetari          # numele pachetelor: toate, bioscem, magazin, …
 $PHP tools/verificare/licenta.php bioscem            # pluginurile Bioscem
 $PHP tools/verificare/licenta.php bioscem blog=oprit # la fel, cu blogul oprit (pornit / se_opreste / oprit)
@@ -318,7 +356,7 @@ doar aici: `licenta.php` refuză să ruleze din alt dosar sau pe un site care nu
 
 ```sh
 cd ~/domains/<domeniul-verificare>/public_html
-PHP=/opt/alt/php83/usr/bin/php
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
 $PHP tools/verificare/sterge.php
 #   arată ce șterge și întreabă; scrii „da”
 #   ultimul rând: „GATA: copia a fost ștearsă”
@@ -349,9 +387,18 @@ uiți, copia se închide singură după 7 zile (decizia D1): site-ul arată „C
 
 ### Codul nou, mai târziu
 
-hPanel → GIT → **Deploy** (sau prin SSH `git -C ~/domains/<domeniul-verificare>/public_html pull --ff-only`,
-dacă `stare.php` arată „git pe server: DA”), apoi `$PHP tools/verificare/stare.php`. `.env` și `storage/` nu
-sunt în git, deci rămân neatinse.
+Prin SSH (dacă ai adus codul cu `git clone`, pasul 2a, sau dacă `stare.php` arată „git pe server: DA”):
+
+```sh
+cd ~/domains/<domeniul-verificare>/public_html
+git pull --ff-only
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # sau PHP=/opt/alt/php83/usr/bin/php, dacă sodium (CLI) e DA fără -d
+$PHP tools/verificare/stare.php
+```
+
+Sau hPanel → GIT → **Deploy** (pasul 2b), apoi `$PHP tools/verificare/stare.php`. `.env` și `storage/` nu sunt în git,
+deci rămân neatinse. Dacă `git pull --ff-only` spune că nu poate („Not possible to fast-forward”), nu forța nimic:
+trimite-ne rândul.
 
 ### Dacă ceva nu merge
 
@@ -367,6 +414,11 @@ sunt în git, deci rămân neatinse.
 | „nu pot ascunde ce scrii (comanda stty nu merge …)” | Trimite-ne textul. Nu scrie parolele în altă parte |
 | După o oprire în mijlocul unei parole nu mai vezi ce scrii (sau Ctrl-C nu mai merge) | Scrie `stty sane` și Enter (literele nu apar cât scrii, dar comanda merge). Ctrl-C la o parolă pune singur terminalul înapoi; asta se întâmplă doar dacă procesul a fost oprit cu forța (de exemplu de găzduire) |
 | `stare.php`: „PHP CLI ≥ minimul codului: NU” | Folosești PHP-ul implicit al contului; pune `PHP=/opt/alt/php83/usr/bin/php` (sau versiunea aleasă) |
+| `stare.php`: „NU    extensia sodium (CLI)” și „INFO  Lipsește extensia PHP sodium … deși modulul ei e pe server” (sau `configureaza.php` / `incarca.php` / `licenta.php`: „EROARE: lipsește extensia PHP sodium …”) | PHP-ul liniei de comandă nu încarcă singur sodium (așa e `/opt/alt/php83` pe Hostinger). Scrii exact rândul din mesaj, `PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"`, și dai din nou aceeași comandă cu `$PHP`. Procesele pornite de unelte (migrările, comparația calculelor) primesc singure același `-d` |
+| „lipsește extensia PHP … (hPanel → PHP Configuration → PHP extensions; sau alt PHP din /opt/alt)” | Modulul nu e nici pe disc: hPanel → Advanced → PHP Configuration → PHP extensions, sau alt PHP din `/opt/alt`; trimite-ne rândul |
+| `stare.php`: „NU    extensia sodium (web)” | hPanel → Advanced → PHP Configuration → PHP extensions → bifezi sodium → Save; apoi `stare.php` din nou |
+| `stare.php`: „INFO  /robots.txt îl dă CDN-ul Hostinger (server: hcdn), nu site-ul …” | Nimic: pe domeniul temporar CDN-ul nu se poate opri; site-ul rămâne închis (poarta 401, `noindex`). Nu e NU (mai sus, „robots.txt pe domeniul temporar”) |
+| `stare.php`: „NU    /robots.txt: „Disallow: /” (îl dă CDN-ul Hostinger (hcdn), dar domeniul nu e unul temporar …)” | Pe un domeniu propriu CDN-ul se poate opri: îl oprești din setările CDN ale site-ului în hPanel, apoi `stare.php` din nou. Alt motiv în paranteză: trimite-ne textul |
 | `configureaza.php` sau `stare.php`: „baza nu e a altui site din cont: NU (o folosește …)” | Ai scris numele bazei unui site live. Creează în hPanel → Databases o bază nouă, doar pentru verificare, și `$PHP tools/verificare/configureaza.php --rescrie` |
 | `stare.php`: „cheia privată a licenței de verificare …: NU” (sau „LICENTA_CHEIE_PUBLICA … NU”) | `$PHP tools/verificare/configureaza.php --rescrie` (face cheia; restul îl ceri din nou) |
 | `stare.php`: un rând NU în „Gărzile copiei” | Nu încărca nicio copie; trimite-ne tot textul (rândul spune unde e problema) |
@@ -458,13 +510,58 @@ jurnalul erorilor PHP), înaintea fișierelor încărcate, a stratului SEO și a
    503 „a expirat”. Așa aplicația nu rulează niciodată pe baza goală (nici `ensure*`, nici erori), iar o
    copie uitată se închide singură. Abia apoi cererea ajunge la aplicație.
 
+### robots.txt pe domeniul temporar (`lib/roboti-gazda.php`)
+
+Pe un domeniu temporar Hostinger (`<nume>.hostingersite.com`) CDN-ul găzduirii răspunde singur la `/robots.txt`, fără
+să ajungă la PHP (văzut pe 21 oct 2026, pe site-ul proprietarului): `server: hcdn`, niciun antet al porții, textul
+„User-agent: Googlebot / Disallow: /” și „User-agent: * / Allow: /”. Pe domeniul temporar CDN-ul nu se poate opri, deci
+`stare.php` nu poate vedea niciodată „Disallow: /” al porții. `RobotiGazda::cdnHostinger()` (pur, fără cereri) spune dacă
+e exact acest caz, cu tot ce ține site-ul închis; atunci `stare.php` tipărește un rând INFO (Googlebot oprit de găzduire,
+ceilalți roboți 401 la poartă; neconfigurat, 503) în locul rândului robots.txt și garda 4 rămâne DA (cu nota „din afară
+/robots.txt îl dă CDN-ul Hostinger”). Condițiile, toate:
+
+1. răspunsul nu e al site-ului: n-are `X-Robots-Tag` și nici `Cache-Control` cu `no-store` (poarta le pune pe **orice**
+   răspuns, și pe `/robots.txt` al ei, înaintea aplicației: `forteazaAntete()`);
+2. e al CDN-ului Hostinger: `server: hcdn`, codul 200 și exact textul de mai sus (`\r\n` și spațiile de la capăt de rând
+   nu contează, orice alt rând da);
+3. domeniul site-ului (dosarul `~/domains/<gazda>/public_html`, același cu `APP_URL`) e unul temporar: un singur nume
+   înaintea lui `hostingersite.com`;
+4. fără parolă, `/` răspunde 401 (neconfigurat: 503), cu `X-Robots-Tag: noindex` și `Cache-Control: no-store`;
+5. `Robots::text()` dă „User-agent: * / Disallow: /” (dacă o cerere ar ajunge la site).
+
+Orice altceva rămâne NU, cu motivul în paranteză: site-ul care răspunde cu antetele lui și alt text, alt text al
+CDN-ului, alt server, un domeniu propriu (acolo CDN-ul se oprește), poarta deschisă, fără noindex, `Robots::text()`
+greșit.
+
+### PHP-ul liniei de comandă și extensiile (`lib/php-cli.php`)
+
+Pe Hostinger `/opt/alt/php83/usr/bin/php` nu încarcă sodium, deși `/opt/alt/php83/usr/lib64/php/modules/sodium.so`
+există; `-d extension=sodium.so` îl încarcă (21 oct 2026). Bifa din hPanel → PHP extensions schimbă doar PHP-ul site-ului.
+`PhpCli`:
+
+- **refuzul** (`lipsa()`): `configureaza.php`, `incarca.php`, `licenta.php`, `sterge.php`, `agregate.php`,
+  `amprenta-site.php`, `compara-calcule.php` și `tools/sonda/amprenta-schema.php`, cărora le lipsește o extensie cerută
+  cu modulul în `extension_dir`, spun reparația exactă: `PHP="<PHP_BINARY> -d extension=sodium.so"`, apoi aceeași
+  comandă cu `$PHP`; fără modul, hPanel. `stare.php` arată rândul NU și dedesubt același text ca INFO;
+- **comanda de dat mai departe** (`comanda()`: „Pasul următor”, „Continuă cu”, „rulează …”): dacă procesul de acum are o
+  extensie doar prin `-d` (PHP_BINARY pornit simplu n-o are; o sondă a lui), `PHP="<PHP_BINARY> -d extension=…"; $PHP
+  <unealta>`, altfel `PHP_BINARY <unealta>` ca până acum; `stare.php` o spune și ca INFO;
+- **procesele copil** (`pentruCopil()`, în `lib/calcule.php`: lucrătorii comparației și `scripts/migreaza.php`): o sondă
+  a PHP-ului copilului (o dată pe PHP, cu mediul și felul lucrătorilor: țevi sau fișiere), apoi `-d extension=<nume>.so`
+  pentru fiecare extensie din `PhpCli::EXTENSII` (mysqlnd, pdo, pdo_mysql, sodium, mbstring, intl, gd, curl, openssl,
+  zip) pe care o are comanda, iar copilul pornit simplu nu, cu modulul în `extension_dir`-ul lui (mysqlnd și pdo
+  înaintea lui pdo_mysql); o a doua sondă verifică, iar textul comparației spune într-un rând ce s-a adăugat (fără calea
+  PHP-ului). Altfel `$PHP` (cu `-d`) n-ar ajunge la copii: PHP_BINARY e doar executabilul. `tools/inghetare/`
+  (generatorul înghețării) pornește și el PHP_BINARY, dar rulează doar local, cu `tools/dev/php.sh`.
+
 ### Sonda (`/_verificare/sonda`)
 
 `stare.php` scrie în `storage/verificare/sonda.json` amprenta unui jeton aleator (expiră în 2 minute) și
 cere `/_verificare/sonda?sonda=<jeton>` cu acel jeton și ca parolă Basic, cookie și antet propriu. Poarta
 răspunde, o singură dată, cu ce vede PHP-ul web: versiunea și SAPI, pe unde a sosit Basic (sau deloc), dacă
 au sosit cookie-ul și antetul, clasa lui `REMOTE_ADDR` (loopback, privată, CGNAT, publică), dacă sosesc
-`X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP`/`Forwarded`, HTTPS, `max_execution_time`, `memory_limit`,
+`X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP`/`Forwarded` (pentru ultima adresă din `X-Forwarded-For` clasa ei, fără port
+doar la `a.b.c.d:port` și `[v6]:port`, ca în `IpClient`; ea și `X-Real-IP` față de `REMOTE_ADDR` doar ca DA/NU), HTTPS, `max_execution_time`, `memory_limit`,
 funcțiile oprite, extensiile, `imagewebp` și cele 14 gărzi ale copiei, cum le vede PHP-ul site-ului (doar DA/NU,
 `Verificare::garzi()`). Fără jetonul bun, adresa e tratată ca oricare alta (401).
 
@@ -482,7 +579,7 @@ de comandă (cronurile citesc același `.env`).
 | 1 | Poarta | `Verificare::poarta()`, prima în `public/index.php` | HTTP Basic sau formularul; 10 parole greșite → 429 (mai sus) |
 | 2 | noindex | tot poarta | `X-Robots-Tag: noindex, nofollow, noarchive`, `Cache-Control: no-store, private` pe fiecare răspuns |
 | 3 | Expirarea | tot poarta (`stareDinRand`) | copia mai veche de `VERIFICARE_ZILE_PASTRARE` zile (cel mult 7, D1) → 503 |
-| 4 | robots.txt | poarta și `Robots::text()` | `User-agent: *` / `Disallow: /`, fără `Allow:` pentru fluxul de produse și fără `Sitemap:` |
+| 4 | robots.txt | poarta și `Robots::text()` | `User-agent: *` / `Disallow: /`, fără `Allow:` pentru fluxul de produse și fără `Sitemap:`; pe domeniul temporar Hostinger, din afară îl dă CDN-ul (rândul INFO al lui `stare.php`, „robots.txt pe domeniul temporar”) |
 | 5 | Emailurile | `OrderMailer::sendHtmlEmail` (singurul drum: comenzi, conturi, newsletter, coșuri abandonate, BT, contact) → `Verificare::trimiteEmail()` | doar la `VERIFICARE_EMAIL`, subiectul cu „[VERIFICARE] ”, la început un rând „pe site, acest email ar fi plecat la …” (adresa doar dacă e `@verificare.invalid`, altfel „o adresă din afara copiei”); prin căsuța copiei (`VERIFICARE_SMTP_*`; SMTP-ul, SendGrid-ul și expeditorul din setări nu se folosesc) sau, fără ea, fișier `.eml` 0600 în `storage/verificare/mail/`; cel mult 100 pe zi (`emailuri-azi.json`), peste ele nu pleacă (excepție: „eșuat, sărit” în istoricul emailurilor) |
 | 6 | ERP | `ErpClient::fromSettings` și `ErpClient::request` | null (oprit), afară de o copie de verificare a ERP-ului: `VERIFICARE_ERP_URL` https pe `*-verif.erp.andaxi.ro` cu `VERIFICARE_ERP_CHEIE` (D5); adresa și cheia din setări nu se folosesc niciodată |
 | 7 | FAN Courier | `FanCourierGateway::createInternalAwb` și `rawRequest` | niciun AWB și nicio cerere (tarif live, urmărire, lockere, nomenclator), afară de `VERIFICARE_FAN_TEST=1` (un cont FAN de test, D6); checkout-ul cu tariful live pornit refuză comanda cu motivul |
@@ -676,7 +773,10 @@ totalul salvat e doar informativă).
   dat cu `--php-vechi` (de exemplu PHP-ul lui live, `/opt/alt/php81/usr/bin/php`; implicit același), codul comun pe PHP-ul
   comenzii (cel puțin `php_min`). Întâi doar „verifica”: garda, versiunea, pluginurile codului comun (cele din
   `licente_dev.<profil>` trebuie să fie toate pornite, altfel refuz: comparația ar număra ca diferență ce oprește licența) și
-  amprentele setărilor din care se fac calculele (informativ: aceleași valori în ambele coduri?). Fiecare lucrător verifică,
+  amprentele setărilor din care se fac calculele (informativ: aceleași valori în ambele coduri?). Lucrătorii și migrările
+  primesc aceleași extensii ca comanda: unde PHP-ul lor pornit simplu nu încarcă una (pe Hostinger, sodium; comanda pornită
+  cu `$PHP`, adică cu `-d extension=sodium.so`), `-d extension=<nume>.so`, după o sondă pe PHP (`lib/php-cli.php`, „PHP-ul
+  liniei de comandă și extensiile”), cu un rând „extensiile PHP-ului … în procesele copil: … doar cu -d …”. Fiecare lucrător verifică,
   după ce codul lui s-a legat la bază și înaintea oricărui cod al aplicației, că e chiar copia așteptată (același nume de
   bază, același rând `_verificare`; local, același nume `cms_*`). Mediul: pe server doar `PATH`, `HOME`, `LANG`; cererile spre
   internet spre `127.0.0.1:9`, `allow_url_fopen=0`; pe copie gărzile (`SITE_COPIE_VERIFICARE=1`) și setările neutralizate la
@@ -982,7 +1082,14 @@ simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public
 pe o bază goală, cu cheia licenței; poarta (401, 429, formularul, cookie-ul, sonda, modul formular, pingul fără parolă,
 webhook-urile), `stare.php` în ambele stări (ieșirea lui întreagă intră în raport; configurat: „GATA” și cele 14
 gărzi DA), apoi **fiecare gardă stricată pe rând** în copia codului (14 mutații: `stare.php` trebuie să-i arate
-rândul NU și să nu mai spună „GATA”); o copie „încărcată” (`cms_verif_copie`, o copie a bazei de dezvoltare cu
+rândul NU și să nu mai spună „GATA”); robots.txt prin CDN-ul Hostinger simulat (`tools/dev/lib/cdn-simulat.php`,
+`CMS_DEV_PORT`+11: textul hcdn, alt text, alt server, antetele porții, sau totul spre copie) pe domeniul copiei (propriu:
+NU) și pe o a doua găzduire simulată pe un domeniu temporar (`verificare-proba.hostingersite.com`, `CMS_DEV_PORT`+6:
+INFO și „GATA”; neconfigurat, INFO cu 503), plus fiecare ramură a lui `RobotiGazda` cu răspunsuri simulate (A); un PHP
+care nu încarcă singur pdo_mysql (`tools/dev/lib/php-fara-extensii.php`: PHP-ul testului cu `PHP_INI_SCAN_DIR` fără
+fișierul lui ini, pornit cu `exec -a`, deci PHP_BINARY e chiar el, ca `/opt/alt/php83` pe Hostinger; sodium e în PHP-ul
+local, deci aici stă în locul lui): refuzurile cu reparația exactă, `stare.php` cu rândul NU și INFO, apoi pornit cu `-d`
+„Pasul următor” cu `$PHP`; o copie „încărcată” (`cms_verif_copie`, o copie a bazei de dezvoltare cu
 `_verificare`, licența pusă de `licenta.php toate`; paginile 200, cu noindex și no-store) și una expirată; gărzile,
 cu setările unui site adevărat lăsate în baza copiei (SMTP, Stripe live, EuPlătesc, ERP, FAN, BT live în `.env`,
 GA/GTM/Ads/Clarity/tawk.to, login Google): bannerul, nicio etichetă, pozele 302 și căile rele 404, fluxul Merchant,
@@ -1093,7 +1200,10 @@ mediul gol: baza în urma codului (o migrare neaplicată) → migrările întâi
 nume de bază sau cale a contului; fiecare refuz al serverului (`_verificare` lipsă, neîncheiat, din altă sursă, prea vechi;
 `incarcat-la` lipsă sau expirat; `.env` fără `SITE_COPIE_VERIFICARE=1` sau cu alt pachet; alt `HOME`; baza în `.env`-ul altui
 site din cont; codul vechi lipsă, legătură sau cu `.env`-ul spre altă bază; `--cod-vechi`, `--local` și `--declarate` pe
-server; licența cu cupoanele oprite; baza fără registrul migrărilor); un PHP sub minim.
+server; licența cu cupoanele oprite; baza fără registrul migrărilor); un PHP sub minim; un PHP care încarcă pdo_mysql și
+mbstring doar cu `-d` (`tools/dev/lib/php-fara-extensii.php`, ca sodium în `/opt/alt/php83` pe Hostinger): fără `-d` refuzul
+cu reparația exactă; cu `-d` migrările și lucrătorii primesc aceleași `-d extension=…` (și prin fișiere) și „TRECE”, cu un
+rând care spune ce s-a adăugat; mutația care nu le dă (copiii cu PHP_BINARY simplu) pică la migrări.
 **`tools/dev/test-amprenta-site.php`**: fără server normalizarea, câmpurile unei pagini inventate, gazda sursă (pe gazda
 copiei, linkurile absolute spre site-ul copiat sunt străine fără ea și ale site-ului cu ea), versiunea pozei de distribuire (în
 calea rândului și la alegerea celor 20 de poze), adresele pe care unealta nu le cere, fișierul, comparația (câte o schimbare

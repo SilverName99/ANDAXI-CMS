@@ -48,8 +48,10 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
         . "de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php).\n");
     exit(1);
 }
-if (!extension_loaded('pdo_mysql')) {
-    fwrite(STDERR, "EROARE: lipsește extensia PHP pdo_mysql.\n");
+require_once __DIR__ . '/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('pdo_mysql'), 'tools/verificare/agregate.php');
+if ($lipsaExtensii !== null) {
+    fwrite(STDERR, 'EROARE: ' . $lipsaExtensii . ".\n");
     exit(1);
 }
 

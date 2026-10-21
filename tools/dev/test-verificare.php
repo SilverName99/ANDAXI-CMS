@@ -18,13 +18,21 @@ declare(strict_types=1);
  *    sk_test_, BT doar test, EuPlătesc și FAN oprite, etichetele, login-ul Google, adresa
  *    pozelor lipsă cu fiecare cale rea refuzată, bannerul, webhook-urile, expirarea), fiecare
  *    și în afara copiei (nu schimbă nimic). PHP-urile sub minim: configureaza.php, stare.php,
- *    licenta.php și sterge.php spun singure că PHP-ul e prea vechi (cod 1).
+ *    licenta.php și sterge.php spun singure că PHP-ul e prea vechi (cod 1). robots.txt-ul CDN-ului
+ *    Hostinger pe domeniul temporar (tools/verificare/lib/roboti-gazda.php), cu răspunsuri simulate pentru
+ *    fiecare ramură: INFO doar pentru textul lui exact, cu server: hcdn, fără antetele porții, pe
+ *    <nume>.hostingersite.com, cu poarta închisă, noindex și Robots::text „Disallow: /”; altfel NU, cu motivul.
+ *    Extensiile PHP-ului liniei de comandă (tools/verificare/lib/php-cli.php): sonda, `-d extension=<nume>.so`
+ *    exact cât lipsește (ca /opt/alt/php83 cu sodium.so neîncărcat), mysqlnd și pdo înaintea lui pdo_mysql.
  * B. O copie a codului (fișierele din git, cu modificările necomise) într-o găzduire
  *    simulată, `$CMS_DEV_DIR/verificare/acasa/domains/verificare.exemplu.test/public_html`,
  *    servită de `php -S` pe CMS_DEV_PORT+7 cu un mediu gol (ca pe Hostinger: totul din .env):
  *    B1 fără .env: orice cerere (pagini, admin, POST, robots, health, ping, fișiere, .env, .git,
  *       sonda) → 503 „neconfigurat”, noindex, no-store, fără sesiune; stare.php →
- *       „NECONFIGURAT” și „503 = DA”.
+ *       „NECONFIGURAT” și „503 = DA”. Un PHP care nu încarcă singur pdo_mysql (modulul pe disc,
+ *       tools/dev/lib/php-fara-extensii.php; pe Hostinger e sodium): configureaza.php, incarca.php și
+ *       sterge.php refuză cu reparația exactă (PHP="… -d extension=pdo_mysql.so", aceeași comandă cu
+ *       $PHP), stare.php îi dă rândul NU și INFO-ul; pornit cu -d, „Pasul următor” e în forma cu $PHP.
  *    B2 configureaza.php: refuzurile (dosar greșit, bază cu tabele, parola bazei greșită,
  *       parole ale porții diferite, scurte sau egale cu parola bazei, .env existent,
  *       --rescrie peste .env-ul unui site adevărat) fără să scrie nimic; apoi configurarea
@@ -48,7 +56,11 @@ declare(strict_types=1);
  *       VERIFICARE_WEBHOOKURI_DESCHISE=1 și doar cu o copie); sonda (un jeton, o dată, cu
  *       gărzile văzute de PHP-ul site-ului); stare.php → „GATA: …”, cele 14 gărzi DA, fără
  *       secrete; apoi fiecare gardă stricată pe rând în copia codului (14 mutații) → rândul
- *       ei NU și fără „GATA”; --rescrie cu altă parolă anulează cookie-urile vechi.
+ *       ei NU și fără „GATA”; robots.txt prin CDN-ul Hostinger simulat (tools/dev/lib/cdn-simulat.php,
+ *       CMS_DEV_PORT+11): pe domeniul copiei (propriu) NU, cu motivul; pe o a doua găzduire simulată pe
+ *       un domeniu temporar (<nume>.hostingersite.com, CMS_DEV_PORT+6) INFO și „GATA”, iar alt text, alt
+ *       server sau antetele porții tot NU; neconfigurat, INFO cu 503; --rescrie (pornit cu -d
+ *       extension=pdo_mysql.so: „Pasul următor” cu $PHP) cu altă parolă anulează cookie-urile vechi.
  *    B4 copie „încărcată” (cms_verif_copie: o copie a bazei de dezvoltare, cu _verificare, și
  *       licența pusă de tools/verificare/licenta.php toate): cu parola, paginile aplicației
  *       răspund 200, cu noindex și no-store chiar și unde aplicația pune alt antet (sitemap);
@@ -96,9 +108,14 @@ $radacina = dirname(__DIR__, 2);
 require_once $radacina . '/src/Support/Env.php';
 require_once $radacina . '/src/Support/IpClient.php';
 require_once $radacina . '/src/Support/Verificare.php';
+require_once $radacina . '/tools/verificare/lib/roboti-gazda.php';
+require_once $radacina . '/tools/verificare/lib/php-cli.php';
+require_once $radacina . '/tools/dev/lib/php-fara-extensii.php';
 
 use App\Support\IpClient;
 use App\Support\Verificare;
+use Unelte\Verificare\PhpCli;
+use Unelte\Verificare\RobotiGazda;
 
 $dosarDev = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/');
 $fisierRaport = $dosarDev . '/test-verificare-raport.txt';
@@ -369,6 +386,69 @@ foreach ($phpVechi as $binar) {
     }
 }
 
+// robots.txt pe domeniul temporar Hostinger (tools/verificare/lib/roboti-gazda.php), cu răspunsuri simulate: fiecare ramură.
+// CDN-ul găzduirii (hcdn) răspunde singur la /robots.txt; e INFO (null) doar exact așa și doar cu site-ul închis.
+$hcdn = ['cod' => 200, 'antete' => ['server' => 'hcdn', 'content-type' => 'text/plain'],
+    'corp' => "User-agent: Googlebot\r\nDisallow: /  \r\n\r\nUser-agent: *\r\nAllow: /\r\n"];
+$temporar = 'verificare-proba.hostingersite.com';
+$cdn = static fn (array $r, ?string $g = 'verificare-proba.hostingersite.com', bool $inchis = true, bool $noindex = true, bool $cod = true): ?string
+    => RobotiGazda::cdnHostinger($r, $g, $inchis, $noindex, $cod);
+$motivCu = static fn (?string $motiv, string $text): bool => $motiv !== null && str_contains($motiv, $text);
+$verifica('robots, CDN-ul Hostinger pe domeniul temporar (textul lui, server: hcdn, fără antetele site-ului, poarta închisă, noindex, '
+    . 'Robots::text „Disallow: /”) → INFO, nu NU (și cu \\r\\n și spații la capăt de rând)', $cdn($hcdn) === null
+    && $cdn(['corp' => RobotiGazda::TEXT_HCDN] + $hcdn) === null && $cdn($hcdn, $temporar, true, true, true) === null);
+$verifica('robots, textul INFO: Googlebot oprit de găzduire, ceilalți roboți 401 la poartă (configurat) sau 503 (neconfigurat)',
+    str_contains(RobotiGazda::textInfo(true), 'Googlebot e oprit de găzduire') && str_contains(RobotiGazda::textInfo(true), '401 la poartă')
+    && str_contains(RobotiGazda::textInfo(false), '503') && str_contains(RobotiGazda::textInfo(true), 'nu se poate opri'));
+$verifica('robots, răspunsul are antetele porții (X-Robots-Tag, sau doar Cache-Control: no-store): e al site-ului, cu alt text → NU',
+    $motivCu($cdn(['antete' => $hcdn['antete'] + ['x-robots-tag' => 'noindex, nofollow, noarchive']] + $hcdn), 'vine de la site')
+    && $motivCu($cdn(['antete' => $hcdn['antete'] + ['x-robots-tag' => 'all']] + $hcdn), 'vine de la site')
+    && $motivCu($cdn(['antete' => $hcdn['antete'] + ['cache-control' => 'no-store, private']] + $hcdn), 'vine de la site'));
+$verifica('robots, alt server decât hcdn (nginx, lipsă) → NU, cu numele serverului',
+    $motivCu($cdn(['antete' => ['server' => 'nginx']] + $hcdn), 'server: nginx') && $motivCu($cdn(['antete' => []] + $hcdn), 'server: lipsă')
+    && $motivCu($cdn(['antete' => ['server' => 'hcdn2']] + $hcdn), 'nici de la CDN-ul Hostinger'));
+$verifica('robots, hcdn cu alt text (Allow pentru toți, un rând în plus, fără Googlebot) sau alt cod → NU',
+    $motivCu($cdn(['corp' => "User-agent: *\nAllow: /\n"] + $hcdn), 'altceva decât textul lui')
+    && $motivCu($cdn(['corp' => RobotiGazda::TEXT_HCDN . "\nSitemap: https://x/sitemap.xml"] + $hcdn), 'altceva')
+    && $motivCu($cdn(['corp' => "User-agent: *\nDisallow: /\n"] + $hcdn), 'altceva')
+    && $motivCu($cdn(['cod' => 404] + $hcdn), 'codul 404') && $motivCu($cdn(['cod' => 503] + $hcdn), 'codul 503'));
+$verifica('robots, hcdn pe un domeniu propriu (sau fără domeniu, subdomeniu mai adânc, hostingersite.com la mijloc) → NU: acolo CDN-ul se oprește',
+    $motivCu($cdn($hcdn, 'verificare.exemplu.ro'), 'domeniul nu e unul temporar') && $motivCu($cdn($hcdn, null), 'domeniul nu e unul temporar')
+    && $motivCu($cdn($hcdn, 'a.b.hostingersite.com'), 'temporar') && $motivCu($cdn($hcdn, 'x.hostingersite.com.exemplu.ro'), 'temporar')
+    && $motivCu($cdn($hcdn, 'hostingersite.com'), 'temporar') && $cdn($hcdn, 'VERIFICARE-PROBA.hostingersite.com') === null);
+$verifica('robots, hcdn pe domeniul temporar, dar poarta nu închide site-ul / fără noindex / Robots::text greșit → NU, cu motivul',
+    $motivCu($cdn($hcdn, $temporar, false), 'poarta nu închide') && $motivCu($cdn($hcdn, $temporar, true, false), 'noindex și no-store')
+    && $motivCu($cdn($hcdn, $temporar, true, true, false), 'Robots::text()'));
+
+// PHP-ul liniei de comandă și extensiile lui (tools/verificare/lib/php-cli.php): sonda, ce se adaugă cu -d, nevoile lui pdo_mysql.
+$sondaAici = PhpCli::sondeaza([PHP_BINARY]);
+$verifica('PhpCli: sonda lui PHP_BINARY (extension_dir și extensiile încărcate) = ce vede procesul de acum', $sondaAici !== null
+    && $sondaAici['dir'] === (string) ini_get('extension_dir') && $sondaAici['ext'] === PhpCli::incarcateAici()
+    && PhpCli::citesteSonda("PHP Warning:  PHP Startup: Unable to load dynamic library 'x'\n@@php-cli@@{\"dir\":\"/d\",\"ext\":{\"sodium\":true,\"rau nume\":true}}\n")
+        === ['dir' => '/d', 'ext' => ['sodium' => true]]
+    && PhpCli::citesteSonda('fără marcaj') === null && PhpCli::citesteSonda('@@php-cli@@{nu e json') === null, json_encode($sondaAici));
+$moduleProba = $dosarDev . '/verificare-module-proba';
+@mkdir($moduleProba . '/modules', 0770, true);
+foreach (['sodium', 'mysqlnd', 'pdo', 'pdo_mysql', 'mbstring'] as $modulProba) {
+    file_put_contents($moduleProba . '/modules/' . $modulProba . '.so', '');
+}
+$copilHostinger = ['dir' => $moduleProba . '/modules', 'ext' => ['sodium' => false, 'pdo' => true, 'mysqlnd' => true, 'pdo_mysql' => true, 'mbstring' => true]];
+$c1 = PhpCli::completeaza($copilHostinger, ['sodium', 'pdo_mysql', 'mbstring']);
+$c2 = PhpCli::completeaza(['dir' => $moduleProba . '/modules', 'ext' => []], ['pdo_mysql']);
+$c3 = PhpCli::completeaza(['dir' => $moduleProba . '/modules', 'ext' => []], ['intl', 'sodium']);
+$c4 = PhpCli::pentruCopil(['dir' => $moduleProba . '/modules', 'ext' => ['sodium' => false] + array_filter(PhpCli::incarcateAici())]);
+$verifica('PhpCli: ca /opt/alt/php83 pe Hostinger (sodium.so în modules, neîncărcat) → exact -d extension=sodium.so; pdo_mysql cu mysqlnd și '
+    . 'pdo înainte; fără modul → „lipsă”, nimic adăugat; copilul primește doar ce are procesul de acum',
+    $c1 === ['argumente' => ['-d', 'extension=sodium.so'], 'adaugate' => ['sodium'], 'lipsa' => []]
+    && $c2['argumente'] === ['-d', 'extension=mysqlnd.so', '-d', 'extension=pdo.so', '-d', 'extension=pdo_mysql.so']
+    && $c3 === ['argumente' => ['-d', 'extension=sodium.so'], 'adaugate' => ['sodium'], 'lipsa' => ['intl']]
+    && $c4['argumente'] === (extension_loaded('sodium') ? ['-d', 'extension=sodium.so'] : []) && $c4['lipsa'] === []
+    && PhpCli::completeaza($copilHostinger, ['pdo_mysql', 'mbstring'])['argumente'] === [], json_encode([$c1, $c2, $c3, $c4]));
+exec('rm -rf ' . escapeshellarg($moduleProba));
+$verifica('PhpCli: cu PHP-ul testului nu lipsește nimic (fără refuz, „Pasul următor” cu PHP_BINARY, ca până acum)',
+    PhpCli::lipsa(['pdo_mysql', 'sodium'], 'tools/verificare/stare.php') === null && PhpCli::reparatie()['forma'] === null
+    && PhpCli::comanda('tools/verificare/stare.php') === PHP_BINARY . ' tools/verificare/stare.php');
+
 // =====================================================================
 // B. Copia într-o găzduire simulată
 // =====================================================================
@@ -461,9 +541,12 @@ $ini = static function () use ($jurnalErori, $copie): array {
         '-d', 'opcache.enable=0',
     ];
 };
-/** Un script din copie (configureaza.php, stare.php), cu intrarea dată pe stdin (nu e terminal). */
-$ruleaza = static function (string $script, array $argumente, string $intrare, ?string $acasaData = null) use ($copie, $acasa, $mediu, $ini): array {
-    $comanda = array_merge([PHP_BINARY], $ini(), [$copie . '/' . $script], $argumente);
+/**
+ * Un script din copie (configureaza.php, stare.php), cu intrarea dată pe stdin (nu e terminal); `$php`: alt PHP (executabilul
+ * și argumentele lui, de exemplu PHP-ul fără pdo_mysql și `-d extension=pdo_mysql.so`), implicit PHP_BINARY.
+ */
+$ruleaza = static function (string $script, array $argumente, string $intrare, ?string $acasaData = null, ?array $php = null) use ($copie, $acasa, $mediu, $ini): array {
+    $comanda = array_merge($php ?? [PHP_BINARY], $ini(), [$copie . '/' . $script], $argumente);
     $proces = proc_open($comanda, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1]], $tevi, $copie, $mediu($acasaData ?? $acasa));
     if (!is_resource($proces)) {
         return ['cod' => -1, 'iesire' => 'nu pornește'];
@@ -668,6 +751,30 @@ try {
     $verifica('stare.php fără .env: „NECONFIGURAT”, cu „503 = DA”, cod 1', $s['cod'] === 1 && str_starts_with($ultimul, 'NECONFIGURAT:')
         && str_contains($s['iesire'], 'DA    fără configurare, / răspunde 503') && str_contains($s['iesire'], 'DA    /robots.txt răspunde 503'),
         $ultimul);
+
+    // PHP-ul liniei de comandă care nu încarcă singur o extensie cu modulul pe disc (pe Hostinger: /opt/alt/php83 și sodium; aici
+    // pdo_mysql, fiindcă sodium e în PHP-ul local; tools/dev/lib/php-fara-extensii.php): refuzul cu reparația exactă, apoi cu $PHP.
+    $phpFaraPdo = php_fara_extensii($dosarTest . '/php-fara-pdo-mysql', ['pdo_mysql']);
+    $cuPdo = [$phpFaraPdo, '-d', 'extension=pdo_mysql.so'];
+    $formaAsteptata = 'PHP="' . $phpFaraPdo . ' -d extension=pdo_mysql.so"';
+    foreach (['configureaza.php' => 'Nu am scris nimic', 'incarca.php' => 'Nu am atins nimic', 'sterge.php' => 'Nu am șters nimic'] as $unealta => $coada) {
+        $r = $ruleaza('tools/verificare/' . $unealta, [], '', null, [$phpFaraPdo]);
+        $verifica($unealta . ' cu un PHP fără pdo_mysql (modulul pe disc): cod 1, reparația exactă (PHP="… -d extension=pdo_mysql.so", aceeași comandă cu $PHP), nimic scris',
+            $r['cod'] === 1 && str_contains($r['iesire'], 'lipsește extensia PHP pdo_mysql din PHP-ul liniei de comandă, deși modulul ei e pe server')
+            && str_contains($r['iesire'], $formaAsteptata . ', apoi aceeași comandă cu $PHP (de exemplu $PHP tools/verificare/' . $unealta . ')')
+            && str_contains($r['iesire'], $coada) && !file_exists($copie . '/.env'), trim($r['iesire']));
+    }
+    $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '', null, [$phpFaraPdo]);
+    $verifica('stare.php cu un PHP fără pdo_mysql: „NU extensia pdo_mysql (CLI)”, INFO cu reparația exactă, „NU E GATA”', $s['cod'] === 1
+        && str_contains($s['iesire'], 'NU    extensia pdo_mysql (CLI)') && str_contains($s['iesire'], 'INFO  Lipsește extensia PHP pdo_mysql din PHP-ul liniei de comandă')
+        && str_contains($s['iesire'], $formaAsteptata . ', apoi aceeași comandă cu $PHP (de exemplu $PHP tools/verificare/stare.php)')
+        && str_contains($s['iesire'], 'NU E GATA:'), trim($s['iesire']));
+    $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '', null, $cuPdo);
+    $ultimul = trim((string) strrchr("\n" . trim($s['iesire']), "\n"));
+    $verifica('stare.php pornit cu $PHP (-d extension=pdo_mysql.so): extensia DA, INFO „doar cu -d”, „Pasul următor” cu PHP="…"; $PHP …',
+        $s['cod'] === 1 && str_contains($s['iesire'], 'DA    extensia pdo_mysql (CLI)') && str_contains($s['iesire'], 'INFO  PHP-ul liniei de comandă încarcă pdo_mysql doar cu -d')
+        && $ultimul === 'NECONFIGURAT: site-ul e închis publicului (503). Pasul următor: ' . $formaAsteptata . '; $PHP tools/verificare/configureaza.php',
+        $ultimul . ' | ' . trim($s['iesire']));
 
     // ── B2. configureaza.php ──
     $scrie('');
@@ -935,7 +1042,23 @@ try {
     $fapte = json_decode($r['corp'], true);
     $verifica('sonda: cookie-ul ei trimis ca listă → „cookie” NU, fără avertisment', $r['cod'] === 200 && is_array($fapte)
         && ($fapte['cookie'] ?? true) === false && !str_contains((string) @file_get_contents($jurnalErori), 'Array to string'), substr($r['corp'], 0, 120));
-    @unlink($copie . '/storage/verificare/sonda.json');
+    // X-Forwarded-For și X-Real-IP, ca pe Hostinger (o adresă, prin CDN): clasa ultimei adrese (o IPv6 fără paranteze care se
+    // termină în cifre nu are port) și dacă e chiar REMOTE_ADDR, doar DA/NU; intrarea pentru IpClient (WP-12b).
+    $antetIp = static function (array $antete) use ($cerere, $copie): ?array {
+        $jetonIp = bin2hex(random_bytes(32));
+        file_put_contents($copie . '/storage/verificare/sonda.json', json_encode(['amprenta' => hash('sha256', $jetonIp), 'expira' => time() + 60]));
+        $r = $cerere('GET', Verificare::CALE_SONDA . '?sonda=' . $jetonIp, ['antete' => $antete]);
+        @unlink($copie . '/storage/verificare/sonda.json');
+        $f = json_decode($r['corp'], true);
+        return $r['cod'] === 200 && is_array($f) && !str_contains($r['corp'], '2a02:2f0e') && !str_contains($r['corp'], '198.51.100') ? $f : null;
+    };
+    $f1 = $antetIp(['X-Forwarded-For: 2a02:2f0e:1:2::1234', 'X-Real-IP: 127.0.0.1']);
+    $f2 = $antetIp(['X-Forwarded-For: 198.51.100.7:443, 127.0.0.1', 'X-Real-IP: 198.51.100.7']);
+    $verifica('sonda: X-Forwarded-For cu o IPv6 fără paranteze (terminată în cifre) → „publică”, nu „invalidă”; ultima adresă și X-Real-IP față de '
+        . 'REMOTE_ADDR doar ca DA/NU (nicio adresă în răspuns)', $f1 !== null && $f2 !== null && $f1['xff'] === 1 && $f1['xff_ultima'] === 'publică'
+        && $f1['xff_ultima_e_remote'] === false && $f1['x_real_ip'] === true && $f1['x_real_ip_e_remote'] === true
+        && $f2['xff'] === 2 && $f2['xff_ultima'] === 'loopback (127.0.0.0/8)' && $f2['xff_ultima_e_remote'] === true && $f2['x_real_ip_e_remote'] === false,
+        json_encode([$f1['xff_ultima'] ?? null, $f2['xff_ultima'] ?? null]));
 
     $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $port], '');
     // Ieșirea întreagă în raport: așa arată textul pe care îl trimite proprietarul (aici, cu date inventate).
@@ -1009,8 +1132,127 @@ try {
     $verifica('mutațiile n-au lăsat nimic să plece (plasa de siguranță a lui stare.php e 127.0.0.1:9) și nici email scris',
         $conexiuni($portProxy) === [] && $conexiuni($portInterzis) === [] && $mesajeSmtp() === [] && glob($copie . '/storage/verificare/mail/*.eml') === []);
 
-    $r = $ruleaza('tools/verificare/configureaza.php', ['--rescrie'], $intrare(array_replace($bune, [5 => $parolaPoarta2, 6 => $parolaPoarta2])));
+    // ── robots.txt dat de CDN-ul Hostinger (hcdn), simulat în fața copiei (tools/dev/lib/cdn-simulat.php, pe CMS_DEV_PORT+11) ──
+    $portCdn = $port + 4;
+    $portTemporar = $port - 1;
+    $dosarCdn = $dosarTest . '/cdn';
+    @mkdir($dosarCdn, 0770, true);
+    $modCdn = static function (string $mod, int $tinta) use ($dosarCdn): void {
+        file_put_contents($dosarCdn . '/mod', $mod);
+        file_put_contents($dosarCdn . '/tinta', 'http://127.0.0.1:' . $tinta);
+    };
+    $pidCdn = 0;
+    $pidTemporar = 0;
+    $opresteProces = static function (int $pid): void {
+        if ($pid > 0) {
+            exec('pkill -TERM -P ' . $pid . ' 2>/dev/null; kill ' . $pid . ' 2>/dev/null');
+            for ($i = 0; $i < 50 && trim((string) shell_exec('kill -0 ' . $pid . ' 2>/dev/null && echo x')) !== ''; $i++) {
+                usleep(100000);
+            }
+        }
+    };
+    $raspunde = static function (int $portul) use ($cerere, &$port): bool {
+        $vechi = $port;
+        $port = $portul;
+        $raspuns = false;
+        for ($i = 0; $i < 50 && !$raspuns; $i++) {
+            $raspuns = $cerere('GET', '/robots.txt')['cod'] !== 0;
+            if (!$raspuns) {
+                usleep(200000);
+            }
+        }
+        $port = $vechi;
+        return $raspuns;
+    };
+    $randNu = static fn (string $iesire, string $inceput): bool => preg_match('/^  NU    ' . preg_quote($inceput, '/') . '/m', $iesire) === 1;
+    try {
+        $modCdn('trece', $port);
+        $pidCdn = (int) trim((string) shell_exec('cd ' . escapeshellarg($dosarCdn) . ' && env -i PATH=' . escapeshellarg((string) getenv('PATH'))
+            . ' CDN_SIMULAT_DOSAR=' . escapeshellarg($dosarCdn) . ' nohup ' . escapeshellarg(PHP_BINARY) . ' -S 127.0.0.1:' . $portCdn . ' '
+            . escapeshellarg($radacina . '/tools/dev/lib/cdn-simulat.php') . ' >> ' . escapeshellarg($dosarCdn . '/cdn.log') . ' 2>&1 & echo $!'));
+        $verifica('CDN-ul simulat pornește (port ' . $portCdn . ')', $raspunde($portCdn), (string) @file_get_contents($dosarCdn . '/cdn.log'));
+        $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $portCdn], '');
+        $verifica('prin CDN-ul simulat care lasă și /robots.txt la site: tot „GATA” (CDN-ul nu schimbă altceva)', $s['cod'] === 0
+            && str_contains($s['iesire'], "GATA: site-ul de verificare e pregătit") && str_contains($s['iesire'], 'DA    /robots.txt: „Disallow: /”'), $randuriNu($s['iesire']));
+        $modCdn('hcdn', $port);
+        $s = $ruleaza('tools/verificare/stare.php', ['--adresa=http://127.0.0.1:' . $portCdn], '');
+        $verifica('robots.txt-ul CDN-ului Hostinger pe un domeniu propriu (' . $gazda . '): rândul NU, cu motivul, și garda 4 NU, fără „GATA”',
+            $s['cod'] === 1 && $randNu($s['iesire'], '/robots.txt: „Disallow: /” (îl dă CDN-ul Hostinger (hcdn), dar domeniul nu e unul temporar')
+            && $randNu($s['iesire'], '4. robots.txt') && str_contains($s['iesire'], 'NU E GATA:') && !str_contains($s['iesire'], 'INFO  /robots.txt îl dă CDN-ul'),
+            $randuriNu($s['iesire']));
+
+        // Același cod pe un domeniu temporar Hostinger: o a doua găzduire simulată, cu .env-ul și cheia licenței copiei, servită pe CMS_DEV_PORT+6.
+        $gazdaTemporara = 'verificare-proba.hostingersite.com';
+        $acasaTemporara = $dosarTest . '/acasa-temporar';
+        $copieTemporara = $acasaTemporara . '/domains/' . $gazdaTemporara . '/public_html';
+        foreach ($fisiere as $fisier) {
+            if (!is_file($radacina . '/' . $fisier) || str_starts_with($fisier, '.env')
+                || (str_starts_with($fisier, 'storage/') && !in_array(basename($fisier), ['.gitkeep', '.gitignore'], true))) {
+                continue;
+            }
+            @mkdir(dirname($copieTemporara . '/' . $fisier), 0770, true);
+            copy($radacina . '/' . $fisier, $copieTemporara . '/' . $fisier);
+            @chmod($copieTemporara . '/' . $fisier, fileperms($radacina . '/' . $fisier) & 0777);
+        }
+        $envTemporar = str_replace(['APP_URL=https://' . $gazda, $copie], ['APP_URL=https://' . $gazdaTemporara, $copieTemporara], (string) file_get_contents($copie . '/.env'));
+        file_put_contents($copieTemporara . '/.env', $envTemporar);
+        chmod($copieTemporara . '/.env', 0600);
+        @mkdir($copieTemporara . '/storage/licenta', 0770, true);
+        copy($copie . '/storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA, $copieTemporara . '/storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA);
+        chmod($copieTemporara . '/storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA, 0600);
+        $env = '';
+        foreach ($mediu($acasaTemporara) as $nume => $valoare) {
+            $env .= ' ' . $nume . '=' . escapeshellarg($valoare);
+        }
+        $pidTemporar = (int) trim((string) shell_exec('cd ' . escapeshellarg($copieTemporara) . ' && env -i' . $env . ' nohup ' . escapeshellarg(PHP_BINARY) . ' '
+            . implode(' ', array_map('escapeshellarg', $ini())) . ' -S 127.0.0.1:' . $portTemporar . ' -t public tools/dev/router.php >> '
+            . escapeshellarg($dosarTest . '/server-temporar.log') . ' 2>&1 & echo $!'));
+        $verifica('a doua găzduire simulată, pe un domeniu temporar Hostinger (' . $gazdaTemporara . '), pornește (port ' . $portTemporar . ')',
+            $raspunde($portTemporar) && str_contains($envTemporar, 'APP_URL=https://' . $gazdaTemporara . "\n"), (string) @file_get_contents($dosarTest . '/server-temporar.log'));
+        $stareTemporar = static function () use ($copieTemporara, $acasaTemporara, $mediu, $ini, $portCdn): array {
+            $proces = proc_open(array_merge([PHP_BINARY], $ini(), [$copieTemporara . '/tools/verificare/stare.php', '--adresa=http://127.0.0.1:' . $portCdn]),
+                [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1]], $tevi, $copieTemporara, $mediu($acasaTemporara));
+            fclose($tevi[0]);
+            $iesire = (string) stream_get_contents($tevi[1]);
+            fclose($tevi[1]);
+            return ['cod' => proc_close($proces), 'iesire' => $iesire];
+        };
+        $modCdn('hcdn', $portTemporar);
+        $s = $stareTemporar();
+        file_put_contents($fisierRaport, '        | ' . str_replace("\n", "\n        | ", rtrim($s['iesire'])) . "\n", FILE_APPEND);
+        $verifica('domeniul temporar Hostinger, robots.txt-ul CDN-ului (hcdn): un rând INFO (Googlebot oprit de găzduire, ceilalți roboți 401 la poartă), '
+            . 'garda 4 DA, niciun NU, „GATA”', $s['cod'] === 0 && str_contains($s['iesire'], 'GATA: site-ul de verificare e pregătit (toate verificările DA)')
+            && str_contains($s['iesire'], 'INFO  /robots.txt îl dă CDN-ul Hostinger (server: hcdn), nu site-ul') && str_contains($s['iesire'], 'ceilalți roboți primesc 401 la poartă')
+            && str_contains($s['iesire'], 'DA    4. robots.txt: „Disallow: /” (în cod; din afară /robots.txt îl dă CDN-ul Hostinger, INFO mai sus)')
+            && $randuriNu($s['iesire']) === '' && str_contains($s['iesire'], 'domeniul ' . $gazdaTemporara), $randuriNu($s['iesire']) . ' | ' . trim($s['iesire']));
+        foreach (['text-strain' => 'răspunde altceva decât textul lui știut', 'alt-server' => 'nici de la CDN-ul Hostinger (server: nginx)',
+            'cu-antetele-site' => 'răspunsul vine de la site (are antetele porții)'] as $mod => $motiv) {
+            $modCdn($mod, $portTemporar);
+            $s = $stareTemporar();
+            $verifica('domeniul temporar, alt răspuns la /robots.txt (' . $mod . '): rândul NU („' . $motiv . '”), garda 4 NU, fără „GATA”', $s['cod'] === 1
+                && $randNu($s['iesire'], '/robots.txt: „Disallow: /” (') && str_contains($s['iesire'], $motiv) && $randNu($s['iesire'], '4. robots.txt')
+                && !str_contains($s['iesire'], 'INFO  /robots.txt îl dă CDN-ul'), $randuriNu($s['iesire']));
+        }
+        $modCdn('hcdn', $portTemporar);
+        rename($copieTemporara . '/.env', $copieTemporara . '/.env.t');
+        $s = $stareTemporar();
+        rename($copieTemporara . '/.env.t', $copieTemporara . '/.env');
+        $ultimul = trim((string) strrchr("\n" . trim($s['iesire']), "\n"));
+        $verifica('domeniul temporar, neconfigurat (fără .env), robots.txt-ul CDN-ului: INFO (ceilalți roboți primesc 503), tot „NECONFIGURAT” (singurul NU e .env)',
+            $s['cod'] === 1 && str_starts_with($ultimul, 'NECONFIGURAT:') && str_contains($s['iesire'], 'INFO  /robots.txt îl dă CDN-ul Hostinger')
+            && str_contains($s['iesire'], 'primesc 503 „neconfigurat”') && str_contains($s['iesire'], 'DA    fără configurare, / răspunde 503'), $ultimul . ' | ' . $randuriNu($s['iesire']));
+    } finally {
+        $opresteProces($pidCdn);
+        $opresteProces($pidTemporar);
+    }
+    $verifica('robots prin CDN: nimic n-a plecat spre plasa de siguranță, niciun email', $conexiuni($portProxy) === [] && $conexiuni($portInterzis) === []
+        && $mesajeSmtp() === [] && $emailuri() === 0, json_encode([$conexiuni($portProxy), $conexiuni($portInterzis), count($mesajeSmtp()), $emailuri()]));
+
+    // Configurarea din nou, cu PHP-ul care are pdo_mysql doar prin -d (ca $PHP pe Hostinger): „Pasul următor” în forma cu $PHP.
+    $r = $ruleaza('tools/verificare/configureaza.php', ['--rescrie'], $intrare(array_replace($bune, [5 => $parolaPoarta2, 6 => $parolaPoarta2])), null, $cuPdo);
     $verifica('--rescrie pe copia de verificare, cu altă parolă a porții → cod 0', $r['cod'] === 0, trim($r['iesire']));
+    $verifica('--rescrie pornit cu $PHP (-d extension=pdo_mysql.so): „Gata. Pasul următor: PHP="…"; $PHP tools/verificare/stare.php”',
+        str_contains($r['iesire'], 'Gata. Pasul următor: ' . $formaAsteptata . '; $PHP tools/verificare/stare.php'), trim($r['iesire']));
     $verifica('--rescrie păstrează cheia licenței (același fișier, aceeași cheie publică în .env)', trim((string) @file_get_contents($fisierCheie)) === $textCheie
         && (Verificare::citesteEnv((string) file_get_contents($copie . '/.env'))['LICENTA_CHEIE_PUBLICA'] ?? '') === (string) ($cheiEnv['LICENTA_CHEIE_PUBLICA'] ?? '')
         && str_contains($r['iesire'], 'DA    cheia licenței de verificare de dinainte, păstrată'), trim($r['iesire']));

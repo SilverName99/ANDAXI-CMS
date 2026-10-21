@@ -51,7 +51,10 @@ declare(strict_types=1);
  *    B2 refuzurile: _verificare lipsă, neîncheiat, din altă sursă, prea vechi; incarcat-la expirat; .env fără
  *       SITE_COPIE_VERIFICARE=1; alt HOME; baza în .env-ul altui site din cont; codul vechi lipsă, legătură sau cu .env-ul
  *       spre altă bază; --cod-vechi, --local și --declarate pe server; o licență cu cupoanele oprite;
- *    B3 un PHP sub minim: mesajul, nu o eroare de sintaxă.
+ *    B3 un PHP sub minim: mesajul, nu o eroare de sintaxă;
+ *    B4 un PHP care încarcă pdo_mysql și mbstring doar cu -d (ca sodium în /opt/alt/php83 pe Hostinger;
+ *       tools/dev/lib/php-fara-extensii.php): fără -d refuzul cu reparația exactă; cu -d, migrările și lucrătorii
+ *       pornite cu PHP_BINARY primesc aceleași -d extension=… (și prin fișiere), „TRECE”; mutația care nu le dă → pică.
  *
  * Își face și își șterge bazele cms_calc_t, cms_calc_copie, cms_calc_alta și utilizatorul cms_calc_test; baza de dezvoltare
  * trebuie să fie făcută de tools/dev/instaleaza.sh (o copiază; n-o schimbă). Raportul: $CMS_DEV_DIR/test-calcule-raport.txt;
@@ -217,6 +220,7 @@ $forme = [
     '/^  codul comun: ([a-z0-9-]+, )?(commit [0-9a-f]{7}|fără \.git), PHP \d+\.\d+\.\d+$/u',
     '/^  baza: (o bază cms_\* a uneltelor de dezvoltare \(date demo\)|copia de verificare bioscem, încărcată la \d{4}-\d\d-\d\d \d\d:\d\d UTC, anonimizată)$/u',
     '/^  migrările: (baza e la zi cu codul comun|baza era „[a-z_]+”; aplicate acum \(scripts\/migreaza\.php --aplica --site=bioscem, cod 0\), la zi)$/u',
+    '/^  extensiile PHP-ului (acestei comenzi|codului vechi \(--php-vechi\)) în procesele copil: [a-z_]+(, [a-z_]+)* doar cu( -d extension=[a-z_]+\.so)+( \(tot lipsesc: [a-z_]+(, [a-z_]+)*\))?$/u',
     '/^  pluginurile site-ului pe codul comun: toate pornite$/u',
     '/^  setările calculelor \(informativ\): \d+ chei, (aceleași valori în ambele coduri|alte valori în codul comun la \d+: [a-z0-9_, ]+)$/u',
     '/^  cupoane: (\d+ făcute valabile pe durata comparației \(--fara-cupoane-valide le lasă cum sunt\)|lăsate cum sunt \(--fara-cupoane-valide\))$/u',
@@ -875,7 +879,8 @@ try {
     file_put_contents($copie . '/storage/verificare/incarcat-la', date('c') . "\n");
     $mediuServer = ['PATH' => (string) getenv('PATH'), 'HOME' => $acasa, 'LANG' => 'C.UTF-8'];
     $peServer = static function (string $script, array $argumente, array $optiuni = []) use ($proces, $ini, $copie, $mediuServer): array {
-        return $proces(array_merge([$optiuni['php'] ?? PHP_BINARY], $ini, [$copie . '/' . $script], $argumente), ($optiuni['mediu'] ?? []) + $mediuServer,
+        // `php`: alt PHP (calea lui, sau o listă: executabilul și argumentele lui, de exemplu -d extension=…).
+        return $proces(array_merge((array) ($optiuni['php'] ?? PHP_BINARY), $ini, [$copie . '/' . $script], $argumente), ($optiuni['mediu'] ?? []) + $mediuServer,
             $optiuni['cwd'] ?? $copie);
     };
     $l = $peServer('tools/verificare/licenta.php', ['bioscem']);
@@ -997,6 +1002,55 @@ try {
         $r = $proces([trim((string) shell_exec('command -v ' . $binar)), '-l', $radacina . '/tools/verificare/lucrator-calcule.php'], getenv(), $radacina);
         $verifica($binar . ': lucrator-calcule.php are sintaxa PHP 8.0 (codul vechi poate rula pe PHP-ul lui live, --php-vechi)', $r['cod'] === 0, $r['tot']);
     }
+
+    // ── B4 ──
+    // Ca pe Hostinger (21 oct 2026): PHP-ul liniei de comandă nu încarcă singur o extensie cu modulul pe disc (acolo sodium în
+    // /opt/alt/php83), proprietarul îl pornește cu -d (`$PHP`), iar procesele copil pornite cu PHP_BINARY (migrările, lucrătorii)
+    // trebuie să primească aceleași -d. Aici PHP-ul testului fără pdo_mysql și mbstring (tools/dev/lib/php-fara-extensii.php).
+    $scrie('');
+    $scrie('B4. PHP-ul care încarcă pdo_mysql și mbstring doar cu -d (ca sodium în /opt/alt/php83 pe Hostinger)');
+    require_once $radacina . '/tools/dev/lib/php-fara-extensii.php';
+    $phpFara = php_fara_extensii($dosarTest . '/php-fara-extensii', ['pdo_mysql', 'mbstring']);
+    $cuD = [$phpFara, '-d', 'extension=pdo_mysql.so', '-d', 'extension=mbstring.so'];
+    $r = $peServer('tools/verificare/compara-calcule.php', [], ['php' => $phpFara]);
+    $verifica('compara-calcule.php cu PHP-ul fără pdo_mysql: cod 1, reparația exactă (PHP="… -d extension=pdo_mysql.so", aceeași comandă cu $PHP)',
+        $r['cod'] === 1 && str_contains($r['tot'], 'lipsește extensia PHP pdo_mysql din PHP-ul liniei de comandă, deși modulul ei e pe server')
+        && str_contains($r['tot'], 'PHP="' . $phpFara . ' -d extension=pdo_mysql.so"') && str_contains($r['tot'], '$PHP tools/verificare/compara-calcule.php'), $r['tot']);
+    $inUrma = static function () use ($dbCopie): void {
+        $dbCopie->exec("UPDATE _platforma_stare SET valoare = 'cod-de-dinainte' WHERE cheie = 'amprenta'");
+        $dbCopie->exec("DELETE FROM _platforma_migrari WHERE id = 'magazin/0032_avertismente_produse'");
+        $dbCopie->exec('DROP TABLE order_product_warnings');
+        $dbCopie->exec('DROP TABLE product_warnings');
+    };
+    // Întâi fără reparație (mutația în copia codului: procesele copil cu PHP_BINARY simplu): migreaza.php n-are pdo_mysql și pică.
+    $inUrma();
+    $fisierCalcule = $copie . '/tools/verificare/lib/calcule.php';
+    $originalCalcule = (string) file_get_contents($fisierCalcule);
+    $dinMutatie = 'return array_merge([$php], $this->extensiiCopil[$php]);';
+    try {
+        file_put_contents($fisierCalcule, str_replace($dinMutatie, 'return [$php];', $originalCalcule));
+        $rM = $peServer('tools/verificare/compara-calcule.php', [], ['php' => $cuD]);
+    } finally {
+        file_put_contents($fisierCalcule, $originalCalcule);
+    }
+    $verifica('mutația (procesele copil fără -d extension=…): migrările pică, fără „TRECE”, cupoanele neatinse', substr_count($originalCalcule, $dinMutatie) === 1
+        && $rM['cod'] !== 0 && str_contains($rM['tot'], 'scripts/migreaza.php --aplica --site=bioscem a ieșit cu codul') && !str_contains($rM['tot'], 'REZULTAT: TRECE'),
+        'cod ' . $rM['cod'] . ': ' . $rM['tot']);
+    $r = $peServer('tools/verificare/compara-calcule.php', [], ['php' => $cuD]);
+    foreach (explode("\n", trim($r['iesire'])) as $rand) {
+        $scrie('        | ' . $rand);
+    }
+    $verifica('pornit cu $PHP (-d extension=pdo_mysql.so -d extension=mbstring.so): migrările și lucrătorii primesc aceleași -d, „TRECE”, „diferite 0”, '
+        . 'un rând spune ce s-a adăugat', $r['cod'] === 0 && str_contains($r['iesire'], "REZULTAT: TRECE\n")
+        && str_contains($r['iesire'], 'migrările: baza era „in_urma”; aplicate acum') && str_contains($r['iesire'], '| diferite 0 | erori vechi 0 | erori nou 0')
+        && str_contains($r['iesire'], '  extensiile PHP-ului acestei comenzi în procesele copil: pdo_mysql, mbstring doar cu -d extension=pdo_mysql.so -d extension=mbstring.so')
+        && !str_contains($r['iesire'], 'tot lipsesc'), 'cod ' . $r['cod'] . ': ' . $r['tot']);
+    $verifica('ieșirea cu $PHP: doar forme știute (calea PHP-ului nu apare), nicio parolă, bază, utilizator, cale a contului; stderr gol',
+        $randuriStraine($r['iesire']) === [] && $faraSecrete($r['tot']) === '' && !str_contains($r['tot'], $phpFara) && trim($r['erori']) === '',
+        implode(' | ', $randuriStraine($r['iesire'])) . ' ' . $faraSecrete($r['tot']) . ' ' . $r['erori']);
+    $r = $peServer('tools/verificare/compara-calcule.php', ['--prin-fisiere'], ['php' => $cuD]);
+    $verifica('la fel prin fișiere (--prin-fisiere, sonda copilului tot prin fișiere): „TRECE”', $r['cod'] === 0 && str_contains($r['iesire'], "REZULTAT: TRECE\n")
+        && str_contains($r['iesire'], 'doar cu -d extension=pdo_mysql.so -d extension=mbstring.so') && (glob($copie . '/storage/verificare/tmp/*') ?: []) === [], $r['tot']);
 
     $sumaDevDupa = implode(',', $root->query('CHECKSUM TABLE `' . $bazaDev . '`.coupons, `' . $bazaDev . '`.orders')->fetchAll(PDO::FETCH_COLUMN, 1));
     $verifica('baza de dezvoltare neatinsă (CHECKSUM TABLE coupons, orders)', $sumaDevDupa === $sumaDevInainte);

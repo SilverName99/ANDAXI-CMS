@@ -48,8 +48,11 @@ if (version_compare(PHP_VERSION, $phpMin, '<')) {
     licenta_opreste('PHP ' . PHP_VERSION . ' e mai vechi decât minimul codului (' . $phpMin . '). Rulează cu un PHP mai nou, '
         . 'de exemplu /opt/alt/php83/usr/bin/php (versiunile: ls /opt/alt | grep php).');
 }
-if (!extension_loaded('sodium')) {
-    licenta_opreste('lipsește extensia PHP sodium (hPanel → PHP Configuration → PHP extensions).');
+// Sodium lipsă cu modulul pe server (pe Hostinger, /opt/alt/php83) primește reparația exactă, -d extension=sodium.so.
+require_once $radacina . '/tools/verificare/lib/php-cli.php';
+$lipsaExtensii = \Unelte\Verificare\PhpCli::lipsa(array('sodium'), 'tools/verificare/licenta.php');
+if ($lipsaExtensii !== null) {
+    licenta_opreste($lipsaExtensii . '.');
 }
 
 require_once $radacina . '/src/Support/Env.php';
@@ -86,11 +89,11 @@ $cheiePublica = null;
 $cheiePrivata = Verificare::cheiePrivataLicenta($cheiePublica);
 if ($cheiePrivata === null) {
     licenta_opreste('lipsește cheia licenței de verificare (storage/licenta/' . Verificare::FISIER_CHEIE_LICENTA . '): '
-        . PHP_BINARY . ' tools/verificare/configureaza.php --rescrie o face.');
+        . \Unelte\Verificare\PhpCli::comanda('tools/verificare/configureaza.php --rescrie') . ' o face.');
 }
 if (trim(isset($cheiEnv['LICENTA_CHEIE_PUBLICA']) ? $cheiEnv['LICENTA_CHEIE_PUBLICA'] : '') !== $cheiePublica) {
     licenta_opreste('LICENTA_CHEIE_PUBLICA din .env nu e perechea cheii private de aici: '
-        . PHP_BINARY . ' tools/verificare/configureaza.php --rescrie le pune la loc.');
+        . \Unelte\Verificare\PhpCli::comanda('tools/verificare/configureaza.php --rescrie') . ' le pune la loc.');
 }
 
 // Codul aplicației (în linia de comandă bootstrap.php nu pornește nicio sesiune și nu deschide baza).
