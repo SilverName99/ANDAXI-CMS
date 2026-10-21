@@ -23,6 +23,9 @@ final class CustomerAuth
     public static function login(int $userId): void
     {
         if ($userId > 0) {
+            // Id nou de sesiune înainte de logare (N15, WP-12b): coșul trece în sesiunea nouă, iar cine avea id-ul
+            // de dinainte nu primește logarea (Sesiune::idNouLaLogare).
+            Sesiune::idNouLaLogare();
             $_SESSION[self::SESSION_KEY] = $userId;
         }
     }

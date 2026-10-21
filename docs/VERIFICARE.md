@@ -23,7 +23,8 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 | Fișier | Ce e |
 |---|---|
 | `src/Support/Verificare.php` | Poarta (prima în `public/index.php`), ajutoarele ei și cele 14 gărzi ale copiei (WP-08) |
-| `src/Support/IpClient.php` | Adresa vizitatorului (`REMOTE_ADDR`, sau `X-Forwarded-For` doar de la un proxy de încredere) |
+| `src/Support/IpClient.php` | Adresa vizitatorului (`REMOTE_ADDR`, sau `X-Forwarded-For` doar de la un proxy de încredere), din WP-12b pentru tot site-ul |
+| `src/Support/ParolaAdmin.php` | Felul parolei salvate a unui admin (hash, bcrypt vechi, hash stricat, goală, text clar) și când se reface după logare: aceeași regulă la logare și în numărătoarea `admini` a seturilor (WP-12b) |
 | `tools/verificare/configureaza.php` | Scrie `.env`-ul site-ului și face cheia licenței de verificare (o dată, pe server, prin SSH) |
 | `tools/verificare/stare.php` | Ce e configurat, ce știe găzduirea, dacă site-ul e închis și fiecare gardă; doar DA/NU și versiuni; ultimul rând „GATA” |
 | `tools/verificare/licenta.php` | Pune pe copie un pachet de pluginuri (`bioscem`, `magazin`, `toate`, …), semnat cu cheia de pe server |
@@ -898,8 +899,22 @@ stânga, prima adresă din `X-Forwarded-For` care nu e de încredere. Ce scrie v
 stânga și nu se ajunge la el. Dacă `stare.php` arată că PHP-ul vede un proxy (o rețea privată sau a CDN-ului
 în loc de adresa vizitatorului), toți vizitatorii împart aceeași limită de 10 încercări până se trece
 rețeaua lui în `IP_PROXY_DE_INCREDERE`. O limită numără pe `IpClient::cheieLimita()`: IPv4 adresa
-întreagă, IPv6 rețeaua /64. Limitele de încercări ale site-ului (checkout, înregistrare, recenzii) trec pe
-`IpClient` în WP-12b.
+întreagă, IPv6 rețeaua /64.
+
+**Din WP-12b, tot codul site-ului ia adresa vizitatorului doar de aici:** limitele de încercări ale checkout-ului (10
+în 15 minute) și ale înregistrării (8), jurnalul adminului, acordurile GDPR, mesajele de contact, deschiderile și
+clicurile newsletterului, IP-urile cu acces din mentenanță (și „IP-ul tău curent” de lângă ele, în Setări magazin;
+adresa e în forma canonică, iar lista se compară ca adrese, `IpClient::aceeasiAdresa`, deci `2001:DB8:0:0::1` sau
+`::ffff:1.2.3.4` scrise acolo se potrivesc în continuare, o rețea nu).
+Codul vechi lua primul `X-Forwarded-For` (sau `X-Real-IP`), deci oricine ocolea limitele scriind alt antet la fiecare
+încercare. Limitele numără în SQL pe `IpClient::conditieLimita()`: o adresă IPv4 exact, ca înainte, una IPv6 cu toată
+rețeaua ei /64 (primii 8 octeți, `INET6_ATON`); rândurile păstrează adresa întreagă. Singura altă citire a antetelor e
+sonda de mai sus (`Verificare::raspundeSonda`), care spune doar ce sosește; `tools/dev/test-securitate.php` caută în cod
+orice altă citire și pică pe ea. Pe un site live, înainte de trecerea pe codul comun (vezi
+[MIGRARI.md](MIGRARI.md), „Pe server, la adoptare”): dacă site-ul are un CDN sau un proxy în față (CDN-ul Hostinger,
+Cloudflare), `REMOTE_ADDR` e adresa lui, deci rețelele lui intră în `IP_PROXY_DE_INCREDERE` din `.env`; altfel toți
+vizitatorii ar împărți aceeași limită. Ce vede PHP-ul arată `stare.php` pe site-ul de verificare, pus în față cu același
+CDN ca site-ul live.
 
 ### Cheile din `.env` (scrise de `configureaza.php`)
 
@@ -1032,7 +1047,11 @@ Ce garantează amândouă (capul lui `tools/verificare/lib/live.php`; le verific
   (chei, id-uri, slug-uri, nume de structură, clase CSS, commit-uri, luni); o valoare care nu se potrivește
   oprește verificarea ei („valoare refuzată”), nu ajunge pe ecran. O coloană cu nume de date personale
   (`CitireLive::TIPAR_PERSONAL`, același tipar ca la încărcarea anonimizată din WP-09) nu poate fi citită deloc.
-  Numerele se calculează în SQL (parolele adminilor se clasează în SQL, ca text, fără să fie citite);
+  Numerele se calculează în SQL (parolele adminilor se clasează în SQL, ca text, fără să fie citite, după aceeași
+  regulă ca logarea, `App\Support\ParolaAdmin`, din WP-12b: hash cunoscut, bcrypt `$2a$`/`$2b$`, hash stricat (forma
+  unui hash, `$`, numele algoritmului, `$`, dar nu unul de mai sus: tăiat, `$6$`, `$1$`, WordPress `$P$`; nu se loghează
+  cu nicio parolă, deci ATENȚIE peste 0), goală, text clar; `admini.parola_necunoscuta` = exact adminii pe care logarea îi compară în clar, deci trebuie să fie 0 pe
+  toate cele patru site-uri înainte ca ramura aceea să fie ștearsă, în R2);
   în PHP ajung doar conținut public (pagini cu HTML, CSS și JS, articole, descrieri de produse, șabloane cu
   HTML, CSS și JS, setările `design_*`, și cele `_js`) pentru clasele CSS și cheile ofertelor BBD.
 - **V-CSS** (clasele folosite de conținutul din bază): din atributele `class` și blocurile `<style>` ale
@@ -1127,7 +1146,11 @@ toate pe `cms_sonde_t`, o bază făcută ca a unui site live încă neadoptat (d
 `tools/dev/migrari/pe-vechi.php`, cu seed-ul și datele demo: are tabelul vechi `reviews` și celelalte obiecte
 vechi, făcute de codul lor, și nu are registrul migrărilor), cu rânduri inventate pentru fiecare verificare (toate
 datele personale cu un marcaj aleator). Baza de dezvoltare nu-i trebuie. Verifică garda instrucțiunilor și tiparele ieșirii, fiecare refuz al
-locului (cod 2, nimic citit), fiecare număr al fiecărui set (cât se schimbă după rândurile inventate), că
+locului (cod 2, nimic citit), fiecare număr al fiecărui set (cât se schimbă după rândurile inventate; numerele
+parolelor adminilor sunt, pe toate rândurile, cele date de `ParolaAdmin::fel`, și pe valorile la care SQL-ul s-ar putea
+despărți de regulă: lungimea în octeți față de caractere, un spațiu față de gol, argon2, `$2a$`/`$2b$`, alte hash-uri
+(`$6$`, `$P$`, litere mari), forma hash-ului fără nume de algoritm sau cu un nume care nu e ASCII, pe MariaDB și pe
+MySQL 8), că
 serverul refuză scrierile din sesiune, că un ALTER din altă conexiune pe un tabel deja citit nu așteaptă în
 mijlocul unui grup, că un utilizator doar cu SELECT ajunge, sonda (amprenta ei = a bazei), `din-sonda.php`
 (schema refăcută dă aceeași amprentă pe MariaDB și pe MySQL 8; refuzurile și cu căi relative), aceleași

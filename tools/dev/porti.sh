@@ -107,6 +107,10 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # G-cmp și G-cmp-istoric (aceeași normalizare, în ambele moduri) arată că nicio pagină nu s-a schimbat; uneltele noi stau în
 # tools/verificare/ și folosesc lib/live.php, lib/cont.php și lib/intrare.php ale celorlalte, deci G-verif și G-sonde (regula
 # de mai sus pentru uneltele de pe servere).
+# WP-12b (G-M5, N15, G-m2): pe lângă acceptanța din plan (G-cmp, G-plug, G-smoke cu tools/dev/test-securitate.php, G-calc),
+# G-verif (IpClient e și al porții copiei de verificare, cu testele lui în test-verificare.php) și G-sonde (numărătoarea
+# parolelor adminilor din tools/verificare/seturi/comun.php folosește acum regula logării, App\Support\ParolaAdmin; regula de
+# mai sus pentru uneltele de pe servere).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -122,7 +126,7 @@ declare -A PORTI=(
     [WP-11]="G-rute G-calc G-cmp G-cmp-istoric G-verif G-sonde G-php"
     [WP-11b]="G-rute G-calc G-sonde G-cmp G-php"
     [WP-12]="G-rute G-mig G-cmp G-plug G-smoke G-php"
-    [WP-12b]="G-rute G-mig G-cmp G-plug G-smoke G-calc G-php"
+    [WP-12b]="G-rute G-mig G-cmp G-plug G-smoke G-calc G-verif G-sonde G-php"
     [WP-13]="G-rute G-mig G-cmp G-vizual G-plug G-smoke G-php"
     [WP-14]="G-rute G-mig G-cmp G-pachet G-plug G-smoke G-php"
     [WP-15]="G-rute G-mig G-cmp G-plug G-smoke G-verif G-php"

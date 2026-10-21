@@ -450,7 +450,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                                placeholder="ex: 86.120.10.5, 79.117.4.20">
                         <small style="color:#64748b;">
                             Separate prin virgulă. IP-ul tău curent este
-                            <strong><?= htmlspecialchars((string) ($_SERVER['REMOTE_ADDR'] ?? '?'), ENT_QUOTES) ?></strong>.
+                            <strong><?= htmlspecialchars(\App\Support\IpClient::adresa() ?: '?', ENT_QUOTES) ?></strong>.
                         </small>
                     </div>
 

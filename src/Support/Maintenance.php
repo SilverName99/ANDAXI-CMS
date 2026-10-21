@@ -166,12 +166,16 @@ final class Maintenance
         if ($lista === '') {
             return false;
         }
-        $ipCurent = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        // Adresa vizitatorului după regula IpClient (X-Forwarded-For doar de la un proxy de încredere; WP-12b).
+        $ipCurent = IpClient::adresa();
         if ($ipCurent === '') {
             return false;
         }
+        // Adresa e acum în forma canonică (IpClient), deci o adresă din listă scrisă altfel (litere mari, zerouri,
+        // IPv4 în formă IPv6, cum o arăta poate serverul înainte) se compară tot ca adresă; o rețea nu se potrivește.
         foreach (preg_split('/[\s,;]+/', $lista) ?: [] as $ip) {
-            if (trim($ip) !== '' && trim($ip) === $ipCurent) {
+            $ip = trim($ip);
+            if ($ip !== '' && ($ip === $ipCurent || IpClient::aceeasiAdresa($ip, $ipCurent))) {
                 return true;
             }
         }

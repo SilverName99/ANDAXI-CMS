@@ -557,6 +557,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Reparațiile de securitate WP-12b (tools/dev/test-securitate.php, pe licența „toate”, pe serverul pornit aici; al doilea
+# server, cu 127.0.0.1 ca proxy de încredere, pe portul +20): parolele adminilor (necriptate, argon2, $2a$/$2b$), id-ul
+# sesiunii la logare, adresa vizitatorului în limite și jurnale. Pune la loc toată baza (verificat cu CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Securitatea WP-12b (tools/dev/test-securitate.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-securitate.php" > "$TMP/test-securitate.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-securitate.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-securitate.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-securitate.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
 scrie ""
 scrie "== Instrucțiuni de schemă (DDL) pe cerere"

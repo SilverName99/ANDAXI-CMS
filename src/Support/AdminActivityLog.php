@@ -87,14 +87,9 @@ final class AdminActivityLog
         }
     }
 
+    /** Adresa vizitatorului după regula IpClient (X-Forwarded-For doar de la un proxy de încredere; WP-12b). */
     private static function clientIp(): string
     {
-        foreach (['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'] as $key) {
-            $val = trim((string) ($_SERVER[$key] ?? ''));
-            if ($val !== '') {
-                return explode(',', $val)[0];
-            }
-        }
-        return '';
+        return mb_substr(IpClient::adresa(), 0, 45);
     }
 }

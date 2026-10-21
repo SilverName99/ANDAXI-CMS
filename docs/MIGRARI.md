@@ -464,7 +464,9 @@ Unde se folosește:
 
 Corpurile funcțiilor se șterg după cele patru adoptări (R2, MIG-11), odată cu `tableHasColumn`,
 `BtIpayPayments::areTabele`, căutările în tabelul vechi `reviews` și `database/schema.sql` (azi doar
-documentație: nu-l mai rulează nimeni).
+documentație: nu-l mai rulează nimeni). Tot atunci se șterge, din `Auth::attempt`, comparația în clar a unei parole de
+admin salvate necriptat (WP-12b, `App\Support\ParolaAdmin`), după ce numărătoarea WP-10 (`admini.parola_necunoscuta`)
+arată 0 pe toate cele patru site-uri.
 
 **Contorul de instrucțiuni (doar dezvoltare).** Cu `CMS_DEV_NUMARA_SQL=1` în mediul serverului de dezvoltare,
 `Database::connection` întoarce un `App\Support\ContorSql`: fiecare cerere scrie un rând JSON în
@@ -701,6 +703,11 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    la plasare, ca înainte, dar cronul `erp-sync.php` și „Retrimite” nu reîncearcă nicio trimitere eșuată (cronul scrie
    „Pragul trimiterii (erp_trimite_din) lipsește”, Setări → ERP ANDAXI arată nota „nu e încă scris”). După `--aplica`
    cheia e scrisă (gol la Bioscem) și cele rămase pleacă la rularea următoare a cronului.
+5. **Adresa vizitatorului** (WP-12b; se pregătește înaintea urcării codului de la pasul 4): codul comun crede
+   `X-Forwarded-For` doar de la un proxy din `IP_PROXY_DE_INCREDERE` (`.env`, gol implicit), ca limitele checkout-ului
+   și ale înregistrării să nu poată fi ocolite. Dacă site-ul are un CDN sau un proxy în față (CDN-ul Hostinger, Cloudflare), rețelele lui
+   intră în `IP_PROXY_DE_INCREDERE`; altfel toți vizitatorii ar împărți aceeași limită
+   ([VERIFICARE.md](VERIFICARE.md), „Adresa vizitatorului”).
 
 Comparația calculelor de pe copie (`tools/verificare/compara-calcule.php`, WP-11; [VERIFICARE.md](VERIFICARE.md),
 „Comparația calculelor”) cere baza la zi cu codul comun: dacă garda spune `in_urma` (cod nou urcat după încărcare),

@@ -35,6 +35,7 @@ $actionLabels = [
     'bt_ipay_test_refund' => 'BT test: rambursare',
     'bt_ipay_test_deposit_refund' => 'BT test: încasare + rambursare',
     'activare_plugin' => 'Plugin pornit: pas de activare',
+    'parola_convertita' => 'Parolă veche convertită (salvată necriptat, criptată la logare)',
 ];
 $label = static fn(string $a): string => $actionLabels[$a] ?? $a;
 

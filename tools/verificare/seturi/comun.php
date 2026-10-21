@@ -17,8 +17,12 @@ declare(strict_types=1);
  * coloană care lipsește pe site dă „LIPSĂ”, nu o eroare. Descrierile sunt texte fixe.
  */
 
+use App\Support\ParolaAdmin;
 use Unelte\Verificare\ClaseCss;
 use Unelte\Verificare\Context;
+
+// Regula parolelor adminilor (WP-12b), aceeași ca la logare; fișierul nu depinde de nimic altceva.
+require_once dirname(__DIR__, 3) . '/src/Support/ParolaAdmin.php';
 
 /** Interogările cu „în ultimele N zile” (created_at), pentru coloanele care există. */
 $inUltimele = static fn (int $zile, string $coloana = 'created_at'): string => $coloana . ' >= NOW() - INTERVAL ' . $zile . ' DAY';
@@ -61,22 +65,37 @@ return [
                 $c->raport->lipsa('admini', 'coloana admins.password_hash');
                 return;
             }
+            // Aceeași regulă ca logarea adminului (App\Support\ParolaAdmin::fel, WP-12b), în SQL, din aceleași
+            // constante: începutul comparat ca octeți, lungimea în octeți (LENGTH, ca strlen), forma unui hash cu
+            // aceeași expresie regulată (TIPAR_HASH, pe valoarea trecută în utf8mb4_bin: aceleași potriviri în
+            // MariaDB și în MySQL 8, care refuză REGEXP pe octeți), golul tot după lungime (cu o colație PAD SPACE,
+            // '' = ' ' ar fi adevărat). test-sonde.php verifică, rând cu rând, că numerele de aici sunt cele date de
+            // ParolaAdmin::fel pe aceleași valori.
             $p = '`' . $coloana . '`';
-            $bcrypt = '(CAST(LEFT(' . $p . ', 4) AS BINARY) = CAST(\'$2y$\' AS BINARY) AND CHAR_LENGTH(' . $p . ') = 60)';
-            $argon = '(CAST(LEFT(' . $p . ', 9) AS BINARY) = CAST(\'$argon2i$\' AS BINARY) OR CAST(LEFT(' . $p . ', 10) AS BINARY) = CAST(\'$argon2id$\' AS BINARY))';
-            $vechi = '(CAST(LEFT(' . $p . ', 4) AS BINARY) IN (CAST(\'$2a$\' AS BINARY), CAST(\'$2b$\' AS BINARY)) AND CHAR_LENGTH(' . $p . ') = 60)';
+            $incepeCu = static fn (array $prefixe): string => '(' . implode(' OR ', array_map(
+                static fn (string $prefix): string => 'CAST(LEFT(' . $p . ', ' . strlen($prefix) . ') AS BINARY) = CAST(\'' . $prefix . '\' AS BINARY)',
+                $prefixe
+            )) . ')';
+            $lungimeBcrypt = 'LENGTH(' . $p . ') = ' . ParolaAdmin::LUNGIME_BCRYPT;
+            $cunoscut = '((' . $incepeCu([ParolaAdmin::PREFIX_BCRYPT]) . ' AND ' . $lungimeBcrypt . ') OR ' . $incepeCu(ParolaAdmin::PREFIXE_ARGON) . ')';
+            $vechi = '(' . $incepeCu(ParolaAdmin::PREFIXE_BCRYPT_VECHI) . ' AND ' . $lungimeBcrypt . ')';
+            $oriceHash = '(CONVERT(' . $p . ' USING utf8mb4) COLLATE utf8mb4_bin REGEXP \'' . ParolaAdmin::TIPAR_HASH . '\')';
+            $gol = 'LENGTH(COALESCE(' . $p . ', \'\')) = 0';
             $r = $c->citire->randuri('SELECT COUNT(*) AS total,
-                    COALESCE(SUM(CASE WHEN ' . $bcrypt . ' OR ' . $argon . ' THEN 1 ELSE 0 END), 0) AS cunoscut,
+                    COALESCE(SUM(CASE WHEN ' . $cunoscut . ' THEN 1 ELSE 0 END), 0) AS cunoscut,
                     COALESCE(SUM(CASE WHEN ' . $vechi . ' THEN 1 ELSE 0 END), 0) AS vechi,
-                    COALESCE(SUM(CASE WHEN COALESCE(' . $p . ', \'\') = \'\' THEN 1 ELSE 0 END), 0) AS gol
+                    COALESCE(SUM(CASE WHEN ' . $oriceHash . ' AND NOT ' . $cunoscut . ' AND NOT ' . $vechi . ' THEN 1 ELSE 0 END), 0) AS stricat,
+                    COALESCE(SUM(CASE WHEN ' . $gol . ' THEN 1 ELSE 0 END), 0) AS gol
                 FROM admins LIMIT 1')[0];
             $total = (int) $r['total'];
             $c->raport->numar('admini.total', $total);
             $c->raport->numar('admini.parola_hash_cunoscut', (int) $r['cunoscut'], 'bcrypt $2y$ sau argon2: password_get_info îl recunoaște');
-            $c->raport->numar('admini.parola_bcrypt_2a_2b', (int) $r['vechi'], 'bcrypt $2a$/$2b$: password_verify merge, password_get_info nu (de știut la WP-12b)');
+            $c->raport->numar('admini.parola_bcrypt_2a_2b', (int) $r['vechi'], 'bcrypt $2a$/$2b$: password_verify merge, password_get_info nu; la prima logare devine $2y$ (WP-12b)');
+            $c->raport->numar('admini.parola_hash_stricat', (int) $r['stricat'],
+                'are forma unui hash, dar nu unul de mai sus (tăiat, alt algoritm: $6$, $1$, $P$ …): nu se loghează cu nicio parolă (o parolă nouă din Setări → Administratori)', 0);
             $c->raport->numar('admini.parola_goala', (int) $r['gol'], 'fără parolă');
-            $c->raport->numar('admini.parola_necunoscuta', max(0, $total - (int) $r['cunoscut'] - (int) $r['vechi'] - (int) $r['gol']),
-                'probabil text clar (Auth::attempt îl compară în clar); trebuie 0 înainte de MIG-11', 0);
+            $c->raport->numar('admini.parola_necunoscuta', max(0, $total - (int) $r['cunoscut'] - (int) $r['vechi'] - (int) $r['stricat'] - (int) $r['gol']),
+                'text clar: codul comun îl compară în clar și îl criptează la prima logare (WP-12b); trebuie 0 înainte de MIG-11', 0);
         },
     ],
     [

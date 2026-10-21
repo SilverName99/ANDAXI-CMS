@@ -977,7 +977,7 @@ final class NewsletterService
                 )->execute(['id' => $sendId]);
             }
 
-            $ip = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+            $ip = IpClient::adresa();
             $db->prepare(
                 'INSERT INTO newsletter_campaign_opens (campaign_id, send_id, opened_at, ip)
                  VALUES (:cid, :sid, NOW(), :ip)'
@@ -1024,7 +1024,7 @@ final class NewsletterService
                 )->execute(['id' => $sendId]);
             }
 
-            $ip = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+            $ip = IpClient::adresa();
             $db->prepare(
                 'INSERT INTO newsletter_campaign_clicks (campaign_id, subscriber_id, email, url, clicked_at, ip)
                  VALUES (:cid, :sub, :email, :url, NOW(), :ip)'

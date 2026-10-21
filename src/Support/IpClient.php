@@ -17,10 +17,14 @@ namespace App\Support;
  * dreapta, deci ce a inventat vizitatorul stă mereu în stânga și nu se ajunge la ea.
  *
  * Ce rețea are proxy-ul găzduirii (CDN-ul Hostinger) arată `tools/verificare/stare.php`
- * (clasa lui `REMOTE_ADDR` și dacă sosește `X-Forwarded-For`). Limitele de încercări
- * ale site-ului trec pe această clasă în WP-12b; până atunci o folosește doar poarta.
+ * (clasa lui `REMOTE_ADDR` și dacă sosește `X-Forwarded-For`). Din WP-12b, tot codul citește
+ * adresa vizitatorului doar de aici: limitele de încercări (checkout, înregistrare, poarta
+ * copiei de verificare), jurnalul adminului, acordurile GDPR, mesajele de contact,
+ * deschiderile și clicurile newsletterului, IP-urile cu acces în mentenanță. Singura altă
+ * citire a antetelor e sonda copiei de verificare (`Verificare::raspundeSonda`), care spune doar
+ * ce sosește. `tools/dev/test-securitate.php` caută orice altă citire și pică pe ea.
  * O limită numără pe `cheieLimita()`, nu pe adresa exactă: o adresă IPv6 contează cu
- * toată rețeaua ei /64.
+ * toată rețeaua ei /64 (în SQL: `conditieLimita()`).
  */
 final class IpClient
 {
@@ -94,6 +98,36 @@ final class IpClient
             return $normala;
         }
         return (string) inet_ntop(substr($octeti, 0, 8) . str_repeat("\0", 8)) . '/64';
+    }
+
+    /**
+     * Condiția SQL după care o limită de încercări numără rândurile aceluiași vizitator, pe o coloană
+     * în care s-a scris `adresa()` întreagă (de exemplu `checkout_submit_logs.ip_address`): o adresă
+     * IPv4 (sau ce nu e o adresă IPv6) exact, ca până acum; o adresă IPv6 cu toată rețeaua ei /64
+     * (`cheieLimita()`), comparată de server pe primii 8 octeți (`INET6_ATON`, în MariaDB și în
+     * MySQL). Rândurile rămân cu adresa întreagă, deci în admin se văd ca până acum.
+     *
+     * @return array{0: string, 1: array<string, string>} condiția și parametrii ei
+     */
+    public static function conditieLimita(string $coloana, string $ip): array
+    {
+        $normala = self::normalizeaza($ip);
+        $octeti = $normala === null ? '' : (string) inet_pton($normala);
+        if (strlen($octeti) !== 16) {
+            return [$coloana . ' = :ip_limita', ['ip_limita' => $ip]];
+        }
+        return ['HEX(LEFT(INET6_ATON(' . $coloana . '), 8)) = :ip_retea', ['ip_retea' => strtoupper(bin2hex(substr($octeti, 0, 8)))]];
+    }
+
+    /**
+     * E aceeași adresă, oricum ar fi scrisă? „2001:DB8:0:0::1” = „2001:db8::1”, „::ffff:1.2.3.4” = „1.2.3.4”
+     * (`adresa()` o întoarce mereu în forma canonică, deci o listă scrisă de mână se compară așa). Doar adrese,
+     * nu rețele: ce nu e o adresă nu e egal cu nimic.
+     */
+    public static function aceeasiAdresa(string $a, string $b): bool
+    {
+        $normalaA = self::normalizeaza($a);
+        return $normalaA !== null && $normalaA === self::normalizeaza($b);
     }
 
     /**

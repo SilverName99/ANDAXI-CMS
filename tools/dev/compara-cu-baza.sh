@@ -128,6 +128,19 @@
 #    editoare, C6; pozele leneșe ale selectoarelor, C7; categoria doar ca text a unei postări, X1b) e
 #    declarat în compara-cu-baza.php ($porturiBiovitality, $deBioscem), iar salvările C2 și X1b sunt
 #    cazurile de tip „reparatie” de acolo.
+#  - reparațiile de securitate WP-12b (site-uri/bioscem/ce-se-schimba.md; dovada: tools/dev/test-securitate.php,
+#    din smoke.sh, și G-sonde pentru numărătoarea parolelor): logarea adminului (App\Support\ParolaAdmin) verifică
+#    un hash doar ca hash (și argon2, și bcrypt-ul vechi $2a$/$2b$; alt hash, ca $6$ sau $P$, nu intră deloc), compară
+#    în clar doar o parolă salvată necriptat și o criptează la prima logare, cu un rând „parola_convertita” în Jurnal
+#    activitate, iar un hash cu un cost mai mic decât cel implicit îl reface (nu coboară costul); la fiecare logare (adminul, clientul) sesiunea primește alt id (App\Support\Sesiune), deci cookie-ul
+#    răspunsului la POST /admin/login și POST /login e altul (comparația nu compară răspunsurile login-ului, doar
+#    unde duce, iar borcanele de cookie-uri iau id-ul nou); adresa vizitatorului vine doar din App\Support\IpClient
+#    (limitele checkout-ului și ale înregistrării, cu IPv6 pe /64, jurnalul adminului, GDPR, contactul, newsletterul,
+#    mentenanța, cu IP-urile ei comparate ca adrese). Aici nicio cerere nu trimite X-Forwarded-For, adminii demo au
+#    parole bcrypt (o bază făcută de php8.3, costul 10, servită de PHP 8.4 își ridică o dată costul la prima logare
+#    pe codul comun; hash-ul nu apare în nicio pagină și nu e în rândurile cazurilor de salvare), iar pe 127.0.0.1
+#    adresa e aceeași pentru ambele coduri, deci paginile, Securitate formulare și „IP-ul tău curent” din Setări
+#    magazin ies la fel.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul

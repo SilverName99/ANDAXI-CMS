@@ -189,7 +189,7 @@ return [
                 'phone' => ['telefon'],
                 'birth_date' => ['nul'],
                 'gender' => ['nul'],
-                // Auth::attempt compară în clar o parolă care nu e bcrypt: toate devin bcrypt aleatoare.
+                // Auth::attempt compară în clar o parolă salvată necriptat (App\Support\ParolaAdmin): toate devin bcrypt aleatoare.
                 'password_hash' => ['parola'],
                 'google_id' => ['nul'],
             ]],

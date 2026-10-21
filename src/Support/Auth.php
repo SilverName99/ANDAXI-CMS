@@ -36,6 +36,9 @@ final class Auth
      */
     private const INACTIVITATE = 60 * 60 * 12; // 12 ore
 
+    /** Rândul din Jurnal activitate scris când o parolă veche necriptată se criptează la logare (WP-12b). */
+    public const JURNAL_PAROLA_CONVERTITA = 'parola_convertita';
+
     public static function check(): bool
     {
         if (!isset($_SESSION['admin_id'])) {
@@ -93,23 +96,59 @@ final class Auth
             return false;
         }
 
+        // Felul parolei salvate (G-M5, WP-12b; regula în ParolaAdmin): un hash se verifică doar ca hash, inclusiv
+        // argon2 și bcrypt-ul vechi $2a$/$2b$; ce are forma unui hash, dar nu e unul pe care îl verificăm, nu intră
+        // cu nicio parolă și nu se compară niciodată în clar. Doar o parolă veche salvată necriptat se compară în
+        // clar, și se criptează la prima logare.
+        $id = (int) $admin['id'];
         $stored = (string) $admin['password_hash'];
-        $isBcrypt = str_starts_with($stored, '$2y$') || str_starts_with($stored, '$2a$') || str_starts_with($stored, '$2b$');
-        $isValid = $isBcrypt ? password_verify($password, $stored) : hash_equals($stored, $password);
+        $fel = ParolaAdmin::fel($stored);
+        if ($fel === ParolaAdmin::GOL || $fel === ParolaAdmin::HASH_STRICAT) {
+            return false;
+        }
+        $isValid = $fel === ParolaAdmin::TEXT_CLAR ? hash_equals($stored, $password) : password_verify($password, $stored);
 
         if (!$isValid) {
             return false;
+        }
+
+        if ($fel === ParolaAdmin::TEXT_CLAR) {
+            if (self::rescrieParola($db, $id, $stored, $password)) {
+                AdminActivityLog::log($db, self::JURNAL_PAROLA_CONVERTITA, ['rezultat' => 'era salvată necriptat; acum e criptată'], $id);
+            }
+        } elseif (ParolaAdmin::deRefacut($stored)) {
+            self::rescrieParola($db, $id, $stored, $password);
         }
 
         $roles = self::rolesFromStorage(
             (string) ($admin['role'] ?? self::ROLE_GENERAL),
             $admin['roles_json'] ?? null
         );
-        $_SESSION['admin_id'] = (int) $admin['id'];
+        // Id nou de sesiune înainte de logare (N15): cine avea id-ul de dinainte nu primește logarea.
+        Sesiune::idNouLaLogare();
+        $_SESSION['admin_id'] = $id;
         $_SESSION['admin_roles'] = $roles;
         $_SESSION['admin_role'] = self::primaryRole($roles);
         $_SESSION['admin_last_seen'] = time();
         return true;
+    }
+
+    /**
+     * Rescrie parola salvată cu `password_hash(PASSWORD_DEFAULT)` după o logare reușită (o parolă necriptată, un
+     * bcrypt vechi, argon2 sau un cost mai mic decât cel implicit; `ParolaAdmin::deRefacut`). Doar dacă rândul are
+     * încă valoarea verificată (altfel cineva a schimbat parola între timp și rămâne a lui). Întoarce true dacă
+     * rândul s-a schimbat; o eroare a bazei nu oprește logarea (se încearcă din nou la următoarea).
+     */
+    private static function rescrieParola(PDO $db, int $id, string $vechi, string $parola): bool
+    {
+        try {
+            $stmt = $db->prepare('UPDATE admins SET password_hash = :nou
+                WHERE id = :id AND CAST(password_hash AS BINARY) = CAST(:vechi AS BINARY)');
+            $stmt->execute(['nou' => password_hash($parola, PASSWORD_DEFAULT), 'id' => $id, 'vechi' => $vechi]);
+            return $stmt->rowCount() === 1;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public static function logout(): void

@@ -30,7 +30,9 @@ declare(strict_types=1);
  *       utilizator sau bază), session.auto_start; un PHP sub minim primește mesajul, nu o eroare.
  *    B2 fiecare set pe copia bazei: cod 0, nicio EROARE; tabelele altor site-uri apar LIPSĂ.
  *    B3 cu rânduri inventate pentru fiecare verificare (personale, toate cu un marcaj aleator):
- *       fiecare număr se schimbă exact cât trebuie (deltele așteptate sunt scrise aici).
+ *       fiecare număr se schimbă exact cât trebuie (deltele așteptate sunt scrise aici); numerele
+ *       parolelor adminilor sunt, pe toate rândurile, cele date de regula logării
+ *       (App\Support\ParolaAdmin::fel, WP-12b), și pe valorile la care SQL-ul s-ar putea despărți de ea.
  *    B4 sesiunea doar de citire (în proces): INSERT, CREATE, ALTER refuzate de server (1792),
  *       timpul pe instrucțiune setat, garda refuză o scriere, o citire în afara tranzacției și o
  *       coloană cu nume de date personale; parcurge pe bucăți; în mijlocul unui grup, un ALTER
@@ -70,8 +72,10 @@ $radacina = dirname(__DIR__, 2);
 require_once $radacina . '/tools/sonda/lib/amprenta-schema.php';
 require_once $radacina . '/src/Support/Migrari/Amprenta.php';
 require_once $radacina . '/src/Support/Migrari/Server.php';
+require_once $radacina . '/src/Support/ParolaAdmin.php';
 
 use App\Support\Migrari\Amprenta;
+use App\Support\ParolaAdmin;
 use Unelte\Verificare\CitireLive;
 use Unelte\Verificare\ClaseCss;
 use Unelte\Verificare\InstructiuneRefuzata;
@@ -452,9 +456,11 @@ try {
     }
     @mkdir($verif . '/src/Support', 0770, true);
     @mkdir($verif . '/config', 0770, true);
-    // Verificare și căile site-ului pe care le cere (Paths: .env, storage/verificare; WP-07).
+    // Verificare și căile site-ului pe care le cere (Paths: .env, storage/verificare; WP-07); regula parolelor adminilor
+    // (ParolaAdmin, WP-12b), pe care o încarcă setul comun.
     copy($radacina . '/src/Support/Verificare.php', $verif . '/src/Support/Verificare.php');
     copy($radacina . '/src/Support/Paths.php', $verif . '/src/Support/Paths.php');
+    copy($radacina . '/src/Support/ParolaAdmin.php', $verif . '/src/Support/ParolaAdmin.php');
     copy($radacina . '/config/app.php', $verif . '/config/app.php');
     $scrieEnv($verif, ['APP_URL' => 'https://verificare.exemplu.test', 'SITE_COPIE_VERIFICARE' => '1', 'DB_HOST' => 'localhost', 'DB_DATABASE' => 'cms_verif_inexistenta']);
 
@@ -496,7 +502,8 @@ try {
     exec('mkdir -p ' . escapeshellarg($live['biovitality'] . '/tools') . ' && cp -r ' . escapeshellarg($verif . '/tools/verificare') . ' '
         . escapeshellarg($live['biovitality'] . '/tools/') . ' && mkdir -p ' . escapeshellarg($live['biovitality'] . '/src/Support') . ' '
         . escapeshellarg($live['biovitality'] . '/config') . ' && cp ' . escapeshellarg($verif . '/src/Support/Verificare.php') . ' '
-        . escapeshellarg($verif . '/src/Support/Paths.php') . ' ' . escapeshellarg($live['biovitality'] . '/src/Support/') . ' && cp ' . escapeshellarg($verif . '/config/app.php') . ' ' . escapeshellarg($live['biovitality'] . '/config/'));
+        . escapeshellarg($verif . '/src/Support/Paths.php') . ' ' . escapeshellarg($verif . '/src/Support/ParolaAdmin.php') . ' '
+        . escapeshellarg($live['biovitality'] . '/src/Support/') . ' && cp ' . escapeshellarg($verif . '/config/app.php') . ' ' . escapeshellarg($live['biovitality'] . '/config/'));
     $r = $ruleaza('tools/verificare/agregate.php', ['--set=bioscem'], ['cod' => $live['biovitality']]);
     exec('rm -rf ' . escapeshellarg($live['biovitality'] . '/tools') . ' ' . escapeshellarg($live['biovitality'] . '/src') . ' ' . escapeshellarg($live['biovitality'] . '/config'));
     $verifica('din dosarul unui site live → refuzat', $faraBaza($r) && str_contains($r['erori'], 'pe un site live'), $r['tot']);
@@ -606,8 +613,21 @@ try {
         return $id;
     };
     $hash = password_hash('x', PASSWORD_BCRYPT);
+    // Parolele adminilor (WP-12b, App\Support\ParolaAdmin): câte una de fiecare fel, plus cazurile în care SQL-ul s-ar
+    // putea despărți de regula din PHP (lungimea în octeți față de caractere, un spațiu față de gol, alte hash-uri: $6$,
+    // $P$, litere mari; forma hash-ului fără nume de algoritm sau cu un nume care nu e ASCII).
     $ins('admins', [['email' => 'admin1.' . $m . '@exemplu.ro', 'password_hash' => 'parola-' . $m], ['email' => 'admin2.' . $m . '@exemplu.ro', 'password_hash' => '$2a$' . substr($hash, 4)],
-        ['email' => 'admin3.' . $m . '@exemplu.ro', 'password_hash' => '']]);
+        ['email' => 'admin3.' . $m . '@exemplu.ro', 'password_hash' => ''],
+        ['email' => 'admin4.' . $m . '@exemplu.ro', 'password_hash' => password_hash('x', PASSWORD_ARGON2ID)],
+        ['email' => 'admin5.' . $m . '@exemplu.ro', 'password_hash' => '$2b$' . substr($hash, 4)],
+        ['email' => 'admin6.' . $m . '@exemplu.ro', 'password_hash' => '$2y$10$scurt'],
+        ['email' => 'admin7.' . $m . '@exemplu.ro', 'password_hash' => substr($hash, 0, 59) . 'ă'],
+        ['email' => 'admin8.' . $m . '@exemplu.ro', 'password_hash' => '$6$rounds=5000$sare$' . str_repeat('a', 86)],
+        ['email' => 'admin9.' . $m . '@exemplu.ro', 'password_hash' => ' '],
+        ['email' => 'admin10.' . $m . '@exemplu.ro', 'password_hash' => '$P$B' . str_repeat('a', 30)],
+        ['email' => 'admin11.' . $m . '@exemplu.ro', 'password_hash' => '$$dublu'],
+        ['email' => 'admin12.' . $m . '@exemplu.ro', 'password_hash' => '$ARGON2ID$v=19$x'],
+        ['email' => 'admin13.' . $m . '@exemplu.ro', 'password_hash' => '$ă$x']]);
     $client = $ins('users', [['first_name' => 'Prenume' . $m, 'last_name' => 'Nume' . $m, 'email' => 'client.' . $m . '@exemplu.ro', 'phone' => $telefon, 'password_hash' => $hash]]);
     $bbd = json_encode([['date' => '2027-01-01', 'lot' => 'L1', 'price' => '10', 'stock' => 5, 'key' => 'abc123'], ['date' => '2027-02-01', 'lot' => 'L2', 'price' => '9', 'stock' => 5]]);
     $produsBbd = $ins('products', [['name' => 'Produs BBD test', 'slug' => 'produs-bbd-test', 'is_active' => 1, 'bbd_enabled' => 1, 'bbd_entries_json' => $bbd,
@@ -747,8 +767,8 @@ try {
     $numar = static fn (array $rulare, string $cheie): int => (int) ($rulare[$cheie][1] ?? 0);
     // [set, cheie, schimbarea] (delta față de rularea 1) sau [set, cheie, '=', valoarea] sau [set, cheie, 'are', element] (într-o listă).
     $asteptari = [
-        ['bioscem', 'admini.total', 3], ['bioscem', 'admini.parola_necunoscuta', 1], ['bioscem', 'admini.parola_bcrypt_2a_2b', 1], ['bioscem', 'admini.parola_goala', 1],
-        ['bioscem', 'admini.parola_hash_cunoscut', 0],
+        ['bioscem', 'admini.total', 13], ['bioscem', 'admini.parola_necunoscuta', 4], ['bioscem', 'admini.parola_bcrypt_2a_2b', 2], ['bioscem', 'admini.parola_goala', 1],
+        ['bioscem', 'admini.parola_hash_cunoscut', 1], ['bioscem', 'admini.parola_hash_stricat', 5],
         ['bioscem', 'erp.de_trimis.peste_1_an', 1], ['bioscem', 'erp.de_trimis.7_30_zile', 1], ['bioscem', 'erp.de_trimis.sub_7_zile', 0],
         ['bioscem', 'erp.status.pending', 2], ['bioscem', 'erp.status.failed', 1], ['bioscem', 'erp.status.sent', '=', '1'],
         ['bioscem', 'erp.trimisa_cea_mai_veche_comanda_luna', '=', '2025-03'], ['bioscem', 'erp.prima_sincronizare_luna', '=', '2025-03'],
@@ -805,9 +825,23 @@ try {
             $verifica($set . ' ' . $cheie . ' conține ' . $a[3], in_array($a[3], $elemente ?: [], true), 'acum ' . ($acum ?? 'lipsă'));
         }
     }
-    $verifica('o valoare neașteptată e ATENȚIE (parolă în clar, coduri care se ciocnesc), restul INFO/OK',
+    $verifica('o valoare neașteptată e ATENȚIE (parolă în clar, hash stricat, coduri care se ciocnesc), restul INFO/OK',
         ($rulari2['bioscem']['admini.parola_necunoscuta'][0] ?? '') === 'ATENȚIE' && ($rulari2['bioscem']['v5.coduri_active_cu_spatii_egale_fara_spatii_cu_alt_cod'][0] ?? '') === 'ATENȚIE'
-        && ($rulari1['bioscem']['admini.parola_necunoscuta'][0] ?? '') === 'OK');
+        && ($rulari2['bioscem']['admini.parola_hash_stricat'][0] ?? '') === 'ATENȚIE'
+        && ($rulari1['bioscem']['admini.parola_necunoscuta'][0] ?? '') === 'OK' && ($rulari1['bioscem']['admini.parola_hash_stricat'][0] ?? '') === 'OK');
+    // Numărătoarea parolelor e chiar regula logării (WP-12b): pe toate rândurile din admins (și ale datelor demo), fiecare
+    // număr al setului = câte valori pune App\Support\ParolaAdmin::fel în felul lui. Așa „parola_necunoscuta” = exact
+    // adminii pe care Auth::attempt îi compară în clar, numărul care trebuie să fie 0 înainte de MIG-11.
+    $dupaFel = array_fill_keys([ParolaAdmin::HASH, ParolaAdmin::BCRYPT_VECHI, ParolaAdmin::HASH_STRICAT, ParolaAdmin::GOL, ParolaAdmin::TEXT_CLAR], 0);
+    foreach ($db->query('SELECT password_hash FROM admins')->fetchAll(PDO::FETCH_COLUMN) as $valoareParola) {
+        $dupaFel[ParolaAdmin::fel((string) $valoareParola)]++;
+    }
+    $dinSet = [ParolaAdmin::HASH => 'admini.parola_hash_cunoscut', ParolaAdmin::BCRYPT_VECHI => 'admini.parola_bcrypt_2a_2b',
+        ParolaAdmin::HASH_STRICAT => 'admini.parola_hash_stricat', ParolaAdmin::GOL => 'admini.parola_goala', ParolaAdmin::TEXT_CLAR => 'admini.parola_necunoscuta'];
+    $dinSetNumere = array_map(static fn (string $cheie): int => $numar($rulari2['bioscem'], $cheie), $dinSet);
+    $verifica('parolele adminilor: fiecare număr al setului = ParolaAdmin::fel pe aceleași ' . array_sum($dupaFel) . ' rânduri (regula logării), totalul la fel',
+        $dinSetNumere === $dupaFel && $numar($rulari2['bioscem'], 'admini.total') === array_sum($dupaFel),
+        'setul ' . json_encode($dinSetNumere) . ', ParolaAdmin ' . json_encode($dupaFel));
     $verifica('V-CSS la urmă, după verificările setului', ($pozCss = strpos($texte2['bioscem'], '== Clasele CSS')) !== false && $pozCss > (int) strpos($texte2['bioscem'], '== BS-V1'));
 
     // ── B4. Sesiunea doar de citire (în proces) ──

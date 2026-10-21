@@ -1138,7 +1138,7 @@ final class SiteController
                 'nume_semnatura' => $numeSemnatura,
                 'signature_data_url' => $signatureDataUrl,
                 'source_url' => trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ($_SERVER['HTTP_REFERER'] ?? ''))) ?: null,
-                'ip_address' => trim((string) ($_SERVER['REMOTE_ADDR'] ?? '')) ?: null,
+                'ip_address' => \App\Support\IpClient::adresa() ?: null,
                 'user_agent' => trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')) ?: null,
             ]);
         } catch (Throwable) {
@@ -3861,7 +3861,7 @@ final class SiteController
                 'subject' => $subject,
                 'message' => $message,
                 'source_url' => trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ($_SERVER['HTTP_REFERER'] ?? ''))) ?: null,
-                'ip_address' => trim((string) ($_SERVER['REMOTE_ADDR'] ?? '')) ?: null,
+                'ip_address' => \App\Support\IpClient::adresa() ?: null,
                 'user_agent' => trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? '')) ?: null,
             ]);
         } catch (Throwable) {
@@ -8714,13 +8714,15 @@ CSS;
             return false;
         }
         try {
+            // Același vizitator: adresa întreagă; o adresă IPv6, cu toată rețeaua ei /64 (IpClient::conditieLimita).
+            [$acelasiVizitator, $parametri] = \App\Support\IpClient::conditieLimita('ip_address', $ip);
             $stmt = $db->prepare(
                 'SELECT COUNT(*)
                  FROM checkout_submit_logs
-                 WHERE ip_address = :ip
+                 WHERE ' . $acelasiVizitator . '
                    AND created_at >= (NOW() - INTERVAL 15 MINUTE)'
             );
-            $stmt->execute(['ip' => $ip]);
+            $stmt->execute($parametri);
             return ((int) $stmt->fetchColumn()) >= self::CHECKOUT_ANTIBOT_MAX_ATTEMPTS_PER_15_MIN;
         } catch (Throwable) {
             return false;
@@ -8745,18 +8747,8 @@ CSS;
 
     private function checkoutClientIp(): string
     {
-        $forwarded = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
-        if ($forwarded !== '') {
-            $parts = explode(',', $forwarded);
-            if ($parts !== []) {
-                $candidate = trim((string) ($parts[0] ?? ''));
-                if ($candidate !== '') {
-                    return mb_substr($candidate, 0, 64);
-                }
-            }
-        }
-        $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
-        return $remote !== '' ? mb_substr($remote, 0, 64) : '';
+        // Adresa vizitatorului după regula IpClient (X-Forwarded-For doar de la un proxy de încredere; WP-12b).
+        return mb_substr(\App\Support\IpClient::adresa(), 0, 64);
     }
 
     private function ensureRegisterAntiBotSchema(PDO $db): void
@@ -8871,13 +8863,15 @@ CSS;
             return false;
         }
         try {
+            // Același vizitator: adresa întreagă; o adresă IPv6, cu toată rețeaua ei /64 (IpClient::conditieLimita).
+            [$acelasiVizitator, $parametri] = \App\Support\IpClient::conditieLimita('ip_address', $ip);
             $stmt = $db->prepare(
                 'SELECT COUNT(*)
                  FROM register_submit_logs
-                 WHERE ip_address = :ip
+                 WHERE ' . $acelasiVizitator . '
                    AND created_at >= (NOW() - INTERVAL 15 MINUTE)'
             );
-            $stmt->execute(['ip' => $ip]);
+            $stmt->execute($parametri);
             return ((int) $stmt->fetchColumn()) >= self::REGISTER_ANTIBOT_MAX_ATTEMPTS_PER_15_MIN;
         } catch (Throwable) {
             return false;
@@ -8902,18 +8896,8 @@ CSS;
 
     private function registerClientIp(): string
     {
-        $forwarded = trim((string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''));
-        if ($forwarded !== '') {
-            $parts = explode(',', $forwarded);
-            if ($parts !== []) {
-                $candidate = trim((string) ($parts[0] ?? ''));
-                if ($candidate !== '') {
-                    return mb_substr($candidate, 0, 64);
-                }
-            }
-        }
-        $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
-        return $remote !== '' ? mb_substr($remote, 0, 64) : '';
+        // Adresa vizitatorului după regula IpClient (X-Forwarded-For doar de la un proxy de încredere; WP-12b).
+        return mb_substr(\App\Support\IpClient::adresa(), 0, 64);
     }
 
     private function ensureFanLocalitiesSchema(PDO $db): void
