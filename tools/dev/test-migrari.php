@@ -62,7 +62,8 @@ declare(strict_types=1);
  *        genereaza-fixture.php --verifica (G-baza: baseline-ul = schema codului minus excluderile,
  *        grupul C = ce lăsau funcțiile codului pe aceleași rânduri inventate).
  *    T2  baseline-ul pe schema fiecărui cod (tools/dev/migrari/vechi/<cod>.sql, făcută din codul lui:
- *        cms, bs, bv, vt, gr; la zi cu codul, genereaza-fixture.php --verifica-fixture-uri): planul
+ *        cms, bs, bv, vt, gr; la zi cu codul, genereaza-fixture.php --verifica-fixture-uri, și cu clonele
+ *        în dosare cu alt nume, CMS_DEV_REPO_* spre legături simbolice: sursa e numele repo-ului): planul
  *        are în grupul B exact numerele din migrari.md §2.2 (BS: nimic), aplicarea face exact ce arată
  *        planul, nu șterge și nu schimbă nimic din ce exista, ce rămâne în plus = extra-<cod>.txt,
  *        avertismentele = diferențele de definiție de dinainte; BV și GR fără parametrul procesatorului:

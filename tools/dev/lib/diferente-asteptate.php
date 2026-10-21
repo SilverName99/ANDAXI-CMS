@@ -236,21 +236,27 @@ function diferente_antete(string $antet, string $portBaza, string $portCurent): 
 /**
  * Verificarea mecanismului, fără server: un marcaj declarat dar lipsă, unul găsit de
  * două ori, unul nedeclarat, unul fără pereche, un text pe altă pagină, un cod de stare
- * declarat care nu mai e cel primit trebuie să pice; cazurile bune trebuie să treacă și
- * să lase exact pagina de bază.
+ * declarat care nu mai e cel primit trebuie să pice; o declarație greșită (fără motiv, cu
+ * o listă de pagini goală, cu „ori” care nu e un întreg de cel puțin 1) trebuie să pice cu
+ * numele câmpului, pe o pagină care altfel s-ar potrivi cu numărătoarea; cazurile bune
+ * trebuie să treacă și să lase exact pagina de bază.
  *
  * @return list<string> ce nu a mers (gol = totul în regulă)
  */
 function diferente_autotest(): array
 {
     $esecuri = [];
-    $ruleaza = static function (string $caz, callable $f, bool $trebuiePica, ?string $paginaAsteptata = null) use (&$esecuri): void {
+    // $motivAsteptat: la un caz care trebuie să pice, textul pe care îl are cel puțin una dintre probleme
+    // (de exemplu: „ori” lipsește sau e greșit), ca să pice din motivul testat, nu din altul (o numărătoare greșită).
+    $ruleaza = static function (string $caz, callable $f, bool $trebuiePica, ?string $paginaAsteptata = null, ?string $motivAsteptat = null) use (&$esecuri): void {
         $gasite = [];
         $probleme = [];
         $rezultat = $f($gasite, $probleme);
         $aPicat = $probleme !== [];
         if ($aPicat !== $trebuiePica) {
             $esecuri[] = $caz . ': ' . ($trebuiePica ? 'trebuia să pice și a trecut' : 'a picat: ' . implode('; ', $probleme));
+        } elseif ($motivAsteptat !== null && array_filter($probleme, static fn (string $p): bool => str_contains($p, $motivAsteptat)) === []) {
+            $esecuri[] = $caz . ': a picat, dar nu din motivul testat (' . $motivAsteptat . '): ' . implode('; ', $probleme);
         } elseif ($paginaAsteptata !== null && $rezultat !== $paginaAsteptata) {
             $esecuri[] = $caz . ': pagina rămasă diferă (' . json_encode($rezultat, JSON_UNESCAPED_UNICODE) . ')';
         }
@@ -290,7 +296,7 @@ function diferente_autotest(): array
         => diferente_texte($texte, '/cos', '<b>Text nou</b>', $g, $p), true);
     $ruleaza('text declarat fără motiv', static fn (array &$g, array &$p): string
         => diferente_texte(['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => '']]],
-            '/magazin', '<b>Text nou</b>', $g, $p), true);
+            '/magazin', '<b>Text nou</b>', $g, $p), true, null, '„motiv” lipsește sau e greșit');
     // O listă de pagini: textul pe fiecare dintre ele (o dată), pe nicio altă pagină.
     $peMaiMulte = ['$porturiBioscem' => [['nume' => 'l', 'cale' => ['/', '/magazin', '/produs/*'], 'nou' => 'Text nou', 'vechi' => 'Text vechi',
         'motiv' => 'test']]];
@@ -302,10 +308,6 @@ function diferente_autotest(): array
         => diferente_texte($peMaiMulte, '/magazin', '<b>Text vechi</b>', $g, $p), true);
     $ruleaza('text cu o listă de pagini, găsit pe o pagină din afara listei', static fn (array &$g, array &$p): string
         => diferente_texte($peMaiMulte, '/cos', '<b>Text nou</b>', $g, $p), true);
-    $ruleaza('text cu o listă de pagini goală', static fn (array &$g, array &$p): string
-        => diferente_texte(['$porturiBioscem' => [['nume' => 'l', 'cale' => [], 'nou' => 'Text nou', 'motiv' => 'test']]], '/', '<b>Text nou</b>', $g, $p), true);
-    $ruleaza('text cu o listă de pagini cu o pagină goală', static fn (array &$g, array &$p): string
-        => diferente_texte(['$porturiBioscem' => [['nume' => 'l', 'cale' => ['/', ''], 'nou' => 'Text nou', 'motiv' => 'test']]], '/', '<b>Text nou</b>', $g, $p), true);
     // „ori”: exact atâtea apariții pe fiecare pagină a declarației (nici mai puține, nici mai multe).
     $deTrei = ['$porturiBioscem' => [['nume' => 'o', 'cale' => '/produs/ceai', 'nou' => 'Ceai – Marca | Firma', 'vechi' => 'Ceai | Firma', 'motiv' => 'test',
         'ori' => 3]]];
@@ -318,10 +320,22 @@ function diferente_autotest(): array
         => diferente_texte($deTrei, '/produs/ceai', $trei . '<p>Ceai – Marca | Firma</p>', $g, $p), true);
     $ruleaza('text cu „ori” 3, pe altă pagină', static fn (array &$g, array &$p): string
         => diferente_texte($deTrei, '/produs/alt-ceai', $trei, $g, $p), true);
-    foreach (['0' => 0, 'negativ' => -1, 'text' => '3'] as $cazOri => $oriGresit) {
-        $ruleaza('text cu „ori” greșit (' . $cazOri . ')', static fn (array &$g, array &$p): string
-            => diferente_texte(['$porturiBioscem' => [['nume' => 'o', 'cale' => '/', 'nou' => 'Text nou', 'motiv' => 'test', 'ori' => $oriGresit]]],
-                '/', '<b>Text nou</b>', $g, $p), true);
+    // Declarații greșite („cale” sau „ori”). Pagina fiecărui caz se potrivește cu ce ar număra declarația
+    // dacă ar fi primită (un text lipsă la 0 apariții sau la o listă goală, de 3 ori la „3”, o dată la
+    // 1.0), deci cazul pică doar dacă declarația e respinsă, și trebuie să pice cu numele câmpului.
+    $declaratiiGresite = [
+        'listă de pagini goală' => [['cale' => []], '<b>Text vechi</b>', 'cale'],
+        'listă de pagini cu o pagină goală' => [['cale' => ['/', '']], '<b>Text nou</b>', 'cale'],
+        '„ori” 0' => [['ori' => 0], '<b>Text vechi</b>', 'ori'],
+        '„ori” negativ' => [['ori' => -1], '<b>Text vechi</b>', 'ori'],
+        '„ori” text' => [['ori' => '3'], str_repeat('<b>Text nou</b>', 3), 'ori'],
+        '„ori” zecimal' => [['ori' => 1.0], '<b>Text nou</b>', 'ori'],
+        '„ori” null' => [['ori' => null], '<b>Text nou</b>', 'ori'],
+    ];
+    foreach ($declaratiiGresite as $cazGresit => [$campuri, $htmlGresit, $campGresit]) {
+        $ruleaza('text declarat cu ' . $cazGresit, static fn (array &$g, array &$p): string
+            => diferente_texte(['$porturiBioscem' => [array_merge(['nume' => 'g', 'cale' => '/', 'nou' => 'Text nou', 'vechi' => 'Text vechi',
+                'motiv' => 'test'], $campuri)]], '/', $htmlGresit, $g, $p), true, null, '„' . $campGresit . '” lipsește sau e greșit');
     }
 
     // Codurile de stare declarate: doar exact codurile declarate, cu textul doar pe pagina curentă.

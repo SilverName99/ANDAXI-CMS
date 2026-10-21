@@ -52,7 +52,8 @@ declare(strict_types=1);
  *       extra-<cod>.txt (ce are acea schemă în plus față de asteptat.json), pentru cms, bs, bv, vt, gr. Codul
  *       vechi al unui site (bs, bv, vt, gr) e clona lui (CMS_DEV_REPO_BS, _BV, _VT, _GR) la „ultimul commit
  *       revizuit” din docs/de-portat.md: când acela se mută (un commit nou portat), fixture-ul se reface aici
- *       și T2 arată ce s-a schimbat. cms e acest repo la commit-ul scris în capul lui cms.sql (implicit HEAD la
+ *       și T2 arată ce s-a schimbat. Sursa scrisă în fișiere e numele repo-ului (Nou-site-bioscem@<commit> …),
+ *       oricum s-ar numi dosarul clonei. cms e acest repo la commit-ul scris în capul lui cms.sql (implicit HEAD la
  *       prima generare; --cms=<commit> îl schimbă): schema pe care o făcea codul comun înainte de migrări.
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica-fixture-uri
  *       Fără să scrie nimic: fiecare fixture din git are amprenta schemei pe care o face codul din capul lui
@@ -590,7 +591,9 @@ if ($comanda === 'fixture-uri' || $comanda === 'verifica-fixture-uri') {
             $commit = $scrieFisiere ? ($commitCms ?? $dinCap[1] ?? trim((string) shell_exec('git -C ' . escapeshellarg($radacina) . ' rev-parse --short HEAD'))) : ($dinCap[1] ?? '');
         } else {
             $clona = (string) (getenv($variabila) ?: dirname($radacina) . '/' . $implicite[$variabila]);
-            $eticheta = basename($clona);
+            // Numele repo-ului, nu al dosarului clonei: eticheta intră în capul fixture-ului și în extra-<cod>.txt
+            // (din git), deci o clonă într-un dosar cu alt nume (CMS_DEV_REPO_*) trebuie să dea aceleași fișiere.
+            $eticheta = $implicite[$variabila];
             $deAcum = $revizuit($site);
             $commit = $scrieFisiere ? $deAcum : ($dinCap[1] ?? '');
             if (!$scrieFisiere) {

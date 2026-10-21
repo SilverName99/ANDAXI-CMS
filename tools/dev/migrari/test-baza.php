@@ -356,8 +356,8 @@ $cuProcesatorLipsa = ['bv', 'gr'];
 
 // T1/T2 (fără server pe care să-l aleg): genereaza-fixture.php --verifica (G-baza) și --verifica-fixture-uri.
 $scrie('T1, T2: migrările de bază față de schema codului (genereaza-fixture.php)');
-$ruleazaGf = static function (array $argumente) use ($genereazaFixture, $radacina, $utilizator, $parola, $sockMaria): array {
-    $env = getenv();
+$ruleazaGf = static function (array $argumente, array $mediu = []) use ($genereazaFixture, $radacina, $utilizator, $parola, $sockMaria): array {
+    $env = array_merge(getenv(), $mediu);
     $env['DB_USERNAME'] = $utilizator;
     $env['DB_PASSWORD'] = $parola;
     $p = proc_open(array_merge([PHP_BINARY, '-d', 'pdo_mysql.default_socket=' . $sockMaria, '-d', 'display_errors=stderr', $genereazaFixture], $argumente),
@@ -376,6 +376,25 @@ $verifica('T1: genereaza-fixture.php --verifica (G-baza): baseline-ul pe o bază
 $verifica('T2: fixture-urile din git (tools/dev/migrari/vechi/<cod>.sql, extra-<cod>.txt) = schema pe care o face acum codul fiecăruia, '
     . 'din „ultimul commit revizuit” (genereaza-fixture.php --verifica-fixture-uri)',
     $codFx === 0, implode("\n", array_filter(explode("\n", $outFx), static fn (string $l): bool => str_contains($l, 'EȘEC') || str_contains($l, 'EROARE'))));
+// Aceleași fișiere cu clonele în dosare cu alt nume (CMS_DEV_REPO_* spre o clonă oarecare, aici o legătură simbolică):
+// sursa scrisă în capul fixture-ului și în extra-<cod>.txt e numele repo-ului, nu al dosarului clonei (WP-07, deschis (b);
+// revizuirea WP-R din 21 oct). Legăturile stau în $lucru; $sterge le șterge fără să intre în clone.
+$cuAltNume = $lucru . '/clone-cu-alt-nume';
+@mkdir($cuAltNume, 0777, true);
+$mediuAltNume = [];
+foreach (['CMS_DEV_REPO_BS' => 'Nou-site-bioscem', 'CMS_DEV_REPO_BV' => 'Mutare-Site-Biovitality', 'CMS_DEV_REPO_VT' => 'vertij-tinitus-refacut',
+    'CMS_DEV_REPO_GR' => 'site-nou-grafoanaytis.ro'] as $variabilaClona => $numeImplicit) {
+    $legatura = $cuAltNume . '/alta-clona-' . strtolower(substr($variabilaClona, -2));
+    if (is_link($legatura)) {
+        unlink($legatura);
+    }
+    symlink((string) (getenv($variabilaClona) ?: dirname($radacina) . '/' . $numeImplicit), $legatura);
+    $mediuAltNume[$variabilaClona] = $legatura;
+}
+[$codAlt, $outAlt] = $ruleazaGf(['--verifica-fixture-uri'], $mediuAltNume);
+$verifica('T2: aceleași fixture-uri cu clonele în dosare cu alt nume (CMS_DEV_REPO_* spre ' . basename($cuAltNume) . '/alta-clona-*): '
+    . 'sursa din fișiere e numele repo-ului, nu al dosarului',
+    $codAlt === 0, implode("\n", array_filter(explode("\n", $outAlt), static fn (string $l): bool => str_contains($l, 'EȘEC') || str_contains($l, 'EROARE'))));
 $extraCms = $liniiObiecte($dosarVechi . '/extra-cms.txt') ?? [];
 $verifica('T2: extra-cms.txt = exact excluderile instalării noi (tools/dev/migrari/excluderi.php)',
     $extraCms === $sortat(array_keys($excluderi['excluse'])), implode(', ', $extraCms));
