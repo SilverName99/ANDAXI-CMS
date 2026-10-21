@@ -17,7 +17,7 @@ declare(strict_types=1);
  *
  * Alte opțiuni: --profil=bioscem (singurul azi; Biovitality vine în WP-11b), --prin-fisiere (lucrătorii primesc și dau
  * datele prin fișiere 0600 din storage/verificare/tmp, șterse la final, ca atunci când găzduirea oprește proc_open),
- * --cod-nou=<dosar> (doar cu --local).
+ * --cod-nou=<dosar> și --declarate=<fișier.json> (diferențele voite ale codului comun, pe comenzile demo; doar cu --local).
  *
  * Pe ecran doar numere și nume de câmpuri (lib/calcule.php: ce garantează, ce se compară, codurile de ieșire): niciun
  * id, număr de comandă, nume, sumă sau produs. Ultimul rând: „REZULTAT: TRECE” (cod 0) sau „REZULTAT: PICĂ” (cod 1);

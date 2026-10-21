@@ -10,20 +10,23 @@ declare(strict_types=1);
  *
  *   php tools/verificare/amprenta-site.php --baza=https://bioscem.ro --iesire=amprenta-live.tsv
  *   read -rs VERIFICARE_POARTA_PAROLA; export VERIFICARE_POARTA_PAROLA        # parola porții, fără să apară pe ecran
- *   php tools/verificare/amprenta-site.php --baza=https://<domeniul-verificare> --poarta=verificare --iesire=amprenta-verificare.tsv
+ *   php tools/verificare/amprenta-site.php --baza=https://<domeniul-verificare> --poarta=verificare --gazda-sursa=bioscem.ro \
+ *       --iesire=amprenta-verificare.tsv
  *   php tools/verificare/amprenta-site.php --compara amprenta-live.tsv amprenta-verificare.tsv            # câmpurile structurale
  *   php tools/verificare/amprenta-site.php --compara inainte.tsv dupa.tsv --strict                         # și corpul paginilor
  *
  * Opțiuni: --max=<n> (implicit 3000 de adrese), --pauza=<secunde> (implicit 1; cel puțin 1 pe un site care nu e pe
- * calculatorul tău). Parola porții doar în VERIFICARE_POARTA_PAROLA, niciodată în linia de comandă, și doar pe https.
+ * calculatorul tău), --gazda-sursa=<gazdă> (site-ul al cărui conținut e copiat: linkurile absolute spre el sunt ale
+ * site-ului amprentat; o copie de verificare o cere). Parola porții doar în VERIFICARE_POARTA_PAROLA, niciodată în linia de
+ * comandă, și doar pe https.
  *
  * Trei folosiri (planul de verificare, §2.4): (1) Etapa 1: bioscem.ro (codul vechi) față de site-ul de verificare (codul
  * comun pe copia de azi-noapte), doar câmpurile structurale; (2) repetiția din Etapa 4: pe site-ul de verificare, codul
  * vechi față de codul comun, pe aceeași bază, cu --strict; (3) noaptea adoptării: site-ul live înainte și după.
  *
  * Ce cere și ce scrie: capul lui lib/amprenta.php. Cod de ieșire: 0 amprenta scrisă (cu --compara: „LA FEL”); 1 oprită
- * (site-ul nu răspunde, parola porții greșită; cu --compara: „DIFERĂ”); 2 refuzată (argumentele, un fișier care nu e o
- * amprentă), fără nicio cerere.
+ * (site-ul nu răspunde, parola porții greșită, o copie fără --gazda-sursa; cu --compara: „DIFERĂ”); 2 refuzată
+ * (argumentele, un fișier care nu e o amprentă, două amprente cu alte gazde sursă), fără nicio cerere.
  *
  * Fișierul folosește doar sintaxa PHP 7.0 (ca un PHP prea vechi să-și vadă versiunea); lib/amprenta.php e PHP 8.3.
  */

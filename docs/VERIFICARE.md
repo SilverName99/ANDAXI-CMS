@@ -231,15 +231,18 @@ schimbă nimic, e ca un vizitator care deschide paginile pe rând), apoi cele do
 $PHP tools/verificare/amprenta-site.php --baza=https://bioscem.ro --iesire=storage/verificare/sonde/amprenta-bioscem.tsv
 read -rs VERIFICARE_POARTA_PAROLA        # scrii parola porții (nu se vede), apoi Enter
 export VERIFICARE_POARTA_PAROLA
-$PHP tools/verificare/amprenta-site.php --baza=https://<domeniul-verificare> --poarta=verificare --iesire=storage/verificare/sonde/amprenta-copie.tsv
+$PHP tools/verificare/amprenta-site.php --baza=https://<domeniul-verificare> --poarta=verificare --gazda-sursa=bioscem.ro --iesire=storage/verificare/sonde/amprenta-copie.tsv
 unset VERIFICARE_POARTA_PAROLA
 $PHP tools/verificare/amprenta-site.php --compara storage/verificare/sonde/amprenta-bioscem.tsv storage/verificare/sonde/amprenta-copie.tsv
 #   ultimul rând: „REZULTAT: LA FEL” (sau „DIFERĂ”, cu adresele și câmpurile care diferă)
 ```
 
 Parola porții se dă doar așa (`read -rs`), niciodată pe linia comenzii; unealta o trimite doar copiei, doar pe https, și
-se oprește după o singură încercare greșită (nu ajunge la cele 10 care închid poarta). În fișierele `.tsv` nu e numele
-niciunui site, doar adrese publice (`{GAZDA}/…`), titluri și amprente.
+se oprește după o singură încercare greșită (nu ajunge la cele 10 care închid poarta). `--gazda-sursa=bioscem.ro` spune că
+pe copie conținutul vine de pe bioscem.ro: descrierile și paginile importate din WordPress au linkuri scrise întreg spre
+`https://bioscem.ro/…`, care pe bioscem.ro sunt linkuri ale site-ului și trebuie să fie la fel pe copie (fără opțiune,
+amprenta copiei se oprește după prima pagină și îți spune s-o dai). În fișierele `.tsv` nu e numele niciunui site, doar
+adrese publice (`{GAZDA}/…`), titluri și amprente.
 
 Dacă `configureaza.php --rescrie` (a) nu e nevoie, `stare.php` (b) spune „GATA” direct; dacă e nevoie, încărcarea
 (c) îți spune singură „REFUZAT: … configureaza.php --rescrie” și nu atinge nimic.
@@ -397,6 +400,9 @@ sunt în git, deci rămân neatinse.
 | `compara-calcule.php`: „OPRIT: …” | Ne trimiți textul. Dacă spune că cupoanele NU s-au pus la loc, rulezi comanda din nou: întâi le pune la loc |
 | `compara-calcule.php`: „… baza copiei era „in_urma”, iar scripts/migreaza.php --aplica … a ieșit cu codul …” | Codul nou are migrări pe care copia nu le are încă și ele n-au mers: `$PHP scripts/migreaza.php --aplica --site=bioscem` și ne trimiți textul lui |
 | `amprenta-site.php`: „OPRIT: site-ul cere parola porții” sau „parola porții nu e bună” | `read -rs VERIFICARE_POARTA_PAROLA`, `export VERIFICARE_POARTA_PAROLA` și `--poarta=verificare` (ca la pasul 6, f); după o parolă greșită unealta se oprește singură |
+| `amprenta-site.php`: „OPRIT: e o copie de verificare … --gazda-sursa=bioscem.ro” | Comanda copiei din pasul 6, f are și `--gazda-sursa=bioscem.ro`: o rulezi din nou așa |
+| `amprenta-site.php --compara`: „REFUZAT: amprentele au alte gazde sursă …” | Una dintre amprente e făcută fără `--gazda-sursa` (sau cu altă gazdă): faci din nou amprenta copiei exact ca la pasul 6, f |
+| `amprenta-site.php --compara`: „REFUZAT: … e de altă versiune a amprentei …” | Amprenta e făcută cu o versiune mai veche a uneltei: le faci din nou pe amândouă (pasul 6, f) |
 | `amprenta-site.php --compara`: „REZULTAT: DIFERĂ” | Ne trimiți textul și cele două fișiere `.tsv` |
 | O comandă (`configureaza.php`, `stare.php`, `migreaza.php`, `install.php`) se oprește cu „PHP Fatal error” sau „PHP Warning” | Trimite-ne rândurile din terminal: erorile PHP ale comenzilor apar acolo (stderr), nu într-un fișier. Ale paginilor sunt în `storage/logs/php.log` al site-ului de verificare, dacă serverul nu are alt jurnal (`$PHP scripts/diagnostic.php` arată unde; WP-07) |
 
@@ -711,6 +717,19 @@ totalul salvat e doar informativă).
   Cod de ieșire: 0 „TRECE” (niciun caz diferit și nicio eroare în niciun cod); 1 „PICĂ”, sau „OPRIT” după ce cupoanele au
   fost schimbate (puse la loc); 2 refuzat, nimic schimbat. Textul se salvează în `storage/verificare/sonde/` (local:
   `$CMS_DEV_DIR/calcule-raport.txt`).
+- **Diferențele voite** (doar local, `--declarate=<fișier.json>`; planul de verificare, §2.3: „diferite 0, afară de
+  schimbările voite, scrise explicit”, ca `$porturiBioscem` la comparația paginilor). O schimbare făcută intenționat în codul
+  comun (de exemplu transportul gratuit pe produs din WP-20, pe o comandă demo cu un astfel de produs) se declară pe comanda
+  ei: `[{"comanda": <id>, "campuri": ["shipping", "total"], "motiv": "WP-20, C14a: …"}]`. Câmpurile sunt toate cele care
+  diferă la acea comandă, exact (numele din raport: `subtotal`, `shipping`, `linie.price`, `transport_admin_0`,
+  `puncte_estimate` …; din payload-ul ERP cheia, `erp.<cheie>`, nu `erp` singur), cu motivul. Un caz care diferă exact la
+  câmpurile declarate se numără „declarat”, nu „diferit” (rândul `diferențe declarate (--declarate): N potrivite exact |
+  nepotrivite M`); o declarație nepotrivită (o diferență în plus sau în minus, nicio diferență, o comandă care nu e caz, o
+  eroare în cod) pică, cu declarația numită după numărul ei (`declarații nepotrivite: #1 (diferă la: …; declarat: …)`). Un
+  fișier greșit (fără motiv, un câmp necunoscut, aceeași comandă de două ori …) e refuz. Pe site-ul de verificare opțiunea e
+  refuzată: acolo orice diferență pică. În poarta G-calc lista e `$diferenteDeclarate` din `tools/dev/test-calcule.php`, un
+  bloc pe WP, cu numele comenzii inventate (azi goală); pe site-ul de verificare simulat al testului, comenzile declarate nu
+  sunt cazuri.
 
 ### Amprenta paginilor (`amprenta-site.php`, WP-11)
 
@@ -735,21 +754,33 @@ orice calculator.
 - **Poarta copiei:** `--poarta=<utilizator>`, parola doar din `VERIFICARE_POARTA_PAROLA` (niciodată din linia de comandă) și
   doar pe https (local și pe http); un 401 la prima cerere oprește totul („cere parola porții” sau „parola nu e bună”, după o
   singură încercare), un 429 la fel.
-- **Ce scrie** (TSV, 0600, fără gazdă: `{GAZDA}` în adrese; capul spune versiunea, dacă e o copie de verificare, câte adrese
-  și data), pe fiecare adresă: calea (partea aleatoare → `{ALEATOR}`), de unde a venit, codul, `Location`, felul răspunsului,
-  sha1 pe corpul normalizat, titlul, meta robots, canonical, H1 (câte și amprenta textului), tipurile JSON-LD (sortate, de la
-  orice adâncime), câte linkuri interne, formularele (câte și amprenta metodelor și acțiunilor), `X-Robots-Tag`, poza de
-  distribuire. Normalizarea corpului e cea a comparației locale (`tools/dev/lib/normalizeaza-html.php`, aceeași cu
-  `compara-cu-baza.php`): tokenurile, momentele, `?v=`, identificatorii aleatori, gazda, **bannerul copiei scos**
-  (`id="verificare-banner"`, garda 14), plus versiunea pozei de distribuire (`/og/<12 hex>/` → `/og/{V}/`). Copia de
-  verificare se recunoaște după banner.
+- **Gazda sursă** (`--gazda-sursa=<gazdă>`): un site pornit pe conținutul altuia, cum e copia de verificare a bioscem.ro, are
+  în conținutul copiat linkuri absolute spre site-ul copiat: descrierile produselor și paginile importate din WordPress
+  (`https://bioscem.ro/produs/…`, `…/wp-content/uploads/…`), canonical-urile puse de mână în `seo_pages`. Pe bioscem.ro ele
+  sunt ale site-ului (linkuri interne, cerute, `{GAZDA}` în canonical); cu opțiunea sunt la fel pe copie: gazda sursă e
+  tratată ca a site-ului amprentat la căile hărții, linkuri, canonical, formulare, poză și în corpul normalizat. O copie de
+  verificare (bannerul în prima pagină) fără opțiune se oprește după prima cerere („OPRIT: e o copie de verificare …”). În
+  cap se scrie amprenta gazdei sursă (12 hex din sha1, aceeași cu și fără `www.`; fără opțiune, a gazdei amprentate), nu
+  gazda; două amprente cu alte gazde sursă nu se compară (refuz, cod 2): linkurile conținutului ar diferi oricare ar fi
+  codul. În repetiția din Etapa 4 (codul vechi și codul comun, ambele pe gazda copiei) ambele amprente se fac cu
+  `--gazda-sursa`.
+- **Ce scrie** (TSV, 0600, fără gazdă: `{GAZDA}` în adrese; capul spune versiunea (2), dacă e o copie de verificare, câte
+  adrese, amprenta gazdei sursă și data), pe fiecare adresă: calea (partea aleatoare → `{ALEATOR}`, versiunea pozei →
+  `/og/{V}/`), de unde a venit, codul, `Location`, felul răspunsului, sha1 pe corpul normalizat, titlul, meta robots,
+  canonical, H1 (câte și amprenta textului), tipurile JSON-LD (sortate, de la orice adâncime), câte linkuri interne,
+  formularele (câte și amprenta metodelor și acțiunilor), `X-Robots-Tag`, poza de distribuire. Normalizarea corpului e cea a comparației locale (`tools/dev/lib/normalizeaza-html.php`, aceeași cu
+  `compara-cu-baza.php`): tokenurile, momentele, `?v=`, identificatorii aleatori, gazda (și gazda sursă), **bannerul copiei
+  scos** (`id="verificare-banner"`, garda 14), plus versiunea pozei de distribuire (`/og/<12 hex>/` → `/og/{V}/`). Versiunea
+  depinde de data și mărimea fișierului (`ImagineDistribuire::versiune`), deci se scoate și din calea rândurilor `/og/…`, iar
+  cele 20 de poze se aleg după calea fără ea: același site înainte și după, cu pozele copiate fără datele lor (noaptea
+  adoptării), are aceleași rânduri. Copia de verificare se recunoaște după banner.
 - **`--compara A.tsv B.tsv`**: câte adrese sunt doar într-una (și care), câte diferențe pe fiecare câmp structural (codul,
   `Location`, felul, canonical, robots, titlul, H1, JSON-LD, linkurile, formularele, `X-Robots-Tag`, poza de distribuire) și
   adresele, cel mult 50 pe câmp; cu `--strict` și corpul. Cod 0 „LA FEL”, 1 „DIFERĂ”, 2 un fișier care nu e o amprentă (sau
-  de altă versiune). Când doar una dintre amprente e a unei copii de verificare, nu se compară ce pun gărzile copiei, și se
-  spune: `X-Robots-Tag` (poarta îl pune pe fiecare răspuns), poza de distribuire și adresele `/og/`, `/uploads/` (garda 13:
-  pozele nu se copiază); `--strict` cere atunci două amprente de același fel (pe copie gărzile schimbă corpul: bannerul,
-  etichetele terților, robots.txt).
+  de altă versiune) sau două amprente cu alte gazde sursă. Când doar una dintre amprente e a unei copii de verificare, nu se
+  compară ce pun gărzile copiei, și se spune: `X-Robots-Tag` (poarta îl pune pe fiecare răspuns), poza de distribuire și
+  adresele `/og/`, `/uploads/` (garda 13: pozele nu se copiază); `--strict` cere atunci două amprente de același fel (pe copie
+  gărzile schimbă corpul: bannerul, etichetele terților, robots.txt).
 
 ### Adresa vizitatorului (`IpClient`)
 
@@ -1035,33 +1066,47 @@ servere.
 
 `tools/dev/compara-calcule-local.sh` (poarta G-calc, și cu PHP-ul minim) scoate codul Bioscem însuși (commit-ul revizuit din
 [de-portat.md](de-portat.md), aceeași copie ca la `compara-cu-baza.sh`) și rulează două teste. **`tools/dev/test-calcule.php`**:
-`compara-calcule.php --local` pe `cms_calc_t`, o copie a bazei de dezvoltare cu 28 de comenzi inventate (puncte peste
-disponibil, sub minim, fără cont, cu cupon; cupoane fixe, procentuale, expirate, oprite, unice folosite, inexistente, pe
-produse, pe categorii, fără cumulare, pentru un client, cu număr de articole; BBD, FANbox, firmă, București, reducere și
-transport puse de mână, precomandă, produse inactive și șterse, coș gol, pragul transportului gratuit, o localitate cu km
-în plus): „TRECE”, „diferite 0”, fiecare tip de caz prezent, aceleași cupoane și puncte aplicate în ambele coduri; fiecare
-rând al ieșirii are una dintre formele știute (doar numere și nume), fără nume de produse, numere de comenzi, emailuri sau
-numele bazei; cupoanele puse la loc (CHECKSUM TABLE), niciun fișier de sesiune; la fel cu prețurile fixe ale transportului,
-cu `--fara-cupoane-valide` (mai puține cupoane aplicate: punerea lor contează), `--prin-fisiere`, `--php-vechi=php<min>`,
-`--n`. Apoi câte o mutație în codul comun (într-o copie, `--cod-nou`): totalul, reducerea procentuală, prețul BBD, valoarea
-punctelor, transportul din admin, punctele promise, o cheie a payload-ului ERP, o excepție: fiecare trebuie să dea „PICĂ” și
-să-și numească câmpul, deci comparația chiar vede fiecare calcul. Refuzurile locale (cod 2, nimic schimbat), lucrătorul
-pornit direct pe altă bază sau fără `_verificare`, o rulare omorâtă după cupoane (următoarea le pune la loc) și o eroare
-fatală de memorie (cupoanele puse la loc pe loc). La urmă, pe un site de verificare simulat (`$CMS_DEV_DIR/calcule/acasa`:
-copia codului din git, `.env`-ul copiei, licența pusă de `licenta.php`, codul vechi în `cod-vechi/bioscem/` cu `.env`-ul lui,
-baza `cms_calc_copie` cu `_verificare` și un utilizator cu parolă), cu mediul gol: baza în urma codului (o migrare
-neaplicată) → migrările întâi, apoi „TRECE”, textul salvat 0600, nicio parolă, nume de bază sau cale a contului; fiecare
-refuz al serverului (`_verificare` lipsă, neîncheiat, din altă sursă, prea vechi; `incarcat-la` lipsă sau expirat; `.env`
-fără `SITE_COPIE_VERIFICARE=1` sau cu alt pachet; alt `HOME`; baza în `.env`-ul altui site din cont; codul vechi lipsă,
-legătură sau cu `.env`-ul spre altă bază; `--cod-vechi` și `--local` pe server; licența cu cupoanele oprite; baza fără
-registrul migrărilor); un PHP sub
-minim. **`tools/dev/test-amprenta-site.php`**: fără server normalizarea, câmpurile unei pagini inventate, adresele pe care
-unealta nu le cere, fișierul, comparația (câte o schimbare pe fiecare câmp, corpul doar cu `--strict`, o copie de verificare
-față de un site) și refuzurile liniei de comandă; apoi, pe `cms_amprenta_t` (cu o poză de produs, pentru poza de
-distribuire), codul Bioscem (`CMS_DEV_PORT`+16), codul comun cu pachetul Bioscem (+17) și o copie de verificare a codului
-comun (+18, cu poarta): codul comun de două ori „LA FEL” cu `--strict`; Bioscem față de codul comun „LA FEL” pe câmpurile
-structurale și, cu `--strict`, „DIFERĂ” doar la corpul lui `/robots.txt` (diferența declarată în `$deBioscem`); politețea
-văzută din partea serverului (doar GET, User-Agent-ul uneltei, fără cookie, nicio adresă interzisă, câte o cerere pe adresă,
-pauza); licența fără blog „DIFERĂ” (`/blog` 200 → 404, articolele doar în amprenta Bioscem); copia fără parolă sau cu parola
-greșită oprită după o singură cerere, cu parola „copie de verificare: DA” și, față de Bioscem, „LA FEL” cu câmpurile gărzilor
-spuse ca necomparate. Bazele, serverele și dosarele se fac și se șterg acolo; baza de dezvoltare doar se copiază.
+`compara-calcule.php --local` pe `cms_calc_t`, o copie a bazei de dezvoltare în care fiecare ramură a calculelor contează
+(transportul 12 lei în București și 45 în provincie, plafonul de 40 sub el, gratuit de la 150 / 250 lei; TVA adăugat la preț
+la două produse, cota de 11% la două), cu 35 de comenzi inventate (puncte peste disponibil, sub minim, fără cont, cu cupon;
+cupoane fixe, procentuale, expirate, oprite, unice folosite, inexistente, pe produse, pe categorii, fără cumulare, pentru un
+client, cu număr de articole; BBD, FANbox, firmă, București, reducere și transport puse de mână, precomandă, produse inactive
+și șterse, coș gol, sub, între și peste pragurile transportului gratuit în București și în provincie, TVA adăugat și altă
+cotă, o localitate cu km în plus): „TRECE”, „diferite 0”, fiecare tip de caz prezent, aceleași cupoane și puncte aplicate în
+ambele coduri, diferențele declarate (azi niciuna) potrivite; fiecare rând al ieșirii are una dintre formele știute (doar
+numere și nume), fără nume de produse, numere de comenzi, emailuri sau numele bazei; cupoanele puse la loc (CHECKSUM TABLE),
+niciun fișier de sesiune; la fel cu prețurile fixe ale transportului (cu câte o mutație a prețului FANbox, a km
+suplimentari și a pragului Bucureștiului, fiecare „PICĂ”), cu `--fara-cupoane-valide` (mai puține cupoane aplicate: punerea
+lor contează), `--prin-fisiere`, `--php-vechi=php<min>`, `--n`. Apoi câte o mutație în codul comun (într-o copie,
+`--cod-nou`): totalul, reducerea procentuală, prețul BBD, valoarea punctelor, transportul din admin, punctele promise, o cheie
+a payload-ului ERP, o excepție, TVA-ul adăugat, subtotalul fără TVA al produselor cu TVA adăugat, cota TVA, Bucureștiul
+nerecunoscut (în checkout și în admin), provincia cu prețul Bucureștiului, pragul provinciei în București, transportul fără
+plafon (în checkout și în admin): fiecare trebuie să dea „PICĂ” și să-și numească câmpul, deci comparația chiar vede fiecare
+calcul. Refuzurile locale (cod 2, nimic schimbat), lucrătorul pornit direct pe altă bază sau fără `_verificare`, o rulare
+omorâtă după cupoane (următoarea le pune la loc) și o eroare fatală de memorie (cupoanele puse la loc pe loc). Diferențele
+declarate (`--declarate`), cu o diferență voită într-o copie a codului comun (transport gratuit și o cheie ERP pe o singură
+comandă): declarată exact „TRECE”, nedeclarată „PICĂ”, declarația fără diferență, cu un câmp în minus sau în plus, fără cheia
+ERP sau cu alta, pe o comandă care nu e caz „PICĂ” cu declarația numită, fișierele greșite refuzate. La urmă, pe un site de
+verificare simulat (`$CMS_DEV_DIR/calcule/acasa`: copia codului din git, `.env`-ul copiei, licența pusă de `licenta.php`,
+codul vechi în `cod-vechi/bioscem/` cu `.env`-ul lui, baza `cms_calc_copie` cu `_verificare` și un utilizator cu parolă), cu
+mediul gol: baza în urma codului (o migrare neaplicată) → migrările întâi, apoi „TRECE”, textul salvat 0600, nicio parolă,
+nume de bază sau cale a contului; fiecare refuz al serverului (`_verificare` lipsă, neîncheiat, din altă sursă, prea vechi;
+`incarcat-la` lipsă sau expirat; `.env` fără `SITE_COPIE_VERIFICARE=1` sau cu alt pachet; alt `HOME`; baza în `.env`-ul altui
+site din cont; codul vechi lipsă, legătură sau cu `.env`-ul spre altă bază; `--cod-vechi`, `--local` și `--declarate` pe
+server; licența cu cupoanele oprite; baza fără registrul migrărilor); un PHP sub minim.
+**`tools/dev/test-amprenta-site.php`**: fără server normalizarea, câmpurile unei pagini inventate, gazda sursă (pe gazda
+copiei, linkurile absolute spre site-ul copiat sunt străine fără ea și ale site-ului cu ea), versiunea pozei de distribuire (în
+calea rândului și la alegerea celor 20 de poze), adresele pe care unealta nu le cere, fișierul, comparația (câte o schimbare
+pe fiecare câmp, corpul doar cu `--strict`, doar versiunea pozei alta „LA FEL”, alte gazde sursă refuz, o copie de verificare
+față de un site) și refuzurile liniei de comandă; apoi, pe `cms_amprenta_t` (cu o poză de produs, pentru poza de distribuire,
+și cu linkuri absolute spre serverul Bioscem în conținut, ca linkurile spre bioscem.ro din conținutul importat din WordPress:
+în prima pagină, în descrierea unui produs și un canonical pus de mână), codul Bioscem (`CMS_DEV_PORT`+16), codul comun cu
+pachetul Bioscem (+17, cu `--gazda-sursa` a serverului Bioscem) și o copie de verificare a codului comun (+18, cu poarta):
+codul comun de două ori „LA FEL” cu `--strict`; Bioscem (cu poza copiată cu altă dată: altă versiune `/og/`) față de codul
+comun „LA FEL” pe câmpurile structurale, adresele linkurilor absolute cerute pe ambele, și, cu `--strict`, „DIFERĂ” doar la
+corpul lui `/robots.txt` (diferența declarată în `$deBioscem`); fără `--gazda-sursa` comparația refuză, iar paginile codului
+comun citite fără ea au alte linkuri și alt canonical; politețea văzută din partea serverului (doar GET, User-Agent-ul
+uneltei, fără cookie, nicio adresă interzisă, câte o cerere pe adresă, pauza); licența fără blog „DIFERĂ” (`/blog` 200 → 404,
+articolele doar în amprenta Bioscem); copia fără parolă, cu parola greșită sau fără `--gazda-sursa` oprită după o singură
+cerere, cu ambele „copie de verificare: DA” și, față de Bioscem, „LA FEL” (și pe paginile cu linkuri absolute) cu câmpurile
+gărzilor spuse ca necomparate. Bazele, serverele și dosarele se fac și se șterg acolo; baza de dezvoltare doar se copiază.

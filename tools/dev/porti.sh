@@ -64,7 +64,7 @@ poarta G-verif "testele site-ului de verificare și ale încărcării copiei (de
     "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php ;; tools/dev/php.sh tools/dev/test-incarcare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-incarcare.php" WP-08a
 poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-sonda): doar citire, nimic scris, nicio valoare personală; și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/test-sonde.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-sonde.php" WP-10
-poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un site de verificare simulat: diferite 0, mutațiile care trebuie să pice, refuzurile) și amprenta paginilor (amprenta-site.php pe codul Bioscem și pe codul comun), față de același cod de bază ca G-cmp; și cu php$MINIM (rulează pe servere)" \
+poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un site de verificare simulat: diferite 0, mutațiile care trebuie să pice, diferențele declarate, refuzurile) și amprenta paginilor (amprenta-site.php pe codul Bioscem și pe codul comun, cu gazda sursă), față de același cod de bază ca G-cmp; și cu php$MINIM (rulează pe servere)" \
     "tools/dev/compara-calcule-local.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/compara-calcule-local.sh" WP-11
 poarta G-vizual "stilurile calculate ale paginilor publice (capturile, pentru ochi)" "tools/dev/capturi-publice.sh" WP-13
 poarta G-pachet "pachetul Bioscem și pachetul neutru" \

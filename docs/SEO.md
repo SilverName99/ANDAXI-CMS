@@ -354,7 +354,9 @@ fluxului; textele Google ale primei pagini, a 3 categorii și 20 de produse
   formularele, `X-Robots-Tag`, poza de distribuire), din `/sitemap.xml`, linkurile primei
   pagini, adresele vechi ale categoriilor (`/magazin?category=` → 301 într-un salt), fluxul
   și pozele `/og/`; două amprente se compară câmp cu câmp. bioscem.ro față de copia de
-  verificare (codul comun pe copia de azi-noapte) e acceptanța părții B pe datele adevărate
+  verificare (codul comun pe copia de azi-noapte, amprentată cu `--gazda-sursa=bioscem.ro`:
+  linkurile absolute din conținutul importat din WordPress și canonical-urile puse de mână
+  sunt ale copiei, ca pe bioscem.ro) e acceptanța părții B pe datele adevărate
   (WP-37…WP-40), iar în noaptea adoptării site-ul live înainte și după. Local, în poarta
   G-calc (`tools/dev/test-amprenta-site.php`): codul Bioscem față de codul comun, aceleași
   câmpuri pe toate adresele, iar corpul diferă doar la `/robots.txt` (diferența din

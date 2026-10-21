@@ -27,7 +27,16 @@ declare(strict_types=1);
  *
  * Normalizarea corpului e cea a comparației locale (tools/dev/lib/normalizeaza-html.php): tokenurile, momentele, `?v=`,
  * gazda site-ului → `{GAZDA}`, bannerul copiei de verificare scos (`id="verificare-banner"`), plus versiunea pozei de
- * distribuire (`/og/<12 hex>/` → `/og/{V}/`, depinde de data fișierului). În fișier nu se scrie gazda.
+ * distribuire (`/og/<12 hex>/` → `/og/{V}/`, depinde de data fișierului; și în calea rândurilor `/og/…`, și la alegerea
+ * celor 20 de poze, ca aceeași poză cu altă dată a fișierului să fie același rând). În fișier nu se scrie gazda.
+ *
+ * Gazda sursă (`--gazda-sursa=<gazdă>`): un site pornit pe conținutul altuia (copia de verificare a bioscem.ro) are în
+ * conținutul copiat (descrierile produselor și paginile importate din WordPress, canonical-urile puse de mână în
+ * `seo_pages`) linkuri absolute spre site-ul copiat. Cu `--gazda-sursa=bioscem.ro` ele sunt ale site-ului amprentat, ca pe
+ * bioscem.ro: `{GAZDA}` în adrese, linkuri interne, cerute pe copie. O copie de verificare (bannerul în prima pagină) cere
+ * opțiunea (altfel oprește după prima cerere). În capul fișierului se scrie doar o amprentă a gazdei sursei (a gazdei
+ * amprentate, fără opțiune): două amprente cu alte gazde sursă nu se compară (refuz), fiindcă linkurile absolute ale
+ * conținutului ar ieși diferite oricare ar fi codul.
  *
  * Comparația: câmpurile structurale (codul, `Location`, felul, canonical, robots, titlul, H1, JSON-LD, linkurile,
  * formularele, X-Robots-Tag, poza de distribuire) și adresele care sunt doar într-una; cu `--strict` și corpul. Când doar
@@ -52,7 +61,8 @@ final class RefuzAmprenta extends RuntimeException
 
 final class AmprentaSite
 {
-    public const VERSIUNE = 1;
+    /** 2 (revizia WP-11): amprenta gazdei sursă în cap, versiunea pozei normalizată și în calea rândurilor `/og/`. */
+    public const VERSIUNE = 2;
     public const USER_AGENT = 'ANDAXI-audit/1.0';
     /** Coloanele fișierului, în ordine. */
     public const COLOANE = ['cale', 'de_unde', 'cod', 'location', 'tip', 'corp', 'titlu', 'robots', 'canonical', 'h1', 'jsonld', 'linkuri', 'formulare',
@@ -83,15 +93,19 @@ final class AmprentaSite
     private \CurlHandle $curl;
     private string $schema;
     private string $gazda;
+    /** @var list<string> Gazdele ale căror adrese sunt ale site-ului amprentat: a lui și, cu --gazda-sursa, a site-ului copiat. */
+    private array $gazde;
     private string $aleator;
     /** @var list<string> */
     private array $text = [];
 
-    private function __construct(private string $baza, private ?string $poarta, private ?string $parola, private int $maxim, private float $pauza)
+    private function __construct(private string $baza, private ?string $poarta, private ?string $parola, private int $maxim, private float $pauza,
+        private ?string $gazdaSursa)
     {
         $parti = parse_url($baza);
         $this->schema = strtolower((string) ($parti['scheme'] ?? ''));
         $this->gazda = strtolower((string) ($parti['host'] ?? '')) . (isset($parti['port']) ? ':' . (int) $parti['port'] : '');
+        $this->gazde = array_values(array_unique(array_filter([$this->gazda, (string) $gazdaSursa], static fn (string $g): bool => $g !== '')));
         $this->aleator = bin2hex(random_bytes(8));
         $curl = curl_init();
         if (!$curl instanceof \CurlHandle) {
@@ -111,7 +125,7 @@ final class AmprentaSite
             $opt = [];
             $pozitionale = [];
             foreach (array_slice($argv, 1) as $argument) {
-                if (preg_match('/^--(baza|poarta|iesire|max|pauza)=(.*)$/s', $argument, $m) === 1) {
+                if (preg_match('/^--(baza|poarta|iesire|max|pauza|gazda-sursa)=(.*)$/s', $argument, $m) === 1) {
                     $opt[$m[1]] = $m[2];
                 } elseif ($argument === '--compara' || $argument === '--strict') {
                     $opt[substr($argument, 2)] = true;
@@ -123,13 +137,13 @@ final class AmprentaSite
                 }
             }
             if (isset($opt['compara'])) {
-                if (count($pozitionale) !== 2 || isset($opt['baza'])) {
+                if (count($pozitionale) !== 2 || isset($opt['baza']) || isset($opt['gazda-sursa'])) {
                     throw new RefuzAmprenta('--compara cere două fișiere: --compara A.tsv B.tsv [--strict]');
                 }
                 return ComparatieAmprente::ruleaza($pozitionale[0], $pozitionale[1], isset($opt['strict']));
             }
             if ($pozitionale !== [] || isset($opt['strict'])) {
-                throw new RefuzAmprenta('fără --compara, doar --baza=… --iesire=… [--poarta=…] [--max=…] [--pauza=…]');
+                throw new RefuzAmprenta('fără --compara, doar --baza=… --iesire=… [--poarta=…] [--gazda-sursa=…] [--max=…] [--pauza=…]');
             }
             $a = self::pregateste($opt);
             return $a->amprenteaza((string) $opt['iesire']);
@@ -182,10 +196,36 @@ final class AmprentaSite
                 throw new RefuzAmprenta('parola porții se trimite doar pe https');
             }
         }
+        $gazdaSursa = isset($opt['gazda-sursa']) ? self::gazdaData((string) $opt['gazda-sursa']) : null;
         if (!function_exists('curl_init') || !class_exists(DOMDocument::class)) {
             throw new RefuzAmprenta('lipsesc extensiile PHP curl sau dom');
         }
-        return new self($baza, $poarta, $parola, (int) $maxim, (float) $pauza);
+        return new self($baza, $poarta, $parola, (int) $maxim, (float) $pauza, $gazdaSursa);
+    }
+
+    /** Gazda dată cu --gazda-sursa (`bioscem.ro`, `www.bioscem.ro`, `https://bioscem.ro`, `127.0.0.1:8717`), mică, fără schemă. */
+    private static function gazdaData(string $valoare): string
+    {
+        $valoare = strtolower(trim($valoare));
+        if (preg_match('#^https?://#', $valoare) === 1) {
+            $parti = parse_url(rtrim($valoare, '/'));
+            if (!is_array($parti) || ($parti['host'] ?? '') === '' || isset($parti['user']) || isset($parti['pass']) || (isset($parti['path']) && $parti['path'] !== '')
+                || isset($parti['query']) || isset($parti['fragment'])) {
+                $valoare = '';
+            } else {
+                $valoare = (string) $parti['host'] . (isset($parti['port']) ? ':' . (int) $parti['port'] : '');
+            }
+        }
+        if (preg_match('/^[a-z0-9]([a-z0-9-]{0,62}\.){0,10}[a-z0-9-]{1,63}(:[0-9]{1,5})?$/', $valoare) !== 1) {
+            throw new RefuzAmprenta('--gazda-sursa e gazda site-ului al cărui conținut e copiat (de exemplu --gazda-sursa=bioscem.ro), fără cale');
+        }
+        return $valoare;
+    }
+
+    /** Amprenta (12 hex) gazdei sursă scrisă în capul fișierului: aceeași cu și fără `www.`, fără să scrie gazda. */
+    public static function amprentaGazdei(string $gazda): string
+    {
+        return substr(sha1(self::faraWww(strtolower(trim($gazda)))), 0, 12);
     }
 
     /** Adresa e una pe care unealta o cere? (calea, cu interogarea; GET) */
@@ -219,6 +259,7 @@ final class AmprentaSite
     {
         $inceput = microtime(true);
         $this->spune('Amprenta site-ului (WP-11): ' . $this->schema . '://' . $this->gazda . ($this->poarta !== null ? ', cu parola porții' : '')
+            . ($this->gazdaSursa !== null ? ', conținutul copiat de pe ' . $this->gazdaSursa . ' (--gazda-sursa: adresele lui sunt ale acestui site)' : '')
             . '; GET, fără cookie-uri, ' . self::USER_AGENT . ', pauză ' . rtrim(rtrim(number_format($this->pauza, 3, '.', ''), '0'), '.') . ' s');
         $randuri = [];
         $surse = [];
@@ -246,6 +287,13 @@ final class AmprentaSite
         }
         if ($prima['cod'] === 429) {
             return $this->opreste('poarta a răspuns 429 (prea multe încercări de la această adresă): aștepți 10 minute');
+        }
+        $campuriPrima = self::campuri($prima['corp'], $prima['tip'], $this->gazde);
+        if ($campuriPrima['copie'] && $this->gazdaSursa === null) {
+            // Conținutul copiei vine de pe site-ul copiat, cu linkurile lui absolute: fără gazda lui, ar ieși adrese străine.
+            return $this->opreste('e o copie de verificare (bannerul ei în prima pagină): dă și gazda site-ului copiat, de exemplu '
+                . '--gazda-sursa=bioscem.ro, ca linkurile absolute din conținutul copiat (descrieri, pagini, canonical-uri puse de mână) '
+                . 'să fie ale copiei, ca pe site-ul copiat');
         }
         $inexistenta = self::PREFIX_INEXISTENTA . $this->aleator;
         foreach (self::FIXE as $cale) {
@@ -281,7 +329,6 @@ final class AmprentaSite
             $adauga($cale, 'harta');
         }
         // Linkurile din prima pagină.
-        $campuriPrima = self::campuri($prima['corp'], $prima['tip'], $this->gazda);
         foreach ($campuriPrima['linkuri_cai'] as $cale) {
             $adauga($cale, 'link');
         }
@@ -306,17 +353,11 @@ final class AmprentaSite
             $randuri[$cale] = $this->rand($cale, $deUnde, $r);
             $surse[$deUnde] = ($surse[$deUnde] ?? 0) + 1;
         }
-        // Pozele de distribuire găsite în pagini (aceleași pe ambele site-uri: primele după adresă).
-        $poze = [];
-        foreach ($randuri as $rand) {
-            $og = (string) $rand['og_cale'];
-            if ($og !== '' && str_starts_with($og, '/og/')) {
-                $poze[$og] = true;
-            }
-        }
-        ksort($poze, SORT_STRING);
-        foreach (array_slice(array_keys($poze), 0, self::OG_MAXIM) as $cale) {
-            if (count($randuri) >= $this->maxim || isset($randuri[$cale])) {
+        // Pozele de distribuire găsite în pagini (aceleași pe ambele site-uri: primele după adresa fără versiune).
+        $poze = self::pozeDeCerut($randuri);
+        $vazute = array_flip(array_map(static fn ($c): string => self::faraVersiune((string) $c), array_keys($randuri)));
+        foreach ($poze as $cale) {
+            if (count($randuri) >= $this->maxim || isset($vazute[self::faraVersiune($cale)])) {
                 continue;
             }
             $randuri[$cale] = $this->rand($cale, 'og', $this->cereCuPauza($cale));
@@ -332,7 +373,7 @@ final class AmprentaSite
             $coduri[(string) $rand['cod']] = ($coduri[(string) $rand['cod']] ?? 0) + 1;
         }
         ksort($coduri);
-        FisierAmprenta::scrie($iesire, array_values($randuri), $copie);
+        FisierAmprenta::scrie($iesire, array_values($randuri), $copie, self::amprentaGazdei($this->gazdaSursa ?? $this->gazda));
         $this->spune('copie de verificare (bannerul ei în pagini): ' . ($copie ? 'DA' : 'NU'));
         $this->spune('adrese: ' . count($randuri) . ' (fixe ' . ($surse['fix'] ?? 0) . ', din hartă ' . ($surse['harta'] ?? 0) . ', linkuri din prima pagină '
             . ($surse['link'] ?? 0) . ', categorii vechi ' . ($surse['categorie-veche'] ?? 0) . ', poze de distribuire ' . ($surse['og'] ?? 0) . ')'
@@ -422,7 +463,7 @@ final class AmprentaSite
         ];
     }
 
-    /** Calea (cu interogarea) unei adrese de pe aceeași gazdă (cu sau fără www.), sau null. */
+    /** Calea (cu interogarea) unei adrese de pe gazda site-ului (sau gazda sursă; cu sau fără www.), sau null. */
     private function caleDeAici(string $adresa): ?string
     {
         $adresa = trim(html_entity_decode($adresa, ENT_QUOTES | ENT_XML1, 'UTF-8'));
@@ -434,10 +475,51 @@ final class AmprentaSite
             return null;
         }
         $gazda = strtolower((string) ($parti['host'] ?? '')) . (isset($parti['port']) ? ':' . (int) $parti['port'] : '');
-        if (self::faraWww($gazda) !== self::faraWww($this->gazda)) {
+        if (!self::eGazdaSitului($gazda, $this->gazde)) {
             return null;
         }
         return self::faraFragment(($parti['path'] ?? '/') . (isset($parti['query']) ? '?' . $parti['query'] : ''));
+    }
+
+    /** @param list<string> $gazde */
+    private static function eGazdaSitului(string $gazda, array $gazde): bool
+    {
+        if ($gazda === '') {
+            return false;
+        }
+        foreach ($gazde as $g) {
+            if (self::faraWww($gazda) === self::faraWww(strtolower((string) $g))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Pozele de distribuire de cerut (cel mult OG_MAXIM, căile din pagini): primele după calea fără versiunea fișierului
+     * (`/og/{V}/…`), deci aceleași pe două site-uri cu aceleași poze, oricare ar fi data fișierelor; o poză văzută cu două
+     * versiuni se cere o singură dată.
+     *
+     * @param iterable<array<string, string|int|bool>> $randuri
+     * @return list<string>
+     */
+    public static function pozeDeCerut(iterable $randuri): array
+    {
+        $poze = [];
+        foreach ($randuri as $rand) {
+            $og = (string) ($rand['og_cale'] ?? '');
+            if ($og !== '' && str_starts_with($og, '/og/')) {
+                $poze[self::faraVersiune($og)] ??= $og;
+            }
+        }
+        ksort($poze, SORT_STRING);
+        return array_values(array_slice($poze, 0, self::OG_MAXIM));
+    }
+
+    /** O cale `/og/<12 hex>/…` cu versiunea pozei scoasă (`/og/{V}/…`); celelalte căi rămân. */
+    private static function faraVersiune(string $cale): string
+    {
+        return (string) preg_replace('#^/og/[0-9a-f]{12}/#', '/og/{V}/', $cale);
     }
 
     private static function faraFragment(string $cale): string
@@ -479,26 +561,29 @@ final class AmprentaSite
      */
     private function rand(string $cale, string $deUnde, array $r): array
     {
-        return self::randDin($cale, $deUnde, $r, $this->gazda, [$this->aleator]);
+        return self::randDin($cale, $deUnde, $r, $this->gazde, [$this->aleator]);
     }
 
     /**
-     * Rândul amprentei, fără rețea (îl folosesc și testele): câmpurile din răspuns, cu gazda și textele aleatoare normalizate.
+     * Rândul amprentei, fără rețea (îl folosesc și testele): câmpurile din răspuns, cu gazdele site-ului (a lui și gazda
+     * sursă), textele aleatoare și versiunea pozelor de distribuire normalizate (și în cale: același rând oricare ar fi data
+     * fișierului).
      *
      * @param array{cod: int, location: string, tip: string, x_robots: string, corp: string} $r
+     * @param list<string> $gazde
      * @param list<string> $aleatoare
      * @return array<string, string|int|bool>
      */
-    public static function randDin(string $cale, string $deUnde, array $r, string $gazda, array $aleatoare): array
+    public static function randDin(string $cale, string $deUnde, array $r, array $gazde, array $aleatoare): array
     {
-        $campuri = self::campuri($r['corp'], $r['tip'], $gazda);
+        $campuri = self::campuri($r['corp'], $r['tip'], $gazde);
         $text = self::eText($r['tip']);
-        $corp = $text ? self::normalizeazaCorp($r['corp'], $gazda, $aleatoare) : $r['corp'];
+        $corp = $text ? self::normalizeazaCorp($r['corp'], $gazde, $aleatoare) : $r['corp'];
         return [
-            'cale' => str_replace($aleatoare, '{ALEATOR}', $cale),
+            'cale' => self::faraVersiune(str_replace($aleatoare, '{ALEATOR}', $cale)),
             'de_unde' => $deUnde,
             'cod' => $r['cod'],
-            'location' => $r['location'] !== '' ? str_replace($aleatoare, '{ALEATOR}', self::adresa($r['location'], $gazda)) : '-',
+            'location' => $r['location'] !== '' ? str_replace($aleatoare, '{ALEATOR}', self::adresa($r['location'], $gazde)) : '-',
             'tip' => $r['tip'] !== '' ? $r['tip'] : '-',
             'corp' => sha1($corp),
             'titlu' => $campuri['titlu'],
@@ -520,15 +605,25 @@ final class AmprentaSite
         return preg_match('#(text/|html|xml|json|javascript|ecmascript)#', $tip) === 1;
     }
 
-    /** Corpul normalizat (tools/dev/lib/normalizeaza-html.php, plus versiunea pozelor de distribuire). */
-    public static function normalizeazaCorp(string $corp, string $gazda, array $aleatoare): string
+    /**
+     * Corpul normalizat (tools/dev/lib/normalizeaza-html.php, cu gazdele site-ului, plus versiunea pozelor de distribuire).
+     *
+     * @param list<string> $gazde
+     * @param list<string> $aleatoare
+     */
+    public static function normalizeazaCorp(string $corp, array $gazde, array $aleatoare): string
     {
-        $corp = normalizeaza_html($corp, ['fara_banner' => true, 'gazde' => [$gazda], 'aleatoare' => $aleatoare]);
+        $corp = normalizeaza_html($corp, ['fara_banner' => true, 'gazde' => $gazde, 'aleatoare' => $aleatoare]);
         return normalizeaza_inlocuieste('#/og/[0-9a-f]{12}/#', '/og/{V}/', $corp);
     }
 
-    /** O adresă scrisă cu `{GAZDA}` când e a site-ului (sau relativă), întreagă altfel; `/og/<versiune>/` → `/og/{V}/`. */
-    public static function adresa(string $adresa, string $gazda): string
+    /**
+     * O adresă scrisă cu `{GAZDA}` când e a site-ului (relativă, sau pe una dintre gazdele lui: a lui și gazda sursă),
+     * întreagă altfel; `/og/<versiune>/` → `/og/{V}/`.
+     *
+     * @param list<string> $gazde
+     */
+    public static function adresa(string $adresa, array $gazde): string
     {
         $adresa = trim(html_entity_decode($adresa, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
         if ($adresa === '') {
@@ -539,7 +634,7 @@ final class AmprentaSite
         } else {
             $parti = parse_url(str_starts_with($adresa, '//') ? 'https:' . $adresa : $adresa);
             $g = is_array($parti) ? strtolower((string) ($parti['host'] ?? '')) . (isset($parti['port']) ? ':' . (int) $parti['port'] : '') : '';
-            $rezultat = $g !== '' && self::faraWww($g) === self::faraWww(strtolower($gazda))
+            $rezultat = self::eGazdaSitului($g, $gazde)
                 ? NORMALIZEAZA_GAZDA . ($parti['path'] ?? '/') . (isset($parti['query']) ? '?' . $parti['query'] : '')
                 : $adresa;
         }
@@ -549,12 +644,14 @@ final class AmprentaSite
     /**
      * Câmpurile unei pagini HTML (din corpul fără banner): titlul, robots, canonical, H1 (număr și amprentă), tipurile JSON-LD
      * (sortate, de la orice adâncime), linkurile interne (număr; și căile lor, pentru primul nivel al căutării), formularele
-     * (număr și amprenta acțiunilor), poza de distribuire, dacă e o copie de verificare.
+     * (număr și amprenta acțiunilor), poza de distribuire, dacă e o copie de verificare. „Interne” sunt adresele relative și
+     * cele de pe gazdele site-ului (a lui și gazda sursă).
      *
+     * @param list<string> $gazde
      * @return array{titlu: string, robots: string, canonical: string, h1: string, jsonld: string, linkuri: string, linkuri_cai: list<string>,
      *               formulare: string, og_image: string, og_cale: string, copie: bool}
      */
-    public static function campuri(string $corp, string $tip, string $gazda): array
+    public static function campuri(string $corp, string $tip, array $gazde): array
     {
         $gol = ['titlu' => '-', 'robots' => '-', 'canonical' => '-', 'h1' => '-', 'jsonld' => '-', 'linkuri' => '-', 'linkuri_cai' => [], 'formulare' => '-',
             'og_image' => '-', 'og_cale' => '', 'copie' => false];
@@ -581,7 +678,7 @@ final class AmprentaSite
         foreach ($x->query('//link[@href]') ?: [] as $nod) {
             $rel = ' ' . strtolower($text((string) $nod->getAttribute('rel'))) . ' ';
             if (str_contains($rel, ' canonical ')) {
-                $canonical = self::adresa((string) $nod->getAttribute('href'), $gazda);
+                $canonical = self::adresa((string) $nod->getAttribute('href'), $gazde);
                 break;
             }
         }
@@ -608,7 +705,7 @@ final class AmprentaSite
             if ($href === '' || str_starts_with($href, '#') || preg_match('/^(mailto|tel|javascript|data|sms|whatsapp):/i', $href) === 1) {
                 continue;
             }
-            $adresa = self::adresa($href, $gazda);
+            $adresa = self::adresa($href, $gazde);
             if (str_starts_with($adresa, NORMALIZEAZA_GAZDA)) {
                 $linkuri++;
                 $cai[] = self::faraFragment(substr($adresa, strlen(NORMALIZEAZA_GAZDA)));
@@ -619,13 +716,13 @@ final class AmprentaSite
         }
         $actiuni = [];
         foreach ($x->query('//form') ?: [] as $nod) {
-            $actiuni[] = strtolower($text((string) $nod->getAttribute('method'))) . ' ' . self::adresa((string) $nod->getAttribute('action'), $gazda);
+            $actiuni[] = strtolower($text((string) $nod->getAttribute('method'))) . ' ' . self::adresa((string) $nod->getAttribute('action'), $gazde);
         }
         sort($actiuni, SORT_STRING);
         $og = '-';
         $ogCale = '';
         foreach ($x->query('//meta[@property="og:image"]/@content') ?: [] as $nod) {
-            $og = self::adresa((string) $nod->nodeValue, $gazda);
+            $og = self::adresa((string) $nod->nodeValue, $gazde);
             $brut = (string) $nod->nodeValue;
             $parti = parse_url($brut);
             if (str_starts_with($og, NORMALIZEAZA_GAZDA)) {
@@ -668,16 +765,25 @@ final class AmprentaSite
     }
 }
 
-/** Fișierul amprentei: un TSV cu un rând de cap (versiunea, copia de verificare, numărul de adrese, data) și coloanele. */
+/**
+ * Fișierul amprentei: un TSV cu un rând de cap (versiunea, copia de verificare, numărul de adrese, amprenta gazdei sursă,
+ * data) și coloanele.
+ */
 final class FisierAmprenta
 {
     public const CAP = '# amprenta-site ';
 
-    /** @param list<array<string, string|int|bool>> $randuri */
-    public static function scrie(string $fisier, array $randuri, bool $copie): void
+    /**
+     * @param list<array<string, string|int|bool>> $randuri
+     * @param string $sursa amprenta gazdei sursă (AmprentaSite::amprentaGazdei: --gazda-sursa sau, fără ea, gazda amprentată)
+     */
+    public static function scrie(string $fisier, array $randuri, bool $copie, string $sursa): void
     {
-        $text = self::CAP . AmprentaSite::VERSIUNE . ' | copie de verificare: ' . ($copie ? 'DA' : 'NU') . ' | adrese: ' . count($randuri) . ' | '
-            . gmdate('Y-m-d\TH:i:s\Z') . "\n" . implode("\t", AmprentaSite::COLOANE) . "\n";
+        if (preg_match('/^[0-9a-f]{12}$/', $sursa) !== 1) {
+            throw new RefuzAmprenta('amprenta gazdei sursă nu e bună');
+        }
+        $text = self::CAP . AmprentaSite::VERSIUNE . ' | copie de verificare: ' . ($copie ? 'DA' : 'NU') . ' | adrese: ' . count($randuri) . ' | sursa: '
+            . $sursa . ' | ' . gmdate('Y-m-d\TH:i:s\Z') . "\n" . implode("\t", AmprentaSite::COLOANE) . "\n";
         foreach ($randuri as $rand) {
             $valori = [];
             foreach (AmprentaSite::COLOANE as $coloana) {
@@ -699,16 +805,19 @@ final class FisierAmprenta
         }
     }
 
-    /** @return array{copie: bool, adrese: int, data: string, randuri: array<string, array<string, string>>} */
+    /** @return array{copie: bool, adrese: int, sursa: string, data: string, randuri: array<string, array<string, string>>} */
     public static function citeste(string $fisier): array
     {
         $text = is_file($fisier) && is_readable($fisier) ? (string) @file_get_contents($fisier) : '';
         $linii = explode("\n", rtrim($text, "\n"));
-        if (count($linii) < 2 || preg_match('/^# amprenta-site (\d+) \| copie de verificare: (DA|NU) \| adrese: (\d+) \| (\S+)$/', $linii[0], $m) !== 1) {
+        if (count($linii) < 2 || preg_match('/^# amprenta-site (\d+) \| /', $linii[0], $v) !== 1) {
             throw new RefuzAmprenta('fișierul ' . basename($fisier) . ' nu e o amprentă scrisă de amprenta-site.php');
         }
-        if ((int) $m[1] !== AmprentaSite::VERSIUNE) {
-            throw new RefuzAmprenta('fișierul ' . basename($fisier) . ' e de altă versiune a amprentei (' . $m[1] . '); fă-l din nou cu această unealtă');
+        if ((int) $v[1] !== AmprentaSite::VERSIUNE) {
+            throw new RefuzAmprenta('fișierul ' . basename($fisier) . ' e de altă versiune a amprentei (' . $v[1] . '); fă-l din nou cu această unealtă');
+        }
+        if (preg_match('/^# amprenta-site \d+ \| copie de verificare: (DA|NU) \| adrese: (\d+) \| sursa: ([0-9a-f]{12}) \| (\S+)$/', $linii[0], $m) !== 1) {
+            throw new RefuzAmprenta('fișierul ' . basename($fisier) . ' nu e o amprentă scrisă de amprenta-site.php');
         }
         if ($linii[1] !== implode("\t", AmprentaSite::COLOANE)) {
             throw new RefuzAmprenta('fișierul ' . basename($fisier) . ' are alte coloane');
@@ -722,10 +831,10 @@ final class FisierAmprenta
             $rand = array_combine(AmprentaSite::COLOANE, $valori);
             $randuri[$rand['cale']] = $rand;
         }
-        if (count($randuri) !== (int) $m[3]) {
+        if (count($randuri) !== (int) $m[2]) {
             throw new RefuzAmprenta('fișierul ' . basename($fisier) . ' nu are câte adrese spune capul lui');
         }
-        return ['copie' => $m[2] === 'DA', 'adrese' => count($randuri), 'data' => $m[4], 'randuri' => $randuri];
+        return ['copie' => $m[1] === 'DA', 'adrese' => count($randuri), 'sursa' => $m[3], 'data' => $m[4], 'randuri' => $randuri];
     }
 }
 
@@ -738,6 +847,13 @@ final class ComparatieAmprente
     {
         $A = FisierAmprenta::citeste($a);
         $B = FisierAmprenta::citeste($b);
+        if ($A['sursa'] !== $B['sursa']) {
+            // Conținutul (descrierile, paginile, canonical-urile puse de mână) are linkuri absolute spre site-ul lui de origine:
+            // cu alte gazde sursă ar ieși alte linkuri interne, alte adrese cerute și alt canonical, oricare ar fi codul.
+            throw new RefuzAmprenta('amprentele au alte gazde sursă (A ' . $A['sursa'] . ', B ' . $B['sursa'] . '): conținutul unui site pornit pe '
+                . 'conținutul altuia (copia de verificare) are linkuri absolute spre site-ul copiat, deci amprenta lui se face cu '
+                . '--gazda-sursa=<gazda site-ului copiat>, de exemplu --gazda-sursa=bioscem.ro; fă din nou amprenta căreia îi lipsește');
+        }
         $unaCopie = $A['copie'] !== $B['copie'];
         if ($strict && $unaCopie) {
             throw new RefuzAmprenta('--strict compară doar două amprente de același fel (amândouă ale unei copii de verificare, sau niciuna): '
@@ -748,7 +864,7 @@ final class ComparatieAmprente
         };
         $spune('Amprentele: A ' . basename($a) . ' (copie de verificare: ' . ($A['copie'] ? 'DA' : 'NU') . ', ' . $A['adrese'] . ' adrese, ' . $A['data'] . ') și B '
             . basename($b) . ' (copie de verificare: ' . ($B['copie'] ? 'DA' : 'NU') . ', ' . $B['adrese'] . ' adrese, ' . $B['data'] . ')'
-            . ($strict ? '; cu --strict (și corpul)' : '; câmpurile structurale (corpul doar cu --strict)'));
+            . '; aceeași gazdă sursă' . ($strict ? '; cu --strict (și corpul)' : '; câmpurile structurale (corpul doar cu --strict)'));
         $campuri = AmprentaSite::STRUCTURALE;
         if ($strict) {
             $campuri[] = 'corp';

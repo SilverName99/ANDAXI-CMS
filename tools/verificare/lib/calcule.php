@@ -43,8 +43,16 @@ declare(strict_types=1);
  * pe datele demo, după tipul cazului). Textul se salvează și în `storage/verificare/sonde/calcule-<profil>-<data>.txt`
  * (local: `$CMS_DEV_DIR/calcule-raport.txt`).
  *
- * Cod de ieșire: 0 „REZULTAT: TRECE” (niciun caz diferit, nicio eroare în niciun cod); 1 „REZULTAT: PICĂ” (sau o
- * oprire după ce cupoanele au fost schimbate, puse la loc); 2 refuzat, nimic schimbat.
+ * Diferențele voite (doar local, `--declarate=<fișier.json>`, ca listele `$porturiBioscem` ale comparației paginilor): o
+ * schimbare făcută intenționat în codul comun (de exemplu transportul gratuit pe produs din WP-20, pe o comandă demo cu un
+ * astfel de produs) se declară pe comanda ei, cu toate câmpurile care diferă (`shipping`, `total`, `linie.price`,
+ * `erp.<cheie>` …, exact, nici mai multe, nici mai puține) și motivul. Un caz declarat care diferă exact la câmpurile lui
+ * se numără „declarat”, nu „diferit”; o declarație nepotrivită (alte câmpuri, nicio diferență, o comandă care nu e caz, o
+ * eroare) face comparația să pice, ca o diferență nedeclarată. Pe site-ul de verificare nu există declarații: acolo orice
+ * diferență pică.
+ *
+ * Cod de ieșire: 0 „REZULTAT: TRECE” (niciun caz diferit nedeclarat, nicio declarație nepotrivită, nicio eroare în niciun
+ * cod); 1 „REZULTAT: PICĂ” (sau o oprire după ce cupoanele au fost schimbate, puse la loc); 2 refuzat, nimic schimbat.
  *
  * Sintaxa e PHP 8.3 (php_min); punctul de intrare verifică versiunea cu sintaxă PHP 7.0.
  */
@@ -74,6 +82,9 @@ final class ComparaCalcule
     /** Câmpurile de dincolo de sumar: recalculul transportului din admin și punctele promise. */
     public const CAMPURI_ALTE = ['transport_admin', 'transport_admin_0', 'puncte_estimate', 'puncte_estimate_salvat'];
 
+    /** Câmpurile de dincolo de sumar care pot fi declarate (`--declarate`) ca diferențe voite, pe lângă CAMPURI, CAMPURI_ALTE și `erp.<cheie>`. */
+    private const CAMPURI_DECLARABILE = ['cupon_ok', 'puncte_aplicate', 'linii'];
+
     /** Coloanele cupoanelor schimbate pe durata comparației (și puse la loc). */
     private const COLOANE_CUPON = ['is_active', 'starts_at', 'ends_at', 'max_uses_total', 'used_at'];
 
@@ -99,6 +110,8 @@ final class ComparaCalcule
     /** @var array<string, mixed>|null Cupoanele de dinainte (pentru punerea la loc). */
     private ?array $cupoaneOriginale = null;
     private string $fisierCupoane = '';
+    /** @var list<array{comanda: int, campuri: list<string>, motiv: string}>|null Diferențele voite (--declarate, doar local). */
+    private ?array $declarate = null;
 
     private function __construct(string $radacina)
     {
@@ -145,7 +158,7 @@ final class ComparaCalcule
                 : '; cupoanele NU s-au putut pune la loc: rulează din nou comanda (le pune la loc la început)') : '; nu am schimbat nimic'));
             return $avea ? 1 : 2;
         });
-        $opt = Rulare::argumente($argv, ['local', 'profil', 'cod-vechi', 'cod-nou', 'php-vechi', 'n', 'fara-cupoane-valide', 'prin-fisiere']);
+        $opt = Rulare::argumente($argv, ['local', 'profil', 'cod-vechi', 'cod-nou', 'php-vechi', 'n', 'fara-cupoane-valide', 'prin-fisiere', 'declarate']);
         $this->profil = is_string($opt['profil'] ?? null) ? (string) $opt['profil'] : 'bioscem';
         if (!in_array($this->profil, self::PROFILURI, true)) {
             throw new Refuz('profil necunoscut' . (preg_match('/^[a-z]{1,20}$/', $this->profil) === 1 ? ' (' . $this->profil . ')' : '')
@@ -158,6 +171,12 @@ final class ComparaCalcule
         $this->prinFisiere = isset($opt['prin-fisiere']);
         $cupoaneValide = !isset($opt['fara-cupoane-valide']);
 
+        if (isset($opt['declarate'])) {
+            if (!isset($opt['local'])) {
+                throw new Refuz('--declarate e doar pentru testul local (--local): pe site-ul de verificare orice diferență pică');
+            }
+            $this->declarate = self::citesteDeclarate(is_string($opt['declarate']) ? $opt['declarate'] : '');
+        }
         if (isset($opt['local'])) {
             $this->pregatesteLocal($opt);
         } else {
@@ -809,6 +828,84 @@ final class ComparaCalcule
     }
 
     // ───────────────────────────────────────────────────────────
+    // Diferențele declarate (--declarate, doar local)
+    // ───────────────────────────────────────────────────────────
+
+    /**
+     * Fișierul diferențelor voite: o listă JSON (poate fi goală) de `{"comanda": <id>, "campuri": [...], "motiv": "..."}`,
+     * fiecare comandă o dată, câmpurile cu numele din raport (`shipping`, `linie.price`, `transport_admin`, `erp.transport` …;
+     * `erp` singur nu: se numesc cheile payload-ului). Orice altceva e refuz, înaintea oricărei schimbări.
+     *
+     * @return list<array{comanda: int, campuri: list<string>, motiv: string}>
+     */
+    private static function citesteDeclarate(string $fisier): array
+    {
+        if ($fisier === '' || !is_file($fisier) || !is_readable($fisier)) {
+            throw new Refuz('--declarate=<fișier.json>: fișierul diferențelor declarate nu există');
+        }
+        $date = json_decode((string) file_get_contents($fisier), true);
+        if (!is_array($date) || ($date !== [] && array_keys($date) !== range(0, count($date) - 1))) {
+            throw new Refuz('fișierul diferențelor declarate nu e o listă JSON ([{"comanda": …, "campuri": […], "motiv": "…"}])');
+        }
+        $permise = array_merge(self::CAMPURI, self::CAMPURI_DECLARABILE, self::CAMPURI_ALTE,
+            array_map(static fn (string $c): string => 'linie.' . $c, array_merge(self::CAMPURI_LINIE, ['bbd_key'])));
+        $declarate = [];
+        $comenzi = [];
+        foreach ($date as $k => $d) {
+            $nr = '#' . ($k + 1);
+            if (!is_array($d) || array_diff(array_keys($d), ['comanda', 'campuri', 'motiv']) !== []) {
+                throw new Refuz('declarația ' . $nr . ' are alte chei decât comanda, campuri, motiv');
+            }
+            if (!is_int($d['comanda'] ?? null) || $d['comanda'] < 1) {
+                throw new Refuz('declarația ' . $nr . ': comanda e id-ul comenzii (un număr întreg pozitiv)');
+            }
+            if (isset($comenzi[$d['comanda']])) {
+                throw new Refuz('declarația ' . $nr . ': comanda e declarată de două ori (o declarație pe comandă, cu toate câmpurile ei)');
+            }
+            $campuri = $d['campuri'] ?? null;
+            if (!is_array($campuri) || $campuri === [] || array_keys($campuri) !== range(0, count($campuri) - 1)) {
+                throw new Refuz('declarația ' . $nr . ': campuri e lista câmpurilor care diferă (cel puțin unul)');
+            }
+            foreach ($campuri as $camp) {
+                if (!is_string($camp) || (!in_array($camp, $permise, true) && preg_match('/^erp\.([A-Za-z0-9_]{1,60}|\(lipsă\))$/u', $camp) !== 1)) {
+                    throw new Refuz('declarația ' . $nr . ': câmp necunoscut' . (is_string($camp) && preg_match('/^[a-z_.]{1,40}$/', $camp) === 1 ? ' (' . $camp . ')' : '')
+                        . ' (numele din raport: ' . implode(', ', self::CAMPURI) . ', linie.<câmp>, transport_admin …, erp.<cheie>)');
+                }
+            }
+            if (count(array_unique($campuri)) !== count($campuri)) {
+                throw new Refuz('declarația ' . $nr . ': un câmp e scris de două ori');
+            }
+            if (!is_string($d['motiv'] ?? null) || mb_strlen(trim($d['motiv'])) < 10) {
+                throw new Refuz('declarația ' . $nr . ': lipsește motivul (de ce diferă voit, cu WP-ul care a făcut schimbarea)');
+            }
+            sort($campuri, SORT_STRING);
+            $comenzi[$d['comanda']] = true;
+            $declarate[] = ['comanda' => $d['comanda'], 'campuri' => $campuri, 'motiv' => trim($d['motiv'])];
+        }
+        return $declarate;
+    }
+
+    /**
+     * Câmpurile care diferă la un caz, cu numele folosite de declarații: `erp` înlocuit de cheile payload-ului care diferă
+     * (`erp.<cheie>`), sortate.
+     *
+     * @param list<string> $campuri
+     * @param array<string, int> $cheiErp
+     * @return list<string>
+     */
+    private static function campuriExacte(array $campuri, array $cheiErp): array
+    {
+        $exacte = array_values(array_diff($campuri, ['erp']));
+        if (in_array('erp', $campuri, true)) {
+            foreach (array_keys($cheiErp) as $cheie) {
+                $exacte[] = 'erp.' . $cheie;
+            }
+        }
+        sort($exacte, SORT_STRING);
+        return $exacte;
+    }
+
+    // ───────────────────────────────────────────────────────────
     // Raportul
     // ───────────────────────────────────────────────────────────
 
@@ -834,6 +931,13 @@ final class ComparaCalcule
         $cupoaneOk = ['vechi' => 0, 'nou' => 0];
         $puncteFolosite = ['vechi' => 0, 'nou' => 0];
         $faraErori = 0;
+        // Diferențele declarate (--declarate): după comanda cazului; ce s-a găsit pentru fiecare declarație.
+        $declaratiaComenzii = [];
+        foreach ((array) $this->declarate as $k => $d) {
+            $declaratiaComenzii[(int) $d['comanda']] = (int) $k;
+        }
+        $gasitDeclarate = [];
+        $declarateOk = 0;
         foreach ($cazuri as $caz) {
             foreach (explode('+', (string) $caz['tip']) as $t) {
                 $peTip[$t] = ($peTip[$t] ?? 0) + 1;
@@ -847,7 +951,11 @@ final class ComparaCalcule
             if (isset($b['eroare'])) {
                 $eroriNou[(string) $b['eroare']] = ($eroriNou[(string) $b['eroare']] ?? 0) + 1;
             }
+            $kDeclarat = $declaratiaComenzii[(int) $caz['id']] ?? null;
             if (isset($a['eroare']) || isset($b['eroare'])) {
+                if ($kDeclarat !== null) {
+                    $gasitDeclarate[$kDeclarat] = 'eroare în cod';
+                }
                 continue;
             }
             $faraErori++;
@@ -859,7 +967,17 @@ final class ComparaCalcule
                     $puncteFolosite[$parte]++;
                 }
             }
-            $campuri = self::diferente($a, $b, $cheiErp);
+            $cheiCaz = [];
+            $campuri = self::diferente($a, $b, $cheiCaz);
+            if ($kDeclarat !== null) {
+                $exacte = self::campuriExacte($campuri, $cheiCaz);
+                $declarat = (array) $this->declarate[$kDeclarat]['campuri'];
+                if ($exacte === $declarat) {
+                    $gasitDeclarate[$kDeclarat] = true;
+                } else {
+                    $gasitDeclarate[$kDeclarat] = ($exacte === [] ? 'nicio diferență' : 'diferă la: ' . implode(', ', $exacte)) . '; declarat: ' . implode(', ', $declarat);
+                }
+            }
             if (!in_array('erp', $campuri, true)) {
                 $erpIdentice++;
             }
@@ -876,9 +994,17 @@ final class ComparaCalcule
                 $identice++;
                 continue;
             }
+            if ($kDeclarat !== null && ($gasitDeclarate[$kDeclarat] ?? null) === true) {
+                // O diferență voită, declarată exact (câmpurile ei, nici mai multe, nici mai puține).
+                $declarateOk++;
+                continue;
+            }
             $diferite++;
             foreach ($campuri as $camp) {
                 $peCamp[$camp] = ($peCamp[$camp] ?? 0) + 1;
+            }
+            foreach ($cheiCaz as $cheie => $numarChei) {
+                $cheiErp[$cheie] = ($cheiErp[$cheie] ?? 0) + $numarChei;
             }
             $peTipCaz[(string) $caz['tip']] = ($peTipCaz[(string) $caz['tip']] ?? 0) + 1;
         }
@@ -900,13 +1026,25 @@ final class ComparaCalcule
         if ($nrEroriVechi + $nrEroriNou > 0) {
             $this->spune('erori: vechi ' . self::lista($eroriVechi, true) . ' | nou ' . self::lista($eroriNou, true));
         }
+        $nepotrivite = [];
+        if ($this->declarate !== null) {
+            foreach ($this->declarate as $k => $d) {
+                if (($gasitDeclarate[$k] ?? null) !== true) {
+                    $nepotrivite[] = '#' . ($k + 1) . ' (' . (is_string($gasitDeclarate[$k] ?? null) ? $gasitDeclarate[$k] : 'comanda nu e printre cazuri') . ')';
+                }
+            }
+            $this->spune('diferențe declarate (--declarate): ' . $declarateOk . ' potrivite exact | nepotrivite ' . count($nepotrivite));
+            if ($nepotrivite !== []) {
+                $this->spune('declarații nepotrivite: ' . implode(', ', $nepotrivite));
+            }
+        }
         $this->spune('informativ: total nou = total salvat la ' . $totalSalvat . '/' . $faraErori
             . ' (diferențele vin din prețurile, cupoanele și transportul de acum, nu din cod)');
         $this->spune('avertismente PHP: vechi ' . array_sum($vechi['avertismente']) . ', nou ' . array_sum($nou['avertismente'])
             . (array_sum($vechi['avertismente']) + array_sum($nou['avertismente']) > 0
                 ? ' (vechi: ' . self::lista($vechi['avertismente'], true) . '; nou: ' . self::lista($nou['avertismente'], true) . ')' : ''));
         $this->spune('fișiere de sesiune lăsate de lucrători: ' . $sesiuniLasate . ($sesiuniLasate > 0 ? ' (șterse acum)' : ''));
-        $trece = $diferite === 0 && $nrEroriVechi === 0 && $nrEroriNou === 0;
+        $trece = $diferite === 0 && $nrEroriVechi === 0 && $nrEroriNou === 0 && $nepotrivite === [];
         $this->spune('REZULTAT: ' . ($trece ? 'TRECE' : 'PICĂ'));
         $this->salveaza();
         return $trece ? 0 : 1;
