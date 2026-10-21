@@ -191,9 +191,9 @@ $PHP tools/verificare/sterge.php
 
 Șterge tabelele bazei copiei, emailurile păstrate ca fișiere, cache-ul, sesiunile și copia codului vechi
 (`~/domains/<domeniul-verificare>/cod-vechi/`). Rămân `.env`, licența, cheia ei și rezultatele de la
-pasul 5 (pe care le ștergi tu, după ce ni le trimiți). Refuză să șteargă o bază care nu e o copie de
-verificare sau pe care o folosește alt site din cont. Dacă uiți, copia se închide singură după 7 zile
-(decizia D1): site-ul arată „Copia de verificare a expirat”.
+pasul 5 (pe care le ștergi tu, după ce ni le trimiți). Șterge la fel și o încărcare oprită la jumătate.
+Refuză să șteargă o bază care nu e o copie de verificare sau pe care o folosește alt site din cont. Dacă
+uiți, copia se închide singură după 7 zile (decizia D1): site-ul arată „Copia de verificare a expirat”.
 
 ### Datele de pe copie și cine le vede
 
@@ -203,8 +203,9 @@ verificare sau pe care o folosește alt site din cont. Dacă uiți, copia se în
   „[VERIFICARE]” în subiect, cel mult 100 pe zi; în fiecare email un rând arată cui i-ar fi plecat pe
   site.
 - **Paginile publice** (cu parola porții) le vedem și noi, ca să verificăm cum arată (decizia D8);
-  bannerul roșu „SITE DE VERIFICARE” de sus arată acolo adresa ta doar pe jumătate. **Adminul copiei e al
-  tău**: conturile de admin le face încărcarea, pentru tine.
+  bannerul roșu „SITE DE VERIFICARE” de sus arată acolo adresa ta doar pe jumătate, și la fel pe pagina de
+  logare a adminului. **Adminul copiei e al tău**: conturile de admin le face încărcarea, pentru tine; abia
+  după logare bannerul arată adresa întreagă.
 - **Personalul clienților** (decizia OD-39): repetă noul admin doar pe o copie demonstrativă, cu pachetul
   site-ului lor și fără date personale (`incarca.php --demo --pachet=<site>`, WP-09), sau pe copia
   anonimizată a propriului lor site, într-o sesiune separată; **niciodată pe datele altui client**. Pe
@@ -334,7 +335,7 @@ de comandă (cronurile citesc același `.env`).
 | 11 | Etichetele terților | `views/layout.php` (`$acceptaUrmarire`, `google-site-verification`) și `ChatLive::activ` | fără Google Analytics, Tag Manager, Google Ads, Clarity, tawk.to și verificarea Google, orice ar scrie în setări și chiar cu „Accept toate” |
 | 12 | Login cu Google | `SiteController::googleOAuthSettings` | oprit (`/auth/google` → `/login`) |
 | 13 | Pozele | `public/index.php` (fișierele încărcate) și `ImagineDistribuire` (`/og/…`) → `Verificare::redirectUploadLipsa()` | pozele nu se copiază: una care lipsește → 302 spre `VERIFICARE_UPLOADS_DIN` + aceeași cale (doar căi `/uploads/…`, `/og/…` fără „..”, „//”, „\\”, caractere de control); paginile arată la fel, fără inoduri folosite și fără fișiere cu date personale pe copie |
-| 14 | Bannerul | `views/layout.php` și `views/admin/layout.php` → `Verificare::banner()` | primul în pagină: „SITE DE VERIFICARE — date anonimizate, plăți de test, emailurile ajung doar la …” (pe site adresa ascunsă pe jumătate, D8; în admin întreagă); `id="verificare-banner"`, ca o comparație a paginilor cu site-ul adevărat (WP-11) să-l scoată |
+| 14 | Bannerul | `views/layout.php` și `views/admin/layout.php` → `Verificare::banner()` | primul în pagină: „SITE DE VERIFICARE — date anonimizate, plăți de test, emailurile ajung doar la …” (pe site și pe paginile adminului de dinaintea logării, ca `/admin/login`, adresa ascunsă pe jumătate, D8; întreagă doar cu adminul logat: layout-ul adminului dă `banner('admin')` doar după `Auth::check()`); `id="verificare-banner"`, ca o comparație a paginilor cu site-ul adevărat (WP-11) să-l scoată |
 
 Din fluxurile aduse din Bioscem în WP-R: fluxul Google Merchant (`/feed/google-merchant.xml`) e în spatele porții
 (Google primește 401, robots.txt nu-l mai lasă), iar blocul avertismentului pentru produsele refrigerate din
@@ -377,6 +378,14 @@ pe care o termină rularea următoare), apoi `incarcat-la`, `storage/verificare/
 decât `~/domains/<gazdă>/public_html`, un `.env` fără `SITE_COPIE_VERIFICARE=1` sau fără `DB_DATABASE`, o bază cu tabele fără
 `_verificare` sau scrisă în `.env`-ul altui site din cont (`tools/verificare/lib/cont.php`, ca la `configureaza.php`,
 `stare.php` și `licenta.php`), un răspuns care nu e „da”.
+
+**Înțelegerea cu încărcarea (WP-09).** `sterge.php` recunoaște copia doar după tabelul `_verificare`, deci
+încărcarea îl scrie **primul**: imediat după verificarea că baza țintă e goală (sau are deja `_verificare`), înaintea
+oricărui `CREATE TABLE` sau `INSERT` cu date, cu `anonimizat = 0` (și pasul la care a ajuns, pentru `--reia`); abia
+la sfârșit, după aserțiuni, pune `anonimizat = 1` și scrie `incarcat-la`. Așa o încărcare oprită la jumătate (procesul
+omorât de găzduire, o eroare înaintea ștergerii automate) rămâne o copie de verificare: poarta arată tot „Copia de
+verificare lipsește” (fără `incarcat-la`), iar `sterge.php`, `incarca.php --reincarca` sau `--reia` o pot lua de la
+capăt fără phpMyAdmin. `sterge.php` nu se uită la `anonimizat`: orice bază cu `_verificare` se șterge.
 
 ### Adresa vizitatorului (`IpClient`)
 
@@ -557,7 +566,8 @@ rulează singur testul T2-live: baseline-ul pe schema live a site-ului, pe Maria
 
 ### Ce urmează
 
-- **WP-09**: `incarca.php --din=bioscem` (copia anonimizată în timp ce se citește, `_verificare`, `incarcat-la`,
+- **WP-09**: `incarca.php --din=bioscem` (copia anonimizată în timp ce se citește, `_verificare` scris primul, cu
+  `anonimizat = 0`, și `anonimizat = 1` + `incarcat-la` la final, ca la „Ștergerea”,
   emailurile `@verificare.invalid`, adminul proprietarului, licența `bioscem` prin `licenta.php`, codul vechi în
   `cod-vechi/`) și `incarca.php --demo --pachet=<site>` (pentru repetițiile personalului, OD-39).
 - **WP-11**: calculele vechi față de cele noi pe copie (`compara-calcule.php`) și amprenta paginilor
@@ -583,9 +593,12 @@ login-ul Google, checkout-ul fără EuPlătesc și BT, Stripe și tariful FAN re
 cu emailurile ei (clientul și adminul) doar la proprietar prin căsuța copiei, limita de 100, fișierele `.eml`, fiecare
 loc din cod din linia de comandă; apoi `SITE_COPIE_VERIFICARE=0` cu aceleași setări (etichetele, Google, EuPlătesc și
 BT apar: testul vede ce opresc gărzile); la urmă `licenta.php` și `sterge.php` (refuzurile, ștergerea, o legătură
-spre afară neurmată). Plasa de siguranță e `tools/dev/lib/gaura-neagra.php`: proxy-ul copiei (`CMS_DEV_PORT`+12)
-și adresa „interzisă” (+14: SMTP-ul, ERP-ul, FAN-ul și banca din setări) notează fiecare conexiune, iar +13 e căsuța
-copiei, un server SMTP care păstrează mesajele; la final trebuie să fi ajuns acolo doar drumurile permise încercate
+spre afară neurmată, o încărcare oprită la jumătate: tabele cu date și `_verificare` cu `anonimizat = 0`). Bannerul
+se verifică pe o pagină publică și pe `/admin/login` (adresa ascunsă pe jumătate), apoi în admin după logare
+(întreagă). Cere baza de dezvoltare făcută de `tools/dev/instaleaza.sh` (o copiază în `cms_verif_copie`): fără ea,
+sau cu o bază fără `_platforma_stare` și `settings`, se oprește de la început cu acest motiv. Plasa de siguranță e
+`tools/dev/lib/gaura-neagra.php`: proxy-ul copiei (`CMS_DEV_PORT`+12) și adresa „interzisă” (+14: SMTP-ul, ERP-ul,
+FAN-ul și banca din setări) notează fiecare conexiune, iar +13 e căsuța copiei, un server SMTP care păstrează mesajele; la final trebuie să fi ajuns acolo doar drumurile permise încercate
 anume (o cheie `sk_test_`, o copie `*-verif` a ERP-ului, contul FAN și BT de test), ca să se vadă că plasa chiar
 numără. Bazele `cms_verif_gol`, `cms_verif_plina`, `cms_verif_copie` și utilizatorul `cms_verif_test` se fac și se
 șterg acolo. Cu un PHP sub minim instalat (`php7.0` … `php8.2`) verifică și mesajul pentru un PHP prea vechi, la

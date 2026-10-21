@@ -11,7 +11,9 @@ declare(strict_types=1);
  *
  * Șterge, doar în site-ul de verificare:
  * - din baza copiei: toate tabelele, vederile, rutinele și evenimentele (declanșatoarele pleacă odată cu tabelele),
- *   doar dacă baza are tabelul `_verificare` (e o copie încărcată) sau e deja goală;
+ *   doar dacă baza are tabelul `_verificare` (e o copie încărcată, sau o încărcare oprită la jumătate: încărcarea,
+ *   WP-09, scrie `_verificare` cu `anonimizat = 0` înaintea oricărui tabel cu date și abia la final `anonimizat = 1`
+ *   și `incarcat-la`) sau e deja goală;
  * - `storage/verificare/incarcat-la` (poarta arată apoi „Copia de verificare lipsește”), emailurile scrise ca fișiere
  *   (`storage/verificare/mail/`) și dosarul temporar (`storage/verificare/tmp/`);
  * - cache-urile copiei (`storage/cache/`: paginile, fluxul de produse, pozele de distribuire) și sesiunile

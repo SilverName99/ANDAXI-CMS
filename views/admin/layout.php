@@ -44,7 +44,7 @@ if ($adminFavicon === '') {
     <script src="https://cdn.jsdelivr.net/npm/js-beautify@1.15.1/js/lib/beautify-html.min.js"></script>
 </head>
 <body>
-    <?php echo \App\Support\Verificare::banner('admin'); /* bannerul copiei de verificare; gol în rest */ if (\App\Support\Auth::check()): ?>
+    <?php $adminLogat = \App\Support\Auth::check(); echo \App\Support\Verificare::banner($adminLogat ? 'admin' : 'site'); /* bannerul copiei de verificare (adresa întreagă doar cu adminul logat); gol în rest */ if ($adminLogat): ?>
         <?php
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/admin', PHP_URL_PATH) ?: '/admin';
         $isActive = static function (array $prefixes) use ($path): bool {

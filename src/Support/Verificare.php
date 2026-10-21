@@ -670,7 +670,8 @@ final class Verificare
     /**
      * Bannerul copiei, primul în pagină (site: `views/layout.php`; admin: `views/admin/layout.php`); gol în afara
      * copiei. Pe site adresa proprietarului apare ascunsă pe jumătate (paginile publice le vede și cine verifică
-     * paginile, decizia D8); în admin, întreagă.
+     * paginile, decizia D8); `'admin'` o arată întreagă și se cere doar cu un admin logat: layout-ul adminului dă
+     * `'site'` paginilor de dinaintea logării (`/admin/login`, parola uitată), pe care le vede oricine are parola porții.
      */
     public static function banner(string $loc = 'site'): string
     {

@@ -57,7 +57,7 @@ declare(strict_types=1);
  *       necitit sau din viitor → 503 (/health: din nou „ok” al porții).
  *    B5 gărzile, cu setările unui site adevărat lăsate în baza copiei (SMTP, Stripe live,
  *       EuPlătesc, ERP, FAN, BT live în .env, GA/GTM/Ads/Clarity/tawk.to, login Google):
- *       bannerul (adresa ascunsă pe site, întreagă în admin), nicio etichetă a terților chiar cu
+ *       bannerul (adresa ascunsă pe site și pe /admin/login, întreagă doar cu adminul logat), nicio etichetă a terților chiar cu
  *       „Accept toate”, pozele lipsă → 302 spre VERIFICARE_UPLOADS_DIN (și poza de distribuire),
  *       căile rele 404, fluxul Merchant doar cu parola și noindex, robots fără „Allow”, login-ul
  *       Google oprit, checkout-ul fără EuPlătesc și BT, plata Stripe și tariful FAN refuzate, o
@@ -74,12 +74,14 @@ declare(strict_types=1);
  *       „toate”) și tools/verificare/sterge.php (refuzurile: alt dosar, „nu”, baza altui site,
  *       o bază fără _verificare, un .env fără DB_DATABASE; apoi ștergerea: tabelele, incarcat-la, emailurile, temporarele,
  *       cache-ul, sesiunile, cod-vechi/ fără să urmeze o legătură spre afară; rămân .gitkeep,
- *       sondele, .env, licența).
+ *       sondele, .env, licența; și o încărcare oprită la jumătate: tabele cu date și _verificare cu anonimizat = 0).
  *    Pe tot parcursul: proxy-ul copiei e „gaura neagră cu contoare” (tools/dev/lib/gaura-neagra.php,
  *       CMS_DEV_PORT+12; SMTP-ul copiei +13; adresele interzise, SMTP-ul și ERP-ul din setări, FAN_API_BASE,
  *       banca: +14): la final doar ieșirile permise de mai sus; niciun tabel în baza goală, nicio sesiune
  *       pornită de o cerere oprită la poartă, niciun email prin mail(), jurnalul PHP al copiei fără avertismente.
  *
+ * Cere baza de dezvoltare (DB_DATABASE, din CMS_DEV_DB) făcută de tools/dev/instaleaza.sh: B4 o copiază; fără ea
+ * (lipsă, goală sau fără _platforma_stare și settings) testul se oprește de la început și spune asta.
  * Bazele cms_verif_gol, cms_verif_plina, cms_verif_copie și utilizatorul lor se fac și se șterg
  * aici; copia, serverul ei și gaura neagră se opresc și se șterg la final. Raportul:
  * $CMS_DEV_DIR/test-verificare-raport.txt; cod de ieșire 0 doar dacă totul a trecut.
@@ -584,6 +586,18 @@ try {
     if ($cerere('GET', '/health')['cod'] !== 0) {
         throw new RuntimeException('pe portul ' . $port . ' răspunde deja un server; oprește-l întâi');
     }
+    // Copia „încărcată” din B4 e o copie a bazei de dezvoltare: o bază lipsă sau goală ar trece copierea (0 tabele + 1)
+    // și ar face din B4–B7 erori 500 fără motiv. Deci baza trebuie să fie deja făcută de tools/dev/instaleaza.sh.
+    $bazaDev = (string) getenv('DB_DATABASE');
+    if (preg_match('/^cms_[a-z0-9_]+$/', $bazaDev) !== 1) {
+        throw new RuntimeException('baza de dezvoltare (DB_DATABASE) nu e o bază cms_*');
+    }
+    $tabeleAplicatie = $root->prepare("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('_platforma_stare', 'settings')");
+    $tabeleAplicatie->execute([$bazaDev]);
+    if (count($tabeleAplicatie->fetchAll(PDO::FETCH_COLUMN)) !== 2) {
+        throw new RuntimeException('baza de dezvoltare ' . $bazaDev . ' lipsește sau n-are tabelele aplicației (_platforma_stare, settings): '
+            . 'rulează întâi tools/dev/instaleaza.sh');
+    }
 
     // ── Plasa de siguranță cu contoare ──
     mkdir($dosarGaura, 0770, true);
@@ -1006,10 +1020,6 @@ try {
     // ── B4. Copie „încărcată” ──
     $scrie('');
     $scrie('B4. Copie încărcată (cms_verif_copie: o copie a bazei de dezvoltare, cu _verificare; licența pusă de licenta.php)');
-    $bazaDev = (string) getenv('DB_DATABASE');
-    if (preg_match('/^cms_[a-z0-9_]+$/', $bazaDev) !== 1) {
-        throw new RuntimeException('baza de dezvoltare (DB_DATABASE) nu e o bază cms_*');
-    }
     $root->exec('DROP DATABASE IF EXISTS ' . $bazaCopie);
     $root->exec('CREATE DATABASE ' . $bazaCopie . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
     $tabeleDev = $root->query('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = ' . $root->quote($bazaDev)
@@ -1021,7 +1031,8 @@ try {
     }
     $root->exec('CREATE TABLE `' . $bazaCopie . '`._verificare (sursa VARCHAR(40) NOT NULL, incarcat_la DATETIME NOT NULL, anonimizat TINYINT(1) NOT NULL)');
     $root->exec('INSERT INTO `' . $bazaCopie . "`._verificare VALUES ('test', NOW(), 1)");
-    $verifica('copia bazei de dezvoltare: ' . count($tabeleDev) . ' tabele, plus _verificare', $tabeleIn($bazaCopie) === count($tabeleDev) + 1);
+    $verifica('copia bazei de dezvoltare: ' . count($tabeleDev) . ' tabele (cu _platforma_stare și settings), plus _verificare',
+        $tabeleIn($bazaCopie) === count($tabeleDev) + 1 && in_array('_platforma_stare', $tabeleDev, true) && in_array('settings', $tabeleDev, true));
     $scrieEnv(['DB_DATABASE' => $bazaCopie, 'DB_USERNAME' => (string) getenv('DB_USERNAME'), 'DB_PASSWORD' => (string) getenv('DB_PASSWORD')]);
     $r = $ruleaza('tools/verificare/licenta.php', ['toate'], '');
     $verifica('licenta.php toate → licența copiei, semnată cu cheia de pe server (site „verificare”), cod 0', $r['cod'] === 0
@@ -1127,6 +1138,11 @@ try {
     $verifica('bannerul pe site, primul în <body>, cu adresa proprietarului ascunsă pe jumătate', str_contains($r['corp'],
         '<body class="site-shell">' . "\n    " . '<div id="' . Verificare::ID_BANNER . '"') && str_contains($r['corp'], Verificare::emailAscuns($emailProprietar))
         && !str_contains($r['corp'], $emailProprietar));
+    // Paginile adminului de dinaintea logării le vede oricine are parola porții (și cine verifică paginile, D8).
+    $r = $cerere('GET', '/admin/login', ['basic' => $bunaBasic]);
+    $verifica('bannerul pe /admin/login (parola porții, fără admin logat): adresa proprietarului tot ascunsă pe jumătate', $r['cod'] === 200
+        && str_contains($r['corp'], '<div id="' . Verificare::ID_BANNER . '"') && str_contains($r['corp'], Verificare::emailAscuns($emailProprietar))
+        && !str_contains($r['corp'], $emailProprietar), (string) $r['cod']);
     $jarAdmin = $dosarTest . '/jar-admin.txt';
     $parolaAdmin = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
     $r = $cerere('POST', '/admin/login', ['basic' => $bunaBasic, 'jar' => $jarAdmin,
@@ -1443,6 +1459,19 @@ try {
         && str_contains($r['iesire'], 'GATA'), trim($r['iesire']));
     $verifica('ieșirile lui licenta.php și sterge.php: nicio parolă, cheie sau adresă de email; numele bazei nu apare', $faraSecrete($r['iesire']) === ''
         && !str_contains($r['iesire'], $bazaCopie));
+    // O încărcare oprită la jumătate (de exemplu procesul omorât de găzduire): încărcarea (WP-09) scrie întâi `_verificare` cu
+    // anonimizat = 0, înaintea oricărui tabel cu date, și abia la final anonimizat = 1 și incarcat-la. sterge.php o șterge.
+    $copieT = '`' . $bazaCopie . '`.';
+    $root->exec('CREATE TABLE ' . $copieT . '_verificare (sursa VARCHAR(40) NOT NULL, incarcat_la DATETIME NOT NULL, anonimizat TINYINT(1) NOT NULL)');
+    $root->exec('INSERT INTO ' . $copieT . "_verificare VALUES ('test', NOW(), 0)");
+    $root->exec('CREATE TABLE ' . $copieT . 'users (id INT PRIMARY KEY, email VARCHAR(190) NOT NULL) ENGINE=InnoDB');
+    $root->exec('CREATE TABLE ' . $copieT . 'orders (id INT PRIMARY KEY, user_id INT NULL, CONSTRAINT fk_proba_user FOREIGN KEY (user_id) REFERENCES users (id)) ENGINE=InnoDB');
+    $root->exec('INSERT INTO ' . $copieT . "users VALUES (1, 'client-1@verificare.invalid')");
+    $root->exec('INSERT INTO ' . $copieT . 'orders VALUES (1, 1)');
+    $r = $ruleaza('tools/verificare/sterge.php', ['--da'], '');
+    $verifica('sterge.php pe o încărcare oprită la jumătate (tabele cu date, _verificare cu anonimizat = 0, fără incarcat-la) → GATA, baza goală',
+        $r['cod'] === 0 && str_contains($r['iesire'], 'GATA: copia a fost ștearsă') && str_contains($r['iesire'], '3 tabele')
+        && $tabeleIn($bazaCopie) === 0, trim($r['iesire']));
 
     $verifica('la final, plasa de siguranță: doar ieșirile permise de mai sus (Stripe de test, copia ERP, contul FAN și BT de test), niciun alt email',
         $conexiuni($portProxy) === $iesiriPermise[0] && $conexiuni($portInterzis) === $iesiriPermise[1] && count($mesajeSmtp()) === 2,

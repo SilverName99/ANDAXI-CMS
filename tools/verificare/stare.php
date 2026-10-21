@@ -476,7 +476,7 @@ if ($activ) {
         && stare_cheama($radacina, 'src/Support/ImagineDistribuire.php', 'Verificare::redirectUploadLipsa(')
         ? true : 'public/index.php nu trimite pozele lipsă spre VERIFICARE_UPLOADS_DIN';
     $locuri['banner'] = stare_cheama($radacina, 'views/layout.php', "\App\Support\Verificare::banner('site')")
-        && stare_cheama($radacina, 'views/admin/layout.php', "\App\Support\Verificare::banner('admin')")
+        && stare_cheama($radacina, 'views/admin/layout.php', "\$adminLogat = \App\Support\Auth::check(); echo \App\Support\Verificare::banner(\$adminLogat ? 'admin' : 'site');")
         ? true : 'layout-urile nu au bannerul';
 
     $numar = 0;
