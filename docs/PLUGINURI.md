@@ -303,8 +303,8 @@ diferențe sunt scrise una câte una, cu motivul lor, în `$deBioscem` din
 `compara-cu-baza.php` și în `site-uri/bioscem/ce-se-schimba.md`: azi explicația
 „Sitemap XML” din Setări magazin (pomenește și articolele) și locul regulii
 `/cos-cumparaturi` în robots.txt, ambele din portarea generalizată a livrării 1 SEO, plus
-rândul `Disallow: /_andaxi/` din robots.txt (WP-07); adresa nouă `/_andaxi/ping` e declarată în
-`$coduriDeBioscem` (404 în Bioscem).
+rândul `Disallow: /_andaxi/` din robots.txt (WP-07); adresa nouă `/_andaxi/ping` (și cu „/” la sfârșit) e
+declarată în `$coduriDeBioscem` (404 în Bioscem).
 
 ## Pașii de activare
 

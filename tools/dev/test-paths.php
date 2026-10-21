@@ -20,6 +20,9 @@ declare(strict_types=1);
  *    A3 Căutarea din acceptanța planului: în bootstrap.php, src/, views/, public/, scripts/ și config/ nicio cale
  *       storage/, uploads/, sessions/, .env sau public/ construită în afara lui Paths (din __DIR__/dirname() sau
  *       lipită la o altă cale); comentariile nu contează.
+ *    A4 Linia de comandă, cu setările php.ini-ului obișnuit (fără error_log, display_errors oprit): un avertisment și
+ *       o eroare fatală de după bootstrap.php apar pe stderr, ca până acum, și nu doar într-un fișier; în Etapa 2 și
+ *       în site/storage/logs/php.log.
  * B. Găzduirea simulată din Etapa 2 ($CMS_DEV_DIR/paths/acasa): o versiune de cod comună
  *    (platforma/releases/<versiune>/: fișierele din git cu modificările necomise, VERSION, plus un .env și o poză
  *    „capcană” pe care nu are voie să le folosească nimeni) și două site-uri (domains/a.exemplu.test,
@@ -27,8 +30,8 @@ declare(strict_types=1);
  *    uploads/), fiecare cu baza lui (cms_paths_a, cms_paths_b), instalate din linia de comandă ca
  *    `bin/platforma --site=` (Etapa 2) și servite de `php -S` pe CMS_DEV_PORT+9 și +10, cu un mediu gol:
  *    B1 instalarea: jurnalul migrărilor în site/storage/logs, versiunea în _platforma_migrari, nicio sesiune;
- *    B2 pingul: 200, JSON, versiunea din VERSION, „la_zi”, no-store, fără cookie și fără sesiune; .env-ul versiunii
- *       ignorat;
+ *    B2 pingul: 200, JSON, versiunea din VERSION, „la_zi”, no-store, fără cookie și fără sesiune, și cu „/” la
+ *       sfârșit (routerul îl duce tot la ping); .env-ul versiunii ignorat;
  *    B3 o pagină pe fiecare site: numele magazinului din baza lui; un sess_* în site/storage/sessions al lui (cu
  *       gardul), nimic în versiune; cookie-ul unui site nu deschide o sesiune pe celălalt;
  *    B4 pozele din uploads/ al public_html (servite de index.php, ca pe un server care trimite fișierele lipsă la PHP),
@@ -38,7 +41,8 @@ declare(strict_types=1);
  *       doar în site/storage/logs/php.log al acelui site, nimic în jurnalul serverului; pluginuri.log tot acolo;
  *    B7 MENTENANTA: 503, Retry-After: 120, mentenanta.html (HEAD fără corp); /_andaxi/, /webhook/ și /api/erp/ trec;
  *       celălalt site neatins; fără fișier, din nou 200;
- *    B8 RELEASE lipsă, de altă formă sau spre o versiune care lipsește → 503; versiunea din site/releases/ găsită;
+ *    B8 RELEASE lipsă, goală, de altă formă (și una care, fără verificarea formei, ar ajunge la versiunea care există:
+ *       „../releases/<v>”, „./<v>”) sau spre o versiune care lipsește → 503; versiunea din site/releases/ găsită;
  *    B9 pingul: baza lipsă → 503 repede; un server care acceptă conexiunea și tace → 503 în aproximativ 2 secunde;
  *       baza goală → „fara_registru”; fără ultima_ord → „in_urma”;
  *    B10 linia de comandă: diagnostic.php arată .env-ul și storage/ ale site-ului; migreaza.php --stare; nicio sesiune;
@@ -233,6 +237,52 @@ exec('rm -rf ' . escapeshellarg($temp));
 $verifica('căutarea prinde construcțiile vechi (sesiunile din __DIR__, o cale lipită de o variabilă, și pe rândul următor, assets din views) '
     . 'și sare comentariile, HTML-ul și adresele de pagină', array_keys($prinse) === ['bootstrap.php:3', 'src/A.php:3', 'src/A.php:5', 'views/v.php:2'],
     $text($prinse));
+
+$scrie('');
+$scrie('A4. Erorile PHP ale liniei de comandă (cronurile, migreaza.php, install.php): pe ecran, ca până acum');
+// Un script care trece prin bootstrap.php, apoi scrie un avertisment și cade cu o excepție neprinsă, rulat cu setările
+// php.ini-ului obișnuit al liniei de comandă (Debian, alt-php: display_errors oprit, log_errors pornit, fără error_log,
+// deci PHP scrie erorile pe stderr). Uneltele de dezvoltare dau mereu un error_log (php.sh), așa că doar aici se vede.
+$temp = sys_get_temp_dir() . '/cms-test-paths-cli-' . getmypid();
+@mkdir($temp . '/site', 0770, true);
+$semn = 'proba-cli-' . getmypid();
+$scriptCli = $temp . '/eroare.php';
+file_put_contents($scriptCli, '<?php
+declare(strict_types=1);
+[$_, $bootstrap, $site] = $argv + [null, null, null];
+if ($site !== "-") {
+    define("PLATFORMA_SITE_DIR", $site);
+}
+require $bootstrap;
+trigger_error("' . $semn . '-avertisment", E_USER_WARNING);
+throw new RuntimeException("' . $semn . '-fatala");
+');
+/** @return array{0: int, 1: string} codul de ieșire și stderr */
+$ruleazaCuEroare = static function (string $site) use ($scriptCli, $radacina): array {
+    $proces = proc_open([PHP_BINARY, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=', '-d', 'error_reporting=E_ALL',
+        $scriptCli, $radacina . '/bootstrap.php', $site], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tevi);
+    if (!is_resource($proces)) {
+        return [-1, 'nu pornește'];
+    }
+    stream_get_contents($tevi[1]);
+    $erori = (string) stream_get_contents($tevi[2]);
+    fclose($tevi[1]);
+    fclose($tevi[2]);
+    return [proc_close($proces), $erori];
+};
+$jurnalCod = Paths::stocare('logs/php.log');
+[$c, $erori] = $ruleazaCuEroare('-');
+$verifica('așezarea de azi: avertismentul și eroarea fatală pe stderr (terminalul, ieșirea cronului), cod 255, nimic în '
+    . 'storage/logs/php.log', $c === 255 && str_contains($erori, $semn . '-avertisment') && str_contains($erori, 'Uncaught RuntimeException: ' . $semn . '-fatala')
+    && !str_contains((string) @file_get_contents($jurnalCod), $semn), 'cod ' . $c . ', stderr: ' . mb_substr(trim($erori), 0, 300));
+[$c, $erori] = $ruleazaCuEroare($temp . '/site');
+$jurnalSite = (string) @file_get_contents($temp . '/site/storage/logs/php.log');
+$verifica('Etapa 2 (bin/platforma --site=): tot pe stderr și, în plus, în site/storage/logs/php.log al site-ului, cod 255',
+    $c === 255 && str_contains($erori, $semn . '-avertisment') && str_contains($erori, 'Uncaught RuntimeException: ' . $semn . '-fatala')
+    && str_contains($jurnalSite, $semn . '-avertisment') && str_contains($jurnalSite, $semn . '-fatala')
+    && !str_contains((string) @file_get_contents($jurnalCod), $semn), 'cod ' . $c . ', stderr: ' . mb_substr(trim($erori), 0, 300)
+    . ' | jurnal: ' . mb_substr(trim($jurnalSite), 0, 300));
+exec('rm -rf ' . escapeshellarg($temp));
 
 if ($doarCai) {
     $scrie('');
@@ -497,6 +547,13 @@ try {
     $verifica('HEAD: 200, fără corp', $r['cod'] === 200 && $r['corp'] === '', (string) $r['cod']);
     $r = $cerere('a', 'GET', '/_andaxi/ping?gclid=x&utm_source=google');
     $verifica('cu parametri: tot pingul, fără cookie (nici cel al reclamelor)', $r['cod'] === 200 && $faraCookie($r), implode(' | ', $r['cookies']));
+    // Routerul scoate „/”-ul final, deci și /_andaxi/ping/ ajunge la ping: trebuie servit tot de calea rapidă, nu după sesiune.
+    $r = $cerere('a', 'GET', '/_andaxi/ping/');
+    $rHead = $cerere('a', 'HEAD', '/_andaxi/ping/?x=1');
+    $verifica('cu „/” la sfârșit (GET și HEAD cu parametri): tot pingul, același JSON, no-store, fără cookie', $r['cod'] === 200
+        && $r['corp'] === '{"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi"}' && ($r['antete']['cache-control'] ?? '') === 'no-store'
+        && $faraCookie($r) && $rHead['cod'] === 200 && $rHead['corp'] === '' && $faraCookie($rHead),
+        $r['cod'] . ' ' . $r['corp'] . ' | ' . implode(' | ', array_merge($r['cookies'], $rHead['cookies'])));
     $verifica('.env-ul din versiune ignorat, niciun fișier de sesiune', $sesiuni($siteuri['a']['site'] . '/storage/sessions') === []
         && $sesiuni($siteuri['b']['site'] . '/storage/sessions') === [] && $sesiuni($cod . '/storage/sessions') === []);
 
@@ -623,7 +680,11 @@ try {
     $scrie('');
     $scrie('B8. RELEASE și versiunea');
     $rezultate = [];
-    foreach (['lipsă' => null, 'de altă formă' => "../../platforma/releases/x\n", 'goală' => "\n", 'spre o versiune care lipsește' => "2026.10.9-0000000\n"] as $caz => $continut) {
+    // „de altă formă, spre versiunea care există”: fără verificarea formei, ~/platforma/releases/../releases/<v> și
+    // ~/platforma/releases/./<v> ar încărca versiunea, deci doar verificarea formei le poate opri.
+    foreach (['lipsă' => null, 'de altă formă' => "../../platforma/releases/x\n", 'goală' => "\n", 'spre o versiune care lipsește' => "2026.10.9-0000000\n",
+        'de altă formă, spre versiunea care există (../releases/<v>)' => '../releases/' . $versiune . "\n",
+        'de altă formă, spre versiunea care există (./<v>)' => './' . $versiune . "\n"] as $caz => $continut) {
         @unlink($siteuri['a']['site'] . '/RELEASE');
         if ($continut !== null) {
             file_put_contents($siteuri['a']['site'] . '/RELEASE', $continut);

@@ -402,6 +402,19 @@ $coduriDeBioscem = [
             . 'dacă baza răspunde (SELECT 1 în cel mult 2 secunde) și dacă schema e la zi; JSON, Cache-Control: no-store, '
             . 'fără sesiune. Pe Bioscem adresa dă azi pagina 404; nicio pagină a site-ului nu se schimbă.',
     ],
+    // Aceeași adresă cu „/” la sfârșit (revizuirea WP-07): routerul o duce la ruta pingului, deci public/index.php o
+    // servește tot ca ping, fără sesiune (Ping::eCererea). În Bioscem tot 404 (pe gazda corectă stratul SEO lasă 404-ul).
+    [
+        'nume' => '/_andaxi/ping/: pingul și cu „/” la sfârșit, nou',
+        'cale' => '/_andaxi/ping/',
+        'cod_baza' => 404,
+        'cod_curent' => 200,
+        'text' => '{"ok":true,"db":true,"cod":null,"schema":"la_zi"}',
+        'motiv' => 'routerul scoate „/”-ul final, iar /_andaxi e scos din redirecționările SEO (SeoRedirects::CAI_EXCLUSE), '
+            . 'deci adresa cu „/” e tot pingul: același JSON, fără sesiune și fără cookie, cu aceeași limită de 2 secunde '
+            . '(altfel ar fi trecut prin toată aplicația, cu un fișier de sesiune nou la fiecare cerere). Pe Bioscem dă '
+            . 'azi pagina 404, ca /_andaxi/ping.',
+    ],
 ];
 $porturiBiovitality = [
 ];
@@ -621,8 +634,9 @@ $pagini = [
     ['viz', '/api/products/best-sellers?limit=3'],
     // Pagina din bază „checkout/succes” deschisă direct (cod de stare declarat în $coduriDeBioscem).
     ['anon', '/checkout/succes'],
-    // Pingul monitorizării (WP-07, nou; declarat în $coduriDeBioscem).
+    // Pingul monitorizării (WP-07, nou; declarat în $coduriDeBioscem), și cu „/” la sfârșit.
     ['anon', '/_andaxi/ping'],
+    ['anon', '/_andaxi/ping/'],
 ];
 
 // O pagină a site-ului (din bază, ca orice pagină scrisă de client) cu liste goale,

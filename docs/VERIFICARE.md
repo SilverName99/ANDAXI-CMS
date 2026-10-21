@@ -178,6 +178,7 @@ sunt în git, deci rămân neatinse.
 | „PARȚIAL” sau rânduri EROARE / SĂRIT | Trimite-ne fișierul așa cum e; o verificare căzută nu le strică pe celelalte |
 | „OPRIT: memoria PHP s-a terminat (memory_limit) …” | Trimite-ne fișierul (are verificările de până acolo). Dacă vrei și restul: aceeași comandă cu `$PHP -d memory_limit=512M tools/verificare/agregate.php --set=…` |
 | Un rând „AVERTISMENT PHP: …” | Trimite-ne rândul; verificările merg mai departe (rândul are doar felul și locul erorii în codul uneltei) |
+| O comandă (`configureaza.php`, `stare.php`, `migreaza.php`, `install.php`) se oprește cu „PHP Fatal error” sau „PHP Warning” | Trimite-ne rândurile din terminal: erorile PHP ale comenzilor apar acolo (stderr), nu într-un fișier. Ale paginilor sunt în `storage/logs/php.log` al site-ului de verificare, dacă serverul nu are alt jurnal (`$PHP scripts/diagnostic.php` arată unde; WP-07) |
 
 ## Cum funcționează (pentru programatori)
 
@@ -208,7 +209,8 @@ jurnalul erorilor PHP), înaintea fișierelor încărcate, a stratului SEO și a
    cere 200 întoarce codul la loc dacă `migreaza.php --aplica` n-a rulat). Tot fără parolă, `GET`/`HEAD
    /_andaxi/ping` (pingul monitorizării, `App\Support\Ping`, WP-07): îl dă mereu aplicația, care la el face doar
    `SELECT 1` și citește garda, înaintea oricărui alt cod, deci și pe baza goală dinaintea primei încărcări
-   (`"schema":"fara_registru"`, niciun tabel făcut). Un POST pe ping și orice altă adresă `/_andaxi/…` cer parola.
+   (`"schema":"fara_registru"`, niciun tabel făcut). Un POST pe ping și orice altă adresă `/_andaxi/…` cer parola
+   (și `/_andaxi/ping/`, cu „/” la sfârșit: fără parolă trece doar adresa exactă; cu parola, o servește tot pingul).
 5. Poarta are nevoie de `VERIFICARE_POARTA_UTILIZATOR`, de un hash valid în `VERIFICARE_POARTA_HASH` și de
    dosarul de lucru; altfel tot 503 „neconfigurat” (motivul îl arată `stare.php`).
 6. Parola: **HTTP Basic**, citit din `PHP_AUTH_USER`/`PHP_AUTH_PW`, din antetul `Authorization`

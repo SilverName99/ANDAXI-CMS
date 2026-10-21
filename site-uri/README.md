@@ -20,6 +20,7 @@ date scrise în cod).
 | `<site>/migrari.json` | parametrii migrărilor pe care îi știe doar site-ul (`Schema::parametruSite`), de exemplu procesatorul linkurilor de plată vechi |
 | `<site>/privat/` | valorile private ale înghețării (adrese, telefoane: decizia OD-49, repo-ul e public); **ignorat de git**, scris de generator local și copiat de mână pe server lângă pachet |
 | `vertij/ce-se-schimba.md` | ca la Bioscem; începută odată cu înghețarea (bannerul de cookie-uri) |
+| `biovitality/ce-se-schimba.md`, `grafoanaytis/ce-se-schimba.md` | ca la Bioscem; începute în WP-07 (robots.txt, `/_andaxi/ping`, jurnalul erorilor PHP). Ce primesc din alte site-uri odată cu codul comun (`docs/de-portat.md`) le trec porturile lor, până la adoptare |
 
 Formatul și regulile: [docs/SEO.md](../docs/SEO.md) (harta adreselor, SEO) și [docs/MIGRARI.md](../docs/MIGRARI.md), „Înghețarea setărilor” și „Parametrii site-ului”. Pachetul inventat al site-ului
 de dezvoltare stă în `tools/dev/site-demo/`.

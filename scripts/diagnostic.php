@@ -100,7 +100,10 @@ echo 'radacina aplicatiei : ' . Paths::radacina() . "\n";
 echo 'fisier .env         : ' . ($envExista ? $envPath : 'LIPSESTE') . "\n";
 echo 'citibil             : ' . ($envCitibil ? 'da' : 'NU (cronul ruleaza cu alt utilizator?)') . "\n";
 echo 'dosarul storage     : ' . Paths::stocare() . "\n";
-echo 'jurnal erori PHP    : ' . ((string) ini_get('error_log') !== '' ? (string) ini_get('error_log') : 'al serverului (fara fisier ales)') . "\n";
+// Al acestui proces: în așezarea de azi linia de comandă n-are fișier (erorile pe ecran, stderr), iar paginile
+// scriu în storage/logs/php.log dacă serverul web nu are alt jurnal (App\Support\Paths::alegeJurnalulPhp).
+echo 'jurnal erori PHP    : ' . ((string) ini_get('error_log') !== '' ? (string) ini_get('error_log')
+    : 'pe ecran (stderr); paginile: ' . Paths::stocare('logs/php.log') . ' daca serverul web nu are alt jurnal') . "\n";
 echo 'utilizator sistem   : ' . (function_exists('posix_geteuid') ? (string) posix_geteuid() : 'necunoscut') . "\n";
 $arataPhp();
 

@@ -119,20 +119,31 @@ final class Paths
 
     /**
      * Jurnalul erorilor PHP al site-ului: `storage/logs/php.log` (în Etapa 2 `site/storage/logs/php.log`, pe care îl
-     * citește verificarea de după un deploy: nicio eroare „PHP Fatal” nouă). În Etapa 2 mereu; în așezarea de azi doar
-     * când serverul nu a ales deja un jurnal (`error_log` gol), deci un jurnal pus de găzduire sau de uneltele de
-     * dezvoltare rămâne cel de până acum. O cheamă `public/index.php` înaintea oricărui alt cod (și a porții) și
-     * `bootstrap.php` (linia de comandă); a doua oară nu mai schimbă nimic.
+     * citește verificarea de după un deploy: nicio eroare „PHP Fatal” nouă). O cheamă `public/index.php` înaintea
+     * oricărui alt cod (și a porții) și `bootstrap.php` (linia de comandă); a doua oară nu mai schimbă nimic.
+     *
+     *  - **Paginile:** în Etapa 2 mereu; în așezarea de azi doar când serverul nu a ales deja un jurnal (`error_log`
+     *    gol), deci un jurnal pus de găzduire sau de uneltele de dezvoltare rămâne cel de până acum.
+     *  - **Linia de comandă** (cronurile, `scripts/migreaza.php`, `install.php`): în așezarea de azi neatinsă. Fără
+     *    `error_log`, PHP scrie erorile pe stderr, deci în terminal și în ieșirea cronului; un `error_log` gol nu
+     *    înseamnă aici „fără jurnal”, iar un fișier ales de noi le-ar ascunde (o eroare fatală la adoptare s-ar
+     *    termina fără niciun mesaj). În Etapa 2 (`bin/platforma --site=`) și în jurnalul site-ului, dar tot pe
+     *    ecran: dacă PHP nu le afișează (`display_errors` oprit, ca în php.ini-ul obișnuit), le afișează pe stderr.
      */
     public static function alegeJurnalulPhp(): void
     {
-        if (!self::cuStub() && trim((string) ini_get('error_log')) !== '') {
+        $cli = PHP_SAPI === 'cli';
+        if (!self::cuStub() && ($cli || trim((string) ini_get('error_log')) !== '')) {
             return;
         }
         $dosar = self::stocareSite('logs');
-        if (is_dir($dosar) && is_writable($dosar)) {
-            ini_set('error_log', $dosar . '/php.log');
+        if (!is_dir($dosar) || !is_writable($dosar)) {
+            return;
         }
+        if ($cli && in_array(strtolower(trim((string) ini_get('display_errors'))), ['', '0', 'off', 'no', 'false', 'none'], true)) {
+            ini_set('display_errors', 'stderr');
+        }
+        ini_set('error_log', $dosar . '/php.log');
     }
 
     /** Dosarul cu `.env` și `storage/`: `PLATFORMA_SITE_DIR` în Etapa 2, altfel rădăcina codului. */

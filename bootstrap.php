@@ -21,8 +21,9 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-// Jurnalul erorilor PHP al site-ului: storage/logs/php.log (în Etapa 2, site/storage/logs/php.log), dacă serverul nu
-// are deja unul (Paths::alegeJurnalulPhp; o pagină l-a ales deja în public/index.php, aici contează linia de comandă).
+// Jurnalul erorilor PHP al site-ului (Paths::alegeJurnalulPhp; o pagină l-a ales deja în public/index.php). Aici
+// contează linia de comandă din Etapa 2 (bin/platforma --site=): erorile în site/storage/logs/php.log și pe stderr.
+// În așezarea de azi linia de comandă rămâne neatinsă: erorile pe stderr, ca până acum.
 App\Support\Paths::alegeJurnalulPhp();
 
 /**
@@ -54,11 +55,12 @@ App\Support\Paths::alegeJurnalulPhp();
 // Fluxul de produse pentru Google (/feed/google-merchant.xml) e doar citire și
 // îl cere un robot o dată pe zi: fără sesiune, deci fără cookie și fără un
 // fișier de sesiune nou la fiecare preluare. La fel pingul monitorizării
-// (/_andaxi/ping, la 5 minute; App\Support\Ping). Doar căile exacte, doar GET/HEAD.
+// (/_andaxi/ping, la 5 minute; App\Support\Ping::eCererea, și cu „/” la sfârșit,
+// pe care routerul îl duce tot la el). Doar căile acestea, doar GET/HEAD.
 $faraSesiune = PHP_SAPI !== 'cli'
     && in_array(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? '')), ['GET', 'HEAD'], true)
-    && in_array((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? ''),
-        ['/feed/google-merchant.xml', App\Support\Ping::CALE], true);
+    && ((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '') === '/feed/google-merchant.xml'
+        || App\Support\Ping::eCererea());
 
 if (PHP_SAPI === 'cli' && !defined('ANDAXI_CU_SESIUNE')) {
     if (!isset($_SESSION) || !is_array($_SESSION)) {

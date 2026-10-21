@@ -100,11 +100,12 @@
 #    licența, importurile, copiile scripturilor, dosarul site-ului de verificare), docroot-ul cu uploads/,
 #    sitemap-urile scrise de admin și .htaccess-ul de cache; în așezarea de azi aceleași căi ca până
 #    acum, deci aceleași pagini (aici, ambele servere). Așezarea din Etapa 2 (deploy/stub/, sesiunile și
-#    jurnalele fiecărui site în dosarul lui) o verifică tools/dev/test-paths.php. Jurnalul erorilor PHP:
-#    storage/logs/php.log, doar dacă serverul nu are deja unul (error_log gol; aici e cel al uneltelor);
+#    jurnalele fiecărui site în dosarul lui) o verifică tools/dev/test-paths.php. Jurnalul erorilor PHP al
+#    paginilor: storage/logs/php.log, doar dacă serverul nu are deja unul (error_log gol; aici e cel al
+#    uneltelor); linia de comandă rămâne neatinsă (erorile pe stderr, ca în Bioscem);
 #    bootstrap.php pornește sesiunea după autoloader (același dosar, aceleași cookie-uri);
-#  - GET /_andaxi/ping (App\Support\Ping, nou: în Bioscem 404), fără sesiune și fără cookie: declarat
-#    în $coduriDeBioscem; robots.txt are în plus „Disallow: /_andaxi/” ($deBioscem).
+#  - GET /_andaxi/ping și /_andaxi/ping/ (App\Support\Ping, nou: în Bioscem 404), fără sesiune și fără
+#    cookie: declarate în $coduriDeBioscem; robots.txt are în plus „Disallow: /_andaxi/” ($deBioscem).
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul

@@ -20,10 +20,12 @@ use Throwable;
  *    ar ține altfel cererea minute întregi).
  *
  * Mereu `Cache-Control: no-store`, fără sesiune și fără cookie (bootstrap.php). `public/index.php` îl servește imediat
- * după bootstrap, înaintea setărilor, a pluginurilor, a pașilor de activare și a cache-ului de pagini, cu o conexiune
- * a lui: nimic altceva nu rulează și nu așteaptă baza. Ruta din `src/Http/rute.php` (proprietar: nucleul, catalogul
- * `nucleu.rute_publice`) face același lucru. Ocolește mentenanța din admin (`Maintenance`) și pe cea a deploy-ului
- * (`MENTENANTA`, stub-ul), redirecționările SEO și, pe site-ul de verificare, parola porții (doar GET și HEAD).
+ * după bootstrap (și pe `/_andaxi/ping/`, `eCererea()`), înaintea setărilor, a pluginurilor, a pașilor de activare și a
+ * cache-ului de pagini, cu o conexiune a lui: nimic altceva nu rulează și nu așteaptă baza. Ruta din
+ * `src/Http/rute.php` (proprietar: nucleul, catalogul `nucleu.rute_publice`) face același lucru; e acolo pentru catalog
+ * și unelte, o cerere prin `public/index.php` nu ajunge la ea. Ocolește mentenanța din admin (`Maintenance`) și pe cea
+ * a deploy-ului (`MENTENANTA`, stub-ul), redirecționările SEO și, pe site-ul de verificare, parola porții (doar GET și
+ * HEAD pe adresa exactă, fără „/” la sfârșit).
  */
 final class Ping
 {
@@ -31,12 +33,16 @@ final class Ping
     /** Secunde: conectarea la bază și fiecare citire. */
     public const LIMITA_BAZA = 2;
 
-    /** Cererea curentă e pingul? (GET sau HEAD, exact calea, cu sau fără parametri.) */
+    /**
+     * Cererea curentă e pingul? GET sau HEAD, cu sau fără parametri, pe calea lui sau pe ea cu „/” la sfârșit
+     * (`/_andaxi/ping/`): routerul scoate „/”-ul final și le duce pe amândouă la ruta pingului, iar redirecționările SEO
+     * nu ating `/_andaxi`, deci și forma cu „/” trebuie servită aici, înaintea sesiunii și a conexiunii aplicației.
+     */
     public static function eCererea(): bool
     {
         $metoda = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? ''));
-        return ($metoda === 'GET' || $metoda === 'HEAD')
-            && (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '') === self::CALE;
+        $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '');
+        return ($metoda === 'GET' || $metoda === 'HEAD') && $cale !== '' && rtrim($cale, '/') === self::CALE;
     }
 
     /** Trimite răspunsul (codul, antetele și, în afară de HEAD, corpul JSON). Nu oprește scriptul. */

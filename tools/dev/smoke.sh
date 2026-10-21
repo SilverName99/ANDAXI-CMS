@@ -296,9 +296,16 @@ verifica_p nucleu "health (cu starea schemei)" 200 - GET /health "schema: la_zi"
 verifica_p nucleu "ping: baza, versiunea codului, schema" 200 - GET /_andaxi/ping '"ok":true,"db":true,"cod":null,"schema":"la_zi"'
 confirma "ping: JSON, Cache-Control: no-store, fără cookie de sesiune" \
     bash -c "tr -d '\r' < '$TMP/antet' | grep -qix 'cache-control: no-store' && tr -d '\r' < '$TMP/antet' | grep -qi '^content-type: application/json' && ! grep -qi '^set-cookie:' '$TMP/antet'"
+# Cu „/” la sfârșit routerul ajunge tot la ping: trebuie servit tot ca ping (fără sesiune), nu de restul aplicației.
+verifica_p nucleu "ping cu „/” la sfârșit: tot pingul" 200 - GET /_andaxi/ping/ '"ok":true,"db":true,"cod":null,"schema":"la_zi"'
+confirma "ping cu „/” la sfârșit: no-store, fără cookie de sesiune" \
+    bash -c "tr -d '\r' < '$TMP/antet' | grep -qix 'cache-control: no-store' && ! grep -qi '^set-cookie:' '$TMP/antet'"
 SESIUNI_PING="$(find "$RADACINA/storage/sessions" -maxdepth 1 -type f -name 'sess_*' | wc -l)"
-for _ in 1 2 3; do curl -s --noproxy '*' -o /dev/null "$B/_andaxi/ping" || true; done
-confirma "ping: nicio sesiune nouă în storage/sessions (3 cereri)" \
+for _ in 1 2 3; do
+    curl -s --noproxy '*' -o /dev/null "$B/_andaxi/ping" || true
+    curl -s --noproxy '*' -o /dev/null "$B/_andaxi/ping/" || true
+done
+confirma "ping: nicio sesiune nouă în storage/sessions (6 cereri, și cu „/” la sfârșit)" \
     bash -c "[ \"\$(find '$RADACINA/storage/sessions' -maxdepth 1 -type f -name 'sess_*' | wc -l)\" = '$SESIUNI_PING' ]"
 
 scrie ""

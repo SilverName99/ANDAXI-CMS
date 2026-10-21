@@ -682,6 +682,12 @@ doar chei citite de migrările din `database/migrari/`, valori permise și chei 
 3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe site-ul live `--plan`, apoi `--aplica` (fără
    `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12): o corectură e `setari-inghetate-2.json`.
 
+Erorile PHP ale comenzilor (`migreaza.php`, `install.php`, cronurile) apar în terminal, pe stderr, ca până acum: o
+eroare fatală din afara raportului runner-ului (memoria terminată, de exemplu) se vede acolo, cu codul de ieșire 255.
+În așezarea de azi linia de comandă nu scrie în `storage/logs/php.log` (acolo scriu doar paginile, când serverul web
+nu are alt jurnal); în Etapa 2 (`bin/platforma --site=`) le scrie și acolo ([DEZVOLTARE.md](DEZVOLTARE.md), „Unde
+scrie codul”, jurnalul erorilor PHP).
+
 ## O migrare nouă, pas cu pas
 
 1. Numărul (NNNN) e cel rezervat pentru pachetul de lucru în planul Etapei 1 (§4.3), chiar dacă e sub ultimul
