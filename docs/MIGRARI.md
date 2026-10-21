@@ -484,7 +484,7 @@ de `App\Support\Activari::ruleaza`), o singură dată pe bază, când pluginul d
 | Plugin | Pas | Ce face |
 |---|---|---|
 | `acorduri_gdpr` | `pagina_acorduri_gdpr` | pagina `/acorduri-gdpr` cu `{{gdpr_agreements_form}}`, **doar dacă nu există** (nici ștearsă): o pagină ștearsă de admin rămâne ștearsă (codul vechi o readucea la fiecare pagină din admin cât pluginul era vizibil) |
-| `erp` | `prag_trimitere_erp` | `erp_trimite_din` = acum, **doar dacă cheia lipsește cu totul** din `settings`: o valoare goală (înghețarea Bioscem: fără prag) rămâne. Pornit pe un site care nu l-a avut, ERP-ul nu mai primește tot istoricul „pending” (G-M8; îl citește WP-12, E1) |
+| `erp` | `prag_trimitere_erp` | `erp_trimite_din` = acum, **doar dacă cheia lipsește cu totul** din `settings`: o valoare goală (înghețarea Bioscem: fără prag) rămâne. Pornit pe un site care nu l-a avut, ERP-ul nu mai primește tot istoricul „pending” (G-M8). Îl respectă, din WP-12 (E1), `retryPending`, contoarele din Setări → ERP ANDAXI și Admin → Comenzi; cât timp cheia lipsește (pasul n-a rulat încă), nicio comandă nu pleacă automat ([PLUGINURI.md](PLUGINURI.md), `erp`) |
 
 Ce s-a făcut pe o bază stă chiar în ea, în setarea `activari_pluginuri` (pluginul → momentul): un plugin
 „pornit” care nu e acolo își rulează pașii și intră acolo (la o eroare rămâne pe dinafară și se încearcă din

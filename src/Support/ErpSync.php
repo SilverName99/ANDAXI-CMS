@@ -258,12 +258,84 @@ final class ErpSync
     }
 
     /**
+     * Pragul trimiterii automate în ERP (planul Etapei 1, WP-12 E1; G-M8): setarea `erp_trimite_din`.
+     *
+     *  - `fara`: cheia există și e goală: fără prag, ca până acum (înghețarea Bioscem, un site legat
+     *    de mult de ERP);
+     *  - `data`: o dată (`Y-m-d H:i:s`, scrisă de pasul de activare al pluginului `erp` când pornește pe
+     *    un site care nu l-a avut): comenzile plasate înainte nu se trimit automat; una anume se poate
+     *    trimite din admin (🔄 în Comenzi), iar evenimentele unei comenzi trimise (plata, anularea, returul)
+     *    merg ca înainte;
+     *  - `lipsa`: cheia lipsește cu totul: pasul de activare n-a rulat încă (baza nu e la zi cu migrările,
+     *    `docs/MIGRARI.md`, „Pașii de activare”), deci pragul nu se știe și istoricul nu pleacă încă;
+     *  - `gresit`: altă valoare (scrisă de mână): ca `lipsa`, până se corectează.
+     *
+     * Setarea nu e în `Settings::DEFAULTS`: lipsa ei are un înțeles al ei (pasul de activare o scrie doar
+     * dacă lipsește), pe care o valoare implicită l-ar șterge; se citește deci rândul însuși.
+     *
+     * @return array{stare: 'fara'|'data'|'lipsa'|'gresit', din: ?string}
+     */
+    public static function pragTrimitere(PDO $db): array
+    {
+        try {
+            $stmt = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+            $stmt->execute(['k' => 'erp_trimite_din']);
+            $valoare = $stmt->fetchColumn();
+        } catch (Throwable) {
+            return ['stare' => 'lipsa', 'din' => null];
+        }
+        if ($valoare === false || $valoare === null) {
+            return ['stare' => 'lipsa', 'din' => null];
+        }
+        $valoare = trim((string) $valoare);
+        if ($valoare === '') {
+            return ['stare' => 'fara', 'din' => null];
+        }
+        $data = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $valoare);
+        if ($data === false || $data->format('Y-m-d H:i:s') !== $valoare) {
+            return ['stare' => 'gresit', 'din' => null];
+        }
+        return ['stare' => 'data', 'din' => $valoare];
+    }
+
+    /**
+     * Condiția pragului pentru o interogare pe `orders` (WP-12 E1): același filtru în `retryPending`, în
+     * numărătorile din Setări → ERP ANDAXI și în contorul `erp` al `LucruriInCurs` (WP-27, Etapa 2), ca
+     * cifrele să spună exact ce va pleca. Fără prag: nimic; cu o dată: comenzile plasate de atunci; cu
+     * pragul încă nescris sau greșit: nicio comandă.
+     *
+     * @param array{stare: string, din: ?string} $prag din pragTrimitere()
+     * @return array{0: string, 1: array<string, string>} fragmentul SQL (începe cu „ AND ”) și parametrii lui
+     */
+    public static function filtruPrag(array $prag, string $coloana = 'created_at'): array
+    {
+        return match ($prag['stare'] ?? 'lipsa') {
+            'fara' => ['', []],
+            'data' => [' AND ' . $coloana . ' >= :erp_trimite_din', ['erp_trimite_din' => (string) $prag['din']]],
+            default => [' AND 1 = 0', []],
+        };
+    }
+
+    /**
+     * Comanda e de dinainte de pragul trimiterii (WP-12 E1)? Doar cu un prag dat; atunci nu pleacă
+     * automat, dar se poate trimite de mână.
+     *
+     * @param array{stare: string, din: ?string} $prag
+     */
+    public static function inainteDePrag(array $prag, string $creata): bool
+    {
+        return ($prag['stare'] ?? '') === 'data' && trim($creata) !== '' && trim($creata) < (string) $prag['din'];
+    }
+
+    /**
      * Reîncearcă comenzile eșuate al căror termen a venit. Rulează din cron.
      *
      * `tinute` sunt comenzile refuzate fiindcă modulul „Magazin online” e
-     * oprit în ERP: nu sunt eșecuri, așteaptă repornirea.
+     * oprit în ERP: nu sunt eșecuri, așteaptă repornirea. Doar comenzile de la
+     * pragul trimiterii (`erp_trimite_din`, pragTrimitere): cele de dinainte nu
+     * pleacă automat; fără prag scris încă, niciuna (`prag` spune care e cazul).
      *
-     * @return array{incercate: int, reusite: int, esuate: int, tinute: int}
+     * @return array{incercate: int, reusite: int, esuate: int, tinute: int, prag: string, prag_din: ?string}
      */
     public static function retryPending(PDO $db, int $limit = 25): array
     {
@@ -273,6 +345,8 @@ final class ErpSync
         // nimic — nici comenzile obișnuite.
         Precomanda::ensureSchema($db);
 
+        $prag = self::pragTrimitere($db);
+        [$sqlPrag, $parametriPrag] = self::filtruPrag($prag);
         $stmt = $db->prepare(
             "SELECT id FROM orders
              WHERE deleted_at IS NULL
@@ -282,13 +356,14 @@ final class ErpSync
                AND erp_attempts < :max_attempts
                AND (erp_next_retry_at IS NULL OR erp_next_retry_at <= NOW())
                AND status NOT IN ('cancelled', 'refunded', 'failed', 'returned')
-               AND (payment_method NOT IN (" . PaymentMethods::cardSql() . ") OR payment_status = 'paid')
+               AND (payment_method NOT IN (" . PaymentMethods::cardSql() . ") OR payment_status = 'paid')"
+               . $sqlPrag . "
              ORDER BY id ASC
              LIMIT " . max(1, min(200, $limit))
         );
-        $stmt->execute(['max_attempts' => self::MAX_ATTEMPTS]);
+        $stmt->execute(['max_attempts' => self::MAX_ATTEMPTS] + $parametriPrag);
 
-        $rezultat = ['incercate' => 0, 'reusite' => 0, 'esuate' => 0, 'tinute' => 0];
+        $rezultat = ['incercate' => 0, 'reusite' => 0, 'esuate' => 0, 'tinute' => 0, 'prag' => $prag['stare'], 'prag_din' => $prag['din']];
         foreach (($stmt->fetchAll() ?: []) as $row) {
             $rezultat['incercate']++;
             $push = self::push($db, (int) $row['id']);

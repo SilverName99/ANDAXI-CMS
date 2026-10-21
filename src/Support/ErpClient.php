@@ -59,6 +59,23 @@ final class ErpClient
         return new self($url, $key, (int) ($settings['erp_timeout'] ?? 20));
     }
 
+    /**
+     * Clientul cu timeout scurt, pentru citirile din calea de afișare (stocul din magazin, din coș și
+     * din admin). Acolo un ERP lent nu are voie să țină pagina: mai bine rămâne stocul de pe site
+     * decât să aștepte vizitatorul (și lacătul sesiunii lui) zeci de secunde. Trimiterile, anulările
+     * și restul operațiilor din admin folosesc timeout-ul întreg din setări. Din Biovitality
+     * (`6cc6fc5`, acolo 4 secunde); aici 3 (planul SEO, partea B, B6).
+     */
+    public static function fromDbRapid(PDO $db, int $timeout = 3): ?self
+    {
+        $client = self::fromDb($db);
+        if ($client === null) {
+            return null;
+        }
+        $client->timeout = max(2, $timeout);
+        return $client;
+    }
+
     /** Clientul activ, sau null dacă integrarea e oprită/neconfigurată. */
     public static function fromDb(PDO $db): ?self
     {

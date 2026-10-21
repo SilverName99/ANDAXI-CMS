@@ -4,6 +4,9 @@ $stockEnabled = (string) ($settings['erp_stock_enabled'] ?? '0') === '1';
 $apiKey = (string) ($settings['erp_api_key'] ?? '');
 $queue = is_array($queue ?? null) ? $queue : ['pending' => 0, 'failed' => 0, 'sent' => 0];
 $inCurs = (int) ($queue['cancel_pending'] ?? 0) + (int) ($queue['retur_pending'] ?? 0);
+// Pragul trimiterii automate (erp_trimite_din, WP-12 E1); fără prag pagina e cea de până acum.
+$pragErp = is_array($pragErp ?? null) ? $pragErp : ['stare' => 'fara', 'din' => null];
+$inainteDePrag = (int) ($queue['inainte_de_prag'] ?? 0);
 // Explicațiile despre AWB și puncte doar pe site-urile cu livrarea FAN, respectiv cu fidelitatea.
 $cuFan = \App\Support\Plugins::vizibil('livrare_fan');
 $cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
@@ -38,6 +41,16 @@ $cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
             <div style="font-size:22px;font-weight:700;color:#92400e;"><?= $inCurs ?></div>
         </div>
     </div>
+<?php if ($pragErp['stare'] === 'data'): ?>
+    <p class="muted" data-prag-erp="data" style="margin:0 0 16px;">
+        Comenzile plasate înainte de <strong><?= htmlspecialchars(date('d.m.Y H:i', (int) strtotime((string) $pragErp['din'])), ENT_QUOTES) ?></strong>, momentul legării site-ului cu ERP-ul, nu se trimit automat (<?= $inainteDePrag ?> netrimise; nu intră în „În așteptare” și „Eșuate”). Una anume se trimite din Comenzi, cu 🔄.
+    </p>
+<?php endif; ?>
+<?php if ($pragErp['stare'] === 'lipsa' || $pragErp['stare'] === 'gresit'): ?>
+    <p class="muted" data-prag-erp="<?= htmlspecialchars((string) $pragErp['stare'], ENT_QUOTES) ?>" style="margin:0 0 16px;color:#92400e;">
+        Pragul trimiterii (setarea <code>erp_trimite_din</code>) <?= $pragErp['stare'] === 'lipsa' ? 'nu e încă scris' : 'nu e o dată' ?>: nicio comandă netrimisă nu pleacă automat în ERP (<?= $inainteDePrag ?> așteaptă). Îl scrie pasul de activare al ERP-ului, la prima cerere după ce baza e la zi cu migrările (<code>scripts/migreaza.php --aplica</code>).
+    </p>
+<?php endif; ?>
 
     <form method="post" action="/admin/settings/erp" class="form-grid">
         <label class="form-field" style="grid-column:1 / -1;">

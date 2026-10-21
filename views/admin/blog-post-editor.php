@@ -7,6 +7,8 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
 $fieldMap = is_array($fieldMap ?? null) ? $fieldMap : ['0' => []];
 $selectedTemplateId = (int) ($selectedTemplateId ?? 0);
 $selectedCategoryId = (int) ($selectedCategoryId ?? 0);
+// Categoria venită doar ca text la import, fără o categorie din listă cu același nume (WP-12, X1b).
+$categorieDoarText = trim((string) ($categorieDoarText ?? ''));
 $editingPostSeo = is_array($editingPostSeo ?? null) ? $editingPostSeo : [
     'title' => '', 'description' => '', 'canonical_url' => '', 'image_url' => '',
 ];
@@ -67,6 +69,10 @@ $returnParam = $postId > 0 ? (string) $postId : 'new';
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
+<?php if ($categorieDoarText !== ''): ?>
+            <small class="muted" data-categorie-doar-text>Categoria postării, „<?= htmlspecialchars($categorieDoarText, ENT_QUOTES) ?>”, a venit doar ca text (de exemplu de la un import) și nu e în lista de mai sus: rămâne la salvare. Bifează o categorie dacă vrei s-o schimbi.</small>
+            <input type="hidden" name="category" value="<?= htmlspecialchars($categorieDoarText, ENT_QUOTES) ?>">
+<?php endif; ?>
         </div>
 
         <div class="field" data-field="title">
@@ -233,7 +239,7 @@ $returnParam = $postId > 0 ? (string) $postId : 'new';
                     data-image-url="<?= htmlspecialchars((string) ($image['image_url'] ?? ''), ENT_QUOTES) ?>"
                     data-search="<?= htmlspecialchars(strtolower((string) (($image['title'] ?? '') . ' ' . ($image['alt_text'] ?? '') . ' ' . ($image['image_url'] ?? ''))), ENT_QUOTES) ?>"
                 >
-                    <img src="<?= htmlspecialchars((string) ($image['image_url'] ?? ''), ENT_QUOTES) ?>" alt="" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+                    <img loading="lazy" decoding="async" src="<?= htmlspecialchars((string) ($image['image_url'] ?? ''), ENT_QUOTES) ?>" alt="" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
                     <strong><?= htmlspecialchars((string) (($image['title'] ?? '') !== '' ? $image['title'] : 'Imagine fără titlu'), ENT_QUOTES) ?></strong>
                 </button>
             <?php endforeach; ?>

@@ -4,6 +4,8 @@ $areFan = \App\Support\Plugins::vizibil('livrare_fan');
 $areErp = \App\Support\Plugins::vizibil('erp');
 // Textele care pomenesc ERP-ul: pe un site fără pluginul ERP rămâne doar ce se întâmplă pe site.
 $cuErp = static fn (string $text, string $faraErp): string => $areErp ? $text : $faraErp;
+// Pragul trimiterii în ERP (erp_trimite_din, WP-12 E1): comenzile de dinainte nu pleacă automat.
+$pragErp = is_array($pragErp ?? null) ? $pragErp : ['stare' => 'fara', 'din' => null];
 $arePromo = \App\Support\Plugins::vizibil('produse_promo');
 $arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
 $areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
@@ -423,6 +425,16 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                             'cancel_pending' => 'warn',
                             'retur_pending' => 'warn',
                         ][$erpStatus] ?? 'warn';
+                        $erpEticheta = (string) ($erpLabels[$erpStatus] ?? $erpStatus);
+                        $erpTitluStare = $erpError !== '' ? $erpError : ($erpProblems !== '' ? 'De rezolvat în ERP: ' . $erpProblems : '');
+                        // Comanda de dinainte de pragul trimiterii (erp_trimite_din, WP-12 E1): nu pleacă automat.
+                        $erpInainteDePrag = $erpEnabled && in_array($erpStatus, ['pending', 'failed'], true)
+                            && \App\Support\ErpSync::inainteDePrag($pragErp, (string) ($order['created_at'] ?? ''));
+                        if ($erpInainteDePrag) {
+                            $erpPill = 'muted';
+                            $erpEticheta = 'ERP: înainte de legare';
+                            $erpTitluStare = 'Înainte de legarea cu ERP-ul (nu se trimite automat). O poți trimite cu 🔄.';
+                        }
                         $erpFactura = trim((string) ($order['erp_factura_numar'] ?? ''));
                         $precomandaStare = $arePrecomenzi ? strtolower(trim((string) ($order['preorder_status'] ?? ''))) : '';
                         $ePrecomandaInAsteptare = $precomandaStare === 'asteptare';
@@ -512,8 +524,8 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                 <?php endif; ?>
                                 <?php if ($erpEnabled && !$ePrecomandaInAsteptare): ?>
                                     <span class="status-pill status-pill--<?= htmlspecialchars($erpPill, ENT_QUOTES) ?>"
-                                          title="<?= htmlspecialchars($erpError !== '' ? $erpError : ($erpProblems !== '' ? 'De rezolvat în ERP: ' . $erpProblems : ''), ENT_QUOTES) ?>">
-                                        <?= htmlspecialchars((string) ($erpLabels[$erpStatus] ?? $erpStatus), ENT_QUOTES) ?>
+                                          title="<?= htmlspecialchars($erpTitluStare, ENT_QUOTES) ?>">
+                                        <?= htmlspecialchars($erpEticheta, ENT_QUOTES) ?>
                                     </span>
                                 <?php endif; ?>
                                 <?php if ($paymentError !== ''): ?>
@@ -672,7 +684,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                                 . ($erpError !== '' ? ' — ultima eroare: ' . $erpError : '');
                                         ?>
                                         <form method="post" action="/admin/orders/<?= $orderId ?>/erp-retry"
-                                              <?= $erpTrimisa ? 'onsubmit="return confirm(\'Comanda ' . htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) . ' a fost deja trimisă în ERP.\n\nO retrimiți? Acolo se actualizează cu ce e acum pe site.\')"' : '' ?>>
+                                              <?= $erpTrimisa ? 'onsubmit="return confirm(\'Comanda ' . htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) . ' a fost deja trimisă în ERP.\n\nO retrimiți? Acolo se actualizează cu ce e acum pe site.\')"' : ($erpInainteDePrag ? 'onsubmit="return confirm(\'Comanda ' . htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) . ' e de dinainte de legarea cu ERP-ul și nu se trimite automat.\n\nO trimiți acum în ERP?\')"' : '') ?>>
                                             <button type="submit" class="order-action-btn"
                                                     title="<?= htmlspecialchars($erpTitlu, ENT_QUOTES) ?>"
                                                     <?= $erpTrimisa ? 'style="opacity:.55;"' : '' ?>>🔄</button>

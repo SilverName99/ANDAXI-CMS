@@ -116,6 +116,40 @@ if (!$db instanceof PDO) {
     exit(1);
 }
 $unu = static fn (string $sql): string => (string) ($db->query($sql)->fetchColumn() ?: '');
+
+/**
+ * Setările înghețate ale Bioscem (`site-uri/bioscem/setari-inghetate.json`, docs/MIGRARI.md, „Înghețarea setărilor”),
+ * puse pe baza de test pe durata comparației: codul Bioscem nu le citește, dar baza Bioscem adoptată le are, deci codul
+ * curent se compară cu ele (regula R1 din port-biovitality.md; din WP-14, baza în forma Bioscem le are de la instalare).
+ * Azi: `erp_trimite_din` gol (fără prag; WP-12 E1). Pe baza de dezvoltare pasul de activare al ERP-ului a scris data
+ * instalării, deci fără înghețare Setări → ERP ANDAXI ar număra separat comenzile demo de dinainte de prag. Valorile
+ * private (înlocuitori în git) nu se pun. La final, și la o oprire, fiecare setare revine cum era (și o cheie lipsă).
+ */
+$setariInghetateBioscem = json_decode((string) @file_get_contents($radacina . '/site-uri/bioscem/setari-inghetate.json'), true);
+$setariDePusLaLoc = [];
+foreach ((array) ($setariInghetateBioscem['setari'] ?? []) as $cheieInghetata => $intrareInghetata) {
+    $valoareInghetata = is_array($intrareInghetata) ? ($intrareInghetata['valoare'] ?? null) : $intrareInghetata;
+    if (!is_string($valoareInghetata) || (is_array($intrareInghetata) && !empty($intrareInghetata['privat']))) {
+        continue;
+    }
+    $stmtInghetata = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+    $stmtInghetata->execute(['k' => (string) $cheieInghetata]);
+    $setariDePusLaLoc[(string) $cheieInghetata] = $stmtInghetata->fetchColumn();
+    \App\Support\Settings::save($db, [(string) $cheieInghetata => $valoareInghetata]);
+}
+register_shutdown_function(static function () use ($db, $setariDePusLaLoc): void {
+    foreach ($setariDePusLaLoc as $cheie => $valoare) {
+        if ($valoare === false) {
+            $db->prepare('DELETE FROM settings WHERE `key` = :k')->execute(['k' => $cheie]);
+        } else {
+            \App\Support\Settings::save($db, [$cheie => (string) $valoare]);
+        }
+    }
+});
+if ($setariDePusLaLoc !== []) {
+    echo '  INFO  setările înghețate ale Bioscem, pe durata comparației: ', implode(', ', array_keys($setariDePusLaLoc)), "\n";
+}
+
 $parola = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
 $adminEmail = (string) (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro');
 
@@ -290,6 +324,16 @@ $idCupon = $unu('SELECT id FROM coupons ORDER BY id LIMIT 1');
 $idSablonProdus = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
 // Pagina din bază cu liste goale (o face scriptul mai jos, la cereri).
 $paginaListe = 'test-liste-goale-' . getmypid();
+// WP-12 (X1b): postarea demo importată cu categoria doar ca text (tools/dev/date-demo.php) și o a doua postare, căreia
+// cazul de salvare îi pune drept categorie doar numele unei categorii din listă (declarațiile din $deBioscem).
+$idPostareDoarText = (int) $unu("SELECT id FROM blog_posts WHERE slug = 'sfaturi-vechi-importate' AND deleted_at IS NULL");
+$categorieDoarTextDemo = $unu('SELECT category FROM blog_posts WHERE id = ' . $idPostareDoarText);
+$idPostareTextCaNume = (int) $unu("SELECT id FROM blog_posts WHERE deleted_at IS NULL AND slug <> 'sfaturi-vechi-importate' ORDER BY id LIMIT 1 OFFSET 1");
+// O categorie nouă doar pentru cazul acela (id fix, ștearsă la final): bifa ei apare doar în editorul postării lui, nu și
+// în cazul „blog: editorul bifează toate categoriile postării”, unde sunt bifate toate categoriile demo.
+$idMaxCategoriiBlog = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_categories');
+$idCategorieDupaNume = $idMaxCategoriiBlog + 1;
+$numeCategorieDupaNume = 'Categorie importată (compara)';
 
 /**
  * Doar față de un commit din acest repo (baza „commit”, istoricul: --baza=f5ae5ea): schimbările din
@@ -727,6 +771,30 @@ $deBioscem = [
         'motiv' => 'pingul monitorizării (GET /_andaxi/ping) e o adresă tehnică, ca /webhook/: robots.txt o închide '
             . 'motoarelor de căutare. Celelalte reguli și ordinea lor rămân.',
     ],
+    // WP-12 (X1b): o postare importată cu categoria doar ca text. Paginile se cer în cazurile de salvare „blog: …
+    // categoria doar ca text …” (mai jos), deci doar față de codul Bioscem (ca editorul postării, cu diferențele portului
+    // vertij); site-uri/bioscem/ce-se-schimba.md.
+    [
+        'nume' => 'editorul postării: categoria doar ca text, fără o categorie cu același nume, se arată și se trimite la salvare',
+        'cale' => '/admin/blog/posts/editor?post=' . $idPostareDoarText,
+        'nou' => "\n            <small class=\"muted\" data-categorie-doar-text>Categoria postării, „" . $categorieDoarTextDemo
+            . "”, a venit doar ca text (de exemplu de la un import) și nu e în lista de mai sus: rămâne la salvare. Bifează o "
+            . "categorie dacă vrei s-o schimbi.</small>\n            <input type=\"hidden\" name=\"category\" value=\""
+            . $categorieDoarTextDemo . '">',
+        'vechi' => '',
+        'motiv' => 'X1b (WP-12): editorul Bioscem nu bifează nimic la o postare cu categoria doar ca text și nu trimite niciun câmp de '
+            . 'categorie, deci o re-salvare o ștergea; acum textul se arată și se trimite (câmp ascuns), iar salvarea îl păstrează.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'editorul postării: categoria doar ca text, cu numele unei categorii din listă, e bifată',
+        'cale' => '/admin/blog/posts/editor?post=' . $idPostareTextCaNume,
+        'nou' => 'name="category_ids[]" value="' . $idCategorieDupaNume . '" checked>',
+        'vechi' => 'name="category_ids[]" value="' . $idCategorieDupaNume . '" >',
+        'motiv' => 'X1b (WP-12): categoria din listă cu același nume (sau aceeași adresă) ca textul postării se bifează, deci re-salvarea '
+            . 'leagă postarea de ea; în Bioscem nicio bifă, iar re-salvarea ștergea categoria.',
+        'mod' => 'repo',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
@@ -771,7 +839,54 @@ $coduriDeBioscem = [
             . 'azi pagina 404, ca /_andaxi/ping.',
     ],
 ];
+// WP-12 (Biovitality c64fc2d, 4f65fd9): editoarele de cod doar pe cele patru pagini care le folosesc (C6) și pozele
+// selectoarelor de imagini încărcate abia la deschiderea lor (C7). Câte poze are fiecare selector: galeria demo, cu
+// filtrul și limita controllerului (produse și Setări magazin: doar „image”, 300; emailuri, editorul postării și
+// autorii: „image” sau fără tip, 500).
+$cdnEditoare = '';
+foreach (['codemirror@5.65.18/lib/codemirror.min.css', 'codemirror@5.65.18/theme/material-darker.min.css',
+    'codemirror@5.65.18/addon/dialog/dialog.min.css'] as $fisierCdn) {
+    $cdnEditoare .= '    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/' . $fisierCdn . "\">\n";
+}
+foreach (['codemirror@5.65.18/lib/codemirror.min.js', 'codemirror@5.65.18/mode/javascript/javascript.min.js',
+    'codemirror@5.65.18/mode/css/css.min.js', 'codemirror@5.65.18/mode/xml/xml.min.js', 'codemirror@5.65.18/mode/htmlmixed/htmlmixed.min.js',
+    'codemirror@5.65.18/addon/dialog/dialog.min.js', 'codemirror@5.65.18/addon/search/searchcursor.min.js',
+    'codemirror@5.65.18/addon/search/search.min.js', 'codemirror@5.65.18/addon/edit/closebrackets.min.js',
+    'codemirror@5.65.18/addon/edit/matchbrackets.min.js', 'codemirror@5.65.18/addon/selection/active-line.min.js',
+    'js-beautify@1.15.1/js/lib/beautify.min.js', 'js-beautify@1.15.1/js/lib/beautify-css.min.js',
+    'js-beautify@1.15.1/js/lib/beautify-html.min.js'] as $fisierCdn) {
+    $cdnEditoare .= '    <script src="https://cdn.jsdelivr.net/npm/' . $fisierCdn . "\"></script>\n";
+}
+$pozeSelectorImagine = min(300, (int) $unu("SELECT COUNT(*) FROM gallery_images WHERE media_type = 'image'"));
+$pozeSelectorSauFaraTip = min(500, (int) $unu("SELECT COUNT(*) FROM gallery_images WHERE media_type = 'image' OR media_type IS NULL"));
 $porturiBiovitality = [
+    [
+        'nume' => 'adminul: CodeMirror și js-beautify doar în cele patru editoare de cod',
+        'cale' => '/admin*',
+        // Editoarele (design-site, page-editor, product-template-editor; blog-template-editor nu se cere aici) le
+        // încarcă în continuare, deci acolo pagina e cea a Bioscem.
+        'fara_pagini' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit',
+            '/admin/products/templates/' . $idSablonProdus . '/builder', '/admin/design'],
+        'nou' => "\">\n</head>",
+        'vechi' => "\">\n" . $cdnEditoare . '</head>',
+        'motiv' => 'Biovitality c64fc2d (WP-12 C6): cele 15 fișiere de pe CDN se încărcau, fără defer, pe fiecare pagină de admin, '
+            . 'deși doar editoarele de cod le folosesc („Erori moștenite” 6 din docs/DEZVOLTARE.md); paginile arată la fel.',
+    ],
+    [
+        'nume' => 'selectoarele de imagini din galerie: pozele se încarcă abia când se deschide selectorul',
+        'cale' => ['/admin/products', '/admin/settings/store', '/admin/emails/newsletters*', '/admin/blog/posts/editor*'],
+        'ori' => max(1, $pozeSelectorImagine),
+        'ori_pe_pagina' => [
+            // Setări magazin are două selectoare (favicon și imaginea SEO implicită).
+            '/admin/settings/store' => max(1, 2 * $pozeSelectorImagine),
+            '/admin/emails/newsletters*' => max(1, $pozeSelectorSauFaraTip),
+            '/admin/blog/posts/editor*' => max(1, $pozeSelectorSauFaraTip),
+        ],
+        'nou' => '<img loading="lazy" decoding="async" src="',
+        'vechi' => '<img src="',
+        'motiv' => 'Biovitality 4f65fd9 (WP-12 C7): selectorul stă într-o fereastră ascunsă, dar browserul descărca toate pozele '
+            . 'galeriei (până la 500) la fiecare încărcare a paginii (pe Email-uri, pe orice tab); acum doar la deschiderea lui.',
+    ],
 ];
 // Postările cazului „blog: un link YouTube (fără acord) și unul Vimeo (cu acord)” din salvări (mai jos): doar pe
 // paginile lor apar playerul și caseta „Pornește videoclipul” (declarate aici, în $porturiVertij).
@@ -866,9 +981,16 @@ $listeCoduri = $doarInModulBazei(['$coduriDeBioscem' => $coduriDeBioscem]);
 // Eticheta fiecărei declarații de cod => de câte ori i s-a cerut pagina (trebuie exact o dată).
 $coduriGasite = [];
 /** Scoate din pagina curentă tot ce e declarat (marcaje, apoi texte); problemele în $probleme. */
-$faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort): string {
+// Fiecare declarație găsită măcar o dată în toată rularea (WP-12): una pe care n-o atinge nicio pagină cerută (o pagină
+// scoasă din listă, un caz de salvare care nu mai rulează) n-ar dovedi nimic, deci pică la final.
+$gasiteInRulare = [];
+$faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort, &$gasiteInRulare): string {
     $html = diferente_marcaje($marcajePort, $cale, $html, $gasite, $probleme);
-    return diferente_texte($listeDeclarate, $cale, $html, $gasite, $probleme);
+    $html = diferente_texte($listeDeclarate, $cale, $html, $gasite, $probleme);
+    foreach ($gasite as $etichetaGasita => $deCate) {
+        $gasiteInRulare[$etichetaGasita] = ($gasiteInRulare[$etichetaGasita] ?? 0) + (int) $deCate;
+    }
+    return $html;
 };
 /** [cale => tipurile JSON-LD așteptate]; orice altă pagină nu are date structurate. */
 $jsonLdAsteptat = static function (string $cale): array {
@@ -1121,7 +1243,10 @@ foreach ($pagini as $pagina) {
     $problemePorturi = [];
     $a = $normalizeaza($r['baza']['corp']);
     $corpCurent = $fataDeCommit ? $faraSeo($cale, $r['curent']['corp'], $gasite) : $r['curent']['corp'];
-    $b = $normalizeaza($faraDeclarate($cale, $corpCurent, $porturiGasite, $problemePorturi));
+    // O redirecționare (3xx) nu e o pagină: declarațiile de texte nu se aplică pe ea (de exemplu „/admin” al unui rol
+    // parțial, care duce la pagina rolului); corpul ei se compară neatins.
+    $esteRedirectionare = $r['curent']['cod'] >= 300 && $r['curent']['cod'] < 400;
+    $b = $normalizeaza($esteRedirectionare ? $corpCurent : $faraDeclarate($cale, $corpCurent, $porturiGasite, $problemePorturi));
     $eticheta = str_pad($rol, 13) . $cale;
     // Diferențele SEO așteptate (doar față de un commit dinaintea SEO): datele structurate
     // exact unde trebuie, robots.txt cu regulile noi.
@@ -2080,11 +2205,146 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         },
     ];
 
+    // ── Reparațiile WP-12 (tip „reparatie”): un defect al Bioscem pe care codul comun îl repară voit. „verifica” cere
+    // defectul pe rezultatul codului Bioscem (cazul ajunge chiar pe ramura reparată), „verifica_curent” reparația pe
+    // rezultatul codului curent, iar starea diferă exact prin „diferente” (rândurile lui salvari_diferente, în orice
+    // ordine): nici mai mult, nici altceva. Răspunsurile rămân identice (textele declarate scoase din paginile GET).
+    // Fiecare intră și în site-uri/bioscem/ce-se-schimba.md.
+    $corpPostareDin = static fn (array $rand, string $rezumat, array $extra = []): array => [
+        'action' => 'save',
+        'id' => (string) ($rand['id'] ?? ''),
+        'title' => (string) ($rand['title'] ?? ''),
+        'slug' => (string) ($rand['slug'] ?? ''),
+        'excerpt' => $rezumat,
+        'content' => (string) ($rand['content'] ?? ''),
+        'reading_minutes' => (string) ($rand['reading_minutes'] ?? '1'),
+        'published_at' => (string) ($rand['published_at'] ?? ''),
+        'author_id' => (string) ($rand['author_id'] ?? ''),
+        'template_id' => (string) ($rand['template_id'] ?? ''),
+        'featured_image_url' => (string) ($rand['featured_image_url'] ?? ''),
+    ] + ((int) ($rand['is_published'] ?? 0) === 1 ? ['is_published' => '1'] : []) + $extra;
+    // Ce trimite editorul, din pagina lui (ca un browser): bifele categoriilor și câmpul ascuns „category”, dacă există.
+    $campuriCategorieDinEditor = static function (string $html): array {
+        $campuri = [];
+        if (preg_match_all('#name="category_ids\[\]" value="(\d+)" checked>#', $html, $m) > 0) {
+            $campuri['category_ids'] = array_values($m[1]);
+        }
+        if (preg_match('#<input type="hidden" name="category" value="([^"]*)">#', $html, $m) === 1) {
+            $campuri['category'] = html_entity_decode($m[1], ENT_QUOTES);
+        }
+        return $campuri;
+    };
+    $tabeleAlePostarii = static fn (int $id): array => [
+        ['tabel' => 'blog_posts', 'unde' => 'id = :p1', 'param' => ['p1' => $id], 'cheie' => 'id'],
+        ['tabel' => 'blog_post_categories', 'unde' => 'post_id = :p2', 'param' => ['p2' => $id]],
+        ['tabel' => 'seo_pages', 'unde' => 'page_type = \'blog_post\' AND page_ref = :p3', 'param' => ['p3' => (string) $id], 'cheie' => 'id'],
+        $tokenCache,
+    ];
+    $postareDoarText = $citeste('SELECT * FROM blog_posts WHERE id = :id', ['id' => $idPostareDoarText])[0] ?? [];
+    $postareTextCaNume = $citeste('SELECT * FROM blog_posts WHERE id = :id', ['id' => $idPostareTextCaNume])[0] ?? [];
+    $rezumatReparatie = 'Rezumat schimbat la re-salvare (compara-cu-baza, WP-12)';
+    $salvataReparatia = static fn (array $stare): array => ($stare['postare']['excerpt'] ?? null) === $rezumatReparatie
+        ? [] : ['salvarea nu a ajuns în bază: rezumatul postării nu e cel trimis'];
+    $tipIdCategorie = $citeste('SELECT category_id FROM blog_posts WHERE category_id IS NOT NULL LIMIT 1')[0]['category_id'] ?? null;
+    $idCategorieCaInBaza = is_int($tipIdCategorie) ? $idCategorieDupaNume : (string) $idCategorieDupaNume;
+    $oferteSalvateJson = (string) json_encode($oferteSalvate, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $descriereScurtaReparatie = 'Descriere scurtă schimbată (compara-cu-baza, WP-12)';
+    $salvari[] = [
+        'nume' => 'oferte BBD: salvarea produsului fără câmpul ofertelor (JavaScript căzut) le păstrează',
+        'tip' => 'reparatie',
+        'reparatie' => 'WP-12 C2, din Biovitality c64fc2d',
+        'tabele' => [
+            ['tabel' => 'products', 'unde' => 'id = :p1', 'param' => ['p1' => $idProdusBbd], 'cheie' => 'id'],
+            ['tabel' => 'product_category_links', 'unde' => 'product_id = :p2', 'param' => ['p2' => $idProdusBbd], 'cheie' => 'id'],
+            ['tabel' => 'product_extra_field_values', 'unde' => 'product_id = :p3', 'param' => ['p3' => $idProdusBbd], 'cheie' => 'id'],
+            ['tabel' => 'seo_pages', 'unde' => 'page_type = \'product\' AND page_ref = :p4', 'param' => ['p4' => (string) $idProdusBbd], 'cheie' => 'id'],
+            $tokenCache,
+        ],
+        'pregateste' => static function (PDO $db) use ($idProdusBbd, $oferteSalvateJson): void {
+            $db->prepare('UPDATE products SET bbd_enabled = 1, bbd_entries_json = :j WHERE id = :id')->execute([
+                'j' => $oferteSalvateJson, 'id' => $idProdusBbd]);
+        },
+        // Formularul fără bbd_entries_json; descrierea scurtă schimbată arată că salvarea a ajuns în bază.
+        'cereri' => [['POST', '/admin/products/' . $idProdusBbd . '/update',
+            array_diff_key(['short_description' => $descriereScurtaReparatie] + $corpProdus, ['bbd_entries_json' => true])]],
+        'stare' => static fn (PDO $db): array => [
+            'produs' => salvari_fara_coloane($citeste('SELECT * FROM products WHERE id = :id', ['id' => $idProdusBbd])[0] ?? []),
+        ],
+        'verifica' => static fn (array $stare): array => array_merge(
+            ($stare['produs']['short_description'] ?? null) === $descriereScurtaReparatie ? [] : ['salvarea nu a ajuns în bază'],
+            ($stare['produs']['bbd_entries_json'] ?? null) === '[]' ? [] : ['ofertele nu s-au șters: '
+                . json_encode($stare['produs']['bbd_entries_json'] ?? null, JSON_UNESCAPED_UNICODE)]),
+        'verifica_curent' => static fn (array $stare): array => array_merge(
+            ($stare['produs']['short_description'] ?? null) === $descriereScurtaReparatie ? [] : ['salvarea nu a ajuns în bază'],
+            ($stare['produs']['bbd_entries_json'] ?? null) === $oferteSalvateJson ? [] : ['ofertele nu au rămas cele din bază: '
+                . json_encode($stare['produs']['bbd_entries_json'] ?? null, JSON_UNESCAPED_UNICODE)]),
+        'diferente' => ['bază: produs.bbd_entries_json: "[]" → ' . json_encode($oferteSalvateJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
+    ];
+    $salvari[] = [
+        'nume' => 'blog: o postare cu categoria doar ca text (importată) o păstrează la re-salvare',
+        'tip' => 'reparatie',
+        'reparatie' => 'WP-12 X1b',
+        'tabele' => $tabeleAlePostarii($idPostareDoarText),
+        'pregateste' => static function (PDO $db) use ($idPostareDoarText, $categorieDoarTextDemo): void {
+            $db->prepare('UPDATE blog_posts SET category = :c, category_id = NULL WHERE id = :id')
+                ->execute(['c' => $categorieDoarTextDemo, 'id' => $idPostareDoarText]);
+            $db->prepare('DELETE FROM blog_post_categories WHERE post_id = :id')->execute(['id' => $idPostareDoarText]);
+        },
+        'cereri' => [
+            ['GET', '/admin/blog/posts/editor?post=' . $idPostareDoarText, []],
+            static fn (array $raspunsuri): array => ['POST', '/admin/blog/posts',
+                $corpPostareDin($postareDoarText, $rezumatReparatie, $campuriCategorieDinEditor((string) ($raspunsuri[0]['corp'] ?? '')))],
+        ],
+        'stare' => static fn (PDO $db): array => $starePostare($db, $idPostareDoarText),
+        'verifica' => static fn (array $stare): array => array_merge($salvataReparatia($stare),
+            ($stare['postare']['category'] ?? null) === null && ($stare['postare']['category_id'] ?? null) === null && $stare['categorii'] === []
+                ? [] : ['categoria nu s-a pierdut la re-salvare: ' . json_encode($stare, JSON_UNESCAPED_UNICODE)]),
+        'verifica_curent' => static fn (array $stare, array $raspunsuri): array => array_merge($salvataReparatia($stare),
+            ($stare['postare']['category'] ?? null) === $categorieDoarTextDemo && ($stare['postare']['category_id'] ?? null) === null
+                && $stare['categorii'] === [] ? [] : ['categoria doar ca text nu a rămas: ' . json_encode($stare, JSON_UNESCAPED_UNICODE)],
+            str_contains((string) ($raspunsuri[0]['corp_brut'] ?? ''), 'data-categorie-doar-text') ? [] : ['editorul nu arată categoria']),
+        'diferente' => ['bază: postare.category: null → ' . json_encode($categorieDoarTextDemo, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
+    ];
+    $salvari[] = [
+        'nume' => 'blog: categoria doar ca text, cu numele unei categorii din listă, e bifată și se leagă la re-salvare',
+        'tip' => 'reparatie',
+        'reparatie' => 'WP-12 X1b',
+        'tabele' => array_merge($tabeleAlePostarii($idPostareTextCaNume), [
+            ['tabel' => 'blog_categories', 'unde' => 'id > :c1', 'param' => ['c1' => $idMaxCategoriiBlog], 'cheie' => 'id'],
+        ]),
+        'pregateste' => static function (PDO $db) use ($idPostareTextCaNume, $numeCategorieDupaNume, $idCategorieDupaNume): void {
+            $db->prepare('INSERT INTO blog_categories (id, name, slug, sort_order, is_active) VALUES (:id, :n, :s, 90, 1)')
+                ->execute(['id' => $idCategorieDupaNume, 'n' => $numeCategorieDupaNume, 's' => 'categorie-importata-compara']);
+            $db->prepare('UPDATE blog_posts SET category = :c, category_id = NULL WHERE id = :id')
+                ->execute(['c' => $numeCategorieDupaNume, 'id' => $idPostareTextCaNume]);
+            $db->prepare('DELETE FROM blog_post_categories WHERE post_id = :id')->execute(['id' => $idPostareTextCaNume]);
+        },
+        'cereri' => [
+            ['GET', '/admin/blog/posts/editor?post=' . $idPostareTextCaNume, []],
+            static fn (array $raspunsuri): array => ['POST', '/admin/blog/posts',
+                $corpPostareDin($postareTextCaNume, $rezumatReparatie, $campuriCategorieDinEditor((string) ($raspunsuri[0]['corp'] ?? '')))],
+        ],
+        'stare' => static fn (PDO $db): array => $starePostare($db, $idPostareTextCaNume),
+        'verifica' => static fn (array $stare): array => array_merge($salvataReparatia($stare),
+            ($stare['postare']['category'] ?? null) === null && ($stare['postare']['category_id'] ?? null) === null && $stare['categorii'] === []
+                ? [] : ['categoria nu s-a pierdut la re-salvare: ' . json_encode($stare, JSON_UNESCAPED_UNICODE)]),
+        'verifica_curent' => static fn (array $stare): array => array_merge($salvataReparatia($stare),
+            ($stare['postare']['category'] ?? null) === $numeCategorieDupaNume
+                && (int) ($stare['postare']['category_id'] ?? 0) === $idCategorieDupaNume && $stare['categorii'] === [$idCategorieDupaNume]
+                ? [] : ['postarea nu e legată de categoria cu același nume: ' . json_encode($stare, JSON_UNESCAPED_UNICODE)]),
+        'diferente' => [
+            'bază: postare.category: null → ' . json_encode($numeCategorieDupaNume, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'bază: postare.category_id: null → ' . json_encode($idCategorieCaInBaza),
+            'bază: categorii.0: null → ' . json_encode($idCategorieDupaNume),
+        ],
+    ];
+
     foreach ($salvari as $caz) {
         $regresie = ($caz['tip'] ?? 'schimbare') === 'regresie';
+        $reparatie = ($caz['tip'] ?? 'schimbare') === 'reparatie';
         // „sursa”: al cui commit e cazul (implicit Bioscem; un port din alt site vechi, de exemplu vertij).
-        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (' . ($caz['sursa'] ?? 'Bioscem') . ' ' . $caz['din']
-            . ($regresie ? ', regresie' : '') . ')';
+        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (' . ($reparatie ? 'reparație ' . (string) ($caz['reparatie'] ?? '?')
+            : ($caz['sursa'] ?? 'Bioscem') . ' ' . $caz['din'] . ($regresie ? ', regresie' : '')) . ')';
         $original = salvari_instantaneu($db, $caz['tabele']);
         $rezultate = [];
         $probleme = [];
@@ -2130,12 +2390,14 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                     // O salvare din admin face un token nou, la întâmplare, pentru versiunea fișierelor
                     // statice (ResponseCache::generateAssetVersionToken): diferă de la un server la altul.
                     $corp = (string) preg_replace('/(&(?:amp;)?v=)[0-9a-f]{12}\b/', '$1<TOKEN-CACHE>', $curata(strtr($r['corp'], $inlocuiri)));
-                    // Diferențele declarate se scot, ca în lista de pagini, doar din paginile cerute cu GET.
-                    if ($server === 'curent' && $cereriFacute[$server][$n][0] === 'GET') {
+                    // Diferențele declarate se scot, ca în lista de pagini, doar din paginile cerute cu GET (nu din redirecționări).
+                    if ($server === 'curent' && $cereriFacute[$server][$n][0] === 'GET' && ($r['cod'] < 300 || $r['cod'] >= 400)) {
                         $gasiteSalvare = [];
                         $corp = $faraDeclarate((string) $cereriFacute[$server][$n][1], $corp, $gasiteSalvare, $probleme);
                     }
                     $raspunsuri[$n] = [
+                        // Corpul primit, neatins (doar pentru „verifica_curent” al unei reparații).
+                        'corp_brut' => $r['corp'],
                         'cod' => $r['cod'],
                         'location' => $curata(strtr(str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['location']), $inlocuiri)),
                         'antete' => $normalizeazaAntete($r['antete']),
@@ -2157,13 +2419,31 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             $probleme[] = 'baza nu a putut fi pusă la loc exact (tools/dev/lib/salvari-admin.php)';
         }
         foreach (($caz['verifica'])($rezultate['baza']['stare'], $rezultate['baza']['raspunsuri']) as $problema) {
-            $probleme[] = ($regresie
-                ? 'codul de bază nu dă rezultatul de pe ramura pe care ' . $caz['din'] . ' nu o schimbă: '
-                : (isset($caz['sursa'])
-                    ? 'codul Bioscem nu dă ce dădea înaintea portului din ' . $caz['sursa'] . ' ' . $caz['din'] . ': '
-                    : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ')) . $problema;
+            $probleme[] = ($reparatie
+                ? 'codul Bioscem nu arată defectul pe care îl repară ' . (string) ($caz['reparatie'] ?? '?') . ': '
+                : ($regresie
+                    ? 'codul de bază nu dă rezultatul de pe ramura pe care ' . $caz['din'] . ' nu o schimbă: '
+                    : (isset($caz['sursa'])
+                        ? 'codul Bioscem nu dă ce dădea înaintea portului din ' . $caz['sursa'] . ' ' . $caz['din'] . ': '
+                        : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): '))) . $problema;
         }
         $diferente = salvari_diferente($rezultate['baza']['stare'], $rezultate['curent']['stare'], 'bază: ');
+        if ($reparatie) {
+            // O reparație: codul curent trebuie să arate reparația, iar starea să difere exact prin ce e declarat.
+            if (trim((string) ($caz['reparatie'] ?? '')) === '' || !is_array($caz['diferente'] ?? null) || !isset($caz['verifica_curent'])) {
+                $probleme[] = 'reparația e declarată incomplet (fiecare cu „reparatie”, „verifica_curent” și „diferente”)';
+            } else {
+                foreach (($caz['verifica_curent'])($rezultate['curent']['stare'], $rezultate['curent']['raspunsuri']) as $problema) {
+                    $probleme[] = 'codul curent nu arată reparația ' . $caz['reparatie'] . ': ' . $problema;
+                }
+                $reale = $diferente;
+                $declarateStare = array_map('strval', $caz['diferente']);
+                sort($reale);
+                sort($declarateStare);
+                $diferente = $reale === $declarateStare ? [] : array_merge(['starea diferă altfel decât e declarat; declarat: '
+                    . implode(' | ', $declarateStare)], $reale === [] ? ['(starea e aceeași pe ambele servere)'] : $reale);
+            }
+        }
         if (count($rezultate['baza']['raspunsuri'] ?? []) !== count($rezultate['curent']['raspunsuri'] ?? [])) {
             $diferente[] = 'alt număr de cereri pe cele două servere';
         }
@@ -2192,6 +2472,23 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         foreach (array_merge($probleme, array_slice($diferente, 0, 12)) as $rand) {
             echo '          ', mb_substr($rand, 0, 400), "\n";
         }
+    }
+}
+
+// Fiecare declarație (text sau marcaj) găsită măcar o dată în toată rularea, pe paginile sau în cazurile de salvare.
+foreach ($listeDeclarate as $numeLista => $lista) {
+    foreach ($lista as $intrare) {
+        $etichetaDeclaratiei = $numeLista . ' „' . (string) ($intrare['nume'] ?? '') . '”';
+        if (($gasiteInRulare[$etichetaDeclaratiei] ?? 0) === 0) {
+            $diferite[] = $etichetaDeclaratiei;
+            echo '  DIFERĂ ', $etichetaDeclaratiei, ": declarată, dar negăsită pe nicio pagină cerută (pagina ei nu se mai cere?)\n";
+        }
+    }
+}
+foreach ($marcajePort as $numeMarcaj => $_) {
+    if (($gasiteInRulare['marcaj ' . $numeMarcaj] ?? 0) === 0) {
+        $diferite[] = 'marcaj ' . $numeMarcaj;
+        echo '  DIFERĂ marcajul ', $numeMarcaj, ": declarat, dar negăsit pe nicio pagină cerută\n";
     }
 }
 

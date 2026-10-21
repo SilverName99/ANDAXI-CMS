@@ -742,6 +742,15 @@ foreach ([
         $insArtCat->execute(['p' => $idArticol, 'c' => $catBlog[$catSlug]]);
     }
 }
+// Un articol importat cu categoria doar ca text (fără category_id și fără rânduri în blog_post_categories), cu
+// un nume care nu e al niciunei categorii: editorul îl arată și îl păstrează la salvare (WP-12, X1b; compara-cu-baza.php).
+$insArticol->execute([
+    't' => 'Sfaturi vechi, importate', 's' => 'sfaturi-vechi-importate', 'ex' => 'Rezumat inventat pentru un articol importat.',
+    'cat' => 'Sfaturi din arhivă', 'cat_id' => null, 'es' => null, 'ee' => null, 'ep' => null, 'el' => null,
+    'c' => '<p>Text demo al unui articol importat: categoria lui a venit doar ca text.</p>',
+    'pub' => $dataSql($acum - 60 * $zi), 'is_pub' => 1, 'a' => $idAutor,
+    'img' => $imagine('Sfaturi vechi', 'blog-sfaturi-vechi-importate', [90, 120, 110]),
+]);
 
 // --- Newsletter --------------------------------------------------------------------
 $db->exec("INSERT INTO newsletter_lists (name, description, is_default) VALUES

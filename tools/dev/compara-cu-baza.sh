@@ -113,6 +113,21 @@
 #    SITE_COPIE_VERIFICARE=1 nu fac nimic (aici ambele servere sunt fără variabilă, deci aceleași
 #    pagini); cu ea le verifică tools/dev/test-verificare.php, cu o „gaură neagră” care numără orice
 #    conexiune spre afară.
+#  - reparațiile WP-12 care nu se văd în paginile cerute aici (site-uri/bioscem/ce-se-schimba.md; dovada:
+#    tools/dev/test-reparatii.php și smoke.sh): finalizarea comenzii verifică și stocul rămas al ofertei BBD
+#    (C1b; un POST /checkout peste stocul ofertei duce înapoi în coș, cu mesaj, fără comandă); stocul din ERP
+#    cu timeout de 3 secunde, eșecul și SKU-urile necunoscute ținute minte 60 de secunde (C3; aici ERP-ul e
+#    oprit, deci nimic din pagini); heartbeat-ul, sumarul coșului, catalogul și cele mai vândute eliberează
+#    lacătul sesiunii după ce au citit-o (C4; răspunsurile, la fel); JSON-ul gărzii pe /api/… are și `error`
+#    (X6; nicio adresă /api/… a unui plugin oprit nu se cere aici); pragul trimiterii în ERP (E1): cu
+#    erp_trimite_din gol (înghețarea Bioscem), cronul erp-sync, „Retrimite” și contoarele din Setări → ERP
+#    ANDAXI rămân ca în Bioscem. Comparația pune pe durata ei, în baza de test, setările înghețate ale
+#    Bioscem (site-uri/bioscem/setari-inghetate.json, fără cele private; azi erp_trimite_din gol), cum le
+#    are baza Bioscem după adoptare, iar la final valorile de dinainte (pe baza de dezvoltare pragul e
+#    momentul instalării, pus de pasul de activare). Ce se vede în admin (CodeMirror doar în cele patru
+#    editoare, C6; pozele leneșe ale selectoarelor, C7; categoria doar ca text a unei postări, X1b) e
+#    declarat în compara-cu-baza.php ($porturiBiovitality, $deBioscem), iar salvările C2 și X1b sunt
+#    cazurile de tip „reparatie” de acolo.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul

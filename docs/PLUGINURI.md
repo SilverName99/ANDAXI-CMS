@@ -174,7 +174,9 @@ Ce face garda cu o rută a unui plugin care nu e vizibil:
 - site: pagina 404 a site-ului (pagina „404” din admin, dacă e publicată), sau
   redirecționarea din licență, doar dacă duce la o pagină care se vede pe site
   (o redirecționare spre pagina altui plugin oprit dă 404: fără bucle, fără 302
-  spre un 404); `/api/…` primesc un 404 scurt în JSON;
+  spre un 404); `/api/…` primesc un 404 scurt în JSON, `{"ok":false,"message":"Pagina nu a fost găsită.","error":"Pagina nu a fost găsită."}`
+  (textul și în `error` din WP-12, X6: aplicațiile care vorbesc cu site-ul, de exemplu aplicația Windows a
+  fișierelor din cloud a Biovitality, citesc doar `error`);
 - adresele mereu deschise: ajung la controller (se notează în jurnal o dată pe zi
   pe adresă). Controllerul procesează ce vine de la procesator sau dintr-un email
   trimis (plata semnată, linkul semnat); fără pluginul pe site, unei cereri care
@@ -493,8 +495,21 @@ dispar, iar linkurile spre el se scot din pagini.
   pe site nimic nu citește încă marcajul.
 - **Pornește**: pasul de activare scrie `erp_trimite_din` = momentul pornirii, doar
   dacă setarea lipsește cu totul (o valoare goală, ca la înghețarea Bioscem,
-  înseamnă „fără prag” și rămâne). Trimiterile o vor respecta din WP-12 (E1):
-  pornit pe un site care nu l-a avut, ERP-ul nu primește tot istoricul „pending”.
+  înseamnă „fără prag” și rămâne). Trimiterile o respectă din WP-12 (E1;
+  `ErpSync::pragTrimitere` și `filtruPrag`): pornit pe un site care nu l-a avut, ERP-ul nu
+  primește tot istoricul „pending”. Cronul `erp-sync.php` și „Retrimite” din Setări → ERP ANDAXI
+  trimit doar comenzile plasate de la prag (cronul scrie de ce nu și pe celelalte), contoarele
+  „În așteptare” și „Eșuate” le numără la fel (cele de dinainte separat, cu o notă), iar Admin →
+  Comenzi le arată pe cele de dinainte cu „ERP: înainte de legare”; 🔄 trimite una anume de mână,
+  cu confirmare, iar plata, anularea sau returul unei comenzi trimise merg ca înainte
+  (`ErpSync::push`). Cheia goală: fără prag, ca înainte; cheia lipsă (pasul de activare n-a rulat,
+  de exemplu baza nu e la zi cu migrările) sau o valoare care nu e o dată: nicio comandă nu pleacă
+  automat până la scrierea pragului.
+- **Stocul din ERP** (WP-12, C3, din Biovitality): pe paginile magazinului ERP-ul e întrebat cu un
+  timeout de 3 secunde (`ErpClient::fromDbRapid`; trimiterile și restul operațiilor folosesc
+  `erp_timeout`); un eșec se ține minte 60 de secunde (`cache/erp-stock-esec`: între timp nu se mai
+  întreabă deloc), la fel un SKU pe care ERP-ul nu-l cunoaște (`necunoscut_la`, în `cache/erp-stock.json`).
+  Rezultatul rămâne „fail open”: fără răspuns, sau pentru un SKU necunoscut, rămâne stocul de pe site.
 - **Se oprește**: comenzile plasate **înainte** de oprire pleacă în ERP ca de
   obicei, oricând li s-ar confirma plata (EuPlătesc, BT, Stripe, OP) sau ar trece
   prin reîncercările cronului; doar o comandă plasată **după** momentul în care

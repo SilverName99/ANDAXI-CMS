@@ -1410,6 +1410,33 @@ final class SiteController
                 return;
             }
         }
+        // La fel stocul ofertelor BBD (WP-12, C1b): prețul redus al unei oferte se dă doar cât mai are
+        // bucăți — stocul ei minus ce au rezervat comenzile active cu aceeași cheie
+        // (decorateProductBbdEntriesWithAvailability). Coșul se verifică la adăugare, dar între timp
+        // altcineva putea lua ultimele bucăți ale ofertei la prețul redus. Liniile coșului cu același
+        // produs și aceeași ofertă se numără împreună, o singură dată.
+        $peOferte = [];
+        foreach ($summary['lines'] as $linie) {
+            $cheieOferta = (string) ($linie['bbd_key'] ?? '');
+            $idProdusOferta = (int) ($linie['id'] ?? 0);
+            if ($cheieOferta === '' || $idProdusOferta <= 0) {
+                continue;
+            }
+            $locOferta = $idProdusOferta . '|' . $cheieOferta;
+            $peOferte[$locOferta] ??= ['id' => $idProdusOferta, 'cheie' => $cheieOferta,
+                'nume' => trim((string) ($linie['name'] ?? 'Un produs')), 'cantitate' => 0];
+            $peOferte[$locOferta]['cantitate'] += max(0, (int) ($linie['quantity'] ?? 0));
+        }
+        foreach ($peOferte as $oferta) {
+            $produsOferta = $this->findProductById($oferta['id']);
+            $intrareOferta = is_array($produsOferta) ? $this->resolveRequestedBbdSelection($produsOferta, $oferta['cheie']) : [];
+            $ramaseOferta = $intrareOferta !== [] ? $this->resolveBbdEntryAvailableStock($intrareOferta) : null;
+            if ($ramaseOferta !== null && $oferta['cantitate'] > $ramaseOferta) {
+                Flash::set('error', ($oferta['nume'] !== '' ? $oferta['nume'] : 'Un produs') . ': ' . $this->mesajStocOferta($ramaseOferta));
+                header('Location: /cos');
+                return;
+            }
+        }
 
         // Produsele cu avertisment (ex. refrigerate) cer bifa de sub casetă,
         // verificată pe coșul de ACUM: între afișare și trimitere coșul se
@@ -2178,6 +2205,12 @@ final class SiteController
 
     public function cartHeartbeat(): void
     {
+        // Ce trebuie din sesiune se citește înainte de a-i elibera lacătul: restul cererii (sumarul,
+        // eventual stocul din ERP) nu mai are nevoie de el și nu ține în loc navigarea din același
+        // browser (WP-12 C4, din Biovitality 6cc6fc5).
+        $checkoutForm = is_array($_SESSION['checkout_form'] ?? null) ? $_SESSION['checkout_form'] : [];
+        $this->elibereazaSesiunea();
+
         $db = $this->db();
         if (!$db instanceof PDO) {
             http_response_code(204);
@@ -2204,7 +2237,7 @@ final class SiteController
             $payload = [];
         }
 
-        $checkout = $_SESSION['checkout_form'] ?? [];
+        $checkout = $checkoutForm;
         $email = trim((string) ($payload['email'] ?? $checkout['billing_email'] ?? ''));
         $customerName = trim((string) ($payload['customer_name'] ?? ((string) ($checkout['billing_first_name'] ?? '') . ' ' . (string) ($checkout['billing_last_name'] ?? ''))));
 
@@ -2246,6 +2279,9 @@ final class SiteController
 
     public function cartSummaryApi(): void
     {
+        // Doar citește coșul din sesiune: lacătul se eliberează, ca sondajul de fundal al coșului
+        // plutitor să nu țină în loc clicurile din pagină.
+        $this->elibereazaSesiunea();
         $db = $this->db();
         $payload = $this->buildFloatingCartPayload($db);
         $this->jsonResponse($payload);
@@ -2280,6 +2316,7 @@ final class SiteController
 
     public function bestSellersApi(): void
     {
+        $this->elibereazaSesiunea();
         $limit = (int) ($_GET['limit'] ?? 4);
         $limit = max(1, min(24, $limit));
         // Fără magazin pe site, „cele mai vândute” nu se mai iau din comenzi: ordinea
@@ -2296,6 +2333,7 @@ final class SiteController
 
     public function shopCatalogApi(): void
     {
+        $this->elibereazaSesiunea();
         $categoryFilter = $this->requestCategoryFilter();
         $sort = $this->requestShopCatalogSort();
         [$products] = $this->loadProducts();
@@ -6408,6 +6446,27 @@ CSS;
         return Database::connection($config['db']);
     }
 
+    /**
+     * Eliberează lacătul sesiunii cererii curente (WP-12 C4, din Biovitality `6cc6fc5`).
+     *
+     * PHP ține un lacăt exclusiv pe fișierul de sesiune de la `session_start()` până la finalul
+     * scriptului, deci cererile aceluiași browser rulează una după alta. O cerere de fundal lentă
+     * (heartbeat-ul din checkout, sumarul coșului plutitor, catalogul, cele mai vândute; pe un
+     * magazin cu ERP, și stocul din ERP) ținea astfel în loc clicurile vizitatorului.
+     *
+     * Se cheamă DOAR după ce s-a citit din `$_SESSION` tot ce trebuie, într-o cerere care nu scrie
+     * nimic de păstrat în ea: superglobala rămâne citibilă, dar ce se mai scrie nu se mai salvează
+     * (verificat: sumarul nu scrie coșul; `Cart` normalizează doar ce citește; `CustomerAuth::user`
+     * deloghează un cont șters, iar pierderea acelei scrieri e fără urmări, cererea următoare o
+     * face din nou). `session_id()` merge în continuare.
+     */
+    private function elibereazaSesiunea(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+    }
+
     private function findProductById(int $id): ?array
     {
         if ($id <= 0) {
@@ -9819,6 +9878,17 @@ CSS;
         }
 
         return $total;
+    }
+
+    /** Mesajul pentru o ofertă BBD care nu mai are destule bucăți la finalizarea comenzii (WP-12, C1b). */
+    private function mesajStocOferta(int $ramase): string
+    {
+        if ($ramase <= 0) {
+            return 'oferta aleasă s-a epuizat. Scoate-o din coș sau alege altă ofertă.';
+        }
+
+        return ($ramase === 1 ? 'oferta mai are o singură bucată.' : "oferta mai are {$ramase} bucăți.")
+            . ' Ajustează cantitatea din coș.';
     }
 
     private function mesajStocInsuficient(int $limita): string

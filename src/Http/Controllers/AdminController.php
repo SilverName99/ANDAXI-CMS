@@ -3023,6 +3023,34 @@ final class AdminController
         }
     }
 
+    /**
+     * Categoria din listă care corespunde textului importat al unei postări (WP-12, X1b): întâi după
+     * nume, exact, apoi după adresă (slug-ul categoriei, sau cel făcut din numele ei, față de cel al
+     * textului: „noutati” sau „Noutati” = „Noutăți”). 0 = niciuna.
+     *
+     * @param list<array<string, mixed>> $categorii
+     */
+    private function categorieBlogDupaText(array $categorii, string $text): int
+    {
+        $text = trim($text);
+        foreach ($categorii as $categorie) {
+            if ($text !== '' && trim((string) ($categorie['name'] ?? '')) === $text) {
+                return (int) ($categorie['id'] ?? 0);
+            }
+        }
+        $slugText = \App\Support\Slug::categorie($text);
+        if ($slugText === '') {
+            return 0;
+        }
+        foreach ($categorii as $categorie) {
+            $slugSalvat = trim((string) ($categorie['slug'] ?? ''));
+            if ($slugSalvat === $slugText || \App\Support\Slug::categorie((string) ($categorie['name'] ?? '')) === $slugText) {
+                return (int) ($categorie['id'] ?? 0);
+            }
+        }
+        return 0;
+    }
+
     private function loadBlogAuthorsOptions(PDO $db): array
     {
         try {
@@ -3271,6 +3299,22 @@ final class AdminController
                 $selectedCategoryIds[] = $selectedCategoryId;
             }
         }
+        // O postare importată cu categoria doar ca text (`blog_posts.category`, fără `category_id` și fără
+        // rânduri în blog_post_categories) n-avea nicio bifă, iar editorul nu trimitea niciun câmp de
+        // categorie, deci o re-salvare o ștergea (WP-12, X1b). Acum: categoria din listă cu același nume
+        // (sau aceeași adresă) se bifează; fără una, textul se arată și se trimite mai departe la salvare.
+        $categorieDoarText = '';
+        if (is_array($editingPost) && $selectedCategoryIds === [] && (int) ($editingPost['category_id'] ?? 0) === 0) {
+            $textCategorie = trim((string) ($editingPost['category'] ?? ''));
+            if ($textCategorie !== '') {
+                $idDupaText = $this->categorieBlogDupaText($categories, $textCategorie);
+                if ($idDupaText > 0) {
+                    $selectedCategoryIds[] = $idDupaText;
+                } else {
+                    $categorieDoarText = $textCategorie;
+                }
+            }
+        }
 
         // Map templateId => chei de camp vizibile (0 = template implicit).
         $fieldMap = ['0' => \App\Support\BlogTemplateFields::fieldKeysForHtml($this->blogTemplateDefaultHtml())];
@@ -3290,6 +3334,7 @@ final class AdminController
             'selectedTemplateId' => $selectedTemplateId,
             'selectedCategoryId' => $selectedCategoryId,
             'selectedCategoryIds' => $selectedCategoryIds,
+            'categorieDoarText' => $categorieDoarText,
             'fieldCatalog' => \App\Support\BlogTemplateFields::catalog(),
             'fieldMap' => $fieldMap,
         ], 'admin/layout');
@@ -4546,9 +4591,13 @@ final class AdminController
         $precomandaUpdate = $this->plafoanePrecomandaDinPost();
         // Câmpurile pluginurilor pe care site-ul nu le are lipsesc din formular;
         // valorile lor rămân cele din bază (la repornire, produsul își regăsește
-        // ofertele BBD, plafoanele de precomandă și nota de după coș).
+        // ofertele BBD, plafoanele de precomandă și nota de după coș). La fel ofertele
+        // BBD când câmpul lor lipsește cu totul din formular (JavaScript-ul paginii căzut,
+        // formular trimis înainte să se completeze): asta nu înseamnă „șterge ofertele”, ci
+        // „nu am ce salva”; un „[]” trimis rămâne o ștergere voită (WP-12 C2, din Biovitality c64fc2d).
+        $faraOferteInFormular = !array_key_exists('bbd_entries_json', $_POST);
         if (!\App\Support\Plugins::vizibil('oferte_bbd') || !\App\Support\Plugins::vizibil('precomenzi')
-            || !\App\Support\Plugins::vizibil('magazin')) {
+            || !\App\Support\Plugins::vizibil('magazin') || $faraOferteInFormular) {
             $stmtVechi = $db->prepare(
                 'SELECT bbd_enabled, bbd_entries_json, preorder_enabled, preorder_max_per_order, preorder_max_total,
                         post_cart_note_enabled, post_cart_note_text
@@ -4558,6 +4607,8 @@ final class AdminController
             $vechi = $stmtVechi->fetch() ?: [];
             if (!\App\Support\Plugins::vizibil('oferte_bbd')) {
                 $bbdEnabled = (int) ($vechi['bbd_enabled'] ?? 0);
+                $bbdEntriesJson = (string) ($vechi['bbd_entries_json'] ?? '[]');
+            } elseif ($faraOferteInFormular) {
                 $bbdEntriesJson = (string) ($vechi['bbd_entries_json'] ?? '[]');
             }
             if (!\App\Support\Plugins::vizibil('precomenzi')) {
@@ -5262,6 +5313,9 @@ final class AdminController
             'orderPaymentStatusLabels' => $orderPaymentStatusLabels,
             'orderPaymentMethodLabels' => $orderPaymentMethodLabels,
             'settings' => $setariComenzi,
+            // Pragul trimiterii în ERP (WP-12 E1): comenzile de dinainte arată „înainte de legare”.
+            'pragErp' => \App\Support\Plugins::vizibil('erp') && $db instanceof PDO
+                ? \App\Support\ErpSync::pragTrimitere($db) : ['stare' => 'fara', 'din' => null],
             'erpModulBanner' => \App\Support\Plugins::vizibil('erp') ? \App\Support\ErpModul::banner($db, $setariComenzi) : '',
         ], 'admin/layout');
     }
@@ -11712,7 +11766,8 @@ final class AdminController
 
         $db = $this->db();
         $settings = Settings::all($db);
-        $queue = ['pending' => 0, 'failed' => 0, 'sent' => 0, 'cancel_pending' => 0, 'retur_pending' => 0];
+        $queue = ['pending' => 0, 'failed' => 0, 'sent' => 0, 'cancel_pending' => 0, 'retur_pending' => 0, 'inainte_de_prag' => 0];
+        $pragErp = ['stare' => 'fara', 'din' => null];
 
         if ($db instanceof PDO) {
             \App\Support\ErpSync::ensureSchema($db);
@@ -11728,6 +11783,25 @@ final class AdminController
                         $queue[$status] = (int) ($row['total'] ?? 0);
                     }
                 }
+                // Pragul trimiterii (erp_trimite_din, WP-12 E1): „În așteptare” și „Eșuate” numără doar ce poate
+                // pleca automat, cu același filtru ca retryPending; comenzile de dinainte se numără separat.
+                $pragErp = \App\Support\ErpSync::pragTrimitere($db);
+                if ($pragErp['stare'] !== 'fara') {
+                    [$sqlPrag, $parametriPrag] = \App\Support\ErpSync::filtruPrag($pragErp);
+                    $stmtPrag = $db->prepare(
+                        "SELECT erp_status, COUNT(*) AS total
+                         FROM orders WHERE deleted_at IS NULL AND erp_status IN ('pending', 'failed')" . $sqlPrag . '
+                         GROUP BY erp_status'
+                    );
+                    $stmtPrag->execute($parametriPrag);
+                    $deTrimis = ['pending' => 0, 'failed' => 0];
+                    foreach ($stmtPrag->fetchAll() ?: [] as $row) {
+                        $deTrimis[(string) ($row['erp_status'] ?? '')] = (int) ($row['total'] ?? 0);
+                    }
+                    $queue['inainte_de_prag'] = $queue['pending'] + $queue['failed'] - $deTrimis['pending'] - $deTrimis['failed'];
+                    $queue['pending'] = $deTrimis['pending'];
+                    $queue['failed'] = $deTrimis['failed'];
+                }
             } catch (Throwable) {
                 // Contoarele sunt informative; pagina se afișează oricum.
             }
@@ -11737,6 +11811,7 @@ final class AdminController
             'title' => 'ERP ANDAXI',
             'settings' => $settings,
             'queue' => $queue,
+            'pragErp' => $pragErp,
             'erpModulBanner' => \App\Support\ErpModul::banner($db, $settings),
         ], 'admin/layout');
     }
@@ -11867,8 +11942,20 @@ final class AdminController
             $notaModul = $modulInchis
                 ? ' Comenzile noi ținute de modulul „Magazin online” (oprit sau în curs de oprire în ERP) pleacă singure după ce e pornit din nou.'
                 : '';
+            // Pragul trimiterii (WP-12 E1): fără prag, mesajul de până acum.
+            $notaPrag = '';
+            if ($rezultat['prag'] === 'data') {
+                $notaPrag = ' Comenzile plasate înainte de ' . date('d.m.Y H:i', (int) strtotime((string) $rezultat['prag_din']))
+                    . ' (legarea cu ERP-ul) nu se retrimit de aici; una anume se trimite din Comenzi, cu 🔄.';
+            } elseif ($rezultat['prag'] === 'gresit') {
+                $notaPrag = ' Pragul trimiterii (erp_trimite_din) nu e o dată (AAAA-LL-ZZ HH:MM:SS), deci nicio comandă nu pleacă automat '
+                    . 'până nu se corectează.';
+            } elseif ($rezultat['prag'] !== 'fara') {
+                $notaPrag = ' Pragul trimiterii nu e încă scris (erp_trimite_din), deci nicio comandă nu pleacă automat; '
+                    . 'îl scrie pasul de activare al ERP-ului, după ce baza e la zi cu migrările.';
+            }
             if ($rezultat['incercate'] === 0) {
-                Flash::set($modulInchis ? 'error' : 'success', 'Nu există comenzi de retrimis acum.' . $notaModul);
+                Flash::set($modulInchis ? 'error' : 'success', 'Nu există comenzi de retrimis acum.' . $notaModul . $notaPrag);
             } else {
                 Flash::set(
                     ($rezultat['esuate'] > 0 || $rezultat['tinute'] > 0) ? 'error' : 'success',
@@ -11879,7 +11966,7 @@ final class AdminController
                         $rezultat['esuate']
                     ) . ($rezultat['tinute'] > 0
                         ? sprintf(' %d rămân aici: modulul „Magazin online” e oprit sau se oprește în ERP.', $rezultat['tinute'])
-                        : '')
+                        : '') . $notaPrag
                 );
             }
             header('Location: /admin/settings/erp');

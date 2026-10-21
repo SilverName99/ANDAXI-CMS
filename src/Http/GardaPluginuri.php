@@ -18,7 +18,7 @@ use App\Support\View;
  *    adminului; fără login, la pagina de login, ca orice pagină de admin;
  *  - site: pagina 404 a site-ului (sau redirecționarea din licență, dacă duce
  *    la o pagină care se vede pe site);
- *    pentru /api/… un 404 scurt, în JSON;
+ *    pentru /api/… un 404 scurt, în JSON (textul și în `error`, pentru aplicațiile externe);
  *  - adresele de confirmare (plăți, ERP, linkuri din emailuri trimise) răspund
  *    MEREU; dacă pluginul e oprit, prima cerere din zi la fiecare adresă se
  *    notează în jurnal.
@@ -58,11 +58,14 @@ final class GardaPluginuri
             return false;
         }
 
-        // Cererile scripturilor din pagină (/api/…) primesc un 404 scurt, nu o pagină întreagă.
+        // Cererile scripturilor din pagină (/api/…) primesc un 404 scurt, nu o pagină întreagă. Textul
+        // e și în `error` (WP-12 X6): aplicațiile care vorbesc cu site-ul, de exemplu aplicația Windows a
+        // fișierelor din cloud ale Biovitality, citesc doar `error`; fără el ar arăta un mesaj gol.
         if (str_starts_with($tipar, '/api/')) {
             http_response_code(404);
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['ok' => false, 'message' => 'Pagina nu a fost găsită.'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['ok' => false, 'message' => 'Pagina nu a fost găsită.', 'error' => 'Pagina nu a fost găsită.'],
+                JSON_UNESCAPED_UNICODE);
             return false;
         }
 

@@ -365,6 +365,55 @@ else
     scrie "  SĂRIT pagina de mulțumire, comanda în bază, emailul (magazin nu e în pachet)"
 fi
 
+# Stocul ofertei BBD la finalizare (planul Etapei 1, WP-12 C1b): doi cumpărători pun în coș, fiecare, cât
+# permite oferta (primul toate bucățile rămase, al doilea 2) și ajung amândoi la formularul comenzii. Al doilea
+# plasează primul comanda; al primului trebuie refuzată, cu bucățile rămase în mesaj, și nu se creează.
+scrie ""
+scrie "== Oferta BBD: două comenzi pe ultimele bucăți (WP-12 C1b)"
+if vizibil oferte_bbd && [ "${STARI[magazin]:-oprit}" = "pornit" ]; then
+    ID_BBD="$(q "SELECT id FROM products WHERE slug = '$SLUG_BBD'")"
+    verifica "produsul cu oferte: prima ofertă și bucățile ei" 200 o1 GET "/produs/$SLUG_BBD" "data-bbd-key="
+    CHEIE_BBD="$(grep -o 'data-bbd-key="[^"]*"' "$TMP/corp" | head -1 | sed 's/^data-bbd-key="//; s/"$//')"
+    RAMASE_BBD="$(grep -o 'Doar [0-9]* în stoc' "$TMP/corp" | head -1 | grep -o '[0-9]*' || true)"
+    if [ -z "$CHEIE_BBD" ] || [ -z "$RAMASE_BBD" ] || [ "$RAMASE_BBD" -lt 4 ]; then
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  oferta BBD din datele demo: cheia «$CHEIE_BBD», bucăți rămase «$RAMASE_BBD» (trebuie cel puțin 4)"
+    else
+        verifica "cumpărătorul 1: toate cele $RAMASE_BBD bucăți ale ofertei în coș" 302 o1 POST "/cos/adauga/$ID_BBD" "" \
+            "quantity=$RAMASE_BBD" "bbd_key=$CHEIE_BBD"
+        confirma "… acceptat (coșul, nu produsul cu „nu mai are stoc”)" test "$(redirect_ultim)" = "/cos"
+        verifica "cumpărătorul 2: 2 bucăți ale aceleiași oferte în coș" 302 o2 POST "/cos/adauga/$ID_BBD" "" "quantity=2" "bbd_key=$CHEIE_BBD"
+        confirma "… acceptat" test "$(redirect_ultim)" = "/cos"
+        declare -A TOKEN_BBD=() RANDAT_BBD=()
+        for jar in o1 o2; do
+            verifica "formularul comenzii ($jar)" 200 "$jar" GET /checkout 'name="checkout_form_token"'
+            TOKEN_BBD[$jar]="$(grep -o 'name="checkout_form_token" value="[^"]*"' "$TMP/corp" | sed 's/.*value="//; s/"$//' | head -1)"
+            RANDAT_BBD[$jar]="$(grep -o 'name="checkout_form_rendered_at" value="[^"]*"' "$TMP/corp" | sed 's/.*value="//; s/"$//' | head -1)"
+        done
+        sleep 3 # protecția anti-robot (ca mai sus)
+        plaseaza_bbd() {
+            verifica "$2" 302 "$1" POST /checkout "" \
+                "checkout_form_token=${TOKEN_BBD[$1]}" "checkout_form_rendered_at=${RANDAT_BBD[$1]}" \
+                "billing_first_name=Test" "billing_last_name=Oferta" "billing_phone=0700000556" "billing_email=oferta-$1@exemplu.ro" \
+                "billing_street=Strada Exemplului" "billing_street_no=7" "billing_city=Cluj-Napoca" "billing_county=Cluj" \
+                "billing_postcode=400000" "shipping_same_as_billing=1" "payment_method=cod" "accept_terms=1"
+        }
+        plaseaza_bbd o2 "cumpărătorul 2 plasează comanda"
+        NR_BBD="$(redirect_ultim)"
+        NR_BBD="${NR_BBD##*/checkout/succes/}"
+        confirma "… comanda $NR_BBD e în bază, cu oferta: 2 × cheia $CHEIE_BBD" \
+            test "$(q "SELECT CONCAT(i.quantity, '/', i.bbd_key) FROM orders o JOIN order_items i ON i.order_id = o.id WHERE o.order_number = '$NR_BBD'")" = "2/$CHEIE_BBD"
+        COMENZI_INAINTE="$(q "SELECT COUNT(*) FROM orders")"
+        plaseaza_bbd o1 "cumpărătorul 1 plasează comanda cu $RAMASE_BBD bucăți (oferta mai are $((RAMASE_BBD - 2)))"
+        confirma "… refuzată: înapoi în coș" test "$(redirect_ultim)" = "/cos"
+        confirma "… și nu s-a creat nicio comandă" test "$(q "SELECT COUNT(*) FROM orders")" = "$COMENZI_INAINTE"
+        verifica "coșul cumpărătorului 1 spune câte bucăți mai are oferta" 200 o1 GET /cos \
+            "oferta mai are $((RAMASE_BBD - 2)) bucăți. Ajustează cantitatea din coș."
+    fi
+else
+    scrie "  SĂRIT comenzile pe oferta BBD (oferte_bbd sau magazin nu e pornit în pachet)"
+fi
+
 scrie ""
 scrie "== Adrese de confirmare (fără semnătură: trebuie refuzate, niciodată 404/500)"
 verifica "webhook Stripe" "400|401|403" - POST /webhook/stripe
@@ -491,6 +540,22 @@ fi
 SESIUNI_DUPA="$(numara_sesiuni)"
 confirma "cronurile și runner-ul migrărilor nu lasă fișiere de sesiune ($SESIUNI_INAINTE înainte, $SESIUNI_DUPA după)" \
     test "$SESIUNI_DUPA" -eq "$SESIUNI_INAINTE"
+
+# Reparațiile WP-12 (tools/dev/test-reparatii.php, pe licența „toate”, pe serverul pornit aici; ERP-ul fals pe portul
+# +19): ofertele BBD în admin, categoria-text a unei postări importate, adminul fără editoarele de cod, garda pe /api/…,
+# stocul din ERP, lacătul sesiunii, pragul trimiterii în ERP. Pune la loc toată baza (verificat cu CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Reparațiile WP-12 (tools/dev/test-reparatii.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-reparatii.php" > "$TMP/test-reparatii.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-reparatii.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-reparatii.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-reparatii.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
 
 # Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
 scrie ""

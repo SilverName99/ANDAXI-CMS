@@ -81,16 +81,16 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 | `9cca65b` | 19.08 | Promoționale: fereastra „Cui a fost dat” derulează | de portat (WP-21, C13) |
 | `2ebc0cb` | 19.08 | Produse promoționale: export Excel | de portat (WP-21, C13; `XlsxWriter` în nucleu) |
 | `657c0cf` | 19.08 | Promoționale: momentul acordării și operatorul | de portat (WP-21, C13; migrarea 0031) |
-| `6cc6fc5` | 20.08 | Eliberarea lacătului de sesiune pe cererile de fundal | de portat (WP-12, C3, C4) |
+| `6cc6fc5` | 20.08 | Eliberarea lacătului de sesiune pe cererile de fundal | portat (WP-12, 21 octombrie): C4 `elibereazaSesiunea()` în heartbeat (formularul din sesiune citit înainte), sumarul coșului, cele mai vândute și catalog; C3 `ErpClient::fromDbRapid`, cu 3 secunde (planul SEO §8.12, B6) în locul celor 4 din BV. Dovada: `tools/dev/test-reparatii.php` (E, F) |
 | `9f076f8` | 20.08 | FANbox: „Ramburs” devine „Plata la FANbox” | nu se portează (CMS păstrează Bioscem `705371a`, C16) |
 | `95f904f` | 20.08 | Newsletter: diagnostic destinatari, filtre și paginare | de portat (WP-21, C11a) |
 | `8ba8ddd` | 20.08 | Recenzii: filtru anti-spam și secțiunea Spam | de portat (WP-21, C10; migrarea 0030) |
 | `649c837` | 20.08 | Analiza competiției (+ mici schimbări în emails) | pluginul `concurenta` (Etapa 4, P3); partea de newsletter în WP-21 (C11) |
 | `f4dd2c0` | 20.08 | Statistici newsletter fără reîncărcarea paginii | de portat (WP-21, C11a) |
-| `4f65fd9` | 20.08 | Galeria din selectoare nu se mai descarcă la fiecare pagină | de portat (WP-12, C7) |
+| `4f65fd9` | 20.08 | Galeria din selectoare nu se mai descarcă la fiecare pagină | portat (WP-12, C7: `loading="lazy" decoding="async"` pe cele 6 poze ale selectoarelor; declarat în `$porturiBiovitality`) |
 | `0c682b3` | 21.08 | Recenzii: detectorul prinde injecțiile boolean | de portat (WP-21, C10) |
 | `855dab2` | 21.08 | Popup newsletter: CSS și JS în fișiere | de portat (WP-21, C11e) |
-| `c64fc2d` | 21.08 | Ofertele nu mai reînvie; salvarea nu mai așteaptă ERP-ul | C1 portat prin Bioscem `b632294` (`62349a2`; varianta Bioscem tratează în plus cheile care se ciocnesc, BV o primește la adoptare); de portat C2, C3, C6 (WP-12); C5 nu se portează (înlocuit de migrări, WP-05) |
+| `c64fc2d` | 21.08 | Ofertele nu mai reînvie; salvarea nu mai așteaptă ERP-ul | C1 portat prin Bioscem `b632294` (`62349a2`; varianta Bioscem tratează în plus cheile care se ciocnesc, BV o primește la adoptare); C2, C3, C6 portate (WP-12, 21 octombrie; C3 ține minte în plus, 60 de secunde, codurile pe care ERP-ul nu le cunoaște, G-m3; C2 dovedit de cazul de salvare „reparație” din `compara-cu-baza.php`, C6 declarat în `$porturiBiovitality`); C5 nu se portează (înlocuit de migrări, WP-05) |
 | `d19a8ca` | 25.08 | Panoul de căutare peste benzile de anunț | nu se portează (anulat de `6583720` în aceeași zi; BV = CMS) |
 | `6583720` | 25.08 | Revine la straturile de dinainte în layout | nu se portează (anulează `d19a8ca`) |
 | `f5486ee` `6ee0f79` `e5c2b11` `375c36b` `9945580` `282f24f` `74fd7e4` `e2de3cb` `b43ade2` `771bfa2` `5ef9fe7` `5f1abee` `168e78d` `a59d950` `9c1286b` `370f97d` `274bddd` `f9b4d78` | 26–31.08 | bunny.net, fișiere de lucru, rolul „Cloud user”, parole pe foldere, aplicația Windows | pluginul `fisiere_cloud` (Etapa 4, P1); aplicația C# în repo separat (P2) |

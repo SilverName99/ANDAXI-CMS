@@ -22,6 +22,12 @@ declare(strict_types=1);
  * terminat în „*” („/admin*” = fiecare pagină comparată care începe cu /admin); la un
  * text declarat poate fi și o listă de astfel de pagini (aceeași schimbare pe mai multe
  * pagini, de exemplu un rând nou în <head>): textul trebuie găsit pe fiecare dintre ele.
+ * Un text declarat poate avea și „fara_pagini” (WP-12): paginile (sau prefixele) acoperite
+ * de „cale” pe care textul NU trebuie să apară deloc, de exemplu „/admin*” fără cele patru
+ * editoare de cod, unde schimbarea nu se face; acolo un text găsit e o problemă. Și
+ * „ori_pe_pagina” (WP-12): pentru unele dintre paginile din „cale” (cheile, scrise exact ca
+ * acolo), alt număr exact de apariții decât „ori” (de exemplu pagina cu două selectoare de
+ * imagini, unde aceeași schimbare apare de două ori mai des).
  * Plus anteturile răspunsului, normalizate pentru comparare (diferente_antete).
  * Funcții pure (fără server și fără bază), verificate de diferente_autotest().
  */
@@ -44,7 +50,9 @@ function diferenta_pe_pagina(string|array $declarata, string $cale): bool
 
 /**
  * Ce lipsește dintr-o declarație de text (gol = completă): nume, cale (o pagină sau o listă nevidă
- * de pagini, fiecare un text nevid), nou, motiv; „ori”, dacă e dat, un număr întreg de cel puțin 1.
+ * de pagini, fiecare un text nevid), nou, motiv; „ori”, dacă e dat, un număr întreg de cel puțin 1;
+ * „fara_pagini”, dacă e dat, o listă nevidă de pagini, fiecare un text nevid; „ori_pe_pagina”, dacă
+ * e dat, o listă nevidă pagină => număr întreg de cel puțin 1, fiecare pagină una din „cale”.
  */
 function diferenta_declaratie_incompleta(array $intrare): string
 {
@@ -61,6 +69,24 @@ function diferenta_declaratie_incompleta(array $intrare): string
     if (array_key_exists('ori', $intrare) && (!is_int($intrare['ori']) || $intrare['ori'] < 1)) {
         return 'ori';
     }
+    if (array_key_exists('fara_pagini', $intrare)) {
+        $excluse = $intrare['fara_pagini'];
+        if (!is_array($excluse) || $excluse === []
+            || array_filter($excluse, static fn ($p): bool => !is_string($p) || trim($p) === '') !== []) {
+            return 'fara_pagini';
+        }
+    }
+    if (array_key_exists('ori_pe_pagina', $intrare)) {
+        $peFiecare = $intrare['ori_pe_pagina'];
+        if (!is_array($peFiecare) || $peFiecare === []) {
+            return 'ori_pe_pagina';
+        }
+        foreach ($peFiecare as $paginaOri => $numarOri) {
+            if (!is_string($paginaOri) || !in_array($paginaOri, $pagini, true) || !is_int($numarOri) || $numarOri < 1) {
+                return 'ori_pe_pagina';
+            }
+        }
+    }
     return '';
 }
 
@@ -68,7 +94,7 @@ function diferenta_declaratie_incompleta(array $intrare): string
  * Pune la loc textele declarate. Problemele (text negăsit pe pagina lui, găsit de mai
  * multe ori sau pe altă pagină, declarație incompletă) se adaugă în $probleme.
  *
- * @param array<string, list<array{nume?: string, cale?: string|list<string>, nou?: string, vechi?: string, motiv?: string, ori?: int}>> $liste
+ * @param array<string, list<array{nume?: string, cale?: string|list<string>, nou?: string, vechi?: string, motiv?: string, ori?: int, fara_pagini?: list<string>, ori_pe_pagina?: array<string, int>}>> $liste
  * @param array<string, int> $gasite
  * @param list<string> $probleme
  */
@@ -85,7 +111,17 @@ function diferente_texte(array $liste, string $cale, string $html, array &$gasit
                 continue;
             }
             $html = str_replace((string) $intrare['nou'], (string) ($intrare['vechi'] ?? ''), $html, $n);
-            $asteptat = diferenta_pe_pagina($intrare['cale'], $cale) ? (int) ($intrare['ori'] ?? 1) : 0;
+            $asteptat = 0;
+            if (diferenta_pe_pagina($intrare['cale'], $cale)
+                && !(isset($intrare['fara_pagini']) && diferenta_pe_pagina($intrare['fara_pagini'], $cale))) {
+                $asteptat = (int) ($intrare['ori'] ?? 1);
+                foreach ((array) ($intrare['ori_pe_pagina'] ?? []) as $paginaOri => $numarOri) {
+                    if (diferenta_pe_pagina((string) $paginaOri, $cale)) {
+                        $asteptat = (int) $numarOri;
+                        break;
+                    }
+                }
+            }
             if ($n !== $asteptat) {
                 $probleme[] = $eticheta . ' găsit de ' . $n . ' ori, așteptat ' . $asteptat;
             }
@@ -336,6 +372,45 @@ function diferente_autotest(): array
         $ruleaza('text declarat cu ' . $cazGresit, static fn (array &$g, array &$p): string
             => diferente_texte(['$porturiBioscem' => [array_merge(['nume' => 'g', 'cale' => '/', 'nou' => 'Text nou', 'vechi' => 'Text vechi',
                 'motiv' => 'test'], $campuri)]], '/', $htmlGresit, $g, $p), true, null, '„' . $campGresit . '” lipsește sau e greșit');
+    }
+    // „fara_pagini” (WP-12): un prefix cu pagini scoase; pe ele textul nu are voie să apară, pe restul exact o dată.
+    $faraEditoare = ['$porturiBiovitality' => [['nume' => 'f', 'cale' => '/admin*', 'fara_pagini' => ['/admin/design', '/admin/pages/*'],
+        'nou' => 'Text nou', 'vechi' => 'Text vechi', 'motiv' => 'test']]];
+    $ruleaza('text cu „fara_pagini”, găsit o dată pe o pagină a prefixului', static fn (array &$g, array &$p): string
+        => diferente_texte($faraEditoare, '/admin/orders', '<b>Text nou</b>', $g, $p), false, '<b>Text vechi</b>');
+    foreach (['/admin/design', '/admin/pages/7/edit'] as $paginaScoasa) {
+        $ruleaza('text cu „fara_pagini”, lipsă pe pagina scoasă ' . $paginaScoasa, static fn (array &$g, array &$p): string
+            => diferente_texte($faraEditoare, $paginaScoasa, '<b>Text vechi</b>', $g, $p), false, '<b>Text vechi</b>');
+        $ruleaza('text cu „fara_pagini”, găsit pe pagina scoasă ' . $paginaScoasa, static fn (array &$g, array &$p): string
+            => diferente_texte($faraEditoare, $paginaScoasa, '<b>Text nou</b>', $g, $p), true);
+    }
+    $ruleaza('text cu „fara_pagini”, lipsă de pe o pagină a prefixului', static fn (array &$g, array &$p): string
+        => diferente_texte($faraEditoare, '/admin/orders', '<b>Text vechi</b>', $g, $p), true);
+    $ruleaza('text cu „fara_pagini”, găsit pe o pagină din afara prefixului', static fn (array &$g, array &$p): string
+        => diferente_texte($faraEditoare, '/cos', '<b>Text nou</b>', $g, $p), true);
+    // „ori_pe_pagina” (WP-12): pe pagina din listă, numărul ei; pe celelalte pagini, „ori”.
+    $peDoua = ['$porturiBiovitality' => [['nume' => 'p', 'cale' => ['/admin/products', '/admin/settings/store'], 'ori' => 2,
+        'ori_pe_pagina' => ['/admin/settings/store' => 4], 'nou' => 'Text nou', 'vechi' => 'Text vechi', 'motiv' => 'test']]];
+    $ruleaza('text cu „ori_pe_pagina”, de 4 ori pe pagina cu alt număr', static fn (array &$g, array &$p): string
+        => diferente_texte($peDoua, '/admin/settings/store', str_repeat('<b>Text nou</b>', 4), $g, $p), false, str_repeat('<b>Text vechi</b>', 4));
+    $ruleaza('text cu „ori_pe_pagina”, de 2 ori pe pagina cu alt număr (4)', static fn (array &$g, array &$p): string
+        => diferente_texte($peDoua, '/admin/settings/store', str_repeat('<b>Text nou</b>', 2), $g, $p), true);
+    $ruleaza('text cu „ori_pe_pagina”, de 2 ori pe celelalte pagini („ori”)', static fn (array &$g, array &$p): string
+        => diferente_texte($peDoua, '/admin/products', str_repeat('<b>Text nou</b>', 2), $g, $p), false, str_repeat('<b>Text vechi</b>', 2));
+    $ruleaza('text cu „ori_pe_pagina”, de 4 ori pe celelalte pagini', static fn (array &$g, array &$p): string
+        => diferente_texte($peDoua, '/admin/products', str_repeat('<b>Text nou</b>', 4), $g, $p), true);
+    // „ori_pe_pagina” greșit: pe pagina lui, cu exact cât ar număra declarația dacă ar fi primită.
+    foreach (['listă goală' => [[], 2], 'o pagină din afara „cale”' => [['/cos' => 4], 2], 'un număr text' => [['/admin/settings/store' => '4'], 2],
+        'un număr 0' => [['/admin/settings/store' => 0], 2]] as $cazOri => [$oriGresit, $deCateOri]) {
+        $ruleaza('text declarat cu „ori_pe_pagina” ' . $cazOri, static fn (array &$g, array &$p): string
+            => diferente_texte(['$porturiBiovitality' => [array_merge($peDoua['$porturiBiovitality'][0], ['ori_pe_pagina' => $oriGresit])]],
+                '/admin/settings/store', str_repeat('<b>Text nou</b>', $deCateOri), $g, $p), true, null, '„ori_pe_pagina” lipsește sau e greșit');
+    }
+    // „fara_pagini” greșit: pe o pagină scoasă, unde textul lipsește (cât ar număra declarația dacă ar fi primită).
+    foreach (['listă goală' => [], 'un text, nu o listă' => '/admin/design', 'listă cu o pagină goală' => ['/admin/design', '']] as $cazFara => $faraGresit) {
+        $ruleaza('text declarat cu „fara_pagini” ' . $cazFara, static fn (array &$g, array &$p): string
+            => diferente_texte(['$porturiBiovitality' => [['nume' => 'f', 'cale' => '/admin*', 'fara_pagini' => $faraGresit, 'nou' => 'Text nou',
+                'vechi' => 'Text vechi', 'motiv' => 'test']]], '/admin/design', '<b>Text vechi</b>', $g, $p), true, null, '„fara_pagini” lipsește sau e greșit');
     }
 
     // Codurile de stare declarate: doar exact codurile declarate, cu textul doar pe pagina curentă.

@@ -25,6 +25,13 @@ if ($adminFavicon === '') {
     <link rel="icon" href="<?= htmlspecialchars($adminFavicon, ENT_QUOTES) ?>">
     <?php $cssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time(); ?>
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= $cssVersion ?><?= $adminAssetVersionQuery ?>">
+<?php
+// CodeMirror și js-beautify sunt 15 fișiere de pe un CDN, fără defer: pagina aștepta să vină toate, pe
+// FIECARE pagină de admin, deși doar cele patru editoare de cod le folosesc (WP-12 C6, din Biovitality
+// c64fc2d; „Erori moștenite” 6 din docs/DEZVOLTARE.md). Pe celelalte pagini nu se mai cer.
+$adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-template-editor', 'admin/blog-template-editor'];
+?>
+<?php if (in_array(\App\Support\View::vedereaCurenta(), $adminEditoareDeCod, true)): ?>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/theme/material-darker.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.18/addon/dialog/dialog.min.css">
@@ -42,6 +49,7 @@ if ($adminFavicon === '') {
     <script src="https://cdn.jsdelivr.net/npm/js-beautify@1.15.1/js/lib/beautify.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-beautify@1.15.1/js/lib/beautify-css.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-beautify@1.15.1/js/lib/beautify-html.min.js"></script>
+<?php endif; ?>
 </head>
 <body>
     <?php $adminLogat = \App\Support\Auth::check(); echo \App\Support\Verificare::banner($adminLogat ? 'admin' : 'site'); /* bannerul copiei de verificare (adresa întreagă doar cu adminul logat); gol în rest */ if ($adminLogat): ?>
