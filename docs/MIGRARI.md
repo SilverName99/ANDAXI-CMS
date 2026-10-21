@@ -682,6 +682,11 @@ doar chei citite de migrările din `database/migrari/`, valori permise și chei 
 3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe site-ul live `--plan`, apoi `--aplica` (fără
    `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12): o corectură e `setari-inghetate-2.json`.
 
+Comparația calculelor de pe copie (`tools/verificare/compara-calcule.php`, WP-11; [VERIFICARE.md](VERIFICARE.md),
+„Comparația calculelor”) cere baza la zi cu codul comun: dacă garda spune `in_urma` (cod nou urcat după încărcare),
+rulează ea întâi `scripts/migreaza.php --aplica --site=<profil>` (doar pe copie, cu toate gărzile ei) și după el cere
+`la_zi`; altă stare, sau local (`--local`), e refuz. Codul vechi nu are migrări, deci vede aceeași bază.
+
 Erorile PHP ale comenzilor (`migreaza.php`, `install.php`, cronurile) apar în terminal, pe stderr, ca până acum: o
 eroare fatală din afara raportului runner-ului (memoria terminată, de exemplu) se vede acolo, cu codul de ieșire 255.
 În așezarea de azi linia de comandă nu scrie în `storage/logs/php.log` (acolo scriu doar paginile, când serverul web

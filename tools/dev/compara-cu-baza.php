@@ -49,6 +49,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/lib/diferente-asteptate.php';
+require_once __DIR__ . '/lib/normalizeaza-html.php';
 if (in_array('--autotest', $argv, true)) {
     $esecuri = diferente_autotest();
     foreach ($esecuri as $esec) {
@@ -146,40 +147,19 @@ $cerere = static function (string $port, string $metoda, string $cale, string $j
 // Anteturile răspunsului se compară și ele (tools/dev/lib/diferente-asteptate.php → diferente_antete).
 $normalizeazaAntete = static fn (string $antet): array => diferente_antete($antet, $portBaza, $portCurent);
 
-/** Ce diferă la fiecare cerere, indiferent de cod. */
-$normalizeaza = static function (string $html) use ($portBaza, $portCurent, $dosarBaza, $radacina, $faraUnealtaInterna): string {
-    if ($faraUnealtaInterna) {
-        // Panoul importului din backup WordPress (unealta internă), din fereastra de import a utilizatorilor.
-        $html = (string) preg_replace('#(data-admin-simple-panel="import"[^>]*>).*?(<h3[^>]*>Import din fișier CSV/XLSX</h3>)#s',
-            '$1<IMPORT-WORDPRESS>$2', $html);
-    }
-    $html = str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $html);
-    // Căile de pe disc apar în instrucțiunile de cron din admin.
-    if ($dosarBaza !== '') {
-        $html = str_replace($dosarBaza, $radacina, $html);
-    }
-    $inlocuiri = [
-        // Tokenurile formularelor și momentul randării lor.
-        '/(name="(?:checkout_form_token|register_form_token|_csrf|csrf_token|admin_csrf)"\s+value=")[^"]*"/' => '$1<TOKEN>"',
-        '/(name="(?:checkout_form_rendered_at|register_form_rendered_at)"\s+value=")[^"]*"/' => '$1<MOMENT>"',
-        '/("(?:token|rendered_at)"\s*:\s*)("[^"]*"|\d+)/' => '$1<TOKEN>',
-        // Aceleași câmpuri în HTML-ul de previzualizare pus în JSON (editorul de pagini: \u0022 în loc de ghilimele).
-        '/(name=\\\\u0022(?:checkout_form_token|register_form_token|_csrf|csrf_token|admin_csrf)\\\\u0022\s+value=\\\\u0022)[^\\\\]*/' => '$1<TOKEN>',
-        '/(name=\\\\u0022(?:checkout_form_rendered_at|register_form_rendered_at)\\\\u0022\s+value=\\\\u0022)\d+/' => '$1<MOMENT>',
-        '/(String\()"[0-9a-f]{16,}"/' => '$1"<TOKEN>"',
-        '/(Number\()\d{9,}/' => '$1<MOMENT>',
-        '/(window\.BT_CSRF\s*=\s*)"[^"]*"/' => '$1"<TOKEN>"',
-        // Versiunea fișierelor statice = data fișierului pe disc (și variantele WebP ale logo-ului din antet).
-        '/(\.(?:css|js|webp)\?v=)\d+/' => '$1<V>',
-        // Identificatori aleși la întâmplare (formularele de checkout/cont).
-        '/\b(bv-checkout-[a-z0-9-]*?)[0-9a-f]{6,}\b/' => '$1<ID>',
-        '/\b([a-z]+-)[0-9a-f]{12,}\b/' => '$1<ID>',
-    ];
-    foreach ($inlocuiri as $tipar => $cu) {
-        $html = (string) preg_replace($tipar, $cu, $html);
-    }
-    return $html;
-};
+/**
+ * Ce diferă la fiecare cerere, indiferent de cod (tools/dev/lib/normalizeaza-html.php, aceeași normalizare ca amprenta
+ * paginilor din tools/verificare/amprenta-site.php): portul codului de bază și, în instrucțiunile de cron din admin,
+ * dosarul copiei lui devin ale codului curent.
+ */
+$inlocuiriBaza = ['127.0.0.1:' . $portBaza => '127.0.0.1:' . $portCurent];
+if ($dosarBaza !== '') {
+    $inlocuiriBaza[$dosarBaza] = $radacina;
+}
+$normalizeaza = static fn (string $html): string => normalizeaza_html($html, [
+    'fara_import_wordpress' => $faraUnealtaInterna,
+    'inlocuiri' => $inlocuiriBaza,
+]);
 
 /**
  * Diferențele SEO ale livrării 1 (docs/SEO.md), scrise aici una câte una și

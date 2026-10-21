@@ -64,7 +64,8 @@ poarta G-verif "testele site-ului de verificare și ale încărcării copiei (de
     "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php ;; tools/dev/php.sh tools/dev/test-incarcare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-incarcare.php" WP-08a
 poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-sonda): doar citire, nimic scris, nicio valoare personală; și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/test-sonde.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-sonde.php" WP-10
-poarta G-calc "calculele (golden master local) față de același cod de bază ca G-cmp" "tools/dev/compara-calcule-local.sh" WP-11
+poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un site de verificare simulat: diferite 0, mutațiile care trebuie să pice, refuzurile) și amprenta paginilor (amprenta-site.php pe codul Bioscem și pe codul comun), față de același cod de bază ca G-cmp; și cu php$MINIM (rulează pe servere)" \
+    "tools/dev/compara-calcule-local.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/compara-calcule-local.sh" WP-11
 poarta G-vizual "stilurile calculate ale paginilor publice (capturile, pentru ochi)" "tools/dev/capturi-publice.sh" WP-13
 poarta G-pachet "pachetul Bioscem și pachetul neutru" \
     "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-14
@@ -101,6 +102,11 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # De la WP-09, G-verif rulează și testele încărcării copiei (test-incarcare.php: încărcarea anonimizată pe o găzduire
 # simulată, cu baza „live” făcută ca a unui Bioscem neadoptat, pe MariaDB și MySQL 8), cu ambele PHP-uri: încărcarea
 # folosește configureaza.php, stare.php, licenta.php și sterge.php, deci orice WP cu G-verif le verifică împreună.
+# WP-11 (G2, G3): G-calc e acceptanța (tools/dev/compara-calcule-local.sh: golden master-ul local și amprenta paginilor, cu
+# ambele PHP-uri); normalizarea paginilor s-a mutat din compara-cu-baza.php în tools/dev/lib/normalizeaza-html.php, deci
+# G-cmp și G-cmp-istoric (aceeași normalizare, în ambele moduri) arată că nicio pagină nu s-a schimbat; uneltele noi stau în
+# tools/verificare/ și folosesc lib/live.php, lib/cont.php și lib/intrare.php ale celorlalte, deci G-verif și G-sonde (regula
+# de mai sus pentru uneltele de pe servere).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -113,7 +119,7 @@ declare -A PORTI=(
     [WP-08]="G-rute G-paths G-verif G-sonde G-cmp G-smoke G-php"
     [WP-09]="G-rute G-verif G-sonde G-cmp G-php"
     [WP-10]="G-rute G-sonde G-verif G-runner G-cmp G-php"
-    [WP-11]="G-rute G-calc G-cmp G-php"
+    [WP-11]="G-rute G-calc G-cmp G-cmp-istoric G-verif G-sonde G-php"
     [WP-11b]="G-rute G-calc G-sonde G-cmp G-php"
     [WP-12]="G-rute G-mig G-cmp G-plug G-smoke G-php"
     [WP-12b]="G-rute G-mig G-cmp G-plug G-smoke G-calc G-php"

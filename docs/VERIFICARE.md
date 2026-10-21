@@ -15,6 +15,11 @@ date personale, pentru repetițiile personalului. Până la prima încărcare si
 Tot de aici, din WP-10, rulează **verificările pe site-urile live** (pasul 5): citesc baza celor patru
 site-uri doar în citire și scriu numai numere, DA/NU și nume de structură.
 
+Din WP-11, după încărcare (pasul 6, e și f): **comparația calculelor** (golden master-ul: codul vechi al site-ului,
+copiat de încărcare, și codul comun calculează pe aceeași copie, pentru aceleași comenzi, coșul, transportul, punctele și
+ce pleacă în ERP; pe ecran doar numere) și **amprenta paginilor** (ce vede un vizitator pe fiecare adresă publică, pe
+site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
+
 | Fișier | Ce e |
 |---|---|
 | `src/Support/Verificare.php` | Poarta (prima în `public/index.php`), ajutoarele ei și cele 14 gărzi ale copiei (WP-08) |
@@ -29,6 +34,9 @@ site-uri doar în citire și scriu numai numere, DA/NU și nume de structură.
 | `tools/verificare/lib/cont.php` | Contul SSH e comun cu site-urile live: o bază scrisă în `.env`-ul altui site e refuzată de toate uneltele de mai sus |
 | `tools/verificare/agregate.php` (+ `seturi/`, `lib/`) | Verificările agregate pe un site live (WP-10, mai jos) |
 | `tools/sonda/amprenta-schema.php` (+ `lib/`) | Sonda schemei unui site live (WP-10, MIG-08) |
+| `tools/verificare/compara-calcule.php` (+ `lucrator-calcule.php`, `lib/calcule.php`) | Comparația calculelor (golden master, WP-11): codul vechi din `cod-vechi/` și codul comun, pe copie, pentru aceleași comenzi; doar numere (mai jos) |
+| `tools/verificare/amprenta-site.php` (+ `lib/amprenta.php`, `tools/dev/lib/normalizeaza-html.php`) | Amprenta paginilor unui site, live sau de verificare (WP-11): pentru fiecare adresă publică codul, unde trimite, titlul, robots, canonical, H1, JSON-LD…; două amprente se compară (mai jos) |
+| `tools/dev/test-calcule.php`, `tools/dev/test-amprenta-site.php` (prin `tools/dev/compara-calcule-local.sh`) | Testele lor (poarta G-calc): local, față de codul Bioscem însuși, și pe un site de verificare simulat |
 | `tools/dev/test-verificare.php` (+ `lib/gaura-neagra.php`) | Testele (poarta G-verif), pe o găzduire simulată local, cu o plasă de siguranță care numără orice cerere spre afară |
 | `tools/dev/test-sonde.php` | Testele verificărilor pe site-urile live (poarta G-sonde), tot pe o găzduire simulată |
 | `tools/dev/test-incarcare.php` | Testele încărcării copiei (tot poarta G-verif), pe o găzduire simulată cu un Bioscem „live” inventat, pe MariaDB și MySQL 8 |
@@ -207,7 +215,31 @@ $PHP tools/verificare/incarca.php --din=bioscem
 # d) din nou
 $PHP tools/verificare/stare.php
 #   ultimul rând din nou „GATA: …”, acum și cu „DA    copia e încheiată și anonimizată”
+
+# e) comparația calculelor: codul vechi Bioscem (copiat la c, în cod-vechi/bioscem/) față de codul comun, pe copie
+$PHP tools/verificare/compara-calcule.php
+#   câteva minute; pe ecran doar numere și nume de câmpuri; ultimul rând trebuie să fie: „REZULTAT: TRECE”
+#   textul e salvat și în storage/verificare/sonde/calcule-bioscem-<data>.txt
 ```
+
+**Amprenta paginilor** (f), tot noaptea, după (e): ce vede un vizitator pe fiecare adresă publică a bioscem.ro (codul
+vechi) și a copiei (codul comun), câte o cerere pe secundă, doar GET (cam o oră pentru tot site-ul; pe bioscem.ro nu
+schimbă nimic, e ca un vizitator care deschide paginile pe rând), apoi cele două comparate:
+
+```sh
+# f) amprenta paginilor
+$PHP tools/verificare/amprenta-site.php --baza=https://bioscem.ro --iesire=storage/verificare/sonde/amprenta-bioscem.tsv
+read -rs VERIFICARE_POARTA_PAROLA        # scrii parola porții (nu se vede), apoi Enter
+export VERIFICARE_POARTA_PAROLA
+$PHP tools/verificare/amprenta-site.php --baza=https://<domeniul-verificare> --poarta=verificare --iesire=storage/verificare/sonde/amprenta-copie.tsv
+unset VERIFICARE_POARTA_PAROLA
+$PHP tools/verificare/amprenta-site.php --compara storage/verificare/sonde/amprenta-bioscem.tsv storage/verificare/sonde/amprenta-copie.tsv
+#   ultimul rând: „REZULTAT: LA FEL” (sau „DIFERĂ”, cu adresele și câmpurile care diferă)
+```
+
+Parola porții se dă doar așa (`read -rs`), niciodată pe linia comenzii; unealta o trimite doar copiei, doar pe https, și
+se oprește după o singură încercare greșită (nu ajunge la cele 10 care închid poarta). În fișierele `.tsv` nu e numele
+niciunui site, doar adrese publice (`{GAZDA}/…`), titluri și amprente.
 
 Dacă `configureaza.php --rescrie` (a) nu e nevoie, `stare.php` (b) spune „GATA” direct; dacă e nevoie, încărcarea
 (c) îți spune singură „REFUZAT: … configureaza.php --rescrie” și nu atinge nimic.
@@ -217,7 +249,12 @@ contului tău de la (c). Conturile de admin ale site-ului Bioscem sunt pe copie 
 și parole pe care nu le știe nimeni, deci nu se pot loga; contul tău e administrator general.
 
 **Ne trimiți tot textul** afișat (nu are date ale clienților, parole sau numele bazei). E salvat și în
-`storage/verificare/sonde/incarcare-bioscem-<data>.txt`; îl descarci la fel ca la pasul 5 și îl ștergi apoi.
+`storage/verificare/sonde/incarcare-bioscem-<data>.txt`, cel al comparației în `calcule-bioscem-<data>.txt`, iar
+amprentele în `amprenta-bioscem.tsv` și `amprenta-copie.tsv`; le descarci la fel ca la pasul 5 și le ștergi apoi.
+
+Comparația calculelor rulează doar pe copie (pe un site live refuză: ambele coduri ar schimba schema bazei chiar în
+calculele verificate). Pe durata ei, cupoanele comenzilor comparate devin valabile (altfel un cupon expirat de mult nu s-ar
+mai calcula în niciun cod) și se pun la loc la final; o comparație oprită le pune la loc la începutul celei următoare.
 
 **Dacă se oprește:**
 
@@ -353,6 +390,14 @@ sunt în git, deci rămân neatinse.
 | `incarca.php`: „ÎNTRERUPT: …” | Rulezi comanda din rând (`--reia`); continuă de unde a rămas |
 | `incarca.php`: „OPRIT: … copia NU s-a putut șterge singură” | `$PHP tools/verificare/sterge.php`, apoi trimite-ne textul |
 | `incarca.php --demo --pachet=…`: „… codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): ți le trimitem noi; copia s-a șters singură |
+| `compara-calcule.php`: „REFUZAT: copia de verificare lipsește”, „… a expirat”, „copia nu e încheiată” sau „copia e din altă sursă” | Încarci întâi copia Bioscem (pasul 6, c; `sterge.php` înainte dacă pe copie e altceva), apoi comparația |
+| `compara-calcule.php`: „REFUZAT: codul vechi lipsește din cod-vechi/bioscem/” sau „.env-ul codului vechi … nu e spre baza copiei” | Încărcarea l-a sărit (`--fara-cod-vechi`), `sterge.php` l-a șters sau a rămas de la altă copie: încarci din nou (`--reincarca`) |
+| `compara-calcule.php`: „REFUZAT: pe codul comun nu sunt pornite toate pluginurile site-ului: …” | Ai schimbat pachetul copiei (pasul 7): `$PHP tools/verificare/licenta.php bioscem`, apoi din nou comparația |
+| `compara-calcule.php`: „REZULTAT: PICĂ” | Ne trimiți tot textul (spune doar ce câmpuri și ce tipuri de comenzi diferă, fără date). Copia rămâne cum era, cupoanele puse la loc |
+| `compara-calcule.php`: „OPRIT: …” | Ne trimiți textul. Dacă spune că cupoanele NU s-au pus la loc, rulezi comanda din nou: întâi le pune la loc |
+| `compara-calcule.php`: „… baza copiei era „in_urma”, iar scripts/migreaza.php --aplica … a ieșit cu codul …” | Codul nou are migrări pe care copia nu le are încă și ele n-au mers: `$PHP scripts/migreaza.php --aplica --site=bioscem` și ne trimiți textul lui |
+| `amprenta-site.php`: „OPRIT: site-ul cere parola porții” sau „parola porții nu e bună” | `read -rs VERIFICARE_POARTA_PAROLA`, `export VERIFICARE_POARTA_PAROLA` și `--poarta=verificare` (ca la pasul 6, f); după o parolă greșită unealta se oprește singură |
+| `amprenta-site.php --compara`: „REZULTAT: DIFERĂ” | Ne trimiți textul și cele două fișiere `.tsv` |
 | O comandă (`configureaza.php`, `stare.php`, `migreaza.php`, `install.php`) se oprește cu „PHP Fatal error” sau „PHP Warning” | Trimite-ne rândurile din terminal: erorile PHP ale comenzilor apar acolo (stderr), nu într-un fișier. Ale paginilor sunt în `storage/logs/php.log` al site-ului de verificare, dacă serverul nu are alt jurnal (`$PHP scripts/diagnostic.php` arată unde; WP-07) |
 
 ## Cum funcționează (pentru programatori)
@@ -597,6 +642,115 @@ sarea, fișierele copiei); 2 refuzat, nimic atins (toate refuzurile vin înainte
 după ea devine „OPRIT”, cod 1, cu ștergerea copiei); 3 „ÎNTRERUPT” (bugetul, legătura pierdută, o eroare fatală PHP),
 copia neterminată rămâne închisă pentru `--reia` sau `sterge.php`.
 
+### Comparația calculelor (`compara-calcule.php`, WP-11)
+
+Golden master-ul din planul de verificare (§2.3, G2): pentru aceleași comenzi și aceeași bază, **codul vechi al site-ului
+și codul comun trebuie să calculeze aceleași sume**. Nu e o comparație cu totalurile salvate: sumarul coșului citește
+prețurile, perioadele de reducere și cupoanele de acum, deci un total de acum o lună poate diferi pe drept (potrivirea cu
+totalul salvat e doar informativă).
+
+- **Unde rulează.** Pe copia de verificare: `Locul::verificare` (dosarul `~/domains/<gazdă>/public_html`, `HOME`,
+  `SITE_COPIE_VERIFICARE=1`), baza din `.env` nescrisă în `.env`-ul altui site din cont (`Cont::bazaAltuiSite`), `SITE_SLUG`
+  = profilul, `storage/verificare/incarcat-la` neexpirat și `_verificare` cu `anonimizat = 1`, sursa profilului și
+  `incarcat_la` în ultimele `VERIFICARE_ZILE_PASTRARE` zile. Codul vechi e `~/domains/<verificare>/cod-vechi/<profil>/`
+  (copiat de încărcare, pasul 10; nu o legătură), cu `.env`-ul lui spre aceeași bază. În dezvoltare, doar cu `--local`
+  (fără `.env` în niciun cod, `CMS_DEV_DIR` în mediu, o bază `cms_*` pe calculator, fără `SITE_COPIE_VERIFICARE=1`; codul vechi
+  dat cu `--cod-vechi`, codul comun cel de aici sau `--cod-nou`, pentru mutațiile testului). **Niciodată pe o bază live,
+  oricum ar fi pornit:** ambele coduri trimit DDL chiar în calculul verificat (`CheckoutCalculator::fetchProducts` →
+  `ensureProductVatSchema`, `Precomanda::ensureSchema`; pe codul vechi și `ErpSync::ensureSchema`), deci nu există nicio
+  opțiune pentru așa ceva. Profilul: `bioscem` (Biovitality, cu Stripe, numerotarea BV și pachetele excluse, în WP-11b).
+- **Migrările.** Cu baza în urma codului comun (cod nou urcat după încărcare: garda spune `in_urma`), comanda rulează
+  întâi `scripts/migreaza.php --aplica --site=<profil>`, iar după el garda trebuie să spună `la_zi`; altă stare (fără
+  registru, o eroare a gărzii: nu e o copie lăsată de încărcare) și, local, orice stare în afară de `la_zi` e refuz.
+- **Cazurile** (o interogare, pe baza copiei): ultimele `--n` comenzi (implicit 500; fără cele șterse și cele `failed`),
+  plus fiecare comandă din ultimele 12 luni cu cupon, puncte, o linie cu ofertă BBD sau FANbox (cel mult 300). Fiecare are
+  un tip, din ce are: `cupon_procent`, `cupon_fix`, `cupon_inexistent`, `puncte`, `bbd`, `fanbox`, `firma`, `judet_bucuresti`
+  (sau `simplu`).
+- **Lucrătorii** (`lucrator-calcule.php --cod=<rădăcina>`): câte un proces pentru fiecare cod, pe rând; codul vechi pe PHP-ul
+  dat cu `--php-vechi` (de exemplu PHP-ul lui live, `/opt/alt/php81/usr/bin/php`; implicit același), codul comun pe PHP-ul
+  comenzii (cel puțin `php_min`). Întâi doar „verifica”: garda, versiunea, pluginurile codului comun (cele din
+  `licente_dev.<profil>` trebuie să fie toate pornite, altfel refuz: comparația ar număra ca diferență ce oprește licența) și
+  amprentele setărilor din care se fac calculele (informativ: aceleași valori în ambele coduri?). Fiecare lucrător verifică,
+  după ce codul lui s-a legat la bază și înaintea oricărui cod al aplicației, că e chiar copia așteptată (același nume de
+  bază, același rând `_verificare`; local, același nume `cms_*`). Mediul: pe server doar `PATH`, `HOME`, `LANG`; cererile spre
+  internet spre `127.0.0.1:9`, `allow_url_fopen=0`; pe copie gărzile (`SITE_COPIE_VERIFICARE=1`) și setările neutralizate la
+  încărcare opresc oricum ERP-ul, FAN-ul și plățile. Sesiunea: un handler de sesiune gol, pornit înainte de `bootstrap.php`
+  (al Bioscem ar porni altfel o sesiune și în linia de comandă), deci niciun fișier de sesiune; comanda verifică după fiecare
+  rulare dosarele `storage/sessions` ale ambelor coduri. Datele: prin țevi (`proc_open`) sau, fără el (ori cu
+  `--prin-fisiere`), prin fișiere 0600 în `storage/verificare/tmp/`, șterse la final; numele bazei nu apare în linia de comandă.
+- **Ce se compară**, pentru fiecare caz, prin API-ul public al codului, ca un client în checkout (`Cart::clear()`, `Cart::add`
+  pentru fiecare linie, cu cheia BBD, `Cart::applyCoupon`, `CustomerAuth::login` și `Cart::requestPoints`, județul și
+  localitatea de facturare, `CheckoutCalculator::alegeFanbox`), rotunjit la 2 zecimale, cu toleranța 0,005:
+  `CheckoutCalculator::buildSummary` (subtotalul, fără TVA, reducerea, punctele, TVA-ul și cel adăugat, transportul,
+  totalul, dacă cuponul a mers, punctele aplicate; pe fiecare linie prețul, totalul, TVA-ul, reducerea, totalul după
+  reducere, cheia BBD), `adminRecalcShipping` (cu transportul salvat și cu 0, ca la trecerea pe FANbox din admin),
+  `LoyaltyService::estimateEarnPoints` (din sumar și din comanda salvată) și `ErpSync::buildPayload` pe comanda salvată
+  (sha1 pe JSON-ul canonic; la o diferență, numele cheilor de sus care diferă).
+- **Cupoanele** (`--cupoane-valide`, implicit; `--fara-cupoane-valide` le lasă): cele folosite de cazuri devin valabile pe
+  durata comparației (`is_active = 1`, fără `starts_at`, `ends_at`, `max_uses_total`, `used_at`), altfel cupoanele vechi ar
+  fi expirate în ambele coduri și reducerea nu s-ar mai calcula. Valorile de dinainte se scriu întâi într-un fișier 0600 din
+  `tmp/` și se pun la loc la final (și după o eroare fatală PHP), verificat rând cu rând; o rulare omorâtă între ele le pune
+  la loc la începutul celei următoare.
+- **Ieșirea** (doar numere, nume de câmpuri, tipuri de caz, chei ERP și locuri din cod; niciun id, număr de comandă, nume,
+  sumă sau produs, decizia D10; o diferență se reproduce pe datele demo, după tipul cazului):
+
+  ```
+  cazuri 512 | identice 512 | diferite 0 | erori vechi 0 | erori nou 0
+  cazuri pe tip: bbd 40, cupon_fix 12, cupon_procent 85, fanbox 130, firma 61, judet_bucuresti 140, puncte 22, simplu 190
+  cupoane aplicate fără eroare: vechi 90, nou 90 | puncte folosite: vechi 20, nou 20
+  diferențe pe câmp: —
+  diferențe pe tip de caz: —
+  payload ERP: identice 512 | chei diferite: —
+  transportul din admin: identice 512 | punctele promise: identice 512
+  informativ: total nou = total salvat la 430/512 (diferențele vin din prețurile, cupoanele și transportul de acum, nu din cod)
+  avertismente PHP: vechi 0, nou 0
+  fișiere de sesiune lăsate de lucrători: 0
+  REZULTAT: TRECE
+  ```
+
+  Cod de ieșire: 0 „TRECE” (niciun caz diferit și nicio eroare în niciun cod); 1 „PICĂ”, sau „OPRIT” după ce cupoanele au
+  fost schimbate (puse la loc); 2 refuzat, nimic schimbat. Textul se salvează în `storage/verificare/sonde/` (local:
+  `$CMS_DEV_DIR/calcule-raport.txt`).
+
+### Amprenta paginilor (`amprenta-site.php`, WP-11)
+
+Amprenta din planul de verificare (§2.4, G3): ce vede din afară un vizitator (și Google) pe fiecare adresă publică a unui
+site adevărat. Două amprente se compară câmp cu câmp: (1) în Etapa 1, bioscem.ro (codul vechi) față de copia de verificare
+(codul comun pe copia de azi-noapte), doar câmpurile structurale; e și acceptanța părții B a SEO (WP-37…WP-40) pe copie;
+(2) în repetiția din Etapa 4, pe copie, codul vechi față de codul comun pe aceeași bază, cu `--strict`; (3) în noaptea
+adoptării, site-ul live înainte și după. Nu atinge nicio bază și nu citește niciun `.env`; rulează de pe server sau de pe
+orice calculator.
+
+- **Ce cere**, doar GET, fără cookie-uri, `User-Agent: ANDAXI-audit/1.0`, fără să urmeze redirecționările (se scrie
+  `Location`), cu `--pauza` între cereri (implicit 1 s, cel puțin 1 s pe un site care nu e pe calculatorul tău), cel mult
+  `--max` adrese (3000): lista fixă (`/`, `/magazin`, `/blog`, `/contact`, `/cos`, `/checkout`, `/robots.txt`, `/sitemap.xml`,
+  o adresă inexistentă aleasă la întâmplare, plus paginile aduse din Bioscem în WP-R: fluxul `/feed/google-merchant.xml` și
+  casetele avertismentelor coșului, `/api/cart/avertismente`, singura adresă `/api/` cerută), fiecare `<loc>` din
+  `/sitemap.xml` și din hărțile unui index (de pe aceeași gazdă, cu sau fără `www.`), linkurile de pe aceeași gazdă din
+  prima pagină, adresele vechi ale categoriilor (`/magazin?category=<slug>` pentru fiecare `/categorie/<slug>`, plus una
+  inexistentă: 301 într-un singur salt, livrarea 2 SEO) și primele 20 de poze de distribuire `/og/…` din `og:image` (aceleași
+  pe ambele site-uri). Niciodată `/admin`, `/api/` (afară de cea de mai sus), `/webhook`, `/plata`, `/contul-meu`,
+  `/newsletter/`, `/auth`, `/checkout/…`, `/gdpr-agreements`, `/_verificare`, `/_andaxi`, `/uploads/`, `/logout`
+  (`AmprentaSite::permisa`). Fiecare cerere fără cookie pornește pe site o sesiune nouă, goală, ca orice vizitator nou.
+- **Poarta copiei:** `--poarta=<utilizator>`, parola doar din `VERIFICARE_POARTA_PAROLA` (niciodată din linia de comandă) și
+  doar pe https (local și pe http); un 401 la prima cerere oprește totul („cere parola porții” sau „parola nu e bună”, după o
+  singură încercare), un 429 la fel.
+- **Ce scrie** (TSV, 0600, fără gazdă: `{GAZDA}` în adrese; capul spune versiunea, dacă e o copie de verificare, câte adrese
+  și data), pe fiecare adresă: calea (partea aleatoare → `{ALEATOR}`), de unde a venit, codul, `Location`, felul răspunsului,
+  sha1 pe corpul normalizat, titlul, meta robots, canonical, H1 (câte și amprenta textului), tipurile JSON-LD (sortate, de la
+  orice adâncime), câte linkuri interne, formularele (câte și amprenta metodelor și acțiunilor), `X-Robots-Tag`, poza de
+  distribuire. Normalizarea corpului e cea a comparației locale (`tools/dev/lib/normalizeaza-html.php`, aceeași cu
+  `compara-cu-baza.php`): tokenurile, momentele, `?v=`, identificatorii aleatori, gazda, **bannerul copiei scos**
+  (`id="verificare-banner"`, garda 14), plus versiunea pozei de distribuire (`/og/<12 hex>/` → `/og/{V}/`). Copia de
+  verificare se recunoaște după banner.
+- **`--compara A.tsv B.tsv`**: câte adrese sunt doar într-una (și care), câte diferențe pe fiecare câmp structural (codul,
+  `Location`, felul, canonical, robots, titlul, H1, JSON-LD, linkurile, formularele, `X-Robots-Tag`, poza de distribuire) și
+  adresele, cel mult 50 pe câmp; cu `--strict` și corpul. Cod 0 „LA FEL”, 1 „DIFERĂ”, 2 un fișier care nu e o amprentă (sau
+  de altă versiune). Când doar una dintre amprente e a unei copii de verificare, nu se compară ce pun gărzile copiei, și se
+  spune: `X-Robots-Tag` (poarta îl pune pe fiecare răspuns), poza de distribuire și adresele `/og/`, `/uploads/` (garda 13:
+  pozele nu se copiază); `--strict` cere atunci două amprente de același fel (pe copie gărzile schimbă corpul: bannerul,
+  etichetele terților, robots.txt).
+
 ### Adresa vizitatorului (`IpClient`)
 
 `IpClient::adresa()` întoarce `REMOTE_ADDR`. Doar când `REMOTE_ADDR` e într-una din rețelele din
@@ -666,8 +820,8 @@ de acolo:
 | `incarcat-la` | data încărcării copiei (ISO 8601 sau secunde Unix), scrisă de `incarca.php` la final (după verificări), ștearsă de `sterge.php` și de o încărcare nouă |
 | `emailuri-azi.json` | ziua, câte emailuri au plecat și câte au fost sărite (limita de 100 pe zi), 0600 |
 | `mail/` | emailurile copiei ca fișiere `.eml` (0600), când copia n-are căsuță de trimitere; le șterge `sterge.php` |
-| `tmp/` | fișierele temporare ale copiei și sarea unei încărcări neterminate (`sare-incarcare`, 0600, pentru `--reia`; ștearsă la final); le șterge `sterge.php` |
-| `sonde/` | rezultatele verificărilor pe site-urile live (pasul 5) și textele încărcărilor (`incarcare-<sursa>-<data>.txt`, pasul 6), 0600 într-un dosar 0700; le trimite proprietarul, apoi le șterge |
+| `tmp/` | fișierele temporare ale copiei, sarea unei încărcări neterminate (`sare-incarcare`, 0600, pentru `--reia`; ștearsă la final) și ale comparației calculelor (cazurile și rezultatele lucrătorilor, când `proc_open` lipsește; valorile de dinainte ale cupoanelor, `calcule-cupoane-<amprentă>.json`, cât durează comparația), 0600, șterse la final; le șterge și `sterge.php` |
+| `sonde/` | rezultatele verificărilor pe site-urile live (pasul 5), textele încărcărilor (`incarcare-<sursa>-<data>.txt`, pasul 6), ale comparațiilor calculelor (`calcule-<profil>-<data>.txt`) și amprentele paginilor (`--iesire=…`, pasul 6, f), 0600 într-un dosar 0700; le trimite proprietarul, apoi le șterge |
 
 ### Verificările pe site-urile live (WP-10)
 
@@ -778,10 +932,12 @@ rulează singur testul T2-live: baseline-ul pe schema live a site-ului, pe Maria
 
 - **Prima încărcare a Bioscem** (pasul 6, noaptea, proprietarul): textul ei ne arată duratele migrărilor pe baza
   adevărată (`migrari.json`) și dacă regulile acoperă tot.
-- **WP-11b**: regulile anonimizării Biovitality (`tools/verificare/reguli/biovitality.php`); vertij și grafoanaytis
-  le primesc la porturile lor.
-- **WP-11**: calculele vechi față de cele noi pe copie (`compara-calcule.php`, cu codul vechi din `cod-vechi/`) și
-  amprenta paginilor (`amprenta-site.php`, fără bannerul copiei).
+- **Prima comparație a calculelor și prima amprentă** (pasul 6, e și f, după prima încărcare): „REZULTAT: TRECE” e
+  acceptanța porturilor cu bani (WP-20: C14a, C9, X5; WP-25), care o rulează din nou.
+- **WP-11b**, după WP-20: regulile anonimizării Biovitality (`tools/verificare/reguli/biovitality.php`), profilul
+  `biovitality` al comparației calculelor (Stripe, numerotarea BV, transportul gratuit pe produs, cupoanele compacte;
+  coșurile cu pachete numărate apart, nu comparate) și amprenta biovitality.ro; vertij și grafoanaytis primesc regulile
+  la porturile lor.
 - **Etapa 2**: modul de test al plăților (chei de test, `VERIFICARE_WEBHOOKURI_DESCHISE=1`), check-in-ul licenței
   la CRM.
 
@@ -876,3 +1032,36 @@ schimbat (cod 1 și copia ștearsă, nu cod 2), `--demo`
 și nicio cale a contului în ieșiri și în textele salvate. Cere baza de dezvoltare făcută de `instaleaza.sh` (copia
 demonstrativă se compară cu ea). Bazele `cms_incarc_*` și utilizatorii lor se fac și se șterg acolo, pe ambele
 servere.
+
+`tools/dev/compara-calcule-local.sh` (poarta G-calc, și cu PHP-ul minim) scoate codul Bioscem însuși (commit-ul revizuit din
+[de-portat.md](de-portat.md), aceeași copie ca la `compara-cu-baza.sh`) și rulează două teste. **`tools/dev/test-calcule.php`**:
+`compara-calcule.php --local` pe `cms_calc_t`, o copie a bazei de dezvoltare cu 28 de comenzi inventate (puncte peste
+disponibil, sub minim, fără cont, cu cupon; cupoane fixe, procentuale, expirate, oprite, unice folosite, inexistente, pe
+produse, pe categorii, fără cumulare, pentru un client, cu număr de articole; BBD, FANbox, firmă, București, reducere și
+transport puse de mână, precomandă, produse inactive și șterse, coș gol, pragul transportului gratuit, o localitate cu km
+în plus): „TRECE”, „diferite 0”, fiecare tip de caz prezent, aceleași cupoane și puncte aplicate în ambele coduri; fiecare
+rând al ieșirii are una dintre formele știute (doar numere și nume), fără nume de produse, numere de comenzi, emailuri sau
+numele bazei; cupoanele puse la loc (CHECKSUM TABLE), niciun fișier de sesiune; la fel cu prețurile fixe ale transportului,
+cu `--fara-cupoane-valide` (mai puține cupoane aplicate: punerea lor contează), `--prin-fisiere`, `--php-vechi=php<min>`,
+`--n`. Apoi câte o mutație în codul comun (într-o copie, `--cod-nou`): totalul, reducerea procentuală, prețul BBD, valoarea
+punctelor, transportul din admin, punctele promise, o cheie a payload-ului ERP, o excepție: fiecare trebuie să dea „PICĂ” și
+să-și numească câmpul, deci comparația chiar vede fiecare calcul. Refuzurile locale (cod 2, nimic schimbat), lucrătorul
+pornit direct pe altă bază sau fără `_verificare`, o rulare omorâtă după cupoane (următoarea le pune la loc) și o eroare
+fatală de memorie (cupoanele puse la loc pe loc). La urmă, pe un site de verificare simulat (`$CMS_DEV_DIR/calcule/acasa`:
+copia codului din git, `.env`-ul copiei, licența pusă de `licenta.php`, codul vechi în `cod-vechi/bioscem/` cu `.env`-ul lui,
+baza `cms_calc_copie` cu `_verificare` și un utilizator cu parolă), cu mediul gol: baza în urma codului (o migrare
+neaplicată) → migrările întâi, apoi „TRECE”, textul salvat 0600, nicio parolă, nume de bază sau cale a contului; fiecare
+refuz al serverului (`_verificare` lipsă, neîncheiat, din altă sursă, prea vechi; `incarcat-la` lipsă sau expirat; `.env`
+fără `SITE_COPIE_VERIFICARE=1` sau cu alt pachet; alt `HOME`; baza în `.env`-ul altui site din cont; codul vechi lipsă,
+legătură sau cu `.env`-ul spre altă bază; `--cod-vechi` și `--local` pe server; licența cu cupoanele oprite; baza fără
+registrul migrărilor); un PHP sub
+minim. **`tools/dev/test-amprenta-site.php`**: fără server normalizarea, câmpurile unei pagini inventate, adresele pe care
+unealta nu le cere, fișierul, comparația (câte o schimbare pe fiecare câmp, corpul doar cu `--strict`, o copie de verificare
+față de un site) și refuzurile liniei de comandă; apoi, pe `cms_amprenta_t` (cu o poză de produs, pentru poza de
+distribuire), codul Bioscem (`CMS_DEV_PORT`+16), codul comun cu pachetul Bioscem (+17) și o copie de verificare a codului
+comun (+18, cu poarta): codul comun de două ori „LA FEL” cu `--strict`; Bioscem față de codul comun „LA FEL” pe câmpurile
+structurale și, cu `--strict`, „DIFERĂ” doar la corpul lui `/robots.txt` (diferența declarată în `$deBioscem`); politețea
+văzută din partea serverului (doar GET, User-Agent-ul uneltei, fără cookie, nicio adresă interzisă, câte o cerere pe adresă,
+pauza); licența fără blog „DIFERĂ” (`/blog` 200 → 404, articolele doar în amprenta Bioscem); copia fără parolă sau cu parola
+greșită oprită după o singură cerere, cu parola „copie de verificare: DA” și, față de Bioscem, „LA FEL” cu câmpurile gărzilor
+spuse ca necomparate. Bazele, serverele și dosarele se fac și se șterg acolo; baza de dezvoltare doar se copiază.

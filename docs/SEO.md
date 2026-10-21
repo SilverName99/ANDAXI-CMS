@@ -347,7 +347,18 @@ fluxului; textele Google ale primei pagini, a 3 categorii și 20 de produse
   `Allow` pentru flux în robots.txt, câmpurile avertismentului) sunt declarate în
   `$porturiBioscem`, fiecare cu commit-ul Bioscem, pagina (sau paginile) și numărul exact de
   apariții (WP-R, 21 octombrie); o livrare nouă își adaugă acolo declarațiile, în același commit;
-- `tools/dev/verifica-rute.php`: fiecare adresă mereu deschisă e exclusă.
+- `tools/dev/verifica-rute.php`: fiecare adresă mereu deschisă e exclusă;
+- `tools/verificare/amprenta-site.php` (WP-11; [VERIFICARE.md](VERIFICARE.md), „Amprenta
+  paginilor”): ce vede Google pe fiecare adresă publică a unui site adevărat (codul,
+  `Location`, titlul, robots, canonical, H1, tipurile JSON-LD, linkurile interne,
+  formularele, `X-Robots-Tag`, poza de distribuire), din `/sitemap.xml`, linkurile primei
+  pagini, adresele vechi ale categoriilor (`/magazin?category=` → 301 într-un salt), fluxul
+  și pozele `/og/`; două amprente se compară câmp cu câmp. bioscem.ro față de copia de
+  verificare (codul comun pe copia de azi-noapte) e acceptanța părții B pe datele adevărate
+  (WP-37…WP-40), iar în noaptea adoptării site-ul live înainte și după. Local, în poarta
+  G-calc (`tools/dev/test-amprenta-site.php`): codul Bioscem față de codul comun, aceleași
+  câmpuri pe toate adresele, iar corpul diferă doar la `/robots.txt` (diferența din
+  `$deBioscem`).
 
 ## 11. Ce nu e aici (încă)
 
