@@ -244,6 +244,15 @@ DateSite::reseteaza($radacina . '/site-uri/bioscem');
 $verifica('Bioscem: numele implicit din seo.json, sufixul vechi „BIOSCEM” scos din titluri, prefixul id-urilor din flux',
     SeoMeta::numeMagazinImplicit() === 'Bioscem Shop' && SeoMeta::curataTitlu('Ceai de mentă | BIOSCEM') === 'Ceai de mentă'
     && FluxGoogleMerchant::prefixId() === 'BS-', SeoMeta::curataTitlu('Ceai de mentă | BIOSCEM') . ' / ' . FluxGoogleMerchant::prefixId());
+// „harrison” e un cuvânt generic al mărcilor Bioscem (din „HSN - Harrison Sport Nutrition”): un nume de produs care îl
+// conține nu are marca, deci titlul o adaugă. În pachetul demo cuvântul nu e generic (mai jos). Comparația cu Bioscem o
+// dovedește și pe pagină (cazul „titlul unui produs cu un cuvânt generic al mărcii”).
+$marcaTest = 'HDN - Harrison Demo Nutrition';
+$verifica('Bioscem: „harrison” din seo.json (titluri.cuvinte_generice_marca) nu deosebește marca, deci titlul o adaugă',
+    !SeoMeta::marcaInNume('Proteină Harrison de test', $marcaTest) && SeoMeta::marcaInNume('Proteină HDN de test', $marcaTest)
+    && SeoMeta::marcaInNume('Proteină Demo de test', $marcaTest)
+    && SeoMeta::titluDinNume('Proteină Harrison de test', $marcaTest, 'Bioscem Shop') === 'Proteină Harrison de test – ' . $marcaTest,
+    SeoMeta::titluDinNume('Proteină Harrison de test', $marcaTest, 'Bioscem Shop'));
 $verifica('Bioscem: returul din seo.json (14 zile, /termeni-conditii, transportul înapoi plătit de client), FAN Courier, fără termen de livrare',
     PoliticaLivrare::activ() && PoliticaLivrare::retur() === ['zile' => 14, 'pagina' => '/termeni-conditii', 'taxe' => 'client']
     && PoliticaLivrare::serviciuAdresa() === 'FAN Courier' && PoliticaLivrare::termenLivrare() === null
@@ -298,10 +307,11 @@ $verifica('Bioscem: logo-ul din antet primește <picture> cu cele două WebP; al
     && str_contains($logo[0], ' 2x"><img src="/uploads/gallery/bioscem-logo-2.png"') && $logo[1] === $antetLogo && $logo[2] === $antetLogo,
     $logo[0]);
 DateSite::reseteaza();
-$verifica('pachetul demo (fără livrare_retur, logo_antet, flux_merchant): nimic declarat, prefixul implicit „P-”, numele din seo.json',
+$verifica('pachetul demo (fără livrare_retur, logo_antet, flux_merchant, titluri): nimic declarat, prefixul implicit „P-”, numele din seo.json, „harrison” nu e generic',
     !PoliticaLivrare::activ() && PoliticaLivrare::retur() === [] && PoliticaLivrare::optiuni($setariLivrare, 14.5, false) === []
     && FluxGoogleMerchant::prefixId() === 'P-' && LogoAntet::webp($antetLogo) === $antetLogo
-    && SeoMeta::numeMagazinImplicit() === 'Firma Demo din pachet' && SeoMeta::curataTitlu('Ceai | BIOSCEM') === 'Ceai | BIOSCEM');
+    && SeoMeta::numeMagazinImplicit() === 'Firma Demo din pachet' && SeoMeta::curataTitlu('Ceai | BIOSCEM') === 'Ceai | BIOSCEM'
+    && SeoMeta::marcaInNume('Proteină Harrison de test', $marcaTest));
 $verifica('fără datele unui site: numele implicit din config (APP_NAME), nu „Bioscem Shop”', (static function () use ($radacina): bool {
     DateSite::reseteaza($radacina . '/storage/nu-exista-' . getmypid());
     $config = require $radacina . '/config/app.php';

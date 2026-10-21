@@ -16,7 +16,8 @@ declare(strict_types=1);
  *  1. Registrul (App\Support\Migrari\Registru): fiecare fișier are forma cerută, numărul NNNN e unic în tot
  *     dosarul, dosarul e „nucleu” sau cheia unui plugin din config/plugins.php.
  *  2. migrari.lock are exact migrările din cod, cu sha-ul lor (una nouă trebuie trecută: genereaza-fixture.php
- *     --asteptat), iar o migrare retrasă are motivul scris; ultima.php are ultimul număr și amprenta codului.
+ *     --asteptat), iar o migrare retrasă are motivul scris; ultima.php are ultimul număr, amprenta codului și
+ *     id-urile migrărilor (Registru::ultima(); garda le citește la fiecare cerere).
  *  3. În fișierele de migrare: niciun DDL scris de mână (CREATE/ALTER/DROP/RENAME/TRUNCATE …: totul trece prin
  *     Schema, care detectează și alege clauzele); în definiții niciun AFTER/FIRST (blochează pe MySQL < 8.0.29 și
  *     eșuează în tăcere când coloana de referință lipsește), niciun IF [NOT] EXISTS (există doar pe MariaDB),
@@ -135,7 +136,7 @@ $fisierUltima = $dosarMigrari . '/ultima.php';
 $ultima = is_file($fisierUltima) ? (static function (string $__fisier): mixed {
     return require $__fisier;
 })($fisierUltima) : null;
-if ($migrari !== [] && $ultima !== ['ord' => (int) end($migrari)['ord'], 'amprenta' => $registru->amprenta()]) {
+if ($migrari !== [] && $ultima !== $registru->ultima()) {
     $incalca('ultima.php nu e la zi (ultima migrare ' . sprintf('%04d', (int) end($migrari)['ord']) . '; genereaza-fixture.php --asteptat)');
 }
 

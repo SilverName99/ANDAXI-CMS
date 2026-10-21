@@ -43,7 +43,9 @@ declare(strict_types=1);
  *    14), un tabel ocupat (reîncercări, apoi 1 și reluare), mărimea tabelelor în plan, un tabel
  *    #sql-* rămas, sql_mode în ieșire și în jurnal, verificarea (14), configurarea (2), pașii
  *    site-ului, --json, nicio valoare din rânduri (nici cu ghilimele sau \ în ea, din date(),
- *    peBucati(), 1062 și 1366) și nicio parolă în ieșire.
+ *    peBucati(), 1062 și 1366) și nicio parolă în ieșire. Garda (Garda::stare) cu o migrare nouă
+ *    numerotată sub una deja aplicată (numerele rezervate pe pachete de lucru): in_urma până o aplică
+ *    runner-ul, apoi la_zi, și tot la_zi după întoarcerea la codul de dinainte (runner-ul acelui cod: 12).
  * I. Pasul de înghețare a setărilor (WP-06; în tools/dev/migrari/test-inghetare-runner.php): pachetul fără --site
  *    sau al altui site (2), fără fișierul privat (15), planul, aplicarea (lipsa, lipsa_sau_gol, o valoare prezentă
  *    neatinsă, TRIM doar pe spații), a doua oară nimic, fișierul aplicat schimbat (12), corectura -2, provizoriu
@@ -117,6 +119,7 @@ require_once $radacina . '/bootstrap.php';
 use App\Support\Migrari\Amprenta;
 use App\Support\Migrari\Eroare;
 use App\Support\Migrari\Executie;
+use App\Support\Migrari\Garda;
 use App\Support\Migrari\Registru;
 use App\Support\Migrari\Schema;
 use App\Support\Migrari\Server;
@@ -1025,6 +1028,53 @@ foreach ($cuRunner ? $servere : [] as $numeServer => $sock) {
     [$cod, $out] = $ruleaza($sock, $b('veche'), $jucarii, ['--verifica']);
     $verifica('… --verifica: 0, tot ce trebuie există; coloana veche și tabelele site-ului „în plus”',
         $cod === 0 && str_contains($out, 'în plus  coloana jucarii.coloana_veche') && str_contains($out, 'în plus  tabelul settings'), $out);
+
+    // Garda (App\Support\Migrari\Garda; docs/MIGRARI.md, „Garda”) cu numerele rezervate pe pachete de lucru (planul Etapei 1,
+    // §4.3): o migrare nouă poate avea un număr sub una deja aplicată. Codul „v1” are 0001 și 0003, codul „v2” în plus 0002;
+    // garda citește ultima.php al codului dat (Garda::folosesteDosarul), scris ca de genereaza-fixture.php (Registru::textUltima).
+    $v1 = $lucru . '/goluri-v1-' . $cheiServer;
+    $v2 = $lucru . '/goluri-v2-' . $cheiServer;
+    foreach ([$v1, $v2] as $dosarGol) {
+        $scrieMigrare($dosarGol, 'nucleu/0001_gol_unu', "        \$s->tabel('gol_unu', 'id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY');");
+        $scrieMigrare($dosarGol, 'catalog/0003_gol_trei', "        \$s->tabel('gol_trei', 'id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY');");
+    }
+    $scrieMigrare($v2, 'catalog/0002_gol_doi', "        \$s->tabel('gol_doi', 'id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY');");
+    foreach ([$v1, $v2] as $dosarGol) {
+        $genereazaAsteptat($sock, $dosarGol);
+        file_put_contents($dosarGol . '/ultima.php', $registru($dosarGol)->textUltima());
+    }
+    $gardaCu = static function (string $dosarCod, PDO $db): string {
+        Garda::folosesteDosarul($dosarCod);
+        return Garda::stare($db);
+    };
+    $goluri = $bazaNoua($sock, $b('goluri'));
+    [$cg1, $og1] = $ruleaza($sock, $b('goluri'), $v1, ['--aplica']);
+    $stareV1 = $stareBaza($goluri);
+    $dupaV1 = [$gardaCu($v1, $goluri), $gardaCu($v2, $goluri)];
+    $verifica('garda: baza la zi cu codul v1 (0001, 0003; ultima_ord 3) e la_zi pentru v1 și in_urma pentru v2, care are în plus '
+        . '0002, sub ultima_ord (aceeași ultimă migrare, altă amprentă)',
+        $cg1 === 0 && ($stareV1['ultima_ord'] ?? '') === '3' && $registru($v1)->ultimaOrd() === $registru($v2)->ultimaOrd()
+        && $dupaV1 === [Garda::LA_ZI, Garda::IN_URMA], $og1 . json_encode($dupaV1));
+    [$cg2, $og2] = $ruleaza($sock, $b('goluri'), $v2, ['--stare']);
+    $verifica('… --stare cu v2 arată 0002 de aplicat (ultima_ord 1: prima neterminată e 0002)',
+        $cg2 === 0 && str_contains($og2, 'catalog/0002_gol_doi') && str_contains($og2, 'ultima_ord: 1'), $og2);
+    [$cg3, $og3] = $ruleaza($sock, $b('goluri'), $v2, ['--aplica']);
+    $dupaV2 = [$gardaCu($v2, $goluri), $gardaCu($v1, $goluri)];
+    $verifica('… --aplica cu v2 aplică doar 0002 (după 0003, deja aplicată); apoi la_zi pentru v2 și pentru v1 (codul întors la '
+        . 'versiunea de dinainte: baza are tot ce cere el, plus 0002)',
+        $cg3 === 0 && array_column($randuri($goluri), 'rezultat', 'id') === ['catalog/0002_gol_doi' => 'aplicata', 'catalog/0003_gol_trei' => 'aplicata',
+            'nucleu/0001_gol_unu' => 'aplicata'] && $dupaV2 === [Garda::LA_ZI, Garda::LA_ZI], $og3 . json_encode($dupaV2));
+    $stareInainte = $stareBaza($goluri);
+    [$cg4, $og4] = $ruleaza($sock, $b('goluri'), $v1, ['--aplica']);
+    $verifica('… runner-ul cu v1 pe această bază: 12 (0002 aplicată lipsește din cod), starea neatinsă, garda tot la_zi',
+        $cg4 === 12 && $stareBaza($goluri) === $stareInainte && $gardaCu($v1, $goluri) === Garda::LA_ZI, $og4);
+    $goluri->exec("UPDATE _platforma_migrari SET rezultat = 'partiala' WHERE id = 'catalog/0002_gol_doi'");
+    $goluri->exec("UPDATE _platforma_stare SET valoare = 'alt-cod' WHERE cheie = 'amprenta'");
+    $partiala = $gardaCu($v2, $goluri);
+    $goluri->exec("UPDATE _platforma_migrari SET rezultat = 'aplicata' WHERE id = 'catalog/0002_gol_doi'");
+    $verifica('… cu amprenta altui cod și 0002 „partiala”: in_urma; din nou „aplicata”: la_zi',
+        $partiala === Garda::IN_URMA && $gardaCu($v2, $goluri) === Garda::LA_ZI, $partiala);
+    Garda::folosesteDosarul(null);
 
     // Oprit după fiecare operație, apoi reluat.
     $esecuriOprire = [];

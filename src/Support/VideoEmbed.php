@@ -12,8 +12,16 @@ namespace App\Support;
  * recunoaște nu produce nimic — mai bine lipsește videoul decât să rămână
  * o casetă neagră pe pagină.
  *
- * Din vertij `0fc2b2c` (20 oct 2026), neschimbată. Pluginul blog (postările și
- * evenimentul următor, NextEvent).
+ * Playerul YouTube sau Vimeo e conținut al altcuiva, care poate urmări vizitatorul
+ * (Vimeo pune cookie-uri fără `dnt=1`). Ca analiza și chatul (CookieConsent), el se
+ * încarcă singur doar după ce vizitatorul a acceptat toate cookie-urile; altfel, în
+ * locul lui stă o casetă de aceeași mărime cu „Pornește videoclipul”: playerul se
+ * încarcă abia la apăsare (fără JavaScript, linkul deschide videoul pe YouTube sau
+ * Vimeo). Playerul Vimeo are mereu `dnt=1` (fără cookie-uri de urmărire).
+ *
+ * Din vertij `0fc2b2c` (20 oct 2026), plus acordul pentru cookie-uri și `dnt=1`
+ * (site-uri/vertij/ce-se-schimba.md). Pluginul blog (postările și evenimentul
+ * următor, NextEvent).
  */
 final class VideoEmbed
 {
@@ -26,7 +34,11 @@ final class VideoEmbed
         'ogg' => 'video/ogg',
     ];
 
-    public static function render(string $url): string
+    /**
+     * @param bool|null $cuAcord playerul YouTube/Vimeo se încarcă singur? null = vizitatorul a acceptat toate
+     *                           cookie-urile (CookieConsent::permiteUrmarire); altfel caseta „Pornește videoclipul”
+     */
+    public static function render(string $url, ?bool $cuAcord = null): string
     {
         $url = trim($url);
         if ($url === '') {
@@ -38,13 +50,20 @@ final class VideoEmbed
             $start = self::startSeconds($url);
             $src = 'https://www.youtube-nocookie.com/embed/' . rawurlencode($youtubeId)
                 . ($start > 0 ? '?start=' . $start : '');
+            $link = 'https://www.youtube.com/watch?v=' . rawurlencode($youtubeId) . ($start > 0 ? '&t=' . $start . 's' : '');
 
-            return self::iframe($src, 'Videoclip YouTube');
+            return ($cuAcord ?? CookieConsent::permiteUrmarire())
+                ? self::iframe($src, 'Videoclip YouTube')
+                : self::faraAcord($src, $link, 'YouTube', 'Videoclip YouTube');
         }
 
         $vimeoId = self::vimeoId($url);
         if ($vimeoId !== '') {
-            return self::iframe('https://player.vimeo.com/video/' . rawurlencode($vimeoId), 'Videoclip Vimeo');
+            $src = 'https://player.vimeo.com/video/' . rawurlencode($vimeoId) . '?dnt=1';
+
+            return ($cuAcord ?? CookieConsent::permiteUrmarire())
+                ? self::iframe($src, 'Videoclip Vimeo')
+                : self::faraAcord($src, 'https://vimeo.com/' . rawurlencode($vimeoId), 'Vimeo', 'Videoclip Vimeo');
         }
 
         $mime = self::fileMime($url);
@@ -75,6 +94,34 @@ final class VideoEmbed
             . ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"'
             . ' referrerpolicy="strict-origin-when-cross-origin"'
             . ' allowfullscreen loading="lazy"></iframe>'
+            . '</div>';
+    }
+
+    /**
+     * Fără acordul vizitatorului: o casetă de mărimea playerului, cu un link spre video. La apăsare (cu
+     * JavaScript) linkul se înlocuiește cu playerul, pornit; fără JavaScript deschide videoul la furnizor.
+     */
+    private static function faraAcord(string $src, string $link, string $furnizor, string $title): string
+    {
+        $porneste = "var f=document.createElement('iframe');f.src=this.getAttribute('data-video-player');"
+            . "f.title=this.getAttribute('data-video-titlu');"
+            . "f.setAttribute('style','position:absolute;inset:0;width:100%;height:100%;border:0;');"
+            . "f.setAttribute('allow','accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');"
+            . "f.setAttribute('referrerpolicy','strict-origin-when-cross-origin');f.setAttribute('allowfullscreen','');"
+            . 'this.parentNode.replaceChild(f,this);return false;';
+
+        return '<div style="position:relative;width:100%;padding-top:56.25%;border-radius:14px;overflow:hidden;background:#15202b;">'
+            . '<a href="' . htmlspecialchars($link, ENT_QUOTES) . '" target="_blank" rel="noopener"'
+            . ' data-video-player="' . htmlspecialchars($src . (str_contains($src, '?') ? '&' : '?') . 'autoplay=1', ENT_QUOTES) . '"'
+            . ' data-video-titlu="' . htmlspecialchars($title, ENT_QUOTES) . '"'
+            . ' onclick="' . htmlspecialchars($porneste, ENT_QUOTES) . '"'
+            . ' style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;'
+            . 'padding:18px;color:#ffffff;text-decoration:none;text-align:center;font-size:15px;line-height:1.5;">'
+            . '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;'
+            . 'border-radius:50%;background:rgba(255,255,255,.18);font-size:26px;">&#9654;</span>'
+            . '<span><strong>Pornește videoclipul</strong><br>Playerul ' . $furnizor . ' se încarcă doar când apeși; '
+            . $furnizor . ' poate folosi cookie-uri.</span>'
+            . '</a>'
             . '</div>';
     }
 

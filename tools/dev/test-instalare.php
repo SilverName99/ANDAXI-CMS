@@ -8,7 +8,9 @@ declare(strict_types=1);
  *
  *  A. Garda (App\Support\Migrari\Garda::stare): o bază fără tabele sau ca înainte → fara_registru; după migrări →
  *     la_zi (și cu ultima_ord mai mare decât în cod: o bază înaintea codului); ultima_ord mai mic sau _platforma_stare
- *     fără rând → in_urma; fără conexiune sau cu conexiunea închisă de server → eroare; o singură citire pe conexiune.
+ *     fără rând → in_urma; o migrare din cod cu numărul sub ultima_ord, nerulată (amprenta altui cod) → in_urma, iar cu
+ *     una în plus pe care codul n-o are → la_zi; fără conexiune sau cu conexiunea închisă de server → eroare; o singură
+ *     citire pe conexiune.
  *  B. scripts/install.php: fără server (socket inexistent) 1, cu mesajul pe stderr (la fel seed.php); pe o bază goală 0:
  *     schema = asteptat.json, garda la_zi, seed-ul neutru (doar noutati, evenimente), setările implicite, adminul cu
  *     rolul în forma de azi (role + roles_json), pașii de activare ai licenței; a doua oară 1, „baza există”, nimic scris;
@@ -353,6 +355,30 @@ $dbB->exec("UPDATE _platforma_stare SET valoare = '" . ($ultimaOrd + 5) . "' WHE
 Garda::uita();
 $verifica('ultima_ord mai mare decât în cod (codul întors la o versiune de dinainte): la_zi', Garda::stare($conectare('cms_inst_b')) === Garda::LA_ZI);
 $dbB->exec("UPDATE _platforma_stare SET valoare = '" . $ultimaOrd . "' WHERE cheie = 'ultima_ord'");
+// Numerele sunt rezervate pe pachete de lucru (planul Etapei 1, §4.3): o migrare nouă poate avea un număr sub una deja
+// aplicată. Pe baza la zi, ca după rularea codului de dinainte de ea: rândul unei migrări de la mijloc lipsește, amprenta
+// din _platforma_stare e a altui cod, ultima_ord rămâne cel din cod (cazul întreg, cu runner-ul: test-migrari.php, R).
+$idMijloc = 'blog/0024_legaturi_categorii';
+$randMijloc = $dbB->query("SELECT * FROM _platforma_migrari WHERE id = '" . $idMijloc . "'")->fetch(PDO::FETCH_ASSOC);
+$amprentaCod = $unu($dbB, "SELECT valoare FROM _platforma_stare WHERE cheie = 'amprenta'");
+$dbB->exec("DELETE FROM _platforma_migrari WHERE id = '" . $idMijloc . "'");
+$dbB->exec("UPDATE _platforma_stare SET valoare = 'amprenta-codului-de-dinainte' WHERE cheie = 'amprenta'");
+Garda::uita();
+$faraMijloc = Garda::stare($conectare('cms_inst_b'));
+$dbB->prepare('INSERT INTO _platforma_migrari (' . implode(', ', array_keys((array) $randMijloc)) . ') VALUES ('
+    . implode(', ', array_fill(0, count((array) $randMijloc), '?')) . ')')->execute(array_values((array) $randMijloc));
+Garda::uita();
+$cuMijloc = Garda::stare($conectare('cms_inst_b'));
+$dbB->exec("INSERT INTO _platforma_migrari (id, ord, proprietar, tip, sha256, blocanta, rezultat, operatii, inceputa_la, terminata_la)
+    VALUES ('catalog/0026_din_codul_nou', 26, 'catalog', 'schema', '" . str_repeat('0', 64) . "', 0, 'aplicata', 1, NOW(), NOW())");
+Garda::uita();
+$bazaInainte = Garda::stare($conectare('cms_inst_b'));
+$dbB->exec("DELETE FROM _platforma_migrari WHERE id = 'catalog/0026_din_codul_nou'");
+$dbB->prepare("UPDATE _platforma_stare SET valoare = ? WHERE cheie = 'amprenta'")->execute([$amprentaCod]);
+$verifica('o migrare din cod cu numărul sub ultima_ord, fără rândul ei (amprenta altui cod, ultima_ord = ultima din cod): in_urma; '
+    . 'cu rândul ei: la_zi; cu încă una pe care codul nu o are (codul întors la o versiune de dinainte): la_zi',
+    is_array($randMijloc) && $amprentaCod !== '' && [$faraMijloc, $cuMijloc, $bazaInainte] === [Garda::IN_URMA, Garda::LA_ZI, Garda::LA_ZI],
+    json_encode([$faraMijloc, $cuMijloc, $bazaInainte]));
 $dbI->exec("DELETE FROM _platforma_stare WHERE cheie = 'ultima_ord'");
 Garda::uita();
 $verifica('_platforma_stare fără rândul ultima_ord: in_urma', Garda::stare($conectare('cms_inst_intrerupt')) === Garda::IN_URMA);

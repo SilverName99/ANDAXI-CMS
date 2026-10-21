@@ -25,6 +25,8 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul
+# Înghețarea setărilor (mai jos) se reproduce din clonele celor patru coduri vechi, la commit-ul revizuit.
+verifica_clonele
 
 cu_capturi=1
 PACHET="toate"

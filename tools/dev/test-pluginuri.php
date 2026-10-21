@@ -962,7 +962,7 @@ try {
         'oferte_bbd' => ['/\bBBD\b/u', '/Sertar Oferte/u', '/Sertar lateral „Oferte”/u'],
         'produse_promo' => ['/[Pp]romoțional/u'],
         'conturi_clienti' => ['/Contul meu/u', '/Creează cont/u', '/Listă utilizatori/u', '/Setări utilizatori/u'],
-        'blog' => ['/\bBlog\b/u', '/Articole recente/u'],
+        'blog' => ['/\bBlog\b/u', '/Articole recente/u', '/Pornește videoclipul/u'],
         'newsletter' => ['/[Nn]ewsletter/u', '/[Aa]bonaț/u', '/opt-in/u'],
         'chat_live' => ['/tawk/iu', '/Chat live/u'],
         'manechin' => ['/[Mm]anechin/u'],

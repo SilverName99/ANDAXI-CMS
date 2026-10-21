@@ -162,6 +162,22 @@ if [ -n "$DOAR" ]; then
     done
 fi
 
+# Porțile care citesc clonele codurilor vechi, la „ultimul commit revizuit” din docs/de-portat.md: comparația cu
+# Bioscem (și în testele pluginurilor, E, și în golden master) doar clona Bioscem; testul de fum (înghețarea
+# setărilor celor patru site-uri, și în G-php și G-vechi) și testele migrărilor (fixture-urile, T10) toate patru. O
+# clonă fără commit-ul ei oprește totul de la început, cu numele clonei, în loc de un eșec adânc într-o poartă.
+clone_cerute=""
+for p in $alese; do
+    case "$p" in
+        G-smoke|G-php|G-mig|G-vechi) clone_cerute="toate" ;;
+        G-cmp|G-plug|G-plug-fiecare|G-calc) [ -n "$clone_cerute" ] || clone_cerute="bioscem" ;;
+    esac
+done
+case "$clone_cerute" in
+    toate) verifica_clonele ;;
+    bioscem) verifica_clonele bioscem ;;
+esac
+
 RAPORT="$CMS_DEV_DIR/porti-$WP.txt"
 COMMIT="$(git -C "$RADACINA" rev-parse --short HEAD 2>/dev/null || echo '?')"
 MODIFICAT=""

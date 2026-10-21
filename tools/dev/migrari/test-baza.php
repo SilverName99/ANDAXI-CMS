@@ -1151,7 +1151,7 @@ $proprietarGresit = static function () use ($copieL, $migrareNoua, $lint, $bazaN
     $lacat = $r->lacat();
     $lacat['migrari']['catalog/0098_proba'] = Registru::sha($copieL . '/database/migrari/catalog/0098_proba.php');
     file_put_contents($copieL . '/database/migrari/migrari.lock', json_encode(['migrari' => $lacat['migrari'], 'retrase' => (object) $lacat['retrase']]));
-    file_put_contents($copieL . '/database/migrari/ultima.php', "<?php\nreturn ['ord' => " . $r->ultimaOrd() . ", 'amprenta' => '" . $r->amprenta() . "'];\n");
+    file_put_contents($copieL . '/database/migrari/ultima.php', $r->textUltima());
     $bazaNoua($sockMaria, 'cms_mig_t_t11');
     $ruleaza($sockMaria, 'cms_mig_t_t11', $copieL . '/database/migrari', ['--aplica']);
     file_put_contents($copieL . '/database/migrari/asteptat.json', $ruleaza($sockMaria, 'cms_mig_t_t11', $copieL . '/database/migrari', ['--amprenta'])[1]);

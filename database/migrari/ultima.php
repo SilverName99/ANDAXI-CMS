@@ -3,7 +3,38 @@
 declare(strict_types=1);
 
 // Generat de tools/dev/migrari/genereaza-fixture.php --asteptat; nu se editează de mână.
-// Numărul ultimei migrări din cod și amprenta listei „id:sha256”: garda de la fiecare cerere
-// (WP-05) compară ultima_ord din _platforma_stare cu ord de aici, fără să citească migrările.
+// Garda de la fiecare cerere (App\Support\Migrari\Garda, docs/MIGRARI.md) îl citește în locul migrărilor:
+// ultima_ord și amprenta din _platforma_stare față de ord și amprenta de aici; când amprenta diferă (alt cod
+// decât la ultima rulare a runner-ului), fiecare id de mai jos trebuie să fie terminat în _platforma_migrari.
 
-return ['ord' => 32, 'amprenta' => '01ff20f565592dcb9f29da27d60ac125e5843e30537fb13c6b9fb612be33098b'];
+return [
+    'ord' => 32,
+    'amprenta' => '01ff20f565592dcb9f29da27d60ac125e5843e30537fb13c6b9fb612be33098b',
+    'migrari' => [
+        'nucleu/0001_baza_nucleu',
+        'catalog/0002_baza_catalog',
+        'conturi_clienti/0003_baza_conturi',
+        'magazin/0004_baza_magazin',
+        'livrare_fan/0005_baza_fan',
+        'plata_stripe/0006_baza_stripe',
+        'plata_euplatesc/0007_baza_euplatesc',
+        'plata_bt/0008_baza_bt',
+        'link_plata/0009_baza_link_plata',
+        'erp/0010_baza_erp',
+        'cupoane/0011_baza_cupoane',
+        'fidelitate/0012_baza_fidelitate',
+        'recenzii/0013_baza_recenzii',
+        'precomenzi/0014_baza_precomenzi',
+        'oferte_bbd/0015_baza_bbd',
+        'produse_promo/0016_baza_promo',
+        'blog/0017_baza_blog',
+        'newsletter/0018_baza_newsletter',
+        'acorduri_gdpr/0019_baza_gdpr',
+        'nucleu/0020_roluri_admini',
+        'catalog/0021_coloane_vechi_catalog',
+        'cupoane/0022_coloane_vechi_cupoane',
+        'recenzii/0023_recenzii_vechi',
+        'blog/0024_legaturi_categorii',
+        'magazin/0032_avertismente_produse',
+    ],
+];

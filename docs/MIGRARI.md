@@ -85,7 +85,7 @@ database/migrari/
   site/<site>/<nume>.php             pașii unui singur site (id site/<site>/<nume>), doar cu --site
   migrari.lock                       {"migrari": {id: sha256}, "retrase": {id: motiv}}: ce s-a publicat
   asteptat.json                      amprenta schemei după toate migrările, pe o bază goală
-  ultima.php                         numărul ultimei migrări, pentru garda de la fiecare cerere (WP-05)
+  ultima.php                         ultima migrare, amprenta codului și id-urile migrărilor, pentru garda (WP-05)
 site-uri/<site>/setari-inghetate.json   înghețarea setărilor site-ului (pasul site/<site>/setari-inghetate, WP-06);
                                      corecturile de după adoptare: setari-inghetate-2.json, -3 …
 site-uri/<site>/migrari.json         parametrii site-ului (Schema::parametruSite)
@@ -115,7 +115,11 @@ tools/dev/test-inghetare.php         testele generatorului și ale verificării 
 ```
 
 - **id** = `<proprietar>/<NNNN>_<nume>`. **NNNN** e unic în tot dosarul (oricare proprietar) și dă
-  ordinea. Numerele sunt rezervate pe pachete de lucru în planul Etapei 1 (§4.3).
+  ordinea. Numerele sunt rezervate pe pachete de lucru în planul Etapei 1 (§4.3), deci o migrare nouă poate
+  avea un număr **mai mic** decât una deja publicată (de exemplu `catalog/0026` din WP-19 după
+  `magazin/0032` din WP-R). Pe o bază nouă ordinea e cea a numerelor; pe un site care are deja migrările mai
+  mari, runner-ul o aplică după ele. De aceea o migrare nu are voie să depindă de una cu număr mai mare (T1,
+  pe o bază goală, ar pica), iar garda nu se bizuie doar pe `ultima_ord` (mai jos, „Garda”).
 - Dosarul spune doar **al cui e codul**. Fiecare migrare rulează pe **fiecare site, oricare ar fi
   starea pluginului ei**: o licență schimbată nu are voie să ceară DDL, iar codul comun citește
   coloanele pluginurilor și cu pluginul oprit (istoricul comenzilor).
@@ -227,7 +231,9 @@ starea, sub lacăt, cu codul ei.
 `_platforma_stare` (`ultima_ord` = cea mai mare ord până la care toate migrările din cod sunt
 aplicate sau detectate; `amprenta` = sha256 al listei „id:sha” a codului care a rulat; `server`;
 `ultima_rulare`; `pasi_site` = `{"site": "<site>", "pasi": [id-urile pașilor așteptați]}`, doar cât un pas al site-ului
-n-a terminat). Prefixul
+n-a terminat). `ultima_ord` singur nu spune că baza e la zi: o migrare nouă poate avea un număr sub el (numerele
+rezervate), deci cine întreabă „e la zi?” (CRM-ul, `actualizeaza.sh`) ia răspunsul gărzii (`/health`, `schema:`).
+Prefixul
 `_platforma_` e al runner-ului; tabelele lui nu intră în amprentă. Ele călătoresc în copia bazei, deci o bază
 restaurată continuă exact de unde era.
 
@@ -408,15 +414,16 @@ WP-05 amândouă ieșeau cu 0 la baza căzută („Erori moștenite” 4 din [DE
 
 ## Garda: nicio cerere nu mai trimite DDL
 
-`App\Support\Migrari\Garda::stare(PDO)` spune, cu o singură citire după cheia primară (ținută minte pe
-conexiune), cum stă baza față de migrările din cod (`database/migrari/ultima.php`):
+`App\Support\Migrari\Garda::stare(PDO)` spune cum stă baza față de migrările din cod
+(`database/migrari/ultima.php`: numărul ultimei migrări, amprenta codului și id-urile tuturor migrărilor, scris de
+`genereaza-fixture.php --asteptat`), ținut minte pe conexiune:
 
 | Stare | Când |
 |---|---|
-| `la_zi` | `_platforma_stare.ultima_ord` ≥ ultima migrare din cod (și o bază înaintea codului, după o revenire la codul de dinainte: migrările doar adaugă) |
-| `in_urma` | runner-ul a lucrat pe bază, dar n-a ajuns la ultima migrare din cod (cod nou urcat, `--aplica` nerulat sau oprit), `_platforma_stare` fără `ultima_ord`, sau pașii site-ului (înghețarea) n-au terminat (`pasi_site`) |
+| `la_zi` | fiecare migrare din cod e aplicată sau detectată pe bază. Pe drumul obișnuit (codul e cel cu care a rulat ultima oară runner-ul: `_platforma_stare.amprenta` = amprenta din `ultima.php`): `ultima_ord` ≥ ultima migrare din cod, cu o singură citire după cheia primară. Când amprenta diferă (cod nou urcat, sau codul întors la o versiune de dinainte), garda citește și migrările terminate din `_platforma_migrari`: fiecare id din `ultima.php` trebuie să fie acolo. O bază înaintea codului (după o revenire la codul de dinainte) e tot la zi: migrările doar adaugă |
+| `in_urma` | runner-ul a lucrat pe bază, dar o migrare din cod nu e terminată pe ea (cod nou urcat, `--aplica` nerulat sau oprit; și una cu numărul sub `ultima_ord`, venită după ea), `_platforma_stare` fără `ultima_ord`, sau pașii site-ului (înghețarea) n-au terminat (`pasi_site`) |
 | `fara_registru` | baza n-a văzut niciodată runner-ul (fără `_platforma_stare`): un site pe codul vechi, de dinainte de adoptare |
-| `eroare` | fără conexiune, conexiunea căzută, fără drept de citire, sau lipsește `ultima.php` |
+| `eroare` | fără conexiune, conexiunea căzută, fără drept de citire, sau lipsește `ultima.php` (ori are forma de dinainte, fără id-uri) |
 
 Unde se folosește:
 
@@ -672,14 +679,16 @@ doar chei citite de migrările din `database/migrari/`, valori permise și chei 
 
 ## O migrare nouă, pas cu pas
 
-1. Numărul (NNNN) e cel rezervat pentru pachetul de lucru în planul Etapei 1 (§4.3); dosarul e proprietarul:
+1. Numărul (NNNN) e cel rezervat pentru pachetul de lucru în planul Etapei 1 (§4.3), chiar dacă e sub ultimul
+   publicat (mai sus, „Fișierele”: nu are voie să depindă de o migrare cu număr mai mare); dosarul e proprietarul:
    `nucleu` sau cheia pluginului din `config/plugins.php`, care trebuie să aibă tabelul sau coloana în
    `tabele` (verificarea fișierelor pică altfel).
 2. Fișierul, cu exact cele patru chei (`descriere`, `tip`, `blocanta`, `sus`) și doar metodele din `Schema`
    (mai sus): fără SQL de schemă scris de mână, fără `AFTER`, fără colație, nicio ștergere în afara unei
    migrări „contract”, nicio valoare din rânduri în mesaje.
 3. `tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --asteptat`: `asteptat.json`, `migrari.lock`,
-   `ultima.php` (garda le citește; o migrare publicată nu se mai schimbă, o corectură e o migrare nouă).
+   `ultima.php` (garda îl citește, cu id-ul noii migrări; o migrare publicată nu se mai schimbă, o corectură e o
+   migrare nouă).
 4. O migrare de date își trece tabelele în `$tabeleDate` din `tools/dev/migrari/test-baza.php` (altfel T4 și
    T10 nu știu ce are voie să schimbe) și are un caz de rânduri inventate; o coloană nouă pe care o citește
    codul vechi al unui site se face și acolo, adoptiv (detectată, nu creată a doua oară).
@@ -757,7 +766,9 @@ valoare (1062, 1366, din `date()` și din `peBucati()`); `tabelComplet` (și cur
 tabelul chiar atunci, fără o coloană, sau cu toate coloanele dar fără indecși și fără cheia străină) și
 `schimbaImplicit`; colația coloanelor (în amprentă doar cea diferită de a tabelului, la fel pe ambele servere;
 CHARACTER SET/COLLATE refuzate într-o migrare); un tabel sărit de `information_schema` (1684) citit din nou,
-iar sărit mereu, codul 3; plus sesiunile din linia de comandă.
+iar sărit mereu, codul 3; garda cu o migrare nouă numerotată sub una deja aplicată (`in_urma` până o aplică
+runner-ul, apoi `la_zi`, tot `la_zi` cu codul de dinainte, al cărui runner iese cu 12); plus sesiunile din linia de
+comandă.
 
 **Migrările adevărate** (M, T1–T11 din migrari.md §4; WP-04; în `tools/dev/migrari/test-baza.php`), pe
 MariaDB și pe MySQL 8:
@@ -782,7 +793,7 @@ MariaDB și pe MySQL 8:
 (poarta **G-inst**, și cu PHP-ul minim; doar MariaDB, pe baze `cms_inst_*` făcute și șterse acolo, cu licența
 într-un dosar al testului și un server pe `CMS_DEV_PORT`+8): `install.php` și `seed.php` fără server (1, pe
 stderr), pe o bază goală, a doua oară, oprit la jumătate și reluat, pe o bază străină, fără licență; garda în
-fiecare stare și o singură citire pe conexiune; `/health` și bannerul; pașii de activare (prima cerere după
+fiecare stare (și o migrare din cod cu numărul sub `ultima_ord`, încă nerulată) și o singură citire pe conexiune; `/health` și bannerul; pașii de activare (prima cerere după
 licență, o singură dată, pagina ștearsă rămâne ștearsă, ERP oprit și pornit cu cheia goală sau lipsă);
 contorul pe dashboard, comenzi, produs și o comandă trimisă, plus dashboard-ul unei baze ca înainte, înainte și
 după baseline. Raport: `storage/logs/dev/test-instalare-raport.txt`. Poarta **G-vechi** rulează comparația cu

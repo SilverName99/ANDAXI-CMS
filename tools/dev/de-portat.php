@@ -10,6 +10,7 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/de-portat.php                 # toate cele patru site-uri
  *   tools/dev/php.sh tools/dev/de-portat.php bioscem vertij  # doar acestea
  *   php tools/dev/de-portat.php --revizuit=bioscem           # doar commit-ul revizuit (îl citește compara-cu-baza.sh)
+ *   php tools/dev/de-portat.php --verifica-clonele [bioscem …] # fiecare clonă are commit-ul ei revizuit? (porti.sh, smoke.sh)
  *
  * Clonele: CMS_DEV_REPO_BS, CMS_DEV_REPO_BV, CMS_DEV_REPO_VT, CMS_DEV_REPO_GR
  * (implicit alături de acest repo, ca în tools/dev/comun.sh). Scriptul doar citește:
@@ -19,6 +20,11 @@ declare(strict_types=1);
  *
  * Cod de ieșire: 0 = nimic nou; 2 = sunt commit-uri noi (de trecut în docs/de-portat.md);
  * 1 = eroare (clonă lipsă, commit revizuit necunoscut, tabel stricat).
+ *
+ * --verifica-clonele: doar dacă fiecare clonă (toate patru, sau site-urile date) există și are „ultimul commit
+ * revizuit” al ei. Porțile care citesc codul vechi (comparația cu Bioscem, înghețarea setărilor din testul de
+ * fum, fixture-urile migrărilor) l-ar cere oricum, dar ar pica adânc într-un test; așa, porti.sh și smoke.sh
+ * se opresc de la început, cu clona și commit-ul care lipsesc. Cod 0 = toate au commit-ul, 1 = nu.
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -93,6 +99,34 @@ foreach ($argumente as $argument) {
         echo $tabel[$cheie]['revizuit'], "\n";
         exit(0);
     }
+}
+if (in_array('--verifica-clonele', $argumente, true)) {
+    $site = array_values(array_diff(array_map('mb_strtolower', $argumente), ['--verifica-clonele']));
+    $lipsa = [];
+    $bune = [];
+    foreach ($site === [] ? array_keys($variabile) : $site as $cheie) {
+        if (!isset($variabile[$cheie])) {
+            $eroare('site necunoscut „' . $cheie . '” (bioscem, biovitality, vertij, grafoanaytis).');
+        }
+        $dosar = $clona($cheie);
+        $commit = $tabel[$cheie]['revizuit'];
+        if (!is_dir($dosar)) {
+            $lipsa[] = $cheie . ': clona ' . $dosar . ' lipsește (' . $variabile[$cheie] . ')';
+        } elseif ($git($dosar, ['rev-parse', '--verify', '--quiet', $commit . '^{commit}'])[0] !== 0) {
+            $lipsa[] = $cheie . ': clona ' . $dosar . ' nu are „ultimul commit revizuit” ' . $commit . ' din docs/de-portat.md '
+                . '(git -C ' . $dosar . ' fetch, sau ' . $variabile[$cheie] . '=<o clonă care îl are>)';
+        } else {
+            $bune[] = $cheie . ' ' . $commit;
+        }
+    }
+    if ($lipsa !== []) {
+        foreach ($lipsa as $rand) {
+            fwrite(STDERR, 'EROARE: ' . $rand . "\n");
+        }
+        exit(1);
+    }
+    echo 'clonele au commit-urile revizuite: ', implode(', ', $bune), "\n";
+    exit(0);
 }
 $alese = $argumente === [] ? array_keys($variabile) : array_map('mb_strtolower', $argumente);
 

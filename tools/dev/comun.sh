@@ -62,6 +62,16 @@ verifica_mediul() {
     mkdir -p "$CMS_DEV_DIR" "$CMS_DEV_DIR/mail"
 }
 
+# Clonele codurilor vechi au „ultimul commit revizuit” din docs/de-portat.md? Fără argumente toate patru, altfel
+# site-urile date (bioscem, biovitality, vertij, grafoanaytis). Porțile care le citesc (comparația cu Bioscem,
+# înghețarea setărilor din testul de fum, fixture-urile migrărilor) ar pica oricum, dar adânc într-un test; așa se
+# opresc de la început, cu numele clonei și al commit-ului (de exemplu după ce s-a portat un commit încă neadus în
+# clona locală: întâi `git -C <clonă> fetch`, sau CMS_DEV_REPO_<SITE> spre o clonă care îl are).
+verifica_clonele() {
+    "$CMS_DEV_PHP" "$RADACINA/tools/dev/de-portat.php" --verifica-clonele "$@" >/dev/null \
+        || die "o clonă a codurilor vechi nu are commit-ul revizuit (mai sus); porțile care o citesc ar pica."
+}
+
 parola_admin() {
     local fisier="$CMS_DEV_DIR/admin-parola.txt"
     if [ ! -s "$fisier" ]; then

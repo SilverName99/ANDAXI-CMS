@@ -384,6 +384,12 @@ $coduriDeBioscem = [
 ];
 $porturiBiovitality = [
 ];
+// Postările cazului „blog: un link YouTube (fără acord) și unul Vimeo (cu acord)” din salvări (mai jos): doar pe
+// paginile lor apar playerul și caseta „Pornește videoclipul” (declarate aici, în $porturiVertij).
+$slugVideoYoutube = 'video-youtube-de-test-' . getmypid();
+$slugVideoVimeo = 'video-vimeo-de-test-' . getmypid();
+$videoNeagra = static fn (string $url): string => '<video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;">'
+    . '<source src="' . $url . '" type="video/mp4">Browserul tău nu suportă redarea video.</video>';
 $porturiVertij = [
     // WP-R (20 oct 2026): vertij 0fc2b2c, câmpul de video al postării acceptă și linkuri YouTube și Vimeo
     // (App\Support\VideoEmbed); textul din editor spune asta (site-uri/bioscem/ce-se-schimba.md).
@@ -403,6 +409,44 @@ $porturiVertij = [
             . "                Merge și un fișier urcat în Galerie (<code>/uploads/gallery/nume.mp4</code>).\n            </small>",
         'vechi' => '<small class="muted">Încarcă fișierul .mp4 în Galerie, apoi pune aici calea (ex: <code>/uploads/gallery/nume.mp4</code>).</small>',
         'motiv' => 'perechea rândului de mai sus (vertij 0fc2b2c).',
+        'mod' => 'repo',
+    ],
+    // WP-R, revizuirea portului (20 oct 2026): playerul altui site doar cu acordul pentru cookie-uri (App\Support\VideoEmbed,
+    // CookieConsent), Vimeo cu dnt=1; site-uri/bioscem/ce-se-schimba.md și site-uri/vertij/ce-se-schimba.md.
+    [
+        'nume' => 'postarea cu un link YouTube, la un vizitator fără acordul pentru cookie-uri: caseta „Pornește videoclipul”',
+        'cale' => '/blog/' . $slugVideoYoutube,
+        'nou' => '<div style="position:relative;width:100%;padding-top:56.25%;border-radius:14px;overflow:hidden;background:#15202b;">'
+            . '<a href="https://www.youtube.com/watch?v=AbCdEf12345&amp;t=65s" target="_blank" rel="noopener"'
+            . ' data-video-player="https://www.youtube-nocookie.com/embed/AbCdEf12345?start=65&amp;autoplay=1" data-video-titlu="Videoclip YouTube"'
+            . ' onclick="var f=document.createElement(&#039;iframe&#039;);f.src=this.getAttribute(&#039;data-video-player&#039;);'
+            . 'f.title=this.getAttribute(&#039;data-video-titlu&#039;);'
+            . 'f.setAttribute(&#039;style&#039;,&#039;position:absolute;inset:0;width:100%;height:100%;border:0;&#039;);'
+            . 'f.setAttribute(&#039;allow&#039;,&#039;accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share&#039;);'
+            . 'f.setAttribute(&#039;referrerpolicy&#039;,&#039;strict-origin-when-cross-origin&#039;);f.setAttribute(&#039;allowfullscreen&#039;,&#039;&#039;);'
+            . 'this.parentNode.replaceChild(f,this);return false;"'
+            . ' style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;'
+            . 'padding:18px;color:#ffffff;text-decoration:none;text-align:center;font-size:15px;line-height:1.5;">'
+            . '<span aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;'
+            . 'border-radius:50%;background:rgba(255,255,255,.18);font-size:26px;">&#9654;</span>'
+            . '<span><strong>Pornește videoclipul</strong><br>Playerul YouTube se încarcă doar când apeși; YouTube poate folosi cookie-uri.</span>'
+            . '</a></div>',
+        'vechi' => $videoNeagra('https://youtu.be/AbCdEf12345?t=1m5s'),
+        'motiv' => 'vertij 0fc2b2c: un link YouTube devine playerul lui (în Bioscem, caseta video neagră); fără acordul vizitatorului '
+            . 'pentru toate cookie-urile, playerul se încarcă abia la apăsarea casetei (diferență față de vertij, la revizuirea portului).',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'postarea cu un link Vimeo, la un vizitator care a acceptat toate cookie-urile: playerul, cu dnt=1',
+        'cale' => '/blog/' . $slugVideoVimeo,
+        'nou' => '<div style="position:relative;width:100%;padding-top:56.25%;border-radius:14px;overflow:hidden;background:#15202b;">'
+            . '<iframe src="https://player.vimeo.com/video/123456789?dnt=1" title="Videoclip Vimeo"'
+            . ' style="position:absolute;inset:0;width:100%;height:100%;border:0;"'
+            . ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"'
+            . ' referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe></div>',
+        'vechi' => $videoNeagra('https://vimeo.com/123456789'),
+        'motiv' => 'vertij 0fc2b2c: un link Vimeo devine playerul lui (în Bioscem, caseta video neagră); cu acordul vizitatorului se '
+            . 'încarcă singur, mereu cu dnt=1 (Vimeo fără cookie-uri de urmărire; diferență față de vertij, la revizuirea portului).',
         'mod' => 'repo',
     ],
 ];
@@ -831,8 +875,12 @@ if (is_array($hartaBaza)) {
  *  - un caz de tip „regresie” cere rezultatul de pe o ramură pe care commit-ul „din” nu o
  *    schimbă (același înainte și după el); o ramură atinsă greșit la portare o prinde
  *    comparația cu codul curent, o schimbare a ei în Bioscem o prinde „verifica”.
+ *  - un caz al unui port din alt site („sursa”, de exemplu vertij), de tip „schimbare”: Bioscem nu are
+ *    commit-ul, deci „verifica” cere pe codul Bioscem ce dădea el înaintea portului, iar pagina codului
+ *    curent diferă doar prin textele declarate pentru paginile cazului ($porturiVertij).
  * O cerere e [metodă, cale, date, rol, 'pauza' => secunde]: rolul „adm” (implicit, logat la
- * începutul cazului) sau „viz” (un vizitator nou, de exemplu pentru coș și comandă); „pauza”
+ * începutul cazului), „viz” (un vizitator nou, de exemplu pentru coș și comandă) sau „viz-acord” (un
+ * vizitator nou care a acceptat toate cookie-urile, cookie-ul lui CookieConsent pus dinainte); „pauza”
  * așteaptă înainte (garda anti-robot a checkout-ului). Ea poate fi și o funcție care o face din
  * răspunsurile de până atunci (tokenul formularului, numărul comenzii). „curata” scoate din
  * răspunsuri ce diferă de la o rulare la alta (ora unei comenzi), „la_final” curăță după caz
@@ -1554,7 +1602,102 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 . '<source src="/uploads/gallery/film-de-test.mp4" type="video/mp4">Browserul tău nu suportă redarea video.</video></div>')
                 ? [] : ['postarea nu are videoul .mp4 în <video>'],
         ],
+        [
+            // Port din vertij (0fc2b2c, App\Support\VideoEmbed), cu acordul pentru cookie-uri de la revizuirea portului: un
+            // link YouTube, la un vizitator fără acord, e caseta „Pornește videoclipul”; un link Vimeo, la unul care a acceptat
+            // toate cookie-urile (rolul „viz-acord”), e playerul, cu dnt=1. Pe codul Bioscem ambele sunt caseta video neagră
+            // de azi; diferența e declarată în $porturiVertij, doar pe paginile acestor două postări.
+            'nume' => 'blog: un link YouTube (vizitator fără acord) și unul Vimeo (cu acord) în câmpul de video al postării',
+            'sursa' => 'vertij',
+            'din' => '0fc2b2c',
+            'tabele' => [
+                ['tabel' => 'blog_posts', 'unde' => 'id > :m1', 'param' => ['m1' => $idMaxPostari], 'cheie' => 'id'],
+                ['tabel' => 'blog_templates', 'unde' => 'id > :t1', 'param' => ['t1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_templates')],
+                    'cheie' => 'id'],
+            ],
+            'pregateste' => static function (PDO $db) use ($idPostare, $slugVideoYoutube, $slugVideoVimeo): void {
+                $db->prepare('INSERT INTO blog_templates (name, slug, description, html_content, css_content, js_content, is_active)
+                    VALUES (?, ?, ?, ?, \'\', \'\', 1)')->execute(['Articol cu video extern (test)', 'articol-cu-video-extern-test-' . getmypid(), '',
+                    '<article class="video-test"><h1>{{blog_title}}</h1><div class="video-test__player">{{blog_video}}</div>'
+                    . '<p class="video-test__link">{{blog_video_url}}</p>{{blog_content}}</article>']);
+                $sablon = (int) $db->lastInsertId();
+                // Două copii ale primei postări, cu adresa, titlul, șablonul și linkul lor de video.
+                $coloane = array_values(array_diff($db->query('SHOW COLUMNS FROM blog_posts')->fetchAll(PDO::FETCH_COLUMN),
+                    ['id', 'slug', 'title', 'video_url', 'template_id']));
+                $lista = implode(', ', array_map(static fn (string $c): string => '`' . $c . '`', $coloane));
+                $copie = $db->prepare('INSERT INTO blog_posts (' . $lista . ', slug, title, video_url, template_id) SELECT ' . $lista
+                    . ', ?, ?, ?, ? FROM blog_posts WHERE id = ?');
+                $copie->execute([$slugVideoYoutube, 'Postare cu video YouTube (test)', 'https://youtu.be/AbCdEf12345?t=1m5s', $sablon, $idPostare]);
+                $copie->execute([$slugVideoVimeo, 'Postare cu video Vimeo (test)', 'https://vimeo.com/123456789', $sablon, $idPostare]);
+            },
+            'cereri' => [
+                ['GET', '/blog/' . $slugVideoYoutube, [], 'viz'],
+                ['GET', '/blog/' . $slugVideoVimeo, [], 'viz-acord'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $contine($raspunsuri[0], '<div class="video-test__player">' . $videoNeagra('https://youtu.be/AbCdEf12345?t=1m5s') . '</div>')
+                    ? [] : ['postarea cu linkul YouTube nu are caseta video de azi'],
+                $contine($raspunsuri[1], '<div class="video-test__player">' . $videoNeagra('https://vimeo.com/123456789') . '</div>')
+                    && !$contine($raspunsuri[1], 'id="cookie-banner"')
+                    ? [] : ['postarea cu linkul Vimeo nu are caseta video de azi, sau vizitatorul cu acord vede bannerul de cookie-uri']),
+        ],
     );
+
+    // Constantele Bioscem mutate în site-uri/bioscem/seo.json (WP-R): cuvântul generic „harrison” din mărci
+    // (titluri.cuvinte_generice_marca, SeoMeta::marcaInNume) și prefixul „BS-” al id-urilor din fluxul Merchant
+    // (flux_merchant.prefix_id) pentru un produs fără cod unic. Datele demo nu ating nicio ramură (nicio marcă cu
+    // „Harrison”, fiecare produs cu codul lui), deci cazul face trei copii ale ceaiului de mentă, cu id-uri fixe
+    // (aceleași pe ambele servere, deci aceleași id-uri în flux): o marcă „… Harrison …” cu un nume de produs care îl
+    // conține, un cod gol și un cod dublat (cu litere diferite).
+    $idMaxProduse = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM products');
+    $marcaHarrison = 'HDN - Harrison Demo Nutrition';
+    $produseFaraCod = [
+        ['id' => $idMaxProduse + 1, 'nume' => 'Proteină Harrison de test', 'slug' => 'proteina-harrison-de-test', 'sku' => ''],
+        ['id' => $idMaxProduse + 2, 'nume' => 'Baton proteic de test', 'slug' => 'baton-proteic-de-test', 'sku' => 'DUBLU-TEST'],
+        ['id' => $idMaxProduse + 3, 'nume' => 'Baton proteic de test, cutie', 'slug' => 'baton-proteic-de-test-cutie', 'sku' => 'dublu-test'],
+    ];
+    $salvari[] = [
+        'nume' => 'titlul unui produs cu un cuvânt generic al mărcii (Harrison) și id-urile din flux ale produselor fără cod unic',
+        'din' => '93d803f, d277727',
+        'tabele' => [
+            ['tabel' => 'products', 'unde' => 'id > :p1', 'param' => ['p1' => $idMaxProduse], 'cheie' => 'id'],
+            ['tabel' => 'product_category_links', 'unde' => 'product_id > :p2', 'param' => ['p2' => $idMaxProduse], 'cheie' => 'id'],
+        ],
+        'pregateste' => static function (PDO $db) use ($idMentaInt, $produseFaraCod, $marcaHarrison, $stergeFluxul): void {
+            $coloane = array_values(array_diff($db->query('SHOW COLUMNS FROM products')->fetchAll(PDO::FETCH_COLUMN),
+                ['id', 'name', 'slug', 'sku', 'brand']));
+            $lista = implode(', ', array_map(static fn (string $c): string => '`' . $c . '`', $coloane));
+            $copie = $db->prepare('INSERT INTO products (id, name, slug, sku, brand, ' . $lista . ') SELECT ?, ?, ?, ?, ?, ' . $lista
+                . ' FROM products WHERE id = ?');
+            $legaturi = $db->prepare('INSERT INTO product_category_links (product_id, category_id)
+                SELECT ?, category_id FROM product_category_links WHERE product_id = ?');
+            foreach ($produseFaraCod as $produs) {
+                $copie->execute([$produs['id'], $produs['nume'], $produs['slug'], $produs['sku'], $marcaHarrison, $idMentaInt]);
+                $legaturi->execute([$produs['id'], $idMentaInt]);
+            }
+            $stergeFluxul();
+        },
+        'la_final' => static fn () => $stergeFluxul(),
+        'cereri' => [
+            ['GET', '/produs/proteina-harrison-de-test', [], 'viz'],
+            ['GET', '/feed/google-merchant.xml', [], 'viz'],
+        ],
+        'stare' => static fn (PDO $db): array => [],
+        'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $produseFaraCod, $marcaHarrison): array {
+            $probleme = [];
+            // „harrison” e generic: numele produsului nu conține marca, deci titlul o adaugă.
+            if (!$contine($raspunsuri[0], '<title>Proteină Harrison de test – ' . $marcaHarrison)) {
+                $probleme[] = 'titlul produsului nu adaugă marca (cuvântul „harrison” nu e generic?)';
+            }
+            foreach ($produseFaraCod as $produs) {
+                if (!$contine($raspunsuri[1], '<g:id>BS-' . $produs['id'] . '</g:id>')) {
+                    $probleme[] = 'fluxul nu are id-ul BS-' . $produs['id'] . ' (' . ($produs['sku'] === '' ? 'cod gol' : 'cod dublat') . ')';
+                }
+            }
+            return $probleme;
+        },
+    ];
 
     foreach ($salvari as $caz) {
         $regresie = ($caz['tip'] ?? 'schimbare') === 'regresie';
@@ -1573,10 +1716,14 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 $jaruriCaz = [
                     'adm' => $dosarDiff . '/jar-' . $server . '-salvare.txt',
                     'viz' => $dosarDiff . '/jar-' . $server . '-salvare-viz.txt',
+                    'viz-acord' => $dosarDiff . '/jar-' . $server . '-salvare-viz-acord.txt',
                 ];
                 foreach ($jaruriCaz as $jarCaz) {
                     @unlink($jarCaz);
                 }
+                // Un vizitator nou care a apăsat „Accept toate” în bannerul de cookie-uri (cookie-ul lui CookieConsent).
+                file_put_contents($jaruriCaz['viz-acord'], "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::COOKIE . "\t"
+                    . \App\Support\CookieConsent::TOATE . "\n");
                 $cerere($port, 'POST', '/admin/login', $jaruriCaz['adm'], ['email' => $adminEmail, 'password' => $parola]);
                 // O cerere e [metodă, cale, date, rol = 'adm' | 'viz', 'pauza' => secunde înainte] sau o
                 // funcție care o face din răspunsurile de până atunci (de exemplu tokenul formularului).
@@ -1631,7 +1778,9 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         foreach (($caz['verifica'])($rezultate['baza']['stare'], $rezultate['baza']['raspunsuri']) as $problema) {
             $probleme[] = ($regresie
                 ? 'codul de bază nu dă rezultatul de pe ramura pe care ' . $caz['din'] . ' nu o schimbă: '
-                : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ') . $problema;
+                : (isset($caz['sursa'])
+                    ? 'codul Bioscem nu dă ce dădea înaintea portului din ' . $caz['sursa'] . ' ' . $caz['din'] . ': '
+                    : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ')) . $problema;
         }
         $diferente = salvari_diferente($rezultate['baza']['stare'], $rezultate['curent']['stare'], 'bază: ');
         if (count($rezultate['baza']['raspunsuri'] ?? []) !== count($rezultate['curent']['raspunsuri'] ?? [])) {

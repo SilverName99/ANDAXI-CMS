@@ -605,7 +605,9 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Conține**: `/blog`, articolele, API-ul blogului, codurile `{{blog_posts}}`,
   `{{latest_posts}}`, `{{category_*}}`, `{{next_event_*}}`, articolele de pe prima
   pagină, meniul Blog; videoul postării și al evenimentului următor (`VideoEmbed`, din
-  vertij `0fc2b2c`: YouTube, Vimeo sau un fișier video urcat în Galerie). Tabele: `blog_*`.
+  vertij `0fc2b2c`: YouTube, Vimeo sau un fișier video urcat în Galerie; playerul YouTube
+  sau Vimeo se încarcă singur doar cu acordul pentru toate cookie-urile, altfel la apăsarea
+  casetei „Pornește videoclipul”; Vimeo cu `dnt=1`). Tabele: `blog_*`.
 - **Are nevoie de**: nimic. **Se oprește**: ca pornit. **Oprit**: nimic din blog
   pe site, în pagini, în meniu sau în harta site-ului; titlul pus chiar înaintea
   codului (`<h2>Din blog</h2>`) pleacă odată cu el; rolul „Administrator Blog” nu

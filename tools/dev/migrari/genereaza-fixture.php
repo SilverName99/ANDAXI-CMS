@@ -26,7 +26,8 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --asteptat
  *       database/migrari/asteptat.json (amprenta unei baze goale după `migreaza.php --aplica`),
  *       migrari.lock (id → sha256; o migrare deja trecută acolo cu alt sha e refuzată, afară de
- *       --rescrie-lacatul: o migrare publicată nu se schimbă) și ultima.php (pentru garda, WP-05).
+ *       --rescrie-lacatul: o migrare publicată nu se schimbă) și ultima.php (pentru garda, WP-05:
+ *       Registru::textUltima()).
  *
  *   tools/dev/php.sh tools/dev/migrari/genereaza-fixture.php --verifica [--server=mariadb|mysql8] [--repo=<clona CMS>@<commit>]
  *       Acceptanța migrărilor de bază (WP-03; poarta G-baza din porti.sh), pe MariaDB și pe MySQL 8
@@ -718,10 +719,7 @@ if ($comanda === 'asteptat') {
     if ($codVerifica !== 0) {
         $renunta('--verifica după generare: cod ' . $codVerifica . ': ' . trim($outVerifica));
     }
-    file_put_contents($fisierUltima, "<?php\n\ndeclare(strict_types=1);\n\n// Generat de tools/dev/migrari/genereaza-fixture.php --asteptat; nu se editează de mână.\n"
-        . "// Numărul ultimei migrări din cod și amprenta listei „id:sha256”: garda de la fiecare cerere\n"
-        . "// (WP-05) compară ultima_ord din _platforma_stare cu ord de aici, fără să citească migrările.\n\n"
-        . 'return [\'ord\' => ' . $registru->ultimaOrd() . ', \'amprenta\' => \'' . $registru->amprenta() . "'];\n");
+    file_put_contents($fisierUltima, $registru->textUltima());
     $vechi = $inainte[$fisierAsteptat];
     echo 'genereaza-fixture --asteptat (', $numeServer[$server], '): ', count($migrari), ' migrări, ultima ', sprintf('%04d', $registru->ultimaOrd()),
         '; asteptat.json: ', $descrie($amprenta), ($vechi !== null && $vechi !== Amprenta::json($amprenta) ? ' (SCHIMBAT)' : ($vechi === null ? ' (nou)' : ' (neschimbat)')),
@@ -776,7 +774,7 @@ $lacat = $registru->lacat();
 $verifica('migrari.lock are exact migrările din cod, cu sha-ul lor; ultima.php e la zi',
     $lacat['migrari'] === array_combine(array_column($migrari, 'id'), array_column($migrari, 'sha256'))
     && is_file($dosarMigrari . '/ultima.php')
-    && (require $dosarMigrari . '/ultima.php') === ['ord' => $registru->ultimaOrd(), 'amprenta' => $registru->amprenta()],
+    && (require $dosarMigrari . '/ultima.php') === $registru->ultima(),
     'rulează genereaza-fixture.php --asteptat');
 $grupB = array_values(array_filter($migrari, static fn (array $m): bool => $m['ord'] >= 1 && $m['ord'] <= 19));
 $grupC = array_values(array_filter($migrari, static fn (array $m): bool => $m['ord'] >= 20 && $m['ord'] <= 24));

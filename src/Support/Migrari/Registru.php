@@ -22,7 +22,8 @@ use Throwable;
  *  - `migrari.lock`: {"migrari": {id: sha256}, "retrase": {id: motiv}}: o migrare publicată
  *    nu se mai schimbă (sha diferit → codul 12), una ștearsă trebuie trecută la „retrase”;
  *  - `asteptat.json`: amprenta schemei după toate migrările, pe o bază goală (Amprenta);
- *  - `ultima.php`: numărul ultimei migrări, citit de garda de la fiecare cerere (WP-05).
+ *  - `ultima.php`: numărul ultimei migrări, amprenta codului și id-urile migrărilor, citite de garda de la
+ *    fiecare cerere (WP-05; ultima()).
  *
  * sha256 se calculează pe fișierul cu sfârșituri de rând LF (un checkout pe Windows nu
  * schimbă nimic).
@@ -316,6 +317,33 @@ final class Registru
     {
         $linii = array_map(static fn (array $m): string => $m['id'] . ':' . $m['sha256'], $this->migrari());
         return hash('sha256', implode("\n", $linii));
+    }
+
+    /**
+     * Ce ține ultima.php, pentru garda de la fiecare cerere (Garda, docs/MIGRARI.md, „Garda”), care nu citește
+     * migrările: numărul ultimei, amprenta codului și id-urile tuturor, în ordine. Lista e acolo pentru că
+     * numerele sunt rezervate pe pachete de lucru (planul Etapei 1, §4.3): o migrare nouă poate avea un număr
+     * mai mic decât una deja publicată, deci „ultima_ord ≥ ord” nu spune singur că baza le are pe toate.
+     *
+     * @return array{ord: int, amprenta: string, migrari: list<string>}
+     */
+    public function ultima(): array
+    {
+        return ['ord' => $this->ultimaOrd(), 'amprenta' => $this->amprenta(), 'migrari' => array_column($this->migrari(), 'id')];
+    }
+
+    /** Fișierul ultima.php, exact cum îl scrie tools/dev/migrari/genereaza-fixture.php --asteptat (și cum îl cere lint-ul). */
+    public function textUltima(): string
+    {
+        $ultima = $this->ultima();
+        $linii = array_map(static fn (string $id): string => '        ' . var_export($id, true) . ",\n", $ultima['migrari']);
+        return "<?php\n\ndeclare(strict_types=1);\n\n"
+            . "// Generat de tools/dev/migrari/genereaza-fixture.php --asteptat; nu se editează de mână.\n"
+            . "// Garda de la fiecare cerere (App\\Support\\Migrari\\Garda, docs/MIGRARI.md) îl citește în locul migrărilor:\n"
+            . "// ultima_ord și amprenta din _platforma_stare față de ord și amprenta de aici; când amprenta diferă (alt cod\n"
+            . "// decât la ultima rulare a runner-ului), fiecare id de mai jos trebuie să fie terminat în _platforma_migrari.\n\n"
+            . "return [\n    'ord' => " . $ultima['ord'] . ",\n    'amprenta' => '" . $ultima['amprenta'] . "',\n    'migrari' => [\n"
+            . implode('', $linii) . "    ],\n];\n";
     }
 
     public static function sha(string $fisier): string
