@@ -59,10 +59,14 @@ final class Amprenta
      */
     public static array $pauzeSarite = [0.05, 0.1, 0.2, 0.4, 0.8, 1.6];
 
+    /**
+     * Tabelele care nu intră în amprentă: ale runner-ului (`_platforma_*`), cele de lucru ale serverului (`#sql…`) și ale
+     * sincronizării FAN (`__sync`, `__vechi`), marcajul copiei de verificare (`_verificare`, scris de tools/verificare/incarca.php).
+     */
     public static function ignorat(string $tabel): bool
     {
         return str_starts_with($tabel, '_platforma_') || str_starts_with($tabel, '#sql')
-            || str_ends_with($tabel, '__sync') || str_ends_with($tabel, '__vechi');
+            || str_ends_with($tabel, '__sync') || str_ends_with($tabel, '__vechi') || $tabel === '_verificare';
     }
 
     // ------------------------------------------------------------------ citire

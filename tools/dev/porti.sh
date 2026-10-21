@@ -60,8 +60,8 @@ poarta G-vechi "aceleași teste pe o bază făcută ca înainte de migrări și 
     "CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/instaleaza.sh --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh --licenta=bioscem ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-pluginuri.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-seo.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/smoke.sh --toate-pachetele --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi tools/dev/instaleaza.sh --sterge-baza ;; tools/dev/instaleaza.sh" WP-05
 poarta G-paths "căile site-ului (App\\Support\\Paths): așezarea de azi și cea din Etapa 2 pe o găzduire simulată (stub-ul, MENTENANTA, sesiunile, jurnalele și pozele fiecărui site, pingul /_andaxi/ping), nicio cale construită în afara Paths; și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/test-paths.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-paths.php" WP-07
-poarta G-verif "testele site-ului de verificare, și cu php$MINIM (codul lui rulează pe servere)" \
-    "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php" WP-08a
+poarta G-verif "testele site-ului de verificare și ale încărcării copiei (de la WP-09: test-incarcare.php, anonimizarea în drum, --reia, --demo, MariaDB și MySQL 8), și cu php$MINIM (codul lor rulează pe servere)" \
+    "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php ;; tools/dev/php.sh tools/dev/test-incarcare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-incarcare.php" WP-08a
 poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-sonda): doar citire, nimic scris, nicio valoare personală; și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/test-sonde.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-sonde.php" WP-10
 poarta G-calc "calculele (golden master local) față de același cod de bază ca G-cmp" "tools/dev/compara-calcule-local.sh" WP-11
@@ -98,6 +98,9 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # definește PLATFORMA_SITE_DIR, exact ce simulează test-paths.php: linia de comandă din Etapa 2, jurnalul și erorile
 # ei); hotărât la WP-R din 21 oct (Restanțe). G-cmp-istoric e și la WP-R: fiecare port din Bioscem își declară
 # diferențele față de f5ae5ea în $porturiBioscem, pe commit-uri (compara-cu-baza.php), în același commit cu portul.
+# De la WP-09, G-verif rulează și testele încărcării copiei (test-incarcare.php: încărcarea anonimizată pe o găzduire
+# simulată, cu baza „live” făcută ca a unui Bioscem neadoptat, pe MariaDB și MySQL 8), cu ambele PHP-uri: încărcarea
+# folosește configureaza.php, stare.php, licenta.php și sterge.php, deci orice WP cu G-verif le verifică împreună.
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"

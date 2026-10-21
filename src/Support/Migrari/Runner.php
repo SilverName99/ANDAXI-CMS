@@ -527,11 +527,15 @@ final class Runner
 
     // ---------------------------------------------------------- verificările
 
-    /** Codul 4: baza are tabele, dar nu e a unui site ANDAXI (de exemplu un WordPress). */
+    /**
+     * Codul 4: baza are tabele, dar nu e a unui site ANDAXI (de exemplu un WordPress). `_verificare`, marcajul copiei de
+     * verificare, nu contează: încărcarea copiei (tools/verificare/incarca.php) îl scrie primul, deci copia demonstrativă
+     * rulează migrările pe o bază care are doar marcajul (docs/VERIFICARE.md, „Încărcarea copiei”).
+     */
     private function paznic(): void
     {
-        $tabele = $this->db->query("SELECT TABLE_NAME FROM information_schema.TABLES
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN);
+        $tabele = array_values(array_diff($this->db->query("SELECT TABLE_NAME FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN), ['_verificare']));
         if ($tabele === [] || in_array(self::TABEL_MIGRARI, $tabele, true)
             || array_diff(['settings', 'admins', 'pages'], $tabele) === []) {
             return;

@@ -280,6 +280,20 @@ if ($envExista) {
         $tabele = (int) $pdo->query('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()')->fetchColumn();
         $marcaj = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_verificare'")->fetchColumn() > 0;
         stare_rand($tabele === 0 || $marcaj, 'baza e goală sau e o copie de verificare (' . $tabele . ' tabele' . ($marcaj ? ', cu _verificare' : '') . ')');
+        // Copia încărcată (tools/verificare/incarca.php): _verificare scris primul, cu anonimizat = 0; abia după verificările
+        // A1–A9, anonimizat = 1 și storage/verificare/incarcat-la. O încărcare oprită la jumătate rămâne închisă (fără incarcat-la).
+        $randMarcaj = $marcaj ? $pdo->query('SELECT * FROM _verificare LIMIT 1')->fetch(PDO::FETCH_ASSOC) : false;
+        $anonimizat = is_array($randMarcaj) && (int) (isset($randMarcaj['anonimizat']) ? $randMarcaj['anonimizat'] : 0) === 1;
+        if ($marcaj) {
+            $sursaCopiei = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) (isset($randMarcaj['sursa']) ? $randMarcaj['sursa'] : '')));
+            $pasCopiei = preg_replace('/[^a-z_]/', '', (string) (isset($randMarcaj['pas']) ? $randMarcaj['pas'] : ''));
+            stare_rand($anonimizat, 'copia e încheiată și anonimizată (_verificare: anonimizat = ' . ($anonimizat ? '1' : '0')
+                . ($sursaCopiei !== '' ? ', sursa ' . $sursaCopiei : '') . ')'
+                . ($anonimizat ? '' : ': încărcare neterminată' . ($pasCopiei !== '' ? ' (pasul ' . $pasCopiei . ')' : '')
+                    . '; tools/verificare/incarca.php … --reia o continuă, sterge.php o șterge'));
+        }
+        stare_rand($copie['stare'] === 'lipsa' || $anonimizat, 'incarcat-la doar cu o copie încheiată'
+            . ($copie['stare'] !== 'lipsa' && !$anonimizat ? ': incarcat-la există, dar baza nu are o copie încheiată (sterge.php, apoi încarcă din nou)' : ''));
         $pdo = null;
     } catch (PDOException $e) {
         $codDb = preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) === 1 ? (int) $m[1] : (int) $e->getCode();

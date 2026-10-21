@@ -18,7 +18,10 @@ declare(strict_types=1);
  *   (`storage/verificare/mail/`) și dosarul temporar (`storage/verificare/tmp/`);
  * - cache-urile copiei (`storage/cache/`: paginile, fluxul de produse, pozele de distribuire) și sesiunile
  *   (`storage/sessions/`: coșurile și logările de pe copie);
+ * - pozele inventate ale copiei demonstrative (`public/uploads/demo/`, `incarca.php --demo`);
  * - copia codului vechi de lângă site (`~/domains/<domeniul-verificare>/cod-vechi/`, WP-09).
+ *
+ * Dosarul temporar are și sarea unei încărcări neterminate (`incarca.php`, pentru `--reia`): pleacă și ea.
  *
  * Rămân: `.env`, licența și cheia ei, contorul emailurilor zilei, jurnalele și rezultatele verificărilor pe site-urile
  * live (`storage/verificare/sonde/`: le ștergi tu, după ce ni le trimiți). Tipărește doar numere și DA/NU.
@@ -180,7 +183,9 @@ $codVechi = $dosarCod . '/cod-vechi';
 sterge_spune('Ștergerea copiei de pe site-ul de verificare https://' . $gazda);
 sterge_spune('  baza: ' . count($deSters['BASE TABLE']) . ' tabele, ' . count($deSters['VIEW']) . ' vederi, ' . count($rutine) . ' rutine, '
     . count($evenimente) . ' evenimente' . ($marcaj ? ' (copie de verificare, cu _verificare)' : ' (goală)'));
+$pozeDemo = \App\Support\Paths::uploads('demo');
 sterge_spune('  fișierele copiei: incarcat-la, emailurile ca fișiere, temporarele, cache-ul, sesiunile'
+    . (is_dir($pozeDemo) || is_link($pozeDemo) ? ', pozele copiei demonstrative (public/uploads/demo/)' : '')
     . (is_dir($codVechi) && !is_link($codVechi) ? ', codul vechi (cod-vechi/)' : ''));
 if (!$faraIntrebare) {
     fwrite(STDOUT, 'Scrie „da” ca să ștergi (orice altceva: nu se șterge nimic): ');
@@ -236,7 +241,15 @@ $fisiere = array(
     'temporare' => sterge_continut($dosarCopie . '/tmp', $pastreaza),
     'cache' => sterge_continut(\App\Support\Paths::stocare('cache'), $pastreaza),
     'sesiuni' => sterge_continut(\App\Support\Paths::stocare('sessions'), $pastreaza, '/^sess_/'),
+    'poze_demo' => 0,
 );
+// Pozele inventate ale copiei demonstrative: tot dosarul (nu sunt ale codului); o legătură se șterge ea însăși.
+if (is_link($pozeDemo)) {
+    @unlink($pozeDemo);
+} elseif (is_dir($pozeDemo)) {
+    $fisiere['poze_demo'] = sterge_continut($pozeDemo, array());
+    @rmdir($pozeDemo);
+}
 $codVechiSters = 0;
 $codVechiBun = true;
 if (is_link($codVechi)) {
@@ -252,7 +265,7 @@ sterge_spune('  ' . str_pad($ramase === 0 ? 'DA' : 'NU', 6) . 'baza e goală: ' 
     . $sterse['rutine'] . ' rutine, ' . $sterse['evenimente'] . ' evenimente șterse' . ($ramase > 0 ? ' (au rămas ' . $ramase . ')' : ''));
 sterge_spune('  ' . str_pad($incarcareStearsa && !file_exists($incarcat) ? 'DA' : 'NU', 6) . 'incarcat-la șters (site-ul arată „Copia de verificare lipsește”)');
 sterge_spune('  INFO  fișiere șterse: ' . $fisiere['emailuri'] . ' emailuri, ' . $fisiere['temporare'] . ' temporare, ' . $fisiere['cache']
-    . ' din cache, ' . $fisiere['sesiuni'] . ' sesiuni');
+    . ' din cache, ' . $fisiere['sesiuni'] . ' sesiuni' . ($fisiere['poze_demo'] > 0 ? ', ' . $fisiere['poze_demo'] . ' poze ale copiei demonstrative' : ''));
 sterge_spune('  ' . str_pad($codVechiBun && !file_exists($codVechi) ? 'DA' : 'NU', 6) . 'codul vechi de lângă site (cod-vechi/): '
     . ($codVechiSters > 0 ? $codVechiSters . ' fișiere șterse' : 'nu era'));
 $gasite = glob($dosarCopie . '/sonde/*');
@@ -262,7 +275,7 @@ if ($sonde > 0) {
         . 'după ce ni le trimiți, rm storage/verificare/sonde/*');
 }
 sterge_spune('');
-if ($ramase > 0 || file_exists($incarcat) || file_exists($codVechi)) {
+if ($ramase > 0 || file_exists($incarcat) || file_exists($codVechi) || file_exists($pozeDemo) || is_link($pozeDemo)) {
     sterge_opreste('ceva nu s-a șters (rândurile NU de mai sus). Rulează din nou; dacă rămâne așa, trimite-ne textul.');
 }
 sterge_spune('GATA: copia a fost ștearsă');

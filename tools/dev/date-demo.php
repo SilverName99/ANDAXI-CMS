@@ -21,6 +21,11 @@ declare(strict_types=1);
  *     cupoane, puncte de fidelitate, recenzii, blog, newsletter, pagini.
  *
  * Refuză să ruleze pe o bază al cărei nume nu începe cu „cms_”.
+ *
+ * Singura excepție: copia demonstrativă de pe site-ul de verificare (tools/verificare/incarca.php --demo, decizia
+ * OD-39; docs/VERIFICARE.md), care încarcă fișierul după ce definește ANDAXI_DEMO_PE_VERIFICARE. Atunci garda e alta:
+ * site-ul e copia de verificare (SITE_COPIE_VERIFICARE=1) și baza e o copie demonstrativă în lucru (tabelul _verificare cu
+ * sursa „demo” și anonimizat = 0), deci nu poate fi baza unui site. Un refuz e atunci o excepție (încărcarea șterge copia).
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -36,27 +41,40 @@ use App\Support\OrderNumber;
 use App\Support\Precomanda;
 use App\Support\Settings;
 
+$peVerificare = defined('ANDAXI_DEMO_PE_VERIFICARE');
+$refuza = static function (string $mesaj) use ($peVerificare): never {
+    if ($peVerificare) {
+        throw new RuntimeException('date-demo.php: ' . $mesaj);
+    }
+    fwrite(STDERR, $mesaj . "\n");
+    exit(1);
+};
+
 $config = require __DIR__ . '/../../config/app.php';
 $numeBaza = (string) ($config['db']['database'] ?? '');
-if (preg_match('/^cms_[a-z0-9_]+$/', $numeBaza) !== 1) {
-    fwrite(STDERR, "Baza '{$numeBaza}' nu începe cu cms_; date-demo.php rulează doar pe baze de test.\n");
-    exit(1);
+if (!$peVerificare && preg_match('/^cms_[a-z0-9_]+$/', $numeBaza) !== 1) {
+    $refuza("Baza '{$numeBaza}' nu începe cu cms_; date-demo.php rulează doar pe baze de test.");
 }
-if (!str_starts_with((string) ($config['url'] ?? ''), 'http://127.0.0.1:')) {
-    fwrite(STDERR, "APP_URL trebuie să fie http://127.0.0.1:<port> (vezi tools/dev/comun.sh).\n");
-    exit(1);
+if (!$peVerificare && !str_starts_with((string) ($config['url'] ?? ''), 'http://127.0.0.1:')) {
+    $refuza('APP_URL trebuie să fie http://127.0.0.1:<port> (vezi tools/dev/comun.sh).');
 }
 
 $db = Database::connection($config['db']);
 if (!$db instanceof PDO) {
-    fwrite(STDERR, "Nu mă pot conecta la baza {$numeBaza}.\n");
-    exit(1);
+    $refuza($peVerificare ? 'nu mă pot conecta la baza copiei.' : "Nu mă pot conecta la baza {$numeBaza}.");
+}
+if ($peVerificare) {
+    $marcaj = \App\Support\Verificare::activ()
+        && (int) $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_verificare'")->fetchColumn() === 1
+        ? $db->query('SELECT sursa, anonimizat FROM _verificare LIMIT 1')->fetch(PDO::FETCH_ASSOC) : false;
+    if (!is_array($marcaj) || (string) $marcaj['sursa'] !== 'demo' || (int) $marcaj['anonimizat'] !== 0) {
+        $refuza('rulează pe un site doar pe o copie demonstrativă de verificare în lucru (_verificare: sursa demo, anonimizat 0).');
+    }
 }
 
 $produseExistente = (int) $db->query('SELECT COUNT(*) FROM products WHERE sku LIKE "DEMO-%"')->fetchColumn();
 if ($produseExistente > 0) {
-    fwrite(STDERR, "Baza are deja date demo. Refă-o cu tools/dev/instaleaza.sh.\n");
-    exit(1);
+    $refuza('Baza are deja date demo. Refă-o cu tools/dev/instaleaza.sh.');
 }
 
 mt_srand(20261018); // aceleași date la fiecare rulare
@@ -532,7 +550,11 @@ foreach ($statusuri as $n => $status) {
         default => 'unpaid',
     };
     $awb = in_array($status, ['completed', 'returned'], true) || ($status === 'processing' && $n % 2 === 0);
-    $numar = OrderNumber::urmatorul($db, $setari);
+    // Cu numerotarea veche (order_number_mode „legacy”, de exemplu la pachetul vertij pe copia demonstrativă) numărul are
+    // data, secunda și 3 cifre la întâmplare: zeci de comenzi scrise în aceeași secundă se pot nimeri pe același număr.
+    do {
+        $numar = OrderNumber::urmatorul($db, $setari);
+    } while (in_array($numar, array_column($comenzi, 'numar'), true));
     $firma = $n % 10 === 6;
     $insComanda->execute([
         'order_number' => $numar,

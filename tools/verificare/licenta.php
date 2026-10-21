@@ -95,13 +95,15 @@ if (trim(isset($cheiEnv['LICENTA_CHEIE_PUBLICA']) ? $cheiEnv['LICENTA_CHEIE_PUBL
 
 // Codul aplicației (în linia de comandă bootstrap.php nu pornește nicio sesiune și nu deschide baza).
 require_once $radacina . '/bootstrap.php';
+// Pachetul, semnătura și pașii de activare: comune cu incarca.php (tools/verificare/lib/licenta-copie.php).
+require_once $radacina . '/tools/verificare/lib/licenta-copie.php';
+
+use Unelte\Verificare\LicentaCopie;
 
 $catalog = \App\Support\Plugins::catalog();
-$dosarLicenta = \App\Support\Licenta::dosar();
 
 if ($comanda === 'presetari') {
-    echo implode("\n", array_merge(array('toate'), array_keys((array) (isset($catalog['licente_dev']) ? $catalog['licente_dev'] : array())),
-        array_keys((array) (isset($catalog['pachete']) ? $catalog['pachete'] : array())))), "\n";
+    echo implode("\n", LicentaCopie::presetari($catalog)), "\n";
     exit(0);
 }
 
@@ -127,108 +129,20 @@ if ($comanda === 'arata') {
 
 // ── Pachetul ──
 
-$chei = array_keys($catalog['pluginuri']);
-$pluginuri = array();
-if ($comanda === 'toate') {
-    $pluginuri = array_fill_keys($chei, 'pornit');
-} elseif (isset($catalog['licente_dev'][$comanda])) {
-    foreach ((array) $catalog['licente_dev'][$comanda] as $cheie) {
-        $pluginuri[(string) $cheie] = 'pornit';
-    }
-} elseif (isset($catalog['pachete'][$comanda])) {
-    $pachet = $catalog['pachete'][$comanda];
-    foreach (array_merge((array) (isset($pachet['pluginuri']) ? $pachet['pluginuri'] : array()),
-        (array) (isset($pachet['cel_putin_una_din']) ? $pachet['cel_putin_una_din'] : array())) as $cheie) {
-        $pluginuri[(string) $cheie] = 'pornit';
-    }
-} else {
-    licenta_opreste('nu există pachetul „' . $comanda . '” (licenta.php presetari arată numele).');
+try {
+    $pluginuri = LicentaCopie::pluginuri($catalog, $comanda, $argumente);
+    $pusa = LicentaCopie::pune($pluginuri, $cheiePrivata);
+} catch (RuntimeException $e) {
+    licenta_opreste($e->getMessage());
 }
-foreach ($argumente as $argument) {
-    if (strpos($argument, '=') === false) {
-        licenta_opreste('nu înțeleg „' . $argument . '” (aștept plugin=stare, de exemplu blog=oprit).');
-    }
-    $parti = explode('=', $argument, 2);
-    $cheie = trim($parti[0]);
-    $stare = trim($parti[1]);
-    if (!in_array($cheie, $chei, true)) {
-        licenta_opreste('pluginul „' . $cheie . '” nu există în config/plugins.php.');
-    }
-    if (!in_array($stare, \App\Support\Licenta::STARI, true)) {
-        licenta_opreste('starea „' . $stare . '” nu există (pornit, se_opreste, oprit).');
-    }
-    $pluginuri[$cheie] = $stare;
-}
-foreach (array_keys($pluginuri) as $cheie) {
-    if (!in_array($cheie, $chei, true)) {
-        licenta_opreste('pachetul „' . $comanda . '” are pluginul necunoscut „' . $cheie . '” (config/plugins.php).');
-    }
-}
-// Licența listează doar ce nu e oprit (lipsă = oprit), ca cea a CRM-ului.
-$pluginuri = array_filter($pluginuri, function ($stare) {
-    return $stare !== 'oprit';
-});
-
-// Orice pachet poate urma oricărui alt pachet: fără ultima licență bună și fără starea aplicată.
-$versiune = 0;
-foreach (array(\App\Support\Licenta::FISIER, \App\Support\Licenta::FISIER_BUN) as $fisier) {
-    $date = json_decode((string) @file_get_contents($dosarLicenta . '/' . $fisier), true);
-    $versiune = max($versiune, is_array($date) ? (int) (isset($date['versiune']) ? $date['versiune'] : 0) : 0);
-}
-foreach (array(\App\Support\Licenta::FISIER_BUN, \App\Support\Plugins::FISIER_STARE) as $fisier) {
-    if (is_file($dosarLicenta . '/' . $fisier) && !@unlink($dosarLicenta . '/' . $fisier)) {
-        licenta_opreste('nu pot șterge storage/licenta/' . $fisier . ' (drepturi de scriere?).');
-    }
-}
-$licenta = array(
-    'site' => \App\Support\Licenta::site(),
-    'emisa_la' => gmdate('Y-m-d\TH:i:s\Z'),
-    'versiune' => $versiune + 1,
-    'pluginuri' => $pluginuri,
-);
-$rezultat = \App\Support\Licenta::instaleaza(\App\Support\Licenta::semneaza($licenta, $cheiePrivata));
-if (!$rezultat['ok']) {
-    licenta_opreste('licența nu a fost pusă: ' . $rezultat['eroare']);
-}
-\App\Support\Plugins::reseteaza();
-$pornite = array();
-foreach (\App\Support\Plugins::stari() as $cheie => $stare) {
-    if ($stare !== 'oprit') {
-        $pornite[] = $cheie . ($stare === 'se_opreste' ? ' (se oprește)' : '');
-    }
-}
-echo 'Licența v', $licenta['versiune'], ' pentru „', $licenta['site'], '” (', $comanda, '): ', $pornite === array() ? 'doar nucleul' : implode(', ', $pornite), "\n";
-foreach (\App\Support\Plugins::mesaje() as $mesaj) {
+echo 'Licența v', $pusa['versiune'], ' pentru „', $pusa['site'], '” (', $comanda, '): ', $pusa['pornite'] === array() ? 'doar nucleul' : implode(', ', $pusa['pornite']), "\n";
+foreach ($pusa['mesaje'] as $mesaj) {
     echo 'Notă: ', $mesaj, "\n";
 }
 
 // ── Pașii de activare, doar pe o copie încărcată ──
 
-$app = require $radacina . '/config/app.php';
-$db = null;
-try {
-    $db = \App\Support\Database::connection((array) (isset($app['db']) ? $app['db'] : array()));
-} catch (Throwable $e) {
-    $db = null;
-}
-if (!$db instanceof PDO) {
-    echo "Notă: baza nu răspunde; pașii de activare rulează la prima cerere de pe copie.\n";
-    exit(0);
-}
-$copie = (int) $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '_verificare'")->fetchColumn() > 0;
-if (!$copie || \Unelte\Verificare\Cont::bazaAltuiSite($acasa, (string) \App\Support\Env::get('DB_DATABASE', ''), (string) \App\Support\Env::get('DB_HOST', 'localhost')) !== null) {
-    echo "Notă: pe bază nu e încă o copie de verificare; pașii de activare ai pluginurilor rulează după încărcare.\n";
-    exit(0);
-}
-try {
-    foreach (\App\Support\Activari::ruleaza($db) as $pas) {
-        echo 'Activare ', $pas['plugin'], ': ', $pas['rezultat'], "\n";
-    }
-    $asteapta = \App\Support\Activari::asteptare($db);
-    if ($asteapta !== null) {
-        echo 'Notă: pașii de activare așteaptă migrările (garda: ', $asteapta, '); rulează după scripts/migreaza.php --aplica.', "\n";
-    }
-} catch (Throwable $e) {
-    echo 'Notă: pașii de activare n-au rulat acum (', \App\Support\Migrari\Schema::faraValori($e->getMessage()), '); rulează la prima cerere.', "\n";
+foreach (LicentaCopie::activari($acasa) as $rand) {
+    echo $rand, "\n";
 }
 exit(0);

@@ -6,10 +6,11 @@ doar de test, emailuri doar spre proprietar. **E închis publicului din prima ce
 
 Ce există acum: poarta, configurarea și verificarea serverului (WP-08a), cele **14 gărzi ale copiei**
 (emailuri doar spre proprietar, plăți doar de test, ERP, FAN și EuPlătesc oprite, fără etichetele
-terților, pozele de pe site-ul sursă, bannerul), licența de verificare și ștergerea copiei (WP-08).
-Încărcarea anonimizată a unei copii vine în WP-09 (`incarca.php`); până atunci site-ul arată, după
-parolă, doar „Copia de verificare lipsește”, iar `stare.php` se termină cu „GATA”: site-ul e pregătit
-pentru date.
+terților, pozele de pe site-ul sursă, bannerul), licența de verificare și ștergerea copiei (WP-08), și
+**încărcarea copiei** (WP-09, `incarca.php`): copia anonimizată a bazei Bioscem (datele personale sunt
+schimbate în timp ce se citesc, deci nu ajung niciodată în baza copiei) sau o copie demonstrativă, fără
+date personale, pentru repetițiile personalului. Până la prima încărcare site-ul arată, după parolă, doar
+„Copia de verificare lipsește”, iar `stare.php` se termină cu „GATA”: site-ul e pregătit pentru date.
 
 Tot de aici, din WP-10, rulează **verificările pe site-urile live** (pasul 5): citesc baza celor patru
 site-uri doar în citire și scriu numai numere, DA/NU și nume de structură.
@@ -22,11 +23,15 @@ site-uri doar în citire și scriu numai numere, DA/NU și nume de structură.
 | `tools/verificare/stare.php` | Ce e configurat, ce știe găzduirea, dacă site-ul e închis și fiecare gardă; doar DA/NU și versiuni; ultimul rând „GATA” |
 | `tools/verificare/licenta.php` | Pune pe copie un pachet de pluginuri (`bioscem`, `magazin`, `toate`, …), semnat cu cheia de pe server |
 | `tools/verificare/sterge.php` | Șterge copia (baza, emailurile ca fișiere, cache-ul, sesiunile, codul vechi), după fiecare sesiune |
+| `tools/verificare/incarca.php` (+ `lib/incarcare.php`) | Încarcă copia: `--din=bioscem` (anonimizată în drum) sau `--demo` (date inventate), noaptea, prin SSH (WP-09, mai jos) |
+| `tools/verificare/reguli/bioscem.php` | Regulile anonimizării Bioscem: pentru fiecare tabel și fiecare coloană, păstrată, schimbată (cum) sau doar structura |
+| `tools/verificare/lib/licenta-copie.php`, `lib/intrebari.php` | Licența copiei (folosită de `licenta.php` și de încărcare) și întrebările din terminal (de `configureaza.php` și de încărcare) |
 | `tools/verificare/lib/cont.php` | Contul SSH e comun cu site-urile live: o bază scrisă în `.env`-ul altui site e refuzată de toate uneltele de mai sus |
 | `tools/verificare/agregate.php` (+ `seturi/`, `lib/`) | Verificările agregate pe un site live (WP-10, mai jos) |
 | `tools/sonda/amprenta-schema.php` (+ `lib/`) | Sonda schemei unui site live (WP-10, MIG-08) |
 | `tools/dev/test-verificare.php` (+ `lib/gaura-neagra.php`) | Testele (poarta G-verif), pe o găzduire simulată local, cu o plasă de siguranță care numără orice cerere spre afară |
 | `tools/dev/test-sonde.php` | Testele verificărilor pe site-urile live (poarta G-sonde), tot pe o găzduire simulată |
+| `tools/dev/test-incarcare.php` | Testele încărcării copiei (tot poarta G-verif), pe o găzduire simulată cu un Bioscem „live” inventat, pe MariaDB și MySQL 8 |
 
 ## Pașii proprietarului (copiat și lipit)
 
@@ -103,7 +108,7 @@ Ne trimiți **tot textul** afișat de ultimul `stare.php`. Nu conține parole, c
 de email: doar DA/NU, versiuni și setări PHP. Din el aflăm ce nu știm despre găzduire (versiunea PHP a
 site-ului, dacă antetul parolei ajunge la PHP, ce adresă vede PHP-ul pentru vizitator, ce funcții sunt
 oprite, ce server de baze de date are contul) și că fiecare dintre cele 14 gărzi ale copiei e la locul ei
-(secțiunea „Gărzile copiei”, rândurile 1–14, toate DA). Abia cu „GATA” se poate încărca o copie (WP-09).
+(secțiunea „Gărzile copiei”, rândurile 1–14, toate DA). Abia cu „GATA” se poate încărca o copie (pasul 6).
 
 ### 4. În browser
 
@@ -161,10 +166,96 @@ Fișierele au numere scoase din datele site-urilor (câte comenzi, câte conturi
 git și nu le publica**: repo-urile sunt publice (decizia OD-49). La noi stau tot în afara git-ului
 (`tools/dev/migrari/vechi/privat/`). În browser nu se văd: `storage/` nu e servit.
 
-### 6. Licența copiei (pachetul de pluginuri)
+### 6. Încărcarea copiei Bioscem (noaptea, după ce îți scriem că e pe GitHub)
+
+Ce face: copiază baza Bioscem pe site-ul de verificare și **schimbă datele personale în timp ce le
+citește** (numele, adresele, telefoanele, emailurile, parolele, IP-urile, textele scrise de clienți, codurile
+unice de cupon, linkurile de plată), deci în baza copiei nu ajunge nicio dată a unui client. Pe site-ul Bioscem
+**nu scrie nimic**: îi citește baza doar în citire, fără să oprească sau să încetinească comenzile, și îi copiază
+codul (fără `.env`, poze, sesiuni, jurnale, copii de baze) lângă site-ul de verificare, în
+`~/domains/<domeniul-verificare>/cod-vechi/bioscem/`, în afara `public_html` (nu se vede din browser). Apoi
+rulează pe copie migrările codului comun (repetiția adoptării Bioscem), verifică singură copia (verificările
+A1–A9: doar numere), îți face contul de admin și pune licența Bioscem. Dacă o verificare pică, **șterge singură
+copia**.
+
+**Când:** noaptea, între 23:00 și 02:00 sau după 03:30 (la 02:45 rulează copia de noapte). Durează câteva
+minute.
+
+```sh
+ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
+cd ~/domains/<domeniul-verificare>/public_html
+PHP=/opt/alt/php83/usr/bin/php
+#   întâi codul nou: hPanel → GIT → Deploy (sau git pull --ff-only, ca la „Codul nou, mai târziu”)
+
+# a) doar dacă .env-ul e de dinainte de licența de verificare (din WP-08a): îl scrie din nou, cu cheia licenței
+$PHP tools/verificare/configureaza.php --rescrie
+#   cere din nou totul, ca la pasul 3 (baza, utilizatorul, parola bazei, emailul tău, căsuța, parola porții)
+
+# b) site-ul e pregătit?
+$PHP tools/verificare/stare.php
+#   ultimul rând trebuie să fie: „GATA: site-ul de verificare e pregătit (toate verificările DA)”
+
+# c) încărcarea
+$PHP tools/verificare/incarca.php --din=bioscem
+#   găsește singur dosarul Bioscem (după domeniul din .env-ul lui) și îl scrie în primele rânduri
+#   întreabă: „da” ca să înceapă; emailul contului tău de admin pe copie (Enter = adresa ta din .env);
+#   parola acestui cont, de două ori (cel puțin 12 caractere, alta decât parola porții; nu se vede)
+#   pe ecran doar DA/NU, numere, nume de tabele și durate; ultimul rând trebuie să fie:
+#   „GATA: copia e anonimizată, toate verificările au trecut”
+
+# d) din nou
+$PHP tools/verificare/stare.php
+#   ultimul rând din nou „GATA: …”, acum și cu „DA    copia e încheiată și anonimizată”
+```
+
+Dacă `configureaza.php --rescrie` (a) nu e nevoie, `stare.php` (b) spune „GATA” direct; dacă e nevoie, încărcarea
+(c) îți spune singură „REFUZAT: … configureaza.php --rescrie” și nu atinge nimic.
+
+Apoi, în browser: `https://<domeniul-verificare>/admin/login` (după parola porții), cu emailul și parola
+contului tău de la (c). Conturile de admin ale site-ului Bioscem sunt pe copie cu adrese `admin<n>@verificare.invalid`
+și parole pe care nu le știe nimeni, deci nu se pot loga; contul tău e administrator general.
+
+**Ne trimiți tot textul** afișat (nu are date ale clienților, parole sau numele bazei). E salvat și în
+`storage/verificare/sonde/incarcare-bioscem-<data>.txt`; îl descarci la fel ca la pasul 5 și îl ștergi apoi.
+
+**Dacă se oprește:**
+
+- „ÎNTRERUPT: … Continuă cu: … --reia” (legătura cu baza s-a pierdut, sau timpul dat cu `--buget`): rulezi
+  comanda din rând, `$PHP tools/verificare/incarca.php --din=bioscem --reia`. Întreabă la fel și continuă de la
+  grupul de tabele la care a rămas, cu aceleași pseudonime.
+- Terminalul s-a închis sau găzduirea a oprit comanda (ultimul rând nu e „GATA”, „ÎNTRERUPT” sau „OPRIT”): tot
+  `--reia`. Până atunci copia rămâne închisă („Copia de verificare lipsește”).
+- „OPRIT: încărcarea nu s-a terminat, iar copia a fost ștearsă singură”: o verificare a picat sau Bioscem are o
+  coloană nouă, fără regulă de anonimizare (rândul „NU” de deasupra îi spune numele). Nu faci nimic; ne trimiți
+  textul, iar după ce îți scriem, rulezi încărcarea din nou.
+- Dacă găzduirea oprește comenzile lungi: `$PHP tools/verificare/incarca.php --din=bioscem --buget=600` (după 10
+  minute nu mai începe niciun grup nou și se oprește cu „ÎNTRERUPT”), apoi `--reia --buget=600` până la „GATA”.
+
+O încărcare făcută din nou peste copia de dinainte: `--reincarca`. Copia se închide singură după 7 zile
+(„Copia de verificare a expirat”); oricum o ștergi la final cu `sterge.php` (pasul 8).
+
+**Copia demonstrativă** (pentru repetițiile personalului unui client, decizia OD-39): aceeași comandă, cu
+`--demo` în loc de `--din=bioscem`. Nu deschide nicio bază a unui site: copia e făcută din migrări și din
+datele inventate ale codului, cu pachetul site-ului clientului.
+
+```sh
+$PHP tools/verificare/sterge.php                                # întâi, dacă pe copie e altceva
+$PHP tools/verificare/incarca.php --demo --pachet=biovitality   # sau bioscem, vertij, grafoanaytis
+#   întreabă: „da”; emailul și parola contului tău (ca mai sus); apoi parola personalului, de două ori
+#   (alta decât a ta): o primesc cei 3 admini cu rol parțial (adresele lor sunt pe ecran, …@verificare.invalid)
+#   și clienții inventați; o dai tu personalului, pentru sesiunea lor
+#   ultimul rând: „GATA: copia e anonimizată, toate verificările au trecut”
+```
+
+`--licenta=<pachet>` alege alt pachet de pluginuri decât al site-ului (numele: `licenta.php presetari`). Pentru
+Biovitality, vertij și grafoanaytis trebuie pe server, lângă pachet, valorile private ale înghețării setărilor
+(`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi; nu e în git): fără el încărcarea se
+oprește cu „codul 15” și șterge copia.
+
+### 7. Licența copiei (pachetul de pluginuri)
 
 Ce pluginuri are copia (de exemplu cele ale Bioscem, sau un pachet cu blogul oprit, ca să vezi ce
-dispare) se alege tot din dosarul site-ului de verificare. Încărcarea copiei (WP-09) pune singură
+dispare) se alege tot din dosarul site-ului de verificare. Încărcarea copiei (pasul 6) pune singură
 pachetul site-ului copiat; comanda de mai jos e pentru încercări:
 
 ```sh
@@ -179,7 +270,7 @@ $PHP tools/verificare/licenta.php arata              # ce e pornit acum
 Orice pachet poate urma oricărui alt pachet. Licența e semnată cu cheia de pe acest server, deci merge
 doar aici: `licenta.php` refuză să ruleze din alt dosar sau pe un site care nu e cel de verificare.
 
-### 7. După fiecare sesiune de verificare: ștergerea copiei
+### 8. După fiecare sesiune de verificare: ștergerea copiei
 
 ```sh
 cd ~/domains/<domeniul-verificare>/public_html
@@ -189,15 +280,16 @@ $PHP tools/verificare/sterge.php
 #   ultimul rând: „GATA: copia a fost ștearsă”
 ```
 
-Șterge tabelele bazei copiei, emailurile păstrate ca fișiere, cache-ul, sesiunile și copia codului vechi
-(`~/domains/<domeniul-verificare>/cod-vechi/`). Rămân `.env`, licența, cheia ei și rezultatele de la
-pasul 5 (pe care le ștergi tu, după ce ni le trimiți). Șterge la fel și o încărcare oprită la jumătate.
+Șterge tabelele bazei copiei, emailurile păstrate ca fișiere, cache-ul, sesiunile, pozele copiei demonstrative
+și copia codului vechi (`~/domains/<domeniul-verificare>/cod-vechi/`). Rămân `.env`, licența, cheia ei și
+rezultatele de la pașii 5 și 6 (pe care le ștergi tu, după ce ni le trimiți). Șterge la fel și o încărcare
+oprită la jumătate.
 Refuză să șteargă o bază care nu e o copie de verificare sau pe care o folosește alt site din cont. Dacă
 uiți, copia se închide singură după 7 zile (decizia D1): site-ul arată „Copia de verificare a expirat”.
 
 ### Datele de pe copie și cine le vede
 
-- **Datele sunt anonimizate la încărcare** (WP-09): numele, adresele, telefoanele devin inventate, iar
+- **Datele sunt anonimizate la încărcare** (pasul 6): numele, adresele, telefoanele devin inventate, iar
   emailurile clienților devin adrese `…@verificare.invalid`, un domeniu rezervat care nu poate primi
   niciun email. Oricum, pe copie **orice email pleacă doar la adresa ta** (`VERIFICARE_EMAIL`), cu
   „[VERIFICARE]” în subiect, cel mult 100 pe zi; în fiecare email un rând arată cui i-ar fi plecat pe
@@ -207,7 +299,7 @@ uiți, copia se închide singură după 7 zile (decizia D1): site-ul arată „C
   logare a adminului. **Adminul copiei e al tău**: conturile de admin le face încărcarea, pentru tine; abia
   după logare bannerul arată adresa întreagă.
 - **Personalul clienților** (decizia OD-39): repetă noul admin doar pe o copie demonstrativă, cu pachetul
-  site-ului lor și fără date personale (`incarca.php --demo --pachet=<site>`, WP-09), sau pe copia
+  site-ului lor și fără date personale (`incarca.php --demo --pachet=<site>`, pasul 6), sau pe copia
   anonimizată a propriului lor site, într-o sesiune separată; **niciodată pe datele altui client**. Pe
   copie e mereu un singur client (`sterge.php` înainte de altul).
 
@@ -247,6 +339,15 @@ sunt în git, deci rămân neatinse.
 | „PARȚIAL” sau rânduri EROARE / SĂRIT | Trimite-ne fișierul așa cum e; o verificare căzută nu le strică pe celelalte |
 | „OPRIT: memoria PHP s-a terminat (memory_limit) …” | Trimite-ne fișierul (are verificările de până acolo). Dacă vrei și restul: aceeași comandă cu `$PHP -d memory_limit=512M tools/verificare/agregate.php --set=…` |
 | Un rând „AVERTISMENT PHP: …” | Trimite-ne rândul; verificările merg mai departe (rândul are doar felul și locul erorii în codul uneltei) |
+| `incarca.php`: „REFUZAT: lipsește cheia licenței de verificare …” sau „… .env nu are un VERIFICARE_EMAIL bun” | `.env`-ul e de dinainte de WP-08: `$PHP tools/verificare/configureaza.php --rescrie`, apoi `stare.php` și din nou încărcarea |
+| `incarca.php`: „REFUZAT: pe copie e deja o încărcare (sursa bioscem, terminată)” | O faci din nou cu `--reincarca`, sau o ștergi întâi cu `sterge.php` |
+| `incarca.php`: „REFUZAT: pe copie e deja o încărcare (… oprită la pasul …)” | `--reia` o continuă; `--reincarca` o face de la capăt; `sterge.php` o șterge |
+| `incarca.php`: „REFUZAT: regulile de anonimizare s-au schimbat …” sau „… sarea încărcării oprite lipsește” | Codul nou a venit între timp (sau `sterge.php` a șters sarea): `--reincarca`, de la capăt |
+| `incarca.php`: „REFUZAT: pe copie e altă sursă (demo) …” | Pe copie e copia demonstrativă: `sterge.php`, apoi încărcarea |
+| `incarca.php`: „NU    <tabel>.<coloană> … coloană fără regulă” și „OPRIT: … copia a fost ștearsă singură” | Bioscem are o coloană nouă: trimite-ne textul (are doar numele ei); după ce o trecem în reguli, încarci din nou |
+| `incarca.php`: „ÎNTRERUPT: …” | Rulezi comanda din rând (`--reia`); continuă de unde a rămas |
+| `incarca.php`: „OPRIT: … copia NU s-a putut șterge singură” | `$PHP tools/verificare/sterge.php`, apoi trimite-ne textul |
+| `incarca.php --demo --pachet=…`: „… codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): ți le trimitem noi; copia s-a șters singură |
 | O comandă (`configureaza.php`, `stare.php`, `migreaza.php`, `install.php`) se oprește cu „PHP Fatal error” sau „PHP Warning” | Trimite-ne rândurile din terminal: erorile PHP ale comenzilor apar acolo (stderr), nu într-un fișier. Ale paginilor sunt în `storage/logs/php.log` al site-ului de verificare, dacă serverul nu are alt jurnal (`$PHP scripts/diagnostic.php` arată unde; WP-07) |
 
 ## Cum funcționează (pentru programatori)
@@ -372,7 +473,8 @@ rând în CRM și sincronizări adevărate.
 rutinele și evenimentele (`_verificare` ultimul: o ștergere oprită la jumătate lasă tot o copie de verificare,
 pe care o termină rularea următoare), apoi `incarcat-la`, `storage/verificare/mail/` și `tmp/`, `storage/cache/`
 (paginile, fluxul de produse, pozele de distribuire), sesiunile (`sess_*`) și `~/domains/<verificare>/cod-vechi/`
-(fără să urmeze o legătură: o legătură se șterge ea însăși). Păstrează `.gitkeep`, `.gitignore` și gardurile
+(fără să urmeze o legătură: o legătură se șterge ea însăși), pozele copiei demonstrative (`public/uploads/demo/`) și,
+din `tmp/`, sarea unei încărcări neterminate. Păstrează `.gitkeep`, `.gitignore` și gardurile
 `.htaccess` (sunt ale codului), `.env`, licența și cheia, contorul emailurilor zilei, jurnalele și
 `storage/verificare/sonde/` (pe care le amintește). Tipărește doar numere. Refuză, fără să șteargă nimic: alt dosar
 decât `~/domains/<gazdă>/public_html`, un `.env` fără `SITE_COPIE_VERIFICARE=1` sau fără `DB_DATABASE`, o bază cu tabele fără
@@ -380,12 +482,106 @@ decât `~/domains/<gazdă>/public_html`, un `.env` fără `SITE_COPIE_VERIFICARE
 `stare.php` și `licenta.php`), un răspuns care nu e „da”.
 
 **Înțelegerea cu încărcarea (WP-09).** `sterge.php` recunoaște copia doar după tabelul `_verificare`, deci
-încărcarea îl scrie **primul**: imediat după verificarea că baza țintă e goală (sau are deja `_verificare`), înaintea
-oricărui `CREATE TABLE` sau `INSERT` cu date, cu `anonimizat = 0` (și pasul la care a ajuns, pentru `--reia`); abia
-la sfârșit, după aserțiuni, pune `anonimizat = 1` și scrie `incarcat-la`. Așa o încărcare oprită la jumătate (procesul
+încărcarea îl scrie **primul**: imediat după verificarea că baza țintă e goală (sau are deja `_verificare`) și după
+întrebări, înaintea oricărui `CREATE TABLE` sau `INSERT` cu date, cu `anonimizat = 0` (și pasul la care a ajuns,
+pentru `--reia`); abia la sfârșit, după aserțiuni și licență, pune `anonimizat = 1` și scrie `incarcat-la`
+(`stare.php` arată „NU” la „copia e încheiată și anonimizată” până atunci). Așa o încărcare oprită la jumătate (procesul
 omorât de găzduire, o eroare înaintea ștergerii automate) rămâne o copie de verificare: poarta arată tot „Copia de
 verificare lipsește” (fără `incarcat-la`), iar `sterge.php`, `incarca.php --reincarca` sau `--reia` o pot lua de la
 capăt fără phpMyAdmin. `sterge.php` nu se uită la `anonimizat`: orice bază cu `_verificare` se șterge.
+
+### Încărcarea copiei (`incarca.php`, WP-09)
+
+`tools/verificare/incarca.php` verifică doar PHP-ul (sintaxă 7.0: versiunea, `pdo_mysql`, `sodium`) și încarcă
+`tools/verificare/lib/incarcare.php` (`Reguli`, `Transformari`, `SursaCopie`, `Copiere`, `Incarcare`). Locul și
+refuzurile sunt ale celorlalte unelte (`Locul::verificare`: dosarul `~/domains/<gazdă>/public_html`, `HOME`,
+`SITE_COPIE_VERIFICARE=1`); în plus `.env` trebuie să aibă `DB_DATABASE`, un `VERIFICARE_EMAIL` bun, `LICENTA_SITE`
+„verificare…” și cheia publică a perechii din `storage/licenta/`. Baza copiei nu e niciodată baza sursei sau a altui
+site din cont (verificat înainte de conexiune) și e goală sau are `_verificare`.
+
+**`--din=<site>`** (azi doar `bioscem`: `tools/verificare/reguli/<site>.php`), în ordine:
+
+1. **Sursa**: `SiteLive::gaseste` (ca `agregate.php`; `--dosar=` pentru alt dosar). Din `.env`-ul ei se iau doar
+   `APP_URL` și `DB_*` (și, decizia D3, cele trei chei `BT_IPAY_TEST_*`, copiate în `.env`-ul copiei doar dacă acolo
+   sunt goale; `BT_IPAY_LIVE_*` nu se citesc). Commit-ul codului ei (din `.git`, fără comanda git) intră în
+   `_verificare.cod_sursa_commit`.
+2. **Întrebările** (înaintea oricărei schimbări): „da” (`--da` o sare), adresa și parola contului de admin al
+   proprietarului (cel puțin 12 caractere, alta decât parola porții, de două ori).
+3. **`_verificare` primul** (`anonimizat = 0`, `pas`, versiunea regulilor) și sarea încărcării (32 de octeți aleatori,
+   `storage/verificare/tmp/sare-incarcare`, 0600, cât încărcarea nu e terminată: `--reia` dă aceleași pseudonime);
+   `.env`: `SITE_SLUG`, `SITE_DATE_DOSAR` (pachetul site-ului), `VERIFICARE_SURSA`, `VERIFICARE_UPLOADS_DIN` (pozele
+   lipsă spre site-ul copiat), cheile de test BT (D3), atomic.
+4. **Sesiunea sursei**: `SET SESSION TRANSACTION READ ONLY` (verificat cu `@@transaction_read_only`, altfel nu se
+   citește nimic), REPEATABLE READ, `time_zone = '+00:00'` (pe ambele baze: TIMESTAMP-urile trec neschimbate),
+   așteptarea după un lacăt 5 s, fără limita pe instrucțiune. Doar SELECT și SHOW (o singură instrucțiune, fără
+   comentarii și fără cuvintele unei scrieri sau ale unui lacăt; `SHOW CREATE TABLE` doar în forma exactă). Vederile,
+   declanșatoarele, rutinele și evenimentele opresc încărcarea (o copie nu le ia).
+5. **Scanerul** (fail-closed), înaintea oricărui rând: fiecare coloană a fiecărui tabel copiat trebuie să fie în
+   reguli (`pastreaza` sau `transforma`), oricare i-ar fi numele; una nouă oprește totul, cu numele ei pe ecran (și
+   „nume de date personale” dacă se potrivește `CitireLive::TIPAR_PERSONAL`). Un tabel fără reguli primește doar
+   structura (și e numit pe ecran), la fel cele `doar_structura` (jurnalele, resetările de parolă, acordurile GDPR,
+   coșurile abandonate). Tabelele de lucru FAN (`fan_*__sync`, `__vechi`) iau regulile tabelului lor.
+6. **Structura**: `SHOW CREATE TABLE` al sursei, cu `sql_mode`-ul ei.
+7. **Datele, grup cu grup** (`grupuri` din reguli: setări, conținut, catalog, blog, FAN, comenzi, recenzii,
+   newsletter, mesaje, admini): un grup = un instantaneu al sursei (`START TRANSACTION WITH CONSISTENT SNAPSHOT,
+   READ ONLY`, fără lacăte pe rândurile site-ului) și o tranzacție a copiei, în care intră și marcajul (grupul gata,
+   numerele). Rândurile se citesc fără buffer (memoria ține un rând) și se scriu în loturi de cel mult 500 de rânduri,
+   4 MB și 60.000 de parametri; datele personale se schimbă în PHP, între citire și scriere. În același instantaneu:
+   numărătoarea sursei = rândurile citite = numărătoarea copiei, pe fiecare tabel (A7). Un grup oprit nu lasă nimic;
+   `--reia` îl ia de la capăt (îi golește întâi tabelele). `--buget=<secunde>`: după el nu mai începe niciun grup.
+8. **Setările** neutralizate (lista `setari` din reguli, planul de verificare §3.5.2, plus adresele IP ale
+   mentenanței, contul colector al rambursurilor și persoana și telefonul expeditorului FAN): în drum și încă o dată
+   peste tot tabelul (cheile lipsă se scriu). Golite: cheile, parolele, id-urile conturilor externe (și orice cheie cu
+   `password`, `secret`, `api_key`, `_token`, `client_secret`); `0`: plățile, ERP-ul, AWB-ul automat, tariful FAN live,
+   login-ul Google, etichetele terților; adresa proprietarului: destinatarii emailurilor; căsuța copiei: expeditorul;
+   „VERIFICARE ” în fața numelui expeditorului; o cheie de mentenanță nouă.
+9. **Contul proprietarului**: administrator general, bcrypt. Adminii site-ului au deja `admin<id>@verificare.invalid`
+   și o parolă bcrypt aleatoare (din reguli).
+10. **Codul vechi** în `~/domains/<verificare>/cod-vechi/<site>/` (0700, fișierele 0600, în afara `public_html`, fără
+    cron): doar extensiile de cod, fără `.env*`, `.git`, `storage/` (dosarele rămân, goale), `public/uploads/`,
+    sitemap-uri, jurnale, arhive, exporturi și copii de baze (`*.sql` doar sub `database/`, sub 2 MB); legăturile nu se
+    urmează. Lângă el, un `.env` doar cu baza copiei și BT în test (pentru comparația calculelor, WP-11).
+    `--fara-cod-vechi` sare pasul.
+11. **Migrările**, în proces, ca `scripts/migreaza.php --plan`, `--aplica`, `--verifica` cu `--site=<pachet>`
+    (`--permite-provizoriu`, care are efect doar aici): repetiția adoptării; textul runner-ului intră în raport (fără
+    numele bazei). Garda trebuie să spună `la_zi`.
+12. **Verificările A1–A9** (doar numere; oricare pică: copia se șterge singură, cod 1). A1: emailurile pseudonimizate
+    toate `@verificare.invalid` și, în orice coloană de text a tabelelor care nu sunt publice, nicio adresă din altă
+    parte (contul proprietarului nu se numără); A2: tabelele „doar structura”, cele fără reguli și cele cu date
+    personale ale planului (`Incarcare::FARA_RANDURI`, oricare ar fi regulile) fără niciun rând; A3: telefoanele (după
+    reguli și după nume) `07` + 8 cifre; A4: IP-urile, browserele, `google_id`, răspunsurile băncii și celelalte coloane
+    golite: NULL; A5: parolele clienților și ale adminilor bcrypt; A6: setările neutralizate (socotite din listă, nu cu
+    transformarea); A7: numărătorile; A8: niciun jeton al linkurilor de plată egal cu unul al sursei (ținute minte la
+    citire, ca sha256), toate 64 hex diferite; A9 (în plus față de plan): niciun cod unic de cupon al sursei rămas, nici
+    în cupoane, nici în comenzi.
+13. **Licența** pachetului din reguli (`licenta`, sau `--licenta=`), prin `LicentaCopie` (ca `licenta.php`), apoi
+    pașii de activare ai pluginurilor.
+14. **Final**: `anonimizat = 1`, `incarcat_la`, `storage/verificare/incarcat-la`, sarea ștearsă; ultimul rând „GATA”.
+
+**Pseudonimele** (H = HMAC-SHA256 cu sarea încărcării): emailul `u` + 12 hex din H(adresa cu litere mici) +
+`@verificare.invalid` (aceeași adresă, același pseudonim în orice tabel); telefonul `07` + 8 cifre din H(cifre);
+numele de familie 6 hex din H(email); „Client …”/„Abonat …”/„Firma … SRL” + 6 hex din H(valoare) (așa migrarea
+recenziilor vechi potrivește `reviews` cu `product_reviews` ca pe site-ul adevărat); adresa „Strada Verificare N”,
+codul poștal `000000`; textele libere „[text anonimizat, N caractere]” (recenziile aprobate, publice, rămân);
+referințele plăților `anon-<id>`; jetoanele 64 hex noi; codurile unice de cupon `VERIF-<id>` (și în comenzi); AWB-urile
+`DEMO<id>` (și în lista coletelor, cu adresa de urmărire refăcută). Orașele, județele, sumele, stările, datele și
+id-urile rămân. Fiecare regulă e în capul `tools/verificare/reguli/bioscem.php`; `versiune` crește la orice schimbare
+(o încărcare începută cu altă versiune nu se continuă).
+
+**`--demo [--pachet=<site>] [--licenta=<pachet>]`** (G-M9, OD-39): nicio bază sursă nu se deschide. Pe baza goală (doar
+`_verificare`, sursa `demo`; `Runner::paznic` și `Amprenta::ignorat` nu-l numără) rulează migrările cu pașii
+pachetului, seed-ul neutru, setările implicite, `database/seed.sql` și `tools/dev/date-demo.php` (care pe un site îi
+cere copiei de verificare `_verificare` cu sursa `demo` și `anonimizat = 0`, constanta `ANDAXI_DEMO_PE_VERIFICARE`);
+adresele `@exemplu.ro` devin `@verificare.invalid` în orice coloană de text, personalul (3 admini cu rol parțial) și
+clienții inventați primesc parola personalului (întrebată, alta decât a proprietarului), setările se neutralizează ca
+mai sus, apoi contul proprietarului, A1, A3, A5, A6, licența (implicit `licente_dev` al pachetului, altfel `toate`).
+Nu se continuă cu `--reia` (se face din nou cu `--reincarca`).
+
+**Pe ecran** doar DA/NU, numere, nume de tabele și de coloane, durate; numele bazei copiei și al utilizatorului ei se
+înlocuiesc. Textul se salvează și în `storage/verificare/sonde/incarcare-<sursa>-<data>.txt` (0600), înainte de
+ultimul rând. **Cod de ieșire**: 0 „GATA”; 1 „OPRIT”, copia ștearsă singură (baza, `incarcat-la`, codul vechi,
+sarea, fișierele copiei); 2 refuzat, nimic atins; 3 „ÎNTRERUPT” (bugetul, legătura pierdută, o eroare fatală PHP),
+copia neterminată rămâne închisă pentru `--reia` sau `sterge.php`.
 
 ### Adresa vizitatorului (`IpClient`)
 
@@ -409,14 +605,14 @@ rețeaua lui în `IP_PROXY_DE_INCREDERE`. O limită numără pe `IpClient::cheie
 | `VERIFICARE_POARTA_UTILIZATOR`, `VERIFICARE_POARTA_HASH`, `VERIFICARE_POARTA_MOD` | `verificare`, `password_hash` al parolei porții, `basic` | poarta |
 | `VERIFICARE_ZILE_PASTRARE` | `7` (cel mult 7) | poarta (expirarea copiei) |
 | `IP_PROXY_DE_INCREDERE` | gol | `IpClient` |
-| `VERIFICARE_SURSA`, `VERIFICARE_UPLOADS_DIN`, `VERIFICARE_WEBHOOKURI_DESCHISE` | `bioscem`, `https://bioscem.ro`, `0` | încărcarea (WP-09), pozele (garda 13), webhook-urile (poarta) |
+| `VERIFICARE_SURSA`, `VERIFICARE_UPLOADS_DIN`, `VERIFICARE_WEBHOOKURI_DESCHISE` | `bioscem`, `https://bioscem.ro`, `0` | sursa copiei și pozele (garda 13; pe amândouă le scrie și încărcarea: site-ul copiat, sau `demo`), webhook-urile (poarta) |
 | `VERIFICARE_EMAIL`, `VERIFICARE_SMTP_HOST`, `_PORT`, `_UTILIZATOR`, `_PAROLA`, `_CRIPTARE` | adresa proprietarului; căsuța lui (`smtp.hostinger.com`, `465`, ea, parola ei, `ssl`) sau gazda goală | garda 5 (toate emailurile spre proprietar; fără gazdă, fișiere `.eml`) |
 | `VERIFICARE_ERP_URL`, `VERIFICARE_ERP_CHEIE` | lipsesc (ERP oprit, D5) | garda 6 (doar o copie `*-verif.erp.andaxi.ro`, mai târziu) |
 | `VERIFICARE_FAN_TEST`, `VERIFICARE_EUPLATESC_TEST` | lipsesc | gărzile 7 și 10 (`1` = un cont de test al FAN, al EuPlătesc) |
-| `BT_IPAY_MODE`, `BT_IPAY_TEST_*`, `BT_IPAY_LIVE_*` | `test`, gol, gol | aplicația (garda 9: mereu modul de test; `stare.php` cere `BT_IPAY_LIVE_*` goale) |
+| `BT_IPAY_MODE`, `BT_IPAY_TEST_*`, `BT_IPAY_LIVE_*` | `test`, gol, gol | aplicația (garda 9: mereu modul de test; `stare.php` cere `BT_IPAY_LIVE_*` goale). `incarca.php --din` copiază cele trei chei `BT_IPAY_TEST_*` ale site-ului copiat, dacă aici sunt goale (decizia D3) |
 | `LICENTA_SITE`, `LICENTA_CHEIE_PUBLICA` | `verificare`, cheia publică a perechii făcute de `configureaza.php` | licența (`licenta.php`) |
 | `SITE_DATE_DOSAR` | `<dosarul codului>/site-uri/bioscem` | harta adreselor vechi și regulile SEO |
-| `SITE_SLUG` | `bioscem` | `scripts/migreaza.php` (pașii site-ului: înghețarea setărilor din pachet; fără el, cu pachetul Bioscem, migrările se opresc cu codul 2). Un `.env` scris înainte (fără cheie) o primește de mână sau cu `--rescrie` ([MIGRARI.md](MIGRARI.md), „Înghețarea setărilor”). Repetiția adoptării pentru Biovitality, vertij sau grafoanaytis schimbă de mână **amândouă**, `SITE_SLUG=<site>` și `SITE_DATE_DOSAR=<dosarul codului>/site-uri/<site>`, și copiază `site-uri/<site>/privat/` din dezvoltare lângă pachet (cu doar una schimbată, migrările se opresc cu codul 2); după repetiție se pun la loc valorile Bioscem. `--permite-provizoriu` (înghețările BV, VT, GR sunt provizorii) merge doar aici, cu `SITE_COPIE_VERIFICARE=1`; pentru Bioscem nu schimbă nimic |
+| `SITE_SLUG` | `bioscem` | `scripts/migreaza.php` (pașii site-ului: înghețarea setărilor din pachet; fără el, cu pachetul Bioscem, migrările se opresc cu codul 2). Un `.env` scris înainte (fără cheie) o primește de mână sau cu `--rescrie` ([MIGRARI.md](MIGRARI.md), „Înghețarea setărilor”). Încărcarea (`incarca.php`) le scrie pe **amândouă**, `SITE_SLUG=<site>` și `SITE_DATE_DOSAR=<dosarul codului>/site-uri/<site>`, pentru pachetul pe care îl încarcă (`--din=bioscem`, `--demo --pachet=<site>`); pentru Biovitality, vertij sau grafoanaytis trebuie copiat și `site-uri/<site>/privat/` din dezvoltare lângă pachet (fără el, codul 15). De mână, cu doar una schimbată, migrările se opresc cu codul 2. `--permite-provizoriu` (înghețările BV, VT, GR sunt provizorii) merge doar aici, cu `SITE_COPIE_VERIFICARE=1`; pentru Bioscem nu schimbă nimic |
 | `ADMIN_DEFAULT_PASSWORD` | gol | nefolosit (adminul îl face încărcarea) |
 
 `configureaza.php` scrie fișierul atomic (temporar 0600, apoi `rename`) și verifică înainte că fiecare
@@ -453,11 +649,11 @@ de acolo:
 |---|---|
 | `poarta-esecuri.json` | amprentele adreselor cu parole greșite, din ultimele 10 minute |
 | `sonda.json` | amprenta jetonului sondei (2 minute, o singură folosire) |
-| `incarcat-la` | data încărcării copiei (ISO 8601 sau secunde Unix), scrisă de încărcare (WP-09), ștearsă de `sterge.php` |
+| `incarcat-la` | data încărcării copiei (ISO 8601 sau secunde Unix), scrisă de `incarca.php` la final (după verificări), ștearsă de `sterge.php` și de o încărcare nouă |
 | `emailuri-azi.json` | ziua, câte emailuri au plecat și câte au fost sărite (limita de 100 pe zi), 0600 |
 | `mail/` | emailurile copiei ca fișiere `.eml` (0600), când copia n-are căsuță de trimitere; le șterge `sterge.php` |
-| `tmp/` | fișierele temporare ale încărcării (WP-09); le șterge `sterge.php` |
-| `sonde/` | rezultatele verificărilor pe site-urile live (pasul 5), 0600 într-un dosar 0700; le trimite proprietarul, apoi le șterge |
+| `tmp/` | fișierele temporare ale copiei și sarea unei încărcări neterminate (`sare-incarcare`, 0600, pentru `--reia`; ștearsă la final); le șterge `sterge.php` |
+| `sonde/` | rezultatele verificărilor pe site-urile live (pasul 5) și textele încărcărilor (`incarcare-<sursa>-<data>.txt`, pasul 6), 0600 într-un dosar 0700; le trimite proprietarul, apoi le șterge |
 
 ### Verificările pe site-urile live (WP-10)
 
@@ -566,12 +762,12 @@ rulează singur testul T2-live: baseline-ul pe schema live a site-ului, pe Maria
 
 ### Ce urmează
 
-- **WP-09**: `incarca.php --din=bioscem` (copia anonimizată în timp ce se citește, `_verificare` scris primul, cu
-  `anonimizat = 0`, și `anonimizat = 1` + `incarcat-la` la final, ca la „Ștergerea”,
-  emailurile `@verificare.invalid`, adminul proprietarului, licența `bioscem` prin `licenta.php`, codul vechi în
-  `cod-vechi/`) și `incarca.php --demo --pachet=<site>` (pentru repetițiile personalului, OD-39).
-- **WP-11**: calculele vechi față de cele noi pe copie (`compara-calcule.php`) și amprenta paginilor
-  (`amprenta-site.php`, fără bannerul copiei).
+- **Prima încărcare a Bioscem** (pasul 6, noaptea, proprietarul): textul ei ne arată duratele migrărilor pe baza
+  adevărată (`migrari.json`) și dacă regulile acoperă tot.
+- **WP-11b**: regulile anonimizării Biovitality (`tools/verificare/reguli/biovitality.php`); vertij și grafoanaytis
+  le primesc la porturile lor.
+- **WP-11**: calculele vechi față de cele noi pe copie (`compara-calcule.php`, cu codul vechi din `cod-vechi/`) și
+  amprenta paginilor (`amprenta-site.php`, fără bannerul copiei).
 - **Etapa 2**: modul de test al plăților (chei de test, `VERIFICARE_WEBHOOKURI_DESCHISE=1`), check-in-ul licenței
   la CRM.
 
@@ -626,3 +822,29 @@ parcursul, că marcajul, parolele, numele bazei, ale utilizatorilor și calea
 contului nu apar în nicio ieșire, că baza nu s-a schimbat (CHECKSUM TABLE), că în dosarele site-urilor live
 nu s-a schimbat niciun fișier și că în site-ul de verificare s-a scris doar `storage/verificare/sonde/`.
 Bazele `cms_sonde_t`, `cms_sonde_rt` și utilizatorii `cms_sonde_tot`, `cms_sonde_citire` se fac și se șterg acolo.
+
+`tools/dev/php.sh tools/dev/test-incarcare.php` (tot poarta G-verif, și cu PHP-ul minim; `--fara-baza`: doar A)
+încearcă încărcarea. **A**, fără bază: regulile Bioscem acoperă fiecare tabel și fiecare coloană a schemei Bioscem
+4254ca4 (`tools/dev/migrari/vechi/bs.sql`, și avertismentul pe produs) și a codului comun (`asteptat.json`), nicio
+regulă spre o coloană care nu există, fiecare fel de greșeală din reguli e prins, scanerul, fiecare transformare,
+neutralizarea setărilor și verificarea ei (A6), ce fișiere ale codului vechi se copiază, garda instrucțiunilor sursei,
+mesajul pentru un PHP prea vechi. **B**, o găzduire simulată în `$CMS_DEV_DIR/incarcare/acasa`: site-ul de verificare
+(copia codului din git, configurat cu `configureaza.php`, servit pe `CMS_DEV_PORT`+15) și un Bioscem „live” inventat
+(`domains/bioscem.ro/public_html`: `.env` cu cheile BT de test și live, cod, `.git`, sesiuni, poze, sitemap, jurnale,
+o copie de bază uitată, un export, o arhivă, o legătură spre afară), cu baza `cms_incarc_sursa` făcută ca a unui site
+încă neadoptat (`pe-vechi.php`, seed-ul, datele demo și tabelele avertismentului din `bs.sql`: aceleași tabele și
+coloane ca `bs.sql`, verificat) și un rând inventat în fiecare tabel cu date personale, cu un marcaj aleator în
+fiecare coloană personală; copia pe `cms_incarc_tinta`; referința `cms_incarc_ref` (aceeași sursă, copiată simplu și
+trecută prin aceleași migrări). Parcurge: refuzurile (cod 2, nimic atins), scanerul (o coloană personală nouă, una
+oarecare, o vedere: cod 1, copia ștearsă singură), încărcarea (A1–A9 DA; niciun marcaj și nicio valoare personală a
+sursei în nicio coloană a copiei; tabelele copiate cum sunt = referința, CHECKSUM TABLE; coloanele păstrate ale celor
+anonimizate = referința; pseudonimele la fel în toate tabelele; setările, migrările, licența, contul proprietarului
+care se loghează, adminii site-ului care nu, D3, codul vechi, sursa și dosarul ei neschimbate, `stare.php` „GATA”),
+sesiunea sursei doar în citire (și un utilizator doar cu SELECT), `--reincarca`, `--reia` (`--buget=0`: un grup pe
+rulare, apoi „GATA”, cu aceleași pseudonime; resturile unui grup neterminat șterse; refuzurile), câte o mutație pentru
+fiecare verificare A1–A9 (o regulă sau un pas stricat în copia codului: verificarea ei NU, copia ștearsă), `--demo`
+(aceleași date inventate ca baza de dezvoltare, personalul se loghează; vertij fără și cu valori private inventate)
+și aceeași încărcare pe MySQL 8. Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator
+și nicio cale a contului în ieșiri și în textele salvate. Cere baza de dezvoltare făcută de `instaleaza.sh` (copia
+demonstrativă se compară cu ea). Bazele `cms_incarc_*` și utilizatorii lor se fac și se șterg acolo, pe ambele
+servere.
