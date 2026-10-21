@@ -169,8 +169,9 @@ git și nu le publica**: repo-urile sunt publice (decizia OD-49). La noi stau to
 ### 6. Încărcarea copiei Bioscem (noaptea, după ce îți scriem că e pe GitHub)
 
 Ce face: copiază baza Bioscem pe site-ul de verificare și **schimbă datele personale în timp ce le
-citește** (numele, adresele, telefoanele, emailurile, parolele, IP-urile, textele scrise de clienți, codurile
-unice de cupon, linkurile de plată), deci în baza copiei nu ajunge nicio dată a unui client. Pe site-ul Bioscem
+citește** (numele, adresele și etichetele lor, telefoanele, emailurile, parolele, IP-urile, textele scrise de
+clienți, adresele de email din recenziile publice, codurile unice de cupon, linkurile de plată), deci în baza copiei
+nu ajunge nicio dată a unui client. Pe site-ul Bioscem
 **nu scrie nimic**: îi citește baza doar în citire, fără să oprească sau să încetinească comenzile, și îi copiază
 codul (fără `.env`, poze, sesiuni, jurnale, copii de baze) lângă site-ul de verificare, în
 `~/domains/<domeniul-verificare>/cod-vechi/bioscem/`, în afara `public_html` (nu se vede din browser). Apoi
@@ -226,8 +227,11 @@ contului tău de la (c). Conturile de admin ale site-ului Bioscem sunt pe copie 
 - Terminalul s-a închis sau găzduirea a oprit comanda (ultimul rând nu e „GATA”, „ÎNTRERUPT” sau „OPRIT”): tot
   `--reia`. Până atunci copia rămâne închisă („Copia de verificare lipsește”).
 - „OPRIT: încărcarea nu s-a terminat, iar copia a fost ștearsă singură”: o verificare a picat sau Bioscem are o
-  coloană nouă, fără regulă de anonimizare (rândul „NU” de deasupra îi spune numele). Nu faci nimic; ne trimiți
-  textul, iar după ce îți scriem, rulezi încărcarea din nou.
+  coloană nouă, fără regulă de anonimizare (rândul „NU” de deasupra îi spune numele; la A1, tabelul și coloana în
+  care a rămas o adresă de email, fără adresă). Nu faci nimic; ne trimiți textul, iar după ce îți scriem, rulezi
+  încărcarea din nou.
+- „REFUZAT: …” (de exemplu „legătura cu baza site-ului nu merge”): nu s-a atins nimic, nici copia de dinainte, nici
+  `.env`-ul; ne trimiți rândul.
 - Dacă găzduirea oprește comenzile lungi: `$PHP tools/verificare/incarca.php --din=bioscem --buget=600` (după 10
   minute nu mai începe niciun grup nou și se oprește cu „ÎNTRERUPT”), apoi `--reia --buget=600` până la „GATA”.
 
@@ -334,7 +338,7 @@ sunt în git, deci rămân neatinse.
 | „REFUZAT: nu găsesc site-ul live …” | Site-ul stă în alt dosar decât cel după domeniu: `ls ~/domains`, apoi aceeași comandă cu `--dosar=~/domains/<domeniu>/public_html` |
 | „REFUZAT: găsesc mai multe dosare cu …” | Două dosare au același domeniu în `.env`; alegi dosarul site-ului live cu `--dosar=…` |
 | „REFUZAT: … APP_URL are domeniul …, nu …” | Dosarul dat cu `--dosar` e al altui site; verifică domeniul |
-| „REFUZAT: legătura cu baza site-ului nu merge (eroarea 1045 …)” | Datele din `.env`-ul site-ului live nu deschid baza de pe acest cont; trimite-ne rândul (nu are parole) |
+| „REFUZAT: legătura cu baza site-ului nu merge (eroarea 1045 …)” | Datele din `.env`-ul site-ului live nu deschid baza de pe acest cont; trimite-ne rândul (nu are parole). La `incarca.php` refuzul vine înaintea oricărei schimbări: copia de dinainte, `.env`-ul și restul rămân cum erau |
 | „REFUZAT: … .env nu se poate citi” | PHP-ul nu are voie în dosarul celuilalt site; trimite-ne rândul |
 | „PARȚIAL” sau rânduri EROARE / SĂRIT | Trimite-ne fișierul așa cum e; o verificare căzută nu le strică pe celelalte |
 | „OPRIT: memoria PHP s-a terminat (memory_limit) …” | Trimite-ne fișierul (are verificările de până acolo). Dacă vrei și restul: aceeași comandă cu `$PHP -d memory_limit=512M tools/verificare/agregate.php --set=…` |
@@ -345,6 +349,7 @@ sunt în git, deci rămân neatinse.
 | `incarca.php`: „REFUZAT: regulile de anonimizare s-au schimbat …” sau „… sarea încărcării oprite lipsește” | Codul nou a venit între timp (sau `sterge.php` a șters sarea): `--reincarca`, de la capăt |
 | `incarca.php`: „REFUZAT: pe copie e altă sursă (demo) …” | Pe copie e copia demonstrativă: `sterge.php`, apoi încărcarea |
 | `incarca.php`: „NU    <tabel>.<coloană> … coloană fără regulă” și „OPRIT: … copia a fost ștearsă singură” | Bioscem are o coloană nouă: trimite-ne textul (are doar numele ei); după ce o trecem în reguli, încarci din nou |
+| `incarca.php`: „NU    A1 … adresele sunt în: <tabel>.<coloană> (N)” și „OPRIT: … copia a fost ștearsă singură” | O adresă de email a rămas într-o coloană pe care regulile o lasă cum e (de exemplu un text scris de cineva): trimite-ne textul (are doar numele coloanei și câte adrese); după ce schimbăm regula, încarci din nou |
 | `incarca.php`: „ÎNTRERUPT: …” | Rulezi comanda din rând (`--reia`); continuă de unde a rămas |
 | `incarca.php`: „OPRIT: … copia NU s-a putut șterge singură” | `$PHP tools/verificare/sterge.php`, apoi trimite-ne textul |
 | `incarca.php --demo --pachet=…`: „… codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): ți le trimitem noi; copia s-a șters singură |
@@ -507,15 +512,18 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
    `_verificare.cod_sursa_commit`.
 2. **Întrebările** (înaintea oricărei schimbări): „da” (`--da` o sare), adresa și parola contului de admin al
    proprietarului (cel puțin 12 caractere, alta decât parola porții, de două ori).
-3. **`_verificare` primul** (`anonimizat = 0`, `pas`, versiunea regulilor) și sarea încărcării (32 de octeți aleatori,
+3. **Sesiunea sursei**, deschisă tot înaintea oricărei schimbări (după întrebări, ca o legătură să nu stea deschisă cât
+   scrie proprietarul; nu citește niciun rând): `SET SESSION TRANSACTION READ ONLY` (verificat cu
+   `@@transaction_read_only`, altfel nu se citește nimic), REPEATABLE READ, `time_zone = '+00:00'` (pe ambele baze:
+   TIMESTAMP-urile trec neschimbate), așteptarea după un lacăt 5 s, fără limita pe instrucțiune. O legătură care nu
+   merge sau o sesiune care nu trece în modul doar de citire e un refuz (cod 2): copia de dinainte, `.env`-ul și sarea
+   rămân cum erau (și la `--reincarca`). Doar SELECT și SHOW (o singură instrucțiune, fără comentarii și fără cuvintele
+   unei scrieri sau ale unui lacăt; `SHOW CREATE TABLE` doar în forma exactă). Vederile, declanșatoarele, rutinele și
+   evenimentele opresc încărcarea (o copie nu le ia).
+4. **`_verificare` primul** (`anonimizat = 0`, `pas`, versiunea regulilor) și sarea încărcării (32 de octeți aleatori,
    `storage/verificare/tmp/sare-incarcare`, 0600, cât încărcarea nu e terminată: `--reia` dă aceleași pseudonime);
    `.env`: `SITE_SLUG`, `SITE_DATE_DOSAR` (pachetul site-ului), `VERIFICARE_SURSA`, `VERIFICARE_UPLOADS_DIN` (pozele
    lipsă spre site-ul copiat), cheile de test BT (D3), atomic.
-4. **Sesiunea sursei**: `SET SESSION TRANSACTION READ ONLY` (verificat cu `@@transaction_read_only`, altfel nu se
-   citește nimic), REPEATABLE READ, `time_zone = '+00:00'` (pe ambele baze: TIMESTAMP-urile trec neschimbate),
-   așteptarea după un lacăt 5 s, fără limita pe instrucțiune. Doar SELECT și SHOW (o singură instrucțiune, fără
-   comentarii și fără cuvintele unei scrieri sau ale unui lacăt; `SHOW CREATE TABLE` doar în forma exactă). Vederile,
-   declanșatoarele, rutinele și evenimentele opresc încărcarea (o copie nu le ia).
 5. **Scanerul** (fail-closed), înaintea oricărui rând: fiecare coloană a fiecărui tabel copiat trebuie să fie în
    reguli (`pastreaza` sau `transforma`), oricare i-ar fi numele; una nouă oprește totul, cu numele ei pe ecran (și
    „nume de date personale” dacă se potrivește `CitireLive::TIPAR_PERSONAL`). Un tabel fără reguli primește doar
@@ -547,7 +555,10 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
     numele bazei). Garda trebuie să spună `la_zi`.
 12. **Verificările A1–A9** (doar numere; oricare pică: copia se șterge singură, cod 1). A1: emailurile pseudonimizate
     toate `@verificare.invalid` și, în orice coloană de text a tabelelor care nu sunt publice, nicio adresă din altă
-    parte (contul proprietarului nu se numără); A2: tabelele „doar structura”, cele fără reguli și cele cu date
+    parte (contul proprietarului nu se numără); când pică, numește fiecare `tabel.coloană` cu câte adrese (nu adresele),
+    ca textul trimis de proprietar să arate unde e. Tabelele publice (`emailuri_publice`, cu motivul: paginile, produsele,
+    articolele, care au adresa magazinului) nu se caută; recenziile aprobate se caută, iar adresele din textul lor
+    (scrise de clienți) devin pseudonime la încărcare, deci A1 rămâne strictă și acolo; A2: tabelele „doar structura”, cele fără reguli și cele cu date
     personale ale planului (`Incarcare::FARA_RANDURI`, oricare ar fi regulile) fără niciun rând; A3: telefoanele (după
     reguli și după nume) `07` + 8 cifre; A4: IP-urile, browserele, `google_id`, răspunsurile băncii și celelalte coloane
     golite: NULL; A5: parolele clienților și ale adminilor bcrypt; A6: setările neutralizate (socotite din listă, nu cu
@@ -562,7 +573,9 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
 `@verificare.invalid` (aceeași adresă, același pseudonim în orice tabel); telefonul `07` + 8 cifre din H(cifre);
 numele de familie 6 hex din H(email); „Client …”/„Abonat …”/„Firma … SRL” + 6 hex din H(valoare) (așa migrarea
 recenziilor vechi potrivește `reviews` cu `product_reviews` ca pe site-ul adevărat); adresa „Strada Verificare N”,
-codul poștal `000000`; textele libere „[text anonimizat, N caractere]” (recenziile aprobate, publice, rămân);
+codul poștal `000000`; textele libere „[text anonimizat, N caractere]”, și eticheta adresei din contul clientului
+(„Acasă”, dar și „La mama, …”); recenziile aprobate, publice, rămân, cu fiecare adresă de email din text schimbată cu
+pseudonimul ei;
 referințele plăților `anon-<id>`; jetoanele 64 hex noi; codurile unice de cupon `VERIF-<id>` (și în comenzi); AWB-urile
 `DEMO<id>` (și în lista coletelor, cu adresa de urmărire refăcută). Orașele, județele, sumele, stările, datele și
 id-urile rămân. Fiecare regulă e în capul `tools/verificare/reguli/bioscem.php`; `versiune` crește la orice schimbare
@@ -580,7 +593,8 @@ Nu se continuă cu `--reia` (se face din nou cu `--reincarca`).
 **Pe ecran** doar DA/NU, numere, nume de tabele și de coloane, durate; numele bazei copiei și al utilizatorului ei se
 înlocuiesc. Textul se salvează și în `storage/verificare/sonde/incarcare-<sursa>-<data>.txt` (0600), înainte de
 ultimul rând. **Cod de ieșire**: 0 „GATA”; 1 „OPRIT”, copia ștearsă singură (baza, `incarcat-la`, codul vechi,
-sarea, fișierele copiei); 2 refuzat, nimic atins; 3 „ÎNTRERUPT” (bugetul, legătura pierdută, o eroare fatală PHP),
+sarea, fișierele copiei); 2 refuzat, nimic atins (toate refuzurile vin înaintea primei schimbări; un refuz venit totuși
+după ea devine „OPRIT”, cod 1, cu ștergerea copiei); 3 „ÎNTRERUPT” (bugetul, legătura pierdută, o eroare fatală PHP),
 copia neterminată rămâne închisă pentru `--reia` sau `sterge.php`.
 
 ### Adresa vizitatorului (`IpClient`)
@@ -828,21 +842,35 @@ Bazele `cms_sonde_t`, `cms_sonde_rt` și utilizatorii `cms_sonde_tot`, `cms_sond
 4254ca4 (`tools/dev/migrari/vechi/bs.sql`, și avertismentul pe produs) și a codului comun (`asteptat.json`), nicio
 regulă spre o coloană care nu există, fiecare fel de greșeală din reguli e prins, scanerul, fiecare transformare,
 neutralizarea setărilor și verificarea ei (A6), ce fișiere ale codului vechi se copiază, garda instrucțiunilor sursei,
-mesajul pentru un PHP prea vechi. **B**, o găzduire simulată în `$CMS_DEV_DIR/incarcare/acasa`: site-ul de verificare
+mesajul pentru un PHP prea vechi; **oracolul testului**, ținut în test, nu luat din reguli: tabelele cu datele
+clienților și, în fiecare, singurele coloane de text sau de dată care au voie să rămână cum sunt (orașul, stările,
+datele…), plus clasa fiecărui tabel (al clienților, fără rânduri, public): orice altă coloană de text sau de dată a
+tabelelor clienților trebuie transformată de reguli, iar fiecare tabel al regulilor trebuie clasificat și în test (două
+chei); câte o mutație a regulilor pe care `probleme()` nu o vede (mesajul de contact, notele adminului, eroarea ERP,
+eticheta adresei, data nașterii… lăsate cum sunt; un tabel al clienților copiat cum e; un tabel nou) e prinsă, cu numele
+ei. **B**, o găzduire simulată în `$CMS_DEV_DIR/incarcare/acasa`: site-ul de verificare
 (copia codului din git, configurat cu `configureaza.php`, servit pe `CMS_DEV_PORT`+15) și un Bioscem „live” inventat
 (`domains/bioscem.ro/public_html`: `.env` cu cheile BT de test și live, cod, `.git`, sesiuni, poze, sitemap, jurnale,
 o copie de bază uitată, un export, o arhivă, o legătură spre afară), cu baza `cms_incarc_sursa` făcută ca a unui site
 încă neadoptat (`pe-vechi.php`, seed-ul, datele demo și tabelele avertismentului din `bs.sql`: aceleași tabele și
-coloane ca `bs.sql`, verificat) și un rând inventat în fiecare tabel cu date personale, cu un marcaj aleator în
-fiecare coloană personală; copia pe `cms_incarc_tinta`; referința `cms_incarc_ref` (aceeași sursă, copiată simplu și
-trecută prin aceleași migrări). Parcurge: refuzurile (cod 2, nimic atins), scanerul (o coloană personală nouă, una
-oarecare, o vedere: cod 1, copia ștearsă singură), încărcarea (A1–A9 DA; niciun marcaj și nicio valoare personală a
-sursei în nicio coloană a copiei; tabelele copiate cum sunt = referința, CHECKSUM TABLE; coloanele păstrate ale celor
-anonimizate = referința; pseudonimele la fel în toate tabelele; setările, migrările, licența, contul proprietarului
-care se loghează, adminii site-ului care nu, D3, codul vechi, sursa și dosarul ei neschimbate, `stare.php` „GATA”),
-sesiunea sursei doar în citire (și un utilizator doar cu SELECT), `--reincarca`, `--reia` (`--buget=0`: un grup pe
-rulare, apoi „GATA”, cu aceleași pseudonime; resturile unui grup neterminat șterse; refuzurile), câte o mutație pentru
-fiecare verificare A1–A9 (o regulă sau un pas stricat în copia codului: verificarea ei NU, copia ștearsă), `--demo`
+coloane ca `bs.sql`, verificat) și un rând inventat în fiecare tabel al clienților (după oracol, nu după reguli), cu un
+marcaj aleator în fiecare coloană pe care oracolul o cere schimbată, oricare i-ar fi regula, plus o recenzie aprobată
+cu adrese de email în text; copia pe `cms_incarc_tinta`; referința `cms_incarc_ref` (aceeași sursă, copiată simplu și
+trecută prin aceleași migrări). Parcurge: refuzurile (cod 2, nimic atins; și legătura cu baza sursei care nu merge,
+fără nicio schimbare a copiei sau a `.env`-ului, și cu `--reincarca` peste o copie terminată), scanerul (o coloană
+personală nouă, una oarecare, o vedere: cod 1, copia ștearsă singură), încărcarea (A1–A9 DA; niciun marcaj și nicio
+valoare personală a sursei, după oracol, în nicio coloană a copiei; pe rândurile cu marcaj, fiecare valoare cerută
+schimbată de oracol e alta decât în sursă, iar pe referință toate sunt la fel, deci verificarea poate pica; tabelele
+copiate cum sunt = referința, CHECKSUM TABLE; coloanele păstrate ale celor anonimizate = referința; recenzia aprobată
+cu adresele schimbate în pseudonime; pseudonimele la fel în toate tabelele; setările, migrările, licența, contul
+proprietarului care se loghează, adminii site-ului care nu, D3, codul vechi, sursa și dosarul ei neschimbate,
+`stare.php` „GATA”), sesiunea sursei doar în citire (și un utilizator doar cu SELECT), `--reincarca`, `--reia`
+(`--buget=0`: un grup pe rulare, apoi „GATA”, cu aceleași pseudonime; resturile unui grup neterminat șterse;
+refuzurile), câte o mutație pentru fiecare verificare A1–A9 (o regulă sau un pas stricat în copia codului: verificarea
+ei NU, copia ștearsă), încă una pentru fiecare text liber al clienților și al adminilor lăsat cum e (subiectul și
+mesajul de contact, notele adminului, eroarea ERP, motivul deblocării, al reducerii, eroarea plății, eticheta adresei:
+A1 pică și numește coloana), o adresă într-o coloană păstrată (A1 numește coloana) și un refuz venit după ce copia s-a
+schimbat (cod 1 și copia ștearsă, nu cod 2), `--demo`
 (aceleași date inventate ca baza de dezvoltare, personalul se loghează; vertij fără și cu valori private inventate)
 și aceeași încărcare pe MySQL 8. Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator
 și nicio cale a contului în ieșiri și în textele salvate. Cere baza de dezvoltare făcută de `instaleaza.sh` (copia

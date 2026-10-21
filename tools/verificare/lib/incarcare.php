@@ -14,7 +14,8 @@ declare(strict_types=1);
  *   o licență; nicio bază sursă nu se deschide (repetițiile personalului clienților, decizia OD-39).
  *
  * Ordinea (--din): verificările de loc și de bază, fără să atingă nimic → întrebările (confirmarea, contul de admin al
- * proprietarului) → `_verificare` scris PRIMUL, cu `anonimizat = 0` (înțelegerea cu sterge.php: o încărcare oprită la
+ * proprietarului) → sesiunea sursei, deschisă și verificată doar de citire (niciun rând citit; dacă nu merge: refuz, cod 2,
+ * nimic atins) → `_verificare` scris PRIMUL, cu `anonimizat = 0` (înțelegerea cu sterge.php: o încărcare oprită la
  * jumătate rămâne o copie de verificare) → scanerul coloanelor (fail-closed: o coloană necunoscută oprește totul înaintea
  * oricărui rând) → structura (SHOW CREATE TABLE) → datele, grup cu grup (un instantaneu al sursei și o tranzacție a copiei
  * pe grup; `--reia` continuă de la primul grup neterminat) → setările neutralizate, adminul proprietarului, codul vechi în
@@ -351,6 +352,8 @@ final class Reguli
 final class Transformari
 {
     public const DOMENIU = 'verificare.invalid';
+    /** O adresă de email într-un text (aceeași formă caută și A1 în coloanele de text). */
+    public const TIPAR_EMAIL = '/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/';
     /** Costul bcrypt al parolelor aleatoare ale clienților (nimeni nu le știe; cu costul implicit, 10.000 de conturi ar dura minute). */
     public const COST_PAROLA = 4;
 
@@ -436,6 +439,20 @@ final class Transformari
         return '[text anonimizat, ' . mb_strlen((string) $v) . ' caractere]';
     }
 
+    /**
+     * Un text public păstrat (o recenzie aprobată: regula `text` cu `daca`, pe rândurile din afara condiției), cu fiecare
+     * adresă de email din el schimbată cu pseudonimul ei (E): textul l-a scris un client, deci adresa e probabil a lui.
+     * Restul textului rămâne cum e; o adresă deja @verificare.invalid rămâne.
+     */
+    public function faraEmailuri(mixed $v): mixed
+    {
+        if (self::gol($v) || !str_contains((string) $v, '@')) {
+            return $v;
+        }
+        return (string) preg_replace_callback(self::TIPAR_EMAIL, fn (array $m): string => str_ends_with(strtolower($m[0]), '@' . self::DOMENIU)
+            ? $m[0] : (string) $this->email($m[0]), (string) $v);
+    }
+
     public static function parola(): string
     {
         return password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT, ['cost' => self::COST_PAROLA]);
@@ -482,7 +499,7 @@ final class Transformari
                 'adresa' => self::gol($v) ? $v : 'Strada Verificare ' . (((int) $id) % 200 + 1),
                 'numar_strada' => self::gol($v) ? $v : '1',
                 'cod_postal' => self::gol($v) ? $v : '000000',
-                'text' => $this->conditie($t, $rand) ? self::text($v) : $v,
+                'text' => $this->conditie($t, $rand) ? self::text($v) : $this->faraEmailuri($v),
                 'ref' => self::gol($v) ? $v : 'anon-' . $id,
                 'parola' => self::parola(),
                 'nul' => null,
@@ -1173,6 +1190,11 @@ final class Incarcare
         try {
             return $incarcare->executa($argv);
         } catch (Refuz $e) {
+            // Codul 2 spune „nimic atins”: un refuz venit după ce copia s-a schimbat (nu ar trebui să existe) e o oprire, cu
+            // ștergerea copiei și ultimul rând OPRIT, ca orice altă eroare de după acel punct.
+            if ($incarcare->atinsa) {
+                return $incarcare->esec($e->getMessage());
+            }
             fwrite(STDERR, 'REFUZAT: ' . $e->getMessage() . "\n");
             return self::COD_REFUZ;
         } catch (Intrerupere $e) {
@@ -1512,6 +1534,13 @@ final class Incarcare
         // ── Întrebările, înaintea oricărei schimbări ──
         $this->intrebari($mod, $marcaj);
 
+        // ── Sesiunea sursei, tot înaintea oricărei schimbări (nu citește niciun rând): o legătură care nu merge sau o sesiune
+        // care nu trece în modul doar de citire e un refuz cu nimic atins (copia, .env-ul și sarea rămân cum erau) ──
+        if (!$demo) {
+            $this->sursa = SursaCopie::deschide($this->conexiuneSursa);
+            $this->conexiuneSursa = [];
+        }
+
         // ── De aici copia se schimbă ──
         $this->atinsa = true;
         $this->curataFisiere($mod !== 'reia');
@@ -1707,9 +1736,8 @@ final class Incarcare
         $verificari = $marcaj !== null && $this->pas !== 'inceput' ? (array) json_decode((string) ($marcaj['verificari'] ?? '{}'), true) : [];
         $adminId = (int) ($marcaj['admin_proprietar_id'] ?? 0);
 
-        // ── Sursa: sesiunea doar de citire, obiectele interzise, scanerul ──
-        $this->sursa = SursaCopie::deschide($this->conexiuneSursa);
-        $this->conexiuneSursa = [];
+        // ── Sursa (sesiunea doar de citire, deschisă înainte de orice schimbare), obiectele interzise, scanerul ──
+        assert($this->sursa !== null);
         $this->rand(true, 'baza sursei: ' . ($this->sursa->familie === 'mariadb' ? 'MariaDB ' : 'MySQL ') . $this->sursa->versiune
             . ', sesiune doar de citire (READ ONLY, verificată), instantanee consecvente, fără buffer');
         $interzise = array_filter($this->sursa->obiecteInterzise());
@@ -2288,22 +2316,29 @@ final class Incarcare
         $numar = static fn (string $sql): int => (int) $db->query($sql)->fetchColumn();
         $q = static fn (string $n): string => SursaCopie::cita($n);
 
-        // A1: adresele de email.
+        // A1: adresele de email. Fiecare coloană cu adrese din altă parte e numită pe ecran (doar tabel.coloană și câte):
+        // textul trimis de proprietar arată unde e adresa, fără ea.
         $rele = 0;
+        $unde = [];
         $coloaneEmail = $peReguli(Reguli::EMAIL);
         foreach ($coloaneEmail as [$tabel, $coloana, $fel]) {
             if ($fel === 'emailuri') {
+                $n = 0;
                 foreach ($db->query('SELECT ' . $q($coloana) . ' FROM ' . $q($tabel) . ' WHERE ' . $q($coloana) . " LIKE '%@%'" . $faraProprietar($tabel))->fetchAll(PDO::FETCH_COLUMN) as $v) {
                     foreach (preg_split('/[\s,;]+/', trim((string) $v)) ?: [] as $adresa) {
                         if ($adresa !== '' && !str_ends_with(strtolower($adresa), '@' . Transformari::DOMENIU)) {
-                            $rele++;
+                            $n++;
                         }
                     }
                 }
-                continue;
+            } else {
+                $n = $numar('SELECT COUNT(*) FROM ' . $q($tabel) . ' WHERE ' . $q($coloana) . ' IS NOT NULL AND ' . $q($coloana) . " <> '' AND "
+                    . $q($coloana) . " NOT LIKE '%@verificare.invalid'" . $faraProprietar($tabel));
             }
-            $rele += $numar('SELECT COUNT(*) FROM ' . $q($tabel) . ' WHERE ' . $q($coloana) . ' IS NOT NULL AND ' . $q($coloana) . " <> '' AND "
-                . $q($coloana) . " NOT LIKE '%@verificare.invalid'" . $faraProprietar($tabel));
+            if ($n > 0) {
+                $rele += $n;
+                $unde[$tabel . '.' . $coloana] = ($unde[$tabel . '.' . $coloana] ?? 0) + $n;
+            }
         }
         $generice = 0;
         $scanate = 0;
@@ -2319,18 +2354,22 @@ final class Incarcare
                 $scanate++;
                 $stmt = $db->query('SELECT ' . $q($coloana) . ' FROM ' . $q($tabel) . ' WHERE ' . $q($coloana) . " LIKE '%@%'" . $faraProprietar($tabel));
                 while (($v = $stmt->fetchColumn()) !== false) {
-                    if (preg_match_all('/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/', (string) $v, $m) > 0) {
+                    if (preg_match_all(Transformari::TIPAR_EMAIL, (string) $v, $m) > 0) {
                         foreach ($m[0] as $adresa) {
                             if (!str_ends_with(strtolower($adresa), '@' . Transformari::DOMENIU)) {
                                 $generice++;
+                                $unde[$tabel . '.' . $coloana] = ($unde[$tabel . '.' . $coloana] ?? 0) + 1;
                             }
                         }
                     }
                 }
             }
         }
+        ksort($unde);
         $esecuri[] = $this->aserțiune('A1', $rele === 0 && $generice === 0, 'emailurile: ' . count($coloaneEmail) . ' coloane cu pseudonime, toate @verificare.invalid ('
-            . $rele . ' altfel); căutarea generică în ' . $scanate . ' coloane de text: ' . $generice . ' adrese din afara verificare.invalid (contul tău nu se numără)');
+            . $rele . ' altfel); căutarea generică în ' . $scanate . ' coloane de text: ' . $generice . ' adrese din afara verificare.invalid (contul tău nu se numără)'
+            . ($unde !== [] ? '; adresele sunt în: ' . implode(', ', array_map(static fn (string $c, int $n): string => $c . ' (' . $n . ')',
+                array_slice(array_keys($unde), 0, 30), array_slice(array_values($unde), 0, 30))) . (count($unde) > 30 ? ' și încă ' . (count($unde) - 30) . ' coloane' : '') : ''));
 
         // A2: tabelele doar cu structură, fără niciun rând.
         $cuRanduri = [];
@@ -2596,11 +2635,20 @@ final class Incarcare
         $db2 = $this->copie->db;
         $numar = static fn (string $sql): int => (int) $db2->query($sql)->fetchColumn();
         $esecuri = [];
-        $releEmail = $numar("SELECT COUNT(*) FROM users WHERE email NOT LIKE '%@verificare.invalid'")
-            + $numar("SELECT COUNT(*) FROM orders WHERE billing_email NOT LIKE '%@verificare.invalid'")
-            + $numar('SELECT COUNT(*) FROM admins WHERE email NOT LIKE ' . $db2->quote('%@' . Transformari::DOMENIU) . ' AND id <> ' . $adminId)
-            + $numar("SELECT COUNT(*) FROM newsletter_subscribers WHERE email NOT LIKE '%@verificare.invalid'");
-        $esecuri[] = $this->aserțiune('A1', $releEmail === 0, 'emailurile clienților, comenzilor, adminilor și abonaților: toate @verificare.invalid (' . $releEmail . ' altfel)');
+        $releEmail = 0;
+        $undeEmail = [];
+        foreach (['users.email' => "SELECT COUNT(*) FROM users WHERE email NOT LIKE '%@verificare.invalid'",
+            'orders.billing_email' => "SELECT COUNT(*) FROM orders WHERE billing_email NOT LIKE '%@verificare.invalid'",
+            'admins.email' => 'SELECT COUNT(*) FROM admins WHERE email NOT LIKE ' . $db2->quote('%@' . Transformari::DOMENIU) . ' AND id <> ' . $adminId,
+            'newsletter_subscribers.email' => "SELECT COUNT(*) FROM newsletter_subscribers WHERE email NOT LIKE '%@verificare.invalid'"] as $coloana => $sql) {
+            $n = $numar($sql);
+            if ($n > 0) {
+                $releEmail += $n;
+                $undeEmail[] = $coloana . ' (' . $n . ')';
+            }
+        }
+        $esecuri[] = $this->aserțiune('A1', $releEmail === 0, 'emailurile clienților, comenzilor, adminilor și abonaților: toate @verificare.invalid (' . $releEmail . ' altfel)'
+            . ($undeEmail !== [] ? '; adresele sunt în: ' . implode(', ', $undeEmail) : ''));
         $releTelefon = $numar("SELECT COUNT(*) FROM users WHERE phone IS NOT NULL AND phone <> '' AND phone NOT REGEXP '^07[0-9]{8}$'");
         $esecuri[] = $this->aserțiune('A3', $releTelefon === 0, 'telefoanele clienților: 07 + 8 cifre (' . $releTelefon . ' altfel)');
         $releParola = $numar("SELECT COUNT(*) FROM users WHERE password_hash NOT LIKE '$2y$%'") + $numar("SELECT COUNT(*) FROM admins WHERE password_hash NOT LIKE '$2y$%'");

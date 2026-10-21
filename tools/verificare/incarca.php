@@ -16,8 +16,9 @@ declare(strict_types=1);
  * D3), --buget=<secunde> (după el nu mai începe niciun grup; continui cu --reia), --licenta=<pachet> (implicit al site-ului),
  * --da (fără întrebarea „da”; adresa și parola contului de admin se cer oricum).
  *
- * Ce face, pe scurt (capul lui tools/verificare/lib/incarcare.php): `_verificare` scris primul (anonimizat = 0), sursa citită
- * strict în citire (o sesiune READ ONLY, un instantaneu consecvent pe grup, fără buffer), un scaner care oprește totul la o
+ * Ce face, pe scurt (capul lui tools/verificare/lib/incarcare.php): sesiunea sursei deschisă și verificată doar de citire
+ * înaintea oricărei schimbări, `_verificare` scris primul (anonimizat = 0), sursa citită strict în citire (un instantaneu
+ * consecvent pe grup, fără buffer), un scaner care oprește totul la o
  * coloană fără regulă, structura, datele cu pseudonimele făcute în drum (tools/verificare/reguli/<site>.php), setările
  * neutralizate, contul tău de admin, codul vechi în afara public_html, migrările (`migreaza --aplica --site=<site>`),
  * verificările A1–A9 (o verificare care pică șterge copia singură), licența, apoi anonimizat = 1 și incarcat-la.
@@ -25,7 +26,8 @@ declare(strict_types=1);
  * Pe ecran: doar DA/NU, numere, nume de tabele și de coloane, durate. Niciodată o valoare dintr-un rând, o parolă, numele
  * bazei sau o adresă întreagă. Textul se salvează și în storage/verificare/sonde/ (ca rezultatele verificărilor).
  *
- * Cod de ieșire: 0 GATA; 1 oprită, copia ștearsă singură; 2 refuzată, nimic atins; 3 oprită (bugetul, legătura pierdută, o
+ * Cod de ieșire: 0 GATA; 1 oprită, copia ștearsă singură; 2 refuzată, nimic atins (orice refuz vine înaintea primei
+ * schimbări; unul venit după ea e o oprire, cod 1); 3 oprită (bugetul, legătura pierdută, o
  * eroare fatală PHP), copia neterminată rămâne închisă: --reia continuă, sterge.php o șterge.
  *
  * Fișierul (și lib/intrare.php, lib/intrebari.php) folosește doar sintaxa PHP 7.0, ca un PHP prea vechi să-și vadă versiunea.

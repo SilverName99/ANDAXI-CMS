@@ -16,25 +16,33 @@ declare(strict_types=1);
  *    date personale cu regula sau motivul lui; greșelile din reguli (fiecare fel) sunt prinse; scanerul (o coloană personală
  *    sau doar necunoscută oprește, un tabel necunoscut = doar structura, un tip necopiabil oprește); fiecare transformare
  *    (pseudonimele consecvente și diferite de la o sare la alta, telefoanele, numele, AWB-urile, cupoanele, adresele,
- *    lungimea coloanei, NULL pe NOT NULL), neutralizarea setărilor și verificarea ei (A6) socotită separat, ce fișiere ale
- *    codului vechi se copiază, garda instrucțiunilor sursei; incarca.php sub un PHP prea vechi.
+ *    lungimea coloanei, NULL pe NOT NULL, eticheta adresei, adresele de email din recenziile aprobate), neutralizarea
+ *    setărilor și verificarea ei (A6) socotită separat, ce fișiere ale codului vechi se copiază, garda instrucțiunilor
+ *    sursei; incarca.php sub un PHP prea vechi. Oracolul testului ($oracolPastrate și celelalte, ținute aici, nu luate din
+ *    reguli): fiecare tabel al regulilor e clasificat și în test, iar în tabelele clienților fiecare coloană de text sau de
+ *    dată din afara listei oracolului e transformată; mutațiile pe care probleme() nu le vede (un text liber păstrat, un
+ *    tabel al clienților copiat cum e, un tabel nou) sunt prinse, cu numele lor.
  * B. O găzduire simulată ($CMS_DEV_DIR/incarcare/acasa): site-ul de verificare (copia codului din git, configurat cu
  *    configureaza.php, servit pe CMS_DEV_PORT+15) și un Bioscem „live” inventat (domains/bioscem.ro/public_html: .env cu
  *    datele de test și live ale băncii, cod, .git, sesiuni, poze, sitemap, jurnale, o copie de bază uitată, un export, o
  *    arhivă, o legătură spre afară), cu baza cms_incarc_sursa făcută ca a unui site încă neadoptat (tools/dev/migrari/pe-vechi.php,
  *    seed-ul și datele demo, plus tabelele avertismentului din bs.sql: aceleași tabele și coloane ca bs.sql, verificat), cu
- *    un rând inventat în fiecare tabel anonimizat și „doar structura”, cu un marcaj aleator în fiecare coloană personală, plus
- *    setările din lista neutralizării, seo_pages pentru o categorie și o marcă, avertismentele, un tabel de lucru FAN și unul
- *    necunoscut; copia pe cms_incarc_tinta. Referința cms_incarc_ref: aceeași sursă copiată simplu și trecută prin aceleași
- *    migrări. Pe tot parcursul: marcajul, parolele, numele bazelor și ale utilizatorilor și calea contului nu apar în nicio
- *    ieșire și în niciun text salvat.
+ *    un rând inventat în fiecare tabel al clienților și „doar structura” ale oracolului, cu un marcaj aleator în fiecare
+ *    coloană pe care oracolul o cere schimbată (oricare i-ar fi regula), plus setările din lista neutralizării, seo_pages
+ *    pentru o categorie și o marcă, avertismentele, o recenzie aprobată cu adrese de email în text, un tabel de lucru FAN și
+ *    unul necunoscut; copia pe cms_incarc_tinta. Referința cms_incarc_ref: aceeași sursă copiată simplu și trecută prin
+ *    aceleași migrări. Pe tot parcursul: marcajul, parolele, numele bazelor și ale utilizatorilor și calea contului nu apar
+ *    în nicio ieșire și în niciun text salvat.
  *    B1 refuzurile (cod 2, nimic atins: copia fără niciun tabel, sursa și dosarul live neschimbate): argumentele, un site
  *       fără reguli, răspunsurile (da, parolele, adresa, intrarea încheiată), alt dosar, alt HOME, site-ul live negăsit, baza
- *       copiei = baza sursei sau a altui site din cont (fără conexiune la ea), o bază cu tabele fără _verificare.
+ *       copiei = baza sursei sau a altui site din cont (fără conexiune la ea), o bază cu tabele fără _verificare, legătura cu
+ *       baza sursei care nu merge (nici .env-ul copiei, nici sarea, niciun text salvat).
  *    B2 scanerul: o coloană personală nouă, una doar necunoscută, o vedere, un _verificare în sursă → cod 1, doar numele pe
  *       ecran, copia ștearsă singură.
  *    B3 încărcarea: „GATA” ultimul rând, A1–A9 DA; pe copie niciun marcaj (în nicio coloană a niciunui tabel) și niciuna din
- *       valorile personale ale sursei (căutate întregi); _verificare încheiat, incarcat-la, sarea ștearsă; rândurile = sursa;
+ *       valorile personale ale sursei (după oracol, căutate întregi); pe rândurile cu marcaj, fiecare valoare cerută schimbată
+ *       de oracol e alta decât în sursă (pe referință, toate la fel); recenzia aprobată cu adresele schimbate în pseudonime;
+ *       _verificare încheiat, incarcat-la, sarea ștearsă; rândurile = sursa;
  *       tabelele „doar structura” și cel necunoscut fără rânduri; față de referință: CHECKSUM TABLE egal pe tabelele copiate cum
  *       sunt (și seo_pages cu categoria și marca, avertismentele, liniile comenzilor) și coloanele păstrate egale în cele
  *       anonimizate; pseudonimele consecvente între tabele, codurile unice, jetoanele, AWB-urile, setările, migrările
@@ -42,11 +50,15 @@ declare(strict_types=1);
  *       vechi (doar cod, în afara public_html), sursa neschimbată (baza și dosarul), stare.php „GATA” înainte și după, pagina
  *       servită doar cu parola porții, textul salvat.
  *    B4 sesiunea sursei e doar de citire (serverul refuză o scriere, și în instantaneu); încărcarea cu un utilizator doar cu SELECT.
- *    B5 --reincarca: refuzat fără el; cu el, altă sare, alt pseudonim.
+ *    B5 --reincarca: refuzat fără el; cu legătura sursei care nu merge, refuzat cu copia terminată neatinsă; cu el, altă
+ *       sare, alt pseudonim.
  *    B6 --reia: --buget=0 copiază un grup pe rulare (cod 3, copia închisă, stare.php „NU E GATA”, site-ul „lipsește”), apoi
  *       --reia până la „GATA”, cu pseudonimele consecvente între rulări; resturile unui grup neterminat se șterg; --reia
  *       refuzat pe o copie terminată, cu alte reguli, fără sare; sterge.php pe o încărcare oprită.
- *    B7 mutațiile: fiecare aserțiune pică pe o regulă sau un pas stricat într-o copie a codului (A1…A9), iar copia se șterge.
+ *    B7 mutațiile: fiecare aserțiune pică pe o regulă sau un pas stricat într-o copie a codului (A1…A9), iar copia se șterge;
+ *       fiecare text liber al clienților și al adminilor lăsat cum e (contact, notele adminului, erorile ERP și ale plății,
+ *       motivele, eticheta adresei) și o adresă într-o coloană păstrată: A1 pică și numește coloana; un refuz venit după ce
+ *       copia s-a schimbat: cod 1 și copia ștearsă, nu cod 2.
  *    B8 --demo: fără nicio bază sursă (site-ul live ascuns), aceleași rânduri ca datele demo din baza de dezvoltare, adresele
  *       @verificare.invalid, personalul și clienții cu parola personalului (se loghează), contul proprietarului; un pachet cu
  *       înghețare privată fără privat/ → oprit, copia ștearsă; cu valori private inventate și --licenta=toate → „GATA”;
@@ -190,6 +202,164 @@ $verifica('tabelele cu date personale fără rânduri: acordurile GDPR, jurnalel
     'admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs', 'register_submit_logs', 'customer_password_resets', 'cart_abandonments'],
     static fn (string $t): bool => ($reguli->tabel($t)['mod'] ?? '') === 'doar_structura')) === 7);
 
+// ── Oracolul testului, ținut aici, nu luat din reguli (revizuirea WP-09) ──
+// O regulă schimbată greșit, dar consecvent în reguli (o coloană liberă a clienților trecută în „pastreaza”), nu are voie
+// să treacă testul: verificările de scurgere de mai jos (A și B3) se fac după clasificarea de aici, nu după reguli. Două
+// chei: o coloană nouă păstrată pe copie cere un rând în reguli și unul aici.
+// - $oracolPastrate: tabelele cu datele clienților și, în fiecare, SINGURELE coloane de text (char, varchar, text, json,
+//   blob, set) sau de dată care au voie să ajungă pe copie cu valoarea sursei. Orice altă coloană de text sau de dată a
+//   lor (din bs.sql, din asteptat.json sau venită mai târziu) trebuie să fie în `transforma` al regulilor, primește în B3
+//   un marcaj în rândul inventat (oricare i-ar fi regula) și nu are voie să ajungă pe copie cu valoarea sursei. Coloanele
+//   numerice, enum și bit nu pot ține un nume, o adresă sau un text liber, deci nu sunt aici.
+// - $oracolConditii: coloanele transformate doar pe unele rânduri (condiția, în SQL pe sursă); pe celelalte valoarea e
+//   publică (recenziile aprobate) sau de business (codurile cupoanelor obișnuite, motivele automate ale punctelor).
+// - $oracolFaraRanduri: tabelele fără niciun rând pe copie. $oracolPublice: conținutul și datele de business, copiate cum
+//   sunt (clasificate la nivel de tabel: o coloană nouă a lor o oprește scanerul până la regula ei).
+$oracolPastrate = [
+    // Id-urile produselor, ale categoriilor și ale clienților unui cupon; eticheta unui lot de coduri unice (o scrie magazinul).
+    'coupons' => ['product_ids_json', 'category_ids_json', 'allowed_user_ids_json', 'import_batch', 'used_at', 'starts_at', 'ends_at', 'created_at'],
+    'users' => ['created_at'],
+    // Orașul și județul: regulile livrării depind de ele.
+    'user_addresses' => ['city', 'county', 'created_at'],
+    // Numărul, stările și metodele; orașele și județele; FANbox-ul ales (date publice ale lockerului); starea coletului dată de FAN;
+    // sursa reclamei; starea și numerele din ERP; datele.
+    'orders' => ['order_number', 'status', 'preorder_status', 'payment_method', 'payment_status', 'shipping_method', 'billing_city', 'billing_county',
+        'shipping_city', 'shipping_county', 'fan_locker_name', 'fan_locker_address', 'fan_locker_city', 'fan_locker_county', 'fan_locker_postcode',
+        'fan_tracking_status', 'ad_source', 'erp_status', 'erp_order_id', 'erp_factura_numar', 'preorder_released_at', 'paid_at', 'loyalty_points_awarded_at',
+        'fan_tracking_last_event_at', 'fan_tracking_synced_at', 'completed_awb_email_sent_at', 'deleted_at', 'created_at', 'updated_at', 'erp_last_attempt_at',
+        'erp_next_retry_at', 'erp_synced_at', 'edit_unlocked_at', 'terms_accepted_at'],
+    'order_payment_links' => ['referinta', 'status', 'procesator', 'created_at', 'expires_at', 'paid_at'],
+    // Felul, modul, numărul comenzii la bancă, starea, descrierea codului de răspuns al băncii, operația în curs (sume și cine a
+    // pornit-o: admin, erp…), datele.
+    'bt_ipay_transactions' => ['kind', 'mode', 'bt_order_number', 'state', 'action_desc', 'op_pending', 'deposit_requested_at', 'reminder_sent_at',
+        'authorized_at', 'deposited_at', 'reversed_at', 'refunded_at', 'last_checked_at', 'public_checked_at', 'callback_checked_at', 'created_at', 'updated_at'],
+    'loyalty_points_transactions' => ['tx_type', 'created_at'],
+    'product_reviews' => ['source', 'created_at'],
+    'reviews' => ['created_at'],
+    'newsletter_subscribers' => ['status', 'created_at', 'updated_at'],
+    'newsletter_campaign_sends' => ['status', 'sent_at', 'created_at', 'opened_at', 'clicked_at'],
+    'newsletter_campaign_opens' => ['opened_at'],
+    // Linkul din campanie, același pentru toți abonații (cel de dezabonare nu se urmărește: NewsletterService::injectClickTracking).
+    'newsletter_campaign_clicks' => ['url', 'clicked_at'],
+    'contact_form_messages' => ['status', 'created_at'],
+    'email_logs' => ['email_type', 'status', 'sent_at', 'created_at'],
+    'email_send_history' => ['email_type', 'source', 'status', 'provider', 'sent_at', 'created_at'],
+    'admins' => ['role', 'roles_json', 'created_at'],
+];
+$oracolConditii = [
+    'coupons.code' => 'is_unique = 1',
+    'coupons.name' => 'is_unique = 1',
+    'orders.coupon_code' => 'LOWER(TRIM(coupon_code)) IN (SELECT LOWER(TRIM(code)) FROM coupons WHERE is_unique = 1)',
+    'product_reviews.review_text' => 'is_approved = 0',
+    'reviews.review_text' => 'is_approved = 0',
+    'loyalty_points_transactions.reason' => 'admin_id IS NOT NULL',
+];
+$oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs', 'register_submit_logs', 'customer_password_resets', 'cart_abandonments',
+    'gdpr_agreements'];
+$oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
+    'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
+    'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
+    'blog_post_categories', 'blog_templates', 'fan_localities', 'fan_localities_extra_km', 'fan_lockers', 'fan_nomenclator_sync', 'fan_streets', 'order_items',
+    'order_promo_items', 'order_product_warnings', 'newsletter_lists', 'newsletter_list_subscribers', 'newsletter_templates', 'newsletter_optin_forms',
+    'newsletter_campaigns'];
+$tipuriText = ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'set'];
+$tipuriData = ['date', 'datetime', 'timestamp', 'time', 'year'];
+/** Coloanele unui tabel al clienților pe care oracolul le cere schimbate: cele de text sau de dată din afara listei lui. */
+$deSchimbat = static function (string $tabel, array $coloane) use ($oracolPastrate, $tipuriText, $tipuriData): array {
+    $r = [];
+    foreach ($coloane as $coloana => $c) {
+        if (in_array(strtolower((string) $c['tip']), array_merge($tipuriText, $tipuriData), true) && !in_array($coloana, $oracolPastrate[$tabel] ?? [], true)) {
+            $r[] = (string) $coloana;
+        }
+    }
+    return $r;
+};
+$schemaToata = $bs;
+foreach ($cms as $tabel => $coloane) {
+    $schemaToata[$tabel] = ($schemaToata[$tabel] ?? []) + $coloane;
+}
+/**
+ * Regulile față de oracol, fără bază: fiecare tabel al regulilor clasificat și aici, cu un mod potrivit clasei; în fiecare tabel
+ * al clienților, fiecare coloană de text sau de dată a schemei (Bioscem 4254ca4 și codul comun) e transformată de reguli sau e în
+ * lista oracolului. Întoarce problemele (tabel.coloana cu motivul); o listă goală = regulile nu lasă nimic din afara oracolului.
+ */
+$oracolStatic = static function (Reguli $r) use ($oracolPastrate, $oracolFaraRanduri, $oracolPublice, $schemaToata, $deSchimbat): array {
+    $p = [];
+    foreach ((array) $r->date['tabele'] as $tabel => $regula) {
+        $mod = (string) ($regula['mod'] ?? '');
+        if (isset($oracolPastrate[$tabel])) {
+            if (!in_array($mod, ['anonimizeaza', 'doar_structura'], true)) {
+                $p[] = $tabel . ': date ale clienților cu modul ' . $mod;
+            }
+        } elseif (in_array($tabel, $oracolFaraRanduri, true)) {
+            if ($mod !== 'doar_structura') {
+                $p[] = $tabel . ': trebuie doar_structura, nu ' . $mod;
+            }
+        } elseif ($tabel === 'settings') {
+            if ($mod !== 'setari') {
+                $p[] = 'settings: trebuie setari, nu ' . $mod;
+            }
+        } elseif (!in_array($tabel, $oracolPublice, true)) {
+            $p[] = $tabel . ': tabel neclasificat în oracolul testului';
+        }
+    }
+    foreach (array_merge(array_keys($oracolPastrate), $oracolFaraRanduri) as $tabel) {
+        if (!isset($r->date['tabele'][$tabel])) {
+            $p[] = $tabel . ': lipsește din reguli';
+        }
+    }
+    foreach ($oracolPastrate as $tabel => $pastrate) {
+        $regula = (array) ($r->date['tabele'][$tabel] ?? []);
+        foreach ($pastrate as $coloana) {
+            if (!isset($schemaToata[$tabel][$coloana])) {
+                $p[] = $tabel . '.' . $coloana . ': în oracol, dar nu în schemă';
+            }
+        }
+        if (($regula['mod'] ?? '') !== 'anonimizeaza') {
+            continue;
+        }
+        foreach ($deSchimbat($tabel, $schemaToata[$tabel] ?? []) as $coloana) {
+            if (!isset($regula['transforma'][$coloana])) {
+                $p[] = $tabel . '.' . $coloana . ': neschimbată de reguli';
+            }
+        }
+    }
+    return $p;
+};
+$verifica('oracolul testului: fiecare tabel al regulilor e clasificat și în test, cu modul potrivit; în cele ' . count($oracolPastrate) . ' tabele ale clienților, '
+    . 'fiecare coloană de text sau de dată a schemei e schimbată de reguli sau păstrată de oracol (' . array_sum(array_map(static fn (string $t): int
+        => count($deSchimbat($t, $schemaToata[$t] ?? [])), array_keys($oracolPastrate))) . ' de schimbat)', $oracolStatic($reguli) === [], implode('; ', $oracolStatic($reguli)));
+// Mutațiile pe care probleme() nu le vede (regulile rămân „bune”): fiecare e prinsă de oracol, cu numele coloanei.
+$mutatiiOracol = [
+    'contact_form_messages.subject' => 'subiectul unui mesaj de contact', 'contact_form_messages.message' => 'mesajul de contact',
+    'orders.admin_notes' => 'notele adminului pe comandă', 'orders.erp_last_error' => 'eroarea ERP-ului (poate numi clientul)',
+    'orders.edit_unlock_reason' => 'motivul deblocării comenzii', 'orders.manual_discount_reason' => 'motivul reducerii manuale',
+    'orders.payment_error' => 'eroarea plății', 'orders.notes' => 'nota clientului', 'user_addresses.label' => 'eticheta adresei, scrisă de client',
+    'users.birth_date' => 'data nașterii', 'newsletter_campaign_sends.error_message' => 'răspunsul serverului de email',
+];
+foreach ($mutatiiOracol as $tc => $ce) {
+    [$tabel, $coloana] = explode('.', $tc);
+    $date = $reguli->date;
+    unset($date['tabele'][$tabel]['transforma'][$coloana]);
+    $date['tabele'][$tabel]['pastreaza'][] = $coloana;
+    if (preg_match(CitireLive::TIPAR_PERSONAL, $coloana) === 1) {
+        $date['tabele'][$tabel]['motive'][$coloana] = 'mutație de test';
+    }
+    $mutata = Reguli::din($date);
+    $verifica('oracolul prinde ' . $ce . ' păstrat(ă) cum e (' . $tc . '), deși regulile trec de probleme()', $mutata->probleme() === []
+        && $oracolStatic($mutata) === [$tc . ': neschimbată de reguli'], implode('; ', array_merge($mutata->probleme(), $oracolStatic($mutata))));
+}
+$date = $reguli->date;
+$date['tabele']['contact_form_messages'] = ['mod' => 'copiaza', 'pastreaza' => array_keys($schemaToata['contact_form_messages']), 'motive' => array_fill_keys(
+    array_values(array_filter(array_keys($schemaToata['contact_form_messages']), static fn (string $c): bool => preg_match(CitireLive::TIPAR_PERSONAL, $c) === 1)),
+    'mutație de test'), 'emailuri_publice' => 'mutație de test'];
+$date['tabele']['tabel_nou_clienti'] = ['mod' => 'copiaza', 'pastreaza' => ['id', 'nota']];
+$date['grupuri']['mesaje'][] = 'tabel_nou_clienti';
+$mutata = Reguli::din($date);
+$verifica('oracolul prinde un tabel al clienților copiat cum e (contact_form_messages) și un tabel nou din reguli, neclasificat în test', $mutata->probleme() === []
+    && $oracolStatic($mutata) === ['contact_form_messages: date ale clienților cu modul copiaza', 'tabel_nou_clienti: tabel neclasificat în oracolul testului'],
+    implode('; ', array_merge($mutata->probleme(), $oracolStatic($mutata))));
+
 // Fiecare fel de greșeală din reguli e prinsă.
 $strica = static function (callable $schimba) use ($reguli): array {
     $date = $reguli->date;
@@ -304,6 +474,18 @@ $verifica('recenziile: textul celor nemoderate anonimizat, al celor aprobate (pu
     . 'pseudonim și în tabelul vechi reviews (migrarea lui le potrivește după nume), alt nume, alt pseudonim', $recenzii[0]['review_text'] === '[text anonimizat, 6 caractere]'
     && $recenzii[1]['review_text'] === 'Public' && preg_match('/^Client [0-9A-F]{6}$/', (string) $recenzii[1]['user_name']) === 1 && $recenzii[1]['user_email'] === null
     && $vechea['user_name'] === $recenzii[1]['user_name'] && $recenzii[0]['user_name'] !== $recenzii[1]['user_name']);
+$cuAdresa = $t->rand('product_reviews', (array) $reguli->tabel('product_reviews'), ['id' => 3, 'user_name' => 'Ana', 'review_text' => 'Foarte bun! Scrieți-mi la '
+    . 'Ana.Pop@Exemplu-Client.ro sau la u123@verificare.invalid.', 'is_approved' => 1], []);
+$nemoderata = $t->rand('product_reviews', (array) $reguli->tabel('product_reviews'), ['id' => 4, 'user_name' => 'Ana', 'review_text' => 'Scrieți-mi la ana@b.ro',
+    'is_approved' => 0], []);
+$verifica('o recenzie aprobată cu o adresă de email în text: textul rămâne, adresa devine pseudonimul ei E (același ca în users), una deja @verificare.invalid '
+    . 'rămâne; una nemoderată: tot textul anonimizat', $cuAdresa['review_text'] === 'Foarte bun! Scrieți-mi la ' . $e1 . ' sau la u123@verificare.invalid.'
+    && $nemoderata['review_text'] === '[text anonimizat, 22 caractere]' && $t->faraEmailuri(null) === null && $t->faraEmailuri('fără adresă') === 'fără adresă',
+    (string) $cuAdresa['review_text']);
+$adresaClient = $t->rand('user_addresses', (array) $reguli->tabel('user_addresses'), ['id' => 8, 'label' => 'La mama, Elena Popescu', 'city' => 'Cluj-Napoca',
+    'county' => 'Cluj', 'full_name' => 'Ana Pop'], []);
+$verifica('adresa unui client: eticheta (scrisă de el) anonimizată, orașul și județul păstrate', $adresaClient['label'] === '[text anonimizat, 22 caractere]'
+    && $adresaClient['city'] === 'Cluj-Napoca' && $adresaClient['county'] === 'Cluj', json_encode($adresaClient, JSON_UNESCAPED_UNICODE) ?: '');
 $puncte = [$t->rand('loyalty_points_transactions', (array) $reguli->tabel('loyalty_points_transactions'), ['id' => 1, 'admin_id' => 3, 'reason' => 'Bonus pentru Ana', 'meta_json' => '{}'], []),
     $t->rand('loyalty_points_transactions', (array) $reguli->tabel('loyalty_points_transactions'), ['id' => 2, 'admin_id' => null, 'reason' => 'Comanda 203801', 'meta_json' => '{}'], [])];
 $verifica('punctele: motivul scris de un admin devine „Ajustare manuală”, cel automat rămâne; meta_json NULL', $puncte[0]['reason'] === 'Ajustare manuală'
@@ -680,16 +862,30 @@ $randNou = static function (PDO $db, string $tabel, array $valori) use ($coloane
     return $id;
 };
 /**
- * Baza „live” inventată: rândurile cu marcaj în fiecare coloană transformată de reguli (adrese, telefoane, nume, texte
- * libere, jetoane, AWB-uri, coduri unice, parole în clar), în fiecare tabel „doar structura” (toate coloanele de text) și în
- * setările din lista neutralizării; plus seo_pages pentru categorii și mărci, avertismentele, un tabel de lucru FAN și un
- * tabel necunoscut. Întoarce id-urile rândurilor cu marcaj, pe tabel.
+ * Baza „live” inventată: în fiecare tabel al clienților (după oracolul testului, nu după reguli) un rând cu marcaj în fiecare
+ * coloană de text sau de dată din afara listei oracolului (adrese, telefoane, nume, texte libere, jetoane, AWB-uri, coduri
+ * unice, parole în clar; forma valorii după regula coloanei, dacă are una), în fiecare tabel „doar structura” (toate coloanele
+ * de text) și în setările din lista neutralizării; plus seo_pages pentru categorii și mărci, avertismentele, o recenzie
+ * aprobată cu adrese de email în text, un tabel de lucru FAN și un tabel necunoscut. Întoarce id-urile rândurilor cu marcaj,
+ * pe tabel (și `recenzie_aprobata`).
  */
-$umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M, $telefon, $emailClient, $jeton): array {
+$setariCuMarcaj = ['stripe_secret_key' => 'sk_live_' . $m, 'erp_api_key' => 'erp' . $m, 'o_cheie_noua_api_key' => 'k' . $m, 'smtp_password' => 'smtp' . $m,
+    'smtp_host' => 'smtp.' . $m . '.bioscem-test.ro', 'erp_enabled' => '1', 'stripe_enabled' => '1', 'bt_ipay_enabled' => '1', 'fan_awb_auto' => '1',
+    'contact_form_recipients' => 'dest.' . $m . '@exemplu-client.ro', 'email_template_comanda_noua_admin_recipients' => 'admin.' . $m . '@exemplu-client.ro',
+    'bt_ipay_notify_emails' => $emailClient, 'order_email_from_address' => 'comenzi.' . $m . '@bioscem-test.ro', 'order_email_from_name' => 'Bioscem',
+    'maintenance_key' => 'mk' . $m, 'maintenance_allowed_ips' => '10.1.2.3', 'fan_sender_phone' => $telefon, 'fan_cod_iban' => 'RO49' . $M,
+    'google_analytics_id' => 'G-' . $M, 'tawk_property_id' => 'tawk' . $m];
+$umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M, $telefon, $emailClient, $jeton, $oracolPastrate, $oracolFaraRanduri,
+    $deSchimbat, $setariCuMarcaj): array {
     $db->exec("SET time_zone = '+00:00'");
     $valoare = static function (string $tabel, string $coloana, string $fel, array $c) use ($m, $M, $telefon, $emailClient, $jeton): mixed {
-        if (in_array($c['tip'], ['date', 'datetime', 'timestamp'], true)) {
-            return $c['tip'] === 'date' ? '1990-02-03' : '2026-02-03 04:05:06';
+        if (in_array($c['tip'], ['date', 'datetime', 'timestamp', 'time', 'year'], true)) {
+            return match ($c['tip']) {
+                'date' => '1990-02-03',
+                'time' => '04:05:06',
+                'year' => 1990,
+                default => '2026-02-03 04:05:06',
+            };
         }
         if (in_array($c['tip'], ['tinyint', 'smallint', 'mediumint', 'int', 'bigint', 'decimal'], true)) {
             return 7;
@@ -722,26 +918,27 @@ $umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M
     };
     $ids = [];
     // Întâi clientul, ca rândurile celorlalte tabele să fie ale lui.
-    $ordine = array_keys((array) $reguli->date['tabele']);
+    $ordine = array_merge(array_keys($oracolPastrate), $oracolFaraRanduri);
     usort($ordine, static fn (string $a, string $b): int => ($b === 'users') <=> ($a === 'users') ?: ($b === 'orders') <=> ($a === 'orders'));
     foreach ($ordine as $tabel) {
-        $regula = (array) $reguli->date['tabele'][$tabel];
         $coloane = $coloaneTabel($db, $tabel);
-        if ($coloane === [] || !in_array($regula['mod'], ['anonimizeaza', 'doar_structura'], true)) {
+        if ($coloane === []) {
             continue;
         }
         $valori = [];
-        if ($regula['mod'] === 'doar_structura') {
+        if (in_array($tabel, $oracolFaraRanduri, true)) {
             foreach ($coloane as $nume => $c) {
                 if (in_array($c['tip'], ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext'], true) && stripos((string) $c['extra'], 'generated') === false) {
                     $valori[$nume] = $valoare($tabel, $nume, $nume === 'email' || str_ends_with($nume, '_email') ? 'email' : 'text', $c);
                 }
             }
         } else {
-            foreach ((array) $regula['transforma'] as $nume => $t) {
-                if (isset($coloane[$nume])) {
-                    $valori[$nume] = $valoare($tabel, $nume, (string) $t[0], $coloane[$nume]);
-                }
+            // Fiecare coloană pe care oracolul o cere schimbată primește marcajul, oricare i-ar fi regula (forma valorii: după
+            // regula ei, dacă are una; altfel un text cu marcajul, adresa și telefonul clientului).
+            $transforma = (array) ($reguli->date['tabele'][$tabel]['transforma'] ?? []);
+            foreach ($deSchimbat($tabel, array_map(static fn (array $c): array => ['tip' => $c['tip']], array_filter($coloane, static fn (array $c): bool
+                => stripos((string) $c['extra'], 'generated') === false))) as $nume) {
+                $valori[$nume] = $valoare($tabel, $nume, (string) ($transforma[$nume][0] ?? ''), $coloane[$nume]);
             }
         }
         $legaturi = [
@@ -768,14 +965,8 @@ $umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M
         }
     }
     // Setările din lista neutralizării, cu valorile unui site adevărat (inventate, cu marcaj).
-    $setari = ['stripe_secret_key' => 'sk_live_' . $m, 'erp_api_key' => 'erp' . $m, 'o_cheie_noua_api_key' => 'k' . $m, 'smtp_password' => 'smtp' . $m,
-        'smtp_host' => 'smtp.' . $m . '.bioscem-test.ro', 'erp_enabled' => '1', 'stripe_enabled' => '1', 'bt_ipay_enabled' => '1', 'fan_awb_auto' => '1',
-        'contact_form_recipients' => 'dest.' . $m . '@exemplu-client.ro', 'email_template_comanda_noua_admin_recipients' => 'admin.' . $m . '@exemplu-client.ro',
-        'bt_ipay_notify_emails' => $emailClient, 'order_email_from_address' => 'comenzi.' . $m . '@bioscem-test.ro', 'order_email_from_name' => 'Bioscem',
-        'maintenance_key' => 'mk' . $m, 'maintenance_allowed_ips' => '10.1.2.3', 'fan_sender_phone' => $telefon, 'fan_cod_iban' => 'RO49' . $M,
-        'google_analytics_id' => 'G-' . $M, 'tawk_property_id' => 'tawk' . $m];
     $s = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
-    foreach ($setari as $cheie => $v) {
+    foreach ($setariCuMarcaj as $cheie => $v) {
         $s->execute([$cheie, $v]);
     }
     // Conținut copiat cum e: titlurile pentru Google ale unei categorii și ale unei mărci, avertismentul unui produs și ce a
@@ -790,6 +981,9 @@ $umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M
         'checkbox_label' => 'Am înțeles', 'checkbox_ticked' => 1, 'product_ids_json' => '[' . $produs . ']', 'product_names_json' => '["Produs"]',
         'confirmed_at' => '2026-10-20 10:00:00']);
     $randNou($db, 'coupons', ['code' => 'VARA10', 'name' => 'Vara', 'type' => 'percent', 'value' => 10, 'is_unique' => 0]);
+    // O recenzie aprobată (publică) cu adresa clientului și o altă adresă în text: rămâne, cu adresele schimbate cu pseudonimele lor.
+    $ids['recenzie_aprobata'] = $randNou($db, 'product_reviews', ['product_id' => $produs, 'user_name' => 'Cititor ' . $m, 'user_email' => $emailClient,
+        'rating' => 5, 'review_text' => 'Recomand! Am întrebat la ' . $emailClient . ' și la contact@bioscem-test.ro, răspuns rapid.', 'is_approved' => 1]);
     // Un tabel de lucru al sincronizării FAN (regulile tabelului lui) și unul necunoscut (doar structura, niciun rând).
     $db->exec('CREATE TABLE fan_streets__sync LIKE fan_streets');
     $randNou($db, 'fan_streets__sync', ['county' => 'Cluj', 'locality' => 'Cluj-Napoca', 'street' => 'Strada Memorandumului', 'row_key' => 'k1']);
@@ -964,9 +1158,9 @@ try {
     }
     $idsMarcaj = $construita['ids'];
     $sursa = $conectare($sockMaria, $bazaSursa);
-    $verifica('rândurile cu marcaj: în fiecare tabel cu reguli de anonimizare și în fiecare tabel „doar structura” (' . count($idsMarcaj) . ' tabele)',
-        count(array_filter((array) $reguli->date['tabele'], static fn (array $r): bool => in_array($r['mod'], ['anonimizeaza', 'doar_structura'], true)))
-        === count($idsMarcaj), implode(', ', array_keys($idsMarcaj)));
+    $cuMarcajPus = array_values(array_filter(array_keys($idsMarcaj), static fn (string $t): bool => isset($oracolPastrate[$t]) || in_array($t, $oracolFaraRanduri, true)));
+    $verifica('rândurile cu marcaj: în fiecare tabel al clienților și în fiecare tabel „doar structura” ale oracolului testului (' . count($cuMarcajPus) . ' tabele)',
+        count($cuMarcajPus) === count($oracolPastrate) + count($oracolFaraRanduri) && isset($idsMarcaj['recenzie_aprobata']), implode(', ', array_keys($idsMarcaj)));
     $root->exec('CREATE DATABASE ' . $bazaTinta . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
     foreach ([[$utilizatorLive, $parolaLive, 'ALL', $bazaSursa], [$utilizatorCitire, $parolaCitire, 'SELECT', $bazaSursa], [$utilizatorTinta, $parolaTinta, 'ALL', $bazaTinta]]
         as [$u, $p, $drept, $b]) {
@@ -1073,6 +1267,19 @@ try {
     $verifica('baza copiei are tabele fără _verificare (pare baza unui site) → refuzat, neatinsă', $r['cod'] === 2 && str_contains($r['tot'], 'pare baza unui site')
         && $tabele($tinta) === ['settings'], $descrie($r));
     $tinta->exec('DROP TABLE settings');
+    // Legătura cu baza sursei nu merge (parola din .env-ul site-ului live nu e bună): refuz înainte de orice schimbare a copiei.
+    $timpEnv = filemtime($live . '/.env');
+    $envCopieInainte = (string) file_get_contents($copie . '/.env');
+    $rapoarteInainte = glob($copie . '/storage/verificare/sonde/incarcare-*.txt') ?: [];
+    $scrieEnvLive(['DB_PASSWORD' => $parolaLive . 'gresita'] + $envLive);
+    $r = $incarca(['--din=bioscem', '--da'], $raspunsuriAdmin);
+    $scrieEnvLive($envLive);
+    touch($live . '/.env', (int) $timpEnv);
+    clearstatcache();
+    $verifica('legătura cu baza sursei nu merge (parola din .env-ul live greșită) → refuzat (cod 2), nimic atins: copia fără niciun tabel, .env-ul copiei '
+        . 'neschimbat, nicio sare, niciun text salvat', $r['cod'] === 2 && str_contains($r['erori'], 'REFUZAT: legătura cu baza site-ului nu merge')
+        && $tabele($tinta) === [] && (string) file_get_contents($copie . '/.env') === $envCopieInainte && !file_exists($fisierSare)
+        && (glob($copie . '/storage/verificare/sonde/incarcare-*.txt') ?: []) === $rapoarteInainte && $curat($r), $descrie($r));
     $verifica('după refuzuri: copia goală, fără incarcat-la, cod-vechi sau sare; sursa și dosarul live neschimbate', $stearsa($tinta)
         && $sume($sursa) === $sumeSursa && $instantaneu($live) === $instantaneuLive);
 
@@ -1138,46 +1345,45 @@ try {
 
     $cuMarcaj = $cuValori($tinta, $cautateInCopie);
     $verifica('pe copie: niciun marcaj, telefon, jeton sau adresă a clientului inventat, în nicio coloană a niciunui tabel', $cuMarcaj === [], implode(', ', $cuMarcaj));
-    // Fiecare valoare personală a sursei (coloanele transformate fără condiție), căutată întreagă în tot textul copiei; nu se
-    // caută cele care apar și în conținutul copiat cum e (un nume de produs egal cu un nume de recenzie nu e o scurgere).
-    $transformate = [];
-    foreach ((array) $reguli->date['tabele'] as $tabel => $regula) {
-        foreach ((array) ($regula['transforma'] ?? []) as $coloana => $t) {
-            if (!isset($t['daca']) && !isset($t['daca_nenul']) && !in_array($t[0], ['cod_cupon', 'nume_cupon', 'cupon_comanda', 'subiect'], true)) {
-                $transformate[$tabel . '.' . $coloana] = true;
-            }
-        }
-    }
-    $pastrate = $textBaza($sursa, null);
+    // Fiecare valoare personală a sursei, căutată întreagă în tot textul copiei. Care coloane sunt personale spune oracolul
+    // testului (nu regulile): în tabelele clienților, fiecare coloană de text din afara listei lui (pe rândurile condiției, la
+    // cele schimbate doar pe unele rânduri). Nu se caută valorile care apar și în textul public al sursei (tabelele publice și
+    // setările, coloanele păstrate ale oracolului, rândurile din afara condițiilor: un nume de produs egal cu un nume de
+    // recenzie nu e o scurgere).
+    $tabeleSursa = $tabele($sursa);
     $valoriPersonale = [];
-    foreach (array_keys($transformate) as $tc) {
-        [$tabel, $coloana] = explode('.', $tc);
-        if (!in_array($tabel, $tabele($sursa), true)) {
-            continue;
-        }
-        foreach ($sursa->query('SELECT DISTINCT `' . $coloana . '` FROM `' . $tabel . '` WHERE `' . $coloana . '` IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN) as $v) {
-            $v = trim((string) $v);
-            if (mb_strlen($v) >= 6 && !preg_match('/^[0-9 .:-]+$/', $v)) {
-                $valoriPersonale[$v] = $tc;
-            }
-        }
-    }
     $textSursaPastrat = '';
-    foreach ($tabele($sursa) as $tabel) {
-        $regula = $reguli->tabel($tabel);
-        if ($regula === null || $regula['mod'] === 'doar_structura') {
+    foreach ($tabeleSursa as $tabel) {
+        if (in_array($tabel, $oracolFaraRanduri, true)) {
             continue;
         }
-        foreach ((array) ($regula['pastreaza'] ?? []) as $coloana) {
-            if (in_array($coloana, array_column($sursa->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = "
-                . $sursa->quote($tabel))->fetchAll(), 'COLUMN_NAME'), true)) {
-                foreach ($sursa->query('SELECT `' . $coloana . '` FROM `' . $tabel . '` WHERE `' . $coloana . '` IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN) as $v) {
-                    $textSursaPastrat .= "\x1f" . $v;
+        $coloaneSursa = $coloaneTabel($sursa, $tabel);
+        $personale = isset($oracolPastrate[$tabel]) ? $deSchimbat($tabel, $coloaneSursa) : [];
+        foreach ($coloaneSursa as $coloana => $c) {
+            if (!in_array($c['tip'], ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json'], true)) {
+                continue;
+            }
+            $conditie = $oracolConditii[$tabel . '.' . $coloana] ?? null;
+            if (in_array($coloana, $personale, true)) {
+                foreach ($sursa->query('SELECT DISTINCT `' . $coloana . '` FROM `' . $tabel . '` WHERE `' . $coloana . '` IS NOT NULL'
+                    . ($conditie !== null ? ' AND (' . $conditie . ')' : ''))->fetchAll(PDO::FETCH_COLUMN) as $v) {
+                    $v = trim((string) $v);
+                    if (mb_strlen($v) >= 6 && !preg_match('/^[0-9 .:-]+$/', $v)) {
+                        $valoriPersonale[$v] = $tabel . '.' . $coloana;
+                    }
+                }
+                if ($conditie === null) {
+                    continue;
                 }
             }
+            // Setările cu valorile inventate ale unui site adevărat (cheile, destinatarii) nu sunt text public: se schimbă pe copie.
+            foreach ($sursa->query('SELECT `' . $coloana . '` FROM `' . $tabel . '` WHERE `' . $coloana . '` IS NOT NULL'
+                . ($conditie !== null ? ' AND NOT (' . $conditie . ')' : '') . ($tabel === 'settings' ? ' AND `key` NOT IN ('
+                . implode(', ', array_map([$sursa, 'quote'], array_keys($setariCuMarcaj))) . ')' : ''))->fetchAll(PDO::FETCH_COLUMN) as $v) {
+                $textSursaPastrat .= "\x1f" . $v;
+            }
         }
     }
-    unset($pastrate);
     $textCopie = $textBaza($tinta);
     $scurse = [];
     foreach ($valoriPersonale as $v => $tc) {
@@ -1191,7 +1397,7 @@ try {
     $mk = $marcaj($tinta);
     $verifica('_verificare încheiat (sursa bioscem, anonimizat = 1, pasul gata, incarcat_la, versiunea regulilor, commit-ul codului sursei); incarcat-la '
         . 'scris (0600); sarea ștearsă', is_array($mk) && ($mk['sursa'] ?? '') === 'bioscem' && (int) ($mk['anonimizat'] ?? 0) === 1 && ($mk['pas'] ?? '') === 'gata'
-        && ($mk['incarcat_la'] ?? null) !== null && ($mk['versiune_reguli'] ?? '') === '1' && ($mk['cod_sursa_commit'] ?? '') === str_repeat('b', 40)
+        && ($mk['incarcat_la'] ?? null) !== null && ($mk['versiune_reguli'] ?? '') === $reguli->versiune() && ($mk['cod_sursa_commit'] ?? '') === str_repeat('b', 40)
         && is_file($fisierIncarcat) && (fileperms($fisierIncarcat) & 0777) === 0600 && !file_exists($fisierSare), json_encode($mk) ?: '');
     // Numerele de pe ecran = rândurile sursei, tabel cu tabel.
     preg_match_all('/^  ([a-z0-9_]+)\s+(\d+)$/m', substr($r['iesire'], (int) strpos($r['iesire'], 'Rândurile copiate')), $gasite, PREG_SET_ORDER);
@@ -1261,6 +1467,45 @@ try {
         && in_array('product_warnings', $copiateLaFel, true) && in_array('order_product_warnings', $copiateLaFel, true) && in_array('order_items', $copiateLaFel, true)
         && in_array('fan_streets__sync', $copiateLaFel, true) && $comparate > 150, implode(', ', $diferite));
 
+    // Oracolul testului pe rândurile cu marcaj: în fiecare tabel al clienților, fiecare coloană pe care oracolul o cere schimbată
+    // (nu cele din reguli) are pe copie altă valoare decât în sursă. Aceeași comparație pe referință (sursa copiată cum e) trebuie
+    // să le găsească pe toate la fel: așa se vede că verificarea chiar poate pica.
+    $raman = static function (PDO $db) use ($sursa, $oracolPastrate, $idsMarcaj, $coloaneTabel, $deSchimbat): array {
+        $r = [];
+        $verificate = 0;
+        foreach (array_keys($oracolPastrate) as $tabel) {
+            if (!isset($idsMarcaj[$tabel])) {
+                continue;
+            }
+            $s = $sursa->prepare('SELECT * FROM `' . $tabel . '` WHERE id = ?');
+            $s->execute([$idsMarcaj[$tabel]]);
+            $inSursa = (array) $s->fetch();
+            $s = $db->prepare('SELECT * FROM `' . $tabel . '` WHERE id = ?');
+            $s->execute([$idsMarcaj[$tabel]]);
+            $peCopie = $s->fetch();
+            foreach ($deSchimbat($tabel, $coloaneTabel($sursa, $tabel)) as $coloana) {
+                $v = $inSursa[$coloana] ?? null;
+                if ($v === null || trim((string) $v) === '') {
+                    continue;
+                }
+                $verificate++;
+                if (is_array($peCopie) && (string) ($peCopie[$coloana] ?? '') === (string) $v) {
+                    $r[] = $tabel . '.' . $coloana;
+                }
+            }
+        }
+        return ['raman' => $r, 'verificate' => $verificate];
+    };
+    $peCopie = $raman($tinta);
+    $peReferinta = $raman($ref);
+    $deSchimbatToate = array_sum(array_map(static fn (string $t): int => count($deSchimbat($t, $coloaneTabel($sursa, $t))), array_keys($oracolPastrate)));
+    $verifica('oracolul testului pe rândurile cu marcaj: niciuna din cele ' . $peCopie['verificate'] . ' valori pe care oracolul le cere schimbate (fiecare coloană '
+        . 'de text sau de dată a tabelelor clienților din afara listei lui, oricare i-ar fi regula, are marcajul) nu e pe copie la fel ca în sursă; pe referință '
+        . '(sursa copiată cum e) toate ' . count($peReferinta['raman']) . ' sunt la fel (verificarea poate pica)', $peCopie['raman'] === []
+        && $peCopie['verificate'] === $deSchimbatToate && $deSchimbatToate > 80 && count($peReferinta['raman']) === $peReferinta['verificate']
+        && $peReferinta['verificate'] === $deSchimbatToate, 'pe copie: ' . implode(', ', $peCopie['raman']) . ' (' . $peCopie['verificate'] . '/' . $deSchimbatToate
+        . ') | pe referință: ' . count($peReferinta['raman']) . '/' . $peReferinta['verificate']);
+
     // Pseudonimele: aceeași adresă a sursei → același pseudonim în toate tabelele; adrese diferite → pseudonime diferite.
     $val = static function (PDO $db, string $tabel, string $coloana, int $id): mixed {
         $s = $db->prepare('SELECT `' . $coloana . '` FROM `' . $tabel . '` WHERE id = ?');
@@ -1292,15 +1537,20 @@ try {
     $adresa = $tinta->query('SELECT * FROM user_addresses WHERE id = ' . (int) $idsMarcaj['user_addresses'])->fetch();
     $comanda = $tinta->query('SELECT * FROM orders WHERE id = ' . (int) $idsMarcaj['orders'])->fetch();
     $awbLista = json_decode((string) $comanda['fan_awb_list'], true);
-    $verifica('rândurile cu marcaj: telefonul 07…, adresa „Strada Verificare N”, codul poștal 000000, numele „Client …”, nota „[text anonimizat]”, '
-        . 'AWB-urile DEMO<id> (și în lista coletelor, cu adresa de urmărire), firma și CUI-ul inventate, orașul și totalul păstrate',
+    $verifica('rândurile cu marcaj: telefonul 07…, adresa „Strada Verificare N”, codul poștal 000000, numele „Client …”, eticheta adresei și nota „[text '
+        . 'anonimizat]”, AWB-urile DEMO<id> (și în lista coletelor, cu adresa de urmărire), firma și CUI-ul inventate, orașul și totalul păstrate',
         preg_match('/^07\d{8}$/', (string) $val($tinta, 'users', 'phone', $idsMarcaj['users'])) === 1 && str_starts_with((string) $adresa['street'], 'Strada Verificare ')
+        && str_starts_with((string) $adresa['label'], '[text anonimizat, ')
         && $adresa['postcode'] === '000000' && $adresa['street_no'] === '1' && $adresa['address_line2'] === null && str_starts_with((string) $adresa['full_name'], 'Client ')
         && str_starts_with((string) $comanda['notes'], '[text anonimizat, ') && $comanda['fan_awb'] === 'DEMO' . $comanda['id']
         && ($awbLista[0]['awb'] ?? '') === 'DEMO' . $comanda['id'] && ($awbLista[1]['awb'] ?? '') === 'DEMO' . $comanda['id'] . '-2'
         && str_contains((string) $comanda['fan_tracking_url'], 'DEMO' . $comanda['id']) && preg_match('/^Firma [0-9A-F]{6} SRL$/', (string) $comanda['billing_company_name']) === 1
         && preg_match('/^RO\d{8}$/', (string) $comanda['billing_company_tax_id']) === 1 && $comanda['billing_city'] === 'Cluj-Napoca' && $comanda['total'] === '123.45',
         json_encode([$adresa, $comanda], JSON_UNESCAPED_UNICODE) ?: '');
+    $aprobata = (string) $val($tinta, 'product_reviews', 'review_text', $idsMarcaj['recenzie_aprobata']);
+    $verifica('recenzia aprobată (publică) cu adrese de email în text: textul rămâne, adresa clientului devine pseudonimul lui din users, cealaltă tot un '
+        . 'pseudonim @verificare.invalid (A1 a rămas strictă și a trecut)', preg_match('/^Recomand! Am întrebat la ' . preg_quote($e, '/')
+        . ' și la u[0-9a-f]{12}@verificare\.invalid, răspuns rapid\.$/u', $aprobata) === 1, $aprobata);
     $cupon = $tinta->query('SELECT * FROM coupons WHERE id = ' . (int) $idsMarcaj['coupons'])->fetch();
     $jetoaneSursa = $sursa->query('SELECT token FROM order_payment_links')->fetchAll(PDO::FETCH_COLUMN);
     $jetoaneCopie = $tinta->query('SELECT token FROM order_payment_links')->fetchAll(PDO::FETCH_COLUMN);
@@ -1426,6 +1676,20 @@ try {
     $r = $incarca(['--din=bioscem', '--da'], $raspunsuriAdmin);
     $verifica('fără --reincarca peste o copie terminată → refuzat, copia neatinsă', $r['cod'] === 2 && str_contains($r['tot'], 'pe copie e deja o încărcare (sursa bioscem, terminată)')
         && $val($tinta, 'users', 'email', $idsMarcaj['users']) === $e1, $descrie($r));
+    // --reincarca cu o legătură a sursei care nu merge: refuzat înainte să șteargă copia de dinainte (cod 2 = nimic atins).
+    $sumeTerminata = $sume($tinta);
+    $envCopieInainte = (string) file_get_contents($copie . '/.env');
+    $timpEnv = filemtime($live . '/.env');
+    $scrieEnvLive(['DB_PASSWORD' => $parolaLive . 'gresita'] + $envLive);
+    $r = $incarca(['--din=bioscem', '--reincarca', '--da'], $raspunsuriAdmin);
+    $scrieEnvLive($envLive);
+    touch($live . '/.env', (int) $timpEnv);
+    clearstatcache();
+    $mk = $marcaj($tinta);
+    $verifica('--reincarca cu legătura sursei care nu merge → refuzat (cod 2), copia terminată de dinainte neatinsă (CHECKSUM TABLE, anonimizat = 1, '
+        . 'incarcat-la), .env-ul copiei neschimbat, nicio sare', $r['cod'] === 2 && str_contains($r['erori'], 'REFUZAT: legătura cu baza site-ului nu merge')
+        && $sume($tinta) === $sumeTerminata && (int) ($mk['anonimizat'] ?? 0) === 1 && is_file($fisierIncarcat)
+        && (string) file_get_contents($copie . '/.env') === $envCopieInainte && !file_exists($fisierSare) && $curat($r), $descrie($r));
     $r = $incarca(['--din=bioscem', '--reincarca', '--da'], $raspunsuriAdmin);
     $e2 = (string) $val($tinta, 'users', 'email', $idsMarcaj['users']);
     $verifica('--reincarca: „GATA”, cu altă sare (alt pseudonim pentru aceeași adresă), copia de dinainte ștearsă întâi', $r['cod'] === 0
@@ -1478,7 +1742,7 @@ try {
     // O încărcare oprită: alte reguli (versiunea), sarea lipsă → --reia refuzat; sterge.php o șterge.
     $r = $incarca(['--din=bioscem', '--reincarca', '--da', '--buget=0'], $raspunsuriAdmin);
     $scrieReguli(static function (array &$d): void {
-        $d['versiune'] = 2;
+        $d['versiune'] = (int) $d['versiune'] + 1;
     });
     $r2 = $incarca(['--din=bioscem', '--reia', '--da'], $raspunsuriAdmin);
     $scrieReguli(null);
@@ -1555,6 +1819,40 @@ try {
             && preg_match('/^  NU    ' . $asertiune . '[ :]/m', $r['iesire']) === 1 && str_contains($r['iesire'], 'copia a fost ștearsă singură') && $stearsa($tinta)
             && $curat($r), $descrie($r));
     }
+    // Textele libere ale clienților și ale adminilor trecute greșit în „pastreaza” (regulile rămân „bune” pentru probleme()):
+    // marcajul pus de oracol (cu adresa clientului) ajunge în căutarea generică A1, care pică și numește coloana; copia se șterge.
+    foreach (['contact_form_messages.subject', 'contact_form_messages.message', 'orders.admin_notes', 'orders.erp_last_error', 'orders.edit_unlock_reason',
+        'orders.manual_discount_reason', 'orders.payment_error', 'user_addresses.label'] as $tc) {
+        [$tabel, $coloana] = explode('.', $tc);
+        $scrieReguli(static function (array &$d) use ($tabel, $coloana): void {
+            unset($d['tabele'][$tabel]['transforma'][$coloana]);
+            $d['tabele'][$tabel]['pastreaza'][] = $coloana;
+        });
+        $bune = Reguli::din(require $reguliCopie)->probleme() === [];
+        $r = $incarca(['--din=bioscem', '--reincarca', '--da'], $raspunsuriAdmin);
+        $scrieReguli(null);
+        $verifica('A1 pică (regula: ' . $tc . ' păstrată cum e): cod 1, „NU    A1” cu numele coloanei, copia ștearsă singură, fără secrete pe ecran', $bune
+            && $r['cod'] === 1 && preg_match('/^  NU    A1 .*adresele sunt în: (.*, )?' . preg_quote($tc, '/') . ' \(\d+\)/m', $r['iesire']) === 1
+            && str_contains($r['iesire'], 'copia a fost ștearsă singură') && $stearsa($tinta) && $curat($r), $descrie($r));
+    }
+    // O adresă într-o coloană păstrată (starea coletului dată de FAN), cu regulile neschimbate: A1 pică și numește coloana.
+    $comandaFan = (int) $sursa->query('SELECT MIN(id) FROM orders')->fetchColumn();
+    $stareFan = $sursa->query('SELECT fan_tracking_status FROM orders WHERE id = ' . $comandaFan)->fetchColumn();
+    $sursa->prepare('UPDATE orders SET fan_tracking_status = ?, updated_at = updated_at WHERE id = ?')->execute(['Livrat, semnat de ' . $emailClient, $comandaFan]);
+    $r = $incarca(['--din=bioscem', '--reincarca', '--da'], $raspunsuriAdmin);
+    $sursa->prepare('UPDATE orders SET fan_tracking_status = ?, updated_at = updated_at WHERE id = ?')->execute([$stareFan === false ? null : $stareFan, $comandaFan]);
+    $verifica('o adresă de email într-o coloană păstrată (orders.fan_tracking_status): A1 pică și numește doar tabelul și coloana, nu adresa; copia ștearsă singură',
+        $r['cod'] === 1 && preg_match('/^  NU    A1 .*adresele sunt în: orders\.fan_tracking_status \(1\)$/m', $r['iesire']) === 1
+        && str_contains($r['iesire'], 'copia a fost ștearsă singură') && $stearsa($tinta) && $curat($r), $descrie($r));
+    // Un refuz venit după ce copia s-a schimbat (o mutație a pasului): nu „cod 2, nimic atins”, ci oprirea cu ștergerea copiei.
+    $refuzTarziu = ["        \$this->pregatesteEnv();\n", "        throw new Refuz('mutație de test: un refuz după ce copia s-a schimbat');\n"];
+    $bune = substr_count($libOriginal, $refuzTarziu[0]) === 1;
+    file_put_contents($libCopie, str_replace($refuzTarziu[0], $refuzTarziu[1], $libOriginal));
+    $r = $incarca(['--din=bioscem', '--reincarca', '--da'], $raspunsuriAdmin);
+    file_put_contents($libCopie, $libOriginal);
+    $verifica('un refuz după ce copia s-a schimbat (mutație): cod 1, „NU” cu motivul, ultimul rând „OPRIT: … copia a fost ștearsă singură”, nu cod 2', $bune
+        && $r['cod'] === 1 && str_contains($r['iesire'], 'NU    mutație de test: un refuz după ce copia s-a schimbat')
+        && str_starts_with($ultimul($r['iesire']), 'OPRIT: încărcarea nu s-a terminat, iar copia a fost ștearsă singură') && $stearsa($tinta) && $curat($r), $descrie($r));
     $verifica('după mutații: sursa neschimbată, dosarul live neatins', $sume($sursa) === $sumeSursa && $instantaneu($live) === $instantaneuLive);
 
     // =================================================================

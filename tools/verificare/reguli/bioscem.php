@@ -31,7 +31,8 @@ declare(strict_types=1);
  * (`admin<id>@verificare.invalid`), `telefon` (`07` + 8 cifre din H), `prenume` (`Client`), `nume` (6 hex mari din
  * H(email): `'email' => coloana`), `nume_client` / `nume_abonat` (`Client …` / `Abonat …` + 6 hex din H(nume): același
  * nume, același pseudonim, și în tabele diferite), `adresa` (`Strada Verificare N`), `numar_strada` (`1`), `cod_postal`
- * (`000000`), `text` (`[text anonimizat, N caractere]`; cu `'daca' => [coloana => valoare]` doar pe acele rânduri), `ref`
+ * (`000000`), `text` (`[text anonimizat, N caractere]`; cu `'daca' => [coloana => valoare]` doar pe acele rânduri, iar pe
+ * celelalte textul, public, rămâne cu fiecare adresă de email din el schimbată cu pseudonimul ei E), `ref`
  * (`anon-<id>`), `parola` (bcrypt al unei parole aleatoare, pe orice rând), `nul` (NULL, sau gol pe o coloană NOT NULL),
  * `valoare` (`'valoare' => …`, cu `'daca_nenul' => coloana`), `firma`, `cui`, `reg_com`, `subiect` (`'din' => coloana`),
  * `token` (64 hex noi), `cod_cupon` / `nume_cupon` / `cupon_comanda` (codurile unice devin `VERIF-<id>`, și în comenzi;
@@ -46,7 +47,8 @@ declare(strict_types=1);
 
 return [
     'site' => 'bioscem',
-    'versiune' => 1,
+    // 2 (revizuirea WP-09): user_addresses.label transformată; adresele de email din recenziile aprobate, schimbate cu pseudonimul.
+    'versiune' => 2,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -191,8 +193,10 @@ return [
                 'password_hash' => ['parola'],
                 'google_id' => ['nul'],
             ]],
-        'user_addresses' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'user_id', 'label', 'city', 'county', 'is_default', 'created_at'],
+        'user_addresses' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'user_id', 'city', 'county', 'is_default', 'created_at'],
             'transforma' => [
+                // Eticheta o scrie clientul în contul lui („Acasă”, „Birou”, dar și „La mama, Elena …”): un text liber al lui.
+                'label' => ['text'],
                 'full_name' => ['nume_client'],
                 'phone' => ['telefon'],
                 'street' => ['adresa'],
@@ -294,12 +298,14 @@ return [
             'transforma' => [
                 'user_name' => ['nume_client'],
                 'user_email' => ['email'],
-                // Cele aprobate sunt deja publice pe site.
+                // Cele aprobate sunt deja publice pe site și rămân, dar cu adresele de email din text schimbate cu pseudonimul lor
+                // (le-a scris clientul; A1 rămâne strictă și pe acest tabel).
                 'review_text' => ['text', 'daca' => ['is_approved' => 0]],
             ]],
         'reviews' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'product_id', 'rating', 'is_approved', 'created_at'],
             'transforma' => [
                 'user_name' => ['nume_client'],
+                // Ca la product_reviews (același text, același rezultat: migrarea recenziilor vechi le potrivește și după text).
                 'review_text' => ['text', 'daca' => ['is_approved' => 0]],
             ]],
 
