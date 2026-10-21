@@ -797,13 +797,14 @@ final class ComparaCalcule
         return ['primul' => $primul, 'cazuri' => $cazuri, 'avertismente' => array_map('intval', (array) ($gata['avertismente'] ?? []))];
     }
 
-    /** Socketul bazei dat PHP-ului acestui proces (`pdo_mysql.default_socket`), dat mai departe proceselor copil. @return list<string> */
     /**
      * Un PHP copil (lucrătorul, migrările), cu aceleași extensii ca procesul de acum (lib/php-cli.php): pe Hostinger
      * /opt/alt/php83/usr/bin/php nu încarcă sodium singur, iar comanda proprietarului (`$PHP`, cu `-d extension=sodium.so`)
      * nu ajunge la PHP_BINARY. Sonda copilului rulează o dată pe PHP, cu mediul și felul lucrătorilor (țevi sau fișiere);
      * pentru fiecare extensie din PhpCli::EXTENSII pe care o avem aici, iar copilul pornit simplu nu, `-d extension=<nume>.so`
-     * dacă modulul e în extension_dir-ul lui. Ce s-a adăugat se spune într-un rând (fără calea PHP-ului).
+     * dacă modulul e în extension_dir-ul lui. Ce s-a adăugat se spune într-un rând (fără calea PHP-ului); la fel ce nu se poate
+     * aduce așa (modulul lipsește din extension_dir-ul copilului, de exemplu un --php-vechi fără pdo_mysql): atunci lucrătorul
+     * sau migrările pică mai încolo, iar rândul spune de ce.
      *
      * @return list<string> executabilul și argumentele `-d extension=…`
      */
@@ -813,11 +814,16 @@ final class ComparaCalcule
             $sonda = $this->sondaPhp([$php]);
             $c = $sonda === null ? ['argumente' => [], 'adaugate' => [], 'lipsa' => []] : PhpCli::pentruCopil($sonda);
             $this->extensiiCopil[$php] = $c['argumente'];
+            $cine = $php === PHP_BINARY ? 'acestei comenzi' : 'codului vechi (--php-vechi)';
+            if ($c['lipsa'] !== []) {
+                $this->spune('  extensiile PHP-ului ' . $cine . ' în procesele copil: fără ' . implode(', ', $c['lipsa']) . ' ('
+                    . (count($c['lipsa']) === 1 ? 'modulul nu e' : 'modulele nu sunt') . ' în extension_dir-ul lui, nici cu -d)');
+            }
             if ($c['argumente'] !== []) {
                 // Verificat: cu -d, copilul chiar le are.
                 $dupa = $this->sondaPhp(array_merge([$php], $c['argumente']));
                 $tot = array_values(array_filter($c['adaugate'], static fn (string $e): bool => $dupa === null || empty($dupa['ext'][$e])));
-                $this->spune('  extensiile PHP-ului ' . ($php === PHP_BINARY ? 'acestei comenzi' : 'codului vechi (--php-vechi)') . ' în procesele copil: '
+                $this->spune('  extensiile PHP-ului ' . $cine . ' în procesele copil: '
                     . implode(', ', $c['adaugate']) . ' doar cu ' . implode(' ', $c['argumente']) . ($tot !== [] ? ' (tot lipsesc: ' . implode(', ', $tot) . ')' : ''));
             }
         }
@@ -840,6 +846,7 @@ final class ComparaCalcule
         return PhpCli::citesteSonda($r['iesire']);
     }
 
+    /** Socketul bazei dat PHP-ului acestui proces (`pdo_mysql.default_socket`), dat mai departe proceselor copil. @return list<string> */
     private static function iniSocket(): array
     {
         $socket = (string) ini_get('pdo_mysql.default_socket');

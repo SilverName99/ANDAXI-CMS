@@ -11,16 +11,33 @@ declare(strict_types=1);
  * așa, PHP_BINARY e chiar acest executabil, ca /opt/alt/php83/usr/bin/php pe server, deci și procesele copil pornite cu
  * PHP_BINARY (cu orice mediu, și cu unul gol) n-au extensiile, până primesc `-d extension=<nume>.so`.
  *
+ * Cu `$faraModul`, nici modulele lor nu sunt în `extension_dir`-ul lui (un dosar cu legături spre celelalte module, dat cu
+ * `-d extension_dir=…`): ca un alt PHP din /opt/alt (`--php-vechi`) care n-are deloc extensia, deci nici `-d` nu o aduce.
+ *
  * Întoarce calea executabilului (fără legături, cum o vede PHP_BINARY). Aruncă o excepție dacă PHP-ul făcut așa tot are o
- * extensie scoasă sau, cu `-d extension=<nume>.so`, tot nu o are (atunci testul n-ar dovedi nimic).
+ * extensie scoasă sau, cu `-d extension=<nume>.so`, tot nu o are (atunci testul n-ar dovedi nimic); cu `$faraModul`, dacă
+ * `-d` o aduce.
  *
  * @param list<string> $scoase
  */
-function php_fara_extensii(string $dosar, array $scoase, string $php = PHP_BINARY): string
+function php_fara_extensii(string $dosar, array $scoase, string $php = PHP_BINARY, bool $faraModul = false): string
 {
     $confd = $dosar . '/conf.d';
     if (!is_dir($confd) && !mkdir($confd, 0770, true) && !is_dir($confd)) {
         throw new RuntimeException('nu pot face ' . $confd);
+    }
+    $dirModule = '';
+    if ($faraModul) {
+        $dirModule = $dosar . '/module';
+        $sursa = rtrim(trim((string) shell_exec(escapeshellarg($php) . ' -r ' . escapeshellarg('echo ini_get("extension_dir");') . ' 2>/dev/null')), '/');
+        if ($sursa === '' || !is_dir($sursa) || (!is_dir($dirModule) && !mkdir($dirModule, 0770, true) && !is_dir($dirModule))) {
+            throw new RuntimeException('nu pot face ' . $dirModule . ' (extension_dir: ' . $sursa . ')');
+        }
+        foreach (glob($sursa . '/*.so') ?: [] as $modul) {
+            if (!in_array(basename($modul, '.so'), $scoase, true) && !file_exists($dirModule . '/' . basename($modul))) {
+                symlink($modul, $dirModule . '/' . basename($modul));
+            }
+        }
     }
     foreach (array_filter(array_map('trim', explode(',', (string) php_ini_scanned_files()))) as $fisier) {
         $text = (string) @file_get_contents($fisier);
@@ -33,7 +50,7 @@ function php_fara_extensii(string $dosar, array $scoase, string $php = PHP_BINAR
     file_put_contents($executabil, "#!/bin/bash\n"
         . '# PHP-ul testului fără ' . implode(', ', $scoase) . ' (le încarcă doar -d extension=<nume>.so), ca /opt/alt/php83 pe Hostinger fără sodium.' . "\n"
         . 'PHP_INI_SCAN_DIR=' . escapeshellarg($confd) . "\nexport PHP_INI_SCAN_DIR\n"
-        . 'exec -a "$0" ' . escapeshellarg($php) . ' "$@"' . "\n");
+        . 'exec -a "$0" ' . escapeshellarg($php) . ($dirModule !== '' ? ' -d extension_dir=' . escapeshellarg($dirModule) : '') . ' "$@"' . "\n");
     chmod($executabil, 0755);
     $executabil = (string) realpath($executabil);
     $are = static function (array $argumente) use ($executabil, $scoase): array {
@@ -45,7 +62,8 @@ function php_fara_extensii(string $dosar, array $scoase, string $php = PHP_BINAR
     };
     $simplu = $are([]);
     $cuD = $are(array_merge(...array_map(static fn (string $e): array => ['-d', 'extension=' . $e . '.so'], $scoase)));
-    if ($simplu['php'] !== $executabil || in_array(true, (array) $simplu['ext'], true) || in_array(false, (array) $cuD['ext'], true) || $cuD['ext'] === []) {
+    if ($simplu['php'] !== $executabil || in_array(true, (array) $simplu['ext'], true) || $cuD['ext'] === []
+        || in_array($faraModul, (array) $cuD['ext'], true)) {
         throw new RuntimeException('PHP-ul fără ' . implode(', ', $scoase) . ' nu iese cum trebuie: ' . json_encode([$simplu, $cuD]));
     }
     return $executabil;

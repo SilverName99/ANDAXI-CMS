@@ -391,8 +391,8 @@ foreach ($phpVechi as $binar) {
 $hcdn = ['cod' => 200, 'antete' => ['server' => 'hcdn', 'content-type' => 'text/plain'],
     'corp' => "User-agent: Googlebot\r\nDisallow: /  \r\n\r\nUser-agent: *\r\nAllow: /\r\n"];
 $temporar = 'verificare-proba.hostingersite.com';
-$cdn = static fn (array $r, ?string $g = 'verificare-proba.hostingersite.com', bool $inchis = true, bool $noindex = true, bool $cod = true): ?string
-    => RobotiGazda::cdnHostinger($r, $g, $inchis, $noindex, $cod);
+$cdn = static fn (array $r, ?string $g = 'verificare-proba.hostingersite.com', bool $inchis = true, bool $noindex = true, bool $cod = true,
+    bool $poarta = true): ?string => RobotiGazda::cdnHostinger($r, $g, $inchis, $noindex, $cod, $poarta);
 $motivCu = static fn (?string $motiv, string $text): bool => $motiv !== null && str_contains($motiv, $text);
 $verifica('robots, CDN-ul Hostinger pe domeniul temporar (textul lui, server: hcdn, fără antetele site-ului, poarta închisă, noindex, '
     . 'Robots::text „Disallow: /”) → INFO, nu NU (și cu \\r\\n și spații la capăt de rând)', $cdn($hcdn) === null
@@ -416,9 +416,21 @@ $verifica('robots, hcdn pe un domeniu propriu (sau fără domeniu, subdomeniu ma
     $motivCu($cdn($hcdn, 'verificare.exemplu.ro'), 'domeniul nu e unul temporar') && $motivCu($cdn($hcdn, null), 'domeniul nu e unul temporar')
     && $motivCu($cdn($hcdn, 'a.b.hostingersite.com'), 'temporar') && $motivCu($cdn($hcdn, 'x.hostingersite.com.exemplu.ro'), 'temporar')
     && $motivCu($cdn($hcdn, 'hostingersite.com'), 'temporar') && $cdn($hcdn, 'VERIFICARE-PROBA.hostingersite.com') === null);
-$verifica('robots, hcdn pe domeniul temporar, dar poarta nu închide site-ul / fără noindex / Robots::text greșit → NU, cu motivul',
+$verifica('robots, hcdn pe domeniul temporar, dar poarta nu închide site-ul / fără noindex / Robots::text greșit / robots.txt-ul porții schimbat → NU, cu motivul',
     $motivCu($cdn($hcdn, $temporar, false), 'poarta nu închide') && $motivCu($cdn($hcdn, $temporar, true, false), 'noindex și no-store')
-    && $motivCu($cdn($hcdn, $temporar, true, true, false), 'Robots::text()'));
+    && $motivCu($cdn($hcdn, $temporar, true, true, false), 'Robots::text()')
+    && $motivCu($cdn($hcdn, $temporar, true, true, true, false), 'nici poarta (src/Support/Verificare.php) nu mai răspunde la /robots.txt'));
+// Pe domeniul temporar nicio cerere spre /robots.txt nu ajunge la poartă, deci stare.php îi citește codul: ramura ei, neschimbată.
+$codPoarta = (string) file_get_contents($radacina . '/src/Support/Verificare.php');
+$ramuraPoarta = "if (\$citire && \$cale === '/robots.txt') {\n            self::raspundeText(200, \"User-agent: *\\nDisallow: /\\n\", \$metoda);\n        }";
+$verifica('robots, codul porții: ramura /robots.txt cu „Disallow: /” (cea din src/Support/Verificare.php) → DA; schimbată (Allow, alt text, altă cale, '
+    . 'fără ea, doar textul fără ramură) → NU', substr_count($codPoarta, $ramuraPoarta) === 1 && RobotiGazda::textPoarta($codPoarta)
+    && RobotiGazda::textPoarta(str_replace("\n            ", "\n\t", $codPoarta))
+    && !RobotiGazda::textPoarta(str_replace($ramuraPoarta, str_replace('Disallow: /', 'Allow: /', $ramuraPoarta), $codPoarta))
+    && !RobotiGazda::textPoarta(str_replace($ramuraPoarta, str_replace('Disallow: /\\n', 'Disallow: /admin\\n', $ramuraPoarta), $codPoarta))
+    && !RobotiGazda::textPoarta(str_replace($ramuraPoarta, str_replace("'/robots.txt'", "'/robots.txt.vechi'", $ramuraPoarta), $codPoarta))
+    && !RobotiGazda::textPoarta(str_replace($ramuraPoarta, '', $codPoarta))
+    && !RobotiGazda::textPoarta('self::raspundeText(200, "User-agent: *\\nDisallow: /\\n", $metoda);'));
 
 // PHP-ul liniei de comandă și extensiile lui (tools/verificare/lib/php-cli.php): sonda, ce se adaugă cu -d, nevoile lui pdo_mysql.
 $sondaAici = PhpCli::sondeaza([PHP_BINARY]);
@@ -1234,6 +1246,21 @@ try {
                 && !str_contains($s['iesire'], 'INFO  /robots.txt îl dă CDN-ul'), $randuriNu($s['iesire']));
         }
         $modCdn('hcdn', $portTemporar);
+        // Mutația: poarta copiei temporare răspunde la /robots.txt cu „Allow: /”. Cererea n-ajunge la ea (o dă CDN-ul), deci doar
+        // citirea codului o prinde: rândul NU, nu INFO.
+        $fisierPoarta = $copieTemporara . '/src/Support/Verificare.php';
+        $originalPoarta = (string) file_get_contents($fisierPoarta);
+        $ramura = "self::raspundeText(200, \"User-agent: *\\nDisallow: /\\n\", \$metoda);";
+        try {
+            file_put_contents($fisierPoarta, str_replace($ramura, str_replace('Disallow: /', 'Allow: /', $ramura), $originalPoarta));
+            $s = $stareTemporar();
+        } finally {
+            file_put_contents($fisierPoarta, $originalPoarta);
+        }
+        $verifica('domeniul temporar, robots.txt-ul CDN-ului, dar poarta copiei schimbată să dea „Allow: /” (mutația): rândul NU (poarta numită), '
+            . 'garda 4 NU, fără INFO și fără „GATA”', substr_count($originalPoarta, $ramura) === 1 && $s['cod'] === 1
+            && $randNu($s['iesire'], '/robots.txt: „Disallow: /” (îl dă CDN-ul Hostinger (hcdn), dar nici poarta (src/Support/Verificare.php)')
+            && $randNu($s['iesire'], '4. robots.txt') && !str_contains($s['iesire'], 'INFO  /robots.txt îl dă CDN-ul'), $randuriNu($s['iesire']));
         rename($copieTemporara . '/.env', $copieTemporara . '/.env.t');
         $s = $stareTemporar();
         rename($copieTemporara . '/.env.t', $copieTemporara . '/.env');
@@ -1516,7 +1543,10 @@ try {
         && ($azi['sarite'] ?? -1) === 0 && (fileperms($copie . '/storage/verificare/emailuri-azi.json') & 0777) === 0600, json_encode($azi) ?: '');
 
     // Limita de 100 pe zi și emailurile fără căsuță, din linia de comandă (ca un cron).
-    file_put_contents($copie . '/storage/verificare/emailuri-azi.json', json_encode(['zi' => date('Y-m-d'), 'trimise' => 100, 'sarite' => 0]));
+    // Ziua contorului e a copiei (fusul ei, APP_TIMEZONE, Europe/Bucharest), nu a testului (UTC): seara, după 21:00/22:00 UTC, ele diferă.
+    $ziCopiei = $inCopie('return date("Y-m-d");');
+    file_put_contents($copie . '/storage/verificare/emailuri-azi.json', json_encode(['zi' => is_string($ziCopiei) ? $ziCopiei : date('Y-m-d'),
+        'trimise' => 100, 'sarite' => 0]));
     $mesajeInainte = count($mesajeSmtp());
     $rez = $inCopie('try { \App\Support\OrderMailer::sendCustom("abonat.newsletter@exemplu.ro", "Newsletter", "<p>Corp</p>", \App\Support\Settings::all(\App\Support\Database::connection((require "' . $copie . '/config/app.php")["db"])), null); return "trimis"; } catch (Throwable $e) { return $e->getMessage(); }');
     $azi = json_decode((string) @file_get_contents($copie . '/storage/verificare/emailuri-azi.json'), true);

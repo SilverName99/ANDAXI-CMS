@@ -113,12 +113,14 @@ cd ~/domains/<domeniul-verificare>/public_html
 ls /opt/alt | grep php              # versiunile PHP; alege-o pe cea de la pasul 1.2, de exemplu php83
 PHP=/opt/alt/php83/usr/bin/php
 $PHP tools/verificare/stare.php
-#   înainte de configurare, ultimul rând: „NECONFIGURAT: site-ul e închis publicului (503) …”
-#   dacă arată „NU    extensia sodium (CLI)” și dedesubt „INFO  Lipsește extensia PHP sodium … PHP="…"”:
+#   pe Hostinger, prima dată ultimul rând e „NU E GATA: 2 verificări au ieșit NU …”, cele două fiind
+#   „NU    extensia sodium (CLI)” (cu dedesubt „INFO  Lipsește extensia PHP sodium … PHP="…"”) și
+#   „NU    .env există (îl scrie configureaza.php)” (încă nu e configurat; cu alte rânduri NU, trimite-ne textul).
 #   PHP-ul acesta nu încarcă singur sodium, deși îl are pe disc (așa e pe Hostinger). Scrii rândul din INFO:
 PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
 $PHP tools/verificare/stare.php
-#   acum „DA    extensia sodium (CLI)”; de aici încolo toate comenzile cu acest $PHP (și la pașii 5–8)
+#   acum „DA    extensia sodium (CLI)” și ultimul rând „NECONFIGURAT: site-ul e închis publicului (503) …”
+#   (singurul NU rămas e .env-ul); de aici încolo toate comenzile cu acest $PHP (și la pașii 5–8)
 $PHP tools/verificare/configureaza.php
 #   întreabă: numele bazei, utilizatorul bazei, parola bazei (nu se vede când scrii),
 #   emailul tău (emailurile de test merg doar acolo; adresa stă doar în .env-ul de pe server,
@@ -527,11 +529,13 @@ ceilalți roboți 401 la poartă; neconfigurat, 503) în locul rândului robots.
 3. domeniul site-ului (dosarul `~/domains/<gazda>/public_html`, același cu `APP_URL`) e unul temporar: un singur nume
    înaintea lui `hostingersite.com`;
 4. fără parolă, `/` răspunde 401 (neconfigurat: 503), cu `X-Robots-Tag: noindex` și `Cache-Control: no-store`;
-5. `Robots::text()` dă „User-agent: * / Disallow: /” (dacă o cerere ar ajunge la site).
+5. în cod robots.txt-ul rămâne „User-agent: * / Disallow: /”: al porții (ramura `/robots.txt` din
+   `src/Support/Verificare.php`, `RobotiGazda::textPoarta()`; nicio cerere spre `/robots.txt` nu ajunge la ea, deci
+   `stare.php` îi citește codul, ca la celelalte gărzi) și al aplicației (`Robots::text()`, garda 4).
 
 Orice altceva rămâne NU, cu motivul în paranteză: site-ul care răspunde cu antetele lui și alt text, alt text al
-CDN-ului, alt server, un domeniu propriu (acolo CDN-ul se oprește), poarta deschisă, fără noindex, `Robots::text()`
-greșit.
+CDN-ului, alt server, un domeniu propriu (acolo CDN-ul se oprește), poarta deschisă, fără noindex, robots.txt-ul porții
+schimbat în cod, `Robots::text()` greșit.
 
 ### PHP-ul liniei de comandă și extensiile (`lib/php-cli.php`)
 
@@ -551,7 +555,10 @@ există; `-d extension=sodium.so` îl încarcă (21 oct 2026). Bifa din hPanel �
   pentru fiecare extensie din `PhpCli::EXTENSII` (mysqlnd, pdo, pdo_mysql, sodium, mbstring, intl, gd, curl, openssl,
   zip) pe care o are comanda, iar copilul pornit simplu nu, cu modulul în `extension_dir`-ul lui (mysqlnd și pdo
   înaintea lui pdo_mysql); o a doua sondă verifică, iar textul comparației spune într-un rând ce s-a adăugat (fără calea
-  PHP-ului). Altfel `$PHP` (cu `-d`) n-ar ajunge la copii: PHP_BINARY e doar executabilul. `tools/inghetare/`
+  PHP-ului). O extensie al cărei modul lipsește din `extension_dir`-ul copilului (de exemplu un `--php-vechi` din
+  `/opt/alt` fără pdo_mysql) nu se poate aduce așa: un rând „… în procesele copil: fără pdo_mysql (modulul nu e în
+  extension_dir-ul lui, nici cu -d)”, apoi lucrătorul pică (alt PHP, sau extensia bifată pentru el). Altfel `$PHP` (cu
+  `-d`) n-ar ajunge la copii: PHP_BINARY e doar executabilul. `tools/inghetare/`
   (generatorul înghețării) pornește și el PHP_BINARY, dar rulează doar local, cu `tools/dev/php.sh`.
 
 ### Sonda (`/_verificare/sonda`)
@@ -776,7 +783,8 @@ totalul salvat e doar informativă).
   amprentele setărilor din care se fac calculele (informativ: aceleași valori în ambele coduri?). Lucrătorii și migrările
   primesc aceleași extensii ca comanda: unde PHP-ul lor pornit simplu nu încarcă una (pe Hostinger, sodium; comanda pornită
   cu `$PHP`, adică cu `-d extension=sodium.so`), `-d extension=<nume>.so`, după o sondă pe PHP (`lib/php-cli.php`, „PHP-ul
-  liniei de comandă și extensiile”), cu un rând „extensiile PHP-ului … în procesele copil: … doar cu -d …”. Fiecare lucrător verifică,
+  liniei de comandă și extensiile”), cu un rând „extensiile PHP-ului … în procesele copil: … doar cu -d …” (sau „… fără …”,
+  când modulul lipsește din `extension_dir`-ul copilului). Fiecare lucrător verifică,
   după ce codul lui s-a legat la bază și înaintea oricărui cod al aplicației, că e chiar copia așteptată (același nume de
   bază, același rând `_verificare`; local, același nume `cms_*`). Mediul: pe server doar `PATH`, `HOME`, `LANG`; cererile spre
   internet spre `127.0.0.1:9`, `allow_url_fopen=0`; pe copie gărzile (`SITE_COPIE_VERIFICARE=1`) și setările neutralizate la

@@ -54,7 +54,8 @@ declare(strict_types=1);
  *    B3 un PHP sub minim: mesajul, nu o eroare de sintaxă;
  *    B4 un PHP care încarcă pdo_mysql și mbstring doar cu -d (ca sodium în /opt/alt/php83 pe Hostinger;
  *       tools/dev/lib/php-fara-extensii.php): fără -d refuzul cu reparația exactă; cu -d, migrările și lucrătorii
- *       pornite cu PHP_BINARY primesc aceleași -d extension=… (și prin fișiere), „TRECE”; mutația care nu le dă → pică.
+ *       pornite cu PHP_BINARY primesc aceleași -d extension=… (și prin fișiere), „TRECE”; mutația care nu le dă → pică;
+ *       un --php-vechi fără pdo_mysql și fără modulul lui (nici -d nu-l aduce): un rând spune ce lipsește, lucrătorul pică.
  *
  * Își face și își șterge bazele cms_calc_t, cms_calc_copie, cms_calc_alta și utilizatorul cms_calc_test; baza de dezvoltare
  * trebuie să fie făcută de tools/dev/instaleaza.sh (o copiază; n-o schimbă). Raportul: $CMS_DEV_DIR/test-calcule-raport.txt;
@@ -221,6 +222,7 @@ $forme = [
     '/^  baza: (o bază cms_\* a uneltelor de dezvoltare \(date demo\)|copia de verificare bioscem, încărcată la \d{4}-\d\d-\d\d \d\d:\d\d UTC, anonimizată)$/u',
     '/^  migrările: (baza e la zi cu codul comun|baza era „[a-z_]+”; aplicate acum \(scripts\/migreaza\.php --aplica --site=bioscem, cod 0\), la zi)$/u',
     '/^  extensiile PHP-ului (acestei comenzi|codului vechi \(--php-vechi\)) în procesele copil: [a-z_]+(, [a-z_]+)* doar cu( -d extension=[a-z_]+\.so)+( \(tot lipsesc: [a-z_]+(, [a-z_]+)*\))?$/u',
+    '/^  extensiile PHP-ului (acestei comenzi|codului vechi \(--php-vechi\)) în procesele copil: fără [a-z_]+(, [a-z_]+)* \((modulul nu e|modulele nu sunt) în extension_dir-ul lui, nici cu -d\)$/u',
     '/^  pluginurile site-ului pe codul comun: toate pornite$/u',
     '/^  setările calculelor \(informativ\): \d+ chei, (aceleași valori în ambele coduri|alte valori în codul comun la \d+: [a-z0-9_, ]+)$/u',
     '/^  cupoane: (\d+ făcute valabile pe durata comparației \(--fara-cupoane-valide le lasă cum sunt\)|lăsate cum sunt \(--fara-cupoane-valide\))$/u',
@@ -1051,6 +1053,16 @@ try {
     $r = $peServer('tools/verificare/compara-calcule.php', ['--prin-fisiere'], ['php' => $cuD]);
     $verifica('la fel prin fișiere (--prin-fisiere, sonda copilului tot prin fișiere): „TRECE”', $r['cod'] === 0 && str_contains($r['iesire'], "REZULTAT: TRECE\n")
         && str_contains($r['iesire'], 'doar cu -d extension=pdo_mysql.so -d extension=mbstring.so') && (glob($copie . '/storage/verificare/tmp/*') ?: []) === [], $r['tot']);
+    // Un alt PHP pentru codul vechi (--php-vechi, de exemplu /opt/alt/php81) fără pdo_mysql și fără modulul lui: -d nu-l poate aduce;
+    // rândul spune ce lipsește (altfel lucrătorul ar pica doar cu „could not find driver”), iar comparația nu trece.
+    $phpFaraModul = php_fara_extensii($dosarTest . '/php-fara-modul', ['pdo_mysql'], PHP_BINARY, true);
+    $sumaInainte = $sumaCupoane($dbCopie);
+    $r = $peServer('tools/verificare/compara-calcule.php', ['--php-vechi=' . $phpFaraModul]);
+    $randLipsa = '  extensiile PHP-ului codului vechi (--php-vechi) în procesele copil: fără pdo_mysql (modulul nu e în extension_dir-ul lui, nici cu -d)';
+    $verifica('--php-vechi fără pdo_mysql și fără modulul lui în extension_dir: un rând îl numește (în forma știută), lucrătorul vechi pică, fără „TRECE”, '
+        . 'cupoanele puse la loc, nicio parolă, bază, utilizator, cale', $r['cod'] !== 0 && str_contains($r['iesire'], $randLipsa . "\n")
+        && !in_array($randLipsa, $randuriStraine($r['iesire']), true) && !str_contains($r['tot'], 'REZULTAT: TRECE') && $sumaCupoane($dbCopie) === $sumaInainte
+        && $faraSecrete($r['tot']) === '' && !str_contains($r['tot'], $phpFaraModul), 'cod ' . $r['cod'] . ': ' . $r['tot']);
 
     $sumaDevDupa = implode(',', $root->query('CHECKSUM TABLE `' . $bazaDev . '`.coupons, `' . $bazaDev . '`.orders')->fetchAll(PDO::FETCH_COLUMN, 1));
     $verifica('baza de dezvoltare neatinsă (CHECKSUM TABLE coupons, orders)', $sumaDevDupa === $sumaDevInainte);

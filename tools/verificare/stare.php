@@ -352,6 +352,9 @@ if ($activ) {
     }
 }
 $robotiDinCod = $textRoboti === "User-agent: *\nDisallow: /\n";
+// robots.txt-ul porții (src/Support/Verificare.php): pe domeniul temporar nicio cerere spre /robots.txt nu ajunge la ea (îl dă
+// CDN-ul), deci se citește codul, ca la celelalte gărzi.
+$robotiPoarta = RobotiGazda::textPoarta((string) @file_get_contents($radacina . '/src/Support/Verificare.php'));
 if ($baza === '') {
     stare_rand(false, 'nu știu adresa site-ului (nici APP_URL, nici dosarul ~/domains/<domeniu>)');
 } else {
@@ -385,7 +388,7 @@ if ($baza === '') {
         // dacă e exact acel răspuns și site-ul rămâne închis; orice alt răspuns e NU, cu motivul.
         $motivRoboti = $robotiPe ? '' : RobotiGazda::cdnHostinger($roboti,
             $envExista ? ($gazda !== null && $appUrl === 'https://' . $gazda ? $gazda : null) : $gazda,
-            $inchis, $noindexPe, $envExista ? $robotiDinCod : true);
+            $inchis, $noindexPe, $envExista ? $robotiDinCod : true, $envExista ? $robotiPoarta : true);
         if ($motivRoboti === null) {
             $robotiCdn = true;
             stare_info(RobotiGazda::textInfo($envExista));

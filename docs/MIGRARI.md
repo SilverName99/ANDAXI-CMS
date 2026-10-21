@@ -667,6 +667,20 @@ doar chei citite de migrările din `database/migrari/`, valori permise și chei 
 
 ### Pe server, la adoptare
 
+Întâi, pe fiecare site live, **extensia sodium** (văzut pe site-ul de verificare, 21 oct 2026). Licența
+(`Licenta::verifica`, semnătura Ed25519) are nevoie de sodium în PHP-ul site-ului (web) și în cel al liniei de comandă.
+Pe Hostinger fiecare website are lista lui de extensii, iar codul vechi n-a avut nevoie de sodium, deci pe site-urile
+live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-aplicata.json`) merge doar cu nucleul: magazinul
+și celelalte pluginuri oprite, cronurile pluginurilor ies cu codul 2 ([PLUGINURI.md](PLUGINURI.md), regula 4).
+- **Web**: hPanel → acel website → PHP Configuration → PHP extensions → bifezi sodium, înainte de urcarea codului comun
+  (codului vechi nu-i schimbă nimic). Repetiția de pe verificare nu dovedește asta: site-ul de verificare are bifa lui.
+  Bifa se vede în hPanel, la site-ul live însuși; o verificare automată pe site-ul live, înainte de comutare, intră în
+  deploy-ul din Etapa 2 (planul Etapei 1, §0c, predarea (c)). După urcare, în admin nu trebuie să apară „Licența lipsește”.
+- **Linia de comandă**: `/opt/alt/php83/usr/bin/php` nu încarcă sodium singur (bifa din hPanel e doar pentru web), deci
+  comenzile se dau cu `PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"` și `$PHP scripts/migreaza.php …`,
+  `$PHP scripts/diagnostic.php --licenta`, iar liniile de cron din hPanel cu același `-d extension=sodium.so`.
+  `diagnostic.php --licenta` arată doar sodium-ul liniei de comandă, nu pe al site-ului.
+
 1. Pachetul site-ului (cu `setari-inghetate.json` și `migrari.json`) în `SITE_DATE_DOSAR`, iar `privat/` lângă el,
    copiat de mână din dezvoltare (deploy-ul din Etapa 2 nu are voie să-l șteargă); `SITE_SLUG` în `.env`.
 2. Repetiția pe verificare, pe o copie a bazei live: `php scripts/migreaza.php --plan --permite-provizoriu`, apoi
