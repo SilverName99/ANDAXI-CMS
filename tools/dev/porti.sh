@@ -38,7 +38,7 @@ poarta G-rute "fiecare rută are proprietar; instantaneul rutelor pe fiecare lic
     "tools/dev/php.sh tools/dev/verifica-rute.php --scurt ;; tools/dev/php.sh tools/dev/instantaneu-rute.php" WP-01
 poarta G-cmp "HTML identic cu codul Bioscem (ultimul commit revizuit), licența „toate” și licența Bioscem" \
     "tools/dev/compara-cu-baza.sh ;; tools/dev/compara-cu-baza.sh --licenta=bioscem" WP-01
-poarta G-cmp-istoric "la fel, față de f5ae5ea (codul dinaintea pluginurilor; SEO și porturile din Bioscem scoase explicit)" \
+poarta G-cmp-istoric "la fel, față de f5ae5ea (codul dinaintea pluginurilor; livrarea 1 SEO și fiecare port din Bioscem de după el scoase explicit, pe commit-uri)" \
     "tools/dev/compara-cu-baza.sh --baza=f5ae5ea ;; tools/dev/compara-cu-baza.sh --baza=f5ae5ea --licenta=bioscem" WP-01
 poarta G-plug "testele pluginurilor (A–G)" "tools/dev/php.sh tools/dev/test-pluginuri.php" WP-01
 poarta G-plug-fiecare "testele pluginurilor plus fiecare plugin oprit pe rând (~20 min)" \
@@ -56,8 +56,8 @@ poarta G-mig "testele migrărilor: runner-ul și migrările adevărate pe scheme
     "tools/dev/php.sh tools/dev/test-migrari.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-migrari.php ;; tools/dev/php.sh tools/dev/verifica-migrari.php ;; tools/dev/php.sh tools/dev/test-inghetare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-inghetare.php ;; tools/dev/php.sh tools/inghetare/verifica-inghetare.php" WP-04
 poarta G-inst "instalarea prin migrări (install.php, seed-ul neutru, adminul), garda și /health, pașii de activare ai pluginurilor, 0 DDL pe cerere; și cu php$MINIM; apoi baza de dezvoltare din nou, prin migrări (pentru porțile de după)" \
     "tools/dev/php.sh tools/dev/test-instalare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-instalare.php ;; tools/dev/instaleaza.sh" WP-05
-poarta G-vechi "aceleași teste pe o bază făcută ca înainte de migrări și trecută prin baseline (cms_dev_vechi, portul 8711): comparația cu Bioscem (ambele licențe), pluginurile, SEO, fumul pe fiecare pachet; apoi baza se șterge" \
-    "CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/instaleaza.sh --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh --licenta=bioscem ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-pluginuri.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-seo.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/smoke.sh --toate-pachetele --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi tools/dev/instaleaza.sh --sterge-baza" WP-05
+poarta G-vechi "aceleași teste pe o bază făcută ca înainte de migrări și trecută prin baseline (cms_dev_vechi, portul 8711): comparația cu Bioscem (ambele licențe), pluginurile, SEO, fumul pe fiecare pachet; apoi baza se șterge și baza de dezvoltare se face din nou (instaleaza.sh a scris o parolă de admin nouă, pe care o folosesc porțile de după)" \
+    "CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/instaleaza.sh --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/compara-cu-baza.sh --licenta=bioscem ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-pluginuri.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/php.sh tools/dev/test-seo.php ;; CMS_DEV_DB=cms_dev_vechi CMS_DEV_PORT=8711 tools/dev/smoke.sh --toate-pachetele --pe-vechi ;; CMS_DEV_DB=cms_dev_vechi tools/dev/instaleaza.sh --sterge-baza ;; tools/dev/instaleaza.sh" WP-05
 poarta G-paths "căile site-ului (App\\Support\\Paths): așezarea de azi și cea din Etapa 2 pe o găzduire simulată (stub-ul, MENTENANTA, sesiunile, jurnalele și pozele fiecărui site, pingul /_andaxi/ping), nicio cale construită în afara Paths; și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/test-paths.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-paths.php" WP-07
 poarta G-verif "testele site-ului de verificare, și cu php$MINIM (codul lui rulează pe servere)" \
@@ -83,13 +83,21 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # (tools/verificare, tools/sonda) sau fixture-urile făcute din sondă. G-inst (WP-05) e la WP-urile care
 # ating instalarea, runner-ul sau calea cererii (WP-06, WP-07, WP-41) și reface la final baza de dezvoltare
 # prin migrări, deci G-cmp, G-plug și G-seo de după ea rulează pe o bază migrată; G-vechi (WP-05) le rulează
-# încă o dată pe o bază veche trecută prin baseline (Bioscem neschimbat pe ambele, planul §5 WP-05).
+# încă o dată pe o bază veche trecută prin baseline (Bioscem neschimbat pe ambele, planul §5 WP-05). Fiecare
+# instaleaza.sh scrie o parolă de admin nouă în $CMS_DEV_DIR/admin-parola.txt, deci G-vechi reface la final și baza
+# de dezvoltare: altfel adminul ei ar rămâne cu parola veche și o poartă de după care se loghează (G-verif, G-cmp,
+# G-admin; la WP-41 G-verif vine după G-vechi) ar pica (găsit la WP-R din 21 oct, rulând toate porțile).
 # De la WP-06, G-mig cuprinde și înghețarea setărilor (test-inghetare.php, verifica-inghetare.php):
 # fiecare WP cu G-mig verifică deci că înghețările sunt complete față de codul lui (amprenta nucleului);
 # un WP care schimbă DEFAULTS sau o valoare de rezervă le regenerează (genereaza-setari.php --toate).
 # G-paths (WP-07, „New tests” și acceptanța: test-paths.php) e la WP-07 și la WP-41; căutarea căilor construite
 # în afara Paths (test-paths.php --doar-cai) rulează oricum în testul de fum, deci la fiecare WP cu G-smoke. WP-07
 # atinge și poarta site-ului de verificare (pingul fără parolă) și uneltele lui, deci rulează și G-verif și G-sonde.
+# G-paths e și la WP-08 (gărzile copiei de verificare stau în căile Paths: dosarul storage/verificare, /uploads/ lipsă
+# → 302 din public/index.php, pe care așezarea din Etapa 2 îl servește altfel) și la WP-28 (bin/platforma --site=
+# definește PLATFORMA_SITE_DIR, exact ce simulează test-paths.php: linia de comandă din Etapa 2, jurnalul și erorile
+# ei); hotărât la WP-R din 21 oct (Restanțe). G-cmp-istoric e și la WP-R: fiecare port din Bioscem își declară
+# diferențele față de f5ae5ea în $porturiBioscem, pe commit-uri (compara-cu-baza.php), în același commit cu portul.
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -99,7 +107,7 @@ declare -A PORTI=(
     [WP-06]="G-rute G-mig G-inst G-cmp G-plug G-smoke G-php"
     [WP-07]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-verif G-sonde G-php"
     [WP-08a]="G-rute G-verif G-cmp G-php"
-    [WP-08]="G-rute G-verif G-sonde G-cmp G-smoke G-php"
+    [WP-08]="G-rute G-paths G-verif G-sonde G-cmp G-smoke G-php"
     [WP-09]="G-rute G-verif G-sonde G-cmp G-php"
     [WP-10]="G-rute G-sonde G-verif G-runner G-cmp G-php"
     [WP-11]="G-rute G-calc G-cmp G-php"
@@ -121,7 +129,7 @@ declare -A PORTI=(
     [WP-25]="G-rute G-mig G-cmp G-plug G-smoke G-calc G-php"
     [WP-26]="G-rute G-mig G-cmp G-plug G-smoke G-seo G-php"
     [WP-27]="G-rute G-lic G-plug G-cmp G-php"
-    [WP-28]="G-rute G-mig G-cmp G-plug G-smoke G-php"
+    [WP-28]="G-rute G-paths G-mig G-cmp G-plug G-smoke G-php"
     [WP-29]="G-rute G-admin G-cmp G-php"
     [WP-30]="G-rute G-admin G-vizual G-cmp G-plug G-smoke G-php"
     [WP-31]="G-rute G-admin G-cmp G-plug G-php"
@@ -135,7 +143,7 @@ declare -A PORTI=(
     [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"
     [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-seo G-php"
     [WP-41]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
-    [WP-R]="G-rute G-cmp G-plug G-php"
+    [WP-R]="G-rute G-cmp G-cmp-istoric G-plug G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33

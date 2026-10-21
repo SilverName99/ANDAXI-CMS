@@ -611,8 +611,10 @@ sunt inventate.
 `tools/dev/php.sh tools/dev/test-sonde.php` (poarta G-sonde, și cu PHP-ul minim) încearcă verificările pe
 site-urile live într-o găzduire simulată în `$CMS_DEV_DIR/sonde/`: site-ul de verificare (doar uneltele) și
 patru site-uri „live” inventate (`bioscem.ro`, `www.grafoanaytis.ro`, `biovitality.ro`, `vertij-tinitus.ro`),
-toate pe `cms_sonde_t`, o copie a bazei de dezvoltare, cu rânduri inventate pentru fiecare verificare (toate
-datele personale cu un marcaj aleator). Verifică garda instrucțiunilor și tiparele ieșirii, fiecare refuz al
+toate pe `cms_sonde_t`, o bază făcută ca a unui site live încă neadoptat (de codul de dinainte de migrări,
+`tools/dev/migrari/pe-vechi.php`, cu seed-ul și datele demo: are tabelul vechi `reviews` și celelalte obiecte
+vechi, făcute de codul lor, și nu are registrul migrărilor), cu rânduri inventate pentru fiecare verificare (toate
+datele personale cu un marcaj aleator). Baza de dezvoltare nu-i trebuie. Verifică garda instrucțiunilor și tiparele ieșirii, fiecare refuz al
 locului (cod 2, nimic citit), fiecare număr al fiecărui set (cât se schimbă după rândurile inventate), că
 serverul refuză scrierile din sesiune, că un ALTER din altă conexiune pe un tabel deja citit nu așteaptă în
 mijlocul unui grup, că un utilizator doar cu SELECT ajunge, sonda (amprenta ei = a bazei), `din-sonda.php`

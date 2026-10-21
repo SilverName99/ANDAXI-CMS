@@ -10,8 +10,11 @@ Verificarea săptămânală: `tools/dev/php.sh tools/dev/de-portat.php` (listeaz
 
 „Ultimul commit revizuit” al Bioscem e și **baza comparației** `tools/dev/compara-cu-baza.sh`:
 codul comun trebuie să dea același HTML ca acel commit al Bioscem. Un commit Bioscem portat
-mută rândul de mai jos la el, apoi comparația trebuie să iasă cu 0 fără nicio intrare nouă în
-`$porturiBioscem` (se pot declara doar diferențe `$deBioscem`, cu motivul lor).
+mută rândul de mai jos la el, apoi comparația trebuie să iasă cu 0 fără nicio declarație pentru
+port (se pot declara doar diferențe `$deBioscem`, cu motivul lor; `$porturiBioscem` nu se aplică
+față de Bioscem). Comparația istorică, `--baza=f5ae5ea` (poarta G-cmp-istoric, și la WP-R), primește
+în schimb, în același commit cu portul, diferențele lui față de acel commit în `$porturiBioscem`,
+pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|

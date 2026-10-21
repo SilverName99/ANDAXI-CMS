@@ -32,7 +32,8 @@ declare(strict_types=1);
  * livrării 1 (docs/SEO.md), scrise mai jos una câte una ($faraSeo): ce s-a scos se
  * afișează pe pagină, iar datele structurate trebuie să apară exact unde sunt
  * așteptate ($jsonLdAsteptat). La fel textele schimbărilor portate din Bioscem după
- * acel commit ($porturiBioscem): fiecare exact o dată, pe pagina ei.
+ * acel commit ($porturiBioscem, pe commit-uri Bioscem): fiecare de exact câte ori e
+ * declarat (implicit o dată) pe pagina (sau paginile) ei și pe nicio alta.
  *
  * În ambele moduri, tot doar din pagina codului curent: diferențele declarate
  * explicit, cu pagina și motivul lor ($deBioscem, $porturiBiovitality,
@@ -296,12 +297,29 @@ $faraSeo = static function (string $cale, string $html, array &$gasite) use ($pr
     );
     return $html;
 };
+// Datele demo pe care le cer paginile comparate și declarațiile de mai jos (slugurile, id-urile).
+$idMenta = $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'");
+$slugBbd = $unu('SELECT slug FROM products WHERE bbd_enabled = 1 AND is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1');
+$slugPre = $unu('SELECT slug FROM products WHERE preorder_enabled = 1 ORDER BY id LIMIT 1');
+$slugBlog = $unu('SELECT slug FROM blog_posts WHERE is_published = 1 ORDER BY id LIMIT 1');
+$idClient = $unu("SELECT id FROM users WHERE email = 'andrei.exemplu@exemplu.ro'");
+$nrComanda = $unu('SELECT order_number FROM orders WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 1');
+$idPagina = $unu("SELECT id FROM pages WHERE slug = '' LIMIT 1");
+$tokenLink = $unu('SELECT token FROM order_payment_links ORDER BY id LIMIT 1');
+$idCupon = $unu('SELECT id FROM coupons ORDER BY id LIMIT 1');
+$idSablonProdus = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
+// Pagina din bază cu liste goale (o face scriptul mai jos, la cereri).
+$paginaListe = 'test-liste-goale-' . getmypid();
+
 /**
- * Doar față de un commit din acest repo (baza „commit”): schimbările din Bioscem
- * portate după acel commit, altele decât SEO. Textul nou, exact cum îl scrie codul,
- * pagina pe care trebuie să apară și ce era în locul lui. Față de Bioscem (baza
- * „repo”) nu se aplică: codul Bioscem le are deja. Un port din Bioscem nu se mai
- * adaugă aici (se mută „ultimul commit revizuit” în docs/de-portat.md).
+ * Doar față de un commit din acest repo (baza „commit”, istoricul: --baza=f5ae5ea): schimbările din
+ * Bioscem portate după acel commit, altele decât livrarea 1 SEO ($faraSeo), fiecare cu commit-ul
+ * Bioscem din care vine. Textul nou, exact cum îl scrie codul, pagina (sau paginile) pe care trebuie
+ * să apară, de câte ori („ori”, implicit o dată) și ce era în locul lui. Față de Bioscem (baza „repo”,
+ * poarta G-cmp) nu se aplică: codul Bioscem le are deja, deci acolo un port nu adaugă nimic aici (se
+ * mută doar „ultimul commit revizuit” în docs/de-portat.md). Ca istoricul să rămână o dovadă (poarta
+ * G-cmp-istoric, și la WP-R), fiecare port Bioscem își trece aici diferențele față de f5ae5ea, pe
+ * commit-uri, în același commit cu portul; nimic nu se scoate cu un tipar general.
  */
 $porturiBioscem = [
     [
@@ -313,6 +331,363 @@ $porturiBioscem = [
         'motiv' => 'Bioscem de5c2b0 „AWB: numărul de colete poate fi ales în ERP la aprobare” (CMS 4915478; doar cu ERP-ul pe site)',
     ],
 ];
+// WP-R (20 oct 2026, CMS 43bdccc): livrarea 2 SEO și avertismentul pe produs, Bioscem 6c8c789 … 4254ca4. Declarate pentru
+// istoric la WP-R din 21 oct (Restanțe), pe paginile datelor demo (servite cu pachetul inventat, tools/dev/site-demo/).
+$porturiBioscemLivrarea2 = (static function () use ($slugBbd, $slugPre, $slugBlog, $paginaListe, $nrComanda, $idPagina, $idSablonProdus, $unu): array {
+    $intrari = [];
+    $produse = ['/produs/ceai-de-menta', '/produs/ceai-de-musetel', '/produs/' . $slugBbd, '/produs/' . $slugPre];
+    $listeCatalog = ['/magazin', '/categorie/ceaiuri', '/marca/livada-demo'];
+    $editoarePagini = ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'];
+    $h = static fn (string $text): string => htmlspecialchars($text, ENT_QUOTES);
+    // Un text cum apare în previzualizarea din editorul de pagini (șir JSON într-un <script>, aceleași opțiuni ca $faraSeo).
+    $inJson = static fn (string $text): string => substr((string) json_encode($text, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
+        | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), 1, -1);
+    // Categoriile demo: [nume, slug] (filtrul catalogului le arată pe toate, în ordinea numelor).
+    $categorii = [];
+    foreach (explode("\n", $unu("SELECT GROUP_CONCAT(CONCAT(name, '\t', slug) ORDER BY name SEPARATOR '\n') FROM product_categories")) as $rand) {
+        if ($rand !== '') {
+            $categorii[] = explode("\t", $rand, 2);
+        }
+    }
+    $produs = static function (string $cale) use ($unu): array {
+        $slug = substr($cale, strlen('/produs/'));
+        $stmt = $unu("SELECT CONCAT(p.name, '\t', COALESCE(p.brand, ''), '\t', COALESCE(c.name, ''), '\t', COALESCE(c.slug, ''), '\t',
+            IF(p.product_template_id IS NULL, 0, 1)) FROM products p LEFT JOIN product_categories c ON c.id = p.category_id
+            WHERE p.slug = " . var_export($slug, true));
+        return explode("\t", $stmt);
+    };
+
+    // Bioscem 7455b77 (A7): numele site-ului și limba pentru Facebook și WhatsApp, pe fiecare pagină publică cu antet.
+    $intrari[] = [
+        'nume' => 'og:site_name și og:locale în <head>',
+        'cale' => array_merge(['/', '/blog', '/blog/' . $slugBlog, '/contact', '/termeni-si-conditii', '/pagina-care-nu-exista', '/' . $paginaListe],
+            $listeCatalog, $produse),
+        'nou' => "    <meta property=\"og:site_name\" content=\"Firma Demo\">\n    <meta property=\"og:locale\" content=\"ro_RO\">\n",
+        'vechi' => '',
+        'motiv' => 'Bioscem 7455b77 (livrarea 2 SEO, A7): numele site-ului (numele magazinului) și limba, pentru previzualizarea '
+            . 'linkului pe Facebook și WhatsApp (ImagineDistribuire, views/layout.php)',
+    ];
+
+    // Bioscem 93d803f (A6): o singură regulă pentru titluri și descrieri (SeoMeta). Descrierea listelor și a produselor (în
+    // <head>, og:description, twitter:description) și marca în titlul produsului (<title>, og:title, twitter:title).
+    $descrieri = [
+        '/magazin' => 'Magazinul Firma Demo: 39 de produse în 7 categorii, printre care Ceaiuri, Suplimente, Cosmetice naturale și altele, '
+            . 'cu prețuri de la 9,90 lei.',
+        '/categorie/ceaiuri' => 'Ceaiuri: 7 produse de la Livada Demo și Natura Exemplu, cu prețuri de la 13,90 lei. Comandă online pe Firma Demo.',
+        '/marca/livada-demo' => 'Livada Demo: 11 produse din categoriile Ceaiuri, Uleiuri, Superalimente și altele, cu prețuri de la 9,90 lei. '
+            . 'Comandă online pe Firma Demo.',
+    ];
+    foreach ($produse as $cale) {
+        [$nume, $marca] = $produs($cale);
+        // Din primul paragraf al descrierii produsului (datele demo: „<nume> este un produs fictiv …”).
+        $descrieri[$cale] = $nume . ' este un produs fictiv din catalogul demo al Firma Demo SRL. Textul servește doar la verificarea paginilor.';
+        $intrari[] = [
+            'nume' => 'titlul produsului cu marca (' . $cale . ')',
+            'cale' => $cale,
+            'nou' => $h($nume . ' – ' . $marca . ' | Firma Demo'),
+            'vechi' => $h($nume . ' | Firma Demo'),
+            'motiv' => 'Bioscem 93d803f (livrarea 2 SEO, A6): titlul produsului are și marca, în <title>, og:title și twitter:title',
+            'ori' => 3,
+        ];
+    }
+    foreach ($descrieri as $cale => $descriere) {
+        foreach (['meta name="description"', 'meta property="og:description"', 'meta name="twitter:description"'] as $eticheta) {
+            $intrari[] = [
+                'nume' => '<' . $eticheta . '> (' . $cale . ')',
+                'cale' => $cale,
+                'nou' => '            <' . $eticheta . ' content="' . $h($descriere) . "\">\n",
+                'vechi' => '',
+                'motiv' => 'Bioscem 93d803f (livrarea 2 SEO, A6): descrierea paginii, din aceeași regulă pentru toate listele și produsele',
+            ];
+        }
+    }
+    $intrari[] = [
+        'nume' => 'Setări magazin → SEO: numele magazinului în titluri',
+        'cale' => '/admin/settings/store',
+        'nou' => <<<'HTML'
+                                    <h3 style="margin-top:0;">Numele magazinului în titluri</h3>
+            <p style="margin:0 0 10px;color:#64748b;">
+                Apare la finalul titlurilor din Google și din browser (ex. „Magazin | Firma Demo”)
+                și ca nume al firmei în datele pentru Google. Gol = „Firma Demo din pachet”.
+            </p>
+            <form method="post" action="/admin/settings/store" style="margin-bottom:22px;">
+                <input type="hidden" name="action" value="save_store_name">
+                <div class="field" style="max-width:680px;">
+                    <label for="store_name">Nume magazin</label>
+                    <input id="store_name" type="text" name="store_name" maxlength="60" value="Firma Demo" placeholder="Firma Demo din pachet">
+                </div>
+                <div style="margin-top:10px;">
+                    <button class="btn" type="submit">Salvează numele</button>
+                </div>
+            </form>
+
+            <h3 style="margin-top:0;">SEO Google (global)</h3>
+HTML,
+        'vechi' => '                        <h3 style="margin-top:0;">SEO Google (global)</h3>',
+        'motiv' => 'Bioscem 93d803f (livrarea 2 SEO, A6): numele magazinului din titluri se scrie în admin (store_name)',
+    ];
+    $intrari[] = [
+        'nume' => 'Setări magazin → SEO: prima pagină are întâietate',
+        'cale' => '/admin/settings/store',
+        'nou' => "SEO specific.\n                Titlul și descrierea pentru Homepage au întâietate pe prima pagină.\n",
+        'vechi' => "SEO specific.\n",
+        'motiv' => 'Bioscem 93d803f (livrarea 2 SEO, A6): explicația regulii unice (titlul și descrierea primei pagini câștigă)',
+    ];
+
+    // Bioscem 6c8c789 (A3): categoriile pe /categorie/{slug}. Linkurile din paginile din bază (LinkuriCategorii), din
+    // pagina produsului și din editorul șablonului, sortarea paginilor de categorie și de marcă, filtrul catalogului.
+    $legaturiAcasa = [['Suplimente', 'suplimente'], ['Ceaiuri', 'ceaiuri'], ['Miere', 'miere'], ['Superalimente', 'superalimente'],
+        ['Cosmetice naturale', 'cosmetice-naturale'], ['Uleiuri', 'uleiuri']];
+    foreach ($legaturiAcasa as [$numeCategorie, $slugCategorie]) {
+        $intrari[] = [
+            'nume' => 'prima pagină: linkul spre categoria ' . $numeCategorie,
+            'cale' => '/',
+            'nou' => '<a class="bs-need" href="/categorie/' . $slugCategorie . '">',
+            'vechi' => '<a class="bs-need" href="/magazin?category=' . rawurlencode($numeCategorie) . '">',
+            'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): un link vechi /magazin?category= din conținutul unei pagini duce direct la '
+                . 'pagina categoriei (LinkuriCategorii)',
+        ];
+    }
+    foreach ($produse as $cale) {
+        [, , $numeCategorie, $slugCategorie, $cuSablon] = $produs($cale);
+        if ($cuSablon !== '1') {
+            continue; // fără șablon (product.php): fără linkul categoriei
+        }
+        $intrari[] = [
+            'nume' => 'pagina produsului: linkul categoriei (' . $cale . ')',
+            'cale' => $cale,
+            'nou' => '<p class="demo-produs__categorie"><a href="/categorie/' . $slugCategorie . '">',
+            'vechi' => '<p class="demo-produs__categorie"><a href="/magazin?category=' . rawurlencode($numeCategorie) . '">',
+            'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): {{product_category_url}} e pagina categoriei',
+        ];
+    }
+    $intrari[] = [
+        'nume' => 'editorul șablonului de produs: exemplul pentru {{product_category_url}}',
+        'cale' => '/admin/products/templates/' . $idSablonProdus . '/builder',
+        'nou' => "'{{product_category_url}}': '/categorie/suplimente',",
+        'vechi' => "'{{product_category_url}}': '/magazin?category=Suplimente',",
+        'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): previzualizarea șablonului (views/admin/product-template-editor.php) arată '
+            . 'adresa nouă a categoriei',
+    ];
+    foreach (['alpha_asc', 'featured', 'price_asc', 'price_desc'] as $sortare) {
+        $intrari[] = [
+            'nume' => 'pagina categoriei: sortarea ' . $sortare,
+            'cale' => '/categorie/ceaiuri',
+            'nou' => 'href="/categorie/ceaiuri?sort=' . $sortare . '"',
+            'vechi' => 'href="/magazin?sort=' . $sortare . '&categorie=Ceaiuri"',
+            'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): sortarea rămâne pe pagina categoriei',
+        ];
+        $intrari[] = [
+            'nume' => 'pagina mărcii: sortarea ' . $sortare,
+            'cale' => '/marca/livada-demo',
+            'nou' => 'href="/marca/livada-demo?sort=' . $sortare . '"',
+            'vechi' => 'href="/magazin?sort=' . $sortare . '"',
+            'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): sortarea rămâne pe pagina mărcii',
+        ];
+    }
+    foreach (array_merge([['', '/magazin']], array_map(static fn (array $c): array => [$c[0], '/categorie/' . $c[1]], $categorii)) as [$valoare, $adresa]) {
+        $intrari[] = [
+            'nume' => 'filtrul catalogului: adresa categoriei „' . ($valoare !== '' ? $valoare : 'Toate') . '”',
+            'cale' => $listeCatalog,
+            'nou' => 'data-filter-value="' . $h($valoare) . '" data-filter-url="' . $adresa . '" ',
+            'vechi' => 'data-filter-value="' . $h($valoare) . '" ',
+            'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): o categorie aleasă în filtru deschide pagina ei',
+        ];
+    }
+    $jsFiltru = <<<'JS'
+      // Categoria are pagina ei (/categorie/…); se păstrează doar sortarea aleasă.
+      const target = String(input.getAttribute('data-filter-url') || '');
+      if (target !== '') {
+        const next = new URL(target, window.location.origin);
+        const sort = new URL(window.location.href).searchParams.get('sort');
+        if (sort) {
+          next.searchParams.set('sort', sort);
+        }
+        window.location.href = next.toString();
+        return;
+      }
+
+JS;
+    $intrari[] = [
+        'nume' => 'filtrul catalogului: scriptul care deschide pagina categoriei',
+        'cale' => $listeCatalog,
+        'nou' => $jsFiltru,
+        'vechi' => '',
+        'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): pagina categoriei în locul parametrului categorie, cu sortarea aleasă',
+    ];
+    $intrari[] = [
+        'nume' => 'editorul de pagini: previzualizarea catalogului, adresa „Toate”',
+        'cale' => $editoarePagini,
+        'nou' => $inJson('data-filter-value="" data-filter-url="/magazin" '),
+        'vechi' => $inJson('data-filter-value="" '),
+        'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): aceeași secțiune a catalogului, în previzualizarea editorului',
+    ];
+    $intrari[] = [
+        'nume' => 'editorul de pagini: previzualizarea catalogului, scriptul filtrului',
+        'cale' => $editoarePagini,
+        'nou' => $inJson($jsFiltru),
+        'vechi' => '',
+        'motiv' => 'Bioscem 6c8c789 (livrarea 2 SEO, A3): aceeași secțiune a catalogului, în previzualizarea editorului',
+    ];
+
+    // Bioscem d277727 (A13): fluxul Google Merchant Center, deschis roboților.
+    $intrari[] = [
+        'nume' => 'robots.txt: fluxul Merchant Center',
+        'cale' => '/robots.txt',
+        'nou' => "User-agent: *\nAllow: /feed/google-merchant.xml\n",
+        'vechi' => "User-agent: *\n",
+        'motiv' => 'Bioscem d277727 (livrarea 2 SEO, A13): /feed/google-merchant.xml (FluxGoogleMerchant), permis în robots.txt',
+    ];
+
+    // Avertismentul pe produs, Bioscem 0582ce9 … 4254ca4: câmpurile din Admin → Produse (333ba9e), fereastra la adăugarea în
+    // coș (b874cf0), confirmarea pe comandă (5f2e483, 233cc7d), blocul din email (fa76c4f). Nicio dată demo nu are avertisment.
+    $intrari[] = [
+        'nume' => 'Admin → Produse: cele trei câmpuri ale avertismentului',
+        'cale' => '/admin/products',
+        'nou' => <<<'HTML'
+                    <section class="panel product-editor-card">
+                        <div class="product-editor-card__head">
+                            <h4>Avertisment la coș și la finalizarea comenzii</h4>
+                            <p>De ex. pentru produsele refrigerate. Activ doar dacă „Text avertisment” e completat.</p>
+                        </div>
+                        <div class="product-editor-grid">
+                            <div class="field full">
+                                <label for="p_avertisment_titlu">Titlu avertisment</label>
+                                <input type="text" name="avertisment_titlu" id="p_avertisment_titlu" maxlength="200" placeholder="ex. ATENȚIE – PRODUS REFRIGERAT">
+                            </div>
+                            <div class="field full">
+                                <label for="p_avertisment_text">Text avertisment</label>
+                                <textarea name="avertisment_text" id="p_avertisment_text" rows="6" maxlength="8000" placeholder="Textul pe care îl vede clientul. Un rând gol = paragraf nou."></textarea>
+                            </div>
+                            <div class="field full">
+                                <label for="p_avertisment_eticheta">Text bifă la finalizarea comenzii</label>
+                                <input type="text" name="avertisment_eticheta" id="p_avertisment_eticheta" maxlength="300" placeholder="ex. Am citit și am înțeles condițiile pentru produsul refrigerat">
+                                <small class="muted">
+                                    Text simplu, fără HTML (un rând gol în text = paragraf nou). Cu text completat: la adăugarea în coș
+                                    apare o fereastră cu titlul și textul, iar la finalizarea comenzii o casetă deasupra butonului și
+                                    bifa obligatorie cu acest text (gol = „Am citit și am înțeles avertismentul de mai sus.”).
+                                    Confirmarea rămâne pe comandă și apare în emailul de confirmare.
+                                </small>
+                            </div>
+                        </div>
+                    </section>
+
+
+HTML,
+        'vechi' => '',
+        'motiv' => 'Bioscem 333ba9e (avertismentul pe produs): titlul, textul și eticheta bifei, în editorul produsului',
+    ];
+    $intrari[] = [
+        'nume' => 'Admin → Produse: câmpurile avertismentului completate la deschiderea produsului',
+        'cale' => '/admin/products',
+        'nou' => <<<'JS'
+            // Avertismentul (fereastra din coș + bifa de la comandă).
+            [['p_avertisment_titlu', 'avertisment_titlu'], ['p_avertisment_text', 'avertisment_text'], ['p_avertisment_eticheta', 'avertisment_eticheta']]
+                .forEach(([idCamp, cheie]) => {
+                    const camp = document.getElementById(idCamp);
+                    if (camp instanceof HTMLInputElement || camp instanceof HTMLTextAreaElement) {
+                        camp.value = String(product[cheie] || '');
+                    }
+                });
+
+JS,
+        'vechi' => '',
+        'motiv' => 'Bioscem 333ba9e (avertismentul pe produs): editorul pune în câmpuri avertismentul salvat',
+    ];
+    $intrari[] = [
+        'nume' => 'Admin → Produse: avertismentul (gol) în datele fiecărui produs din listă',
+        'cale' => '/admin/products',
+        'nou' => 'avertisment_titlu&quot;:&quot;&quot;,&quot;avertisment_text&quot;:&quot;&quot;,&quot;avertisment_eticheta&quot;:&quot;&quot;,&quot;',
+        'vechi' => '',
+        'motiv' => 'Bioscem 333ba9e (avertismentul pe produs): lista dă editorului și cele trei câmpuri (goale: niciun produs demo nu are '
+            . 'avertisment); o dată pe fiecare produs din listă',
+        'ori' => (int) $unu('SELECT COUNT(*) FROM products WHERE deleted_at IS NULL'),
+    ];
+    $intrari[] = [
+        'nume' => 'pagina produsului: fereastra avertismentului după adăugarea în coș',
+        'cale' => $produse,
+        'nou' => <<<'JS'
+    // Produsul cu avertisment (ex. refrigerat): fereastra vine în răspunsul
+    // adăugării; scriptul ei se încarcă doar când e nevoie.
+    const arataAvertismentProdus = (avertisment, revino) => {
+        if (!avertisment || typeof avertisment !== 'object') {
+            return;
+        }
+        if (window.bvAvertismentProdus) {
+            window.bvAvertismentProdus.arata(avertisment, revino);
+            return;
+        }
+        const src = String(avertisment.script || '');
+        if (!src.startsWith('/assets/')) {
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = () => window.bvAvertismentProdus?.arata(avertisment, revino);
+        document.head.appendChild(script);
+    };
+
+
+JS,
+        'vechi' => '',
+        'motiv' => 'Bioscem b874cf0 (avertismentul pe produs): butonul de coș al paginii produsului arată fereastra avertismentului '
+            . '(scriptul ei se încarcă doar pentru un produs cu avertisment)',
+    ];
+    $intrari[] = [
+        'nume' => 'pagina produsului: fereastra avertismentului, chemată după adăugare',
+        'cale' => $produse,
+        'nou' => "                arataAvertismentProdus(payload?.avertisment, button);\n",
+        'vechi' => '',
+        'motiv' => 'Bioscem b874cf0 (avertismentul pe produs): perechea rândului de mai sus',
+    ];
+    $comenzi = ['/admin/orders', '/admin/orders?search=' . rawurlencode($nrComanda)];
+    $intrari[] = [
+        'nume' => 'Admin → Comenzi: avertismentele confirmate, în fereastra comenzii',
+        'cale' => $comenzi,
+        'nou' => <<<'JS'
+            // Avertismentele confirmate la plasare (ex. produs refrigerat): ce a
+            // văzut și a bifat clientul, exact cum era textul atunci.
+            const avertismenteConfirmate = Array.isArray(order.avertismente_confirmate) ? order.avertismente_confirmate : [];
+            const avertismenteHtml = avertismenteConfirmate.map((a) => `<div data-avertisment-confirmat style="margin:0 0 10px;padding:10px 12px;border:1px solid #fca5a5;border-left:4px solid #dc2626;border-radius:8px;background:#fef2f2;color:#7f1d1d;font-size:13px;">
+                    <strong>${esc(a.linie || '')}</strong>
+                    <details style="margin-top:6px;">
+                        <summary style="cursor:pointer;color:#991b1b;">Textul confirmat</summary>
+                        <div style="margin-top:6px;white-space:pre-line;color:#1f2937;overflow-wrap:anywhere;">${esc(a.text || '')}</div>
+                        <p style="margin:8px 0 0;color:#475569;">${(Array.isArray(a.etichete) && a.etichete.length > 1) ? 'Bifele' : 'Bifa'}: ${(Array.isArray(a.etichete) ? a.etichete : []).map((e) => `„${esc(e)}”`).join(', ')}</p>
+                    </details>
+                </div>`).join('');
+
+
+JS,
+        'vechi' => '',
+        'motiv' => 'Bioscem 5f2e483 și 233cc7d (avertismentul pe produs): confirmarea rămâne pe comandă și se vede în admin',
+    ];
+    $intrari[] = [
+        'nume' => 'Admin → Comenzi: avertismentele confirmate, puse în fereastră',
+        'cale' => $comenzi,
+        'nou' => '\'\'}${avertismenteHtml}',
+        'vechi' => '\'\'}',
+        'motiv' => 'Bioscem 5f2e483 (avertismentul pe produs): perechea rândului de mai sus',
+    ];
+    $intrari[] = [
+        'nume' => 'Emailuri: codul {{avertismente_produse}} în lista codurilor',
+        'cale' => '/admin/emails/newsletters*',
+        'nou' => <<<'HTML'
+                                            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+                            <div>
+                                <code style="font-weight:700;color:#0f172a;">{{avertismente_produse}}</code>
+                                <div style="margin-top:4px;color:#64748b;font-size:13px;line-height:1.45;">
+                                    Avertismentele confirmate la comandă (ex. produs refrigerat); fără cod, apar singure sub produse                                </div>
+                            </div>
+                        </div>
+
+HTML,
+        'vechi' => '',
+        'motiv' => 'Bioscem fa76c4f (avertismentul pe produs): blocul avertismentelor confirmate din emailul de confirmare a comenzii',
+    ];
+    return $intrari;
+})();
+$porturiBioscem = array_merge($porturiBioscem, $porturiBioscemLivrarea2);
 
 /**
  * În ambele moduri: diferențele față de codul de bază declarate explicit, fiecare cu
@@ -534,16 +909,6 @@ foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
     }
 }
 
-$idMenta = $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'");
-$slugBbd = $unu('SELECT slug FROM products WHERE bbd_enabled = 1 AND is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1');
-$slugPre = $unu('SELECT slug FROM products WHERE preorder_enabled = 1 ORDER BY id LIMIT 1');
-$slugBlog = $unu('SELECT slug FROM blog_posts WHERE is_published = 1 ORDER BY id LIMIT 1');
-$idClient = $unu("SELECT id FROM users WHERE email = 'andrei.exemplu@exemplu.ro'");
-$nrComanda = $unu('SELECT order_number FROM orders WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 1');
-$idPagina = $unu("SELECT id FROM pages WHERE slug = '' LIMIT 1");
-$tokenLink = $unu('SELECT token FROM order_payment_links ORDER BY id LIMIT 1');
-$idCupon = $unu('SELECT id FROM coupons ORDER BY id LIMIT 1');
-$idSablonProdus = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
 $dupaLogin = [];
 
 foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
@@ -653,7 +1018,6 @@ if ($suprapuse > 0) {
         . "același id ca o înregistrare; scoase din baza de test (ordinea lor nu e fixă nici în Bioscem).\n";
 }
 
-$paginaListe = 'test-liste-goale-' . getmypid();
 $db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published, created_at, updated_at)
     VALUES (:title, :slug, :html, \'\', \'\', 1, NOW(), NOW())')->execute([
     'title' => 'Liste goale',

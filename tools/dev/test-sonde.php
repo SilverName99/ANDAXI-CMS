@@ -17,7 +17,9 @@ declare(strict_types=1);
  *    domeniul din APP_URL, .env-ul ca legătură.
  * B. O găzduire simulată în $CMS_DEV_DIR/sonde/acasa-u<marcaj>/ (același cont: site-ul de
  *    verificare și patru site-uri „live” inventate, bioscem.ro, www.grafoanaytis.ro,
- *    biovitality.ro, vertij-tinitus.ro), cu baza cms_sonde_t, o copie a bazei de dezvoltare.
+ *    biovitality.ro, vertij-tinitus.ro), cu baza cms_sonde_t, făcută ca a unui site live încă neadoptat:
+ *    de codul de dinainte de migrări (tools/dev/migrari/pe-vechi.php, cu tabelul vechi `reviews` și
+ *    celelalte obiecte vechi, fără registrul migrărilor), plus seed-ul și datele demo.
  *    Scripturile rulează cu un mediu gol (ca pe Hostinger) și cu erorile PHP pe ecran (uneltele
  *    le înlocuiesc cu „AVERTISMENT PHP” / „OPRIT”, căutate și ele în fiecare ieșire):
  *    B1 refuzurile (cod 2, nimic citit, nimic scris): alt dosar decât al verificării, .env fără
@@ -399,15 +401,42 @@ try {
         throw new RuntimeException('MariaDB nu merge pe ' . $sockMaria);
     }
     $root = $conectare($sockMaria);
-    if ((int) $root->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cms_dev'")->fetchColumn() < 50) {
-        throw new RuntimeException('baza cms_dev lipsește sau e goală: tools/dev/instaleaza.sh');
-    }
 
-    // ── Baza: o copie a bazei de dezvoltare (date demo) și doi utilizatori ──
+    // ── Baza: ca a unui site live încă neadoptat, cu datele demo, și doi utilizatori ──
+    // Baza unui site live a făcut-o codul de dinainte de migrări: install.php și schema.sql de atunci, apoi funcțiile
+    // ensure* la primele pagini (tools/dev/migrari/pe-vechi.php), fără registrul migrărilor (_platforma_*, pe care un site
+    // neadoptat nu-l are). Așa are, făcute de codul lor și nu scrise de mână aici, și obiectele vechi pe care o instalare
+    // nouă nu le mai primește (tabelul `reviews`, tabelele manechinului, products.gallery_json). Apoi seed-ul și datele demo
+    // (scripts/seed.php, tools/dev/date-demo.php), ca pe baza de dezvoltare; licența „toate” dintr-un dosar al testului
+    // (CMS_DEV_LICENTA_DOSAR: licența locală nu se atinge). Baza de dezvoltare nu se citește deloc.
     $root->exec('CREATE DATABASE ' . $baza . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
-    foreach ($root->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'cms_dev' AND TABLE_TYPE = 'BASE TABLE'")->fetchAll(PDO::FETCH_COLUMN) as $tabel) {
-        $root->exec('CREATE TABLE ' . $baza . '.`' . $tabel . '` LIKE cms_dev.`' . $tabel . '`');
-        $root->exec('INSERT INTO ' . $baza . '.`' . $tabel . '` SELECT * FROM cms_dev.`' . $tabel . '`');
+    $dosarLicenta = $dosarTest . '/licenta-toate';
+    @mkdir($dosarLicenta, 0770, true);
+    $construieste = static function (array $script) use ($radacina, $baza, $sockMaria, $dosarLicenta): array {
+        $mediu = getenv();
+        $mediu['CMS_DEV_DB'] = $baza;
+        $mediu['CMS_DEV_SOCK'] = $sockMaria;
+        $mediu['CMS_DEV_LICENTA_DOSAR'] = $dosarLicenta;
+        $proces = proc_open(array_merge([$radacina . '/tools/dev/php.sh'], $script), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tevi, $radacina, $mediu);
+        $iesire = (string) stream_get_contents($tevi[1]) . (string) stream_get_contents($tevi[2]);
+        fclose($tevi[1]);
+        fclose($tevi[2]);
+        return [proc_close($proces), $iesire];
+    };
+    $construire = [];
+    foreach ([['tools/dev/licenta.php', 'toate'], ['tools/dev/migrari/pe-vechi.php'], ['scripts/seed.php'], ['tools/dev/date-demo.php']] as $script) {
+        $construire[$script[0]] = $construieste($script);
+    }
+    $coduriConstruire = array_map(static fn (array $r): int => $r[0], $construire);
+    $tabeleLive = $root->query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = '" . $baza . "'")->fetchAll(PDO::FETCH_COLUMN);
+    $verifica('baza „live”: făcută de codul de dinainte de migrări (pe-vechi.php, garda: fara_registru), seed.php și date-demo.php, cod 0; '
+        . 'are tabelul vechi `reviews` (al codului vechi), nu are registrul migrărilor (_platforma_*)',
+        array_filter($coduriConstruire) === [] && str_contains($construire['tools/dev/migrari/pe-vechi.php'][1], 'garda: fara_registru')
+        && str_contains($construire['tools/dev/date-demo.php'][1], 'Date demo gata') && in_array('reviews', $tabeleLive, true)
+        && array_filter($tabeleLive, static fn (string $t): bool => str_starts_with($t, '_platforma_')) === [] && count($tabeleLive) > 50,
+        json_encode($coduriConstruire) . "\n" . implode("\n", array_map(static fn (array $r): string => mb_substr($r[1], -600), $construire)));
+    if (array_filter($coduriConstruire) !== []) {
+        throw new RuntimeException('baza „live” nu s-a putut face (mai sus)');
     }
     $root->exec("CREATE USER '" . $utilizatorTot . "'@'localhost' IDENTIFIED BY " . $root->quote($parolaTot));
     $root->exec('GRANT ALL ON ' . $baza . ".* TO '" . $utilizatorTot . "'@'localhost'");
@@ -627,12 +656,8 @@ try {
     $ins('newsletter_subscribers', [['email' => 'abonat.' . $m . '@exemplu.ro', 'name' => 'Abonat ' . $m, 'status' => 'active']]);
     $ins('product_reviews', [['product_id' => $produsBbd, 'user_name' => 'Recenzent ' . $m, 'user_email' => 'recenzent.' . $m . '@exemplu.ro', 'rating' => 5,
         'review_text' => 'Text ' . $m, 'is_approved' => 0]]);
-    // Tabelul vechi de recenzii al Bioscem (ca în tools/dev/migrari/vechi/bs.sql): o bază făcută prin migrări nu-l mai are
-    // (recenzii/0013; 0023 îl copiază, unde există, în product_reviews), un site live încă neadoptat da.
-    $db->exec('CREATE TABLE IF NOT EXISTS reviews (id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, product_id INT UNSIGNED NOT NULL,
-        user_name VARCHAR(120) NOT NULL, rating TINYINT UNSIGNED NOT NULL DEFAULT 5, review_text TEXT NULL, is_approved TINYINT(1) NOT NULL DEFAULT 0,
-        created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, KEY fk_reviews_product (product_id),
-        CONSTRAINT fk_reviews_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE)');
+    // Tabelul vechi de recenzii (îl are baza „live”, făcută de codul de dinainte de migrări; o instalare nouă nu-l mai
+    // primește, recenzii/0013, iar 0023 îl copiază o dată, la adoptare, în product_reviews): un rând necopiat încă.
     $ins('reviews', [['product_id' => $produsBbd, 'user_name' => 'Vechi ' . $m, 'rating' => 4, 'review_text' => 'Vechi ' . $m, 'is_approved' => 1, 'created_at' => '2024-01-01 10:00:00']]);
     $ins('fan_streets', [['county' => 'Cluj', 'locality' => 'Cluj-Napoca', 'street' => 'Strada test', 'county_norm' => 'cluj', 'locality_norm' => 'cluj-napoca',
         'street_norm' => 'strada test', 'row_key' => '', 'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]]);
@@ -1025,9 +1050,14 @@ try {
         $dbMy8->exec("SET SESSION sql_mode = ''");
         $db->exec("SET time_zone = '+00:00'");
         $dbMy8->exec("SET time_zone = '+00:00'");
+        // Rândurile se copiază tabel cu tabel, în ordinea numelor, deci cheile străine ale schemei vechi (de exemplu
+        // order_items → orders) sunt oprite cât durează copierea: sunt aceleași rânduri ca pe MariaDB, unde cheile
+        // s-au verificat la scriere.
+        $dbMy8->exec('SET SESSION foreign_key_checks = 0');
         foreach ($db->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $tabel) {
-            // Tabelele runner-ului (_platforma_*, pe care le are o bază făcută prin migrări) nu sunt în sondă (Amprenta le
-            // sare), deci nici în schema de pe MySQL 8; verificările nu le citesc.
+            // Ce sare Amprenta (tabelele runner-ului, _platforma_*, pe care baza „live” de aici nu le are, dar le-ar avea un
+            // site prins în mijlocul adoptării; tabelele de lucru ale serverului) nu e în sondă, deci nici în schema de pe
+            // MySQL 8; verificările nu le citesc.
             if (Amprenta::ignorat((string) $tabel)) {
                 continue;
             }
@@ -1039,6 +1069,7 @@ try {
                     ->execute(array_merge(...array_map('array_values', $bucata)));
             }
         }
+        $dbMy8->exec('SET SESSION foreign_key_checks = 1');
         $db->exec('SET time_zone = SYSTEM');
         $toateLaFel = true;
         $diferente = [];

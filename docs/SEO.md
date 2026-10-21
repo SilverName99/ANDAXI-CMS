@@ -339,9 +339,14 @@ fluxului; textele Google ale primei pagini, a 3 categorii și 20 de produse
   categoriilor, sortarea, fluxul, poza de distribuire și, în cazurile de salvare, antetul cu
   logo-ul și linkurile vechi, câmpurile SEO ale categoriilor și mărcilor, numele magazinului
   și livrarea cu prețuri fixe (date structurate și flux). Istoric,
-  `--baza=f5ae5ea`: diferențele SEO față de codul de dinainte sunt scrise explicit
-  (datele structurate, unde trebuie să apară; robots.txt; width/height; poza principală;
-  stilurile catalogului; textul „Sitemap XML”) și se scot doar ele;
+  `--baza=f5ae5ea`: diferențele SEO ale livrării 1 față de codul de dinainte sunt scrise
+  explicit (datele structurate, unde trebuie să apară; robots.txt; width/height; poza
+  principală; stilurile catalogului; textul „Sitemap XML”) și se scot doar ele; cele ale
+  livrării 2 și ale avertismentului pe produs (Bioscem `6c8c789` … `4254ca4`: og:site_name și
+  og:locale, descrierile și marca în titlul produsului, linkurile și filtrul categoriilor,
+  `Allow` pentru flux în robots.txt, câmpurile avertismentului) sunt declarate în
+  `$porturiBioscem`, fiecare cu commit-ul Bioscem, pagina (sau paginile) și numărul exact de
+  apariții (WP-R, 21 octombrie); o livrare nouă își adaugă acolo declarațiile, în același commit;
 - `tools/dev/verifica-rute.php`: fiecare adresă mereu deschisă e exclusă.
 
 ## 11. Ce nu e aici (încă)

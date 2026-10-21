@@ -6,9 +6,10 @@ declare(strict_types=1);
  * Diferențele așteptate față de codul de bază, folosite de tools/dev/compara-cu-baza.php.
  * Se scot doar din pagina codului curent; restul paginii se compară octet cu octet.
  *
- *  - texte declarate: [nume, cale, nou, vechi, motiv]. „nou” e textul exact scris de
+ *  - texte declarate: [nume, cale, nou, vechi, motiv, ori]. „nou” e textul exact scris de
  *    codul curent, „vechi” ce scrie codul de bază în locul lui; fiecare trebuie găsit
- *    exact o dată pe fiecare pagină a lui și niciodată pe altă pagină;
+ *    exact o dată (sau exact „ori” ori, de exemplu titlul unei pagini, care e și în
+ *    og:title și în twitter:title) pe fiecare pagină a lui și niciodată pe altă pagină;
  *  - marcaje de port: `<!--port:<sursa>:<NUME>-->…<!--/port:<sursa>:<NUME>-->` (scrise de
  *    App\Support\Dev::marcaj); blocul întreg se scoate. Fiecare nume e declarat o
  *    singură dată, cu pagina lui, și trebuie găsit exact o dată pe ea; un marcaj
@@ -18,24 +19,56 @@ declare(strict_types=1);
  *    (500) și aici merge; se verifică ambele coduri și un text al paginii curente.
  *
  * „cale” e pagina comparată (cu parametrii ei, ca în lista de pagini) sau un prefix
- * terminat în „*” („/admin*” = fiecare pagină comparată care începe cu /admin).
+ * terminat în „*” („/admin*” = fiecare pagină comparată care începe cu /admin); la un
+ * text declarat poate fi și o listă de astfel de pagini (aceeași schimbare pe mai multe
+ * pagini, de exemplu un rând nou în <head>): textul trebuie găsit pe fiecare dintre ele.
  * Plus anteturile răspunsului, normalizate pentru comparare (diferente_antete).
  * Funcții pure (fără server și fără bază), verificate de diferente_autotest().
  */
 
-/** Pagina comparată e una dintre paginile declarației? */
-function diferenta_pe_pagina(string $declarata, string $cale): bool
+/** Pagina comparată e una dintre paginile declarației (o pagină, un prefix cu „*” sau o listă de ele)? */
+function diferenta_pe_pagina(string|array $declarata, string $cale): bool
 {
+    if (is_array($declarata)) {
+        foreach ($declarata as $una) {
+            if (is_string($una) && $una !== '' && diferenta_pe_pagina($una, $cale)) {
+                return true;
+            }
+        }
+        return false;
+    }
     return str_ends_with($declarata, '*')
         ? str_starts_with($cale, substr($declarata, 0, -1))
         : $declarata === $cale;
 }
 
 /**
+ * Ce lipsește dintr-o declarație de text (gol = completă): nume, cale (o pagină sau o listă nevidă
+ * de pagini, fiecare un text nevid), nou, motiv; „ori”, dacă e dat, un număr întreg de cel puțin 1.
+ */
+function diferenta_declaratie_incompleta(array $intrare): string
+{
+    foreach (['nume', 'nou', 'motiv'] as $camp) {
+        if (!is_string($intrare[$camp] ?? null) || trim($intrare[$camp]) === '') {
+            return $camp;
+        }
+    }
+    $cale = $intrare['cale'] ?? null;
+    $pagini = is_array($cale) ? $cale : [$cale];
+    if ($pagini === [] || array_filter($pagini, static fn ($p): bool => !is_string($p) || trim($p) === '') !== []) {
+        return 'cale';
+    }
+    if (array_key_exists('ori', $intrare) && (!is_int($intrare['ori']) || $intrare['ori'] < 1)) {
+        return 'ori';
+    }
+    return '';
+}
+
+/**
  * Pune la loc textele declarate. Problemele (text negăsit pe pagina lui, găsit de mai
  * multe ori sau pe altă pagină, declarație incompletă) se adaugă în $probleme.
  *
- * @param array<string, list<array{nume?: string, cale?: string, nou?: string, vechi?: string, motiv?: string}>> $liste
+ * @param array<string, list<array{nume?: string, cale?: string|list<string>, nou?: string, vechi?: string, motiv?: string, ori?: int}>> $liste
  * @param array<string, int> $gasite
  * @param list<string> $probleme
  */
@@ -43,16 +76,16 @@ function diferente_texte(array $liste, string $cale, string $html, array &$gasit
 {
     foreach ($liste as $numeLista => $lista) {
         foreach ($lista as $intrare) {
-            $nume = (string) ($intrare['nume'] ?? '');
+            $nume = is_string($intrare['nume'] ?? null) ? $intrare['nume'] : '';
             $eticheta = $numeLista . ' „' . $nume . '”';
-            foreach (['nume', 'cale', 'nou', 'motiv'] as $camp) {
-                if (trim((string) ($intrare[$camp] ?? '')) === '') {
-                    $probleme[] = $eticheta . ': lipsește „' . $camp . '” (fiecare diferență se declară cu pagina și motivul ei)';
-                    continue 2;
-                }
+            $lipsa = diferenta_declaratie_incompleta($intrare);
+            if ($lipsa !== '') {
+                $probleme[] = $eticheta . ': „' . $lipsa . '” lipsește sau e greșit (fiecare diferență se declară cu pagina și motivul ei; '
+                    . '„ori”, dacă e dat, e un număr de cel puțin 1)';
+                continue;
             }
             $html = str_replace((string) $intrare['nou'], (string) ($intrare['vechi'] ?? ''), $html, $n);
-            $asteptat = diferenta_pe_pagina((string) $intrare['cale'], $cale) ? 1 : 0;
+            $asteptat = diferenta_pe_pagina($intrare['cale'], $cale) ? (int) ($intrare['ori'] ?? 1) : 0;
             if ($n !== $asteptat) {
                 $probleme[] = $eticheta . ' găsit de ' . $n . ' ori, așteptat ' . $asteptat;
             }
@@ -258,6 +291,38 @@ function diferente_autotest(): array
     $ruleaza('text declarat fără motiv', static fn (array &$g, array &$p): string
         => diferente_texte(['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => '']]],
             '/magazin', '<b>Text nou</b>', $g, $p), true);
+    // O listă de pagini: textul pe fiecare dintre ele (o dată), pe nicio altă pagină.
+    $peMaiMulte = ['$porturiBioscem' => [['nume' => 'l', 'cale' => ['/', '/magazin', '/produs/*'], 'nou' => 'Text nou', 'vechi' => 'Text vechi',
+        'motiv' => 'test']]];
+    foreach (['/', '/magazin', '/produs/ceai'] as $paginaListei) {
+        $ruleaza('text cu o listă de pagini, găsit o dată pe ' . $paginaListei, static fn (array &$g, array &$p): string
+            => diferente_texte($peMaiMulte, $paginaListei, '<b>Text nou</b>', $g, $p), false, '<b>Text vechi</b>');
+    }
+    $ruleaza('text cu o listă de pagini, lipsă de pe una dintre ele', static fn (array &$g, array &$p): string
+        => diferente_texte($peMaiMulte, '/magazin', '<b>Text vechi</b>', $g, $p), true);
+    $ruleaza('text cu o listă de pagini, găsit pe o pagină din afara listei', static fn (array &$g, array &$p): string
+        => diferente_texte($peMaiMulte, '/cos', '<b>Text nou</b>', $g, $p), true);
+    $ruleaza('text cu o listă de pagini goală', static fn (array &$g, array &$p): string
+        => diferente_texte(['$porturiBioscem' => [['nume' => 'l', 'cale' => [], 'nou' => 'Text nou', 'motiv' => 'test']]], '/', '<b>Text nou</b>', $g, $p), true);
+    $ruleaza('text cu o listă de pagini cu o pagină goală', static fn (array &$g, array &$p): string
+        => diferente_texte(['$porturiBioscem' => [['nume' => 'l', 'cale' => ['/', ''], 'nou' => 'Text nou', 'motiv' => 'test']]], '/', '<b>Text nou</b>', $g, $p), true);
+    // „ori”: exact atâtea apariții pe fiecare pagină a declarației (nici mai puține, nici mai multe).
+    $deTrei = ['$porturiBioscem' => [['nume' => 'o', 'cale' => '/produs/ceai', 'nou' => 'Ceai – Marca | Firma', 'vechi' => 'Ceai | Firma', 'motiv' => 'test',
+        'ori' => 3]]];
+    $trei = '<title>Ceai – Marca | Firma</title><meta content="Ceai – Marca | Firma"><meta content="Ceai – Marca | Firma">';
+    $ruleaza('text cu „ori” 3, găsit de 3 ori', static fn (array &$g, array &$p): string
+        => diferente_texte($deTrei, '/produs/ceai', $trei, $g, $p), false, str_replace('Ceai – Marca | Firma', 'Ceai | Firma', $trei));
+    $ruleaza('text cu „ori” 3, găsit de 2 ori', static fn (array &$g, array &$p): string
+        => diferente_texte($deTrei, '/produs/ceai', substr($trei, 0, (int) strrpos($trei, '<meta')), $g, $p), true);
+    $ruleaza('text cu „ori” 3, găsit de 4 ori', static fn (array &$g, array &$p): string
+        => diferente_texte($deTrei, '/produs/ceai', $trei . '<p>Ceai – Marca | Firma</p>', $g, $p), true);
+    $ruleaza('text cu „ori” 3, pe altă pagină', static fn (array &$g, array &$p): string
+        => diferente_texte($deTrei, '/produs/alt-ceai', $trei, $g, $p), true);
+    foreach (['0' => 0, 'negativ' => -1, 'text' => '3'] as $cazOri => $oriGresit) {
+        $ruleaza('text cu „ori” greșit (' . $cazOri . ')', static fn (array &$g, array &$p): string
+            => diferente_texte(['$porturiBioscem' => [['nume' => 'o', 'cale' => '/', 'nou' => 'Text nou', 'motiv' => 'test', 'ori' => $oriGresit]]],
+                '/', '<b>Text nou</b>', $g, $p), true);
+    }
 
     // Codurile de stare declarate: doar exact codurile declarate, cu textul doar pe pagina curentă.
     $coduri = ['$coduriDeBioscem' => [['nume' => 'c', 'cale' => '/checkout/succes', 'cod_baza' => 500, 'cod_curent' => 200,
