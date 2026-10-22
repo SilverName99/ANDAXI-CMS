@@ -30,7 +30,9 @@ namespace App\Support;
  *
  * Fișierele publice ale temei stau în pachet în `tema/public/` și se servesc la `/tema/…`: pe server din
  * `public/tema/` (le copiază acolo instalarea și fiecare actualizare a pachetului), în dezvoltare direct din pachet
- * (tools/dev/router.php). Adresele primesc `?v=<data fișierului>`.
+ * (tools/dev/router.php). Adresele primesc `?v=<data fișierului>`. Pe server, un fișier al temei care nu a ajuns în
+ * `public/tema/` nu intră în pagină (nimeni nu l-ar servi): o temă copiată pe jumătate lasă doar o foaie sau un
+ * script lipsă, nu legături spre pagina 404 (`scripts/diagnostic.php --pachet` spune ce lipsește).
  *
  * O valoare greșită nu oprește site-ul: cheia rămâne la implicit (un element greșit dintr-o listă se scoate) și se scrie
  * un rând în jurnalul PHP. `tools/dev/verifica-pachet.php` refuză un pachet cu astfel de probleme (`valideaza()`).
@@ -197,9 +199,11 @@ final class Tema
     }
 
     /**
-     * Fișierul de pe disc din spatele unei adrese publice (`/tema/…`, `/assets/…`, `/uploads/…`), sau null pentru o
-     * adresă care nu e una dintre acestea (sau are „..”, „//”). `/tema/…`: întâi `public/tema/` (pe server), apoi
-     * `tema/public/` din pachet (dezvoltarea, sau un pachet încă necopiat).
+     * Fișierul de pe disc care servește o adresă publică (`/tema/…`, `/assets/…`, `/uploads/…`), sau null pentru o
+     * adresă care nu e una dintre acestea (sau are „..”, „//”). Fișierul poate să nu existe (cine îl folosește verifică
+     * cu is_file). `/tema/…`: `public/tema/` din docroot, singurul pe care îl servește serverul web; doar sub
+     * tools/dev/router.php, care servește `/tema/…` direct din `tema/public/` al pachetului și o spune prin constanta
+     * `ANDAXI_DEV_TEMA_DIN_PACHET` (dosarul acela), un fișier care lipsește din `public/tema/` se ia de acolo.
      */
     public static function fisierPublic(string $cale): ?string
     {
@@ -214,10 +218,11 @@ final class Tema
             return Paths::public('assets/' . $m[2]);
         }
         $dinDocroot = Paths::public('tema/' . $m[2]);
-        if (is_file($dinDocroot)) {
+        $servitDinPachet = defined('ANDAXI_DEV_TEMA_DIN_PACHET') ? (string) constant('ANDAXI_DEV_TEMA_DIN_PACHET') : '';
+        if (is_file($dinDocroot) || $servitDinPachet === '') {
             return $dinDocroot;
         }
-        return DateSite::dosar() . '/tema/public/' . $m[2];
+        return $servitDinPachet . '/' . $m[2];
     }
 
     // -----------------------------------------------------------------
@@ -471,7 +476,8 @@ final class Tema
     }
 
     /**
-     * Doar adresele cu fișier (o temă copiată pe jumătate pe server nu pune în pagină legături spre fișiere lipsă).
+     * Doar adresele cu fișier servit (fisierPublic: pe server, cel din `public/tema/`), deci o temă copiată pe jumătate
+     * pe server nu pune în pagină legături spre fișiere lipsă.
      *
      * @param array<mixed> $adrese
      * @return list<string>

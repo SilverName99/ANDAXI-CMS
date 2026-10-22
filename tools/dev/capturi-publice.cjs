@@ -66,9 +66,15 @@ async function contextNou(browser, blocate, latime) {
 async function pregatesteRol(context, server, rol, roluri) {
     const date = roluri[rol] || {};
     if (date.email) {
+        // O logare reușită duce la /contul-meu; una refuzată (o parolă greșită, de exemplu admin-parola.txt rescris de altă
+        // unealtă) duce înapoi la /login, tot cu 302. Altfel rolul ar rula ca vizitator, iar paginile clientului ar ieși la
+        // fel pe ambele servere fără să fi fost văzute.
         const r = await context.request.post(server + '/login', { form: { email: date.email, password: date.parola }, maxRedirects: 0 });
-        if (r.status() >= 400) {
-            throw new Error('login ' + rol + ' pe ' + server + ': ' + r.status());
+        const locatie = r.headers().location || '';
+        const cale = locatie !== '' ? new URL(locatie, server).pathname : '';
+        if (r.status() < 300 || r.status() >= 400 || cale !== '/contul-meu') {
+            throw new Error('login ' + rol + ' pe ' + server + ': ' + r.status() + ' spre „' + locatie + '”, aștept /contul-meu '
+                + '(parola clientului demo nu e cea din admin-parola.txt?)');
         }
     }
     if (date.produs) {

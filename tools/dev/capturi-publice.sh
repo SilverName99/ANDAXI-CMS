@@ -7,7 +7,8 @@
 #   tools/dev/capturi-publice.sh --licenta=bioscem    # la fel, cu licența de dezvoltare a Bioscem
 #   tools/dev/capturi-publice.sh --baza-repo=<clonă>@<commit>
 #   tools/dev/capturi-publice.sh --autotest           # unealta însăși: un arbore identic dă 0 diferențe, o singură regulă
-#                                                     # schimbată într-o copie a app.css se raportează, declarațiile merg
+#                                                     # schimbată într-o copie a app.css se raportează, declarațiile merg,
+#                                                     # un client care nu se poate loga oprește unealta
 #
 # Paginile (prima pagină, o categorie, un produs cu șablon și unul fără, coșul, checkout-ul, contul, un articol, blogul,
 # o pagină legală, un 404, pagina de mulțumire a unei comenzi demo), ca vizitator și ca client logat, la 390, 768, 1366
@@ -125,6 +126,10 @@ caz "aceeași regulă, declarată: trece" 0 "0 diferențe nedeclarate, 0 declara
     --declaratii="$LUCRU/declaratie-fundal.json"
 caz "declarată pe altă proprietate: pică" 1 "background-color" --latimi=1366 --declaratii="$LUCRU/declaratie-alta-proprietate.json"
 caz "declarată pe altă pagină: pică" 1 "background-color" --latimi=1366 --declaratii="$LUCRU/declaratie-alta-pagina.json"
+# Clientul cu o parolă greșită: logarea duce înapoi la /login (tot 302), iar unealta se oprește în loc să compare, ca
+# vizitator, paginile clientului.
+caz "clientul nu se poate loga: unealta se oprește" 2 "login cli pe http://127.0.0.1:" --latimi=1366 --fara-declaratii \
+    --parola-client=parola-gresita-autotest
 
 echo "capturi-publice --autotest: $TRECUTE cazuri trecute, $ESECURI eșuate"
 [ "$ESECURI" = 0 ]

@@ -18,8 +18,10 @@ declare(strict_types=1);
  *     (fișiere la o adresă fixă, copiate peste public/ la adoptare) doar imagini, niciuna peste un fișier al nucleului,
  *     în uploads/ sau în tema/; continut/ (GR-20) încă nu face parte din format; privat/ (ignorat de git) doar .json.
  *     Nicăieri PHP (.php, .phtml, .phar …), .htaccess, fișiere ascunse, legături simbolice sau fișiere peste 1 MB.
- *  2. Conținutul: fiecare .json e un obiect JSON valid; .md și .css sunt UTF-8; un .css nu are „</style”, @import sau
- *     url() spre alt server (adresa IP a vizitatorului ar pleca la un terț) și nici „javascript:”/expression();
+ *  2. Conținutul: fiecare .json e un obiect JSON valid; .md și .css sunt UTF-8; un .css nu are „</style”, niciun @import
+ *     și nicio adresă spre alt server în url(), src() sau într-un șir (image-set), citit ca de browser: fără comentarii,
+ *     cu escape-urile decodate (adresa IP a vizitatorului ar pleca la un terț; css_incarcare_externa), și nici
+ *     „javascript:”/expression();
  *     fiecare .svg trece de lista albă din App\Support\SvgSigur.
  *     setari-inghetate.json (și corecturile -<N>) se citește ca la runner-ul migrărilor (App\Support\Migrari\Inghetare)
  *     și e a site-ului pachetului; conținutul îl verifică tools/inghetare/verifica-inghetare.php.
@@ -99,6 +101,158 @@ $fisiereNucleuPublic = (static function () use ($radacina): array {
     }
     return $lista;
 })();
+
+/**
+ * Ce ar face o foaie de stil să ceară ceva de la alt server (adresa IP a vizitatorului ar pleca la un terț înaintea
+ * acordului pentru cookie-uri): prima problemă găsită, sau null. Foaia se citește cum o citește browserul (CSS Syntax,
+ * doar cât trebuie aici): comentariile se sar, iar escape-urile (`\68ttps`, `u\72l(`, `\` la capăt de rând) se decodează
+ * în nume, în șiruri și în url(), deci o adresă nu se poate ascunde după ele. Se refuză:
+ *  - orice `@import` (o foaie a temei se declară în tema.json → css; un `@import` al unui `data:text/css` ar putea
+ *    aduce el ceva de pe alt server, nevăzut aici);
+ *  - în `url(…)` și `src(…)`: o adresă cu schemă (alta decât `data:`) sau care începe cu `//`;
+ *  - orice șir care începe cu `http:`, `https:` sau `//` (`image-set("https://…" 1x)` și celelalte funcții de imagine
+ *    cer și șiruri simple).
+ * Înainte de verificare, adresa se curăță ca la browser: fără tab-uri și linii noi, fără spațiile și caracterele de
+ * control de la capete, „\” citit ca „/” (`url(\\exemplu.test/a.png)` e tot o adresă fără schemă spre alt server).
+ */
+function css_incarcare_externa(string $css): ?string
+{
+    $lungime = strlen($css);
+    $i = 0;
+    $hex = static fn (string $c): bool => $c !== '' && ctype_xdigit($c);
+    // Un escape care începe la $i (pe „\”): caracterul lui și poziția de după el.
+    $escape = static function (int $i) use ($css, $lungime, $hex): array {
+        $j = $i + 1;
+        if ($j >= $lungime) {
+            return ['', $j];
+        }
+        if ($hex($css[$j])) {
+            $cifre = '';
+            while ($j < $lungime && strlen($cifre) < 6 && $hex($css[$j])) {
+                $cifre .= $css[$j++];
+            }
+            if ($j < $lungime && $css[$j] === "\r" && ($css[$j + 1] ?? '') === "\n") {
+                $j += 2;
+            } elseif ($j < $lungime && strpbrk($css[$j], " \t\n\r\f") !== false) {
+                $j++;
+            }
+            $cod = (int) hexdec($cifre);
+            return [($cod === 0 || $cod > 0x10FFFF || ($cod >= 0xD800 && $cod <= 0xDFFF)) ? "\u{FFFD}" : mb_chr($cod, 'UTF-8'), $j];
+        }
+        // Orice alt caracter (întreg, chiar dacă e UTF-8 pe mai mulți octeți).
+        $lung = ord($css[$j]) >= 0xF0 ? 4 : (ord($css[$j]) >= 0xE0 ? 3 : (ord($css[$j]) >= 0xC0 ? 2 : 1));
+        return [substr($css, $j, $lung), $j + $lung];
+    };
+    $escapeValid = static fn (int $i): bool => $css[$i] === '\\' && $i + 1 < $lungime && strpbrk($css[$i + 1], "\n\r\f") === false;
+    // Un nume (identificator, cuvântul de după „@”) de la $i: textul decodat și poziția de după el.
+    $nume = static function (int $i) use ($css, $lungime, $escape, $escapeValid): array {
+        $text = '';
+        while ($i < $lungime) {
+            $c = $css[$i];
+            if (ctype_alnum($c) || $c === '-' || $c === '_' || ord($c) >= 0x80) {
+                $text .= $c;
+                $i++;
+            } elseif ($escapeValid($i)) {
+                [$caracter, $i] = $escape($i);
+                $text .= $caracter;
+            } else {
+                break;
+            }
+        }
+        return [$text, $i];
+    };
+    // Un șir care începe la $i (pe ghilimea): conținutul decodat și poziția de după el.
+    $sir = static function (int $i) use ($css, $lungime, $escape): array {
+        $ghilimea = $css[$i++];
+        $text = '';
+        while ($i < $lungime) {
+            $c = $css[$i];
+            if ($c === $ghilimea) {
+                return [$text, $i + 1];
+            }
+            if ($c === "\n") {
+                // Șir neînchis pe rând: browserul îl aruncă.
+                return [$text, $i];
+            }
+            if ($c === '\\') {
+                if ($i + 1 < $lungime && $css[$i + 1] === "\n") {
+                    $i += 2;
+                    continue;
+                }
+                if ($i + 2 < $lungime && $css[$i + 1] === "\r" && $css[$i + 2] === "\n") {
+                    $i += 3;
+                    continue;
+                }
+                [$caracter, $i] = $escape($i);
+                $text .= $caracter;
+                continue;
+            }
+            $text .= $c;
+            $i++;
+        }
+        return [$text, $i];
+    };
+    $curata = static fn (string $adresa): string => str_replace('\\', '/', trim(str_replace(["\t", "\n", "\r"], '', $adresa), " \x00..\x1F"));
+    $inUrl = static function (string $adresa) use ($curata): ?string {
+        $adresa = $curata($adresa);
+        return preg_match('#^(//|(?!data:)[a-z][a-z0-9+.\-]*:)#i', $adresa) === 1 ? 'url() spre „' . $adresa . '”' : null;
+    };
+    while ($i < $lungime) {
+        $c = $css[$i];
+        if ($c === '/' && ($css[$i + 1] ?? '') === '*') {
+            $sfarsit = strpos($css, '*/', $i + 2);
+            $i = $sfarsit === false ? $lungime : $sfarsit + 2;
+            continue;
+        }
+        if ($c === '"' || $c === "'") {
+            [$text, $i] = $sir($i);
+            if (preg_match('#^(//|https?:)#i', $curata($text)) === 1) {
+                return 'șirul „' . $curata($text) . '” (o adresă de pe alt server)';
+            }
+            continue;
+        }
+        if ($c === '@') {
+            [$text, $i] = $nume($i + 1);
+            if (strtolower($text) === 'import') {
+                return '@import (o foaie a temei se declară în tema.json → css)';
+            }
+            continue;
+        }
+        if (ctype_alnum($c) || $c === '-' || $c === '_' || ord($c) >= 0x80 || $escapeValid($i)) {
+            [$text, $dupa] = $nume($i);
+            // Mereu înainte (un nume citește cel puțin un caracter; altfel bucla n-ar mai ieși).
+            $i = max($dupa, $i + 1);
+            if (($css[$i] ?? '') !== '(' || !in_array(strtolower($text), ['url', 'src'], true)) {
+                continue;
+            }
+            $i++;
+            while ($i < $lungime && strpbrk($css[$i], " \t\n\r\f") !== false) {
+                $i++;
+            }
+            if ($i < $lungime && ($css[$i] === '"' || $css[$i] === "'")) {
+                [$adresa, $i] = $sir($i);
+            } else {
+                // Adresa fără ghilimele: până la „)” sau un spațiu, cu escape-urile decodate.
+                $adresa = '';
+                while ($i < $lungime && $css[$i] !== ')' && strpbrk($css[$i], " \t\n\r\f") === false) {
+                    if ($escapeValid($i)) {
+                        [$caracter, $i] = $escape($i);
+                        $adresa .= $caracter;
+                    } else {
+                        $adresa .= $css[$i++];
+                    }
+                }
+            }
+            $problema = $inUrl($adresa);
+            if ($problema !== null) {
+                return $problema;
+            }
+            continue;
+        }
+        $i++;
+    }
+    return null;
+}
 
 /** Al cui site e pachetul: numele dosarului pentru site-uri/<site>, null (oricare) pentru pachetele de dezvoltare. */
 $siteAsteptat = static function (string $dosar) use ($radacina): ?string {
@@ -215,8 +369,9 @@ $verificaPachet = static function (string $dosar, ?string $site, bool $alUnuiCli
             if (preg_match('#</style#i', $continut) === 1) {
                 $probleme[] = $relativ . ': conține „</style”';
             }
-            if (preg_match('#url\(\s*[\'"]?\s*(https?:|//)|@import\s+(url\(\s*)?[\'"]?\s*(https?:|//)#i', $continut) === 1) {
-                $probleme[] = $relativ . ': încarcă ceva de pe alt server (url() sau @import spre http/https)';
+            $externa = css_incarcare_externa($continut);
+            if ($externa !== null) {
+                $probleme[] = $relativ . ': poate încărca ceva de pe alt server: ' . $externa;
             }
             if (preg_match('/javascript:|expression\s*\(|behavior\s*:/i', $continut) === 1) {
                 $probleme[] = $relativ . ': conține „javascript:”, expression() sau behavior';
@@ -358,6 +513,24 @@ if ($autotest) {
     $caz('blocul css_inline cu „</style”', static fn (string $d) => file_put_contents($d . '/tema/pagina-succes.css', ".a{}</style><script>alert(1)</script>\n"), '</style');
     $caz('CSS-ul temei cu un font de la Google', static fn (string $d) => file_put_contents($d . '/tema/public/css/tema-demo.css',
         "@import url('https://fonts.googleapis.com/css2?family=Rubik');\n", FILE_APPEND), 'alt server');
+    // Același lucru, ascuns: fiecare formă o citește browserul ca o cerere spre alt server.
+    $cssExtern = static fn (string $regula): callable => static fn (string $d) => file_put_contents($d . '/tema/public/css/tema-demo.css',
+        $regula . "\n", FILE_APPEND);
+    $caz('CSS: image-set() cu un șir de pe alt server', $cssExtern('.a{background-image:image-set("https://exemplu.test/a.png" 1x)}'), 'alt server');
+    $caz('CSS: url() cu escape (\\68ttps)', $cssExtern('.b{background:url(\\68ttps://exemplu.test/b.png)}'), 'alt server');
+    $caz('CSS: u\\72l() cu numele scris cu escape', $cssExtern('.c{background:u\\72l("https://exemplu.test/c.png")}'), 'alt server');
+    $caz('CSS: url() fără schemă (//)', $cssExtern('.d{background:url( //exemplu.test/d.png )}'), 'alt server');
+    $caz('CSS: url() cu „\\/” (citit „//”)', $cssExtern(".e{background:url('/\\/exemplu.test/e.png')}"), 'alt server');
+    $caz('CSS: url() cu „\\\\” (browserul îl citește „//”)', $cssExtern('.l{background:url("\\\\\\\\exemplu.test/l.png")}'), 'alt server');
+    $caz('CSS: url() cu http: fără „//”', $cssExtern('.f{background:url(http:exemplu.test/f.png)}'), 'alt server');
+    $caz('CSS: url() cu un tab în schemă', $cssExtern(".g{background:url('ht\\9 tps://exemplu.test/g.png')}"), 'alt server');
+    $caz('CSS: @import scris cu escape, spre un fișier local', $cssExtern('@\\69mport "/tema/css/alta.css";'), '@import');
+    $caz('CSS: @import al unui data:text/css', $cssExtern('@import url("data:text/css,@import%20url(https%3A//exemplu.test/h.css)");'), '@import');
+    $caz('CSS: un comentariu cu apostrof înaintea unui image-set()', $cssExtern("/* it's */ .i{background-image:image-set(\"https://exemplu.test/i.png\" 1x)}"),
+        'alt server');
+    $caz('CSS: adrese locale, un SVG data: (cu xmlns http) și un șir obișnuit: trece', $cssExtern(".j{background:url(/tema/img/logo-demo.svg) no-repeat,"
+        . " url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E\")}\n.k::before{content:\"Tel: 0700 000 000\"}"
+        . "\n/* url(https://exemplu.test/comentariu.png) */"), null);
     $caz('o cheie necunoscută în tema.json', static fn (string $d) => $tema($d, static function (array $t): array {
         $t['culoare'] = '#000';
         return $t;

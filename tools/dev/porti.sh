@@ -115,6 +115,9 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # WP-13 (GR-18, DB-01, GR-07): pe lângă porțile din plan (G-cmp, G-vizual pe pachetul implicit, testul temei în G-plug),
 # G-seo (DateSite::json citește acum căi din pachet, ca tema/tema.json; regulile SEO vin tot prin el) și G-cmp-istoric
 # (views/layout.php și vederile de rezervă s-au schimbat: și față de f5ae5ea trebuie să rămână aceleași pagini).
+# WP-16 (predarea WP-13): a treia linie din /health, „pachet: <amprenta manifestului>” sau „pachet: lipsa” (de-bioscem §5.2,
+# App\Support\PachetSite::amprenta), schimbă corpurile exacte ale lui /health pe care le verifică tools/dev/test-instalare.php
+# (G-inst) și tools/dev/test-verificare.php (G-verif, poarta copiei lasă /health să treacă), deci WP-16 rulează și G-inst și G-verif.
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -134,7 +137,7 @@ declare -A PORTI=(
     [WP-13]="G-rute G-mig G-cmp G-cmp-istoric G-vizual G-plug G-smoke G-seo G-php"
     [WP-14]="G-rute G-mig G-cmp G-pachet G-plug G-smoke G-php"
     [WP-15]="G-rute G-mig G-cmp G-plug G-smoke G-verif G-php"
-    [WP-16]="G-rute G-mig G-cmp G-pachet G-vizual G-plug G-smoke G-php"
+    [WP-16]="G-rute G-mig G-inst G-cmp G-pachet G-vizual G-plug G-smoke G-verif G-php"
     [WP-17]="G-rute G-mig G-cmp G-pachet G-plug G-smoke G-php"
     [WP-18]="G-rute G-mig G-cmp G-pachet G-plug G-smoke G-php"
     [WP-19]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-smoke G-php"

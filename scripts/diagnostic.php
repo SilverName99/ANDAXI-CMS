@@ -24,7 +24,7 @@ declare(strict_types=1);
  * fi alta: pe Hostinger se vede în hPanel → PHP Configuration.
  *
  * Arată și pachetul de date al site-ului (`--pachet`, docs/PACHETE.md): dosarul (`SITE_DATE_DOSAR`), manifestul
- * `pachet.json` (fiecare fișier cu sha256-ul lui, site-ul = `LICENTA_SITE`), tema și copiile fișierelor publice ale
+ * `pachet.json` (fiecare fișier cu sha256-ul lui, site-ul = `LICENTA_SITE` = `SITE_SLUG`), tema și copiile fișierelor publice ale
  * pachetului în docroot (`tema/public/` în `public/tema/`, `public/` peste `public/`). Iese cu 1 dacă ceva nu se
  * potrivește: un pachet lipsă sau stricat nu are voie să treacă neobservat (numele cookie-ului de acord, de exemplu,
  * ar reveni la cel implicit).
@@ -51,12 +51,14 @@ require_once __DIR__ . '/../bootstrap.php';
 
 use App\Support\Database;
 use App\Support\DateSite;
+use App\Support\Env;
 use App\Support\Licenta;
 use App\Support\PachetSite;
 use App\Support\Paths;
 use App\Support\Plugins;
 use App\Support\Settings;
 use App\Support\Tema;
+use App\Support\Verificare;
 
 $config = require __DIR__ . '/../config/app.php';
 
@@ -105,14 +107,33 @@ if (in_array('--licenta', $argv, true)) {
     exit($licentaOk && !$phpPreaVechi ? 0 : 1);
 }
 
-/** Pachetul de date al site-ului: manifestul, tema, copiile publice. Întoarce true dacă totul se potrivește. */
+/**
+ * Pachetul de date al site-ului: manifestul, tema, copiile publice. Întoarce true dacă totul se potrivește. Al cui e
+ * site-ul se spune de două ori în .env, și ambele trebuie să fie ale pachetului: SITE_SLUG (migrările rulează cu el pașii
+ * site-ului, înghețarea setărilor; docs/MIGRARI.md) și LICENTA_SITE (licența, pluginurile). Una lipsă e o problemă:
+ * fără ea nu se poate spune că pachetul copiat e chiar al acestui site. Singura excepție e copia de verificare
+ * (SITE_COPIE_VERIFICARE=1, docs/VERIFICARE.md), a cărei licență e a ei (LICENTA_SITE începe cu „verificare”): acolo
+ * pachetul e al lui SITE_SLUG.
+ */
 $arataPachet = static function (): bool {
     echo "=== Pachetul site-ului ===\n";
     $dosar = DateSite::dosar();
     $site = Licenta::site();
+    $slug = trim((string) Env::get('SITE_SLUG', ''));
+    $copieVerificare = Verificare::activ() && str_starts_with($site, 'verificare');
     echo 'dosar        : ' . $dosar . (is_dir($dosar) ? '' : ' (LIPSESTE)') . "\n";
-    echo 'site (.env)  : ' . ($site !== '' ? $site : 'LIPSESTE (LICENTA_SITE)') . "\n";
-    $probleme = PachetSite::verifica($dosar, $site !== '' ? $site : null);
+    echo 'site (.env)  : ' . ($site !== '' ? $site : 'LIPSESTE (LICENTA_SITE)')
+        . ($copieVerificare ? ' (licenta copiei de verificare; pachetul e al lui SITE_SLUG)' : '') . "\n";
+    echo 'SITE_SLUG    : ' . ($slug !== '' ? $slug : 'LIPSESTE') . "\n";
+    $probleme = PachetSite::verifica($dosar, $slug !== '' ? $slug : ($site !== '' && !$copieVerificare ? $site : null));
+    if ($site === '') {
+        $probleme[] = 'LICENTA_SITE lipsește din .env: nu se poate verifica al cui e pachetul';
+    }
+    if ($slug === '') {
+        $probleme[] = 'SITE_SLUG lipsește din .env: migrările n-ar rula pașii site-ului (înghețarea setărilor)';
+    } elseif ($site !== '' && $slug !== $site && !$copieVerificare) {
+        $probleme[] = 'SITE_SLUG („' . $slug . '”) diferă de LICENTA_SITE („' . $site . '”)';
+    }
     $amprenta = PachetSite::amprenta($dosar);
     echo 'manifest     : ' . ($amprenta !== null ? 'pachet.json, amprenta ' . $amprenta : 'LIPSESTE') . "\n";
     if (is_file($dosar . '/' . Tema::FISIER)) {

@@ -9,7 +9,11 @@ declare(strict_types=1);
  *
  *   capturi-publice.php compara --baza=<url> --curent=<url> [--eticheta=<text>] [--pagini=toate|redus]
  *       [--latimi=390,768,1366,1920] [--declaratii=<fișier.json>|--fara-declaratii] [--fara-capturi] [--dosar=<nume>]
+ *       [--parola-client=<text>]   # doar autotestul: o parolă greșită a clientului demo
  *   capturi-publice.php verificari --server=<url> --verificari=<fișier.json> [--dosar=<nume>]
+ *
+ * Clientul se loghează la începutul fiecărui rol, pe fiecare server; o logare care nu duce la /contul-meu (de exemplu
+ * cu o parolă greșită) oprește unealta cu codul 2, ca paginile clientului să nu se compare, în gol, ca ale unui vizitator.
  *
  * **compara**: setul fix de pagini publice (prima pagină, o categorie, un produs cu șablon și unul fără, coșul, checkout-ul,
  * contul, un articol, lista blogului, o pagină legală, un 404 și pagina de mulțumire a unei comenzi demo), ca vizitator
@@ -100,6 +104,10 @@ if (!$db instanceof PDO) {
 }
 $unu = static fn (string $sql): string => (string) ($db->query($sql)->fetchColumn() ?: '');
 $parola = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
+// Doar pentru autotest (capturi-publice.sh --autotest): o parolă greșită a clientului, ca logarea refuzată să oprească unealta.
+if (is_string($optiuni['parola-client'] ?? null)) {
+    $parola = (string) $optiuni['parola-client'];
+}
 $idMenta = $unu("SELECT id FROM products WHERE slug = 'ceai-de-menta'");
 $roluri = [
     'viz' => ['produs' => $idMenta, 'cantitate' => 2],

@@ -26,15 +26,18 @@ if ($cale !== '/' && $cale !== '/sitemap.xml' && !str_starts_with($cale, '/uploa
 // pachet (tema/public/) la instalare și la fiecare actualizare, și le servește serverul web (regula de mai sus). Aici
 // nu le copiază nimeni: se servesc direct din pachetul ales (SITE_DATE_DOSAR), doar fișierele din tema/public/ și doar
 // tipurile pe care tools/dev/verifica-pachet.php le primește acolo. Un fișier care lipsește ajunge la aplicație (404).
+$dosarSite = trim((string) getenv('SITE_DATE_DOSAR'));
+if ($dosarSite !== '' && $dosarSite[0] !== '/') {
+    $dosarSite = dirname($radacinaPublica) . '/' . $dosarSite;
+}
+$dosarTema = $dosarSite !== '' ? realpath($dosarSite . '/tema/public') : false;
+// Aplicația (App\Support\Tema::fisierPublic) pune în pagină o adresă /tema/… al cărei fișier nu e în public/tema/ doar
+// dacă îl servește cineva: aici routerul, din acest dosar. Fără constantă (serverul web de pe Hostinger) nu.
+define('ANDAXI_DEV_TEMA_DIN_PACHET', $dosarTema !== false ? $dosarTema : '');
 if (str_starts_with($cale, '/tema/')) {
-    $dosarSite = trim((string) getenv('SITE_DATE_DOSAR'));
-    if ($dosarSite !== '' && $dosarSite[0] !== '/') {
-        $dosarSite = dirname($radacinaPublica) . '/' . $dosarSite;
-    }
     $tipuri = ['css' => 'text/css; charset=utf-8', 'js' => 'text/javascript; charset=utf-8', 'svg' => 'image/svg+xml',
         'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp', 'gif' => 'image/gif',
         'avif' => 'image/avif', 'ico' => 'image/x-icon', 'woff2' => 'font/woff2'];
-    $dosarTema = $dosarSite !== '' ? realpath($dosarSite . '/tema/public') : false;
     $fisier = $dosarTema !== false ? realpath($dosarTema . '/' . substr($cale, strlen('/tema/'))) : false;
     $tip = $tipuri[strtolower(pathinfo((string) $fisier, PATHINFO_EXTENSION))] ?? null;
     if ($fisier !== false && $tip !== null && is_file($fisier) && str_starts_with($fisier, $dosarTema . DIRECTORY_SEPARATOR)) {

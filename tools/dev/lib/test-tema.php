@@ -10,14 +10,18 @@ declare(strict_types=1);
  *  T1, fără server: valorile implicite (scrise în test: comportamentul de azi), regulile lui tema.json (o cheie greșită
  *      rămâne la implicit, cu problema ei; un element greșit dintr-o listă se scoate), lista albă a iconițelor și a
  *      fișierelor SVG (cele 19 iconițe de azi ale nucleului trec), adresele publice ale temei, DateSite::site și căile
- *      din pachet, Tema la rulare (blocul inline, logo-ul, versiunea).
+ *      din pachet, Tema la rulare (blocul inline, logo-ul, versiunea) în cele trei locuri: pe server cu tema necopiată
+ *      în public/tema/ (nicio legătură spre ea), sub routerul de dezvoltare (din pachet) și pe o găzduire simulată după
+ *      copiere (din public/tema/); diagnostic.php --pachet (manifestul, LICENTA_SITE și SITE_SLUG, copia de verificare).
  *  T2, un server al codului curent pe CMS_DEV_PORT+21 cu pachetul tools/dev/site-demo-tema: efectul fiecărei chei în HTML
  *      (fonturile, Bootstrap, app.css, foile și scripturile temei, <main>, mesajele, butonul „Înapoi sus”, culoarea
  *      bannerelor și a paginilor de rezervă, logo-ul sertarului, iconițele categoriilor, blocul paginii de mulțumire),
  *      fișierele /tema/… servite (cele din afara tema/public/ nu), niciun avertisment PHP.
  *  T3, același port: fără temă, cu tema.json gol și cu fiecare cheie scrisă la valoarea ei implicită, paginile (și
  *      vederile de rezervă: 404, mulțumirea, linkul de plată, verificarea BT, sertarul de meniu) ies octet cu octet la fel,
- *      și au semnele codului de dinainte (Google Fonts, app.css, .container, fără butonul „sus”, #2f8d5b).
+ *      și au semnele codului de dinainte (Google Fonts, app.css, .container, fără butonul „sus”, #2f8d5b). Că vederile
+ *      de rezervă și sertarul sunt chiar cele ale Bioscem o arată comparația cu codul Bioscem (G-cmp, cazul „vederi” din
+ *      tools/dev/compara-cu-baza.php); T3 compară codul curent doar cu el însuși.
  *  T4, Playwright (tools/dev/capturi-publice.php verificari, instrumentul porții G-vizual): stilurile calculate ale temei
  *      demo (Rubik încărcat și folosit, Bootstrap aplicat și pornit, scriptul temei, <main> lat, butonul sus fix după
  *      derulare, culoarea butonului 404, fără app.css).
@@ -144,8 +148,10 @@ $verifica('adresele publice ale temei: „..”, „//”, căi relative, ascuns
 
 // DateSite::site și căile din pachet.
 $tScrie('site.json', $tJson(['cookie_consimtamant' => 'demo_consimtamant', 'grup' => ['cheie' => 2]]));
+$tScrie('tema/public/img/doar-in-pachet.svg', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>');
 $tScrie('tema/tema.json', $tJson(['culoare_principala' => '#123456', 'css' => ['/tema/css/a.css'], 'css_inline' => ['pagina_succes' => 'bun.css'],
-    'logo_meniu_mobil' => ['candidati' => ['/tema/img/lipsa.svg'], 'implicit' => '/tema/img/implicit.svg', 'alt' => 'Logo demo']]));
+    'logo_meniu_mobil' => ['candidati' => ['/tema/img/lipsa.svg', '/tema/img/doar-in-pachet.svg'], 'implicit' => '/tema/img/implicit.svg',
+        'alt' => 'Logo demo']]));
 DateSite::reseteaza($tPachet);
 Tema::reseteaza();
 $verifica('DateSite::site: valoarea, o cale „grup.cheie”, implicitul pentru o cheie lipsă; DateSite::json citește tema/tema.json, '
@@ -153,38 +159,84 @@ $verifica('DateSite::site: valoarea, o cale „grup.cheie”, implicitul pentru 
     && DateSite::site('grup.cheie') === 2 && DateSite::site('lipsa', 'implicit') === 'implicit'
     && (DateSite::json('tema/tema.json')['culoare_principala'] ?? null) === '#123456'
     && DateSite::json('../pachet/site.json') === [] && DateSite::json($tPachet . '/site.json') === []);
+// Aici (linia de comandă, fără tools/dev/router.php) e ca pe server: /tema/… se servește doar din public/tema/, unde
+// fișierele acestui pachet nu sunt. Deci nicio legătură spre ele: foaia lipsește, logo-ul e cel implicit.
 $tLogo = Tema::logoMeniuMobil();
-$verifica('Tema la rulare: blocul inline din fișier, culoarea, foaia cu ?v=<data fișierului>, logo-ul implicit când niciun candidat nu există',
+$verifica('Tema la rulare, pe server cu tema necopiată în public/tema/: blocul inline și culoarea da; foaia nu intră în pagină, '
+    . 'adresa ei nu primește ?v=, logo-ul e cel implicit (cel din pachet nu se servește)',
     Tema::cssInline('pagina_succes', 'IMPLICIT') === ".a{color:red}\n" && Tema::cssInline('alt_bloc', 'IMPLICIT') === 'IMPLICIT'
-    && Tema::culoarePrincipala() === '#123456' && Tema::css() === ['/tema/css/a.css']
-    && Tema::url('/tema/css/a.css') === '/tema/css/a.css?v=' . filemtime($tPachet . '/tema/public/css/a.css')
-    && $tLogo === ['cale' => '/tema/img/implicit.svg', 'alt' => 'Logo demo'], json_encode($tLogo));
+    && Tema::culoarePrincipala() === '#123456' && Tema::css() === [] && Tema::url('/tema/css/a.css') === '/tema/css/a.css'
+    && Tema::fisierPublic('/tema/css/a.css') === Paths::public('tema/css/a.css')
+    && $tLogo === ['cale' => '/tema/img/implicit.svg', 'alt' => 'Logo demo'], json_encode([Tema::css(), $tLogo], JSON_UNESCAPED_SLASHES));
+// Aceeași temă într-un proces nou, cu constantele date: a routerului de dezvoltare (servește /tema/… din pachet) sau
+// docroot-ul unei găzduiri simulate (PLATFORMA_PUBLIC_DIR, App\Support\Paths) în care tema a fost copiată.
+$tTemaInProces = static function (array $constante) use ($radacina, $tPachet): array {
+    $cod = 'foreach (json_decode($argv[1], true) as $k => $v) { define($k, $v); } require $argv[2] . "/bootstrap.php";'
+        . ' echo json_encode(["css" => App\Support\Tema::css(), "url" => App\Support\Tema::url("/tema/css/a.css"),'
+        . ' "logo" => App\Support\Tema::logoMeniuMobil()], JSON_UNESCAPED_SLASHES);';
+    $iesire = (string) shell_exec('env SITE_DATE_DOSAR=' . escapeshellarg($tPachet) . ' ' . escapeshellarg(PHP_BINARY) . ' -r '
+        . escapeshellarg($cod) . ' ' . escapeshellarg((string) json_encode($constante)) . ' ' . escapeshellarg($radacina) . ' 2>/dev/null');
+    return (array) json_decode($iesire, true);
+};
+$tSubRouter = $tTemaInProces(['ANDAXI_DEV_TEMA_DIN_PACHET' => $tPachet . '/tema/public']);
+$verifica('sub routerul de dezvoltare (ANDAXI_DEV_TEMA_DIN_PACHET): foaia și logo-ul din pachet, cu ?v=<data fișierului din pachet>',
+    $tSubRouter === ['css' => ['/tema/css/a.css'], 'url' => '/tema/css/a.css?v=' . filemtime($tPachet . '/tema/public/css/a.css'),
+        'logo' => ['cale' => '/tema/img/doar-in-pachet.svg?v=' . filemtime($tPachet . '/tema/public/img/doar-in-pachet.svg'), 'alt' => 'Logo demo']],
+    json_encode($tSubRouter, JSON_UNESCAPED_SLASHES));
+@mkdir($tTemp . '/docroot/tema/css', 0770, true);
+@mkdir($tTemp . '/docroot/tema/img', 0770, true);
+copy($tPachet . '/tema/public/css/a.css', $tTemp . '/docroot/tema/css/a.css');
+copy($tPachet . '/tema/public/img/doar-in-pachet.svg', $tTemp . '/docroot/tema/img/doar-in-pachet.svg');
+touch($tTemp . '/docroot/tema/css/a.css', 1700000000);
+touch($tTemp . '/docroot/tema/img/doar-in-pachet.svg', 1700000001);
+$tGazduire = $tTemaInProces(['PLATFORMA_PUBLIC_DIR' => $tTemp . '/docroot']);
+$verifica('pe server, după copierea temei în public/tema/: foaia și logo-ul de acolo, cu ?v=<data copiei>',
+    $tGazduire === ['css' => ['/tema/css/a.css'], 'url' => '/tema/css/a.css?v=1700000000',
+        'logo' => ['cale' => '/tema/img/doar-in-pachet.svg?v=1700000001', 'alt' => 'Logo demo']],
+    json_encode($tGazduire, JSON_UNESCAPED_SLASHES));
 $tScrie('site.json', '{"stricat": ');
 DateSite::reseteaza($tPachet);
 $verifica('site.json stricat: valorile implicite (nu oprește site-ul)', DateSite::site('cookie_consimtamant', 'implicit') === 'implicit');
 DateSite::reseteaza();
 Tema::reseteaza();
 
-// scripts/diagnostic.php --pachet (pe server, la adoptare): manifestul, site-ul din .env, copiile publice.
-$tDiagnostic = static function (string $pachet, string $site) use ($radacina): array {
+// scripts/diagnostic.php --pachet (pe server, la adoptare): manifestul, site-ul din .env (LICENTA_SITE și SITE_SLUG, ambele
+// ale pachetului; pe copia de verificare licența e a copiei), copiile publice.
+$tDiagnostic = static function (string $pachet, string $site, ?string $slug = null, bool $copie = false) use ($radacina): array {
     exec('cd ' . escapeshellarg($radacina) . ' && env SITE_DATE_DOSAR=' . escapeshellarg($pachet) . ' LICENTA_SITE=' . escapeshellarg($site)
-        . ' ' . escapeshellarg(PHP_BINARY) . ' scripts/diagnostic.php --pachet 2>&1', $iesire, $cod);
+        . ' SITE_SLUG=' . escapeshellarg($slug ?? $site) . ' SITE_COPIE_VERIFICARE=' . ($copie ? '1' : '') . ' '
+        . escapeshellarg(PHP_BINARY) . ' scripts/diagnostic.php --pachet 2>&1', $iesire, $cod);
     return [$cod, implode("\n", $iesire)];
 };
 exec('mkdir -p ' . escapeshellarg($tTemp . '/schimbat') . ' && cp ' . escapeshellarg($radacina . '/tools/dev/site-demo') . '/* ' . escapeshellarg($tTemp . '/schimbat/'));
 file_put_contents($tTemp . '/schimbat/seo.json', "{}\n");
-[$cod1, $text1] = $tDiagnostic($radacina . '/tools/dev/site-demo', 'demo');
-[$cod2, $text2] = $tDiagnostic($tTemp . '/schimbat', 'demo');
-[$cod3, $text3] = $tDiagnostic($radacina . '/tools/dev/site-demo', 'altul');
-[$cod4, $text4] = $tDiagnostic($radacina . '/tools/dev/site-demo-tema', 'demo');
-[$cod5, $text5] = $tDiagnostic($tTemp . '/nu-exista', 'demo');
-$verifica('diagnostic.php --pachet: pachetul demo ok (0); un fișier schimbat, alt site, fișierele temei necopiate în public/tema/ și un '
-    . 'dosar lipsă ies cu 1, cu motivul', $cod1 === 0 && str_contains($text1, 'rezultat     : ok')
-    && $cod2 === 1 && str_contains($text2, 'fișier schimbat față de pachet.json (sha256): seo.json')
-    && $cod3 === 1 && str_contains($text3, 'nu al lui „altul”')
-    && $cod4 === 1 && str_contains($text4, 'public/tema/css/tema-demo.css lipsește')
-    && $cod5 === 1 && str_contains($text5, 'dosarul pachetului lipsește'),
-    "$cod1/$cod2/$cod3/$cod4/$cod5 " . mb_substr($text1 . ' | ' . $text4, 0, 400));
+$tDemo = $radacina . '/tools/dev/site-demo';
+$tCazuriDiagnostic = [
+    'pachetul demo' => [$tDemo, 'demo', null, 0, 'rezultat     : ok'],
+    'un fișier schimbat' => [$tTemp . '/schimbat', 'demo', null, 1, 'fișier schimbat față de pachet.json (sha256): seo.json'],
+    'alt site' => [$tDemo, 'altul', null, 1, 'nu al lui „altul”'],
+    'tema necopiată în public/tema/' => [$radacina . '/tools/dev/site-demo-tema', 'demo', null, 1, 'public/tema/css/tema-demo.css lipsește'],
+    'dosarul lipsă' => [$tTemp . '/nu-exista', 'demo', null, 1, 'dosarul pachetului lipsește'],
+    'fără LICENTA_SITE' => [$tDemo, '', 'demo', 1, 'LICENTA_SITE lipsește din .env'],
+    'fără SITE_SLUG' => [$tDemo, 'demo', '', 1, 'SITE_SLUG lipsește din .env'],
+    'SITE_SLUG al altui site' => [$tDemo, 'demo', 'altul', 1, 'SITE_SLUG („altul”) diferă de LICENTA_SITE („demo”)'],
+    'doar SITE_SLUG, al altui site' => [$tDemo, '', 'altul', 1, 'nu al lui „altul”'],
+    // Copia de verificare (docs/VERIFICARE.md): licența ei („verificare…”), pachetul site-ului copiat (SITE_SLUG).
+    'copia de verificare' => [$tDemo, 'verificare', 'demo', 0, 'rezultat     : ok', true],
+    'copia de verificare, cu pachetul altui site' => [$tDemo, 'verificare', 'altul', 1, 'nu al lui „altul”', true],
+    'licența „verificare” fără SITE_COPIE_VERIFICARE' => [$tDemo, 'verificare', 'demo', 1, 'diferă de LICENTA_SITE („verificare”)'],
+];
+$tDiagnosticGresit = [];
+foreach ($tCazuriDiagnostic as $nume => [$pachet, $site, $slug, $codAsteptat, $text]) {
+    [$cod, $iesire] = $tDiagnostic($pachet, $site, $slug, (bool) ($tCazuriDiagnostic[$nume][5] ?? false));
+    if ($cod !== $codAsteptat || !str_contains($iesire, $text)) {
+        $tDiagnosticGresit[] = $nume . ': cod ' . $cod . ' (aștept ' . $codAsteptat . '), „' . $text . '” ' . (str_contains($iesire, $text) ? 'găsit' : 'negăsit');
+    }
+}
+$verifica('diagnostic.php --pachet: pachetul demo ok (0); un fișier schimbat, alt site, fișierele temei necopiate în public/tema/, un '
+    . 'dosar lipsă, LICENTA_SITE sau SITE_SLUG lipsă și SITE_SLUG al altui site ies cu 1, cu motivul; pe copia de verificare '
+    . 'pachetul e al lui SITE_SLUG (' . count($tCazuriDiagnostic) . ' cazuri)',
+    $tDiagnosticGresit === [], implode('; ', $tDiagnosticGresit));
 
 // ---------------------------------------------------------------------
 // T2–T4. Un server al codului curent cu un pachet ales (CMS_DEV_PORT+21)

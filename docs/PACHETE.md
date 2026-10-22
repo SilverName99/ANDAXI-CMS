@@ -53,7 +53,8 @@ doar `tema.json` și blocuri `.css`; în `tema/public/` imagini (`svg png jpg jp
 }
 ```
 
-- `site`: numele site-ului; pe server trebuie să fie `LICENTA_SITE` din `.env` (pachetele de dezvoltare au `demo`).
+- `site`: numele site-ului; pe server trebuie să fie `LICENTA_SITE` și `SITE_SLUG` din `.env`, ambele (pe copia de verificare
+  licența e a copiei, `verificare…`, deci acolo doar `SITE_SLUG`; pachetele de dezvoltare au `demo`).
 - `fisiere`: **fiecare** fișier al pachetului (fără manifest și fără `privat/`), cu sha256-ul lui. Un fișier lipsă,
   unul în plus sau unul schimbat se văd imediat.
 - `obligatorii`: fișierele fără de care site-ul s-ar schimba fără să spună nimic (implicit cele citite la fiecare
@@ -66,7 +67,10 @@ rescrie înghețarea. Clasa `App\Support\PachetSite` îl calculează și îl ver
 ## Tema (`tema/tema.json`)
 
 Fără `tema.json` (sau cu fiecare cheie la valoarea ei implicită) **paginile ies octet cu octet ca înainte**: fiecare
-cheie are ca implicit exact ce făcea nucleul (testul temei, `test-pluginuri.php` T3, și comparația cu Bioscem, G-cmp).
+cheie are ca implicit exact ce făcea nucleul. Dovada: comparația cu codul Bioscem (G-cmp), care, pe lângă paginile ei,
+are cazul „vederi” (`tools/dev/compara-cu-baza.php`: paginile din bază „404” și „checkout/succes” nepublicate și un antet
+cu `{{mobile_menu}}`, deci vederile de rezervă și sertarul de meniu, octet cu octet ca la Bioscem), și testul temei
+(`test-pluginuri.php` T3: fără temă = `tema.json` gol = fiecare cheie scrisă la implicit, cu semnele codului de dinainte).
 O temă aduce doar ce cheile de mai jos permit; tot restul înfățișării unui site (antetul, subsolul, paginile) e conținut
 în baza lui.
 
@@ -90,13 +94,19 @@ Reguli:
 
 - **Fișierele publice ale temei** stau în pachet în `tema/public/` și se servesc la `/tema/…`, cu `?v=<data fișierului>`
   (`Tema::url`), ca o temă schimbată să ajungă imediat la vizitatori. Pe server stau în `public/tema/` (ignorat de git),
-  copiate din pachet la instalare și la fiecare actualizare; în dezvoltare `tools/dev/router.php` le servește direct din
-  pachetul ales (`SITE_DATE_DOSAR`), doar din `tema/public/` și doar tipurile de mai sus.
+  copiate din pachet la instalare și la fiecare actualizare, și numai de acolo intră în pagină: o foaie, un script sau un
+  logo al temei care nu a ajuns în `public/tema/` nu se pune în pagină (serverul web n-ar avea ce servi; `diagnostic.php
+  --pachet` spune ce lipsește). În dezvoltare `tools/dev/router.php` le servește direct din pachetul ales
+  (`SITE_DATE_DOSAR`), doar din `tema/public/` și doar tipurile de mai sus, și o spune aplicației prin constanta
+  `ANDAXI_DEV_TEMA_DIN_PACHET` (`Tema::fisierPublic`).
 - **SVG-ul** care ajunge în pagini trece printr-o listă albă (`App\Support\SvgSigur`): iconițele (`fragment`) doar
   `path circle rect line polyline polygon ellipse` cu atributele de geometrie, fișierele `.svg` (`problemaFisier`) fără
   `script`, `foreignObject`, `image`, `a`, `style`, atribute `on…`, `href`/`url()` în afara fișierului, DOCTYPE sau entități.
-- **Un bloc `css_inline`** nu are voie să conțină `</style`; nicio foaie a pachetului nu încarcă ceva de pe alt server
-  (`url()`/`@import` spre http/https), ca adresa vizitatorului să nu plece la un terț înainte de acordul pentru cookie-uri.
+- **Un bloc `css_inline`** nu are voie să conțină `</style`; nicio foaie a pachetului nu încarcă ceva de pe alt server,
+  ca adresa vizitatorului să nu plece la un terț înainte de acordul pentru cookie-uri: niciun `@import` (foile se declară
+  în `css`), nicio adresă cu schemă (alta decât `data:`) sau care începe cu `//` în `url()`/`src()` și niciun șir care
+  începe cu `http:`, `https:` sau `//` (`image-set()`). Foaia se citește ca de browser: comentariile se sar, escape-urile
+  (`\68ttps`, `u\72l(`) se decodează.
 - **O valoare greșită** nu oprește site-ul: cheia rămâne la implicit (un element greșit dintr-o listă se scoate) și se
   scrie un rând în jurnalul PHP. `verifica-pachet.php` refuză pachetul (`Tema::valideaza`).
 - **Fonturile și Bootstrap-ul** sunt ale nucleului (`public/assets/vendor/`, proveniența în `VERSIUNE.txt`, licențele
@@ -139,13 +149,17 @@ tools/dev/php.sh tools/dev/verifica-pachet.php --autotest              # fiecare
 ```
 
 Rulează în testul de fum (pasul 1, și autotestul), deci în porțile G-smoke și G-php. Verifică locul și tipul fiecărui
-fișier, conținutul (JSON valid, UTF-8, CSS fără `</style` și fără alt server, SVG din lista albă), `tema.json`
+fișier, conținutul (JSON valid, UTF-8, CSS fără `</style`, fără `@import` și fără alt server, SVG din lista albă), `tema.json`
 (`Tema::valideaza`), înghețarea setărilor (se citește ca la runner-ul migrărilor și e a site-ului; restul îl verifică
 `tools/inghetare/verifica-inghetare.php`), manifestul (`PachetSite::verifica`) și `ce-se-schimba.md` la fiecare site.
 Autotestul plantează,
 pe rând, într-o copie a temei demo: un `.php`, un `.phtml`, un `.htaccess`, o legătură simbolică, patru SVG-uri
 periculoase, un script nedeclarat, un fișier de peste 1 MB, două iconițe periculoase, un bloc cu `</style`, un font de la
-Google, o cheie necunoscută, o foaie lipsă, un fișier schimbat sau nou față de manifest, manifestul lipsă, un pachet de
+Google și alte unsprezece forme ale unei cereri spre alt server (`image-set()` cu un șir, `url()` cu escape, numele
+`u\72l(`, `//`, `\/`, `\\`, `http:` fără `//`, un tab în schemă, `@import` scris cu escape, `@import` al unui
+`data:text/css`, un comentariu cu apostrof înaintea unui `image-set()`; o foaie cu adrese locale, un SVG `data:` și un șir
+obișnuit trece),
+o cheie necunoscută, o foaie lipsă, un fișier schimbat sau nou față de manifest, manifestul lipsă, un pachet de
 client fără `ce-se-schimba.md`, un fișier peste unul al nucleului sau în `uploads/`, `continut/`, un fișier ascuns, un
 JSON stricat, altceva decât JSON în `privat/` și o înghețare pe care runner-ul n-o citește.
 
@@ -157,7 +171,8 @@ JSON stricat, altceva decât JSON în `privat/` și o înghețare pe care runner
   el). Site-ul de verificare ia codul cu `git clone`, deci are și `site-uri/`, și `tools/`.
 - **La adoptare** ([MIGRARI.md](MIGRARI.md), „Pe server, la adoptare”, pasul 1): pachetul în `SITE_DATE_DOSAR`,
   `tema/public/` în `public/tema/`, `public/` peste `public/`, apoi `$PHP scripts/diagnostic.php --pachet`, al cărui
-  ultim rând trebuie să fie `rezultat     : ok` (manifestul, site-ul = `LICENTA_SITE`, fiecare sha256, tema, copiile
+  ultim rând trebuie să fie `rezultat     : ok` (manifestul, site-ul = `LICENTA_SITE` = `SITE_SLUG`, ambele obligatorii,
+  fiecare sha256, tema, copiile
   publice; altfel iese cu 1 și spune ce lipsește sau diferă). Un pachet lipsă sau stricat nu are voie să treacă
   neobservat: valorile ar reveni la cele implicite (de exemplu numele cookie-ului de acord, după WP-16).
 - **Deploy-ul din Etapa 2** (`actualizeaza.sh`) înlocuiește pachetul dintr-o bucată și refuză comutarea dacă

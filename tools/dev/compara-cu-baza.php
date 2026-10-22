@@ -1018,17 +1018,35 @@ foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
 }
 
 $dupaLogin = [];
+// Unde a dus fiecare logare: o parolă greșită (de exemplu admin-parola.txt rescris de altă unealtă) duce înapoi la
+// pagina de login pe ambele servere, iar paginile adminului și ale clientului ar ieși „identice” fără să fi fost văzute.
+$logariGresite = [];
 
 foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, $jaruri[$eticheta]['viz'], ['quantity' => '2']);
-    $cerere($port, 'POST', '/admin/login', $jaruri[$eticheta]['adm'], ['email' => $adminEmail, 'password' => $parola]);
-    $cerere($port, 'POST', '/login', $jaruri[$eticheta]['cli'], ['email' => 'andrei.exemplu@exemplu.ro', 'password' => $parola]);
+    $logari = [
+        'admin@… → /admin' => [$cerere($port, 'POST', '/admin/login', $jaruri[$eticheta]['adm'], ['email' => $adminEmail, 'password' => $parola])['location'], '/admin'],
+        'clientul → /contul-meu' => [$cerere($port, 'POST', '/login', $jaruri[$eticheta]['cli'],
+            ['email' => 'andrei.exemplu@exemplu.ro', 'password' => $parola])['location'], '/contul-meu'],
+    ];
     // Adminii cu rol parțial: meniul lor are alte intrări, iar după login ajung pe prima pagină a rolului.
     foreach (['magazin', 'blog', 'emailuri'] as $rolAdmin) {
         $dupaLogin[$eticheta][$rolAdmin] = $cerere($port, 'POST', '/admin/login', $jaruri[$eticheta]['adm-' . $rolAdmin],
             ['email' => $rolAdmin . '@exemplu.ro', 'password' => $parola])['location'];
+        $logari[$rolAdmin . '@exemplu.ro → /admin…'] = [$dupaLogin[$eticheta][$rolAdmin], null];
+    }
+    foreach ($logari as $ce => [$locatie, $asteptata]) {
+        $cale = (string) parse_url($locatie, PHP_URL_PATH);
+        if ($asteptata !== null ? $cale !== $asteptata : (!str_starts_with($cale, '/admin') || $cale === '/admin/login')) {
+            $logariGresite[] = $eticheta . ': ' . $ce . ' a dus la „' . $locatie . '”';
+        }
     }
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, $jaruri[$eticheta]['cli'], ['quantity' => '1']);
+}
+if ($logariGresite !== []) {
+    fwrite(STDERR, 'Logarea a eșuat (parola din ' . $dosarDev . '/admin-parola.txt nu e cea a bazei? refă-o cu tools/dev/instaleaza.sh): '
+        . implode('; ', $logariGresite) . "\n");
+    exit(1);
 }
 
 // [rol, cale]: paginile-cheie (cerute de sarcină) și vecinii lor apropiați.
@@ -1392,6 +1410,10 @@ if (is_array($hartaBaza)) {
  *  - un caz al unui port din alt site („sursa”, de exemplu vertij), de tip „schimbare”: Bioscem nu are
  *    commit-ul, deci „verifica” cere pe codul Bioscem ce dădea el înaintea portului, iar pagina codului
  *    curent diferă doar prin textele declarate pentru paginile cazului ($porturiVertij).
+ *  - un caz de tip „vederi” nu salvează nimic: pune baza într-o stare pe care lista de pagini nu o are (de
+ *    exemplu paginile din bază „404” și „checkout/succes” nepublicate, ca să se vadă vederile de rezervă ale
+ *    nucleului) și cere pagini; „verifica” cere pe codul de bază semnele vederilor (altfel cazul ar trece în gol),
+ *    iar „din” spune ce pachet de lucru l-a adus.
  * O cerere e [metodă, cale, date, rol, 'pauza' => secunde]: rolul „adm” (implicit, logat la
  * începutul cazului), „viz” (un vizitator nou, de exemplu pentru coș și comandă) sau „viz-acord” (un
  * vizitator nou care a acceptat toate cookie-urile, cookie-ul lui CookieConsent pus dinainte); „pauza”
@@ -2372,13 +2394,66 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             'bază: categorii.0: null → ' . json_encode($idCategorieDupaNume),
         ],
     ];
+    // WP-13 (revizuirea): vederile de rezervă ale nucleului, pe care tema le atinge (views/site/not-found.php,
+    // checkout-success.php, checkout-bt-verificare.php), și sertarul de meniu {{mobile_menu}} din layout (logo-ul lui).
+    // Lista de pagini nu le vede: baza demo are paginile ei „404” și „checkout/succes” (publicate, deci acelea se
+    // afișează), nimic nu cere /checkout/bt/retur sau un produs care nu există, iar antetul demo n-are sertarul. Aici,
+    // pe durata cazului, cele două pagini din bază sunt nepublicate și antetul are {{cart_count}} și {{mobile_menu}};
+    // un vizitator nou cere paginile pe ambele servere. Fără tema.json trebuie să iasă octet cu octet ca la Bioscem.
+    $antetRezerva = '<header class="antet-test-rezerva"><a href="/">Firma Demo</a> <span class="cos">{{cart_count}}</span>{{mobile_menu}}</header>';
+    $salvari[] = [
+        'nume' => 'paginile de rezervă (404, produs lipsă, verificarea plății BT, mulțumirea) și sertarul de meniu, fără paginile din bază',
+        'tip' => 'vederi',
+        'din' => 'WP-13',
+        'tabele' => [
+            ['tabel' => 'pages', 'unde' => 'slug IN (\'404\', \'checkout/succes\')', 'cheie' => 'id'],
+            ['tabel' => 'settings', 'unde' => '`key` = \'design_header_html\'', 'cheie' => 'key'],
+        ],
+        'pregateste' => static function (PDO $db) use ($antetRezerva): void {
+            $db->exec("UPDATE pages SET is_published = 0 WHERE slug IN ('404', 'checkout/succes')");
+            $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)')
+                ->execute(['design_header_html', $antetRezerva]);
+        },
+        // Mulțumirea ultima: ține minte în sesiune conversia comenzii (pentru pagina următoare).
+        'cereri' => [
+            ['GET', '/', [], 'viz'],
+            ['GET', '/pagina-care-nu-exista', [], 'viz'],
+            ['GET', '/produs/nimic-de-gasit-aici-zzz', [], 'viz'],
+            ['GET', '/checkout/bt/retur', [], 'viz'],
+            ['GET', '/checkout/succes/' . rawurlencode($nrComanda), [], 'viz'],
+        ],
+        'stare' => static fn (PDO $db): array => [],
+        // Pe codul de bază: fiecare cerere a dat vederea nucleului (nu pagina din bază, nu o redirecționare).
+        'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+            $asteptat = [
+                ['/ (sertarul)', 200, ['data-bv-mobile-menu-drawer', 'alt="Bioscem" loading="lazy">', 'class="antet-test-rezerva"']],
+                ['404', 404, ['Este posibil ca linkul să fie vechi. Caută produsul dorit sau vezi tot magazinul.', 'background:#2f8d5b;']],
+                ['produsul lipsă', 404, ['Produsul căutat nu mai există', 'background:#2f8d5b;']],
+                ['verificarea BT', 200, ['Înapoi în magazin</a>', 'background:#2f8d5b;']],
+                ['mulțumirea', 200, ['--bs-succes-accent:#075d61;', 'class="bs-succes__titlu"']],
+            ];
+            $probleme = [];
+            foreach ($asteptat as $n => [$ce, $cod, $texte]) {
+                if ((int) ($raspunsuri[$n]['cod'] ?? 0) !== $cod) {
+                    $probleme[] = $ce . ': codul ' . (int) ($raspunsuri[$n]['cod'] ?? 0) . ', aștept ' . $cod;
+                }
+                foreach ($texte as $text) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = $ce . ': lipsește „' . $text . '”';
+                    }
+                }
+            }
+            return $probleme;
+        },
+    ];
 
     foreach ($salvari as $caz) {
         $regresie = ($caz['tip'] ?? 'schimbare') === 'regresie';
         $reparatie = ($caz['tip'] ?? 'schimbare') === 'reparatie';
+        $vederi = ($caz['tip'] ?? 'schimbare') === 'vederi';
         // „sursa”: al cui commit e cazul (implicit Bioscem; un port din alt site vechi, de exemplu vertij).
-        $eticheta = str_pad('salvare', 13) . $caz['nume'] . ' (' . ($reparatie ? 'reparație ' . (string) ($caz['reparatie'] ?? '?')
-            : ($caz['sursa'] ?? 'Bioscem') . ' ' . $caz['din'] . ($regresie ? ', regresie' : '')) . ')';
+        $eticheta = str_pad($vederi ? 'vederi' : 'salvare', 13) . $caz['nume'] . ' (' . ($reparatie ? 'reparație ' . (string) ($caz['reparatie'] ?? '?')
+            : ($vederi ? 'nucleul, ' . $caz['din'] : ($caz['sursa'] ?? 'Bioscem') . ' ' . $caz['din'] . ($regresie ? ', regresie' : ''))) . ')';
         $original = salvari_instantaneu($db, $caz['tabele']);
         $rezultate = [];
         $probleme = [];
@@ -2455,11 +2530,11 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         foreach (($caz['verifica'])($rezultate['baza']['stare'], $rezultate['baza']['raspunsuri']) as $problema) {
             $probleme[] = ($reparatie
                 ? 'codul Bioscem nu arată defectul pe care îl repară ' . (string) ($caz['reparatie'] ?? '?') . ': '
-                : ($regresie
+                : ($vederi ? 'codul de bază nu arată vederile cazului (paginile din bază încă publicate?): ' : ($regresie
                     ? 'codul de bază nu dă rezultatul de pe ramura pe care ' . $caz['din'] . ' nu o schimbă: '
                     : (isset($caz['sursa'])
                         ? 'codul Bioscem nu dă ce dădea înaintea portului din ' . $caz['sursa'] . ' ' . $caz['din'] . ': '
-                        : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): '))) . $problema;
+                        : 'codul de bază nu arată schimbarea cazului (are commit-ul ' . $caz['din'] . '?): ')))) . $problema;
         }
         $diferente = salvari_diferente($rezultate['baza']['stare'], $rezultate['curent']['stare'], 'bază: ');
         if ($reparatie) {

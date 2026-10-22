@@ -146,11 +146,17 @@
 #    magazin ies la fel.
 #  - tema site-ului (WP-13, App\Support\Tema, docs/PACHETE.md): fără tema.json (pachetul Bioscem n-are încă una) fiecare
 #    punct al temei din views/layout.php și din vederile de rezervă (404, mulțumirea, linkul de plată, verificarea BT)
-#    scrie exact ce scria. Vederile de rezervă nu se văd aici (baza demo are paginile ei „404” și „checkout/succes”);
-#    dovada: tools/dev/test-pluginuri.php T3 (fără temă = tema.json gol = fiecare cheie la implicit, octet cu octet, cu
-#    paginile din bază nepublicate) și, pentru CSS, G-vizual (--vizual, mai sus; tools/dev/capturi-publice.sh). Noi, fără
-#    efect în pagini: fonturile și Bootstrap-ul în public/assets/vendor/, /tema/… în routerul de dezvoltare, pachet.json
-#    în pachete, scripts/diagnostic.php --pachet, .gitattributes (export-ignore).
+#    scrie exact ce scria. Lista de pagini nu vede vederile de rezervă (baza demo are paginile ei „404” și
+#    „checkout/succes”), nici sertarul de meniu ({{mobile_menu}}): le compară cu codul Bioscem cazul „vederi” din
+#    compara-cu-baza.php (cu cele două pagini din bază nepublicate și un antet cu sertarul, pe durata cazului: 404,
+#    un produs care nu există, verificarea plății BT, mulțumirea, prima pagină); linkul de plată e în lista de pagini.
+#    tools/dev/test-pluginuri.php T3 arată în plus că tema.json gol și fiecare cheie scrisă la implicit dau aceleași
+#    pagini ca fără temă, iar pentru CSS e G-vizual (--vizual, mai sus; tools/dev/capturi-publice.sh). Noi, fără efect
+#    în pagini: fonturile și Bootstrap-ul în public/assets/vendor/, /tema/… în routerul de dezvoltare, pachet.json în
+#    pachete, scripts/diagnostic.php --pachet, .gitattributes (export-ignore).
+#
+# Fiecare logare de la început (administratorul, clientul demo, adminii cu rol parțial) trebuie să ajungă unde duce o
+# logare reușită; altfel comparația se oprește (codul 1), în loc să compare în gol paginile de login ale ambelor coduri.
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul
