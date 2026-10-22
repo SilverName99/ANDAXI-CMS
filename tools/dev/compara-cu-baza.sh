@@ -10,6 +10,8 @@
 #                                                               # dinaintea pluginurilor; scoate diferențele SEO și porturile)
 #   tools/dev/compara-cu-baza.sh --licenta=bioscem              # cu licența de dezvoltare a Bioscem (config/plugins.php,
 #                                                               # licente_dev), pusă înainte; la final se pune la loc „toate”
+#   tools/dev/compara-cu-baza.sh --vizual                       # pe aceleași servere, stilurile calculate (G-vizual) în
+#                                                               # locul HTML-ului; îl folosește tools/dev/capturi-publice.sh
 #
 # Codul de bază se scoate cu `git archive`: din repo-ul vechi în
 # $CMS_DEV_DIR/baza-<repo>-<commit>, dintr-un commit al acestui repo în
@@ -142,6 +144,13 @@
 #    pe codul comun; hash-ul nu apare în nicio pagină și nu e în rândurile cazurilor de salvare), iar pe 127.0.0.1
 #    adresa e aceeași pentru ambele coduri, deci paginile, Securitate formulare și „IP-ul tău curent” din Setări
 #    magazin ies la fel.
+#  - tema site-ului (WP-13, App\Support\Tema, docs/PACHETE.md): fără tema.json (pachetul Bioscem n-are încă una) fiecare
+#    punct al temei din views/layout.php și din vederile de rezervă (404, mulțumirea, linkul de plată, verificarea BT)
+#    scrie exact ce scria. Vederile de rezervă nu se văd aici (baza demo are paginile ei „404” și „checkout/succes”);
+#    dovada: tools/dev/test-pluginuri.php T3 (fără temă = tema.json gol = fiecare cheie la implicit, octet cu octet, cu
+#    paginile din bază nepublicate) și, pentru CSS, G-vizual (--vizual, mai sus; tools/dev/capturi-publice.sh). Noi, fără
+#    efect în pagini: fonturile și Bootstrap-ul în public/assets/vendor/, /tema/… în routerul de dezvoltare, pachet.json
+#    în pachete, scripts/diagnostic.php --pachet, .gitattributes (export-ignore).
 
 source "$(dirname "${BASH_SOURCE[0]}")/comun.sh"
 verifica_mediul
@@ -151,9 +160,11 @@ MOD="repo"
 REPO_BAZA=""
 COMMIT=""
 LICENTA_COMPARATIE=""
+VIZUAL=0
 for argument in "$@"; do
     case "$argument" in
         --licenta=*) LICENTA_COMPARATIE="${argument#--licenta=}" ;;
+        --vizual) VIZUAL=1 ;;
         --baza-repo=*)
             MOD="repo"
             valoare="${argument#--baza-repo=}"
@@ -168,6 +179,9 @@ for argument in "$@"; do
     esac
 done
 
+# G-vizual compară doar față de codul unui site vechi: față de un commit al acestui repo (istoric) diferențele HTML
+# declarate în $porturiBioscem ar schimba și stilurile, iar acolo nu sunt declarate.
+[ "$VIZUAL" = 1 ] && [ "$MOD" = "commit" ] && die "--vizual merge doar față de codul unui site vechi (--baza-repo), nu față de --baza=<commit>"
 PORT_CURENT="$CMS_DEV_PORT"
 if [ "$MOD" = "repo" ]; then
     REPO_BAZA="${REPO_BAZA:-$CMS_DEV_REPO_BS}"
@@ -353,4 +367,11 @@ if [ -n "$LICENTA_COMPARATIE" ]; then
     "${PHP_DEV[@]}" tools/dev/licenta.php "$LICENTA_COMPARATIE" >/dev/null || die "licența „$LICENTA_COMPARATIE” nu s-a pus"
 fi
 [ "$MOD" = "repo" ] && echo "  INFO  bază $ETICHETA_BAZA (port $PORT_BAZA), cod curent pe portul $PORT_CURENT, datele site-ului: ${SITE_DATE_DOSAR#"$RADACINA"/}"
+if [ "$VIZUAL" = 1 ]; then
+    # Aceleași două servere, aceleași date ale site-ului; în locul HTML-ului, stilurile calculate ale paginilor publice
+    # (tools/dev/capturi-publice.php și .cjs; poarta G-vizual).
+    "${PHP_DEV[@]}" tools/dev/capturi-publice.php compara --baza="http://127.0.0.1:$PORT_BAZA" --curent="http://127.0.0.1:$PORT_CURENT" \
+        --eticheta="$ETICHETA_BAZA (licența ${LICENTA_COMPARATIE:-toate})" --dosar="compara-${LICENTA_COMPARATIE:-toate}"
+    exit $?
+fi
 "${PHP_DEV[@]}" tools/dev/compara-cu-baza.php "$PORT_BAZA" "$ETICHETA_BAZA" "$BAZA_DIR" "$MOD" "$PORT_CURENT" "${SITE_BAZA:-}"

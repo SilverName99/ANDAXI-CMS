@@ -1,0 +1,37 @@
+/*
+ * Tema demo (tools/dev/site-demo-tema): foaia de stil a temei, încărcată după fonturi și Bootstrap, fără app.css.
+ * Fiecare regulă de aici e verificată de testul temei (stilurile calculate, tools/dev/capturi-publice.cjs --asteptari).
+ */
+:root {
+  --tema-demo-accent: #0f766e;
+}
+
+body {
+  font-family: 'Rubik', system-ui, sans-serif;
+  color: #1f2937;
+}
+
+.site-container > .container,
+main.site-container > section {
+  padding-top: 12px;
+}
+
+/* Butonul „Înapoi sus” (tema.json → buton_sus): înfățișarea e a temei. */
+.sus {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--tema-demo-accent);
+  color: #ffffff;
+  z-index: 1000;
+}
+
+.sus[hidden] {
+  display: none;
+}

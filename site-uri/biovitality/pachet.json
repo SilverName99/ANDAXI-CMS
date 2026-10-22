@@ -1,0 +1,10 @@
+{
+    "format": 1,
+    "site": "biovitality",
+    "fisiere": {
+        "ce-se-schimba.md": "f50d72177206b68d800d136a89b2710fe24d0c36b7c4bf73d6cec5ccfef65880",
+        "migrari.json": "65aa7b211a09b3162bbeadded7a9ca312246695121b4804f7885a593a2fa98c2",
+        "setari-inghetate.json": "3d214c6dca48734b17ff3c62212527c84e360028ef5838dfd73dd6404b8b8222"
+    },
+    "obligatorii": []
+}

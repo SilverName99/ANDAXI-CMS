@@ -102,6 +102,14 @@ $contine = static fn (array $lista, string $text): bool => array_filter($lista, 
 $scrie('Test pluginuri ANDAXI-CMS — ' . date('Y-m-d H:i:s'));
 $scrie('');
 
+// --doar-tema: doar secțiunea T (tema site-ului), de exemplu după o schimbare în Tema sau în pachetul temei demo.
+if (in_array('--doar-tema', $argv, true)) {
+    require __DIR__ . '/lib/test-tema.php';
+    $scrie('');
+    $scrie('Rezultat: ' . $trecute . ' verificări trecute, ' . $esuate . ' eșuate.');
+    exit($esuate === 0 ? 0 : 1);
+}
+
 // =====================================================================
 // A. Licența
 // =====================================================================
@@ -1660,6 +1668,14 @@ if (!in_array('--fara-seo', $argv, true)) {
         }
     }
     $verifica('testul SEO (raport: ' . $dosarDev . '/test-seo-raport.txt)', $codSeo === 0);
+}
+
+// =================================================================
+// T. Tema site-ului (WP-13, GR-18): fiecare cheie din tema.json, cu pachetul inventat tools/dev/site-demo-tema;
+//    fără temă (sau cu fiecare cheie la implicit) paginile rămân octet cu octet aceleași (docs/PACHETE.md)
+// =================================================================
+if (!in_array('--fara-tema', $argv, true)) {
+    require __DIR__ . '/lib/test-tema.php';
 }
 
 $scrie('');

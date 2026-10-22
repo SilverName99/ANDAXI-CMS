@@ -1,0 +1,24 @@
+{
+  "_despre": "Tema inventată a testului temei (tools/dev/test-pluginuri.php, secțiunea T; docs/PACHETE.md): fiecare cheie altfel decât valoarea ei implicită, ca efectul fiecăreia să se vadă în pagină. Nu e tema niciunui site.",
+  "css": ["/tema/css/tema-demo.css"],
+  "incarca_app_css": false,
+  "fonturi": ["/assets/vendor/fonturi/rubik/rubik.css"],
+  "fonturi_google": false,
+  "bootstrap": true,
+  "js_final": ["/tema/js/tema-demo.js"],
+  "main": "lat",
+  "flash": "bootstrap",
+  "buton_sus": true,
+  "culoare_principala": "#0f766e",
+  "logo_meniu_mobil": {
+    "_despre": "Primul candidat nu există (se sare), al doilea e fișierul temei; „implicit” se folosește doar când niciun candidat nu există.",
+    "candidati": ["/uploads/gallery/tema-demo-logo-lipsa.png", "/tema/img/logo-demo.svg"],
+    "implicit": "/tema/img/logo-implicit.svg",
+    "alt": "Firma Demo (tema)"
+  },
+  "iconite_categorii": [
+    ["ceai", "<path d=\"M4 8h12v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z\"/><path d=\"M16 10h2a2 2 0 0 1 0 4h-2\"/>"],
+    ["miere", "<circle cx=\"12\" cy=\"12\" r=\"6\"/><path d=\"M12 6v12\"/>"]
+  ],
+  "css_inline": {"pagina_succes": "pagina-succes.css"}
+}

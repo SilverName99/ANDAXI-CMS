@@ -16,10 +16,14 @@ namespace App\Support;
  * Etapa 2 (o versiune de cod comună mai multor site-uri) `.env`-ul fiecărui
  * site îl scrie explicit.
  *
- * Fișierele de azi (vezi docs/SEO.md):
+ * Fișierele citite la cerere (formatul pachetului: docs/PACHETE.md; SEO: docs/SEO.md):
  *  - `redirecturi.json`: adresele vechi ale site-ului (301 sau 410);
  *  - `seo.json`: regulile SEO ale site-ului (etichetele din sitemap, logo-ul
- *    și numele pentru Google, reguli robots.txt în plus).
+ *    și numele pentru Google, reguli robots.txt în plus);
+ *  - `site.json`: constantele tehnice ale site-ului care nu se schimbă niciodată
+ *    pe un site existent (numele cookie-ului de acord, cheia popup-ului; WP-16 și
+ *    WP-17 le mută aici), citite cu `site()`;
+ *  - `tema/tema.json`: tema site-ului (App\Support\Tema).
  *
  * Pachetul de date al unui site existent stă în `site-uri/<site>/` (de exemplu
  * `site-uri/bioscem/`) și se copiază în dosarul site-ului la instalare.
@@ -60,6 +64,10 @@ final class DateSite
      * fișierul lipsește sau nu e JSON valid (atunci se notează o dată în
      * jurnalul PHP: un fișier stricat nu are voie să oprească site-ul).
      *
+     * `$fisier` e calea din pachet („seo.json”, „tema/tema.json”): doar litere mici,
+     * cifre, „-” și „_”, cu „/” între dosare, terminată în „.json”; orice altceva
+     * (o cale absolută, „..”) se tratează ca un fișier care lipsește.
+     *
      * @return array<mixed>
      */
     public static function json(string $fisier): array
@@ -67,8 +75,11 @@ final class DateSite
         if (array_key_exists($fisier, self::$json)) {
             return self::$json[$fisier];
         }
-        $cale = self::dosar() . '/' . basename($fisier);
         $date = [];
+        if (preg_match('#^[a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*\.json$#', $fisier) !== 1) {
+            return self::$json[$fisier] = $date;
+        }
+        $cale = self::dosar() . '/' . $fisier;
         if (is_file($cale)) {
             $brut = @file_get_contents($cale);
             $decodat = is_string($brut) ? json_decode($brut, true) : null;
@@ -84,7 +95,21 @@ final class DateSite
     /** O valoare din `seo.json` după cale („sitemap.eticheta_minim_produse”), sau $implicit. */
     public static function seo(string $cheie, mixed $implicit = null): mixed
     {
-        $valoare = self::json('seo.json');
+        return self::valoare('seo.json', $cheie, $implicit);
+    }
+
+    /**
+     * O constantă a site-ului din `site.json` după cale („cookie_consimtamant”), sau $implicit.
+     * Aceleași reguli ca `seo()`: fișierul lipsă sau stricat dă $implicit (stricat: o linie în jurnalul PHP).
+     */
+    public static function site(string $cheie, mixed $implicit = null): mixed
+    {
+        return self::valoare('site.json', $cheie, $implicit);
+    }
+
+    private static function valoare(string $fisier, string $cheie, mixed $implicit): mixed
+    {
+        $valoare = self::json($fisier);
         foreach (explode('.', $cheie) as $parte) {
             if (!is_array($valoare) || !array_key_exists($parte, $valoare)) {
                 return $implicit;

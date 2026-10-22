@@ -170,13 +170,13 @@ primește odată cu codul comun, la adoptare (Etapa 4; pe un site fără pluginu
 
 | Commit | Data | Subiect | Stare |
 |---|---|---|---|
-| `509354b` | — | Temelia vizuală: brand și Bootstrap 5 | cheia `bootstrap` WP-13 (GR-18); restul pachetul GR (GR-19) |
-| `21bbb02` | — | Paginile site-ului, front-end desprins de tema veche | `incarca_app_css` WP-13 (GR-18); conținutul pachetul GR (GR-20) |
+| `509354b` | — | Temelia vizuală: brand și Bootstrap 5 | cheia `bootstrap` portată (WP-13, 22 octombrie: `tema.json` → `bootstrap`, Bootstrap 5.3.8 în nucleu, `public/assets/vendor/bootstrap/`, aceiași octeți ca la GR; docs/PACHETE.md); restul pachetul GR (GR-19) |
+| `21bbb02` | — | Paginile site-ului, front-end desprins de tema veche | `incarca_app_css` portat (WP-13, 22 octombrie: fără `app.css` pe paginile publice, adminul îl păstrează); conținutul pachetul GR (GR-20) |
 | `9d7d0fa` | — | Instalarea nouă fără resturi | nu se portează (valorile implicite → înghețarea GR, GR-22) |
-| `74e4b25` | — | Pagini pe tot ecranul, încărcare multiplă în galerie | WP-15 (GR-05); `main: lat` WP-13 (GR-18) |
+| `74e4b25` | — | Pagini pe tot ecranul, încărcare multiplă în galerie | WP-15 (GR-05); `main: lat` și mesajele în containerul lor (`flash: bootstrap`) portate (WP-13, 22 octombrie) |
 | `50f5d28` | — | Pagina Produse în meniu | pachetul GR (GR-20); implicitul → GR-22 |
 | `2c11526` | — | Formularul GDPR adaptat | de portat (WP-18, GR-03) |
-| `86ca09b` | — | Fontul Rubik, meniu cu majuscule | WP-13 (GR-07); restul pachetul GR |
+| `86ca09b` | — | Fontul Rubik, meniu cu majuscule | Rubik portat (WP-13, 22 octombrie, GR-07: `public/assets/vendor/fonturi/rubik/`, aceleași greutăți și fișierul variabil al lui GR, o singură copie pe subset; `tema.json` → `fonturi`, `fonturi_google: false`); restul pachetul GR |
 | `94a44db` | — | Banda de clienți, imaginile clientului | pachetul GR; `optimizeaza-imagini` → WP-40 (B5); `mapeaza-imagini` nu se portează |
 | `873383e` | — | Imaginile lipsă arată a machetă (`imagini.js`) | pachetul GR (`js_final`, GR-19) |
 | `9e21659` | — | Banner de proiect, pagina Companie, `install`/`seed` | codurile de ieșire portate în WP-05 (GR-02: `install.php` și `seed.php` ies cu 1, mesajul pe stderr); restul pachetul GR |
@@ -190,7 +190,7 @@ primește odată cu codul comun, la adoptare (Etapa 4; pe un site fără pluginu
 | `d253903` | — | Pagina de servicii legată de sertarul de ofertă | WP-26 (vederea admin); conținutul pachetul GR |
 | `19a8784` | — | Pagina Produse fără sortare și fără butoane | WP-19 (GR-16 `catalog_sortare_vizibila`); restul pachetul GR |
 | `f2f1596` | — | Sigla nouă, subsolul, filtre pe patru coloane | pachetul GR (GR-19, GR-20) |
-| `b4159bd` | — | Pagini legale, buton „înapoi sus”, Companie | `buton_sus` WP-13 (GR-18); conținutul pachetul GR |
+| `b4159bd` | — | Pagini legale, buton „înapoi sus”, Companie | `buton_sus` portat (WP-13, 22 octombrie: ținta, ancora și scriptul ei din layoutul GR; înfățișarea `.sus` vine cu CSS-ul temei GR, GR-19); conținutul pachetul GR |
 | `1ff9f88` | — | Catalogul în ordinea cerută de client | de portat (WP-19, GR-08; pasul de date GR în Etapa 4) |
 | `e927172` `49d8b9b` `9e1b62d` `e34fd31` | — | Animații, cifre, banda de sigle, antet care se strânge | pachetul GR (GR-19) |
 | `d1bffca` | — | Toate mesajele spre cutia tipografiei | înghețarea GR (GR-22); `verifica-email` generic WP-26 (GR-21) |

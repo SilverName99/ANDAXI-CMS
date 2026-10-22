@@ -21,6 +21,12 @@ if ($returCard && $platit) {
 }
 ?>
 <style>
+<?php
+// Stilurile paginii de mulțumire: ale nucleului (mai jos) sau, dacă tema site-ului îl înlocuiește, blocul ei
+// (tema.json → css_inline.pagina_succes, un fișier din tema/; App\Support\Tema::cssInline). Între <style> și </style>
+// ajunge exact unul dintre ele.
+ob_start();
+?>
 .bs-succes{
     --bs-succes-accent:#075d61;
     --bs-succes-line:#e3ecec;
@@ -174,7 +180,7 @@ if ($returCard && $platit) {
     .bs-succes__valoare{text-align:left;}
     .bs-succes__actiuni .btn{width:100%;}
 }
-</style>
+<?= \App\Support\Tema::cssInline('pagina_succes', (string) ob_get_clean()) ?></style>
 
 <div class="bs-succes">
     <div class="bs-succes__card">

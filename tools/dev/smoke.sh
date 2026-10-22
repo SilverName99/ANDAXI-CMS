@@ -216,10 +216,10 @@ incarca_starile
 
 # Fără server: suprafața fiecărei licențe de test față de fișierele din git (tools/dev/instantanee/),
 # mecanismul diferențelor declarate ale comparației cu baza, verificarea fișierelor de migrare
-# (plus DDL-ul din cod față de lista celui vechi; asteptat.json și proprietarii, pe o bază goală cms_mig_v_*)
-# și înghețarea setărilor site-urilor vechi.
+# (plus DDL-ul din cod față de lista celui vechi; asteptat.json și proprietarii, pe o bază goală cms_mig_v_*),
+# înghețarea setărilor site-urilor vechi și pachetele de date ale site-urilor.
 scrie ""
-scrie "== Instantaneul rutelor, diferențele declarate, fișierele de migrare, căile site-ului și înghețarea setărilor"
+scrie "== Instantaneul rutelor, diferențele declarate, fișierele de migrare, căile site-ului, înghețarea setărilor și pachetele site-urilor"
 confirma "instantaneul rutelor (tools/dev/instantaneu-rute.php)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/instantaneu-rute.php"
 confirma "diferențele declarate, marcajele de port și anteturile din compara-cu-baza.php (--autotest)" "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/compara-cu-baza.php" --autotest
 if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/verifica-migrari.php" > "$TMP/verifica-migrari.log" 2>&1; then
@@ -250,6 +250,20 @@ else
     scrie "  EȘEC  înghețarea setărilor site-urilor vechi (tools/inghetare/verifica-inghetare.php):"
     grep -E 'EȘEC|EROARE' "$TMP/verifica-inghetare.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
 fi
+
+# Pachetele de date ale site-urilor (WP-13, docs/PACHETE.md): fără PHP sau JavaScript nedeclarat, fără .htaccess, legături
+# simbolice sau fișiere peste 1 MB, SVG doar din lista albă, tema.json corectă, pachet.json cu sha256-ul fiecărui fișier,
+# ce-se-schimba.md la fiecare site; apoi autotestul verificării (fiecare greșeală plantată într-o copie e prinsă).
+if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/verifica-pachet.php" > "$TMP/verifica-pachet.log" 2>&1; then
+    TRECUTE=$((TRECUTE + 1))
+    scrie "  OK    pachetele site-urilor (tools/dev/verifica-pachet.php): $(tail -1 "$TMP/verifica-pachet.log" | sed 's/^verifica-pachet: //')"
+else
+    ESECURI=$((ESECURI + 1))
+    scrie "  EȘEC  pachetele site-urilor (tools/dev/verifica-pachet.php):"
+    grep -E 'EȘEC|EROARE' "$TMP/verifica-pachet.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+fi
+confirma "verificarea pachetelor prinde fiecare greșeală plantată (tools/dev/verifica-pachet.php --autotest)" \
+    "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/verifica-pachet.php" --autotest
 
 # 2. Serverul, cu contorul de instrucțiuni (App\Support\ContorSql): la final, nicio cerere nu trebuie să fi trimis
 # DDL (pe o bază la zi, funcțiile ensure* ies pe loc; garda din docs/MIGRARI.md).

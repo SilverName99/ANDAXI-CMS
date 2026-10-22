@@ -1,0 +1,19 @@
+{
+    "format": 1,
+    "site": "bioscem",
+    "fisiere": {
+        "avertismente-produse.json": "ad83a202def7a38d0b71dad17f4cf478d0dda0f27eaef13dfb9d325c81f03ba3",
+        "ce-se-schimba.md": "f36a1da67a33c67f881d6fcdb6d135830e9d83d6c8381fac4059c58aed228a85",
+        "migrari.json": "d521ab48a5e53d4319d0fbd57dcc2635319b58b4c9a0850c85ed503077356535",
+        "public/assets/img/bioscem-logo-2-212.webp": "b893ae1bfe45baa0df90e63db72e596f22bfdd6da4617408b9b18bfacf4456e6",
+        "public/assets/img/bioscem-logo-2-423.webp": "f8af5587072e1fddbf4a46b7a2f74eecec945b91e628a2fd019e3c96f8a4e501",
+        "redirecturi.json": "9ee999bf32cfa9ed355bea170ead4a6b4f4a4d5ca4fece25d5c93a5231cfaf3a",
+        "seo-texte.json": "17bf6441a99cae3f1c5ac82c50ad122d7d6a1c151ede9f6912dff5d3b20e086b",
+        "seo.json": "d90433636e22e2e186547baafd17266f4af565760e299035492f77aa89b091e9",
+        "setari-inghetate.json": "f33d2a3808d2b4fc8727b0f2abfd96dba85c135a8d4c1635f20b5762cd2f9f68"
+    },
+    "obligatorii": [
+        "redirecturi.json",
+        "seo.json"
+    ]
+}

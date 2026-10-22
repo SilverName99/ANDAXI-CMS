@@ -1,0 +1,5 @@
+# Versiunile de cod pentru site-uri se fac cu `git archive` (Etapa 2) și nu conțin pachetele site-urilor (fiecare site
+# primește doar pachetul lui, separat: datele unui client nu ajung pe serverul altuia) și nici uneltele de dezvoltare
+# și de verificare (tools/). docs/PACHETE.md, „Pe server”. Site-ul de verificare ia codul cu `git clone`, deci le are.
+/site-uri export-ignore
+/tools export-ignore

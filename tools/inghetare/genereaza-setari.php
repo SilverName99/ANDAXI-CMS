@@ -44,8 +44,11 @@ foreach (['Eroare', 'ParametruLipsa', 'Inghetare'] as $clasa) {
     require_once $radacina . '/src/Support/Migrari/' . $clasa . '.php';
 }
 require_once __DIR__ . '/lib/Generator.php';
+require_once $radacina . '/src/Support/Tema.php';
+require_once $radacina . '/src/Support/PachetSite.php';
 
 use App\Support\Migrari\Inghetare;
+use App\Support\PachetSite;
 use Unelte\Inghetare\Generator;
 
 $opreste = static function (string $mesaj): never {
@@ -189,7 +192,16 @@ foreach ($alese as $site) {
     } elseif (is_file($privat)) {
         unlink($privat);
     }
+    // Manifestul pachetului (pachet.json, docs/PACHETE.md) ține sha256-ul fiecărui fișier: îl rescrie odată cu înghețarea,
+    // ca pachetul să rămână verificabil (tools/dev/verifica-pachet.php, în testul de fum). privat/ nu intră în el.
+    $dosarPachet = dirname($fisier);
+    $manifestNou = '';
+    if (is_file($dosarPachet . '/' . PachetSite::MANIFEST)) {
+        $existent = PachetSite::manifest($dosarPachet);
+        $manifestNou = PachetSite::text(PachetSite::calculeaza($dosarPachet, is_string($existent['site'] ?? null) ? (string) $existent['site'] : $site));
+        file_put_contents($dosarPachet . '/' . PachetSite::MANIFEST, $manifestNou);
+    }
     echo 'OK    ', $rezultat['rezumat'], ' — scris ', substr($fisier, strlen($radacina) + 1) ?: $fisier,
-        $rezultat['privat'] !== null ? ' (+ privat/, în afara git-ului)' : '', "\n";
+        $rezultat['privat'] !== null ? ' (+ privat/, în afara git-ului)' : '', $manifestNou !== '' ? ' (+ pachet.json)' : '', "\n";
 }
 exit($esuate === 0 ? 0 : 1);

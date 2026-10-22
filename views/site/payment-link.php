@@ -19,6 +19,8 @@ $inCurs = (bool) ($inCurs ?? false) && !$platitAcum;
 $urlReverificare = (string) ($urlReverificare ?? '');
 // Procesatorul linkului nu mai e pe site: linkul se vede, dar nu mai pornește o plată.
 $procesorOprit = (bool) ($procesorOprit ?? false) && !$platitAcum && !$inCurs;
+// Culoarea butoanelor: a temei site-ului (tema.json → culoare_principala), implicit #2f8d5b.
+$culoareButon = \App\Support\Tema::culoarePrincipala();
 ?>
 <section class="panel" style="max-width:560px;margin-left:auto;margin-right:auto;padding:32px 26px;text-align:center;">
     <?php if ($platitAcum): ?>
@@ -29,7 +31,7 @@ $procesorOprit = (bool) ($procesorOprit ?? false) && !$platitAcum && !$inCurs;
             a fost achitată. Îți pregătim comanda pentru livrare.
         </p>
         <p style="margin:24px 0 0;">
-            <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#2f8d5b;color:#fff;text-decoration:none;font-weight:700;">Continuă cumpărăturile</a>
+            <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Continuă cumpărăturile</a>
         </p>
     <?php elseif ($inCurs): ?>
         <h1 style="margin:0 0 12px;font-size:24px;color:#0f172a;">Verificăm plata</h1>
@@ -40,7 +42,7 @@ $procesorOprit = (bool) ($procesorOprit ?? false) && !$platitAcum && !$inCurs;
         <?php if ($urlReverificare !== ''): ?>
             <p style="margin:22px 0 0;">
                 <a href="<?= htmlspecialchars($urlReverificare, ENT_QUOTES) ?>" data-reverificare
-                   style="display:inline-block;padding:12px 22px;border-radius:10px;background:#2f8d5b;color:#fff;text-decoration:none;font-weight:700;">Verifică din nou</a>
+                   style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Verifică din nou</a>
             </p>
             <script>setTimeout(function () { var a = document.querySelector('[data-reverificare]'); if (a) { window.location.href = a.href; } }, 30000);</script>
         <?php endif; ?>
@@ -70,7 +72,7 @@ $procesorOprit = (bool) ($procesorOprit ?? false) && !$platitAcum && !$inCurs;
 
         <form method="post" action="/plata/<?= rawurlencode($token) ?>">
             <button type="submit"
-                    style="display:inline-block;min-width:240px;padding:14px 26px;border:none;border-radius:12px;background:#2f8d5b;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">
+                    style="display:inline-block;min-width:240px;padding:14px 26px;border:none;border-radius:12px;background:<?= $culoareButon ?>;color:#fff;font-size:16px;font-weight:700;cursor:pointer;">
                 Plătește cu cardul
             </button>
         </form>

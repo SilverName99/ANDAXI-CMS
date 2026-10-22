@@ -1,0 +1,4 @@
+Font: Playfair Display, Google Fonts v40, fișierele variabile (axa wght), subseturile latin și latin-ext
+Sursa: pachetul npm @fontsource-variable/playfair-display@5.2.8, files/playfair-display-latin-wght-normal.woff2 și
+files/playfair-display-latin-ext-wght-normal.woff2, neschimbate (aceiași octeți pe care îi dă Google Fonts),
+redenumite playfair-latin.woff2 și playfair-latin-ext.woff2. Licență: SIL Open Font License 1.1 (OFL.txt, alături).

@@ -1,0 +1,4 @@
+Font: DM Sans, Google Fonts v17, fișierele variabile (axa wght), subseturile latin și latin-ext
+Sursa: pachetul npm @fontsource-variable/dm-sans@5.2.8, files/dm-sans-latin-wght-normal.woff2 și
+files/dm-sans-latin-ext-wght-normal.woff2, neschimbate (aceiași octeți pe care îi dă Google Fonts),
+redenumite dm-sans-latin.woff2 și dm-sans-latin-ext.woff2. Licență: SIL Open Font License 1.1 (OFL.txt, alături).

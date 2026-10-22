@@ -53,6 +53,18 @@ final class HomeSections
         $normalized = strtr($normalized, [
             'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't',
         ]);
+        // Tema site-ului își poate aduce iconițele (tema.json → iconite_categorii, perechi [cuvânt, svg] încercate în
+        // ordine, fiecare svg trecut prin App\Support\SvgSigur); atunci lista de mai sus nu se mai folosește, doar
+        // iconița implicită rămâne pentru categoriile fără potrivire.
+        $iconiteTema = Tema::iconiteCategorii();
+        if ($iconiteTema !== null) {
+            foreach ($iconiteTema as [$cuvant, $svg]) {
+                if (str_contains($normalized, $cuvant)) {
+                    return $svg;
+                }
+            }
+            return self::CATEGORY_ICONS['default'];
+        }
         foreach (self::CATEGORY_ICONS as $key => $path) {
             if ($key !== 'default' && str_contains($normalized, $key)) {
                 return $path;

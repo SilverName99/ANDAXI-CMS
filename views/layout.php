@@ -70,14 +70,24 @@ $designMenu = \App\Support\Plugins::curataTokenuri($designMenu);
 $cartCountTokens = ['{{cart_count}}', '{{ cart_count }}'];
 $mobileMenuToken = '{{mobile_menu}}';
 $mobileMenuTokenPattern = '/\{\{\s*mobile_menu\s*\}\}/i';
-// Logo pentru sertarul de meniu mobil; se ia primul fișier existent din galerie.
-$mobileMenuLogoPath = '/uploads/gallery/bioscem-logo.png';
-foreach (['bioscem-logo.webp', 'bioscem-logo.png', 'bioscem-logo.jpg', 'bioscem-logo.svg'] as $logoCandidate) {
-    if (is_file(\App\Support\Paths::uploads('gallery') . '/' . $logoCandidate)) {
-        $mobileMenuLogoPath = '/uploads/gallery/' . $logoCandidate;
-        break;
+// Logo pentru sertarul de meniu mobil: cel al temei site-ului (tema.json → logo_meniu_mobil: primul candidat care
+// există, altfel cel implicit al ei); fără el, ca până acum, primul fișier existent din galerie.
+$mobileMenuLogoTema = \App\Support\Tema::logoMeniuMobil();
+if ($mobileMenuLogoTema !== null) {
+    $mobileMenuLogoPath = $mobileMenuLogoTema['cale'];
+    $mobileMenuLogoAlt = $mobileMenuLogoTema['alt'];
+} else {
+    $mobileMenuLogoPath = '/uploads/gallery/bioscem-logo.png';
+    foreach (['bioscem-logo.webp', 'bioscem-logo.png', 'bioscem-logo.jpg', 'bioscem-logo.svg'] as $logoCandidate) {
+        if (is_file(\App\Support\Paths::uploads('gallery') . '/' . $logoCandidate)) {
+            $mobileMenuLogoPath = '/uploads/gallery/' . $logoCandidate;
+            break;
+        }
     }
+    $mobileMenuLogoAlt = 'Bioscem';
 }
+// Culoarea principală a bannerelor de mai jos (tema.json → culoare_principala; implicit #2f8d5b, ca până acum).
+$culoarePrincipala = \App\Support\Tema::culoarePrincipala();
 $mobileMenuFallbackHtml = '<ul class="menu-root"><li><a href="/">Acasă</a></li><li><a href="/magazin">Magazin</a></li><li><a href="/blog">Blog</a></li><li><a href="/contact">Contact</a></li></ul>';
 $mobileMenuTokenAssetsEnabled = false;
 // Coșul flotant e al magazinului; când magazinul se oprește nu mai primește produse noi.
@@ -298,7 +308,7 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
         . '<aside class="bv-mobile-menu-token__drawer" data-bv-mobile-menu-drawer aria-hidden="true">'
         . '<div class="bv-mobile-menu-token__drawer-head">'
         . '<a href="/" class="bv-mobile-menu-token__brand" aria-label="Acasă">'
-        . '<img src="' . htmlspecialchars($mobileMenuLogoPath, ENT_QUOTES) . '" alt="Bioscem" loading="lazy">'
+        . '<img src="' . htmlspecialchars($mobileMenuLogoPath, ENT_QUOTES) . '" alt="' . htmlspecialchars($mobileMenuLogoAlt, ENT_QUOTES) . '" loading="lazy">'
         . '</a>'
         . '<button class="bv-mobile-menu-token__close" type="button" aria-label="Închide meniul" data-bv-mobile-menu-close>&times;</button>'
         . '</div>'
@@ -413,11 +423,30 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     <link rel="icon" href="<?= $siteFaviconUrlEscaped ?>">
     <link rel="shortcut icon" href="<?= $siteFaviconUrlEscaped ?>">
     <link rel="apple-touch-icon" href="<?= $siteFaviconUrlEscaped ?>">
+<?php
+// Tema site-ului (App\Support\Tema, tema/tema.json din dosarul site-ului; docs/PACHETE.md): fonturile, Bootstrap-ul,
+// app.css și foile de stil ale temei, în această ordine; CSS-ul din Design vine după ele. Fără temă, exact rândurile
+// de dinainte: fonturile de la Google și app.css. Blocurile stau pe coloana 0, deci nu lasă nimic în pagină când nu se
+// afișează.
+?>
+<?php if (\App\Support\Tema::fonturiGoogle()): ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<?php endif; ?>
+<?php foreach (\App\Support\Tema::fonturi() as $temaFont): ?>
+    <link rel="stylesheet" href="<?= htmlspecialchars(\App\Support\Tema::url($temaFont), ENT_QUOTES) ?>">
+<?php endforeach; ?>
+<?php if (\App\Support\Tema::bootstrap()): ?>
+    <link rel="stylesheet" href="<?= htmlspecialchars(\App\Support\Tema::url(\App\Support\Tema::BOOTSTRAP_CSS), ENT_QUOTES) ?>">
+<?php endif; ?>
+<?php if (\App\Support\Tema::incarcaAppCss()): ?>
     <?php $cssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time(); ?>
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= $cssVersion ?><?= $assetVersionQuery ?>">
+<?php endif; ?>
+<?php foreach (\App\Support\Tema::css() as $temaCss): ?>
+    <link rel="stylesheet" href="<?= htmlspecialchars(\App\Support\Tema::url($temaCss), ENT_QUOTES) ?>">
+<?php endforeach; ?>
     <?php
     $designCss = trim(implode("\n", array_filter([
         $designHeaderCss,
@@ -951,6 +980,10 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     </style>
 </head>
 <body class="site-shell">
+<?php if (\App\Support\Tema::butonSus()): ?>
+<?php /* Ținta butonului „Înapoi sus” (tema.json → buton_sus, GR b4159bd): fără ea, ancora n-ar avea unde duce focusul. */ ?>
+<span id="inceput-pagina"></span>
+<?php endif; ?>
     <?php echo \App\Support\Verificare::banner('site'); /* bannerul copiei de verificare; gol în rest */ if ($gtmEnabled && $gtmBodyCode !== ''): ?>
     <?= $gtmBodyCode ?>
     <?php elseif ($gtmEnabled && $gtmId !== ''): ?>
@@ -1048,7 +1081,21 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     </aside>
     <?php endif; ?>
 
-    <main class="container site-container">
+<?php /* tema.json → main „lat” (GR 74e4b25): <main> pe toată lățimea, fără .container; secțiunile paginilor își pun
+             singure containerul, iar mesajele de mai jos îl primesc pe al lor (flash „bootstrap”). */ ?>
+    <main class="<?= \App\Support\Tema::clasaMain() ?>">
+<?php if (\App\Support\Tema::flash() === 'bootstrap'): ?>
+        <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
+            <div class="container mt-3">
+                <div class="alert alert-success mb-0"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
+            </div>
+        <?php endif; ?>
+        <?php if (($message = \App\Support\Flash::get('error')) !== null): ?>
+            <div class="container mt-3">
+                <div class="alert alert-danger mb-0"><?= htmlspecialchars($message, ENT_QUOTES) ?></div>
+            </div>
+        <?php endif; ?>
+<?php else: ?>
         <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
             <section class="panel" style="border-color:#34d399;background:#ecfdf5;color:#065f46;">
                 <?= htmlspecialchars($message, ENT_QUOTES) ?>
@@ -1059,6 +1106,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                 <?= htmlspecialchars($message, ENT_QUOTES) ?>
             </section>
         <?php endif; ?>
+<?php endif; ?>
         <?= $content ?>
     </main>
 
@@ -1098,14 +1146,14 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                 <p style="margin:0;flex:1 1 320px;min-width:260px;color:#334155;font-size:14px;line-height:1.55;">
                     <?= htmlspecialchars($textCookies, ENT_QUOTES) ?>
                     <?php if ($linkPolitica !== ''): ?>
-                        <a href="<?= htmlspecialchars($linkPolitica, ENT_QUOTES) ?>" style="color:#2f8d5b;text-decoration:underline;">Politica de confidențialitate</a>
+                        <a href="<?= htmlspecialchars($linkPolitica, ENT_QUOTES) ?>" style="color:<?= $culoarePrincipala ?>;text-decoration:underline;">Politica de confidențialitate</a>
                     <?php endif; ?>
                 </p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
                     <button type="button" data-cookie-choice="necessary"
                             style="padding:11px 18px;border:1px solid #cbd5e1;border-radius:10px;background:#ffffff;color:#334155;font-size:14px;font-weight:600;cursor:pointer;">Doar necesare</button>
                     <button type="button" data-cookie-choice="all"
-                            style="padding:11px 22px;border:none;border-radius:10px;background:#2f8d5b;color:#ffffff;font-size:14px;font-weight:700;cursor:pointer;">Accept toate</button>
+                            style="padding:11px 22px;border:none;border-radius:10px;background:<?= $culoarePrincipala ?>;color:#ffffff;font-size:14px;font-weight:700;cursor:pointer;">Accept toate</button>
                 </div>
             </div>
         </div>
@@ -1158,7 +1206,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                 </div>
                 <div style="margin-top:18px;text-align:center;">
                     <button type="button" data-welcome-popup-close
-                            style="display:inline-block;min-width:180px;padding:12px 22px;border:none;border-radius:12px;background:#2f8d5b;color:#ffffff;font-size:15px;font-weight:700;cursor:pointer;">Am înțeles</button>
+                            style="display:inline-block;min-width:180px;padding:12px 22px;border:none;border-radius:12px;background:<?= $culoarePrincipala ?>;color:#ffffff;font-size:15px;font-weight:700;cursor:pointer;">Am înțeles</button>
                 </div>
             </div>
         </div>
@@ -2157,6 +2205,62 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
             });
         })();
     </script>
+<?php endif; ?>
+<?php /* Tema site-ului: JavaScript-ul Bootstrap, scripturile temei (tema.json → js_final) și butonul „Înapoi sus”. */ ?>
+<?php if (\App\Support\Tema::bootstrap()): ?>
+<script src="<?= htmlspecialchars(\App\Support\Tema::url(\App\Support\Tema::BOOTSTRAP_JS), ENT_QUOTES) ?>" defer></script>
+<?php endif; ?>
+<?php foreach (\App\Support\Tema::jsFinal() as $temaJs): ?>
+<script src="<?= htmlspecialchars(\App\Support\Tema::url($temaJs), ENT_QUOTES) ?>" defer></script>
+<?php endforeach; ?>
+<?php if (\App\Support\Tema::butonSus()): ?>
+<?php
+/*
+ * Butonul „Înapoi sus” (GR b4159bd). Stă în șablon, nu în subsolul din Design: subsolul se poate rescrie din admin, iar
+ * butonul ar dispărea odată cu el. E ancoră, nu buton: dus sus, focusul trebuie să ajungă la începutul paginii (ținta
+ * #inceput-pagina, imediat după <body>), altfel următorul Tab ar continua din subsol. Apare abia după ce pagina a fost
+ * derulată o înălțime de ecran; înfățișarea (.sus) o dă CSS-ul temei.
+ */
+?>
+<a class="sus" href="#inceput-pagina" aria-label="Înapoi sus" hidden>
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+       stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M12 19V5M5 12l7-7 7 7"/>
+  </svg>
+</a>
+<script>
+    (function () {
+        'use strict';
+
+        var buton = document.querySelector('.sus');
+        if (!buton) {
+            return;
+        }
+
+        // Pragul e o înălțime de ecran, nu un număr fix de pixeli: pe un telefon 600px înseamnă o pagină întreagă
+        // derulată, pe un monitor mare abia jumătate de ecran.
+        function potriveste() {
+            var arata = window.scrollY > window.innerHeight;
+            buton.hidden = !arata;
+        }
+
+        potriveste();
+        window.addEventListener('scroll', potriveste, { passive: true });
+        window.addEventListener('resize', potriveste);
+
+        // Derularea lină o face „scroll-behavior” din CSS, care ascultă și de „prefers-reduced-motion”. Aici rămâne doar
+        // mutarea focusului: o ancoră duce privirea sus, dar focusul îl duce numai dacă ținta îl poate primi.
+        buton.addEventListener('click', function () {
+            var inceput = document.getElementById('inceput-pagina');
+            if (inceput) {
+                window.setTimeout(function () {
+                    inceput.setAttribute('tabindex', '-1');
+                    inceput.focus({ preventScroll: true });
+                }, 0);
+            }
+        });
+    })();
+</script>
 <?php endif; ?>
 </body>
 </html>

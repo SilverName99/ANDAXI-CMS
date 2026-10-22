@@ -1,0 +1,12 @@
+{
+    "format": 1,
+    "site": "demo",
+    "fisiere": {
+        "redirecturi.json": "155853e1dc8ed3758bca816883de0b5b9a660e3d9dd11b24b3338e6d2bbcc9ec",
+        "seo.json": "ece05abf022a94080292864f3d93df29e2e9d08296a48e7ef78175760a82e2dc"
+    },
+    "obligatorii": [
+        "redirecturi.json",
+        "seo.json"
+    ]
+}

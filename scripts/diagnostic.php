@@ -23,9 +23,16 @@ declare(strict_types=1);
  * (`php_min` din config/app.php) și iese cu 1 sub el. Versiunea site-ului (web) poate
  * fi alta: pe Hostinger se vede în hPanel → PHP Configuration.
  *
+ * Arată și pachetul de date al site-ului (`--pachet`, docs/PACHETE.md): dosarul (`SITE_DATE_DOSAR`), manifestul
+ * `pachet.json` (fiecare fișier cu sha256-ul lui, site-ul = `LICENTA_SITE`), tema și copiile fișierelor publice ale
+ * pachetului în docroot (`tema/public/` în `public/tema/`, `public/` peste `public/`). Iese cu 1 dacă ceva nu se
+ * potrivește: un pachet lipsă sau stricat nu are voie să treacă neobservat (numele cookie-ului de acord, de exemplu,
+ * ar reveni la cel implicit).
+ *
  * Rulare:
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --licenta    # doar licența și PHP-ul (verificarea dinaintea unui deploy)
+ *   /usr/bin/php /cale/catre/scripts/diagnostic.php --pachet     # doar pachetul de date al site-ului (la adoptare, după copiere)
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -43,10 +50,13 @@ $envCitibil = $envExista && is_readable($envPath);
 require_once __DIR__ . '/../bootstrap.php';
 
 use App\Support\Database;
+use App\Support\DateSite;
 use App\Support\Licenta;
+use App\Support\PachetSite;
 use App\Support\Paths;
 use App\Support\Plugins;
 use App\Support\Settings;
+use App\Support\Tema;
 
 $config = require __DIR__ . '/../config/app.php';
 
@@ -93,6 +103,51 @@ if (in_array('--licenta', $argv, true)) {
     $licentaOk = $arataLicenta();
     $arataPhp();
     exit($licentaOk && !$phpPreaVechi ? 0 : 1);
+}
+
+/** Pachetul de date al site-ului: manifestul, tema, copiile publice. Întoarce true dacă totul se potrivește. */
+$arataPachet = static function (): bool {
+    echo "=== Pachetul site-ului ===\n";
+    $dosar = DateSite::dosar();
+    $site = Licenta::site();
+    echo 'dosar        : ' . $dosar . (is_dir($dosar) ? '' : ' (LIPSESTE)') . "\n";
+    echo 'site (.env)  : ' . ($site !== '' ? $site : 'LIPSESTE (LICENTA_SITE)') . "\n";
+    $probleme = PachetSite::verifica($dosar, $site !== '' ? $site : null);
+    $amprenta = PachetSite::amprenta($dosar);
+    echo 'manifest     : ' . ($amprenta !== null ? 'pachet.json, amprenta ' . $amprenta : 'LIPSESTE') . "\n";
+    if (is_file($dosar . '/' . Tema::FISIER)) {
+        $problemeTema = Tema::probleme();
+        echo 'tema         : ' . ($problemeTema === [] ? 'ok' : 'PROBLEME') . "\n";
+        foreach ($problemeTema as $problema) {
+            $probleme[] = Tema::FISIER . ': ' . $problema;
+        }
+    } else {
+        echo "tema         : fara tema.json (paginile nucleului, neschimbate)\n";
+    }
+    // Fișierele publice ale pachetului se servesc din docroot: tema/public/ ca public/tema/, public/ la aceeași adresă.
+    $copii = 0;
+    foreach (is_dir($dosar) ? PachetSite::fisiere($dosar) : [] as $relativ) {
+        $tinta = str_starts_with($relativ, 'tema/public/') ? 'tema/' . substr($relativ, strlen('tema/public/'))
+            : (str_starts_with($relativ, 'public/') ? substr($relativ, strlen('public/')) : null);
+        if ($tinta === null) {
+            continue;
+        }
+        $copii++;
+        $fisier = Paths::public($tinta);
+        if (!is_file($fisier) || !hash_equals((string) hash_file('sha256', $dosar . '/' . $relativ), (string) hash_file('sha256', $fisier))) {
+            $probleme[] = 'public/' . $tinta . (is_file($fisier) ? ' diferă de ' : ' lipsește; se copiază din ') . $relativ;
+        }
+    }
+    echo 'publice      : ' . $copii . " fisiere ale pachetului, in docroot (tema/public/ -> public/tema/, public/ -> public/)\n";
+    foreach ($probleme as $problema) {
+        echo '  problema   : ' . $problema . "\n";
+    }
+    echo 'rezultat     : ' . ($probleme === [] ? 'ok' : 'NU E IN REGULA (' . count($probleme) . ' probleme)') . "\n";
+    return $probleme === [];
+};
+
+if (in_array('--pachet', $argv, true)) {
+    exit($arataPachet() ? 0 : 1);
 }
 
 echo "=== Mediu ===\n";

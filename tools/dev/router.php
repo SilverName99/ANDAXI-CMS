@@ -22,6 +22,32 @@ if ($cale !== '/' && $cale !== '/sitemap.xml' && !str_starts_with($cale, '/uploa
     }
 }
 
+// /tema/… sunt fișierele publice ale temei site-ului (docs/PACHETE.md). Pe server stau în public/tema/, copiate din
+// pachet (tema/public/) la instalare și la fiecare actualizare, și le servește serverul web (regula de mai sus). Aici
+// nu le copiază nimeni: se servesc direct din pachetul ales (SITE_DATE_DOSAR), doar fișierele din tema/public/ și doar
+// tipurile pe care tools/dev/verifica-pachet.php le primește acolo. Un fișier care lipsește ajunge la aplicație (404).
+if (str_starts_with($cale, '/tema/')) {
+    $dosarSite = trim((string) getenv('SITE_DATE_DOSAR'));
+    if ($dosarSite !== '' && $dosarSite[0] !== '/') {
+        $dosarSite = dirname($radacinaPublica) . '/' . $dosarSite;
+    }
+    $tipuri = ['css' => 'text/css; charset=utf-8', 'js' => 'text/javascript; charset=utf-8', 'svg' => 'image/svg+xml',
+        'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp', 'gif' => 'image/gif',
+        'avif' => 'image/avif', 'ico' => 'image/x-icon', 'woff2' => 'font/woff2'];
+    $dosarTema = $dosarSite !== '' ? realpath($dosarSite . '/tema/public') : false;
+    $fisier = $dosarTema !== false ? realpath($dosarTema . '/' . substr($cale, strlen('/tema/'))) : false;
+    $tip = $tipuri[strtolower(pathinfo((string) $fisier, PATHINFO_EXTENSION))] ?? null;
+    if ($fisier !== false && $tip !== null && is_file($fisier) && str_starts_with($fisier, $dosarTema . DIRECTORY_SEPARATOR)) {
+        header('Content-Type: ' . $tip);
+        header('Content-Length: ' . (string) filesize($fisier));
+        header('Last-Modified: ' . gmdate('D, d M Y H:i:s', (int) filemtime($fisier)) . ' GMT');
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') {
+            readfile($fisier);
+        }
+        return true;
+    }
+}
+
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = $radacinaPublica . '/index.php';
 require $radacinaPublica . '/index.php';

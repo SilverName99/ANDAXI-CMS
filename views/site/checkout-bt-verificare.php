@@ -13,6 +13,8 @@
  */
 $numar = trim((string) ($numar ?? ''));
 $urlReverificare = trim((string) ($urlReverificare ?? ''));
+// Culoarea butoanelor: a temei site-ului (tema.json → culoare_principala), implicit #2f8d5b.
+$culoareButon = \App\Support\Tema::culoarePrincipala();
 ?>
 <section class="panel" style="max-width:560px;margin-left:auto;margin-right:auto;padding:32px 26px;text-align:center;">
     <h1 style="margin:0 0 12px;font-size:24px;color:#0f172a;">
@@ -27,7 +29,7 @@ $urlReverificare = trim((string) ($urlReverificare ?? ''));
         <?php if ($urlReverificare !== ''): ?>
             <p style="margin:22px 0 0;">
                 <a href="<?= htmlspecialchars($urlReverificare, ENT_QUOTES) ?>" data-reverificare
-                   style="display:inline-block;padding:12px 22px;border-radius:10px;background:#2f8d5b;color:#fff;text-decoration:none;font-weight:700;">Verifică din nou</a>
+                   style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Verifică din nou</a>
             </p>
             <p style="margin:12px 0 0;color:#94a3b8;font-size:13px;">Pagina se reîmprospătează singură peste 30 de secunde.</p>
             <script>setTimeout(function () { var a = document.querySelector('[data-reverificare]'); if (a) { window.location.href = a.href; } }, 30000);</script>
@@ -38,7 +40,7 @@ $urlReverificare = trim((string) ($urlReverificare ?? ''));
             Pentru orice întrebare despre comandă, scrie-ne și îți răspundem cât de repede putem.
         </p>
         <p style="margin:22px 0 0;">
-            <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#2f8d5b;color:#fff;text-decoration:none;font-weight:700;">Înapoi în magazin</a>
+            <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Înapoi în magazin</a>
         </p>
     <?php endif; ?>
 </section>

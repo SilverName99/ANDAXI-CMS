@@ -1,0 +1,11 @@
+/* Tema demo: pagina de mulțumire (tema.json → css_inline.pagina_succes). */
+.bs-succes{
+    --bs-succes-accent:#0f766e;
+    max-width:600px;
+    margin:24px auto 48px;
+}
+.bs-succes__card{
+    padding:28px 22px;
+    border:2px solid var(--bs-succes-accent);
+    border-radius:8px;
+}

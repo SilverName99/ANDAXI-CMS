@@ -1,0 +1,4 @@
+Font: Rubik, Google Fonts v31, fișierele variabile (axa wght), subseturile latin și latin-ext
+Sursa: pachetul npm @fontsource-variable/rubik@5.2.8, files/rubik-latin-wght-normal.woff2 și
+files/rubik-latin-ext-wght-normal.woff2, neschimbate (aceiași octeți pe care îi dă Google Fonts),
+redenumite rubik-latin.woff2 și rubik-latin-ext.woff2. Licență: SIL Open Font License 1.1 (OFL.txt, alături).

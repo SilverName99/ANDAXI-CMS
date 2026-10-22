@@ -684,7 +684,10 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
   `diagnostic.php --licenta` arată doar sodium-ul liniei de comandă, nu pe al site-ului.
 
 1. Pachetul site-ului (cu `setari-inghetate.json` și `migrari.json`) în `SITE_DATE_DOSAR`, iar `privat/` lângă el,
-   copiat de mână din dezvoltare (deploy-ul din Etapa 2 nu are voie să-l șteargă); `SITE_SLUG` în `.env`.
+   copiat de mână din dezvoltare (deploy-ul din Etapa 2 nu are voie să-l șteargă); `SITE_SLUG` în `.env`. Fișierele
+   publice ale pachetului în docroot: `tema/public/` în `public/tema/`, `public/` peste `public/`
+   ([PACHETE.md](PACHETE.md), „Pe server”). Apoi `$PHP scripts/diagnostic.php --pachet`: ultimul rând trebuie să fie
+   `rezultat     : ok` (manifestul `pachet.json`, site-ul = `LICENTA_SITE`, fiecare sha256, tema, copiile publice).
 2. Repetiția pe verificare, pe o copie a bazei live: `php scripts/migreaza.php --plan --permite-provizoriu`, apoi
    `--aplica --permite-provizoriu`; planul arată fiecare cheie scrisă. Copia o încarcă încărcarea din WP-08
    ([VERIFICARE.md](VERIFICARE.md)). `configureaza.php` scrie `SITE_COPIE_VERIFICARE=1` (fără el `--permite-provizoriu`

@@ -1,0 +1,4 @@
+VERSIUNE=5.3.8
+Sursa: pachetul npm bootstrap@5.3.8, dist/css/bootstrap.min.css și dist/js/bootstrap.bundle.min.js, neschimbate
+(aceiași octeți ca în grafoanaytis d3c4b79, public/assets/vendor/bootstrap/). Licență: MIT (LICENSE, alături).
+Se încarcă doar pe site-urile a căror temă cere Bootstrap (tema.json → "bootstrap": true; docs/PACHETE.md).

@@ -1,0 +1,10 @@
+{
+    "format": 1,
+    "site": "vertij",
+    "fisiere": {
+        "ce-se-schimba.md": "e19ff63a1bc04c265682f805412c641ac86698d1fdf885f868ec9b46cd516ce5",
+        "migrari.json": "f613501cb313a1029844b0a88d20ebbaef6c9b370bf6bdd42bcf1359bdcd8386",
+        "setari-inghetate.json": "31a1661ff9d8061b98d717a526249f6fdf336bcd64adc1d4a59f704d7f7897e3"
+    },
+    "obligatorii": []
+}

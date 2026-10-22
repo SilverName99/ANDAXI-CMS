@@ -18,7 +18,7 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | `src/Support/JsonLd.php` | Datele structurate (produs, ofertă, firimituri, firmă, site) |
 | `src/Support/ImageDimensions.php` | width/height ale pozelor (cache în `storage/cache/image-dimensions.json`) |
 | `src/Support/Slug.php` | Slug-urile de marcă, etichetă și categorie (aceleași în pagini și în sitemap) |
-| `src/Support/DateSite.php` | Datele unui site: `redirecturi.json` și `seo.json` din dosarul site-ului |
+| `src/Support/DateSite.php` | Datele unui site: `redirecturi.json` și `seo.json` din dosarul site-ului (formatul pachetului: [PACHETE.md](PACHETE.md)) |
 | `src/Support/LinkuriCategorii.php` | Categoriile pe `/categorie/{slug}`: linkurile din pagini, antet, meniu și subsol, ținta celor vechi (catalog) |
 | `src/Support/SeoMeta.php` | Titlurile și descrierile Google, numele magazinului din titluri |
 | `src/Support/LogoAntet.php` | Logo-ul din antet ca WebP mic, cu PNG-ul ca rezervă |
@@ -265,9 +265,11 @@ minute în `storage/cache/`; cât magazinul se oprește, canalul rămâne, făr�
 ## 9. Datele unui site
 
 Dosarul: `SITE_DATE_DOSAR` din `.env` (cale absolută sau relativă la rădăcină); gol =
-`<rădăcină>/site` (ignorat de git). Doar fișiere JSON, fără PHP executabil. Un site
-fără dosar merge cu valorile implicite (nicio regulă de hartă, etichetele de la 1
-produs, logo-ul = iconița). Un fișier stricat se ignoră (o linie în jurnalul PHP).
+`<rădăcină>/site` (ignorat de git). Doar date, fără PHP executabil: formatul întreg al
+pachetului (fișierele permise, manifestul `pachet.json`, tema, verificarea) e în
+[PACHETE.md](PACHETE.md). Un site fără dosar merge cu valorile implicite (nicio regulă de
+hartă, etichetele de la 1 produs, logo-ul = iconița). Un fișier stricat se ignoră (o linie
+în jurnalul PHP); `tools/dev/verifica-pachet.php` (în testul de fum) nu-l lasă în repo.
 
 `seo.json` (toate cheile sunt opționale; cheile `_despre` sunt comentarii):
 
@@ -289,11 +291,12 @@ produs, logo-ul = iconița). Un fișier stricat se ignoră (o linie în jurnalul
 
 `livrare_retur` și condițiile lui le confirmă proprietarul site-ului (`termen_livrare`:
 `[pregătire min, max, transport min, max]` în zile lucrătoare, sau `null`; `taxe`: `client` sau
-`gratuit`). Fișierele publice ale pachetului (de exemplu variantele WebP ale logo-ului) stau în
-`site-uri/<site>/public/` și se copiază peste `public/` la adoptare.
+`gratuit`). Fișierele publice ale pachetului la o adresă fixă (de exemplu variantele WebP ale logo-ului) stau în
+`site-uri/<site>/public/` și se copiază peste `public/` la adoptare ([PACHETE.md](PACHETE.md), „Fișierele publice la o
+adresă fixă”).
 
 **Pachetele site-urilor** stau în `site-uri/<site>/` și se copiază în dosarul site-ului
-la instalare (sau la adoptarea codului comun). `site-uri/bioscem/`: 128 de reguli exacte, adică
+la instalare (sau la adoptarea codului comun; verificarea pe server: `scripts/diagnostic.php --pachet`). `site-uri/bioscem/`: 128 de reguli exacte, adică
 cele 113 ale livrării 1 (103 × 301, 10 × 410), cele 14 × 301 aprobate de proprietar pe
 19 octombrie (Bioscem `9f59e79`: produse și etichete șterse, spre înlocuitorul verificat) și
 `/retur-garantie` → `/termeni-conditii` (20 octombrie, Bioscem `8c074f1`), plus
