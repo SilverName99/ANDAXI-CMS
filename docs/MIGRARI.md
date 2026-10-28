@@ -688,6 +688,10 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    publice ale pachetului în docroot: `tema/public/` în `public/tema/`, `public/` peste `public/`
    ([PACHETE.md](PACHETE.md), „Pe server”). Apoi `$PHP scripts/diagnostic.php --pachet`: ultimul rând trebuie să fie
    `rezultat     : ok` (manifestul `pachet.json`, site-ul = `LICENTA_SITE` = `SITE_SLUG`, fiecare sha256, tema, copiile publice).
+   Un pachet cu pozele refăcute (`poze-optimizate.json`, la Bioscem cele 10 poze ale livrării 4 SEO) are și rândul
+   `poze refacute: N din M trec pe WebP`: N trebuie să fie M; un rând `atentie` spune care poză veche are pe disc altă
+   mărime decât pachetul (rămâne poza veche). Mărimea corectă e cea de pe disc (`stat -c %s public/uploads/gallery/<poza>`),
+   niciodată cea a unei descărcări prin CDN ([SEO.md](SEO.md), „Pozele refăcute”).
 2. Repetiția pe verificare, pe o copie a bazei live: `php scripts/migreaza.php --plan --permite-provizoriu`, apoi
    `--aplica --permite-provizoriu`; planul arată fiecare cheie scrisă. Copia o încarcă încărcarea din WP-08
    ([VERIFICARE.md](VERIFICARE.md)). `configureaza.php` scrie `SITE_COPIE_VERIFICARE=1` (fără el `--permite-provizoriu`

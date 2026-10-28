@@ -96,6 +96,14 @@
 #    (aceleași valori, deci aceleași pagini); variantele WebP ale logo-ului sunt fișiere ale pachetului
 #    (site-uri/bioscem/public/, copiate peste public/ la adoptare și, aici, pe durata comparației);
 #    schimbările din docs/templates (6c8c789, df21b30) nu se portează (decizia OD-34);
+#  - livrarea 4 SEO (WP-R din 28 oct, Bioscem 5359ec6 … 070e1af): config/poze-optimizate.php al Bioscem e în pachet
+#    (site-uri/bioscem/poze-optimizate.json, fișierele WebP în site-uri/bioscem/public/assets/img/optimizate/, puse aici în
+#    public/ pe durata comparației, ca logo-ul), termenul de livrare implicit în seo.json → livrare_retur.termen_livrare,
+#    scripts/seo-continut.json în site-uri/bioscem/seo-continut.json (scripts/seo-continut.php generic, cu numele magazinului
+#    și numărătoarea din fișier); pozele vechi ale listei nu sunt în datele demo, deci compara-cu-baza.sh pune, tot pe durata
+#    comparației, câte un PNG inventat de exact mărimea din listă (și în copia codului de bază), iar cazul „pozele refăcute”
+#    schimbă mărimea uneia; cardurile „Produse similare” scrise pe server respectă pluginurile ca JavaScript-ul caruselului
+#    (cu pluginurile Bioscem, aceleași pagini); scripts/diagnostic.php --pachet arată și mărimile pozelor de pe disc;
 #  - din alt site vechi: videoul postărilor (vertij 0fc2b2c, App\Support\VideoEmbed), cu textul
 #    editorului declarat în $porturiVertij și rândul din site-uri/bioscem/ce-se-schimba.md;
 #  - căile site-ului prin App\Support\Paths (WP-07): .env, storage/ (sesiunile, cache-ul, jurnalele,
@@ -281,6 +289,30 @@ if [ "$MOD" = "repo" ] && [ -n "${SITE_DATE_DOSAR:-}" ]; then
             FISIERE_PUSE+=("$LOGO_FISIER")
         fi
     fi
+    # Pozele vechi ale pozelor refăcute (poze-optimizate.json → poze, Bioscem e2c97dc, 070e1af): datele demo nu le au, iar
+    # fără ele niciun cod nu trece pe WebP. Câte un PNG inventat, de exact mărimea scrisă în pachet (cea de pe discul
+    # serverului), doar pe durata comparației (copiate mai jos și în codul de bază). Cazul „poze refăcute” din
+    # compara-cu-baza.php schimbă pe durata lui mărimea uneia (altă poză încărcată cu același nume).
+    while read -r POZA_CALE POZA_OCTETI; do
+        [ -n "$POZA_CALE" ] || continue
+        case "$POZA_CALE" in /uploads/*) ;; *) die "poze-optimizate.json: poza veche nu e în /uploads/: $POZA_CALE" ;; esac
+        case "$POZA_CALE" in *..*) die "poze-optimizate.json: cale nepermisă: $POZA_CALE" ;; esac
+        POZA_FISIER="$RADACINA/public$POZA_CALE"
+        [ -e "$POZA_FISIER" ] && die "public$POZA_CALE există deja; comparația pune acolo o poză de test (șterge-o întâi)"
+        POZA_DOSAR="$(dirname "$POZA_FISIER")"
+        [ -d "$POZA_DOSAR" ] || { mkdir -p "$POZA_DOSAR"; DOSARE_PUSE+=("$POZA_DOSAR"); }
+        "${PHP_DEV[@]}" -r '$i = imagecreatetruecolor(40, 40);
+            imagefill($i, 0, 0, imagecolorallocate($i, 120, 160, 90));
+            ob_start(); imagepng($i); $png = (string) ob_get_clean();
+            $octeti = (int) $argv[2];
+            if (strlen($png) > $octeti) { exit(1); }
+            file_put_contents($argv[1], $png . str_repeat("\0", $octeti - strlen($png))) === $octeti || exit(1);' \
+            "$POZA_FISIER" "$POZA_OCTETI" || die "nu pot face poza de test $POZA_FISIER ($POZA_OCTETI octeți)"
+        FISIERE_PUSE+=("$POZA_FISIER")
+    done < <("${PHP_DEV[@]}" -r '$j = json_decode((string) @file_get_contents($argv[1] . "/poze-optimizate.json"), true);
+        foreach ((array) (is_array($j) ? ($j["poze"] ?? []) : []) as $veche => $rand) {
+            if (is_array($rand) && is_int($rand["octeti"] ?? null)) { echo $veche, " ", $rand["octeti"], "\n"; }
+        }' "$SITE_DATE_DOSAR")
     # Fișierele publice ale pachetului (site-uri/<site>/public/, de exemplu variantele WebP ale
     # logo-ului) se copiază la adoptare peste public/ (site-uri/README.md); aici, la fel, doar
     # pe durata comparației. Unul care există deja în public/ cu alt conținut oprește comparația.

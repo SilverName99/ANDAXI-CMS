@@ -33,7 +33,8 @@ pe un server, iar `scripts/diagnostic.php --pachet` îl vede pe server (mai jos)
 | `setari-inghetate.json` (și corecturile `setari-inghetate-<N>.json`) | `scripts/migreaza.php --aplica --site` ([MIGRARI.md](MIGRARI.md), „Înghețarea setărilor”) | o dată, la adoptare |
 | `migrari.json` | migrările ([MIGRARI.md](MIGRARI.md), „Parametrii site-ului”) | la migrări |
 | `pluginuri.json` | `tools/dev/licenta.php`, verificarea de la adoptare (WP-14) | doar unelte; licența vine numai de la CRM |
-| `seo-texte.json`, `avertismente-produse.json` | `scripts/seo-texte.php`, `scripts/avertisment-produse.php` | o dată, de mână (`--plan`, `--aplica`) |
+| `poze-optimizate.json` | `PozeOptimizate` ([SEO.md](SEO.md), „Pozele refăcute”) | la fiecare cerere: pozele mari afișate din fișierele WebP ale pachetului (`public/`), cu mărimea pozei vechi **de pe discul serverului** (`"marimi_de_pe": "disc"`) |
+| `seo-texte.json`, `avertismente-produse.json`, `seo-continut.json` | `scripts/seo-texte.php`, `scripts/avertisment-produse.php`, `scripts/seo-continut.php` | o dată, de mână (`--plan`, `--aplica`) |
 | `privat/*.json` | înghețarea setărilor | **ignorat de git** (decizia OD-49): valorile private, copiate de mână pe server; nu intră în manifest |
 | `continut/**` | importatorul de conținut al unui site nou (GR-20, Etapa 4) | încă nu face parte din format: verificarea îl refuză până vine importatorul cu regulile lui |
 
@@ -58,7 +59,7 @@ doar `tema.json` și blocuri `.css`; în `tema/public/` imagini (`svg png jpg jp
 - `fisiere`: **fiecare** fișier al pachetului (fără manifest și fără `privat/`), cu sha256-ul lui. Un fișier lipsă,
   unul în plus sau unul schimbat se văd imediat.
 - `obligatorii`: fișierele fără de care site-ul s-ar schimba fără să spună nimic (implicit cele citite la fiecare
-  cerere care există în pachet: `redirecturi.json`, `seo.json`, `site.json`, `tema/tema.json`).
+  cerere care există în pachet: `redirecturi.json`, `seo.json`, `site.json`, `tema/tema.json`, `poze-optimizate.json`).
 
 Îl scrie `tools/dev/php.sh tools/dev/verifica-pachet.php --actualizeaza-manifest` (determinist: aceleași fișiere, aceiași
 octeți), după orice schimbare voită într-un pachet; `tools/inghetare/genereaza-setari.php` îl rescrie singur când
@@ -140,6 +141,15 @@ la adoptare se copiază peste `public/` al site-ului (în Etapa 2, în docroot).
 nucleului (verificarea compară cu fișierele din git), în `uploads/` (pozele clientului) sau în `tema/`.
 `tools/dev/compara-cu-baza.sh` le pune în `public/` doar pe durata comparației.
 
+**Pozele refăcute** (`poze-optimizate.json`, Bioscem `e2c97dc`, `070e1af`): fișierele WebP noi stau tot aici
+(`public/assets/img/optimizate/`), iar lista spune pentru fiecare poză veche din `/uploads/` mărimea ei în octeți. Lecția
+Bioscem `070e1af`: mărimea se ia **pe server, de pe disc** (`stat -c %s`), niciodată descărcând poza (CDN-ul Hostinger
+trimite pozele refăcute, cu alți octeți; cu mărimile luate așa nicio poză nu trecea pe WebP). Verificarea cere
+`"marimi_de_pe": "disc"`, poze vechi în `/uploads/` cu extensie de imagine, mărimi întregi pozitive și fiecare fișier nou în
+`public/`, WebP adevărat și mai mic decât poza veche; `scripts/diagnostic.php --pachet` compară pe server fiecare mărime cu
+fișierul de pe disc. `tools/dev/compara-cu-baza.sh` pune pe durata comparației poze vechi inventate, de exact mărimea din
+listă.
+
 ## Verificarea (`tools/dev/verifica-pachet.php`)
 
 ```sh
@@ -150,7 +160,7 @@ tools/dev/php.sh tools/dev/verifica-pachet.php --autotest              # fiecare
 
 Rulează în testul de fum (pasul 1, și autotestul), deci în porțile G-smoke și G-php. Verifică locul și tipul fiecărui
 fișier, conținutul (JSON valid, UTF-8, CSS fără `</style`, fără `@import` și fără alt server, SVG din lista albă), `tema.json`
-(`Tema::valideaza`), înghețarea setărilor (se citește ca la runner-ul migrărilor și e a site-ului; restul îl verifică
+(`Tema::valideaza`), lista pozelor refăcute (`poze-optimizate.json`, mai sus), înghețarea setărilor (se citește ca la runner-ul migrărilor și e a site-ului; restul îl verifică
 `tools/inghetare/verifica-inghetare.php`), manifestul (`PachetSite::verifica`) și `ce-se-schimba.md` la fiecare site.
 Autotestul plantează,
 pe rând, într-o copie a temei demo: un `.php`, un `.phtml`, un `.htaccess`, o legătură simbolică, patru SVG-uri
@@ -161,7 +171,8 @@ Google și alte unsprezece forme ale unei cereri spre alt server (`image-set()` 
 obișnuit trece),
 o cheie necunoscută, o foaie lipsă, un fișier schimbat sau nou față de manifest, manifestul lipsă, un pachet de
 client fără `ce-se-schimba.md`, un fișier peste unul al nucleului sau în `uploads/`, `continut/`, un fișier ascuns, un
-JSON stricat, altceva decât JSON în `privat/` și o înghețare pe care runner-ul n-o citește.
+JSON stricat, altceva decât JSON în `privat/`, o înghețare pe care runner-ul n-o citește și trei liste de poze
+refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu mărimea scrisă ca text; una bună trece).
 
 ## Pe server
 

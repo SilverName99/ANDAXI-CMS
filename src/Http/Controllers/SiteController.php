@@ -101,6 +101,18 @@ final class SiteController
         $categoryName = $this->resolveCategoryNameBySlug($slug);
 
         if ($categoryName === '') {
+            // Categorie inexistentă: pagina 404 a magazinului, nu tot magazinul sub
+            // un 404 (A10). Doar când baza răspunde și adresa nu e o cale exclusă
+            // scrisă cu „//” (vezi SeoIndexare::pagina404Magazin); altfel, ca înainte.
+            $db = $this->db();
+            if ($db instanceof PDO && \App\Support\SeoIndexare::pagina404Magazin((string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+                $this->renderPagina404(
+                    'Categoria căutată nu există',
+                    'Este posibil ca linkul să fie vechi. Caută produsul dorit sau vezi tot magazinul.',
+                    $db
+                );
+                return;
+            }
             http_response_code(404);
         } else {
             // Aceeași categorie scrisă altfel (litere mari): 301 la forma salvată.
@@ -438,15 +450,19 @@ final class SiteController
         if ($tinta !== null && \App\Support\SeoRedirects::redirectCanonic($tinta['cale'], $tinta['query'])) {
             return;
         }
-        $this->randeazaMagazin($this->requestCategoryFilter(), '');
+        // Căutarea internă (/magazin?q=…): noindex,follow, fără canonical (A10).
+        $this->randeazaMagazin($this->requestCategoryFilter(), '', \App\Support\SeoIndexare::pentruMagazin($_GET));
     }
 
     /**
      * Magazinul: tot catalogul sau o categorie. $caleCategorie e adresa paginii
      * de categorie când lista e afișată de /categorie/{slug} (atunci sortarea
-     * rămâne pe acea adresă); gol pentru /magazin.
+     * rămâne pe acea adresă); gol pentru /magazin. $robots: meta robots și
+     * „fără canonical” pentru căutare (vezi SeoIndexare::pentruMagazin).
+     *
+     * @param array{metaRobots?: string, faraCanonical?: bool} $robots
      */
-    private function randeazaMagazin(string $categoryFilter, string $caleCategorie): void
+    private function randeazaMagazin(string $categoryFilter, string $caleCategorie, array $robots = []): void
     {
         $shopPage = $this->findPublishedPageBySlug('magazin');
         $db = $this->db();
@@ -483,7 +499,7 @@ final class SiteController
                 'shopCategoryLabel' => $shopCategoryLabel,
                 'shopPageTitle' => (string) ($shopPage['title'] ?? 'Magazin'),
                 'jsonLd' => $this->jsonLdPagina,
-            ], $seoLista));
+            ], $seoLista, $robots));
             return;
         }
 
@@ -493,7 +509,7 @@ final class SiteController
             'title' => 'Magazin',
             'activeCategory' => $categoryFilter,
             'jsonLd' => $this->jsonLdPagina,
-        ], $seoLista));
+        ], $seoLista, $robots));
     }
 
     /**
@@ -576,20 +592,28 @@ final class SiteController
     public function blog(): void
     {
         $db = $this->db();
-        $blogPostsHtml = $this->renderBlogPostsSection($db instanceof PDO ? $db : null);
         $blogPage = $this->findPublishedPageBySlug('blog');
+        // A11: titlul listei („Blog & Resurse”) e H1-ul paginii, când textul ei n-are deja unul.
+        $blogPostsHtml = $this->renderBlogPostsSection(
+            $db instanceof PDO ? $db : null,
+            \App\Support\SeoIndexare::titluBlogCaH1(is_array($blogPage) ? (string) ($blogPage['html_content'] ?? '') : '{{blog_posts}}')
+        );
+        // /blog fără niciun articol publicat: noindex,follow (decizia D7, A10).
+        $robots = \App\Support\SeoIndexare::pentruBlog(count($this->loadPublishedBlogPosts($db instanceof PDO ? $db : null, 1)));
         if (is_array($blogPage)) {
             $settings = $this->cachedSettings($db instanceof PDO ? $db : null);
+            $titlu = (string) ($blogPage['title'] ?? 'Blog');
             View::render('site/custom-page', array_merge([
-                'title' => (string) ($blogPage['title'] ?? 'Blog'),
+                'title' => $titlu,
                 'page' => $blogPage,
                 'mannequinSectionHtml' => $this->renderMannequinSection($db instanceof PDO ? $db : null, $settings),
                 'blogPostsHtml' => $blogPostsHtml,
-            ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $blogPage)));
+                'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina($titlu, 'blog', (string) ($blogPage['html_content'] ?? '')),
+            ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $blogPage), $robots));
             return;
         }
 
-        View::render('site/custom-page', [
+        View::render('site/custom-page', array_merge([
             'title' => 'Blog',
             'page' => [
                 'html_content' => '{{blog_posts}}',
@@ -598,7 +622,8 @@ final class SiteController
             ],
             'blogPostsHtml' => $blogPostsHtml,
             'mannequinSectionHtml' => '',
-        ]);
+            'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina('Blog', 'blog'),
+        ], $robots));
     }
 
     public function blogPostsApi(): void
@@ -642,21 +667,18 @@ final class SiteController
     {
         $slug = trim((string) ($params['slug'] ?? ''));
         if ($slug === '') {
-            http_response_code(404);
-            echo 'Articolul nu a fost găsit.';
+            $this->articolNegasit(null);
             return;
         }
 
         $db = $this->db();
         if (!$db instanceof PDO) {
-            http_response_code(404);
-            echo 'Articolul nu a fost găsit.';
+            $this->articolNegasit(null);
             return;
         }
         $post = $this->loadPublishedBlogPostBySlug($db, $slug);
         if (!is_array($post)) {
-            http_response_code(404);
-            echo 'Articolul nu a fost găsit.';
+            $this->articolNegasit($db);
             return;
         }
 
@@ -671,6 +693,26 @@ final class SiteController
             ],
             'mannequinSectionHtml' => '',
         ], $seoMeta));
+    }
+
+    /**
+     * Articol de blog inexistent (nepublicat, programat, șters): pagina 404 a
+     * magazinului, cu meniu, căutare și produse (A10), în loc de textul simplu de
+     * până acum. Cu SEO_NOINDEX=0, sau pe o cale exclusă scrisă cu „//” (de exemplu
+     * „//api/blog/posts”, citită de router ca /blog/posts), textul simplu, ca înainte.
+     */
+    private function articolNegasit(?PDO $db): void
+    {
+        if (!\App\Support\SeoIndexare::pagina404Magazin((string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+            http_response_code(404);
+            echo 'Articolul nu a fost găsit.';
+            return;
+        }
+        $this->renderPagina404(
+            'Articolul nu a fost găsit',
+            'Este posibil ca linkul să fie vechi sau articolul să nu mai fie publicat. Caută produsul dorit sau vezi tot magazinul.',
+            $db
+        );
     }
 
     public function product(array $params): void
@@ -4302,13 +4344,15 @@ final class SiteController
             'page' => $page,
             'mannequinSectionHtml' => $this->renderMannequinSection($db, $settings),
             'shopCatalogHtml' => $slug === 'magazin' ? $this->renderShopCatalogSection($db, $this->requestCategoryFilter()) : '',
-            'blogPostsHtml' => $slug === 'blog' ? $this->renderBlogPostsSection($db) : '',
+            'blogPostsHtml' => $slug === 'blog' ? $this->renderBlogPostsSection($db, \App\Support\SeoIndexare::titluBlogCaH1($pageHtmlContent)) : '',
             'cartFormHtml' => $cartFormHtml,
             'checkoutFormHtml' => $checkoutFormHtml,
             'accountSectionHtml' => $accountSectionHtml,
             'productReviewFormHtml' => $productReviewFormHtml,
             'gdprAgreementsFormHtml' => $gdprAgreementsFormHtml,
             'checkoutSuccessOrderInfoHtml' => $checkoutSuccessOrderInfoHtml,
+            // A11: titlul paginii ca H1 când textul n-are (nu pe coș, comandă, cont, login).
+            'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina((string) $page['title'], $slug, $pageHtmlContent),
         ], $this->seoPagina($db, $page, $slug)));
     }
 
@@ -4778,7 +4822,11 @@ final class SiteController
         ]);
     }
 
-    private function renderBlogPostsSection(?PDO $db): string
+    /**
+     * Lista de articole ({{blog_posts}}). $titluH1: titlul listei („Blog & Resurse”)
+     * e scris ca <h1>, cu aceleași stiluri, pentru că e H1-ul paginii /blog (A11).
+     */
+    private function renderBlogPostsSection(?PDO $db, bool $titluH1 = false): string
     {
         $perPage = self::BLOG_POSTS_PER_PAGE;
         $totalPosts = $this->countPublishedBlogPosts($db);
@@ -4844,6 +4892,7 @@ final class SiteController
             'posts' => $posts,
             'baseUrl' => '/blog',
             'pagination' => $pagination,
+            'titluH1' => $titluH1,
         ]);
     }
 
@@ -5941,6 +5990,16 @@ HTML;
     </section>
 </article>
 HTML;
+            // Poza articolului (șablonul implicit): width/height rezervă locul ei
+            // (stilul de mai jos o face lată cât coloana, cu înălțimea proporțională).
+            $dimensiuniCoperta = \App\Support\PozeOptimizate::dimensiuni($image);
+            if ($dimensiuniCoperta !== '') {
+                $templateHtml = str_replace(
+                    '<img src="{{blog_image_url}}" alt="{{blog_title}}">',
+                    '<img src="{{blog_image_url}}" alt="{{blog_title}}"' . $dimensiuniCoperta . '>',
+                    $templateHtml
+                );
+            }
         }
         $templateCss = trim((string) ($post['template_css_content'] ?? ''));
         if ($templateCss === '') {
@@ -7734,7 +7793,7 @@ CSS;
                 'categorie' => trim((string) (($product['category_name'] ?? $product['category']) ?? '')),
                 // Coloana EAN nu există încă; când apare (B4), intră singură.
                 'gtin' => (string) ($product['gtin'] ?? $product['ean'] ?? ''),
-                'livrare' => \App\Support\PoliticaLivrare::optiuni($settings, $pretAfisat, $redusa),
+                'livrare' => \App\Support\PoliticaLivrare::optiuni($settings, $pretAfisat),
             ];
         }
         return $produse;
@@ -7833,12 +7892,12 @@ CSS;
             }
 
             // Livrarea și returul (A5 din planul SEO): costul transportului pentru
-            // produsul comandat singur, din prețurile fixe ale checkout-ului, și
-            // politica de retur din termeni. Vezi PoliticaLivrare.
+            // produsul comandat singur, la prețul afișat (cu reducerea), după regula
+            // din coș, cu termenul de livrare, și politica de retur din termeni.
+            // Vezi PoliticaLivrare.
             $livrare = \App\Support\PoliticaLivrare::optiuni(
                 $this->cachedSettings($this->db()),
-                (float) ($product['price'] ?? 0),
-                (bool) ($product['has_sale_price'] ?? false)
+                (float) ($product['price'] ?? 0)
             );
 
             $nodProdus = \App\Support\JsonLd::produs([
@@ -10814,6 +10873,8 @@ CSS;
     {
         $items = [];
         foreach ($urls as $url) {
+            // Pozele mari refăcute (A8) se afișează din fișierul nou, mai mic.
+            $url = \App\Support\PozeOptimizate::src((string) $url);
             $safeUrl = htmlspecialchars((string) $url, ENT_QUOTES);
             $safeAlt = htmlspecialchars($productName, ENT_QUOTES);
             // width/height: locul pozei e rezervat înainte să se încarce (fără „săritură”).
@@ -10828,6 +10889,8 @@ CSS;
         $slides = [];
         $thumbs = [];
         foreach ($urls as $index => $url) {
+            // Pozele mari refăcute (A8) se afișează din fișierul nou, mai mic.
+            $url = \App\Support\PozeOptimizate::src((string) $url);
             $safeUrl = htmlspecialchars((string) $url, ENT_QUOTES);
             $safeAlt = htmlspecialchars($productName, ENT_QUOTES);
             // width/height: locul pozei e rezervat înainte să se încarce (fără „săritură”).
@@ -11346,88 +11409,29 @@ CSS;
 
     private function buildSimilarProductsForSite(array $products, array $currentProduct): array
     {
+        // A14: 4–8 produse din aceeași categorie, scrise și în HTML (vezi
+        // App\Support\ProduseSimilare); fără baza de date sau cu
+        // SEO_PRODUSE_SIMILARE=0 rămâne secțiunea de dinainte (doar alegerea din admin).
+        if (\App\Support\ProduseSimilare::activ()) {
+            $alese = $this->produseSimilareDinCategorie($products, $currentProduct);
+            if ($alese !== null) {
+                return $alese;
+            }
+        }
         $items = [];
         $currentId = (int) ($currentProduct['id'] ?? 0);
-        $selectedIds = [];
-        $rawSelected = $currentProduct['similar_products_json'] ?? [];
-        if (is_string($rawSelected) && trim($rawSelected) !== '') {
-            $decoded = json_decode($rawSelected, true);
-            if (is_array($decoded)) {
-                $rawSelected = $decoded;
-            } else {
-                $rawSelected = [];
-            }
-        }
-        if (is_array($rawSelected)) {
-            foreach ($rawSelected as $value) {
-                $id = (int) $value;
-                if ($id <= 0 || $id === $currentId || in_array($id, $selectedIds, true)) {
-                    continue;
-                }
-                $selectedIds[] = $id;
-                if (count($selectedIds) >= 12) {
-                    break;
-                }
-            }
-        }
+        $selectedIds = $this->produseSimilareAleseInAdmin($currentProduct);
 
         $itemById = [];
         foreach ($products as $candidate) {
             if (!is_array($candidate)) {
                 continue;
             }
-            // Products from loadProducts() are already normalized. Re-normalizing would
-            // recompute base_price from the already-discounted price, collapsing
-            // base_price to price and hiding the discount badge + old price.
-            if (!isset($candidate['base_price'])) {
-                $candidate = $this->normalizeProduct($candidate);
-            }
-            $id = (int) ($candidate['id'] ?? 0);
-            $name = trim((string) ($candidate['name'] ?? ''));
-            $slug = trim((string) ($candidate['slug'] ?? ''));
-            if ($id <= 0 || $name === '' || $slug === '' || $id === $currentId) {
+            $item = $this->elementProdusSimilar($candidate);
+            if ($item === null || $item['id'] === $currentId) {
                 continue;
             }
-            $currentPrice = (float) ($candidate['price'] ?? 0);
-            $regularPrice = (float) ($candidate['base_price'] ?? $currentPrice);
-            // Use the normalized has_sale_price (accounts for scheduled sale periods),
-            // not just the raw sale_price field — otherwise a period-based discount shows
-            // the reduced price but no discount badge.
-            $hasSalePrice = (bool) ($candidate['has_sale_price'] ?? false)
-                && $regularPrice > $currentPrice
-                && $currentPrice > 0;
-            $item = [
-                'id' => $id,
-                'name' => $name,
-                'slug' => $slug,
-                'url' => '/produs/' . rawurlencode($slug),
-                'category' => (string) (($candidate['category_name'] ?? $candidate['category']) ?? ''),
-                'image_url' => (string) ($candidate['image_url'] ?? '/assets/img/product-placeholder.svg'),
-                'price' => $currentPrice,
-                'regular_price' => $regularPrice,
-                'has_sale_price' => $hasSalePrice ? 1 : 0,
-                'discount_badge_mode' => (string) ($candidate['discount_badge_mode'] ?? 'percent') === 'value' ? 'value' : 'percent',
-                'discount_value_label' => $hasSalePrice ? rtrim(rtrim(number_format($regularPrice - $currentPrice, 2, '.', ''), '0'), '.') : '',
-                'price_label' => number_format($currentPrice, 2) . ' lei',
-                'regular_price_label' => $hasSalePrice ? number_format($regularPrice, 2) . ' lei' : '',
-                'short_description' => (string) ($candidate['short_description'] ?? ''),
-                'reviews_count' => max(0, (int) ($candidate['reviews_count'] ?? 0)),
-                'reviews_average' => max(0.0, min(5.0, (float) ($candidate['reviews_average'] ?? 0))),
-                // Precomanda nu e „epuizat": marfa vine, doar mai târziu. Fără
-                // asta, produsul bifat apărea fără buton și în carusel.
-                'preorder' => \App\Support\Precomanda::estePrecomanda($candidate) ? 1 : 0,
-                'out_of_stock' => (int) ($candidate['out_of_stock'] ?? 0) === 1
-                    && !\App\Support\Precomanda::estePrecomanda($candidate) ? 1 : 0,
-            ];
-            // Catalog fără magazin (de prezentare): în pagină nu ajunge niciun preț;
-            // fără recenzii, nici numărul și media lor.
-            if (!\App\Support\Plugins::vizibil('magazin')) {
-                $item = array_merge($item, ['price' => 0.0, 'regular_price' => 0.0, 'has_sale_price' => 0,
-                    'discount_value_label' => '', 'price_label' => '', 'regular_price_label' => '']);
-            }
-            if (!\App\Support\Plugins::vizibil('recenzii')) {
-                $item = array_merge($item, ['reviews_count' => 0, 'reviews_average' => 0.0]);
-            }
+            $id = $item['id'];
             $items[] = $item;
             $itemById[$id] = $item;
             if (count($items) >= 40) {
@@ -11470,6 +11474,180 @@ CSS;
         return array_slice($ordered, 0, 24);
     }
 
+    /**
+     * Produsele alese în admin pentru un produs (similar_products_json), în
+     * ordinea lor, fără duplicate și fără produsul însuși; cel mult 12.
+     *
+     * @return list<int>
+     */
+    private function produseSimilareAleseInAdmin(array $currentProduct): array
+    {
+        $currentId = (int) ($currentProduct['id'] ?? 0);
+        $selectedIds = [];
+        $rawSelected = $currentProduct['similar_products_json'] ?? [];
+        if (is_string($rawSelected) && trim($rawSelected) !== '') {
+            $decoded = json_decode($rawSelected, true);
+            $rawSelected = is_array($decoded) ? $decoded : [];
+        }
+        if (is_array($rawSelected)) {
+            foreach ($rawSelected as $value) {
+                $id = (int) $value;
+                if ($id <= 0 || $id === $currentId || in_array($id, $selectedIds, true)) {
+                    continue;
+                }
+                $selectedIds[] = $id;
+                if (count($selectedIds) >= 12) {
+                    break;
+                }
+            }
+        }
+        return $selectedIds;
+    }
+
+    /**
+     * A14: produsele similare din aceeași categorie (regula e în
+     * App\Support\ProduseSimilare::ordine). Doar produse active și nesterse.
+     * Null dacă baza nu răspunde: atunci rămâne secțiunea de dinainte.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    private function produseSimilareDinCategorie(array $products, array $currentProduct): ?array
+    {
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            return null;
+        }
+        $meta = [];
+        try {
+            foreach ($db->query('SELECT id, category_id, is_active FROM products WHERE deleted_at IS NULL')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                $meta[(int) $rand['id']] = [(int) ($rand['category_id'] ?? 0), (int) ($rand['is_active'] ?? 1) === 1];
+            }
+        } catch (Throwable) {
+            return null;
+        }
+        $currentId = (int) ($currentProduct['id'] ?? 0);
+        $candidati = [];
+        $elemente = [];
+        foreach ($products as $candidate) {
+            if (!is_array($candidate)) {
+                continue;
+            }
+            if (!isset($candidate['base_price'])) {
+                $candidate = $this->normalizeProduct($candidate);
+            }
+            $item = $this->elementProdusSimilar($candidate);
+            if ($item === null) {
+                continue;
+            }
+            $id = $item['id'];
+            if ($id === $currentId || !isset($meta[$id]) || !$meta[$id][1]) {
+                continue;
+            }
+            $candidati[$id] = [
+                'categorie_id' => $meta[$id][0],
+                'categorie' => (string) ($candidate['category'] ?? ''),
+                'disponibil' => $item['out_of_stock'] !== 1,
+                // Cu ofertă de ales (lot cu dată de expirare): butonul din card n-o poate alege.
+                'alegere' => \App\Support\BbdOferte::cereAlegere($candidate),
+            ];
+            $elemente[$id] = $item;
+        }
+        $ids = \App\Support\ProduseSimilare::ordine(
+            $currentId,
+            [
+                'categorie_id' => (int) ($currentProduct['category_id'] ?? ($meta[$currentId][0] ?? 0)),
+                'categorie' => (string) ($currentProduct['category'] ?? ''),
+            ],
+            $this->produseSimilareAleseInAdmin($currentProduct),
+            $candidati
+        );
+        if ($ids === []) {
+            return [];
+        }
+        $reviewMap = $this->loadShopCatalogReviewMap($db, $ids);
+        $ordonate = [];
+        foreach ($ids as $id) {
+            $item = $elemente[$id];
+            $stats = $reviewMap[$id] ?? null;
+            if (is_array($stats)) {
+                $item['reviews_count'] = max(0, (int) ($stats['count'] ?? 0));
+                $item['reviews_average'] = max(0.0, min(5.0, (float) ($stats['average'] ?? 0.0)));
+            }
+            // Pozele mari refăcute (A8) se afișează din fișierul nou, mai mic.
+            $item['image_url'] = \App\Support\PozeOptimizate::src((string) $item['image_url']);
+            $ordonate[] = $this->produsSimilarFaraPluginuriOprite($item);
+        }
+        return $ordonate;
+    }
+
+    /**
+     * Elementul unui produs pentru caruselul „Produse similare” (datele din care
+     * JavaScript-ul desenează cardul), sau null dacă produsul n-are id, nume sau adresă.
+     */
+    private function elementProdusSimilar(array $candidate): ?array
+    {
+        // Products from loadProducts() are already normalized. Re-normalizing would
+        // recompute base_price from the already-discounted price, collapsing
+        // base_price to price and hiding the discount badge + old price.
+        if (!isset($candidate['base_price'])) {
+            $candidate = $this->normalizeProduct($candidate);
+        }
+        $id = (int) ($candidate['id'] ?? 0);
+        $name = trim((string) ($candidate['name'] ?? ''));
+        $slug = trim((string) ($candidate['slug'] ?? ''));
+        if ($id <= 0 || $name === '' || $slug === '') {
+            return null;
+        }
+        $currentPrice = (float) ($candidate['price'] ?? 0);
+        $regularPrice = (float) ($candidate['base_price'] ?? $currentPrice);
+        // Use the normalized has_sale_price (accounts for scheduled sale periods),
+        // not just the raw sale_price field — otherwise a period-based discount shows
+        // the reduced price but no discount badge.
+        $hasSalePrice = (bool) ($candidate['has_sale_price'] ?? false)
+            && $regularPrice > $currentPrice
+            && $currentPrice > 0;
+        $item = [
+            'id' => $id,
+            'name' => $name,
+            'slug' => $slug,
+            'url' => '/produs/' . rawurlencode($slug),
+            'category' => (string) (($candidate['category_name'] ?? $candidate['category']) ?? ''),
+            'image_url' => (string) ($candidate['image_url'] ?? '/assets/img/product-placeholder.svg'),
+            'price' => $currentPrice,
+            'regular_price' => $regularPrice,
+            'has_sale_price' => $hasSalePrice ? 1 : 0,
+            'discount_badge_mode' => (string) ($candidate['discount_badge_mode'] ?? 'percent') === 'value' ? 'value' : 'percent',
+            'discount_value_label' => $hasSalePrice ? rtrim(rtrim(number_format($regularPrice - $currentPrice, 2, '.', ''), '0'), '.') : '',
+            'price_label' => number_format($currentPrice, 2) . ' lei',
+            'regular_price_label' => $hasSalePrice ? number_format($regularPrice, 2) . ' lei' : '',
+            'short_description' => (string) ($candidate['short_description'] ?? ''),
+            'reviews_count' => max(0, (int) ($candidate['reviews_count'] ?? 0)),
+            'reviews_average' => max(0.0, min(5.0, (float) ($candidate['reviews_average'] ?? 0))),
+            // Precomanda nu e „epuizat": marfa vine, doar mai târziu. Fără
+            // asta, produsul bifat apărea fără buton și în carusel.
+            'preorder' => \App\Support\Precomanda::estePrecomanda($candidate) ? 1 : 0,
+            'out_of_stock' => (int) ($candidate['out_of_stock'] ?? 0) === 1
+                && !\App\Support\Precomanda::estePrecomanda($candidate) ? 1 : 0,
+        ];
+        return $this->produsSimilarFaraPluginuriOprite($item);
+    }
+
+    /**
+     * Catalog fără magazin (de prezentare): în pagină nu ajunge niciun preț;
+     * fără recenzii, nici numărul și media lor.
+     */
+    private function produsSimilarFaraPluginuriOprite(array $item): array
+    {
+        if (!\App\Support\Plugins::vizibil('magazin')) {
+            $item = array_merge($item, ['price' => 0.0, 'regular_price' => 0.0, 'has_sale_price' => 0,
+                'discount_value_label' => '', 'price_label' => '', 'regular_price_label' => '']);
+        }
+        if (!\App\Support\Plugins::vizibil('recenzii')) {
+            $item = array_merge($item, ['reviews_count' => 0, 'reviews_average' => 0.0]);
+        }
+        return $item;
+    }
+
     private function buildSimilarProductsSectionHtml(array $similarProducts): string
     {
         if ($similarProducts === []) {
@@ -11488,7 +11666,10 @@ CSS;
             . '<div class="similar-products__head"><h3>Produse similare</h3></div>'
             . '<div class="similar-products__carousel">'
             . '<button type="button" class="similar-products__nav" data-action="prev" aria-label="Produse anterioare">‹</button>'
-            . '<div class="similar-products__viewport"><div class="similar-products__track" data-similar-track="1"></div></div>'
+            // A14: cardurile sunt și în HTML (linkuri reale); JavaScript-ul le rearanjează ca înainte.
+            . '<div class="similar-products__viewport"><div class="similar-products__track" data-similar-track="1">'
+            . (\App\Support\ProduseSimilare::activ() ? \App\Support\ProduseSimilare::cardurileHtml(array_values($similarProducts)) : '')
+            . '</div></div>'
             . '<button type="button" class="similar-products__nav" data-action="next" aria-label="Produse următoare">›</button>'
             . '</div>'
             . '<div class="similar-products__dots" data-similar-dots="1" aria-label="Paginare produse similare"></div>'

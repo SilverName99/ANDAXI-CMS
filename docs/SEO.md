@@ -8,7 +8,8 @@ același comportament, dar fără nimic scris pentru un anumit site:
 |---|---|---|
 | 1 (19 octombrie 2026): robots, sitemap, adresa unică, harta adreselor vechi, date structurate, viteză | `80bb4a4`…`6d29b37`, unite în `f5eafa3` | portată (`c2b9331`) |
 | 2 (20 octombrie 2026): categoriile pe `/categorie/{slug}`, titluri și descrieri, câmpuri SEO pe categorii și mărci, logo-ul WebP, livrarea și returul în datele structurate, poza de distribuire, fluxul Merchant Center, textele Google ale primei pagini, a 3 categorii și 20 de produse | `6c8c789`…`0250480` | portată (WP-R, 20 octombrie; `docs/de-portat.md`) |
-| 3, 4 (29 octombrie, 5 noiembrie) | — | de portat când apar (WP-R) |
+| 4 (21 octombrie 2026): termenul de livrare din setări, regula D (gratuit de la prag și la reducere, ca în coș), noindex pe căutare și pe /blog gol, 404 fără canonical și pagina 404 a magazinului pe /blog/x și /categorie/x, H1 din titlu, width/height și pozele mari ca WebP (mărimile pozelor vechi de pe disc, `070e1af`), „Produse similare” în HTML, HEAD cu majuscule, scriptul de conținut (AIRCALL, linkurile din texte) | `5359ec6`…`070e1af` | portată (WP-R, 28 octombrie; `docs/de-portat.md`) |
+| 3 | — | de portat când apare (WP-R) |
 
 | Fișier | Ce e |
 |---|---|
@@ -25,7 +26,11 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | `src/Support/PoliticaLivrare.php` | Livrarea și returul pentru Google (date structurate, flux), din datele site-ului (magazin) |
 | `src/Support/ImagineDistribuire.php` | Poza de distribuire 1200×630 (`/og/…`) pentru Facebook și WhatsApp |
 | `src/Support/FluxGoogleMerchant.php` | Fluxul de produse pentru Google Merchant Center, `/feed/google-merchant.xml` (magazin) |
+| `src/Support/SeoIndexare.php` | noindex pe căutarea internă și pe /blog gol, canonicalul pe 404, pagina 404 a magazinului pe /blog/x și /categorie/x, H1-ul din titlu (livrarea 4) |
+| `src/Support/PozeOptimizate.php` | width/height pe pozele din șabloane; pozele mari afișate din fișierele WebP ale pachetului (livrarea 4) |
+| `src/Support/ProduseSimilare.php` | „Produse similare” din aceeași categorie, cu cardurile în HTML (livrarea 4) |
 | `scripts/seo-texte.php` | Aplică textele Google scrise de mână ale unui site (`seo-texte.json` din dosarul lui) |
+| `scripts/seo-continut.php` | Schimbă o dată conținutul din bază al unui site: produse redenumite, linkuri din texte (`seo-continut.json` din dosarul lui) |
 | `site-uri/bioscem/` | Pachetul de date Bioscem (harta și regulile SEO din livrarea 1) |
 | `tools/dev/site-demo/` | Pachetul de date inventat al site-ului de dezvoltare (folosit de teste) |
 | `tools/dev/test-seo.php` | Testele SEO (vezi mai jos) |
@@ -189,10 +194,17 @@ Doar date care se văd în pagină; adrese absolute (din `APP_URL`).
   `dfcf6bd`, `1e46f9f`; `PoliticaLivrare`) doar cu magazinul pornit și doar pentru un site
   care are condițiile confirmate de proprietar în `seo.json` → `livrare_retur` (fără ele,
   nimic). Livrarea vine din Setări livrare → prețuri fixe (exact ce încasează checkout-ul):
-  doar tariful la adresă (nu și cel la punctele de ridicare), gratuit doar pentru un produs la
-  preț întreg care singur atinge pragul în toată țara; la reducere sau între pragurile București
-  și provincie, nimic; fără prețuri fixe active, nimic. Termenul de livrare
-  (`deliveryTime`) doar când e scris în `termen_livrare`. Returul (zilele, pagina cu
+  doar tariful la adresă (nu și cel la punctele de ridicare); gratuit când prețul afișat atinge
+  pragul în toată țara, și la produsele cu reducere, exact ca în coș (livrarea 4, Bioscem
+  `196fa46`, decizia D; `PoliticaLivrare::gratuit` = `CheckoutCalculator::transportGratuit`,
+  fără cupon); între pragurile București și provincie, nimic; fără prețuri fixe active, nimic.
+  **Termenul de livrare** (`deliveryTime`: `handlingTime`, `transitTime`, `businessDays` luni–vineri;
+  în flux `g:min/max_handling_time`, `g:min/max_transit_time`, `g:shipping_*_business_days`;
+  livrarea 4, Bioscem `5359ec6`): implicit `termen_livrare` din `seo.json`, peste el cele patru
+  setări `seo_livrare_pregatire_min/_max`, `seo_livrare_transport_min/_max` (tabelul settings,
+  fără ecran în admin; un număr întreg 0–30, altfel valoarea implicită; un minim peste maxim
+  readuce perechea); un site cu `termen_livrare` `null` îl declară doar din toate patru setările.
+  Returul (zilele, pagina cu
   condițiile, cine plătește transportul înapoi) se scrie și la firmă
   (`Organization.hasMerchantReturnPolicy`). Oprire: `SEO_LIVRARE_RETUR=0`.
 
@@ -201,6 +213,22 @@ Doar date care se văd în pagină; adrese absolute (din `APP_URL`).
 `mailto:`/`tel:` din antet și subsol; logo doar dacă are cel puțin 112×112 px și e
 aproape pătrat (cel mult 1,5:1): întâi pozele din `seo.json` → `organizatie.logo`,
 apoi iconița site-ului; `sameAs` doar cu profiluri sociale reale din antet și subsol.
+
+## 5b. Ce intră în Google: noindex, canonicalul pe 404, H1
+
+Livrarea 4, Bioscem `ef22b23`, `682843c`, `9fe175d`, `dd41c59`, `a64afb6` (`SeoIndexare`):
+
+- `noindex,follow` pe căutarea internă (`/magazin?q=…`, fără canonical) și pe `/blog` cât n-are
+  niciun articol publicat (Bioscem, decizia D7); etichetele rămân indexate (D2, D3).
+- Pagina „nu există” (404, 410) nu are canonical și nici `og:url`, în afară de căile de plată,
+  coș, cont, admin (`SeoRedirects::CAI_EXCLUSE`), care rămân ca înainte.
+- Un articol de blog sau o categorie care nu există primesc pagina 404 a magazinului
+  (`not-found.php`), nu un text simplu, respectiv tot magazinul; pe o cale exclusă scrisă cu „//”
+  (de exemplu `//api/blog/posts`) răspunsul rămâne cel de dinainte.
+- O pagină din constructor fără niciun `<h1>` (nu prima pagină, 404, magazinul și nici paginile
+  cu coșul, comanda, contul) primește titlul ei ca H1, cu un stil fără specificitate (`:where`);
+  pe `/blog`, titlul listei („Blog & Resurse”) e H1-ul paginii când textul ei n-are unul.
+- Opriri: `SEO_NOINDEX=0`, `SEO_H1=0`.
 
 ## 6. Viteza paginilor (LCP, CLS)
 
@@ -214,6 +242,29 @@ apoi iconița site-ului; `sameAs` doar cu profiluri sociale reale din antet și 
   pachetului site-ului, copiate peste `public/` la adoptare), `<img>`-ul lui din antet e
   învelit într-un `<picture>` cu ele; browserele fără WebP și roboții primesc PNG-ul. Fără
   configurare, fără un fișier sau cu alt PNG (altă mărime), antetul rămâne exact cum e.
+- **Pozele din șabloane** (livrarea 4, Bioscem `e2c97dc`; `PozeOptimizate::dimensiuni`):
+  width/height și pe pozele blogului, ale cardurilor de evenimente, ale ofertelor BBD și ale
+  logo-ului din sertarul de meniu. Nu pe paginile de coș, comandă, plată, cont.
+- **Pozele refăcute** (livrarea 4, Bioscem `e2c97dc`, `070e1af`; `PozeOptimizate`): pozele mari
+  ale unui site se afișează (galeria produsului, cardurile, prima pagină, textul paginilor din
+  constructor) din fișiere WebP ale pachetului, după `poze-optimizate.json` (`{"marimi_de_pe":
+  "disc", "poze": {"/uploads/…": {"noua": "/assets/img/…webp", "octeti": N}}}`, fișierele în
+  `public/` al pachetului). Doar dacă poza veche de pe disc are exact `octeti` (altă poză
+  încărcată cu același nume rămâne cea încărcată). **Mărimea se ia pe server, de pe disc**
+  (`stat -c %s public/uploads/gallery/<poza>`), niciodată descărcând poza: CDN-ul Hostinger
+  trimite pozele refăcute, cu alți octeți, și atunci nicio poză nu trece pe WebP (Bioscem
+  `070e1af`, după livrarea 4). De aceea `tools/dev/verifica-pachet.php` refuză lista fără
+  `"marimi_de_pe": "disc"`, iar `scripts/diagnostic.php --pachet` arată pe server, pentru fiecare
+  poză, dacă mărimea de pe disc e cea din pachet (rândurile „atentie”). Datele structurate,
+  fluxul și poza de distribuire rămân pe poza veche (rezoluția mare). Oprire: `SEO_POZE=0`.
+- **Produse similare** (livrarea 4, Bioscem `2d43171`; `ProduseSimilare`): 4–8 produse din
+  aceeași categorie (cele alese în admin din categorie primele, apoi pe rând după produsul
+  curent, epuizatele la urmă, fără cele cu ofertă BBD de ales dacă nu sunt alese în admin; sub
+  4, completate cu cele alese în admin din alte categorii), cu cardurile scrise în HTML (linkuri
+  reale) exact cum le face JavaScript-ul caruselului, inclusiv pluginurile (stelele doar cu
+  recenziile, prețul doar cu magazinul, butonul de coș doar cât magazinul primește comenzi).
+  Oprire: `SEO_PRODUSE_SIMILARE=0`.
+- **HEAD** pe o adresă cu litere mari primește același răspuns ca GET (livrarea 4, `bb11ae0`).
 
 ## 7. Titluri, descrieri și distribuire
 
@@ -250,6 +301,14 @@ cele scrise, fără regula de mai jos).
   refuză dacă baza nu e cea așteptată (o categorie sau un produs lipsă, un titlu pe care
   regula de mai sus l-ar reface), `--restaureaza` pune copia la loc. Bioscem:
   `site-uri/bioscem/seo-texte.json`.
+- **Conținutul schimbat o dată** (livrarea 4, Bioscem `c3ad6ab`, `b51067a`): `seo-continut.json`
+  în dosarul site-ului (`{versiune: 1, nume_magazin, asteptat: {aircall, inlocuiri}, aircall: [produse
+  redenumite după cod: adresa cu litere mici, numele, titlul și descrierea Google, primul paragraf],
+  inlocuiri: [text exact vechi → nou, de exact „aparitii” ori, în pagini, descrieri sau tab-uri]}`) și
+  `php scripts/seo-continut.php --plan | --aplica | --restaureaza [--fisier=…] [--forteaza]`: aceleași
+  reguli ca mai sus (refuz fără să scrie nimic, o tranzacție, copia în `storage/`, codul produsului
+  niciodată schimbat, a doua rulare „Nimic de schimbat”). Bioscem: `site-uri/bioscem/seo-continut.json`
+  (căștile AIRCALL și 30 de linkuri; deja aplicat pe site, 21 octombrie).
 
 ## 8. Fluxul pentru Google Merchant Center
 
@@ -283,14 +342,15 @@ hartă, etichetele de la 1 produs, logo-ul = iconița). Un fișier stricat se ig
   "logo_antet": {"png": "/uploads/gallery/logo.png", "dimensiuni": [977, 240],
                  "webp_1x": "/assets/img/logo-212.webp", "webp_2x": "/assets/img/logo-423.webp"},
   "distribuire": {"logo": "/uploads/gallery/logo.png"},
-  "livrare_retur": {"serviciu": "FAN Courier", "termen_livrare": null,
+  "livrare_retur": {"serviciu": "FAN Courier", "termen_livrare": [0, 1, 1, 2],
                     "retur": {"zile": 14, "pagina": "/termeni-conditii", "taxe": "client"}},
   "flux_merchant": {"prefix_id": "P-"}
 }
 ```
 
 `livrare_retur` și condițiile lui le confirmă proprietarul site-ului (`termen_livrare`:
-`[pregătire min, max, transport min, max]` în zile lucrătoare, sau `null`; `taxe`: `client` sau
+`[pregătire min, max, transport min, max]` în zile lucrătoare, valorile implicite pe care setările `seo_livrare_*` le pot
+schimba, sau `null`; `taxe`: `client` sau
 `gratuit`). Fișierele publice ale pachetului la o adresă fixă (de exemplu variantele WebP ale logo-ului) stau în
 `site-uri/<site>/public/` și se copiază peste `public/` la adoptare ([PACHETE.md](PACHETE.md), „Fișierele publice la o
 adresă fixă”).
@@ -305,11 +365,13 @@ cele 113 ale livrării 1 (103 × 301, 10 × 410), cele 14 × 301 aprobate de pro
 „Bioscem Shop” și logo-urile încercate, `/cos-cumparaturi` (pagina de coș din
 constructorul Bioscem) blocată în robots.txt și exclusă din redirecționări; din livrarea 2:
 sufixul vechi „BIOSCEM”, „harrison” (nu e o marcă), logo-ul din antet și variantele lui WebP
-(`site-uri/bioscem/public/assets/img/`), logo-ul de distribuire, livrarea FAN Courier fără
-termen (termenul de 1–3 zile lucrătoare vine cu livrarea 4, decizia proprietarului din 20
-octombrie), returul de 14 zile din `/termeni-conditii` plătit de client, prefixul `BS-` al
+(`site-uri/bioscem/public/assets/img/`), logo-ul de distribuire, livrarea FAN Courier,
+returul de 14 zile din `/termeni-conditii` plătit de client, prefixul `BS-` al
 fluxului; textele Google ale primei pagini, a 3 categorii și 20 de produse
-(`seo-texte.json`).
+(`seo-texte.json`); din livrarea 4: termenul de livrare 0–1 + 1–2 zile lucrătoare (decizia
+proprietarului din 20 octombrie), cele 10 poze mari ca WebP (`poze-optimizate.json`, mărimile de pe
+discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și al linkurilor din texte
+(`seo-continut.json`) și ținta cu litere mici a regulii `/produs/casti-antiradiatii-aircall-sp21`.
 
 ## 10. Teste
 

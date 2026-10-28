@@ -56,6 +56,7 @@ use App\Support\Licenta;
 use App\Support\PachetSite;
 use App\Support\Paths;
 use App\Support\Plugins;
+use App\Support\PozeOptimizate;
 use App\Support\Settings;
 use App\Support\Tema;
 use App\Support\Verificare;
@@ -160,6 +161,24 @@ $arataPachet = static function (): bool {
         }
     }
     echo 'publice      : ' . $copii . " fisiere ale pachetului, in docroot (tema/public/ -> public/tema/, public/ -> public/)\n";
+    // Pozele refăcute ale site-ului (PozeOptimizate, poze-optimizate.json): fiecare trece pe WebP doar dacă poza veche de
+    // pe disc are exact mărimea din pachet. O mărime luată printr-o descărcare (CDN-ul trimite alți octeți) nu se potrivește
+    // niciodată (lecția Bioscem 070e1af): aici se vede pe server, cu mărimea de pe disc. Nu e o problemă a pachetului (o
+    // poză înlocuită în galerie rămâne, voit, cea nouă), deci doar „atentie”.
+    if (is_file($dosar . '/' . PozeOptimizate::FISIER)) {
+        $poze = PozeOptimizate::verificaPeDisc();
+        $peWebp = count(array_filter($poze, static fn (array $p): bool => $p['pe_disc'] === $p['octeti'] && $p['noua_exista']));
+        echo 'poze refacute: ' . $peWebp . ' din ' . count($poze) . " trec pe WebP (marimea pozei vechi pe disc = cea din pachet)\n";
+        if ($poze === []) {
+            $probleme[] = PozeOptimizate::FISIER . ' nu se poate folosi (marimi_de_pe trebuie sa fie „disc”, cu cel putin o poza; vezi tools/dev/verifica-pachet.php)';
+        }
+        foreach ($poze as $p) {
+            if ($p['pe_disc'] !== $p['octeti']) {
+                echo '  atentie    : ' . $p['veche'] . ($p['pe_disc'] === null ? ' lipseste de pe disc' : ' are ' . $p['pe_disc'] . ' octeti pe disc')
+                    . ', pachetul spune ' . $p['octeti'] . ": ramane poza veche (marimea se ia pe server, cu stat -c %s, nu dintr-o descarcare prin CDN)\n";
+            }
+        }
+    }
     foreach ($probleme as $problema) {
         echo '  problema   : ' . $problema . "\n";
     }

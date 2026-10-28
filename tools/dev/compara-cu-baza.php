@@ -169,6 +169,10 @@ $cerere = static function (string $port, string $metoda, string $cale, string $j
     if ($metoda === 'POST') {
         curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($date));
     }
+    if ($metoda === 'HEAD') {
+        // Fără corp: altfel curl așteaptă corpul anunțat de Content-Length.
+        curl_setopt($c, CURLOPT_NOBODY, true);
+    }
     $raspuns = (string) curl_exec($c);
     $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
     $marimeAntet = (int) curl_getinfo($c, CURLINFO_HEADER_SIZE);
@@ -715,6 +719,119 @@ HTML,
     return $intrari;
 })();
 $porturiBioscem = array_merge($porturiBioscem, $porturiBioscemLivrarea2);
+// WP-R (28 oct 2026): livrarea 4 SEO, Bioscem 5359ec6 … 070e1af, declarată pentru istoric pe paginile datelor demo (pachetul
+// inventat, tools/dev/site-demo/, n-are livrare_retur și nici poze-optimizate.json, deci aici nu apar termenul de livrare și
+// pozele WebP; pe acelea, și pe toate cele de mai jos, le dovedește G-cmp, față de codul Bioscem însuși, cu pachetul Bioscem).
+$diferiteInainte = [];
+$porturiBioscemLivrarea4 = (static function () use ($fataDeCommit, $paginaListe, $slugBlog, $slugBbd, $slugPre, $portCurent, $radacina,
+    $cerere, $dosarDiff, $db, $unu, $faraSeo, &$diferiteInainte): array {
+    $h = static fn (string $text): string => htmlspecialchars($text, ENT_QUOTES);
+    $intrari = [];
+    // Bioscem 9fe175d (A11): o pagină din constructor fără niciun <h1> primește titlul ei ca H1, cu stilul lui, înaintea textului.
+    $intrari[] = [
+        'nume' => 'H1-ul pus de șablon pe o pagină fără <h1> (Liste goale)',
+        'cale' => '/' . $paginaListe,
+        'nou' => "    <style>\n        /* Titlul adăugat de șablon: fără specificitate (:where), ca stilurile paginii\n"
+            . "           (de exemplu șablonul paginilor de text) să aibă întâietate. */\n"
+            . '        :where(.custom-page-content) > :where(.custom-page-h1){max-width:1180px;margin:24px auto 14px;font-family:Georgia,'
+            . '"Times New Roman",serif;font-size:31px;font-weight:500;line-height:1.3;color:#064b4f;}' . "\n"
+            . '        @media (max-width:768px){:where(.custom-page-content) > :where(.custom-page-h1){font-size:25px;}}' . "\n"
+            . "    </style>\n<section class=\"custom-page-content\">\n    <h1 class=\"custom-page-h1\">Liste goale</h1>\n",
+        'vechi' => "<section class=\"custom-page-content\">\n    ",
+        'motiv' => 'Bioscem 9fe175d (livrarea 4 SEO, A11): titlul paginii ca H1 când textul ei n-are unul (SeoIndexare, views/site/custom-page.php)',
+    ];
+    // Bioscem ef22b23 (A10): pagina „nu există” fără canonical și fără og:url.
+    $adresa404 = 'http://127.0.0.1:' . $portCurent . '/pagina-care-nu-exista';
+    $intrari[] = [
+        'nume' => 'pagina 404 fără canonical',
+        'cale' => '/pagina-care-nu-exista',
+        'nou' => "</title>\n            <meta property=\"og:type\" content=\"website\">",
+        'vechi' => "</title>\n                <link rel=\"canonical\" href=\"" . $adresa404 . "\">\n        <meta property=\"og:type\" content=\"website\">",
+        'motiv' => 'Bioscem ef22b23 (livrarea 4 SEO, A10): o adresă care nu există nu are canonical (SeoIndexare::faraCanonicalPentruCod)',
+    ];
+    $intrari[] = [
+        'nume' => 'pagina 404 fără og:url',
+        'cale' => '/pagina-care-nu-exista',
+        'nou' => "\">\n                    <meta name=\"twitter:card\" content=\"summary\">",
+        'vechi' => "\">\n                <meta property=\"og:url\" content=\"" . $adresa404 . "\">\n                <meta name=\"twitter:card\" content=\"summary\">",
+        'motiv' => 'Bioscem ef22b23 (livrarea 4 SEO, A10): perechea rândului de mai sus (og:url = canonicalul)',
+    ];
+    // Bioscem e2c97dc (A8): poza articolului din șablonul implicit cu width/height.
+    $postare = $db->query('SELECT title, featured_image_url FROM blog_posts WHERE slug = ' . $db->quote($slugBlog))->fetch(PDO::FETCH_ASSOC) ?: [];
+    $copertaPostare = trim((string) ($postare['featured_image_url'] ?? ''));
+    $dimensiuni = $copertaPostare !== '' ? @getimagesize($radacina . '/public' . $copertaPostare) : false;
+    if (is_array($dimensiuni)) {
+        $intrari[] = [
+            'nume' => 'poza articolului cu width/height',
+            'cale' => '/blog/' . $slugBlog,
+            'nou' => '<img src="' . $h($copertaPostare) . '" alt="' . $h((string) $postare['title']) . '" width="' . (int) $dimensiuni[0]
+                . '" height="' . (int) $dimensiuni[1] . '">',
+            'vechi' => '<img src="' . $h($copertaPostare) . '" alt="' . $h((string) $postare['title']) . '">',
+            'motiv' => 'Bioscem e2c97dc (livrarea 4 SEO, A8): width/height pe poza articolului (PozeOptimizate::dimensiuni)',
+        ];
+    } elseif ($fataDeCommit) {
+        $diferiteInainte[] = 'istoric       poza articolului /blog/' . $slugBlog;
+        echo '  DIFERĂ istoric: poza articolului /blog/', $slugBlog, ' nu se poate citi (', $copertaPostare, ")\n";
+    }
+    // Bioscem 2d43171 (A14): „Produse similare” din aceeași categorie, cu cardurile scrise în HTML. Pe paginile datelor demo
+    // nicio alegere din admin, deci în f5ae5ea secțiunea lipsea. Textul secțiunii se ia din pagina codului curent, dar doar
+    // dacă produsele ei sunt exact cele ale regulii, calculate aici din bază, independent de cod (aceeași categorie, active,
+    // fără cele cu ofertă BBD de ales, întâi cele care nu sunt epuizate, apoi pe rând după produsul curent, cel mult 8) și
+    // dacă fiecare card duce la produsul lui; marcajul cardurilor e dovedit de G-cmp (aceleași pagini ca Bioscem 070e1af).
+    if (!$fataDeCommit) {
+        return $intrari;
+    }
+    $jar = $dosarDiff . '/jar-istoric-similare.txt';
+    foreach (['/produs/ceai-de-menta', '/produs/ceai-de-musetel', '/produs/' . $slugBbd, '/produs/' . $slugPre] as $cale) {
+        $slug = substr($cale, strlen('/produs/'));
+        $curent = $db->query('SELECT id, category_id, similar_products_json FROM products WHERE slug = ' . $db->quote($slug))->fetch(PDO::FETCH_ASSOC) ?: [];
+        $idCurent = (int) ($curent['id'] ?? 0);
+        $toate = $db->query('SELECT * FROM products WHERE deleted_at IS NULL AND is_active = 1 AND category_id = '
+            . (int) ($curent['category_id'] ?? 0) . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $ids = array_map(static fn (array $r): int => (int) $r['id'], $toate);
+        $pozitie = array_flip($ids);
+        $n = max(1, count($ids));
+        $candidati = array_values(array_filter($toate, static fn (array $r): bool => (int) $r['id'] !== $idCurent
+            && !\App\Support\BbdOferte::cereAlegere($r)));
+        usort($candidati, static fn (array $a, array $b): int => [(int) $a['out_of_stock'] === 1 ? 1 : 0,
+            ((($pozitie[(int) $a['id']] - ($pozitie[$idCurent] ?? 0)) + $n) % $n)]
+            <=> [(int) $b['out_of_stock'] === 1 ? 1 : 0, ((($pozitie[(int) $b['id']] - ($pozitie[$idCurent] ?? 0)) + $n) % $n)]);
+        $asteptate = array_slice($candidati, 0, 8);
+        @unlink($jar);
+        // Ca la compararea paginii: întâi diferențele livrării 1 SEO ($faraSeo; între ele width/height pe pozele cardurilor).
+        $gasiteSeo = [];
+        $corp = $faraSeo($cale, (string) $cerere($portCurent, 'GET', $cale, $jar)['corp'], $gasiteSeo);
+        @unlink($jar);
+        $probleme = [];
+        if ($idCurent === 0 || trim((string) ($curent['similar_products_json'] ?? '')) !== '') {
+            $probleme[] = 'produsul lipsește sau are produse similare alese în admin (în f5ae5ea secțiunea n-ar lipsi)';
+        }
+        $sectiuni = preg_match_all('#<section class="similar-products" data-similar-products="1">.*?</section>#s', $corp, $m) === 1 ? $m[0][0] : '';
+        preg_match('#<script type="application/json" class="similar-products__data">(.*?)</script>#s', $sectiuni, $json);
+        $iduriPagina = array_map(static fn ($p): int => (int) ($p['id'] ?? 0), (array) json_decode((string) ($json[1] ?? ''), true));
+        preg_match_all('#<a class="similar-product-card__media" href="(/[^"]*)"#', $sectiuni, $linkuri);
+        if ($sectiuni === '' || $iduriPagina !== array_map(static fn (array $r): int => (int) $r['id'], $asteptate)
+            || $linkuri[1] !== array_map(static fn (array $r): string => '/produs/' . rawurlencode((string) $r['slug']), $asteptate)) {
+            $probleme[] = 'produsele secțiunii (' . json_encode($iduriPagina) . ', ' . json_encode($linkuri[1]) . ') nu sunt cele ale regulii ('
+                . json_encode(array_map(static fn (array $r): int => (int) $r['id'], $asteptate)) . ')';
+        }
+        if ($probleme !== []) {
+            $diferiteInainte[] = 'istoric       produse similare ' . $cale;
+            echo '  DIFERĂ istoric: produse similare ', $cale, ': ', implode('; ', $probleme), "\n";
+            continue;
+        }
+        $intrari[] = [
+            'nume' => 'produse similare din aceeași categorie (' . $cale . ')',
+            'cale' => $cale,
+            'nou' => $sectiuni,
+            'vechi' => '',
+            'motiv' => 'Bioscem 2d43171 (livrarea 4 SEO, A14): 4–8 produse din aceeași categorie, cu cardurile în HTML (ProduseSimilare); '
+                . 'în f5ae5ea doar cele alese în admin (aici niciunul, deci fără secțiune)',
+        ];
+    }
+    return $intrari;
+})();
+$porturiBioscem = array_merge($porturiBioscem, $porturiBioscemLivrarea4);
 
 /**
  * În ambele moduri: diferențele față de codul de bază declarate explicit, fiecare cu
@@ -1805,6 +1922,36 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
     };
     $contine = static fn (array $raspuns, string $text): bool => str_contains((string) ($raspuns['corp'] ?? ''), $text);
 
+    // Livrarea 4 SEO: cele patru setări ale termenului, produsele și pagina cazurilor, mărimea unei poze vechi de test.
+    $setariTermen = array_merge(...array_values(\App\Support\PoliticaLivrare::SETARI_TERMEN));
+    $idPeSlug = static fn (string $slug): int => (int) $unu('SELECT id FROM products WHERE slug = ' . $db->quote($slug));
+    $idMusetel = $idPeSlug('ceai-de-musetel');
+    $idCosCadou = $idPeSlug('cos-cadou-cu-miere');
+    $paginaPoze = 'test-poze-refacute-' . getmypid();
+    // Poza „/uploads/gallery/plasma-quinton.png” (pusă de compara-cu-baza.sh la mărimea din pachet) cu $plus octeți în plus, în
+    // ambele coduri (codul de bază are copia lui a încărcărilor): altă poză încărcată cu același nume.
+    $schimbaMarimeaPozei = static function (int $plus) use ($radacina, $dosarBaza): void {
+        $poze = (array) (\App\Support\DateSite::json('poze-optimizate.json')['poze'] ?? []);
+        $octeti = (int) ($poze['/uploads/gallery/plasma-quinton.png']['octeti'] ?? 0);
+        // Aceeași dată a fișierului în ambele copii (versiunea pozei de distribuire /og/… depinde de ea).
+        $data = (int) @filemtime($radacina . '/public/uploads/gallery/plasma-quinton.png');
+        foreach ([$radacina, $dosarBaza] as $dosar) {
+            $fisier = $dosar . '/public/uploads/gallery/plasma-quinton.png';
+            if ($octeti > 0 && $data > 0 && is_file($fisier)) {
+                $fp = fopen($fisier, 'r+');
+                ftruncate($fp, $octeti + $plus);
+                fclose($fp);
+                touch($fisier, $data);
+                clearstatcache(true, $fisier);
+            }
+        }
+    };
+    // Adresele cardurilor „Produse similare” scrise în HTML, în ordine.
+    $linkuriSimilare = static function (array $raspuns): array {
+        preg_match_all('/<a class="similar-product-card__media" href="(\/[^"]*)"/', (string) ($raspuns['corp'] ?? ''), $m);
+        return $m[1];
+    };
+
     array_push($salvari,
         [
             'nume' => 'antet, meniu și subsol: linkurile vechi duc la /categorie/{slug}, logo-ul ca WebP',
@@ -1912,7 +2059,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         ],
         [
             'nume' => 'livrarea cu prețuri fixe: în datele structurate ale produselor și în fluxul Merchant Center',
-            'din' => 'dfcf6bd, 1e46f9f',
+            'din' => 'dfcf6bd, 1e46f9f, 5359ec6, 196fa46',
             'tabele' => $tabeleLivrare,
             'pregateste' => static function (PDO $db) use ($setariLivrare, $stergeFluxul): void {
                 $stmt = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
@@ -1923,7 +2070,8 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             },
             'la_final' => static fn () => $stergeFluxul(),
             'cereri' => [
-                // Sub prag: tariful la adresă; peste prag, la preț întreg: gratuit; la reducere: nimic.
+                // Sub prag: tariful la adresă; peste prag, la preț întreg: gratuit; la reducere peste prag: tot gratuit, ca în
+                // coș (regula D, 196fa46; înainte: nimic); fiecare cu termenul de livrare implicit (5359ec6).
                 ['GET', '/produs/ceai-de-menta', [], 'viz'],
                 ['GET', '/produs/omega-3-din-alge', [], 'viz'],
                 ['GET', '/produs/miere-de-manuka-mgo-400', [], 'viz'],
@@ -1939,8 +2087,23 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 if (!$contine($raspunsuri[1], '"shippingDetails"')) {
                     $probleme[] = 'produsul peste prag nu are livrarea gratuită în datele structurate';
                 }
-                if ($contine($raspunsuri[2], '"shippingDetails"')) {
-                    $probleme[] = 'produsul la reducere are livrare în datele structurate';
+                if (!$contine($raspunsuri[2], '"shippingDetails"') || !$contine($raspunsuri[2], '"value":"0.00"')) {
+                    $probleme[] = 'produsul la reducere peste prag nu are livrarea gratuită (regula D, ca în coș)';
+                }
+                $termenImplicit = '"deliveryTime":{"@type":"ShippingDeliveryTime","handlingTime":{"@type":"QuantitativeValue","minValue":0,'
+                    . '"maxValue":1,"unitCode":"DAY"},"transitTime":{"@type":"QuantitativeValue","minValue":1,"maxValue":2,"unitCode":"DAY"},'
+                    . '"businessDays":{"@type":"OpeningHoursSpecification","dayOfWeek":["https://schema.org/Monday","https://schema.org/Tuesday",'
+                    . '"https://schema.org/Wednesday","https://schema.org/Thursday","https://schema.org/Friday"]}}';
+                foreach ([0, 1, 2] as $n) {
+                    if (!$contine($raspunsuri[$n], $termenImplicit)) {
+                        $probleme[] = 'produsul ' . ($n + 1) . ' nu are termenul de livrare implicit (0–1 + 1–2 zile lucrătoare, luni–vineri)';
+                    }
+                }
+                if (!$contine($raspunsuri[3], '<g:min_handling_time>0</g:min_handling_time><g:max_handling_time>1</g:max_handling_time>'
+                        . '<g:min_transit_time>1</g:min_transit_time><g:max_transit_time>2</g:max_transit_time>')
+                    || !$contine($raspunsuri[3], '<g:shipping_handling_business_days>M;T;W;R;F</g:shipping_handling_business_days>')
+                    || !$contine($raspunsuri[3], '<g:shipping_transit_business_days>M;T;W;R;F</g:shipping_transit_business_days>')) {
+                    $probleme[] = 'fluxul nu are termenul de livrare și zilele lucrătoare';
                 }
                 if (!$contine($raspunsuri[0], '"hasMerchantReturnPolicy"') || !$contine($raspunsuri[4], '"hasMerchantReturnPolicy"')) {
                     $probleme[] = 'returul lipsește din datele structurate (produs sau firmă)';
@@ -1950,6 +2113,185 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 }
                 return $probleme;
             },
+        ],
+        // Livrarea 4 SEO (Bioscem 5359ec6): termenul de livrare din cele patru setări, peste valorile implicite din seo.json; o
+        // valoare greșită ia valoarea implicită (pregătirea „x”–2 → 0–2), o valoare peste 30 la fel (transportul 31–3 → 1–3).
+        [
+            'nume' => 'livrarea 4: termenul de livrare din setări (o valoare greșită ia valoarea implicită)',
+            'din' => '5359ec6',
+            'tabele' => [
+                ['tabel' => 'settings', 'unde' => '`key` IN (\'' . implode('\', \'', array_merge(array_keys($setariLivrare), $setariTermen)) . '\')',
+                    'cheie' => 'key'],
+                $tokenCache,
+            ],
+            'pregateste' => static function (PDO $db) use ($setariLivrare, $stergeFluxul): void {
+                $stmt = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+                foreach ($setariLivrare + ['seo_livrare_pregatire_min' => 'x', 'seo_livrare_pregatire_max' => '2',
+                    'seo_livrare_transport_min' => '31', 'seo_livrare_transport_max' => '3'] as $cheie => $valoare) {
+                    $stmt->execute([$cheie, $valoare]);
+                }
+                $stergeFluxul();
+            },
+            'la_final' => static fn () => $stergeFluxul(),
+            'cereri' => [
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['GET', '/feed/google-merchant.xml', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $contine($raspunsuri[0], '"handlingTime":{"@type":"QuantitativeValue","minValue":0,"maxValue":2,"unitCode":"DAY"},'
+                    . '"transitTime":{"@type":"QuantitativeValue","minValue":1,"maxValue":3,"unitCode":"DAY"}')
+                    ? [] : ['datele structurate nu au termenul 0–2 + 1–3 din setări'],
+                $contine($raspunsuri[1], '<g:min_handling_time>0</g:min_handling_time><g:max_handling_time>2</g:max_handling_time>'
+                    . '<g:min_transit_time>1</g:min_transit_time><g:max_transit_time>3</g:max_transit_time>')
+                    ? [] : ['fluxul nu are termenul 0–2 + 1–3 din setări']),
+        ],
+        // Livrarea 4 SEO (Bioscem ef22b23, 682843c, dd41c59, a64afb6, bb11ae0): căutarea internă cu noindex și fără canonical;
+        // o categorie și un articol care nu există primesc pagina 404 a magazinului (fără canonical); pe o cale exclusă scrisă
+        // cu „//” răspunsul de dinainte; un link de plată greșit își păstrează canonicalul și pe 404; HEAD pe o adresă cu
+        // majuscule primește 301-ul de la GET (înainte 404). Nimic de salvat: doar cererile, pe ambele servere.
+        [
+            'nume' => 'livrarea 4: căutarea cu noindex, paginile 404 noi, căile excluse, HEAD cu majuscule',
+            'din' => 'ef22b23, 682843c, dd41c59, a64afb6, bb11ae0',
+            'tabele' => [$tokenCache],
+            'pregateste' => static function (PDO $db): void {
+            },
+            'cereri' => [
+                ['GET', '/magazin?q=ceai', [], 'viz'],
+                ['GET', '/categorie/categorie-care-nu-exista', [], 'viz'],
+                ['GET', '/blog/articol-care-nu-exista', [], 'viz'],
+                ['GET', '//api/blog/posts', [], 'viz'],
+                ['GET', '/plata/token-care-nu-exista', [], 'viz'],
+                ['GET', '/pagina-care-nu-exista', [], 'viz'],
+                ['HEAD', '/produs/CEAI-DE-MENTA', [], 'viz'],
+                ['HEAD', '/produs/ceai-de-menta', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+                $probleme = [];
+                $noindex = '<meta name="robots" content="noindex,follow">';
+                if (!$contine($raspunsuri[0], $noindex) || $contine($raspunsuri[0], 'rel="canonical"')) {
+                    $probleme[] = '/magazin?q=ceai: fără noindex sau cu canonical';
+                }
+                foreach ([1 => 'Categoria căutată nu există', 2 => 'Articolul nu a fost găsit'] as $n => $titlu) {
+                    if ((int) ($raspunsuri[$n]['cod'] ?? 0) !== 404 || !$contine($raspunsuri[$n], $titlu)
+                        || $contine($raspunsuri[$n], 'rel="canonical"') || !$contine($raspunsuri[$n], '</html>')) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ': nu e pagina 404 a magazinului, fără canonical („' . $titlu . '”)';
+                    }
+                }
+                if ((int) ($raspunsuri[3]['cod'] ?? 0) !== 404 || trim((string) ($raspunsuri[3]['corp'] ?? '')) !== 'Articolul nu a fost găsit.') {
+                    $probleme[] = '//api/blog/posts nu mai dă textul simplu de dinainte';
+                }
+                if ((int) ($raspunsuri[4]['cod'] ?? 0) !== 404 || !$contine($raspunsuri[4], 'rel="canonical"')) {
+                    $probleme[] = 'linkul de plată greșit și-a pierdut canonicalul (căile de plată rămân ca înainte)';
+                }
+                if ((int) ($raspunsuri[5]['cod'] ?? 0) !== 404 || $contine($raspunsuri[5], 'rel="canonical"')) {
+                    $probleme[] = 'pagina 404 are canonical';
+                }
+                if ((int) ($raspunsuri[6]['cod'] ?? 0) !== 301 || !str_ends_with((string) ($raspunsuri[6]['location'] ?? ''), '/produs/ceai-de-menta')) {
+                    $probleme[] = 'HEAD pe adresa cu majuscule nu dă 301 spre adresa cu litere mici (cod ' . (int) ($raspunsuri[6]['cod'] ?? 0) . ')';
+                }
+                // Pe adresa corectă HEAD rămâne cum era (routerul n-are rute HEAD): doar adresa cu majuscule merge ca GET.
+                if ((int) ($raspunsuri[7]['cod'] ?? 0) !== 404) {
+                    $probleme[] = 'HEAD pe adresa corectă nu mai dă 404-ul de dinainte (cod ' . (int) ($raspunsuri[7]['cod'] ?? 0) . ')';
+                }
+                return $probleme;
+            },
+        ],
+        // Livrarea 4 SEO (Bioscem ef22b23, D7; dd41c59, A11): /blog fără niciun articol publicat are noindex, iar când textul
+        // paginii „blog” n-are <h1> (pagina demo are unul, deci aici e scos), titlul listei („Blog & Resurse”) e H1-ul paginii,
+        // fără alt H1 pus de șablon; un articol nepublicat dă pagina 404 a magazinului.
+        [
+            'nume' => 'livrarea 4: /blog fără articole publicate (noindex, „Blog & Resurse” ca H1)',
+            'din' => 'ef22b23, dd41c59',
+            'tabele' => [['tabel' => 'blog_posts', 'unde' => '1 = 1', 'cheie' => 'id'],
+                ['tabel' => 'pages', 'unde' => 'slug = \'blog\'', 'cheie' => 'id'], $tokenCache],
+            'pregateste' => static function (PDO $db): void {
+                $db->exec('UPDATE blog_posts SET is_published = 0');
+                $db->exec("UPDATE pages SET html_content = '<section>{{blog_posts}}</section>' WHERE slug = 'blog'");
+            },
+            'cereri' => [
+                ['GET', '/blog', [], 'viz'],
+                ['GET', '/blog/' . $slugBlog, [], 'viz'],
+                ['GET', '/sitemap.xml', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $contine($raspunsuri[0], '<meta name="robots" content="noindex,follow">') ? [] : ['/blog gol fără noindex'],
+                $contine($raspunsuri[0], '<h1>Blog &amp; Resurse</h1>') && !$contine($raspunsuri[0], 'class="custom-page-h1"')
+                    ? [] : ['/blog fără H1-ul „Blog & Resurse” (sau cu încă un H1 din șablon)'],
+                (int) ($raspunsuri[1]['cod'] ?? 0) === 404 && $contine($raspunsuri[1], 'Articolul nu a fost găsit')
+                    && $contine($raspunsuri[1], '</html>') ? [] : ['articolul nepublicat nu dă pagina 404 a magazinului']),
+        ],
+        // Livrarea 4 SEO (Bioscem e2c97dc, 070e1af, A8): pozele mari ale site-ului (poze-optimizate.json) se afișează din WebP-ul
+        // pachetului doar cu poza veche de exact mărimea scrisă (cea de pe disc; compara-cu-baza.sh pune pozele de test); una cu
+        // altă mărime (altă poză încărcată cu același nume) rămâne cea veche; fluxul și datele structurate rămân pe poza veche.
+        // O pagină din constructor fără <h1> primește titlul ei ca H1 (9fe175d, A11).
+        [
+            'nume' => 'livrarea 4: pozele refăcute (WebP doar cu mărimea de pe disc), H1-ul paginii fără titlu',
+            'din' => 'e2c97dc, 070e1af, 9fe175d',
+            'tabele' => array_merge($tabeleProdus($idMentaInt), $tabeleProdus($idMusetel), [
+                ['tabel' => 'pages', 'unde' => 'slug = :pz', 'param' => ['pz' => $paginaPoze], 'cheie' => 'id'],
+                $tokenCache,
+            ]),
+            'pregateste' => static function (PDO $db) use ($idMentaInt, $idMusetel, $paginaPoze, $schimbaMarimeaPozei, $stergeFluxul): void {
+                $db->prepare('UPDATE products SET image_url = ? WHERE id = ?')->execute(['/uploads/gallery/vivomixx.png', $idMentaInt]);
+                $db->prepare('UPDATE products SET image_url = ? WHERE id = ?')->execute(['/uploads/gallery/plasma-quinton.png', $idMusetel]);
+                $db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published, created_at, updated_at)
+                    VALUES (?, ?, ?, \'\', \'\', 1, NOW(), NOW())')->execute(['Poze refăcute', $paginaPoze,
+                    '<p><img src="/uploads/gallery/hero-homepage.png" alt="Erou"></p><p><img alt="Al doilea" src=\'/uploads/gallery/siliciu-organic.png\'></p>'
+                    . '<p><img src="/uploads/gallery/plasma-quinton.png" alt="Altă mărime"></p>']);
+                $schimbaMarimeaPozei(1);
+                $stergeFluxul();
+            },
+            'la_final' => static function () use ($schimbaMarimeaPozei, $stergeFluxul): void {
+                $schimbaMarimeaPozei(0);
+                $stergeFluxul();
+            },
+            'cereri' => [
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['GET', '/produs/ceai-de-musetel', [], 'viz'],
+                ['GET', '/categorie/ceaiuri', [], 'viz'],
+                ['GET', '/' . $paginaPoze, [], 'viz'],
+                ['GET', '/feed/google-merchant.xml', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $contine($raspunsuri[0], 'src="/assets/img/optimizate/vivomixx.webp"') ? [] : ['produsul cu poza refăcută nu arată WebP-ul'],
+                $contine($raspunsuri[0], '"image":["http://127.0.0.1:') && $contine($raspunsuri[0], '/uploads/gallery/vivomixx.png"]')
+                    ? [] : ['datele structurate nu mai au poza veche'],
+                $contine($raspunsuri[1], 'src="/uploads/gallery/plasma-quinton.png"') && !$contine($raspunsuri[1], 'plasma-quinton.webp')
+                    && $contine($raspunsuri[1], '/assets/img/optimizate/vivomixx.webp') ? [] : ['poza cu altă mărime a trecut pe WebP (sau cardul similar nu)'],
+                $contine($raspunsuri[2], '/assets/img/optimizate/vivomixx.webp') ? [] : ['cardul din categorie nu arată WebP-ul'],
+                $contine($raspunsuri[3], 'src="/assets/img/optimizate/hero-homepage.webp"')
+                    && $contine($raspunsuri[3], 'src=\'/assets/img/optimizate/siliciu-organic.webp\'')
+                    && $contine($raspunsuri[3], 'src="/uploads/gallery/plasma-quinton.png"') ? [] : ['pozele din textul paginii nu sunt cele așteptate'],
+                $contine($raspunsuri[3], '<h1 class="custom-page-h1">Poze refăcute</h1>') ? [] : ['pagina fără <h1> nu primește titlul ca H1'],
+                $contine($raspunsuri[4], '/uploads/gallery/vivomixx.png') && !$contine($raspunsuri[4], 'optimizate') ? [] : ['fluxul nu mai are poza veche']),
+        ],
+        // Livrarea 4 SEO (Bioscem 2d43171, A14): „Produse similare” din aceeași categorie, scrise în HTML: cele alese în admin din
+        // categorie primele, apoi celelalte după produsul curent, epuizatele la urmă; o categorie cu mai puțin de 4 se
+        // completează cu cele alese în admin din alte categorii (și cu oferte BBD).
+        [
+            'nume' => 'livrarea 4: produsele similare (aceeași categorie, alegerea din admin, completarea până la 4)',
+            'din' => '2d43171',
+            'tabele' => array_merge($tabeleProdus($idMentaInt), $tabeleProdus($idCosCadou), [$tokenCache]),
+            'pregateste' => static function (PDO $db) use ($idMentaInt, $idCosCadou, $idPeSlug): void {
+                $db->prepare('UPDATE products SET similar_products_json = ? WHERE id = ?')->execute([json_encode([
+                    $idPeSlug('omega-3-din-alge'), $idPeSlug('ceai-de-tei'), $idPeSlug('ceai-de-fructe-de-padure')]), $idMentaInt]);
+                $db->prepare('UPDATE products SET similar_products_json = ? WHERE id = ?')->execute([json_encode([
+                    $idPeSlug('omega-3-din-alge'), $idPeSlug('miere-de-tei'), $idPeSlug('seminte-de-chia')]), $idCosCadou]);
+            },
+            'cereri' => [
+                ['GET', '/produs/ceai-de-menta', [], 'viz'],
+                ['GET', '/produs/cos-cadou-cu-miere', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $linkuriSimilare($raspunsuri[0]) === ['/produs/ceai-de-tei', '/produs/ceai-de-musetel', '/produs/ceai-verde-sencha',
+                    '/produs/ceai-de-ghimbir', '/produs/ceai-de-fructe-de-padure'] ? [] : ['ceai de mentă: ' . json_encode($linkuriSimilare($raspunsuri[0]))],
+                $linkuriSimilare($raspunsuri[1]) === ['/produs/set-cadou-ceaiuri', '/produs/omega-3-din-alge', '/produs/miere-de-tei',
+                    '/produs/seminte-de-chia'] ? [] : ['coș cadou: ' . json_encode($linkuriSimilare($raspunsuri[1]))]),
         ],
         [
             'nume' => 'avertisment: cele trei câmpuri se salvează din Admin → Produse și apar în editor',

@@ -3,17 +3,30 @@
     "site": "bioscem",
     "fisiere": {
         "avertismente-produse.json": "ad83a202def7a38d0b71dad17f4cf478d0dda0f27eaef13dfb9d325c81f03ba3",
-        "ce-se-schimba.md": "f36a1da67a33c67f881d6fcdb6d135830e9d83d6c8381fac4059c58aed228a85",
+        "ce-se-schimba.md": "0a397ea87a4dc98bb6efcde1129c53aad59f8432f9bc357bd5a475b3226ddd66",
         "migrari.json": "d521ab48a5e53d4319d0fbd57dcc2635319b58b4c9a0850c85ed503077356535",
+        "poze-optimizate.json": "90d8bb80f8520d0bdfab39bf49660a44dfea2e2182f72e68f847f4cdec33d4a8",
         "public/assets/img/bioscem-logo-2-212.webp": "b893ae1bfe45baa0df90e63db72e596f22bfdd6da4617408b9b18bfacf4456e6",
         "public/assets/img/bioscem-logo-2-423.webp": "f8af5587072e1fddbf4a46b7a2f74eecec945b91e628a2fd019e3c96f8a4e501",
-        "redirecturi.json": "9ee999bf32cfa9ed355bea170ead4a6b4f4a4d5ca4fece25d5c93a5231cfaf3a",
+        "public/assets/img/optimizate/bunatati-pentru-toata-familia.webp": "ad11c2257e47a49bd42a7584ec182fde0966807c1eeeb337f233c8766ef798a9",
+        "public/assets/img/optimizate/clorura-de-magneziu-sare-nigari-1-kg.webp": "6c8b8e660d539e92de3175b2c684c9c2bdba1a19045b2cf280c140d3322b130a",
+        "public/assets/img/optimizate/clorura-de-magneziu-sare-nigari-500-gr.webp": "3ebe1b77581f8db112ac4c139b83025b655bf3dfc60ca5b1d102856478108d1c",
+        "public/assets/img/optimizate/hero-homepage.webp": "b7f7c2e5532f3c4a9cfe9dac85dfbd806656c89193823f4120eb792c54fcd178",
+        "public/assets/img/optimizate/pachet-batoane-kanne-bio-energie-snack-41-gratuit.webp": "4187217fa4a64f98afa5185d424dd56904ffbdd831b1df332c93ca18059773f4",
+        "public/assets/img/optimizate/plasma-quinton.webp": "cff6cb7c3afb8c12d7a5d15d89c93c2d3f2e29ee3d2067931d95e613223f6ceb",
+        "public/assets/img/optimizate/siliciu-organic.webp": "55d12dfa53ce386f5d1525cc99f584c84cf2b760c3b86c887be623e3c3be6db1",
+        "public/assets/img/optimizate/vitamina-b12-metilcobalamina-1.webp": "8df4d4aab97fb982aee5812258bfb62dbe302c276ba356dffc93d0ba9a2e40aa",
+        "public/assets/img/optimizate/vitamina-c-alcalina-ascorbat-de-sodiu-500-gr.webp": "bdba96867dbaad30960810b34afdcde325c884ee1e3ee57edb068039aa2c32b8",
+        "public/assets/img/optimizate/vivomixx.webp": "0dd01d6448ef0048e6b932290704e4971c870adda4e04e3583786fa0ebed6f21",
+        "redirecturi.json": "92dcb0cc1b3d9155704069968209be39a2a16b09529e1bff89f4d764d7f42fa0",
+        "seo-continut.json": "79812cf0016644618db7cfea1e9f5d488a2794db11ebf133f79430b88140ba8c",
         "seo-texte.json": "17bf6441a99cae3f1c5ac82c50ad122d7d6a1c151ede9f6912dff5d3b20e086b",
-        "seo.json": "d90433636e22e2e186547baafd17266f4af565760e299035492f77aa89b091e9",
-        "setari-inghetate.json": "f33d2a3808d2b4fc8727b0f2abfd96dba85c135a8d4c1635f20b5762cd2f9f68"
+        "seo.json": "92c6005c4ca664483e721103be7ea2a3ae1bb6a7e6f864c216b552a66a4bb3ee",
+        "setari-inghetate.json": "ed535824415d11c1ce2dc01a9581388582f7149e24c5ed9107db8ead4f495ff4"
     },
     "obligatorii": [
         "redirecturi.json",
-        "seo.json"
+        "seo.json",
+        "poze-optimizate.json"
     ]
 }

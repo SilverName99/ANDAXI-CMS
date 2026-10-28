@@ -2,7 +2,7 @@
     "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
     "format": 2,
     "site": "biovitality",
-    "sursa": "Mutare-Site-Biovitality@cc231e4",
+    "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
     "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
     "setari": {

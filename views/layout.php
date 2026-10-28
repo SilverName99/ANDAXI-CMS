@@ -254,6 +254,13 @@ $canonicalUrlFinal = trim((string) ($metaCanonicalUrl ?? ''));
 if ($canonicalUrlFinal === '') {
     $canonicalUrlFinal = $appUrl . ($requestPath === '/' ? '/' : $requestPath);
 }
+// Fără canonical (și fără og:url) pe pagina „nu există” (404/410) și unde
+// controllerul o cere (căutarea internă cu noindex). Vezi App\Support\SeoIndexare.
+// Paginile de coș, comandă, plată și cont rămân exact ca înainte, și pe 404.
+if (!empty($faraCanonical)
+    || \App\Support\SeoIndexare::faraCanonicalPentruCod((int) http_response_code(), (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    $canonicalUrlFinal = '';
+}
 $metaImageUrlFinal = trim((string) ($metaImageUrl ?? ''));
 // Poza de distribuire (Facebook, WhatsApp, X): varianta 1200×630 a pozei
 // paginii (produsul: poza lui principală), altfel cea implicită din Setări
@@ -308,7 +315,7 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
         . '<aside class="bv-mobile-menu-token__drawer" data-bv-mobile-menu-drawer aria-hidden="true">'
         . '<div class="bv-mobile-menu-token__drawer-head">'
         . '<a href="/" class="bv-mobile-menu-token__brand" aria-label="Acasă">'
-        . '<img src="' . htmlspecialchars($mobileMenuLogoPath, ENT_QUOTES) . '" alt="' . htmlspecialchars($mobileMenuLogoAlt, ENT_QUOTES) . '" loading="lazy">'
+        . '<img src="' . htmlspecialchars($mobileMenuLogoPath, ENT_QUOTES) . '" alt="' . htmlspecialchars($mobileMenuLogoAlt, ENT_QUOTES) . '"' . \App\Support\PozeOptimizate::dimensiuni($mobileMenuLogoPath) . ' loading="lazy">'
         . '</a>'
         . '<button class="bv-mobile-menu-token__close" type="button" aria-label="Închide meniul" data-bv-mobile-menu-close>&times;</button>'
         . '</div>'
@@ -371,9 +378,8 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
     <?php if ($canonicalUrlFinal !== ''): ?>
         <link rel="canonical" href="<?= htmlspecialchars($canonicalUrlFinal, ENT_QUOTES) ?>">
     <?php endif; ?>
-<?php /* Loc pregătit pentru „noindex” (deciziile D2 etichete mici, D3 etichete cu nume de boli
-și D7 /blog gol nu sunt încă luate): un controller poate trimite $metaRobots, de exemplu
-„noindex,follow”. Azi niciun controller nu o trimite, deci nu apare nimic în pagină. */
+<?php /* „noindex,follow” trimis de controller în $metaRobots: căutarea internă (/magazin?q=…)
+și /blog fără articole publicate (vezi App\Support\SeoIndexare). Celelalte pagini nu au etichetă. */
 if (isset($metaRobots) && preg_match('/^[a-z ,-]+$/i', trim((string) $metaRobots)) === 1) {
     echo '    <meta name="robots" content="', htmlspecialchars(trim((string) $metaRobots), ENT_QUOTES), '">', "\n";
 } ?>
@@ -1052,14 +1058,14 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                         <?php
                         $offerName = trim((string) ($offer['name'] ?? 'Produs'));
                         $offerUrl = trim((string) ($offer['url'] ?? '/magazin'));
-                        $offerImage = trim((string) ($offer['image_url'] ?? '/assets/img/product-placeholder.svg'));
+                        $offerImage = \App\Support\PozeOptimizate::src(trim((string) ($offer['image_url'] ?? '/assets/img/product-placeholder.svg')));
                         $offerCount = max(1, (int) ($offer['offer_count'] ?? 1));
                         $offerPrice = max(0.0, (float) ($offer['price'] ?? 0.0));
                         $offerComparePrice = isset($offer['compare_at_price']) ? max(0.0, (float) ($offer['compare_at_price'] ?? 0.0)) : 0.0;
                         ?>
                         <li>
                             <a class="bv-bbd-sidebar__item" href="<?= htmlspecialchars($offerUrl, ENT_QUOTES) ?>">
-                                <img src="<?= htmlspecialchars($offerImage, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($offerName, ENT_QUOTES) ?>" loading="lazy">
+                                <img src="<?= htmlspecialchars($offerImage, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($offerName, ENT_QUOTES) ?>"<?= \App\Support\PozeOptimizate::dimensiuni($offerImage) ?> loading="lazy">
                                 <div>
                                     <h4 class="bv-bbd-sidebar__item-name"><?= htmlspecialchars($offerName, ENT_QUOTES) ?></h4>
                                     <p class="bv-bbd-sidebar__item-label">

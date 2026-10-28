@@ -18,8 +18,8 @@ pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|
-| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `4254ca4` (20.10.2026) | CMS pornește din `11b1040` |
-| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `cc231e4` (20.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
+| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `070e1af` (21.10.2026) | CMS pornește din `11b1040` |
+| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `779e0d8` (21.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
 | vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `0fc2b2c` (20.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
 | grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (20.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |
 
@@ -48,7 +48,15 @@ pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 | `0f5f568` | 20.10 | Avertismentul pe produs: scriptul pentru cele trei produse refrigerate | portat (`43bdccc`; `scripts/avertisment-produse.php` generic, textele și produsele Bioscem în `site-uri/bioscem/avertismente-produse.json`) |
 | `ce40df1` | 20.10 | Avertismentul pe produs: README și `.env.example` | portat (`43bdccc`: `.env.example`; README-ul Bioscem nu e în CMS, documentația în `docs/PLUGINURI.md` și `docs/DEZVOLTARE.md`) |
 | — | 29.10 | SEO livrarea 3 (restul redirecționărilor, noindex pe etichetele mici) | de portat (WP-R, A12) când apare |
-| — | 05.11 | SEO livrarea 4 (dimensiuni poze, linkuri, H1, linkuri interne; termenul de livrare 1–3 zile lucrătoare pentru Google, decizia proprietarului din 20 oct) | de portat (WP-R, A12) |
+| `5359ec6` | 21.10 | SEO livrarea 4, A5: termenul de livrare pentru Google (0–1 zile pregătire + 1–2 transport, zile lucrătoare luni–vineri) din patru setări, în datele structurate și în flux | portat (WP-R din 28.10, în commit-ul care mută aici „ultimul commit revizuit”; termenul implicit în `site-uri/bioscem/seo.json` → `livrare_retur.termen_livrare` = `[0, 1, 1, 2]`, setările `seo_livrare_*` din nucleu peste el; un site fără termen în pachet îl declară doar din setări complete) |
+| `196fa46` | 21.10 | SEO livrarea 4, decizia D: transport gratuit de la prag și la produsele cu reducere, ca în checkout | portat (aceeași regulă ca `CheckoutCalculator::transportGratuit`, nucleu; apare doar pe un site cu `livrare_retur`) |
+| `ef22b23` `682843c` `dd41c59` `a64afb6` | 21.10 | SEO livrarea 4, A10: noindex,follow pe căutarea internă și pe /blog gol, fără canonical pe 404 (nu pe căile de plată, coș, cont), pagina 404 a magazinului pe /blog/x și /categorie/x (nu pe căile excluse scrise cu „//”) | portat (`SeoIndexare`, nucleu; oprirea `SEO_NOINDEX=0`) |
+| `9fe175d` `4f8b8ec` `dd41c59` | 21.10 | SEO livrarea 4, A11: titlul paginii ca H1 când textul n-are; pe /blog „Blog & Resurse” e H1-ul | portat (`SeoIndexare`, `views/site/custom-page.php`, `views/site/components/blog-posts.php`; oprirea `SEO_H1=0`) |
+| `e2c97dc` `070e1af` | 21.10 | SEO livrarea 4, A8: width/height pe pozele din șabloane; cele 10 poze mari din fișiere WebP noi; mărimile pozelor vechi luate de pe disc, nu prin CDN | portat (`PozeOptimizate`, nucleu: lista din `config/poze-optimizate.php` e în pachet, `site-uri/bioscem/poze-optimizate.json` cu `"marimi_de_pe": "disc"`, fișierele în `site-uri/bioscem/public/assets/img/optimizate/`, copiate peste `public/` la adoptare; lecția `070e1af` în `tools/dev/verifica-pachet.php` (fără `"disc"` pachetul e refuzat) și în `scripts/diagnostic.php --pachet` (mărimea fiecărei poze vechi de pe disc față de pachet); oprirea `SEO_POZE=0`) |
+| `2d43171` | 21.10 | SEO livrarea 4, A14: „Produse similare” din aceeași categorie, cu cardurile în HTML | portat (`ProduseSimilare`, nucleu; cardurile respectă pluginurile ca JavaScript-ul caruselului: stelele doar cu recenziile, prețul doar cu magazinul, butonul doar cât magazinul primește comenzi; oprirea `SEO_PRODUSE_SIMILARE=0`) |
+| `bb11ae0` | 21.10 | SEO livrarea 4: HEAD pe o adresă cu litere mari primește același răspuns ca GET | portat (`SeoRedirects`) |
+| `c3ad6ab` `b51067a` | 21.10 | SEO livrarea 4, D5 și A9: scriptul de conținut (căștile AIRCALL – alb / – negru cu adresele cu litere mici, 30 de linkuri din texte), fără frazele A9-12 și A9-13; ținta regulii `/produs/casti-antiradiatii-aircall-sp21` cu litere mici | portat (`scripts/seo-continut.php` generic, lista Bioscem în `site-uri/bioscem/seo-continut.json`, cu numele magazinului și numărătoarea mutate din script; regula în `site-uri/bioscem/redirecturi.json`). Pe Bioscem e deja aplicat (21.10): rulat din nou spune „Nimic de schimbat” |
+| `36376f3` `34a1a2c` | 21.10 | SEO livrarea 4: README și `.env.example` | portat (`.env.example`; README-ul Bioscem nu e în CMS, documentația în `docs/SEO.md`, `docs/PACHETE.md`) |
 
 `b632294` și `b3781a4` merg mai departe decât Biovitality: cheile de ofertă care s-ar ciocni (o ofertă
 nouă care ar primi cheia păstrată a alteia, o cheie dublată) primesc altă variantă, o cheie care nu e
@@ -66,6 +74,16 @@ intrare în `$porturiBioscem`: paginile (categoriile vechi, fluxul, poza de dist
 numele magazinului, livrarea cu prețuri fixe, avertismentul salvat, golit și neatins, fereastra din coș,
 comanda refuzată fără bifă și comanda cu bifă, cu emailul și Admin → Comenzi); față de Bioscem `9f59e79` pică
 fiecare dintre ele.
+
+Livrarea 4 SEO (`5359ec6` … `070e1af`, WP-R din 28 octombrie) la fel, doar pe Bioscem. Dovada: comparația față de
+Bioscem `070e1af`, fără nicio intrare în `$porturiBioscem`, cu licența `toate` și `bioscem`: paginile (inclusiv 404 fără
+canonical, „Produse similare”, H1-ul paginilor fără) și cazurile noi de salvare: livrarea cu prețuri fixe (regula D și
+termenul implicit), termenul din setări (cu valori greșite), căutarea cu noindex și paginile 404 noi (căile excluse cu „//”,
+linkul de plată greșit, HEAD cu majuscule), /blog fără articole (noindex, „Blog & Resurse” ca H1), pozele refăcute (cu
+pozele vechi de test puse de `compara-cu-baza.sh` la exact mărimea din pachet, una schimbată: rămâne PNG-ul) și produsele
+similare alese în admin; față de Bioscem `4254ca4` pică 55 de pagini și cazuri. Istoricul (`--baza=f5ae5ea`) are
+diferențele livrării 4 în `$porturiBioscem`, pe commit-uri (secțiunea „Produse similare” cu produsele verificate
+independent de cod).
 
 ## Biovitality (de la `f7d15ba`)
 
@@ -126,8 +144,13 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 dacă BV live le are, devin CSS de temă BV în Etapa 4), `5ef9706` + anularea `308b369`;
 `claude/bunny-admin-access-zone-8eqier` → `63dc58b` (același conținut ca `f5486ee`).
 
-Biovitality nu are livrarea 2 SEO și avertismentul pe produs ale Bioscem (`6c8c789` … `4254ca4`, 20.10): le primește
-odată cu codul comun, la adoptare (Etapa 4; lista din `site-uri/biovitality/ce-se-schimba.md` le trece atunci).
+| `779e0d8` | 21.10 | Aplicația de desktop: executabilul construit se păstrează 14 zile | nu se portează (doar `.github/workflows/`, construirea aplicației Windows a BV; CMS-ul n-are `.github/`) |
+
+Biovitality nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO ale Bioscem (`6c8c789` … `070e1af`,
+20–21.10): le primește odată cu codul comun, la adoptare (Etapa 4; lista din `site-uri/biovitality/ce-se-schimba.md` le
+trece atunci: noindex pe căutare și pe /blog gol, 404 fără canonical și pagina 404 a magazinului pe /blog/x și
+/categorie/x, H1-ul din titlu pe paginile fără, „Produse similare” din aceeași categorie, HEAD cu majuscule; termenul de
+livrare și pozele WebP doar cu datele lor în pachet).
 
 ## vertij (de la `6d48cd8`)
 
@@ -160,13 +183,23 @@ odată cu codul comun, la adoptare (Etapa 4; lista din `site-uri/biovitality/ce-
 | `ad1d792` | 20.10 | Secțiunile pentru medici și pacienți: zece categorii de blog și zece pagini (scriptul `seed-content-sections.php`), blocurile HTML din `docs/pagini/` | nu se portează (conținutul VT, deja în baza lui; ca `docs/templates` la Bioscem, decizia OD-34); repararea panoului „Evenimente pentru pacienți” e tot conținut (HTML-ul paginii) |
 | `0fc2b2c` | 20.10 | Câmpul de video al postării: linkuri YouTube și Vimeo (`VideoEmbed`), un singur loc pentru postare și evenimentul următor; șablonul „Articol cu imagini și video” | portat (`78e1d36`: `VideoEmbed`, `SiteController`, `NextEvent`, `BlogTemplateFields`, editorul postării; pluginul blog). Șablonul îl face scriptul de conținut VT (nu se portează). Pentru Bioscem: rând în `site-uri/bioscem/ce-se-schimba.md`, textul editorului declarat în `$porturiVertij`, iar un fișier .mp4 rămâne `<video>` exact ca azi (caz „regresie” în `compara-cu-baza.php`). Diferență față de vertij (revizuirea portului, 20.10): playerul YouTube/Vimeo se încarcă singur doar cu acordul pentru cookie-uri, altfel la apăsarea casetei „Pornește videoclipul”; Vimeo cu `dnt=1` (rând în `site-uri/vertij/ce-se-schimba.md`; ambele ramuri declarate în `$porturiVertij`, cazul „blog: un link YouTube/Vimeo”). Biovitality are altă clasă cu același nume (`App\Support\VideoEmbed`, coperta videoului în newslettere, `84e29a9`): WP-21 (C11d) le pune împreună în aceasta |
 
-vertij nu are livrarea 2 SEO și avertismentul pe produs ale Bioscem (`6c8c789` … `4254ca4`, 20.10): le primește odată
-cu codul comun, la adoptare (Etapa 4; `site-uri/vertij/ce-se-schimba.md` le trece atunci, după pluginurile VT).
+| `7d7d8cc` | 26.10 | Plata activării în listele de cereri și utilizatori; `&nbsp;` din rezumatele cardurilor (`PlainText`) | de portat: listele în pluginul `membri` (Etapa 4, VT-M1) / WP-25; `PlainText` (entitățile decodate, sfârșitul de bloc ca spațiu, în `CategoryPosts`) cu WP-24 (VT-C4) |
+| `b0a81e1` | 26.10 | Derularea tabelelor late doar pe cele două liste (`.admin-table-scroll`) | de portat odată cu `7d7d8cc` (aceleași liste; adminul refăcut în faza D). Comite și două capturi într-un dosar `undefined/` (nu se portează) |
+| `9ab7999` | 28.10 | Șablonul postării de eveniment (`docs/sabloane/eveniment.*`) | nu se portează (conținutul VT, ca `ad1d792`, decizia OD-34) |
+
+Cele trei commit-uri de mai sus (`7d7d8cc` … `9ab7999`, „doar origin” la `tools/dev/de-portat.php`) sunt pe ramura
+vertij de pe GitHub, dar clona locală (`../vertij-tinitus-refacut`) e încă la `0fc2b2c`. „Ultimul commit revizuit” al
+vertij rămâne `0fc2b2c` până se portează (porțile rulează codul vertij de la acel commit, `smoke.sh --pachet=vertij`):
+`7d7d8cc` și `b0a81e1` ating codul (`PlainText`, listele adminului), deci se portează în WP-ul lor, nu în acest WP-R
+(doar Bioscem, decizia A2 din 27.10).
+
+vertij nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO ale Bioscem (`6c8c789` … `070e1af`, 20–21.10): le
+primește odată cu codul comun, la adoptare (Etapa 4; `site-uri/vertij/ce-se-schimba.md` le trece atunci, după pluginurile VT).
 
 ## grafoanaytis (de la `87aaa90`)
 
-grafoanaytis nu are livrarea 2 SEO și avertismentul pe produs ale Bioscem (`6c8c789` … `4254ca4`, 20.10): le
-primește odată cu codul comun, la adoptare (Etapa 4; pe un site fără pluginul magazin, avertismentul și fluxul Merchant nu apar).
+grafoanaytis nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO ale Bioscem (`6c8c789` … `070e1af`,
+20–21.10): le primește odată cu codul comun, la adoptare (Etapa 4; pe un site fără pluginul magazin, avertismentul și fluxul Merchant nu apar).
 
 | Commit | Data | Subiect | Stare |
 |---|---|---|---|

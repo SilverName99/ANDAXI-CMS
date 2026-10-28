@@ -1,0 +1,46 @@
+{
+  "_despre": "Livrarea 4 SEO (Bioscem e2c97dc, 070e1af; planul SEO, A8): cele 10 poze mari (PNG de 0,6–2,4 MB) se afișează din fișiere noi WebP de 47–152 KB, din public/assets/img/optimizate/ al acestui pachet (copiate peste public/ la adoptare). Cele 8 poze au aceleași dimensiuni în pixeli ca originalele; cele două pachete (1254×1254) sunt micșorate la 940×940 și 1003×1003, aceeași formă. Pozele vechi rămân pe server: datele structurate, fluxul și poza de distribuire le folosesc în continuare. „octeti” e mărimea pozei vechi DE PE DISCUL SERVERULUI (stat -c %s în public/uploads/gallery, 21 oct 2026), nu cea descărcată prin CDN: CDN-ul Hostinger trimite pozele refăcute, cu alți octeți (hero-homepage.png: 592991 pe disc, 622488 prin CDN), și cu mărimea de acolo nicio poză nu se schimba (Bioscem 070e1af). O mărime diferită (altă poză încărcată cu același nume) lasă poza veche. Oprire: SEO_POZE=0.",
+  "marimi_de_pe": "disc",
+  "poze": {
+    "/uploads/gallery/hero-homepage.png": {
+      "noua": "/assets/img/optimizate/hero-homepage.webp",
+      "octeti": 592991
+    },
+    "/uploads/gallery/plasma-quinton.png": {
+      "noua": "/assets/img/optimizate/plasma-quinton.webp",
+      "octeti": 570352
+    },
+    "/uploads/gallery/vivomixx.png": {
+      "noua": "/assets/img/optimizate/vivomixx.webp",
+      "octeti": 782416
+    },
+    "/uploads/gallery/siliciu-organic.png": {
+      "noua": "/assets/img/optimizate/siliciu-organic.webp",
+      "octeti": 671843
+    },
+    "/uploads/gallery/bunatati-pentru-toata-familia.png": {
+      "noua": "/assets/img/optimizate/bunatati-pentru-toata-familia.webp",
+      "octeti": 2440860
+    },
+    "/uploads/gallery/pachet-batoane-kanne-bio-energie-snack-41-gratuit.png": {
+      "noua": "/assets/img/optimizate/pachet-batoane-kanne-bio-energie-snack-41-gratuit.webp",
+      "octeti": 2268031
+    },
+    "/uploads/gallery/vitamina-c-alcalina-ascorbat-de-sodiu-500-gr.png": {
+      "noua": "/assets/img/optimizate/vitamina-c-alcalina-ascorbat-de-sodiu-500-gr.webp",
+      "octeti": 2208321
+    },
+    "/uploads/gallery/clorura-de-magneziu-sare-nigari-500-gr.png": {
+      "noua": "/assets/img/optimizate/clorura-de-magneziu-sare-nigari-500-gr.webp",
+      "octeti": 1857629
+    },
+    "/uploads/gallery/clorura-de-magneziu-sare-nigari-1-kg.png": {
+      "noua": "/assets/img/optimizate/clorura-de-magneziu-sare-nigari-1-kg.webp",
+      "octeti": 1652597
+    },
+    "/uploads/gallery/vitamina-b12-metilcobalamina-1.png": {
+      "noua": "/assets/img/optimizate/vitamina-b12-metilcobalamina-1.webp",
+      "octeti": 1341536
+    }
+  }
+}

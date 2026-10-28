@@ -31,9 +31,9 @@
     "logo": "/uploads/gallery/bioscem-logo-2.png"
   },
   "livrare_retur": {
-    "_despre": "Livrarea 2 SEO (Bioscem dfcf6bd, 1e46f9f): condițiile confirmate de proprietar pentru Google. Livrarea la adresă prin FAN Courier (prețul din Setări livrare → prețuri fixe); termenul de livrare nehotărât încă (null); returul din /termeni-conditii: 14 zile de la primire, transportul înapoi plătit de client.",
+    "_despre": "Livrarea 2 SEO (Bioscem dfcf6bd, 1e46f9f): condițiile confirmate de proprietar pentru Google. Livrarea la adresă prin FAN Courier (prețul din Setări livrare → prețuri fixe); returul din /termeni-conditii: 14 zile de la primire, transportul înapoi plătit de client. Livrarea 4 SEO (Bioscem 5359ec6, decizia din 20 oct 2026): termenul de livrare implicit, în zile lucrătoare luni–vineri: pregătire 0–1, transport 1–2 (1–3 în total); setările seo_livrare_pregatire_min/_max și seo_livrare_transport_min/_max îl pot schimba fără cod.",
     "serviciu": "FAN Courier",
-    "termen_livrare": null,
+    "termen_livrare": [0, 1, 1, 2],
     "retur": {"zile": 14, "pagina": "/termeni-conditii", "taxe": "client"}
   },
   "flux_merchant": {

@@ -45,6 +45,7 @@ require_once $radacina . '/bootstrap.php';
 use App\Support\Migrari\Eroare;
 use App\Support\Migrari\Inghetare;
 use App\Support\PachetSite;
+use App\Support\PozeOptimizate;
 use App\Support\SvgSigur;
 use App\Support\Tema;
 
@@ -61,6 +62,8 @@ const FISIERE_RADACINA = [
     'pluginuri.json' => 'copia contractului (doar pentru unelte)',
     'seo-texte.json' => 'textele Google scrise de mână (scripts/seo-texte.php)',
     'avertismente-produse.json' => 'avertismentele produselor (scripts/avertisment-produse.php)',
+    'seo-continut.json' => 'conținutul schimbat o dată: produse redenumite, linkuri din texte (scripts/seo-continut.php)',
+    'poze-optimizate.json' => 'pozele mari afișate din fișiere noi (PozeOptimizate; fișierele în public/)',
 ];
 
 $argumente = array_slice($argv, 1);
@@ -254,6 +257,65 @@ function css_incarcare_externa(string $css): ?string
     return null;
 }
 
+/**
+ * Problemele din poze-optimizate.json al unui pachet (gol = bun): „marimi_de_pe” = „disc”, „poze” un obiect nevid; fiecare
+ * cheie o poză din /uploads/ (cale din site, cu extensie de imagine), fiecare „noua” un .webp din public/ al pachetului (un
+ * WebP adevărat, mai mic decât poza veche, folosit o singură dată), fiecare „octeti” un întreg pozitiv.
+ *
+ * @return list<string>
+ */
+function problemePozeOptimizate(string $dosar): array
+{
+    $date = json_decode((string) @file_get_contents($dosar . '/' . PozeOptimizate::FISIER), true);
+    if (!is_array($date)) {
+        return ['nu e un obiect JSON valid'];
+    }
+    $probleme = [];
+    if (($date['marimi_de_pe'] ?? null) !== 'disc') {
+        $probleme[] = '„marimi_de_pe” trebuie să fie „disc”: mărimea fiecărei poze vechi se ia pe server, cu stat -c %s, '
+            . 'niciodată dintr-o descărcare (CDN-ul trimite alți octeți și atunci nicio poză nu trece pe WebP; Bioscem 070e1af)';
+    }
+    $poze = $date['poze'] ?? null;
+    if (!is_array($poze) || $poze === [] || array_is_list($poze)) {
+        return array_merge($probleme, ['„poze” trebuie să fie un obiect nevid: {"/uploads/…": {"noua": "/assets/img/…webp", "octeti": N}}']);
+    }
+    $folosite = [];
+    foreach ($poze as $veche => $rand) {
+        $veche = (string) $veche;
+        $noua = is_array($rand) ? ($rand['noua'] ?? null) : null;
+        $octeti = is_array($rand) ? ($rand['octeti'] ?? null) : null;
+        if (!PozeOptimizate::caleBuna($veche) || !str_starts_with($veche, '/uploads/')
+            || !in_array(strtolower(pathinfo($veche, PATHINFO_EXTENSION)), IMAGINI, true)) {
+            $probleme[] = $veche . ': poza veche trebuie să fie o imagine din /uploads/ (cale din site, fără parametri)';
+            continue;
+        }
+        if (!is_int($octeti) || $octeti < 1) {
+            $probleme[] = $veche . ': „octeti” trebuie să fie mărimea pozei de pe disc, un număr întreg pozitiv';
+        }
+        if (!is_string($noua) || !PozeOptimizate::caleBuna($noua) || strtolower(pathinfo($noua, PATHINFO_EXTENSION)) !== 'webp') {
+            $probleme[] = $veche . ': „noua” trebuie să fie calea unui .webp al pachetului (de exemplu /assets/img/optimizate/<nume>.webp)';
+            continue;
+        }
+        if (isset($folosite[$noua])) {
+            $probleme[] = $veche . ': ' . $noua . ' e deja poza nouă a lui ' . $folosite[$noua];
+        }
+        $folosite[$noua] = $veche;
+        $fisier = $dosar . '/public' . $noua;
+        if (!is_file($fisier)) {
+            $probleme[] = $veche . ': fișierul nou lipsește din pachet (public' . $noua . ')';
+            continue;
+        }
+        $info = @getimagesize($fisier);
+        if (!is_array($info) || ($info[2] ?? null) !== IMAGETYPE_WEBP) {
+            $probleme[] = $veche . ': public' . $noua . ' nu e o poză WebP';
+        }
+        if (is_int($octeti) && $octeti > 0 && (int) filesize($fisier) >= $octeti) {
+            $probleme[] = $veche . ': public' . $noua . ' (' . (int) filesize($fisier) . ' octeți) nu e mai mic decât poza veche (' . $octeti . ')';
+        }
+    }
+    return $probleme;
+}
+
 /** Al cui site e pachetul: numele dosarului pentru site-uri/<site>, null (oricare) pentru pachetele de dezvoltare. */
 $siteAsteptat = static function (string $dosar) use ($radacina): ?string {
     return str_starts_with($dosar, $radacina . '/site-uri/') ? basename($dosar) : null;
@@ -382,6 +444,17 @@ $verificaPachet = static function (string $dosar, ?string $site, bool $alUnuiCli
             if ($problema !== null) {
                 $probleme[] = $relativ . ': SVG nesigur (' . $problema . ')';
             }
+        }
+    }
+
+    // Pozele refăcute (poze-optimizate.json, PozeOptimizate): fiecare poză veche din /uploads/ are fișierul nou al pachetului
+    // (public/…, un WebP adevărat, mai mic decât ea) și mărimea ei în octeți. Mărimea se ia pe server, de pe disc (stat -c %s),
+    // niciodată dintr-o descărcare: CDN-ul trimite pozele refăcute, cu alți octeți, și cu o asemenea mărime nicio poză nu trece pe
+    // WebP (lecția Bioscem 070e1af). De aceea fișierul trebuie să spună „marimi_de_pe”: „disc”; pe server, scripts/diagnostic.php
+    // --pachet compară fiecare mărime cu fișierul de pe disc.
+    if (in_array(PozeOptimizate::FISIER, $fisiere, true)) {
+        foreach (problemePozeOptimizate($dosar) as $problema) {
+            $probleme[] = PozeOptimizate::FISIER . ': ' . $problema;
         }
     }
 
@@ -561,6 +634,25 @@ if ($autotest) {
         && file_put_contents($d . '/privat/note.txt', 'x'), 'doar fișiere .json');
     $caz('o înghețare a setărilor pe care runner-ul n-o citește', static fn (string $d) => file_put_contents($d . '/' . Inghetare::FISIER,
         '{"format": 2, "site": "demo", "altceva": 1}'), 'runner-ul migrărilor n-o citește');
+    // Pozele refăcute: un pachet cu o poză bună trece; fără „marimi_de_pe”: „disc”, fără fișierul nou sau cu o mărime care nu e număr, nu.
+    $pozeOptimizate = static function (array $schimba = [], bool $cuFisier = true): callable {
+        return static function (string $d) use ($schimba, $cuFisier): void {
+            @mkdir($d . '/public/assets/img/optimizate', 0770, true);
+            if ($cuFisier) {
+                $imagine = imagecreatetruecolor(8, 8);
+                imagewebp($imagine, $d . '/public/assets/img/optimizate/demo.webp');
+            }
+            file_put_contents($d . '/' . PozeOptimizate::FISIER, (string) json_encode(array_replace([
+                'marimi_de_pe' => 'disc',
+                'poze' => ['/uploads/gallery/demo.png' => ['noua' => '/assets/img/optimizate/demo.webp', 'octeti' => 50000]],
+            ], $schimba)));
+        };
+    };
+    $caz('poze-optimizate.json cu o poză și fișierul ei WebP: trece', $pozeOptimizate(), null);
+    $caz('poze-optimizate.json fără „marimi_de_pe”: „disc” (mărimi luate prin CDN?)', $pozeOptimizate(['marimi_de_pe' => 'cdn']), 'stat -c %s');
+    $caz('poze-optimizate.json fără fișierul nou în public/', $pozeOptimizate([], false), 'fișierul nou lipsește');
+    $caz('poze-optimizate.json cu mărimea scrisă ca text', $pozeOptimizate(['poze' => ['/uploads/gallery/demo.png'
+        => ['noua' => '/assets/img/optimizate/demo.webp', 'octeti' => '50000']]]), 'număr întreg pozitiv');
     exec('rm -rf ' . escapeshellarg($temp));
     echo 'verifica-pachet --autotest: ', $trecute, ' cazuri trecute, ', $esuate, " eșuate\n";
     exit($esuate === 0 ? 0 : 1);

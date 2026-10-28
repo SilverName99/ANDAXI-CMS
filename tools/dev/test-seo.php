@@ -253,16 +253,44 @@ $verifica('Bioscem: „harrison” din seo.json (titluri.cuvinte_generice_marca)
     && SeoMeta::marcaInNume('Proteină Demo de test', $marcaTest)
     && SeoMeta::titluDinNume('Proteină Harrison de test', $marcaTest, 'Bioscem Shop') === 'Proteină Harrison de test – ' . $marcaTest,
     SeoMeta::titluDinNume('Proteină Harrison de test', $marcaTest, 'Bioscem Shop'));
-$verifica('Bioscem: returul din seo.json (14 zile, /termeni-conditii, transportul înapoi plătit de client), FAN Courier, fără termen de livrare',
+$verifica('Bioscem: returul din seo.json (14 zile, /termeni-conditii, transportul înapoi plătit de client), FAN Courier, termenul implicit 0–1 + 1–2',
     PoliticaLivrare::activ() && PoliticaLivrare::retur() === ['zile' => 14, 'pagina' => '/termeni-conditii', 'taxe' => 'client']
-    && PoliticaLivrare::serviciuAdresa() === 'FAN Courier' && PoliticaLivrare::termenLivrare() === null
+    && PoliticaLivrare::serviciuAdresa() === 'FAN Courier' && PoliticaLivrare::termenLivrare() === [0, 1, 1, 2]
     && PoliticaLivrare::linkRetur('https://exemplu.test/') === 'https://exemplu.test/termeni-conditii');
-$verifica('Bioscem: livrarea cu prețuri fixe: sub prag tariful la adresă, peste prag gratuit, la reducere sau între praguri nimic',
-    PoliticaLivrare::optiuni($setariLivrare, 14.5, false) === [['serviciu' => 'FAN Courier', 'pret' => 19.99]]
-    && PoliticaLivrare::optiuni($setariLivrare, 89.0, false) === [['serviciu' => 'FAN Courier', 'pret' => 0.0]]
-    && PoliticaLivrare::optiuni($setariLivrare, 169.0, true) === []
-    && PoliticaLivrare::optiuni(['shipping_free_province' => '150'] + $setariLivrare, 100.0, false) === []
-    && PoliticaLivrare::optiuni(['shipping_fixed_enabled' => '0'] + $setariLivrare, 14.5, false) === []);
+// Livrarea 4 SEO (Bioscem 196fa46, regula D): gratuit ca în coș, indiferent de reducere; între praguri (pe județe) nimic.
+$termenImplicit = ['pregatire' => [0, 1], 'transport' => [1, 2]];
+$verifica('Bioscem: livrarea cu prețuri fixe: sub prag tariful la adresă, peste prag gratuit (și la reducere, ca în coș), între praguri nimic',
+    PoliticaLivrare::optiuni($setariLivrare, 14.5) === [['serviciu' => 'FAN Courier', 'pret' => 19.99, 'termen' => $termenImplicit]]
+    && PoliticaLivrare::optiuni($setariLivrare, 89.0) === [['serviciu' => 'FAN Courier', 'pret' => 0.0, 'termen' => $termenImplicit]]
+    && PoliticaLivrare::optiuni($setariLivrare, 80.0) === [['serviciu' => 'FAN Courier', 'pret' => 0.0, 'termen' => $termenImplicit]]
+    && PoliticaLivrare::optiuni($setariLivrare, 79.99)[0]['pret'] === 19.99
+    && PoliticaLivrare::optiuni(['shipping_free_province' => '150'] + $setariLivrare, 100.0) === []
+    && PoliticaLivrare::optiuni(['shipping_free_province' => '0', 'shipping_free_bucharest' => '0'] + $setariLivrare, 900.0)[0]['pret'] === 19.99
+    && PoliticaLivrare::optiuni(['shipping_fixed_enabled' => '0'] + $setariLivrare, 14.5) === []);
+// Livrarea 4 SEO (Bioscem 5359ec6): termenul din cele patru setări, peste cel din seo.json; o valoare greșită (nu e întreg 0–30)
+// ia valoarea implicită, un minim peste maxim readuce perechea.
+$verifica('Bioscem: termenul de livrare din setări (valori bune, greșite, peste 30, minim peste maxim)',
+    PoliticaLivrare::termen(['seo_livrare_pregatire_min' => '1', 'seo_livrare_pregatire_max' => '2', 'seo_livrare_transport_min' => '2',
+        'seo_livrare_transport_max' => '5']) === ['pregatire' => [1, 2], 'transport' => [2, 5]]
+    && PoliticaLivrare::termen(['seo_livrare_pregatire_min' => 'x', 'seo_livrare_pregatire_max' => '2', 'seo_livrare_transport_min' => '31',
+        'seo_livrare_transport_max' => '3']) === ['pregatire' => [0, 2], 'transport' => [1, 3]]
+    && PoliticaLivrare::termen(['seo_livrare_pregatire_min' => '3', 'seo_livrare_transport_max' => '-1', 'seo_livrare_transport_min' => '1.5'])
+        === ['pregatire' => [0, 1], 'transport' => [1, 2]]
+    && PoliticaLivrare::termen([]) === $termenImplicit);
+$livrareJsonLd = JsonLd::livrare(PoliticaLivrare::optiuni($setariLivrare, 14.5));
+$xmlFlux = FluxGoogleMerchant::xml([['id' => 'BS-1', 'titlu' => 'Ceai', 'descriere' => 'Ceai de test', 'link' => 'https://exemplu.test/produs/ceai',
+    'imagine' => 'https://exemplu.test/a.png', 'imagini_extra' => [], 'disponibilitate' => 'InStock', 'pret' => 14.5, 'pret_redus' => null,
+    'reducere_de_la' => '', 'reducere_pana_la' => '', 'marca' => 'Demo', 'categorie' => 'Ceaiuri', 'gtin' => '',
+    'livrare' => PoliticaLivrare::optiuni($setariLivrare, 14.5)]], 'https://exemplu.test', 'Bioscem');
+$verifica('Bioscem: termenul în datele structurate (handlingTime, transitTime, businessDays luni–vineri) și în flux (M;T;W;R;F)',
+    ($livrareJsonLd[0]['deliveryTime']['handlingTime']['maxValue'] ?? null) === 1
+    && ($livrareJsonLd[0]['deliveryTime']['transitTime']['minValue'] ?? null) === 1
+    && ($livrareJsonLd[0]['deliveryTime']['businessDays']['dayOfWeek'][4] ?? null) === 'https://schema.org/Friday'
+    && str_contains($xmlFlux, '<g:min_handling_time>0</g:min_handling_time><g:max_handling_time>1</g:max_handling_time><g:min_transit_time>1</g:min_transit_time>')
+    && str_contains($xmlFlux, '<g:shipping_handling_business_days>M;T;W;R;F</g:shipping_handling_business_days>')
+    && str_contains($xmlFlux, '<g:shipping_transit_business_days>M;T;W;R;F</g:shipping_transit_business_days>')
+    && JsonLd::termenValid(['pregatire' => [2, 1], 'transport' => [1, 2]]) === null
+    && !isset(JsonLd::livrare([['serviciu' => 'X', 'pret' => 1.0]])[0]['deliveryTime']), $xmlFlux);
 $opriri = (static function (): array {
     putenv('SEO_LIVRARE_RETUR=0');
     $livrare = PoliticaLivrare::activ() || PoliticaLivrare::retur() !== [];
@@ -306,9 +334,225 @@ $verifica('Bioscem: logo-ul din antet primește <picture> cu cele două WebP; al
     str_contains($logo[0], '<picture style="display:contents"><source type="image/webp" srcset="/assets/img/bioscem-logo-2-212.webp?v=')
     && str_contains($logo[0], ' 2x"><img src="/uploads/gallery/bioscem-logo-2.png"') && $logo[1] === $antetLogo && $logo[2] === $antetLogo,
     $logo[0]);
+// A7. Livrarea 4 SEO (Bioscem 5359ec6 … 070e1af). Comparația cu codul Bioscem dovedește paginile Bioscem (G-cmp); aici,
+// regulile claselor noi, pachetul și scriptul de conținut, fiecare ramură.
+// Pozele refăcute (PozeOptimizate, poze-optimizate.json din pachet): WebP doar cu poza veche de exact mărimea din pachet.
+$pozeTest = (static function () use ($radacina): array {
+    $harta = (array) (DateSite::json('poze-optimizate.json')['poze'] ?? []);
+    $veche = '/uploads/gallery/vivomixx.png';
+    $noua = (string) ($harta[$veche]['noua'] ?? '');
+    $octeti = (int) ($harta[$veche]['octeti'] ?? 0);
+    $fisierVechi = $radacina . '/public' . $veche;
+    $fisierNou = $radacina . '/public' . $noua;
+    if ($noua === '' || $octeti < 1 || file_exists($fisierVechi) || file_exists($fisierNou)) {
+        return ['eroare' => 'harta Bioscem fără vivomixx sau fișierele există deja în public/'];
+    }
+    $puse = [];
+    foreach ([dirname($fisierVechi), dirname($fisierNou)] as $dosar) {
+        if (!is_dir($dosar)) {
+            mkdir($dosar, 0775, true);
+            $puse[] = $dosar;
+        }
+    }
+    $rezultat = [];
+    try {
+        copy($radacina . '/site-uri/bioscem/public' . $noua, $fisierNou);
+        file_put_contents($fisierVechi, str_repeat("\0", $octeti));
+        $_SERVER['REQUEST_URI'] = '/produs/test';
+        \App\Support\PozeOptimizate::reseteaza();
+        $rezultat['src'] = \App\Support\PozeOptimizate::src($veche);
+        $rezultat['absolut'] = \App\Support\PozeOptimizate::src('https://www.' . (string) parse_url((string) \App\Support\Env::get('APP_URL', 'http://exemplu.test'), PHP_URL_HOST) . $veche);
+        $rezultat['strain'] = \App\Support\PozeOptimizate::src('https://alt-site.test' . $veche);
+        $rezultat['html'] = \App\Support\PozeOptimizate::inHtml('<p><img alt="a" src="' . $veche . '"> <img src="/uploads/gallery/alta.png"></p><a href="' . $veche . '">x</a>');
+        $rezultat['dimensiuni'] = \App\Support\PozeOptimizate::dimensiuni($noua);
+        $rezultat['disc'] = array_values(array_filter(\App\Support\PozeOptimizate::verificaPeDisc(), static fn (array $p): bool => $p['veche'] === $veche));
+        $_SERVER['REQUEST_URI'] = '/checkout';
+        \App\Support\PozeOptimizate::reseteaza();
+        $rezultat['exclus'] = \App\Support\PozeOptimizate::src($veche);
+        $_SERVER['REQUEST_URI'] = '/produs/test';
+        putenv('SEO_POZE=0');
+        \App\Support\PozeOptimizate::reseteaza();
+        $rezultat['oprit'] = [\App\Support\PozeOptimizate::src($veche), \App\Support\PozeOptimizate::dimensiuni($noua)];
+        putenv('SEO_POZE');
+        // Altă poză încărcată cu același nume (alt număr de octeți): rămâne poza încărcată.
+        file_put_contents($fisierVechi, str_repeat("\0", $octeti + 1));
+        clearstatcache();
+        \App\Support\PozeOptimizate::reseteaza();
+        $rezultat['alta_marime'] = \App\Support\PozeOptimizate::src($veche);
+        $rezultat['disc_alta'] = array_values(array_filter(\App\Support\PozeOptimizate::verificaPeDisc(), static fn (array $p): bool => $p['veche'] === $veche));
+    } finally {
+        @unlink($fisierVechi);
+        @unlink($fisierNou);
+        foreach (array_reverse($puse) as $dosar) {
+            @rmdir($dosar);
+        }
+        $_SERVER['REQUEST_URI'] = '/';
+        \App\Support\PozeOptimizate::reseteaza();
+    }
+    return $rezultat;
+})();
+$verifica('Bioscem: pozele refăcute: WebP-ul pachetului doar cu poza veche de exact mărimea din pachet (cea de pe disc), și pe www',
+    ($pozeTest['src'] ?? '') === '/assets/img/optimizate/vivomixx.webp' && ($pozeTest['absolut'] ?? '') === '/assets/img/optimizate/vivomixx.webp'
+    && ($pozeTest['strain'] ?? '') === 'https://alt-site.test/uploads/gallery/vivomixx.png'
+    && ($pozeTest['html'] ?? '') === '<p><img alt="a" src="/assets/img/optimizate/vivomixx.webp"> <img src="/uploads/gallery/alta.png"></p><a href="/uploads/gallery/vivomixx.png">x</a>'
+    && preg_match('/^ width="\d+" height="\d+"$/', (string) ($pozeTest['dimensiuni'] ?? '')) === 1
+    && ($pozeTest['disc'][0]['pe_disc'] ?? null) === ($pozeTest['disc'][0]['octeti'] ?? 0) && ($pozeTest['disc'][0]['noua_exista'] ?? false) === true,
+    json_encode($pozeTest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+$verifica('Bioscem: pozele refăcute: nu pe coș/comandă/cont, nu cu SEO_POZE=0, nu cu altă poză de același nume (verificaPeDisc o arată)',
+    ($pozeTest['exclus'] ?? '') === '/uploads/gallery/vivomixx.png' && ($pozeTest['oprit'] ?? []) === ['/uploads/gallery/vivomixx.png', '']
+    && ($pozeTest['alta_marime'] ?? '') === '/uploads/gallery/vivomixx.png'
+    && ($pozeTest['disc_alta'][0]['pe_disc'] ?? 0) === ($pozeTest['disc_alta'][0]['octeti'] ?? 0) + 1,
+    json_encode($pozeTest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+// Un pachet a cărui listă nu spune „marimi_de_pe”: „disc” (mărimi luate printr-o descărcare?) nu schimbă nicio poză.
+$pozeFaraDisc = (static function () use ($radacina): array {
+    $dosar = sys_get_temp_dir() . '/test-seo-poze-' . getmypid();
+    @mkdir($dosar, 0700, true);
+    $date = (array) json_decode((string) file_get_contents($radacina . '/site-uri/bioscem/poze-optimizate.json'), true);
+    $date['marimi_de_pe'] = 'cdn';
+    file_put_contents($dosar . '/poze-optimizate.json', json_encode($date));
+    DateSite::reseteaza($dosar);
+    \App\Support\PozeOptimizate::reseteaza();
+    $randuri = \App\Support\PozeOptimizate::verificaPeDisc($dosar);
+    @unlink($dosar . '/poze-optimizate.json');
+    @rmdir($dosar);
+    DateSite::reseteaza($radacina . '/site-uri/bioscem');
+    \App\Support\PozeOptimizate::reseteaza();
+    return [$randuri, count(\App\Support\PozeOptimizate::verificaPeDisc($dosar))];
+})();
+$verifica('pozele refăcute: fără „marimi_de_pe”: „disc” lista nu se folosește; pachetul Bioscem are 10 poze',
+    $pozeFaraDisc === [[], 10], json_encode($pozeFaraDisc));
+// SeoIndexare (ef22b23, 9fe175d, 682843c, dd41c59, a64afb6): noindex, canonical pe 404, pagina 404 a magazinului, H1.
+$indexare = static fn (): array => [
+    \App\Support\SeoIndexare::pentruMagazin(['q' => ' ceai ']), \App\Support\SeoIndexare::pentruMagazin(['q' => '  ']),
+    \App\Support\SeoIndexare::pentruMagazin(['q' => ['x']]), \App\Support\SeoIndexare::pentruBlog(0), \App\Support\SeoIndexare::pentruBlog(1),
+    \App\Support\SeoIndexare::faraCanonicalPentruCod(404, '/nu-exista?x=1'), \App\Support\SeoIndexare::faraCanonicalPentruCod(410, '/vechi'),
+    \App\Support\SeoIndexare::faraCanonicalPentruCod(200, '/'), \App\Support\SeoIndexare::faraCanonicalPentruCod(404, '/plata/x'),
+    \App\Support\SeoIndexare::faraCanonicalPentruCod(404, '//checkout/x'), \App\Support\SeoIndexare::pagina404Magazin('/blog/x'),
+    \App\Support\SeoIndexare::pagina404Magazin('//api/blog/posts'),
+    \App\Support\SeoIndexare::h1PentruPagina(' Termeni ', 'termeni-conditii', '<p>x</p>'), \App\Support\SeoIndexare::h1PentruPagina('Coș', 'cos'),
+    \App\Support\SeoIndexare::h1PentruPagina('Acasă', ''), \App\Support\SeoIndexare::h1PentruPagina('Magazin', 'magazin'),
+    \App\Support\SeoIndexare::h1PentruPagina('Pagina 404', '404'), \App\Support\SeoIndexare::h1PentruPagina('Comanda', 'finalizare', '{{ checkout_form }}'),
+    \App\Support\SeoIndexare::adaugaH1('<p>x</p>', 'A & <b>'), \App\Support\SeoIndexare::adaugaH1('<H1 class="t">Are</H1>', 'Alt'),
+    \App\Support\SeoIndexare::titluBlogCaH1('<section>{{blog_posts}}</section>'), \App\Support\SeoIndexare::titluBlogCaH1('<h1>Blog</h1>'),
+];
+$indexarePornita = $indexare();
+putenv('SEO_NOINDEX=0');
+putenv('SEO_H1=0');
+$indexareOprita = $indexare();
+putenv('SEO_NOINDEX');
+putenv('SEO_H1');
+$verifica('SeoIndexare: noindex pe căutare și pe /blog gol, fără canonical pe 404 (nu pe căile excluse, nici cu „//”), H1 doar pe paginile de conținut fără <h1>',
+    $indexarePornita === [['metaRobots' => 'noindex,follow', 'faraCanonical' => true], [], [], ['metaRobots' => 'noindex,follow'], [],
+        true, true, false, false, false, true, false, 'Termeni', '', '', '', '', '',
+        "<h1 class=\"custom-page-h1\">A &amp; &lt;b&gt;</h1>\n<p>x</p>", '<H1 class="t">Are</H1>', true, false],
+    json_encode($indexarePornita, JSON_UNESCAPED_UNICODE));
+$verifica('SeoIndexare: SEO_NOINDEX=0 și SEO_H1=0 readuc tot ce era înainte',
+    $indexareOprita === [[], [], [], [], [], false, false, false, false, false, false, false, '', '', '', '', '', '',
+        "<h1 class=\"custom-page-h1\">A &amp; &lt;b&gt;</h1>\n<p>x</p>", '<H1 class="t">Are</H1>', false, false],
+    json_encode($indexareOprita, JSON_UNESCAPED_UNICODE));
+// ProduseSimilare::ordine (2d43171): aceeași categorie, alegerea din admin întâi, disponibilele înaintea celor epuizate, rotația
+// după produsul curent, fără cele cu ofertă de ales (doar dacă sunt alese în admin), completarea până la 4 cu alegerea din admin.
+$cand = static fn (int $cat, bool $disponibil = true, bool $alegere = false): array => ['categorie_id' => $cat, 'categorie' => '', 'disponibil' => $disponibil, 'alegere' => $alegere];
+$candidatiSimilare = [5 => $cand(7), 6 => $cand(7), 7 => $cand(7), 9 => $cand(7, false), 10 => $cand(7), 11 => $cand(7, true, true),
+    12 => $cand(7, true, true), 37 => $cand(3), 39 => $cand(10), 26 => $cand(2), 17 => $cand(9, true, true)];
+$ordineSimilare = [
+    \App\Support\ProduseSimilare::ordine(4, ['categorie_id' => 7, 'categorie' => ''], [], $candidatiSimilare),
+    \App\Support\ProduseSimilare::ordine(7, ['categorie_id' => 7, 'categorie' => ''], [], $candidatiSimilare),
+    \App\Support\ProduseSimilare::ordine(4, ['categorie_id' => 7, 'categorie' => ''], [37, 7, 9, 12, 4], $candidatiSimilare),
+    \App\Support\ProduseSimilare::ordine(40, ['categorie_id' => 10, 'categorie' => ''], [37, 26, 17, 99], $candidatiSimilare),
+    \App\Support\ProduseSimilare::ordine(40, ['categorie_id' => 0, 'categorie' => ''], [37, 26], $candidatiSimilare),
+];
+$verifica('ProduseSimilare: ordinea (categoria, admin, disponibil, rotația, ofertele de ales, completarea până la 4)',
+    $ordineSimilare === [[5, 6, 7, 10, 9], [10, 5, 6, 9], [7, 12, 5, 6, 10, 9], [39, 37, 26, 17], [37, 26]], json_encode($ordineSimilare));
+$cardSimilar = \App\Support\ProduseSimilare::cardurileHtml([['id' => 3, 'name' => 'Ceai "test"', 'url' => 'javascript:alert(1)', 'image_url' => 'data:x',
+    'price' => 10, 'regular_price' => 20, 'has_sale_price' => 1, 'price_label' => '10.00 lei', 'regular_price_label' => '20.00 lei',
+    'out_of_stock' => 0, 'preorder' => 0, 'reviews_count' => 2, 'reviews_average' => 4.4]]);
+$verifica('ProduseSimilare: cardul ca în JavaScript (adrese sigure, textul scăpat, bulina reducerii, butonul de coș)',
+    str_contains($cardSimilar, 'href="#"') && str_contains($cardSimilar, 'src="/assets/img/product-placeholder.svg"')
+    && str_contains($cardSimilar, 'alt="Ceai &quot;test&quot;"') && str_contains($cardSimilar, '>-50%</span>')
+    && str_contains($cardSimilar, 'action="/cos/adauga/3"') && str_starts_with($cardSimilar, '<div class="similar-products__slide"><article'),
+    $cardSimilar);
+// Termenul unui site fără termen_livrare (null): doar din setări, cu toate patru numerele bune.
+$termenFaraImplicit = (static function () use ($radacina): array {
+    $dosar = sys_get_temp_dir() . '/test-seo-termen-' . getmypid();
+    @mkdir($dosar, 0700, true);
+    file_put_contents($dosar . '/seo.json', json_encode(['livrare_retur' => ['serviciu' => 'Curier', 'termen_livrare' => null,
+        'retur' => ['zile' => 14, 'pagina' => '/termeni', 'taxe' => 'client']]]));
+    DateSite::reseteaza($dosar);
+    $setari = ['seo_livrare_pregatire_min' => '0', 'seo_livrare_pregatire_max' => '1', 'seo_livrare_transport_min' => '2', 'seo_livrare_transport_max' => '3'];
+    $rezultat = [PoliticaLivrare::termen([]), PoliticaLivrare::termen($setari), PoliticaLivrare::termen(['seo_livrare_transport_max' => '1'] + $setari)];
+    @unlink($dosar . '/seo.json');
+    @rmdir($dosar);
+    DateSite::reseteaza($radacina . '/site-uri/bioscem');
+    return $rezultat;
+})();
+$verifica('PoliticaLivrare: un site fără termen în seo.json îl declară doar din setări complete și în ordine',
+    $termenFaraImplicit === [null, ['pregatire' => [0, 1], 'transport' => [2, 3]], null], json_encode($termenFaraImplicit));
+// scripts/seo-continut.php (Bioscem c3ad6ab, b51067a), generic: lista din seo-continut.json al dosarului site-ului. Pe baza de
+// dezvoltare, cu o listă inventată (fără produse AIRCALL, o înlocuire pe /termeni-si-conditii): --plan nu scrie, --aplica scrie
+// și face copia, a doua oară „Nimic de schimbat”, --restaureaza pune textul la loc; refuzurile nu scriu nimic.
+$continut = (static function () use ($radacina): array {
+    $app = require $radacina . '/config/app.php';
+    $db = Database::connection((array) $app['db']);
+    if (!$db instanceof PDO) {
+        return ['eroare' => 'fără bază'];
+    }
+    $textAcum = static fn (): ?string => ($v = $db->query("SELECT html_content FROM pages WHERE slug = 'termeni-si-conditii' AND deleted_at IS NULL")->fetchColumn()) === false ? null : (string) $v;
+    $inainte = $textAcum();
+    $dosar = sys_get_temp_dir() . '/test-seo-continut-' . getmypid();
+    @mkdir($dosar, 0700, true);
+    $copiiInainte = glob(\App\Support\Paths::stocare() . '/seo-continut-copie-*.json') ?: [];
+    $lista = static fn (array $inlocuire, array $extra = []): string => (string) json_encode(array_merge(['versiune' => 1, 'nume_magazin' => 'Firma Demo',
+        'asteptat' => ['aircall' => 0, 'inlocuiri' => 1], 'aircall' => [], 'inlocuiri' => [array_merge(['id' => 'T-01', 'tabel' => 'pages',
+        'cheie' => ['slug' => 'termeni-si-conditii'], 'camp' => 'html_content', 'vechi' => 'Text inventat al Firma Demo SRL.',
+        'nou' => 'Text inventat (corectat de test) al Firma Demo SRL.', 'aparitii' => 1], $inlocuire)]], $extra), JSON_UNESCAPED_UNICODE);
+    $ruleaza = static function (string $mod) use ($radacina, $dosar): array {
+        exec('SITE_DATE_DOSAR=' . escapeshellarg($dosar) . ' ' . escapeshellarg(PHP_BINARY) . ' -d '
+            . escapeshellarg('pdo_mysql.default_socket=' . (string) ini_get('pdo_mysql.default_socket'))
+            . ' ' . escapeshellarg($radacina . '/scripts/seo-continut.php')
+            . ' ' . $mod . ' 2>&1', $iesire, $cod);
+        return [$cod, implode("\n", $iesire)];
+    };
+    $r = [];
+    try {
+        file_put_contents($dosar . '/seo-continut.json', $lista([], ['asteptat' => ['aircall' => 0, 'inlocuiri' => 2]]));
+        $r['numar'] = $ruleaza('--aplica');
+        file_put_contents($dosar . '/seo-continut.json', $lista(['aparitii' => 2]));
+        $r['aparitii'] = $ruleaza('--aplica');
+        file_put_contents($dosar . '/seo-continut.json', $lista(['nou' => 'Text cu ş sedilă al Firma Demo SRL.']));
+        $r['sedila'] = $ruleaza('--aplica');
+        $r['dupa_refuzuri'] = $textAcum() === $inainte;
+        file_put_contents($dosar . '/seo-continut.json', $lista([]));
+        $r['plan'] = $ruleaza('--plan');
+        $r['dupa_plan'] = $textAcum() === $inainte;
+        $r['aplica'] = $ruleaza('--aplica');
+        $r['dupa_aplica'] = $textAcum() === str_replace('Text inventat al Firma', 'Text inventat (corectat de test) al Firma', (string) $inainte);
+        $r['a_doua'] = $ruleaza('--aplica');
+        $r['restaureaza'] = $ruleaza('--restaureaza');
+        $r['dupa_restaurare'] = $textAcum() === $inainte;
+    } finally {
+        if ($textAcum() !== $inainte && $inainte !== null) {
+            $db->prepare("UPDATE pages SET html_content = ? WHERE slug = 'termeni-si-conditii' AND deleted_at IS NULL")->execute([$inainte]);
+        }
+        foreach (array_diff(glob(\App\Support\Paths::stocare() . '/seo-continut-copie-*.json') ?: [], $copiiInainte) as $copie) {
+            @unlink($copie);
+        }
+        @unlink($dosar . '/seo-continut.json');
+        @rmdir($dosar);
+    }
+    return $r;
+})();
+$verifica('scripts/seo-continut.php: refuză (cod 3, nimic scris) altă numărătoare, alt număr de apariții, „ş” cu sedilă',
+    ($continut['numar'][0] ?? 0) === 3 && ($continut['aparitii'][0] ?? 0) === 3 && str_contains((string) ($continut['aparitii'][1] ?? ''), 'apare de 1 ori, nu de 2')
+    && ($continut['sedila'][0] ?? 0) === 3 && ($continut['dupa_refuzuri'] ?? false) === true, json_encode($continut, JSON_UNESCAPED_UNICODE));
+$verifica('scripts/seo-continut.php: --plan nu scrie, --aplica scrie o dată (cu copie), a doua oară nimic, --restaureaza pune la loc',
+    ($continut['plan'][0] ?? 1) === 0 && str_contains((string) ($continut['plan'][1] ?? ''), 'PLAN (nu scriu nimic)') && ($continut['dupa_plan'] ?? false) === true
+    && ($continut['aplica'][0] ?? 1) === 0 && ($continut['dupa_aplica'] ?? false) === true
+    && ($continut['a_doua'][0] ?? 1) === 0 && str_contains((string) ($continut['a_doua'][1] ?? ''), 'Nimic de schimbat')
+    && ($continut['restaureaza'][0] ?? 1) === 0 && ($continut['dupa_restaurare'] ?? false) === true, json_encode($continut, JSON_UNESCAPED_UNICODE));
 DateSite::reseteaza();
 $verifica('pachetul demo (fără livrare_retur, logo_antet, flux_merchant, titluri): nimic declarat, prefixul implicit „P-”, numele din seo.json, „harrison” nu e generic',
-    !PoliticaLivrare::activ() && PoliticaLivrare::retur() === [] && PoliticaLivrare::optiuni($setariLivrare, 14.5, false) === []
+    !PoliticaLivrare::activ() && PoliticaLivrare::retur() === [] && PoliticaLivrare::optiuni($setariLivrare, 14.5) === []
     && FluxGoogleMerchant::prefixId() === 'P-' && LogoAntet::webp($antetLogo) === $antetLogo
     && SeoMeta::numeMagazinImplicit() === 'Firma Demo din pachet' && SeoMeta::curataTitlu('Ceai | BIOSCEM') === 'Ceai | BIOSCEM'
     && SeoMeta::marcaInNume('Proteină Harrison de test', $marcaTest));
