@@ -61,7 +61,7 @@ declare(strict_types=1);
  *       copia s-a schimbat: cod 1 și copia ștearsă, nu cod 2.
  *    B8 --demo: fără nicio bază sursă (site-ul live ascuns), aceleași rânduri ca datele demo din baza de dezvoltare, adresele
  *       @verificare.invalid, personalul și clienții cu parola personalului (se loghează), contul proprietarului; un pachet cu
- *       înghețare privată fără privat/ → oprit, copia ștearsă; cu valori private inventate și --licenta=toate → „GATA”;
+ *       înghețare privată fără privat/ → refuzat înainte de orice schimbare; cu valori private inventate și --licenta=toate → „GATA”;
  *       sterge.php șterge și pozele copiei.
  *    B9 pe MySQL 8 (pornit dacă nu mergea): aceeași sursă și aceeași încărcare, „GATA”, niciun marcaj.
  *
@@ -1917,8 +1917,9 @@ try {
     $r = $incarca(['--demo', '--da'], $raspunsuriDemo);
     $verifica('a doua copie demonstrativă fără --reincarca → refuzat', $r['cod'] === 2 && str_contains($r['tot'], 'pe copie e deja o încărcare (sursa demo, terminată)'), $descrie($r));
     $r = $incarca(['--demo', '--reincarca', '--pachet=vertij', '--da'], $raspunsuriDemo);
-    $verifica('--demo --pachet=vertij fără valorile private ale înghețării (site-uri/vertij/privat/) → cod 1, codul 15, copia ștearsă singură (și pozele)',
-        $r['cod'] === 1 && str_contains($r['tot'], 'codul 15') && $stearsa($tinta) && !file_exists($copie . '/public/uploads/demo') && $curat($r), $descrie($r));
+    $verifica('--demo --pachet=vertij fără valorile private ale înghețării (site-uri/vertij/privat/) → refuzat înainte de orice schimbare (cod 2, '
+        . '„codul 15”), copia de dinainte neatinsă', $r['cod'] === 2 && str_contains($r['tot'], 'codul 15') && str_contains($r['tot'], 'Nimic nu s-a schimbat')
+        && !$stearsa($tinta) && $curat($r), $descrie($r));
     // Valorile private ale înghețării vertij, inventate (pe server stau lângă pachet, în afara git-ului).
     $fisierVertij = $copie . '/site-uri/vertij/setari-inghetate.json';
     $inghetareVertij = json_decode((string) file_get_contents($fisierVertij), true);

@@ -193,15 +193,15 @@ $verifica('calea fișierului privat: privat/<nume> lângă fișier', Inghetare::
 $verifica('emailurile reale: orice adresă în afara @exemplu.ro (și cu majuscule la domeniu: tot demo)',
     Inghetare::emailuriReale('a@exemplu.ro, B@EXEMPLU.RO; contact@client-inventat.test') === ['contact@client-inventat.test']
     && Inghetare::emailuriReale('no-reply@localhost (fără punct în domeniu)') === []);
-$telefoane = ['0244 510 507', '0756.195.323', '+40 744 123 456', '0040-721-000-111', '0212345678', '(0244) 510 507',
-    '+40 (244) 510 507', '0244 / 510 507', '0721 234 5678', '+40722123456', '(0244)-510-507'];
+$telefoane = ['0244 000 111', '0712.345.678', '+40 744 123 456', '0040-721-000-111', '0212345678', '(0244) 000 111',
+    '+40 (244) 000 111', '0244 / 000 111', '0721 234 5678', '+40722123456', '(0244)-000-111'];
 $shaHex = [];
 for ($i = 0; $i < 2000; $i++) {
     $shaHex[] = hash('sha256', 'proba-' . $i);
 }
 $nuTelefoane = array_merge(['203800', 'J2006017724407', '2026-10-20 10:00:00', 'RO49AAAA1B31007593840000',
     'amprenta ' . hash('sha256', 'x') . ' ' . str_repeat('ab0712345678cd', 3), '0700 000 001', '19166493', '07212345678901',
-    '0244 510 50712', 'x0244510507'], $shaHex, array_map('strtoupper', array_slice($shaHex, 0, 200)));
+    '0244 000 11112', 'x0244000111'], $shaHex, array_map('strtoupper', array_slice($shaHex, 0, 200)));
 $verifica('telefoanele: fix și mobil, cu spații, puncte, liniuțe, bare, paranteze (și câte trei la rând), +40/0040, cu o cifră în plus '
     . '(nu un număr mai lung, o dată, un cont, 2200 de sha256 în hex sau înlocuitorul)',
     array_filter($telefoane, static fn (string $t): bool => Inghetare::telefoane('tel. ' . $t . '.') === []) === []
@@ -209,7 +209,7 @@ $verifica('telefoanele: fix și mobil, cu spații, puncte, liniuțe, bare, paran
     json_encode([array_map([Inghetare::class, 'telefoane'], $telefoane), array_map([Inghetare::class, 'telefoane'], $nuTelefoane)]));
 $verifica('înlocuitorii: același număr de adrese, un telefon inventat, „Valoare demo”; deterministi; recunoscuți ca înlocuitori',
     Inghetare::inlocuitor('a@client-inventat.test, b@client-inventat.test') === 'adresa1@exemplu.ro, adresa2@exemplu.ro'
-    && Inghetare::inlocuitor('0244 510 507') === '0700 000 001' && Inghetare::inlocuitor('Ion Inventat') === 'Valoare demo'
+    && Inghetare::inlocuitor('0244 000 111') === '0700 000 001' && Inghetare::inlocuitor('Ion Inventat') === 'Valoare demo'
     && Inghetare::eInlocuitor('adresa1@exemplu.ro, adresa2@exemplu.ro') && Inghetare::eInlocuitor('Valoare demo')
     && !Inghetare::eInlocuitor('contact@client-inventat.test') && !Inghetare::arePrivat(Inghetare::inlocuitor('a@client-inventat.test')));
 $verifica('valoarea scurtă din plan: cea întreagă între ghilimele, una lungă tăiată, cu lungimea',
@@ -488,7 +488,7 @@ $mutatii = [
         return $d;
     }), 'fără date private în git'],
     'un telefon într-un motiv' => [static fn () => $strica('vertij', static function (array $d): array {
-        $d['fara_inghetare']['tawk_enabled']['motiv'] .= ' — 0244 510 507';
+        $d['fara_inghetare']['tawk_enabled']['motiv'] .= ' — 0244 000 111';
         return $d;
     }), 'fără date private în git'],
     'o valoare privată care nu e înlocuitor' => [static fn () => $strica('grafoanaytis', static function (array $d): array {
@@ -513,7 +513,7 @@ foreach ($mutatii as $nume => [$fa, $asteptat]) {
     $refa();
     $fa();
     [$cm, $om] = $verificaIng($cuCopie);
-    if ($cm !== 1 || !str_contains($om, $asteptat) || str_contains($om, 'client-inventat') || str_contains($om, '0244 510 507')) {
+    if ($cm !== 1 || !str_contains($om, $asteptat) || str_contains($om, 'client-inventat') || str_contains($om, '0244 000 111')) {
         $esecuri[] = $nume . ': cod ' . $cm . "\n" . $om;
     }
 }

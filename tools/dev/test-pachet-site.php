@@ -94,14 +94,17 @@ $verifica = static function (string $ce, bool $ok, string $detalii = '') use (&$
 DateSite::reseteaza();
 Tema::reseteaza();
 
-/** Lista neagră (de-bioscem §7.4), fiecare termen ca un cuvânt întreg (altfel „rațiu” ar prinde „operațiune”). */
-const LISTA_NEAGRA = ['bioscem', 'amalbo', 'tătaru', 'tataru', 'neurocare', 'rațiu', 'ratiu', '19166493', 'j2006017724407', '0756.195.323',
-    'quinton', 'vivomixx', 'siliciu organic', 'info pacienți', 'info medici', 'vitalitate și protecție', 'jurnalul bioscem'];
+/**
+ * Lista neagră (de-bioscem §7.4; tools/dev/lib/lista-neagra.php: termenii firmei și, din privat/, cei personali, OD-49),
+ * fiecare termen ca un cuvânt întreg (altfel „rațiu” ar prinde „operațiune”).
+ */
+require_once __DIR__ . '/lib/lista-neagra.php';
+$GLOBALS['listaNeagra'] = lista_neagra($radacina);
 /** @return list<string> termenii din lista neagră găsiți în text */
 function potriviri_lista_neagra(string $text): array
 {
     $gasite = [];
-    foreach (LISTA_NEAGRA as $termen) {
+    foreach ((array) $GLOBALS['listaNeagra'] as $termen) {
         if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($termen, '/') . '(?![\p{L}\p{N}])/iu', $text) === 1) {
             $gasite[] = $termen;
         }
@@ -329,7 +332,8 @@ if ($mod === 'bioscem') {
 // =====================================================================
 // neutru
 // =====================================================================
-$scrie('== G-pachet neutru: cu pachetul demo, nimic din lista neagră (' . implode(', ', LISTA_NEAGRA) . ')');
+$scrie('== G-pachet neutru: cu pachetul demo, nimic din lista neagră (' . implode(', ', LISTA_NEAGRA_FIRMA) . ' și '
+    . count(lista_neagra_private($radacina)) . ' termeni personali din privat/, nescriși aici)');
 
 /**
  * Ce mai rămâne de scos, cu WP-ul care îl scoate (pagina sau emailul → termenii). Aici potrivirea trebuie să existe încă:
@@ -427,7 +431,7 @@ $cerere = static function (string $metoda, string $cale, string $jar, array $dat
 $jarViz = $dosarDev . '/test-pachet-viz-' . getmypid() . '.txt';
 $jarAdm = $dosarDev . '/test-pachet-adm-' . getmypid() . '.txt';
 $tabele = [
-    ['tabel' => 'settings', 'unde' => "`key` IN ('design_header_html', 'store_name', 'order_email_from_name') OR `key` LIKE 'gdpr\\_%'", 'cheie' => 'key'],
+    ['tabel' => 'settings', 'unde' => "`key` IN ('design_header_html', 'store_name', 'order_email_from_name', 'order_number_next', 'order_number_mode') OR `key` LIKE 'gdpr\\_%'", 'cheie' => 'key'],
     ['tabel' => 'pages', 'unde' => "slug IN ('404', 'checkout/succes')", 'cheie' => 'id'],
 ];
 $original = salvari_instantaneu($db, $tabele);
@@ -555,6 +559,17 @@ try {
     $verifica('N4 o variantă necunoscută se salvează „general”, o denumire goală apare iar ca spațiu de completat (și în adresa de retragere)',
         ($randuri['gdpr_formular_varianta'] ?? '') === 'general' && ($randuri['gdpr_operator_nume'] ?? null) === ''
         && str_contains($acord, 'serviciilor poștale la <span class="de-completat">') && str_contains($acord, '<tr><th>CUI</th>'));
+
+    // N4 (revizuirea WP-17): numerotarea salvată cu câmpul gol păstrează contorul (nu sare la începutul implicit, 1001).
+    $db->exec("INSERT INTO settings (`key`, `value`) VALUES ('order_number_next', '4321') ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
+    $cerere('POST', '/admin/settings/store', $jarAdm, ['action' => 'save_order_numbering', 'order_number_mode' => 'sequential',
+        'order_number_next' => ' ']);
+    $dupaGol = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'order_number_next'")->fetchColumn();
+    $cerere('POST', '/admin/settings/store', $jarAdm, ['action' => 'save_order_numbering', 'order_number_mode' => 'sequential',
+        'order_number_next' => '4 400']);
+    $dupaScris = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'order_number_next'")->fetchColumn();
+    $verifica('N4 numerotarea: salvată cu câmpul gol, contorul rămâne (4321); cu un număr scris („4 400”), acela (4400)',
+        $dupaGol === '4321' && $dupaScris === '4400', $dupaGol . ' / ' . $dupaScris);
 
     // N3: emailurile de test, fiecare tip din pagină (și cel simplu), cu numele expeditorului gol.
     $dosarMail = $dosarDev . '/mail';

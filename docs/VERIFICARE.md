@@ -335,8 +335,8 @@ $PHP tools/verificare/incarca.php --demo --pachet=biovitality   # sau bioscem, v
 `--licenta=<pachet>` alege alt pachet de pluginuri decât al site-ului (numele: `licenta.php presetari`). Pentru
 fiecare pachet (din WP-16 și pentru Bioscem: destinatarii formularului de contact; din WP-18 și datele de contact de pe
 acordul GDPR) trebuie pe server, lângă pachet, valorile private ale înghețării setărilor
-(`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi; nu e în git): fără el încărcarea se
-oprește cu „codul 15” și șterge copia.
+(`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi; nu e în git): fără el încărcarea refuză
+de la început (codul 2, „… codul 15 …”), înainte de orice schimbare.
 
 ### 7. Licența copiei (pachetul de pluginuri)
 
@@ -448,7 +448,7 @@ trimite-ne rândul.
 | `incarca.php`: „NU    A1 … adresele sunt în: <tabel>.<coloană> (N)” și „OPRIT: … copia a fost ștearsă singură” | O adresă de email a rămas într-o coloană pe care regulile o lasă cum e (de exemplu un text scris de cineva): trimite-ne textul (are doar numele coloanei și câte adrese); după ce schimbăm regula, încarci din nou |
 | `incarca.php`: „ÎNTRERUPT: …” | Rulezi comanda din rând (`--reia`); continuă de unde a rămas |
 | `incarca.php`: „OPRIT: … copia NU s-a putut șterge singură” | `$PHP tools/verificare/sterge.php`, apoi trimite-ne textul |
-| `incarca.php --demo --pachet=…`: „… codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): ți le trimitem noi; copia s-a șters singură |
+| `incarca.php`: „… privat/setari-inghetate.json lipsește … codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): ți le trimitem noi; nimic nu s-a schimbat |
 | `compara-calcule.php`: „REFUZAT: copia de verificare lipsește”, „… a expirat”, „copia nu e încheiată” sau „copia e din altă sursă” | Încarci întâi copia Bioscem (pasul 6, c; `sterge.php` înainte dacă pe copie e altceva), apoi comparația |
 | `compara-calcule.php`: „REFUZAT: codul vechi lipsește din cod-vechi/bioscem/” sau „.env-ul codului vechi … nu e spre baza copiei” | Încărcarea l-a sărit (`--fara-cod-vechi`), `sterge.php` l-a șters sau a rămas de la altă copie: încarci din nou (`--reincarca`) |
 | `compara-calcule.php`: „REFUZAT: pe codul comun nu sunt pornite toate pluginurile site-ului: …” | Ai schimbat pachetul copiei (pasul 7): `$PHP tools/verificare/licenta.php bioscem`, apoi din nou comparația |

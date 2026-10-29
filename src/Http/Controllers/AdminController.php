@@ -9912,7 +9912,11 @@ final class AdminController
             if (!in_array($mod, [\App\Support\OrderNumber::MOD_SECVENTIAL, \App\Support\OrderNumber::MOD_VECHI], true)) {
                 $mod = \App\Support\OrderNumber::MOD_SECVENTIAL;
             }
-            $urmator = \App\Support\OrderNumber::normalizeazaStart($_POST['order_number_next'] ?? null);
+            // Un câmp gol păstrează contorul de acum (altfel seria ar sări în tăcere la începutul implicit).
+            $urmatorScris = trim((string) ($_POST['order_number_next'] ?? ''));
+            $urmator = preg_replace('/[\s.,]+/', '', $urmatorScris) === ''
+                ? \App\Support\OrderNumber::urmatorulAfisat($db, Settings::all($db))
+                : \App\Support\OrderNumber::normalizeazaStart($urmatorScris);
             Settings::save($db, [
                 'order_number_mode' => $mod,
                 'order_number_next' => (string) $urmator,

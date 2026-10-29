@@ -58,7 +58,7 @@ final class Inghetare
     private const TIPAR_EMAIL = '/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/';
     /**
      * Un număr de telefon românesc (fix sau mobil, cu sau fără +40, cu spații, puncte, liniuțe, bare sau paranteze
-     * între grupuri, câte cel mult trei: „(0244) 510 507”, „+40 (244) 510 507”, „0244 / 510 507”; și cu o cifră în
+     * între grupuri, câte cel mult trei: „(0244) 000 111”, „+40 (244) 000 111”, „0244 / 000 111”; și cu o cifră în
      * plus, „0721 234 5678”), ca un cuvânt întreg: nu o bucată dintr-un număr mai lung sau dintr-un sha256 scris în
      * hex. E plasa de siguranță a datelor private (OD-49), deci prinde mai mult decât numerele bine scrise.
      */

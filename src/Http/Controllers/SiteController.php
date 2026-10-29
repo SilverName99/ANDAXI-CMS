@@ -779,12 +779,13 @@ final class SiteController
             'section_html' => '',
             'items' => [],
         ];
-        $settings = [];
+        // Setările înaintea produselor similare: cardurile lor scriu descrierea implicită (catalog_descriere_implicita) la un
+        // produs fără descriere scurtă.
+        $settings = $db instanceof PDO ? Settings::all($db) : [];
         $similarProducts = $this->buildSimilarProductsForSite($products, $product);
         $similarProductsSectionHtml = $this->buildSimilarProductsSectionHtml($similarProducts, $settings);
         if ($db instanceof PDO) {
             $this->ensureProductCustomSchema($db);
-            $settings = Settings::all($db);
             $extraFields = $this->loadProductExtraFieldsForSite($db, (int) ($product['id'] ?? 0));
             $productReviews = $this->loadProductReviewsForSite($db, $product);
             $template = $this->loadProductTemplateForSite(

@@ -1477,6 +1477,25 @@ final class Incarcare
             throw new Refuz('--licenta: nu există pachetul de pluginuri „' . (preg_match('/^[a-z0-9_-]{1,40}$/', $this->licenta) === 1 ? $this->licenta : '?')
                 . '” (' . implode(', ', $presetari) . ')');
         }
+        // ── Valorile private ale înghețării pachetului, înaintea oricărei schimbări: fără ele migrările de pe copie s-ar opri
+        // cu codul 15 abia după copierea datelor (docs/MIGRARI.md, „Înghețarea setărilor”; OD-49) ──
+        $fisierInghetare = $this->radacina . '/site-uri/' . $this->pachet . '/setari-inghetate.json';
+        if (is_file($fisierInghetare)) {
+            // Doar clasele înghețării (bootstrap.php se încarcă abia pe copia configurată).
+            $src = $this->radacina . '/src/';
+            spl_autoload_register(static function (string $clasa) use ($src): void {
+                if (str_starts_with($clasa, 'App\\Support\\Migrari\\') && is_file($f = $src . str_replace('\\', '/', substr($clasa, 4)) . '.php')) {
+                    require_once $f;
+                }
+            });
+            try {
+                \App\Support\Migrari\Inghetare::dinFisier($fisierInghetare)->valoriPrivate('site/' . $this->pachet . '/setari-inghetate');
+            } catch (\App\Support\Migrari\ParametruLipsa $e) {
+                throw new Refuz('înghețarea pachetului ' . $this->pachet . ' are valori private, dar site-uri/' . $this->pachet
+                    . '/privat/setari-inghetate.json lipsește sau e al altei versiuni a înghețării: migrările s-ar opri cu codul 15. '
+                    . 'Pune-l lângă pachet (ți-l trimitem noi; docs/MIGRARI.md), apoi rulează din nou. Nimic nu s-a schimbat.');
+            }
+        }
 
         // ── Baza copiei, fără s-o atingi: întâi că nu e a altui site (fără să se conecteze la ea), apoi deschisă ──
         $dbNume = trim($this->env['DB_DATABASE']);

@@ -137,6 +137,15 @@ register_shutdown_function(static function () use ($db, $setariDePusLaLoc): void
 });
 echo '  INFO  baza în forma Bioscem, pe durata comparației (tools/dev/lib/forma-bioscem.php): ', count($setariDePusLaLoc),
     ' setări (înghețarea și antetul cu sertarul de meniu)', "\n";
+// Un produs fără descriere scurtă printre produsele similare ale unui produs fără șablon (/produs/ceai-de-musetel) și în
+// liste: cardurile scriu atunci descrierea implicită (Bioscem: „Supliment natural”, din înghețare; WP-16, DB-14). Datele
+// demo au descrieri peste tot, deci una se golește pe durata comparației și revine la final (și la o oprire).
+$slugFaraDescriere = 'ceai-de-ghimbir';
+$descriereScurtaInainte = $unu('SELECT short_description FROM products WHERE slug = ' . $db->quote($slugFaraDescriere));
+$db->prepare("UPDATE products SET short_description = '' WHERE slug = ?")->execute([$slugFaraDescriere]);
+register_shutdown_function(static function () use ($db, $slugFaraDescriere, $descriereScurtaInainte): void {
+    $db->prepare('UPDATE products SET short_description = ? WHERE slug = ?')->execute([$descriereScurtaInainte, $slugFaraDescriere]);
+});
 
 // Numele site-ului din titlurile adminului (WP-16, $deBioscem): cel pe care îl vede codul curent în baza de acum.
 $numeSiteAdmin = \App\Support\Brand::numeSite(\App\Support\Settings::all($db));

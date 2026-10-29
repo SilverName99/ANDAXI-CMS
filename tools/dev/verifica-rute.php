@@ -392,8 +392,9 @@ foreach (array_merge(['nucleu' => $catalog['nucleu']], $pluginuri) as $cheie => 
 }
 
 // 11. Nucleul nu pomenește un client: lista neagră, în mod clichet (tools/dev/nume-client-ramase.txt doar scade).
-$listaNeagra = ['bioscem', 'amalbo', 'tătaru', 'tataru', 'neurocare', 'rațiu', 'ratiu', '19166493', 'j2006017724407', '0756.195.323',
-    'quinton', 'vivomixx', 'siliciu organic', 'info pacienți', 'info medici', 'vitalitate și protecție', 'jurnalul bioscem'];
+// Termenii firmei și, din privat/ (OD-49: datele unei persoane nu stau în git), cei personali: tools/dev/lib/lista-neagra.php.
+require_once __DIR__ . '/lib/lista-neagra.php';
+$listaNeagra = lista_neagra($radacina);
 $fisierRamase = $radacina . '/tools/dev/nume-client-ramase.txt';
 $potriviriClient = [];
 $candidati = [];
