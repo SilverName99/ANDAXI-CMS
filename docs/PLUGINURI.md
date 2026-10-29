@@ -680,8 +680,18 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Acorduri GDPR (`acorduri_gdpr`)
 
 - **Conține**: pagina `acorduri-gdpr` cu `{{gdpr_agreements_form}}` (formularul
-  semnat de medici), `/gdpr-agreements/…`, Utilizatori → Acorduri GDPR (lista și
-  exportul Excel). Tabel: `gdpr_agreements`.
+  de acord semnat pe tabletă), `/gdpr-agreements/…`, Utilizatori → Acorduri GDPR
+  (lista, exportul Excel și blocul „Datele operatorului”, salvat la
+  `POST /admin/pages/gdpr-agreements/settings`). Tabel: `gdpr_agreements`.
+- **Setări** (WP-18, din grafoanaytis): `gdpr_formular_varianta` (`general`, implicit:
+  „în scopul …”, CUI, compania, funcția, domeniul de activitate; `medical`: „înscrierea
+  la evenimentul medical …”, CUIM, instituția medicală, tipul medicului, specializarea;
+  etichetele exportului Excel o urmează), `gdpr_scop`, `gdpr_operator_{nume, sediu,
+  telefon, email, regcom, cui, marca, reprezentant}` și `gdpr_operator_adresa_retragere`
+  (goală = „<denumire> - <sediu>”). O valoare goală apare în formular ca spațiu de
+  completat (iar stilul lui se scrie doar atunci); fără email nu apare linkul.
+  Bioscem, Biovitality și vertij au textul de azi prin înghețare (cu reprezentantul,
+  telefonul și emailul ca valori private), grafoanaytis varianta `general`.
 - **Are nevoie de**: nimic.
 - **Pornește**: pasul de activare face pagina `acorduri-gdpr` o singură dată, dacă
   nu există. O pagină ștearsă de admin rămâne ștearsă (înainte de migrări se

@@ -48,7 +48,9 @@ declare(strict_types=1);
 return [
     'site' => 'bioscem',
     // 2 (revizuirea WP-09): user_addresses.label transformată; adresele de email din recenziile aprobate, schimbate cu pseudonimul.
-    'versiune' => 2,
+    // 3 (WP-18): reprezentantul și telefonul operatorului de pe acordul GDPR golite, emailul lui = adresa proprietarului
+    // (valori private ale înghețării, OD-49: nu ajung pe copie).
+    'versiune' => 3,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -393,12 +395,14 @@ return [
             'google_ads_conversion_label', 'microsoft_clarity_project_id', 'google_site_verification',
             // În plus față de plan (WP-09): adresele IP ale celor care văd site-ul în mentenanță, contul colector al rambursurilor,
             // persoana și telefonul expeditorului FAN (AWB-urile sunt oricum oprite pe copie).
-            'maintenance_allowed_ips', 'fan_cod_iban', 'fan_sender_name', 'fan_sender_phone'],
+            'maintenance_allowed_ips', 'fan_cod_iban', 'fan_sender_name', 'fan_sender_phone',
+            // WP-18: persoana și telefonul operatorului din textul acordului GDPR (pe copie, spații de completat).
+            'gdpr_operator_reprezentant', 'gdpr_operator_telefon'],
         'zero' => ['erp_enabled', 'erp_stock_enabled', 'euplatesc_enabled', 'stripe_enabled', 'bt_ipay_enabled', 'fan_awb_auto', 'fan_live_tariff_enabled',
             'customer_google_auth_enabled', 'tawk_enabled', 'microsoft_clarity_enabled', 'google_analytics_enabled', 'google_tag_manager_enabled',
             'google_ads_enabled'],
         // Adresa proprietarului (VERIFICARE_EMAIL).
-        'proprietar' => ['contact_form_recipients', 'bt_ipay_notify_emails', 'fan_sender_email'],
+        'proprietar' => ['contact_form_recipients', 'bt_ipay_notify_emails', 'fan_sender_email', 'gdpr_operator_email'],
         'proprietar_tipar' => '/^email_template_[a-z0-9_]+_admin_recipients$/',
         // Căsuța de trimitere a copiei (VERIFICARE_SMTP_UTILIZATOR), altfel o adresă care nu primește nimic.
         'casuta' => ['order_email_from_address'],

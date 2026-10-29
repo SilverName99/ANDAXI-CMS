@@ -31,8 +31,58 @@ $buildExportUrl = static function () use ($search): string {
 };
 $paginationStart = max(1, $page - 2);
 $paginationEnd = min($totalPages, $page + 2);
+// Datele operatorului din textul acordului (WP-18, GR-03, portat din grafoanaytis 2c11526, d1bffca): formularul public
+// le folosește direct; un câmp gol apare acolo ca spațiu de completat.
+$setari = is_array($setari ?? null) ? $setari : [];
+$valGdpr = static fn (string $cheie): string => htmlspecialchars((string) ($setari[$cheie] ?? ''), ENT_QUOTES);
+$variantaGdpr = (string) ($setari['gdpr_formular_varianta'] ?? '') === 'medical' ? 'medical' : 'general';
+$campuriOperator = [
+    ['gdpr_operator_nume', 'Denumire societate', 'ex: SC Firma Demo SRL', true],
+    ['gdpr_operator_reprezentant', 'Reprezentant legal', 'ex: Administrator Nume Prenume', true],
+    ['gdpr_operator_regcom', 'Nr. Registrul Comerțului', 'ex: J40/123/2020', true],
+    ['gdpr_operator_cui', 'CUI / Cod TVA', 'ex: RO12345678', true],
+    ['gdpr_operator_sediu', 'Sediu social', 'Strada, număr, oraș', false],
+    ['gdpr_operator_telefon', 'Telefon', '', false],
+    ['gdpr_operator_email', 'Email pentru retragerea acordului', 'ex: gdpr@domeniul-tau.ro', false],
+    ['gdpr_operator_marca', 'Marca sub care este cunoscută firma', '', false],
+    ['gdpr_operator_adresa_retragere', 'Adresa poștală pentru retragerea acordului', 'gol = „denumire - sediu”', false],
+];
 ?>
 
+<?= \App\Support\Dev::marcaj('gr:gdpr-setari') ?>
+<section class="panel" style="margin-bottom:18px;">
+    <div class="section-head">
+        <h2 style="margin:0;">Datele operatorului</h2>
+        <p style="margin:6px 0 0;color:#64748b;">
+            Apar în textul acordului semnat de vizitatori. Câmpurile marcate cu * sunt date juridice: cât timp lipsesc,
+            formularul le arată ca spații de completat.
+        </p>
+    </div>
+    <form method="post" action="/admin/pages/gdpr-agreements/settings" class="form-grid" style="margin-top:14px;">
+        <div class="field">
+            <label for="gdpr-varianta">Textul formularului</label>
+            <select id="gdpr-varianta" name="gdpr_formular_varianta">
+                <option value="general" <?= $variantaGdpr === 'general' ? 'selected' : '' ?>>General (un scop: oferte, comunicări …; CUI, companie, funcție)</option>
+                <option value="medical" <?= $variantaGdpr === 'medical' ? 'selected' : '' ?>>Eveniment medical (CUIM, instituție medicală, tip medic, specializare)</option>
+            </select>
+        </div>
+        <div class="field" style="grid-column:1/-1;">
+            <label for="gdpr-scop">Scopul prelucrării (sau evenimentul)</label>
+            <input id="gdpr-scop" type="text" name="gdpr_scop" value="<?= $valGdpr('gdpr_scop') ?>"
+                   placeholder="ex: primirii de oferte și comunicări comerciale">
+        </div>
+<?php foreach ($campuriOperator as [$cheie, $eticheta, $exemplu, $obligatoriu]): ?>
+        <div class="field">
+            <label for="<?= $cheie ?>"><?= htmlspecialchars($eticheta, ENT_QUOTES) ?><?= $obligatoriu ? ' *' : '' ?></label>
+            <input id="<?= $cheie ?>" type="text" name="<?= $cheie ?>" value="<?= $valGdpr($cheie) ?>" placeholder="<?= htmlspecialchars($exemplu, ENT_QUOTES) ?>">
+        </div>
+<?php endforeach; ?>
+        <div style="grid-column:1/-1;display:flex;justify-content:flex-end;">
+            <button class="btn" type="submit">Salvează datele operatorului</button>
+        </div>
+    </form>
+</section>
+<?= \App\Support\Dev::marcaj('gr:gdpr-setari', true) ?>
 <section class="panel">
     <div class="section-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
         <div>

@@ -381,7 +381,8 @@ $porturiBioscemLivrarea2 = (static function () use ($slugBbd, $slugPre, $slugBlo
     // Bioscem 7455b77 (A7): numele site-ului și limba pentru Facebook și WhatsApp, pe fiecare pagină publică cu antet.
     $intrari[] = [
         'nume' => 'og:site_name și og:locale în <head>',
-        'cale' => array_merge(['/', '/blog', '/blog/' . $slugBlog, '/contact', '/termeni-si-conditii', '/pagina-care-nu-exista', '/' . $paginaListe],
+        'cale' => array_merge(['/', '/blog', '/blog/' . $slugBlog, '/contact', '/termeni-si-conditii', '/pagina-care-nu-exista', '/' . $paginaListe,
+            '/acorduri-gdpr'],
             $listeCatalog, $produse),
         'nou' => "    <meta property=\"og:site_name\" content=\"Firma Demo\">\n    <meta property=\"og:locale\" content=\"ro_RO\">\n",
         'vechi' => '',
@@ -730,6 +731,9 @@ $porturiBioscemLivrarea4 = (static function () use ($fataDeCommit, $paginaListe,
         'vechi' => "<section class=\"custom-page-content\">\n    ",
         'motiv' => 'Bioscem 9fe175d (livrarea 4 SEO, A11): titlul paginii ca H1 când textul ei n-are unul (SeoIndexare, views/site/custom-page.php)',
     ];
+    // La fel pe pagina acordului GDPR (WP-18 o adaugă la comparație), al cărei formular n-are <h1>.
+    $intrari[] = ['nume' => 'H1-ul pus de șablon pe o pagină fără <h1> (Acorduri GDPR)', 'cale' => '/acorduri-gdpr',
+        'nou' => str_replace('>Liste goale</h1>', '>Acorduri GDPR</h1>', $intrari[0]['nou'])] + $intrari[0];
     // Bioscem ef22b23 (A10): pagina „nu există” fără canonical și fără og:url.
     // Canonicalul codului de bază vine din APP_URL (portul serverului de dezvoltare), nu din portul serverului care răspunde
     // (din WP-16 codul curent rulează și aici pe un server doar al comparației, +4).
@@ -1130,6 +1134,9 @@ $porturiGrafo = [
  * nume trebuie găsit exact o dată pe pagina lui și pe nicio altă pagină.
  */
 $marcajePort = [
+    // WP-18 (GR-03, DB-15): blocul „Datele operatorului” (din grafoanaytis 2c11526, d1bffca) deasupra listei acordurilor
+    // GDPR; textul formularului public citește aceste setări (Bioscem: din înghețare, /acorduri-gdpr rămâne identică).
+    'gr:gdpr-setari' => ['cale' => '/admin/users/gdpr-agreements', 'motiv' => 'WP-18: setările operatorului acordului GDPR, portate din grafoanaytis'],
 ];
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
@@ -1292,6 +1299,10 @@ $pagini = [
     // Pingul monitorizării (WP-07, nou; declarat în $coduriDeBioscem), și cu „/” la sfârșit.
     ['anon', '/_andaxi/ping'],
     ['anon', '/_andaxi/ping/'],
+    // WP-18 (GR-03, DB-15): acordul GDPR, cu datele operatorului din setări (Bioscem: din înghețare, cu valorile private)
+    // și lista acordurilor din admin, cu blocul setărilor marcat.
+    ['viz', '/acorduri-gdpr'],
+    ['adm', '/admin/users/gdpr-agreements'],
 ];
 
 // O pagină a site-ului (din bază, ca orice pagină scrisă de client) cu liste goale,

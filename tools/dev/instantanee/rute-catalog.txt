@@ -2,7 +2,7 @@
 # Pe site: catalog
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (257)
+RUTE (258)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> 404 [acorduri_gdpr]
@@ -179,6 +179,7 @@ POST /admin/orders/{id}/promo -> 403 [produse_promo]
 POST /admin/orders/{id}/restore -> 403 [magazin]
 POST /admin/orders/{id}/shipping -> 403 [magazin]
 POST /admin/orders/{id}/status -> 403 [magazin]
+POST /admin/pages/gdpr-agreements/settings -> 403 [acorduri_gdpr]
 POST /admin/pages/save -> CONTROLLER [nucleu]
 POST /admin/pages/{id}/delete -> CONTROLLER [nucleu]
 POST /admin/pages/{id}/force-delete -> CONTROLLER [nucleu]

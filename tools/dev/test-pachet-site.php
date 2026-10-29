@@ -29,7 +29,10 @@ declare(strict_types=1);
  *  B12 formatul vechi al numerelor de comandă are prefixul codului Bioscem, contorul pornește de la implicitul lui;
  *  B13 cota de TVA implicită (și cea trimisă în ERP pentru un produs fără cotă) = implicitul Bioscem (19);
  *  B14 emailul comenzii cu ordin de plată: corpul și blocurile înghețate sunt cele vechi, iar ale nucleului diferă doar
- *      prin sloganul scos.
+ *      prin sloganul scos;
+ *  B15 (WP-18) acordul GDPR: varianta „medical”, fiecare valoare înghețată (și cele private) e în textul acordului din codul
+ *      Bioscem, cele personale sunt private, iar fraza operatorului și cea a retragerii, scrise de codul comun cu valorile
+ *      înghețate, sunt rândurile codului Bioscem (pagina întreagă o compară G-cmp, /acorduri-gdpr).
  *
  * **neutru** (pachetul tools/dev/site-demo, baza de dezvoltare, un server al codului curent pe CMS_DEV_PORT+24): nicio
  * potrivire din lista neagră a de-bioscem §7.4 (numele Bioscem, firma și reprezentantul de pe acordul GDPR, conferința,
@@ -38,7 +41,9 @@ declare(strict_types=1);
  *     cookie-ului și al cheii popup-ului (cele implicite), iconița unei categorii fără temă (cea implicită);
  *  N2 paginile publice (cu antetul de rezervă, apoi cu un antet care are sertarul de meniu; vederile de rezervă 404 și
  *     mulțumirea, cu paginile lor din bază nepublicate), robots.txt, sitemap.xml și paginile din admin cu texte schimbate;
- *  N3 fiecare email de test din Email-uri → Trimite email test (cu numele expeditorului gol, deci cel de rezervă).
+ *  N3 fiecare email de test din Email-uri → Trimite email test (cu numele expeditorului gol, deci cel de rezervă);
+ *  N4 (WP-18) acordul GDPR fără datele operatorului (spații de completat, varianta „general”), blocul lor din admin și
+ *     salvarea lor (valori inventate; varianta „medical”, adresa de retragere implicită, o variantă necunoscută = „general”).
  * Ce mai rămâne de scos în WP-urile următoare stă în $ramase (pagina sau emailul, termenul, WP-ul): acolo potrivirea
  * TREBUIE să existe încă (altfel lista nu mai e la zi și pică), iar lista doar scade.
  *
@@ -279,6 +284,41 @@ if ($mod === 'bioscem') {
         && (string) ($blocuriVechi[$diferaBlocuri[0]]['content'] ?? '') === "Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!\nEchipa {{store_name}}"
         && (string) ($blocuriNoi[$diferaBlocuri[0]]['content'] ?? '') === 'Echipa {{store_name}}');
 
+    // B15 (WP-18): acordul GDPR, cu datele operatorului din înghețare (cu cele private).
+    $siteVechi = $vechi('src/Http/Controllers/SiteController.php');
+    $gdpr = array_filter($faraRand, static fn (string $cheie): bool => str_starts_with($cheie, 'gdpr_'), ARRAY_FILTER_USE_KEY);
+    $lipsaDinVechi = [];
+    foreach ($gdpr as $cheie => $valoare) {
+        if ($cheie !== 'gdpr_formular_varianta' && ($valoare === '' || !str_contains($siteVechi, htmlspecialchars($valoare, ENT_QUOTES)))) {
+            $lipsaDinVechi[] = $cheie;
+        }
+    }
+    $intrari = $inghetare->setari();
+    $verifica('B15 acordul GDPR: varianta „medical” și cele 10 valori înghețate (' . count($gdpr) . ' chei) sunt în textul acordului din codul '
+        . 'Bioscem; reprezentantul, telefonul și emailul sunt private', ($gdpr['gdpr_formular_varianta'] ?? '') === 'medical' && count($gdpr) === 11
+        && $lipsaDinVechi === [] && ($intrari['gdpr_operator_reprezentant']['privat'] ?? false) === true
+        && ($intrari['gdpr_operator_telefon']['privat'] ?? false) === true && ($intrari['gdpr_operator_email']['privat'] ?? false) === true,
+        'lipsă din codul vechi: ' . implode(', ', $lipsaDinVechi));
+    // Rândurile cu operatorul și cu retragerea acordului, din șablonul codului comun cu valorile înghețate.
+    $siteNou = (string) file_get_contents($radacina . '/src/Http/Controllers/SiteController.php');
+    $email = htmlspecialchars($gdpr['gdpr_operator_email'], ENT_QUOTES);
+    $inlocuiri = ['{$operatorNume}' => $gdpr['gdpr_operator_nume'], '{$operatorSediu}' => $gdpr['gdpr_operator_sediu'],
+        '{$operatorTelefon}' => $gdpr['gdpr_operator_telefon'], '{$operatorRegCom}' => $gdpr['gdpr_operator_regcom'],
+        '{$operatorCui}' => $gdpr['gdpr_operator_cui'], '{$operatorMarca}' => $gdpr['gdpr_operator_marca'],
+        '{$operatorReprezentant}' => $gdpr['gdpr_operator_reprezentant'], '{$adresaRetragere}' => $gdpr['gdpr_operator_adresa_retragere'],
+        '{$legaturaEmail}' => '<a href="mailto:' . $email . '">' . $email . '</a>'];
+    $rand = static function (string $text, string $inceput): string {
+        preg_match_all('/^[ \t]*' . preg_quote($inceput, '/') . '.*$/mu', $text, $m);
+        return count($m[0]) === 1 ? trim($m[0][0]) : '(' . count($m[0]) . ' rânduri)';
+    };
+    $operatorNou = strtr($rand($siteNou, 'de către operatorul de date cu caracter personal <strong>{$operatorNume}'), array_map(
+        static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES), $inlocuiri));
+    $retragereNou = strtr($rand($siteNou, '<p>Prezentul consimțământ este valabil până la retragerea expresă'), ['{$adresaRetragere}'
+        => htmlspecialchars($inlocuiri['{$adresaRetragere}'], ENT_QUOTES), '{$legaturaEmail}' => $inlocuiri['{$legaturaEmail}']]);
+    $verifica('B15 acordul GDPR: fraza operatorului și cea a retragerii acordului, scrise de codul comun cu valorile înghețate = rândurile '
+        . 'codului Bioscem', $operatorNou === $rand($siteVechi, 'de către operatorul de date cu caracter personal <strong>')
+        && $retragereNou === $rand($siteVechi, '<p>Prezentul consimțământ este valabil până la retragerea expresă'));
+
     } catch (Throwable $e) {
         $verifica('citirea codului Bioscem și a pachetului', false, $e->getMessage());
     }
@@ -387,7 +427,7 @@ $cerere = static function (string $metoda, string $cale, string $jar, array $dat
 $jarViz = $dosarDev . '/test-pachet-viz-' . getmypid() . '.txt';
 $jarAdm = $dosarDev . '/test-pachet-adm-' . getmypid() . '.txt';
 $tabele = [
-    ['tabel' => 'settings', 'unde' => "`key` IN ('design_header_html', 'store_name', 'order_email_from_name')", 'cheie' => 'key'],
+    ['tabel' => 'settings', 'unde' => "`key` IN ('design_header_html', 'store_name', 'order_email_from_name') OR `key` LIKE 'gdpr\\_%'", 'cheie' => 'key'],
     ['tabel' => 'pages', 'unde' => "slug IN ('404', 'checkout/succes')", 'cheie' => 'id'],
 ];
 $original = salvari_instantaneu($db, $tabele);
@@ -479,6 +519,43 @@ try {
         }
     }
 
+    // N4 (WP-18): acordul GDPR fără datele operatorului, blocul lor din admin și salvarea lor (valori inventate).
+    $db->exec("DELETE FROM settings WHERE `key` LIKE 'gdpr\\_%'");
+    $acord = $cerere('GET', '/acorduri-gdpr', $jarViz);
+    $faraListaNeagra('N4 /acorduri-gdpr (' . $acord['cod'] . ', fără datele operatorului)', $acord['corp']);
+    $verifica('N4 /acorduri-gdpr fără datele operatorului: spații de completat (cu stilul lor), varianta „general” (CUI, „în scopul”), '
+        . 'fără link de email', $acord['cod'] === 200 && substr_count($acord['corp'], '<span class="de-completat">') >= 10
+        && str_contains($acord['corp'], '.gdpr-agreement .de-completat{') && str_contains($acord['corp'], '<tr><th>CUI</th>')
+        && str_contains($acord['corp'], 'în scopul') && !str_contains($acord['corp'], 'CUIM') && !str_contains($acord['corp'], 'mailto:'));
+    $lista = $cerere('GET', '/admin/users/gdpr-agreements', $jarAdm);
+    $faraListaNeagra('N4 /admin/users/gdpr-agreements (' . $lista['cod'] . ')', $lista['corp']);
+    $verifica('N4 Acorduri GDPR din admin: blocul „Datele operatorului”, salvat la /admin/pages/gdpr-agreements/settings',
+        $lista['cod'] === 200 && str_contains($lista['corp'], 'action="/admin/pages/gdpr-agreements/settings"')
+        && str_contains($lista['corp'], 'name="gdpr_operator_adresa_retragere"'));
+    $operatorDemo = ['gdpr_formular_varianta' => 'medical', 'gdpr_scop' => 'Congresul Demo 2030', 'gdpr_operator_nume' => 'SC Firma Demo SRL',
+        'gdpr_operator_reprezentant' => 'Administrator Ion Exemplu', 'gdpr_operator_regcom' => 'J40/123/2020', 'gdpr_operator_cui' => 'RO12345678',
+        'gdpr_operator_sediu' => 'Str. Exemplu nr. 1, București', 'gdpr_operator_telefon' => '0700 000 000',
+        'gdpr_operator_email' => 'gdpr@exemplu.ro', 'gdpr_operator_marca' => 'Demo', 'gdpr_operator_adresa_retragere' => ''];
+    $salvare = $cerere('POST', '/admin/pages/gdpr-agreements/settings', $jarAdm, $operatorDemo);
+    $acord = $cerere('GET', '/acorduri-gdpr', $jarViz)['corp'];
+    $verifica('N4 salvarea datelor operatorului (varianta „medical”): 302 spre listă, textul acordului cu ele, adresa de retragere '
+        . 'implicită „<denumire> - <sediu>”, linkul de email, fără spații de completat și fără stilul lor', $salvare['cod'] === 302
+        && str_ends_with($salvare['location'], '/admin/users/gdpr-agreements')
+        && str_contains($acord, 'la evenimentul medical' . "\n" . '            <strong>Congresul Demo 2030</strong>,')
+        && str_contains($acord, '<strong>SC Firma Demo SRL</strong>, persoană juridică română, cu sediul în Str. Exemplu nr. 1, București, telefon 0700 000 000')
+        && str_contains($acord, 'reprezentată legal prin Administrator Ion Exemplu, în calitate de')
+        && str_contains($acord, 'serviciilor poștale la SC Firma Demo SRL - Str. Exemplu nr. 1, București sau prin')
+        && str_contains($acord, '<a href="mailto:gdpr@exemplu.ro">gdpr@exemplu.ro</a>') && str_contains($acord, '<tr><th>CUIM</th>')
+        && !str_contains($acord, 'de-completat'), $salvare['cod'] . ' → ' . $salvare['location']);
+    $cerere('POST', '/admin/pages/gdpr-agreements/settings', $jarAdm, ['gdpr_formular_varianta' => 'altceva', 'gdpr_operator_nume' => '  ']
+        + $operatorDemo);
+    $randuri = $db->query("SELECT `key`, `value` FROM settings WHERE `key` IN ('gdpr_formular_varianta', 'gdpr_operator_nume')")
+        ->fetchAll(PDO::FETCH_KEY_PAIR);
+    $acord = $cerere('GET', '/acorduri-gdpr', $jarViz)['corp'];
+    $verifica('N4 o variantă necunoscută se salvează „general”, o denumire goală apare iar ca spațiu de completat (și în adresa de retragere)',
+        ($randuri['gdpr_formular_varianta'] ?? '') === 'general' && ($randuri['gdpr_operator_nume'] ?? null) === ''
+        && str_contains($acord, 'serviciilor poștale la <span class="de-completat">') && str_contains($acord, '<tr><th>CUI</th>'));
+
     // N3: emailurile de test, fiecare tip din pagină (și cel simplu), cu numele expeditorului gol.
     $dosarMail = $dosarDev . '/mail';
     $tipuri = ['', 'new_order', 'new_order_op', 'processing', 'shipped', 'delivered', 'cancelled', 'abandoned_cart', 'account_created'];
@@ -521,7 +598,7 @@ try {
 } finally {
     $puneLaLoc();
 }
-$verifica('baza de dezvoltare pusă la loc exact (antetul, numele, paginile „404” și „checkout/succes”)', salvari_instantaneu($db, $tabele) === $original);
+$verifica('baza de dezvoltare pusă la loc exact (antetul, numele, datele operatorului GDPR, paginile „404” și „checkout/succes”)', salvari_instantaneu($db, $tabele) === $original);
 
 $scrie('test-pachet-site neutru: ' . $verificari . ' verificări, ' . $esecuri . ' greșite');
 exit($esecuri === 0 ? 0 : 1);

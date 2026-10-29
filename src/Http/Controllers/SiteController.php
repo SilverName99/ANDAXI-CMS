@@ -5008,6 +5008,52 @@ final class SiteController
         $numeSemnatura = htmlspecialchars($old($oldInput, 'nume_semnatura'), ENT_QUOTES);
         $signatureDataUrl = htmlspecialchars($old($oldInput, 'signature_data_url'), ENT_QUOTES);
 
+        /*
+         * Datele operatorului și scopul vin din setări (Admin → Utilizatori → Acorduri GDPR; WP-18, GR-03, DB-15), nu din
+         * cod. Un câmp necompletat apare ca spațiu de completat (un acord cu datele greșite ale operatorului n-ar avea
+         * valoare), iar stilul lui se scrie doar atunci. Varianta textului (`gdpr_formular_varianta`): „medical”
+         * (înscrierea la un eveniment medical: CUIM, instituția medicală, tipul medicului, specializarea) sau „general”
+         * (un scop oarecare: CUI, compania, funcția, domeniul de activitate). Un site existent își păstrează textul prin
+         * înghețarea setărilor.
+         */
+        $setariGdpr = Settings::all($this->db());
+        $lipsesteDate = false;
+        $dateOperator = static function (string $cheie) use ($setariGdpr, &$lipsesteDate): string {
+            $valoare = trim((string) ($setariGdpr[$cheie] ?? ''));
+            if ($valoare !== '') {
+                return htmlspecialchars($valoare, ENT_QUOTES);
+            }
+            $lipsesteDate = true;
+            return '<span class="de-completat">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>';
+        };
+        $medical = trim((string) ($setariGdpr['gdpr_formular_varianta'] ?? '')) === 'medical';
+        $scop = $dateOperator('gdpr_scop');
+        $operatorNume = $dateOperator('gdpr_operator_nume');
+        $operatorSediu = $dateOperator('gdpr_operator_sediu');
+        $operatorTelefon = $dateOperator('gdpr_operator_telefon');
+        $operatorRegCom = $dateOperator('gdpr_operator_regcom');
+        $operatorCui = $dateOperator('gdpr_operator_cui');
+        $operatorMarca = $dateOperator('gdpr_operator_marca');
+        $operatorReprezentant = $dateOperator('gdpr_operator_reprezentant');
+        // Adresa pentru retragerea acordului: a ei, altfel „<operator> - <sediu>”.
+        $adresaRetragere = trim((string) ($setariGdpr['gdpr_operator_adresa_retragere'] ?? '')) !== ''
+            ? $dateOperator('gdpr_operator_adresa_retragere') : $operatorNume . ' - ' . $operatorSediu;
+        $operatorEmail = trim((string) ($setariGdpr['gdpr_operator_email'] ?? ''));
+        $legaturaEmail = $operatorEmail !== ''
+            ? '<a href="mailto:' . htmlspecialchars($operatorEmail, ENT_QUOTES) . '">' . htmlspecialchars($operatorEmail, ENT_QUOTES) . '</a>'
+            : $dateOperator('gdpr_operator_email');
+        $frazaScop = $medical
+            ? "utilizarea datelor cu caracter personal pentru înscrierea mea la evenimentul medical\n            <strong>{$scop}</strong>,"
+            : "prelucrarea datelor mele cu caracter personal în scopul\n            <strong>{$scop}</strong>,";
+        $scopSectiuneaII = $medical ? 'pentru înscrierea la evenimentul medical menționat.' : 'în scopul menționat.';
+        [$etCuim, $etInstitutie, $etInstitutieAdresa, $etActivitate, $etTipMedic, $etSpecializare] = $medical
+            ? ['CUIM', 'DENUMIRE INSTITUȚIE MEDICALĂ', 'ADRESĂ INSTITUȚIE MEDICALĂ', 'DESFĂȘURARE ACTIVITATE (INSTITUȚIE)',
+                'TIP MEDIC (primar, specialist, rezident)', 'SPECIALIZARE']
+            : ['CUI', 'DENUMIRE COMPANIE', 'ADRESĂ COMPANIE', 'DESFĂȘURARE ACTIVITATE (COMPANIE)', 'FUNCȚIE', 'DOMENIU DE ACTIVITATE'];
+        $stilDeCompletat = $lipsesteDate
+            ? "        .gdpr-agreement .de-completat{display:inline-block;min-width:150px;border-bottom:1px dashed #94a3b8;vertical-align:baseline}\n"
+            : '';
+
         return <<<HTML
 <section id="gdpr-agreement-form" class="gdpr-agreement" data-gdpr-agreement-root="1">
     <style>
@@ -5032,7 +5078,7 @@ final class SiteController
         .gdpr-agreement canvas{width:100%;height:180px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;touch-action:none;display:block}
         .gdpr-agreement .signature-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
         .gdpr-agreement .muted{color:#64748b;font-size:13px}
-        .gdpr-agreement .form-actions{margin-top:18px;display:flex;justify-content:flex-end}
+{$stilDeCompletat}        .gdpr-agreement .form-actions{margin-top:18px;display:flex;justify-content:flex-end}
         .gdpr-agreement .bullet-list{margin:0 0 12px 18px}
         .gdpr-agreement .bullet-list li{margin-bottom:6px}
         .gdpr-agreement .bottom-grid{display:grid;gap:16px;grid-template-columns:1fr 1.2fr;margin-top:18px}
@@ -5064,9 +5110,8 @@ final class SiteController
             <span class="line-input"><input type="text" name="ci_emitent" value="{$ciEmitent}"></span>
             la data de
             <span class="line-input"><input type="date" name="ci_data_eliberare" value="{$ciDataEliberare}"></span>,
-            denumit în continuare <strong>subiect</strong>, îmi exprim acordul cu privire la utilizarea datelor cu caracter personal pentru înscrierea mea la evenimentul medical
-            <strong>“Conferințele Neurocare – Ediția a 2-a Multidisciplinaritate în acțiune – Frontiere în neuropediatrie” - București, între 14-16 mai 2026</strong>,
-            de către operatorul de date cu caracter personal <strong>SC Amalbo Consulting SRL</strong>, persoană juridică română, cu sediul în București, str.Dr.Rațiu nr. 13, sector 1, telefon 0756.195.323, înregistrată la Registrul Comerțului sub nr. J2006017724407, cod unic de înregistrare/cod TVA (RO)19166493, identificată în acest document prin marca <strong>„Bioscem”</strong>, reprezentată legal prin Director General Tătaru Bogdan, în calitate de <strong>beneficiar</strong>, cunoscând următoarele:
+            denumit în continuare <strong>subiect</strong>, îmi exprim acordul cu privire la {$frazaScop}
+            de către operatorul de date cu caracter personal <strong>{$operatorNume}</strong>, persoană juridică română, cu sediul în {$operatorSediu}, telefon {$operatorTelefon}, înregistrată la Registrul Comerțului sub nr. {$operatorRegCom}, cod unic de înregistrare/cod TVA {$operatorCui}, identificată în acest document prin marca <strong>„{$operatorMarca}”</strong>, reprezentată legal prin {$operatorReprezentant}, în calitate de <strong>beneficiar</strong>, cunoscând următoarele:
         </p>
 
         <h3>I. Date procesate</h3>
@@ -5075,21 +5120,21 @@ final class SiteController
             <tr><th>NUME</th><td><input type="text" name="nume" value="{$nume}"></td></tr>
             <tr><th>PRENUME</th><td><input type="text" name="prenume" value="{$prenume}"></td></tr>
             <tr><th>CNP</th><td><input type="text" name="cnp" inputmode="numeric" maxlength="13" value="{$cnp}"></td></tr>
-            <tr><th>CUIM</th><td><input type="text" name="cuim" value="{$cuim}"></td></tr>
+            <tr><th>{$etCuim}</th><td><input type="text" name="cuim" value="{$cuim}"></td></tr>
             <tr><th>TELEFON</th><td><input type="text" name="telefon" value="{$telefon}"></td></tr>
             <tr><th>EMAIL</th><td><input type="email" name="email" value="{$email}"></td></tr>
             <tr><th>ADRESĂ DE CORESPONDENȚĂ</th><td><textarea name="adresa_corespondenta">{$adresaCorespondenta}</textarea></td></tr>
-            <tr><th>DENUMIRE INSTITUȚIE MEDICALĂ<br><small>DESFĂȘURARE ACTIVITATE</small></th><td><textarea name="institutie_medicala">{$institutieMedicala}</textarea></td></tr>
-            <tr><th>ADRESĂ INSTITUȚIE MEDICALĂ<br><small>DESFĂȘURARE ACTIVITATE</small></th><td><textarea name="institutie_adresa">{$institutieAdresa}</textarea></td></tr>
-            <tr><th>DESFĂȘURARE ACTIVITATE (INSTITUȚIE)</th><td><input type="text" name="institutie_activitate" value="{$institutieActivitate}"></td></tr>
+            <tr><th>{$etInstitutie}<br><small>DESFĂȘURARE ACTIVITATE</small></th><td><textarea name="institutie_medicala">{$institutieMedicala}</textarea></td></tr>
+            <tr><th>{$etInstitutieAdresa}<br><small>DESFĂȘURARE ACTIVITATE</small></th><td><textarea name="institutie_adresa">{$institutieAdresa}</textarea></td></tr>
+            <tr><th>{$etActivitate}</th><td><input type="text" name="institutie_activitate" value="{$institutieActivitate}"></td></tr>
             <tr><th>DESFĂȘURARE ACTIVITATE (ADRESĂ)</th><td><input type="text" name="institutie_activitate_adresa" value="{$institutieActivitateAdresa}"></td></tr>
-            <tr><th>TIP MEDIC (primar, specialist, rezident)</th><td><input type="text" name="tip_medic" value="{$tipMedic}"></td></tr>
-            <tr><th>SPECIALIZARE</th><td><input type="text" name="specializare" value="{$specializare}"></td></tr>
+            <tr><th>{$etTipMedic}</th><td><input type="text" name="tip_medic" value="{$tipMedic}"></td></tr>
+            <tr><th>{$etSpecializare}</th><td><input type="text" name="specializare" value="{$specializare}"></td></tr>
             </tbody>
         </table>
 
         <h3>II. Scopul în care va fi utilizat consimțământul</h3>
-        <p>Datele cu caracter personal vor fi utilizate strict pentru înscrierea la evenimentul medical menționat.</p>
+        <p>Datele cu caracter personal vor fi utilizate strict {$scopSectiuneaII}</p>
 
         <h3>III. Drepturile subiectului</h3>
         <p>Subiectul este protejat de către Regulamentul nr. 679/2016 privind protecția persoanelor fizice în ceea ce privește prelucrarea datelor cu caracter personal și privind libera circulație a acestor date și de abrogare a Directivei 95/46/CE (Regulament General privind protecția datelor) și are dreptul de a solicita în orice moment:</p>
@@ -5101,7 +5146,7 @@ final class SiteController
         </ul>
 
         <h3>IV. Valabilitate</h3>
-        <p>Prezentul consimțământ este valabil până la retragerea expresă a acestuia, în formă scrisă prin utilizarea serviciilor poștale la SC AMALBO CONSULTING SRL - str.Dr.Rațiu nr.13, sector 1, București sau prin utilizarea serviciilor de poștă electronică la adresa <a href="mailto:gdpr@bioscem.ro">gdpr@bioscem.ro</a>.</p>
+        <p>Prezentul consimțământ este valabil până la retragerea expresă a acestuia, în formă scrisă prin utilizarea serviciilor poștale la {$adresaRetragere} sau prin utilizarea serviciilor de poștă electronică la adresa {$legaturaEmail}.</p>
 
         <h3>V. Declarație</h3>
         <p>Subiectul își exprimă consimțământul în favoarea beneficiarului cu privire la utilizarea neremunerată a datelor cu caracter personal descrise mai sus. Utilizarea datelor cu caracter personal, al imaginilor fotografice, înregistrărilor audio și video în alte scopuri decât cele descrise mai sus sau pentru comercializarea prin transferul datelor cu caracter personal, al imaginilor către alți terți decât cei menționați este strict interzisă.</p>

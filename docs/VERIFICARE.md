@@ -695,7 +695,8 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
    numărătoarea sursei = rândurile citite = numărătoarea copiei, pe fiecare tabel (A7). Un grup oprit nu lasă nimic;
    `--reia` îl ia de la capăt (îi golește întâi tabelele). `--buget=<secunde>`: după el nu mai începe niciun grup.
 8. **Setările** neutralizate (lista `setari` din reguli, planul de verificare §3.5.2, plus adresele IP ale
-   mentenanței, contul colector al rambursurilor și persoana și telefonul expeditorului FAN): în drum și încă o dată
+   mentenanței, contul colector al rambursurilor, persoana și telefonul expeditorului FAN și, din WP-18, reprezentantul și
+   telefonul operatorului de pe acordul GDPR, valori private ale înghețării; emailul lui devine adresa proprietarului): în drum și încă o dată
    peste tot tabelul (cheile lipsă se scriu). Golite: cheile, parolele, id-urile conturilor externe (și orice cheie cu
    `password`, `secret`, `api_key`, `_token`, `client_secret`); `0`: plățile, ERP-ul, AWB-ul automat, tariful FAN live,
    login-ul Google, etichetele terților; adresa proprietarului: destinatarii emailurilor; căsuța copiei: expeditorul;

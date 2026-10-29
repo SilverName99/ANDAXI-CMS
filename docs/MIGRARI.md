@@ -700,7 +700,7 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    ([VERIFICARE.md](VERIFICARE.md)). `configureaza.php` scrie `SITE_COPIE_VERIFICARE=1` (fără el `--permite-provizoriu`
    nu are efect) și pachetul Bioscem: `SITE_SLUG=bioscem`, `SITE_DATE_DOSAR=<dosarul codului>/site-uri/bioscem`.
    Pentru Bioscem `--permite-provizoriu` nu schimbă nimic (înghețarea lui nu e provizorie); din WP-16 înghețarea Bioscem are
-   și valori private (destinatarii formularului de contact; din WP-18 și datele de contact de pe acordul GDPR), deci și pentru
+   și valori private (destinatarii formularului de contact; din WP-18 și reprezentantul, telefonul și emailul operatorului de pe acordul GDPR), deci și pentru
    Bioscem `site-uri/bioscem/privat/` se copiază de mână lângă pachet (altfel codul 15). **Repetiția pentru
    Biovitality, vertij sau grafoanaytis** cere în `.env`-ul copiei, înainte de `--plan`, ambele schimbate:
    `SITE_SLUG=<site>` și `SITE_DATE_DOSAR=<dosarul codului>/site-uri/<site>`, plus `site-uri/<site>/privat/` copiat

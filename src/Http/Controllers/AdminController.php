@@ -3636,6 +3636,8 @@ final class AdminController
 
         View::render('admin/gdpr-agreements', [
             'title' => 'Acorduri GDPR',
+            // Datele operatorului din textul acordului (WP-18, GR-03): blocul de setări de deasupra listei.
+            'setari' => Settings::all($db),
             'items' => $items,
             'search' => $search,
             'page' => $page,
@@ -3644,6 +3646,43 @@ final class AdminController
             'totalItems' => $total,
             'totalPages' => $totalPages,
         ], 'admin/layout');
+    }
+
+    /** Cheile datelor operatorului din textul acordului GDPR (WP-18, GR-03, DB-15), salvate din blocul de deasupra listei. */
+    private const CHEI_GDPR_OPERATOR = ['gdpr_formular_varianta', 'gdpr_scop', 'gdpr_operator_nume', 'gdpr_operator_reprezentant',
+        'gdpr_operator_regcom', 'gdpr_operator_cui', 'gdpr_operator_sediu', 'gdpr_operator_telefon', 'gdpr_operator_email',
+        'gdpr_operator_marca', 'gdpr_operator_adresa_retragere'];
+
+    /**
+     * POST /admin/pages/gdpr-agreements/settings: datele operatorului de date cu caracter personal și scopul, din textul
+     * formularului public (portat din grafoanaytis `2c11526`, `d1bffca`, cu varianta formularului și adresa de retragere).
+     * Se salvează și goale (formularul le arată atunci ca spații de completat), dar adminul e avertizat pentru cele juridice.
+     */
+    public function gdprAgreementsSettingsSave(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        $db = $this->db();
+        // Înapoi la listă (adresa /admin/pages/gdpr-agreements a portului duce tot aici).
+        $inapoi = '/admin/users/gdpr-agreements';
+        if (!$db instanceof PDO) {
+            Flash::set('error', 'Conexiunea DB nu este disponibilă.');
+            header('Location: ' . $inapoi);
+            return;
+        }
+        $valori = [];
+        foreach (self::CHEI_GDPR_OPERATOR as $cheie) {
+            $valori[$cheie] = trim((string) ($_POST[$cheie] ?? ''));
+        }
+        $valori['gdpr_formular_varianta'] = $valori['gdpr_formular_varianta'] === 'medical' ? 'medical' : 'general';
+        Settings::save($db, $valori);
+        $lipsa = array_keys(array_filter(array_intersect_key($valori, array_flip(['gdpr_operator_nume', 'gdpr_operator_regcom',
+            'gdpr_operator_cui', 'gdpr_operator_reprezentant'])), static fn (string $v): bool => $v === ''));
+        Flash::set($lipsa !== [] ? 'error' : 'success', $lipsa !== []
+            ? 'Datele au fost salvate, dar ' . count($lipsa) . ' câmpuri juridice sunt încă goale. Formularul le va afișa ca spații de completat.'
+            : 'Datele operatorului au fost salvate.');
+        header('Location: ' . $inapoi);
     }
 
     public function gdprAgreementsExport(): void
@@ -3725,7 +3764,8 @@ final class AdminController
             return null;
         }
 
-        $columns = $this->gdprAgreementsExportColumns();
+        $columns = $this->gdprAgreementsExportColumns(
+            trim((string) (Settings::all($this->db())['gdpr_formular_varianta'] ?? '')) === 'medical');
         $signatureColumnIndex = 1;
         foreach ($columns as $index => $column) {
             if (($column['key'] ?? '') === '__signature_image') {
@@ -3830,7 +3870,12 @@ final class AdminController
     /**
      * @return list<array{key:string,label:string,width:float}>
      */
-    private function gdprAgreementsExportColumns(): array
+    /**
+     * Coloanele exportului Excel. Etichetele câmpurilor care țin de varianta formularului (WP-18, GR-03) o urmează:
+     * „medical” (CUIM, instituția medicală, tipul medicului, specializarea) sau „general” (CUI, compania, funcția,
+     * domeniul de activitate); cheile coloanelor din bază rămân aceleași.
+     */
+    private function gdprAgreementsExportColumns(bool $medical = true): array
     {
         return [
             ['key' => 'id', 'label' => 'ID', 'width' => 8.0],
@@ -3842,16 +3887,16 @@ final class AdminController
             ['key' => 'nume', 'label' => 'Nume', 'width' => 18.0],
             ['key' => 'prenume', 'label' => 'Prenume', 'width' => 18.0],
             ['key' => 'cnp', 'label' => 'CNP', 'width' => 18.0],
-            ['key' => 'cuim', 'label' => 'CUIM', 'width' => 16.0],
+            ['key' => 'cuim', 'label' => $medical ? 'CUIM' : 'CUI', 'width' => 16.0],
             ['key' => 'telefon', 'label' => 'Telefon', 'width' => 16.0],
             ['key' => 'email', 'label' => 'Email', 'width' => 24.0],
             ['key' => 'adresa_corespondenta', 'label' => 'Adresa corespondenta', 'width' => 26.0],
-            ['key' => 'institutie_medicala', 'label' => 'Denumire institutie medicala', 'width' => 26.0],
-            ['key' => 'institutie_activitate', 'label' => 'Desfasurare activitate (institutie)', 'width' => 27.0],
-            ['key' => 'institutie_adresa', 'label' => 'Adresa institutie medicala', 'width' => 28.0],
+            ['key' => 'institutie_medicala', 'label' => $medical ? 'Denumire institutie medicala' : 'Denumire companie', 'width' => 26.0],
+            ['key' => 'institutie_activitate', 'label' => $medical ? 'Desfasurare activitate (institutie)' : 'Desfasurare activitate (companie)', 'width' => 27.0],
+            ['key' => 'institutie_adresa', 'label' => $medical ? 'Adresa institutie medicala' : 'Adresa companie', 'width' => 28.0],
             ['key' => 'institutie_activitate_adresa', 'label' => 'Desfasurare activitate (adresa)', 'width' => 27.0],
-            ['key' => 'tip_medic', 'label' => 'Tip medic', 'width' => 16.0],
-            ['key' => 'specializare', 'label' => 'Specializare', 'width' => 18.0],
+            ['key' => 'tip_medic', 'label' => $medical ? 'Tip medic' : 'Functie', 'width' => 16.0],
+            ['key' => 'specializare', 'label' => $medical ? 'Specializare' : 'Domeniu de activitate', 'width' => 18.0],
             ['key' => 'data_semnare', 'label' => 'Data', 'width' => 14.0],
             ['key' => 'nume_semnatura', 'label' => 'Nume semnatura', 'width' => 24.0],
             ['key' => '__signature_image', 'label' => 'Semnatura (imagine)', 'width' => 34.0],

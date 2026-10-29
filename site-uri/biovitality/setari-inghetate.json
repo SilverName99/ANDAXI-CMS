@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "a52c037448c68c3e1dcb039451f328ceb72e6223f49625e5586776a306760de8",
+    "amprenta_nucleu": "a67488a3714f29edd1447fb7325759e30e15bf8196ab2ccdf84cada252e15727",
     "setari": {
         "bunny_app_download_path": {
             "valoare": "aplicatie/BiovitalityFiles.exe",
@@ -111,6 +111,137 @@
             "sursa": "BV cc231e4: ErpSync::coleteCalcul trimite kgMaxColet = 0.0 (comanda nu se împarte în colete după greutate); port-biovitality.md §7, decizia OD-09",
             "vechi": "lipsește",
             "nucleu": "cod \"13\""
+        },
+        "gdpr_formular_varianta": {
+            "valoare": "medical",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "SiteController::renderGdprAgreementFormSection: textul acordului era al unui eveniment medical (CUIM, instituția medicală, tipul medicului, specializarea, „înscrierea la evenimentul medical”); implicitul nucleului e varianta „general” (WP-18, GR-03, DB-15)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"general\""
+        },
+        "gdpr_operator_adresa_retragere": {
+            "valoare": "SC AMALBO CONSULTING SRL - str.Dr.Rațiu nr.13, sector 1, București",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: adresa poștală pentru retragerea acordului (secțiunea IV) era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/serviciilor poștale la ([^<]+?) sau prin utilizarea serviciilor de poștă electronică/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_cui": {
+            "valoare": "(RO)19166493",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: codul fiscal era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/cod unic de înregistrare\\/cod TVA ([^,]+), identificată/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_email": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa",
+            "din": "extras",
+            "privat": true,
+            "sursa": "SiteController::renderGdprAgreementFormSection: adresa de email pentru retragerea acordului (secțiunea IV) era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/serviciilor de poștă electronică la adresa <a href=\"mailto:([^\"]+)\">/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_marca": {
+            "valoare": "Biovitality",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: marca era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/prin marca <strong>„([^”]+)”<\\/strong>/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_nume": {
+            "valoare": "SC Amalbo Consulting SRL",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: denumirea operatorului era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/de către operatorul de date cu caracter personal <strong>([^<]+)<\\/strong>, persoană juridică/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_regcom": {
+            "valoare": "J2006017724407",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: numărul de la Registrul Comerțului era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/Registrul Comerțului sub nr\\. ([^,]+), cod unic/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_reprezentant": {
+            "valoare": "Valoare demo",
+            "mod": "lipsa",
+            "din": "extras",
+            "privat": true,
+            "sursa": "SiteController::renderGdprAgreementFormSection: reprezentantul legal (date personale: privat, OD-49) era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/reprezentată legal prin ([^,]+), în calitate de/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_sediu": {
+            "valoare": "București, str.Dr.Rațiu nr. 13, sector 1",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: sediul operatorului era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/persoană juridică română, cu sediul în ([^,]+, [^,]+, [^,]+), telefon /u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_operator_telefon": {
+            "valoare": "0700 000 001",
+            "mod": "lipsa",
+            "din": "extras",
+            "privat": true,
+            "sursa": "SiteController::renderGdprAgreementFormSection: telefonul operatorului era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/, telefon ([0-9.]+), înregistrată la Registrul/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "gdpr_scop": {
+            "valoare": "“Conferințele Neurocare – Ediția a 2-a Multidisciplinaritate în acțiune – Frontiere în neuropediatrie” - București, între 14-16 mai 2026",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::renderGdprAgreementFormSection: evenimentul din prima frază a acordului era scris în textul acordului /acorduri-gdpr; codul comun îl ia din setări, gol = spațiu de completat (WP-18, GR-03, DB-15; OD-22: textul de azi, neschimbat)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/la evenimentul medical\\n\\s*<strong>(.+?)<\\/strong>,\\n/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
         },
         "maintenance_message": {
             "valoare": "",

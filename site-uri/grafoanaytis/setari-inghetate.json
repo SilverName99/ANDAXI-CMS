@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "a52c037448c68c3e1dcb039451f328ceb72e6223f49625e5586776a306760de8",
+    "amprenta_nucleu": "a67488a3714f29edd1447fb7325759e30e15bf8196ab2ccdf84cada252e15727",
     "setari": {
         "catalog_descriere_implicita": {
             "valoare": "Supliment natural",
@@ -69,6 +69,14 @@
             "sursa": "GR (din BV 88b7f4d) nu împarte comanda în colete după greutate: fără cheie, fără împărțire (ca BV, decizia OD-09)",
             "vechi": "lipsește",
             "nucleu": "cod \"13\""
+        },
+        "gdpr_formular_varianta": {
+            "valoare": "general",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "SiteController::renderGdprAgreementFormSection: textul acordului era cel general („în scopul …”, CUI, compania, funcția, domeniul de activitate; grafoanaytis 2c11526, d1bffca), iar datele operatorului din setări (din DEFAULTS, mai jos); varianta „general” e și implicitul nucleului, scrisă aici ca textul să nu depindă de el (WP-18, GR-03)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"general\""
         },
         "gdpr_operator_email": {
             "valoare": "adresa1@exemplu.ro",

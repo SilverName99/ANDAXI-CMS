@@ -11,7 +11,7 @@
 7	scripts/seo-continut.php
 8	scripts/seo-texte.php
 8	src/Http/Controllers/AdminController.php
-16	src/Http/Controllers/SiteController.php
+4	src/Http/Controllers/SiteController.php
 1	src/Http/rute.php
 1	src/Support/Activari.php
 2	src/Support/AvertismentProduse.php

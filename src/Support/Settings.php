@@ -98,6 +98,21 @@ final class Settings
         'email_brand_color_2' => '#334155',
         'store_logo_url' => '',
         'catalog_descriere_implicita' => '',
+        // WP-18 (GR-03, DB-15): datele operatorului și scopul din textul acordului GDPR (pluginul acorduri_gdpr; Admin →
+        // Utilizatori → Acorduri GDPR). Goale: formularul le arată ca spații de completat. Varianta textului: „general”
+        // (un scop oarecare) sau „medical” (înscrierea la un eveniment medical); adresa de retragere goală =
+        // „<denumire> - <sediu>”. Un site existent își păstrează textul prin înghețare.
+        'gdpr_formular_varianta' => 'general',
+        'gdpr_scop' => '',
+        'gdpr_operator_nume' => '',
+        'gdpr_operator_sediu' => '',
+        'gdpr_operator_telefon' => '',
+        'gdpr_operator_email' => '',
+        'gdpr_operator_regcom' => '',
+        'gdpr_operator_cui' => '',
+        'gdpr_operator_marca' => '',
+        'gdpr_operator_reprezentant' => '',
+        'gdpr_operator_adresa_retragere' => '',
         'email_delivery_method' => 'smtp',
         // WP-16 (DB-05): gol = numele site-ului (Brand::numeExpeditor); un site existent își păstrează numele prin înghețare.
         'order_email_from_name' => '',
