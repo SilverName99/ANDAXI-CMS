@@ -266,7 +266,19 @@ async function compara(browser) {
                     vazute.add(e.k);
                     const b = harta.get(e.k);
                     if (!b) {
-                        diferente.push({ rol, cale, latime, cheie: e.k, proprietate: '(elementul lipsește în bază)', baza: '', curent: '', declarata: false });
+                        // Un element nou se poate declara (WP-21): proprietatea „(element nou)” a unei declarații care îl prinde.
+                        let declarataNou = false;
+                        for (const i of e.d) {
+                            const d = declaratii[i];
+                            const paginiD = Array.isArray(d.pagini) ? d.pagini : [d.pagini];
+                            const proprietatiD = Array.isArray(d.proprietate) ? d.proprietate : [d.proprietate];
+                            if ((paginiD.includes('*') || paginiD.includes(cale)) && proprietatiD.includes('(element nou)')
+                                && (!d.latimi || d.latimi.includes(latime)) && (!d.roluri || d.roluri.includes(rol))) {
+                                declarataNou = true;
+                                folosite.add(i);
+                            }
+                        }
+                        diferente.push({ rol, cale, latime, cheie: e.k, proprietate: '(elementul lipsește în bază)', baza: '', curent: '', declarata: declarataNou });
                         continue;
                     }
                     for (const p of PROPRIETATI) {

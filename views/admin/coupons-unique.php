@@ -238,6 +238,128 @@ $pageUrl = static function (int $p) use ($view, $q, $batch, $perPage): string {
                     <label class="vuc-editchk"><input type="checkbox" name="edit_stacks" value="1" form="vuc-bulk"> Cumulare cu reduceri</label>
                     <select name="stacks_value" form="vuc-bulk"><option value="1">Se cumulează</option><option value="0">Nu se cumulează</option></select>
                 </div>
+<?= \App\Support\Dev::marcaj('bv:cupoane-unice-produse') ?>
+<?php
+/*
+ * WP-21 (C12, din Biovitality 222ed71): rândul „Produse” al editării în masă. Lista bifată înlocuiește produsele fiecărui
+ * cupon ales (selectate sau tot lotul); fără niciun produs bifat, cupoanele se aplică la toate produsele. Lista se
+ * precompletează din cupoanele alese când au aceleași produse (sau, fără selecție, din lotul afișat); altfel spune că
+ * sunt diferite. Produsele cupoanelor vin din datele de mai jos (id => produse, doar la selectate).
+ */
+$dateProduseCupoane = ['cupoane' => (object) (is_array($produseCupoane ?? null) ? $produseCupoane : []), 'lot' => $batch !== '' ? 1 : 0];
+?>
+                <div class="vuc-editrow vuc-editrow--top">
+                    <label class="vuc-editchk"><input type="checkbox" name="edit_products" value="1" form="vuc-bulk"> Produse</label>
+                    <div class="vuc-products">
+                        <input type="text" class="coupon-admin-check-search" placeholder="Caută produs..." data-vuc-product-search autocomplete="off">
+                        <div class="coupon-admin-checklist" role="group" aria-label="Produsele la care se aplică cupoanele">
+                            <?php foreach ($products as $product): ?>
+                                <label class="coupon-admin-checkline" data-vuc-product-item data-search="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>">
+                                    <input type="checkbox" name="product_ids[]" value="<?= (int) ($product['id'] ?? 0) ?>" form="vuc-bulk">
+                                    <span><?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                        <p class="coupon-admin-check-empty" data-vuc-product-empty hidden>Niciun produs pentru căutarea introdusă.</p>
+                        <label class="coupon-admin-active-check">
+                            <input type="checkbox" name="apply_only_selected_products" value="1" form="vuc-bulk">
+                            <span>Se aplică doar la produsele selectate, dar merge și cu alte produse în coș.</span>
+                        </label>
+                        <small class="vuc-products-note">Produsele bifate înlocuiesc lista fiecărui cupon. Dacă nu bifezi niciun produs, cupoanele se aplică la toate produsele. <span data-vuc-products-state></span></small>
+                    </div>
+                </div>
+                <script type="application/json" id="vuc-produse-date"><?= json_encode($dateProduseCupoane, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+                <style>
+                .vuc-editrow--top{align-items:flex-start;}
+                .vuc-editrow--top .vuc-editchk{padding-top:8px;}
+                .vuc-products{flex:1;min-width:260px;max-width:640px;display:flex;flex-direction:column;gap:6px;}
+                .vuc-products .coupon-admin-check-search{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13.5px;margin-bottom:0;}
+                .vuc-products .coupon-admin-checklist{max-height:220px;}
+                .vuc-products .coupon-admin-active-check{margin:2px 0 0;font-weight:600;font-size:13.5px;color:#374151;align-items:center;gap:8px;}
+                .vuc-products .coupon-admin-active-check input[type=checkbox]{width:16px;height:16px;min-width:16px;min-height:16px;margin:0;}
+                .vuc-products-note{color:#6b7280;font-size:12.5px;line-height:1.45;}
+                </style>
+                <script>
+                // După încărcarea paginii: cupoanele (.vuc-rowcheck) sunt în tabelul de sub panou.
+                document.addEventListener('DOMContentLoaded', function(){
+                  var date = {};
+                  try { date = JSON.parse((document.getElementById('vuc-produse-date') || {}).textContent || '{}') || {}; } catch (e) { return; }
+                  var cupoane = date.cupoane || {};
+                  var panel = document.getElementById('vuc-editpanel');
+                  if(!panel){ return; }
+                  var checks = Array.prototype.slice.call(document.querySelectorAll('.vuc-rowcheck'));
+                  var selAll = document.getElementById('vuc-selall');
+                  var editProducts = panel.querySelector('input[name="edit_products"]');
+                  var onlySelected = panel.querySelector('input[name="apply_only_selected_products"]');
+                  var productSearch = panel.querySelector('[data-vuc-product-search]');
+                  var productItems = Array.prototype.slice.call(panel.querySelectorAll('[data-vuc-product-item]'));
+                  var productBoxes = productItems.map(function(item){ return item.querySelector('input[type=checkbox]'); });
+                  var productEmpty = panel.querySelector('[data-vuc-product-empty]');
+                  var productState = panel.querySelector('[data-vuc-products-state]');
+                  // După ce omul a bifat ceva în listă, nu-i mai schimbăm noi bifele.
+                  var productsTouched = false;
+                  function plain(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+                  function produse(n){
+                    var de = n >= 20 && (n % 100 === 0 || n % 100 >= 20);
+                    return n + (de ? ' de' : '') + (n === 1 ? ' produs' : ' produse');
+                  }
+                  function alCuponului(c){
+                    var info = cupoane[c.value] || {p: [], o: 0};
+                    return {lista: (info.p || []).join(','), doar: Number(info.o) === 1 ? '1' : '0'};
+                  }
+                  function bifeazaProduse(ids, doar){
+                    if(productsTouched){ return; }
+                    var pe = {};
+                    ids.forEach(function(id){ pe[id] = true; });
+                    productBoxes.forEach(function(b){ b.checked = !!pe[b.value]; });
+                    if(onlySelected){ onlySelected.checked = doar; }
+                  }
+                  function syncProducts(){
+                    if(!productState){ return; }
+                    // Cupoanele bifate; fără bife, într-un lot filtrat, cele afișate.
+                    var surse = checks.filter(function(c){ return c.checked; });
+                    var eticheta = 'Cupoanele selectate';
+                    if(surse.length === 0 && Number(date.lot) === 1){ surse = checks.slice(); eticheta = 'Cupoanele din lot afișate'; }
+                    if(surse.length === 0){ bifeazaProduse([], false); productState.textContent = ''; return; }
+                    var primul = alCuponului(surse[0]);
+                    var aceleasi = surse.every(function(c){ var x = alCuponului(c); return x.lista === primul.lista && x.doar === primul.doar; });
+                    if(!aceleasi){
+                      bifeazaProduse([], false);
+                      productState.textContent = eticheta + ' au produse diferite; ce bifezi aici le înlocuiește pe toate.';
+                      return;
+                    }
+                    var ids = primul.lista === '' ? [] : primul.lista.split(',');
+                    bifeazaProduse(ids, primul.doar === '1');
+                    productState.textContent = ids.length === 0
+                      ? eticheta + ' se aplică acum la toate produsele.'
+                      : eticheta + ' se aplică acum la ' + produse(ids.length) + (productsTouched ? '.' : ', bifate mai sus.');
+                  }
+                  function touchProducts(){
+                    productsTouched = true;
+                    if(editProducts){ editProducts.checked = true; }
+                    syncProducts();
+                  }
+                  productBoxes.forEach(function(b){ b.addEventListener('change', touchProducts); });
+                  if(onlySelected){ onlySelected.addEventListener('change', touchProducts); }
+                  if(productSearch){
+                    productSearch.addEventListener('input', function(){
+                      var q = plain(productSearch.value.trim());
+                      var vizibile = 0;
+                      productItems.forEach(function(item){
+                        var ok = q === '' || plain(item.getAttribute('data-search')).indexOf(q) >= 0;
+                        item.style.display = ok ? '' : 'none';
+                        if(ok){ vizibile++; }
+                      });
+                      if(productEmpty){ productEmpty.hidden = vizibile > 0; }
+                    });
+                  }
+                  // Selecția cupoanelor (rândurile și „Selectează tot”) schimbă lista; după scriptul paginii, care le numără.
+                  checks.forEach(function(c){ c.addEventListener('change', syncProducts); });
+                  if(selAll){ selAll.addEventListener('change', syncProducts); }
+                  syncProducts();
+                });
+                </script>
+<?= \App\Support\Dev::marcaj('bv:cupoane-unice-produse', true) ?>
             </div>
             <div class="vuc-editpanel__actions">
                 <button class="btn" form="vuc-bulk" type="submit" name="action" value="bulk_edit" onclick="return vucBulkGuard('Aplici modificările la cupoanele selectate?')">Aplică la selectate</button>

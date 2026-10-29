@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
+    "amprenta_nucleu": "688b79f240ba3d4585f6bd04c1d7b9d2bd34fad2216368d571de7bf26840b1ed",
     "setari": {
         "bunny_app_download_path": {
             "valoare": "aplicatie/BiovitalityFiles.exe",
@@ -423,6 +423,16 @@
             "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
+        },
+        "recenzii_insigna_meniu": {
+            "motiv": "Biovitality arată deja bulina recenziilor neaprobate în meniu (84e29a9, views/admin/layout.php); implicitul nucleului (1) e comportamentul de azi",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "recenzii_ip_zile": {
+            "motiv": "OD-15: codul Biovitality ține adresa recenziei pe termen nelimitat; codul comun o golește după 90 de zile (declarat în ce-se-schimba.md)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"90\""
         },
         "welcome_popup_version": {
             "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",

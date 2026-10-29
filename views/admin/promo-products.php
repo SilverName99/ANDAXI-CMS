@@ -23,6 +23,25 @@ $fmtDate = static function (string $v): string {
             <h1>Produse promoționale</h1>
             <p>Nomenclator intern pentru ce mai adaugi la comenzi (scrisoare, mostră, pix etc.). Le selectezi apoi în detaliile fiecărei comenzi.</p>
         </div>
+<?= \App\Support\Dev::marcaj('bv:promo-export') ?>
+<?php
+// WP-21 (C13, din Biovitality 2ebc0cb, 9cca65b): exportul Excel (produsele și cui au fost date), cu intervalul de date
+// filtrat mai jos; fereastra „Cui a fost dat” se oprește la înălțimea ecranului și derulează doar lista dinăuntru.
+$exportQuery = array_filter(['from' => $from, 'to' => $to], static fn (string $v): bool => $v !== '');
+$exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_build_query($exportQuery) : '');
+?>
+        <div>
+            <a class="btn btn-secondary" href="<?= $esc($exportUrl) ?>"
+               title="Descarcă produsele promoționale și lista celor care le-au primit (Excel)">⭳ Export Excel</a>
+        </div>
+        <style>
+        #promo-detail-modal > div{max-height:calc(100vh - 40px);display:flex;flex-direction:column;}
+        #promo-detail-modal > div > div:first-child{gap:12px;flex:0 0 auto;}
+        #promo-detail-close{flex:0 0 auto;}
+        #promo-detail-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+        #promo-detail-modal > div > div:last-child{flex:0 0 auto;}
+        </style>
+<?= \App\Support\Dev::marcaj('bv:promo-export', true) ?>
     </div>
 
     <!-- Promoționale per client -->
@@ -126,6 +145,9 @@ $fmtDate = static function (string $v): string {
             <?php if ($from !== '' || $to !== ''): ?>
                 <a class="btn btn-secondary" href="/admin/promo-products">Reset</a>
             <?php endif; ?>
+<?= \App\Support\Dev::marcaj('bv:promo-export-filtru') ?>
+            <a class="btn btn-secondary" href="<?= $esc($exportUrl) ?>">⭳ Export Excel</a>
+<?= \App\Support\Dev::marcaj('bv:promo-export-filtru', true) ?>
         </form>
 
         <?php if ($report === []): ?>
@@ -217,10 +239,11 @@ $fmtDate = static function (string $v): string {
                         return '<div style="border-top:1px solid #eee;padding:8px 0;font-size:13px;">' +
                             '<strong>' + esc(x.client_name) + '</strong>' + (x.email ? ' · ' + esc(x.email) : '') +
                             '<br><span style="color:#94a3b8;">' + esc(x.order_number) + ' · ' + esc(x.created_at) + '</span>' +
+                            '<br><span style="color:#94a3b8;">' + (x.given_at ? 'Dat la ' + esc(x.given_at) + (x.given_by ? ' de ' + esc(x.given_by) : '') : 'Dat odată cu comanda') + '</span>' +
                             ' — <strong>× ' + (Number(x.quantity)||1) + '</strong></div>';
                     }).join('');
                     document.getElementById('promo-detail-body').innerHTML =
-                        '<p style="margin:0 0 10px;font-weight:700;">Total dat: ' + (Number(d.total)||0) + ' buc. la ' + recs.length + ' comenzi</p>' + rows;
+                        '<p style="position:sticky;top:0;z-index:1;margin:0 0 10px;padding:6px 0;background:#fff;font-weight:700;">Total dat: ' + (Number(d.total)||0) + ' buc. la ' + recs.length + ' comenzi</p>' + rows;
                 })
                 .catch(function(){ document.getElementById('promo-detail-body').innerHTML = '<p style="color:#dc2626;">Eroare de comunicare.</p>'; });
         });

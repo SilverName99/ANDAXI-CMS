@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
+    "amprenta_nucleu": "688b79f240ba3d4585f6bd04c1d7b9d2bd34fad2216368d571de7bf26840b1ed",
     "setari": {
         "catalog_ascunde_inactive": {
             "valoare": "0",
@@ -316,6 +316,16 @@
             "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
+        },
+        "recenzii_insigna_meniu": {
+            "motiv": "Fără pluginul recenzii în abonament (catalog, cereri_oferta): meniul n-are intrarea Recenzii, setarea nu se folosește",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "recenzii_ip_zile": {
+            "motiv": "Fără pluginul recenzii în abonament: nicio recenzie, nicio adresă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"90\""
         },
         "stripe_enabled": {
             "motiv": "GR nu are magazin (licența GR: catalog și cereri de ofertă, OD-23): plata nu apare nicăieri, iar cheile Stripe trebuie să fie goale pe GR (port-grafoanaytis.md GR-22)",

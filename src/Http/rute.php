@@ -215,6 +215,7 @@ return static function (Router $router): void {
     $router->post('/admin/orders/{id}/precomanda-elibereaza', [AdminController::class, 'precomandaElibereaza']);
     $router->get('/admin/orders/{id}/client-promo', [AdminController::class, 'orderClientPromo']);
     $router->get('/admin/promo-products/search', [AdminController::class, 'promoClientSearchApi']);
+    $router->get('/admin/promo-products/export', [AdminController::class, 'promoProductsExport']);
     $router->get('/admin/promo-products/{id}/recipients', [AdminController::class, 'promoProductRecipientsApi']);
     $router->get('/admin/promo-products', [AdminController::class, 'promoProducts']);
     $router->post('/admin/promo-products', [AdminController::class, 'promoProductSave']);
@@ -258,6 +259,7 @@ return static function (Router $router): void {
     $router->get('/admin/emails/builder', [AdminController::class, 'emailsBuilder']);
     $router->post('/admin/emails/builder', [AdminController::class, 'emailsBuilderSave']);
     $router->post('/admin/emails/builder/preview', [AdminController::class, 'emailsBuilderPreview']);
+    $router->post('/admin/emails/builder/video-lookup', [AdminController::class, 'emailsVideoLookup']);
     $router->get('/admin/emails/{section}', [AdminController::class, 'emailsSection']);
     $router->post('/admin/emails', [AdminController::class, 'emailsSave']);
     $router->post('/admin/emails/test', [AdminController::class, 'emailsSendTest']);

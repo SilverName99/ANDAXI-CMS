@@ -587,7 +587,8 @@ dispar, iar linkurile spre el se scot din pagini.
 
 ### Cupoane (`cupoane`)
 
-- **Conține**: meniul Cupoane și Cupoane unice; câmpul de cupon din coș, din
+- **Conține**: meniul Cupoane și Cupoane unice (cu produsele schimbate în masă, WP-21 C12, din
+  Biovitality `222ed71`); câmpul de cupon din coș, din
   coșul flotant și din checkout; reducerea cu cupon din fereastra comenzii.
   Tabel: `coupons`. Un cod scris cu spații („AZ 987”) găsește cuponul AZ987 când nu există
   exact așa (WP-20, C9, din Biovitality `aed0cee`); comanda ține codul din bază.
@@ -616,7 +617,17 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: tab-ul și formularul de recenzii de pe produs, stelele din catalog,
   `{{product_review_form}}`, `/review-form/…`, meniul Recenzii (moderare). Tabel:
-  `product_reviews`.
+  `product_reviews`. **Anti-spamul** (WP-21, C10, din Biovitality `8ba8ddd`, `0c682b3`;
+  `App\Support\ReviewGuard`, migrarea `recenzii/0030`): câmpul-capcană `review_website`,
+  formularul trimis la sub 3 secunde, peste 4 recenzii pe oră de la aceeași adresă (regula
+  `IpClient`, IPv6 pe /64), același text în 30 de zile, tipare de atac (SQLi, XSS, JNDI),
+  linkuri, BBCode, domenii de test, nume generate. Recenzia suspectă se salvează marcată
+  (`is_spam`, `spam_reason`, cu adresa în `ip_address`) și stă în filtrul „Spam”, nu în
+  „Pending”; „Detectează spamul” (recenziile primite înainte), „Golește spamul”, „Spam” / „Nu e
+  spam” pe rând. Bulina din meniu cu recenziile care așteaptă (fără spam), după setarea
+  `recenzii_insigna_meniu` (nucleul 1; Bioscem înghețat 0). Adresa unei recenzii se golește după
+  `recenzii_ip_zile` zile (implicit 90, recomandarea OD-15; 0 = cât recenzia), la o recenzie nouă și
+  la deschiderea listei din admin.
 - **Are nevoie de**: catalog.
 - **Se oprește**: recenziile existente se văd, cele noi nu se mai primesc.
 - **Oprit**: nimic despre recenzii pe site sau în admin: nici codurile și tab-ul
@@ -650,7 +661,10 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: meniul Produse promoționale; mostrele și cadourile din fereastra
   comenzii și raportul pe client. Tabele: `promotional_products`,
-  `order_promo_items`.
+  `order_promo_items` (WP-21, C13, din Biovitality `657c0cf`, `2ebc0cb`, `9cca65b`: „dat la” și
+  „dat de”, `given_at`/`given_by` din `produse_promo/0031`, păstrate peste re-salvările comenzii;
+  exportul Excel `GET /admin/promo-products/export`, cu `App\Support\XlsxWriter` din nucleu: foile
+  „Produse” și „Cui a fost dat”, pe intervalul filtrat; fereastra „Cui a fost dat” derulează).
 - **Are nevoie de**: magazin.
 - **Se oprește**: ca pornit (se folosește doar în admin, pe comenzile existente).
 - **Oprit**: nimic promo în comenzi sau în meniu.
@@ -690,7 +704,14 @@ dispar, iar linkurile spre el se scot din pagini.
   (și campaniile); formularele de abonare; cronul
   `scripts/newsletter-campaigns.php` („vizibil”); dezabonarea și urmărirea
   deschiderilor/clickurilor (mereu deschise). Tabele: `newsletter_*`,
-  `orders.nl_campaign_id`.
+  `orders.nl_campaign_id`. Din Biovitality (WP-21, C11): destinatarii unei campanii filtrați și
+  paginați pe server, fără reîncărcarea paginii (`95f904f`, `f4dd2c0`); diagnosticul unei campanii
+  în `tools/newsletter/diagnostic-campanie.php` (doar numere, fără adrese); blocurile din coloane fără
+  fundal propriu și cu aliniere (`b9fcaf8`; un fundal gol nu mai scrie `background:;`); blocul
+  „Video / TikTok” (`84e29a9`: coperta cu buton, nu player; `POST /admin/emails/builder/video-lookup`
+  ia titlul și coperta prin oEmbed de la TikTok, YouTube, Vimeo și păstrează coperta în
+  `uploads/video-thumbs`; ruta e și a magazinului, ca preview-ul); popup-ul de abonare în
+  `public/assets/{css,js}/optin-popup.*` (`855dab2`, folosit de antetul Biovitality).
 - **Are nevoie de**: nimic.
 - **Se oprește**: campaniile pornite se termină (cronul le duce la capăt); „Trimite
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile

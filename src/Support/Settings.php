@@ -111,6 +111,12 @@ final class Settings
         'catalog_sortare_vizibila' => '1',
         'catalog_similare_titlu' => 'Produse asemănătoare',
         'catalog_similare_subtitlu' => '',
+        // WP-21 (C10, din Biovitality 84e29a9): bulina cu numărul recenziilor care așteaptă aprobare, lângă „Recenzii” în
+        // meniul adminului (pluginul recenzii). Un site existent își păstrează meniul prin înghețare.
+        'recenzii_insigna_meniu' => '1',
+        // WP-21 (C10, OD-15): câte zile se păstrează adresa de la care a venit o recenzie (product_reviews.ip_address,
+        // pentru limita anti-spam și pentru admin); după aceea se golește. 0 = se păstrează cât recenzia.
+        'recenzii_ip_zile' => '90',
         // WP-18 (GR-03, DB-15): datele operatorului și scopul din textul acordului GDPR (pluginul acorduri_gdpr; Admin →
         // Utilizatori → Acorduri GDPR). Goale: formularul le arată ca spații de completat. Varianta textului: „general”
         // (un scop oarecare) sau „medical” (înscrierea la un eveniment medical); adresa de retragere goală =

@@ -97,18 +97,18 @@ dovada pe datele BV: WP-11b); `5d071e2`, `18d44ab` Lot C; `9f5b196`, `98f81b6`
 
 | Commit | Data | Subiect | Stare |
 |---|---|---|---|
-| `9cca65b` | 19.08 | Promoționale: fereastra „Cui a fost dat” derulează | de portat (WP-21, C13) |
-| `2ebc0cb` | 19.08 | Produse promoționale: export Excel | de portat (WP-21, C13; `XlsxWriter` în nucleu) |
-| `657c0cf` | 19.08 | Promoționale: momentul acordării și operatorul | de portat (WP-21, C13; migrarea 0031) |
+| `9cca65b` | 19.08 | Promoționale: fereastra „Cui a fost dat” derulează | portat (WP-21, C13: stilul în marcajul `bv:promo-export`, totalul lipit sus declarat în `$porturiBiovitality`) |
+| `2ebc0cb` | 19.08 | Produse promoționale: export Excel | portat (WP-21, C13: `App\Support\XlsxWriter` în nucleu, fără rezerva în `public/uploads`; `GET /admin/promo-products/export`) |
+| `657c0cf` | 19.08 | Promoționale: momentul acordării și operatorul | portat (WP-21, C13: `produse_promo/0031`; `given_by` = emailul adminului) |
 | `6cc6fc5` | 20.08 | Eliberarea lacătului de sesiune pe cererile de fundal | portat (WP-12, 21 octombrie): C4 `elibereazaSesiunea()` în heartbeat (formularul din sesiune citit înainte), sumarul coșului, cele mai vândute și catalog; C3 `ErpClient::fromDbRapid`, cu 3 secunde (planul SEO §8.12, B6) în locul celor 4 din BV. Dovada: `tools/dev/test-reparatii.php` (E, F) |
 | `9f076f8` | 20.08 | FANbox: „Ramburs” devine „Plata la FANbox” | nu se portează (CMS păstrează Bioscem `705371a`, C16) |
-| `95f904f` | 20.08 | Newsletter: diagnostic destinatari, filtre și paginare | de portat (WP-21, C11a) |
-| `8ba8ddd` | 20.08 | Recenzii: filtru anti-spam și secțiunea Spam | de portat (WP-21, C10; migrarea 0030; limita pe adresă cu `IpClient::adresa()`/`conditieLimita()` din WP-12b, nu cu `CF-Connecting-IP`/`X-Forwarded-For` ca în `ReviewGuard::ip` din BV) |
+| `95f904f` | 20.08 | Newsletter: diagnostic destinatari, filtre și paginare | portat (WP-21, C11a, C11b: filtrele și paginarea pe server; scriptul ca `tools/newsletter/diagnostic-campanie.php`, fără `--emailuri`) |
+| `8ba8ddd` | 20.08 | Recenzii: filtru anti-spam și secțiunea Spam | portat (WP-21, C10: `App\Support\ReviewGuard`, `recenzii/0030`; limita pe adresă cu `IpClient::adresa()`/`conditieLimita()` din WP-12b, nu cu `CF-Connecting-IP`/`X-Forwarded-For` ca în `ReviewGuard::ip` din BV; fără DDL la cerere) |
 | `649c837` | 20.08 | Analiza competiției (+ mici schimbări în emails) | pluginul `concurenta` (Etapa 4, P3); partea de newsletter în WP-21 (C11) |
-| `f4dd2c0` | 20.08 | Statistici newsletter fără reîncărcarea paginii | de portat (WP-21, C11a) |
+| `f4dd2c0` | 20.08 | Statistici newsletter fără reîncărcarea paginii | portat (WP-21, C11a) |
 | `4f65fd9` | 20.08 | Galeria din selectoare nu se mai descarcă la fiecare pagină | portat (WP-12, C7: `loading="lazy" decoding="async"` pe cele 6 poze ale selectoarelor; declarat în `$porturiBiovitality`) |
-| `0c682b3` | 21.08 | Recenzii: detectorul prinde injecțiile boolean | de portat (WP-21, C10) |
-| `855dab2` | 21.08 | Popup newsletter: CSS și JS în fișiere | de portat (WP-21, C11e) |
+| `0c682b3` | 21.08 | Recenzii: detectorul prinde injecțiile boolean | portat (WP-21, C10) |
+| `855dab2` | 21.08 | Popup newsletter: CSS și JS în fișiere | portat (WP-21, C11e: `public/assets/{css,js}/optin-popup.*`, la fel; antetul BV le cere, G-vizual cu popup-ul deschis la adoptarea BV) |
 | `c64fc2d` | 21.08 | Ofertele nu mai reînvie; salvarea nu mai așteaptă ERP-ul | C1 portat prin Bioscem `b632294` (`62349a2`; varianta Bioscem tratează în plus cheile care se ciocnesc, BV o primește la adoptare); C2, C3, C6 portate (WP-12, 21 octombrie; C3 ține minte în plus, 60 de secunde, codurile pe care ERP-ul nu le cunoaște, G-m3; C2 dovedit de cazul de salvare „reparație” din `compara-cu-baza.php`, C6 declarat în `$porturiBiovitality`); C5 nu se portează (înlocuit de migrări, WP-05) |
 | `d19a8ca` | 25.08 | Panoul de căutare peste benzile de anunț | nu se portează (anulat de `6583720` în aceeași zi; BV = CMS) |
 | `6583720` | 25.08 | Revine la straturile de dinainte în layout | nu se portează (anulează `d19a8ca`) |
@@ -120,12 +120,12 @@ dovada pe datele BV: WP-11b); `5d071e2`, `18d44ab` Lot C; `9f5b196`, `98f81b6`
 | `9c549c7` | 03.09 | Blog: cuprins, bibliografie, articole similare, etichete | de portat (WP-22, B2) |
 | `263b520` | 03.09 | Blog: căutare și filtrare pe categorii și etichete | de portat (WP-22, B3) |
 | `49c4f5b` | 03.09 | Blog: previzualizare desktop/telefon, card Google | de portat (WP-23 B4; cardul Google în WP-37) |
-| `84e29a9` | 03.09 | Parteneri care curg, bulină la recenzii, bloc video în newslettere | bulina WP-21 (C10), video WP-21 (C11d); partenerii pachetul BV (P5) |
+| `84e29a9` | 03.09 | Parteneri care curg, bulină la recenzii, bloc video în newslettere | bulina portată (WP-21, C10: `insigna` în catalogul meniului, fără spam, setarea `recenzii_insigna_meniu`, Bioscem înghețat 0), blocul video portat (WP-21, C11d: `VideoEmbed::copertaSiTitlu` în clasa venită din vertij, coperta doar din https și doar imagine, cel mult 5 MB); partenerii pachetul BV (P5) |
 | `f5295b5` | 03.09 | Căutare mai rapidă în blog + documentație | de portat (WP-22, B3, X12 `Slug`) |
 | `3ea6a31` | 03.09 | Editorul reține categoriile, etichetele și referințele | X1 (categoriile) portat prin Bioscem `89dcc4e` (`1df3771`), plus regula categoriei principale din Bioscem `b3781a4` (`dbd218c`), pe care BV nu o are și o primește la adoptare; etichetele și referințele de portat (WP-23, B4) |
 | `e2c33d3` | 03.09 | Paginarea postărilor nu mai sare în capul listei | de portat (WP-23, B4) |
 | `6ea2cb1` | 03.09 | Banda cu parteneri pe desktop + derulare lină din cuprins | `blog-anchors.js` în WP-22 (doar pe `/blog/{slug}`); partenerii pachetul BV |
-| `b9fcaf8` | 03.09 | Coloanele: culoarea coloanei nu mai e acoperită | de portat (WP-21, C11c) |
+| `b9fcaf8` | 03.09 | Coloanele: culoarea coloanei nu mai e acoperită | portat (WP-21, C11c; `transparent`/`none` scrise rămân ca înainte, doar fundalul gol nu mai scrie nimic) |
 | `90afd46` | 08.09 | Template-uri de produs: pachete cu produse din magazin | câmpurile portate (WP-19, C14d: `template_only` cu migrarea `catalog/0027`, tipul „Imagine” cu selectorul galeriei, filtrul câmpurilor după șablon în editor, câmpul „html” ca markup după `catalog_camp_html_brut`, Bioscem înghețat `0`); pachetele pluginul `pachete_produse` (Etapa 4, P4) |
 | `83067d3` | 08.09 | Instalarea creează coloanele pentru pachete | pluginul `pachete_produse` (Etapa 4; migrare în grupul G) |
 | `2b8a618` | 09.09 | Checkout, transport gratuit, produse inactive, ordine manuală | produsele inactive și ordinea manuală portate (WP-19: C8 cu `catalog_ascunde_inactive`, Bioscem înghețat `0`, linkul de ciornă cu cheia din `catalog/0026`; C14b `App\Support\ProductOrder` + sortarea „Ordinea din catalog” a GR); transportul gratuit portat (WP-20, C14a); textul Stripe din checkout nu se portează (C15) |
@@ -134,7 +134,7 @@ dovada pe datele BV: WP-11b); `5d071e2`, `18d44ab` Lot C; `9f5b196`, `98f81b6`
 | `57447e0` | 09.09 | Editorul spune ce câmpuri a ascuns și de ce | portat (WP-19, C14d) |
 | `afc6fd7` `7391226` | 09.09 | Coșul arată pachetele care conțin produsul | pluginul `pachete_produse` (Etapa 4, P4) |
 | `a14df64` | 09.09 | Transport gratuit din produs, respectat peste tot | portat (WP-20, C14a: `products.free_shipping` din `magazin/0028`, coșul, cota FAN, cele trei recalculări din admin cu transportul pus de mână înainte, datele Google; dovada pe datele BV: WP-11b) |
-| `222ed71` | 12.10 | Cupoane unice: produsele se schimbă în masă | de portat (WP-21, C12) |
+| `222ed71` | 12.10 | Cupoane unice: produsele se schimbă în masă | portat (WP-21, C12; produsele cupoanelor din pagină în datele marcajului, nu în atribute pe rând) |
 | `aed0cee` | 15.10 | Codul de cupon acceptat cu spații | portat (WP-20, C9; dovada pe datele BV: WP-11b) |
 | `cc231e4` | 19.10 | AWB: numărul de colete ales în ERP la aprobare | portat (`4915478`, din Bioscem `de5c2b0`); la trecerea BV înghețare `fan_kg_max_colet=0` |
 | — | — | Contul arată doar comenzile legate de cont | nu se face pe BV (decizia OD-47, 19.10): doar în codul comun, regula nucleului din WP-25; la trecere intră în „ce se schimbă” al BV |

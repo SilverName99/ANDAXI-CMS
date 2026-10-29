@@ -883,6 +883,216 @@ $verifica('Admin → comanda → „Trimite linkul de plată”: cu doar Stripe 
     json_encode($r));
 
 // =====================================================================
+// WP-21 A. Anti-spamul recenziilor (C10)
+// =====================================================================
+$scrie('');
+$scrie('== WP-21 A. Recenziile: capcana, limitele, filtrul Spam, bulina (C10)');
+$verifica('ReviewGuard: tiparele de atac, linkurile, BBCode-ul, domeniile de test, numele generate și textele fără cuvinte sunt prinse',
+    \App\Support\ReviewGuard::motivDinContinut('Ion', "-1' OR 2+150-150-1=0+0+0+1 or 'H3CkKkLG'='") === 'tipar de atac automat'
+    && \App\Support\ReviewGuard::motivDinContinut('Ion', 'bun 1 UNION SELECT parola FROM admini') === 'tipar de atac automat'
+    && \App\Support\ReviewGuard::motivDinContinut('Ion', 'vezi https://a.ro si www.b.ro') === 'prea multe linkuri'
+    && \App\Support\ReviewGuard::motivDinContinut('Ion', 'super [url=http://x]aici[/url]') === 'cod BBCode de spam'
+    && \App\Support\ReviewGuard::motivDinContinut('Ion', 'Produs foarte bun', 'ion@mailinator.com') === 'adresă de email de test sau temporară'
+    && \App\Support\ReviewGuard::motivDinContinut('fnfOzvSR fnfOzvSR', 'Produs foarte bun') === 'nume generat automat'
+    && \App\Support\ReviewGuard::motivDinContinut('Ion', '=1=2=3=4=5=6=7=8') === 'text fără cuvinte, doar semne');
+$verifica('… recenziile adevărate trec (diacritice, „=” într-o frază, nume cu majuscule, un singur link)',
+    \App\Support\ReviewGuard::motivDinContinut('Maria-Ioana Popescu', 'Ceaiul e foarte bun, l-am luat de 3 ori = cel mai bun raport preț/calitate.') === null
+    && \App\Support\ReviewGuard::motivDinContinut('Ștefan Țurcanu', 'Recomand! Detalii pe https://exemplu.ro', 'stefan@exemplu.ro') === null
+    && \App\Support\ReviewGuard::motiv(['name' => 'Ana', 'text' => 'Foarte bun', 'opened_at' => time() - 60]) === null
+    && \App\Support\ReviewGuard::motiv(['name' => 'Ana', 'text' => 'Foarte bun', 'honeypot' => 'http://spam']) === 'câmp-capcană completat'
+    && \App\Support\ReviewGuard::motiv(['name' => 'Ana', 'text' => 'Foarte bun', 'opened_at' => time()]) === 'formular trimis prea repede');
+
+$setare('recenzii_insigna_meniu', '1');
+$produsRecenzie = $db->query("SELECT id, slug FROM products WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+$paginaProdus = $cerere('GET', '/produs/' . rawurlencode((string) $produsRecenzie['slug']))['corp'];
+$verifica('formularul de recenzie are capcana (review_website, ascunsă) și momentul deschiderii (review_opened_at)',
+    str_contains($paginaProdus, 'name="review_website" value="" tabindex="-1"') && preg_match('/name="review_opened_at" value="\d{10}"/', $paginaProdus) === 1);
+// Recenziile de mai jos vin de la 127.0.0.1: rândurile vechi de la aceeași adresă nu au voie să atingă limita.
+$db->exec("UPDATE product_reviews SET ip_address = NULL WHERE ip_address = '127.0.0.1'");
+$trimiteRecenzie = static function (array $campuri) use ($cerere, $produsRecenzie, $jarViz): array {
+    return $cerere('POST', '/produs/' . rawurlencode((string) $produsRecenzie['slug']) . '/review', $jarViz, $campuri + ['review_rating' => '5',
+        'review_opened_at' => (string) (time() - 30), 'review_website' => '']);
+};
+@unlink($jarViz);
+$trimiteRecenzie(['review_name' => 'Ana Test', 'review_text' => 'Recenzie adevărată de test, produs bun ' . getmypid()]);
+$normala = $db->query("SELECT is_spam, spam_reason, ip_address, is_approved FROM product_reviews ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+$verifica('o recenzie obișnuită: în așteptare, nemarcată, cu adresa vizitatorului (127.0.0.1)', (int) $normala['is_spam'] === 0
+    && $normala['spam_reason'] === null && $normala['ip_address'] === '127.0.0.1' && (int) $normala['is_approved'] === 0, json_encode($normala));
+$trimiteRecenzie(['review_name' => 'Robot', 'review_text' => 'Text de robot, capcana completată ' . getmypid(), 'review_website' => 'http://spam.example']);
+$capcana = $db->query("SELECT id, is_spam, spam_reason FROM product_reviews ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+$verifica('capcana completată: salvată, dar marcată spam („câmp-capcană completat”), nu se pierde', (int) $capcana['is_spam'] === 1
+    && $capcana['spam_reason'] === 'câmp-capcană completat', json_encode($capcana));
+$trimiteRecenzie(['review_name' => 'Ana Test', 'review_text' => 'Recenzie adevărată de test, produs bun ' . getmypid()]);
+$verifica('același text trimis din nou: spam („text identic …”)', $unu('SELECT spam_reason FROM product_reviews ORDER BY id DESC LIMIT 1') === 'text identic cu o recenzie trimisă recent');
+$trimiteRecenzie(['review_name' => 'Ana Test', 'review_text' => 'A patra recenzie de la aceeași adresă ' . getmypid()]);
+$trimiteRecenzie(['review_name' => 'Ana Test', 'review_text' => 'A cincea recenzie de la aceeași adresă ' . getmypid()]);
+$verifica('a cincea recenzie într-o oră de la aceeași adresă: spam („prea multe recenzii de la aceeași adresă IP”)',
+    $unu('SELECT spam_reason FROM product_reviews ORDER BY id DESC LIMIT 1') === 'prea multe recenzii de la aceeași adresă IP');
+$cerere('POST', '/review-form/submit', $jarViz, ['product_id' => (string) $produsRecenzie['id'], 'review_name' => 'QR Test', 'review_email' => 'qr@exemplu.ro',
+    'review_text' => 'Prin formularul QR ' . getmypid(), 'review_rating' => '4', 'review_opened_at' => (string) time(), 'redirect_to' => '/']);
+$verifica('formularul QR: trimis imediat după deschidere → spam („formular trimis prea repede”)',
+    $unu('SELECT spam_reason FROM product_reviews ORDER BY id DESC LIMIT 1') === 'formular trimis prea repede');
+@unlink($jarViz);
+
+$inAsteptare = (int) $unu('SELECT COUNT(*) FROM product_reviews WHERE is_approved = 0 AND is_spam = 0');
+$spam = (int) $unu('SELECT COUNT(*) FROM product_reviews WHERE is_spam = 1');
+$lista = $cerere('GET', '/admin/products/reviews?status=pending', $jarAdmin)['corp'];
+$listaSpam = $cerere('GET', '/admin/products/reviews?status=spam', $jarAdmin)['corp'];
+$verifica('Admin → Recenzii: „Pending (' . $inAsteptare . ')” fără spam, „Spam (' . $spam . ')” cu ele, butoanele spamului; bulina meniului = ' . $inAsteptare,
+    str_contains($lista, 'Pending (' . $inAsteptare . ')') && str_contains($lista, 'Spam (' . $spam . ')') && str_contains($lista, 'Detectează spamul')
+    && str_contains($lista, 'Golește spamul (' . $spam . ')') && str_contains($lista, 'id="recenzii-spam-date"')
+    && !str_contains($lista, 'Text de robot, capcana completată') && str_contains($listaSpam, 'Text de robot, capcana completată')
+    && preg_match('#Recenzii<span class="nav-badge" title="' . $inAsteptare . ' în așteptare"[^>]*>' . $inAsteptare . '</span>#u', $lista) === 1);
+$setare('recenzii_insigna_meniu', '0');
+$verifica('… cu recenzii_insigna_meniu = 0 (înghețarea Bioscem): fără bulină', !str_contains($cerere('GET', '/admin/products/reviews', $jarAdmin)['corp'], 'nav-badge'));
+$setare('recenzii_insigna_meniu', '1');
+$idNormala = (int) $unu("SELECT id FROM product_reviews WHERE review_text LIKE 'Recenzie adevărată de test%' ORDER BY id ASC LIMIT 1");
+$cerere('POST', '/admin/products/reviews', $jarAdmin, ['id' => (string) $idNormala, 'action' => 'spam', 'status' => 'pending']);
+$marcata = $db->query('SELECT is_spam, spam_reason, is_approved FROM product_reviews WHERE id = ' . $idNormala)->fetch(PDO::FETCH_ASSOC);
+$cerere('POST', '/admin/products/reviews', $jarAdmin, ['id' => (string) $idNormala, 'action' => 'not_spam', 'status' => 'spam']);
+$scoasa = $db->query('SELECT is_spam, spam_reason FROM product_reviews WHERE id = ' . $idNormala)->fetch(PDO::FETCH_ASSOC);
+$verifica('„Spam” pe rând: marcată manual (și neaprobată); „Nu e spam”: înapoi în așteptare', (int) $marcata['is_spam'] === 1
+    && $marcata['spam_reason'] === 'marcată manual' && (int) $marcata['is_approved'] === 0 && (int) $scoasa['is_spam'] === 0 && $scoasa['spam_reason'] === null);
+$db->prepare("INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved) VALUES (:p, 'Scaner', '', 5, :t, 'product_page', 0)")
+    ->execute(['p' => (int) $produsRecenzie['id'], 't' => '1 AND SLEEP(5) ' . getmypid()]);
+$idAtac = (int) $db->lastInsertId();
+$cerere('POST', '/admin/products/reviews', $jarAdmin, ['action' => 'scan_spam', 'status' => 'pending']);
+$verifica('„Detectează spamul”: recenzia veche cu tipar de atac trece în spam, cea adevărată nu', (int) $unu('SELECT is_spam FROM product_reviews WHERE id = ' . $idAtac) === 1
+    && (int) $unu('SELECT is_spam FROM product_reviews WHERE id = ' . $idNormala) === 0);
+// OD-15: adresele mai vechi de recenzii_ip_zile (90) se golesc la deschiderea listei; cu 0 rămân.
+$db->prepare("INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved, ip_address, created_at)
+    VALUES (:p, 'Veche', '', 5, :t, 'product_page', 1, '198.51.100.7', NOW() - INTERVAL 100 DAY)")->execute(['p' => (int) $produsRecenzie['id'], 't' => 'Recenzie veche ' . getmypid()]);
+$idVeche = (int) $db->lastInsertId();
+$setare('recenzii_ip_zile', '0');
+$cerere('GET', '/admin/products/reviews', $jarAdmin);
+$pastrata = $unu('SELECT ip_address FROM product_reviews WHERE id = ' . $idVeche);
+$setare('recenzii_ip_zile', '90');
+$cerere('GET', '/admin/products/reviews', $jarAdmin);
+$verifica('adresa unei recenzii mai vechi de 90 de zile se golește (OD-15, recenzii_ip_zile); cu 0 rămâne; cea de azi rămâne',
+    $pastrata === '198.51.100.7' && $unu('SELECT ip_address FROM product_reviews WHERE id = ' . $idVeche) === ''
+    && $unu("SELECT COUNT(*) FROM product_reviews WHERE ip_address = '127.0.0.1'") !== '0');
+$totalInainte = (int) $unu('SELECT COUNT(*) FROM product_reviews');
+$spamInainte = (int) $unu('SELECT COUNT(*) FROM product_reviews WHERE is_spam = 1');
+$cerere('POST', '/admin/products/reviews', $jarAdmin, ['action' => 'delete_spam_all', 'status' => 'spam']);
+$verifica('„Golește spamul”: șterge exact recenziile spam (' . $spamInainte . '), restul rămân', (int) $unu('SELECT COUNT(*) FROM product_reviews WHERE is_spam = 1') === 0
+    && (int) $unu('SELECT COUNT(*) FROM product_reviews') === $totalInainte - $spamInainte);
+
+// =====================================================================
+// WP-21 B. Cupoanele unice: produsele schimbate în masă (C12)
+// =====================================================================
+$scrie('');
+$scrie('== WP-21 B. Cupoanele unice: produsele în masă (C12)');
+$cupoaneUnice = array_map('intval', $db->query("SELECT id FROM coupons WHERE is_unique = 1 AND used_at IS NULL ORDER BY id LIMIT 2")->fetchAll(PDO::FETCH_COLUMN));
+$produseCupon = array_map('intval', $db->query('SELECT id FROM products WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 2')->fetchAll(PDO::FETCH_COLUMN));
+$cerere('POST', '/admin/coupons/unique/action', $jarAdmin, ['action' => 'bulk_edit', 'scope' => 'selected', 'ids' => array_map('strval', $cupoaneUnice),
+    'edit_products' => '1', 'product_ids' => array_map('strval', $produseCupon), 'apply_only_selected_products' => '1']);
+$randuriCupoane = $db->query('SELECT product_ids_json, apply_only_selected_products FROM coupons WHERE id IN (' . implode(',', $cupoaneUnice) . ')')->fetchAll(PDO::FETCH_ASSOC);
+$asteptat = json_encode($produseCupon);
+$verifica('editarea în masă cu „Produse”: lista bifată și „doar la produsele selectate” pe ambele cupoane alese',
+    count($cupoaneUnice) === 2 && count($randuriCupoane) === 2 && array_unique(array_column($randuriCupoane, 'product_ids_json')) === [(string) $randuriCupoane[0]['product_ids_json']]
+    && json_decode((string) $randuriCupoane[0]['product_ids_json'], true) === $produseCupon && (int) $randuriCupoane[0]['apply_only_selected_products'] === 1,
+    json_encode($randuriCupoane) . ' vs ' . $asteptat);
+$cerere('POST', '/admin/coupons/unique/action', $jarAdmin, ['action' => 'bulk_edit', 'scope' => 'selected', 'ids' => array_map('strval', $cupoaneUnice), 'edit_products' => '1']);
+$verifica('… fără niciun produs bifat: fără restricție de produs (lista goală), „doar la selectate” scos',
+    (int) $unu('SELECT COUNT(*) FROM coupons WHERE id IN (' . implode(',', $cupoaneUnice) . ") AND (product_ids_json IS NULL OR product_ids_json IN ('', '[]'))
+        AND apply_only_selected_products = 0") === 2);
+$paginaUnice = $cerere('GET', '/admin/coupons/unique', $jarAdmin)['corp'];
+$verifica('pagina cupoanelor unice: rândul „Produse” în panoul de editare și produsele fiecărui cupon în datele lui',
+    str_contains($paginaUnice, 'name="edit_products"') && str_contains($paginaUnice, 'id="vuc-produse-date"') && str_contains($paginaUnice, '"' . $cupoaneUnice[0] . '":{"p":'));
+
+// =====================================================================
+// WP-21 C. Produsele promoționale: „dat la” / „dat de”, exportul Excel (C13)
+// =====================================================================
+$scrie('');
+$scrie('== WP-21 C. Produsele promoționale: „dat la”, „dat de”, exportul Excel (C13)');
+$promo = $db->query('SELECT order_id, promo_product_id FROM order_promo_items ORDER BY id LIMIT 1')->fetch(PDO::FETCH_ASSOC) ?: [];
+$idComandaPromo = (int) $promo['order_id'];
+$altPromo = (int) $unu('SELECT id FROM promotional_products WHERE id <> :p ORDER BY id LIMIT 1', ['p' => (int) $promo['promo_product_id']]);
+$db->prepare("UPDATE order_promo_items SET given_at = '2026-01-02 03:04:05', given_by = 'operator.vechi@exemplu.ro' WHERE order_id = :o")->execute(['o' => $idComandaPromo]);
+$r = json_decode($cerere('POST', '/admin/orders/' . $idComandaPromo . '/promo', $jarAdmin, ['promo_product_id' => [(string) $promo['promo_product_id'], (string) $altPromo],
+    'quantity' => ['1', '2']])['corp'], true) ?: [];
+$randuriPromo = $db->query('SELECT promo_product_id, given_at, given_by FROM order_promo_items WHERE order_id = ' . $idComandaPromo . ' ORDER BY promo_product_id')
+    ->fetchAll(PDO::FETCH_ASSOC);
+$peProdus = array_column($randuriPromo, null, 'promo_product_id');
+$verifica('re-salvarea promoționalelor comenzii: cel deja dat își păstrează „dat la / dat de”, cel nou primește acum și emailul adminului',
+    ($r['ok'] ?? false) === true && ($peProdus[(int) $promo['promo_product_id']]['given_at'] ?? '') === '2026-01-02 03:04:05'
+    && ($peProdus[(int) $promo['promo_product_id']]['given_by'] ?? '') === 'operator.vechi@exemplu.ro'
+    && abs(strtotime((string) ($peProdus[$altPromo]['given_at'] ?? '')) - time()) < 120 && ($peProdus[$altPromo]['given_by'] ?? '') === $adminEmail,
+    json_encode($randuriPromo));
+$api = json_decode($cerere('GET', '/admin/promo-products/' . $altPromo . '/recipients', $jarAdmin)['corp'], true) ?: [];
+$verifica('„Cui a fost dat” (API): „dat la” și „dat de” pe fiecare rând', ($api['ok'] ?? false) === true
+    && in_array($adminEmail, array_column((array) ($api['recipients'] ?? []), 'given_by'), true), json_encode($api));
+$export = $cerere('GET', '/admin/promo-products/export?from=2000-01-01', $jarAdmin);
+$fisierXlsx = $dosarDev . '/test-porturi-bv-' . getmypid() . '.xlsx';
+file_put_contents($fisierXlsx, $export['corp']);
+$zip = new ZipArchive();
+$deschis = $zip->open($fisierXlsx) === true;
+$foaie2 = $deschis ? (string) $zip->getFromName('xl/worksheets/sheet2.xml') : '';
+$workbook = $deschis ? (string) $zip->getFromName('xl/workbook.xml') : '';
+if ($deschis) {
+    $zip->close();
+}
+@unlink($fisierXlsx);
+$verifica('exportul Excel: o arhivă xlsx validă (Content-Type, numele fișierului), foile „Produse” și „Cui a fost dat”, cu „Dat la”, „Dat de” și adminul',
+    $export['cod'] === 200 && str_contains((string) ($export['antete']['content-type'] ?? ''), 'spreadsheetml')
+    && str_contains((string) ($export['antete']['content-disposition'] ?? ''), 'promotionale-') && $deschis
+    && str_contains($workbook, 'name="Produse"') && str_contains($workbook, 'name="Cui a fost dat"')
+    && str_contains($foaie2, '>Dat la<') && str_contains($foaie2, '>Dat de<') && str_contains($foaie2, htmlspecialchars($adminEmail, ENT_XML1)),
+    'cod ' . $export['cod'] . ' ' . json_encode($export['antete']));
+$paginaPromo = $cerere('GET', '/admin/promo-products', $jarAdmin)['corp'];
+$verifica('pagina promoționalelor: butonul „Export Excel” (sus și lângă filtru, cu intervalul) și fereastra care derulează',
+    substr_count($paginaPromo, '⭳ Export Excel') === 2 && str_contains($paginaPromo, '#promo-detail-body{flex:1 1 auto;min-height:0;overflow-y:auto;'));
+
+// =====================================================================
+// WP-21 D. Newsletterul: fundalul gol, blocul video, statisticile, diagnosticul (C11)
+// =====================================================================
+$scrie('');
+$scrie('== WP-21 D. Newsletterul: fundalul gol, blocul video, statisticile, diagnosticul, popup-ul (C11)');
+$randeaza = static fn (array $bloc): string => \App\Support\NewsletterService::renderHtmlFromBlocks(\App\Support\NewsletterService::normalizeBlocks([$bloc]), 'Test');
+$cuAlb = $randeaza(['type' => 'text', 'content' => 'Text', 'background' => '#ffffff']);
+$faraCheie = $randeaza(['type' => 'text', 'content' => 'Text']);
+$gol = $randeaza(['type' => 'text', 'content' => 'Text', 'background' => '']);
+$verifica('fundalul blocului: #ffffff și cheia lipsă ies ca înainte (background:#ffffff;), gol iese fără fundal (nu „background:;”)',
+    str_contains($cuAlb, 'background:#ffffff;') && $faraCheie === $cuAlb && !str_contains($gol, 'background:;') && $gol !== $cuAlb);
+$video = $randeaza(['type' => 'video', 'video_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'thumbnail_url' => '/uploads/video-thumbs/x.jpg',
+    'title' => 'Titlu video', 'label' => '▶ Vezi pe YouTube']);
+$verifica('blocul video în email: coperta ca link spre videoclip, titlul și butonul; niciun <video> sau <iframe>',
+    str_contains($video, 'href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"') && str_contains($video, 'video-thumbs/x.jpg') && str_contains($video, 'Titlu video')
+    && str_contains($video, '▶ Vezi pe YouTube') && !str_contains($video, '<video') && !str_contains($video, '<iframe'));
+$verifica('VideoEmbed::furnizor / copertaSiTitlu fără cereri în afară: TikTok, YouTube, Vimeo, fișier; un link necunoscut sau ftp:// → eroare; un .mp4 → fără oEmbed',
+    \App\Support\VideoEmbed::furnizor('https://www.tiktok.com/@cont/video/123') === 'tiktok' && \App\Support\VideoEmbed::furnizor('https://youtu.be/dQw4w9WgXcQ') === 'youtube'
+    && \App\Support\VideoEmbed::furnizor('https://vimeo.com/123456') === 'vimeo' && \App\Support\VideoEmbed::furnizor('/uploads/gallery/clip.mp4') === 'file'
+    && \App\Support\VideoEmbed::furnizor('https://exemplu.ro/pagina') === ''
+    && (\App\Support\VideoEmbed::copertaSiTitlu('https://exemplu.ro/pagina')['ok'] ?? true) === false
+    && (\App\Support\VideoEmbed::copertaSiTitlu('ftp://exemplu.ro/a.mp4')['ok'] ?? true) === false
+    && (\App\Support\VideoEmbed::copertaSiTitlu('https://exemplu.ro/clip.mp4')['provider'] ?? '') === 'file');
+$lookup = json_decode($cerere('POST', '/admin/emails/builder/video-lookup', $jarAdmin, ['url' => 'https://exemplu.ro/pagina'])['corp'], true) ?: [];
+$lookupAnonim = json_decode($cerere('POST', '/admin/emails/builder/video-lookup', null, ['url' => 'https://exemplu.ro/clip.mp4'])['corp'], true);
+$verifica('POST /admin/emails/builder/video-lookup: un link nerecunoscut → ok false cu mesaj; fără admin, nimic', ($lookup['ok'] ?? true) === false
+    && str_contains((string) ($lookup['error'] ?? ''), 'Nu recunosc linkul') && (!is_array($lookupAnonim) || ($lookupAnonim['ok'] ?? true) === false), json_encode($lookup));
+$constructor = $cerere('GET', '/admin/emails/builder', $jarAdmin)['corp'];
+$verifica('constructorul de emailuri: blocul „Video / TikTok” în paletă și în cod, fundalul blocurilor din coloane („Fără fundal”)',
+    str_contains($constructor, 'data-block-type="video"') && str_contains($constructor, 'window.ebVideoLookup') && str_contains($constructor, 'function subBlockDefault(type)')
+    && str_contains($constructor, 'Fără fundal (se vede culoarea coloanei)'));
+$idCampanie = (int) $unu('SELECT id FROM newsletter_campaigns ORDER BY id LIMIT 1');
+$stmtSend = $db->prepare("INSERT INTO newsletter_campaign_sends (campaign_id, email, status, opened_at, open_count, clicked_at, click_count, sent_at)
+    VALUES (:c, :e, :s, :o, :oc, NULL, 0, NOW())");
+foreach ([['deschis1@exemplu.ro', 'sent', date('Y-m-d H:i:s'), 1], ['nedeschis1@exemplu.ro', 'sent', null, 0], ['esuat1@exemplu.ro', 'failed', null, 0]] as [$e, $st, $o, $oc]) {
+    $stmtSend->execute(['c' => $idCampanie, 'e' => $e, 's' => $st, 'o' => $o, 'oc' => $oc]);
+}
+$stats = $cerere('GET', '/admin/emails/newsletters?tab=stats&campaign_id=' . $idCampanie . '&recip_f=failed', $jarAdmin)['corp'];
+$verifica('statisticile campaniei: destinatarii filtrați pe server (doar eșuatele), panoul care se reîncarcă pe loc',
+    str_contains($stats, 'esuat1@exemplu.ro') && !str_contains($stats, 'deschis1@exemplu.ro') && str_contains($stats, 'id="nl-recip-panel"'));
+$iesire = [];
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/tools/newsletter/diagnostic-campanie.php') . ' ' . $idCampanie
+    . ' --fata-de=' . $idCampanie . ' --emailuri 2>&1', $iesire, $codDiag);
+$verifica('tools/newsletter/diagnostic-campanie.php: rulează (cod 0), fără nicio adresă de email în ieșire, nici cu --emailuri',
+    $codDiag === 0 && !str_contains(implode("\n", $iesire), '@'), implode(' | ', array_slice($iesire, 0, 6)));
+$verifica('popup-ul de abonare: public/assets/css/optin-popup.css și public/assets/js/optin-popup.js',
+    is_file($radacina . '/public/assets/css/optin-popup.css') && is_file($radacina . '/public/assets/js/optin-popup.js')
+    && $cerere('GET', '/assets/js/optin-popup.js')['cod'] === 200);
+
+// =====================================================================
 // Final: totul la loc
 // =====================================================================
 $scrie('');

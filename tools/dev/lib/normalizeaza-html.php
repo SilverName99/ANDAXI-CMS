@@ -76,7 +76,7 @@ function normalizeaza_html(string $html, array $optiuni = []): string
     $inlocuiri = [
         // Tokenurile formularelor și momentul randării lor.
         '/(name="(?:checkout_form_token|register_form_token|_csrf|csrf_token|admin_csrf)"\s+value=")[^"]*"/' => '$1<TOKEN>"',
-        '/(name="(?:checkout_form_rendered_at|register_form_rendered_at)"\s+value=")[^"]*"/' => '$1<MOMENT>"',
+        '/(name="(?:checkout_form_rendered_at|register_form_rendered_at|review_opened_at)"\s+value=")[^"]*"/' => '$1<MOMENT>"',
         '/("(?:token|rendered_at)"\s*:\s*)("[^"]*"|\d+)/' => '$1<TOKEN>',
         // Aceleași câmpuri în HTML-ul de previzualizare pus în JSON (editorul de pagini: \u0022 în loc de ghilimele).
         '/(name=\\\\u0022(?:checkout_form_token|register_form_token|_csrf|csrf_token|admin_csrf)\\\\u0022\s+value=\\\\u0022)[^\\\\]*/' => '$1<TOKEN>',

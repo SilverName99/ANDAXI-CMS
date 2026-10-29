@@ -1,0 +1,35 @@
+/* Popup de abonare la newsletter.
+   Stă în fișier, nu în antetul editabil din admin: firewall-ul gazdei
+   (mod_security) respinge cu "Forbidden" formularele care conțin cod. */
+.bv-optin{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;}
+.bv-optin[hidden]{display:none !important;}
+.bv-optin__backdrop{position:absolute;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(2px);}
+.bv-optin__dialog{position:relative;width:100%;max-width:440px;background:#fff;border-radius:16px;
+  padding:34px 30px 26px;box-shadow:0 24px 60px rgba(15,23,42,.28);text-align:center;
+  font-family:inherit;color:#1f2933;animation:bv-optin-in .28s ease-out;}
+@keyframes bv-optin-in{from{opacity:0;transform:translateY(14px) scale(.98);}to{opacity:1;transform:none;}}
+.bv-optin__x{position:absolute;top:10px;right:12px;width:34px;height:34px;border:0;background:transparent;
+  font-size:26px;line-height:1;color:#94a3b8;cursor:pointer;border-radius:50%;}
+.bv-optin__x:hover{background:#f1f5f9;color:#334155;}
+.bv-optin__kicker{margin:0 0 8px;font-size:12px;letter-spacing:.12em;font-weight:700;color:#0f8f7a;}
+.bv-optin__title{margin:0 0 10px;font-size:24px;line-height:1.25;font-weight:700;}
+.bv-optin__text{margin:0 0 20px;font-size:15px;line-height:1.55;color:#475569;}
+.bv-optin__form{display:block;text-align:left;}
+.bv-optin__label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#334155;}
+.bv-optin__input{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;
+  padding:11px 12px;font:inherit;font-size:15px;color:#0f172a;background:#f8fafc;}
+.bv-optin__input:focus{outline:none;border-color:#0f8f7a;background:#fff;box-shadow:0 0 0 3px rgba(15,143,122,.15);}
+.bv-optin__submit{margin-top:14px;width:100%;background:#0f8f7a;color:#fff;border:1px solid #0f8f7a;
+  padding:12px 16px;border-radius:8px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;}
+.bv-optin__submit:hover{background:#0c7a68;border-color:#0c7a68;}
+.bv-optin__submit[disabled]{opacity:.6;cursor:default;}
+.bv-optin__msg{margin:14px 0 0;font-size:14px;font-weight:600;}
+.bv-optin__msg.is-ok{color:#15803d;}
+.bv-optin__msg.is-err{color:#b91c1c;}
+.bv-optin__later{margin-top:14px;background:none;border:0;color:#64748b;font:inherit;font-size:14px;
+  text-decoration:underline;cursor:pointer;padding:6px;}
+.bv-optin__later:hover{color:#334155;}
+.bv-optin--nudge .bv-optin__dialog{animation:bv-optin-nudge .3s ease;}
+@keyframes bv-optin-nudge{0%,100%{transform:none;}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+body.bv-optin-open{overflow:hidden;}
+@media (max-width:480px){.bv-optin__dialog{padding:30px 20px 22px;}.bv-optin__title{font-size:21px;}}

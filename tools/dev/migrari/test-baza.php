@@ -148,14 +148,15 @@ $faraTabele = static function (array $amprenta, array $tabele): array {
  * la tabele care existau: „tabel.coloană”. Pe o bază făcută de un cod care nu le avea, ele sunt (cu tabelele noi) singura
  * schimbare de schemă pe care o aduce --aplica.
  */
-$coloaneNoiDupaBaseline = static function (array $raport) use ($grupa): array {
+// Coloanele (sau, cu $fel = 'index', indecșii) puse de migrările de după baseline, ca „tabel.nume”.
+$coloaneNoiDupaBaseline = static function (array $raport, string $fel = 'coloana') use ($grupa): array {
     $c = [];
     foreach ((array) ($raport['migrari'] ?? []) as $m) {
         if ($grupa((int) $m['ord']) !== 'după') {
             continue;
         }
         foreach ((array) ($m['operatii'] ?? []) as $o) {
-            if (($o['fel'] ?? '') === 'coloana' && ($o['clasa'] ?? '') !== 'fara_efect') {
+            if (($o['fel'] ?? '') === $fel && ($o['clasa'] ?? '') !== 'fara_efect') {
                 $c[] = (string) $o['obiect'];
             }
         }
@@ -163,10 +164,11 @@ $coloaneNoiDupaBaseline = static function (array $raport) use ($grupa): array {
     sort($c);
     return array_values(array_unique($c));
 };
-$faraColoane = static function (array $amprenta, array $coloane): array {
+// Scoate din amprentă coloanele date (sau, cu $cheie = 'indecsi', indecșii dați), „tabel.nume”.
+$faraColoane = static function (array $amprenta, array $coloane, string $cheie = 'coloane'): array {
     foreach ($coloane as $tabelColoana) {
         [$tabel, $coloana] = explode('.', $tabelColoana, 2) + [1 => ''];
-        unset($amprenta['tabele'][$tabel]['coloane'][$coloana]);
+        unset($amprenta['tabele'][$tabel][$cheie][$coloana]);
     }
     return $amprenta;
 };
@@ -966,11 +968,13 @@ foreach ($servere as $numeServer => $sock) {
     // Schema: neschimbată, în afară de tabelele și coloanele noi ale migrărilor de după baseline (codul vechi nu le avea).
     $noiDupa10 = $tabeleNoiDupaBaseline($ra);
     $coloaneDupa10 = $coloaneNoiDupaBaseline($ra);
-    $Q10 = $faraColoane($faraTabele($amp($db10), $noiDupa10), $coloaneDupa10);
+    $indecsiDupa10 = $coloaneNoiDupaBaseline($ra, 'index');
+    $Q10 = $faraColoane($faraColoane($faraTabele($amp($db10), $noiDupa10), $coloaneDupa10), $indecsiDupa10, 'indecsi');
     $schimbate10 = $schimbate($S10, $instantaneu($db10));
     $verifica('T10: baza făcută ca înainte (pe-vechi.php, seed.php, date-demo.php): baseline-ul iese cu 0, grupul B „detectata” fără nicio operație, '
         . 'schema neschimbată (în afară de tabelele noi de după baseline: ' . ($noiDupa10 !== [] ? implode(', ', $noiDupa10) : 'niciunul')
-        . '; coloanele noi: ' . ($coloaneDupa10 !== [] ? implode(', ', $coloaneDupa10) : 'niciuna') . '), '
+        . '; coloanele noi: ' . ($coloaneDupa10 !== [] ? implode(', ', $coloaneDupa10) : 'niciuna')
+        . '; indecșii noi: ' . ($indecsiDupa10 !== [] ? implode(', ', $indecsiDupa10) : 'niciunul') . '), '
         . 'datele schimbate doar unde declară migrările (' . $operatiiFacute($ra) . ' operații)',
         $cpv === 0 && str_contains($opv, 'garda: fara_registru') && $cs === 0 && $cd === 0 && $ca === 0
         && ($s10['B'] ?? null) === ['detectata' => $numarB] && !isset($operatii($ra)['B'])

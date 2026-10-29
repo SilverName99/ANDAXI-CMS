@@ -308,8 +308,9 @@ return [
             'rute_publice' => ['/produs/{slug}/review', '/review-form/*'],
             'tokenuri' => ['product_review_form'],
             'meniu' => [
+                // WP-21 (C10): bulina recenziilor care așteaptă aprobare (fără spam), după setarea recenzii_insigna_meniu.
                 ['grup' => 'magazin', 'ordine' => 80, 'eticheta' => 'Recenzii', 'href' => '/admin/products/reviews',
-                    'icon' => 'star', 'activ' => ['/admin/products/reviews']],
+                    'icon' => 'star', 'activ' => ['/admin/products/reviews'], 'insigna' => [\App\Support\ReviewGuard::class, 'insignaMeniu']],
             ],
             'tabele' => ['product_reviews'],
         ],
@@ -546,6 +547,10 @@ return [
             [[], 'newsletter'],
         ],
         'POST /admin/emails/builder/preview' => [
+            [[], ['newsletter', 'magazin']],
+        ],
+        // WP-21 (C11d): coperta și titlul unui link video pentru blocul „Video / TikTok” (newslettere și emailuri ecommerce).
+        'POST /admin/emails/builder/video-lookup' => [
             [[], ['newsletter', 'magazin']],
         ],
         // Jurnalul anti-robot al formularelor: înregistrarea e a conturilor, checkout-ul al magazinului.

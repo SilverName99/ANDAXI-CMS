@@ -1215,11 +1215,11 @@ final class NewsletterService
             $desktopSize = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 34);
             $mobileSize = self::normalizeFontSize((int) ($block['font_size_mobile'] ?? $desktopSize), $desktopSize);
             $contentHtml = self::allowRichTags(self::esc((string) ($block['content'] ?? '')));
-            $hdrBg = self::esc((string) ($block['background'] ?? '#1a7a5e'));
-            return '<div class="nl-text-desktop" style="display:block;text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';background:' . $hdrBg . ';' . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';font-size:' . $desktopSize . 'px;font-weight:700;">'
+            $hdrBg = self::fundal($block, '#1a7a5e');
+            return '<div class="nl-text-desktop" style="display:block;text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';' . $hdrBg . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';font-size:' . $desktopSize . 'px;font-weight:700;">'
                 . $contentHtml
                 . '</div>'
-                . '<div class="nl-text-mobile" style="display:none;text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';background:' . $hdrBg . ';' . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';font-size:' . $mobileSize . 'px;font-weight:700;">'
+                . '<div class="nl-text-mobile" style="display:none;text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';' . $hdrBg . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';font-size:' . $mobileSize . 'px;font-weight:700;">'
                 . $contentHtml
                 . '</div>';
         }
@@ -1227,11 +1227,11 @@ final class NewsletterService
             $desktopSize = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 15);
             $mobileSize = self::normalizeFontSize((int) ($block['font_size_mobile'] ?? $desktopSize), $desktopSize);
             $contentHtml = self::renderTextWithLinks((string) ($block['content'] ?? ''));
-            $txtBg = self::esc((string) ($block['background'] ?? '#ffffff'));
-            return '<div class="nl-text-desktop" style="display:block;text-align:' . self::esc((string) ($block['align'] ?? 'left')) . ';background:' . $txtBg . ';' . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#1f2937')) . ';font-size:' . $desktopSize . 'px;line-height:1.6;">'
+            $txtBg = self::fundal($block);
+            return '<div class="nl-text-desktop" style="display:block;text-align:' . self::esc((string) ($block['align'] ?? 'left')) . ';' . $txtBg . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#1f2937')) . ';font-size:' . $desktopSize . 'px;line-height:1.6;">'
                 . $contentHtml
                 . '</div>'
-                . '<div class="nl-text-mobile" style="display:none;text-align:' . self::esc((string) ($block['align'] ?? 'left')) . ';background:' . $txtBg . ';' . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#1f2937')) . ';font-size:' . $mobileSize . 'px;line-height:1.6;">'
+                . '<div class="nl-text-mobile" style="display:none;text-align:' . self::esc((string) ($block['align'] ?? 'left')) . ';' . $txtBg . $bgStyle . $hPad . $vPad . $fontStyle . 'color:' . self::esc((string) ($block['text_color'] ?? '#1f2937')) . ';font-size:' . $mobileSize . 'px;line-height:1.6;">'
                 . $contentHtml
                 . '</div>';
         }
@@ -1248,16 +1248,68 @@ final class NewsletterService
             if ($imgLink !== '') {
                 $imgTag = '<a href="' . self::esc($imgLink) . '" target="_blank" style="text-decoration:none;border:none;">' . $imgTag . '</a>';
             }
-            return '<div style="' . $vPad . $hPad . 'text-align:' . $imgAlign . ';background:' . self::esc((string) ($block['background'] ?? '#ffffff')) . ';' . $bgStyle . '">' . $imgTag . '</div>';
+            return '<div style="' . $vPad . $hPad . 'text-align:' . $imgAlign . ';' . self::fundal($block) . $bgStyle . '">' . $imgTag . '</div>';
         }
         if ($type === 'button') {
             $fontSize = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 16);
             $padV = min(40, max(2, (int) ($block['btn_pad_v'] ?? 11)));
             $padH = min(80, max(4, (int) ($block['btn_pad_h'] ?? 22)));
-            return '<div style="text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';' . $vPad . $hPad . 'background:' . self::esc((string) ($block['background'] ?? '#ffffff')) . ';' . $bgStyle . '"><a href="' . self::esc((string) ($block['url'] ?? '#')) . '" style="display:inline-block;background:' . self::esc((string) ($block['button_color'] ?? '#2d7d5f')) . ';color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';padding:' . $padV . 'px ' . $padH . 'px;border-radius:' . max(0, (int) ($block['border_radius'] ?? $block['radius'] ?? 6)) . 'px;text-decoration:none;font-weight:700;font-size:' . $fontSize . 'px;">' . self::esc((string) ($block['label'] ?? 'Buton')) . '</a></div>';
+            return '<div style="text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';' . $vPad . $hPad . self::fundal($block) . $bgStyle . '"><a href="' . self::esc((string) ($block['url'] ?? '#')) . '" style="display:inline-block;background:' . self::esc((string) ($block['button_color'] ?? '#2d7d5f')) . ';color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';padding:' . $padV . 'px ' . $padH . 'px;border-radius:' . max(0, (int) ($block['border_radius'] ?? $block['radius'] ?? 6)) . 'px;text-decoration:none;font-weight:700;font-size:' . $fontSize . 'px;">' . self::esc((string) ($block['label'] ?? 'Buton')) . '</a></div>';
         }
         if ($type === 'divider') {
-            return '<div style="background:' . self::esc((string) ($block['background'] ?? '#ffffff')) . ';' . $bgStyle . $hPad . $vPad . '"><hr style="border:none;border-top:' . max(1,(int)($block['thickness']??1)) . 'px solid ' . self::esc((string) ($block['color'] ?? $block['line_color'] ?? '#dbe2ea')) . ';margin:0 auto;width:' . min(100,max(10,(int)($block['width']??80))) . '%;"></div>';
+            return '<div style="' . self::fundal($block) . $bgStyle . $hPad . $vPad . '"><hr style="border:none;border-top:' . max(1,(int)($block['thickness']??1)) . 'px solid ' . self::esc((string) ($block['color'] ?? $block['line_color'] ?? '#dbe2ea')) . ';margin:0 auto;width:' . min(100,max(10,(int)($block['width']??80))) . '%;"></div>';
+        }
+        if ($type === 'video') {
+            // Niciun client de email nu redă video în mesaj: Gmail, Outlook și
+            // Apple Mail scot `<video>` și `<iframe>`. Trimitem coperta cu un
+            // buton de play desenat sub ea, totul într-un link către videoclip.
+            $videoUrl = self::normalizeLinkUrl((string) ($block['video_url'] ?? ''));
+            if ($videoUrl === '') {
+                // Un fișier urcat la noi („/uploads/…/clip.mp4") e o adresă
+                // relativă; în email trebuie să plece completă.
+                $videoUrl = self::absoluteMediaUrl((string) ($block['video_url'] ?? ''));
+            }
+            $coperta = self::absoluteMediaUrl((string) ($block['thumbnail_url'] ?? ''));
+            if ($videoUrl === '' && $coperta === '') {
+                return '';
+            }
+            $latime = min(100, max(20, (int) ($block['width'] ?? 100)));
+            $raza = max(0, (int) ($block['border_radius'] ?? 10));
+            $aliniere = self::esc((string) ($block['align'] ?? 'center'));
+            $fundal = self::fundal($block);
+            $titlu = trim((string) ($block['title'] ?? ''));
+            $etichetaButon = trim((string) ($block['label'] ?? '')) !== ''
+                ? (string) $block['label']
+                : '▶ Vezi videoclipul';
+            $culoareButon = self::esc((string) ($block['button_color'] ?? '#2d7d5f'));
+            $culoareText = self::esc((string) ($block['text_color'] ?? '#ffffff'));
+
+            $interior = '';
+            if ($coperta !== '') {
+                $imagine = '<img src="' . self::esc($coperta) . '"'
+                    . ' alt="' . self::esc($titlu !== '' ? $titlu : 'Deschide videoclipul') . '"'
+                    . ' style="width:' . $latime . '%;max-width:100%;height:auto;border:none;'
+                    . 'border-radius:' . $raza . 'px;display:inline-block;vertical-align:top;">';
+                $interior .= $videoUrl !== ''
+                    ? '<a href="' . self::esc($videoUrl) . '" target="_blank" style="text-decoration:none;border:none;">' . $imagine . '</a>'
+                    : $imagine;
+            }
+            if ($titlu !== '') {
+                $interior .= '<div style="margin-top:10px;' . $fontStyle . 'font-size:15px;font-weight:600;color:'
+                    . self::esc((string) ($block['title_color'] ?? '#1f2937')) . ';">'
+                    . self::esc($titlu) . '</div>';
+            }
+            if ($videoUrl !== '') {
+                $interior .= '<div style="margin-top:' . ($coperta !== '' || $titlu !== '' ? 12 : 0) . 'px;">'
+                    . '<a href="' . self::esc($videoUrl) . '" target="_blank"'
+                    . ' style="display:inline-block;background:' . $culoareButon . ';color:' . $culoareText . ';'
+                    . 'padding:11px 22px;border-radius:' . max(0, (int) ($block['button_radius'] ?? 6)) . 'px;'
+                    . 'text-decoration:none;font-weight:700;font-size:15px;' . $fontStyle . '">'
+                    . self::esc($etichetaButon) . '</a></div>';
+            }
+
+            return '<div style="text-align:' . $aliniere . ';' . $fundal . $bgStyle . $hPad . $vPad . '">'
+                . $interior . '</div>';
         }
         if ($type === 'social') {
             $links  = is_array($block['links'] ?? null) ? $block['links'] : [];
@@ -1304,7 +1356,7 @@ final class NewsletterService
             // max-widths the columns wrap and stack automatically — no media query needed,
             // so it works even in clients that strip <head> styles (Gmail Android, etc.).
             $reference = 600; // desktop content width the columns add up to
-            $colBg = self::esc((string) ($block['background'] ?? '#ffffff'));
+            $colBg = self::fundal($block);
             $colText = self::esc((string) ($block['text_color'] ?? '#1f2937'));
             $cells = [];
             for ($index = 0; $index < $columns; $index++) {
@@ -1316,7 +1368,7 @@ final class NewsletterService
                 }
                 $w = $widths2[$index];
                 $maxW = max(120, (int) round($reference * $w / 100));
-                $inner = '<div style="background:' . $colBg . ';color:' . $colText . ';padding:10px;line-height:1.55;">'
+                $inner = '<div style="' . $colBg . 'color:' . $colText . ';padding:10px;line-height:1.55;">'
                     . $childHtml
                     . '</div>';
                 $cells[] = '<!--[if mso]><td width="' . $w . '%" valign="top"><![endif]-->'
@@ -1332,7 +1384,23 @@ final class NewsletterService
                 . '</div>';
         }
 
-        return '<div style="height:' . max(4, (int) ($block['height'] ?? 24)) . 'px;' . $hPad . 'background:' . self::esc((string)($block['background']??'#ffffff')) . ';' . $bgStyle . '"></div>';
+        return '<div style="height:' . max(4, (int) ($block['height'] ?? 24)) . 'px;' . $hPad . self::fundal($block) . $bgStyle . '"></div>';
+    }
+
+    /**
+     * Fundalul unui bloc, gata de pus în `style` (WP-21: C11c, din Biovitality b9fcaf8). Gol înseamnă fără fundal:
+     * blocul lasă să se vadă ce e în spatele lui, de exemplu culoarea coloanei în care stă (altfel fiecare casetă își
+     * punea albul ei peste ea). Codul de dinainte scria atunci `background:;`, o regulă greșită pe care clienții de email o
+     * aruncă oricum. Orice valoare scrisă (și `#ffffff`, `transparent`) iese exact ca înainte, deci buletinele făcute
+     * înainte rămân octet cu octet aceleași; un bloc fără cheie e alb, ca înainte.
+     */
+    private static function fundal(array $block, string $implicit = '#ffffff'): string
+    {
+        $culoare = (string) ($block['background'] ?? $implicit);
+        if (trim($culoare) === '') {
+            return '';
+        }
+        return 'background:' . self::esc($culoare) . ';';
     }
 
     private static function normalizeFontSize(int $fontSize, int $fallback): int
@@ -1416,6 +1484,22 @@ final class NewsletterService
             $row['align']     = (string) ($block['align'] ?? 'center');
             $row['border_radius'] = max(0, (int) ($block['border_radius'] ?? 0));
             $row['link_url']  = (string) ($block['link_url'] ?? '');
+            return $row;
+        }
+        if ($type === 'video') {
+            $row['video_url'] = (string) ($block['video_url'] ?? '');
+            $row['thumbnail_url'] = (string) ($block['thumbnail_url'] ?? '');
+            $row['title'] = (string) ($block['title'] ?? '');
+            $row['title_color'] = (string) ($block['title_color'] ?? '#1f2937');
+            $row['provider'] = (string) ($block['provider'] ?? '');
+            $row['label'] = (string) ($block['label'] ?? '▶ Vezi videoclipul');
+            $row['width'] = min(100, max(20, (int) ($block['width'] ?? 100)));
+            $row['border_radius'] = max(0, (int) ($block['border_radius'] ?? 10));
+            $row['button_radius'] = max(0, (int) ($block['button_radius'] ?? 6));
+            $row['button_color'] = (string) ($block['button_color'] ?? '#2d7d5f');
+            $row['text_color'] = (string) ($block['text_color'] ?? '#ffffff');
+            $row['align'] = (string) ($block['align'] ?? 'center');
+            $row['background'] = (string) ($block['background'] ?? '#ffffff');
             return $row;
         }
         if ($type === 'button') {

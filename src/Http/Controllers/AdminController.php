@@ -3369,9 +3369,15 @@ final class AdminController
             return;
         }
         $this->ensureOptionalSchema($db);
+        // WP-21 (C10, din Biovitality 8ba8ddd): spamul marcat de ReviewGuard stă în filtrul lui, „Spam”, nu în
+        // „Pending”. Fără coloanele lui (recenzii/0030 încă nerulată), lista e cea de dinainte.
+        $areSpam = $this->recenziiCuSpam($db);
+        if ($areSpam) {
+            \App\Support\ReviewGuard::curataAdreseVechi($db, Settings::all($db));
+        }
 
         $status = trim((string) ($_GET['status'] ?? 'pending'));
-        if (!in_array($status, ['pending', 'approved', 'all'], true)) {
+        if (!in_array($status, $areSpam ? ['pending', 'approved', 'spam', 'all'] : ['pending', 'approved', 'all'], true)) {
             $status = 'pending';
         }
         $search = trim((string) ($_GET['q'] ?? ''));
@@ -3382,9 +3388,11 @@ final class AdminController
         $where = ['1=1'];
         $params = [];
         if ($status === 'pending') {
-            $where[] = 'r.is_approved = 0';
+            $where[] = $areSpam ? 'r.is_approved = 0 AND r.is_spam = 0' : 'r.is_approved = 0';
         } elseif ($status === 'approved') {
             $where[] = 'r.is_approved = 1';
+        } elseif ($status === 'spam') {
+            $where[] = 'r.is_spam = 1';
         }
         if ($search !== '') {
             $where[] = '(p.name LIKE :search OR r.user_name LIKE :search OR r.user_email LIKE :search OR r.review_text LIKE :search OR COALESCE(r.source, "") LIKE :search)';
@@ -3475,8 +3483,9 @@ final class AdminController
         try {
             $countRows = $db->query(
                 'SELECT
-                    SUM(CASE WHEN is_approved = 0 THEN 1 ELSE 0 END) AS pending_count,
+                    SUM(CASE WHEN is_approved = 0' . ($areSpam ? ' AND is_spam = 0' : '') . ' THEN 1 ELSE 0 END) AS pending_count,
                     SUM(CASE WHEN is_approved = 1 THEN 1 ELSE 0 END) AS approved_count,
+                    ' . ($areSpam ? 'SUM(CASE WHEN is_spam = 1 THEN 1 ELSE 0 END)' : '0') . ' AS spam_count,
                     COUNT(*) AS total_count
                  FROM product_reviews'
             )->fetch();
@@ -3484,8 +3493,32 @@ final class AdminController
                 $counts['pending'] = (int) ($countRows['pending_count'] ?? 0);
                 $counts['approved'] = (int) ($countRows['approved_count'] ?? 0);
                 $counts['all'] = (int) ($countRows['total_count'] ?? 0);
+                if ($areSpam) {
+                    $counts['spam'] = (int) ($countRows['spam_count'] ?? 0);
+                }
             }
         } catch (Throwable) {
+        }
+
+        // Marcajul de spam, motivul și adresa fiecărei recenzii din pagină (pentru insigna și butonul „Spam” / „Nu e
+        // spam” de pe rând), separat de lista de mai sus.
+        $spamRecenzii = [];
+        $iduri = array_values(array_filter(array_map(static fn ($r): int => is_array($r) ? (int) ($r['id'] ?? 0) : 0, $reviews)));
+        if ($areSpam && $iduri !== []) {
+            try {
+                $stmt = $db->prepare('SELECT id, is_spam, spam_reason, ip_address FROM product_reviews WHERE id IN ('
+                    . implode(',', array_fill(0, count($iduri), '?')) . ')');
+                $stmt->execute($iduri);
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                    $spamRecenzii[(string) (int) $rand['id']] = [
+                        'spam' => (int) $rand['is_spam'] === 1 ? 1 : 0,
+                        'motiv' => (string) ($rand['spam_reason'] ?? ''),
+                        'ip' => (string) ($rand['ip_address'] ?? ''),
+                    ];
+                }
+            } catch (Throwable) {
+                $spamRecenzii = [];
+            }
         }
 
         View::render('admin/product-reviews', [
@@ -3500,7 +3533,20 @@ final class AdminController
             'perPageOptions' => $this->adminPerPageOptions(),
             'panel' => $panel,
             'counts' => $counts,
+            'areSpam' => $areSpam,
+            'spamRecenzii' => $spamRecenzii,
         ], 'admin/layout');
+    }
+
+    /** WP-21 (C10): tabelul recenziilor are coloanele anti-spamului (recenzii/0030)? */
+    private function recenziiCuSpam(PDO $db): bool
+    {
+        try {
+            $db->query('SELECT is_spam, spam_reason, ip_address FROM product_reviews LIMIT 0');
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public function productReviewsSave(): void
@@ -3510,7 +3556,8 @@ final class AdminController
         }
 
         $id = (int) ($_POST['id'] ?? 0);
-        if ($id <= 0) {
+        $actiuneInMasa = in_array(trim((string) ($_POST['action'] ?? '')), ['scan_spam', 'delete_spam_all'], true);
+        if ($id <= 0 && !$actiuneInMasa) {
             Flash::set('error', 'Recenzie invalidă.');
             header('Location: /admin/products/reviews');
             return;
@@ -3531,7 +3578,7 @@ final class AdminController
         $redirectPage = $this->normalizeAdminPage((int) ($_POST['page'] ?? 1));
         $redirectPerPage = $this->normalizeAdminPerPage((int) ($_POST['per_page'] ?? 25));
         $redirectPanel = $this->normalizeAdminListPanel((string) ($_POST['panel'] ?? 'list'));
-        if (!in_array($redirectStatus, ['pending', 'approved', 'all'], true)) {
+        if (!in_array($redirectStatus, ['pending', 'approved', 'spam', 'all'], true)) {
             $redirectStatus = 'pending';
         }
         $backUrl = '/admin/products/reviews?status=' . rawurlencode($redirectStatus)
@@ -3555,6 +3602,22 @@ final class AdminController
                 $stmt = $db->prepare('DELETE FROM product_reviews WHERE id = :id');
                 $stmt->execute(['id' => $id]);
                 Flash::set('success', 'Recenzia a fost ștearsă.');
+            } elseif ($action === 'spam') {
+                // WP-21 (C10): spamul nu se publică; marcajul îl scoate din „Pending”.
+                $db->prepare('UPDATE product_reviews SET is_spam = 1, is_approved = 0, spam_reason = :motiv WHERE id = :id')
+                    ->execute(['motiv' => 'marcată manual', 'id' => $id]);
+                Flash::set('success', 'Recenzia a fost mutată în spam.');
+            } elseif ($action === 'not_spam') {
+                $db->prepare('UPDATE product_reviews SET is_spam = 0, spam_reason = NULL WHERE id = :id')->execute(['id' => $id]);
+                Flash::set('success', 'Recenzia a fost scoasă din spam și așteaptă aprobarea.');
+            } elseif ($action === 'scan_spam') {
+                $marcate = \App\Support\ReviewGuard::marcheazaExistente($db);
+                Flash::set('success', $marcate > 0
+                    ? 'Am mutat în spam ' . $marcate . ' recenzii.'
+                    : 'Nu am găsit recenzii de spam printre cele neaprobate.');
+            } elseif ($action === 'delete_spam_all') {
+                $sterse = (int) $db->exec('DELETE FROM product_reviews WHERE is_spam = 1');
+                Flash::set('success', 'Am șters ' . $sterse . ' recenzii de spam.');
             } else {
                 Flash::set('error', 'Acțiune invalidă pentru recenzie.');
             }
@@ -6009,13 +6072,43 @@ final class AdminController
             $rows[] = ['pid' => $pid, 'name' => $names[$pid], 'qty' => $qty];
         }
 
+        // WP-21 (C13, din Biovitality 657c0cf): selecția se rescrie în întregime la fiecare salvare. Ca „dat la” să rămână
+        // momentul real, îl citim înainte de ștergere și îl punem la loc pentru produsele care erau deja pe comandă; doar
+        // cele nou adăugate primesc data de acum și adminul logat. Fără coloane (produse_promo/0031 nerulată): ca înainte.
+        $areDatLa = $this->promoAreDatLa($db);
+        $acordateAnterior = [];
+        if ($areDatLa) {
+            $vechi = $db->prepare('SELECT promo_product_id, given_at, given_by FROM order_promo_items WHERE order_id = :oid');
+            $vechi->execute(['oid' => $orderId]);
+            foreach ($vechi->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                $cheie = (int) ($rand['promo_product_id'] ?? 0);
+                if ($cheie > 0 && !isset($acordateAnterior[$cheie])) {
+                    $acordateAnterior[$cheie] = [
+                        'given_at' => (string) ($rand['given_at'] ?? '') !== '' ? (string) $rand['given_at'] : null,
+                        'given_by' => (string) ($rand['given_by'] ?? '') !== '' ? (string) $rand['given_by'] : null,
+                    ];
+                }
+            }
+        }
+        $operator = $this->emailAdminLogat($db);
+        $acum = date('Y-m-d H:i:s');
+
         try {
             $db->beginTransaction();
             $db->prepare('DELETE FROM order_promo_items WHERE order_id = :oid')->execute(['oid' => $orderId]);
             if ($rows !== []) {
-                $ins = $db->prepare('INSERT INTO order_promo_items (order_id, promo_product_id, name, quantity) VALUES (:oid, :pid, :name, :qty)');
+                $ins = $db->prepare($areDatLa
+                    ? 'INSERT INTO order_promo_items (order_id, promo_product_id, name, quantity, given_at, given_by)
+                       VALUES (:oid, :pid, :name, :qty, :given_at, :given_by)'
+                    : 'INSERT INTO order_promo_items (order_id, promo_product_id, name, quantity) VALUES (:oid, :pid, :name, :qty)');
                 foreach ($rows as $r) {
-                    $ins->execute(['oid' => $orderId, 'pid' => $r['pid'], 'name' => $r['name'], 'qty' => $r['qty']]);
+                    $valori = ['oid' => $orderId, 'pid' => $r['pid'], 'name' => $r['name'], 'qty' => $r['qty']];
+                    if ($areDatLa) {
+                        $anterior = $acordateAnterior[$r['pid']] ?? null;
+                        $valori['given_at'] = $anterior['given_at'] ?? $acum;
+                        $valori['given_by'] = $anterior['given_by'] ?? $operator;
+                    }
+                    $ins->execute($valori);
                 }
             }
             $db->commit();
@@ -7132,6 +7225,171 @@ final class AdminController
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    /** WP-21 (C13): order_promo_items are coloanele „dat la” / „dat de” (produse_promo/0031)? */
+    private function promoAreDatLa(PDO $db): bool
+    {
+        try {
+            $db->query('SELECT given_at, given_by FROM order_promo_items LIMIT 0');
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /** WP-21 (C13): emailul adminului logat, pentru urme de tipul „cine a dat”; null fără admin sau fără email. */
+    private function emailAdminLogat(PDO $db): ?string
+    {
+        $id = Auth::id();
+        if ($id === null) {
+            return null;
+        }
+        try {
+            $stmt = $db->prepare('SELECT email FROM admins WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => $id]);
+            $email = trim((string) ($stmt->fetchColumn() ?: ''));
+        } catch (Throwable) {
+            return null;
+        }
+        return $email !== '' ? mb_substr($email, 0, 190) : null;
+    }
+
+    /**
+     * WP-21 (C13, din Biovitality 2ebc0cb, 657c0cf): exportul Excel al produselor promoționale. Două foi: nomenclatorul cu
+     * totalurile pe produs și „Cui a fost dat”, un rând pe acordare (cu „Dat la” / „Dat de”). Intervalul de date din pagină
+     * se aplică amândurora, ca fișierul să conțină exact ce se vede pe ecran.
+     */
+    public function promoProductsExport(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            Flash::set('error', 'Conexiunea DB nu este disponibilă.');
+            header('Location: /admin/promo-products');
+            return;
+        }
+        $this->ensurePromoSchema($db);
+        $areDatLa = $this->promoAreDatLa($db);
+
+        $from = trim((string) ($_GET['from'] ?? ''));
+        $to = trim((string) ($_GET['to'] ?? ''));
+        $where = ['o.deleted_at IS NULL'];
+        $params = [];
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) === 1) {
+            $where[] = 'o.created_at >= :from';
+            $params['from'] = $from . ' 00:00:00';
+        } else {
+            $from = '';
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) === 1) {
+            $where[] = 'o.created_at <= :to';
+            $params['to'] = $to . ' 23:59:59';
+        } else {
+            $to = '';
+        }
+        $whereSql = implode(' AND ', $where);
+
+        // Totalurile se leagă pe denumire, nu pe id: un produs șters din nomenclator rămâne pe comenzile vechi și trebuie
+        // să apară în raport.
+        $totaluri = [];
+        try {
+            $stmt = $db->prepare("SELECT pi.name AS name, SUM(pi.quantity) AS total, COUNT(DISTINCT pi.order_id) AS orders_count
+                FROM order_promo_items pi JOIN orders o ON o.id = pi.order_id WHERE {$whereSql} GROUP BY pi.name");
+            $stmt->execute($params);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                $totaluri[mb_strtolower(trim((string) ($rand['name'] ?? '')))] = [
+                    'nume' => trim((string) ($rand['name'] ?? '')),
+                    'total' => (int) ($rand['total'] ?? 0),
+                    'comenzi' => (int) ($rand['orders_count'] ?? 0),
+                ];
+            }
+        } catch (Throwable) {
+            $totaluri = [];
+        }
+        $produse = $db->query('SELECT id, name, notes, is_active, sort_order, created_at FROM promotional_products ORDER BY sort_order ASC, name ASC')
+            ->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $randuriProduse = [];
+        $vazute = [];
+        foreach ($produse as $produs) {
+            $nume = trim((string) ($produs['name'] ?? ''));
+            $cheie = mb_strtolower($nume);
+            $vazute[$cheie] = true;
+            $randuriProduse[] = [
+                $nume,
+                trim((string) ($produs['notes'] ?? '')),
+                (int) ($produs['is_active'] ?? 0) === 1 ? 'Activ' : 'Inactiv',
+                (int) ($produs['sort_order'] ?? 0),
+                (int) ($totaluri[$cheie]['total'] ?? 0),
+                (int) ($totaluri[$cheie]['comenzi'] ?? 0),
+                $this->promoFmtDate((string) ($produs['created_at'] ?? '')),
+            ];
+        }
+        // Produse date pe comenzi, dar care nu mai există în nomenclator.
+        foreach ($totaluri as $cheie => $date) {
+            if (!isset($vazute[$cheie])) {
+                $randuriProduse[] = [$date['nume'], 'Șters din nomenclator', 'Inactiv', 0, $date['total'], $date['comenzi'], ''];
+            }
+        }
+
+        $randuriClienti = [];
+        try {
+            $stmt = $db->prepare('SELECT pi.name AS promo_name, pi.quantity, ' . ($areDatLa ? 'pi.given_at, pi.given_by' : 'NULL AS given_at, NULL AS given_by') . ',
+                    o.order_number, o.created_at, o.status, o.billing_first_name, o.billing_last_name, o.billing_email, o.billing_phone
+                FROM order_promo_items pi JOIN orders o ON o.id = pi.order_id
+                WHERE ' . $whereSql . ' ORDER BY o.created_at DESC, pi.id ASC');
+            $stmt->execute($params);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                $client = trim((string) ($rand['billing_first_name'] ?? '') . ' ' . (string) ($rand['billing_last_name'] ?? ''));
+                // „Dat la” lipsește pe acordările de dinainte de coloană: acolo, data comenzii, marcată ca atare.
+                $datLa = trim((string) ($rand['given_at'] ?? ''));
+                $randuriClienti[] = [
+                    trim((string) ($rand['promo_name'] ?? '')),
+                    $client !== '' ? $client : 'Client',
+                    trim((string) ($rand['billing_email'] ?? '')),
+                    trim((string) ($rand['billing_phone'] ?? '')),
+                    trim((string) ($rand['order_number'] ?? '')),
+                    $this->promoFmtDate((string) ($rand['created_at'] ?? '')),
+                    $datLa !== '' ? $this->promoFmtDate($datLa) : $this->promoFmtDate((string) ($rand['created_at'] ?? '')) . ' (data comenzii)',
+                    trim((string) ($rand['given_by'] ?? '')),
+                    trim((string) ($rand['status'] ?? '')),
+                    max(1, (int) ($rand['quantity'] ?? 1)),
+                ];
+            }
+        } catch (Throwable) {
+            $randuriClienti = [];
+        }
+
+        $xlsx = new \App\Support\XlsxWriter();
+        $xlsx->addSheet('Produse', [
+            ['label' => 'Denumire', 'width' => 34],
+            ['label' => 'Notă', 'width' => 34],
+            ['label' => 'Status', 'width' => 10],
+            ['label' => 'Ordine afișare', 'width' => 14],
+            ['label' => 'Total dat (buc.)', 'width' => 16],
+            ['label' => 'Comenzi', 'width' => 10],
+            ['label' => 'Adăugat la', 'width' => 18],
+        ], $randuriProduse);
+        $xlsx->addSheet('Cui a fost dat', [
+            ['label' => 'Produs promoțional', 'width' => 30],
+            ['label' => 'Persoana care l-a primit', 'width' => 26],
+            ['label' => 'Email', 'width' => 30],
+            ['label' => 'Telefon', 'width' => 16],
+            ['label' => 'Nr. comandă', 'width' => 22],
+            ['label' => 'Data comenzii', 'width' => 18],
+            ['label' => 'Dat la', 'width' => 22],
+            ['label' => 'Dat de', 'width' => 24],
+            ['label' => 'Status comandă', 'width' => 16],
+            ['label' => 'Cantitate', 'width' => 11],
+        ], $randuriClienti);
+
+        $sufix = $from !== '' || $to !== '' ? '-' . ($from !== '' ? $from : 'inceput') . '_' . ($to !== '' ? $to : 'azi') : '';
+        if (!$xlsx->trimite('promotionale-' . date('Y-m-d') . $sufix . '.xlsx')) {
+            Flash::set('error', 'Nu am putut genera fișierul Excel. ' . $xlsx->ultimaEroare());
+            header('Location: /admin/promo-products');
+        }
+    }
+
     private function promoFmtDate(string $v): string
     {
         $v = trim($v);
@@ -7285,8 +7543,11 @@ final class AdminController
         $name = (string) ($ps->fetchColumn() ?: '');
 
         try {
+            // WP-21 (C13): și când / de cine a fost dat, după produse_promo/0031.
+            $areDatLa = $this->promoAreDatLa($db);
             $stmt = $db->prepare(
-                "SELECT o.order_number, o.created_at, o.billing_first_name, o.billing_last_name, o.billing_email, pi.quantity
+                "SELECT o.order_number, o.created_at, o.billing_first_name, o.billing_last_name, o.billing_email, pi.quantity"
+                . ($areDatLa ? ', pi.given_at, pi.given_by' : '') . "
                  FROM order_promo_items pi
                  JOIN orders o ON o.id = pi.order_id
                  WHERE o.deleted_at IS NULL AND pi.promo_product_id = :id
@@ -7300,13 +7561,19 @@ final class AdminController
                 $cn = trim((string) ($r['billing_first_name'] ?? '') . ' ' . (string) ($r['billing_last_name'] ?? ''));
                 $qty = (int) ($r['quantity'] ?? 1);
                 $total += $qty;
-                $recipients[] = [
+                $destinatar = [
                     'order_number' => (string) ($r['order_number'] ?? ''),
                     'created_at' => $this->promoFmtDate((string) ($r['created_at'] ?? '')),
                     'client_name' => $cn !== '' ? $cn : 'Client',
                     'email' => (string) ($r['billing_email'] ?? ''),
                     'quantity' => $qty,
                 ];
+                if ($areDatLa) {
+                    $datLa = trim((string) ($r['given_at'] ?? ''));
+                    $destinatar['given_at'] = $datLa !== '' ? $this->promoFmtDate($datLa) : '';
+                    $destinatar['given_by'] = trim((string) ($r['given_by'] ?? ''));
+                }
+                $recipients[] = $destinatar;
             }
             echo json_encode(['ok' => true, 'name' => $name, 'total' => $total, 'recipients' => $recipients], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable) {
@@ -12855,6 +13122,93 @@ final class AdminController
         echo json_encode(['ok' => true, 'html' => $html], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    /**
+     * WP-21 (C11d, din Biovitality 84e29a9): datele unui link video pentru blocul „Video / TikTok” din constructorul
+     * de emailuri: furnizorul, titlul și coperta (App\Support\VideoEmbed::copertaSiTitlu). Coperta se descarcă și se
+     * păstrează la noi (uploads/video-thumbs): adresele copertelor TikTok expiră și sunt blocate de pe alte site-uri, deci
+     * una legată direct ar arăta ruptă în inbox peste câteva zile.
+     */
+    public function emailsVideoLookup(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->guard()) {
+            echo json_encode(['ok' => false, 'error' => 'Sesiune expirată.']);
+            return;
+        }
+        $date = \App\Support\VideoEmbed::copertaSiTitlu(trim((string) ($_POST['url'] ?? '')));
+        if (($date['ok'] ?? false) !== true) {
+            echo json_encode(['ok' => false, 'error' => (string) ($date['error'] ?? 'Link video nerecunoscut.')], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $coperta = trim((string) ($date['thumbnail_url'] ?? ''));
+        $copertaLocala = $coperta !== '' ? $this->salveazaCopertaVideo($coperta) : '';
+        echo json_encode([
+            'ok' => true,
+            'provider' => (string) ($date['provider'] ?? ''),
+            'provider_label' => \App\Support\VideoEmbed::etichetaFurnizor((string) ($date['provider'] ?? '')),
+            'title' => (string) ($date['title'] ?? ''),
+            'author' => (string) ($date['author'] ?? ''),
+            // Descărcarea n-a mers: adresa originală (mai bine o copertă care poate expira decât niciuna).
+            'thumbnail_url' => $copertaLocala !== '' ? $copertaLocala : $coperta,
+            'thumbnail_local' => $copertaLocala !== '',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Coperta unui videoclip (o adresă https dată de furnizor), descărcată în uploads/video-thumbs: adresa ei publică,
+     * sau gol. Doar o imagine (PNG, GIF, WEBP sau JPEG după primii octeți), de cel mult 5 MB.
+     */
+    private function salveazaCopertaVideo(string $url): string
+    {
+        if (preg_match('#^https://#i', $url) !== 1 || !function_exists('curl_init')) {
+            return '';
+        }
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return '';
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 4,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_CONNECTTIMEOUT => 6,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_MAXFILESIZE => 5 * 1024 * 1024,
+            CURLOPT_USERAGENT => 'ANDAXI-CMS/1.0',
+        ]);
+        $continut = curl_exec($ch);
+        $cod = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if (!is_string($continut) || $cod < 200 || $cod >= 300 || strlen($continut) < 500 || strlen($continut) > 5 * 1024 * 1024) {
+            return '';
+        }
+        // Extensia din conținut, nu din adresă (coperta TikTok vine de la o adresă fără extensie); altceva decât o
+        // imagine nu se salvează.
+        $extensie = match (true) {
+            str_starts_with($continut, "\x89PNG") => 'png',
+            str_starts_with($continut, 'GIF8') => 'gif',
+            str_starts_with($continut, 'RIFF') && substr($continut, 8, 4) === 'WEBP' => 'webp',
+            str_starts_with($continut, "\xFF\xD8\xFF") => 'jpg',
+            default => '',
+        };
+        if ($extensie === '') {
+            return '';
+        }
+        $fisier = 'video-' . substr(hash('sha256', $url), 0, 16) . '.' . $extensie;
+        $folder = \App\Support\Paths::uploads('video-thumbs');
+        if (!is_dir($folder) && !@mkdir($folder, 0775, true) && !is_dir($folder)) {
+            return '';
+        }
+        $tinta = $folder . '/' . $fisier;
+        if (!is_file($tinta) && file_put_contents($tinta, $continut) === false) {
+            return '';
+        }
+        @chmod($tinta, 0664);
+        return '/uploads/video-thumbs/' . $fisier;
+    }
+
     public function emailsSection(array $params): void
     {
         if (!$this->guard()) {
@@ -13111,12 +13465,89 @@ final class AdminController
                             $statsTopLinks = [];
                         }
 
+                        // Destinatarii: filtrare și paginare pe server. Lista poate
+                        // avea mii de rânduri, așa că nu se mai încarcă „ultimii 100"
+                        // și nu se mai filtrează din JavaScript.
                         try {
-                            $r = $db->prepare('SELECT email, status, opened_at, open_count, clicked_at, click_count FROM newsletter_campaign_sends WHERE campaign_id=:id ORDER BY id DESC LIMIT 100');
-                            $r->execute(['id' => $statsCampaignId]);
+                            $filtruCerut = strtolower(trim((string) ($_GET['recip_f'] ?? 'all')));
+                            $filtreValide = ['all', 'opened', 'not_opened', 'clicked', 'not_clicked', 'failed'];
+                            $statsRecipientsFilter = in_array($filtruCerut, $filtreValide, true) ? $filtruCerut : 'all';
+                            $statsRecipientsQuery = trim((string) ($_GET['recip_q'] ?? ''));
+                            if (mb_strlen($statsRecipientsQuery) > 120) {
+                                $statsRecipientsQuery = mb_substr($statsRecipientsQuery, 0, 120);
+                            }
+                            $perPagCerut = (int) ($_GET['recip_per_page'] ?? 50);
+                            $statsRecipientsPerPage = in_array($perPagCerut, [25, 50, 100, 200], true) ? $perPagCerut : 50;
+
+                            $conditii = ['campaign_id = :id'];
+                            $paramsRecip = ['id' => $statsCampaignId];
+                            if ($statsRecipientsQuery !== '') {
+                                $conditii[] = 'email LIKE :term';
+                                $paramsRecip['term'] = '%' . $statsRecipientsQuery . '%';
+                            }
+                            switch ($statsRecipientsFilter) {
+                                case 'opened':
+                                    $conditii[] = 'opened_at IS NOT NULL';
+                                    break;
+                                case 'not_opened':
+                                    $conditii[] = 'opened_at IS NULL AND status = \'sent\'';
+                                    break;
+                                case 'clicked':
+                                    $conditii[] = 'clicked_at IS NOT NULL';
+                                    break;
+                                case 'not_clicked':
+                                    $conditii[] = 'clicked_at IS NULL AND status = \'sent\'';
+                                    break;
+                                case 'failed':
+                                    $conditii[] = 'status <> \'sent\'';
+                                    break;
+                            }
+                            $undeRecip = implode(' AND ', $conditii);
+
+                            $c = $db->prepare('SELECT COUNT(*) FROM newsletter_campaign_sends WHERE ' . $undeRecip);
+                            $c->execute($paramsRecip);
+                            $statsRecipientsTotal = (int) ($c->fetchColumn() ?: 0);
+                            $statsRecipientsPages = max(1, (int) ceil($statsRecipientsTotal / max(1, $statsRecipientsPerPage)));
+                            $statsRecipientsPage = max(1, (int) ($_GET['recip_page'] ?? 1));
+                            $statsRecipientsPage = min($statsRecipientsPage, $statsRecipientsPages);
+                            $offsetRecip = ($statsRecipientsPage - 1) * $statsRecipientsPerPage;
+
+                            $r = $db->prepare(
+                                'SELECT email, status, opened_at, open_count, clicked_at, click_count, sent_at
+                                 FROM newsletter_campaign_sends
+                                 WHERE ' . $undeRecip . '
+                                 ORDER BY id DESC
+                                 LIMIT ' . $statsRecipientsPerPage . ' OFFSET ' . max(0, $offsetRecip)
+                            );
+                            $r->execute($paramsRecip);
                             $statsRecipients = $r->fetchAll() ?: [];
+
+                            // Numerele de lângă fiecare filtru, dintr-o singură trecere.
+                            $n = $db->prepare(
+                                'SELECT COUNT(*) AS toti,
+                                        SUM(CASE WHEN opened_at IS NOT NULL THEN 1 ELSE 0 END) AS deschise,
+                                        SUM(CASE WHEN opened_at IS NULL AND status = \'sent\' THEN 1 ELSE 0 END) AS nedeschise,
+                                        SUM(CASE WHEN clicked_at IS NOT NULL THEN 1 ELSE 0 END) AS clicuri,
+                                        SUM(CASE WHEN clicked_at IS NULL AND status = \'sent\' THEN 1 ELSE 0 END) AS fara_clic,
+                                        SUM(CASE WHEN status <> \'sent\' THEN 1 ELSE 0 END) AS esuate
+                                 FROM newsletter_campaign_sends WHERE campaign_id = :id'
+                            );
+                            $n->execute(['id' => $statsCampaignId]);
+                            $numere = $n->fetch() ?: [];
+                            $statsRecipientsCounts = [
+                                'all' => (int) ($numere['toti'] ?? 0),
+                                'opened' => (int) ($numere['deschise'] ?? 0),
+                                'not_opened' => (int) ($numere['nedeschise'] ?? 0),
+                                'clicked' => (int) ($numere['clicuri'] ?? 0),
+                                'not_clicked' => (int) ($numere['fara_clic'] ?? 0),
+                                'failed' => (int) ($numere['esuate'] ?? 0),
+                            ];
                         } catch (\Throwable) {
                             $statsRecipients = [];
+                            $statsRecipientsTotal = 0;
+                            $statsRecipientsPages = 1;
+                            $statsRecipientsPage = 1;
+                            $statsRecipientsCounts = [];
                         }
 
                         try {
@@ -13230,6 +13661,13 @@ final class AdminController
             'statsHourlyOpens' => $statsHourlyOpens ?? [],
             'statsTopLinks' => $statsTopLinks ?? [],
             'statsRecipients' => $statsRecipients ?? [],
+            'statsRecipientsFilter' => $statsRecipientsFilter ?? 'all',
+            'statsRecipientsQuery' => $statsRecipientsQuery ?? '',
+            'statsRecipientsPage' => $statsRecipientsPage ?? 1,
+            'statsRecipientsPages' => $statsRecipientsPages ?? 1,
+            'statsRecipientsPerPage' => $statsRecipientsPerPage ?? 50,
+            'statsRecipientsTotal' => $statsRecipientsTotal ?? 0,
+            'statsRecipientsCounts' => $statsRecipientsCounts ?? [],
             'statsRevenue' => $statsRevenue ?? ['orders_count' => 0, 'revenue' => 0],
         ], 'admin/layout');
     }
@@ -15938,6 +16376,7 @@ final class AdminController
         $products = [];
         $categories = [];
         $users = [];
+        $produseCupoane = [];
         $activeCount = 0;
         $usedCount = 0;
         $totalFiltered = 0;
@@ -16020,11 +16459,34 @@ final class AdminController
             $products = $db->query('SELECT id, name FROM products WHERE deleted_at IS NULL AND is_active = 1 ORDER BY name ASC LIMIT 2000')->fetchAll() ?: [];
             $categories = $db->query('SELECT id, name FROM product_categories ORDER BY name ASC LIMIT 1000')->fetchAll() ?: [];
             $users = $db->query('SELECT id, first_name, last_name, email FROM users ORDER BY email ASC LIMIT 3000')->fetchAll() ?: [];
+
+            // WP-21 (C12, din Biovitality 222ed71): produsele fiecărui cupon din pagină, pentru rândul „Produse” din
+            // panoul de editare în masă: id => {p: [id-uri, crescător], o: 1 = doar la produsele selectate}.
+            $iduriCupoane = array_values(array_filter(array_map(static fn ($c): int => is_array($c) ? (int) ($c['id'] ?? 0) : 0, (array) $coupons)));
+            if ($iduriCupoane !== []) {
+                try {
+                    $st = $db->prepare('SELECT id, product_ids_json, apply_only_selected_products FROM coupons WHERE id IN ('
+                        . implode(',', array_fill(0, count($iduriCupoane), '?')) . ')');
+                    $st->execute($iduriCupoane);
+                    foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                        $produseCupon = json_decode((string) ($rand['product_ids_json'] ?? ''), true);
+                        $produseCupon = is_array($produseCupon)
+                            ? array_values(array_unique(array_filter(array_map('intval', $produseCupon), static fn (int $pid): bool => $pid > 0)))
+                            : [];
+                        sort($produseCupon);
+                        $produseCupoane[(string) (int) $rand['id']] = ['p' => $produseCupon,
+                            'o' => (int) ($rand['apply_only_selected_products'] ?? 0) === 1 ? 1 : 0];
+                    }
+                } catch (Throwable) {
+                    $produseCupoane = [];
+                }
+            }
         }
 
         View::render('admin/coupons-unique', [
             'title' => 'Cupoane unice',
             'coupons' => is_array($coupons) ? $coupons : [],
+            'produseCupoane' => $produseCupoane,
             'products' => is_array($products) ? $products : [],
             'categories' => is_array($categories) ? $categories : [],
             'users' => is_array($users) ? $users : [],
@@ -16304,6 +16766,14 @@ final class AdminController
                         if (isset($_POST['edit_stacks'])) {
                             $sets[] = 'stacks_with_discounts = ?';
                             $vals[] = ((string) ($_POST['stacks_value'] ?? '1')) === '1' ? 1 : 0;
+                        }
+                        // WP-21 (C12, din Biovitality 222ed71): produsele la care se aplică. Lista bifată o înlocuiește
+                        // pe a fiecărui cupon; niciun produs bifat = fără restricție de produs.
+                        if (isset($_POST['edit_products'])) {
+                            $sets[] = 'product_ids_json = ?';
+                            $vals[] = $this->couponIdsToJson($this->normalizePositiveIds($_POST['product_ids'] ?? []));
+                            $sets[] = 'apply_only_selected_products = ?';
+                            $vals[] = isset($_POST['apply_only_selected_products']) ? 1 : 0;
                         }
                         if ($sets === []) {
                             Flash::set('error', 'Nu ai bifat niciun câmp de modificat.');

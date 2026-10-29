@@ -1068,7 +1068,40 @@ $porturiBiovitality = [
         'motiv' => 'Biovitality 4f65fd9 (WP-12 C7): selectorul stă într-o fereastră ascunsă, dar browserul descărca toate pozele '
             . 'galeriei (până la 500) la fiecare încărcare a paginii (pe Email-uri, pe orice tab); acum doar la deschiderea lui.',
     ],
+    // WP-21 (C13, Biovitality 657c0cf, 9cca65b): fereastra „Cui a fost dat” arată și când / de cine a fost dat produsul,
+    // iar totalul rămâne lipit sus când lista derulează.
+    [
+        'nume' => 'produsele promoționale: „dat la / dat de” în fereastra „Cui a fost dat”',
+        'cale' => '/admin/promo-products',
+        'nou' => "'<br><span style=\"color:#94a3b8;\">' + esc(x.order_number) + ' · ' + esc(x.created_at) + '</span>' +\n"
+            . "                            '<br><span style=\"color:#94a3b8;\">' + (x.given_at ? 'Dat la ' + esc(x.given_at) + (x.given_by ? ' de ' + "
+            . "esc(x.given_by) : '') : 'Dat odată cu comanda') + '</span>' +",
+        'vechi' => "'<br><span style=\"color:#94a3b8;\">' + esc(x.order_number) + ' · ' + esc(x.created_at) + '</span>' +",
+        'motiv' => 'Biovitality 657c0cf (WP-21 C13): momentul acordării și adminul care a dat produsul (order_promo_items.given_at, '
+            . 'given_by, produse_promo/0031), păstrate peste re-salvări.',
+    ],
+    [
+        'nume' => 'produsele promoționale: totalul lipit sus în fereastra care derulează',
+        'cale' => '/admin/promo-products',
+        'nou' => "'<p style=\"position:sticky;top:0;z-index:1;margin:0 0 10px;padding:6px 0;background:#fff;font-weight:700;\">Total dat: '",
+        'vechi' => "'<p style=\"margin:0 0 10px;font-weight:700;\">Total dat: '",
+        'motiv' => 'Biovitality 9cca65b (WP-21 C13): la sute de rânduri, fereastra „Cui a fost dat” curgea peste pagină; acum derulează '
+            . 'doar lista, cu totalul sus.',
+    ],
 ];
+// WP-21 (C11c, C11d; Biovitality b9fcaf8, 84e29a9): constructorul de emailuri, blocul „Video / TikTok” și fundalul blocurilor
+// din coloane; textele (codul Bioscem → codul de acum) în tools/dev/lib/declaratii-wp21-constructor.php, pe pagina
+// constructorului unui template nou.
+foreach (require __DIR__ . '/lib/declaratii-wp21-constructor.php' as $nrConstructor => $schimbareConstructor) {
+    $porturiBiovitality[] = [
+        'nume' => 'constructorul de emailuri: blocul video și fundalul blocurilor din coloane (' . ($nrConstructor + 1) . ')',
+        'cale' => '/admin/emails/builder',
+        'nou' => $schimbareConstructor['nou'],
+        'vechi' => $schimbareConstructor['vechi'],
+        'motiv' => 'Biovitality 84e29a9 și b9fcaf8 (WP-21 C11c, C11d): blocul video al newsletterelor (copertă cu buton, nu player: '
+            . 'clienții de email nu redau video) și blocurile din coloane fără fundal propriu, cu aliniere.',
+    ];
+}
 // Postările cazului „blog: un link YouTube (fără acord) și unul Vimeo (cu acord)” din salvări (mai jos): doar pe
 // paginile lor apar playerul și caseta „Pornește videoclipul” (declarate aici, în $porturiVertij).
 $slugVideoYoutube = 'video-youtube-de-test-' . getmypid();
@@ -1181,6 +1214,22 @@ $marcajePort = [
     // WP-18 (GR-03, DB-15): blocul „Datele operatorului” (din grafoanaytis 2c11526, d1bffca) deasupra listei acordurilor
     // GDPR; textul formularului public citește aceste setări (Bioscem: din înghețare, /acorduri-gdpr rămâne identică).
     'gr:gdpr-setari' => ['cale' => '/admin/users/gdpr-agreements', 'motiv' => 'WP-18: setările operatorului acordului GDPR, portate din grafoanaytis'],
+    // WP-21 (C10, Biovitality 8ba8ddd, 0c682b3): capcana anti-spam a formularului de recenzie (câmpul ascuns review_website și
+    // momentul deschiderii, review_opened_at, care se schimbă la fiecare cerere) și, în admin, filtrul „Spam”, butoanele lui
+    // și marcajul pe rând (scriptul cu datele recenziilor din pagină).
+    // Paginile de produs cerute (lista de pagini și cazurile de salvare); nu și produsul lipsă (404, fără formular).
+    'bv:recenzie-capcana' => ['cale' => ['/produs/ceai-de-menta', '/produs/ceai-de-musetel', '/produs/' . $slugBbd, '/produs/' . $slugPre,
+        '/produs/omega-3-din-alge', '/produs/miere-de-manuka-mgo-400', '/produs/cos-cadou-cu-miere', '/produs/proteina-harrison-de-test'], 'motiv' => 'WP-21 (C10): capcana și momentul deschiderii '
+        . 'formularului de recenzie'],
+    'bv:recenzii-filtru-spam' => ['cale' => '/admin/products/reviews', 'motiv' => 'WP-21 (C10): filtrul „Spam” al recenziilor'],
+    'bv:recenzii-spam-actiuni' => ['cale' => '/admin/products/reviews', 'motiv' => 'WP-21 (C10): „Detectează spamul” și „Golește spamul”'],
+    'bv:recenzii-spam-randuri' => ['cale' => '/admin/products/reviews', 'motiv' => 'WP-21 (C10): insigna SPAM, adresa și butonul '
+        . '„Spam” / „Nu e spam” pe fiecare rând'],
+    // WP-21 (C12, Biovitality 222ed71): rândul „Produse” al editării în masă a cupoanelor unice.
+    'bv:cupoane-unice-produse' => ['cale' => '/admin/coupons/unique', 'motiv' => 'WP-21 (C12): produsele cupoanelor unice, schimbate în masă'],
+    // WP-21 (C13, Biovitality 2ebc0cb, 9cca65b): exportul Excel al produselor promoționale și fereastra care derulează.
+    'bv:promo-export' => ['cale' => '/admin/promo-products', 'motiv' => 'WP-21 (C13): butonul „Export Excel” și stilul ferestrei „Cui a fost dat”'],
+    'bv:promo-export-filtru' => ['cale' => '/admin/promo-products', 'motiv' => 'WP-21 (C13): „Export Excel” lângă filtrul de date'],
 ];
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
@@ -1331,6 +1380,11 @@ $pagini = [
     ['adm', '/admin/products/new'],
     ['adm', '/admin/coupons?coupon=' . $idCupon],
     ['adm', '/admin/promo-products'],
+    // WP-21 (C10, C12): recenziile (filtrul Spam) și cupoanele unice (produsele în masă).
+    ['adm', '/admin/products/reviews'],
+    ['adm', '/admin/coupons/unique'],
+    // WP-21 (C11c, C11d): constructorul de emailuri, un template nou (?type=newsletter de mai jos răspunde cu 302).
+    ['adm', '/admin/emails/builder'],
     // Paginile atinse de verificarea din Etapa 1, pasul 4 (editoare, texte ale nucleului, robots, API-uri).
     ['adm', '/admin/pages/new'],
     ['adm', '/admin/products/templates/' . $idSablonProdus . '/builder'],

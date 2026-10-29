@@ -938,12 +938,15 @@ final class SiteController
             'review_text' => $text,
             'source' => 'product_page',
         ];
+        $motivSpam = $this->verificaSpamRecenzie($db, $name, $text, (string) $payload['user_email']);
+        $idRecenzie = 0;
         try {
             $insert = $db->prepare(
                 'INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved)
                  VALUES (:product_id, :user_name, :user_email, :rating, :review_text, :source, 0)'
             );
             $insert->execute($payload);
+            $idRecenzie = (int) $db->lastInsertId();
         } catch (Throwable) {
             try {
                 $insert = $db->prepare(
@@ -957,6 +960,7 @@ final class SiteController
                     'rating' => (int) $payload['rating'],
                     'review_text' => (string) $payload['review_text'],
                 ]);
+                $idRecenzie = (int) $db->lastInsertId();
             } catch (Throwable) {
                 $legacyInsert = $db->prepare(
                     'INSERT INTO reviews (product_id, user_name, rating, review_text, is_approved)
@@ -970,6 +974,8 @@ final class SiteController
                 ]);
             }
         }
+
+        $this->marcheazaRecenzia($db, $idRecenzie, $motivSpam);
 
         Flash::set('success', 'Mulțumim! Review-ul tău a fost trimis și așteaptă aprobarea.');
         header('Location: /produs/' . rawurlencode((string) $product['slug']) . '#product-reviews');
@@ -1041,6 +1047,7 @@ final class SiteController
             'review_text' => $text,
             'source' => 'qr_form',
         ];
+        $motivSpam = $this->verificaSpamRecenzie($db, $name, $text, $email);
         try {
             $insert = $db->prepare(
                 'INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved)
@@ -1061,8 +1068,51 @@ final class SiteController
             ]);
         }
 
+        $this->marcheazaRecenzia($db, (int) $db->lastInsertId(), $motivSpam);
+
         Flash::set('success', 'Mulțumim! Recenzia a fost trimisă și va apărea după aprobare.');
         header('Location: ' . $redirectTo);
+    }
+
+    /**
+     * WP-21 (C10, din Biovitality 8ba8ddd, 0c682b3): recenzia arată a spam? Formularele de recenzie sunt ținta
+     * scanerelor automate (payload-uri de injecție), care umpleau lista „În așteptare” din admin. Motivul, sau null.
+     */
+    private function verificaSpamRecenzie(PDO $db, string $name, string $text, string $email): ?string
+    {
+        return \App\Support\ReviewGuard::motiv([
+            'name' => $name,
+            'text' => $text,
+            'email' => $email,
+            'ip' => \App\Support\ReviewGuard::ip(),
+            'honeypot' => (string) ($_POST['review_website'] ?? ''),
+            'opened_at' => (int) ($_POST['review_opened_at'] ?? 0),
+        ], $db);
+    }
+
+    /**
+     * WP-21 (C10): rândul tocmai inserat în product_reviews ($id; 0 = salvată în tabelul vechi `reviews`, nimic de
+     * marcat) primește adresa vizitatorului și, dacă e cazul, marcajul de spam cu motivul.
+     * Separat de INSERT, ca salvarea să meargă și pe o bază fără coloanele noi (migrarea recenzii/0030 încă nerulată):
+     * acolo recenzia rămâne în așteptare, ca înainte.
+     */
+    private function marcheazaRecenzia(PDO $db, int $id, ?string $motivSpam): void
+    {
+        if ($id <= 0) {
+            return;
+        }
+        \App\Support\ReviewGuard::curataAdreseVechi($db, $this->cachedSettings($db));
+        try {
+            $db->prepare('UPDATE product_reviews SET ip_address = :ip, is_spam = :spam, spam_reason = :motiv WHERE id = :id')
+                ->execute([
+                    'ip' => \App\Support\ReviewGuard::ip() !== '' ? \App\Support\ReviewGuard::ip() : null,
+                    'spam' => $motivSpam === null ? 0 : 1,
+                    'motiv' => $motivSpam,
+                    'id' => $id,
+                ]);
+        } catch (Throwable) {
+            // Fără coloanele anti-spamului: recenzia rămâne în așteptare.
+        }
     }
 
     public function gdprAgreementSubmit(): void
@@ -5177,6 +5227,7 @@ final class SiteController
             . '<div class="product-reviews-head"><div class="product-reviews-head__inline"><span class="product-reviews-head__label">Recenzie produs</span></div></div>'
             . '<form method="post" action="/review-form/submit" class="product-review-form">'
             . '<input type="hidden" name="redirect_to" value="' . $redirectTo . '">'
+            . \App\Support\Dev::marcaj('bv:recenzie-capcana-qr') . \App\Support\ReviewGuard::campuriFormular() . \App\Support\Dev::marcaj('bv:recenzie-capcana-qr', true)
             . '<div class="field"><label>Produs</label><select name="product_id" required>' . implode('', $options) . '</select></div>'
             . '<div class="field"><label>Nume</label><input type="text" name="review_name" value="' . htmlspecialchars($defaultName, ENT_QUOTES) . '" required></div>'
             . '<div class="field"><label>Email (opțional)</label><input type="email" name="review_email" value="' . htmlspecialchars($defaultEmail, ENT_QUOTES) . '" placeholder="nume@email.com"></div>'
@@ -11616,6 +11667,7 @@ CSS;
         }
         return '<form method="post" action="/produs/' . $safeSlug . '/review#product-reviews" class="product-review-form">'
             . '<h4>Lasă un review</h4>'
+            . \App\Support\Dev::marcaj('bv:recenzie-capcana') . \App\Support\ReviewGuard::campuriFormular() . \App\Support\Dev::marcaj('bv:recenzie-capcana', true)
             . '<div class="field"><label>Nume</label><input type="text" name="review_name" required value="' . $safeDefaultName . '"></div>'
             . '<div class="field"><label>Rating</label><div class="product-review-rating" data-review-rating="1"><input type="hidden" name="review_rating" value="' . $defaultRating . '" data-review-rating-input="1">' . $ratingControls . '</div></div>'
             . '<div class="field"><label>Review</label><textarea name="review_text" rows="4" required></textarea></div>'

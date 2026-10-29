@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 return [
     'ord' => 32,
-    'amprenta' => '1cfd416777be5cbe048f92670906e0ce5abc11610445e0ae9f502b163c49fcbf',
+    'amprenta' => '69393abc4c9624d4aa0e77a453286a192a133d5d8c71b18b0f38cd1c3b971c8d',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',
@@ -38,6 +38,8 @@ return [
         'catalog/0026_vizibilitate_ordine',
         'catalog/0027_campuri_doar_sablon',
         'magazin/0028_transport_gratuit',
+        'recenzii/0030_recenzii_spam',
+        'produse_promo/0031_promo_dat_la',
         'magazin/0032_avertismente_produse',
     ],
 ];

@@ -318,6 +318,8 @@ să iasă la fel oricare ar fi serverul (de exemplu `explicit_defaults_for_times
 | `catalog/0026_vizibilitate_ordine` (WP-19, 29 octombrie) | `products.preview_token` (cheia linkului de ciornă; fiecare produs fără cheie primește una, cu `random_bytes`, pe bucăți de 500, fără să-i schimbe `updated_at`), `products.sort_position`, `products.hidden_in_catalog`; **adoptivă**: codul Biovitality face aceleași coloane, cu aceleași definiții, deci pe baza lui completează doar cheile lipsă |
 | `catalog/0027_campuri_doar_sablon` (WP-19) | `product_extra_fields.template_only`; adoptivă (Biovitality) |
 | `magazin/0028_transport_gratuit` (WP-20) | `products.free_shipping` (`TINYINT(1) NOT NULL DEFAULT 0`, coloana pluginului `magazin` în tabelul catalogului); adoptivă (Biovitality face aceeași coloană); implicit 0, deci calculele unei baze fără produse bifate (Bioscem) rămân aceleași |
+| `recenzii/0030_recenzii_spam` (WP-21) | `product_reviews.ip_address`, `is_spam`, `spam_reason`, indexul `idx_product_reviews_spam`; adoptivă (Biovitality face aceleași, `ReviewGuard::ensureSchema`); nicio recenzie marcată la început |
+| `produse_promo/0031_promo_dat_la` (WP-21) | `order_promo_items.given_at`, `given_by`; adoptivă (Biovitality); acordările de dinainte rămân fără valoare (exportul arată data comenzii, marcată) |
 | `site/grafoanaytis/0001_ordine_catalog` (WP-19, pasul site-ului, doar cu `--site=grafoanaytis`, la adoptarea lui) | ordinea catalogului din coloana veche `products.sort_order` în `sort_position`, ca rang dens (cel mai mic `sort_order` > 0 devine 1; 0 rămâne NULL), doar unde `sort_position` e încă NULL; fără coloana veche, nimic |
 
 O migrare de după baseline e o migrare obișnuită: pe o bază nouă o aplică `--aplica` după baseline, pe un site

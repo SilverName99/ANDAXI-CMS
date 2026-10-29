@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@070e1af",
-    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
+    "amprenta_nucleu": "688b79f240ba3d4585f6bd04c1d7b9d2bd34fad2216368d571de7bf26840b1ed",
     "setari": {
         "bt_ipay_descriere_magazin": {
             "valoare": "bioscem.ro",
@@ -253,6 +253,14 @@
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
         },
+        "recenzii_insigna_meniu": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-21 (C10): codul Bioscem nu are bulina recenziilor în meniul adminului (views/admin/layout.php); fiecare pagină de admin rămâne identică până o pornește clientul din setări (recenzii_insigna_meniu = 1)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "welcome_popup_body": {
             "valoare": "Vă informăm că am lansat o nouă platformă BIOSCEM. Pentru a putea comanda și beneficia în continuare de produsele comercializate de către SC BIOSCEM SRL, toți clienții și utilizatorii sunt rugați să își creeze un CONT NOU.\n\n⚠️ IMPORTANT: Conturile vechi și datele de autentificare anterioare nu mai sunt valabile. Accesul la noua platformă se face exclusiv prin intermediul unui cont nou, pe care vă rugăm să vi-l creați.\n\nNe cerem scuze pentru eventualele neplăceri cauzate de această schimbare și vă mulțumim pentru înțelegere, răbdare și încredere.\n\nVă dorim o experiență cât mai plăcută pe noua platformă!\n\nCu drag,\nEchipa BIOSCEM – Vitalitate & Protecție",
             "mod": "lipsa",
@@ -312,6 +320,11 @@
             "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
+        },
+        "recenzii_ip_zile": {
+            "motiv": "Nou (WP-21, C10, OD-15): codul Bioscem nu ține adresa de la care vine o recenzie; codul comun o ține 90 de zile, pentru limita anti-spam (declarat în ce-se-schimba.md)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"90\""
         }
     }
 }

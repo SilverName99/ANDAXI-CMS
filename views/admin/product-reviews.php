@@ -9,6 +9,9 @@ $perPage = (int) ($perPage ?? 25);
 $perPageOptions = is_array($perPageOptions ?? null) ? $perPageOptions : [10, 25, 50, 100, 200, 500];
 $totalReviews = max(0, (int) ($totalReviews ?? count($reviews)));
 $totalPages = max(1, (int) ($totalPages ?? 1));
+// WP-21 (C10, din Biovitality 8ba8ddd): filtrul „Spam”, butoanele lui și marcajul pe rând, doar cu coloanele anti-spamului.
+$areSpam = (bool) ($areSpam ?? false);
+$spamRecenzii = is_array($spamRecenzii ?? null) ? $spamRecenzii : [];
 $buildReviewsUrl = static function (array $params) use ($status, $search, $perPage, $panel): string {
     $query = [
         'status' => $status,
@@ -69,6 +72,11 @@ $paginationEnd = min($totalPages, $page + 2);
                     <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>
                         Aprobate (<?= (int) ($counts['approved'] ?? 0) ?>)
                     </option>
+<?php if ($areSpam): ?><?= \App\Support\Dev::marcaj('bv:recenzii-filtru-spam') ?>
+                    <option value="spam" <?= $status === 'spam' ? 'selected' : '' ?>>
+                        Spam (<?= (int) ($counts['spam'] ?? 0) ?>)
+                    </option>
+<?= \App\Support\Dev::marcaj('bv:recenzii-filtru-spam', true) ?><?php endif; ?>
                     <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>
                         Toate (<?= (int) ($counts['all'] ?? 0) ?>)
                     </option>
@@ -96,6 +104,28 @@ $paginationEnd = min($totalPages, $page + 2);
         <p style="margin:0 0 10px;color:#64748b;">
             Afișare <?= count($reviews) ?> din <?= $totalReviews ?> recenzii.
         </p>
+<?php if ($areSpam): ?><?= \App\Support\Dev::marcaj('bv:recenzii-spam-actiuni') ?>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px;">
+            <form method="post" action="/admin/products/reviews"
+                  onsubmit="return confirm('Trec prin recenziile neaprobate și le mut în Spam pe cele care arată a atac automat. Continui?');">
+                <input type="hidden" name="action" value="scan_spam">
+                <input type="hidden" name="status" value="<?= htmlspecialchars($status, ENT_QUOTES) ?>">
+                <input type="hidden" name="per_page" value="<?= $perPage ?>">
+                <input type="hidden" name="panel" value="<?= htmlspecialchars($panel, ENT_QUOTES) ?>">
+                <button class="btn btn-secondary" type="submit" title="Detectează spamul din recenziile deja primite">Detectează spamul</button>
+            </form>
+            <?php if ((int) ($counts['spam'] ?? 0) > 0): ?>
+                <form method="post" action="/admin/products/reviews"
+                      onsubmit="return confirm('Ștergi definitiv toate cele <?= (int) ($counts['spam'] ?? 0) ?> recenzii marcate ca spam?');">
+                    <input type="hidden" name="action" value="delete_spam_all">
+                    <input type="hidden" name="status" value="spam">
+                    <input type="hidden" name="per_page" value="<?= $perPage ?>">
+                    <input type="hidden" name="panel" value="<?= htmlspecialchars($panel, ENT_QUOTES) ?>">
+                    <button class="btn btn-danger" type="submit">Golește spamul (<?= (int) ($counts['spam'] ?? 0) ?>)</button>
+                </form>
+            <?php endif; ?>
+        </div>
+<?= \App\Support\Dev::marcaj('bv:recenzii-spam-actiuni', true) ?><?php endif; ?>
 
         <table class="table">
             <thead>
@@ -185,6 +215,73 @@ $paginationEnd = min($totalPages, $page + 2);
             <?php endif; ?>
             </tbody>
         </table>
+<?php if ($areSpam && $reviews !== []): ?><?= \App\Support\Dev::marcaj('bv:recenzii-spam-randuri') ?>
+<?php
+/*
+ * Pe fiecare rând: insigna „SPAM — motivul”, adresa de la care a venit recenzia și butonul „Spam” / „Nu e spam”, puse de
+ * un script din datele de mai jos (id => spam, motiv, adresă), cu aceleași câmpuri ascunse ca formularele rândului.
+ */
+$dateSpam = ['recenzii' => (object) $spamRecenzii, 'status' => $status, 'q' => $search, 'page' => $page, 'per_page' => $perPage, 'panel' => $panel];
+?>
+<script type="application/json" id="recenzii-spam-date"><?= json_encode($dateSpam, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script>
+(() => {
+    let date = {};
+    try {
+        date = JSON.parse(document.getElementById('recenzii-spam-date')?.textContent || '{}') || {};
+    } catch {
+        return;
+    }
+    const recenzii = date.recenzii || {};
+    document.querySelectorAll('table.table tbody tr').forEach((rand) => {
+        const celule = rand.querySelectorAll('td');
+        const id = (celule[0]?.textContent || '').replace('#', '').trim();
+        const info = recenzii[id];
+        if (!info || celule.length < 8) {
+            return;
+        }
+        const client = celule[3];
+        if (Number(info.spam) === 1) {
+            const insigna = document.createElement('span');
+            insigna.style.cssText = 'display:inline-block;margin-top:4px;background:#fee2e2;color:#b91c1c;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:700;';
+            insigna.textContent = 'SPAM' + (info.motiv ? ' — ' + info.motiv : '');
+            client.appendChild(document.createElement('br'));
+            client.appendChild(insigna);
+        }
+        if (info.ip) {
+            const adresa = document.createElement('small');
+            adresa.style.color = '#94a3b8';
+            adresa.textContent = 'IP ' + info.ip;
+            client.appendChild(document.createElement('br'));
+            client.appendChild(adresa);
+        }
+        const actiuni = celule[7].querySelector('div');
+        const stergere = actiuni ? actiuni.querySelector('form:last-child') : null;
+        if (!actiuni) {
+            return;
+        }
+        const formular = document.createElement('form');
+        formular.method = 'post';
+        formular.action = '/admin/products/reviews';
+        const campuri = { id: id, action: Number(info.spam) === 1 ? 'not_spam' : 'spam', status: date.status || 'pending', q: date.q || '',
+            page: String(date.page || 1), per_page: String(date.per_page || 25), panel: date.panel || 'list' };
+        Object.entries(campuri).forEach(([nume, valoare]) => {
+            const camp = document.createElement('input');
+            camp.type = 'hidden';
+            camp.name = nume;
+            camp.value = valoare;
+            formular.appendChild(camp);
+        });
+        const buton = document.createElement('button');
+        buton.className = 'btn btn-secondary';
+        buton.type = 'submit';
+        buton.textContent = Number(info.spam) === 1 ? 'Nu e spam' : 'Spam';
+        formular.appendChild(buton);
+        actiuni.insertBefore(formular, stergere);
+    });
+})();
+</script>
+<?= \App\Support\Dev::marcaj('bv:recenzii-spam-randuri', true) ?><?php endif; ?>
 
         <?php if ($totalPages > 1): ?>
             <nav class="product-reviews-pagination" aria-label="Paginare recenzii admin">

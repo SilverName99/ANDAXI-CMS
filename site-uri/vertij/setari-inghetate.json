@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
+    "amprenta_nucleu": "688b79f240ba3d4585f6bd04c1d7b9d2bd34fad2216368d571de7bf26840b1ed",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -666,6 +666,16 @@
             "motiv": "Cu numerotarea „legacy” (order_number_mode, mai sus) contorul nu se folosește",
             "vechi": "lipsește",
             "nucleu": "implicit \"1001\""
+        },
+        "recenzii_insigna_meniu": {
+            "motiv": "Fără pluginul recenzii în abonament (lista de azi): meniul n-are intrarea Recenzii, setarea nu se folosește",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "recenzii_ip_zile": {
+            "motiv": "Fără pluginul recenzii în abonament: nicio recenzie, nicio adresă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"90\""
         },
         "shipping_fixed_base": {
             "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",

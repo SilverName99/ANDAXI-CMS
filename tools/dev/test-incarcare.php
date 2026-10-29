@@ -234,7 +234,8 @@ $oracolPastrate = [
     'bt_ipay_transactions' => ['kind', 'mode', 'bt_order_number', 'state', 'action_desc', 'op_pending', 'deposit_requested_at', 'reminder_sent_at',
         'authorized_at', 'deposited_at', 'reversed_at', 'refunded_at', 'last_checked_at', 'public_checked_at', 'callback_checked_at', 'created_at', 'updated_at'],
     'loyalty_points_transactions' => ['tx_type', 'created_at'],
-    'product_reviews' => ['source', 'created_at'],
+    // Motivul spamului (WP-21): unul din textele fixe ale App\Support\ReviewGuard, niciodată text al clientului.
+    'product_reviews' => ['source', 'spam_reason', 'created_at'],
     'reviews' => ['created_at'],
     'newsletter_subscribers' => ['status', 'created_at', 'updated_at'],
     'newsletter_campaign_sends' => ['status', 'sent_at', 'created_at', 'opened_at', 'clicked_at'],

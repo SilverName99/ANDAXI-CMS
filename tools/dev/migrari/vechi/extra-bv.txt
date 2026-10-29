@@ -3,14 +3,8 @@
 # exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.
 coloana blog_posts.featured_image_width
 coloana blog_posts.references_html
-coloana order_promo_items.given_at
-coloana order_promo_items.given_by
-coloana product_reviews.ip_address
-coloana product_reviews.is_spam
-coloana product_reviews.spam_reason
 coloana products.bundle_items_json
 coloana products.gallery_json
-indexul product_reviews.idx_product_reviews_spam
 tabelul admin_app_tokens
 tabelul blog_post_tags
 tabelul blog_tags

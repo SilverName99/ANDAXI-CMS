@@ -112,6 +112,15 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                 . htmlspecialchars((string) $intrare['href'], ENT_QUOTES) . '">' . "\n"
                 . $sp($indent + 4) . '<span class="nav-icon">' . $icon((string) ($intrare['icon'] ?? '')) . '</span>';
             $eticheta = htmlspecialchars((string) $intrare['eticheta'], ENT_QUOTES);
+            // Bulina unei intrări (WP-21: recenziile care așteaptă aprobare), din catalog („insigna”: o funcție care
+            // întoarce un număr); 0 = nimic, ca înainte.
+            $numarInsigna = is_callable($intrare['insigna'] ?? null) ? (int) call_user_func($intrare['insigna']) : 0;
+            if ($numarInsigna > 0) {
+                $eticheta .= '<span class="nav-badge" title="' . $numarInsigna . ' în așteptare"'
+                    . ' style="display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;margin-left:8px;'
+                    . 'padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;line-height:1;'
+                    . 'vertical-align:middle;">' . ($numarInsigna > 99 ? '99+' : (string) $numarInsigna) . '</span>';
+            }
             $html .= $etichetaPeRand ? "\n" . $sp($indent + 4) . $eticheta . "\n" : ' ' . $eticheta . "\n";
             return $html . $sp($indent) . '</a>' . "\n";
         };

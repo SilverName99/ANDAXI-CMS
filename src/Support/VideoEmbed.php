@@ -22,9 +22,22 @@ namespace App\Support;
  * Din vertij `0fc2b2c` (20 oct 2026), plus acordul pentru cookie-uri și `dnt=1`
  * (site-uri/vertij/ce-se-schimba.md). Pluginul blog (postările și evenimentul
  * următor, NextEvent).
+ *
+ * Plus, pentru blocul „Video / TikTok” al newsletterelor (WP-21: C11d, din
+ * Biovitality 84e29a9): furnizorul unui link (TikTok, YouTube, Vimeo sau un fișier
+ * video), titlul și coperta lui prin oEmbed (`copertaSiTitlu`). Clienții de email
+ * nu redau video (Gmail, Outlook și Apple Mail scot `<video>` și `<iframe>`), deci
+ * în email pleacă o copertă pe care se dă clic, cu un buton.
  */
 final class VideoEmbed
 {
+    /** Adresele oEmbed ale furnizorilor cunoscuți (blocul video al newsletterelor). */
+    private const OEMBED = [
+        'tiktok' => 'https://www.tiktok.com/oembed?url=',
+        'youtube' => 'https://www.youtube.com/oembed?format=json&url=',
+        'vimeo' => 'https://vimeo.com/api/oembed.json?url=',
+    ];
+
     /** Extensiile pe care browserul le poate reda direct cu <video>. */
     private const FILE_TYPES = [
         'mp4' => 'video/mp4',
@@ -85,6 +98,112 @@ final class VideoEmbed
     }
 
     /** Raport pe 16:9, fără CSS extern, ca să meargă și în template-uri scrise de mână. */
+    /**
+     * Furnizorul unui link video: tiktok, youtube, vimeo, file (un fișier video, și urcat la noi, fără gazdă) sau gol.
+     */
+    public static function furnizor(string $url): string
+    {
+        $url = trim($url);
+        $gazda = strtolower((string) parse_url($url, PHP_URL_HOST));
+        if ($gazda === '') {
+            return self::fileMime($url) !== '' || self::esteFisierVideo($url) ? 'file' : '';
+        }
+        $gazda = preg_replace('/^www\./', '', $gazda) ?? $gazda;
+        return match (true) {
+            $gazda === 'tiktok.com' || str_ends_with($gazda, '.tiktok.com') => 'tiktok',
+            self::youtubeId($url) !== '' => 'youtube',
+            self::vimeoId($url) !== '' => 'vimeo',
+            default => self::esteFisierVideo($url) ? 'file' : '',
+        };
+    }
+
+    /** Numele furnizorului, cum îl scriem pe buton („▶ Vezi pe TikTok”). */
+    public static function etichetaFurnizor(string $furnizor): string
+    {
+        return match ($furnizor) {
+            'tiktok' => 'TikTok',
+            'youtube' => 'YouTube',
+            'vimeo' => 'Vimeo',
+            default => 'videoclip',
+        };
+    }
+
+    /**
+     * Ce știm despre un link video pentru blocul de newsletter: furnizorul, titlul și adresa copertei (oEmbed; la
+     * YouTube, dacă oEmbed nu răspunde, coperta de la adresa ei previzibilă). Un fișier video nu are oEmbed: coperta o
+     * alege omul. O cerere în afară doar pentru furnizorii cunoscuți, la adresele lor oEmbed.
+     *
+     * @return array{ok: bool, provider: string, title: string, thumbnail_url: string, author: string, error: string}
+     */
+    public static function copertaSiTitlu(string $url): array
+    {
+        $url = trim($url);
+        $gol = ['ok' => false, 'provider' => '', 'title' => '', 'thumbnail_url' => '', 'author' => '', 'error' => ''];
+        if ($url === '' || preg_match('#^https?://#i', $url) !== 1) {
+            return ['error' => 'Linkul trebuie să înceapă cu http:// sau https://'] + $gol;
+        }
+        $furnizor = self::furnizor($url);
+        if ($furnizor === '') {
+            return ['error' => 'Nu recunosc linkul. Merg TikTok, YouTube, Vimeo sau un fișier video (.mp4).'] + $gol;
+        }
+        if ($furnizor === 'file') {
+            return ['ok' => true, 'provider' => 'file'] + $gol;
+        }
+        $rezerva = '';
+        if ($furnizor === 'youtube') {
+            $rezerva = 'https://img.youtube.com/vi/' . rawurlencode(self::youtubeId($url)) . '/hqdefault.jpg';
+        }
+        $raspuns = self::cerereOembed(self::OEMBED[$furnizor] . rawurlencode($url));
+        $date = $raspuns !== null ? json_decode($raspuns, true) : null;
+        if (!is_array($date)) {
+            return $rezerva !== ''
+                ? ['ok' => true, 'provider' => $furnizor, 'thumbnail_url' => $rezerva] + $gol
+                : ['provider' => $furnizor, 'error' => 'Nu am putut lua datele videoclipului. Verifică linkul sau pune manual o imagine de copertă.'] + $gol;
+        }
+        $coperta = trim((string) ($date['thumbnail_url'] ?? ''));
+        return [
+            'ok' => true,
+            'provider' => $furnizor,
+            'title' => trim((string) ($date['title'] ?? '')),
+            'thumbnail_url' => preg_match('#^https://#i', $coperta) === 1 ? $coperta : $rezerva,
+            'author' => trim((string) ($date['author_name'] ?? '')),
+            'error' => '',
+        ];
+    }
+
+    /** Linkul duce la un fișier video (după extensie)? */
+    private static function esteFisierVideo(string $url): bool
+    {
+        $extensie = strtolower(pathinfo((string) parse_url(trim($url), PHP_URL_PATH), PATHINFO_EXTENSION));
+        return in_array($extensie, ['mp4', 'webm', 'mov', 'm4v'], true);
+    }
+
+    /** Răspunsul unei adrese oEmbed (cu cURL, fără allow_url_fopen), sau null. */
+    private static function cerereOembed(string $url): ?string
+    {
+        if (!function_exists('curl_init')) {
+            return null;
+        }
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 4,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
+            CURLOPT_CONNECTTIMEOUT => 6,
+            CURLOPT_TIMEOUT => 12,
+            CURLOPT_USERAGENT => 'ANDAXI-CMS/1.0',
+        ]);
+        $raspuns = curl_exec($ch);
+        $cod = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        return is_string($raspuns) && $raspuns !== '' && $cod >= 200 && $cod < 300 ? $raspuns : null;
+    }
+
     private static function iframe(string $src, string $title): string
     {
         return '<div style="position:relative;width:100%;padding-top:56.25%;border-radius:14px;overflow:hidden;background:#15202b;">'

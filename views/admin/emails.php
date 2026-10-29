@@ -1504,9 +1504,55 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
             <?php endif; ?>
 
             <!-- Recipients table -->
-            <div class="nl-stats-panel">
-                <p class="nl-stats-section-title">Destinatari (ultimii 100)</p>
-                <input type="text" class="nl-stats-search" id="nl-recip-search" placeholder="Caută după email…" oninput="nlFilterRecip(this.value)">
+            <div class="nl-stats-panel" id="nl-recip-panel">
+                <?php
+                $rcFilter = (string) ($statsRecipientsFilter ?? 'all');
+                $rcQuery = (string) ($statsRecipientsQuery ?? '');
+                $rcPage = (int) ($statsRecipientsPage ?? 1);
+                $rcPages = (int) ($statsRecipientsPages ?? 1);
+                $rcPerPage = (int) ($statsRecipientsPerPage ?? 50);
+                $rcTotal = (int) ($statsRecipientsTotal ?? 0);
+                $rcCounts = is_array($statsRecipientsCounts ?? null) ? $statsRecipientsCounts : [];
+                $rcOptiuni = [
+                    'all' => 'Toți destinatarii',
+                    'opened' => 'Doar cine a deschis',
+                    'not_opened' => 'Doar cine NU a deschis',
+                    'clicked' => 'Doar cine a dat click',
+                    'not_clicked' => 'Doar cine NU a dat click',
+                    'failed' => 'Doar eșuate',
+                ];
+                $rcLink = static function (array $extra) use ($statsCampaignId, $rcFilter, $rcQuery, $rcPerPage): string {
+                    $params = array_merge([
+                        'tab' => 'stats',
+                        'campaign_id' => (int) $statsCampaignId,
+                        'recip_f' => $rcFilter,
+                        'recip_q' => $rcQuery,
+                        'recip_per_page' => $rcPerPage,
+                    ], $extra);
+                    return '?' . http_build_query(array_filter($params, static fn ($v) => $v !== '' && $v !== null));
+                };
+                ?>
+                <p class="nl-stats-section-title">Destinatari<?= $rcTotal > 0 ? ' (' . number_format($rcTotal) . ')' : '' ?></p>
+                <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+                    <input type="hidden" name="tab" value="stats">
+                    <input type="hidden" name="campaign_id" value="<?= (int) $statsCampaignId ?>">
+                    <select name="recip_f" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                        <?php foreach ($rcOptiuni as $rcVal => $rcEticheta): ?>
+                            <option value="<?= $rcVal ?>"<?= $rcFilter === $rcVal ? ' selected' : '' ?>>
+                                <?= htmlspecialchars($rcEticheta, ENT_QUOTES) ?><?= isset($rcCounts[$rcVal]) ? ' (' . number_format((int) $rcCounts[$rcVal]) . ')' : '' ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <input type="text" name="recip_q" value="<?= htmlspecialchars($rcQuery, ENT_QUOTES) ?>" placeholder="Caută după email…"
+                           style="flex:1 1 220px;min-width:180px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                    <select name="recip_per_page" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                        <?php foreach ([25, 50, 100, 200] as $rcPp): ?>
+                            <option value="<?= $rcPp ?>"<?= $rcPerPage === $rcPp ? ' selected' : '' ?>><?= $rcPp ?> / pagină</option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn" style="padding:8px 16px;">Aplică</button>
+                    <a class="btn btn-light" style="padding:8px 16px;" href="?tab=stats&amp;campaign_id=<?= (int) $statsCampaignId ?>">Reset</a>
+                </form>
                 <div style="overflow-x:auto;">
                 <table class="nl-stats-table" id="nl-recip-table">
                     <thead><tr><th>Email</th><th>Status</th><th>Deschis</th><th>Click-uri</th></tr></thead>
@@ -1533,21 +1579,125 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                             </td>
                         </tr>
                     <?php endforeach; ?>
-                    <?php if (empty($statsRecipients)): ?><tr><td colspan="4" style="text-align:center;color:#64748b;">Nu există date de destinatari.</td></tr><?php endif; ?>
+                    <?php if (empty($statsRecipients)): ?><tr><td colspan="4" style="text-align:center;color:#64748b;padding:18px;"><?= ($rcFilter !== 'all' || $rcQuery !== '') ? 'Niciun destinatar pentru filtrul ales.' : 'Nu există date de destinatari.' ?></td></tr><?php endif; ?>
                     </tbody>
                 </table>
                 </div>
-                <script>
-                function nlFilterRecip(q) {
-                    q = q.toLowerCase();
-                    const rows = document.querySelectorAll('#nl-recip-table tbody tr');
-                    rows.forEach(function(row) {
-                        const email = (row.cells[0] ? row.cells[0].textContent : '').toLowerCase();
-                        row.style.display = email.indexOf(q) !== -1 ? '' : 'none';
-                    });
-                }
-                </script>
+                <?php if ($rcPages > 1): ?>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:12px;">
+                    <span style="color:#64748b;font-size:13px;">
+                        Pagina <?= $rcPage ?> din <?= $rcPages ?> — <?= number_format($rcTotal) ?> destinatari
+                    </span>
+                    <span style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                        <?php if ($rcPage > 1): ?>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($rcLink(['recip_page' => 1]), ENT_QUOTES) ?>">« Prima</a>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($rcLink(['recip_page' => $rcPage - 1]), ENT_QUOTES) ?>">‹ Înapoi</a>
+                        <?php endif; ?>
+                        <?php
+                        $rcStart = max(1, $rcPage - 2);
+                        $rcEnd = min($rcPages, $rcStart + 4);
+                        $rcStart = max(1, $rcEnd - 4);
+                        for ($rcI = $rcStart; $rcI <= $rcEnd; $rcI++):
+                        ?>
+                            <a class="btn <?= $rcI === $rcPage ? '' : 'btn-light' ?>" style="padding:6px 12px;"
+                               href="<?= htmlspecialchars($rcLink(['recip_page' => $rcI]), ENT_QUOTES) ?>"><?= $rcI ?></a>
+                        <?php endfor; ?>
+                        <?php if ($rcPage < $rcPages): ?>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($rcLink(['recip_page' => $rcPage + 1]), ENT_QUOTES) ?>">Înainte ›</a>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($rcLink(['recip_page' => $rcPages]), ENT_QUOTES) ?>">Ultima »</a>
+                        <?php endif; ?>
+                    </span>
+                </div>
+                <?php endif; ?>
             </div>
+            <script>
+            (function () {
+                // Filtrarea și paginarea destinatarilor se fac fără reîncărcarea
+                // paginii: tabelul e jos de tot, iar o navigare obișnuită ar duce
+                // ecranul înapoi sus după fiecare clic. Cerem aceeași adresă,
+                // luăm din răspuns doar panoul acesta și îl punem la loc.
+                var panou = document.getElementById('nl-recip-panel');
+                if (!panou || !window.fetch || !window.DOMParser) {
+                    return;
+                }
+
+                var inCurs = false;
+
+                function incarca(url) {
+                    if (inCurs) {
+                        return;
+                    }
+                    inCurs = true;
+                    panou.style.opacity = '0.55';
+                    panou.style.pointerEvents = 'none';
+
+                    fetch(url, { credentials: 'same-origin' })
+                        .then(function (raspuns) {
+                            if (!raspuns.ok) {
+                                throw new Error('http ' + raspuns.status);
+                            }
+                            return raspuns.text();
+                        })
+                        .then(function (html) {
+                            var doc = new DOMParser().parseFromString(html, 'text/html');
+                            var nou = doc.getElementById('nl-recip-panel');
+                            if (!nou) {
+                                throw new Error('fara panou');
+                            }
+                            panou.innerHTML = nou.innerHTML;
+                            // Adresa din bară rămâne în pas cu ce se vede, ca
+                            // reîncărcarea manuală sau un bookmark să dea același lucru.
+                            window.history.replaceState({}, '', url);
+                            panou.style.opacity = '';
+                            panou.style.pointerEvents = '';
+                            inCurs = false;
+                        })
+                        .catch(function () {
+                            // Orice nu merge (sesiune expirată, rețea) → navigare normală.
+                            window.location.href = url;
+                        });
+                }
+
+                panou.addEventListener('submit', function (ev) {
+                    var formular = ev.target;
+                    if (!formular || formular.tagName !== 'FORM') {
+                        return;
+                    }
+                    ev.preventDefault();
+                    var date = new URLSearchParams(new FormData(formular));
+                    // Un filtru nou repornește de la prima pagină.
+                    date.delete('recip_page');
+                    incarca('?' + date.toString());
+                });
+
+                // Alegerea din liste se aplică pe loc; butonul „Aplică" rămâne
+                // pentru căutarea după email, unde nu vrei să pleci la fiecare tastă.
+                panou.addEventListener('change', function (ev) {
+                    var camp = ev.target;
+                    if (!camp || camp.tagName !== 'SELECT' || !camp.form) {
+                        return;
+                    }
+                    if (typeof camp.form.requestSubmit === 'function') {
+                        camp.form.requestSubmit();
+                    } else {
+                        camp.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
+                });
+
+                panou.addEventListener('click', function (ev) {
+                    var link = ev.target.closest ? ev.target.closest('a[href]') : null;
+                    if (!link || !panou.contains(link)) {
+                        return;
+                    }
+                    var href = link.getAttribute('href') || '';
+                    if (href.charAt(0) !== '?') {
+                        return;
+                    }
+                    ev.preventDefault();
+                    incarca(href);
+                });
+            })();
+            </script>
 
         <?php endif; ?>
         </div><!-- /.nl-stats-wrap -->

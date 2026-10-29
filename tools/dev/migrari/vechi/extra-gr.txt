@@ -1,14 +1,8 @@
 # Obiectele pe care schema codului site-nou-grafoanaytis.ro@d3c4b79 (fixture-ul gr.sql) le are în plus față de
 # database/migrari/asteptat.json: rămân pe site după baseline (migrările nu le ating). Testul T2 cere
 # exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.
-coloana order_promo_items.given_at
-coloana order_promo_items.given_by
-coloana product_reviews.ip_address
-coloana product_reviews.is_spam
-coloana product_reviews.spam_reason
 coloana products.gallery_json
 coloana products.sort_order
-indexul product_reviews.idx_product_reviews_spam
 tabelul competition_partners
 tabelul competition_prices
 tabelul mannequin_point_products

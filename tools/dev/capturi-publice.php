@@ -60,14 +60,27 @@ const PROPRIETATI = [
     'transform',
 ];
 const LATIMI = [390, 768, 1366, 1920];
+/** „Proprietatea” unei declarații pentru un element care există doar în codul curent (WP-21). */
+const ELEMENT_NOU = '(element nou)';
 
 /**
  * Diferențele voite ale stilurilor calculate, una pe rând, în blocul WP-ului care o aduce (planul, §4.3): fiecare cu
- * „nume”, „selector” (CSS, evaluat în pagina codului curent), „proprietate” (una sau o listă din PROPRIETATI),
- * „pagini” („*” sau o listă de căi), opțional „latimi” și „roluri” (viz, cli), și „motiv”. O declarație pe care nu o
- * folosește nicio diferență pică (nu dovedește nimic). WP-13 nu schimbă niciun CSS fără tema.json, deci lista e goală.
+ * „nume”, „selector” (CSS, evaluat în pagina codului curent), „proprietate” (una sau o listă din PROPRIETATI; sau, de la
+ * WP-21, ELEMENT_NOU: un element care există doar în codul curent), „pagini” („*” sau o listă de căi), opțional „latimi”
+ * și „roluri” (viz, cli), și „motiv”. O declarație pe care nu o folosește nicio diferență pică (nu dovedește nimic).
+ * WP-13 nu schimbă niciun CSS fără tema.json.
  */
 $porturiVizual = [
+    // WP-21 (C10, Biovitality 8ba8ddd): capcana formularului de recenzie, un câmp de 1×1 px, transparent, mutat în afara
+    // ecranului (roboții îl completează, oamenii nu-l văd); unde formularul e vizibil, câmpul are dreptunghiuri, deci e un
+    // element nou pentru unealtă. Nimic altceva nu se mișcă (restul paginii se compară ca până acum).
+    [
+        'nume' => 'capcana formularului de recenzie',
+        'selector' => 'input[name="review_website"]',
+        'proprietate' => ELEMENT_NOU,
+        'pagini' => '*',
+        'motiv' => 'WP-21 C10: câmpul-capcană review_website (position:absolute; left:-9999px; 1×1 px; opacity:0)',
+    ],
 ];
 
 $argumente = array_slice($argv, 1);
@@ -219,7 +232,7 @@ if (isset($optiuni['fara-declaratii'])) {
 }
 foreach ($declaratii as $i => $d) {
     $proprietati = (array) ($d['proprietate'] ?? []);
-    $necunoscute = array_diff($proprietati, PROPRIETATI);
+    $necunoscute = array_diff($proprietati, PROPRIETATI, [ELEMENT_NOU]);
     if (!is_string($d['selector'] ?? null) || $proprietati === [] || $necunoscute !== [] || !isset($d['pagini'])
         || trim((string) ($d['motiv'] ?? '')) === '') {
         fwrite(STDERR, 'declarația ' . $i . ' („' . ($d['nume'] ?? '?') . '”): trebuie selector, proprietate (din lista PROPRIETATI'

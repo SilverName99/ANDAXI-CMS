@@ -595,8 +595,39 @@ try {
     }
     $verifica('Bioscem față de codul comun: câmpurile structurale „LA FEL”', $r['cod'] === 0 && str_contains($r['iesire'], 'diferențe pe câmp: —'), $r['iesire']);
     $rs = $compara($tsvVechi, $tsvNou, true);
-    $verifica('cu --strict: „DIFERĂ” doar la corpul lui /robots.txt (regulile declarate în $deBioscem din compara-cu-baza.php)', $rs['cod'] === 1
-        && str_contains($rs['iesire'], "diferențe pe câmp: corp 1\n  corp: /robots.txt\n"), $rs['iesire']);
+    // WP-21 (C10): formularul de recenzie de pe paginile de produs are două câmpuri noi (capcana review_website și momentul
+    // deschiderii, review_opened_at; marcajul bv:recenzie-capcana din compara-cu-baza.php). Corpul diferă deci și pe fiecare
+    // pagină de produs cu formularul; altceva nu: pe o pagină, fără cele două câmpuri, corpul e al codului Bioscem.
+    preg_match_all('#^  corp: (\S+)$#m', $rs['iesire'], $corpuriDiferite);
+    $faraRecenzie = static fn (string $corp): string => (string) preg_replace(
+        '#<!--port:bv:recenzie-capcana(|-qr)-->(<input type="text" name="review_website" value="" tabindex="-1" autocomplete="off" '
+        . 'aria-hidden="true" style="[^"]*"><input type="hidden" name="review_opened_at" value="\d+">)?<!--/port:bv:recenzie-capcana\1-->#',
+        '', $corp);
+    $streine = [];
+    foreach ($corpuriDiferite[1] as $caleDiferita) {
+        if ($caleDiferita !== '/robots.txt' && (!str_starts_with($caleDiferita, '/produs/')
+            || !str_contains($cerePagina($portNou, $caleDiferita)['corp'], 'name="review_website"'))) {
+            $streine[] = $caleDiferita;
+        }
+    }
+    // Versiunea pozei de distribuire diferă oricum între cele două coduri (verificarea de mai sus): /og/{V}/ în ambele.
+    $faraOg = static fn (string $corp): string => (string) preg_replace('#/og/[0-9a-f]{12}/#', '/og/{V}/', $corp);
+    $corpVechi = normalizeaza_html($faraOg($cerePagina($portVechi, '/produs/ceai-de-menta')['corp']), ['fara_banner' => true]);
+    $corpNou = normalizeaza_html($faraOg(str_replace(':' . $portNou, ':' . $portVechi, $faraRecenzie($cerePagina($portNou, '/produs/ceai-de-menta')['corp']))),
+        ['fara_banner' => true]);
+    $primaDiferenta = '';
+    if ($corpVechi !== $corpNou) {
+        $n = 0;
+        while ($n < min(strlen($corpVechi), strlen($corpNou)) && $corpVechi[$n] === $corpNou[$n]) {
+            $n++;
+        }
+        $primaDiferenta = ' | prima diferență la octetul ' . $n . ': vechi «' . substr($corpVechi, max(0, $n - 80), 200) . '» nou «'
+            . substr($corpNou, max(0, $n - 80), 200) . '»';
+    }
+    $verifica('cu --strict: „DIFERĂ” doar la corpul lui /robots.txt (regulile declarate în $deBioscem din compara-cu-baza.php) și al paginilor de '
+        . 'produs cu formularul de recenzie (' . (count($corpuriDiferite[1]) - 1) . '; WP-21, cele două câmpuri anti-spam: fără ele, '
+        . '/produs/ceai-de-menta e octet cu octet a codului Bioscem)', $rs['cod'] === 1 && in_array('/robots.txt', $corpuriDiferite[1], true)
+        && count($corpuriDiferite[1]) > 1 && $streine === [] && $corpVechi === $corpNou, $rs['iesire'] . ' | străine: ' . implode(', ', $streine) . $primaDiferenta);
     // Fără gazda sursă: comparația refuză (alte gazde sursă), iar paginile codului comun citite fără ea chiar diferă de cele Bioscem.
     $tsvFaraSursa = $dosarTest . '/nou-fara-sursa.tsv';
     $r = $amprenta(['--baza=http://127.0.0.1:' . $portNou, '--iesire=' . $tsvFaraSursa, '--pauza=0']);

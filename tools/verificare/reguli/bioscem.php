@@ -52,7 +52,9 @@ return [
     // (valori private ale înghețării, OD-49: nu ajung pe copie).
     // 4 (WP-19, WP-20): coloanele noi ale catalogului (catalog/0026, catalog/0027) și transportul gratuit pe produs
     // (magazin/0028), copiate cum sunt.
-    'versiune' => 4,
+    // 5 (WP-21): adresa de la care a venit o recenzie golită, marcajul de spam păstrat (recenzii/0030); „dat de” al produselor
+    // promoționale (emailul adminului, produse_promo/0031) cu pseudonimul lui, „dat la” păstrat.
+    'versiune' => 5,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -291,16 +293,21 @@ return [
                 'reason' => ['valoare', 'valoare' => 'Ajustare manuală', 'daca_nenul' => 'admin_id'],
                 'meta_json' => ['nul'],
             ]],
-        'order_promo_items' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'order_id', 'promo_product_id', 'name', 'quantity', 'created_at'],
-            'motive' => ['name' => 'numele produsului promoțional dat']],
+        'order_promo_items' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'order_id', 'promo_product_id', 'name', 'quantity', 'created_at',
+            'given_at'], 'motive' => ['name' => 'numele produsului promoțional dat'],
+            'transforma' => [
+                'given_by' => ['email'],
+            ]],
         // Ce a confirmat clientul pe comandă (Bioscem 5f2e483): textele avertismentului produselor, nu ale clientului.
         'order_product_warnings' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'order_id', 'title', 'body', 'checkbox_label', 'checkbox_ticked',
             'product_ids_json', 'product_names_json', 'confirmed_at'],
             'emailuri_publice' => 'copia textului public al avertismentului, din momentul comenzii'],
 
         // ── Recenziile ──
-        'product_reviews' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'product_id', 'rating', 'is_approved', 'source', 'created_at'],
+        'product_reviews' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'product_id', 'rating', 'is_approved', 'source', 'created_at',
+            'is_spam', 'spam_reason'],
             'transforma' => [
+                'ip_address' => ['nul'],
                 'user_name' => ['nume_client'],
                 'user_email' => ['email'],
                 // Cele aprobate sunt deja publice pe site și rămân, dar cu adresele de email din text schimbate cu pseudonimul lor

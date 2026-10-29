@@ -459,7 +459,9 @@ try {
             $tCerere('POST', '/cos/adauga/' . $tIdProdus, $jar, ['quantity' => '2']);
             $tCerere('GET', '/cos', $jar);
             $r = $tCerere('GET', $cale, $jar);
-            $rezultat[$cale] = $r['cod'] . "\n" . (string) preg_replace(['/name="(_token|checkout_form_token|register_form_token)" value="[^"]*"/',
+            // Valorile care se schimbă la fiecare cerere: jetoanele formularelor și (WP-21) momentul deschiderii formularului
+            // de recenzie (review_opened_at, secunda cererii).
+            $rezultat[$cale] = $r['cod'] . "\n" . (string) preg_replace(['/name="(_token|checkout_form_token|register_form_token|review_opened_at)" value="[^"]*"/',
                 '/data-csrf="[^"]*"/', '/checkout-[0-9a-f]{10}/'], ['name="$1" value="T"', 'data-csrf="T"', 'checkout-ID'], $r['corp']);
         }
         return $rezultat;
