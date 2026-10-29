@@ -881,7 +881,9 @@ orice calculator.
   canonical, H1 (câte și amprenta textului), tipurile JSON-LD (sortate, de la orice adâncime), câte linkuri interne,
   formularele (câte și amprenta metodelor și acțiunilor), `X-Robots-Tag`, poza de distribuire. Normalizarea corpului e cea a comparației locale (`tools/dev/lib/normalizeaza-html.php`, aceeași cu
   `compara-cu-baza.php`): tokenurile, momentele, `?v=`, identificatorii aleatori, gazda (și gazda sursă), **bannerul copiei
-  scos** (`id="verificare-banner"`, garda 14), plus versiunea pozei de distribuire (`/og/<12 hex>/` → `/og/{V}/`). Versiunea
+  scos** (`id="verificare-banner"`, garda 14), cele două câmpuri ascunse ale formularului de recenzie, exact cum le scrie
+  codul comun (`AmprentaSite::CAMPURI_RECENZIE`, WP-21: declarate; orice altă schimbare a formularului rămâne în corp),
+  plus versiunea pozei de distribuire (`/og/<12 hex>/` → `/og/{V}/`). Versiunea
   depinde de data și mărimea fișierului (`ImagineDistribuire::versiune`), deci se scoate și din calea rândurilor `/og/…`, iar
   cele 20 de poze se aleg după calea fără ea: același site înainte și după, cu pozele copiate fără datele lor (noaptea
   adoptării), are aceleași rânduri. Copia de verificare se recunoaște după banner.

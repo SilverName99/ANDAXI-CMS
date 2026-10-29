@@ -15,7 +15,8 @@ use Throwable;
  * nu mai ajung în lista „În așteptare”, unde se amestecau cu recenziile reale.
  *
  * Semnalele: câmpul-capcană (`review_website`, ascuns vizitatorilor, completat de roboți), formularul trimis la mai
- * puțin de 3 secunde de la deschidere (`review_opened_at`), peste 4 recenzii pe oră de la aceeași adresă (după regula
+ * puțin de 3 secunde de la deschidere (`review_opened_at`; un formular fără moment, după ZILE_GRATIE_FARA_MOMENT de la
+ * pornirea anti-spamului), peste 4 recenzii pe oră de la aceeași adresă (după regula
  * `IpClient`: adresa reală a conexiunii, `X-Forwarded-For` doar de la un proxy de încredere, IPv6 pe rețeaua /64;
  * codul Biovitality credea primul `X-Forwarded-For`, pe care îl scrie oricine), același text în ultimele 30 de zile,
  * tipare de atac automat (SQLi, XSS, JNDI), prea multe linkuri, BBCode, domenii de email de test sau temporare, nume
@@ -68,6 +69,40 @@ final class ReviewGuard
         'temp-mail.org', 'trashmail.com', '10minutemail.com', 'dispostable.com',
     ];
 
+    /**
+     * Câte zile după pornirea anti-spamului (migrarea recenzii/0030) primim încă un formular fără `review_opened_at`:
+     * paginile de produs puse în cache înainte (cache-ul site-ului, CDN-ul) au formularul fără cele două câmpuri, iar
+     * un vizitator real de pe o asemenea pagină nu trebuie mutat în spam. După termen, toate formularele site-ului au
+     * momentul (îl pune codul, pe fiecare formular de recenzie), deci lipsa lui înseamnă o trimitere fără pagină: robot.
+     */
+    public const ZILE_GRATIE_FARA_MOMENT = 7;
+
+    /** Migrarea care pornește anti-spamul (coloanele marcajului); momentul ei e începutul termenului de grație. */
+    private const MIGRAREA_ANTISPAM = 'recenzii/0030_recenzii_spam';
+
+    /**
+     * Lipsa momentului deschiderii e semn de spam? Doar după termenul de grație de la $pornitLa (momentul terminării
+     * migrării recenzii/0030, „Y-m-d H:i:s”); fără el (baza nemigrată, registrul ilizibil) niciodată.
+     */
+    public static function faraMomentSuspect(?string $pornitLa, int $acum): bool
+    {
+        $moment = $pornitLa !== null ? strtotime($pornitLa) : false;
+        return $moment !== false && $acum - $moment > self::ZILE_GRATIE_FARA_MOMENT * 86400;
+    }
+
+    /** Momentul în care s-a terminat migrarea anti-spamului (registrul migrărilor), sau null. */
+    private static function antiSpamPornitLa(PDO $db): ?string
+    {
+        try {
+            $stmt = $db->prepare('SELECT terminata_la FROM ' . Migrari\Runner::TABEL_MIGRARI . ' WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => self::MIGRAREA_ANTISPAM]);
+            $valoare = $stmt->fetchColumn();
+            return is_string($valoare) && $valoare !== '' ? $valoare : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     /** Adresa vizitatorului, după regula comună (App\Support\IpClient), tăiată la lungimea coloanei. */
     public static function ip(): string
     {
@@ -89,6 +124,9 @@ final class ReviewGuard
         $deschisLa = (int) ($date['opened_at'] ?? 0);
         if ($deschisLa > 0 && (time() - $deschisLa) < self::SECUNDE_MINIME) {
             return 'formular trimis prea repede';
+        }
+        if ($deschisLa <= 0 && $db instanceof PDO && self::faraMomentSuspect(self::antiSpamPornitLa($db), time())) {
+            return 'formular fără momentul deschiderii';
         }
 
         $text = (string) ($date['text'] ?? '');

@@ -591,7 +591,10 @@ dispar, iar linkurile spre el se scot din pagini.
   Biovitality `222ed71`); câmpul de cupon din coș, din
   coșul flotant și din checkout; reducerea cu cupon din fereastra comenzii.
   Tabel: `coupons`. Un cod scris cu spații („AZ 987”) găsește cuponul AZ987 când nu există
-  exact așa (WP-20, C9, din Biovitality `aed0cee`); comanda ține codul din bază.
+  exact așa (WP-20, C9, din Biovitality `aed0cee`); comanda ține codul din bază. În tranzacția
+  comenzii, rândul cuponului se blochează (`SELECT … FOR UPDATE`) și cuponul se verifică din nou
+  (unicul nefolosit, `max_uses_total` sub limită; marcarea unicului trebuie să schimbe exact un rând):
+  altfel comanda nu se creează și clientul e trimis în coș cu „Cuponul a fost deja folosit.”.
 - **Are nevoie de**: magazin.
 - **Se oprește**: câmpul de cupon dispare, un cupon nu se mai aplică unei comenzi
   noi (cererea directă e refuzată, cu mesaj); comenzile existente își păstrează
@@ -626,8 +629,12 @@ dispar, iar linkurile spre el se scot din pagini.
   „Pending”; „Detectează spamul” (recenziile primite înainte), „Golește spamul”, „Spam” / „Nu e
   spam” pe rând. Bulina din meniu cu recenziile care așteaptă (fără spam), după setarea
   `recenzii_insigna_meniu` (nucleul 1; Bioscem înghețat 0). Adresa unei recenzii se golește după
-  `recenzii_ip_zile` zile (implicit 90, recomandarea OD-15; 0 = cât recenzia), la o recenzie nouă și
-  la deschiderea listei din admin.
+  `recenzii_ip_zile` zile (implicit 90, recomandarea OD-15; 0 = cât recenzia), la o recenzie nouă, la
+  deschiderea listei din admin și la fiecare rulare a cronului `scripts/abandoned-cart-emails.php`
+  (pe un site fără magazin, doar primele două). Un formular fără `review_opened_at` e primit
+  `ReviewGuard::ZILE_GRATIE_FARA_MOMENT` (7) zile după migrarea `recenzii/0030` (paginile din cache
+  n-au câmpul), apoi e spam („formular fără momentul deschiderii”). „Aprobă” scoate recenzia din spam;
+  „Golește spamul” șterge doar spamul neaprobat.
 - **Are nevoie de**: catalog.
 - **Se oprește**: recenziile existente se văd, cele noi nu se mai primesc.
 - **Oprit**: nimic despre recenzii pe site sau în admin: nici codurile și tab-ul

@@ -1078,6 +1078,29 @@ final class SiteController
      * WP-21 (C10, din Biovitality 8ba8ddd, 0c682b3): recenzia arată a spam? Formularele de recenzie sunt ținta
      * scanerelor automate (payload-uri de injecție), care umpleau lista „În așteptare” din admin. Motivul, sau null.
      */
+    /**
+     * Cuponul comenzii (dacă are) mai poate fi folosit? Blochează rândul lui (SELECT … FOR UPDATE, până la sfârșitul
+     * tranzacției comenzii) și refolosește regula din coș (CheckoutCalculator::cuponMaiPoateFiFolosit): unicul încă
+     * nefolosit, cel cu max_uses_total sub limită. Fără cupon, fără rândul lui sau fără tabel: true, ca înainte.
+     *
+     * @param array<string, mixed> $summary
+     */
+    private function cuponulMaiPoateFiFolosit(PDO $db, array $summary): bool
+    {
+        $cod = strtoupper(trim((string) ($summary['coupon']['code'] ?? '')));
+        if ($cod === '') {
+            return true;
+        }
+        try {
+            $stmt = $db->prepare('SELECT * FROM coupons WHERE code = :code LIMIT 1 FOR UPDATE');
+            $stmt->execute(['code' => $cod]);
+            $cupon = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            return true;
+        }
+        return !is_array($cupon) || \App\Support\CheckoutCalculator::cuponMaiPoateFiFolosit($db, $cupon);
+    }
+
     private function verificaSpamRecenzie(PDO $db, string $name, string $text, string $email): ?string
     {
         return \App\Support\ReviewGuard::motiv([
@@ -1587,8 +1610,17 @@ final class SiteController
             $pointsDiscount = 0.0;
         }
 
+        $cuponFolosit = false;
         try {
             $db->beginTransaction();
+
+            // Cuponul, verificat din nou sub blocare (prima instrucțiune a tranzacției, ca numărătoarea de mai jos să vadă
+            // comenzile celorlalte tranzacții încheiate): două finalizări în paralel cu același cupon unic, sau cu ultima
+            // folosire a unui cupon cu max_uses_total, nu mai păstrează amândouă reducerea; a doua e trimisă înapoi în coș.
+            if (!$this->cuponulMaiPoateFiFolosit($db, $summary)) {
+                $cuponFolosit = true;
+                throw new RuntimeException('Cuponul a fost deja folosit.');
+            }
 
             $stmt = $db->prepare(
                 'INSERT INTO orders (
@@ -1676,6 +1708,7 @@ final class SiteController
             // Cupon unic (single-use): marchează-l ca folosit → trece în tabul „Cupoane folosite"
             $appliedCouponCode = strtoupper(trim((string) ($summary['coupon']['code'] ?? '')));
             if ($appliedCouponCode !== '') {
+                $marcat = null;
                 try {
                     $markUsed = $db->prepare(
                         'UPDATE coupons SET used_at = :now
@@ -1683,7 +1716,13 @@ final class SiteController
                          LIMIT 1'
                     );
                     $markUsed->execute(['now' => $now->format('Y-m-d H:i:s'), 'code' => $appliedCouponCode]);
+                    $marcat = $markUsed->rowCount();
                 } catch (\Throwable) {
+                }
+                // Un cupon unic se marchează exact o dată: altfel l-a folosit între timp altă comandă.
+                if ($marcat !== 1 && ($summary['coupon']['is_unique'] ?? 0) == 1) {
+                    $cuponFolosit = true;
+                    throw new RuntimeException('Cuponul a fost deja folosit.');
                 }
             }
 
@@ -1747,6 +1786,12 @@ final class SiteController
         } catch (Throwable) {
             if ($db->inTransaction()) {
                 $db->rollBack();
+            }
+            if ($cuponFolosit) {
+                Cart::clearCoupon();
+                Flash::set('error', 'Cuponul a fost deja folosit.');
+                header('Location: /cos');
+                return;
             }
             Flash::set('error', 'A apărut o eroare la salvarea comenzii. Reîncearcă.');
             header('Location: /checkout');

@@ -28,7 +28,8 @@ declare(strict_types=1);
  * Normalizarea corpului e cea a comparației locale (tools/dev/lib/normalizeaza-html.php): tokenurile, momentele, `?v=`,
  * gazda site-ului → `{GAZDA}`, bannerul copiei de verificare scos (`id="verificare-banner"`), plus versiunea pozei de
  * distribuire (`/og/<12 hex>/` → `/og/{V}/`, depinde de data fișierului; și în calea rândurilor `/og/…`, și la alegerea
- * celor 20 de poze, ca aceeași poză cu altă dată a fișierului să fie același rând). În fișier nu se scrie gazda.
+ * celor 20 de poze, ca aceeași poză cu altă dată a fișierului să fie același rând) și cele două câmpuri ascunse ale
+ * formularului de recenzie, declarate (CAMPURI_RECENZIE, WP-21). În fișier nu se scrie gazda.
  *
  * Gazda sursă (`--gazda-sursa=<gazdă>`): un site pornit pe conținutul altuia (copia de verificare a bioscem.ro) are în
  * conținutul copiat (descrierile produselor și paginile importate din WordPress, canonical-urile puse de mână în
@@ -614,8 +615,22 @@ final class AmprentaSite
     public static function normalizeazaCorp(string $corp, array $gazde, array $aleatoare): string
     {
         $corp = normalizeaza_html($corp, ['fara_banner' => true, 'gazde' => $gazde, 'aleatoare' => $aleatoare]);
+        $corp = normalizeaza_inlocuieste(self::CAMPURI_RECENZIE, '', $corp);
         return normalizeaza_inlocuieste('#/og/[0-9a-f]{12}/#', '/og/{V}/', $corp);
     }
+
+    /**
+     * Cele două câmpuri ascunse ale formularului de recenzie (WP-21, C10: App\Support\ReviewGuard::campuriFormular(),
+     * declarate în site-uri/<slug>/ce-se-schimba.md), exact cum le scrie codul comun, după normalizare (momentul e
+     * `<MOMENT>`), cu marcajele de dezvoltare `bv:recenzie-capcana*` dacă sunt: se scot din corp, ca o pagină de produs
+     * a codului vechi și aceeași pagină a codului comun să aibă aceeași amprentă. Doar perechea exactă: un atribut
+     * schimbat, alt câmp sau orice altă diferență a formularului rămâne în corp (și „DIFERĂ” cu --strict).
+     */
+    public const CAMPURI_RECENZIE = '#(?:<!--port:bv:recenzie-capcana(?:-qr)?-->)?'
+        . '<input type="text" name="review_website" value="" tabindex="-1" autocomplete="off" aria-hidden="true"'
+        . ' style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">'
+        . '<input type="hidden" name="review_opened_at" value="<MOMENT>">'
+        . '(?:<!--/port:bv:recenzie-capcana(?:-qr)?-->)?#';
 
     /**
      * O adresă scrisă cu `{GAZDA}` când e a site-ului (relativă, sau pe una dintre gazdele lui: a lui și gazda sursă),

@@ -3593,6 +3593,13 @@ final class AdminController
             if ($action === 'approve') {
                 $stmt = $db->prepare('UPDATE product_reviews SET is_approved = 1 WHERE id = :id');
                 $stmt->execute(['id' => $id]);
+                // WP-21 (C10): o recenzie aprobată nu mai e spam (altfel „Golește spamul” ar șterge-o); separat, ca să tacă
+                // pe o bază fără coloanele anti-spamului (recenzii/0030).
+                try {
+                    $db->prepare('UPDATE product_reviews SET is_spam = 0, spam_reason = NULL WHERE id = :id AND is_spam = 1')
+                        ->execute(['id' => $id]);
+                } catch (Throwable) {
+                }
                 Flash::set('success', 'Recenzia a fost aprobată.');
             } elseif ($action === 'pending') {
                 $stmt = $db->prepare('UPDATE product_reviews SET is_approved = 0 WHERE id = :id');
@@ -3616,7 +3623,8 @@ final class AdminController
                     ? 'Am mutat în spam ' . $marcate . ' recenzii.'
                     : 'Nu am găsit recenzii de spam printre cele neaprobate.');
             } elseif ($action === 'delete_spam_all') {
-                $sterse = (int) $db->exec('DELETE FROM product_reviews WHERE is_spam = 1');
+                // Doar spamul nepublicat: o recenzie aprobată nu se șterge de aici, oricum ar fi marcată.
+                $sterse = (int) $db->exec('DELETE FROM product_reviews WHERE is_spam = 1 AND is_approved = 0');
                 Flash::set('success', 'Am șters ' . $sterse . ' recenzii de spam.');
             } else {
                 Flash::set('error', 'Acțiune invalidă pentru recenzie.');

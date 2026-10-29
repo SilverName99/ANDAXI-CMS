@@ -1093,6 +1093,127 @@ $verifica('popup-ul de abonare: public/assets/css/optin-popup.css și public/ass
     && $cerere('GET', '/assets/js/optin-popup.js')['cod'] === 200);
 
 // =====================================================================
+// Revizuirea WP-19…WP-21: recenzia aprobată din Spam, momentul lipsă, cronul, cursa cuponului
+// =====================================================================
+$scrie('');
+$scrie('== Revizuire: recenzia aprobată din Spam, formularul fără moment, adresele golite de cron, cursa cuponului');
+$db->prepare("INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved, is_spam, spam_reason)
+    VALUES (:p, 'Din spam', '', 5, :t, 'product_page', 0, 1, 'marcată manual')")->execute(['p' => (int) $produsRecenzie['id'], 't' => 'Aprobată din spam ' . getmypid()]);
+$idDinSpam = (int) $db->lastInsertId();
+$db->prepare("INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved, is_spam, spam_reason)
+    VALUES (:p, 'Spam publicat', '', 5, :t, 'product_page', 1, 1, 'marcată manual')")->execute(['p' => (int) $produsRecenzie['id'], 't' => 'Publicată și marcată ' . getmypid()]);
+$idPublicataMarcata = (int) $db->lastInsertId();
+$cerere('POST', '/admin/products/reviews', $jarAdmin, ['id' => (string) $idDinSpam, 'action' => 'approve', 'status' => 'spam']);
+$aprobata = $db->query('SELECT is_approved, is_spam, spam_reason FROM product_reviews WHERE id = ' . $idDinSpam)->fetch(PDO::FETCH_ASSOC) ?: [];
+$cerere('POST', '/admin/products/reviews', $jarAdmin, ['action' => 'delete_spam_all', 'status' => 'spam']);
+$verifica('„Aprobă” din tabul Spam: publicată și scoasă din spam; „Golește spamul” nu șterge nicio recenzie aprobată',
+    (int) ($aprobata['is_approved'] ?? 0) === 1 && (int) ($aprobata['is_spam'] ?? 1) === 0 && array_key_exists('spam_reason', $aprobata) && $aprobata['spam_reason'] === null
+    && $unu('SELECT COUNT(*) FROM product_reviews WHERE id IN (' . $idDinSpam . ', ' . $idPublicataMarcata . ')') === '2',
+    json_encode($aprobata));
+$db->exec('DELETE FROM product_reviews WHERE id IN (' . $idDinSpam . ', ' . $idPublicataMarcata . ')');
+
+// Formularul fără review_opened_at: primit în termenul de grație de după migrarea recenzii/0030 (pagini din cache), spam după.
+$pornire = $unu("SELECT terminata_la FROM _platforma_migrari WHERE id = 'recenzii/0030_recenzii_spam'");
+$zileGratie = \App\Support\ReviewGuard::ZILE_GRATIE_FARA_MOMENT;
+$verifica('fără momentul deschiderii: acceptat în cele ' . $zileGratie . ' zile de după pornirea anti-spamului, spam după; fără migrare, mereu acceptat',
+    $pornire !== '' && !\App\Support\ReviewGuard::faraMomentSuspect(date('Y-m-d H:i:s', time() - 3600), time())
+    && \App\Support\ReviewGuard::faraMomentSuspect(date('Y-m-d H:i:s', time() - ($zileGratie * 86400 + 60)), time())
+    && !\App\Support\ReviewGuard::faraMomentSuspect(null, time())
+    && \App\Support\ReviewGuard::motiv(['name' => 'Ana', 'text' => 'Foarte bun'], $db) === null);
+$db->prepare("UPDATE _platforma_migrari SET terminata_la = :t WHERE id = 'recenzii/0030_recenzii_spam'")
+    ->execute(['t' => date('Y-m-d H:i:s', time() - ($zileGratie + 1) * 86400)]);
+$motivDupaGratie = \App\Support\ReviewGuard::motiv(['name' => 'Ana', 'text' => 'Foarte bun'], $db);
+$motivCuMoment = \App\Support\ReviewGuard::motiv(['name' => 'Ana', 'text' => 'Foarte bun', 'opened_at' => time() - 60], $db);
+$db->prepare("UPDATE _platforma_migrari SET terminata_la = :t WHERE id = 'recenzii/0030_recenzii_spam'")->execute(['t' => $pornire]);
+$verifica('… după termen: formularul fără moment e spam („formular fără momentul deschiderii”), cel cu moment trece',
+    $motivDupaGratie === 'formular fără momentul deschiderii' && $motivCuMoment === null, (string) $motivDupaGratie);
+
+// OD-15: cronul magazinului golește și el adresele vechi (nu doar o recenzie nouă sau lista din admin).
+$db->prepare("INSERT INTO product_reviews (product_id, user_name, user_email, rating, review_text, source, is_approved, ip_address, created_at)
+    VALUES (:p, 'Veche cron', '', 5, :t, 'product_page', 1, '198.51.100.9', NOW() - INTERVAL 120 DAY)")->execute(['p' => (int) $produsRecenzie['id'], 't' => 'Recenzie veche cron ' . getmypid()]);
+$idVecheCron = (int) $db->lastInsertId();
+$mailuriInainte = glob($dosarDev . '/mail/*') ?: [];
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/scripts/abandoned-cart-emails.php') . ' --limit=1 2>&1', $iesireCron, $codCron);
+array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte));
+$verifica('cronul scripts/abandoned-cart-emails.php golește adresa unei recenzii de 120 de zile (recenzii_ip_zile 90), cu aceeași ieșire',
+    $codCron === 0 && $unu('SELECT ip_address FROM product_reviews WHERE id = ' . $idVecheCron) === ''
+    && str_starts_with((string) end($iesireCron), 'Abandoned cart email sync: '), implode(' | ', $iesireCron));
+$db->exec('DELETE FROM product_reviews WHERE id = ' . $idVecheCron);
+
+// Cursa cuponului: între verificarea din coș (buildSummary) și tranzacția comenzii, alt client îl folosește. Testul ține
+// el rândul cuponului blocat (o tranzacție deschisă) cât timp comanda e trimisă, apoi îl folosește și închide tranzacția:
+// comanda nu se creează, clientul ajunge în coș cu „Cuponul a fost deja folosit.”.
+$cursaCupon = static function (string $cod, callable $folosesteCuponul) use ($db, $cerere, $unu, $idAlt, $dosarDev, $baza): array {
+    $jar = $dosarDev . '/test-porturi-bv-cursa-' . getmypid() . '.txt';
+    @unlink($jar);
+    $cerere('POST', '/cos/adauga/' . $idAlt, $jar, ['quantity' => '1']);
+    $cerere('POST', '/cos/cupon', $jar, ['coupon_code' => $cod]);
+    $pagina = $cerere('GET', '/checkout', $jar)['corp'];
+    preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagina, $token);
+    preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagina, $randat);
+    sleep(3); // garda anti-bot cere câteva secunde între afișare și trimitere
+    $ultima = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM orders');
+    $db->beginTransaction();
+    $db->prepare('SELECT id FROM coupons WHERE code = :c FOR UPDATE')->execute(['c' => $cod]);
+    $folosesteCuponul($db);
+    $c = curl_init($baza . '/checkout');
+    $antete = [];
+    curl_setopt_array($c, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 60,
+        CURLOPT_COOKIEFILE => $jar, CURLOPT_COOKIEJAR => $jar,
+        CURLOPT_HEADERFUNCTION => static function ($c, string $linie) use (&$antete): int {
+            if (str_contains($linie, ':')) {
+                [$nume, $valoare] = explode(':', $linie, 2);
+                $antete[strtolower(trim($nume))] = trim($valoare);
+            }
+            return strlen($linie);
+        },
+        CURLOPT_POSTFIELDS => http_build_query([
+            'checkout_form_token' => $token[1] ?? '', 'checkout_form_rendered_at' => $randat[1] ?? '',
+            'billing_first_name' => 'Test', 'billing_last_name' => 'Cursa', 'billing_phone' => '0700000779',
+            'billing_email' => 'cursa@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '9',
+            'billing_city' => 'Satu Inventat', 'billing_county' => 'Cluj', 'billing_postcode' => '400001',
+            'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+        ])]);
+    $multi = curl_multi_init();
+    curl_multi_add_handle($multi, $c);
+    $pana = microtime(true) + 2.5; // cererea trece de verificarea din coș și așteaptă rândul blocat
+    do {
+        curl_multi_exec($multi, $active);
+        curl_multi_select($multi, 0.1);
+    } while ($active && microtime(true) < $pana);
+    $db->commit();
+    do {
+        curl_multi_exec($multi, $active);
+        curl_multi_select($multi, 0.2);
+    } while ($active);
+    $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+    curl_multi_remove_handle($multi, $c);
+    curl_multi_close($multi);
+    $comenziNoi = (int) $unu('SELECT COUNT(*) FROM orders WHERE id > ' . $ultima);
+    $cos = $cerere('GET', '/cos', $jar)['corp'];
+    @unlink($jar);
+    return ['cod' => $cod, 'location' => $antete['location'] ?? '', 'comenzi_noi' => $comenziNoi, 'mesaj' => str_contains($cos, 'Cuponul a fost deja folosit.')];
+};
+$codUnic = 'CURSA-UNIC-' . getmypid();
+$db->prepare("INSERT INTO coupons (name, code, type, value, is_active, is_unique) VALUES ('Cursa unic', :c, 'percent', 10, 1, 1)")->execute(['c' => $codUnic]);
+$r = $cursaCupon($codUnic, static function (PDO $db) use ($codUnic): void {
+    $db->prepare('UPDATE coupons SET used_at = NOW() WHERE code = :c')->execute(['c' => $codUnic]);
+});
+$verifica('cupon unic folosit de altă comandă în timpul finalizării: nicio comandă, înapoi în coș cu „Cuponul a fost deja folosit.”',
+    $r['cod'] === 302 && $r['location'] === '/cos' && $r['comenzi_noi'] === 0 && $r['mesaj'], json_encode($r));
+$codMax = 'CURSA-MAX-' . getmypid();
+$db->prepare("INSERT INTO coupons (name, code, type, value, is_active, max_uses_total) VALUES ('Cursa max', :c, 'percent', 10, 1, 1)")->execute(['c' => $codMax]);
+$comandaMartor = (int) $unu("SELECT id FROM orders WHERE deleted_at IS NULL AND status NOT IN ('cancelled', 'failed', 'refunded', 'returned') ORDER BY id LIMIT 1");
+$cuponMartor = $unu('SELECT coupon_code FROM orders WHERE id = ' . $comandaMartor);
+$r = $cursaCupon($codMax, static function (PDO $db) use ($codMax, $comandaMartor): void {
+    $db->prepare('UPDATE orders SET coupon_code = :c WHERE id = :id')->execute(['c' => $codMax, 'id' => $comandaMartor]);
+});
+$verifica('cupon cu max_uses_total = 1 a cărui ultimă folosire o ia altă comandă în timpul finalizării: nicio comandă, înapoi în coș',
+    $r['cod'] === 302 && $r['location'] === '/cos' && $r['comenzi_noi'] === 0 && $r['mesaj'], json_encode($r));
+$db->prepare('UPDATE orders SET coupon_code = :c WHERE id = :id')->execute(['c' => $cuponMartor !== '' ? $cuponMartor : null, 'id' => $comandaMartor]);
+$db->prepare('DELETE FROM coupons WHERE code IN (:a, :b)')->execute(['a' => $codUnic, 'b' => $codMax]);
+
+// =====================================================================
 // Final: totul la loc
 // =====================================================================
 $scrie('');

@@ -40,6 +40,12 @@ if (isset($argv) && is_array($argv)) {
 
 EmailAutomation::ensureSchema($db);
 $settings = Settings::all($db);
+// WP-21 (C10, OD-15): adresele IP ale recenziilor mai vechi de recenzii_ip_zile se golesc și aici, la fiecare rulare a
+// cronului magazinului, nu doar la o recenzie nouă sau la lista din admin (un site fără recenzii noi și fără admin
+// deschis le-ar păstra altfel peste termen). Fără ieșire; tace pe o bază fără coloana ip_address.
+if (\App\Support\Plugins::vizibil('recenzii')) {
+    \App\Support\ReviewGuard::curataAdreseVechi($db, $settings);
+}
 $result = EmailAutomation::sendDueAbandonedCartEmails($db, $settings, $limit);
 
 echo 'Abandoned cart email sync: ';

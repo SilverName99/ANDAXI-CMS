@@ -1096,6 +1096,17 @@ final class CheckoutCalculator
         }
     }
 
+    /**
+     * Cuponul (rândul lui din `coupons`) mai poate fi folosit: unicul nefolosit, cel cu max_uses_total sub limită. Public
+     * pentru verificarea din tranzacția comenzii (SiteController::checkoutSubmit, după blocarea rândului cuponului).
+     *
+     * @param array<string, mixed> $coupon
+     */
+    public static function cuponMaiPoateFiFolosit(PDO $db, array $coupon): bool
+    {
+        return self::couponUsageAvailable($db, $coupon);
+    }
+
     private static function couponUsageAvailable(PDO $db, array $coupon): bool
     {
         // Cupoanele unice (single-use) sunt guvernate exclusiv de flag-ul used_at,
