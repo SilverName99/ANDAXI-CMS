@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "1c2c8a1fe1138946d0bd7af1ec5ef79df9f75051cd3d008631a69842bf6067e5",
+    "amprenta_nucleu": "a52c037448c68c3e1dcb039451f328ceb72e6223f49625e5586776a306760de8",
     "setari": {
         "bunny_app_download_path": {
             "valoare": "aplicatie/BiovitalityFiles.exe",
@@ -98,6 +98,12 @@
             "din": "cod",
             "sursa": "$settings['customer_registration_field_phone'] ?? … (rezerva din cod)"
         },
+        "default_vat_percent": {
+            "valoare": "19",
+            "mod": "lipsa",
+            "din": "cod",
+            "sursa": "$settings['default_vat_percent'] ?? … (rezerva din cod)"
+        },
         "fan_kg_max_colet": {
             "valoare": "0",
             "mod": "lipsa",
@@ -124,6 +130,18 @@
             "din": "implicit",
             "sursa": "Settings::DEFAULTS",
             "nota": "Gol în bază: codul comun pune „Bioscem” (EmailAutomation, emailul linkului de plată), codul vechi numele lui la linkul de plată; de aici lipsa_sau_gol"
+        },
+        "order_number_legacy_prefix": {
+            "valoare": "BV",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Support/OrderNumber.php: formatul vechi al numerelor de comandă (rezerva numerotării) avea prefixul scris în cod; codul comun îl ia din setare (WP-17, BV X11, OD-08), implicit „CMD”. Numerele ajung în ERP, deci prefixul nu se schimbă",
+            "extrage": {
+                "fisier": "src/Support/OrderNumber.php",
+                "tipar": "/return '([A-Z]+)' \\. date\\('YmdHis'\\)/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"CMD\""
         },
         "order_number_mode": {
             "valoare": "legacy",
@@ -208,6 +226,16 @@
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod expresie",
             "nucleu": "implicit \"\""
+        },
+        "email_brand_color": {
+            "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"#0f766e\""
+        },
+        "email_brand_color_2": {
+            "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"#334155\""
         },
         "euplatesc_currency": {
             "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",

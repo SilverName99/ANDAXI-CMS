@@ -27,7 +27,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
         }
         $orderNumberNext = (int) ($orderNumberNext ?? \App\Support\OrderNumber::normalizeazaStart($settings['order_number_next'] ?? null));
         $vatSumar = is_array($vatSumar ?? null) ? $vatSumar : [];
-        $vatImplicit = trim((string) ($settings['default_vat_percent'] ?? '19'));
+        $vatImplicit = trim(\App\Support\Settings::cotaTvaImplicita($settings));
         // Cota cea mai folosită e cea de la care va vrea sa plece, cel mai probabil.
         $vatCotaDominanta = $vatImplicit;
         $vatMaxProduse = -1;
@@ -559,7 +559,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                     <label for="order_number_mode">Format</label>
                     <select id="order_number_mode" name="order_number_mode">
                         <option value="<?= \App\Support\OrderNumber::MOD_SECVENTIAL ?>" <?= $orderNumberMode === \App\Support\OrderNumber::MOD_SECVENTIAL ? 'selected' : '' ?>>Numere consecutive (203800, 203801, …)</option>
-                        <option value="<?= \App\Support\OrderNumber::MOD_VECHI ?>" <?= $orderNumberMode === \App\Support\OrderNumber::MOD_VECHI ? 'selected' : '' ?>>Format vechi (BV + dată + aleator)</option>
+                        <option value="<?= \App\Support\OrderNumber::MOD_VECHI ?>" <?= $orderNumberMode === \App\Support\OrderNumber::MOD_VECHI ? 'selected' : '' ?>>Format vechi (<?= htmlspecialchars(\App\Support\OrderNumber::prefixVechi($settings), ENT_QUOTES) ?> + dată + aleator)</option>
                     </select>
                 </div>
                 <div class="field" style="max-width:420px;margin-top:10px;">

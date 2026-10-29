@@ -3,8 +3,20 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@070e1af",
-    "amprenta_nucleu": "1c2c8a1fe1138946d0bd7af1ec5ef79df9f75051cd3d008631a69842bf6067e5",
+    "amprenta_nucleu": "a52c037448c68c3e1dcb039451f328ceb72e6223f49625e5586776a306760de8",
     "setari": {
+        "bt_ipay_descriere_magazin": {
+            "valoare": "bioscem.ro",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Support/BtIpayPayments.php: textul plății trimis băncii („Comanda <nr> …”, extrasul cumpărătorului) avea numele magazinului scris în cod; codul comun îl ia din setare, altfel din gazda site-ului (WP-17, DB-16), care pe copia de verificare e alta",
+            "extrage": {
+                "fisier": "src/Support/BtIpayPayments.php",
+                "tipar": "/'Plata de test 1 leu ([^']+)'/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
         "catalog_descriere_implicita": {
             "valoare": "Supliment natural",
             "mod": "lipsa",
@@ -25,6 +37,41 @@
             "sursa": "Settings::DEFAULTS",
             "nota": "Gol sau fără nicio adresă validă: codul vechi trimitea la adresa lui (SiteController::destinatariFormularContact, BtIpayPayments::setari), codul comun la adresa de contact a site-ului (Brand::emailContact); de aici lipsa_sau_gol"
         },
+        "default_vat_percent": {
+            "valoare": "19",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "email_template_new_order_op_blocks_json": {
+            "valoare": "[{\"type\":\"header\",\"content\":\"🏦\",\"align\":\"center\",\"background\":\"#ffffff\",\"text_color\":\"#2f8d5b\",\"block_background\":\"#ffffff\"},{\"type\":\"header\",\"content\":\"{{store_name}}\",\"align\":\"center\",\"background\":\"#ffffff\",\"text_color\":\"#0f2532\",\"block_background\":\"#ffffff\"},{\"type\":\"text\",\"content\":\"Bună ziua,\\n\\nVă mulțumim pentru comanda #{{order_number}}.\\n\\nPentru plata prin Ordin de Plată (OP), vă rugăm să utilizați următoarele date:\",\"align\":\"left\",\"background\":\"#ffffff\",\"text_color\":\"#44606b\",\"block_background\":\"#ffffff\"},{\"type\":\"text\",\"content\":\"DATE DE PLATĂ\\n{{payment_details}}\\n\\nSumă: {{order_total}}\\nDetalii plată: Comanda #{{order_number}}\",\"align\":\"left\",\"background\":\"#f4f7f4\",\"text_color\":\"#16323f\",\"block_background\":\"#f4f7f4\"},{\"type\":\"text\",\"content\":\"După efectuarea plății, vă rugăm să ne trimiteți dovada plății prin răspuns la acest email.\",\"align\":\"left\",\"background\":\"#ffffff\",\"text_color\":\"#44606b\",\"block_background\":\"#ffffff\"},{\"type\":\"text\",\"content\":\"Rezumat comandă:\\n{{order_items_html}}\\n{{order_totals_html}}\",\"align\":\"left\",\"background\":\"#ffffff\",\"text_color\":\"#0f2532\",\"block_background\":\"#ffffff\"},{\"type\":\"text\",\"content\":\"Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!\\nEchipa {{store_name}}\",\"align\":\"left\",\"background\":\"#ffffff\",\"text_color\":\"#44606b\",\"block_background\":\"#ffffff\"},{\"type\":\"divider\",\"line_color\":\"#eceff1\",\"block_background\":\"#ffffff\"},{\"type\":\"text\",\"content\":\"© {{year}} {{store_name}}. Toate drepturile rezervate.\\nAcest email a fost trimis la {{customer_email}}\",\"align\":\"center\",\"background\":\"#ffffff\",\"text_color\":\"#5f7680\",\"block_background\":\"#ffffff\"}]",
+            "mod": "lipsa_sau_gol",
+            "din": "extras",
+            "sursa": "AdminController::newOrderOpEcommerceDefaultBlocks al codului vechi: blocurile editorului vizual ale aceluiași email, cu sloganul (WP-17, DB-20). Gol = blocurile implicite, de aici lipsa_sau_gol",
+            "extrage": {
+                "apel": "App\\Http\\Controllers\\AdminController::newOrderOpEcommerceDefaultBlocks",
+                "argumente": [],
+                "json": true
+            },
+            "vechi": "lipsește",
+            "nucleu": "lipsește"
+        },
+        "email_template_new_order_op_body": {
+            "valoare": "<div style=\"text-align:center;padding-top:8px;\">\n  <div style=\"margin:0 auto 12px;color:#2f8d5b;font-size:56px;line-height:1;font-weight:700;\">🏦</div>\n  <h2 style=\"margin:0;font-family:'Playfair Display',Georgia,serif;font-size:42px;line-height:1.05;color:#0f172a;font-weight:700;\">{{store_name}}</h2>\n</div>\n\n<p style=\"margin:28px 0 10px;font-size:34px;line-height:1.1;color:#0f172a;font-weight:700;\">Bună ziua,</p>\n<p style=\"margin:0 0 20px;color:#4f6b66;font-size:16px;line-height:1.55;\">Vă mulțumim pentru comanda <strong>#{{order_number}}</strong>.</p>\n<p style=\"margin:0 0 14px;color:#4f6b66;font-size:16px;line-height:1.55;\">Pentru plata prin Ordin de Plată (OP), vă rugăm să utilizați următoarele date:</p>\n\n<table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"border-collapse:separate;border-spacing:0;background:#f4f7f4;border-radius:14px;padding:18px;margin:0 0 22px;\">\n  <tr>\n    <td style=\"padding:0 0 10px;color:#0f172a;font-size:15px;font-weight:700;letter-spacing:.06em;\">DATE DE PLATĂ</td>\n  </tr>\n  <tr>\n    <!-- Fără white-space:pre-line: {{payment_details}} vine deja cu <br>,\n         iar cele două împreună ar rupe fiecare rând de două ori. -->\n    <td style=\"padding:0 0 10px;color:#1f2937;font-size:16px;line-height:1.6;\">{{payment_details}}</td>\n  </tr>\n  <tr>\n    <td style=\"padding:10px 0 0;border-top:1px solid #dbe6e5;color:#0f172a;font-size:20px;line-height:1.4;font-weight:700;\">Sumă: {{order_total}}</td>\n  </tr>\n  <tr>\n    <td style=\"padding:6px 0 0;color:#1f2937;font-size:16px;line-height:1.5;\">Detalii plată: Comanda #{{order_number}}</td>\n  </tr>\n</table>\n\n<p style=\"margin:0 0 18px;color:#4f6b66;font-size:16px;line-height:1.55;\">După efectuarea plății, vă rugăm să ne trimiteți dovada plății <strong>prin răspuns la acest email</strong>.</p>\n\n<p style=\"margin:0 0 8px;color:#0f172a;font-size:28px;line-height:1.1;font-weight:700;\">Rezumat comandă</p>\n<div style=\"margin:0 0 6px;\">\n  {{order_items_html}}\n</div>\n<div style=\"margin:0 0 18px;\">\n  {{order_totals_html}}\n</div>\n\n<p style=\"margin:0 0 4px;color:#4f6b66;font-size:16px;line-height:1.55;\">Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!</p>\n<p style=\"margin:0 0 18px;color:#4f6b66;font-size:16px;line-height:1.55;\">Echipa {{store_name}}</p>\n\n<hr style=\"border:none;border-top:1px solid #e5e7eb;margin:18px 0 16px;\">\n<p style=\"margin:0 0 6px;text-align:center;color:#5b6f69;font-size:14px;line-height:1.5;\">© {{year}} {{store_name}}. Toate drepturile rezervate.</p>\n<p style=\"margin:0;text-align:center;color:#7b8b86;font-size:14px;line-height:1.5;\">Acest email a fost trimis la {{customer_email}}</p>",
+            "mod": "lipsa_sau_gol",
+            "din": "extras",
+            "sursa": "OrderMailer::templateDefinitions → new_order_op → default_body al codului vechi: textul implicit al emailului comenzii cu ordin de plată avea sloganul site-ului; codul comun l-a scos (WP-17, DB-20). Gol = implicitul (OrderMailer::sendTemplate), de aici lipsa_sau_gol",
+            "extrage": {
+                "apel": "App\\Support\\OrderMailer::templateDefinitions",
+                "argumente": [],
+                "cale": [
+                    "new_order_op",
+                    "default_body"
+                ]
+            },
+            "vechi": "lipsește",
+            "nucleu": "lipsește"
+        },
         "erp_trimite_din": {
             "valoare": "",
             "mod": "lipsa",
@@ -40,6 +87,24 @@
             "din": "implicit",
             "sursa": "Settings::DEFAULTS",
             "nota": "Gol în bază: codul vechi punea tot „Bioscem” (EmailAutomation, emailul linkului de plată, cu ?: pe gol), codul comun numele site-ului (Brand::numeExpeditor); de aici lipsa_sau_gol"
+        },
+        "order_number_legacy_prefix": {
+            "valoare": "BV",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Support/OrderNumber.php: formatul vechi al numerelor de comandă (rezerva numerotării) avea prefixul scris în cod; codul comun îl ia din setare (WP-17, BV X11, OD-08), implicit „CMD”. Numerele ajung în ERP, deci prefixul nu se schimbă",
+            "extrage": {
+                "fisier": "src/Support/OrderNumber.php",
+                "tipar": "/return '([A-Z]+)' \\. date\\('YmdHis'\\)/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"CMD\""
+        },
+        "order_number_next": {
+            "valoare": "203800",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
         },
         "welcome_popup_body": {
             "valoare": "Vă informăm că am lansat o nouă platformă BIOSCEM. Pentru a putea comanda și beneficia în continuare de produsele comercializate de către SC BIOSCEM SRL, toți clienții și utilizatorii sunt rugați să își creeze un CONT NOU.\n\n⚠️ IMPORTANT: Conturile vechi și datele de autentificare anterioare nu mai sunt valabile. Accesul la noua platformă se face exclusiv prin intermediul unui cont nou, pe care vă rugăm să vi-l creați.\n\nNe cerem scuze pentru eventualele neplăceri cauzate de această schimbare și vă mulțumim pentru înțelegere, răbdare și încredere.\n\nVă dorim o experiență cât mai plăcută pe noua platformă!\n\nCu drag,\nEchipa BIOSCEM – Vitalitate & Protecție",
@@ -65,6 +130,16 @@
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod \"\" | expresie",
             "nucleu": "implicit \"\""
+        },
+        "email_brand_color": {
+            "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"#0f766e\""
+        },
+        "email_brand_color_2": {
+            "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"#334155\""
         },
         "header_account_label": {
             "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",

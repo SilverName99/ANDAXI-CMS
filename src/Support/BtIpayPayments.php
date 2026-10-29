@@ -452,6 +452,29 @@ final class BtIpayPayments
     // ------------------------------------------------------------------
 
     /**
+     * Textul plății trimis băncii (îl vede cumpărătorul pe extras și în pagina băncii; WP-17, DB-16): „Comanda <nr>
+     * <magazin>”, „Diferenta comanda <nr> <magazin>” (linkul de plată al unei diferențe), „Plata de test 1 leu <magazin>”.
+     * <magazin> = Setări → `bt_ipay_descriere_magazin`, altfel gazda site-ului fără „www.” (Brand::gazda). Un site existent
+     * își păstrează textul prin înghețare (nu prin APP_URL: copia de verificare are altă gazdă). Fără diacritice, ca
+     * textele de dinainte (banca le cere așa).
+     *
+     * @param array<string, mixed> $settings
+     */
+    public static function descriere(string $tip, string $numar, array $settings): string
+    {
+        $magazin = trim((string) ($settings['bt_ipay_descriere_magazin'] ?? ''));
+        if ($magazin === '') {
+            $magazin = Brand::gazda();
+        }
+        $text = match ($tip) {
+            self::TIP_COMANDA => 'Comanda ' . $numar,
+            self::TIP_LINK => 'Diferenta comanda ' . $numar,
+            default => 'Plata de test 1 leu',
+        };
+        return $magazin !== '' ? $text . ' ' . $magazin : $text;
+    }
+
+    /**
      * Înregistrează plata la bancă (registerPreAuth.do) pentru o comandă abia
      * salvată și întoarce adresa paginii de plată. Fiecare încercare are propriul
      * număr la bancă: prima e numărul comenzii, următoarele „{nr}-R2", „{nr}-R3".
@@ -477,7 +500,7 @@ final class BtIpayPayments
         $numarComanda = (string) $comanda['order_number'];
         $date = self::dateClient($comanda) + [
             'suma' => $suma,
-            'descriere' => 'Comanda ' . $numarComanda . ' bioscem.ro',
+            'descriere' => self::descriere(self::TIP_COMANDA, $numarComanda, Settings::all($db)),
             'user_agent' => $userAgent,
         ];
 
@@ -544,7 +567,7 @@ final class BtIpayPayments
             }
             $date = self::dateClient($comanda) + [
                 'suma' => $suma,
-                'descriere' => 'Diferenta comanda ' . (string) $comanda['order_number'] . ' bioscem.ro',
+                'descriere' => self::descriere(self::TIP_LINK, (string) $comanda['order_number'], Settings::all($db)),
                 'user_agent' => $userAgent,
             ];
 
@@ -636,7 +659,7 @@ final class BtIpayPayments
         $numar = 'TEST-' . date('ymd-His') . '-' . bin2hex(random_bytes(2));
         return self::inregistreaza($db, self::TIP_TEST, 0, $numar, [
             'suma' => 100,
-            'descriere' => 'Plata de test 1 leu bioscem.ro',
+            'descriere' => self::descriere(self::TIP_TEST, '', Settings::all($db)),
             'email' => $emailAdmin,
             'user_agent' => $userAgent,
         ], $returnUrlBaza);

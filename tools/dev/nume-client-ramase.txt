@@ -10,13 +10,11 @@
 1	scripts/install.php
 7	scripts/seo-continut.php
 8	scripts/seo-texte.php
-9	src/Http/Controllers/AdminController.php
+8	src/Http/Controllers/AdminController.php
 16	src/Http/Controllers/SiteController.php
 1	src/Http/rute.php
 1	src/Support/Activari.php
 2	src/Support/AvertismentProduse.php
-1	src/Support/BtIpayGateway.php
-3	src/Support/BtIpayPayments.php
 1	src/Support/DateSite.php
 1	src/Support/Dev.php
 1	src/Support/ErpSync.php
@@ -25,8 +23,6 @@
 1	src/Support/LinkuriCategorii.php
 3	src/Support/LogoAntet.php
 2	src/Support/Migrari/Inghetare.php
-1	src/Support/NewsletterService.php
-1	src/Support/OrderMailer.php
 1	src/Support/PachetSite.php
 1	src/Support/Plugins.php
 5	src/Support/PoliticaLivrare.php

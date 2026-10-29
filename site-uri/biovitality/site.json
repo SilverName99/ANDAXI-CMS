@@ -1,4 +1,5 @@
 {
-    "_despre": "Constantele tehnice ale site-ului, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). Codul vechi (din linia Biovitality) numea cookie-ul acordului „bv_cookie_consent”: cu alt nume, fiecare vizitator care a ales deja ar vedea din nou bannerul. Fereastra de bun venit nu există pe acest site.",
-    "cookie_consimtamant": "bv_cookie_consent"
+    "_despre": "Constantele tehnice ale site-ului, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). Codul vechi (din linia Biovitality) numea cookie-ul acordului „bv_cookie_consent”: cu alt nume, fiecare vizitator care a ales deja ar vedea din nou bannerul. Fereastra de bun venit nu există pe acest site. newsletter_sare_semnatura: sarea cu care codul vechi își semna linkurile din newslettere (dezabonarea, deschiderea, clicul); cu altă sare, fiecare link trimis până la adoptare n-ar mai merge (WP-17).",
+    "cookie_consimtamant": "bv_cookie_consent",
+    "newsletter_sare_semnatura": "biovitality"
 }

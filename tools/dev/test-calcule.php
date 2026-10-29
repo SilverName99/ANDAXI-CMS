@@ -839,6 +839,19 @@ try {
     mkdir($copie, 0770, true);
     mkdir($codVechiV, 0700, true);
     $nCopie = $copiazaCodul($radacina, $copie, true);
+    // Valorile private ale înghețării Bioscem (din WP-16; OD-49): pe server proprietarul copiază site-uri/bioscem/privat/ lângă
+    // pachet; aici, valori inventate (calculele nu le citesc).
+    $fisierInghetare = $copie . '/site-uri/bioscem/setari-inghetate.json';
+    $inghetare = json_decode((string) file_get_contents($fisierInghetare), true);
+    $privat = ['site' => $inghetare['site'], 'sursa' => $inghetare['sursa'],
+        'pentru' => hash('sha256', str_replace("\r\n", "\n", (string) file_get_contents($fisierInghetare))), 'setari' => []];
+    foreach ((array) $inghetare['setari'] as $cheie => $intrare) {
+        if (is_array($intrare) && ($intrare['privat'] ?? false) === true) {
+            $privat['setari'][$cheie] = 'bioscem.' . $cheie . '@exemplu-client.ro';
+        }
+    }
+    @mkdir($copie . '/site-uri/bioscem/privat', 0700, true);
+    file_put_contents($copie . '/site-uri/bioscem/privat/setari-inghetate.json', (string) json_encode($privat));
     $nVechi = $copiazaCodul($codVechi, $codVechiV, false);
     $copiazaBaza($root, $bazaT, $bazaCopie);
     $root->exec("CREATE USER '" . $utilizator . "'@'localhost' IDENTIFIED BY " . $root->quote($parolaDb));

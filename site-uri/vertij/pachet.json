@@ -2,9 +2,10 @@
     "format": 1,
     "site": "vertij",
     "fisiere": {
-        "ce-se-schimba.md": "af1e7be2aedcbcdc9a6c93e4738a90e96eb1603c57824218b1c718e1aad72489",
+        "ce-se-schimba.md": "ffb8ba159078ca75b9865b5840807beff12f0d020645f987184235a520de3e61",
         "migrari.json": "f613501cb313a1029844b0a88d20ebbaef6c9b370bf6bdd42bcf1359bdcd8386",
-        "setari-inghetate.json": "ecaa1e6920fbe448ba1c51925526f689bcb4372b75221dea6cb3a6531b9d9781"
+        "setari-inghetate.json": "437492c34e22cafd9343ee7fdbce7bd7c5bbe981d10a1751bbd082cf44f6656f",
+        "site.json": "b24a39a3b23ba3d73854e54d771fb84520275a5d33df50194396e9def965e931"
     },
     "obligatorii": []
 }

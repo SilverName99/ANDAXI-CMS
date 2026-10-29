@@ -1,0 +1,4 @@
+{
+    "_despre": "Constantele tehnice ale site-ului, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). vertij nu are bannerul de cookie-uri și nici fereastra de bun venit, deci doar sarea semnăturii newsletterului. newsletter_sare_semnatura: sarea cu care codul vechi își semna linkurile din newslettere (dezabonarea, deschiderea, clicul); cu altă sare, fiecare link trimis până la adoptare n-ar mai merge (WP-17).",
+    "newsletter_sare_semnatura": "biovitality"
+}

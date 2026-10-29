@@ -1,5 +1,6 @@
 {
-    "_despre": "Constantele tehnice ale Bioscem, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). Cu alte nume, fiecare vizitator care a ales deja la cookie-uri ar vedea din nou bannerul, iar cine a închis fereastra de bun venit ar vedea-o din nou.",
+    "_despre": "Constantele tehnice ale Bioscem, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). Cu alte nume, fiecare vizitator care a ales deja la cookie-uri ar vedea din nou bannerul, iar cine a închis fereastra de bun venit ar vedea-o din nou. newsletter_sare_semnatura: sarea cu care codul vechi își semna linkurile din newslettere (dezabonarea, deschiderea, clicul); cu altă sare, fiecare link trimis până la adoptare n-ar mai merge (WP-17).",
     "cookie_consimtamant": "bioscem_cookie_consent",
-    "cheie_popup_inchis": "bioscem_welcome_popup_inchis"
+    "cheie_popup_inchis": "bioscem_welcome_popup_inchis",
+    "newsletter_sare_semnatura": "bioscem"
 }

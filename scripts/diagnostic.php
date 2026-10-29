@@ -33,6 +33,8 @@ declare(strict_types=1);
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --licenta    # doar licența și PHP-ul (verificarea dinaintea unui deploy)
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --pachet     # doar pachetul de date al site-ului (la adoptare, după copiere)
+ *   /usr/bin/php /cale/catre/scripts/diagnostic.php --cheie-newsletter   # rândul NEWSLETTER_CHEIE_SEMNARE=… de pus în .env la
+ *                                                                        # adoptare: cheia derivată pe care site-ul o folosește acum
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -101,6 +103,23 @@ $arataLicenta = static function (): bool {
     echo 'pluginuri    : ' . ($pornite === [] ? 'doar nucleul' : implode(', ', $pornite)) . "\n";
     return $licenta !== null;
 };
+
+// La adoptare (docs/MIGRARI.md, „Pe server, la adoptare”): cheia cu care site-ul își semnează acum linkurile din newslettere,
+// ca rând de pus în .env. Rulat pe site-ul live, cu .env-ul lui (APP_URL și baza lui), înainte de comutare.
+if (in_array('--cheie-newsletter', $argv, true)) {
+    $sursa = \App\Support\NewsletterService::sursaCheiiSemnare();
+    if ($sursa === 'env') {
+        echo "NEWSLETTER_CHEIE_SEMNARE e deja in .env; nimic de facut.\n";
+        exit(0);
+    }
+    $sare = \App\Support\DateSite::site('newsletter_sare_semnatura');
+    if (!is_string($sare) || trim($sare) === '') {
+        fwrite(STDERR, "Pachetul site-ului n-are site.json → newsletter_sare_semnatura: nu stiu ce cheie folosea site-ul.\n");
+        exit(1);
+    }
+    echo 'NEWSLETTER_CHEIE_SEMNARE=' . \App\Support\NewsletterService::cheieDerivata(trim($sare)) . "\n";
+    exit(0);
+}
 
 if (in_array('--licenta', $argv, true)) {
     $licentaOk = $arataLicenta();
@@ -256,6 +275,17 @@ foreach ($deVerificat as $cheie => $fel) {
         $fel === 'secret' ? 'completat (' . strlen($valoare) . ' caractere)' : $valoare
     );
 }
+
+// Cheia de semnare a linkurilor din newslettere (WP-17): fără ea fixată, linkurile trimise depind de APP_URL și de
+// numele bazei. Cheia însăși nu se afișează; doar sursa și, la o derivare, sha256-ul ei scurt (pentru comparare).
+echo "\n=== Newsletter ===\n";
+$sursaNewsletter = \App\Support\NewsletterService::sursaCheiiSemnare();
+echo 'cheia de semnare a linkurilor: ' . match ($sursaNewsletter) {
+    'env' => 'din .env (NEWSLETTER_CHEIE_SEMNARE)',
+    'env_gresit' => 'ATENTIE: NEWSLETTER_CHEIE_SEMNARE din .env nu are 64 de cifre hexazecimale mici, deci se ignora',
+    'site.json' => 'derivata cu sarea din pachetul site-ului (site.json → newsletter_sare_semnatura); la adoptare se scrie in .env',
+    default => 'ATENTIE: derivata din LICENTA_SITE (nici .env, nici pachetul nu o fixeaza); linkurile trimise nu mai merg daca se schimba APP_URL, baza sau LICENTA_SITE',
+} . "\n";
 
 echo "\n=== Comenzi cu AWB ===\n";
 try {

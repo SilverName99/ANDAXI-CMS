@@ -23,7 +23,13 @@ declare(strict_types=1);
  *     Bioscem, octet cu octet;
  *  B7 descrierea unui produs fără descriere scurtă (înghețarea) = textul din catalogul și din caruselul Bioscem;
  *  B8 fereastra de bun venit (înghețarea) = implicitele Bioscem (pornită, titlul, textul);
- *  B9 pachetul e întreg (manifestul) și /health îl arată (PachetSite::amprenta).
+ *  B9 pachetul e întreg (manifestul) și /health îl arată (PachetSite::amprenta);
+ *  B10 (WP-17) tokenul de dezabonare din newsletter = formula veche, cu sarea din site.json = cea din codul Bioscem;
+ *  B11 textele plății BT („Comanda <nr> …”, diferența, plata de test) = cele scrise în codul Bioscem;
+ *  B12 formatul vechi al numerelor de comandă are prefixul codului Bioscem, contorul pornește de la implicitul lui;
+ *  B13 cota de TVA implicită (și cea trimisă în ERP pentru un produs fără cotă) = implicitul Bioscem (19);
+ *  B14 emailul comenzii cu ordin de plată: corpul și blocurile înghețate sunt cele vechi, iar ale nucleului diferă doar
+ *      prin sloganul scos.
  *
  * **neutru** (pachetul tools/dev/site-demo, baza de dezvoltare, un server al codului curent pe CMS_DEV_PORT+24): nicio
  * potrivire din lista neagră a de-bioscem §7.4 (numele Bioscem, firma și reprezentantul de pe acordul GDPR, conferința,
@@ -224,6 +230,55 @@ if ($mod === 'bioscem') {
         && array_intersect(['site.json', 'tema/tema.json'], (array) (PachetSite::manifest(DateSite::dosar())['obligatorii'] ?? [])) === ['site.json', 'tema/tema.json'],
         implode('; ', $probleme));
 
+    // WP-17. B10: linkurile din newslettere semnate cu aceeași cheie (sarea din site.json = cea din codul Bioscem).
+    $sareVeche = $dinVechi('src/Support/NewsletterService.php', "/'newsletter-unsubscribe\\|' \\. \\\$url \\. '\\|' \\. \\\$dbName \\. '\\|([a-z]+)'\\)/");
+    $config = require $radacina . '/config/app.php';
+    $cheieVeche = hash('sha256', 'newsletter-unsubscribe|' . (string) ($config['url'] ?? '') . '|' . (string) ($config['db']['database'] ?? '') . '|' . $sareVeche);
+    $token = (new ReflectionMethod(\App\Support\NewsletterService::class, 'buildUnsubscribeToken'))->invoke(null, 42, 'Abonat@Exemplu.ro');
+    $payloadVechi = rtrim(strtr(base64_encode('42|abonat@exemplu.ro'), '+/', '-_'), '=');
+    $semnaturaVeche = rtrim(strtr(base64_encode(hash_hmac('sha256', $payloadVechi, $cheieVeche, true)), '+/', '-_'), '=');
+    $verifica('B10 newsletterul: sarea „' . $sareVeche . '” (site.json) = cea din codul Bioscem; tokenul de dezabonare = formula veche, '
+        . 'iar fără .env cheia vine din site.json', $token === $payloadVechi . '.' . $semnaturaVeche
+        && \App\Support\NewsletterService::sursaCheiiSemnare() === 'site.json'
+        && \App\Support\NewsletterService::cheieDerivata($sareVeche) === $cheieVeche);
+    // B11: textele plății BT (le vede cumpărătorul pe extras), din înghețare, nu din APP_URL.
+    $btVechi = $vechi('src/Support/BtIpayPayments.php');
+    $btPayments = \App\Support\BtIpayPayments::class;
+    $verifica('B11 textele plății la Banca Transilvania = cele trei texte scrise în codul Bioscem (cu numărul comenzii)',
+        str_contains($btVechi, "'Comanda ' . \$numarComanda . ' " . substr($btPayments::descriere($btPayments::TIP_COMANDA, '', $faraRand), strlen('Comanda  ')) . "'")
+        && $btPayments::descriere($btPayments::TIP_COMANDA, '203801', $faraRand) === 'Comanda 203801 ' . $dinVechi('src/Support/BtIpayPayments.php', "/'Comanda ' \\. \\\$numarComanda \\. ' ([^']+)'/")
+        && $btPayments::descriere($btPayments::TIP_LINK, '203801', $faraRand) === 'Diferenta comanda 203801 ' . $dinVechi('src/Support/BtIpayPayments.php', "/'Diferenta comanda ' \\. \\(string\\) \\\$comanda\\['order_number'\\] \\. ' ([^']+)'/")
+        && $btPayments::descriere($btPayments::TIP_TEST, '', $faraRand) === $dinVechi('src/Support/BtIpayPayments.php', "/'(Plata de test 1 leu [^']+)'/"));
+    // B12: formatul vechi al numerelor de comandă și contorul.
+    $numarVechi = \App\Support\OrderNumber::vechi($faraRand);
+    $prefixVechiBs = $dinVechi('src/Support/OrderNumber.php', "/return '([A-Z]+)' \\. date\\('YmdHis'\\)/");
+    $verifica('B12 numerotarea: formatul vechi „' . $numarVechi . '” are prefixul din codul Bioscem („' . $prefixVechiBs . '”), contorul pornește de la '
+        . 'implicitul Bioscem', preg_match('/^' . $prefixVechiBs . '\d{17}$/', $numarVechi) === 1
+        && \App\Support\OrderNumber::normalizeazaStart($faraRand['order_number_next']) === (int) $implicitVechi('order_number_next'));
+    // B13: TVA-ul implicit (prețurile fără cotă în fișă, liniile trimise în ERP fără cotă pe produs).
+    $verifica('B13 cota de TVA implicită „' . Settings::cotaTvaImplicita($faraRand) . '” = implicitul codului Bioscem (și în ERP)',
+        Settings::cotaTvaImplicita($faraRand) === $implicitVechi('default_vat_percent')
+        && round((float) Settings::cotaTvaImplicita($faraRand), 2) === 19.0);
+    // B14: emailul comenzii cu ordin de plată: textul și blocurile vechi prin înghețare; nucleul diferă doar prin slogan.
+    $definitii = \App\Support\OrderMailer::templateDefinitions();
+    $corpNou = (string) $definitii['new_order_op']['default_body'];
+    $corpVechi = (string) $faraRand['email_template_new_order_op_body'];
+    $randSlogan = '<p style="margin:0 0 4px;color:#4f6b66;font-size:16px;line-height:1.55;">Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!</p>' . "\n";
+    $blocuriVechi = json_decode((string) $faraRand['email_template_new_order_op_blocks_json'], true);
+    $blocuriNoi = (new ReflectionMethod(\App\Http\Controllers\AdminController::class, 'newOrderOpEcommerceDefaultBlocks'))
+        ->invoke((new ReflectionClass(\App\Http\Controllers\AdminController::class))->newInstanceWithoutConstructor());
+    $diferaBlocuri = [];
+    foreach ((array) $blocuriVechi as $i => $bloc) {
+        if ($bloc !== ($blocuriNoi[$i] ?? null)) {
+            $diferaBlocuri[] = $i;
+        }
+    }
+    $verifica('B14 emailul OP: corpul și blocurile Bioscem (înghețate) au sloganul; implicitele nucleului sunt aceleași fără el',
+        str_contains($corpVechi, $randSlogan) && str_replace($randSlogan, '', $corpVechi) === $corpNou
+        && count((array) $blocuriVechi) === count($blocuriNoi) && count($diferaBlocuri) === 1
+        && (string) ($blocuriVechi[$diferaBlocuri[0]]['content'] ?? '') === "Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!\nEchipa {{store_name}}"
+        && (string) ($blocuriNoi[$diferaBlocuri[0]]['content'] ?? '') === 'Echipa {{store_name}}');
+
     } catch (Throwable $e) {
         $verifica('citirea codului Bioscem și a pachetului', false, $e->getMessage());
     }
@@ -247,8 +302,6 @@ $ramase = [
     // inventat „Echipa Bioscem” (AdminController::loadBlogPostsPreview). Previzualizarea e un șir JSON cu „<”, „>” scrise
     // \u003C, \u003E, deci „Jurnalul” lipit de un „E” nu e un cuvânt întreg: se vede doar „bioscem”.
     'pagina /admin/pages/new' => ['bioscem', 'WP-22'],
-    // WP-17 (DB-20, G1): sloganul Bioscem din emailul implicit al comenzii cu ordin de plată.
-    'emailul new_order_op' => ['vitalitate și protecție', 'WP-17'],
 ];
 $ramaseVazute = [];
 /** O potrivire e permisă doar dacă e exact cea așteptată în $ramase. */
@@ -287,6 +340,24 @@ $verifica('N1 adresa de contact fără setări: adresa primului administrator ge
     Brand::emailContact(null, ['contact_email' => '', 'contact_form_recipients' => '']) === ''
     && Brand::emailContact(null, ['contact_email' => 'a@exemplu.ro', 'contact_form_recipients' => 'b@exemplu.ro']) === 'a@exemplu.ro'
     && Brand::emailContact(null, ['contact_email' => 'nu-e-adresa', 'contact_form_recipients' => 'x; B@exemplu.ro,c@exemplu.ro']) === 'B@exemplu.ro');
+
+// WP-17: plata BT, numerotarea, TVA-ul, newsletterul și emailurile conturilor, fără nimic al unui client.
+$verifica('N1 (WP-17) TVA implicit 21, numerotarea de la 1001, formatul vechi cu „CMD” (OD-07, OD-08)',
+    Settings::cotaTvaImplicita($implicite) === '21' && \App\Support\OrderNumber::normalizeazaStart($implicite['order_number_next']) === 1001
+    && preg_match('/^CMD\d{17}$/', \App\Support\OrderNumber::vechi($implicite)) === 1
+    && preg_match('/^CMD\d{17}$/', \App\Support\OrderNumber::vechi(['order_number_legacy_prefix' => 'bv; drop'])) === 1);
+$verifica('N1 (WP-17) textul plății BT fără setare: gazda site-ului („' . \App\Support\BtIpayPayments::descriere('order', '1001', $implicite) . '”)',
+    \App\Support\BtIpayPayments::descriere('order', '1001', $implicite) === 'Comanda 1001 ' . Brand::gazda() && Brand::gazda() !== ''
+    && \App\Support\BtIpayPayments::descriere('test', '', ['bt_ipay_descriere_magazin' => 'exemplu.ro']) === 'Plata de test 1 leu exemplu.ro');
+$verifica('N1 (WP-17) cheia linkurilor din newslettere: fără .env și fără sare în pachet, derivată din LICENTA_SITE (diagnostic.php o arată ca ATENȚIE)',
+    \App\Support\NewsletterService::sursaCheiiSemnare() === 'licenta');
+$emailCont = \App\Support\BrandedEmail::render($implicite, ['title' => 'Confirmă adresa', 'greeting' => 'Bună!', 'intro' => 'Text.',
+    'button' => ['label' => 'Confirmă', 'url' => 'https://exemplu.ro/x'], 'recipient' => 'client@exemplu.ro']);
+$faraListaNeagra('N1 (WP-17) emailul unui cont (BrandedEmail) cu setările implicite', $emailCont);
+$verifica('N1 (WP-17) BrandedEmail: numele de rezervă e gazda, culorile implicite neutre; o culoare greșită din setări nu ajunge în email',
+    \App\Support\BrandedEmail::brandName($implicite) === Brand::gazda() && str_contains($emailCont, \App\Support\BrandedEmail::CULOARE_2_IMPLICITA)
+    && \App\Support\BrandedEmail::culoare(['email_brand_color' => 'red;x:y'], 'email_brand_color', '#000000') === '#000000'
+    && \App\Support\BrandedEmail::brandName(['email_brand_name' => '', 'store_name' => 'Magazin X']) === 'Magazin X');
 
 // N2, N3: un server al codului curent cu pachetul demo, pe baza de dezvoltare.
 $app = require $radacina . '/config/app.php';
@@ -436,7 +507,7 @@ try {
         if (preg_match('/^Subject: (.*)$/m', $continut, $s) === 1) {
             $text .= "\n" . iconv_mime_decode(trim($s[1]), ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8');
         }
-        $faraListaNeagra($tip === 'new_order_op' ? 'emailul new_order_op' : 'N3 ' . $eticheta, $text);
+        $faraListaNeagra('N3 ' . $eticheta, $text);
         if ($tip === '') {
             $verifica('N3 emailul de test simplu: subiectul „Email test ' . $numeFaraSetari . '” (numele de rezervă al expeditorului)',
                 str_contains($text, 'Email test ' . $numeFaraSetari));

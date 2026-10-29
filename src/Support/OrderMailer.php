@@ -1622,6 +1622,8 @@ HTML;
      * Comanda plătită prin ordin de plată. Datele băncii nu stau aici, ci în
      * Setări plăți, de unde le ia şi pagina de checkout — un singur loc pentru
      * IBAN, ca să nu ajungă vreodată două valori diferite pe site şi pe email.
+     * Fără sloganul unui client (WP-17, DB-20): un site existent își păstrează textul de dinainte prin înghețarea setărilor
+     * (email_template_new_order_op_body, scos din codul lui vechi).
      */
     private static function newOrderOpAdvancedDefaultBody(): string
     {
@@ -1662,7 +1664,6 @@ HTML;
   {{order_totals_html}}
 </div>
 
-<p style="margin:0 0 4px;color:#4f6b66;font-size:16px;line-height:1.55;">Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!</p>
 <p style="margin:0 0 18px;color:#4f6b66;font-size:16px;line-height:1.55;">Echipa {{store_name}}</p>
 
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:18px 0 16px;">

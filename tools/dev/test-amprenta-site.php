@@ -421,6 +421,16 @@ try {
     imagefill($imagine, 0, 0, imagecolorallocate($imagine, 40, 120, 60));
     imagepng($imagine, $radacina . '/public' . $pozaTest);
     $dbT = $conectare($baza);
+    // Baza în forma Bioscem (setările înghețate, cu valorile private, și un antet ca al lui; WP-16,
+    // tools/dev/lib/forma-bioscem.php): codul Bioscem are în cod ce codul comun citește din bază. Baza e a testului, se
+    // șterge la final, deci nimic de pus la loc.
+    spl_autoload_register(static function (string $clasa) use ($radacina): void {
+        if (str_starts_with($clasa, 'App\\') && is_file($f = $radacina . '/src/' . str_replace('\\', '/', substr($clasa, 4)) . '.php')) {
+            require_once $f;
+        }
+    });
+    require_once __DIR__ . '/lib/forma-bioscem.php';
+    forma_bioscem_pune($dbT, $radacina);
     $dbT->prepare("UPDATE products SET image_url = ? WHERE slug = 'ceai-de-menta'")->execute([$pozaTest]);
     // Conținutul copiat cu linkurile lui absolute spre site-ul de origine (aici serverul Bioscem), ca descrierile și paginile
     // importate din WordPress pe bioscem.ro: în prima pagină (și spre o adresă la care duce doar linkul absolut), în

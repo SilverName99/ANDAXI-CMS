@@ -10,18 +10,25 @@ use Throwable;
 /**
  * Numerotarea comenzilor de pe site.
  *
- * Modul „sequential" dă numere simple, crescătoare (203800, 203801, …),
+ * Modul „sequential" dă numere simple, crescătoare (1001, 1002, …),
  * rezervate atomic, ca două comenzi simultane să nu primească același număr.
- * Modul „legacy" păstrează formatul vechi, BV + dată + aleator, ca supapă
- * de întoarcere dacă ceva merge prost.
+ * Modul „legacy" păstrează formatul vechi, prefix + dată + aleator, ca supapă
+ * de întoarcere dacă ceva merge prost. Prefixul e setarea
+ * `order_number_legacy_prefix` (WP-17, BV X11; implicit „CMD”, la cele patru
+ * site-uri existente „BV”, din înghețare: numerele lor ajung în ERP și nu se
+ * schimbă); începutul numerotării, `order_number_next` (implicit 1001, decizia
+ * OD-08; un site existent își are deja contorul).
  */
 final class OrderNumber
 {
     public const MOD_SECVENTIAL = 'sequential';
     public const MOD_VECHI = 'legacy';
 
-    /** De unde pornește numerotarea dacă nimeni n-a setat altceva. */
-    public const START_IMPLICIT = 203800;
+    /** De unde pornește numerotarea dacă nimeni n-a setat altceva (un site nou; OD-08). */
+    public const START_IMPLICIT = 1001;
+
+    /** Prefixul formatului vechi pe un site fără altul în setări (OD-08). */
+    public const PREFIX_IMPLICIT = 'CMD';
 
     /** Cheia din `settings` care ține următorul număr de emis. */
     public const CHEIE_URMATOR = 'order_number_next';
@@ -37,7 +44,7 @@ final class OrderNumber
     {
         $mod = trim((string) ($settings[self::cheieMod()] ?? self::MOD_SECVENTIAL));
         if ($mod !== self::MOD_SECVENTIAL || !$db instanceof PDO) {
-            return self::vechi();
+            return self::vechi($settings);
         }
 
         $seed = self::normalizeazaStart($settings[self::CHEIE_URMATOR] ?? null);
@@ -55,13 +62,25 @@ final class OrderNumber
         }
 
         // Numerotarea nu are voie să blocheze o comandă reală.
-        return self::vechi();
+        return self::vechi($settings);
     }
 
-    /** Formatul vechi, păstrat pentru comenzile deja emise și ca rezervă. */
-    public static function vechi(): string
+    /**
+     * Formatul vechi, păstrat pentru comenzile deja emise și ca rezervă: prefixul site-ului (`order_number_legacy_prefix`:
+     * 1–8 litere mari sau cifre, altfel PREFIX_IMPLICIT) + dată + 3 cifre aleatoare.
+     *
+     * @param array<string, mixed> $settings
+     */
+    public static function vechi(array $settings = []): string
     {
-        return 'BV' . date('YmdHis') . random_int(100, 999);
+        return self::prefixVechi($settings) . date('YmdHis') . random_int(100, 999);
+    }
+
+    /** @param array<string, mixed> $settings */
+    public static function prefixVechi(array $settings): string
+    {
+        $prefix = trim((string) ($settings['order_number_legacy_prefix'] ?? ''));
+        return preg_match('/^[A-Z0-9]{1,8}$/', $prefix) === 1 ? $prefix : self::PREFIX_IMPLICIT;
     }
 
     public static function cheieMod(): string

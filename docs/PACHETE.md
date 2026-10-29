@@ -26,7 +26,7 @@ pe un server, iar `scripts/diagnostic.php --pachet` îl vede pe server (mai jos)
 | `ce-se-schimba.md` | proprietarul, la adoptare | **obligatoriu** în `site-uri/<site>/`: ce vede altfel clientul pe codul comun (G-m4) |
 | `redirecturi.json` | `SeoRedirects` ([SEO.md](SEO.md), „Adresele vechi”) | la fiecare cerere |
 | `seo.json` | `DateSite::seo` ([SEO.md](SEO.md), „Datele unui site”) | la fiecare cerere |
-| `site.json` | `DateSite::site` | la fiecare cerere: constantele tehnice care nu se schimbă niciodată pe un site existent (WP-16: `cookie_consimtamant`, numele cookie-ului acordului, `CookieConsent::nume`, implicit `cookie_consent`; `cheie_popup_inchis`, cheia din `localStorage` a ferestrei de bun venit închise, `Brand::cheiePopupInchis`, implicit `welcome_popup_inchis`; WP-17: sarea semnăturii newsletterului). Un nume care nu e simplu (`[A-Za-z0-9_-]`) se ignoră, cu un rând în jurnal |
+| `site.json` | `DateSite::site` | la fiecare cerere: constantele tehnice care nu se schimbă niciodată pe un site existent (WP-16: `cookie_consimtamant`, numele cookie-ului acordului, `CookieConsent::nume`, implicit `cookie_consent`; `cheie_popup_inchis`, cheia din `localStorage` a ferestrei de bun venit închise, `Brand::cheiePopupInchis`, implicit `welcome_popup_inchis`; WP-17: `newsletter_sare_semnatura`, sarea cu care codul vechi își semna linkurile din newslettere, „bioscem”, „biovitality” sau „grafoanaytis”; o cheie fixă din `.env`, `NEWSLETTER_CHEIE_SEMNARE`, are întâietate). Un nume care nu e simplu (`[A-Za-z0-9_-]`) se ignoră, cu un rând în jurnal |
 | `tema/tema.json`, `tema/*.css` | `Tema` (mai jos) | la fiecare cerere |
 | `tema/public/**` | serverul web, la `/tema/**` | copiat în `public/tema/` la instalare și la fiecare actualizare |
 | `public/**` | serverul web, la aceeași adresă | copiat peste `public/` la adoptare (mai jos) |
@@ -200,5 +200,5 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   cookie-ul și popup-ul (`site.json`); BV și GR au `site.json` cu cookie-ul lor (`bv_cookie_consent`). Testul pachetului
   (G-pachet, `tools/dev/test-pachet-site.php bioscem|neutru`) compară valorile pachetului Bioscem cu cele scrise în
   codul Bioscem și caută numele unui client în paginile, emailurile și implicitele nucleului cu pachetul demo.
-- WP-17: sarea semnăturii newsletterului (`site.json`). SEO B6: fonturile locale pentru Bioscem (`fonturi`).
+- **Făcut în WP-17:** sarea semnăturii newsletterului în `site.json` (Bioscem, Biovitality, vertij, grafoanaytis). SEO B6: fonturile locale pentru Bioscem (`fonturi`).
 - Etapa 4: tema grafoanaytis (GR-19) și conținutul de pornire (`continut/`, GR-20).

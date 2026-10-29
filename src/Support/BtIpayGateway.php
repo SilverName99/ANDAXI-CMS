@@ -322,7 +322,8 @@ final class BtIpayGateway
             CURLOPT_PROTOCOLS => $protocoale,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_USERAGENT => 'bioscem-shop/bt-ipay',
+            // Programul care cheamă banca (WP-17, OD-32): al platformei, nu al unui client.
+            CURLOPT_USERAGENT => 'andaxi-cms/bt-ipay',
         ]);
         $corp = curl_exec($ch);
         $http = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);

@@ -877,7 +877,7 @@ final class ErpSync
     /** Liniile comenzii, cu SKU-ul și cota de TVA luate din fișa produsului. */
     private static function buildLines(PDO $db, int $orderId): array
     {
-        $cotaImplicita = round((float) (Settings::all($db)['default_vat_percent'] ?? 19), 2);
+        $cotaImplicita = round((float) Settings::cotaTvaImplicita(Settings::all($db)), 2);
 
         try {
             $stmt = $db->prepare(

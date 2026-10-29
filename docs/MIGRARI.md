@@ -720,6 +720,13 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    și ale înregistrării să nu poată fi ocolite. Dacă site-ul are un CDN sau un proxy în față (CDN-ul Hostinger, Cloudflare), rețelele lui
    intră în `IP_PROXY_DE_INCREDERE`; altfel toți vizitatorii ar împărți aceeași limită
    ([VERIFICARE.md](VERIFICARE.md), „Adresa vizitatorului”).
+6. **Cheia linkurilor din newslettere** (WP-17; cu codul comun deja pe server, înaintea primei pagini servite de el, cu `.env`-ul
+   site-ului live și pachetul lui):
+   `$PHP scripts/diagnostic.php --cheie-newsletter` scrie rândul `NEWSLETTER_CHEIE_SEMNARE=<64 de cifre>` (cheia derivată
+   pe care site-ul o folosește azi, din `APP_URL`, numele bazei și sarea din `site.json` → `newsletter_sare_semnatura`),
+   care se pune în `.env`. Fără el linkurile de dezabonare, deschidere și clic din newsletterele deja trimise merg doar cât
+   `APP_URL` și baza rămân exact aceleași (un `www` sau un „/” în plus le rupe). Decizia OD-28: cheia derivată rămâne;
+   rotirea la o cheie aleatoare (cu ambele acceptate 12 luni) vine într-o versiune următoare.
 
 Comparația calculelor de pe copie (`tools/verificare/compara-calcule.php`, WP-11; [VERIFICARE.md](VERIFICARE.md),
 „Comparația calculelor”) cere baza la zi cu codul comun: dacă garda spune `in_urma` (cod nou urcat după încărcare),

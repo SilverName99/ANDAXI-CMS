@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "1c2c8a1fe1138946d0bd7af1ec5ef79df9f75051cd3d008631a69842bf6067e5",
+    "amprenta_nucleu": "a52c037448c68c3e1dcb039451f328ceb72e6223f49625e5586776a306760de8",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -152,7 +152,7 @@
             "din": "manual",
             "sursa": "VT scrie 19 % în cod (AdminController la salvarea produsului, CheckoutCalculator); înghețat ca TVA-ul să nu se schimbe singur (invariantul I4 din de-bioscem.md, OD-07)",
             "vechi": "lipsește",
-            "nucleu": "implicit \"19\""
+            "nucleu": "implicit \"21\""
         },
         "donations_amounts": {
             "valoare": "1000,500,250,100,50,25",
@@ -220,6 +220,30 @@
             "din": "cod",
             "sursa": "$settings['donations_thanks_text'] ?? … (rezerva din cod)"
         },
+        "email_brand_color": {
+            "valoare": "#ea4968",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Support/BrandedEmail.php: culoarea emailurilor conturilor (GRADIENT_START) era scrisă în cod; codul comun o ia din setare (WP-17, VT-C7)",
+            "extrage": {
+                "fisier": "src/Support/BrandedEmail.php",
+                "tipar": "/const GRADIENT_START = '(#[0-9a-fA-F]{6})'/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"#0f766e\""
+        },
+        "email_brand_color_2": {
+            "valoare": "#6f2b98",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Support/BrandedEmail.php: culoarea emailurilor conturilor (GRADIENT_END) era scrisă în cod; codul comun o ia din setare (WP-17, VT-C7)",
+            "extrage": {
+                "fisier": "src/Support/BrandedEmail.php",
+                "tipar": "/const GRADIENT_END = '(#[0-9a-fA-F]{6})'/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"#334155\""
+        },
         "email_logo_url": {
             "valoare": "/uploads/gallery/logo-vertij-tinitus.png",
             "mod": "lipsa",
@@ -232,6 +256,18 @@
             "din": "implicit",
             "sursa": "Settings::DEFAULTS",
             "nota": "Gol în bază: codul vechi ia numele societății (BrandedEmail::brandName), codul comun pune „Bioscem”; de aici lipsa_sau_gol"
+        },
+        "order_number_legacy_prefix": {
+            "valoare": "BV",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Http/Controllers/SiteController.php: formatul vechi al numerelor de comandă (rezerva numerotării) avea prefixul scris în cod; codul comun îl ia din setare (WP-17, BV X11, OD-08), implicit „CMD”. Numerele ajung în ERP, deci prefixul nu se schimbă",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/return '([A-Z]+)' \\. date\\('YmdHis'\\)/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"CMD\""
         },
         "order_number_mode": {
             "valoare": "legacy",
@@ -462,7 +498,7 @@
         "order_number_next": {
             "motiv": "Cu numerotarea „legacy” (order_number_mode, mai sus) contorul nu se folosește",
             "vechi": "lipsește",
-            "nucleu": "implicit \"203800\""
+            "nucleu": "implicit \"1001\""
         },
         "shipping_fixed_base": {
             "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",

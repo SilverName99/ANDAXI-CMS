@@ -2,10 +2,10 @@
     "format": 1,
     "site": "biovitality",
     "fisiere": {
-        "ce-se-schimba.md": "9e715858f36342a5a3dcf58feae4c97f482cf431d066c7279d2b8cc1b02b5665",
+        "ce-se-schimba.md": "d310ee5bb66a43a4623d4cdc957c4bc29f016f53bd8f20cbe41522a9bc71ff39",
         "migrari.json": "65aa7b211a09b3162bbeadded7a9ca312246695121b4804f7885a593a2fa98c2",
-        "setari-inghetate.json": "7db52989cf4b34aa800428317b44425686fe6e5247840247bf0b350985099db7",
-        "site.json": "07d00379da1104de5cfd9a05594f65506ddc3c244c122d5398888690f496b9cf"
+        "setari-inghetate.json": "2826e2f7f53acadf1d270bf5a08abaed5e241152cfb6f6a5cdc4a08c84310098",
+        "site.json": "6ee3f5db22d5ab6bf65dc6d01d9d7987aa62e1b0d5a36ca96b859be998aeffc4"
     },
     "obligatorii": [
         "site.json"

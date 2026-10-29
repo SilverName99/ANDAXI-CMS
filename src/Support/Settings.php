@@ -64,9 +64,13 @@ final class Settings
         'fan_parcel_length_cm' => '',
         'fan_parcel_width_cm' => '',
         'fan_parcel_height_cm' => '',
-        'default_vat_percent' => '19',
+        // WP-17 (DB-18, DB-19, X11; deciziile OD-07, OD-08): pe un site nou TVA-ul implicit 21 (cota standard de azi),
+        // numerotarea de la 1001 și formatul vechi cu prefixul „CMD”. Cele patru site-uri existente rămân, prin înghețare,
+        // la 19, la contorul lor și la „BV”; TVA-ul se schimbă doar explicit, cu unealta din Setări magazin.
+        'default_vat_percent' => '21',
         'order_number_mode' => 'sequential',
-        'order_number_next' => '203800',
+        'order_number_next' => '1001',
+        'order_number_legacy_prefix' => 'CMD',
         'cookie_banner_enabled' => '1',
         'cookie_banner_text' => 'Folosim cookies pentru funcționarea site-ului și, cu acordul tău, pentru statistici de trafic. Poți accepta toate cookie-urile sau doar pe cele strict necesare.',
         'cookie_banner_policy_url' => '',
@@ -89,6 +93,9 @@ final class Settings
         'email_brand_name' => '',
         'email_logo_url' => '',
         'email_site_url' => '',
+        // WP-17 (VT-C7): culorile emailurilor conturilor și ale pluginurilor (App\Support\BrandedEmail), neutre.
+        'email_brand_color' => '#0f766e',
+        'email_brand_color_2' => '#334155',
         'store_logo_url' => '',
         'catalog_descriere_implicita' => '',
         'email_delivery_method' => 'smtp',
@@ -152,6 +159,8 @@ final class Settings
         'bt_ipay_autodeposit_hours' => '96',
         'bt_ipay_expire_minutes' => '60',
         'bt_ipay_notify_emails' => '',
+        // WP-17 (DB-16): numele magazinului din textul plății trimis băncii („Comanda 1001 exemplu.ro”); gol = gazda site-ului.
+        'bt_ipay_descriere_magazin' => '',
         // Mod mentenanță: vizitatorii văd „Revenim în curând", testerii văd site-ul.
         'maintenance_enabled' => '0',
         'maintenance_title' => 'Revenim în curând',
@@ -260,6 +269,17 @@ final class Settings
         'cache_assets_etag_enabled' => '1',
         'cache_assets_version_token' => '',
     ];
+
+    /**
+     * Cota de TVA implicită a site-ului, ca text (de exemplu „21”): setarea `default_vat_percent`, altfel implicitul
+     * nucleului (WP-17, DB-19). Toate locurile care foloseau „19” scris în cod o citesc de aici.
+     *
+     * @param array<string, mixed> $setari
+     */
+    public static function cotaTvaImplicita(array $setari): string
+    {
+        return (string) ($setari['default_vat_percent'] ?? self::DEFAULTS['default_vat_percent']);
+    }
 
     public static function all(?PDO $db): array
     {

@@ -1544,9 +1544,7 @@ final class AdminController
         }
 
         $categories = $this->categoriesList();
-        $defaultVat = $db instanceof PDO
-            ? (string) (Settings::all($db)['default_vat_percent'] ?? '19')
-            : '19';
+        $defaultVat = Settings::cotaTvaImplicita(Settings::all($db));
         // Mărcile și etichetele deja folosite, pentru sugestiile din formular:
         // altfel apar „Farabella", „farabella" și „FARABELLA" ca trei branduri.
         $brands = [];
@@ -4379,7 +4377,7 @@ final class AdminController
             $category = $fallbackCategory !== '' ? $fallbackCategory : null;
         }
         $price = (float) ($_POST['price'] ?? 0);
-        $vatImplicit = (string) (Settings::all($db)['default_vat_percent'] ?? '19');
+        $vatImplicit = Settings::cotaTvaImplicita(Settings::all($db));
         $vatPercentRaw = str_replace(',', '.', trim((string) ($_POST['vat_percent'] ?? $vatImplicit)));
         $vatPercent = (float) $vatPercentRaw;
         if (!is_finite($vatPercent) || $vatPercent < 0) {
@@ -4556,7 +4554,7 @@ final class AdminController
         $bbdEntriesJson = $this->normalizeProductBbdEntriesJson($_POST['bbd_entries_json'] ?? '[]');
         $postCartNoteEnabled = isset($_POST['post_cart_note_enabled']) ? 1 : 0;
         $postCartNoteText = trim((string) ($_POST['post_cart_note_text'] ?? ''));
-        $vatImplicit = (string) (Settings::all($db)['default_vat_percent'] ?? '19');
+        $vatImplicit = Settings::cotaTvaImplicita(Settings::all($db));
         $vatPercentRaw = str_replace(',', '.', trim((string) ($_POST['vat_percent'] ?? $vatImplicit)));
         $vatPercent = (float) $vatPercentRaw;
         if (!is_finite($vatPercent) || $vatPercent < 0) {
@@ -9878,7 +9876,8 @@ final class AdminController
                 'success',
                 $mod === \App\Support\OrderNumber::MOD_SECVENTIAL
                     ? 'Numerotare salvată. Următoarea comandă va primi numărul ' . $urmator . '.'
-                    : 'Numerotare salvată. Comenzile revin la formatul vechi (BV + dată).'
+                    : 'Numerotare salvată. Comenzile revin la formatul vechi ('
+                        . \App\Support\OrderNumber::prefixVechi(Settings::all($db)) . ' + dată).'
             );
             header('Location: /admin/settings/store?tab=numerotare');
             return;
@@ -21160,7 +21159,8 @@ HTML;
     /**
      * Blocurile cu care se deschide editorul vizual pentru emailul de OP.
      * Fără ele, editorul ar porni de la textul curăţat de HTML şi prima salvare
-     * ar turti aşezarea şablonului.
+     * ar turti aşezarea şablonului. Fără sloganul unui client (WP-17, DB-20): un site existent își păstrează blocurile de
+     * dinainte prin înghețare (email_template_new_order_op_blocks_json).
      */
     private function newOrderOpEcommerceDefaultBlocks(): array
     {
@@ -21216,7 +21216,7 @@ HTML;
             ],
             [
                 'type' => 'text',
-                'content' => "Vă mulțumim și vă dorim VITALITATE ȘI PROTECȚIE!\nEchipa {{store_name}}",
+                'content' => "Echipa {{store_name}}",
                 'align' => 'left',
                 'background' => '#ffffff',
                 'text_color' => '#44606b',

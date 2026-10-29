@@ -1106,12 +1106,60 @@ final class NewsletterService
         return $scheme . '://' . $host;
     }
 
+    /** Cheia de semnare din .env: 64 de cifre hexazecimale mici (de exemplu cheia derivată a unui site existent, înghețată la adoptare). */
+    public const CHEIE_SEMNARE_ENV = 'NEWSLETTER_CHEIE_SEMNARE';
+
+    /**
+     * Cheia cu care se semnează linkurile din newslettere (dezabonarea, deschiderea, clicul; WP-17, DB-17). Un link
+     * trimis rămâne bun doar cât cheia rămâne aceeași, deci ordinea e: `.env NEWSLETTER_CHEIE_SEMNARE` (cheia fixă a
+     * site-ului) → `site.json newsletter_sare_semnatura` (derivarea veche a site-ului, cu sarea din codul lui vechi)
+     * → derivarea cu LICENTA_SITE drept sare (un site nou fără cheie; `scripts/diagnostic.php` o arată ca ATENȚIE).
+     * Derivarea folosește APP_URL și numele bazei, deci o schimbare a lor rupe linkurile trimise: de aceea, la adoptare,
+     * cheia derivată se scrie în .env (docs/MIGRARI.md, „Pe server, la adoptare”).
+     */
     private static function unsubscribeSigningKey(): string
+    {
+        $cheie = trim((string) Env::get(self::CHEIE_SEMNARE_ENV, ''));
+        if (preg_match('/^[0-9a-f]{64}$/', $cheie) === 1) {
+            return $cheie;
+        }
+        return self::cheieDerivata(self::sareSemnatura());
+    }
+
+    /**
+     * Cheia derivată cu o sare (formula codului de dinainte, unde sarea era numele site-ului scris în cod). Publică pentru
+     * scripts/diagnostic.php (cheia de scris în .env la adoptare) și pentru teste.
+     */
+    public static function cheieDerivata(string $sare): string
     {
         $config = require __DIR__ . '/../../config/app.php';
         $url = (string) ($config['url'] ?? '');
         $dbName = (string) ($config['db']['database'] ?? '');
-        return hash('sha256', 'newsletter-unsubscribe|' . $url . '|' . $dbName . '|bioscem');
+        return hash('sha256', 'newsletter-unsubscribe|' . $url . '|' . $dbName . '|' . $sare);
+    }
+
+    /** Sarea derivării: site.json → newsletter_sare_semnatura, altfel LICENTA_SITE. */
+    private static function sareSemnatura(): string
+    {
+        $sare = DateSite::site('newsletter_sare_semnatura');
+        return is_string($sare) && trim($sare) !== '' ? trim($sare) : trim((string) Env::get('LICENTA_SITE', ''));
+    }
+
+    /**
+     * De unde vine cheia de semnare: „env” (cheia fixă din .env), „site.json” (derivarea veche a site-ului) sau „licenta”
+     * (derivarea cu LICENTA_SITE). O valoare din .env care nu are forma cerută se ignoră și se spune („env_gresit”).
+     */
+    public static function sursaCheiiSemnare(): string
+    {
+        $cheie = trim((string) Env::get(self::CHEIE_SEMNARE_ENV, ''));
+        if (preg_match('/^[0-9a-f]{64}$/', $cheie) === 1) {
+            return 'env';
+        }
+        if ($cheie !== '') {
+            return 'env_gresit';
+        }
+        $sare = DateSite::site('newsletter_sare_semnatura');
+        return is_string($sare) && trim($sare) !== '' ? 'site.json' : 'licenta';
     }
 
     private static function base64UrlEncode(string $value): string
