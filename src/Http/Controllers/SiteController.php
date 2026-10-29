@@ -1075,10 +1075,6 @@ final class SiteController
     }
 
     /**
-     * WP-21 (C10, din Biovitality 8ba8ddd, 0c682b3): recenzia arată a spam? Formularele de recenzie sunt ținta
-     * scanerelor automate (payload-uri de injecție), care umpleau lista „În așteptare” din admin. Motivul, sau null.
-     */
-    /**
      * Cuponul comenzii (dacă are) mai poate fi folosit? Blochează rândul lui (SELECT … FOR UPDATE, până la sfârșitul
      * tranzacției comenzii) și refolosește regula din coș (CheckoutCalculator::cuponMaiPoateFiFolosit): unicul încă
      * nefolosit, cel cu max_uses_total sub limită. Fără cupon, fără rândul lui sau fără tabel: true, ca înainte.
@@ -1101,6 +1097,10 @@ final class SiteController
         return !is_array($cupon) || \App\Support\CheckoutCalculator::cuponMaiPoateFiFolosit($db, $cupon);
     }
 
+    /**
+     * WP-21 (C10, din Biovitality 8ba8ddd, 0c682b3): recenzia arată a spam? Formularele de recenzie sunt ținta
+     * scanerelor automate (payload-uri de injecție), care umpleau lista „În așteptare” din admin. Motivul, sau null.
+     */
     private function verificaSpamRecenzie(PDO $db, string $name, string $text, string $email): ?string
     {
         return \App\Support\ReviewGuard::motiv([
