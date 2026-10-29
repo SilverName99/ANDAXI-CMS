@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 return [
     'ord' => 32,
-    'amprenta' => '7fb1cc9435fe59b538f3a71fc5dc57c14aab133ccd285fd021736993b692ad63',
+    'amprenta' => '1cfd416777be5cbe048f92670906e0ce5abc11610445e0ae9f502b163c49fcbf',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',
@@ -37,6 +37,7 @@ return [
         'blog/0024_legaturi_categorii',
         'catalog/0026_vizibilitate_ordine',
         'catalog/0027_campuri_doar_sablon',
+        'magazin/0028_transport_gratuit',
         'magazin/0032_avertismente_produse',
     ],
 ];

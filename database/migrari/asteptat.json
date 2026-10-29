@@ -4816,6 +4816,12 @@
                     "null": false,
                     "tip": "varchar(10)"
                 },
+                "free_shipping": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "gallery_images_json": {
                     "extra": "",
                     "implicit": null,

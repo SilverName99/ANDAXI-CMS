@@ -420,9 +420,16 @@ dispar, iar linkurile spre el se scot din pagini.
   Comenzi) și blocul din emailul de confirmare (`{{avertismente_produse}}`, sau singur sub
   produse); oprire de urgență `AVERTISMENT_PRODUSE=0` (textele și confirmările rămân);
   `scripts/avertisment-produse.php` pune textele unui site din `avertismente-produse.json`
-  din dosarul lui (Bioscem: cele trei produse refrigerate). Tabele: `orders`, `order_items`,
-  `email_logs`, `cart_abandonments`, `product_warnings`, `order_product_warnings` (migrarea
-  `magazin/0032`).
+  din dosarul lui (Bioscem: cele trei produse refrigerate); **transportul gratuit pe produs**
+  (WP-20, C14a, din Biovitality `2b8a618`, `a14df64`): bifa „Transport gratuit pentru acest
+  produs” din editorul produsului (`products.free_shipping`, migrarea `magazin/0028`); un singur
+  produs bifat în coș face toată comanda fără transport, peste prag, prețul fix și tariful
+  curierului (coșul arată „Ai transport gratuit pe comandă.”, cota FAN nu se mai cere), iar în
+  admin (reducerea comercială, schimbarea produselor, trecerea pe FANbox) ordinea e: transportul
+  pus de mână > produsul gratuit > pragul > transportul curent; livrarea din datele structurate și
+  din fluxul Merchant e 0 lei la produsul bifat. Fără produs bifat (implicit), totul e ca înainte.
+  Tabele: `orders`, `order_items`, `email_logs`, `cart_abandonments`, `product_warnings`,
+  `order_product_warnings` (migrarea `magazin/0032`) și coloana `products.free_shipping`.
 - **Are nevoie de**: catalog.
 - **Se oprește**: checkout-ul și coșul arată „Momentan nu se mai pot plasa comenzi
   online.”; „Adaugă în coș” dispare de pe produse (cu același mesaj) și e refuzat
@@ -514,7 +521,11 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Link de plată pentru diferențe (`link_plata`)
 
 - **Conține**: butonul „Trimite link de plată” din comandă; pagina `/plata/…`.
-  Tabel: `order_payment_links`.
+  Tabel: `order_payment_links`. Procesatorul unui link nou: Banca Transilvania (pornită în
+  producție), altfel EuPlătesc, altfel **Stripe** (WP-20, X5, din Biovitality: pornit în Setări
+  plăți, cu cheia secretă): o sesiune Stripe Checkout pe referința linkului, confirmată de
+  webhook-ul `checkout.session.completed` (suma verificată în bani) sau la întoarcerea clientului;
+  suma se adaugă la încasat, starea comenzii nu se schimbă. Un link își păstrează procesatorul.
 - **Are nevoie de**: magazin și cel puțin o plată cu cardul.
 - **Se oprește**: nu se mai trimit linkuri noi; cele trimise se pot plăti.
 - **Oprit**: butonul dispare, `/plata/…` dă 404.
@@ -578,7 +589,8 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: meniul Cupoane și Cupoane unice; câmpul de cupon din coș, din
   coșul flotant și din checkout; reducerea cu cupon din fereastra comenzii.
-  Tabel: `coupons`.
+  Tabel: `coupons`. Un cod scris cu spații („AZ 987”) găsește cuponul AZ987 când nu există
+  exact așa (WP-20, C9, din Biovitality `aed0cee`); comanda ține codul din bază.
 - **Are nevoie de**: magazin.
 - **Se oprește**: câmpul de cupon dispare, un cupon nu se mai aplică unei comenzi
   noi (cererea directă e refuzată, cu mesaj); comenzile existente își păstrează

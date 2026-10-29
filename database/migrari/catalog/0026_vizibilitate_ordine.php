@@ -35,7 +35,9 @@ return [
             $stmt = $db->prepare("SELECT id FROM products WHERE id > ? AND id <= ? AND (preview_token IS NULL OR preview_token = '')");
             $stmt->execute([$de, $pana]);
             $ids = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
-            $pune = $db->prepare("UPDATE products SET preview_token = ? WHERE id = ? AND (preview_token IS NULL OR preview_token = '')");
+            // updated_at = updated_at: cheia nu e o modificare a produsului (coloana are ON UPDATE CURRENT_TIMESTAMP, iar data
+            // ultimei modificări intră în harta site-ului și în paginile produselor).
+            $pune = $db->prepare("UPDATE products SET preview_token = ?, updated_at = updated_at WHERE id = ? AND (preview_token IS NULL OR preview_token = '')");
             $schimbate = 0;
             foreach ($ids as $id) {
                 $pune->execute([bin2hex(random_bytes(16)), (int) $id]);

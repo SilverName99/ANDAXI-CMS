@@ -504,10 +504,15 @@
         const shippingAmount = Number(summary.shipping || 0);
         const shippingRemaining = Number(summary.shipping_remaining_for_free || 0);
         const shippingFreeThreshold = Number(summary.shipping_free_threshold || 0);
-        const hasFreeShippingByThreshold = Number.isFinite(shippingRemaining)
+        // Un produs cu transport gratuit (WP-20, C14a) face comanda gratuită indiferent de pragul de valoare, care poate
+        // fi chiar și oprit.
+        const freeByProduct = Boolean(summary.shipping_free_by_product);
+        const hasFreeShippingByThreshold = freeByProduct || (
+            Number.isFinite(shippingRemaining)
             && shippingRemaining <= 0
             && Number.isFinite(shippingFreeThreshold)
-            && shippingFreeThreshold > 0;
+            && shippingFreeThreshold > 0
+        );
         const shippingLabel = (() => {
             if (Number.isFinite(shippingAmount) && shippingAmount > 0) {
                 return formatMoney(shippingAmount);

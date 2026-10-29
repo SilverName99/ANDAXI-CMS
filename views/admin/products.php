@@ -585,6 +585,22 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                     catalogului (de exemplu un pachet care are deja secțiunea lui).
                                 </p>
                             </div>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
+                            <div class="field full" id="p_transport_campuri">
+                                <input type="hidden" name="transport_campuri_trimise" value="1">
+                                <label>Transport</label>
+                                <div class="product-status-flags">
+                                    <label>
+                                        <input type="checkbox" name="free_shipping" id="p_free_shipping" value="1">
+                                        Transport gratuit pentru acest produs
+                                    </label>
+                                </div>
+                                <p class="field-hint" style="margin-top:6px;">
+                                    Dacă în coș ajunge măcar un produs cu bifa asta, comanda are transport 0, indiferent de valoare
+                                    și de curier. Doar un transport pus de mână pe comandă îl înlocuiește.
+                                </p>
+                            </div>
+<?php endif; ?>
                             <div class="field">
                                 <label for="p_sort_position">Poziție în liste</label>
                                 <input type="number" min="0" step="1" name="sort_position" id="p_sort_position" placeholder="ordinea implicită">
@@ -1761,7 +1777,8 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
  * WP-19 (C8, C14b, C14c, C14d; din Biovitality 2b8a618, b9e3ddc, 90afd46, 57447e0): câmpurile catalogului ale produsului
  * (poziția, ascunderea din catalog, linkul de ciornă al unui produs inactiv, și în listă), câmpurile suplimentare arătate
  * după șablonul ales (cu mesajul celor ascunse) și câmpurile de tip „Imagine”, cu selectorul galeriei. Un script separat,
- * care ascultă aceleași butoane ca editorul de mai sus (rulează după el).
+ * care ascultă aceleași butoane ca editorul de mai sus (rulează după el). WP-20 (C14a, din Biovitality 2b8a618): și bifa
+ * „transport gratuit”.
  */
 $dateCatalogProduse = [
     'produse' => (object) (is_array($catalogProduse ?? null) ? $catalogProduse : []),
@@ -1808,6 +1825,7 @@ $dateCatalogProduse = [
     // Câmpurile catalogului în editor.
     const pozitie = document.getElementById('p_sort_position');
     const ascuns = document.getElementById('p_hidden_in_catalog');
+    const transportGratuit = document.getElementById('p_free_shipping');
     const blocCiorna = document.getElementById('p_draft_wrap');
     const linkCiorna = document.getElementById('p_draft_url');
     const deschideCiorna = document.getElementById('p_draft_open');
@@ -1818,6 +1836,9 @@ $dateCatalogProduse = [
         }
         if (ascuns instanceof HTMLInputElement) {
             ascuns.checked = Boolean(info && Number(info.hidden_in_catalog) === 1);
+        }
+        if (transportGratuit instanceof HTMLInputElement) {
+            transportGratuit.checked = Boolean(info && Number(info.free_shipping) === 1);
         }
         const url = info && info.draft_url ? new URL(info.draft_url, window.location.origin).toString() : '';
         // Cu style.display, nu [hidden]: .field are display:flex, care bate atributul hidden.

@@ -50,7 +50,9 @@ return [
     // 2 (revizuirea WP-09): user_addresses.label transformată; adresele de email din recenziile aprobate, schimbate cu pseudonimul.
     // 3 (WP-18): reprezentantul și telefonul operatorului de pe acordul GDPR golite, emailul lui = adresa proprietarului
     // (valori private ale înghețării, OD-49: nu ajung pe copie).
-    'versiune' => 3,
+    // 4 (WP-19, WP-20): coloanele noi ale catalogului (catalog/0026, catalog/0027) și transportul gratuit pe produs
+    // (magazin/0028), copiate cum sunt.
+    'versiune' => 4,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -130,11 +132,12 @@ return [
             'discount_badge_mode', 'bbd_enabled', 'bbd_entries_json', 'post_cart_note_enabled', 'post_cart_note_text', 'stock', 'out_of_stock',
             'preorder_enabled', 'preorder_max_per_order', 'preorder_max_total', 'weight_grams', 'image_url', 'gallery_json', 'gallery_images_json',
             'similar_products_json', 'badge_popular', 'badge_best_seller', 'badge_seasonal', 'is_active', 'deleted_at', 'created_at', 'updated_at',
-            'brand', 'tags_json'], 'motive' => ['name' => 'numele produsului'],
+            'brand', 'tags_json', 'preview_token', 'sort_position', 'hidden_in_catalog', 'free_shipping'], 'motive' => ['name' => 'numele produsului',
+            'preview_token' => 'cheia linkului de ciornă al unui produs inactiv (WP-19): a produsului, nu a unui client; copia e privată'],
             'emailuri_publice' => 'descrierile produselor pot avea adresa magazinului'],
         'product_category_links' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'product_id', 'category_id']],
         'product_extra_fields' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'field_key', 'field_type', 'placeholder', 'default_value',
-            'is_required', 'sort_order', 'is_active', 'created_at', 'updated_at'], 'motive' => ['name' => 'numele unui câmp al produselor']],
+            'is_required', 'sort_order', 'is_active', 'created_at', 'updated_at', 'template_only'], 'motive' => ['name' => 'numele unui câmp al produselor']],
         'product_extra_field_values' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'product_id', 'field_id', 'value', 'created_at', 'updated_at'],
             'emailuri_publice' => 'valorile câmpurilor de produs sunt conținut public'],
         'product_templates' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'description', 'html_content', 'css_content', 'js_content',

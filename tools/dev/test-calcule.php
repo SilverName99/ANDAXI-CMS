@@ -18,7 +18,8 @@ declare(strict_types=1);
  *    București, reducere și transport puse de mână, precomandă, produse inactive și șterse, coș gol, sub, între și peste
  *    pragurile de transport gratuit, în București și în provincie, TVA adăugat și altă cotă, o localitate cu km în plus):
  *    A1 comparația cu datele demo: „REZULTAT: TRECE”, „diferite 0”, fiecare tip de caz prezent, cupoane și puncte aplicate
- *       în ambele coduri, același payload ERP, diferențele declarate (lista $diferenteDeclarate, azi goală) potrivite;
+ *       în ambele coduri, același payload ERP, diferențele declarate (lista $diferenteDeclarate: comanda cu produsul cu
+ *       transport gratuit, WP-20) potrivite exact; transportul din admin identic pe celelalte cazuri;
  *       fiecare rând al ieșirii are una din formele știute (doar numere, nume de câmpuri și de tipuri), niciun nume de
  *       produs, număr de comandă, email sau număr de bază; cupoanele puse la loc (CHECKSUM TABLE), niciun fișier de sesiune,
  *       dosarul temporar gol;
@@ -411,6 +412,8 @@ try {
         'București între praguri' => [[[2, 1, '']], '', 0, 0, 'Bucuresti', 'Sector 2', 0, 0, 0, null],
         'provincie între praguri' => [[[2, 1, '']], '', 0, 0, 'Cluj', 'Cluj-Napoca', 0, 0, 0, null],
         'provincie peste prag' => [[[40, 2, '']], '', 0, 0, 'Constanta', 'Constanta', 0, 0, 0, null],
+        // WP-20 (C14a): produsul 17 (nefolosit de comenzile demo și de celelalte cazuri) are transport gratuit, mai jos.
+        'transport gratuit pe produs' => [[[17, 1, ''], [19, 1, '']], '', 0, 0, 'Cluj', 'Cluj-Napoca', 0, 0, 0, null],
     ];
     $nrInventate = 0;
     $iduriInventate = [];
@@ -446,11 +449,24 @@ try {
     $verifica($nrInventate . ' comenzi inventate și 6 cupoane inventate în ' . $bazaT, $nrInventate === count($comenziInventate));
 
     // Diferențele voite ale codului comun față de codul Bioscem, pe comenzile inventate (ca $porturiBioscem în compara-cu-baza.php):
-    // câte un bloc pe WP, '<numele comenzii inventate>' => [[câmpurile care diferă, exact, cu numele din raport], 'motivul']. Azi
-    // niciuna: codul comun calculează ca Bioscem. WP-20 (C14a, transportul gratuit pe produs) adaugă aici comanda inventată cu
-    // produsul lui demo. Pe copia simulată (B) nu se pot declara (pe server orice diferență pică): comenzile declarate se scot
-    // acolo din cazuri (deleted_at).
+    // câte un bloc pe WP, '<numele comenzii inventate>' => [[câmpurile care diferă, exact, cu numele din raport], 'motivul']. Pe
+    // copia simulată (B) nu se pot declara (pe server orice diferență pică): comenzile declarate se scot acolo din cazuri
+    // (deleted_at).
+    //
+    // WP-20 (C14a, din Biovitality 2b8a618, a14df64): produsul 17 primește transport gratuit (products.free_shipping, magazin/0028).
+    // Comanda lui (sub prag, provincie) are transportul 0 în coș (shipping, total) și în recalculările din admin (transport_admin:
+    // transportul curent al comenzii nu mai contează; transport_admin_0: estimarea din setări nici ea); payload-ul ERP și punctele
+    // nu depind de transport. Pe Bioscem niciun produs nu e bifat (coloana e nouă, implicit 0), deci calculele lui rămân aceleași.
+    $db->exec('UPDATE products SET free_shipping = 1 WHERE id = 17');
+    $verifica('baza ' . $bazaT . ': produsul 17 cu transport gratuit, singurul; nicio comandă demo nu îl are',
+        (int) $db->query('SELECT COUNT(*) FROM products WHERE free_shipping = 1')->fetchColumn() === 1
+        && (int) $db->query('SELECT COUNT(*) FROM products WHERE id = 17 AND is_active = 1 AND deleted_at IS NULL')->fetchColumn() === 1
+        && (int) $db->query('SELECT COUNT(*) FROM order_items WHERE product_id = 17 AND order_id NOT IN (' . (int) $iduriInventate['transport gratuit pe produs'] . ')')
+            ->fetchColumn() === 0);
     $diferenteDeclarate = [
+        // WP-20
+        'transport gratuit pe produs' => [['shipping', 'total', 'transport_admin', 'transport_admin_0'],
+            'WP-20 C14a: produsul cu transport gratuit (products.free_shipping) face comanda fără transport, în coș și în admin'],
     ];
     $declaratii = [];
     foreach ($diferenteDeclarate as $nume => [$campuriDeclarate, $motiv]) {
@@ -496,9 +512,12 @@ try {
         $cupoaneVechi === $cupoaneNou && $cupoaneNou >= 8 && $puncteNou >= 3 && preg_match('/^  cupoane: ([1-9]\d*) făcute valabile/m', $r['iesire']) === 1);
     $verifica('diferențele declarate ($diferenteDeclarate, --declarate): ' . count($declaratii) . ' potrivite exact, niciuna nepotrivită',
         str_contains($r['iesire'], "\ndiferențe declarate (--declarate): " . count($declaratii) . " potrivite exact | nepotrivite 0\n"), $r['iesire']);
-    $verifica('payload ERP, transportul din admin și punctele promise: identice pe toate cazurile', $cazuri !== null
+    // Transportul din admin diferă voit pe comenzile declarate cu transport_admin (WP-20, C14a); payload-ul ERP și punctele nicăieri.
+    $declarateAdmin = count(array_filter($declaratii, static fn (array $d): bool => array_intersect($d['campuri'], ['transport_admin', 'transport_admin_0']) !== []));
+    $verifica('payload ERP și punctele promise: identice pe toate cazurile; transportul din admin: pe toate în afara celor declarate (' . $declarateAdmin . ')',
+        $cazuri !== null
         && str_contains($r['iesire'], 'payload ERP: identice ' . $cazuri . ' | chei diferite: —')
-        && str_contains($r['iesire'], 'transportul din admin: identice ' . $cazuri . ' | punctele promise: identice ' . $cazuri));
+        && str_contains($r['iesire'], 'transportul din admin: identice ' . ($cazuri - $declarateAdmin) . ' | punctele promise: identice ' . $cazuri));
     $straine = $randuriStraine($r['iesire']);
     $nume = $db->query("SELECT name FROM products WHERE CHAR_LENGTH(name) > 6")->fetchAll(PDO::FETCH_COLUMN);
     $numere = $db->query('SELECT order_number FROM orders')->fetchAll(PDO::FETCH_COLUMN);
@@ -515,7 +534,8 @@ try {
     $verifica('copia codului comun pentru mutații (' . $copiate . ' fișiere, fără .env și storage/)', $copiate > 200 && is_file($codMutat . '/src/Support/CheckoutCalculator.php'));
     $mediuMutatie = ['LICENTA_DOSAR' => $radacina . '/storage/licenta'];
     /** O mutație [fișier, text, înlocuire, tipare…] în copie: trebuie să dea „PICĂ” și să-și numească câmpul (fiecare tipar). */
-    $ruleazaMutatie = static function (string $nume, array $m) use ($compara, $codVechi, $codMutat, $mediuMutatie, $verifica, $ultimul, $randuriStraine, &$cazuri): void {
+    $ruleazaMutatie = static function (string $nume, array $m) use ($compara, $codVechi, $codMutat, $mediuMutatie, $verifica, $ultimul, $randuriStraine, &$cazuri,
+        $declarateAdmin): void {
         [$fisier, $din, $cu] = $m;
         $tipare = array_slice($m, 3);
         $original = (string) file_get_contents($codMutat . '/' . $fisier);
@@ -531,7 +551,7 @@ try {
         }
         $potrivite = true;
         foreach ($tipare as $tipar) {
-            $potrivite = $potrivite && preg_match(str_replace('%CAZURI%', (string) $cazuri, $tipar), $r['iesire']) === 1;
+            $potrivite = $potrivite && preg_match(str_replace('%ADMIN%', (string) ($cazuri - $declarateAdmin), $tipar), $r['iesire']) === 1;
         }
         $verifica('mutația „' . $nume . '”: cod 1, „REZULTAT: PICĂ”, câmpul ei numit; rândurile tot în formele știute', $r['cod'] === 1
             && $ultimul($r['iesire']) === 'REZULTAT: PICĂ' && $potrivite && $randuriStraine($r['iesire']) === [], 'cod ' . $r['cod'] . ': ' . $r['tot']);
@@ -629,7 +649,7 @@ try {
             '/^diferențe pe tip de caz: .*puncte/m'],
         'transportul din admin (+1)' => ['src/Support/CheckoutCalculator.php', "        if (\$currentShipping > 0.0) {\n            return round(\$currentShipping, 2);",
             "        if (\$currentShipping > 0.0) {\n            return round(\$currentShipping + 1, 2);", '/^diferențe pe câmp: .*\btransport_admin \d+/m',
-            '/^transportul din admin: identice (?!' . '%CAZURI%' . ' )\d+/m'],
+            '/^transportul din admin: identice (?!' . '%ADMIN%' . ' )\d+/m'],
         'punctele promise (+1)' => ['src/Support/LoyaltyService.php', "return max(0, (int) floor(\$base * (float) \$cfg['earn_rate']));",
             "return max(0, (int) floor(\$base * (float) \$cfg['earn_rate']) + 1);", '/^diferențe pe câmp: .*\bpuncte_estimate \d+/m'],
         'o cheie a payload-ului ERP' => ['src/Support/ErpSync.php', "'livrareTara' => 'RO',", "'livrareTara' => 'RO-',", '/^payload ERP: identice 0 \| chei diferite: livrareTara \d+$/m'],
@@ -752,16 +772,18 @@ try {
     $scrie('A6. Diferențele declarate (--declarate): o diferență voită în codul comun, pe o singură comandă inventată');
     // Diferența voită: transport gratuit doar pe comanda „sub prag, provincie” (singura din Vaslui), ca transportul gratuit pe
     // produs din WP-20. Diferă exact shipping și total (punctele, transportul din admin și payload-ul ERP nu depind de el).
-    $mutatieVoita = ['src/Support/CheckoutCalculator.php', '$shipping = self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);',
-        '$shipping = self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference); if ($county === \'Vaslui\') { $shipping = 0.0; }'];
+    $mutatieVoita = ['src/Support/CheckoutCalculator.php', ': self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);',
+        ': self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference); if ($county === \'Vaslui\') { $shipping = 0.0; }'];
     // A doua, pe aceeași comandă: o cheie a payload-ului ERP (județul de facturare scris prescurtat).
     $mutatieVoitaErp = ['src/Support/ErpSync.php', "'facturareJudet' => (string) (\$order['billing_county'] ?? ''),",
         "'facturareJudet' => ((string) (\$order['billing_county'] ?? '')) === 'Vaslui' ? 'VS' : (string) (\$order['billing_county'] ?? ''),"];
     $idVoit = $iduriInventate['sub prag, provincie'];
     $motivVoit = 'testul A6: transport gratuit voit pe o comandă, ca transportul gratuit pe produs (WP-20, C14a)';
     $fisierA6 = $dosarTest . '/declarate-a6.json';
-    $cuDeclaratiile = static function (array $declaratiiA6, array $mutatiiVoite) use ($compara, $codVechi, $codMutat, $mediuMutatie, $fisierA6): array {
-        file_put_contents($fisierA6, is_string($declaratiiA6[0] ?? null) ? $declaratiiA6[0] : json_encode($declaratiiA6, JSON_UNESCAPED_UNICODE));
+    // Declarațiile testului, urmate de cele ale codului comun ($diferenteDeclarate, ca la A1): numerotarea „#1”, „#2” e a lor.
+    $cuDeclaratiile = static function (array $declaratiiA6, array $mutatiiVoite) use ($compara, $codVechi, $codMutat, $mediuMutatie, $fisierA6, $declaratii): array {
+        file_put_contents($fisierA6, is_string($declaratiiA6[0] ?? null) ? $declaratiiA6[0]
+            : json_encode($declaratiiA6 === [] ? $declaratii : array_merge($declaratiiA6, $declaratii), JSON_UNESCAPED_UNICODE));
         $originale = [];
         foreach ($mutatiiVoite as [$fisier, $din, $cu]) {
             $originale[$fisier] = (string) file_get_contents($codMutat . '/' . $fisier);
@@ -781,7 +803,7 @@ try {
     $r = $cuDeclaratiile([$exacta], [$mutatieVoita]);
     $verifica('declarată exact (shipping, total) → cod 0, „TRECE”, „diferite 0”, „1 potrivite exact | nepotrivite 0”', $r['cod'] === 0
         && $ultimul($r['iesire']) === 'REZULTAT: TRECE' && str_contains($r['iesire'], '| diferite 0 | erori vechi 0 | erori nou 0')
-        && str_contains($r['iesire'], "\ndiferențe declarate (--declarate): 1 potrivite exact | nepotrivite 0\n") && str_contains($r['iesire'], "\ndiferențe pe câmp: —\n")
+        && str_contains($r['iesire'], "\ndiferențe declarate (--declarate): " . (1 + count($declaratii)) . " potrivite exact | nepotrivite 0\n") && str_contains($r['iesire'], "\ndiferențe pe câmp: —\n")
         && $randuriStraine($r['iesire']) === [], 'cod ' . $r['cod'] . ': ' . $r['tot']);
     $r = $cuDeclaratiile([], [$mutatieVoita]);
     $verifica('nedeclarată → cod 1, „PICĂ”, „diferite 1”, shipping și total numite', $r['cod'] === 1 && $ultimul($r['iesire']) === 'REZULTAT: PICĂ'
@@ -789,7 +811,7 @@ try {
     $cuErp = ['campuri' => ['shipping', 'total', 'erp.facturareJudet']] + $exacta;
     $r = $cuDeclaratiile([$cuErp], [$mutatieVoita, $mutatieVoitaErp]);
     $verifica('cu o cheie a payload-ului ERP, declarată exact (shipping, total, erp.facturareJudet) → cod 0, „TRECE”, 1 potrivită', $r['cod'] === 0
-        && $ultimul($r['iesire']) === 'REZULTAT: TRECE' && str_contains($r['iesire'], "\ndiferențe declarate (--declarate): 1 potrivite exact | nepotrivite 0\n")
+        && $ultimul($r['iesire']) === 'REZULTAT: TRECE' && str_contains($r['iesire'], "\ndiferențe declarate (--declarate): " . (1 + count($declaratii)) . " potrivite exact | nepotrivite 0\n")
         && str_contains($r['iesire'], 'payload ERP: identice ' . ($cazuri - 1) . ' | chei diferite: —'), 'cod ' . $r['cod'] . ': ' . $r['tot']);
     $nepotrivite = [
         'fără diferența ei (codul fără mutație)' => [[$exacta], [], '#1 (nicio diferență; declarat: shipping, total)', '| diferite 0 |'],

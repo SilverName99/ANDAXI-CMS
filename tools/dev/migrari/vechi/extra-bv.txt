@@ -9,7 +9,6 @@ coloana product_reviews.ip_address
 coloana product_reviews.is_spam
 coloana product_reviews.spam_reason
 coloana products.bundle_items_json
-coloana products.free_shipping
 coloana products.gallery_json
 indexul product_reviews.idx_product_reviews_spam
 tabelul admin_app_tokens

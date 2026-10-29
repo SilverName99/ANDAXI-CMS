@@ -1460,6 +1460,20 @@ try {
             continue;
         }
         if ($regula['mod'] === 'copiaza') {
+            // Coloanele pe care o migrare le umple cu valori aleatoare (catalog/0026: cheia linkului de ciornă, din
+            // random_bytes) nu se pot compara: referința (sursa trecută prin migrări) are chei proprii, iar copia, făcută din
+            // rândurile unei surse care nu are încă coloana, le are goale (le primește produsul la prima salvare). Tabelul
+            // se compară fără ele.
+            $aleatoare = ['products' => ['preview_token']][$tabel] ?? [];
+            if ($aleatoare !== []) {
+                $coloane = array_values(array_diff(array_keys($coloaneTabel($tinta, $tabel)), $aleatoare));
+                if ($amprentaColoane($tinta, $tabel, $coloane, '', $cheiePrimara($tinta, $tabel)) === $amprentaColoane($ref, $tabel, $coloane, '', $cheiePrimara($ref, $tabel))) {
+                    $copiateLaFel[] = $tabel;
+                } else {
+                    $diferite[] = $tabel . ' (fără ' . implode(', ', $aleatoare) . ')';
+                }
+                continue;
+            }
             if ($sumeCopie[$tabel] === $sumeRef[$tabel]) {
                 $copiateLaFel[] = $tabel;
             } else {

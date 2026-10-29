@@ -6923,6 +6923,11 @@ CSS;
             )
             : max(0.0, (float) ($summary['subtotal'] ?? 0.0));
         $shippingRemainingForFree = max(0.0, $shippingFreeThreshold - $shippingReference);
+        // WP-20 (C14a): transportul gratuit dintr-un produs: coșul flotant arată direct „Gratuit”.
+        $gratuitDinProdus = !empty($summary['shipping_free_by_product']);
+        if ($gratuitDinProdus) {
+            $shippingRemainingForFree = 0.0;
+        }
 
         $lines = [];
         $vatTotal = 0.0;
@@ -6970,7 +6975,7 @@ CSS;
             ];
         }
 
-        return [
+        $raspuns = [
             'ok' => true,
             'items_count' => Cart::countItems(),
             'lines' => $lines,
@@ -7002,6 +7007,11 @@ CSS;
             'cart_url' => '/cos',
             'continue_shopping_url' => \App\Support\Catalog::url($this->cachedSettings($db)),
         ];
+        if ($gratuitDinProdus) {
+            // Doar atunci: răspunsul unui coș obișnuit rămâne exact cel de dinainte.
+            $raspuns['shipping_free_by_product'] = true;
+        }
+        return $raspuns;
     }
 
     private function requestPayload(): array
@@ -7315,6 +7325,18 @@ CSS;
             $this->renderPagina404('Link de plată invalid', $eroare, $db);
             return;
         }
+        // WP-20 (X5): întoarcerea de la Stripe. Webhook-ul e sursa de adevăr, dar poate întârzia: întrebăm direct
+        // Stripe de sesiunea acestui link, ca pagina să nu-i spună „de plată” o sumă pe care tocmai a achitat-o.
+        $sesiuneStripe = trim((string) ($_GET['session_id'] ?? ''));
+        if ($sesiuneStripe !== '' && (string) ($link['status'] ?? '') === \App\Support\PaymentLink::STATUS_ASTEPTARE
+            && \App\Support\PaymentLink::procesator($link) === \App\Support\PaymentLink::PROCESATOR_STRIPE) {
+            try {
+                $this->sincronizeazaPlataLinkStripe($db, $link, $sesiuneStripe);
+            } catch (Throwable) {
+                // Stripe nu răspunde acum: confirmarea vine prin webhook.
+            }
+            $link = \App\Support\PaymentLink::dupaId($db, (int) $link['id']) ?? $link;
+        }
 
         $procesator = \App\Support\PaymentLink::procesorEfectiv($link, Settings::all($db));
         $esteplatit = (string) ($link['status'] ?? '') === \App\Support\PaymentLink::STATUS_PLATIT;
@@ -7387,6 +7409,29 @@ CSS;
             return;
         }
 
+        if (\App\Support\PaymentLink::procesorEfectiv($link, $settings) === \App\Support\PaymentLink::PROCESATOR_STRIPE) {
+            // WP-20 (X5, din Biovitality): diferența prin Stripe Checkout, o sesiune separată pe referința linkului.
+            $secretKey = trim((string) ($settings['stripe_secret_key'] ?? ''));
+            $campuri = $this->campuriStripeLink($link, $order, $settings, $appUrl);
+            if ($secretKey === '' || $campuri === null) {
+                $this->renderPagina404('Plata nu poate fi pornită', $secretKey === '' ? 'Plata cu cardul nu este configurată.' : 'Suma linkului este invalidă.', $db);
+                return;
+            }
+            try {
+                $session = StripeGateway::createCheckoutSession($secretKey, $campuri);
+            } catch (Throwable $e) {
+                $this->renderPagina404('Plata nu a putut fi pornită', $e->getMessage(), $db);
+                return;
+            }
+            $checkoutUrl = trim((string) ($session['url'] ?? ''));
+            if ($checkoutUrl === '') {
+                $this->renderPagina404('Plata nu a putut fi pornită', 'Stripe nu a returnat o adresă de plată.', $db);
+                return;
+            }
+            header('Location: ' . $checkoutUrl, true, 303);
+            return;
+        }
+
         try {
             $fields = EuPlatescGateway::buildRequest($settings, [
                 // Referința e unică per încercare; la întoarcere o recunoaștem
@@ -7418,6 +7463,115 @@ CSS;
             'fields' => $fields,
             'orderNumber' => $numarComanda,
         ]);
+    }
+
+    /**
+     * WP-20 (X5): câmpurile sesiunii Stripe Checkout pentru diferența de pe un link: suma în subunități (bani), referința
+     * linkului (`client_reference_id`, nu numărul comenzii: la întoarcere trebuie să știm că e o diferență, nu plata
+     * inițială) și cheia linkului în metadate, pe sesiune și pe plată (`payment_link_token`), după care webhook-ul o
+     * recunoaște. Fără `metadata[order_number]` / `[order_id]`: drumul plății inițiale nu are voie s-o ia drept a lui.
+     * Null când suma nu e pozitivă.
+     *
+     * @param array<string, mixed> $link
+     * @param array<string, mixed> $order
+     * @param array<string, mixed> $settings
+     * @return array<string, string>|null
+     */
+    private function campuriStripeLink(array $link, array $order, array $settings, string $appUrl): ?array
+    {
+        $suma = $this->toMinorAmount((float) ($link['amount'] ?? 0));
+        if ($suma <= 0) {
+            return null;
+        }
+        $currency = strtolower(trim((string) ($settings['stripe_currency'] ?? 'ron')));
+        if (!preg_match('/^[a-z]{3}$/', $currency)) {
+            $currency = 'ron';
+        }
+        $token = rawurlencode((string) ($link['token'] ?? ''));
+        $numarComanda = (string) ($order['order_number'] ?? '');
+        $campuri = [
+            'payment_method_types[0]' => 'card',
+            'mode' => 'payment',
+            'success_url' => $appUrl . '/plata/' . $token . '?platit=1&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $appUrl . '/plata/' . $token . '?esuat=1',
+            'client_reference_id' => (string) ($link['referinta'] ?? ''),
+            'metadata[payment_link_token]' => (string) ($link['token'] ?? ''),
+            'metadata[payment_link_reference]' => (string) ($link['referinta'] ?? ''),
+            'payment_intent_data[metadata][payment_link_token]' => (string) ($link['token'] ?? ''),
+            'line_items[0][price_data][currency]' => $currency,
+            'line_items[0][price_data][product_data][name]' => 'Diferență comanda ' . $numarComanda,
+            'line_items[0][price_data][unit_amount]' => (string) $suma,
+            'line_items[0][quantity]' => '1',
+            'locale' => 'auto',
+        ];
+        $email = trim((string) ($order['billing_email'] ?? ''));
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $campuri['customer_email'] = $email;
+        }
+        return $campuri;
+    }
+
+    /**
+     * WP-20 (X5): întoarcerea clientului de la Stripe pe pagina linkului. Sesiunea trebuie să fie a ACESTUI link (cheia
+     * din metadate), altfel nu se face nimic: o sesiune a altei comenzi, pusă în adresă, nu are voie să atingă nimic.
+     *
+     * @param array<string, mixed> $link
+     */
+    private function sincronizeazaPlataLinkStripe(PDO $db, array $link, string $sessionId): void
+    {
+        $secretKey = trim((string) (Settings::all($db)['stripe_secret_key'] ?? ''));
+        if ($secretKey === '') {
+            return;
+        }
+        $session = StripeGateway::retrieveCheckoutSession($secretKey, $sessionId, ['expand[]' => 'payment_intent']);
+        $tokenSesiune = trim((string) ($session['metadata']['payment_link_token'] ?? ''));
+        if ($tokenSesiune === '' || !hash_equals((string) ($link['token'] ?? ''), $tokenSesiune)) {
+            return;
+        }
+        $this->applyStripeSessionResult($db, $session, $this->sesiuneStripePlatita($session));
+    }
+
+    /** Sesiunea Stripe e plătită (ca la întoarcerea din checkout: sesiunea sau plata ei)? */
+    private function sesiuneStripePlatita(array $session): bool
+    {
+        $paymentStatus = strtolower(trim((string) ($session['payment_status'] ?? '')));
+        $intentStatus = is_array($session['payment_intent'] ?? null)
+            ? strtolower(trim((string) ($session['payment_intent']['status'] ?? '')))
+            : '';
+        return in_array($paymentStatus, ['paid', 'no_payment_required'], true) || $intentStatus === 'succeeded';
+    }
+
+    /**
+     * WP-20 (X5, din Biovitality): confirmarea Stripe a unei plăți de diferență. Adaugă suma la `paid_amount`
+     * (PaymentLink::confirmaPlata, idempotentă) și retrimite comanda în ERP; starea comenzii nu se schimbă (era deja
+     * plătită). Suma încasată trebuie să fie exact cea a linkului, în subunități, și linkul trebuie să fie unul Stripe.
+     *
+     * @param array<string, mixed> $session
+     */
+    private function aplicaPlataLinkStripe(PDO $db, array $session): bool
+    {
+        $token = trim((string) ($session['metadata']['payment_link_token'] ?? ''));
+        $link = $token !== '' ? \App\Support\PaymentLink::dupaToken($db, $token) : null;
+        if ($link === null || \App\Support\PaymentLink::procesator($link) !== \App\Support\PaymentLink::PROCESATOR_STRIPE) {
+            return false;
+        }
+        $incasat = (int) ($session['amount_total'] ?? 0);
+        $cerut = $this->toMinorAmount((float) ($link['amount'] ?? 0));
+        if ($cerut <= 0 || $incasat !== $cerut) {
+            return false;
+        }
+        $intent = $session['payment_intent'] ?? '';
+        $intentId = is_array($intent) ? (string) ($intent['id'] ?? '') : (string) $intent;
+        $prima = \App\Support\PaymentLink::confirmaPlata($db, $link, (string) ($session['id'] ?? ''), $intentId);
+        if ($prima) {
+            // ERP-ul trebuie să afle noua sumă încasată pe aceeași comandă.
+            try {
+                \App\Support\ErpSync::push($db, (int) $link['order_id'], true);
+            } catch (Throwable) {
+                // Cronul reîncearcă; banii sunt deja înregistrați pe site.
+            }
+        }
+        return true;
     }
 
     /**
@@ -7755,6 +7909,14 @@ CSS;
 
     private function applyStripeSessionResult(PDO $db, array $session, bool $paid): void
     {
+        // WP-20 (X5): plata unei diferențe (sesiunea unui link de plată) merge pe alt drum: adaugă suma la ce s-a
+        // încasat deja, fără să atingă starea comenzii. O sesiune expirată sau refuzată lasă linkul valabil.
+        if (trim((string) ($session['metadata']['payment_link_token'] ?? '')) !== '') {
+            if ($paid) {
+                $this->aplicaPlataLinkStripe($db, $session);
+            }
+            return;
+        }
         $orderNumber = trim((string) ($session['metadata']['order_number'] ?? $session['client_reference_id'] ?? ''));
         $orderId = (int) ($session['metadata']['order_id'] ?? 0);
         $sessionId = trim((string) ($session['id'] ?? ''));
@@ -7813,6 +7975,10 @@ CSS;
 
     private function applyStripePaymentIntentResult(PDO $db, array $paymentIntent, bool $paid): void
     {
+        // WP-20 (X5): plata unui link de diferență se confirmă pe sesiune (checkout.session.completed), nu aici.
+        if (trim((string) ($paymentIntent['metadata']['payment_link_token'] ?? '')) !== '') {
+            return;
+        }
         $orderNumber = trim((string) ($paymentIntent['metadata']['order_number'] ?? ''));
         $orderId = (int) ($paymentIntent['metadata']['order_id'] ?? 0);
         $paymentIntentId = trim((string) ($paymentIntent['id'] ?? ''));
@@ -8100,7 +8266,7 @@ CSS;
                 'categorie' => trim((string) (($product['category_name'] ?? $product['category']) ?? '')),
                 // Coloana EAN nu există încă; când apare (B4), intră singură.
                 'gtin' => (string) ($product['gtin'] ?? $product['ean'] ?? ''),
-                'livrare' => \App\Support\PoliticaLivrare::optiuni($settings, $pretAfisat),
+                'livrare' => \App\Support\PoliticaLivrare::optiuni($settings, $pretAfisat, (int) ($product['free_shipping'] ?? 0) === 1),
             ];
         }
         return $produse;
@@ -8204,7 +8370,8 @@ CSS;
             // Vezi PoliticaLivrare.
             $livrare = \App\Support\PoliticaLivrare::optiuni(
                 $this->cachedSettings($this->db()),
-                (float) ($product['price'] ?? 0)
+                (float) ($product['price'] ?? 0),
+                (int) ($product['free_shipping'] ?? 0) === 1
             );
 
             $nodProdus = \App\Support\JsonLd::produs([
@@ -8783,6 +8950,10 @@ CSS;
 
     private function requiresFanLiveShippingCharge(array $settings, array $summary): bool
     {
+        // WP-20 (C14a): un produs cu transport gratuit în coș scutește comanda de transport; curierul nu se mai întreabă.
+        if (!empty($summary['shipping_free_by_product'])) {
+            return false;
+        }
         $county = trim((string) ($summary['county'] ?? Cart::county()));
         $isBucharest = mb_strtolower($county) === 'bucuresti';
         $includeCoupons = ((string) ($settings['shipping_include_coupons'] ?? '1')) === '1';

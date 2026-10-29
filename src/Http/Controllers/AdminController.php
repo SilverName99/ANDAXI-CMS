@@ -4563,9 +4563,10 @@ final class AdminController
     /**
      * WP-19 (C8, C14b, C14c): câmpurile catalogului ale fiecărui produs din listă, pentru editor și pentru linkul de
      * ciornă din listă: id => {sort_position, hidden_in_catalog, draft_url}. `draft_url` doar pentru un produs inactiv
-     * care are cheie (un produs fără cheie o primește la prima salvare). Fără catalog/0026 încă: [].
+     * care are cheie (un produs fără cheie o primește la prima salvare). Fără catalog/0026 încă: []. WP-20 (C14a):
+     * plus `free_shipping` (1 la produsele cu transport gratuit), după magazin/0028.
      *
-     * @return array<string, array{sort_position: int|null, hidden_in_catalog: int, draft_url: string}>
+     * @return array<string, array{sort_position: int|null, hidden_in_catalog: int, draft_url: string, free_shipping?: int}>
      */
     private function catalogProduseAdmin(?PDO $db): array
     {
@@ -4589,6 +4590,15 @@ final class AdminController
                     ? '/produs/' . rawurlencode($slug) . '?draft=' . rawurlencode($cheie)
                     : '',
             ];
+        }
+        try {
+            foreach ($db->query('SELECT id FROM products WHERE deleted_at IS NULL AND free_shipping = 1')->fetchAll(PDO::FETCH_COLUMN) ?: [] as $id) {
+                if (isset($harta[(string) (int) $id])) {
+                    $harta[(string) (int) $id]['free_shipping'] = 1;
+                }
+            }
+        } catch (Throwable) {
+            // Fără magazin/0028 încă: niciun produs cu transport gratuit.
         }
         return $harta;
     }
@@ -4662,6 +4672,16 @@ final class AdminController
             $db->prepare('UPDATE products SET ' . implode(', ', $seturi) . ' WHERE id = :id')->execute($parametri);
         } catch (Throwable) {
             // Fără catalog/0026 încă: produsul e salvat, câmpurile catalogului vin după migrare.
+        }
+        // WP-20 (C14a): bifa „transport gratuit”, doar când formularul a arătat-o (marcajul `transport_campuri_trimise`,
+        // cu pluginul magazinului pe site); altfel rămâne ce era în bază.
+        if (array_key_exists('transport_campuri_trimise', $_POST)) {
+            try {
+                $db->prepare('UPDATE products SET free_shipping = :gratuit WHERE id = :id')
+                    ->execute(['gratuit' => isset($_POST['free_shipping']) ? 1 : 0, 'id' => $productId]);
+            } catch (Throwable) {
+                // Fără magazin/0028 încă: bifa vine după migrare.
+            }
         }
     }
 
@@ -6070,7 +6090,9 @@ final class AdminController
             + round((float) ($order['loyalty_points_discount'] ?? 0), 2);
 
         // Transportul se ia de la zero: prețul vechi era pentru cealaltă
-        // destinație, deci nu are ce să conteze aici.
+        // destinație, deci nu are ce să conteze aici. Un produs cu transport
+        // gratuit în comandă (WP-20, C14a) îl face 0 oricum.
+        $gratuitDinProdus = \App\Support\CheckoutCalculator::comandaAreTransportGratuit($db, $orderId);
         $transport = \App\Support\ShippingPricing::pret(
             $db,
             $settings,
@@ -6084,14 +6106,18 @@ final class AdminController
                 (string) ($order['billing_county'] ?? ''),
                 $subtotal,
                 $discountRef,
-                0.0
+                0.0,
+                false,
+                $gratuitDinProdus
             );
         } elseif (\App\Support\CheckoutCalculator::adminRecalcShipping(
             $settings,
             (string) ($order['billing_county'] ?? ''),
             $subtotal,
             $discountRef,
-            0.0
+            0.0,
+            false,
+            $gratuitDinProdus
         ) === 0.0) {
             // Pragul de transport gratuit rămâne valabil și la FANbox.
             $transport = 0.0;
@@ -6294,7 +6320,8 @@ final class AdminController
             $subtotal,
             $discountRef,
             (float) ($order['shipping_cost'] ?? 0),
-            (int) ($order['shipping_manual'] ?? 0) === 1
+            (int) ($order['shipping_manual'] ?? 0) === 1,
+            \App\Support\CheckoutCalculator::comandaAreTransportGratuit($db, $orderId)
         );
         $total = round(max(0.0, $subtotal - min($discountRef, $subtotal) + $shipping), 2);
 
@@ -6759,13 +6786,15 @@ final class AdminController
         }
         $manualDiscount = min($manualDiscount, $subtotal);
         $discountRef = $discountTotal + $pointsDiscount + $manualDiscount;
+        // Lista nouă de produse, nu cea din bază: order_items are încă rândurile vechi aici (WP-20, C14a).
         $shipping = \App\Support\CheckoutCalculator::adminRecalcShipping(
             $settings,
             (string) ($order['billing_county'] ?? ''),
             $subtotal,
             $discountRef,
             (float) ($order['shipping_cost'] ?? 0),
-            (int) ($order['shipping_manual'] ?? 0) === 1
+            (int) ($order['shipping_manual'] ?? 0) === 1,
+            \App\Support\CheckoutCalculator::produseAuTransportGratuit($db, array_map(static fn (array $l): int => (int) $l['pid'], $lines))
         );
         $effDiscount = min($discountRef, $subtotal);
         $total = round(max(0.0, $subtotal - $effDiscount + $shipping), 2);
@@ -6903,13 +6932,13 @@ final class AdminController
         $settings = Settings::all($db);
         // Un link NOU se plătește prin Banca Transilvania când BT e pornit în
         // producție (și deschis clienților), altfel prin EuPlătesc, ca până
-        // acum. Fără niciunul, nu trimitem clientului un link care l-ar duce
-        // într-o fundătură.
+        // acum, altfel prin Stripe (WP-20, X5). Fără niciunul, nu trimitem
+        // clientului un link care l-ar duce într-o fundătură.
         $procesator = \App\Support\PaymentLink::procesorPentruLinkNou($settings);
         if ($procesator === '') {
             echo json_encode([
                 'ok' => false,
-                'error' => 'Linkurile de plată pentru diferență merg prin Banca Transilvania (pornită în producție) sau prin EuPlătesc, '
+                'error' => 'Linkurile de plată pentru diferență merg prin Banca Transilvania (pornită în producție), prin EuPlătesc sau prin Stripe, '
                     . 'dar niciunul nu e pornit și configurat în Setări plăți. Pornește unul acolo, sau, dacă banii vin pe altă cale '
                     . '(OP, ramburs, numerar), consemnează-i cu „Înregistrează încasarea".',
             ]);
@@ -6984,6 +7013,8 @@ final class AdminController
         ];
         if (\App\Support\PaymentLink::procesator($link) === \App\Support\PaymentLink::PROCESATOR_BT) {
             $raspuns['procesator'] = 'Banca Transilvania';
+        } elseif (\App\Support\PaymentLink::procesator($link) === \App\Support\PaymentLink::PROCESATOR_STRIPE) {
+            $raspuns['procesator'] = 'Stripe';
         }
         echo json_encode($raspuns, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }

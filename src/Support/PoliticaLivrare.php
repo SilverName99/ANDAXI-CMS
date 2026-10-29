@@ -144,10 +144,13 @@ final class PoliticaLivrare
      * termenul de livrare când site-ul îl are. Listă goală când nu putem spune
      * sigur cât costă transportul.
      *
+     * Un produs cu transport gratuit (WP-20, C14a: `products.free_shipping`) are livrarea 0 oriunde, ca în coș.
+     *
      * @param float $pretAfisat prețul din pagină (cu reducerea, dacă e)
+     * @param bool $transportGratuit produsul are transport gratuit
      * @return list<array{serviciu: string, pret: float, termen?: array{pregatire: array{0: int, 1: int}, transport: array{0: int, 1: int}}}>
      */
-    public static function optiuni(array $setari, float $pretAfisat): array
+    public static function optiuni(array $setari, float $pretAfisat, bool $transportGratuit = false): array
     {
         if (!self::activ() || !ShippingPricing::esteActiv($setari)) {
             return [];
@@ -159,8 +162,8 @@ final class PoliticaLivrare
         }
 
         // Pragul de gratuitate e pe județ (București / provincie), ca în coș.
-        $gratuitBucuresti = self::gratuit($setari, true, $pretAfisat);
-        $gratuitProvincie = self::gratuit($setari, false, $pretAfisat);
+        $gratuitBucuresti = $transportGratuit || self::gratuit($setari, true, $pretAfisat);
+        $gratuitProvincie = $transportGratuit || self::gratuit($setari, false, $pretAfisat);
         if ($gratuitBucuresti !== $gratuitProvincie) {
             // Gratuit doar în unele județe: Google nu primește regiuni pentru România. Tăcem.
             return [];

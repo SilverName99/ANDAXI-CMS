@@ -5,7 +5,7 @@
  * @var array<string, mixed> $link
  * @var array<string, mixed> $order
  * @var bool $esteplatit
- * @var string $procesator euplatesc | btipay
+ * @var string $procesator euplatesc | btipay | stripe
  * @var bool $inCurs plata BT e autorizată, încasarea încă nu s-a confirmat
  * @var string $urlReverificare adresa care reverifică plata la bancă (doar browserul care a plătit)
  */
@@ -15,6 +15,7 @@ $token = (string) ($link['token'] ?? '');
 $platitAcum = $esteplatit || isset($_GET['platit']);
 $esuat = isset($_GET['esuat']);
 $procesatorBt = ($procesator ?? 'euplatesc') === 'btipay';
+$procesatorStripe = ($procesator ?? 'euplatesc') === 'stripe';
 $inCurs = (bool) ($inCurs ?? false) && !$platitAcum;
 $urlReverificare = (string) ($urlReverificare ?? '');
 // Procesatorul linkului nu mai e pe site: linkul se vede, dar nu mai pornește o plată.
@@ -78,7 +79,7 @@ $culoareButon = \App\Support\Tema::culoarePrincipala();
         </form>
 
         <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;line-height:1.5;">
-            <?= $procesatorBt ? 'Plata se face securizat, pe pagina Băncii Transilvania.' : 'Plata se face securizat, pe pagina procesatorului EuPlătesc.' ?><br>
+            <?= $procesatorBt ? 'Plata se face securizat, pe pagina Băncii Transilvania.' : ($procesatorStripe ? 'Plata se face securizat, pe pagina procesatorului Stripe.' : 'Plata se face securizat, pe pagina procesatorului EuPlătesc.') ?><br>
             Datele cardului nu ajung pe site-ul nostru.
         </p>
     <?php endif; ?>

@@ -271,7 +271,13 @@ final class CheckoutCalculator
 
         $county = Cart::county();
         $shippingDiscountReference = $discount + $pointsDiscount;
-        $shipping = self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);
+        // WP-20 (C14a, din Biovitality 2b8a618, a14df64): un singur produs cu transport gratuit în coș face toată comanda
+        // fără transport, peste prag și peste tariful curierului.
+        $transportGratuitDinProdus = $db instanceof PDO
+            && self::produseAuTransportGratuit($db, array_map(static fn (array $l): int => (int) ($l['id'] ?? 0), $lines));
+        $shipping = $transportGratuitDinProdus
+            ? 0.0
+            : self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);
         $isBucharest = mb_strtolower(trim($county)) === 'bucuresti';
         $includeCoupons = ((string) ($settings['shipping_include_coupons'] ?? '1')) === '1';
         $shippingFreeThreshold = $isBucharest
@@ -282,7 +288,7 @@ final class CheckoutCalculator
             : max(0.0, $subtotal);
         $total = max(0, $subtotal - $discount - $pointsDiscount + $shipping + $vatAdditional);
 
-        return [
+        $rezumat = [
             'lines' => $lines,
             'subtotal' => $subtotal,
             'subtotal_without_vat' => $subtotalWithoutVat,
@@ -300,6 +306,54 @@ final class CheckoutCalculator
             'shipping_free_threshold' => max(0.0, $shippingFreeThreshold),
             'total_weight_kg' => $totalWeightGrams > 0 ? ($totalWeightGrams / 1000) : 0.0,
         ];
+        if ($transportGratuitDinProdus) {
+            // Transportul e gratuit fiindcă un produs din coș îl oferă așa, nu fiindcă s-a atins pragul: curierul nu se
+            // mai întreabă (requiresFanLiveShippingCharge), iar referința pragului ajunge la prag, ca orice ecran care
+            // măsoară „cât mai lipsește până la transport gratuit” să arate că s-a ajuns acolo. Cheia apare doar atunci,
+            // ca sumarul unui coș obișnuit să rămână exact cel de dinainte.
+            $rezumat['shipping_free_by_product'] = true;
+            $rezumat['shipping_reference'] = max($shippingReference, $shippingFreeThreshold);
+        }
+        return $rezumat;
+    }
+
+    /**
+     * WP-20 (C14a): vreunul dintre produsele astea are transport gratuit (`products.free_shipping = 1`, magazin/0028)?
+     * Coșul (buildSummary) și recalculările comenzii din admin (lista de produse a comenzii) întreabă la fel. Fără
+     * coloană încă (migrarea n-a rulat): false, ca înainte.
+     *
+     * @param list<int> $idProduse
+     */
+    public static function produseAuTransportGratuit(PDO $db, array $idProduse): bool
+    {
+        $idProduse = array_values(array_unique(array_filter(array_map('intval', $idProduse), static fn (int $id): bool => $id > 0)));
+        if ($idProduse === []) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare('SELECT 1 FROM products WHERE free_shipping = 1 AND id IN ('
+                . implode(',', array_fill(0, count($idProduse), '?')) . ') LIMIT 1');
+            $stmt->execute($idProduse);
+            return (bool) $stmt->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /** WP-20 (C14a): comanda, așa cum e în bază, are măcar un produs cu transport gratuit? */
+    public static function comandaAreTransportGratuit(PDO $db, int $orderId): bool
+    {
+        if ($orderId <= 0) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare('SELECT product_id FROM order_items WHERE order_id = :id');
+            $stmt->execute(['id' => $orderId]);
+            $ids = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        } catch (Throwable) {
+            return false;
+        }
+        return self::produseAuTransportGratuit($db, array_map('intval', $ids));
     }
 
     private static function fetchProducts(?PDO $db, array $ids): array
@@ -843,8 +897,17 @@ final class CheckoutCalculator
              WHERE code = :code AND is_active = 1
              LIMIT 1"
         );
-        $stmt->execute(['code' => strtoupper(trim($code))]);
+        $code = strtoupper(trim($code));
+        $stmt->execute(['code' => $code]);
         $row = $stmt->fetch();
+        // WP-20 (C9, din Biovitality aed0cee): pe cupoanele tipărite codul poate apărea cu spații („AZ 987” pentru
+        // AZ987). Dacă nu există exact așa, îl căutăm și fără spații (și spațiul nedespărțitor sau tabul); un cod care
+        // chiar are spații găsește întâi potrivirea exactă. Comanda ia codul din bază, deci rămâne AZ987.
+        $compact = (string) preg_replace('/\s+/u', '', $code);
+        if (!is_array($row) && $compact !== '' && $compact !== $code) {
+            $stmt->execute(['code' => $compact]);
+            $row = $stmt->fetch();
+        }
         return is_array($row) ? $row : null;
     }
 
@@ -1155,6 +1218,9 @@ final class CheckoutCalculator
      * Recalcul transport pentru editarea manuală a comenzii din admin.
      * Dacă subtotalul (minus reduceri) atinge pragul de transport gratuit → 0.
      * Altfel păstrează transportul curent dacă e > 0, ori estimează din setări.
+     *
+     * Ordinea (WP-20, C14a): transportul pus de mână > un produs cu transport gratuit în comandă ($gratuitDinProdus,
+     * vezi produseAuTransportGratuit) > pragul de gratuitate > transportul curent / estimat.
      */
     public static function adminRecalcShipping(
         array $settings,
@@ -1162,7 +1228,8 @@ final class CheckoutCalculator
         float $subtotal,
         float $discount,
         float $currentShipping,
-        bool $shippingManual = false
+        bool $shippingManual = false,
+        bool $gratuitDinProdus = false
     ): float {
         // Transportul pus de mână e o decizie, nu o valoare de recalculat:
         // pragul de gratuitate îl ștergea la fiecare „Recalculează și salvează",
@@ -1170,6 +1237,9 @@ final class CheckoutCalculator
         // reducere negociată la produse — clientul plătește transportul).
         if ($shippingManual) {
             return round(max(0.0, $currentShipping), 2);
+        }
+        if ($gratuitDinProdus) {
+            return 0.0;
         }
         $isBucharest = strtolower(trim($county)) === 'bucuresti';
         $includeCoupons = ((string) ($settings['shipping_include_coupons'] ?? '1')) === '1';

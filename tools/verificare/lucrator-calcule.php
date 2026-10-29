@@ -22,7 +22,8 @@ declare(strict_types=1);
  * fiecare linie a comenzii (produsul, cantitatea, cheia ofertei BBD), `Cart::applyCoupon`, `CustomerAuth::login` și
  * `Cart::requestPoints`, `Cart::setCounty` și `CheckoutCalculator::setLocalitate` (județul și localitatea de facturare,
  * ca în checkout), `CheckoutCalculator::alegeFanbox`; apoi `CheckoutCalculator::buildSummary`, `adminRecalcShipping` (cu
- * transportul salvat și cu 0, ca la trecerea pe FANbox din admin), `LoyaltyService::estimateEarnPoints` (din sumar și din
+ * transportul salvat și cu 0, ca la trecerea pe FANbox din admin; cu argumentul transportului gratuit din produs al
+ * comenzii, WP-20 C14a, pe care un cod fără el îl ignoră), `LoyaltyService::estimateEarnPoints` (din sumar și din
  * comanda salvată) și `ErpSync::buildPayload` pe comanda salvată (sha1 pe JSON-ul canonic, plus câte un sha1 pe fiecare
  * cheie de sus, ca să se vadă care diferă). Sesiunea e un array în memorie: un handler de sesiune gol pornit înainte de
  * bootstrap.php (bootstrap-ul Bioscem pornește altfel o sesiune și în linia de comandă), deci niciun fișier de sesiune.
@@ -295,9 +296,21 @@ foreach ((array) ($cerere['cazuri'] ?? []) as $caz) {
         $reducere = round((float) ($caz['discount_total'] ?? 0), 2) + round((float) ($caz['puncte_discount'] ?? 0), 2)
             + round((float) ($caz['manual'] ?? 0), 2);
         $judet = (string) ($caz['judet'] ?? '');
+        // Comanda are un produs cu transport gratuit (products.free_shipping, WP-20 C14a)? Ca adminul (comandaAreTransportGratuit),
+        // din rândurile comenzii; fără coloană, nu. Un cod fără argumentul al șaptelea (codul vechi) îl ignoră.
+        $gratuitDinProdus = false;
+        try {
+            $gratuit = $db->prepare('SELECT 1 FROM order_items oi INNER JOIN products p ON p.id = oi.product_id
+                WHERE oi.order_id = :id AND p.free_shipping = 1 LIMIT 1');
+            $gratuit->execute(['id' => (int) ($caz['id'] ?? 0)]);
+            $gratuitDinProdus = (bool) $gratuit->fetchColumn();
+        } catch (Throwable $e) {
+            $gratuitDinProdus = false;
+        }
         $transportAdmin = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere,
-            (float) ($caz['transport'] ?? 0), (bool) ($caz['transport_manual'] ?? false));
-        $transportAdmin0 = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere, 0.0);
+            (float) ($caz['transport'] ?? 0), (bool) ($caz['transport_manual'] ?? false), $gratuitDinProdus);
+        $transportAdmin0 = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere, 0.0,
+            false, $gratuitDinProdus);
 
         // Punctele promise („Primești X puncte”): din sumar, ca în coș, și din comanda salvată.
         $eligibil = max(0.0, (float) ($s['subtotal'] ?? 0) - (float) ($s['discount'] ?? 0) - (float) ($s['points_discount'] ?? 0));

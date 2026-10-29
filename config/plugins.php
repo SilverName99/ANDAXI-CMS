@@ -188,7 +188,9 @@ return [
             // Emailurile de coș abandonat invită clientul să termine comanda: nu și cu checkout-ul închis.
             'cron' => ['scripts/abandoned-cart-emails.php' => 'pornit'],
             // Avertismentul pe produs (WP-R, din Bioscem 0582ce9): textele pe produs și ce a confirmat clientul pe comandă.
-            'tabele' => ['orders', 'order_items', 'email_logs', 'cart_abandonments', 'product_warnings', 'order_product_warnings'],
+            // Transportul gratuit pe produs (WP-20, C14a, din Biovitality): coloana magazinului în tabelul catalogului.
+            'tabele' => ['orders', 'order_items', 'email_logs', 'cart_abandonments', 'product_warnings', 'order_product_warnings',
+                'products.free_shipping'],
         ],
 
         'livrare_fan' => [

@@ -20,8 +20,12 @@ $total = (float) ($summary['total'] ?? 0);
 $shippingThresholdRaw = (float) ($summary['shipping_free_threshold'] ?? 200);
 $shippingThreshold = $shippingThresholdRaw > 0 ? $shippingThresholdRaw : 200.0;
 $shippingReference = max(0.0, (float) ($summary['shipping_reference'] ?? ($subtotal - $discount - $pointsDiscount)));
-$remainingForFreeShipping = max(0.0, $shippingThreshold - $shippingReference);
-$freeShippingProgress = $shippingThreshold > 0 ? min(100.0, (($shippingReference / $shippingThreshold) * 100.0)) : 0.0;
+// Un produs cu transport gratuit (WP-20, C14a) face comanda gratuită indiferent de prag.
+$transportGratuitDinProdus = !empty($summary['shipping_free_by_product']);
+$remainingForFreeShipping = $transportGratuitDinProdus ? 0.0 : max(0.0, $shippingThreshold - $shippingReference);
+$freeShippingProgress = $transportGratuitDinProdus
+    ? 100.0
+    : ($shippingThreshold > 0 ? min(100.0, (($shippingReference / $shippingThreshold) * 100.0)) : 0.0);
 // Transportul e cunoscut din coș doar când e gratuit sau când magazinul are
 // preț fix; cu tarif de curier se află abia la checkout, după adresă.
 $shippingCost = (float) ($summary['shipping'] ?? 0.0);

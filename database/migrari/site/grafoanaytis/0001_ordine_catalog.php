@@ -13,7 +13,8 @@ use App\Support\Migrari\Schema;
  * = catalog), /produse arată produsele în aceeași ordine ca pe site-ul vechi; proprietarul o confirmă pe copia de
  * verificare (migrari.md §7.8).
  *
- * Scrie doar unde sort_position e încă NULL (pasul se poate relua; o poziție pusă între timp din admin rămâne). Fără
+ * Scrie doar unde sort_position e încă NULL (pasul se poate relua; o poziție pusă între timp din admin rămâne), fără să
+ * atingă data ultimei modificări a produsului (updated_at = updated_at; coloana are ON UPDATE CURRENT_TIMESTAMP). Fără
  * coloana veche (o bază care n-a avut codul grafoanaytis), nimic.
  */
 return [
@@ -29,7 +30,7 @@ return [
                      FROM products
                      WHERE sort_order > 0
                  ) r ON r.id = p.id
-                 SET p.sort_position = r.rang
+                 SET p.sort_position = r.rang, p.updated_at = p.updated_at
                  WHERE p.sort_position IS NULL');
         });
     },

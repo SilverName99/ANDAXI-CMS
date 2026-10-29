@@ -22,7 +22,9 @@ use Throwable;
  *
  * Fiecare link ține minte procesatorul cu care se plătește (`procesator`):
  * EuPlătesc, ca până acum, sau Banca Transilvania, când BT e pornit în
- * producție. Linkurile deja trimise merg mai departe pe procesatorul lor.
+ * producție, sau Stripe (WP-20, X5, din Biovitality: site-urile care încasează
+ * doar prin Stripe), când niciunul dintre primele două nu e pornit. Linkurile
+ * deja trimise merg mai departe pe procesatorul lor.
  */
 final class PaymentLink
 {
@@ -32,6 +34,7 @@ final class PaymentLink
 
     public const PROCESATOR_EUPLATESC = 'euplatesc';
     public const PROCESATOR_BT = 'btipay';
+    public const PROCESATOR_STRIPE = 'stripe';
 
     /** Cât timp rămâne valabil un link netrimis la plată (zile). */
     private const VALABILITATE_ZILE = 30;
@@ -108,7 +111,8 @@ final class PaymentLink
     /**
      * Cu ce procesator se plătește un link NOU: Banca Transilvania când e
      * pornită în producție, cu datele de acces și deschisă clienților (nu doar
-     * administratorilor); altfel EuPlătesc, ca până acum. Gol = niciunul.
+     * administratorilor); altfel EuPlătesc, ca până acum; altfel Stripe (WP-20,
+     * X5), când e pornit cu cheia secretă. Gol = niciunul.
      */
     public static function procesorPentruLinkNou(array $settings): string
     {
@@ -118,15 +122,20 @@ final class PaymentLink
         if (self::euPlatescPentruLinkuri($settings, true)) {
             return self::PROCESATOR_EUPLATESC;
         }
+        if (self::stripePentruLinkuri($settings, true)) {
+            return self::PROCESATOR_STRIPE;
+        }
         return '';
     }
 
     /** Se mai poate plăti azi un link cu procesatorul lui? */
     public static function procesorDisponibil(string $procesator, array $settings): bool
     {
-        return $procesator === self::PROCESATOR_BT
-            ? self::btPentruLinkuri($settings, false)
-            : self::euPlatescPentruLinkuri($settings, false);
+        return match ($procesator) {
+            self::PROCESATOR_BT => self::btPentruLinkuri($settings, false),
+            self::PROCESATOR_STRIPE => self::stripePentruLinkuri($settings, false),
+            default => self::euPlatescPentruLinkuri($settings, false),
+        };
     }
 
     /**
@@ -147,11 +156,27 @@ final class PaymentLink
         return $licenta && EuPlatescGateway::isEnabled($settings);
     }
 
+    /**
+     * La fel, pentru Stripe (WP-20, X5): pornit în Setări plăți, cu cheia secretă, ca la checkout. Pluginul Stripe nu cere
+     * magazinul (îl folosesc și donațiile), deci aici îl cerem noi, ca la EuPlătesc: un link de plată e al unei comenzi.
+     */
+    private static function stripePentruLinkuri(array $settings, bool $linkNou): bool
+    {
+        $licenta = $linkNou
+            ? Plugins::permiteInceput('plata_stripe') && Plugins::permiteInceput('magazin')
+            : Plugins::vizibil('plata_stripe') && Plugins::vizibil('magazin');
+        return $licenta
+            && (string) ($settings['stripe_enabled'] ?? '0') === '1'
+            && trim((string) ($settings['stripe_secret_key'] ?? '')) !== '';
+    }
+
     public static function procesator(array $link): string
     {
-        return (string) ($link['procesator'] ?? '') === self::PROCESATOR_BT
-            ? self::PROCESATOR_BT
-            : self::PROCESATOR_EUPLATESC;
+        return match ((string) ($link['procesator'] ?? '')) {
+            self::PROCESATOR_BT => self::PROCESATOR_BT,
+            self::PROCESATOR_STRIPE => self::PROCESATOR_STRIPE,
+            default => self::PROCESATOR_EUPLATESC,
+        };
     }
 
     /**
@@ -184,7 +209,11 @@ final class PaymentLink
      */
     public static function procesorScosDinLicenta(string $procesator): bool
     {
-        return !Plugins::vizibil($procesator === self::PROCESATOR_BT ? 'plata_bt' : 'plata_euplatesc');
+        return !Plugins::vizibil(match ($procesator) {
+            self::PROCESATOR_BT => 'plata_bt',
+            self::PROCESATOR_STRIPE => 'plata_stripe',
+            default => 'plata_euplatesc',
+        });
     }
 
     /** Restul de încasat pentru o comandă: total − cât s-a încasat deja. */
@@ -216,7 +245,7 @@ final class PaymentLink
         if ($orderId <= 0 || $suma <= 0) {
             return null;
         }
-        $procesator = $procesator === self::PROCESATOR_BT ? self::PROCESATOR_BT : self::PROCESATOR_EUPLATESC;
+        $procesator = self::procesator(['procesator' => $procesator]);
 
         $existent = self::linkActivPentruSuma($db, $orderId, $suma);
         if ($existent !== null && ($settings === [] || self::procesorDisponibil(self::procesator($existent), $settings))) {

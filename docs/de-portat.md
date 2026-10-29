@@ -89,7 +89,8 @@ independent de cod).
 
 **Deja în CMS** (le are Bioscem, deci și CMS-ul): `bbfc9bc` integrarea ERP; `adeea74` capcana anti-bot;
 `81bda7a` Lot A; `2622237`, `f76eda8`, `1d48301`, `83b14e1`, `3021542`, `ff0cb6d` Lot B (pentru `3021542`
-varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `18d44ab` Lot C; `9f5b196`, `98f81b6`
+varianta Stripe a linkului de plată portată în WP-20, X5: `PaymentLink::PROCESATOR_STRIPE`, după BT și EuPlătesc;
+dovada pe datele BV: WP-11b); `5d071e2`, `18d44ab` Lot C; `9f5b196`, `98f81b6`
 (portate din Bioscem); `1b0d61f` tab „Sertar Oferte”; `fca58bd`, `c32bc8d` chat live (Bioscem l-a primit din BV);
 `0fadb19` data nașterii pe liste; `f78ecb7` coloana „Cui a fost dat” (echivalentul Bioscem
 `promoProductRecipientsApi`); `4acb250` linia de produs dublată (Bioscem `11b1040`); `88b7f4d` unire.
@@ -127,14 +128,14 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 | `b9fcaf8` | 03.09 | Coloanele: culoarea coloanei nu mai e acoperită | de portat (WP-21, C11c) |
 | `90afd46` | 08.09 | Template-uri de produs: pachete cu produse din magazin | câmpurile portate (WP-19, C14d: `template_only` cu migrarea `catalog/0027`, tipul „Imagine” cu selectorul galeriei, filtrul câmpurilor după șablon în editor, câmpul „html” ca markup după `catalog_camp_html_brut`, Bioscem înghețat `0`); pachetele pluginul `pachete_produse` (Etapa 4, P4) |
 | `83067d3` | 08.09 | Instalarea creează coloanele pentru pachete | pluginul `pachete_produse` (Etapa 4; migrare în grupul G) |
-| `2b8a618` | 09.09 | Checkout, transport gratuit, produse inactive, ordine manuală | produsele inactive și ordinea manuală portate (WP-19: C8 cu `catalog_ascunde_inactive`, Bioscem înghețat `0`, linkul de ciornă cu cheia din `catalog/0026`; C14b `App\Support\ProductOrder` + sortarea „Ordinea din catalog” a GR); transportul gratuit WP-20 (C14a); textul Stripe din checkout nu se portează (C15) |
+| `2b8a618` | 09.09 | Checkout, transport gratuit, produse inactive, ordine manuală | produsele inactive și ordinea manuală portate (WP-19: C8 cu `catalog_ascunde_inactive`, Bioscem înghețat `0`, linkul de ciornă cu cheia din `catalog/0026`; C14b `App\Support\ProductOrder` + sortarea „Ordinea din catalog” a GR); transportul gratuit portat (WP-20, C14a); textul Stripe din checkout nu se portează (C15) |
 | `1d4bee2` | 09.09 | Cod de pagină pentru produsele unui template | portat (WP-19, C14e: `{{products_by_template:…}}`, cardul în `product-card.php` cu markup-ul catalogului de azi, octet cu octet) |
 | `b9e3ddc` | 09.09 | Bifa care scoate un produs din lista magazinului | portat (WP-19, C14c: `hidden_in_catalog` din `catalog/0026`) |
 | `57447e0` | 09.09 | Editorul spune ce câmpuri a ascuns și de ce | portat (WP-19, C14d) |
 | `afc6fd7` `7391226` | 09.09 | Coșul arată pachetele care conțin produsul | pluginul `pachete_produse` (Etapa 4, P4) |
-| `a14df64` | 09.09 | Transport gratuit din produs, respectat peste tot | de portat (WP-20, C14a) |
+| `a14df64` | 09.09 | Transport gratuit din produs, respectat peste tot | portat (WP-20, C14a: `products.free_shipping` din `magazin/0028`, coșul, cota FAN, cele trei recalculări din admin cu transportul pus de mână înainte, datele Google; dovada pe datele BV: WP-11b) |
 | `222ed71` | 12.10 | Cupoane unice: produsele se schimbă în masă | de portat (WP-21, C12) |
-| `aed0cee` | 15.10 | Codul de cupon acceptat cu spații | de portat (WP-20, C9) |
+| `aed0cee` | 15.10 | Codul de cupon acceptat cu spații | portat (WP-20, C9; dovada pe datele BV: WP-11b) |
 | `cc231e4` | 19.10 | AWB: numărul de colete ales în ERP la aprobare | portat (`4915478`, din Bioscem `de5c2b0`); la trecerea BV înghețare `fan_kg_max_colet=0` |
 | — | — | Contul arată doar comenzile legate de cont | nu se face pe BV (decizia OD-47, 19.10): doar în codul comun, regula nucleului din WP-25; la trecere intră în „ce se schimbă” al BV |
 

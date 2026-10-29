@@ -34,6 +34,21 @@ declare(strict_types=1);
  * I. Adminul: editorul produsului salvează poziția și bifa „ascuns din catalog” (și le păstrează când formularul nu le
  *    trimite), un produs nou primește cheia de ciornă, lista arată linkul de ciornă.
  *
+ * WP-20 — banii (C14a, C9, X5):
+ * A. Transportul gratuit pe produs (C14a): fără bifă coșul și API-ul lui sunt exact ca înainte (fără cheia nouă); cu un
+ *    produs bifat în coș, transportul 0, totalul fără el, „Ai transport gratuit pe comandă.” cu bara plină, cota de transport
+ *    a checkout-ului 0 și cu prețul fix pornit (martor: 19 lei fără bifă); adminRecalcShipping în ordinea transport pus de
+ *    mână > produs gratuit > prag > transport curent; în admin, reducerea comercială și schimbarea produselor (din lista
+ *    nouă) dau transport 0, iar transportul pus de mână rămâne; PoliticaLivrare (JSON-LD, fluxul Merchant) dă 0 lei la
+ *    produsul bifat; editorul produsului salvează bifa doar când formularul o trimite.
+ * B. Cupoanele (C9): „DEMO 10”, cu tab și spațiu nedespărțitor, găsește DEMO10; un cod care chiar are spații găsește
+ *    întâi potrivirea exactă; un cupon oprit nu se găsește; în coș rămâne codul din bază.
+ * C. Linkul de plată prin Stripe (X5): procesorul unui link nou (Stripe după BT și EuPlătesc), pagina linkului, câmpurile
+ *    sesiunii Stripe Checkout (suma în bani, referința și cheia linkului, fără metadatele comenzii; nicio cerere spre
+ *    Stripe), webhook-ul semnat local: semnătură greșită, altă sumă, sesiune neplătită, payment_intent al linkului → nimic;
+ *    sesiunea plătită → linkul plătit și suma adăugată la încasat, o singură dată, fără să schimbe starea comenzii; o sesiune
+ *    Stripe cu cheia unui link EuPlătesc → nimic; adminul trimite un link Stripe când e singurul procesator.
+ *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
  * paginilor și sesiunile făcute aici. Serverul de dezvoltare se oprește la final dacă l-a pornit testul. Raportul:
  * $CMS_DEV_DIR/test-porturi-bv-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -49,8 +64,10 @@ require_once $radacina . '/bootstrap.php';
 require_once __DIR__ . '/lib/salvari-admin.php';
 
 use App\Support\Catalog;
+use App\Support\CheckoutCalculator;
 use App\Support\Database;
 use App\Support\Paths;
+use App\Support\PaymentLink;
 use App\Support\ProductOrder;
 use App\Support\ResponseCache;
 
@@ -602,6 +619,268 @@ $verifica('Admin → Produse: linkul de ciornă al produsului inactiv în datele
     ($dateAdmin['produse'][(string) $idInactiv]['draft_url'] ?? '') === '/produs/' . $slugInactiv . '?draft=' . $cheieInactiv
     && ($dateAdmin['produse'][(string) $idGhimbir]['draft_url'] ?? 'x') === ''
     && str_contains($admin, 'id="p_sort_position"') && str_contains($admin, 'name="catalog_campuri_trimise"'));
+
+// =====================================================================
+// WP-20 A. Transportul gratuit pe produs (C14a)
+// =====================================================================
+$scrie('');
+$scrie('== WP-20 A. Transportul gratuit pe produs (C14a)');
+$setare('erp_enabled', '0'); // nicio cerere spre ERP din salvările de mai jos
+$setare('shipping_fixed_enabled', '0');
+$setare('shipping_free_province', '200');
+$setare('shipping_free_bucharest', '200');
+$setare('shipping_cost_province', '15');
+$setare('shipping_max_cost', '40');
+$db->exec('UPDATE products SET free_shipping = 0');
+$idGratuit = (int) $unu("SELECT id FROM products WHERE slug = 'ceai-de-tei' AND is_active = 1 AND deleted_at IS NULL AND bbd_enabled = 0");
+$idAlt = (int) $unu("SELECT id FROM products WHERE slug = 'fulgi-de-ovaz-integral' AND is_active = 1 AND deleted_at IS NULL");
+$verifica('produsele demo ale testului (ceai de tei, fulgi de ovăz), active, ieftine (sub pragul de 200 lei)', $idGratuit > 0 && $idAlt > 0
+    && (float) $unu('SELECT price FROM products WHERE id = ' . $idGratuit) + (float) $unu('SELECT price FROM products WHERE id = ' . $idAlt) < 100);
+
+$verifica('CheckoutCalculator::produseAuTransportGratuit: fără produs bifat, nu; lista goală sau id-uri greșite, nu',
+    !CheckoutCalculator::produseAuTransportGratuit($db, [$idGratuit, $idAlt]) && !CheckoutCalculator::produseAuTransportGratuit($db, [])
+    && !CheckoutCalculator::produseAuTransportGratuit($db, [0, -3]));
+$coloanaPrag = static fn (string $corp): bool => str_contains($corp, 'Ai transport gratuit pe comandă.');
+@unlink($jarViz);
+$cerere('POST', '/cos/judet', $jarViz, ['county' => 'Cluj']);
+$cerere('POST', '/cos/adauga/' . $idGratuit, $jarViz, ['quantity' => '1']);
+$cerere('POST', '/cos/adauga/' . $idAlt, $jarViz, ['quantity' => '1']);
+$sumar = json_decode($cerere('GET', '/api/cart/summary', $jarViz)['corp'], true) ?: [];
+$cos = $cerere('GET', '/cos', $jarViz)['corp'];
+$verifica('fără bifă: coșul arată „Mai adaugă … pentru transport gratuit”, API-ul coșului fără cheia shipping_free_by_product (exact ca înainte)',
+    count((array) ($sumar['lines'] ?? [])) === 2 && !array_key_exists('shipping_free_by_product', $sumar)
+    && (float) ($sumar['shipping_remaining_for_free'] ?? 0) > 0 && str_contains($cos, 'pentru transport gratuit') && !$coloanaPrag($cos),
+    json_encode(array_intersect_key($sumar, array_flip(['shipping', 'shipping_remaining_for_free', 'total']))));
+$totalFara = (float) ($sumar['total'] ?? 0);
+$transportFara = (float) ($sumar['shipping'] ?? 0);
+
+$db->prepare('UPDATE products SET free_shipping = 1 WHERE id = :id')->execute(['id' => $idGratuit]);
+$sumar = json_decode($cerere('GET', '/api/cart/summary', $jarViz)['corp'], true) ?: [];
+$cos = $cerere('GET', '/cos', $jarViz)['corp'];
+$verifica('cu bifa pe un produs din coș: transport 0, totalul scade cu transportul, shipping_free_by_product, „Ai transport gratuit pe comandă.” cu bara plină',
+    ($sumar['shipping_free_by_product'] ?? null) === true && (float) ($sumar['shipping'] ?? -1) === 0.0
+    && (float) ($sumar['shipping_remaining_for_free'] ?? -1) === 0.0 && abs($totalFara - $transportFara - (float) ($sumar['total'] ?? 0)) < 0.01
+    && $coloanaPrag($cos) && str_contains($cos, 'width:100.00%'),
+    'fără: transport ' . $transportFara . ', total ' . $totalFara . ' | cu: ' . json_encode(array_intersect_key($sumar, array_flip(['shipping', 'shipping_remaining_for_free', 'total', 'shipping_free_by_product']))));
+// Prețul fix al transportului (Setări livrare) și tariful curierului: bifa le bate pe amândouă.
+$setare('shipping_fixed_enabled', '1');
+$setare('shipping_fixed_base', '19');
+$cota = json_decode($cerere('GET', '/api/checkout/shipping-quote?' . http_build_query(['billing_county' => 'Cluj', 'billing_city' => 'Cluj-Napoca',
+    'billing_street' => 'Strada Exemplu', 'billing_street_no' => '1', 'billing_postcode' => '400000']), $jarViz)['corp'], true) ?: [];
+$verifica('cu prețul fix al transportului pornit: cota de transport a checkout-ului 0, fără să ceară transport (requires_shipping_charge false)',
+    ($cota['ok'] ?? false) === true && (float) ($cota['shipping'] ?? -1) === 0.0 && ($cota['requires_shipping_charge'] ?? true) === false, json_encode($cota));
+$db->prepare('UPDATE products SET free_shipping = 0 WHERE id = :id')->execute(['id' => $idGratuit]);
+$cota = json_decode($cerere('GET', '/api/checkout/shipping-quote?' . http_build_query(['billing_county' => 'Cluj', 'billing_city' => 'Cluj-Napoca',
+    'billing_street' => 'Strada Exemplu', 'billing_street_no' => '1', 'billing_postcode' => '400000']), $jarViz)['corp'], true) ?: [];
+$verifica('… martor: fără bifă, același coș plătește prețul fix (19 lei)', (float) ($cota['shipping'] ?? 0) === 19.0, json_encode($cota));
+$setare('shipping_fixed_enabled', '0');
+@unlink($jarViz);
+
+// Recalculările din admin: transportul pus de mână > produsul cu transport gratuit > pragul > transportul curent.
+$s = ['shipping_free_province' => '200', 'shipping_free_bucharest' => '200', 'shipping_cost_province' => '15', 'shipping_max_cost' => '40',
+    'shipping_include_coupons' => '1'];
+$verifica('adminRecalcShipping: transportul pus de mână bate produsul gratuit (25), produsul gratuit bate transportul curent (0), fără el ca înainte (12)',
+    CheckoutCalculator::adminRecalcShipping($s, 'Cluj', 50.0, 0.0, 25.0, true, true) === 25.0
+    && CheckoutCalculator::adminRecalcShipping($s, 'Cluj', 50.0, 0.0, 12.0, false, true) === 0.0
+    && CheckoutCalculator::adminRecalcShipping($s, 'Cluj', 50.0, 0.0, 0.0, false, true) === 0.0
+    && CheckoutCalculator::adminRecalcShipping($s, 'Cluj', 50.0, 0.0, 12.0, false, false) === 12.0
+    && CheckoutCalculator::adminRecalcShipping($s, 'Cluj', 50.0, 0.0, 12.0) === 12.0);
+
+// O comandă demo neprocesată, cu transport plătit: reducerea comercială și schimbarea produselor din admin.
+$idComanda = (int) $unu("SELECT o.id FROM orders o WHERE o.deleted_at IS NULL AND o.status IN ('pending', 'pending_payment') AND o.shipping_cost > 0
+    AND o.shipping_manual = 0 AND o.subtotal < 150 AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.product_id = " . $idGratuit . ")
+    ORDER BY o.id LIMIT 1");
+$verifica('o comandă demo neprocesată, cu transport, sub prag, fără ceaiul de tei', $idComanda > 0);
+$transportComanda = (float) $unu('SELECT shipping_cost FROM orders WHERE id = ' . $idComanda);
+$r = json_decode($cerere('POST', '/admin/orders/' . $idComanda . '/discount', $jarAdmin, ['mode' => 'suma', 'value' => '1', 'reason' => 'test'])['corp'], true) ?: [];
+$verifica('fără produs gratuit în comandă: reducerea din admin păstrează transportul (' . $transportComanda . ')', ($r['ok'] ?? false) === true
+    && (float) $unu('SELECT shipping_cost FROM orders WHERE id = ' . $idComanda) === $transportComanda, json_encode($r));
+$db->prepare('UPDATE products SET free_shipping = 1 WHERE id = :id')->execute(['id' => $idGratuit]);
+$linii = $db->query('SELECT product_id, quantity FROM order_items WHERE order_id = ' . $idComanda . ' AND product_id IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC);
+$corpLinii = ['product_id' => array_merge(array_column($linii, 'product_id'), [(string) $idGratuit]),
+    'quantity' => array_merge(array_column($linii, 'quantity'), ['1'])];
+$r = json_decode($cerere('POST', '/admin/orders/' . $idComanda . '/items', $jarAdmin, $corpLinii)['corp'], true) ?: [];
+$comanda = $db->query('SELECT shipping_cost, subtotal, total, manual_discount, discount_total, loyalty_points_discount FROM orders WHERE id = '
+    . $idComanda)->fetch(PDO::FETCH_ASSOC);
+$reducereComanda = min((float) $comanda['subtotal'], (float) $comanda['manual_discount'] + (float) $comanda['discount_total'] + (float) $comanda['loyalty_points_discount']);
+$verifica('schimbarea produselor din admin, cu ceaiul de tei adăugat: transportul 0 (din lista nouă, nu din bază), totalul = subtotal − reduceri',
+    ($r['ok'] ?? false) === true && (float) $comanda['shipping_cost'] === 0.0
+    && abs((float) $comanda['total'] - ((float) $comanda['subtotal'] - $reducereComanda)) < 0.01, json_encode($r) . ' ' . json_encode($comanda));
+$db->prepare('UPDATE orders SET shipping_cost = 14, shipping_manual = 0 WHERE id = :id')->execute(['id' => $idComanda]);
+$r = json_decode($cerere('POST', '/admin/orders/' . $idComanda . '/discount', $jarAdmin, ['mode' => 'suma', 'value' => '2', 'reason' => 'test'])['corp'], true) ?: [];
+$verifica('reducerea din admin pe comanda cu produsul gratuit: transportul 0', ($r['ok'] ?? false) === true
+    && (float) $unu('SELECT shipping_cost FROM orders WHERE id = ' . $idComanda) === 0.0, json_encode($r));
+$db->prepare('UPDATE orders SET shipping_cost = 14, shipping_manual = 1 WHERE id = :id')->execute(['id' => $idComanda]);
+$r = json_decode($cerere('POST', '/admin/orders/' . $idComanda . '/discount', $jarAdmin, ['mode' => 'suma', 'value' => '3', 'reason' => 'test'])['corp'], true) ?: [];
+$verifica('… cu transportul pus de mână (shipping_manual = 1): rămâne 14', ($r['ok'] ?? false) === true
+    && (float) $unu('SELECT shipping_cost FROM orders WHERE id = ' . $idComanda) === 14.0, json_encode($r));
+
+// Promisiunea de livrare din datele pentru Google (JSON-LD, fluxul Merchant): 0 lei la produsul bifat.
+$setariFixe = ['shipping_fixed_enabled' => '1', 'shipping_fixed_base' => '19', 'shipping_free_province' => '200', 'shipping_free_bucharest' => '200'];
+if (\App\Support\PoliticaLivrare::activ()) {
+    $faraBifa = \App\Support\PoliticaLivrare::optiuni($setariFixe, 22.0);
+    $cuBifa = \App\Support\PoliticaLivrare::optiuni($setariFixe, 22.0, true);
+    $verifica('PoliticaLivrare::optiuni: produsul bifat are livrarea 0 lei, cel nebifat prețul fix (19)', ($cuBifa[0]['pret'] ?? null) === 0.0
+        && ($faraBifa[0]['pret'] ?? null) === 19.0, json_encode([$faraBifa, $cuBifa]));
+} else {
+    $verifica('PoliticaLivrare::optiuni: livrarea în datele Google e oprită pe site, deci nicio opțiune, cu sau fără bifă',
+        \App\Support\PoliticaLivrare::optiuni($setariFixe, 22.0, true) === [] && \App\Support\PoliticaLivrare::optiuni($setariFixe, 22.0) === []);
+}
+
+// Adminul: bifa în editorul produsului (cu magazinul pe site), salvată doar când formularul o trimite.
+$produs = $db->query('SELECT * FROM products WHERE id = ' . $idAlt)->fetch(PDO::FETCH_ASSOC) ?: [];
+$corp = [
+    'name' => (string) $produs['name'], 'slug' => (string) $produs['slug'], 'sku' => (string) $produs['sku'],
+    'category_id' => (string) $produs['category_id'], 'product_template_id' => (string) $produs['product_template_id'],
+    'price' => (string) $produs['price'], 'stock' => (string) $produs['stock'], 'vat_percent' => (string) $produs['vat_percent'],
+    'vat_included' => (string) $produs['vat_included'], 'weight_grams' => (string) $produs['weight_grams'],
+    'short_description' => (string) $produs['short_description'], 'description' => (string) $produs['description'],
+    'image_url' => (string) $produs['image_url'], 'is_active' => '1',
+];
+$cerere('POST', '/admin/products/' . $idAlt . '/update', $jarAdmin, $corp + ['transport_campuri_trimise' => '1', 'free_shipping' => '1']);
+$bifat = (int) $unu('SELECT free_shipping FROM products WHERE id = ' . $idAlt);
+$cerere('POST', '/admin/products/' . $idAlt . '/update', $jarAdmin, $corp);
+$pastrat = (int) $unu('SELECT free_shipping FROM products WHERE id = ' . $idAlt);
+$cerere('POST', '/admin/products/' . $idAlt . '/update', $jarAdmin, $corp + ['transport_campuri_trimise' => '1']);
+$scos = (int) $unu('SELECT free_shipping FROM products WHERE id = ' . $idAlt);
+$admin = $cerere('GET', '/admin/products', $jarAdmin)['corp'];
+$dateAdmin = preg_match('#<script type="application/json" id="produse-catalog-date">(.*?)</script>#s', $admin, $mm) === 1 ? json_decode($mm[1], true) : [];
+$verifica('editorul produsului: bifa salvată (1), păstrată de o salvare fără ea (1), scoasă din formular (0); în pagină și în datele listei',
+    $bifat === 1 && $pastrat === 1 && $scos === 0 && str_contains($admin, 'id="p_free_shipping"') && str_contains($admin, 'name="transport_campuri_trimise"')
+    && (int) ($dateAdmin['produse'][(string) $idGratuit]['free_shipping'] ?? 0) === 1 && !isset($dateAdmin['produse'][(string) $idAlt]['free_shipping']),
+    $bifat . '/' . $pastrat . '/' . $scos);
+$db->exec('UPDATE products SET free_shipping = 0');
+
+// =====================================================================
+// WP-20 B. Cupoanele cu spații (C9)
+// =====================================================================
+$scrie('');
+$scrie('== WP-20 B. Codul cuponului scris cu spații (C9)');
+$cuponDupaCod = static function (string $cod) use ($db): ?array {
+    $m = new ReflectionMethod(CheckoutCalculator::class, 'loadCouponByCode');
+    $m->setAccessible(true);
+    return $m->invoke(null, $db, $cod);
+};
+$verifica('„DEMO 10”, „ demo10 ”, „DE MO 10” (cu tab și spațiu nedespărțitor) găsesc cuponul DEMO10, cu codul din bază',
+    ($cuponDupaCod('DEMO 10')['code'] ?? '') === 'DEMO10' && ($cuponDupaCod(' demo10 ')['code'] ?? '') === 'DEMO10'
+    && ($cuponDupaCod("DE\tMO\u{00A0}10")['code'] ?? '') === 'DEMO10');
+$db->exec("INSERT INTO coupons (name, code, type, value, is_active) VALUES ('Test spații', 'CALC 77', 'percent', 5, 1), ('Test compact', 'CALC77', 'percent', 7, 1)");
+$verifica('un cod care chiar are spații („CALC 77”) găsește întâi potrivirea exactă, nu varianta compactă (CALC77)',
+    ($cuponDupaCod('calc 77')['code'] ?? '') === 'CALC 77' && ($cuponDupaCod('CALC77')['code'] ?? '') === 'CALC77'
+    && ($cuponDupaCod('C ALC77')['code'] ?? '') === 'CALC77');
+$verifica('un cod inexistent rămâne inexistent; un cupon oprit nu se găsește nici cu spații', $cuponDupaCod('NU EXISTA') === null
+    && $cuponDupaCod('OPRIT 20') === null);
+@unlink($jarViz);
+$cerere('POST', '/cos/adauga/' . $idAlt, $jarViz, ['quantity' => '3']);
+$cerere('POST', '/cos/cupon', $jarViz, ['coupon_code' => 'demo 10']);
+$sumar = json_decode($cerere('GET', '/api/cart/summary', $jarViz)['corp'], true) ?: [];
+$verifica('în coș: „demo 10” se aplică, iar coșul ține codul din bază (DEMO10)', ($sumar['coupon']['code'] ?? '') === 'DEMO10'
+    && (float) ($sumar['discount'] ?? 0) > 0, json_encode(array_intersect_key($sumar, array_flip(['coupon', 'coupon_error', 'discount']))));
+@unlink($jarViz);
+
+// =====================================================================
+// WP-20 C. Linkul de plată prin Stripe (X5)
+// =====================================================================
+$scrie('');
+$scrie('== WP-20 C. Linkul de plată a diferenței prin Stripe (X5)');
+$stripe = ['stripe_enabled' => '1', 'stripe_secret_key' => 'sk_test_inventat'];
+$eu = ['euplatesc_enabled' => '1', 'euplatesc_merchant_id' => 'inventat', 'euplatesc_secret_key' => 'inventat'];
+$verifica('procesorul unui link nou: Stripe doar când nici BT, nici EuPlătesc nu sunt pornite; EuPlătesc rămâne înaintea lui; fără cheie, niciunul',
+    PaymentLink::procesorPentruLinkNou($stripe) === PaymentLink::PROCESATOR_STRIPE
+    && PaymentLink::procesorPentruLinkNou($stripe + $eu) === PaymentLink::PROCESATOR_EUPLATESC
+    && PaymentLink::procesorPentruLinkNou(['stripe_enabled' => '1', 'stripe_secret_key' => '']) === ''
+    && PaymentLink::procesorPentruLinkNou(['stripe_enabled' => '0', 'stripe_secret_key' => 'sk_test_x']) === '');
+$verifica('procesatorul unui link: „stripe” recunoscut; necunoscut = EuPlătesc (ca înainte); Stripe disponibil doar cu setările lui',
+    PaymentLink::procesator(['procesator' => 'stripe']) === 'stripe' && PaymentLink::procesator(['procesator' => 'altceva']) === 'euplatesc'
+    && PaymentLink::procesorDisponibil('stripe', $stripe) && !PaymentLink::procesorDisponibil('stripe', $eu)
+    && !PaymentLink::procesorScosDinLicenta('stripe'));
+
+$comandaPlatita = $db->query("SELECT id, order_number, total, paid_amount, status, payment_status FROM orders WHERE deleted_at IS NULL AND payment_status = 'paid'
+    AND total > 40 ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+$idPlatita = (int) ($comandaPlatita['id'] ?? 0);
+$db->prepare('UPDATE orders SET paid_amount = ROUND(total - 25.5, 2) WHERE id = :id')->execute(['id' => $idPlatita]);
+$link = PaymentLink::creeaza($db, $idPlatita, (string) $comandaPlatita['order_number'], 25.5, PaymentLink::PROCESATOR_STRIPE, []);
+$verifica('o comandă demo plătită, cu 25,50 lei rest: linkul nou ține procesatorul „stripe”', $idPlatita > 0 && is_array($link)
+    && (string) ($link['procesator'] ?? '') === 'stripe' && (string) ($link['status'] ?? '') === 'pending');
+$token = (string) ($link['token'] ?? '');
+$setare('stripe_enabled', '1');
+$pagina = $cerere('GET', '/plata/' . rawurlencode($token));
+$verifica('pagina linkului: suma, butonul de plată și „pe pagina procesatorului Stripe”', $pagina['cod'] === 200 && str_contains($pagina['corp'], '25,50 lei')
+    && str_contains($pagina['corp'], 'pe pagina procesatorului Stripe') && str_contains($pagina['corp'], 'Plătește cu cardul'));
+
+// Câmpurile sesiunii Stripe Checkout (fără cererea spre Stripe).
+$site = (new ReflectionClass(\App\Http\Controllers\SiteController::class))->newInstanceWithoutConstructor();
+$campuri = (new ReflectionMethod($site, 'campuriStripeLink'))->invoke($site, $link, ['order_number' => (string) $comandaPlatita['order_number'],
+    'billing_email' => 'client@exemplu.ro'], ['stripe_currency' => 'RON'], 'https://magazin.exemplu.ro');
+$verifica('sesiunea Stripe a linkului: suma în bani (2550), referința linkului, cheia lui în metadate (și pe plată), întoarcerea pe /plata/…, '
+    . 'fără metadatele comenzii (order_number / order_id)', is_array($campuri) && $campuri['line_items[0][price_data][unit_amount]'] === '2550'
+    && $campuri['line_items[0][price_data][currency]'] === 'ron' && $campuri['client_reference_id'] === (string) $link['referinta']
+    && $campuri['metadata[payment_link_token]'] === $token && $campuri['payment_intent_data[metadata][payment_link_token]'] === $token
+    && str_starts_with($campuri['success_url'], 'https://magazin.exemplu.ro/plata/' . $token . '?platit=1&session_id=')
+    && !isset($campuri['metadata[order_number]']) && !isset($campuri['metadata[order_id]']) && ($campuri['customer_email'] ?? '') === 'client@exemplu.ro',
+    json_encode($campuri));
+$verifica('… un link cu suma 0: nicio sesiune', (new ReflectionMethod($site, 'campuriStripeLink'))->invoke($site, ['amount' => '0'] + $link, [], [], '') === null);
+
+/** Un eveniment Stripe semnat local cu secretul webhook-ului din setări (whsec_…), trimis la /webhook/stripe. */
+$secretWebhook = 'whsec_test_inventat';
+$setare('stripe_webhook_secret', $secretWebhook);
+$webhook = static function (array $eveniment, ?string $secret = null) use ($baza, $secretWebhook): array {
+    $corp = (string) json_encode($eveniment);
+    $t = time();
+    $semnatura = 't=' . $t . ',v1=' . hash_hmac('sha256', $t . '.' . $corp, $secret ?? $secretWebhook);
+    $c = curl_init($baza . '/webhook/stripe');
+    curl_setopt_array($c, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $corp, CURLOPT_RETURNTRANSFER => true, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '',
+        CURLOPT_TIMEOUT => 60, CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Stripe-Signature: ' . $semnatura]]);
+    $raspuns = (string) curl_exec($c);
+    $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+    curl_close($c);
+    return ['cod' => $cod, 'corp' => $raspuns];
+};
+$sesiune = static fn (string $tok, int $suma, string $stare = 'paid'): array => ['id' => 'evt_test_' . bin2hex(random_bytes(4)),
+    'type' => 'checkout.session.completed', 'data' => ['object' => ['id' => 'cs_test_' . bin2hex(random_bytes(6)), 'object' => 'checkout.session',
+        'payment_status' => $stare, 'amount_total' => $suma, 'currency' => 'ron', 'client_reference_id' => 'ref', 'payment_intent' => 'pi_test_inventat',
+        'metadata' => ['payment_link_token' => $tok]]]];
+$stareComanda = static fn () => $db->query('SELECT status, payment_status, paid_amount, total FROM orders WHERE id = ' . $idPlatita)->fetch(PDO::FETCH_ASSOC);
+$inainte = $stareComanda();
+$r = $webhook($sesiune($token, 2550), 'whsec_alt_secret');
+$verifica('webhook cu semnătură greșită: 400, linkul tot neplătit', $r['cod'] === 400
+    && $unu('SELECT status FROM order_payment_links WHERE token = :t', ['t' => $token]) === 'pending');
+$r = $webhook($sesiune($token, 2549));
+$verifica('sesiune plătită cu altă sumă (25,49 în loc de 25,50): linkul rămâne neplătit, comanda neatinsă', $r['cod'] === 200
+    && $unu('SELECT status FROM order_payment_links WHERE token = :t', ['t' => $token]) === 'pending' && $stareComanda() === $inainte);
+$r = $webhook($sesiune($token, 2550, 'unpaid'));
+$verifica('sesiune neplătită (payment_status unpaid): linkul rămâne neplătit, comanda neatinsă (nu devine „eșuată”)', $r['cod'] === 200
+    && $unu('SELECT status FROM order_payment_links WHERE token = :t', ['t' => $token]) === 'pending' && $stareComanda() === $inainte);
+$r = $webhook(['id' => 'evt_pi', 'type' => 'payment_intent.succeeded', 'data' => ['object' => ['id' => 'pi_test_inventat', 'object' => 'payment_intent',
+    'metadata' => ['payment_link_token' => $token, 'order_number' => (string) $comandaPlatita['order_number']]]]]);
+$verifica('payment_intent.succeeded al unei plăți de link: ignorat (linkul se confirmă pe sesiune), comanda neatinsă', $r['cod'] === 200
+    && $unu('SELECT status FROM order_payment_links WHERE token = :t', ['t' => $token]) === 'pending' && $stareComanda() === $inainte);
+$r = $webhook($sesiune($token, 2550));
+$dupa = $stareComanda();
+$verifica('checkout.session.completed plătit, cu suma linkului: linkul plătit, încasat pe comandă +25,50 (= totalul), starea comenzii neschimbată',
+    $r['cod'] === 200 && $unu('SELECT status FROM order_payment_links WHERE token = :t', ['t' => $token]) === 'paid'
+    && abs((float) $dupa['paid_amount'] - (float) $dupa['total']) < 0.005 && $dupa['status'] === $inainte['status']
+    && $dupa['payment_status'] === 'paid', json_encode([$inainte, $dupa]));
+$r = $webhook($sesiune($token, 2550));
+$verifica('… același eveniment a doua oară: suma nu se adaugă din nou', $r['cod'] === 200 && $stareComanda() === $dupa);
+// Un link EuPlătesc nu se plătește printr-o sesiune Stripe.
+$db->prepare('UPDATE orders SET paid_amount = ROUND(total - 10, 2) WHERE id = :id')->execute(['id' => $idPlatita]);
+$linkEu = PaymentLink::creeaza($db, $idPlatita, (string) $comandaPlatita['order_number'], 10.0, PaymentLink::PROCESATOR_EUPLATESC, []);
+$inainte = $stareComanda();
+$r = $webhook($sesiune((string) ($linkEu['token'] ?? ''), 1000));
+$verifica('sesiune Stripe cu cheia unui link EuPlătesc: linkul rămâne neplătit, comanda neatinsă', is_array($linkEu) && $r['cod'] === 200
+    && $unu('SELECT status FROM order_payment_links WHERE token = :t', ['t' => (string) $linkEu['token']]) === 'pending' && $stareComanda() === $inainte);
+// Adminul: „Trimite linkul de plată” alege Stripe când e singurul procesator pornit (emailul pleacă în dosarul de dezvoltare).
+$setare('euplatesc_enabled', '0');
+$setare('bt_ipay_enabled', '0');
+$setare('stripe_secret_key', 'sk_test_inventat');
+$db->prepare("UPDATE order_payment_links SET status = 'cancelled' WHERE order_id = :id AND status = 'pending'")->execute(['id' => $idPlatita]);
+$db->prepare('UPDATE orders SET paid_amount = ROUND(total - 7, 2) WHERE id = :id')->execute(['id' => $idPlatita]);
+$r = json_decode($cerere('POST', '/admin/orders/' . $idPlatita . '/payment-link', $jarAdmin)['corp'], true) ?: [];
+$verifica('Admin → comanda → „Trimite linkul de plată”: cu doar Stripe pornit, linkul nou e Stripe, iar răspunsul o spune',
+    (($r['ok'] ?? false) === true || str_contains((string) ($r['error'] ?? ''), 'emailul nu a plecat')) && ($r['procesator'] ?? 'Stripe') === 'Stripe'
+    && $unu("SELECT procesator FROM order_payment_links WHERE order_id = :id AND status = 'pending' ORDER BY id DESC LIMIT 1", ['id' => $idPlatita]) === 'stripe',
+    json_encode($r));
 
 // =====================================================================
 // Final: totul la loc
