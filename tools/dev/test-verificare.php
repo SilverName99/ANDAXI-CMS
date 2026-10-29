@@ -1326,9 +1326,13 @@ try {
     // aici ce ar vedea pe site; cu baza în urma codului 503 (ultima_ord coborât o clipă pe baza copiei, apoi pus la loc).
     $bazaCopiei = '`' . $bazaCopie . '`';
     $ultimaDinCod = (int) ((require $radacina . '/database/migrari/ultima.php')['ord'] ?? 0);
+    // Pachetul copiei (configureaza.php: site-uri/bioscem), cum îl vede codul copiei însuși.
+    $pachetCopiei = (string) $inCopie('return \App\Support\PachetSite::amprenta(\App\Support\DateSite::dosar()) ?? "lipsa";');
+    $verifica('pachetul copiei de verificare: site-uri/bioscem, cu manifestul lui', preg_match('/^[0-9a-f]{12}$/', $pachetCopiei) === 1, $pachetCopiei);
     $r = $cerere('GET', '/health');
     $verifica('/health fără parolă, cu copia încărcată → aplicația: 200 „ok” + „schema: la_zi”, noindex, no-store '
-        . '(copia bazei de dezvoltare, făcută prin migrări de tools/dev/instaleaza.sh)', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi" && $antetPoarta($r),
+        . '(copia bazei de dezvoltare, făcută prin migrări de tools/dev/instaleaza.sh) și, pe al treilea rând (WP-16), pachetul copiei',
+        $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi\npachet: " . $pachetCopiei && $antetPoarta($r),
         $r['cod'] . ' ' . $r['corp']);
     $ultimaInBaza = (string) $root->query('SELECT valoare FROM ' . $bazaCopiei . "._platforma_stare WHERE cheie = 'ultima_ord'")->fetchColumn();
     try {

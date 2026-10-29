@@ -333,7 +333,8 @@ $PHP tools/verificare/incarca.php --demo --pachet=biovitality   # sau bioscem, v
 ```
 
 `--licenta=<pachet>` alege alt pachet de pluginuri decât al site-ului (numele: `licenta.php presetari`). Pentru
-Biovitality, vertij și grafoanaytis trebuie pe server, lângă pachet, valorile private ale înghețării setărilor
+fiecare pachet (din WP-16 și pentru Bioscem: destinatarii formularului de contact; din WP-18 și datele de contact de pe
+acordul GDPR) trebuie pe server, lângă pachet, valorile private ale înghețării setărilor
 (`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi; nu e în git): fără el încărcarea se
 oprește cu „codul 15” și șterge copia.
 
@@ -484,7 +485,7 @@ jurnalul erorilor PHP), înaintea fișierelor încărcate, a stratului SEO și a
    web, fără antet; `robots.txt` le închide oricum.
 4. Fără parolă: `GET /robots.txt` → `User-agent: *` / `Disallow: /`; `GET /health` → `ok` (fără bază, fără
    sesiune) cât nu e încărcată nicio copie (sau copia a expirat). Cu o copie încărcată, `GET /health` îl dă
-   aplicația, tot fără parolă, ca pe un site adevărat: `ok` și `schema: <stare>`, iar cu baza în urma
+   aplicația, tot fără parolă, ca pe un site adevărat: `ok`, `schema: <stare>` și `pachet: <amprenta>` (WP-16), iar cu baza în urma
    codului (migrări neaplicate) **503** `schema: in_urma` ([MIGRARI.md](MIGRARI.md), „Garda”). Așa o
    repetiție a deploy-ului pe verificare vede exact ce ar vedea pe site (o verificare după deploy care
    cere 200 întoarce codul la loc dacă `migreaza.php --aplica` n-a rulat). Tot fără parolă, `GET`/`HEAD

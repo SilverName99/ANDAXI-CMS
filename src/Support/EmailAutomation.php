@@ -89,7 +89,7 @@ final class EmailAutomation
             (string) ($parti[1] ?? ''),
             $email
         );
-        $storeName = trim((string) ($settings['order_email_from_name'] ?? 'Bioscem')) ?: 'Bioscem';
+        $storeName = Brand::numeExpeditor($settings);
 
         $context = [
             'customer_name' => $customerName,
@@ -215,10 +215,7 @@ final class EmailAutomation
             $trackingUrl = '/contul-meu?section=orders';
         }
 
-        $storeName = trim((string) ($settings['order_email_from_name'] ?? 'Bioscem'));
-        if ($storeName === '') {
-            $storeName = 'Bioscem';
-        }
+        $storeName = Brand::numeExpeditor($settings);
         $orderItems = self::loadOrderItems($db, $orderId);
         $orderSummaryText = self::orderItemsSummaryText($orderItems);
         $orderSummaryRows = self::orderItemsSummaryRowsHtml($orderItems);

@@ -19,7 +19,8 @@ declare(strict_types=1);
  *      fișierele /tema/… servite (cele din afara tema/public/ nu), niciun avertisment PHP.
  *  T3, același port: fără temă, cu tema.json gol și cu fiecare cheie scrisă la valoarea ei implicită, paginile (și
  *      vederile de rezervă: 404, mulțumirea, linkul de plată, verificarea BT, sertarul de meniu) ies octet cu octet la fel,
- *      și au semnele codului de dinainte (Google Fonts, app.css, .container, fără butonul „sus”, #2f8d5b). Că vederile
+ *      și au semnele codului de dinainte (Google Fonts, app.css, .container, fără butonul „sus”, #2f8d5b) și implicitele neutre
+ *      din WP-16 (sertarul fără logo arată numele site-ului ca text, mulțumirea are paleta neutră). Că vederile
  *      de rezervă și sertarul sunt chiar cele ale Bioscem o arată comparația cu codul Bioscem (G-cmp, cazul „vederi” din
  *      tools/dev/compara-cu-baza.php); T3 compară codul curent doar cu el însuși.
  *  T4, Playwright (tools/dev/capturi-publice.php verificari, instrumentul porții G-vizual): stilurile calculate ale temei
@@ -109,11 +110,15 @@ $verifica('css_inline: un bloc cu „</style” (și cu majuscule) sau un fișie
     $v['css_inline'] === [] && count($p) === 1 && $v2['css_inline'] === [] && count($p2) === 1
     && $v3['css_inline'] === ['pagina_succes' => 'bun.css'] && $p3 === [], implode('; ', array_merge($p, $p2, $p3)));
 
-// SvgSigur: iconițele de azi ale nucleului (le mută WP-16 în pachetul Bioscem) trec toate; fragmentele periculoase nu.
-$tIconiteNucleu = (new ReflectionClassConstant(HomeSections::class, 'CATEGORY_ICONS'))->getValue();
+// SvgSigur: iconița implicită a nucleului și cele mutate în WP-16 în pachetul Bioscem (tema.json → iconite_categorii) trec
+// toate; fragmentele periculoase nu.
+$tIconiteNucleu = ['implicita' => (string) (new ReflectionClassConstant(HomeSections::class, 'ICONITA_IMPLICITA'))->getValue()];
+foreach ((array) (json_decode((string) file_get_contents($radacina . '/site-uri/bioscem/tema/tema.json'), true)['iconite_categorii'] ?? []) as $tPereche) {
+    $tIconiteNucleu[(string) ($tPereche[0] ?? '?')] = (string) ($tPereche[1] ?? '');
+}
 $tIconiteRele = array_filter($tIconiteNucleu, static fn (string $svg): bool => !SvgSigur::fragment($svg));
-$verifica('cele ' . count($tIconiteNucleu) . ' iconițe ale nucleului trec de lista albă (SvgSigur::fragment)', $tIconiteRele === [],
-    implode(', ', array_keys($tIconiteRele)));
+$verifica('cele ' . count($tIconiteNucleu) . ' iconițe (cea implicită a nucleului și cele ale pachetului Bioscem) trec de lista albă (SvgSigur::fragment)',
+    count($tIconiteNucleu) === 19 && $tIconiteRele === [], implode(', ', array_keys($tIconiteRele)));
 $tFragmenteRele = ['<script>alert(1)</script>', '<path d="M0 0" onload="alert(1)"/>', '<a href="javascript:alert(1)"><path d="M0 0"/></a>',
     '<path d="M0 0" style="fill:url(https://exemplu.test/x)"/>', '<image href="https://exemplu.test/x.png"/>', '<path d="&#x4d;0 0"/>',
     '<!-- x --><path d="M0 0"/>', '<![CDATA[<script>]]>', 'text', '<foreignObject><p>x</p></foreignObject>',
@@ -483,7 +488,9 @@ try {
     }
     $verifica('fără temă = tema.json gol = fiecare cheie scrisă la implicit: ' . count($paginiT3) . ' pagini (și vederile de rezervă, '
         . 'sertarul de meniu) octet cu octet la fel', $diferite === [] && count($referinta) === count($paginiT3)
-        && str_contains($referinta['/'], 'alt="Bioscem" loading="lazy">') && str_contains($referinta['/checkout/succes/' . $tNr], '--bs-succes-accent:#075d61'),
+        // Implicitele neutre ale nucleului (WP-16): sertarul fără logo arată numele site-ului ca text, mulțumirea are paleta neutră.
+        && str_contains($referinta['/'], '<span class="bv-mobile-menu-token__brand-text">')
+        && str_contains($referinta['/checkout/succes/' . $tNr], '--bs-succes-accent:#334155'),
         implode(', ', $diferite));
     // Implicitul însuși e comportamentul de azi (o valoare implicită schimbată ar schimba la fel toate cele trei variante).
     $acasaImplicit = $referinta['/'];

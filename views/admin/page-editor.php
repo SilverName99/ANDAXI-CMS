@@ -169,7 +169,7 @@ if (!is_string($previewAppCssContent)) {
             </p>
             <div class="field" style="max-width:720px;">
                 <label for="seo_title">Meta title</label>
-                <input id="seo_title" type="text" name="seo_title" value="<?= htmlspecialchars($pageSeoTitle, ENT_QUOTES) ?>" maxlength="120" placeholder="Ex: Bioscem - Titlu pagină">
+                <input id="seo_title" type="text" name="seo_title" value="<?= htmlspecialchars($pageSeoTitle, ENT_QUOTES) ?>" maxlength="120" placeholder="Ex: Numele site-ului - Titlu pagină">
             </div>
             <div class="field" style="max-width:720px;">
                 <label for="seo_description">Meta description</label>

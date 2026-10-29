@@ -31,6 +31,9 @@ if ($sortOptions === []) {
         'price_desc' => 'Preț: mare → mic',
     ];
 }
+// Textul unui produs fără descriere scurtă: Setări → catalog_descriere_implicita (WP-16, DB-14); gol = niciun text, elementul
+// rămâne (un site existent își păstrează textul prin înghețarea setărilor).
+$descriereImplicita = (string) ($descriereImplicita ?? '');
 // Pluginurile: fără magazin (catalog de prezentare) produsele n-au preț și coș;
 // când magazinul se oprește, nu se mai adaugă nimic în coș; stelele doar cu recenziile.
 $arePreturi = \App\Support\Plugins::vizibil('magazin');
@@ -324,7 +327,7 @@ if (!$arePreturi) {
           </div>
 
           <div class="bv-popular-card__body">
-            <p class="bv-popular-card__desc"><?= htmlspecialchars($desc !== '' ? $desc : 'Supliment natural', ENT_QUOTES) ?></p>
+            <p class="bv-popular-card__desc"><?= htmlspecialchars($desc !== '' ? $desc : $descriereImplicita, ENT_QUOTES) ?></p>
             <h3 class="bv-popular-card__name"><a href="/produs/<?= rawurlencode($slug) ?>"><?= htmlspecialchars($name, ENT_QUOTES) ?></a></h3>
 
 <?php if ($areRecenzii): ?>

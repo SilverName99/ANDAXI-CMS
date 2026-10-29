@@ -402,6 +402,10 @@ final class OrderMailer
             }
         }
 
+        // {{store_name}} fără valoare în context: numele expeditorului, altfel al site-ului (WP-16; nicio rezervă cu numele unui client).
+        if (trim((string) ($context['store_name'] ?? '')) === '') {
+            $context['store_name'] = Brand::numeExpeditor($settings);
+        }
         $vars = self::templateVars($context);
         $subject = self::applyTemplate($subjectTemplate, $vars);
         if ($subject === '') {
@@ -622,7 +626,7 @@ HTML;
 
     private static function sendHtmlEmail(string $to, string $subject, string $html, array $settings): void
     {
-        $fromName = self::sanitizeHeader((string) ($settings['order_email_from_name'] ?? 'Bioscem'));
+        $fromName = self::sanitizeHeader(Brand::numeExpeditor($settings));
         // Site-ul de verificare (docs/VERIFICARE.md): orice email doar la proprietar, cu „[VERIFICARE]”, prin căsuța
         // copiei sau ca fișier, cel mult 100 pe zi; SMTP-ul, SendGrid-ul și adresa expeditorului din setări nu se folosesc.
         if (Verificare::activ()) {
@@ -788,7 +792,7 @@ HTML;
         }
     }
 
-    /** Domeniul dintr-o adresă de email („no-reply@bioscem.ro" → „bioscem.ro"). */
+    /** Domeniul dintr-o adresă de email („no-reply@exemplu.ro" → „exemplu.ro"). */
     private static function domeniuDinEmail(string $email): string
     {
         $pozitie = strrpos($email, '@');
@@ -1120,7 +1124,8 @@ HTML;
         }
         $storeName = trim((string) ($context['store_name'] ?? ''));
         if ($storeName === '') {
-            $storeName = 'Bioscem';
+            // sendTemplate pune deja numele expeditorului; aici doar dacă lipsesc și setările.
+            $storeName = Brand::numeSite([]);
         }
         $customerEmail = trim((string) ($context['customer_email'] ?? ''));
         if ($customerEmail === '') {

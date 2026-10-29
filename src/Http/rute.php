@@ -20,15 +20,19 @@ return static function (Router $router): void {
     // Starea site-ului pentru monitorizare și pentru deploy: „ok” și, pe al doilea rând, schema bazei
     // față de migrările din cod (App\Support\Migrari\Garda: la_zi, in_urma, fara_registru, eroare).
     // O bază în urma codului dă 503, ca verificarea de după un deploy să întoarcă codul la loc.
+    // Al treilea rând (WP-16, DB-08): pachetul site-ului din SITE_DATE_DOSAR, ca primele 12 caractere
+    // ale sha256-ului manifestului (pachet.json), sau „lipsa”: un pachet lipsă ar schimba ce văd vizitatorii (numele
+    // cookie-ului de acord, tema), deci deploy-ul și monitorul îl văd aici.
     $router->get('/health', static function (): void {
         $schema = \App\Support\Migrari\Garda::stareSite();
+        $pachet = 'pachet: ' . (\App\Support\PachetSite::amprenta(\App\Support\DateSite::dosar()) ?? 'lipsa');
         header('Content-Type: text/plain; charset=utf-8');
         if ($schema === \App\Support\Migrari\Garda::IN_URMA) {
             http_response_code(503);
-            echo "indisponibil\nschema: " . $schema;
+            echo "indisponibil\nschema: " . $schema . "\n" . $pachet;
             return;
         }
-        echo "ok\nschema: " . $schema;
+        echo "ok\nschema: " . $schema . "\n" . $pachet;
     });
 
     // robots.txt e servit dinamic (regulile în App\Support\Robots, doar ale

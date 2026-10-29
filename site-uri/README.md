@@ -20,6 +20,9 @@ scrise în cod).
 | `bioscem/avertismente-produse.json` | avertismentul celor trei produse refrigerate (Bioscem `0f5f568`), pentru `php scripts/avertisment-produse.php` |
 | `bioscem/seo-continut.json` | conținutul schimbat o dată în livrarea 4 SEO (căștile AIRCALL, 30 de linkuri din texte; Bioscem `c3ad6ab`, `b51067a`), pentru `php scripts/seo-continut.php`; pe Bioscem deja aplicat |
 | `bioscem/poze-optimizate.json` | cele 10 poze mari afișate ca WebP (livrarea 4 SEO, Bioscem `e2c97dc`, `070e1af`): poza veche → fișierul nou din `bioscem/public/assets/img/optimizate/` și mărimea pozei vechi **de pe discul serverului** (`"marimi_de_pe": "disc"`; prin CDN ar fi alți octeți și nicio poză n-ar trece pe WebP); obligatoriu în `pachet.json` ([docs/SEO.md](../docs/SEO.md), „Pozele refăcute”) |
+| `bioscem/site.json` | constantele tehnice ale Bioscem (WP-16): numele cookie-ului acordului (`bioscem_cookie_consent`) și cheia popup-ului închis (`bioscem_welcome_popup_inchis`); obligatoriu în `pachet.json` |
+| `bioscem/tema/` | tema Bioscem (WP-16): `tema.json` (logo-ul sertarului de meniu, cele 18 iconițe ale categoriilor, blocul paginii de mulțumire) și `pagina-succes.css` (stilurile paginii de mulțumire, cu paleta Bioscem), toate scoase din nucleu octet cu octet; `tema/tema.json` obligatoriu |
+| `biovitality/site.json`, `grafoanaytis/site.json` | numele cookie-ului acordului din codurile lor (`bv_cookie_consent`, WP-16): vizitatorii care au ales nu văd din nou bannerul |
 | `bioscem/public/` | fișierele publice ale site-ului la o adresă fixă (variantele WebP ale logo-ului din antet, Bioscem `a14e803`, și cele 10 poze refăcute ale livrării 4, `070e1af`, la `/assets/img/…`): **la adoptare se copiază peste `public/` al codului** (nu în dosarul site-ului); doar imagini, niciuna peste un fișier al nucleului; `tools/dev/compara-cu-baza.sh` le pune acolo doar pe durata comparației ([docs/PACHETE.md](../docs/PACHETE.md), „Fișierele publice la o adresă fixă”) |
 | `bioscem/ce-se-schimba.md` | ce vede altfel clientul când trece pe codul comun (se predă la adoptare); fiecare rând e declarat și în `tools/dev/compara-cu-baza.php`. Obligatoriu în fiecare pachet de aici |
 | `<site>/setari-inghetate.json` | înghețarea setărilor (WP-06): valorile codului vechi al site-ului acolo unde codul comun ar folosi altceva, scrise o singură dată, la adoptare, doar unde lipsesc (pasul `site/<site>/setari-inghetate` al migrărilor). Bioscem din `070e1af`; Biovitality, vertij și grafoanaytis provizorii până la raportul „live față de repo” din Etapa 0. Generat de `tools/inghetare/genereaza-setari.php` (care rescrie și `pachet.json`), verificat de `tools/inghetare/verifica-inghetare.php` |
@@ -30,8 +33,10 @@ scrise în cod).
 
 Cele trei liste de mai sus au, din WP-R din 21 octombrie, și rândurile nucleului din lista Bioscem care li se aplică (trecerea pe migrări: `/health`, `install.php`, nicio instrucțiune de schemă pe cerere, pașii de activare și rândurile lor din jurnal, ștergerile care rămân; schema adăugată de migrări; sesiunea, cronurile, pagina de start a adminului), verificate pe codul fiecărui site la „ultimul commit revizuit”. Ce primesc din alte site-uri odată cu codul comun (livrările SEO și avertismentul pe produs ale Bioscem, reparațiile Bioscem; `docs/de-portat.md`) le trec porturile lor, până la adoptare.
 
-Încă nicio temă (`tema/`) și niciun `site.json` aici: pachetul Bioscem le primește în WP-14 și WP-16, cel grafoanaytis în
-Etapa 4 (GR-19). Formatul și regulile: [docs/PACHETE.md](../docs/PACHETE.md) (pachetul, tema, manifestul),
+Din WP-16: `bioscem/site.json` (numele cookie-ului acordului și cheia popup-ului, cum le avea codul Bioscem),
+`bioscem/tema/` (`tema.json`: logo-ul sertarului de meniu, iconițele categoriilor, blocul paginii de mulțumire,
+`pagina-succes.css`, toate scoase din nucleu, cu valorile codului Bioscem) și `biovitality/site.json`,
+`grafoanaytis/site.json` (cookie-ul `bv_cookie_consent` al codurilor lor). Tema grafoanaytis vine în Etapa 4 (GR-19). Formatul și regulile: [docs/PACHETE.md](../docs/PACHETE.md) (pachetul, tema, manifestul),
 [docs/SEO.md](../docs/SEO.md) (harta adreselor, SEO) și [docs/MIGRARI.md](../docs/MIGRARI.md), „Înghețarea setărilor” și
 „Parametrii site-ului”. Pachetele inventate ale site-ului de dezvoltare stau în `tools/dev/site-demo/` (fără temă) și
 `tools/dev/site-demo-tema/` (doar tema, pentru testul temei).

@@ -15,7 +15,7 @@ $defaultSnippets = [
   </nav>
 </header>',
     'footer' => '<footer style="background:#0f172a;color:#cbd5e1;padding:24px 32px;">
-  <p style="margin:0;">&copy; ' . date('Y') . ' Bioscem. Toate drepturile rezervate.</p>
+  <p style="margin:0;">&copy; ' . date('Y') . ' ' . htmlspecialchars(\App\Support\Brand::numeSite($settings), ENT_QUOTES) . '. Toate drepturile rezervate.</p>
 </footer>',
     'menu' => '<a href="/" style="color:white;text-decoration:none;">Acasă</a>
 <a href="/magazin" style="color:white;text-decoration:none;">Magazin</a>

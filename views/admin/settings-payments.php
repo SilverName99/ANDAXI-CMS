@@ -244,7 +244,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
         <div class="field" style="grid-column:1/-1;">
             <label>Instrucțiuni de plată (IBAN, bancă, beneficiar…)</label>
             <textarea name="bank_transfer_instructiuni" rows="5"
-                placeholder="Beneficiar: BIOSCEM S.R.L.&#10;IBAN: RO...&#10;Banca: ...&#10;Comanda se procesează după încasare."><?= htmlspecialchars((string) ($settings['bank_transfer_instructiuni'] ?? ''), ENT_QUOTES) ?></textarea>
+                placeholder="Beneficiar: FIRMA S.R.L.&#10;IBAN: RO...&#10;Banca: ...&#10;Comanda se procesează după încasare."><?= htmlspecialchars((string) ($settings['bank_transfer_instructiuni'] ?? ''), ENT_QUOTES) ?></textarea>
             <p style="margin:4px 0 0;color:#64748b;font-size:13px;">
                 Textul apare exact așa la client. În șabloanele de email se poate folosi și
                 variabila <code>{{payment_instructions}}</code>; dacă lipsește din șablon,

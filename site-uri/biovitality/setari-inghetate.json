@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
+    "amprenta_nucleu": "1c2c8a1fe1138946d0bd7af1ec5ef79df9f75051cd3d008631a69842bf6067e5",
     "setari": {
         "bunny_app_download_path": {
             "valoare": "aplicatie/BiovitalityFiles.exe",
@@ -53,6 +53,18 @@
             "mod": "lipsa",
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
+        },
+        "catalog_descriere_implicita": {
+            "valoare": "Supliment natural",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "views/site/components/product-card.php și views/site/product.php (caruselul produselor similare): un produs fără descriere scurtă arăta „Supliment natural”; codul comun nu arată niciun text (catalog_descriere_implicita gol, WP-16, DB-14)",
+            "extrage": {
+                "fisier": "views/site/components/product-card.php",
+                "tipar": "/\\$desc !== '' \\? \\$desc : '([^']+)'/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
         },
         "contact_form_recipients": {
             "valoare": "adresa1@exemplu.ro",
@@ -146,9 +158,9 @@
             "valoare": "0",
             "mod": "lipsa",
             "din": "manual",
-            "sursa": "BV n-are fereastra de bun venit (nicio cheie welcome_popup_* în codul vechi); rezerva codului comun e tot „0” (views/layout.php)",
+            "sursa": "BV n-are fereastra de bun venit (nicio cheie welcome_popup_* în codul vechi); implicitul codului comun e tot „0” din WP-16",
             "vechi": "lipsește",
-            "nucleu": "implicit \"1\""
+            "nucleu": "implicit \"0\""
         }
     },
     "fara_inghetare": {
@@ -193,9 +205,9 @@
             "nucleu": "implicit \"72\""
         },
         "contact_email": {
-            "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: JSON-LD-ul codului comun lasă emailul afară dacă e gol, iar Maintenance.php cade pe order_email_from_email, o cheie care nu există",
+            "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod expresie",
-            "nucleu": "cod \"\" | expresie"
+            "nucleu": "implicit \"\""
         },
         "euplatesc_currency": {
             "motiv": "EuPlătesc e nou pentru acest site (codul vechi nu-l avea): fără rând, euplatesc_enabled e oprit",
@@ -212,15 +224,10 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
         },
-        "welcome_popup_body": {
-            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
+        "header_account_label": {
+            "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",
             "vechi": "lipsește",
-            "nucleu": "implicit sha256:566998599b36315d (659 caractere)"
-        },
-        "welcome_popup_title": {
-            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
-            "vechi": "lipsește",
-            "nucleu": "implicit \"Bine ați venit pe noul site BIOSCEM!\""
+            "nucleu": "implicit \"Contul meu\""
         },
         "welcome_popup_version": {
             "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",

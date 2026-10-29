@@ -5,7 +5,7 @@ $categories = is_array($categories ?? null) ? $categories : [];
     <div class="section-head">
         <div>
             <h1>Categorii blog</h1>
-            <p>Zonele de conținut (ex: Noutăți, Evenimente, Info pacienți, Info medici).</p>
+            <p>Zonele de conținut (ex: Noutăți, Evenimente).</p>
         </div>
     </div>
 

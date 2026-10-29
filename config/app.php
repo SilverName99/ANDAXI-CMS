@@ -5,7 +5,8 @@ declare(strict_types=1);
 use App\Support\Env;
 
 return [
-    'name' => Env::get('APP_NAME', 'Bioscem Shop'),
+    // Numele site-ului când nici setările, nici pachetul lui nu au unul (App\Support\Brand::numeSite); gol = gazda din APP_URL.
+    'name' => Env::get('APP_NAME', ''),
     'env' => Env::get('APP_ENV', 'production'),
     'debug' => filter_var(Env::get('APP_DEBUG', false), FILTER_VALIDATE_BOOL),
     'url' => Env::get('APP_URL', ''),

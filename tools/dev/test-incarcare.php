@@ -1146,6 +1146,19 @@ try {
     }
     $verifica('copia codului (' . $copiate . ' fișiere, fără storage/, .env și privat/)', $copiate > 100 && is_file($copie . '/tools/verificare/incarca.php')
         && !is_dir($copie . '/site-uri/vertij/privat'));
+    // Din WP-16 și înghețarea Bioscem are o valoare privată (destinatarii formularului de contact; OD-49): pe server
+    // proprietarul copiază site-uri/bioscem/privat/ lângă pachet (docs/VERIFICARE.md); aici, valori inventate.
+    $fisierBioscem = $copie . '/site-uri/bioscem/setari-inghetate.json';
+    $inghetareBioscem = json_decode((string) file_get_contents($fisierBioscem), true);
+    $privatBioscem = ['site' => $inghetareBioscem['site'], 'sursa' => $inghetareBioscem['sursa'],
+        'pentru' => hash('sha256', str_replace("\r\n", "\n", (string) file_get_contents($fisierBioscem))), 'setari' => []];
+    foreach ((array) $inghetareBioscem['setari'] as $cheie => $intrare) {
+        if (is_array($intrare) && ($intrare['privat'] ?? false) === true) {
+            $privatBioscem['setari'][$cheie] = 'bioscem.' . $cheie . '@exemplu-client.ro';
+        }
+    }
+    @mkdir($copie . '/site-uri/bioscem/privat', 0700, true);
+    file_put_contents($copie . '/site-uri/bioscem/privat/setari-inghetate.json', (string) json_encode($privatBioscem));
 
     // ── Baza „live”: ca a unui Bioscem încă neadoptat ──
     $construita = $facSursa($sockMaria);

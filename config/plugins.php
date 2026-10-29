@@ -377,7 +377,7 @@ return [
             'meniu' => [
                 ['grup' => 'blog', 'ordine' => 10, 'eticheta' => 'Postări blog', 'href' => '/admin/blog/posts', 'icon' => 'pages',
                     'activ' => ['/admin/blog/posts']],
-                // Ca în Bioscem: „Categorii” apare cui are voie la postări.
+                // Ca în codul de dinainte de pluginuri: „Categorii” apare cui are voie la postări.
                 ['grup' => 'blog', 'ordine' => 20, 'eticheta' => 'Categorii', 'href' => '/admin/blog/categories', 'icon' => 'pages',
                     'activ' => ['/admin/blog/categories'], 'permisiune' => '/admin/blog/posts'],
                 ['grup' => 'blog', 'ordine' => 30, 'eticheta' => 'Template blog', 'href' => '/admin/blog/templates', 'icon' => 'design',

@@ -1,0 +1,4 @@
+{
+    "_despre": "Constantele tehnice ale site-ului, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). Codul vechi (din linia Biovitality) numea cookie-ul acordului „bv_cookie_consent”: cu alt nume, fiecare vizitator care a ales deja ar vedea din nou bannerul. Fereastra de bun venit nu există pe acest site.",
+    "cookie_consimtamant": "bv_cookie_consent"
+}

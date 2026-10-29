@@ -127,7 +127,7 @@ if ($panelWidth > 640) {
             </div>
             <div class="field" style="grid-column:1/-1;">
                 <label>URL-uri unde NU se afișează coșul flotant</label>
-                <textarea name="floating_cart_excluded_urls" rows="4" placeholder="/checkout&#10;/contul-meu&#10;https://bioscem.ro/contact"><?= htmlspecialchars($excludedUrls, ENT_QUOTES) ?></textarea>
+                <textarea name="floating_cart_excluded_urls" rows="4" placeholder="/checkout&#10;/contul-meu&#10;https://domeniul-tau.ro/contact"><?= htmlspecialchars($excludedUrls, ENT_QUOTES) ?></textarea>
                 <small style="color:#64748b;">Un URL pe rând. Poți pune path-uri (ex: /checkout) sau URL complet (se păstrează doar path-ul).</small>
             </div>
             <div class="field">

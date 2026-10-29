@@ -1,0 +1,44 @@
+# Clichetul verificării 11 din tools/dev/verifica-rute.php: potrivirile din lista neagră (numele unui client) care mai
+# sunt azi în nucleu, pe fișiere. Lista doar scade; goală = verificarea strictă. Rescrisă de
+# tools/dev/php.sh tools/dev/verifica-rute.php --actualizeaza-nume-client
+1	config/activari.php
+6	config/plugins.php
+3	database/migrari/blog/0017_baza_blog.php
+7	database/migrari/magazin/0032_avertismente_produse.php
+5	scripts/avertisment-produse.php
+1	scripts/diagnostic.php
+1	scripts/install.php
+7	scripts/seo-continut.php
+8	scripts/seo-texte.php
+9	src/Http/Controllers/AdminController.php
+16	src/Http/Controllers/SiteController.php
+1	src/Http/rute.php
+1	src/Support/Activari.php
+2	src/Support/AvertismentProduse.php
+1	src/Support/BtIpayGateway.php
+3	src/Support/BtIpayPayments.php
+1	src/Support/DateSite.php
+1	src/Support/Dev.php
+1	src/Support/ErpSync.php
+2	src/Support/FluxGoogleMerchant.php
+2	src/Support/ImagineDistribuire.php
+1	src/Support/LinkuriCategorii.php
+3	src/Support/LogoAntet.php
+2	src/Support/Migrari/Inghetare.php
+1	src/Support/NewsletterService.php
+1	src/Support/OrderMailer.php
+1	src/Support/PachetSite.php
+1	src/Support/Plugins.php
+5	src/Support/PoliticaLivrare.php
+3	src/Support/PozeOptimizate.php
+1	src/Support/ProduseSimilare.php
+14	src/Support/SeoMeta.php
+2	src/Support/SeoRedirects.php
+1	src/Support/Sitemap.php
+1	src/Support/Tema.php
+2	src/Support/Verificare.php
+2	views/admin/blog-template-editor.php
+1	views/layout.php
+3	views/site/components/blog-posts.php
+14	views/site/home.php
+1	views/site/not-found.php

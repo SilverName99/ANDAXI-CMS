@@ -72,19 +72,15 @@ $mobileMenuToken = '{{mobile_menu}}';
 $mobileMenuTokenPattern = '/\{\{\s*mobile_menu\s*\}\}/i';
 // Logo pentru sertarul de meniu mobil: cel al temei site-ului (tema.json → logo_meniu_mobil: primul candidat care
 // există, altfel cel implicit al ei); fără el, ca până acum, primul fișier existent din galerie.
+// Logo pentru sertarul de meniu mobil (WP-16, DB-09): Setări → `store_logo_url`, altfel cel al temei site-ului (tema.json
+// → logo_meniu_mobil: primul candidat care există, altfel cel implicit al ei), altfel
+// numele site-ului ca text. Textul alternativ: al temei, altfel numele site-ului.
+$numeSiteAntet = \App\Support\Brand::numeSite($designSettings);
+$mobileMenuLogoPath = trim((string) ($designSettings['store_logo_url'] ?? ''));
 $mobileMenuLogoTema = \App\Support\Tema::logoMeniuMobil();
-if ($mobileMenuLogoTema !== null) {
+$mobileMenuLogoAlt = $mobileMenuLogoTema !== null && $mobileMenuLogoTema['alt'] !== '' ? $mobileMenuLogoTema['alt'] : $numeSiteAntet;
+if ($mobileMenuLogoPath === '' && $mobileMenuLogoTema !== null) {
     $mobileMenuLogoPath = $mobileMenuLogoTema['cale'];
-    $mobileMenuLogoAlt = $mobileMenuLogoTema['alt'];
-} else {
-    $mobileMenuLogoPath = '/uploads/gallery/bioscem-logo.png';
-    foreach (['bioscem-logo.webp', 'bioscem-logo.png', 'bioscem-logo.jpg', 'bioscem-logo.svg'] as $logoCandidate) {
-        if (is_file(\App\Support\Paths::uploads('gallery') . '/' . $logoCandidate)) {
-            $mobileMenuLogoPath = '/uploads/gallery/' . $logoCandidate;
-            break;
-        }
-    }
-    $mobileMenuLogoAlt = 'Bioscem';
 }
 // Culoarea principală a bannerelor de mai jos (tema.json → culoare_principala; implicit #2f8d5b, ca până acum).
 $culoarePrincipala = \App\Support\Tema::culoarePrincipala();
@@ -315,13 +311,15 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
         . '<aside class="bv-mobile-menu-token__drawer" data-bv-mobile-menu-drawer aria-hidden="true">'
         . '<div class="bv-mobile-menu-token__drawer-head">'
         . '<a href="/" class="bv-mobile-menu-token__brand" aria-label="Acasă">'
-        . '<img src="' . htmlspecialchars($mobileMenuLogoPath, ENT_QUOTES) . '" alt="' . htmlspecialchars($mobileMenuLogoAlt, ENT_QUOTES) . '"' . \App\Support\PozeOptimizate::dimensiuni($mobileMenuLogoPath) . ' loading="lazy">'
+        . ($mobileMenuLogoPath !== ''
+            ? '<img src="' . htmlspecialchars($mobileMenuLogoPath, ENT_QUOTES) . '" alt="' . htmlspecialchars($mobileMenuLogoAlt, ENT_QUOTES) . '"' . \App\Support\PozeOptimizate::dimensiuni($mobileMenuLogoPath) . ' loading="lazy">'
+            : '<span class="bv-mobile-menu-token__brand-text">' . htmlspecialchars($numeSiteAntet, ENT_QUOTES) . '</span>')
         . '</a>'
         . '<button class="bv-mobile-menu-token__close" type="button" aria-label="Închide meniul" data-bv-mobile-menu-close>&times;</button>'
         . '</div>'
         . '<nav class="bv-mobile-menu-token__nav" aria-label="Meniu mobil">' . $mobileMenuHtml . '</nav>'
         . '<div class="bv-mobile-menu-token__links">'
-        . '<a href="/login">Contul meu</a>'
+        . '<a href="/login">' . htmlspecialchars(\App\Support\Brand::etichetaCont($designSettings), ENT_QUOTES) . '</a>'
         . '</div>'
         . '</aside>'
         . '</div>';
@@ -1003,7 +1001,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     <?php else: ?>
         <header class="header">
             <div class="container site-container header-inner">
-                <a href="/" class="logo">Bioscem Shop (Custom)</a>
+                <a href="/" class="logo"><?= htmlspecialchars($numeSiteAntet, ENT_QUOTES) ?></a>
                 <nav class="nav">
                     <?php if (trim($designMenu) !== ''): ?>
                         <?= $designMenu ?>
@@ -1175,7 +1173,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                     var alegere = buton.getAttribute('data-cookie-choice');
                     var expira = new Date(Date.now() + DURATA_ZILE * 864e5).toUTCString();
                     var securizat = location.protocol === 'https:' ? ';Secure' : '';
-                    document.cookie = <?= json_encode(\App\Support\CookieConsent::COOKIE) ?> + '=' + alegere +
+                    document.cookie = <?= json_encode(\App\Support\CookieConsent::nume()) ?> + '=' + alegere +
                         ';path=/;expires=' + expira + ';SameSite=Lax' + securizat;
                     banner.style.display = 'none';
                     // Reîncărcăm: abia acum serverul are voie să trimită
@@ -1219,7 +1217,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
         <script>
             (function () {
                 'use strict';
-                var CHEIE = 'bioscem_welcome_popup_inchis';
+                var CHEIE = <?= \App\Support\View::sirJs(\App\Support\Brand::cheiePopupInchis()) ?>;
                 var versiune = <?= json_encode($popupVersiune) ?>;
                 var popup = document.getElementById('welcome-popup');
                 if (!popup) { return; }

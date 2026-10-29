@@ -227,7 +227,7 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                 <input type="hidden" name="action" value="save_seo_defaults">
                 <div class="field" style="max-width:680px;">
                     <label for="seo_home_title">Titlu SEO pentru Homepage</label>
-                    <input id="seo_home_title" type="text" name="seo_home_title" value="<?= htmlspecialchars($seoHomeTitle, ENT_QUOTES) ?>" maxlength="120" placeholder="Ex: Bioscem - Produse naturale pentru sănătate">
+                    <input id="seo_home_title" type="text" name="seo_home_title" value="<?= htmlspecialchars($seoHomeTitle, ENT_QUOTES) ?>" maxlength="120" placeholder="Ex: Numele magazinului - descriere scurtă">
                 </div>
                 <div class="field" style="max-width:680px;">
                     <label for="seo_home_description">Descriere SEO pentru Homepage</label>

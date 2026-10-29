@@ -26,7 +26,7 @@ pe un server, iar `scripts/diagnostic.php --pachet` îl vede pe server (mai jos)
 | `ce-se-schimba.md` | proprietarul, la adoptare | **obligatoriu** în `site-uri/<site>/`: ce vede altfel clientul pe codul comun (G-m4) |
 | `redirecturi.json` | `SeoRedirects` ([SEO.md](SEO.md), „Adresele vechi”) | la fiecare cerere |
 | `seo.json` | `DateSite::seo` ([SEO.md](SEO.md), „Datele unui site”) | la fiecare cerere |
-| `site.json` | `DateSite::site` | la fiecare cerere: constantele tehnice care nu se schimbă niciodată pe un site existent (numele cookie-ului de acord, cheia popup-ului, sarea semnăturii newsletterului; le mută aici WP-16 și WP-17) |
+| `site.json` | `DateSite::site` | la fiecare cerere: constantele tehnice care nu se schimbă niciodată pe un site existent (WP-16: `cookie_consimtamant`, numele cookie-ului acordului, `CookieConsent::nume`, implicit `cookie_consent`; `cheie_popup_inchis`, cheia din `localStorage` a ferestrei de bun venit închise, `Brand::cheiePopupInchis`, implicit `welcome_popup_inchis`; WP-17: sarea semnăturii newsletterului). Un nume care nu e simplu (`[A-Za-z0-9_-]`) se ignoră, cu un rând în jurnal |
 | `tema/tema.json`, `tema/*.css` | `Tema` (mai jos) | la fiecare cerere |
 | `tema/public/**` | serverul web, la `/tema/**` | copiat în `public/tema/` la instalare și la fiecare actualizare |
 | `public/**` | serverul web, la aceeași adresă | copiat peste `public/` la adoptare (mai jos) |
@@ -185,15 +185,20 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   ultim rând trebuie să fie `rezultat     : ok` (manifestul, site-ul = `LICENTA_SITE` = `SITE_SLUG`, ambele obligatorii,
   fiecare sha256, tema, copiile
   publice; altfel iese cu 1 și spune ce lipsește sau diferă). Un pachet lipsă sau stricat nu are voie să treacă
-  neobservat: valorile ar reveni la cele implicite (de exemplu numele cookie-ului de acord, după WP-16).
+  neobservat: valorile ar reveni la cele implicite (de exemplu numele cookie-ului de acord: fiecare vizitator ar vedea
+  din nou bannerul). De aceea `site.json` și `tema/tema.json` sunt obligatorii în pachetul Bioscem, iar `/health` arată
+  pe al treilea rând `pachet: <primele 12 caractere ale sha256-ului lui pachet.json>` sau `pachet: lipsa` (WP-16).
 - **Deploy-ul din Etapa 2** (`actualizeaza.sh`) înlocuiește pachetul dintr-o bucată și refuză comutarea dacă
   verificarea pică (planul de-Bioscem §5.2).
 
 ## Ce urmează
 
-- WP-14: conținutul pachetului Bioscem (`site.json`, `tema/`, `pluginuri.json`, `README.md`), baza de dezvoltare făcută
-  ca a Bioscem și comparația cu pachetul ei (`--site=bioscem`), testul pachetului (G-pachet).
-- WP-16: identitatea Bioscem iese din nucleu în pachetul ei: logo-ul sertarului (`logo_meniu_mobil`), iconițele
-  (`iconite_categorii`), blocul paginii de mulțumire (`css_inline.pagina_succes`), cookie-ul și popup-ul (`site.json`).
+- WP-14: restul pachetului Bioscem (`pluginuri.json`, `README.md`), baza de dezvoltare făcută ca a Bioscem
+  (`cms_dev_bioscem`) și comparația cu pachetul ei (`--site=bioscem`), faza emailurilor.
+- **Făcut în WP-16:** identitatea Bioscem a ieșit din nucleu în pachetul ei: logo-ul sertarului (`logo_meniu_mobil`),
+  iconițele (`iconite_categorii`), blocul paginii de mulțumire (`tema/pagina-succes.css`, `css_inline.pagina_succes`),
+  cookie-ul și popup-ul (`site.json`); BV și GR au `site.json` cu cookie-ul lor (`bv_cookie_consent`). Testul pachetului
+  (G-pachet, `tools/dev/test-pachet-site.php bioscem|neutru`) compară valorile pachetului Bioscem cu cele scrise în
+  codul Bioscem și caută numele unui client în paginile, emailurile și implicitele nucleului cu pachetul demo.
 - WP-17: sarea semnăturii newsletterului (`site.json`). SEO B6: fonturile locale pentru Bioscem (`fonturi`).
 - Etapa 4: tema grafoanaytis (GR-19) și conținutul de pornire (`continut/`, GR-20).

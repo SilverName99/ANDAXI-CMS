@@ -21,7 +21,7 @@ if ($adminFavicon === '') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= htmlspecialchars(($title ?? 'Admin') . ' | Admin Bioscem', ENT_QUOTES) ?></title>
+    <title><?= htmlspecialchars(($title ?? 'Admin') . ' | Admin ' . \App\Support\Brand::numeSite($adminSettings), ENT_QUOTES) ?></title>
     <link rel="icon" href="<?= htmlspecialchars($adminFavicon, ENT_QUOTES) ?>">
     <?php $cssVersion = @filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time(); ?>
     <link rel="stylesheet" href="/assets/css/app.css?v=<?= $cssVersion ?><?= $adminAssetVersionQuery ?>">

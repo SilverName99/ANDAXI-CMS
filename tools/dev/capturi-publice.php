@@ -10,6 +10,8 @@ declare(strict_types=1);
  *   capturi-publice.php compara --baza=<url> --curent=<url> [--eticheta=<text>] [--pagini=toate|redus]
  *       [--latimi=390,768,1366,1920] [--declaratii=<fișier.json>|--fara-declaratii] [--fara-capturi] [--dosar=<nume>]
  *       [--parola-client=<text>]   # doar autotestul: o parolă greșită a clientului demo
+ *       [--forma-bioscem]          # baza în forma Bioscem pe durata rulării (tools/dev/lib/forma-bioscem.php), ca la
+ *                                  # compara-cu-baza.php: o pune compara-cu-baza.sh --vizual față de codul Bioscem
  *   capturi-publice.php verificari --server=<url> --verificari=<fișier.json> [--dosar=<nume>]
  *
  * Clientul se loghează la începutul fiecărui rol, pe fiecare server; o logare care nu duce la /contul-meu (de exemplu
@@ -103,6 +105,20 @@ if (!$db instanceof PDO) {
     exit(2);
 }
 $unu = static fn (string $sql): string => (string) ($db->query($sql)->fetchColumn() ?: '');
+// Față de codul Bioscem, baza în forma Bioscem (setările înghețate și antetul cu sertarul de meniu), exact ca în
+// compara-cu-baza.php, și pusă la loc la final (și la o oprire).
+if ($mod === 'compara' && isset($optiuni['forma-bioscem'])) {
+    require_once __DIR__ . '/lib/forma-bioscem.php';
+    try {
+        $deRestaurat = forma_bioscem_pune($db, $radacina);
+    } catch (Throwable $e) {
+        fwrite(STDERR, 'baza în forma Bioscem nu se poate pune: ' . $e->getMessage() . "\n");
+        exit(2);
+    }
+    register_shutdown_function(static function () use ($db, $deRestaurat): void {
+        forma_bioscem_restaureaza($db, $deRestaurat);
+    });
+}
 $parola = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
 // Doar pentru autotest (capturi-publice.sh --autotest): o parolă greșită a clientului, ca logarea refuzată să oprească unealta.
 if (is_string($optiuni['parola-client'] ?? null)) {

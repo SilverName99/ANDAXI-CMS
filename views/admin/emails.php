@@ -77,7 +77,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                 <input
                     type="text"
                     name="order_email_from_name"
-                    value="<?= htmlspecialchars((string) ($settings['order_email_from_name'] ?? 'Bioscem'), ENT_QUOTES) ?>"
+                    value="<?= htmlspecialchars((string) ($settings['order_email_from_name'] ?? ''), ENT_QUOTES) ?>"
                 >
             </div>
             <div class="field">
@@ -1142,8 +1142,8 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                     <input
                         type="text"
                         name="contact_form_recipients"
-                        value="<?= htmlspecialchars(trim((string) ($settings['contact_form_recipients'] ?? 'contact@bioscem.ro')), ENT_QUOTES) ?>"
-                        placeholder="contact@bioscem.ro, comenzi@bioscem.ro"
+                        value="<?= htmlspecialchars(trim((string) ($settings['contact_form_recipients'] ?? '')), ENT_QUOTES) ?>"
+                        placeholder="contact@domeniul-tau.ro, comenzi@domeniul-tau.ro"
                         style="flex:1 1 420px;min-width:280px;"
                     >
                     <button class="btn" type="submit">Salvează destinatarii</button>
@@ -1169,9 +1169,10 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                 </div>
                 <div id="contact-instructions-body">
                     <?php
-                    $destinatariContact = trim((string) ($settings['contact_form_recipients'] ?? 'contact@bioscem.ro'));
+                    $destinatariContact = trim((string) ($settings['contact_form_recipients'] ?? ''));
                     if ($destinatariContact === '') {
-                        $destinatariContact = 'contact@bioscem.ro';
+                        // Fără destinatari, mesajele merg la adresa de contact a site-ului (App\Support\Brand::emailContact).
+                        $destinatariContact = \App\Support\Brand::emailContact(null, $settings) ?: 'adresa primului administrator general';
                     }
                     ?>
                     <p style="margin:0 0 10px;color:#64748b;">

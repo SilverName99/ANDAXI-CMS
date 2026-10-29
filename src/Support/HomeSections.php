@@ -19,28 +19,11 @@ use Throwable;
  */
 final class HomeSections
 {
-    /** Iconițe alese după numele categoriei; „default” acoperă restul. */
-    private const CATEGORY_ICONS = [
-        'digestie' => '<path d="M8 3v6a4 4 0 0 0 8 0V3"/><path d="M12 13v8"/><path d="M9 21h6"/>',
-        'probiotice' => '<path d="M8 3v6a4 4 0 0 0 8 0V3"/><path d="M12 13v8"/><path d="M9 21h6"/>',
-        'imunitate' => '<path d="M12 3 5 6v6c0 4.4 2.8 7.8 7 9 4.2-1.2 7-4.6 7-9V6l-7-3z"/><path d="m9.4 12.3 1.8 1.8 3.5-3.5"/>',
-        'sport' => '<path d="M13 2 4 14h7l-1 8 10-13h-7z"/>',
-        'vitamine' => '<path d="M13 2 4 14h7l-1 8 10-13h-7z"/>',
-        'minerale' => '<path d="m12 2 4 6-4 14-4-14z"/><path d="M8 8h8"/>',
-        'siliciu' => '<path d="m12 2 4 6-4 14-4-14z"/><path d="M8 8h8"/>',
-        'detoxifiere' => '<path d="M12 2C8 7 5 11 5 15a7 7 0 0 0 14 0c0-4-3-8-7-13z"/>',
-        'alge' => '<path d="M12 21c0-6 2-11 6-14"/><path d="M12 21c0-6-2-11-6-14"/><path d="M12 21v-9"/>',
-        'neuro' => '<path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5 3 3 0 0 0 2 5 3 3 0 0 0 5 1"/><path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5 3 3 0 0 1-2 5 3 3 0 0 1-5 1"/><path d="M12 4v16"/>',
-        'tiroida' => '<path d="M7 4c-1 4-1 8 1 11 1.5 2.2 4.5 2.2 6 0 2-3 2-7 1-11"/><path d="M12 15v6"/>',
-        'menopauza' => '<path d="M7 4c-1 4-1 8 1 11 1.5 2.2 4.5 2.2 6 0 2-3 2-7 1-11"/><path d="M12 15v6"/>',
-        'dermato' => '<path d="M12 21s8-4.5 8-11a4.5 4.5 0 0 0-8-3 4.5 4.5 0 0 0-8 3c0 6.5 8 11 8 11z"/>',
-        'beauty' => '<path d="M12 21s8-4.5 8-11a4.5 4.5 0 0 0-8-3 4.5 4.5 0 0 0-8 3c0 6.5 8 11 8 11z"/>',
-        'respiro' => '<path d="M12 4v8"/><path d="M8 8a4 4 0 0 0-4 4c0 3 2 6 4 8"/><path d="M16 8a4 4 0 0 1 4 4c0 3-2 6-4 8"/>',
-        'hrana' => '<path d="M6 3v8a3 3 0 0 0 6 0V3"/><path d="M9 11v10"/><path d="M17 3c-1.5 2-2 4-2 6v3h4V9c0-2-.5-4-2-6z"/><path d="M17 12v9"/>',
-        'quinton' => '<path d="M12 3c3 4 6 7 6 10a6 6 0 0 1-12 0c0-3 3-6 6-10z"/>',
-        'cmo' => '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7a5 5 0 1 0 5 5"/><circle cx="12" cy="12" r="1.5"/>',
-        'default' => '<path d="M19.1 5.1c-6 .2-10.4 3.9-10.4 6.5 0 2.9 2 4.9 4.5 4.9 4.2 0 7.7-4 8.2-9.6.1-.9-.6-1.8-2.3-1.8Z"/><path d="M6.6 20.4c2.1-4.7 6.1-8 11.3-10.2"/>',
-    ];
+    /**
+     * Iconița unei categorii fără iconiță în tema site-ului (WP-16, DB-10). Iconițele alese după numele categoriei
+     * sunt ale temei site-ului: tema.json → iconite_categorii.
+     */
+    private const ICONITA_IMPLICITA = '<path d="M19.1 5.1c-6 .2-10.4 3.9-10.4 6.5 0 2.9 2 4.9 4.5 4.9 4.2 0 7.7-4 8.2-9.6.1-.9-.6-1.8-2.3-1.8Z"/><path d="M6.6 20.4c2.1-4.7 6.1-8 11.3-10.2"/>';
 
     private static function e(string $value): string
     {
@@ -53,24 +36,14 @@ final class HomeSections
         $normalized = strtr($normalized, [
             'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't',
         ]);
-        // Tema site-ului își poate aduce iconițele (tema.json → iconite_categorii, perechi [cuvânt, svg] încercate în
-        // ordine, fiecare svg trecut prin App\Support\SvgSigur); atunci lista de mai sus nu se mai folosește, doar
-        // iconița implicită rămâne pentru categoriile fără potrivire.
-        $iconiteTema = Tema::iconiteCategorii();
-        if ($iconiteTema !== null) {
-            foreach ($iconiteTema as [$cuvant, $svg]) {
-                if (str_contains($normalized, $cuvant)) {
-                    return $svg;
-                }
-            }
-            return self::CATEGORY_ICONS['default'];
-        }
-        foreach (self::CATEGORY_ICONS as $key => $path) {
-            if ($key !== 'default' && str_contains($normalized, $key)) {
-                return $path;
+        // Tema site-ului își aduce iconițele (tema.json → iconite_categorii, perechi [cuvânt, svg] încercate în ordine,
+        // fiecare svg trecut prin App\Support\SvgSigur); o categorie fără potrivire primește iconița implicită.
+        foreach (Tema::iconiteCategorii() ?? [] as [$cuvant, $svg]) {
+            if (str_contains($normalized, $cuvant)) {
+                return $svg;
             }
         }
-        return self::CATEGORY_ICONS['default'];
+        return self::ICONITA_IMPLICITA;
     }
 
     /** Linkul categoriei: /categorie/{slug} (vezi LinkuriCategorii). */

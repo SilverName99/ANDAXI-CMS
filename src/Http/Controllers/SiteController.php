@@ -781,7 +781,7 @@ final class SiteController
         ];
         $settings = [];
         $similarProducts = $this->buildSimilarProductsForSite($products, $product);
-        $similarProductsSectionHtml = $this->buildSimilarProductsSectionHtml($similarProducts);
+        $similarProductsSectionHtml = $this->buildSimilarProductsSectionHtml($similarProducts, $settings);
         if ($db instanceof PDO) {
             $this->ensureProductCustomSchema($db);
             $settings = Settings::all($db);
@@ -850,6 +850,8 @@ final class SiteController
                 'apply_product_template' => (string) ($settings['store_quantity_apply_product_template'] ?? '0') === '1',
             ],
             'isOutOfStock' => $isOutOfStock,
+            // Textul unui produs similar fără descriere scurtă (WP-16, DB-14; un site existent își păstrează textul prin înghețare).
+            'descriereImplicita' => (string) ($settings['catalog_descriere_implicita'] ?? ''),
             'title' => (string) $product['name'],
             'jsonLd' => $jsonLd,
         ], $productSeoMeta));
@@ -3954,7 +3956,9 @@ final class SiteController
     /**
      * Adresele care primesc mesajele din formularul de contact. Se acceptă mai
      * multe, separate prin virgulă, punct-virgulă sau linii noi. Fără setare
-     * validă, rămâne adresa implicită, ca formularul să nu tacă niciodată.
+     * validă, adresa de contact a site-ului (Brand::emailContact: contact_email,
+     * apoi primul administrator general), ca formularul să nu tacă; fără niciuna,
+     * mesajul rămâne doar în admin.
      *
      * @return list<string>
      */
@@ -3969,7 +3973,11 @@ final class SiteController
                 $out[strtolower($adresa)] = $adresa;
             }
         }
-        return $out !== [] ? array_values($out) : ['contact@bioscem.ro'];
+        if ($out !== []) {
+            return array_values($out);
+        }
+        $contact = \App\Support\Brand::emailContact($this->db(), $settings);
+        return $contact !== '' ? [$contact] : [];
     }
 
     public function optInSubmit(array $params): void
@@ -4813,6 +4821,7 @@ final class SiteController
         }
         return $this->renderPhpView('site/components/shop-catalog', [
             'products' => $products,
+            'descriereImplicita' => (string) (Settings::all($db)['catalog_descriere_implicita'] ?? ''),
             'categories' => $categories,
             'categoryUrls' => $categoryUrls,
             'activeCategory' => $categoryFilter,
@@ -10416,7 +10425,7 @@ CSS;
             $reviewsStarsHtml,
             $similarProducts
         );
-        $similarProductsSectionHtml = $this->buildSimilarProductsSectionHtml($similarProducts);
+        $similarProductsSectionHtml = $this->buildSimilarProductsSectionHtml($similarProducts, $settings);
         $productPrice = (float) ($product['price'] ?? 0);
         $productBasePrice = (float) ($product['base_price'] ?? $productPrice);
         $productSalePrice = (float) (($product['sale_price'] ?? 0) ?: 0);
@@ -11648,7 +11657,7 @@ CSS;
         return $item;
     }
 
-    private function buildSimilarProductsSectionHtml(array $similarProducts): string
+    private function buildSimilarProductsSectionHtml(array $similarProducts, array $settings = []): string
     {
         if ($similarProducts === []) {
             return '';
@@ -11668,7 +11677,8 @@ CSS;
             . '<button type="button" class="similar-products__nav" data-action="prev" aria-label="Produse anterioare">‹</button>'
             // A14: cardurile sunt și în HTML (linkuri reale); JavaScript-ul le rearanjează ca înainte.
             . '<div class="similar-products__viewport"><div class="similar-products__track" data-similar-track="1">'
-            . (\App\Support\ProduseSimilare::activ() ? \App\Support\ProduseSimilare::cardurileHtml(array_values($similarProducts)) : '')
+            . (\App\Support\ProduseSimilare::activ() ? \App\Support\ProduseSimilare::cardurileHtml(array_values($similarProducts),
+                (string) ($settings['catalog_descriere_implicita'] ?? '')) : '')
             . '</div></div>'
             . '<button type="button" class="similar-products__nav" data-action="next" aria-label="Produse următoare">›</button>'
             . '</div>'

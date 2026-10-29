@@ -15,7 +15,7 @@ declare(strict_types=1);
  * oprește curat, iar ce a rămas pleacă la următoarea trecere.
  *
  * Exemplu de cron (Hostinger), la fiecare 5 minute:
- *   /usr/bin/php /home/USER/domains/bioscem.ro/public_html/scripts/newsletter-campaigns.php
+ *   /usr/bin/php /home/USER/domains/DOMENIU/public_html/scripts/newsletter-campaigns.php
  */
 
 if (PHP_SAPI !== 'cli') {

@@ -3,8 +3,28 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@070e1af",
-    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
+    "amprenta_nucleu": "1c2c8a1fe1138946d0bd7af1ec5ef79df9f75051cd3d008631a69842bf6067e5",
     "setari": {
+        "catalog_descriere_implicita": {
+            "valoare": "Supliment natural",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "views/site/components/shop-catalog.php și views/site/product.php (caruselul produselor similare): un produs fără descriere scurtă arăta „Supliment natural”; codul comun nu arată niciun text (catalog_descriere_implicita gol, WP-16, DB-14)",
+            "extrage": {
+                "fisier": "views/site/components/shop-catalog.php",
+                "tipar": "/\\$desc !== '' \\? \\$desc : '([^']+)'/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "contact_form_recipients": {
+            "valoare": "adresa1@exemplu.ro",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "privat": true,
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol sau fără nicio adresă validă: codul vechi trimitea la adresa lui (SiteController::destinatariFormularContact, BtIpayPayments::setari), codul comun la adresa de contact a site-ului (Brand::emailContact); de aici lipsa_sau_gol"
+        },
         "erp_trimite_din": {
             "valoare": "",
             "mod": "lipsa",
@@ -13,7 +33,43 @@
             "vechi": "lipsește",
             "nucleu": "lipsește",
             "nota": "Fără rândul gol, prima cerere de după adoptare ar pune pragul la data adoptării, iar comenzile Bioscem încă netrimise în ERP n-ar mai pleca (WP-12, E1)"
+        },
+        "order_email_from_name": {
+            "valoare": "Bioscem",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol în bază: codul vechi punea tot „Bioscem” (EmailAutomation, emailul linkului de plată, cu ?: pe gol), codul comun numele site-ului (Brand::numeExpeditor); de aici lipsa_sau_gol"
+        },
+        "welcome_popup_body": {
+            "valoare": "Vă informăm că am lansat o nouă platformă BIOSCEM. Pentru a putea comanda și beneficia în continuare de produsele comercializate de către SC BIOSCEM SRL, toți clienții și utilizatorii sunt rugați să își creeze un CONT NOU.\n\n⚠️ IMPORTANT: Conturile vechi și datele de autentificare anterioare nu mai sunt valabile. Accesul la noua platformă se face exclusiv prin intermediul unui cont nou, pe care vă rugăm să vi-l creați.\n\nNe cerem scuze pentru eventualele neplăceri cauzate de această schimbare și vă mulțumim pentru înțelegere, răbdare și încredere.\n\nVă dorim o experiență cât mai plăcută pe noua platformă!\n\nCu drag,\nEchipa BIOSCEM – Vitalitate & Protecție",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "welcome_popup_enabled": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
+        },
+        "welcome_popup_title": {
+            "valoare": "Bine ați venit pe noul site BIOSCEM!",
+            "mod": "lipsa",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS"
         }
     },
-    "fara_inghetare": {}
+    "fara_inghetare": {
+        "contact_email": {
+            "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
+            "vechi": "cod \"\" | expresie",
+            "nucleu": "implicit \"\""
+        },
+        "header_account_label": {
+            "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Contul meu\""
+        }
+    }
 }

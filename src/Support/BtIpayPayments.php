@@ -359,7 +359,11 @@ final class BtIpayPayments
             }
         }
         if ($emailuri === []) {
-            $emailuri = ['contact@bioscem.ro' => 'contact@bioscem.ro'];
+            // Fără destinatari în setări: adresa de contact a site-ului (WP-16, DB-06), dacă există; altfel nimeni.
+            $contact = Brand::emailContact(null, $settings);
+            if ($contact !== '') {
+                $emailuri = [strtolower($contact) => $contact];
+            }
         }
 
         return [

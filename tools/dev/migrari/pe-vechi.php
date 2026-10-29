@@ -10,6 +10,8 @@ declare(strict_types=1);
  *  1. `scripts/install.php` de la commit-ul dinaintea migrărilor (cel din capul fixture-ului
  *     tools/dev/migrari/vechi/cms.sql, „-- sursa: ANDAXI-CMS@<commit>”), cu `database/schema.sql` de
  *     acolo: schema.sql, ALTER-urile lui, setările implicite, adminul, lista implicită de newsletter;
+ *     setările implicite sunt cele ale codului de atunci (Settings::DEFAULTS de la commit, WP-16), nu ale
+ *     codului de acum;
  *  2. fiecare funcție ensure* și asigura* a codului de acum, o trecere, ca la primele pagini ale unui
  *     site folosit (pe o bază fără _platforma_stare, garda le lasă să lucreze ca înainte): tabelele
  *     și coloanele făcute din mers, categoriile de blog ale codului vechi, pagina /acorduri-gdpr,
@@ -116,6 +118,34 @@ echo $iesire;
 if (!str_contains($iesire, 'Install finalizat')) {
     $opreste('install.php de la ' . $commit . ' nu a spus „Install finalizat”.');
 }
+
+// 1b. Setările implicite ale codului de atunci. install.php de atunci scria `Settings::all()`, iar aici rulează cu clasele
+//     de acum: din WP-16 implicitele codului comun nu mai sunt ale codului vechi (fereastra de bun venit, destinatarii
+//     formularului de contact, numele expeditorului …), deci baza ar arăta ca a unui site nou, nu ca a unui site vechi.
+//     Rândurile se fac ca ale codului de atunci: Settings::DEFAULTS de la commit, citit de tools/inghetare/lib/citeste-cod.php
+//     (proces separat), scris peste ce a scris install.php; cheile pe care codul de atunci nu le avea se scot.
+@mkdir($dosar . '/cod/src/Support', 0770, true);
+exec('git -C ' . escapeshellarg($radacina) . ' show ' . escapeshellarg($commit . ':src/Support/Settings.php') . ' > '
+    . escapeshellarg($dosar . '/cod/src/Support/Settings.php') . ' 2>/dev/null', $_, $codSetari);
+$citire = $codSetari === 0 ? json_decode((string) shell_exec(escapeshellarg(PHP_BINARY) . ' '
+    . escapeshellarg($radacina . '/tools/inghetare/lib/citeste-cod.php') . ' ' . escapeshellarg($dosar . '/cod') . ' 2>&1'), true) : null;
+if (!is_array($citire['implicite'] ?? null) || count($citire['implicite']) < 100) {
+    $opreste('nu pot citi Settings::DEFAULTS de la ' . $commit . ' (tools/inghetare/lib/citeste-cod.php).');
+}
+$impliciteVechi = (array) $citire['implicite'];
+$scrieSetare = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+foreach ($impliciteVechi as $cheie => $valoare) {
+    $scrieSetare->execute([(string) $cheie, (string) $valoare]);
+}
+$scoateSetare = $db->prepare('DELETE FROM settings WHERE `key` = ?');
+$scoase = 0;
+foreach (array_keys((new ReflectionClassConstant(\App\Support\Settings::class, 'DEFAULTS'))->getValue()) as $cheie) {
+    if (!array_key_exists($cheie, $impliciteVechi)) {
+        $scoateSetare->execute([$cheie]);
+        $scoase += $scoateSetare->rowCount();
+    }
+}
+echo '== Setările implicite de la ', $commit, ': ', count($impliciteVechi), ' scrise, ', $scoase, " chei noi scoase\n";
 
 // 2. Funcțiile ensure*/asigura* ale codului de acum, o trecere (pe o bază fără registru lucrează ca înainte).
 if (Garda::stare($db) !== Garda::FARA_REGISTRU) {

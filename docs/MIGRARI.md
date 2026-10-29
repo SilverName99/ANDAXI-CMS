@@ -453,7 +453,10 @@ Unde se folosește:
   live, rândul ei intră în „ce se schimbă” al site-ului. Dovada (T10): pe o bază la zi, cu categoriile șterse și
   o recenzie copiată și ștearsă, funcțiile codului comun nu scriu nimic, iar ale codului Bioscem le readuc.
 - **`/health`**: „ok” și, pe al doilea rând, `schema: <stare>`; cu `in_urma` răspunde **503** („indisponibil”),
-  ca verificarea de după un deploy (`actualizeaza.sh`, Etapa 2) să întoarcă codul la loc. La fel pe copia de
+  ca verificarea de după un deploy (`actualizeaza.sh`, Etapa 2) să întoarcă codul la loc. Pe al treilea rând (WP-16)
+  `pachet: <primele 12 caractere ale sha256-ului lui pachet.json>` sau `pachet: lipsa`: un pachet al site-ului lipsă
+  schimbă ce văd vizitatorii (numele cookie-ului acordului, tema; [PACHETE.md](PACHETE.md)), deci deploy-ul compară
+  rândul cu pachetul urcat. La fel pe copia de
   verificare, cu o copie încărcată (fără copie, poarta răspunde „ok” fără bază; [VERIFICARE.md](VERIFICARE.md)).
 - **`/_andaxi/ping`** (WP-07, `App\Support\Ping`; [DEZVOLTARE.md](DEZVOLTARE.md), „Unde scrie codul”): JSON cu
   `"schema": "<stare>"` (aceeași gardă, pe conexiunea lui, limitată la 2 secunde) și versiunea codului; răspunde
@@ -696,7 +699,9 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    `--aplica --permite-provizoriu`; planul arată fiecare cheie scrisă. Copia o încarcă încărcarea din WP-08
    ([VERIFICARE.md](VERIFICARE.md)). `configureaza.php` scrie `SITE_COPIE_VERIFICARE=1` (fără el `--permite-provizoriu`
    nu are efect) și pachetul Bioscem: `SITE_SLUG=bioscem`, `SITE_DATE_DOSAR=<dosarul codului>/site-uri/bioscem`.
-   Pentru Bioscem `--permite-provizoriu` nu schimbă nimic (înghețarea lui nu e provizorie). **Repetiția pentru
+   Pentru Bioscem `--permite-provizoriu` nu schimbă nimic (înghețarea lui nu e provizorie); din WP-16 înghețarea Bioscem are
+   și valori private (destinatarii formularului de contact; din WP-18 și datele de contact de pe acordul GDPR), deci și pentru
+   Bioscem `site-uri/bioscem/privat/` se copiază de mână lângă pachet (altfel codul 15). **Repetiția pentru
    Biovitality, vertij sau grafoanaytis** cere în `.env`-ul copiei, înainte de `--plan`, ambele schimbate:
    `SITE_SLUG=<site>` și `SITE_DATE_DOSAR=<dosarul codului>/site-uri/<site>`, plus `site-uri/<site>/privat/` copiat
    din dezvoltare lângă pachet. Cu doar una dintre ele runner-ul refuză (`--site` altul decât `SITE_SLUG`, sau pachetul

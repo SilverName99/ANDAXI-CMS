@@ -56,7 +56,7 @@ if (!$arePreturi) {
             <img
                 id="product-default-main-image"
                 src="<?= htmlspecialchars((string) ($galleryUrls[0] ?? '/assets/img/product-placeholder.svg'), ENT_QUOTES) ?>"
-                alt="<?= htmlspecialchars((string) ($product['name'] ?? 'Produs Bioscem'), ENT_QUOTES) ?>"<?= /* width/height rezervă locul pozei; ea e elementul principal al paginii (LCP), deci se încarcă imediat și cu prioritate */ \App\Support\ImageDimensions::atribute((string) ($galleryUrls[0] ?? '')) . "\n" ?>
+                alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>"<?= /* width/height rezervă locul pozei; ea e elementul principal al paginii (LCP), deci se încarcă imediat și cu prioritate */ \App\Support\ImageDimensions::atribute((string) ($galleryUrls[0] ?? '')) . "\n" ?>
                 loading="eager"
                 fetchpriority="high"
                 decoding="async"
@@ -69,7 +69,7 @@ if (!$arePreturi) {
                         <button type="button" class="product-default-thumb" data-image-url="<?= htmlspecialchars((string) $url, ENT_QUOTES) ?>">
                             <img
                                 src="<?= htmlspecialchars((string) $url, ENT_QUOTES) ?>"
-                                alt="<?= htmlspecialchars((string) ($product['name'] ?? 'Produs Bioscem'), ENT_QUOTES) ?>"<?= \App\Support\ImageDimensions::atribute((string) $url) . "\n" ?>
+                                alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>"<?= \App\Support\ImageDimensions::atribute((string) $url) . "\n" ?>
                                 loading="lazy"
                                 decoding="async"
                                 onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';"
@@ -922,7 +922,7 @@ if (!$arePreturi) {
                     const image = escapeHtml(safeImageUrl(item.image_url || '/assets/img/product-placeholder.svg'));
                     const name = escapeHtml(item.name || 'Produs');
                     const url = escapeHtml(safeLinkUrl(item.url || '#'));
-                    const description = escapeHtml(item.short_description || 'Supliment natural');
+                    const description = escapeHtml(item.short_description || <?= \App\Support\View::sirJs((string) ($descriereImplicita ?? '')) ?>);
                     const priceLabel = escapeHtml(item.price_label || '');
                     const regularPriceLabel = escapeHtml(item.regular_price_label || '');
                     const reviewsCount = Math.max(0, Number.parseInt(item.reviews_count || '0', 10) || 0);

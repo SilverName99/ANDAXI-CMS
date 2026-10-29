@@ -32,6 +32,17 @@ final class View
     }
 
     /**
+     * Un text ca șir JavaScript între apostrofuri, sigur într-un <script> („'Supliment natural'”): \, ', rândurile noi
+     * și separatorii de rând Unicode scăpați, iar „<” scris \x3C (nimic nu poate închide scriptul).
+     */
+    public static function sirJs(string $text): string
+    {
+        return "'" . strtr($text, [
+            '\\' => '\\\\', "'" => "\\'", "\n" => '\\n', "\r" => '\\r', '<' => '\\x3C', "\u{2028}" => '\\u2028', "\u{2029}" => '\\u2029',
+        ]) . "'";
+    }
+
+    /**
      * Vederea pe care o îmbracă aspectul (`views/admin/layout.php` încarcă editoarele de cod doar pe
      * paginile care le folosesc, WP-12 C6). Nu se citește din variabila `$template` a aspectului: o
      * vedere o poate refolosi (de exemplu `foreach ($templates as $template)` în editorul postării).

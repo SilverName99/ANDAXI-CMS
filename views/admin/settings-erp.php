@@ -63,7 +63,7 @@ $cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 
         <label class="form-field" style="grid-column:1 / -1;">
             <span>Adresa ERP-ului</span>
-            <input type="url" name="erp_url" placeholder="https://bioscem.erp.andaxi.ro"
+            <input type="url" name="erp_url" placeholder="https://firma.erp.andaxi.ro"
                    value="<?= htmlspecialchars((string) ($settings['erp_url'] ?? ''), ENT_QUOTES) ?>">
             <small>Fără „/api" la final — se adaugă automat.</small>
         </label>

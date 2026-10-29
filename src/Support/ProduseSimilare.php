@@ -126,13 +126,15 @@ final class ProduseSimilare
      * plus width/height pe poze.
      *
      * @param list<array<string, mixed>> $produse elementele din SiteController::buildSimilarProductsForSite
+     * @param string $descriereImplicita textul unui produs fără descriere scurtă (Setări → catalog_descriere_implicita;
+     *                                   WP-16, DB-14), ca în JavaScript
      */
-    public static function cardurileHtml(array $produse): string
+    public static function cardurileHtml(array $produse, string $descriereImplicita = ''): string
     {
         $carduri = [];
         foreach ($produse as $p) {
             if (is_array($p)) {
-                $carduri[] = self::card($p);
+                $carduri[] = self::card($p, $descriereImplicita);
             }
         }
         $slideuri = [];
@@ -143,13 +145,13 @@ final class ProduseSimilare
     }
 
     /** Un card, ca în JavaScript (inclusiv corpul cardului închis de </article>). */
-    private static function card(array $p): string
+    private static function card(array $p, string $descriereImplicita): string
     {
         $imagineBruta = self::adresaSigura((string) (($p['image_url'] ?? '') ?: '/assets/img/product-placeholder.svg'), '/assets/img/product-placeholder.svg');
         $imagine = self::e($imagineBruta);
         $nume = self::e((string) (($p['name'] ?? '') ?: 'Produs'));
         $url = self::e(self::adresaSigura((string) (($p['url'] ?? '') ?: '#'), '#'));
-        $descriere = self::e((string) (($p['short_description'] ?? '') ?: 'Supliment natural'));
+        $descriere = self::e((string) (($p['short_description'] ?? '') ?: $descriereImplicita));
         $pret = self::e((string) ($p['price_label'] ?? ''));
         $pretVechi = self::e((string) ($p['regular_price_label'] ?? ''));
         $recenzii = max(0, (int) ($p['reviews_count'] ?? 0));

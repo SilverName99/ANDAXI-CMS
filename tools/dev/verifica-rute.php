@@ -21,12 +21,23 @@ declare(strict_types=1);
  *     rând de tabel sau un `</article>` fără pereche;
  * 10. fiecare adresă „mereu deschisă” din catalog (webhook-uri, întoarceri de
  *     plată, ERP, linkurile din emailuri) e exclusă din redirecționările SEO
- *     (App\Support\SeoRedirects): o confirmare de plată nu primește niciodată 301.
+ *     (App\Support\SeoRedirects): o confirmare de plată nu primește niciodată 301;
+ * 11. nucleul nu pomenește un client (planul de scoatere a numelor de client, §7.4, DB-04;
+ *     adusă în WP-16): niciun termen din lista neagră (numele Bioscem, firma și
+ *     reprezentantul de pe acordul GDPR, conferința, produsele și categoriile Bioscem,
+ *     sloganul), ca un cuvânt întreg, fără deosebire de litere mari, în src/, views/,
+ *     config/, scripts/, public/ (fără uploads/, tema/ și assets/vendor/), database/,
+ *     bootstrap.php, index.php și .env.example, comentariile incluse. În **mod clichet**:
+ *     ce mai e azi stă în tools/dev/nume-client-ramase.txt (fișier → număr de potriviri);
+ *     un fișier nou cu potriviri, sau mai multe decât în listă, pică, iar unul cu mai
+ *     puține cere lista micșorată (`--actualizeaza-nume-client` o rescrie: lista doar
+ *     scade). Lista goală = verificarea strictă din plan.
  *
  * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
  *
- *   php tools/dev/verifica-rute.php            # raport complet
- *   php tools/dev/verifica-rute.php --scurt    # doar problemele și sumarul
+ *   php tools/dev/verifica-rute.php                              # raport complet
+ *   php tools/dev/verifica-rute.php --scurt                      # doar problemele și sumarul
+ *   php tools/dev/verifica-rute.php --actualizeaza-nume-client   # rescrie lista clichetului (11) după ce s-au scos nume
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -380,6 +391,68 @@ foreach (array_merge(['nucleu' => $catalog['nucleu']], $pluginuri) as $cheie => 
     }
 }
 
+// 11. Nucleul nu pomenește un client: lista neagră, în mod clichet (tools/dev/nume-client-ramase.txt doar scade).
+$listaNeagra = ['bioscem', 'amalbo', 'tătaru', 'tataru', 'neurocare', 'rațiu', 'ratiu', '19166493', 'j2006017724407', '0756.195.323',
+    'quinton', 'vivomixx', 'siliciu organic', 'info pacienți', 'info medici', 'vitalitate și protecție', 'jurnalul bioscem'];
+$fisierRamase = $radacina . '/tools/dev/nume-client-ramase.txt';
+$potriviriClient = [];
+$candidati = [];
+foreach (['src', 'views', 'config', 'scripts', 'public', 'database'] as $dosarCod) {
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($radacina . '/' . $dosarCod, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $candidati[] = substr($f->getPathname(), strlen($radacina) + 1);
+    }
+}
+foreach (['bootstrap.php', 'index.php', '.env.example'] as $fisierCod) {
+    if (is_file($radacina . '/' . $fisierCod)) {
+        $candidati[] = $fisierCod;
+    }
+}
+foreach ($candidati as $relativ) {
+    if (preg_match('#^public/(uploads|tema|assets/vendor)/#', $relativ) === 1
+        || preg_match('/\.(png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|pdf|zip|gz)$/i', $relativ) === 1) {
+        continue;
+    }
+    $text = (string) file_get_contents($radacina . '/' . $relativ);
+    $n = 0;
+    foreach ($listaNeagra as $termen) {
+        $n += (int) preg_match_all('/(?<![\p{L}\p{N}])' . preg_quote($termen, '/') . '(?![\p{L}\p{N}])/iu', $text);
+    }
+    if ($n > 0) {
+        $potriviriClient[$relativ] = $n;
+    }
+}
+ksort($potriviriClient, SORT_STRING);
+if (in_array('--actualizeaza-nume-client', $argv, true)) {
+    $text = "# Clichetul verificării 11 din tools/dev/verifica-rute.php: potrivirile din lista neagră (numele unui client) care mai\n"
+        . "# sunt azi în nucleu, pe fișiere. Lista doar scade; goală = verificarea strictă. Rescrisă de\n"
+        . "# tools/dev/php.sh tools/dev/verifica-rute.php --actualizeaza-nume-client\n";
+    foreach ($potriviriClient as $relativ => $n) {
+        $text .= $n . "\t" . $relativ . "\n";
+    }
+    file_put_contents($fisierRamase, $text);
+    echo 'Lista clichetului (11) rescrisă: ' . count($potriviriClient) . ' fișiere, ' . array_sum($potriviriClient) . " potriviri.\n";
+}
+$ramaseClient = [];
+foreach (file(is_file($fisierRamase) ? $fisierRamase : '/dev/null', FILE_IGNORE_NEW_LINES) ?: [] as $rand) {
+    if (preg_match('/^(\d+)\t(\S+)$/', $rand, $m) === 1) {
+        $ramaseClient[$m[2]] = (int) $m[1];
+    }
+}
+foreach ($potriviriClient as $relativ => $n) {
+    if ($n > ($ramaseClient[$relativ] ?? 0)) {
+        $problema('Nucleul pomenește un client: ' . $relativ . ' are ' . $n . ' potriviri din lista neagră (clichetul permite '
+            . ($ramaseClient[$relativ] ?? 0) . '; tools/dev/nume-client-ramase.txt). Scrie neutru (de exemplu exemplu.ro, „Firma Demo”) '
+            . 'sau mută valoarea în pachetul site-ului.');
+    }
+}
+foreach ($ramaseClient as $relativ => $n) {
+    if (($potriviriClient[$relativ] ?? 0) < $n) {
+        $problema('Clichetul numelor de client (11) nu mai e la zi: ' . $relativ . ' are ' . ($potriviriClient[$relativ] ?? 0) . ' potriviri, '
+            . 'lista ' . $n . '. Micșorează lista: tools/dev/php.sh tools/dev/verifica-rute.php --actualizeaza-nume-client');
+    }
+}
+
 // Raportul.
 if (!$scurt) {
     echo 'Rutele din router și proprietarul lor (' . count($rute) . "):\n";
@@ -394,7 +467,8 @@ arsort($numarate);
 echo 'Rute: ' . count($rute) . '; declarații în catalog: ' . count(Plugins::listaDeclaratii())
     . '; reguli împărțite: ' . count($catalog['rute_impartite']) . '; intrări de meniu: ' . count($intrari)
     . '; cronuri: ' . count($cronuriCatalog) . '; întrebări Plugins::… în cod: ' . $intrebari
-    . '; blocuri pe coloana 0 în șabloane: ' . $blocuri . "\n";
+    . '; blocuri pe coloana 0 în șabloane: ' . $blocuri
+    . '; nume de client în nucleu (clichetul 11): ' . array_sum($potriviriClient) . ' în ' . count($potriviriClient) . " fișiere\n";
 $bucati = [];
 foreach ($numarate as $cheie => $n) {
     $bucati[] = $cheie . ' ' . $n;

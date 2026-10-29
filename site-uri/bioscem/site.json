@@ -1,0 +1,5 @@
+{
+    "_despre": "Constantele tehnice ale Bioscem, care nu se schimbă niciodată pe site-ul existent (docs/PACHETE.md; DateSite::site). Cu alte nume, fiecare vizitator care a ales deja la cookie-uri ar vedea din nou bannerul, iar cine a închis fereastra de bun venit ar vedea-o din nou.",
+    "cookie_consimtamant": "bioscem_cookie_consent",
+    "cheie_popup_inchis": "bioscem_welcome_popup_inchis"
+}

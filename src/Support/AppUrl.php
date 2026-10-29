@@ -37,7 +37,7 @@ final class AppUrl
     }
 
     /**
-     * Transformă „/contul-meu" în „https://bioscem.ro/contul-meu".
+     * Transformă „/contul-meu" în „https://exemplu.ro/contul-meu".
      * URL-urile absolute, mailto: și tel: rămân neatinse.
      */
     public static function absolut(string $url): string

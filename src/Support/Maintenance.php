@@ -152,7 +152,9 @@ final class Maintenance
         $date = [
             'titlu' => $titlu,
             'mesaj' => $mesaj,
-            'email' => trim((string) ($settings['contact_email'] ?? $settings['order_email_from_email'] ?? '')),
+            // Doar adresa de contact a site-ului (WP-16): rezerva de dinainte citea o cheie care n-a existat niciodată
+            // (order_email_from_email), deci pagina n-a arătat altă adresă; adresa expeditorului (no-reply@…) nu e de contact.
+            'email' => trim((string) ($settings['contact_email'] ?? '')),
             'telefon' => trim((string) ($settings['contact_phone'] ?? '')),
             'logo' => trim((string) ($settings['store_favicon_url'] ?? '')),
         ];

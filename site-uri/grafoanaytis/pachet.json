@@ -2,9 +2,12 @@
     "format": 1,
     "site": "grafoanaytis",
     "fisiere": {
-        "ce-se-schimba.md": "0edf6946c10dabeb61da637f8d6a24a82fd4a1e8c9067f0c03cf436f59cf935b",
+        "ce-se-schimba.md": "0549619edd135884c4afb9885d5171be94c2e310c827c53a731b7ba5d5d3652d",
         "migrari.json": "2d2f2adb78394f8638c5801e77270cdb114cf0310744560c302d8a720b94986a",
-        "setari-inghetate.json": "c797b2482082ac4fc52e405255ab292e8ea36f8e940e3e9c26b01424e0826822"
+        "setari-inghetate.json": "7bf1a58cfb2d3b8cc30d26b943069a0c49b2f944d445dce9cb6c0025dd067213",
+        "site.json": "07d00379da1104de5cfd9a05594f65506ddc3c244c122d5398888690f496b9cf"
     },
-    "obligatorii": []
+    "obligatorii": [
+        "site.json"
+    ]
 }

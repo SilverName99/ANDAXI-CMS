@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "582cd111704f07d3acaae1bdf4186b9dc08ccb9d12972e47f614dbf051a7a8df",
+    "amprenta_nucleu": "1c2c8a1fe1138946d0bd7af1ec5ef79df9f75051cd3d008631a69842bf6067e5",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -96,6 +96,18 @@
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
         },
+        "catalog_descriere_implicita": {
+            "valoare": "Supliment natural",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "views/site/components/shop-catalog.php și views/site/product.php (caruselul produselor similare): un produs fără descriere scurtă arăta „Supliment natural”; codul comun nu arată niciun text (catalog_descriere_implicita gol, WP-16, DB-14)",
+            "extrage": {
+                "fisier": "views/site/components/shop-catalog.php",
+                "tipar": "/\\$desc !== '' \\? \\$desc : '([^']+)'/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
         "checkout_cod_enabled": {
             "valoare": "0",
             "mod": "lipsa",
@@ -113,7 +125,7 @@
                 "tipar": "/\\$to = '([^']+@[^']+)';/"
             },
             "vechi": "lipsește",
-            "nucleu": "implicit privat (18 caractere)",
+            "nucleu": "implicit \"\"",
             "nota": "Dacă baza VT are o altă adresă validă într-una dintre cele trei chei, azi mesajele merg acolo: o arată verificarea pachetului pe verificare (DB-24), înainte de adoptare"
         },
         "customer_registration_field_first_name": {
@@ -214,12 +226,6 @@
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
         },
-        "header_account_label": {
-            "valoare": "Contul meu",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
         "order_email_from_name": {
             "valoare": "Societatea de Vertij, Tinitus și Hipoacuzie",
             "mod": "lipsa_sau_gol",
@@ -297,7 +303,7 @@
                 ]
             },
             "vechi": "implicit \"\"",
-            "nucleu": "lipsește",
+            "nucleu": "implicit \"\"",
             "nota": "Dacă baza VT are alt email_brand_name sau order_email_from_name, titlul de azi îl folosește pe acela: îl arată verificarea pachetului pe verificare (DB-24), iar WP-16 (Brand::numeSite) revede decizia"
         },
         "stripe_enabled": {
@@ -314,7 +320,7 @@
             "din": "manual",
             "sursa": "VT n-are fereastra de bun venit (nicio cheie welcome_popup_* în codul vechi); port-vertij.md §8",
             "vechi": "lipsește",
-            "nucleu": "implicit \"1\""
+            "nucleu": "implicit \"0\""
         }
     },
     "fara_inghetare": {
@@ -357,11 +363,6 @@
             "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
-        },
-        "contact_email": {
-            "motiv": "Codul vechi n-o folosea; în codul comun, goală = fără email în JSON-LD și în pagina de mentenanță",
-            "vechi": "lipsește",
-            "nucleu": "cod \"\" | expresie"
         },
         "cookie_banner_enabled": {
             "motiv": "VT n-avea banner de cookie-uri; în codul comun Microsoft Clarity se încarcă doar după acord, deci bannerul apare (schimbare acceptată în port-vertij.md §8, „Clarity only with consent”; rândul ei în site-uri/vertij/ce-se-schimba.md)",
@@ -512,16 +513,6 @@
             "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",
             "vechi": "lipsește",
             "nucleu": "implicit \"default\""
-        },
-        "welcome_popup_body": {
-            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
-            "vechi": "lipsește",
-            "nucleu": "implicit sha256:566998599b36315d (659 caractere)"
-        },
-        "welcome_popup_title": {
-            "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",
-            "vechi": "lipsește",
-            "nucleu": "implicit \"Bine ați venit pe noul site BIOSCEM!\""
         },
         "welcome_popup_version": {
             "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",

@@ -118,38 +118,28 @@ if (!$db instanceof PDO) {
 $unu = static fn (string $sql): string => (string) ($db->query($sql)->fetchColumn() ?: '');
 
 /**
- * Setările înghețate ale Bioscem (`site-uri/bioscem/setari-inghetate.json`, docs/MIGRARI.md, „Înghețarea setărilor”),
- * puse pe baza de test pe durata comparației: codul Bioscem nu le citește, dar baza Bioscem adoptată le are, deci codul
- * curent se compară cu ele (regula R1 din port-biovitality.md; din WP-14, baza în forma Bioscem le are de la instalare).
- * Azi: `erp_trimite_din` gol (fără prag; WP-12 E1). Pe baza de dezvoltare pasul de activare al ERP-ului a scris data
- * instalării, deci fără înghețare Setări → ERP ANDAXI ar număra separat comenzile demo de dinainte de prag. Valorile
- * private (înlocuitori în git) nu se pun. La final, și la o oprire, fiecare setare revine cum era (și o cheie lipsă).
+ * Baza în forma Bioscem pe durata comparației (tools/dev/lib/forma-bioscem.php): setările înghețate ale Bioscem
+ * (`site-uri/bioscem/setari-inghetate.json`, cu valorile private din `privat/`, scris local de generator) și un antet ca
+ * al Bioscem, cu sertarul de meniu. Codul Bioscem le are scrise în cod (sau în implicitele lui), codul curent le ia din
+ * bază și din pachet (regula R1 din port-biovitality.md; din WP-14, baza cms_dev_bioscem le are de la instalare). Pe baza
+ * de dezvoltare pasul de activare al ERP-ului a scris data instalării, deci fără înghețare Setări → ERP ANDAXI ar număra
+ * separat comenzile demo de dinainte de prag. La final, și la o oprire, fiecare setare revine cum era (și o cheie lipsă).
  */
-$setariInghetateBioscem = json_decode((string) @file_get_contents($radacina . '/site-uri/bioscem/setari-inghetate.json'), true);
-$setariDePusLaLoc = [];
-foreach ((array) ($setariInghetateBioscem['setari'] ?? []) as $cheieInghetata => $intrareInghetata) {
-    $valoareInghetata = is_array($intrareInghetata) ? ($intrareInghetata['valoare'] ?? null) : $intrareInghetata;
-    if (!is_string($valoareInghetata) || (is_array($intrareInghetata) && !empty($intrareInghetata['privat']))) {
-        continue;
-    }
-    $stmtInghetata = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
-    $stmtInghetata->execute(['k' => (string) $cheieInghetata]);
-    $setariDePusLaLoc[(string) $cheieInghetata] = $stmtInghetata->fetchColumn();
-    \App\Support\Settings::save($db, [(string) $cheieInghetata => $valoareInghetata]);
+require_once __DIR__ . '/lib/forma-bioscem.php';
+try {
+    $setariDePusLaLoc = forma_bioscem_pune($db, $radacina);
+} catch (Throwable $e) {
+    fwrite(STDERR, 'Baza în forma Bioscem nu se poate pune: ' . $e->getMessage() . "\n");
+    exit(1);
 }
 register_shutdown_function(static function () use ($db, $setariDePusLaLoc): void {
-    foreach ($setariDePusLaLoc as $cheie => $valoare) {
-        if ($valoare === false) {
-            $db->prepare('DELETE FROM settings WHERE `key` = :k')->execute(['k' => $cheie]);
-        } else {
-            \App\Support\Settings::save($db, [$cheie => (string) $valoare]);
-        }
-    }
+    forma_bioscem_restaureaza($db, $setariDePusLaLoc);
 });
-if ($setariDePusLaLoc !== []) {
-    echo '  INFO  setările înghețate ale Bioscem, pe durata comparației: ', implode(', ', array_keys($setariDePusLaLoc)), "\n";
-}
+echo '  INFO  baza în forma Bioscem, pe durata comparației (tools/dev/lib/forma-bioscem.php): ', count($setariDePusLaLoc),
+    ' setări (înghețarea și antetul cu sertarul de meniu)', "\n";
 
+// Numele site-ului din titlurile adminului (WP-16, $deBioscem): cel pe care îl vede codul curent în baza de acum.
+$numeSiteAdmin = \App\Support\Brand::numeSite(\App\Support\Settings::all($db));
 $parola = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
 $adminEmail = (string) (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro');
 
@@ -741,7 +731,9 @@ $porturiBioscemLivrarea4 = (static function () use ($fataDeCommit, $paginaListe,
         'motiv' => 'Bioscem 9fe175d (livrarea 4 SEO, A11): titlul paginii ca H1 când textul ei n-are unul (SeoIndexare, views/site/custom-page.php)',
     ];
     // Bioscem ef22b23 (A10): pagina „nu există” fără canonical și fără og:url.
-    $adresa404 = 'http://127.0.0.1:' . $portCurent . '/pagina-care-nu-exista';
+    // Canonicalul codului de bază vine din APP_URL (portul serverului de dezvoltare), nu din portul serverului care răspunde
+    // (din WP-16 codul curent rulează și aici pe un server doar al comparației, +4).
+    $adresa404 = rtrim((string) (getenv('APP_URL') ?: 'http://127.0.0.1:' . $portCurent), '/') . '/pagina-care-nu-exista';
     $intrari[] = [
         'nume' => 'pagina 404 fără canonical',
         'cale' => '/pagina-care-nu-exista',
@@ -890,6 +882,59 @@ $deBioscem = [
         'vechi' => "Disallow: /webhook/\n",
         'motiv' => 'pingul monitorizării (GET /_andaxi/ping) e o adresă tehnică, ca /webhook/: robots.txt o închide '
             . 'motoarelor de căutare. Celelalte reguli și ordinea lor rămân.',
+    ],
+    // WP-16 (DB-21, OD-29): textele doar din admin cu numele Bioscem, scrise neutru. Și față de f5ae5ea (ambele moduri);
+    // site-uri/bioscem/ce-se-schimba.md. Titlul filelor adminului ia numele site-ului (App\Support\Brand::numeSite: Setări
+    // magazin → SEO Google, altfel seo.json → organizatie.nume, la Bioscem „Bioscem Shop”), aici numele din baza demo.
+    [
+        'nume' => 'titlul filei din admin: numele site-ului în locul cuvântului „Bioscem”',
+        'cale' => '/admin*',
+        'nou' => ' | Admin ' . htmlspecialchars($numeSiteAdmin, ENT_QUOTES) . "</title>\n",
+        'vechi' => " | Admin Bioscem</title>\n",
+        'motiv' => 'WP-16 (A3): „Admin Bioscem” era scris în views/admin/layout.php; acum „Admin <numele site-ului>” (pe Bioscem live '
+            . '„Admin Bioscem Shop”, din seo.json, sau numele scris în Setări magazin). Doar în fila browserului adminului.',
+    ],
+    [
+        'nume' => 'Setări magazin → SEO Google: exemplul titlului primei pagini',
+        'cale' => '/admin/settings/store',
+        'nou' => 'placeholder="Ex: Numele magazinului - descriere scurtă"',
+        'vechi' => 'placeholder="Ex: Bioscem - Produse naturale pentru sănătate"',
+        'motiv' => 'WP-16 (H1d): exemplul din câmpul gol nu mai poartă numele unui client.',
+    ],
+    [
+        'nume' => 'Setări → ERP ANDAXI: exemplul adresei',
+        'cale' => '/admin/settings/erp',
+        'nou' => 'placeholder="https://firma.erp.andaxi.ro"',
+        'vechi' => 'placeholder="https://bioscem.erp.andaxi.ro"',
+        'motiv' => 'WP-16 (H1a): exemplul din câmpul gol nu mai poartă numele unui client.',
+    ],
+    [
+        'nume' => 'Setări plăți → ordin de plată: exemplul instrucțiunilor',
+        'cale' => '/admin/settings/payments',
+        'nou' => 'placeholder="Beneficiar: FIRMA S.R.L.&#10;',
+        'vechi' => 'placeholder="Beneficiar: BIOSCEM S.R.L.&#10;',
+        'motiv' => 'WP-16 (H1c): exemplul din câmpul gol nu mai poartă numele unui client.',
+    ],
+    [
+        'nume' => 'Pagini → pagină nouă: exemplul titlului SEO',
+        'cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'],
+        'nou' => 'placeholder="Ex: Numele site-ului - Titlu pagină"',
+        'vechi' => 'placeholder="Ex: Bioscem - Titlu pagină"',
+        'motiv' => 'WP-16 (H1e): exemplul din câmpul gol nu mai poartă numele unui client.',
+    ],
+    [
+        'nume' => 'Coș flotant: exemplul adreselor excluse',
+        'cale' => '/admin/settings/floating-cart',
+        'nou' => 'https://domeniul-tau.ro/contact"',
+        'vechi' => 'https://bioscem.ro/contact"',
+        'motiv' => 'WP-16 (H1b): exemplul din câmpul gol nu mai poartă numele unui client.',
+    ],
+    [
+        'nume' => 'Email-uri → formulare de contact: exemplul destinatarilor',
+        'cale' => '/admin/emails/newsletters?tab=contact_forms',
+        'nou' => 'placeholder="contact@domeniul-tau.ro, comenzi@domeniul-tau.ro"',
+        'vechi' => 'placeholder="contact@bioscem.ro, comenzi@bioscem.ro"',
+        'motiv' => 'WP-16 (A7): exemplul din câmpul gol nu mai poartă adresele unui client.',
     ],
     // WP-12 (X1b): o postare importată cu categoria doar ca text. Paginile se cer în cazurile de salvare „blog: …
     // categoria doar ca text …” (mai jos), deci doar față de codul Bioscem (ca editorul postării, cu diferențele portului
@@ -2053,6 +2098,11 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 ['GET', '/admin/settings/store', []],
             ],
             'stare' => static fn (PDO $db): array => ['nume' => $citeste("SELECT `value` FROM settings WHERE `key` = 'store_name'")],
+            // WP-16: titlul filei din admin ia numele site-ului, deci aici numele salvat chiar de acest caz; adus la numele
+            // din baza demo, declarația „titlul filei din admin” din $deBioscem îl scoate ca pe orice pagină de admin. Pe
+            // codul Bioscem titlul e „Admin Bioscem”, deci înlocuirea nu-l atinge.
+            'curata' => static fn (string $text): string => str_replace(' | Admin Magazinul de Test</title>',
+                ' | Admin ' . htmlspecialchars($numeSiteAdmin, ENT_QUOTES) . '</title>', $text),
             'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
                 ($stare['nume'][0]['value'] ?? null) === 'Magazinul de Test' ? [] : ['numele salvat: ' . json_encode($stare['nume'], JSON_UNESCAPED_UNICODE)],
                 $contine($raspunsuri[2], 'Magazinul de Test</title>') ? [] : ['titlul produsului nu are numele magazinului']),
@@ -2814,7 +2864,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                     @unlink($jarCaz);
                 }
                 // Un vizitator nou care a apăsat „Accept toate” în bannerul de cookie-uri (cookie-ul lui CookieConsent).
-                file_put_contents($jaruriCaz['viz-acord'], "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::COOKIE . "\t"
+                file_put_contents($jaruriCaz['viz-acord'], "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t"
                     . \App\Support\CookieConsent::TOATE . "\n");
                 $cerere($port, 'POST', '/admin/login', $jaruriCaz['adm'], ['email' => $adminEmail, 'password' => $parola]);
                 // O cerere e [metodă, cale, date, rol = 'adm' | 'viz', 'pauza' => secunde înainte] sau o

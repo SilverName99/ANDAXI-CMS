@@ -2271,7 +2271,7 @@ final class Incarcare
             }
             if ($cod !== 0) {
                 throw new EsecIncarcare('migrările pe copie s-au oprit cu codul ' . $cod . ' (' . $comanda . ')'
-                    . ($cod === 15 ? '; pentru pachetele biovitality, vertij și grafoanaytis trebuie site-uri/<site>/privat/ lângă pachet (docs/MIGRARI.md)' : ''));
+                    . ($cod === 15 ? '; fiecare pachet cu valori private în înghețare (bioscem, biovitality, vertij, grafoanaytis) cere site-uri/<site>/privat/ lângă pachet (docs/MIGRARI.md)' : ''));
             }
         }
         \App\Support\Migrari\Garda::uita();

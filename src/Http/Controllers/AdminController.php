@@ -5381,7 +5381,7 @@ final class AdminController
     /**
      * Scoate codul fiscal dintr-un text scris de client.
      *
-     * În câmpul de CUI ajunge des și denumirea firmei („BIOSCEM SRL RO12345678").
+     * În câmpul de CUI ajunge des și denumirea firmei („FIRMA DEMO SRL RO12345678").
      * Dacă apare un cod precedat de „RO", el câștigă — e forma completă. Altfel
      * luăm cel mai lung grup de cifre, ca „MERIDIAN 2000 SRL 45678901" să dea
      * 45678901, nu 2000. Fără nicio cifră, lăsăm textul cum e: nu inventăm un
@@ -6770,7 +6770,7 @@ final class AdminController
         $url = \App\Support\AppUrl::absolut('/plata/' . rawurlencode((string) $link['token']));
         $numeClient = trim((string) ($order['billing_first_name'] ?? '') . ' ' . (string) ($order['billing_last_name'] ?? ''));
         $numarComanda = (string) ($order['order_number'] ?? '');
-        $magazin = trim((string) ($settings['order_email_from_name'] ?? 'Bioscem')) ?: 'Bioscem';
+        $magazin = \App\Support\Brand::numeExpeditor($settings);
 
         $html = '<p>Bună' . ($numeClient !== '' ? ' ' . htmlspecialchars($numeClient, ENT_QUOTES) : '') . ',</p>'
             . '<p>Pentru comanda <strong>' . htmlspecialchars($numarComanda, ENT_QUOTES) . '</strong> a rămas de achitat suma de <strong>'
@@ -13363,7 +13363,7 @@ final class AdminController
                     'order_status' => 'În procesare',
                     'estimated_delivery' => '8-9 Aprilie 2026',
                     'customer_email' => $to,
-                    'store_name' => (string) ($testSettings['order_email_from_name'] ?? 'Bioscem'),
+                    'store_name' => \App\Support\Brand::numeExpeditor($testSettings),
                     'order_date' => '6 Aprilie 2026',
                     'order_action_url' => $testOrderActionUrl,
                     'year' => date('Y'),
@@ -14177,7 +14177,7 @@ final class AdminController
 
         $payload = [
             'email_delivery_method' => $deliveryMethod,
-            'order_email_from_name' => trim((string) ($_POST['order_email_from_name'] ?? 'Bioscem')),
+            'order_email_from_name' => trim((string) ($_POST['order_email_from_name'] ?? '')),
             'order_email_from_address' => trim((string) ($_POST['order_email_from_address'] ?? 'no-reply@localhost')),
         ];
 
@@ -14228,7 +14228,7 @@ final class AdminController
             if ($type === '') {
                 OrderMailer::sendCustom(
                     $to,
-                    'Email test Bioscem',
+                    'Email test ' . \App\Support\Brand::numeExpeditor($settings),
                     '<p>Salut! Acesta este un email de test trimis din modulul Email-uri.</p>',
                     $settings,
                     $db,
@@ -19818,6 +19818,7 @@ HTML;
         }
         return $this->renderPartialPhpView('site/components/shop-catalog', [
             'products' => $products,
+            'descriereImplicita' => (string) (Settings::all($db)['catalog_descriere_implicita'] ?? ''),
             'categories' => $categories,
             'activeCategory' => $activeCategory,
             'sort' => $sort,

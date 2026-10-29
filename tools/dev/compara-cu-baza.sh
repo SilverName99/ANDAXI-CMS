@@ -131,10 +131,12 @@
 #    lacătul sesiunii după ce au citit-o (C4; răspunsurile, la fel); JSON-ul gărzii pe /api/… are și `error`
 #    (X6; nicio adresă /api/… a unui plugin oprit nu se cere aici); pragul trimiterii în ERP (E1): cu
 #    erp_trimite_din gol (înghețarea Bioscem), cronul erp-sync, „Retrimite” și contoarele din Setări → ERP
-#    ANDAXI rămân ca în Bioscem. Comparația pune pe durata ei, în baza de test, setările înghețate ale
-#    Bioscem (site-uri/bioscem/setari-inghetate.json, fără cele private; azi erp_trimite_din gol), cum le
-#    are baza Bioscem după adoptare, iar la final valorile de dinainte (pe baza de dezvoltare pragul e
-#    momentul instalării, pus de pasul de activare). Ce se vede în admin (CodeMirror doar în cele patru
+#    ANDAXI rămân ca în Bioscem. Comparația pune pe durata ei baza de test „în forma Bioscem”
+#    (tools/dev/lib/forma-bioscem.php, din WP-16; și pentru --vizual): setările înghețate ale Bioscem
+#    (site-uri/bioscem/setari-inghetate.json, cu valorile private din privat/, scrise local de
+#    tools/inghetare/genereaza-setari.php), cum le are baza Bioscem după adoptare, și un antet ca al Bioscem cu
+#    sertarul de meniu; la final valorile de dinainte (pe baza de dezvoltare pragul e momentul instalării, pus
+#    de pasul de activare). Ce se vede în admin (CodeMirror doar în cele patru
 #    editoare, C6; pozele leneșe ale selectoarelor, C7; categoria doar ca text a unei postări, X1b) e
 #    declarat în compara-cu-baza.php ($porturiBiovitality, $deBioscem), iar salvările C2 și X1b sunt
 #    cazurile de tip „reparatie” de acolo.
@@ -226,6 +228,20 @@ if [ "$MOD" = "repo" ]; then
     PORT_CURENT=$((CMS_DEV_PORT + 4))
 else
     COMMIT="${COMMIT:-f5ae5ea}"
+    # Istoric: codul de atunci avea scrise în nucleu constantele și tema Bioscem pe care WP-16 le-a mutat în pachetul
+    # Bioscem (numele cookie-ului acordului, cheia popup-ului, logo-ul sertarului, iconițele, blocul paginii de
+    # mulțumire). Codul curent rulează deci cu pachetul demo (regulile SEO și harta, pe care le declară $faraSeo și
+    # $porturiBioscem) plus site.json și tema/ ale pachetului Bioscem, într-o copie în $CMS_DEV_DIR (refăcută la fiecare rulare).
+    PACHET_ISTORIC="$CMS_DEV_DIR/pachet-istoric"
+    rm -rf "$PACHET_ISTORIC"
+    mkdir -p "$PACHET_ISTORIC"
+    cp -a "$SITE_DATE_DOSAR"/. "$PACHET_ISTORIC"/
+    cp -p "$RADACINA/site-uri/bioscem/site.json" "$PACHET_ISTORIC/site.json"
+    rm -rf "$PACHET_ISTORIC/tema"
+    cp -a "$RADACINA/site-uri/bioscem/tema" "$PACHET_ISTORIC/tema"
+    export SITE_DATE_DOSAR="$PACHET_ISTORIC"
+    # Serverul de dezvoltare are alt pachet: și aici un server doar pentru comparație (portul +4).
+    PORT_CURENT=$((CMS_DEV_PORT + 4))
     COMMIT_SCURT="$(git -C "$RADACINA" rev-parse --short "$COMMIT^{commit}")" || die "commit necunoscut: $COMMIT"
     BAZA_DIR="$CMS_DEV_DIR/baza-$COMMIT_SCURT"
     ETICHETA_BAZA="$COMMIT_SCURT"
@@ -408,8 +424,11 @@ fi
 if [ "$VIZUAL" = 1 ]; then
     # Aceleași două servere, aceleași date ale site-ului; în locul HTML-ului, stilurile calculate ale paginilor publice
     # (tools/dev/capturi-publice.php și .cjs; poarta G-vizual).
+    # Față de codul Bioscem, baza în forma Bioscem (ca în compara-cu-baza.php; tools/dev/lib/forma-bioscem.php).
+    FORMA=()
+    [ "${SITE_BAZA:-}" = "bioscem" ] && FORMA=(--forma-bioscem)
     "${PHP_DEV[@]}" tools/dev/capturi-publice.php compara --baza="http://127.0.0.1:$PORT_BAZA" --curent="http://127.0.0.1:$PORT_CURENT" \
-        --eticheta="$ETICHETA_BAZA (licența ${LICENTA_COMPARATIE:-toate})" --dosar="compara-${LICENTA_COMPARATIE:-toate}"
+        --eticheta="$ETICHETA_BAZA (licența ${LICENTA_COMPARATIE:-toate})" --dosar="compara-${LICENTA_COMPARATIE:-toate}" "${FORMA[@]}"
     exit $?
 fi
 "${PHP_DEV[@]}" tools/dev/compara-cu-baza.php "$PORT_BAZA" "$ETICHETA_BAZA" "$BAZA_DIR" "$MOD" "$PORT_CURENT" "${SITE_BAZA:-}"

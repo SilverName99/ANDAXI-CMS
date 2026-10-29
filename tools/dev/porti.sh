@@ -69,7 +69,7 @@ poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un sit
 poarta G-vizual "stilurile calculate ale paginilor publice față de codul Bioscem însuși, pe serverele lui G-cmp, licența „toate” și licența Bioscem (capturile, doar pentru ochi); întâi autotestul instrumentului" \
     "tools/dev/capturi-publice.sh --autotest ;; tools/dev/capturi-publice.sh ;; tools/dev/capturi-publice.sh --licenta=bioscem" WP-13
 poarta G-pachet "pachetul Bioscem și pachetul neutru" \
-    "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-14
+    "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-16
 poarta G-lic "sincronizarea licenței cu CRM-ul (CRM fals)" "tools/dev/php.sh tools/dev/test-licenta-crm.php" WP-27
 poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de eticheta dinaintea refacerii" \
     "tools/dev/php.sh tools/dev/contract-admin.php" WP-29
@@ -118,6 +118,9 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # WP-16 (predarea WP-13): a treia linie din /health, „pachet: <amprenta manifestului>” sau „pachet: lipsa” (de-bioscem §5.2,
 # App\Support\PachetSite::amprenta), schimbă corpurile exacte ale lui /health pe care le verifică tools/dev/test-instalare.php
 # (G-inst) și tools/dev/test-verificare.php (G-verif, poarta copiei lasă /health să treacă), deci WP-16 rulează și G-inst și G-verif.
+# G-pachet (tools/dev/test-pachet-site.php) e adus de WP-16, nu de WP-14: ordinea proprietarului din 28 oct pune WP-16…WP-18
+# înaintea lui WP-14, iar porțile lor îl cer (valorile pachetului Bioscem față de codul Bioscem; nimic din lista neagră cu
+# pachetul demo). WP-14 îl mută pe baza cms_dev_bioscem și îi adaugă faza emailurilor.
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"

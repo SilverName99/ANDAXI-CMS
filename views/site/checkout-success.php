@@ -22,16 +22,16 @@ if ($returCard && $platit) {
 ?>
 <style>
 <?php
-// Stilurile paginii de mulțumire: ale nucleului (mai jos) sau, dacă tema site-ului îl înlocuiește, blocul ei
-// (tema.json → css_inline.pagina_succes, un fișier din tema/; App\Support\Tema::cssInline). Între <style> și </style>
-// ajunge exact unul dintre ele.
+// Stilurile paginii de mulțumire: ale nucleului (mai jos, cu o paletă neutră; WP-16, DB-12) sau, dacă tema site-ului îl
+// înlocuiește, blocul ei (tema.json → css_inline.pagina_succes, un fișier din tema/; App\Support\Tema::cssInline; la
+// un site existent tema/pagina-succes.css din pachetul lui, cu paleta de dinainte). Între <style> și </style> ajunge exact unul.
 ob_start();
 ?>
 .bs-succes{
-    --bs-succes-accent:#075d61;
-    --bs-succes-line:#e3ecec;
-    --bs-succes-text:#18353a;
-    --bs-succes-muted:#66787b;
+    --bs-succes-accent:#334155;
+    --bs-succes-line:#e2e8f0;
+    --bs-succes-text:#0f172a;
+    --bs-succes-muted:#64748b;
     max-width:640px;
     margin:32px auto 56px;
     padding:0 16px;
@@ -43,7 +43,7 @@ ob_start();
     border:1px solid var(--bs-succes-line);
     border-radius:18px;
     padding:36px 32px 32px;
-    box-shadow:0 18px 44px rgba(11,70,72,.08);
+    box-shadow:0 18px 44px rgba(15,23,42,.08);
     text-align:center;
 }
 .bs-succes__bifa{
@@ -82,7 +82,7 @@ ob_start();
     margin:26px 0 0;
     border:1px solid var(--bs-succes-line);
     border-radius:12px;
-    background:#f8fbfb;
+    background:#f8fafc;
     text-align:left;
 }
 .bs-succes__rand{
@@ -115,9 +115,9 @@ ob_start();
 .bs-succes__plata{
     margin:20px 0 0;
     padding:20px;
-    border:1px solid #cbe0df;
+    border:1px solid #cbd5e1;
     border-radius:12px;
-    background:#f2f9f8;
+    background:#f1f5f9;
     text-align:left;
 }
 .bs-succes__plata h2{
@@ -134,7 +134,7 @@ ob_start();
 .bs-succes__date{
     margin:0;
     padding:14px 16px;
-    border:1px solid #d7e7e6;
+    border:1px solid #e2e8f0;
     border-radius:10px;
     background:#fff;
     /* Cifrele de cont se citesc mai bine cu lățime fixă. */
@@ -147,7 +147,7 @@ ob_start();
 .bs-succes__copiaza{
     margin-top:12px;
     padding:9px 16px;
-    border:1px solid #a9cecc;
+    border:1px solid #94a3b8;
     border-radius:100px;
     background:#fff;
     color:var(--bs-succes-accent);
@@ -157,7 +157,7 @@ ob_start();
     cursor:pointer;
 }
 .bs-succes__copiaza:hover{
-    background:#e6f3f2;
+    background:#f1f5f9;
 }
 .bs-succes__actiuni{
     margin:26px 0 0;

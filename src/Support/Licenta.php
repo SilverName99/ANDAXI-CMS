@@ -13,7 +13,7 @@ use Throwable;
  *
  * Fișierul `licenta.json` (în `storage/licenta/`, sau în `LICENTA_DOSAR`) arată așa:
  *
- *     {"site":"bioscem","emisa_la":"2026-10-18T09:15:02Z","versiune":17,
+ *     {"site":"exemplu","emisa_la":"2026-10-18T09:15:02Z","versiune":17,
  *      "pluginuri":{"catalog":"pornit","magazin":"se_opreste"},
  *      "semnatura":"<Ed25519, base64>"}
  *

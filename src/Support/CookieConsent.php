@@ -15,7 +15,12 @@ namespace App\Support;
  */
 final class CookieConsent
 {
-    public const COOKIE = 'bioscem_cookie_consent';
+    /**
+     * Numele cookie-ului pe un site fără altul în datele lui (WP-16, DB-08, decizia OD-27). Un site existent își
+     * păstrează numele din site.json → cookie_consimtamant (pachetul lui, site-uri/<site>/site.json): altfel fiecare
+     * vizitator care a ales deja ar vedea din nou bannerul.
+     */
+    public const IMPLICIT = 'cookie_consent';
 
     /** Toate cookie-urile, inclusiv cele de analiză și marketing. */
     public const TOATE = 'all';
@@ -26,10 +31,29 @@ final class CookieConsent
     /** Cât timp ținem minte alegerea (6 luni, recomandarea autorităților). */
     public const DURATA = 180 * 24 * 60 * 60;
 
+    /**
+     * Numele cookie-ului acordului: site.json → cookie_consimtamant, altfel IMPLICIT. Un nume care nu poate fi al unui
+     * cookie (gol, spații, „;”, „=”, alt tip) se ignoră, cu un rând în jurnalul PHP: un site.json greșit nu are voie
+     * să strice bannerul.
+     */
+    public static function nume(): string
+    {
+        $nume = DateSite::site('cookie_consimtamant', self::IMPLICIT);
+        if (is_string($nume) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $nume) === 1) {
+            return $nume;
+        }
+        static $anuntat = false;
+        if (!$anuntat) {
+            $anuntat = true;
+            error_log('ANDAXI-CMS: site.json → cookie_consimtamant nu e un nume de cookie valid; folosesc „' . self::IMPLICIT . '”.');
+        }
+        return self::IMPLICIT;
+    }
+
     /** Alegerea vizitatorului, sau '' dacă încă nu a ales. */
     public static function alegere(): string
     {
-        $valoare = trim((string) ($_COOKIE[self::COOKIE] ?? ''));
+        $valoare = trim((string) ($_COOKIE[self::nume()] ?? ''));
         return in_array($valoare, [self::TOATE, self::NECESARE], true) ? $valoare : '';
     }
 

@@ -496,8 +496,13 @@ $verifica('după --aplica (baza din nou la zi): prima cerere rulează pașii (er
 
 $scrie('');
 $scrie('== C. /health și bannerul din admin');
+// Al treilea rând (WP-16): pachetul site-ului (aici cel demo, din SITE_DATE_DOSAR), ca primele 12 caractere ale sha256-ului
+// manifestului, sau „pachet: lipsa”.
+$randPachet = "\npachet: " . (\App\Support\PachetSite::amprenta(\App\Support\DateSite::dosar()) ?? 'lipsa');
 $r = $cerere('GET', '/health');
-$verifica('/health pe o bază la zi: 200, „ok” și „schema: la_zi”', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi", $r['cod'] . ' ' . $r['corp']);
+$verifica('/health pe o bază la zi: 200, „ok”, „schema: la_zi” și pachetul demo („' . trim($randPachet) . '”)', $r['cod'] === 200
+    && $r['corp'] === "ok\nschema: la_zi" . $randPachet && str_ends_with($randPachet, (string) \App\Support\PachetSite::amprenta(\App\Support\DateSite::dosar()))
+    && preg_match('/^\npachet: [0-9a-f]{12}$/', $randPachet) === 1, $r['cod'] . ' ' . $r['corp']);
 $r = $cerere('GET', '/admin', $jarAdmin);
 $verifica('bannerul schemei: lipsește pe o bază la zi', $r['cod'] === 200 && !str_contains($r['corp'], 'data-schema='), (string) $r['cod']);
 $dbD->exec("UPDATE _platforma_stare SET valoare = '" . ($ultimaOrd - 1) . "' WHERE cheie = 'ultima_ord'");
@@ -514,7 +519,7 @@ $verifica('bannerul schemei: nu apare pentru un admin cu rol parțial (administr
     && !str_contains($r['corp'], 'data-schema='), (string) $r['cod']);
 $dbD->exec("UPDATE _platforma_stare SET valoare = '" . $ultimaOrd . "' WHERE cheie = 'ultima_ord'");
 $r = $cerere('GET', '/health');
-$verifica('/health după aducerea la zi: 200 din nou', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi", $r['cod'] . ' ' . $r['corp']);
+$verifica('/health după aducerea la zi: 200 din nou', $r['cod'] === 200 && $r['corp'] === "ok\nschema: la_zi" . $randPachet, $r['cod'] . ' ' . $r['corp']);
 
 // =====================================================================
 // E. Contorul de instrucțiuni
@@ -573,7 +578,7 @@ $dbV = $bazaNoua('cms_inst_vechi');
 $verifica('o bază ca înainte: pe-vechi.php, seed.php, date-demo.php', $cv === 0 && $cs === 0 && $cd === 0 && str_contains($ov, 'garda: fara_registru'), $ov);
 $verifica('serverul testului pe baza ca înainte', $pornesteServerul('cms_inst_vechi'));
 $r = $cerere('GET', '/health');
-$verifica('/health pe baza ca înainte: 200, „schema: fara_registru”', $r['cod'] === 200 && $r['corp'] === "ok\nschema: fara_registru", $r['corp']);
+$verifica('/health pe baza ca înainte: 200, „schema: fara_registru”', $r['cod'] === 200 && $r['corp'] === "ok\nschema: fara_registru" . $randPachet, $r['corp']);
 $ok = $login('admin@exemplu.ro', $jarAdmin);
 $citesteContorul();
 $r = $cerere('GET', '/admin', $jarAdmin);

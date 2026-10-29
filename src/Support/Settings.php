@@ -42,7 +42,9 @@ final class Settings
         'fan_shipment_type' => 'parcel',
         'fan_parcel_count' => '1',
         'fan_envelope_count' => '0',
-        'contact_form_recipients' => 'contact@bioscem.ro',
+        // WP-16 (DB-06): fără adresa unui client; gol = Brand::emailContact (contact_email, apoi primul administrator
+        // general). Un site existent își păstrează adresa prin înghețare (site-uri/<site>/setari-inghetate.json).
+        'contact_form_recipients' => '',
         'fan_option_codes' => '',
         'fan_service_type_fanbox' => 'FANbox',
         'fan_declared_value_mode' => 'order_total',
@@ -68,12 +70,30 @@ final class Settings
         'cookie_banner_enabled' => '1',
         'cookie_banner_text' => 'Folosim cookies pentru funcționarea site-ului și, cu acordul tău, pentru statistici de trafic. Poți accepta toate cookie-urile sau doar pe cele strict necesare.',
         'cookie_banner_policy_url' => '',
-        'welcome_popup_enabled' => '1',
-        'welcome_popup_title' => 'Bine ați venit pe noul site BIOSCEM!',
-        'welcome_popup_body' => "Vă informăm că am lansat o nouă platformă BIOSCEM. Pentru a putea comanda și beneficia în continuare de produsele comercializate de către SC BIOSCEM SRL, toți clienții și utilizatorii sunt rugați să își creeze un CONT NOU.\n\n⚠️ IMPORTANT: Conturile vechi și datele de autentificare anterioare nu mai sunt valabile. Accesul la noua platformă se face exclusiv prin intermediul unui cont nou, pe care vă rugăm să vi-l creați.\n\nNe cerem scuze pentru eventualele neplăceri cauzate de această schimbare și vă mulțumim pentru înțelegere, răbdare și încredere.\n\nVă dorim o experiență cât mai plăcută pe noua platformă!\n\nCu drag,\nEchipa BIOSCEM – Vitalitate & Protecție",
+        // WP-16 (DB-07): fereastra de bun venit oprită și goală pe un site nou; un site existent își păstrează fereastra (titlul
+        // și textul de la lansarea site-ului) prin înghețare.
+        'welcome_popup_enabled' => '0',
+        'welcome_popup_title' => '',
+        'welcome_popup_body' => '',
         'welcome_popup_version' => '1',
+        // WP-16 (VT-C6, DB-05, DB-09, DB-14): identitatea site-ului, fără niciun nume de client. Numele site-ului
+        // (Setări magazin → SEO Google; gol = seo.json → organizatie.nume, APP_NAME, gazda: App\Support\Brand), adresa
+        // și telefonul de contact (datele structurate, pagina de mentenanță, Brand::emailContact), eticheta contului din
+        // sertarul de meniu, numele, logo-ul și adresa din emailurile conturilor (BrandedEmail, WP-17), logo-ul
+        // sertarului de meniu (gol = tema.json → logo_meniu_mobil, apoi numele site-ului ca text) și descrierea unui
+        // produs fără descriere scurtă în catalog (gol = niciun text).
+        'store_name' => '',
+        'contact_email' => '',
+        'contact_phone' => '',
+        'header_account_label' => 'Contul meu',
+        'email_brand_name' => '',
+        'email_logo_url' => '',
+        'email_site_url' => '',
+        'store_logo_url' => '',
+        'catalog_descriere_implicita' => '',
         'email_delivery_method' => 'smtp',
-        'order_email_from_name' => 'Bioscem',
+        // WP-16 (DB-05): gol = numele site-ului (Brand::numeExpeditor); un site existent își păstrează numele prin înghețare.
+        'order_email_from_name' => '',
         'order_email_from_address' => 'no-reply@localhost',
         'smtp_host' => '',
         'smtp_port' => '587',
