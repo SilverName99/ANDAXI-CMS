@@ -89,6 +89,7 @@ $modalOpen = $selectedFieldId > 0 || $newRequested;
                     <option value="text" <?= $type === 'text' ? 'selected' : '' ?>>Text simplu</option>
                     <option value="textarea" <?= $type === 'textarea' ? 'selected' : '' ?>>Text lung</option>
                     <option value="html" <?= $type === 'html' ? 'selected' : '' ?>>HTML</option>
+                    <option value="image" <?= $type === 'image' ? 'selected' : '' ?>>Imagine</option>
                 </select>
             </div>
             <div class="field">
@@ -108,6 +109,18 @@ $modalOpen = $selectedFieldId > 0 || $newRequested;
                     <input type="checkbox" name="is_required" <?= (int) ($editingField['is_required'] ?? 0) === 1 ? 'checked' : '' ?>>
                     Obligatoriu la completare produs
                 </label>
+            </div>
+            <div class="field" style="grid-column:1/-1;">
+                <input type="hidden" name="template_only_trimis" value="1">
+                <label style="display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" name="template_only" <?= (int) ($editingField['template_only'] ?? 0) === 1 ? 'checked' : '' ?>>
+                    Apare doar la template-urile care îl folosesc
+                </label>
+                <small style="color:#64748b;">
+                    Bifat, câmpul se arată în editorul de produs doar dacă template-ul ales conține codul lui
+                    (<code>{{field_cod}}</code>), iar pe pagina produsului nu intră în lista de informații și nici ca tab.
+                    Nebifat, apare la toate produsele.
+                </small>
             </div>
             <div class="field" style="grid-column:1/-1;">
                 <label style="display:flex;align-items:center;gap:8px;">

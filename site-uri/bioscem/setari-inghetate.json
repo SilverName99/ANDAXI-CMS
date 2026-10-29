@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@070e1af",
-    "amprenta_nucleu": "a67488a3714f29edd1447fb7325759e30e15bf8196ab2ccdf84cada252e15727",
+    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
     "setari": {
         "bt_ipay_descriere_magazin": {
             "valoare": "bioscem.ro",
@@ -16,6 +16,22 @@
             },
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
+        },
+        "catalog_ascunde_inactive": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizia OD-12 / WP-19 (C8): Bioscem păstrează produsele inactive în liste până confirmă clientul lista din verificarea V2 (WP-10), apoi le ascunde împreună cu redirecționările 301 ale celor cu trafic din Google. SiteController::loadProducts și numărătoarea categoriilor citeau doar produsele neșterse: un produs inactiv apărea în magazin, în categorii, pe prima pagină și se putea deschide; codul comun le ascunde (WP-19, C8, catalog_ascunde_inactive = 1)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "catalog_camp_html_brut": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "WP-19 (C14d): codul vechi escapa valoarea oricărui câmp suplimentar, și a celor de tip „html” (htmlspecialchars în SiteController::buildProductTemplateRender); fără răspunsul verificării V4 (câmpuri „html” cu markup pe Bioscem), rămân escapate",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "catalog_descriere_implicita": {
             "valoare": "Supliment natural",
@@ -257,6 +273,26 @@
         }
     },
     "fara_inghetare": {
+        "catalog_pagina": {
+            "motiv": "Același catalog la /magazin în ambele coduri (WP-19, GR-09: catalog_pagina = magazin)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"magazin\""
+        },
+        "catalog_similare_titlu": {
+            "motiv": "Codul vechi n-avea banda {{product_produse_similare}} (WP-19, GR-16), deci niciun titlu de păstrat",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Produse asemănătoare\""
+        },
+        "catalog_sortare_implicita": {
+            "motiv": "Aceeași sortare la prima deschidere în ambele coduri: alfabetică (WP-19, GR-08)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"alpha_asc\""
+        },
+        "catalog_sortare_vizibila": {
+            "motiv": "Butonul sortării se vede în ambele coduri (WP-19, GR-16)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "contact_email": {
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod \"\" | expresie",

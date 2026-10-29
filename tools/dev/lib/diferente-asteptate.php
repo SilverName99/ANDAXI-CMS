@@ -146,7 +146,13 @@ function diferente_marcaje(array $marcaje, string $cale, string $html, array &$g
         if (preg_match('/^[a-z]+:[A-Za-z0-9_.-]+$/', (string) $nume) !== 1) {
             $probleme[] = 'marcajul „' . $nume . '”: numele trebuie să fie <sursa>:<NUME> (de exemplu bv:tab-spam)';
         }
-        if (trim((string) ($declaratie['cale'] ?? '')) === '' || trim((string) ($declaratie['motiv'] ?? '')) === '') {
+        // Pagina: un text nevid sau (WP-19) o listă nevidă de pagini, fiecare un text nevid (același șablon pe două pagini,
+        // de exemplu editorul paginii nou și existent); pe fiecare pagină din listă marcajul apare exact o dată.
+        $caleMarcaj = $declaratie['cale'] ?? '';
+        $caleBuna = is_array($caleMarcaj)
+            ? $caleMarcaj !== [] && array_filter($caleMarcaj, static fn ($c): bool => !is_string($c) || trim($c) === '') === []
+            : trim((string) $caleMarcaj) !== '';
+        if (!$caleBuna || trim((string) ($declaratie['motiv'] ?? '')) === '') {
             $probleme[] = 'marcajul „' . $nume . '”: lipsește pagina sau motivul';
         }
     }
@@ -169,7 +175,8 @@ function diferente_marcaje(array $marcaje, string $cale, string $html, array &$g
     }
     foreach ($marcaje as $nume => $declaratie) {
         $n = $numarate[$nume] ?? 0;
-        $asteptat = diferenta_pe_pagina((string) ($declaratie['cale'] ?? ''), $cale) ? 1 : 0;
+        $caleMarcaj = $declaratie['cale'] ?? '';
+        $asteptat = diferenta_pe_pagina(is_array($caleMarcaj) ? $caleMarcaj : (string) $caleMarcaj, $cale) ? 1 : 0;
         if ($n !== $asteptat) {
             $probleme[] = 'marcajul „' . $nume . '” găsit de ' . $n . ' ori, așteptat ' . $asteptat;
         }
@@ -320,6 +327,22 @@ function diferente_autotest(): array
         => diferente_marcaje(['gr:peste-tot' => $marcaje['gr:peste-tot']], '/cos', $peAdmin($baza), $g, $p), true);
     $ruleaza('marcaj declarat fără motiv', static fn (array &$g, array &$p): string
         => diferente_marcaje(['bv:bloc' => ['cale' => '/admin/products']], '/admin/products', $cuBloc, $g, $p), true);
+    // WP-19: un marcaj pe o listă de pagini (același șablon pe două pagini): o dată pe fiecare, pe nicio alta.
+    $peDoua = ['bv:bloc' => ['cale' => ['/admin/pages/new', '/admin/pages/7/edit'], 'motiv' => 'test']];
+    $ruleaza('marcaj pe o listă de pagini, găsit pe prima', static fn (array &$g, array &$p): string
+        => diferente_marcaje($peDoua, '/admin/pages/new', $cuBloc, $g, $p), false, $baza);
+    $ruleaza('marcaj pe o listă de pagini, găsit pe a doua', static fn (array &$g, array &$p): string
+        => diferente_marcaje($peDoua, '/admin/pages/7/edit', $cuBloc, $g, $p), false, $baza);
+    $ruleaza('marcaj pe o listă de pagini, lipsă de pe una din ele', static fn (array &$g, array &$p): string
+        => diferente_marcaje($peDoua, '/admin/pages/new', $baza, $g, $p), true, null, 'găsit de 0 ori, așteptat 1');
+    $ruleaza('marcaj pe o listă de pagini, găsit pe o pagină din afara listei', static fn (array &$g, array &$p): string
+        => diferente_marcaje($peDoua, '/admin/pages', $cuBloc, $g, $p), true, null, 'găsit de 1 ori, așteptat 0');
+    $ruleaza('marcaj cu lista de pagini goală', static fn (array &$g, array &$p): string
+        => diferente_marcaje(['bv:bloc' => ['cale' => [], 'motiv' => 'test']], '/admin/products', $baza, $g, $p), true, null,
+            'lipsește pagina sau motivul');
+    $ruleaza('marcaj cu o pagină goală în listă', static fn (array &$g, array &$p): string
+        => diferente_marcaje(['bv:bloc' => ['cale' => ['/admin/products', ' '], 'motiv' => 'test']], '/admin/products', $cuBloc, $g, $p),
+            true, null, 'lipsește pagina sau motivul');
 
     $texte = ['$deBioscem' => [['nume' => 't', 'cale' => '/magazin', 'nou' => 'Text nou', 'vechi' => 'Text vechi', 'motiv' => 'test']]];
     $ruleaza('text găsit o dată, pe pagina lui', static fn (array &$g, array &$p): string

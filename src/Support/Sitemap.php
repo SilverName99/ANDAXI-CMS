@@ -82,6 +82,9 @@ final class Sitemap
         };
 
         $cuCatalog = Plugins::vizibil('catalog');
+        // WP-19 (GR-09): pagina catalogului (catalog_pagina; implicit „magazin”), o singură dată, cu data celui mai nou
+        // produs; /magazin, care atunci face 301 spre ea, nu intră.
+        $paginaCatalog = ltrim(Catalog::urlDinBaza($db), '/');
         $cuBlog = Plugins::vizibil('blog');
         $articole = $cuBlog ? self::articolePublicate($db) : [];
         $produse = $cuCatalog ? self::produseActive($db) : [];
@@ -111,8 +114,12 @@ final class Sitemap
             if ($slugMic === 'blog' && $articole === []) {
                 continue;
             }
+            // Cu catalogul pe altă pagină (WP-19, GR-09), pagina „magazin” face 301 acolo: nu intră.
+            if ($slugMic === 'magazin' && $paginaCatalog !== 'magazin' && $cuCatalog) {
+                continue;
+            }
             $lastmod = self::lastmod($pagina);
-            if ($slugMic === 'magazin') {
+            if ($slugMic === $paginaCatalog) {
                 $lastmod = self::celMaiNou([$lastmod, ...array_column($produse, 'lastmod')]);
             }
             $adauga('/' . self::codeazaCale($slug), $lastmod);
@@ -120,7 +127,7 @@ final class Sitemap
 
         if ($cuCatalog) {
             // Rutele fixe ale catalogului (există și fără pagină în constructor).
-            $adauga('/magazin', self::celMaiNou(array_column($produse, 'lastmod')));
+            $adauga('/' . self::codeazaCale($paginaCatalog), self::celMaiNou(array_column($produse, 'lastmod')));
         }
         $adauga('/contact');
 

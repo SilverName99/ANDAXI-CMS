@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "a67488a3714f29edd1447fb7325759e30e15bf8196ab2ccdf84cada252e15727",
+    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
     "setari": {
         "bunny_app_download_path": {
             "valoare": "aplicatie/BiovitalityFiles.exe",
@@ -53,6 +53,22 @@
             "mod": "lipsa",
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
+        },
+        "catalog_ascunde_inactive": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "Biovitality 2b8a618: codul vechi ascundea deja produsele inactive (loadProducts cu is_active = 1, numărătoarea categoriilor, pagina produsului doar pe linkul de ciornă), la fel ca nucleul (WP-19, C8)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "catalog_camp_html_brut": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "Biovitality 90afd46: codul vechi punea deja câmpurile suplimentare de tip „html” ca markup, la fel ca nucleul (WP-19, C14d)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "catalog_descriere_implicita": {
             "valoare": "Supliment natural",
@@ -352,6 +368,26 @@
             "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
+        },
+        "catalog_pagina": {
+            "motiv": "Același catalog la /magazin în ambele coduri (WP-19, GR-09: catalog_pagina = magazin)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"magazin\""
+        },
+        "catalog_similare_titlu": {
+            "motiv": "Codul vechi n-avea banda {{product_produse_similare}} (WP-19, GR-16), deci niciun titlu de păstrat",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Produse asemănătoare\""
+        },
+        "catalog_sortare_implicita": {
+            "motiv": "Aceeași sortare la prima deschidere în ambele coduri: alfabetică (WP-19, GR-08)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"alpha_asc\""
+        },
+        "catalog_sortare_vizibila": {
+            "motiv": "Butonul sortării se vede în ambele coduri (WP-19, GR-16)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "contact_email": {
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",

@@ -315,11 +315,14 @@ să iasă la fel oricare ar fi serverul (de exemplu `explicit_defaults_for_times
 | După baseline (pachetele de lucru, în numerele lor din planul Etapei 1) | Ce conține |
 |---|---|
 | `magazin/0032_avertismente_produse` (WP-R, 20 octombrie) | avertismentul pe produs, din Bioscem `0582ce9`: `product_warnings` (titlul, textul și eticheta bifei pe produs) și `order_product_warnings` (ce a confirmat clientul pe comandă), `product_warnings_schema_version` = `1` în setări, dacă nu e deja; **adoptivă**: pe Bioscem tabelele le face codul la prima salvare a unui avertisment, deci migrarea le găsește coloană cu coloană; colația ca la tabelele BT (la cod, a serverului; la migrare `utf8mb4_unicode_ci`) |
+| `catalog/0026_vizibilitate_ordine` (WP-19, 29 octombrie) | `products.preview_token` (cheia linkului de ciornă; fiecare produs fără cheie primește una, cu `random_bytes`, pe bucăți de 500), `products.sort_position`, `products.hidden_in_catalog`; **adoptivă**: codul Biovitality face aceleași coloane, cu aceleași definiții, deci pe baza lui completează doar cheile lipsă |
+| `catalog/0027_campuri_doar_sablon` (WP-19) | `product_extra_fields.template_only`; adoptivă (Biovitality) |
+| `site/grafoanaytis/0001_ordine_catalog` (WP-19, pasul site-ului, doar cu `--site=grafoanaytis`, la adoptarea lui) | ordinea catalogului din coloana veche `products.sort_order` în `sort_position`, ca rang dens (cel mai mic `sort_order` > 0 devine 1; 0 rămâne NULL), doar unde `sort_position` e încă NULL; fără coloana veche, nimic |
 
 O migrare de după baseline e o migrare obișnuită: pe o bază nouă o aplică `--aplica` după baseline, pe un site
 vechi la adoptare, odată cu baseline-ul. Testele o știu: T4 și T10 (`tools/dev/migrari/test-baza.php`) cer schema
-neschimbată pe o bază făcută de codul de dinainte de migrări, în afară de tabelele noi ale migrărilor de după
-baseline, iar `genereaza-fixture.php --verifica` le aplică după baseline pe baza făcută de cod.
+neschimbată pe o bază făcută de codul de dinainte de migrări, în afară de tabelele și coloanele noi ale migrărilor de
+după baseline (WP-19: coloanele noi pe tabelele existente), iar `genereaza-fixture.php --verifica` le aplică după baseline pe baza făcută de cod.
 
 **Ce nu primește o instalare nouă** (doar site-urile care le au le păstrează, până la faza „contract”):
 tabelul vechi `reviews`, tabelele moarte `mannequin_points`/`mannequin_point_products` (pluginul manechin

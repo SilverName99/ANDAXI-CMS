@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 return [
     'ord' => 32,
-    'amprenta' => '01ff20f565592dcb9f29da27d60ac125e5843e30537fb13c6b9fb612be33098b',
+    'amprenta' => '7fb1cc9435fe59b538f3a71fc5dc57c14aab133ccd285fd021736993b692ad63',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',
@@ -35,6 +35,8 @@ return [
         'cupoane/0022_coloane_vechi_cupoane',
         'recenzii/0023_recenzii_vechi',
         'blog/0024_legaturi_categorii',
+        'catalog/0026_vizibilitate_ordine',
+        'catalog/0027_campuri_doar_sablon',
         'magazin/0032_avertismente_produse',
     ],
 ];

@@ -35,7 +35,18 @@ if (!$arePreturi) {
     $templateCurrentPriceDisplay = '';
     $templateOldPriceDisplay = '';
 }
+// WP-19 (C14d): câmpurile legate de un șablon și imaginile n-au ce căuta în lista de texte a paginii implicite.
+$extraFields = array_values(array_filter($extraFields, static fn ($camp): bool => is_array($camp)
+    && empty($camp['template_only']) && (string) ($camp['type'] ?? '') !== 'image'));
+// WP-19 (C8): produsul inactiv deschis pe linkul lui de ciornă.
+$esteCiorna = (bool) ($esteCiorna ?? false);
 ?>
+<?php if ($esteCiorna): ?>
+<div class="produs-ciorna" role="status" style="margin:0 0 14px;padding:12px 16px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb;color:#92400e;font-size:14px;line-height:1.5;">
+    <strong>Ciornă.</strong>
+    Produsul nu e activ, deci nu apare în magazin și nu poate fi cumpărat. Pagina se vede doar prin acest link.
+</div>
+<?php endif; ?>
 <?php if ($hasTemplateRender): ?>
     <section class="panel product-template-render">
         <?php if (trim((string) ($templateRender['css'] ?? '')) !== ''): ?>

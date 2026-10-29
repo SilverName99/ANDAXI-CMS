@@ -5,16 +5,12 @@ coloana blog_posts.featured_image_width
 coloana blog_posts.references_html
 coloana order_promo_items.given_at
 coloana order_promo_items.given_by
-coloana product_extra_fields.template_only
 coloana product_reviews.ip_address
 coloana product_reviews.is_spam
 coloana product_reviews.spam_reason
 coloana products.bundle_items_json
 coloana products.free_shipping
 coloana products.gallery_json
-coloana products.hidden_in_catalog
-coloana products.preview_token
-coloana products.sort_position
 indexul product_reviews.idx_product_reviews_spam
 tabelul admin_app_tokens
 tabelul blog_post_tags

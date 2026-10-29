@@ -398,7 +398,17 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                 ?>
                                 <div class="field full">
                                     <label><?= htmlspecialchars($fieldName !== '' ? $fieldName : ('Câmp #' . $fieldId), ENT_QUOTES) ?></label>
-                                    <?php if ($fieldType === 'textarea' || $fieldType === 'html'): ?>
+                                    <?php if ($fieldType === 'image'): ?>
+                                        <input type="hidden" name="extra_fields[<?= $fieldId ?>]" id="p_extra_<?= $fieldId ?>" data-default="<?= htmlspecialchars($fieldDefault, ENT_QUOTES) ?>">
+                                        <div class="product-image-picker-inline" data-camp-imagine="<?= $fieldId ?>">
+                                            <img id="camp_imagine_<?= $fieldId ?>_preview" src="/assets/img/product-placeholder.svg" alt="" loading="lazy" style="width:72px;height:72px;object-fit:cover;border-radius:8px;" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+                                            <div>
+                                                <button class="btn btn-secondary" type="button" data-camp-imagine-alege="<?= $fieldId ?>">Selectează imagine</button>
+                                                <button class="btn btn-secondary" type="button" data-camp-imagine-sterge="<?= $fieldId ?>">Scoate</button>
+                                                <p id="camp_imagine_<?= $fieldId ?>_eticheta" class="muted" style="margin:8px 0 0;font-size:12px;">Nicio imagine aleasă.</p>
+                                            </div>
+                                        </div>
+                                    <?php elseif ($fieldType === 'textarea' || $fieldType === 'html'): ?>
                                         <textarea
                                             name="extra_fields[<?= $fieldId ?>]"
                                             id="p_extra_<?= $fieldId ?>"
@@ -417,6 +427,13 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                     <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
+<?= \App\Support\Dev::marcaj('bv:campuri-sablon') ?>
+                            <p class="muted" id="camp-extra-gol" style="display:none;margin:0;">Template-ul ales nu folosește niciun câmp suplimentar.</p>
+                            <p class="muted" id="camp-extra-ascunse" style="display:none;margin:0;grid-column:1/-1;">
+                                <span id="camp-extra-ascunse-text"></span>
+                                <button type="button" class="btn btn-secondary" id="camp-extra-arata" style="margin-left:8px;padding:4px 10px;font-size:12px;">Arată-le oricum</button>
+                            </p>
+<?= \App\Support\Dev::marcaj('bv:campuri-sablon', true) ?>
                         </div>
                     </section>
                 </div>
@@ -553,6 +570,36 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                 </p>
 <?php endif; ?>
                             </div>
+<?= \App\Support\Dev::marcaj('bv:produs-catalog') ?>
+                            <div class="field full" id="p_catalog_campuri">
+                                <input type="hidden" name="catalog_campuri_trimise" value="1">
+                                <label>Catalog</label>
+                                <div class="product-status-flags">
+                                    <label>
+                                        <input type="checkbox" name="hidden_in_catalog" id="p_hidden_in_catalog" value="1">
+                                        Ascuns din lista magazinului
+                                    </label>
+                                </div>
+                                <p class="field-hint" style="margin-top:6px;">
+                                    Produsul rămâne de cumpărat, cu pagina lui și în harta site-ului, dar nu apare în lista
+                                    catalogului (de exemplu un pachet care are deja secțiunea lui).
+                                </p>
+                            </div>
+                            <div class="field">
+                                <label for="p_sort_position">Poziție în liste</label>
+                                <input type="number" min="0" step="1" name="sort_position" id="p_sort_position" placeholder="ordinea implicită">
+                                <p class="field-hint">1 = primul în listele de produse (prima pagină, produsele similare); gol = ordinea implicită. Și ordinea sortării „Ordinea din catalog”.</p>
+                            </div>
+                            <div class="field full" id="p_draft_wrap" style="display:none;">
+                                <label for="p_draft_url">Link de ciornă</label>
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <input type="text" id="p_draft_url" readonly style="flex:1;">
+                                    <button type="button" class="btn btn-secondary" id="p_draft_copy">Copiază</button>
+                                    <a class="btn btn-secondary" id="p_draft_open" href="#" target="_blank" rel="noopener">Deschide</a>
+                                </div>
+                                <p class="field-hint">Produsul e inactiv: pagina lui se vede doar prin acest link (fără cache, fără indexare în Google).</p>
+                            </div>
+<?= \App\Support\Dev::marcaj('bv:produs-catalog', true) ?>
 <?php if ($arePrecomenzi): ?>
                             <div class="field">
                                 <label for="p_preorder_max_per_order">Maxim per comandă</label>
@@ -1708,3 +1755,212 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
     updatePostCartNoteVisibility();
 })();
 </script>
+<?= \App\Support\Dev::marcaj('bv:produse-catalog-js') ?>
+<?php
+/*
+ * WP-19 (C8, C14b, C14c, C14d; din Biovitality 2b8a618, b9e3ddc, 90afd46, 57447e0): câmpurile catalogului ale produsului
+ * (poziția, ascunderea din catalog, linkul de ciornă al unui produs inactiv, și în listă), câmpurile suplimentare arătate
+ * după șablonul ales (cu mesajul celor ascunse) și câmpurile de tip „Imagine”, cu selectorul galeriei. Un script separat,
+ * care ascultă aceleași butoane ca editorul de mai sus (rulează după el).
+ */
+$dateCatalogProduse = [
+    'produse' => (object) (is_array($catalogProduse ?? null) ? $catalogProduse : []),
+    'sabloane' => (object) (is_array($campuriPeSablon['sabloane'] ?? null) ? $campuriPeSablon['sabloane'] : []),
+    'campuri' => (object) (is_array($campuriPeSablon['campuri'] ?? null) ? $campuriPeSablon['campuri'] : []),
+];
+?>
+<script type="application/json" id="produse-catalog-date"><?= json_encode($dateCatalogProduse, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script>
+(() => {
+    let date = { produse: {}, sabloane: {}, campuri: {} };
+    try {
+        date = JSON.parse(document.getElementById('produse-catalog-date')?.textContent || '{}') || date;
+    } catch {
+        return;
+    }
+    const produse = date.produse || {};
+    const sabloane = date.sabloane || {};
+    const campuri = date.campuri || {};
+
+    // Linkul de ciornă în listă, lângă „inactiv”.
+    document.querySelectorAll('.edit-product-btn').forEach((btn) => {
+        let produs = {};
+        try {
+            produs = JSON.parse(btn.dataset.product || '{}');
+        } catch {
+            return;
+        }
+        const info = produse[String(produs.id || '')];
+        const coloana = btn.closest('.col-actions')?.parentElement?.querySelector('.col-status');
+        if (!info || !info.draft_url || !coloana) {
+            return;
+        }
+        const link = document.createElement('a');
+        link.className = 'status-pill';
+        link.href = info.draft_url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = 'ciornă';
+        link.title = 'Pagina produsului inactiv, vizibilă doar prin acest link';
+        coloana.appendChild(link);
+    });
+
+    // Câmpurile catalogului în editor.
+    const pozitie = document.getElementById('p_sort_position');
+    const ascuns = document.getElementById('p_hidden_in_catalog');
+    const blocCiorna = document.getElementById('p_draft_wrap');
+    const linkCiorna = document.getElementById('p_draft_url');
+    const deschideCiorna = document.getElementById('p_draft_open');
+    const puneProdus = (id) => {
+        const info = produse[String(id || '')] || null;
+        if (pozitie instanceof HTMLInputElement) {
+            pozitie.value = info && info.sort_position ? String(info.sort_position) : '';
+        }
+        if (ascuns instanceof HTMLInputElement) {
+            ascuns.checked = Boolean(info && Number(info.hidden_in_catalog) === 1);
+        }
+        const url = info && info.draft_url ? new URL(info.draft_url, window.location.origin).toString() : '';
+        // Cu style.display, nu [hidden]: .field are display:flex, care bate atributul hidden.
+        if (blocCiorna instanceof HTMLElement) {
+            blocCiorna.style.display = url === '' ? 'none' : '';
+        }
+        if (linkCiorna instanceof HTMLInputElement) {
+            linkCiorna.value = url;
+        }
+        if (deschideCiorna instanceof HTMLAnchorElement) {
+            deschideCiorna.href = url || '#';
+        }
+    };
+    document.getElementById('p_draft_copy')?.addEventListener('click', () => {
+        if (linkCiorna instanceof HTMLInputElement && linkCiorna.value !== '') {
+            linkCiorna.select();
+            navigator.clipboard?.writeText(linkCiorna.value).catch(() => document.execCommand('copy'));
+        }
+    });
+
+    // Câmpurile suplimentare după șablon: unul „doar la șabloanele care îl folosesc” apare numai unde șablonul îl cere.
+    const selectSablon = document.getElementById('p_product_template_id');
+    const mesajGol = document.getElementById('camp-extra-gol');
+    const mesajAscunse = document.getElementById('camp-extra-ascunse');
+    const textAscunse = document.getElementById('camp-extra-ascunse-text');
+    const blocuriCamp = Array.from(document.querySelectorAll('[name^="extra_fields["]'))
+        .map((intrare) => {
+            const id = String(intrare.getAttribute('name') || '').replace(/^extra_fields\[(\d+)\]$/, '$1');
+            return { bloc: intrare.closest('.field'), camp: campuri[id] || null };
+        })
+        .filter((x) => x.bloc instanceof HTMLElement);
+    let arataToate = false;
+    const aplicaFiltrul = () => {
+        const idSablon = selectSablon instanceof HTMLSelectElement ? String(selectSablon.value || '') : '';
+        const cerute = Array.isArray(sabloane[idSablon]) ? sabloane[idSablon] : [];
+        let vizibile = 0;
+        const numeAscunse = [];
+        blocuriCamp.forEach(({ bloc, camp }) => {
+            const doarSablon = Boolean(camp && Number(camp.doar_sablon) === 1);
+            const seVede = arataToate || !doarSablon || cerute.indexOf(String(camp.cod || '')) !== -1;
+            bloc.style.display = seVede ? '' : 'none';
+            if (seVede) {
+                vizibile += 1;
+            } else {
+                numeAscunse.push((bloc.querySelector('label')?.textContent || '').trim());
+            }
+        });
+        if (mesajGol instanceof HTMLElement) {
+            mesajGol.style.display = blocuriCamp.length > 0 && vizibile === 0 ? '' : 'none';
+        }
+        if (mesajAscunse instanceof HTMLElement && textAscunse instanceof HTMLElement) {
+            mesajAscunse.style.display = numeAscunse.length === 0 ? 'none' : '';
+            const nume = numeAscunse.filter(Boolean).join(', ');
+            textAscunse.textContent = numeAscunse.length === 1
+                ? 'Un câmp nu se vede aici, fiindcă template-ul ales nu îl folosește: ' + nume + '.'
+                : numeAscunse.length + ' câmpuri nu se văd aici, fiindcă template-ul ales nu le folosește: ' + nume + '.';
+        }
+    };
+    document.getElementById('camp-extra-arata')?.addEventListener('click', () => {
+        arataToate = true;
+        aplicaFiltrul();
+    });
+    selectSablon?.addEventListener('change', aplicaFiltrul);
+
+    // Câmpurile de tip „Imagine”: previzualizarea și selectorul galeriei.
+    const puneImagine = (id, url) => {
+        const valoare = String(url || '').trim();
+        const intrare = document.getElementById('p_extra_' + id);
+        const poza = document.getElementById('camp_imagine_' + id + '_preview');
+        const eticheta = document.getElementById('camp_imagine_' + id + '_eticheta');
+        if (intrare instanceof HTMLInputElement) {
+            intrare.value = valoare;
+        }
+        if (poza instanceof HTMLImageElement) {
+            poza.src = valoare !== '' ? valoare : '/assets/img/product-placeholder.svg';
+        }
+        if (eticheta instanceof HTMLElement) {
+            eticheta.textContent = valoare !== '' ? valoare : 'Nicio imagine aleasă.';
+        }
+    };
+    const imaginiDinCampuri = () => {
+        document.querySelectorAll('[data-camp-imagine]').forEach((bloc) => {
+            const id = String(bloc.getAttribute('data-camp-imagine') || '');
+            const intrare = document.getElementById('p_extra_' + id);
+            puneImagine(id, intrare instanceof HTMLInputElement ? intrare.value : '');
+        });
+    };
+    const fereastraPoze = document.getElementById('product-image-modal');
+    let campImagine = '';
+    document.querySelectorAll('[data-camp-imagine-alege]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            campImagine = String(btn.getAttribute('data-camp-imagine-alege') || '');
+            fereastraPoze?.classList.add('open');
+        });
+    });
+    document.querySelectorAll('[data-camp-imagine-sterge]').forEach((btn) => {
+        btn.addEventListener('click', () => puneImagine(String(btn.getAttribute('data-camp-imagine-sterge') || ''), ''));
+    });
+    // Cât timp selectorul e deschis pentru un câmp „Imagine”, alegerea merge în câmp (faza de captură: înaintea
+    // selectorului imaginii principale, care altfel ar schimba poza produsului).
+    document.addEventListener('click', (ev) => {
+        const element = ev.target instanceof Element ? ev.target.closest('.product-picker-item') : null;
+        if (campImagine === '' || !element) {
+            return;
+        }
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        puneImagine(campImagine, String(element.getAttribute('data-image-url') || ''));
+        campImagine = '';
+        fereastraPoze?.classList.remove('open');
+    }, true);
+    if (fereastraPoze instanceof HTMLElement) {
+        new MutationObserver(() => {
+            if (!fereastraPoze.classList.contains('open')) {
+                campImagine = '';
+            }
+        }).observe(fereastraPoze, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    // După butoanele editorului (care completează formularul), aici: câmpurile catalogului, filtrul, pozele.
+    document.querySelectorAll('.edit-product-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            let produs = {};
+            try {
+                produs = JSON.parse(btn.dataset.product || '{}');
+            } catch {
+                produs = {};
+            }
+            puneProdus(produs.id);
+            arataToate = false;
+            aplicaFiltrul();
+            imaginiDinCampuri();
+        });
+    });
+    document.getElementById('add-product-btn')?.addEventListener('click', () => {
+        puneProdus('');
+        arataToate = false;
+        aplicaFiltrul();
+        imaginiDinCampuri();
+    });
+    puneProdus('');
+    aplicaFiltrul();
+    imaginiDinCampuri();
+})();
+</script>
+<?= \App\Support\Dev::marcaj('bv:produse-catalog-js', true) ?>

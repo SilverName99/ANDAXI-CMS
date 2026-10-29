@@ -355,6 +355,16 @@ foreach ($produseDemo as $i => [$nume, $categorie, $pret, $pretRedus, $stoc, $ma
 }
 // Produsele din seed.sql (3) primesc și ele legătura de categorie.
 $db->exec('INSERT IGNORE INTO product_category_links (product_id, category_id) SELECT id, category_id FROM products WHERE category_id IS NOT NULL');
+// WP-19 (C8): fiecare produs are cheia linkului de ciornă, ca după migrarea catalog/0026 pe un site (un produs fără cheie o
+// primește la prima salvare din admin, ceea ce ar face salvările comparate cu Bioscem să difere). Pe o bază făcută ca
+// înainte de migrări (instaleaza.sh --pe-vechi) coloana nu există încă: o face și o completează migrarea.
+try {
+    $puneCheie = $db->prepare("UPDATE products SET preview_token = :cheie WHERE id = :id AND (preview_token IS NULL OR preview_token = '')");
+    foreach ($db->query('SELECT id FROM products')->fetchAll(PDO::FETCH_COLUMN) as $idProdus) {
+        $puneCheie->execute(['cheie' => bin2hex(random_bytes(16)), 'id' => (int) $idProdus]);
+    }
+} catch (Throwable) {
+}
 
 // --- Nomenclator FAN minim (localități reale, publice; lockere inventate) ------
 $localitati = [

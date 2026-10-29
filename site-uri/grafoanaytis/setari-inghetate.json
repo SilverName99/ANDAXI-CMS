@@ -4,8 +4,24 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "a67488a3714f29edd1447fb7325759e30e15bf8196ab2ccdf84cada252e15727",
+    "amprenta_nucleu": "6d37ae2c300d9463d12d80b0f66d2a4a3ff9ae41ba4336190869700aa116a1e9",
     "setari": {
+        "catalog_ascunde_inactive": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "WP-19 (C8): codul vechi (SiteController::loadProducts) și numărătoarea categoriilor citeau doar produsele neșterse: un produs inactiv apărea în magazin, în categorii, pe prima pagină și se putea deschide; codul comun le ascunde (WP-19, C8, catalog_ascunde_inactive = 1); planul (port-grafoanaytis GR-16 punctul 5) recomandă 1 după numărătoarea G2 a produselor inactive: decizia proprietarului la adoptare",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "catalog_camp_html_brut": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "WP-19 (C14d): codul vechi escapa valoarea oricărui câmp suplimentar, și a celor de tip „html” (SiteController::buildProductTemplateRender)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "catalog_descriere_implicita": {
             "valoare": "Supliment natural",
             "mod": "lipsa",
@@ -17,6 +33,42 @@
             },
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
+        },
+        "catalog_pagina": {
+            "valoare": "produse",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "grafoanaytis 5f27a59: catalogul stă la /produse (pagina cu {{shop_catalog}} din meniu), iar /magazin făcea 301 acolo (public/index.php); codul comun îl pune pe pagina din catalog_pagina (WP-19, GR-09)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"magazin\""
+        },
+        "catalog_similare_subtitlu": {
+            "valoare": "Din aceeași categorie, executate în aceeași hală.",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "SiteController::buildProductTemplateRender (product_produse_similare): subtitlul benzii produselor asemănătoare era scris în cod; codul comun îl ia din setare, gol = fără subtitlu (WP-19, GR-16)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/'titlu' => 'Produse asemănătoare',\\s*'subtitlu' => '([^']+)'/u"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "catalog_sortare_implicita": {
+            "valoare": "catalog",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "grafoanaytis 1ff9f88: catalogul se deschidea în ordinea aleasă de client (sortarea „catalog”, coloana sort_order; pasul site/grafoanaytis/0001_ordine_catalog o mută în sort_position); codul comun pornește alfabetic (WP-19, GR-08)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"alpha_asc\""
+        },
+        "catalog_sortare_vizibila": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "grafoanaytis 19a8784: pagina Produse n-avea butonul sortării; codul comun îl arată (WP-19, GR-16)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "contact_form_recipients": {
             "valoare": "adresa1@exemplu.ro",
@@ -224,6 +276,11 @@
             "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
+        },
+        "catalog_similare_titlu": {
+            "motiv": "Același titlu în ambele coduri: banda „Produse asemănătoare” a codului vechi (SiteController, product_produse_similare) e titlul implicit al nucleului (WP-19, GR-16)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Produse asemănătoare\""
         },
         "contact_email": {
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",

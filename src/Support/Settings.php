@@ -98,6 +98,19 @@ final class Settings
         'email_brand_color_2' => '#334155',
         'store_logo_url' => '',
         'catalog_descriere_implicita' => '',
+        // WP-19 (C8, C14b + GR-08, C14d, GR-09, GR-16): catalogul (App\Support\Catalog). Un produs inactiv nu mai apare în
+        // liste și nu are pagină (doar linkul lui de ciornă); sortarea implicită a catalogului (alpha_asc, featured,
+        // price_asc, price_desc sau catalog = „Ordinea din catalog”, după products.sort_position); un câmp suplimentar de
+        // tip „html” se pune în pagină ca markup; pagina catalogului ({{shop_catalog}}; altă pagină decât „magazin” →
+        // /magazin face 301 acolo); butonul sortării vizibil; titlul și subtitlul benzii {{product_produse_similare}}.
+        // Un site existent își păstrează comportamentul prin înghețare (site-uri/<site>/setari-inghetate.json).
+        'catalog_ascunde_inactive' => '1',
+        'catalog_sortare_implicita' => 'alpha_asc',
+        'catalog_camp_html_brut' => '1',
+        'catalog_pagina' => 'magazin',
+        'catalog_sortare_vizibila' => '1',
+        'catalog_similare_titlu' => 'Produse asemănătoare',
+        'catalog_similare_subtitlu' => '',
         // WP-18 (GR-03, DB-15): datele operatorului și scopul din textul acordului GDPR (pluginul acorduri_gdpr; Admin →
         // Utilizatori → Acorduri GDPR). Goale: formularul le arată ca spații de completat. Varianta textului: „general”
         // (un scop oarecare) sau „medical” (înscrierea la un eveniment medical); adresa de retragere goală =

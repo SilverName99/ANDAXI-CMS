@@ -328,7 +328,7 @@ final class SiteController
             '',
             ['tip' => $tip, 'slug' => $slug],
             // Sortarea rămâne pe pagina mărcii sau a etichetei.
-            $eticheta !== '' ? ($tip === 'brand' ? '/marca/' : '/eticheta/') . rawurlencode($slug) : '/magazin',
+            $eticheta !== '' ? ($tip === 'brand' ? '/marca/' : '/eticheta/') . rawurlencode($slug) : \App\Support\Catalog::url($this->cachedSettings($this->db())),
             $produseAfisate
         );
 
@@ -450,6 +450,12 @@ final class SiteController
         if ($tinta !== null && \App\Support\SeoRedirects::redirectCanonic($tinta['cale'], $tinta['query'])) {
             return;
         }
+        // WP-19 (GR-09): catalogul stă pe altă pagină (catalog_pagina, de exemplu /produse): /magazin face 301 acolo,
+        // cu parametrii păstrați (sortarea, căutarea, parametrii de reclamă).
+        $urlCatalog = \App\Support\Catalog::url($this->cachedSettings($db));
+        if ($urlCatalog !== '/magazin' && \App\Support\SeoRedirects::redirectCanonic($urlCatalog)) {
+            return;
+        }
         // Căutarea internă (/magazin?q=…): noindex,follow, fără canonical (A10).
         $this->randeazaMagazin($this->requestCategoryFilter(), '', \App\Support\SeoIndexare::pentruMagazin($_GET));
     }
@@ -464,8 +470,10 @@ final class SiteController
      */
     private function randeazaMagazin(string $categoryFilter, string $caleCategorie, array $robots = []): void
     {
-        $shopPage = $this->findPublishedPageBySlug('magazin');
         $db = $this->db();
+        // WP-19 (GR-09): pagina catalogului din constructor (catalog_pagina; implicit „magazin”).
+        $urlCatalog = \App\Support\Catalog::url($this->cachedSettings($db));
+        $shopPage = $this->findPublishedPageBySlug(ltrim($urlCatalog, '/'));
         $pdo = $db instanceof PDO ? $db : null;
         $shopCategoryLabel = $this->normalizeShopCategoryFilter(
             $categoryFilter,
@@ -479,13 +487,15 @@ final class SiteController
             $db,
             $categoryFilter,
             null,
-            $shopCategoryLabel !== '' && $caleCategorie !== '' ? $caleCategorie : '/magazin',
+            $shopCategoryLabel !== '' && $caleCategorie !== '' ? $caleCategorie : $urlCatalog,
             $produseAfisate
         );
         $seoLista = $this->seoListaMagazin($pdo, $shopCategoryLabel, $caleCategorie, $produseAfisate, $shopPage);
 
         if (is_array($shopPage)) {
             $settings = $this->cachedSettings($db);
+            // WP-19 (C14e): {{products_by_template:…}} și pe pagina catalogului.
+            $shopPage['html_content'] = $this->inlocuiesteProduseDupaSablon($pdo, (string) ($shopPage['html_content'] ?? ''));
             // Categoria validată (goală dacă filtrul din URL nu există),
             // ca pagina să poată afișa titlul categoriei curente.
             $pageTitle = $shopCategoryLabel !== ''
@@ -736,6 +746,19 @@ final class SiteController
             }
         }
 
+        // WP-19 (C8): un produs inactiv se vede ca ciornă pe linkul lui (/produs/<slug>?draft=<cheie>), cu bara de ciornă,
+        // fără cache și fără indexare; fără cheie, cu catalog_ascunde_inactive pornit, nu are pagină (ca un produs șters).
+        $esteCiorna = false;
+        if (is_array($product) && (int) ($product['is_active'] ?? 1) !== 1) {
+            if (\App\Support\Catalog::cheiePotrivita($product, (string) ($_GET['draft'] ?? ''))) {
+                $esteCiorna = true;
+                header('Cache-Control: no-store, private');
+                header('X-Robots-Tag: noindex, nofollow');
+            } elseif (\App\Support\Catalog::ascundeInactive($this->cachedSettings($db))) {
+                $product = null;
+            }
+        }
+
         if ($product === null) {
             // Link vechi (site-ul anterior, Google, bookmark): dacă putem
             // identifica fără dubiu produsul, trimitem clientul direct la el.
@@ -838,6 +861,7 @@ final class SiteController
         }
         View::render('site/product', array_merge([
             'product' => $product,
+            'esteCiorna' => $esteCiorna,
             'extraFields' => $extraFields,
             'productReviews' => $productReviews,
             'similarProducts' => $similarProducts,
@@ -862,7 +886,7 @@ final class SiteController
     {
         $slug = trim((string) ($params['slug'] ?? ''));
         if ($slug === '') {
-            header('Location: /magazin');
+            header('Location: ' . \App\Support\Catalog::url($this->cachedSettings($this->db())));
             return;
         }
 
@@ -2386,6 +2410,7 @@ final class SiteController
         $categoryFilter = $this->requestCategoryFilter();
         $sort = $this->requestShopCatalogSort();
         [$products] = $this->loadProducts();
+        $products = self::faraAscunseDinCatalog($products);
         $products = $this->enrichShopCatalogProducts($this->db(), $products);
         $categories = $this->loadShopCatalogCategories($this->db());
         if ($categories === []) {
@@ -2399,13 +2424,14 @@ final class SiteController
             ));
         }
         $products = $this->applyShopCatalogSort($products, $sort);
-        $items = array_map(static function (array $product): array {
+        $urlCatalog = \App\Support\Catalog::url($this->cachedSettings($this->db()));
+        $items = array_map(static function (array $product) use ($urlCatalog): array {
             $slug = trim((string) ($product['slug'] ?? ''));
             return [
                 'id' => (int) ($product['id'] ?? 0),
                 'name' => (string) ($product['name'] ?? 'Produs'),
                 'slug' => $slug,
-                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : '/magazin',
+                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : $urlCatalog,
                 'category' => trim((string) ($product['category'] ?? '')),
                 'short_description' => trim((string) ($product['short_description'] ?? '')),
                 'image_url' => trim((string) ($product['image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg',
@@ -2470,7 +2496,7 @@ final class SiteController
                 'id' => (int) ($produs['id'] ?? 0),
                 'name' => (string) ($produs['name'] ?? 'Produs'),
                 'slug' => $slug,
-                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : '/magazin',
+                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : \App\Support\Catalog::urlSite(),
                 'category' => trim((string) ($produs['category'] ?? '')),
                 'short_description' => trim((string) ($produs['short_description'] ?? '')),
                 'image_url' => trim((string) ($produs['image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg',
@@ -2775,7 +2801,7 @@ final class SiteController
         $product = $this->findProductById($productId);
         if ($product === null) {
             Flash::set('error', 'Produsul nu a fost găsit.');
-            header('Location: /magazin');
+            header('Location: ' . \App\Support\Catalog::url($this->cachedSettings($this->db())));
             return;
         }
         if (
@@ -4296,6 +4322,14 @@ final class SiteController
         }
 
         $settings = $this->cachedSettings($db);
+        // WP-19 (GR-09): pagina catalogului, alta decât „magazin” (catalog_pagina, de exemplu „produse”), se afișează
+        // exact ca /magazin: lista, filtrul categoriei din adresă, SEO-ul listei și căutarea (noindex).
+        $paginaCatalog = \App\Support\Catalog::pagina($settings);
+        if ($paginaCatalog !== 'magazin' && mb_strtolower($slugSalvat !== '' ? $slugSalvat : $slug) === $paginaCatalog
+            && \App\Support\Plugins::vizibil('catalog')) {
+            $this->randeazaMagazin($this->requestCategoryFilter(), '', \App\Support\SeoIndexare::pentruMagazin($_GET));
+            return;
+        }
         $checkoutFormHtml = '';
         $cartFormHtml = '';
         $accountSectionHtml = '';
@@ -4341,6 +4375,12 @@ final class SiteController
         if (str_contains($pageHtmlContent, self::GDPR_AGREEMENTS_FORM_TOKEN)) {
             $gdprAgreementsFormHtml = $this->renderGdprAgreementFormSection();
         }
+        // WP-19: {{products_by_template:…}} (C14e) și {{produse_serviciu}} (GR-17), calculate doar când pagina le are.
+        $page['html_content'] = $this->inlocuiesteProduseDupaSablon($db, (string) $page['html_content']);
+        if (str_contains((string) $page['html_content'], '{{produse_serviciu}}')) {
+            $page['html_content'] = str_replace('{{produse_serviciu}}', $this->renderProduseServiciuSection($db, $slug),
+                (string) $page['html_content']);
+        }
         $checkoutSuccessOrderInfoHtml = '';
         if ($slug === 'checkout/succes' && str_contains($pageHtmlContent, self::CHECKOUT_SUCCESS_ORDER_INFO_TOKEN)) {
             $orderNumber = trim((string) ($_GET['order_number'] ?? ''));
@@ -4352,7 +4392,7 @@ final class SiteController
             'title' => (string) $page['title'],
             'page' => $page,
             'mannequinSectionHtml' => $this->renderMannequinSection($db, $settings),
-            'shopCatalogHtml' => $slug === 'magazin' ? $this->renderShopCatalogSection($db, $this->requestCategoryFilter()) : '',
+            'shopCatalogHtml' => $slug === $paginaCatalog ? $this->renderShopCatalogSection($db, $this->requestCategoryFilter()) : '',
             'blogPostsHtml' => $slug === 'blog' ? $this->renderBlogPostsSection($db, \App\Support\SeoIndexare::titluBlogCaH1($pageHtmlContent)) : '',
             'cartFormHtml' => $cartFormHtml,
             'checkoutFormHtml' => $checkoutFormHtml,
@@ -4769,7 +4809,162 @@ final class SiteController
 
     private function requestShopCatalogSort(): string
     {
-        return $this->normalizeShopCatalogSort((string) ($_GET['sort'] ?? 'alpha_asc'));
+        // WP-19 (GR-08): fără ?sort=, sortarea implicită din setări (catalog_sortare_implicita; nucleul: alfabetică).
+        return $this->normalizeShopCatalogSort((string) ($_GET['sort']
+            ?? \App\Support\Catalog::sortareImplicita($this->cachedSettings($this->db()))));
+    }
+
+    /**
+     * WP-19 (GR-16): banda {{product_produse_similare}} din șablonul paginii de produs: produsele similare (aceleași ca
+     * {{product_similar_products_section}}) în cardurile simple, fără preț, stele și coș; titlul și subtitlul din setări.
+     *
+     * @param list<array<string, mixed>> $produseSimilare
+     * @param array<string, mixed> $setari
+     */
+    private function renderProduseCategorieHtml(array $produseSimilare, array $setari): string
+    {
+        return $this->renderPhpView('site/components/produse-categorie', [
+            'produse' => array_map(static fn (array $p): array => [
+                'name' => (string) ($p['name'] ?? ''),
+                'slug' => (string) ($p['slug'] ?? ''),
+                'short_description' => (string) ($p['short_description'] ?? ''),
+                'image_url' => (string) ($p['image_url'] ?? ''),
+            ], array_values(array_filter($produseSimilare, 'is_array'))),
+            'titlu' => (string) ($setari['catalog_similare_titlu'] ?? ''),
+            'subtitlu' => (string) ($setari['catalog_similare_subtitlu'] ?? ''),
+            'textLegatura' => \App\Support\Catalog::textLegaturaProdus(),
+            'idSectiune' => 'produse-similare',
+        ]);
+    }
+
+    /**
+     * WP-19 (GR-17, din grafoanaytis 8f51fe4): {{produse_serviciu}} pe o pagină de serviciu = produsele categoriei care
+     * poartă slug-ul ultimului segment al paginii („/servicii/lipire-cutii” → categoria „lipire-cutii”), în ordinea din
+     * catalog (poziția, apoi numele). Fără categorie sau fără produse, tokenul dispare.
+     */
+    private function renderProduseServiciuSection(PDO $db, string $slugPagina): string
+    {
+        $slugCategorie = (string) substr((string) strrchr('/' . trim($slugPagina, '/'), '/'), 1);
+        if ($slugCategorie === '') {
+            return '';
+        }
+        // Produsele categoriei: principală (category_id sau numele scris pe produs) ori suplimentară (legăturile).
+        $sql = 'SELECT DISTINCT p.id, p.name, p.slug, p.short_description, p.image_url%s
+             FROM products p
+             INNER JOIN product_categories c ON c.slug = :slug
+             LEFT JOIN product_category_links l ON l.product_id = p.id AND l.category_id = c.id
+             WHERE p.deleted_at IS NULL' . \App\Support\Catalog::conditieActive($this->cachedSettings($db), 'p') . '
+               AND (l.product_id IS NOT NULL OR p.category_id = c.id OR LOWER(TRIM(COALESCE(p.category, \'\'))) = LOWER(TRIM(c.name)))';
+        try {
+            try {
+                $stmt = $db->prepare(sprintf($sql, ', p.sort_position'));
+                $stmt->execute(['slug' => $slugCategorie]);
+            } catch (Throwable) {
+                // Fără catalog/0026 încă: ordinea doar după nume.
+                $stmt = $db->prepare(sprintf($sql, ''));
+                $stmt->execute(['slug' => $slugCategorie]);
+            }
+            $produse = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return '';
+        }
+        if ($produse === []) {
+            return '';
+        }
+        return $this->renderPhpView('site/components/produse-categorie', [
+            'produse' => \App\Support\ProductOrder::dupaCatalog($produse),
+            'titlu' => 'Ce executăm cu acest serviciu',
+            'subtitlu' => '',
+            'textLegatura' => \App\Support\Catalog::textLegaturaProdus(),
+            'idSectiune' => 'produse-serviciu',
+        ]);
+    }
+
+    /**
+     * WP-19 (C14e, din Biovitality 1d4bee2): {{products_by_template:slug-sablon}} = produsele care folosesc un șablon de
+     * produs, în cardurile catalogului. Opțiunile, oricâte și în orice ordine, după „|”: limit, link, text, titlu,
+     * subtitlu (de exemplu {{products_by_template:pachete|limit=4|link=/pachete|text=Vezi toate pachetele}}).
+     */
+    private function inlocuiesteProduseDupaSablon(?PDO $db, string $html): string
+    {
+        // Căutarea doar scutește expresia regulată când pagina n-are codul (forma cu spații e tot validă).
+        if (!str_contains($html, 'products_by_template')) {
+            return $html;
+        }
+        return (string) preg_replace_callback(
+            '/\{\{\s*products_by_template\s*:\s*([^}|]+?)\s*((?:\|[^}]*)?)\}\}/i',
+            function (array $m) use ($db): string {
+                $optiuni = [];
+                foreach (explode('|', (string) ($m[2] ?? '')) as $bucata) {
+                    $bucata = trim($bucata);
+                    if ($bucata === '' || !str_contains($bucata, '=')) {
+                        continue;
+                    }
+                    [$cheie, $valoare] = explode('=', $bucata, 2);
+                    $optiuni[strtolower(trim($cheie))] = trim($valoare);
+                }
+                return $this->renderProduseDupaSablonSection(
+                    $db,
+                    (string) ($m[1] ?? ''),
+                    (int) ($optiuni['limit'] ?? 0),
+                    (string) ($optiuni['link'] ?? ''),
+                    (string) ($optiuni['text'] ?? ''),
+                    (string) ($optiuni['titlu'] ?? ''),
+                    (string) ($optiuni['subtitlu'] ?? '')
+                );
+            },
+            $html
+        );
+    }
+
+    /** Produsele unui șablon, în ordinea listelor (ProductOrder::aseaza, fără cele inactive cu setarea), tăiate la limită. */
+    private function renderProduseDupaSablonSection(
+        ?PDO $db,
+        string $slugSablon,
+        int $limita = 0,
+        string $link = '',
+        string $textLink = '',
+        string $titlu = '',
+        string $subtitlu = ''
+    ): string {
+        $slugSablon = trim($slugSablon);
+        if ($slugSablon === '' || !$db instanceof PDO) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare('SELECT id FROM product_templates WHERE slug = :slug LIMIT 1');
+            $stmt->execute(['slug' => $slugSablon]);
+            $idSablon = (int) ($stmt->fetchColumn() ?: 0);
+        } catch (Throwable) {
+            return '';
+        }
+        if ($idSablon <= 0) {
+            return '';
+        }
+        [$produse] = $this->loadProducts();
+        $produse = array_values(array_filter(
+            $produse,
+            static fn (array $p): bool => (int) ($p['product_template_id'] ?? 0) === $idSablon
+        ));
+        if ($produse === []) {
+            return '';
+        }
+        if ($limita > 0) {
+            $produse = array_slice($produse, 0, $limita);
+        }
+        // Un link doar spre o adresă a site-ului sau http(s), nu javascript: și altele.
+        $link = trim($link);
+        if ($link !== '' && preg_match('#^(/(?!/)|https?://)#i', $link) !== 1) {
+            $link = '';
+        }
+        return $this->renderPhpView('site/components/products-by-template', [
+            'products' => $this->enrichShopCatalogProducts($db, $produse),
+            'descriereImplicita' => (string) ($this->cachedSettings($db)['catalog_descriere_implicita'] ?? ''),
+            'sectionTitle' => $titlu,
+            'sectionSubtitle' => $subtitlu,
+            'bannerUrl' => $link,
+            'bannerText' => $textLink,
+        ]);
     }
 
     /**
@@ -4785,6 +4980,8 @@ final class SiteController
         $categoryFilter = trim($categoryFilter);
         $sort = $this->requestShopCatalogSort();
         [$products] = $this->loadProducts();
+        // WP-19 (C14c): un produs bifat „ascuns din catalog” rămâne de cumpărat și are pagina lui, dar nu apare în listă.
+        $products = self::faraAscunseDinCatalog($products);
         $products = $this->enrichShopCatalogProducts($db, $products);
         if ($filtruExtra !== null) {
             $tip = (string) ($filtruExtra['tip'] ?? '');
@@ -4820,16 +5017,32 @@ final class SiteController
                 $categoryUrls[$value] = \App\Support\LinkuriCategorii::url($db, $value);
             }
         }
+        $setari = Settings::all($db);
+        $urlCatalog = \App\Support\Catalog::url($setari);
         return $this->renderPhpView('site/components/shop-catalog', [
             'products' => $products,
-            'descriereImplicita' => (string) (Settings::all($db)['catalog_descriere_implicita'] ?? ''),
+            'descriereImplicita' => (string) ($setari['catalog_descriere_implicita'] ?? ''),
             'categories' => $categories,
             'categoryUrls' => $categoryUrls,
             'activeCategory' => $categoryFilter,
             'sort' => $sort,
             'sortOptions' => $this->shopCatalogSortOptions(),
-            'baseUrl' => $baseUrl !== '' ? $baseUrl : '/magazin',
+            'baseUrl' => $baseUrl !== '' ? $baseUrl : $urlCatalog,
+            'urlCatalog' => $urlCatalog,
+            'sortareVizibila' => \App\Support\Catalog::sortareVizibila($setari),
         ]);
+    }
+
+    /**
+     * WP-19 (C14c): produsele fără cele bifate „ascuns din catalog” (products.hidden_in_catalog), pentru lista
+     * {{shop_catalog}} și API-ul ei. Restul listelor (prima pagină, similare, căutarea, harta site-ului) le păstrează.
+     *
+     * @param list<array<string, mixed>> $produse
+     * @return list<array<string, mixed>>
+     */
+    private static function faraAscunseDinCatalog(array $produse): array
+    {
+        return array_values(array_filter($produse, static fn (array $p): bool => (int) ($p['hidden_in_catalog'] ?? 0) !== 1));
     }
 
     /**
@@ -6135,14 +6348,25 @@ CSS;
             return [];
         }
         $counts = [];
+        // WP-19: numărătoarea urmează lista catalogului: fără produsele inactive (C8, cu setarea) și fără cele ascunse
+        // din catalog (C14c, catalog/0026; până la migrare, fără această condiție).
+        $faraInactive = \App\Support\Catalog::conditieActive($this->cachedSettings($db));
+        $faraInactiveP = \App\Support\Catalog::conditieActive($this->cachedSettings($db), 'p');
+        $cuAscunse = static function (callable $interogare) {
+            try {
+                return $interogare(' AND hidden_in_catalog = 0', ' AND p.hidden_in_catalog = 0');
+            } catch (Throwable) {
+                return $interogare('', '');
+            }
+        };
         try {
-            $stmt = $db->query(
+            $stmt = $cuAscunse(static fn (string $faraAscunse): \PDOStatement|false => $db->query(
                 'SELECT TRIM(category) AS category_name, COUNT(*) AS products_count
                  FROM products
-                 WHERE deleted_at IS NULL
+                 WHERE deleted_at IS NULL' . $faraInactive . $faraAscunse . '
                    AND TRIM(COALESCE(category, "")) <> ""
                  GROUP BY TRIM(category)'
-            );
+            ));
             $rows = $stmt ? ($stmt->fetchAll() ?: []) : [];
             foreach ($rows as $row) {
                 if (!is_array($row)) {
@@ -6161,15 +6385,15 @@ CSS;
             }
             // Produsele legate suplimentar se adaugă la numărătoarea categoriei.
             try {
-                $extraStmt = $db->query(
+                $extraStmt = $cuAscunse(static fn (string $_, string $faraAscunseP): \PDOStatement|false => $db->query(
                     'SELECT TRIM(pc.name) AS category_name, COUNT(*) AS products_count
                      FROM product_category_links l
                      INNER JOIN product_categories pc ON pc.id = l.category_id
-                     INNER JOIN products p ON p.id = l.product_id AND p.deleted_at IS NULL
+                     INNER JOIN products p ON p.id = l.product_id AND p.deleted_at IS NULL' . $faraInactiveP . $faraAscunseP . '
                      WHERE TRIM(COALESCE(pc.name, "")) <> ""
                        AND LOWER(TRIM(COALESCE(p.category, ""))) <> LOWER(TRIM(pc.name))
                      GROUP BY TRIM(pc.name)'
-                );
+                ));
                 foreach (($extraStmt ? ($extraStmt->fetchAll() ?: []) : []) as $row) {
                     if (!is_array($row)) {
                         continue;
@@ -6276,25 +6500,37 @@ CSS;
     private function normalizeShopCatalogSort(string $sort): string
     {
         $sort = trim(strtolower($sort));
-        return match ($sort) {
-            'alpha_asc', 'featured', 'price_asc', 'price_desc' => $sort,
-            default => 'alpha_asc',
+        // WP-19 (GR-08): „Ordinea din catalog” există doar când e chiar sortarea implicită a site-ului; altfel o adresă
+        // cu ?sort=catalog dă alfabetica, ca înainte.
+        $cuOrdineaCatalogului = \App\Support\Catalog::sortareImplicita($this->cachedSettings($this->db()))
+            === \App\Support\Catalog::SORTARE_CATALOG;
+        return match (true) {
+            in_array($sort, ['alpha_asc', 'featured', 'price_asc', 'price_desc'], true) => $sort,
+            $sort === \App\Support\Catalog::SORTARE_CATALOG && $cuOrdineaCatalogului => $sort,
+            default => $cuOrdineaCatalogului ? \App\Support\Catalog::SORTARE_CATALOG : 'alpha_asc',
         };
     }
 
     private function shopCatalogSortOptions(): array
     {
-        return [
+        $optiuni = [
             'alpha_asc' => 'Alfabetică',
             'featured' => 'Popularitate',
             'price_asc' => 'Preț: mic → mare',
             'price_desc' => 'Preț: mare → mic',
         ];
+        if (\App\Support\Catalog::sortareImplicita($this->cachedSettings($this->db())) === \App\Support\Catalog::SORTARE_CATALOG) {
+            $optiuni = ['catalog' => 'Ordinea din catalog'] + $optiuni;
+        }
+        return $optiuni;
     }
 
     private function applyShopCatalogSort(array $products, string $sort): array
     {
         $sort = $this->normalizeShopCatalogSort($sort);
+        if ($sort === \App\Support\Catalog::SORTARE_CATALOG) {
+            return \App\Support\ProductOrder::dupaCatalog($products);
+        }
         usort($products, static function (array $left, array $right) use ($sort): int {
             $leftId = (int) ($left['id'] ?? 0);
             $rightId = (int) ($right['id'] ?? 0);
@@ -6478,8 +6714,10 @@ CSS;
         if ($db instanceof PDO) {
             $this->ensureProductCustomSchema($db);
             \App\Support\ProductCategories::ensureSchema($db);
-            $limitSql = $limit > 0 ? (' LIMIT ' . $limit) : '';
-            $whereSql = 'deleted_at IS NULL';
+            // WP-19 (C14b): limita se aplică după așezarea manuală (ProductOrder::aseaza), altfel un produs mutat pe
+            // primul loc ar putea fi tăiat de SQL înainte să ajungă acolo. C8: fără produsele inactive, cu setarea.
+            $limitSql = '';
+            $whereSql = 'deleted_at IS NULL' . \App\Support\Catalog::conditieActive($this->cachedSettings($db));
             $params = [];
             if ($categoryFilter !== '') {
                 // Categoria principală sau oricare dintre categoriile suplimentare.
@@ -6490,26 +6728,38 @@ CSS;
                 $params['category_filter'] = $categoryFilter;
                 $params['category_filter2'] = $categoryFilter;
             }
-            try {
-                $sql = 'SELECT id, name, slug, short_description, product_highlights, category, price, sale_price, sale_price_periods_json, discount_badge_mode, bbd_enabled, bbd_entries_json, post_cart_note_enabled, post_cart_note_text, out_of_stock, preorder_enabled, preorder_max_per_order, preorder_max_total, image_url, gallery_images_json, similar_products_json, badge_popular, badge_best_seller, badge_seasonal, brand, tags_json FROM products WHERE ' . $whereSql . ' ORDER BY id DESC' . $limitSql;
-                $stmt = $db->prepare($sql);
-                $stmt->execute($params);
-                $rows = $stmt->fetchAll();
-            } catch (Throwable) {
+            // Interogările, de la cea completă la cele de rezervă ale schemelor vechi; prima care merge dă rândurile.
+            // WP-19: prima cere și coloanele catalogului (poziția, ascunderea din catalog, șablonul, catalog/0026);
+            // cât timp migrarea n-a rulat, a doua, fără ele, ca înainte.
+            $coloane = 'id, name, slug, short_description, product_highlights, category, price, sale_price, sale_price_periods_json, discount_badge_mode, bbd_enabled, bbd_entries_json, post_cart_note_enabled, post_cart_note_text, out_of_stock, preorder_enabled, preorder_max_per_order, preorder_max_total, image_url, gallery_images_json, similar_products_json, badge_popular, badge_best_seller, badge_seasonal, brand, tags_json';
+            $interogari = [
+                ['SELECT ' . $coloane . ', sort_position, hidden_in_catalog, product_template_id FROM products WHERE ' . $whereSql . ' ORDER BY id DESC' . $limitSql, $params],
+                ['SELECT ' . $coloane . ' FROM products WHERE ' . $whereSql . ' ORDER BY id DESC' . $limitSql, $params],
+                ['SELECT id, name, slug, short_description, NULL AS product_highlights, category, price, sale_price, NULL AS sale_price_periods_json, 0 AS bbd_enabled, NULL AS bbd_entries_json, 0 AS post_cart_note_enabled, NULL AS post_cart_note_text, 0 AS out_of_stock, image_url, gallery_json AS gallery_images_json, similar_products_json, label_popular AS badge_popular, label_best_seller AS badge_best_seller, label_seasonal AS badge_seasonal FROM products WHERE ' . $whereSql . ' ORDER BY id DESC' . $limitSql, $params],
+                ['SELECT id, name, slug, short_description, NULL AS product_highlights, NULL AS category, price, NULL AS sale_price, NULL AS sale_price_periods_json, 0 AS bbd_enabled, NULL AS bbd_entries_json, 0 AS post_cart_note_enabled, NULL AS post_cart_note_text, 0 AS out_of_stock, image_url FROM products WHERE deleted_at IS NULL' . \App\Support\Catalog::conditieActive($this->cachedSettings($db)) . ' ORDER BY id DESC' . $limitSql, []],
+            ];
+            $rows = [];
+            foreach ($interogari as $nr => [$sql, $parametri]) {
                 try {
-                    $sql = 'SELECT id, name, slug, short_description, NULL AS product_highlights, category, price, sale_price, NULL AS sale_price_periods_json, 0 AS bbd_enabled, NULL AS bbd_entries_json, 0 AS post_cart_note_enabled, NULL AS post_cart_note_text, 0 AS out_of_stock, image_url, gallery_json AS gallery_images_json, similar_products_json, label_popular AS badge_popular, label_best_seller AS badge_best_seller, label_seasonal AS badge_seasonal FROM products WHERE ' . $whereSql . ' ORDER BY id DESC' . $limitSql;
                     $stmt = $db->prepare($sql);
-                    $stmt->execute($params);
+                    $stmt->execute($parametri);
                     $rows = $stmt->fetchAll();
-                } catch (Throwable) {
-                    $sql = 'SELECT id, name, slug, short_description, NULL AS product_highlights, NULL AS category, price, NULL AS sale_price, NULL AS sale_price_periods_json, 0 AS bbd_enabled, NULL AS bbd_entries_json, 0 AS post_cart_note_enabled, NULL AS post_cart_note_text, 0 AS out_of_stock, image_url FROM products WHERE deleted_at IS NULL ORDER BY id DESC' . $limitSql;
-                    $stmt = $db->prepare($sql);
-                    $stmt->execute([]);
-                    $rows = $stmt->fetchAll();
+                    break;
+                } catch (Throwable $e) {
+                    // Ultima interogare, ca înainte, nu se înghite.
+                    if ($nr === array_key_last($interogari)) {
+                        throw $e;
+                    }
                 }
             }
 
             $rows = is_array($rows) ? $rows : [];
+            // Întâi așezarea manuală, apoi tăierea la limită: un produs mutat pe primul loc trebuie să apară și în
+            // listele scurte, de pe prima pagină. Fără nicio poziție, ordinea e exact cea de mai sus.
+            $rows = \App\Support\ProductOrder::aseaza($rows);
+            if ($limit > 0) {
+                $rows = array_slice($rows, 0, $limit);
+            }
             $rows = array_map(fn (array $row): array => $this->normalizeProduct($row), $rows);
             // Numele categoriilor suplimentare, pentru filtrarea din catalog.
             $extraNume = \App\Support\ProductCategories::namesForProducts(
@@ -6750,7 +7000,7 @@ CSS;
             'shipping_remaining_for_free' => $shippingRemainingForFree,
             'checkout_url' => '/checkout',
             'cart_url' => '/cos',
-            'continue_shopping_url' => '/magazin',
+            'continue_shopping_url' => \App\Support\Catalog::url($this->cachedSettings($db)),
         ];
     }
 
@@ -6771,6 +7021,8 @@ CSS;
 
     private function loadBestSellersFromCompletedOrders(int $limit = 4): array
     {
+        // WP-19 (C8): fără produsele inactive, cu catalog_ascunde_inactive pornit.
+        $faraInactive = \App\Support\Catalog::conditieActive($this->cachedSettings($this->db()), 'p');
         $db = $this->db();
         if (!$db instanceof PDO) {
             return [];
@@ -6793,7 +7045,7 @@ CSS;
                 GROUP BY product_id
              ) r ON r.product_id = p.id
              WHERE o.status = "completed"
-               AND p.deleted_at IS NULL
+               AND p.deleted_at IS NULL' . $faraInactive . '
              GROUP BY p.id, p.name, p.slug, p.short_description, p.category, p.price, p.sale_price, p.sale_price_periods_json, p.discount_badge_mode, p.out_of_stock, p.image_url, r.reviews_count, r.reviews_average
              ORDER BY sold_qty DESC, p.id DESC
              LIMIT ' . $limitSql,
@@ -6811,7 +7063,7 @@ CSS;
                 GROUP BY product_id
              ) r ON r.product_id = p.id
              WHERE o.status = "completed"
-               AND p.deleted_at IS NULL
+               AND p.deleted_at IS NULL' . $faraInactive . '
              GROUP BY p.id, p.name, p.slug, p.short_description, p.category, p.price, p.sale_price, p.sale_price_periods_json, p.discount_badge_mode, p.out_of_stock, p.image_url, r.reviews_count, r.reviews_average
              ORDER BY sold_qty DESC, p.id DESC
              LIMIT ' . $limitSql,
@@ -6829,7 +7081,7 @@ CSS;
                 GROUP BY product_id
              ) r ON r.product_id = p.id
              WHERE o.status = "completed"
-               AND p.deleted_at IS NULL
+               AND p.deleted_at IS NULL' . $faraInactive . '
              GROUP BY p.id, p.name, p.slug, p.short_description, p.category, p.price, p.sale_price, p.image_url, r.reviews_count, r.reviews_average
              ORDER BY sold_qty DESC, p.id DESC
              LIMIT ' . $limitSql,
@@ -6847,7 +7099,7 @@ CSS;
                 GROUP BY product_id
              ) r ON r.product_id = p.id
              WHERE o.status = "completed"
-               AND p.deleted_at IS NULL
+               AND p.deleted_at IS NULL' . $faraInactive . '
              GROUP BY p.id, p.name, p.slug, p.short_description, p.category, p.price, p.sale_price, p.image_url, r.reviews_count, r.reviews_average
              ORDER BY sold_qty DESC, p.id DESC
              LIMIT ' . $limitSql,
@@ -6886,7 +7138,7 @@ CSS;
                 'id' => (int) ($normalized['id'] ?? 0),
                 'name' => (string) ($normalized['name'] ?? 'Produs'),
                 'slug' => $slug,
-                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : '/magazin',
+                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : \App\Support\Catalog::urlSite(),
                 'category' => trim((string) ($normalized['category'] ?? '')),
                 'short_description' => trim((string) ($normalized['short_description'] ?? '')),
                 'image_url' => (string) ($normalized['image_url'] ?? '/assets/img/product-placeholder.svg'),
@@ -10367,15 +10619,20 @@ CSS;
         if ($productId <= 0) {
             return [];
         }
-        $stmt = $db->prepare(
-            'SELECT f.id, f.name, f.field_key, f.field_type, f.placeholder, f.sort_order,
+        // WP-19 (C14d): `template_only` vine cu catalog/0027; cât timp migrarea n-a rulat, interogarea fără ea (0).
+        $selectDeBaza = 'SELECT f.id, f.name, f.field_key, f.field_type, f.placeholder, f.sort_order, %s AS template_only,
                     v.`value` AS field_value
              FROM product_extra_fields f
              LEFT JOIN product_extra_field_values v ON v.field_id = f.id AND v.product_id = :product_id
              WHERE f.is_active = 1
-             ORDER BY f.sort_order ASC, f.id ASC'
-        );
-        $stmt->execute(['product_id' => $productId]);
+             ORDER BY f.sort_order ASC, f.id ASC';
+        try {
+            $stmt = $db->prepare(sprintf($selectDeBaza, 'f.template_only'));
+            $stmt->execute(['product_id' => $productId]);
+        } catch (Throwable) {
+            $stmt = $db->prepare(sprintf($selectDeBaza, '0'));
+            $stmt->execute(['product_id' => $productId]);
+        }
         $rows = $stmt->fetchAll();
         if (!is_array($rows)) {
             return [];
@@ -10395,6 +10652,7 @@ CSS;
                 'key' => $key,
                 'type' => (string) ($row['field_type'] ?? 'text'),
                 'placeholder' => (string) ($row['placeholder'] ?? ''),
+                'template_only' => (int) ($row['template_only'] ?? 0) === 1,
                 'value' => (string) ($row['field_value'] ?? ''),
             ];
         }
@@ -10609,6 +10867,11 @@ CSS;
             'product_taxonomii' => $productTaxonomiesHtml,
             'product_stock' => (string) max(0, (int) ($product['stock'] ?? 0)),
             'product_weight_grams' => (string) max(0, (int) ($product['weight_grams'] ?? 0)),
+            // WP-19 (GR-16): banda simplă a produselor din aceeași categorie (fără preț, stele și coș), doar când șablonul
+            // o cere.
+            'product_produse_similare' => str_contains($templateHtmlRaw, 'produse_similare')
+                ? $this->renderProduseCategorieHtml($similarProducts, $settings)
+                : '',
         ];
         // Catalog fără magazin (de prezentare): produsele n-au preț.
         if (!\App\Support\Plugins::vizibil('magazin')) {
@@ -10623,6 +10886,10 @@ CSS;
                 $map['product:' . substr($key, 8)] = $value;
             }
         }
+        // WP-19 (C14d): câmpurile de tip „html” se pun în pagină așa cum au fost scrise (cu catalog_camp_html_brut pornit);
+        // restul se escapează, ca un text oarecare să nu poată închide un tag.
+        $tokenuriBrute = [];
+        $htmlBrut = \App\Support\Catalog::campHtmlBrut($settings);
         foreach ($extraFields as $field) {
             if (!is_array($field)) {
                 continue;
@@ -10633,6 +10900,10 @@ CSS;
             }
             $map['field_' . $key] = (string) ($field['value'] ?? '');
             $map['field:' . $key] = (string) ($field['value'] ?? '');
+            if ($htmlBrut && (string) ($field['type'] ?? '') === 'html') {
+                $tokenuriBrute['field_' . $key] = true;
+                $tokenuriBrute['field:' . $key] = true;
+            }
         }
 
         $html = $templateHtmlRaw;
@@ -10640,7 +10911,9 @@ CSS;
         $js = (string) ($template['js_content'] ?? '');
         foreach ($map as $key => $value) {
             $placeholder = '{{' . $key . '}}';
-            if (in_array($key, [
+            if (isset($tokenuriBrute[$key]) || in_array($key, [
+                'product_produse_similare',
+                'product:produse_similare',
                 'product_image_gallery',
                 'product_image_carousel',
                 'product_reviews_stars',
@@ -11217,6 +11490,11 @@ CSS;
             }
             $key = trim((string) ($field['key'] ?? ''));
             if ($key === '') {
+                continue;
+            }
+            // WP-19 (C14d): o imagine se pune prin token în șablon, nu ca tab de text; un câmp legat de șablon își are
+            // locul lui în șablon.
+            if (strtolower(trim((string) ($field['type'] ?? ''))) === 'image' || !empty($field['template_only'])) {
                 continue;
             }
             $label = trim((string) ($field['name'] ?? ''));
@@ -12278,6 +12556,8 @@ CSS;
 
     private function loadMannequinProductMap(PDO $db): array
     {
+        // WP-19 (C8): fără produsele inactive, cu catalog_ascunde_inactive pornit.
+        $faraInactive = \App\Support\Catalog::conditieActive($this->cachedSettings($db), 'p');
         try {
             $stmt = $db->query(
                 'SELECT p.id, p.name, p.slug, p.short_description, p.price, p.sale_price, p.sale_price_periods_json, p.out_of_stock, p.image_url,
@@ -12285,7 +12565,7 @@ CSS;
                         AVG(pr.rating) AS reviews_average
                  FROM products p
                  LEFT JOIN product_reviews pr ON pr.product_id = p.id AND pr.is_approved = 1
-                 WHERE p.deleted_at IS NULL
+                 WHERE p.deleted_at IS NULL' . $faraInactive . '
                  GROUP BY p.id, p.name, p.slug, p.short_description, p.price, p.sale_price, p.sale_price_periods_json, p.out_of_stock, p.image_url
                  ORDER BY p.id DESC'
             );
@@ -12296,7 +12576,7 @@ CSS;
                         AVG(pr.rating) AS reviews_average
                  FROM products p
                  LEFT JOIN product_reviews pr ON pr.product_id = p.id AND pr.is_approved = 1
-                 WHERE p.deleted_at IS NULL
+                 WHERE p.deleted_at IS NULL' . $faraInactive . '
                  GROUP BY p.id, p.name, p.slug, p.short_description, p.price, p.image_url
                  ORDER BY p.id DESC'
             );
@@ -12327,7 +12607,7 @@ CSS;
                 'price' => $effectivePrice,
                 'regular_price' => max(0.0, (float) ($row['price'] ?? 0.0)),
                 'image_url' => trim((string) ($row['image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg',
-                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : '/magazin',
+                'url' => $slug !== '' ? ('/produs/' . rawurlencode($slug)) : \App\Support\Catalog::urlSite(),
                 'reviews_count' => max(0, (int) ($row['reviews_count'] ?? 0)),
                 'reviews_average' => max(0, min(5, (float) ($row['reviews_average'] ?? 0))),
                 'out_of_stock' => $isOutOfStock ? 1 : 0,

@@ -346,7 +346,7 @@ dispar, iar linkurile spre el se scot din pagini.
   Template-uri produse; paginile `/magazin`, `/categorie/…`, `/marca/…`,
   `/eticheta/…`, `/produs/…`, căutarea și API-urile de produse; codurile
   `{{shop_catalog}}`, `{{shop_category}}`, `{{shop_title}}`,
-  `{{featured_products}}`, `{{product_categories}}`; cardul „Produse” din
+  `{{featured_products}}`, `{{product_categories}}`, `{{products_by_template:…}}`, `{{produse_serviciu}}`; cardul „Produse” din
   dashboard; tab-ul „TVA” din Setări magazin; din livrarea 2 SEO (WP-R): adresele
   `/categorie/{slug}` ale categoriilor și 301-ul de la `/magazin?category=…`, rescrierea
   linkurilor vechi spre categorii din pagini, antet, meniu și subsol
@@ -355,6 +355,42 @@ dispar, iar linkurile spre el se scot din pagini.
   listelor de produse (`SeoMeta`). Tabele: `products`,
   `product_categories`, `product_category_links`, `product_extra_*`,
   `product_template*`.
+- **Vizibilitatea, ordinea și paginile catalogului (WP-19, din Biovitality și grafoanaytis)**, cu setările din
+  `App\Support\Catalog` (implicitul nucleului e comportamentul nou; cele patru site-uri vechi își păstrează
+  comportamentul prin înghețare, `site-uri/<site>/setari-inghetate.json`):
+  - `catalog_ascunde_inactive` (`1`): un produs inactiv nu apare în nicio listă (magazinul, categoriile și numărătoarea
+    lor, prima pagină, cele mai vândute, manechinul, `{{products_by_template:…}}`) și nu are pagină; se vede doar pe
+    linkul lui de ciornă, `/produs/<slug>?draft=<cheie>` (`products.preview_token`, din migrarea `catalog/0026`;
+    `hash_equals`; bara „Ciornă”, `Cache-Control: no-store, private`, `X-Robots-Tag: noindex, nofollow`, deci nici în
+    cache-ul paginilor). Cu `0` (Bioscem, vertij, grafoanaytis înghețate; BV `1`) produsul inactiv apare ca înainte,
+    iar linkul de ciornă merge oricum. Linkul îl dă Admin → Produse (editorul și eticheta „ciornă” din listă); un produs
+    nou, sau unul fără cheie, o primește la salvare. Un produs inactiv nu se poate cumpăra, cu sau fără setare;
+  - `products.sort_position` (Admin → Produse, „Poziție în liste”): locul fix în listele în ordinea bazei (prima pagină,
+    produsele similare din alegerea adminului, `{{products_by_template:…}}`), `App\Support\ProductOrder::aseaza`, și
+    cheia sortării „Ordinea din catalog” (`catalog`, `ProductOrder::dupaCatalog`: pozițiile crescător, apoi restul
+    alfabetic), care există doar când `catalog_sortare_implicita` = `catalog` (grafoanaytis); altfel catalogul pornește
+    cu `catalog_sortare_implicita` (`alpha_asc`) și `?sort=catalog` dă alfabetica. `catalog_sortare_vizibila` = `0`
+    ascunde butonul sortării (grafoanaytis);
+  - `products.hidden_in_catalog` („Ascuns din lista magazinului”): lipsește din `{{shop_catalog}}`, din
+    `/api/shop/catalog` și din numărătoarea categoriilor, dar are pagina lui, e în harta site-ului și se poate cumpăra;
+  - `catalog_pagina` (`magazin`): pagina din constructor care ține catalogul; alta (grafoanaytis: `produse`) se afișează
+    exact ca `/magazin` (filtrul categoriei, căutarea cu noindex), `/magazin` face 301 acolo cu parametrii păstrați, iar
+    harta site-ului și linkurile de rezervă („Vezi toate produsele”, pagina 404, coșul gol, mulțumirea, linkul de plată)
+    duc acolo. Catalogul apare doar pe pagina din setare (verificarea BS-V1 din WP-10, o pagină Bioscem cu
+    `{{shop_catalog}}` în afara „magazin”, n-a rulat; până atunci regula strictă);
+  - câmpurile suplimentare (Admin → Câmpuri suplimentare): tipul „Imagine” (adresa unei imagini din galerie) și bifa
+    „Apare doar la template-urile care îl folosesc” (`product_extra_fields.template_only`, `catalog/0027`): în editorul
+    produsului câmpul apare doar când șablonul ales îl conține (cu mesajul celor ascunse și „Arată-le oricum”), iar pe
+    pagina produsului nu intră în lista de informații și nici ca tab (nici câmpurile „Imagine”). Un câmp „html” intră în
+    șablon ca markup cu `catalog_camp_html_brut` = `1` (BV), altfel escapat ca textul (Bioscem, vertij, grafoanaytis);
+  - codurile `{{products_by_template:slug-sablon|limit=…|link=…|text=…|titlu=…|subtitlu=…}}` (produsele unui șablon, în
+    cardurile catalogului: `views/site/components/product-card.php` și `product-card-styles.php`, aceleași în
+    `{{shop_catalog}}`; un `link` doar spre o adresă a site-ului sau `http(s)://`), `{{produse_serviciu}}` (pe o pagină
+    de serviciu, produsele categoriei cu slug-ul ultimului segment al paginii, în ordinea catalogului) și, în șabloanele
+    de produs, `{{product_produse_similare}}` (produsele similare în cardurile simple `produse-categorie.php`, fără
+    preț, stele și coș; titlul și subtitlul din `catalog_similare_titlu`/`_subtitlu`; legătura „Cere ofertă” doar cu
+    `cereri_oferta` portat și pe site, WP-26, altfel „Vezi produsul”). Fără magazin, cardul catalogului nu mai are
+    rândul de jos gol.
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (nu începe nimic cu bani; produsele rămân vizibile cât
   magazinul își termină comenzile).

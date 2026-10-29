@@ -4458,6 +4458,12 @@
                     "null": false,
                     "tip": "int"
                 },
+                "template_only": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "updated_at": {
                     "extra": "on update current_timestamp",
                     "implicit": "current_timestamp",
@@ -4816,6 +4822,12 @@
                     "null": true,
                     "tip": "longtext"
                 },
+                "hidden_in_catalog": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "id": {
                     "extra": "auto_increment",
                     "implicit": null,
@@ -4876,6 +4888,12 @@
                     "null": true,
                     "tip": "int unsigned"
                 },
+                "preview_token": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(32)"
+                },
                 "price": {
                     "extra": "",
                     "implicit": "0.00",
@@ -4929,6 +4947,12 @@
                     "implicit": null,
                     "null": false,
                     "tip": "varchar(190)"
+                },
+                "sort_position": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int"
                 },
                 "stock": {
                     "extra": "",

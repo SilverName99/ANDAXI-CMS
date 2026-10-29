@@ -31,7 +31,7 @@ $culoareButon = \App\Support\Tema::culoarePrincipala();
             a fost achitată. Îți pregătim comanda pentru livrare.
         </p>
         <p style="margin:24px 0 0;">
-            <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Continuă cumpărăturile</a>
+            <a href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>" style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Continuă cumpărăturile</a>
         </p>
     <?php elseif ($inCurs): ?>
         <h1 style="margin:0 0 12px;font-size:24px;color:#0f172a;">Verificăm plata</h1>

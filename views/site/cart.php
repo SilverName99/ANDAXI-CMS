@@ -143,7 +143,7 @@ foreach ($lines as $line) {
         <article class="bv-cart-v2__empty">
             <h2>Coșul este gol</h2>
             <p>Adaugă produse în coș pentru a continua comanda.</p>
-            <a class="btn" href="/magazin">Continuă cumpărăturile</a>
+            <a class="btn" href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>">Continuă cumpărăturile</a>
         </article>
     <?php else: ?>
         <div class="bv-cart-v2__layout">

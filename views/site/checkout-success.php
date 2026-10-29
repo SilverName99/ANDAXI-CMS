@@ -230,7 +230,7 @@ ob_start();
         <?php endif; ?>
 
         <div class="bs-succes__actiuni">
-            <a class="btn" href="/magazin">Continuă cumpărăturile</a>
+            <a class="btn" href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>">Continuă cumpărăturile</a>
         </div>
 
         <?php if ($email !== ''): ?>

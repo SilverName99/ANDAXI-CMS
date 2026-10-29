@@ -34,6 +34,8 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
             ['label' => 'Input cantitate (după setări)', 'token' => '{{product_quantity_input}}'],
             ['label' => 'Buton adaugă în coș', 'token' => '{{product_add_to_cart_button}}'],
             ['label' => 'Text sub buton adaugă în coș', 'token' => '{{product_post_cart_note}}'],
+            // WP-19 (GR-16): banda simplă a produselor din aceeași categorie (fără preț, stele și coș).
+            ['label' => 'Produse din aceeași categorie (bandă simplă)', 'token' => '{{product_produse_similare}}'],
         ];
         $reviewTokens = [
             ['label' => 'Număr review-uri', 'token' => '{{product_reviews_count}}'],

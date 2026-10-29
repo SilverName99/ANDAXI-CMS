@@ -1588,6 +1588,9 @@ final class AdminController
 
         View::render('admin/products', [
             'title' => 'Produse',
+            // WP-19: câmpurile catalogului pe produs (C8, C14b, C14c) și câmpurile suplimentare pe șablon (C14d).
+            'catalogProduse' => $this->catalogProduseAdmin($db),
+            'campuriPeSablon' => $this->campuriSuplimentarePeSablon($productTemplates, $extraFields),
             'categoriiExtra' => $categoriiExtra,
             'products' => $products,
             'brands' => array_values($brands),
@@ -1670,7 +1673,8 @@ final class AdminController
         $name = trim((string) ($_POST['name'] ?? $_POST['label'] ?? ''));
         $fieldKey = $this->normalizeProductFieldKey((string) ($_POST['field_key'] ?? $_POST['code'] ?? ''));
         $fieldType = trim((string) ($_POST['field_type'] ?? $_POST['type'] ?? 'textarea'));
-        if (!in_array($fieldType, ['text', 'textarea', 'html'], true)) {
+        // WP-19 (C14d): tipul „Imagine” (adresa unei imagini din galerie, pusă în șablon prin {{field_<cod>}}).
+        if (!in_array($fieldType, ['text', 'textarea', 'html', 'image'], true)) {
             $fieldType = 'textarea';
         }
         $placeholder = trim((string) ($_POST['placeholder'] ?? ''));
@@ -1727,9 +1731,21 @@ final class AdminController
                     'is_active' => $isActive,
                 ]);
                 Flash::set('success', 'Câmpul a fost adăugat.');
+                $id = (int) $db->lastInsertId();
             }
         } catch (Throwable) {
             Flash::set('error', 'Nu am putut salva câmpul. Verifică dacă acest cod există deja.');
+            header('Location: /admin/products/fields');
+            return;
+        }
+        // WP-19 (C14d): „apare doar la șabloanele care îl folosesc”, separat (coloana vine cu catalog/0027; până atunci
+        // câmpul se salvează ca înainte). Doar dacă formularul a trimis marcajul bifei.
+        if ($id > 0 && array_key_exists('template_only_trimis', $_POST)) {
+            try {
+                $db->prepare('UPDATE product_extra_fields SET template_only = :t WHERE id = :id')
+                    ->execute(['t' => isset($_POST['template_only']) ? 1 : 0, 'id' => $id]);
+            } catch (Throwable) {
+            }
         }
 
         header('Location: /admin/products/fields');
@@ -1892,6 +1908,8 @@ final class AdminController
             ['code' => '{{product_icon_user}}', 'label' => 'Iconiță SVG: user'],
             ['code' => '{{product_quantity_input}}', 'label' => 'Input cantitate'],
             ['code' => '{{product_add_to_cart_button}}', 'label' => 'Buton adaugă în coș'],
+            // WP-19 (GR-16): banda simplă a produselor din aceeași categorie (fără preț, stele și coș).
+            ['code' => '{{product_produse_similare}}', 'label' => 'Produse din aceeași categorie (bandă simplă, fără preț)'],
         ];
         foreach ($this->loadProductExtraFields($db) as $field) {
             if (!is_array($field) || (int) ($field['is_active'] ?? 1) !== 1) {
@@ -4521,6 +4539,7 @@ final class AdminController
             $categoryId
         );
         $this->saveProductExtraFieldValues($db, $productId, $extraValues);
+        $this->saveProductCatalogFromPost($db, $productId, true);
         if ($productId > 0) {
             $this->saveSeoSettings($db, 'product', (string) $productId, [
                 'title' => $seoTitle,
@@ -4539,6 +4558,111 @@ final class AdminController
         }
         Flash::set('success', 'Produsul a fost adăugat.');
         header('Location: /admin/products');
+    }
+
+    /**
+     * WP-19 (C8, C14b, C14c): câmpurile catalogului ale fiecărui produs din listă, pentru editor și pentru linkul de
+     * ciornă din listă: id => {sort_position, hidden_in_catalog, draft_url}. `draft_url` doar pentru un produs inactiv
+     * care are cheie (un produs fără cheie o primește la prima salvare). Fără catalog/0026 încă: [].
+     *
+     * @return array<string, array{sort_position: int|null, hidden_in_catalog: int, draft_url: string}>
+     */
+    private function catalogProduseAdmin(?PDO $db): array
+    {
+        if (!$db instanceof PDO) {
+            return [];
+        }
+        try {
+            $randuri = $db->query('SELECT id, slug, is_active, preview_token, sort_position, hidden_in_catalog
+                FROM products WHERE deleted_at IS NULL ORDER BY id DESC')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+        $harta = [];
+        foreach ($randuri as $rand) {
+            $cheie = trim((string) ($rand['preview_token'] ?? ''));
+            $slug = trim((string) ($rand['slug'] ?? ''));
+            $harta[(string) (int) $rand['id']] = [
+                'sort_position' => \App\Support\ProductOrder::pozitie($rand),
+                'hidden_in_catalog' => (int) ($rand['hidden_in_catalog'] ?? 0) === 1 ? 1 : 0,
+                'draft_url' => (int) ($rand['is_active'] ?? 1) !== 1 && $cheie !== '' && $slug !== ''
+                    ? '/produs/' . rawurlencode($slug) . '?draft=' . rawurlencode($cheie)
+                    : '',
+            ];
+        }
+        return $harta;
+    }
+
+    /**
+     * WP-19 (C14d, din Biovitality 90afd46): ce câmpuri suplimentare cere fiecare șablon de produs (codul lor,
+     * {{field_<cod>}} sau {{field:<cod>}}, în HTML, CSS sau JS), ca editorul să arate un câmp „doar la șabloanele care îl
+     * folosesc” numai unde e cerut. id șablon => [coduri]; plus câmpurile: id => {cod, doar_sablon}.
+     *
+     * @param list<array<string, mixed>> $sabloane
+     * @param list<array<string, mixed>> $campuri
+     * @return array{sabloane: array<string, list<string>>, campuri: array<string, array{cod: string, doar_sablon: int}>}
+     */
+    private function campuriSuplimentarePeSablon(array $sabloane, array $campuri): array
+    {
+        $peSablon = [];
+        foreach ($sabloane as $sablon) {
+            if (!is_array($sablon)) {
+                continue;
+            }
+            $continut = (string) ($sablon['html_content'] ?? '') . "\n" . (string) ($sablon['css_content'] ?? '')
+                . "\n" . (string) ($sablon['js_content'] ?? '');
+            $coduri = [];
+            foreach ($campuri as $camp) {
+                $cod = is_array($camp) ? trim((string) ($camp['field_key'] ?? '')) : '';
+                if ($cod !== '' && (str_contains($continut, '{{field_' . $cod . '}}') || str_contains($continut, '{{field:' . $cod . '}}'))) {
+                    $coduri[] = $cod;
+                }
+            }
+            $peSablon[(string) (int) ($sablon['id'] ?? 0)] = $coduri;
+        }
+        $peCamp = [];
+        foreach ($campuri as $camp) {
+            if (is_array($camp) && (int) ($camp['id'] ?? 0) > 0) {
+                $peCamp[(string) (int) $camp['id']] = [
+                    'cod' => trim((string) ($camp['field_key'] ?? '')),
+                    'doar_sablon' => (int) ($camp['template_only'] ?? 0) === 1 ? 1 : 0,
+                ];
+            }
+        }
+        return ['sabloane' => $peSablon, 'campuri' => $peCamp];
+    }
+
+    /**
+     * WP-19 (C8, C14b, C14c): câmpurile catalogului din formularul produsului, într-o instrucțiune separată (coloanele
+     * vin cu catalog/0026; până la migrare salvarea produsului merge ca înainte, fără ele). Ca la ofertele BBD (C2), un
+     * câmp pe care formularul nu l-a trimis deloc (alt formular, o unealtă) păstrează valoarea din bază: poziția doar cu
+     * `sort_position` în POST, bifa „ascuns din catalog” doar cu marcajul `catalog_campuri_trimise`. Un produs nou, sau
+     * unul fără cheie de ciornă (adăugat de codul de dinainte), primește cheia lui.
+     */
+    private function saveProductCatalogFromPost(PDO $db, int $productId, bool $nou): void
+    {
+        if ($productId <= 0) {
+            return;
+        }
+        $seturi = [];
+        $parametri = ['id' => $productId];
+        if (array_key_exists('sort_position', $_POST)) {
+            $seturi[] = 'sort_position = :sort_position';
+            $parametri['sort_position'] = \App\Support\ProductOrder::dinFormular($_POST['sort_position']);
+        }
+        if (array_key_exists('catalog_campuri_trimise', $_POST)) {
+            $seturi[] = 'hidden_in_catalog = :hidden_in_catalog';
+            $parametri['hidden_in_catalog'] = isset($_POST['hidden_in_catalog']) ? 1 : 0;
+        }
+        $seturi[] = $nou
+            ? 'preview_token = :preview_token'
+            : "preview_token = CASE WHEN preview_token IS NULL OR preview_token = '' THEN :preview_token ELSE preview_token END";
+        $parametri['preview_token'] = \App\Support\Catalog::cheieCiorna();
+        try {
+            $db->prepare('UPDATE products SET ' . implode(', ', $seturi) . ' WHERE id = :id')->execute($parametri);
+        } catch (Throwable) {
+            // Fără catalog/0026 încă: produsul e salvat, câmpurile catalogului vin după migrare.
+        }
     }
 
     /**
@@ -4757,6 +4881,7 @@ final class AdminController
             $categoryIdFromPost
         );
         $this->saveProductExtraFieldValues($db, $id, $extraValues);
+        $this->saveProductCatalogFromPost($db, $id, false);
         $this->saveSeoSettings($db, 'product', (string) $id, [
             'title' => $seoTitle,
             'description' => $seoDescription,
@@ -14583,6 +14708,16 @@ final class AdminController
      * formularul de recenzii…) nu se mai calculează și nu ajunge în sursa
      * paginii. Cu toate pluginurile pe site, exact ce era înainte, în aceeași ordine.
      */
+    /** Chenarul de previzualizare al unei secțiuni care se vede doar pe site (WP-19). */
+    private static function chenarPrevizualizare(string $titlu, string $detalii): string
+    {
+        return '<div style="margin:18px auto;width:min(1200px,92%);padding:26px;border:2px dashed #8ab69f;border-radius:16px;'
+            . 'background:#f6faf7;color:#0f7b53;text-align:center;font:600 14px/1.5 Arial,sans-serif;">'
+            . htmlspecialchars($titlu, ENT_QUOTES) . '<br><span style="font-weight:400;color:#566479;">'
+            . htmlspecialchars($detalii, ENT_QUOTES) . '</span><br><span style="font-weight:400;color:#8b96a7;font-size:12px;">'
+            . 'se văd pe site, nu aici în preview</span></div>';
+    }
+
     private function previzualizariEditorPagini(?PDO $db): array
     {
         $coduri = [
@@ -14603,6 +14738,12 @@ final class AdminController
                 fn (): string => $this->gdprAgreementsFormPreviewHtml()],
             'checkoutSuccessOrderInfo' => ['checkout_success_order_info', fn (): string => self::CHECKOUT_SUCCESS_ORDER_INFO_TOKEN,
                 fn (): string => $this->checkoutSuccessOrderInfoPreviewHtml()],
+            // WP-19 (C14e, GR-17): secțiunile cu parametri nu se pot pregăti dinainte; în previzualizare, un chenar cu
+            // setările cerute (%s = ce urmează după „:” în cod).
+            'produseDupaSablon' => ['products_by_template', fn (): string => '{{products_by_template:slug-template}}',
+                fn (): string => self::chenarPrevizualizare('Produsele template-ului', '%s')],
+            'produseServiciu' => ['produse_serviciu', fn (): string => '{{produse_serviciu}}',
+                fn (): string => self::chenarPrevizualizare('Produsele serviciului', 'categoria cu slug-ul ultimului segment al paginii')],
         ];
         $date = [];
         foreach ($coduri as $cheie => [$token, $cod, $previzualizare]) {
@@ -16946,22 +17087,25 @@ final class AdminController
 
     private function loadProductExtraFields(PDO $db): array
     {
-        try {
-            $rows = $db->query(
-                'SELECT id, name, field_key, field_type, placeholder, default_value, is_required, sort_order, is_active
-                 FROM product_extra_fields
-                 ORDER BY sort_order ASC, id ASC'
-            )->fetchAll();
-            return is_array($rows) ? $rows : [];
-        } catch (Throwable) {
-            // Legacy fallback for old draft schema fields.
-            $rows = $db->query(
-                'SELECT id, label AS name, field_key, input_type AS field_type, placeholder, NULL AS default_value, 0 AS is_required, sort_order, is_active
-                 FROM product_extra_fields
-                 ORDER BY sort_order ASC, id ASC'
-            )->fetchAll();
-            return is_array($rows) ? $rows : [];
+        // WP-19 (C14d): template_only vine cu catalog/0027; până atunci 0, cu interogarea de dedesubt.
+        foreach (['template_only', '0 AS template_only'] as $doarSablon) {
+            try {
+                $rows = $db->query(
+                    'SELECT id, name, field_key, field_type, placeholder, default_value, is_required, ' . $doarSablon . ', sort_order, is_active
+                     FROM product_extra_fields
+                     ORDER BY sort_order ASC, id ASC'
+                )->fetchAll();
+                return is_array($rows) ? $rows : [];
+            } catch (Throwable) {
+            }
         }
+        // Legacy fallback for old draft schema fields.
+        $rows = $db->query(
+            'SELECT id, label AS name, field_key, input_type AS field_type, placeholder, NULL AS default_value, 0 AS is_required, 0 AS template_only, sort_order, is_active
+             FROM product_extra_fields
+             ORDER BY sort_order ASC, id ASC'
+        )->fetchAll();
+        return is_array($rows) ? $rows : [];
     }
 
     private function loadProductExtraFieldById(PDO $db, int $id): ?array
@@ -16969,27 +17113,29 @@ final class AdminController
         if ($id <= 0) {
             return null;
         }
-        try {
-            $stmt = $db->prepare(
-                'SELECT id, name, field_key, field_type, placeholder, default_value, is_required, sort_order, is_active
-                 FROM product_extra_fields
-                 WHERE id = :id
-                 LIMIT 1'
-            );
-            $stmt->execute(['id' => $id]);
-            $row = $stmt->fetch() ?: null;
-            return is_array($row) ? $row : null;
-        } catch (Throwable) {
-            $stmt = $db->prepare(
-                'SELECT id, label AS name, field_key, input_type AS field_type, placeholder, NULL AS default_value, 0 AS is_required, sort_order, is_active
-                 FROM product_extra_fields
-                 WHERE id = :id
-                 LIMIT 1'
-            );
-            $stmt->execute(['id' => $id]);
-            $row = $stmt->fetch() ?: null;
-            return is_array($row) ? $row : null;
+        foreach (['template_only', '0 AS template_only'] as $doarSablon) {
+            try {
+                $stmt = $db->prepare(
+                    'SELECT id, name, field_key, field_type, placeholder, default_value, is_required, ' . $doarSablon . ', sort_order, is_active
+                     FROM product_extra_fields
+                     WHERE id = :id
+                     LIMIT 1'
+                );
+                $stmt->execute(['id' => $id]);
+                $row = $stmt->fetch() ?: null;
+                return is_array($row) ? $row : null;
+            } catch (Throwable) {
+            }
         }
+        $stmt = $db->prepare(
+            'SELECT id, label AS name, field_key, input_type AS field_type, placeholder, NULL AS default_value, 0 AS is_required, 0 AS template_only, sort_order, is_active
+             FROM product_extra_fields
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch() ?: null;
+        return is_array($row) ? $row : null;
     }
 
     private function loadProductTemplates(PDO $db): array

@@ -141,7 +141,9 @@ return [
             'rute_admin' => ['/admin/products/*', '/admin/categories/*'],
             'rute_publice' => ['/magazin', '/categorie/*', '/marca/*', '/eticheta/*', '/produs/*',
                 '/api/products/*', '/api/search/*', '/api/shop/*'],
-            'tokenuri' => ['shop_catalog', 'shop_category', 'shop_title', 'featured_products', 'product_categories'],
+            // WP-19: produsele unui șablon de produs (C14e) și produsele unei pagini de serviciu (GR-17).
+            'tokenuri' => ['shop_catalog', 'shop_category', 'shop_title', 'featured_products', 'product_categories',
+                'products_by_template', 'produse_serviciu'],
             'meniu' => [
                 ['grup' => 'magazin', 'ordine' => 10, 'eticheta' => 'Produse', 'href' => '/admin/products', 'icon' => 'products',
                     'activ' => $activExact('/admin/products')],

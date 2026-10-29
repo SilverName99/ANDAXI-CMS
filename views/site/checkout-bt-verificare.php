@@ -40,7 +40,7 @@ $culoareButon = \App\Support\Tema::culoarePrincipala();
             Pentru orice întrebare despre comandă, scrie-ne și îți răspundem cât de repede putem.
         </p>
         <p style="margin:22px 0 0;">
-            <a href="/magazin" style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Înapoi în magazin</a>
+            <a href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>" style="display:inline-block;padding:12px 22px;border-radius:10px;background:<?= $culoareButon ?>;color:#fff;text-decoration:none;font-weight:700;">Înapoi în magazin</a>
         </p>
     <?php endif; ?>
 </section>

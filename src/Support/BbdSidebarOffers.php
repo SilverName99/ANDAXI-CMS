@@ -112,7 +112,7 @@ final class BbdSidebarOffers
         $slug = trim((string) ($row['slug'] ?? ''));
         $url = $slug !== ''
             ? '/produs/' . rawurlencode($slug)
-            : '/magazin';
+            : Catalog::urlSite();
 
         $regularPrice = self::normalizeMoney($row['price'] ?? 0.0);
         $effectivePrice = self::resolveEffectiveBasePrice($row, $now);

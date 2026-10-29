@@ -950,7 +950,9 @@ try {
     // etichete și explicații ale pluginului, nu date. Datele vechi rămân (de exemplu
     // „Reducere cupon (COD)” pe o comandă veche, ca totalul să se lege).
     $semneText = [
-        'catalog' => ['/Categorii produse/u', '/Vezi toate produsele/u', '/Câmpuri suplimentare/u'],
+        // WP-19: câmpurile catalogului din editorul produsului, sortarea „Ordinea din catalog”, bara de ciornă, banda simplă.
+        'catalog' => ['/Categorii produse/u', '/Vezi toate produsele/u', '/Câmpuri suplimentare/u', '/Ascuns din lista magazinului/u',
+            '/Poziție în liste/u', '/Link de ciornă/u', '/Ordinea din catalog/u', '/Pagina se vede doar prin acest link/u', '/Produse asemănătoare/u'],
         // Avertismentul pe produs (Bioscem 333ba9e, fa76c4f): cardul din editorul produsului și codul din emailuri.
         'magazin' => ['/Adaugă în coș/u', '/Finalizează comanda/u', '/Comenzi recente/u', '/Numerotare comenzi/u', '/Coș flotant/u',
             '/Avertisment la coș/u', '/Avertismentele confirmate/u', '/Comandă online pe/u'],

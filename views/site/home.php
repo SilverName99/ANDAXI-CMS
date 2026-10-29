@@ -834,7 +834,7 @@ $whyItems = [
         <h1>Vitalitate si protectie,<br>intr-o selectie premium de<br>produse pentru echilibru<br>si sanatate.</h1>
         <p>Selectie specializata de suplimente si produse naturale, sustinute de stiinta si experienta.</p>
         <div class="bs-hero-actions">
-          <a class="bs-btn" href="/magazin">Descopera produsele <span aria-hidden="true">&rarr;</span></a>
+          <a class="bs-btn" href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>">Descopera produsele <span aria-hidden="true">&rarr;</span></a>
           <a class="bs-btn bs-btn--ghost" href="#bs-needs">Cauta dupa nevoie <span aria-hidden="true">&#9776;</span></a>
         </div>
       </div>
@@ -926,7 +926,7 @@ $whyItems = [
 
       <div class="bs-section-head">
         <h2 class="bs-section-title">Produse recomandate</h2>
-        <a class="bs-link" href="/magazin">Vezi toate produsele <span aria-hidden="true">&rarr;</span></a>
+        <a class="bs-link" href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>">Vezi toate produsele <span aria-hidden="true">&rarr;</span></a>
       </div>
 
       <div class="bs-products-grid">

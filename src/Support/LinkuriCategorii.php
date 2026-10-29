@@ -114,11 +114,13 @@ final class LinkuriCategorii
     public static function url(?PDO $db, string $nume): string
     {
         $nume = trim($nume);
+        // WP-19 (GR-09): catalogul poate sta pe altă pagină decât /magazin (catalog_pagina).
+        $catalog = Catalog::urlDinBaza($db);
         if ($nume === '') {
-            return '/magazin';
+            return $catalog;
         }
         $cale = self::cale($db, $nume);
-        return $cale !== '' ? $cale : '/magazin?category=' . rawurlencode($nume);
+        return $cale !== '' ? $cale : $catalog . '?category=' . rawurlencode($nume);
     }
 
     /**

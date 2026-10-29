@@ -587,6 +587,21 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Porturile din Biovitality și grafoanaytis ale catalogului (WP-19), banilor (WP-20) și recenziilor (WP-21):
+# tools/dev/test-porturi-bv.php, pe licența „toate”, pe serverul pornit aici. Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Porturile BV/GR WP-19…WP-21 (tools/dev/test-porturi-bv.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-porturi-bv.php" > "$TMP/test-porturi-bv.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-porturi-bv.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-porturi-bv.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-porturi-bv.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
 scrie ""
 scrie "== Instrucțiuni de schemă (DDL) pe cerere"

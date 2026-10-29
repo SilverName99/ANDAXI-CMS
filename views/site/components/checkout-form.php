@@ -206,7 +206,7 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
         <article class="bv-checkout-v3__card bv-checkout-v3__empty">
             <h3 style="margin:0;font:700 22px/1.1 'Playfair Display',Georgia,serif;color:#173625;">Coșul este gol</h3>
             <p>Nu poți finaliza checkout-ul fără produse în coș.</p>
-            <a href="/magazin">Vezi produse</a>
+            <a href="<?= htmlspecialchars(\App\Support\Catalog::urlSite(), ENT_QUOTES) ?>">Vezi produse</a>
         </article>
     <?php else: ?>
         <div class="bv-checkout-v3__shell">

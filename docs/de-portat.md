@@ -125,12 +125,12 @@ varianta Stripe a linkului de plată rămâne „de portat”, X5); `5d071e2`, `
 | `e2c33d3` | 03.09 | Paginarea postărilor nu mai sare în capul listei | de portat (WP-23, B4) |
 | `6ea2cb1` | 03.09 | Banda cu parteneri pe desktop + derulare lină din cuprins | `blog-anchors.js` în WP-22 (doar pe `/blog/{slug}`); partenerii pachetul BV |
 | `b9fcaf8` | 03.09 | Coloanele: culoarea coloanei nu mai e acoperită | de portat (WP-21, C11c) |
-| `90afd46` | 08.09 | Template-uri de produs: pachete cu produse din magazin | câmpurile WP-19 (C14d); pachetele pluginul `pachete_produse` (Etapa 4, P4) |
+| `90afd46` | 08.09 | Template-uri de produs: pachete cu produse din magazin | câmpurile portate (WP-19, C14d: `template_only` cu migrarea `catalog/0027`, tipul „Imagine” cu selectorul galeriei, filtrul câmpurilor după șablon în editor, câmpul „html” ca markup după `catalog_camp_html_brut`, Bioscem înghețat `0`); pachetele pluginul `pachete_produse` (Etapa 4, P4) |
 | `83067d3` | 08.09 | Instalarea creează coloanele pentru pachete | pluginul `pachete_produse` (Etapa 4; migrare în grupul G) |
-| `2b8a618` | 09.09 | Checkout, transport gratuit, produse inactive, ordine manuală | WP-19 (C8, C14b), WP-20 (C14a); textul Stripe din checkout nu se portează (C15) |
-| `1d4bee2` | 09.09 | Cod de pagină pentru produsele unui template | de portat (WP-19, C14e) |
-| `b9e3ddc` | 09.09 | Bifa care scoate un produs din lista magazinului | de portat (WP-19, C14c) |
-| `57447e0` | 09.09 | Editorul spune ce câmpuri a ascuns și de ce | de portat (WP-19, C14d) |
+| `2b8a618` | 09.09 | Checkout, transport gratuit, produse inactive, ordine manuală | produsele inactive și ordinea manuală portate (WP-19: C8 cu `catalog_ascunde_inactive`, Bioscem înghețat `0`, linkul de ciornă cu cheia din `catalog/0026`; C14b `App\Support\ProductOrder` + sortarea „Ordinea din catalog” a GR); transportul gratuit WP-20 (C14a); textul Stripe din checkout nu se portează (C15) |
+| `1d4bee2` | 09.09 | Cod de pagină pentru produsele unui template | portat (WP-19, C14e: `{{products_by_template:…}}`, cardul în `product-card.php` cu markup-ul catalogului de azi, octet cu octet) |
+| `b9e3ddc` | 09.09 | Bifa care scoate un produs din lista magazinului | portat (WP-19, C14c: `hidden_in_catalog` din `catalog/0026`) |
+| `57447e0` | 09.09 | Editorul spune ce câmpuri a ascuns și de ce | portat (WP-19, C14d) |
 | `afc6fd7` `7391226` | 09.09 | Coșul arată pachetele care conțin produsul | pluginul `pachete_produse` (Etapa 4, P4) |
 | `a14df64` | 09.09 | Transport gratuit din produs, respectat peste tot | de portat (WP-20, C14a) |
 | `222ed71` | 12.10 | Cupoane unice: produsele se schimbă în masă | de portat (WP-21, C12) |
@@ -215,16 +215,16 @@ grafoanaytis nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO a
 | `9e21659` | — | Banner de proiect, pagina Companie, `install`/`seed` | codurile de ieșire portate în WP-05 (GR-02: `install.php` și `seed.php` ies cu 1, mesajul pe stderr); restul pachetul GR |
 | `2ec6c26` `6b41718` `69b1852` | — | Inventarul golurilor, documentul pentru client, marcajele „[DE COMPLETAT]” | nu se portează (unelte GR, GR-21) |
 | `b568a9c` | — | Catalog și cereri de ofertă în locul coșului | WP-26 (GR-15); `ModPrezentare` nu se portează (GR-14a, garda o face deja) |
-| `8f51fe4` | — | Serviciu → produsele lui → produsul | WP-19 (GR-16 componenta; GR-17 doar dacă tokenul e folosit) |
-| `84c9f6b` | — | Josul paginii de produs: imagine mare, banda de similare | WP-19 (GR-16 `{{product_produse_similare}}`); CSS-ul pachetul GR |
-| `5f27a59` | — | Catalogul la `/produse` | WP-19 (GR-09); CSS-ul pachetul GR |
-| `810229c` | — | Săgeata din catalog buton real, poza principală în carusel | caruselul deja în CMS (GR-11); `ModPrezentare` nu; butonul de verificat în WP-19 |
+| `8f51fe4` | — | Serviciu → produsele lui → produsul | portat (WP-19: componenta `produse-categorie.php` cu textele neutre, GR-16; `{{produse_serviciu}}`, GR-17, calculat doar pe paginile care îl au, fără numărătoarea G2 din WP-10: inert unde nu e folosit) |
+| `84c9f6b` | — | Josul paginii de produs: imagine mare, banda de similare | `{{product_produse_similare}}` portat (WP-19, GR-16: titlul și subtitlul în `catalog_similare_titlu`/`_subtitlu`, subtitlul GR înghețat; „Cere ofertă” doar cu `cereri_oferta` portat și pe site, WP-26); CSS-ul pachetul GR |
+| `5f27a59` | — | Catalogul la `/produse` | portat (WP-19, GR-09: `catalog_pagina`, GR înghețat `produse`; /magazin 301 acolo; catalogul doar pe pagina din setare, nu pe orice pagină cu token — verificarea BS-V1 din WP-10 n-a rulat); CSS-ul pachetul GR |
+| `810229c` | — | Săgeata din catalog buton real, poza principală în carusel | caruselul deja în CMS (GR-11); `ModPrezentare` nu; butonul verificat în WP-19: codul GR de la `d3c4b79` nu mai are rândul „Cere ofertă” pe card (punctul 13 al reviziei), doar CSS-ul lui, care e al pachetului GR; nimic de portat |
 | `b480109` `8662320` | — | Brandul albastru, semnul de focalizare | pachetul GR (GR-19) |
 | `d253903` | — | Pagina de servicii legată de sertarul de ofertă | WP-26 (vederea admin); conținutul pachetul GR |
-| `19a8784` | — | Pagina Produse fără sortare și fără butoane | WP-19 (GR-16 `catalog_sortare_vizibila`); restul pachetul GR |
+| `19a8784` | — | Pagina Produse fără sortare și fără butoane | `catalog_sortare_vizibila` portat (WP-19, GR-16; GR înghețat `0`); cardul fără rândul de jos gol fără magazin (WP-19, GR-16); restul pachetul GR |
 | `f2f1596` | — | Sigla nouă, subsolul, filtre pe patru coloane | pachetul GR (GR-19, GR-20) |
 | `b4159bd` | — | Pagini legale, buton „înapoi sus”, Companie | `buton_sus` portat (WP-13, 22 octombrie: ținta, ancora și scriptul ei din layoutul GR; înfățișarea `.sus` vine cu CSS-ul temei GR, GR-19); conținutul pachetul GR |
-| `1ff9f88` | — | Catalogul în ordinea cerută de client | de portat (WP-19, GR-08; pasul de date GR în Etapa 4) |
+| `1ff9f88` | — | Catalogul în ordinea cerută de client | portat (WP-19, GR-08: o singură coloană `sort_position` cu BV C14b, sortarea `catalog`, `catalog_sortare_implicita` înghețat `catalog`; pasul `site/grafoanaytis/0001_ordine_catalog` mută `sort_order` ca rang dens, aplicat la adoptarea GR în Etapa 4) |
 | `e927172` `49d8b9b` `9e1b62d` `e34fd31` | — | Animații, cifre, banda de sigle, antet care se strânge | pachetul GR (GR-19) |
 | `d1bffca` | — | Toate mesajele spre cutia tipografiei | înghețarea GR (GR-22); `verifica-email` generic WP-26 (GR-21) |
 | `fe0c041` | — | Reply-To = cine scrie; verificarea SMTP | de portat (WP-15 GR-01; WP-26 GR-21) |

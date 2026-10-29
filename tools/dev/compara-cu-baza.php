@@ -1136,6 +1136,28 @@ $porturiVertij = [
     ],
 ];
 $porturiGrafo = [
+    // WP-19 (GR-16, din grafoanaytis 84c9f6b): codul benzii simple a produselor din aceeași categorie, în lista codurilor
+    // editorului de șabloane de produs (tabul „General” și tabul „Toate”).
+    [
+        'nume' => 'editorul șabloanelor de produs: codul {{product_produse_similare}} în tabul „General”',
+        'cale' => '/admin/products/templates/' . $idSablonProdus . '/builder',
+        'nou' => "                    <div style=\"padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;\">\n"
+            . "                        <strong style=\"display:block;font-size:13px;\">Produse din aceeași categorie (bandă simplă)</strong>\n"
+            . "                        <code>{{product_produse_similare}}</code>\n                    </div>\n                ",
+        'vechi' => '',
+        'motiv' => 'grafoanaytis 84c9f6b (WP-19, GR-16): banda produselor din aceeași categorie fără preț, stele și coș, pentru '
+            . 'șabloanele unui catalog de prezentare; un cod nou, nefolosit de șabloanele Bioscem.',
+    ],
+    [
+        'nume' => 'editorul șabloanelor de produs: codul {{product_produse_similare}} în tabul „Toate”',
+        'cale' => '/admin/products/templates/' . $idSablonProdus . '/builder',
+        'nou' => "                    <div style=\"padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;\">\n"
+            . "                        <small style=\"display:block;color:#64748b;font-weight:700;\">General</small>\n"
+            . "                        <strong style=\"display:block;font-size:13px;\">Produse din aceeași categorie (bandă simplă)</strong>\n"
+            . "                        <code>{{product_produse_similare}}</code>\n                    </div>\n                ",
+        'vechi' => '',
+        'motiv' => 'perechea rândului de mai sus (grafoanaytis 84c9f6b, WP-19, GR-16).',
+    ],
 ];
 /**
  * Marcajele de port (App\Support\Dev::marcaj): nume „<sursa>:<NUME>” => pagina (sau
@@ -1143,6 +1165,19 @@ $porturiGrafo = [
  * nume trebuie găsit exact o dată pe pagina lui și pe nicio altă pagină.
  */
 $marcajePort = [
+    // WP-19 (C8, C14b, C14c, C14d, C14e, GR-17; Biovitality 2b8a618, b9e3ddc, 90afd46, 57447e0, 1d4bee2; grafoanaytis 8f51fe4):
+    // câmpurile noi ale catalogului în editorul produsului, mesajul câmpurilor suplimentare ascunse după șablon,
+    // scriptul lor (plus linkul de ciornă din listă) și codurile noi din editorul paginilor, cu previzualizarea lor.
+    'bv:produs-catalog' => ['cale' => '/admin/products', 'motiv' => 'WP-19: poziția în liste, „ascuns din lista magazinului” și linkul '
+        . 'de ciornă al unui produs inactiv, în editorul produsului (portate din Biovitality)'],
+    'bv:campuri-sablon' => ['cale' => '/admin/products', 'motiv' => 'WP-19 (C14d): mesajele câmpurilor suplimentare ascunse fiindcă '
+        . 'șablonul ales nu le folosește'],
+    'bv:produse-catalog-js' => ['cale' => '/admin/products', 'motiv' => 'WP-19: datele și scriptul câmpurilor catalogului (editor, '
+        . 'filtrul câmpurilor după șablon, câmpurile „Imagine”, linkul de ciornă din listă), separat de scriptul editorului'],
+    'bv:token-produse-sablon' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-19 (C14e, '
+        . 'GR-17): codurile {{products_by_template:…}} și {{produse_serviciu}} în lista codurilor editorului de pagini'],
+    'bv:previzualizare-produse-sablon' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-19 '
+        . '(C14e, GR-17): chenarul lor în previzualizarea editorului de pagini'],
     // WP-18 (GR-03, DB-15): blocul „Datele operatorului” (din grafoanaytis 2c11526, d1bffca) deasupra listei acordurilor
     // GDPR; textul formularului public citește aceste setări (Bioscem: din înghețare, /acorduri-gdpr rămâne identică).
     'gr:gdpr-setari' => ['cale' => '/admin/users/gdpr-agreements', 'motiv' => 'WP-18: setările operatorului acordului GDPR, portate din grafoanaytis'],

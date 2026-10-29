@@ -119,7 +119,8 @@ $stari = static function (array $raport) use ($grupa): array {
 /**
  * Tabelele făcute de migrările de după baseline (grupul „după”, de exemplu magazin/0032, WP-R): pe o bază făcută de un
  * cod care nu le avea, ele sunt singura schimbare de schemă pe care o aduce --aplica, deci „schema neschimbată” se
- * compară fără ele. O migrare de după baseline care schimbă un tabel existent nu intră aici (atunci testul pică).
+ * compară fără ele. O coloană nouă pe un tabel existent o ia $coloaneNoiDupaBaseline (mai jos); orice altă schimbare a
+ * unui tabel existent (un index, o coloană schimbată) nu intră nicăieri (atunci testul pică).
  */
 $tabeleNoiDupaBaseline = static function (array $raport) use ($grupa): array {
     $t = [];
@@ -139,6 +140,33 @@ $tabeleNoiDupaBaseline = static function (array $raport) use ($grupa): array {
 $faraTabele = static function (array $amprenta, array $tabele): array {
     foreach ($tabele as $tabel) {
         unset($amprenta['tabele'][$tabel]);
+    }
+    return $amprenta;
+};
+/**
+ * Coloanele adăugate de migrările de după baseline (WP-19: catalog/0026 și 0027 pe tabelele catalogului; WP-20, WP-21 la fel)
+ * la tabele care existau: „tabel.coloană”. Pe o bază făcută de un cod care nu le avea, ele sunt (cu tabelele noi) singura
+ * schimbare de schemă pe care o aduce --aplica.
+ */
+$coloaneNoiDupaBaseline = static function (array $raport) use ($grupa): array {
+    $c = [];
+    foreach ((array) ($raport['migrari'] ?? []) as $m) {
+        if ($grupa((int) $m['ord']) !== 'după') {
+            continue;
+        }
+        foreach ((array) ($m['operatii'] ?? []) as $o) {
+            if (($o['fel'] ?? '') === 'coloana' && ($o['clasa'] ?? '') !== 'fara_efect') {
+                $c[] = (string) $o['obiect'];
+            }
+        }
+    }
+    sort($c);
+    return array_values(array_unique($c));
+};
+$faraColoane = static function (array $amprenta, array $coloane): array {
+    foreach ($coloane as $tabelColoana) {
+        [$tabel, $coloana] = explode('.', $tabelColoana, 2) + [1 => ''];
+        unset($amprenta['tabele'][$tabel]['coloane'][$coloana]);
     }
     return $amprenta;
 };
@@ -173,6 +201,8 @@ $tabeleDate = [
     'blog/0024_legaturi_categorii' => ['blog_post_categories'],
     // După baseline (WP-R): versiunea schemei avertismentelor, ca la BT (0008).
     'magazin/0032_avertismente_produse' => ['settings'],
+    // WP-19 (C8): cheia linkului de ciornă a produselor existente, completată pe bucăți.
+    'catalog/0026_vizibilitate_ordine' => ['products'],
 ];
 $tabeleAtinse = static function (array $raport) use ($tabeleDate): array {
     $t = [];
@@ -933,12 +963,14 @@ foreach ($servere as $numeServer => $sock) {
     [$ca, $ra] = $mig($sock, $baza, ['--aplica', '--json']);
     $s10 = $stari($ra);
     [$atinse, $nedeclarate] = $tabeleAtinse($ra);
-    // Schema: neschimbată, în afară de tabelele noi ale migrărilor de după baseline (codul vechi nu le avea).
+    // Schema: neschimbată, în afară de tabelele și coloanele noi ale migrărilor de după baseline (codul vechi nu le avea).
     $noiDupa10 = $tabeleNoiDupaBaseline($ra);
-    $Q10 = $faraTabele($amp($db10), $noiDupa10);
+    $coloaneDupa10 = $coloaneNoiDupaBaseline($ra);
+    $Q10 = $faraColoane($faraTabele($amp($db10), $noiDupa10), $coloaneDupa10);
     $schimbate10 = $schimbate($S10, $instantaneu($db10));
     $verifica('T10: baza făcută ca înainte (pe-vechi.php, seed.php, date-demo.php): baseline-ul iese cu 0, grupul B „detectata” fără nicio operație, '
-        . 'schema neschimbată (în afară de tabelele noi de după baseline: ' . ($noiDupa10 !== [] ? implode(', ', $noiDupa10) : 'niciunul') . '), '
+        . 'schema neschimbată (în afară de tabelele noi de după baseline: ' . ($noiDupa10 !== [] ? implode(', ', $noiDupa10) : 'niciunul')
+        . '; coloanele noi: ' . ($coloaneDupa10 !== [] ? implode(', ', $coloaneDupa10) : 'niciuna') . '), '
         . 'datele schimbate doar unde declară migrările (' . $operatiiFacute($ra) . ' operații)',
         $cpv === 0 && str_contains($opv, 'garda: fara_registru') && $cs === 0 && $cd === 0 && $ca === 0
         && ($s10['B'] ?? null) === ['detectata' => $numarB] && !isset($operatii($ra)['B'])

@@ -82,6 +82,14 @@ if (!is_string($previewAppCssContent)) {
 <?php if (\App\Support\Plugins::tokenVizibil('shop_catalog')): ?>
                 <div><code><?= htmlspecialchars($shopCatalogCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ catalog magazin (filtre + produse)</span></div>
 <?php endif; ?>
+<?= \App\Support\Dev::marcaj('bv:token-produse-sablon') ?>
+<?php if (\App\Support\Plugins::tokenVizibil('products_by_template')): ?>
+                <div><code>{{products_by_template:slug-template}}</code> <span style="color:#64748b;">→ produsele care folosesc un template de produs, în cardurile catalogului. Opțional, oricâte și în orice ordine, despărțite prin <code>|</code>: <code>limit=4</code>, <code>link=/pachete</code>, <code>text=Vezi toate pachetele</code>, <code>titlu=...</code>, <code>subtitlu=...</code> (ex: <code>{{products_by_template:template-pachete|limit=4|link=/pachete|text=Vezi toate pachetele}}</code>)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('produse_serviciu')): ?>
+                <div><code>{{produse_serviciu}}</code> <span style="color:#64748b;">→ pe o pagină de serviciu: produsele categoriei care are slug-ul ultimului segment al paginii (ex: pagina <code>servicii/lipire-cutii</code> → categoria <code>lipire-cutii</code>), fără preț și coș</span></div>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('bv:token-produse-sablon', true) ?>
 <?php if (\App\Support\Plugins::tokenVizibil('blog_posts')): ?>
                 <div><code><?= htmlspecialchars($blogPostsCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ listare postări blog</span></div>
 <?php endif; ?>
@@ -507,3 +515,45 @@ if (!is_string($previewAppCssContent)) {
     });
 })();
 </script>
+<?= \App\Support\Dev::marcaj('bv:previzualizare-produse-sablon') ?>
+<?php
+/*
+ * WP-19 (C14e, GR-17): în previzualizare, {{products_by_template:…}} și {{produse_serviciu}} devin un chenar cu setările
+ * cerute (secțiunile cu parametri nu se pot pregăti dinainte). Un script separat: după fiecare încărcare a previzualizării
+ * înlocuiește doar nodurile de text cu aceste coduri.
+ */
+?>
+<script>
+(() => {
+    const iframe = document.getElementById('page-preview');
+    const chenarSablon = <?= json_encode((string) ($produseDupaSablonPreviewHtml ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const chenarServiciu = <?= json_encode((string) ($produseServiciuPreviewHtml ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    if (!(iframe instanceof HTMLIFrameElement) || (chenarSablon === '' && chenarServiciu === '')) {
+        return;
+    }
+    const escapa = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+    const tipar = /\{\{\s*(?:products_by_template\s*:\s*([^}]*)|produse_serviciu\s*)\}\}/gi;
+    iframe.addEventListener('load', () => {
+        const doc = iframe.contentDocument;
+        if (!doc || !doc.body) {
+            return;
+        }
+        const noduri = [];
+        const parcurgere = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+        while (parcurgere.nextNode()) {
+            if (/\{\{\s*(products_by_template|produse_serviciu)/i.test(parcurgere.currentNode.nodeValue || '')) {
+                noduri.push(parcurgere.currentNode);
+            }
+        }
+        noduri.forEach((nod) => {
+            const html = escapa(nod.nodeValue || '').replace(tipar, (_, argumente) => (argumente !== undefined
+                ? (chenarSablon !== '' ? chenarSablon.replace('%s', escapa(argumente)) : '')
+                : chenarServiciu));
+            const loc = doc.createElement('span');
+            loc.innerHTML = html;
+            nod.replaceWith(...Array.from(loc.childNodes));
+        });
+    });
+})();
+</script>
+<?= \App\Support\Dev::marcaj('bv:previzualizare-produse-sablon', true) ?>

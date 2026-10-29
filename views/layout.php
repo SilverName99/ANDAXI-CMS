@@ -84,7 +84,7 @@ if ($mobileMenuLogoPath === '' && $mobileMenuLogoTema !== null) {
 }
 // Culoarea principală a bannerelor de mai jos (tema.json → culoare_principala; implicit #2f8d5b, ca până acum).
 $culoarePrincipala = \App\Support\Tema::culoarePrincipala();
-$mobileMenuFallbackHtml = '<ul class="menu-root"><li><a href="/">Acasă</a></li><li><a href="/magazin">Magazin</a></li><li><a href="/blog">Blog</a></li><li><a href="/contact">Contact</a></li></ul>';
+$mobileMenuFallbackHtml = '<ul class="menu-root"><li><a href="/">Acasă</a></li><li><a href="' . htmlspecialchars(\App\Support\Catalog::url($designSettings), ENT_QUOTES) . '">Magazin</a></li><li><a href="/blog">Blog</a></li><li><a href="/contact">Contact</a></li></ul>';
 $mobileMenuTokenAssetsEnabled = false;
 // Coșul flotant e al magazinului; când magazinul se oprește nu mai primește produse noi.
 $floatingCartEnabled = $magazinPrimesteComenzi && (string) ($designSettings['floating_cart_enabled'] ?? '1') === '1';
@@ -1007,7 +1007,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                         <?= $designMenu ?>
                     <?php else: ?>
                         <a href="/">Acasă</a>
-                        <a href="/magazin">Magazin</a>
+                        <a href="<?= htmlspecialchars(\App\Support\Catalog::url($designSettings), ENT_QUOTES) ?>">Magazin</a>
                         <a href="/cos">Coș (<?= \App\Support\Cart::countItems() ?>)</a>
                         <a href="/checkout">Checkout</a>
                         <a href="/blog">Blog</a>
@@ -1043,7 +1043,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
             <ul class="bv-bbd-sidebar__list">
                 <?php if ($bbdSidebarOffers === []): ?>
                     <li>
-                        <a class="bv-bbd-sidebar__item" href="/magazin">
+                        <a class="bv-bbd-sidebar__item" href="<?= htmlspecialchars(\App\Support\Catalog::url($designSettings), ENT_QUOTES) ?>">
                             <img src="/assets/img/product-placeholder.svg" alt="Produse" loading="lazy">
                             <div>
                                 <h4 class="bv-bbd-sidebar__item-name">Momentan nu sunt oferte disponibile</h4>
@@ -1055,7 +1055,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
                     <?php foreach ($bbdSidebarOffers as $offer): ?>
                         <?php
                         $offerName = trim((string) ($offer['name'] ?? 'Produs'));
-                        $offerUrl = trim((string) ($offer['url'] ?? '/magazin'));
+                        $offerUrl = trim((string) ($offer['url'] ?? \App\Support\Catalog::url($designSettings)));
                         $offerImage = \App\Support\PozeOptimizate::src(trim((string) ($offer['image_url'] ?? '/assets/img/product-placeholder.svg')));
                         $offerCount = max(1, (int) ($offer['offer_count'] ?? 1));
                         $offerPrice = max(0.0, (float) ($offer['price'] ?? 0.0));
