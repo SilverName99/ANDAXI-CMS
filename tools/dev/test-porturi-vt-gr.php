@@ -39,6 +39,13 @@ declare(strict_types=1);
  * D. {{auth_form}}, regula comenzilor fără cont, confirmarea adresei (link o dată, 7 zile, retrimiterea limitată),
  *    tab-urile contului.
  *
+ * WP-26 — cererile de ofertă, meniul fără magazin, uneltele de operare (GR-15, GR-14c, GR-21, VT-O1):
+ * A. App\Support\CereriOferta (hash-ul adresei, limita), grupul „Produse” fără magazin, regula anonimizării.
+ * B. {{product_quote_button}}, /api/cerere-oferta (salvarea, emailul, validarea, capcana, limita 429), lista din admin
+ *    (CSRF, starea, ștergerea, numele în confirm()), stările se oprește / oprit, licența grafoanaytis.
+ * C. scripts/exporta-date-legale.php și /_andaxi/export/{token} (rândurile, 0600, o singură folosire, expirarea).
+ * D. scripts/verifica-email.php și scripts/diagnostic.php --email (fără adrese și parole).
+ *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
  * paginilor, sesiunile, fișierele încărcate, emailurile capturate și jurnalul fatal. Serverele pornite aici se opresc.
  * Raportul: $CMS_DEV_DIR/test-porturi-vt-gr-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -54,6 +61,7 @@ require_once $radacina . '/bootstrap.php';
 require_once __DIR__ . '/lib/salvari-admin.php';
 
 use App\Support\AccesMembri;
+use App\Support\CereriOferta;
 use App\Support\ConfirmareEmail;
 use App\Support\Database;
 use App\Support\Hooks;
@@ -1228,7 +1236,260 @@ $verifica('cont.taburi: tab-ul pluginului în meniu și conținutul lui când e 
 $verifica('fără conținut pentru client (agățarea nu dă tab-ul): niciun tab, iar ?section=donatii-test duce la profil', !str_contains($contAna, 'donatii-test')
     && str_contains($contAna, 'Profilul meu'));
 
-// ##WP26##
+// =====================================================================
+// WP-26 A. Cererile de ofertă, meniul fără magazin și regula anonimizării, fără server
+// =====================================================================
+$scrie('');
+$scrie('== WP-26 A. CereriOferta (limita, hash-ul adresei), grupul „Produse” fără magazin, regula anonimizării');
+CereriOferta::reseteaza();
+$db->exec('DELETE FROM quote_submit_logs');
+$hashA = CereriOferta::hashIp('203.0.113.7');
+$verifica('hash-ul adresei: 64 de caractere hex, același pentru aceeași adresă, altul pentru alta, nu sha256 simplu al adresei',
+    preg_match('/^[a-f0-9]{64}$/', $hashA) === 1 && $hashA === CereriOferta::hashIp('203.0.113.7') && $hashA !== CereriOferta::hashIp('203.0.113.8')
+    && $hashA !== hash('sha256', '203.0.113.7') && CereriOferta::hashIp('2001:db8:1:2::5') === CereriOferta::hashIp('2001:db8:1:2::9'));
+for ($i = 0; $i < CereriOferta::LIMITA_CERERI - 1; $i++) {
+    CereriOferta::noteazaTrimiterea($db, '203.0.113.7');
+}
+$subLimita = !CereriOferta::limitat($db, '203.0.113.7');
+CereriOferta::noteazaTrimiterea($db, '203.0.113.7');
+$verifica('limita: 4 trimiteri = încă voie, a 5-a = limitat (5 la 10 minute); altă adresă nu e atinsă; în tabel doar hash-ul',
+    $subLimita && CereriOferta::limitat($db, '203.0.113.7') && !CereriOferta::limitat($db, '203.0.113.8')
+    && (int) $unu("SELECT COUNT(*) FROM quote_submit_logs WHERE ip_hash LIKE '%203.0.113%'") === 0);
+$db->exec('UPDATE quote_submit_logs SET created_at = NOW() - INTERVAL 11 MINUTE');
+$verifica('limita: trimiterile mai vechi de 10 minute nu se mai numără', !CereriOferta::limitat($db, '203.0.113.7'));
+$db->exec('DELETE FROM quote_submit_logs');
+$stariInainte = Plugins::stari();
+Plugins::folosesteStari(array_merge($stariInainte, ['magazin' => Plugins::OPRIT]));
+$grupFara = array_values(array_filter(Plugins::meniuAdmin(), static fn (array $s): bool => $s['cheie'] === 'magazin'))[0] ?? [];
+Plugins::folosesteStari($stariInainte);
+$grupCu = array_values(array_filter(Plugins::meniuAdmin(), static fn (array $s): bool => $s['cheie'] === 'magazin'))[0] ?? [];
+$verifica('GR-14c: grupul din meniul adminului se cheamă „Produse” fără magazin, „Magazin” cu el; „Cereri de ofertă” în grup',
+    ($grupFara['eticheta'] ?? '') === 'Produse' && ($grupCu['eticheta'] ?? '') === 'Magazin'
+    && in_array('Cereri de ofertă', array_column((array) ($grupCu['intrari'] ?? []), 'eticheta'), true));
+require_once $radacina . '/src/Support/Verificare.php';
+require_once $radacina . '/tools/verificare/lib/incarcare.php';
+$reguliBs = \Unelte\Verificare\Reguli::incarca($radacina, 'bioscem');
+$regulaCereri = (array) $reguliBs->tabel('quote_requests');
+$t = new \Unelte\Verificare\Transformari(random_bytes(32));
+$randCerere = ['id' => 4, 'product_id' => 1, 'product_name' => 'Produs Demo', 'product_slug' => 'produs-demo', 'name' => 'Ana Pop',
+    'company' => 'Firma Pop SRL', 'email' => 'ana.pop@exemplu-client.ro', 'phone' => '0722333444', 'message' => 'Vreau 500 de bucăți, sunați-mă',
+    'status' => 'noua', 'admin_note' => 'A sunat Ana Pop', 'consent_at' => '2026-10-01 10:00:00', 'source_url' => 'https://exemplu.ro/produs/x?email=ana',
+    'created_at' => '2026-10-01 10:00:00', 'updated_at' => '2026-10-01 10:00:00', 'deleted_at' => null];
+$anonim = $t->rand('quote_requests', $regulaCereri, $randCerere, []);
+$verifica('regula anonimizării (tools/verificare/reguli): quote_requests „anonimizeaza” (cine a cerut, mesajul, nota, adresa paginii schimbate; '
+    . 'produsul și starea păstrate), quote_submit_logs doar structura',
+    ($regulaCereri['mod'] ?? '') === 'anonimizeaza' && ($reguliBs->tabel('quote_submit_logs')['mod'] ?? '') === 'doar_structura'
+    && str_ends_with((string) $anonim['email'], '@verificare.invalid') && !str_contains(json_encode($anonim, JSON_UNESCAPED_UNICODE) ?: '', 'Pop')
+    && !str_contains((string) $anonim['phone'], '722333444') && $anonim['product_name'] === 'Produs Demo' && $anonim['status'] === 'noua'
+    && !str_contains((string) $anonim['source_url'], 'email=ana'), json_encode($anonim, JSON_UNESCAPED_UNICODE) ?: '');
+
+// =====================================================================
+// WP-26 B. Butonul, cererea, lista din admin, stările pluginului (prin server)
+// =====================================================================
+$scrie('');
+$scrie('== WP-26 B. {{product_quote_button}}, /api/cerere-oferta, Cereri de ofertă în admin, se oprește și oprit');
+$produsOferta = $db->query('SELECT id, slug, name, product_template_id FROM products WHERE deleted_at IS NULL AND is_active = 1
+    AND product_template_id IS NOT NULL ORDER BY id LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+$slugOferta = (string) $produsOferta['slug'];
+$db->prepare("UPDATE product_templates SET html_content = CONCAT(html_content, '<div class=\"oferta-test\">{{product_quote_button}}</div>') WHERE id = :id")
+    ->execute(['id' => (int) $produsOferta['product_template_id']]);
+ResponseCache::purgePageCache();
+$paginaProdus = $cerere('GET', '/produs/' . $slugOferta)['corp'];
+$verifica('pagina produsului: butonul cu textul implicit „Cere ofertă”, sertarul cu formularul (produsul în data-produs, capcana), scriptul '
+    . 'sertarului; tema demo fără Bootstrap: JavaScript-ul Bootstrap din nucleu și regulile CSS ale sertarului',
+    str_contains($paginaProdus, 'sertar-oferta__declansator') && preg_match('#aria-controls="sertar-oferta">\s*Cere ofertă#u', $paginaProdus) === 1
+    && str_contains($paginaProdus, 'data-produs="' . $slugOferta . '"') && str_contains($paginaProdus, 'name="website"')
+    && str_contains($paginaProdus, '/assets/js/sertar-oferta.js?v=') && str_contains($paginaProdus, 'bootstrap.bundle.min.js')
+    && str_contains($paginaProdus, '.sertar-oferta.offcanvas{position:fixed') && !str_contains($paginaProdus, '{{product_quote_button}}'),
+    mb_substr($paginaProdus, max(0, (int) strpos($paginaProdus, 'oferta-test') - 50), 400));
+$setare('cereri_oferta_buton', 'Solicită mostre și ofertă de preț');
+$setare('cereri_oferta_confidentialitate_url', '/politica-de-confidentialitate');
+$paginaProdus = $cerere('GET', '/produs/' . $slugOferta)['corp'];
+$verifica('textele din setări (ca înghețarea grafoanaytis): butonul și linkul spre politica de confidențialitate',
+    str_contains($paginaProdus, 'Solicită mostre și ofertă de preț') && str_contains($paginaProdus, 'href="/politica-de-confidentialitate"'));
+$setare('contact_form_recipients', 'birou@exemplu.ro');
+$db->exec('DELETE FROM quote_submit_logs');
+$maxCerere = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM quote_requests');
+$dinainteMail = glob($dosarMail . '/*.eml') ?: [];
+$json = static fn (array $d): string => (string) json_encode($d, JSON_UNESCAPED_UNICODE);
+$antetJson = ['Content-Type: application/json', 'Referer: ' . $baza . '/produs/' . $slugOferta];
+$r = $cerere('POST', '/api/cerere-oferta', null, $json(['product_slug' => $slugOferta, 'name' => 'Ionel Ofertant', 'company' => 'Tipar Test SRL',
+    'email' => 'Ionel.Ofertant@exemplu.ro', 'phone' => '0700111222', 'message' => "Vreau 1000 de bucăți.\nCât costă?", 'website' => '', 'consent' => true]), $antetJson);
+$rand = $db->query('SELECT * FROM quote_requests WHERE id > ' . $maxCerere)->fetch(PDO::FETCH_ASSOC) ?: [];
+$mailuri = $mailuriNoi($dinainteMail);
+$verifica('o cerere bună: 200 cu textul de mulțumire; rândul salvat (produsul găsit după slug pe server, emailul cu litere mici, acordul, '
+    . 'pagina de pe care a venit), starea „noua”',
+    $r['cod'] === 200 && str_contains($r['corp'], '"ok":true') && str_contains($r['corp'], 'Vă răspundem cât mai curând')
+    && (int) ($rand['product_id'] ?? 0) === (int) $produsOferta['id'] && ($rand['product_name'] ?? '') === $produsOferta['name']
+    && ($rand['email'] ?? '') === 'ionel.ofertant@exemplu.ro' && ($rand['consent_at'] ?? '') !== '' && ($rand['status'] ?? '') === 'noua'
+    && str_ends_with((string) ($rand['source_url'] ?? ''), '/produs/' . $slugOferta), $r['cod'] . ' ' . $r['corp']);
+$subiectMail = static fn (string $s): string => str_contains($s, '=?') ? (string) iconv_mime_decode($s, ICONV_MIME_DECODE_CONTINUE_ON_ERROR, 'UTF-8') : $s;
+$verifica('emailul spre destinatarii formularului de contact: subiectul cu produsul, Reply-To = vizitatorul (GR-01)',
+    count($mailuri) === 1 && $antetMail((string) ($mailuri[0] ?? ''), 'To') === 'birou@exemplu.ro'
+    && str_contains($antetMail((string) ($mailuri[0] ?? ''), 'Reply-To'), 'ionel.ofertant@exemplu.ro')
+    && str_contains($subiectMail($antetMail((string) ($mailuri[0] ?? ''), 'Subject')), 'Cerere de ofertă: ' . $produsOferta['name']),
+    mb_substr((string) ($mailuri[0] ?? ''), 0, 600));
+$verifica('jurnalul limitei: un rând, doar hash-ul adresei (nu 127.0.0.1)',
+    (int) $unu('SELECT COUNT(*) FROM quote_submit_logs') === 1 && $unu('SELECT ip_hash FROM quote_submit_logs') === CereriOferta::hashIp('127.0.0.1'));
+$rFaraEmail = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'X', 'email' => 'nu-e-adresa', 'consent' => true]), $antetJson);
+$rFaraAcord = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'X', 'email' => 'x@exemplu.ro', 'consent' => false]), $antetJson);
+$rCapcana = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'Robot', 'email' => 'robot@exemplu.ro', 'consent' => true, 'website' => 'http://spam']), $antetJson);
+$verifica('email greșit 422, fără acord 422, capcana completată: 200 „ok”, dar niciun rând nou',
+    $rFaraEmail['cod'] === 422 && $rFaraAcord['cod'] === 422 && $rCapcana['cod'] === 200 && str_contains($rCapcana['corp'], '"ok":true')
+    && (int) $unu('SELECT COUNT(*) FROM quote_requests WHERE id > ' . $maxCerere) === 1);
+$r5 = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'A cincea', 'email' => 'a5@exemplu.ro', 'consent' => true]), $antetJson);
+$r6 = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'A șasea', 'email' => 'a6@exemplu.ro', 'consent' => true]), $antetJson);
+$verifica('limita prin server: a 5-a trimitere în 10 minute trece, a 6-a primește 429 și nu se salvează',
+    $r5['cod'] === 200 && $r6['cod'] === 429 && (int) $unu("SELECT COUNT(*) FROM quote_requests WHERE email = 'a6@exemplu.ro'") === 0, $r6['cod'] . ' ' . $r6['corp']);
+$db->exec('DELETE FROM quote_submit_logs');
+$idCerere = (int) ($rand['id'] ?? 0);
+$numeRau = 'Ionel O' . "'" . 'Brien"); alert(1); ("';
+$db->prepare('UPDATE quote_requests SET name = :n WHERE id = :id')->execute(['n' => $numeRau, 'id' => $idCerere]);
+$logareAdmin();
+$lista = $cerere('GET', '/admin/cereri-oferta', $jarAdmin)['corp'];
+$verifica('lista din admin: cererea cu produsul și emailul; numele (din formularul public) ajunge în confirm() doar ca șir JSON',
+    str_contains($lista, 'ionel.ofertant@exemplu.ro') && str_contains($lista, 'href="/produs/' . $slugOferta . '"') && str_contains($lista, 'Cereri de ofertă')
+    && !str_contains($lista, "O'Brien\"); alert(1)")
+    && str_contains($lista, 'return confirm(' . htmlspecialchars((string) json_encode('Ștergeți cererea de la ' . $numeRau . '?', JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE), ENT_QUOTES) . ')'), mb_substr($lista, (int) strpos($lista, 'onsubmit'), 300));
+preg_match('/name="_csrf" value="([^"]+)"/', $lista, $mc);
+$cerere('POST', '/admin/cereri-oferta/' . $idCerere . '/stare', $jarAdmin, ['stare' => 'in_lucru', 'nota' => 'Fără jeton']);
+$faraJeton = $unu('SELECT status FROM quote_requests WHERE id = :id', ['id' => $idCerere]);
+$r = $cerere('POST', '/admin/cereri-oferta/' . $idCerere . '/stare', $jarAdmin, ['stare' => 'trimisa', 'nota' => 'Ofertă trimisă pe email', 'stare_filtru' => 'noua',
+    '_csrf' => $mc[1] ?? '']);
+$verifica('starea: fără jetonul anti-CSRF nu se schimbă nimic; cu el starea și nota se salvează, înapoi la filtrul deschis, un rând în Jurnal activitate',
+    $faraJeton === 'noua' && $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/admin/cereri-oferta?stare=noua'
+    && $unu('SELECT status FROM quote_requests WHERE id = :id', ['id' => $idCerere]) === 'trimisa'
+    && $unu('SELECT admin_note FROM quote_requests WHERE id = :id', ['id' => $idCerere]) === 'Ofertă trimisă pe email'
+    && (int) $unu("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cerere_oferta_stare'") >= 1);
+$r = $cerere('POST', '/admin/cereri-oferta/' . $idCerere . '/sterge', $jarAdmin, ['_csrf' => $mc[1] ?? '']);
+$lista = $cerere('GET', '/admin/cereri-oferta', $jarAdmin)['corp'];
+$verifica('ștergerea: „moale” (deleted_at), cererea nu mai e în listă, rândul rămâne în bază',
+    $r['cod'] === 302 && $unu('SELECT deleted_at FROM quote_requests WHERE id = :id', ['id' => $idCerere]) !== ''
+    && !str_contains($lista, 'ionel.ofertant@exemplu.ro'));
+$licenta('toate', 'cereri_oferta=se_opreste');
+$paginaProdus = $cerere('GET', '/produs/' . $slugOferta)['corp'];
+$r = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'Târziu', 'email' => 'tarziu@exemplu.ro', 'consent' => true]), $antetJson);
+$lista = $cerere('GET', '/admin/cereri-oferta', $jarAdmin);
+$verifica('se oprește: fără buton și fără scriptul lui pe produs, o cerere nouă 403 (nesalvată), lista din admin rămâne',
+    !str_contains($paginaProdus, 'sertar-oferta') && !str_contains($paginaProdus, '{{product_quote_button}}') && $r['cod'] === 403
+    && (int) $unu("SELECT COUNT(*) FROM quote_requests WHERE email = 'tarziu@exemplu.ro'") === 0 && $lista['cod'] === 200
+    && str_contains($lista['corp'], 'a5@exemplu.ro'), $r['cod'] . ' ' . $lista['cod']);
+$licenta('toate', 'cereri_oferta=oprit');
+$paginaProdus = $cerere('GET', '/produs/' . $slugOferta)['corp'];
+$r = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'Oprit', 'email' => 'oprit@exemplu.ro', 'consent' => true]), $antetJson);
+$lista = $cerere('GET', '/admin/cereri-oferta', $jarAdmin);
+$meniu = $cerere('GET', '/admin', $jarAdmin)['corp'];
+$verifica('oprit: fără buton, /api/cerere-oferta 404 (JSON), lista din admin 403, meniul fără „Cereri de ofertă”; rândurile rămân în bază',
+    !str_contains($paginaProdus, 'sertar-oferta') && !str_contains($paginaProdus, '{{product_quote_button}}') && $r['cod'] === 404
+    && str_contains((string) ($r['antete']['content-type'] ?? ''), 'json') && $lista['cod'] === 403 && !str_contains($meniu, 'href="/admin/cereri-oferta"')
+    && (int) $unu('SELECT COUNT(*) FROM quote_requests') >= 5, $r['cod'] . ' ' . $lista['cod']);
+$licenta('grafoanaytis');
+$meniu = $cerere('GET', '/admin', $jarAdmin)['corp'];
+$verifica('licența grafoanaytis: grupul din meniu „Produse” (GR-14c), cu „Cereri de ofertă”; nimic din magazin',
+    preg_match('#<span class="nav-icon">.*?</span> Produse\s*</#su', $meniu) === 1 && str_contains($meniu, 'href="/admin/cereri-oferta"')
+    && !str_contains($meniu, 'href="/admin/orders"'), mb_substr(strip_tags($meniu), 0, 400));
+$licenta('toate');
+$setare('cereri_oferta_buton', null);
+$setare('cereri_oferta_confidentialitate_url', null);
+$setare('contact_form_recipients', null);
+
+// =====================================================================
+// WP-26 C. Exportul datelor legale (scripts/exporta-date-legale.php, /_andaxi/export/{token})
+// =====================================================================
+$scrie('');
+$scrie('== WP-26 C. Exportul datelor cu păstrare legală');
+$dosarExport = \App\Support\ExportDateLegale::dosar();
+$exportInainte = array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExport . '/*.json') ?: []);
+$ruleaza = static function (string ...$argumente) use ($radacina): array {
+    exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/scripts/exporta-date-legale.php') . ' '
+        . implode(' ', array_map('escapeshellarg', $argumente)) . ' 2>&1', $iesire, $cod);
+    return ['cod' => $cod, 'iesire' => implode("\n", $iesire)];
+};
+$e = $ruleaza('--ce=comenzi');
+preg_match('#/_andaxi/export/([a-f0-9]{64})#', $e['iesire'], $ml);
+$tokenExport = (string) ($ml[1] ?? '');
+$cheieExport = hash('sha256', $tokenExport);
+$fisierExport = $dosarExport . '/' . $cheieExport . '.csv';
+$comenziTotal = (int) $unu('SELECT COUNT(*) FROM orders');
+$verifica('scriptul: cod 0, doar numărul de rânduri (= comenzile din bază) și linkul; CSV-ul în storage/export cu drepturi 0600, numit după '
+    . 'hash-ul tokenului (tokenul nu e pe disc)',
+    $e['cod'] === 0 && str_contains($e['iesire'], 'rânduri  : ' . $comenziTotal) && $tokenExport !== '' && is_file($fisierExport)
+    && (fileperms($fisierExport) & 0777) === 0600 && !str_contains($e['iesire'], '@') && glob($dosarExport . '/*' . $tokenExport . '*') === [], $e['iesire']);
+$r = $cerere('GET', '/_andaxi/export/' . $tokenExport);
+$inregistrari = [];
+$fCsv = fopen('php://memory', 'r+');
+fwrite($fCsv, (string) preg_replace('/^\xEF\xBB\xBF/', '', $r['corp']));
+rewind($fCsv);
+while (($linieCsv = fgetcsv($fCsv, null, ',', '"', '')) !== false) {
+    $inregistrari[] = $linieCsv;
+}
+fclose($fCsv);
+$verifica('linkul: 200, text/csv ca atașament, no-store; capul de tabel plus un rând pe comandă (numărul din bază)',
+    $r['cod'] === 200 && str_starts_with((string) ($r['antete']['content-type'] ?? ''), 'text/csv')
+    && str_contains((string) ($r['antete']['content-disposition'] ?? ''), 'attachment') && str_contains((string) ($r['antete']['cache-control'] ?? ''), 'no-store')
+    && in_array('order_number', $inregistrari[0] ?? [], true) && count($inregistrari) - 1 === $comenziTotal, $r['cod'] . ' ' . count($inregistrari));
+$r2 = $cerere('GET', '/_andaxi/export/' . $tokenExport);
+$verifica('a doua folosire: 404; fișierul și descrierea lui au dispărut', $r2['cod'] === 404 && !is_file($fisierExport)
+    && !is_file($dosarExport . '/' . $cheieExport . '.json'));
+$e = $ruleaza('--ce=acorduri_gdpr', '--din=2099-01-01');
+preg_match('#/_andaxi/export/([a-f0-9]{64})#', $e['iesire'], $ml);
+$tokenGdpr = (string) ($ml[1] ?? '');
+$metaGdpr = $dosarExport . '/' . hash('sha256', $tokenGdpr) . '.json';
+$verifica('--din în viitor: 0 rânduri, tot cu link', $e['cod'] === 0 && str_contains($e['iesire'], 'rânduri  : 0') && is_file($metaGdpr), $e['iesire']);
+$metaDate = json_decode((string) file_get_contents($metaGdpr), true);
+$metaDate['expira'] = time() - 1;
+file_put_contents($metaGdpr, json_encode($metaDate));
+$r = $cerere('GET', '/_andaxi/export/' . bin2hex(random_bytes(32)));
+$verifica('un token necunoscut: 404; un export expirat se șterge la următoarea cerere (fișierul și descrierea)',
+    $r['cod'] === 404 && !is_file($metaGdpr) && !is_file(substr($metaGdpr, 0, -5) . '.csv'));
+$eDonatii = $ruleaza('--ce=donatii');
+$eGresit = $ruleaza('--ce=parole');
+$eData = $ruleaza('--ce=comenzi', '--din=31-12-2025');
+$verifica('refuzuri: --ce necunoscut cod 2, o dată greșită cod 2, un tabel care nu există pe site (donations) cod 1, fără fișier lăsat',
+    $eGresit['cod'] === 2 && $eData['cod'] === 2 && $eDonatii['cod'] === ((int) $unu("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'donations'") === 1 ? 0 : 1)
+    && array_diff(array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExport . '/*.json') ?: []), $exportInainte) === [],
+    $eGresit['iesire'] . ' | ' . $eData['iesire'] . ' | ' . $eDonatii['iesire']);
+foreach (array_diff(array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExport . '/*.json') ?: []), $exportInainte) as $rest) {
+    @unlink($rest);
+}
+
+// =====================================================================
+// WP-26 D. Uneltele de operare: verifica-email.php, diagnostic.php --email
+// =====================================================================
+$scrie('');
+$scrie('== WP-26 D. scripts/verifica-email.php și scripts/diagnostic.php --email (fără adrese, fără parole)');
+$scriptOp = static function (string $script, string ...$argumente) use ($radacina): array {
+    exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/scripts/' . $script) . ' '
+        . implode(' ', array_map('escapeshellarg', $argumente)) . ' 2>&1', $iesire, $cod);
+    return ['cod' => $cod, 'iesire' => implode("\n", $iesire)];
+};
+$setare('contact_form_recipients', 'secretariat.firma@exemplu-real.ro, gresit-fara-arond');
+$setare('smtp_host', 'smtp.exemplu-real.ro');
+$setare('smtp_username', 'cont.smtp@alt-domeniu.ro');
+$setare('smtp_password', 'parola-smtp-foarte-secreta');
+$setare('order_email_from_address', 'comenzi@exemplu-real.ro');
+$db->exec("INSERT INTO email_send_history (recipient, subject, email_type, status, created_at) VALUES ('destinatar.ascuns@exemplu-real.ro', 'Test', 'test_wp26', 'sent', NOW())");
+$v = $scriptOp('verifica-email.php');
+$verifica('verifica-email: destinatarii și ultimele trimiteri ascunse (s***@domeniu), parola doar „(pusă)”, adresa invalidă numărată, '
+    . 'avertismentul DMARC (contul SMTP pe alt domeniu), cod 1',
+    $v['cod'] === 1 && str_contains($v['iesire'], 's***@exemplu-real.ro') && str_contains($v['iesire'], 'd***@exemplu-real.ro')
+    && !str_contains($v['iesire'], 'secretariat.firma') && !str_contains($v['iesire'], 'destinatar.ascuns') && !str_contains($v['iesire'], 'cont.smtp@')
+    && !str_contains($v['iesire'], 'parola-smtp-foarte-secreta') && str_contains($v['iesire'], '(pusă)') && str_contains($v['iesire'], 'DMARC')
+    && str_contains($v['iesire'], '1 din adresele'), $v['iesire']);
+$vr = $scriptOp('verifica-email.php', '--repara', '--destinatari=birou.nou@exemplu-real.ro', '--expeditor=comenzi@alt-domeniu.ro');
+$verifica('verifica-email --repara: valorile din parametri scrise (contact_form_recipients, order_email_from_address), parola neatinsă; '
+    . 'fără parametri refuzat (cod 2)',
+    $unu("SELECT value FROM settings WHERE `key` = 'contact_form_recipients'") === 'birou.nou@exemplu-real.ro'
+    && $unu("SELECT value FROM settings WHERE `key` = 'order_email_from_address'") === 'comenzi@alt-domeniu.ro'
+    && $unu("SELECT value FROM settings WHERE `key` = 'smtp_password'") === 'parola-smtp-foarte-secreta' && !str_contains($vr['iesire'], 'parola-smtp')
+    && $scriptOp('verifica-email.php', '--repara')['cod'] === 2, $vr['iesire']);
+$dg = $scriptOp('diagnostic.php', '--email');
+$verifica('diagnostic.php --email: doar numere (trimiterile pe tipuri și stări), nicio adresă, niciun IP, cod 0',
+    $dg['cod'] === 0 && str_contains($dg['iesire'], 'test_wp26') && !str_contains($dg['iesire'], '@') && preg_match('/\b\d{1,3}(\.\d{1,3}){3}\b/', $dg['iesire']) !== 1,
+    $dg['iesire']);
+foreach (['contact_form_recipients', 'smtp_host', 'smtp_username', 'smtp_password', 'order_email_from_address'] as $cheieOp) {
+    $setare($cheieOp, null);
+}
 
 // =====================================================================
 // Final: baza pusă la loc, nicio eroare PHP nouă

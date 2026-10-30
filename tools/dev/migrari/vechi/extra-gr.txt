@@ -7,5 +7,4 @@ tabelul competition_partners
 tabelul competition_prices
 tabelul mannequin_point_products
 tabelul mannequin_points
-tabelul quote_requests
 tabelul reviews

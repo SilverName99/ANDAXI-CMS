@@ -63,9 +63,12 @@ return [
         ['cheie' => 'dashboard', 'tip' => 'link'],
         ['cheie' => 'utilizatori', 'tip' => 'grup', 'eticheta' => 'Utilizatori', 'icon' => 'users',
             'deschis' => ['/admin/users']],
-        ['cheie' => 'magazin', 'tip' => 'grup', 'eticheta' => 'Magazin', 'icon' => 'store',
+        // WP-26 (GR-14c, OD-25): fără magazin (un catalog de prezentare), grupul se cheamă „Produse”; eticheta definitivă vine
+        // cu meniul nou al adminului (WP-30).
+        ['cheie' => 'magazin', 'tip' => 'grup', 'eticheta' => 'Magazin', 'icon' => 'store', 'eticheta_fara' => ['magazin' => 'Produse'],
             'deschis' => ['/admin/products', '/admin/orders', '/admin/coupons', '/admin/categories', '/admin/promo-products',
-                '/admin/settings/floating-cart', '/admin/products/fields', '/admin/products/templates', '/admin/products/reviews']],
+                '/admin/settings/floating-cart', '/admin/products/fields', '/admin/products/templates', '/admin/products/reviews',
+                '/admin/cereri-oferta']],
         ['cheie' => 'configurare', 'tip' => 'grup', 'eticheta' => 'Configurare', 'icon' => 'settings',
             'deschis' => ['/admin/settings/store', '/admin/settings/shipping', '/admin/settings/payments', '/admin/settings/erp',
                 '/admin/settings/mannequin', '/admin/settings/admins']],
@@ -472,13 +475,21 @@ return [
                 'account_activations'],
         ],
 
+        // WP-26 (GR-15, din grafoanaytis): butonul „Cere ofertă” cu sertarul lui pe pagina de produs ({{product_quote_button}}),
+        // cererile salvate (cu stare) și lista lor în admin. App\Support\CereriOferta, CereriOfertaController.
         'cereri_oferta' => [
             'nume' => 'Cereri de ofertă',
             'descriere' => 'Buton pe produs, formular de cerere de ofertă și lista cererilor în admin.',
             'necesita' => ['catalog'],
-            'portat' => false,
             'sursa' => 'grafoanaytis.ro',
-            'tabele' => ['quote_requests'],
+            'rute_admin' => ['/admin/cereri-oferta', '/admin/cereri-oferta/*'],
+            'rute_publice' => ['POST /api/cerere-oferta'],
+            'tokenuri' => ['product_quote_button'],
+            'meniu' => [
+                ['grup' => 'magazin', 'ordine' => 45, 'eticheta' => 'Cereri de ofertă', 'href' => '/admin/cereri-oferta', 'icon' => 'orders',
+                    'activ' => ['/admin/cereri-oferta']],
+            ],
+            'tabele' => ['quote_requests', 'quote_submit_logs'],
         ],
 
         'fisiere_cloud' => [

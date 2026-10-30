@@ -33,7 +33,8 @@
         "blog/0033_blog_avansat": "b6f94a2f6fda359d14247efae2076b1650cea5895190dc49d8dc0e2e7b50c2a9",
         "nucleu/0034_acces_membri": "898460b2fefe87c10155a711c5c6049283bed8175942f302f71755f9215cb00c",
         "plata_stripe/0035_evenimente_stripe": "6035ddcef8937b0bc10e1e622f961d23a3b2020f050ef4b1652517abf9e3f5fd",
-        "conturi_clienti/0036_confirmare_email": "af296e0f98d29359ba6fb9803a41a2423d4e0a544a87ccdee67e1a384f2a4384"
+        "conturi_clienti/0036_confirmare_email": "af296e0f98d29359ba6fb9803a41a2423d4e0a544a87ccdee67e1a384f2a4384",
+        "cereri_oferta/0037_cereri_oferta": "e07a4b550ef3a0ddd2a084a1bfb3362f1597c632360c256252cbc83fcc51d5ca"
     },
     "retrase": {}
 }

@@ -167,6 +167,17 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
                 <?php endforeach; ?>
+<?php
+/* WP-26 (GR-15): butonul „Cere ofertă” cu sertarul lui, doar cu pluginul cereri_oferta pe site. */
+?>
+<?= \App\Support\Dev::marcaj('gr:token-oferta') ?>
+<?php if (\App\Support\Plugins::tokenVizibil('product_quote_button')): ?>
+                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                        <strong style="display:block;font-size:13px;">Buton „Cere ofertă” (cu formularul cererii)</strong>
+                        <code>{{product_quote_button}}</code>
+                    </div>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('gr:token-oferta', true) ?>
             </div>
 
             <div class="template-token-panel" data-token-panel="all" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
@@ -177,6 +188,15 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
                 <?php endforeach; ?>
+<?= \App\Support\Dev::marcaj('gr:token-oferta-toate') ?>
+<?php if (\App\Support\Plugins::tokenVizibil('product_quote_button')): ?>
+                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                        <small style="display:block;color:#64748b;font-weight:700;">General</small>
+                        <strong style="display:block;font-size:13px;">Buton „Cere ofertă” (cu formularul cererii)</strong>
+                        <code>{{product_quote_button}}</code>
+                    </div>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('gr:token-oferta-toate', true) ?>
             </div>
 
             <div class="template-token-panel" data-token-panel="extra" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
@@ -361,6 +381,11 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
     const replacePlaceholders = (content) => {
         const map = {
             '{{product_name}}': 'Produs demo',
+<?= \App\Support\Dev::marcaj('gr:previzualizare-oferta') ?>
+<?php if (\App\Support\Plugins::tokenVizibil('product_quote_button')): ?>
+            '{{product_quote_button}}': '<button type="button" class="btn btn-primary">' + <?= json_encode(\App\Support\CereriOferta::texte(\App\Support\Settings::all(\App\Support\Database::connection([])))['buton'], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> + '</button>',
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('gr:previzualizare-oferta', true) ?>
 <?php if ($cuMagazin): ?>
             '{{product_price}}': '99.00',
             '{{product_price_display}}': '99.00 lei',

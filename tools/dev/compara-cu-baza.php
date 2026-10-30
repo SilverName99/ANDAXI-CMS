@@ -38,6 +38,8 @@ declare(strict_types=1);
  * În ambele moduri, tot doar din pagina codului curent: diferențele declarate
  * explicit, cu pagina și motivul lor ($deBioscem, $porturiBiovitality,
  * $porturiVertij, $porturiGrafo) și blocurile marcate cu <!--port:…--> ($marcajePort).
+ * Cu licența „toate”, și intrările din meniul adminului ale pluginurilor pe care Bioscem
+ * nu le-a avut (din catalog; $meniuFaraBioscem, WP-26), fiecare găsită măcar o dată.
  * Plus paginile care în codul de bază cad și aici merg ($coduriDeBioscem): trec doar cu
  * exact codurile declarate și cu textul declarat pe pagina curentă.
  * Contractul lor e în tools/dev/lib/diferente-asteptate.php.
@@ -1356,7 +1358,32 @@ $marcajePort = [
     // primit pe tipuri și „Verifică webhook-ul” (cu formularul lui, în afara formularului setărilor).
     'vt:stripe-evenimente' => ['cale' => '/admin/settings/payments', 'motiv' => 'WP-25 (VT-X1): evenimentele webhook-ului Stripe și verificarea lui'],
     'vt:stripe-verifica-formular' => ['cale' => '/admin/settings/payments', 'motiv' => 'WP-25 (VT-X1): formularul „Verifică webhook-ul”'],
+    // WP-26 (GR-15, din grafoanaytis): codul {{product_quote_button}} în lista editorului de șabloane de produs (tabul
+    // „General” și tabul „Toate”) și exemplul lui în previzualizare, doar cu pluginul cereri_oferta pe site (marcajele apar
+    // goale fără el, de exemplu cu licența Bioscem).
+    'gr:token-oferta' => ['cale' => '/admin/products/templates/' . $idSablonProdus . '/builder', 'motiv' => 'WP-26 (GR-15): codul '
+        . 'butonului „Cere ofertă” în tabul „General” al editorului de șabloane de produs'],
+    'gr:token-oferta-toate' => ['cale' => '/admin/products/templates/' . $idSablonProdus . '/builder', 'motiv' => 'WP-26 (GR-15): același '
+        . 'cod în tabul „Toate”'],
+    'gr:previzualizare-oferta' => ['cale' => '/admin/products/templates/' . $idSablonProdus . '/builder', 'motiv' => 'WP-26 (GR-15): '
+        . 'butonul în previzualizarea șablonului'],
 ];
+// WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
+// dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de
+// ofertă” a pluginului cereri_oferta). Se scot din pagina codului curent înainte de comparare, doar exact intrarea (linkul,
+// iconița, eticheta, din catalog), și fiecare trebuie găsită măcar o dată în rulare; cu licența Bioscem lista e goală.
+$meniuFaraBioscem = [];
+foreach (Plugins::catalog()['pluginuri'] as $cheiePlugin => $definitiePlugin) {
+    if (in_array($cheiePlugin, (array) (Plugins::catalog()['licente_dev']['bioscem'] ?? []), true) || $cheiePlugin === 'migrare_wordpress'
+        || !Plugins::vizibil((string) $cheiePlugin)) {
+        continue;
+    }
+    foreach ((array) ($definitiePlugin['meniu'] ?? []) as $intrareMeniu) {
+        $meniuFaraBioscem['meniu ' . $cheiePlugin . ' ' . $intrareMeniu['href']] = '#\n[ \t]*<a class="[^"]*" href="'
+            . preg_quote((string) $intrareMeniu['href'], '#') . '">\s*<span class="nav-icon">(?:(?!</a>).)*?</span> '
+            . preg_quote((string) $intrareMeniu['eticheta'], '#') . '\s*</a>#s';
+    }
+}
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
 if ($fataDeCommit) {
@@ -1378,10 +1405,18 @@ $coduriGasite = [];
 // Fiecare declarație găsită măcar o dată în toată rularea (WP-12): una pe care n-o atinge nicio pagină cerută (o pagină
 // scoasă din listă, un caz de salvare care nu mai rulează) n-ar dovedi nimic, deci pică la final.
 $gasiteInRulare = [];
-$faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort, &$gasiteInRulare): string {
+$faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort, &$gasiteInRulare,
+    $meniuFaraBioscem): string {
     // Jetonul de sesiune al unui formular de admin (_csrf) e la întâmplare: o declarație care îl conține îl scrie <TOKEN>,
     // cum îl lasă oricum normalizeaza_html() după (revizuirea WP-23: editorul postării are acum jetonul în formular).
     $html = (string) preg_replace('/(name="_csrf" value=")[0-9a-f]{64}"/', '$1<TOKEN>"', $html);
+    foreach ($meniuFaraBioscem as $etichetaMeniu => $tiparMeniu) {
+        $html = (string) preg_replace($tiparMeniu, '', $html, -1, $deCateMeniu);
+        if ($deCateMeniu > 1) {
+            $probleme[] = $etichetaMeniu . ': găsită de ' . $deCateMeniu . ' ori în aceeași pagină';
+        }
+        $gasiteInRulare[$etichetaMeniu] = ($gasiteInRulare[$etichetaMeniu] ?? 0) + $deCateMeniu;
+    }
     $html = diferente_marcaje($marcajePort, $cale, $html, $gasite, $probleme);
     $html = diferente_texte($listeDeclarate, $cale, $html, $gasite, $probleme);
     foreach ($gasite as $etichetaGasita => $deCate) {
@@ -3362,6 +3397,12 @@ foreach ($listeDeclarate as $numeLista => $lista) {
         }
     }
 }
+foreach (array_keys($meniuFaraBioscem) as $etichetaMeniu) {
+    if (($gasiteInRulare[$etichetaMeniu] ?? 0) === 0) {
+        $diferite[] = $etichetaMeniu;
+        echo '  DIFERĂ ', $etichetaMeniu, ": intrarea de meniu a unui plugin pe care Bioscem nu-l are, negăsită în nicio pagină de admin\n";
+    }
+}
 foreach ($marcajePort as $numeMarcaj => $_) {
     if (($gasiteInRulare['marcaj ' . $numeMarcaj] ?? 0) === 0) {
         $diferite[] = 'marcaj ' . $numeMarcaj;
@@ -3381,6 +3422,9 @@ foreach ($listeDeclarate + $listeCoduri as $numeLista => $lista) {
 }
 if ($marcajePort !== []) {
     $declarate[] = count($marcajePort) . ' marcaje de port';
+}
+if ($meniuFaraBioscem !== []) {
+    $declarate[] = count($meniuFaraBioscem) . ' intrări de meniu ale pluginurilor fără Bioscem';
 }
 echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice (cod, Location, anteturi, corp), ', count($diferite), ' diferite; ',
     $fataDeCommit ? count($diferenteSeoAsteptate) . ' pagini cu diferențele SEO așteptate (livrarea 1 SEO), ' : '',

@@ -982,6 +982,8 @@ try {
         'migrare_wordpress' => ['/backup WordPress/u', '/UpdraftPlus/u'],
         // WP-24 (VT-X2): nota „acces restricționat” a nucleului apare doar cu pluginul membri (fără el, 404).
         'membri' => ['/Conținut pentru membri/u', '/Doar cont activ/u'],
+        // WP-26 (GR-15): lista din admin, butonul (textul implicit și cel înghețat al grafoanaytis) și linkul cardurilor simple.
+        'cereri_oferta' => ['/Cereri de ofertă/u', '/ofertă de preț/u', '/Cere ofertă/u'],
     ];
     /** Semnele pluginurilor oprite găsite în textul paginilor (fiecare pagină: cale, rol, text). */
     $problemeText = static function (array $pagini) use ($semneText): array {
@@ -1622,7 +1624,7 @@ try {
             $meniu = array_values(array_unique(array_map(static fn ($h): string => html_entity_decode((string) $h), $hrefuriMeniu[1])));
             $oprite = array_keys(array_filter(Plugins::stari(), static fn (string $st): bool => $st === 'oprit'));
             $scrie('-- fără „' . $cheie . '” (oprite: ' . implode(', ', array_diff($oprite, ['pachete_produse', 'donatii', 'membri',
-                'cereri_oferta', 'fisiere_cloud', 'concurenta'])) . ')');
+                'fisiere_cloud', 'concurenta'])) . ')');
             $rez = $treceCuBrowserul($publicFix, array_values(array_unique(array_merge($meniu, $paginiAdminExtra()))), '');
             if ($rez === null) {
                 $verifica('browser: trecerea cu Playwright', false, $ultimaEroareBrowser);

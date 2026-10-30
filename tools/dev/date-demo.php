@@ -826,6 +826,27 @@ foreach ([['Mesaj Demo', 'Întrebare despre livrare'], ['Exemplu Client', 'Dispo
         'm' => 'Mesaj inventat pentru test.', 'st' => $k === 0 ? 'new' : 'read', 'c' => $dataSql($acum - $k * $zi)]);
 }
 
+// --- Cereri de ofertă (pluginul cereri_oferta, WP-26) -------------------------------
+// Pe o bază făcută ca înainte de migrări (instaleaza.sh --pe-vechi), fără tabelul cereri_oferta/0037, se sare.
+$areCereri = (int) $db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'quote_requests'")
+    ->fetchColumn() === 1;
+$produsCerut = $db->query("SELECT id, slug, name FROM products WHERE deleted_at IS NULL ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: null;
+$insCerere = !$areCereri ? null : $db->prepare(
+    'INSERT INTO quote_requests (product_id, product_name, product_slug, name, company, email, phone, message, status, consent_at, created_at)
+     VALUES (:pid, :pn, :ps, :n, :f, :e, :t, :m, :st, :c, :c)'
+);
+foreach ([['Cerere Demo', 'Firma Demo SRL', 'noua'], ['Exemplu Ofertant', '', 'noua'], ['Test Cumpărător', 'Atelier Test', 'in_lucru'],
+    ['Client Inventat', '', 'trimisa'], ['Persoană Fictivă', 'Exemplu SA', 'inchisa']] as $k => [$numeCerere, $firmaCerere, $stareCerere]) {
+    if (!$areCereri) {
+        break;
+    }
+    $cuProdus = is_array($produsCerut) && $k !== 1;
+    $insCerere->execute(['pid' => $cuProdus ? (int) $produsCerut['id'] : null, 'pn' => $cuProdus ? (string) $produsCerut['name'] : null,
+        'ps' => $cuProdus ? (string) $produsCerut['slug'] : ($k === 1 ? 'serviciu-demo' : null), 'n' => $numeCerere,
+        'f' => $firmaCerere !== '' ? $firmaCerere : null, 'e' => sprintf('cerere%02d@exemplu.ro', $k + 1), 't' => $k % 2 === 0 ? '0700000888' : null,
+        'm' => 'Cerere inventată pentru test: 500 de bucăți.', 'st' => $stareCerere, 'c' => $dataSql($acum - $k * $zi)]);
+}
+
 // --- Pagini (cu tokenurile folosite de un site real) --------------------------------
 $pagini = [
     ['Acasă', '', '<section class="demo-acasa"><h1>Firma Demo</h1><p>Site de dezvoltare cu date inventate.</p>'

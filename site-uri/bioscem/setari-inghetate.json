@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@070e1af",
-    "amprenta_nucleu": "eba034e121011df9ebd1929dac6f9eade8b0253cfeca48af1f642892e5849329",
+    "amprenta_nucleu": "c8f938b84a9ac1ef08268fa8facfaf95d97d7e31cf564edb599328e6e358d635",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -369,6 +369,31 @@
             "motiv": "Butonul sortării se vede în ambele coduri (WP-19, GR-16)",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
+        },
+        "cereri_oferta_buton": {
+            "motiv": "textul sertarului „Cere ofertă” (pluginul cereri_oferta, WP-26): site-ul n-are pluginul, iar codul vechi nu avea cererile de ofertă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Cere ofertă\""
+        },
+        "cereri_oferta_eticheta_mesaj": {
+            "motiv": "textul sertarului „Cere ofertă” (pluginul cereri_oferta, WP-26): site-ul n-are pluginul, iar codul vechi nu avea cererile de ofertă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Mesaj\""
+        },
+        "cereri_oferta_intro": {
+            "motiv": "textul sertarului „Cere ofertă” (pluginul cereri_oferta, WP-26): site-ul n-are pluginul, iar codul vechi nu avea cererile de ofertă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Completați formularul și vă răspundem cu o ofertă.\""
+        },
+        "cereri_oferta_multumire": {
+            "motiv": "textul sertarului „Cere ofertă” (pluginul cereri_oferta, WP-26): site-ul n-are pluginul, iar codul vechi nu avea cererile de ofertă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Am primit cererea. Vă răspundem cât mai curând.\""
+        },
+        "cereri_oferta_titlu": {
+            "motiv": "textul sertarului „Cere ofertă” (pluginul cereri_oferta, WP-26): site-ul n-are pluginul, iar codul vechi nu avea cererile de ofertă",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Cerere de ofertă pentru:\""
         },
         "contact_email": {
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",

@@ -35,6 +35,10 @@ declare(strict_types=1);
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --pachet     # doar pachetul de date al site-ului (la adoptare, după copiere)
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --cheie-newsletter   # rândul NEWSLETTER_CHEIE_SEMNARE=… de pus în .env la
  *                                                                        # adoptare: cheia derivată pe care site-ul o folosește acum
+ *   /usr/bin/php /cale/catre/scripts/diagnostic.php --email      # emailurile trimise, doar numere (WP-26, VT-O1): pe tipuri și
+ *                                                                # stări (24 de ore, 7 zile), ultima reușită și ultimul eșec,
+ *                                                                # linkurile de confirmare a adresei, înregistrările; nicio adresă,
+ *                                                                # niciun IP, niciun text de eroare (verifica-email.php: configurația)
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -118,6 +122,52 @@ if (in_array('--cheie-newsletter', $argv, true)) {
         exit(1);
     }
     echo 'NEWSLETTER_CHEIE_SEMNARE=' . \App\Support\NewsletterService::cheieDerivata(trim($sare)) . "\n";
+    exit(0);
+}
+
+// Emailurile, doar agregate (WP-26, VT-O1: în locul scriptului vertij diagnose-account-emails.php, care afișa adrese și IP-uri).
+if (in_array('--email', $argv, true)) {
+    $dbEmail = Database::connection((array) ($config['db'] ?? []));
+    if (!$dbEmail instanceof PDO) {
+        echo "baza         : NU (conexiunea nu merge)\n";
+        exit(1);
+    }
+    $setariEmail = Settings::all($dbEmail);
+    echo "=== Emailuri (doar numere) ===\n";
+    echo 'metoda       : ' . (trim((string) ($setariEmail['email_delivery_method'] ?? '')) ?: 'smtp') . "\n";
+    $numar = static function (string $sql) use ($dbEmail): ?string {
+        try {
+            $v = $dbEmail->query($sql)->fetchColumn();
+            return $v === false || $v === null ? '-' : (string) $v;
+        } catch (Throwable) {
+            return null;
+        }
+    };
+    foreach (['24 HOUR' => '24 de ore', '7 DAY' => '7 zile'] as $interval => $eticheta) {
+        try {
+            $randuri = $dbEmail->query('SELECT email_type, status, COUNT(*) AS n FROM email_send_history WHERE created_at >= NOW() - INTERVAL '
+                . $interval . ' GROUP BY email_type, status ORDER BY email_type, status')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            $randuri = null;
+        }
+        echo 'trimise ' . str_pad($eticheta, 5) . ': ' . ($randuri === null ? 'istoricul nu se poate citi' : ($randuri === [] ? 'niciunul' : '')) . "\n";
+        foreach ((array) $randuri as $r) {
+            echo '  ' . str_pad((string) $r['email_type'], 36) . ' ' . str_pad((string) $r['status'], 8) . ' ' . (int) $r['n'] . "\n";
+        }
+    }
+    echo 'ultima reușită: ' . ($numar("SELECT MAX(created_at) FROM email_send_history WHERE status = 'sent'") ?? '-') . "\n";
+    echo 'ultimul eșec  : ' . ($numar("SELECT MAX(created_at) FROM email_send_history WHERE status <> 'sent'") ?? '-') . "\n";
+    $confirmari = $numar('SELECT COUNT(*) FROM customer_email_confirmations WHERE created_at >= NOW() - INTERVAL 7 DAY');
+    if ($confirmari !== null) {
+        echo 'linkuri de confirmare (7 zile): ' . $confirmari . ' trimise, '
+            . ($numar('SELECT COUNT(*) FROM customer_email_confirmations WHERE created_at >= NOW() - INTERVAL 7 DAY AND used_at IS NOT NULL') ?? '-')
+            . " folosite\n";
+        echo 'conturi neconfirmate: ' . ($numar('SELECT COUNT(*) FROM users WHERE email_confirmed_at IS NULL') ?? '-') . "\n";
+    }
+    $inregistrari = $numar('SELECT COUNT(*) FROM register_submit_logs WHERE created_at >= NOW() - INTERVAL 24 HOUR');
+    if ($inregistrari !== null) {
+        echo 'încercări de înregistrare (24 de ore): ' . $inregistrari . "\n";
+    }
     exit(0);
 }
 

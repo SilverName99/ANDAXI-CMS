@@ -4310,20 +4310,8 @@ final class SiteController
      */
     private function destinatariFormularContact(array $settings): array
     {
-        $brut = trim((string) ($settings['contact_form_recipients'] ?? ''));
-        $bucati = preg_split('/[\s,;]+/', $brut) ?: [];
-        $out = [];
-        foreach ($bucati as $adresa) {
-            $adresa = trim((string) $adresa);
-            if ($adresa !== '' && filter_var($adresa, FILTER_VALIDATE_EMAIL)) {
-                $out[strtolower($adresa)] = $adresa;
-            }
-        }
-        if ($out !== []) {
-            return array_values($out);
-        }
-        $contact = \App\Support\Brand::emailContact($this->db(), $settings);
-        return $contact !== '' ? [$contact] : [];
+        // Aceeași regulă și pentru cererile de ofertă (WP-26): App\Support\Brand::destinatariContact.
+        return \App\Support\Brand::destinatariContact($this->db(), $settings);
     }
 
     public function optInSubmit(array $params): void
@@ -11927,6 +11915,11 @@ CSS;
             'product_produse_similare' => str_contains($templateHtmlRaw, 'produse_similare')
                 ? $this->renderProduseCategorieHtml($similarProducts, $settings)
                 : '',
+            // WP-26 (GR-15): butonul „Cere ofertă” și sertarul lui (pluginul cereri_oferta; gol fără el pornit), doar când
+            // șablonul îl cere.
+            'product_quote_button' => str_contains($templateHtmlRaw, 'quote_button')
+                ? \App\Support\CereriOferta::butonHtml($settings, (string) ($product['slug'] ?? ''), (string) ($product['name'] ?? ''), $mainImage)
+                : '',
         ];
         // Catalog fără magazin (de prezentare): produsele n-au preț.
         if (!\App\Support\Plugins::vizibil('magazin')) {
@@ -11969,6 +11962,8 @@ CSS;
             if (isset($tokenuriBrute[$key]) || in_array($key, [
                 'product_produse_similare',
                 'product:produse_similare',
+                'product_quote_button',
+                'product:quote_button',
                 'product_image_gallery',
                 'product_image_carousel',
                 'product_reviews_stars',

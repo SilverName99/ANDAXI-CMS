@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CereriOfertaController;
 use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\SiteController;
 use App\Http\Router;
@@ -324,5 +325,15 @@ return static function (Router $router): void {
     $router->post('/admin/settings/payments/verifica-webhook', [AdminController::class, 'stripeWebhookVerifica']);
     $router->get('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirma']);
     $router->post('/contul-meu/confirmare-email', [ConfirmareEmailController::class, 'retrimite']);
+    // WP-26 (GR-15, din grafoanaytis): cererea de ofertă din sertarul de pe produs și lista cererilor în admin (cereri_oferta).
+    $router->post('/api/cerere-oferta', [CereriOfertaController::class, 'trimite']);
+    $router->get('/admin/cereri-oferta', [CereriOfertaController::class, 'lista']);
+    $router->post('/admin/cereri-oferta/{id}/stare', [CereriOfertaController::class, 'stare']);
+    $router->post('/admin/cereri-oferta/{id}/sterge', [CereriOfertaController::class, 'sterge']);
+    // WP-26 (OD-51): linkul unic, 24 de ore, al unui export de date legale făcut cu scripts/exporta-date-legale.php (al
+    // nucleului, /_andaxi/*; 404 fără un token valabil).
+    $router->get('/_andaxi/export/{token}', static function (array $params): void {
+        \App\Support\ExportDateLegale::serveste((string) ($params['token'] ?? ''));
+    });
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

@@ -111,6 +111,15 @@ final class Settings
         'catalog_sortare_vizibila' => '1',
         'catalog_similare_titlu' => 'Produse asemănătoare',
         'catalog_similare_subtitlu' => '',
+        // WP-26 (GR-15, OD-26): textele sertarului „Cere ofertă” (pluginul cereri_oferta), neutre; grafoanaytis își
+        // păstrează textele prin înghețare. Pagina de confidențialitate goală = cea a bannerului de cookie
+        // (cookie_banner_policy_url); amândouă goale = fără link.
+        'cereri_oferta_buton' => 'Cere ofertă',
+        'cereri_oferta_titlu' => 'Cerere de ofertă pentru:',
+        'cereri_oferta_intro' => 'Completați formularul și vă răspundem cu o ofertă.',
+        'cereri_oferta_eticheta_mesaj' => 'Mesaj',
+        'cereri_oferta_multumire' => 'Am primit cererea. Vă răspundem cât mai curând.',
+        'cereri_oferta_confidentialitate_url' => '',
         // WP-21 (C10, din Biovitality 84e29a9): bulina cu numărul recenziilor care așteaptă aprobare, lângă „Recenzii” în
         // meniul adminului (pluginul recenzii). Un site existent își păstrează meniul prin înghețare.
         'recenzii_insigna_meniu' => '1',

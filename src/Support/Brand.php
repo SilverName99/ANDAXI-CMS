@@ -60,6 +60,24 @@ final class Brand
     }
 
     /**
+     * Cine primește mesajele formularului de contact și cererile de ofertă (WP-26): adresele valide din
+     * `contact_form_recipients`, altfel adresa de contact a site-ului (`emailContact`); gol = nimeni (mesajul rămâne doar
+     * în admin).
+     *
+     * @param array<string, mixed> $setari
+     * @return list<string>
+     */
+    public static function destinatariContact(?PDO $db, array $setari): array
+    {
+        $lista = self::adrese((string) ($setari['contact_form_recipients'] ?? ''));
+        if ($lista !== []) {
+            return $lista;
+        }
+        $contact = self::emailContact($db, $setari);
+        return $contact !== '' ? [$contact] : [];
+    }
+
+    /**
      * Adresele valide dintr-o listă scrisă în setări (separate prin virgulă, punct și virgulă sau spații), fără
      * dubluri (litere mari și mici la fel; rămâne forma scrisă ultima), în ordinea primei apariții. Aceeași regulă ca
      * destinatarii formularului de contact și ai alertelor BT.

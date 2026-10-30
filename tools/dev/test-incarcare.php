@@ -247,6 +247,8 @@ $oracolPastrate = [
     // Linkul din campanie, același pentru toți abonații (cel de dezabonare nu se urmărește: NewsletterService::injectClickTracking).
     'newsletter_campaign_clicks' => ['url', 'clicked_at'],
     'contact_form_messages' => ['status', 'created_at'],
+    // Produsul cerut (din catalog), starea și datele (WP-26).
+    'quote_requests' => ['product_name', 'product_slug', 'status', 'consent_at', 'created_at', 'updated_at', 'deleted_at'],
     'email_logs' => ['email_type', 'status', 'sent_at', 'created_at'],
     'email_send_history' => ['email_type', 'source', 'status', 'provider', 'sent_at', 'created_at'],
     'admins' => ['role', 'roles_json', 'created_at'],
@@ -260,7 +262,7 @@ $oracolConditii = [
     'loyalty_points_transactions.reason' => 'admin_id IS NOT NULL',
 ];
 $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs', 'register_submit_logs', 'customer_password_resets', 'cart_abandonments',
-    'gdpr_agreements', 'customer_email_confirmations', 'stripe_events'];
+    'gdpr_agreements', 'customer_email_confirmations', 'stripe_events', 'quote_submit_logs'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',

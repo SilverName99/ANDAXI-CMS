@@ -45,6 +45,17 @@ Plugins::stare('magazin');           // 'pornit' | 'se_opreste' | 'oprit'
 Nucleul (`'nucleu'`) e mereu pornit. O cheie greșită în cod dă „oprit” și se
 notează în jurnal; `verifica-rute.php` prinde cheile greșite din cod înainte.
 
+**Datele cu păstrare legală ale unui plugin oprit** (WP-26, decizia OD-51 = b): un
+plugin oprit nu arată nimic în admin, dar rândurile lui rămân. Când clientul le cere
+(comenzile pentru contabilitate, acordurile GDPR semnate, donațiile), ANDAXI rulează
+pe server `php scripts/exporta-date-legale.php --ce=comenzi|acorduri_gdpr|donatii
+[--din=AAAA-LL-ZZ]` (oricare ar fi starea pluginului; citește tabelele direct). Scriptul
+scrie un CSV în `storage/export/` (drepturi 0600) și afișează doar numărul de rânduri
+și un link `/_andaxi/export/<token>`, bun o singură dată, 24 de ore; fișierul se șterge
+după descărcare, iar unul expirat la următoarea rulare sau la următoarea cerere spre
+`/_andaxi/export/…`. Pe disc stă doar hash-ul tokenului; fără un token valabil adresa
+dă 404. În admin nu apare nimic (App\Support\ExportDateLegale).
+
 **Dependențele** („are nevoie de” din catalog): un plugin nu poate fi mai pornit
 decât pluginurile de care are nevoie. Dacă una e oprită, e tratat ca oprit. Dacă
 una se oprește, se oprește și el: altfel, de exemplu, livrarea FAN ar dispărea
@@ -307,7 +318,10 @@ puse exact în locurile unde începe ceva nou:
 - **Etichete care depind de un plugin**: o intrare de meniu poate avea
   `eticheta_fara` și `icon_fara` (`'Setări magazin'` devine `'Setări site'` fără
   magazin, iar coșul de lângă „Trimite email test” devine un plic); la fel
-  titlul paginii și tab-ul „Pagini magazin” / „Pagini site”.
+  titlul paginii și tab-ul „Pagini magazin” / „Pagini site”. Și un grup din
+  `meniu_admin` le poate avea (WP-26, GR-14c): grupul „Magazin” se cheamă
+  „Produse” pe un catalog fără magazin (OD-25; eticheta definitivă vine cu meniul
+  nou al adminului, WP-30).
 - **Rolurile de administrator** legate de un plugin („Administrator magazin” fără
   catalog, „Administrator Blog” fără blog) nu se mai oferă în Administratori; un
   administrator care are deja rolul îl păstrează la salvare (câmp ascuns). După
@@ -869,6 +883,38 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Oprit**: pagina dă 404 (și scrisă altfel), nu se mai creează la generarea
   paginilor; meniul dispare; semnăturile rămân în bază.
 
+### Cereri de ofertă (`cereri_oferta`)
+
+WP-26 (GR-15, din grafoanaytis `d3c4b79`). Un catalog care nu vinde primește cereri în
+loc de comenzi.
+
+- **Conține**: codul `{{product_quote_button}}` din șablonul de produs (butonul și un
+  sertar lateral cu formularul: nume, companie, email, telefon, mesaj, acordul; un
+  offcanvas Bootstrap 5, cu marcajul și clasele din grafoanaytis), `POST /api/cerere-oferta`
+  (JSON; capcana pentru roboți, câmpurile mărginite, produsul căutat după slug pe server;
+  cererea se salvează întâi, apoi pleacă emailul la destinatarii formularului de contact,
+  cu Reply-To = vizitatorul), Magazin/Produse → Cereri de ofertă (lista cu filtrul pe
+  stare, starea și nota internă pe rând, ștergerea „moale”; jeton anti-CSRF, un rând în
+  Jurnal activitate). Tabele: `quote_requests`, `quote_submit_logs` (migrarea
+  `cereri_oferta/0037`; pe grafoanaytis tabelul există deja și e adoptat cu rândurile lui).
+- **Limita**: 5 trimiteri la 10 minute de la același vizitator (429), numărate doar cu un
+  HMAC al adresei (IPv6 pe /64), nu cu adresa; rândurile mai vechi de o zi se șterg din mers.
+- **Setări** (textele, implicit neutre; grafoanaytis are textele lui prin înghețare, OD-26):
+  `cereri_oferta_buton` („Cere ofertă”), `cereri_oferta_titlu`, `cereri_oferta_intro`,
+  `cereri_oferta_eticheta_mesaj`, `cereri_oferta_multumire` (răspunsul după trimitere),
+  `cereri_oferta_confidentialitate_url` (goală = adresa bannerului de cookie; amândouă
+  goale = fără link). Încă fără ecran în admin: se pun prin pachetul site-ului.
+- **Bootstrap**: o temă cu `"bootstrap": true` are deja CSS-ul și JavaScript-ul; altfel
+  codul aduce JavaScript-ul Bootstrap din nucleu și câteva reguli CSS doar pentru sertar.
+- **Rol**: „Administrator magazin” vede lista (lângă comenzi).
+- **Are nevoie de**: `catalog`. Fără magazin, cardurile simple de produse spun „Cere
+  ofertă” în loc de „Vezi produsul” (GR-16), iar grupul din meniul adminului se cheamă
+  „Produse” (GR-14c).
+- **Se oprește**: butonul nu se mai arată (nici scriptul lui), o cerere nouă primește 403;
+  lista din admin rămâne.
+- **Oprit**: `/api/cerere-oferta` dă 404 (JSON), adminul 403, meniul dispare; rândurile
+  rămân (exportul de mai sus nu le cuprinde: nu sunt date cu păstrare legală).
+
 ### Neportate încă
 
 Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
@@ -880,7 +926,6 @@ nu schimbă încă nimic):
 | `pachete_produse` | Biovitality | magazin | `products.bundle_items_json` |
 | `donatii` | vertij-tinitus.ro | plata_stripe | `donations` |
 | `membri` | vertij-tinitus.ro | conturi_clienti, plata_stripe | `professions`, `profession_fields`, `account_verification*`, `account_activations` |
-| `cereri_oferta` | grafoanaytis.ro | catalog | `quote_requests` |
 | `fisiere_cloud` | Biovitality | nimic | `admin_app_tokens`, `bunny_*`, `file_locks`, `file_versions` |
 | `concurenta` | Biovitality | nimic | `competition_partners`, `competition_prices` |
 
@@ -973,7 +1018,8 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
 - **Rolurile de administrator** sunt tot cele patru din Bioscem, cu prefixele de
   adrese scrise în `Auth::canAccessPath`; pluginurile nu-și declară încă rolurile.
   Rolurile legate de un plugin se ascund (vezi mai sus), dar un plugin nou cu
-  pagini de admin are nevoie de o declarație de rol în catalog.
+  pagini de admin are nevoie de o declarație de rol în catalog. Până atunci,
+  `/admin/cereri-oferta` (WP-26) e scris la „Administrator magazin”, lângă comenzi.
 - **Șabloanele de email ale magazinului** („Comandă expediată”, „Comandă livrată”)
   rămân în Email-uri ecommerce și fără FAN (sunt textul clientului); nu se mai
   trimit singure (vezi „Livrarea fără FAN”).

@@ -5285,6 +5285,169 @@
             },
             "motor": "InnoDB"
         },
+        "quote_requests": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "admin_note": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "company": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(160)"
+                },
+                "consent_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "deleted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "message": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(160)"
+                },
+                "phone": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(60)"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "product_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "product_slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "source_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'noua'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_quote_created": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_quote_status": {
+                    "coloane": [
+                        "status"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "quote_submit_logs": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_quote_submit_logs_ip": {
+                    "coloane": [
+                        "ip_hash",
+                        "created_at"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "register_submit_logs": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {

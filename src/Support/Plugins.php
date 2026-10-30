@@ -449,6 +449,14 @@ final class Plugins
             }
             usort($alese, static fn (array $a, array $b): int
                 => [(int) ($a['ordine'] ?? 0), $a['_pozitie']] <=> [(int) ($b['ordine'] ?? 0), $b['_pozitie']]);
+            // Și eticheta sau iconița unui grup pot depinde de un plugin (WP-26, GR-14c: „Magazin” → „Produse” fără magazin).
+            foreach (['eticheta_fara' => 'eticheta', 'icon_fara' => 'icon'] as $cheieFara => $camp) {
+                foreach ((array) ($slot[$cheieFara] ?? []) as $pluginLipsa => $altaValoare) {
+                    if (!self::vizibil((string) $pluginLipsa)) {
+                        $slot[$camp] = (string) $altaValoare;
+                    }
+                }
+            }
             $sloturi[] = [
                 'cheie' => (string) $slot['cheie'],
                 'tip' => (string) ($slot['tip'] ?? 'grup'),

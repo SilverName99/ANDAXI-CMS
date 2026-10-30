@@ -67,7 +67,8 @@ return [
     // și legăturile lor, copiate cum sunt (conținut public).
     // 8 (WP-24, WP-25): pages/blog_posts.requires_active_account copiate, users.email_confirmed_at păstrată (o dată),
     // customer_email_confirmations și stripe_events doar structura.
-    'versiune' => 8,
+    // 9 (WP-26): quote_requests anonimizat (ca mesajele de contact), quote_submit_logs doar structura.
+    'versiune' => 9,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -92,7 +93,7 @@ return [
         'newsletter' => ['newsletter_lists', 'newsletter_subscribers', 'newsletter_list_subscribers', 'newsletter_templates',
             'newsletter_optin_forms', 'newsletter_campaigns', 'newsletter_campaign_sends', 'newsletter_campaign_opens',
             'newsletter_campaign_clicks'],
-        'mesaje' => ['contact_form_messages', 'email_logs', 'email_send_history'],
+        'mesaje' => ['contact_form_messages', 'email_logs', 'email_send_history', 'quote_requests'],
         'admini' => ['admins'],
     ],
 
@@ -115,6 +116,8 @@ return [
         // Stripe ale plăților; o copie nu primește webhook-uri, iar un eveniment notat ar face unul adevărat „duplicat”).
         'customer_email_confirmations' => ['mod' => 'doar_structura', 'motiv' => 'jetoanele de confirmare a adresei (hash) și contul lor'],
         'stripe_events' => ['mod' => 'doar_structura', 'motiv' => 'evenimentele Stripe primite: id-urile plăților, fără folos pe o copie'],
+        // WP-26: trimiterile cererilor de ofertă (hash-ul adresei vizitatorului), doar pentru limită.
+        'quote_submit_logs' => ['mod' => 'doar_structura', 'motiv' => 'trimiterile cererilor de ofertă: hash-ul adresei IP a vizitatorului'],
 
         // ── Setările ──
         'settings' => ['mod' => 'setari', 'pastreaza' => ['key', 'value'], 'emailuri_publice' => 'textele site-ului (antet, subsol, '
@@ -397,6 +400,20 @@ return [
                 'source_url' => ['url_fara_interogare'],
                 'ip_address' => ['nul'],
                 'user_agent' => ['nul'],
+            ]],
+        // WP-26 (cereri_oferta/0037): cererile de ofertă, ca mesajele de contact (cine a cerut, ce a scris, nota adminului);
+        // produsul cerut (numele și adresa lui din catalog), starea și datele rămân.
+        'quote_requests' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'product_id', 'product_name', 'product_slug', 'status',
+            'consent_at', 'created_at', 'updated_at', 'deleted_at'],
+            'motive' => ['product_name' => 'numele produsului cerut, din catalog (public)'],
+            'transforma' => [
+                'name' => ['nume_client'],
+                'company' => ['firma'],
+                'email' => ['email'],
+                'phone' => ['telefon'],
+                'message' => ['text'],
+                'admin_note' => ['text'],
+                'source_url' => ['url_fara_interogare'],
             ]],
         'email_logs' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'order_id', 'email_type', 'status', 'sent_at', 'created_at'],
             'motive' => ['email_type' => 'felul emailului (de exemplu new_order), nu o adresă'],

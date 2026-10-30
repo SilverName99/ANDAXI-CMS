@@ -343,6 +343,8 @@ final class Auth
                 '/admin/products/templates',
                 '/admin/products/reviews',
                 '/admin/orders',
+                // WP-26 (GR-15): cererile de ofertă stau lângă comenzi (pe un catalog fără magazin, ele sunt comenzile).
+                '/admin/cereri-oferta',
                 '/admin/coupons',
                 '/admin/promo-products',
                 '/admin/settings/floating-cart',
