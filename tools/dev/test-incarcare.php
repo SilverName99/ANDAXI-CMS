@@ -573,13 +573,16 @@ foreach ($bv as $tabel => $coloane) {
     }
 }
 $vechiBv = [];
+// Coloane găsite doar pe baza live biovitality.ro, pe care codul Biovitality nu le face (deci nu sunt nici în bv.sql, care
+// e schema codului): regula lor rămâne, ca încărcarea de pe server să le știe.
+$doarPeLiveBv = ['product_templates.builder_json'];
 foreach ((array) $reguliBv->date['tabele'] as $tabel => $regula) {
     if (!isset($existenteBv[$tabel])) {
         $vechiBv[] = $tabel;
         continue;
     }
     foreach (array_merge((array) ($regula['pastreaza'] ?? []), array_keys((array) ($regula['transforma'] ?? []))) as $coloana) {
-        if (!isset($existenteBv[$tabel . '.' . $coloana])) {
+        if (!isset($existenteBv[$tabel . '.' . $coloana]) && !in_array($tabel . '.' . $coloana, $doarPeLiveBv, true)) {
             $vechiBv[] = $tabel . '.' . $coloana;
         }
     }
