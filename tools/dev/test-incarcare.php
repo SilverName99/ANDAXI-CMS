@@ -263,7 +263,8 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
-    'blog_post_categories', 'blog_templates', 'fan_localities', 'fan_localities_extra_km', 'fan_lockers', 'fan_nomenclator_sync', 'fan_streets', 'order_items',
+    'blog_post_categories', 'blog_templates', 'blog_tags', 'blog_post_tags', 'fan_localities', 'fan_localities_extra_km', 'fan_lockers',
+    'fan_nomenclator_sync', 'fan_streets', 'order_items',
     'order_promo_items', 'order_product_warnings', 'newsletter_lists', 'newsletter_list_subscribers', 'newsletter_templates', 'newsletter_optin_forms',
     'newsletter_campaigns'];
 $tipuriText = ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'set'];
@@ -599,7 +600,8 @@ foreach ($bv + $cms as $tabel => $coloane) {
 $verifica('Biovitality: fiecare coloană cu nume de date personale dintr-un tabel copiat e transformată sau păstrată cu motiv', $personaleBv === [], implode(', ', $personaleBv));
 // Oracolul pentru Biovitality: același oracol al clienților (tabelele lor sunt aceleași), plus tabelele doar ale Biovitality, clasificate aici.
 $oracolFaraRanduriBv = array_merge($oracolFaraRanduri, ['admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions']);
-$oracolPubliceBv = array_merge($oracolPublice, ['competition_partners', 'competition_prices', 'blog_tags', 'blog_post_tags']);
+// Etichetele blogului sunt din WP-22 și ale codului comun (blog/0033), deci în $oracolPublice.
+$oracolPubliceBv = array_merge($oracolPublice, ['competition_partners', 'competition_prices']);
 $schemaToataBv = $schemaToata;
 foreach ($bv as $tabel => $coloane) {
     $schemaToataBv[$tabel] = ($schemaToataBv[$tabel] ?? []) + $coloane;
