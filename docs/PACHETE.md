@@ -7,7 +7,7 @@ SEO, constantele tehnice, tema, înghețarea setărilor, lista schimbărilor pen
 
 | Unde | Ce |
 |---|---|
-| `site-uri/<site>/` | pachetele site-urilor existente: `bioscem`, `biovitality`, `vertij`, `grafoanaytis` |
+| `site-uri/<site>/` | pachetele site-urilor existente: `bioscem`, `biovitality`, `vertij`, `grafoanaytis`; local, baza de dezvoltare în forma unuia: `tools/dev/instaleaza.sh --site=<site>` |
 | `tools/dev/site-demo/` | pachetul inventat al site-ului de dezvoltare, **fără temă** (testele văd nucleul neschimbat) |
 | `tools/dev/site-demo-tema/` | o temă inventată, doar pentru testul temei (fiecare cheie altfel decât implicitul) |
 | pe server | dosarul din `SITE_DATE_DOSAR` (`.env`; gol = `site/` în rădăcina codului, ignorat de git); în Etapa 2 `~/domains/<d>/site/pachet/` |
@@ -186,7 +186,7 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   fiecare sha256, tema, copiile
   publice; altfel iese cu 1 și spune ce lipsește sau diferă). Un pachet lipsă sau stricat nu are voie să treacă
   neobservat: valorile ar reveni la cele implicite (de exemplu numele cookie-ului de acord: fiecare vizitator ar vedea
-  din nou bannerul). De aceea `site.json` și `tema/tema.json` sunt obligatorii în pachetul Bioscem, iar `/health` arată
+  din nou bannerul). De aceea `site.json` și `tema/tema.json` sunt obligatorii în pachetele Bioscem și Biovitality, iar `/health` arată
   pe al treilea rând `pachet: <primele 12 caractere ale sha256-ului lui pachet.json>` sau `pachet: lipsa` (WP-16).
 - **Deploy-ul din Etapa 2** (`actualizeaza.sh`) înlocuiește pachetul dintr-o bucată și refuză comutarea dacă
   verificarea pică (planul de-Bioscem §5.2).
@@ -201,4 +201,11 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   (G-pachet, `tools/dev/test-pachet-site.php bioscem|neutru`) compară valorile pachetului Bioscem cu cele scrise în
   codul Bioscem și caută numele unui client în paginile, emailurile și implicitele nucleului cu pachetul demo.
 - **Făcut în WP-17:** sarea semnăturii newsletterului în `site.json` (Bioscem, Biovitality, vertij, grafoanaytis). SEO B6: fonturile locale pentru Bioscem (`fonturi`).
+- **Făcut în pachetul Biovitality** (30 octombrie; ordinea proprietarului din 28 octombrie, B5: Biovitality e primul site pe
+  codul comun): `tema/tema.json` cu logo-ul sertarului din codul Biovitality (`tema/tema.json` obligatoriu, ca la Bioscem),
+  `README.md` (ce e și ce nu e în pachet, și de ce), baza de dezvoltare în forma unui site (`tools/dev/instaleaza.sh
+  --site=<site>`, înghețarea emulată de `tools/dev/pachet-site.php`; [DEZVOLTARE.md](DEZVOLTARE.md), „Baza în forma unui
+  site”) și `test-pachet-site.php biovitality` (valorile pachetului față de codul Biovitality, apoi baza servită cu el). Fără
+  `redirecturi.json` și `seo.json` (codul Biovitality n-are nimic de păstrat; SEO-ul lui la adoptare, în Faza E) și fără
+  `pluginuri.json` (WP-14). Banda partenerilor și restul temei Biovitality: Etapa 4 (P5).
 - Etapa 4: tema grafoanaytis (GR-19) și conținutul de pornire (`continut/`, GR-20).

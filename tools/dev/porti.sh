@@ -68,8 +68,8 @@ poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un sit
     "tools/dev/compara-calcule-local.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/compara-calcule-local.sh" WP-11
 poarta G-vizual "stilurile calculate ale paginilor publice față de codul Bioscem însuși, pe serverele lui G-cmp, licența „toate” și licența Bioscem (capturile, doar pentru ochi); întâi autotestul instrumentului" \
     "tools/dev/capturi-publice.sh --autotest ;; tools/dev/capturi-publice.sh ;; tools/dev/capturi-publice.sh --licenta=bioscem" WP-13
-poarta G-pachet "pachetul Bioscem și pachetul neutru" \
-    "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-16
+poarta G-pachet "pachetul Bioscem, pachetul Biovitality (cu baza în forma Biovitality) și pachetul neutru" \
+    "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php biovitality ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-16
 poarta G-lic "sincronizarea licenței cu CRM-ul (CRM fals)" "tools/dev/php.sh tools/dev/test-licenta-crm.php" WP-27
 poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de eticheta dinaintea refacerii" \
     "tools/dev/php.sh tools/dev/contract-admin.php" WP-29
@@ -121,6 +121,12 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # G-pachet (tools/dev/test-pachet-site.php) e adus de WP-16, nu de WP-14: ordinea proprietarului din 28 oct pune WP-16…WP-18
 # înaintea lui WP-14, iar porțile lor îl cer (valorile pachetului Bioscem față de codul Bioscem; nimic din lista neagră cu
 # pachetul demo). WP-14 îl mută pe baza cms_dev_bioscem și îi adaugă faza emailurilor.
+# Pachetul Biovitality (BV-pachet; ordinea proprietarului din 28 oct, pasul 3, și B5: Biovitality e primul site pe codul comun)
+# n-are un WP al lui în plan: e perechea lui WP-14 pentru Biovitality. G-pachet îi verifică valorile față de codul Biovitality și
+# baza în forma Biovitality (instaleaza.sh --site=biovitality); G-cmp și G-verif fiindcă date-demo.php (și în copia
+# demonstrativă de verificare) și instaleaza.sh s-au schimbat; G-smoke verifică pachetul (verifica-pachet.php) și înghețarea.
+# WP-11b (golden master-ul Biovitality): pe lângă porțile din plan, G-verif (regulile Biovitality ale încărcării, testate în
+# test-incarcare.php).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -134,7 +140,8 @@ declare -A PORTI=(
     [WP-09]="G-rute G-verif G-sonde G-cmp G-php"
     [WP-10]="G-rute G-sonde G-verif G-runner G-cmp G-php"
     [WP-11]="G-rute G-calc G-cmp G-cmp-istoric G-verif G-sonde G-php"
-    [WP-11b]="G-rute G-calc G-sonde G-cmp G-php"
+    [WP-11b]="G-rute G-calc G-verif G-sonde G-cmp G-php"
+    [BV-pachet]="G-rute G-pachet G-smoke G-cmp G-verif G-php"
     [WP-12]="G-rute G-mig G-cmp G-plug G-smoke G-php"
     [WP-12b]="G-rute G-mig G-cmp G-plug G-smoke G-calc G-verif G-sonde G-php"
     [WP-13]="G-rute G-mig G-cmp G-cmp-istoric G-vizual G-plug G-smoke G-seo G-php"
@@ -168,7 +175,7 @@ declare -A PORTI=(
     [WP-41]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
     [WP-R]="G-rute G-cmp G-cmp-istoric G-plug G-php"
 )
-ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b WP-12 WP-12b WP-13 WP-14
+ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33
 WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
 
@@ -200,12 +207,13 @@ fi
 
 # Porțile care citesc clonele codurilor vechi, la „ultimul commit revizuit” din docs/de-portat.md: comparația cu
 # Bioscem (și în testele pluginurilor, E, în golden master și în stilurile calculate, G-vizual) doar clona Bioscem; testul de fum (înghețarea
-# setărilor celor patru site-uri, și în G-php și G-vechi) și testele migrărilor (fixture-urile, T10) toate patru. O
+# setărilor celor patru site-uri, și în G-php și G-vechi), testele migrărilor (fixture-urile, T10) și testul pachetelor (Bioscem și
+# Biovitality, G-pachet) toate patru. O
 # clonă fără commit-ul ei oprește totul de la început, cu numele clonei, în loc de un eșec adânc într-o poartă.
 clone_cerute=""
 for p in $alese; do
     case "$p" in
-        G-smoke|G-php|G-mig|G-vechi) clone_cerute="toate" ;;
+        G-smoke|G-php|G-mig|G-vechi|G-pachet) clone_cerute="toate" ;;
         G-cmp|G-plug|G-plug-fiecare|G-calc|G-vizual) [ -n "$clone_cerute" ] || clone_cerute="bioscem" ;;
     esac
 done

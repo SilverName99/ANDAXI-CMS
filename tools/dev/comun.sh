@@ -13,6 +13,8 @@ set -euo pipefail
 
 RADACINA="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# Baza dată din mediu (alege_site_dev de mai jos nu o schimbă atunci).
+CMS_DEV_DB_DIN_MEDIU="${CMS_DEV_DB:-}"
 CMS_DEV_DB="${CMS_DEV_DB:-cms_dev}"
 CMS_DEV_SOCK="${CMS_DEV_SOCK:-/tmp/claude-0/maria/sock}"
 # Al doilea server, MySQL 8 (testele runner-ului de migrări rulează pe amândouă: pe Hostinger
@@ -70,6 +72,21 @@ verifica_mediul() {
 verifica_clonele() {
     "$CMS_DEV_PHP" "$RADACINA/tools/dev/de-portat.php" --verifica-clonele "$@" >/dev/null \
         || die "o clonă a codurilor vechi nu are commit-ul revizuit (mai sus); porțile care o citesc ar pica."
+}
+
+# --site=<site> (instaleaza.sh, server.sh): baza de dezvoltare în forma unui site existent, cu pachetul lui din
+# site-uri/<site>/ (docs/DEZVOLTARE.md, „Baza în forma unui site”): baza cms_dev_<site> (dacă CMS_DEV_DB nu e dat),
+# SITE_DATE_DOSAR spre pachet și licența într-un dosar al ei ($CMS_DEV_DIR/licenta-<site>), ca storage/licenta (licența
+# „toate” a bazei cms_dev) să rămână neatinsă. Se cheamă înaintea lui exporta_mediul_aplicatiei.
+alege_site_dev() {
+    local site="$1"
+    [[ "$site" =~ ^[a-z0-9][a-z0-9-]{0,40}$ ]] && [ -f "$RADACINA/site-uri/$site/pachet.json" ] \
+        || die "--site=$site: nu există pachetul site-uri/$site/ (bioscem, biovitality, vertij, grafoanaytis)"
+    CMS_DEV_SITE="$site"
+    [ -n "$CMS_DEV_DB_DIN_MEDIU" ] || CMS_DEV_DB="cms_dev_${site//-/_}"
+    export SITE_DATE_DOSAR="$RADACINA/site-uri/$site"
+    export CMS_DEV_LICENTA_DOSAR="${CMS_DEV_LICENTA_DOSAR:-$CMS_DEV_DIR/licenta-$site}"
+    mkdir -p "$CMS_DEV_LICENTA_DOSAR"
 }
 
 parola_admin() {

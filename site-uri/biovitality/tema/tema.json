@@ -1,0 +1,8 @@
+{
+    "_despre": "Tema Biovitality: doar ce scotea nucleul din codul Biovitality (docs/PACHETE.md, „Tema”). Logo-ul sertarului de meniu mobil ({{mobile_menu}}) e cel din views/layout.php al codului Biovitality: o singură poză, fără alte variante căutate, cu textul alternativ „BioVitality”. Restul cheilor lipsesc, deci au implicitul nucleului. Banda partenerilor și scripturile ei (P5) vin cu tema completă a site-ului, în Etapa 4.",
+    "logo_meniu_mobil": {
+        "candidati": [],
+        "implicit": "/uploads/gallery/biovitality-logo.png",
+        "alt": "BioVitality"
+    }
+}

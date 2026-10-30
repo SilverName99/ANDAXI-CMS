@@ -20,6 +20,10 @@ declare(strict_types=1);
  *  2. scrie datele demo: categorii, ~40 de produse, clienți, ~60 de comenzi,
  *     cupoane, puncte de fidelitate, recenzii, blog, newsletter, pagini.
  *
+ * Cu `--site=<site>` (tools/dev/instaleaza.sh --site=<site>, baza în forma unui site existent) mai pune și un antet
+ * inventat în bază (`design_header_html`) cu {{menu}}, {{cart_count}} și {{mobile_menu}}: site-urile existente au antetul
+ * lor în bază, deci se vede sertarul de meniu mobil cu logo-ul temei din pachet, nu antetul de rezervă al nucleului.
+ *
  * Refuză să ruleze pe o bază al cărei nume nu începe cu „cms_”.
  *
  * Singura excepție: copia demonstrativă de pe site-ul de verificare (tools/verificare/incarca.php --demo, decizia
@@ -49,6 +53,16 @@ $refuza = static function (string $mesaj) use ($peVerificare): never {
     fwrite(STDERR, $mesaj . "\n");
     exit(1);
 };
+
+$siteDemo = null;
+// Pe copia demonstrativă de verificare fișierul se încarcă dintr-o unealtă: argumentele ei nu sunt ale acestui fișier.
+foreach ($peVerificare ? [] : array_slice($argv ?? [], 1) as $argument) {
+    if (preg_match('/^--site=([a-z0-9][a-z0-9-]{0,40})$/', (string) $argument, $m) === 1 && is_file(__DIR__ . '/../../site-uri/' . $m[1] . '/pachet.json')) {
+        $siteDemo = $m[1];
+        continue;
+    }
+    $refuza('argument necunoscut: ' . $argument . ' (doar --site=<un pachet din site-uri/>)');
+}
 
 $config = require __DIR__ . '/../../config/app.php';
 $numeBaza = (string) ($config['db']['database'] ?? '');
@@ -820,6 +834,13 @@ $insPagina = $db->prepare(
 );
 foreach ($pagini as [$titlu, $slug, $html]) {
     $insPagina->execute(['t' => $titlu, 's' => $slug, 'h' => $html]);
+}
+
+if ($siteDemo !== null) {
+    // Antetul inventat al unui site existent (cu sertarul de meniu mobil, ca antetele lor din bază).
+    Settings::save($db, ['design_header_html' => '<header class="antet-demo-site"><a href="/" class="antet-demo-site__logo">Firma Demo</a>'
+        . '<nav class="antet-demo-site__meniu">{{menu}}</nav><a href="/cos" class="antet-demo-site__cos">Coș ({{cart_count}})</a>{{mobile_menu}}</header>']);
+    echo 'Antetul demo al site-ului ' . $siteDemo . " (cu {{cart_count}} și {{mobile_menu}}).\n";
 }
 
 $sumar = [

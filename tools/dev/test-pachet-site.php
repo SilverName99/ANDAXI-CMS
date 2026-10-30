@@ -8,6 +8,8 @@ declare(strict_types=1);
  *
  *   tools/dev/php.sh tools/dev/test-pachet-site.php bioscem   # pachetul Bioscem dă exact valorile codului Bioscem
  *   tools/dev/php.sh tools/dev/test-pachet-site.php neutru    # pachetul demo: niciun nume de client, nicăieri
+ *   tools/dev/php.sh tools/dev/test-pachet-site.php biovitality  # pachetul Biovitality dă valorile codului Biovitality, plus
+ *                                                            # baza în forma Biovitality servită cu el (tools/dev/lib/test-pachet-biovitality.php)
  *
  * **bioscem** (fără server; pachetul site-uri/bioscem/ și înghețarea lui, cu valorile private din privat/, pe care le
  * scrie local tools/inghetare/genereaza-setari.php): fiecare valoare se compară cu cea scrisă în codul Bioscem însuși, la
@@ -58,12 +60,12 @@ if (PHP_SAPI !== 'cli') {
 
 $radacina = dirname(__DIR__, 2);
 $mod = (string) ($argv[1] ?? '');
-if (!in_array($mod, ['bioscem', 'neutru'], true)) {
-    fwrite(STDERR, "folosire: tools/dev/php.sh tools/dev/test-pachet-site.php bioscem|neutru\n");
+if (!in_array($mod, ['bioscem', 'biovitality', 'neutru'], true)) {
+    fwrite(STDERR, "folosire: tools/dev/php.sh tools/dev/test-pachet-site.php bioscem|biovitality|neutru\n");
     exit(2);
 }
 // Pachetul încercat se alege înaintea primei citiri (DateSite ține minte dosarul).
-putenv('SITE_DATE_DOSAR=' . ($mod === 'bioscem' ? $radacina . '/site-uri/bioscem' : $radacina . '/tools/dev/site-demo'));
+putenv('SITE_DATE_DOSAR=' . ($mod !== 'neutru' ? $radacina . '/site-uri/' . $mod : $radacina . '/tools/dev/site-demo'));
 $_ENV['SITE_DATE_DOSAR'] = getenv('SITE_DATE_DOSAR');
 require_once $radacina . '/bootstrap.php';
 require_once __DIR__ . '/lib/salvari-admin.php';
@@ -327,6 +329,13 @@ if ($mod === 'bioscem') {
     }
     $scrie('test-pachet-site bioscem: ' . $verificari . ' verificări, ' . $esecuri . ' greșite');
     exit($esecuri === 0 ? 0 : 1);
+}
+
+// =====================================================================
+// biovitality (pachetul Biovitality, B5: primul site pe codul comun)
+// =====================================================================
+if ($mod === 'biovitality') {
+    require __DIR__ . '/lib/test-pachet-biovitality.php';
 }
 
 // =====================================================================
