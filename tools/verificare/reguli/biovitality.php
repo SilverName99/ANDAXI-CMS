@@ -42,7 +42,7 @@ $reguli['site'] = 'biovitality';
 // Versiunea Biovitality urmează versiunea regulilor Bioscem (sutele) și pe a ei (unitățile): o schimbare în oricare face o
 // încărcare oprită să nu mai fie continuată cu --reia. 1 (WP-11b): prima. 2 (revizuirea WP-11b): blog_posts.wp_post_id și
 // lista albă a setărilor (cea Biovitality, mai jos).
-$reguli['versiune'] = $reguli['versiune'] * 100 + 3;
+$reguli['versiune'] = $reguli['versiune'] * 100 + 4;
 $reguli['schema'] = 'Mutare-Site-Biovitality@779e0d8 (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
 $reguli['pachet'] = 'biovitality';
@@ -90,5 +90,13 @@ $reguli['setari']['zero'][] = 'bunny_enabled';
 // ale celui Bioscem; o altă cheie a sursei oprește încărcarea.
 $cunoscute = require __DIR__ . '/setari-cunoscute.php';
 $reguli['setari']['cunoscute'] = array_values(array_unique(array_merge($cunoscute['nucleu'], $cunoscute['biovitality'])));
+// Găsite la prima încărcare de pe server (30 oct 2026): tipografia temei (culoarea, fontul și mărimea textului și a
+// titlurilor), rămasă în baza biovitality.ro de la un editor de temă pe care codul de azi nu-l mai are. Doar aspect, nimic
+// secret sau personal: se copiază ca atare.
+foreach (['body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as $element) {
+    foreach (['color', 'font_family', 'font_size'] as $proprietate) {
+        $reguli['setari']['cunoscute'][] = 'typo_' . $element . '_' . $proprietate;
+    }
+}
 
 return $reguli;
