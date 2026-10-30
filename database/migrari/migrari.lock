@@ -29,7 +29,8 @@
         "magazin/0028_transport_gratuit": "f736aa28ed6db68f6a5966d6e319c7933fc8c114dccfc000b5858de758e7a62a",
         "recenzii/0030_recenzii_spam": "1349f5ac86315459cde12dff8581518fd3dbb4258f2220b042a2f222f44c1f51",
         "produse_promo/0031_promo_dat_la": "d148b3d837e73cfb4f18bc737d75199ab7cca1ef1fa8895619c33bacb84d6c22",
-        "magazin/0032_avertismente_produse": "d417010739268abcf7b02a2320ae335f46da1db78ad6c79c6156c47dda06a853"
+        "magazin/0032_avertismente_produse": "d417010739268abcf7b02a2320ae335f46da1db78ad6c79c6156c47dda06a853",
+        "blog/0033_blog_avansat": "b6f94a2f6fda359d14247efae2076b1650cea5895190dc49d8dc0e2e7b50c2a9"
     },
     "retrase": {}
 }

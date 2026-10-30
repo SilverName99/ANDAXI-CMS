@@ -63,7 +63,9 @@ return [
     // 5 (WP-21): adresa de la care a venit o recenzie golită, marcajul de spam păstrat (recenzii/0030); „dat de” al produselor
     // promoționale (emailul adminului, produse_promo/0031) cu pseudonimul lui, „dat la” păstrat.
     // 6 (revizuirea WP-11b): lista albă a cheilor de setări (o cheie necunoscută și neneutralizată oprește încărcarea).
-    'versiune' => 6,
+    // 7 (WP-22): blogul avansat (blog/0033): lățimea copertei, bibliografia și id-ul din WordPress ale articolelor, etichetele
+    // și legăturile lor, copiate cum sunt (conținut public).
+    'versiune' => 7,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -80,7 +82,7 @@ return [
             'promotional_products', 'loyalty_points_rules'],
         'catalog' => ['product_categories', 'products', 'product_category_links', 'product_extra_fields', 'product_extra_field_values',
             'product_templates', 'product_template_fields', 'product_warnings'],
-        'blog' => ['blog_authors', 'blog_categories', 'blog_posts', 'blog_post_categories', 'blog_templates'],
+        'blog' => ['blog_authors', 'blog_categories', 'blog_posts', 'blog_post_categories', 'blog_templates', 'blog_tags', 'blog_post_tags'],
         'fan' => ['fan_localities', 'fan_localities_extra_km', 'fan_lockers', 'fan_nomenclator_sync', 'fan_streets'],
         'comenzi' => ['coupons', 'users', 'user_addresses', 'orders', 'order_items', 'order_payment_links', 'bt_ipay_transactions',
             'loyalty_points_transactions', 'order_promo_items', 'order_product_warnings'],
@@ -167,9 +169,14 @@ return [
             'motive' => ['name' => 'numele categoriei']],
         'blog_posts' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'title', 'slug', 'excerpt', 'category', 'category_id', 'event_start_date',
             'event_end_date', 'event_price', 'event_ticket_url', 'event_location', 'content', 'reading_minutes', 'published_at', 'is_published',
-            'template_id', 'author_id', 'featured_image_url', 'video_url', 'deleted_at', 'created_at', 'updated_at'],
+            'template_id', 'author_id', 'featured_image_url', 'video_url', 'deleted_at', 'created_at', 'updated_at',
+            // WP-22 (blog/0033): lățimea copertei, bibliografia (conținut public al articolului), id-ul articolului în WordPress.
+            'featured_image_width', 'references_html', 'wp_post_id'],
             'emailuri_publice' => 'articolele pot avea adresa magazinului sau a unui organizator de eveniment, publice'],
         'blog_post_categories' => ['mod' => 'copiaza', 'pastreaza' => ['post_id', 'category_id']],
+        // WP-22 (blog/0033): etichetele articolelor (publice) și legăturile lor.
+        'blog_tags' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele public al unei etichete de blog']],
+        'blog_post_tags' => ['mod' => 'copiaza', 'pastreaza' => ['post_id', 'tag_id']],
         'blog_templates' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'description', 'html_content', 'css_content', 'js_content',
             'is_active', 'created_at', 'updated_at'], 'motive' => ['name' => 'numele unui șablon'],
             'emailuri_publice' => 'șabloanele articolelor pot avea adresa magazinului'],

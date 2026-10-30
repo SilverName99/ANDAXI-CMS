@@ -949,6 +949,39 @@ $deBioscem = [
         'vechi' => 'placeholder="contact@bioscem.ro, comenzi@bioscem.ro"',
         'motiv' => 'WP-16 (A7): exemplul din câmpul gol nu mai poartă adresele unui client.',
     ],
+    // WP-22 (DB-13, D7): autorul articolelor de exemplu din previzualizarea listei de articole a editorului de pagini (când
+    // baza n-are articole de arătat acolo) nu mai poartă numele unui client. Pe site, /blog e identic.
+    [
+        'nume' => 'Pagini → previzualizarea {{blog_posts}}: poza autorului articolelor de exemplu',
+        'cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'],
+        'nou' => 'alt=\\u0022Autor demo\\u0022',
+        'vechi' => 'alt=\\u0022Echipa Bioscem\\u0022',
+        'motiv' => 'WP-22 (DB-13, D7): articolul de exemplu din previzualizarea editorului de pagini avea autorul „Echipa Bioscem”; acum '
+            . '„Autor demo” (textul alternativ al pozei autorului, în JSON-ul previzualizării). Doar în admin.',
+    ],
+    [
+        'nume' => 'Pagini → previzualizarea {{blog_posts}}: numele autorului articolelor de exemplu',
+        'cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'],
+        'nou' => '\\u003Cspan\\u003EAutor demo\\u003C/span\\u003E',
+        'vechi' => '\\u003Cspan\\u003EEchipa Bioscem\\u003C/span\\u003E',
+        'motiv' => 'WP-22 (DB-13, D7): perechea rândului de mai sus (numele scris sub poză).',
+    ],
+    [
+        'nume' => 'editorul șabloanelor de blog: autorul din datele de exemplu ale previzualizării',
+        'cale' => '/admin/blog/templates/' . $idSablonBlogEditor . '/builder',
+        'nou' => "'{{blog_author_name}}': 'Autor demo',",
+        'vechi' => "'{{blog_author_name}}': 'Echipa Bioscem',",
+        'motiv' => 'WP-22 (DB-13, D7): datele de exemplu cu care editorul arată un șablon nu mai poartă numele unui client.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'editorul șabloanelor de blog: linkul autorului din datele de exemplu ale previzualizării',
+        'cale' => '/admin/blog/templates/' . $idSablonBlogEditor . '/builder',
+        'nou' => "'{{blog_author_url}}': '/blog?autor=autor-demo',",
+        'vechi' => "'{{blog_author_url}}': '/blog?autor=echipa-bioscem',",
+        'motiv' => 'WP-22 (DB-13, D7): perechea rândului de mai sus.',
+        'mod' => 'repo',
+    ],
     // WP-12 (X1b): o postare importată cu categoria doar ca text. Paginile se cer în cazurile de salvare „blog: …
     // categoria doar ca text …” (mai jos), deci doar față de codul Bioscem (ca editorul postării, cu diferențele portului
     // vertij); site-uri/bioscem/ce-se-schimba.md.
@@ -1088,6 +1121,24 @@ $porturiBiovitality = [
         'motiv' => 'Biovitality 9cca65b (WP-21 C13): la sute de rânduri, fereastra „Cui a fost dat” curgea peste pagină; acum derulează '
             . 'doar lista, cu totalul sus.',
     ],
+];
+// WP-22 (B2, Biovitality 9c549c7): lista tokenurilor din editorul șabloanelor de blog are cele patru tokenuri noi ale
+// articolului (pagina cerută de cazul de salvare „editorul șabloanelor de blog”, pe un șablon făcut acolo).
+$tokenuriBlogNoi = '';
+foreach (['Cuprins (din titlurile articolului)' => '{{blog_toc}}', 'Referințe (bibliografie)' => '{{blog_references}}',
+    'Etichete' => '{{blog_tags}}', 'Articole similare' => '{{blog_related_posts}}'] as $etichetaToken => $tokenNou) {
+    $tokenuriBlogNoi .= "                                    <div style=\"padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;\">\n"
+        . "                        <strong style=\"display:block;font-size:13px;\">" . $etichetaToken . "</strong>\n"
+        . "                        <code>" . $tokenNou . "</code>\n                    </div>\n";
+}
+$porturiBiovitality[] = [
+    'nume' => 'editorul șabloanelor de blog: tokenurile cuprinsului, bibliografiei, etichetelor și articolelor similare',
+    'cale' => '/admin/blog/templates/' . $idSablonBlogEditor . '/builder',
+    'nou' => $tokenuriBlogNoi,
+    'vechi' => '',
+    'motiv' => 'Biovitality 9c549c7 (WP-22 B2): {{blog_toc}}, {{blog_references}}, {{blog_tags}} și {{blog_related_posts}} se pot pune în '
+        . 'șablonul articolului; pe site, un șablon fără ele arată ca înainte.',
+    'mod' => 'repo',
 ];
 // WP-21 (C11c, C11d; Biovitality b9fcaf8, 84e29a9): constructorul de emailuri, blocul „Video / TikTok” și fundalul blocurilor
 // din coloane; textele (codul Bioscem → codul de acum) în tools/dev/lib/declaratii-wp21-constructor.php, pe pagina
@@ -2638,6 +2689,45 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 '<div class="video-test__player"><video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;">'
                 . '<source src="/uploads/gallery/film-de-test.mp4" type="video/mp4">Browserul tău nu suportă redarea video.</video></div>')
                 ? [] : ['postarea nu are videoul .mp4 în <video>'],
+        ],
+        [
+            // WP-22 (Biovitality 9c549c7, 263b520; DB-13): cu blogul avansat oprit (blog_avansat = 0, înghețarea Bioscem)
+            // articolul rămâne cel de dinainte și cu un șablon care are secțiunea veche „Articole interesante” (umplută din
+            // JavaScript, data-blog-related-list): titlurile fără ancore, fără cuprins, secțiunea neatinsă; categoria și
+            // inițiala autorului unui articol fără ele vin din înghețare („Jurnal Bioscem”, „B”); /blog ignoră ?q=,
+            // ?categorie= și ?eticheta= (lista întreagă, fără căutare).
+            'nume' => 'blog: blogul avansat oprit lasă articolul (șablon cu „Articole interesante”) și /blog cu filtre ca înainte',
+            'sursa' => 'Biovitality',
+            'din' => '9c549c7',
+            'tip' => 'regresie',
+            'tabele' => [
+                ['tabel' => 'blog_posts', 'unde' => 'id = :p1', 'param' => ['p1' => $idPostare], 'cheie' => 'id'],
+                ['tabel' => 'blog_templates', 'unde' => 'id > :t1', 'param' => ['t1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_templates')],
+                    'cheie' => 'id'],
+            ],
+            'pregateste' => static function (PDO $db) use ($idPostare): void {
+                $db->prepare('INSERT INTO blog_templates (name, slug, description, html_content, css_content, js_content, is_active)
+                    VALUES (?, ?, ?, ?, \'\', \'\', 1)')->execute(['Articol cu articole interesante (test)', 'articol-interesante-test-' . getmypid(), '',
+                    '<article class="leg"><span class="leg__cat">{{blog_category}}</span><span class="leg__ini">{{blog_author_initials}}</span>'
+                    . '<h1>{{blog_title}}</h1><div class="leg__content">{{blog_content_html}}</div><section class="leg__related" data-blog-related>'
+                    . '<h2>Articole interesante</h2><div class="leg__related-grid" data-blog-related-list></div></section></article>']);
+                $db->prepare('UPDATE blog_posts SET template_id = :t, category = NULL, author_id = NULL, content = :c WHERE id = :id')->execute([
+                    't' => (int) $db->lastInsertId(), 'id' => $idPostare,
+                    'c' => '<h2>Primul titlu</h2><p>Unu [1].</p><h3>Al doilea titlu</h3><p>Doi.</p><h2>Al treilea</h2><p>Trei.</p>']);
+            },
+            'cereri' => [
+                ['GET', '/blog/' . (string) ($postare['slug'] ?? ''), [], 'viz'],
+                ['GET', '/blog?q=ceai&categorie=noutati&eticheta=nu-exista', [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => array_merge(
+                $contine($raspunsuri[0], '<h2>Primul titlu</h2><p>Unu [1].</p><h3>Al doilea titlu</h3>') ? [] : ['titlurile articolului nu mai sunt cele scrise'],
+                $contine($raspunsuri[0], '<h2>Articole interesante</h2><div class="leg__related-grid" data-blog-related-list></div>')
+                    ? [] : ['secțiunea „Articole interesante” nu mai e cea din șablon'],
+                $contine($raspunsuri[0], '<span class="leg__cat">Jurnal Bioscem</span><span class="leg__ini">B</span>')
+                    ? [] : ['categoria sau inițiala unui articol fără ele nu e cea a Bioscem'],
+                $contine($raspunsuri[1], 'Articol recent') && !$contine($raspunsuri[1], 'blog-search') ? [] : ['/blog cu filtre nu e lista întreagă'],
+            ),
         ],
         [
             // Port din vertij (0fc2b2c, App\Support\VideoEmbed), cu acordul pentru cookie-uri de la revizuirea portului: un

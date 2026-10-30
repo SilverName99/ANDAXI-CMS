@@ -373,7 +373,9 @@ return [
 
         'blog' => [
             'nume' => 'Blog',
-            'descriere' => 'Articole, categorii, autori, șabloane de articol și evenimente.',
+            // WP-22 (B1): blogul avansat din Biovitality (etichete, căutare, cuprins, bibliografie, articole similare).
+            'descriere' => 'Articole, categorii, etichete, autori, șabloane de articol și evenimente; căutare și filtrare în '
+                . 'listă, cuprins, bibliografie și articole similare în articol.',
             'necesita' => [],
             'rute_admin' => ['/admin/blog/*'],
             'rute_publice' => ['/blog/*', '/api/blog/*'],
@@ -390,7 +392,8 @@ return [
                 ['grup' => 'blog', 'ordine' => 40, 'eticheta' => 'Autori blog', 'href' => '/admin/blog/authors', 'icon' => 'users',
                     'activ' => ['/admin/blog/authors']],
             ],
-            'tabele' => ['blog_posts', 'blog_categories', 'blog_post_categories', 'blog_authors', 'blog_templates'],
+            'tabele' => ['blog_posts', 'blog_categories', 'blog_post_categories', 'blog_authors', 'blog_templates', 'blog_tags',
+                'blog_post_tags'],
         ],
 
         'newsletter' => [

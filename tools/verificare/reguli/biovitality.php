@@ -16,11 +16,11 @@ declare(strict_types=1);
  *   `file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota lui și căile documentelor
  *   firmei, care pot avea nume de oameni; pluginul `fisiere_cloud` nu e portat, deci copia nu le folosește);
  * - **copiate cum sunt:** `competition_partners`, `competition_prices` (concurenții și prețurile lor: date de business ale
- *   produselor, publice), `blog_tags`, `blog_post_tags` (etichetele blogului); coloanele Biovitality ale tabelelor comune:
- *   `products.bundle_items_json` (din ce produse e făcut un pachet), `blog_posts.references_html` și
- *   `blog_posts.featured_image_width` (conținutul public al articolelor), `blog_posts.wp_post_id` (id-ul articolului în
- *   WordPress-ul vechi; o pune importul `scripts/import-wordpress-posts.php` al codului Biovitality, nu instalarea, deci nu e
- *   în bv.sql, dar e pe site: setul tools/verificare/seturi/biovitality.php o numără);
+ *   produselor, publice); coloana Biovitality a tabelelor comune `products.bundle_items_json` (din ce produse e făcut un
+ *   pachet). Etichetele blogului (`blog_tags`, `blog_post_tags`) și coloanele `blog_posts.references_html`,
+ *   `featured_image_width`, `wp_post_id` le are din WP-22 și codul comun (migrarea blog/0033), deci regulile lor sunt cele
+ *   Bioscem (`wp_post_id` o pune importul `scripts/import-wordpress-posts.php` al codului Biovitality, nu instalarea, deci nu
+ *   e în bv.sql, dar e pe site: setul tools/verificare/seturi/biovitality.php o numără);
  * - **ca la Bioscem:** id-urile Stripe ale comenzilor (`orders.stripe_session_id`, `stripe_payment_intent_id`) devin
  *   `anon-<id>` (regula `ref`; nu există o coloană a clientului Stripe în codul Biovitality), procesatorul linkurilor de
  *   plată (`order_payment_links.procesator`) rămâne, clienții importați din WordPress au parola înlocuită (`users`, ca toate
@@ -41,16 +41,16 @@ if (!is_array($reguli) || ($reguli['site'] ?? null) !== 'bioscem' || !is_int($re
 $reguli['site'] = 'biovitality';
 // Versiunea Biovitality urmează versiunea regulilor Bioscem (sutele) și pe a ei (unitățile): o schimbare în oricare face o
 // încărcare oprită să nu mai fie continuată cu --reia. 1 (WP-11b): prima. 2 (revizuirea WP-11b): blog_posts.wp_post_id și
-// lista albă a setărilor (cea Biovitality, mai jos).
-$reguli['versiune'] = $reguli['versiune'] * 100 + 4;
+// lista albă a setărilor (cea Biovitality, mai jos). 3, 4: product_templates.builder_json, tipografia temei (typo_*),
+// găsite la prima încărcare de pe server. 5 (WP-22): etichetele și coloanele blogului avansat trec în regulile Bioscem
+// (codul comun le are acum, blog/0033).
+$reguli['versiune'] = $reguli['versiune'] * 100 + 5;
 $reguli['schema'] = 'Mutare-Site-Biovitality@779e0d8 (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
 $reguli['pachet'] = 'biovitality';
 
 $reguli['grupuri']['catalog'][] = 'competition_partners';
 $reguli['grupuri']['catalog'][] = 'competition_prices';
-$reguli['grupuri']['blog'][] = 'blog_tags';
-$reguli['grupuri']['blog'][] = 'blog_post_tags';
 
 $reguli['tabele'] += [
     // ── Doar structura (Biovitality) ──
@@ -65,17 +65,10 @@ $reguli['tabele'] += [
         'sort_order', 'created_at'], 'motive' => ['name' => 'numele unui magazin concurent (o firmă, public)']],
     'competition_prices' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'partner_id', 'product_id', 'price', 'campaign_active', 'campaign_price', 'campaign_start',
         'campaign_end', 'out_of_stock', 'only_in_store', 'product_url', 'updated_at']],
-
-    // ── Etichetele blogului (publice) ──
-    'blog_tags' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele public al unei etichete de blog']],
-    'blog_post_tags' => ['mod' => 'copiaza', 'pastreaza' => ['post_id', 'tag_id']],
 ];
 
-// Coloanele Biovitality ale tabelelor comune (conținut public).
+// Coloana Biovitality a tabelelor comune (conținut public).
 $reguli['tabele']['products']['pastreaza'][] = 'bundle_items_json';
-$reguli['tabele']['blog_posts']['pastreaza'][] = 'references_html';
-$reguli['tabele']['blog_posts']['pastreaza'][] = 'featured_image_width';
-$reguli['tabele']['blog_posts']['pastreaza'][] = 'wp_post_id';
 // Găsită la prima încărcare de pe server (30 oct 2026): coloana există în baza biovitality.ro, dar niciun cod din
 // depozite n-o scrie sau citește. E machetarea unui șablon de pagină de produs, făcută de admin: conținut public.
 $reguli['tabele']['product_templates']['pastreaza'][] = 'builder_json';

@@ -41,6 +41,13 @@ final class SiteController
     private const GDPR_AGREEMENTS_FORM_TOKEN = '{{gdpr_agreements_form}}';
     private const CHECKOUT_SUCCESS_ORDER_INFO_TOKEN = '{{checkout_success_order_info}}';
     private const BLOG_POSTS_PER_PAGE = 13;
+
+    /**
+     * Colația în care căutarea din blog ignoră diacriticele, ca „sanatate" să
+     * găsească și „sănătate". Dacă serverul n-o acceptă pe coloanele astea,
+     * căutarea se reface fără ea și rămâne o potrivire obișnuită.
+     */
+    private const BLOG_SEARCH_COLLATION = ' COLLATE utf8mb4_unicode_ci';
     private const FAN_LOCALITIES_API_ENDPOINT = '/api/fan/localities';
     private const CHECKOUT_SHIPPING_QUOTE_API_ENDPOINT = '/api/checkout/shipping-quote';
     private const CHECKOUT_ANTIBOT_SESSION_KEY = 'checkout_antibot_tokens';
@@ -601,30 +608,64 @@ final class SiteController
 
     public function blog(): void
     {
+        // Filtrele din adresă (?q=, ?categorie=, ?eticheta=) le citește doar blogul avansat (WP-22); fără el, /blog e
+        // pagina de dinainte, oricare ar fi adresa.
         $db = $this->db();
+        $this->renderBlogIndex(
+            \App\Support\BlogAvansat::pornit($this->cachedSettings($db instanceof PDO ? $db : null)) ? $this->requestBlogFilter() : []
+        );
+    }
+
+    /**
+     * Pagina de blog, cu sau fără filtre (WP-22: B3, din Biovitality 263b520). Aceeași pagină din admin, doar că
+     * lista dinăuntru știe de categorie, etichetă și căutare.
+     *
+     * @param array{category?: string, tag?: string, q?: string} $filtru
+     */
+    private function renderBlogIndex(array $filtru = []): void
+    {
+        $db = $this->db();
+        $pdo = $db instanceof PDO ? $db : null;
         $blogPage = $this->findPublishedPageBySlug('blog');
         // A11: titlul listei („Blog & Resurse”) e H1-ul paginii, când textul ei n-are deja unul.
         $blogPostsHtml = $this->renderBlogPostsSection(
-            $db instanceof PDO ? $db : null,
-            \App\Support\SeoIndexare::titluBlogCaH1(is_array($blogPage) ? (string) ($blogPage['html_content'] ?? '') : '{{blog_posts}}')
+            $pdo,
+            \App\Support\SeoIndexare::titluBlogCaH1(is_array($blogPage) ? (string) ($blogPage['html_content'] ?? '') : '{{blog_posts}}'),
+            $filtru
         );
         // /blog fără niciun articol publicat: noindex,follow (decizia D7, A10).
-        $robots = \App\Support\SeoIndexare::pentruBlog(count($this->loadPublishedBlogPosts($db instanceof PDO ? $db : null, 1)));
+        $robots = \App\Support\SeoIndexare::pentruBlog(count($this->loadPublishedBlogPosts($pdo, 1)));
+
+        // Titlul spune pe ce s-a filtrat, altfel toate paginile de categorie ar avea același titlu ca /blog și s-ar
+        // bate cap în cap în Google.
+        $titluFiltru = '';
+        if (trim((string) ($filtru['category'] ?? '')) !== '') {
+            $titluFiltru = $this->loadBlogTermName($pdo, 'blog_categories', (string) $filtru['category']);
+        } elseif (trim((string) ($filtru['tag'] ?? '')) !== '') {
+            $nume = $this->loadBlogTermName($pdo, 'blog_tags', (string) $filtru['tag']);
+            $titluFiltru = $nume !== '' ? ('Eticheta: ' . $nume) : '';
+        } elseif (trim((string) ($filtru['q'] ?? '')) !== '') {
+            $titluFiltru = 'Căutare: ' . trim((string) $filtru['q']);
+        }
+
         if (is_array($blogPage)) {
-            $settings = $this->cachedSettings($db instanceof PDO ? $db : null);
+            $settings = $this->cachedSettings($pdo);
             $titlu = (string) ($blogPage['title'] ?? 'Blog');
             View::render('site/custom-page', array_merge([
-                'title' => $titlu,
+                'title' => $titluFiltru !== '' ? ($titluFiltru . ' — ' . $titlu) : $titlu,
                 'page' => $blogPage,
-                'mannequinSectionHtml' => $this->renderMannequinSection($db instanceof PDO ? $db : null, $settings),
+                'mannequinSectionHtml' => $this->renderMannequinSection($pdo, $settings),
                 'blogPostsHtml' => $blogPostsHtml,
                 'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina($titlu, 'blog', (string) ($blogPage['html_content'] ?? '')),
-            ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $blogPage), $robots));
+            ], $titluFiltru !== ''
+                // Pe pagina filtrată nu folosim meta-urile paginii de blog: ar descrie altceva decât se vede.
+                ? []
+                : $this->customPageSeoMeta($pdo, $blogPage), $robots));
             return;
         }
 
         View::render('site/custom-page', array_merge([
-            'title' => 'Blog',
+            'title' => $titluFiltru !== '' ? ($titluFiltru . ' — Blog') : 'Blog',
             'page' => [
                 'html_content' => '{{blog_posts}}',
                 'css_content' => '',
@@ -692,7 +733,7 @@ final class SiteController
             return;
         }
 
-        $render = $this->buildBlogTemplateRender($post);
+        $render = $this->buildBlogTemplateRender($post, $db);
         $seoMeta = $this->seoMetaFor($db, 'blog_post', (string) ((int) ($post['id'] ?? 0)));
         View::render('site/custom-page', array_merge([
             'title' => (string) ($post['title'] ?? 'Articol'),
@@ -5143,15 +5184,50 @@ final class SiteController
     /**
      * Lista de articole ({{blog_posts}}). $titluH1: titlul listei („Blog & Resurse”)
      * e scris ca <h1>, cu aceleași stiluri, pentru că e H1-ul paginii /blog (A11).
+     * $filtru (WP-22: B3, din Biovitality 263b520): categoria, eticheta și căutarea; fără, lista de dinainte.
+     *
+     * @param array{category?: string, tag?: string, q?: string} $filtru
      */
-    private function renderBlogPostsSection(?PDO $db, bool $titluH1 = false): string
+    private function renderBlogPostsSection(?PDO $db, bool $titluH1 = false, array $filtru = []): string
     {
+        $filtru = [
+            'category' => trim((string) ($filtru['category'] ?? '')),
+            'tag' => trim((string) ($filtru['tag'] ?? '')),
+            'q' => trim((string) ($filtru['q'] ?? '')),
+        ];
+        $areFiltru = $filtru['category'] !== '' || $filtru['tag'] !== '' || $filtru['q'] !== '';
+        $settings = $this->cachedSettings($db);
+        $avansat = \App\Support\BlogAvansat::pornit($settings);
+
         $perPage = self::BLOG_POSTS_PER_PAGE;
-        $totalPosts = $this->countPublishedBlogPosts($db);
+        $totalPosts = $this->countPublishedBlogPosts($db, $filtru);
         $totalPages = max(1, (int) ceil($totalPosts / $perPage));
         $currentPage = min($this->requestBlogPostsPage(), $totalPages);
         $offset = ($currentPage - 1) * $perPage;
-        $posts = $this->loadPublishedBlogPosts($db, $perPage, $offset);
+        $posts = $this->loadPublishedBlogPosts($db, $perPage, $offset, $filtru);
+
+        // La căutare, fiecare rezultat primește titlul și un fragment cu
+        // termenul evidențiat — altfel nu se vede de ce a ieșit în listă.
+        if ($filtru['q'] !== '') {
+            foreach ($posts as &$post) {
+                if (!is_array($post)) {
+                    continue;
+                }
+                $post['title_highlighted'] = \App\Support\BlogSearch::highlight(
+                    (string) ($post['title'] ?? ''),
+                    $filtru['q']
+                );
+                $post['excerpt_highlighted'] = \App\Support\BlogSearch::highlight(
+                    \App\Support\BlogSearch::bestSnippet(
+                        (string) ($post['excerpt'] ?? ''),
+                        (string) ($post['content'] ?? ''),
+                        $filtru['q']
+                    ),
+                    $filtru['q']
+                );
+            }
+            unset($post);
+        }
 
         $numericPages = array_values(array_unique(array_filter([
             1,
@@ -5211,7 +5287,84 @@ final class SiteController
             'baseUrl' => '/blog',
             'pagination' => $pagination,
             'titluH1' => $titluH1,
+            // WP-22: comutatorul blogului avansat (căutarea și chips-urile categoriilor) și textele listei (DB-13).
+            'avansat' => $avansat,
+            'eticheta' => \App\Support\BlogAvansat::etichetaLista($settings),
+            'titluLista' => \App\Support\BlogAvansat::titluLista($settings),
+            'descriere' => \App\Support\BlogAvansat::descriereLista($settings),
+            'autorImplicit' => \App\Support\BlogAvansat::autorImplicit($settings),
+            'categories' => $avansat ? $this->loadBlogCategoriesWithCounts($db) : [],
+            'activeCategory' => $filtru['category'],
+            'activeCategoryName' => $this->loadBlogTermName($db, 'blog_categories', $filtru['category']),
+            'activeTag' => $filtru['tag'],
+            'activeTagName' => $this->loadBlogTermName($db, 'blog_tags', $filtru['tag']),
+            'query' => $filtru['q'],
+            'hasFilter' => $areFiltru,
+            'totalPosts' => $totalPosts,
         ]);
+    }
+
+    /**
+     * Filtrele cerute prin adresă: /blog?categorie=…&eticheta=…&q=… (WP-22: B3, din Biovitality 263b520; doar cu blogul
+     * avansat, vezi blog()).
+     *
+     * @return array{category: string, tag: string, q: string}
+     */
+    private function requestBlogFilter(): array
+    {
+        $parametru = static fn (string $cheie): string => is_string($_GET[$cheie] ?? null) ? (string) $_GET[$cheie] : '';
+        return [
+            'category' => \App\Support\Slug::make($parametru('categorie')),
+            'tag' => \App\Support\Slug::make($parametru('eticheta')),
+            // Căutarea rămâne cum a scris-o omul; o curățăm doar de spații și de lungimi absurde.
+            'q' => mb_substr(trim($parametru('q')), 0, 120),
+        ];
+    }
+
+    /** /blog/categorie/{slug}: articolele unei categorii active (WP-22: B3). */
+    public function blogCategory(array $params): void
+    {
+        $this->blogFiltrat('category', 'blog_categories', (string) ($params['slug'] ?? ''));
+    }
+
+    /** /blog/eticheta/{slug}: articolele cu o etichetă (WP-22: B3). */
+    public function blogTag(array $params): void
+    {
+        $this->blogFiltrat('tag', 'blog_tags', (string) ($params['slug'] ?? ''));
+    }
+
+    /**
+     * Pagina unei categorii sau etichete. O categorie sau etichetă care nu există (sau o categorie inactivă) e pagina 404
+     * a magazinului, ca un articol lipsă, nu o listă goală cu 200 (Biovitality o arăta așa). Căutarea (?q=) merge și aici
+     * doar cu blogul avansat.
+     */
+    private function blogFiltrat(string $cheie, string $tabela, string $slugCerut): void
+    {
+        $db = $this->db();
+        $pdo = $db instanceof PDO ? $db : null;
+        $slug = \App\Support\Slug::make($slugCerut);
+        if ($slug === '' || $this->loadBlogTermName($pdo, $tabela, $slug) === '') {
+            $this->blogTermenNegasit($pdo, $cheie === 'tag' ? 'Eticheta nu a fost găsită' : 'Categoria nu a fost găsită');
+            return;
+        }
+        $filtru = \App\Support\BlogAvansat::pornit($this->cachedSettings($pdo)) ? $this->requestBlogFilter() : ['category' => '', 'tag' => '', 'q' => ''];
+        $filtru['category'] = $cheie === 'category' ? $slug : '';
+        $filtru['tag'] = $cheie === 'tag' ? $slug : '';
+        $this->renderBlogIndex($filtru);
+    }
+
+    private function blogTermenNegasit(?PDO $db, string $titlu): void
+    {
+        if (!\App\Support\SeoIndexare::pagina404Magazin((string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+            http_response_code(404);
+            echo $titlu . '.';
+            return;
+        }
+        $this->renderPagina404(
+            $titlu,
+            'Este posibil ca linkul să fie vechi sau ca pagina să nu mai existe. Vezi toate articolele de pe blog sau caută produsul dorit.',
+            $db
+        );
     }
 
     private function renderPublicProductReviewFormSection(?PDO $db, ?int $selectedProductId = null): string
@@ -6191,7 +6344,58 @@ HTML;
         }
     }
 
-    private function loadPublishedBlogPosts(?PDO $db, int $limit = 24, int $offset = 0): array
+    /**
+     * Condițiile de filtrare pentru listarea de blog: categorie, etichetă și
+     * căutare liberă.
+     *
+     * `$colatie` e trucul prin care „sanatate" găsește și „sănătate": comparăm
+     * într-o colație care ignoră diacriticele. Nu orice server o acceptă pe
+     * orice coloană, de aceea apelantul reîncearcă fără ea.
+     *
+     * @param array{category?: string, tag?: string, q?: string} $filtru
+     *
+     * @return array{0: string, 1: array<string, string>}
+     */
+    private function blogPostsFilterSql(array $filtru, string $colatie): array
+    {
+        $conditii = '';
+        $parametri = [];
+
+        $categorie = trim((string) ($filtru['category'] ?? ''));
+        if ($categorie !== '') {
+            $conditii .= ' AND EXISTS (
+                    SELECT 1 FROM blog_post_categories pc
+                    INNER JOIN blog_categories c ON c.id = pc.category_id
+                    WHERE pc.post_id = p.id AND c.slug = :filtruCategorie
+                 )';
+            $parametri['filtruCategorie'] = $categorie;
+        }
+
+        $eticheta = trim((string) ($filtru['tag'] ?? ''));
+        if ($eticheta !== '') {
+            $conditii .= ' AND EXISTS (
+                    SELECT 1 FROM blog_post_tags pt
+                    INNER JOIN blog_tags t ON t.id = pt.tag_id
+                    WHERE pt.post_id = p.id AND t.slug = :filtruEticheta
+                 )';
+            $parametri['filtruEticheta'] = $eticheta;
+        }
+
+        $cautare = trim((string) ($filtru['q'] ?? ''));
+        if ($cautare !== '') {
+            $conditii .= ' AND (p.title' . $colatie . ' LIKE :filtruCautare'
+                . ' OR p.excerpt' . $colatie . ' LIKE :filtruCautare'
+                . ' OR p.content' . $colatie . ' LIKE :filtruCautare)';
+            $parametri['filtruCautare'] = '%' . $cautare . '%';
+        }
+
+        return [$conditii, $parametri];
+    }
+
+    /**
+     * @param array{category?: string, tag?: string, q?: string} $filtru
+     */
+    private function loadPublishedBlogPosts(?PDO $db, int $limit = 24, int $offset = 0, array $filtru = []): array
     {
         if (!$db instanceof PDO) {
             return [];
@@ -6199,58 +6403,151 @@ HTML;
         $this->ensureOptionalPageSchema($db);
         $safeLimit = max(1, min(60, $limit));
         $safeOffset = max(0, $offset);
-        try {
-            $stmt = $db->prepare(
-                'SELECT p.id, p.title, p.slug, p.excerpt, p.content, p.reading_minutes, p.published_at,
-                        p.featured_image_url AS cover_image_url, COALESCE(a.name, "") AS author_name,
-                        COALESCE(a.avatar_url, "") AS author_avatar_url
-                 FROM blog_posts p
-                 LEFT JOIN blog_authors a ON a.id = p.author_id
-                 WHERE p.deleted_at IS NULL
-                   AND p.is_published = 1
-                   AND p.published_at <= NOW()
-                 ORDER BY p.published_at DESC, p.id DESC
-                 LIMIT :limit OFFSET :offset'
-            );
-            $stmt->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
-            $stmt->bindValue(':offset', $safeOffset, PDO::PARAM_INT);
-            $stmt->execute();
-            $rows = $stmt->fetchAll();
-            if (!is_array($rows)) {
-                return [];
-            }
-            foreach ($rows as &$row) {
-                if (!is_array($row)) {
-                    continue;
+
+        // Blogul avansat (Biovitality 263b520) dă și categoria fiecărui articol (în /api/blog/posts, pentru șabloanele
+        // care o citesc); fără el, lista e cea de dinainte.
+        $cuCategoria = \App\Support\BlogAvansat::pornit($this->cachedSettings($db)) ? 'p.category, ' : '';
+        foreach ([self::BLOG_SEARCH_COLLATION, ''] as $colatie) {
+            [$conditii, $parametri] = $this->blogPostsFilterSql($filtru, $colatie);
+            try {
+                $stmt = $db->prepare(
+                    'SELECT p.id, p.title, p.slug, p.excerpt, p.content, p.reading_minutes, p.published_at,
+                            ' . $cuCategoria . 'p.featured_image_url AS cover_image_url, COALESCE(a.name, "") AS author_name,
+                            COALESCE(a.avatar_url, "") AS author_avatar_url
+                     FROM blog_posts p
+                     LEFT JOIN blog_authors a ON a.id = p.author_id
+                     WHERE p.deleted_at IS NULL
+                       AND p.is_published = 1
+                       AND p.published_at <= NOW()' . $conditii . '
+                     ORDER BY p.published_at DESC, p.id DESC
+                     LIMIT :limit OFFSET :offset'
+                );
+                foreach ($parametri as $cheie => $valoare) {
+                    $stmt->bindValue(':' . $cheie, $valoare);
                 }
-                $row['cover_image_url'] = trim((string) ($row['cover_image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg';
-                $published = trim((string) ($row['published_at'] ?? ''));
-                $row['published_at_label'] = $published !== '' ? date('d.m.Y', strtotime($published) ?: time()) : '';
-                $row['content_text'] = trim(strip_tags((string) ($row['content'] ?? '')));
+                $stmt->bindValue(':limit', $safeLimit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $safeOffset, PDO::PARAM_INT);
+                $stmt->execute();
+                $rows = $stmt->fetchAll();
+                if (!is_array($rows)) {
+                    return [];
+                }
+                foreach ($rows as &$row) {
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $row['cover_image_url'] = trim((string) ($row['cover_image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg';
+                    $published = trim((string) ($row['published_at'] ?? ''));
+                    $row['published_at_label'] = $published !== '' ? date('d.m.Y', strtotime($published) ?: time()) : '';
+                    $row['content_text'] = trim(strip_tags((string) ($row['content'] ?? '')));
+                }
+                unset($row);
+
+                return array_values(array_filter($rows, static fn ($row): bool => is_array($row)));
+            } catch (Throwable) {
+                if ($colatie === '') {
+                    return [];
+                }
             }
-            unset($row);
-            return array_values(array_filter($rows, static fn ($row): bool => is_array($row)));
-        } catch (Throwable) {
-            return [];
         }
+
+        return [];
     }
 
-    private function countPublishedBlogPosts(?PDO $db): int
+    /**
+     * @param array{category?: string, tag?: string, q?: string} $filtru
+     */
+    private function countPublishedBlogPosts(?PDO $db, array $filtru = []): int
     {
         if (!$db instanceof PDO) {
             return 0;
         }
         $this->ensureOptionalPageSchema($db);
+
+        foreach ([self::BLOG_SEARCH_COLLATION, ''] as $colatie) {
+            [$conditii, $parametri] = $this->blogPostsFilterSql($filtru, $colatie);
+            try {
+                $stmt = $db->prepare(
+                    'SELECT COUNT(*) FROM blog_posts p
+                     WHERE p.deleted_at IS NULL
+                       AND p.is_published = 1
+                       AND p.published_at <= NOW()' . $conditii
+                );
+                $stmt->execute($parametri);
+
+                return max(0, (int) $stmt->fetchColumn());
+            } catch (Throwable) {
+                if ($colatie === '') {
+                    return 0;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Categoriile de blog cu câte articole publicate are fiecare. Cele goale
+     * nu apar: un filtru care duce la o pagină goală e doar în drum.
+     *
+     * @return array<int, array{name: string, slug: string, count: int}>
+     */
+    private function loadBlogCategoriesWithCounts(?PDO $db): array
+    {
+        if (!$db instanceof PDO) {
+            return [];
+        }
         try {
             $stmt = $db->query(
-                'SELECT COUNT(*) FROM blog_posts p
-                 WHERE p.deleted_at IS NULL
-                   AND p.is_published = 1
-                   AND p.published_at <= NOW()'
+                'SELECT c.name, c.slug, COUNT(DISTINCT p.id) AS articole
+                 FROM blog_categories c
+                 INNER JOIN blog_post_categories pc ON pc.category_id = c.id
+                 INNER JOIN blog_posts p ON p.id = pc.post_id
+                     AND p.deleted_at IS NULL
+                     AND p.is_published = 1
+                     AND p.published_at <= NOW()
+                 WHERE c.is_active = 1
+                 GROUP BY c.id, c.name, c.slug, c.sort_order
+                 HAVING articole > 0
+                 ORDER BY c.sort_order ASC, c.name ASC'
             );
-            return max(0, (int) ($stmt ? $stmt->fetchColumn() : 0));
+            $categorii = [];
+            foreach ($stmt ? ($stmt->fetchAll() ?: []) : [] as $rand) {
+                if (!is_array($rand)) {
+                    continue;
+                }
+                $nume = trim((string) ($rand['name'] ?? ''));
+                $slug = trim((string) ($rand['slug'] ?? ''));
+                if ($nume === '' || $slug === '') {
+                    continue;
+                }
+                $categorii[] = ['name' => $nume, 'slug' => $slug, 'count' => (int) ($rand['articole'] ?? 0)];
+            }
+
+            return $categorii;
         } catch (Throwable) {
-            return 0;
+            return [];
+        }
+    }
+
+    /**
+     * Numele unei categorii sau etichete după slug, pentru titlul paginii.
+     */
+    private function loadBlogTermName(?PDO $db, string $tabela, string $slug): string
+    {
+        $slug = trim($slug);
+        if (!$db instanceof PDO || $slug === '' || !in_array($tabela, ['blog_categories', 'blog_tags'], true)) {
+            return '';
+        }
+        try {
+            // O categorie inactivă nu are pagină (nici chips-ul ei nu apare în listă).
+            $stmt = $db->prepare("SELECT name FROM {$tabela} WHERE slug = :slug"
+                . ($tabela === 'blog_categories' ? ' AND is_active = 1' : '') . ' LIMIT 1');
+            $stmt->execute(['slug' => $slug]);
+
+            return trim((string) ($stmt->fetchColumn() ?: ''));
+        } catch (Throwable) {
+            return '';
         }
     }
 
@@ -6289,12 +6586,58 @@ HTML;
         }
     }
 
-    private function buildBlogTemplateRender(array $post): array
+    /**
+     * Randarea unui articol, pentru previzualizarea din admin.
+     *
+     * Trece exact prin codul care randează articolul pe site, ca ce se vede în
+     * previzualizare să fie chiar ce se va vedea după salvare.
+     *
+     * @param array<string, mixed> $post
+     *
+     * @return array{html: string, css: string, js: string}
+     */
+    public function renderBlogPreview(array $post, ?PDO $db = null): array
     {
+        return $this->buildBlogTemplateRender($post, $db);
+    }
+
+    /**
+     * Articolul randat prin șablonul lui (sau prin cel implicit). WP-22 (B2, din Biovitality c078bd5, 9c549c7): cuprinsul
+     * (ancore pe titlurile H2/H3), bibliografia cu citările legate, etichetele, articolele similare și lățimea copertei;
+     * ce depinde de comutatorul blogului avansat și ce nu, în App\Support\BlogAvansat.
+     *
+     * @param array<string, mixed> $post
+     * @return array{html: string, css: string, js: string}
+     */
+    private function buildBlogTemplateRender(array $post, ?PDO $db = null): array
+    {
+        $settings = $this->cachedSettings($db);
+        $avansat = \App\Support\BlogAvansat::pornit($settings);
         $title = trim((string) ($post['title'] ?? 'Articol blog'));
         $slug = trim((string) ($post['slug'] ?? ''));
         $content = (string) ($post['content'] ?? '');
         $contentHtml = trim($content) !== '' ? $content : '<p>Conținut indisponibil.</p>';
+        $templateHtml = trim((string) ($post['template_html_content'] ?? ''));
+        $sablonImplicit = $templateHtml === '';
+
+        // Cuprinsul pune ancore pe titluri, deci trebuie făcut înaintea oricărei alte prelucrări a conținutului. Cu
+        // blogul avansat oprit, doar într-un șablon care cere {{blog_toc}} (titlurile rămân altfel fără id, ca înainte).
+        $tocHtml = '';
+        if ($avansat || str_contains($templateHtml, '{{blog_toc}}')) {
+            $cuprins = \App\Support\BlogToc::build($contentHtml);
+            $contentHtml = (string) $cuprins['html'];
+            $tocHtml = (string) $cuprins['toc'];
+        }
+
+        // Bibliografia stă separat de text; citările „[1]" din articol capătă link către referința potrivită. Fără
+        // bibliografie (NULL, ca toate articolele de dinainte) nu se schimbă nimic.
+        $referencesRaw = trim((string) ($post['references_html'] ?? ''));
+        $numereReferinte = \App\Support\BlogReferences::numere($referencesRaw);
+        if ($numereReferinte !== []) {
+            $contentHtml = \App\Support\BlogReferences::linkCitations($contentHtml, $numereReferinte);
+        }
+        $referencesHtml = $referencesRaw !== '' ? \App\Support\BlogReferences::render($referencesRaw) : '';
+
         $contentText = trim(strip_tags($contentHtml));
         $excerpt = trim((string) ($post['excerpt'] ?? ''));
         if ($excerpt === '' && $contentText !== '') {
@@ -6304,9 +6647,14 @@ HTML;
         if ($image === '') {
             $image = '/assets/img/product-placeholder.svg';
         }
-        $authorName = trim((string) ($post['author_name'] ?? 'Bioscem'));
-        $authorInitials = mb_strtoupper(mb_substr($authorName !== '' ? $authorName : 'B', 0, 1));
-        $blogCategory = trim((string) ($post['category'] ?? 'Jurnal Bioscem'));
+        // Cât din lățimea articolului ocupă imaginea principală, ales din admin (100 = ca înainte).
+        $coverWidth = (int) ($post['featured_image_width'] ?? 100);
+        $coverWidth = max(10, min(100, $coverWidth > 0 ? $coverWidth : 100));
+        // DB-13 (D4–D6): autorul, inițiala lui și categoria când articolul n-are, din setări (un site existent le are
+        // înghețate la textele de până acum).
+        $authorName = trim((string) ($post['author_name'] ?? \App\Support\BlogAvansat::autorImplicit($settings)));
+        $authorInitials = mb_strtoupper(mb_substr($authorName !== '' ? $authorName : \App\Support\BlogAvansat::initialaImplicita($settings), 0, 1));
+        $blogCategory = trim((string) ($post['category'] ?? \App\Support\BlogAvansat::categorieImplicita($settings)));
         $authorSlug = trim((string) ($post['author_slug'] ?? ''));
         $publishedAt = trim((string) ($post['published_at'] ?? ''));
         $publishedDate = $publishedAt !== '' ? date('d.m.Y', strtotime($publishedAt) ?: time()) : date('d.m.Y');
@@ -6332,9 +6680,41 @@ HTML;
         $videoUrl = trim((string) ($post['video_url'] ?? ''));
         $videoEmbed = VideoEmbed::render($videoUrl);
 
-        $templateHtml = trim((string) ($post['template_html_content'] ?? ''));
-        if ($templateHtml === '') {
-            $templateHtml = <<<HTML
+        // Etichetele: o interogare, nimic de arătat fără rânduri. Articolele similare doar unde se pot vedea.
+        $postId = (int) ($post['id'] ?? 0);
+        $tagsHtml = $this->renderBlogTagsHtml($this->loadBlogPostTags($db, $postId));
+        $articoleInrudite = [];
+        if ($avansat || str_contains($templateHtml, '{{blog_related_posts}}')) {
+            $articoleInrudite = \App\Support\BlogRelatedPosts::find($db, $postId, 3);
+        }
+        $relatedHtml = \App\Support\BlogRelatedPosts::renderSection($articoleInrudite);
+
+        if ($sablonImplicit) {
+            // Șablonul implicit: cu blogul avansat are în plus cuprinsul, bibliografia, etichetele și articolele similare.
+            $templateHtml = $avansat ? <<<HTML
+<article class="blog-article-default">
+    <header class="blog-article-default__hero">
+        <span class="blog-article-default__category">{{blog_category}}</span>
+        <h1>{{blog_title}}</h1>
+        <div class="blog-article-default__meta-bar">
+            <span class="blog-article-default__author-name">{{blog_author_name}}</span>
+            <span class="blog-article-default__meta-item">{{blog_published_date}}</span>
+            <span class="blog-article-default__meta-item">{{blog_reading_label}}</span>
+            <span class="blog-article-default__share">Distribuie</span>
+        </div>
+    </header>
+    <figure class="blog-article-default__cover">
+        <img src="{{blog_image_url}}" alt="{{blog_title}}">
+    </figure>
+    <section class="blog-article-default__content">
+        {{blog_toc}}
+        {{blog_content_html}}
+    </section>
+    {{blog_references}}
+    {{blog_tags}}
+    {{blog_related_posts}}
+</article>
+HTML : <<<HTML
 <article class="blog-article-default">
     <header class="blog-article-default__hero">
         <span class="blog-article-default__category">{{blog_category}}</span>
@@ -6389,9 +6769,37 @@ HTML;
 @media (max-width:1024px){.blog-article-default__hero h1{font-size:36px;}}
 @media (max-width:720px){.blog-article-default{max-width:90%;}.blog-article-default__hero h1{font-size:30px;}.blog-article-default__meta-bar .blog-article-default__share{width:100%;margin-left:0;}}
 CSS;
+            if ($avansat) {
+                // Titlurile H4–H6 și pozele din text (editorul blogului avansat le pune; altfel H5/H6 ies mai mici decât
+                // textul), după regulile H3 ale șablonului, ca în Biovitality.
+                $templateCss = str_replace(
+                    ".blog-article-default__content strong,",
+                    ".blog-article-default__content h4{margin:26px 0 10px;font-family:\"DM Sans\",Arial,sans-serif;font-size:18px;line-height:1.3;font-weight:700;color:#0f172a;}\n.blog-article-default__content h5{margin:22px 0 8px;font-family:\"DM Sans\",Arial,sans-serif;font-size:16px;line-height:1.35;font-weight:700;color:#1f2937;}\n.blog-article-default__content h6{margin:20px 0 8px;font-family:\"DM Sans\",Arial,sans-serif;font-size:14px;line-height:1.4;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#475569;}\n.blog-article-default__content img{max-width:100%;height:auto;border-radius:12px;}\n.blog-article-default__content strong,",
+                    $templateCss
+                );
+            }
         }
 
         $templateJs = (string) ($post['template_js_content'] ?? '');
+        // Tokenurile noi (WP-22) se înlocuiesc întâi, în șablon, înainte să intre conținutul articolului: un text din
+        // articol care arată ca un token nou rămâne cum e scris (ca înainte).
+        $tokenuriNoi = [
+            '{{blog_toc}}' => $tocHtml,
+            '{{blog_references}}' => $referencesHtml,
+            '{{blog_tags}}' => $tagsHtml,
+            '{{blog_related_posts}}' => $relatedHtml,
+            '{{blog_image_width}}' => $coverWidth . '%',
+        ];
+        $areTokenReferinte = str_contains($templateHtml, '{{blog_references}}');
+        $areTokenEtichete = str_contains($templateHtml, '{{blog_tags}}');
+        // Articolul folosește ceva din stilurile blogului avansat (cuprinsul arătat, citările, bibliografia, etichetele,
+        // secțiunea articolelor similare)? Doar atunci se încarcă fișierele lui (mai jos).
+        $folosesteAvansat = ($tocHtml !== '' && str_contains($templateHtml, '{{blog_toc}}'))
+            || $referencesHtml !== '' || $tagsHtml !== ''
+            || ($relatedHtml !== '' && str_contains($templateHtml, '{{blog_related_posts}}'));
+        $templateHtml = strtr($templateHtml, $tokenuriNoi);
+        $templateCss = strtr($templateCss, $tokenuriNoi);
+        $templateJs = strtr($templateJs, $tokenuriNoi);
         $tokens = [
             '{{blog_title}}' => $title,
             '{{blog_slug}}' => $slug,
@@ -6431,11 +6839,159 @@ CSS;
             $renderJs = str_replace($needle, $value, $renderJs);
         }
 
+        // Template-urile scrise înainte de bibliografie și etichete n-au
+        // token-urile lor. Le punem oricum la sfârșit, altfel conținutul
+        // există în baza de date, dar nu-l vede nimeni.
+        if ($referencesHtml !== '' && !$areTokenReferinte) {
+            $renderHtml = $this->appendInsideBlogArticle($renderHtml, $referencesHtml);
+        }
+        if ($tagsHtml !== '' && !$areTokenEtichete) {
+            $renderHtml = $this->appendInsideBlogArticle($renderHtml, $tagsHtml);
+        }
+
+        // Secțiunea „articole interesante" din template-ul actual se umplea din JavaScript, cu articole luate la
+        // întâmplare. Cu blogul avansat o umplem de pe server, cu articole din aceleași categorii și etichete.
+        if ($avansat) {
+            $renderHtml = \App\Support\BlogRelatedPosts::renameLegacyHeading($renderHtml);
+            $renderHtml = \App\Support\BlogRelatedPosts::upgradeLegacySection($renderHtml, $articoleInrudite);
+        }
+
+        // Îngustarea imaginii principale trebuie să meargă la orice template, nu
+        // doar la cel implicit, și fără să ceară cuiva să-și rescrie template-ul.
+        // Se marchează prima imagine care are adresa copertei — doar prima:
+        // aceeași poză folosită mai jos, în text, își păstrează lățimea ei.
+        if ($coverWidth < 100 && $image !== '') {
+            $marcate = 0;
+            $renderHtml = (string) preg_replace_callback(
+                '/<img\b[^>]*>/i',
+                static function (array $m) use ($image, &$marcate): string {
+                    if ($marcate > 0) {
+                        return $m[0];
+                    }
+                    if (preg_match('/\bsrc\s*=\s*(["\'])(.*?)\1/i', $m[0], $src) !== 1
+                        || html_entity_decode($src[2], ENT_QUOTES, 'UTF-8') !== $image) {
+                        return $m[0];
+                    }
+                    $marcate++;
+
+                    // Dacă imaginea are deja o clasă, ne adăugăm la ea; altfel
+                    // punem una nouă. Două atribute `class` ar fi HTML stricat.
+                    if (preg_match('/\bclass\s*=\s*(["\'])(.*?)\1/i', $m[0], $cls) === 1) {
+                        return str_replace(
+                            $cls[0],
+                            'class=' . $cls[1] . trim($cls[2] . ' bv-cover-img') . $cls[1],
+                            $m[0]
+                        );
+                    }
+
+                    return preg_replace('/^<img\b/i', '<img class="bv-cover-img"', $m[0], 1) ?? $m[0];
+                },
+                $renderHtml
+            );
+
+            if ($marcate > 0) {
+                $renderHtml = '<div class="bv-cover-scaled">' . $renderHtml . '</div>';
+                $renderCss .= "\n.bv-cover-scaled img.bv-cover-img{max-width:" . $coverWidth
+                    . "%;height:auto;margin-left:auto;margin-right:auto;}";
+            }
+        }
+
+        // Stilurile și derularea lină ale blogului avansat, doar dacă articolul le folosește.
+        if ($folosesteAvansat) {
+            $renderHtml .= "\n" . \App\Support\BlogAvansat::fisiere();
+        }
+
         return [
             'html' => $renderHtml,
             'css' => $renderCss,
             'js' => $renderJs,
         ];
+    }
+
+    /**
+     * Pune o bucată de HTML la sfârșitul articolului, dar înaintea secțiunii cu
+     * articole înrudite — bibliografia ține de articol, nu de recomandări.
+     */
+    private function appendInsideBlogArticle(string $html, string $bucata): string
+    {
+        if (trim($bucata) === '') {
+            return $html;
+        }
+
+        if (preg_match('#<section\b[^>]*\bdata-blog-related\b#i', $html, $m, PREG_OFFSET_CAPTURE) === 1) {
+            $pozitie = (int) $m[0][1];
+
+            return substr($html, 0, $pozitie) . $bucata . substr($html, $pozitie);
+        }
+
+        $inchidere = strripos($html, '</article>');
+        if ($inchidere !== false) {
+            return substr($html, 0, $inchidere) . $bucata . substr($html, $inchidere);
+        }
+
+        return $html . $bucata;
+    }
+
+    /**
+     * Etichetele unei postări, în ordine alfabetică.
+     *
+     * @return array<int, array{name: string, slug: string}>
+     */
+    private function loadBlogPostTags(?PDO $db, int $postId): array
+    {
+        if (!$db instanceof PDO || $postId <= 0) {
+            return [];
+        }
+        try {
+            $stmt = $db->prepare(
+                'SELECT t.name, t.slug
+                 FROM blog_post_tags pt
+                 INNER JOIN blog_tags t ON t.id = pt.tag_id
+                 WHERE pt.post_id = :id
+                 ORDER BY t.name ASC'
+            );
+            $stmt->execute(['id' => $postId]);
+            $randuri = $stmt->fetchAll() ?: [];
+
+            $etichete = [];
+            foreach ($randuri as $rand) {
+                if (!is_array($rand)) {
+                    continue;
+                }
+                $nume = trim((string) ($rand['name'] ?? ''));
+                $slug = trim((string) ($rand['slug'] ?? ''));
+                if ($nume !== '' && $slug !== '') {
+                    $etichete[] = ['name' => $nume, 'slug' => $slug];
+                }
+            }
+
+            return $etichete;
+        } catch (Throwable) {
+            // Tabela poate lipsi pe o bază care n-a trecut prin admin încă.
+            return [];
+        }
+    }
+
+    /**
+     * @param array<int, array{name: string, slug: string}> $etichete
+     */
+    private function renderBlogTagsHtml(array $etichete): string
+    {
+        if ($etichete === []) {
+            return '';
+        }
+
+        $chipuri = '';
+        foreach ($etichete as $eticheta) {
+            $chipuri .= '<a class="blog-tags__chip" href="/blog/eticheta/' . rawurlencode($eticheta['slug']) . '">'
+                . htmlspecialchars($eticheta['name'], ENT_QUOTES)
+                . '</a>';
+        }
+
+        return '<nav class="blog-tags" aria-label="Etichete">'
+            . '<span class="blog-tags__label">Etichete</span>'
+            . '<span class="blog-tags__list">' . $chipuri . '</span>'
+            . '</nav>';
     }
 
     private function loadShopCatalogCategories(?PDO $db): array

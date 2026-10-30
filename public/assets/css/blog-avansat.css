@@ -1,0 +1,313 @@
+/*
+ * Blogul avansat (WP-22: B2, din Biovitality 9c549c7 și 6ea2cb1): cuprinsul, citările, bibliografia, etichetele,
+ * articolele similare și locul aprins după o săritură la o ancoră. În Biovitality stăteau în app.css, pe orice pagină;
+ * aici se încarcă doar pe un articol de blog care le folosește (App\Support\BlogAvansat::fisiere), deci nicio altă
+ * pagină nu se schimbă.
+ */
+/* ─────────────────────────────────────────────────────────────────────────
+   Blog: cuprins, bibliografie, etichete, articole similare.
+
+   Stau într-un fișier, nu în template-ul de articol, ca să arate la fel
+   indiferent de template-ul ales din admin.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Ancorele nu trebuie să ajungă sub antetul lipit de marginea de sus. */
+.blog-post-template-v3__content h2[id],
+.blog-post-template-v3__content h3[id],
+.blog-article-default__content h2[id],
+.blog-article-default__content h3[id],
+.blog-references__item[id],
+.blog-cite[id] {
+    scroll-margin-top: 96px;
+}
+
+/* ── Cuprins ─────────────────────────────────────────────────────────── */
+.blog-toc {
+    margin: 0 0 28px;
+}
+
+.blog-toc__box {
+    border: 1px solid #e2ece7;
+    border-radius: 14px;
+    background: #f7fbf9;
+    padding: 14px 18px;
+}
+
+.blog-toc__summary {
+    cursor: pointer;
+    list-style: none;
+    font-family: "DM Sans", Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #0f7b53;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.blog-toc__summary::-webkit-details-marker { display: none; }
+
+.blog-toc__summary::after {
+    content: "▾";
+    margin-left: auto;
+    font-size: 14px;
+    transition: transform .2s ease;
+}
+
+.blog-toc__box[open] .blog-toc__summary::after { transform: rotate(180deg); }
+
+.blog-toc__list {
+    margin: 12px 0 0;
+    padding: 0 0 0 20px;
+    counter-reset: none;
+}
+
+.blog-toc__item {
+    margin: 0 0 6px;
+    line-height: 1.45;
+}
+
+/* Titlurile mari sunt îngroșate, ca articolul să se parcurgă din ochi;
+   cele mici stau retrase și mai discret. */
+.blog-toc__item--h2 { font-weight: 700; }
+
+.blog-toc__item--h3 {
+    list-style: none;
+    margin-left: 14px;
+    font-size: .94em;
+    font-weight: 400;
+    color: #64748b;
+}
+
+.blog-toc__item--h3::before {
+    content: "–";
+    margin-right: 8px;
+    color: #94a3b8;
+}
+
+.blog-toc__link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.blog-toc__link:hover { color: #0f7b53; text-decoration: underline; }
+
+/* ── Citări în text ──────────────────────────────────────────────────── */
+.blog-cite {
+    display: inline-block;
+    font-size: .78em;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: super;
+    padding: 1px 3px;
+    color: #0f7b53;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.blog-cite:hover { background: #e8f7f1; text-decoration: none; }
+
+/* ── Bibliografie ────────────────────────────────────────────────────── */
+.blog-references {
+    margin: 36px 0 8px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.blog-references__title {
+    margin: 0 0 14px;
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.blog-references__list {
+    margin: 0;
+    padding: 0 0 0 26px;
+    font-family: "DM Sans", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #64748b;
+}
+
+.blog-references__item {
+    margin: 0 0 10px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    transition: background .3s ease;
+}
+
+/* Referința spre care s-a sărit din text se aprinde o clipă, ca să se vadă
+   unde ai ajuns într-o listă de 20 de titluri. */
+.blog-references__item:target { background: #eefaf4; }
+
+.blog-references__body a { color: #0f7b53; word-break: break-word; }
+
+.blog-references__back {
+    margin-left: 6px;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.blog-references__back:hover { color: #0f7b53; }
+
+.blog-references__free { font-size: 14px; line-height: 1.6; color: #64748b; }
+
+/* ── Etichete ────────────────────────────────────────────────────────── */
+.blog-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 26px 0 8px;
+}
+
+.blog-tags__label {
+    font-family: "DM Sans", Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.blog-tags__list { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.blog-tags__chip {
+    display: inline-flex;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid #e2ece7;
+    background: #f7fbf9;
+    font-family: "DM Sans", Arial, sans-serif;
+    font-size: 13px;
+    color: #35564a;
+    text-decoration: none;
+    transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+
+.blog-tags__chip:hover {
+    background: #e8f7f1;
+    border-color: #bfe0d2;
+    color: #0f7b53;
+}
+
+/* ── Articole similare (token {{blog_related_posts}}) ────────────────── */
+.blog-related {
+    margin: 36px 0 8px;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.blog-related__title {
+    margin: 0 0 16px;
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.blog-related__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.blog-related-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e9efec;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #fff;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.blog-related-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(23, 59, 43, .08);
+}
+
+.blog-related-media {
+    display: block;
+    aspect-ratio: 16 / 10;
+    background: #f1f5f4;
+    overflow: hidden;
+}
+
+.blog-related-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.blog-related-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px 16px;
+}
+
+.blog-related-category {
+    font-family: "DM Sans", Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #0f7b53;
+}
+
+.blog-related-title {
+    margin: 0;
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 17px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.blog-related-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 2px;
+    font-family: "DM Sans", Arial, sans-serif;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.blog-related-meta-item { display: inline-flex; align-items: center; gap: 5px; }
+
+.blog-related-meta-item svg { width: 13px; height: 13px; }
+
+@media (max-width: 860px) {
+    .blog-related__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+    .blog-related__grid { grid-template-columns: minmax(0, 1fr); }
+    .blog-references__list { padding-left: 20px; }
+}
+
+/* Locul în care s-a ajuns dintr-un link de cuprins sau dintr-o citare se
+   aprinde o clipă. Altfel, după derulare, nu se vede la ce ai ajuns. */
+.bv-anchor-flash {
+    animation: bv-anchor-flash 1.4s ease-out;
+    border-radius: 8px;
+}
+
+@keyframes bv-anchor-flash {
+    0%   { background-color: rgba(15, 123, 83, .16); }
+    100% { background-color: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bv-anchor-flash { animation: none; }
+}

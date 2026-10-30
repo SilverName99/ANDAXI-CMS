@@ -602,6 +602,21 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Blogul avansat din Biovitality (WP-22, WP-23): tools/dev/test-blog-avansat.php, pe licența „toate”, pe serverul pornit
+# aici. Pune la loc toată baza (CHECKSUM TABLE), licența și fișierele de import.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Blogul avansat WP-22, WP-23 (tools/dev/test-blog-avansat.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-blog-avansat.php" > "$TMP/test-blog-avansat.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-blog-avansat.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-blog-avansat.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-blog-avansat.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
 scrie ""
 scrie "== Instrucțiuni de schemă (DDL) pe cerere"

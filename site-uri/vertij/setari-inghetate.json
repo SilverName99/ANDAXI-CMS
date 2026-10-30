@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "688b79f240ba3d4585f6bd04c1d7b9d2bd34fad2216368d571de7bf26840b1ed",
+    "amprenta_nucleu": "8fb21fe96f1f94b16c818a3827d265eaff5e36d8e5d02bcc52c52d0a68829d8c",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -95,6 +95,54 @@
             "mod": "lipsa",
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
+        },
+        "blog_autor_implicit": {
+            "valoare": "Redacția",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Http/Controllers/SiteController.php: autorul unui articol fără câmpul autorului (și inițiala lui, prima literă), scrisă în cod; codul comun o ia din setarea blog_autor_implicit (WP-22, DB-13)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/\\$authorName = trim\\(\\(string\\) \\(\\$post\\['author_name'\\] \\?\\? '([^']+)'\\)\\);/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "blog_categorie_implicita": {
+            "valoare": "Jurnal",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "src/Http/Controllers/SiteController.php: categoria unui articol fără categorie, scrisă în cod; codul comun o ia din setarea blog_categorie_implicita (WP-22, DB-13)",
+            "extrage": {
+                "fisier": "src/Http/Controllers/SiteController.php",
+                "tipar": "/\\$blogCategory = trim\\(\\(string\\) \\(\\$post\\['category'\\] \\?\\? '([^']+)'\\)\\);/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "blog_descriere_lista": {
+            "valoare": "Articole utile despre wellness, nutriție și un stil de viață echilibrat.",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "views/site/components/blog-posts.php: descrierea de sub titlul listei de articole (/blog), scrisă în cod; codul comun o ia din setarea blog_descriere_lista (WP-22, DB-13)",
+            "extrage": {
+                "fisier": "views/site/components/blog-posts.php",
+                "tipar": "/blog-listing__head.*?<p>([^<]+)<\\/p>/s"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
+        },
+        "blog_eticheta_lista": {
+            "valoare": "Jurnal",
+            "mod": "lipsa",
+            "din": "extras",
+            "sursa": "views/site/components/blog-posts.php: eticheta de deasupra titlului listei de articole (/blog), scrisă în cod; codul comun o ia din setarea blog_eticheta_lista (WP-22, DB-13)",
+            "extrage": {
+                "fisier": "views/site/components/blog-posts.php",
+                "tipar": "/<span class=\"blog-listing__eyebrow\">([^<]+)<\\/span>/"
+            },
+            "vechi": "lipsește",
+            "nucleu": "implicit \"\""
         },
         "catalog_ascunde_inactive": {
             "valoare": "0",
@@ -511,6 +559,16 @@
             "motiv": "Plata prin transfer bancar e nouă în codul comun: fără rând e oprită (rezerva „0”)",
             "vechi": "lipsește",
             "nucleu": "cod \"0\""
+        },
+        "blog_avansat": {
+            "motiv": "Decizia OD-13 (recomandarea): blogul avansat pornit pe toate site-urile în afară de Bioscem; schimbare vizibilă, în ce-se-schimba.md (WP-22)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "blog_titlu_lista": {
+            "motiv": "Același titlu al listei de articole în ambele coduri: „Blog & Resurse” (WP-22, DB-13)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"Blog & Resurse\""
         },
         "bt_ipay_admin_only": {
             "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",

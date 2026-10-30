@@ -14,10 +14,35 @@ $pageLinks = is_array($paginationPayload['items'] ?? null) ? $paginationPayload[
 // Pe /blog titlul listei e H1-ul paginii (A11, vezi SeoIndexare::titluBlogCaH1);
 // aceleași stiluri ca H2-ul de până acum, doar eticheta se schimbă.
 $etichetaTitlu = !empty($titluH1) ? 'h1' : 'h2';
-$buildPost = static function (array $post, string $baseUrl): array {
+// WP-22 (DB-13): textele listei din setări (App\Support\BlogAvansat; un site existent le are înghețate la cele de până acum). Eticheta și
+// descrierea goale nu se scriu deloc.
+$etichetaLista = trim((string) ($eticheta ?? ''));
+$titluLista = trim((string) ($titluLista ?? '')) ?: 'Blog & Resurse';
+$descriereLista = trim((string) ($descriere ?? ''));
+$autorImplicit = (string) ($autorImplicit ?? '');
+// WP-22 (B3, din Biovitality 263b520): căutarea și chips-urile categoriilor (doar cu blogul avansat), pagina unei
+// categorii sau etichete și rezultatele unei căutări. Fără blog avansat și fără filtru, lista e octet cu octet cea de
+// dinainte (de aceea condițiile de mai jos stau la începutul rândului: nu scriu spații în pagină).
+$avansat = !empty($avansat);
+$categories = is_array($payload['categories'] ?? null) ? $payload['categories'] : (is_array($categories ?? null) ? $categories : []);
+$activeCategory = trim((string) ($payload['activeCategory'] ?? ($activeCategory ?? '')));
+$activeCategoryName = trim((string) ($payload['activeCategoryName'] ?? ($activeCategoryName ?? '')));
+$activeTag = trim((string) ($payload['activeTag'] ?? ($activeTag ?? '')));
+$activeTagName = trim((string) ($payload['activeTagName'] ?? ($activeTagName ?? '')));
+$query = trim((string) ($payload['query'] ?? ($query ?? '')));
+$hasFilter = (bool) ($payload['hasFilter'] ?? ($hasFilter ?? false));
+$totalPosts = (int) ($payload['totalPosts'] ?? ($totalPosts ?? count($posts)));
+// La căutare sau filtrare, primul rezultat nu mai e „articolul recent": e doar primul din listă, deci nu-l mai scoatem
+// în evidență.
+$showFeatured = !$hasFilter;
+$categoryUrl = static function (string $slug) use ($baseUrl, $query): string {
+    $url = $slug === '' ? $baseUrl : $baseUrl . '/categorie/' . rawurlencode($slug);
+    return $query !== '' ? $url . '?q=' . rawurlencode($query) : $url;
+};
+$buildPost = static function (array $post, string $baseUrl) use ($autorImplicit): array {
     $title = trim((string) ($post['title'] ?? 'Articol blog'));
     $slug = trim((string) ($post['slug'] ?? ''));
-    $author = trim((string) ($post['author_name'] ?? 'Bioscem'));
+    $author = trim((string) ($post['author_name'] ?? $autorImplicit));
     $authorAvatar = trim((string) ($post['author_avatar_url'] ?? ''));
     if ($authorAvatar === '') {
         $authorAvatar = '/assets/img/product-placeholder.svg';
@@ -40,6 +65,14 @@ $buildPost = static function (array $post, string $baseUrl): array {
     $url = $slug !== '' ? ($baseUrl . '/' . rawurlencode($slug)) : $baseUrl;
     return [
         'title' => $title,
+        // Când s-a căutat ceva, titlul și fragmentul vin gata evidențiate de pe server (deja escapate); altfel le
+        // escapăm aici.
+        'title_html' => trim((string) ($post['title_highlighted'] ?? '')) !== ''
+            ? (string) $post['title_highlighted']
+            : htmlspecialchars($title, ENT_QUOTES),
+        'excerpt_html' => trim((string) ($post['excerpt_highlighted'] ?? '')) !== ''
+            ? (string) $post['excerpt_highlighted']
+            : htmlspecialchars($excerpt, ENT_QUOTES),
         'author' => $author,
         'author_avatar' => $authorAvatar,
         'minutes' => $minutes,
@@ -53,25 +86,102 @@ $buildPost = static function (array $post, string $baseUrl): array {
 <section class="blog-listing" data-blog-posts-token="1">
     <div class="blog-listing__shell">
         <header class="blog-listing__head">
-            <span class="blog-listing__eyebrow">Jurnalul Bioscem</span>
-            <<?= $etichetaTitlu ?>>Blog &amp; Resurse</<?= $etichetaTitlu ?>>
-            <p>Articole utile despre wellness, nutriție și un stil de viață echilibrat.</p>
+<?php if ($etichetaLista !== ''): ?>
+            <span class="blog-listing__eyebrow"><?= htmlspecialchars($etichetaLista, ENT_QUOTES) ?></span>
+<?php endif; ?>
+<?php if ($activeCategoryName !== ''): ?>
+            <<?= $etichetaTitlu ?>><?= htmlspecialchars($activeCategoryName, ENT_QUOTES) ?></<?= $etichetaTitlu ?>>
+            <p><?= $totalPosts === 1 ? 'Un articol' : $totalPosts . ' articole' ?> în această categorie.</p>
+<?php elseif ($activeTagName !== ''): ?>
+            <<?= $etichetaTitlu ?>>Eticheta „<?= htmlspecialchars($activeTagName, ENT_QUOTES) ?>”</<?= $etichetaTitlu ?>>
+            <p><?= $totalPosts === 1 ? 'Un articol' : $totalPosts . ' articole' ?> cu această etichetă.</p>
+<?php else: ?>
+            <<?= $etichetaTitlu ?>><?= htmlspecialchars($titluLista, ENT_QUOTES) ?></<?= $etichetaTitlu ?>>
+<?php if ($descriereLista !== ''): ?>
+            <p><?= htmlspecialchars($descriereLista, ENT_QUOTES) ?></p>
+<?php endif; ?>
+<?php endif; ?>
         </header>
+<?php if ($avansat): ?>
+
+        <!-- Căutarea merge și fără JavaScript: e un formular GET obișnuit, iar
+             adresa cu ?q= poate fi trimisă mai departe sau pusă la favorite. -->
+        <form class="blog-search" method="get" action="<?= htmlspecialchars($baseUrl, ENT_QUOTES) ?>" role="search">
+            <?php if ($activeCategory !== ''): ?>
+                <input type="hidden" name="categorie" value="<?= htmlspecialchars($activeCategory, ENT_QUOTES) ?>">
+            <?php endif; ?>
+            <?php if ($activeTag !== ''): ?>
+                <input type="hidden" name="eticheta" value="<?= htmlspecialchars($activeTag, ENT_QUOTES) ?>">
+            <?php endif; ?>
+            <label class="blog-search__field">
+                <span class="blog-search__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M10 2a8 8 0 1 1-5.29 14L2.7 18a1 1 0 0 1-1.4-1.42l2-2A8 8 0 0 1 10 2Zm0 2a6 6 0 1 0 0 12A6 6 0 0 0 10 4Z" fill="currentColor"/></svg>
+                </span>
+                <span class="sr-only">Caută în articole</span>
+                <input type="search" name="q" value="<?= htmlspecialchars($query, ENT_QUOTES) ?>"
+                       placeholder="Caută în articole — titlu sau conținut..." autocomplete="off">
+            </label>
+            <button type="submit" class="blog-search__btn">Caută</button>
+            <?php if ($hasFilter): ?>
+                <a class="blog-search__clear" href="<?= htmlspecialchars($baseUrl, ENT_QUOTES) ?>">Șterge filtrele</a>
+            <?php endif; ?>
+        </form>
+
+        <?php if ($categories !== []): ?>
+            <nav class="blog-cats" aria-label="Categorii articole">
+                <a class="blog-cats__chip <?= ($activeCategory === '' && $activeTag === '') ? 'is-active' : '' ?>"
+                   href="<?= htmlspecialchars($categoryUrl(''), ENT_QUOTES) ?>">Toate</a>
+                <?php foreach ($categories as $category): ?>
+                    <?php
+                    $catSlug = trim((string) ($category['slug'] ?? ''));
+                    $catName = trim((string) ($category['name'] ?? ''));
+                    if ($catSlug === '' || $catName === '') {
+                        continue;
+                    }
+                    ?>
+                    <a class="blog-cats__chip <?= $activeCategory === $catSlug ? 'is-active' : '' ?>"
+                       href="<?= htmlspecialchars($categoryUrl($catSlug), ENT_QUOTES) ?>">
+                        <?= htmlspecialchars($catName, ENT_QUOTES) ?>
+                        <span class="blog-cats__count"><?= (int) ($category['count'] ?? 0) ?></span>
+                    </a>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
+
+        <?php if ($query !== ''): ?>
+            <p class="blog-search__summary">
+                <?php if ($totalPosts === 0): ?>
+                    Niciun articol pentru „<strong><?= htmlspecialchars($query, ENT_QUOTES) ?></strong>”.
+                <?php else: ?>
+                    <?= $totalPosts === 1 ? 'Un articol găsit' : $totalPosts . ' articole găsite' ?>
+                    pentru „<strong><?= htmlspecialchars($query, ENT_QUOTES) ?></strong>”.
+                <?php endif; ?>
+            </p>
+        <?php endif; ?>
+<?php endif; ?>
         <?php if ($posts === []): ?>
+<?php if ($hasFilter): ?>
+            <div class="blog-listing__empty">
+                Nu am găsit niciun articol după acest filtru.
+                <a href="<?= htmlspecialchars($baseUrl, ENT_QUOTES) ?>">Vezi toate articolele</a>
+            </div>
+<?php else: ?>
             <div class="blog-listing__empty">Nu există articole publicate momentan.</div>
+<?php endif; ?>
         <?php else: ?>
             <?php
-            $featured = $buildPost((array) $posts[0], $baseUrl);
-            $rest = array_slice($posts, 1);
+            $featured = $showFeatured ? $buildPost((array) $posts[0], $baseUrl) : null;
+            $rest = $showFeatured ? array_slice($posts, 1) : $posts;
             ?>
+<?php if ($featured !== null): ?>
             <article class="blog-featured">
                 <a class="blog-featured__media" href="<?= htmlspecialchars((string) $featured['url'], ENT_QUOTES) ?>">
                     <img src="<?= htmlspecialchars((string) $featured['image'], ENT_QUOTES) ?>" alt="<?= htmlspecialchars((string) $featured['title'], ENT_QUOTES) ?>"<?= \App\Support\PozeOptimizate::dimensiuni((string) $featured['image']) ?> loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
                 </a>
                 <div class="blog-featured__body">
                     <span class="blog-featured__kicker">Articol recent</span>
-                    <h3 class="blog-featured__title"><a href="<?= htmlspecialchars((string) $featured['url'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $featured['title'], ENT_QUOTES) ?></a></h3>
-                    <p class="blog-featured__excerpt"><?= htmlspecialchars((string) $featured['excerpt'], ENT_QUOTES) ?></p>
+                    <h3 class="blog-featured__title"><a href="<?= htmlspecialchars((string) $featured['url'], ENT_QUOTES) ?>"><?= $featured['title_html'] ?></a></h3>
+                    <p class="blog-featured__excerpt"><?= $featured['excerpt_html'] ?></p>
                     <div class="blog-featured__meta">
                         <span class="blog-featured__author">
                             <img class="blog-featured__author-avatar" src="<?= htmlspecialchars((string) $featured['author_avatar'], ENT_QUOTES) ?>" alt="<?= htmlspecialchars((string) $featured['author'], ENT_QUOTES) ?>"<?= \App\Support\PozeOptimizate::dimensiuni((string) $featured['author_avatar']) ?> loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
@@ -95,6 +205,7 @@ $buildPost = static function (array $post, string $baseUrl): array {
                     <a class="blog-featured__read" href="<?= htmlspecialchars((string) $featured['url'], ENT_QUOTES) ?>">Citește articolul →</a>
                 </div>
             </article>
+<?php endif; ?>
 
             <?php if ($rest !== []): ?>
                 <div class="blog-listing__grid">
@@ -106,8 +217,8 @@ $buildPost = static function (array $post, string $baseUrl): array {
                             </a>
                             <div class="blog-card__body">
                                 <span class="blog-card__category">Articol</span>
-                                <h3 class="blog-card__title"><a href="<?= htmlspecialchars((string) $item['url'], ENT_QUOTES) ?>"><?= htmlspecialchars((string) $item['title'], ENT_QUOTES) ?></a></h3>
-                                <p class="blog-card__excerpt"><?= htmlspecialchars((string) $item['excerpt'], ENT_QUOTES) ?></p>
+                                <h3 class="blog-card__title"><a href="<?= htmlspecialchars((string) $item['url'], ENT_QUOTES) ?>"><?= $item['title_html'] ?></a></h3>
+                                <p class="blog-card__excerpt"><?= $item['excerpt_html'] ?></p>
                                 <div class="blog-card__meta">
                                     <span class="blog-card__author">
                                         <img class="blog-card__author-avatar" src="<?= htmlspecialchars((string) $item['author_avatar'], ENT_QUOTES) ?>" alt="<?= htmlspecialchars((string) $item['author'], ENT_QUOTES) ?>"<?= \App\Support\PozeOptimizate::dimensiuni((string) $item['author_avatar']) ?> loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
@@ -229,6 +340,60 @@ $buildPost = static function (array $post, string $baseUrl): array {
 @media (min-width:1200px){.blog-listing__head <?= $etichetaTitlu ?>{font-size:60px;}}
 @media (max-width:1020px){.blog-listing__grid{grid-template-columns:repeat(2,minmax(0,1fr));}.blog-featured{grid-template-columns:1fr;}.blog-featured__media{min-height:220px;}}
 @media (max-width:680px){.blog-listing{padding:14px 0 24px;}.blog-listing__shell{padding:0 12px;border-radius:0;}.blog-listing__head <?= $etichetaTitlu ?>{font-size:36px;}.blog-listing__head p{font-size:18px;}.blog-featured__title{font-size:30px;}.blog-listing__grid{grid-template-columns:1fr;}}
+<?php if ($avansat || $hasFilter): ?>
+/* ── Căutare și categorii ─────────────────────────────────────────────── */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
+.blog-search{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;}
+.blog-search__field{
+    flex:1 1 320px;min-width:0;display:flex;align-items:center;gap:10px;
+    padding:0 14px;height:46px;border:1px solid #dbe5dd;border-radius:999px;background:#fff;
+    transition:border-color .18s ease,box-shadow .18s ease;
+}
+.blog-search__field:focus-within{border-color:#0f7b53;box-shadow:0 0 0 3px rgba(15,123,83,.12);}
+.blog-search__icon{display:inline-grid;place-items:center;color:#94a3b8;flex:0 0 auto;}
+.blog-search__icon svg{width:18px;height:18px;display:block;}
+.blog-search__field input{
+    flex:1 1 auto;min-width:0;border:0;outline:0;background:none;
+    font:400 15px/1 "DM Sans",Arial,sans-serif;color:#0f172a;
+}
+.blog-search__field input::placeholder{color:#94a3b8;}
+.blog-search__btn{
+    height:46px;padding:0 22px;border:0;border-radius:999px;cursor:pointer;background:#0f7b53;color:#fff;
+    font:600 14px/1 "DM Sans",Arial,sans-serif;transition:background .18s ease;
+}
+.blog-search__btn:hover{background:#0c6544;}
+.blog-search__clear{font:400 13px/1 "DM Sans",Arial,sans-serif;color:#64748b;text-decoration:underline;}
+.blog-search__clear:hover{color:#0f7b53;}
+.blog-search__summary{margin:0 0 14px;font:400 14px/1.5 "DM Sans",Arial,sans-serif;color:#64748b;}
+
+/* Chipsurile se derulează orizontal pe ecrane mici, în loc să se rupă pe
+   patru rânduri și să împingă articolele sub linia de plutire. */
+.blog-cats{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;}
+.blog-cats__chip{
+    display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
+    border:1px solid #dbe5dd;background:#fff;text-decoration:none;
+    font:500 13px/1 "DM Sans",Arial,sans-serif;color:#35564a;white-space:nowrap;
+    transition:background .18s ease,border-color .18s ease,color .18s ease;
+}
+.blog-cats__chip:hover{background:#f2f8f5;border-color:#bfe0d2;}
+.blog-cats__chip.is-active{background:#0f7b53;border-color:#0f7b53;color:#fff;}
+.blog-cats__count{
+    font-size:11px;font-weight:600;padding:2px 6px;border-radius:999px;
+    background:#eef4f1;color:#0f7b53;
+}
+.blog-cats__chip.is-active .blog-cats__count{background:rgba(255,255,255,.22);color:#fff;}
+
+/* Termenul găsit, evidențiat în titlu și în fragmentul de sub el. */
+.blog-listing mark.blog-hit{background:#fdf0b8;color:inherit;padding:0 2px;border-radius:3px;}
+
+.blog-listing__empty a{color:#0f7b53;}
+
+@media (max-width:640px){
+    .blog-cats{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+    .blog-cats::-webkit-scrollbar{display:none;}
+    .blog-search__btn{flex:1 1 auto;}
+}
+<?php endif; ?>
 </style>
 
 <script>

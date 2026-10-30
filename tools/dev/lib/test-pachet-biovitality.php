@@ -35,7 +35,7 @@ declare(strict_types=1);
  *     valorile private ca înlocuitori inventați, și nicio adresă din afara @exemplu.ro în setările de destinatar;
  *  S3 licența site-ului: pluginurile lui pornite, BT, EuPlătesc și precomenzile oprite; licența bazei cms_dev neatinsă;
  *  S4 paginile publice: cookie-ul acordului „bv_cookie_consent” în banner, sertarul cu logo-ul Biovitality, acordul GDPR cu
- *     marca Biovitality, nicio pomenire a Bioscem (afară de ce rămâne pentru WP-22 în $ramaseBv).
+ *     marca Biovitality, nicio pomenire a Bioscem ($ramaseBv gol din WP-22), textele Biovitality ale listei de articole.
  *
  * Variabilele din test-pachet-site.php: $radacina, $dosarDev, $verifica, $scrie, $verificari, $esecuri.
  */
@@ -330,7 +330,13 @@ try {
         && str_contains($acord['corp'], 'prin marca <strong>„Biovitality”</strong>') && str_contains($acord['corp'], 'la evenimentul medical')
         && str_contains($acord['corp'], 'Valoare demo') && str_contains($acord['corp'], 'adresa1@exemplu.ro'));
     // Ce mai pomenește Bioscem pe un site Biovitality, cu WP-ul care îl scoate (aceeași listă ca $ramase din modul neutru).
-    $ramaseBv = ['/blog' => 'WP-22'];
+    // Gol din WP-22 (DB-13): /blog are textele Biovitality din înghețare.
+    $ramaseBv = [];
+    $listaBlog = $cerereBv('/blog')['corp'];
+    $verifica('S4 /blog: eticheta „Jurnalul BioVitality” și descrierea din înghețare, blogul avansat pornit (căutarea)',
+        str_contains($listaBlog, '<span class="blog-listing__eyebrow">Jurnalul BioVitality</span>')
+        && str_contains($listaBlog, '<p>Articole utile despre wellness, nutriție și un stil de viață echilibrat.</p>')
+        && str_contains($listaBlog, '<form class="blog-search"'));
     $slugProdus = (string) $db->query('SELECT slug FROM products WHERE is_active = 1 AND deleted_at IS NULL ORDER BY id LIMIT 1')->fetchColumn();
     $slugBlog = (string) $db->query('SELECT slug FROM blog_posts WHERE is_published = 1 ORDER BY id LIMIT 1')->fetchColumn();
     foreach (['/', '/magazin', '/produs/' . $slugProdus, '/cos', '/checkout', '/contact', '/blog', '/blog/' . $slugBlog, '/acorduri-gdpr', '/login',

@@ -700,10 +700,33 @@ dispar, iar linkurile spre el se scot din pagini.
   vertij `0fc2b2c`: YouTube, Vimeo sau un fișier video urcat în Galerie; playerul YouTube
   sau Vimeo se încarcă singur doar cu acordul pentru toate cookie-urile, altfel la apăsarea
   casetei „Pornește videoclipul”; Vimeo cu `dnt=1`). Tabele: `blog_*`.
+- **Blogul avansat** (WP-22, din Biovitality `c078bd5` … `6ea2cb1`; migrarea `blog/0033`):
+  etichetele (`blog_tags`, `blog_post_tags`), bibliografia (`blog_posts.references_html`), lățimea
+  copertei (`featured_image_width`), id-ul din WordPress (`wp_post_id`). Comutatorul
+  `blog_avansat` (OD-13 luată ca recomandarea, de confirmat de proprietar: un singur comutator; nucleul 1, Bioscem înghețat 0,
+  `App\Support\BlogAvansat`): pe `/blog` căutarea (`?q=`, fără grijă la diacritice, cu termenul
+  evidențiat; `App\Support\BlogSearch`) și chips-urile categoriilor cu articole publicate (cu
+  numărul lor; `?categorie=`, `?eticheta=`); în articol cuprinsul automat (ancore pe H2/H3,
+  `App\Support\BlogToc`), iar șablonul implicit are în plus cuprinsul, bibliografia, etichetele,
+  articolele similare și stilurile H4–H6; secțiunea veche „Articole interesante” a unui șablon
+  (`data-blog-related-list`, umplută din JavaScript la întâmplare) o umple serverul cu articole
+  din aceleași categorii și etichete (`App\Support\BlogRelatedPosts`). Cu el oprit, `/blog` și
+  articolele sunt cele de dinainte. **Mereu** (fără date noi nu schimbă nimic): bibliografia și
+  citările „[1]” legate de ea (`App\Support\BlogReferences`, ancora `#surse` păstrată), etichetele
+  articolului (adăugate la sfârșit unui șablon fără `{{blog_tags}}` / `{{blog_references}}`),
+  coperta sub 100%, tokenurile noi într-un șablon (`{{blog_toc}}`, `{{blog_references}}`,
+  `{{blog_tags}}`, `{{blog_related_posts}}`, `{{blog_image_width}}`), paginile
+  `/blog/categorie/{slug}` și `/blog/eticheta/{slug}` (o categorie inactivă sau un slug necunoscut:
+  404, pagina magazinului). Stilurile și derularea lină (`public/assets/css/blog-avansat.css`,
+  `public/assets/js/blog-anchors.js`) se încarcă doar pe un articol care le folosește. Textele
+  listei și ale articolului din setări (DB-13): `blog_eticheta_lista`, `blog_titlu_lista`,
+  `blog_descriere_lista`, `blog_autor_implicit` (gol = numele site-ului; și inițiala lui),
+  `blog_categorie_implicita`; fiecare site vechi le are înghețate la ale lui.
 - **Are nevoie de**: nimic. **Se oprește**: ca pornit. **Oprit**: nimic din blog
   pe site, în pagini, în meniu sau în harta site-ului; titlul pus chiar înaintea
   codului (`<h2>Din blog</h2>`) pleacă odată cu el; rolul „Administrator Blog” nu
-  se mai oferă (cine îl are îl păstrează).
+  se mai oferă (cine îl are îl păstrează); paginile de categorie, de etichetă și căutarea
+  (`/blog/...`, `/blog?q=`) dau 404 ca restul blogului.
 
 ### Newsletter (`newsletter`)
 

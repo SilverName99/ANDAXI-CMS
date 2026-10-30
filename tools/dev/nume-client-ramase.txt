@@ -10,8 +10,8 @@
 1	scripts/install.php
 7	scripts/seo-continut.php
 8	scripts/seo-texte.php
-8	src/Http/Controllers/AdminController.php
-4	src/Http/Controllers/SiteController.php
+6	src/Http/Controllers/AdminController.php
+2	src/Http/Controllers/SiteController.php
 1	src/Http/rute.php
 1	src/Support/Activari.php
 2	src/Support/AvertismentProduse.php
@@ -33,8 +33,6 @@
 1	src/Support/Sitemap.php
 1	src/Support/Tema.php
 2	src/Support/Verificare.php
-2	views/admin/blog-template-editor.php
 1	views/layout.php
-3	views/site/components/blog-posts.php
 14	views/site/home.php
 1	views/site/not-found.php

@@ -307,5 +307,10 @@ return static function (Router $router): void {
         \App\Support\Ping::raspunde();
     });
 
+    // WP-22 (B3, din Biovitality 263b520): paginile unei categorii și ale unei etichete de blog (articolele ei, cu titlul
+    // ei; o categorie sau etichetă inexistentă = 404). `/blog/{slug}` nu le prinde (un singur segment).
+    $router->get('/blog/categorie/{slug}', [SiteController::class, 'blogCategory']);
+    $router->get('/blog/eticheta/{slug}', [SiteController::class, 'blogTag']);
+
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

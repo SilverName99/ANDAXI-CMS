@@ -293,6 +293,40 @@
             },
             "motor": "InnoDB"
         },
+        "blog_post_tags": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "post_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "tag_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "post_id",
+                        "tag_id"
+                    ],
+                    "unic": true
+                },
+                "idx_bpt_tag": {
+                    "coloane": [
+                        "tag_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "blog_posts": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -374,6 +408,12 @@
                     "null": true,
                     "tip": "varchar(255)"
                 },
+                "featured_image_width": {
+                    "extra": "",
+                    "implicit": "100",
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
                 "id": {
                     "extra": "auto_increment",
                     "implicit": null,
@@ -397,6 +437,12 @@
                     "implicit": "1",
                     "null": false,
                     "tip": "int unsigned"
+                },
+                "references_html": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
                 },
                 "slug": {
                     "extra": "",
@@ -427,6 +473,12 @@
                     "implicit": null,
                     "null": true,
                     "tip": "varchar(500)"
+                },
+                "wp_post_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
                 }
             },
             "fk": [],
@@ -449,6 +501,63 @@
                         "published_at"
                     ],
                     "unic": false
+                },
+                "idx_blog_posts_wp": {
+                    "coloane": [
+                        "wp_post_id"
+                    ],
+                    "unic": false
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "blog_tags": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(150)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(170)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "name": {
+                    "coloane": [
+                        "name"
+                    ],
+                    "unic": true
                 },
                 "slug": {
                     "coloane": [

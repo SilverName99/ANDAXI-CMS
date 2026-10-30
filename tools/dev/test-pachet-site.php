@@ -349,12 +349,7 @@ $scrie('== G-pachet neutru: cu pachetul demo, nimic din lista neagră (' . implo
  * când WP-ul ei o scoate, intrarea pleacă din listă (lista doar scade).
  */
 $ramase = [
-    // WP-22 (DB-13, D1): eticheta listei de articole „Jurnalul Bioscem” (blog-posts.php), cu textele avansate ale blogului.
-    'pagina /blog' => ['bioscem', 'jurnalul bioscem', 'WP-22'],
-    // WP-22 (DB-13, D1, D7): previzualizarea listei de articole din editorul de pagini (aceeași etichetă) și autorul ei
-    // inventat „Echipa Bioscem” (AdminController::loadBlogPostsPreview). Previzualizarea e un șir JSON cu „<”, „>” scrise
-    // \u003C, \u003E, deci „Jurnalul” lipit de un „E” nu e un cuvânt întreg: se vede doar „bioscem”.
-    'pagina /admin/pages/new' => ['bioscem', 'WP-22'],
+    // Gol din WP-22 (DB-13: textele listei de articole și autorul previzualizării din setări / neutre).
 ];
 $ramaseVazute = [];
 /** O potrivire e permisă doar dacă e exact cea așteptată în $ramase. */

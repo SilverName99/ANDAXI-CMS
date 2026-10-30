@@ -20532,9 +20532,16 @@ HTML;
     private function blogPostsPreviewHtml(?PDO $db): string
     {
         $posts = $this->loadBlogPostsPreview($db, 6);
+        // WP-22: textele listei și comutatorul blogului avansat, ca pe /blog (fără categorii: previzualizarea nu filtrează).
+        $setari = Settings::all($db);
         return $this->renderPartialPhpView('site/components/blog-posts', [
             'posts' => $posts,
             'baseUrl' => '/blog',
+            'avansat' => \App\Support\BlogAvansat::pornit($setari),
+            'eticheta' => \App\Support\BlogAvansat::etichetaLista($setari),
+            'titluLista' => \App\Support\BlogAvansat::titluLista($setari),
+            'descriere' => \App\Support\BlogAvansat::descriereLista($setari),
+            'autorImplicit' => \App\Support\BlogAvansat::autorImplicit($setari),
         ]);
     }
 
@@ -20846,7 +20853,7 @@ HTML;
                 'reading_minutes' => 5,
                 'published_at' => date('Y-m-d H:i:s'),
                 'cover_image_url' => '/assets/img/product-placeholder.svg',
-                'author_name' => 'Echipa Bioscem',
+                'author_name' => 'Autor demo',
             ]];
         }
 
@@ -20876,7 +20883,7 @@ HTML;
                 'reading_minutes' => 5,
                 'published_at' => date('Y-m-d H:i:s'),
                 'cover_image_url' => '/assets/img/product-placeholder.svg',
-                'author_name' => 'Echipa Bioscem',
+                'author_name' => 'Autor demo',
             ]];
         }
     }

@@ -117,6 +117,19 @@ final class Settings
         // WP-21 (C10, OD-15): câte zile se păstrează adresa de la care a venit o recenzie (product_reviews.ip_address,
         // pentru limita anti-spam și pentru admin); după aceea se golește. 0 = se păstrează cât recenzia.
         'recenzii_ip_zile' => '90',
+        // WP-22 (B1, B2, B3, DB-13; decizia OD-13 luată ca recomandarea: un singur comutator): blogul avansat din
+        // Biovitality. Cu blog_avansat = 1, pe /blog căutarea și categoriile (chips-uri cu numărul de articole), iar în
+        // articol cuprinsul automat (ancore pe titlurile H2/H3), plus bibliografia, etichetele și articolele similare în
+        // șablonul implicit, iar secțiunea veche „Articole interesante” a unui șablon se umple de pe server; cu 0, /blog și
+        // articolele arată ca înainte (bibliografia și etichetele unui articol care le are apar oricum). Textele listei:
+        // eticheta de deasupra titlului (gol = fără), titlul, descrierea (gol = fără), autorul și categoria arătate când
+        // articolul n-are (gol = numele site-ului, respectiv nimic). Un site existent își păstrează blogul prin înghețare.
+        'blog_avansat' => '1',
+        'blog_eticheta_lista' => '',
+        'blog_titlu_lista' => 'Blog & Resurse',
+        'blog_descriere_lista' => '',
+        'blog_autor_implicit' => '',
+        'blog_categorie_implicita' => '',
         // WP-18 (GR-03, DB-15): datele operatorului și scopul din textul acordului GDPR (pluginul acorduri_gdpr; Admin →
         // Utilizatori → Acorduri GDPR). Goale: formularul le arată ca spații de completat. Varianta textului: „general”
         // (un scop oarecare) sau „medical” (înscrierea la un eveniment medical); adresa de retragere goală =
