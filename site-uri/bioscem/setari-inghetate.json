@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@070e1af",
-    "amprenta_nucleu": "8fb21fe96f1f94b16c818a3827d265eaff5e36d8e5d02bcc52c52d0a68829d8c",
+    "amprenta_nucleu": "e6e58731d608c856a9a063642e677068115a3aded4cfdd8b027cbd9bd0bf92c9",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -308,6 +308,14 @@
             "mod": "lipsa",
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
+        },
+        "page_cache_browser_policy": {
+            "valoare": "max_age",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-15 (VT-C2, OD-18, recomandarea): codul vechi trimite pentru paginile din cache „Cache-Control: public, max-age=<ttl>” (src/Support/ResponseCache.php); rămâne așa până decide clientul",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"revalidate\""
         },
         "recenzii_insigna_meniu": {
             "valoare": "0",

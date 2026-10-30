@@ -1302,6 +1302,10 @@ $marcajePort = [
     'bv:blog-lista-inceput' => ['cale' => '/admin/blog/posts', 'motiv' => 'WP-23 (B4): începutul containerului listei postărilor'],
     'bv:blog-lista-sfarsit' => ['cale' => '/admin/blog/posts', 'motiv' => 'WP-23 (B4): sfârșitul containerului listei postărilor'],
     'bv:blog-lista-script' => ['cale' => '/admin/blog/posts', 'motiv' => 'WP-23 (B4): stilul și scriptul paginării fără reîncărcare'],
+    // WP-15 (GR-06, din grafoanaytis): {{an}} în HTML-ul antetului și al subsolului din Design site — ajutorul de deasupra
+    // editorului și anul pus în previzualizarea lui (paginile publice nu se schimbă: Bioscem nu are {{an}} scris).
+    'gr:an-ajutor' => ['cale' => '/admin/design', 'motiv' => 'WP-15 (GR-06): ajutorul pentru {{an}} în Design site'],
+    'gr:an-previzualizare' => ['cale' => '/admin/design', 'motiv' => 'WP-15 (GR-06): {{an}} înlocuit cu anul în previzualizarea Design site'],
 ];
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];

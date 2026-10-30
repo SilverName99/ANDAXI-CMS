@@ -6,6 +6,9 @@ namespace App\Support;
 
 final class ResponseCache
 {
+    /** Cache-Control-ul paginilor HTML din cache cu politica „revalidate” (VT-C2; vertij PAGE_CACHE_CONTROL). */
+    private const CACHE_CONTROL_REVALIDARE = 'no-cache, must-revalidate';
+
     /**
      * @return list<string>
      */
@@ -88,14 +91,27 @@ final class ResponseCache
             if ($expiresAt > time()) {
                 $etag = trim((string) ($meta['etag'] ?? ''));
                 $lastModifiedTs = (int) ($meta['last_modified_ts'] ?? 0);
-                if (self::matchesNotModified($etag, $lastModifiedTs)) {
+                $cacheControl = self::cacheControlCitit($settings, $meta, $ttlSeconds);
+
+                // Din vertij (VT-C1, 1fbd151/6d50d39/fd766f6): fișierul se citește o singură dată și se
+                // verifică: hash-ul conținutului trebuie să fie ETag-ul salvat (sha1). Un fișier trunchiat
+                // sau stricat are alt hash, deci nu se servește și nu primește 304; pagina se face din nou.
+                $body = @file_get_contents($cacheFile);
+                $bodyIntact = is_string($body) && $body !== ''
+                    && ($etag !== ''
+                        ? ('"' . sha1($body) . '"' === $etag)
+                        : str_contains($body, '</html>'));
+
+                // 304 doar dacă fișierul din cache e intact: un browser care a ținut minte o versiune
+                // trunchiată primește astfel pagina bună.
+                if ($bodyIntact && self::matchesNotModified($etag, $lastModifiedTs)) {
                     if ($etag !== '') {
                         header('ETag: ' . $etag);
                     }
                     if ($lastModifiedTs > 0) {
                         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT');
                     }
-                    header('Cache-Control: ' . (string) ($meta['cache_control'] ?? ('public, max-age=' . min($ttlSeconds, 86400))));
+                    header('Cache-Control: ' . $cacheControl);
                     header('X-Page-Cache: HIT-304');
                     http_response_code(304);
                     return [
@@ -109,8 +125,7 @@ final class ResponseCache
                     ];
                 }
 
-                $body = @file_get_contents($cacheFile);
-                if (is_string($body) && $body !== '') {
+                if ($bodyIntact) {
                     $status = (int) ($meta['status_code'] ?? 200);
                     if ($status < 100 || $status > 599) {
                         $status = 200;
@@ -123,7 +138,7 @@ final class ResponseCache
                     if ($lastModifiedTs > 0) {
                         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT');
                     }
-                    header('Cache-Control: ' . (string) ($meta['cache_control'] ?? ('public, max-age=' . min($ttlSeconds, 86400))));
+                    header('Cache-Control: ' . $cacheControl);
                     header('X-Page-Cache: HIT');
                     echo $body;
                     return [
@@ -152,7 +167,37 @@ final class ResponseCache
             'ttl_seconds' => $ttlSeconds,
             'path' => $path,
             'query' => $query,
+            'cache_control' => self::cacheControlNou($settings, $ttlSeconds),
         ];
+    }
+
+    /**
+     * Cache-Control-ul unei pagini HTML puse acum în cache (VT-C2, setarea page_cache_browser_policy):
+     * - „revalidate” (implicit, ca la vertij, 7c1ae16): browserul păstrează pagina, dar o revalidează la fiecare
+     *   cerere (ETag / Last-Modified); serverul răspunde repede 304 cât timp pagina e aceeași, iar după o
+     *   golire a cache-ului vizitatorul vede imediat pagina nouă;
+     * - „max_age” (înghețat pe site-urile vechi care o aveau): browserul o ține până la o zi fără să întrebe (comportamentul vechi).
+     */
+    public static function cacheControlNou(array $settings, int $ttlSeconds): string
+    {
+        if (self::politicaBrowser($settings) === 'max_age') {
+            return 'public, max-age=' . max(0, min(max(60, $ttlSeconds), 86400));
+        }
+        return self::CACHE_CONTROL_REVALIDARE;
+    }
+
+    /** La fel, pentru o pagină servită din cache: „max_age” păstrează exact ce s-a scris la salvare (ca până acum). */
+    private static function cacheControlCitit(array $settings, array $meta, int $ttlSeconds): string
+    {
+        if (self::politicaBrowser($settings) === 'max_age') {
+            return (string) ($meta['cache_control'] ?? ('public, max-age=' . min($ttlSeconds, 86400)));
+        }
+        return self::CACHE_CONTROL_REVALIDARE;
+    }
+
+    public static function politicaBrowser(array $settings): string
+    {
+        return trim((string) ($settings['page_cache_browser_policy'] ?? 'revalidate')) === 'max_age' ? 'max_age' : 'revalidate';
     }
 
     /**
@@ -174,11 +219,10 @@ final class ResponseCache
         $shouldCache = self::isResponseCacheable($statusCode, $headers, $body);
         if ($shouldCache) {
             $ttlSeconds = max(60, (int) ($context['ttl_seconds'] ?? 1800));
-            $maxAge = max(0, min($ttlSeconds, 86400));
             $etag = '"' . sha1($body) . '"';
             $lastModifiedTs = time();
             $lastModifiedHttp = gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT';
-            $cacheControl = 'public, max-age=' . $maxAge;
+            $cacheControl = (string) ($context['cache_control'] ?? ('public, max-age=' . max(0, min($ttlSeconds, 86400))));
             header('Content-Type: text/html; charset=utf-8');
             header('ETag: ' . $etag, true);
             header('Last-Modified: ' . $lastModifiedHttp, true);
@@ -613,6 +657,11 @@ final class ResponseCache
                 return false;
             }
         }
+        // Din vertij (VT-C1, 4ac772b): o pagină HTML fără </html> e incompletă (de exemplu randarea oprită de o
+        // eroare fatală) și nu se ține niciodată în cache, altfel s-ar servi trunchiată tuturor.
+        if ($hasHtmlContentType && !str_contains($body, '</html>')) {
+            return false;
+        }
         return $hasHtmlContentType;
     }
 
@@ -664,9 +713,23 @@ final class ResponseCache
         if (!is_dir($dir)) {
             @mkdir($dir, 0775, true);
         }
-        $tmp = $targetFile . '.tmp';
-        @file_put_contents($tmp, $contents, LOCK_EX);
-        @rename($tmp, $targetFile);
+        // Din vertij (VT-C1, 6d50d39): un nume temporar unic pe scriere, ca două cereri simultane pentru aceeași
+        // pagină să nu scrie în același fișier (flock e doar consultativ și nu oprește trunchierea la deschidere);
+        // fișierul se mută la locul lui doar dacă s-a scris tot conținutul, altfel se șterge.
+        try {
+            $unic = getmypid() . '-' . bin2hex(random_bytes(6));
+        } catch (\Throwable) {
+            $unic = getmypid() . '-' . uniqid('', true);
+        }
+        $tmp = $targetFile . '.' . $unic . '.tmp';
+        $scris = @file_put_contents($tmp, $contents);
+        if ($scris === false || $scris !== strlen($contents)) {
+            @unlink($tmp);
+            return;
+        }
+        if (!@rename($tmp, $targetFile)) {
+            @unlink($tmp);
+        }
     }
 
     private static function deleteFile(string $file): bool

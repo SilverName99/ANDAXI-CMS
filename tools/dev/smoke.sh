@@ -617,6 +617,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Porturile din vertij și grafoanaytis ale pasului 5 (WP-15, WP-24, WP-25, WP-26): tools/dev/test-porturi-vt-gr.php, pe
+# licența „toate”, pe serverul pornit aici (plus un al doilea server pe +30, un Stripe fals pe +28 și un SMTP fals pe +29,
+# oprite de el). Pune la loc toată baza (CHECKSUM TABLE), fișierele încărcate, emailurile și jurnalul fatal.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Porturile VT/GR WP-15, WP-24…WP-26 (tools/dev/test-porturi-vt-gr.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-porturi-vt-gr.php" > "$TMP/test-porturi-vt-gr.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-porturi-vt-gr.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-porturi-vt-gr.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-porturi-vt-gr.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
 scrie ""
 scrie "== Instrucțiuni de schemă (DDL) pe cerere"

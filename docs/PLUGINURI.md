@@ -517,6 +517,12 @@ dispar, iar linkurile spre el se scot din pagini.
   deloc, pagina `/plata/…` arată suma și cere clientului să ne contacteze (nu mai
   pornește nicio plată). Textele BT care trimit la EuPlătesc („linkurile rămân pe
   EuPlătesc”) se schimbă.
+- **Stripe, cererile spre API** (`App\Support\StripeGateway`, WP-15, VT-C10 din vertij): pe lângă Checkout, și
+  PaymentIntent, Customer, Product și Subscription (creare, citire, anulare cu DELETE) pentru donații și membri
+  (Etapa 4), cu `Idempotency-Key` la creări, și lista endpoint-urilor de webhook. Antetul `Stripe-Version` vine din
+  setarea `stripe_api_version` (fără câmp în admin; goală = fără antet, contul folosește versiunea lui implicită, ca
+  până acum pe toate cele patru site-uri); webhook-urile urmează versiunea endpoint-ului, nu antetul. Pentru teste,
+  `STRIPE_API_BASE` poate trimite cererile la un server local (doar `http://127.0.0.1:…` sau `http://localhost:…`).
 
 ### Link de plată pentru diferențe (`link_plata`)
 

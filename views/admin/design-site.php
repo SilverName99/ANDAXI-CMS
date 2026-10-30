@@ -169,6 +169,13 @@ $mobileMenuEmbedToken = '{{mobile_menu}}';
                     </div>
                 </details>
             <?php endif; ?>
+<?= \App\Support\Dev::marcaj('gr:an-ajutor') ?>
+<?php if ($section === 'header' || $section === 'footer'): ?>
+                <p style="margin:0 0 12px;color:#64748b;">
+                    În HTML-ul de header și de footer poți folosi <code>{{an}}</code> pentru anul curent (de exemplu „© {{an}} Firma”).
+                </p>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('gr:an-ajutor', true) ?>
 
             <div class="editor-grid" id="design-editor-grid">
                 <div class="code-column" id="design-code-column">
@@ -560,6 +567,11 @@ $mobileMenuEmbedToken = '{{mobile_menu}}';
         let headerHtml = (sections.header.html || '').trim();
         let footerHtml = (sections.footer.html || '').trim();
         const menuHtml = (sections.menu.html || '').trim();
+<?= \App\Support\Dev::marcaj('gr:an-previzualizare') ?>
+        const anCurent = String(new Date().getFullYear());
+        headerHtml = headerHtml.split('{{an}}').join(anCurent);
+        footerHtml = footerHtml.split('{{an}}').join(anCurent);
+<?= \App\Support\Dev::marcaj('gr:an-previzualizare', true) ?>
         if (headerHtml !== '' && menuHtml !== '') {
             headerHtml = headerHtml.replace(/\{\{\s*menu\s*\}\}/gi, menuHtml);
         }

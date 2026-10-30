@@ -316,5 +316,7 @@ return static function (Router $router): void {
     // randează pe site; al pluginului blog (/admin/blog/*).
     $router->post('/admin/blog/posts/preview', [AdminController::class, 'blogPostPreview']);
 
+    // WP-15 (GR-05, din grafoanaytis 74e4b25): încărcarea mai multor fișiere odată în galerie (nucleu, ca /admin/gallery).
+    $router->post('/admin/gallery/bulk-upload', [AdminController::class, 'galleryBulkUpload']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

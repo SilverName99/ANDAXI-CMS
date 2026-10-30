@@ -190,6 +190,9 @@ final class Settings
         'stripe_secret_key' => '',
         'stripe_webhook_secret' => '',
         'stripe_currency' => 'ron',
+        // WP-15: VT-C10 — antetul Stripe-Version al cererilor spre Stripe; gol = fără antet (contul folosește versiunea
+        // lui implicită, ca până acum pe toate cele patru site-uri). Plățile și webhook-urile citesc ambele forme.
+        'stripe_api_version' => '',
         // EuPlătesc — plata cu cardul prin redirect (procesatorul implicit).
         'euplatesc_enabled' => '0',
         'euplatesc_merchant_id' => '',
@@ -315,6 +318,10 @@ final class Settings
         'cache_assets_versioning_mode' => 'query',
         'cache_assets_etag_enabled' => '1',
         'cache_assets_version_token' => '',
+        // WP-15: VT-C2 (OD-18) — cum ține browserul o pagină HTML venită din cache-ul de pagini: „revalidate” (o
+        // revalidează la fiecare cerere) sau „max_age” (o ține până la o zi fără să întrebe; înghețat pe site-urile
+        // care îl aveau). Fără câmp în admin (o schimbă ANDAXI).
+        'page_cache_browser_policy' => 'revalidate',
     ];
 
     /**

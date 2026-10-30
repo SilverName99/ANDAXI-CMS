@@ -16080,7 +16080,8 @@ final class AdminController
             }
         }
 
-        $uploaded = $this->handleMediaUpload($_FILES['image_file'] ?? null, 'gallery', $title !== '' ? $title : $uploadedFileBaseName);
+        $uploaded = $this->handleMediaUpload($_FILES['image_file'] ?? null, 'gallery', $title !== '' ? $title : $uploadedFileBaseName,
+            self::EXTENSII_GALERIE);
         $mediaType = 'image';
         if (is_array($uploaded)) {
             $imageUrl = (string) $uploaded['url'];
@@ -16113,6 +16114,152 @@ final class AdminController
 
         Flash::set('success', 'Media adăugată în galerie.');
         header('Location: /admin/gallery');
+    }
+
+    /**
+     * GR-05 (din grafoanaytis, 74e4b25): mai multe fișiere odată în galerie (`image_files[]`). Titlul și textul
+     * alternativ vin din numele fișierului; ce nu se poate încărca e numit în mesaj. PHP limitează numărul de fișiere
+     * pe cerere (`max_file_uploads`) și mărimea totală (`post_max_size`): o cerere peste `post_max_size` ajunge fără
+     * niciun fișier, iar mesajul spune asta, nu „niciun fișier selectat”. Un rând în jurnalul adminilor pe încărcare.
+     */
+    public function galleryBulkUpload(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            Flash::set('error', 'Conexiunea DB nu este disponibilă.');
+            header('Location: /admin/gallery');
+            return;
+        }
+        $this->ensureOptionalSchema($db);
+
+        $fisiere = $this->normalizeUploadedFiles($_FILES['image_files'] ?? null);
+        if ($fisiere === []) {
+            $marime = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+            $limita = $this->octetiDinIni((string) ini_get('post_max_size'));
+            if ($marime > 0 && $limita > 0 && $marime > $limita) {
+                Flash::set('error', 'Fișierele au împreună ' . $this->marimeLizibila($marime) . ', peste limita serverului de '
+                    . $this->marimeLizibila($limita) . ' pe o încărcare. Încarcă-le în mai multe tranșe.');
+            } else {
+                Flash::set('error', 'Nu a fost selectat niciun fișier.');
+            }
+            header('Location: /admin/gallery');
+            return;
+        }
+
+        $folderId = (int) ($_POST['folder_id'] ?? 0);
+        $isActive = isset($_POST['is_active']) ? 1 : 0;
+
+        $stmt = $db->prepare(
+            'INSERT INTO gallery_images (title, media_type, image_url, folder_id, alt_text, sort_order, is_active)
+             VALUES (:title, :media_type, :image_url, :folder_id, :alt_text, :sort_order, :is_active)'
+        );
+
+        $reusite = 0;
+        $esuate = [];
+        foreach ($fisiere as $index => $fisier) {
+            $numeOriginal = (string) ($fisier['name'] ?? '');
+            $baza = trim((string) pathinfo($numeOriginal, PATHINFO_FILENAME));
+            $titlu = trim((string) (preg_replace('/\s+/', ' ', str_replace(['-', '_'], ' ', $baza)) ?? ''));
+            if ($titlu === '') {
+                $titlu = 'Media ' . ($index + 1);
+            }
+
+            $incarcat = $this->handleMediaUpload($fisier, 'gallery', $baza !== '' ? $baza : $titlu, self::EXTENSII_GALERIE);
+            if (!is_array($incarcat)) {
+                $esuate[] = $numeOriginal !== '' ? $numeOriginal : ('fișierul ' . ($index + 1));
+                continue;
+            }
+
+            $stmt->execute([
+                'title' => $titlu,
+                'media_type' => (string) $incarcat['media_type'],
+                'image_url' => (string) $incarcat['url'],
+                'folder_id' => $folderId > 0 ? $folderId : null,
+                'alt_text' => $titlu,
+                'sort_order' => 0,
+                'is_active' => $isActive,
+            ]);
+            $reusite++;
+        }
+
+        $maxim = (int) ini_get('max_file_uploads');
+        if ($reusite > 0) {
+            $mesaj = $reusite === 1 ? 'A fost încărcat 1 fișier.' : "Au fost încărcate {$reusite} fișiere.";
+            if ($esuate !== []) {
+                $mesaj .= ' Nu au putut fi încărcate: ' . implode(', ', array_slice($esuate, 0, 5))
+                    . (count($esuate) > 5 ? ' și altele' : '') . '.';
+            }
+            if ($maxim > 0 && count($fisiere) >= $maxim) {
+                $mesaj .= " Serverul primește cel mult {$maxim} fișiere pe încărcare; dacă ai ales mai multe, încarcă restul separat.";
+            }
+            Flash::set('success', $mesaj);
+        } else {
+            Flash::set('error', 'Niciun fișier nu a putut fi încărcat. Verifică formatul și dimensiunea.');
+        }
+
+        \App\Support\AdminActivityLog::log($db, 'galerie_incarcare_multipla', [
+            'incarcate' => $reusite,
+            'esuate' => count($esuate),
+            'folder_id' => $folderId > 0 ? $folderId : null,
+        ]);
+
+        header('Location: /admin/gallery');
+    }
+
+    /**
+     * Desface forma pe care PHP o dă unui `<input type="file" multiple>` (un singur element cu câte o listă pe fiecare
+     * cheie) în intrări separate, de forma cerută de handleMediaUpload, fără sloturile goale.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function normalizeUploadedFiles(mixed $camp): array
+    {
+        if (!is_array($camp) || !is_array($camp['name'] ?? null)) {
+            return [];
+        }
+
+        $rezultat = [];
+        foreach (array_keys($camp['name']) as $i) {
+            if ((int) ($camp['error'][$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+                continue;
+            }
+            $rezultat[] = [
+                'name' => (string) ($camp['name'][$i] ?? ''),
+                'type' => (string) ($camp['type'][$i] ?? ''),
+                'tmp_name' => (string) ($camp['tmp_name'][$i] ?? ''),
+                'error' => (int) ($camp['error'][$i] ?? UPLOAD_ERR_OK),
+                'size' => (int) ($camp['size'][$i] ?? 0),
+            ];
+        }
+
+        return $rezultat;
+    }
+
+    /** O valoare din php.ini („8M”, „1G”, „512K”, „1048576”) în octeți. */
+    private function octetiDinIni(string $valoare): int
+    {
+        $valoare = trim($valoare);
+        if ($valoare === '') {
+            return 0;
+        }
+        $numar = (int) $valoare;
+        return match (strtolower(substr($valoare, -1))) {
+            'g' => $numar * 1024 * 1024 * 1024,
+            'm' => $numar * 1024 * 1024,
+            'k' => $numar * 1024,
+            default => $numar,
+        };
+    }
+
+    private function marimeLizibila(int $octeti): string
+    {
+        return $octeti >= 1024 * 1024
+            ? number_format($octeti / (1024 * 1024), 1, ',', '.') . ' MB'
+            : number_format($octeti / 1024, 0, ',', '.') . ' KB';
     }
 
     public function createGalleryFolder(): void
@@ -26283,7 +26430,17 @@ HTML;
         return implode('/', $normalized);
     }
 
-    private function handleMediaUpload(mixed $file, string $namespace, string $preferredName = ''): ?array
+    /** Extensiile încărcărilor din editoarele de produs și de articol: doar imagini și video (azi). */
+    private const EXTENSII_MEDIA = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4'];
+    /** Extensiile galeriei: în plus PDF-uri (GR-04, din grafoanaytis, d3c4b79), ca documentele legate din pagini. */
+    private const EXTENSII_GALERIE = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'pdf'];
+
+    /**
+     * Un fișier încărcat, mutat în `uploads/<namespace>/`. `$extensiiPermise`: lista ecranului care încarcă (PDF doar
+     * din galerie, GR-04). Conținutul se verifică după tip, nu doar extensia: un PDF începe cu „%PDF-”, o imagine
+     * trebuie să fie citită de getimagesize().
+     */
+    private function handleMediaUpload(mixed $file, string $namespace, string $preferredName = '', array $extensiiPermise = self::EXTENSII_MEDIA): ?array
     {
         if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             return null;
@@ -26299,8 +26456,10 @@ HTML;
         }
 
         $ext = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
-        $allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4'];
-        if (!in_array($ext, $allowed, true)) {
+        if (!in_array($ext, $extensiiPermise, true) || !in_array($ext, self::EXTENSII_GALERIE, true)) {
+            return null;
+        }
+        if (!$this->continutPotrivit($tmpPath, $ext)) {
             return null;
         }
 
@@ -26337,11 +26496,31 @@ HTML;
         ];
     }
 
+    /** Conținutul fișierului se potrivește cu extensia? PDF: „%PDF-” la început; imagini: getimagesize(); mp4: neverificat. */
+    private function continutPotrivit(string $cale, string $ext): bool
+    {
+        if ($ext === 'pdf') {
+            $inceput = @file_get_contents($cale, false, null, 0, 5);
+            return $inceput === '%PDF-';
+        }
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+            return @getimagesize($cale) !== false;
+        }
+        return true;
+    }
+
+    /**
+     * Felul fișierului, după extensie: `video` (mp4), `document` (PDF, GR-04: galeria îi arată o fișă cu numele și un
+     * link; alegătoarele de poze cer `media_type = 'image'`, deci îl sar) sau `image`.
+     */
     private function detectMediaType(string $path): string
     {
         $urlPath = (string) (parse_url($path, PHP_URL_PATH) ?? $path);
         $ext = strtolower(pathinfo($urlPath, PATHINFO_EXTENSION));
-        return $ext === 'mp4' ? 'video' : 'image';
+        if ($ext === 'mp4') {
+            return 'video';
+        }
+        return $ext === 'pdf' ? 'document' : 'image';
     }
 
     private function galleryMoveResponse(bool $ok, string $message): void

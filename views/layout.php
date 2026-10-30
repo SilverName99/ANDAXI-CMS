@@ -294,6 +294,9 @@ if ($metaImageUrlFinal !== '' && !preg_match('/^https?:\/\//i', $metaImageUrlFin
 }
 $siteFaviconUrlEscaped = htmlspecialchars($siteFaviconUrl, ENT_QUOTES);
 $designHeaderOutput = $designHeader;
+// GR-06 (din grafoanaytis): {{an}} = anul curent, ca nota de copyright să nu rămână pe un an vechi. Înaintea meniului,
+// deci doar în HTML-ul scris în Design site. O pagină din cache păstrează anul până expiră (cel mult o zi).
+$designHeaderOutput = str_replace('{{an}}', date('Y'), $designHeaderOutput);
 if (trim($designHeaderOutput) !== '' && trim($designMenu) !== '') {
     $designHeaderOutput = str_replace(['{{menu}}', '{{ menu }}'], $designMenu, $designHeaderOutput);
 }
@@ -1117,7 +1120,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     <?php if (trim($designFooter) !== ''): ?>
         <?php
         // Aceleasi token-uri ca in header: meniul si numarul de produse din cos.
-        $designFooterOutput = $designFooter;
+        $designFooterOutput = str_replace('{{an}}', date('Y'), $designFooter);
         if (trim($designMenu) !== '') {
             $designFooterOutput = str_replace(['{{menu}}', '{{ menu }}'], $designMenu, $designFooterOutput);
         }

@@ -160,13 +160,13 @@ livrare și pozele WebP doar cu datele lor în pachet).
 
 | Commit | Data | Subiect | Stare |
 |---|---|---|---|
-| `7c1ae16` | 29.06 | Cache: browserul revalidează mereu | de portat (WP-15, VT-C2, setare pe site) |
+| `7c1ae16` | 29.06 | Cache: browserul revalidează mereu | portat (WP-15, VT-C2: setarea `page_cache_browser_policy`, implicit `revalidate`; Bioscem, Biovitality și grafoanaytis înghețate `max_age`, decizia OD-18) |
 | `5a50703` | 29.06 | Formularul de contact spre emailul site-ului | nu se portează (Bioscem `cad75e0`, `contact_form_recipients`; înghețare VT) |
 | `7519384` | 29.06 | Slidere pe mobil + sigla SVTH | de verificat în WP-24 (sliderul pare deja în CMS prin BV `7773149`/`c2959f3`); sigla = conținut VT |
 | `b0aa083` `e577b94` `01e2773` `76dd45e` | 12.07 | Slider `{{category_posts}}`: carduri de eveniment și navigare | de portat (WP-24, VT-C4) |
 | `32db865` `b032fae` `1f28376` `8412906` | 22.07 | Donații Stripe: fundație, popup, mod „Exemplu” | pluginul `donatii` (Etapa 4, VT-D1, D8) |
-| `1fbd151` `6d50d39` `fd766f6` | 22.07 | Cache de pagini: integritate la scriere, citire, 304 | de portat (WP-15, VT-C1) |
-| `4ac772b` | 22.07 | Logger fatal + nu memora pagini incomplete | de portat (WP-15, VT-C1, VT-C3) |
+| `1fbd151` `6d50d39` `fd766f6` | 22.07 | Cache de pagini: integritate la scriere, citire, 304 | portat (WP-15, VT-C1; cheia cache-ului și TTL-ul de 60 s cu stocul din ERP ale codului comun păstrate) |
+| `4ac772b` | 22.07 | Logger fatal + nu memora pagini incomplete | portat (WP-15, VT-C1, VT-C3: `storage/logs/fatal.log` prin `Paths::stocareSite`, calea fără query string) |
 | `265db83` `67319f7` `ff3c46e` `c1abee4` | 07.08 | Tokenurile `category_event_rows`, `category_grid_paged` | de portat (WP-24, VT-C4) |
 | `5e1d8bd` `6c4d97c` | 07.08 | Paginile de cont și resetare în culorile brandului | pachetul VT (temă, Etapa 4) |
 | `833baa9` | 07.08 | Tokenul `{{auth_form}}` | de portat (WP-25, VT-C5) |
@@ -180,7 +180,7 @@ livrare și pozele WebP doar cu datele lor în pachet).
 | `e707086` | 06.09 | Trimitere SMTP reală | nu se portează (CMS are varianta aliniată DMARC, `OrderMailer.php:716-729`); diagnosticul în WP-26 |
 | `a7177e8` `b52208e` | 06.09–05.10 | Sigla și culorile linkurilor în emailuri | de portat (WP-17, VT-C7) |
 | `7c2a1a2` | 05.10 | Pregătire pentru domeniul oficial (sesiune, link coș) | nu se portează (Bioscem `af56687`, VT-C12/C14) |
-| `dc52498` `b3967d3` `24bca44` `5359797` `ca1120c` | 05.10 | Donații lunare, chitanțe, versiunea API Stripe | `donatii` (Etapa 4, VT-D1…D4); `StripeGateway` WP-15 (VT-C10); dispecerul WP-25 (VT-X1) |
+| `dc52498` `b3967d3` `24bca44` `5359797` `ca1120c` | 05.10 | Donații lunare, chitanțe, versiunea API Stripe | `donatii` (Etapa 4, VT-D1…D4); `StripeGateway` portat (WP-15, VT-C10: plus `Stripe-Version` din `stripe_api_version`, `Idempotency-Key`, `listWebhookEndpoints`); dispecerul WP-25 (VT-X1) |
 | `ad1d792` | 20.10 | Secțiunile pentru medici și pacienți: zece categorii de blog și zece pagini (scriptul `seed-content-sections.php`), blocurile HTML din `docs/pagini/` | nu se portează (conținutul VT, deja în baza lui; ca `docs/templates` la Bioscem, decizia OD-34); repararea panoului „Evenimente pentru pacienți” e tot conținut (HTML-ul paginii) |
 | `0fc2b2c` | 20.10 | Câmpul de video al postării: linkuri YouTube și Vimeo (`VideoEmbed`), un singur loc pentru postare și evenimentul următor; șablonul „Articol cu imagini și video” | portat (`78e1d36`: `VideoEmbed`, `SiteController`, `NextEvent`, `BlogTemplateFields`, editorul postării; pluginul blog). Șablonul îl face scriptul de conținut VT (nu se portează). Pentru Bioscem: rând în `site-uri/bioscem/ce-se-schimba.md`, textul editorului declarat în `$porturiVertij`, iar un fișier .mp4 rămâne `<video>` exact ca azi (caz „regresie” în `compara-cu-baza.php`). Diferență față de vertij (revizuirea portului, 20.10): playerul YouTube/Vimeo se încarcă singur doar cu acordul pentru cookie-uri, altfel la apăsarea casetei „Pornește videoclipul”; Vimeo cu `dnt=1` (rând în `site-uri/vertij/ce-se-schimba.md`; ambele ramuri declarate în `$porturiVertij`, cazul „blog: un link YouTube/Vimeo”). Biovitality are altă clasă cu același nume (`App\Support\VideoEmbed`, coperta videoului în newslettere, `84e29a9`): WP-21 (C11d) le pune împreună în aceasta |
 
@@ -207,7 +207,7 @@ grafoanaytis nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO a
 | `509354b` | — | Temelia vizuală: brand și Bootstrap 5 | cheia `bootstrap` portată (WP-13, 22 octombrie: `tema.json` → `bootstrap`, Bootstrap 5.3.8 în nucleu, `public/assets/vendor/bootstrap/`, aceiași octeți ca la GR; docs/PACHETE.md); restul pachetul GR (GR-19) |
 | `21bbb02` | — | Paginile site-ului, front-end desprins de tema veche | `incarca_app_css` portat (WP-13, 22 octombrie: fără `app.css` pe paginile publice, adminul îl păstrează); conținutul pachetul GR (GR-20) |
 | `9d7d0fa` | — | Instalarea nouă fără resturi | nu se portează (valorile implicite → înghețarea GR, GR-22) |
-| `74e4b25` | — | Pagini pe tot ecranul, încărcare multiplă în galerie | WP-15 (GR-05); `main: lat` și mesajele în containerul lor (`flash: bootstrap`) portate (WP-13, 22 octombrie) |
+| `74e4b25` | — | Pagini pe tot ecranul, încărcare multiplă în galerie | încărcarea multiplă portată (WP-15, GR-05: plus mesajul cererii peste `post_max_size` și un rând în jurnalul adminilor); `main: lat` și mesajele în containerul lor (`flash: bootstrap`) portate (WP-13, 22 octombrie) |
 | `50f5d28` | — | Pagina Produse în meniu | pachetul GR (GR-20); implicitul → GR-22 |
 | `2c11526` | — | Formularul GDPR adaptat | de portat (WP-18, GR-03) |
 | `86ca09b` | — | Fontul Rubik, meniu cu majuscule | Rubik portat (WP-13, 22 octombrie, GR-07: `public/assets/vendor/fonturi/rubik/`, aceleași greutăți și fișierul variabil al lui GR, o singură copie pe subset; `tema.json` → `fonturi`, `fonturi_google: false`); restul pachetul GR |
@@ -228,7 +228,7 @@ grafoanaytis nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO a
 | `1ff9f88` | — | Catalogul în ordinea cerută de client | portat (WP-19, GR-08: o singură coloană `sort_position` cu BV C14b, sortarea `catalog`, `catalog_sortare_implicita` înghețat `catalog`; pasul `site/grafoanaytis/0001_ordine_catalog` mută `sort_order` ca rang dens, aplicat la adoptarea GR în Etapa 4) |
 | `e927172` `49d8b9b` `9e1b62d` `e34fd31` | — | Animații, cifre, banda de sigle, antet care se strânge | pachetul GR (GR-19) |
 | `d1bffca` | — | Toate mesajele spre cutia tipografiei | înghețarea GR (GR-22); `verifica-email` generic WP-26 (GR-21) |
-| `fe0c041` | — | Reply-To = cine scrie; verificarea SMTP | de portat (WP-15 GR-01; WP-26 GR-21) |
-| `d3c4b79` | 18.09 | Banda de recrutare, PDF-uri în galerie, CSS-ul antetului | PDF-urile WP-15 (GR-04); CSS antet deja în CMS (GR-12); conținutul pachetul GR (GR-13, GR-20) |
+| `fe0c041` | — | Reply-To = cine scrie; verificarea SMTP | Reply-To portat (WP-15, GR-01: SMTP, mail() și SendGrid; adresa doar dacă e validă); verificarea SMTP WP-26 (GR-21) |
+| `d3c4b79` | 18.09 | Banda de recrutare, PDF-uri în galerie, CSS-ul antetului | PDF-urile portate (WP-15, GR-04: doar din galerie, conținutul verificat — `%PDF-` și `getimagesize()`; stilul fișei în pagina galeriei); `{{an}}` portat (WP-15, GR-06: în footer și în antet, cu ajutorul din Design site); CSS antet deja în CMS (GR-12); conținutul pachetul GR (GR-13, GR-20) |
 | `91a332c` `7bbc69e` `fbd2a08` `c2a96bc` `8f4a520` `f1c0161` `496402a` `257a831` `2ac291b` `34be948` `0eb923d` `c55fed0` `b1d9474` `bda8c32` `2305ad7` `8212267` `349bddb` `ae088a9` `79a8df0` `ae9ddc7` `1980696` `ef56a3e` `ba0b3ed` | — | Conținut, imagini și texte ale clientului | pachetul GR (GR-19, GR-20); regula din `496402a` (toate rândurile paginii de start) intră în importator |
 | `6ea348f` `d2b7f4d` `466ab8c` `ed45094` `a145317` `d0b0114` `a19bae8` | — | Încărcări de fișiere brute („asset-uri noi”) | nu se portează (rămân în afara oricărui repo) |

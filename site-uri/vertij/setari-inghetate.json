@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "8fb21fe96f1f94b16c818a3827d265eaff5e36d8e5d02bcc52c52d0a68829d8c",
+    "amprenta_nucleu": "e6e58731d608c856a9a063642e677068115a3aded4cfdd8b027cbd9bd0bf92c9",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -724,6 +724,11 @@
             "motiv": "Cu numerotarea „legacy” (order_number_mode, mai sus) contorul nu se folosește",
             "vechi": "lipsește",
             "nucleu": "implicit \"1001\""
+        },
+        "page_cache_browser_policy": {
+            "motiv": "Același comportament: vertij trimite deja „no-cache, must-revalidate” pentru paginile din cache (7c1ae16), implicitul codului comun (WP-15, VT-C2)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"revalidate\""
         },
         "recenzii_insigna_meniu": {
             "motiv": "Fără pluginul recenzii în abonament (lista de azi): meniul n-are intrarea Recenzii, setarea nu se folosește",

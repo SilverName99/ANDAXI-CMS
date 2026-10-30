@@ -508,8 +508,12 @@ HTML;
             $meta['order_number'] = $orderNumber;
         }
 
+        // GR-01 (din grafoanaytis, fe0c041): „Răspunde” ajunge la cine a scris (formularul de contact, cererea de
+        // ofertă), dacă apelantul a dat adresa în „from_email”; altfel Reply-To rămâne adresa expeditorului.
+        $replyTo = self::adresaRaspuns($historyMeta);
+
         try {
-            self::sendHtmlEmail($to, $subject, $html, $settings);
+            self::sendHtmlEmail($to, $subject, $html, $settings, $replyTo);
             self::logEmailSend($db, [
                 'order_id' => $orderId,
                 'email_type' => $emailType,
@@ -595,8 +599,12 @@ HTML;
         }
         $meta = is_array($historyMeta['meta'] ?? null) ? $historyMeta['meta'] : [];
 
+        // GR-01 (din grafoanaytis, fe0c041): „Răspunde” ajunge la cine a scris (formularul de contact, cererea de
+        // ofertă), dacă apelantul a dat adresa în „from_email”; altfel Reply-To rămâne adresa expeditorului.
+        $replyTo = self::adresaRaspuns($historyMeta);
+
         try {
-            self::sendHtmlEmail($to, $subject, $html, $settings);
+            self::sendHtmlEmail($to, $subject, $html, $settings, $replyTo);
             self::logEmailSend($db, [
                 'order_id' => $orderId,
                 'email_type' => $emailType,
@@ -624,7 +632,14 @@ HTML;
         }
     }
 
-    private static function sendHtmlEmail(string $to, string $subject, string $html, array $settings): void
+    /** Adresa vizitatorului din `from_email` (GR-01), doar dacă e o adresă validă (deci fără rânduri noi); altfel gol. */
+    private static function adresaRaspuns(array $historyMeta): string
+    {
+        $adresa = trim((string) ($historyMeta['from_email'] ?? ''));
+        return filter_var($adresa, FILTER_VALIDATE_EMAIL) ? $adresa : '';
+    }
+
+    private static function sendHtmlEmail(string $to, string $subject, string $html, array $settings, string $replyTo = ''): void
     {
         $fromName = self::sanitizeHeader(Brand::numeExpeditor($settings));
         // Site-ul de verificare (docs/VERIFICARE.md): orice email doar la proprietar, cu „[VERIFICARE]”, prin căsuța
@@ -640,10 +655,14 @@ HTML;
             $fromAddress = 'no-reply@localhost';
         }
 
+        if (!filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+            $replyTo = $fromAddress;
+        }
+
         $subject = self::sanitizeHeader($subject);
         $deliveryMethod = strtolower(trim((string) ($settings['email_delivery_method'] ?? 'smtp')));
         if ($deliveryMethod === 'sendgrid') {
-            self::sendWithSendGrid($to, $subject, $html, $fromName, $fromAddress, $settings);
+            self::sendWithSendGrid($to, $subject, $html, $fromName, $fromAddress, $settings, $replyTo);
             return;
         }
 
@@ -651,11 +670,11 @@ HTML;
         // pentru instalările fără SMTP (pe Hostinger mail() e aruncat tăcut).
         $smtpHost = trim((string) ($settings['smtp_host'] ?? ''));
         if ($deliveryMethod === 'smtp' && $smtpHost !== '') {
-            self::sendWithSmtp($to, $subject, $html, $fromName, $fromAddress, $settings);
+            self::sendWithSmtp($to, $subject, $html, $fromName, $fromAddress, $settings, $replyTo);
             return;
         }
 
-        self::sendWithPhpMail($to, $subject, $html, $fromName, $fromAddress);
+        self::sendWithPhpMail($to, $subject, $html, $fromName, $fromAddress, $replyTo);
     }
 
     /**
@@ -669,8 +688,12 @@ HTML;
         string $html,
         string $fromName,
         string $fromAddress,
-        array $settings
+        array $settings,
+        string $replyTo = ''
     ): void {
+        if (!filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+            $replyTo = $fromAddress;
+        }
         $host = trim((string) ($settings['smtp_host'] ?? ''));
         $port = (int) ($settings['smtp_port'] ?? 587);
         if ($port <= 0) {
@@ -762,7 +785,7 @@ HTML;
             $anteturi = [
                 'Date: ' . date('r'),
                 'From: ' . $numeCodat . ' <' . $expeditorPlic . '>',
-                'Reply-To: ' . $fromAddress,
+                'Reply-To: ' . $replyTo,
                 'To: <' . $to . '>',
                 'Subject: ' . $subiectCodat,
                 'MIME-Version: 1.0',
@@ -831,8 +854,12 @@ HTML;
         string $subject,
         string $html,
         string $fromName,
-        string $fromAddress
+        string $fromAddress,
+        string $replyTo = ''
     ): void {
+        if (!filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+            $replyTo = $fromAddress;
+        }
         if (!function_exists('mail')) {
             throw new RuntimeException('Functia mail() nu este disponibila pe server.');
         }
@@ -841,7 +868,7 @@ HTML;
             'MIME-Version: 1.0',
             'Content-Type: text/html; charset=UTF-8',
             'From: ' . self::sanitizeHeader($fromName) . ' <' . $fromAddress . '>',
-            'Reply-To: ' . $fromAddress,
+            'Reply-To: ' . $replyTo,
             'X-Mailer: PHP/' . phpversion(),
         ];
 
@@ -857,7 +884,8 @@ HTML;
         string $html,
         string $fromName,
         string $fromAddress,
-        array $settings
+        array $settings,
+        string $replyTo = ''
     ): void {
         $apiKey = trim((string) ($settings['sendgrid_api_key'] ?? ''));
         if ($apiKey === '') {
@@ -878,6 +906,10 @@ HTML;
                 'value' => $html,
             ]],
         ];
+        // Doar când răspunsul merge altundeva decât la expeditor (GR-01): altfel corpul cererii rămâne cel de până acum.
+        if (filter_var($replyTo, FILTER_VALIDATE_EMAIL) && strcasecmp($replyTo, $fromAddress) !== 0) {
+            $payload['reply_to'] = ['email' => $replyTo];
+        }
 
         $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($body === false) {

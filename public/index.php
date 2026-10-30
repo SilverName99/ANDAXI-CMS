@@ -9,6 +9,27 @@ declare(strict_types=1);
 require_once __DIR__ . '/../src/Support/Paths.php';
 \App\Support\Paths::alegeJurnalulPhp();
 
+// Jurnalul erorilor fatale (din vertij, VT-C3, 4ac772b): o eroare fatală care oprește randarea lasă un rând în
+// storage/logs/fatal.log al site-ului (momentul, calea cererii, mesajul, fișierul și linia), ca o pagină trunchiată
+// să se poată explica. Doar calea, fără query string: acolo pot sta tokenuri (linkuri de plată, resetări, confirmări).
+register_shutdown_function(static function (): void {
+    $eroare = error_get_last();
+    if ($eroare === null || !in_array($eroare['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        return;
+    }
+    $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? '');
+    $dosar = \App\Support\Paths::stocareSite('logs');
+    if (!is_dir($dosar) || !is_writable($dosar)) {
+        return;
+    }
+    @file_put_contents(
+        $dosar . '/fatal.log',
+        date('c') . '  ' . ($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . $cale . "\n  " . $eroare['message']
+            . "\n  in " . $eroare['file'] . ':' . $eroare['line'] . "\n\n",
+        FILE_APPEND | LOCK_EX
+    );
+});
+
 // Poarta (App\Support\Verificare, docs/VERIFICARE.md), prima, înaintea fișierelor încărcate,
 // a stratului SEO și a sesiunii: un site fără bază configurată (deploy proaspăt, fără .env)
 // răspunde 503 „neconfigurat”, nu paginile aplicației; site-ul de verificare

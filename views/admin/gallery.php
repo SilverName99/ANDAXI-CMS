@@ -18,7 +18,7 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
     <div class="section-head">
         <div>
             <h1>Galerie</h1>
-            <p>Gestionează imagini și videoclipuri mp4.</p>
+            <p>Gestionează imagini, videoclipuri mp4 și documente PDF.</p>
         </div>
         <div style="display:flex;gap:8px;">
             <button class="btn btn-secondary" type="button" id="open-folder-modal">+ Adaugă folder</button>
@@ -70,6 +70,8 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
                         <video muted preload="metadata">
                             <source src="<?= htmlspecialchars((string) $folder['cover_url'], ENT_QUOTES) ?>" type="video/mp4">
                         </video>
+                    <?php elseif (($folder['cover_media_type'] ?? '') === 'document'): ?>
+                        <span>PDF</span>
                     <?php elseif (!empty($folder['cover_url'])): ?>
                         <img src="<?= htmlspecialchars((string) $folder['cover_url'], ENT_QUOTES) ?>" alt="<?= htmlspecialchars((string) $folder['name'], ENT_QUOTES) ?>" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
                     <?php else: ?>
@@ -102,7 +104,7 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
         <div class="gallery-empty">
             <div class="icon">🖼️</div>
             <h3>Niciun fișier</h3>
-            <p><?= $searchQuery !== '' ? 'Nu există rezultate pentru căutarea ta.' : 'Adaugă imagini sau clipuri mp4 în galerie.' ?></p>
+            <p><?= $searchQuery !== '' ? 'Nu există rezultate pentru căutarea ta.' : 'Adaugă imagini, clipuri mp4 sau PDF-uri în galerie.' ?></p>
         </div>
     <?php elseif ($viewMode !== 'folders'): ?>
         <form method="post" action="/admin/gallery/bulk-delete" id="gallery-bulk-form">
@@ -149,6 +151,21 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
                             <video controls preload="metadata">
                                 <source src="<?= htmlspecialchars($mediaUrl, ENT_QUOTES) ?>" type="video/mp4">
                             </video>
+                        <?php elseif ($mediaType === 'document'): ?>
+                            <?php
+                            /*
+                             * Un PDF nu se poate desena într-un „img": pus acolo,
+                             * ar arăta ca o imagine stricată. Primește o fișă cu
+                             * numele fișierului și o legătură care îl deschide,
+                             * ca să se poată verifica din galerie că e cel bun.
+                             */
+                            ?>
+                            <a class="gallery-item__document" href="<?= htmlspecialchars($mediaUrl, ENT_QUOTES) ?>"
+                               target="_blank" rel="noopener"
+                               title="Deschide documentul într-o filă nouă">
+                                <span class="gallery-item__document-icon" aria-hidden="true">PDF</span>
+                                <span class="gallery-item__document-name"><?= htmlspecialchars(basename($mediaUrl), ENT_QUOTES) ?></span>
+                            </a>
                         <?php else: ?>
                             <img
                                 src="<?= htmlspecialchars($mediaUrl, ENT_QUOTES) ?>"
@@ -203,6 +220,45 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
             <h3>Adaugă media</h3>
             <button type="button" class="icon-btn" id="close-gallery-modal">✕</button>
         </div>
+        <form method="post" action="/admin/gallery/bulk-upload" class="form-grid"
+              enctype="multipart/form-data" id="gallery-bulk-form" style="margin-bottom:22px;">
+            <div class="field" style="grid-column:1/-1;">
+                <label class="upload-dropzone" for="gallery-bulk-files" id="gallery-bulk-dropzone">
+                    <input type="file" id="gallery-bulk-files" name="image_files[]"
+                           accept="image/*,video/mp4,application/pdf" multiple hidden>
+                    <span class="icon">⤴⤴</span>
+                    <strong>Încarcă mai multe fișiere odată</strong>
+                    <small>Selectează mai multe cu Ctrl / Shift, sau trage-le aici</small>
+                    <em id="gallery-bulk-count">Niciun fișier selectat</em>
+                </label>
+            </div>
+            <div class="field">
+                <label>Folder pentru toate</label>
+                <select name="folder_id">
+                    <option value="">Fără folder</option>
+                    <?php foreach ($folders as $folder): ?>
+                        <option value="<?= (int) $folder['id'] ?>"><?= htmlspecialchars((string) $folder['name'], ENT_QUOTES) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;margin-top:26px;">
+                    <input type="checkbox" name="is_active" value="1" checked>
+                    Activează-le pe toate
+                </label>
+            </div>
+            <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                <small style="color:#64748b;">
+                    Titlul fiecărei imagini se ia din numele fișierului. Le poți redenumi după încărcare.
+                </small>
+                <button class="btn" type="submit" id="gallery-bulk-submit" disabled>Încarcă toate</button>
+            </div>
+        </form>
+
+        <p style="margin:0 0 14px;color:#64748b;font-size:13px;">
+            Sau adaugă un singur fișier, cu titlu și alt text scrise de tine:
+        </p>
+
         <form method="post" action="/admin/gallery" class="form-grid" enctype="multipart/form-data" id="gallery-form">
             <div class="field" style="grid-column:1/-1;">
                 <label>Titlu *</label>
@@ -223,15 +279,15 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
             </div>
             <div class="field" style="grid-column:1/-1;">
                 <label class="upload-dropzone" for="gallery-image-file" id="gallery-dropzone">
-                    <input type="file" id="gallery-image-file" name="image_file" accept="image/*,video/mp4" hidden>
+                    <input type="file" id="gallery-image-file" name="image_file" accept="image/*,video/mp4,application/pdf" hidden>
                     <span class="icon">⤴</span>
-                    <strong>Upload media (imagine/mp4)</strong>
+                    <strong>Upload media (imagine / mp4 / PDF)</strong>
                     <small>Click pentru alegere sau drag & drop</small>
                     <em id="gallery-file-name">Niciun fișier selectat</em>
                 </label>
             </div>
             <div class="field" style="grid-column:1/-1;">
-                <label>...sau URL media (imagine/mp4)</label>
+                <label>...sau URL media (imagine / mp4 / PDF)</label>
                 <input type="text" name="image_url" placeholder="/assets/img/product-placeholder.svg">
             </div>
             <div class="field" style="grid-column:1/-1;">
@@ -433,6 +489,54 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
         const selectedFile = e.dataTransfer.files[0];
         fileName.textContent = selectedFile.name;
         syncTitleFromFile(selectedFile);
+    });
+
+    /* Incarcare multipla: numara fisierele alese si activeaza butonul. */
+    const bulkInput = document.getElementById('gallery-bulk-files');
+    const bulkCount = document.getElementById('gallery-bulk-count');
+    const bulkZone = document.getElementById('gallery-bulk-dropzone');
+    const bulkSubmit = document.getElementById('gallery-bulk-submit');
+    const bulkForm = document.getElementById('gallery-bulk-form');
+
+    function arataNumarFisiere(fisiere) {
+        const n = fisiere ? fisiere.length : 0;
+        if (bulkCount) {
+            bulkCount.textContent = n === 0
+                ? 'Niciun fișier selectat'
+                : (n === 1 ? '1 fișier selectat' : n + ' fișiere selectate');
+        }
+        if (bulkSubmit) {
+            bulkSubmit.disabled = n === 0;
+            bulkSubmit.textContent = n > 1 ? ('Încarcă toate (' + n + ')') : 'Încarcă';
+        }
+    }
+
+    bulkInput?.addEventListener('change', () => arataNumarFisiere(bulkInput.files));
+
+    ['dragenter', 'dragover'].forEach((ev) => {
+        bulkZone?.addEventListener(ev, (e) => {
+            e.preventDefault();
+            bulkZone.classList.add('drag-over');
+        });
+    });
+    ['dragleave', 'drop'].forEach((ev) => {
+        bulkZone?.addEventListener(ev, (e) => {
+            e.preventDefault();
+            bulkZone.classList.remove('drag-over');
+        });
+    });
+    bulkZone?.addEventListener('drop', (e) => {
+        if (!e.dataTransfer?.files?.length) return;
+        bulkInput.files = e.dataTransfer.files;
+        arataNumarFisiere(bulkInput.files);
+    });
+
+    /* Incarcarea mai multor fisiere dureaza; fara semnal, utilizatorul da click iar. */
+    bulkForm?.addEventListener('submit', () => {
+        if (bulkSubmit) {
+            bulkSubmit.disabled = true;
+            bulkSubmit.textContent = 'Se încarcă…';
+        }
     });
 
     form?.addEventListener('submit', () => {
@@ -711,3 +815,46 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
     });
 })();
 </script>
+<style>
+/* Fișa unui document din galerie (GR-04, din grafoanaytis d3c4b79; în pagina galeriei, nu în app.css, care intră și în
+   previzualizarea editorului de pagini). Ține locul imaginii, cu aceeași înălțime ca ea și ca videoclipul. */
+.gallery-item__document {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    height: 140px;
+    padding: 12px;
+    background: #f8fafc;
+    color: #334155;
+    text-decoration: none;
+    text-align: center;
+}
+
+.gallery-item__document:hover,
+.gallery-item__document:focus-visible {
+    background: #eef2f7;
+}
+
+.gallery-item__document-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 46px;
+    padding: 5px 9px;
+    border-radius: 6px;
+    background: #b91c1c;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .06em;
+}
+
+.gallery-item__document-name {
+    font-size: 13px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+</style>

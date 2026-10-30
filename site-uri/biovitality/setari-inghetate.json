@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "8fb21fe96f1f94b16c818a3827d265eaff5e36d8e5d02bcc52c52d0a68829d8c",
+    "amprenta_nucleu": "e6e58731d608c856a9a063642e677068115a3aded4cfdd8b027cbd9bd0bf92c9",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Biovitality",
@@ -351,6 +351,14 @@
             "mod": "lipsa",
             "din": "cod",
             "sursa": "$settings['order_number_next'] ?? … (rezerva din cod)"
+        },
+        "page_cache_browser_policy": {
+            "valoare": "max_age",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-15 (VT-C2, OD-18, recomandarea): codul vechi trimite pentru paginile din cache „Cache-Control: public, max-age=<ttl>” (src/Support/ResponseCache.php); rămâne așa până decide clientul",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"revalidate\""
         },
         "store_name": {
             "valoare": "Biovitality Shop",
