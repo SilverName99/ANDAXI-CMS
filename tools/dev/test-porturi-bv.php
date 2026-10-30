@@ -29,7 +29,8 @@ declare(strict_types=1);
  *    implicite și nici ca tab; adminul salvează tipul „Imagine” și bifa.
  * G. {{products_by_template:…}} (C14e): doar produsele active ale șablonului, cu limita, titlul, subtitlul și bannerul;
  *    un link `javascript:` nu intră; un șablon inexistent nu lasă nimic; codul în editorul paginilor.
- * H. GR-16, GR-17: {{product_produse_similare}} (banda simplă, titlul din setări, „Vezi produsul”),
+ * H. GR-16, GR-17: {{product_produse_similare}} (banda simplă, titlul din setări, „Cere ofertă” cu pluginul cereri_oferta,
+ *    WP-26, „Vezi produsul” fără el),
  *    catalog_sortare_vizibila = 0 fără butonul sortării, {{produse_serviciu}} pe o pagină de serviciu.
  * I. Adminul: editorul produsului salvează poziția și bifa „ascuns din catalog” (și le păstrează când formularul nu le
  *    trimite), un produs nou primește cheia de ciornă, lista arată linkul de ciornă.
@@ -551,9 +552,19 @@ $db->prepare('UPDATE product_templates SET html_content = :h WHERE id = :id')->e
     'h' => $sablonVechi . '{{product_produse_similare}}']);
 $setare('catalog_similare_subtitlu', 'Subtitlu de test');
 $pagina = $cerere('GET', '/produs/ceai-de-menta')['corp'];
-$verifica('{{product_produse_similare}}: banda simplă, cu titlul implicit, subtitlul din setări și „Vezi produsul”',
+// Cu licența „toate”, cereri_oferta e pe site (portat în WP-26): legătura cardului spune „Cere ofertă”.
+$verifica('{{product_produse_similare}}: banda simplă, cu titlul implicit, subtitlul din setări și „Cere ofertă” (cereri_oferta pe site)',
     str_contains($pagina, '<section id="produse-similare"') && str_contains($pagina, 'Produse asemănătoare')
-    && str_contains($pagina, 'Subtitlu de test') && str_contains($pagina, 'Vezi produsul') && !str_contains($pagina, '{{product_produse_similare}}'));
+    && str_contains($pagina, 'Subtitlu de test') && str_contains($pagina, 'Cere ofertă') && !str_contains($pagina, 'Vezi produsul')
+    && !str_contains($pagina, '{{product_produse_similare}}'));
+$licentaSchimbata = true;
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/tools/dev/licenta.php') . ' toate cereri_oferta=oprit 2>&1',
+    $iesireLicenta, $codLicenta);
+$faraOferta = $cerere('GET', '/produs/ceai-de-menta')['corp'];
+$verifica('… fără cereri_oferta: „Vezi produsul”', $codLicenta === 0 && str_contains($faraOferta, 'Vezi produsul') && !str_contains($faraOferta, 'Cere ofertă'),
+    implode(' ', $iesireLicenta));
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/tools/dev/licenta.php') . ' toate 2>&1', $iesireLicenta, $codLicenta);
+$licentaSchimbata = $codLicenta !== 0;
 $verifica('… cardurile duc la produse din aceeași categorie, fără preț', preg_match_all('#<section id="produse-similare".*?</section>#s', $pagina, $banda) === 1
     && substr_count($banda[0][0], 'href="/produs/ceai-') >= 1 && !str_contains($banda[0][0], ' lei'));
 $setare('catalog_similare_subtitlu', null);
