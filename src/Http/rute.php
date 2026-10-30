@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\SiteController;
 use App\Http\Router;
 
@@ -318,5 +319,10 @@ return static function (Router $router): void {
 
     // WP-15 (GR-05, din grafoanaytis 74e4b25): încărcarea mai multor fișiere odată în galerie (nucleu, ca /admin/gallery).
     $router->post('/admin/gallery/bulk-upload', [AdminController::class, 'galleryBulkUpload']);
+    // WP-25 (VT-X1, VT-C9, VT-C8): „Verifică webhook-ul” din Setări plăți (plata_stripe); confirmarea adresei de email a
+    // unui cont de client, din linkul primit pe email (mereu deschis) și retrimiterea lui din cont (conturi_clienti).
+    $router->post('/admin/settings/payments/verifica-webhook', [AdminController::class, 'stripeWebhookVerifica']);
+    $router->get('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirma']);
+    $router->post('/contul-meu/confirmare-email', [ConfirmareEmailController::class, 'retrimite']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

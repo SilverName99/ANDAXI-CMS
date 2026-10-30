@@ -4,7 +4,11 @@ $orders = is_array($orders ?? null) ? $orders : [];
 $addresses = is_array($addresses ?? null) ? $addresses : [];
 $pointsHistory = is_array($pointsHistory ?? null) ? $pointsHistory : [];
 $settingsCardRows = is_array($settingsCardRows ?? null) ? $settingsCardRows : [];
-$accountSection = in_array((string) ($accountSection ?? 'profile'), ['profile', 'orders', 'addresses', 'points', 'settings'], true) ? (string) $accountSection : 'profile';
+// WP-25 (VT-X3): tab-urile pluginurilor (cont.taburi, doar cele cu conținut) și statisticile lor (cont.antet).
+$taburiPlugin = is_array($taburiPlugin ?? null) ? $taburiPlugin : [];
+$tabPluginHtml = (string) ($tabPluginHtml ?? '');
+$statisticiPlugin = is_array($statisticiPlugin ?? null) ? $statisticiPlugin : [];
+$accountSection = in_array((string) ($accountSection ?? 'profile'), array_merge(['profile', 'orders', 'addresses', 'points', 'settings'], array_keys($taburiPlugin)), true) ? (string) $accountSection : 'profile';
 // Sistemul de puncte oprit din admin → secțiunea dispare din cont.
 $loyaltyEnabled = !isset($loyaltyEnabled) || !empty($loyaltyEnabled);
 if (!$loyaltyEnabled && $accountSection === 'points') {
@@ -51,6 +55,9 @@ $menuItems = [
 if (!$loyaltyEnabled) {
     unset($menuItems['points']);
 }
+foreach ($taburiPlugin as $cheieTab => $tabPlugin) {
+    $menuItems = array_slice($menuItems, 0, -1, true) + [$cheieTab => (string) $tabPlugin['eticheta']] + array_slice($menuItems, -1, null, true);
+}
 // Fără magazin pe site, comenzile și adresele de livrare apar doar clienților
 // care au deja (istoricul lor, doar pentru citire); altfel nu se vorbește de ele.
 $cuMagazinCont = \App\Support\Plugins::vizibil('magazin');
@@ -92,7 +99,7 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                             <a
                                 class="<?= $accountSection === $key ? 'is-active' : '' ?>"
                                 href="/contul-meu?section=<?= urlencode($key) ?>"
-                                data-account-nav="<?= htmlspecialchars($key, ENT_QUOTES) ?>"
+                                <?= isset($taburiPlugin[$key]) ? 'data-account-tab-plugin' : 'data-account-nav' ?>="<?= htmlspecialchars($key, ENT_QUOTES) ?>"
                             >
                                 <span class="account-section-v2__menu-main">
                                     <span class="account-section-v2__menu-icon"><?= $menuIcons[$key] ?? '' ?></span>
@@ -113,6 +120,12 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
             </aside>
 
             <div class="account-section-v2__main" data-account-panels>
+<?php if ((int) ($comenziAscunse ?? 0) > 0): ?>
+                <p class="account-section-v2__confirmare" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;padding:12px 14px;border:1px solid #fcd34d;border-radius:12px;background:#fffbeb;">
+                    <span><?= htmlspecialchars((string) ($textComenziAscunse ?? ''), ENT_QUOTES) ?></span>
+                    <form method="post" action="/contul-meu/confirmare-email" style="margin:0;"><button class="btn btn-secondary" type="submit">Trimite linkul</button></form>
+                </p>
+<?php endif; ?>
                 <section class="account-section-v2__panel <?= $accountSection === 'profile' ? 'is-active' : '' ?>" data-account-panel="profile">
                     <article class="account-section-v2__profile-card">
                         <div class="account-section-v2__profile-head">
@@ -178,6 +191,12 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                             <span>Ultima comandă</span>
                         </article>
 <?php endif; ?>
+<?php foreach ($statisticiPlugin as $statisticaPlugin): ?>
+                        <article class="account-section-v2__card">
+                            <strong><?= htmlspecialchars((string) $statisticaPlugin['valoare'], ENT_QUOTES) ?></strong>
+                            <span><?= htmlspecialchars((string) $statisticaPlugin['eticheta'], ENT_QUOTES) ?></span>
+                        </article>
+<?php endforeach; ?>
                     </div>
                 </section>
 
@@ -327,6 +346,11 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                         </article>
                     </article>
                 </section>
+<?php if (isset($taburiPlugin[$accountSection])): ?>
+                <section class="account-section-v2__panel is-active" data-account-panel="<?= htmlspecialchars($accountSection, ENT_QUOTES) ?>">
+                    <?= $tabPluginHtml ?>
+                </section>
+<?php endif; ?>
             </div>
         </div>
 

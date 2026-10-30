@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "e6e58731d608c856a9a063642e677068115a3aded4cfdd8b027cbd9bd0bf92c9",
+    "amprenta_nucleu": "eba034e121011df9ebd1929dac6f9eade8b0253cfeca48af1f642892e5849329",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",
@@ -352,6 +352,11 @@
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod expresie",
             "nucleu": "implicit \"\""
+        },
+        "customer_email_confirmation_required": {
+            "motiv": "Codul vechi n-are confirmarea adresei la înregistrare: implicitul 0 al codului comun e aceeași purtare (contul intră imediat). Confirmarea pentru comenzile fără cont e o regulă a nucleului, fără setare (OD-47, ce-se-schimba.md)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
         },
         "email_brand_color": {
             "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",

@@ -167,6 +167,10 @@ return [
                 . 'coșul abandonat și coșul flotant, avertismentul pe produs (ex. refrigerat) și fluxul de produse pentru Google Merchant Center.',
             'necesita' => ['catalog'],
             'bani' => true,
+            // WP-25 (VT-X1): evenimentele Stripe pe care le procesează (App\Support\StripeEvenimente; Setări plăți le cere
+            // în endpoint-ul de webhook al contului).
+            'stripe_evenimente' => ['checkout.session.completed', 'checkout.session.async_payment_succeeded',
+                'checkout.session.async_payment_failed', 'checkout.session.expired', 'payment_intent.succeeded', 'payment_intent.payment_failed'],
             'rute_admin' => ['/admin/orders/*', '/admin/settings/floating-cart'],
             // Fluxul Merchant Center are prețuri și disponibilitate: e al magazinului, nu al catalogului (WP-R).
             'rute_publice' => ['/cos/*', '/api/cart/*', '/api/checkout/*', '/checkout', '/checkout/succes/*', '/feed/google-merchant\.xml'],
@@ -222,7 +226,9 @@ return [
             'necesita' => [],
             'bani' => true,
             'rute_mereu_deschise' => ['POST /webhook/stripe'],
-            'tabele' => ['orders.stripe_*'],
+            // WP-25 (VT-X1): „Verifică webhook-ul” din Setări plăți (endpoint-ul contului, versiunea, evenimentele lipsă).
+            'rute_admin' => ['/admin/settings/payments/verifica-webhook'],
+            'tabele' => ['orders.stripe_*', 'stripe_events'],
         ],
 
         'plata_euplatesc' => [
@@ -254,6 +260,9 @@ return [
             'bani' => true,
             'rute_admin' => ['/admin/orders/{id}/payment-link'],
             'rute_publice' => ['/plata/*'],
+            // WP-25: plata unui link prin Stripe se confirmă pe sesiunea lui de checkout (StripeEvenimente, proprietarul
+            // „link_plata” după metadata.payment_link_token).
+            'stripe_evenimente' => ['checkout.session.completed', 'checkout.session.async_payment_succeeded'],
             'tabele' => ['order_payment_links'],
         ],
 
@@ -360,8 +369,11 @@ return [
             'necesita' => [],
             'rute_admin' => ['/admin/users/*'],
             'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*'],
+            // WP-25 (VT-C9): linkul de confirmare a adresei din emailurile trimise merge în orice stare a pluginului.
+            'rute_mereu_deschise' => ['GET /cont/confirmare/{token}'],
             'pagini' => ['resetare-parola'],
-            'tokenuri' => ['account_section', 'auth_google_button'],
+            // WP-25 (VT-C5): {{auth_form}} = formularul de intrare / înregistrare, pe paginile „login” și „register”.
+            'tokenuri' => ['account_section', 'auth_google_button', 'auth_form'],
             'meniu' => [
                 ['grup' => 'utilizatori', 'ordine' => 10, 'eticheta' => 'Listă utilizatori', 'href' => '/admin/users', 'icon' => 'users',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users'])
@@ -371,7 +383,7 @@ return [
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users/settings'])
                         && ($tab ?? 'settings') !== 'points'],
             ],
-            'tabele' => ['users', 'user_addresses', 'customer_password_resets'],
+            'tabele' => ['users', 'user_addresses', 'customer_password_resets', 'customer_email_confirmations'],
         ],
 
         'blog' => [
@@ -442,6 +454,8 @@ return [
             'bani' => true,
             'portat' => false,
             'sursa' => 'vertij-tinitus.ro',
+            'stripe_evenimente' => ['payment_intent.succeeded', 'payment_intent.payment_failed', 'invoice.paid', 'invoice.payment_failed',
+                'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded'],
             'tabele' => ['donations'],
         ],
 
@@ -452,6 +466,8 @@ return [
             'bani' => true,
             'portat' => false,
             'sursa' => 'vertij-tinitus.ro',
+            'stripe_evenimente' => ['checkout.session.completed', 'checkout.session.async_payment_succeeded',
+                'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded'],
             'tabele' => ['professions', 'profession_fields', 'account_verifications', 'account_verification_documents',
                 'account_activations'],
         ],

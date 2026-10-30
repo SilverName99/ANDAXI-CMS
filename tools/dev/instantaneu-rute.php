@@ -154,7 +154,10 @@ $faraPlugin = [
 // catalog (rute_mereu_deschise), pică până se adaugă și aici, cu metoda ei.
 $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /webhook/bt-ipay', 'GET /checkout/bt/retur',
     'POST /checkout/succes/{orderNumber}', 'POST /api/erp/notificare', 'POST /api/erp/adrese', 'GET /newsletter/unsubscribe/{token}',
-    'GET /newsletter/track/open/{campaignId}/{subscriberId}/{token}', 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}'];
+    'GET /newsletter/track/open/{campaignId}/{subscriberId}/{token}', 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}',
+    // WP-25: linkul de confirmare a adresei din emailul de după înregistrare (un cont creat cât `conturi_clienti` era
+    // pornit se confirmă și după oprirea lui).
+    'GET /cont/confirmare/{token}'];
 $mereuDeschiseFixeNorm = [];
 foreach ($mereuDeschiseFixe as $adresa) {
     [$metodaFixa, $tiparFix] = explode(' ', $adresa, 2);

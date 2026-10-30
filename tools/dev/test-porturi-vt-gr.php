@@ -24,6 +24,21 @@ declare(strict_types=1);
  *    refuzate, PDF-ul refuzat la încărcarea din editorul de produs și de articol; încărcarea multiplă (titlurile din nume,
  *    fișierul refuzat numit, un rând în jurnalul adminilor), o cerere peste post_max_size cu mesajul ei.
  *
+ * WP-24 — punctele de legătură și poarta conținutului pentru membri (VT-X2, VT-C4):
+ * A. App\Support\Hooks: punct necunoscut refuzat, agățarea contează doar cât pluginul e vizibil (sau activ).
+ * B. App\Support\AccesMembri: decizia (liber / notă / 404), listele, condiția SQL, căile restricționate.
+ * C. Pe site: paginile și articolele doar pentru membri (404 cu `membri` oprit, nota 403 cu el pornit), API-ul, listele,
+ *    tokenurile categoriei, harta site-ului, linkurile din meniu.
+ * D. Cu agățări de probă (al doilea server, CMS_DEV_HOOKS): membrul activ, nota pluginului, ștergerea contului,
+ *    înregistrarea, câmpurile editorului, layout.final_body.
+ *
+ * WP-25 — conturile și infrastructura Stripe (VT-X1, VT-X3, VT-X4, VT-C5, VT-C8, VT-C9):
+ * A. App\Support\StripeEvenimente: proprietarul unui eveniment, evenimentele cerute, verificarea webhook-ului.
+ * B. /webhook/stripe: semnătura, notarea în stripe_events, duplicatele, proprietarul oprit.
+ * C. Setări plăți: evenimentele cerute, ultimul primit, „Verifică webhook-ul” pe Stripe-ul fals.
+ * D. {{auth_form}}, regula comenzilor fără cont, confirmarea adresei (link o dată, 7 zile, retrimiterea limitată),
+ *    tab-urile contului.
+ *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
  * paginilor, sesiunile, fișierele încărcate, emailurile capturate și jurnalul fatal. Serverele pornite aici se opresc.
  * Raportul: $CMS_DEV_DIR/test-porturi-vt-gr-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -39,6 +54,7 @@ require_once $radacina . '/bootstrap.php';
 require_once __DIR__ . '/lib/salvari-admin.php';
 
 use App\Support\AccesMembri;
+use App\Support\ConfirmareEmail;
 use App\Support\Database;
 use App\Support\Hooks;
 use App\Support\OrderMailer;
@@ -46,6 +62,7 @@ use App\Support\Paths;
 use App\Support\Plugins;
 use App\Support\ResponseCache;
 use App\Support\Settings;
+use App\Support\StripeEvenimente;
 use App\Support\StripeGateway;
 
 $dosarDev = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/');
@@ -352,6 +369,11 @@ return [
     }],
     ['punct' => 'editor.pagina.campuri', 'plugin' => 'membri', 'fn' => static fn (array $rand): string => $camp($rand)],
     ['punct' => 'editor.articol.campuri', 'plugin' => 'membri', 'fn' => static fn (array $rand): string => $camp($rand)],
+    ['punct' => 'cont.taburi', 'plugin' => 'donatii', 'fn' => static fn ($db, array $u): array => ($u['email'] ?? '') !== 'tab.test@exemplu.ro' ? []
+        : [['cheie' => 'donatii-test', 'eticheta' => 'Donațiile mele (test)', 'icon' => '', 'insigna' => '',
+            'render' => static fn (): string => '<div class="tab-plugin-test-continut">Donații (test)</div>']]],
+    ['punct' => 'cont.antet', 'plugin' => 'donatii', 'fn' => static fn ($db, array $u): array => ($u['email'] ?? '') !== 'tab.test@exemplu.ro' ? []
+        : [['eticheta' => 'Donații', 'valoare' => '3']]],
 ];
 HOOKS);
 $eroriServer2 = $dosarLucru . '/erori-server2.log';
@@ -943,7 +965,270 @@ $verifica('inregistrare.cont_existent: o adresă care are deja cont → redirec�
     && ($r['antete']['location'] ?? '') === '/contact?reluare=1', json_encode([$r['cod'], $r['antete']['location'] ?? '']));
 $db->exec("DELETE FROM register_submit_logs");
 
-// ##WP25##
+// =====================================================================
+// WP-25 A. Dispecerul Stripe, fără server
+// =====================================================================
+$scrie('');
+$scrie('== WP-25 A. StripeEvenimente: proprietarul, evenimentele cerute, verificarea webhook-ului');
+$ev = static fn (array $obiect, string $tip = 'checkout.session.completed'): array => ['id' => 'evt_x', 'type' => $tip, 'data' => ['object' => $obiect]];
+$verifica('proprietarul: activarea unui cont → membri; o donație → donatii; un link de plată → link_plata; o comandă → magazin; altceva → null',
+    StripeEvenimente::proprietar($db, $ev(['metadata' => ['type' => 'account_activation', 'order_number' => 'X']])) === 'membri'
+    && StripeEvenimente::proprietar($db, $ev(['metadata' => ['type' => 'donation']])) === 'donatii'
+    && StripeEvenimente::proprietar($db, $ev(['metadata' => ['payment_link_token' => 'abc', 'order_number' => 'X']])) === 'link_plata'
+    && StripeEvenimente::proprietar($db, $ev(['metadata' => ['order_number' => 'CMD-1']])) === 'magazin'
+    && StripeEvenimente::proprietar($db, $ev(['object' => 'payment_intent', 'metadata' => ['order_id' => '5']], 'payment_intent.succeeded')) === 'magazin'
+    && StripeEvenimente::proprietar($db, $ev(['object' => 'checkout.session', 'client_reference_id' => 'CMD-2'])) === 'magazin'
+    && StripeEvenimente::proprietar($db, $ev(['object' => 'invoice', 'subscription' => 'sub_x'], 'invoice.paid')) === null
+    && StripeEvenimente::proprietar($db, $ev(['object' => 'customer'], 'customer.created')) === null);
+$cerute = StripeEvenimente::ceruteDePluginuri();
+$verifica('evenimentele cerute de pluginurile vizibile (licența „toate”): ale magazinului, donațiilor și membrilor, fără dubluri',
+    in_array('checkout.session.completed', $cerute, true) && in_array('invoice.paid', $cerute, true) && in_array('charge.refunded', $cerute, true)
+    && count($cerute) === count(array_unique($cerute)), implode(', ', $cerute));
+putenv('STRIPE_API_BASE=http://127.0.0.1:' . $portStripe);
+$_ENV['STRIPE_API_BASE'] = 'http://127.0.0.1:' . $portStripe;
+StripeGateway::folosesteSetarile([]);
+$raspunsuriStripe(['GET /v1/webhook_endpoints' => ['cod' => 200, 'corp' => ['data' => [
+    ['url' => 'https://alt.exemplu.ro/webhook/stripe', 'status' => 'enabled', 'enabled_events' => ['*']],
+    ['url' => 'http://site.exemplu.ro/webhook/stripe', 'status' => 'enabled', 'api_version' => '2026-08-26.proba',
+        'enabled_events' => ['checkout.session.completed', 'payment_intent.succeeded']],
+]]]]);
+$rez = StripeEvenimente::verificaWebhook('sk_test_inventat', 'http://site.exemplu.ro');
+$verifica('verificaWebhook: endpoint-ul cu adresa site-ului, pornit, versiunea lui, evenimentele cerute care îi lipsesc',
+    $rez['gasit'] && $rez['activ'] && $rez['versiune'] === '2026-08-26.proba' && in_array('checkout.session.expired', $rez['lipsa'], true)
+    && !in_array('checkout.session.completed', $rez['lipsa'], true) && $rez['eroare'] === '', json_encode($rez));
+$rez = StripeEvenimente::verificaWebhook('sk_test_inventat', 'http://altul.exemplu.ro');
+$verifica('verificaWebhook: fără endpoint pentru adresa site-ului → negăsit; fără cheie → eroarea ei', !$rez['gasit']
+    && StripeEvenimente::verificaWebhook('', 'http://x')['eroare'] === 'Lipsește cheia secretă Stripe.');
+$cereriStripe();
+putenv('STRIPE_API_BASE');
+unset($_ENV['STRIPE_API_BASE']);
+
+// =====================================================================
+// WP-25 B. Webhook-ul prin server
+// =====================================================================
+$scrie('');
+$scrie('== WP-25 B. /webhook/stripe: semnătura, notarea, duplicatele, proprietarul oprit');
+$secret = 'whsec_test_wp25';
+$setare('stripe_webhook_secret', $secret);
+$trimiteEveniment = static function (array $eveniment, ?string $secretSemnare = null, string $bazaServer = '') use ($cerere, $secret): array {
+    $corp = json_encode($eveniment, JSON_UNESCAPED_SLASHES);
+    $t = time();
+    return $cerere('POST', $bazaServer . '/webhook/stripe', null, $corp, ['Content-Type: application/json',
+        'Stripe-Signature: t=' . $t . ',v1=' . hash_hmac('sha256', $t . '.' . $corp, $secretSemnare ?? $secret)]);
+};
+$comanda = $db->query("SELECT id, order_number FROM orders WHERE deleted_at IS NULL AND order_number <> '' ORDER BY id DESC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$idComanda = (int) $comanda['id'];
+$db->prepare("UPDATE orders SET payment_status = 'pending', status = 'pending_payment', paid_at = NULL WHERE id = :id")->execute(['id' => $idComanda]);
+$platit = ['id' => 'evt_wp25_platit', 'type' => 'checkout.session.completed', 'api_version' => '2026-08-26.proba', 'data' => ['object' => [
+    'id' => 'cs_wp25', 'object' => 'checkout.session', 'payment_status' => 'paid', 'payment_intent' => 'pi_wp25',
+    'metadata' => ['order_number' => (string) $comanda['order_number']]]]];
+$r = $trimiteEveniment($platit, 'whsec_gresit');
+$verifica('semnătură greșită: 400 invalid_signature, nimic notat', $r['cod'] === 400 && trim($r['corp']) === 'invalid_signature'
+    && (int) $unu("SELECT COUNT(*) FROM stripe_events WHERE event_id LIKE 'evt_wp25%'") === 0);
+$emailuriComanda = static fn (): int => (int) $unu("SELECT COUNT(*) FROM email_send_history WHERE order_id = :id", ['id' => $idComanda]);
+$inainteEmail = $emailuriComanda();
+$r = $trimiteEveniment($platit);
+$rand = $db->query("SELECT * FROM stripe_events WHERE event_id = 'evt_wp25_platit'")->fetch(PDO::FETCH_ASSOC) ?: [];
+$verifica('sesiunea plătită: 200 ok, comanda plătită, evenimentul notat (proprietarul magazin, versiunea, procesat)', $r['cod'] === 200
+    && trim($r['corp']) === 'ok' && $unu('SELECT payment_status FROM orders WHERE id = :id', ['id' => $idComanda]) === 'paid'
+    && ($rand['proprietar'] ?? '') === 'magazin' && ($rand['api_version'] ?? '') === '2026-08-26.proba' && ($rand['procesat_la'] ?? null) !== null
+    && ($rand['object_id'] ?? '') === 'cs_wp25', json_encode($rand));
+$dupaPrimul = $emailuriComanda();
+$db->prepare("UPDATE orders SET payment_status = 'pending' WHERE id = :id")->execute(['id' => $idComanda]);
+$r = $trimiteEveniment($platit);
+$verifica('același eveniment retrimis: 200 „duplicate”, comanda neatinsă, niciun email nou', $r['cod'] === 200 && trim($r['corp']) === 'duplicate'
+    && $unu('SELECT payment_status FROM orders WHERE id = :id', ['id' => $idComanda]) === 'pending' && $emailuriComanda() === $dupaPrimul,
+    $r['corp'] . ' ' . $dupaPrimul . '/' . $emailuriComanda());
+$r = $trimiteEveniment(['id' => 'evt_wp25_client', 'type' => 'customer.created', 'data' => ['object' => ['id' => 'cus_1', 'object' => 'customer']]]);
+$verifica('un tip pe care nu-l tratează nimeni: 200 ok, notat fără proprietar', $r['cod'] === 200 && trim($r['corp']) === 'ok'
+    && $unu("SELECT rezultat FROM stripe_events WHERE event_id = 'evt_wp25_client'") === 'fara_proprietar');
+$r = $trimiteEveniment(['type' => 'payment_intent.payment_failed', 'data' => ['object' => ['id' => 'pi_x', 'object' => 'payment_intent',
+    'metadata' => ['order_id' => (string) $idComanda]]]]);
+$verifica('un eveniment fără id se procesează (plata eșuată), fără rând în stripe_events', $r['cod'] === 200
+    && $unu('SELECT payment_status FROM orders WHERE id = :id', ['id' => $idComanda]) === 'failed'
+    && (int) $unu("SELECT COUNT(*) FROM stripe_events WHERE event_id LIKE 'evt_wp25%'") === 2);
+$jurnalPluginuri = Paths::stocare('logs') . '/pluginuri.log';
+$jurnalInainte = (string) @file_get_contents($jurnalPluginuri);
+// Rândul „o dată pe zi” se notează în pluginuri-azi.json: pus deoparte și golit, ca rândul să se scrie și la o a doua rulare.
+$fisierAzi = Paths::stocare('logs') . '/pluginuri-azi.json';
+$aziInainte = @file_get_contents($fisierAzi);
+@unlink($fisierAzi);
+$licenta('toate', 'magazin=oprit');
+$db->prepare("UPDATE orders SET payment_status = 'pending', status = 'pending_payment' WHERE id = :id")->execute(['id' => $idComanda]);
+$r = $trimiteEveniment(['id' => 'evt_wp25_oprit', 'type' => 'checkout.session.completed', 'data' => ['object' => ['id' => 'cs_o', 'object' => 'checkout.session',
+    'payment_status' => 'paid', 'metadata' => ['order_number' => (string) $comanda['order_number']]]]]);
+$jurnalDupa = (string) @file_get_contents($jurnalPluginuri);
+$verifica('magazin oprit: webhook-ul răspunde, banii se înregistrează (comanda plătită) și un rând pe zi în pluginuri.log',
+    $r['cod'] === 200 && $unu('SELECT payment_status FROM orders WHERE id = :id', ['id' => $idComanda]) === 'paid'
+    && str_contains(substr($jurnalDupa, strlen($jurnalInainte)), 'checkout.session.completed'), $r['cod'] . ' ' . mb_substr(substr($jurnalDupa, strlen($jurnalInainte)), 0, 300));
+$licenta('toate');
+if (is_string($aziInainte)) {
+    file_put_contents($fisierAzi, $aziInainte);
+} else {
+    @unlink($fisierAzi);
+}
+if ($jurnalInainte === '') {
+    @unlink($jurnalPluginuri);
+} else {
+    file_put_contents($jurnalPluginuri, $jurnalInainte);
+}
+$setare('stripe_webhook_secret', null);
+
+// =====================================================================
+// WP-25 C. Setări plăți: „Verifică webhook-ul” (al doilea server, Stripe-ul fals)
+// =====================================================================
+$scrie('');
+$scrie('== WP-25 C. Setări plăți: evenimentele cerute, ultimul primit, „Verifică webhook-ul”');
+$setare('stripe_secret_key', 'sk_test_inventat');
+$raspunsuriStripe(['GET /v1/webhook_endpoints' => ['cod' => 200, 'corp' => ['data' => [['url' => $baza2 . '/webhook/stripe', 'status' => 'enabled',
+    'api_version' => '2026-08-26.proba', 'enabled_events' => ['checkout.session.completed']]]]]]);
+$plati = $cerere('GET', $baza2 . '/admin/settings/payments', $jarAdmin2)['corp'];
+preg_match('/name="_csrf" value="([^"]+)"/', $plati, $mc);
+$verifica('pagina arată evenimentele cerute și ultimul eveniment primit (din stripe_events)', str_contains($plati, 'id="stripe-webhook"')
+    && str_contains($plati, 'checkout.session.async_payment_failed') && str_contains($plati, 'customer.created'));
+$fara = $cerere('POST', $baza2 . '/admin/settings/payments/verifica-webhook', $jarAdmin2, []);
+$verifica('fără jetonul CSRF: refuzat (nicio cerere spre Stripe)', $fara['cod'] === 302 && $cereriStripe() === []);
+$r = $cerere('POST', $baza2 . '/admin/settings/payments/verifica-webhook', $jarAdmin2, ['_csrf' => $mc[1] ?? '']);
+$plati = $cerere('GET', $baza2 . '/admin/settings/payments', $jarAdmin2)['corp'];
+$cereriVerificare = $cereriStripe();
+$verifica('„Verifică webhook-ul”: GET /v1/webhook_endpoints cu cheia, rezultatul (pornit, versiunea, ce lipsește) arătat o dată',
+    $r['cod'] === 302 && count($cereriVerificare) === 1 && ($cereriVerificare[0]['cale'] ?? '') === '/v1/webhook_endpoints'
+    && str_contains($plati, 'Webhook-ul există: pornit') && str_contains($plati, '2026-08-26.proba') && str_contains($plati, 'îi lipsesc')
+    && !str_contains($cerere('GET', $baza2 . '/admin/settings/payments', $jarAdmin2)['corp'], 'Webhook-ul există'), mb_substr(strip_tags($plati), 0, 200));
+$setare('stripe_secret_key', null);
+$raspunsuriStripe([]);
+
+// =====================================================================
+// WP-25 D. Conturile: {{auth_form}}, regula comenzilor fără cont, confirmarea adresei, tab-urile
+// =====================================================================
+$scrie('');
+$scrie('== WP-25 D. {{auth_form}}, comenzile fără cont, confirmarea adresei, tab-urile contului');
+foreach (['login' => 'Intrare test', 'register' => 'Înregistrare test', 'pagina-auth-test' => 'Alta'] as $slugAuth => $titluAuth) {
+    $db->prepare("INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published) VALUES (:t, :s, :h, '', '', 1)")
+        ->execute(['t' => $titluAuth, 's' => $slugAuth, 'h' => '<div class="pagina-auth">{{auth_form}}</div>']);
+}
+$login = $cerere('GET', '/login')['corp'];
+$register = $cerere('GET', '/register')['corp'];
+$alta = $cerere('GET', '/pagina-auth-test')['corp'];
+$verifica('{{auth_form}}: pe paginile „login” și „register” formularul (fila potrivită, capcana ascunsă cu display:none, jetonul anti-robot)',
+    str_contains($login, 'data-auth-form') && str_contains($login, 'class="active" href="/login"') && str_contains($register, 'class="active" href="/register"')
+    && str_contains($register, 'name="register_form_token" value="') && str_contains($register, 'style="display:none;" aria-hidden="true"'));
+$verifica('{{auth_form}} pe altă pagină: gol (fără formular, fără codul tokenului)', !str_contains($alta, 'data-auth-form') && !str_contains($alta, '{{auth_form}}'));
+$db->exec("DELETE FROM pages WHERE slug IN ('login', 'register', 'pagina-auth-test')");
+// Regula comenzilor fără cont (G-M4).
+$coloaneComenzi = $db->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders'
+    AND COLUMN_NAME NOT IN ('id', 'order_number', 'user_id', 'billing_email') ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_COLUMN);
+$lista = implode(', ', array_map(static fn ($c): string => '`' . $c . '`', $coloaneComenzi));
+$db->prepare("INSERT INTO orders (order_number, user_id, billing_email, {$lista}) SELECT 'CMD-FARA-CONT-WP25', NULL, 'ana@exemplu.ro', {$lista}
+    FROM orders WHERE id = :id")->execute(['id' => $idComanda]);
+$idFaraCont = (int) $db->lastInsertId();
+$db->prepare("UPDATE orders SET billing_first_name = 'Ana', billing_address_line1 = 'Strada Inventată 7' WHERE id = :id")->execute(['id' => $idFaraCont]);
+$parolaAna = 'parola-ana-wp25';
+$db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Ana', 'Test', 'ana@exemplu.ro', :h)")
+    ->execute(['h' => password_hash($parolaAna, PASSWORD_BCRYPT)]);
+$idAna = (int) $db->lastInsertId();
+$jarAna = $dosarLucru . '/ana-jar.txt';
+$cerere('GET', '/login', $jarAna);
+$cerere('POST', '/login', $jarAna, ['email' => 'ana@exemplu.ro', 'password' => $parolaAna]);
+$cont = $cerere('GET', '/contul-meu?section=orders', $jarAna)['corp'];
+$verifica('cont nou cu adresa unei comenzi fără cont: comanda NU apare, nici adresa ei de facturare; rândul „Ai comenzi mai vechi…” cu butonul',
+    !str_contains($cont, 'CMD-FARA-CONT-WP25') && !str_contains($cont, 'Strada Inventată 7')
+    && str_contains($cont, ConfirmareEmail::TEXT_IMPLICIT_COMENZI) && str_contains($cont, 'action="/contul-meu/confirmare-email"'));
+$dinainteMail = glob($dosarMail . '/*.eml') ?: [];
+$cerere('POST', '/contul-meu/confirmare-email', $jarAna, []);
+$mailuri = $mailuriNoi($dinainteMail);
+$corpMail = quoted_printable_decode((string) end($mailuri));
+$corpMail .= base64_decode((string) (preg_match('/\r?\n\r?\n([A-Za-z0-9+\/=\r\n]{40,})/', (string) end($mailuri), $mb) === 1 ? preg_replace('/\s+/', '', $mb[1]) : ''));
+preg_match('#/cont/confirmare/([a-f0-9]{64})#', $corpMail, $mt);
+$tokenAna = (string) ($mt[1] ?? '');
+$verifica('„Trimite linkul”: un email spre adresa contului cu linkul /cont/confirmare/<token>; în bază doar hash-ul (scop „comenzi”)',
+    count($mailuri) === 1 && $tokenAna !== '' && $antetMail((string) $mailuri[0], 'To') === 'ana@exemplu.ro'
+    && $unu('SELECT token_hash FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === hash('sha256', $tokenAna)
+    && $unu('SELECT scop FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === 'comenzi', mb_substr($corpMail, 0, 300));
+$db->prepare('UPDATE customer_email_confirmations SET created_at = NOW() - INTERVAL 8 DAY WHERE user_id = :id')->execute(['id' => $idAna]);
+$r = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$verifica('linkul expirat (8 zile): nu confirmă nimic, comanda rămâne fără cont', $r['cod'] === 302
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idAna]) === ''
+    && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraCont]) === '');
+$db->prepare('UPDATE customer_email_confirmations SET created_at = NOW() WHERE user_id = :id')->execute(['id' => $idAna]);
+$r = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$cont = $cerere('GET', '/contul-meu?section=orders', $jarAna)['corp'];
+$verifica('linkul valabil: adresa confirmată, comanda legată de cont (orders.user_id), listată, rândul dispare; un rând în Jurnal activitate',
+    $r['cod'] === 302 && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idAna]) !== ''
+    && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraCont]) === $idAna && str_contains($cont, 'CMD-FARA-CONT-WP25')
+    && !str_contains($cont, ConfirmareEmail::TEXT_IMPLICIT_COMENZI)
+    && (int) $unu("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cont_comenzi_legate' AND context_json LIKE :c", ['c' => '%"user_id":' . $idAna . '%']) === 1);
+$r = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$verifica('același link a doua oară: refuzat (folosit)', $r['cod'] === 302 && str_contains($cerere('GET', '/contul-meu', $jarAna)['corp'], 'expirat sau a fost deja folosit'));
+// Resetarea parolei dovedește adresa.
+$db->prepare("INSERT INTO orders (order_number, user_id, billing_email, {$lista}) SELECT 'CMD-FARA-CONT-WP25B', NULL, 'bogdan@exemplu.ro', {$lista}
+    FROM orders WHERE id = :id")->execute(['id' => $idComanda]);
+$idFaraContB = (int) $db->lastInsertId();
+$db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Bogdan', 'Test', 'bogdan@exemplu.ro', :h)")
+    ->execute(['h' => password_hash('parola-veche-1', PASSWORD_BCRYPT)]);
+$idBogdan = (int) $db->lastInsertId();
+$dinainteMail = glob($dosarMail . '/*.eml') ?: [];
+$cerere('POST', '/contul-meu/resetare-parola', null, ['email' => 'bogdan@exemplu.ro']);
+$mailReset = (string) (($mailuriNoi($dinainteMail))[0] ?? '');
+$textReset = quoted_printable_decode($mailReset) . base64_decode((string) (preg_match('/\r?\n\r?\n([A-Za-z0-9+\/=\r\n]{40,})/', $mailReset, $mr) === 1
+    ? preg_replace('/\s+/', '', $mr[1]) : ''));
+preg_match('#/contul-meu/resetare-parola/([A-Za-z0-9]+)#', $textReset, $mrt);
+$cerere('POST', '/contul-meu/resetare-parola/' . ($mrt[1] ?? 'x'), null, ['password' => 'parola-noua-123', 'password_confirm' => 'parola-noua-123']);
+$verifica('un link de resetare a parolei folosit dovedește adresa: contul confirmat, comanda fără cont legată',
+    $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idBogdan]) !== ''
+    && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraContB]) === $idBogdan, 'token: ' . ($mrt[1] ?? '-'));
+$verifica('logarea cu Google: callback-ul marchează adresa confirmată (sursa „google”)',
+    preg_match('/resolveGoogleUser\(\$db, \$userInfo\);\s*\/\/[^\n]*\n\s*\\\\App\\\\Support\\\\ConfirmareEmail::marcheazaConfirmat\(\$db, \$userId, \'google\'\)/',
+        (string) file_get_contents($radacina . '/src/Http/Controllers/SiteController.php')) === 1);
+// Confirmarea cerută la înregistrare.
+$setare('customer_email_confirmation_required', '1');
+$db->exec('DELETE FROM register_submit_logs');
+$jarNou = $dosarLucru . '/nou-jar.txt';
+$formular = $cerere('GET', '/register', $jarNou)['corp'];
+preg_match('/name="register_form_token" value="([^"]+)"/', $formular, $t);
+preg_match('/name="register_form_rendered_at" value="(\d+)"/', $formular, $ra);
+sleep(3);
+$dinainteMail = glob($dosarMail . '/*.eml') ?: [];
+$r = $cerere('POST', '/register', $jarNou, ['register_form_token' => $t[1] ?? '', 'register_form_rendered_at' => $ra[1] ?? '0', 'register_hp_website' => '',
+    'first_name' => 'Cezar', 'last_name' => 'Test', 'email' => 'cezar@exemplu.ro', 'phone' => '0700000001', 'password' => 'parola-cezar-1',
+    'password_confirm' => 'parola-cezar-1']);
+$idCezar = (int) $unu("SELECT id FROM users WHERE email = 'cezar@exemplu.ro'");
+$mailCezar = $mailuriNoi($dinainteMail);
+$verifica('confirmarea cerută: contul creat, linkul pe email, fără logare automată (spre /login)', $idCezar > 0 && $r['cod'] === 302
+    && ($r['antete']['location'] ?? '') === '/login' && count($mailCezar) === 1 && !str_contains($cerere('GET', '/contul-meu', $jarNou)['corp'] . '', 'cezar@exemplu.ro'));
+$r = $cerere('POST', '/login', $jarNou, ['email' => 'cezar@exemplu.ro', 'password' => 'parola-cezar-1']);
+$paginaLogin = $cerere('GET', '/login', $jarNou)['corp'];
+$verifica('logarea contului neconfirmat: refuzată cu mesajul ei și butonul „Trimite din nou linkul de confirmare”', $r['cod'] === 302
+    && str_contains($paginaLogin, 'Confirmă întâi adresa de email') && str_contains($paginaLogin, 'Trimite din nou linkul de confirmare'));
+$jarAnaNou = $dosarLucru . '/ana2-jar.txt';
+$r = $cerere('POST', '/login', $jarAnaNou, ['email' => 'bogdan@exemplu.ro', 'password' => 'parola-noua-123']);
+$verifica('un cont de dinainte (fără link de înregistrare) intră ca înainte, cu setarea pornită', $r['cod'] === 302
+    && str_starts_with((string) ($r['antete']['location'] ?? ''), '/contul-meu'));
+$coduri = [];
+for ($i = 0; $i < 6; $i++) {
+    $cerere('POST', '/contul-meu/confirmare-email', $jarNou, []);
+    $coduri[] = str_contains($cerere('GET', '/login', $jarNou)['corp'], 'prea multe linkuri') ? 'limita' : 'trimis';
+}
+$verifica('retrimiterea: 5 la 15 minute de la aceeași adresă, a șasea refuzată; bugetul nu se amestecă cu al înregistrărilor (VT-C8)',
+    $coduri === ['trimis', 'trimis', 'trimis', 'trimis', 'trimis', 'limita']
+    && (int) $unu("SELECT COUNT(*) FROM register_submit_logs WHERE status = 'resend'") === 5, implode(',', $coduri));
+$db->exec('DELETE FROM register_submit_logs');
+$setare('customer_email_confirmation_required', null);
+// Tab-urile contului (agățări de probă pe al doilea server).
+$db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Tab', 'Test', 'tab.test@exemplu.ro', :h)")
+    ->execute(['h' => password_hash('parola-tab-123', PASSWORD_BCRYPT)]);
+$jarTab = $dosarLucru . '/tab-jar.txt';
+$cerere('GET', $baza2 . '/login', $jarTab);
+$cerere('POST', $baza2 . '/login', $jarTab, ['email' => 'tab.test@exemplu.ro', 'password' => 'parola-tab-123']);
+$cont = $cerere('GET', $baza2 . '/contul-meu?section=donatii-test', $jarTab)['corp'];
+$contAna = $cerere('GET', $baza2 . '/contul-meu?section=donatii-test', $jarAna)['corp'];
+$verifica('cont.taburi: tab-ul pluginului în meniu și conținutul lui când e ales; cont.antet: statistica din antet',
+    str_contains($cont, 'href="/contul-meu?section=donatii-test"') && str_contains($cont, 'Donațiile mele (test)') && str_contains($cont, 'tab-plugin-test-continut')
+    && str_contains($cont, '<strong>3</strong>') && str_contains($cont, '<span>Donații</span>'));
+$verifica('fără conținut pentru client (agățarea nu dă tab-ul): niciun tab, iar ?section=donatii-test duce la profil', !str_contains($contAna, 'donatii-test')
+    && str_contains($contAna, 'Profilul meu'));
+
+// ##WP26##
 
 // =====================================================================
 // Final: baza pusă la loc, nicio eroare PHP nouă
@@ -960,7 +1245,7 @@ $verifica('nicio eroare PHP nouă în jurnal', $grave === 0, mb_substr($eroriNoi
 $eroriDoi = $eroriServer2Text;
 $verifica('al doilea server: în jurnalul lui doar avertismentul așteptat al cererii peste post_max_size',
     (int) preg_match_all('/PHP (Warning|Notice|Fatal error|Parse error)/', $eroriDoi) === 1
-    && preg_match('/PHP Warning:  PHP Request Startup: POST Content-Length of \d+ bytes exceeds the limit/', $eroriDoi) === 1,
+    && preg_match('/PHP Warning:  (PHP Request Startup: )?POST Content-Length of \d+ bytes exceeds the limit/', $eroriDoi) === 1,
     mb_substr($eroriDoi, 0, 1500));
 
 $scrie('');

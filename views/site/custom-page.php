@@ -18,6 +18,8 @@ $blogPostsHtml = (string) ($blogPostsHtml ?? '');
 $cartFormHtml = (string) ($cartFormHtml ?? '');
 $checkoutFormHtml = (string) ($checkoutFormHtml ?? '');
 $accountSectionHtml = (string) ($accountSectionHtml ?? '');
+// WP-25 (VT-C5): {{auth_form}}, doar pe paginile „login” și „register” (altfel gol).
+$authFormHtml = (string) ($authFormHtml ?? '');
 $productReviewFormHtml = (string) ($productReviewFormHtml ?? '');
 $gdprAgreementsFormHtml = (string) ($gdprAgreementsFormHtml ?? '');
 $checkoutSuccessOrderInfoHtml = (string) ($checkoutSuccessOrderInfoHtml ?? '');
@@ -57,6 +59,7 @@ $pageHtml = str_replace('{{cart_form}}', $cartFormHtml, $pageHtml);
 $pageHtml = str_replace('{{checkout_form}}', $checkoutFormHtml, $pageHtml);
 $pageHtml = str_replace('{{account_section}}', $accountSectionHtml, $pageHtml);
 $pageHtml = str_replace('{{auth_google_button}}', $authGoogleButtonHtml, $pageHtml);
+$pageHtml = str_replace('{{auth_form}}', $authFormHtml, $pageHtml);
 $pageHtml = str_replace('{{product_review_form}}', $productReviewFormHtml, $pageHtml);
 $pageHtml = str_replace('{{gdpr_agreements_form}}', $gdprAgreementsFormHtml, $pageHtml);
 $pageHtml = str_replace('{{checkout_success_order_info}}', $checkoutSuccessOrderInfoHtml, $pageHtml);

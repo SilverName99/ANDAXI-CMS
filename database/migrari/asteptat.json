@@ -1431,6 +1431,69 @@
             },
             "motor": "InnoDB"
         },
+        "customer_email_confirmations": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "scop": {
+                    "extra": "",
+                    "implicit": "'inregistrare'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "token_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "used_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_customer_email_confirmations_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "unic": false
+                },
+                "uniq_customer_email_confirmations_token": {
+                    "coloane": [
+                        "token_hash"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "customer_password_resets": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -5371,6 +5434,82 @@
             },
             "motor": "InnoDB"
         },
+        "stripe_events": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "api_version": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(40)"
+                },
+                "event_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "livemode": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "object_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "primit_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "procesat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "proprietar": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(40)"
+                },
+                "rezultat": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "event_id"
+                    ],
+                    "unic": true
+                },
+                "idx_stripe_events_tip": {
+                    "coloane": [
+                        "type",
+                        "primit_la"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "user_addresses": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -5508,6 +5647,12 @@
                     "implicit": null,
                     "null": false,
                     "tip": "varchar(190)"
+                },
+                "email_confirmed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
                 },
                 "first_name": {
                     "extra": "",

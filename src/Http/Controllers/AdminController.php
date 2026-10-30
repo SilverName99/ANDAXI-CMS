@@ -11970,7 +11970,52 @@ final class AdminController
             'bt' => $this->btIpayDateAdmin($db, $settings, $tab === 'bt'),
             'csrfToken' => \App\Support\AdminCsrf::token(),
             'procesatoriVizibili' => $vizibile,
+            // WP-25 (VT-X1): evenimentele cerute de pluginurile de pe site, ultimul primit pe tipuri și rezultatul
+            // ultimei „Verifică webhook-ul” (o singură dată, din sesiune).
+            'stripeEvenimente' => $vizibile['stripe'] ? \App\Support\StripeEvenimente::ceruteDePluginuri() : [],
+            'stripeUltimele' => $vizibile['stripe'] && $db instanceof PDO ? \App\Support\StripeEvenimente::ultimelePrimite($db) : [],
+            'stripeVerificare' => $this->iaVerificareWebhook(),
+            'cuMagazin' => $vizibile['ordin'],
         ], 'admin/layout');
+    }
+
+    /** Rezultatul ultimei verificări a webhook-ului, o singură dată (apoi se șterge din sesiune). */
+    private function iaVerificareWebhook(): ?array
+    {
+        $rezultat = $_SESSION['stripe_verificare_webhook'] ?? null;
+        unset($_SESSION['stripe_verificare_webhook']);
+        return is_array($rezultat) ? $rezultat : null;
+    }
+
+    /**
+     * WP-25 (VT-X1): „Verifică webhook-ul” din Setări plăți. Cere contului Stripe lista endpoint-urilor de webhook
+     * (`GET /v1/webhook_endpoints`), găsește pe cel cu adresa `<APP_URL>/webhook/stripe` și arată dacă e pornit, versiunea
+     * lui API și evenimentele cerute de pluginurile site-ului care îi lipsesc. Doar citește; cu jetonul CSRF al plăților.
+     */
+    public function stripeWebhookVerifica(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        if (!\App\Support\AdminCsrf::valid()) {
+            Flash::set('error', 'Sesiunea formularului a expirat. Reîncarcă pagina și încearcă din nou.');
+            header('Location: /admin/settings/payments');
+            return;
+        }
+        $db = $this->db();
+        $setari = Settings::all($db);
+        \App\Support\StripeGateway::folosesteSetarile($setari);
+        $_SESSION['stripe_verificare_webhook'] = \App\Support\StripeEvenimente::verificaWebhook(
+            (string) ($setari['stripe_secret_key'] ?? ''),
+            $this->appUrl()
+        );
+        if ($db instanceof PDO) {
+            \App\Support\AdminActivityLog::log($db, 'stripe_verificare_webhook', [
+                'gasit' => (bool) $_SESSION['stripe_verificare_webhook']['gasit'],
+                'lipsa' => count((array) $_SESSION['stripe_verificare_webhook']['lipsa']),
+            ]);
+        }
+        header('Location: /admin/settings/payments#stripe-webhook');
     }
 
     /**
@@ -12036,6 +12081,9 @@ final class AdminController
         }
         if (!$vizibile['ordin']) {
             $prefixeAscunse[] = 'bank_transfer_';
+            // WP-25: fără magazin, bifa „plata prin Stripe în checkout” nu se arată, deci nici nu se schimbă la salvare
+            // (Stripe rămâne al donațiilor și al membrilor, care nu depind de ea).
+            $prefixeAscunse[] = 'stripe_enabled';
         }
         $ascunsa = static function (string $cheie) use ($prefixeAscunse): bool {
             foreach ($prefixeAscunse as $prefix) {

@@ -2,7 +2,7 @@
 # Pe site: plata_stripe, conturi_clienti, donatii, membri
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (264)
+RUTE (267)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> 404 [acorduri_gdpr]
@@ -98,6 +98,7 @@ GET  /checkout -> 404 [magazin]
 GET  /checkout/bt/retur -> MEREU [plata_bt]
 GET  /checkout/succes -> 404 [magazin]
 GET  /checkout/succes/{orderNumber} -> 404 [magazin]
+GET  /cont/confirmare/{token} -> MEREU [conturi_clienti]
 GET  /contact -> CONTROLLER [nucleu]
 GET  /contul-meu -> CONTROLLER [conturi_clienti]
 GET  /contul-meu/resetare-parola -> CONTROLLER [conturi_clienti]
@@ -213,6 +214,7 @@ POST /admin/settings/payments/bt -> 403 [plata_bt]
 POST /admin/settings/payments/bt/test-action -> 403 [plata_bt]
 POST /admin/settings/payments/bt/test-connection -> 403 [plata_bt]
 POST /admin/settings/payments/bt/test-payment -> 403 [plata_bt]
+POST /admin/settings/payments/verifica-webhook -> CONTROLLER [plata_stripe]
 POST /admin/settings/shipping -> 403 [livrare_fan]
 POST /admin/settings/shipping/extra-km/import -> 403 [livrare_fan]
 POST /admin/settings/shipping/fan-nomenclator/sync -> 403 [livrare_fan]
@@ -241,6 +243,7 @@ POST /checkout -> 404 [magazin]
 POST /checkout/succes/{orderNumber} -> MEREU [magazin]
 POST /contact/send -> CONTROLLER [nucleu]
 POST /contul-meu/adrese -> CONTROLLER [conturi_clienti]
+POST /contul-meu/confirmare-email -> CONTROLLER [conturi_clienti]
 POST /contul-meu/inregistrare -> CONTROLLER [conturi_clienti]
 POST /contul-meu/login -> CONTROLLER [conturi_clienti]
 POST /contul-meu/logout -> CONTROLLER [conturi_clienti]

@@ -2389,8 +2389,6 @@ final class SiteController
             echo 'db_unavailable';
             return;
         }
-        $this->ensureStripeSchema($db);
-
         $settings = Settings::all($db);
         $webhookSecret = trim((string) ($settings['stripe_webhook_secret'] ?? ''));
         if ($webhookSecret === '') {
@@ -2398,6 +2396,8 @@ final class SiteController
             echo 'webhook_not_configured';
             return;
         }
+        // După verificarea secretului (constatarea GR): o cerere spre un site fără Stripe configurat nu atinge schema.
+        $this->ensureStripeSchema($db);
 
         if (!StripeGateway::verifyWebhookSignature($payload, $signature, $webhookSecret)) {
             http_response_code(400);
@@ -2412,28 +2412,38 @@ final class SiteController
             return;
         }
 
-        $type = (string) ($event['type'] ?? '');
-        $object = $event['data']['object'] ?? null;
+        // WP-25 (VT-X1): dispecerul (App\Support\StripeEvenimente): notarea evenimentului (un eveniment retrimis nu se
+        // procesează de două ori), proprietarul (magazin, link_plata; donatii, membri în Etapa 4) și handler-ul lui.
+        $this->inregistreazaHandlereStripe();
+        $rezultat = \App\Support\StripeEvenimente::proceseaza($db, $event);
+        http_response_code($rezultat['cod']);
+        echo $rezultat['text'];
+    }
 
-        if (!is_array($object)) {
-            http_response_code(200);
-            echo 'ok';
-            return;
+    /**
+     * WP-25 (VT-X1): handler-ele Stripe ale magazinului și ale linkurilor de plată sunt ramurile de dinainte ale
+     * webhook-ului, neschimbate: sesiunea de checkout (plătită la „completed” cu payment_status = paid sau la
+     * „async_payment_succeeded”; neplătită la „expired” și „async_payment_failed”) și PaymentIntent-ul. Plata unui link
+     * (metadata.payment_link_token, proprietarul „link_plata”) trece prin aceleași metode, care o duc pe drumul ei (X5).
+     */
+    private function inregistreazaHandlereStripe(): void
+    {
+        $sesiune = fn (?bool $platita): callable => function (PDO $db, array $obiect) use ($platita): ?string {
+            $this->applyStripeSessionResult($db, $obiect, $platita ?? ((string) ($obiect['payment_status'] ?? '') === 'paid'));
+            return null;
+        };
+        $plata = fn (bool $platita): callable => function (PDO $db, array $obiect) use ($platita): ?string {
+            $this->applyStripePaymentIntentResult($db, $obiect, $platita);
+            return null;
+        };
+        foreach (['magazin', 'link_plata'] as $proprietar) {
+            \App\Support\StripeEvenimente::handler($proprietar, 'checkout.session.completed', $sesiune(null));
+            \App\Support\StripeEvenimente::handler($proprietar, 'checkout.session.async_payment_succeeded', $sesiune(true));
+            \App\Support\StripeEvenimente::handler($proprietar, 'checkout.session.expired', $sesiune(false));
+            \App\Support\StripeEvenimente::handler($proprietar, 'checkout.session.async_payment_failed', $sesiune(false));
+            \App\Support\StripeEvenimente::handler($proprietar, 'payment_intent.succeeded', $plata(true));
+            \App\Support\StripeEvenimente::handler($proprietar, 'payment_intent.payment_failed', $plata(false));
         }
-
-        if ($type === 'checkout.session.completed' || $type === 'checkout.session.async_payment_succeeded') {
-            $isPaid = ((string) ($object['payment_status'] ?? '') === 'paid') || $type === 'checkout.session.async_payment_succeeded';
-            $this->applyStripeSessionResult($db, $object, $isPaid);
-        } elseif ($type === 'checkout.session.expired' || $type === 'checkout.session.async_payment_failed') {
-            $this->applyStripeSessionResult($db, $object, false);
-        } elseif ($type === 'payment_intent.succeeded') {
-            $this->applyStripePaymentIntentResult($db, $object, true);
-        } elseif ($type === 'payment_intent.payment_failed') {
-            $this->applyStripePaymentIntentResult($db, $object, false);
-        }
-
-        http_response_code(200);
-        echo 'ok';
     }
 
     public function cartHeartbeat(): void
@@ -3186,21 +3196,23 @@ final class SiteController
             $registrationFields = $this->customerRegistrationFields($settings);
             $user = CustomerAuth::user($db);
             if (is_array($user)) {
+                // WP-25 (G-M4, OD-47): comenzile fără cont cu adresa contului (și completarea adresei de facturare din
+                // ele) doar după ce clientul a dovedit adresa (App\Support\ConfirmareEmail).
+                [$comenziAle, $parametriComenzi] = \App\Support\ConfirmareEmail::conditieComenzi($db, (int) ($user['id'] ?? 0),
+                    (string) ($user['email'] ?? ''));
                 $stmt = $db->prepare(
                     'SELECT id, order_number, status, payment_status, total, created_at,
                             billing_first_name, billing_last_name, billing_phone, billing_email,
                             billing_address_line1, billing_address_line2, billing_city, billing_county, billing_postcode
                      FROM orders
                      WHERE deleted_at IS NULL
-                       AND (user_id = :user_id OR (user_id IS NULL AND billing_email = :email))
+                       AND ' . $comenziAle . '
                      ORDER BY id DESC
                      LIMIT 200'
                 );
-                $stmt->execute([
-                    'user_id' => (int) ($user['id'] ?? 0),
-                    'email' => (string) ($user['email'] ?? ''),
-                ]);
+                $stmt->execute($parametriComenzi);
                 $orders = $stmt->fetchAll();
+                $comenziAscunse = \App\Support\ConfirmareEmail::comenziAscunse($db, (int) ($user['id'] ?? 0), (string) ($user['email'] ?? ''));
                 if (!empty($orders) && is_array($orders[0])) {
                     $latestBillingOrder = $orders[0];
                 }
@@ -3234,7 +3246,9 @@ final class SiteController
             return;
         }
         $accountSection = trim((string) ($_GET['section'] ?? 'profile'));
-        if (!in_array($accountSection, ['profile', 'orders', 'addresses', 'points', 'settings'], true)) {
+        // WP-25 (VT-X3): tab-urile pluginurilor (cont.taburi), doar cele cu conținut, intră în lista permisă.
+        $taburiCont = is_array($user) && $db instanceof PDO ? $this->taburiCont($db, $user, $accountSection) : ['taburi' => [], 'html' => '', 'statistici' => []];
+        if (!in_array($accountSection, array_merge(['profile', 'orders', 'addresses', 'points', 'settings'], array_keys($taburiCont['taburi'])), true)) {
             $accountSection = 'profile';
         }
         $next = $this->safeRedirectPath($nextQuery, '/contul-meu');
@@ -3276,7 +3290,61 @@ final class SiteController
             'dbReady' => $db instanceof PDO,
             'next' => $next,
             'registerAntiBot' => $this->issueRegisterAntiBotPayload(),
+            // WP-25: tab-urile și statisticile pluginurilor, rândul comenzilor fără cont de confirmat, contul care
+            // așteaptă confirmarea (pe pagina de intrare).
+            'taburiPlugin' => $taburiCont['taburi'],
+            'tabPluginHtml' => $taburiCont['html'],
+            'statisticiPlugin' => $taburiCont['statistici'],
+            'comenziAscunse' => $comenziAscunse ?? 0,
+            'textComenziAscunse' => $this->textComenziAscunse($settings),
+            'confirmareInAsteptare' => !is_array($user) && (int) ($_SESSION['confirmare_email_cont'] ?? 0) > 0,
         ]);
+    }
+
+    /**
+     * WP-25 (VT-X3): tab-urile pluginurilor în contul clientului (punctul `cont.taburi`: listă de `{cheie, eticheta, icon,
+     * insigna, render}`; un plugin dă un tab doar când are ce arăta), HTML-ul celui deschis și statisticile din antet
+     * (`cont.antet`: listă de `{eticheta, valoare}`). Fără agățări: nimic, deci pagina contului rămâne cea de azi.
+     *
+     * @return array{taburi: array<string, array{eticheta: string, icon: string, insigna: string}>, html: string, statistici: list<array{eticheta: string, valoare: string}>}
+     */
+    private function taburiCont(PDO $db, array $user, string $sectiune): array
+    {
+        $taburi = [];
+        $html = '';
+        foreach (\App\Support\Hooks::ruleaza('cont.taburi', $db, $user) as $lista) {
+            foreach (is_array($lista) ? $lista : [] as $tab) {
+                $cheie = is_array($tab) ? trim((string) ($tab['cheie'] ?? '')) : '';
+                if ($cheie === '' || preg_match('/^[a-z0-9_-]{1,40}$/', $cheie) !== 1
+                    || in_array($cheie, ['profile', 'orders', 'addresses', 'points', 'settings'], true) || !is_callable($tab['render'] ?? null)) {
+                    continue;
+                }
+                $taburi[$cheie] = [
+                    'eticheta' => trim((string) ($tab['eticheta'] ?? $cheie)),
+                    'icon' => (string) ($tab['icon'] ?? ''),
+                    'insigna' => trim((string) ($tab['insigna'] ?? '')),
+                ];
+                if ($cheie === $sectiune) {
+                    $html = (string) ($tab['render'])($db, $user);
+                }
+            }
+        }
+        $statistici = [];
+        foreach (\App\Support\Hooks::ruleaza('cont.antet', $db, $user) as $lista) {
+            foreach (is_array($lista) ? $lista : [] as $stat) {
+                if (is_array($stat) && trim((string) ($stat['eticheta'] ?? '')) !== '') {
+                    $statistici[] = ['eticheta' => trim((string) $stat['eticheta']), 'valoare' => trim((string) ($stat['valoare'] ?? ''))];
+                }
+            }
+        }
+        return ['taburi' => $taburi, 'html' => $html, 'statistici' => $statistici];
+    }
+
+    /** Textul rândului „Ai comenzi mai vechi…” din cont (setarea `cont_comenzi_neconfirmate_text`). */
+    private function textComenziAscunse(array $settings): string
+    {
+        $text = trim((string) ($settings['cont_comenzi_neconfirmate_text'] ?? ''));
+        return $text !== '' ? $text : \App\Support\ConfirmareEmail::TEXT_IMPLICIT_COMENZI;
     }
 
     public function loginPage(): void
@@ -3297,11 +3365,14 @@ final class SiteController
         $page = $this->findPublishedPageBySlug('login');
         if (is_array($page)) {
             $next = $this->safeRedirectPath((string) ($_GET['next'] ?? ''), '/contul-meu');
+            $antiBot = $this->issueRegisterAntiBotPayload();
             View::render('site/custom-page', array_merge([
                 'title' => (string) ($page['title'] ?? 'Login'),
                 'page' => $page,
                 'socialAuthConfig' => $this->googleAuthViewConfig($runtimeSettings, $next),
-                'registerAntiBot' => $this->issueRegisterAntiBotPayload(),
+                'registerAntiBot' => $antiBot,
+                // WP-25 (VT-C5): {{auth_form}} pe pagina „login”.
+                'authFormHtml' => $this->authFormHtml($page, 'login', $next, $settings, $antiBot),
                 'mannequinSectionHtml' => $this->renderMannequinSection($db, $runtimeSettings),
             ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $page)));
             return;
@@ -3329,18 +3400,39 @@ final class SiteController
         if (is_array($page)) {
             $next = $this->safeRedirectPath((string) ($_GET['next'] ?? ''), '/contul-meu');
             $registrationFields = $this->customerRegistrationFields($settings);
+            $antiBot = $this->issueRegisterAntiBotPayload();
             View::render('site/custom-page', array_merge([
                 'title' => (string) ($page['title'] ?? 'Register'),
                 'page' => $page,
                 'registrationFieldVisibility' => $registrationFields,
                 'socialAuthConfig' => $this->googleAuthViewConfig($runtimeSettings, $next),
-                'registerAntiBot' => $this->issueRegisterAntiBotPayload(),
+                'registerAntiBot' => $antiBot,
+                // WP-25 (VT-C5): {{auth_form}} pe pagina „register”.
+                'authFormHtml' => $this->authFormHtml($page, 'register', $next, $settings, $antiBot),
                 'mannequinSectionHtml' => $this->renderMannequinSection($db, $runtimeSettings),
             ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $page)));
             return;
         }
 
         $this->account();
+    }
+
+    /**
+     * WP-25 (VT-C5): HTML-ul lui {{auth_form}} (views/site/components/auth-form.php), doar dacă pagina îl folosește; același
+     * jeton anti-robot ca formularul paginii, ca să nu se emită două.
+     */
+    private function authFormHtml(array $page, string $vedere, string $next, array $settings, array $antiBot): string
+    {
+        if (!str_contains((string) ($page['html_content'] ?? ''), '{{auth_form}}')) {
+            return '';
+        }
+        return $this->renderPhpView('site/components/auth-form', [
+            'activeView' => $vedere,
+            'next' => $next,
+            'registrationFields' => $this->customerRegistrationFields($settings),
+            'registerAntiBotToken' => (string) ($antiBot['token'] ?? ''),
+            'registerAntiBotRenderedAt' => (int) ($antiBot['rendered_at'] ?? 0),
+        ]);
     }
 
     public function googleAuthStart(): void
@@ -3424,6 +3516,8 @@ final class SiteController
             $token = $this->googleTokenExchange($oauth, $code);
             $userInfo = $this->googleFetchUserInfo((string) ($token['access_token'] ?? ''));
             $userId = $this->resolveGoogleUser($db, $userInfo);
+            // WP-25 (G-M4): Google a verificat adresa (resolveGoogleUser refuză una neverificată).
+            \App\Support\ConfirmareEmail::marcheazaConfirmat($db, $userId, 'google');
         } catch (RuntimeException $exception) {
             Flash::set('error', $exception->getMessage());
             header('Location: /login');
@@ -3579,6 +3673,22 @@ final class SiteController
             header('Location: ' . $this->safeRedirectPath($dupaCreare, '/login'));
             return;
         }
+        // WP-25 (VT-C9): cu confirmarea cerută la înregistrare (customer_email_confirmation_required), contul primește linkul
+        // pe email și intră doar după ce îl folosește.
+        if ((string) ($settings['customer_email_confirmation_required'] ?? '0') === '1' && $registrationFields['email']) {
+            $tokenConfirmare = \App\Support\ConfirmareEmail::linkNou($db, $userId, \App\Support\ConfirmareEmail::SCOP_INREGISTRARE);
+            if ($tokenConfirmare !== null) {
+                try {
+                    \App\Support\ConfirmareEmail::trimiteEmail($db, $settings, ['email' => $email, 'first_name' => $firstName], $tokenConfirmare);
+                } catch (Throwable) {
+                    // Linkul se poate cere din nou de pe pagina de intrare.
+                }
+                $_SESSION['confirmare_email_cont'] = $userId;
+                Flash::set('success', 'Contul a fost creat. Ți-am trimis un link la ' . $email . ': confirmă adresa ca să intri în cont.');
+                header('Location: /login');
+                return;
+            }
+        }
         CustomerAuth::login($userId);
         EmailAutomation::sendAccountWelcome($db, $settings, $email, trim($firstName . ' ' . $lastName));
         $claimedPoints = $this->claimPendingLoyaltyPointsForUser($db, $userId);
@@ -3618,6 +3728,16 @@ final class SiteController
             header('Location: /login');
             return;
         }
+
+        // WP-25 (VT-C9): cu confirmarea cerută la înregistrare, un cont creat atunci și neconfirmat încă nu intră; pagina
+        // de intrare îi oferă retrimiterea linkului.
+        if (\App\Support\ConfirmareEmail::blocheazaLogarea($db, Settings::all($db), (int) ($user['id'] ?? 0))) {
+            $_SESSION['confirmare_email_cont'] = (int) ($user['id'] ?? 0);
+            Flash::set('error', 'Confirmă întâi adresa de email: ți-am trimis un link când ți-ai făcut contul.');
+            header('Location: /login');
+            return;
+        }
+        unset($_SESSION['confirmare_email_cont']);
 
         if (WordPressPassword::needsUpgradeToBcrypt($storedHash)) {
             $upgrade = $db->prepare('UPDATE users SET password_hash = :password_hash WHERE id = :id');
@@ -4043,6 +4163,11 @@ final class SiteController
         ]);
         $use = $db->prepare('UPDATE customer_password_resets SET used_at = NOW() WHERE email = :email AND used_at IS NULL');
         $use->execute(['email' => $email]);
+        // WP-25 (G-M4): linkul de resetare a venit pe această adresă, deci adresa e dovedită (comenzile fără cont cu ea
+        // apar în cont).
+        $contResetat = $db->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
+        $contResetat->execute(['email' => $email]);
+        \App\Support\ConfirmareEmail::marcheazaConfirmat($db, (int) ($contResetat->fetchColumn() ?: 0), 'resetare');
 
         CustomerAuth::logout();
         Flash::set('success', 'Parola a fost actualizată. Te poți autentifica acum.');
@@ -6074,6 +6199,13 @@ HTML;
         ];
 
         return $this->renderPhpView('site/components/account-section', [
+            // WP-25 (G-M4): rândul „Ai comenzi mai vechi…” la un cont neconfirmat cu comenzi fără cont.
+            'comenziAscunse' => (int) ($state['comenzi_ascunse'] ?? 0),
+            'textComenziAscunse' => (string) ($state['text_comenzi_ascunse'] ?? ''),
+            // WP-25 (VT-X3): tab-urile și statisticile pluginurilor.
+            'taburiPlugin' => $state['taburi_plugin'] ?? [],
+            'tabPluginHtml' => (string) ($state['tab_plugin_html'] ?? ''),
+            'statisticiPlugin' => $state['statistici_plugin'] ?? [],
             'loyaltyEnabled' => !empty($state['loyalty_enabled']),
             'customer' => $state['customer'] ?? null,
             'orders' => $orders,
@@ -6130,21 +6262,22 @@ HTML;
 
         $email = trim((string) ($customer['email'] ?? ''));
         $userId = (int) ($customer['id'] ?? 0);
+        // WP-25 (G-M4, OD-47): ca în account(), comenzile fără cont doar după confirmarea adresei.
+        [$comenziAle, $parametriComenzi] = \App\Support\ConfirmareEmail::conditieComenzi($db, $userId, $email);
         $ordersStmt = $db->prepare(
             'SELECT id, order_number, status, payment_status, total, created_at,
                     billing_first_name, billing_last_name, billing_phone, billing_email,
                     billing_address_line1, billing_address_line2, billing_city, billing_county, billing_postcode
              FROM orders
              WHERE deleted_at IS NULL
-               AND (user_id = :user_id OR (user_id IS NULL AND billing_email = :email))
+               AND ' . $comenziAle . '
              ORDER BY id DESC
              LIMIT 200'
         );
-        $ordersStmt->execute([
-            'user_id' => $userId,
-            'email' => $email,
-        ]);
+        $ordersStmt->execute($parametriComenzi);
         $orders = $ordersStmt->fetchAll() ?: [];
+        $state['comenzi_ascunse'] = \App\Support\ConfirmareEmail::comenziAscunse($db, $userId, $email);
+        $state['text_comenzi_ascunse'] = $this->textComenziAscunse(Settings::all($db));
         $addresses = $this->loadCustomerAddresses($db, $userId);
 
         $firstName = trim((string) ($customer['first_name'] ?? ''));
@@ -6166,7 +6299,12 @@ HTML;
         $state['avatar_initials'] = \App\Support\CustomerDisplay::initiale($firstName, $lastName, $email);
 
         $section = trim((string) ($_GET['section'] ?? 'profile'));
-        if (!in_array($section, ['profile', 'orders', 'addresses', 'points', 'settings'], true)) {
+        // WP-25 (VT-X3): tab-urile pluginurilor, ca în account().
+        $taburiCont = $this->taburiCont($db, $customer, $section);
+        $state['taburi_plugin'] = $taburiCont['taburi'];
+        $state['tab_plugin_html'] = $taburiCont['html'];
+        $state['statistici_plugin'] = $taburiCont['statistici'];
+        if (!in_array($section, array_merge(['profile', 'orders', 'addresses', 'points', 'settings'], array_keys($taburiCont['taburi'])), true)) {
             $section = 'profile';
         }
         $editRaw = trim((string) ($_GET['edit'] ?? ''));
@@ -10156,25 +10294,13 @@ CSS;
         return null;
     }
 
-    private function registerRateLimited(PDO $db, string $ip): bool
+    /**
+     * Bugetul înregistrărilor de la aceeași adresă (15 minute). WP-25 (VT-C8, din vertij 26c74f9): retrimiterile linkului
+     * de confirmare (rândurile „resend”) au bugetul lor, de 5, și nu se numără aici (App\Support\ConfirmareEmail::limitat).
+     */
+    private function registerRateLimited(PDO $db, string $ip, string $scope = 'register'): bool
     {
-        if ($ip === '') {
-            return false;
-        }
-        try {
-            // Același vizitator: adresa întreagă; o adresă IPv6, cu toată rețeaua ei /64 (IpClient::conditieLimita).
-            [$acelasiVizitator, $parametri] = \App\Support\IpClient::conditieLimita('ip_address', $ip);
-            $stmt = $db->prepare(
-                'SELECT COUNT(*)
-                 FROM register_submit_logs
-                 WHERE ' . $acelasiVizitator . '
-                   AND created_at >= (NOW() - INTERVAL 15 MINUTE)'
-            );
-            $stmt->execute($parametri);
-            return ((int) $stmt->fetchColumn()) >= self::REGISTER_ANTIBOT_MAX_ATTEMPTS_PER_15_MIN;
-        } catch (Throwable) {
-            return false;
-        }
+        return \App\Support\ConfirmareEmail::limitat($db, $ip, $scope);
     }
 
     private function logRegisterSubmitAttempt(PDO $db, string $ip, string $userAgent, string $status): void

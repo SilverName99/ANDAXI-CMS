@@ -42,6 +42,12 @@ $areStripe = (bool) ($procesatoriVizibili['stripe'] ?? true);
 $areBt = (bool) ($procesatoriVizibili['bt'] ?? true);
 $areOrdin = (bool) ($procesatoriVizibili['ordin'] ?? true);
 $areCard = $areEu || $areStripe || $areBt;
+// WP-25 (VT-X1): webhook-ul Stripe (evenimentele cerute, ultimul primit, „Verifică webhook-ul”); fără magazin, textele
+// secțiunii Stripe nu mai vorbesc de checkout.
+$stripeEvenimente = is_array($stripeEvenimente ?? null) ? $stripeEvenimente : [];
+$stripeUltimele = is_array($stripeUltimele ?? null) ? $stripeUltimele : [];
+$stripeVerificare = is_array($stripeVerificare ?? null) ? $stripeVerificare : null;
+$cuMagazinPlati = (bool) ($cuMagazin ?? true);
 // Cât BT „se oprește”, plata de test de 1 leu nu mai pornește (cele începute se termină).
 $btPoatePorni = \App\Support\Plugins::permiteInceput('plata_bt');
 // Textele care pomenesc ERP-ul doar pe site-urile cu legătura ERP.
@@ -254,6 +260,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
 <?php endif; ?>
 
 <?php if ($areStripe): ?>
+<?php if ($cuMagazinPlati): ?>
         <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
             <h3 style="margin:0;">Stripe (rezervă)</h3>
             <p style="margin:6px 0 0;color:#64748b;">
@@ -267,6 +274,14 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                 Arată și plata prin Stripe în checkout
             </label>
         </div>
+<?php else: ?>
+        <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
+            <h3 style="margin:0;">Stripe</h3>
+            <p style="margin:6px 0 0;color:#64748b;">
+                Plățile cu cardul ale site-ului (de exemplu donațiile sau cotizațiile) trec prin contul tău Stripe.
+            </p>
+        </article>
+<?php endif; ?>
         <div class="field" style="grid-column:1/-1;">
             <label>Stripe Publishable Key</label>
             <input type="text" name="stripe_publishable_key"
@@ -287,6 +302,36 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <label>Webhook endpoint Stripe</label>
             <input type="text" value="<?= htmlspecialchars($appUrl . '/webhook/stripe', ENT_QUOTES) ?>" readonly>
         </div>
+<?= \App\Support\Dev::marcaj('vt:stripe-evenimente') ?>
+        <div class="field" style="grid-column:1/-1;" id="stripe-webhook">
+            <label>Evenimentele pe care le cere site-ul în webhook-ul Stripe</label>
+            <p style="margin:4px 0 8px;color:#64748b;font-size:13px;">
+                În contul Stripe (Developers → Webhooks), endpoint-ul de mai sus trebuie să primească:
+                <code><?= htmlspecialchars(implode(', ', $stripeEvenimente), ENT_QUOTES) ?></code>.
+            </p>
+<?php if ($stripeUltimele !== []): ?>
+            <p style="margin:0 0 8px;color:#64748b;font-size:13px;">Ultimul eveniment primit:
+<?php foreach ($stripeUltimele as $tipEveniment => $momentEveniment): ?>
+                <span style="display:inline-block;margin-right:10px;"><code><?= htmlspecialchars((string) $tipEveniment, ENT_QUOTES) ?></code> <?= htmlspecialchars((string) $momentEveniment, ENT_QUOTES) ?></span>
+<?php endforeach; ?>
+            </p>
+<?php endif; ?>
+<?php if (is_array($stripeVerificare)): ?>
+            <div class="panel" style="margin:0 0 8px;padding:10px 12px;border-color:<?= !empty($stripeVerificare['gasit']) && !empty($stripeVerificare['activ']) && empty($stripeVerificare['lipsa']) ? '#34d399' : '#fca5a5' ?>;">
+<?php if (($stripeVerificare['eroare'] ?? '') !== ''): ?>
+                <?= htmlspecialchars((string) $stripeVerificare['eroare'], ENT_QUOTES) ?>
+<?php elseif (empty($stripeVerificare['gasit'])): ?>
+                Contul Stripe nu are un webhook cu adresa <code><?= htmlspecialchars((string) $stripeVerificare['adresa'], ENT_QUOTES) ?></code>. Adaugă-l în Developers → Webhooks.
+<?php else: ?>
+                Webhook-ul există: <?= !empty($stripeVerificare['activ']) ? 'pornit' : 'OPRIT' ?>; versiunea API a endpoint-ului:
+                <code><?= htmlspecialchars((string) ($stripeVerificare['versiune'] ?: 'necunoscută'), ENT_QUOTES) ?></code>;
+                <?= empty($stripeVerificare['lipsa']) ? 'primește toate evenimentele cerute.' : 'îi lipsesc: <code>' . htmlspecialchars(implode(', ', (array) $stripeVerificare['lipsa']), ENT_QUOTES) . '</code>.' ?>
+<?php endif; ?>
+            </div>
+<?php endif; ?>
+            <button class="btn btn-secondary" type="submit" form="stripe-verifica-webhook">Verifică webhook-ul</button>
+        </div>
+<?= \App\Support\Dev::marcaj('vt:stripe-evenimente', true) ?>
 <?php endif; ?>
 
         <div style="grid-column:1/-1;">
@@ -296,6 +341,11 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <button class="btn" type="submit">Salvează setările de plată</button>
         </div>
     </form>
+<?= \App\Support\Dev::marcaj('vt:stripe-verifica-formular') ?>
+<?php if ($areStripe): ?>
+    <form method="post" action="/admin/settings/payments/verifica-webhook" id="stripe-verifica-webhook" hidden><?= $campCsrf ?></form>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('vt:stripe-verifica-formular', true) ?>
 <?php else: ?>
     <?php
     $variabile = is_array($bt['variabile'] ?? null) ? $bt['variabile'] : [];

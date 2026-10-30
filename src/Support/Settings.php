@@ -220,6 +220,11 @@ final class Settings
         'customer_google_auth_enabled' => '0',
         'customer_google_client_id' => '',
         'customer_google_client_secret' => '',
+        // WP-25: VT-C9 (OD-19) — confirmarea adresei la înregistrare: cu 1, contul creat primește un link pe email și intră
+        // doar după ce îl folosește (conturile de dinainte intră ca înainte; App\Support\ConfirmareEmail). Textul rândului
+        // din cont pentru un cont neconfirmat cu comenzi fără cont (G-M4; gol = textul implicit).
+        'customer_email_confirmation_required' => '0',
+        'cont_comenzi_neconfirmate_text' => '',
         'loyalty_points_enabled' => '1',
         'loyalty_points_earn_rate' => '1',
         'loyalty_points_redeem_value' => '0.10',

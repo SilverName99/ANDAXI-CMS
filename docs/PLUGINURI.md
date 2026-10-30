@@ -542,6 +542,16 @@ dispar, iar linkurile spre el se scot din pagini.
   deloc, pagina `/plata/…` arată suma și cere clientului să ne contacteze (nu mai
   pornește nicio plată). Textele BT care trimit la EuPlătesc („linkurile rămân pe
   EuPlătesc”) se schimbă.
+- **Webhook-ul Stripe** (`App\Support\StripeEvenimente`, WP-25, VT-X1; migrarea `plata_stripe/0035`): după semnătură,
+  fiecare eveniment se notează în `stripe_events` (unul retrimis primește 200 „duplicate” și nu se mai procesează),
+  primește un proprietar (membri → donatii → link_plata → magazin, după metadata și tabelul donațiilor) și trece prin
+  handler-ul lui, **în orice stare a pluginului** (banii se înregistrează mereu; emailurile către clienți ale pluginurilor
+  noi doar cu pluginul vizibil; cu proprietarul oprit, un rând pe zi în `pluginuri.log`). Handler-ele magazinului și ale
+  linkului de plată sunt ramurile de dinainte, neschimbate. Fiecare plugin își declară evenimentele (`stripe_evenimente`
+  în catalog); Setări plăți le arată, cu ultimul eveniment primit pe tipuri și butonul „Verifică webhook-ul”
+  (`POST /admin/settings/payments/verifica-webhook`, cu jetonul CSRF: endpoint-ul contului pentru adresa site-ului, pornit
+  sau nu, versiunea lui API, evenimentele care îi lipsesc). Fără magazin, secțiunea Stripe nu mai vorbește de checkout și
+  bifa „plata prin Stripe în checkout” nu se arată (nici nu se schimbă la salvare).
 - **Stripe, cererile spre API** (`App\Support\StripeGateway`, WP-15, VT-C10 din vertij): pe lângă Checkout, și
   PaymentIntent, Customer, Product și Subscription (creare, citire, anulare cu DELETE) pentru donații și membri
   (Etapa 4), cu `Idempotency-Key` la creări, și lista endpoint-urilor de webhook. Antetul `Stripe-Version` vine din
@@ -714,6 +724,21 @@ dispar, iar linkurile spre el se scot din pagini.
   `{{auth_google_button}}`; meniul Listă utilizatori și Setări utilizatori;
   dashboard: „Utilizatori” și „Utilizatori recenți”; emailul de bun venit. Tabele:
   `users`, `user_addresses`, `customer_password_resets`.
+- **Din vertij** (WP-25): `{{auth_form}}` (VT-C5: formularul de intrare și de înregistrare, doar pe paginile cu adresa
+  `login` și `register`, cu capcana anti-robot a codului comun și culoarea principală a temei; câmpurile unui plugin prin
+  `inregistrare.formular`); tab-urile pluginurilor în cont (VT-X3, `cont.taburi`, doar cele cu conținut; `cont.antet`
+  pentru statistici; decizia OD-20 luată ca recomandarea: pagina de cont a nucleului, nu cea refăcută a vertij);
+  confirmarea adresei (VT-C9, OD-19 ca recomandarea, `App\Support\ConfirmareEmail`, migrarea `conturi_clienti/0036`):
+  `users.email_confirmed_at`, linkurile din `customer_email_confirmations` (hash sha256, 7 zile, o folosire),
+  `GET /cont/confirmare/{token}` mereu deschis, retrimiterea din cont `POST /contul-meu/confirmare-email` cu bugetul ei
+  (5 la 15 minute, separat de înregistrări, VT-C8); setarea `customer_email_confirmation_required` (oprită implicit;
+  vertij înghețat pornit): contul creat cât e pornită primește linkul și nu intră până nu-l folosește, conturile de
+  dinainte intră ca înainte.
+- **Comenzile fără cont** (regula nucleului G-M4, decizia OD-47, fără setare): o comandă plasată fără cont cu adresa unui
+  cont apare în el (și îi completează adresa de facturare) doar după ce clientul dovedește adresa: linkul de confirmare
+  (cerut de el, din rândul „Ai comenzi mai vechi făcute cu această adresă…”, textul în `cont_comenzi_neconfirmate_text`;
+  nicio trimitere în masă), un link de resetare a parolei folosit sau o logare cu Google. Atunci comenzile se leagă de
+  cont (`orders.user_id`, un rând „cont_comenzi_legate” în Jurnal activitate).
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (clienții își văd contul și comenzile).
 - **Oprit**: fără conturi pe site (linkurile „Contul meu”/„Autentificare” se scot);
@@ -949,9 +974,6 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
   adrese scrise în `Auth::canAccessPath`; pluginurile nu-și declară încă rolurile.
   Rolurile legate de un plugin se ascund (vezi mai sus), dar un plugin nou cu
   pagini de admin are nevoie de o declarație de rol în catalog.
-- **Setări plăți pe un site fără magazin** (Asociație, cu Stripe pentru donații):
-  pagina arată Stripe, dar explicațiile vorbesc încă de checkout și comenzi;
-  se rescriu când se portează donațiile și membrii.
 - **Șabloanele de email ale magazinului** („Comandă expediată”, „Comandă livrată”)
   rămân în Email-uri ecommerce și fără FAN (sunt textul clientului); nu se mai
   trimit singure (vezi „Livrarea fără FAN”).
@@ -965,6 +987,11 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
   înainte de a muta codul.
 
 ## Dezvoltare
+
+**Codul nou al unui plugin** stă într-un controller al lui (`src/Http/Controllers/<Nume>Controller.php`), nu în
+`SiteController`/`AdminController`, care nu se mai lungesc. Controllerele noi folosesc trăsătura `Comun` (WP-25, VT-X4:
+`db()`, `jsonResponse()`, `requestPayload()`, `appUrl()`, garda adminului `guard()`), ca `ConfirmareEmailController`
+(WP-25) și `CereriOfertaController` (WP-26).
 
 `tools/dev/instaleaza.sh` pune licența „toate” (toate pluginurile, inclusiv unealta
 internă). Licențele de dezvoltare ale celor patru site-uri existente sunt scrise

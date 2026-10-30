@@ -3,7 +3,7 @@
     "site": "bioscem",
     "fisiere": {
         "avertismente-produse.json": "ad83a202def7a38d0b71dad17f4cf478d0dda0f27eaef13dfb9d325c81f03ba3",
-        "ce-se-schimba.md": "b8d755c242c963424c8fada67eb64f7535d383c083b405c98c6864fe09677b07",
+        "ce-se-schimba.md": "cfe6dd3e3941337ff3dd0b5eef55f7415cf17bfeb414ddbea2b930bbff280f83",
         "migrari.json": "d521ab48a5e53d4319d0fbd57dcc2635319b58b4c9a0850c85ed503077356535",
         "poze-optimizate.json": "90d8bb80f8520d0bdfab39bf49660a44dfea2e2182f72e68f847f4cdec33d4a8",
         "public/assets/img/bioscem-logo-2-212.webp": "b893ae1bfe45baa0df90e63db72e596f22bfdd6da4617408b9b18bfacf4456e6",
@@ -22,7 +22,7 @@
         "seo-continut.json": "79812cf0016644618db7cfea1e9f5d488a2794db11ebf133f79430b88140ba8c",
         "seo-texte.json": "17bf6441a99cae3f1c5ac82c50ad122d7d6a1c151ede9f6912dff5d3b20e086b",
         "seo.json": "92c6005c4ca664483e721103be7ea2a3ae1bb6a7e6f864c216b552a66a4bb3ee",
-        "setari-inghetate.json": "1a0d501ba3c580bb2f0f276c11e90c7fca07e680fddeaaf88a210301f8fbe486",
+        "setari-inghetate.json": "baf0bc4ab7c004352c8c4567dc8c974334a66e9f50d22f39b7e429d594edde48",
         "site.json": "64c0d7eba124fcb626ee2bec745d393348e68e948a7812bbf5f8bc7404432777",
         "tema/pagina-succes.css": "dba8295ff5ff5f032d7f9fbf10a8b82b020f63157e6b30e23493bd39e7c7bafb",
         "tema/tema.json": "2c6d88b4e88beff80abc36064e4797ca5c74a703d59f6cbbabd913b44d4335bb"

@@ -2,7 +2,14 @@
 $customer = is_array($customer ?? null) ? $customer : null;
 $orders = is_array($orders ?? null) ? $orders : [];
 $activeView = in_array((string) ($activeView ?? 'login'), ['login', 'register'], true) ? (string) $activeView : 'login';
-$accountSection = in_array((string) ($accountSection ?? 'profile'), ['profile', 'orders', 'addresses', 'points', 'settings'], true) ? (string) $accountSection : 'profile';
+// WP-25 (VT-X3): tab-urile pluginurilor (cont.taburi; doar cele cu conținut) intră în lista permisă.
+$taburiPlugin = is_array($taburiPlugin ?? null) ? $taburiPlugin : [];
+$tabPluginHtml = (string) ($tabPluginHtml ?? '');
+$statisticiPlugin = is_array($statisticiPlugin ?? null) ? $statisticiPlugin : [];
+$comenziAscunse = max(0, (int) ($comenziAscunse ?? 0));
+$textComenziAscunse = (string) ($textComenziAscunse ?? '');
+$confirmareInAsteptare = !empty($confirmareInAsteptare);
+$accountSection = in_array((string) ($accountSection ?? 'profile'), array_merge(['profile', 'orders', 'addresses', 'points', 'settings'], array_keys($taburiPlugin)), true) ? (string) $accountSection : 'profile';
 $dbReady = (bool) ($dbReady ?? false);
 $next = (string) ($next ?? '/contul-meu');
 $ordersCount = max(0, (int) ($ordersCount ?? count($orders)));
@@ -83,6 +90,12 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                                 <span>Puncte</span>
                             </article>
                         <?php endif; ?>
+<?php foreach ($statisticiPlugin as $statisticaPlugin): ?>
+                            <article>
+                                <strong><?= htmlspecialchars((string) $statisticaPlugin['valoare'], ENT_QUOTES) ?></strong>
+                                <span><?= htmlspecialchars((string) $statisticaPlugin['eticheta'], ENT_QUOTES) ?></span>
+                            </article>
+<?php endforeach; ?>
                     </div>
                 </article>
 
@@ -93,6 +106,9 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                     <?php if ($loyaltyEnabled): ?>
                         <a class="<?= $accountSection === 'points' ? 'active' : '' ?>" href="/contul-meu?section=points"><span>Punctele mele</span><span>›</span></a>
                     <?php endif; ?>
+<?php foreach ($taburiPlugin as $cheieTab => $tabPlugin): ?>
+                    <a class="<?= $accountSection === $cheieTab ? 'active' : '' ?>" href="/contul-meu?section=<?= urlencode((string) $cheieTab) ?>"><span><?= htmlspecialchars((string) $tabPlugin['eticheta'], ENT_QUOTES) ?><?= $tabPlugin['insigna'] !== '' ? ' <em class="customer-menu-badge">' . htmlspecialchars((string) $tabPlugin['insigna'], ENT_QUOTES) . '</em>' : '' ?></span><span>›</span></a>
+<?php endforeach; ?>
                     <a class="<?= $accountSection === 'settings' ? 'active' : '' ?>" href="/contul-meu?section=settings"><span>Setări</span><span>›</span></a>
                 </nav>
                 <form method="post" action="/contul-meu/logout">
@@ -101,6 +117,12 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
             </aside>
 
             <div class="customer-main">
+<?php if ($comenziAscunse > 0): ?>
+                <p class="customer-confirmare-comenzi" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;padding:12px 14px;border:1px solid #fcd34d;border-radius:12px;background:#fffbeb;">
+                    <span><?= htmlspecialchars($textComenziAscunse, ENT_QUOTES) ?></span>
+                    <form method="post" action="/contul-meu/confirmare-email" style="margin:0;"><button class="btn btn-secondary" type="submit">Trimite linkul</button></form>
+                </p>
+<?php endif; ?>
                 <?php if ($accountSection === 'orders'): ?>
                     <article class="panel" style="margin:0;">
                         <h2 style="margin-top:0;">Comenzile mele</h2>
@@ -295,6 +317,8 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                             </div>
                         </form>
                     </article>
+                <?php elseif (isset($taburiPlugin[$accountSection])): ?>
+                    <?= $tabPluginHtml ?>
                 <?php else: ?>
                     <article class="panel" style="margin:0;">
                         <div class="customer-profile-head">
@@ -358,6 +382,11 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                     <button class="btn" type="submit">Login</button>
                 </form>
                 <p style="margin-top:10px;"><a href="/contul-meu/resetare-parola">Ai uitat parola?</a></p>
+<?php if ($confirmareInAsteptare): ?>
+                <form method="post" action="/contul-meu/confirmare-email" style="margin-top:10px;">
+                    <button class="btn btn-secondary" type="submit">Trimite din nou linkul de confirmare</button>
+                </form>
+<?php endif; ?>
             </article>
 
             <article class="panel" style="<?= $activeView === 'register' ? '' : 'display:none;' ?>" data-auth-view="register">

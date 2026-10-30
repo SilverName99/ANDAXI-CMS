@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "e6e58731d608c856a9a063642e677068115a3aded4cfdd8b027cbd9bd0bf92c9",
+    "amprenta_nucleu": "eba034e121011df9ebd1929dac6f9eade8b0253cfeca48af1f642892e5849329",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -191,6 +191,14 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"\"",
             "nota": "Dacă baza VT are o altă adresă validă într-una dintre cele trei chei, azi mesajele merg acolo: o arată verificarea pachetului pe verificare (DB-24), înainte de adoptare"
+        },
+        "customer_email_confirmation_required": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-25 (OD-19, recomandarea: „VT înghețat pornit”): vertij cere confirmarea adresei la înregistrare (50ef812, 7a70d26). Conturile de dinainte intră ca înainte (logarea e oprită doar pentru contul creat cât setarea e pornită); verificările membrilor rămân ale pluginului membri (Etapa 4)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
         },
         "customer_registration_field_first_name": {
             "valoare": "1",

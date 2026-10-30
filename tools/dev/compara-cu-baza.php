@@ -165,7 +165,11 @@ $cerere = static function (string $port, string $metoda, string $cale, string $j
         CURLOPT_COOKIEJAR => $jar,
         CURLOPT_HEADER => true,
     ]);
-    if ($metoda === 'POST') {
+    if ($metoda === 'POST' && isset($date['_corp_brut'])) {
+        // WP-25: un corp trimis așa cum e (de exemplu un eveniment Stripe semnat, JSON), cu antetele lui.
+        curl_setopt($c, CURLOPT_POSTFIELDS, (string) $date['_corp_brut']);
+        curl_setopt($c, CURLOPT_HTTPHEADER, array_values((array) ($date['_antete'] ?? [])));
+    } elseif ($metoda === 'POST') {
         curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($date));
     }
     if ($metoda === 'HEAD') {
@@ -1348,6 +1352,10 @@ $marcajePort = [
         . 'codurile rândurilor de evenimente și ale grilei paginate în lista editorului de pagini'],
     'vt:previzualizare-evenimente' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-24 (VT-C4): '
         . 'chenarul lor în previzualizarea editorului de pagini'],
+    // WP-25 (VT-X1): în Setări plăți, sub adresa webhook-ului Stripe, evenimentele cerute de pluginurile site-ului, ultimul
+    // primit pe tipuri și „Verifică webhook-ul” (cu formularul lui, în afara formularului setărilor).
+    'vt:stripe-evenimente' => ['cale' => '/admin/settings/payments', 'motiv' => 'WP-25 (VT-X1): evenimentele webhook-ului Stripe și verificarea lui'],
+    'vt:stripe-verifica-formular' => ['cale' => '/admin/settings/payments', 'motiv' => 'WP-25 (VT-X1): formularul „Verifică webhook-ul”'],
 ];
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
@@ -1823,6 +1831,11 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     };
     $tokenCache = ['tabel' => 'settings', 'unde' => '`key` = \'cache_assets_version_token\'', 'cheie' => 'key'];
+    // WP-25: trei comenzi demo pentru cazul webhook-ului Stripe (numărul și id-ul lor) și ultimul email de dinainte.
+    $comenziStripe = array_map('intval', $db->query('SELECT id FROM orders WHERE deleted_at IS NULL AND order_number <> \'\' ORDER BY id LIMIT 3')
+        ->fetchAll(PDO::FETCH_COLUMN));
+    $numereStripe = array_map(static fn (int $id): string => (string) $unu('SELECT order_number FROM orders WHERE id = ' . $id), $comenziStripe);
+    $GLOBALS['ultimulEmailStripe'] = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_send_history');
 
     // Oferte BBD (Bioscem b632294): cheia primită se păstrează; o ofertă nouă care ar primi cheia
     // păstrată a alteia (sau o cheie dublată) primește alta; o cheie care nu e text nu strică nimic.
@@ -2785,6 +2798,69 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[0], '<article class="vtcs__card">')
                 && $contine($raspunsuri[0], 'class="vtcg__card') && $contine($raspunsuri[0], "const next = sl.querySelector('[data-vt-next]');")
                 ? [] : ['pagina nu are sliderul și grila categoriei „evenimente” (cardurile, scriptul)'],
+        ],
+        [
+            // WP-25 (VT-X1): webhook-ul Stripe trece prin dispecer (App\Support\StripeEvenimente): aceleași evenimente semnate
+            // (sesiune plătită, PaymentIntent eșuat, sesiune expirată, un tip pe care nu-l tratează nimeni) dau aceleași
+            // răspunsuri, aceleași rânduri ale comenzilor și aceleași emailuri ca webhook-ul Bioscem. Evenimentul retrimis
+            // (răspuns „duplicate”, neprocesat a doua oară) e verificat de tools/dev/test-porturi-vt-gr.php.
+            'nume' => 'Stripe: evenimente semnate prin dispecer (sesiune plătită, plată eșuată, sesiune expirată, tip necunoscut)',
+            'sursa' => 'vertij',
+            'din' => 'dc52498',
+            'tip' => 'regresie',
+            'tabele' => [
+                ['tabel' => 'orders', 'unde' => 'id IN (:o1, :o2, :o3)', 'param' => ['o1' => $comenziStripe[0], 'o2' => $comenziStripe[1], 'o3' => $comenziStripe[2]],
+                    'cheie' => 'id'],
+                ['tabel' => 'settings', 'unde' => "`key` = 'stripe_webhook_secret'", 'cheie' => 'key'],
+                ['tabel' => 'email_send_history', 'unde' => 'id > :e1', 'param' => ['e1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_send_history')],
+                    'cheie' => 'id'],
+                ['tabel' => 'stripe_events', 'unde' => '1 = 1', 'cheie' => 'event_id'],
+                // Emailul „comandă nouă” pleacă o singură dată pe comandă (EmailAutomation::isOrderTemplateAlreadySent):
+                // fără punerea la loc, al doilea server n-ar mai trimite ce a trimis primul.
+                ['tabel' => 'email_logs', 'unde' => 'order_id IN (:l1, :l2, :l3)', 'param' => ['l1' => $comenziStripe[0], 'l2' => $comenziStripe[1],
+                    'l3' => $comenziStripe[2]], 'cheie' => 'id'],
+            ],
+            'pregateste' => static function (PDO $db) use ($comenziStripe): void {
+                $db->prepare("INSERT INTO settings (`key`, `value`) VALUES ('stripe_webhook_secret', 'whsec_comparatie')
+                    ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)")->execute();
+                $db->prepare("UPDATE orders SET payment_status = 'pending', status = 'pending_payment', paid_at = NULL, payment_error = NULL
+                    WHERE id IN (" . implode(',', array_map('intval', $comenziStripe)) . ')')->execute();
+            },
+            'cereri' => array_map(static fn (array $eveniment): callable => static function () use ($eveniment): array {
+                $corp = json_encode($eveniment, JSON_UNESCAPED_SLASHES);
+                $t = time();
+                return ['POST', '/webhook/stripe', ['_corp_brut' => $corp, '_antete' => ['Content-Type: application/json',
+                    'Stripe-Signature: t=' . $t . ',v1=' . hash_hmac('sha256', $t . '.' . $corp, 'whsec_comparatie')]], 'viz'];
+            }, [
+                ['id' => 'evt_cmp_1', 'type' => 'checkout.session.completed', 'data' => ['object' => ['id' => 'cs_cmp_1', 'object' => 'checkout.session',
+                    'payment_status' => 'paid', 'payment_intent' => 'pi_cmp_1', 'metadata' => ['order_number' => $numereStripe[0]]]]],
+                ['id' => 'evt_cmp_2', 'type' => 'payment_intent.payment_failed', 'data' => ['object' => ['id' => 'pi_cmp_2', 'object' => 'payment_intent',
+                    'metadata' => ['order_id' => (string) $comenziStripe[1]]]]],
+                ['id' => 'evt_cmp_3', 'type' => 'checkout.session.expired', 'data' => ['object' => ['id' => 'cs_cmp_3', 'object' => 'checkout.session',
+                    'payment_status' => 'unpaid', 'metadata' => ['order_number' => $numereStripe[2]]]]],
+                ['id' => 'evt_cmp_4', 'type' => 'customer.created', 'data' => ['object' => ['id' => 'cus_cmp', 'object' => 'customer']]],
+            ]),
+            'stare' => static function (PDO $db) use ($comenziStripe): array {
+                $comenzi = $db->query('SELECT id, status, payment_status, stripe_session_id, stripe_payment_intent_id, paid_at IS NOT NULL AS platita,
+                    payment_error FROM orders WHERE id IN (' . implode(',', array_map('intval', $comenziStripe)) . ') ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+                $emailuri = $db->query("SELECT email_type, recipient, status, order_id, subject FROM email_send_history WHERE id > " . (int) $GLOBALS['ultimulEmailStripe']
+                    . ' AND order_id IN (' . implode(',', array_map('intval', $comenziStripe)) . ') ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+                return ['comenzi' => $comenzi, 'emailuri' => $emailuri];
+            },
+            'verifica' => static function (array $stare, array $raspunsuri) use ($comenziStripe): array {
+                $probleme = [];
+                foreach ($raspunsuri as $n => $r) {
+                    if ($r['cod'] !== 200 || trim((string) $r['corp_brut']) !== 'ok') {
+                        $probleme[] = 'evenimentul ' . ($n + 1) . ': ' . $r['cod'] . ' ' . mb_substr((string) $r['corp_brut'], 0, 60);
+                    }
+                }
+                $dupaId = array_column($stare['comenzi'], null, 'id');
+                if (($dupaId[$comenziStripe[0]]['payment_status'] ?? '') !== 'paid' || ($dupaId[$comenziStripe[1]]['payment_status'] ?? '') !== 'failed'
+                    || ($dupaId[$comenziStripe[2]]['payment_status'] ?? '') !== 'failed') {
+                    $probleme[] = 'comenzile nu au starea plății așteptată: ' . json_encode($stare['comenzi']);
+                }
+                return $probleme;
+            },
         ],
         [
             // WP-22 (Biovitality 9c549c7, 263b520; DB-13): cu blogul avansat oprit (blog_avansat = 0, înghețarea Bioscem)
