@@ -255,7 +255,7 @@ $PHP tools/verificare/stare.php
 $PHP tools/verificare/incarca.php --din=bioscem
 #   găsește singur dosarul Bioscem (după domeniul din .env-ul lui) și îl scrie în primele rânduri
 #   întreabă: „da” ca să înceapă; emailul contului tău de admin pe copie (Enter = adresa ta din .env);
-#   parola acestui cont, de două ori (cel puțin 10 caractere, alta decât parola porții; nu se vede)
+#   parola acestui cont, de două ori (cel puțin 10 caractere, poate fi aceeași cu parola porții; nu se vede)
 #   pe ecran doar DA/NU, numere, nume de tabele și durate; ultimul rând trebuie să fie:
 #   „GATA: copia e anonimizată, toate verificările au trecut”
 
@@ -754,7 +754,7 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
    sunt goale; `BT_IPAY_LIVE_*` nu se citesc). Commit-ul codului ei (din `.git`, fără comanda git) intră în
    `_verificare.cod_sursa_commit`.
 2. **Întrebările** (înaintea oricărei schimbări): „da” (`--da` o sare), adresa și parola contului de admin al
-   proprietarului (cel puțin 10 caractere, alta decât parola porții, de două ori).
+   proprietarului (cel puțin 10 caractere, poate fi aceeași cu parola porții, de două ori).
 3. **Sesiunea sursei**, deschisă tot înaintea oricărei schimbări (după întrebări, ca o legătură să nu stea deschisă cât
    scrie proprietarul; nu citește niciun rând): `SET SESSION TRANSACTION READ ONLY` (verificat cu
    `@@transaction_read_only`, altfel nu se citește nimic), REPEATABLE READ, `time_zone = '+00:00'` (pe ambele baze:

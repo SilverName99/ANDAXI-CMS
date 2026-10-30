@@ -1380,7 +1380,6 @@ try {
         'alt răspuns decât „da”' => [['--din=bioscem'], ['nu'], 'n-ai scris „da”'],
         'parola contului de admin sub 10 caractere' => [['--din=bioscem', '--da'], ['', 'scurta', 'scurta'], 'sub 10 caractere'],
         'cele două parole diferite' => [['--din=bioscem', '--da'], ['', $parolaAdmin, $parolaAdmin . 'x'], 'nu sunt la fel'],
-        'parola contului = parola porții' => [['--din=bioscem', '--da'], ['', $parolaPoarta, $parolaPoarta], 'alta decât parola porții'],
         'o adresă de admin invalidă' => [['--din=bioscem', '--da'], ['nu-e-email', $parolaAdmin, $parolaAdmin], 'nu e validă'],
         'intrarea se încheie înainte de răspunsuri' => [['--din=bioscem', '--da'], [''], 'intrarea s-a încheiat'],
     ];

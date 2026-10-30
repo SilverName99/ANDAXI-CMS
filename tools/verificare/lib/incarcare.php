@@ -1681,10 +1681,9 @@ final class Incarcare
             if (strlen($parola) < 10) {
                 throw new Refuz('parola contului de admin are sub 10 caractere. Nu am atins nimic');
             }
-            $hashPoarta = trim($this->env['VERIFICARE_POARTA_HASH'] ?? '');
-            if ($hashPoarta !== '' && password_verify($parola, $hashPoarta)) {
-                throw new Refuz('parola contului de admin trebuie să fie alta decât parola porții. Nu am atins nimic');
-            }
+            // Parola contului poate fi aceeași cu a porții (proprietarul, 30 oct 2026): copia e
+            // anonimizată, se închide singură după 7 zile, iar o parolă în plus de ținut minte nu
+            // aduce aici destul cât să merite.
             if (!hash_equals($parola, verificare_intreaba('Parola contului de admin, încă o dată: ', true))) {
                 throw new Refuz('cele două parole ale contului de admin nu sunt la fel. Nu am atins nimic');
             }
