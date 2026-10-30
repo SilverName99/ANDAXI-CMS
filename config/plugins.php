@@ -130,7 +130,10 @@ return [
                 'href' => '/admin/emails/newsletters?tab=history', 'icon' => 'emails', 'activ' => $activTab('history')],
         ],
         'tabele' => ['admins', 'settings', 'pages', 'seo_pages', 'gallery_images', 'gallery_folders', 'contact_form_messages',
-            'email_send_history', 'admin_activity_log', 'checkout_submit_logs', 'register_submit_logs'],
+            'email_send_history', 'admin_activity_log', 'checkout_submit_logs', 'register_submit_logs',
+            // WP-24 (VT-X2): fanionul „doar pentru membri” al articolelor e al nucleului (poarta, App\Support\AccesMembri),
+            // nu al blogului (migrarea nucleu/0034).
+            'blog_posts.requires_active_account'],
     ],
 
     'pluginuri' => [
@@ -380,7 +383,9 @@ return [
             'rute_admin' => ['/admin/blog/*'],
             'rute_publice' => ['/blog/*', '/api/blog/*'],
             'tokenuri' => ['blog_posts', 'latest_posts', 'category_posts', 'category_grid', 'category_events', 'next_event_image',
-                'next_event_url', 'next_event_title', 'next_event_excerpt', 'next_event_period', 'next_event_video'],
+                'next_event_url', 'next_event_title', 'next_event_excerpt', 'next_event_period', 'next_event_video',
+                // WP-24 (VT-C4, din vertij): rândurile de evenimente și grila paginată din mai multe categorii.
+                'category_event_rows', 'category_grid_paged'],
             'meniu' => [
                 ['grup' => 'blog', 'ordine' => 10, 'eticheta' => 'Postări blog', 'href' => '/admin/blog/posts', 'icon' => 'pages',
                     'activ' => ['/admin/blog/posts']],

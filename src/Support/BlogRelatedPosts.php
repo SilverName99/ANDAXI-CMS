@@ -225,7 +225,7 @@ final class BlogRelatedPosts
                  WHERE p.id <> :id
                    AND p.deleted_at IS NULL
                    AND p.is_published = 1
-                   AND p.published_at <= NOW()
+                   AND p.published_at <= NOW()" . AccesMembri::conditieSql($db, 'p') . "
                  GROUP BY p.id, p.title, p.slug, p.category, p.featured_image_url, p.reading_minutes, p.published_at
                  HAVING comune_categorii > 0 OR comune_etichete > 0
                  ORDER BY (comune_categorii * 2 + comune_etichete) DESC, p.published_at DESC
@@ -269,7 +269,7 @@ final class BlogRelatedPosts
                  WHERE p.deleted_at IS NULL
                    AND p.is_published = 1
                    AND p.published_at <= NOW()
-                   {$conditie}
+                   {$conditie}" . AccesMembri::conditieSql($db, 'p') . "
                  ORDER BY p.published_at DESC, p.id DESC
                  LIMIT " . (int) $limit
             );

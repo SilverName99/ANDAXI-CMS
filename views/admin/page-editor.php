@@ -56,6 +56,7 @@ if (!is_string($previewAppCssContent)) {
                 <input type="checkbox" name="is_published" value="1" <?= $isPublished ? 'checked' : '' ?>>
                 Publicată
             </label>
+<?= \App\Support\Hooks::html('editor.pagina.campuri', is_array($page ?? null) ? $page : []) ?>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button type="button" class="btn btn-secondary device-switch active" data-device="desktop" title="Desktop">
                     <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg>
@@ -141,6 +142,14 @@ if (!is_string($previewAppCssContent)) {
 <?php if (\App\Support\Plugins::tokenVizibil('category_events')): ?>
                 <div><code>{{category_events:slug-categorie}}</code> <span style="color:#64748b;">→ pagină de evenimente: hero cu următorul eveniment + secțiunile „viitoare" și „trecute" (ex: <code>{{category_events:evenimente}}</code>)</span></div>
 <?php endif; ?>
+<?= \App\Support\Dev::marcaj('vt:token-evenimente') ?>
+<?php if (\App\Support\Plugins::tokenVizibil('category_event_rows')): ?>
+                <div><code>{{category_event_rows:slug-categorie}}</code> <span style="color:#64748b;">→ listă compactă cu postările dintr-o categorie (imagine mică, titlu, dată, „Detalii"), paginată câte 3 (ex: <code>{{category_event_rows:evenimente}}</code>)</span></div>
+<?php endif; ?>
+<?php if (\App\Support\Plugins::tokenVizibil('category_grid_paged')): ?>
+                <div><code>{{category_grid_paged:slug1,slug2,...}}</code> <span style="color:#64748b;">→ grilă cu postările din mai multe categorii (separate prin virgulă), paginată câte 6 (ex: <code>{{category_grid_paged:evenimente,noutati}}</code>)</span></div>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('vt:token-evenimente', true) ?>
             </div>
         </details>
 
@@ -557,3 +566,45 @@ if (!is_string($previewAppCssContent)) {
 })();
 </script>
 <?= \App\Support\Dev::marcaj('bv:previzualizare-produse-sablon', true) ?>
+<?= \App\Support\Dev::marcaj('vt:previzualizare-evenimente') ?>
+<?php
+/*
+ * WP-24 (VT-C4): în previzualizare, {{category_event_rows:…}} și {{category_grid_paged:…}} devin un chenar cu categoriile
+ * cerute (ca mai sus: un script separat, doar nodurile de text cu aceste coduri).
+ */
+?>
+<script>
+(() => {
+    const iframe = document.getElementById('page-preview');
+    const chenarRanduri = <?= json_encode((string) ($evenimenteRanduriPreviewHtml ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const chenarGrila = <?= json_encode((string) ($grilaPaginataPreviewHtml ?? ''), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    if (!(iframe instanceof HTMLIFrameElement) || (chenarRanduri === '' && chenarGrila === '')) {
+        return;
+    }
+    const escapa = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
+    const tipar = /\{\{\s*(category_event_rows|category_grid_paged)\s*:\s*([^}]*)\}\}/gi;
+    iframe.addEventListener('load', () => {
+        const doc = iframe.contentDocument;
+        if (!doc || !doc.body) {
+            return;
+        }
+        const noduri = [];
+        const parcurgere = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+        while (parcurgere.nextNode()) {
+            if (/\{\{\s*(category_event_rows|category_grid_paged)/i.test(parcurgere.currentNode.nodeValue || '')) {
+                noduri.push(parcurgere.currentNode);
+            }
+        }
+        noduri.forEach((nod) => {
+            const html = escapa(nod.nodeValue || '').replace(tipar, (_, cod, argumente) => {
+                const chenar = cod.toLowerCase() === 'category_event_rows' ? chenarRanduri : chenarGrila;
+                return chenar !== '' ? chenar.replace('%s', escapa(argumente)) : '';
+            });
+            const loc = doc.createElement('span');
+            loc.innerHTML = html;
+            nod.replaceWith(...Array.from(loc.childNodes));
+        });
+    });
+})();
+</script>
+<?= \App\Support\Dev::marcaj('vt:previzualizare-evenimente', true) ?>

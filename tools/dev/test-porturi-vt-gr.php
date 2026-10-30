@@ -38,9 +38,12 @@ $radacina = dirname(__DIR__, 2);
 require_once $radacina . '/bootstrap.php';
 require_once __DIR__ . '/lib/salvari-admin.php';
 
+use App\Support\AccesMembri;
 use App\Support\Database;
+use App\Support\Hooks;
 use App\Support\OrderMailer;
 use App\Support\Paths;
+use App\Support\Plugins;
 use App\Support\ResponseCache;
 use App\Support\Settings;
 use App\Support\StripeGateway;
@@ -316,10 +319,45 @@ $raspunsuriStripe = static function (array $raspunsuri) use ($dosarStripe): void
 // cookie-ul sesiunii trimis înapoi, fără Set-Cookie) cache-ul lucrează, iar integritatea lui se poate verifica.
 $port2 = $port + 30;
 $baza2 = 'http://127.0.0.1:' . $port2;
+// Agățările de probă ale celui de-al doilea server (WP-24 D: CMS_DEV_HOOKS, citit de App\Support\Hooks doar cu APP_ENV=local).
+$fisierHooks = $dosarLucru . '/hooks-proba.php';
+file_put_contents($fisierHooks, <<<'HOOKS'
+<?php
+$jurnal = (string) getenv('CMS_DEV_HOOKS_JURNAL');
+$scrie = static function (array $intrare) use ($jurnal): void {
+    file_put_contents($jurnal, json_encode($intrare, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND | LOCK_EX);
+};
+$camp = static function (array $rand): string {
+    return '<input type="hidden" name="requires_active_account_present" value="1"><label><input type="checkbox" name="requires_active_account"'
+        . ' value="1"' . ((int) ($rand['requires_active_account'] ?? 0) === 1 ? ' checked' : '') . '> Doar cont activ</label>';
+};
+return [
+    ['punct' => 'continut.membru_activ', 'plugin' => 'membri', 'fn' => static fn ($db, array $u): bool => ($u['email'] ?? '') === 'membru.activ@exemplu.ro'],
+    ['punct' => 'continut.nota', 'plugin' => 'membri', 'fn' => static fn ($db, $u, string $titlu): string
+        => '<div class="nota-plugin-test">Nota pluginului: ' . htmlspecialchars($titlu, ENT_QUOTES) . '</div>'],
+    ['punct' => 'layout.final_body', 'plugin' => 'donatii', 'fn' => static fn (): string => '<!--final-body-test-->'],
+    ['punct' => 'utilizator.sters', 'plugin' => 'membri', 'fn' => static function ($db, array $iduri, string $din) use ($scrie): void {
+        $scrie(['ids' => $iduri, 'din' => $din]);
+    }],
+    ['punct' => 'inregistrare.formular', 'plugin' => 'membri', 'stare' => 'activ', 'fn' => static fn (): string
+        => '<div class="camp-inregistrare-test">Profesia (test)</div>'],
+    ['punct' => 'inregistrare.valideaza', 'plugin' => 'membri', 'stare' => 'activ', 'fn' => static fn ($db, array $s): array
+        => (($_POST['profesie_test'] ?? '') === 'rea') ? ['error' => 'Profesia aleasă nu e validă (test).']
+            : ['data' => ['profesie' => (string) ($_POST['profesie_test'] ?? '')]]],
+    ['punct' => 'inregistrare.cont_existent', 'plugin' => 'membri', 'stare' => 'activ', 'fn' => static fn ($db, string $email, array $date): ?string
+        => ($date['profesie'] ?? '') === 'reluare' ? '/contact?reluare=1' : null],
+    ['punct' => 'inregistrare.dupa_creare', 'plugin' => 'membri', 'stare' => 'activ', 'fn' => static function ($db, int $id, array $date) use ($scrie): ?string {
+        $scrie(['creat' => $id, 'date' => $date]);
+        return ($date['profesie'] ?? '') === 'confirmare' ? '/contact?confirma=1' : null;
+    }],
+    ['punct' => 'editor.pagina.campuri', 'plugin' => 'membri', 'fn' => static fn (array $rand): string => $camp($rand)],
+    ['punct' => 'editor.articol.campuri', 'plugin' => 'membri', 'fn' => static fn (array $rand): string => $camp($rand)],
+];
+HOOKS);
 $eroriServer2 = $dosarLucru . '/erori-server2.log';
 $porneste([$radacina . '/tools/dev/php.sh', '-d', 'session.cache_limiter=', '-d', 'error_log=' . $eroriServer2, '-S', '127.0.0.1:' . $port2, '-t', $radacina . '/public',
     $radacina . '/tools/dev/lib/router-cache.php'], ['CMS_DEV_PORT' => (string) $port2, 'STRIPE_API_BASE' => 'http://127.0.0.1:' . $portStripe,
-    'PHP_CLI_SERVER_WORKERS' => '2']);
+    'PHP_CLI_SERVER_WORKERS' => '2', 'CMS_DEV_HOOKS' => $fisierHooks, 'CMS_DEV_HOOKS_JURNAL' => $dosarLucru . '/hooks-jurnal.jsonl']);
 if (!$asteaptaPort($port2)) {
     $scrie('EROARE: al doilea server nu pornește pe portul ' . $port2);
     exit(1);
@@ -648,7 +686,264 @@ $verifica('o cerere peste post_max_size (' . $limitaPost . '): mesajul spune lim
     && str_contains($mesajMare, 'peste limita serverului') && $numarGalerie() === $inainte + 4, $mesajMare);
 @unlink($mare);
 
-// ##WP24##
+// =====================================================================
+// WP-24 A. Hooks, fără server
+// =====================================================================
+$scrie('');
+$scrie('== WP-24 A. Punctele de legătură (App\Support\Hooks)');
+$aruncat = static function (callable $f): string {
+    try {
+        $f();
+    } catch (Throwable $e) {
+        return $e->getMessage();
+    }
+    return '';
+};
+Hooks::reseteaza();
+$verifica('fără agățări (config/hooks.php gol): html() gol, ruleaza() [], oricare() false, primul() null',
+    Hooks::html('layout.final_body') === '' && Hooks::ruleaza('utilizator.sters', $db, [1], 'admin') === []
+    && Hooks::oricare('continut.membru_activ', $db, []) === false && Hooks::primul('inregistrare.dupa_creare', $db, 1, []) === null);
+$verifica('un punct necunoscut sau un plugin care nu e în catalog e refuzat', str_contains($aruncat(static fn () => Hooks::adauga('layout.nu_exista', 'membri', static fn () => '')), 'nu există')
+    && str_contains($aruncat(static fn () => Hooks::adauga('layout.final_body', 'plugin_inventat', static fn () => '')), 'nu e în catalog'));
+Hooks::adauga('layout.final_body', 'donatii', static fn (): string => '<i>d</i>');
+Hooks::adauga('layout.final_body', 'membri', static fn (): string => '<i>m</i>');
+Hooks::adauga('inregistrare.formular', 'membri', static fn (): string => '<i>f</i>', 'activ');
+Hooks::adauga('inregistrare.dupa_creare', 'membri', static fn (PDO $d, int $id): ?string => $id === 7 ? '/x' : null);
+Hooks::adauga('continut.membru_activ', 'membri', static fn (): bool => true);
+Plugins::folosesteStari(array_merge(Plugins::stari(), ['donatii' => Plugins::PORNIT, 'membri' => Plugins::PORNIT]));
+$verifica('cu pluginurile pornite: html() lipește în ordinea agățării, primul() dă prima valoare, oricare() true',
+    Hooks::html('layout.final_body') === '<i>d</i><i>m</i>' && Hooks::primul('inregistrare.dupa_creare', $db, 7, []) === '/x'
+    && Hooks::primul('inregistrare.dupa_creare', $db, 8, []) === null && Hooks::oricare('continut.membru_activ', $db, []) === true
+    && array_keys(Hooks::ruleaza('layout.final_body')) === ['donatii', 'membri']);
+Plugins::folosesteStari(array_merge(Plugins::stari(), ['donatii' => Plugins::OPRIT, 'membri' => Plugins::SE_OPRESTE]));
+$verifica('donatii oprit: agățarea lui nu rulează; membri „se oprește”: cele „vizibil” rulează, cele „activ” nu',
+    Hooks::html('layout.final_body') === '<i>m</i>' && Hooks::html('inregistrare.formular') === '' && Hooks::are('continut.membru_activ')
+    && !Hooks::are('inregistrare.formular'));
+Plugins::reseteaza();
+Hooks::reseteaza();
+Plugins::incarca();
+
+// =====================================================================
+// WP-24 B. AccesMembri, fără server
+// =====================================================================
+$scrie('');
+$scrie('== WP-24 B. Poarta conținutului pentru membri (App\Support\AccesMembri)');
+AccesMembri::reseteaza();
+$restr = ['title' => 'R', 'content' => '<p>secret</p>', 'content_text' => 'secret', 'requires_active_account' => '1'];
+$liber = ['title' => 'L', 'content' => '<p>public</p>', 'content_text' => 'public', 'requires_active_account' => '0'];
+$stariCu = static fn (string $membri): array => array_merge(Plugins::stari(), ['membri' => $membri]);
+Plugins::folosesteStari($stariCu(Plugins::OPRIT));
+$verifica('membri oprit: un rând restricționat = 404, unul liber = liber; lista fără rândul restricționat; SQL cu condiția',
+    AccesMembri::decizie($db, $restr) === AccesMembri::NEGASIT && AccesMembri::decizie($db, $liber) === AccesMembri::LIBER
+    && AccesMembri::filtreazaLista($db, [$liber, $restr]) === [$liber]
+    && AccesMembri::conditieSql($db, 'p') === ' AND p.requires_active_account = 0');
+Plugins::folosesteStari($stariCu(Plugins::PORNIT));
+AccesMembri::reseteaza();
+$_SESSION = [];
+$lista = AccesMembri::filtreazaLista($db, [$liber, $restr]);
+$verifica('membri pornit, vizitator: nota; lista păstrează rândul, fără text și cu is_locked; SQL fără condiție (rândul se vede ca teaser)',
+    AccesMembri::decizie($db, $restr) === AccesMembri::NOTA && count($lista) === 2 && $lista[1]['content'] === ''
+    && $lista[1]['content_text'] === '' && ($lista[1]['is_locked'] ?? false) === true && $lista[0] === $liber
+    && AccesMembri::conditieSql($db, 'p') === '');
+$verifica('harta site-ului și evenimentul următor: condiția mereu; un alias greșit nu intră în SQL',
+    AccesMembri::conditieSql($db, 'p', 'blog_posts', true) === ' AND p.requires_active_account = 0' && AccesMembri::conditieSql($db, 'p;x') === '');
+$idMembru = (int) $unu("SELECT id FROM users ORDER BY id LIMIT 1");
+Hooks::adauga('continut.membru_activ', 'membri', static fn (PDO $d, array $u): bool => (int) $u['id'] === $idMembru);
+$_SESSION = ['customer_user_id' => $idMembru];
+AccesMembri::reseteaza();
+$verifica('membri pornit, membru activ (agățarea continut.membru_activ): liber, lista neatinsă',
+    AccesMembri::decizie($db, $restr) === AccesMembri::LIBER && AccesMembri::filtreazaLista($db, [$liber, $restr]) === [$liber, $restr]);
+$_SESSION = [];
+Hooks::reseteaza();
+AccesMembri::reseteaza();
+Plugins::reseteaza();
+Plugins::incarca();
+$verifica('coloanaSql: coloana pe baza migrată (nucleu/0034), alias-ul dat', AccesMembri::coloanaSql($db, 'p') === ', p.requires_active_account'
+    && AccesMembri::areColoana($db, 'pages') && AccesMembri::areColoana($db, 'blog_posts') && !AccesMembri::areColoana($db, 'users'));
+$coloane = $db->query("SELECT TABLE_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+    AND COLUMN_NAME = 'requires_active_account' ORDER BY TABLE_NAME")->fetchAll(PDO::FETCH_NUM);
+$verifica('migrarea nucleu/0034: pages și blog_posts au requires_active_account TINYINT(1) NOT NULL DEFAULT 0, 0 peste tot',
+    json_encode($coloane) === json_encode([['blog_posts', 'tinyint(1)', 'NO', '0'], ['pages', 'tinyint(1)', 'NO', '0']])
+    && (int) $unu('SELECT COUNT(*) FROM pages WHERE requires_active_account <> 0') === 0
+    && (int) $unu('SELECT COUNT(*) FROM blog_posts WHERE requires_active_account <> 0') === 0, json_encode($coloane));
+
+// =====================================================================
+// WP-24 C. Paginile și articolele doar pentru membri, prin server
+// =====================================================================
+$scrie('');
+$scrie('== WP-24 C. Poarta pe site: pagini, articole, API, liste, tokenuri, sitemap, linkuri');
+$catEvenimente = (int) $unu("SELECT id FROM blog_categories WHERE slug = 'evenimente' LIMIT 1");
+$db->prepare("INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published, requires_active_account)
+    VALUES ('Pagina membrilor test', 'pagina-membri-test', '<h1>Pentru membri</h1><p>Text secret al membrilor.</p>', '', '', 1, 1)")->execute();
+$idPaginaMembri = (int) $db->lastInsertId();
+$tokenuri = '<div id="t-latest">{{latest_posts:6}}</div><div id="t-slider">{{category_posts:evenimente}}</div>'
+    . '<div id="t-rows">{{category_event_rows:evenimente}}</div><div id="t-grid">{{category_grid_paged:evenimente,noutati}}</div>'
+    . '<div id="t-next">{{next_event_title}}</div><p><a href="/pagina-membri-test">link spre membri</a></p>';
+$db->prepare("INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published) VALUES ('Tokenuri membri test', 'tokenuri-membri-test', :h, '', '', 1)")
+    ->execute(['h' => $tokenuri]);
+$idPaginaTokenuri = (int) $db->lastInsertId();
+$db->prepare("INSERT INTO blog_posts (title, slug, excerpt, content, reading_minutes, published_at, is_published, category, category_id,
+    event_start_date, event_location, requires_active_account)
+    VALUES ('Atelier secret membri', 'atelier-secret-membri', 'Rezumat public al atelierului.', '<p>Conținut secret al atelierului.</p>', 3,
+    NOW() - INTERVAL 1 HOUR, 1, 'Evenimente', :c, CURDATE() + INTERVAL 1 DAY, 'Sala membrilor', 1)")->execute(['c' => $catEvenimente ?: null]);
+$idArticolMembri = (int) $db->lastInsertId();
+if ($catEvenimente > 0) {
+    $db->prepare('INSERT IGNORE INTO blog_post_categories (post_id, category_id) VALUES (:p, :c)')->execute(['p' => $idArticolMembri, 'c' => $catEvenimente]);
+}
+ResponseCache::purgePageCache();
+// Membri pornit (licența „toate”), vizitator, fără agățări (serverul de dezvoltare): nota nucleului.
+$pagina = $cerere('GET', '/pagina-membri-test');
+$verifica('membri pornit, vizitator: pagina restricționată = 403, noindex, nofollow, nota nucleului, fără textul ei',
+    $pagina['cod'] === 403 && str_contains($pagina['corp'], '<meta name="robots" content="noindex, nofollow">')
+    && str_contains($pagina['corp'], 'Conținut pentru membri') && str_contains($pagina['corp'], 'Pagina membrilor test')
+    && !str_contains($pagina['corp'], 'Text secret al membrilor'), $pagina['cod'] . ' ' . mb_substr(strip_tags($pagina['corp']), 0, 300));
+$articol = $cerere('GET', '/blog/atelier-secret-membri');
+$verifica('membri pornit, vizitator: articolul restricționat = 403 cu nota, fără conținut', $articol['cod'] === 403
+    && !str_contains($articol['corp'], 'Conținut secret al atelierului'));
+$api = $cerere('GET', '/api/blog/posts/atelier-secret-membri');
+$verifica('API-ul articolului: 403, requires_active_account: true, fără conținut', $api['cod'] === 403
+    && (json_decode($api['corp'], true)['requires_active_account'] ?? null) === true && !str_contains($api['corp'], 'secret al atelierului'));
+$apiLista = json_decode($cerere('GET', '/api/blog/posts')['corp'], true);
+$dinLista = array_values(array_filter((array) ($apiLista['posts'] ?? []), static fn ($p): bool => ($p['slug'] ?? '') === 'atelier-secret-membri'));
+$verifica('API-ul listei: articolul apare blocat (is_locked, content și content_text goale), fără coloana requires_active_account',
+    count($dinLista) === 1 && ($dinLista[0]['is_locked'] ?? false) === true && ($dinLista[0]['content'] ?? 'x') === ''
+    && ($dinLista[0]['content_text'] ?? 'x') === '' && !array_key_exists('requires_active_account', $dinLista[0])
+    && !array_key_exists('requires_active_account', (array) (($apiLista['posts'] ?? [])[0] ?? [])), json_encode($dinLista));
+$tok = $cerere('GET', '/tokenuri-membri-test')['corp'];
+$sectiune = static fn (string $html, string $id): string => (string) (preg_match('#<div id="' . $id . '">(.*?)</div>\s*<div id="#s', $html . '<div id="', $m) === 1 ? $m[1] : '');
+$verifica('{{latest_posts}}, {{category_posts}}, {{category_event_rows}}, {{category_grid_paged}}: articolul ca teaser (titlul), fără textul secret',
+    str_contains($sectiune($tok, 't-latest'), 'Atelier secret membri') && str_contains($sectiune($tok, 't-slider'), 'Atelier secret membri')
+    && str_contains($tok, 'class="vter__row') && str_contains($tok, 'data-vter-page-size="6"') && !str_contains($tok, 'secret al atelierului'),
+    mb_substr(strip_tags($tok), 0, 400));
+$verifica('{{next_event_title}}: un eveniment doar pentru membri nu apare niciodată (A11)', !str_contains($sectiune($tok, 't-next'), 'Atelier secret membri'));
+$verifica('sliderul: cardul de eveniment (data în colț, locația, „Vezi detalii”) pentru postarea cu event_start_date',
+    str_contains($tok, 'vtcs__card vtcs__card--event') && str_contains($tok, 'vtcs__date-day') && str_contains($tok, 'Sala membrilor')
+    && str_contains($tok, 'Vezi detalii →'));
+$sitemap = $cerere('GET', '/sitemap.xml')['corp'];
+$verifica('sitemap.xml: fără pagina și articolul restricționate (mereu)', !str_contains($sitemap, 'pagina-membri-test')
+    && !str_contains($sitemap, 'atelier-secret-membri') && str_contains($sitemap, 'tokenuri-membri-test'));
+$verifica('linkul spre pagina restricționată rămâne cât timp membri e pe site', str_contains($tok, 'href="/pagina-membri-test"'));
+// Membri oprit: 404 și dispare din liste și din linkuri.
+$licenta('toate', 'membri=oprit');
+AccesMembri::reseteaza();
+$pagina = $cerere('GET', '/pagina-membri-test');
+$articol = $cerere('GET', '/blog/atelier-secret-membri');
+$api = $cerere('GET', '/api/blog/posts/atelier-secret-membri');
+$verifica('membri oprit: pagina 404, articolul 404, API-ul 404 (JSON), fără nimic din conținut', $pagina['cod'] === 404 && $articol['cod'] === 404
+    && $api['cod'] === 404 && !str_contains($pagina['corp'] . $articol['corp'] . $api['corp'], 'secret'),
+    $pagina['cod'] . ' ' . $articol['cod'] . ' ' . $api['cod']);
+$tok = $cerere('GET', '/tokenuri-membri-test')['corp'];
+$apiLista = $cerere('GET', '/api/blog/posts')['corp'];
+$blog = $cerere('GET', '/blog')['corp'];
+$verifica('membri oprit: articolul lipsește din {{latest_posts}}, din tokenurile categoriilor, din /blog și din API-ul listei',
+    !str_contains($tok, 'Atelier secret membri') && !str_contains($apiLista, 'atelier-secret-membri') && !str_contains($blog, 'atelier-secret-membri'));
+$verifica('membri oprit: linkul spre pagina restricționată se scoate din textul paginii (ca linkurile oricărui plugin oprit)',
+    !str_contains($tok, 'href="/pagina-membri-test"') && str_contains($tok, '<div id="t-latest">'));
+$licenta('toate');
+AccesMembri::reseteaza();
+// Salvarea din editor păstrează fanionul fără câmpul pluginului.
+$salveazaPagina = static function (array $extra) use ($cerere, $jarAdmin, $idPaginaMembri): array {
+    return $cerere('POST', '/admin/pages/save', $jarAdmin, $extra + ['id' => (string) $idPaginaMembri, 'title' => 'Pagina membrilor test',
+        'slug' => 'pagina-membri-test', 'html_content' => '<h1>Pentru membri</h1><p>Text secret al membrilor.</p>', 'css_content' => '',
+        'js_content' => '', 'is_published' => '1']);
+};
+$fanion = static fn (): int => (int) $unu('SELECT requires_active_account FROM pages WHERE id = :id', ['id' => $idPaginaMembri]);
+$salveazaPagina([]);
+$dupaFara = $fanion();
+$salveazaPagina(['requires_active_account_present' => '1']);
+$dupaDebifat = $fanion();
+$salveazaPagina(['requires_active_account_present' => '1', 'requires_active_account' => '1']);
+$verifica('pagina salvată fără câmpul pluginului păstrează fanionul (1); cu requires_active_account_present=1 și fără bifă → 0; cu bifă → 1',
+    $dupaFara === 1 && $dupaDebifat === 0 && $fanion() === 1, json_encode([$dupaFara, $dupaDebifat, $fanion()]));
+$editor = $cerere('GET', '/admin/pages/' . $idPaginaMembri . '/edit', $jarAdmin)['corp'];
+$verifica('editorul paginii: fără pluginul membri portat, niciun câmp „Doar cont activ” (îl adaugă agățarea)', !str_contains($editor, 'requires_active_account'));
+$salveazaArticol = static function (array $extra) use ($cerere, $jarAdmin, $idArticolMembri): array {
+    return $cerere('POST', '/admin/blog/posts', $jarAdmin, $extra + ['action' => 'save', 'id' => (string) $idArticolMembri,
+        'title' => 'Atelier secret membri', 'slug' => 'atelier-secret-membri', 'content' => '<p>Conținut secret al atelierului.</p>',
+        'excerpt' => 'Rezumat public al atelierului.', 'reading_minutes' => '3', 'is_published' => '1',
+        'published_at' => date('Y-m-d\TH:i', time() - 3600), 'timezone_offset_minutes' => '0']);
+};
+$fanionArticol = static fn (): int => (int) $unu('SELECT requires_active_account FROM blog_posts WHERE id = :id', ['id' => $idArticolMembri]);
+$salveazaArticol([]);
+$articolFara = $fanionArticol();
+$salveazaArticol(['requires_active_account_present' => '1']);
+$verifica('articolul salvat fără câmpul pluginului păstrează fanionul; cu requires_active_account_present=1 fără bifă → 0',
+    $articolFara === 1 && $fanionArticol() === 0, json_encode([$articolFara, $fanionArticol()]));
+$db->prepare('UPDATE blog_posts SET requires_active_account = 1 WHERE id = :id')->execute(['id' => $idArticolMembri]);
+
+// =====================================================================
+// WP-24 D. Cu agățări de probă (al doilea server, CMS_DEV_HOOKS)
+// =====================================================================
+$scrie('');
+$scrie('== WP-24 D. Agățările: membrul activ, nota pluginului, ștergerea contului, înregistrarea, editorul, layout.final_body');
+$parolaMembru = 'Parola-membru-test-1';
+$db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Membru', 'Activ', 'membru.activ@exemplu.ro', :h)")
+    ->execute(['h' => password_hash($parolaMembru, PASSWORD_BCRYPT)]);
+$idMembruActiv = (int) $db->lastInsertId();
+$jarMembru = $dosarLucru . '/membru-jar.txt';
+$cerere('GET', $baza2 . '/login', $jarMembru);
+$cerere('POST', $baza2 . '/login', $jarMembru, ['email' => 'membru.activ@exemplu.ro', 'password' => $parolaMembru]);
+$pagina = $cerere('GET', $baza2 . '/pagina-membri-test', $jarMembru);
+$verifica('membrul activ (continut.membru_activ) vede pagina: 200, cu textul ei', $pagina['cod'] === 200
+    && str_contains($pagina['corp'], 'Text secret al membrilor'), (string) $pagina['cod']);
+$articol = $cerere('GET', $baza2 . '/blog/atelier-secret-membri', $jarMembru);
+$api = json_decode($cerere('GET', $baza2 . '/api/blog/posts', $jarMembru)['corp'], true);
+$dinLista = array_values(array_filter((array) ($api['posts'] ?? []), static fn ($p): bool => ($p['slug'] ?? '') === 'atelier-secret-membri'));
+$verifica('membrul activ: articolul 200 cu conținutul; în listă fără is_locked, cu text', $articol['cod'] === 200
+    && str_contains($articol['corp'], 'Conținut secret al atelierului') && count($dinLista) === 1 && !isset($dinLista[0]['is_locked'])
+    && ($dinLista[0]['content'] ?? '') !== '');
+$nota = $cerere('GET', $baza2 . '/pagina-membri-test');
+$verifica('vizitatorul: nota pluginului (continut.nota) în locul celei a nucleului, tot 403', $nota['cod'] === 403
+    && str_contains($nota['corp'], 'nota-plugin-test') && str_contains($nota['corp'], 'Nota pluginului: Pagina membrilor test')
+    && !str_contains($nota['corp'], 'Text secret'));
+$verifica('layout.final_body: HTML-ul agățării chiar înainte de </body> (al doilea server), nimic pe serverul fără agățări',
+    str_contains($nota['corp'], '<!--final-body-test--></body>') && !str_contains($cerere('GET', '/contact')['corp'], 'final-body-test'));
+$editor = $cerere('GET', $baza2 . '/admin/pages/' . $idPaginaMembri . '/edit', $jarAdmin2)['corp'];
+$editorArticol = $cerere('GET', $baza2 . '/admin/blog/posts/editor?post=' . $idArticolMembri, $jarAdmin2)['corp'];
+$verifica('editor.pagina.campuri / editor.articol.campuri: câmpul agățării, bifat după rândul salvat',
+    str_contains($editor, 'name="requires_active_account_present"') && str_contains($editor, 'value="1" checked> Doar cont activ')
+    && str_contains($editorArticol, 'name="requires_active_account_present"') && str_contains($editorArticol, 'checked> Doar cont activ'));
+$jurnalHooks = $dosarLucru . '/hooks-jurnal.jsonl';
+$idSters = (int) $unu("SELECT id FROM users WHERE email <> 'membru.activ@exemplu.ro' ORDER BY id DESC LIMIT 1");
+$cerere('POST', $baza2 . '/admin/users/delete-selected', $jarAdmin2, ['user_ids' => [(string) $idSters]]);
+$cerere('POST', $baza2 . '/contul-meu/sterge', $jarMembru, ['confirm_delete' => '1']);
+$intrari = array_map(static fn (string $l): array => (array) json_decode($l, true), file($jurnalHooks, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []);
+$sterse = array_values(array_filter($intrari, static fn (array $i): bool => isset($i['din'])));
+$verifica('utilizator.sters: din admin ([id], „admin”) și din cont ([id], „cont”), înaintea ștergerii; conturile șterse',
+    count($sterse) === 2 && $sterse[0] === ['ids' => [$idSters], 'din' => 'admin'] && $sterse[1] === ['ids' => [$idMembruActiv], 'din' => 'cont']
+    && (int) $unu('SELECT COUNT(*) FROM users WHERE id IN (' . $idSters . ',' . $idMembruActiv . ')') === 0, json_encode($intrari));
+$inregistrare = $cerere('GET', $baza2 . '/register', $jarClient);
+$verifica('inregistrare.formular: câmpul pluginului în formularul de înregistrare (al doilea server); nimic pe primul',
+    str_contains($inregistrare['corp'], 'camp-inregistrare-test') && !str_contains($cerere('GET', '/register')['corp'], 'camp-inregistrare-test'));
+$inregistreaza = static function (array $extra) use ($cerere, $baza2, $jarClient): array {
+    $formular = $cerere('GET', $baza2 . '/register', $jarClient)['corp'];
+    preg_match('/name="register_form_token" value="([^"]+)"/', $formular, $t);
+    preg_match('/name="register_form_rendered_at" value="(\d+)"/', $formular, $ra);
+    sleep(3);
+    return $cerere('POST', $baza2 . '/register', $jarClient, $extra + ['register_form_token' => $t[1] ?? '', 'register_form_rendered_at' => $ra[1] ?? '0',
+        'register_hp_website' => '', 'first_name' => 'Ana', 'last_name' => 'Test', 'phone' => '0700000000',
+        'password' => 'parola-test-123', 'password_confirm' => 'parola-test-123']);
+};
+$db->exec("DELETE FROM register_submit_logs");
+$r = $inregistreaza(['email' => 'inregistrare.rea@exemplu.ro', 'profesie_test' => 'rea']);
+$mesaj = $cerere('GET', $baza2 . '/register', $jarClient)['corp'];
+$verifica('inregistrare.valideaza: eroarea pluginului oprește înregistrarea (mesajul ei, niciun cont)', $r['cod'] === 302
+    && str_contains($mesaj, 'Profesia aleasă nu e validă (test).')
+    && (int) $unu("SELECT COUNT(*) FROM users WHERE email = 'inregistrare.rea@exemplu.ro'") === 0, $r['cod'] . ' ' . ($r['antete']['location'] ?? ''));
+$r = $inregistreaza(['email' => 'inregistrare.buna@exemplu.ro', 'profesie_test' => 'confirmare']);
+$idNouCont = (int) $unu("SELECT id FROM users WHERE email = 'inregistrare.buna@exemplu.ro'");
+$intrari = array_map(static fn (string $l): array => (array) json_decode($l, true), file($jurnalHooks, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: []);
+$creat = array_values(array_filter($intrari, static fn (array $i): bool => isset($i['creat'])));
+$verifica('inregistrare.dupa_creare: primește id-ul și datele validate; redirecționarea lui, fără logare automată',
+    $idNouCont > 0 && $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/contact?confirma=1'
+    && ($creat[0] ?? []) === ['creat' => $idNouCont, 'date' => ['profesie' => 'confirmare']]
+    && !str_contains($cerere('GET', $baza2 . '/contul-meu', $jarClient)['corp'], 'inregistrare.buna@exemplu.ro'), json_encode([$r['cod'], $r['antete']['location'] ?? '', $creat]));
+$r = $inregistreaza(['email' => 'inregistrare.buna@exemplu.ro', 'profesie_test' => 'reluare']);
+$verifica('inregistrare.cont_existent: o adresă care are deja cont → redirecționarea pluginului', $r['cod'] === 302
+    && ($r['antete']['location'] ?? '') === '/contact?reluare=1', json_encode([$r['cod'], $r['antete']['location'] ?? '']));
+$db->exec("DELETE FROM register_submit_logs");
+
+// ##WP25##
 
 // =====================================================================
 // Final: baza pusă la loc, nicio eroare PHP nouă

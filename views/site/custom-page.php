@@ -83,6 +83,27 @@ $pageHtml = (string) preg_replace_callback(
     },
     $pageHtml
 );
+// WP-24 (VT-C4, din vertij 265db83, 67319f7, ff3c46e): rândurile de evenimente ale unei categorii
+// ({{category_event_rows:slug}}, câte 3 pe pagină) și grila paginată din mai multe categorii
+// ({{category_grid_paged:slug1,slug2}}, câte 6), cu paginarea .vter de mai jos.
+$hasEventRows = false;
+$pageHtml = (string) preg_replace_callback(
+    '/\{\{\s*category_event_rows\s*:\s*([a-z0-9\-]+)\s*\}\}/i',
+    static function (array $m) use ($nextEventDb, &$hasEventRows): string {
+        $hasEventRows = true;
+        return \App\Support\CategoryPosts::renderEventRows($nextEventDb, (string) ($m[1] ?? ''));
+    },
+    $pageHtml
+);
+$pageHtml = (string) preg_replace_callback(
+    '/\{\{\s*category_grid_paged\s*:\s*([a-z0-9,\-]+)\s*\}\}/i',
+    static function (array $m) use ($nextEventDb, &$hasCategoryGrid, &$hasEventRows): string {
+        $hasCategoryGrid = true; // stilurile de card .vtcg
+        $hasEventRows = true;    // paginarea (CSS + JS) .vter
+        return \App\Support\CategoryPosts::renderCategoryGridPaged($nextEventDb, (string) ($m[1] ?? ''));
+    },
+    $pageHtml
+);
 // Secțiuni dinamice pentru pagina de acasă / pagini de prezentare.
 // Numărul de elemente este opțional: {{featured_products}} sau {{featured_products:8}}.
 $pageHtml = (string) preg_replace_callback(
@@ -303,6 +324,15 @@ $customPageClass = 'custom-page-content' . (in_array($pageSlug, $narrowSlugs, tr
         .vtcs__card{flex:0 0 calc((100% - 36px)/3);scroll-snap-align:start;scroll-snap-stop:always;background:#fff;border:1px solid #f0d7de;border-radius:18px;overflow:hidden;display:flex;flex-direction:column;}
         .vtcs__media{display:block;aspect-ratio:16/10;background:#fdeef2;overflow:hidden;border-radius:18px 18px 0 0;}
         .vtcs__media img{width:100%;height:100%;object-fit:cover;display:block;border-radius:18px 18px 0 0;}
+        /* WP-24 (VT-C4, din vertij b0aa083): cardul de eveniment, cu data în colț și locația */
+        .vtcs__card--event .vtcs__media{position:relative;}
+        .vtcs__date{position:absolute;top:12px;left:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:52px;padding:8px 10px;background:linear-gradient(160deg,#ea4968,#c13c93);color:#fff;border-radius:14px;box-shadow:0 8px 18px rgba(193,60,147,.35);line-height:1;}
+        .vtcs__date-day{font-size:22px;font-weight:800;font-family:"Playfair Display","DM Sans",serif;}
+        .vtcs__date-mon{font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:3px;}
+        .vtcs__metarow{display:flex;flex-wrap:wrap;gap:12px;margin-top:2px;}
+        .vtcs__meta{display:inline-flex;align-items:center;gap:6px;color:#6b7280;font-size:13px;font-weight:600;}
+        .vtcs__meta svg{color:#ea4968;flex:0 0 auto;}
+        .vtcs__card--event .vtcs__title{font-size:19px;}
         .vtcs .vtcs__card{border-radius:18px !important;}
         .vtcs .vtcs__media,.vtcs .vtcs__media img{border-radius:18px 18px 0 0 !important;}
         .vtcs__body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:8px;flex:1;}
@@ -373,6 +403,88 @@ $customPageClass = 'custom-page-content' . (in_array($pageSlug, $narrowSlugs, tr
         }
     </style>
 <?php endif; ?>
+<?php if (!empty($hasEventRows)): ?>
+    <style>
+        .vter{display:flex;flex-direction:column;gap:12px;}
+        .vter__row{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #f0dbe3;border-radius:12px !important;padding:12px 16px;}
+        .vter__media{flex:0 0 auto;width:64px;height:64px;border-radius:10px !important;background:#fdeef2;background-size:cover;background-position:center;overflow:hidden;display:block;}
+        .vter__media--ico{display:flex;align-items:center;justify-content:center;color:#ea4968;}
+        .vter__main{flex:1;min-width:0;}
+        .vter__title{margin:0 0 3px;font-family:"Playfair Display","DM Sans",serif;font-size:16px;font-weight:800;color:#15202b;line-height:1.25;}
+        .vter__title a{color:inherit;text-decoration:none;}
+        .vter__title a:hover{color:#ea4968;}
+        .vter__desc{margin:0;font-size:13.5px;line-height:1.55;color:#6b7280;}
+        .vter__meta{display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:#7a7a7a;text-align:right;white-space:nowrap;}
+        .vter__date{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;color:#7a7a7a;}
+        .vter__date svg{flex:0 0 auto;}
+        .vter__link{flex:0 0 auto;color:#ea4968 !important;font-weight:800;font-size:14px;text-decoration:none;white-space:nowrap;}
+        .vter__link:hover{text-decoration:underline;}
+        .vter__row.is-past{opacity:.75;}
+        .vter__empty{color:#6b7280;font-style:italic;padding:10px 0;}
+        .vter__list{display:flex;flex-direction:column;gap:12px;}
+        /* varianta grilă paginată (category_grid_paged): 3 pe rând; colțurile rotunjite și peste o temă care le taie
+           (vertij c1abee4: .site-shell article{border-radius:0}), doar în grila paginată */
+        .custom-page-content .vter .vtcg__card{border-radius:18px !important;}
+        .custom-page-content .vter .vtcg__media,.custom-page-content .vter .vtcg__media img{border-radius:18px 18px 0 0 !important;}
+        .vter .vtcg{grid-template-columns:repeat(3,1fr);}
+        @media(max-width:900px){.vter .vtcg{grid-template-columns:repeat(2,1fr);}}
+        @media(max-width:600px){.vter .vtcg{grid-template-columns:1fr;}}
+        .vter__pager{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px;}
+        .vter__pager:empty{display:none;}
+        .vter__pg{min-width:32px;height:32px;padding:0 10px;border:1px solid #f0dbe3;background:#fff;color:#15202b;border-radius:8px !important;font-weight:700;font-size:13px;cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease;}
+        .vter__pg:hover{border-color:#ea4968;color:#ea4968;}
+        .vter__pg.is-active{background:#ea4968;border-color:#ea4968;color:#fff;}
+        .vter__pg[disabled]{opacity:.4;cursor:default;}
+        @media(max-width:600px){
+            .vter__row{flex-wrap:wrap;}
+            .vter__meta{text-align:left;flex-direction:row;gap:12px;width:100%;}
+        }
+    </style>
+    <script>
+    (() => {
+        if (window.__vterInit) { return; }
+        window.__vterInit = true;
+        const build = (box) => {
+            const list = box.querySelector('[data-vter-list]');
+            const pager = box.querySelector('[data-vter-pager]');
+            if (!list || !pager) { return; }
+            const rows = Array.from(list.children).filter((el) => el.nodeType === 1);
+            const size = Math.max(1, parseInt(box.dataset.vterPageSize || '3', 10) || 3);
+            const pages = Math.ceil(rows.length / size);
+            if (pages <= 1) { pager.innerHTML = ''; return; }
+            let current = 1;
+            const show = (pg) => {
+                current = Math.min(pages, Math.max(1, pg));
+                rows.forEach((r, i) => {
+                    const on = i >= (current - 1) * size && i < current * size;
+                    r.style.display = on ? '' : 'none';
+                });
+                Array.from(pager.querySelectorAll('.vter__pg')).forEach((b) => {
+                    const p = b.dataset.pg;
+                    if (p === 'prev') { b.disabled = current === 1; }
+                    else if (p === 'next') { b.disabled = current === pages; }
+                    else { b.classList.toggle('is-active', Number(p) === current); }
+                });
+            };
+            const mk = (label, pg, cls) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'vter__pg' + (cls ? ' ' + cls : '');
+                b.dataset.pg = pg;
+                b.textContent = label;
+                b.addEventListener('click', () => show(pg === 'prev' ? current - 1 : (pg === 'next' ? current + 1 : Number(pg))));
+                return b;
+            };
+            pager.innerHTML = '';
+            pager.appendChild(mk('‹', 'prev'));
+            for (let i = 1; i <= pages; i++) { pager.appendChild(mk(String(i), String(i))); }
+            pager.appendChild(mk('›', 'next'));
+            show(1);
+        };
+        document.querySelectorAll('[data-vter]').forEach(build);
+    })();
+    </script>
+<?php endif; ?>
 <?php if (!empty($hasCategorySlider)): ?>
     <script>
     (() => {
@@ -384,34 +496,70 @@ $customPageClass = 'custom-page-content' . (in_array($pageSlug, $narrowSlugs, tr
             const dotsWrap = sl.querySelector('[data-vt-dots]');
             const prev = sl.querySelector('[data-vt-prev]');
             const next = sl.querySelector('[data-vt-next]');
-            const pageWidth = () => vp.clientWidth || 1;
-            const pageCount = () => Math.max(1, Math.round(vp.scrollWidth / pageWidth()));
-            const current = () => Math.round(vp.scrollLeft / pageWidth());
+            // WP-24 (VT-C4, din vertij e577b94, 01e2773, 76dd45e): navigarea card cu card.
+            const cards = () => Array.from(vp.children);
+            // pasul = un card (lățime + gap), citit din distanța dintre primele două carduri
+            const step = () => {
+                const cs = cards();
+                if (cs.length >= 2) { return Math.max(1, cs[1].offsetLeft - cs[0].offsetLeft); }
+                if (cs.length === 1) { return Math.max(1, cs[0].offsetWidth); }
+                return vp.clientWidth || 1;
+            };
+            const count = () => cards().length;
+            const maxScroll = () => Math.max(0, vp.scrollWidth - vp.clientWidth);
+            // ultima poziție de start care poate fi atinsă (cardurile din coadă
+            // nu pot deveni primul-din-stânga când slider-ul ajunge la capăt)
+            const lastStart = () => {
+                const cs = cards();
+                const max = maxScroll();
+                let idx = 0;
+                for (let i = 0; i < cs.length; i++) {
+                    if (cs[i].offsetLeft <= max + 1) { idx = i; }
+                }
+                return idx;
+            };
+            const dotCount = () => lastStart() + 1;
+            const current = () => Math.min(lastStart(), Math.round(vp.scrollLeft / step()));
             const update = () => {
                 const c = current();
                 if (dotsWrap) {
                     Array.from(dotsWrap.children).forEach((d, i) => d.classList.toggle('is-active', i === c));
                 }
-                if (prev) { prev.disabled = c <= 0; }
-                if (next) { next.disabled = c >= pageCount() - 1; }
+                if (prev) { prev.disabled = vp.scrollLeft <= 1; }
+                if (next) { next.disabled = vp.scrollLeft >= maxScroll() - 1; }
+            };
+            // scroll programatic care ignoră temporar snap-ul (scroll-snap-stop:always
+            // ar opri altfel scroll-ul la primul card, blocând salturile mai lungi)
+            const jumpTo = (left) => {
+                vp.style.scrollSnapType = 'none';
+                vp.scrollTo({ left: left, behavior: 'smooth' });
+                clearTimeout(vp.__vtSnap);
+                vp.__vtSnap = setTimeout(() => { vp.style.scrollSnapType = ''; }, 600);
+            };
+            const goTo = (i) => {
+                const ls = lastStart();
+                const idx = Math.max(0, Math.min(ls, i));
+                // ultima poziție merge până la capăt, ca să se vadă complet ultimul card
+                const target = idx >= ls ? maxScroll() : Math.min(idx * step(), maxScroll());
+                jumpTo(target);
             };
             const buildDots = () => {
                 if (!dotsWrap) { return; }
-                const n = pageCount();
+                const n = dotCount();
                 dotsWrap.innerHTML = '';
                 if (n <= 1) { update(); return; }
                 for (let i = 0; i < n; i++) {
                     const b = document.createElement('button');
                     b.type = 'button';
                     b.className = 'vtcs__dot';
-                    b.setAttribute('aria-label', 'Pagina ' + (i + 1));
-                    b.addEventListener('click', () => vp.scrollTo({ left: i * pageWidth(), behavior: 'smooth' }));
+                    b.setAttribute('aria-label', 'Cardul ' + (i + 1));
+                    b.addEventListener('click', () => goTo(i));
                     dotsWrap.appendChild(b);
                 }
                 update();
             };
-            if (prev) { prev.addEventListener('click', () => vp.scrollBy({ left: -pageWidth(), behavior: 'smooth' })); }
-            if (next) { next.addEventListener('click', () => vp.scrollBy({ left: pageWidth(), behavior: 'smooth' })); }
+            if (prev) { prev.addEventListener('click', () => goTo(current() - 1)); }
+            if (next) { next.addEventListener('click', () => goTo(current() + 1)); }
             let st;
             vp.addEventListener('scroll', () => { clearTimeout(st); st = setTimeout(update, 80); });
             let rt;

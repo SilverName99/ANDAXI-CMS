@@ -97,7 +97,9 @@ final class Sitemap
         $adauga('/', self::lastmod($acasa[0] ?? []));
 
         // Paginile din constructor.
-        foreach (self::interogare($db, 'SELECT slug, updated_at, created_at FROM pages WHERE is_published = 1 AND deleted_at IS NULL ORDER BY id ASC') as $pagina) {
+        // WP-24 (VT-X2): paginile doar pentru membri nu intră niciodată (403 sau 404, după pluginul `membri`).
+        foreach (self::interogare($db, 'SELECT slug, updated_at, created_at FROM pages WHERE is_published = 1 AND deleted_at IS NULL'
+            . AccesMembri::conditieSql($db, 'pages', 'pages', true) . ' ORDER BY id ASC') as $pagina) {
             $slug = trim(trim((string) ($pagina['slug'] ?? '')), '/');
             $slugMic = mb_strtolower($slug);
             if (in_array($slugMic, self::PAGINI_SISTEM, true)
@@ -237,7 +239,8 @@ final class Sitemap
         $articole = [];
         foreach (self::interogare($db,
             'SELECT slug, updated_at, created_at, published_at FROM blog_posts
-             WHERE deleted_at IS NULL AND is_published = 1 AND published_at <= NOW() AND TRIM(COALESCE(slug, "")) <> ""
+             WHERE deleted_at IS NULL AND is_published = 1 AND published_at <= NOW() AND TRIM(COALESCE(slug, "")) <> ""'
+             . AccesMembri::conditieSql($db, 'blog_posts', 'blog_posts', true) . '
              ORDER BY published_at DESC, id DESC') as $rand) {
             $articole[] = ['slug' => trim((string) $rand['slug']), 'lastmod' => self::lastmod($rand)];
         }

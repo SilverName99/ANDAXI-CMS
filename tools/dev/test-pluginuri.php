@@ -980,6 +980,8 @@ try {
         'manechin' => ['/[Mm]anechin/u'],
         'acorduri_gdpr' => ['/Acorduri GDPR/iu'],
         'migrare_wordpress' => ['/backup WordPress/u', '/UpdraftPlus/u'],
+        // WP-24 (VT-X2): nota „acces restricționat” a nucleului apare doar cu pluginul membri (fără el, 404).
+        'membri' => ['/Conținut pentru membri/u', '/Doar cont activ/u'],
     ];
     /** Semnele pluginurilor oprite găsite în textul paginilor (fiecare pagină: cale, rol, text). */
     $problemeText = static function (array $pagini) use ($semneText): array {

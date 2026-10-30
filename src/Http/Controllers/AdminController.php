@@ -608,6 +608,9 @@ final class AdminController
                 }
             }
 
+            // WP-24 (VT-C15): pluginurile își curăță datele contului (documente, abonamente) înaintea ștergerii.
+            \App\Support\Hooks::ruleaza('utilizator.sters', $db, $ids, 'admin');
+
             $deleteStmt = $db->prepare('DELETE FROM users WHERE id IN (' . $in . ')');
             $deleteStmt->execute($ids);
             $deleted = (int) $deleteStmt->rowCount();
@@ -2945,6 +2948,11 @@ final class AdminController
                     // instrucțiunea blogului avansat, care tace cât timp migrarea blog/0033 n-a rulat).
                     $copieAvansata = $this->scrieBlogAvansat($db, $newId, $this->normalizeImageWidthPercent($source['featured_image_width'] ?? null),
                         trim((string) ($source['references_html'] ?? '')));
+                    // WP-24 (VT-X2): copia unei postări doar pentru membri rămâne doar pentru membri.
+                    if (\App\Support\AccesMembri::areColoana($db, 'blog_posts')) {
+                        $db->prepare('UPDATE blog_posts SET requires_active_account = (SELECT r FROM (SELECT requires_active_account AS r
+                            FROM blog_posts WHERE id = :vechi) x) WHERE id = :nou')->execute(['vechi' => $id, 'nou' => $newId]);
+                    }
                     // Copia păstrează categoriile și etichetele originalului:
                     // altfel ar trebui rebifate de fiecare dată.
                     try {
@@ -3183,6 +3191,8 @@ final class AdminController
                     $faraAvansat ? 'bibliografia și lățimea copertei' : '', $faraEtichete ? 'etichetele' : '',
                 ])) . ' n-au putut fi salvate. Încearcă din nou; dacă se repetă, eroarea e în jurnalul serverului.');
             }
+            // WP-24 (VT-X2): „doar pentru membri”, doar dacă formularul l-a trimis.
+            $this->scrieAccesMembri($db, 'blog_posts', $id);
         }
         if ($savedPost) {
             $this->refreshCacheAfterPublicContentChange($db);
@@ -3218,6 +3228,23 @@ final class AdminController
      * eroare se scrie în jurnal și întoarce false (salvarea o spune adminului). Aceleași valori nu schimbă rândul (nici
      * `updated_at`).
      */
+    /**
+     * WP-24 (VT-X2): `requires_active_account` al unei pagini sau al unei postări, scris doar când formularul a trimis
+     * `requires_active_account_present=1` (câmpul „Doar cont activ” îl adaugă pluginul `membri` prin
+     * `editor.pagina.campuri` / `editor.articol.campuri`). Fără el (pluginul lipsă, alt formular, o unealtă) valoarea
+     * salvată rămâne (A10). Pe o bază fără coloană (nemigrată) nu face nimic.
+     */
+    private function scrieAccesMembri(PDO $db, string $tabel, int $id): void
+    {
+        if ($id <= 0 || (string) ($_POST['requires_active_account_present'] ?? '') !== '1'
+            || !\App\Support\AccesMembri::areColoana($db, $tabel)) {
+            return;
+        }
+        $valoare = (string) ($_POST['requires_active_account'] ?? '') === '1' ? 1 : 0;
+        $db->prepare('UPDATE ' . ($tabel === 'pages' ? 'pages' : 'blog_posts') . ' SET requires_active_account = :v WHERE id = :id')
+            ->execute(['v' => $valoare, 'id' => $id]);
+    }
+
     private function scrieBlogAvansat(PDO $db, int $postId, int $latimeCoperta, string $referinte): bool
     {
         if ($postId <= 0) {
@@ -15475,6 +15502,11 @@ final class AdminController
                 fn (): string => self::chenarPrevizualizare('Produsele template-ului', '%s')],
             'produseServiciu' => ['produse_serviciu', fn (): string => '{{produse_serviciu}}',
                 fn (): string => self::chenarPrevizualizare('Produsele serviciului', 'categoria cu slug-ul ultimului segment al paginii')],
+            // WP-24 (VT-C4): rândurile de evenimente și grila paginată din mai multe categorii (blogul).
+            'evenimenteRanduri' => ['category_event_rows', fn (): string => '{{category_event_rows:slug-categorie}}',
+                fn (): string => self::chenarPrevizualizare('Rândurile de evenimente (câte 3 pe pagină)', 'categoria %s')],
+            'grilaPaginata' => ['category_grid_paged', fn (): string => '{{category_grid_paged:slug1,slug2}}',
+                fn (): string => self::chenarPrevizualizare('Grila paginată a postărilor (câte 6 pe pagină)', 'categoriile %s')],
         ];
         $date = [];
         foreach ($coduri as $cheie => [$token, $cod, $previzualizare]) {
@@ -15507,7 +15539,9 @@ final class AdminController
         $this->ensureOptionalSchema($db);
 
         $stmt = $db->prepare(
-            'SELECT id, title, slug, html_content, css_content, js_content, is_published
+            'SELECT id, title, slug, html_content, css_content, js_content, is_published'
+            // WP-24 (VT-X2): „doar pentru membri”, pentru câmpul pe care îl adaugă pluginul `membri` (editor.pagina.campuri).
+            . \App\Support\AccesMembri::coloanaSql($db, 'pages', 'pages') . '
              FROM pages
              WHERE id = :id AND deleted_at IS NULL
              LIMIT 1'
@@ -15636,6 +15670,7 @@ final class AdminController
             header('Location: /admin/pages');
             return;
         }
+        $this->scrieAccesMembri($db, 'pages', $id);
         $this->saveCustomPageSeoSettings($db, $id, [
             'title' => $seoTitle,
             'description' => $seoDescription,
@@ -18300,7 +18335,7 @@ final class AdminController
                 'SELECT p.id, p.title, p.slug, p.excerpt, p.content, p.reading_minutes, p.published_at, p.is_published,
                         p.template_id, p.author_id, p.featured_image_url, p.deleted_at,
                         p.category, p.category_id, p.event_start_date, p.event_end_date, p.event_price, p.event_ticket_url, p.event_location, p.video_url,
-                        p.template_id AS blog_template_id
+                        p.template_id AS blog_template_id' . \App\Support\AccesMembri::coloanaSql($db, 'p') . '
                  FROM blog_posts p
                  WHERE ' . $where . '
                  LIMIT 1'

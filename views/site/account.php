@@ -422,6 +422,7 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                             <input type="password" name="password_confirm" minlength="8" required>
                         </div>
                     <?php endif; ?>
+<?= \App\Support\Hooks::html('inregistrare.formular') ?>
                     <div style="grid-column:1/-1;">
                         <button class="btn" type="submit">Creează cont</button>
                     </div>

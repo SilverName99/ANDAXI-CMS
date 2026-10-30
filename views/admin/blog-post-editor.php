@@ -48,6 +48,7 @@ $returnParam = $postId > 0 ? (string) $postId : 'new';
         <?php if ($postId > 0): ?>
             <input type="hidden" name="id" value="<?= $postId ?>">
         <?php endif; ?>
+<?= \App\Support\Hooks::html('editor.articol.campuri', $editingPost ?? []) ?>
 
         <div class="field">
             <label>Template (layout)</label>

@@ -651,6 +651,10 @@ final class Plugins
                     break;
                 }
             }
+            // WP-24: paginile doar pentru membri, fără pluginul `membri`, sunt ascunse (linkurile spre ele se scot).
+            if (self::$nimicAscuns && !self::vizibil('membri') && AccesMembri::areCaiRestrictionate()) {
+                self::$nimicAscuns = false;
+            }
         }
         return self::$nimicAscuns;
     }
@@ -690,6 +694,11 @@ final class Plugins
         $cheieMemo = strtoupper($metoda) . ' ' . $cale . '?' . http_build_query($get);
         if (isset(self::$adreseVizibile[$cheieMemo])) {
             return self::$adreseVizibile[$cheieMemo];
+        }
+        // WP-24 (VT-X2): o pagină sau un articol doar pentru membri e al pluginului `membri`; fără el răspunde 404,
+        // deci linkurile spre el pleacă din pagini ca ale oricărui plugin oprit (App\Support\AccesMembri).
+        if (strtoupper($metoda) === 'GET' && !self::vizibil('membri') && AccesMembri::caleRestrictionata($cale)) {
+            return self::$adreseVizibile[$cheieMemo] = false;
         }
         $gasita = self::routerSite()->gaseste(strtoupper($metoda), $cale);
         $vizibila = true;

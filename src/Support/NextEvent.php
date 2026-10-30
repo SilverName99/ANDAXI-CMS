@@ -80,7 +80,7 @@ final class NextEvent
                  FROM blog_posts p
                  LEFT JOIN blog_categories c ON c.id = p.category_id
                  WHERE p.deleted_at IS NULL
-                   AND p.is_published = 1
+                   AND p.is_published = 1" . AccesMembri::conditieSql($db, 'p', 'blog_posts', true) . "
                    AND p.event_start_date IS NOT NULL
                    AND p.event_start_date >= CURDATE()
                    AND (p.category = 'Evenimente' OR c.slug = 'evenimente'

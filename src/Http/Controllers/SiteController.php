@@ -73,6 +73,9 @@ final class SiteController
         $homePage = $this->findPublishedRootPage();
         if (is_array($homePage)) {
             $db = $this->db();
+            if ($this->poartaMembri($db instanceof PDO ? $db : null, $homePage)) {
+                return;
+            }
             $settings = $this->cachedSettings($db);
             View::render('site/custom-page', array_merge([
                 'title' => (string) ($homePage['title'] ?? 'Acasă'),
@@ -699,14 +702,27 @@ final class SiteController
             return;
         }
 
-        $post = $this->loadPublishedBlogPostBySlug($this->db(), $slug);
-        if (!is_array($post)) {
+        $db = $this->db();
+        $post = $this->loadPublishedBlogPostBySlug($db, $slug);
+        // WP-24 (VT-X2): un articol doar pentru membri nu scapă prin API: fără pluginul `membri` nu există (404), cu el
+        // îl primește doar un membru activ (altfel 403, ca la vertij).
+        $accesMembri = is_array($post) ? \App\Support\AccesMembri::decizie($db instanceof PDO ? $db : null, $post) : '';
+        if (!is_array($post) || $accesMembri === \App\Support\AccesMembri::NEGASIT) {
             $this->jsonResponse([
                 'ok' => false,
                 'error' => 'Articolul nu a fost găsit.',
             ], 404);
             return;
         }
+        if ($accesMembri === \App\Support\AccesMembri::NOTA) {
+            $this->jsonResponse([
+                'ok' => false,
+                'requires_active_account' => true,
+                'error' => 'Acest articol este disponibil doar membrilor cu cont activ.',
+            ], 403);
+            return;
+        }
+        unset($post['requires_active_account']);
 
         $this->jsonResponse([
             'ok' => true,
@@ -730,6 +746,17 @@ final class SiteController
         $post = $this->loadPublishedBlogPostBySlug($db, $slug);
         if (!is_array($post)) {
             $this->articolNegasit($db);
+            return;
+        }
+        // WP-24 (VT-X2): un articol doar pentru membri (fără pluginul `membri` nu există; cu el, nota pentru cine nu e
+        // membru activ).
+        $accesMembri = \App\Support\AccesMembri::decizie($db, $post);
+        if ($accesMembri === \App\Support\AccesMembri::NEGASIT) {
+            $this->articolNegasit($db);
+            return;
+        }
+        if ($accesMembri === \App\Support\AccesMembri::NOTA) {
+            $this->notaMembri($db, (string) ($post['title'] ?? ''));
             return;
         }
 
@@ -3485,6 +3512,22 @@ final class SiteController
             $birthDate = $birthDateRaw;
         }
 
+        // WP-24 (VT-X2): un plugin poate cere câmpuri în plus la înregistrare (de exemplu profesia, la `membri`) și le
+        // validează aici, înainte de crearea contului; prima eroare oprește înregistrarea.
+        $dateInregistrare = [];
+        foreach (\App\Support\Hooks::ruleaza('inregistrare.valideaza', $db, $settings) as $rezultatPlugin) {
+            if (!is_array($rezultatPlugin)) {
+                continue;
+            }
+            $eroarePlugin = trim((string) ($rezultatPlugin['error'] ?? ''));
+            if ($eroarePlugin !== '') {
+                Flash::set('error', $eroarePlugin);
+                header('Location: /register');
+                return;
+            }
+            $dateInregistrare = array_merge($dateInregistrare, (array) ($rezultatPlugin['data'] ?? []));
+        }
+
         $existsStmt = $db->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $attempts = 0;
         while (true) {
@@ -3494,6 +3537,12 @@ final class SiteController
             }
 
             if ($registrationFields['email']) {
+                // WP-24: un plugin poate relua o înregistrare neterminată pe aceeași adresă (redirecționarea lui).
+                $reluare = \App\Support\Hooks::primul('inregistrare.cont_existent', $db, $email, $dateInregistrare);
+                if (is_string($reluare) && $reluare !== '') {
+                    header('Location: ' . $this->safeRedirectPath($reluare, '/login'));
+                    return;
+                }
                 Flash::set('error', 'Există deja un cont cu această adresă de email.');
                 header('Location: /login');
                 return;
@@ -3523,6 +3572,13 @@ final class SiteController
         ]);
 
         $userId = (int) $db->lastInsertId();
+        // WP-24: după crearea contului, un plugin își salvează datele (de exemplu cererea de membru) și poate trimite
+        // vizitatorul altundeva, fără logare automată (de exemplu „confirmă adresa”).
+        $dupaCreare = \App\Support\Hooks::primul('inregistrare.dupa_creare', $db, $userId, $dateInregistrare);
+        if (is_string($dupaCreare) && $dupaCreare !== '') {
+            header('Location: ' . $this->safeRedirectPath($dupaCreare, '/login'));
+            return;
+        }
         CustomerAuth::login($userId);
         EmailAutomation::sendAccountWelcome($db, $settings, $email, trim($firstName . ' ' . $lastName));
         $claimedPoints = $this->claimPendingLoyaltyPointsForUser($db, $userId);
@@ -3864,6 +3920,8 @@ final class SiteController
                 ->execute(['user_id' => $userId]);
             $db->prepare('DELETE FROM loyalty_points_transactions WHERE user_id = :user_id')
                 ->execute(['user_id' => $userId]);
+            // WP-24 (VT-C15): pluginurile își curăță datele contului (documente, abonamente) înaintea ștergerii.
+            \App\Support\Hooks::ruleaza('utilizator.sters', $db, [$userId], 'cont');
             $db->prepare('DELETE FROM users WHERE id = :id LIMIT 1')
                 ->execute(['id' => $userId]);
             $db->commit();
@@ -4337,6 +4395,41 @@ final class SiteController
      * inexistentă: pagina „404” din admin, dacă e publicată, altfel cea din cod.
      * Fără căutarea „poate e un produs vechi”: adresa e a unui plugin, nu a unui produs.
      */
+    /**
+     * WP-24 (VT-X2): poarta unei pagini (sau a paginii de start) doar pentru membri (App\Support\AccesMembri). True dacă a
+     * răspuns deja: 404 fără pluginul `membri`, nota „acces restricționat” (403) pentru cine nu e membru activ.
+     */
+    private function poartaMembri(?PDO $db, array $pagina): bool
+    {
+        $decizie = \App\Support\AccesMembri::decizie($db, $pagina);
+        if ($decizie === \App\Support\AccesMembri::NEGASIT) {
+            $this->paginaNegasita();
+            return true;
+        }
+        if ($decizie === \App\Support\AccesMembri::NOTA) {
+            $this->notaMembri($db, (string) ($pagina['title'] ?? ''));
+            return true;
+        }
+        return false;
+    }
+
+    /** Nota „acces restricționat”: 403, noindex, nofollow, fără cache (pluginul `membri` o poate da prin `continut.nota`). */
+    private function notaMembri(?PDO $db, string $titluContinut): void
+    {
+        http_response_code(403);
+        header('Cache-Control: no-store, private');
+        View::render('site/custom-page', [
+            'title' => 'Conținut pentru membri',
+            'page' => [
+                'html_content' => \App\Support\AccesMembri::nota($db, $titluContinut),
+                'css_content' => '',
+                'js_content' => '',
+            ],
+            'mannequinSectionHtml' => '',
+            'metaRobots' => 'noindex, nofollow',
+        ]);
+    }
+
     public function paginaNegasita(): void
     {
         $db = $this->db();
@@ -4395,6 +4488,10 @@ final class SiteController
             $proprietarPagina = \App\Support\Plugins::proprietarPagina((string) ($page['slug'] ?? ''));
             if ($proprietarPagina !== null && !\App\Support\Plugins::vizibil($proprietarPagina)) {
                 $this->paginaNegasita();
+                return;
+            }
+            // WP-24 (VT-X2): pagina doar pentru membri.
+            if ($this->poartaMembri($db, $page)) {
                 return;
             }
         }
@@ -4832,8 +4929,9 @@ final class SiteController
         }
         $this->ensureOptionalPageSchema($db);
 
+        // WP-24 (VT-X2): și fanionul „doar pentru membri” (App\Support\AccesMembri, poarta din customPage).
         $stmt = $db->prepare(
-            'SELECT id, title, slug, html_content, css_content, js_content
+            'SELECT id, title, slug, html_content, css_content, js_content' . \App\Support\AccesMembri::coloanaSql($db, 'pages', 'pages') . '
              FROM pages
              WHERE slug = :slug AND is_published = 1 AND deleted_at IS NULL
              LIMIT 1'
@@ -4852,7 +4950,7 @@ final class SiteController
         $this->ensureOptionalPageSchema($db);
 
         $stmt = $db->query(
-            "SELECT id, title, slug, html_content, css_content, js_content
+            "SELECT id, title, slug, html_content, css_content, js_content" . \App\Support\AccesMembri::coloanaSql($db, 'pages', 'pages') . "
              FROM pages
              WHERE (slug = '' OR LOWER(slug) IN ('acasa', 'home'))
                AND is_published = 1
@@ -6413,12 +6511,12 @@ HTML;
                 $stmt = $db->prepare(
                     'SELECT p.id, p.title, p.slug, p.excerpt, p.content, p.reading_minutes, p.published_at,
                             ' . $cuCategoria . 'p.featured_image_url AS cover_image_url, COALESCE(a.name, "") AS author_name,
-                            COALESCE(a.avatar_url, "") AS author_avatar_url
+                            COALESCE(a.avatar_url, "") AS author_avatar_url' . \App\Support\AccesMembri::coloanaSql($db, 'p') . '
                      FROM blog_posts p
                      LEFT JOIN blog_authors a ON a.id = p.author_id
                      WHERE p.deleted_at IS NULL
                        AND p.is_published = 1
-                       AND p.published_at <= NOW()' . $conditii . '
+                       AND p.published_at <= NOW()' . $conditii . \App\Support\AccesMembri::conditieSql($db, 'p') . '
                      ORDER BY p.published_at DESC, p.id DESC
                      LIMIT :limit OFFSET :offset'
                 );
@@ -6443,7 +6541,15 @@ HTML;
                 }
                 unset($row);
 
-                return array_values(array_filter($rows, static fn ($row): bool => is_array($row)));
+                // WP-24 (VT-X2): cu `membri` pe site, la cine nu e membru activ, articolele lui rămân doar cu titlul și
+                // rezumatul scris (`is_locked`); coloana nu apare în listă (nici în /api/blog/posts), ca până acum.
+                $rows = \App\Support\AccesMembri::filtreazaLista($db, array_values(array_filter($rows, static fn ($row): bool => is_array($row))));
+                foreach ($rows as &$row) {
+                    unset($row['requires_active_account']);
+                }
+                unset($row);
+
+                return $rows;
             } catch (Throwable) {
                 if ($colatie === '') {
                     return [];
@@ -6471,7 +6577,7 @@ HTML;
                     'SELECT COUNT(*) FROM blog_posts p
                      WHERE p.deleted_at IS NULL
                        AND p.is_published = 1
-                       AND p.published_at <= NOW()' . $conditii
+                       AND p.published_at <= NOW()' . $conditii . \App\Support\AccesMembri::conditieSql($db, 'p')
                 );
                 $stmt->execute($parametri);
 
@@ -6505,7 +6611,7 @@ HTML;
                  INNER JOIN blog_posts p ON p.id = pc.post_id
                      AND p.deleted_at IS NULL
                      AND p.is_published = 1
-                     AND p.published_at <= NOW()
+                     AND p.published_at <= NOW()' . \App\Support\AccesMembri::conditieSql($db, 'p') . '
                  WHERE c.is_active = 1
                  GROUP BY c.id, c.name, c.slug, c.sort_order
                  HAVING articole > 0

@@ -160,18 +160,20 @@ final class HomeSections
         try {
             $stmt = $db->prepare(
                 'SELECT p.title, p.slug, p.excerpt, p.content, p.featured_image_url,
-                        COALESCE(a.name, "") AS author_name
+                        COALESCE(a.name, "") AS author_name' . AccesMembri::coloanaSql($db, 'p') . '
                  FROM blog_posts p
                  LEFT JOIN blog_authors a ON a.id = p.author_id
                  WHERE p.deleted_at IS NULL
                    AND p.is_published = 1
-                   AND p.published_at <= NOW()
+                   AND p.published_at <= NOW()' . AccesMembri::conditieSql($db, 'p') . '
                  ORDER BY p.published_at DESC, p.id DESC
                  LIMIT :limit'
             );
             $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
             $stmt->execute();
-            $rows = $stmt->fetchAll() ?: [];
+            // WP-24 (VT-X2): articolele doar pentru membri: lipsesc fără pluginul `membri`; cu el, fără text la cine nu e
+            // membru activ (rămâne rezumatul scris).
+            $rows = AccesMembri::filtreazaLista($db, $stmt->fetchAll() ?: []);
         } catch (Throwable) {
             return '';
         }

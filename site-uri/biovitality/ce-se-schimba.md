@@ -44,6 +44,7 @@ exact ca azi.
 | Emailul „Mesaj nou din formularul de contact” | „Răspunde” merge la vizitatorul care a scris (antetul `Reply-To`); azi merge la adresa expeditorului. `From` și emailurile comenzilor rămân aceleași. | Portat din grafoanaytis (GR-01, OD-21) | WP-15 |
 | Admin → Galerie | Se pot urca și PDF-uri (fișa „PDF” din grilă) și mai multe fișiere odată (titlul din numele fișierului; o încărcare peste limita serverului spune limita); un fișier cu extensie de imagine care nu e imagine, sau un „PDF” care nu e PDF, e refuzat. Încărcarea din editorul de produs și de articol primește în continuare doar imagini și mp4. O încărcare multiplă lasă un rând în Jurnal activitate. | Portat din grafoanaytis (GR-04, GR-05) | WP-15 |
 | Admin → Design site | `{{an}}` în HTML-ul de antet și de footer devine anul curent (explicat deasupra editorului, arătat în previzualizare). Antetul și footerul de azi nu-l au, deci paginile rămân aceleași. | Portat din grafoanaytis (GR-06) | WP-15 |
+| Paginile cu sliderul `{{category_posts:…}}` (dacă site-ul le folosește) | Săgețile și punctele merg câte un card; o postare cu dată de eveniment apare ca un card de eveniment (data în colț, locația, „Vezi detalii →”). Postările fără dată arată ca azi. | Portat din vertij (VT-C4) | WP-24 |
 
 ## Ce nu se vede
 
@@ -72,3 +73,4 @@ exact ca azi.
 | Cache-ul paginilor (când e pornit) | Un fișier din cache stricat sau scris pe jumătate nu se mai servește, o pagină incompletă nu intră în cache. `Cache-Control` rămâne cel de azi (`page_cache_browser_policy` înghețat `max_age`). | Portat din vertij (VT-C1, VT-C2) |
 | Jurnalul erorilor fatale (`storage/logs/fatal.log`) | O eroare fatală lasă un rând (calea fără parametri, mesajul, fișierul și linia). | Portat din vertij (VT-C3) |
 | Cererile spre Stripe | Aceleași (fără `Stripe-Version`, setarea `stripe_api_version` goală). | Portat din vertij (VT-C10) |
+| Baza de date: `pages.requires_active_account`, `blog_posts.requires_active_account` (`nucleu/0034`) | Coloane noi, 0 peste tot (nimic doar pentru membri); punctele de legătură pentru pluginuri goale; codurile `{{category_event_rows}}`, `{{category_grid_paged}}` în editorul de pagini. | WP-24 (VT-X2, VT-C4) |

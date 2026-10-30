@@ -330,6 +330,8 @@ $idSablonProdus = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
 $idSablonBlogEditor = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_templates') + 9000;
 // Pagina din bază cu liste goale (o face scriptul mai jos, la cereri).
 $paginaListe = 'test-liste-goale-' . getmypid();
+// WP-24 (VT-C4): pagina cu {{category_posts:evenimente}} și {{category_grid:evenimente}} a cazului „sliderul de categorie”.
+$paginaSlider = 'test-slider-evenimente-' . getmypid();
 // WP-12 (X1b): postarea demo importată cu categoria doar ca text (tools/dev/date-demo.php) și o a doua postare, căreia
 // cazul de salvare îi pune drept categorie doar numele unei categorii din listă (declarațiile din $deBioscem).
 $idPostareDoarText = (int) $unu("SELECT id FROM blog_posts WHERE slug = 'sfaturi-vechi-importate' AND deleted_at IS NULL");
@@ -1235,6 +1237,40 @@ $porturiVertij = [
         'mod' => 'repo',
     ],
 ];
+// WP-24 (VT-C4, din vertij e577b94, 01e2773, 76dd45e, b0aa083): sliderul {{category_posts}} merge card cu card (scriptul
+// lui, citit din vederea fiecărui cod, între „const next” și „let st;”) și are stilul cardului de eveniment (doar pentru
+// postările cu data unui eveniment; în cazul de salvare de mai jos niciuna, deci cardurile rămân cele de azi).
+$scriptSlider = static function (string $fisier): string {
+    $text = (string) @file_get_contents($fisier);
+    $inceput = strpos($text, "            const next = sl.querySelector('[data-vt-next]');\n");
+    $sfarsit = $inceput === false ? false : strpos($text, "            let st;\n", $inceput);
+    return $inceput !== false && $sfarsit !== false ? substr($text, $inceput, $sfarsit - $inceput) : '';
+};
+$stilEveniment = (static function () use ($radacina): string {
+    $text = (string) @file_get_contents($radacina . '/views/site/custom-page.php');
+    $inceput = strpos($text, '        /* WP-24 (VT-C4, din vertij b0aa083)');
+    $sfarsit = $inceput === false ? false : strpos($text, '        .vtcs .vtcs__card{', $inceput);
+    return $inceput !== false && $sfarsit !== false ? substr($text, $inceput, $sfarsit - $inceput) : '';
+})();
+$porturiVertij[] = [
+    'nume' => 'sliderul {{category_posts}}: săgețile și punctele merg card cu card',
+    'cale' => '/' . $paginaSlider,
+    'nou' => $scriptSlider($radacina . '/views/site/custom-page.php'),
+    'vechi' => $scriptSlider($dosarBaza . '/views/site/custom-page.php'),
+    'motiv' => 'vertij e577b94, 01e2773, 76dd45e (WP-24, VT-C4): săgețile și punctele mergeau câte o lățime de ecran, dar '
+        . 'scroll-snap-stop:always (același CSS la Bioscem) oprea browserul după un card („două înainte, una înapoi”); acum pasul '
+        . 'e un card și punctele sunt doar pozițiile la care se poate ajunge (site-uri/bioscem/ce-se-schimba.md).',
+    'mod' => 'repo',
+];
+$porturiVertij[] = [
+    'nume' => 'sliderul {{category_posts}}: stilul cardului de eveniment (data în colț, locația)',
+    'cale' => '/' . $paginaSlider,
+    'nou' => $stilEveniment,
+    'vechi' => '',
+    'motiv' => 'vertij b0aa083 (WP-24, VT-C4): regulile noi țin doar de clasele cardului de eveniment (vtcs__card--event, '
+        . 'vtcs__date…), pe care un card obișnuit nu le are; stilul cardurilor de azi nu se schimbă (G-vizual).',
+    'mod' => 'repo',
+];
 $porturiGrafo = [
     // WP-19 (GR-16, din grafoanaytis 84c9f6b): codul benzii simple a produselor din aceeași categorie, în lista codurilor
     // editorului de șabloane de produs (tabul „General” și tabul „Toate”).
@@ -1306,6 +1342,12 @@ $marcajePort = [
     // editorului și anul pus în previzualizarea lui (paginile publice nu se schimbă: Bioscem nu are {{an}} scris).
     'gr:an-ajutor' => ['cale' => '/admin/design', 'motiv' => 'WP-15 (GR-06): ajutorul pentru {{an}} în Design site'],
     'gr:an-previzualizare' => ['cale' => '/admin/design', 'motiv' => 'WP-15 (GR-06): {{an}} înlocuit cu anul în previzualizarea Design site'],
+    // WP-24 (VT-C4, din vertij 67319f7, ff3c46e): codurile {{category_event_rows:…}} și {{category_grid_paged:…}} în lista
+    // editorului de pagini și chenarul lor în previzualizare.
+    'vt:token-evenimente' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-24 (VT-C4): '
+        . 'codurile rândurilor de evenimente și ale grilei paginate în lista editorului de pagini'],
+    'vt:previzualizare-evenimente' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-24 (VT-C4): '
+        . 'chenarul lor în previzualizarea editorului de pagini'],
 ];
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
@@ -2717,6 +2759,32 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 '<div class="video-test__player"><video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;">'
                 . '<source src="/uploads/gallery/film-de-test.mp4" type="video/mp4">Browserul tău nu suportă redarea video.</video></div>')
                 ? [] : ['postarea nu are videoul .mp4 în <video>'],
+        ],
+        [
+            // WP-24 (VT-C4, din vertij): o pagină cu {{category_posts:evenimente}} și {{category_grid:evenimente}}. Fără postări
+            // cu data unui eveniment (puse pe NULL aici, puse la loc după), cardurile sliderului și ale grilei rămân octet cu
+            // octet cele de azi; diferă doar scriptul sliderului (navigarea card cu card) și stilul nou al cardului de
+            // eveniment, declarate în $porturiVertij. Cardul de eveniment însuși (doar pentru postările cu data) îl verifică
+            // tools/dev/test-porturi-vt-gr.php și e în site-uri/bioscem/ce-se-schimba.md.
+            'nume' => 'blog: sliderul și grila unei categorii (cardurile de azi, navigarea card cu card)',
+            'sursa' => 'vertij',
+            'din' => 'e577b94',
+            'tip' => 'schimbare',
+            'tabele' => [
+                ['tabel' => 'pages', 'unde' => 'id > :g1', 'param' => ['g1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM pages')], 'cheie' => 'id'],
+                ['tabel' => 'blog_posts', 'unde' => 'event_start_date IS NOT NULL', 'param' => [], 'cheie' => 'id'],
+            ],
+            'pregateste' => static function (PDO $db) use ($paginaSlider): void {
+                $db->exec('UPDATE blog_posts SET event_start_date = NULL WHERE event_start_date IS NOT NULL');
+                $db->prepare('INSERT INTO pages (title, slug, html_content, css_content, js_content, is_published) VALUES (?, ?, ?, \'\', \'\', 1)')
+                    ->execute(['Slider evenimente (test)', $paginaSlider,
+                        '<div class="t-slider">{{category_posts:evenimente}}</div><div class="t-grid">{{category_grid:evenimente}}</div>']);
+            },
+            'cereri' => [['GET', '/' . $paginaSlider, [], 'viz']],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[0], '<article class="vtcs__card">')
+                && $contine($raspunsuri[0], 'class="vtcg__card') && $contine($raspunsuri[0], "const next = sl.querySelector('[data-vt-next]');")
+                ? [] : ['pagina nu are sliderul și grila categoriei „evenimente” (cardurile, scriptul)'],
         ],
         [
             // WP-22 (Biovitality 9c549c7, 263b520; DB-13): cu blogul avansat oprit (blog_avansat = 0, înghețarea Bioscem)

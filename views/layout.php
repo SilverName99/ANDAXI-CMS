@@ -2269,6 +2269,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     })();
 </script>
 <?php endif; ?>
+<?= \App\Support\Hooks::html('layout.final_body') ?>
 </body>
 </html>
 <?php

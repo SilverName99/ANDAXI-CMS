@@ -200,6 +200,31 @@ Dashboard-ul arată cardurile și listele doar pentru pluginurile vizibile
 (Produse = catalog; Comenzi și „Comenzi recente” = magazin; Utilizatori și
 „Utilizatori recenți” = conturi de clienți).
 
+## Punctele de legătură și conținutul pentru membri (WP-24)
+
+**Punctele de legătură** (`App\Support\Hooks`, din vertij VT-X2, port-vertij §4.2): nucleul cheamă un punct,
+un plugin se agață de el dintr-un singur loc, `config/hooks.php` (gol în Etapa 1: `membri` și `donatii` vin în
+Etapa 4). O agățare contează doar cât pluginul ei e vizibil (sau, cu `'stare' => 'activ'`, doar pornit); fără
+agățări, nucleul se poartă exact ca înainte. Punctele și locul lor: `inregistrare.formular` (formularul de
+înregistrare din contul clientului; și `{{auth_form}}`, WP-25), `inregistrare.valideaza` / `inregistrare.cont_existent` /
+`inregistrare.dupa_creare` (`accountRegister`: înainte de creare, adresa care are deja cont, după creare — o
+redirecționare a pluginului înseamnă fără logare automată), `cont.taburi` și `cont.antet` (pagina contului, WP-25),
+`continut.membru_activ` și `continut.nota` (poarta de mai jos), `editor.pagina.campuri` / `editor.articol.campuri`
+(câmpurile din editorul paginii și al articolului), `utilizator.sters` (din Admin → Utilizatori și din „Șterge contul”,
+înaintea ștergerii, în aceeași tranzacție), `layout.final_body` (înainte de `</body>` pe paginile publice),
+`plugin.lucruri_in_curs` (pentru lucrurile în curs, WP-27). În dezvoltare (`APP_ENV=local`), `CMS_DEV_HOOKS` poate da un
+fișier cu agățări de probă (`tools/dev/test-porturi-vt-gr.php`).
+
+**Conținutul pentru membri** (`App\Support\AccesMembri`, migrarea `nucleu/0034`): o pagină sau un articol cu
+`requires_active_account = 1`. Cu pluginul `membri` oprit sau lipsă, rândul nu există pentru nimeni: 404 (API: JSON
+404), lipsește din `/blog`, din API-ul listei, din `{{latest_posts}}`, `{{category_*}}`, articolele similare, numărătorile
+categoriilor, iar linkurile spre el pleacă din pagini (ca ale unui plugin oprit, `Plugins::adresaVizibila`). Cu `membri`
+pornit sau „se oprește”: un membru activ (agățarea `continut.membru_activ`) îl vede; oricine altcineva primește nota
+„acces restricționat” (403, `noindex, nofollow`, fără cache; a pluginului prin `continut.nota`, altfel a nucleului), iar în
+liste rămâne doar titlul și rezumatul scris (`is_locked`, fără text). Harta site-ului și `{{next_event_*}}` nu-l iau
+niciodată. Editoarele scriu fanionul doar când formularul trimite `requires_active_account_present=1` (câmpul îl
+adaugă pluginul); altfel valoarea salvată rămâne. Pe o bază nemigrată coloana lipsește și nimic nu e restricționat.
+
 ## Dincolo de rute: ce mai ascunde site-ul
 
 Garda oprește adresele; restul îl fac câteva mecanisme comune, apoi verificări
@@ -702,7 +727,10 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: `/blog`, articolele, API-ul blogului, codurile `{{blog_posts}}`,
   `{{latest_posts}}`, `{{category_*}}`, `{{next_event_*}}`, articolele de pe prima
-  pagină, meniul Blog; videoul postării și al evenimentului următor (`VideoEmbed`, din
+  pagină, meniul Blog; din vertij (WP-24, VT-C4) cardurile de eveniment în sliderul `{{category_posts}}` (doar pentru
+  postările cu data unui eveniment: data în colț, locația, „Vezi detalii”; săgețile și punctele merg card cu card),
+  `{{category_event_rows:slug}}` (rânduri compacte, câte 3 pe pagină) și `{{category_grid_paged:slug1,slug2}}` (grila
+  din mai multe categorii, câte 6), cu clasele `vtcs__`/`vtcg__`/`vter__` ale conținutului vertij; videoul postării și al evenimentului următor (`VideoEmbed`, din
   vertij `0fc2b2c`: YouTube, Vimeo sau un fișier video urcat în Galerie; playerul YouTube
   sau Vimeo se încarcă singur doar cu acordul pentru toate cookie-urile, altfel la apăsarea
   casetei „Pornește videoclipul”; Vimeo cu `dnt=1`). Tabele: `blog_*`.

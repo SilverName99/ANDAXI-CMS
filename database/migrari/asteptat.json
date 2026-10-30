@@ -444,6 +444,12 @@
                     "null": true,
                     "tip": "longtext"
                 },
+                "requires_active_account": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "slug": {
                     "extra": "",
                     "implicit": null,
@@ -4324,6 +4330,12 @@
                     "implicit": null,
                     "null": true,
                     "tip": "longtext"
+                },
+                "requires_active_account": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
                 },
                 "slug": {
                     "extra": "",
