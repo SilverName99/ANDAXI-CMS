@@ -18,7 +18,9 @@ declare(strict_types=1);
  * - **copiate cum sunt:** `competition_partners`, `competition_prices` (concurenții și prețurile lor: date de business ale
  *   produselor, publice), `blog_tags`, `blog_post_tags` (etichetele blogului); coloanele Biovitality ale tabelelor comune:
  *   `products.bundle_items_json` (din ce produse e făcut un pachet), `blog_posts.references_html` și
- *   `blog_posts.featured_image_width` (conținutul public al articolelor);
+ *   `blog_posts.featured_image_width` (conținutul public al articolelor), `blog_posts.wp_post_id` (id-ul articolului în
+ *   WordPress-ul vechi; o pune importul `scripts/import-wordpress-posts.php` al codului Biovitality, nu instalarea, deci nu e
+ *   în bv.sql, dar e pe site: setul tools/verificare/seturi/biovitality.php o numără);
  * - **ca la Bioscem:** id-urile Stripe ale comenzilor (`orders.stripe_session_id`, `stripe_payment_intent_id`) devin
  *   `anon-<id>` (regula `ref`; nu există o coloană a clientului Stripe în codul Biovitality), procesatorul linkurilor de
  *   plată (`order_payment_links.procesator`) rămâne, clienții importați din WordPress au parola înlocuită (`users`, ca toate
@@ -27,7 +29,8 @@ declare(strict_types=1);
  * - **setările:** în plus golite toate cheile `bunny_*` ale fișierelor din cloud care pot deschide sau arăta spațiul de
  *   stocare (zona, parola ei, regiunea, adresa CDN, dosarul de bază, cheia API și orice cheie `bunny_*` nouă: tiparul de
  *   mai jos le golește pe toate în afara celor de configurare știute), iar `bunny_enabled` = 0, ca o copie să nu atingă
- *   niciodată fișierele adevărate (port-biovitality.md §11).
+ *   niciodată fișierele adevărate (port-biovitality.md §11); lista albă a cheilor (`cunoscute`) e a codului comun și a
+ *   codului Biovitality (tools/verificare/reguli/setari-cunoscute.php), nu a celui Bioscem.
  */
 
 $reguli = require __DIR__ . '/bioscem.php';
@@ -37,8 +40,9 @@ if (!is_array($reguli) || ($reguli['site'] ?? null) !== 'bioscem' || !is_int($re
 
 $reguli['site'] = 'biovitality';
 // Versiunea Biovitality urmează versiunea regulilor Bioscem (sutele) și pe a ei (unitățile): o schimbare în oricare face o
-// încărcare oprită să nu mai fie continuată cu --reia. 1 (WP-11b): prima.
-$reguli['versiune'] = $reguli['versiune'] * 100 + 1;
+// încărcare oprită să nu mai fie continuată cu --reia. 1 (WP-11b): prima. 2 (revizuirea WP-11b): blog_posts.wp_post_id și
+// lista albă a setărilor (cea Biovitality, mai jos).
+$reguli['versiune'] = $reguli['versiune'] * 100 + 2;
 $reguli['schema'] = 'Mutare-Site-Biovitality@779e0d8 (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
 $reguli['pachet'] = 'biovitality';
@@ -71,6 +75,7 @@ $reguli['tabele'] += [
 $reguli['tabele']['products']['pastreaza'][] = 'bundle_items_json';
 $reguli['tabele']['blog_posts']['pastreaza'][] = 'references_html';
 $reguli['tabele']['blog_posts']['pastreaza'][] = 'featured_image_width';
+$reguli['tabele']['blog_posts']['pastreaza'][] = 'wp_post_id';
 
 // Setările: fișierele din cloud (bunny.net) oprite și fără nicio cheie de acces; restul ca la Bioscem.
 $reguli['setari']['goale_tipar'] = '/(password|secret|api_key|_token$|client_secret)|^bunny_(?!(?:enabled|timeout|upload_target|gallery_folder|lock_expire_hours'
@@ -78,5 +83,9 @@ $reguli['setari']['goale_tipar'] = '/(password|secret|api_key|_token$|client_sec
 $reguli['setari']['goale'] = array_merge($reguli['setari']['goale'], ['bunny_storage_zone', 'bunny_storage_password', 'bunny_storage_region', 'bunny_cdn_url',
     'bunny_base_folder', 'bunny_api_key']);
 $reguli['setari']['zero'][] = 'bunny_enabled';
+// Lista albă a setărilor: cheile codului comun și ale codului Biovitality (Settings::DEFAULTS și restul celor folosite), nu
+// ale celui Bioscem; o altă cheie a sursei oprește încărcarea.
+$cunoscute = require __DIR__ . '/setari-cunoscute.php';
+$reguli['setari']['cunoscute'] = array_values(array_unique(array_merge($cunoscute['nucleu'], $cunoscute['biovitality'])));
 
 return $reguli;

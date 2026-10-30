@@ -404,6 +404,12 @@ $cazuri = [
     'o opțiune necunoscută' => static function (array &$d): void {
         $d['tabele']['users']['transforma']['email'] = ['email', 'sare' => 'x'];
     },
+    'lista albă a setărilor lipsă' => static function (array &$d): void {
+        unset($d['setari']['cunoscute']);
+    },
+    'o cheie știută care arată a secret, neneutralizată (smtp_pass)' => static function (array &$d): void {
+        $d['setari']['cunoscute'][] = 'smtp_pass';
+    },
 ];
 foreach ($cazuri as $ce => $schimba) {
     $verifica('regulile stricate se refuză: ' . $ce, $strica($schimba) !== []);
@@ -420,6 +426,17 @@ $verifica('scanerul: o coloană personală nouă (orders.telefon_livrare) și un
     . 'un tip necopiabil oprește; un tabel nou = doar structura', count($scan['probleme']) === 3 && str_contains(implode(' ', $scan['probleme']), 'orders.telefon_livrare (nume de date personale)')
     && str_contains(implode(' ', $scan['probleme']), 'products.culoare_noua: coloană fără regulă') && str_contains(implode(' ', $scan['probleme']), 'pages.title: tipul geometry')
     && $scan['necunoscute'] === ['tabel_nou_test'], implode('; ', $scan['probleme']));
+// Scanerul setărilor (fail-closed, revizuirea WP-11b): o cheie pe care n-o știe codul și n-o neutralizează regulile oprește.
+$setariNoi = $reguli->scaneazaSetari(['store_name', 'email_template_new_order_body', 'customer_registration_field_phone', 'smtp_password', 'stripe_cheie_noua_secret',
+    'smtp_pass', 'stripe_restricted_key', 'cheie_noua_de_test', 'Numele Unui Om']);
+$verifica('scanerul setărilor (Bioscem): cheile știute de cod (și familiile după tipar) și cele neutralizate trec; una necunoscută care arată a secret '
+    . '(smtp_pass, stripe_restricted_key) și una doar necunoscută (cheie_noua_de_test) opresc, cu numele lor; un nume neobișnuit, doar lungimea',
+    count($setariNoi) === 4 && str_contains(implode(' ', $setariNoi), 'settings.smtp_pass (arată a secret): cheie necunoscută codului')
+    && str_contains(implode(' ', $setariNoi), 'settings.stripe_restricted_key (arată a secret)') && str_contains(implode(' ', $setariNoi), 'settings.cheie_noua_de_test: cheie necunoscută')
+    && str_contains(implode(' ', $setariNoi), 'o cheie cu nume neobișnuit (14 caractere)') && !str_contains(implode(' ', $setariNoi), 'Numele'), implode('; ', $setariNoi));
+exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($radacina . '/tools/dev/genereaza-setari-cunoscute.php') . ' --verifica 2>&1', $iesireLista, $codLista);
+$verifica('lista albă a setărilor (tools/verificare/reguli/setari-cunoscute.php) e la zi cu codul comun și cu cel al site-urilor la „ultimul commit revizuit” '
+    . '(tools/dev/genereaza-setari-cunoscute.php --verifica)', $codLista === 0, implode(' ', $iesireLista));
 $sursaFan = $structuraDin($bs);
 $sursaFan['fan_streets__sync'] = $sursaFan['fan_streets'];
 $scan = $reguli->scaneaza($sursaFan);
@@ -535,8 +552,11 @@ $verifica('A6 se socotește din lista regulilor, nu cu transformarea: o valoare 
 $reguliBv = Reguli::incarca($radacina, 'biovitality');
 $verifica('regulile Biovitality se încarcă (cele Bioscem plus ale lui), fără nicio greșeală de formă; versiunea urmează și versiunea regulilor Bioscem',
     $reguliBv->probleme() === [] && $reguliBv->date['licenta'] === 'biovitality' && $reguliBv->date['pachet'] === 'biovitality'
-    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 1, implode('; ', $reguliBv->probleme()));
+    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 2, implode('; ', $reguliBv->probleme()));
 $bv = $coloaneSql($radacina . '/tools/dev/migrari/vechi/bv.sql');
+// Coloanele pe care le pune pe site un script al codului Biovitality, nu instalarea (deci nu sunt în bv.sql): importul WordPress
+// (scripts/import-wordpress-posts.php:314). Setul tools/verificare/seturi/biovitality.php le numără; regulile trebuie să le știe.
+$bv['blog_posts']['wp_post_id'] = ['tip' => 'int', 'nul' => true, 'lungime' => null, 'generata' => false];
 $scanBv = $reguliBv->scaneaza($structuraDin($bv));
 $verifica('scanerul pe schema Biovitality 779e0d8 (bv.sql, ' . count($bv) . ' tabele): fiecare tabel are regulă (' . count($scanBv['copiate']) . ' copiate, '
     . count($scanBv['doar_structura']) . ' doar structura), fiecare coloană a unui tabel copiat e în reguli', $scanBv['probleme'] === [] && $scanBv['necunoscute'] === []
@@ -609,6 +629,11 @@ $verifica('scanerul Biovitality (fail-closed): o coloană nouă cu date personal
     && str_contains(implode(' ', $scanBvNou['probleme']), 'competition_partners.contact_email (nume de date personale): coloană fără regulă')
     && str_contains(implode(' ', $scanBvNou['probleme']), 'products.bundle_note: coloană fără regulă') && $scanBvNou['necunoscute'] === ['bunny_share_links'],
     implode('; ', $scanBvNou['probleme']));
+$setariNoiBv = $reguliBv->scaneazaSetari(['bunny_timeout', 'bunny_storage_zone', 'bunny_cheie_noua', 'order_email_from_email', 'store_name', 'smtp_pass',
+    'cheie_noua_de_test', 'catalog_pagina']);
+$verifica('scanerul setărilor (Biovitality, lista codului comun și a codului Biovitality): bunny_* știute sau golite după tipar trec; o cheie necunoscută '
+    . 'oprește (smtp_pass, cheie_noua_de_test), cu numele ei', count($setariNoiBv) === 2 && str_contains(implode(' ', $setariNoiBv), 'settings.smtp_pass (arată a secret)')
+    && str_contains(implode(' ', $setariNoiBv), 'settings.cheie_noua_de_test: cheie necunoscută'), implode('; ', $setariNoiBv));
 $setariBv = (array) $reguliBv->date['setari'];
 $neutruBv = static fn (string $cheie, string $valoare = 'valoare'): mixed => $t->setare($cheie, $valoare, $setariBv, 'proprietar@exemplu.ro', 'verificare@exemplu.ro');
 $cuListaBv = static fn (string $cheie, string $valoare): ?bool => Incarcare::setareNeutralizata($cheie, $valoare, $setariBv, 'proprietar@exemplu.ro', 'verificare@exemplu.ro');
@@ -632,20 +657,23 @@ $verifica('Biovitality: id-urile Stripe ale comenzii devin anon-<id>, numărul �
 // Codul vechi: ce se copiază.
 $copiate = [];
 foreach (['public/index.php', 'src/Support/X.php', 'views/a.php', 'public/assets/app.css', 'public/assets/app.js', 'public/assets/logo.png', 'database/schema.sql',
-    'config/app.php', 'composer.json', 'public/.htaccess', '.htaccess', 'storage/sessions/.gitkeep', 'public/robots.txt', 'README.md', '.env.example'] as $fisier) {
+    'config/app.php', 'composer.json', 'public/.htaccess', '.htaccess', 'storage/sessions/.gitkeep', 'public/robots.txt', 'README.md', '.env.example',
+    'scripts/seo-continut.json', 'src/Data/judete.json', 'config/feed.xml', 'vendor/composer/installed.json', 'public/manifest.json', 'composer.lock'] as $fisier) {
     if (Incarcare::motivSarit($fisier) !== null) {
         $copiate[] = $fisier;
     }
 }
 $sarite = [];
 foreach (['.env', '.env.backup', '.env.2026', 'storage/sessions/sess_abc', 'storage/import/dump.sql', 'storage/logs/php.log', 'public/error_log', 'error_log',
-    'public/sitemap.xml', 'public/sitemap-produse.xml', 'backup.sql', 'comenzi.csv', 'arhiva.zip', 'export.tar', 'x.log', 'public/uploads-fara-extensie'] as $fisier) {
+    'public/sitemap.xml', 'public/sitemap-produse.xml', 'backup.sql', 'comenzi.csv', 'arhiva.zip', 'export.tar', 'x.log', 'public/uploads-fara-extensie',
+    'export.xml', 'wordpress/export.xml', 'utilizatori.json', 'public/export-clienti.json', 'tmp/comenzi.txt', 'public/note.txt', 'public/wp-content/feed.xml'] as $fisier) {
     if (Incarcare::motivSarit($fisier) === null) {
         $sarite[] = $fisier;
     }
 }
 $verifica('codul vechi: se copiază codul (php, css, js, poze ale temei, schema.sql, .htaccess, .gitkeep din storage, .env.example); se sar .env*, storage/, '
-    . 'jurnalele, sitemap-urile, copiile de bază, exporturile și arhivele', $copiate === [] && $sarite === [], implode(', ', array_merge($copiate, $sarite)));
+    . 'jurnalele, sitemap-urile, copiile de bază, exporturile și arhivele; .json/.xml/.txt doar din dosarele codului (src, views, config, database, scripts, '
+    . 'vendor) și cele știute ale rădăcinii și ale public/ (un export.xml WordPress sau un export JSON al utilizatorilor rămâne pe server)', $copiate === [] && $sarite === [], implode(', ', array_merge($copiate, $sarite)));
 
 // Garda instrucțiunilor sursei.
 $refuzata = static function (string $sql): bool {
@@ -1413,6 +1441,8 @@ try {
             'NU    orders.telefon_livrare (nume de date personale): coloană fără regulă'],
         'o coloană nouă oarecare (products.culoare_noua)' => ['ALTER TABLE products ADD COLUMN culoare_noua VARCHAR(30) NULL', "UPDATE products SET culoare_noua = '" . $m . "', updated_at = updated_at",
             'ALTER TABLE products DROP COLUMN culoare_noua', 'NU    products.culoare_noua: coloană fără regulă'],
+        'o cheie de setări necunoscută codului (smtp_pass)' => ["INSERT INTO settings (`key`, `value`) VALUES ('smtp_pass', 'parola-" . $m . "')", null,
+            "DELETE FROM settings WHERE `key` = 'smtp_pass'", 'NU    settings.smtp_pass (arată a secret): cheie necunoscută codului, fără regulă'],
         'o vedere' => ['CREATE VIEW vedere_test AS SELECT id FROM orders', null, 'DROP VIEW vedere_test', '1 vederi'],
         'un tabel _verificare (sursa e o copie)' => ['CREATE TABLE _verificare (id INT)', null, 'DROP TABLE _verificare', 'e o copie de verificare'],
     ];
@@ -2100,6 +2130,8 @@ try {
     foreach ($creariBv as [$sql]) {
         $sursaBv->exec($sql);
     }
+    // Ca pe site, după importul WordPress al codului Biovitality (scripts/import-wordpress-posts.php:314-315).
+    $sursaBv->exec('ALTER TABLE blog_posts ADD COLUMN wp_post_id INT UNSIGNED DEFAULT NULL, ADD KEY idx_blog_posts_wp (wp_post_id)');
     $faraInSursa = [];
     foreach ((array) $inghetareBv['setari'] as $cheie => $intrare) {
         if (is_array($intrare) && ($intrare['mod'] ?? '') === 'lipsa') {
@@ -2136,6 +2168,8 @@ try {
     // Ce e doar al Biovitality: un produs-pachet, concurenții, etichetele blogului, o comandă plătită cu Stripe, setările fișierelor din cloud.
     $produsBv = (int) $sursaBv->query('SELECT MIN(id) FROM products')->fetchColumn();
     $sursaBv->prepare('UPDATE products SET bundle_items_json = ? WHERE id = ?')->execute(['[{"product_id":' . ($produsBv + 1) . ',"quantity":2}]', $produsBv]);
+    $articolBv = (int) $sursaBv->query('SELECT MIN(id) FROM blog_posts')->fetchColumn();
+    $sursaBv->exec('UPDATE blog_posts SET wp_post_id = 4711 WHERE id = ' . $articolBv);
     $partenerBv = $randNou($sursaBv, 'competition_partners', ['name' => 'Magazin Concurent Demo', 'website' => 'https://concurent.exemplu.ro', 'is_active' => 1]);
     $randNou($sursaBv, 'competition_prices', ['partner_id' => $partenerBv, 'product_id' => $produsBv, 'price' => '49.90', 'product_url' => 'https://concurent.exemplu.ro/p/1']);
     $etichetaBv = $randNou($sursaBv, 'blog_tags', ['name' => 'Imunitate', 'slug' => 'imunitate']);
@@ -2218,8 +2252,10 @@ try {
         }
     }
     $pachetCopie = (string) $tinta->query('SELECT bundle_items_json FROM products WHERE id = ' . $produsBv)->fetchColumn();
+    $wpCopie = (string) $tinta->query('SELECT wp_post_id FROM blog_posts WHERE id = ' . $articolBv)->fetchColumn();
     $verifica('Biovitality: concurenții și prețurile lor, etichetele blogului, produsele (cu pachetul: bundle_items_json păstrat), comenzile și clienții, cu tot atâtea '
-        . 'rânduri ca sursa', $altfelBv === [] && $pachetCopie === '[{"product_id":' . ($produsBv + 1) . ',"quantity":2}]'
+        . 'rânduri ca sursa; id-ul WordPress al unui articol (wp_post_id, pus de importul codului Biovitality) păstrat', $altfelBv === []
+        && $pachetCopie === '[{"product_id":' . ($produsBv + 1) . ',"quantity":2}]' && $wpCopie === '4711'
         && (string) $tinta->query('SELECT name FROM competition_partners WHERE id = ' . $partenerBv)->fetchColumn() === 'Magazin Concurent Demo', implode(', ', $altfelBv));
     $stripeBv = $tinta->query('SELECT stripe_session_id, stripe_payment_intent_id, payment_method FROM orders WHERE id = ' . (int) $idsBv['orders'])->fetch();
     $procesatoare = $tinta->query('SELECT DISTINCT procesator FROM order_payment_links')->fetchAll(PDO::FETCH_COLUMN);
@@ -2252,8 +2288,13 @@ try {
     $verifica('Biovitality: sursa neschimbată (CHECKSUM TABLE) și dosarul live neschimbat', $sume($sursaBv) === $sumeSursaBv && $instantaneu($liveBv) === $instantaneuLiveBv,
         implode(', ', array_keys(array_diff_assoc($sume($sursaBv), $sumeSursaBv))));
     $s = $sterge();
-    $verifica('sterge.php pe copia Biovitality: „GATA”, copia ștearsă (și codul vechi)', $s['cod'] === 0 && $stearsa($tinta), $descrie($s));
+    $verifica('sterge.php pe copia Biovitality: „GATA”, copia ștearsă (și codul vechi); la final spune că valorile private ale înghețării sunt încă lângă pachete '
+        . '(site-uri/biovitality/privat/, site-uri/bioscem/privat/), fără valorile lor', $s['cod'] === 0 && $stearsa($tinta)
+        && str_contains($s['iesire'], 'ATENȚIE site-uri/biovitality/privat/ e încă aici') && str_contains($s['iesire'], 'ATENȚIE site-uri/bioscem/privat/ e încă aici')
+        && !str_contains($s['tot'], '@exemplu-client.ro') && str_starts_with($ultimul($s['iesire']), 'GATA: copia a fost ștearsă'), $descrie($s));
     exec('rm -rf ' . escapeshellarg($copie . '/site-uri/biovitality/privat'));
+    $s = $sterge();
+    $verifica('sterge.php după rm -r site-uri/biovitality/privat: nu-l mai pomenește', $s['cod'] === 0 && !str_contains($s['iesire'], 'site-uri/biovitality/privat'), $descrie($s));
 
     // =================================================================
     $scrie('');

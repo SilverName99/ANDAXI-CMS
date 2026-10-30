@@ -134,6 +134,53 @@ final class Generator
     }
 
     /**
+     * Copia codului vechi dintr-un dosar (pe server, dosarul site-ului live; `genereaza-setari.php --cod-vechi`), doar în
+     * citire: numai fișierele .php pe care le citește citeste-cod.php (src, views, scripts, config, public fără uploads/,
+     * bootstrap.php), fără legături, fără .env, poze sau altceva. Întoarce dosarul copiei (nou, 0700), pe care îl șterge
+     * apelantul.
+     */
+    public function copieDinDosar(string $sursa): string
+    {
+        $sursa = rtrim($sursa, '/');
+        if (!is_file($sursa . '/src/Support/Settings.php') || is_link($sursa . '/src/Support/Settings.php')) {
+            throw new RuntimeException($sursa . ' nu are src/Support/Settings.php (dă dosarul codului site-ului, cel cu src/)');
+        }
+        @mkdir($this->lucru, 0700, true);
+        $dosar = $this->lucru . '/cod-dosar-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        if (!@mkdir($dosar, 0700)) {
+            throw new RuntimeException('nu pot face dosarul copiei ' . $dosar);
+        }
+        $fisiere = [];
+        foreach (self::PARTI_COD as $parte) {
+            $cale = $sursa . '/' . $parte;
+            if ($parte === 'bootstrap.php') {
+                if (is_file($cale) && !is_link($cale)) {
+                    $fisiere[] = $parte;
+                }
+                continue;
+            }
+            if (!is_dir($cale) || is_link($cale)) {
+                continue;
+            }
+            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($cale, \FilesystemIterator::SKIP_DOTS));
+            foreach ($it as $f) {
+                $rel = substr($f->getPathname(), strlen($sursa) + 1);
+                if ($f->isLink() || !$f->isFile() || !str_ends_with($f->getFilename(), '.php') || str_starts_with($rel, 'public/uploads/')) {
+                    continue;
+                }
+                $fisiere[] = $rel;
+            }
+        }
+        foreach ($fisiere as $rel) {
+            @mkdir(dirname($dosar . '/' . $rel), 0700, true);
+            if (!@copy($sursa . '/' . $rel, $dosar . '/' . $rel)) {
+                throw new RuntimeException('nu pot copia ' . $rel);
+            }
+        }
+        return $dosar;
+    }
+
+    /**
      * Ce folosește un cod când o setare lipsește (procesul-copil citeste-cod.php).
      *
      * @param array<string, array<string, mixed>> $extrase cheie → cererea „extrage” a unei decizii

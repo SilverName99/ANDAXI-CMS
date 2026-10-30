@@ -97,6 +97,8 @@ final class ComparaCalcule
      * - `fara_epuizate`: produsele marcate epuizate (`out_of_stock = 1`) se scot din coșul cazului, în ambele coduri: codul vechi nu le
      *   pune în sumar (`fetchProducts` cu `out_of_stock = 0`), codul comun le păstrează (Bioscem: stocul adevărat îl dă ERP-ul, iar
      *   finalizarea oprește comanda), deci aceeași comandă veche, recalculată cu fișa de acum a produsului, ar diferi prin construcție.
+     *   Un coș doar cu produse epuizate ar fi gol în ambele (deci „identic” fără să fi comparat ceva): se scoate dintre cazuri și se
+     *   numără, „excluse: epuizate N”.
      * Fiecare e o schimbare a clientului, scrisă în site-uri/<profil>/ce-se-schimba.md.
      */
     public const DECLARATE_PROFIL = [
@@ -262,6 +264,7 @@ final class ComparaCalcule
             $this->spune('  excluse: pachete ' . $this->pachete . ' (coșuri cu un produs-pachet, numărate, necomparate: pachete_produse vine în Etapa 4)');
         }
         if ($this->epuizate !== null) {
+            $this->spune('  excluse: epuizate ' . $this->epuizate['excluse'] . ' (coșuri doar cu produse epuizate: gol în ambele coduri, necomparate)');
             $this->spune('  produse epuizate scoase din coș, în ambele coduri: ' . $this->epuizate['linii'] . ' linii în ' . $this->epuizate['cazuri']
                 . ' cazuri (codul vechi nu le pune în sumar, codul comun le păstrează: diferență declarată pe profil)');
         }
@@ -613,10 +616,15 @@ final class ComparaCalcule
                     $epuizate[(int) $idProdus] = true;
                 }
             }
-            $this->epuizate = ['linii' => 0, 'cazuri' => 0];
+            $this->epuizate = ['linii' => 0, 'cazuri' => 0, 'excluse' => 0];
             foreach ($linii as $idComanda => $liniiComanda) {
                 $ramase = array_values(array_filter($liniiComanda, static fn (array $l): bool => !isset($epuizate[$l[0]])));
-                if (count($ramase) !== count($liniiComanda)) {
+                if ($ramase === [] && $liniiComanda !== []) {
+                    // Toate liniile epuizate: în ambele coduri un coș gol, deci „identic” fără să fi comparat nimic. Se scoate dintre
+                    // cazuri și se numără („excluse: epuizate N”), ca pachetele (revizuirea WP-11b).
+                    $this->epuizate['excluse']++;
+                    unset($cazuri[$idComanda], $linii[$idComanda]);
+                } elseif (count($ramase) !== count($liniiComanda)) {
                     $this->epuizate['linii'] += count($liniiComanda) - count($ramase);
                     $this->epuizate['cazuri']++;
                     $linii[$idComanda] = $ramase;
@@ -1168,6 +1176,9 @@ final class ComparaCalcule
         $this->spune('cazuri ' . $total . ' | identice ' . $identice . ' | diferite ' . $diferite . ' | erori vechi ' . $nrEroriVechi . ' | erori nou ' . $nrEroriNou);
         if ($this->pachete !== null) {
             $this->spune('excluse: pachete ' . $this->pachete . ' (necomparate; în repetiția din Etapa 4, cu pachete_produse portat)');
+        }
+        if ($this->epuizate !== null) {
+            $this->spune('excluse: epuizate ' . $this->epuizate['excluse'] . ' (coșuri doar cu produse epuizate, necomparate)');
         }
         ksort($peTip);
         $this->spune('cazuri pe tip: ' . self::lista($peTip));

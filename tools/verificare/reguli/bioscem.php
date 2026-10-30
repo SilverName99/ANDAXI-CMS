@@ -41,9 +41,17 @@ declare(strict_types=1);
  * `parola` și `token`). Orașul și județul rămân (regulile livrării depind de ele), la fel sumele, stările, datele și
  * id-urile.
  *
+ * Setările sunt și ele fail-closed (revizuirea WP-11b): o cheie din `settings` a sursei pe care n-o neutralizează lista de
+ * mai jos și n-o știe codul (`cunoscute`: cheile codului comun și ale codului Bioscem la „ultimul commit revizuit”, din
+ * tools/verificare/reguli/setari-cunoscute.php, generat de tools/dev/genereaza-setari-cunoscute.php; `cunoscute_tipar`:
+ * familiile cu nume făcute din mers) oprește încărcarea înaintea oricărui rând, cu numele ei, ca o coloană fără regulă.
+ * O cheie știută care arată a secret (parolă, cheie, jeton, IBAN) trebuie să fie neutralizată (altfel regulile au o greșeală).
+ *
  * `versiune` crește la orice schimbare: o încărcare începută cu altă versiune nu se continuă cu --reia (--reincarca).
  * Biovitality, vertij și grafoanaytis primesc fișierele lor în porturile lor (WP-11b pentru Biovitality).
  */
+
+$cunoscute = require __DIR__ . '/setari-cunoscute.php';
 
 return [
     'site' => 'bioscem',
@@ -54,7 +62,8 @@ return [
     // (magazin/0028), copiate cum sunt.
     // 5 (WP-21): adresa de la care a venit o recenzie golită, marcajul de spam păstrat (recenzii/0030); „dat de” al produselor
     // promoționale (emailul adminului, produse_promo/0031) cu pseudonimul lui, „dat la” păstrat.
-    'versiune' => 5,
+    // 6 (revizuirea WP-11b): lista albă a cheilor de setări (o cheie necunoscută și neneutralizată oprește încărcarea).
+    'versiune' => 6,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -420,5 +429,9 @@ return [
         'prefix' => ['order_email_from_name'],
         // O cheie nouă, a copiei (din sarea încărcării; aceeași la --reia).
         'aleatoare' => ['maintenance_key'],
+        // Lista albă: cheile pe care le știe codul (cel comun și cel Bioscem), copiate cum sunt dacă nu sunt mai sus; orice altă
+        // cheie a sursei oprește încărcarea (Reguli::scaneazaSetari), cu numele ei. Familiile cu nume făcute din mers, ca tipar.
+        'cunoscute' => array_values(array_unique(array_merge($cunoscute['nucleu'], $cunoscute['bioscem']))),
+        'cunoscute_tipar' => '/^(?:email_template_[a-z0-9_]+|customer_registration_field_[a-z0-9_]+)$/',
     ],
 ];

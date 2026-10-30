@@ -24,7 +24,8 @@ declare(strict_types=1);
  * Dosarul temporar are și sarea unei încărcări neterminate (`incarca.php`, pentru `--reia`): pleacă și ea.
  *
  * Rămân: `.env`, licența și cheia ei, contorul emailurilor zilei, jurnalele și rezultatele verificărilor pe site-urile
- * live (`storage/verificare/sonde/`: le ștergi tu, după ce ni le trimiți). Tipărește doar numere și DA/NU.
+ * live (`storage/verificare/sonde/`: le ștergi tu, după ce ni le trimiți) și valorile private ale înghețării
+ * (`site-uri/<site>/privat/`; la final un rând ATENȚIE pentru fiecare, ca să le ștergi când nu mai încarci site-ul). Tipărește doar numere și DA/NU.
  *
  * Refuză (cod 1, fără să șteargă nimic) dacă:
  * - PHP-ul e mai vechi decât `php_min` (config/app.php);
@@ -275,6 +276,14 @@ $sonde = is_array($gasite) ? count($gasite) : 0;
 if ($sonde > 0) {
     sterge_spune('  INFO  în storage/verificare/sonde/ mai sunt ' . $sonde . ' fișiere ale verificărilor pe site-urile live: '
         . 'după ce ni le trimiți, rm storage/verificare/sonde/*');
+}
+// Valorile private ale înghețării (site-uri/<site>/privat/, puse lângă pachet pentru încărcare): nu sunt ale copiei, deci nu
+// le șterge sterge.php, dar spune că sunt încă aici (adresele și telefonul operatorului, numele reprezentantului).
+$privat = glob($radacina . '/site-uri/*/privat', GLOB_ONLYDIR);
+foreach (is_array($privat) ? $privat : array() as $dosarPrivat) {
+    $sitePrivat = basename(dirname($dosarPrivat));
+    sterge_spune('  ATENȚIE site-uri/' . $sitePrivat . '/privat/ e încă aici (valorile private ale înghețării ' . $sitePrivat . ': adresele de email, '
+        . 'telefonul și numele operatorului): dacă nu mai încarci ' . $sitePrivat . ' curând, rm -r site-uri/' . $sitePrivat . '/privat');
 }
 sterge_spune('');
 if ($ramase > 0 || file_exists($incarcat) || file_exists($codVechi) || file_exists($pozeDemo) || is_link($pozeDemo)) {

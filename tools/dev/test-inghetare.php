@@ -20,7 +20,8 @@ declare(strict_types=1);
  *     cod comun inventat: intrările automate (DEFAULTS, rezerve, private cu înlocuitor și fișierul privat), lipsa =
  *     gol, deciziile lipsă (nimic scris), deciziile scrise (legate de valorile de atunci), determinismul, --verifica,
  *     o decizie veche după o schimbare a codului comun (și confirmarea ei din nou), o valoare privată scrisă de mână,
- *     un „extrage” greșit, un fara_inghetare fără obiect scos, provizoriu și --confirmat, un fișier închis.
+ *     un „extrage” greșit, un fara_inghetare fără obiect scos, provizoriu și --confirmat, un fișier închis; pe server
+ *     (--cod-vechi=<dosar>): doar privat/, din dosarul codului, dacă dă exact înghețarea din pachet (altfel nimic scris).
  *  V. Verificarea (tools/inghetare/verifica-inghetare.php) pe pachetele din repo (0) și pe o copie a lor cu câte o
  *     greșeală: o adresă reală într-o notă, o valoare privată care nu e înlocuitor, o setare nouă în codul comun
  *     (amprenta și reproducerea), un parametru necunoscut sau o valoare nepermisă în migrari.json, sursa altă decât
@@ -397,6 +398,37 @@ $privat1 = (string) file_get_contents($privatProba);
 [$c4, $o4] = $gen(['--verifica']);
 $verifica('determinist: a doua generare dă aceleași fișiere, octet cu octet; --verifica 0', $c3 === 0 && $c4 === 0
     && (string) file_get_contents($fisierProba) === $text1 && (string) file_get_contents($privatProba) === $privat1 && str_contains($o4, 'la zi'), $o4);
+// Pe server (--cod-vechi=<dosar>, docs/VERIFICARE.md pasul 6b): doar privat/, din dosarul codului (nu o clonă), dacă dă
+// exact înghețarea din pachet; fișierul din pachet neatins, dosarul codului doar citit.
+$live = $lucru . '/live-proba';
+@mkdir($live, 0777, true);
+exec('git -C ' . escapeshellarg($vechiRepo) . ' archive ' . escapeshellarg($commitVechi) . ' | tar -x -C ' . escapeshellarg($live));
+file_put_contents($live . '/.env', "DB_PASSWORD=parola-inventata\n");
+@mkdir($live . '/public/uploads', 0777, true);
+file_put_contents($live . '/public/uploads/x.php', "<?php\n\$a = \$settings['din_uploads'] ?? 'u';\n");
+$genServer = static fn (string $dosar, array $extra = []): array => $ruleaza(array_merge([$radacina . '/tools/inghetare/genereaza-setari.php', '--site=proba',
+    '--cod-vechi=' . $dosar, '--pachete=' . $pachete, '--nucleu=' . $nucleu, '--lucru=' . $lucru . '/lucru-server'], $extra));
+$sumeLive = (string) shell_exec('cd ' . escapeshellarg($live) . ' && find . -type f -exec sha256sum {} + | sort');
+unlink($privatProba);
+[$cs1, $os1] = $genServer($live);
+$verifica('--cod-vechi (pe server): 0, privat/ scris (0600) din dosarul codului, octet cu octet ca din clonă; fișierul din pachet neatins; dosarul codului '
+    . 'neschimbat; pe ecran doar numele cheilor private', $cs1 === 0 && (string) @file_get_contents($privatProba) === $privat1
+    && (fileperms($privatProba) & 0777) === 0600 && (string) file_get_contents($fisierProba) === $text1
+    && (string) shell_exec('cd ' . escapeshellarg($live) . ' && find . -type f -exec sha256sum {} + | sort') === $sumeLive
+    && str_contains($os1, '2 valori private: email_vechi, telefon_vechi') && !str_contains($os1, 'client-inventat') && !str_contains($os1, '0800'), $os1);
+unlink($privatProba);
+file_put_contents($live . '/views/layout.php', str_replace("'unu'", "'trei'", (string) file_get_contents($live . '/views/layout.php')));
+[$cs2, $os2] = $genServer($live);
+[$cs3, $os3] = $genServer($lucru . '/nu-exista');
+[$cs4, $os4] = $genServer($live, ['--repo=' . $vechiRepo . '@' . $commitVechi]);
+$verifica('--cod-vechi refuzat (1, nimic scris): alt cod decât cel din pachet („nu e codul revizuit”), un dosar fără src/, împreună cu --repo',
+    $cs2 === 1 && (str_contains($os2, 'nu e codul revizuit') || str_contains($os2, 'erori ale generării')) && $cs3 === 1
+    && str_contains($os3, 'nu are src/Support/Settings.php') && $cs4 === 1 && str_contains($os4, 'merge doar cu un singur --site') && !is_file($privatProba)
+    && (string) file_get_contents($fisierProba) === $text1,
+    $os2 . $os3 . $os4);
+file_put_contents($privatProba, $privat1);
+chmod($privatProba, 0600);
+
 file_put_contents($fisierProba, str_replace('nota rămâne', 'nota schimbată de mână', $text1));
 [$c5, $o5] = $gen(['--verifica']);
 file_put_contents($fisierProba, $text1);

@@ -67,6 +67,8 @@ final class Reguli
     public const EMAIL = ['email', 'emailuri', 'email_admin'];
     /** Numele unui tabel sau al unei coloane pe care unealta le pune într-o instrucțiune. */
     public const TIPAR_NUME = '/^[A-Za-z0-9_$]{1,64}$/';
+    /** O cheie de setare care arată a secret (lista ei albă cere neutralizarea, probleme()). */
+    public const TIPAR_SETARE_SECRETA = '/(pass|secret|token|api_?key|_key$|private|iban|credential)/';
 
     /** @param array<string, mixed> $date */
     private function __construct(public readonly string $site, public readonly array $date)
@@ -242,14 +244,65 @@ final class Reguli
             }
         }
         $setari = (array) ($this->date['setari'] ?? []);
-        foreach (['goale_tipar', 'proprietar_tipar'] as $cheie) {
+        foreach (['goale_tipar', 'proprietar_tipar', 'cunoscute_tipar'] as $cheie) {
             if (!is_string($setari[$cheie] ?? null) || @preg_match((string) $setari[$cheie], '') === false) {
                 $p[] = 'setari.' . $cheie . ' nu e un tipar';
             }
         }
-        foreach (['goale', 'zero', 'proprietar', 'casuta', 'prefix', 'aleatoare'] as $cheie) {
+        foreach (['goale', 'zero', 'proprietar', 'casuta', 'prefix', 'aleatoare', 'cunoscute'] as $cheie) {
             if (!is_array($setari[$cheie] ?? null)) {
                 $p[] = 'setari.' . $cheie . ' lipsă';
+            }
+        }
+        if ($p === []) {
+            // O cheie știută care arată a secret se neutralizează: lista albă nu lasă să treacă o parolă sau o cheie.
+            foreach ((array) $setari['cunoscute'] as $cheie) {
+                if (preg_match(self::TIPAR_SETARE_SECRETA, (string) $cheie) === 1 && !$this->setareNeutralizata((string) $cheie)) {
+                    $p[] = 'setari.cunoscute: ' . $cheie . ' arată a secret, dar nu e neutralizată';
+                }
+            }
+        }
+        return $p;
+    }
+
+    /** Cheia e în lista neutralizării (golită, zero, a proprietarului, căsuța, prefixată, aleatoare) sau într-un tipar al ei. */
+    public function setareNeutralizata(string $cheie): bool
+    {
+        $setari = (array) ($this->date['setari'] ?? []);
+        foreach (['goale', 'zero', 'proprietar', 'casuta', 'prefix', 'aleatoare'] as $lista) {
+            if (in_array($cheie, (array) ($setari[$lista] ?? []), true)) {
+                return true;
+            }
+        }
+        foreach (['goale_tipar', 'proprietar_tipar'] as $tipar) {
+            if (is_string($setari[$tipar] ?? null) && preg_match($setari[$tipar], $cheie) === 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Scanerul setărilor (fail-closed, revizuirea WP-11b), înaintea oricărui rând și încă o dată pe fiecare rând copiat: o
+     * cheie a sursei care nu e neutralizată și nu e știută de cod (`cunoscute`, `cunoscute_tipar`) e o problemă, cu numele
+     * ei (un nume neobișnuit, doar lungimea). Lista goală = toate au regula lor.
+     *
+     * @param list<string> $chei
+     * @return list<string>
+     */
+    public function scaneazaSetari(array $chei): array
+    {
+        $setari = (array) ($this->date['setari'] ?? []);
+        $cunoscute = array_flip(array_map('strval', (array) ($setari['cunoscute'] ?? [])));
+        $tipar = is_string($setari['cunoscute_tipar'] ?? null) ? $setari['cunoscute_tipar'] : '/(?!)/';
+        $p = [];
+        foreach ($chei as $cheie) {
+            $cheie = (string) $cheie;
+            if (preg_match('/^[a-z0-9_]{1,100}$/', $cheie) !== 1) {
+                $p[] = 'settings: o cheie cu nume neobișnuit (' . mb_strlen($cheie) . ' caractere), fără regulă';
+            } elseif (!isset($cunoscute[$cheie]) && preg_match($tipar, $cheie) !== 1 && !$this->setareNeutralizata($cheie)) {
+                $p[] = 'settings.' . $cheie . (preg_match(self::TIPAR_SETARE_SECRETA, $cheie) === 1 ? ' (arată a secret)' : '')
+                    . ': cheie necunoscută codului, fără regulă';
             }
         }
         return $p;
@@ -1785,6 +1838,22 @@ final class Incarcare
         if ($scan['lipsa'] !== []) {
             $this->info(count($scan['lipsa']) . ' coloane din reguli nu sunt în baza sursei (ale codului comun, venite cu migrările)');
         }
+        // Setările (fail-closed, ca o coloană): fiecare cheie a sursei e știută de cod sau neutralizată (și pe fiecare rând copiat).
+        foreach (array_intersect($scan['copiate'], array_keys(array_filter((array) $reguli->date['tabele'],
+            static fn (array $r): bool => ($r['mod'] ?? '') === 'setari'))) as $tabelSetari) {
+            $chei = array_map(static fn (array $r): string => (string) $r['k'], $this->sursa->instantaneu(
+                fn (): array => $this->sursa->randuri('SELECT `key` AS k FROM ' . SursaCopie::cita($tabelSetari))));
+            $faraRegula = $reguli->scaneazaSetari($chei);
+            if ($faraRegula !== []) {
+                foreach (array_slice($faraRegula, 0, 50) as $problema) {
+                    $this->spune('  NU    ' . $problema);
+                }
+                throw new EsecIncarcare('scanerul a oprit încărcarea înaintea oricărui rând: ' . count($faraRegula) . ' chei de setări pe care nu le știe '
+                    . 'codul și nu le neutralizează tools/verificare/reguli/' . $this->sursaNume . '.php (doar numele lor, mai sus). Trimite-ne textul: '
+                    . 'întâi se scriu regulile');
+            }
+            $this->rand(true, 'scanerul setărilor: ' . count($chei) . ' chei, fiecare știută de cod sau neutralizată');
+        }
 
         // ── Structura ──
         if ($this->pas === 'inceput') {
@@ -2026,6 +2095,11 @@ final class Incarcare
     private function setareInDrum(array $rand): array
     {
         $setari = (array) $this->reguli?->date['setari'];
+        $faraRegula = $this->reguli?->scaneazaSetari([(string) $rand['key']]) ?? ['fără reguli'];
+        if ($faraRegula !== []) {
+            // Venită după scaner (între citirea cheilor și instantaneul grupului): grupul nu se scrie.
+            throw new EsecIncarcare('scanerul setărilor a oprit copierea: ' . $faraRegula[0]);
+        }
         $nou = $this->t->setare((string) $rand['key'], $rand['value'], $setari, $this->proprietar(), $this->casuta());
         if ($nou !== null) {
             $rand['value'] = $nou;
@@ -2219,6 +2293,16 @@ final class Incarcare
     private const EXTENSII_COD = ['php', 'phtml', 'js', 'mjs', 'css', 'html', 'htm', 'svg', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'ico',
         'woff', 'woff2', 'ttf', 'otf', 'eot', 'map', 'json', 'md', 'txt', 'xml', 'lock', 'yml', 'yaml', 'dist', 'example'];
 
+    /** Un .json/.xml/.txt al codului: în dosarele codului (și vendor/) sau unul dintre fișierele știute ale rădăcinii și ale public/. */
+    private static function dateDeCod(string $rel): bool
+    {
+        if (preg_match('#^(?:src|views|config|database|scripts|resources|vendor)/#', $rel) === 1) {
+            return true;
+        }
+        return in_array($rel, ['composer.json', 'composer.lock', 'package.json', 'package-lock.json', 'public/manifest.json',
+            'public/browserconfig.xml', 'public/ads.txt', 'public/humans.txt', 'public/.well-known/security.txt'], true);
+    }
+
     /** null = se copiază; '' = sărit fără să se numere felul (.env, storage, jurnale); altfel felul fișierului sărit. */
     public static function motivSarit(string $rel, int $marime = 0): ?string
     {
@@ -2239,6 +2323,11 @@ final class Incarcare
         if ($extensie === 'sql') {
             // Schema și seed-ul codului, nu o copie a bazei.
             return str_starts_with($rel, 'database/') && $marime < 2 * 1048576 ? null : 'sql';
+        }
+        if (in_array($extensie, ['json', 'xml', 'txt'], true) && !self::dateDeCod($rel)) {
+            // Un export lăsat în dosar (export.xml-ul WordPress, utilizatori.json, comenzi.txt) nu pleacă: doar cele din dosarele
+            // codului și cele știute ale rădăcinii și ale public/ (revizuirea WP-11b).
+            return $extensie;
         }
         if (in_array($extensie, self::EXTENSII_COD, true)) {
             return null;

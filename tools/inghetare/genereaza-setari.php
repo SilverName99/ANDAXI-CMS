@@ -14,6 +14,14 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=biovitality --provizoriu="<motiv>"
  *   tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=biovitality --confirmat     # scoate „provizoriu”
  *   tools/dev/php.sh tools/inghetare/genereaza-setari.php --toate --verifica                # nu scrie: e la zi?
+ *   $PHP tools/inghetare/genereaza-setari.php --site=biovitality --cod-vechi=<dosarul codului site-ului>   # pe server
+ *
+ * `--cod-vechi=<dosar>` (pe server, docs/VERIFICARE.md, pasul 6b): scrie **doar** valorile private
+ * (`site-uri/<site>/privat/setari-inghetate.json`, 0600), din codul site-ului live citit direct din dosarul lui (doar
+ * în citire: se copiază într-un dosar temporar numai fișierele .php citite, fără legături, .env sau poze; copia se
+ * șterge la final). Fișierul din pachet și pachet.json rămân neatinse: înghețarea generată acum trebuie să fie, octet
+ * cu octet, cea din pachet (aceeași sursă, aceleași decizii), altfel codul de pe site nu e cel revizuit și nu scrie
+ * nimic (cod 1). Așa valorile private nu pleacă de pe server și nu trec pe la noi.
  *
  * Codul vechi: clona site-ului (CMS_DEV_REPO_BS, _BV, _VT, _GR din tools/dev/comun.sh) la „ultimul commit
  * revizuit” din docs/de-portat.md, sau `--repo=<clonă>@<commit>` (doar cu --site; apoi verificarea cere
@@ -61,6 +69,7 @@ $toate = false;
 $repo = null;
 $provizoriu = null;
 $verifica = false;
+$codVechiDosar = null;
 $pachete = $radacina . '/site-uri';
 $nucleu = $radacina;
 $lucru = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/') . '/inghetare';
@@ -80,6 +89,8 @@ foreach (array_slice($argv, 1) as $argument) {
         $provizoriu = false;
     } elseif ($argument === '--verifica') {
         $verifica = true;
+    } elseif (str_starts_with($argument, '--cod-vechi=')) {
+        $codVechiDosar = rtrim(substr($argument, strlen('--cod-vechi=')), '/');
     } elseif (str_starts_with($argument, '--pachete=')) {
         $pachete = rtrim(substr($argument, strlen('--pachete=')), '/');
     } elseif (str_starts_with($argument, '--nucleu=')) {
@@ -101,6 +112,70 @@ if ($repo !== null && count($alese) !== 1) {
 }
 if ($provizoriu !== null && $verifica) {
     $opreste('--provizoriu/--confirmat schimbă fișierul: nu merg cu --verifica');
+}
+if ($codVechiDosar !== null && ($toate || count($alese) !== 1 || $repo !== null || $provizoriu !== null || $verifica)) {
+    $opreste('--cod-vechi=<dosar> merge doar cu un singur --site (fără --repo, --provizoriu, --confirmat, --verifica)');
+}
+if ($codVechiDosar !== null) {
+    // Pe server: doar privat/, din codul site-ului live, dacă dă exact înghețarea din pachet.
+    $site = $alese[0];
+    $fisier = $pachete . '/' . $site . '/' . Inghetare::FISIER;
+    $privat = Inghetare::caleaPrivata($fisier);
+    $lucruServer = str_contains(implode(' ', $argv), '--lucru=') ? $lucru : sys_get_temp_dir() . '/inghetare-' . getmypid() . '-' . bin2hex(random_bytes(4));
+    $generator = new Generator($radacina, $lucruServer);
+    $dosarCod = null;
+    try {
+        if (!is_file($fisier)) {
+            throw new RuntimeException('pachetul nu are ' . Inghetare::FISIER . ' (git pull?)');
+        }
+        Inghetare::dinFisier($fisier);
+        $existent = (array) json_decode((string) file_get_contents($fisier), true);
+        $dosarCod = $generator->copieDinDosar((string) realpath($codVechiDosar) ?: $codVechiDosar);
+        $citireNucleu = $generator->citesteCod($nucleu);
+        $citireVeche = $generator->citesteCod($dosarCod, Generator::cereriExtrase($existent));
+        $rezultat = $generator->genereaza($site, (string) ($existent['sursa'] ?? ''), $existent, $citireVeche, $citireNucleu);
+        if ($rezultat['erori'] !== []) {
+            throw new RuntimeException(count($rezultat['erori']) . ' erori ale generării (codul site-ului nu e cel revizuit, ' . ($existent['sursa'] ?? '?') . ')');
+        }
+        if ($rezultat['text'] !== (string) file_get_contents($fisier)) {
+            throw new RuntimeException('codul din ' . $codVechiDosar . ' nu dă înghețarea din pachet (' . ($existent['sursa'] ?? '?') . '): nu e codul revizuit; '
+                . 'nu scriu nimic, trimite-ne textul');
+        }
+        if ($rezultat['privat'] === null) {
+            throw new RuntimeException('înghețarea ' . $site . ' nu are valori private: nu e nimic de scris');
+        }
+        if (is_dir($radacina . '/.git') && str_starts_with($privat, $radacina . '/')) {
+            exec('git -C ' . escapeshellarg($radacina) . ' check-ignore -q ' . escapeshellarg(substr($privat, strlen($radacina) + 1)), $_, $codIgnorat);
+            if ($codIgnorat !== 0) {
+                throw new RuntimeException($privat . ' nu e ignorat de git (.gitignore: /site-uri/*/privat/); nu scriu valorile private');
+            }
+        }
+        @mkdir(dirname($privat), 0700, true);
+        @chmod(dirname($privat), 0700);
+        $temporar = $privat . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        $vechiUmask = umask(0077);
+        $scris = file_put_contents($temporar, $rezultat['privat']);
+        umask($vechiUmask);
+        if ($scris === false || !@chmod($temporar, 0600) || !@rename($temporar, $privat)) {
+            @unlink($temporar);
+            throw new RuntimeException('nu pot scrie ' . $privat);
+        }
+        $chei = array_keys((array) (json_decode($rezultat['privat'], true)['setari'] ?? []));
+        echo 'OK    ', $site, ': înghețarea din codul site-ului = cea din pachet (', $existent['sursa'] ?? '?', '); scris site-uri/', $site,
+            '/privat/setari-inghetate.json (0600; ', count($chei), ' valori private: ', implode(', ', $chei), '); pachetul neatins', "\n";
+        $cod = 0;
+    } catch (Throwable $e) {
+        echo 'EȘEC  ', $site, ': ', $e->getMessage(), "\n";
+        $cod = 1;
+    } finally {
+        if ($dosarCod !== null) {
+            exec('rm -rf ' . escapeshellarg($dosarCod));
+        }
+        if (!str_contains(implode(' ', $argv), '--lucru=')) {
+            exec('rm -rf ' . escapeshellarg($lucruServer));
+        }
+    }
+    exit($cod);
 }
 
 $generator = new Generator($radacina, $lucru);

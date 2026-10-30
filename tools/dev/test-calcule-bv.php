@@ -19,7 +19,7 @@ declare(strict_types=1);
  * într-o copie, cu valori private inventate), ca la adoptare, și licența de dezvoltare a Biovitality.
  *
  * C1 compara-calcule.php --local --profil=biovitality: „REZULTAT: TRECE”, „diferite 0”, „excluse: pachete 1” (comanda cu pachetul
- *    nu e printre cazuri), cupoanele aplicate în ambele coduri (și cel cu spații), payload-ul ERP identic, transportul din admin
+ *    nu e printre cazuri), „excluse: epuizate N” (comenzile doar cu produse epuizate, un coș gol în ambele coduri, nu sunt cazuri), cupoanele aplicate în ambele coduri (și cel cu spații), payload-ul ERP identic, transportul din admin
  *    identic (și pe comanda cu transport gratuit, pe care codul Biovitality îl pune în admin, nu în funcție); diferențele voite pe
  *    clase ale profilului (ComparaCalcule::DECLARATE_PROFIL, aceleași și pe server): produsele epuizate scoase din coș în ambele coduri
  *    (cât numără baza) și cheile ERP noi ale codului comun (adresa de facturare, nota internă), lipsă în codul vechi, numărate; cele pe
@@ -323,11 +323,18 @@ try {
     $eligibile = (int) $db->query("SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL AND status <> 'failed'")->fetchColumn();
     $verifica('C1 „REZULTAT: TRECE”, diferite 0, erori 0' . ($declarate !== [] ? ', diferențele voite declarate potrivite exact (' . count($declarate) . ')' : ''),
         $r['cod'] === 0 && $ultimul($r['iesire']) === 'REZULTAT: TRECE' && str_contains($r['iesire'], '| diferite 0 | erori vechi 0 | erori nou 0'), mb_substr($r['tot'], -3000));
-    $verifica('C1 coșurile cu un produs-pachet: „excluse: pachete 1”, iar comanda lui nu e printre cazuri (' . $cazuri . ' = ' . $eligibile . ' comenzi − 1)',
-        str_contains($r['iesire'], 'excluse: pachete 1 (') && $cazuri === $eligibile - 1);
-    $epuizateAsteptate = (int) $db->query("SELECT COUNT(*) FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id INNER JOIN products p ON p.id = oi.product_id
-        WHERE o.deleted_at IS NULL AND o.status <> 'failed' AND p.out_of_stock = 1 AND NOT EXISTS (SELECT 1 FROM order_items x INNER JOIN products y ON y.id = x.product_id
-        WHERE x.order_id = o.id AND y.bundle_items_json IS NOT NULL AND TRIM(y.bundle_items_json) NOT IN ('', '[]', '{}', 'null'))")->fetchColumn();
+    // Comenzile fără pachet: cele cu toate liniile epuizate (excluse) și liniile epuizate ale celorlalte (scoase din coș).
+    $faraPachet = "o.deleted_at IS NULL AND o.status <> 'failed' AND NOT EXISTS (SELECT 1 FROM order_items x INNER JOIN products y ON y.id = x.product_id
+        WHERE x.order_id = o.id AND y.bundle_items_json IS NOT NULL AND TRIM(y.bundle_items_json) NOT IN ('', '[]', '{}', 'null'))";
+    $doarEpuizate = "NOT EXISTS (SELECT 1 FROM order_items z INNER JOIN products w ON w.id = z.product_id WHERE z.order_id = o.id AND w.out_of_stock = 0)";
+    $excluseEpuizate = (int) $db->query('SELECT COUNT(*) FROM orders o WHERE ' . $faraPachet . ' AND EXISTS (SELECT 1 FROM order_items v WHERE v.order_id = o.id) AND '
+        . $doarEpuizate)->fetchColumn();
+    $verifica('C1 coșurile cu un produs-pachet („excluse: pachete 1”) și cele doar cu produse epuizate (gol în ambele coduri, „excluse: epuizate ' . $excluseEpuizate
+        . '”) nu sunt printre cazuri (' . $cazuri . ' = ' . $eligibile . ' comenzi − 1 − ' . $excluseEpuizate . ')', $excluseEpuizate > 0
+        && str_contains($r['iesire'], 'excluse: pachete 1 (') && str_contains($r['iesire'], "\nexcluse: epuizate " . $excluseEpuizate . ' (')
+        && $cazuri === $eligibile - 1 - $excluseEpuizate);
+    $epuizateAsteptate = (int) $db->query('SELECT COUNT(*) FROM order_items oi INNER JOIN orders o ON o.id = oi.order_id INNER JOIN products p ON p.id = oi.product_id
+        WHERE p.out_of_stock = 1 AND ' . $faraPachet . ' AND NOT ' . $doarEpuizate)->fetchColumn();
     $verifica('C1 produsele epuizate scoase din coș în ambele coduri (diferența declarată pe profil): ' . $epuizateAsteptate . ' linii, cât numără baza, iar cazurile '
         . 'lor identice', $epuizateAsteptate > 0 && preg_match('/^  produse epuizate scoase din coș, în ambele coduri: ' . $epuizateAsteptate . ' linii în \d+ cazuri/m',
             $r['iesire']) === 1);
@@ -335,7 +342,7 @@ try {
         preg_match('/^payload ERP: chei noi ale codului comun \(lipsă în codul vechi; declarate pe profil, necomparate\): facturareAdresa (\d+), facturareCodPostal \1, '
             . 'facturareJudet \1, facturareOras \1, observatiiInterne \1$/m', $r['iesire'], $mNoi) === 1 && (int) $mNoi[1] === $cazuri);
     $verifica('C1 cupoanele aplicate în ambele coduri la fel (și cel cerut cu spații), punctele folosite, transportul din admin și payload-ul ERP identice pe toate cazurile',
-        preg_match('/^cupoane aplicate fără eroare: vechi (\d+), nou \1 \|/m', $r['iesire']) === 1 && (int) $numar($r['iesire'], '/^cupoane aplicate fără eroare: vechi (\d+)/m') >= 5
+        preg_match('/^cupoane aplicate fără eroare: vechi (\d+), nou \1 \|/m', $r['iesire']) === 1 && (int) $numar($r['iesire'], '/^cupoane aplicate fără eroare: vechi (\d+)/m') >= 4
         && $numar($r['iesire'], '/^payload ERP: identice (\d+)/m') === $cazuri && $numar($r['iesire'], '/^transportul din admin: identice (\d+)/m') === $cazuri);
 
     // ── C2: mutațiile codului comun și refuzurile ──
@@ -380,8 +387,11 @@ try {
     foreach ([
         'fără scoaterea produselor epuizate (DECLARATE_PROFIL fara_epuizate)' => ["'fara_epuizate' => true,", "'fara_epuizate' => false,",
             static fn (array $r): bool => $r['cod'] === 1 && preg_match('/^diferențe pe câmp: .*\bsubtotal \d+/m', $r['iesire']) === 1],
+        'fără excluderea coșurilor doar cu produse epuizate (un coș gol în ambele coduri numărat „identic”)' => ['if ($ramase === [] && $liniiComanda !== []) {',
+            'if (false) {', static fn (array $r): bool => str_contains($r['iesire'], "\nexcluse: epuizate 0 (")
+            && $numar($r['iesire'], '/^cazuri (\d+) \|/m') === $eligibile - 1],
         'fără excluderea coșurilor cu pachete (PROFILURI_CU_PACHETE)' => ["public const PROFILURI_CU_PACHETE = ['biovitality'];", 'public const PROFILURI_CU_PACHETE = [];',
-            static fn (array $r): bool => !str_contains($r['iesire'], 'excluse: pachete') && $numar($r['iesire'], '/^cazuri (\d+) \|/m') === $eligibile],
+            static fn (array $r): bool => !str_contains($r['iesire'], 'excluse: pachete') && $numar($r['iesire'], '/^cazuri (\d+) \|/m') === $eligibile - $excluseEpuizate],
     ] as $ce => [$din, $in, $semn]) {
         file_put_contents($calculeCopie, str_replace($din, $in, $calculeOriginal));
         $r = $proces(array_merge([PHP_BINARY], $ini, [$codMutat . '/tools/verificare/compara-calcule.php', '--local', '--profil=biovitality', '--cod-vechi=' . $codVechi]),

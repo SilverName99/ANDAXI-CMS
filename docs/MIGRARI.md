@@ -618,7 +618,14 @@ tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=bioscem
 tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=vertij --repo=<clonă>@<commit>
 tools/dev/php.sh tools/inghetare/genereaza-setari.php --site=biovitality --provizoriu="<motiv>"   # sau --confirmat
 tools/dev/php.sh tools/inghetare/genereaza-setari.php --toate --verifica    # nu scrie: e la zi?
+$PHP tools/inghetare/genereaza-setari.php --site=biovitality --cod-vechi=<dosarul codului site-ului>   # pe server
 ```
+
+`--cod-vechi=<dosar>` e pentru server (VERIFICARE.md, pasul 6b): scrie **doar** `site-uri/<site>/privat/` (0600), din
+codul site-ului citit din dosarul lui (doar fișierele `.php` pe care le citește `lib/citeste-cod.php`, fără legături,
+`.env` sau `public/uploads/`, copiate într-un dosar temporar șters la final), și numai dacă înghețarea generată e octet
+cu octet cea din pachet (aceeași sursă, aceleași decizii); fișierul din pachet și `pachet.json` nu se ating. Așa
+valorile private (OD-49) nu pleacă de pe server.
 
 Codul vechi e clona site-ului (`CMS_DEV_REPO_BS`, `_BV`, `_VT`, `_GR` din `tools/dev/comun.sh`) la „ultimul commit
 revizuit” din [de-portat.md](de-portat.md), copiat cu `git archive` în `$CMS_DEV_DIR/inghetare/` (clona nu se

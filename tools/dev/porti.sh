@@ -208,12 +208,13 @@ fi
 # Porțile care citesc clonele codurilor vechi, la „ultimul commit revizuit” din docs/de-portat.md: comparația cu
 # Bioscem (și în testele pluginurilor, E, și în stilurile calculate, G-vizual) doar clona Bioscem; testul de fum (înghețarea
 # setărilor celor patru site-uri, și în G-php și G-vechi), testele migrărilor (fixture-urile, T10), testul pachetelor (Bioscem și
-# Biovitality, G-pachet) și golden master-ul (Bioscem și, din WP-11b, Biovitality, G-calc) toate patru. O
+# Biovitality, G-pachet), golden master-ul (Bioscem și, din WP-11b, Biovitality, G-calc) și, din revizuirea WP-11b, testele
+# încărcării (lista albă a setărilor, citită din codul Bioscem și Biovitality, G-verif) toate patru. O
 # clonă fără commit-ul ei oprește totul de la început, cu numele clonei, în loc de un eșec adânc într-o poartă.
 clone_cerute=""
 for p in $alese; do
     case "$p" in
-        G-smoke|G-php|G-mig|G-vechi|G-pachet|G-calc) clone_cerute="toate" ;;
+        G-smoke|G-php|G-mig|G-vechi|G-pachet|G-calc|G-verif) clone_cerute="toate" ;;
         G-cmp|G-plug|G-plug-fiecare|G-vizual) [ -n "$clone_cerute" ] || clone_cerute="bioscem" ;;
     esac
 done

@@ -348,19 +348,25 @@ de la început (codul 2, „… codul 15 …”), înainte de orice schimbare.
 
 Ca la pasul 6, pentru biovitality.ro (decizia OD-46: baza Biovitality se citește noaptea, doar în citire, anonimizată în
 drum, ștearsă după). **O singură sursă odată**: dacă pe copie e încărcat Bioscem (sau copia demonstrativă), întâi se
-șterge; încărcarea Biovitality refuză altfel, fără să atingă nimic. Înainte, pune lângă pachet valorile private ale
-înghețării Biovitality, `site-uri/biovitality/privat/setari-inghetate.json` (ți-l trimitem noi; nu e în git): fără el
-încărcarea refuză de la început (codul 2, „… codul 15 …”).
+șterge; încărcarea Biovitality refuză altfel, fără să atingă nimic. Înainte, valorile private ale înghețării
+Biovitality, `site-uri/biovitality/privat/setari-inghetate.json` (nu e în git; fără el încărcarea refuză de la început,
+codul 2, „… codul 15 …”): patru valori, toate date de contact ale firmei, nicio parolă sau cheie — destinatarii
+formularului de contact, adresa de email și telefonul operatorului de pe acordul GDPR și numele reprezentantului lui (o
+persoană, deci date personale). Nu ți-l trimitem: îl faci chiar pe server, din codul biovitality.ro (citit doar, din
+dosarul lui), cu generatorul înghețării, care scrie **doar** acest fișier și numai dacă codul de pe site dă exact
+înghețarea din pachet (`Mutare-Site-Biovitality@779e0d8`); altfel nu scrie nimic (cod 1, „nu e codul revizuit”) și ne
+trimiți textul.
 
 ```sh
 ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
 cd ~/domains/<domeniul-verificare>/public_html
 PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
 git pull --ff-only                                       # codul nou (sau hPanel → GIT → Deploy)
-mkdir -p site-uri/biovitality/privat && chmod 700 site-uri/biovitality/privat
-#   pui în el fișierul primit, setari-inghetate.json (din calculatorul tău: scp -P 65002 setari-inghetate.json
-#   uXXXXXXXXX@<IP>:domains/<domeniul-verificare>/public_html/site-uri/biovitality/privat/), apoi:
-chmod 600 site-uri/biovitality/privat/setari-inghetate.json
+$PHP tools/inghetare/genereaza-setari.php --site=biovitality --cod-vechi="$HOME/domains/biovitality.ro/public_html"
+#   un rând: „OK    biovitality: înghețarea din codul site-ului = cea din pachet (Mutare-Site-Biovitality@779e0d8); scris
+#   site-uri/biovitality/privat/setari-inghetate.json (0600; 4 valori private: contact_form_recipients, gdpr_operator_email,
+#   gdpr_operator_reprezentant, gdpr_operator_telefon); pachetul neatins”
+#   (dacă dosarul biovitality.ro e altul, dosarul care are src/ și .env-ul site-ului)
 
 # a) doar dacă pe copie e altă încărcare (Bioscem sau demonstrativa): o ștergi
 $PHP tools/verificare/sterge.php
@@ -385,6 +391,7 @@ $PHP tools/verificare/stare.php
 $PHP tools/verificare/compara-calcule.php --profil=biovitality
 #   pe ecran doar numere și nume de câmpuri; rânduri de citit:
 #   „excluse: pachete N” (coșurile cu un produs-pachet: numărate, necomparate, până la Etapa 4),
+#   „excluse: epuizate N” (coșurile doar cu produse epuizate acum: goale în ambele coduri, deci necomparate),
 #   „produse epuizate scoase din coș, în ambele coduri: …” și „payload ERP: chei noi ale codului comun …” (diferențele
 #   declarate pe profil, mai jos);
 #   ultimul rând trebuie să fie: „REZULTAT: TRECE” (cu „diferite 0”); textul e salvat în
@@ -412,8 +419,10 @@ $PHP tools/verificare/sterge.php
 **Ne trimiți tot textul** (c, e, f), ca la pasul 6 (`incarcare-biovitality-<data>.txt`, `calcule-biovitality-<data>.txt`,
 cele două amprente), apoi ștergi fișierele și `site-uri/biovitality/privat/` de pe server (`rm -r
 site-uri/biovitality/privat`), dacă nu urmează imediat altă încărcare Biovitality. Dacă se oprește, aceleași rânduri ca la
-pasul 6 („Dacă se oprește”), cu `--din=biovitality`. Dacă (c) se oprește cu „NU … coloană fără regulă”, Biovitality are o
-coloană nouă: ne trimiți textul (doar numele ei), iar după ce scriem regula rulezi din nou.
+pasul 6 („Dacă se oprește”), cu `--din=biovitality`. Dacă (c) se oprește cu „NU … coloană fără regulă” sau „NU
+settings.… cheie necunoscută codului”, Biovitality are o coloană sau o setare nouă: ne trimiți textul (doar numele ei),
+iar după ce scriem regula rulezi din nou. Dacă generatorul de la început spune „EȘEC … nu e codul revizuit”, codul de pe
+biovitality.ro nu e commit-ul revizuit: ne trimiți rândul și nu încarci (înghețarea se reface întâi).
 
 ### 7. Licența copiei (pachetul de pluginuri)
 
@@ -525,7 +534,7 @@ trimite-ne rândul.
 | `incarca.php`: „NU    A1 … adresele sunt în: <tabel>.<coloană> (N)” și „OPRIT: … copia a fost ștearsă singură” | O adresă de email a rămas într-o coloană pe care regulile o lasă cum e (de exemplu un text scris de cineva): trimite-ne textul (are doar numele coloanei și câte adrese); după ce schimbăm regula, încarci din nou |
 | `incarca.php`: „ÎNTRERUPT: …” | Rulezi comanda din rând (`--reia`); continuă de unde a rămas |
 | `incarca.php`: „OPRIT: … copia NU s-a putut șterge singură” | `$PHP tools/verificare/sterge.php`, apoi trimite-ne textul |
-| `incarca.php`: „… privat/setari-inghetate.json lipsește … codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): ți le trimitem noi; nimic nu s-a schimbat |
+| `incarca.php`: „… privat/setari-inghetate.json lipsește … codul 15 …” | Lipsesc valorile private ale înghețării pachetului (`site-uri/<site>/privat/`): pentru Biovitality le faci pe server (pasul 6b, `genereaza-setari.php --cod-vechi`), pentru celelalte ți le trimitem noi; nimic nu s-a schimbat |
 | `compara-calcule.php`: „REFUZAT: copia de verificare lipsește”, „… a expirat”, „copia nu e încheiată” sau „copia e din altă sursă” | Încarci întâi copia Bioscem (pasul 6, c; `sterge.php` înainte dacă pe copie e altceva), apoi comparația |
 | `compara-calcule.php`: „REFUZAT: codul vechi lipsește din cod-vechi/bioscem/” sau „.env-ul codului vechi … nu e spre baza copiei” | Încărcarea l-a sărit (`--fara-cod-vechi`), `sterge.php` l-a șters sau a rămas de la altă copie: încarci din nou (`--reincarca`) |
 | `compara-calcule.php`: „REFUZAT: pe codul comun nu sunt pornite toate pluginurile site-ului: …” | Ai schimbat pachetul copiei (pasul 7): `$PHP tools/verificare/licenta.php bioscem`, apoi din nou comparația |
@@ -777,13 +786,20 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
    peste tot tabelul (cheile lipsă se scriu). Golite: cheile, parolele, id-urile conturilor externe (și orice cheie cu
    `password`, `secret`, `api_key`, `_token`, `client_secret`); `0`: plățile, ERP-ul, AWB-ul automat, tariful FAN live,
    login-ul Google, etichetele terților; adresa proprietarului: destinatarii emailurilor; căsuța copiei: expeditorul;
-   „VERIFICARE ” în fața numelui expeditorului; o cheie de mentenanță nouă.
+   „VERIFICARE ” în fața numelui expeditorului; o cheie de mentenanță nouă. Lista albă (fail-closed, ca la coloane): o
+   cheie a sursei pe care nu o neutralizează lista și nu o știe codul (cel comun și al site-ului: `Settings::DEFAULTS` și
+   restul cheilor folosite, în `tools/verificare/reguli/setari-cunoscute.php`, generat de
+   `tools/dev/genereaza-setari-cunoscute.php`) oprește încărcarea înaintea oricărui rând (cod 1, doar numele ei), și încă o
+   dată pe rândul ei, dacă a apărut între scaner și copiere. O cheie știută care arată a secret trebuie să fie neutralizată
+   (altfel regulile se refuză).
 9. **Contul proprietarului**: administrator general, bcrypt. Adminii site-ului au deja `admin<id>@verificare.invalid`
    și o parolă bcrypt aleatoare (din reguli).
 10. **Codul vechi** în `~/domains/<verificare>/cod-vechi/<site>/` (0700, fișierele 0600, în afara `public_html`, fără
     cron): doar extensiile de cod, fără `.env*`, `.git`, `storage/` (dosarele rămân, goale), `public/uploads/`,
-    sitemap-uri, jurnale, arhive, exporturi și copii de baze (`*.sql` doar sub `database/`, sub 2 MB); legăturile nu se
-    urmează. Lângă el, un `.env` doar cu baza copiei și BT în test (pentru comparația calculelor, WP-11).
+    sitemap-uri, jurnale, arhive, exporturi și copii de baze (`*.sql` doar sub `database/`, sub 2 MB; `.json`, `.xml`,
+    `.txt` doar din dosarele codului, `src/`, `views/`, `config/`, `database/`, `scripts/`, `vendor/`, și cele știute ale
+    rădăcinii și ale `public/`, ca `composer.json` sau `robots.txt`: un `export.xml` WordPress sau un export JSON al
+    utilizatorilor lăsat în dosar nu pleacă); legăturile nu se urmează. Lângă el, un `.env` doar cu baza copiei și BT în test (pentru comparația calculelor, WP-11).
     `--fara-cod-vechi` sare pasul.
 11. **Migrările**, în proces, ca `scripts/migreaza.php --plan`, `--aplica`, `--verifica` cu `--site=<pachet>`
     (`--permite-provizoriu`, care are efect doar aici): repetiția adoptării; textul runner-ului intră în raport (fără
@@ -1326,7 +1342,10 @@ cu chei inventate; valorile private ale înghețării inventate în `privat/` al
 jurnalului copiat pică la A1 cu coloana numită, apoi `--din=biovitality` „GATA” cu A1–A9 DA, niciun marcaj pe copie, tabelele
 Biovitality fără rânduri, cele publice cu tot atâtea rânduri, id-urile Stripe `anon-<id>`, procesatorul Stripe pus de migrare,
 cheile `bunny_*` golite, înghețarea Biovitality aplicată, codul vechi copiat; cu ea pe copie, `--din=bioscem` (și `--reincarca`)
-refuzate; sursa neschimbată; `sterge.php`. Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator
+refuzate; sursa neschimbată; `sterge.php` (cu rândul ATENȚIE pentru `privat/`, care dispare după `rm -r`). Din revizuirea
+WP-11b, scanerul setărilor: în A o cheie necunoscută codului (una care arată a secret, `smtp_pass`, și una oarecare) oprește,
+Bioscem și Biovitality, o cheie știută care arată a secret fără neutralizare face regulile greșite, iar lista albă e la zi; în
+B2 o cheie `smtp_pass` în baza sursei oprește încărcarea înaintea oricărui rând. Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator
 și nicio cale a contului în ieșiri și în textele salvate. Cere baza de dezvoltare făcută de `instaleaza.sh` (copia
 demonstrativă se compară cu ea). Bazele `cms_incarc_*` și utilizatorii lor se fac și se șterg acolo, pe ambele
 servere.
@@ -1337,9 +1356,10 @@ revizuit) și rulează trei teste. **`tools/dev/test-calcule-bv.php`** (WP-11b):
 Biovitality (`bv.sql`, rândurile demo în coloanele comune, plățile doar ramburs și Stripe, plus comenzi inventate: un produs cu
 transport gratuit singur în coș, un cupon cerut „ vara 10 ”, un produs-pachet, o plată Stripe, peste 13 kg), trecută prin
 migrările cu `--site=biovitality` (pachetul într-o copie, cu valori private inventate și fără „provizoriu”) și cu licența
-Biovitality: `compara-calcule.php --local --profil=biovitality` „TRECE”, „diferite 0”, „excluse: pachete 1”, produsele epuizate
-scoase cât numără baza, cheile ERP noi numărate pe fiecare caz; mutațiile (transportul gratuit pe produs ignorat, cuponul cu
-spații necăutat compact, coletele la 13 kg, fără regula epuizatelor, fără excluderea pachetelor, un cod vechi care trimite și el
+Biovitality: `compara-calcule.php --local --profil=biovitality` „TRECE”, „diferite 0”, „excluse: pachete 1”, „excluse: epuizate N” (comenzile doar
+cu produse epuizate, cât numără baza), produsele epuizate scoase din celelalte cât numără baza, cheile ERP noi numărate pe fiecare caz; mutațiile (transportul gratuit pe produs ignorat, cuponul cu
+spații necăutat compact, coletele la 13 kg, fără regula epuizatelor, fără excluderea coșurilor doar cu epuizate, fără
+excluderea pachetelor, un cod vechi care trimite și el
 o cheie declarată nouă) pică fiecare cu câmpul ei; refuzurile (alt profil; profilul Biovitality pe o bază fără
 `bundle_items_json`); apoi amprenta paginilor pe codul Biovitality (+26) și pe codul comun cu pachetul Biovitality (+27), pe
 aceeași bază, și comparația lor (informativă, în raport). **`tools/dev/test-calcule.php`**:
