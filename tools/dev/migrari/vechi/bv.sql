@@ -910,6 +910,7 @@ CREATE TABLE `product_templates` (
   `html_content` longtext NOT NULL,
   `css_content` longtext DEFAULT NULL,
   `js_content` longtext DEFAULT NULL,
+  `builder_json` longtext DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),

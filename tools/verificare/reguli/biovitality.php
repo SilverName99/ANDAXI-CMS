@@ -42,7 +42,7 @@ $reguli['site'] = 'biovitality';
 // Versiunea Biovitality urmează versiunea regulilor Bioscem (sutele) și pe a ei (unitățile): o schimbare în oricare face o
 // încărcare oprită să nu mai fie continuată cu --reia. 1 (WP-11b): prima. 2 (revizuirea WP-11b): blog_posts.wp_post_id și
 // lista albă a setărilor (cea Biovitality, mai jos).
-$reguli['versiune'] = $reguli['versiune'] * 100 + 2;
+$reguli['versiune'] = $reguli['versiune'] * 100 + 3;
 $reguli['schema'] = 'Mutare-Site-Biovitality@779e0d8 (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
 $reguli['pachet'] = 'biovitality';
@@ -76,6 +76,9 @@ $reguli['tabele']['products']['pastreaza'][] = 'bundle_items_json';
 $reguli['tabele']['blog_posts']['pastreaza'][] = 'references_html';
 $reguli['tabele']['blog_posts']['pastreaza'][] = 'featured_image_width';
 $reguli['tabele']['blog_posts']['pastreaza'][] = 'wp_post_id';
+// Găsită la prima încărcare de pe server (30 oct 2026): coloana există în baza biovitality.ro, dar niciun cod din
+// depozite n-o scrie sau citește. E machetarea unui șablon de pagină de produs, făcută de admin: conținut public.
+$reguli['tabele']['product_templates']['pastreaza'][] = 'builder_json';
 
 // Setările: fișierele din cloud (bunny.net) oprite și fără nicio cheie de acces; restul ca la Bioscem.
 $reguli['setari']['goale_tipar'] = '/(password|secret|api_key|_token$|client_secret)|^bunny_(?!(?:enabled|timeout|upload_target|gallery_folder|lock_expire_hours'

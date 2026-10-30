@@ -552,7 +552,7 @@ $verifica('A6 se socotește din lista regulilor, nu cu transformarea: o valoare 
 $reguliBv = Reguli::incarca($radacina, 'biovitality');
 $verifica('regulile Biovitality se încarcă (cele Bioscem plus ale lui), fără nicio greșeală de formă; versiunea urmează și versiunea regulilor Bioscem',
     $reguliBv->probleme() === [] && $reguliBv->date['licenta'] === 'biovitality' && $reguliBv->date['pachet'] === 'biovitality'
-    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 2, implode('; ', $reguliBv->probleme()));
+    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 3, implode('; ', $reguliBv->probleme()));
 $bv = $coloaneSql($radacina . '/tools/dev/migrari/vechi/bv.sql');
 // Coloanele pe care le pune pe site un script al codului Biovitality, nu instalarea (deci nu sunt în bv.sql): importul WordPress
 // (scripts/import-wordpress-posts.php:314). Setul tools/verificare/seturi/biovitality.php le numără; regulile trebuie să le știe.
