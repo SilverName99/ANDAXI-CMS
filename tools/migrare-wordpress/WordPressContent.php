@@ -14,8 +14,11 @@ namespace App\Support;
  */
 final class WordPressContent
 {
-    /** Extensii de fișier pe care le aducem la noi în /uploads. */
-    private const EXTENSII_IMAGINE = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg'];
+    /**
+     * Extensii de fișier pe care le aducem la noi în /uploads. Fără svg: un SVG poate avea scripturi și s-ar servi de pe
+     * domeniul site-ului (revizuirea WP-23); unul din export rămâne la adresa veche, ca imaginile străine.
+     */
+    public const EXTENSII_IMAGINE = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
 
     public static function curata(string $html): string
     {

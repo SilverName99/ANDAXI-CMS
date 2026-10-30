@@ -64,14 +64,18 @@ final class Slug
      * Slug liber, verificat cu un callback care spune dacă e deja luat.
      * La coliziune adaugă -2, -3 … până găsește unul liber.
      *
+     * $lungimeMaxima: cât încape în coloana slug-ului, cu tot cu sufix (implicit 200: VARCHAR(255) și VARCHAR(190) ale
+     * articolelor și autorilor; 170 pentru blog_tags.slug și blog_categories.slug, revizuirea WP-23).
+     *
      * @param callable(string): bool $esteLuat
      */
-    public static function unique(string $value, callable $esteLuat, string $fallback = 'articol'): string
+    public static function unique(string $value, callable $esteLuat, string $fallback = 'articol', int $lungimeMaxima = 200): string
     {
         $baza = self::make($value, $fallback);
-        // Coloanele de slug sunt VARCHAR(255); lăsăm loc și pentru sufix.
-        if (mb_strlen($baza) > 190) {
-            $baza = rtrim(mb_substr($baza, 0, 190), '-');
+        // Lăsăm loc și pentru sufix („-2” … „-500” sau „-” + 8 hex).
+        $loc = max(10, $lungimeMaxima - 10);
+        if (mb_strlen($baza) > $loc) {
+            $baza = rtrim(mb_substr($baza, 0, $loc), '-');
         }
         if ($baza === '') {
             $baza = $fallback;

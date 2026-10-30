@@ -829,17 +829,33 @@ nu schimbă încă nimic):
 
 Nu se vinde și nu apare în pachete; o pune doar ANDAXI în licență, pe durata unei
 migrări. **Conține**: importul din backup WordPress (UpdraftPlus) din Utilizatori →
-Import utilizatori (`POST /admin/users/import-backup`); după un import fără erori fișierul
-se șterge din `storage/import` (are datele clienților) și mesajul o spune. Importul
+Import utilizatori (`POST /admin/users/import-backup`); după un import fără erori (conturi, adrese,
+abonați) al unui fișier citit până la capăt (rândul „-- Dump completed” al lui mysqldump sau coada
+gzip, ISIZE, egală cu ce s-a citit) fișierul se șterge din `storage/import` (are datele clienților) și
+mesajul o spune; altfel rămâne, cu motivul în mesaj (o arhivă tăiată, erori). Importul
 articolelor dintr-un export WordPress (WXR; WP-23, din Biovitality `14d19dc`), în linia de
 comandă: `$PHP tools/migrare-wordpress/import-wordpress-posts.php <export.xml> [--dry-run]`
 (cere și pluginul blog și migrarea `blog/0033`; refuză cu codul 2 altfel): titlul, slug-ul,
 conținutul curățat, rezumatul, data, ciorna, autorul, categoriile, etichetele, coperta, bibliografia
 (câmpul „surse”), titlul și descrierea SEO; pozele de pe domeniile exportului se aduc în
 `uploads/blog/<an>/<lună>` (pe copia de verificare nu); o rulare repetată actualizează (după
-`blog_posts.wp_post_id`), nu dublează; `--post-type` (implicit `post`; Biovitality: `project`). După o
-rulare care a scris fără erori, **fișierul exportului se șterge** (are emailurile autorilor),
-afară de `--pastreaza-sursa`. **Oprit**: nu apar nici formularul, nici explicația lui; importul
+`blog_posts.wp_post_id`), nu dublează; `--post-type` (implicit `post`; Biovitality: `project`; cu 0
+postări scriptul arată tipurile din export). **Nu suprascrie** (revizuirea WP-23): o postare din CMS
+fără `wp_post_id` cu același slug (se adaugă una nouă, cu slug-ul liber următor; `--adopta-dupa-slug`
+o preia; `--dry-run` listează potrivirile separat), una din coș (sărită și raportată, nu se scoate din
+coș) sau una adusă de import și editată după aceea în admin (`updated_at > created_at`: importul le
+scrie egale; sărită, decât cu `--suprascrie`; o salvare care schimbă doar etichetele, categoriile sau
+SEO nu atinge rândul). Termenii (categorii, etichete, autori) se fac în tranzacția postării; o eroare
+la ei, la legături sau la SEO anulează postarea, se numără și golește memoria termenilor. **Pozele**:
+doar http/https, doar de pe domeniile exportului și `--extra-host` (verificat și după fiecare
+redirecționare, urmărite de mână), doar spre adrese IP publice (nu private, loopback, link-local,
+rezervate; adresa fixată cu `CURLOPT_RESOLVE`, fără proxy), fără svg, cel mult 15 MB, Content-Type și
+conținut jpeg/png/webp/gif/avif; un fișier existent cu același nume e refolosit doar cu același
+conținut, altfel imaginea primește „-2” (`CMS_DEV_IMPORT_ADRESE_LOCALE=1` permite 127.0.0.1, doar
+pentru teste). **Fișierul exportului se șterge** (are emailurile autorilor) doar când toate sunt
+adevărate: e un export WordPress (`<wp:wxr_version>`), are cel puțin o postare de tipul cerut, fără
+`--limit` și `--only-published`, nicio imagine eșuată, nicio eroare, nicio postare editată sărită, e în
+`storage/import`, nu e `--dry-run` sau `--pastreaza-sursa`; altfel scriptul spune de ce a rămas. **Oprit**: nu apar nici formularul, nici explicația lui; importul
 CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelor refuză.
 
 ## Ce nu se poate ascunde fără o refacere mai adâncă

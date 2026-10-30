@@ -363,7 +363,8 @@ $copieCod = static function (?string $repo) use ($radacina, $lucru, $opreste): a
             $clona = (string) getcwd() . '/' . $clona;
         }
         $clona = (string) realpath($clona);
-        if ($clona === '' || !is_dir($clona . '/.git')) {
+        // Un worktree (`git worktree add`) are `.git` fișier, nu dosar: e tot o clonă (ca în tools/inghetare/lib/Generator.php).
+        if ($clona === '' || (!is_dir($clona . '/.git') && !is_file($clona . '/.git'))) {
             $opreste('--repo: ' . $repo . ' nu e o clonă git');
         }
         $scurt = trim((string) shell_exec('git -C ' . escapeshellarg($clona) . ' rev-parse --short ' . escapeshellarg($commit . '^{commit}') . ' 2>/dev/null'));

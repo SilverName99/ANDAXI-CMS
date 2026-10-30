@@ -236,7 +236,12 @@ final class AdminController
         // fără nicio eroare fișierul se șterge din storage/import, ca să nu rămână pe server (și în copiile de siguranță,
         // 12 luni); după o verificare sau un import cu erori rămâne, pentru încă o rulare.
         $sursaStearsa = false;
-        if ($scrie && (int) ($raport['esuate'] ?? 0) === 0) {
+        // Revizuirea WP-23: doar dacă cititorul a ajuns la capătul adevărat al fișierului (o arhivă tăiată se oprește în
+        // tăcere) și dacă nimic n-a eșuat (conturi, adrese, abonați).
+        $faraEsecuri = (int) ($raport['esuate'] ?? 0) === 0 && (int) ($raport['adrese_esuate'] ?? 0) === 0
+            && (int) ($raport['abonati_esuati'] ?? 0) === 0;
+        $complet = !empty($date['complet']);
+        if ($scrie && $faraEsecuri && $complet) {
             $sursaStearsa = @unlink(\App\Support\Paths::stocare('import') . '/' . $nume);
         }
         Flash::set('wp_dump_report', (string) json_encode(array_merge($raport, [
@@ -250,7 +255,9 @@ final class AdminController
             $scrie
                 ? 'Import finalizat din ' . $nume . '.' . ($sursaStearsa
                     ? ' Fișierul sursă a fost șters de pe server (are datele clienților).'
-                    : ' Fișierul sursă a rămas pe server (' . ((int) ($raport['esuate'] ?? 0) > 0 ? 'importul a avut erori' : 'nu a putut fi șters')
+                    : ' Fișierul sursă a rămas pe server (' . (!$complet
+                        ? 'nu s-a putut confirma că a fost citit până la capăt: arhivă tăiată sau fără sfârșitul ei'
+                        : (!$faraEsecuri ? 'importul a avut erori' : 'nu a putut fi șters'))
                         . '): șterge-l după ce termini, are datele clienților.')
                 : 'Verificare finalizată — nu s-a scris nimic încă. Vezi raportul de mai jos.'
         );
@@ -335,6 +342,9 @@ final class AdminController
         $noi = 0;
         $adrese = 0;
         $esuate = 0;
+        // Revizuirea WP-23: adresele și abonații care n-au intrat se numără (fișierul se șterge doar fără niciunul).
+        $adreseEsuate = 0;
+        $abonatiEsuati = 0;
         // O singură tranzacție pentru toate conturile: mii de inserări separate
         // ar dura minute, iar o cădere la jumătate ar lăsa importul pe jumătate
         // făcut, fără să se știe unde a rămas.
@@ -397,7 +407,8 @@ final class AdminController
                 ]);
                 $adrese++;
             } catch (Throwable) {
-                // Adresa e un bonus: dacă schema diferă, contul rămâne valid.
+                // Adresa e un bonus: dacă schema diferă, contul rămâne valid (dar backup-ul nu se șterge).
+                $adreseEsuate++;
             }
         }
         if ($inTranzactie) {
@@ -405,7 +416,8 @@ final class AdminController
                 $db->commit();
             } catch (Throwable) {
                 $db->rollBack();
-                return ['conturi_scrise' => 0, 'adrese_scrise' => 0, 'abonati_scrisi' => 0, 'esuate' => $noi + $esuate];
+                return ['conturi_scrise' => 0, 'adrese_scrise' => 0, 'abonati_scrisi' => 0, 'esuate' => $noi + $esuate,
+                    'adrese_esuate' => $adreseEsuate, 'abonati_esuati' => count((array) ($date['abonati'] ?? []))];
             }
         }
 
@@ -423,10 +435,12 @@ final class AdminController
                         $abonatiNoi++;
                     } catch (Throwable) {
                         $esuate++;
+                        $abonatiEsuati++;
                     }
                 }
             } catch (Throwable) {
-                // Fără liste de newsletter, conturile tot au intrat.
+                // Fără liste de newsletter, conturile tot au intrat (dar abonații nu, deci backup-ul nu se șterge).
+                $abonatiEsuati = count($abonati) - $abonatiNoi;
             }
         }
 
@@ -435,6 +449,8 @@ final class AdminController
             'adrese_scrise' => $adrese,
             'abonati_scrisi' => $abonatiNoi,
             'esuate' => $esuate,
+            'adrese_esuate' => $adreseEsuate,
+            'abonati_esuati' => $abonatiEsuati,
         ];
     }
 
@@ -2702,6 +2718,15 @@ final class AdminController
         if (!$this->guard()) {
             return;
         }
+        // Revizuirea WP-23: jetonul sesiunii (antetul X-CSRF-Token trimis de editor), ca o pagină străină să nu poată
+        // randa conținut ales de ea în numele adminului.
+        if (!\App\Support\AdminCsrf::valid()) {
+            http_response_code(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo 'Sesiunea editorului a expirat: reîncarcă pagina și încearcă din nou.';
+            return;
+        }
 
         $db = $this->db();
         $templateId = (int) ($_POST['template_id'] ?? 0);
@@ -2918,7 +2943,7 @@ final class AdminController
                     $this->saveSeoSettings($db, 'blog_post', (string) $newId, $sourceSeo);
                     // WP-23 (B4, Biovitality c078bd5, 3ea6a31): copia are și lățimea copertei și bibliografia (în
                     // instrucțiunea blogului avansat, care tace cât timp migrarea blog/0033 n-a rulat).
-                    $this->scrieBlogAvansat($db, $newId, $this->normalizeImageWidthPercent($source['featured_image_width'] ?? null),
+                    $copieAvansata = $this->scrieBlogAvansat($db, $newId, $this->normalizeImageWidthPercent($source['featured_image_width'] ?? null),
                         trim((string) ($source['references_html'] ?? '')));
                     // Copia păstrează categoriile și etichetele originalului:
                     // altfel ar trebui rebifate de fiecare dată.
@@ -2930,7 +2955,9 @@ final class AdminController
                         $copiazaCategorii->execute(['nou' => $newId, 'vechi' => $id]);
                     } catch (Throwable) {
                     }
-                    $this->syncBlogPostTags($db, $newId, (string) ($source['tags_text'] ?? ''));
+                    if (!$this->syncBlogPostTags($db, $newId, (string) ($source['tags_text'] ?? '')) || !$copieAvansata) {
+                        Flash::set('error', 'Copia nu are bibliografia, lățimea copertei sau etichetele originalului (eroarea e în jurnalul serverului).');
+                    }
                 }
                 $this->refreshCacheAfterPublicContentChange($db);
                 Flash::set('success', 'Postarea a fost duplicată. Editează copia înainte de publicare.');
@@ -3147,9 +3174,15 @@ final class AdminController
                 }
             } catch (Throwable) {
             }
-            // WP-23 (B4): lățimea copertei, bibliografia și etichetele, după rândul postării.
-            $this->scrieBlogAvansat($db, $id, $featuredWidth, $referencesHtml);
-            $this->syncBlogPostTags($db, $id, $tagsInput);
+            // WP-23 (B4): lățimea copertei, bibliografia și etichetele, după rândul postării; o eroare (alta decât baza fără
+            // blog/0033) nu mai trece neobservată: postarea e salvată, dar adminul află ce lipsește (revizuirea WP-23).
+            $faraAvansat = !$this->scrieBlogAvansat($db, $id, $featuredWidth, $referencesHtml);
+            $faraEtichete = !$this->syncBlogPostTags($db, $id, $tagsInput);
+            if ($faraAvansat || $faraEtichete) {
+                Flash::set('error', 'Postarea a fost salvată, dar ' . implode(' și ', array_filter([
+                    $faraAvansat ? 'bibliografia și lățimea copertei' : '', $faraEtichete ? 'etichetele' : '',
+                ])) . ' n-au putut fi salvate. Încearcă din nou; dacă se repetă, eroarea e în jurnalul serverului.');
+            }
         }
         if ($savedPost) {
             $this->refreshCacheAfterPublicContentChange($db);
@@ -3181,12 +3214,14 @@ final class AdminController
     /**
      * Câmpurile blogului avansat ale unei postări (WP-23, B4; coloanele migrării blog/0033), scrise separat de rândul
      * postării: pe o bază care n-a trecut încă prin migrare (codul nou, înainte de `scripts/migreaza.php --aplica`)
-     * instrucțiunea tace, iar postarea se salvează ca înainte. Aceleași valori nu schimbă rândul (nici `updated_at`).
+     * instrucțiunea tace (doar coloana sau tabelul lipsă, 1054/1146), iar postarea se salvează ca înainte. Orice altă
+     * eroare se scrie în jurnal și întoarce false (salvarea o spune adminului). Aceleași valori nu schimbă rândul (nici
+     * `updated_at`).
      */
-    private function scrieBlogAvansat(PDO $db, int $postId, int $latimeCoperta, string $referinte): void
+    private function scrieBlogAvansat(PDO $db, int $postId, int $latimeCoperta, string $referinte): bool
     {
         if ($postId <= 0) {
-            return;
+            return true;
         }
         try {
             $db->prepare('UPDATE blog_posts SET featured_image_width = :w, references_html = :r WHERE id = :id')->execute([
@@ -3194,8 +3229,24 @@ final class AdminController
                 'r' => trim($referinte) !== '' ? trim($referinte) : null,
                 'id' => $postId,
             ]);
-        } catch (Throwable) {
+            return true;
+        } catch (Throwable $e) {
+            return $this->faraMigrareaBlogului($e, 'bibliografia și lățimea copertei postării ' . $postId);
         }
+    }
+
+    /**
+     * O eroare a câmpurilor blogului avansat: true dacă e doar lipsa coloanei sau a tabelului (1054, 1146: baza n-a trecut
+     * încă prin blog/0033, deci se ignoră), altfel false, după un rând în jurnalul PHP (revizuirea WP-23).
+     */
+    private function faraMigrareaBlogului(Throwable $e, string $ce): bool
+    {
+        $cod = $e instanceof \PDOException ? (int) ($e->errorInfo[1] ?? 0) : 0;
+        if (in_array($cod, [1054, 1146], true)) {
+            return true;
+        }
+        error_log('blog: ' . $ce . ' n-au putut fi salvate: ' . $e->getMessage());
+        return false;
     }
 
     /**
@@ -26118,10 +26169,10 @@ HTML;
      * noi se creează din mers; cele rămase fără nicio postare nu se șterg
      * singure, ca sugestiile să nu dispară în timp ce cineva rescrie un articol.
      */
-    private function syncBlogPostTags(PDO $db, int $postId, string $text): void
+    private function syncBlogPostTags(PDO $db, int $postId, string $text): bool
     {
         if ($postId <= 0) {
-            return;
+            return true;
         }
 
         $nume = [];
@@ -26134,12 +26185,15 @@ HTML;
             $nume[mb_strtolower($eticheta)] = $eticheta;
         }
 
+        // Revizuirea WP-23: totul într-o tranzacție (o eroare la jumătate nu lasă postarea fără etichetele ei vechi), iar
+        // o eroare se ignoră doar pe o bază fără blog/0033 (1054/1146); altfel jurnal și false.
+        $propriaTranzactie = !$db->inTransaction();
         try {
+            if ($propriaTranzactie) {
+                $db->beginTransaction();
+            }
             $sterge = $db->prepare('DELETE FROM blog_post_tags WHERE post_id = :pid');
             $sterge->execute(['pid' => $postId]);
-            if ($nume === []) {
-                return;
-            }
 
             $cauta = $db->prepare('SELECT id FROM blog_tags WHERE name = :name LIMIT 1');
             $adauga = $db->prepare('INSERT INTO blog_tags (name, slug) VALUES (:name, :slug)');
@@ -26157,7 +26211,8 @@ HTML;
 
                             return $slugLuat->fetchColumn() !== false;
                         },
-                        'eticheta'
+                        'eticheta',
+                        170 // blog_tags.slug e VARCHAR(170)
                     );
                     $adauga->execute(['name' => $eticheta, 'slug' => $slug]);
                     $tagId = (int) $db->lastInsertId();
@@ -26166,7 +26221,15 @@ HTML;
                     $leaga->execute(['pid' => $postId, 'tid' => $tagId]);
                 }
             }
-        } catch (Throwable) {
+            if ($propriaTranzactie) {
+                $db->commit();
+            }
+            return true;
+        } catch (Throwable $e) {
+            if ($propriaTranzactie && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            return $this->faraMigrareaBlogului($e, 'etichetele postării ' . $postId);
         }
     }
 

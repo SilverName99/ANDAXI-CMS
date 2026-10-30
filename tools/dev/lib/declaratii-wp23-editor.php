@@ -15,6 +15,18 @@ declare(strict_types=1);
  * @return list<array{nou: string, vechi: string}>
  */
 return [
+    // Revizuirea WP-23: jetonul sesiunii în formular (previzualizarea îl cere în antetul X-CSRF-Token).
+    [
+        'nou' => <<<'TXT'
+
+        <input type="hidden" name="_csrf" value="<TOKEN>">
+
+TXT,
+        'vechi' => <<<'TXT'
+
+
+TXT,
+    ],
     [
         'nou' => <<<'TXT'
 
@@ -221,7 +233,7 @@ TXT,
         <div class="blog-preview-stage">
             <div class="blog-preview-frame" id="blog-preview-frame">
                 <p class="blog-preview-loading" id="blog-preview-loading">Se pregătește previzualizarea…</p>
-                <iframe id="blog-preview-iframe" title="Previzualizare articol" hidden></iframe>
+                <iframe id="blog-preview-iframe" title="Previzualizare articol" sandbox="allow-scripts" hidden></iframe>
             </div>
         </div>
     </div>
@@ -655,10 +667,12 @@ TXT,
         }
 
         try {
+            const jeton = form.querySelector('input[name="_csrf"]');
             const raspuns = await fetch('/admin/blog/posts/preview', {
                 method: 'POST',
                 body: new FormData(form),
                 credentials: 'same-origin',
+                headers: {'X-CSRF-Token': jeton instanceof HTMLInputElement ? jeton.value : ''},
             });
             if (!raspuns.ok) throw new Error('HTTP ' + raspuns.status);
             const html = await raspuns.text();

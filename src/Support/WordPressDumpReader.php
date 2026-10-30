@@ -87,9 +87,17 @@ final class WordPressDumpReader
         $meta = [];                   // wpUserId -> [cheie => valoare]
         $abonati = [];                // email => rând
         $stat = ['linii' => 0, 'octeti' => 0, 'admini_sariti' => 0];
+        // Revizuirea WP-23: câți octeți necomprimați s-au citit și ultimul rând nevid, ca la final să se știe dacă fișierul
+        // a fost citit până la capătul lui adevărat (o arhivă tăiată se oprește în tăcere la gzgets).
+        $necomprimati = 0;
+        $ultimulRand = '';
 
         while (($linie = gzgets($stream)) !== false) {
             $stat['linii']++;
+            $necomprimati += strlen($linie);
+            if (trim($linie) !== '') {
+                $ultimulRand = $linie;
+            }
             if ($progres !== null && ($stat['linii'] % 20000) === 0) {
                 $progres(gztell($stream));
             }
@@ -186,7 +194,9 @@ final class WordPressDumpReader
                 }
             }
         }
+        $laSfarsit = gzeof($stream);
         gzclose($stream);
+        $complet = $laSfarsit && self::sfarsitAdevarat($cale, $necomprimati, $ultimulRand);
 
         if ($utilizatori === [] && $abonati === []) {
             return [
@@ -198,6 +208,7 @@ final class WordPressDumpReader
                 'abonati' => [],
                 'statistici' => $stat,
                 'tabele' => $tabeleGasite,
+                'complet' => $complet,
             ];
         }
 
@@ -223,7 +234,35 @@ final class WordPressDumpReader
             'abonati' => array_values($abonati),
             'statistici' => $stat,
             'tabele' => $tabeleGasite,
+            'complet' => $complet,
         ];
+    }
+
+    /**
+     * Fișierul a fost citit până la capătul lui adevărat? O arhivă gzip: mărimea necomprimată din coada ei (ISIZE, ultimii
+     * 4 octeți, modulo 2^32) e exact cât s-a citit. Un .sql necomprimat: ultimul rând e cel cu care mysqldump își încheie
+     * dump-ul („-- Dump completed”). Altfel (arhivă tăiată, coadă lipsă, alt program) nu se poate ști, deci nu: importul
+     * merge, dar fișierul nu se șterge singur (revizuirea WP-23).
+     */
+    private static function sfarsitAdevarat(string $cale, int $necomprimati, string $ultimulRand): bool
+    {
+        $f = @fopen($cale, 'rb');
+        if ($f === false) {
+            return false;
+        }
+        $magic = (string) fread($f, 2);
+        if ($magic === "\x1f\x8b") {
+            $marime = (int) filesize($cale);
+            if ($marime < 18 || fseek($f, -4, SEEK_END) !== 0) {
+                fclose($f);
+                return false;
+            }
+            $coada = unpack('Visize', (string) fread($f, 4));
+            fclose($f);
+            return is_array($coada) && (int) $coada['isize'] === ($necomprimati & 0xFFFFFFFF);
+        }
+        fclose($f);
+        return str_starts_with(trim($ultimulRand), '-- Dump completed');
     }
 
     /** Rolul funcțional al unui tabel, după coloanele lui (null = ignorat). */

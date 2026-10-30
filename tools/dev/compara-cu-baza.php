@@ -1147,7 +1147,8 @@ foreach (require __DIR__ . '/lib/declaratii-wp23-editor.php' as $nrEditor => $sc
     $porturiBiovitality[] = [
         'nume' => 'editorul postării de blog: blogul avansat (' . ($nrEditor + 1) . ')',
         'cale' => '/admin/blog/posts/editor*',
-        'nou' => $schimbareEditor['nou'],
+        // Adresa site-ului din cardul Google e cea a serverului de dezvoltare (CMS_DEV_PORT); textele sunt scrise cu 8701.
+        'nou' => str_replace('http://127.0.0.1:8701', 'http://127.0.0.1:' . (getenv('CMS_DEV_PORT') ?: '8701'), $schimbareEditor['nou']),
         'vechi' => $schimbareEditor['vechi'],
         'motiv' => 'Biovitality c078bd5, 9c549c7, 49c4f5b, 3ea6a31 (WP-23 B4): editorul blogului avansat (H5/H6, aliniere, chenarul '
             . 'pozelor, lățimea copertei, bibliografia, etichetele, dialogul de link, textul alternativ, cardul Google, previzualizarea, '
@@ -1324,6 +1325,9 @@ $coduriGasite = [];
 // scoasă din listă, un caz de salvare care nu mai rulează) n-ar dovedi nimic, deci pică la final.
 $gasiteInRulare = [];
 $faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort, &$gasiteInRulare): string {
+    // Jetonul de sesiune al unui formular de admin (_csrf) e la întâmplare: o declarație care îl conține îl scrie <TOKEN>,
+    // cum îl lasă oricum normalizeaza_html() după (revizuirea WP-23: editorul postării are acum jetonul în formular).
+    $html = (string) preg_replace('/(name="_csrf" value=")[0-9a-f]{64}"/', '$1<TOKEN>"', $html);
     $html = diferente_marcaje($marcajePort, $cale, $html, $gasite, $probleme);
     $html = diferente_texte($listeDeclarate, $cale, $html, $gasite, $probleme);
     foreach ($gasite as $etichetaGasita => $deCate) {

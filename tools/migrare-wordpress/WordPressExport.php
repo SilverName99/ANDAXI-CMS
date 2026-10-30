@@ -23,6 +23,12 @@ final class WordPressExport
     /** @var array<int, string> id atașament -> adresa fișierului */
     private array $attachments = [];
 
+    /** `<wp:wxr_version>` din canal: gol = fișierul nu e un export WordPress (WXR), chiar dacă e un XML valid. */
+    private string $wxrVersion = '';
+
+    /** @var array<string, int> tipul de postare din WordPress -> câte sunt în export (pentru indiciul „0 postări”) */
+    private array $tipuri = [];
+
     private function __construct()
     {
     }
@@ -50,9 +56,15 @@ final class WordPressExport
         }
 
         $export = new self();
+        if (isset($xml->channel)) {
+            $export->wxrVersion = trim((string) ($xml->channel->children('wp', true)->wxr_version ?? ''));
+        }
         foreach ($xml->channel->item ?? [] as $item) {
             $wp = $item->children('wp', true);
             $tip = trim((string) ($wp->post_type ?? ''));
+            if ($tip !== '') {
+                $export->tipuri[$tip] = ($export->tipuri[$tip] ?? 0) + 1;
+            }
 
             if ($tip === 'attachment') {
                 $id = (int) ($wp->post_id ?? 0);
@@ -77,6 +89,18 @@ final class WordPressExport
     public function posts(): array
     {
         return $this->posts;
+    }
+
+    /** Versiunea WXR din export („1.2”); goală pentru un XML care nu e un export WordPress. */
+    public function wxrVersion(): string
+    {
+        return $this->wxrVersion;
+    }
+
+    /** @return array<string, int> tipul de postare -> câte sunt în export */
+    public function tipuri(): array
+    {
+        return $this->tipuri;
     }
 
     /** Adresa fișierului pentru un id de atașament din WordPress. */
