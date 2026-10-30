@@ -1378,7 +1378,7 @@ try {
         '--demo cu --fara-cod-vechi' => [['--demo', '--fara-cod-vechi'], [], 'sunt doar pentru --din'],
         '--demo cu un pachet inexistent' => [['--demo', '--pachet=nu-exista'], [], '--pachet: nu există'],
         'alt răspuns decât „da”' => [['--din=bioscem'], ['nu'], 'n-ai scris „da”'],
-        'parola contului de admin sub 12 caractere' => [['--din=bioscem', '--da'], ['', 'scurta', 'scurta'], 'sub 12 caractere'],
+        'parola contului de admin sub 10 caractere' => [['--din=bioscem', '--da'], ['', 'scurta', 'scurta'], 'sub 10 caractere'],
         'cele două parole diferite' => [['--din=bioscem', '--da'], ['', $parolaAdmin, $parolaAdmin . 'x'], 'nu sunt la fel'],
         'parola contului = parola porții' => [['--din=bioscem', '--da'], ['', $parolaPoarta, $parolaPoarta], 'alta decât parola porții'],
         'o adresă de admin invalidă' => [['--din=bioscem', '--da'], ['nu-e-email', $parolaAdmin, $parolaAdmin], 'nu e validă'],

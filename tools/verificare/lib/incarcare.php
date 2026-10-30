@@ -1677,9 +1677,9 @@ final class Incarcare
             if (filter_var($this->emailProprietar, FILTER_VALIDATE_EMAIL) === false || strlen($this->emailProprietar) > 190) {
                 throw new Refuz('adresa contului de admin nu e validă. Nu am atins nimic');
             }
-            $parola = verificare_intreaba('Parola contului tău de admin pe copie (cel puțin 12 caractere; nu se vede): ', true);
-            if (strlen($parola) < 12) {
-                throw new Refuz('parola contului de admin are sub 12 caractere. Nu am atins nimic');
+            $parola = verificare_intreaba('Parola contului tău de admin pe copie (cel puțin 10 caractere; nu se vede): ', true);
+            if (strlen($parola) < 10) {
+                throw new Refuz('parola contului de admin are sub 10 caractere. Nu am atins nimic');
             }
             $hashPoarta = trim($this->env['VERIFICARE_POARTA_HASH'] ?? '');
             if ($hashPoarta !== '' && password_verify($parola, $hashPoarta)) {
@@ -1692,9 +1692,9 @@ final class Incarcare
         }
         if ($this->sursaNume === 'demo') {
             $parola = verificare_intreaba('Parola conturilor personalului pe copia demonstrativă (cei 3 admini cu rol parțial și clienții '
-                . 'inventați; cel puțin 12 caractere; nu se vede): ', true);
-            if (strlen($parola) < 12) {
-                throw new Refuz('parola personalului are sub 12 caractere. Nu am atins nimic');
+                . 'inventați; cel puțin 10 caractere; nu se vede): ', true);
+            if (strlen($parola) < 10) {
+                throw new Refuz('parola personalului are sub 10 caractere. Nu am atins nimic');
             }
             if ($parola === $this->parolaProprietar) {
                 throw new Refuz('parola personalului trebuie să fie alta decât parola contului tău. Nu am atins nimic');
