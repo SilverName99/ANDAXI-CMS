@@ -82,7 +82,7 @@ final class Reguli
         $fisier = $radacina . '/tools/verificare/reguli/' . $site . '.php';
         if (!is_file($fisier)) {
             throw new Refuz('nu există încă reguli de anonimizare pentru „' . $site . '” (tools/verificare/reguli/' . $site . '.php; '
-                . 'Biovitality le primește în WP-11b, vertij și grafoanaytis la porturile lor). Nu am atins nimic');
+                . 'vertij și grafoanaytis le primesc la porturile lor). Nu am atins nimic');
         }
         $date = require $fisier;
         if (!is_array($date) || ($date['site'] ?? null) !== $site) {
@@ -1399,7 +1399,7 @@ final class Incarcare
         $this->arg = Rulare::argumente($argv, ['din', 'demo', 'pachet', 'licenta', 'dosar', 'reincarca', 'reia', 'da', 'fara-cod-vechi', 'fara-bt-test', 'buget']);
         $demo = isset($this->arg['demo']);
         if ($demo === isset($this->arg['din'])) {
-            throw new Refuz('alege ce încarci: --din=bioscem (copia anonimizată a site-ului live) sau --demo [--pachet=<site>] [--licenta=<pachet>] '
+            throw new Refuz('alege ce încarci: --din=bioscem sau --din=biovitality (copia anonimizată a site-ului live) sau --demo [--pachet=<site>] [--licenta=<pachet>] '
                 . '(copia demonstrativă, fără date personale)');
         }
         foreach (['demo', 'reincarca', 'reia', 'da', 'fara-cod-vechi', 'fara-bt-test'] as $comutator) {
@@ -2047,7 +2047,7 @@ final class Incarcare
     /** Lista neutralizării, încă o dată, peste tot tabelul (și cheile lipsă se scriu). Întoarce câte chei a scris. */
     private function neutralizeazaSetari(bool $dupaMigrari = false): int
     {
-        $setari = $this->reguli !== null ? (array) $this->reguli->date['setari'] : self::neutralizareImplicita();
+        $setari = $this->reguli !== null ? (array) $this->reguli->date['setari'] : $this->neutralizareImplicita();
         $db = $this->copie->db;
         $existente = [];
         foreach ($db->query('SELECT `key`, `value` FROM settings')->fetchAll(PDO::FETCH_KEY_PAIR) as $cheie => $valoare) {
@@ -2078,10 +2078,14 @@ final class Incarcare
         return $scrise;
     }
 
-    /** Lista neutralizării pentru copia demonstrativă (aceeași ca a Bioscem). @return array<string, mixed> */
-    private static function neutralizareImplicita(): array
+    /**
+     * Lista neutralizării pentru copia demonstrativă: a regulilor pachetului, dacă site-ul are reguli (Biovitality, cu cheile
+     * fișierelor din cloud), altfel cea a Bioscem. @return array<string, mixed>
+     */
+    private function neutralizareImplicita(): array
     {
-        $reguli = require dirname(__DIR__) . '/reguli/bioscem.php';
+        $fisier = dirname(__DIR__) . '/reguli/' . (preg_match('/^[a-z0-9][a-z0-9-]{0,40}$/', $this->pachet) === 1 ? $this->pachet : 'bioscem') . '.php';
+        $reguli = require (is_file($fisier) ? $fisier : dirname(__DIR__) . '/reguli/bioscem.php');
         return (array) $reguli['setari'];
     }
 
@@ -2651,7 +2655,7 @@ final class Incarcare
         // Verificările care au sens pe date inventate: emailurile, telefoanele, parolele, setările.
         $this->spune('');
         $this->spune('Verificările copiei demonstrative (doar numere):');
-        $reguli = Reguli::din(require dirname(__DIR__) . '/reguli/bioscem.php');
+        $reguli = Reguli::din(['setari' => $this->neutralizareImplicita()]);
         $db2 = $this->copie->db;
         $numar = static fn (string $sql): int => (int) $db2->query($sql)->fetchColumn();
         $esecuri = [];

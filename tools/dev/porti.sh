@@ -64,7 +64,7 @@ poarta G-verif "testele site-ului de verificare și ale încărcării copiei (de
     "tools/dev/php.sh tools/dev/test-verificare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-verificare.php ;; tools/dev/php.sh tools/dev/test-incarcare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-incarcare.php" WP-08a
 poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-sonda): doar citire, nimic scris, nicio valoare personală; și cu php$MINIM" \
     "tools/dev/php.sh tools/dev/test-sonde.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-sonde.php" WP-10
-poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un site de verificare simulat: diferite 0, mutațiile care trebuie să pice, diferențele declarate, refuzurile) și amprenta paginilor (amprenta-site.php pe codul Bioscem și pe codul comun, cu gazda sursă), față de același cod de bază ca G-cmp; și cu php$MINIM (rulează pe servere)" \
+poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un site de verificare simulat: diferite 0, mutațiile care trebuie să pice, diferențele declarate, refuzurile) și amprenta paginilor (amprenta-site.php pe codul Bioscem și pe codul comun, cu gazda sursă), față de același cod de bază ca G-cmp; din WP-11b și golden master-ul Biovitality (--profil=biovitality, față de codul Biovitality revizuit, pe o bază făcută ca a lui); și cu php$MINIM (rulează pe servere)" \
     "tools/dev/compara-calcule-local.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/compara-calcule-local.sh" WP-11
 poarta G-vizual "stilurile calculate ale paginilor publice față de codul Bioscem însuși, pe serverele lui G-cmp, licența „toate” și licența Bioscem (capturile, doar pentru ochi); întâi autotestul instrumentului" \
     "tools/dev/capturi-publice.sh --autotest ;; tools/dev/capturi-publice.sh ;; tools/dev/capturi-publice.sh --licenta=bioscem" WP-13
@@ -206,15 +206,15 @@ if [ -n "$DOAR" ]; then
 fi
 
 # Porțile care citesc clonele codurilor vechi, la „ultimul commit revizuit” din docs/de-portat.md: comparația cu
-# Bioscem (și în testele pluginurilor, E, în golden master și în stilurile calculate, G-vizual) doar clona Bioscem; testul de fum (înghețarea
-# setărilor celor patru site-uri, și în G-php și G-vechi), testele migrărilor (fixture-urile, T10) și testul pachetelor (Bioscem și
-# Biovitality, G-pachet) toate patru. O
+# Bioscem (și în testele pluginurilor, E, și în stilurile calculate, G-vizual) doar clona Bioscem; testul de fum (înghețarea
+# setărilor celor patru site-uri, și în G-php și G-vechi), testele migrărilor (fixture-urile, T10), testul pachetelor (Bioscem și
+# Biovitality, G-pachet) și golden master-ul (Bioscem și, din WP-11b, Biovitality, G-calc) toate patru. O
 # clonă fără commit-ul ei oprește totul de la început, cu numele clonei, în loc de un eșec adânc într-o poartă.
 clone_cerute=""
 for p in $alese; do
     case "$p" in
-        G-smoke|G-php|G-mig|G-vechi|G-pachet) clone_cerute="toate" ;;
-        G-cmp|G-plug|G-plug-fiecare|G-calc|G-vizual) [ -n "$clone_cerute" ] || clone_cerute="bioscem" ;;
+        G-smoke|G-php|G-mig|G-vechi|G-pachet|G-calc) clone_cerute="toate" ;;
+        G-cmp|G-plug|G-plug-fiecare|G-vizual) [ -n "$clone_cerute" ] || clone_cerute="bioscem" ;;
     esac
 done
 case "$clone_cerute" in

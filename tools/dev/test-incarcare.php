@@ -9,6 +9,7 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/test-incarcare.php
  *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-incarcare.php   # cu PHP-ul minim (poarta G-verif le rulează pe amândouă)
  *   tools/dev/php.sh tools/dev/test-incarcare.php --fara-baza          # doar A
+ *   tools/dev/php.sh tools/dev/test-incarcare.php --doar-mariadb       # fără B9 (MySQL 8; decizia A1 a proprietarului, 27 oct), spus în raport
  *
  * A. Fără bază: regulile acoperă fiecare tabel și fiecare coloană a schemei Bioscem 4254ca4 (tools/dev/migrari/vechi/bs.sql:
  *    și avertismentul pe produs; câmpurile SEO ale categoriilor și mărcilor sunt rânduri în seo_pages) și a schemei codului
@@ -107,6 +108,8 @@ $verifica = static function (string $eticheta, bool $ok, string $detalii = '') u
     }
 };
 $faraBaza = in_array('--fara-baza', $argv, true);
+// Doar MariaDB (decizia proprietarului din 27 oct, A1: site-urile rulează pe MariaDB): B9 se sare, spus în raport.
+$doarMariaDb = in_array('--doar-mariadb', $argv, true);
 $scrie('Test încărcare ANDAXI-CMS — ' . date('Y-m-d H:i:s') . ', PHP ' . PHP_VERSION);
 
 // =====================================================================
@@ -284,7 +287,7 @@ foreach ($cms as $tabel => $coloane) {
  * al clienților, fiecare coloană de text sau de dată a schemei (Bioscem 4254ca4 și codul comun) e transformată de reguli sau e în
  * lista oracolului. Întoarce problemele (tabel.coloana cu motivul); o listă goală = regulile nu lasă nimic din afara oracolului.
  */
-$oracolStatic = static function (Reguli $r) use ($oracolPastrate, $oracolFaraRanduri, $oracolPublice, $schemaToata, $deSchimbat): array {
+$oracolStaticPe = static function (Reguli $r, array $oracolFaraRanduri, array $oracolPublice, array $schemaToata) use ($oracolPastrate, $deSchimbat): array {
     $p = [];
     foreach ((array) $r->date['tabele'] as $tabel => $regula) {
         $mod = (string) ($regula['mod'] ?? '');
@@ -327,6 +330,7 @@ $oracolStatic = static function (Reguli $r) use ($oracolPastrate, $oracolFaraRan
     }
     return $p;
 };
+$oracolStatic = static fn (Reguli $r): array => $oracolStaticPe($r, $oracolFaraRanduri, $oracolPublice, $schemaToata);
 $verifica('oracolul testului: fiecare tabel al regulilor e clasificat și în test, cu modul potrivit; în cele ' . count($oracolPastrate) . ' tabele ale clienților, '
     . 'fiecare coloană de text sau de dată a schemei e schimbată de reguli sau păstrată de oracol (' . array_sum(array_map(static fn (string $t): int
         => count($deSchimbat($t, $schemaToata[$t] ?? [])), array_keys($oracolPastrate))) . ' de schimbat)', $oracolStatic($reguli) === [], implode('; ', $oracolStatic($reguli)));
@@ -527,6 +531,104 @@ $verifica('A6 se socotește din lista regulilor, nu cu transformarea: o valoare 
     && $cuLista('order_email_from_name', 'Bioscem') === false && $cuLista('order_email_from_name', 'VERIFICARE Bioscem') === true
     && $cuLista('maintenance_key', 'cheie-veche') === false && $cuLista('maintenance_key', str_repeat('a', 24)) === true && $cuLista('store_name', 'orice') === null);
 
+// ── Biovitality (WP-11b): regulile Bioscem plus ce are în plus schema codului Biovitality 779e0d8 (bv.sql) ──
+$reguliBv = Reguli::incarca($radacina, 'biovitality');
+$verifica('regulile Biovitality se încarcă (cele Bioscem plus ale lui), fără nicio greșeală de formă; versiunea urmează și versiunea regulilor Bioscem',
+    $reguliBv->probleme() === [] && $reguliBv->date['licenta'] === 'biovitality' && $reguliBv->date['pachet'] === 'biovitality'
+    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 1, implode('; ', $reguliBv->probleme()));
+$bv = $coloaneSql($radacina . '/tools/dev/migrari/vechi/bv.sql');
+$scanBv = $reguliBv->scaneaza($structuraDin($bv));
+$verifica('scanerul pe schema Biovitality 779e0d8 (bv.sql, ' . count($bv) . ' tabele): fiecare tabel are regulă (' . count($scanBv['copiate']) . ' copiate, '
+    . count($scanBv['doar_structura']) . ' doar structura), fiecare coloană a unui tabel copiat e în reguli', $scanBv['probleme'] === [] && $scanBv['necunoscute'] === []
+    && count($bv) >= 63, implode('; ', array_merge($scanBv['probleme'], $scanBv['necunoscute'])));
+$scanBvCms = $reguliBv->scaneaza($structuraDin($cms));
+$verifica('regulile Biovitality pe schema codului comun (o bază Biovitality deja adoptată): nicio coloană fără regulă, niciun tabel necunoscut',
+    $scanBvCms['probleme'] === [] && $scanBvCms['necunoscute'] === [], implode('; ', array_merge($scanBvCms['probleme'], $scanBvCms['necunoscute'])));
+$existenteBv = $existente;
+foreach ($bv as $tabel => $coloane) {
+    $existenteBv[$tabel] = true;
+    foreach (array_keys($coloane) as $coloana) {
+        $existenteBv[$tabel . '.' . $coloana] = true;
+    }
+}
+$vechiBv = [];
+foreach ((array) $reguliBv->date['tabele'] as $tabel => $regula) {
+    if (!isset($existenteBv[$tabel])) {
+        $vechiBv[] = $tabel;
+        continue;
+    }
+    foreach (array_merge((array) ($regula['pastreaza'] ?? []), array_keys((array) ($regula['transforma'] ?? []))) as $coloana) {
+        if (!isset($existenteBv[$tabel . '.' . $coloana])) {
+            $vechiBv[] = $tabel . '.' . $coloana;
+        }
+    }
+}
+$verifica('fiecare tabel și fiecare coloană din regulile Biovitality există în schema Biovitality, Bioscem sau a codului comun', $vechiBv === [], implode(', ', $vechiBv));
+$personaleBv = [];
+foreach ($bv + $cms as $tabel => $coloane) {
+    $regula = $reguliBv->tabel($tabel);
+    if ($regula === null || $regula['mod'] === 'doar_structura') {
+        continue;
+    }
+    foreach (array_keys($coloane) as $coloana) {
+        if (preg_match(CitireLive::TIPAR_PERSONAL, $coloana) === 1 && !isset($regula['transforma'][$coloana]) && trim((string) ($regula['motive'][$coloana] ?? '')) === '') {
+            $personaleBv[] = $tabel . '.' . $coloana;
+        }
+    }
+}
+$verifica('Biovitality: fiecare coloană cu nume de date personale dintr-un tabel copiat e transformată sau păstrată cu motiv', $personaleBv === [], implode(', ', $personaleBv));
+// Oracolul pentru Biovitality: același oracol al clienților (tabelele lor sunt aceleași), plus tabelele doar ale Biovitality, clasificate aici.
+$oracolFaraRanduriBv = array_merge($oracolFaraRanduri, ['admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions']);
+$oracolPubliceBv = array_merge($oracolPublice, ['competition_partners', 'competition_prices', 'blog_tags', 'blog_post_tags']);
+$schemaToataBv = $schemaToata;
+foreach ($bv as $tabel => $coloane) {
+    $schemaToataBv[$tabel] = ($schemaToataBv[$tabel] ?? []) + $coloane;
+}
+$verifica('oracolul pe regulile Biovitality: fiecare tabel clasificat (și cele doar ale Biovitality), în tabelele clienților fiecare coloană de text sau de dată '
+    . 'a schemei Biovitality și a codului comun schimbată de reguli sau păstrată de oracol; jetoanele aplicației, parolele dosarelor din cloud, deschiderile lor '
+    . 'și jurnalele fișierelor fără rânduri', $oracolStaticPe($reguliBv, $oracolFaraRanduriBv, $oracolPubliceBv, $schemaToataBv) === [],
+    implode('; ', $oracolStaticPe($reguliBv, $oracolFaraRanduriBv, $oracolPubliceBv, $schemaToataBv)));
+$dateBv = $reguliBv->date;
+unset($dateBv['tabele']['file_locks']);
+$dateBv['tabele']['file_locks'] = ['mod' => 'copiaza', 'pastreaza' => ['id', 'storage', 'file_path', 'path_hash', 'admin_id', 'admin_email', 'note', 'origin', 'locked_at',
+    'expires_at'], 'motive' => ['admin_email' => 'mutație de test']];
+$dateBv['grupuri']['admini'][] = 'file_locks';
+$mutataBv = Reguli::din($dateBv);
+$verifica('oracolul Biovitality prinde jurnalul fișierelor din cloud (file_locks: emailul adminului, nota, căile) copiat cum e, deși regulile trec de probleme()',
+    $mutataBv->probleme() === [] && $oracolStaticPe($mutataBv, $oracolFaraRanduriBv, $oracolPubliceBv, $schemaToataBv) === ['file_locks: trebuie doar_structura, nu copiaza'],
+    implode('; ', array_merge($mutataBv->probleme(), $oracolStaticPe($mutataBv, $oracolFaraRanduriBv, $oracolPubliceBv, $schemaToataBv))));
+// Scanerul fail-closed pe o sursă Biovitality: o coloană nouă cu date personale într-un tabel copiat, un tabel nou al fișierelor din cloud.
+$sursaBvNoua = $structuraDin($bv);
+$sursaBvNoua['competition_partners']['coloane']['contact_email'] = ['tip' => 'varchar', 'nul' => true, 'lungime' => 190, 'generata' => false];
+$sursaBvNoua['products']['coloane']['bundle_note'] = ['tip' => 'text', 'nul' => true, 'lungime' => null, 'generata' => false];
+$sursaBvNoua['bunny_share_links'] = ['tip' => 'BASE TABLE', 'coloane' => ['id' => ['tip' => 'int', 'nul' => false, 'lungime' => null, 'generata' => false],
+    'email' => ['tip' => 'varchar', 'nul' => true, 'lungime' => 190, 'generata' => false]]];
+$scanBvNou = $reguliBv->scaneaza($sursaBvNoua);
+$verifica('scanerul Biovitality (fail-closed): o coloană nouă cu date personale (competition_partners.contact_email) și una doar necunoscută (products.bundle_note) '
+    . 'opresc, cu numele lor; un tabel nou (bunny_share_links) = doar structura, fără rânduri', count($scanBvNou['probleme']) === 2
+    && str_contains(implode(' ', $scanBvNou['probleme']), 'competition_partners.contact_email (nume de date personale): coloană fără regulă')
+    && str_contains(implode(' ', $scanBvNou['probleme']), 'products.bundle_note: coloană fără regulă') && $scanBvNou['necunoscute'] === ['bunny_share_links'],
+    implode('; ', $scanBvNou['probleme']));
+$setariBv = (array) $reguliBv->date['setari'];
+$neutruBv = static fn (string $cheie, string $valoare = 'valoare'): mixed => $t->setare($cheie, $valoare, $setariBv, 'proprietar@exemplu.ro', 'verificare@exemplu.ro');
+$cuListaBv = static fn (string $cheie, string $valoare): ?bool => Incarcare::setareNeutralizata($cheie, $valoare, $setariBv, 'proprietar@exemplu.ro', 'verificare@exemplu.ro');
+$verifica('setările Biovitality: fișierele din cloud oprite (bunny_enabled 0) și fără nicio cheie de acces (zona, parola, regiunea, CDN-ul, dosarul de bază, cheia API, '
+    . 'o cheie bunny_* nouă golite); configurarea știută (timeout, ținta, dosarele, aplicația) neatinsă; Stripe golit ca la Bioscem; A6 le verifică la fel',
+    $neutruBv('bunny_enabled', '1') === '0' && $neutruBv('bunny_storage_zone') === '' && $neutruBv('bunny_storage_password') === '' && $neutruBv('bunny_storage_region') === ''
+    && $neutruBv('bunny_cdn_url') === '' && $neutruBv('bunny_base_folder') === '' && $neutruBv('bunny_api_key') === '' && $neutruBv('bunny_zona_noua') === ''
+    && $neutruBv('bunny_timeout') === null && $neutruBv('bunny_upload_target') === null && $neutruBv('bunny_app_download_path') === null
+    && $neutruBv('stripe_secret_key') === '' && $neutruBv('stripe_webhook_secret') === '' && $cuListaBv('bunny_storage_zone', 'zona-reala') === false
+    && $cuListaBv('bunny_zona_noua', 'x') === false && $cuListaBv('bunny_enabled', '1') === false && $cuListaBv('bunny_enabled', '0') === true
+    && $cuListaBv('bunny_timeout', '20') === null);
+$comandaBv = $t->rand('orders', (array) $reguliBv->tabel('orders'), ['id' => 41, 'stripe_session_id' => 'cs_live_bv', 'stripe_payment_intent_id' => 'pi_bv',
+    'payment_method' => 'stripe', 'order_number' => 'BV20260101101010123'], []);
+$linkBv = $t->rand('order_payment_links', (array) $reguliBv->tabel('order_payment_links'), ['id' => 5, 'token' => str_repeat('b', 64), 'procesator' => 'stripe'], []);
+$promoBv = $t->rand('order_promo_items', (array) $reguliBv->tabel('order_promo_items'), ['id' => 2, 'given_by' => 'Sef@Biovitality-Test.ro', 'given_at' => '2026-01-01 10:00:00'], []);
+$verifica('Biovitality: id-urile Stripe ale comenzii devin anon-<id>, numărul „BV…” și metoda rămân; procesatorul linkului de plată rămâne, jetonul e nou; '
+    . '„dat de” al produselor promoționale cu pseudonimul emailului', $comandaBv['stripe_session_id'] === 'anon-41' && $comandaBv['stripe_payment_intent_id'] === 'anon-41'
+    && $comandaBv['order_number'] === 'BV20260101101010123' && $comandaBv['payment_method'] === 'stripe' && $linkBv['procesator'] === 'stripe'
+    && $linkBv['token'] !== str_repeat('b', 64) && $promoBv['given_by'] === $t->email('sef@biovitality-test.ro') && $promoBv['given_at'] === '2026-01-01 10:00:00');
+
 // Codul vechi: ce se copiază.
 $copiate = [];
 foreach (['public/index.php', 'src/Support/X.php', 'views/a.php', 'public/assets/app.css', 'public/assets/app.js', 'public/assets/logo.png', 'database/schema.sql',
@@ -599,6 +701,8 @@ $sockMy8 = (string) (getenv('CMS_DEV_SOCK_MYSQL8') ?: '/tmp/claude-0/my8/run/soc
 $bazaSursa = 'cms_incarc_sursa';
 $bazaTinta = 'cms_incarc_tinta';
 $bazaRef = 'cms_incarc_ref';
+$bazaSursaBv = 'cms_incarc_bv';
+$liveBv = $acasa . '/domains/biovitality.ro/public_html';
 $utilizatorLive = 'cms_incarc_live';
 $utilizatorCitire = 'cms_incarc_citire';
 $utilizatorTinta = 'cms_incarc_tinta';
@@ -614,7 +718,7 @@ $emailClient = 'client.' . $m . '@exemplu-client.ro';
 $jeton = bin2hex(random_bytes(32));
 $btTest = ['BT_IPAY_TEST_USER' => 'bttu' . $m, 'BT_IPAY_TEST_PASS' => 'bttp' . $m, 'BT_IPAY_TEST_CALLBACK_KEY' => 'bttk' . $m];
 $secrete = [$m, $M, $telefon, $parolaLive, $parolaCitire, $parolaTinta, $parolaPoarta, $parolaAdmin, $parolaPersonal, $emailProprietar, $jeton,
-    $bazaSursa, $bazaTinta, $utilizatorLive, $utilizatorCitire, $dosarTest, 'exemplu-client.ro'];
+    $bazaSursa, $bazaTinta, $utilizatorLive, $utilizatorCitire, $dosarTest, 'exemplu-client.ro', $bazaSursaBv];
 // Ce nu are voie să ajungă în baza copiei (căutat în fiecare coloană de text a fiecărui tabel): marcajul, telefonul,
 // jetonul, domeniul adreselor clientului inventat, parolele în clar.
 $cautateInCopie = [strtolower($m), $telefon, $jeton, 'exemplu-client.ro', 'bioscem-test.ro'];
@@ -643,7 +747,7 @@ $opresteServerul = static function () use (&$pidServer): void {
     }
     $pidServer = 0;
 };
-$curata = static function () use ($conectare, $merge, $sockMaria, $sockMy8, $bazaSursa, $bazaTinta, $bazaRef, $utilizatorLive, $utilizatorCitire,
+$curata = static function () use ($conectare, $merge, $sockMaria, $sockMy8, $bazaSursa, $bazaTinta, $bazaRef, $bazaSursaBv, $utilizatorLive, $utilizatorCitire,
     $utilizatorTinta, $dosarTest, $dosarDev, $opresteServerul): void {
     $opresteServerul();
     foreach ([$sockMaria, $sockMy8] as $sock) {
@@ -651,7 +755,7 @@ $curata = static function () use ($conectare, $merge, $sockMaria, $sockMy8, $baz
             continue;
         }
         $root = $conectare($sock);
-        foreach ([$bazaSursa, $bazaTinta, $bazaRef] as $b) {
+        foreach ([$bazaSursa, $bazaTinta, $bazaRef, $bazaSursaBv] as $b) {
             $root->exec('DROP DATABASE IF EXISTS ' . $b);
         }
         foreach ([$utilizatorLive, $utilizatorCitire, $utilizatorTinta] as $u) {
@@ -876,8 +980,9 @@ $setariCuMarcaj = ['stripe_secret_key' => 'sk_live_' . $m, 'erp_api_key' => 'erp
     'bt_ipay_notify_emails' => $emailClient, 'order_email_from_address' => 'comenzi.' . $m . '@bioscem-test.ro', 'order_email_from_name' => 'Bioscem',
     'maintenance_key' => 'mk' . $m, 'maintenance_allowed_ips' => '10.1.2.3', 'fan_sender_phone' => $telefon, 'fan_cod_iban' => 'RO49' . $M,
     'google_analytics_id' => 'G-' . $M, 'tawk_property_id' => 'tawk' . $m];
-$umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M, $telefon, $emailClient, $jeton, $oracolPastrate, $oracolFaraRanduri,
-    $deSchimbat, $setariCuMarcaj): array {
+$umple = static function (PDO $db, ?array $faraRanduri = null, bool $continutBioscem = true) use ($reguli, $randNou, $coloaneTabel, $m, $M, $telefon, $emailClient,
+    $jeton, $oracolPastrate, $oracolFaraRanduri, $deSchimbat, $setariCuMarcaj): array {
+    $faraRanduri ??= $oracolFaraRanduri;
     $db->exec("SET time_zone = '+00:00'");
     $valoare = static function (string $tabel, string $coloana, string $fel, array $c) use ($m, $M, $telefon, $emailClient, $jeton): mixed {
         if (in_array($c['tip'], ['date', 'datetime', 'timestamp', 'time', 'year'], true)) {
@@ -919,7 +1024,7 @@ $umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M
     };
     $ids = [];
     // Întâi clientul, ca rândurile celorlalte tabele să fie ale lui.
-    $ordine = array_merge(array_keys($oracolPastrate), $oracolFaraRanduri);
+    $ordine = array_merge(array_keys($oracolPastrate), $faraRanduri);
     usort($ordine, static fn (string $a, string $b): int => ($b === 'users') <=> ($a === 'users') ?: ($b === 'orders') <=> ($a === 'orders'));
     foreach ($ordine as $tabel) {
         $coloane = $coloaneTabel($db, $tabel);
@@ -927,7 +1032,7 @@ $umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M
             continue;
         }
         $valori = [];
-        if (in_array($tabel, $oracolFaraRanduri, true)) {
+        if (in_array($tabel, $faraRanduri, true)) {
             foreach ($coloane as $nume => $c) {
                 if (in_array($c['tip'], ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext'], true) && stripos((string) $c['extra'], 'generated') === false) {
                     $valori[$nume] = $valoare($tabel, $nume, $nume === 'email' || str_ends_with($nume, '_email') ? 'email' : 'text', $c);
@@ -976,11 +1081,13 @@ $umple = static function (PDO $db) use ($reguli, $randNou, $coloaneTabel, $m, $M
     $categorie = (string) $db->query('SELECT slug FROM product_categories ORDER BY id LIMIT 1')->fetchColumn();
     $randNou($db, 'seo_pages', ['page_type' => 'category', 'page_ref' => $categorie, 'title' => 'Categoria pentru Google', 'description' => 'Descrierea categoriei']);
     $randNou($db, 'seo_pages', ['page_type' => 'brand', 'page_ref' => 'Marca Demo', 'title' => 'Marca pentru Google', 'description' => 'Descrierea mărcii']);
-    $randNou($db, 'product_warnings', ['product_id' => $produs, 'title' => 'Produs refrigerat', 'body' => 'Se păstrează la frigider; întrebări la contact@bioscem.ro',
-        'checkbox_label' => 'Am înțeles', 'updated_at' => '2026-10-20 10:00:00']);
-    $randNou($db, 'order_product_warnings', ['order_id' => $ids['orders'], 'title' => 'Produs refrigerat', 'body' => 'Se păstrează la frigider',
-        'checkbox_label' => 'Am înțeles', 'checkbox_ticked' => 1, 'product_ids_json' => '[' . $produs . ']', 'product_names_json' => '["Produs"]',
-        'confirmed_at' => '2026-10-20 10:00:00']);
+    if ($continutBioscem) {
+        $randNou($db, 'product_warnings', ['product_id' => $produs, 'title' => 'Produs refrigerat', 'body' => 'Se păstrează la frigider; întrebări la contact@bioscem.ro',
+            'checkbox_label' => 'Am înțeles', 'updated_at' => '2026-10-20 10:00:00']);
+        $randNou($db, 'order_product_warnings', ['order_id' => $ids['orders'], 'title' => 'Produs refrigerat', 'body' => 'Se păstrează la frigider',
+            'checkbox_label' => 'Am înțeles', 'checkbox_ticked' => 1, 'product_ids_json' => '[' . $produs . ']', 'product_names_json' => '["Produs"]',
+            'confirmed_at' => '2026-10-20 10:00:00']);
+    }
     $randNou($db, 'coupons', ['code' => 'VARA10', 'name' => 'Vara', 'type' => 'percent', 'value' => 10, 'is_unique' => 0]);
     // O recenzie aprobată (publică) cu adresa clientului și o altă adresă în text: rămâne, cu adresele schimbate cu pseudonimele lor.
     $ids['recenzie_aprobata'] = $randNou($db, 'product_reviews', ['product_id' => $produs, 'user_name' => 'Cititor ' . $m, 'user_email' => $emailClient,
@@ -1231,7 +1338,7 @@ try {
     $refuzuri = [
         'fără --din și fără --demo' => [[], [], 'alege ce încarci'],
         '--din și --demo împreună' => [['--din=bioscem', '--demo'], [], 'alege ce încarci'],
-        'un site fără reguli (biovitality)' => [['--din=biovitality'], [], 'nu există încă reguli de anonimizare pentru „biovitality”'],
+        'un site fără reguli (vertij)' => [['--din=vertij'], [], 'nu există încă reguli de anonimizare pentru „vertij”'],
         'un nume de site nepermis' => [['--din=../x'], [], 'nume de site nepermis'],
         'un argument necunoscut' => [['--din=bioscem', '--sterge-tot'], [], 'argument necunoscut'],
         '--pachet fără --demo' => [['--din=bioscem', '--pachet=vertij'], [], '--pachet e doar pentru --demo'],
@@ -1966,12 +2073,198 @@ try {
 
     // =================================================================
     $scrie('');
+    $scrie('B10. Biovitality (WP-11b): o sursă făcută ca baza codului Biovitality 779e0d8 (bv.sql) cu datele demo, încărcată cu --din=biovitality');
+    // Pe server proprietarul pune lângă pachet valorile private ale înghețării Biovitality (docs/VERIFICARE.md); aici, inventate, cu marcaj:
+    // după migrări încărcarea trebuie să le golească sau să le schimbe cu adresa proprietarului (A6), deci niciuna nu rămâne pe copie.
+    $fisierBv = $copie . '/site-uri/biovitality/setari-inghetate.json';
+    $inghetareBv = json_decode((string) file_get_contents($fisierBv), true);
+    $privatBv = ['site' => $inghetareBv['site'], 'sursa' => $inghetareBv['sursa'],
+        'pentru' => hash('sha256', str_replace("\r\n", "\n", (string) file_get_contents($fisierBv))), 'setari' => []];
+    foreach ((array) $inghetareBv['setari'] as $cheie => $intrare) {
+        if (is_array($intrare) && ($intrare['privat'] ?? false) === true) {
+            $privatBv['setari'][$cheie] = str_contains((string) $cheie, 'telefon') ? $telefon
+                : (str_contains((string) $cheie, 'email') || str_contains((string) $cheie, 'recipients') ? 'bv.' . $cheie . '@exemplu-client.ro' : 'Persoana ' . $m);
+        }
+    }
+    @mkdir($copie . '/site-uri/biovitality/privat', 0700, true);
+    file_put_contents($copie . '/site-uri/biovitality/privat/setari-inghetate.json', (string) json_encode($privatBv));
+
+    // Baza „live” Biovitality: structura din bv.sql (schema pe care o face codul Biovitality, nu codul comun), rândurile demo ale bazei de
+    // dezvoltare copiate în coloanele comune (setările fără cheile pe care înghețarea Biovitality le scrie doar unde lipsesc: ca pe site, unde
+    // codul vechi nu le avea), apoi rândurile cu marcaj ale oracolului, cu tabelele doar ale Biovitality, plus conținutul lor.
+    $root->exec('DROP DATABASE IF EXISTS ' . $bazaSursaBv);
+    $root->exec('CREATE DATABASE ' . $bazaSursaBv . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+    $sursaBv = $conectare($sockMaria, $bazaSursaBv);
+    preg_match_all('/^CREATE TABLE `([^`]+)`.*?;$/ms', (string) file_get_contents($radacina . '/tools/dev/migrari/vechi/bv.sql'), $creariBv, PREG_SET_ORDER);
+    $sursaBv->exec('SET FOREIGN_KEY_CHECKS = 0');
+    foreach ($creariBv as [$sql]) {
+        $sursaBv->exec($sql);
+    }
+    $faraInSursa = [];
+    foreach ((array) $inghetareBv['setari'] as $cheie => $intrare) {
+        if (is_array($intrare) && ($intrare['mod'] ?? '') === 'lipsa') {
+            $faraInSursa[] = (string) $cheie;
+        }
+    }
+    $sursaBv->exec('SET FOREIGN_KEY_CHECKS = 0');
+    $copiateDinDev = 0;
+    foreach (array_keys($bv) as $tabelBv) {
+        $comune = array_values(array_intersect(array_keys($coloaneTabel($sursaBv, $tabelBv)), array_keys($coloaneTabel($conectare($sockMaria, $bazaDev), $tabelBv))));
+        if ($comune === []) {
+            continue;
+        }
+        $lista = '`' . implode('`, `', $comune) . '`';
+        $unde = $tabelBv === 'settings' ? ' WHERE `key` NOT IN (' . implode(', ', array_map([$sursaBv, 'quote'], $faraInSursa)) . ')' : '';
+        $copiateDinDev += (int) $sursaBv->exec('INSERT INTO `' . $tabelBv . '` (' . $lista . ') SELECT ' . $lista . ' FROM `' . $bazaDev . '`.`' . $tabelBv . '`' . $unde);
+    }
+    $sursaBv->exec('SET FOREIGN_KEY_CHECKS = 1');
+    $schemaSursaBv = [];
+    foreach ($sursaBv->query('SELECT TABLE_NAME AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()')->fetchAll() as $r) {
+        $schemaSursaBv[(string) $r['t']][] = (string) $r['c'];
+    }
+    $diferenteBv = [];
+    foreach ($bv + $schemaSursaBv as $tabelBv => $_) {
+        $a = array_keys($bv[$tabelBv] ?? []);
+        $b = $schemaSursaBv[$tabelBv] ?? [];
+        sort($a);
+        sort($b);
+        if ($a !== $b) {
+            $diferenteBv[] = $tabelBv;
+        }
+    }
+    $idsBv = $umple($sursaBv, $oracolFaraRanduriBv, false);
+    // Ce e doar al Biovitality: un produs-pachet, concurenții, etichetele blogului, o comandă plătită cu Stripe, setările fișierelor din cloud.
+    $produsBv = (int) $sursaBv->query('SELECT MIN(id) FROM products')->fetchColumn();
+    $sursaBv->prepare('UPDATE products SET bundle_items_json = ? WHERE id = ?')->execute(['[{"product_id":' . ($produsBv + 1) . ',"quantity":2}]', $produsBv]);
+    $partenerBv = $randNou($sursaBv, 'competition_partners', ['name' => 'Magazin Concurent Demo', 'website' => 'https://concurent.exemplu.ro', 'is_active' => 1]);
+    $randNou($sursaBv, 'competition_prices', ['partner_id' => $partenerBv, 'product_id' => $produsBv, 'price' => '49.90', 'product_url' => 'https://concurent.exemplu.ro/p/1']);
+    $etichetaBv = $randNou($sursaBv, 'blog_tags', ['name' => 'Imunitate', 'slug' => 'imunitate']);
+    $sursaBv->prepare('INSERT INTO blog_post_tags (post_id, tag_id) VALUES ((SELECT MIN(id) FROM blog_posts), ?)')->execute([$etichetaBv]);
+    $sursaBv->prepare("UPDATE orders SET payment_method = 'stripe', stripe_session_id = ?, stripe_payment_intent_id = ? WHERE id = ?")
+        ->execute(['cs_live_' . $m, 'pi_' . $m, $idsBv['orders']]);
+    $s = $sursaBv->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+    foreach (['bunny_enabled' => '1', 'bunny_storage_zone' => 'zona-' . $m, 'bunny_storage_password' => 'bp' . $m, 'bunny_api_key' => 'ba' . $m,
+        'bunny_storage_region' => 'de', 'bunny_cdn_url' => 'https://' . $m . '.b-cdn.net', 'bunny_base_folder' => 'firma-' . $m, 'bunny_cheie_noua' => 'bk' . $m,
+        'bunny_timeout' => '20'] as $cheie => $v) {
+        $s->execute([$cheie, $v]);
+    }
+    $verifica('baza „live” Biovitality: aceleași tabele și coloane ca bv.sql (codul Biovitality 779e0d8), ' . $copiateDinDev . ' rânduri demo, rândurile cu marcaj '
+        . 'în tabelele clienților și în cele fără rânduri (și ale Biovitality: jetoanele aplicației, dosarele din cloud, jurnalele fișierelor), plus conținutul '
+        . 'Biovitality', $diferenteBv === [] && $copiateDinDev > 500 && isset($idsBv['admin_app_tokens'], $idsBv['bunny_protected_folders'], $idsBv['file_locks'],
+            $idsBv['orders'], $idsBv['recenzie_aprobata']), implode(', ', $diferenteBv));
+    foreach ([[$utilizatorLive, $bazaSursaBv]] as [$u, $b]) {
+        $root->exec('GRANT ALL ON ' . $b . ".* TO '" . $u . "'@'localhost'");
+    }
+    $sumeSursaBv = $sume($sursaBv);
+    $randuriBvSursa = [];
+    foreach (['competition_partners', 'competition_prices', 'blog_tags', 'blog_post_tags', 'products', 'orders', 'users'] as $tabelBv) {
+        $randuriBvSursa[$tabelBv] = (int) $sursaBv->query('SELECT COUNT(*) FROM `' . $tabelBv . '`')->fetchColumn();
+    }
+    foreach (['src/Support', 'views', 'public/assets', 'desktop/BiovitalityFiles', '.git/refs/heads/claude', 'storage/sessions'] as $d) {
+        @mkdir($liveBv . '/' . $d, 0770, true);
+    }
+    file_put_contents($liveBv . '/.env', "APP_URL=https://biovitality.ro\nDB_HOST=localhost\nDB_DATABASE=" . $bazaSursaBv . "\nDB_USERNAME=" . $utilizatorLive
+        . "\nDB_PASSWORD=" . $parolaLive . "\nBUNNY_PAROLA=bunny" . $m . "\n");
+    chmod($liveBv . '/.env', 0600);
+    foreach (['public/index.php' => "<?php // Biovitality\n", 'src/Support/Settings.php' => "<?php // setări\n", 'views/acasa.php' => "<h1>Biovitality</h1>\n",
+        'public/assets/app.css' => "body{margin:0}\n", 'desktop/BiovitalityFiles/ApiClient.cs' => "class ApiClient {}\n", 'storage/sessions/sess_' . $m => $emailClient,
+        '.git/HEAD' => "ref: refs/heads/claude/ramura-bv\n", '.git/refs/heads/claude/ramura-bv' => str_repeat('c', 40) . "\n"] as $fisier => $continut) {
+        file_put_contents($liveBv . '/' . $fisier, $continut);
+    }
+    $instantaneuLiveBv = $instantaneu($liveBv);
+
+    // Scanerul (fail-closed) pe sursa Biovitality: o coloană nouă cu date personale într-un tabel copiat oprește totul, cu numele ei.
+    $sursaBv->exec('ALTER TABLE competition_partners ADD COLUMN contact_email VARCHAR(190) NULL');
+    $sursaBv->exec("UPDATE competition_partners SET contact_email = '" . $emailClient . "'");
+    $r = $incarca(['--din=biovitality', '--da'], $raspunsuriAdmin);
+    $sursaBv->exec('ALTER TABLE competition_partners DROP COLUMN contact_email');
+    $verifica('Biovitality: o coloană nouă cu date personale (competition_partners.contact_email) → cod 1, doar numele pe ecran, copia ștearsă singură',
+        $r['cod'] === 1 && str_contains($r['tot'], 'NU    competition_partners.contact_email (nume de date personale): coloană fără regulă')
+        && str_contains($r['tot'], 'copia a fost ștearsă singură') && $stearsa($tinta) && $curat($r), $descrie($r));
+
+    // Mutația: jurnalul fișierelor din cloud (file_locks) copiat cum e, într-o copie a regulilor: A1 îl prinde (emailul adminului) și numește
+    // coloana, copia se șterge singură; deci regula „doar structura” a tabelelor Biovitality chiar apără ceva.
+    $reguliCopieBv = $copie . '/tools/verificare/reguli/biovitality.php';
+    $dateMutBv = require $radacina . '/tools/verificare/reguli/biovitality.php';
+    $dateMutBv['tabele']['file_locks'] = ['mod' => 'copiaza', 'pastreaza' => ['id', 'storage', 'file_path', 'path_hash', 'admin_id', 'admin_email', 'note', 'origin',
+        'locked_at', 'expires_at'], 'motive' => ['admin_email' => 'mutație de test']];
+    $dateMutBv['grupuri']['admini'][] = 'file_locks';
+    file_put_contents($reguliCopieBv, "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($dateMutBv, true) . ";\n");
+    $r = $incarca(['--din=biovitality', '--da'], $raspunsuriAdmin);
+    copy($radacina . '/tools/verificare/reguli/biovitality.php', $reguliCopieBv);
+    $verifica('Biovitality, mutația: file_locks copiat cum e → A1 NU, cu file_locks.admin_email numit, cod 1, copia ștearsă singură', $r['cod'] === 1
+        && preg_match('/^  NU    A1 .*file_locks\.admin_email/m', $r['iesire']) === 1 && $stearsa($tinta) && $curat($r), $descrie($r));
+
+    // Încărcarea.
+    $r = $incarca(['--din=biovitality', '--da'], $raspunsuriAdmin);
+    $verifica('incarca.php --din=biovitality: găsește biovitality.ro după APP_URL, „GATA” ultimul rând, A1–A9 DA, licența biovitality, codul vechi copiat',
+        $r['cod'] === 0 && $ultimul($r['iesire']) === 'GATA: copia e anonimizată, toate verificările au trecut' && preg_match_all('/^  DA    A[1-9] /m', $r['iesire']) === 9
+        && str_contains($r['iesire'], 'sursa: Biovitality') && str_contains($r['iesire'], 'tools/verificare/reguli/biovitality.php')
+        && str_contains($r['iesire'], 'licența copiei: pachetul biovitality') && str_contains($r['iesire'], '--site=biovitality') && $curat($r), $descrie($r));
+    $cuMarcajBv = $cuValori($tinta, $cautateInCopie);
+    $verifica('Biovitality: pe copie niciun marcaj, telefon, jeton, adresă a clientului inventat sau valoare privată a înghețării', $cuMarcajBv === [], implode(', ', $cuMarcajBv));
+    $goaleBv = [];
+    foreach (['admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions'] as $tabelBv) {
+        if (!in_array($tabelBv, $tabele($tinta), true) || (int) $tinta->query('SELECT COUNT(*) FROM `' . $tabelBv . '`')->fetchColumn() !== 0) {
+            $goaleBv[] = $tabelBv;
+        }
+    }
+    $verifica('Biovitality: jetoanele aplicației, dosarele protejate și deschiderile lor, jurnalele fișierelor din cloud: doar structura, 0 rânduri', $goaleBv === [],
+        implode(', ', $goaleBv));
+    $altfelBv = [];
+    foreach ($randuriBvSursa as $tabelBv => $n) {
+        if ((int) $tinta->query('SELECT COUNT(*) FROM `' . $tabelBv . '`')->fetchColumn() !== $n) {
+            $altfelBv[] = $tabelBv;
+        }
+    }
+    $pachetCopie = (string) $tinta->query('SELECT bundle_items_json FROM products WHERE id = ' . $produsBv)->fetchColumn();
+    $verifica('Biovitality: concurenții și prețurile lor, etichetele blogului, produsele (cu pachetul: bundle_items_json păstrat), comenzile și clienții, cu tot atâtea '
+        . 'rânduri ca sursa', $altfelBv === [] && $pachetCopie === '[{"product_id":' . ($produsBv + 1) . ',"quantity":2}]'
+        && (string) $tinta->query('SELECT name FROM competition_partners WHERE id = ' . $partenerBv)->fetchColumn() === 'Magazin Concurent Demo', implode(', ', $altfelBv));
+    $stripeBv = $tinta->query('SELECT stripe_session_id, stripe_payment_intent_id, payment_method FROM orders WHERE id = ' . (int) $idsBv['orders'])->fetch();
+    $procesatoare = $tinta->query('SELECT DISTINCT procesator FROM order_payment_links')->fetchAll(PDO::FETCH_COLUMN);
+    $verifica('Biovitality: id-urile Stripe ale comenzii anon-<id>, metoda păstrată; linkurile de plată vechi primesc procesatorul Stripe la migrare '
+        . '(site-uri/biovitality/migrari.json)', is_array($stripeBv) && $stripeBv['stripe_session_id'] === 'anon-' . $idsBv['orders']
+        && $stripeBv['stripe_payment_intent_id'] === 'anon-' . $idsBv['orders'] && $stripeBv['payment_method'] === 'stripe' && $procesatoare === ['stripe'],
+        json_encode([$stripeBv, $procesatoare]) ?: '');
+    $setariCopieBv = $tinta->query('SELECT `key`, `value` FROM settings')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $verifica('Biovitality: fișierele din cloud oprite și fără nicio cheie (zona, parola, regiunea, CDN-ul, dosarul, cheia API, o cheie bunny_* nouă), Stripe oprit, '
+        . 'destinatarul formularului = adresa proprietarului; înghețarea Biovitality pusă de migrări (coletele 0, numerotarea veche „BV”, acordul „medical”)',
+        ($setariCopieBv['bunny_enabled'] ?? null) === '0' && ($setariCopieBv['bunny_storage_zone'] ?? null) === '' && ($setariCopieBv['bunny_storage_password'] ?? null) === ''
+        && ($setariCopieBv['bunny_storage_region'] ?? null) === '' && ($setariCopieBv['bunny_cdn_url'] ?? null) === '' && ($setariCopieBv['bunny_base_folder'] ?? null) === ''
+        && ($setariCopieBv['bunny_api_key'] ?? null) === '' && ($setariCopieBv['bunny_cheie_noua'] ?? null) === '' && ($setariCopieBv['bunny_timeout'] ?? null) === '20'
+        && ($setariCopieBv['stripe_enabled'] ?? null) === '0' && ($setariCopieBv['contact_form_recipients'] ?? null) === $emailProprietar
+        && ($setariCopieBv['fan_kg_max_colet'] ?? null) === '0' && ($setariCopieBv['order_number_mode'] ?? null) === 'legacy'
+        && ($setariCopieBv['order_number_legacy_prefix'] ?? null) === 'BV' && ($setariCopieBv['gdpr_formular_varianta'] ?? null) === 'medical'
+        && ($setariCopieBv['gdpr_operator_reprezentant'] ?? null) === '' && ($setariCopieBv['gdpr_operator_email'] ?? null) === $emailProprietar,
+        json_encode(array_intersect_key($setariCopieBv, array_flip(['bunny_enabled', 'bunny_storage_zone', 'stripe_enabled', 'fan_kg_max_colet', 'order_number_mode']))) ?: '');
+    $marcajBv = $marcaj($tinta);
+    clearstatcache();
+    $verifica('Biovitality: _verificare (sursa biovitality, anonimizat = 1), codul vechi în cod-vechi/biovitality/ (fără .env-ul site-ului, fără sesiuni)',
+        is_array($marcajBv) && (string) $marcajBv['sursa'] === 'biovitality' && (int) $marcajBv['anonimizat'] === 1 && is_file($codVechi . '/biovitality/public/index.php')
+        && !file_exists($codVechi . '/biovitality/storage/sessions/sess_' . $m) && !str_contains((string) @file_get_contents($codVechi . '/biovitality/.env'), 'bunny' . $m));
+    // O singură sursă odată: cu copia Biovitality pe site, nicio încărcare Bioscem până la sterge.php.
+    $r = $incarca(['--din=bioscem', '--da'], $raspunsuriAdmin);
+    $r2 = $incarca(['--din=bioscem', '--reincarca', '--da'], $raspunsuriAdmin);
+    $verifica('o singură sursă odată: cu copia Biovitality pe site, --din=bioscem și --din=bioscem --reincarca sunt refuzate (cod 2), copia neatinsă',
+        $r['cod'] === 2 && str_contains($r['tot'], 'pe copie e deja o încărcare (sursa biovitality') && $r2['cod'] === 2
+        && str_contains($r2['tot'], 'pe copie e altă sursă (biovitality)') && (int) ($marcaj($tinta)['anonimizat'] ?? 0) === 1, $descrie($r) . ' / ' . $descrie($r2));
+    $verifica('Biovitality: sursa neschimbată (CHECKSUM TABLE) și dosarul live neschimbat', $sume($sursaBv) === $sumeSursaBv && $instantaneu($liveBv) === $instantaneuLiveBv,
+        implode(', ', array_keys(array_diff_assoc($sume($sursaBv), $sumeSursaBv))));
+    $s = $sterge();
+    $verifica('sterge.php pe copia Biovitality: „GATA”, copia ștearsă (și codul vechi)', $s['cod'] === 0 && $stearsa($tinta), $descrie($s));
+    exec('rm -rf ' . escapeshellarg($copie . '/site-uri/biovitality/privat'));
+
+    // =================================================================
+    $scrie('');
     $scrie('B9. Pe MySQL 8');
-    if (!$merge($sockMy8)) {
+    if (!$doarMariaDb && !$merge($sockMy8)) {
         exec(escapeshellarg($radacina . '/tools/dev/mysql8.sh') . ' porneste 2>&1', $iesireMy8, $codMy8);
         $mysql8Pornit = $codMy8 === 0 && $merge($sockMy8);
     }
-    if (!$merge($sockMy8)) {
+    if ($doarMariaDb) {
+        $scrie('  SĂRIT  doar MariaDB (--doar-mariadb; decizia A1 a proprietarului): încărcarea pe MySQL 8 nu s-a verificat în această rulare');
+    } elseif (!$merge($sockMy8)) {
         $verifica('MySQL 8 merge (tools/dev/mysql8.sh porneste)', false, implode("\n", $iesireMy8 ?? []));
     } else {
         $rootMy8 = $conectare($sockMy8);

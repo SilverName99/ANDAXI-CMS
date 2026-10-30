@@ -10,12 +10,13 @@ declare(strict_types=1);
  * din dosarul site-ului de verificare, după încărcare (pasul 6):
  *
  *   $PHP tools/verificare/compara-calcule.php                                  # profilul bioscem, ultimele 500 de comenzi
+ *   $PHP tools/verificare/compara-calcule.php --profil=biovitality             # copia Biovitality (WP-11b; coșurile cu pachete excluse)
  *   $PHP tools/verificare/compara-calcule.php --n=2000                         # mai multe comenzi
  *   $PHP tools/verificare/compara-calcule.php --php-vechi=/opt/alt/php81/usr/bin/php   # codul vechi pe PHP-ul lui live
  *   $PHP tools/verificare/compara-calcule.php --fara-cupoane-valide            # cupoanele rămân cum sunt pe copie
  *   tools/dev/php.sh tools/verificare/compara-calcule.php --local --cod-vechi=<dosar>  # doar local (tools/dev/compara-calcule-local.sh)
  *
- * Alte opțiuni: --profil=bioscem (singurul azi; Biovitality vine în WP-11b), --prin-fisiere (lucrătorii primesc și dau
+ * Alte opțiuni: --profil=bioscem|biovitality (site-ul copiat; implicit bioscem), --prin-fisiere (lucrătorii primesc și dau
  * datele prin fișiere 0600 din storage/verificare/tmp, șterse la final, ca atunci când găzduirea oprește proc_open),
  * --cod-nou=<dosar> și --declarate=<fișier.json> (diferențele voite ale codului comun, pe comenzile demo; doar cu --local).
  *

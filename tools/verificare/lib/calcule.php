@@ -28,6 +28,8 @@ declare(strict_types=1);
  *
  * Cazurile (o singură interogare, pe baza copiei): ultimele `--n` comenzi (implicit 500; `deleted_at IS NULL`, fără cele
  * `failed`), plus fiecare comandă din ultimele 12 luni cu cupon, puncte, o linie cu ofertă BBD sau FANbox (cel mult 300).
+ * Profilul (`--profil=bioscem`, implicit, sau `--profil=biovitality`, WP-11b) e site-ul copiat; la Biovitality comenzile cu un
+ * produs-pachet (`products.bundle_items_json`) se scot dintre cazuri și se numără, „excluse: pachete N” (PROFILURI_CU_PACHETE).
  * Lucrătorilor ajung doar câmpurile de care are nevoie coșul (produsele, cantitățile, cheile BBD, cuponul, clientul,
  * punctele, județul și localitatea de facturare, FANbox) și cele ale comenzii salvate pentru recalculul din admin.
  *
@@ -72,8 +74,40 @@ require_once __DIR__ . '/php-cli.php';
 
 final class ComparaCalcule
 {
-    /** Profilurile cu reguli de calcul (Biovitality în WP-11b: Stripe, numerotarea BV, transportul gratuit, pachetele excluse). */
-    public const PROFILURI = ['bioscem'];
+    /**
+     * Profilurile (site-ul copiat; WP-11b: Biovitality). Profilul alege copia (`_verificare.sursa`, `cod-vechi/<profil>/`), pluginurile
+     * care trebuie pornite pe codul comun (`licente_dev.<profil>`) și pașii migrărilor (`--site=<profil>`); ce e altfel la Biovitality
+     * (Stripe ca plată cu cardul, numerele „BV…”, transportul gratuit pe produs, codurile de cupon compacte, coletele neîmpărțite,
+     * `fan_kg_max_colet` = 0 din înghețare) vine din baza copiei și din codul fiecăruia, deci se compară ca orice alt caz.
+     */
+    public const PROFILURI = ['bioscem', 'biovitality'];
+
+    /**
+     * Profilurile ale căror coșuri cu un produs-pachet (`products.bundle_items_json` nevid) nu se compară, doar se numără
+     * („excluse: pachete N”): pluginul `pachete_produse` se portează abia în Etapa 4, deci acolo ar diferi prin construcție; ele se
+     * compară în repetiția din Etapa 4 (planul Etapei 1, WP-11b).
+     */
+    public const PROFILURI_CU_PACHETE = ['biovitality'];
+
+    /**
+     * Diferențele voite ale codului comun față de codul vechi al unui profil, pe clase (nu pe comandă, deci aceleași local și pe
+     * server), fiecare îngustă, numărată și spusă pe ecran; tot restul se compară ca la orice profil:
+     * - `chei_erp_noi`: chei ale payload-ului ERP pe care codul comun le trimite, iar codul vechi deloc (cheia lipsește din
+     *   payload-ul lui): nu se compară doar așa, lipsă în cel vechi și prezentă în cel nou; o cheie pe care o au amândouă se compară;
+     * - `fara_epuizate`: produsele marcate epuizate (`out_of_stock = 1`) se scot din coșul cazului, în ambele coduri: codul vechi nu le
+     *   pune în sumar (`fetchProducts` cu `out_of_stock = 0`), codul comun le păstrează (Bioscem: stocul adevărat îl dă ERP-ul, iar
+     *   finalizarea oprește comanda), deci aceeași comandă veche, recalculată cu fișa de acum a produsului, ar diferi prin construcție.
+     * Fiecare e o schimbare a clientului, scrisă în site-uri/<profil>/ce-se-schimba.md.
+     */
+    public const DECLARATE_PROFIL = [
+        'biovitality' => [
+            'chei_erp_noi' => [
+                // Adresa de facturare (sediul firmei) separată de cea de livrare, pe factură; nota internă a comenzii (codul Bioscem).
+                'facturareAdresa', 'facturareOras', 'facturareJudet', 'facturareCodPostal', 'observatiiInterne',
+            ],
+            'fara_epuizate' => true,
+        ],
+    ];
 
     /** Diferența peste care două sume rotunjite la 2 zecimale sunt altele. */
     public const TOLERANTA = 0.005;
@@ -122,6 +156,10 @@ final class ComparaCalcule
     private ?array $declarate = null;
     /** @var array<string, list<string>> argumentele `-d extension=…` ale fiecărui PHP copil, după sonda lui (o dată pe PHP) */
     private array $extensiiCopil = [];
+    /** Câte comenzi cu un produs-pachet s-au scos dintre cazuri (PROFILURI_CU_PACHETE); null = profilul nu le scoate. */
+    private ?int $pachete = null;
+    /** Liniile cu produse epuizate scoase din coșuri și în câte cazuri (DECLARATE_PROFIL, fara_epuizate); null = profilul nu le scoate. */
+    private ?array $epuizate = null;
 
     private function __construct(string $radacina)
     {
@@ -172,7 +210,7 @@ final class ComparaCalcule
         $this->profil = is_string($opt['profil'] ?? null) ? (string) $opt['profil'] : 'bioscem';
         if (!in_array($this->profil, self::PROFILURI, true)) {
             throw new Refuz('profil necunoscut' . (preg_match('/^[a-z]{1,20}$/', $this->profil) === 1 ? ' (' . $this->profil . ')' : '')
-                . '; azi doar --profil=bioscem (Biovitality vine în WP-11b)');
+                . '; profilurile: --profil=' . implode(', --profil=', self::PROFILURI) . ' (vertij și grafoanaytis vin la porturile lor)');
         }
         $n = isset($opt['n']) ? (string) $opt['n'] : '500';
         if (preg_match('/^[1-9][0-9]{0,4}$/', $n) !== 1 || (int) $n > 20000) {
@@ -220,6 +258,13 @@ final class ComparaCalcule
 
         // ── Cazurile ──
         $cazuri = $this->cazuri((int) $n);
+        if ($this->pachete !== null) {
+            $this->spune('  excluse: pachete ' . $this->pachete . ' (coșuri cu un produs-pachet, numărate, necomparate: pachete_produse vine în Etapa 4)');
+        }
+        if ($this->epuizate !== null) {
+            $this->spune('  produse epuizate scoase din coș, în ambele coduri: ' . $this->epuizate['linii'] . ' linii în ' . $this->epuizate['cazuri']
+                . ' cazuri (codul vechi nu le pune în sumar, codul comun le păstrează: diferență declarată pe profil)');
+        }
         if ($cazuri === []) {
             throw new Refuz('nicio comandă de comparat (baza n-are comenzi care să nu fie șterse sau eșuate)');
         }
@@ -301,7 +346,7 @@ final class ComparaCalcule
             throw new Refuz('--local doar pe serverul de baze de date al calculatorului (DB_HOST localhost)');
         }
         if (!isset($opt['cod-vechi']) || !is_string($opt['cod-vechi'])) {
-            throw new Refuz('--local cere --cod-vechi=<dosar> (copia commit-ului revizuit al Bioscem; o face tools/dev/compara-calcule-local.sh)');
+            throw new Refuz('--local cere --cod-vechi=<dosar> (copia commit-ului revizuit al site-ului profilului; o face tools/dev/compara-calcule-local.sh)');
         }
         $this->codVechi = self::dosarCod((string) $opt['cod-vechi'], 'codul vechi');
         if (isset($opt['cod-nou'])) {
@@ -499,6 +544,27 @@ final class ComparaCalcule
              ORDER BY o.id DESC LIMIT " . self::SPECIALE_MAXIM)->fetchAll(PDO::FETCH_COLUMN));
         $toate = array_values(array_unique(array_merge($ids, $speciale)));
         sort($toate);
+        $this->pachete = null;
+        if (in_array($this->profil, self::PROFILURI_CU_PACHETE, true)) {
+            // Coșurile cu un produs-pachet: doar numărate, nu comparate (PROFILURI_CU_PACHETE).
+            $coloana = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products'
+                AND COLUMN_NAME = 'bundle_items_json'")->fetchColumn();
+            if ($coloana !== 1) {
+                throw new Refuz('baza n-are products.bundle_items_json: nu e o copie ' . $this->profil . ' (incarca.php --din=' . $this->profil . ')');
+            }
+            $cuPachet = [];
+            foreach (array_chunk($toate, 500) as $bucata) {
+                $st = $db->prepare("SELECT DISTINCT oi.order_id FROM order_items oi INNER JOIN products p ON p.id = oi.product_id
+                    WHERE oi.order_id IN (" . implode(',', array_fill(0, count($bucata), '?')) . ") AND p.bundle_items_json IS NOT NULL
+                    AND TRIM(p.bundle_items_json) NOT IN ('', '[]', '{}', 'null')");
+                $st->execute($bucata);
+                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                    $cuPachet[(int) $id] = true;
+                }
+            }
+            $this->pachete = count($cuPachet);
+            $toate = array_values(array_filter($toate, static fn (int $id): bool => !isset($cuPachet[$id])));
+        }
         $cazuri = [];
         $linii = [];
         foreach (array_chunk($toate, 500) as $bucata) {
@@ -528,6 +594,33 @@ final class ComparaCalcule
             $st->execute($bucata);
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $c) {
                 $tipuriCupon[strtoupper((string) $c['code'])] = (string) $c['type'];
+            }
+        }
+        $this->epuizate = null;
+        if ((self::DECLARATE_PROFIL[$this->profil]['fara_epuizate'] ?? false) === true) {
+            // Produsele marcate epuizate acum: scoase din coșul cazului, în ambele coduri (DECLARATE_PROFIL).
+            $produseCazuri = [];
+            foreach ($linii as $liniiComanda) {
+                foreach ($liniiComanda as $l) {
+                    $produseCazuri[$l[0]] = true;
+                }
+            }
+            $epuizate = [];
+            foreach (array_chunk(array_keys($produseCazuri), 500) as $bucata) {
+                $st = $db->prepare('SELECT id FROM products WHERE out_of_stock = 1 AND id IN (' . implode(',', array_fill(0, count($bucata), '?')) . ')');
+                $st->execute($bucata);
+                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $idProdus) {
+                    $epuizate[(int) $idProdus] = true;
+                }
+            }
+            $this->epuizate = ['linii' => 0, 'cazuri' => 0];
+            foreach ($linii as $idComanda => $liniiComanda) {
+                $ramase = array_values(array_filter($liniiComanda, static fn (array $l): bool => !isset($epuizate[$l[0]])));
+                if (count($ramase) !== count($liniiComanda)) {
+                    $this->epuizate['linii'] += count($liniiComanda) - count($ramase);
+                    $this->epuizate['cazuri']++;
+                    $linii[$idComanda] = $ramase;
+                }
             }
         }
         $rezultat = [];
@@ -982,6 +1075,8 @@ final class ComparaCalcule
         $peCamp = [];
         $peTipCaz = [];
         $cheiErp = [];
+        /** @var array<string, int> $cheiNoi cheile ERP noi ale codului comun, declarate pe profil (necomparate), pe caz */
+        $cheiNoi = [];
         $erpIdentice = 0;
         $adminIdentice = 0;
         $puncteIdentice = 0;
@@ -1027,7 +1122,7 @@ final class ComparaCalcule
                 }
             }
             $cheiCaz = [];
-            $campuri = self::diferente($a, $b, $cheiCaz);
+            $campuri = self::diferente($a, $b, $cheiCaz, (array) (self::DECLARATE_PROFIL[$this->profil]['chei_erp_noi'] ?? []), $cheiNoi);
             if ($kDeclarat !== null) {
                 $exacte = self::campuriExacte($campuri, $cheiCaz);
                 $declarat = (array) $this->declarate[$kDeclarat]['campuri'];
@@ -1071,6 +1166,9 @@ final class ComparaCalcule
         $nrEroriVechi = array_sum($eroriVechi);
         $nrEroriNou = array_sum($eroriNou);
         $this->spune('cazuri ' . $total . ' | identice ' . $identice . ' | diferite ' . $diferite . ' | erori vechi ' . $nrEroriVechi . ' | erori nou ' . $nrEroriNou);
+        if ($this->pachete !== null) {
+            $this->spune('excluse: pachete ' . $this->pachete . ' (necomparate; în repetiția din Etapa 4, cu pachete_produse portat)');
+        }
         ksort($peTip);
         $this->spune('cazuri pe tip: ' . self::lista($peTip));
         $this->spune('cupoane aplicate fără eroare: vechi ' . $cupoaneOk['vechi'] . ', nou ' . $cupoaneOk['nou'] . ' | puncte folosite: vechi '
@@ -1081,6 +1179,10 @@ final class ComparaCalcule
         $this->spune('diferențe pe tip de caz: ' . self::lista($peTipCaz));
         arsort($cheiErp);
         $this->spune('payload ERP: identice ' . $erpIdentice . ' | chei diferite: ' . self::lista($cheiErp));
+        if (isset(self::DECLARATE_PROFIL[$this->profil]['chei_erp_noi'])) {
+            ksort($cheiNoi);
+            $this->spune('payload ERP: chei noi ale codului comun (lipsă în codul vechi; declarate pe profil, necomparate): ' . self::lista($cheiNoi));
+        }
         $this->spune('transportul din admin: identice ' . $adminIdentice . ' | punctele promise: identice ' . $puncteIdentice);
         if ($nrEroriVechi + $nrEroriNou > 0) {
             $this->spune('erori: vechi ' . self::lista($eroriVechi, true) . ' | nou ' . self::lista($eroriNou, true));
@@ -1116,9 +1218,12 @@ final class ComparaCalcule
      * @param array<string, mixed> $a
      * @param array<string, mixed> $b
      * @param array<string, int> $cheiErp
+     * @param list<string> $cheiNoiDeclarate cheile ERP pe care codul comun le trimite în plus (DECLARATE_PROFIL): necomparate doar dacă
+     *        lipsesc din payload-ul vechi și sunt în cel nou; numărate în $cheiNoi
+     * @param array<string, int> $cheiNoi
      * @return list<string>
      */
-    public static function diferente(array $a, array $b, array &$cheiErp): array
+    public static function diferente(array $a, array $b, array &$cheiErp, array $cheiNoiDeclarate = [], ?array &$cheiNoi = null): array
     {
         $dif = [];
         $ra = (array) ($a['rezumat'] ?? []);
@@ -1159,17 +1264,35 @@ final class ComparaCalcule
         $ea = $a['erp'] ?? null;
         $eb = $b['erp'] ?? null;
         if (!is_array($ea) || !is_array($eb) || (string) ($ea['sha1'] ?? 'a') !== (string) ($eb['sha1'] ?? 'b')) {
-            $dif[] = 'erp';
             $ca = is_array($ea) ? (array) ($ea['chei'] ?? []) : [];
             $cb = is_array($eb) ? (array) ($eb['chei'] ?? []) : [];
+            $diferaChei = [];
+            $absorbite = 0;
             foreach (array_unique(array_merge(array_keys($ca), array_keys($cb))) as $cheie) {
-                if (($ca[$cheie] ?? null) !== ($cb[$cheie] ?? null)) {
-                    $nume = preg_match('/^[A-Za-z0-9_]{1,60}$/', (string) $cheie) === 1 ? (string) $cheie : '?';
+                if (($ca[$cheie] ?? null) === ($cb[$cheie] ?? null)) {
+                    continue;
+                }
+                $nume = preg_match('/^[A-Za-z0-9_]{1,60}$/', (string) $cheie) === 1 ? (string) $cheie : '?';
+                if (is_array($ea) && is_array($eb) && in_array($nume, $cheiNoiDeclarate, true) && !array_key_exists($cheie, $ca) && array_key_exists($cheie, $cb)) {
+                    // O cheie nouă a codului comun, declarată pe profil: lipsește din payload-ul vechi, deci nu e o valoare altfel.
+                    $cheiNoi[$nume] = ($cheiNoi[$nume] ?? 0) + 1;
+                    $absorbite++;
+                    continue;
+                }
+                $diferaChei[$nume] = true;
+            }
+            if ($diferaChei === [] && $absorbite === 0) {
+                // Amprenta întregului payload diferă, dar nicio cheie: altă structură (de exemplu altă ordine a listelor).
+                $diferaChei['(structura)'] = true;
+            }
+            if (!is_array($ea) || !is_array($eb) || $diferaChei !== []) {
+                $dif[] = 'erp';
+                foreach (array_keys($diferaChei) as $nume) {
                     $cheiErp[$nume] = ($cheiErp[$nume] ?? 0) + 1;
                 }
-            }
-            if (!is_array($ea) || !is_array($eb)) {
-                $cheiErp['(lipsă)'] = ($cheiErp['(lipsă)'] ?? 0) + 1;
+                if (!is_array($ea) || !is_array($eb)) {
+                    $cheiErp['(lipsă)'] = ($cheiErp['(lipsă)'] ?? 0) + 1;
+                }
             }
         }
         return $dif;

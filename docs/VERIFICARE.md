@@ -15,6 +15,11 @@ date personale, pentru repetițiile personalului. Până la prima încărcare si
 Tot de aici, din WP-10, rulează **verificările pe site-urile live** (pasul 5): citesc baza celor patru
 site-uri doar în citire și scriu numai numere, DA/NU și nume de structură.
 
+Din WP-11b, aceleași pentru **Biovitality** (pasul 6b): încărcarea anonimizată a bazei biovitality.ro
+(`incarca.php --din=biovitality`, regulile Bioscem plus ale Biovitality), comparația calculelor cu profilul Biovitality
+(`compara-calcule.php --profil=biovitality`, coșurile cu pachete excluse și numărate) și amprenta biovitality.ro. O singură
+sursă odată: copia Bioscem se șterge înainte (`sterge.php`).
+
 Din WP-11, după încărcare (pasul 6, e și f): **comparația calculelor** (golden master-ul: codul vechi al site-ului,
 copiat de încărcare, și codul comun calculează pe aceeași copie, pentru aceleași comenzi, coșul, transportul, punctele și
 ce pleacă în ERP; pe ecran doar numere) și **amprenta paginilor** (ce vede un vizitator pe fiecare adresă publică, pe
@@ -31,6 +36,7 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 | `tools/verificare/sterge.php` | Șterge copia (baza, emailurile ca fișiere, cache-ul, sesiunile, codul vechi), după fiecare sesiune |
 | `tools/verificare/incarca.php` (+ `lib/incarcare.php`) | Încarcă copia: `--din=bioscem` (anonimizată în drum) sau `--demo` (date inventate), noaptea, prin SSH (WP-09, mai jos) |
 | `tools/verificare/reguli/bioscem.php` | Regulile anonimizării Bioscem: pentru fiecare tabel și fiecare coloană, păstrată, schimbată (cum) sau doar structura |
+| `tools/verificare/reguli/biovitality.php` | Regulile anonimizării Biovitality (WP-11b): cele Bioscem plus tabelele și coloanele codului Biovitality (jetoanele aplicației Windows, dosarele și jurnalele fișierelor din cloud doar ca structură; concurența, etichetele blogului, pachetele copiate) și cheile fișierelor din cloud (`bunny_*`) golite |
 | `tools/verificare/lib/licenta-copie.php`, `lib/intrebari.php` | Licența copiei (folosită de `licenta.php` și de încărcare) și întrebările din terminal (de `configureaza.php` și de încărcare) |
 | `tools/verificare/lib/cont.php` | Contul SSH e comun cu site-urile live: o bază scrisă în `.env`-ul altui site e refuzată de toate uneltele de mai sus |
 | `tools/verificare/lib/php-cli.php` | PHP-ul liniei de comandă și extensiile lui: o extensie cu modulul pe disc, dar neîncărcată (sodium în `/opt/alt/php83` pe Hostinger), primește reparația exactă (`PHP="… -d extension=sodium.so"`); „Pasul următor” în forma cu `$PHP`; procesele copil primesc aceleași `-d` (mai jos) |
@@ -39,10 +45,10 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 | `tools/sonda/amprenta-schema.php` (+ `lib/`) | Sonda schemei unui site live (WP-10, MIG-08) |
 | `tools/verificare/compara-calcule.php` (+ `lucrator-calcule.php`, `lib/calcule.php`) | Comparația calculelor (golden master, WP-11): codul vechi din `cod-vechi/` și codul comun, pe copie, pentru aceleași comenzi; doar numere (mai jos) |
 | `tools/verificare/amprenta-site.php` (+ `lib/amprenta.php`, `tools/dev/lib/normalizeaza-html.php`) | Amprenta paginilor unui site, live sau de verificare (WP-11): pentru fiecare adresă publică codul, unde trimite, titlul, robots, canonical, H1, JSON-LD…; două amprente se compară (mai jos) |
-| `tools/dev/test-calcule.php`, `tools/dev/test-amprenta-site.php` (prin `tools/dev/compara-calcule-local.sh`) | Testele lor (poarta G-calc): local, față de codul Bioscem însuși, și pe un site de verificare simulat |
+| `tools/dev/test-calcule.php`, `tools/dev/test-amprenta-site.php`, `tools/dev/test-calcule-bv.php` (prin `tools/dev/compara-calcule-local.sh`) | Testele lor (poarta G-calc): local, față de codul Bioscem însuși și (WP-11b) față de codul Biovitality, și pe un site de verificare simulat |
 | `tools/dev/test-verificare.php` (+ `lib/gaura-neagra.php`, `lib/cdn-simulat.php`, `lib/php-fara-extensii.php`) | Testele (poarta G-verif), pe o găzduire simulată local, cu o plasă de siguranță care numără orice cerere spre afară, un CDN Hostinger simulat și un PHP care nu încarcă singur o extensie |
 | `tools/dev/test-sonde.php` | Testele verificărilor pe site-urile live (poarta G-sonde), tot pe o găzduire simulată |
-| `tools/dev/test-incarcare.php` | Testele încărcării copiei (tot poarta G-verif), pe o găzduire simulată cu un Bioscem „live” inventat, pe MariaDB și MySQL 8 |
+| `tools/dev/test-incarcare.php` | Testele încărcării copiei (tot poarta G-verif), pe o găzduire simulată cu un Bioscem „live” inventat și (WP-11b) un Biovitality „live” făcut ca baza codului Biovitality, pe MariaDB (și MySQL 8, fără `--doar-mariadb`) |
 
 ## Pașii proprietarului (copiat și lipit)
 
@@ -337,6 +343,77 @@ fiecare pachet (din WP-16 și pentru Bioscem: destinatarii formularului de conta
 acordul GDPR) trebuie pe server, lângă pachet, valorile private ale înghețării setărilor
 (`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi; nu e în git): fără el încărcarea refuză
 de la început (codul 2, „… codul 15 …”), înainte de orice schimbare.
+
+### 6b. Biovitality: încărcarea, comparația calculelor și amprenta (noaptea, după ce îți scriem că e pe GitHub; WP-11b)
+
+Ca la pasul 6, pentru biovitality.ro (decizia OD-46: baza Biovitality se citește noaptea, doar în citire, anonimizată în
+drum, ștearsă după). **O singură sursă odată**: dacă pe copie e încărcat Bioscem (sau copia demonstrativă), întâi se
+șterge; încărcarea Biovitality refuză altfel, fără să atingă nimic. Înainte, pune lângă pachet valorile private ale
+înghețării Biovitality, `site-uri/biovitality/privat/setari-inghetate.json` (ți-l trimitem noi; nu e în git): fără el
+încărcarea refuză de la început (codul 2, „… codul 15 …”).
+
+```sh
+ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
+cd ~/domains/<domeniul-verificare>/public_html
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
+git pull --ff-only                                       # codul nou (sau hPanel → GIT → Deploy)
+mkdir -p site-uri/biovitality/privat && chmod 700 site-uri/biovitality/privat
+#   pui în el fișierul primit, setari-inghetate.json (din calculatorul tău: scp -P 65002 setari-inghetate.json
+#   uXXXXXXXXX@<IP>:domains/<domeniul-verificare>/public_html/site-uri/biovitality/privat/), apoi:
+chmod 600 site-uri/biovitality/privat/setari-inghetate.json
+
+# a) doar dacă pe copie e altă încărcare (Bioscem sau demonstrativa): o ștergi
+$PHP tools/verificare/sterge.php
+#   arată ce șterge și întreabă; scrii „da”; ultimul rând: „GATA: copia a fost ștearsă”
+
+# b) site-ul e pregătit?
+$PHP tools/verificare/stare.php
+#   ultimul rând: „GATA: site-ul de verificare e pregătit (toate verificările DA)”
+
+# c) încărcarea Biovitality
+$PHP tools/verificare/incarca.php --din=biovitality
+#   găsește singur dosarul biovitality.ro (după APP_URL din .env-ul lui) și îl scrie în primele rânduri; întrebările ca la
+#   pasul 6 („da”, emailul și parola contului tău de admin pe copie, de două ori)
+#   ultimul rând trebuie să fie: „GATA: copia e anonimizată, toate verificările au trecut”
+#   (A1–A9 DA; „licența copiei: pachetul biovitality”; migrările cu --site=biovitality)
+
+# d) din nou
+$PHP tools/verificare/stare.php
+#   ultimul rând „GATA: …”, cu „DA    copia e încheiată și anonimizată”
+
+# e) comparația calculelor: codul vechi Biovitality (copiat la c, în cod-vechi/biovitality/) față de codul comun
+$PHP tools/verificare/compara-calcule.php --profil=biovitality
+#   pe ecran doar numere și nume de câmpuri; rânduri de citit:
+#   „excluse: pachete N” (coșurile cu un produs-pachet: numărate, necomparate, până la Etapa 4),
+#   „produse epuizate scoase din coș, în ambele coduri: …” și „payload ERP: chei noi ale codului comun …” (diferențele
+#   declarate pe profil, mai jos);
+#   ultimul rând trebuie să fie: „REZULTAT: TRECE” (cu „diferite 0”); textul e salvat în
+#   storage/verificare/sonde/calcule-biovitality-<data>.txt
+```
+
+**Amprenta paginilor** (f), tot noaptea, după (e), ca la pasul 6: biovitality.ro (codul vechi) și copia (codul comun):
+
+```sh
+# f) amprenta paginilor
+$PHP tools/verificare/amprenta-site.php --baza=https://biovitality.ro --iesire=storage/verificare/sonde/amprenta-biovitality.tsv
+read -rs VERIFICARE_POARTA_PAROLA        # scrii parola porții (nu se vede), apoi Enter
+export VERIFICARE_POARTA_PAROLA
+$PHP tools/verificare/amprenta-site.php --baza=https://<domeniul-verificare> --poarta=verificare --gazda-sursa=biovitality.ro --iesire=storage/verificare/sonde/amprenta-copie-bv.tsv
+unset VERIFICARE_POARTA_PAROLA
+$PHP tools/verificare/amprenta-site.php --compara storage/verificare/sonde/amprenta-biovitality.tsv storage/verificare/sonde/amprenta-copie-bv.tsv
+#   ultimul rând: „REZULTAT: DIFERĂ”, cu adresele și câmpurile (așteptat: Biovitality primește la adoptare livrările SEO,
+#   harta site-ului, fluxul Google Merchant, adresele /categorie/… și celelalte schimbări din ce-se-schimba.md); lista o
+#   trecem în ce-se-schimba.md, deci ne-o trimiți întreagă
+
+# g) la final, ștergerea copiei (pasul 8)
+$PHP tools/verificare/sterge.php
+```
+
+**Ne trimiți tot textul** (c, e, f), ca la pasul 6 (`incarcare-biovitality-<data>.txt`, `calcule-biovitality-<data>.txt`,
+cele două amprente), apoi ștergi fișierele și `site-uri/biovitality/privat/` de pe server (`rm -r
+site-uri/biovitality/privat`), dacă nu urmează imediat altă încărcare Biovitality. Dacă se oprește, aceleași rânduri ca la
+pasul 6 („Dacă se oprește”), cu `--din=biovitality`. Dacă (c) se oprește cu „NU … coloană fără regulă”, Biovitality are o
+coloană nouă: ne trimiți textul (doar numele ei), iar după ce scriem regula rulezi din nou.
 
 ### 7. Licența copiei (pachetul de pluginuri)
 
@@ -661,7 +738,7 @@ refuzurile sunt ale celorlalte unelte (`Locul::verificare`: dosarul `~/domains/<
 „verificare…” și cheia publică a perechii din `storage/licenta/`. Baza copiei nu e niciodată baza sursei sau a altui
 site din cont (verificat înainte de conexiune) și e goală sau are `_verificare`.
 
-**`--din=<site>`** (azi doar `bioscem`: `tools/verificare/reguli/<site>.php`), în ordine:
+**`--din=<site>`** (`bioscem` și, din WP-11b, `biovitality`: `tools/verificare/reguli/<site>.php`), în ordine:
 
 1. **Sursa**: `SiteLive::gaseste` (ca `agregate.php`; `--dosar=` pentru alt dosar). Din `.env`-ul ei se iau doar
    `APP_URL` și `DB_*` (și, decizia D3, cele trei chei `BT_IPAY_TEST_*`, copiate în `.env`-ul copiei doar dacă acolo
@@ -739,6 +816,23 @@ referințele plăților `anon-<id>`; jetoanele 64 hex noi; codurile unice de cup
 id-urile rămân. Fiecare regulă e în capul `tools/verificare/reguli/bioscem.php`; `versiune` crește la orice schimbare
 (o încărcare începută cu altă versiune nu se continuă).
 
+**Biovitality** (WP-11b, `tools/verificare/reguli/biovitality.php`): regulile Bioscem (fișierul îl include, deci o regulă
+Bioscem schimbată se aplică și aici; `versiune` = cea Bioscem × 100 + a Biovitality, deci orice schimbare oprește un `--reia`),
+plus ce are în plus codul Biovitality la `779e0d8` (`tools/dev/migrari/vechi/bv.sql`): **doar structura** pentru
+`admin_app_tokens` (jetoanele aplicației Windows), `bunny_protected_folders` (parolele dosarelor din cloud), `bunny_folder_unlocks`,
+`file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota, căile documentelor); **copiate** cum
+sunt concurenții și prețurile lor (`competition_partners`, `competition_prices`), etichetele blogului (`blog_tags`,
+`blog_post_tags`), `products.bundle_items_json`, `blog_posts.references_html` și `featured_image_width`; id-urile Stripe ale
+comenzilor `anon-<id>`, procesatorul linkurilor de plată păstrat (vechile linkuri primesc la migrare procesatorul Stripe din
+`site-uri/biovitality/migrari.json`), clienții importați din WordPress cu parola înlocuită, ca toate parolele. Setările: în plus
+**fișierele din cloud oprite** (`bunny_enabled` = 0) și fără nicio cheie de acces: zona, parola ei, regiunea, adresa CDN,
+dosarul de bază, cheia API și orice cheie `bunny_*` nouă (tiparul golește toate cheile `bunny_*` în afara celor de configurare
+știute: `timeout`, `upload_target`, dosarele, `lock_expire_hours`, `versions_keep`, `app_download_path`), ca o copie să nu
+atingă niciodată fișierele adevărate. Licența copiei: `licente_dev.biovitality`; migrările cu `--site=biovitality` (înghețarea
+Biovitality, provizorie: pe copie merge cu `--permite-provizoriu`, pe care încărcarea îl dă). O singură sursă odată: pe o copie
+cu altă sursă, `--din=biovitality` (și `--reincarca`) refuză până la `sterge.php`. Copia demonstrativă `--demo
+--pachet=biovitality` neutralizează setările după aceleași reguli.
+
 **`--demo [--pachet=<site>] [--licenta=<pachet>]`** (G-M9, OD-39): nicio bază sursă nu se deschide. Pe baza goală (doar
 `_verificare`, sursa `demo`; `Runner::paznic` și `Amprenta::ignorat` nu-l numără) rulează migrările cu pașii
 pachetului, seed-ul neutru, setările implicite, `database/seed.sql` și `tools/dev/date-demo.php` (care pe un site îi
@@ -771,14 +865,31 @@ totalul salvat e doar informativă).
   dat cu `--cod-vechi`, codul comun cel de aici sau `--cod-nou`, pentru mutațiile testului). **Niciodată pe o bază live,
   oricum ar fi pornit:** ambele coduri trimit DDL chiar în calculul verificat (`CheckoutCalculator::fetchProducts` →
   `ensureProductVatSchema`, `Precomanda::ensureSchema`; pe codul vechi și `ErpSync::ensureSchema`), deci nu există nicio
-  opțiune pentru așa ceva. Profilul: `bioscem` (Biovitality, cu Stripe, numerotarea BV și pachetele excluse, în WP-11b).
+  opțiune pentru așa ceva. Profilul (`--profil=`, implicit `bioscem`; din WP-11b și `biovitality`) e site-ul copiat: alege
+  copia, codul vechi și pluginurile de pornit; ce are Biovitality altfel (Stripe ca plată cu cardul, numerele „BV…”, transportul
+  gratuit pe produs, codurile de cupon cerute cu spații, coletele neîmpărțite după greutate din înghețare) vine din baza copiei
+  și din codul fiecăruia, deci se compară ca orice caz.
 - **Migrările.** Cu baza în urma codului comun (cod nou urcat după încărcare: garda spune `in_urma`), comanda rulează
   întâi `scripts/migreaza.php --aplica --site=<profil>`, iar după el garda trebuie să spună `la_zi`; altă stare (fără
   registru, o eroare a gărzii: nu e o copie lăsată de încărcare) și, local, orice stare în afară de `la_zi` e refuz.
 - **Cazurile** (o interogare, pe baza copiei): ultimele `--n` comenzi (implicit 500; fără cele șterse și cele `failed`),
   plus fiecare comandă din ultimele 12 luni cu cupon, puncte, o linie cu ofertă BBD sau FANbox (cel mult 300). Fiecare are
   un tip, din ce are: `cupon_procent`, `cupon_fix`, `cupon_inexistent`, `puncte`, `bbd`, `fanbox`, `firma`, `judet_bucuresti`
-  (sau `simplu`).
+  (sau `simplu`). Cu profilul `biovitality`, comenzile cu un produs-pachet (`products.bundle_items_json` nevid) se scot dintre
+  cazuri și se numără (`excluse: pachete N`): pluginul `pachete_produse` vine în Etapa 4, deci acolo s-ar compara două coduri
+  care tratează pachetul diferit prin construcție; ele se compară în repetiția din Etapa 4. Pe o bază fără coloană, profilul
+  refuză (nu e o copie Biovitality).
+- **Diferențele declarate pe profil** (`ComparaCalcule::DECLARATE_PROFIL`, aceleași local și pe server, pe clase, nu pe
+  comandă; fiecare îngustă, numărată pe ecran și scrisă în `site-uri/<profil>/ce-se-schimba.md`). Biovitality: (1) **produsele
+  marcate epuizate** se scot din coșul cazului, în ambele coduri: codul Biovitality nu le pune în sumar (`fetchProducts` cu
+  `out_of_stock = 0`), codul comun (din Bioscem) le păstrează și oprește finalizarea, deci aceeași comandă veche, socotită cu fișa
+  de acum, ar diferi prin construcție (`produse epuizate scoase din coș, în ambele coduri: N linii în M cazuri`); (2) **cheile ERP
+  noi** ale codului comun (`facturareAdresa`, `facturareOras`, `facturareJudet`, `facturareCodPostal`, `observatiiInterne`)
+  nu se compară doar când lipsesc din payload-ul vechi și sunt în cel nou (`payload ERP: chei noi ale codului comun …`); o cheie
+  pe care o trimit amândouă se compară mereu. În plus, lucrătorul face pentru codul Biovitality ce face adminul lui la recalculul
+  transportului: codul Biovitality pune transportul gratuit al produsului în `AdminController`, după `adminRecalcShipping`
+  (`comandaAreTransportGratuit`), codul comun în funcție (al șaptelea argument), deci `transport_admin` se compară ca rezultat
+  al adminului, nu al funcției.
 - **Lucrătorii** (`lucrator-calcule.php --cod=<rădăcina>`): câte un proces pentru fiecare cod, pe rând; codul vechi pe PHP-ul
   dat cu `--php-vechi` (de exemplu PHP-ul lui live, `/opt/alt/php81/usr/bin/php`; implicit același), codul comun pe PHP-ul
   comenzii (cel puțin `php_min`). Întâi doar „verifica”: garda, versiunea, pluginurile codului comun (cele din
@@ -1097,10 +1208,10 @@ rulează singur testul T2-live: baseline-ul pe schema live a site-ului, pe Maria
   adevărată (`migrari.json`) și dacă regulile acoperă tot.
 - **Prima comparație a calculelor și prima amprentă** (pasul 6, e și f, după prima încărcare): „REZULTAT: TRECE” e
   acceptanța porturilor cu bani (WP-20: C14a, C9, X5; WP-25), care o rulează din nou.
-- **WP-11b**, după WP-20: regulile anonimizării Biovitality (`tools/verificare/reguli/biovitality.php`), profilul
-  `biovitality` al comparației calculelor (Stripe, numerotarea BV, transportul gratuit pe produs, cupoanele compacte;
-  coșurile cu pachete numărate apart, nu comparate) și amprenta biovitality.ro; vertij și grafoanaytis primesc regulile
-  la porturile lor.
+- **Prima încărcare a Biovitality** (pasul 6b, noaptea, proprietarul; WP-11b făcut): „GATA”, apoi „REZULTAT: TRECE” la
+  `compara-calcule.php --profil=biovitality` e acceptanța WP-11b (golden master-ul Biovitality: C14a, C9, X5 față de codul
+  Biovitality însuși); amprenta biovitality.ro față de copie e lista schimbărilor vizibile la adoptare. Vertij și
+  grafoanaytis primesc regulile la porturile lor.
 - **Etapa 2**: modul de test al plăților (chei de test, `VERIFICARE_WEBHOOKURI_DESCHISE=1`), check-in-ul licenței
   la CRM.
 
@@ -1202,13 +1313,36 @@ mesajul de contact, notele adminului, eroarea ERP, motivul deblocării, al reduc
 A1 pică și numește coloana), o adresă într-o coloană păstrată (A1 numește coloana) și un refuz venit după ce copia s-a
 schimbat (cod 1 și copia ștearsă, nu cod 2), `--demo`
 (aceleași date inventate ca baza de dezvoltare, personalul se loghează; vertij fără și cu valori private inventate)
-și aceeași încărcare pe MySQL 8. Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator
+și aceeași încărcare pe MySQL 8 (`--doar-mariadb` o sare, spus în raport: decizia A1 a proprietarului). **Biovitality**
+(WP-11b): în A regulile Biovitality (fără greșeli, versiunea legată de a Bioscem) acoperă fiecare tabel și coloană a schemei
+codului Biovitality 779e0d8 (`bv.sql`) și a codului comun, oracolul cu tabelele doar ale Biovitality (jetoanele aplicației,
+dosarele și jurnalele fișierelor din cloud fără rânduri; concurența și etichetele blogului publice) și o mutație care copiază
+jurnalul fișierelor cum e, scanerul fail-closed (o coloană nouă cu date personale, `competition_partners.contact_email`, și una
+doar necunoscută opresc, cu numele lor; un tabel nou fără rânduri), cheile `bunny_*` golite și A6 pe ele, id-urile Stripe,
+procesatorul linkului și „dat de”; în **B10** un Biovitality „live” (`domains/biovitality.ro/public_html`, baza `cms_incarc_bv`
+făcută din `bv.sql`, cu rândurile demo copiate în coloanele comune, câte un rând cu marcaj în fiecare tabel al clienților și în
+cele fără rânduri, plus conținutul Biovitality: un pachet, concurenți, etichete, o comandă Stripe, setările fișierelor din cloud
+cu chei inventate; valorile private ale înghețării inventate în `privat/` al copiei): scanerul oprește pe coloana nouă, mutația
+jurnalului copiat pică la A1 cu coloana numită, apoi `--din=biovitality` „GATA” cu A1–A9 DA, niciun marcaj pe copie, tabelele
+Biovitality fără rânduri, cele publice cu tot atâtea rânduri, id-urile Stripe `anon-<id>`, procesatorul Stripe pus de migrare,
+cheile `bunny_*` golite, înghețarea Biovitality aplicată, codul vechi copiat; cu ea pe copie, `--din=bioscem` (și `--reincarca`)
+refuzate; sursa neschimbată; `sterge.php`. Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator
 și nicio cale a contului în ieșiri și în textele salvate. Cere baza de dezvoltare făcută de `instaleaza.sh` (copia
 demonstrativă se compară cu ea). Bazele `cms_incarc_*` și utilizatorii lor se fac și se șterg acolo, pe ambele
 servere.
 
 `tools/dev/compara-calcule-local.sh` (poarta G-calc, și cu PHP-ul minim) scoate codul Bioscem însuși (commit-ul revizuit din
-[de-portat.md](de-portat.md), aceeași copie ca la `compara-cu-baza.sh`) și rulează două teste. **`tools/dev/test-calcule.php`**:
+[de-portat.md](de-portat.md), aceeași copie ca la `compara-cu-baza.sh`) și, din WP-11b, pe cel Biovitality (la commit-ul lui
+revizuit) și rulează trei teste. **`tools/dev/test-calcule-bv.php`** (WP-11b): baza `cms_calc_bv` făcută ca a codului
+Biovitality (`bv.sql`, rândurile demo în coloanele comune, plățile doar ramburs și Stripe, plus comenzi inventate: un produs cu
+transport gratuit singur în coș, un cupon cerut „ vara 10 ”, un produs-pachet, o plată Stripe, peste 13 kg), trecută prin
+migrările cu `--site=biovitality` (pachetul într-o copie, cu valori private inventate și fără „provizoriu”) și cu licența
+Biovitality: `compara-calcule.php --local --profil=biovitality` „TRECE”, „diferite 0”, „excluse: pachete 1”, produsele epuizate
+scoase cât numără baza, cheile ERP noi numărate pe fiecare caz; mutațiile (transportul gratuit pe produs ignorat, cuponul cu
+spații necăutat compact, coletele la 13 kg, fără regula epuizatelor, fără excluderea pachetelor, un cod vechi care trimite și el
+o cheie declarată nouă) pică fiecare cu câmpul ei; refuzurile (alt profil; profilul Biovitality pe o bază fără
+`bundle_items_json`); apoi amprenta paginilor pe codul Biovitality (+26) și pe codul comun cu pachetul Biovitality (+27), pe
+aceeași bază, și comparația lor (informativă, în raport). **`tools/dev/test-calcule.php`**:
 `compara-calcule.php --local` pe `cms_calc_t`, o copie a bazei de dezvoltare în care fiecare ramură a calculelor contează
 (transportul 12 lei în București și 45 în provincie, plafonul de 40 sub el, gratuit de la 150 / 250 lei; TVA adăugat la preț
 la două produse, cota de 11% la două), cu 35 de comenzi inventate (puncte peste disponibil, sub minim, fără cont, cu cupon;

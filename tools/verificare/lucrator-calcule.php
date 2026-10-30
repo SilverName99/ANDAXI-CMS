@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Lucrătorul comparației calculelor (WP-11, G2; docs/VERIFICARE.md, „Comparația calculelor”). Îl pornește doar
  * tools/verificare/compara-calcule.php, o dată pe fiecare cod: codul vechi al site-ului (pe site-ul de verificare
- * `~/domains/<verificare>/cod-vechi/<site>/`, local copia commit-ului revizuit al Bioscem) și codul comun. Amândouă
+ * `~/domains/<verificare>/cod-vechi/<site>/`, local copia commit-ului revizuit al Bioscem sau al Biovitality) și codul comun. Amândouă
  * rulează pe aceeași bază: copia de verificare (anonimizată, de unică folosință) sau, local, o copie a bazei de
  * dezvoltare. Niciodată pe o bază live: ambele coduri trimit DDL chiar în calculul verificat (CheckoutCalculator,
  * Precomanda, ErpSync), de aceea, înaintea oricărui cod al aplicației, lucrătorul verifică baza la care l-a legat
@@ -16,7 +16,7 @@ declare(strict_types=1);
  * Cererea e un JSON (pe stdin, sau în fișierul --intrare, 0600, cât proc_open lipsește): `faza` („verifica”: doar garda,
  * versiunea PHP, pluginurile codului comun și amprentele setărilor calculelor; „calcule”: cazurile), `mod` („verificare”
  * sau „local”), `baza` (numele bazei la care trebuie să fie legat codul), `sursa` și `incarcat_la` (rândul `_verificare`
- * al copiei), `profil` (`bioscem`), `cazuri`. Numele bazei vine pe stdin, nu în linia de comandă (`ps`).
+ * al copiei), `profil` (`bioscem` sau `biovitality`: pluginurile site-ului din `licente_dev`), `cazuri`. Numele bazei vine pe stdin, nu în linia de comandă (`ps`).
  *
  * Pentru fiecare caz, prin API-ul public al codului, exact ca un client în checkout: `Cart::clear()`, `Cart::add` pentru
  * fiecare linie a comenzii (produsul, cantitatea, cheia ofertei BBD), `Cart::applyCoupon`, `CustomerAuth::login` și
@@ -311,6 +311,15 @@ foreach ((array) ($cerere['cazuri'] ?? []) as $caz) {
             (float) ($caz['transport'] ?? 0), (bool) ($caz['transport_manual'] ?? false), $gratuitDinProdus);
         $transportAdmin0 = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere, 0.0,
             false, $gratuitDinProdus);
+        // Codul Biovitality (WP-11b) are transportul gratuit al produsului în admin, nu în funcție: după adminRecalcShipping, fiecare
+        // recalcul pune 0 dacă comanda are un astfel de produs (AdminController::comandaAreTransportGratuit, la 779e0d8 :5324, :5465,
+        // :5628). Codul comun îl are în funcție (al șaptelea argument); un cod fără acel argument și cu regula în admin primește aici
+        // exact ce face adminul lui.
+        if ($gratuitDinProdus && ($cerere['profil'] ?? '') === 'biovitality'
+            && (new ReflectionMethod(\App\Support\CheckoutCalculator::class, 'adminRecalcShipping'))->getNumberOfParameters() < 7) {
+            $transportAdmin = 0.0;
+            $transportAdmin0 = 0.0;
+        }
 
         // Punctele promise („Primești X puncte”): din sumar, ca în coș, și din comanda salvată.
         $eligibil = max(0.0, (float) ($s['subtotal'] ?? 0) - (float) ($s['discount'] ?? 0) - (float) ($s['points_discount'] ?? 0));

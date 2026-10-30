@@ -34,7 +34,8 @@ declare(strict_types=1);
  *       Bucureștiului, pragul provinciei în București, transportul fără plafon (în checkout și în admin): fiecare „PICĂ” și
  *       își numește câmpul (sau cheia, sau eroarea), deci comparația chiar vede fiecare calcul;
  *    A5 refuzurile (cod 2, nimic schimbat): fără --local în afara site-ului de verificare, altă bază decât cms_*, cu
- *       SITE_COPIE_VERIFICARE=1, un .env în codul vechi, codul vechi lipsă, alt profil, baza în urma migrărilor, o licență cu
+ *       SITE_COPIE_VERIFICARE=1, un .env în codul vechi, codul vechi lipsă, un profil necunoscut, profilul Biovitality pe o bază fără
+ *       produse-pachet, baza în urma migrărilor, o licență cu
  *       cupoanele oprite; lucrătorul pornit direct pe altă bază sau fără _verificare; o rulare oprită după cupoane → rularea
  *       următoare le pune la loc întâi;
  *    A6 diferențele declarate (`--declarate`), cu o diferență voită făcută într-o copie a codului comun (transportul gratuit
@@ -701,7 +702,9 @@ try {
         'fără CMS_DEV_DIR' => [['--local', '--cod-vechi=' . $codVechi], ['CMS_DEV_DIR' => null], 'CMS_DEV_DIR lipsește'],
         'fără --cod-vechi' => [['--local'], [], 'cere --cod-vechi'],
         'codul vechi nu e un cod de site' => [['--local', '--cod-vechi=' . $dosarTest], [], 'nu e dosarul codului unui site'],
-        'alt profil' => [['--local', '--cod-vechi=' . $codVechi, '--profil=biovitality'], [], 'WP-11b'],
+        'un profil necunoscut' => [['--local', '--cod-vechi=' . $codVechi, '--profil=vertij'], [], 'profil necunoscut (vertij)'],
+        // WP-11b: profilul Biovitality pe o bază fără produse-pachet (aici baza demo, în forma Bioscem).
+        'profilul Biovitality pe o bază care nu e a lui' => [['--local', '--cod-vechi=' . $codVechi, '--profil=biovitality'], [], 'nu e o copie biovitality'],
         'un argument necunoscut' => [['--local', '--cod-vechi=' . $codVechi, '--orice'], [], 'argument necunoscut'],
         '--n greșit' => [['--local', '--cod-vechi=' . $codVechi, '--n=0'], [], '--n trebuie'],
         '--php-vechi greșit' => [['--local', '--cod-vechi=' . $codVechi, '--php-vechi=/nu/exista/php'], [], '--php-vechi'],
