@@ -775,6 +775,21 @@ $insArticol->execute([
     'pub' => $dataSql($acum - 60 * $zi), 'is_pub' => 1, 'a' => $idAutor,
     'img' => $imagine('Sfaturi vechi', 'blog-sfaturi-vechi-importate', [90, 120, 110]),
 ]);
+// WP-23 (blogul avansat): articolul în lucru (ciorna, deci nu e pe site și nu schimbă nicio pagină comparată) are trei
+// titluri (cuprinsul), citări și bibliografia lor, două etichete; se vede în editor și în previzualizarea lui. Pe o bază
+// făcută ca înainte de migrări (instaleaza.sh --pe-vechi), fără coloanele și tabelele blog/0033, se sare.
+try {
+    $idCiorna = (int) $db->query("SELECT id FROM blog_posts WHERE slug = 'articol-in-lucru-ciorna'")->fetchColumn();
+    $db->prepare('UPDATE blog_posts SET content = :c, references_html = :r WHERE id = :id')->execute([
+        'id' => $idCiorna,
+        'c' => '<p>Text demo al unui articol în lucru, cu trimiteri la surse inventate [1] și [2].</p><h2>Prima secțiune</h2>'
+            . '<p>Un paragraf de test [1].</p><h3>O subsecțiune</h3><p>Alt paragraf.</p><h2>Concluzii demo</h2><p>Final.</p>',
+        'r' => '<p>[1] Autor Demo, „Un studiu inventat”, Editura Exemplu, 2024.</p><p>[2] Altă sursă demo, exemplu.ro.</p>',
+    ]);
+    $db->exec("INSERT INTO blog_tags (name, slug) VALUES ('Ceaiuri demo', 'ceaiuri-demo'), ('Sfaturi demo', 'sfaturi-demo')");
+    $db->exec('INSERT INTO blog_post_tags (post_id, tag_id) SELECT ' . $idCiorna . ', id FROM blog_tags WHERE slug IN (\'ceaiuri-demo\', \'sfaturi-demo\')');
+} catch (Throwable) {
+}
 
 // --- Newsletter --------------------------------------------------------------------
 $db->exec("INSERT INTO newsletter_lists (name, description, is_default) VALUES

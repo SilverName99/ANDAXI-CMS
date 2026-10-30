@@ -26,11 +26,31 @@ $buildPostsUrl = static function (array $params = []) use ($search, $status, $pe
     }
     return '/admin/blog/posts' . ($query !== [] ? '?' . http_build_query($query) : '');
 };
+// Fereastra din jurul paginii curente, plus prima și ultima, ca la 15 pagini
+// să nu fie nevoie de 7 clicuri până la capăt. Golurile devin „…".
 $paginationPages = [];
-$windowStart = max(1, $page - 2);
-$windowEnd = min($totalPages, $page + 2);
-for ($i = $windowStart; $i <= $windowEnd; $i++) {
-    $paginationPages[] = $i;
+$numere = [1, $totalPages];
+for ($i = $page - 2; $i <= $page + 2; $i++) {
+    $numere[] = $i;
+}
+$numere = array_values(array_unique(array_filter(
+    $numere,
+    static fn (int $n): bool => $n >= 1 && $n <= $totalPages
+)));
+sort($numere, SORT_NUMERIC);
+$anterior = null;
+foreach ($numere as $numar) {
+    if ($anterior !== null) {
+        $gol = $numar - $anterior;
+        if ($gol === 2) {
+            // Un singur număr lipsă: îl arătăm, „…" ar ocupa același loc.
+            $paginationPages[] = $anterior + 1;
+        } elseif ($gol > 2) {
+            $paginationPages[] = '…';
+        }
+    }
+    $paginationPages[] = $numar;
+    $anterior = $numar;
 }
 ?>
 
@@ -87,7 +107,10 @@ for ($i = $windowStart; $i <= $windowEnd; $i++) {
         </div>
     </form>
 
-    <div class="users-table-wrap">
+<?= \App\Support\Dev::marcaj('bv:blog-lista-inceput') ?>    <!-- Tabelul și paginarea se schimbă între ele fără reîncărcarea paginii,
+         ca poziția în listă să rămână unde era. -->
+    <div id="blog-posts-list" data-blog-posts-list>
+<?= \App\Support\Dev::marcaj('bv:blog-lista-inceput', true) ?>    <div class="users-table-wrap">
         <table class="table users-table">
             <thead>
             <tr>
@@ -148,16 +171,118 @@ for ($i = $windowStart; $i <= $windowEnd; $i++) {
         </table>
     </div>
     <?php if ($totalPages > 1): ?>
-        <div class="users-search-row" style="margin-top:10px;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-            <small style="color:#64748b;">Total: <?= $totalPosts ?> postări</small>
+        <div class="users-search-row blog-pager" style="margin-top:10px;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <small style="color:#64748b;">
+                <?= $totalPosts ?> postări · pagina <?= $page ?> din <?= $totalPages ?>
+            </small>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                <a class="btn btn-secondary" href="<?= htmlspecialchars($buildPostsUrl(['page' => max(1, $page - 1)]), ENT_QUOTES) ?>" <?= $page <= 1 ? 'style="pointer-events:none;opacity:.6;"' : '' ?>>‹ Anterior</a>
+                <?php if ($page > 1): ?>
+                    <a class="btn btn-secondary" data-blog-page="<?= $page - 1 ?>"
+                       href="<?= htmlspecialchars($buildPostsUrl(['page' => $page - 1]), ENT_QUOTES) ?>"
+                       rel="prev">‹ Anterior</a>
+                <?php else: ?>
+                    <span class="btn btn-secondary is-disabled" aria-disabled="true">‹ Anterior</span>
+                <?php endif; ?>
+
                 <?php foreach ($paginationPages as $p): ?>
-                    <a class="btn <?= $p === $page ? '' : 'btn-secondary' ?>" href="<?= htmlspecialchars($buildPostsUrl(['page' => $p]), ENT_QUOTES) ?>"><?= $p ?></a>
+                    <?php if ($p === '…'): ?>
+                        <span class="blog-pager__gap" aria-hidden="true">…</span>
+                    <?php elseif ((int) $p === $page): ?>
+                        <span class="btn is-current" aria-current="page"><?= (int) $p ?></span>
+                    <?php else: ?>
+                        <a class="btn btn-secondary" data-blog-page="<?= (int) $p ?>"
+                           href="<?= htmlspecialchars($buildPostsUrl(['page' => (int) $p]), ENT_QUOTES) ?>"><?= (int) $p ?></a>
+                    <?php endif; ?>
                 <?php endforeach; ?>
-                <a class="btn btn-secondary" href="<?= htmlspecialchars($buildPostsUrl(['page' => min($totalPages, $page + 1)]), ENT_QUOTES) ?>" <?= $page >= $totalPages ? 'style="pointer-events:none;opacity:.6;"' : '' ?>>Următor ›</a>
+
+                <?php if ($page < $totalPages): ?>
+                    <a class="btn btn-secondary" data-blog-page="<?= $page + 1 ?>"
+                       href="<?= htmlspecialchars($buildPostsUrl(['page' => $page + 1]), ENT_QUOTES) ?>"
+                       rel="next">Următor ›</a>
+                <?php else: ?>
+                    <span class="btn btn-secondary is-disabled" aria-disabled="true">Următor ›</span>
+                <?php endif; ?>
             </div>
         </div>
     <?php endif; ?>
-    <?php endif; ?>
+<?= \App\Support\Dev::marcaj('bv:blog-lista-sfarsit') ?>    </div><!-- /#blog-posts-list -->
+<?= \App\Support\Dev::marcaj('bv:blog-lista-sfarsit', true) ?>    <?php endif; ?>
 </section>
+<?= \App\Support\Dev::marcaj('bv:blog-lista-script') ?>
+<style>
+.blog-pager__gap{padding:0 4px;color:#94a3b8;user-select:none;}
+.blog-pager .btn.is-current{cursor:default;}
+.blog-pager .btn.is-disabled{opacity:.45;pointer-events:none;}
+/* Cât se încarcă pagina următoare, lista rămâne pe loc, doar se estompează —
+   fără să sară nimic și fără să se schimbe înălțimea. */
+#blog-posts-list[aria-busy="true"]{opacity:.55;transition:opacity .12s ease;}
+#blog-posts-list[aria-busy="true"] a,
+#blog-posts-list[aria-busy="true"] button{pointer-events:none;}
+</style>
+
+<script>
+(() => {
+    'use strict';
+
+    // Paginarea schimbă doar tabelul, nu toată pagina: altfel browserul
+    // reîncarcă și te trimite înapoi în capul listei de fiecare dată.
+    const container = () => document.getElementById('blog-posts-list');
+    let cerereInCurs = null;
+
+    const incarca = async (url, adaugaInIstoric) => {
+        const lista = container();
+        if (!lista) { window.location.href = url; return; }
+
+        // Un clic nou anulează căutarea începută înainte, ca răspunsurile să
+        // nu ajungă în altă ordine decât clicurile.
+        cerereInCurs?.abort();
+        const control = new AbortController();
+        cerereInCurs = control;
+        lista.setAttribute('aria-busy', 'true');
+
+        try {
+            const raspuns = await fetch(url, {
+                credentials: 'same-origin',
+                headers: {'X-Requested-With': 'fetch'},
+                signal: control.signal,
+            });
+            if (!raspuns.ok) throw new Error('HTTP ' + raspuns.status);
+
+            const doc = new DOMParser().parseFromString(await raspuns.text(), 'text/html');
+            const noua = doc.getElementById('blog-posts-list');
+            // Fără containerul așteptat (sesiune expirată, redirect la login)
+            // lăsăm browserul să meargă normal la adresă.
+            if (!noua) { window.location.href = url; return; }
+
+            lista.innerHTML = noua.innerHTML;
+            lista.removeAttribute('aria-busy');
+            if (adaugaInIstoric) {
+                window.history.pushState({blogPosts: true}, '', url);
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') return;
+            // Orice altă problemă: navigare obișnuită, ca omul să ajungă
+            // totuși pe pagina cerută.
+            window.location.href = url;
+        }
+    };
+
+    document.addEventListener('click', (e) => {
+        const link = e.target instanceof Element ? e.target.closest('a[data-blog-page]') : null;
+        if (!link) return;
+        // Clic cu Ctrl / rotița mouse-ului = deschidere în filă nouă; nu ne băgăm.
+        if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        incarca(link.getAttribute('href') || '', true);
+    });
+
+    // Săgeata „înapoi" a browserului trebuie să ducă la pagina anterioară din
+    // listă, nu în afara ei.
+    window.addEventListener('popstate', (e) => {
+        if (e.state && e.state.blogPosts) {
+            incarca(window.location.href, false);
+        }
+    });
+})();
+</script>
+<?= \App\Support\Dev::marcaj('bv:blog-lista-script', true) ?>

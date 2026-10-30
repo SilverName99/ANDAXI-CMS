@@ -722,6 +722,16 @@ dispar, iar linkurile spre el se scot din pagini.
   listei și ale articolului din setări (DB-13): `blog_eticheta_lista`, `blog_titlu_lista`,
   `blog_descriere_lista`, `blog_autor_implicit` (gol = numele site-ului; și inițiala lui),
   `blog_categorie_implicita`; fiecare site vechi le are înghețate la ale lui.
+- **Editorul blogului avansat** (WP-23, din Biovitality `c078bd5`, `9c549c7`, `49c4f5b`, `3ea6a31`,
+  `e2c33d3`): H5/H6 și „Text normal”, aliniere, chenarul pozelor din text (lățimea în procente),
+  lățimea copertei, bibliografia (cu numerotare și renumerotare), etichetele (create la salvare,
+  cu sugestii; `syncBlogPostTags`), dialogul de link (Ctrl+K, cu trimiterile la bibliografie),
+  textul alternativ al pozelor, cardul Google (60/155 de caractere), previzualizarea desktop/telefon
+  (`POST /admin/blog/posts/preview`, același cod ca pe site), „Salvează ca draft”; slug-ul unei
+  postări noi păstrează literele cu diacritice (`Slug::make`); duplicarea copiază și bibliografia,
+  lățimea copertei și etichetele; lista din admin își schimbă paginile fără reîncărcare. Câmpurile
+  noi se scriu într-o instrucțiune separată, care tace pe o bază fără migrarea `blog/0033` (postarea
+  se salvează ca înainte). Editorul se reface în Faza D.
 - **Are nevoie de**: nimic. **Se oprește**: ca pornit. **Oprit**: nimic din blog
   pe site, în pagini, în meniu sau în harta site-ului; titlul pus chiar înaintea
   codului (`<h2>Din blog</h2>`) pleacă odată cu el; rolul „Administrator Blog” nu
@@ -819,9 +829,18 @@ nu schimbă încă nimic):
 
 Nu se vinde și nu apare în pachete; o pune doar ANDAXI în licență, pe durata unei
 migrări. **Conține**: importul din backup WordPress (UpdraftPlus) din Utilizatori →
-Import utilizatori (`POST /admin/users/import-backup`). **Oprit**: nu apar nici
-formularul, nici explicația lui; importul CSV/XLSX de clienți rămâne (e al
-conturilor de clienți).
+Import utilizatori (`POST /admin/users/import-backup`); după un import fără erori fișierul
+se șterge din `storage/import` (are datele clienților) și mesajul o spune. Importul
+articolelor dintr-un export WordPress (WXR; WP-23, din Biovitality `14d19dc`), în linia de
+comandă: `$PHP tools/migrare-wordpress/import-wordpress-posts.php <export.xml> [--dry-run]`
+(cere și pluginul blog și migrarea `blog/0033`; refuză cu codul 2 altfel): titlul, slug-ul,
+conținutul curățat, rezumatul, data, ciorna, autorul, categoriile, etichetele, coperta, bibliografia
+(câmpul „surse”), titlul și descrierea SEO; pozele de pe domeniile exportului se aduc în
+`uploads/blog/<an>/<lună>` (pe copia de verificare nu); o rulare repetată actualizează (după
+`blog_posts.wp_post_id`), nu dublează; `--post-type` (implicit `post`; Biovitality: `project`). După o
+rulare care a scris fără erori, **fișierul exportului se șterge** (are emailurile autorilor),
+afară de `--pastreaza-sursa`. **Oprit**: nu apar nici formularul, nici explicația lui; importul
+CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelor refuză.
 
 ## Ce nu se poate ascunde fără o refacere mai adâncă
 

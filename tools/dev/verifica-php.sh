@@ -9,7 +9,7 @@
 #
 # Dosarele: src/ views/ config/ scripts/ public/ bootstrap.php, database/ (migrările, pe care
 # le rulează scripts/migreaza.php pe servere), deploy/ (stub-ul din public_html, Etapa 2) și, când
-# există, tools/verificare/ și tools/sonda/ (rulează pe servere), plus tools/dev/lib/normalizeaza-html.php (normalizarea
+# există, tools/verificare/, tools/sonda/ și tools/migrare-wordpress/ (rulează pe servere), plus tools/dev/lib/normalizeaza-html.php (normalizarea
 # paginilor, pe care o încarcă tools/verificare/amprenta-site.php pe server, WP-11). Restul uneltelor din tools/dev/
 # nu ajung pe site-uri; ele se verifică rulându-le cu CMS_DEV_PHP (smoke.sh,
 # test-pluginuri.php). Funcțiile apărute după php_min nu le prinde `-l`; le prind
@@ -29,7 +29,7 @@ command -v "$PHP_LINT" >/dev/null 2>&1 \
     || { echo "EROARE: lipsește $PHP_LINT; îl instalezi cu: tools/dev/instaleaza.sh --php-min" >&2; exit 1; }
 
 tinte=()
-for cale in src views config scripts public bootstrap.php database deploy tools/verificare tools/sonda tools/dev/lib/normalizeaza-html.php; do
+for cale in src views config scripts public bootstrap.php database deploy tools/verificare tools/sonda tools/migrare-wordpress tools/dev/lib/normalizeaza-html.php; do
     [ -e "$RADACINA/$cale" ] && tinte+=("$RADACINA/$cale")
 done
 

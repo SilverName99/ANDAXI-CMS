@@ -27,6 +27,19 @@ declare(strict_types=1);
  * E. Textele listei (DB-13): eticheta, titlul, descrierea (goale = fără), autorul și categoria implicite, inițiala.
  * F. Pluginul blog oprit: /blog/categorie/…, /blog/eticheta/… și /blog?q=… dau 404.
  *
+ * WP-23 — editorul, lista din admin, previzualizarea, importul (B4, B7, B8):
+ * G. Editorul (câmpurile noi, sugestiile de etichete, cardul Google fără numele unui client), salvarea unei postări noi
+ *    (slug-ul cu diacritice transliterate, bibliografia, lățimea copertei între 10 și 100, etichetele create din text fără
+ *    dubluri), re-salvarea cu „Salvează ca draft”, lista din admin, duplicarea (bibliografia, lățimea, etichetele,
+ *    categoriile), previzualizarea (codul site-ului, noindex, no-store, doar cu admin logat), salvarea pe o bază fără
+ *    coloanele migrării.
+ * H. Importul dintr-un export WordPress fictiv (tools/migrare-wordpress/import-wordpress-posts.php): --dry-run nu scrie
+ *    și nu șterge; importul (wp_post_id, conținutul curățat, bibliografia, categoria, eticheta, autorul, SEO, ciorna, poza
+ *    adusă local de pe serverul de dezvoltare, cea străină lăsată), fișierul sursă șters după import; a doua rulare
+ *    actualizează, nu dublează; --pastreaza-sursa; refuzul fără unealta internă; un fișier lipsă.
+ * I. Importul utilizatorilor din backup-ul WordPress (Admin → Utilizatori): verificarea lasă fișierul, importul fără
+ *    erori îl șterge și o spune în mesaj.
+ *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
  * paginilor și sesiunile făcute aici. Serverul de dezvoltare se oprește la final dacă l-a pornit testul. Raportul:
  * $CMS_DEV_DIR/test-blog-avansat-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -556,6 +569,185 @@ if ($licenta('catalog')) {
     $verifica('licența „catalog” se poate pune', false);
 }
 $licenta('toate');
+
+// =====================================================================
+// WP-23 G. Editorul, lista, previzualizarea, salvarea
+// =====================================================================
+$scrie('');
+$scrie('== WP-23 G. Editorul, lista din admin, previzualizarea, salvarea');
+$logareAdmin();
+$editorNou = $cerere('GET', '/admin/blog/posts/editor', $jarAdmin);
+$verifica('editorul: câmpurile blogului avansat (bibliografia, etichetele, lățimea copertei, „Salvează ca draft”, previzualizarea, cardul Google)',
+    str_contains($editorNou['corp'], 'name="references_html"') && str_contains($editorNou['corp'], 'name="tags"')
+    && str_contains($editorNou['corp'], 'name="featured_image_width"') && str_contains($editorNou['corp'], 'name="save_as_draft"')
+    && str_contains($editorNou['corp'], 'id="blog-preview-btn"') && str_contains($editorNou['corp'], 'class="blog-serp"')
+    && str_contains($editorNou['corp'], 'data-value="H6"'), mb_substr(strip_tags($editorNou['corp']), 0, 200));
+$verifica('editorul: sugestiile de etichete din cele existente', str_contains($editorNou['corp'], 'Tei test ' . $sufix));
+$verifica('editorul: nicio adresă sau nume de client în cardul Google (gazda site-ului)', !preg_match('/biovitality|bioscem/i', $editorNou['corp']));
+$salveaza = static function (array $campuri) use ($cerere, $jarAdmin): array {
+    return $cerere('POST', '/admin/blog/posts', $jarAdmin, $campuri + ['excerpt' => 'Rezumat test', 'reading_minutes' => '4',
+        'published_at' => date('Y-m-d\TH:i'), 'timezone_offset_minutes' => '0']);
+};
+$r = $salveaza(['title' => 'Sănătatea țesuturilor ' . $sufix, 'slug' => '', 'content' => '<h2>Unu</h2><p>A [1].</p><h2>Doi</h2>',
+    'references_html' => '<p>[1] Sursă inventată.</p>', 'tags' => "Plante, plante ;Ceai nou {$sufix}\nTEI TEST {$sufix}", 'featured_image_width' => '5',
+    'is_published' => '1', 'category_ids' => [(string) $catPlante]]);
+$idNou = (int) $unu('SELECT id FROM blog_posts WHERE title = :t', ['t' => 'Sănătatea țesuturilor ' . $sufix]);
+$rand = $db->query('SELECT * FROM blog_posts WHERE id = ' . $idNou)->fetch(PDO::FETCH_ASSOC) ?: [];
+$verifica('salvarea unei postări noi: slug-ul păstrează literele cu diacritice (Slug::make), bibliografia, lățimea 5 → 10',
+    $r['cod'] === 302 && ($rand['slug'] ?? '') === 'sanatatea-tesuturilor-' . $sufix && ($rand['references_html'] ?? '') === '<p>[1] Sursă inventată.</p>'
+    && (int) ($rand['featured_image_width'] ?? 0) === 10 && (int) ($rand['is_published'] ?? 0) === 1, json_encode($rand));
+$etichetePostare = $db->query('SELECT t.name FROM blog_post_tags pt JOIN blog_tags t ON t.id = pt.tag_id WHERE pt.post_id = ' . $idNou
+    . ' ORDER BY t.name')->fetchAll(PDO::FETCH_COLUMN);
+$verifica('etichetele: create din text (virgulă, punct și virgulă, rând nou), aceeași cu altă literă mare o singură dată, cea existentă refolosită',
+    $etichetePostare === ['Ceai nou ' . $sufix, 'Plante', 'Tei test ' . $sufix] || $etichetePostare === ['Ceai nou ' . $sufix, 'plante', 'Tei test ' . $sufix],
+    json_encode($etichetePostare, JSON_UNESCAPED_UNICODE));
+$verifica('eticheta nouă are slug-ul ei (transliterat, unic)', $unu("SELECT slug FROM blog_tags WHERE name = :n", ['n' => 'Ceai nou ' . $sufix]) === 'ceai-nou-' . $sufix);
+$editor = $cerere('GET', '/admin/blog/posts/editor?post=' . $idNou, $jarAdmin)['corp'];
+$verifica('editorul postării salvate: etichetele scrise într-un rând, bibliografia, lățimea 10',
+    preg_match('/name="tags"[^>]*value="[^"]*Ceai nou ' . $sufix . '/u', $editor) === 1 && str_contains($editor, '&lt;p&gt;[1] Sursă inventată.&lt;/p&gt;')
+    && str_contains($editor, 'name="featured_image_width" id="blog-post-featured-width" min="10" max="100" step="5" value="10"'));
+$r = $salveaza(['id' => (string) $idNou, 'title' => 'Sănătatea țesuturilor ' . $sufix, 'slug' => 'sanatatea-tesuturilor-' . $sufix,
+    'content' => '<p>Altul.</p>', 'references_html' => '', 'tags' => 'Plante', 'featured_image_width' => 'aiurea', 'is_published' => '1',
+    'save_as_draft' => '1', 'category_ids' => [(string) $catPlante]]);
+$rand = $db->query('SELECT * FROM blog_posts WHERE id = ' . $idNou)->fetch(PDO::FETCH_ASSOC) ?: [];
+$flash = $cerere('GET', '/admin/blog/posts', $jarAdmin)['corp'];
+$verifica('„Salvează ca draft”: nepublicată chiar cu bifa „Publicat”, mesajul de ciornă; bibliografia golită, lățimea greșită → 100, etichetele rescrise',
+    (int) ($rand['is_published'] ?? 1) === 0 && $rand['references_html'] === null && (int) $rand['featured_image_width'] === 100
+    && str_contains($flash, 'Postarea a fost salvată ca draft.')
+    && $unu('SELECT COUNT(*) FROM blog_post_tags WHERE post_id = ' . $idNou) === '1', json_encode($rand));
+$verifica('lista postărilor din admin: containerul paginării fără reîncărcare și scriptul ei', str_contains($flash, 'id="blog-posts-list" data-blog-posts-list')
+    && str_contains($flash, "headers: {'X-Requested-With': 'fetch'}"));
+// Duplicarea: categoriile, etichetele, bibliografia și lățimea copertei.
+$db->prepare('UPDATE blog_posts SET references_html = :r, featured_image_width = 40 WHERE id = :id')->execute(['r' => '<p>[1] Pentru copie.</p>', 'id' => $idNou]);
+$maxInainte = (int) $unu('SELECT MAX(id) FROM blog_posts');
+$cerere('POST', '/admin/blog/posts', $jarAdmin, ['action' => 'duplicate', 'id' => (string) $idNou]);
+$idCopie = (int) $unu('SELECT MAX(id) FROM blog_posts WHERE id > ' . $maxInainte);
+$copie = $db->query('SELECT * FROM blog_posts WHERE id = ' . $idCopie)->fetch(PDO::FETCH_ASSOC) ?: [];
+$verifica('duplicarea copiază bibliografia, lățimea copertei, etichetele și categoriile', $idCopie > 0 && ($copie['references_html'] ?? '') === '<p>[1] Pentru copie.</p>'
+    && (int) ($copie['featured_image_width'] ?? 0) === 40 && $unu('SELECT COUNT(*) FROM blog_post_tags WHERE post_id = ' . $idCopie) === '1'
+    && $unu('SELECT COUNT(*) FROM blog_post_categories WHERE post_id = ' . $idCopie) === '1', json_encode($copie));
+// Previzualizarea: același cod ca pe site.
+$prev = $cerere('POST', '/admin/blog/posts/preview', $jarAdmin, ['title' => 'Previzualizare test ' . $sufix, 'slug' => '', 'content' => $continutTitluri,
+    'references_html' => $referinteArticol, 'featured_image_width' => '50', 'template_id' => '', 'id' => (string) $artPrincipal]);
+$verifica('previzualizarea: pagina articolului randată (cuprins, citări, bibliografie, etichetele postării), noindex, no-store',
+    $prev['cod'] === 200 && str_contains($prev['corp'], '<nav class="blog-toc"') && str_contains($prev['corp'], 'id="surse"')
+    && str_contains($prev['corp'], 'class="blog-tags"') && str_contains($prev['corp'], '<meta name="robots" content="noindex, nofollow">')
+    && str_contains((string) ($prev['antete']['cache-control'] ?? ''), 'no-store') && str_contains($prev['corp'], '<h1>Previzualizare test ' . $sufix . '</h1>')
+    && str_contains($prev['corp'], '/assets/css/blog-avansat.css'), mb_substr($prev['corp'], 0, 300));
+$verifica('previzualizarea fără admin logat: nu se randează (redirecționare la login)', $cerere('POST', '/admin/blog/posts/preview', null,
+    ['title' => 'x', 'content' => 'y'])['cod'] === 302);
+// Pe o bază încă fără migrarea blog/0033 (codul nou înainte de `migreaza.php --aplica`) postarea se salvează ca înainte.
+$db->exec('ALTER TABLE blog_posts CHANGE references_html references_html_lipsa LONGTEXT NULL');
+try {
+    $r = $salveaza(['title' => 'Fără migrare ' . $sufix, 'slug' => '', 'content' => '<p>x</p>', 'references_html' => '<p>[1] y</p>',
+        'featured_image_width' => '50', 'is_published' => '1']);
+    $idFara = (int) $unu('SELECT id FROM blog_posts WHERE title = :t', ['t' => 'Fără migrare ' . $sufix]);
+    $editorFara = $cerere('GET', '/admin/blog/posts/editor?post=' . $idFara, $jarAdmin);
+    $verifica('fără coloanele migrării: salvarea merge (câmpurile noi tac), editorul se deschide', $idFara > 0 && $r['cod'] === 302
+        && $editorFara['cod'] === 200 && str_contains($editorFara['corp'], 'Fără migrare ' . $sufix));
+} finally {
+    $db->exec('ALTER TABLE blog_posts CHANGE references_html_lipsa references_html LONGTEXT NULL');
+}
+
+// =====================================================================
+// WP-23 H. Importul din WordPress (unealta internă migrare_wordpress)
+// =====================================================================
+$scrie('');
+$scrie('== WP-23 H. Importul articolelor dintr-un export WordPress (fictiv)');
+$dosarImport = Paths::stocare('import');
+@mkdir($dosarImport, 0775, true);
+$pozaSursa = $baza . '/assets/img/product-placeholder.svg';
+$wxr = static function (string $titluDoi) use ($sufix, $pozaSursa): string {
+    $item = static fn (string $tip, int $id, string $titlu, string $nume, string $status, string $continut, array $termeni, array $meta) =>
+        '<item><title>' . htmlspecialchars($titlu, ENT_XML1) . '</title><dc:creator><![CDATA[Autor Import ' . $sufix . ']]></dc:creator>'
+        . '<content:encoded><![CDATA[' . $continut . ']]></content:encoded><excerpt:encoded><![CDATA[]]></excerpt:encoded>'
+        . '<wp:post_id>' . $id . '</wp:post_id><wp:post_date>2024-05-0' . ($id % 9 + 1) . ' 10:00:00</wp:post_date><wp:post_name>' . $nume . '</wp:post_name>'
+        . '<wp:status>' . $status . '</wp:status><wp:post_type>' . $tip . '</wp:post_type>'
+        . implode('', array_map(static fn (array $t): string => '<category domain="' . $t[0] . '" nicename="x"><![CDATA[' . $t[1] . ']]></category>', $termeni))
+        . implode('', array_map(static fn (string $k, string $v): string => '<wp:postmeta><wp:meta_key>' . $k . '</wp:meta_key><wp:meta_value><![CDATA['
+            . $v . ']]></wp:meta_value></wp:postmeta>', array_keys($meta), $meta))
+        . ($tip === 'attachment' ? '<wp:attachment_url>' . $pozaSursa . '</wp:attachment_url>' : '')
+        . '</item>';
+    return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/" '
+        . 'xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" '
+        . 'xmlns:wp="http://wordpress.org/export/1.2/"><channel><title>Export test</title>'
+        . $item('attachment', 9001, 'Poza', 'poza', 'inherit', '', [], [])
+        . $item('post', 9002, 'Primul articol importat ' . $sufix, 'primul-importat-' . $sufix, 'publish',
+            '<p data-start="1" data-end="2">Text importat [1], cu poza <img src="' . $pozaSursa . '" alt="p"> și una străină <img src="https://exemplu.ro/x.png" alt="x"></p>'
+            . '<p>[caption id="a" width="300"]<img src="https://exemplu.ro/y.png" alt="y"> Legendă[/caption]</p>',
+            [['category', 'Categorie import ' . $sufix], ['post_tag', 'Eticheta import ' . $sufix]],
+            ['surse' => '<p>[1] Sursa importată.</p>', '_thumbnail_id' => '9001', '_aioseo_description' => 'Descriere SEO importată'])
+        . $item('post', 9003, $titluDoi, '', 'draft', '<p>Ciornă importată.</p>', [], [])
+        . $item('page', 9004, 'O pagină, nu un articol', 'pagina-import', 'publish', '<p>x</p>', [], [])
+        . '</channel></rss>';
+};
+$script = escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/tools/migrare-wordpress/import-wordpress-posts.php');
+$importa = static function (string $fisier, string $optiuni = '') use ($script): array {
+    exec($script . ' ' . escapeshellarg($fisier) . ' ' . $optiuni . ' 2>&1', $iesire, $cod);
+    return ['cod' => $cod, 'text' => implode("\n", $iesire)];
+};
+$fisierWxr = $dosarImport . '/export-test-' . $sufix . '.xml';
+file_put_contents($fisierWxr, $wxr('A doua postare ' . $sufix));
+$inainte = $unu('SELECT COUNT(*) FROM blog_posts');
+$r = $importa($fisierWxr, '--dry-run');
+$verifica('--dry-run: 2 postări găsite (o ciornă), pagina și atașamentul sărite, nimic scris, fișierul rămâne', $r['cod'] === 0
+    && str_contains($r['text'], 'Am găsit 2 postări de tip „post” (1 publicate, 1 draft) și 1 atașamente.') && str_contains($r['text'], 'PROBĂ')
+    && $unu('SELECT COUNT(*) FROM blog_posts') === $inainte && is_file($fisierWxr), $r['text']);
+$r = $importa($fisierWxr, '--extra-host=127.0.0.1:' . $port);
+$primul = $db->query("SELECT * FROM blog_posts WHERE wp_post_id = 9002")->fetch(PDO::FETCH_ASSOC) ?: [];
+$pozaLocala = '/uploads/blog/import/product-placeholder.svg';
+$pozeTest[] = Paths::uploads('blog/import/product-placeholder.svg');
+$verifica('importul: postarea publicată cu wp_post_id, slug-ul ei, conținutul curățat (fără data-*, [caption]), bibliografia, poza adusă local',
+    $r['cod'] === 0 && ($primul['slug'] ?? '') === 'primul-importat-' . $sufix && ($primul['references_html'] ?? '') === '<p>[1] Sursa importată.</p>'
+    && !str_contains((string) ($primul['content'] ?? ''), 'data-start') && !str_contains((string) ($primul['content'] ?? ''), '[caption')
+    && str_contains((string) ($primul['content'] ?? ''), 'src="' . $pozaLocala . '"') && ($primul['featured_image_url'] ?? '') === $pozaLocala
+    && str_contains((string) ($primul['content'] ?? ''), 'https://exemplu.ro/x.png') && is_file(Paths::uploads('blog/import/product-placeholder.svg')),
+    $r['text'] . ' | ' . json_encode($primul, JSON_UNESCAPED_UNICODE));
+$verifica('importul: categoria, eticheta și autorul create și legate, descrierea SEO; ciorna nepublicată, cu slug din titlu',
+    $unu('SELECT c.name FROM blog_post_categories l JOIN blog_categories c ON c.id = l.category_id WHERE l.post_id = ' . (int) ($primul['id'] ?? 0)) === 'Categorie import ' . $sufix
+    && $unu('SELECT t.name FROM blog_post_tags l JOIN blog_tags t ON t.id = l.tag_id WHERE l.post_id = ' . (int) ($primul['id'] ?? 0)) === 'Eticheta import ' . $sufix
+    && $unu('SELECT a.name FROM blog_authors a JOIN blog_posts p ON p.author_id = a.id WHERE p.id = ' . (int) ($primul['id'] ?? 0)) === 'Autor Import ' . $sufix
+    && $unu("SELECT description FROM seo_pages WHERE page_type = 'blog_post' AND page_ref = :r", ['r' => (string) ($primul['id'] ?? 0)]) === 'Descriere SEO importată'
+    && $unu("SELECT CONCAT(is_published, ':', slug) FROM blog_posts WHERE wp_post_id = 9003") === '0:a-doua-postare-' . $sufix);
+$verifica('după o rulare care a scris, fără erori: fișierul sursă a fost șters și scriptul o spune', !is_file($fisierWxr)
+    && str_contains($r['text'], 'Fișierul sursă a fost șters'), $r['text']);
+file_put_contents($fisierWxr, $wxr('A doua postare, alt titlu ' . $sufix));
+$dupa = $unu('SELECT COUNT(*) FROM blog_posts');
+$r = $importa($fisierWxr, '--skip-images --pastreaza-sursa');
+$verifica('a doua rulare: postările se actualizează (wp_post_id), nu se dublează; --pastreaza-sursa lasă fișierul',
+    $r['cod'] === 0 && $unu('SELECT COUNT(*) FROM blog_posts') === $dupa && $unu('SELECT title FROM blog_posts WHERE wp_post_id = 9003') === 'A doua postare, alt titlu ' . $sufix
+    && is_file($fisierWxr) && str_contains($r['text'], 'Fișierul sursă a rămas (--pastreaza-sursa)'), $r['text']);
+$licenta('lista', 'catalog=pornit', 'blog=pornit');
+$r = $importa($fisierWxr);
+$verifica('fără unealta internă migrare_wordpress în licență: refuzat (cod 2), nimic scris, fișierul rămâne', $r['cod'] === 2
+    && str_contains($r['text'], 'migrare_wordpress') && is_file($fisierWxr), $r['text']);
+$licenta('toate');
+@unlink($fisierWxr);
+$r = $importa($dosarImport . '/nu-exista-' . $sufix . '.xml');
+$verifica('un fișier care nu există: eroare (cod 1)', $r['cod'] === 1 && str_contains($r['text'], 'nu există'), $r['text']);
+
+// =====================================================================
+// WP-23 I. Importul utilizatorilor din backup-ul WordPress: sursa ștearsă
+// =====================================================================
+$scrie('');
+$scrie('== WP-23 I. Importul utilizatorilor din backup-ul WordPress: fișierul se șterge după import');
+$dump = "CREATE TABLE `wpt_users` (\n  `ID` bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n  `user_login` varchar(60) NOT NULL,\n"
+    . "  `user_pass` varchar(255) NOT NULL,\n  `user_email` varchar(100) NOT NULL,\n  `user_registered` datetime NOT NULL,\n"
+    . "  `display_name` varchar(250) NOT NULL,\n  PRIMARY KEY (`ID`)\n) ENGINE=InnoDB;\n"
+    . "INSERT INTO `wpt_users` VALUES (1,'client1','\$P\$Bexemplu','client.import." . $sufix . "@exemplu.ro','2021-01-01 10:00:00','Client Import');\n"
+    . "CREATE TABLE `wpt_usermeta` (\n  `umeta_id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,\n  `user_id` bigint(20) unsigned NOT NULL,\n"
+    . "  `meta_key` varchar(255) DEFAULT NULL,\n  `meta_value` longtext,\n  PRIMARY KEY (`umeta_id`)\n) ENGINE=InnoDB;\n"
+    . "INSERT INTO `wpt_usermeta` VALUES (1,1,'wpt_capabilities','a:1:{s:8:\\\"customer\\\";b:1;}'),(2,1,'first_name','Client'),(3,1,'last_name','Import');\n";
+$numeDump = 'backup-test-' . $sufix . '-db.sql';
+file_put_contents($dosarImport . '/' . $numeDump, $dump);
+$cerere('POST', '/admin/users/import-backup', $jarAdmin, ['dump_file' => $numeDump, 'mod' => 'verifica']);
+$verifica('verificarea backup-ului (fără scriere): fișierul rămâne', is_file($dosarImport . '/' . $numeDump));
+$r = $cerere('POST', '/admin/users/import-backup', $jarAdmin, ['dump_file' => $numeDump, 'mod' => 'importa']);
+$paginaImport = $cerere('GET', '/admin/users?panel=import', $jarAdmin)['corp'];
+$verifica('importul fără erori: contul adăugat, fișierul șters, mesajul o spune', $r['cod'] === 302 && !is_file($dosarImport . '/' . $numeDump)
+    && $unu('SELECT COUNT(*) FROM users WHERE email = :e', ['e' => 'client.import.' . $sufix . '@exemplu.ro']) === '1'
+    && str_contains($paginaImport, 'Fișierul sursă a fost șters de pe server (are datele clienților).'), mb_substr(strip_tags($paginaImport), 0, 400));
+@unlink($dosarImport . '/' . $numeDump);
 
 // =====================================================================
 // Final: totul la loc

@@ -232,6 +232,13 @@ final class AdminController
             ]);
         }
 
+        // WP-23 (G-m9): un backup WordPress are datele clienților (emailuri, adrese, parole hash-uite). După un import
+        // fără nicio eroare fișierul se șterge din storage/import, ca să nu rămână pe server (și în copiile de siguranță,
+        // 12 luni); după o verificare sau un import cu erori rămâne, pentru încă o rulare.
+        $sursaStearsa = false;
+        if ($scrie && (int) ($raport['esuate'] ?? 0) === 0) {
+            $sursaStearsa = @unlink(\App\Support\Paths::stocare('import') . '/' . $nume);
+        }
         Flash::set('wp_dump_report', (string) json_encode(array_merge($raport, [
             'fisier' => $nume,
             'prefix' => (string) ($date['prefix'] ?? ''),
@@ -241,7 +248,10 @@ final class AdminController
         Flash::set(
             'success',
             $scrie
-                ? 'Import finalizat din ' . $nume . '.'
+                ? 'Import finalizat din ' . $nume . '.' . ($sursaStearsa
+                    ? ' Fișierul sursă a fost șters de pe server (are datele clienților).'
+                    : ' Fișierul sursă a rămas pe server (' . ((int) ($raport['esuate'] ?? 0) > 0 ? 'importul a avut erori' : 'nu a putut fi șters')
+                        . '): șterge-l după ce termini, are datele clienților.')
                 : 'Verificare finalizată — nu s-a scris nimic încă. Vezi raportul de mai jos.'
         );
         header('Location: /admin/users?panel=import');
@@ -2679,6 +2689,116 @@ final class AdminController
         ], 'admin/layout');
     }
 
+    /**
+     * Previzualizarea unui articol înainte de salvare (WP-23: B4, din Biovitality 49c4f5b; POST /admin/blog/posts/preview,
+     * al pluginului blog).
+     *
+     * Primește ce e în formular și întoarce pagina gata randată, cu
+     * template-ul ales. Merge prin același cod ca site-ul, deci ce se vede
+     * aici e ce se va vedea și după publicare.
+     */
+    public function blogPostPreview(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+
+        $db = $this->db();
+        $templateId = (int) ($_POST['template_id'] ?? 0);
+        $template = $templateId > 0 && $db instanceof PDO ? $this->loadBlogTemplateById($db, $templateId) : null;
+        $authorId = (int) ($_POST['author_id'] ?? 0);
+        $author = $authorId > 0 && $db instanceof PDO ? $this->loadBlogAuthorById($db, $authorId) : null;
+
+        $postId = (int) ($_POST['id'] ?? 0);
+        $publishedAt = $this->normalizeBlogDate(
+            (string) ($_POST['published_at'] ?? ''),
+            preg_match('/^-?\d+$/', trim((string) ($_POST['timezone_offset_minutes'] ?? ''))) === 1
+                ? (int) $_POST['timezone_offset_minutes']
+                : null
+        );
+
+        $categorie = '';
+        if ($db instanceof PDO && isset($_POST['category_ids']) && is_array($_POST['category_ids'])) {
+            $primaCategorie = (int) ($_POST['category_ids'][0] ?? 0);
+            if ($primaCategorie > 0) {
+                try {
+                    $stmt = $db->prepare('SELECT name FROM blog_categories WHERE id = :id LIMIT 1');
+                    $stmt->execute(['id' => $primaCategorie]);
+                    $categorie = trim((string) ($stmt->fetchColumn() ?: ''));
+                } catch (Throwable) {
+                }
+            }
+        }
+
+        $imagine = trim((string) ($_POST['featured_image_url'] ?? ''));
+        $post = [
+            // Id-ul contează doar pentru etichete și articole similare; la o
+            // postare nouă nu există încă, deci secțiunile alea ies goale.
+            'id' => $postId,
+            'title' => trim((string) ($_POST['title'] ?? 'Articol fără titlu')) ?: 'Articol fără titlu',
+            'slug' => \App\Support\Slug::make((string) ($_POST['slug'] ?? ''), 'previzualizare'),
+            'content' => (string) ($_POST['content'] ?? ''),
+            'references_html' => (string) ($_POST['references_html'] ?? ''),
+            'excerpt' => trim((string) ($_POST['excerpt'] ?? '')),
+            'category' => $categorie,
+            'reading_minutes' => $this->normalizeBlogReadingMinutes((string) ($_POST['reading_minutes'] ?? '')),
+            'published_at' => $publishedAt,
+            'cover_image_url' => $imagine !== '' ? $imagine : '/assets/img/product-placeholder.svg',
+            'featured_image_width' => $this->normalizeImageWidthPercent($_POST['featured_image_width'] ?? null),
+            'video_url' => trim((string) ($_POST['video_url'] ?? '')),
+            'event_start_date' => trim((string) ($_POST['event_start_date'] ?? '')),
+            'event_end_date' => trim((string) ($_POST['event_end_date'] ?? '')),
+            'event_price' => trim((string) ($_POST['event_price'] ?? '')),
+            'event_ticket_url' => trim((string) ($_POST['event_ticket_url'] ?? '')),
+            'event_location' => trim((string) ($_POST['event_location'] ?? '')),
+            'author_name' => trim((string) ($author['name'] ?? '')),
+            'author_slug' => trim((string) ($author['slug'] ?? '')),
+            'author_bio' => trim((string) ($author['bio'] ?? '')),
+            'author_avatar_url' => trim((string) ($author['avatar_url'] ?? '')),
+            'template_html_content' => (string) ($template['html_content'] ?? ''),
+            'template_css_content' => (string) ($template['css_content'] ?? ''),
+            'template_js_content' => (string) ($template['js_content'] ?? ''),
+        ];
+
+        $render = (new SiteController())->renderBlogPreview($post, $db instanceof PDO ? $db : null);
+
+        header('Content-Type: text/html; charset=utf-8');
+        // Previzualizarea stă într-un iframe cu `srcdoc`; nu are ce căuta în
+        // istoricul niciunui cache.
+        header('Cache-Control: no-store');
+        // Stilurile site-ului ca în views/layout.php: fonturile și CSS-ul temei (pachetul site-ului), app.css doar dacă
+        // tema îl cere (Biovitality le scria fix: fonturile Google și app.css).
+        $stiluri = '';
+        if (\App\Support\Tema::fonturiGoogle()) {
+            $stiluri .= '<link rel="preconnect" href="https://fonts.googleapis.com">'
+                . '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+                . '<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">';
+        }
+        foreach (\App\Support\Tema::fonturi() as $temaFont) {
+            $stiluri .= '<link rel="stylesheet" href="' . htmlspecialchars(\App\Support\Tema::url($temaFont), ENT_QUOTES) . '">';
+        }
+        if (\App\Support\Tema::incarcaAppCss()) {
+            $stiluri .= '<link rel="stylesheet" href="/assets/css/app.css?v=' . (@filemtime(\App\Support\Paths::public('assets/css/app.css')) ?: time()) . '">';
+        }
+        foreach (\App\Support\Tema::css() as $temaCss) {
+            $stiluri .= '<link rel="stylesheet" href="' . htmlspecialchars(\App\Support\Tema::url($temaCss), ENT_QUOTES) . '">';
+        }
+        echo '<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<meta name="robots" content="noindex, nofollow">'
+            . '<title>Previzualizare articol</title>'
+            . $stiluri
+            . '<style>body{margin:0;background:#fff;padding:24px 18px;}'
+            . '.bv-preview-shell{max-width:1120px;margin:0 auto;}'
+            . str_ireplace('</style', '<\/style', (string) ($render['css'] ?? ''))
+            . '</style></head><body class="site-shell">'
+            . '<div class="bv-preview-shell">' . (string) ($render['html'] ?? '') . '</div>'
+            . ((string) ($render['js'] ?? '') !== ''
+                ? '<script>' . str_replace('</script>', '<\/script>', (string) $render['js']) . '</script>'
+                : '')
+            . '</body></html>';
+    }
+
     public function blogPostsImport(): void
     {
         if (!$this->guard()) {
@@ -2796,8 +2916,12 @@ final class AdminController
                 if ($newId > 0) {
                     $sourceSeo = $this->loadSeoSettings($db, 'blog_post', (string) $id);
                     $this->saveSeoSettings($db, 'blog_post', (string) $newId, $sourceSeo);
-                    // Copia păstrează categoriile originalului: altfel ar trebui
-                    // rebifate de fiecare dată.
+                    // WP-23 (B4, Biovitality c078bd5, 3ea6a31): copia are și lățimea copertei și bibliografia (în
+                    // instrucțiunea blogului avansat, care tace cât timp migrarea blog/0033 n-a rulat).
+                    $this->scrieBlogAvansat($db, $newId, $this->normalizeImageWidthPercent($source['featured_image_width'] ?? null),
+                        trim((string) ($source['references_html'] ?? '')));
+                    // Copia păstrează categoriile și etichetele originalului:
+                    // altfel ar trebui rebifate de fiecare dată.
                     try {
                         $copiazaCategorii = $db->prepare(
                             'INSERT IGNORE INTO blog_post_categories (post_id, category_id)
@@ -2806,6 +2930,7 @@ final class AdminController
                         $copiazaCategorii->execute(['nou' => $newId, 'vechi' => $id]);
                     } catch (Throwable) {
                     }
+                    $this->syncBlogPostTags($db, $newId, (string) ($source['tags_text'] ?? ''));
                 }
                 $this->refreshCacheAfterPublicContentChange($db);
                 Flash::set('success', 'Postarea a fost duplicată. Editează copia înainte de publicare.');
@@ -2821,19 +2946,30 @@ final class AdminController
         $id = (int) ($_POST['id'] ?? 0);
         $title = trim((string) ($_POST['title'] ?? ''));
         $slugInput = trim((string) ($_POST['slug'] ?? ''));
-        $slug = $this->slugify($slugInput !== '' ? $slugInput : $title);
+        // `Slug::make` păstrează literele cu diacritice („Sănătatea" →
+        // „sanatatea", nu „sntatea"). La editare slug-ul vine completat din
+        // formular, deci adresele articolelor vechi rămân neatinse.
+        $slug = \App\Support\Slug::make($slugInput !== '' ? $slugInput : $title);
         $excerpt = trim((string) ($_POST['excerpt'] ?? ''));
         $content = (string) ($_POST['content'] ?? '');
+        $referencesHtml = trim((string) ($_POST['references_html'] ?? ''));
+        $tagsInput = (string) ($_POST['tags'] ?? '');
         $readingMinutes = $this->normalizeBlogReadingMinutes((string) ($_POST['reading_minutes'] ?? ''));
         $timezoneOffsetRaw = trim((string) ($_POST['timezone_offset_minutes'] ?? ''));
         $timezoneOffset = ($timezoneOffsetRaw !== '' && preg_match('/^-?\d+$/', $timezoneOffsetRaw) === 1)
             ? (int) $timezoneOffsetRaw
             : null;
         $publishedDate = $this->normalizeBlogDate((string) ($_POST['published_at'] ?? ''), $timezoneOffset);
-        $isPublished = isset($_POST['is_published']) ? 1 : 0;
+        // „Salvează ca draft" e un buton de submit propriu: forțează nepublicat
+        // pentru salvarea asta, fără să umble la bifa din Setări postare.
+        $saveAsDraft = isset($_POST['save_as_draft']);
+        $isPublished = $saveAsDraft ? 0 : (isset($_POST['is_published']) ? 1 : 0);
         $templateId = (int) ($_POST['template_id'] ?? ($_POST['blog_template_id'] ?? 0));
         $authorId = (int) ($_POST['author_id'] ?? 0);
         $featuredImage = trim((string) ($_POST['featured_image_url'] ?? ''));
+        // Cât din lățimea articolului ocupă imaginea principală. 100 = ca până
+        // acum, deci postările vechi arată exact la fel.
+        $featuredWidth = $this->normalizeImageWidthPercent($_POST['featured_image_width'] ?? null);
         $seoTitle = trim((string) ($_POST['seo_title'] ?? ''));
         $seoDescription = trim((string) ($_POST['seo_description'] ?? ''));
         $seoCanonicalUrl = trim((string) ($_POST['seo_canonical_url'] ?? ''));
@@ -2953,7 +3089,9 @@ final class AdminController
                     'video_url' => $videoUrl !== '' ? $videoUrl : null,
                 ]);
                 $savedPost = true;
-                Flash::set('success', 'Postarea de blog a fost actualizată.');
+                Flash::set('success', $saveAsDraft
+                    ? 'Postarea a fost salvată ca draft. Nu se vede pe site până n-o publici.'
+                    : 'Postarea de blog a fost actualizată.');
             } else {
                 $stmt = $db->prepare(
                     'INSERT INTO blog_posts (title, slug, excerpt, content, reading_minutes, published_at, is_published, template_id, author_id, featured_image_url, category, category_id, event_start_date, event_end_date, event_price, event_ticket_url, event_location, video_url)
@@ -2981,7 +3119,9 @@ final class AdminController
                 ]);
                 $id = (int) $db->lastInsertId();
                 $savedPost = true;
-                Flash::set('success', 'Postarea de blog a fost adăugată.');
+                Flash::set('success', $saveAsDraft
+                    ? 'Postarea a fost salvată ca draft. Nu se vede pe site până n-o publici.'
+                    : 'Postarea de blog a fost adăugată.');
             }
         } catch (Throwable) {
             Flash::set('error', 'Nu am putut salva postarea. Verifică dacă slug-ul există deja.');
@@ -3007,6 +3147,9 @@ final class AdminController
                 }
             } catch (Throwable) {
             }
+            // WP-23 (B4): lățimea copertei, bibliografia și etichetele, după rândul postării.
+            $this->scrieBlogAvansat($db, $id, $featuredWidth, $referencesHtml);
+            $this->syncBlogPostTags($db, $id, $tagsInput);
         }
         if ($savedPost) {
             $this->refreshCacheAfterPublicContentChange($db);
@@ -3017,6 +3160,62 @@ final class AdminController
             return;
         }
         header('Location: /admin/blog/posts');
+    }
+
+    /**
+     * Procentul de lățime al unei imagini, între 10 și 100.
+     *
+     * Gol sau aiurea înseamnă 100: o valoare stricată n-are voie să facă
+     * imaginea să dispară din articol.
+     */
+    private function normalizeImageWidthPercent(mixed $raw): int
+    {
+        $value = trim((string) ($raw ?? ''));
+        if ($value === '' || !is_numeric($value)) {
+            return 100;
+        }
+
+        return max(10, min(100, (int) round((float) $value)));
+    }
+
+    /**
+     * Câmpurile blogului avansat ale unei postări (WP-23, B4; coloanele migrării blog/0033), scrise separat de rândul
+     * postării: pe o bază care n-a trecut încă prin migrare (codul nou, înainte de `scripts/migreaza.php --aplica`)
+     * instrucțiunea tace, iar postarea se salvează ca înainte. Aceleași valori nu schimbă rândul (nici `updated_at`).
+     */
+    private function scrieBlogAvansat(PDO $db, int $postId, int $latimeCoperta, string $referinte): void
+    {
+        if ($postId <= 0) {
+            return;
+        }
+        try {
+            $db->prepare('UPDATE blog_posts SET featured_image_width = :w, references_html = :r WHERE id = :id')->execute([
+                'w' => $latimeCoperta,
+                'r' => trim($referinte) !== '' ? trim($referinte) : null,
+                'id' => $postId,
+            ]);
+        } catch (Throwable) {
+        }
+    }
+
+    /**
+     * Perechea lui scrieBlogAvansat la citire: lățimea copertei (100 fără migrare) și bibliografia.
+     *
+     * @return array{featured_image_width: int, references_html: ?string}
+     */
+    private function citesteBlogAvansat(PDO $db, int $postId): array
+    {
+        try {
+            $stmt = $db->prepare('SELECT featured_image_width, references_html FROM blog_posts WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => $postId]);
+            $rand = $stmt->fetch() ?: [];
+            return [
+                'featured_image_width' => (int) ($rand['featured_image_width'] ?? 100) ?: 100,
+                'references_html' => isset($rand['references_html']) ? (string) $rand['references_html'] : null,
+            ];
+        } catch (Throwable) {
+            return ['featured_image_width' => 100, 'references_html' => null];
+        }
     }
 
     private function loadBlogTemplatesList(PDO $db): array
@@ -3353,6 +3552,10 @@ final class AdminController
             'categorieDoarText' => $categorieDoarText,
             'fieldCatalog' => \App\Support\BlogTemplateFields::catalog(),
             'fieldMap' => $fieldMap,
+            'tagSuggestions' => $this->loadBlogTagNames($db),
+            // Numele magazinului intră în cardul de previzualizare Google, ca
+            // titlul de acolo să fie chiar cel pe care-l scrie layout-ul.
+            'siteName' => \App\Support\Brand::numeSite(Settings::all($db)),
         ], 'admin/layout');
     }
 
@@ -17931,6 +18134,9 @@ final class AdminController
                 $catIds[] = (int) $row['category_id'];
             }
             $row['category_ids'] = $catIds;
+            // WP-23 (B4, Biovitality c078bd5, 9c549c7, 3ea6a31): lățimea copertei, bibliografia și etichetele.
+            $row += $this->citesteBlogAvansat($db, $id);
+            $row['tags_text'] = $this->loadBlogPostTagsText($db, $id);
 
             return $row;
         } catch (Throwable) {
@@ -25873,6 +26079,118 @@ HTML;
         $value = preg_replace('/[^a-z0-9\- ]/i', '', $value) ?? '';
         $value = preg_replace('/[\s\-]+/', '-', $value) ?? '';
         return trim($value, '-');
+    }
+
+    /**
+     * Etichetele unei postări, într-un singur rând, cum le scrie omul în
+     * editor: „ayurveda, plante medicinale".
+     */
+    private function loadBlogPostTagsText(PDO $db, int $postId): string
+    {
+        if ($postId <= 0) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare(
+                'SELECT t.name
+                 FROM blog_post_tags pt
+                 INNER JOIN blog_tags t ON t.id = pt.tag_id
+                 WHERE pt.post_id = :id
+                 ORDER BY t.name ASC'
+            );
+            $stmt->execute(['id' => $postId]);
+            $nume = [];
+            foreach ($stmt->fetchAll() ?: [] as $rand) {
+                $eticheta = trim((string) ($rand['name'] ?? ''));
+                if ($eticheta !== '') {
+                    $nume[] = $eticheta;
+                }
+            }
+
+            return implode(', ', $nume);
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * Rescrie etichetele unei postări din textul scris în editor. Etichetele
+     * noi se creează din mers; cele rămase fără nicio postare nu se șterg
+     * singure, ca sugestiile să nu dispară în timp ce cineva rescrie un articol.
+     */
+    private function syncBlogPostTags(PDO $db, int $postId, string $text): void
+    {
+        if ($postId <= 0) {
+            return;
+        }
+
+        $nume = [];
+        foreach (preg_split('/[,\n;]+/u', $text) ?: [] as $bucata) {
+            $eticheta = trim((string) preg_replace('/\s+/u', ' ', (string) $bucata));
+            if ($eticheta === '' || mb_strlen($eticheta) > 150) {
+                continue;
+            }
+            // Aceeași etichetă scrisă cu altă literă mare nu e alta.
+            $nume[mb_strtolower($eticheta)] = $eticheta;
+        }
+
+        try {
+            $sterge = $db->prepare('DELETE FROM blog_post_tags WHERE post_id = :pid');
+            $sterge->execute(['pid' => $postId]);
+            if ($nume === []) {
+                return;
+            }
+
+            $cauta = $db->prepare('SELECT id FROM blog_tags WHERE name = :name LIMIT 1');
+            $adauga = $db->prepare('INSERT INTO blog_tags (name, slug) VALUES (:name, :slug)');
+            $leaga = $db->prepare('INSERT IGNORE INTO blog_post_tags (post_id, tag_id) VALUES (:pid, :tid)');
+            $slugLuat = $db->prepare('SELECT 1 FROM blog_tags WHERE slug = :slug LIMIT 1');
+
+            foreach ($nume as $eticheta) {
+                $cauta->execute(['name' => $eticheta]);
+                $tagId = (int) ($cauta->fetchColumn() ?: 0);
+                if ($tagId === 0) {
+                    $slug = \App\Support\Slug::unique(
+                        $eticheta,
+                        static function (string $candidat) use ($slugLuat): bool {
+                            $slugLuat->execute(['slug' => $candidat]);
+
+                            return $slugLuat->fetchColumn() !== false;
+                        },
+                        'eticheta'
+                    );
+                    $adauga->execute(['name' => $eticheta, 'slug' => $slug]);
+                    $tagId = (int) $db->lastInsertId();
+                }
+                if ($tagId > 0) {
+                    $leaga->execute(['pid' => $postId, 'tid' => $tagId]);
+                }
+            }
+        } catch (Throwable) {
+        }
+    }
+
+    /**
+     * Etichetele existente, pentru sugestiile din editor.
+     *
+     * @return string[]
+     */
+    private function loadBlogTagNames(PDO $db, int $limit = 300): array
+    {
+        try {
+            $stmt = $db->query('SELECT name FROM blog_tags ORDER BY name ASC LIMIT ' . max(1, min(1000, $limit)));
+            $nume = [];
+            foreach ($stmt ? ($stmt->fetchAll() ?: []) : [] as $rand) {
+                $eticheta = trim((string) ($rand['name'] ?? ''));
+                if ($eticheta !== '') {
+                    $nume[] = $eticheta;
+                }
+            }
+
+            return $nume;
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private function normalizePageSlug(string $value): string

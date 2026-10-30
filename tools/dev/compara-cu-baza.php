@@ -1140,6 +1140,21 @@ $porturiBiovitality[] = [
         . 'șablonul articolului; pe site, un șablon fără ele arată ca înainte.',
     'mod' => 'repo',
 ];
+// WP-23 (B4; Biovitality c078bd5, 9c549c7, 49c4f5b, 3ea6a31): editorul postării, rescris în cea mai mare parte; textele
+// (codul Bioscem → codul de acum) în tools/dev/lib/declaratii-wp23-editor.php, pe paginile editorului cerute de cazurile de
+// salvare ale blogului (aceleași pe fiecare postare).
+foreach (require __DIR__ . '/lib/declaratii-wp23-editor.php' as $nrEditor => $schimbareEditor) {
+    $porturiBiovitality[] = [
+        'nume' => 'editorul postării de blog: blogul avansat (' . ($nrEditor + 1) . ')',
+        'cale' => '/admin/blog/posts/editor*',
+        'nou' => $schimbareEditor['nou'],
+        'vechi' => $schimbareEditor['vechi'],
+        'motiv' => 'Biovitality c078bd5, 9c549c7, 49c4f5b, 3ea6a31 (WP-23 B4): editorul blogului avansat (H5/H6, aliniere, chenarul '
+            . 'pozelor, lățimea copertei, bibliografia, etichetele, dialogul de link, textul alternativ, cardul Google, previzualizarea, '
+            . '„Salvează ca draft”); se reface în Faza D.',
+        'mod' => 'repo',
+    ];
+}
 // WP-21 (C11c, C11d; Biovitality b9fcaf8, 84e29a9): constructorul de emailuri, blocul „Video / TikTok” și fundalul blocurilor
 // din coloane; textele (codul Bioscem → codul de acum) în tools/dev/lib/declaratii-wp21-constructor.php, pe pagina
 // constructorului unui template nou.
@@ -1281,6 +1296,11 @@ $marcajePort = [
     // WP-21 (C13, Biovitality 2ebc0cb, 9cca65b): exportul Excel al produselor promoționale și fereastra care derulează.
     'bv:promo-export' => ['cale' => '/admin/promo-products', 'motiv' => 'WP-21 (C13): butonul „Export Excel” și stilul ferestrei „Cui a fost dat”'],
     'bv:promo-export-filtru' => ['cale' => '/admin/promo-products', 'motiv' => 'WP-21 (C13): „Export Excel” lângă filtrul de date'],
+    // WP-23 (B4, Biovitality e2c33d3): lista postărilor de blog din admin își schimbă paginile fără reîncărcare (containerul
+    // listei, stilul și scriptul; paginarea însăși apare doar peste o pagină de postări, 25 implicit, deci nu în datele demo).
+    'bv:blog-lista-inceput' => ['cale' => '/admin/blog/posts', 'motiv' => 'WP-23 (B4): începutul containerului listei postărilor'],
+    'bv:blog-lista-sfarsit' => ['cale' => '/admin/blog/posts', 'motiv' => 'WP-23 (B4): sfârșitul containerului listei postărilor'],
+    'bv:blog-lista-script' => ['cale' => '/admin/blog/posts', 'motiv' => 'WP-23 (B4): stilul și scriptul paginării fără reîncărcare'],
 ];
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];

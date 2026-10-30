@@ -35,6 +35,16 @@ final class BlogTemplateFields
                 'type' => 'textarea',
                 'tokens' => ['{{blog_excerpt}}'],
             ],
+            'references' => [
+                'label' => 'Referințe (bibliografie)',
+                'type' => 'rich',
+                'tokens' => ['{{blog_references}}'],
+            ],
+            'tags' => [
+                'label' => 'Etichete',
+                'type' => 'text',
+                'tokens' => ['{{blog_tags}}'],
+            ],
             'featured_image' => [
                 'label' => 'Imagine principală',
                 'type' => 'image',

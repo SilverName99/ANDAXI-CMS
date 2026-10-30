@@ -2,7 +2,7 @@
 # Pe site: plata_stripe, conturi_clienti, blog, newsletter, donatii, membri
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (262)
+RUTE (263)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> 404 [acorduri_gdpr]
@@ -127,6 +127,7 @@ POST /admin/blog/categories/{id}/update -> CONTROLLER [blog]
 POST /admin/blog/posts -> CONTROLLER [blog]
 POST /admin/blog/posts/image-upload -> CONTROLLER [blog]
 POST /admin/blog/posts/import -> CONTROLLER [blog]
+POST /admin/blog/posts/preview -> CONTROLLER [blog]
 POST /admin/blog/templates -> CONTROLLER [blog]
 POST /admin/categories -> 403 [catalog]
 POST /admin/categories/brand-seo -> 403 [catalog]

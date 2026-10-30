@@ -312,5 +312,9 @@ return static function (Router $router): void {
     $router->get('/blog/categorie/{slug}', [SiteController::class, 'blogCategory']);
     $router->get('/blog/eticheta/{slug}', [SiteController::class, 'blogTag']);
 
+    // WP-23 (B4, din Biovitality 49c4f5b): previzualizarea unui articol din editor (desktop/telefon), cu codul care îl
+    // randează pe site; al pluginului blog (/admin/blog/*).
+    $router->post('/admin/blog/posts/preview', [AdminController::class, 'blogPostPreview']);
+
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

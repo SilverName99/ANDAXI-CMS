@@ -972,8 +972,9 @@ try {
         'oferte_bbd' => ['/\bBBD\b/u', '/Sertar Oferte/u', '/Sertar lateral „Oferte”/u'],
         'produse_promo' => ['/[Pp]romoțional/u'],
         'conturi_clienti' => ['/Contul meu/u', '/Creează cont/u', '/Listă utilizatori/u', '/Setări utilizatori/u'],
-        // WP-22: căutarea din listă și articolele similare ale blogului avansat.
-        'blog' => ['/\bBlog\b/u', '/Articole recente/u', '/Pornește videoclipul/u', '/Caută în articole/u', '/Articole similare/u'],
+        // WP-22, WP-23: căutarea din listă și articolele similare ale blogului avansat; editorul postării.
+        'blog' => ['/\bBlog\b/u', '/Articole recente/u', '/Pornește videoclipul/u', '/Caută în articole/u', '/Articole similare/u',
+            '/Salvează ca draft/u', '/Referințe \(bibliografie\)/u'],
         'newsletter' => ['/[Nn]ewsletter/u', '/[Aa]bonaț/u', '/opt-in/u'],
         'chat_live' => ['/tawk/iu', '/Chat live/u'],
         'manechin' => ['/[Mm]anechin/u'],
