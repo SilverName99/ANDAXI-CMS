@@ -173,18 +173,17 @@ final class CereriOferta
         }
     }
 
+    /** Secretul aleator al site-ului pentru hash-ul adreselor (ascuns din Settings::all; revizuirea WP-26). */
+    public const CHEIE_SECRET_IP = 'cereri_oferta_secret_ip';
+
     /**
      * Hash-ul cu care se numără trimiterile unui vizitator: HMAC-SHA256 al cheii de limită a adresei (IPv6 pe rețeaua /64,
-     * `IpClient::cheieLimita`), cu o cheie a site-ului (din configurația bazei), ca din hash să nu se poată afla adresa
-     * încercând toate adresele IPv4.
+     * `IpClient::cheieLimita`), cu secretul aleator al site-ului (`Settings::secretGenerat`, făcut la prima folosire),
+     * ca din hash să nu se poată afla adresa încercând toate adresele IPv4.
      */
-    public static function hashIp(string $ip): string
+    public static function hashIp(PDO $db, string $ip): string
     {
-        $config = require __DIR__ . '/../../config/app.php';
-        $db = (array) ($config['db'] ?? []);
-        $cheie = hash('sha256', 'cereri-oferta|' . (string) ($config['url'] ?? '') . '|' . (string) ($db['database'] ?? '')
-            . '|' . (string) ($db['password'] ?? ''));
-        return hash_hmac('sha256', IpClient::cheieLimita($ip), $cheie);
+        return hash_hmac('sha256', IpClient::cheieLimita($ip), Settings::secretGenerat($db, self::CHEIE_SECRET_IP));
     }
 
     /** A trimis vizitatorul deja LIMITA_CERERI cereri în ultimele LIMITA_MINUTE minute? */
@@ -196,7 +195,7 @@ final class CereriOferta
         try {
             $stmt = $db->prepare('SELECT COUNT(*) FROM quote_submit_logs WHERE ip_hash = :h
                 AND created_at >= NOW() - INTERVAL ' . self::LIMITA_MINUTE . ' MINUTE');
-            $stmt->execute(['h' => self::hashIp($ip)]);
+            $stmt->execute(['h' => self::hashIp($db, $ip)]);
             return (int) $stmt->fetchColumn() >= self::LIMITA_CERERI;
         } catch (Throwable) {
             return false;
@@ -210,7 +209,7 @@ final class CereriOferta
             return;
         }
         try {
-            $db->prepare('INSERT INTO quote_submit_logs (ip_hash, created_at) VALUES (:h, NOW())')->execute(['h' => self::hashIp($ip)]);
+            $db->prepare('INSERT INTO quote_submit_logs (ip_hash, created_at) VALUES (:h, NOW())')->execute(['h' => self::hashIp($db, $ip)]);
             if (random_int(1, 20) === 1) {
                 $db->exec('DELETE FROM quote_submit_logs WHERE created_at < NOW() - INTERVAL 1 DAY');
             }

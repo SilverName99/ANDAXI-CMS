@@ -9,12 +9,14 @@ use App\Support\CustomerAuth;
 use App\Support\Flash;
 use App\Support\IpClient;
 use App\Support\Settings;
+use App\Support\View;
 use PDO;
 use Throwable;
 
 /**
  * Confirmarea adresei de email a contului de client (WP-25: VT-C9, VT-C8; App\Support\ConfirmareEmail): linkul primit
- * pe email (`GET /cont/confirmare/{token}`, mereu deschis, ca un link deja trimis să meargă în orice stare a pluginului)
+ * pe email (`GET /cont/confirmare/{token}` arată butonul, `POST` confirmă; mereu deschise, ca un link deja trimis să
+ * meargă în orice stare a pluginului)
  * și retrimiterea lui (`POST /contul-meu/confirmare-email`), din cont (rândul „Ai comenzi mai vechi…”) sau de pe pagina
  * de intrare (un cont care așteaptă confirmarea). Primul controller pe trăsătura `Comun` (VT-X4).
  */
@@ -22,19 +24,68 @@ final class ConfirmareEmailController
 {
     use Comun;
 
+    /**
+     * `GET /cont/confirmare/{token}`: pagina cu butonul „Confirmă adresa” (revizuirea WP-25: deschiderea linkului nu
+     * confirmă nimic, ca un program care verifică linkurile din emailuri să nu-l folosească în locul clientului). Un link
+     * „comenzi” deschis fără logare în contul lui trimite întâi la intrarea în cont.
+     */
     public function confirma(array $params): void
     {
         $db = $this->db();
-        $idUtilizator = $db instanceof PDO ? ConfirmareEmail::folosesteLink($db, (string) ($params['token'] ?? '')) : null;
-        $logat = $db instanceof PDO ? CustomerAuth::id() : null;
-        if ($idUtilizator === null) {
+        $token = (string) ($params['token'] ?? '');
+        $link = $db instanceof PDO ? ConfirmareEmail::linkValid($db, $token) : null;
+        if ($link === null) {
             Flash::set('error', 'Linkul de confirmare a expirat sau a fost deja folosit. Cere unul nou din contul tău.');
-            header('Location: ' . ($logat !== null && $logat > 0 ? '/contul-meu' : '/login'));
+            header('Location: ' . ((int) (CustomerAuth::id() ?? 0) > 0 ? '/contul-meu' : '/login'));
             return;
         }
-        unset($_SESSION['confirmare_email_cont']);
-        Flash::set('success', 'Adresa de email a fost confirmată.' . ($logat === $idUtilizator ? '' : ' Te poți autentifica acum.'));
-        header('Location: ' . ($logat === $idUtilizator ? '/contul-meu?section=orders' : '/login'));
+        if ($link['scop'] === ConfirmareEmail::SCOP_COMENZI && (int) (CustomerAuth::id() ?? 0) !== $link['user_id']) {
+            Flash::set('error', 'Intră în contul pentru care ai cerut linkul, apoi apasă „Confirmă adresa”.');
+            header('Location: /login?next=' . rawurlencode('/cont/confirmare/' . $token));
+            return;
+        }
+        header('Cache-Control: no-store');
+        header('X-Robots-Tag: noindex, nofollow');
+        View::render('site/confirmare-email', [
+            'title' => 'Confirmă adresa de email',
+            'metaRobots' => 'noindex,nofollow',
+            'token' => $token,
+            'pentruComenzi' => $link['scop'] === ConfirmareEmail::SCOP_COMENZI,
+        ]);
+    }
+
+    /** `POST /cont/confirmare/{token}`: apăsarea butonului; abia acum se folosește linkul. */
+    public function confirmaPost(array $params): void
+    {
+        $db = $this->db();
+        $logat = CustomerAuth::id();
+        $logat = $logat !== null && $logat > 0 ? $logat : null;
+        $token = (string) ($params['token'] ?? '');
+        $rezultat = $db instanceof PDO ? ConfirmareEmail::folosesteLink($db, $token, $logat, (string) ($_POST['password'] ?? ''))
+            : ['rezultat' => ConfirmareEmail::LINK_INVALID, 'user_id' => null, 'comenzi' => 0, 'puncte' => 0];
+        switch ($rezultat['rezultat']) {
+            case ConfirmareEmail::LINK_LOGARE:
+                Flash::set('error', 'Intră în contul pentru care ai cerut linkul, apoi apasă „Confirmă adresa”.');
+                header('Location: /login?next=' . rawurlencode('/cont/confirmare/' . $token));
+                return;
+            case ConfirmareEmail::LINK_PAROLA:
+                Flash::set('error', 'Parola nu este corectă. Scrie parola contului pe care l-ai creat, apoi apasă „Confirmă adresa”.');
+                header('Location: /cont/confirmare/' . rawurlencode($token));
+                return;
+            case ConfirmareEmail::LINK_CONFIRMAT:
+                unset($_SESSION['confirmare_email_cont']);
+                if ($logat === null && $db instanceof PDO) {
+                    // Linkul de înregistrare cu parola contului: clientul intră direct.
+                    CustomerAuth::login((int) $rezultat['user_id']);
+                }
+                Flash::set('success', 'Adresa de email a fost confirmată.' . ((int) $rezultat['puncte'] > 0
+                    ? ' Am adăugat ' . (int) $rezultat['puncte'] . ' puncte de fidelitate din comenzile anterioare.' : ''));
+                header('Location: /contul-meu?section=orders');
+                return;
+            default:
+                Flash::set('error', 'Linkul de confirmare a expirat sau a fost deja folosit. Cere unul nou din contul tău.');
+                header('Location: ' . ($logat !== null ? '/contul-meu' : '/login'));
+        }
     }
 
     public function retrimite(): void

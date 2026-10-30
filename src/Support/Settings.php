@@ -349,6 +349,13 @@ final class Settings
         return (string) ($setari['default_vat_percent'] ?? self::DEFAULTS['default_vat_percent']);
     }
 
+    /**
+     * Secretele generate de cod (revizuirea WP-26), câte unul pe site: stau în `settings`, dar nu ies niciodată din
+     * `all()` (deci nici în admin, în emailuri sau în exporturi) și nu se scriu cu `save()`; se citesc doar cu
+     * `secretGenerat()`. Pe copia de verificare se golesc (tiparul „secret” din reguli) și se generează din nou.
+     */
+    public const CHEI_ASCUNSE = ['cereri_oferta_secret_ip'];
+
     public static function all(?PDO $db): array
     {
         if (!$db instanceof PDO) {
@@ -359,10 +366,44 @@ final class Settings
         $rows = $db->query('SELECT `key`, `value` FROM settings')->fetchAll();
 
         foreach ($rows as $row) {
+            if (in_array((string) $row['key'], self::CHEI_ASCUNSE, true)) {
+                continue;
+            }
             $settings[(string) $row['key']] = (string) $row['value'];
         }
 
         return $settings;
+    }
+
+    /**
+     * Secretul `$cheie` (una din CHEI_ASCUNSE): 64 de caractere hex aleatoare, făcut la prima cerere și păstrat în
+     * `settings`; două cereri care îl fac în aceeași clipă primesc același secret (INSERT IGNORE, apoi citit).
+     */
+    public static function secretGenerat(PDO $db, string $cheie): string
+    {
+        if (!in_array($cheie, self::CHEI_ASCUNSE, true)) {
+            throw new \InvalidArgumentException('Settings::secretGenerat: „' . $cheie . '” nu e în CHEI_ASCUNSE.');
+        }
+        $citeste = static function () use ($db, $cheie): string {
+            $stmt = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+            $stmt->execute(['k' => $cheie]);
+            return (string) ($stmt->fetchColumn() ?: '');
+        };
+        $valoare = $citeste();
+        if (preg_match('/^[0-9a-f]{64}$/', $valoare) === 1) {
+            return $valoare;
+        }
+        $nou = bin2hex(random_bytes(32));
+        if ($valoare === '') {
+            $db->prepare('INSERT IGNORE INTO settings (`key`, `value`) VALUES (:k, :v)')->execute(['k' => $cheie, 'v' => $nou]);
+        }
+        // Un rând gol sau stricat (de exemplu golit pe copia de verificare) se înlocuiește o singură dată.
+        $db->prepare('UPDATE settings SET `value` = :v WHERE `key` = :k AND `value` = :vechi')->execute(['k' => $cheie, 'v' => $nou, 'vechi' => $valoare]);
+        $valoare = $citeste();
+        if (preg_match('/^[0-9a-f]{64}$/', $valoare) !== 1) {
+            throw new \RuntimeException('Settings::secretGenerat: secretul „' . $cheie . '” nu s-a putut scrie.');
+        }
+        return $valoare;
     }
 
     public static function save(?PDO $db, array $values): void
@@ -377,6 +418,9 @@ final class Settings
         );
 
         foreach ($values as $key => $value) {
+            if (in_array((string) $key, self::CHEI_ASCUNSE, true)) {
+                continue; // secretele generate nu se scriu din formulare (secretGenerat)
+            }
             $stmt->execute([
                 'key' => (string) $key,
                 'value' => (string) $value,

@@ -1440,6 +1440,12 @@
                     "null": false,
                     "tip": "datetime"
                 },
+                "email_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "char(64)"
+                },
                 "id": {
                     "extra": "auto_increment",
                     "implicit": null,
@@ -5612,6 +5618,12 @@
                     "null": false,
                     "tip": "varchar(255)"
                 },
+                "in_lucru_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
                 "livemode": {
                     "extra": "",
                     "implicit": "0",
@@ -5864,6 +5876,12 @@
                     "implicit": null,
                     "null": true,
                     "tip": "varchar(30)"
+                },
+                "session_version": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
                 }
             },
             "fk": [],

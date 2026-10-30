@@ -71,6 +71,8 @@ final class AdminController
         if (!$this->guard()) {
             return;
         }
+        // Exporturile de date legale expirate (WP-26, OD-51), și de aici.
+        \App\Support\ExportDateLegale::curataExpirate();
 
         $db = $this->db();
 
@@ -520,6 +522,9 @@ final class AdminController
             return;
         }
 
+        $adresaVeche = $db->prepare('SELECT email FROM users WHERE id = :id');
+        $adresaVeche->execute(['id' => $id]);
+        $emailVechi = (string) ($adresaVeche->fetchColumn() ?: '');
         $stmt = $db->prepare(
             'UPDATE users
              SET first_name = :first_name,
@@ -540,6 +545,8 @@ final class AdminController
             'gender' => $gender !== '' ? $gender : null,
             'id' => $id,
         ]);
+        // Revizuirea WP-25 (G-M4): confirmarea era a adresei de dinainte.
+        \App\Support\ConfirmareEmail::adresaSchimbata($db, $id, $emailVechi, $email);
 
         Flash::set('success', 'Datele utilizatorului au fost actualizate.');
         header('Location: ' . $redirect);

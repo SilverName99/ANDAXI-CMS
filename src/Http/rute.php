@@ -324,6 +324,8 @@ return static function (Router $router): void {
     // unui cont de client, din linkul primit pe email (mereu deschis) și retrimiterea lui din cont (conturi_clienti).
     $router->post('/admin/settings/payments/verifica-webhook', [AdminController::class, 'stripeWebhookVerifica']);
     $router->get('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirma']);
+    // Revizuirea WP-25: linkul confirmă doar la apăsarea butonului din pagina lui (POST), nu la deschidere.
+    $router->post('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirmaPost']);
     $router->post('/contul-meu/confirmare-email', [ConfirmareEmailController::class, 'retrimite']);
     // WP-26 (GR-15, din grafoanaytis): cererea de ofertă din sertarul de pe produs și lista cererilor în admin (cereri_oferta).
     $router->post('/api/cerere-oferta', [CereriOfertaController::class, 'trimite']);

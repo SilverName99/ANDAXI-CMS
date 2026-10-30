@@ -3515,9 +3515,11 @@ final class SiteController
         try {
             $token = $this->googleTokenExchange($oauth, $code);
             $userInfo = $this->googleFetchUserInfo((string) ($token['access_token'] ?? ''));
-            $userId = $this->resolveGoogleUser($db, $userInfo);
-            // WP-25 (G-M4): Google a verificat adresa (resolveGoogleUser refuză una neverificată).
-            \App\Support\ConfirmareEmail::marcheazaConfirmat($db, $userId, 'google');
+            $parolaAnulata = false;
+            $userId = $this->resolveGoogleUser($db, $userInfo, $parolaAnulata);
+            // WP-25 (G-M4): Google a verificat adresa (resolveGoogleUser refuză una neverificată); se confirmă doar dacă e
+            // adresa de acum a contului (revizuirea WP-25: nu una pusă în profil după legarea contului de Google).
+            $confirmare = \App\Support\ConfirmareEmail::marcheazaConfirmat($db, $userId, 'google', strtolower(trim((string) ($userInfo['email'] ?? ''))));
         } catch (RuntimeException $exception) {
             Flash::set('error', $exception->getMessage());
             header('Location: /login');
@@ -3525,8 +3527,12 @@ final class SiteController
         }
 
         CustomerAuth::login($userId);
-        $claimedPoints = $this->claimPendingLoyaltyPointsForUser($db, $userId);
+        $claimedPoints = $confirmare['puncte'] + $this->claimPendingLoyaltyPointsForUser($db, $userId);
         $successMessage = 'Te-ai autentificat cu Google.';
+        if ($parolaAnulata) {
+            $successMessage .= ' Parola veche a contului a fost anulată (contul nu avea adresa confirmată): intri cu Google sau '
+                . 'îți faci o parolă nouă din „Am uitat parola”.';
+        }
         if ($claimedPoints > 0) {
             $successMessage .= ' Am adăugat ' . $claimedPoints . ' puncte de fidelitate din comenzile anterioare.';
         }
@@ -3848,6 +3854,9 @@ final class SiteController
             return;
         }
 
+        $adresaVeche = $db->prepare('SELECT email FROM users WHERE id = :id');
+        $adresaVeche->execute(['id' => $userId]);
+        $emailVechi = (string) ($adresaVeche->fetchColumn() ?: '');
         $stmt = $db->prepare(
             'UPDATE users
              SET first_name = :first_name,
@@ -3867,6 +3876,8 @@ final class SiteController
             'gender' => $gender !== '' ? $gender : null,
             'id' => $userId,
         ]);
+        // Revizuirea WP-25 (G-M4): confirmarea era a adresei de dinainte; cea nouă se confirmă din nou.
+        \App\Support\ConfirmareEmail::adresaSchimbata($db, $userId, $emailVechi, $email);
 
         Flash::set('success', 'Profilul a fost actualizat.');
         header('Location: /contul-meu?section=profile');
@@ -4164,10 +4175,13 @@ final class SiteController
         $use = $db->prepare('UPDATE customer_password_resets SET used_at = NOW() WHERE email = :email AND used_at IS NULL');
         $use->execute(['email' => $email]);
         // WP-25 (G-M4): linkul de resetare a venit pe această adresă, deci adresa e dovedită (comenzile fără cont cu ea
-        // apar în cont).
+        // apar în cont). Revizuirea WP-25: orice altă sesiune a contului (de exemplu a cuiva care își făcuse contul cu
+        // adresa altuia) nu mai e logată.
         $contResetat = $db->prepare('SELECT id FROM users WHERE email = :email LIMIT 1');
         $contResetat->execute(['email' => $email]);
-        \App\Support\ConfirmareEmail::marcheazaConfirmat($db, (int) ($contResetat->fetchColumn() ?: 0), 'resetare');
+        $idResetat = (int) ($contResetat->fetchColumn() ?: 0);
+        CustomerAuth::incheieAlteSesiuni($db, $idResetat);
+        \App\Support\ConfirmareEmail::marcheazaConfirmat($db, $idResetat, 'resetare', $email);
 
         CustomerAuth::logout();
         Flash::set('success', 'Parola a fost actualizată. Te poți autentifica acum.');
@@ -6079,7 +6093,9 @@ HTML;
 
     private function claimPendingLoyaltyPointsForUser(PDO $db, int $userId): int
     {
-        if ($userId <= 0) {
+        // Revizuirea WP-25 (G-M4): punctele comenzilor fără cont (și legarea lor de cont) doar pentru o adresă dovedită;
+        // altfel le revendică linkul de confirmare cerut din cont (App\Support\ConfirmareEmail::marcheazaConfirmat).
+        if ($userId <= 0 || !\App\Support\ConfirmareEmail::confirmat($db, $userId)) {
             return 0;
         }
 
@@ -6607,9 +6623,15 @@ HTML;
 
         $cautare = trim((string) ($filtru['q'] ?? ''));
         if ($cautare !== '') {
+            // Revizuirea WP-24: la cine nu e membru activ, un articol doar pentru membri se potrivește doar după titlu și
+            // rezumat (textul lui nu se arată, deci nici nu se caută în el; altfel căutarea ar dezvălui ce conține).
+            $dbCautare = Database::connection([]);
+            $faraTextRestrictionat = $dbCautare instanceof PDO && \App\Support\AccesMembri::areColoana($dbCautare, 'blog_posts')
+                && \App\Support\AccesMembri::membriPeSite() && !\App\Support\AccesMembri::membruActiv($dbCautare)
+                ? ' AND p.requires_active_account = 0' : '';
             $conditii .= ' AND (p.title' . $colatie . ' LIKE :filtruCautare'
                 . ' OR p.excerpt' . $colatie . ' LIKE :filtruCautare'
-                . ' OR p.content' . $colatie . ' LIKE :filtruCautare)';
+                . ' OR (p.content' . $colatie . ' LIKE :filtruCautare' . $faraTextRestrictionat . '))';
             $parametri['filtruCautare'] = '%' . $cautare . '%';
         }
 
@@ -9534,7 +9556,13 @@ CSS;
         return $decoded;
     }
 
-    private function resolveGoogleUser(PDO $db, array $googleUser): int
+    /**
+     * Revizuirea WP-25: un cont existent, neconfirmat și nelegat încă de Google, la care intră cineva cu Google pe aceeași
+     * adresă: parola lui se anulează (`$parolaAnulata`), iar sesiunile lui de până acum se încheie. Altfel cine și-ar fi
+     * făcut contul cu adresa altuia ar intra în continuare, cu parola lui, în contul pe care proprietarul adresei îl
+     * folosește de acum. Un rând în Jurnal activitate spune de ce.
+     */
+    private function resolveGoogleUser(PDO $db, array $googleUser, bool &$parolaAnulata = false): int
     {
         $googleId = trim((string) ($googleUser['sub'] ?? ''));
         $email = strtolower(trim((string) ($googleUser['email'] ?? '')));
@@ -9579,6 +9607,14 @@ CSS;
                 throw new RuntimeException('Contul nu poate fi asociat cu Google.');
             }
 
+            if (!\App\Support\ConfirmareEmail::confirmat($db, $userId)) {
+                $db->prepare('UPDATE users SET password_hash = :parola WHERE id = :id')
+                    ->execute(['parola' => password_hash(bin2hex(random_bytes(24)), PASSWORD_BCRYPT), 'id' => $userId]);
+                CustomerAuth::incheieAlteSesiuni($db, $userId);
+                \App\Support\AdminActivityLog::log($db, 'cont_parola_anulata_google', ['user_id' => $userId,
+                    'motiv' => 'logare cu Google într-un cont fără adresa confirmată']);
+                $parolaAnulata = true;
+            }
             $currentFirstName = trim((string) ($existing['first_name'] ?? ''));
             $currentLastName = trim((string) ($existing['last_name'] ?? ''));
             $update = $db->prepare(

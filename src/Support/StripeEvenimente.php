@@ -48,6 +48,24 @@ final class StripeEvenimente
     {
         self::$handlere = [];
         self::$areTabel = null;
+        self::$areInLucru = null;
+    }
+
+    private static ?bool $areInLucru = null;
+
+    /** Migrarea plata_stripe/0039 a rulat? O dată pe cerere. */
+    private static function areColoanaInLucru(PDO $db): bool
+    {
+        if (self::$areInLucru === null) {
+            try {
+                $stmt = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'stripe_events' AND COLUMN_NAME = 'in_lucru_la'");
+                self::$areInLucru = $stmt !== false && (int) $stmt->fetchColumn() === 1;
+            } catch (Throwable) {
+                self::$areInLucru = false;
+            }
+        }
+        return self::$areInLucru;
     }
 
     /**
@@ -81,10 +99,22 @@ final class StripeEvenimente
                     if ((string) ($procesat->fetchColumn() ?: '') !== '') {
                         return ['cod' => 200, 'text' => 'duplicate', 'proprietar' => $proprietar];
                     }
-                    // Notat, dar neprocesat (o încercare oprită la jumătate): se procesează acum.
+                    // Notat, dar neprocesat (o încercare oprită la jumătate): se procesează acum, dacă nu-l are deja altă cerere.
                 }
             } catch (Throwable) {
                 $noteaza = false;
+            }
+            // Revizuirea WP-25: două livrări ale aceluiași eveniment în aceeași clipă. Doar cererea care îl ia în lucru
+            // (atomic) îl procesează; cealaltă răspunde 409, iar Stripe o retrimite mai târziu (atunci primește „duplicate”).
+            // Unul luat și neterminat de 5 minute (o cerere căzută la jumătate) se poate lua din nou; o eroare a
+            // handler-ului îl eliberează imediat.
+            if ($noteaza && self::areColoanaInLucru($db)) {
+                $ia = $db->prepare('UPDATE stripe_events SET in_lucru_la = NOW() WHERE event_id = :id AND procesat_la IS NULL
+                    AND (in_lucru_la IS NULL OR in_lucru_la < NOW() - INTERVAL 5 MINUTE)');
+                $ia->execute(['id' => mb_substr($idEveniment, 0, 255)]);
+                if ($ia->rowCount() !== 1) {
+                    return ['cod' => 409, 'text' => 'in_lucru', 'proprietar' => $proprietar];
+                }
             }
         }
 
@@ -104,7 +134,15 @@ final class StripeEvenimente
                     Plugins::jurnalOdataPeZi('stripe:' . $proprietar . ':' . $tip, 'Webhook Stripe „' . $tip . '” pentru pluginul oprit „'
                         . $proprietar . '”: banii s-au înregistrat, fără emailuri către client.');
                 }
-                $rezultat = (string) ($handler($db, $obiect, $eveniment, $vizibil) ?? 'procesat');
+                try {
+                    $rezultat = (string) ($handler($db, $obiect, $eveniment, $vizibil) ?? 'procesat');
+                } catch (Throwable $eroare) {
+                    if ($noteaza && self::areColoanaInLucru($db)) {
+                        $db->prepare('UPDATE stripe_events SET in_lucru_la = NULL WHERE event_id = :id AND procesat_la IS NULL')
+                            ->execute(['id' => mb_substr($idEveniment, 0, 255)]);
+                    }
+                    throw $eroare;
+                }
             }
         }
         self::noteazaRezultat($db, $noteaza, $idEveniment, $rezultat);

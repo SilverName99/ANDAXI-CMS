@@ -144,6 +144,14 @@
             "din": "cod",
             "sursa": "$settings['cookie_banner_text'] ?? … (rezerva din cod)"
         },
+        "customer_email_confirmation_required": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizia proprietarului din 30 oct (revizuirea WP-25, G-M4): Biovitality cere confirmarea adresei la înregistrare, ca vertij; punctele și comenzile fără cont se revendică doar pentru o adresă confirmată. Conturile de dinainte intră ca înainte",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
         "customer_registration_field_first_name": {
             "valoare": "1",
             "mod": "lipsa",
@@ -484,11 +492,6 @@
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod expresie",
             "nucleu": "implicit \"\""
-        },
-        "customer_email_confirmation_required": {
-            "motiv": "Codul vechi n-are confirmarea adresei la înregistrare: implicitul 0 al codului comun e aceeași purtare (contul intră imediat). Confirmarea pentru comenzile fără cont e o regulă a nucleului, fără setare (OD-47, ce-se-schimba.md)",
-            "vechi": "lipsește",
-            "nucleu": "implicit \"0\""
         },
         "email_brand_color": {
             "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",

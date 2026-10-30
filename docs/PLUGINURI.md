@@ -52,8 +52,8 @@ pe server `php scripts/exporta-date-legale.php --ce=comenzi|acorduri_gdpr|donati
 [--din=AAAA-LL-ZZ]` (oricare ar fi starea pluginului; citește tabelele direct). Scriptul
 scrie un CSV în `storage/export/` (drepturi 0600) și afișează doar numărul de rânduri
 și un link `/_andaxi/export/<token>`, bun o singură dată, 24 de ore; fișierul se șterge
-după descărcare, iar unul expirat la următoarea rulare sau la următoarea cerere spre
-`/_andaxi/export/…`. Pe disc stă doar hash-ul tokenului; fără un token valabil adresa
+după descărcare, iar unul expirat la următoarea rulare, la următoarea cerere spre
+`/_andaxi/export/…`, la prima cerere a zilei, la `migreaza.php --aplica` (deploy) și din Dashboard. Pe disc stă doar hash-ul tokenului; fără un token valabil adresa
 dă 404. În admin nu apare nimic (App\Support\ExportDateLegale).
 
 **Dependențele** („are nevoie de” din catalog): un plugin nu poate fi mai pornit
@@ -557,7 +557,9 @@ dispar, iar linkurile spre el se scot din pagini.
   pornește nicio plată). Textele BT care trimit la EuPlătesc („linkurile rămân pe
   EuPlătesc”) se schimbă.
 - **Webhook-ul Stripe** (`App\Support\StripeEvenimente`, WP-25, VT-X1; migrarea `plata_stripe/0035`): după semnătură,
-  fiecare eveniment se notează în `stripe_events` (unul retrimis primește 200 „duplicate” și nu se mai procesează),
+  fiecare eveniment se notează în `stripe_events` (unul retrimis primește 200 „duplicate” și nu se mai procesează; două
+  livrări în aceeași clipă: doar cea care îl ia în lucru, atomic, îl procesează, cealaltă primește 409 și Stripe o
+  retrimite; unul luat de peste 5 minute se reia, o eroare a handler-ului îl eliberează — `in_lucru_la`, revizuirea WP-25),
   primește un proprietar (membri → donatii → link_plata → magazin, după metadata și tabelul donațiilor) și trece prin
   handler-ul lui, **în orice stare a pluginului** (banii se înregistrează mereu; emailurile către clienți ale pluginurilor
   noi doar cu pluginul vizibil; cu proprietarul oprit, un rând pe zi în `pluginuri.log`). Handler-ele magazinului și ale
@@ -744,15 +746,25 @@ dispar, iar linkurile spre el se scot din pagini.
   pentru statistici; decizia OD-20 luată ca recomandarea: pagina de cont a nucleului, nu cea refăcută a vertij);
   confirmarea adresei (VT-C9, OD-19 ca recomandarea, `App\Support\ConfirmareEmail`, migrarea `conturi_clienti/0036`):
   `users.email_confirmed_at`, linkurile din `customer_email_confirmations` (hash sha256, 7 zile, o folosire),
-  `GET /cont/confirmare/{token}` mereu deschis, retrimiterea din cont `POST /contul-meu/confirmare-email` cu bugetul ei
-  (5 la 15 minute, separat de înregistrări, VT-C8); setarea `customer_email_confirmation_required` (oprită implicit;
-  vertij înghețat pornit): contul creat cât e pornită primește linkul și nu intră până nu-l folosește, conturile de
-  dinainte intră ca înainte.
+  `GET /cont/confirmare/{token}` (pagina cu butonul) și `POST /cont/confirmare/{token}` (confirmarea), mereu deschise,
+  retrimiterea din cont `POST /contul-meu/confirmare-email` cu bugetul ei (5 la 15 minute, separat de înregistrări,
+  VT-C8); setarea `customer_email_confirmation_required` (oprită implicit; vertij și Biovitality înghețate pornit, BV din
+  decizia proprietarului din 30 octombrie): contul creat cât e pornită primește linkul și nu intră până nu-l folosește,
+  conturile de dinainte intră ca înainte.
 - **Comenzile fără cont** (regula nucleului G-M4, decizia OD-47, fără setare): o comandă plasată fără cont cu adresa unui
   cont apare în el (și îi completează adresa de facturare) doar după ce clientul dovedește adresa: linkul de confirmare
   (cerut de el, din rândul „Ai comenzi mai vechi făcute cu această adresă…”, textul în `cont_comenzi_neconfirmate_text`;
-  nicio trimitere în masă), un link de resetare a parolei folosit sau o logare cu Google. Atunci comenzile se leagă de
-  cont (`orders.user_id`, un rând „cont_comenzi_legate” în Jurnal activitate).
+  nicio trimitere în masă), un link de resetare a parolei folosit sau o logare cu Google. Atunci punctele de fidelitate în
+  așteptare ale acelor comenzi se revendică și comenzile se leagă de cont (`orders.user_id`, un rând „cont_comenzi_legate”
+  în Jurnal activitate); la înregistrare sau la logare, fără adresa dovedită, nu se revendică nimic.
+  **Revizuirea WP-25** (dovada e a unei adrese, nu a contului): linkul ține hash-ul adresei la care a plecat
+  (`customer_email_confirmations.email_hash`, migrarea `conturi_clienti/0038`) și confirmă doar dacă adresa contului e tot
+  aceea; resetarea și Google confirmă doar adresa pe care au dovedit-o; o adresă schimbată (din cont sau din admin) își
+  pierde confirmarea. Linkul se deschide într-o pagină cu un buton (deschiderea singură nu confirmă nimic): cel cerut din
+  cont se apasă logat în acel cont, cel de înregistrare cere parola contului (cine și-a făcut cont cu adresa altuia nu-l
+  poate confirma prin proprietarul adresei). Resetarea parolei închide celelalte sesiuni ale contului
+  (`users.session_version`, verificată de `CustomerAuth`); prima intrare cu Google într-un cont neconfirmat, cu parolă,
+  anulează parola veche și sesiunile lui (rândul „cont_parola_anulata_google” în Jurnal activitate).
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (clienții își văd contul și comenzile).
 - **Oprit**: fără conturi pe site (linkurile „Contul meu”/„Autentificare” se scot);
@@ -898,7 +910,9 @@ loc de comenzi.
   Jurnal activitate). Tabele: `quote_requests`, `quote_submit_logs` (migrarea
   `cereri_oferta/0037`; pe grafoanaytis tabelul există deja și e adoptat cu rândurile lui).
 - **Limita**: 5 trimiteri la 10 minute de la același vizitator (429), numărate doar cu un
-  HMAC al adresei (IPv6 pe /64), nu cu adresa; rândurile mai vechi de o zi se șterg din mers.
+  HMAC al adresei (IPv6 pe /64), nu cu adresa; cheia HMAC e un secret aleator al site-ului (`cereri_oferta_secret_ip`, făcut
+  la prima folosire, ascuns din `Settings::all` ca toate `Settings::CHEI_ASCUNSE`); rândurile mai vechi de o zi se șterg din
+  mers.
 - **Setări** (textele, implicit neutre; grafoanaytis are textele lui prin înghețare, OD-26):
   `cereri_oferta_buton` („Cere ofertă”), `cereri_oferta_titlu`, `cereri_oferta_intro`,
   `cereri_oferta_eticheta_mesaj`, `cereri_oferta_multumire` (răspunsul după trimitere),

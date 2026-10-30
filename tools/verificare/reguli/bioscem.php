@@ -68,7 +68,9 @@ return [
     // 8 (WP-24, WP-25): pages/blog_posts.requires_active_account copiate, users.email_confirmed_at păstrată (o dată),
     // customer_email_confirmations și stripe_events doar structura.
     // 9 (WP-26): quote_requests anonimizat (ca mesajele de contact), quote_submit_logs doar structura.
-    'versiune' => 9,
+    // 10 (revizuirea WP-25): users.session_version păstrată (un contor); customer_email_confirmations.email_hash e într-un tabel
+    // doar cu structura.
+    'versiune' => 10,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -220,8 +222,11 @@ return [
         'users' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'loyalty_points', 'created_at',
             // WP-25 (conturi_clienti/0036): când a confirmat clientul adresa (o dată, nu adresa); de ea depind comenzile fără
             // cont arătate în cont, deci copia o păstrează.
-            'email_confirmed_at'],
-            'motive' => ['email_confirmed_at' => 'data confirmării adresei, nu adresa (regula comenzilor fără cont depinde de ea)'],
+            'email_confirmed_at',
+            // Revizuirea WP-25 (conturi_clienti/0038): un număr care crește la resetarea parolei, nu un identificator de sesiune.
+            'session_version'],
+            'motive' => ['email_confirmed_at' => 'data confirmării adresei, nu adresa (regula comenzilor fără cont depinde de ea)',
+                'session_version' => 'un contor (0, 1, 2…) al sesiunilor închise de o resetare a parolei, nu un id de sesiune'],
             'transforma' => [
                 'first_name' => ['prenume'],
                 'last_name' => ['nume', 'email' => 'email'],

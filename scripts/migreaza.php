@@ -152,4 +152,11 @@ try {
 } catch (Throwable $e) {
     $opreste(Eroare::MIGRARE, 'eroare neașteptată: ' . Schema::faraValori($e->getMessage()), $comanda);
 }
+if ($comanda === 'aplica') {
+    // La fiecare deploy: exporturile de date legale expirate se șterg (WP-26, OD-51).
+    try {
+        \App\Support\ExportDateLegale::curataExpirate();
+    } catch (Throwable) {
+    }
+}
 $termina($raport);

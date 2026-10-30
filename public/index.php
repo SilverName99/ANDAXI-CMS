@@ -174,3 +174,5 @@ $router = new Router([GardaPluginuri::class, 'permite']);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 ResponseCache::finishRequest($pageCacheContext);
+// Exporturile de date legale expirate (WP-26, OD-51): șterse cel mult o dată pe zi, după răspuns.
+\App\Support\ExportDateLegale::curataOdataPeZi();

@@ -159,6 +159,29 @@ final class ExportDateLegale
         @unlink($gasit['fisier']);
     }
 
+    /**
+     * Curățenia de mai jos, cel mult o dată pe zi, la o cerere oarecare (revizuirea WP-26: un export nedescărcat nu
+     * așteaptă următorul export ca să fie șters). Doar un `stat` când nu e nimic de făcut; fără dosarul exporturilor, nimic.
+     * O cheamă și `scripts/migreaza.php` (la fiecare deploy) și Dashboard-ul adminului.
+     */
+    public static function curataOdataPeZi(): void
+    {
+        try {
+            $dosar = Paths::stocare('export');
+            if (!is_dir($dosar)) {
+                return;
+            }
+            $semn = $dosar . '/.curatat';
+            if (is_file($semn) && (int) @filemtime($semn) > time() - 86400) {
+                return;
+            }
+            @touch($semn);
+            self::curataExpirate();
+        } catch (\Throwable) {
+            // Curățenia nu oprește niciodată o cerere.
+        }
+    }
+
     /** Șterge exporturile expirate (fișierul și descrierea lui) și resturile fără pereche. Întoarce câte a șters. */
     public static function curataExpirate(): int
     {

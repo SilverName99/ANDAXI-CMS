@@ -157,7 +157,7 @@ $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /
     'GET /newsletter/track/open/{campaignId}/{subscriberId}/{token}', 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}',
     // WP-25: linkul de confirmare a adresei din emailul de după înregistrare (un cont creat cât `conturi_clienti` era
     // pornit se confirmă și după oprirea lui).
-    'GET /cont/confirmare/{token}'];
+    'GET /cont/confirmare/{token}', 'POST /cont/confirmare/{token}'];
 $mereuDeschiseFixeNorm = [];
 foreach ($mereuDeschiseFixe as $adresa) {
     [$metodaFixa, $tiparFix] = explode(' ', $adresa, 2);

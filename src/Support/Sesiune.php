@@ -31,7 +31,8 @@ namespace App\Support;
 final class Sesiune
 {
     /** Cheile sesiunii care spun cine e logat (`Auth::attempt`, `CustomerAuth::login`). */
-    public const CHEI_LOGARE = ['admin_id', 'admin_roles', 'admin_role', 'admin_last_seen', CustomerAuth::SESSION_KEY];
+    public const CHEI_LOGARE = ['admin_id', 'admin_roles', 'admin_role', 'admin_last_seen', CustomerAuth::SESSION_KEY,
+        CustomerAuth::SESSION_VERSION_KEY];
 
     /** Cheia rândului din `cart_abandonments`, scrisă la prima logare (id-ul de dinainte de ea). */
     public const CHEIE_COS_ABANDONAT = 'cos_abandonat_cheie';

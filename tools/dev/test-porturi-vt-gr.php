@@ -853,6 +853,11 @@ $sitemap = $cerere('GET', '/sitemap.xml')['corp'];
 $verifica('sitemap.xml: fără pagina și articolul restricționate (mereu)', !str_contains($sitemap, 'pagina-membri-test')
     && !str_contains($sitemap, 'atelier-secret-membri') && str_contains($sitemap, 'tokenuri-membri-test'));
 $verifica('linkul spre pagina restricționată rămâne cât timp membri e pe site', str_contains($tok, 'href="/pagina-membri-test"'));
+// Revizuirea WP-24: căutarea din /blog nu se uită în textul unui articol restricționat (la cine nu e membru activ).
+$cautaText = $cerere('GET', '/blog?q=' . rawurlencode('Conținut secret'))['corp'];
+$cautaTitlu = $cerere('GET', '/blog?q=' . rawurlencode('Atelier secret'))['corp'];
+$verifica('căutarea în blog: articolul doar pentru membri se găsește după titlu, nu după textul lui (care nu se arată)',
+    !str_contains($cautaText, '/blog/atelier-secret-membri') && str_contains($cautaTitlu, '/blog/atelier-secret-membri'));
 // Membri oprit: 404 și dispare din liste și din linkuri.
 $licenta('toate', 'membri=oprit');
 AccesMembri::reseteaza();
@@ -1010,6 +1015,36 @@ $verifica('verificaWebhook: fără endpoint pentru adresa site-ului → negăsit
 $cereriStripe();
 putenv('STRIPE_API_BASE');
 unset($_ENV['STRIPE_API_BASE']);
+// Revizuirea WP-25: două livrări ale aceluiași eveniment în aceeași clipă (stripe_events.in_lucru_la, plata_stripe/0039).
+StripeEvenimente::reseteaza();
+$apeluri = 0;
+StripeEvenimente::handler('magazin', 'checkout.session.completed', static function () use (&$apeluri): string {
+    $apeluri++;
+    return 'procesat_test';
+});
+$evConcurent = ['id' => 'evt_wp25_concurent', 'type' => 'checkout.session.completed', 'data' => ['object' => ['metadata' => ['order_number' => 'CMD-X']]]];
+$db->exec("INSERT INTO stripe_events (event_id, type, primit_la, in_lucru_la) VALUES ('evt_wp25_concurent', 'checkout.session.completed', NOW(), NOW())");
+$inLucru = StripeEvenimente::proceseaza($db, $evConcurent);
+$db->exec("UPDATE stripe_events SET in_lucru_la = NOW() - INTERVAL 6 MINUTE WHERE event_id = 'evt_wp25_concurent'");
+$reluat = StripeEvenimente::proceseaza($db, $evConcurent);
+$dinNou = StripeEvenimente::proceseaza($db, $evConcurent);
+StripeEvenimente::handler('magazin', 'checkout.session.expired', static function (): string {
+    throw new RuntimeException('handler căzut (test)');
+});
+$evCazut = ['id' => 'evt_wp25_cazut', 'type' => 'checkout.session.expired', 'data' => ['object' => ['metadata' => ['order_number' => 'CMD-X']]]];
+try {
+    StripeEvenimente::proceseaza($db, $evCazut);
+    $aruncat = false;
+} catch (RuntimeException) {
+    $aruncat = true;
+}
+$verifica('evenimentul luat în lucru de altă cerere: 409 fără procesare; unul luat de peste 5 minute se reia (o dată); apoi „duplicate”; '
+    . 'un handler căzut eliberează evenimentul (in_lucru_la gol) pentru retrimiterea lui Stripe',
+    $inLucru['cod'] === 409 && $reluat['cod'] === 200 && $dinNou['text'] === 'duplicate' && $apeluri === 1 && $aruncat
+    && $unu("SELECT in_lucru_la FROM stripe_events WHERE event_id = 'evt_wp25_cazut'") === ''
+    && $unu("SELECT procesat_la FROM stripe_events WHERE event_id = 'evt_wp25_cazut'") === '', json_encode([$inLucru, $reluat, $dinNou, $apeluri]));
+$db->exec("DELETE FROM stripe_events WHERE event_id IN ('evt_wp25_concurent', 'evt_wp25_cazut')");
+StripeEvenimente::reseteaza();
 
 // =====================================================================
 // WP-25 B. Webhook-ul prin server
@@ -1123,74 +1158,165 @@ $verifica('{{auth_form}}: pe paginile „login” și „register” formularul 
     && str_contains($register, 'name="register_form_token" value="') && str_contains($register, 'style="display:none;" aria-hidden="true"'));
 $verifica('{{auth_form}} pe altă pagină: gol (fără formular, fără codul tokenului)', !str_contains($alta, 'data-auth-form') && !str_contains($alta, '{{auth_form}}'));
 $db->exec("DELETE FROM pages WHERE slug IN ('login', 'register', 'pagina-auth-test')");
-// Regula comenzilor fără cont (G-M4).
+// Regula comenzilor fără cont (G-M4; cu reparațiile revizuirii WP-25).
+$textDinMail = static function (string $eml): string {
+    return quoted_printable_decode($eml) . base64_decode((string) (preg_match('/\r?\n\r?\n([A-Za-z0-9+\/=\r\n]{40,})/', $eml, $mb) === 1
+        ? preg_replace('/\s+/', '', $mb[1]) : ''));
+};
+$cereLink = static function (string $jar) use ($cerere, $dosarMail, $mailuriNoi, $textDinMail): string {
+    $dinainte = glob($dosarMail . '/*.eml') ?: [];
+    $cerere('POST', '/contul-meu/confirmare-email', $jar, []);
+    $mailuri = $mailuriNoi($dinainte);
+    return preg_match('#/cont/confirmare/([a-f0-9]{64})#', $textDinMail((string) end($mailuri)), $mt) === 1 ? $mt[1] : '';
+};
 $coloaneComenzi = $db->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders'
-    AND COLUMN_NAME NOT IN ('id', 'order_number', 'user_id', 'billing_email') ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_COLUMN);
+    AND COLUMN_NAME NOT IN ('id', 'order_number', 'user_id', 'billing_email', 'loyalty_points_pending_claim', 'loyalty_points_awarded',
+    'loyalty_points_awarded_at') ORDER BY ORDINAL_POSITION")->fetchAll(PDO::FETCH_COLUMN);
 $lista = implode(', ', array_map(static fn ($c): string => '`' . $c . '`', $coloaneComenzi));
-$db->prepare("INSERT INTO orders (order_number, user_id, billing_email, {$lista}) SELECT 'CMD-FARA-CONT-WP25', NULL, 'ana@exemplu.ro', {$lista}
-    FROM orders WHERE id = :id")->execute(['id' => $idComanda]);
-$idFaraCont = (int) $db->lastInsertId();
+$comandaFaraCont = static function (string $numar, string $email, int $puncte = 0) use ($db, $lista, $idComanda): int {
+    $db->prepare("INSERT INTO orders (order_number, user_id, billing_email, loyalty_points_pending_claim, loyalty_points_awarded, {$lista})
+        SELECT :n, NULL, :e, :p, 0, {$lista} FROM orders WHERE id = :id")->execute(['n' => $numar, 'e' => $email, 'p' => $puncte, 'id' => $idComanda]);
+    return (int) $db->lastInsertId();
+};
+$contNou = static function (string $prenume, string $email, string $parola) use ($db): int {
+    $db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES (:f, 'Test', :e, :h)")
+        ->execute(['f' => $prenume, 'e' => $email, 'h' => password_hash($parola, PASSWORD_BCRYPT)]);
+    return (int) $db->lastInsertId();
+};
+$logare = static function (string $jar, string $email, string $parola) use ($cerere): array {
+    @unlink($jar);
+    $cerere('GET', '/login', $jar);
+    return $cerere('POST', '/login', $jar, ['email' => $email, 'password' => $parola]);
+};
+$idFaraCont = $comandaFaraCont('CMD-FARA-CONT-WP25', 'ana@exemplu.ro', 40);
 $db->prepare("UPDATE orders SET billing_first_name = 'Ana', billing_address_line1 = 'Strada Inventată 7' WHERE id = :id")->execute(['id' => $idFaraCont]);
 $parolaAna = 'parola-ana-wp25';
-$db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Ana', 'Test', 'ana@exemplu.ro', :h)")
-    ->execute(['h' => password_hash($parolaAna, PASSWORD_BCRYPT)]);
-$idAna = (int) $db->lastInsertId();
+$idAna = $contNou('Ana', 'ana@exemplu.ro', $parolaAna);
 $jarAna = $dosarLucru . '/ana-jar.txt';
-$cerere('GET', '/login', $jarAna);
-$cerere('POST', '/login', $jarAna, ['email' => 'ana@exemplu.ro', 'password' => $parolaAna]);
+$r = $logare($jarAna, 'ana@exemplu.ro', $parolaAna);
 $cont = $cerere('GET', '/contul-meu?section=orders', $jarAna)['corp'];
-$verifica('cont nou cu adresa unei comenzi fără cont: comanda NU apare, nici adresa ei de facturare; rândul „Ai comenzi mai vechi…” cu butonul',
+$verifica('cont nou cu adresa unei comenzi fără cont: comanda NU apare, nici adresa ei de facturare; rândul „Ai comenzi mai vechi…” cu butonul; '
+    . 'la logare punctele ei (40, în așteptare) NU se revendică (revizuirea WP-25, blocantul 2)',
     !str_contains($cont, 'CMD-FARA-CONT-WP25') && !str_contains($cont, 'Strada Inventată 7')
-    && str_contains($cont, ConfirmareEmail::TEXT_IMPLICIT_COMENZI) && str_contains($cont, 'action="/contul-meu/confirmare-email"'));
+    && str_contains($cont, ConfirmareEmail::TEXT_IMPLICIT_COMENZI) && str_contains($cont, 'action="/contul-meu/confirmare-email"')
+    && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraCont]) === ''
+    && (int) $unu('SELECT loyalty_points_pending_claim FROM orders WHERE id = :id', ['id' => $idFaraCont]) === 40
+    && (int) $unu('SELECT COUNT(*) FROM loyalty_points_transactions WHERE user_id = :id', ['id' => $idAna]) === 0);
 $dinainteMail = glob($dosarMail . '/*.eml') ?: [];
-$cerere('POST', '/contul-meu/confirmare-email', $jarAna, []);
+$tokenAna = $cereLink($jarAna);
 $mailuri = $mailuriNoi($dinainteMail);
-$corpMail = quoted_printable_decode((string) end($mailuri));
-$corpMail .= base64_decode((string) (preg_match('/\r?\n\r?\n([A-Za-z0-9+\/=\r\n]{40,})/', (string) end($mailuri), $mb) === 1 ? preg_replace('/\s+/', '', $mb[1]) : ''));
-preg_match('#/cont/confirmare/([a-f0-9]{64})#', $corpMail, $mt);
-$tokenAna = (string) ($mt[1] ?? '');
-$verifica('„Trimite linkul”: un email spre adresa contului cu linkul /cont/confirmare/<token>; în bază doar hash-ul (scop „comenzi”)',
+$verifica('„Trimite linkul”: un email spre adresa contului cu linkul /cont/confirmare/<token>; în bază doar hash-ul tokenului și al adresei (scop „comenzi”)',
     count($mailuri) === 1 && $tokenAna !== '' && $antetMail((string) $mailuri[0], 'To') === 'ana@exemplu.ro'
     && $unu('SELECT token_hash FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === hash('sha256', $tokenAna)
-    && $unu('SELECT scop FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === 'comenzi', mb_substr($corpMail, 0, 300));
+    && $unu('SELECT email_hash FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === hash('sha256', 'ana@exemplu.ro')
+    && $unu('SELECT scop FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === 'comenzi');
 $db->prepare('UPDATE customer_email_confirmations SET created_at = NOW() - INTERVAL 8 DAY WHERE user_id = :id')->execute(['id' => $idAna]);
-$r = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$r = $cerere('POST', '/cont/confirmare/' . $tokenAna, $jarAna);
 $verifica('linkul expirat (8 zile): nu confirmă nimic, comanda rămâne fără cont', $r['cod'] === 302
     && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idAna]) === ''
     && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraCont]) === '');
 $db->prepare('UPDATE customer_email_confirmations SET created_at = NOW() WHERE user_id = :id')->execute(['id' => $idAna]);
-$r = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$pagina = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$jarStrain = $dosarLucru . '/strain-jar.txt';
+$rStrain = $cerere('POST', '/cont/confirmare/' . $tokenAna, $jarStrain);
+$verifica('deschiderea linkului (GET) arată doar butonul (POST), fără să confirme; apăsat fără logare în cont (alt browser): trimis la '
+    . 'intrare, nimic confirmat, linkul rămâne bun (revizuirea WP-25, majorul 3)',
+    $pagina['cod'] === 200 && str_contains($pagina['corp'], 'method="post" action="/cont/confirmare/' . $tokenAna . '"')
+    && str_contains((string) ($pagina['antete']['cache-control'] ?? ''), 'no-store')
+    && $rStrain['cod'] === 302 && str_starts_with((string) ($rStrain['antete']['location'] ?? ''), '/login?next=')
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idAna]) === ''
+    && $unu('SELECT used_at FROM customer_email_confirmations WHERE user_id = :id', ['id' => $idAna]) === '', $pagina['cod'] . ' ' . $rStrain['cod']);
+$r = $cerere('POST', '/cont/confirmare/' . $tokenAna, $jarAna);
 $cont = $cerere('GET', '/contul-meu?section=orders', $jarAna)['corp'];
-$verifica('linkul valabil: adresa confirmată, comanda legată de cont (orders.user_id), listată, rândul dispare; un rând în Jurnal activitate',
+$verifica('linkul apăsat din cont: adresa confirmată, punctele (40) revendicate, comanda legată de cont, listată, rândul dispare; un rând în Jurnal activitate',
     $r['cod'] === 302 && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idAna]) !== ''
     && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraCont]) === $idAna && str_contains($cont, 'CMD-FARA-CONT-WP25')
+    && (int) $unu('SELECT loyalty_points_pending_claim FROM orders WHERE id = :id', ['id' => $idFaraCont]) === 0
+    && (int) $unu('SELECT COALESCE(SUM(points_delta), 0) FROM loyalty_points_transactions WHERE user_id = :id', ['id' => $idAna]) === 40
     && !str_contains($cont, ConfirmareEmail::TEXT_IMPLICIT_COMENZI)
     && (int) $unu("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cont_comenzi_legate' AND context_json LIKE :c", ['c' => '%"user_id":' . $idAna . '%']) === 1);
-$r = $cerere('GET', '/cont/confirmare/' . $tokenAna, $jarAna);
+$r = $cerere('POST', '/cont/confirmare/' . $tokenAna, $jarAna);
 $verifica('același link a doua oară: refuzat (folosit)', $r['cod'] === 302 && str_contains($cerere('GET', '/contul-meu', $jarAna)['corp'], 'expirat sau a fost deja folosit'));
-// Resetarea parolei dovedește adresa.
-$db->prepare("INSERT INTO orders (order_number, user_id, billing_email, {$lista}) SELECT 'CMD-FARA-CONT-WP25B', NULL, 'bogdan@exemplu.ro', {$lista}
-    FROM orders WHERE id = :id")->execute(['id' => $idComanda]);
-$idFaraContB = (int) $db->lastInsertId();
-$db->prepare("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Bogdan', 'Test', 'bogdan@exemplu.ro', :h)")
-    ->execute(['h' => password_hash('parola-veche-1', PASSWORD_BCRYPT)]);
-$idBogdan = (int) $db->lastInsertId();
+// Blocantul 1: adresa schimbată după confirmare.
+$idVictima = $comandaFaraCont('CMD-VICTIMA-WP25', 'victima@exemplu.ro', 25);
+$rutaProfil = (string) (preg_match('#action="(/contul-meu/[a-z/-]*profil[a-z/-]*)"#', $cerere('GET', '/contul-meu?section=profile', $jarAna)['corp'], $mp) === 1 ? $mp[1] : '');
+$cerere('POST', $rutaProfil !== '' ? $rutaProfil : '/contul-meu/profil', $jarAna, ['first_name' => 'Ana', 'last_name' => 'Test', 'email' => 'victima@exemplu.ro']);
+$cont = $cerere('GET', '/contul-meu?section=orders', $jarAna)['corp'];
+$verifica('adresa schimbată după confirmare (din cont): confirmarea se șterge, comanda fără cont a noii adrese NU apare, punctele ei nu se '
+    . 'revendică nici la o logare nouă (revizuirea WP-25, blocantul 1)',
+    $rutaProfil !== '' && $unu('SELECT email FROM users WHERE id = :id', ['id' => $idAna]) === 'victima@exemplu.ro'
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idAna]) === '' && !str_contains($cont, 'CMD-VICTIMA-WP25')
+    && ($logare($jarAna, 'victima@exemplu.ro', $parolaAna)['cod'] === 302)
+    && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idVictima]) === ''
+    && (int) $unu('SELECT loyalty_points_pending_claim FROM orders WHERE id = :id', ['id' => $idVictima]) === 25, 'ruta: ' . $rutaProfil);
+// Varianta: linkul cerut pe adresa A, apoi adresa schimbată în B, apoi apăsat.
+$parolaDan = 'parola-dan-wp25';
+$idDan = $contNou('Dan', 'dan@exemplu.ro', $parolaDan);
+$jarDan = $dosarLucru . '/dan-jar.txt';
+$logare($jarDan, 'dan@exemplu.ro', $parolaDan);
+$idVictima2 = $comandaFaraCont('CMD-VICTIMA2-WP25', 'victima2@exemplu.ro');
+$tokenDan = $cereLink($jarDan);
+$cerere('POST', $rutaProfil !== '' ? $rutaProfil : '/contul-meu/profil', $jarDan, ['first_name' => 'Dan', 'last_name' => 'Test', 'email' => 'victima2@exemplu.ro']);
+$r = $cerere('POST', '/cont/confirmare/' . $tokenDan, $jarDan);
+$verifica('linkul cerut pe adresa A, apăsat după schimbarea adresei în B: refuzat, comanda lui B rămâne fără cont',
+    $tokenDan !== '' && $r['cod'] === 302 && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idVictima2]) === ''
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idDan]) === '');
+// Adminul schimbă adresa: confirmarea se șterge.
+$db->prepare('UPDATE users SET email_confirmed_at = NOW() WHERE id = :id')->execute(['id' => $idDan]);
+$logareAdmin();
+$cerere('POST', '/admin/users/save', $jarAdmin, ['id' => (string) $idDan, 'first_name' => 'Dan', 'last_name' => 'Test', 'email' => 'dan.nou@exemplu.ro']);
+$verifica('adresa schimbată din admin (Utilizatori): confirmarea se șterge',
+    $unu('SELECT email FROM users WHERE id = :id', ['id' => $idDan]) === 'dan.nou@exemplu.ro'
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idDan]) === '');
+// Resetarea parolei dovedește adresa și închide celelalte sesiuni.
+$idFaraContB = $comandaFaraCont('CMD-FARA-CONT-WP25B', 'bogdan@exemplu.ro');
+$idBogdan = $contNou('Bogdan', 'bogdan@exemplu.ro', 'parola-veche-1');
+$jarVechiBogdan = $dosarLucru . '/bogdan-vechi-jar.txt';
+$logare($jarVechiBogdan, 'bogdan@exemplu.ro', 'parola-veche-1');
+$logatInainte = str_contains($cerere('GET', '/contul-meu', $jarVechiBogdan)['corp'], 'bogdan@exemplu.ro');
 $dinainteMail = glob($dosarMail . '/*.eml') ?: [];
 $cerere('POST', '/contul-meu/resetare-parola', null, ['email' => 'bogdan@exemplu.ro']);
-$mailReset = (string) (($mailuriNoi($dinainteMail))[0] ?? '');
-$textReset = quoted_printable_decode($mailReset) . base64_decode((string) (preg_match('/\r?\n\r?\n([A-Za-z0-9+\/=\r\n]{40,})/', $mailReset, $mr) === 1
-    ? preg_replace('/\s+/', '', $mr[1]) : ''));
-preg_match('#/contul-meu/resetare-parola/([A-Za-z0-9]+)#', $textReset, $mrt);
+preg_match('#/contul-meu/resetare-parola/([A-Za-z0-9]+)#', $textDinMail((string) (($mailuriNoi($dinainteMail))[0] ?? '')), $mrt);
 $cerere('POST', '/contul-meu/resetare-parola/' . ($mrt[1] ?? 'x'), null, ['password' => 'parola-noua-123', 'password_confirm' => 'parola-noua-123']);
-$verifica('un link de resetare a parolei folosit dovedește adresa: contul confirmat, comanda fără cont legată',
-    $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idBogdan]) !== ''
-    && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraContB]) === $idBogdan, 'token: ' . ($mrt[1] ?? '-'));
-$verifica('logarea cu Google: callback-ul marchează adresa confirmată (sursa „google”)',
-    preg_match('/resolveGoogleUser\(\$db, \$userInfo\);\s*\/\/[^\n]*\n\s*\\\\App\\\\Support\\\\ConfirmareEmail::marcheazaConfirmat\(\$db, \$userId, \'google\'\)/',
-        (string) file_get_contents($radacina . '/src/Http/Controllers/SiteController.php')) === 1);
-// Confirmarea cerută la înregistrare.
+$dupa = $cerere('GET', '/contul-meu', $jarVechiBogdan);
+$verifica('un link de resetare a parolei folosit dovedește adresa (contul confirmat, comanda fără cont legată) și închide sesiunile de dinainte '
+    . 'ale contului (revizuirea WP-25: users.session_version)',
+    $logatInainte && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idBogdan]) !== ''
+    && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idFaraContB]) === $idBogdan
+    && (int) $unu('SELECT session_version FROM users WHERE id = :id', ['id' => $idBogdan]) === 1
+    && !str_contains((string) $dupa['corp'], 'bogdan@exemplu.ro') && in_array($dupa['cod'], [302, 200], true), 'token: ' . ($mrt[1] ?? '-'));
+// Logarea cu Google (în proces: SiteController::resolveGoogleUser și ConfirmareEmail::marcheazaConfirmat, fără Google).
+$site = new \App\Http\Controllers\SiteController();
+$rezolva = new ReflectionMethod($site, 'resolveGoogleUser');
+$idElena = $contNou('Elena', 'elena@exemplu.ro', 'parola-pusa-de-altcineva');
+$comandaElena = $comandaFaraCont('CMD-ELENA-WP25', 'elena@exemplu.ro');
+$parolaAnulata = false;
+$argumente = [$db, ['sub' => 'google-test-elena', 'email' => 'elena@exemplu.ro', 'email_verified' => true, 'given_name' => 'Elena'], &$parolaAnulata];
+$idGoogle = $rezolva->invokeArgs($site, $argumente);
+$confirmareGoogle = ConfirmareEmail::marcheazaConfirmat($db, $idGoogle, 'google', 'elena@exemplu.ro');
+$verifica('Google într-un cont existent, neconfirmat, cu parolă: parola veche anulată, sesiunile lui închise, un rând în Jurnal activitate; '
+    . 'adresa verificată de Google confirmă contul și leagă comanda (revizuirea WP-25, majorul 3)',
+    $idGoogle === $idElena && $parolaAnulata && !password_verify('parola-pusa-de-altcineva', $unu('SELECT password_hash FROM users WHERE id = :id', ['id' => $idElena]))
+    && (int) $unu('SELECT session_version FROM users WHERE id = :id', ['id' => $idElena]) === 1
+    && (int) $unu("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cont_parola_anulata_google' AND context_json LIKE :c", ['c' => '%"user_id":' . $idElena . '%']) === 1
+    && $confirmareGoogle['comenzi'] === 1 && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $comandaElena]) === $idElena);
+$db->prepare("UPDATE users SET email = 'elena.alta@exemplu.ro', email_confirmed_at = NULL WHERE id = :id")->execute(['id' => $idElena]);
+$comandaAlta = $comandaFaraCont('CMD-ELENA-ALTA-WP25', 'elena.alta@exemplu.ro');
+$parolaAnulata = false;
+$argumente = [$db, ['sub' => 'google-test-elena', 'email' => 'elena@exemplu.ro', 'email_verified' => true], &$parolaAnulata];
+$idGoogle = $rezolva->invokeArgs($site, $argumente);
+$confirmareGoogle = ConfirmareEmail::marcheazaConfirmat($db, $idGoogle, 'google', 'elena@exemplu.ro');
+$verifica('Google cu o adresă verificată alta decât cea de acum a contului (schimbată în profil după legare): nu confirmă nimic',
+    $idGoogle === $idElena && $confirmareGoogle['comenzi'] === 0 && !$parolaAnulata
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idElena]) === ''
+    && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $comandaAlta]) === '');
+$verifica('callback-ul Google: confirmă cu adresa trimisă de Google, nu cu cea din cont',
+    str_contains((string) file_get_contents($radacina . '/src/Http/Controllers/SiteController.php'),
+        "ConfirmareEmail::marcheazaConfirmat(\$db, \$userId, 'google', strtolower(trim((string) (\$userInfo['email'] ?? ''))))"));
+// Confirmarea cerută la înregistrare (vertij, Biovitality).
 $setare('customer_email_confirmation_required', '1');
 $db->exec('DELETE FROM register_submit_logs');
+$idComandaCezar = $comandaFaraCont('CMD-CEZAR-WP25', 'cezar@exemplu.ro', 15);
 $jarNou = $dosarLucru . '/nou-jar.txt';
 $formular = $cerere('GET', '/register', $jarNou)['corp'];
 preg_match('/name="register_form_token" value="([^"]+)"/', $formular, $t);
@@ -1202,20 +1328,43 @@ $r = $cerere('POST', '/register', $jarNou, ['register_form_token' => $t[1] ?? ''
     'password_confirm' => 'parola-cezar-1']);
 $idCezar = (int) $unu("SELECT id FROM users WHERE email = 'cezar@exemplu.ro'");
 $mailCezar = $mailuriNoi($dinainteMail);
-$verifica('confirmarea cerută: contul creat, linkul pe email, fără logare automată (spre /login)', $idCezar > 0 && $r['cod'] === 302
-    && ($r['antete']['location'] ?? '') === '/login' && count($mailCezar) === 1 && !str_contains($cerere('GET', '/contul-meu', $jarNou)['corp'] . '', 'cezar@exemplu.ro'));
+$tokenCezar = preg_match('#/cont/confirmare/([a-f0-9]{64})#', $textDinMail((string) end($mailCezar)), $mc2) === 1 ? $mc2[1] : '';
+$verifica('confirmarea cerută: contul creat, linkul pe email, fără logare automată (spre /login), fără puncte revendicate',
+    $idCezar > 0 && $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/login' && count($mailCezar) === 1 && $tokenCezar !== ''
+    && !str_contains($cerere('GET', '/contul-meu', $jarNou)['corp'] . '', 'cezar@exemplu.ro')
+    && (int) $unu('SELECT loyalty_points_pending_claim FROM orders WHERE id = :id', ['id' => $idComandaCezar]) === 15);
 $r = $cerere('POST', '/login', $jarNou, ['email' => 'cezar@exemplu.ro', 'password' => 'parola-cezar-1']);
 $paginaLogin = $cerere('GET', '/login', $jarNou)['corp'];
 $verifica('logarea contului neconfirmat: refuzată cu mesajul ei și butonul „Trimite din nou linkul de confirmare”', $r['cod'] === 302
     && str_contains($paginaLogin, 'Confirmă întâi adresa de email') && str_contains($paginaLogin, 'Trimite din nou linkul de confirmare'));
+$jarAltBrowser = $dosarLucru . '/alt-browser-jar.txt';
+$paginaCezar = $cerere('GET', '/cont/confirmare/' . $tokenCezar, $jarAltBrowser)['corp'];
+$fara = $cerere('POST', '/cont/confirmare/' . $tokenCezar, $jarAltBrowser, []);
+$gresita = $cerere('POST', '/cont/confirmare/' . $tokenCezar, $jarAltBrowser, ['password' => 'nu-e-parola']);
+$verifica('linkul de înregistrare: pagina cere parola contului; fără ea sau cu una greșită nu confirmă nimic (cine a primit linkul pe un cont '
+    . 'făcut de altcineva cu adresa lui nu-l confirmă), linkul rămâne bun',
+    str_contains($paginaCezar, 'name="password"') && $fara['cod'] === 302 && $gresita['cod'] === 302
+    && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idCezar]) === ''
+    && $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idComandaCezar]) === '');
+$bun = $cerere('POST', '/cont/confirmare/' . $tokenCezar, $jarAltBrowser, ['password' => 'parola-cezar-1']);
+$verifica('cu parola contului: adresa confirmată, clientul intră, punctele (15) revendicate și comanda legată',
+    $bun['cod'] === 302 && $unu('SELECT email_confirmed_at FROM users WHERE id = :id', ['id' => $idCezar]) !== ''
+    && str_contains($cerere('GET', '/contul-meu', $jarAltBrowser)['corp'], 'cezar@exemplu.ro')
+    && (int) $unu('SELECT user_id FROM orders WHERE id = :id', ['id' => $idComandaCezar]) === $idCezar
+    && (int) $unu('SELECT COALESCE(SUM(points_delta), 0) FROM loyalty_points_transactions WHERE user_id = :id', ['id' => $idCezar]) === 15);
 $jarAnaNou = $dosarLucru . '/ana2-jar.txt';
 $r = $cerere('POST', '/login', $jarAnaNou, ['email' => 'bogdan@exemplu.ro', 'password' => 'parola-noua-123']);
 $verifica('un cont de dinainte (fără link de înregistrare) intră ca înainte, cu setarea pornită', $r['cod'] === 302
     && str_starts_with((string) ($r['antete']['location'] ?? ''), '/contul-meu'));
+$idFelix = $contNou('Felix', 'felix@exemplu.ro', 'parola-felix-1');
+ConfirmareEmail::linkNou($db, $idFelix, ConfirmareEmail::SCOP_INREGISTRARE);
+$jarFelix = $dosarLucru . '/felix-jar.txt';
+$cerere('GET', '/login', $jarFelix);
+$cerere('POST', '/login', $jarFelix, ['email' => 'felix@exemplu.ro', 'password' => 'parola-felix-1']);
 $coduri = [];
 for ($i = 0; $i < 6; $i++) {
-    $cerere('POST', '/contul-meu/confirmare-email', $jarNou, []);
-    $coduri[] = str_contains($cerere('GET', '/login', $jarNou)['corp'], 'prea multe linkuri') ? 'limita' : 'trimis';
+    $cerere('POST', '/contul-meu/confirmare-email', $jarFelix, []);
+    $coduri[] = str_contains($cerere('GET', '/login', $jarFelix)['corp'], 'prea multe linkuri') ? 'limita' : 'trimis';
 }
 $verifica('retrimiterea: 5 la 15 minute de la aceeași adresă, a șasea refuzată; bugetul nu se amestecă cu al înregistrărilor (VT-C8)',
     $coduri === ['trimis', 'trimis', 'trimis', 'trimis', 'trimis', 'limita']
@@ -1243,10 +1392,16 @@ $scrie('');
 $scrie('== WP-26 A. CereriOferta (limita, hash-ul adresei), grupul „Produse” fără magazin, regula anonimizării');
 CereriOferta::reseteaza();
 $db->exec('DELETE FROM quote_submit_logs');
-$hashA = CereriOferta::hashIp('203.0.113.7');
-$verifica('hash-ul adresei: 64 de caractere hex, același pentru aceeași adresă, altul pentru alta, nu sha256 simplu al adresei',
-    preg_match('/^[a-f0-9]{64}$/', $hashA) === 1 && $hashA === CereriOferta::hashIp('203.0.113.7') && $hashA !== CereriOferta::hashIp('203.0.113.8')
-    && $hashA !== hash('sha256', '203.0.113.7') && CereriOferta::hashIp('2001:db8:1:2::5') === CereriOferta::hashIp('2001:db8:1:2::9'));
+$hashA = CereriOferta::hashIp($db, '203.0.113.7');
+$secretIp = $unu("SELECT value FROM settings WHERE `key` = 'cereri_oferta_secret_ip'");
+Settings::save($db, ['cereri_oferta_secret_ip' => 'suprascris']);
+$verifica('hash-ul adresei: 64 de caractere hex, același pentru aceeași adresă, altul pentru alta, nu sha256 simplu al adresei; cheia HMAC e un '
+    . 'secret aleator al site-ului (revizuirea WP-26), ascuns din Settings::all și pe care Settings::save nu-l scrie',
+    preg_match('/^[a-f0-9]{64}$/', $hashA) === 1 && $hashA === CereriOferta::hashIp($db, '203.0.113.7') && $hashA !== CereriOferta::hashIp($db, '203.0.113.8')
+    && $hashA !== hash('sha256', '203.0.113.7') && CereriOferta::hashIp($db, '2001:db8:1:2::5') === CereriOferta::hashIp($db, '2001:db8:1:2::9')
+    && preg_match('/^[a-f0-9]{64}$/', $secretIp) === 1 && $hashA === hash_hmac('sha256', '203.0.113.7', $secretIp)
+    && !array_key_exists('cereri_oferta_secret_ip', Settings::all($db))
+    && $unu("SELECT value FROM settings WHERE `key` = 'cereri_oferta_secret_ip'") === $secretIp);
 for ($i = 0; $i < CereriOferta::LIMITA_CERERI - 1; $i++) {
     CereriOferta::noteazaTrimiterea($db, '203.0.113.7');
 }
@@ -1330,7 +1485,7 @@ $verifica('emailul spre destinatarii formularului de contact: subiectul cu produ
     && str_contains($subiectMail($antetMail((string) ($mailuri[0] ?? ''), 'Subject')), 'Cerere de ofertă: ' . $produsOferta['name']),
     mb_substr((string) ($mailuri[0] ?? ''), 0, 600));
 $verifica('jurnalul limitei: un rând, doar hash-ul adresei (nu 127.0.0.1)',
-    (int) $unu('SELECT COUNT(*) FROM quote_submit_logs') === 1 && $unu('SELECT ip_hash FROM quote_submit_logs') === CereriOferta::hashIp('127.0.0.1'));
+    (int) $unu('SELECT COUNT(*) FROM quote_submit_logs') === 1 && $unu('SELECT ip_hash FROM quote_submit_logs') === CereriOferta::hashIp($db, '127.0.0.1'));
 $rFaraEmail = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'X', 'email' => 'nu-e-adresa', 'consent' => true]), $antetJson);
 $rFaraAcord = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'X', 'email' => 'x@exemplu.ro', 'consent' => false]), $antetJson);
 $rCapcana = $cerere('POST', '/api/cerere-oferta', null, $json(['name' => 'Robot', 'email' => 'robot@exemplu.ro', 'consent' => true, 'website' => 'http://spam']), $antetJson);
@@ -1449,6 +1604,34 @@ $verifica('refuzuri: --ce necunoscut cod 2, o dată greșită cod 2, un tabel ca
     $eGresit['cod'] === 2 && $eData['cod'] === 2 && $eDonatii['cod'] === ((int) $unu("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'donations'") === 1 ? 0 : 1)
     && array_diff(array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExport . '/*.json') ?: []), $exportInainte) === [],
     $eGresit['iesire'] . ' | ' . $eData['iesire'] . ' | ' . $eDonatii['iesire']);
+// Revizuirea WP-26: curățenia exporturilor expirate fără alt export (o dată pe zi la o cerere, la deploy, din Dashboard).
+$expirat = static function () use ($dosarExport): string {
+    $cheie = hash('sha256', bin2hex(random_bytes(32)));
+    file_put_contents($dosarExport . '/' . $cheie . '.csv', "a\n");
+    file_put_contents($dosarExport . '/' . $cheie . '.json', json_encode(['expira' => time() - 10, 'nume' => 'x.csv', 'ce' => 'comenzi', 'randuri' => 0]));
+    return $dosarExport . '/' . $cheie;
+};
+$semnCuratenie = $dosarExport . '/.curatat';
+$semnInainte = is_file($semnCuratenie) ? (int) filemtime($semnCuratenie) : null;
+@unlink($semnCuratenie);
+$e1 = $expirat();
+$cerere('GET', '/health');
+$e2 = $expirat();
+$cerere('GET', '/health');
+$sters1 = !is_file($e1 . '.csv') && !is_file($e1 . '.json');
+$ramas2 = is_file($e2 . '.csv');
+$logareAdmin();
+$cerere('GET', '/admin', $jarAdmin);
+$e3 = $expirat();
+exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/scripts/migreaza.php') . ' --aplica >/dev/null 2>&1');
+$verifica('exporturile expirate se șterg fără alt export: la prima cerere a zilei (a doua cerere din zi nu mai caută), la Dashboard și la '
+    . 'scripts/migreaza.php --aplica',
+    $sters1 && $ramas2 && !is_file($e2 . '.csv') && !is_file($e3 . '.csv') && !is_file($e3 . '.json'));
+if ($semnInainte === null) {
+    @unlink($semnCuratenie);
+} else {
+    @touch($semnCuratenie, $semnInainte);
+}
 foreach (array_diff(array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExport . '/*.json') ?: []), $exportInainte) as $rest) {
     @unlink($rest);
 }

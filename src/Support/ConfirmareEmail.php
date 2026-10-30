@@ -25,6 +25,18 @@ use Throwable;
  *
  * Pe o bază încă nemigrată (fără `conturi_clienti/0036`) nimeni nu e confirmat: comenzile fără cont nu se arată, nimic
  * nu cade.
+ *
+ * **Revizuirea WP-25** (blocantele G-M4):
+ * - dovada e a unei adrese, nu a contului: linkul ține hash-ul adresei pentru care a plecat (`email_hash`, migrarea
+ *   conturi_clienti/0038) și confirmă doar dacă adresa contului e tot aceea; o resetare a parolei și o logare cu Google
+ *   confirmă doar adresa pe care au dovedit-o; schimbarea adresei (din cont sau din admin) șterge confirmarea
+ *   (`adresaSchimbata`);
+ * - linkul se deschide (GET) într-o pagină cu un buton și confirmă doar la apăsare (POST), ca un program care deschide
+ *   linkurile din emailuri să nu confirme nimic; unul cerut din cont („comenzi”) cere logarea în contul lui, iar cel de
+ *   înregistrare cere parola contului pe pagina lui (altfel cineva care își face cont cu adresa altuia și îl lasă pe
+ *   proprietarul adresei să apese linkul ar primi comenzile și punctele lui; cine știe parola e cel care a făcut contul);
+ * - punctele de fidelitate ale comenzilor fără cont (`loyalty_points_pending_claim`) se revendică doar la confirmare
+ *   (aici), niciodată la înregistrare sau la logare fără adresa dovedită.
  */
 final class ConfirmareEmail
 {
@@ -33,6 +45,11 @@ final class ConfirmareEmail
     public const INREGISTRARI_LA_15_MINUTE = 8;
     public const SCOP_INREGISTRARE = 'inregistrare';
     public const SCOP_COMENZI = 'comenzi';
+    /** Rezultatele lui `folosesteLink`. */
+    public const LINK_CONFIRMAT = 'confirmat';
+    public const LINK_PAROLA = 'parola';
+    public const LINK_INVALID = 'invalid';
+    public const LINK_LOGARE = 'logare';
     public const TEXT_IMPLICIT_COMENZI = 'Ai comenzi mai vechi făcute cu această adresă. Confirmă adresa ca să le vezi aici.';
 
     private static ?bool $areSchema = null;
@@ -51,6 +68,49 @@ final class ConfirmareEmail
             }
         }
         return self::$areSchema;
+    }
+
+    private static ?bool $areHashAdresa = null;
+
+    /** Migrarea conturi_clienti/0038 (linkul legat de adresă) a rulat? Fără ea niciun link nu confirmă. */
+    private static function areHashAdresa(PDO $db): bool
+    {
+        if (self::$areHashAdresa === null) {
+            try {
+                $stmt = $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'customer_email_confirmations' AND COLUMN_NAME = 'email_hash'");
+                self::$areHashAdresa = $stmt !== false && (int) $stmt->fetchColumn() === 1;
+            } catch (Throwable) {
+                self::$areHashAdresa = false;
+            }
+        }
+        return self::$areHashAdresa;
+    }
+
+    /** Hash-ul unei adrese, cum îl ține linkul (litere mici, fără spații). */
+    public static function hashAdresa(string $email): string
+    {
+        return hash('sha256', strtolower(trim($email)));
+    }
+
+    /** Adresa de acum a contului ('' dacă nu există). */
+    private static function adresaContului(PDO $db, int $idUtilizator): string
+    {
+        $stmt = $db->prepare('SELECT email FROM users WHERE id = :id');
+        $stmt->execute(['id' => $idUtilizator]);
+        return trim((string) ($stmt->fetchColumn() ?: ''));
+    }
+
+    /**
+     * Adresa contului s-a schimbat (din cont sau din admin): confirmarea nu mai e valabilă (era a adresei de dinainte).
+     * Comenzile deja legate rămân ale contului.
+     */
+    public static function adresaSchimbata(PDO $db, int $idUtilizator, string $emailVechi, string $emailNou): void
+    {
+        if ($idUtilizator <= 0 || !self::areSchema($db) || self::hashAdresa($emailVechi) === self::hashAdresa($emailNou)) {
+            return;
+        }
+        $db->prepare('UPDATE users SET email_confirmed_at = NULL WHERE id = :id')->execute(['id' => $idUtilizator]);
     }
 
     /** Clientul a dovedit adresa? */
@@ -94,39 +154,43 @@ final class ConfirmareEmail
     }
 
     /**
-     * Marchează adresa ca dovedită (dacă nu era) și leagă de cont comenzile fără cont cu ea. `$sursa`: „link”,
-     * „resetare”, „google”. Întoarce câte comenzi s-au legat.
+     * Marchează adresa ca dovedită (dacă nu era), revendică punctele de fidelitate ale comenzilor fără cont cu ea și le
+     * leagă de cont. `$sursa`: „link”, „resetare”, „google”; `$adresaDovedita`: adresa la care a ajuns dovada (linkul,
+     * emailul resetării, adresa verificată de Google). Dacă nu e adresa de acum a contului, nu se confirmă nimic.
+     *
+     * @return array{comenzi: int, puncte: int}
      */
-    public static function marcheazaConfirmat(PDO $db, int $idUtilizator, string $sursa): int
+    public static function marcheazaConfirmat(PDO $db, int $idUtilizator, string $sursa, string $adresaDovedita): array
     {
+        $nimic = ['comenzi' => 0, 'puncte' => 0];
         if ($idUtilizator <= 0 || !self::areSchema($db)) {
-            return 0;
+            return $nimic;
         }
-        $stmt = $db->prepare('SELECT email, email_confirmed_at FROM users WHERE id = :id');
-        $stmt->execute(['id' => $idUtilizator]);
-        $rand = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!is_array($rand)) {
-            return 0;
+        $email = self::adresaContului($db, $idUtilizator);
+        if ($email === '' || trim($adresaDovedita) === '' || self::hashAdresa($email) !== self::hashAdresa($adresaDovedita)) {
+            return $nimic;
         }
-        $email = trim((string) ($rand['email'] ?? ''));
-        if (trim((string) ($rand['email_confirmed_at'] ?? '')) === '') {
-            $db->prepare('UPDATE users SET email_confirmed_at = NOW() WHERE id = :id AND email_confirmed_at IS NULL')
-                ->execute(['id' => $idUtilizator]);
-        }
-        if ($email === '') {
-            return 0;
+        $db->prepare('UPDATE users SET email_confirmed_at = NOW() WHERE id = :id AND email_confirmed_at IS NULL')
+            ->execute(['id' => $idUtilizator]);
+        // Punctele întâi: revendicarea leagă și ea comanda de cont (doar pe cele cu puncte în așteptare).
+        $puncte = 0;
+        try {
+            $puncte = LoyaltyService::claimPendingPointsByEmail($db, $idUtilizator, strtolower($email));
+        } catch (Throwable) {
+            $puncte = 0;
         }
         $leaga = $db->prepare('UPDATE orders SET user_id = :id WHERE user_id IS NULL AND billing_email = :email AND deleted_at IS NULL');
         $leaga->execute(['id' => $idUtilizator, 'email' => $email]);
         $legate = $leaga->rowCount();
-        if ($legate > 0) {
+        if ($legate > 0 || $puncte > 0) {
             AdminActivityLog::log($db, 'cont_comenzi_legate', [
                 'user_id' => $idUtilizator,
                 'comenzi' => $legate,
+                'puncte' => $puncte,
                 'dovada' => $sursa,
             ]);
         }
-        return $legate;
+        return ['comenzi' => $legate, 'puncte' => $puncte];
     }
 
     /**
@@ -138,42 +202,83 @@ final class ConfirmareEmail
         if ($idUtilizator <= 0 || !self::areSchema($db)) {
             return null;
         }
+        $email = self::adresaContului($db, $idUtilizator);
+        if ($email === '' || !self::areHashAdresa($db)) {
+            return null;
+        }
         $token = bin2hex(random_bytes(32));
-        $db->prepare('INSERT INTO customer_email_confirmations (user_id, token_hash, scop, created_at) VALUES (:id, :hash, :scop, NOW())')
-            ->execute(['id' => $idUtilizator, 'hash' => hash('sha256', $token), 'scop' => $scop === self::SCOP_COMENZI ? $scop : self::SCOP_INREGISTRARE]);
+        $db->prepare('INSERT INTO customer_email_confirmations (user_id, token_hash, scop, email_hash, created_at)
+            VALUES (:id, :hash, :scop, :adresa, NOW())')
+            ->execute(['id' => $idUtilizator, 'hash' => hash('sha256', $token), 'scop' => $scop === self::SCOP_COMENZI ? $scop : self::SCOP_INREGISTRARE,
+                'adresa' => self::hashAdresa($email)]);
         return $token;
     }
 
     /**
-     * Folosește un link: valabil (nefolosit, din ultimele 7 zile) → contul confirmat, comenzile legate; întoarce id-ul
-     * contului. Un link expirat, folosit sau necunoscut nu confirmă nimic (null).
+     * Linkul e bun acum (nefolosit, din ultimele 7 zile, pentru adresa de acum a contului)? Rândul lui (id, user_id,
+     * scop) sau null. Nu folosește linkul (pagina deschisă de GET).
+     *
+     * @return array{id: int, user_id: int, scop: string}|null
      */
-    public static function folosesteLink(PDO $db, string $token): ?int
+    public static function linkValid(PDO $db, string $token): ?array
     {
         $token = trim($token);
-        if (preg_match('/^[a-f0-9]{64}$/', $token) !== 1 || !self::areSchema($db)) {
+        if (preg_match('/^[a-f0-9]{64}$/', $token) !== 1 || !self::areSchema($db) || !self::areHashAdresa($db)) {
             return null;
         }
-        $stmt = $db->prepare('SELECT id, user_id FROM customer_email_confirmations
-            WHERE token_hash = :hash AND used_at IS NULL AND created_at >= (NOW() - INTERVAL ' . self::ZILE_VALABIL . ' DAY) LIMIT 1');
+        $stmt = $db->prepare('SELECT c.id, c.user_id, c.scop, c.email_hash, u.email FROM customer_email_confirmations c
+            INNER JOIN users u ON u.id = c.user_id
+            WHERE c.token_hash = :hash AND c.used_at IS NULL AND c.created_at >= (NOW() - INTERVAL ' . self::ZILE_VALABIL . ' DAY) LIMIT 1');
         $stmt->execute(['hash' => hash('sha256', $token)]);
         $rand = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!is_array($rand)) {
+        if (!is_array($rand) || (string) ($rand['email_hash'] ?? '') === ''
+            || !hash_equals((string) $rand['email_hash'], self::hashAdresa((string) ($rand['email'] ?? '')))) {
             return null;
         }
-        $marcat = $db->prepare('UPDATE customer_email_confirmations SET used_at = NOW() WHERE id = :id AND used_at IS NULL');
-        $marcat->execute(['id' => (int) $rand['id']]);
-        if ($marcat->rowCount() !== 1) {
-            return null; // folosit de altă cerere în aceeași clipă
+        return ['id' => (int) $rand['id'], 'user_id' => (int) $rand['user_id'], 'scop' => (string) $rand['scop']];
+    }
+
+    /**
+     * Folosește un link (apăsarea butonului, POST). Rezultatul:
+     *  - `invalid`: expirat, folosit, necunoscut sau pentru altă adresă decât cea de acum a contului (nimic schimbat);
+     *  - `logare`: un link „comenzi”, dar clientul logat acum (`$idLogat`) nu e al contului (nimic schimbat, linkul rămâne);
+     *  - `parola`: linkul de înregistrare fără parola corectă a contului (nimic schimbat, linkul rămâne);
+     *  - `confirmat`: adresa dovedită, punctele revendicate, comenzile legate.
+     *
+     * @return array{rezultat: string, user_id: ?int, comenzi: int, puncte: int}
+     */
+    public static function folosesteLink(PDO $db, string $token, ?int $idLogat, string $parola = ''): array
+    {
+        $raspuns = ['rezultat' => self::LINK_INVALID, 'user_id' => null, 'comenzi' => 0, 'puncte' => 0];
+        $link = self::linkValid($db, $token);
+        if ($link === null) {
+            return $raspuns;
         }
-        $idUtilizator = (int) $rand['user_id'];
-        self::marcheazaConfirmat($db, $idUtilizator, 'link');
-        return $idUtilizator;
+        $raspuns['user_id'] = $link['user_id'];
+        if ($link['scop'] === self::SCOP_COMENZI && $idLogat !== $link['user_id']) {
+            $raspuns['rezultat'] = self::LINK_LOGARE;
+            return $raspuns;
+        }
+        if ($link['scop'] !== self::SCOP_COMENZI) {
+            $stmt = $db->prepare('SELECT password_hash FROM users WHERE id = :id');
+            $stmt->execute(['id' => $link['user_id']]);
+            if ($parola === '' || !WordPressPassword::verify($parola, (string) ($stmt->fetchColumn() ?: ''))) {
+                $raspuns['rezultat'] = self::LINK_PAROLA;
+                return $raspuns;
+            }
+        }
+        $marcat = $db->prepare('UPDATE customer_email_confirmations SET used_at = NOW() WHERE id = :id AND used_at IS NULL');
+        $marcat->execute(['id' => $link['id']]);
+        if ($marcat->rowCount() !== 1) {
+            return ['rezultat' => self::LINK_INVALID, 'user_id' => null, 'comenzi' => 0, 'puncte' => 0]; // folosit chiar acum
+        }
+        $legate = self::marcheazaConfirmat($db, $link['user_id'], 'link', self::adresaContului($db, $link['user_id']));
+        return ['rezultat' => self::LINK_CONFIRMAT, 'user_id' => $link['user_id']] + $legate;
     }
 
     /**
      * La logare, cu `customer_email_confirmation_required` pornită: contul creat cât era pornită și neconfirmat încă nu
-     * intră (are un link de înregistrare nefolosit). Conturile de dinainte (fără un asemenea link) intră ca înainte.
+     * intră (are un link de înregistrare). Conturile de dinainte (fără un asemenea link) intră ca înainte.
      */
     public static function blocheazaLogarea(PDO $db, array $setari, int $idUtilizator): bool
     {
@@ -248,5 +353,6 @@ final class ConfirmareEmail
     public static function reseteaza(): void
     {
         self::$areSchema = null;
+        self::$areHashAdresa = null;
     }
 }
