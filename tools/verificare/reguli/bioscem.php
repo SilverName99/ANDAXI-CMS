@@ -65,7 +65,9 @@ return [
     // 6 (revizuirea WP-11b): lista albă a cheilor de setări (o cheie necunoscută și neneutralizată oprește încărcarea).
     // 7 (WP-22): blogul avansat (blog/0033): lățimea copertei, bibliografia și id-ul din WordPress ale articolelor, etichetele
     // și legăturile lor, copiate cum sunt (conținut public).
-    'versiune' => 7,
+    // 8 (WP-24, WP-25): pages/blog_posts.requires_active_account copiate, users.email_confirmed_at păstrată (o dată),
+    // customer_email_confirmations și stripe_events doar structura.
+    'versiune' => 8,
     'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -109,6 +111,10 @@ return [
         'customer_password_resets' => ['mod' => 'doar_structura', 'motiv' => 'emailuri și jetoane de resetare a parolei'],
         'cart_abandonments' => ['mod' => 'doar_structura', 'motiv' => 'emailul, numele și conținutul coșului vizitatorilor'],
         'gdpr_agreements' => ['mod' => 'doar_structura', 'motiv' => 'acordurile semnate: CNP, buletin, semnătura (niciodată rânduri)'],
+        // WP-25: linkurile de confirmare a adresei (hash-ul jetonului, al cui e contul) și evenimentele Stripe primite (id-urile
+        // Stripe ale plăților; o copie nu primește webhook-uri, iar un eveniment notat ar face unul adevărat „duplicat”).
+        'customer_email_confirmations' => ['mod' => 'doar_structura', 'motiv' => 'jetoanele de confirmare a adresei (hash) și contul lor'],
+        'stripe_events' => ['mod' => 'doar_structura', 'motiv' => 'evenimentele Stripe primite: id-urile plăților, fără folos pe o copie'],
 
         // ── Setările ──
         'settings' => ['mod' => 'setari', 'pastreaza' => ['key', 'value'], 'emailuri_publice' => 'textele site-ului (antet, subsol, '
@@ -121,7 +127,9 @@ return [
 
         // ── Conținut public ──
         'pages' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'title', 'slug', 'html_content', 'css_content', 'js_content', 'is_published',
-            'deleted_at', 'created_at', 'updated_at'], 'emailuri_publice' => 'paginile site-ului (contact, termeni) au adresa magazinului'],
+            'deleted_at', 'created_at', 'updated_at',
+            // WP-24 (nucleu/0034): pagina e doar pentru membri.
+            'requires_active_account'], 'emailuri_publice' => 'paginile site-ului (contact, termeni) au adresa magazinului'],
         // Categoriile și mărcile au titlul și descrierea pentru Google aici (page_type „category” și „brand”, Bioscem 93d803f).
         'seo_pages' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'page_type', 'page_ref', 'title', 'description', 'canonical_url', 'image_url'],
             'emailuri_publice' => 'textele pentru Google ale paginilor sunt publice'],
@@ -171,7 +179,9 @@ return [
             'event_end_date', 'event_price', 'event_ticket_url', 'event_location', 'content', 'reading_minutes', 'published_at', 'is_published',
             'template_id', 'author_id', 'featured_image_url', 'video_url', 'deleted_at', 'created_at', 'updated_at',
             // WP-22 (blog/0033): lățimea copertei, bibliografia (conținut public al articolului), id-ul articolului în WordPress.
-            'featured_image_width', 'references_html', 'wp_post_id'],
+            'featured_image_width', 'references_html', 'wp_post_id',
+            // WP-24 (nucleu/0034): articolul e doar pentru membri.
+            'requires_active_account'],
             'emailuri_publice' => 'articolele pot avea adresa magazinului sau a unui organizator de eveniment, publice'],
         'blog_post_categories' => ['mod' => 'copiaza', 'pastreaza' => ['post_id', 'category_id']],
         // WP-22 (blog/0033): etichetele articolelor (publice) și legăturile lor.
@@ -204,7 +214,11 @@ return [
                 'code' => ['cod_cupon'],
                 'name' => ['nume_cupon'],
             ]],
-        'users' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'loyalty_points', 'created_at'],
+        'users' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'loyalty_points', 'created_at',
+            // WP-25 (conturi_clienti/0036): când a confirmat clientul adresa (o dată, nu adresa); de ea depind comenzile fără
+            // cont arătate în cont, deci copia o păstrează.
+            'email_confirmed_at'],
+            'motive' => ['email_confirmed_at' => 'data confirmării adresei, nu adresa (regula comenzilor fără cont depinde de ea)'],
             'transforma' => [
                 'first_name' => ['prenume'],
                 'last_name' => ['nume', 'email' => 'email'],

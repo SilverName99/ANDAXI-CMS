@@ -2815,6 +2815,11 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 ['tabel' => 'email_send_history', 'unde' => 'id > :e1', 'param' => ['e1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_send_history')],
                     'cheie' => 'id'],
                 ['tabel' => 'stripe_events', 'unde' => '1 = 1', 'cheie' => 'event_id'],
+                // O plată eșuată sau o sesiune expirată anulează punctele de fidelitate ale comenzii (rândul de anulare și soldul
+                // clientului): fără punerea la loc, baza rămânea schimbată după comparare.
+                ['tabel' => 'loyalty_points_transactions', 'unde' => 'id > :l1',
+                    'param' => ['l1' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM loyalty_points_transactions')], 'cheie' => 'id'],
+                ['tabel' => 'users', 'unde' => '1 = 1', 'cheie' => 'id'],
                 // Emailul „comandă nouă” pleacă o singură dată pe comandă (EmailAutomation::isOrderTemplateAlreadySent):
                 // fără punerea la loc, al doilea server n-ar mai trimite ce a trimis primul.
                 ['tabel' => 'email_logs', 'unde' => 'order_id IN (:l1, :l2, :l3)', 'param' => ['l1' => $comenziStripe[0], 'l2' => $comenziStripe[1],

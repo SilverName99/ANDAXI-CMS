@@ -221,7 +221,8 @@ $verifica('tabelele cu date personale fără rânduri: acordurile GDPR, jurnalel
 $oracolPastrate = [
     // Id-urile produselor, ale categoriilor și ale clienților unui cupon; eticheta unui lot de coduri unice (o scrie magazinul).
     'coupons' => ['product_ids_json', 'category_ids_json', 'allowed_user_ids_json', 'import_batch', 'used_at', 'starts_at', 'ends_at', 'created_at'],
-    'users' => ['created_at'],
+    // Data confirmării adresei (WP-25), nu adresa.
+    'users' => ['created_at', 'email_confirmed_at'],
     // Orașul și județul: regulile livrării depind de ele.
     'user_addresses' => ['city', 'county', 'created_at'],
     // Numărul, stările și metodele; orașele și județele; FANbox-ul ales (date publice ale lockerului); starea coletului dată de FAN;
@@ -259,7 +260,7 @@ $oracolConditii = [
     'loyalty_points_transactions.reason' => 'admin_id IS NOT NULL',
 ];
 $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs', 'register_submit_logs', 'customer_password_resets', 'cart_abandonments',
-    'gdpr_agreements'];
+    'gdpr_agreements', 'customer_email_confirmations', 'stripe_events'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
@@ -1313,8 +1314,11 @@ try {
     $idsMarcaj = $construita['ids'];
     $sursa = $conectare($sockMaria, $bazaSursa);
     $cuMarcajPus = array_values(array_filter(array_keys($idsMarcaj), static fn (string $t): bool => isset($oracolPastrate[$t]) || in_array($t, $oracolFaraRanduri, true)));
-    $verifica('rândurile cu marcaj: în fiecare tabel al clienților și în fiecare tabel „doar structura” ale oracolului testului (' . count($cuMarcajPus) . ' tabele)',
-        count($cuMarcajPus) === count($oracolPastrate) + count($oracolFaraRanduri) && isset($idsMarcaj['recenzie_aprobata']), implode(', ', array_keys($idsMarcaj)));
+    // Doar tabelele pe care le are schema Bioscem (bs.sql): cele venite cu migrările codului comun (de exemplu
+    // customer_email_confirmations, WP-25) nu sunt în baza „live” a unui Bioscem încă neadoptat.
+    $deMarcat = array_values(array_filter(array_merge(array_keys($oracolPastrate), $oracolFaraRanduri), static fn (string $t): bool => isset($bs[$t])));
+    $verifica('rândurile cu marcaj: în fiecare tabel al clienților și în fiecare tabel „doar structura” ale oracolului testului, din schema Bioscem ('
+        . count($cuMarcajPus) . ' tabele)', count($cuMarcajPus) === count($deMarcat) && isset($idsMarcaj['recenzie_aprobata']), implode(', ', array_keys($idsMarcaj)));
     $root->exec('CREATE DATABASE ' . $bazaTinta . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
     foreach ([[$utilizatorLive, $parolaLive, 'ALL', $bazaSursa], [$utilizatorCitire, $parolaCitire, 'SELECT', $bazaSursa], [$utilizatorTinta, $parolaTinta, 'ALL', $bazaTinta]]
         as [$u, $p, $drept, $b]) {
@@ -1953,7 +1957,7 @@ try {
         'A4' => ['regula: users.google_id păstrat', static function (array &$d): void {
             unset($d['tabele']['users']['transforma']['google_id']);
             $d['tabele']['users']['pastreaza'][] = 'google_id';
-            $d['tabele']['users']['motive'] = ['google_id' => 'mutație de test'];
+            $d['tabele']['users']['motive']['google_id'] = 'mutație de test';
         }],
         'A5' => ['regula: admins.password_hash păstrat (parola în clar a sursei)', static function (array &$d): void {
             unset($d['tabele']['admins']['transforma']['password_hash']);

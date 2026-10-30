@@ -1195,7 +1195,7 @@ final class Incarcare
      * numără pe acestea, nu doar pe cele „doar_structura” din reguli: o regulă schimbată greșit în „copiaza” tot pică).
      */
     public const FARA_RANDURI = ['gdpr_agreements', 'admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs', 'register_submit_logs',
-        'customer_password_resets', 'cart_abandonments'];
+        'customer_password_resets', 'cart_abandonments', 'customer_email_confirmations'];
 
     private string $radacina;
     private string $acasa;
