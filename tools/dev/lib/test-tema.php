@@ -62,7 +62,7 @@ $verifica('fără dosarul site-ului: fiecare cheie la implicit, nicio problemă'
 // Implicitul scris aici de mână, nu luat din Tema::IMPLICIT: e ce face codul de dinainte de WP-13 (docs/PACHETE.md).
 $tImplicitAzi = ['css' => [], 'incarca_app_css' => true, 'fonturi' => [], 'fonturi_google' => true, 'bootstrap' => false, 'js_final' => [],
     'main' => 'container', 'flash' => 'panou', 'buton_sus' => false, 'culoare_principala' => '#2f8d5b', 'logo_meniu_mobil' => null,
-    'iconite_categorii' => null, 'css_inline' => []];
+    'iconite_categorii' => null, 'css_inline' => [], 'newsletter' => null];
 $verifica('valorile implicite ale celor ' . count($tImplicitAzi) . ' chei sunt comportamentul de azi (Google Fonts, app.css, .container, '
     . 'panourile, fără buton „sus”, #2f8d5b …)', Tema::IMPLICIT === $tImplicitAzi,
     (string) json_encode(array_diff_assoc(array_map('json_encode', Tema::IMPLICIT), array_map('json_encode', $tImplicitAzi)), JSON_UNESCAPED_SLASHES));
@@ -77,6 +77,8 @@ $tGresite = [
     'js_final' => ['/assets/js/qty-stoc.js'], 'fonturi' => ['/assets/vendor/fonturi/nu-exista/nu-exista.css'],
     'logo_meniu_mobil' => ['candidati' => ['https://exemplu.test/logo.png'], 'implicit' => '/uploads/x.png', 'alt' => 'x'],
     'iconite_categorii' => ['ceai' => '<path d="M0 0"/>'], 'css_inline' => ['antet' => 'a.css'], 'culoare' => '#000',
+    // WP-R din 30 oct (newsletterul): o culoare greșită (și, mai jos, logo-ul WebP, o culoare necunoscută, o cheie necunoscută).
+    'newsletter' => ['culori' => ['principala' => 'verde']],
 ];
 $tGresiteNeprinse = [];
 foreach ($tGresite as $cheie => $valoare) {
@@ -87,6 +89,24 @@ foreach ($tGresite as $cheie => $valoare) {
 }
 $verifica('fiecare cheie cu o valoare greșită (' . count($tGresite) . ', și o cheie necunoscută): o problemă, cheia rămâne la implicit',
     $tGresiteNeprinse === [], implode(', ', $tGresiteNeprinse));
+
+// WP-R din 30 oct (newsletterul): înfățișarea șabloanelor și a paginilor publice ale newsletterului; fiecare greșeală e o problemă și
+// cheia rămâne la implicit (fără logo, paleta neutră), o cheie bună dă logo-ul, textul lui și culorile date peste cele neutre.
+$tNlGresite = ['logo WebP (Outlook nu-l arată)' => ['logo' => '/uploads/gallery/logo.webp'], 'logo din afara site-ului' => ['logo' => 'https://exemplu.test/l.png'],
+    'culoare necunoscută' => ['culori' => ['accent' => '#000000']], 'cheie necunoscută' => ['titlu' => 'x'], 'listă' => ['/uploads/l.png'],
+    'text alternativ prea lung' => ['logo_alt' => str_repeat('a', 121)]];
+$tNlNeprinse = [];
+foreach ($tNlGresite as $ce => $valoare) {
+    [$v, $p] = Tema::valideaza(['newsletter' => $valoare], $tPachet);
+    if ($v !== Tema::IMPLICIT || count($p) !== 1) {
+        $tNlNeprinse[] = $ce;
+    }
+}
+[$v, $p] = Tema::valideaza(['newsletter' => ['_despre' => 'x', 'logo' => '/uploads/gallery/logo.png', 'logo_alt' => 'Firma Demo',
+    'culori' => ['principala' => '#123456', 'linie' => '#abc']]], $tPachet);
+$verifica('newsletter: ' . count($tNlGresite) . ' greșeli prinse, fiecare o problemă; una bună dă logo-ul, textul și culorile peste cele neutre',
+    $tNlNeprinse === [] && $p === [] && $v['newsletter'] === ['culori' => ['principala' => '#123456', 'linie' => '#abc'],
+        'logo' => '/uploads/gallery/logo.png', 'logo_alt' => 'Firma Demo'], implode(', ', $tNlNeprinse) . implode('; ', $p));
 
 $tScrie('tema/public/css/a.css', "body{color:#123}\n");
 $tScrie('tema/public/js/a.js', "void 0;\n");

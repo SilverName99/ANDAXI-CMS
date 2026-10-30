@@ -27,6 +27,7 @@ namespace App\Support;
  * | `logo_meniu_mobil` | (lipsă) | `{candidati, implicit, alt}`: logo-ul sertarului `{{mobile_menu}}` (primul fișier care există) |
  * | `iconite_categorii` | (lipsă) | `[[cuvânt, svg], …]`: iconițele `{{product_categories}}`, încercate în ordine înaintea celei implicite |
  * | `css_inline` | `{}` | `{"pagina_succes": "pagina-succes.css"}`: un bloc `<style>` al nucleului înlocuit cu fișierul din `tema/` |
+ * | `newsletter` | (lipsă) | `{logo, logo_alt, culori}`: înfățișarea șabloanelor de newsletter, a emailurilor de confirmare și a paginilor publice ale newsletterului (`newsletter()`) |
  *
  * Fișierele publice ale temei stau în pachet în `tema/public/` și se servesc la `/tema/…`: pe server din
  * `public/tema/` (le copiază acolo instalarea și fiecare actualizare a pachetului), în dezvoltare direct din pachet
@@ -61,6 +62,21 @@ final class Tema
         'logo_meniu_mobil' => null,
         'iconite_categorii' => null,
         'css_inline' => [],
+        'newsletter' => null,
+    ];
+
+    /**
+     * Culorile implicite ale newsletterului (fără `newsletter.culori` în temă): o paletă neutră. Cheile: `principala`
+     * (titlurile pe fundal, butoanele), `inchisa` (titlurile pe alb, codul cuponului), `fundal_deschis` (subsolul, citatul),
+     * `text`, `text_secundar`, `linie` (separatorul cardurilor).
+     */
+    public const CULORI_NEWSLETTER = [
+        'principala' => '#0f766e',
+        'inchisa' => '#134e4a',
+        'fundal_deschis' => '#f0fdfa',
+        'text' => '#1f2937',
+        'text_secundar' => '#64748b',
+        'linie' => '#e2e8f0',
     ];
 
     /** Blocurile `<style>` ale nucleului pe care o temă le poate înlocui (`css_inline`). */
@@ -172,6 +188,25 @@ final class Tema
     {
         $perechi = self::valori()['iconite_categorii'];
         return is_array($perechi) ? $perechi : null;
+    }
+
+    /**
+     * Înfățișarea newsletterului (șabloanele din builder, emailul de confirmare a abonării și cel cu linkul de dezabonare,
+     * paginile publice de confirmare și dezabonare): logo-ul (o adresă a site-ului, PNG sau JPEG: WebP nu apare în
+     * Outlook), textul lui alternativ și cele șase culori. Fără cheia în temă: fără logo, paleta neutră
+     * (CULORI_NEWSLETTER); o culoare lipsă din temă rămâne cea neutră.
+     *
+     * @return array{logo: ?string, logo_alt: string, culori: array<string, string>}
+     */
+    public static function newsletter(): array
+    {
+        $tema = self::valori()['newsletter'];
+        $tema = is_array($tema) ? $tema : [];
+        return [
+            'logo' => isset($tema['logo']) && is_string($tema['logo']) ? $tema['logo'] : null,
+            'logo_alt' => isset($tema['logo_alt']) && is_string($tema['logo_alt']) ? $tema['logo_alt'] : '',
+            'culori' => array_merge(self::CULORI_NEWSLETTER, (array) ($tema['culori'] ?? [])),
+        ];
     }
 
     /**
@@ -380,6 +415,14 @@ final class Tema
                     }
                     $valori[$cheie] = $perechi;
                     break;
+                case 'newsletter':
+                    $newsletter = self::newsletterValid($valoare);
+                    if (is_string($newsletter)) {
+                        $probleme[] = 'newsletter: ' . $newsletter;
+                    } else {
+                        $valori[$cheie] = $newsletter;
+                    }
+                    break;
                 case 'css_inline':
                     if (!is_array($valoare) || ($valoare !== [] && array_is_list($valoare))) {
                         $probleme[] = 'css_inline trebuie să fie un obiect {"bloc": "fișier.css"}';
@@ -473,6 +516,47 @@ final class Tema
         }
         return ['candidati' => array_values(array_map('strval', $candidati)), 'implicit' => (string) $valoare['implicit'],
             'alt' => (string) $valoare['alt']];
+    }
+
+    /** @return array{logo?: string, logo_alt?: string, culori: array<string, string>}|string valoarea bună sau problema */
+    private static function newsletterValid(mixed $valoare): array|string
+    {
+        if (!is_array($valoare) || array_is_list($valoare)) {
+            return 'trebuie să fie un obiect {logo, logo_alt, culori}';
+        }
+        $necunoscute = array_diff(array_filter(array_keys($valoare), static fn ($k): bool => !str_starts_with((string) $k, '_')),
+            ['logo', 'logo_alt', 'culori']);
+        if ($necunoscute !== []) {
+            return 'chei necunoscute: ' . implode(', ', $necunoscute);
+        }
+        $bun = ['culori' => []];
+        if (array_key_exists('logo', $valoare)) {
+            $logo = $valoare['logo'];
+            if (!is_string($logo) || self::fisierPublic($logo) === null || preg_match('#\.(png|jpe?g|gif)$#i', $logo) !== 1) {
+                return 'logo trebuie să fie o adresă /uploads/…, /tema/… sau /assets/… a unei poze PNG, JPEG sau GIF';
+            }
+            $bun['logo'] = $logo;
+        }
+        if (array_key_exists('logo_alt', $valoare)) {
+            if (!is_string($valoare['logo_alt']) || mb_strlen($valoare['logo_alt']) > 120) {
+                return 'logo_alt trebuie să fie un text de cel mult 120 de caractere';
+            }
+            $bun['logo_alt'] = $valoare['logo_alt'];
+        }
+        $culori = $valoare['culori'] ?? [];
+        if (!is_array($culori) || ($culori !== [] && array_is_list($culori))) {
+            return 'culori trebuie să fie un obiect {nume: "#rrggbb"}';
+        }
+        foreach ($culori as $nume => $culoare) {
+            if (!array_key_exists((string) $nume, self::CULORI_NEWSLETTER)) {
+                return 'culoarea necunoscută „' . $nume . '” (se pot da: ' . implode(', ', array_keys(self::CULORI_NEWSLETTER)) . ')';
+            }
+            if (!is_string($culoare) || preg_match('/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/', $culoare) !== 1) {
+                return 'culori.' . $nume . ' trebuie să fie o culoare #rgb sau #rrggbb';
+            }
+            $bun['culori'][(string) $nume] = $culoare;
+        }
+        return $bun;
     }
 
     /**

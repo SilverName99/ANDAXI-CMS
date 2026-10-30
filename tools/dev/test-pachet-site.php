@@ -244,11 +244,12 @@ if ($mod === 'bioscem') {
     $sareVeche = $dinVechi('src/Support/NewsletterService.php', "/'newsletter-unsubscribe\\|' \\. \\\$url \\. '\\|' \\. \\\$dbName \\. '\\|([a-z]+)'\\)/");
     $config = require $radacina . '/config/app.php';
     $cheieVeche = hash('sha256', 'newsletter-unsubscribe|' . (string) ($config['url'] ?? '') . '|' . (string) ($config['db']['database'] ?? '') . '|' . $sareVeche);
-    $token = (new ReflectionMethod(\App\Support\NewsletterService::class, 'buildUnsubscribeToken'))->invoke(null, 42, 'Abonat@Exemplu.ro');
-    $payloadVechi = rtrim(strtr(base64_encode('42|abonat@exemplu.ro'), '+/', '-_'), '=');
-    $semnaturaVeche = rtrim(strtr(base64_encode(hash_hmac('sha256', $payloadVechi, $cheieVeche, true)), '+/', '-_'), '=');
-    $verifica('B10 newsletterul: sarea „' . $sareVeche . '” (site.json) = cea din codul Bioscem; tokenul de dezabonare = formula veche, '
-        . 'iar fără .env cheia vine din site.json', $token === $payloadVechi . '.' . $semnaturaVeche
+    // Din WP-R de la 30 oct (codul vechi 9aae46a, fd07fc3): linkurile noi se semnează cu o cheie aleatoare
+    // (NEWSLETTER_SECRET sau newsletter_cheie_semnare), iar cheia veche verifică doar linkurile trimise înainte, cu limite;
+    // ea trebuie să rămână exact formula codului Bioscem, altfel linkurile vechi nu mai merg deloc.
+    $cheieVecheCod = (new ReflectionMethod(\App\Support\NewsletterService::class, 'cheieVeche'))->invoke(null);
+    $verifica('B10 newsletterul: sarea „' . $sareVeche . '” (site.json) = cea din codul Bioscem; cheia veche (linkurile trimise înainte) = '
+        . 'formula veche, iar fără .env vine din site.json', $cheieVecheCod === $cheieVeche
         && \App\Support\NewsletterService::sursaCheiiSemnare() === 'site.json'
         && \App\Support\NewsletterService::cheieDerivata($sareVeche) === $cheieVeche);
     // B11: textele plății BT (le vede cumpărătorul pe extras), din înghețare, nu din APP_URL.
@@ -323,6 +324,22 @@ if ($mod === 'bioscem') {
     $verifica('B15 acordul GDPR: fraza operatorului și cea a retragerii acordului, scrise de codul comun cu valorile înghețate = rândurile '
         . 'codului Bioscem', $operatorNou === $rand($siteVechi, 'de către operatorul de date cu caracter personal <strong>')
         && $retragereNou === $rand($siteVechi, '<p>Prezentul consimțământ este valabil până la retragerea expresă'));
+
+    // WP-R din 30 oct (codul vechi 42984c1, 7123076). B16: înfățișarea newsletterului (tema.json → newsletter) = constantele lui
+    // NewsletterSabloane din codul Bioscem (logo-ul PNG, textul lui alternativ, cele șase culori), iar titlul și butonul
+    // paginilor publice ale newsletterului (SiteController::paginaNewsletter) = culorile scrise acolo.
+    $sabloaneVechi = 'src/Support/NewsletterSabloane.php';
+    $constanta = static fn (string $nume): string => $dinVechi($sabloaneVechi, "/private const " . $nume . " = '([^']+)';/");
+    $tema = Tema::newsletter();
+    $paginaVeche = $dinVechi('src/Http/Controllers/SiteController.php', '/(<h1 style="margin:0 0 10px;font-size:26px;color:#[0-9a-f]{6};">.*?background:#[0-9a-f]{6};color:#fff;font-size:16px;)/s');
+    $asteptate = ['principala' => $constanta('CULOARE'), 'inchisa' => $constanta('CULOARE_INCHISA'), 'fundal_deschis' => $constanta('FUNDAL_DESCHIS'),
+        'text' => $constanta('TEXT'), 'text_secundar' => $constanta('TEXT_SECUNDAR'), 'linie' => $constanta('LINIE')];
+    $verifica('B16 newsletterul: logo-ul „' . (string) $tema['logo'] . '”, textul lui alternativ și cele șase culori (tema.json → newsletter) = '
+        . 'constantele NewsletterSabloane din codul Bioscem', $tema['logo'] === $constanta('LOGO')
+        && $tema['logo_alt'] === $dinVechi($sabloaneVechi, "/'image_url' => self::LOGO, 'alt' => '([^']+)'/")
+        && $tema['culori'] === $asteptate, json_encode($tema, JSON_UNESCAPED_UNICODE));
+    $verifica('B16 paginile publice ale newsletterului: titlul și butonul cu culorile din codul Bioscem (inchisa, principala)',
+        str_contains($paginaVeche, 'color:' . $tema['culori']['inchisa'] . ';">') && str_contains($paginaVeche, 'background:' . $tema['culori']['principala'] . ';color:#fff;'));
 
     } catch (Throwable $e) {
         $verifica('citirea codului Bioscem și a pachetului', false, $e->getMessage());
@@ -414,6 +431,17 @@ if (!$db instanceof PDO || (int) $db->query('SELECT COUNT(*) FROM products')->fe
     $scrie('EROARE: baza de test nu are datele demo; rulează întâi tools/dev/instaleaza.sh');
     exit(1);
 }
+// WP-R din 30 oct (newsletterul, codul vechi 42984c1, 7123076). N5: fără tema.json → newsletter, șabloanele, emailul de confirmare a
+// abonării și cel cu linkul de dezabonare n-au logo și au paleta neutră, fără niciun termen din lista neagră.
+$temaNl = Tema::newsletter();
+$sabloaneNl = \App\Support\NewsletterSabloane::lista($db, $implicite);
+$textSabloane = json_encode([$sabloaneNl, \App\Support\NewsletterSabloane::emailConfirmare('https://exemplu.ro/newsletter/confirmare/x', Brand::numeExpeditor($implicite)),
+    \App\Support\NewsletterSabloane::emailLinkDezabonare('https://exemplu.ro/newsletter/unsubscribe/x', Brand::numeExpeditor($implicite))], JSON_UNESCAPED_UNICODE);
+$verifica('N5 newsletterul fără temă: niciun logo, paleta neutră (Tema::CULORI_NEWSLETTER) în ' . count($sabloaneNl) . ' șabloane și în cele două '
+    . 'emailuri ale abonării', $temaNl['logo'] === null && $temaNl['culori'] === Tema::CULORI_NEWSLETTER && !str_contains($textSabloane, '"type":"image","image_url":"/uploads')
+    && str_contains($textSabloane, Tema::CULORI_NEWSLETTER['principala']) && !str_contains($textSabloane, '#075d61'));
+$faraListaNeagra('N5 șabloanele newsletterului și emailurile abonării, cu setările implicite', $textSabloane);
+
 $verifica('N1 adresa de contact fără setări, cu baza: a primului administrator general',
     Brand::emailContact($db, ['contact_email' => '', 'contact_form_recipients' => ''])
         === (string) $db->query("SELECT email FROM admins WHERE role = 'administrator_general' ORDER BY id LIMIT 1")->fetchColumn());

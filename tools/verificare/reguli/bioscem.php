@@ -70,8 +70,12 @@ return [
     // 9 (WP-26): quote_requests anonimizat (ca mesajele de contact), quote_submit_logs doar structura.
     // 10 (revizuirea WP-25): users.session_version păstrată (un contor); customer_email_confirmations.email_hash e într-un tabel
     // doar cu structura.
-    'versiune' => 10,
-    'schema' => 'Nou-site-bioscem@4254ca4 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
+    // 11 (WP-R din 30 oct, newsletterul Bioscem e2e2d77 … 739f58c, newsletter/0040): lista „nu trimite” (amprenta adresei) și
+    // jurnalul cererilor de confirmare (amprenta adresei, IP-ul) doar structura; pending_at/confirmed_at și attempts păstrate,
+    // motivul opririi unei campanii anonimizat (răspunsul serverului de email poate avea o adresă); cheia de semnare a
+    // linkurilor, pragul cheii vechi și starea limitei / cronului neutralizate.
+    'versiune' => 11,
+    'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
     'pachet' => 'bioscem',
@@ -120,6 +124,10 @@ return [
         'stripe_events' => ['mod' => 'doar_structura', 'motiv' => 'evenimentele Stripe primite: id-urile plăților, fără folos pe o copie'],
         // WP-26: trimiterile cererilor de ofertă (hash-ul adresei vizitatorului), doar pentru limită.
         'quote_submit_logs' => ['mod' => 'doar_structura', 'motiv' => 'trimiterile cererilor de ofertă: hash-ul adresei IP a vizitatorului'],
+        // WP-R din 30 oct (newsletter/0040). Lista „nu trimite” ține doar amprenta SHA-256 a adresei unui abonat șters: o adresă
+        // cunoscută se poate verifica împotriva ei, deci e o dată personală (pseudonimă); pe copie nu trebuie (fail-closed).
+        'newsletter_suprimate' => ['mod' => 'doar_structura', 'motiv' => 'lista „nu trimite”: amprenta SHA-256 a adresei fiecărui abonat șters'],
+        'newsletter_cereri_confirmare' => ['mod' => 'doar_structura', 'motiv' => 'cererile de abonare și de link de dezabonare: amprenta adresei și IP-ul (2 zile)'],
 
         // ── Setările ──
         'settings' => ['mod' => 'setari', 'pastreaza' => ['key', 'value'], 'emailuri_publice' => 'textele site-ului (antet, subsol, '
@@ -362,7 +370,7 @@ return [
         // ── Newsletterul ──
         'newsletter_lists' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'description', 'is_default', 'created_at'],
             'motive' => ['name' => 'numele listei'], 'emailuri_publice' => 'descrierile listelor, scrise de magazin'],
-        'newsletter_subscribers' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'status', 'created_at', 'updated_at'],
+        'newsletter_subscribers' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'status', 'created_at', 'updated_at', 'pending_at', 'confirmed_at'],
             'transforma' => [
                 'email' => ['email'],
                 'name' => ['nume_abonat'],
@@ -374,12 +382,15 @@ return [
         'newsletter_optin_forms' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'list_id', 'button_label', 'success_message',
             'fields_json', 'is_active', 'created_at', 'updated_at'], 'motive' => ['name' => 'numele formularului'],
             'emailuri_publice' => 'textele publice ale formularului de abonare'],
-        'newsletter_campaigns' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'template_type', 'template_ref', 'subscriber_list_id',
+        'newsletter_campaigns' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'name', 'template_type', 'template_ref', 'subscriber_list_id',
             'subscriber_list_ids', 'subject', 'blocks_json', 'html_content', 'status', 'scheduled_at', 'sent_at', 'total_recipients', 'total_sent',
             'total_failed', 'created_at', 'updated_at', 'total_opens', 'total_clicks'], 'motive' => ['name' => 'numele campaniei'],
-            'emailuri_publice' => 'campaniile trimise au adresa magazinului'],
+            'emailuri_publice' => 'campaniile trimise au adresa magazinului',
+            // De ce s-a oprit campania: poate fi răspunsul serverului de email, cu adresa unui abonat (de aceea tabelul e
+            // „anonimizeaza” din v11: un tabel „copiaza” nu are transformări; restul coloanelor se păstrează ca înainte).
+            'transforma' => ['last_error' => ['text']]],
         'newsletter_campaign_sends' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'campaign_id', 'subscriber_id', 'status', 'sent_at',
-            'created_at', 'opened_at', 'open_count', 'clicked_at', 'click_count'],
+            'created_at', 'opened_at', 'open_count', 'clicked_at', 'click_count', 'attempts'],
             'transforma' => [
                 'email' => ['email'],
                 // Răspunsul serverului de email poate avea adresa abonatului.
@@ -459,8 +470,15 @@ return [
             // persoana și telefonul expeditorului FAN (AWB-urile sunt oricum oprite pe copie).
             'maintenance_allowed_ips', 'fan_cod_iban', 'fan_sender_name', 'fan_sender_phone',
             // WP-18: persoana și telefonul operatorului din textul acordului GDPR (pe copie, spații de completat).
-            'gdpr_operator_reprezentant', 'gdpr_operator_telefon'],
-        'zero' => ['erp_enabled', 'erp_stock_enabled', 'euplatesc_enabled', 'stripe_enabled', 'bt_ipay_enabled', 'fan_awb_auto', 'fan_live_tariff_enabled',
+            'gdpr_operator_reprezentant', 'gdpr_operator_telefon',
+            // WP-R din 30 oct (newsletterul): cheia de semnare a linkurilor din newslettere (secretă, Settings::CHEI_ASCUNSE; golită, Settings::secretGenerat face alta la
+            // prima semnare, deci linkurile site-ului adevărat nu merg pe ea), nota limitei globale și ora ultimei rulări a cronului
+            // (starea site-ului adevărat).
+            'newsletter_cheie_semnare', 'newsletter_limita_globala_atinsa', 'newsletter_cron_ultima_rulare'],
+        'zero' => [
+            // WP-R din 30 oct: pragul cheii vechi de semnare; „0” = niciun link semnat cu cheia veche nu e crezut pe copie (fail-closed).
+            'newsletter_cheie_limita',
+            'erp_enabled', 'erp_stock_enabled', 'euplatesc_enabled', 'stripe_enabled', 'bt_ipay_enabled', 'fan_awb_auto', 'fan_live_tariff_enabled',
             'customer_google_auth_enabled', 'tawk_enabled', 'microsoft_clarity_enabled', 'google_analytics_enabled', 'google_tag_manager_enabled',
             'google_ads_enabled'],
         // Adresa proprietarului (VERIFICARE_EMAIL).

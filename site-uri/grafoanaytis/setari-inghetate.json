@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "c8f938b84a9ac1ef08268fa8facfaf95d97d7e31cf564edb599328e6e358d635",
+    "amprenta_nucleu": "9d50cc2c41c5d42c9017d4a66c037b38a7666e4fa967951ecc18f593741c918e",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",

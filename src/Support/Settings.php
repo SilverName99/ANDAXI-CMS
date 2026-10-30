@@ -354,7 +354,11 @@ final class Settings
      * `all()` (deci nici în admin, în emailuri sau în exporturi) și nu se scriu cu `save()`; se citesc doar cu
      * `secretGenerat()`. Pe copia de verificare se golesc (tiparul „secret” din reguli) și se generează din nou.
      */
-    public const CHEI_ASCUNSE = ['cereri_oferta_secret_ip'];
+    public const CHEI_ASCUNSE = ['cereri_oferta_secret_ip',
+        // WP-R din 30 oct (newsletterul, codul vechi 9aae46a, fd07fc3): cheia de semnare a linkurilor din newslettere (un secret
+        // generat, secretGenerat) și pragul cheii vechi (JSON-ul scris o dată de NewsletterService::limitaCheieVeche și de migrarea
+        // newsletter/0040; nu e un secret, dar nici o setare: nu se arată și nu se scrie din formulare).
+        'newsletter_cheie_semnare', 'newsletter_cheie_limita'];
 
     public static function all(?PDO $db): array
     {
@@ -366,6 +370,8 @@ final class Settings
         $rows = $db->query('SELECT `key`, `value` FROM settings')->fetchAll();
 
         foreach ($rows as $row) {
+            // Secretele generate și, din WP-R de la 30 oct, cheia de semnare a linkurilor din newsletter și pragul ei (codul vechi
+            // 9aae46a, fd07fc3: nu circulă prin setări — pagini de admin, ERP, diagnostic; le citește doar NewsletterService).
             if (in_array((string) $row['key'], self::CHEI_ASCUNSE, true)) {
                 continue;
             }

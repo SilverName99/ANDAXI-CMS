@@ -145,11 +145,11 @@ try {
     $sareVeche = $dinVechi('src/Support/NewsletterService.php', "/'newsletter-unsubscribe\\|' \\. \\\$url \\. '\\|' \\. \\\$dbName \\. '\\|([a-z]+)'\\)/");
     $config = require $radacina . '/config/app.php';
     $cheieVeche = hash('sha256', 'newsletter-unsubscribe|' . (string) ($config['url'] ?? '') . '|' . (string) ($config['db']['database'] ?? '') . '|' . $sareVeche);
-    $token = (new ReflectionMethod(\App\Support\NewsletterService::class, 'buildUnsubscribeToken'))->invoke(null, 42, 'Abonat@Exemplu.ro');
-    $payloadVechi = rtrim(strtr(base64_encode('42|abonat@exemplu.ro'), '+/', '-_'), '=');
-    $semnaturaVeche = rtrim(strtr(base64_encode(hash_hmac('sha256', $payloadVechi, $cheieVeche, true)), '+/', '-_'), '=');
-    $verifica('V7 newsletterul: sarea „' . $sareVeche . '” (site.json) = cea din codul Biovitality; tokenul de dezabonare = formula veche',
-        $token === $payloadVechi . '.' . $semnaturaVeche && \App\Support\NewsletterService::sursaCheiiSemnare() === 'site.json');
+    // Din WP-R (Bioscem 739f58c) linkurile noi se semnează cu cheia nouă, aleatoare; cheia veche (cea a linkurilor din
+    // emailurile Biovitality de până la adoptare) rămâne crezută până la prag și trebuie să fie exact formula veche.
+    $cheieVecheNucleu = (new ReflectionMethod(\App\Support\NewsletterService::class, 'cheieVeche'))->invoke(null);
+    $verifica('V7 newsletterul: sarea „' . $sareVeche . '” (site.json) = cea din codul Biovitality; cheia veche (a linkurilor de dezabonare de '
+        . 'până la adoptare) = formula veche', $cheieVecheNucleu === $cheieVeche && \App\Support\NewsletterService::sursaCheiiSemnare() === 'site.json');
 
     // V8: numerotarea.
     $numarVechi = \App\Support\OrderNumber::vechi($faraRand);

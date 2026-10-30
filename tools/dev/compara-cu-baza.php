@@ -1170,13 +1170,174 @@ foreach (require __DIR__ . '/lib/declaratii-wp23-editor.php' as $nrEditor => $sc
 foreach (require __DIR__ . '/lib/declaratii-wp21-constructor.php' as $nrConstructor => $schimbareConstructor) {
     $porturiBiovitality[] = [
         'nume' => 'constructorul de emailuri: blocul video și fundalul blocurilor din coloane (' . ($nrConstructor + 1) . ')',
-        'cale' => '/admin/emails/builder',
+        // Și builderul unui newsletter (cazul „newsletter: builderul pe pași” al salvărilor, WP-R din 30 oct).
+        'cale' => ['/admin/emails/builder', '/admin/emails/builder?type=campaign*'],
         'nou' => $schimbareConstructor['nou'],
         'vechi' => $schimbareConstructor['vechi'],
         'motiv' => 'Biovitality 84e29a9 și b9fcaf8 (WP-21 C11c, C11d): blocul video al newsletterelor (copertă cu buton, nu player: '
             . 'clienții de email nu redau video) și blocurile din coloane fără fundal propriu, cu aliniere.',
     ];
 }
+// WP-R din 30 oct 2026: statisticile unui newsletter trimis (cazul „newsletter: „Trimite acum”…” al salvărilor) au lista
+// destinatarilor portată din Biovitality în WP-21 (C11a, 95f904f, f4dd2c0: filtrele și paginarea pe server, reîncărcarea doar a
+// panoului), deci textele ei se declară aici; rândurile tabelului sunt aceleași și se compară. Pagina e cerută doar de acel caz
+// (după trimitere: toți destinatarii trimiși, nimeni n-a deschis sau dat clic).
+$statisticiNlId = (int) $unu('SELECT id FROM newsletter_campaigns WHERE status = \'draft\' ORDER BY id LIMIT 1');
+$statisticiNlTotal = (int) $unu('SELECT COUNT(*) FROM newsletter_list_subscribers ls JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
+    WHERE s.status = \'active\' AND ls.list_id = (SELECT id FROM newsletter_lists ORDER BY id LIMIT 1 OFFSET 1)');
+$porturiBiovitality[] = [
+    'nume' => 'statisticile unui newsletter: filtrele și căutarea destinatarilor pe server',
+    'cale' => '/admin/emails/newsletters?tab=stats&campaign_id=' . $statisticiNlId,
+    'nou' => strtr(<<<'TXT'
+            <div class="nl-stats-panel" id="nl-recip-panel">
+                                <p class="nl-stats-section-title">Destinatari ({T})</p>
+                <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+                    <input type="hidden" name="tab" value="stats">
+                    <input type="hidden" name="campaign_id" value="{ID}">
+                    <select name="recip_f" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                                                    <option value="all" selected>
+                                Toți destinatarii ({T})                            </option>
+                                                    <option value="opened">
+                                Doar cine a deschis (0)                            </option>
+                                                    <option value="not_opened">
+                                Doar cine NU a deschis ({T})                            </option>
+                                                    <option value="clicked">
+                                Doar cine a dat click (0)                            </option>
+                                                    <option value="not_clicked">
+                                Doar cine NU a dat click ({T})                            </option>
+                                                    <option value="failed">
+                                Doar eșuate (0)                            </option>
+                                            </select>
+                    <input type="text" name="recip_q" value="" placeholder="Caută după email…"
+                           style="flex:1 1 220px;min-width:180px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                    <select name="recip_per_page" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                                                    <option value="25">25 / pagină</option>
+                                                    <option value="50" selected>50 / pagină</option>
+                                                    <option value="100">100 / pagină</option>
+                                                    <option value="200">200 / pagină</option>
+                                            </select>
+                    <button type="submit" class="btn" style="padding:8px 16px;">Aplică</button>
+                    <a class="btn btn-light" style="padding:8px 16px;" href="?tab=stats&amp;campaign_id={ID}">Reset</a>
+                </form>
+TXT, ['{T}' => (string) $statisticiNlTotal, '{ID}' => (string) $statisticiNlId]),
+    'vechi' => <<<'TXT'
+            <div class="nl-stats-panel">
+                <p class="nl-stats-section-title">Destinatari (ultimii 100)</p>
+                <input type="text" class="nl-stats-search" id="nl-recip-search" placeholder="Caută după email…" oninput="nlFilterRecip(this.value)">
+TXT,
+    'motiv' => 'Biovitality 95f904f, f4dd2c0 (WP-21 C11a): destinatarii unui newsletter filtrați și paginați pe server, cu numărul fiecărui filtru',
+    'mod' => 'repo',
+];
+$porturiBiovitality[] = [
+    'nume' => 'statisticile unui newsletter: panoul destinatarilor se reîncarcă singur, fără căutarea din pagină',
+    'cale' => '/admin/emails/newsletters?tab=stats&campaign_id=' . $statisticiNlId,
+    'nou' => <<<'TXT'
+                            </div>
+            <script>
+            (function () {
+                // Filtrarea și paginarea destinatarilor se fac fără reîncărcarea
+                // paginii: tabelul e jos de tot, iar o navigare obișnuită ar duce
+                // ecranul înapoi sus după fiecare clic. Cerem aceeași adresă,
+                // luăm din răspuns doar panoul acesta și îl punem la loc.
+                var panou = document.getElementById('nl-recip-panel');
+                if (!panou || !window.fetch || !window.DOMParser) {
+                    return;
+                }
+
+                var inCurs = false;
+
+                function incarca(url) {
+                    if (inCurs) {
+                        return;
+                    }
+                    inCurs = true;
+                    panou.style.opacity = '0.55';
+                    panou.style.pointerEvents = 'none';
+
+                    fetch(url, { credentials: 'same-origin' })
+                        .then(function (raspuns) {
+                            if (!raspuns.ok) {
+                                throw new Error('http ' + raspuns.status);
+                            }
+                            return raspuns.text();
+                        })
+                        .then(function (html) {
+                            var doc = new DOMParser().parseFromString(html, 'text/html');
+                            var nou = doc.getElementById('nl-recip-panel');
+                            if (!nou) {
+                                throw new Error('fara panou');
+                            }
+                            panou.innerHTML = nou.innerHTML;
+                            // Adresa din bară rămâne în pas cu ce se vede, ca
+                            // reîncărcarea manuală sau un bookmark să dea același lucru.
+                            window.history.replaceState({}, '', url);
+                            panou.style.opacity = '';
+                            panou.style.pointerEvents = '';
+                            inCurs = false;
+                        })
+                        .catch(function () {
+                            // Orice nu merge (sesiune expirată, rețea) → navigare normală.
+                            window.location.href = url;
+                        });
+                }
+
+                panou.addEventListener('submit', function (ev) {
+                    var formular = ev.target;
+                    if (!formular || formular.tagName !== 'FORM') {
+                        return;
+                    }
+                    ev.preventDefault();
+                    var date = new URLSearchParams(new FormData(formular));
+                    // Un filtru nou repornește de la prima pagină.
+                    date.delete('recip_page');
+                    incarca('?' + date.toString());
+                });
+
+                // Alegerea din liste se aplică pe loc; butonul „Aplică" rămâne
+                // pentru căutarea după email, unde nu vrei să pleci la fiecare tastă.
+                panou.addEventListener('change', function (ev) {
+                    var camp = ev.target;
+                    if (!camp || camp.tagName !== 'SELECT' || !camp.form) {
+                        return;
+                    }
+                    if (typeof camp.form.requestSubmit === 'function') {
+                        camp.form.requestSubmit();
+                    } else {
+                        camp.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
+                });
+
+                panou.addEventListener('click', function (ev) {
+                    var link = ev.target.closest ? ev.target.closest('a[href]') : null;
+                    if (!link || !panou.contains(link)) {
+                        return;
+                    }
+                    var href = link.getAttribute('href') || '';
+                    if (href.charAt(0) !== '?') {
+                        return;
+                    }
+                    ev.preventDefault();
+                    incarca(href);
+                });
+            })();
+            </script>
+TXT,
+    'vechi' => <<<'TXT'
+                <script>
+                function nlFilterRecip(q) {
+                    q = q.toLowerCase();
+                    const rows = document.querySelectorAll('#nl-recip-table tbody tr');
+                    rows.forEach(function(row) {
+                        const email = (row.cells[0] ? row.cells[0].textContent : '').toLowerCase();
+                        row.style.display = email.indexOf(q) !== -1 ? '' : 'none';
+                    });
+                }
+                </script>
+            </div>
+TXT,
+    'motiv' => 'Biovitality 95f904f, f4dd2c0 (WP-21 C11a): filtrarea și paginarea reîncarcă doar panoul destinatarilor (fetch), în locul căutării în rândurile încărcate',
+    'mod' => 'repo',
+];
 // Postările cazului „blog: un link YouTube (fără acord) și unul Vimeo (cu acord)” din salvări (mai jos): doar pe
 // paginile lor apar playerul și caseta „Pornește videoclipul” (declarate aici, în $porturiVertij).
 $slugVideoYoutube = 'video-youtube-de-test-' . getmypid();
@@ -1388,6 +1549,25 @@ $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturi
     '$porturiGrafo' => $porturiGrafo];
 if ($fataDeCommit) {
     $listeDeclarate = ['$porturiBioscem' => $porturiBioscem] + $listeDeclarate;
+}
+// WP-R din 30 oct 2026 (Bioscem e2e2d77 … 739f58c, newsletterul): paginile newsletterului din admin față de f5ae5ea, pe
+// commit-uri Bioscem, din tools/dev/lib/declaratii-newsletter-istoric.php. Lista se aplică ultima: textele ei sunt scrise din
+// pagina de după celelalte declarații (de exemplu blocul video al constructorului, $porturiBiovitality). Doar istoric.
+if ($fataDeCommit) {
+    $adresaDevNewsletter = rtrim((string) (getenv('APP_URL') ?: 'http://127.0.0.1:8701'), '/');
+    $listeDeclarate['$porturiBioscemNewsletter'] = [];
+    foreach (require __DIR__ . '/lib/declaratii-newsletter-istoric.php' as $nrNewsletter => $schimbareNewsletter) {
+        $listeDeclarate['$porturiBioscemNewsletter'][] = [
+            'nume' => 'newsletterul (' . ($nrNewsletter + 1) . '): ' . $schimbareNewsletter['ce'],
+            'cale' => $schimbareNewsletter['cale'],
+            'nou' => (string) preg_replace_callback('#(/assets/[A-Za-z0-9/_.-]+\.(?:css|js))\?v=<V>#',
+                static fn (array $m): string => $m[1] . '?v=' . (int) (@filemtime($radacina . '/public' . $m[1]) ?: 1),
+                str_replace('http://127.0.0.1:8701', $adresaDevNewsletter, $schimbareNewsletter['nou'])),
+            'vechi' => $schimbareNewsletter['vechi'],
+            'ori' => $schimbareNewsletter['ori'],
+            'motiv' => 'Bioscem ' . $schimbareNewsletter['din'] . ' (newsletterul): ' . $schimbareNewsletter['ce'],
+        ];
+    }
 }
 // Intrările legate de un singur mod ('mod' => 'repo' sau 'commit') se verifică doar în el.
 $doarInModulBazei = static function (array $liste) use ($modBaza): array {
@@ -3197,6 +3377,368 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             'bază: categorii.0: null → ' . json_encode($idCategorieDupaNume),
         ],
     ];
+    // ── WP-R din 30 oct 2026: newsletterul (Bioscem e2e2d77 … 739f58c). Fluxurile publice (dubla confirmare, dezabonarea cu
+    // buton, „cu un clic” și linkurile vechi), lista „nu trimite”, trimiterea, oprirea și programarea, builderul pe pași. Cheia
+    // nouă de semnare e fixată pe durata cazurilor (altfel fiecare server și-ar genera una la prima semnare și linkurile ar
+    // diferi); cheia veche e derivarea cu sarea pachetului (aceeași formulă ca a codului Bioscem, cu APP_URL și baza
+    // comune ambelor servere). Linkurile se fac aici, din bază, ca un client de email care le deschide.
+    $cheieNlTest = str_repeat('5a', 32);
+    $b64Nl = static fn (string $v): string => rtrim(strtr(base64_encode($v), '+/', '-_'), '=');
+    $tokenDezabonareNl = static function (int $id, string $email, string $cheie) use ($b64Nl): string {
+        $plata = $b64Nl($id . '|' . strtolower(trim($email)));
+        return $plata . '.' . $b64Nl(hash_hmac('sha256', $plata, $cheie, true));
+    };
+    $tokenConfirmareNl = static function (int $id, string $email, int $moment) use ($b64Nl, $cheieNlTest): string {
+        $plata = $b64Nl('c|' . $id . '|' . strtolower(trim($email)) . '|' . $moment);
+        return $plata . '.' . $b64Nl(hash_hmac('sha256', $plata, $cheieNlTest, true));
+    };
+    $cheieVecheNl = \App\Support\NewsletterService::cheieDerivata((string) \App\Support\DateSite::site('newsletter_sare_semnatura'));
+    $idAbonatNl = static fn (PDO $db, string $email): int => (int) ($db->query('SELECT id FROM newsletter_subscribers WHERE email = '
+        . $db->quote($email))->fetchColumn() ?: 0);
+    $ultimulEmailNl = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_send_history');
+    $idMaxAbonatiNl = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM newsletter_subscribers');
+    $idMaxFormNl = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM newsletter_optin_forms');
+    $idFormNl = $idMaxFormNl + 1;
+    $slugFormNl = 'abonare-test-' . getmypid();
+    $listeNl = array_map('intval', array_column($citeste('SELECT id FROM newsletter_lists ORDER BY id'), 'id'));
+    $abonatiNl = array_map(static fn (array $r): array => ['id' => (int) $r['id'], 'email' => (string) $r['email']],
+        $citeste('SELECT id, email FROM newsletter_subscribers WHERE status = \'active\' ORDER BY id LIMIT 4'));
+    $idsAbonatiNl = implode(',', array_map(static fn (array $a): int => $a['id'], $abonatiNl));
+    $ciornaNl = (int) $unu('SELECT id FROM newsletter_campaigns WHERE status = \'draft\' ORDER BY id LIMIT 1');
+    $trimisaNl = (int) $unu('SELECT id FROM newsletter_campaigns WHERE status = \'sent\' ORDER BY id LIMIT 1');
+    // Rândurile atinse de toate cazurile newsletterului (puse la loc înainte de fiecare server și la final).
+    $tabeleNl = [
+        ['tabel' => 'settings', 'unde' => '`key` LIKE \'newsletter\\_%\'', 'cheie' => 'key'],
+        ['tabel' => 'newsletter_subscribers', 'unde' => 'id > :n1 OR id IN (' . $idsAbonatiNl . ')', 'param' => ['n1' => $idMaxAbonatiNl], 'cheie' => 'id'],
+        ['tabel' => 'newsletter_list_subscribers', 'unde' => 'subscriber_id > :n2 OR subscriber_id IN (' . $idsAbonatiNl . ')',
+            'param' => ['n2' => $idMaxAbonatiNl]],
+        ['tabel' => 'newsletter_suprimate', 'unde' => '1 = 1', 'cheie' => 'email_hash'],
+        ['tabel' => 'newsletter_cereri_confirmare', 'unde' => '1 = 1', 'cheie' => 'id'],
+        ['tabel' => 'newsletter_optin_forms', 'unde' => 'id > :n3', 'param' => ['n3' => $idMaxFormNl], 'cheie' => 'id'],
+        ['tabel' => 'newsletter_campaigns', 'unde' => '1 = 1', 'cheie' => 'id'],
+        ['tabel' => 'newsletter_campaign_sends', 'unde' => '1 = 1', 'cheie' => 'id'],
+        ['tabel' => 'email_send_history', 'unde' => 'id > :n4', 'param' => ['n4' => $ultimulEmailNl], 'cheie' => 'id'],
+        $tokenCache,
+    ];
+    $pregatesteNl = static function (PDO $db, array $limita = ['campanie' => 0, 'abonat' => 0]) use ($cheieNlTest): void {
+        $pune = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+        $pune->execute(['newsletter_cheie_semnare', $cheieNlTest]);
+        $pune->execute(['newsletter_cheie_limita', json_encode($limita)]);
+        $db->exec('DELETE FROM newsletter_cereri_confirmare');
+        $db->exec("DELETE FROM settings WHERE `key` IN ('newsletter_limita_globala_atinsa', 'newsletter_cron_ultima_rulare')");
+        // Rândurile noi primesc aceleași id-uri pe ambele servere (cele de pe primul au fost șterse la punerea la loc):
+        // contorul fiecărui tabel revine la cel mai mare id rămas.
+        foreach (['newsletter_subscribers', 'newsletter_cereri_confirmare', 'newsletter_campaign_sends', 'email_send_history'] as $tabelNl) {
+            $db->exec('ALTER TABLE `' . $tabelNl . '` AUTO_INCREMENT = 1');
+        }
+    };
+    // Emailurile trimise de caz: felul, destinatarul, subiectul, starea (fără ore și fără id).
+    $emailuriNl = static fn (PDO $db) => array_map(static fn (array $r): string => $r['email_type'] . ' → ' . $r['recipient'] . ': '
+        . $r['subject'] . ' (' . $r['status'] . ')', $db->query('SELECT email_type, recipient, subject, status FROM email_send_history WHERE id > '
+        . $ultimulEmailNl . ' AND email_type LIKE \'newsletter%\' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC));
+    $abonatNl = static function (PDO $db, string $email): array {
+        $rand = $db->query('SELECT name, status, pending_at, confirmed_at FROM newsletter_subscribers WHERE email = ' . $db->quote($email))
+            ->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($rand)) {
+            return ['lipsă'];
+        }
+        $liste = $db->query('SELECT list_id FROM newsletter_list_subscribers ls JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
+            WHERE s.email = ' . $db->quote($email) . ' ORDER BY list_id')->fetchAll(PDO::FETCH_COLUMN);
+        return ['nume' => $rand['name'], 'stare' => $rand['status'], 'cerut' => $rand['pending_at'] !== null,
+            'confirmat' => $rand['confirmed_at'] !== null, 'liste' => array_map('intval', $liste)];
+    };
+    $emailNou = 'confirmare-test@exemplu.ro';
+    // Momentul din linkurile de confirmare: același pe ambele servere.
+    $momentNl = time();
+    $emailExpirat = 'expirat-test@exemplu.ro';
+    array_push($salvari,
+        [
+            'nume' => 'newsletter: dubla confirmare (formularul cere, emailul confirmă; GET arată butonul, POST abonează)',
+            'din' => '7123076, f56a3b5, 739f58c',
+            'tabele' => $tabeleNl,
+            'pregateste' => static function (PDO $db) use ($pregatesteNl, $idFormNl, $slugFormNl, $listeNl): void {
+                $pregatesteNl($db);
+                $db->prepare('INSERT INTO newsletter_optin_forms (id, name, slug, list_id, fields_json, is_active) VALUES (?, ?, ?, ?, ?, 1)')
+                    ->execute([$idFormNl, 'Formular de test', $slugFormNl, $listeNl[1] ?? $listeNl[0],
+                        json_encode([['type' => 'email', 'name' => 'email', 'required' => 1], ['type' => 'text', 'name' => 'name', 'required' => 0]])]);
+            },
+            'cereri' => [
+                ['POST', '/newsletter/optin/' . $slugFormNl, ['email' => strtoupper($emailNou), 'name' => 'Persoană de test', 'response' => 'json'], 'viz'],
+                static fn (array $r) => ['GET', '/newsletter/confirmare/' . rawurlencode($tokenConfirmareNl($idAbonatNl($db, $emailNou), $emailNou, $momentNl)), [], 'viz'],
+                static fn (array $r) => ['POST', '/newsletter/confirmare/' . rawurlencode($tokenConfirmareNl($idAbonatNl($db, $emailNou), $emailNou, $momentNl)),
+                    ['confirmare' => '1'], 'viz'],
+                static fn (array $r) => ['GET', '/newsletter/confirmare/' . rawurlencode($tokenConfirmareNl($idAbonatNl($db, $emailNou), $emailNou, $momentNl)), [], 'viz'],
+                // Deja abonat: același mesaj, niciun email.
+                ['POST', '/newsletter/optin/' . $slugFormNl, ['email' => $emailNou, 'response' => 'json'], 'viz'],
+                // O cerere rămasă neconfirmată: linkul de acum 31 de zile a expirat (410), iar adminul n-o poate activa cu ⟲.
+                ['POST', '/newsletter/optin/' . $slugFormNl, ['email' => $emailExpirat, 'response' => 'json'], 'viz'],
+                static fn (array $r) => ['GET', '/newsletter/confirmare/' . rawurlencode($tokenConfirmareNl($idAbonatNl($db, $emailExpirat), $emailExpirat,
+                    $momentNl - 31 * 86400)), [], 'viz'],
+                ['GET', '/newsletter/confirmare/nu-e-un-link-bun.zzz', [], 'viz'],
+                static fn (array $r) => ['POST', '/admin/emails', ['section' => 'newsletter-subscriber-toggle',
+                    'subscriber_id' => (string) $idAbonatNl($db, $emailExpirat), 'list_id' => (string) ($listeNl[1] ?? $listeNl[0])]],
+                ['GET', '/admin/emails/newsletters?tab=subscribers&list=' . ($listeNl[1] ?? $listeNl[0]), []],
+            ],
+            // Lista abonaților arată minutul cererii și al confirmării (NOW() al fiecărui server): la o trecere de minut
+            // între cele două servere ar diferi.
+            'curata' => static fn (string $text): string => (string) preg_replace('/abonarea pe \d\d\.\d\d\.\d{4} \d\d:\d\d/', 'abonarea pe <DATA>', $text),
+            'stare' => static fn (PDO $db): array => ['confirmat' => $abonatNl($db, $emailNou), 'neconfirmat' => $abonatNl($db, $emailExpirat),
+                'cereri' => $db->query('SELECT tip, COUNT(*) AS n FROM newsletter_cereri_confirmare GROUP BY tip ORDER BY tip')->fetchAll(PDO::FETCH_KEY_PAIR),
+                'emailuri' => $emailuriNl($db)],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $emailNou, $emailExpirat): array {
+                $probleme = [];
+                if (($stare['confirmat']['stare'] ?? '') !== 'active' || empty($stare['confirmat']['confirmat']) || !empty($stare['confirmat']['cerut'])) {
+                    $probleme[] = 'adresa confirmată nu e activă cu confirmed_at (' . json_encode($stare['confirmat']) . ')';
+                }
+                if (($stare['neconfirmat']['stare'] ?? '') !== 'pending' || empty($stare['neconfirmat']['cerut'])) {
+                    $probleme[] = 'cererea neconfirmată nu e „pending” cu pending_at (' . json_encode($stare['neconfirmat']) . ')';
+                }
+                if (count(array_filter($stare['emailuri'], static fn (string $e): bool => str_starts_with($e, 'newsletter_confirmare → '))) !== 2) {
+                    $probleme[] = 'aștept exact două emailuri de confirmare: ' . json_encode($stare['emailuri'], JSON_UNESCAPED_UNICODE);
+                }
+                foreach ([[0, 'Aproape gata!'], [1, 'Confirm abonarea</button>'], [2, 'Gata, te-ai abonat!'], [3, 'Ești abonat'],
+                    [4, 'Aproape gata!'], [6, 'a expirat'], [7, 'Linkul de confirmare nu este valid.'],
+                    [9, 'n-a confirmat încă abonarea din email']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                foreach ([[6, 410], [7, 404]] as [$n, $cod]) {
+                    if ((int) ($raspunsuri[$n]['cod'] ?? 0) !== $cod) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ': codul ' . (int) ($raspunsuri[$n]['cod'] ?? 0) . ', aștept ' . $cod;
+                    }
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'newsletter: dezabonarea doar cu butonul „Confirm dezabonarea” și „cu un clic” din clientul de email',
+            'din' => 'e2e2d77, 7123076',
+            'tabele' => $tabeleNl,
+            'pregateste' => static fn (PDO $db) => $pregatesteNl($db),
+            'cereri' => [
+                ['GET', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[0]['id'], $abonatiNl[0]['email'], $cheieNlTest)), [], 'viz'],
+                ['POST', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[0]['id'], $abonatiNl[0]['email'], $cheieNlTest)),
+                    ['confirmare' => '1'], 'viz'],
+                ['GET', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[0]['id'], $abonatiNl[0]['email'], $cheieNlTest)), [], 'viz'],
+                // RFC 8058: clientul de email trimite singur POST-ul (List-Unsubscribe=One-Click), fără pagină.
+                ['POST', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[1]['id'], $abonatiNl[1]['email'], $cheieNlTest)),
+                    ['List-Unsubscribe' => 'One-Click'], 'viz'],
+                ['GET', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[2]['id'], $abonatiNl[2]['email'], str_repeat('0', 64))), [], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => ['abonati' => array_map(static fn (array $a): array => $abonatNl($db, $a['email']), $abonatiNl)],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+                $probleme = [];
+                foreach ([0 => 'unsubscribed', 1 => 'unsubscribed', 2 => 'active'] as $n => $asteptat) {
+                    if (($stare['abonati'][$n]['stare'] ?? '') !== $asteptat) {
+                        $probleme[] = 'abonatul ' . ($n + 1) . ' are starea ' . json_encode($stare['abonati'][$n] ?? null) . ', aștept ' . $asteptat;
+                    }
+                }
+                foreach ([[0, 'Confirm dezabonarea</button>'], [1, 'Te-ai dezabonat cu succes.'], [2, 'Ești dezabonat'], [3, 'Dezabonat'],
+                    [4, 'nu este valid sau a expirat']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'newsletter: linkul vechi de dezabonare (cheia veche) cere linkul nou pe email; POST-ul direct e refuzat',
+            'din' => 'fd07fc3, f56a3b5, 739f58c',
+            'tabele' => $tabeleNl,
+            'pregateste' => static fn (PDO $db) => $pregatesteNl($db, ['campanie' => 1000, 'abonat' => 1000000]),
+            'cereri' => [
+                ['GET', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[3]['id'], $abonatiNl[3]['email'], $cheieVecheNl)), [], 'viz'],
+                ['POST', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[3]['id'], $abonatiNl[3]['email'], $cheieVecheNl)),
+                    ['List-Unsubscribe' => 'One-Click'], 'viz'],
+                ['POST', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[3]['id'], $abonatiNl[3]['email'], $cheieVecheNl)),
+                    ['trimite_link' => '1'], 'viz'],
+                // Al doilea în aceeași zi: același răspuns, niciun email (unul pe abonat la 24 de ore).
+                ['POST', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[3]['id'], $abonatiNl[3]['email'], $cheieVecheNl)),
+                    ['trimite_link' => '1'], 'viz'],
+            ],
+            'stare' => static fn (PDO $db): array => ['abonat' => $abonatNl($db, $abonatiNl[3]['email']), 'emailuri' => $emailuriNl($db),
+                'cereri' => $db->query('SELECT tip, COUNT(*) AS n FROM newsletter_cereri_confirmare GROUP BY tip ORDER BY tip')->fetchAll(PDO::FETCH_KEY_PAIR)],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $abonatiNl): array {
+                $probleme = [];
+                if (($stare['abonat']['stare'] ?? '') !== 'active') {
+                    $probleme[] = 'linkul vechi a dezabonat direct (' . json_encode($stare['abonat']) . ')';
+                }
+                $linkuri = array_filter($stare['emailuri'], static fn (string $e): bool => str_starts_with($e, 'newsletter_link_dezabonare → '
+                    . $abonatiNl[3]['email']));
+                if (count($linkuri) !== 1 || count($stare['emailuri']) !== 1) {
+                    $probleme[] = 'aștept exact un email cu linkul nou: ' . json_encode($stare['emailuri'], JSON_UNESCAPED_UNICODE);
+                }
+                if ((int) ($raspunsuri[1]['cod'] ?? 0) !== 403) {
+                    $probleme[] = 'POST-ul direct cu tokenul vechi: codul ' . (int) ($raspunsuri[1]['cod'] ?? 0) . ', aștept 403';
+                }
+                foreach ([[0, 'Trimite-mi linkul de dezabonare pe email</button>'], [2, 'Verifică-ți emailul'], [3, 'Verifică-ți emailul']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'newsletter: abonatul șters intră pe lista „nu trimite” (doar amprenta), adăugarea lui din admin e refuzată',
+            'din' => '7123076, f56a3b5',
+            'tabele' => $tabeleNl,
+            'pregateste' => static function (PDO $db) use ($pregatesteNl): void {
+                $pregatesteNl($db);
+                // Nota limitei globale a formularului (Liste abonați, Statistici), atinsă acum o oră.
+                $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (\'newsletter_limita_globala_atinsa\', ?)')
+                    ->execute([date('Y-m-d H:00:00', time() - 3600)]);
+            },
+            'cereri' => [
+                ['POST', '/admin/emails', ['section' => 'newsletter-subscriber-delete', 'subscriber_id' => (string) $abonatiNl[0]['id'],
+                    'list_id' => (string) $listeNl[0]]],
+                ['GET', '/admin/emails/newsletters?tab=subscribers&list=' . $listeNl[0], []],
+                ['POST', '/admin/emails', ['section' => 'newsletter-subscriber-save', 'subscriber_list_id' => (string) $listeNl[0],
+                    'subscriber_email' => strtoupper($abonatiNl[0]['email']), 'subscriber_name' => 'Readus din admin']],
+                ['GET', '/admin/emails/newsletters?tab=subscribers&list=' . $listeNl[0], []],
+                ['GET', '/admin/emails/newsletters?tab=stats', []],
+            ],
+            'stare' => static fn (PDO $db): array => ['abonat' => $abonatNl($db, $abonatiNl[0]['email']),
+                'suprimate' => $db->query('SELECT email_hash, motiv FROM newsletter_suprimate ORDER BY email_hash')->fetchAll(PDO::FETCH_ASSOC)],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $abonatiNl): array {
+                $probleme = [];
+                if ($stare['abonat'] !== ['lipsă']) {
+                    $probleme[] = 'abonatul șters (sau readus din admin) încă există: ' . json_encode($stare['abonat']);
+                }
+                if ($stare['suprimate'] !== [['email_hash' => hash('sha256', strtolower($abonatiNl[0]['email'])), 'motiv' => 'stergere_admin']]) {
+                    $probleme[] = 'lista „nu trimite” nu are exact amprenta adresei șterse: ' . json_encode($stare['suprimate']);
+                }
+                foreach ([[1, 'pusă pe lista „nu trimite”'], [3, 'e pe lista „nu trimite”, '], [1, 'a atins limita de'], [4, 'Pe lista „nu trimite”']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'newsletter: „Trimite acum” (o singură dată fiecăruia, cu evidența încercărilor), apoi statisticile și a doua apăsare',
+            'din' => 'e2e2d77, 9aae46a',
+            'tabele' => $tabeleNl,
+            'pregateste' => static function (PDO $db) use ($pregatesteNl, $ciornaNl, $listeNl): void {
+                $pregatesteNl($db);
+                $db->prepare('UPDATE newsletter_campaigns SET subscriber_list_id = ?, subscriber_list_ids = NULL, status = \'draft\' WHERE id = ?')
+                    ->execute([$listeNl[1] ?? $listeNl[0], $ciornaNl]);
+                $db->prepare('DELETE FROM newsletter_campaign_sends WHERE campaign_id = ?')->execute([$ciornaNl]);
+            },
+            'cereri' => [
+                ['POST', '/admin/emails', ['section' => 'newsletter-campaign-send-now', 'campaign_id' => (string) $ciornaNl]],
+                ['GET', '/admin/emails/newsletters?tab=campaigns&campaign=' . $ciornaNl, []],
+                ['GET', '/admin/emails/newsletters?tab=stats&campaign_id=' . $ciornaNl, []],
+                ['POST', '/admin/emails', ['section' => 'newsletter-campaign-send-now', 'campaign_id' => (string) $ciornaNl]],
+                ['GET', '/admin/emails/newsletters?tab=campaigns&campaign=' . $ciornaNl, []],
+            ],
+            'stare' => static function (PDO $db) use ($ciornaNl, $emailuriNl): array {
+                $campanie = $db->query('SELECT status, total_recipients, total_sent, total_failed, last_error FROM newsletter_campaigns WHERE id = '
+                    . $ciornaNl)->fetch(PDO::FETCH_ASSOC);
+                return ['campanie' => $campanie, 'trimiteri' => $db->query('SELECT subscriber_id, email, status, attempts FROM newsletter_campaign_sends
+                    WHERE campaign_id = ' . $ciornaNl . ' ORDER BY subscriber_id')->fetchAll(PDO::FETCH_ASSOC), 'emailuri' => $emailuriNl($db)];
+            },
+            // Ora trimiterii, în lista destinatarilor din statistici (diferă de la un server la altul la schimbarea secundei).
+            'curata' => static fn (string $text): string => (string) preg_replace('/\d{4}-\d\d-\d\d \d\d:\d\d:\d\d/', '<MOMENT>', $text),
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+                $probleme = [];
+                $trimise = array_filter($stare['trimiteri'], static fn (array $t): bool => $t['status'] === 'sent' && (int) $t['attempts'] === 1);
+                if (($stare['campanie']['status'] ?? '') !== 'sent' || $trimise === [] || count($trimise) !== count($stare['trimiteri'])
+                    || count($stare['emailuri']) !== count($trimise)) {
+                    $probleme[] = 'campania nu e trimisă o singură dată fiecăruia, cu o încercare: ' . json_encode($stare, JSON_UNESCAPED_UNICODE);
+                }
+                foreach ([[1, 'Newsletter trimis integral'], [2, 'Oameni care au deschis'], [4, 'Newsletterul a fost deja trimis']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'newsletter: „Oprește trimiterea”, programarea (nu în trecut) și anularea ei',
+            'din' => 'e2e2d77',
+            'tabele' => $tabeleNl,
+            'pregateste' => static function (PDO $db) use ($pregatesteNl, $ciornaNl): void {
+                $pregatesteNl($db);
+                $db->prepare('UPDATE newsletter_campaigns SET status = \'sending\' WHERE id = ?')->execute([$ciornaNl]);
+                $db->prepare('DELETE FROM newsletter_campaign_sends WHERE campaign_id = ?')->execute([$ciornaNl]);
+            },
+            'cereri' => [
+                ['POST', '/admin/emails', ['section' => 'newsletter-campaign-pause', 'campaign_id' => (string) $ciornaNl]],
+                ['GET', '/admin/emails/newsletters?tab=campaigns', []],
+                ['POST', '/admin/emails', ['section' => 'newsletter-campaign-schedule', 'campaign_id' => (string) $ciornaNl,
+                    'scheduled_at' => '2020-01-01 10:00', 'from_builder' => '1']],
+                ['POST', '/admin/emails', ['section' => 'newsletter-campaign-schedule', 'campaign_id' => (string) $ciornaNl,
+                    'scheduled_at' => '2099-01-01 10:00', 'from_builder' => '1']],
+                ['GET', '/admin/emails/newsletters?tab=campaigns', []],
+                ['POST', '/admin/emails', ['section' => 'newsletter-campaign-unschedule', 'campaign_id' => (string) $ciornaNl]],
+                ['GET', '/admin/emails/newsletters?tab=campaigns', []],
+            ],
+            'stare' => static fn (PDO $db): array => $db->query('SELECT status, scheduled_at FROM newsletter_campaigns WHERE id = ' . $ciornaNl)
+                ->fetch(PDO::FETCH_ASSOC) ?: [],
+            // Motivul opririi are data și ora de acum (diferă de la un server la altul doar la schimbarea minutului).
+            'curata' => static fn (string $text): string => (string) preg_replace('/pe \d\d\.\d\d\.\d{4}, \d\d:\d\d\./', 'pe <DATA>.', $text),
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine): array {
+                $probleme = [];
+                if ($stare !== ['status' => 'draft', 'scheduled_at' => null]) {
+                    $probleme[] = 'după anularea programării campania nu e ciornă fără oră: ' . json_encode($stare);
+                }
+                foreach ([[1, 'Trimiterea se oprește'], [1, 'Oprit de mână din admin'], [4, 'Newsletter programat pentru 01.01.2099, 10:00'],
+                    [6, 'Programarea a fost anulată.']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                return $probleme;
+            },
+        ],
+        [
+            'nume' => 'newsletter: builderul pe pași (Conținut → Destinatari → Verificare → Trimite), salvarea din pași, lista de verificare',
+            'din' => 'e2e2d77, 42984c1, 9aae46a, 739f58c',
+            'tabele' => $tabeleNl,
+            'pregateste' => static fn (PDO $db) => $pregatesteNl($db),
+            // Ora minimă a programării (pasul 4) e minutul de acum: diferă de la un server la altul la schimbarea minutului.
+            'curata' => static fn (string $text): string => (string) preg_replace('/min="\d{4}-\d\d-\d\dT\d\d:\d\d"/', 'min="<MOMENT>"', $text),
+            'cereri' => [
+                ['GET', '/admin/emails/builder?type=campaign&id=' . $ciornaNl . '&nou=1', []],
+                ['POST', '/admin/emails/builder', ['builder_type' => 'campaign', 'builder_id' => (string) $ciornaNl, 'ajax' => '1',
+                    'builder_name' => 'Ciornă salvată din pași', 'builder_subject' => 'Noutățile lunii (test)',
+                    'builder_list_ids' => implode(',', $listeNl),
+                    'blocks_json' => json_encode([['type' => 'text', 'content' => 'Text de test.'], ['type' => 'button', 'label' => 'Vezi magazinul', 'url' => '/magazin']])]],
+                ['POST', '/admin/emails/builder/verificare', ['subject' => 'Noutățile lunii (test)', 'list_ids' => implode(',', $listeNl), 'internet' => '0',
+                    'blocks_json' => json_encode([['type' => 'text', 'content' => 'Scrie aici textul.'], ['type' => 'button', 'label' => 'Gol', 'url' => '']])]],
+                ['GET', '/admin/emails/builder?type=campaign&id=' . $ciornaNl . '&pas=4', []],
+                // Un newsletter trimis nu se mai modifică: 409 la salvarea din pași.
+                ['POST', '/admin/emails/builder', ['builder_type' => 'campaign', 'builder_id' => (string) $trimisaNl, 'ajax' => '1',
+                    'builder_name' => 'Nu trebuie să se salveze', 'builder_subject' => 'X', 'builder_list_ids' => (string) $listeNl[0], 'blocks_json' => '[]']],
+                ['GET', '/admin/emails/builder?type=campaign&id=' . $trimisaNl, []],
+            ],
+            'stare' => static fn (PDO $db): array => $db->query('SELECT id, name, subject, subscriber_list_id, subscriber_list_ids, blocks_json, status
+                FROM newsletter_campaigns WHERE id IN (' . $ciornaNl . ', ' . $trimisaNl . ') ORDER BY id')->fetchAll(PDO::FETCH_ASSOC),
+            'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $ciornaNl): array {
+                $probleme = [];
+                $ciorna = array_values(array_filter($stare, static fn (array $c): bool => (int) $c['id'] === $ciornaNl))[0] ?? [];
+                if (($ciorna['subject'] ?? '') !== 'Noutățile lunii (test)') {
+                    $probleme[] = 'salvarea din pași n-a ajuns în bază: ' . json_encode($ciorna, JSON_UNESCAPED_UNICODE);
+                }
+                if ((int) ($raspunsuri[4]['cod'] ?? 0) !== 409) {
+                    $probleme[] = 'salvarea unui newsletter trimis: codul ' . (int) ($raspunsuri[4]['cod'] ?? 0) . ', aștept 409';
+                }
+                foreach ([[0, 'data-pas-panou'], [0, 'nlp-sablon'], [1, '"ok":true'], [2, 'Au rămas texte de exemplu din șablon'], [2, '"blocheaza":true'],
+                    [3, 'data-pas-panou']] as [$n, $text]) {
+                    if (!$contine($raspunsuri[$n] ?? [], $text)) {
+                        $probleme[] = 'cererea ' . ($n + 1) . ' nu conține „' . $text . '”';
+                    }
+                }
+                return $probleme;
+            },
+        ],
+    );
+
     // WP-13 (revizuirea): vederile de rezervă ale nucleului, pe care tema le atinge (views/site/not-found.php,
     // checkout-success.php, checkout-bt-verificare.php), și sertarul de meniu {{mobile_menu}} din layout (logo-ul lui).
     // Lista de pagini nu le vede: baza demo are paginile ei „404” și „checkout/succes” (publicate, deci acelea se

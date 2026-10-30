@@ -90,6 +90,7 @@ O temă aduce doar ce cheile de mai jos permit; tot restul înfățișării unui
 | `logo_meniu_mobil` | (lipsă) | `{"candidati": [...], "implicit": "...", "alt": "..."}`: logo-ul sertarului `{{mobile_menu}}`, primul candidat care există ca fișier (`/uploads/…`, `/tema/…`, `/assets/…`), altfel `implicit`; fără cheie, ca azi |
 | `iconite_categorii` | (lipsă) | `[["cuvânt", "<path …/>"], …]`: iconițele din `{{product_categories}}`, încercate în ordine (cuvântul în numele categoriei, cu litere mici, fără diacritice) înaintea celei implicite; fără cheie, lista de azi a nucleului |
 | `css_inline` | `{}` | `{"pagina_succes": "pagina-succes.css"}`: blocul `<style>` al paginii de mulțumire (`views/site/checkout-success.php`) înlocuit cu fișierul din `tema/` |
+| `newsletter` | (lipsă) | `{"logo": "/uploads/…png", "logo_alt": "…", "culori": {"principala", "inchisa", "fundal_deschis", "text", "text_secundar", "linie"}}`: înfățișarea șabloanelor de newsletter („Alege un șablon”), a emailurilor de confirmare a abonării și cu linkul de dezabonare, a paginilor publice de confirmare și dezabonare (WP-R din 30 oct, Bioscem `42984c1`, `7123076`). Logo-ul: o adresă `/uploads/`, `/tema/` sau `/assets/` a unei poze PNG, JPEG sau GIF (WebP nu apare în Outlook). Fără cheie: fără logo, paleta neutră a nucleului (`Tema::CULORI_NEWSLETTER`); o culoare nedată rămâne neutră |
 
 Reguli:
 

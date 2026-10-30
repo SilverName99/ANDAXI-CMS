@@ -36,7 +36,8 @@
         "conturi_clienti/0036_confirmare_email": "af296e0f98d29359ba6fb9803a41a2423d4e0a544a87ccdee67e1a384f2a4384",
         "cereri_oferta/0037_cereri_oferta": "e07a4b550ef3a0ddd2a084a1bfb3362f1597c632360c256252cbc83fcc51d5ca",
         "conturi_clienti/0038_confirmare_legata_de_adresa": "dee143b74b34e4fc4bf59513f2442df5e77d0ac69056766b611bd94de7239053",
-        "plata_stripe/0039_evenimente_in_lucru": "b4ffd8f90aa3f37bab8214e143c723cd03b89fdac3b16959f47bc735bce36a91"
+        "plata_stripe/0039_evenimente_in_lucru": "b4ffd8f90aa3f37bab8214e143c723cd03b89fdac3b16959f47bc735bce36a91",
+        "newsletter/0040_newsletter_dubla_confirmare": "eabd47dfedaeb2e3166035d6adf362a2a24f151632893fcdcc91a208f6a46edc"
     },
     "retrase": {}
 }

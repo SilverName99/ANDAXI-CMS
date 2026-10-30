@@ -1,7 +1,7 @@
 -- Fixture-ul migrărilor pentru Bioscem (cod bs): schema pe care o face codul vechi pe o bază goală:
 -- scripts/install.php, apoi funcțiile ensure…/asigura… până nu se mai schimbă (MariaDB 10.11.14-MariaDB-0ubuntu0.24.04.1).
 -- Doar structură, niciun rând; nimic din datele unui site. Îl încarcă tools/dev/test-migrari.php (T2).
--- sursa: Nou-site-bioscem@070e1af
+-- sursa: Nou-site-bioscem@739f58c
 -- Generat de tools/dev/migrari/genereaza-fixture.php --fixture-uri; nu se editează de mână.
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -515,6 +515,7 @@ CREATE TABLE `newsletter_campaigns` (
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `total_opens` int(10) unsigned DEFAULT 0,
   `total_clicks` int(10) unsigned DEFAULT 0,
+  `last_error` text DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -553,8 +554,21 @@ CREATE TABLE `newsletter_campaign_sends` (
   `open_count` int(10) unsigned DEFAULT 0,
   `clicked_at` datetime DEFAULT NULL,
   `click_count` int(10) unsigned DEFAULT 0,
+  `attempts` int(10) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_campaign_subscriber` (`campaign_id`,`subscriber_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `newsletter_cereri_confirmare` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `email_hash` char(64) NOT NULL,
+  `ip` varchar(64) DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  `tip` varchar(20) NOT NULL DEFAULT 'abonare',
+  PRIMARY KEY (`id`),
+  KEY `idx_email_creat` (`email_hash`,`created_at`),
+  KEY `idx_ip_creat` (`ip`,`created_at`),
+  KEY `idx_creat` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `newsletter_lists` (
@@ -594,10 +608,19 @@ CREATE TABLE `newsletter_subscribers` (
   `email` varchar(190) NOT NULL,
   `name` varchar(190) DEFAULT NULL,
   `status` varchar(20) NOT NULL DEFAULT 'active',
+  `pending_at` datetime DEFAULT NULL,
+  `confirmed_at` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `newsletter_suprimate` (
+  `email_hash` char(64) NOT NULL,
+  `motiv` varchar(40) NOT NULL DEFAULT 'stergere_admin',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`email_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `newsletter_templates` (

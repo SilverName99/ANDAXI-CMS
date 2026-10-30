@@ -326,16 +326,31 @@ foreach ($deVerificat as $cheie => $fel) {
     );
 }
 
-// Cheia de semnare a linkurilor din newslettere (WP-17): fără ea fixată, linkurile trimise depind de APP_URL și de
-// numele bazei. Cheia însăși nu se afișează; doar sursa și, la o derivare, sha256-ul ei scurt (pentru comparare).
+// Cheile de semnare ale linkurilor din newslettere. Din WP-R de la 30 oct (codul vechi 9aae46a, fd07fc3) linkurile noi se semnează
+// cu o cheie aleatoare (NEWSLETTER_SECRET din .env, altfel newsletter_cheie_semnare, făcută la prima semnare); cheia de dinainte
+// (WP-17: fixată în .env la adoptare, altfel derivată) verifică doar linkurile trimise înainte, până la pragul scris la adoptare.
+// Cheile însele nu se afișează; doar de unde vin.
 echo "\n=== Newsletter ===\n";
 $sursaNewsletter = \App\Support\NewsletterService::sursaCheiiSemnare();
-echo 'cheia de semnare a linkurilor: ' . match ($sursaNewsletter) {
+$secretNewsletter = trim((string) \App\Support\Env::get('NEWSLETTER_SECRET', '')) !== '';
+$cheieInBaza = '';
+$pragNewsletter = '';
+try {
+    $cheieInBaza = (string) ($db->query("SELECT `value` FROM settings WHERE `key` = 'newsletter_cheie_semnare'")->fetchColumn() ?: '');
+    $pragNewsletter = (string) ($db->query("SELECT `value` FROM settings WHERE `key` = 'newsletter_cheie_limita'")->fetchColumn() ?: '');
+} catch (Throwable) {
+}
+echo 'cheia linkurilor noi: ' . ($secretNewsletter ? 'din .env (NEWSLETTER_SECRET)'
+    : (strlen($cheieInBaza) >= 32 ? 'aleatoare, in baza (newsletter_cheie_semnare)' : 'inca nefacuta (se face la prima semnare)')) . "\n";
+echo 'cheia veche (doar linkurile trimise inainte): ' . match ($sursaNewsletter) {
     'env' => 'din .env (NEWSLETTER_CHEIE_SEMNARE)',
     'env_gresit' => 'ATENTIE: NEWSLETTER_CHEIE_SEMNARE din .env nu are 64 de cifre hexazecimale mici, deci se ignora',
     'site.json' => 'derivata cu sarea din pachetul site-ului (site.json → newsletter_sare_semnatura); la adoptare se scrie in .env',
     default => 'ATENTIE: derivata din LICENTA_SITE (nici .env, nici pachetul nu o fixeaza); linkurile trimise nu mai merg daca se schimba APP_URL, baza sau LICENTA_SITE',
 } . "\n";
+$prag = json_decode($pragNewsletter, true);
+echo 'pragul cheii vechi: ' . (is_array($prag) ? 'campania ' . (int) ($prag['campanie'] ?? 0) . ', abonatul ' . (int) ($prag['abonat'] ?? 0)
+    : ($pragNewsletter === '' ? 'ATENTIE: lipsa (il scrie migrarea newsletter/0040)' : 'niciun link vechi crezut (' . $pragNewsletter . ')')) . "\n";
 
 echo "\n=== Comenzi cu AWB ===\n";
 try {

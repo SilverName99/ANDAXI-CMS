@@ -157,7 +157,10 @@ $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /
     'GET /newsletter/track/open/{campaignId}/{subscriberId}/{token}', 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}',
     // WP-25: linkul de confirmare a adresei din emailul de după înregistrare (un cont creat cât `conturi_clienti` era
     // pornit se confirmă și după oprirea lui).
-    'GET /cont/confirmare/{token}', 'POST /cont/confirmare/{token}'];
+    'GET /cont/confirmare/{token}', 'POST /cont/confirmare/{token}',
+    // WP-R din 30 oct 2026 (codul vechi e2e2d77, 7123076): dezabonarea „cu un clic” a clientului de email (antetul
+    // List-Unsubscribe-Post al unui newsletter trimis) și butonul „Confirm dezabonarea” din pagina linkului, la aceeași adresă.
+    'POST /newsletter/unsubscribe/{token}'];
 $mereuDeschiseFixeNorm = [];
 foreach ($mereuDeschiseFixe as $adresa) {
     [$metodaFixa, $tiparFix] = explode(' ', $adresa, 2);

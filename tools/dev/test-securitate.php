@@ -344,6 +344,11 @@ $permise = [
         '// Doar DA/NU, nicio adresă: ultima adresă din X-Forwarded-For și X-Real-IP sunt chiar REMOTE_ADDR? (pe Hostinger, prin',
         '// CDN-ul hcdn: spune dacă REMOTE_ADDR e vizitatorul; intrare pentru IpClient, WP-12b)',
     ],
+    // WP-R din 30 oct (newsletterul Bioscem 739f58c): doar textul punctului „IP-ul tău” din verificarea dinaintea trimiterii, ca
+    // în codul Bioscem (comparat de G-cmp); adresa vine din IpClient::adresa(), rândul de deasupra lui.
+    'src/Support/NewsletterVerificare.php' => [
+        "\$puncte[] = self::punct('ip', 'info', 'IP-ul tău, așa cum îl vede site-ul: ' . \$ipVazut . ' (REMOTE_ADDR)',",
+    ],
 ];
 $cautaAdresa = static function (string $relativ, string $text) use ($tiparAdresa, $permise): array {
     $gasite = [];

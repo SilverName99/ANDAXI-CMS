@@ -745,8 +745,11 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    `$PHP scripts/diagnostic.php --cheie-newsletter` scrie rândul `NEWSLETTER_CHEIE_SEMNARE=<64 de cifre>` (cheia derivată
    pe care site-ul o folosește azi, din `APP_URL`, numele bazei și sarea din `site.json` → `newsletter_sare_semnatura`),
    care se pune în `.env`. Fără el linkurile de dezabonare, deschidere și clic din newsletterele deja trimise merg doar cât
-   `APP_URL` și baza rămân exact aceleași (un `www` sau un „/” în plus le rupe). Decizia OD-28: cheia derivată rămâne;
-   rotirea la o cheie aleatoare (cu ambele acceptate 12 luni) vine într-o versiune următoare.
+   `APP_URL` și baza rămân exact aceleași (un `www` sau un „/” în plus le rupe). Din WP-R de la 30 oct (Bioscem `9aae46a`,
+   `fd07fc3`) linkurile noi se semnează cu o cheie aleatoare (`NEWSLETTER_SECRET` din `.env`, opțional, altfel
+   `newsletter_cheie_semnare`, făcută la prima semnare), iar cheia derivată de mai sus verifică doar linkurile trimise înainte,
+   până la pragul `newsletter_cheie_limita` (cea mai mare campanie și cel mai mare abonat din ziua adoptării; îl scrie migrarea
+   `newsletter/0040` dacă lipsește; pe Bioscem există deja). Fără rândul din `.env`, deci, se pierd doar linkurile vechi.
 
 Comparația calculelor de pe copie (`tools/verificare/compara-calcule.php`, WP-11; [VERIFICARE.md](VERIFICARE.md),
 „Comparația calculelor”) cere baza la zi cu codul comun: dacă garda spune `in_urma` (cod nou urcat după încărcare),

@@ -18,7 +18,7 @@ pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|
-| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `070e1af` (21.10.2026) | CMS pornește din `11b1040` |
+| Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `739f58c` (30.10.2026) | CMS pornește din `11b1040` |
 | Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `779e0d8` (21.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
 | vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `0fc2b2c` (20.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
 | grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (20.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |
@@ -57,6 +57,14 @@ pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 | `bb11ae0` | 21.10 | SEO livrarea 4: HEAD pe o adresă cu litere mari primește același răspuns ca GET | portat (`SeoRedirects`) |
 | `c3ad6ab` `b51067a` | 21.10 | SEO livrarea 4, D5 și A9: scriptul de conținut (căștile AIRCALL – alb / – negru cu adresele cu litere mici, 30 de linkuri din texte), fără frazele A9-12 și A9-13; ținta regulii `/produs/casti-antiradiatii-aircall-sp21` cu litere mici | portat (`scripts/seo-continut.php` generic, lista Bioscem în `site-uri/bioscem/seo-continut.json`, cu numele magazinului și numărătoarea mutate din script; regula în `site-uri/bioscem/redirecturi.json`). Pe Bioscem e deja aplicat (21.10): rulat din nou spune „Nimic de schimbat” |
 | `36376f3` `34a1a2c` | 21.10 | SEO livrarea 4: README și `.env.example` | portat (`.env.example`; README-ul Bioscem nu e în CMS, documentația în `docs/SEO.md`, `docs/PACHETE.md`) |
+| `e2e2d77` | 30.10 | Newsletter: fără trimiteri duble (lacăt, „pending” înainte de trimitere), dezabonații rămân dezabonați, cel mult 3 încercări, „Oprit” după 5 respingeri, List-Unsubscribe, linkuri și statistici corecte; `NewsletterVerificare`, `NewsletterSabloane` | portat (WP-R din 30.10, în commit-ul care mută aici „ultimul commit revizuit”; coloanele noi le face migrarea adoptivă `newsletter/0040`, nu `ensureSchema`; ruta `POST /newsletter/unsubscribe/{token}` mereu deschisă) |
+| `42984c1` | 30.10 | Newsletter: pașii Conținut → Destinatari → Verificare → Trimite / Programează, șabloanele cu înfățișarea magazinului, componentele de admin (`views/admin/componente/`, `admin-componente.css`) | portat (logo-ul și culorile șabloanelor din `site-uri/bioscem/tema/tema.json` → `newsletter`, cheia nouă a temei; fără catalog, șabloanele n-au carduri de produs, fără magazin, prețuri; componentele, cu legătura lor cu WP-31, în `docs/ui/README.md`) |
+| `4ecdf92` | 30.10 | Newsletter: ghidul „Cum trimit un newsletter” (`docs/ghid-newsletter*`) și nota pentru Faza D (`docs/newsletter-faza-d.md`) | ghidul nu se portează (documentația clientului Bioscem, cu pozele lui); nota: conținutul ei e în `docs/ui/README.md` (componentele) și în `docs/PLUGINURI.md` (newsletterul), pentru WP-29/WP-31 |
+| `9aae46a` | 30.10 | Newsletter: reparațiile după recenzie (stările de pornire, cheia de semnare aleatoare, SSRF în lista de verificare, confirmările pierdute „neconfirmat”) | portat (cheia: `Settings::secretGenerat`, între `Settings::CHEI_ASCUNSE`; cheia de dinainte = cea din WP-17, `NEWSLETTER_CHEIE_SEMNARE` / sarea din pachet) |
+| `fd07fc3` | 30.10 | Newsletter: cheia veche de semnare doar cu limite (clicuri și dezabonări), pragul `newsletter_cheie_limita` | portat (pragul îl scrie și migrarea `newsletter/0040`, dacă lipsește, la trecere; un site nou are 0 și 0) |
+| `7123076` | 30.10 | Newsletter: dubla confirmare, dezabonarea doar cu buton, lista „nu trimite” | portat (rutele `GET/POST /newsletter/confirmare/{token}` ale pluginului; adresa IP a limitelor din `IpClient::adresa()`; pagina publică cu culorile din tema pachetului) |
+| `f56a3b5` | 30.10 | Newsletter: limitele formularului rezervate sub lacăt, linkurile vechi de dezabonare doar prin email | portat |
+| `739f58c` | 30.10 | Newsletter: plafonul global doar pentru abonări, IPv6 pe /64, IP-ul văzut de site în lista de verificare | portat (IP-ul arătat e `IpClient::adresa()`, cel al limitelor) |
 
 `b632294` și `b3781a4` merg mai departe decât Biovitality: cheile de ofertă care s-ar ciocni (o ofertă
 nouă care ar primi cheia păstrată a alteia, o cheie dublată) primesc altă variantă, o cheie care nu e
@@ -84,6 +92,18 @@ pozele vechi de test puse de `compara-cu-baza.sh` la exact mărimea din pachet, 
 similare alese în admin; față de Bioscem `4254ca4` pică 55 de pagini și cazuri. Istoricul (`--baza=f5ae5ea`) are
 diferențele livrării 4 în `$porturiBioscem`, pe commit-uri (secțiunea „Produse similare” cu produsele verificate
 independent de cod).
+
+Newsletterul (`e2e2d77` … `739f58c`, WP-R din 30 octombrie) la fel, doar pe Bioscem: Biovitality, vertij și grafoanaytis îl
+primesc odată cu codul comun, la adoptare (rândul din lista „Ce se vede” a fiecăruia; înfățișarea șabloanelor din pachetul lor,
+`tema.json` → `newsletter`, altfel neutră). Dovada: comparația față de Bioscem `739f58c`, cu licența `toate` și `bioscem`:
+paginile newsletterului (lista, abonații, builderul unui template) și șapte cazuri de salvare: dubla confirmare (formularul,
+GET și POST pe link, linkul expirat, ⟲ refuzat la „neconfirmat”), dezabonarea cu buton și „cu un clic”, linkul vechi (pagina
+fără token, POST-ul direct 403, emailul cu linkul nou, unul pe zi), lista „nu trimite” (ștergerea, adăugarea refuzată, nota
+limitei globale, statisticile), „Trimite acum” (fiecare o dată, statisticile pe oameni, a doua apăsare), oprirea, programarea
+și anularea ei, builderul pe pași (salvarea din pași, lista de verificare, 409 pe un newsletter trimis); față de Bioscem
+`070e1af` pică 10 pagini și cazuri. Ce nu se vede în pagini (lacătul, încercările, limitele, curățenia, pluginul oprit) îl
+verifică `tools/dev/test-newsletter.php` (în testul de fum). Istoricul (`--baza=f5ae5ea`) are diferențele celor trei pagini
+în `tools/dev/lib/declaratii-newsletter-istoric.php`, pe commit-uri.
 
 ## Biovitality (de la `f7d15ba`)
 

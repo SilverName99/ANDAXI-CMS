@@ -85,5 +85,18 @@
     ],
     "css_inline": {
         "pagina_succes": "pagina-succes.css"
+    },
+    "newsletter": {
+        "_despre": "Înfățișarea șabloanelor de newsletter, a emailurilor de confirmare a abonării și a paginilor publice ale newsletterului (codul vechi 42984c1, 7123076: constantele lui NewsletterSabloane, culorile din antetul site-ului; logo-ul PNG, pentru că WebP nu apare în Outlook).",
+        "logo": "/uploads/gallery/bioscem-logo-2.png",
+        "logo_alt": "Bioscem",
+        "culori": {
+            "principala": "#075d61",
+            "inchisa": "#0b3f52",
+            "fundal_deschis": "#eaf6f5",
+            "text": "#18353a",
+            "text_secundar": "#6b7d80",
+            "linie": "#e3ecec"
+        }
     }
 }

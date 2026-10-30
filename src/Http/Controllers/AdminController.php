@@ -11,7 +11,9 @@ use App\Support\EmailAutomation;
 use App\Support\FanCourierGateway;
 use App\Support\Flash;
 use App\Support\LoyaltyService;
+use App\Support\NewsletterSabloane;
 use App\Support\NewsletterService;
+use App\Support\NewsletterVerificare;
 use App\Support\OrderMailer;
 use App\Support\ResponseCache;
 use App\Support\Settings;
@@ -424,6 +426,7 @@ final class AdminController
         }
 
         $abonatiNoi = 0;
+        $abonatiSuprimati = 0;
         $abonati = (array) ($date['abonati'] ?? []);
         if ($abonati !== []) {
             try {
@@ -432,6 +435,11 @@ final class AdminController
                     $listaId = NewsletterService::defaultListId($db);
                 }
                 foreach ($abonati as $a) {
+                    if (NewsletterService::esteSuprimat($db, (string) $a['email'])) {
+                        // Pe lista „nu trimite”: nu se readuce din backup.
+                        $abonatiSuprimati++;
+                        continue;
+                    }
                     try {
                         NewsletterService::subscribeToList($db, $listaId, (string) $a['email'], (string) $a['name']);
                         $abonatiNoi++;
@@ -450,6 +458,7 @@ final class AdminController
             'conturi_scrise' => $noi,
             'adrese_scrise' => $adrese,
             'abonati_scrisi' => $abonatiNoi,
+            'abonati_suprimati' => $abonatiSuprimati,
             'esuate' => $esuate,
             'adrese_esuate' => $adreseEsuate,
             'abonati_esuati' => $abonatiEsuati,
@@ -13277,7 +13286,7 @@ final class AdminController
             ];
         } elseif ($type === 'campaign') {
             $id   = (int) ($_GET['id'] ?? 0);
-            $stmt = $db->prepare('SELECT id, name, subject, subscriber_list_id, subscriber_list_ids, status, scheduled_at, blocks_json FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+            $stmt = $db->prepare('SELECT id, name, subject, subscriber_list_id, subscriber_list_ids, status, scheduled_at, sent_at, total_recipients, last_error, blocks_json FROM newsletter_campaigns WHERE id = :id LIMIT 1');
             $stmt->execute(['id' => $id]);
             $row  = $stmt->fetch();
             if (!is_array($row)) {
@@ -13286,10 +13295,13 @@ final class AdminController
                 return;
             }
             $blocks  = json_decode((string) ($row['blocks_json'] ?? '[]'), true) ?: [];
+            // Numărul care contează la trimitere: doar abonații activi.
             $newsletterLists = $db->query(
-                'SELECT l.id, l.name, COUNT(ls.subscriber_id) AS subscribers_count
+                'SELECT l.id, l.name, l.is_default, COUNT(ls.subscriber_id) AS subscribers_count,
+                        COALESCE(SUM(s.status = "active"), 0) AS active_count
                  FROM newsletter_lists l
                  LEFT JOIN newsletter_list_subscribers ls ON ls.list_id = l.id
+                 LEFT JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
                  GROUP BY l.id ORDER BY l.is_default DESC, l.name ASC'
             )->fetchAll() ?: [];
             $builder = [
@@ -13303,10 +13315,22 @@ final class AdminController
                 'back_url'         => '/admin/emails/newsletters?tab=campaigns',
                 'newsletter_lists'  => $newsletterLists,
                 'list_id'           => (int) ($row['subscriber_list_id'] ?? 0),
-                'list_ids'          => array_values(array_filter(array_map('intval',
-                    json_decode((string) ($row['subscriber_list_ids'] ?? ''), true) ?: []), fn($v) => $v > 0)),
+                // Listele din `subscriber_list_ids`, altfel lista unică. Înainte, o
+                // campanie creată cu „+ Newsletter nou” (doar lista unică) apărea
+                // aici fără nicio listă bifată, iar prima salvare din builder îi
+                // ștergea lista.
+                'list_ids'          => NewsletterService::campaignListIds($row),
                 'status'            => (string) ($row['status'] ?? 'draft'),
                 'scheduled_at'      => (string) ($row['scheduled_at'] ?? ''),
+                // Pentru pașii „Verificare” și „Trimite / Programează”.
+                'last_error'        => (string) ($row['last_error'] ?? ''),
+                'sent_at'           => (string) ($row['sent_at'] ?? ''),
+                'total_recipients'  => (int) ($row['total_recipients'] ?? 0),
+                'totaluri'          => NewsletterService::totaluriTrimiteri($db, $id),
+                'ramase'            => NewsletterService::remainingCount($db, $id, NewsletterService::campaignListIds($row)),
+                'poate_modifica'    => NewsletterService::poateFiModificata($db, $id),
+                'email_test'        => $this->emailAdminCurent($db),
+                'nou'               => (string) ($_GET['nou'] ?? '') === '1',
             ];
         } else {
             Flash::set('error', 'Tip builder necunoscut.');
@@ -13323,6 +13347,9 @@ final class AdminController
         )->fetchAll() ?: [];
 
         $builder['gallery_images'] = $galleryImages;
+        // Șabloanele cu înfățișarea magazinului (logo, culori, produse), pentru
+        // newslettere și pentru template-urile lor; nu pentru emailurile de comandă.
+        $builder['sabloane'] = $type === 'ecommerce' ? [] : NewsletterSabloane::lista($db, $settings);
 
         View::render('admin/emails/builder', [
             'title'   => 'Builder email — ' . ($builder['name'] ?? ''),
@@ -13423,6 +13450,14 @@ final class AdminController
 
         if ($type === 'campaign') {
             $id      = (int) ($_POST['builder_id'] ?? 0);
+            // Un newsletter care a început să plece nu se mai modifică: unii ar
+            // primi o variantă, alții alta, iar statisticile ar amesteca două
+            // conținuturi. Înainte, salvarea trecea peste orice stare.
+            NewsletterService::ensureSchema($db);
+            if (!NewsletterService::poateFiModificata($db, $id)) {
+                $this->raspundeBuilderBlocat($id);
+                return;
+            }
             $name    = trim((string) ($_POST['builder_name'] ?? ''));
             $listIdsRaw = trim((string) ($_POST['builder_list_ids'] ?? ''));
             $listIds = array_values(array_filter(array_map('intval', $listIdsRaw !== '' ? explode(',', $listIdsRaw) : []), fn($v) => $v > 0));
@@ -13439,6 +13474,13 @@ final class AdminController
             );
             $stmt->execute(['name' => $name, 'subject' => $subject, 'list_id' => $primaryListId,
                 'list_ids' => $listIdsJson, 'bj' => $blocksJson, 'html' => $htmlContent, 'id' => $id]);
+            if ((string) ($_POST['ajax'] ?? '') === '1') {
+                // Salvarea din pașii builderului (fetch): răspuns scurt, fără
+                // mesaj flash care să apară apoi pe altă pagină.
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
+                return;
+            }
             Flash::set('success', 'Campanie salvată.');
             header('Location: /admin/emails/builder?type=campaign&id=' . $id);
             return;
@@ -13446,6 +13488,21 @@ final class AdminController
 
         Flash::set('error', 'Tip builder necunoscut.');
         header('Location: /admin/emails/newsletters');
+    }
+
+    /** Răspunsul la o salvare refuzată: campania a început deja să plece. */
+    private function raspundeBuilderBlocat(int $id): void
+    {
+        $mesaj = 'Newsletterul a început deja să plece, așa că nu se mai poate modifica. '
+            . 'Dacă vrei o variantă nouă, folosește „Duplică” din lista de newslettere.';
+        if ((string) ($_POST['ajax'] ?? '') === '1') {
+            http_response_code(409);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => $mesaj], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        Flash::set('error', $mesaj);
+        header('Location: /admin/emails/builder?type=campaign&id=' . $id);
     }
 
     public function emailsBuilderPreview(): void
@@ -13464,6 +13521,36 @@ final class AdminController
         $normalized = NewsletterService::normalizeBlocks($rawBlocks);
         $html = NewsletterService::renderHtmlFromBlocks($normalized, $subject);
         echo json_encode(['ok' => true, 'html' => $html], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Lista de verificare dinaintea trimiterii (pasul 3 din builder), pentru
+     * conținutul de pe ecran, chiar nesalvat. Răspunde JSON; nu trimite nimic.
+     */
+    public function emailsBuilderVerificare(): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->guard()) {
+            echo json_encode(['ok' => false]);
+            return;
+        }
+        $db = $this->db();
+        if (!$db instanceof PDO) {
+            echo json_encode(['ok' => false, 'message' => 'Conexiunea DB nu este disponibilă.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        NewsletterService::ensureSchema($db);
+        $blocks = json_decode((string) ($_POST['blocks_json'] ?? '[]'), true);
+        $listIds = array_map('intval', explode(',', (string) ($_POST['list_ids'] ?? '')));
+        $rezultat = NewsletterVerificare::verifica(
+            $db,
+            Settings::all($db),
+            is_array($blocks) ? $blocks : [],
+            (string) ($_POST['subject'] ?? ''),
+            $listIds,
+            (string) ($_POST['internet'] ?? '1') === '1'
+        );
+        echo json_encode(['ok' => true] + $rezultat, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
@@ -13618,9 +13705,11 @@ final class AdminController
                  ORDER BY updated_at DESC, id DESC'
             )->fetchAll();
             $newsletterLists = $db->query(
-                'SELECT l.id, l.name, l.description, l.is_default, COUNT(ls.subscriber_id) AS subscribers_count
+                'SELECT l.id, l.name, l.description, l.is_default, COUNT(ls.subscriber_id) AS subscribers_count,
+                        COALESCE(SUM(s.status = "active"), 0) AS active_count
                  FROM newsletter_lists l
                  LEFT JOIN newsletter_list_subscribers ls ON ls.list_id = l.id
+                 LEFT JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
                  GROUP BY l.id
                  ORDER BY l.is_default DESC, l.name ASC'
             )->fetchAll();
@@ -13656,7 +13745,7 @@ final class AdminController
                     'SELECT c.id, c.name, c.status, c.template_type, c.template_ref, c.subscriber_list_id,
                             c.subject, c.blocks_json, c.html_content, c.scheduled_at, c.sent_at, c.total_recipients, c.total_sent, c.total_failed,
                             COALESCE(c.total_opens, 0) AS total_opens, COALESCE(c.total_clicks, 0) AS total_clicks,
-                            l.name AS list_name
+                            c.last_error, l.name AS list_name
                      FROM newsletter_campaigns c
                      LEFT JOIN newsletter_lists l ON l.id = c.subscriber_list_id
                      ORDER BY c.id DESC'
@@ -13716,7 +13805,7 @@ final class AdminController
                     }
 
                     $stmtSubscribers = $db->prepare(
-                        'SELECT s.id, s.email, s.name, s.status
+                        'SELECT s.id, s.email, s.name, s.status, s.pending_at, s.confirmed_at
                          FROM newsletter_list_subscribers ls
                          INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
                          WHERE ls.list_id = :list_id' . $filtru . '
@@ -13758,17 +13847,23 @@ final class AdminController
                 $newsletterStats['forms_total'] = (int) $db->query('SELECT COUNT(*) FROM newsletter_optin_forms')->fetchColumn();
                 $newsletterStats['subscribers_active'] = (int) $db->query('SELECT COUNT(*) FROM newsletter_subscribers WHERE status = "active"')->fetchColumn();
                 $newsletterStats['subscribers_unsubscribed'] = (int) $db->query('SELECT COUNT(*) FROM newsletter_subscribers WHERE status = "unsubscribed"')->fetchColumn();
+                $newsletterStats['subscribers_pending'] = (int) $db->query('SELECT COUNT(*) FROM newsletter_subscribers WHERE status = "pending"')->fetchColumn();
+                $newsletterStats['suprimate'] = (int) $db->query('SELECT COUNT(*) FROM newsletter_suprimate')->fetchColumn();
 
                 // Load all sent campaigns with aggregated stats
                 try {
                     $statsCampaigns = $db->query(
-                        'SELECT c.id, c.name, c.subject, c.sent_at, c.total_recipients, c.total_sent,
+                        'SELECT c.id, c.name, c.subject, c.sent_at, c.total_recipients, c.total_sent, c.status,
                                 COALESCE(c.total_opens,0) AS total_opens,
                                 COALESCE(c.total_clicks,0) AS total_clicks,
+                                (SELECT COUNT(*) FROM newsletter_campaign_sends s
+                                  WHERE s.campaign_id = c.id AND s.subscriber_id IS NOT NULL AND s.opened_at IS NOT NULL) AS unique_opens,
+                                (SELECT COUNT(*) FROM newsletter_campaign_sends s
+                                  WHERE s.campaign_id = c.id AND s.subscriber_id IS NOT NULL AND s.clicked_at IS NOT NULL) AS unique_clicks,
                                 l.name AS list_name
                          FROM newsletter_campaigns c
                          LEFT JOIN newsletter_lists l ON l.id = c.subscriber_list_id
-                         WHERE c.status IN ("sent","sending")
+                         WHERE c.status IN ("sent","sending","paused")
                          ORDER BY c.sent_at DESC
                          LIMIT 50'
                     )->fetchAll();
@@ -13788,6 +13883,20 @@ final class AdminController
                         $stmt = $db->prepare('SELECT c.*, l.name AS list_name FROM newsletter_campaigns c LEFT JOIN newsletter_lists l ON l.id=c.subscriber_list_id WHERE c.id=:id LIMIT 1');
                         $stmt->execute(['id' => $statsCampaignId]);
                         $statsCampaignDetail = $stmt->fetch() ?: null;
+                        if (is_array($statsCampaignDetail)) {
+                            // Procentele se fac pe OAMENI (deschideri unice), nu
+                            // pe deschideri: cine deschide de 5 ori nu mai urcă
+                            // rata peste 100%.
+                            $unice = $db->prepare(
+                                'SELECT SUM(opened_at IS NOT NULL) AS unique_opens, SUM(clicked_at IS NOT NULL) AS unique_clicks
+                                 FROM newsletter_campaign_sends WHERE campaign_id = :id AND subscriber_id IS NOT NULL'
+                            );
+                            $unice->execute(['id' => $statsCampaignId]);
+                            $randUnice = $unice->fetch() ?: [];
+                            $statsCampaignDetail['unique_opens'] = (int) ($randUnice['unique_opens'] ?? 0);
+                            $statsCampaignDetail['unique_clicks'] = (int) ($randUnice['unique_clicks'] ?? 0);
+                            $statsCampaignDetail['totaluri'] = NewsletterService::totaluriTrimiteri($db, $statsCampaignId);
+                        }
                     } catch (\Throwable) {
                         $statsCampaignDetail = null;
                     }
@@ -13823,7 +13932,8 @@ final class AdminController
                             $perPagCerut = (int) ($_GET['recip_per_page'] ?? 50);
                             $statsRecipientsPerPage = in_array($perPagCerut, [25, 50, 100, 200], true) ? $perPagCerut : 50;
 
-                            $conditii = ['campaign_id = :id'];
+                            // Testele (fără abonat) nu sunt destinatari ai campaniei (codul vechi e2e2d77).
+                            $conditii = ['campaign_id = :id', 'subscriber_id IS NOT NULL'];
                             $paramsRecip = ['id' => $statsCampaignId];
                             if ($statsRecipientsQuery !== '') {
                                 $conditii[] = 'email LIKE :term';
@@ -13857,7 +13967,7 @@ final class AdminController
                             $offsetRecip = ($statsRecipientsPage - 1) * $statsRecipientsPerPage;
 
                             $r = $db->prepare(
-                                'SELECT email, status, opened_at, open_count, clicked_at, click_count, sent_at
+                                'SELECT email, status, error_message, opened_at, open_count, clicked_at, click_count, sent_at
                                  FROM newsletter_campaign_sends
                                  WHERE ' . $undeRecip . '
                                  ORDER BY id DESC
@@ -13895,7 +14005,10 @@ final class AdminController
                         }
 
                         try {
-                            $rev = $db->prepare('SELECT COUNT(*) AS orders_count, COALESCE(SUM(o.total),0) AS revenue FROM orders o WHERE o.nl_campaign_id=:id AND o.status NOT IN ("cancelled","refunded")');
+                            // Vânzările atribuite numără doar comenzile reale: nu și pe cele
+                            // eșuate la plată, returnate, în coș de gunoi sau cu
+                            // plata cu cardul încă neconfirmată.
+                            $rev = $db->prepare('SELECT COUNT(*) AS orders_count, COALESCE(SUM(o.total),0) AS revenue FROM orders o WHERE o.nl_campaign_id=:id AND o.status NOT IN ("cancelled","refunded","failed","returned","trash","pending_payment")');
                             $rev->execute(['id' => $statsCampaignId]);
                             $statsRevenue = $rev->fetch() ?: ['orders_count' => 0, 'revenue' => 0];
                         } catch (\Throwable) {
@@ -14417,6 +14530,16 @@ final class AdminController
                 header('Location: /admin/emails/newsletters?tab=campaigns');
                 return;
             }
+            if ($id > 0 && !NewsletterService::poateFiModificata($db, $id)) {
+                // Formularul arată doar „draft/scheduled”: salvat peste o
+                // campanie în curs, o trecea în ciornă și trimiterea se oprea.
+                Flash::set('error', 'Newsletterul a început deja să plece, așa că nu se mai poate modifica. Folosește „Duplică” pentru o variantă nouă.');
+                header('Location: /admin/emails/newsletters?tab=campaigns&campaign=' . $id);
+                return;
+            }
+            if ($status === 'sent') {
+                $status = 'draft';
+            }
             if ($status === 'scheduled' && $scheduledAt === null) {
                 Flash::set('error', 'Pentru programare trebuie setată data/ora.');
                 header('Location: /admin/emails/newsletters?tab=campaigns');
@@ -14449,6 +14572,7 @@ final class AdminController
                          template_type = :template_type,
                          template_ref = :template_ref,
                          subscriber_list_id = :subscriber_list_id,
+                         subscriber_list_ids = :subscriber_list_ids,
                          subject = :subject,
                          blocks_json = :blocks_json,
                          html_content = :html_content,
@@ -14462,6 +14586,9 @@ final class AdminController
                     'template_type' => $templateType,
                     'template_ref' => $templateRef,
                     'subscriber_list_id' => $listId,
+                    // Lista aleasă aici înlocuiește și listele multiple alese în
+                    // builder; altfel pagina arăta o listă și se trimitea la alta.
+                    'subscriber_list_ids' => json_encode([$listId]),
                     'subject' => $subject,
                     'blocks_json' => $blocksJson,
                     'html_content' => $finalHtmlContent,
@@ -14548,8 +14675,8 @@ final class AdminController
             ]);
             $id = (int) $db->lastInsertId();
 
-            Flash::set('success', 'Newsletter nou creat. Editează conținutul mai jos.');
-            header('Location: /admin/emails/builder?type=campaign&id=' . $id);
+            Flash::set('success', 'Newsletter nou creat. Alege un șablon și scrie conținutul.');
+            header('Location: /admin/emails/builder?type=campaign&id=' . $id . '&nou=1');
             return;
         }
 
@@ -14563,6 +14690,15 @@ final class AdminController
             $campaignId = (int) ($_POST['campaign_id'] ?? 0);
             if ($campaignId <= 0) {
                 Flash::set('error', 'Newsletter invalid.');
+                header('Location: /admin/emails/newsletters?tab=campaigns');
+                return;
+            }
+            // Ștearsă în timp ce pleacă, evidența celor serviți ar dispărea, iar
+            // o reluare ar putea trimite din nou acelorași oameni.
+            $stare = $db->prepare('SELECT status FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+            $stare->execute(['id' => $campaignId]);
+            if ((string) ($stare->fetchColumn() ?: '') === 'sending') {
+                Flash::set('error', 'Newsletterul se trimite chiar acum. Deschide-l și apasă întâi „Oprește trimiterea”, apoi îl poți șterge.');
                 header('Location: /admin/emails/newsletters?tab=campaigns');
                 return;
             }
@@ -14663,6 +14799,17 @@ final class AdminController
             }
             NewsletterService::ensureSchema($db);
             $campaignId = (int) ($_POST['campaign_id'] ?? 0);
+            $fromBuilder = (string) ($_POST['from_builder'] ?? '') === '1';
+            $inapoi = $fromBuilder ? '/admin/emails/builder?type=campaign&id=' . $campaignId : '/admin/emails/newsletters?tab=campaigns&campaign=' . $campaignId;
+            $campanie = $db->prepare('SELECT id, subject, subscriber_list_id, subscriber_list_ids FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+            $campanie->execute(['id' => $campaignId]);
+            $campanie = $campanie->fetch();
+            $motiv = is_array($campanie) ? NewsletterVerificare::motivBlocare($db, $campanie) : 'Newsletter invalid.';
+            if ($motiv !== '') {
+                Flash::set('error', 'Nu am trimis: ' . $motiv);
+                header('Location: ' . $inapoi);
+                return;
+            }
             try {
                 // Din browser trimitem doar cât încape sigur într-o cerere web;
                 // restul îl duce cronul, ca nimeni să nu stea cu pagina deschisă
@@ -14675,14 +14822,30 @@ final class AdminController
                     time() + 45
                 );
                 $ramase = (int) ($result['remaining'] ?? 0);
-                Flash::set(
-                    'success',
-                    $ramase > 0
-                        ? 'Trimitere pornită: ' . (int) ($result['sent'] ?? 0) . ' emailuri au plecat acum, '
-                            . $ramase . ' mai sunt la rând. Restul pleacă automat, nu mai trebuie să apeși nimic.'
-                        : 'Newsletter trimis integral: ' . (int) ($result['total_sent'] ?? 0) . ' trimise, '
-                            . (int) ($result['total_failed'] ?? 0) . ' eșuate.'
-                );
+                if (!empty($result['busy'])) {
+                    // Lacătul e ținut de altă trimitere (de obicei cronul). Dacă
+                    // omul a apăsat „Reia trimiterea” pe o campanie oprită, o
+                    // trecem pe „sending”, ca trecerea următoare a cronului s-o
+                    // continue; altfel ar rămâne oprită fără să știe nimeni.
+                    $db->prepare('UPDATE newsletter_campaigns SET status = "sending", last_error = NULL WHERE id = :id AND status = "paused"')
+                        ->execute(['id' => $campaignId]);
+                    Flash::set('success', 'Newsletterul se trimite deja în fundal (' . $ramase
+                        . ' mai sunt la rând). Nu trebuie să apeși nimic: pleacă singur.');
+                } elseif (!empty($result['nepornit'])) {
+                    Flash::set('error', 'Newsletterul nu a pornit: între timp i s-a schimbat starea (a fost oprit, trimis sau șters). Reîncarcă pagina.');
+                } elseif (!empty($result['paused'])) {
+                    Flash::set('error', 'Trimiterea s-a oprit: ' . (string) ($result['error'] ?? '')
+                        . ' Verifică setările de trimitere (Email-uri → Setări trimitere), apoi apasă din nou „Reia trimiterea”.');
+                } else {
+                    Flash::set(
+                        'success',
+                        $ramase > 0
+                            ? 'Trimitere pornită: ' . (int) ($result['sent'] ?? 0) . ' emailuri au plecat acum, '
+                                . $ramase . ' mai sunt la rând. Restul pleacă automat, nu mai trebuie să apeși nimic.'
+                            : 'Newsletter trimis integral: ' . (int) ($result['total_sent'] ?? 0) . ' trimise, '
+                                . (int) ($result['total_failed'] ?? 0) . ' eșuate.'
+                    );
+                }
             } catch (RuntimeException $exception) {
                 Flash::set('error', 'Trimiterea newsletter-ului a eșuat: ' . $exception->getMessage());
             }
@@ -14697,27 +14860,108 @@ final class AdminController
                 header('Location: /admin/emails/newsletters?tab=campaigns');
                 return;
             }
+            NewsletterService::ensureSchema($db);
             $campaignId = (int) ($_POST['campaign_id'] ?? 0);
             $scheduledAtRaw = trim((string) ($_POST['scheduled_at'] ?? ''));
             $timestamp = strtotime($scheduledAtRaw);
+            $fromBuilder = (string) ($_POST['from_builder'] ?? '') === '1';
+            $inapoi = $fromBuilder
+                ? '/admin/emails/builder?type=campaign&id=' . $campaignId
+                : '/admin/emails/newsletters?tab=campaigns&campaign=' . $campaignId;
             if ($campaignId <= 0 || $timestamp === false) {
                 Flash::set('error', 'Data de programare este invalidă.');
-                header('Location: /admin/emails/newsletters?tab=campaigns&campaign=' . $campaignId);
+                header('Location: ' . $inapoi);
+                return;
+            }
+            // Programarea unui newsletter deja trimis (sau în curs) îl pornea
+            // din nou la ora aleasă, pentru abonații noi. Se programează doar
+            // ce n-a plecat încă.
+            if (!NewsletterService::poateFiModificata($db, $campaignId)) {
+                Flash::set('error', 'Newsletterul a început deja să plece, așa că nu se mai poate programa. Folosește „Duplică” pentru o variantă nouă.');
+                header('Location: ' . $inapoi);
+                return;
+            }
+            $campanie = $db->prepare('SELECT id, subject, subscriber_list_id, subscriber_list_ids FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+            $campanie->execute(['id' => $campaignId]);
+            $campanie = $campanie->fetch();
+            $motiv = is_array($campanie) ? NewsletterVerificare::motivBlocare($db, $campanie) : 'Newsletter invalid.';
+            if ($motiv !== '') {
+                Flash::set('error', 'Nu am programat: ' . $motiv);
+                header('Location: ' . $inapoi);
+                return;
+            }
+            // O oră trecută ar însemna „trimite la următoarea trecere a
+            // cronului”, adică practic acum; probabil o greșeală de dată.
+            if ($timestamp < time() - 60) {
+                Flash::set('error', 'Ora aleasă (' . date('d.m.Y H:i', $timestamp) . ') a trecut deja. Alege o oră din viitor sau folosește „Trimite acum”.');
+                header('Location: ' . $inapoi);
                 return;
             }
             $scheduledAt = date('Y-m-d H:i:s', $timestamp);
             $stmt = $db->prepare(
                 'UPDATE newsletter_campaigns
-                 SET status = "scheduled", scheduled_at = :scheduled_at
+                 SET status = "scheduled", scheduled_at = :scheduled_at, last_error = NULL
                  WHERE id = :id'
             );
             $stmt->execute([
                 'scheduled_at' => $scheduledAt,
                 'id' => $campaignId,
             ]);
-            Flash::set('success', 'Newsletter programat pentru ' . $scheduledAt . '.');
-            $fromBuilder = (string) ($_POST['from_builder'] ?? '') === '1';
-            header('Location: ' . ($fromBuilder ? '/admin/emails/builder?type=campaign&id=' . $campaignId : '/admin/emails/newsletters?tab=campaigns&campaign=' . $campaignId));
+            Flash::set('success', 'Newsletter programat pentru ' . date('d.m.Y, H:i', $timestamp)
+                . '. Pleacă singur la ora aceea (în cel mult 5 minute după).');
+            header('Location: ' . $inapoi);
+            return;
+        }
+
+        if ($section === 'newsletter-campaign-pause') {
+            // Oprire de urgență (o greșeală văzută după „Trimite acum”): ce a
+            // plecat a plecat, restul așteaptă „Reia trimiterea”.
+            $campaignId = (int) ($_POST['campaign_id'] ?? 0);
+            $inapoi = '/admin/emails/builder?type=campaign&id=' . $campaignId . '&pas=4';
+            if (!$db instanceof PDO || $campaignId <= 0) {
+                Flash::set('error', 'Newsletter invalid.');
+                header('Location: /admin/emails/newsletters?tab=campaigns');
+                return;
+            }
+            NewsletterService::ensureSchema($db);
+            $stmt = $db->prepare(
+                'UPDATE newsletter_campaigns SET status = "paused", last_error = :motiv WHERE id = :id AND status = "sending"'
+            );
+            $stmt->execute(['motiv' => 'Oprit de mână din admin, pe ' . date('d.m.Y, H:i') . '.', 'id' => $campaignId]);
+            Flash::set(
+                $stmt->rowCount() === 1 ? 'success' : 'error',
+                $stmt->rowCount() === 1
+                    ? 'Trimiterea se oprește (în câteva secunde, dacă tocmai pleacă un lot). Cine l-a primit deja rămâne așa; restul așteaptă „Reia trimiterea”.'
+                    : 'Newsletterul nu se mai trimitea.'
+            );
+            header('Location: ' . $inapoi);
+            return;
+        }
+
+        if ($section === 'newsletter-campaign-unschedule') {
+            // Programarea se poate anula cât timp n-a plecat nimic: campania
+            // redevine ciornă și se poate modifica sau programa din nou.
+            $campaignId = (int) ($_POST['campaign_id'] ?? 0);
+            $inapoi = (string) ($_POST['from_builder'] ?? '') === '1'
+                ? '/admin/emails/builder?type=campaign&id=' . $campaignId
+                : '/admin/emails/newsletters?tab=campaigns';
+            if (!$db instanceof PDO || $campaignId <= 0) {
+                Flash::set('error', 'Newsletter invalid.');
+                header('Location: ' . $inapoi);
+                return;
+            }
+            NewsletterService::ensureSchema($db);
+            $stmt = $db->prepare(
+                'UPDATE newsletter_campaigns SET status = "draft", scheduled_at = NULL WHERE id = :id AND status = "scheduled"'
+            );
+            $stmt->execute(['id' => $campaignId]);
+            Flash::set(
+                $stmt->rowCount() === 1 ? 'success' : 'error',
+                $stmt->rowCount() === 1
+                    ? 'Programarea a fost anulată. Newsletterul e din nou ciornă.'
+                    : 'Newsletterul nu mai era programat (poate a început deja să plece).'
+            );
+            header('Location: ' . $inapoi);
             return;
         }
 
@@ -14828,9 +15072,33 @@ final class AdminController
                 header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
                 return;
             }
-            NewsletterService::subscribeToList($db, $listId, $email, $name);
+            $eraDezabonat = NewsletterService::esteDezabonat($db, $email);
+            $stareVeche = $db->prepare('SELECT status FROM newsletter_subscribers WHERE email = :e LIMIT 1');
+            $stareVeche->execute(['e' => $email]);
+            $eraNeconfirmat = (string) ($stareVeche->fetchColumn() ?: '') === 'pending';
+            try {
+                // O adresă nouă adăugată din admin e activă imediat, ca până acum
+                // (adminul o adaugă doar cu acordul omului, dat în altă parte).
+                NewsletterService::subscribeToList($db, $listId, $email, $name);
+            } catch (\App\Support\AdresaSuprimata) {
+                Flash::set('error', 'Adresa ' . $email . ' a fost ștearsă la cererea persoanei și e pe lista „nu trimite”, '
+                    . 'așa că nu poate fi adăugată din admin. Persoana se poate reabona singură, din formularul de pe site (cu confirmare prin email).');
+                header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
+                return;
+            }
 
-            Flash::set('success', 'Abonat salvat.');
+            // Cine s-a dezabonat rămâne dezabonat: îl reactivează doar el,
+            // printr-un formular de abonare, sau adminul cu butonul ⟲ din listă.
+            // Cine n-a confirmat încă abonarea din email rămâne neconfirmat.
+            Flash::set(
+                $eraDezabonat || $eraNeconfirmat ? 'error' : 'success',
+                $eraDezabonat
+                    ? 'Adresa ' . $email . ' s-a dezabonat mai demult, așa că a rămas dezabonată (nu primește newslettere). '
+                        . 'Reactiveaz-o doar dacă persoana ți-a cerut asta explicit.'
+                    : ($eraNeconfirmat
+                        ? 'Adresa ' . $email . ' și-a cerut singură abonarea și n-a confirmat-o încă din email; rămâne neconfirmată (nu primește newslettere) până apasă linkul.'
+                        : 'Abonat salvat.')
+            );
             header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
             return;
         }
@@ -14849,9 +15117,18 @@ final class AdminController
                 header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
                 return;
             }
+            // Lista „nu trimite”: din adresa ștearsă rămâne doar amprenta ei,
+            // ca un import sau o adăugare din admin să n-o readucă (GDPR:
+            // păstrăm atât cât e nevoie ca să respectăm opoziția omului).
+            $adresa = $db->prepare('SELECT email FROM newsletter_subscribers WHERE id = :id LIMIT 1');
+            $adresa->execute(['id' => $subscriberId]);
+            $emailSters = (string) ($adresa->fetchColumn() ?: '');
+            if ($emailSters !== '') {
+                NewsletterService::suprima($db, $emailSters);
+            }
             $db->prepare('DELETE FROM newsletter_list_subscribers WHERE subscriber_id = :id')->execute(['id' => $subscriberId]);
             $db->prepare('DELETE FROM newsletter_subscribers WHERE id = :id')->execute(['id' => $subscriberId]);
-            Flash::set('success', 'Abonatul a fost șters.');
+            Flash::set('success', 'Abonatul a fost șters și adresa a fost pusă pe lista „nu trimite” (nu mai poate fi adăugată din admin sau din import).');
             header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
             return;
         }
@@ -14872,6 +15149,12 @@ final class AdminController
             $current = $db->prepare('SELECT status FROM newsletter_subscribers WHERE id = :id LIMIT 1');
             $current->execute(['id' => $subscriberId]);
             $status = (string) ($current->fetchColumn() ?: 'active');
+            if ($status === 'pending') {
+                // Abonarea cerută din formular o confirmă doar omul, din email.
+                Flash::set('error', 'Abonatul n-a confirmat încă abonarea din email. Doar el o poate confirma.');
+                header('Location: /admin/emails/newsletters?tab=subscribers&list=' . $listId . $this->subscribersReturnQuery());
+                return;
+            }
             $next = $status === 'active' ? 'unsubscribed' : 'active';
             $db->prepare('UPDATE newsletter_subscribers SET status = :status WHERE id = :id')->execute([
                 'status' => $next,
@@ -20364,6 +20647,7 @@ HTML;
         $adaugati = 0;
         $existenti = 0;
         $sariti = 0;
+        $suprimate = 0;
         $invalizi = 0;
         $fisiereSarite = [];
         $vazute = [];
@@ -20421,6 +20705,10 @@ HTML;
                     $existenti++;
                     continue;
                 }
+                if (NewsletterService::esteSuprimat($db, $email)) {
+                    $suprimate++;
+                    continue;
+                }
                 try {
                     NewsletterService::subscribeToList($db, $listId, $email, trim((string) ($rand['name'] ?? '')));
                     $adaugati++;
@@ -20442,7 +20730,7 @@ HTML;
             }
         }
 
-        if ($adaugati === 0 && $existenti === 0 && $invalizi === 0 && $sariti === 0) {
+        if ($adaugati === 0 && $existenti === 0 && $invalizi === 0 && $sariti === 0 && $suprimate === 0) {
             return [
                 'ok' => false,
                 'message' => 'Nu am găsit nicio adresă în fișier. Verifică să fie exportul din Mailchimp '
@@ -20452,7 +20740,8 @@ HTML;
 
         $mesaj = 'Import Mailchimp finalizat: ' . $adaugati . ' abonați noi, '
             . $existenti . ' existau deja, ' . $sariti . ' săriți (nu erau activi), '
-            . $invalizi . ' adrese invalide.';
+            . $invalizi . ' adrese invalide'
+            . ($suprimate > 0 ? ', ' . $suprimate . ' sărite pentru că sunt pe lista „nu trimite”' : '') . '.';
         if ($fisiereSarite !== []) {
             $mesaj .= ' Fișiere ignorate (dezabonați / adrese curățate): ' . implode(', ', $fisiereSarite) . '.';
         }
@@ -20570,6 +20859,8 @@ HTML;
         $duplicates = 0;
         $invalid = 0;
         $processedPairs = 0;
+        $ramasDezabonati = [];
+        $suprimate = [];
 
         $db->beginTransaction();
         try {
@@ -20636,6 +20927,15 @@ HTML;
                         $alreadyInList = ((int) $membershipFind->fetchColumn()) === 1;
                     }
 
+                    if (NewsletterService::esteSuprimat($db, $email)) {
+                        // Pe lista „nu trimite” (șters la cererea omului): sărit.
+                        $suprimate[$email] = true;
+                        continue;
+                    }
+                    if ($existingSubscriberId > 0 && NewsletterService::esteDezabonat($db, $email)) {
+                        // Intră în listă, dar rămâne dezabonat (nu primește nimic).
+                        $ramasDezabonati[$email] = true;
+                    }
                     NewsletterService::subscribeToList($db, $listId, $email, '');
                     if ($alreadyInList) {
                         $duplicates++;
@@ -20653,6 +20953,9 @@ HTML;
             return ['ok' => false, 'message' => 'Importul abonaților a eșuat. Verifică structura fișierului și încearcă din nou.'];
         }
 
+        if ($processedPairs <= 0 && $suprimate !== []) {
+            return ['ok' => false, 'message' => 'Nu s-a importat nimic: toate cele ' . count($suprimate) . ' adrese sunt pe lista „nu trimite” (șterse la cererea persoanelor).'];
+        }
         if ($processedPairs <= 0) {
             return ['ok' => false, 'message' => 'Nu am găsit perechi valide Email/Listă în fișier.'];
         }
@@ -20664,7 +20967,13 @@ HTML;
         return [
             'ok' => true,
             'message' => 'Import abonați finalizat: ' . $imported . ' adăugați, ' . $duplicates . ' existenți, '
-                . $createdLists . ' liste noi create, ' . $invalid . ' intrări invalide.',
+                . $createdLists . ' liste noi create, ' . $invalid . ' intrări invalide.'
+                . ($ramasDezabonati !== []
+                    ? ' ' . count($ramasDezabonati) . ' adrese s-au dezabonat mai demult și au rămas dezabonate.'
+                    : '')
+                . ($suprimate !== []
+                    ? ' ' . count($suprimate) . ' adrese sărite: sunt pe lista „nu trimite”.'
+                    : ''),
         ];
     }
 

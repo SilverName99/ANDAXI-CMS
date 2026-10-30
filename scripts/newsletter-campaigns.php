@@ -11,6 +11,10 @@ declare(strict_types=1);
  *     fiecare rulare o duce mai departe de unde a rămas;
  *  2. pornește campaniile programate care au ajuns la scadență.
  *
+ * Campaniile oprite („Oprit”: serverul de email a refuzat mesaje la rând sau
+ * lista a dispărut) NU se reiau singure; le repornește un om din admin, cu
+ * „Reia trimiterea”, după ce vede motivul.
+ *
  * `--seconds=` ține rularea sub limita de execuție a serverului: la expirare se
  * oprește curat, iar ce a rămas pleacă la următoarea trecere.
  *
@@ -90,12 +94,25 @@ $deadline = time() + $seconds;
 NewsletterService::ensureSchema($db);
 $settings = Settings::all($db);
 
+// Cererile de abonare neconfirmate în 30 de zile (dubla confirmare) se curăță.
+try {
+    NewsletterService::curataCereriExpirate($db);
+} catch (Throwable) {
+}
+
 $continuate = NewsletterService::continueRunningCampaigns($db, $settings, $perRun, $deadline);
 // Cât pluginul „Newsletter” se oprește, campaniile pornite se termină, dar
 // cele programate nu mai pornesc (rămân programate, pentru o eventuală repornire).
 $programate = \App\Support\Plugins::permiteInceput('newsletter')
-    ? NewsletterService::sendDueScheduledCampaigns($db, $settings, $limit, $deadline)
+    ? NewsletterService::sendDueScheduledCampaigns($db, $settings, $limit, $deadline, $perRun)
     : [];
+
+// Ora ultimei rulări încheiate: lista de verificare din builder avertizează
+// dacă cronul s-a oprit (fără el, programările nu pleacă).
+try {
+    Settings::save($db, ['newsletter_cron_ultima_rulare' => date('Y-m-d H:i:s')]);
+} catch (Throwable) {
+}
 
 flock($lock, LOCK_UN);
 fclose($lock);

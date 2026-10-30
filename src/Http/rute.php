@@ -103,6 +103,11 @@ return static function (Router $router): void {
     $router->post('/api/erp/adrese', [AdminController::class, 'erpOrderAddresses']);
     $router->post('/newsletter/optin/{slug}', [SiteController::class, 'optInSubmit']);
     $router->get('/newsletter/unsubscribe/{token}', [SiteController::class, 'newsletterUnsubscribe']);
+    // Dezabonarea „cu un clic” (RFC 8058, antetul List-Unsubscribe-Post) și butonul „Confirm dezabonarea”; dubla
+    // confirmare a abonării (GET arată butonul, POST confirmă). Codul vechi e2e2d77, fd07fc3, 7123076.
+    $router->post('/newsletter/unsubscribe/{token}', [SiteController::class, 'newsletterUnsubscribeOneClick']);
+    $router->get('/newsletter/confirmare/{token}', [SiteController::class, 'newsletterConfirmare']);
+    $router->post('/newsletter/confirmare/{token}', [SiteController::class, 'newsletterConfirmare']);
     $router->get('/newsletter/track/open/{campaignId}/{subscriberId}/{token}', [SiteController::class, 'newsletterTrackOpen']);
     $router->get('/newsletter/track/click/{campaignId}/{subscriberId}/{token}', [SiteController::class, 'newsletterTrackClick']);
     $router->get('/contul-meu', [SiteController::class, 'account']);
@@ -261,6 +266,8 @@ return static function (Router $router): void {
     $router->get('/admin/emails/builder', [AdminController::class, 'emailsBuilder']);
     $router->post('/admin/emails/builder', [AdminController::class, 'emailsBuilderSave']);
     $router->post('/admin/emails/builder/preview', [AdminController::class, 'emailsBuilderPreview']);
+    // Lista de verificare dinaintea trimiterii unui newsletter (pasul 3 din builder; JSON, nu trimite nimic).
+    $router->post('/admin/emails/builder/verificare', [AdminController::class, 'emailsBuilderVerificare']);
     $router->post('/admin/emails/builder/video-lookup', [AdminController::class, 'emailsVideoLookup']);
     $router->get('/admin/emails/{section}', [AdminController::class, 'emailsSection']);
     $router->post('/admin/emails', [AdminController::class, 'emailsSave']);

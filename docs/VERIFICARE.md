@@ -833,6 +833,15 @@ referințele plăților `anon-<id>`; jetoanele 64 hex noi; codurile unice de cup
 id-urile rămân. Fiecare regulă e în capul `tools/verificare/reguli/bioscem.php`; `versiune` crește la orice schimbare
 (o încărcare începută cu altă versiune nu se continuă).
 
+**Newsletterul** (reguli v11, WP-R din 30 oct, Bioscem `e2e2d77` … `739f58c`): lista „nu trimite” (`newsletter_suprimate`, doar
+amprenta SHA-256 a adresei unui abonat șters: o adresă cunoscută se poate verifica împotriva ei, deci e o dată personală) și
+jurnalul cererilor de confirmare (`newsletter_cereri_confirmare`: amprenta adresei, IP-ul) **doar structura**, și în
+`Incarcare::FARA_RANDURI` (fail-closed); `pending_at`, `confirmed_at` și `attempts` copiate, motivul opririi unei campanii
+(`last_error`, poate fi răspunsul serverului de email, cu o adresă) anonimizat. Setările: cheia de semnare a linkurilor
+(`newsletter_cheie_semnare`) golită — copia își face alta la prima semnare (`Settings::secretGenerat`), deci linkurile din
+newsletterele site-ului adevărat nu merg pe copie —, pragul cheii vechi (`newsletter_cheie_limita`) „0” (niciun link vechi
+crezut), nota limitei globale și ora ultimei rulări a cronului golite.
+
 **Biovitality** (WP-11b, `tools/verificare/reguli/biovitality.php`): regulile Bioscem (fișierul îl include, deci o regulă
 Bioscem schimbată se aplică și aici; `versiune` = cea Bioscem × 100 + a Biovitality, deci orice schimbare oprește un `--reia`),
 plus ce are în plus codul Biovitality la `779e0d8` (`tools/dev/migrari/vechi/bv.sql`): **doar structura** pentru

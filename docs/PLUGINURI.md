@@ -837,13 +837,33 @@ dispar, iar linkurile spre el se scot din pagini.
   ia titlul și coperta prin oEmbed de la TikTok, YouTube, Vimeo și păstrează coperta în
   `uploads/video-thumbs`; ruta e și a magazinului, ca preview-ul); popup-ul de abonare în
   `public/assets/{css,js}/optin-popup.*` (`855dab2`, folosit de antetul Biovitality).
+  Din Bioscem (WP-R din 30 oct, `e2e2d77` … `739f58c`): fiecare abonat primește o campanie o singură dată (lacăt pe campanie,
+  adresa trecută „pending” înaintea trimiterii; o trimitere neconfirmată de serverul de email rămâne „unknown”, nu se reia), un
+  mesaj respins se reîncearcă de cel mult 3 ori, după 5 respingeri la rând campania trece în „Oprit” (`last_error`) și așteaptă
+  „Reia trimiterea”; „Oprește trimiterea”, „Anulează programarea”; un newsletter care a plecat nu se mai modifică, nu se
+  programează și nu se retrimite; antetele `List-Unsubscribe` / `List-Unsubscribe-Post`. Formularul public face **dubla
+  confirmare** (`newsletter_cereri_confirmare`: limite pe adresă, pe IP — `IpClient::adresa()`, IPv6 pe /64 —, pe tot site-ul
+  300 pe oră, nota `newsletter_limita_globala_atinsa` în admin; rutele `GET/POST /newsletter/confirmare/{token}`); linkul de
+  dezabonare arată butonul „Confirm dezabonarea”, iar `POST /newsletter/unsubscribe/{token}` (butonul și dezabonarea „cu un clic”
+  a clientului de email) e **mereu deschis**, ca GET-ul; un abonat șters intră pe lista „nu trimite” (`newsletter_suprimate`, doar
+  amprenta SHA-256 a adresei); importurile și adăugarea din admin nu reactivează un dezabonat. Linkurile se semnează cu o cheie
+  aleatoare (`NEWSLETTER_SECRET` din `.env`, altfel `newsletter_cheie_semnare`, `Settings::secretGenerat`); cheia de dinainte
+  (WP-17) verifică doar linkurile trimise înainte, până la pragul `newsletter_cheie_limita` (amândouă în `Settings::CHEI_ASCUNSE`).
+  Builderul unei campanii are pașii Conținut → Destinatari → Verificare → Trimite / Programează (`views/admin/emails/newsletter/`,
+  `public/assets/js/admin/newsletter-pasi.js`), lista de verificare (`NewsletterVerificare`, `POST /admin/emails/builder/verificare`,
+  a pluginului; adresele din afara site-ului cerute doar dacă sunt publice, fără redirecționări) și „Alege un șablon” cu
+  șabloanele magazinului (`NewsletterSabloane`: logo-ul și culorile din tema pachetului, `tema.json` → `newsletter`, altfel fără
+  logo și paleta neutră; fără catalogul pe site, fără carduri de produs; fără magazin, fără prețuri). Componentele adminului
+  folosite de pași (`views/admin/componente/`) sunt ale nucleului ([ui/README.md](ui/README.md)). Tabelele și coloanele noi:
+  migrarea `newsletter/0040`. Testele: `tools/dev/test-newsletter.php`.
 - **Are nevoie de**: nimic.
 - **Se oprește**: campaniile pornite se termină (cronul le duce la capăt); „Trimite
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile
   programate (rămân programate). Linkurile din newsletterele trimise merg.
 - **Oprit**: nimic din newsletter în admin sau pe site; cronul iese cu o linie;
-  dezabonarea și linkurile din newsletterele trimise merg în continuare (cu
-  semnătura lor); un link de dezabonare sau de urmărire nevalid dă 404. Pagina
+  dezabonarea (GET-ul paginii și POST-ul butonului sau „cu un clic”) și linkurile din newsletterele trimise merg în continuare
+  (cu semnătura lor); un link de dezabonare sau de urmărire nevalid dă 404, la fel confirmarea abonării și lista de verificare
+  din admin (garda). Pagina
   Email-uri (emailurile magazinului, formularele de contact, istoricul) își
   schimbă descrierea.
 - **Oricând**: linkul de urmărire a clickurilor duce în afară doar dacă adresa e

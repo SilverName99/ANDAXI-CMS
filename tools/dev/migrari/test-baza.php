@@ -205,6 +205,8 @@ $tabeleDate = [
     'magazin/0032_avertismente_produse' => ['settings'],
     // WP-19 (C8): cheia linkului de ciornă a produselor existente, completată pe bucăți.
     'catalog/0026_vizibilitate_ordine' => ['products'],
+    // WP-R (newsletterul Bioscem 739f58c): pragul cheii vechi de semnare (newsletter_cheie_limita), scris o dată, la adoptare.
+    'newsletter/0040_newsletter_dubla_confirmare' => ['settings'],
 ];
 $tabeleAtinse = static function (array $raport) use ($tabeleDate): array {
     $t = [];

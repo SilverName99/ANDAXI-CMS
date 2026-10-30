@@ -2885,6 +2885,12 @@
         "newsletter_campaign_sends": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
+                "attempts": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
                 "campaign_id": {
                     "extra": "",
                     "implicit": null,
@@ -3003,6 +3009,12 @@
                     "null": false,
                     "tip": "int unsigned"
                 },
+                "last_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
                 "name": {
                     "extra": "",
                     "implicit": null,
@@ -3101,6 +3113,71 @@
                         "id"
                     ],
                     "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_cereri_confirmare": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "email_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": "'abonare'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_creat": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_email_creat": {
+                    "coloane": [
+                        "email_hash",
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_ip_creat": {
+                    "coloane": [
+                        "ip",
+                        "created_at"
+                    ],
+                    "unic": false
                 }
             },
             "motor": "InnoDB"
@@ -3274,6 +3351,12 @@
         "newsletter_subscribers": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
+                "confirmed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
                 "created_at": {
                     "extra": "",
                     "implicit": "current_timestamp",
@@ -3297,6 +3380,12 @@
                     "implicit": null,
                     "null": true,
                     "tip": "varchar(190)"
+                },
+                "pending_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
                 },
                 "status": {
                     "extra": "",
@@ -3322,6 +3411,39 @@
                 "email": {
                     "coloane": [
                         "email"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "newsletter_suprimate": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "email_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "motiv": {
+                    "extra": "",
+                    "implicit": "'stergere_admin'",
+                    "null": false,
+                    "tip": "varchar(40)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "email_hash"
                     ],
                     "unic": true
                 }

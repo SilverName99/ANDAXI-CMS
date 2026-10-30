@@ -4396,56 +4396,229 @@ final class SiteController
             $name = trim((string) ($payload['full_name'] ?? ''));
         }
 
+        // Dubla confirmare: formularul nu abonează pe nimeni direct. Trimite un
+        // email cu link de confirmare; abonatul devine activ doar după clic.
+        // Același mesaj pentru adresă nouă, deja abonată sau cu cerere recentă,
+        // ca formularul să nu spună nimănui cine e abonat.
         try {
-            NewsletterService::subscribeToList($db, (int) ($form['list_id'] ?? 0), $email, $name);
+            $rezultat = NewsletterService::cerereAbonare(
+                $db,
+                (int) ($form['list_id'] ?? 0),
+                $email,
+                $name,
+                // Adresa vizitatorului doar prin IpClient (WP-12b, regulile lui sunt acolo).
+                \App\Support\IpClient::adresa(),
+                Settings::all($db)
+            );
         } catch (RuntimeException $exception) {
-            $this->respondOptInError($exception->getMessage());
+            $this->respondOptInError(
+                str_contains($exception->getMessage(), 'invalid')
+                    ? $exception->getMessage()
+                    : 'Nu am putut trimite emailul de confirmare. Încearcă din nou mai târziu.'
+            );
+            return;
+        }
+        if (in_array($rezultat['stare'], ['limita_ip', 'limita_globala', 'ocupat'], true)) {
+            $this->respondOptInError('Prea multe cereri de abonare acum. Încearcă din nou peste o oră.', 429);
             return;
         }
 
-        $message = trim((string) ($form['success_message'] ?? 'Te-ai abonat cu succes.'));
-        if ($message === '') {
-            $message = 'Te-ai abonat cu succes.';
-        }
-        $this->respondOptInSuccess($message);
+        $this->respondOptInSuccess(
+            'Aproape gata! Ți-am trimis un email la ' . $email . '. Apasă butonul „Confirm abonarea” din el '
+            . '(verifică și folderul Spam). Dacă ești deja abonat, nu trebuie să faci nimic.'
+        );
     }
 
+    /**
+     * Linkul din emailul de confirmare a abonării. GET arată doar o pagină cu
+     * butonul „Confirm abonarea” (programele care deschid singure linkurile din
+     * emailuri nu pot abona pe nimeni); POST-ul butonului confirmă.
+     */
+    public function newsletterConfirmare(array $params): void
+    {
+        $token = trim((string) ($params['token'] ?? ''));
+        $db = $this->db();
+        if ($token === '' || !$db instanceof PDO) {
+            $this->paginaNewsletter('Link invalid', 'Linkul de confirmare nu este valid.', '', '', 404);
+            return;
+        }
+        $estePost = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST';
+        $rezultat = $estePost
+            ? NewsletterService::confirmaAbonare($db, $token)
+            : NewsletterService::verificaConfirmare($db, $token);
+        if ($rezultat['motiv'] === 'deja_activ') {
+            $this->paginaNewsletter('Ești abonat', 'Adresa ' . $rezultat['email'] . ' primește deja newsletterul. Nu trebuie să faci nimic.');
+            return;
+        }
+        if (!$rezultat['ok']) {
+            $this->paginaNewsletter(
+                'Linkul nu mai e valabil',
+                $rezultat['motiv'] === 'expirat'
+                    ? 'Linkul de confirmare a expirat (e valabil ' . NewsletterService::ZILE_CONFIRMARE . ' de zile). Abonează-te din nou de pe site.'
+                    : 'Linkul de confirmare nu este valid.',
+                '',
+                '',
+                $rezultat['motiv'] === 'expirat' ? 410 : 404
+            );
+            return;
+        }
+        if ($estePost) {
+            $this->paginaNewsletter('Gata, te-ai abonat!', 'De acum primești newsletterul pe adresa ' . $rezultat['email'] . '. Te poți dezabona oricând, din linkul de la finalul fiecărui email.');
+            return;
+        }
+        $this->paginaNewsletter(
+            'Confirmi abonarea?',
+            'Vei primi newsletterul pe adresa ' . $rezultat['email'] . '.',
+            'Confirm abonarea',
+            '/newsletter/confirmare/' . rawurlencode($token)
+        );
+    }
+
+    /**
+     * Pagina simplă a fluxurilor publice de newsletter (confirmare abonare,
+     * dezabonare): titlu, un rând de text și, la nevoie, un buton care trimite
+     * un formular POST. Fără conținut din altă parte, fără scripturi.
+     */
+    private function paginaNewsletter(string $titlu, string $text, string $buton = '', string $actiune = '', int $cod = 200, string $camp = 'confirmare'): void
+    {
+        http_response_code($cod);
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Robots-Tag: noindex');
+        $e = static fn(string $x): string => htmlspecialchars($x, ENT_QUOTES, 'UTF-8');
+        // Culorile titlului și ale butonului: tema pachetului (`newsletter.culori`, ca șabloanele de newsletter), altfel neutre.
+        $culori = \App\Support\Tema::newsletter()['culori'];
+        echo '<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' . $e($titlu) . '</title></head>'
+            . '<body style="margin:0;padding:24px;background:#f4f6f8;font-family:Arial,sans-serif;color:#1f2937;">'
+            . '<div style="max-width:560px;margin:24px auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;text-align:center;">'
+            . '<h1 style="margin:0 0 10px;font-size:26px;color:' . $e($culori['inchisa']) . ';">' . $e($titlu) . '</h1>'
+            . '<p style="margin:0' . ($buton !== '' ? ' 0 18px' : '') . ';color:#475569;line-height:1.6;">' . $e($text) . '</p>'
+            . ($buton !== ''
+                ? '<form method="post" action="' . $e($actiune) . '" style="margin:0;"><input type="hidden" name="' . $e($camp) . '" value="1">'
+                    . '<button type="submit" style="padding:12px 22px;border:0;border-radius:8px;background:' . $e($culori['principala']) . ';color:#fff;font-size:16px;font-weight:700;cursor:pointer;">' . $e($buton) . '</button></form>'
+                : '')
+            . '</div></body></html>';
+    }
+
+    /**
+     * Linkul „Dezabonează-mă” din email (GET): arată doar pagina cu butonul
+     * „Confirm dezabonarea”. Programele care deschid singure linkurile (filtre
+     * antivirus, previzualizări) nu mai pot dezabona pe nimeni; dezabonează doar
+     * POST-ul butonului sau cel „cu un clic” al clientului de email.
+     */
     public function newsletterUnsubscribe(array $params): void
     {
         $token = trim((string) ($params['token'] ?? ''));
-        // Fără newsletter pe site, adresa există doar pentru linkurile din newsletterele trimise.
+        // Fără newsletter pe site, adresa există doar pentru linkurile din newsletterele trimise: altceva primește pagina
+        // 404 a site-ului, ca orice adresă a unui plugin pe care site-ul nu-l are.
         $cuNewsletter = \App\Support\Plugins::vizibil('newsletter');
-        if ($token === '') {
+        $db = $this->db();
+        if ($token === '' || !$db instanceof PDO) {
             if (!$cuNewsletter) {
                 $this->paginaNegasita();
                 return;
             }
-            http_response_code(400);
-            echo 'Link invalid de dezabonare.';
+            $this->paginaNewsletter('Link invalid', 'Linkul de dezabonare nu este valid.', '', '', 400);
             return;
         }
+        $rezultat = NewsletterService::verificaDezabonare($db, $token);
+        if (!$rezultat['ok']) {
+            if (!$cuNewsletter) {
+                $this->paginaNegasita();
+                return;
+            }
+            $this->paginaNewsletter('Link invalid', 'Linkul de dezabonare nu este valid sau a expirat.', '', '', 404);
+            return;
+        }
+        if (!empty($rezultat['vechi'])) {
+            // Link dintr-un email vechi: semnătura lui se poate falsifica, deci
+            // pagina nu dezabonează și nu dă alt link; butonul trimite linkul
+            // nou chiar pe adresa abonatului. Aceeași pagină pentru oricine.
+            $this->paginaNewsletter(
+                'Te dezabonezi de la newsletter?',
+                'Linkul ăsta e dintr-un email mai vechi. Ca să fim siguri că ești chiar tu, îți trimitem pe email un link nou de dezabonare.',
+                'Trimite-mi linkul de dezabonare pe email',
+                '/newsletter/unsubscribe/' . rawurlencode($token),
+                200,
+                'trimite_link'
+            );
+            return;
+        }
+        if ($rezultat['deja']) {
+            $this->paginaNewsletter('Ești dezabonat', 'Adresa ' . $rezultat['email'] . ' nu mai primește newslettere de la noi.');
+            return;
+        }
+        $this->paginaNewsletter(
+            'Te dezabonezi de la newsletter?',
+            'Nu vei mai primi newslettere pe adresa ' . $rezultat['email'] . '.',
+            'Confirm dezabonarea',
+            '/newsletter/unsubscribe/' . rawurlencode($rezultat['token_nou'])
+        );
+    }
 
+    /**
+     * Dezabonarea „cu un clic” din clientul de email (RFC 8058): Gmail, Yahoo
+     * și Apple Mail trimit singure un POST la linkul din antetul
+     * List-Unsubscribe, fără să deschidă pagina. Răspunsul e doar un cod.
+     * Tot aici ajunge butonul „Confirm dezabonarea” (cu `confirmare=1`), care
+     * primește o pagină. Un token semnat doar cu cheia veche e refuzat: emailurile
+     * vechi n-aveau antetul List-Unsubscribe, deci nu există POST-uri vechi legitime.
+     */
+    public function newsletterUnsubscribeOneClick(array $params): void
+    {
+        $token = trim((string) ($params['token'] ?? ''));
         $db = $this->db();
-        if (!$db instanceof PDO) {
-            http_response_code(500);
-            echo 'Conexiunea DB nu este disponibilă.';
+        header('Content-Type: text/plain; charset=utf-8');
+        header('X-Robots-Tag: noindex');
+        if ($token === '' || !$db instanceof PDO) {
+            http_response_code($token === '' ? 400 : 500);
+            echo 'Eroare';
             return;
         }
-
         NewsletterService::ensureSchema($db);
+        if ((string) ($_POST['trimite_link'] ?? '') === '1') {
+            // Butonul de pe pagina unui link vechi: linkul nou pleacă doar pe
+            // adresa abonatului. Răspunsul e mereu același.
+            $stare = NewsletterService::trimiteLinkDezabonare($db, $token, \App\Support\IpClient::adresa(), Settings::all($db));
+            if ($stare === 'gata') {
+                $this->paginaNewsletter(
+                    'Verifică-ți emailul',
+                    'Dacă adresa e abonată la newsletter, i-am trimis un email cu linkul de dezabonare. Apasă butonul din el. (Cel mult un email pe zi.)'
+                );
+            } elseif ($stare === 'limita_ip') {
+                $this->paginaNewsletter('Prea multe cereri', 'Au fost prea multe cereri de pe această conexiune. Încearcă din nou peste o oră.', '', '', 429);
+            } else {
+                // Emailul chiar n-a plecat: o spunem, ca omul să nu aștepte degeaba.
+                $this->paginaNewsletter(
+                    'Nu am putut trimite emailul',
+                    'Emailul cu linkul de dezabonare nu a putut fi trimis acum. Încearcă din nou peste câteva minute sau scrie-ne și te dezabonăm noi.',
+                    '',
+                    '',
+                    503
+                );
+            }
+            return;
+        }
         $result = NewsletterService::unsubscribeByToken($db, $token);
-        if (!$result['ok'] && !$cuNewsletter) {
+        if (!empty($result['confirmare'])) {
+            http_response_code(403);
+            echo 'Link vechi: deschide linkul din email și confirmă dezabonarea.';
+            return;
+        }
+        if (!$result['ok'] && !\App\Support\Plugins::vizibil('newsletter')) {
+            // Ca la GET: fără newsletter pe site, doar linkurile din newsletterele trimise au un răspuns al lor.
             $this->paginaNegasita();
             return;
         }
         if (!$result['ok']) {
             http_response_code(404);
-            echo 'Linkul de dezabonare nu este valid sau a expirat.';
+            echo 'Link invalid';
             return;
         }
-
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dezabonare</title></head><body style="margin:0;padding:24px;background:#f4f6f8;font-family:Arial,sans-serif;color:#1f2937;"><div style="max-width:560px;margin:24px auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;text-align:center;"><h1 style="margin:0 0 10px;font-size:28px;color:#0f172a;">Te-ai dezabonat cu succes.</h1><p style="margin:0;color:#475569;line-height:1.6;">Nu vei mai primi newslettere de la noi pe adresa <strong style="color:#0f172a;">' . htmlspecialchars((string) ($result['email'] ?? ''), ENT_QUOTES) . '</strong>.</p></div></body></html>';
+        if ((string) ($_POST['confirmare'] ?? '') === '1') {
+            $this->paginaNewsletter('Te-ai dezabonat cu succes.', 'Nu vei mai primi newslettere de la noi pe adresa ' . (string) ($result['email'] ?? '') . '.');
+            return;
+        }
+        echo 'Dezabonat';
     }
 
     public function newsletterTrackOpen(array $params): void
@@ -4474,19 +4647,27 @@ final class SiteController
         $campaignId  = (int) ($params['campaignId'] ?? 0);
         $subscriberId = (int) ($params['subscriberId'] ?? 0);
         $token       = trim((string) ($params['token'] ?? ''));
-        $destUrl     = trim((string) ($_GET['url'] ?? ''));
+        // Adresa brută, exact cum a fost semnată; spațiile se curăță doar după
+        // verificare (un link vechi cu spațiu la capăt rămâne valabil).
+        $urlBrut     = (string) ($_GET['url'] ?? '');
+        $destUrl     = trim($urlBrut);
 
         // Fără o adresă semnată de noi, linkul duce doar la prima pagină a site-ului.
         $fallback = \App\Support\AppUrl::absolut('/');
         if ($fallback === '') {
             $fallback = '/';
         }
+        // Doar un link semnat de noi duce mai departe (și numără clicul); semnătura se verifică întâi pe adresa brută,
+        // exact cum a fost semnată, apoi pe cea fără spații la capete.
         $db = $this->db();
-        $semnata = null;
+        $destinatie = null;
         if ($destUrl !== '' && $db instanceof \PDO && $campaignId > 0 && $subscriberId > 0 && $token !== '') {
-            $semnata = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $destUrl);
+            $destinatie = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $urlBrut);
+            if ($destinatie === null && $urlBrut !== $destUrl) {
+                $destinatie = NewsletterService::handleClickTrack($db, $campaignId, $subscriberId, $token, $destUrl);
+            }
         }
-        if ($semnata === null) {
+        if ($destinatie === null) {
             // Un link care nu e dintr-un newsletter trimis: fără newsletter pe site, adresa nu există.
             if (!\App\Support\Plugins::vizibil('newsletter')) {
                 $this->paginaNegasita();
@@ -4495,7 +4676,7 @@ final class SiteController
             header('Location: ' . $fallback);
             return;
         }
-        $destUrl = $semnata;
+        $destUrl = trim($destinatie);
 
         if ($campaignId > 0) {
             setcookie('nl_cid', (string) $campaignId, [
@@ -10761,10 +10942,10 @@ CSS;
         header('Location: ' . ($redirect !== '' ? $redirect : '/'));
     }
 
-    private function respondOptInError(string $message): void
+    private function respondOptInError(string $message, int $cod = 422): void
     {
         if ($this->respondsWithJson()) {
-            http_response_code(422);
+            http_response_code($cod);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['ok' => false, 'message' => $message], JSON_UNESCAPED_UNICODE);
             return;

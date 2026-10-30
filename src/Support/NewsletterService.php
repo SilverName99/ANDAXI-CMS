@@ -13,6 +13,25 @@ final class NewsletterService
     private const UNSUBSCRIBE_FOOTER_START = '<!-- newsletter-unsubscribe-footer:start -->';
     private const UNSUBSCRIBE_FOOTER_END = '<!-- newsletter-unsubscribe-footer:end -->';
 
+    /** De câte ori se încearcă, cel mult, o adresă care a fost respinsă. */
+    public const MAX_INCERCARI = 3;
+
+    /**
+     * După atâtea respingeri la rând, serverul de email are o problemă (parolă
+     * schimbată, limită atinsă), nu adresele: campania se oprește și așteaptă
+     * un om, în loc să marcheze toată lista drept „eșuată”.
+     */
+    public const ESECURI_LA_RAND_PAUZA = 5;
+
+    /** Stările unei campanii, cu numele arătat în admin. */
+    public const STARI = [
+        'draft' => 'Ciornă',
+        'scheduled' => 'Programat',
+        'sending' => 'Se trimite',
+        'paused' => 'Oprit',
+        'sent' => 'Trimis',
+    ];
+
     public static function ensureSchema(PDO $db): void
     {
         if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
@@ -216,7 +235,16 @@ final class NewsletterService
         return (int) $db->lastInsertId();
     }
 
-    public static function subscribeToList(PDO $db, int $listId, string $email, string $name = ''): int
+    /**
+     * Adaugă adresa în listă (și în lista implicită).
+     *
+     * @param bool $reactiveaza Doar când omul se abonează SINGUR (formularul
+     *   opt-in de pe site). Un import, adăugarea din admin sau importul din
+     *   WordPress nu au voie să-l reaboneze pe cine s-a dezabonat: retragerea
+     *   consimțământului rămâne în picioare până o schimbă chiar persoana.
+     *   Înainte, orice import punea „active” peste „unsubscribed”.
+     */
+    public static function subscribeToList(PDO $db, int $listId, string $email, string $name = '', bool $reactiveaza = false): int
     {
         if (!$db->inTransaction()) {
             self::ensureSchema($db);
@@ -225,6 +253,12 @@ final class NewsletterService
         $name = trim($name);
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new RuntimeException('Email invalid.');
+        }
+
+        // Lista „nu trimite”: o adresă ștearsă la cererea omului nu revine prin
+        // import sau adăugare din admin (doar el, prin dubla confirmare).
+        if (!$reactiveaza && self::esteSuprimat($db, $email)) {
+            throw new AdresaSuprimata('Adresa ' . $email . ' e pe lista „nu trimite”.');
         }
 
         if ($listId <= 0) {
@@ -237,12 +271,16 @@ final class NewsletterService
         $existingId = (int) ($find->fetchColumn() ?: 0);
         if ($existingId > 0) {
             $subscriberId = $existingId;
+            // Un nume gol (importurile fără coloană de nume) nu șterge numele
+            // știut deja.
             $update = $db->prepare(
                 'UPDATE newsletter_subscribers
-                 SET name = :name, status = "active"
+                 SET name = CASE WHEN :name_gol = 1 THEN name ELSE :name END'
+                 . ($reactiveaza ? ', status = "active"' : '') . '
                  WHERE id = :id'
             );
             $update->execute([
+                'name_gol' => $name === '' ? 1 : 0,
                 'name' => $name,
                 'id' => $subscriberId,
             ]);
@@ -275,6 +313,393 @@ final class NewsletterService
         }
 
         return $subscriberId;
+    }
+
+    /** Adresa există și s-a dezabonat (singură sau din admin). */
+    public static function esteDezabonat(PDO $db, string $email): bool
+    {
+        $stmt = $db->prepare('SELECT status FROM newsletter_subscribers WHERE email = :email LIMIT 1');
+        $stmt->execute(['email' => strtolower(trim($email))]);
+        return (string) ($stmt->fetchColumn() ?: '') === 'unsubscribed';
+    }
+
+    /** Cât e valabil linkul de confirmare (și cât stă o cerere neconfirmată). */
+    public const ZILE_CONFIRMARE = 30;
+
+    /**
+     * Amprenta unei adrese pentru lista „nu trimite” și pentru limite: SHA-256
+     * al adresei normalizate (fără spații, litere mici). Ajunge pentru căutare;
+     * adresa însăși nu se mai păstrează.
+     */
+    public static function amprentaAdresa(string $email): string
+    {
+        return hash('sha256', strtolower(trim($email)));
+    }
+
+    public static function esteSuprimat(PDO $db, string $email): bool
+    {
+        try {
+            $stmt = $db->prepare('SELECT 1 FROM newsletter_suprimate WHERE email_hash = :h LIMIT 1');
+            $stmt->execute(['h' => self::amprentaAdresa($email)]);
+            return (bool) $stmt->fetchColumn();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /** Pune adresa pe lista „nu trimite” (doar amprenta). */
+    public static function suprima(PDO $db, string $email, string $motiv = 'stergere_admin'): void
+    {
+        $db->prepare('INSERT IGNORE INTO newsletter_suprimate (email_hash, motiv) VALUES (:h, :m)')
+            ->execute(['h' => self::amprentaAdresa($email), 'm' => substr($motiv, 0, 40)]);
+    }
+
+    /**
+     * Câte emailuri de confirmare a abonării pleacă pe oră, cel mult, pe tot
+     * site-ul. Emailurile „linkul tău de dezabonare” NU intră aici: altfel
+     * cineva cu câteva IP-uri ar umple plafonul și un abonat real n-ar mai
+     * putea primi linkul de dezabonare (problemă GDPR). Pe ele le limitează
+     * „unul pe abonat la 24 de ore”.
+     */
+    public const LIMITA_GLOBALA_ORA = 300;
+
+    /** Câte cereri pe oră se primesc de la aceeași adresă IP (IPv4) sau rețea /64 (IPv6). */
+    public const LIMITA_IP_ORA = 20;
+
+    /**
+     * Cheia după care se numără limita pe IP: adresa IPv4 ca atare, iar la IPv6
+     * prefixul /64 (un singur client primește de obicei o rețea /64 întreagă,
+     * deci altfel ar avea miliarde de „IP-uri”).
+     */
+    public static function cheieIp(string $ip): string
+    {
+        $ip = trim($ip);
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            $binar = inet_pton($ip);
+            if ($binar !== false) {
+                $prefix = inet_ntop(substr($binar, 0, 8) . str_repeat("\0", 8));
+                return $prefix !== false ? $prefix . '/64' : $ip;
+            }
+        }
+        return substr($ip, 0, 64);
+    }
+
+    /**
+     * Rezervă dreptul de a trimite un email declanșat din pagina publică
+     * (confirmarea abonării, linkul de dezabonare). Numărarea și înregistrarea
+     * se fac sub același lacăt (GET_LOCK), deci zeci de cereri în paralel nu mai
+     * pot trece toate de limite înainte să fie scrise. Înainte, limitele se
+     * numărau întâi și cererea se scria abia la final: 40 de cereri simultane
+     * pentru aceeași adresă au trimis 17 emailuri.
+     *
+     * Limite: pe IP (IpClient::adresa(), adică adresa conexiunii fără un proxy de încredere; IPv6 pe /64) LIMITA_IP_ORA pe oră; pe adresă:
+     * la abonare un email la 5 minute și 3 pe zi, la linkul de dezabonare unul
+     * pe zi; doar la abonare, și LIMITA_GLOBALA_ORA pe oră pe tot site-ul.
+     *
+     * @return string ok | limita_adresa | limita_ip | limita_globala | ocupat
+     */
+    private static int $ultimaRezervare = 0;
+
+    /** Emailul n-a plecat: rezervarea nu consumă limita, omul poate reîncerca. */
+    private static function anuleazaRezervarea(PDO $db): void
+    {
+        if (self::$ultimaRezervare > 0) {
+            $db->prepare('DELETE FROM newsletter_cereri_confirmare WHERE id = :id')->execute(['id' => self::$ultimaRezervare]);
+            self::$ultimaRezervare = 0;
+        }
+    }
+
+    private static function rezervaTrimitere(PDO $db, string $tip, string $amprenta, string $ip): string
+    {
+        $ip = $ip !== '' ? self::cheieIp($ip) : '';
+        $lacat = 'nl_optin_' . substr(sha1((string) ($db->query('SELECT DATABASE()')->fetchColumn() ?: '')), 0, 16);
+        try {
+            $ia = $db->prepare('SELECT GET_LOCK(:n, 5)');
+            $ia->execute(['n' => $lacat]);
+            if ((int) $ia->fetchColumn() !== 1) {
+                return 'ocupat';
+            }
+        } catch (Throwable) {
+            return 'ocupat';
+        }
+        try {
+            if ($ip !== '') {
+                $peIp = $db->prepare('SELECT COUNT(*) FROM newsletter_cereri_confirmare WHERE ip = :ip AND created_at > NOW() - INTERVAL 1 HOUR');
+                $peIp->execute(['ip' => $ip]);
+                if ((int) $peIp->fetchColumn() >= self::LIMITA_IP_ORA) {
+                    return 'limita_ip';
+                }
+            }
+            $peAdresa = $db->prepare(
+                'SELECT COUNT(*) AS pe_zi, COALESCE(SUM(created_at > NOW() - INTERVAL 5 MINUTE), 0) AS recent
+                 FROM newsletter_cereri_confirmare
+                 WHERE email_hash = :h AND tip = :tip AND created_at > NOW() - INTERVAL 1 DAY'
+            );
+            $peAdresa->execute(['h' => $amprenta, 'tip' => $tip]);
+            $limite = $peAdresa->fetch() ?: [];
+            $maxPeZi = $tip === 'abonare' ? 3 : 1;
+            if ((int) ($limite['recent'] ?? 0) > 0 || (int) ($limite['pe_zi'] ?? 0) >= $maxPeZi) {
+                return 'limita_adresa';
+            }
+            $global = $tip === 'abonare'
+                ? (int) $db->query('SELECT COUNT(*) FROM newsletter_cereri_confirmare WHERE tip = "abonare" AND created_at > NOW() - INTERVAL 1 HOUR')->fetchColumn()
+                : 0;
+            if ($global >= self::LIMITA_GLOBALA_ORA) {
+                // Se vede în admin (Liste abonați, Statistici): poate fi un atac.
+                Settings::save($db, ['newsletter_limita_globala_atinsa' => date('Y-m-d H:i:s')]);
+                return 'limita_globala';
+            }
+            $db->prepare('INSERT INTO newsletter_cereri_confirmare (email_hash, ip, tip, created_at) VALUES (:h, :ip, :tip, NOW())')
+                ->execute(['h' => $amprenta, 'ip' => $ip !== '' ? $ip : null, 'tip' => $tip]);
+            self::$ultimaRezervare = (int) $db->lastInsertId();
+            return 'ok';
+        } finally {
+            try {
+                $db->prepare('SELECT RELEASE_LOCK(:n)')->execute(['n' => $lacat]);
+            } catch (Throwable) {
+            }
+        }
+    }
+
+    /**
+     * Cererea de abonare din formularul public (dubla confirmare).
+     *
+     * Nu abonează pe nimeni direct: o adresă nouă devine „pending”, una
+     * dezabonată rămâne dezabonată (cu pending_at), iar omul primește un email
+     * cu linkul de confirmare. Doar clicul lui din email (și butonul de pe
+     * pagină) îl face abonat activ. Un abonat activ nu se atinge.
+     *
+     * `$ip` trebuie să fie IpClient::adresa(): adresa conexiunii cât nu e declarat un
+     * proxy de încredere (pe Hostinger/LiteSpeed e deja IP-ul real al clientului);
+     * X-Forwarded-For se poate falsifica.
+     *
+     * @return array{stare: string, email: string} stare: trimis | deja_activ | limita_adresa | limita_ip | limita_globala | ocupat
+     */
+    public static function cerereAbonare(PDO $db, int $listId, string $email, string $name, string $ip, array $settings): array
+    {
+        self::ensureSchema($db);
+        $email = strtolower(trim($email));
+        $name = trim($name);
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('Adresa de email este invalidă.');
+        }
+        $ip = substr(trim($ip), 0, 64);
+
+        $rand = $db->prepare('SELECT id, status FROM newsletter_subscribers WHERE email = :email LIMIT 1');
+        $rand->execute(['email' => $email]);
+        $existent = $rand->fetch();
+        if ($listId <= 0) {
+            $listId = self::defaultListId($db);
+        }
+        $leaga = function (int $id) use ($db, $listId): void {
+            $link = $db->prepare('INSERT IGNORE INTO newsletter_list_subscribers (list_id, subscriber_id) VALUES (:l, :s)');
+            $link->execute(['l' => self::defaultListId($db), 's' => $id]);
+            $link->execute(['l' => $listId, 's' => $id]);
+        };
+        if (is_array($existent) && (string) $existent['status'] === 'active') {
+            // Deja abonat (și deci confirmat): doar lista din formular, fără email.
+            $leaga((int) $existent['id']);
+            return ['stare' => 'deja_activ', 'email' => $email];
+        }
+
+        $rezervare = self::rezervaTrimitere($db, 'abonare', self::amprentaAdresa($email), $ip);
+        if ($rezervare !== 'ok') {
+            return ['stare' => $rezervare, 'email' => $email];
+        }
+
+        $acum = date('Y-m-d H:i:s');
+        $rand->execute(['email' => $email]);
+        $existent = $rand->fetch();
+        if (!is_array($existent)) {
+            try {
+                $db->prepare('INSERT INTO newsletter_subscribers (email, name, status, pending_at) VALUES (:e, :n, "pending", :p)')
+                    ->execute(['e' => $email, 'n' => $name, 'p' => $acum]);
+                $id = (int) $db->lastInsertId();
+            } catch (Throwable) {
+                // Rândul a apărut între timp (altă cerere pentru aceeași adresă).
+                $rand->execute(['email' => $email]);
+                $id = (int) (($rand->fetch() ?: [])['id'] ?? 0);
+            }
+        } else {
+            $id = (int) $existent['id'];
+            if ((string) $existent['status'] === 'active') {
+                $leaga($id);
+                return ['stare' => 'deja_activ', 'email' => $email];
+            }
+            // „pending” rămâne „pending”; „unsubscribed” rămâne dezabonat până la clic.
+            $db->prepare('UPDATE newsletter_subscribers SET pending_at = :p, name = CASE WHEN :gol = 1 THEN name ELSE :n END WHERE id = :id')
+                ->execute(['p' => $acum, 'gol' => $name === '' ? 1 : 0, 'n' => $name, 'id' => $id]);
+        }
+        if ($id <= 0) {
+            throw new RuntimeException('Nu am putut înregistra cererea de abonare.');
+        }
+        $leaga($id);
+
+        $url = self::urlConfirmare($id, $email, (int) strtotime($acum));
+        $numeMagazin = Brand::numeExpeditor($settings);
+        $subiect = 'Confirmă abonarea la newsletterul ' . $numeMagazin;
+        $html = self::renderHtmlFromBlocks(NewsletterSabloane::emailConfirmare($url, $numeMagazin), $subiect, false);
+        try {
+            OrderMailer::sendCustom($email, $subiect, $html, $settings, $db, [
+                'email_type' => 'newsletter_confirmare',
+                'source' => 'newsletter_optin',
+                'meta' => ['subscriber_id' => $id],
+            ]);
+        } catch (Throwable $exception) {
+            self::anuleazaRezervarea($db);
+            throw $exception instanceof RuntimeException ? $exception : new RuntimeException($exception->getMessage());
+        }
+        return ['stare' => 'trimis', 'email' => $email];
+    }
+
+    /**
+     * Linkurile vechi de dezabonare (semnate doar cu cheia veche, ghicibilă):
+     * butonul de pe pagină cere serverului să trimită, pe adresa abonatului,
+     * un link nou (cheia secretă). Doar cine are acces la inbox se poate apoi
+     * dezabona.
+     *
+     * Rezultat: „gata” (trimis, sau nimic de trimis: abonat inexistent, deja
+     * dezabonat ori link primit deja azi; răspuns identic, ca pagina să nu spună
+     * cine e abonat), „limita_ip”, „ocupat” sau „eroare” (emailul chiar n-a
+     * plecat; pagina o spune, ca nimeni să nu aștepte degeaba un email).
+     * Limite: un email pe abonat la 24 de ore și limita pe IP; plafonul global
+     * nu se aplică (n-are voie să blocheze o dezabonare).
+     */
+    public static function trimiteLinkDezabonare(PDO $db, string $token, string $ip, array $settings): string
+    {
+        $parsed = self::parseUnsubscribeToken($token);
+        if (!is_array($parsed) || empty($parsed['vechi'])) {
+            return 'gata';
+        }
+        self::ensureSchema($db);
+        $rand = $db->prepare('SELECT id, email, status FROM newsletter_subscribers WHERE id = :id AND email = :email LIMIT 1');
+        $rand->execute(['id' => (int) $parsed['id'], 'email' => (string) $parsed['email']]);
+        $abonat = $rand->fetch();
+        if (!is_array($abonat) || (string) $abonat['status'] === 'unsubscribed') {
+            return 'gata';
+        }
+        $rezervare = self::rezervaTrimitere($db, 'dezabonare', hash('sha256', 'dez|' . (int) $abonat['id']), trim($ip));
+        if ($rezervare === 'limita_adresa') {
+            return 'gata';
+        }
+        if ($rezervare !== 'ok') {
+            return $rezervare;
+        }
+        $numeMagazin = Brand::numeExpeditor($settings);
+        $subiect = 'Linkul tău de dezabonare de la newsletterul ' . $numeMagazin;
+        $html = self::renderHtmlFromBlocks(
+            NewsletterSabloane::emailLinkDezabonare(self::unsubscribeUrlForSubscriber($abonat), $numeMagazin),
+            $subiect,
+            false
+        );
+        try {
+            OrderMailer::sendCustom((string) $abonat['email'], $subiect, $html, $settings, $db, [
+                'email_type' => 'newsletter_link_dezabonare',
+                'source' => 'newsletter_unsubscribe',
+                'meta' => ['subscriber_id' => (int) $abonat['id']],
+            ]);
+        } catch (Throwable) {
+            // Eroarea rămâne și în istoricul trimiterilor. Omul poate reîncerca.
+            self::anuleazaRezervarea($db);
+            return 'eroare';
+        }
+        return 'gata';
+    }
+
+    /** Linkul de confirmare, semnat cu cheia nouă (niciodată cu cea veche). */
+    public static function urlConfirmare(int $subscriberId, string $email, int $moment): string
+    {
+        $plata = self::base64UrlEncode('c|' . $subscriberId . '|' . strtolower(trim($email)) . '|' . $moment);
+        $token = $plata . '.' . self::base64UrlEncode(hash_hmac('sha256', $plata, self::cheieSemnare(), true));
+        return self::appBaseUrl() . '/newsletter/confirmare/' . rawurlencode($token);
+    }
+
+    /**
+     * Verifică linkul de confirmare, fără să schimbe nimic.
+     *
+     * @return array{ok: bool, motiv: string, email: string, id: int} motiv: invalid | expirat | deja_activ
+     */
+    public static function verificaConfirmare(PDO $db, string $token): array
+    {
+        $nu = fn(string $motiv, string $email = '') => ['ok' => false, 'motiv' => $motiv, 'email' => $email, 'id' => 0];
+        $token = trim($token);
+        if (!str_contains($token, '.')) {
+            return $nu('invalid');
+        }
+        [$plata, $semnatura] = explode('.', $token, 2);
+        $potrivire = false;
+        foreach (self::cheiNoi() as $cheie) {
+            if (hash_equals(self::base64UrlEncode(hash_hmac('sha256', $plata, $cheie, true)), $semnatura)) {
+                $potrivire = true;
+                break;
+            }
+        }
+        $brut = $potrivire ? self::base64UrlDecode($plata) : null;
+        $parti = $brut !== null ? explode('|', $brut) : [];
+        if (count($parti) !== 4 || $parti[0] !== 'c') {
+            return $nu('invalid');
+        }
+        $id = (int) $parti[1];
+        $email = strtolower(trim($parti[2]));
+        $moment = (int) $parti[3];
+        if ($moment < time() - self::ZILE_CONFIRMARE * 86400) {
+            return $nu('expirat', $email);
+        }
+        self::ensureSchema($db);
+        $stmt = $db->prepare('SELECT status, pending_at FROM newsletter_subscribers WHERE id = :id AND email = :email LIMIT 1');
+        $stmt->execute(['id' => $id, 'email' => $email]);
+        $rand = $stmt->fetch();
+        if (!is_array($rand)) {
+            return $nu('expirat', $email);
+        }
+        if ((string) $rand['status'] === 'active') {
+            return ['ok' => false, 'motiv' => 'deja_activ', 'email' => $email, 'id' => $id];
+        }
+        if (empty($rand['pending_at'])) {
+            return $nu('expirat', $email);
+        }
+        return ['ok' => true, 'motiv' => '', 'email' => $email, 'id' => $id];
+    }
+
+    /**
+     * Clicul pe „Confirm abonarea”: abonatul devine activ, cu ora confirmării,
+     * iar adresa iese de pe lista „nu trimite” (consimțământ nou, al lui).
+     */
+    public static function confirmaAbonare(PDO $db, string $token): array
+    {
+        $rezultat = self::verificaConfirmare($db, $token);
+        if (!$rezultat['ok']) {
+            return $rezultat;
+        }
+        $db->prepare(
+            'UPDATE newsletter_subscribers
+             SET status = "active", confirmed_at = NOW(), pending_at = NULL
+             WHERE id = :id AND status IN ("pending", "unsubscribed") AND pending_at IS NOT NULL'
+        )->execute(['id' => $rezultat['id']]);
+        $db->prepare('DELETE FROM newsletter_suprimate WHERE email_hash = :h')
+            ->execute(['h' => self::amprentaAdresa($rezultat['email'])]);
+        return $rezultat;
+    }
+
+    /**
+     * Curățenie (din cron): cererile neconfirmate în ZILE_CONFIRMARE zile.
+     * Adresele noi neconfirmate se șterg de tot (n-au dat niciun acord); la un
+     * dezabonat se șterge doar cererea. Jurnalul limitelor se păstrează 2 zile.
+     */
+    public static function curataCereriExpirate(PDO $db): int
+    {
+        $prag = date('Y-m-d H:i:s', time() - self::ZILE_CONFIRMARE * 86400);
+        $db->prepare(
+            'DELETE ls FROM newsletter_list_subscribers ls
+             INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
+             WHERE s.status = "pending" AND (s.pending_at IS NULL OR s.pending_at < :p)'
+        )->execute(['p' => $prag]);
+        $sterse = $db->prepare('DELETE FROM newsletter_subscribers WHERE status = "pending" AND (pending_at IS NULL OR pending_at < :p)');
+        $sterse->execute(['p' => $prag]);
+        $db->prepare('UPDATE newsletter_subscribers SET pending_at = NULL WHERE status <> "pending" AND pending_at < :p')
+            ->execute(['p' => $prag]);
+        $db->exec('DELETE FROM newsletter_cereri_confirmare WHERE created_at < NOW() - INTERVAL 2 DAY');
+        return $sterse->rowCount();
     }
 
     /**
@@ -362,11 +787,23 @@ final class NewsletterService
         return $html . $footer;
     }
 
+    /**
+     * Dezabonează după linkul semnat. Un link semnat DOAR cu cheia veche
+     * (ghicibilă) nu dezabonează direct: întoarce `confirmare` = true, iar
+     * pagina îi cere omului să apese „Confirm dezabonarea” (formular cu un
+     * token nou, semnat cu cheia nouă). Altfel oricine ar fi putut dezabona
+     * toată lista cu id-uri la rând.
+     */
     public static function unsubscribeByToken(PDO $db, string $token): array
     {
         $parsed = self::parseUnsubscribeToken($token);
         if (!is_array($parsed)) {
             return ['ok' => false, 'email' => ''];
+        }
+        // Cheia veche: niciodată dezabonare directă, și același răspuns fie că
+        // abonatul există, fie că nu (verificarea existenței vine abia după).
+        if (!empty($parsed['vechi'])) {
+            return ['ok' => false, 'confirmare' => true, 'email' => ''];
         }
 
         $subscriberId = (int) ($parsed['id'] ?? 0);
@@ -401,6 +838,41 @@ final class NewsletterService
         return [
             'ok' => true,
             'email' => $email,
+        ];
+    }
+
+    /**
+     * Pentru pagina de la linkul din email (GET): nu schimbă nimic, doar spune
+     * pe cine privește și dă tokenul (semnat cu cheia nouă) pentru butonul
+     * „Confirm dezabonarea”. Dezabonarea o face doar POST-ul acelui buton, sau
+     * POST-ul „cu un clic” al clientului de email.
+     *
+     * @return array{ok: bool, email: string, token_nou: string, deja: bool}
+     */
+    public static function verificaDezabonare(PDO $db, string $token): array
+    {
+        $parsed = self::parseUnsubscribeToken($token);
+        if (!is_array($parsed)) {
+            return ['ok' => false, 'email' => '', 'token_nou' => '', 'deja' => false, 'vechi' => false];
+        }
+        if (!empty($parsed['vechi'])) {
+            // Cheia veche se poate falsifica: pagina NU dă un token nou și nu
+            // spune dacă abonatul există; butonul ei trimite linkul pe email.
+            return ['ok' => true, 'email' => '', 'token_nou' => '', 'deja' => false, 'vechi' => true];
+        }
+        self::ensureSchema($db);
+        $stmt = $db->prepare('SELECT status FROM newsletter_subscribers WHERE id = :id AND email = :email LIMIT 1');
+        $stmt->execute(['id' => (int) $parsed['id'], 'email' => (string) $parsed['email']]);
+        $stare = $stmt->fetchColumn();
+        if ($stare === false) {
+            return ['ok' => false, 'email' => '', 'token_nou' => '', 'deja' => false, 'vechi' => false];
+        }
+        return [
+            'ok' => true,
+            'email' => (string) $parsed['email'],
+            'token_nou' => $token,
+            'deja' => (string) $stare === 'unsubscribed',
+            'vechi' => false,
         ];
     }
 
@@ -475,17 +947,12 @@ final class NewsletterService
                 'source' => 'newsletter_campaign_test',
                 'campaign_id' => $campaignId,
                 'trigger' => 'manual_test',
+                'meta' => ['campaign_id' => $campaignId],
             ]
         );
-
-        $stmt = $db->prepare(
-            'INSERT INTO newsletter_campaign_sends (campaign_id, subscriber_id, email, status, sent_at)
-             VALUES (:campaign_id, NULL, :email, "sent", NOW())'
-        );
-        $stmt->execute([
-            'campaign_id' => $campaignId,
-            'email' => $to,
-        ]);
+        // Testul NU intră în evidența trimiterilor campaniei: acolo se numără
+        // abonații serviți. Înainte, fiecare test urca „Trimise” și strica
+        // procentele de deschidere; testul rămâne în „Istoric trimiteri”.
     }
 
     /**
@@ -495,156 +962,262 @@ final class NewsletterService
      * starea „sending" până când nu mai are pe nimeni de servit. `$deadline` (un
      * timestamp) oprește lotul mai devreme, ca o rulare din cron să nu fie tăiată
      * la mijloc de limita de execuție a serverului.
+     *
+     * Nimeni nu primește aceeași campanie de două ori:
+     *  - o campanie e trimisă de un singur proces odată (lacăt GET_LOCK pe
+     *    conexiune, eliberat singur dacă procesul moare). Înainte, „Trimite
+     *    acum” apăsat de două ori, sau apăsat cât lucra cronul, alegea aceiași
+     *    destinatari în ambele procese și le trimitea de două ori;
+     *  - fiecare adresă e trecută „pending” ÎNAINTE de trimitere. Dacă procesul
+     *    moare între trimitere și „sent”, adresa rămâne „pending” și NU se
+     *    retrimite: mai bine un mesaj lipsă decât unul dublu;
+     *  - abonarea se verifică din nou chiar înainte de fiecare mesaj, nu doar la
+     *    alegerea lotului: cine se dezabonează în timpul trimiterii nu-l primește.
+     *
+     * `$pornire` spune din ce stare are voie să pornească trimiterea, verificat
+     * după lacăt, în baza de date:
+     *  - „cron”: doar o campanie deja „sending” (continuarea);
+     *  - „programat”: doar „scheduled” cu ora ajunsă;
+     *  - „admin” (Trimite acum / Reia trimiterea): ciornă, programat, oprit, în curs.
+     * Înainte, starea se trecea pe „sending” fără nicio condiție: o campanie
+     * oprită („Oprește trimiterea”) sau cu programarea anulată cât timp cronul
+     * lucra la alta în aceeași trecere era pornită oricum.
      */
     public static function sendCampaignNow(
         PDO $db,
         int $campaignId,
         array $settings,
         int $limit = 5000,
-        ?int $deadline = null
+        ?int $deadline = null,
+        string $pornire = 'admin'
     ): array {
         $campaign = self::loadCampaign($db, $campaignId);
         if (!is_array($campaign)) {
             throw new RuntimeException('Campanie invalidă.');
         }
-
-        $listIdsRaw = trim((string) ($campaign['subscriber_list_ids'] ?? ''));
-        $listIds = $listIdsRaw !== '' ? array_filter(array_map('intval', json_decode($listIdsRaw, true) ?: []), fn($v) => $v > 0) : [];
-        if (empty($listIds)) {
-            $single = (int) ($campaign['subscriber_list_id'] ?? 0);
-            if ($single > 0) {
-                $listIds = [$single];
-            }
+        if ((string) ($campaign['status'] ?? '') === 'sent') {
+            throw new RuntimeException('Newsletterul a fost deja trimis. Ca să-l trimiți din nou, fă o copie (Duplică).');
         }
+
+        $listIds = self::campaignListIds($campaign);
         if (empty($listIds)) {
             throw new RuntimeException('Campania nu are listă de abonați.');
         }
-
-        $blocksJsonRaw = trim((string) ($campaign['blocks_json'] ?? ''));
-        if ($blocksJsonRaw !== '' && $blocksJsonRaw !== '[]') {
-            $parsedBlocks = json_decode($blocksJsonRaw, true);
-            if (is_array($parsedBlocks) && count($parsedBlocks) > 0) {
-                $campaign['html_content'] = self::renderHtmlFromBlocks($parsedBlocks, (string) ($campaign['subject'] ?? ''));
-            }
+        // Fără adresa site-ului, linkul de dezabonare ar ieși „/newsletter/…”,
+        // adică un link mort (din cron nu există HTTP_HOST). Un newsletter fără
+        // dezabonare funcțională nu pleacă.
+        if (self::appBaseUrl() === '') {
+            throw new RuntimeException('Adresa site-ului (APP_URL) lipsește din .env, deci linkul de dezabonare n-ar funcționa. Nu trimit.');
         }
 
-        $recipients = self::remainingRecipients($db, $campaignId, array_values($listIds), $limit);
-        $sent = 0;
-        $failed = 0;
-        $oprit = false;
-        $checkStmt = $db->prepare(
-            'SELECT status
-             FROM newsletter_campaign_sends
-             WHERE campaign_id = :campaign_id AND subscriber_id = :subscriber_id
-             LIMIT 1'
-        );
-
-        foreach ($recipients as $recipient) {
-            if ($deadline !== null && time() >= $deadline) {
-                $oprit = true;
-                break;
-            }
-            $subscriberId = (int) ($recipient['id'] ?? 0);
-            $email = trim((string) ($recipient['email'] ?? ''));
-            if ($subscriberId <= 0 || $email === '') {
-                continue;
-            }
-
-            $checkStmt->execute([
+        $lacat = self::numeLacat($db, $campaignId);
+        if (!self::iaLacat($db, $lacat)) {
+            // Altcineva (cronul sau altă fereastră) trimite deja campania asta.
+            return [
                 'campaign_id' => $campaignId,
-                'subscriber_id' => $subscriberId,
-            ]);
-            $existingStatus = (string) ($checkStmt->fetchColumn() ?: '');
-            if ($existingStatus === 'sent') {
-                continue;
+                'total' => self::totalRecipients($db, $listIds),
+                'sent' => 0,
+                'failed' => 0,
+                'total_sent' => (int) ($campaign['total_sent'] ?? 0),
+                'total_failed' => (int) ($campaign['total_failed'] ?? 0),
+                'remaining' => self::remainingCount($db, $campaignId, $listIds),
+                'stopped_early' => true,
+                'finished' => false,
+                'busy' => true,
+                'paused' => false,
+                'error' => '',
+            ];
+        }
+
+        try {
+            // Starea se schimbă la început, nu la sfârșit: cât timp trimite, în
+            // admin se vede „Se trimite” și conținutul nu se mai poate modifica.
+            // Doar din stările permise pentru cine a pornit trimiterea.
+            $permise = match ($pornire) {
+                'cron' => ['sending'],
+                'programat' => ['scheduled'],
+                default => ['draft', 'scheduled', 'paused', 'sending'],
+            };
+            $semne = implode(',', array_fill(0, count($permise), '?'));
+            $db->prepare(
+                'UPDATE newsletter_campaigns
+                 SET status = "sending", sent_at = COALESCE(sent_at, NOW()), last_error = NULL
+                 WHERE id = ? AND status IN (' . $semne . ')'
+                 . ($pornire === 'programat' ? ' AND scheduled_at IS NOT NULL AND scheduled_at <= NOW()' : '')
+            )->execute(array_merge([$campaignId], $permise));
+            // rowCount() nu ajută aici (0 și când starea era deja „sending”),
+            // deci se citește starea înapoi: dacă nu e „sending”, nu trimitem.
+            if (!self::esteInCurs($db, $campaignId)) {
+                return [
+                    'campaign_id' => $campaignId,
+                    'total' => 0,
+                    'sent' => 0,
+                    'failed' => 0,
+                    'total_sent' => (int) ($campaign['total_sent'] ?? 0),
+                    'total_failed' => (int) ($campaign['total_failed'] ?? 0),
+                    'remaining' => self::remainingCount($db, $campaignId, $listIds),
+                    'stopped_early' => true,
+                    'finished' => false,
+                    'busy' => false,
+                    'nepornit' => true,
+                    'paused' => false,
+                    'error' => '',
+                ];
             }
 
-            try {
-                $unsubscribeUrl = self::unsubscribeUrlForSubscriber($recipient);
-                $baseUrl = self::appBaseUrl();
-                $emailHtml = self::withNewsletterFooter((string) ($campaign['html_content'] ?? '<p>Newsletter</p>'), $unsubscribeUrl);
-                if ($baseUrl !== '') {
-                    $emailHtml = self::injectTrackingPixel($emailHtml, $campaignId, $subscriberId, $baseUrl);
-                    $emailHtml = self::injectClickTracking($emailHtml, $campaignId, $subscriberId, $baseUrl);
+            $blocksJsonRaw = trim((string) ($campaign['blocks_json'] ?? ''));
+            if ($blocksJsonRaw !== '' && $blocksJsonRaw !== '[]') {
+                $parsedBlocks = json_decode($blocksJsonRaw, true);
+                if (is_array($parsedBlocks) && count($parsedBlocks) > 0) {
+                    $campaign['html_content'] = self::renderHtmlFromBlocks($parsedBlocks, (string) ($campaign['subject'] ?? ''));
                 }
-                OrderMailer::sendCustom(
-                    $email,
-                    (string) ($campaign['subject'] ?? 'Newsletter'),
-                    $emailHtml,
-                    $settings,
-                    $db,
-                    [
-                        'email_type' => 'newsletter_campaign',
-                        'source' => 'newsletter_campaign_send',
+            }
+
+            $recipients = self::remainingRecipients($db, $campaignId, $listIds, $limit);
+            $sent = 0;
+            $failed = 0;
+            $oprit = false;
+            $esecuriLaRand = 0;
+            $motivPauza = '';
+            $marcheazaTrimis = $db->prepare(
+                'UPDATE newsletter_campaign_sends
+                 SET status = "sent", error_message = NULL, sent_at = NOW(), email = :email
+                 WHERE campaign_id = :campaign_id AND subscriber_id = :subscriber_id'
+            );
+            $marcheazaEsuat = $db->prepare(
+                'UPDATE newsletter_campaign_sends
+                 SET status = "failed", error_message = :error_message, sent_at = NOW()
+                 WHERE campaign_id = :campaign_id AND subscriber_id = :subscriber_id'
+            );
+            $marcheazaNeconfirmat = $db->prepare(
+                'UPDATE newsletter_campaign_sends
+                 SET status = "unknown", error_message = :error_message, sent_at = NOW()
+                 WHERE campaign_id = :campaign_id AND subscriber_id = :subscriber_id'
+            );
+
+            $opritDeOm = false;
+            foreach ($recipients as $pozitie => $recipient) {
+                if ($deadline !== null && time() >= $deadline) {
+                    $oprit = true;
+                    break;
+                }
+                // „Oprește trimiterea” (sau ștergerea) din admin se vede aici,
+                // la cel mult 20 de mesaje distanță, nu abia la lotul următor.
+                if ($pozitie > 0 && $pozitie % 20 === 0 && !self::esteInCurs($db, $campaignId)) {
+                    $opritDeOm = true;
+                    break;
+                }
+                $subscriberId = (int) ($recipient['id'] ?? 0);
+                $email = trim((string) ($recipient['email'] ?? ''));
+                if ($subscriberId <= 0 || $email === '') {
+                    continue;
+                }
+                if (!self::revendicaDestinatar($db, $campaignId, $subscriberId, $email)) {
+                    continue;
+                }
+
+                try {
+                    $unsubscribeUrl = self::unsubscribeUrlForSubscriber($recipient);
+                    $baseUrl = self::appBaseUrl();
+                    $emailHtml = self::withNewsletterFooter((string) ($campaign['html_content'] ?? '<p>Newsletter</p>'), $unsubscribeUrl);
+                    if ($baseUrl !== '') {
+                        $emailHtml = self::injectTrackingPixel($emailHtml, $campaignId, $subscriberId, $baseUrl);
+                        $emailHtml = self::injectClickTracking($emailHtml, $campaignId, $subscriberId, $baseUrl);
+                    }
+                    OrderMailer::sendCustom(
+                        $email,
+                        (string) ($campaign['subject'] ?? 'Newsletter'),
+                        $emailHtml,
+                        $settings,
+                        $db,
+                        [
+                            'email_type' => 'newsletter_campaign',
+                            'source' => 'newsletter_campaign_send',
+                            'campaign_id' => $campaignId,
+                            'subscriber_id' => $subscriberId,
+                            'trigger' => 'campaign_send_now',
+                            'meta' => ['campaign_id' => $campaignId],
+                            'headers' => self::anteteDezabonare($unsubscribeUrl),
+                        ]
+                    );
+
+                    $marcheazaTrimis->execute([
+                        'email' => $email,
                         'campaign_id' => $campaignId,
                         'subscriber_id' => $subscriberId,
-                        'trigger' => 'campaign_send_now',
-                    ]
-                );
-
-                $stmt = $db->prepare(
-                    'INSERT INTO newsletter_campaign_sends (campaign_id, subscriber_id, email, status, sent_at)
-                     VALUES (:campaign_id, :subscriber_id, :email, "sent", NOW())
-                     ON DUPLICATE KEY UPDATE status = "sent", error_message = NULL, sent_at = NOW(), email = VALUES(email)'
-                );
-                $stmt->execute([
-                    'campaign_id' => $campaignId,
-                    'subscriber_id' => $subscriberId,
-                    'email' => $email,
-                ]);
-                $sent++;
-            } catch (Throwable $exception) {
-                $stmt = $db->prepare(
-                    'INSERT INTO newsletter_campaign_sends (campaign_id, subscriber_id, email, status, error_message, sent_at)
-                     VALUES (:campaign_id, :subscriber_id, :email, "failed", :error_message, NOW())
-                     ON DUPLICATE KEY UPDATE status = "failed", error_message = VALUES(error_message), sent_at = NOW(), email = VALUES(email)'
-                );
-                $stmt->execute([
-                    'campaign_id' => $campaignId,
-                    'subscriber_id' => $subscriberId,
-                    'email' => $email,
-                    'error_message' => substr(trim($exception->getMessage()), 0, 1000),
-                ]);
-                $failed++;
+                    ]);
+                    $sent++;
+                    $esecuriLaRand = 0;
+                } catch (Throwable $exception) {
+                    $mesaj = substr(trim($exception->getMessage()), 0, 1000);
+                    if ($exception instanceof TrimitereNeconfirmata) {
+                        // Poate a ajuns: nu se retrimite (starea „unknown” nu mai
+                        // e aleasă de nicio trecere), dar se vede la statistici.
+                        $marcheazaNeconfirmat->execute([
+                            'error_message' => $mesaj,
+                            'campaign_id' => $campaignId,
+                            'subscriber_id' => $subscriberId,
+                        ]);
+                    } else {
+                        $marcheazaEsuat->execute([
+                            'error_message' => $mesaj,
+                            'campaign_id' => $campaignId,
+                            'subscriber_id' => $subscriberId,
+                        ]);
+                    }
+                    $failed++;
+                    $esecuriLaRand++;
+                    if ($esecuriLaRand >= self::ESECURI_LA_RAND_PAUZA) {
+                        $motivPauza = 'Serverul de email a refuzat ' . $esecuriLaRand
+                            . ' mesaje la rând. Ultimul răspuns: ' . $mesaj;
+                        break;
+                    }
+                }
             }
+
+            // Totalurile se citesc din evidența trimiterilor, nu din lotul curent:
+            // altfel a doua rulare ar raporta mai puțin decât prima și ar șterge
+            // istoricul campaniei.
+            $totalRecipients = self::totalRecipients($db, $listIds);
+            $ramase = self::remainingCount($db, $campaignId, $listIds);
+            $totaluri = self::totaluriTrimiteri($db, $campaignId);
+            $totalSent = $totaluri['trimise'];
+            $totalFailed = $totaluri['esuate'];
+
+            // Cât timp mai are cui trimite, campania rămâne „în curs": cronul o
+            // reia singur, iar în listă se vede că nu s-a terminat. După prea
+            // multe respingeri la rând se oprește și așteaptă un om. Dacă a
+            // oprit-o chiar omul, starea și motivul lui rămân neatinse.
+            $status = $motivPauza !== '' ? 'paused' : ($ramase > 0 ? 'sending' : 'sent');
+            if ($opritDeOm || !self::esteInCurs($db, $campaignId)) {
+                $opritDeOm = true;
+                $status = $ramase > 0 ? 'paused' : 'sent';
+                $motivPauza = '';
+            }
+            $stmt = $db->prepare(
+                'UPDATE newsletter_campaigns
+                 SET status = :status,
+                     sent_at = COALESCE(sent_at, NOW()),
+                     total_recipients = :total_recipients,
+                     total_sent = :total_sent,
+                     total_failed = :total_failed,
+                     last_error = ' . ($opritDeOm ? 'last_error' : ':last_error') . '
+                 WHERE id = :id'
+            );
+            $parametri = [
+                'status' => $status,
+                'total_recipients' => $totalRecipients,
+                'total_sent' => $totalSent,
+                'total_failed' => $totalFailed,
+                'id' => $campaignId,
+            ];
+            if (!$opritDeOm) {
+                $parametri['last_error'] = $motivPauza !== '' ? $motivPauza : null;
+            }
+            $stmt->execute($parametri);
+        } finally {
+            self::elibereazaLacat($db, $lacat);
         }
-
-        // Totalurile se citesc din evidența trimiterilor, nu din lotul curent:
-        // altfel a doua rulare ar raporta mai puțin decât prima și ar șterge
-        // istoricul campaniei.
-        $totalRecipients = self::totalRecipients($db, array_values($listIds));
-        $ramase = self::remainingCount($db, $campaignId, array_values($listIds));
-        $cumulat = $db->prepare(
-            'SELECT
-                SUM(CASE WHEN status = "sent" THEN 1 ELSE 0 END) AS trimise,
-                SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) AS esuate
-             FROM newsletter_campaign_sends
-             WHERE campaign_id = :campaign_id'
-        );
-        $cumulat->execute(['campaign_id' => $campaignId]);
-        $totaluri = $cumulat->fetch() ?: [];
-        $totalSent = (int) ($totaluri['trimise'] ?? 0);
-        $totalFailed = (int) ($totaluri['esuate'] ?? 0);
-
-        // Cât timp mai are cui trimite, campania rămâne „în curs": cronul o
-        // reia singur, iar în listă se vede că nu s-a terminat.
-        $status = $ramase > 0 ? 'sending' : 'sent';
-        $stmt = $db->prepare(
-            'UPDATE newsletter_campaigns
-             SET status = :status,
-                 sent_at = COALESCE(sent_at, NOW()),
-                 total_recipients = :total_recipients,
-                 total_sent = :total_sent,
-                 total_failed = :total_failed
-             WHERE id = :id'
-        );
-        $stmt->execute([
-            'status' => $status,
-            'total_recipients' => $totalRecipients,
-            'total_sent' => $totalSent,
-            'total_failed' => $totalFailed,
-            'id' => $campaignId,
-        ]);
 
         return [
             'campaign_id' => $campaignId,
@@ -654,15 +1227,200 @@ final class NewsletterService
             'total_sent' => $totalSent,
             'total_failed' => $totalFailed,
             'remaining' => $ramase,
-            'stopped_early' => $oprit,
-            'finished' => $ramase === 0,
+            'stopped_early' => $oprit || $motivPauza !== '' || $opritDeOm,
+            'finished' => $status === 'sent',
+            'busy' => false,
+            'nepornit' => false,
+            'paused' => $status === 'paused',
+            'error' => $motivPauza,
         ];
+    }
+
+    /** Campania mai e „în curs”? (Nu, dacă a fost oprită sau ștearsă din admin.) */
+    private static function esteInCurs(PDO $db, int $campaignId): bool
+    {
+        $stmt = $db->prepare('SELECT status FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $campaignId]);
+        return (string) ($stmt->fetchColumn() ?: '') === 'sending';
+    }
+
+    /**
+     * Rezervă adresa pentru trimitere: rândul ei din evidență devine „pending”.
+     * Întoarce false dacă nu trebuie trimis (s-a dezabonat între timp, a primit
+     * deja, e în lucru sau a epuizat încercările).
+     */
+    private static function revendicaDestinatar(PDO $db, int $campaignId, int $subscriberId, string $email): bool
+    {
+        $activ = $db->prepare('SELECT 1 FROM newsletter_subscribers WHERE id = :id AND status = "active" LIMIT 1');
+        $activ->execute(['id' => $subscriberId]);
+        if (!(bool) $activ->fetchColumn()) {
+            return false;
+        }
+
+        $rand = $db->prepare(
+            'SELECT id, status, attempts
+             FROM newsletter_campaign_sends
+             WHERE campaign_id = :campaign_id AND subscriber_id = :subscriber_id
+             LIMIT 1'
+        );
+        $rand->execute(['campaign_id' => $campaignId, 'subscriber_id' => $subscriberId]);
+        $existent = $rand->fetch();
+        if (is_array($existent)) {
+            if ((string) ($existent['status'] ?? '') !== 'failed' || (int) ($existent['attempts'] ?? 0) >= self::MAX_INCERCARI) {
+                return false;
+            }
+            $reia = $db->prepare(
+                'UPDATE newsletter_campaign_sends
+                 SET status = "pending", attempts = attempts + 1, error_message = NULL, sent_at = NOW()
+                 WHERE id = :id AND status = "failed"'
+            );
+            $reia->execute(['id' => (int) $existent['id']]);
+            return $reia->rowCount() === 1;
+        }
+
+        try {
+            $db->prepare(
+                'INSERT INTO newsletter_campaign_sends (campaign_id, subscriber_id, email, status, attempts, sent_at)
+                 VALUES (:campaign_id, :subscriber_id, :email, "pending", 1, NOW())'
+            )->execute([
+                'campaign_id' => $campaignId,
+                'subscriber_id' => $subscriberId,
+                'email' => $email,
+            ]);
+        } catch (Throwable) {
+            // Rândul a apărut între timp (cheia unică): nu e al nostru.
+            return false;
+        }
+        return true;
+    }
+
+    /** Listele unei campanii: `subscriber_list_ids` (JSON), altfel lista unică. */
+    public static function campaignListIds(array $campaign): array
+    {
+        $listIdsRaw = trim((string) ($campaign['subscriber_list_ids'] ?? ''));
+        $decodat = $listIdsRaw !== '' ? json_decode($listIdsRaw, true) : null;
+        $listIds = is_array($decodat)
+            ? array_values(array_filter(array_map('intval', $decodat), fn($v) => $v > 0))
+            : [];
+        if (empty($listIds)) {
+            $single = (int) ($campaign['subscriber_list_id'] ?? 0);
+            if ($single > 0) {
+                $listIds = [$single];
+            }
+        }
+        return array_values(array_unique($listIds));
+    }
+
+    /**
+     * Trimise / eșuate / neconfirmate, din evidență. Testele (fără abonat) nu
+     * se numără. „Neconfirmate” = rezervate dar fără răspuns (proces oprit la
+     * mijloc): nu se retrimit, ca să nu primească nimeni de două ori.
+     */
+    public static function totaluriTrimiteri(PDO $db, int $campaignId): array
+    {
+        $stmt = $db->prepare(
+            'SELECT
+                SUM(CASE WHEN status = "sent" THEN 1 ELSE 0 END) AS trimise,
+                SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) AS esuate,
+                SUM(CASE WHEN status IN ("pending", "unknown") THEN 1 ELSE 0 END) AS neconfirmate
+             FROM newsletter_campaign_sends
+             WHERE campaign_id = :campaign_id AND subscriber_id IS NOT NULL'
+        );
+        $stmt->execute(['campaign_id' => $campaignId]);
+        $rand = $stmt->fetch() ?: [];
+        return [
+            'trimise' => (int) ($rand['trimise'] ?? 0),
+            'esuate' => (int) ($rand['esuate'] ?? 0),
+            'neconfirmate' => (int) ($rand['neconfirmate'] ?? 0),
+        ];
+    }
+
+    /**
+     * Conținutul și destinatarii se pot schimba doar înainte să plece ceva:
+     * ciornă, programat, sau oprit înainte de primul mesaj trimis.
+     */
+    public static function poateFiModificata(PDO $db, int $campaignId): bool
+    {
+        $stmt = $db->prepare('SELECT status FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $campaignId]);
+        $status = (string) ($stmt->fetchColumn() ?: '');
+        if (in_array($status, ['draft', 'scheduled'], true)) {
+            return true;
+        }
+        if ($status === 'paused') {
+            $totaluri = self::totaluriTrimiteri($db, $campaignId);
+            return $totaluri['trimise'] === 0 && $totaluri['neconfirmate'] === 0;
+        }
+        return false;
+    }
+
+    /**
+     * Antetele de dezabonare cerute de Gmail/Yahoo pentru trimiterile în masă
+     * (din 2024): linkul personal și dezabonarea „cu un clic” (RFC 8058), pe
+     * care o face chiar clientul de email printr-un POST la același link.
+     */
+    private static function anteteDezabonare(string $unsubscribeUrl): array
+    {
+        if (!preg_match('#^https?://#i', $unsubscribeUrl)) {
+            return [];
+        }
+        return [
+            'List-Unsubscribe' => '<' . $unsubscribeUrl . '>',
+            'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
+        ];
+    }
+
+    /** Numele lacătului: pe serverul comun, alte baze pot avea campania cu același id. */
+    private static function numeLacat(PDO $db, int $campaignId): string
+    {
+        $baza = '';
+        try {
+            $baza = (string) ($db->query('SELECT DATABASE()')->fetchColumn() ?: '');
+        } catch (Throwable) {
+        }
+        return 'nl_' . substr(sha1($baza), 0, 16) . '_' . $campaignId;
+    }
+
+    private static function iaLacat(PDO $db, string $nume): bool
+    {
+        try {
+            $stmt = $db->prepare('SELECT GET_LOCK(:nume, 0)');
+            $stmt->execute(['nume' => $nume]);
+            return (int) $stmt->fetchColumn() === 1;
+        } catch (Throwable) {
+            // Fără GET_LOCK pe server: rămâne rezervarea „pending” pe adresă.
+            return true;
+        }
+    }
+
+    private static function elibereazaLacat(PDO $db, string $nume): void
+    {
+        try {
+            $stmt = $db->prepare('SELECT RELEASE_LOCK(:nume)');
+            $stmt->execute(['nume' => $nume]);
+        } catch (Throwable) {
+        }
+    }
+
+    /**
+     * Oprește o campanie cu motivul scris, ca să-l vadă omul din admin. Doar
+     * dacă e încă în starea în care a găsit-o cronul: o programare anulată
+     * între timp rămâne ciornă, nu devine „Oprit”.
+     */
+    private static function opresteCampania(PDO $db, int $campaignId, string $motiv, string $dinStarea): void
+    {
+        try {
+            $db->prepare('UPDATE newsletter_campaigns SET status = "paused", last_error = :motiv WHERE id = :id AND status = :stare')
+                ->execute(['motiv' => substr($motiv, 0, 1000), 'id' => $campaignId, 'stare' => $dinStarea]);
+        } catch (Throwable) {
+        }
     }
 
     /**
      * Reia campaniile rămase în curs (status „sending"), în ordinea începerii.
      * Se apelează din cron: o campanie mare se termină singură, în mai multe
-     * treceri, fără ca cineva să apese butonul din nou.
+     * treceri, fără ca cineva să apese butonul din nou. Campaniile oprite
+     * („paused”) NU se reiau singure: le pornește un om, după ce vede motivul.
      */
     public static function continueRunningCampaigns(
         PDO $db,
@@ -687,17 +1445,22 @@ final class NewsletterService
             if ($campaignId <= 0) {
                 continue;
             }
-            $reluate++;
             try {
-                $rezultat = self::sendCampaignNow($db, $campaignId, $settings, $perRun, $deadline);
+                $rezultat = self::sendCampaignNow($db, $campaignId, $settings, $perRun, $deadline, 'cron');
+                if (!empty($rezultat['nepornit']) || !empty($rezultat['busy'])) {
+                    continue;
+                }
+                $reluate++;
                 $trimise += (int) ($rezultat['sent'] ?? 0);
                 $esuate += (int) ($rezultat['failed'] ?? 0);
                 if (!empty($rezultat['finished'])) {
                     $terminate++;
                 }
-            } catch (Throwable) {
+            } catch (Throwable $exception) {
                 // O campanie stricată (listă ștearsă, de exemplu) nu trebuie să
-                // blocheze restul: rămâne în „sending" și se vede în listă.
+                // blocheze restul și nici să fie reîncercată la nesfârșit: se
+                // oprește, cu motivul, și se vede în listă.
+                self::opresteCampania($db, $campaignId, $exception->getMessage(), 'sending');
                 $esuate++;
             }
         }
@@ -714,7 +1477,8 @@ final class NewsletterService
         PDO $db,
         array $settings,
         int $limit = 20,
-        ?int $deadline = null
+        ?int $deadline = null,
+        int $perRun = 10000
     ): array {
         $stmt = $db->prepare(
             'SELECT id
@@ -738,15 +1502,19 @@ final class NewsletterService
             if ($campaignId <= 0) {
                 continue;
             }
-            $processed++;
             try {
-                $result = self::sendCampaignNow($db, $campaignId, $settings, 10000, $deadline);
+                $result = self::sendCampaignNow($db, $campaignId, $settings, $perRun, $deadline, 'programat');
+                if (!empty($result['nepornit']) || !empty($result['busy'])) {
+                    continue;
+                }
+                $processed++;
                 $sent += (int) ($result['sent'] ?? 0);
                 $failed += (int) ($result['failed'] ?? 0);
             } catch (Throwable $exception) {
                 $failed++;
-                $update = $db->prepare('UPDATE newsletter_campaigns SET status = "draft" WHERE id = :id');
-                $update->execute(['id' => $campaignId]);
+                // Înainte se întorcea tăcut la „ciornă”, iar programarea dispărea
+                // fără nicio explicație. Acum rămâne oprită, cu motivul.
+                self::opresteCampania($db, $campaignId, $exception->getMessage(), 'scheduled');
             }
         }
 
@@ -783,6 +1551,10 @@ final class NewsletterService
      * primi N abonați: la a doua rulare erau toți marcați „sent", se săreau toți,
      * iar restul listei nu primea niciodată nimic. De aici, trimiterea se face
      * pe bucăți și fiecare rulare continuă de unde a rămas precedenta.
+     *
+     * Rămân de servit doar cei fără niciun rând în evidență și cei respinși
+     * care mai au încercări. Un rând „pending” (proces oprit la mijloc) nu se
+     * mai alege: s-ar putea ca mesajul să fi plecat deja.
      */
     public static function remainingRecipients(PDO $db, int $campaignId, array $listIds, int $limit = 5000): array
     {
@@ -796,10 +1568,10 @@ final class NewsletterService
              FROM newsletter_list_subscribers ls
              INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
              LEFT JOIN newsletter_campaign_sends cs
-                    ON cs.campaign_id = ? AND cs.subscriber_id = s.id AND cs.status = 'sent'
+                    ON cs.campaign_id = ? AND cs.subscriber_id = s.id
              WHERE ls.list_id IN ($placeholders)
                AND s.status = 'active'
-               AND cs.subscriber_id IS NULL
+               AND (cs.id IS NULL OR (cs.status = 'failed' AND cs.attempts < " . self::MAX_INCERCARI . "))
              ORDER BY s.id ASC
              LIMIT " . max(1, min(50000, $limit))
         );
@@ -838,10 +1610,10 @@ final class NewsletterService
              FROM newsletter_list_subscribers ls
              INNER JOIN newsletter_subscribers s ON s.id = ls.subscriber_id
              LEFT JOIN newsletter_campaign_sends cs
-                    ON cs.campaign_id = ? AND cs.subscriber_id = s.id AND cs.status = 'sent'
+                    ON cs.campaign_id = ? AND cs.subscriber_id = s.id
              WHERE ls.list_id IN ($placeholders)
                AND s.status = 'active'
-               AND cs.subscriber_id IS NULL"
+               AND (cs.id IS NULL OR (cs.status = 'failed' AND cs.attempts < " . self::MAX_INCERCARI . "))"
         );
         $stmt->execute(array_merge([$campaignId], $listIds));
         return (int) $stmt->fetchColumn();
@@ -869,7 +1641,8 @@ final class NewsletterService
     private static function loadCampaign(PDO $db, int $campaignId): ?array
     {
         $stmt = $db->prepare(
-            'SELECT id, name, subject, html_content, blocks_json, subscriber_list_id, subscriber_list_ids, status
+            'SELECT id, name, subject, html_content, blocks_json, subscriber_list_id, subscriber_list_ids, status,
+                    total_sent, total_failed
              FROM newsletter_campaigns
              WHERE id = :id
              LIMIT 1'
@@ -912,7 +1685,7 @@ final class NewsletterService
     public static function injectTrackingPixel(string $html, int $campaignId, int $subscriberId, string $baseUrl): string
     {
         $token = self::base64UrlEncode(
-            hash_hmac('sha256', "open|{$campaignId}|{$subscriberId}", self::unsubscribeSigningKey(), true)
+            hash_hmac('sha256', "open|{$campaignId}|{$subscriberId}", self::cheieSemnare(), true)
         );
         $src = rtrim($baseUrl, '/') . '/newsletter/track/open/' . $campaignId . '/' . $subscriberId . '/' . $token;
         $pixel = '<img src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" width="1" height="1" style="display:block;width:1px;height:1px;border:none;opacity:0;" alt="">';
@@ -930,7 +1703,11 @@ final class NewsletterService
             '/<a\s+([^>]*?)href=["\']([^"\']+)["\']([^>]*?)>/si',
             static function (array $m) use ($campaignId, $subscriberId, $baseUrl): string {
                 $before = $m[1];
-                $url = $m[2];
+                // În HTML, „&” din adresă e scris „&amp;”. Fără decodare,
+                // redirecționarea ducea la „?a=1&amp;b=2”, adică parametrul
+                // „amp;b”: linkurile cu UTM (utm_source=…&utm_medium=…)
+                // ajungeau stricate.
+                $url = html_entity_decode($m[2], ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $after = $m[3];
                 // Skip: anchors, mailto, tel, already-tracked URLs, unsubscribe links
                 if (
@@ -943,7 +1720,7 @@ final class NewsletterService
                     return $m[0];
                 }
                 $token = self::base64UrlEncode(
-                    hash_hmac('sha256', "click|{$campaignId}|{$subscriberId}|{$url}", self::unsubscribeSigningKey(), true)
+                    hash_hmac('sha256', "click|{$campaignId}|{$subscriberId}|{$url}", self::cheieSemnare(), true)
                 );
                 $tracked = $baseUrl . '/newsletter/track/click/' . $campaignId . '/' . $subscriberId . '/' . $token
                     . '?url=' . rawurlencode($url);
@@ -955,10 +1732,9 @@ final class NewsletterService
 
     public static function handleOpenTrack(PDO $db, int $campaignId, int $subscriberId, string $token): string
     {
-        $expectedToken = self::base64UrlEncode(
-            hash_hmac('sha256', "open|{$campaignId}|{$subscriberId}", self::unsubscribeSigningKey(), true)
-        );
-        if (!hash_equals($expectedToken, $token)) {
+        // Și cu cheia veche se numără deschiderea: pixelul nu pune cookie și nu
+        // redirecționează nicăieri.
+        if (self::semnaturaBuna("open|{$campaignId}|{$subscriberId}", $token) === null) {
             return base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
         }
 
@@ -993,19 +1769,30 @@ final class NewsletterService
     }
 
     /**
-     * Notează clickul și întoarce adresa la care duce linkul, sau null dacă
-     * semnătura nu se potrivește: adresa din cerere n-a fost pusă de noi în
-     * newsletter și nu are voie să ducă nicăieri (altfel oricine ar face din
-     * site o trambulină spre orice adresă).
+     * Înregistrează clicul și întoarce adresa la care se merge mai departe, sau
+     * null dacă semnătura nu se potrivește. Înainte, o semnătură greșită
+     * redirecționa oricum la adresa din `?url=`: oricine putea folosi domeniul
+     * magazinului ca trambulină spre un site de phishing.
      */
     public static function handleClickTrack(PDO $db, int $campaignId, int $subscriberId, string $token, string $destUrl): ?string
     {
-        $expectedToken = self::base64UrlEncode(
-            hash_hmac('sha256', "click|{$campaignId}|{$subscriberId}|{$destUrl}", self::unsubscribeSigningKey(), true)
-        );
-        if (!hash_equals($expectedToken, $token)) {
+        $semnatura = self::semnaturaBuna("click|{$campaignId}|{$subscriberId}|{$destUrl}", $token);
+        if ($semnatura === null) {
             return null;
         }
+        // Cheia veche se poate ghici, deci un token doar cu ea e crezut numai
+        // pentru o campanie trimisă înainte de cheia nouă și numai dacă adresa
+        // chiar apare în acea campanie. Altfel: prima pagină, fără cookie.
+        if ($semnatura === 'vechi') {
+            $limita = self::limitaCheieVeche();
+            if ($campaignId > $limita['campanie'] || $subscriberId > $limita['abonat']
+                || !self::adresaEInCampanie($db, $campaignId, $destUrl)) {
+                return null;
+            }
+        }
+        // Emailurile trimise înainte de reparația de mai sus au semnat adresa
+        // cu „&amp;” în ea; semnătura lor rămâne bună, iar adresa se curăță aici.
+        $destUrl = html_entity_decode($destUrl, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 
         try {
             $sendStmt = $db->prepare(
@@ -1049,7 +1836,7 @@ final class NewsletterService
     {
         $payload = $subscriberId . '|' . strtolower(trim($email));
         $payloadEncoded = self::base64UrlEncode($payload);
-        $signature = hash_hmac('sha256', $payloadEncoded, self::unsubscribeSigningKey(), true);
+        $signature = hash_hmac('sha256', $payloadEncoded, self::cheieSemnare(), true);
         return $payloadEncoded . '.' . self::base64UrlEncode($signature);
     }
 
@@ -1065,9 +1852,21 @@ final class NewsletterService
             return null;
         }
 
-        $expectedSignature = hash_hmac('sha256', $payloadEncoded, self::unsubscribeSigningKey(), true);
         $providedSignature = self::base64UrlDecode($signatureEncoded);
-        if ($providedSignature === null || !hash_equals($expectedSignature, $providedSignature)) {
+        if ($providedSignature === null) {
+            return null;
+        }
+        $potrivire = null;
+        foreach (self::cheiNoi() as $cheie) {
+            if (hash_equals(hash_hmac('sha256', $payloadEncoded, $cheie, true), $providedSignature)) {
+                $potrivire = 'nou';
+                break;
+            }
+        }
+        if ($potrivire === null && hash_equals(hash_hmac('sha256', $payloadEncoded, self::cheieVeche(), true), $providedSignature)) {
+            $potrivire = 'vechi';
+        }
+        if ($potrivire === null) {
             return null;
         }
 
@@ -1082,14 +1881,20 @@ final class NewsletterService
         if ($id <= 0 || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return null;
         }
+        // Cheia veche contează doar pentru abonații care existau când a apărut
+        // cheia nouă (doar ei pot avea un email vechi).
+        if ($potrivire === 'vechi' && $id > self::limitaCheieVeche()['abonat']) {
+            return null;
+        }
 
         return [
             'id' => $id,
             'email' => $email,
+            'vechi' => $potrivire === 'vechi',
         ];
     }
 
-    private static function appBaseUrl(): string
+    public static function appBaseUrl(): string
     {
         $config = require __DIR__ . '/../../config/app.php';
         $configured = rtrim((string) ($config['url'] ?? ''), '/');
@@ -1109,15 +1914,195 @@ final class NewsletterService
     /** Cheia de semnare din .env: 64 de cifre hexazecimale mici (de exemplu cheia derivată a unui site existent, înghețată la adoptare). */
     public const CHEIE_SEMNARE_ENV = 'NEWSLETTER_CHEIE_SEMNARE';
 
+    /** Cheia secretă din tabelul settings (nu iese niciodată prin Settings::all). */
+    public const CHEIE_SETARE = 'newsletter_cheie_semnare';
+
+    private static ?string $cheieSemnare = null;
+
     /**
-     * Cheia cu care se semnează linkurile din newslettere (dezabonarea, deschiderea, clicul; WP-17, DB-17). Un link
-     * trimis rămâne bun doar cât cheia rămâne aceeași, deci ordinea e: `.env NEWSLETTER_CHEIE_SEMNARE` (cheia fixă a
-     * site-ului) → `site.json newsletter_sare_semnatura` (derivarea veche a site-ului, cu sarea din codul lui vechi)
-     * → derivarea cu LICENTA_SITE drept sare (un site nou fără cheie; `scripts/diagnostic.php` o arată ca ATENȚIE).
-     * Derivarea folosește APP_URL și numele bazei, deci o schimbare a lor rupe linkurile trimise: de aceea, la adoptare,
-     * cheia derivată se scrie în .env (docs/MIGRARI.md, „Pe server, la adoptare”).
+     * Cheia cu care se semnează linkurile noi (dezabonare, pixel, clic).
+     *
+     * Cheia veche era calculată din adresa site-ului, numele bazei și o sare
+     * scrisă în codul vechi (cheieVeche), iar codul e public: cine ghicea numele bazei putea dezabona
+     * toată lista sau falsifica linkuri. Acum e un secret aleator:
+     * NEWSLETTER_SECRET din .env dacă există, altfel 32 de octeți aleatori
+     * generați o singură dată și păstrați în baza de date (nimic de configurat).
      */
-    private static function unsubscribeSigningKey(): string
+    private static function cheieSemnare(): string
+    {
+        if (self::$cheieSemnare !== null) {
+            return self::$cheieSemnare;
+        }
+        self::limitaCheieVeche();
+        $dinEnv = trim((string) Env::get('NEWSLETTER_SECRET', ''));
+        if ($dinEnv !== '') {
+            return self::$cheieSemnare = $dinEnv;
+        }
+        $dinBaza = self::cheieDinBaza(true);
+        if ($dinBaza === '') {
+            throw new RuntimeException('Nu am putut citi cheia de semnare a newsletterului.');
+        }
+        return self::$cheieSemnare = $dinBaza;
+    }
+
+    /** Cheia din baza de date; la nevoie o creează (o singură dată, fără cursă). */
+    private static function cheieDinBaza(bool $creeaza): string
+    {
+        try {
+            $config = require __DIR__ . '/../../config/app.php';
+            $db = Database::connection($config['db']);
+            if (!$db instanceof PDO) {
+                return '';
+            }
+            $citeste = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+            $citeste->execute(['k' => self::CHEIE_SETARE]);
+            $cheie = (string) ($citeste->fetchColumn() ?: '');
+            if (strlen($cheie) < 32 && $creeaza) {
+                // În codul comun prin Settings::secretGenerat (64 hex, ca în codul vechi): două cereri simultane primesc aceeași
+                // cheie (INSERT IGNORE), iar un rând golit (încărcarea copiei de verificare o golește, ca linkurile site-ului
+                // adevărat să nu meargă pe copie) se înlocuiește o singură dată.
+                $cheie = Settings::secretGenerat($db, self::CHEIE_SETARE);
+            }
+            return strlen($cheie) >= 32 ? $cheie : '';
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * Cheile noi (secrete) acceptate la verificare: cea curentă și cea din bază
+     * (dacă între timp s-a pus NEWSLETTER_SECRET în .env).
+     */
+    private static function cheiNoi(): array
+    {
+        $chei = [];
+        try {
+            $chei[] = self::cheieSemnare();
+        } catch (Throwable) {
+        }
+        $dinBaza = self::cheieDinBaza(false);
+        if ($dinBaza !== '') {
+            $chei[] = $dinBaza;
+        }
+        return array_values(array_unique($chei));
+    }
+
+    /**
+     * Ce cheie a semnat tokenul: „nou” (secretă), „vechi” (cea ghicibilă, doar
+     * pentru emailurile trimise înainte, cu restricțiile de la fiecare folosire)
+     * sau null.
+     */
+    private static function semnaturaBuna(string $mesaj, string $token): ?string
+    {
+        foreach (self::cheiNoi() as $cheie) {
+            if (hash_equals(self::base64UrlEncode(hash_hmac('sha256', $mesaj, $cheie, true)), $token)) {
+                return 'nou';
+            }
+        }
+        if (hash_equals(self::base64UrlEncode(hash_hmac('sha256', $mesaj, self::cheieVeche(), true)), $token)) {
+            return 'vechi';
+        }
+        return null;
+    }
+
+    /** Pragul pentru cheia veche, lângă cheie în settings (ascuns la fel). */
+    public const LIMITA_SETARE = 'newsletter_cheie_limita';
+
+    private static ?array $limitaVeche = null;
+
+    /**
+     * Cea mai mare campanie și cel mai mare abonat de când a apărut cheia nouă:
+     * doar ei pot avea linkuri semnate cu cheia veche. Se scrie o singură dată
+     * (INSERT IGNORE), la prima folosire după actualizare (ensureSchema, cron,
+     * prima semnare).
+     *
+     * @return array{campanie:int, abonat:int}
+     */
+    public static function limitaCheieVeche(?PDO $db = null): array
+    {
+        if (self::$limitaVeche !== null) {
+            return self::$limitaVeche;
+        }
+        $nimic = ['campanie' => 0, 'abonat' => 0];
+        try {
+            if (!$db instanceof PDO) {
+                $config = require __DIR__ . '/../../config/app.php';
+                $db = Database::connection($config['db']);
+            }
+            if (!$db instanceof PDO) {
+                return $nimic;
+            }
+            $citeste = $db->prepare('SELECT `value` FROM settings WHERE `key` = :k LIMIT 1');
+            $citeste->execute(['k' => self::LIMITA_SETARE]);
+            $brut = (string) ($citeste->fetchColumn() ?: '');
+            if ($brut === '') {
+                $campanie = (int) ($db->query('SELECT COALESCE(MAX(id), 0) FROM newsletter_campaigns')->fetchColumn() ?: 0);
+                $abonat = (int) ($db->query('SELECT COALESCE(MAX(id), 0) FROM newsletter_subscribers')->fetchColumn() ?: 0);
+                $db->prepare('INSERT IGNORE INTO settings (`key`, `value`) VALUES (:k, :v)')->execute([
+                    'k' => self::LIMITA_SETARE,
+                    'v' => json_encode(['campanie' => $campanie, 'abonat' => $abonat]),
+                ]);
+                $citeste->execute(['k' => self::LIMITA_SETARE]);
+                $brut = (string) ($citeste->fetchColumn() ?: '');
+            }
+            $date = json_decode($brut, true);
+            if (!is_array($date)) {
+                return $nimic;
+            }
+            return self::$limitaVeche = [
+                'campanie' => max(0, (int) ($date['campanie'] ?? 0)),
+                'abonat' => max(0, (int) ($date['abonat'] ?? 0)),
+            ];
+        } catch (Throwable) {
+            return $nimic;
+        }
+    }
+
+    /**
+     * Adresa apare în campanie (în HTML-ul salvat sau în blocurile ei),
+     * normalizată ca la semnare: „&amp;” decodat și spațiile de la capete scoase.
+     */
+    private static function adresaEInCampanie(PDO $db, int $campaignId, string $destUrl): bool
+    {
+        $stmt = $db->prepare('SELECT subject, html_content, blocks_json FROM newsletter_campaigns WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $campaignId]);
+        $rand = $stmt->fetch();
+        if (!is_array($rand)) {
+            return false;
+        }
+        $surse = [(string) ($rand['html_content'] ?? '')];
+        $blocuri = json_decode((string) ($rand['blocks_json'] ?? ''), true);
+        if (is_array($blocuri) && $blocuri !== []) {
+            try {
+                $surse[] = self::renderHtmlFromBlocks($blocuri, (string) ($rand['subject'] ?? ''));
+            } catch (Throwable) {
+            }
+        }
+        $norm = static fn(string $u): string => trim(html_entity_decode($u, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $cautat = $norm($destUrl);
+        if ($cautat === '') {
+            return false;
+        }
+        foreach ($surse as $html) {
+            if (preg_match_all('/<a\s[^>]*?href=["\']([^"\']+)["\']/si', $html, $m)) {
+                foreach ($m[1] as $href) {
+                    if ($norm($href) === $cautat) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Cheia de dinainte (ghicibilă): doar pentru verificarea linkurilor deja trimise. În codul comun e cheia din WP-17
+     * (DB-17): `.env NEWSLETTER_CHEIE_SEMNARE` (cheia fixă a site-ului, scrisă la adoptare) → `site.json
+     * newsletter_sare_semnatura` (derivarea veche a site-ului, cu sarea din codul lui vechi) → derivarea cu LICENTA_SITE drept sare (un site nou: n-are linkuri vechi, iar pragul lui e 0).
+     * Derivarea folosește APP_URL și numele bazei, deci o schimbare a lor rupe linkurile vechi: de aceea, la adoptare,
+     * cheia derivată se scrie în .env (docs/MIGRARI.md, „Pe server, la adoptare”). Linkurile noi nu o mai folosesc.
+     */
+    private static function cheieVeche(): string
     {
         $cheie = trim((string) Env::get(self::CHEIE_SEMNARE_ENV, ''));
         if (preg_match('/^[0-9a-f]{64}$/', $cheie) === 1) {
@@ -1254,7 +2239,7 @@ final class NewsletterService
             $fontSize = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 16);
             $padV = min(40, max(2, (int) ($block['btn_pad_v'] ?? 11)));
             $padH = min(80, max(4, (int) ($block['btn_pad_h'] ?? 22)));
-            return '<div style="text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';' . $vPad . $hPad . self::fundal($block) . $bgStyle . '"><a href="' . self::esc((string) ($block['url'] ?? '#')) . '" style="display:inline-block;background:' . self::esc((string) ($block['button_color'] ?? '#2d7d5f')) . ';color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';padding:' . $padV . 'px ' . $padH . 'px;border-radius:' . max(0, (int) ($block['border_radius'] ?? $block['radius'] ?? 6)) . 'px;text-decoration:none;font-weight:700;font-size:' . $fontSize . 'px;">' . self::esc((string) ($block['label'] ?? 'Buton')) . '</a></div>';
+            return '<div style="text-align:' . self::esc((string) ($block['align'] ?? 'center')) . ';' . $vPad . $hPad . self::fundal($block) . $bgStyle . '"><a href="' . self::esc(self::linkButon((string) ($block['url'] ?? '#'))) . '" style="display:inline-block;background:' . self::esc((string) ($block['button_color'] ?? '#2d7d5f')) . ';color:' . self::esc((string) ($block['text_color'] ?? '#ffffff')) . ';padding:' . $padV . 'px ' . $padH . 'px;border-radius:' . max(0, (int) ($block['border_radius'] ?? $block['radius'] ?? 6)) . 'px;text-decoration:none;font-weight:700;font-size:' . $fontSize . 'px;">' . self::esc((string) ($block['label'] ?? 'Buton')) . '</a></div>';
         }
         if ($type === 'divider') {
             return '<div style="' . self::fundal($block) . $bgStyle . $hPad . $vPad . '"><hr style="border:none;border-top:' . max(1,(int)($block['thickness']??1)) . 'px solid ' . self::esc((string) ($block['color'] ?? $block['line_color'] ?? '#dbe2ea')) . ';margin:0 auto;width:' . min(100,max(10,(int)($block['width']??80))) . '%;"></div>';
@@ -1310,6 +2295,18 @@ final class NewsletterService
 
             return '<div style="text-align:' . $aliniere . ';' . $fundal . $bgStyle . $hPad . $vPad . '">'
                 . $interior . '</div>';
+        }
+        if ($type === 'quote') {
+            $qColor = self::esc((string) ($block['text_color'] ?? '#166534'));
+            $autor = trim((string) ($block['author'] ?? ''));
+            return '<div style="background:' . self::esc((string) ($block['background'] ?? '#f0fdf4')) . ';' . $bgStyle
+                . 'border-left:4px solid ' . self::esc((string) ($block['border_color'] ?? '#2d7d5f')) . ';'
+                . $vPad . 'padding-left:' . ($pl > 0 ? $pl : 16) . 'px;padding-right:' . $pr . 'px;' . $fontStyle
+                . 'text-align:' . self::esc((string) ($block['align'] ?? 'left')) . ';">'
+                . '<div style="color:' . $qColor . ';font-style:italic;font-size:' . self::normalizeFontSize((int) ($block['font_size'] ?? 0), 16) . 'px;line-height:1.6;">&bdquo;'
+                . self::allowRichTags(self::newlineToBr(self::esc((string) ($block['content'] ?? '')))) . '&rdquo;</div>'
+                . ($autor !== '' ? '<div style="font-size:12px;color:' . $qColor . ';opacity:.7;margin-top:5px;">— ' . self::esc($autor) . '</div>' : '')
+                . '</div>';
         }
         if ($type === 'social') {
             $links  = is_array($block['links'] ?? null) ? $block['links'] : [];
@@ -1534,6 +2531,18 @@ final class NewsletterService
             $row['height'] = (int) ($block['height'] ?? 24);
             return $row;
         }
+        // Citatul există în paleta builderului, dar aici nu era cunoscut: la
+        // salvare devenea text simplu (autorul și bordura se pierdeau), iar
+        // emailul nu semăna cu ce se vedea în editor.
+        if ($type === 'quote') {
+            $row['content'] = (string) ($block['content'] ?? '');
+            $row['author'] = (string) ($block['author'] ?? '');
+            $row['background'] = (string) ($block['background'] ?? '#f0fdf4');
+            $row['text_color'] = (string) ($block['text_color'] ?? '#166534');
+            $row['border_color'] = (string) ($block['border_color'] ?? '#2d7d5f');
+            $row['font_size'] = self::normalizeFontSize((int) ($block['font_size'] ?? 0), 16);
+            return $row;
+        }
         $colTypes = ['columns_2','columns_2_6040','columns_2_4060','columns_2_7030','columns_2_3070','columns_3'];
         if ($allowColumns && in_array($type, $colTypes)) {
             $colWidthsMap = ['columns_3'=>[33,34,33],'columns_2_6040'=>[60,40],'columns_2_4060'=>[40,60],'columns_2_7030'=>[70,30],'columns_2_3070'=>[30,70]];
@@ -1685,8 +2694,29 @@ final class NewsletterService
         if (preg_match('/^www\./i', $raw)) {
             return 'https://' . $raw;
         }
+        // O cale din site („/magazin”) devine adresă completă: în email nu
+        // există „site curent”, iar o cale goală nu duce nicăieri.
+        if (preg_match('#^/(?!/)#', $raw)) {
+            $baseUrl = self::appBaseUrl();
+            return $baseUrl !== '' ? $baseUrl . $raw : '';
+        }
 
         return '';
+    }
+
+    /**
+     * Adresa unui buton: căile din site devin adrese complete, restul rămân
+     * cum le-a scris omul (inclusiv „#” sau {{token}}-urile din emailurile de
+     * comandă).
+     */
+    private static function linkButon(string $value): string
+    {
+        $raw = trim($value);
+        if (preg_match('#^/(?!/)#', $raw)) {
+            $baseUrl = self::appBaseUrl();
+            return $baseUrl !== '' ? $baseUrl . $raw : $raw;
+        }
+        return $raw === '' ? '#' : $raw;
     }
 
     private static function newlineToBr(string $value): string

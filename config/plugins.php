@@ -421,10 +421,15 @@ return [
             'nume' => 'Newsletter',
             'descriere' => 'Liste de abonați, formulare de abonare, campanii și statistici.',
             'necesita' => [],
+            // Lista de verificare dinaintea trimiterii (pasul 3 din builderul unui newsletter).
+            'rute_admin' => ['/admin/emails/builder/verificare'],
             'rute_publice' => ['/newsletter/*'],
-            // Linkurile din newsletterele deja trimise (dezabonare, urmărire) trebuie să meargă mereu.
+            // Linkurile din newsletterele deja trimise (dezabonare, urmărire) trebuie să meargă mereu; la fel dezabonarea
+            // „cu un clic” a clientului de email (List-Unsubscribe-Post) și butonul „Confirm dezabonarea” al paginii, care
+            // trimit un POST la același link. Dubla confirmare a abonării nu: fără newsletter nu mai abonează nimeni.
             'rute_mereu_deschise' => [
                 'GET /newsletter/unsubscribe/{token}',
+                'POST /newsletter/unsubscribe/{token}',
                 'GET /newsletter/track/open/{campaignId}/{subscriberId}/{token}',
                 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}',
             ],
@@ -441,7 +446,11 @@ return [
             'cron' => ['scripts/newsletter-campaigns.php' => 'vizibil'],
             'tabele' => ['newsletter_templates', 'newsletter_lists', 'newsletter_subscribers', 'newsletter_list_subscribers',
                 'newsletter_campaigns', 'newsletter_campaign_sends', 'newsletter_optin_forms', 'newsletter_campaign_opens',
-                'newsletter_campaign_clicks', 'orders.nl_campaign_id'],
+                'newsletter_campaign_clicks', 'orders.nl_campaign_id',
+                // Codul vechi e2e2d77…739f58c (migrarea newsletter/0040): lista „nu trimite” și jurnalul cererilor de
+                // confirmare; coloanele noi ale abonaților, campaniilor și trimiterilor.
+                'newsletter_suprimate', 'newsletter_cereri_confirmare', 'newsletter_subscribers.pending_at',
+                'newsletter_subscribers.confirmed_at', 'newsletter_campaigns.last_error', 'newsletter_campaign_sends.attempts'],
         ],
 
         'chat_live' => [

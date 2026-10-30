@@ -1086,10 +1086,12 @@ $verifica('constructorul de emailuri: blocul „Video / TikTok” în paletă ș
     str_contains($constructor, 'data-block-type="video"') && str_contains($constructor, 'window.ebVideoLookup') && str_contains($constructor, 'function subBlockDefault(type)')
     && str_contains($constructor, 'Fără fundal (se vede culoarea coloanei)'));
 $idCampanie = (int) $unu('SELECT id FROM newsletter_campaigns ORDER BY id LIMIT 1');
-$stmtSend = $db->prepare("INSERT INTO newsletter_campaign_sends (campaign_id, email, status, opened_at, open_count, clicked_at, click_count, sent_at)
-    VALUES (:c, :e, :s, :o, :oc, NULL, 0, NOW())");
-foreach ([['deschis1@exemplu.ro', 'sent', date('Y-m-d H:i:s'), 1], ['nedeschis1@exemplu.ro', 'sent', null, 0], ['esuat1@exemplu.ro', 'failed', null, 0]] as [$e, $st, $o, $oc]) {
-    $stmtSend->execute(['c' => $idCampanie, 'e' => $e, 's' => $st, 'o' => $o, 'oc' => $oc]);
+// Cu subscriber_id: din WP-R (Bioscem e2e2d77) statisticile numără doar trimiterile unui abonat (cele fără, testele de admin, nu).
+$stmtSend = $db->prepare("INSERT INTO newsletter_campaign_sends (campaign_id, subscriber_id, email, status, opened_at, open_count, clicked_at, click_count, sent_at)
+    VALUES (:c, :sid, :e, :s, :o, :oc, NULL, 0, NOW())");
+foreach ([['deschis1@exemplu.ro', 'sent', date('Y-m-d H:i:s'), 1, 900001], ['nedeschis1@exemplu.ro', 'sent', null, 0, 900002],
+    ['esuat1@exemplu.ro', 'failed', null, 0, 900003]] as [$e, $st, $o, $oc, $sid]) {
+    $stmtSend->execute(['c' => $idCampanie, 'sid' => $sid, 'e' => $e, 's' => $st, 'o' => $o, 'oc' => $oc]);
 }
 $stats = $cerere('GET', '/admin/emails/newsletters?tab=stats&campaign_id=' . $idCampanie . '&recip_f=failed', $jarAdmin)['corp'];
 $verifica('statisticile campaniei: destinatarii filtrați pe server (doar eșuatele), panoul care se reîncarcă pe loc',

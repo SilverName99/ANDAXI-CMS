@@ -633,6 +633,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Newsletterul portat din codul vechi (WP-R din 30 oct, Bioscem e2e2d77 … 739f58c): tools/dev/test-newsletter.php, pe licența „toate”,
+# pe serverul pornit aici: cheile, trimiterea (o dată, încercările, oprirea, lacătul), dubla confirmare și limitele, lista „nu trimite”,
+# dezabonarea și clicurile, pluginul oprit. Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Newsletterul (tools/dev/test-newsletter.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-newsletter.php" > "$TMP/test-newsletter.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-newsletter.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-newsletter.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-newsletter.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Instrucțiunile de schemă trimise de cererile de mai sus (contorul serverului; cronurile nu sunt numărate).
 scrie ""
 scrie "== Instrucțiuni de schemă (DDL) pe cerere"

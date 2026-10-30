@@ -598,13 +598,23 @@ HTML;
             $emailType = 'custom';
         }
         $meta = is_array($historyMeta['meta'] ?? null) ? $historyMeta['meta'] : [];
+        // Antete în plus (de exemplu List-Unsubscribe la newsletter). Doar
+        // nume și valori pe un singur rând: nimic din ele nu poate adăuga alte
+        // antete sau destinatari.
+        $anteteExtra = [];
+        foreach ((array) ($historyMeta['headers'] ?? []) as $numeAntet => $valoareAntet) {
+            $numeAntet = (string) $numeAntet;
+            if (preg_match('/^[A-Za-z][A-Za-z0-9-]{0,60}$/', $numeAntet)) {
+                $anteteExtra[$numeAntet] = self::sanitizeHeader((string) $valoareAntet);
+            }
+        }
 
         // GR-01 (din grafoanaytis, fe0c041): „Răspunde” ajunge la cine a scris (formularul de contact, cererea de
         // ofertă), dacă apelantul a dat adresa în „from_email”; altfel Reply-To rămâne adresa expeditorului.
         $replyTo = self::adresaRaspuns($historyMeta);
 
         try {
-            self::sendHtmlEmail($to, $subject, $html, $settings, $replyTo);
+            self::sendHtmlEmail($to, $subject, $html, $settings, $replyTo, $anteteExtra);
             self::logEmailSend($db, [
                 'order_id' => $orderId,
                 'email_type' => $emailType,
@@ -624,7 +634,8 @@ HTML;
                 'recipient' => $to,
                 'subject' => $subject,
                 'status' => 'failed',
-                'error_message' => $exception->getMessage(),
+                'error_message' => ($exception instanceof TrimitereNeconfirmata ? 'Neconfirmat (poate a ajuns): ' : '')
+                    . $exception->getMessage(),
                 'provider' => $provider,
                 'meta' => $meta,
             ]);
@@ -639,7 +650,7 @@ HTML;
         return filter_var($adresa, FILTER_VALIDATE_EMAIL) ? $adresa : '';
     }
 
-    private static function sendHtmlEmail(string $to, string $subject, string $html, array $settings, string $replyTo = ''): void
+    private static function sendHtmlEmail(string $to, string $subject, string $html, array $settings, string $replyTo = '', array $anteteExtra = []): void
     {
         $fromName = self::sanitizeHeader(Brand::numeExpeditor($settings));
         // Site-ul de verificare (docs/VERIFICARE.md): orice email doar la proprietar, cu „[VERIFICARE]”, prin căsuța
@@ -662,7 +673,7 @@ HTML;
         $subject = self::sanitizeHeader($subject);
         $deliveryMethod = strtolower(trim((string) ($settings['email_delivery_method'] ?? 'smtp')));
         if ($deliveryMethod === 'sendgrid') {
-            self::sendWithSendGrid($to, $subject, $html, $fromName, $fromAddress, $settings, $replyTo);
+            self::sendWithSendGrid($to, $subject, $html, $fromName, $fromAddress, $settings, $replyTo, $anteteExtra);
             return;
         }
 
@@ -670,11 +681,11 @@ HTML;
         // pentru instalările fără SMTP (pe Hostinger mail() e aruncat tăcut).
         $smtpHost = trim((string) ($settings['smtp_host'] ?? ''));
         if ($deliveryMethod === 'smtp' && $smtpHost !== '') {
-            self::sendWithSmtp($to, $subject, $html, $fromName, $fromAddress, $settings, $replyTo);
+            self::sendWithSmtp($to, $subject, $html, $fromName, $fromAddress, $settings, $replyTo, $anteteExtra);
             return;
         }
 
-        self::sendWithPhpMail($to, $subject, $html, $fromName, $fromAddress, $replyTo);
+        self::sendWithPhpMail($to, $subject, $html, $fromName, $fromAddress, $replyTo, $anteteExtra);
     }
 
     /**
@@ -689,7 +700,8 @@ HTML;
         string $fromName,
         string $fromAddress,
         array $settings,
-        string $replyTo = ''
+        string $replyTo = '',
+        array $anteteExtra = []
     ): void {
         if (!filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
             $replyTo = $fromAddress;
@@ -792,6 +804,9 @@ HTML;
                 'Content-Type: multipart/alternative; boundary="' . $separator . '"',
                 'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . $ehloHost . '>',
             ];
+            foreach ($anteteExtra as $numeAntet => $valoareAntet) {
+                $anteturi[] = $numeAntet . ': ' . $valoareAntet;
+            }
             $corp = '--' . $separator . "\r\n"
                 . "Content-Type: text/plain; charset=UTF-8\r\n"
                 . "Content-Transfer-Encoding: base64\r\n\r\n"
@@ -803,6 +818,11 @@ HTML;
                 . '--' . $separator . "--\r\n";
             fwrite($fp, implode("\r\n", $anteturi) . "\r\n\r\n" . $corp . "\r\n.\r\n");
             $raspunsData = $citeste();
+            if (trim($raspunsData) === '') {
+                // Conținutul a plecat, dar serverul n-a mai răspuns: nu știm dacă
+                // l-a primit. Un refuz clar (4xx/5xx) rămâne refuz, mai jos.
+                throw new TrimitereNeconfirmata('Serverul SMTP nu a confirmat primirea mesajului (conexiune întreruptă după trimitere).');
+            }
             if ((int) substr($raspunsData, 0, 3) !== 250) {
                 throw new RuntimeException('SMTP a refuzat mesajul: ' . trim($raspunsData));
             }
@@ -855,7 +875,8 @@ HTML;
         string $html,
         string $fromName,
         string $fromAddress,
-        string $replyTo = ''
+        string $replyTo = '',
+        array $anteteExtra = []
     ): void {
         if (!filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
             $replyTo = $fromAddress;
@@ -871,6 +892,9 @@ HTML;
             'Reply-To: ' . $replyTo,
             'X-Mailer: PHP/' . phpversion(),
         ];
+        foreach ($anteteExtra as $numeAntet => $valoareAntet) {
+            $headers[] = $numeAntet . ': ' . $valoareAntet;
+        }
 
         $ok = @mail($to, $subject, $html, implode("\r\n", $headers));
         if (!$ok) {
@@ -885,7 +909,8 @@ HTML;
         string $fromName,
         string $fromAddress,
         array $settings,
-        string $replyTo = ''
+        string $replyTo = '',
+        array $anteteExtra = []
     ): void {
         $apiKey = trim((string) ($settings['sendgrid_api_key'] ?? ''));
         if ($apiKey === '') {
@@ -909,6 +934,9 @@ HTML;
         // Doar când răspunsul merge altundeva decât la expeditor (GR-01): altfel corpul cererii rămâne cel de până acum.
         if (filter_var($replyTo, FILTER_VALIDATE_EMAIL) && strcasecmp($replyTo, $fromAddress) !== 0) {
             $payload['reply_to'] = ['email' => $replyTo];
+        }
+        if ($anteteExtra !== []) {
+            $payload['headers'] = $anteteExtra;
         }
 
         $body = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -949,9 +977,16 @@ HTML;
             $response = curl_exec($ch);
             $httpCode = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             $error = curl_error($ch);
+            $codEroare = curl_errno($ch);
+            $trimisCorp = (float) curl_getinfo($ch, CURLINFO_SIZE_UPLOAD) > 0;
             curl_close($ch);
 
             if ($response === false) {
+                // Cererea a plecat întreagă, dar răspunsul s-a pierdut (timp
+                // expirat, răspuns gol, conexiune ruptă): poate a fost primită.
+                if ($trimisCorp && in_array($codEroare, [28, 52, 56], true)) {
+                    throw new TrimitereNeconfirmata('Furnizorul de email nu a confirmat primirea: ' . $error);
+                }
                 throw new RuntimeException('HTTP cURL error: ' . $error);
             }
 

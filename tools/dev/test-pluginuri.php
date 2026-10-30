@@ -621,7 +621,11 @@ try {
                 }
                 // Fără pluginul pe site, controllerul răspunde 404 unei cereri care nu e a
                 // procesatorului (fără plată semnată): adresa a răspuns, garda nu s-a amestecat.
-                if ($proprietar['mereu_deschis'] && $c['metoda'] === 'POST'
+                // Dezabonarea „cu un clic” (WP-R din 30 oct, codul vechi e2e2d77) răspunde, ca în codul vechi, 404 cu „Link invalid”
+                // unui token care nu e semnat de site, și cu newsletterul pe site.
+                $dezabonareInvalida = $c['tipar'] === '/newsletter/unsubscribe/{token}' && $r['cod'] === 404 && $garda === null
+                    && ($vizibil ? trim($r['corp']) === 'Link invalid' : true);
+                if ($proprietar['mereu_deschis'] && $c['metoda'] === 'POST' && !$dezabonareInvalida
                     && !in_array($r['cod'], array_merge([200, 302, 400, 401, 403], $vizibil ? [] : [404]), true)) {
                     $greseli[] = $eticheta . ': adresa de confirmare a răspuns ' . $r['cod'];
                 }

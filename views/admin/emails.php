@@ -58,6 +58,16 @@ if (!in_array($emailSendHistoryFilterStatus, ['all', 'sent', 'failed'], true)) {
 $emailSendHistoryFilterType = trim((string) ($emailSendHistoryFilters['type'] ?? ''));
 $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
 $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyOpens : [];
+// Limita globală a emailurilor de confirmare / dezabonare atinsă în ultimele
+// 24 de ore: o arătăm în Liste abonați și în Statistici (poate fi un atac).
+$limitaOptinAtinsa = trim((string) ($settings['newsletter_limita_globala_atinsa'] ?? ''));
+$limitaOptinTs = $limitaOptinAtinsa !== '' ? strtotime($limitaOptinAtinsa) : false;
+$notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
+    ? '<div role="status" style="margin:0 0 12px;padding:10px 14px;border:1px solid #fde68a;border-left:4px solid #ca8a04;border-radius:10px;background:#fefce8;color:#713f12;font-size:13px;line-height:1.55;">'
+        . '<strong>Formularul de abonare a atins limita de ' . \App\Support\NewsletterService::LIMITA_GLOBALA_ORA . ' de emailuri pe oră</strong> (ultima dată: '
+        . htmlspecialchars(date('d.m.Y, H:i', (int) $limitaOptinTs), ENT_QUOTES) . '). Unele cereri de abonare n-au primit email (linkurile de dezabonare nu sunt afectate). '
+        . 'Dacă nu ai o campanie mare de înscrieri, poate fi un atac: spune-i programatorului.</div>'
+    : '';
 ?>
 
 <?php if ($currentSection === 'sender'): ?>
@@ -366,9 +376,21 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
         </div>
 
         <?php if ($newsletterTab === 'campaigns'): ?>
-            <div class="newsletter-template-header-row">
-                <h3 class="newsletter-block-title">Newslettere</h3>
-                <button type="button" class="btn" id="campaign-new-btn">+ Newsletter nou</button>
+            <?php require_once __DIR__ . '/componente/_incarca.php'; ?>
+            <link rel="stylesheet" href="/assets/css/admin-componente.css?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/css/admin-componente.css')) ?: 1) ?>">
+            <script src="/assets/js/admin/componente.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/componente.js')) ?: 1) ?>" defer></script>
+            <div style="margin-top:14px;">
+            <?php admin_componenta('antet-pagina', [
+                'id' => 'nl-antet-newslettere',
+                'titlu' => 'Newslettere',
+                'subtitlu' => 'Apasă „+ Newsletter nou”, alege un șablon și urmează cei 4 pași: Conținut → Destinatari → Verificare → Trimite / Programează.',
+                'ajutor' => [
+                    'Ciornă: încă îl lucrezi. Programat: pleacă singur la ora aleasă. Se trimite: pleacă acum, pe bucăți, automat. Oprit: serverul de email a refuzat mesaje; deschide-l și apasă „Reia trimiterea”. Trimis: gata.',
+                    'Un newsletter care a început să plece nu se mai modifică. Pentru o variantă nouă, folosește butonul ⧉ (Duplică).',
+                    'Nimeni nu primește același newsletter de două ori, iar cine s-a dezabonat nu-l primește deloc.',
+                ],
+                'actiuni' => '<button type="button" class="btn" id="campaign-new-btn">+ Newsletter nou</button>',
+            ]); ?>
             </div>
 
             <?php
@@ -395,6 +417,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                                 'sent' => 'trimis',
                                 'sending' => 'în curs',
                                 'scheduled' => 'programat',
+                                'paused' => 'oprit',
                                 'draft' => 'ciornă',
                                 default => $cardStatus,
                             };
@@ -409,8 +432,11 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                                 <div>
                                     <strong><?= htmlspecialchars((string) ($campaign['name'] ?? 'Newsletter'), ENT_QUOTES) ?></strong>
                                     <p><?= htmlspecialchars((string) ($campaign['subject'] ?? ''), ENT_QUOTES) ?></p>
-                                    <?php if (!empty($campaign['scheduled_at'])): ?>
-                                        <p><small>Programat: <?= htmlspecialchars((string) $campaign['scheduled_at'], ENT_QUOTES) ?></small></p>
+                                    <?php if (!empty($campaign['scheduled_at']) && $cardStatus === 'scheduled'): ?>
+                                        <p><small>Programat: <?= htmlspecialchars(date('d.m.Y, H:i', (int) strtotime((string) $campaign['scheduled_at'])), ENT_QUOTES) ?></small></p>
+                                    <?php endif; ?>
+                                    <?php if ($cardStatus === 'paused' && trim((string) ($campaign['last_error'] ?? '')) !== ''): ?>
+                                        <p style="color:#b91c1c;"><small>Oprit: <?= htmlspecialchars((string) $campaign['last_error'], ENT_QUOTES) ?> Deschide-l și apasă „Reia trimiterea”.</small></p>
                                     <?php endif; ?>
                                 </div>
                                 <div class="newsletter-campaign-meta">
@@ -419,7 +445,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                                         <span>Eșuate</span>
                                     </div>
                                     <div class="newsletter-campaign-actions inline">
-                                        <a class="icon-btn" href="/admin/emails/builder?type=campaign&id=<?= $campaignId ?>" title="Editează newsletterul">✎</a>
+                                        <a class="icon-btn" href="/admin/emails/builder?type=campaign&id=<?= $campaignId ?>" title="<?= in_array($cardStatus, ['draft', 'scheduled'], true) ? 'Editează newsletterul' : 'Deschide newsletterul' ?>">✎</a>
                                         <form method="post" action="/admin/emails">
                                             <input type="hidden" name="section" value="newsletter-campaign-duplicate">
                                             <input type="hidden" name="campaign_id" value="<?= $campaignId ?>">
@@ -515,7 +541,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                                     <select name="campaign_list_id" id="campaign-builder-list-id">
                                         <?php foreach ($newsletterLists as $list): ?>
                                             <option value="<?= (int) ($list['id'] ?? 0) ?>" <?= ((int) ($selectedCampaign['subscriber_list_id'] ?? 0) === (int) ($list['id'] ?? 0)) ? 'selected' : '' ?>>
-                                                <?= htmlspecialchars((string) ($list['name'] ?? 'Listă'), ENT_QUOTES) ?> (<?= (int) ($list['subscribers_count'] ?? 0) ?>)
+                                                <?= htmlspecialchars((string) ($list['name'] ?? 'Listă'), ENT_QUOTES) ?> (<?= (int) ($list['active_count'] ?? $list['subscribers_count'] ?? 0) ?> abonați activi)
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -586,7 +612,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                             <select name="campaign_list_id" required>
                                 <?php foreach ($newsletterLists as $list): ?>
                                     <option value="<?= (int) ($list['id'] ?? 0) ?>">
-                                        <?= htmlspecialchars((string) ($list['name'] ?? 'Listă'), ENT_QUOTES) ?> (<?= (int) ($list['subscribers_count'] ?? 0) ?>)
+                                        <?= htmlspecialchars((string) ($list['name'] ?? 'Listă'), ENT_QUOTES) ?> (<?= (int) ($list['active_count'] ?? $list['subscribers_count'] ?? 0) ?> abonați activi)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -786,6 +812,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
         <?php endif; ?>
 
         <?php if ($newsletterTab === 'subscribers'): ?>
+            <?= $notaLimitaOptin ?>
             <div class="newsletter-subscribers-grid">
                 <aside class="newsletter-lists-col">
                     <div class="newsletter-lists-head">
@@ -802,7 +829,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                             <div class="newsletter-list-item <?= $selectedListId === $listId ? 'active' : '' ?>">
                                 <a href="/admin/emails/newsletters?tab=subscribers&list=<?= $listId ?>">
                                     <strong><?= htmlspecialchars((string) ($list['name'] ?? 'Listă'), ENT_QUOTES) ?></strong>
-                                    <small><?= (int) ($list['subscribers_count'] ?? 0) ?> abonați</small>
+                                    <small><?= (int) ($list['subscribers_count'] ?? 0) ?> adrese · <?= (int) ($list['active_count'] ?? 0) ?> abonați activi</small>
                                 </a>
                                 <?php if ((int) ($list['is_default'] ?? 0) !== 1): ?>
                                     <form method="post" action="/admin/emails" onsubmit="return confirm('Ștergi lista?');">
@@ -846,6 +873,11 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                         Acceptă CSV-ul sau chiar arhiva ZIP descărcată din Mailchimp (Audience → Contacts → Export).
                         Intră în lista selectată mai sus. Se importă <strong>doar abonații activi</strong>: dezabonații
                         și adresele curățate sunt ignorate automat, chiar dacă exportul le conține.
+                    </p>
+                    <p style="margin:0 0 10px;color:#64748b;font-size:12px;">
+                        <strong>neconfirmat</strong> = s-a înscris din formularul de pe site și n-a apăsat încă linkul din emailul
+                        de confirmare (nu primește newslettere; cererea expiră după 30 de zile). Un abonat șters intră pe lista
+                        „nu trimite”: importurile și adăugarea din admin îl sar; doar el se poate reabona, de pe site.
                     </p>
 
                     <?php
@@ -908,9 +940,22 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                             <tr>
                                 <td><?= htmlspecialchars((string) ($subscriber['email'] ?? ''), ENT_QUOTES) ?></td>
                                 <td><?= htmlspecialchars((string) ($subscriber['name'] ?? ''), ENT_QUOTES) ?></td>
-                                <td><span class="status-pill <?= $subStatus === 'active' ? 'ok' : 'off' ?>"><?= htmlspecialchars($subStatus, ENT_QUOTES) ?></span></td>
+                                <?php
+                                // Starea pe înțeles: „neconfirmat” = a cerut abonarea din
+                                // formular și n-a apăsat încă linkul din email.
+                                $subEticheta = ['active' => 'abonat', 'unsubscribed' => 'dezabonat', 'pending' => 'neconfirmat'][$subStatus] ?? $subStatus;
+                                if ($subStatus === 'unsubscribed' && !empty($subscriber['pending_at'])) {
+                                    $subEticheta .= ' · a cerut reabonarea';
+                                }
+                                $subTitlu = $subStatus === 'pending'
+                                    ? 'A cerut abonarea pe ' . date('d.m.Y H:i', (int) strtotime((string) $subscriber['pending_at'])) . '; așteaptă clicul din emailul de confirmare.'
+                                    : (!empty($subscriber['confirmed_at']) ? 'A confirmat abonarea pe ' . date('d.m.Y H:i', (int) strtotime((string) $subscriber['confirmed_at'])) . '.' : '');
+                                ?>
+                                <td><span class="status-pill <?= $subStatus === 'active' ? 'ok' : 'off' ?>" <?= $subTitlu !== '' ? 'title="' . htmlspecialchars($subTitlu, ENT_QUOTES) . '"' : '' ?>><?= htmlspecialchars($subEticheta, ENT_QUOTES) ?></span></td>
                                 <td class="template-actions">
-                                    <form method="post" action="/admin/emails" style="display:inline;">
+                                    <?php if ($subStatus !== 'pending'): ?>
+                                    <form method="post" action="/admin/emails" style="display:inline;"
+                                        <?php if ($subStatus !== 'active'): ?>onsubmit="return confirm('Această persoană s-a dezabonat. Reactiveaz-o doar dacă ți-a cerut explicit să primească din nou newslettere. Continui?');"<?php endif; ?>>
                                         <input type="hidden" name="section" value="newsletter-subscriber-toggle">
                                         <input type="hidden" name="subscriber_id" value="<?= $subscriberId ?>">
                                         <input type="hidden" name="list_id" value="<?= $selectedListId ?>">
@@ -918,7 +963,8 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                                         <input type="hidden" name="sub_q" value="<?= htmlspecialchars($subQuery, ENT_QUOTES) ?>">
                                         <button type="submit" class="icon-btn" title="Activează/dezabonează">⟲</button>
                                     </form>
-                                    <form method="post" action="/admin/emails" style="display:inline;" onsubmit="return confirm('Ștergi abonatul?');">
+                                    <?php endif; ?>
+                                    <form method="post" action="/admin/emails" style="display:inline;" onsubmit="return confirm('Ștergi abonatul? Adresa intră pe lista „nu trimite”: nu mai poate fi adăugată din admin sau din import; doar persoana se poate reabona singură, de pe site.');">
                                         <input type="hidden" name="section" value="newsletter-subscriber-delete">
                                         <input type="hidden" name="subscriber_id" value="<?= $subscriberId ?>">
                                         <input type="hidden" name="list_id" value="<?= $selectedListId ?>">
@@ -1304,6 +1350,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
         .nl-stats-search { width: 100%; max-width: 340px; padding: 7px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
         .nl-stats-detalii-btn { display: inline-block; padding: 4px 12px; background: #1a7a5e; color: #fff; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 600; }
         .nl-stats-detalii-btn:hover { background: #15654e; }
+        .nl-stats-nota { margin: -12px 0 20px; color: #64748b; font-size: 12.5px; line-height: 1.55; }
         </style>
         <div class="nl-stats-wrap">
         <?php
@@ -1318,6 +1365,7 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
 
         <?php if ($statsCampaignId === 0 || !$statsCampaignDetail): ?>
             <!-- OVERVIEW MODE -->
+            <?= $notaLimitaOptin ?>
             <div class="nl-stats-kpi-row">
                 <div class="nl-stats-kpi">
                     <div class="nl-kpi-icon">📋</div>
@@ -1339,10 +1387,20 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                     <div class="nl-kpi-val"><?= (int) ($newsletterStats['subscribers_unsubscribed'] ?? 0) ?></div>
                     <div class="nl-kpi-label">Dezabonați</div>
                 </div>
+                <div class="nl-stats-kpi">
+                    <div class="nl-kpi-icon">✉</div>
+                    <div class="nl-kpi-val"><?= (int) ($newsletterStats['subscribers_pending'] ?? 0) ?></div>
+                    <div class="nl-kpi-label">Neconfirmați (așteaptă clicul din email)</div>
+                </div>
+                <div class="nl-stats-kpi">
+                    <div class="nl-kpi-icon">⛔</div>
+                    <div class="nl-kpi-val"><?= (int) ($newsletterStats['suprimate'] ?? 0) ?></div>
+                    <div class="nl-kpi-label">Pe lista „nu trimite”</div>
+                </div>
             </div>
 
             <div class="nl-stats-panel">
-                <p class="nl-stats-section-title">Performance Campanii</p>
+                <p class="nl-stats-section-title">Rezultatele newsletterelor trimise</p>
                 <?php if (empty($statsCampaigns)): ?>
                     <div class="nl-stats-empty">Nu există campanii trimise încă.</div>
                 <?php else: ?>
@@ -1363,10 +1421,11 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                     <?php foreach ($statsCampaigns as $sc): ?>
                         <?php
                         $scSent   = (int) ($sc['total_sent'] ?? 0);
-                        $scOpens  = (int) ($sc['total_opens'] ?? 0);
-                        $scClicks = (int) ($sc['total_clicks'] ?? 0);
-                        $openPct  = $scSent > 0 ? round($scOpens / $scSent * 100, 1) : 0;
-                        $clickPct = $scSent > 0 ? round($scClicks / $scSent * 100, 1) : 0;
+                        // Rata = câți OAMENI au deschis / au dat clic, nu de câte ori.
+                        $scOpens  = (int) ($sc['unique_opens'] ?? $sc['total_opens'] ?? 0);
+                        $scClicks = (int) ($sc['unique_clicks'] ?? $sc['total_clicks'] ?? 0);
+                        $openPct  = $scSent > 0 ? min(100, round($scOpens / $scSent * 100, 1)) : 0;
+                        $clickPct = $scSent > 0 ? min(100, round($scClicks / $scSent * 100, 1)) : 0;
                         $openBarW = min(100, (int) $openPct);
                         $clickBarW = min(100, (int) $clickPct);
                         ?>
@@ -1405,8 +1464,11 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
             $dcSent    = (int) ($statsCampaignDetail['total_sent'] ?? 0);
             $dcOpens   = (int) ($statsCampaignDetail['total_opens'] ?? 0);
             $dcClicks  = (int) ($statsCampaignDetail['total_clicks'] ?? 0);
-            $dcOpenPct = $dcSent > 0 ? round($dcOpens / $dcSent * 100, 1) : 0;
-            $dcClickPct= $dcSent > 0 ? round($dcClicks / $dcSent * 100, 1) : 0;
+            $dcOpensU  = (int) ($statsCampaignDetail['unique_opens'] ?? $dcOpens);
+            $dcClicksU = (int) ($statsCampaignDetail['unique_clicks'] ?? $dcClicks);
+            $dcOpenPct = $dcSent > 0 ? min(100, round($dcOpensU / $dcSent * 100, 1)) : 0;
+            $dcClickPct= $dcSent > 0 ? min(100, round($dcClicksU / $dcSent * 100, 1)) : 0;
+            $dcTotaluri = is_array($statsCampaignDetail['totaluri'] ?? null) ? $statsCampaignDetail['totaluri'] : [];
             $dcOrders  = (int) ($statsRevenue['orders_count'] ?? 0);
             $dcRevenue = (float) ($statsRevenue['revenue'] ?? 0);
             ?>
@@ -1433,15 +1495,15 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                 </div>
                 <div class="nl-stats-kpi">
                     <div class="nl-kpi-icon">👁</div>
-                    <div class="nl-kpi-val"><?= number_format($dcOpens) ?></div>
-                    <div class="nl-kpi-sub"><?= $dcOpenPct ?>% rată deschidere</div>
-                    <div class="nl-kpi-label">Deschideri</div>
+                    <div class="nl-kpi-val"><?= number_format($dcOpensU) ?></div>
+                    <div class="nl-kpi-sub"><?= $dcOpenPct ?>% au deschis · <?= number_format($dcOpens) ?> deschideri în total</div>
+                    <div class="nl-kpi-label">Oameni care au deschis</div>
                 </div>
                 <div class="nl-stats-kpi">
                     <div class="nl-kpi-icon">🖱</div>
-                    <div class="nl-kpi-val"><?= number_format($dcClicks) ?></div>
-                    <div class="nl-kpi-sub"><?= $dcClickPct ?>% rată click</div>
-                    <div class="nl-kpi-label">Click-uri</div>
+                    <div class="nl-kpi-val"><?= number_format($dcClicksU) ?></div>
+                    <div class="nl-kpi-sub"><?= $dcClickPct ?>% au dat clic · <?= number_format($dcClicks) ?> clicuri în total</div>
+                    <div class="nl-kpi-label">Oameni care au dat clic</div>
                 </div>
                 <div class="nl-stats-kpi">
                     <div class="nl-kpi-icon">💰</div>
@@ -1450,6 +1512,17 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                     <div class="nl-kpi-label">Venituri atribuite</div>
                 </div>
             </div>
+            <?php if ((int) ($dcTotaluri['esuate'] ?? 0) > 0 || (int) ($dcTotaluri['neconfirmate'] ?? 0) > 0): ?>
+                <p class="nl-stats-nota">
+                    <?php if ((int) ($dcTotaluri['esuate'] ?? 0) > 0): ?>
+                        <strong><?= (int) $dcTotaluri['esuate'] ?></strong> adrese au fost respinse de serverul de email (se reîncearcă de cel mult <?= \App\Support\NewsletterService::MAX_INCERCARI ?> ori).
+                    <?php endif; ?>
+                    <?php if ((int) ($dcTotaluri['neconfirmate'] ?? 0) > 0): ?>
+                        <strong><?= (int) $dcTotaluri['neconfirmate'] ?></strong> trimiteri au fost întrerupte la mijloc sau neconfirmate de serverul de email; nu se reiau automat (ca nimeni să nu primească de două ori).
+                    <?php endif; ?>
+                </p>
+            <?php endif; ?>
+            <p class="nl-stats-nota">„Venituri atribuite” = comenzile plasate în cel mult 7 zile după un clic din acest newsletter, din același browser (fără cele anulate, returnate, eșuate sau cu plata neconfirmată).</p>
 
             <!-- Hourly opens chart -->
             <?php if (!empty($statsHourlyOpens)): ?>
@@ -1568,7 +1641,11 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
                         ?>
                         <tr>
                             <td><?= htmlspecialchars($rEmail, ENT_QUOTES) ?></td>
-                            <td><span class="nl-stats-badge <?= $rStatus === 'sent' ? 'green' : '' ?>"><?= htmlspecialchars($rStatus, ENT_QUOTES) ?></span></td>
+                            <?php
+                            $rStatusText = ['sent' => 'trimis', 'failed' => 'respins', 'pending' => 'întrerupt', 'unknown' => 'neconfirmat'][$rStatus] ?? $rStatus;
+                            $rEroare = trim((string) ($rcp['error_message'] ?? ''));
+                            ?>
+                            <td><span class="nl-stats-badge <?= $rStatus === 'sent' ? 'green' : '' ?>" <?= $rEroare !== '' ? 'title="' . htmlspecialchars($rEroare, ENT_QUOTES) . '"' : '' ?>><?= htmlspecialchars($rStatusText, ENT_QUOTES) ?></span></td>
                             <td>
                                 <?= $rOpened ? '<span style="color:#1a7a5e;font-weight:700;">&#10003;</span>' : '<span style="color:#cbd5e1;">—</span>' ?>
                                 <?php if ($rOpenCnt > 0): ?><span class="nl-stats-badge"><?= $rOpenCnt ?>x</span><?php endif; ?>
