@@ -21,4 +21,24 @@ declare(strict_types=1);
 return [
     // WP-29: contractul de bază. Pe codul neatins, 0 diferențe: nimic declarat.
     'WP-29' => [],
+
+    // WP-30: cadrul nou (meniul în cele opt grupuri, antetul, culoarea adminului). Paginile nu se schimbă.
+    'WP-30' => [
+        'sari-la-continut' => ['ce' => 'adaugat', 'rand' => '^link #continut$',
+            'motiv' => 'linkul „Sari la conținut” al cadrului (primul element la Tab, pentru cine lucrează cu tastatura)'],
+        'grupuri-vechi' => ['ce' => 'scos', 'rand' => '^data data-toggle-group = (utilizatori|magazin|configurare|blog|emailuri|newslettere)$',
+            'motiv' => 'grupurile meniului de dinainte (Utilizatori, Magazin, Configurare, Blog, Setări email, Email-uri) își țineau cheia '
+                . 'în data-toggle-group; meniul nou (docs/ARHITECTURA-ADMIN.md) leagă butonul grupului de lista lui prin aria-controls'],
+        'meniu-newslettere' => ['ce' => 'adaugat', 'rand' => '^link /admin/emails/newsletters\\?tab=campaigns$', 'licenta' => ['toate', 'bioscem'],
+            'rol' => ['adm', 'emailuri'],
+            'motiv' => 'intrarea nouă „Newslettere” din Marketing (pagina campaniilor, la care se ajungea doar din tab-urile emailurilor)'],
+        'accent-formular' => ['ce' => 'adaugat', 'rand' => '^form POST /admin/settings/store$', 'cale' => '^/admin/settings/store$', 'rol' => 'adm',
+            'motiv' => 'formularul „Culoarea adminului” din Setări magazin / Setări site (aceeași adresă ca restul paginii)'],
+        'accent-actiune' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:hidden action = save_admin_accent$',
+            'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'acțiunea formularului „Culoarea adminului”'],
+        'accent-culoare' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store input:color admin_culoare_accent$',
+            'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'culoarea aleasă (setarea admin_culoare_accent)'],
+        'accent-reseteaza' => ['ce' => 'adaugat', 'rand' => '^buton POST /admin/settings/store reseteaza = 1$',
+            'cale' => '^/admin/settings/store$', 'rol' => 'adm', 'motiv' => 'butonul „Resetează” (accentul neutru)'],
+    ],
 ];

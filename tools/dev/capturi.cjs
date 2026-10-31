@@ -27,8 +27,9 @@ const sufix = process.env.CMS_DEV_CAPTURI_SUFIX || '';
 const set = process.env.CMS_DEV_CAPTURI_SET || 'fum';
 const latimi = (process.env.CMS_DEV_CAPTURI_LATIMI || '390,1366,1920').split(',').map((l) => parseInt(l, 10)).filter((l) => l > 0);
 
-// Meniul lateral: shell-ul de dinainte (.admin-sidebar, grupurile .admin-nav-group) și cel nou (WP-30: .ax-meniu).
-const MENIU = '.ax-meniu, .admin-sidebar';
+// Meniul lateral: cadrul de dinainte (.admin-sidebar, grupurile .admin-nav-group; codul etichetei admin-inainte-b) și cel
+// nou (WP-30: .ax-bara, grupurile .ax-meniu-grup).
+const MENIU = '.ax-bara, .admin-sidebar';
 const LINKURI_MENIU = '.ax-meniu a[href^="/admin"], .admin-nav a[href^="/admin"]';
 
 async function intra(page) {
@@ -49,8 +50,12 @@ async function setFum(context, blocate, eroriPagina) {
     // Meniul: toate grupurile deschise, bara laterală cât e de lungă.
     await page.evaluate(() => {
         document.querySelectorAll('.admin-nav-group').forEach((g) => g.classList.add('open'));
-        document.querySelectorAll('.ax-meniu details').forEach((g) => { g.open = true; });
-        const bara = document.querySelector('.ax-meniu, .admin-sidebar');
+        document.querySelectorAll('.ax-meniu-grup').forEach((g) => {
+            g.classList.add('deschis');
+            const lista = g.querySelector('.ax-meniu-sublista');
+            if (lista) lista.hidden = false;
+        });
+        const bara = document.querySelector('.ax-bara, .admin-sidebar');
         if (bara) {
             bara.style.position = 'static';
             bara.style.height = 'auto';

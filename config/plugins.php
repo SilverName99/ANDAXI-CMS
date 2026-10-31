@@ -55,34 +55,30 @@ $activTab = static fn (string $tabCerut): Closure => static fn (callable $prefix
 
 return [
     /**
-     * Ordinea din meniul adminului. „link” = o singură intrare pe primul nivel;
-     * „grup” = grup care se deschide, cu intrările pluginurilor în el. Un grup
-     * fără nicio intrare vizibilă nu apare deloc.
+     * Ordinea din meniul adminului (WP-30, faza D: cele opt grupuri ale machetelor „B — Compact” și ale inventarului din
+     * docs/ARHITECTURA-ADMIN.md). „link” = o singură intrare pe primul nivel; „grup” = grup care se deschide, cu intrările
+     * pluginurilor în el. Un grup fără nicio intrare vizibilă nu apare deloc, iar unul cu o singură intrare vizibilă (pentru
+     * licența site-ului și rolul adminului) apare ca un singur link, cu numele intrării (de exemplu „Cereri de ofertă” pe un
+     * catalog fără magazin). „deschis”: adresele (prefixe) la care grupul stă deschis, pe lângă paginile intrărilor lui.
+     * WP-30 înlocuiește grupurile de până atunci (Utilizatori, Magazin, Configurare, Blog, Setări email, Email-uri) și
+     * eticheta „Produse” a grupului Magazin fără magazin (GR-14c, OD-25).
      */
     'meniu_admin' => [
-        ['cheie' => 'dashboard', 'tip' => 'link'],
-        ['cheie' => 'utilizatori', 'tip' => 'grup', 'eticheta' => 'Utilizatori', 'icon' => 'users',
-            'deschis' => ['/admin/users']],
-        // WP-26 (GR-14c, OD-25): fără magazin (un catalog de prezentare), grupul se cheamă „Produse”; eticheta definitivă vine
-        // cu meniul nou al adminului (WP-30).
-        ['cheie' => 'magazin', 'tip' => 'grup', 'eticheta' => 'Magazin', 'icon' => 'store', 'eticheta_fara' => ['magazin' => 'Produse'],
-            'deschis' => ['/admin/products', '/admin/orders', '/admin/coupons', '/admin/categories', '/admin/promo-products',
-                '/admin/settings/floating-cart', '/admin/products/fields', '/admin/products/templates', '/admin/products/reviews',
-                '/admin/cereri-oferta']],
-        ['cheie' => 'configurare', 'tip' => 'grup', 'eticheta' => 'Configurare', 'icon' => 'settings',
-            'deschis' => ['/admin/settings/store', '/admin/settings/shipping', '/admin/settings/payments', '/admin/settings/erp',
-                '/admin/settings/mannequin', '/admin/settings/admins']],
-        ['cheie' => 'jurnal', 'tip' => 'link'],
-        ['cheie' => 'pagini', 'tip' => 'link'],
-        ['cheie' => 'galerie', 'tip' => 'link'],
-        ['cheie' => 'design', 'tip' => 'link'],
-        ['cheie' => 'blog', 'tip' => 'grup', 'eticheta' => 'Blog', 'icon' => 'blog',
-            'deschis' => ['/admin/blog/posts', '/admin/blog/categories', '/admin/blog/templates', '/admin/blog/authors']],
-        ['cheie' => 'emailuri', 'tip' => 'grup', 'eticheta' => 'Setări email', 'icon' => 'emails',
-            'deschis' => ['/admin/emails/sender', '/admin/emails/test']],
-        ['cheie' => 'automatizari', 'tip' => 'link'],
-        ['cheie' => 'newslettere', 'tip' => 'grup', 'eticheta' => 'Email-uri', 'icon' => 'newsletter',
-            'deschis' => ['/admin/emails/newsletters']],
+        ['cheie' => 'acasa', 'tip' => 'link'],
+        ['cheie' => 'comenzi', 'tip' => 'grup', 'eticheta' => 'Comenzi', 'icon' => 'orders',
+            'deschis' => ['/admin/orders', '/admin/cereri-oferta']],
+        ['cheie' => 'produse', 'tip' => 'grup', 'eticheta' => 'Produse', 'icon' => 'products',
+            'deschis' => ['/admin/products', '/admin/categories', '/admin/promo-products']],
+        ['cheie' => 'clienti', 'tip' => 'grup', 'eticheta' => 'Clienți', 'icon' => 'users',
+            'deschis' => ['/admin/users/settings', '/admin/users/gdpr-agreements', '/admin/pages/gdpr-agreements']],
+        ['cheie' => 'marketing', 'tip' => 'grup', 'eticheta' => 'Marketing', 'icon' => 'coupon',
+            'deschis' => ['/admin/coupons', '/admin/users/points', '/admin/emails/automation', '/admin/emails/builder']],
+        ['cheie' => 'continut', 'tip' => 'grup', 'eticheta' => 'Conținut', 'icon' => 'pages',
+            'deschis' => ['/admin/pages', '/admin/blog', '/admin/gallery', '/admin/design']],
+        ['cheie' => 'rapoarte', 'tip' => 'grup', 'eticheta' => 'Rapoarte', 'icon' => 'stats',
+            'deschis' => ['/admin/activity-log', '/admin/users/security']],
+        ['cheie' => 'setari', 'tip' => 'grup', 'eticheta' => 'Setări', 'icon' => 'settings',
+            'deschis' => ['/admin/settings', '/admin/emails/sender', '/admin/emails/test']],
     ],
 
     /** Ce are orice site, indiferent de licență. */
@@ -101,35 +97,34 @@ return [
         // /_andaxi/*: adresele platformei (pingul monitorizării; în Etapa 2 și preluarea licenței).
         'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],
         'meniu' => [
-            ['grup' => 'dashboard', 'ordine' => 10, 'eticheta' => 'Dashboard', 'href' => '/admin', 'icon' => 'dashboard',
-                'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin'])
-                    && !$prefix(['/admin/users', '/admin/products', '/admin/categories', '/admin/orders', '/admin/settings',
-                        '/admin/pages', '/admin/gallery', '/admin/design', '/admin/emails'])],
+            // WP-30: „Acasă” (machetele), activă doar pe pagina ei.
+            ['grup' => 'acasa', 'ordine' => 10, 'eticheta' => 'Acasă', 'href' => '/admin', 'icon' => 'dashboard',
+                'activ' => $activExact('/admin')],
             // Încercările de înregistrare (conturi de clienți) și de comandă (magazin), cu protecția anti-robot.
-            ['grup' => 'utilizatori', 'ordine' => 40, 'eticheta' => 'Securitate formulare', 'href' => '/admin/users/security',
+            ['grup' => 'rapoarte', 'ordine' => 20, 'eticheta' => 'Securitate formulare', 'href' => '/admin/users/security',
                 'icon' => 'shield', 'activ' => ['/admin/users/security'], 'oricare_din' => ['magazin', 'conturi_clienti']],
             // Pagina e a nucleului (SEO, cache, mentenanță…); fără magazin pe site se numește „Setări site”.
-            ['grup' => 'configurare', 'ordine' => 10, 'eticheta' => 'Setări magazin', 'href' => '/admin/settings/store',
+            ['grup' => 'setari', 'ordine' => 10, 'eticheta' => 'Setări magazin', 'href' => '/admin/settings/store',
                 'icon' => 'settings', 'activ' => ['/admin/settings/store'], 'eticheta_fara' => ['magazin' => 'Setări site']],
-            ['grup' => 'configurare', 'ordine' => 60, 'eticheta' => 'Google', 'href' => '/admin/settings/google',
+            ['grup' => 'setari', 'ordine' => 100, 'eticheta' => 'Google', 'href' => '/admin/settings/google',
                 'icon' => 'settings', 'activ' => ['/admin/settings/google']],
-            ['grup' => 'configurare', 'ordine' => 70, 'eticheta' => 'Administratori', 'href' => '/admin/settings/admins',
+            ['grup' => 'setari', 'ordine' => 110, 'eticheta' => 'Administratori', 'href' => '/admin/settings/admins',
                 'icon' => 'users', 'activ' => ['/admin/settings/admins']],
-            ['grup' => 'jurnal', 'ordine' => 10, 'eticheta' => 'Jurnal activitate', 'href' => '/admin/activity-log',
+            ['grup' => 'rapoarte', 'ordine' => 10, 'eticheta' => 'Jurnal activitate', 'href' => '/admin/activity-log',
                 'icon' => 'shield', 'activ' => ['/admin/activity-log']],
-            ['grup' => 'pagini', 'ordine' => 10, 'eticheta' => 'Pagini', 'href' => '/admin/pages', 'icon' => 'pages',
+            ['grup' => 'continut', 'ordine' => 10, 'eticheta' => 'Pagini', 'href' => '/admin/pages', 'icon' => 'pages',
                 'activ' => ['/admin/pages']],
-            ['grup' => 'galerie', 'ordine' => 10, 'eticheta' => 'Galerie', 'href' => '/admin/gallery', 'icon' => 'gallery',
+            ['grup' => 'continut', 'ordine' => 60, 'eticheta' => 'Galerie', 'href' => '/admin/gallery', 'icon' => 'gallery',
                 'activ' => ['/admin/gallery']],
-            ['grup' => 'design', 'ordine' => 10, 'eticheta' => 'Header/Footer/Meniu', 'href' => '/admin/design',
+            ['grup' => 'continut', 'ordine' => 70, 'eticheta' => 'Header/Footer/Meniu', 'href' => '/admin/design',
                 'icon' => 'design', 'activ' => ['/admin/design']],
-            ['grup' => 'emailuri', 'ordine' => 10, 'eticheta' => 'Setări trimitere', 'href' => '/admin/emails/sender',
+            ['grup' => 'setari', 'ordine' => 80, 'eticheta' => 'Setări trimitere', 'href' => '/admin/emails/sender',
                 'icon' => 'emails', 'activ' => ['/admin/emails/sender']],
-            ['grup' => 'emailuri', 'ordine' => 20, 'eticheta' => 'Trimite email test', 'href' => '/admin/emails/test',
+            ['grup' => 'setari', 'ordine' => 90, 'eticheta' => 'Trimite email test', 'href' => '/admin/emails/test',
                 'icon' => 'orders', 'activ' => ['/admin/emails/test'], 'icon_fara' => ['magazin' => 'emails']],
-            ['grup' => 'newslettere', 'ordine' => 50, 'eticheta' => 'Formulare contact',
+            ['grup' => 'clienti', 'ordine' => 40, 'eticheta' => 'Formulare contact',
                 'href' => '/admin/emails/newsletters?tab=contact_forms', 'icon' => 'emails', 'activ' => $activTab('contact_forms')],
-            ['grup' => 'newslettere', 'ordine' => 70, 'eticheta' => 'Istoric trimitere',
+            ['grup' => 'rapoarte', 'ordine' => 40, 'eticheta' => 'Istoric trimitere',
                 'href' => '/admin/emails/newsletters?tab=history', 'icon' => 'emails', 'activ' => $activTab('history')],
         ],
         'tabele' => ['admins', 'settings', 'pages', 'seo_pages', 'gallery_images', 'gallery_folders', 'contact_form_messages',
@@ -151,13 +146,13 @@ return [
             'tokenuri' => ['shop_catalog', 'shop_category', 'shop_title', 'featured_products', 'product_categories',
                 'products_by_template', 'produse_serviciu'],
             'meniu' => [
-                ['grup' => 'magazin', 'ordine' => 10, 'eticheta' => 'Produse', 'href' => '/admin/products', 'icon' => 'products',
+                ['grup' => 'produse', 'ordine' => 10, 'eticheta' => 'Produse', 'href' => '/admin/products', 'icon' => 'products',
                     'activ' => $activExact('/admin/products')],
-                ['grup' => 'magazin', 'ordine' => 20, 'eticheta' => 'Categorii produse', 'href' => '/admin/categories',
+                ['grup' => 'produse', 'ordine' => 20, 'eticheta' => 'Categorii produse', 'href' => '/admin/categories',
                     'icon' => 'categories', 'activ' => ['/admin/categories']],
-                ['grup' => 'magazin', 'ordine' => 30, 'eticheta' => 'Câmpuri suplimentare', 'href' => '/admin/products/fields',
+                ['grup' => 'produse', 'ordine' => 30, 'eticheta' => 'Câmpuri suplimentare', 'href' => '/admin/products/fields',
                     'icon' => 'settings', 'activ' => ['/admin/products/fields']],
-                ['grup' => 'magazin', 'ordine' => 40, 'eticheta' => 'Template-uri produse', 'href' => '/admin/products/templates',
+                ['grup' => 'produse', 'ordine' => 40, 'eticheta' => 'Template-uri produse', 'href' => '/admin/products/templates',
                     'icon' => 'design', 'activ' => ['/admin/products/templates']],
             ],
             'tabele' => ['products', 'product_categories', 'product_category_links', 'product_extra_fields',
@@ -182,17 +177,17 @@ return [
             'pagini' => ['checkout/succes'],
             'tokenuri' => ['cart_form', 'checkout_form', 'checkout_success_order_info', 'cart_count'],
             'meniu' => [
-                ['grup' => 'magazin', 'ordine' => 50, 'eticheta' => 'Comenzi', 'href' => '/admin/orders', 'icon' => 'orders',
+                ['grup' => 'comenzi', 'ordine' => 10, 'eticheta' => 'Comenzi', 'href' => '/admin/orders', 'icon' => 'orders',
                     'activ' => $activExact('/admin/orders', '/admin/orders/trash')],
-                ['grup' => 'magazin', 'ordine' => 100, 'eticheta' => 'Coș flotant', 'href' => '/admin/settings/floating-cart',
+                ['grup' => 'setari', 'ordine' => 50, 'eticheta' => 'Coș flotant', 'href' => '/admin/settings/floating-cart',
                     'icon' => 'store', 'activ' => ['/admin/settings/floating-cart']],
                 // Pagina de plăți are și ordinul de plată (al magazinului), și procesatorii de card.
-                ['grup' => 'configurare', 'ordine' => 30, 'eticheta' => 'Setări plăți', 'href' => '/admin/settings/payments',
+                ['grup' => 'setari', 'ordine' => 20, 'eticheta' => 'Setări plăți', 'href' => '/admin/settings/payments',
                     'icon' => 'payments', 'activ' => ['/admin/settings/payments'],
                     'oricare_din' => ['magazin', 'plata_stripe', 'plata_euplatesc', 'plata_bt']],
-                ['grup' => 'automatizari', 'ordine' => 10, 'eticheta' => 'Automatizări', 'href' => '/admin/emails/automation',
+                ['grup' => 'marketing', 'ordine' => 80, 'eticheta' => 'Automatizări', 'href' => '/admin/emails/automation',
                     'icon' => 'automation', 'activ' => ['/admin/emails/automation']],
-                ['grup' => 'newslettere', 'ordine' => 20, 'eticheta' => 'Email-uri ecommerce',
+                ['grup' => 'setari', 'ordine' => 70, 'eticheta' => 'Email-uri ecommerce',
                     'href' => '/admin/emails/newsletters?tab=ecommerce', 'icon' => 'orders', 'activ' => $activTab('ecommerce')],
             ],
             // Emailurile de coș abandonat invită clientul să termine comanda: nu și cu checkout-ul închis.
@@ -211,7 +206,7 @@ return [
                 '/admin/orders/{id}/fan-tracking', '/admin/orders/{id}/fanbox'],
             'rute_publice' => ['/api/fan/*'],
             'meniu' => [
-                ['grup' => 'configurare', 'ordine' => 20, 'eticheta' => 'Setări livrare', 'href' => '/admin/settings/shipping',
+                ['grup' => 'setari', 'ordine' => 30, 'eticheta' => 'Setări livrare', 'href' => '/admin/settings/shipping',
                     'icon' => 'shipping', 'activ' => ['/admin/settings/shipping']],
             ],
             'cron' => [
@@ -278,7 +273,7 @@ return [
             'rute_admin' => ['/admin/settings/erp', '/admin/orders/{id}/erp-retry'],
             'rute_mereu_deschise' => ['POST /api/erp/notificare', 'POST /api/erp/adrese'],
             'meniu' => [
-                ['grup' => 'configurare', 'ordine' => 40, 'eticheta' => 'ERP ANDAXI', 'href' => '/admin/settings/erp',
+                ['grup' => 'setari', 'ordine' => 40, 'eticheta' => 'ERP ANDAXI', 'href' => '/admin/settings/erp',
                     'icon' => 'settings', 'activ' => ['/admin/settings/erp']],
             ],
             'cron' => ['scripts/erp-sync.php' => 'vizibil'],
@@ -292,9 +287,9 @@ return [
             'rute_admin' => ['/admin/coupons/*'],
             'rute_publice' => ['/cos/cupon/*', '/api/cart/coupon/*'],
             'meniu' => [
-                ['grup' => 'magazin', 'ordine' => 60, 'eticheta' => 'Cupoane', 'href' => '/admin/coupons', 'icon' => 'coupon',
+                ['grup' => 'marketing', 'ordine' => 10, 'eticheta' => 'Cupoane', 'href' => '/admin/coupons', 'icon' => 'coupon',
                     'activ' => $activExact('/admin/coupons')],
-                ['grup' => 'magazin', 'ordine' => 70, 'eticheta' => 'Cupoane unice', 'href' => '/admin/coupons/unique',
+                ['grup' => 'marketing', 'ordine' => 20, 'eticheta' => 'Cupoane unice', 'href' => '/admin/coupons/unique',
                     'icon' => 'coupon', 'activ' => ['/admin/coupons/unique']],
             ],
             'tabele' => ['coupons'],
@@ -307,7 +302,7 @@ return [
             'rute_admin' => ['/admin/users/points/*'],
             'rute_publice' => ['/cos/puncte/*'],
             'meniu' => [
-                ['grup' => 'utilizatori', 'ordine' => 30, 'eticheta' => 'Puncte fidelitate', 'href' => '/admin/users/points',
+                ['grup' => 'marketing', 'ordine' => 30, 'eticheta' => 'Puncte fidelitate', 'href' => '/admin/users/points',
                     'icon' => 'stats',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users/points'])
                         || ($prefix(['/admin/users/settings']) && ($tab ?? 'settings') === 'points')],
@@ -324,7 +319,7 @@ return [
             'tokenuri' => ['product_review_form'],
             'meniu' => [
                 // WP-21 (C10): bulina recenziilor care așteaptă aprobare (fără spam), după setarea recenzii_insigna_meniu.
-                ['grup' => 'magazin', 'ordine' => 80, 'eticheta' => 'Recenzii', 'href' => '/admin/products/reviews',
+                ['grup' => 'produse', 'ordine' => 50, 'eticheta' => 'Recenzii', 'href' => '/admin/products/reviews',
                     'icon' => 'star', 'activ' => ['/admin/products/reviews'], 'insigna' => [\App\Support\ReviewGuard::class, 'insignaMeniu']],
             ],
             'tabele' => ['product_reviews'],
@@ -351,7 +346,7 @@ return [
             'necesita' => ['magazin'],
             'rute_admin' => ['/admin/promo-products/*', '/admin/orders/{id}/promo', '/admin/orders/{id}/client-promo'],
             'meniu' => [
-                ['grup' => 'magazin', 'ordine' => 90, 'eticheta' => 'Produse promoționale', 'href' => '/admin/promo-products',
+                ['grup' => 'produse', 'ordine' => 60, 'eticheta' => 'Produse promoționale', 'href' => '/admin/promo-products',
                     'icon' => 'coupon', 'activ' => ['/admin/promo-products']],
             ],
             'tabele' => ['promotional_products', 'order_promo_items'],
@@ -379,10 +374,10 @@ return [
             // WP-25 (VT-C5): {{auth_form}} = formularul de intrare / înregistrare, pe paginile „login” și „register”.
             'tokenuri' => ['account_section', 'auth_google_button', 'auth_form'],
             'meniu' => [
-                ['grup' => 'utilizatori', 'ordine' => 10, 'eticheta' => 'Listă utilizatori', 'href' => '/admin/users', 'icon' => 'users',
+                ['grup' => 'clienti', 'ordine' => 10, 'eticheta' => 'Listă utilizatori', 'href' => '/admin/users', 'icon' => 'users',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users'])
                         && !$prefix(['/admin/users/settings', '/admin/users/points', '/admin/users/security', '/admin/users/gdpr-agreements'])],
-                ['grup' => 'utilizatori', 'ordine' => 20, 'eticheta' => 'Setări utilizatori', 'href' => '/admin/users/settings',
+                ['grup' => 'clienti', 'ordine' => 20, 'eticheta' => 'Setări utilizatori', 'href' => '/admin/users/settings',
                     'icon' => 'settings',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users/settings'])
                         && ($tab ?? 'settings') !== 'points'],
@@ -403,14 +398,14 @@ return [
                 // WP-24 (VT-C4, din vertij): rândurile de evenimente și grila paginată din mai multe categorii.
                 'category_event_rows', 'category_grid_paged'],
             'meniu' => [
-                ['grup' => 'blog', 'ordine' => 10, 'eticheta' => 'Postări blog', 'href' => '/admin/blog/posts', 'icon' => 'pages',
+                ['grup' => 'continut', 'ordine' => 20, 'eticheta' => 'Postări blog', 'href' => '/admin/blog/posts', 'icon' => 'pages',
                     'activ' => ['/admin/blog/posts']],
                 // Ca în codul de dinainte de pluginuri: „Categorii” apare cui are voie la postări.
-                ['grup' => 'blog', 'ordine' => 20, 'eticheta' => 'Categorii', 'href' => '/admin/blog/categories', 'icon' => 'pages',
+                ['grup' => 'continut', 'ordine' => 30, 'eticheta' => 'Categorii', 'href' => '/admin/blog/categories', 'icon' => 'pages',
                     'activ' => ['/admin/blog/categories'], 'permisiune' => '/admin/blog/posts'],
-                ['grup' => 'blog', 'ordine' => 30, 'eticheta' => 'Template blog', 'href' => '/admin/blog/templates', 'icon' => 'design',
+                ['grup' => 'continut', 'ordine' => 40, 'eticheta' => 'Template blog', 'href' => '/admin/blog/templates', 'icon' => 'design',
                     'activ' => ['/admin/blog/templates']],
-                ['grup' => 'blog', 'ordine' => 40, 'eticheta' => 'Autori blog', 'href' => '/admin/blog/authors', 'icon' => 'users',
+                ['grup' => 'continut', 'ordine' => 50, 'eticheta' => 'Autori blog', 'href' => '/admin/blog/authors', 'icon' => 'users',
                     'activ' => ['/admin/blog/authors']],
             ],
             'tabele' => ['blog_posts', 'blog_categories', 'blog_post_categories', 'blog_authors', 'blog_templates', 'blog_tags',
@@ -434,13 +429,16 @@ return [
                 'GET /newsletter/track/click/{campaignId}/{subscriberId}/{token}',
             ],
             'meniu' => [
-                ['grup' => 'newslettere', 'ordine' => 10, 'eticheta' => 'Template-uri',
+                // WP-30: campaniile (trimiterea unui newsletter) au intrare în meniu; până atunci se ajungea la ele doar din tab-uri.
+                ['grup' => 'marketing', 'ordine' => 40, 'eticheta' => 'Newslettere',
+                    'href' => '/admin/emails/newsletters?tab=campaigns', 'icon' => 'newsletter', 'activ' => $activTab('campaigns')],
+                ['grup' => 'marketing', 'ordine' => 50, 'eticheta' => 'Template-uri',
                     'href' => '/admin/emails/newsletters?tab=templates', 'icon' => 'pages', 'activ' => $activTab('templates')],
-                ['grup' => 'newslettere', 'ordine' => 30, 'eticheta' => 'Liste abonați',
+                ['grup' => 'marketing', 'ordine' => 60, 'eticheta' => 'Liste abonați',
                     'href' => '/admin/emails/newsletters?tab=subscribers', 'icon' => 'dashboard', 'activ' => $activTab('subscribers')],
-                ['grup' => 'newslettere', 'ordine' => 40, 'eticheta' => 'Formulare opt-in',
+                ['grup' => 'marketing', 'ordine' => 70, 'eticheta' => 'Formulare opt-in',
                     'href' => '/admin/emails/newsletters?tab=optin', 'icon' => 'emails', 'activ' => $activTab('optin')],
-                ['grup' => 'newslettere', 'ordine' => 60, 'eticheta' => 'Statistici',
+                ['grup' => 'rapoarte', 'ordine' => 30, 'eticheta' => 'Statistici',
                     'href' => '/admin/emails/newsletters?tab=stats', 'icon' => 'stats', 'activ' => $activTab('stats')],
             ],
             'cron' => ['scripts/newsletter-campaigns.php' => 'vizibil'],
@@ -496,7 +494,7 @@ return [
             'rute_publice' => ['POST /api/cerere-oferta'],
             'tokenuri' => ['product_quote_button'],
             'meniu' => [
-                ['grup' => 'magazin', 'ordine' => 45, 'eticheta' => 'Cereri de ofertă', 'href' => '/admin/cereri-oferta', 'icon' => 'orders',
+                ['grup' => 'comenzi', 'ordine' => 20, 'eticheta' => 'Cereri de ofertă', 'href' => '/admin/cereri-oferta', 'icon' => 'orders',
                     'activ' => ['/admin/cereri-oferta']],
             ],
             'tabele' => ['quote_requests', 'quote_submit_logs'],
@@ -530,7 +528,7 @@ return [
             'rute_admin' => ['/admin/settings/mannequin'],
             'tokenuri' => ['mannequin_section'],
             'meniu' => [
-                ['grup' => 'configurare', 'ordine' => 50, 'eticheta' => 'Configurare manechin', 'href' => '/admin/settings/mannequin',
+                ['grup' => 'setari', 'ordine' => 60, 'eticheta' => 'Configurare manechin', 'href' => '/admin/settings/mannequin',
                     'icon' => 'design', 'activ' => ['/admin/settings/mannequin']],
             ],
             'tabele' => ['settings.mannequin_points_json'],
@@ -546,7 +544,7 @@ return [
             'pagini' => ['acorduri-gdpr'],
             'tokenuri' => ['gdpr_agreements_form'],
             'meniu' => [
-                ['grup' => 'utilizatori', 'ordine' => 50, 'eticheta' => 'Acorduri GDPR', 'href' => '/admin/users/gdpr-agreements',
+                ['grup' => 'clienti', 'ordine' => 30, 'eticheta' => 'Acorduri GDPR', 'href' => '/admin/users/gdpr-agreements',
                     'icon' => 'pages', 'activ' => ['/admin/users/gdpr-agreements']],
             ],
             'tabele' => ['gdpr_agreements'],

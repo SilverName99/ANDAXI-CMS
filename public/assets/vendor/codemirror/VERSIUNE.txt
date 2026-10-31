@@ -1,0 +1,6 @@
+VERSIUNE=5.65.18
+Sursa: pachetul npm codemirror@5.65.18, fișierele de mai jos neschimbate (aceiași octeți; varianta neminimizată din
+pachet, în locul celei .min de pe cdn.jsdelivr.net pe care o încărca adminul până la WP-30): lib/codemirror.css,
+lib/codemirror.js, theme/material-darker.css, mode/{javascript,css,xml,htmlmixed}/*.js, addon/dialog/dialog.{css,js},
+addon/search/{searchcursor,search}.js, addon/edit/{closebrackets,matchbrackets}.js, addon/selection/active-line.js.
+Licență: MIT (LICENSE, alături). Se încarcă doar în cele patru editoare de cod (views/admin/layout.php).

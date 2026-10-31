@@ -335,7 +335,8 @@ final class Auth
     private static function canAccessPathForRole(string $path, string $role): bool
     {
         $allowedPrefixes = match ($role) {
-            // Exact intrările din tab-ul „Magazin" al meniului, nimic altceva.
+            // Exact intrările fostului grup „Magazin” al meniului, nimic altceva (din WP-30 ele stau în grupurile Comenzi,
+            // Produse, Marketing — cupoanele — și Setări — coșul flotant; rolul nu se schimbă).
             self::ROLE_STORE => [
                 '/admin/products',
                 '/admin/categories',

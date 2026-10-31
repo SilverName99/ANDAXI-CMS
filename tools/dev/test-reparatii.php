@@ -428,7 +428,9 @@ foreach ([
 // =====================================================================
 $scrie('');
 $scrie('== C. Adminul: CodeMirror doar în editoarele de cod (C6), pozele selectoarelor leneșe (C7)');
-$cdn = 'https://cdn.jsdelivr.net/npm/codemirror@5.65.18/lib/codemirror.min.js';
+// Din WP-30 (faza D) CodeMirror și js-beautify vin din nucleu (public/assets/vendor/), nu de pe CDN: nicio pagină de admin nu
+// mai cere cdn.jsdelivr.net.
+$cdn = '/assets/vendor/codemirror/lib/codemirror.js?v=5.65.18';
 $idPagina = $unu('SELECT id FROM pages ORDER BY id LIMIT 1');
 $idSablon = $unu('SELECT id FROM product_templates ORDER BY id LIMIT 1');
 // Al patrulea editor de cod, al șabloanelor de blog: datele demo n-au niciun șablon de blog, deci testul face unul
@@ -443,7 +445,8 @@ foreach (['/admin/design' => true, '/admin/pages/' . $idPagina . '/edit' => true
     '/admin/settings/store' => false, '/admin/blog/templates' => false, '/admin/blog/authors' => false] as $cale => $cuEditor) {
     $r = $cerere('GET', $cale, $jarAdmin);
     $verifica($cale . ': ' . ($cuEditor ? 'încarcă' : 'nu încarcă') . ' CodeMirror și js-beautify',
-        $r['cod'] === 200 && str_contains($r['corp'], $cdn) === $cuEditor && str_contains($r['corp'], 'beautify-html.min.js') === $cuEditor,
+        $r['cod'] === 200 && str_contains($r['corp'], $cdn) === $cuEditor && str_contains($r['corp'], '/assets/vendor/js-beautify/beautify-html.js') === $cuEditor
+        && !str_contains($r['corp'], 'cdn.jsdelivr.net'),
         'cod ' . $r['cod']);
 }
 // Câte poze are fiecare selector (galeria demo, cu filtrul și limita controllerului, ca în compara-cu-baza.php): produse

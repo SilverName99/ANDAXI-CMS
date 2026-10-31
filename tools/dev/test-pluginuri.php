@@ -677,7 +677,7 @@ try {
 
         // Meniul adminului: exact intrările pluginurilor vizibile (adminul general vede tot ce există).
         $pagina = $cerere('GET', '/admin', $jar);
-        preg_match('#<nav class="admin-nav">(.*?)</nav>#s', $pagina['corp'], $nav);
+        preg_match('#<nav class="ax-meniu"[^>]*>(.*?)</nav>#s', $pagina['corp'], $nav);
         preg_match_all('#href="([^"]+)"#', $nav[1] ?? '', $hrefuri);
         $inMeniu = array_map(static fn ($h) => html_entity_decode($h), $hrefuri[1]);
         $asteptate = [];
@@ -696,7 +696,8 @@ try {
         sort($asteptate);
         $verifica('meniul: ' . count($inMeniu) . ' din ' . count($toateIntrarile) . ' intrări, exact cele ale pluginurilor vizibile',
             $inMeniu === $asteptate, 'în plus: ' . implode(', ', array_diff($inMeniu, $asteptate)) . '; lipsă: ' . implode(', ', array_diff($asteptate, $inMeniu)));
-        $grupuriGoale = preg_match_all('#<div class="group-items">\s*</div>#', $nav[1] ?? '');
+        // Meniul nou (WP-30): lista unui grup e <ul class="ax-meniu-sublista">; un grup gol nu trebuie să apară.
+        $grupuriGoale = preg_match_all('#<ul class="ax-meniu-sublista"[^>]*>\s*</ul>#', $nav[1] ?? '');
         $verifica('meniul: niciun grup gol', $grupuriGoale === 0);
         $corpDashboard = $pagina['corp'];
         $verifica('dashboard: „Comenzi recente” doar cu magazinul', str_contains($corpDashboard, 'Comenzi recente') === Plugins::vizibil('magazin'));
@@ -1271,7 +1272,7 @@ try {
 
         // Meniul adminului: fiecare pagină din el se deschide, fără linkuri spre pluginuri ascunse.
         $panou = $cerere('GET', '/admin', $jar);
-        preg_match('#<nav class="admin-nav">(.*?)</nav>#s', $panou['corp'], $nav);
+        preg_match('#<nav class="ax-meniu"[^>]*>(.*?)</nav>#s', $panou['corp'], $nav);
         preg_match_all('#href="([^"]+)"#', $nav[1] ?? '', $hrefuriMeniu);
         $paginiMeniu = array_values(array_unique(array_map(static fn ($h): string => html_entity_decode((string) $h), $hrefuriMeniu[1])));
         $problemeAdmin = [];
@@ -1314,7 +1315,7 @@ try {
             // Doar conținutul paginii (meniul și stilurile adminului au verificările lor), fără
             // ce e de editat (textarea, al clientului), fără stiluri și comentarii; textul demo
             // al notei de sub butonul de coș e al magazinului, nu al produselor promoționale.
-            $sursa = preg_match('#<main class="admin-content">(.*)</main>#s', $r['corp'], $main) === 1 ? $main[1] : $r['corp'];
+            $sursa = preg_match('#<main class="admin-content[^"]*"[^>]*>(.*)</main>#s', $r['corp'], $main) === 1 ? $main[1] : $r['corp'];
             // (CSS-ul site-ului, pus în pagină pentru previzualizare, are doar nume de clase.)
             $sursa = (string) preg_replace(['#<textarea\b[^>]*>.*?</textarea>#is', '#<style\b[^>]*>.*?</style>#is', '#/\*.*?\*/#s', '#<!--.*?-->#s',
                 '#const previewAppCssContent = [^\n]*#'], '', $sursa);
@@ -1627,7 +1628,7 @@ try {
             @unlink($jar);
             $cerere('POST', '/admin/login', $jar, ['email' => $adminEmail, 'password' => $parolaAdmin]);
             $panou = $cerere('GET', '/admin', $jar);
-            preg_match('#<nav class="admin-nav">(.*?)</nav>#s', $panou['corp'], $nav);
+            preg_match('#<nav class="ax-meniu"[^>]*>(.*?)</nav>#s', $panou['corp'], $nav);
             preg_match_all('#href="([^"]+)"#', $nav[1] ?? '', $hrefuriMeniu);
             $meniu = array_values(array_unique(array_map(static fn ($h): string => html_entity_decode((string) $h), $hrefuriMeniu[1])));
             $oprite = array_keys(array_filter(Plugins::stari(), static fn (string $st): bool => $st === 'oprit'));

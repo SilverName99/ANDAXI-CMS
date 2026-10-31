@@ -172,7 +172,7 @@ function contract_diferente(array $baza, array $curent): array
 }
 
 /**
- * Scoate din diferențele unei pagini ce e declarat ($contractAdminPorturi). O declarație:
+ * Scoate din diferențele unei pagini ce e declarat ($contractAdminPorturi; expresiile regulate fără delimitator, se pun între ~). O declarație:
  *   ['wp' => 'WP-30', 'ce' => 'adaugat'|'scos', 'rand' => '<regex pe rând>', 'cale' => '<regex pe cale>' (implicit orice),
  *    'licenta' => 'toate'|…|null, 'rol' => 'adm'|…|null, 'motiv' => '…']
  * O declarație acoperă toate aparițiile rândului ei pe paginile ei. Întoarce diferențele rămase; $folosite[cheie]++ pentru
@@ -196,10 +196,10 @@ function contract_fara_declarate(array $diferente, array $declaratii, string $ca
             if (isset($d['rol']) && !in_array($rol, (array) $d['rol'], true)) {
                 continue;
             }
-            if (isset($d['cale']) && preg_match('#' . $d['cale'] . '#', $cale) !== 1) {
+            if (isset($d['cale']) && preg_match('~' . $d['cale'] . '~', $cale) !== 1) {
                 continue;
             }
-            if (preg_match('#' . $d['rand'] . '#u', $rand) !== 1) {
+            if (preg_match('~' . $d['rand'] . '~u', $rand) !== 1) {
                 continue;
             }
             $folosite[$cheie] = ($folosite[$cheie] ?? 0) + abs($n);

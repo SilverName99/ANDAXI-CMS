@@ -1914,6 +1914,24 @@ if (!$fataDeCommit) {
     }
 }
 
+// Faza D (WP-30, planul: „admin pages leave the byte-compare of G-cmp, replaced by G-admin”): adminul se reface
+// („B — Compact”), deci paginile lui nu mai pot ieși octet cu octet ca în Bioscem. Ce trimite și ce citește fiecare pagină
+// de admin (formularele, câmpurile, linkurile, atributele data-*, celulele) îl păzește contractul adminului față de eticheta
+// admin-inainte-b (tools/dev/contract-admin.php, poarta G-admin, pe fiecare pagină × rol × licență). Aici rămân paginile
+// vizitatorului și ale clientului, iar din cazurile de salvare starea bazei, emailurile, codurile, Location și anteturile
+// fiecărei cereri; corpul HTML al unei pagini de admin nu se mai compară între servere ($esteAdminHtml; verificările
+// cazului îl citesc în continuare). Declarațiile care privesc doar pagini de admin nu mai trebuie găsite ($doarInAdmin).
+$esteCaleAdmin = static fn (string $cale): bool => $cale === '/admin' || str_starts_with($cale, '/admin/') || str_starts_with($cale, '/admin?');
+$doarInAdmin = static function (string|array $declarata) use ($esteCaleAdmin): bool {
+    $cai = array_values(array_filter((array) $declarata, 'is_string'));
+    return $cai !== [] && array_filter($cai, static fn (string $c): bool => !$esteCaleAdmin(rtrim($c, '*'))) === [];
+};
+$esteAdminHtml = static fn (string $cale, array $raspuns): bool => $esteCaleAdmin((string) parse_url($cale, PHP_URL_PATH))
+    && preg_match('#^Content-Type:\s*text/html#mi', (string) ($raspuns['antete'] ?? '')) === 1;
+$paginiAdmin = count(array_filter($pagini, static fn (array $p): bool => $esteCaleAdmin((string) parse_url((string) $p[1], PHP_URL_PATH))));
+$pagini = array_values(array_filter($pagini, static fn (array $p): bool => !$esteCaleAdmin((string) parse_url((string) $p[1], PHP_URL_PATH))));
+echo '  INFO  ', $paginiAdmin, " pagini de admin lăsate contractului adminului (G-admin, tools/dev/contract-admin.php; faza D)\n";
+
 $identice = 0;
 // Anteturile (normalizate) în capul fișierelor comparate, ca diff-ul să le arate și pe ele.
 $cuAntete = static fn (array $antete, string $corp): string => "ANTETE\n" . implode("\n", $antete) . "\n\nCORP\n" . $corp;
@@ -4205,6 +4223,9 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                         $corp = $faraDeclarate((string) $cereriFacute[$server][$n][1], $corp, $gasiteSalvare, $probleme);
                     }
                     $raspunsuri[$n] = [
+                        // Faza D: corpul unei pagini HTML de admin nu se compară între servere (G-admin o păzește); îl citesc
+                        // doar „verifica” și „verifica_curent” ale cazului.
+                        'admin_html' => $esteAdminHtml((string) $cereriFacute[$server][$n][1], $r),
                         // Corpul primit, neatins (doar pentru „verifica_curent” al unei reparații).
                         'corp_brut' => $r['corp'],
                         'cod' => $r['cod'],
@@ -4258,12 +4279,16 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         }
         foreach ($rezultate['baza']['raspunsuri'] as $n => $rBaza) {
             $rCurent = $rezultate['curent']['raspunsuri'][$n] ?? ['cod' => 0, 'location' => '', 'antete' => [], 'corp' => ''];
+            $faraCorp = ($rBaza['admin_html'] ?? false) && ($rCurent['admin_html'] ?? false);
             foreach (['cod', 'location', 'antete', 'corp'] as $camp) {
+                if ($camp === 'corp' && $faraCorp) {
+                    continue;
+                }
                 if ($rBaza[$camp] !== $rCurent[$camp]) {
                     $diferente[] = 'cererea ' . ($n + 1) . ': ' . $camp . ' diferă';
                 }
             }
-            if ($rBaza['corp'] !== $rCurent['corp'] || $rBaza['antete'] !== $rCurent['antete']) {
+            if ((!$faraCorp && $rBaza['corp'] !== $rCurent['corp']) || $rBaza['antete'] !== $rCurent['antete']) {
                 $nume = 'salvare_' . (preg_replace('/[^a-z0-9]+/i', '_', $caz['nume']) ?: 'caz') . '_' . ($n + 1);
                 file_put_contents($dosarDiff . '/' . $nume . '.baza.html', $cuAntete($rBaza['antete'], $rBaza['corp']));
                 file_put_contents($dosarDiff . '/' . $nume . '.curent.html', $cuAntete($rCurent['antete'], $rCurent['corp']));
@@ -4288,20 +4313,21 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
 foreach ($listeDeclarate as $numeLista => $lista) {
     foreach ($lista as $intrare) {
         $etichetaDeclaratiei = $numeLista . ' „' . (string) ($intrare['nume'] ?? '') . '”';
-        if (($gasiteInRulare[$etichetaDeclaratiei] ?? 0) === 0) {
+        if (($gasiteInRulare[$etichetaDeclaratiei] ?? 0) === 0 && !$doarInAdmin($intrare['cale'] ?? '')) {
             $diferite[] = $etichetaDeclaratiei;
             echo '  DIFERĂ ', $etichetaDeclaratiei, ": declarată, dar negăsită pe nicio pagină cerută (pagina ei nu se mai cere?)\n";
         }
     }
 }
-foreach (array_keys($meniuFaraBioscem) as $etichetaMeniu) {
+// Faza D: meniul adminului nu se mai compară cu al Bioscem (e doar în paginile de admin), deci nici intrările lui.
+foreach ([] as $etichetaMeniu) {
     if (($gasiteInRulare[$etichetaMeniu] ?? 0) === 0) {
         $diferite[] = $etichetaMeniu;
         echo '  DIFERĂ ', $etichetaMeniu, ": intrarea de meniu a unui plugin pe care Bioscem nu-l are, negăsită în nicio pagină de admin\n";
     }
 }
-foreach ($marcajePort as $numeMarcaj => $_) {
-    if (($gasiteInRulare['marcaj ' . $numeMarcaj] ?? 0) === 0) {
+foreach ($marcajePort as $numeMarcaj => $declaratieMarcaj) {
+    if (($gasiteInRulare['marcaj ' . $numeMarcaj] ?? 0) === 0 && !$doarInAdmin($declaratieMarcaj['cale'] ?? '')) {
         $diferite[] = 'marcaj ' . $numeMarcaj;
         echo '  DIFERĂ marcajul ', $numeMarcaj, ": declarat, dar negăsit pe nicio pagină cerută\n";
     }

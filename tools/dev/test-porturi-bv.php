@@ -953,7 +953,7 @@ $verifica('Admin → Recenzii: „Pending (' . $inAsteptare . ')” fără spam,
     str_contains($lista, 'Pending (' . $inAsteptare . ')') && str_contains($lista, 'Spam (' . $spam . ')') && str_contains($lista, 'Detectează spamul')
     && str_contains($lista, 'Golește spamul (' . $spam . ')') && str_contains($lista, 'id="recenzii-spam-date"')
     && !str_contains($lista, 'Text de robot, capcana completată') && str_contains($listaSpam, 'Text de robot, capcana completată')
-    && preg_match('#Recenzii<span class="nav-badge" title="' . $inAsteptare . ' în așteptare"[^>]*>' . $inAsteptare . '</span>#u', $lista) === 1);
+    && preg_match('#Recenzii</span><span class="nav-badge[^"]*" title="' . $inAsteptare . ' în așteptare"[^>]*>' . $inAsteptare . '</span>#u', $lista) === 1);
 $setare('recenzii_insigna_meniu', '0');
 $verifica('… cu recenzii_insigna_meniu = 0 (înghețarea Bioscem): fără bulină', !str_contains($cerere('GET', '/admin/products/reviews', $jarAdmin)['corp'], 'nav-badge'));
 $setare('recenzii_insigna_meniu', '1');

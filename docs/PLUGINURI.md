@@ -203,9 +203,13 @@ O rută nouă fără proprietar face `tools/dev/verifica-rute.php` să pice.
 Meniul adminului se construiește din catalog (`meniu_admin` = ordinea grupurilor,
 iar fiecare plugin își declară intrările cu grupul și ordinea). Intrările
 pluginurilor care nu sunt vizibile lipsesc; un grup rămas gol nu apare. Peste
-asta se aplică, ca înainte, rolurile adminilor. Cu toate pluginurile pornite,
-meniul e identic, octet cu octet, cu cel de dinainte (`compara-cu-baza.sh`, pe
-patru roluri de admin).
+asta se aplică, ca înainte, rolurile adminilor. Din WP-30 (faza D) grupurile sunt
+cele opt ale adminului refăcut: Acasă, Comenzi, Produse, Clienți, Marketing,
+Conținut, Rapoarte, Setări ([ARHITECTURA-ADMIN.md](ARHITECTURA-ADMIN.md)); un grup
+cu o singură intrare vizibilă apare ca link, cu numele intrării. Ce trimite și ce
+citește fiecare pagină de admin (inclusiv linkurile meniului) îl păzește contractul
+adminului (`tools/dev/contract-admin.php`, poarta G-admin), pe patru roluri și trei
+licențe; instantaneele rutelor (G-rute) arată meniul fiecărei licențe.
 
 Dashboard-ul arată cardurile și listele doar pentru pluginurile vizibile
 (Produse = catalog; Comenzi și „Comenzi recente” = magazin; Utilizatori și
@@ -319,9 +323,9 @@ puse exact în locurile unde începe ceva nou:
   `eticheta_fara` și `icon_fara` (`'Setări magazin'` devine `'Setări site'` fără
   magazin, iar coșul de lângă „Trimite email test” devine un plic); la fel
   titlul paginii și tab-ul „Pagini magazin” / „Pagini site”. Și un grup din
-  `meniu_admin` le poate avea (WP-26, GR-14c): grupul „Magazin” se cheamă
-  „Produse” pe un catalog fără magazin (OD-25; eticheta definitivă vine cu meniul
-  nou al adminului, WP-30).
+  `meniu_admin` le poate avea (WP-26, GR-14c). Din WP-30 niciun grup nu mai are nevoie:
+  „Produse” e un grup al lui oricum, iar pe un catalog fără magazin „Cereri de ofertă” e
+  singura intrare din „Comenzi”, deci apare ca link cu numele ei (OD-25).
 - **Rolurile de administrator** legate de un plugin („Administrator magazin” fără
   catalog, „Administrator Blog” fără blog) nu se mai oferă în Administratori; un
   administrator care are deja rolul îl păstrează la salvare (câmp ascuns). După
@@ -942,8 +946,8 @@ loc de comenzi.
   codul aduce JavaScript-ul Bootstrap din nucleu și câteva reguli CSS doar pentru sertar.
 - **Rol**: „Administrator magazin” vede lista (lângă comenzi).
 - **Are nevoie de**: `catalog`. Fără magazin, cardurile simple de produse spun „Cere
-  ofertă” în loc de „Vezi produsul” (GR-16), iar grupul din meniul adminului se cheamă
-  „Produse” (GR-14c).
+  ofertă” în loc de „Vezi produsul” (GR-16), iar în meniul adminului „Cereri de ofertă” stă în grupul „Comenzi” (singură, deci ca
+  link, pe un catalog fără magazin; WP-30, în locul grupului „Produse” al GR-14c).
 - **Se oprește**: butonul nu se mai arată (nici scriptul lui), o cerere nouă primește 403;
   lista din admin rămâne.
 - **Oprit**: `/api/cerere-oferta` dă 404 (JSON), adminul 403, meniul dispare; rândurile

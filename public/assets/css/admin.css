@@ -1,0 +1,376 @@
+/*
+ * Adminul „B — Compact, pentru lucru intens” (Etapa 1, faza D; machetele din docs/ui/). Se încarcă doar în admin
+ * (views/admin/layout.php), după app.css; paginile publice nu-l văd niciodată.
+ *
+ *  1. Variabilele de aspect (--ax-…): culori, fonturi, mărimi, inelul de focus. Accentul vine de la site
+ *     (setarea admin_culoare_accent, App\Support\AdminAspect), pus pe <body> ca --ax-accent și --ax-accent-text.
+ *  2. Cadrul (WP-30): meniul lateral închis la culoare, antetul cu căutarea și „?”, zona paginii.
+ *  3. Paginile încă nerefăcute (WP-30): aceleași clase din app.css (.panel, .btn, tabelele, câmpurile), aduse la
+ *     fontul, mărimea și culorile noi, doar în interiorul cadrului (.ax-continut). Paginile se refac apoi una câte una
+ *     cu componentele (WP-31 … WP-35).
+ *  4. Componentele (WP-31): clasele „adm-…” din views/admin/componente/.
+ *
+ * Reguli: text de bază 14 px, ținte de clic de 44 px în cadru și în componente, focus vizibil pe orice element (un inel
+ * în culoarea accentului), fonturile din nucleu (public/assets/vendor/fonturi/ibm-plex/).
+ */
+
+/* ── 1. Variabilele de aspect ──────────────────────────────────────────────────────────── */
+:root {
+    --ax-accent: #2563eb;
+    --ax-accent-text: #ffffff;
+    --ax-accent-slab: color-mix(in srgb, var(--ax-accent) 10%, #ffffff);
+    --ax-accent-inchis: color-mix(in srgb, var(--ax-accent) 80%, #000000);
+
+    --ax-font: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+    --ax-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ax-text-baza: 14px;
+    --ax-text-mic: 13px;
+    --ax-text-mai-mic: 12px;
+    --ax-tinta: 44px;
+    --ax-raza: 6px;
+    --ax-raza-mare: 8px;
+
+    --ax-pagina: #f3f4f6;
+    --ax-suprafata: #ffffff;
+    --ax-suprafata-2: #f9fafb;
+    --ax-text: #111827;
+    --ax-text-2: #374151;
+    --ax-text-3: #4b5563;
+    --ax-text-slab: #6b7280;
+    --ax-linie: #e5e7eb;
+    --ax-linie-tare: #d1d5db;
+    --ax-link: #1d4ed8;
+    --ax-link-hover: #1e3a8a;
+
+    --ax-bara: #111827;
+    --ax-bara-2: #1f2937;
+    --ax-bara-text: #d1d5db;
+    --ax-bara-text-slab: #9ca3af;
+    --ax-bara-latime: 232px;
+    --ax-antet-inaltime: 52px;
+
+    --ax-ok: #15803d;
+    --ax-ok-fundal: #f0fdf4;
+    --ax-ok-linie: #bbf7d0;
+    --ax-atentie: #a16207;
+    --ax-atentie-fundal: #fefce8;
+    --ax-atentie-linie: #fde68a;
+    --ax-eroare: #b91c1c;
+    --ax-eroare-fundal: #fef2f2;
+    --ax-eroare-linie: #fecaca;
+    --ax-info: #1d4ed8;
+    --ax-info-fundal: #eff6ff;
+    --ax-info-linie: #bfdbfe;
+
+    --ax-focus: 0 0 0 3px color-mix(in srgb, var(--ax-accent) 45%, transparent);
+    --ax-umbra: 0 1px 2px rgba(17, 24, 39, .06);
+    --ax-umbra-mare: 0 18px 40px rgba(17, 24, 39, .18);
+}
+
+/* ── 2. Cadrul ──────────────────────────────────────────────────────────────────────────── */
+body.ax-admin {
+    margin: 0;
+    background: var(--ax-pagina);
+    color: var(--ax-text);
+    font-family: var(--ax-font);
+    font-size: var(--ax-text-baza);
+    line-height: 1.45;
+}
+body.ax-admin button,
+body.ax-admin input,
+body.ax-admin select,
+body.ax-admin textarea {
+    font-family: inherit;
+}
+body.ax-admin kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 20px;
+    padding: 0 5px;
+    border: 1px solid var(--ax-linie-tare);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--ax-suprafata);
+    color: var(--ax-text-2);
+    font-family: var(--ax-font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+}
+
+/* Focus vizibil pe tot adminul: un inel în culoarea accentului (navigarea cu tastatura, WP-31). */
+body.ax-admin a:focus-visible,
+body.ax-admin button:focus-visible,
+body.ax-admin input:focus-visible,
+body.ax-admin select:focus-visible,
+body.ax-admin textarea:focus-visible,
+body.ax-admin summary:focus-visible,
+body.ax-admin [tabindex]:focus-visible {
+    outline: 2px solid var(--ax-accent);
+    outline-offset: 2px;
+    box-shadow: var(--ax-focus);
+}
+
+/* Text doar pentru cititoarele de ecran (și în componente). */
+.adm-ascuns { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.ax-sari {
+    position: absolute;
+    left: 8px;
+    top: -60px;
+    z-index: 100;
+    padding: 10px 14px;
+    border-radius: var(--ax-raza);
+    background: var(--ax-accent);
+    color: var(--ax-accent-text);
+    font-weight: 600;
+}
+.ax-sari:focus { top: 8px; }
+
+.ax-app {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: var(--ax-bara-latime) minmax(0, 1fr);
+}
+.ax-app.sidebar-hidden { grid-template-columns: 0 minmax(0, 1fr); }
+.ax-app.sidebar-hidden .ax-bara { visibility: hidden; }
+
+.nav-icon { width: 16px; height: 16px; display: inline-flex; flex: 0 0 auto; }
+.nav-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Meniul lateral */
+.ax-bara {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: var(--ax-bara);
+    color: var(--ax-bara-text);
+    padding: 12px 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: #374151 transparent;
+}
+.ax-marca { display: flex; align-items: center; gap: 10px; padding: 4px 8px 12px; border-bottom: 1px solid var(--ax-bara-2); }
+.ax-marca-semn {
+    flex: 0 0 auto; width: 30px; height: 30px; border-radius: var(--ax-raza); background: var(--ax-accent); color: var(--ax-accent-text);
+    display: flex; align-items: center; justify-content: center; font-family: var(--ax-font-mono); font-weight: 600; font-size: 14px;
+}
+.ax-marca-text { display: flex; flex-direction: column; min-width: 0; }
+.ax-marca-nume { font-size: 14px; font-weight: 600; color: #ffffff; line-height: 1.25; }
+.ax-marca-site { font-size: 12px; color: var(--ax-bara-text-slab); line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ax-meniu-lista, .ax-meniu-sublista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.ax-meniu-sublista { margin: 2px 0 6px; }
+.ax-meniu-sublista[hidden] { display: none; }
+.ax-meniu-link,
+.ax-meniu-sublink {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: var(--ax-tinta);
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--ax-raza);
+    background: transparent;
+    color: var(--ax-bara-text);
+    font: inherit;
+    font-size: var(--ax-text-baza);
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+.ax-meniu-sublink { min-height: 36px; padding-left: 36px; font-weight: 400; font-size: 13.5px; }
+.ax-meniu-link:hover,
+.ax-meniu-sublink:hover { background: var(--ax-bara-2); color: #ffffff; }
+.ax-meniu-link.active,
+.ax-meniu-sublink.active { background: var(--ax-accent); color: var(--ax-accent-text); }
+.ax-meniu-eticheta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ax-meniu-sageata { display: inline-flex; transition: transform .15s ease; color: var(--ax-bara-text-slab); }
+.ax-meniu-grup.deschis > .ax-meniu-buton .ax-meniu-sageata { transform: rotate(180deg); }
+.ax-meniu-grup.are-activa > .ax-meniu-buton { color: #ffffff; }
+.ax-meniu-numar {
+    min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px; background: #b91c1c; color: #ffffff;
+    font-family: var(--ax-font-mono); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center;
+}
+.ax-bara a:focus-visible,
+.ax-bara button:focus-visible { outline-color: #ffffff; }
+
+.ax-bara-subsol { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--ax-bara-2); }
+.ax-utilizator { display: flex; align-items: center; gap: 10px; padding: 4px 6px 0; }
+.ax-avatar {
+    flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; background: #374151; color: #ffffff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;
+}
+.ax-utilizator-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.ax-utilizator-nume { color: #ffffff; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ax-utilizator-rol { color: var(--ax-bara-text-slab); font-size: 12px; }
+.ax-utilizator form { margin: 0; }
+.ax-iesire {
+    min-height: 36px; padding: 0 10px; border: 1px solid #374151; border-radius: var(--ax-raza); background: transparent;
+    color: var(--ax-bara-text); font-size: 13px; cursor: pointer;
+}
+.ax-iesire:hover { background: var(--ax-bara-2); color: #ffffff; }
+
+/* Antetul și zona paginii */
+.ax-principal { min-width: 0; display: flex; flex-direction: column; }
+.ax-antet {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px 12px;
+    min-height: var(--ax-antet-inaltime);
+    padding: 4px 16px;
+    background: var(--ax-suprafata);
+    border-bottom: 1px solid var(--ax-linie);
+}
+.ax-buton-icon {
+    width: 40px; height: 40px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+    border: 0; border-radius: var(--ax-raza); background: transparent; color: var(--ax-text-2); cursor: pointer; font-size: 20px;
+}
+.ax-buton-icon:hover, .ax-buton-text:hover { background: var(--ax-suprafata-2); color: var(--ax-text); }
+.ax-buton-text {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 0; border-radius: var(--ax-raza);
+    background: transparent; color: var(--ax-text-2); font-size: var(--ax-text-mic); font-weight: 500; cursor: pointer; margin-left: auto;
+}
+.ax-cautare {
+    flex: 1 1 320px;
+    max-width: 640px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 0 12px;
+    border: 1px solid var(--ax-linie-tare);
+    border-radius: var(--ax-raza);
+    background: var(--ax-suprafata-2);
+    color: var(--ax-text-slab);
+    font-size: var(--ax-text-mic);
+    cursor: default;
+}
+.ax-cautare-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ax-taste { display: inline-flex; gap: 3px; }
+
+.ax-continut {
+    width: 100%;
+    max-width: 1600px;
+    padding: 14px 20px 28px;
+    outline: none;
+}
+.ax-continut--plin { max-width: none; padding: 8px 16px 24px; }
+
+/* Lista scurtăturilor (dialog) */
+.ax-dialog {
+    width: min(520px, calc(100vw - 32px));
+    border: 1px solid var(--ax-linie);
+    border-radius: var(--ax-raza-mare);
+    padding: 0;
+    color: var(--ax-text);
+    box-shadow: var(--ax-umbra-mare);
+}
+.ax-dialog::backdrop { background: rgba(17, 24, 39, .45); }
+.ax-dialog-antet { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 18px; border-bottom: 1px solid var(--ax-linie); }
+.ax-dialog-antet h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.ax-taste-lista { margin: 0; padding: 8px 18px; }
+.ax-taste-lista > div { display: flex; align-items: center; gap: 14px; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+.ax-taste-lista > div:last-child { border-bottom: 0; }
+.ax-taste-lista dt { flex: 0 0 64px; margin: 0; }
+.ax-taste-lista dd { margin: 0; color: var(--ax-text-2); }
+.ax-dialog-nota { margin: 0; padding: 10px 18px 16px; color: var(--ax-text-slab); font-size: var(--ax-text-mic); }
+
+.ax-fundal-bara { display: none; }
+
+/* Telefon și tabletă îngustă: meniul se deschide peste pagină. */
+@media (max-width: 900px) {
+    .ax-app, .ax-app.sidebar-hidden { grid-template-columns: minmax(0, 1fr); }
+    .ax-app.sidebar-hidden .ax-bara { visibility: visible; }
+    .ax-bara {
+        position: fixed;
+        z-index: 60;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: min(300px, 86vw);
+        height: auto;
+        transform: translateX(-102%);
+        transition: transform .2s ease;
+        box-shadow: var(--ax-umbra-mare);
+    }
+    .ax-app.bara-deschisa .ax-bara { transform: translateX(0); }
+    .ax-app.bara-deschisa .ax-fundal-bara:not([hidden]) {
+        display: block; position: fixed; inset: 0; z-index: 50; background: rgba(17, 24, 39, .45);
+    }
+    .ax-antet { padding: 4px 10px; }
+    .ax-cautare { flex-basis: 120px; }
+    .ax-cautare-text, .ax-taste, .ax-ascuns-mic { display: none; }
+    .ax-buton-text { padding: 0 8px; }
+    .ax-continut { padding: 12px 12px 24px; }
+    .ax-continut--plin { padding: 8px 16px 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ax-bara, .ax-meniu-sageata { transition: none; }
+}
+
+/* ── 3. Paginile încă nerefăcute, în cadrul nou ─────────────────────────────────────────── */
+.ax-continut h1 { font-size: 20px; line-height: 1.3; font-weight: 600; letter-spacing: 0; }
+.ax-continut h2 { font-size: 16px; line-height: 1.35; font-weight: 600; }
+.ax-continut h3 { font-size: 14.5px; line-height: 1.4; font-weight: 600; }
+.ax-continut a { color: var(--ax-link); }
+.ax-continut a:hover { color: var(--ax-link-hover); }
+.ax-continut .section-head p,
+.ax-continut .muted,
+.ax-continut small { color: var(--ax-text-3); }
+.ax-continut .panel {
+    border-color: var(--ax-linie);
+    border-radius: var(--ax-raza-mare);
+    padding: 16px;
+    margin: 12px 0;
+    box-shadow: var(--ax-umbra);
+}
+.ax-continut .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--ax-accent);
+    border-radius: var(--ax-raza);
+    background: var(--ax-accent);
+    color: var(--ax-accent-text);
+    font-size: var(--ax-text-mic);
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+}
+.ax-continut .btn:hover { transform: none; box-shadow: none; background: var(--ax-accent-inchis); border-color: var(--ax-accent-inchis); color: var(--ax-accent-text); }
+.ax-continut .btn-secondary,
+.ax-continut .btn-light { background: var(--ax-suprafata); border-color: var(--ax-linie-tare); color: var(--ax-text); }
+.ax-continut .btn-secondary:hover,
+.ax-continut .btn-light:hover { background: var(--ax-suprafata-2); border-color: var(--ax-text-slab); color: var(--ax-text); }
+.ax-continut .btn-danger { background: var(--ax-eroare); border-color: var(--ax-eroare); color: #ffffff; }
+.ax-continut .btn-danger:hover { background: #991b1b; border-color: #991b1b; color: #ffffff; }
+.ax-continut .field label,
+.ax-continut label { color: var(--ax-text-2); }
+.ax-continut input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]),
+.ax-continut select,
+.ax-continut textarea {
+    border-color: var(--ax-linie-tare);
+    border-radius: var(--ax-raza);
+    color: var(--ax-text);
+    font-size: var(--ax-text-baza);
+}
+.ax-continut input[type="checkbox"],
+.ax-continut input[type="radio"] { accent-color: var(--ax-accent); }
+.ax-continut table { font-size: 13.5px; }
+.ax-continut th { color: var(--ax-text-3); font-weight: 600; }
+.ax-continut code,
+.ax-continut pre { font-family: var(--ax-font-mono); font-size: 12.5px; }

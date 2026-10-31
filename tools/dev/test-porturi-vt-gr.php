@@ -1415,12 +1415,17 @@ $verifica('limita: trimiterile mai vechi de 10 minute nu se mai numără', !Cere
 $db->exec('DELETE FROM quote_submit_logs');
 $stariInainte = Plugins::stari();
 Plugins::folosesteStari(array_merge($stariInainte, ['magazin' => Plugins::OPRIT]));
-$grupFara = array_values(array_filter(Plugins::meniuAdmin(), static fn (array $s): bool => $s['cheie'] === 'magazin'))[0] ?? [];
+$grupDupaCheie = static fn (string $cheie): array => array_values(array_filter(Plugins::meniuAdmin(), static fn (array $s): bool => $s['cheie'] === $cheie))[0] ?? [];
+$comenziFara = $grupDupaCheie('comenzi');
+$produseFara = $grupDupaCheie('produse');
 Plugins::folosesteStari($stariInainte);
-$grupCu = array_values(array_filter(Plugins::meniuAdmin(), static fn (array $s): bool => $s['cheie'] === 'magazin'))[0] ?? [];
-$verifica('GR-14c: grupul din meniul adminului se cheamă „Produse” fără magazin, „Magazin” cu el; „Cereri de ofertă” în grup',
-    ($grupFara['eticheta'] ?? '') === 'Produse' && ($grupCu['eticheta'] ?? '') === 'Magazin'
-    && in_array('Cereri de ofertă', array_column((array) ($grupCu['intrari'] ?? []), 'eticheta'), true));
+$comenziCu = $grupDupaCheie('comenzi');
+// WP-30 (meniul nou, OD-25): grupul „Produse” există oricum cu catalogul; „Cereri de ofertă” stă în „Comenzi”, singură fără
+// magazin (deci link cu numele ei, views/admin/layout.php), lângă „Comenzi” cu el. Înlocuiește eticheta „Produse” a GR-14c.
+$verifica('GR-14c / WP-30: fără magazin „Comenzi” are doar „Cereri de ofertă”, iar „Produse” are catalogul; cu magazin, Comenzi + Cereri de ofertă',
+    array_column((array) ($comenziFara['intrari'] ?? []), 'eticheta') === ['Cereri de ofertă'] && ($produseFara['eticheta'] ?? '') === 'Produse'
+    && in_array('Produse', array_column((array) ($produseFara['intrari'] ?? []), 'eticheta'), true)
+    && array_column((array) ($comenziCu['intrari'] ?? []), 'eticheta') === ['Comenzi', 'Cereri de ofertă']);
 require_once $radacina . '/src/Support/Verificare.php';
 require_once $radacina . '/tools/verificare/lib/incarcare.php';
 $reguliBs = \Unelte\Verificare\Reguli::incarca($radacina, 'bioscem');
@@ -1540,8 +1545,11 @@ $verifica('oprit: fără buton, /api/cerere-oferta 404 (JSON), lista din admin 4
     && (int) $unu('SELECT COUNT(*) FROM quote_requests') >= 5, $r['cod'] . ' ' . $lista['cod']);
 $licenta('grafoanaytis');
 $meniu = $cerere('GET', '/admin', $jarAdmin)['corp'];
-$verifica('licența grafoanaytis: grupul din meniu „Produse” (GR-14c), cu „Cereri de ofertă”; nimic din magazin',
-    preg_match('#<span class="nav-icon">.*?</span> Produse\s*</#su', $meniu) === 1 && str_contains($meniu, 'href="/admin/cereri-oferta"')
+// WP-30 (meniul nou, docs/ARHITECTURA-ADMIN.md): grupul „Produse” are catalogul, iar „Cereri de ofertă” e singura intrare a
+// grupului „Comenzi”, deci apare ca link cu numele ei (înlocuiește eticheta „Produse” a grupului Magazin, GR-14c, OD-25).
+$verifica('licența grafoanaytis: grupul din meniu „Produse” și linkul „Cereri de ofertă” (singur în Comenzi); nimic din magazin',
+    preg_match('#<span class="ax-meniu-eticheta">Produse</span>#u', $meniu) === 1
+    && preg_match('#<a class="ax-meniu-link[^"]*" href="/admin/cereri-oferta"[^>]*>.*?<span class="ax-meniu-eticheta">Cereri de ofertă</span>#su', $meniu) === 1
     && !str_contains($meniu, 'href="/admin/orders"'), mb_substr(strip_tags($meniu), 0, 400));
 $licenta('toate');
 $setare('cereri_oferta_buton', null);

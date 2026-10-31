@@ -469,7 +469,7 @@ verifica "pagina de login" 200 adm GET /admin/login "Autentificare"
 verifica "login admin" 302 adm POST /admin/login "" "email=$CMS_DEV_ADMIN_EMAIL" "password=$PAROLA"
 verifica "dashboard" 200 adm GET /admin "Dashboard"
 cp "$TMP/corp" "$TMP/dashboard.html"
-sed -n '/<nav class="admin-nav">/,/<\/nav>/p' "$TMP/dashboard.html" \
+sed -n '/<nav class="ax-meniu"/,/<\/nav>/p' "$TMP/dashboard.html" \
     | grep -o 'href="/admin[^"#]*"' | sed 's/^href="//; s/"$//; s/&amp;/\&/g' | awk '!vazut[$0]++' > "$TMP/meniu.txt"
 scrie "  Meniul adminului are $(wc -l < "$TMP/meniu.txt") intrări:"
 while read -r cale; do

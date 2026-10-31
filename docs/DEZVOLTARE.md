@@ -473,6 +473,45 @@ răspund în orice pachet. Rapoartele: `smoke-raport-<pachet>.txt`, capturile cu
 sufixul pachetului (`admin-meniu-prezentare.png`). Cu pachetul „toate”,
 rezultatul e identic cu cel de dinainte de mecanismul de pluginuri.
 
+### Adminul refăcut, „B — Compact” (faza D)
+
+Faza D a Etapei 1 reface tot adminul după machetele din [ui/](ui/README.md); inventarul paginilor, meniul nou și
+propunerile care așteaptă decizia proprietarului sunt în [ARHITECTURA-ADMIN.md](ARHITECTURA-ADMIN.md). Regula: se schimbă
+aspectul, nu ce trimite adminul.
+
+- **Contractul (G-admin, WP-29).** `tools/dev/php.sh tools/dev/contract-admin.php` compară, pe fiecare pagină de admin ×
+  rol × licență, formularele, câmpurile, linkurile, atributele `data-*` și celulele tabelelor cu ale etichetei
+  `admin-inainte-b` (tabelul de mai sus, „Fișierele din `tools/dev/`”). Orice diferență se declară în
+  `tools/dev/lib/contract-admin-declarat.php`, pe WP, cu motivul. Din WP-30 paginile de admin nu mai sunt în comparația
+  octet cu octet cu Bioscem (`compara-cu-baza.sh` le lasă, cu un rând INFO, iar în cazurile de salvare compară starea
+  bazei, emailurile, codurile, `Location` și anteturile, nu și corpul HTML al unei pagini de admin): le păzește G-admin.
+  Paginile vizitatorului și ale clientului rămân în G-cmp, octet cu octet, iar stilurile lor în G-vizual.
+- **Capturile.** `tools/dev/php.sh tools/dev/contract-admin.php --capturi` fotografiază, la 390/1366/1920 px, aceleași
+  pagini pe codul etichetei și pe codul curent (`$CMS_DEV_DIR/capturi/faza-d/{admin-inainte-b,acum}/`), pentru ochi.
+- **Cadrul (WP-30).** `views/admin/layout.php`: meniul lateral închis la culoare (`.ax-bara`, cu grupurile din
+  `config/plugins.php` → `meniu_admin`; un grup cu o singură intrare vizibilă e un link), antetul (`.ax-antet`: butonul
+  meniului, locul căutării, „Scurtături ?”), zona paginii (`<main class="admin-content ax-continut" id="continut">`), linkul
+  „Sari la conținut” și dialogul scurtăturilor. Comportamentul: `public/assets/js/admin/cadru.js` (grupurile ținute minte
+  în `localStorage`, meniul peste pagină sub 900 px, `?` și Esc).
+- **Aspectul.** `public/assets/css/admin.css`, încărcat doar în admin, după `app.css`: variabilele `--ax-…` (culori, fonturi,
+  14 px, ținte de 44 px, inelul de focus), cadrul, aducerea paginilor nerefăcute la fontul și culorile noi (doar în
+  `.ax-continut`) și, din WP-31, componentele. Fonturile IBM Plex Sans/Mono din `public/assets/vendor/fonturi/ibm-plex/`,
+  CodeMirror 5.65.18 și js-beautify 1.15.1 din `public/assets/vendor/codemirror/` și `…/js-beautify/` (proveniența în
+  `VERSIUNE.txt` alături): adminul nu cere nimic de pe alt server (`capturi.cjs` blochează și raportează orice cerere spre
+  afară).
+- **Accentul fiecărui site.** Setarea `admin_culoare_accent` (Setări magazin / Setări site → „Culoarea adminului”,
+  `App\Support\AdminAspect`): un cod `#rrggbb`, gol = albastrul neutru al machetelor (`#2563eb`); textul pe accent e alb
+  sau aproape negru, după contrast. Nu e în `Settings::DEFAULTS` și nu are rezervă scrisă în cod (`?? '…'`), deci nu intră
+  în înghețarea setărilor: nu schimbă nimic pe site.
+- **Regulile de admin din `app.css` (G-M3).** `app.css` rămâne încărcat în admin: paginile încă nerefăcute își au regulile
+  acolo. O regulă de admin iese din `app.css` doar când (1) G-vizual arată aceleași stiluri calculate pe toate paginile
+  publice ale setului, ca vizitator și ca client, și (2) niciuna dintre clasele ei nu apare în setul V-CSS al celor patru
+  site-uri live (clasele folosite de conținutul din baze, `tools/verificare/agregate.php`, WP-10). Seturile V-CSS nu există
+  încă (rularea de noapte a proprietarului, §8 din plan), deci **WP-30 n-a scos nicio regulă**. Regulile cadrului de
+  dinainte (`app.css` de la `.admin-shell`, rândul 3106: `.admin-shell`, `.admin-sidebar`, `.admin-brand`, `.admin-nav`,
+  `.group-items`, `.toggle-group`, `.admin-sidebar-footer`, `.admin-topbar`, și varianta lor pentru ecran îngust) nu mai
+  sunt folosite de admin; ele sunt primele de scos, cu dovada de mai sus, odată cu WP-35.
+
 ## Unde scrie codul (`App\Support\Paths`)
 
 Din WP-07 (punctul A al analizei infrastructurii), codul nu mai construiește din `__DIR__` căile unui site:

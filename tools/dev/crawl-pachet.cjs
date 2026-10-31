@@ -177,9 +177,14 @@ async function ferestreAdmin(page) {
         ]);
         if (dosarCapturi) {
             fs.mkdirSync(dosarCapturi, { recursive: true });
+            // Meniul adminului (WP-30: .ax-bara, grupurile .ax-meniu-grup), toate grupurile deschise, cât e de lung.
             await page.evaluate(() => {
-                document.querySelectorAll('.admin-nav-group').forEach((g) => g.classList.add('open'));
-                const bara = document.querySelector('.admin-sidebar');
+                document.querySelectorAll('.ax-meniu-grup').forEach((g) => {
+                    g.classList.add('deschis');
+                    const lista = g.querySelector('.ax-meniu-sublista');
+                    if (lista) lista.hidden = false;
+                });
+                const bara = document.querySelector('.ax-bara');
                 if (bara) {
                     bara.style.position = 'static';
                     bara.style.height = 'auto';
@@ -188,7 +193,7 @@ async function ferestreAdmin(page) {
                 }
             });
             const fisier = path.join(dosarCapturi, 'admin-meniu' + sufix + '.png');
-            await page.locator('.admin-sidebar').screenshot({ path: fisier });
+            await page.locator('.ax-bara').screenshot({ path: fisier });
             rezultat.capturi.push(fisier);
         }
         for (const cale of intrare.admin || []) {

@@ -1,0 +1,4 @@
+VERSIUNE=1.15.1
+Sursa: pachetul npm js-beautify@1.15.1, js/lib/beautify.js, js/lib/beautify-css.js și js/lib/beautify-html.js,
+neschimbate (aceiași octeți; varianta neminimizată, în locul celei .min de pe cdn.jsdelivr.net de până la WP-30).
+Licență: MIT (LICENSE, alături). Se încarcă doar în cele patru editoare de cod (views/admin/layout.php).

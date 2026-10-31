@@ -191,6 +191,22 @@ $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
                     <button class="btn" type="submit">Salvează favicon</button>
                 </div>
             </form>
+            <?php // WP-30 (faza D): culoarea de accent a adminului acestui site (App\Support\AdminAspect); nu schimbă nimic pe site. ?>
+            <?php $culoareAdmin = \App\Support\AdminAspect::accent($settings); ?>
+            <h3 style="margin:22px 0 0;">Culoarea adminului</h3>
+            <p style="margin:0 0 10px;color:#64748b;">
+                Culoarea butoanelor și a paginii alese din meniu, doar aici în admin (vizitatorii nu o văd). Ajută să știi pe ce
+                site lucrezi când ai mai multe deschise. „Resetează” pune albastrul implicit.
+            </p>
+            <form method="post" action="/admin/settings/store" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <input type="hidden" name="action" value="save_admin_accent">
+                <label for="admin_culoare_accent" style="display:flex;gap:8px;align-items:center;">
+                    <input type="color" id="admin_culoare_accent" name="admin_culoare_accent" value="<?= htmlspecialchars($culoareAdmin, ENT_QUOTES) ?>" style="width:56px;height:40px;padding:2px;">
+                    <span class="muted"><?= htmlspecialchars($culoareAdmin, ENT_QUOTES) ?></span>
+                </label>
+                <button class="btn" type="submit">Salvează culoarea</button>
+                <button class="btn btn-secondary" type="submit" name="reseteaza" value="1">Resetează</button>
+            </form>
         </article>
 
         <article class="panel store-settings-panel" data-store-settings-panel="seo" <?= $defaultStoreTab !== 'seo' ? 'hidden' : '' ?> style="margin:12px 0;">

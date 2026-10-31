@@ -10537,6 +10537,21 @@ final class AdminController
             header('Location: /admin/settings/store');
             return;
         }
+        if ($action === 'save_admin_accent') {
+            // WP-30 (faza D): culoarea de accent a adminului (App\Support\AdminAspect); „Resetează” o golește (accentul neutru).
+            $culoare = strtolower(trim((string) ($_POST[\App\Support\AdminAspect::CHEIE_ACCENT] ?? '')));
+            if (!empty($_POST['reseteaza'])) {
+                $culoare = '';
+            } elseif (!\App\Support\AdminAspect::esteCuloare($culoare)) {
+                Flash::set('error', 'Culoarea adminului trebuie să fie un cod de forma #1a2b3c.');
+                header('Location: /admin/settings/store');
+                return;
+            }
+            Settings::save($db, [\App\Support\AdminAspect::CHEIE_ACCENT => $culoare]);
+            Flash::set('success', $culoare === '' ? 'Culoarea adminului a revenit la cea implicită.' : 'Culoarea adminului a fost salvată.');
+            header('Location: /admin/settings/store');
+            return;
+        }
         if ($action === 'save_store_name') {
             // Numele din titlurile paginilor („Produs | Bioscem Shop”) și din datele
             // pentru Google. Gol = numele implicit al site-ului (SeoMeta::numeMagazinImplicit:
