@@ -3,19 +3,26 @@ $templates = is_array($templates ?? null) ? $templates : [];
 $newRequested = (bool) ($newRequested ?? false);
 ?>
 
+<?php ob_start(); ?>
+    <button class="btn" type="button" id="new-blog-template-btn">+ Template nou</button>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Șabloane blog',
+    'nivel' => 1,
+    'subtitlu' => 'Creează template-uri HTML/CSS/JS pentru postările de blog.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Template blog</h1>
-            <p>Creează template-uri HTML/CSS/JS pentru postările de blog.</p>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btn" type="button" id="new-blog-template-btn">+ Template nou</button>
-        </div>
-    </div>
 
-    <article class="panel" style="margin:0;">
-        <h3 style="margin-top:0;">Template-uri existente</h3>
+    <section class="adm-sectiune" id="blog-templates-template-uri-existente" aria-labelledby="blog-templates-template-uri-existente-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="blog-templates-template-uri-existente-titlu">Template-uri existente</h2>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <div class="users-table-wrap">
             <table class="table users-table">
                 <thead>
@@ -59,7 +66,8 @@ $newRequested = (bool) ($newRequested ?? false);
                 </tbody>
             </table>
         </div>
-    </article>
+        </div>
+    </section>
 </section>
 
 <div class="modal-overlay<?= $newRequested ? ' open' : '' ?>" id="blog-template-create-modal">

@@ -54,17 +54,19 @@ foreach ($numere as $numar) {
 }
 ?>
 
+<?php ob_start(); ?>
+    <a class="btn btn-secondary" href="/admin/blog/posts/trash">Coș postări</a>
+    <a class="btn" href="/admin/blog/posts/new">+ Postare nouă</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Postări blog',
+    'nivel' => 1,
+    'subtitlu' => 'Gestionează articolele pentru secțiunea Blog.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Postări blog</h1>
-            <p>Gestionează articolele pentru secțiunea Blog.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <a class="btn btn-secondary" href="/admin/blog/posts/trash">Coș postări</a>
-            <a class="btn" href="/admin/blog/posts/new">+ Postare nouă</a>
-        </div>
-    </div>
 
     <div class="subsection-tabs" style="margin-bottom:10px;">
         <a class="<?= $panel === 'list' ? 'active' : '' ?>" href="<?= htmlspecialchars($buildPostsUrl(['panel' => 'list', 'page' => 1]), ENT_QUOTES) ?>">Toate postările</a>
@@ -75,7 +77,7 @@ foreach ($numere as $numar) {
     <form method="post" action="/admin/blog/posts/import" enctype="multipart/form-data" class="users-search-row" style="margin-bottom:10px;">
         <input type="file" name="blog_posts_file" accept=".csv,.xlsx" required>
         <button class="btn" type="submit">Import postări (CSV/XLSX)</button>
-        <small style="color:#64748b;">Coloane recomandate: Title, Content, Slug, Date, Status, Excerpt, Categories.</small>
+        <small style="color:var(--ax-text-3);">Coloane recomandate: Title, Content, Slug, Date, Status, Excerpt, Categories.</small>
     </form>
     <?php endif; ?>
 
@@ -172,7 +174,7 @@ foreach ($numere as $numar) {
     </div>
     <?php if ($totalPages > 1): ?>
         <div class="users-search-row blog-pager" style="margin-top:10px;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-            <small style="color:#64748b;">
+            <small style="color:var(--ax-text-3);">
                 <?= $totalPosts ?> postări · pagina <?= $page ?> din <?= $totalPages ?>
             </small>
             <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -210,7 +212,7 @@ foreach ($numere as $numar) {
 </section>
 <?= \App\Support\Dev::marcaj('bv:blog-lista-script') ?>
 <style>
-.blog-pager__gap{padding:0 4px;color:#94a3b8;user-select:none;}
+.blog-pager__gap{padding:0 4px;color:var(--ax-text-3);user-select:none;}
 .blog-pager .btn.is-current{cursor:default;}
 .blog-pager .btn.is-disabled{opacity:.45;pointer-events:none;}
 /* Cât se încarcă pagina următoare, lista rămâne pe loc, doar se estompează —

@@ -42,13 +42,14 @@ $menuEmbedToken = '{{menu}}';
 $mobileMenuEmbedToken = '{{mobile_menu}}';
 ?>
 
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Antet, subsol și meniu',
+    'nivel' => 1,
+    'subtitlu' => 'Editează header-ul, footer-ul și meniul site-ului.',
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Design Site</h1>
-            <p>Editează header-ul, footer-ul și meniul site-ului.</p>
-        </div>
-    </div>
 
     <div class="design-tabs">
         <?php foreach ($tabs as $key => $label): ?>
@@ -150,20 +151,20 @@ $mobileMenuEmbedToken = '{{mobile_menu}}';
             </div>
 
             <?php if ($section === 'header'): ?>
-                <details class="panel" style="margin-bottom:12px;background:#f8fafc;border-color:#cbd5e1;">
-                    <summary style="cursor:pointer;font-weight:700;color:#334155;">Coduri disponibile pentru Header <span style="color:#64748b;font-weight:400;font-size:.9em;">(click pentru arată/ascunde)</span></summary>
-                    <p style="margin:10px 0;color:#64748b;">
+                <details class="panel" style="margin-bottom:12px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
+                    <summary style="cursor:pointer;font-weight:700;color:var(--ax-text-2);">Coduri disponibile pentru Header <span style="color:var(--ax-text-3);font-weight:400;font-size:.9em;">(click pentru arată/ascunde)</span></summary>
+                    <p style="margin:10px 0;color:var(--ax-text-3);">
                         Poți folosi token-urile de mai jos în HTML-ul de header:
                     </p>
                     <div style="display:grid;gap:8px;">
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <code><?= htmlspecialchars($menuEmbedToken, ENT_QUOTES) ?></code>
-                            <span style="color:#64748b;">→ meniul desktop (din secțiunea Meniu)</span>
+                            <span style="color:var(--ax-text-3);">→ meniul desktop (din secțiunea Meniu)</span>
                             <button type="button" class="btn btn-secondary" id="insert-menu-token">Inserează în HTML</button>
                         </div>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                             <code><?= htmlspecialchars($mobileMenuEmbedToken, ENT_QUOTES) ?></code>
-                            <span style="color:#64748b;">→ buton hamburger + sertar mobil</span>
+                            <span style="color:var(--ax-text-3);">→ buton hamburger + sertar mobil</span>
                             <button type="button" class="btn btn-secondary" id="insert-mobile-menu-token">Inserează în HTML</button>
                         </div>
                     </div>
@@ -171,7 +172,7 @@ $mobileMenuEmbedToken = '{{mobile_menu}}';
             <?php endif; ?>
 <?= \App\Support\Dev::marcaj('gr:an-ajutor') ?>
 <?php if ($section === 'header' || $section === 'footer'): ?>
-                <p style="margin:0 0 12px;color:#64748b;">
+                <p style="margin:0 0 12px;color:var(--ax-text-3);">
                     În HTML-ul de header și de footer poți folosi <code>{{an}}</code> pentru anul curent (de exemplu „© {{an}} Firma”).
                 </p>
 <?php endif; ?>

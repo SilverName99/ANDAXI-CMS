@@ -1,14 +1,20 @@
+<?php ob_start(); ?>
+    <a class="btn btn-secondary" href="/admin/pages/trash">Coș pagini</a>
+    <a class="btn" href="/admin/pages/new">Pagină nouă</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Pagini',
+    'nivel' => 1,
+    'subtitlu' => 'Administrezi pagini HTML custom, cu URL controlat prin slug.',
+    'ajutor' => [
+        'Paginile se scriu în HTML, cu editorul de cod; adresa lor e slug-ul.',
+        'O pagină ștearsă stă în coș până o ștergi definitiv.',
+    ],
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div>
-            <h1>Pagini</h1>
-            <p>Administrezi pagini HTML custom, cu URL controlat prin slug.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <a class="btn btn-secondary" href="/admin/pages/trash">Coș pagini</a>
-            <a class="btn" href="/admin/pages/new">Pagină nouă</a>
-        </div>
-    </div>
 
     <table class="table">
         <thead>

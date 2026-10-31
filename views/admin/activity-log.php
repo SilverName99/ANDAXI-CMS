@@ -72,12 +72,17 @@ $valoareCamp = static function (mixed $v): string {
     return (string) $v;
 };
 ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Jurnal activitate',
+    'nivel' => 1,
+    'subtitlu' => 'Ce au schimbat adminii: modificările importante din panou, cu cine, când și ce. Vizibil doar pentru administratorul general.',
+]);
+?>
 <div class="panel" style="margin:0 0 24px;">
-    <h2 style="margin-top:0;">Jurnal activitate admin</h2>
-    <p style="color:#6b7280;margin:0 0 16px;">Vizibil doar pentru Administrator General. Înregistrează modificările critice din panou.</p>
 
     <form method="get" action="/admin/activity-log" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <select name="action" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+        <select name="action" style="padding:6px 10px;border:1px solid var(--ax-linie-tare);border-radius:6px;font-size:13px;">
             <option value="">Toate acțiunile</option>
             <?php foreach ($knownActions as $act): ?>
                 <option value="<?= htmlspecialchars($act, ENT_QUOTES) ?>" <?= $actionFilter === $act ? 'selected' : '' ?>>
@@ -92,7 +97,7 @@ $valoareCamp = static function (mixed $v): string {
     </form>
 
     <?php if ($entries === []): ?>
-        <p style="color:#6b7280;">Nu există înregistrări de activitate încă.</p>
+        <p style="color:var(--ax-text-3);">Nu există înregistrări de activitate încă.</p>
     <?php else: ?>
     <div class="users-table-wrap">
         <table class="table users-table" style="font-size:13px;">
@@ -132,9 +137,9 @@ $valoareCamp = static function (mixed $v): string {
                                 ?>
                                 <li>
                                     <code><?= htmlspecialchars($key, ENT_QUOTES) ?></code>:
-                                    <span style="color:#991b1b;"><?= $from ?></span>
+                                    <span style="color:var(--ax-eroare);"><?= $from ?></span>
                                     →
-                                    <span style="color:#166534;"><?= $to ?></span>
+                                    <span style="color:var(--ax-ok);"><?= $to ?></span>
                                 </li>
                             <?php endforeach; ?>
                             </ul>
@@ -162,13 +167,13 @@ $valoareCamp = static function (mixed $v): string {
                                     <?php endforeach; ?>
                                 </ul>
                             <?php else: ?>
-                                <em style="color:#6b7280;">Fără detalii suplimentare</em>
+                                <em style="color:var(--ax-text-3);">Fără detalii suplimentare</em>
                             <?php endif; ?>
                         <?php else: ?>
                             —
                         <?php endif; ?>
                     </td>
-                    <td style="font-family:monospace;font-size:12px;"><?= htmlspecialchars((string) ($entry['ip'] ?? ''), ENT_QUOTES) ?></td>
+                    <td style="font-family:var(--ax-font-mono);font-size:12px;"><?= htmlspecialchars((string) ($entry['ip'] ?? ''), ENT_QUOTES) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

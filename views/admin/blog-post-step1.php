@@ -2,14 +2,18 @@
 $templates = is_array($templates ?? null) ? $templates : [];
 $categories = is_array($categories ?? null) ? $categories : [];
 ?>
+<?php ob_start(); ?>
+<a class="btn btn-secondary" href="/admin/blog/posts">&larr; Înapoi la listă</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Postare nouă — Pasul 1',
+    'nivel' => 1,
+    'subtitlu' => 'Alege template-ul (layout-ul) și categoria. În Pasul 2 vei completa doar câmpurile cerute de template.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Postare nouă — Pasul 1</h1>
-            <p>Alege template-ul (layout-ul) și categoria. În Pasul 2 vei completa doar câmpurile cerute de template.</p>
-        </div>
-        <a class="btn btn-secondary" href="/admin/blog/posts">&larr; Înapoi la listă</a>
-    </div>
 
     <form method="get" action="/admin/blog/posts/editor" class="form-grid" style="max-width:640px;">
         <div class="field" style="grid-column:1/-1;">
@@ -44,7 +48,7 @@ $categories = is_array($categories ?? null) ? $categories : [];
     </form>
 </section>
 <style>
-.blog-cat-checks{display:flex;flex-wrap:wrap;gap:8px 14px;border:1px solid #cbd5e1;border-radius:12px;padding:12px 14px;background:#fff;}
-.blog-cat-check{display:inline-flex;align-items:center;gap:7px;font-size:14px;color:#1f2937;cursor:pointer;}
+.blog-cat-checks{display:flex;flex-wrap:wrap;gap:8px 14px;border:1px solid var(--ax-linie-tare);border-radius:12px;padding:12px 14px;background:var(--ax-suprafata);}
+.blog-cat-check{display:inline-flex;align-items:center;gap:7px;font-size:14px;color:var(--ax-text-2);cursor:pointer;}
 .blog-cat-check input{width:16px;height:16px;cursor:pointer;}
 </style>

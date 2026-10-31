@@ -137,9 +137,9 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
             <input type="text" id="template-description" name="description" value="<?= htmlspecialchars($templateDescription, ENT_QUOTES) ?>" placeholder="Ex: layout cu bloc informații extinse">
         </div>
 
-        <article class="panel" style="margin-top:12px;background:#f8fafc;border-color:#cbd5e1;">
+        <article class="panel" style="margin-top:12px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
             <h4 style="margin-top:0;">Coduri disponibile pentru template</h4>
-            <p style="margin:0 0 10px;color:#64748b;">Poți copia aceste coduri și le poți insera în HTML/CSS/JS.</p>
+            <p style="margin:0 0 10px;color:var(--ax-text-3);">Poți copia aceste coduri și le poți insera în HTML/CSS/JS.</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
                 <button type="button" class="btn btn-secondary template-token-tab is-active" data-token-tab="general">
                     Coduri generale produse
@@ -162,7 +162,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
 
             <div class="template-token-panel is-active" data-token-panel="general" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($generalProductTokens as $item): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
                         <strong style="display:block;font-size:13px;"><?= htmlspecialchars((string) $item['label'], ENT_QUOTES) ?></strong>
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
@@ -172,7 +172,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
 ?>
 <?= \App\Support\Dev::marcaj('gr:token-oferta') ?>
 <?php if (\App\Support\Plugins::tokenVizibil('product_quote_button')): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
                         <strong style="display:block;font-size:13px;">Buton „Cere ofertă” (cu formularul cererii)</strong>
                         <code>{{product_quote_button}}</code>
                     </div>
@@ -182,16 +182,16 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
 
             <div class="template-token-panel" data-token-panel="all" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($allTokens as $item): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
-                        <small style="display:block;color:#64748b;font-weight:700;"><?= htmlspecialchars((string) $item['group'], ENT_QUOTES) ?></small>
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
+                        <small style="display:block;color:var(--ax-text-3);font-weight:700;"><?= htmlspecialchars((string) $item['group'], ENT_QUOTES) ?></small>
                         <strong style="display:block;font-size:13px;"><?= htmlspecialchars((string) $item['label'], ENT_QUOTES) ?></strong>
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
                 <?php endforeach; ?>
 <?= \App\Support\Dev::marcaj('gr:token-oferta-toate') ?>
 <?php if (\App\Support\Plugins::tokenVizibil('product_quote_button')): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
-                        <small style="display:block;color:#64748b;font-weight:700;">General</small>
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
+                        <small style="display:block;color:var(--ax-text-3);font-weight:700;">General</small>
                         <strong style="display:block;font-size:13px;">Buton „Cere ofertă” (cu formularul cererii)</strong>
                         <code>{{product_quote_button}}</code>
                     </div>
@@ -204,7 +204,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                     <p class="muted" style="margin:0;">Nu există câmpuri suplimentare active.</p>
                 <?php else: ?>
                     <?php foreach ($extraFieldTokens as $item): ?>
-                        <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                        <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
                             <strong style="display:block;font-size:13px;"><?= htmlspecialchars((string) $item['label'], ENT_QUOTES) ?></strong>
                             <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                         </div>
@@ -215,7 +215,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
 <?php if ($cuRecenzii): ?>
             <div class="template-token-panel" data-token-panel="reviews" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($reviewTokens as $item): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
                         <strong style="display:block;font-size:13px;"><?= htmlspecialchars((string) $item['label'], ENT_QUOTES) ?></strong>
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
@@ -225,7 +225,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
 
             <div class="template-token-panel" data-token-panel="icons" style="display:none;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($iconTokens as $item): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
                         <strong style="display:block;font-size:13px;"><?= htmlspecialchars((string) $item['label'], ENT_QUOTES) ?></strong>
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
@@ -256,7 +256,7 @@ $isActive = (int) ($productTemplate['is_active'] ?? 1) === 1;
                 <div class="preview-shell desktop" id="preview-shell">
                     <iframe id="template-preview" title="Preview template produs"></iframe>
                 </div>
-                <small style="display:block;margin-top:10px;color:#64748b;">
+                <small style="display:block;margin-top:10px;color:var(--ax-text-3);">
                     Preview demo pentru codurile disponibile (inclusiv câmpuri extra active).
                 </small>
             </div>

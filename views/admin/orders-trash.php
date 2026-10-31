@@ -1,11 +1,15 @@
+<?php ob_start(); ?>
+<a class="btn btn-secondary" href="/admin/orders">Înapoi la comenzi</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Coș comenzi',
+    'nivel' => 1,
+    'subtitlu' => 'Restaurează comenzile sau șterge-le definitiv.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div>
-            <h1>Coș comenzi</h1>
-            <p>Restaurează comenzile sau șterge-le definitiv.</p>
-        </div>
-        <a class="btn btn-secondary" href="/admin/orders">Înapoi la comenzi</a>
-    </div>
 
     <?php if ($orders === []): ?>
         <div class="trash-empty">
@@ -13,7 +17,7 @@
             <div style="margin-top:6px;">Comenzile mutate în coș apar aici și pot fi restaurate oricând.</div>
         </div>
     <?php else: ?>
-        <p style="color:#64748b;margin:0 0 12px;">
+        <p style="color:var(--ax-text-3);margin:0 0 12px;">
             <?= count($orders) ?> <?= count($orders) === 1 ? 'comandă' : 'comenzi' ?> în coș.
             Restaurarea aduce comanda înapoi în listă exact așa cum era.
         </p>

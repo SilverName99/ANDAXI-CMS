@@ -14,18 +14,19 @@ $etichete = \App\Support\CereriOferta::ETICHETE_STARI;
 $total = array_sum($numarPeStari);
 $e = static fn (?string $v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 ?>
-<h1>Cereri de ofertă</h1>
-<p class="muted">Cererile trimise din sertarul „<?= $e($textButon ?? 'Cere ofertă') ?>” de pe paginile de produs.</p>
-
-<div class="panel" style="margin-bottom:16px;">
-    <a class="btn<?= $stareCurenta === '' ? '' : ' btn-secondary' ?>" href="/admin/cereri-oferta">Toate (<?= (int) $total ?>)</a>
-    <?php foreach ($etichete as $cheie => $eticheta): ?>
-        <a class="btn<?= $stareCurenta === $cheie ? '' : ' btn-secondary' ?>"
-           href="/admin/cereri-oferta?stare=<?= $e($cheie) ?>">
-            <?= $e($eticheta) ?> (<?= (int) ($numarPeStari[$cheie] ?? 0) ?>)
-        </a>
-    <?php endforeach; ?>
-</div>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Cereri de ofertă',
+    'nivel' => 1,
+    'subtitlu' => 'Cererile trimise din sertarul „' . ($textButon ?? 'Cere ofertă') . '” de pe paginile de produs.',
+]);
+$taburiCereri = [['eticheta' => 'Toate', 'href' => '/admin/cereri-oferta', 'numar' => (int) $total, 'activ' => $stareCurenta === '']];
+foreach ($etichete as $cheie => $eticheta) {
+    $taburiCereri[] = ['eticheta' => $eticheta, 'href' => '/admin/cereri-oferta?stare=' . $cheie,
+        'numar' => (int) ($numarPeStari[$cheie] ?? 0), 'activ' => $stareCurenta === $cheie];
+}
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Cererile, după stare', 'taburi' => $taburiCereri]);
+?>
 
 <?php if ($cereri === []): ?>
     <div class="panel">

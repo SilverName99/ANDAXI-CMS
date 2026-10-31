@@ -71,83 +71,83 @@ if (!is_string($previewAppCssContent)) {
             <button class="btn" type="submit">Salvează</button>
         </div>
 
-        <details class="panel" style="margin-top:12px;background:#f8fafc;border-color:#cbd5e1;">
-            <summary style="cursor:pointer;font-weight:700;color:#334155;">Coduri disponibile pentru pagină <span style="color:#64748b;font-weight:400;font-size:.9em;">(click pentru arată/ascunde)</span></summary>
-            <p style="margin:10px 0;color:#64748b;">
+        <details class="panel" style="margin-top:12px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
+            <summary style="cursor:pointer;font-weight:700;color:var(--ax-text-2);">Coduri disponibile pentru pagină <span style="color:var(--ax-text-3);font-weight:400;font-size:.9em;">(click pentru arată/ascunde)</span></summary>
+            <p style="margin:10px 0;color:var(--ax-text-3);">
                 Pentru secțiuni dinamice, poți folosi token-urile de mai jos în HTML:
             </p>
             <div style="display:grid;gap:6px;">
 <?php if (\App\Support\Plugins::tokenVizibil('mannequin_section')): ?>
-                <div><code><?= htmlspecialchars($mannequinCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ secțiune manechin</span></div>
+                <div><code><?= htmlspecialchars($mannequinCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ secțiune manechin</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('shop_catalog')): ?>
-                <div><code><?= htmlspecialchars($shopCatalogCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ catalog magazin (filtre + produse)</span></div>
+                <div><code><?= htmlspecialchars($shopCatalogCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ catalog magazin (filtre + produse)</span></div>
 <?php endif; ?>
 <?= \App\Support\Dev::marcaj('bv:token-produse-sablon') ?>
 <?php if (\App\Support\Plugins::tokenVizibil('products_by_template')): ?>
-                <div><code>{{products_by_template:slug-template}}</code> <span style="color:#64748b;">→ produsele care folosesc un template de produs, în cardurile catalogului. Opțional, oricâte și în orice ordine, despărțite prin <code>|</code>: <code>limit=4</code>, <code>link=/pachete</code>, <code>text=Vezi toate pachetele</code>, <code>titlu=...</code>, <code>subtitlu=...</code> (ex: <code>{{products_by_template:template-pachete|limit=4|link=/pachete|text=Vezi toate pachetele}}</code>)</span></div>
+                <div><code>{{products_by_template:slug-template}}</code> <span style="color:var(--ax-text-3);">→ produsele care folosesc un template de produs, în cardurile catalogului. Opțional, oricâte și în orice ordine, despărțite prin <code>|</code>: <code>limit=4</code>, <code>link=/pachete</code>, <code>text=Vezi toate pachetele</code>, <code>titlu=...</code>, <code>subtitlu=...</code> (ex: <code>{{products_by_template:template-pachete|limit=4|link=/pachete|text=Vezi toate pachetele}}</code>)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('produse_serviciu')): ?>
-                <div><code>{{produse_serviciu}}</code> <span style="color:#64748b;">→ pe o pagină de serviciu: produsele categoriei care are slug-ul ultimului segment al paginii (ex: pagina <code>servicii/lipire-cutii</code> → categoria <code>lipire-cutii</code>), fără preț și coș</span></div>
+                <div><code>{{produse_serviciu}}</code> <span style="color:var(--ax-text-3);">→ pe o pagină de serviciu: produsele categoriei care are slug-ul ultimului segment al paginii (ex: pagina <code>servicii/lipire-cutii</code> → categoria <code>lipire-cutii</code>), fără preț și coș</span></div>
 <?php endif; ?>
 <?= \App\Support\Dev::marcaj('bv:token-produse-sablon', true) ?>
 <?php if (\App\Support\Plugins::tokenVizibil('blog_posts')): ?>
-                <div><code><?= htmlspecialchars($blogPostsCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ listare postări blog</span></div>
+                <div><code><?= htmlspecialchars($blogPostsCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ listare postări blog</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('cart_form')): ?>
-                <div><code><?= htmlspecialchars($cartFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ coș de cumpărături (produse + rezumat)</span></div>
+                <div><code><?= htmlspecialchars($cartFormCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ coș de cumpărături (produse + rezumat)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('checkout_form')): ?>
-                <div><code><?= htmlspecialchars($checkoutFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ formular checkout modern (sumar + plată)</span></div>
+                <div><code><?= htmlspecialchars($checkoutFormCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ formular checkout modern (sumar + plată)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('checkout_success_order_info')): ?>
-                <div><code><?= htmlspecialchars($checkoutSuccessOrderInfoCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ sumar comandă pentru pagina checkout/succes (număr + status)</span></div>
+                <div><code><?= htmlspecialchars($checkoutSuccessOrderInfoCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ sumar comandă pentru pagina checkout/succes (număr + status)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('account_section')): ?>
-                <div><code><?= htmlspecialchars($accountSectionCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ secțiune cont client (profil, comenzi, adrese, puncte)</span></div>
+                <div><code><?= htmlspecialchars($accountSectionCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ secțiune cont client (profil, comenzi, adrese, puncte)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('auth_google_button')): ?>
-                <div><code><?= htmlspecialchars($authGoogleButtonCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ buton Google Login/Register (manual în builder)</span></div>
+                <div><code><?= htmlspecialchars($authGoogleButtonCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ buton Google Login/Register (manual în builder)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('product_review_form')): ?>
-                <div><code><?= htmlspecialchars($productReviewFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ formular recenzii produse (util pentru pagini QR)</span></div>
+                <div><code><?= htmlspecialchars($productReviewFormCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ formular recenzii produse (util pentru pagini QR)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('gdpr_agreements_form')): ?>
-                <div><code><?= htmlspecialchars($gdprAgreementsFormCodeToken, ENT_QUOTES) ?></code> <span style="color:#64748b;">→ formular acorduri GDPR (semnătură tactilă + salvare backend)</span></div>
+                <div><code><?= htmlspecialchars($gdprAgreementsFormCodeToken, ENT_QUOTES) ?></code> <span style="color:var(--ax-text-3);">→ formular acorduri GDPR (semnătură tactilă + salvare backend)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('next_event_image')): ?>
-                <div><code>{{next_event_image}}</code> <span style="color:#64748b;">→ imaginea principală a următorului eveniment</span></div>
+                <div><code>{{next_event_image}}</code> <span style="color:var(--ax-text-3);">→ imaginea principală a următorului eveniment</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('next_event_url')): ?>
-                <div><code>{{next_event_url}}</code> <span style="color:#64748b;">→ link către pagina următorului eveniment</span></div>
+                <div><code>{{next_event_url}}</code> <span style="color:var(--ax-text-3);">→ link către pagina următorului eveniment</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('next_event_title')): ?>
-                <div><code>{{next_event_title}}</code> <span style="color:#64748b;">→ titlul următorului eveniment</span></div>
+                <div><code>{{next_event_title}}</code> <span style="color:var(--ax-text-3);">→ titlul următorului eveniment</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('next_event_excerpt')): ?>
-                <div><code>{{next_event_excerpt}}</code> <span style="color:#64748b;">→ descrierea succintă a următorului eveniment</span></div>
+                <div><code>{{next_event_excerpt}}</code> <span style="color:var(--ax-text-3);">→ descrierea succintă a următorului eveniment</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('next_event_period')): ?>
-                <div><code>{{next_event_period}}</code> <span style="color:#64748b;">→ perioada următorului eveniment</span></div>
+                <div><code>{{next_event_period}}</code> <span style="color:var(--ax-text-3);">→ perioada următorului eveniment</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('next_event_video')): ?>
-                <div><code>{{next_event_video}}</code> <span style="color:#64748b;">→ playerul video al următorului eveniment</span></div>
+                <div><code>{{next_event_video}}</code> <span style="color:var(--ax-text-3);">→ playerul video al următorului eveniment</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('category_posts')): ?>
-                <div><code>{{category_posts:slug-categorie}}</code> <span style="color:#64748b;">→ slider cu postările dintr-o categorie (ex: <code>{{category_posts:noutati}}</code>)</span></div>
+                <div><code>{{category_posts:slug-categorie}}</code> <span style="color:var(--ax-text-3);">→ slider cu postările dintr-o categorie (ex: <code>{{category_posts:noutati}}</code>)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('category_grid')): ?>
-                <div><code>{{category_grid:slug-categorie}}</code> <span style="color:#64748b;">→ grilă cu postările dintr-o categorie; pentru evenimente, viitoarele primele, apoi cele trecute (ex: <code>{{category_grid:evenimente}}</code>)</span></div>
+                <div><code>{{category_grid:slug-categorie}}</code> <span style="color:var(--ax-text-3);">→ grilă cu postările dintr-o categorie; pentru evenimente, viitoarele primele, apoi cele trecute (ex: <code>{{category_grid:evenimente}}</code>)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('category_events')): ?>
-                <div><code>{{category_events:slug-categorie}}</code> <span style="color:#64748b;">→ pagină de evenimente: hero cu următorul eveniment + secțiunile „viitoare" și „trecute" (ex: <code>{{category_events:evenimente}}</code>)</span></div>
+                <div><code>{{category_events:slug-categorie}}</code> <span style="color:var(--ax-text-3);">→ pagină de evenimente: hero cu următorul eveniment + secțiunile „viitoare" și „trecute" (ex: <code>{{category_events:evenimente}}</code>)</span></div>
 <?php endif; ?>
 <?= \App\Support\Dev::marcaj('vt:token-evenimente') ?>
 <?php if (\App\Support\Plugins::tokenVizibil('category_event_rows')): ?>
-                <div><code>{{category_event_rows:slug-categorie}}</code> <span style="color:#64748b;">→ listă compactă cu postările dintr-o categorie (imagine mică, titlu, dată, „Detalii"), paginată câte 3 (ex: <code>{{category_event_rows:evenimente}}</code>)</span></div>
+                <div><code>{{category_event_rows:slug-categorie}}</code> <span style="color:var(--ax-text-3);">→ listă compactă cu postările dintr-o categorie (imagine mică, titlu, dată, „Detalii"), paginată câte 3 (ex: <code>{{category_event_rows:evenimente}}</code>)</span></div>
 <?php endif; ?>
 <?php if (\App\Support\Plugins::tokenVizibil('category_grid_paged')): ?>
-                <div><code>{{category_grid_paged:slug1,slug2,...}}</code> <span style="color:#64748b;">→ grilă cu postările din mai multe categorii (separate prin virgulă), paginată câte 6 (ex: <code>{{category_grid_paged:evenimente,noutati}}</code>)</span></div>
+                <div><code>{{category_grid_paged:slug1,slug2,...}}</code> <span style="color:var(--ax-text-3);">→ grilă cu postările din mai multe categorii (separate prin virgulă), paginată câte 6 (ex: <code>{{category_grid_paged:evenimente,noutati}}</code>)</span></div>
 <?php endif; ?>
 <?= \App\Support\Dev::marcaj('vt:token-evenimente', true) ?>
             </div>
@@ -181,7 +181,7 @@ if (!is_string($previewAppCssContent)) {
 
         <article class="panel" style="margin-top:12px;">
             <h3 style="margin-top:0;">SEO de bază pentru această pagină</h3>
-            <p style="margin:0 0 10px;color:#64748b;">
+            <p style="margin:0 0 10px;color:var(--ax-text-3);">
                 Aceste valori suprascriu setările SEO globale doar pentru pagina curentă.
             </p>
             <div class="field" style="max-width:720px;">

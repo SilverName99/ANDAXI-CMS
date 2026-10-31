@@ -17,12 +17,7 @@ $fmtDate = static function (string $v): string {
     return $ts !== false ? date('d.m.Y H:i', $ts) : $v;
 };
 ?>
-<section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Produse promoționale</h1>
-            <p>Nomenclator intern pentru ce mai adaugi la comenzi (scrisoare, mostră, pix etc.). Le selectezi apoi în detaliile fiecărei comenzi.</p>
-        </div>
+<?php ob_start(); ?>
 <?= \App\Support\Dev::marcaj('bv:promo-export') ?>
 <?php
 // WP-21 (C13, din Biovitality 2ebc0cb, 9cca65b): exportul Excel (produsele și cui au fost date), cu intervalul de date
@@ -30,37 +25,46 @@ $fmtDate = static function (string $v): string {
 $exportQuery = array_filter(['from' => $from, 'to' => $to], static fn (string $v): bool => $v !== '');
 $exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_build_query($exportQuery) : '');
 ?>
-        <div>
-            <a class="btn btn-secondary" href="<?= $esc($exportUrl) ?>"
-               title="Descarcă produsele promoționale și lista celor care le-au primit (Excel)">⭳ Export Excel</a>
-        </div>
-        <style>
-        #promo-detail-modal > div{max-height:calc(100vh - 40px);display:flex;flex-direction:column;}
-        #promo-detail-modal > div > div:first-child{gap:12px;flex:0 0 auto;}
-        #promo-detail-close{flex:0 0 auto;}
-        #promo-detail-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
-        #promo-detail-modal > div > div:last-child{flex:0 0 auto;}
-        </style>
+<div>
+    <a class="btn btn-secondary" href="<?= $esc($exportUrl) ?>"
+       title="Descarcă produsele promoționale și lista celor care le-au primit (Excel)">⭳ Export Excel</a>
+</div>
+<style>
+#promo-detail-modal > div{max-height:calc(100vh - 40px);display:flex;flex-direction:column;}
+#promo-detail-modal > div > div:first-child{gap:12px;flex:0 0 auto;}
+#promo-detail-close{flex:0 0 auto;}
+#promo-detail-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+#promo-detail-modal > div > div:last-child{flex:0 0 auto;}
+</style>
 <?= \App\Support\Dev::marcaj('bv:promo-export', true) ?>
-    </div>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Produse promoționale',
+    'nivel' => 1,
+    'subtitlu' => 'Nomenclator intern pentru ce mai adaugi la comenzi (scrisoare, mostră, pix etc.). Le selectezi apoi în detaliile fiecărei comenzi.',
+    'actiuni' => $antetActiuni,
+]);
+?>
+<section class="panel">
 
     <!-- Promoționale per client -->
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin:0 0 22px;">
+    <div style="background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);padding:18px 20px;margin:0 0 22px;">
         <h3 style="margin:0 0 4px;">Promoționale per client</h3>
-        <p style="margin:0 0 12px;color:#6b7280;font-size:13px;">Caută un client și vezi ce produse promoționale a primit la comenzile lui.</p>
+        <p style="margin:0 0 12px;color:var(--ax-text-3);font-size:13px;">Caută un client și vezi ce produse promoționale a primit la comenzile lui.</p>
         <form id="promo-client-form" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-            <input type="text" id="promo-client-input" value="<?= $esc($clientQuery) ?>" placeholder="Nume client, email sau nr. comandă..." style="flex:1;min-width:240px;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;">
+            <input type="text" id="promo-client-input" value="<?= $esc($clientQuery) ?>" placeholder="Nume client, email sau nr. comandă..." style="flex:1;min-width:240px;padding:9px 12px;border:1px solid var(--ax-linie-tare);border-radius:8px;">
             <button class="btn" type="submit">Caută</button>
             <button class="btn btn-secondary" type="button" id="promo-client-reset">Reset</button>
         </form>
         <div id="promo-client-results">
-            <p style="color:#6b7280;font-style:italic;">Scrie numele unui client ca să vezi ce a primit.</p>
+            <p style="color:var(--ax-text-3);font-style:italic;">Scrie numele unui client ca să vezi ce a primit.</p>
         </div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:22px;align-items:start;">
         <!-- Formular add/edit -->
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;">
+        <div style="background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);padding:18px 20px;">
             <h3 style="margin:0 0 14px;"><?= $editId > 0 ? 'Editează produs' : 'Adaugă produs' ?></h3>
             <form method="post" action="/admin/promo-products" class="form-grid" style="grid-template-columns:1fr;">
                 <input type="hidden" name="id" value="<?= $editId ?>">
@@ -92,16 +96,16 @@ $exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_
         </div>
 
         <!-- Listă -->
-        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:6px 4px;overflow-x:auto;">
+        <div style="background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);padding:6px 4px;overflow-x:auto;">
             <?php if ($items === []): ?>
-                <p style="color:#6b7280;font-style:italic;padding:16px;">Niciun produs promoțional încă. Adaugă unul în stânga.</p>
+                <p style="color:var(--ax-text-3);font-style:italic;padding:16px;">Niciun produs promoțional încă. Adaugă unul în stânga.</p>
             <?php else: ?>
                 <table style="width:100%;border-collapse:collapse;font-size:14px;">
                     <thead>
                         <tr>
-                            <th style="text-align:left;padding:10px 12px;color:#6b7280;font-size:12px;text-transform:uppercase;">Denumire</th>
-                            <th style="text-align:left;padding:10px 12px;color:#6b7280;font-size:12px;text-transform:uppercase;">Notă</th>
-                            <th style="text-align:left;padding:10px 12px;color:#6b7280;font-size:12px;text-transform:uppercase;">Status</th>
+                            <th style="text-align:left;padding:10px 12px;color:var(--ax-text-3);font-size:12px;text-transform:uppercase;">Denumire</th>
+                            <th style="text-align:left;padding:10px 12px;color:var(--ax-text-3);font-size:12px;text-transform:uppercase;">Notă</th>
+                            <th style="text-align:left;padding:10px 12px;color:var(--ax-text-3);font-size:12px;text-transform:uppercase;">Status</th>
                             <th style="padding:10px 12px;"></th>
                         </tr>
                     </thead>
@@ -109,12 +113,12 @@ $exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_
                     <?php foreach ($items as $it): ?>
                         <?php $iid = (int) ($it['id'] ?? 0); $active = ((int) ($it['is_active'] ?? 0)) === 1; ?>
                         <tr>
-                            <td style="padding:10px 12px;border-top:1px solid #eee;font-weight:600;"><?= $esc((string) ($it['name'] ?? '')) ?></td>
-                            <td style="padding:10px 12px;border-top:1px solid #eee;color:#6b7280;"><?= $esc((string) ($it['notes'] ?? '')) ?: '—' ?></td>
-                            <td style="padding:10px 12px;border-top:1px solid #eee;">
-                                <span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;<?= $active ? 'background:#dcfce7;color:#166534;' : 'background:#f3f4f6;color:#6b7280;' ?>"><?= $active ? 'Activ' : 'Inactiv' ?></span>
+                            <td style="padding:10px 12px;border-top:1px solid var(--ax-linie);font-weight:600;"><?= $esc((string) ($it['name'] ?? '')) ?></td>
+                            <td style="padding:10px 12px;border-top:1px solid var(--ax-linie);color:var(--ax-text-3);"><?= $esc((string) ($it['notes'] ?? '')) ?: '—' ?></td>
+                            <td style="padding:10px 12px;border-top:1px solid var(--ax-linie);">
+                                <span style="display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;<?= $active ? 'background:var(--ax-ok-fundal);color:var(--ax-ok);' : 'background:var(--ax-suprafata-2);color:var(--ax-text-3);' ?>"><?= $active ? 'Activ' : 'Inactiv' ?></span>
                             </td>
-                            <td style="padding:10px 12px;border-top:1px solid #eee;white-space:nowrap;text-align:right;">
+                            <td style="padding:10px 12px;border-top:1px solid var(--ax-linie);white-space:nowrap;text-align:right;">
                                 <button type="button" class="btn btn-secondary btn-sm" data-promo-recipients="<?= $iid ?>" style="padding:6px 12px;font-size:13px;">👥 Cui a fost dat</button>
                                 <a class="btn btn-secondary btn-sm" href="/admin/promo-products?edit=<?= $iid ?>" style="padding:6px 12px;font-size:13px;">Editează</a>
                                 <form method="post" action="/admin/promo-products/<?= $iid ?>/delete" style="display:inline" onsubmit="return confirm('Ștergi acest produs promoțional?');">
@@ -130,7 +134,7 @@ $exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_
     </div>
 
     <!-- Raport totaluri -->
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px 20px;margin-top:22px;">
+    <div style="background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);padding:18px 20px;margin-top:22px;">
         <h3 style="margin:0 0 12px;">Raport — total adăugat pe produs</h3>
         <form method="get" action="/admin/promo-products" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">
             <div class="field" style="margin:0;">
@@ -151,22 +155,22 @@ $exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_
         </form>
 
         <?php if ($report === []): ?>
-            <p style="color:#6b7280;font-style:italic;">Niciun produs promoțional adăugat la comenzi în perioada selectată.</p>
+            <p style="color:var(--ax-text-3);font-style:italic;">Niciun produs promoțional adăugat la comenzi în perioada selectată.</p>
         <?php else: ?>
             <table style="width:100%;border-collapse:collapse;font-size:14px;">
                 <thead>
                     <tr>
-                        <th style="text-align:left;padding:8px 12px;color:#6b7280;font-size:12px;text-transform:uppercase;">Produs</th>
-                        <th style="text-align:right;padding:8px 12px;color:#6b7280;font-size:12px;text-transform:uppercase;">Total bucăți</th>
-                        <th style="text-align:right;padding:8px 12px;color:#6b7280;font-size:12px;text-transform:uppercase;">Comenzi</th>
+                        <th style="text-align:left;padding:8px 12px;color:var(--ax-text-3);font-size:12px;text-transform:uppercase;">Produs</th>
+                        <th style="text-align:right;padding:8px 12px;color:var(--ax-text-3);font-size:12px;text-transform:uppercase;">Total bucăți</th>
+                        <th style="text-align:right;padding:8px 12px;color:var(--ax-text-3);font-size:12px;text-transform:uppercase;">Comenzi</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($report as $r): ?>
                     <tr>
-                        <td style="padding:9px 12px;border-top:1px solid #eee;font-weight:600;"><?= $esc((string) ($r['name'] ?? '')) ?></td>
-                        <td style="padding:9px 12px;border-top:1px solid #eee;text-align:right;font-weight:800;"><?= (int) ($r['total'] ?? 0) ?></td>
-                        <td style="padding:9px 12px;border-top:1px solid #eee;text-align:right;color:#6b7280;"><?= (int) ($r['orders_count'] ?? 0) ?></td>
+                        <td style="padding:9px 12px;border-top:1px solid var(--ax-linie);font-weight:600;"><?= $esc((string) ($r['name'] ?? '')) ?></td>
+                        <td style="padding:9px 12px;border-top:1px solid var(--ax-linie);text-align:right;font-weight:800;"><?= (int) ($r['total'] ?? 0) ?></td>
+                        <td style="padding:9px 12px;border-top:1px solid var(--ax-linie);text-align:right;color:var(--ax-text-3);"><?= (int) ($r['orders_count'] ?? 0) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
@@ -177,10 +181,10 @@ $exportUrl = '/admin/promo-products/export' . ($exportQuery !== [] ? '?' . http_
 
 <!-- Popup detalii promoționale per comandă -->
 <div id="promo-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px 24px;box-shadow:0 24px 64px rgba(0,0,0,.3);">
+    <div style="background:var(--ax-suprafata);border-radius:var(--ax-raza-mare);max-width:480px;width:100%;padding:22px 24px;box-shadow:0 24px 64px rgba(0,0,0,.3);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
             <h3 id="promo-detail-title" style="margin:0;">Detalii</h3>
-            <button type="button" id="promo-detail-close" style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:#6b7280;">&times;</button>
+            <button type="button" id="promo-detail-close" style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--ax-text-3);">&times;</button>
         </div>
         <div id="promo-detail-body"></div>
         <div style="margin-top:18px;text-align:right;">

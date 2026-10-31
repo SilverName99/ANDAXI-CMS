@@ -1,5 +1,6 @@
+<?php admin_componenta('antet-pagina', ['titlu' => 'Produs nou', 'nivel' => 1,
+    'actiuni' => '<a class="btn btn-secondary" href="/admin/products">Înapoi la produse</a>']); ?>
 <section class="panel">
-    <h1>Produs nou</h1>
     <form method="post" action="/admin/products" class="form-grid">
         <div class="field">
             <label>Nume *</label>

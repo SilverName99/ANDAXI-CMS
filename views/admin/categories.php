@@ -5,19 +5,20 @@ $brandsSeo = is_array($brandsSeo ?? null) ? $brandsSeo : [];
 ?>
 <style>
 .seo-google-fields{display:grid;gap:8px;margin-top:8px;max-width:620px;}
-.seo-google-fields label{font-size:12px;color:#475569;}
+.seo-google-fields label{font-size:12px;color:var(--ax-text-3);}
 .seo-google-fields input,.seo-google-fields textarea{width:100%;}
-.seo-google-count{font-size:12px;color:#64748b;}
-.seo-google-count.is-long{color:#b45309;}
-.seo-google-summary{cursor:pointer;color:#0f766e;font-size:13px;}
+.seo-google-count{font-size:12px;color:var(--ax-text-3);}
+.seo-google-count.is-long{color:var(--ax-atentie);}
+.seo-google-summary{cursor:pointer;color:var(--ax-accent);font-size:13px;}
 </style>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Categorii produse',
+    'nivel' => 1,
+    'subtitlu' => 'Creează și administrează categoriile din magazin.',
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Categorii produse</h1>
-            <p>Creează și administrează categoriile din magazin.</p>
-        </div>
-    </div>
 
     <form method="post" action="/admin/categories" class="form-grid" style="margin-bottom:14px;">
         <div class="field">

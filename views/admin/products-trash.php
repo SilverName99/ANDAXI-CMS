@@ -1,11 +1,15 @@
+<?php ob_start(); ?>
+<a class="btn btn-secondary" href="/admin/products">Înapoi la produse</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Coș produse',
+    'nivel' => 1,
+    'subtitlu' => 'Refaci produsele șterse sau le elimini definitiv.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-        <div>
-            <h1>Coș produse</h1>
-            <p>Refaci produsele șterse sau le elimini definitiv.</p>
-        </div>
-        <a class="btn btn-secondary" href="/admin/products">Înapoi la produse</a>
-    </div>
 
     <table class="table">
         <thead>

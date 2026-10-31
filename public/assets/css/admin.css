@@ -807,3 +807,13 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .adm-puncte--plus { color: var(--ax-ok); }
 .adm-puncte--minus { color: var(--ax-eroare); }
 #client-puncte { margin-top: 12px; }
+/* Logarea (WP-35): o casetă în mijlocul paginii, cu marca adminului. */
+.ax-admin-login { background: var(--ax-pagina); font-family: var(--ax-font); font-size: var(--ax-text-baza); color: var(--ax-text); }
+.ax-login { max-width: 420px; margin: 64px auto; padding: 24px; background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: var(--ax-raza-mare); box-shadow: var(--ax-umbra); }
+.ax-login__marca { padding: 0 0 16px; border-bottom: 1px solid var(--ax-linie); margin-bottom: 16px; }
+.ax-login .ax-marca-nume { color: var(--ax-text); }
+.ax-login h1 { font-size: 20px; margin: 0 0 12px; }
+.ax-login__formular { display: grid; gap: 6px; }
+.ax-login__formular input { min-height: var(--ax-tinta); padding: 0 12px; border: 1px solid var(--ax-linie-tare); border-radius: var(--ax-raza); font: inherit; }
+.ax-login__formular .btn { margin-top: 10px; min-height: var(--ax-tinta); border: 1px solid var(--ax-accent); border-radius: var(--ax-raza); background: var(--ax-accent); color: var(--ax-accent-text); font-weight: 600; cursor: pointer; }
+.ax-login__eroare { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--ax-eroare-linie); border-radius: var(--ax-raza); background: var(--ax-eroare-fundal); color: var(--ax-eroare); }

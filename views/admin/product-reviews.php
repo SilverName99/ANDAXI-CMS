@@ -34,13 +34,14 @@ $paginationStart = max(1, $page - 2);
 $paginationEnd = min($totalPages, $page + 2);
 ?>
 
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Recenzii',
+    'nivel' => 1,
+    'subtitlu' => 'Review-urile noi intră în pending și se aprobă manual înainte de publicare.',
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Recenzii produse</h1>
-            <p>Review-urile noi intră în pending și se aprobă manual înainte de publicare.</p>
-        </div>
-    </div>
 
     <div class="store-settings-tabs" style="margin-bottom:12px;">
         <a class="btn btn-secondary <?= $panel === 'list' ? 'is-active' : '' ?>" href="<?= htmlspecialchars($buildReviewsUrl(['panel' => 'list', 'page' => 1]), ENT_QUOTES) ?>">Toate recenziile</a>
@@ -101,7 +102,7 @@ $paginationEnd = min($totalPages, $page + 2);
             </div>
         </form>
 
-        <p style="margin:0 0 10px;color:#64748b;">
+        <p style="margin:0 0 10px;color:var(--ax-text-3);">
             Afișare <?= count($reviews) ?> din <?= $totalReviews ?> recenzii.
         </p>
 <?php if ($areSpam): ?><?= \App\Support\Dev::marcaj('bv:recenzii-spam-actiuni') ?>

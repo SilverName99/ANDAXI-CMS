@@ -32,14 +32,18 @@ if ($publishedAt === '') {
 $publishedAtInput = date('Y-m-d\TH:i', strtotime($publishedAt) ?: time());
 $returnParam = $postId > 0 ? (string) $postId : 'new';
 ?>
+<?php ob_start(); ?>
+<a class="btn btn-secondary" href="/admin/blog/posts">&larr; Înapoi la listă</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => (string) ($postId > 0 ? 'Editează postare' : 'Postare nouă — Pasul 2'),
+    'nivel' => 1,
+    'subtitlu' => 'Completează câmpurile cerute de template. Schimbând template-ul, câmpurile se actualizează.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1><?= $postId > 0 ? 'Editează postare' : 'Postare nouă — Pasul 2' ?></h1>
-            <p>Completează câmpurile cerute de template. Schimbând template-ul, câmpurile se actualizează.</p>
-        </div>
-        <a class="btn btn-secondary" href="/admin/blog/posts">&larr; Înapoi la listă</a>
-    </div>
 
     <form method="post" action="/admin/blog/posts" class="form-grid" id="blog-post-form">
         <input type="hidden" name="action" value="save">
@@ -256,7 +260,7 @@ $returnParam = $postId > 0 ? (string) $postId : 'new';
             <div class="blog-tag-chips" id="blog-post-tag-chips" aria-live="polite"></div>
             <?php if ($tagSuggestions !== []): ?>
                 <details style="margin-top:8px;">
-                    <summary style="cursor:pointer;font-size:12px;color:#64748b;">Etichete folosite până acum (<?= count($tagSuggestions) ?>)</summary>
+                    <summary style="cursor:pointer;font-size:12px;color:var(--ax-text-3);">Etichete folosite până acum (<?= count($tagSuggestions) ?>)</summary>
                     <div class="blog-tag-chips blog-tag-chips--pick" style="margin-top:8px;">
                         <?php foreach ($tagSuggestions as $tagSuggestion): ?>
                             <button type="button" class="blog-tag-chip blog-tag-chip--add" data-tag-add="<?= htmlspecialchars((string) $tagSuggestion, ENT_QUOTES) ?>">
@@ -272,7 +276,7 @@ $returnParam = $postId > 0 ? (string) $postId : 'new';
         </div>
 
         <details class="panel" style="grid-column:1/-1;margin:0;">
-            <summary style="cursor:pointer;font-weight:700;">Setări postare <span style="color:#64748b;font-weight:400;font-size:.9em;">(slug, status, dată, SEO)</span></summary>
+            <summary style="cursor:pointer;font-weight:700;">Setări postare <span style="color:var(--ax-text-3);font-weight:400;font-size:.9em;">(slug, status, dată, SEO)</span></summary>
             <div class="form-grid" style="margin-top:12px;">
                 <div class="field">
                     <label>Slug (opțional)</label>

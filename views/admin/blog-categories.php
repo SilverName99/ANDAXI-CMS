@@ -1,13 +1,14 @@
 <?php
 $categories = is_array($categories ?? null) ? $categories : [];
 ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Categorii blog',
+    'nivel' => 1,
+    'subtitlu' => 'Zonele de conținut (ex: Noutăți, Evenimente).',
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Categorii blog</h1>
-            <p>Zonele de conținut (ex: Noutăți, Evenimente).</p>
-        </div>
-    </div>
 
     <form method="post" action="/admin/blog/categories" class="form-grid" style="margin-bottom:14px;">
         <div class="field">

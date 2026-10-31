@@ -69,12 +69,12 @@ $isActive = (int) ($blogTemplate['is_active'] ?? 1) === 1;
             <input type="text" id="template-description" name="description" value="<?= htmlspecialchars($templateDescription, ENT_QUOTES) ?>" placeholder="Ex: layout SEO articol blog">
         </div>
 
-        <article class="panel" style="margin-top:12px;background:#f8fafc;border-color:#cbd5e1;">
+        <article class="panel" style="margin-top:12px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
             <h4 style="margin-top:0;">Coduri disponibile pentru template</h4>
-            <p style="margin:0 0 10px;color:#64748b;">Poți copia aceste coduri și le poți insera în HTML/CSS/JS.</p>
+            <p style="margin:0 0 10px;color:var(--ax-text-3);">Poți copia aceste coduri și le poți insera în HTML/CSS/JS.</p>
             <div class="template-token-panel is-active" data-token-panel="general" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
                 <?php foreach ($generalTokens as $item): ?>
-                    <div style="padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;">
+                    <div style="padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);">
                         <strong style="display:block;font-size:13px;"><?= htmlspecialchars((string) $item['label'], ENT_QUOTES) ?></strong>
                         <code><?= htmlspecialchars((string) $item['token'], ENT_QUOTES) ?></code>
                     </div>
@@ -105,7 +105,7 @@ $isActive = (int) ($blogTemplate['is_active'] ?? 1) === 1;
                 <div class="preview-shell desktop" id="preview-shell">
                     <iframe id="template-preview" title="Preview template blog"></iframe>
                 </div>
-                <small style="display:block;margin-top:10px;color:#64748b;">
+                <small style="display:block;margin-top:10px;color:var(--ax-text-3);">
                     Preview demo pentru codurile disponibile.
                 </small>
             </div>

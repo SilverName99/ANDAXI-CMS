@@ -14,17 +14,19 @@ if ($currentGalleryUrl !== '/admin/gallery') {
 $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?' . $currentGalleryQuery) : '');
 ?>
 
+<?php ob_start(); ?>
+    <button class="btn btn-secondary" type="button" id="open-folder-modal">+ Adaugă folder</button>
+    <button class="btn" type="button" id="open-gallery-modal">+ Adaugă media</button>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Galerie',
+    'nivel' => 1,
+    'subtitlu' => 'Gestionează imagini, videoclipuri mp4 și documente PDF.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Galerie</h1>
-            <p>Gestionează imagini, videoclipuri mp4 și documente PDF.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <button class="btn btn-secondary" type="button" id="open-folder-modal">+ Adaugă folder</button>
-            <button class="btn" type="button" id="open-gallery-modal">+ Adaugă media</button>
-        </div>
-    </div>
 
     <div class="gallery-view-switch">
         <a href="/admin/gallery?view=all<?= $selectedFolderId > 0 ? '&folder=' . $selectedFolderId : '' ?><?= $isUnassignedFilter ? '&folder=unassigned' : '' ?><?= $searchQueryParam ?>" class="btn <?= $viewMode === 'all' ? '' : 'btn-secondary' ?>">Toate pozele</a>
@@ -144,7 +146,7 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
                             <input type="checkbox" name="image_ids[]" value="<?= $mediaId ?>" class="gallery-item-checkbox">
                             Selectează
                             <?php if ($fileMissing): ?>
-                                <span style="margin-left:auto;background:#ef4444;color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;" title="Fișierul nu există pe server. Poți șterge această înregistrare sau re-încărca imaginea.">Lipsă</span>
+                                <span style="margin-left:auto;background:var(--ax-eroare);color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;" title="Fișierul nu există pe server. Poți șterge această înregistrare sau re-încărca imaginea.">Lipsă</span>
                             <?php endif; ?>
                         </label>
                         <?php if ($mediaType === 'video'): ?>
@@ -248,14 +250,14 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
                 </label>
             </div>
             <div style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:12px;">
-                <small style="color:#64748b;">
+                <small style="color:var(--ax-text-3);">
                     Titlul fiecărei imagini se ia din numele fișierului. Le poți redenumi după încărcare.
                 </small>
                 <button class="btn" type="submit" id="gallery-bulk-submit" disabled>Încarcă toate</button>
             </div>
         </form>
 
-        <p style="margin:0 0 14px;color:#64748b;font-size:13px;">
+        <p style="margin:0 0 14px;color:var(--ax-text-3);font-size:13px;">
             Sau adaugă un singur fișier, cu titlu și alt text scrise de tine:
         </p>
 
@@ -826,8 +828,8 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
     gap: 10px;
     height: 140px;
     padding: 12px;
-    background: #f8fafc;
-    color: #334155;
+    background: var(--ax-suprafata-2);
+    color: var(--ax-text-2);
     text-decoration: none;
     text-align: center;
 }
@@ -844,7 +846,7 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
     min-width: 46px;
     padding: 5px 9px;
     border-radius: 6px;
-    background: #b91c1c;
+    background: var(--ax-eroare);
     color: #fff;
     font-size: 12px;
     font-weight: 700;

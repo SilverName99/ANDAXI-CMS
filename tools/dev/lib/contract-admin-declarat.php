@@ -179,6 +179,9 @@ return [
         'fidelitate-fereastra-veche' => ['ce' => 'scos', 'cale' => '^/admin/users/points$', 'rol' => 'adm',
             'rand' => "^(data data-loyalty-history-btn = |data data-user-id = \d+|data data-user-name = .+|celula (Detalii|Selectează un cont pentru a vedea istoricul\.))$",
             'motiv' => 'IA-07: fereastra „Detalii” cu istoricul unui client (încărcat din /admin/users/points/history, adresă care rămâne) iese de pe pagină'],
+        // Restul paginilor: doar antetul, secțiunile și culorile; un singur link nou.
+        'produs-nou-inapoi' => ['ce' => 'adaugat', 'rand' => '^link /admin/products$', 'cale' => '^/admin/products/new$',
+            'motiv' => 'butonul „Înapoi la produse” din antetul paginii „Produs nou” (ca la celelalte pagini din butoane)'],
         // Setări magazin / site (IA-03) și Google (IA-04).
         'google-mutat' => ['ce' => 'adaugat', 'rand' => '^mutat 302 -> /admin/settings/store\?tab=google$', 'cale' => '^/admin/settings/google$', 'rol' => 'adm',
             'motiv' => 'IA-04: pagina Google e partea „Google” a tab-ului „SEO și Google” din Setări magazin / Setări site; adresa veche duce acolo'],

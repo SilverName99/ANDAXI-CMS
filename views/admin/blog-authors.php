@@ -7,16 +7,18 @@ $modalOpen = $selectedAuthorId > 0 || $newRequested;
 $galleryImages = is_array($galleryImages ?? null) ? $galleryImages : [];
 ?>
 
+<?php ob_start(); ?>
+    <button class="btn" type="button" id="add-author-btn">+ Autor nou</button>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Autori blog',
+    'nivel' => 1,
+    'subtitlu' => 'Gestionează autorii disponibili pentru postările de blog.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Autori blog</h1>
-            <p>Gestionează autorii disponibili pentru postările de blog.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <button class="btn" type="button" id="add-author-btn">+ Autor nou</button>
-        </div>
-    </div>
 
     <div class="users-table-wrap">
         <table class="table users-table">
