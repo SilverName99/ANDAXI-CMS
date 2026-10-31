@@ -653,8 +653,9 @@ if (count($comenzi) < 2) {
         array_filter($cereriErp(), static fn (array $r): bool => ($r['cale'] ?? '') === '/api/comenzi-site/ingest')));
     $contoare = static function () use ($cerere, $jarAdmin): array {
         $r = $cerere('GET', '/admin/settings/erp', $jarAdmin);
-        preg_match('#În așteptare</div>\s*<div[^>]*>(\d+)</div>#u', $r['corp'], $asteptare);
-        preg_match('#Eșuate</div>\s*<div[^>]*>(\d+)</div>#u', $r['corp'], $esuate);
+        // Cifrele de sus ale paginii (din WP-35, cardurile adminului: titlul, apoi valoarea).
+        preg_match('#În așteptare</(?:div|span)>\s*<(?:div|span)[^>]*>(\d+)</(?:div|span)>#u', $r['corp'], $asteptare);
+        preg_match('#Eșuate</(?:div|span)>\s*<(?:div|span)[^>]*>(\d+)</(?:div|span)>#u', $r['corp'], $esuate);
         preg_match('#data-prag-erp="([a-z]+)"#', $r['corp'], $stare);
         preg_match('#\((\d+) (?:netrimise|așteaptă)#u', $r['corp'], $inainte);
         return ['cod' => $r['cod'], 'in_asteptare' => (int) ($asteptare[1] ?? -1), 'esuate' => (int) ($esuate[1] ?? -1),
