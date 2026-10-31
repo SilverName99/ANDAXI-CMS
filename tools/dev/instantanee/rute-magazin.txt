@@ -2,7 +2,7 @@
 # Pe site: catalog, magazin, livrare_fan, plata_stripe, plata_euplatesc, plata_bt
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (280)
+RUTE (281)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -20,6 +20,7 @@ GET  /admin/blog/templates -> 403 [blog]
 GET  /admin/blog/templates/builder -> 403 [blog]
 GET  /admin/blog/templates/{id}/builder -> 403 [blog]
 GET  /admin/categories -> CONTROLLER [catalog]
+GET  /admin/cauta -> CONTROLLER [nucleu]
 GET  /admin/cereri-oferta -> 403 [cereri_oferta]
 GET  /admin/componente -> CONTROLLER [nucleu]
 GET  /admin/coupons -> 403 [cupoane]

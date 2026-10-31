@@ -68,6 +68,27 @@ nouă a unei pagini (WP-33, WP-36) se adaugă în lista de la „?” prin `$adm
 verifică într-o plimbare a paginii, cu pluginul ei pornit și oprit (lista comenzilor: `tools/dev/plimbare-comenzi.cjs`, din
 `tools/dev/test-admin-faza-d.php`).
 
+## Căutarea în tot adminul și scurtăturile (WP-36)
+
+Căutarea din antet (macheta: „Caută comenzi, produse, clienți…” cu Ctrl K) e un link spre pagina rezultatelor (`/admin/cauta`);
+cu JavaScript, un clic sau **Ctrl K** (pe Mac ⌘ K) deschide fereastra căutării (`#ax-cautare`, `public/assets/js/admin/cautare.js`):
+câmpul sus, rezultatele pe grupuri (Comenzi, Produse, Clienți, Pagini, Postări blog, Pagini și setări din admin, Acțiuni), rândul
+ales cu bandă în culoarea accentului, jos tastele și „Vezi toate rezultatele”. Textul din antet numește doar ce poate căuta adminul
+acela (`CautareAdmin::indemn`). Ce găsește și pentru cine: `App\Support\CautareAdmin` (fiecare sursă doar cu pluginul ei și cu
+dreptul rolului; `docs/DEZVOLTARE.md`, „Adminul refăcut”).
+
+Lista de la „?” are trei părți: tastele de peste tot (Ctrl K, ?, Esc, Tab), **„Mergi la”** (G, apoi litera unui grup din meniu:
+A Acasă, C Comenzi, P Produse, L Clienți, M Marketing, T Conținut, R Rapoarte, S Setări; doar grupurile pe care le vede adminul,
+cu numele lor din meniu) și „Pe pagina aceasta” (`$adminScurtaturiPagina`). Regulile tuturor scurtăturilor:
+
+- niciuna nu pornește cât scrii într-un câmp (text, listă, editor; nici Ctrl K, care în editorul unei postări pune un link);
+- „G” așteaptă o literă 1,5 secunde (o notă jos o spune); tasta de după „G” e mereu a navigării, deci nu ajunge la scurtăturile
+  paginii: „G C” pe lista comenzilor deschide Comenzi, nu „Confirmă”;
+- o scurtătură doar deschide o pagină sau o fereastră; A/C/P din lista comenzilor apasă butoanele barei, care cer confirmarea
+  de până acum;
+- nicio scurtătură peste o fereastră sau un panou deschis (editorul produsului, panoul comenzii), ca să nu se piardă ce e
+  nesalvat.
+
 **Pentru contractul adminului (WP-29, `$contractAdminPorturi`)** — adrese, câmpuri și atribute noi: `POST /admin/emails/builder/verificare`
 (JSON, nu trimite nimic); `POST /newsletter/unsubscribe/{token}` (cu `confirmare=1`, cu `trimite_link=1` sau „cu un clic”, RFC 8058);
 `GET/POST /newsletter/confirmare/{token}`; secțiunile `newsletter-campaign-unschedule` și `newsletter-campaign-pause` pe `POST /admin/emails`;

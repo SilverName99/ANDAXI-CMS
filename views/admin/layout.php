@@ -200,11 +200,13 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                     <button type="button" class="ax-buton-icon" id="sidebar-toggle-btn" aria-controls="ax-bara" aria-expanded="true" title="Ascunde sau arată meniul">
                         <span class="nav-icon"><?= $icon('menu') ?></span><span class="adm-ascuns">Meniul</span>
                     </button>
-                    <div class="ax-cautare" title="Căutarea în tot adminul (comenzi, produse, clienți) vine în curând">
+<?php // WP-36: căutarea în tot adminul. Linkul duce la pagina rezultatelor (fără JavaScript); cautare.js deschide în locul ei fereastra
+// căutării (și Ctrl+K). Textul spune doar ce surse vede adminul (pluginurile site-ului, rolul lui). ?>
+                    <a class="ax-cautare" href="/admin/cauta" data-ax-cautare aria-haspopup="dialog" aria-keyshortcuts="Control+K">
                         <span class="nav-icon"><?= $icon('search') ?></span>
-                        <span class="ax-cautare-text">Căutarea în tot adminul vine în curând</span><span class="ax-cautare-scurt">Caută (în curând)</span>
+                        <span class="ax-cautare-text"><?= $e(\App\Support\CautareAdmin::indemn()) ?></span><span class="ax-cautare-scurt">Caută</span>
                         <span class="ax-taste" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span>
-                    </div>
+                    </a>
                     <button type="button" class="ax-buton-text" id="ax-buton-taste" aria-haspopup="dialog" aria-controls="ax-taste" aria-keyshortcuts="Shift+?">
                         <span class="nav-icon"><?= $icon('keyboard') ?></span><span class="ax-ascuns-mic">Scurtături</span><kbd>?</kbd>
                     </button>
@@ -242,10 +244,22 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                 <button type="button" class="ax-buton-icon ax-inchide-dialog" title="Închide (Esc)">×<span class="adm-ascuns">Închide</span></button>
             </div>
             <dl class="ax-taste-lista">
+                <div><dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Caută în tot adminul (pe Mac <kbd>⌘</kbd> <kbd>K</kbd>)</dd></div>
                 <div><dt><kbd>?</kbd></dt><dd>Arată lista aceasta</dd></div>
                 <div><dt><kbd>Esc</kbd></dt><dd>Închide fereastra, panoul sau meniul deschis</dd></div>
                 <div><dt><kbd>Tab</kbd></dt><dd>Treci la următorul buton sau câmp (cel ales are un contur colorat)</dd></div>
             </dl>
+<?php // WP-36: „G”, apoi litera unui grup din meniu = prima pagină a grupului pe care o vede adminul (CautareAdmin::salturi: după
+// licență și rol; un grup gol pe site nu are rând). cadru.js citește literele și adresele din data-ax-salt*. ?>
+<?php $adminSalturi = \App\Support\CautareAdmin::salturi(); ?>
+<?php if ($adminSalturi !== []): ?>
+            <h3 class="ax-taste-titlu">Mergi la: <kbd>G</kbd>, apoi litera</h3>
+            <dl class="ax-taste-lista" id="ax-taste-salturi">
+<?php foreach ($adminSalturi as $adminSalt): ?>
+                <div data-ax-salt="<?= $e($adminSalt['litera']) ?>" data-ax-salt-adresa="<?= $e($adminSalt['url']) ?>"><dt><kbd>G</kbd> <kbd><?= $e(strtoupper($adminSalt['litera'])) ?></kbd></dt><dd><?= $e($adminSalt['eticheta']) ?><?= $adminSalt['pagina'] !== $adminSalt['eticheta'] ? ' <span class="ax-taste-unde">· ' . $e($adminSalt['pagina']) . '</span>' : '' ?></dd></div>
+<?php endforeach; ?>
+            </dl>
+<?php endif; ?>
 <?php // Scurtăturile paginii deschise (WP-33: lista comenzilor), puse de vederea ei în $adminScurtaturiPagina: [tasta, ce face]. ?>
 <?php if (is_array($adminScurtaturiPagina ?? null) && $adminScurtaturiPagina !== []): ?>
             <h3 class="ax-taste-titlu">Pe pagina aceasta</h3>
@@ -255,10 +269,30 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
 <?php endforeach; ?>
             </dl>
 <?php endif; ?>
-            <p class="ax-dialog-nota">Căutarea în tot adminul (<kbd>Ctrl</kbd> <kbd>K</kbd>) vine odată cu ultimele pagini refăcute.</p>
+            <p class="ax-dialog-nota">Scurtăturile nu pornesc cât scrii într-un câmp: apasă întâi <kbd>Esc</kbd> sau ieși din câmp. Nicio scurtătură nu face singură o acțiune: cele care trimit ceva cer confirmarea de până acum.</p>
+        </dialog>
+<?php // WP-36: fereastra căutării (Ctrl+K sau clic pe căutarea din antet; public/assets/js/admin/cautare.js). Fără JavaScript, formularul
+// duce la pagina rezultatelor, ca linkul din antet. ?>
+        <dialog class="ax-dialog ax-paleta" id="ax-cautare" aria-labelledby="ax-cautare-titlu">
+            <form class="ax-paleta-formular" id="ax-cautare-formular" method="get" action="/admin/cauta" role="search">
+                <h2 class="adm-ascuns" id="ax-cautare-titlu">Caută în admin</h2>
+                <span class="nav-icon" aria-hidden="true"><?= $icon('search') ?></span>
+                <label class="adm-ascuns" for="ax-cautare-camp">Caută</label>
+                <input type="search" id="ax-cautare-camp" name="q" autocomplete="off" spellcheck="false" placeholder="<?= $e(\App\Support\CautareAdmin::indemn()) ?>"
+                       role="combobox" aria-expanded="false" aria-controls="ax-cautare-rezultate" aria-autocomplete="list">
+                <button type="button" class="ax-buton-icon ax-inchide-dialog" title="Închide (Esc)">×<span class="adm-ascuns">Închide</span></button>
+            </form>
+            <div class="ax-paleta-corp">
+                <div class="ax-paleta-rezultate" id="ax-cautare-rezultate" role="listbox" aria-label="Rezultatele căutării"></div>
+                <p class="ax-paleta-stare" id="ax-cautare-stare" role="status" aria-live="polite">Scrie cel puțin <?= \App\Support\CautareAdmin::MINIM ?> litere sau cifre.</p>
+            </div>
+            <div class="ax-paleta-subsol">
+                <span><kbd>↑</kbd> <kbd>↓</kbd> alegi</span><span><kbd>Enter</kbd> deschizi</span><span><kbd>Esc</kbd> închizi</span>
+                <button type="submit" class="ax-paleta-toate" form="ax-cautare-formular">Vezi toate rezultatele</button>
+            </div>
         </dialog>
 <?php // Componentele (WP-31) întâi: panoul deschis își prinde Esc-ul înaintea cadrului. ?>
-<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'taburi', 'cadru'] as $adminScript): ?>
+<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'taburi', 'cadru', 'cautare'] as $adminScript): ?>
         <script src="/assets/js/admin/<?= $adminScript ?>.js?v=<?= $adminVersiune('assets/js/admin/' . $adminScript . '.js') ?>" defer></script>
 <?php endforeach; ?>
     <?php else: ?>

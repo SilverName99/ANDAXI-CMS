@@ -215,5 +215,22 @@ return [
         'plati-tab-vechi' => ['ce' => 'scos', 'rand' => '^link /admin/settings/payments$', 'cale' => '^/admin/settings/payments', 'rol' => 'adm',
             'motiv' => 'IA-09: tab-ul unic „EuPlătesc, Stripe, ordin de plată” devine cele trei tab-uri de mai sus'],
     ],
-];
 
+    // WP-36: căutarea în tot adminul (Ctrl+K) și navigarea „G, apoi litera”. Doar cadrul (views/admin/layout.php), deci pe
+    // fiecare pagină a unui admin logat; paginile nu se schimbă. Căutarea doar citește (GET), iar literele doar deschid pagini.
+    'WP-36' => [
+        'cautare-link' => ['ce' => 'adaugat', 'rand' => '^link /admin/cauta$',
+            'motiv' => 'căutarea din antet devine un link spre pagina rezultatelor (până acum un text „vine în curând”); cu JavaScript '
+                . 'deschide fereastra căutării'],
+        'cautare-link-js' => ['ce' => 'adaugat', 'rand' => '^data data-ax-cautare =\s*$',
+            'motiv' => 'atributul după care cautare.js găsește căutarea din antet (clicul deschide fereastra)'],
+        'cautare-formular' => ['ce' => 'adaugat', 'rand' => '^form GET /admin/cauta$',
+            'motiv' => 'formularul ferestrei căutării: GET spre pagina rezultatelor (Enter fără rezultat ales, „Vezi toate rezultatele”)'],
+        'cautare-camp' => ['ce' => 'adaugat', 'rand' => '^camp GET /admin/cauta input:search q$',
+            'motiv' => 'câmpul ferestrei căutării'],
+        'salt-litera' => ['ce' => 'adaugat', 'rand' => '^data data-ax-salt = [acplmtrs]$',
+            'motiv' => 'litera fiecărui grup din meniu în lista de la „?” („G C” = Comenzi), doar grupurile pe care le vede adminul (licența, rolul)'],
+        'salt-adresa' => ['ce' => 'adaugat', 'rand' => '^data data-ax-salt-adresa = /admin(/[a-z-]+){0,3}(\?tab=[a-z_]+)?$',
+            'motiv' => 'prima pagină a grupului, pe care o deschide „G <literă>” (prima intrare din meniu la care are voie adminul)'],
+    ],
+];

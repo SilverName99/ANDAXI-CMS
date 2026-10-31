@@ -7,6 +7,10 @@
  *  - Butonul ☰: pe ecran lat ascunde sau arată meniul (ținut minte: admin_sidebar_hidden, ca înainte); pe telefon
  *    deschide meniul peste pagină, iar un clic alături sau Esc îl închide.
  *  - „?” (Shift+/) în afara unui câmp de scris deschide lista scurtăturilor; Esc o închide.
+ *  - WP-36: „G”, apoi o literă (în afara unui câmp de scris, fără fereastră sau panou deschis) duce la prima pagină a unui
+ *    grup din meniu: literele și adresele vin din lista de la „?” (data-ax-salt, data-ax-salt-adresa; doar grupurile pe care
+ *    le vede adminul). Tasta de după „G” e mereu a navigării, deci nu ajunge niciodată la scurtăturile paginii (A, C, P din
+ *    lista comenzilor): „G C” deschide Comenzi, nu confirmă nimic. Navigarea doar deschide o pagină.
  */
 (function () {
   'use strict';
@@ -100,10 +104,18 @@
     dialog.querySelectorAll('.ax-inchide-dialog').forEach(function (b) { b.addEventListener('click', inchideTaste); });
     dialog.addEventListener('click', function (e) { if (e.target === dialog) inchideTaste(); });
   }
+  // Un câmp în care se scrie (WP-36: căsuțele, butoanele radio și celelalte intrări fără text nu sunt câmpuri de scris).
+  var faraText = ['checkbox', 'radio', 'button', 'submit', 'reset', 'image', 'file', 'range', 'color'];
   function seScrie(element) {
     if (!element) return false;
     var tag = (element.tagName || '').toLowerCase();
-    return tag === 'input' || tag === 'textarea' || tag === 'select' || element.isContentEditable;
+    if (tag === 'input') return faraText.indexOf((element.getAttribute('type') || 'text').toLowerCase()) === -1;
+    return tag === 'textarea' || tag === 'select' || !!element.isContentEditable;
+  }
+  // E deschisă o fereastră (alta decât lista de la „?”), un panou lateral, o fereastră veche a unei pagini (editorul produsului) sau meniul pe telefon?
+  function cevaDeschis() {
+    return !!(document.querySelector('dialog[open]:not(#ax-taste)') || document.querySelector('.adm-sertar:not([hidden])')
+      || document.querySelector('.modal-overlay.open') || app.classList.contains('bara-deschisa'));
   }
   document.addEventListener('keydown', function (e) {
     if (e.defaultPrevented) return;
@@ -118,6 +130,56 @@
     }
   });
 
-  // Expus pentru componentele WP-31 (de exemplu panoul lateral închide meniul pe telefon).
-  window.axCadru = { inchideBara: inchideBara, deschideTaste: deschideTaste, inchideTaste: inchideTaste };
+  // „G”, apoi litera grupului (WP-36). Ascultat la captură, pe fereastră: tasta de după „G” se oprește aici, înaintea
+  // scurtăturilor paginii.
+  var salturi = {};
+  document.querySelectorAll('[data-ax-salt][data-ax-salt-adresa]').forEach(function (rand) {
+    salturi[rand.getAttribute('data-ax-salt')] = rand.getAttribute('data-ax-salt-adresa');
+  });
+  var asteaptaLitera = false;
+  var temporizatorG = null;
+  var notaSalt = null;
+  function opresteSalt() {
+    asteaptaLitera = false;
+    window.clearTimeout(temporizatorG);
+    if (notaSalt) notaSalt.hidden = true;
+  }
+  function pornesteSalt() {
+    asteaptaLitera = true;
+    if (!notaSalt) {
+      notaSalt = document.createElement('div');
+      notaSalt.className = 'ax-nota-salt';
+      notaSalt.setAttribute('role', 'status');
+      document.body.appendChild(notaSalt);
+    }
+    notaSalt.innerHTML = '<kbd>G</kbd> … apasă litera paginii (lista: <kbd>?</kbd>)';
+    notaSalt.hidden = false;
+    window.clearTimeout(temporizatorG);
+    temporizatorG = window.setTimeout(opresteSalt, 1500);
+  }
+  window.addEventListener('keydown', function (e) {
+    if (e.isComposing) return;
+    if (asteaptaLitera) {
+      if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].indexOf(e.key) !== -1) return;
+      opresteSalt();
+      // Tab, Esc sau un câmp ales între timp: „G” se uită, tasta merge mai departe.
+      if (e.key === 'Tab' || e.key === 'Escape' || seScrie(e.target)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      var adresa = salturi[(e.key || '').toLowerCase()];
+      if (adresa) window.location.assign(adresa);
+      return;
+    }
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    if ((e.key === 'g' || e.key === 'G') && Object.keys(salturi).length && !seScrie(e.target) && !cevaDeschis()) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      pornesteSalt();
+    }
+  }, true);
+  document.addEventListener('mousedown', function () { if (asteaptaLitera) opresteSalt(); });
+
+  // Expus pentru componentele WP-31 (de exemplu panoul lateral închide meniul pe telefon) și pentru căutare (WP-36).
+  window.axCadru = { inchideBara: inchideBara, deschideTaste: deschideTaste, inchideTaste: inchideTaste, seScrie: seScrie, cevaDeschis: cevaDeschis };
 })();

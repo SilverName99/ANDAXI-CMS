@@ -9,6 +9,8 @@
  *     fontul, mărimea și culorile noi, doar în interiorul cadrului (.ax-continut). Paginile se refac apoi una câte una
  *     cu componentele (WP-31 … WP-35).
  *  4. Componentele (WP-31): clasele „adm-…” din views/admin/componente/.
+ *  5.–6. Paginile refăcute (WP-32 … WP-35).
+ *  7. Căutarea în tot adminul (fereastra de la Ctrl+K, pagina /admin/cauta) și lista scurtăturilor (WP-36).
  *
  * Reguli: text de bază 14 px, ținte de clic de 44 px în cadru și în componente, focus vizibil pe orice element (un inel
  * în culoarea accentului), fonturile din nucleu (public/assets/vendor/fonturi/ibm-plex/).
@@ -255,8 +257,11 @@ body.ax-admin [tabindex]:not([tabindex="-1"]):focus-visible {
     background: var(--ax-suprafata-2);
     color: var(--ax-text-slab);
     font-size: var(--ax-text-mic);
-    cursor: default;
+    text-decoration: none;
+    cursor: pointer;
 }
+/* WP-36: căutarea din antet e un link (pagina rezultatelor; cu JavaScript, fereastra căutării). */
+.ax-cautare:hover { border-color: var(--ax-text-slab); color: var(--ax-text-3); }
 .ax-cautare-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ax-taste { display: inline-flex; gap: 3px; }
 .ax-cautare-scurt { display: none; white-space: nowrap; }
@@ -817,3 +822,63 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .ax-login__formular input { min-height: var(--ax-tinta); padding: 0 12px; border: 1px solid var(--ax-linie-tare); border-radius: var(--ax-raza); font: inherit; }
 .ax-login__formular .btn { margin-top: 10px; min-height: var(--ax-tinta); border: 1px solid var(--ax-accent); border-radius: var(--ax-raza); background: var(--ax-accent); color: var(--ax-accent-text); font-weight: 600; cursor: pointer; }
 .ax-login__eroare { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--ax-eroare-linie); border-radius: var(--ax-raza); background: var(--ax-eroare-fundal); color: var(--ax-eroare); }
+
+/* ── 7. Căutarea în tot adminul și scurtăturile (WP-36) ─────────────────────────────────── */
+/* Fereastra căutării (Ctrl+K; views/admin/layout.php, public/assets/js/admin/cautare.js): sus pe ecran, ca în machete. */
+.ax-paleta { width: min(680px, calc(100vw - 24px)); margin-top: 10vh; margin-bottom: auto; overflow: hidden; }
+.ax-paleta-formular { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 16px; border-bottom: 1px solid var(--ax-linie); color: var(--ax-text-slab); }
+.ax-paleta-formular input[type="search"] {
+    flex: 1 1 auto; min-width: 0; min-height: var(--ax-tinta); border: 0; background: transparent; color: var(--ax-text); font-size: 16px; padding: 0 4px;
+}
+body.ax-admin .ax-paleta-formular input[type="search"]:focus-visible { outline: none; box-shadow: none; }
+/* Butonul × al browserului din câmp: fereastra are deja „Închide”, iar Esc închide fereastra. */
+.ax-paleta-formular input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.ax-paleta-formular:focus-within { box-shadow: inset 0 -2px 0 var(--ax-accent); }
+.ax-paleta-corp { max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; }
+.ax-paleta-rezultate:empty { display: none; }
+.ax-paleta-grup { padding: 6px 0; border-bottom: 1px solid var(--ax-linie); }
+.ax-paleta-grup:last-child { border-bottom: 0; }
+.ax-paleta-grup-titlu { margin: 0; padding: 6px 16px 4px; font-size: var(--ax-text-mai-mic); font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--ax-text-slab); }
+.ax-paleta-rezultat {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: var(--ax-tinta); padding: 8px 16px;
+    border-left: 3px solid transparent; color: var(--ax-text); text-decoration: none;
+}
+.ax-paleta-rezultat:hover { background: var(--ax-suprafata-2); }
+.ax-paleta-rezultat[aria-selected="true"] { background: var(--ax-accent-slab); border-left-color: var(--ax-accent); }
+.ax-paleta-titlu { font-weight: 600; }
+.ax-paleta-detaliu { color: var(--ax-text-3); font-size: var(--ax-text-mic); }
+.ax-paleta-nota { margin: 0; padding: 4px 16px 8px; color: var(--ax-atentie); font-size: var(--ax-text-mic); }
+.ax-paleta-stare { margin: 0; padding: 14px 16px; color: var(--ax-text-3); font-size: var(--ax-text-mic); }
+.ax-paleta-stare:empty { display: none; }
+.ax-paleta-subsol {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--ax-linie);
+    background: var(--ax-suprafata-2); color: var(--ax-text-slab); font-size: var(--ax-text-mai-mic);
+}
+.ax-paleta-toate {
+    margin-left: auto; min-height: 36px; padding: 0 12px; border: 1px solid var(--ax-linie-tare); border-radius: var(--ax-raza);
+    background: var(--ax-suprafata); color: var(--ax-text-2); font: inherit; font-size: var(--ax-text-mic); cursor: pointer;
+}
+@media (max-width: 600px) {
+    .ax-paleta { margin-top: 12px; }
+    .ax-paleta-subsol > span { display: none; }
+}
+/* Lista de la „?”: titlurile părților și pagina la care duce „G <literă>”. */
+.ax-dialog .ax-taste-titlu { padding: 0 18px; }
+.ax-taste-unde { color: var(--ax-text-slab); }
+.ax-taste-lista dd kbd { margin: 0 1px; }
+/* „G” apăsat: nota de jos așteaptă litera. */
+.ax-nota-salt {
+    position: fixed; z-index: 70; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--ax-raza-mare);
+    background: var(--ax-bara); color: #ffffff; font-size: var(--ax-text-mic); box-shadow: var(--ax-umbra-mare);
+}
+body.ax-admin .ax-nota-salt kbd { background: transparent; color: inherit; border-color: #4b5563; }
+/* Pagina rezultatelor (/admin/cauta). */
+.adm-cauta { display: grid; gap: 12px; }
+.adm-cauta__grup { background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: var(--ax-raza-mare); }
+.adm-cauta__titlu { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--ax-linie); font-size: var(--ax-text-baza); font-weight: 600; }
+.adm-cauta__lista { list-style: none; margin: 0; padding: 4px 0; }
+.adm-cauta__rezultat { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-height: var(--ax-tinta); padding: 10px 16px; color: var(--ax-text); text-decoration: none; }
+.adm-cauta__rezultat:hover { background: var(--ax-suprafata-2); }
+.adm-cauta__nume { font-weight: 600; color: var(--ax-link); }
+.adm-cauta__detaliu { color: var(--ax-text-3); font-size: var(--ax-text-mic); }
+.adm-cauta__nota { margin: 0; padding: 8px 16px 0; color: var(--ax-atentie); font-size: var(--ax-text-mic); }

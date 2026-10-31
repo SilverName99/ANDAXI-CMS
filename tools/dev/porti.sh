@@ -139,6 +139,9 @@ poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecar
 # test-incarcare.php).
 # Faza D (WP-29 … WP-36): G-admin (contractul adminului) la fiecare WP; din WP-31 și G-tastatura (plimbarea cu tastatura,
 # planul: „Every Phase D WP passes … the keyboard walk of WP-31”), pe toate paginile contractului și pe /admin/componente.
+# WP-36 încheie faza D, deci are porțile acceptanței ei (planul, „Phase D acceptance”): G-vizual (paginile publice neschimbate),
+# G-plug-fiecare (fiecare plugin oprit pe rând), G-smoke pe fiecare pachet (cu test-admin-faza-d.php, partea E: căutarea pe
+# licențe și roluri) și, ca la WP-35, G-cmp-istoric și G-pachet (ce-se-schimba.md și manifestele celor patru pachete).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -179,7 +182,7 @@ declare -A PORTI=(
     [WP-33]="G-rute G-admin G-tastatura G-cmp G-plug G-smoke G-php"
     [WP-34]="G-rute G-admin G-tastatura G-cmp G-plug G-smoke G-php"
     [WP-35]="G-rute G-admin G-tastatura G-vizual G-cmp G-plug G-smoke G-php"
-    [WP-36]="G-rute G-admin G-tastatura G-cmp G-plug G-php"
+    [WP-36]="G-rute G-admin G-tastatura G-vizual G-cmp G-cmp-istoric G-plug-fiecare G-smoke G-pachet G-php"
     [WP-37]="G-rute G-mig G-cmp G-seo G-plug G-admin G-php"
     [WP-38]="G-rute G-mig G-cmp G-seo G-plug G-php"
     [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"

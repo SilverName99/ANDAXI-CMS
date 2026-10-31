@@ -234,10 +234,13 @@ try {
         // probă a componentelor, ca administrator general, pe fiecare licență aleasă. Fără contract.
         $dosarPlimbare = $dosarLucru . '/plimbare';
         @mkdir($dosarPlimbare, 0770, true);
-        // Plus paginile noi ale fazei D, care nu există la eticheta contractului (WP-32: „Abonamentul tău”; WP-35: „Oferte BBD”).
+        // Plus paginile noi ale fazei D, care nu există la eticheta contractului (WP-32: „Abonamentul tău”; WP-35: „Oferte BBD”;
+        // WP-36: rezultatele căutării).
         $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente', '/admin/abonament',
             // WP-35: „Oferte BBD” (IA-05), pagină nouă.
-            '/admin/products/oferte-bbd']),
+            '/admin/products/oferte-bbd',
+            // WP-36: pagina rezultatelor căutării în tot adminul.
+            '/admin/cauta?q=demo']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;
@@ -246,9 +249,12 @@ try {
             $iesire = [];
             exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php', $licenta]))) . ' 2>&1', $iesire, $cod);
             $cod === 0 || throw new RuntimeException('licența „' . $licenta . '” nu s-a pus');
-            // Scurtăturile cadrului (views/admin/layout.php): „?” deschide lista, Esc o închide. Scurtăturile paginilor (WP-33,
-            // WP-36) se adaugă aici, fiecare cu pluginul ei; cele ale pluginurilor ascunse intră în „absente”.
-            $intrarePlimbare = ['pagini' => $paginiPlimbare, 'scurtaturi' => [['tasta' => '?', 'deschide' => '#ax-taste[open]', 'inchide' => 'Escape']],
+            // Scurtăturile cadrului (views/admin/layout.php): „?” deschide lista, Esc o închide; Ctrl+K (WP-36) deschide fereastra
+            // căutării, Esc o închide. Scurtăturile paginilor (WP-33) se adaugă aici, fiecare cu pluginul ei; cele ale pluginurilor
+            // ascunse intră în „absente”. Navigarea „G, apoi litera” și căutarea pe roluri și licențe: partea E din
+            // tools/dev/test-admin-faza-d.php (tools/dev/plimbare-cautare.cjs).
+            $intrarePlimbare = ['pagini' => $paginiPlimbare, 'scurtaturi' => [['tasta' => '?', 'deschide' => '#ax-taste[open]', 'inchide' => 'Escape'],
+                ['tasta' => 'Control+k', 'deschide' => '#ax-cautare[open]', 'inchide' => 'Escape']],
                 'absente' => []];
             file_put_contents($dosarPlimbare . '/intrare-' . $licenta . '.json', json_encode($intrarePlimbare, JSON_UNESCAPED_SLASHES));
             $rezultat = $dosarPlimbare . '/rezultat-' . $licenta . '.json';

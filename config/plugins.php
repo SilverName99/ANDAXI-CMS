@@ -97,6 +97,8 @@ return [
             '/admin/componente',
             // WP-32: „Abonamentul tău” (modulele din licență).
             '/admin/abonament',
+            // WP-36: căutarea în tot adminul (fiecare rol vede doar sursele lui; App\Support\CautareAdmin).
+            '/admin/cauta',
         ],
         // /_andaxi/*: adresele platformei (pingul monitorizării; în Etapa 2 și preluarea licenței).
         'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],

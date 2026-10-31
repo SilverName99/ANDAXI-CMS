@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Testele paginilor refăcute în faza D, partea a doua (WP-32 … WP-34), ce nu se vede în contractul adminului (G-admin) și
+ * Testele paginilor refăcute în faza D (WP-32 … WP-36), ce nu se vede în contractul adminului (G-admin) și
  * în plimbarea cu tastatura (G-tastatura):
  *
  *   tools/dev/php.sh tools/dev/test-admin-faza-d.php
@@ -30,6 +30,18 @@ declare(strict_types=1);
  *    de emailuri din pagină (șablonul unui email de comandă, al unui newsletter, o campanie) trimit HTML-ul emailului octet cu
  *    octet ca pe codul Bioscem însuși (arborele scos de compara-cu-baza.sh, rulat întâi), nu doar ca pe codul etichetei.
  *    Setările, campaniile și punctele rămân neatinse (CHECKSUM TABLE), campania se pune la loc.
+ *
+ * E. Căutarea în tot adminul și scurtăturile (WP-36; App\Support\CautareAdmin): pe fiecare licență de test (toate, fara, cele
+ *    patru site-uri, cele patru pachete) și fiecare rol (general, magazin, blog, emailuri), o căutare după o comandă demo, un cod
+ *    de produs, un client, o pagină, o postare și câteva cuvinte ale paginilor din admin dă doar sursele pe care rolul le are și
+ *    site-ul le vede (tabelul drepturilor e scris aici, nu luat din Auth), fiecare rezultat și fiecare „G <literă>” se poate
+ *    deschide, iar ce se vede nu are niciun semn al unui plugin oprit (tools/dev/lib/semne-pluginuri.php, comune cu
+ *    test-pluginuri.php). Pe o bază separată (cms_test_cauta: 500 de produse, 4.000 de comenzi, 1.000 de clienți) fiecare căutare
+ *    răspunde sub 300 ms, fiecare interogare are LIMIT, limita de timp a serverului și textul doar ca parametru legat, iar „%%”,
+ *    „__” și ghilimelele se caută ca text. În browser (tools/dev/plimbare-cautare.cjs, licențele „toate” și „grafoanaytis”): Ctrl+K
+ *    pe fiecare rol, lista de la „?”, „G <literă>”, Enter pe o comandă (panoul ei), Esc și focusul, tastarea în câmpuri (nicio
+ *    scurtătură), „G C” pe lista comenzilor cu o comandă bifată (nicio confirmare, nicio cerere POST), „C” singur (confirmarea
+ *    de până acum) și JSON-ul fără sesiune (401). Baza neatinsă.
  *
  * Raportul: $CMS_DEV_DIR/test-admin-faza-d-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
  */
@@ -652,6 +664,338 @@ if (is_array($randCampanie)) {
 }
 $verifica('setările, campaniile, regulile și tranzacțiile punctelor, clienții: neatinse (cererile s-au oprit înainte de server; campania pusă la loc)', $sumaD() === $inainteD);
 $db->prepare('DELETE FROM newsletter_templates WHERE id = ?')->execute([$idSablonNl]);
+
+// =====================================================================
+// E. Căutarea în tot adminul și scurtăturile (WP-36)
+// =====================================================================
+$scrie('');
+$scrie('== E. Căutarea în tot adminul (Ctrl+K) și scurtăturile: fiecare licență de test × fiecare rol, doar ce se vede și e permis');
+$semneText = require __DIR__ . '/lib/semne-pluginuri.php';
+$valoare = static fn (string $sql): string => (string) ($db->query($sql)->fetchColumn() ?: '');
+// Câte un caz pe sursă, din datele demo: [textul căutat, sursa la care trebuie să ajungă].
+$cazuriCautare = [
+    'comanda' => [$valoare('SELECT order_number FROM orders WHERE deleted_at IS NULL ORDER BY id LIMIT 1'), 'comenzi'],
+    'sku' => [$valoare("SELECT sku FROM products WHERE deleted_at IS NULL AND sku <> '' ORDER BY id LIMIT 1"), 'produse'],
+    'client' => [$valoare('SELECT email FROM users ORDER BY id LIMIT 1'), 'clienti'],
+    'pagina' => [$valoare("SELECT title FROM pages WHERE deleted_at IS NULL AND slug = 'despre-noi'"), 'pagini'],
+    'postare' => [$valoare('SELECT title FROM blog_posts WHERE deleted_at IS NULL ORDER BY id LIMIT 1'), 'postari'],
+];
+$verifica('cazurile din datele demo: ' . implode(', ', array_map(static fn (array $c): string => '„' . $c[0] . '”', $cazuriCautare)),
+    !in_array('', array_column($cazuriCautare, 0), true));
+// Ce liste are fiecare rol (scris aici, nu luat din Auth, ca o regulă schimbată acolo să se vadă): adminul general tot; rolul
+// magazin comenzile și produsele; blogul și emailurile postările. Și pluginul fiecărei surse (null = nucleu).
+$drepturiRol = ['general' => ['comenzi', 'produse', 'clienti', 'pagini', 'postari'], 'magazin' => ['comenzi', 'produse'],
+    'blog' => ['postari'], 'emailuri' => ['postari']];
+$pluginSursa = ['comenzi' => 'magazin', 'produse' => 'catalog', 'clienti' => 'conturi_clienti', 'pagini' => null, 'postari' => 'blog'];
+$roluriAuth = ['general' => [\App\Support\Auth::ROLE_GENERAL], 'magazin' => [\App\Support\Auth::ROLE_STORE],
+    'blog' => [\App\Support\Auth::ROLE_BLOG], 'emailuri' => [\App\Support\Auth::ROLE_EMAILS]];
+$catalogPluginuri = Plugins::catalog();
+$preseturi = ['toate' => array_keys($catalogPluginuri['pluginuri']), 'fara' => []];
+foreach ((array) $catalogPluginuri['licente_dev'] as $numePreset => $lista) {
+    $preseturi[$numePreset] = (array) $lista;
+}
+foreach ((array) $catalogPluginuri['pachete'] as $numePreset => $pachet) {
+    $preseturi[$numePreset] = array_merge((array) ($pachet['pluginuri'] ?? []), (array) ($pachet['cel_putin_una_din'] ?? []));
+}
+// Cuvinte care ating paginile din admin, tab-urile setărilor și acțiunile (inclusiv numele pluginurilor).
+$cuvinteGenerale = ['setari', 'plati', 'livrare', 'puncte', 'cupon', 'blog', 'newsletter', 'nou', 'cos', 'tva', 'fan', 'stripe', 'erp',
+    'recenzii', 'sabloane', 'abonament', 'oferte', 'card', 'clienti', 'comenzi'];
+/** Semnele pluginurilor oprite (tools/dev/lib/semne-pluginuri.php) și numele lor din catalog, într-un text. */
+$semneAscunse = static function (string $text) use ($semneText): array {
+    $gasite = [];
+    foreach (Plugins::stari() as $plugin => $stare) {
+        if ($stare !== Plugins::OPRIT) {
+            continue;
+        }
+        $semne = $semneText[$plugin] ?? [];
+        $nume = (string) (Plugins::definitie((string) $plugin)['nume'] ?? '');
+        if (mb_strlen($nume) >= 4) {
+            $semne[] = '/(?<!\p{L})' . preg_quote($nume, '/') . '(?!\p{L})/u';
+        }
+        foreach ($semne as $semn) {
+            if (preg_match($semn, $text, $m) === 1) {
+                $gasite[] = '„' . $m[0] . '” (' . $plugin . ' oprit)';
+            }
+        }
+    }
+    return $gasite;
+};
+$sursePeRol = [];
+$numarCautari = 0;
+$faraComenziCuFara = true;
+$magazinFaraPostari = true;
+foreach ($preseturi as $numePreset => $lista) {
+    Plugins::folosesteStari(array_fill_keys($lista, Plugins::PORNIT));
+    $probleme = [];
+    foreach ($roluriAuth as $rol => $roluri) {
+        $asteptate = array_values(array_filter($drepturiRol[$rol],
+            static fn (string $s): bool => $pluginSursa[$s] === null || Plugins::vizibil((string) $pluginSursa[$s])));
+        $surse = array_values(array_diff(\App\Support\CautareAdmin::surse($roluri), ['setari', 'actiuni']));
+        $sursePeRol[$numePreset][$rol] = $surse;
+        if ($surse !== $asteptate) {
+            $probleme[] = $rol . ': sursele ' . implode(',', $surse) . ' în loc de ' . implode(',', $asteptate);
+        }
+        $texte = [];
+        foreach (array_merge(array_map(static fn (array $c): string => $c[0], $cazuriCautare), $cuvinteGenerale) as $q) {
+            $numarCautari++;
+            $r = \App\Support\CautareAdmin::cauta($db, $q, $roluri);
+            $gasite = array_column($r['grupuri'], 'sursa');
+            foreach ($cazuriCautare as $numeCaz => [$qCaz, $sursaCaz]) {
+                if ($qCaz === $q && in_array($sursaCaz, $gasite, true) !== in_array($sursaCaz, $asteptate, true)) {
+                    $probleme[] = $rol . ' ' . $numeCaz . ': ' . $sursaCaz . (in_array($sursaCaz, $gasite, true) ? ' arătată fără drept sau fără plugin' : ' lipsă');
+                }
+            }
+            foreach (array_diff($gasite, $asteptate, ['setari', 'actiuni']) as $s) {
+                $probleme[] = $rol . ' „' . $q . '”: sursa ' . $s . ' fără drept sau fără plugin';
+            }
+            if ($numePreset === 'fara' && in_array('comenzi', $gasite, true)) {
+                $faraComenziCuFara = false;
+            }
+            if ($rol === 'magazin' && in_array('postari', $gasite, true)) {
+                $magazinFaraPostari = false;
+            }
+            foreach ($r['grupuri'] as $grup) {
+                foreach ($grup['rezultate'] as $rez) {
+                    if (!\App\Support\Auth::canAccessPath($rez['url'], $roluri) || !Plugins::adresaVizibila($rez['url'])) {
+                        $probleme[] = $rol . ' „' . $q . '”: ' . $rez['url'] . ' nu se poate deschide';
+                    }
+                }
+            }
+            // Doar ce se vede (eticheta grupului, titlul și detaliul rezultatelor): nu textul căutat și nici adresele (cele ale
+            // nucleului pot conține „newsletters”, /admin/emails/newsletters?tab=history).
+            foreach ($r['grupuri'] as $grup) {
+                $texte[] = $grup['eticheta'];
+                foreach ($grup['rezultate'] as $rez) {
+                    $texte[] = $rez['titlu'] . ' · ' . $rez['detaliu'];
+                }
+            }
+        }
+        $salturi = \App\Support\CautareAdmin::salturi($roluri);
+        foreach ($salturi as $salt) {
+            if (!\App\Support\Auth::canAccessPath($salt['url'], $roluri) || !Plugins::adresaVizibila($salt['url'])) {
+                $probleme[] = $rol . ': „G ' . strtoupper($salt['litera']) . '” duce la ' . $salt['url'] . ', care nu se poate deschide';
+            }
+        }
+        foreach ($salturi as $salt) {
+            $texte[] = $salt['eticheta'] . ' · ' . $salt['pagina'];
+        }
+        $texte[] = \App\Support\CautareAdmin::indemn($roluri);
+        foreach (array_unique($semneAscunse(implode("\n", $texte))) as $semn) {
+            $probleme[] = $rol . ': ' . $semn;
+        }
+    }
+    $verifica('licența „' . $numePreset . '”: 4 roluri × ' . (count($cazuriCautare) + count($cuvinteGenerale)) . ' căutări — surse '
+        . implode(' | ', array_map(static fn (string $rol, array $s): string => $rol . ' ' . ($s === [] ? '-' : implode(',', $s)),
+            array_keys($sursePeRol[$numePreset]), $sursePeRol[$numePreset]))
+        . '; fiecare rezultat și fiecare „G <literă>” se poate deschide; niciun nume sau text al unui plugin oprit', $probleme === [],
+        implode('; ', array_slice(array_values(array_unique($probleme)), 0, 10)));
+}
+$verifica('fără licență („fara”) nicio comandă, pentru niciun rol; rolul magazin nu primește niciodată postări', $faraComenziCuFara && $magazinFaraPostari);
+Plugins::reseteaza();
+Plugins::incarca();
+
+// Viteza și interogările, pe o bază separată cu 500 de produse, 4.000 de comenzi, 1.000 de clienți, 60 de pagini și 150 de postări.
+$bazaCautare = 'cms_test_cauta';
+$db->exec('DROP DATABASE IF EXISTS ' . $bazaCautare);
+$db->exec('CREATE DATABASE ' . $bazaCautare . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+foreach (['orders', 'products', 'users', 'pages', 'blog_posts'] as $tabel) {
+    $creare = (string) $db->query('SHOW CREATE TABLE `' . $numeBaza . '`.`' . $tabel . '`')->fetch(PDO::FETCH_NUM)[1];
+    $creare = (string) preg_replace('/,\s*CONSTRAINT `[^`]+` FOREIGN KEY [^\n]+/', '', $creare);
+    $db->exec('USE ' . $bazaCautare);
+    $db->exec($creare);
+    $db->exec('USE `' . $numeBaza . '`');
+}
+$tc = new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $config['db']['host'], (int) $config['db']['port'], $bazaCautare),
+    (string) $config['db']['username'], (string) $config['db']['password'],
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+mt_srand(36);
+$cuvinteProdus = ['Ceai', 'Miere', 'Ulei', 'Sirop', 'Pudră', 'Capsule', 'Tinctură', 'Cremă', 'Balsam', 'Sare'];
+$adjective = ['de mentă', 'de tei', 'de cocos', 'de cătină', 'de ghimbir', 'bio', 'cu propolis', 'de lavandă', 'de măceșe', 'de ovăz'];
+$valori = [];
+for ($i = 1; $i <= 500; $i++) {
+    $valori[] = sprintf("(%d, '%s', 'T-%04d', 'test-%d', 10.00, %d, %d)", $i, $cuvinteProdus[$i % 10] . ' ' . $adjective[intdiv($i, 10) % 10] . ' ' . $i,
+        $i, $i, mt_rand(0, 40), $i % 9 === 0 ? 0 : 1);
+}
+$tc->exec('INSERT INTO products (id, name, sku, slug, price, stock, is_active) VALUES ' . implode(', ', $valori));
+$prenumeT = ['Ana', 'Ioana', 'Mihai', 'Radu', 'Elena', 'Victor', 'Daria', 'Paul', 'Sorin', 'Irina'];
+$numeT = ['Exemplu', 'Demo', 'Test', 'Proba', 'Model'];
+foreach (array_chunk(range(1, 4000), 1000) as $bucata) {
+    $valori = [];
+    foreach ($bucata as $i) {
+        $valori[] = sprintf("(%d, 'T%06d', 'completed', 'cod', 'paid', 50.00, 0, 50.00, '%s', '%s', 'c%d@exemplu.ro', '0700000000', 'Str. Test 1', 'Iasi', 'Iasi', '700000', '2026-10-01 10:00:00')",
+            $i, $i, $prenumeT[$i % 10], $numeT[$i % 5], $i);
+    }
+    $tc->exec('INSERT INTO orders (id, order_number, status, payment_method, payment_status, subtotal, shipping_cost, total, billing_first_name, billing_last_name,
+        billing_email, billing_phone, billing_address_line1, billing_city, billing_county, billing_postcode, created_at) VALUES ' . implode(', ', $valori));
+}
+$valori = [];
+for ($i = 1; $i <= 1000; $i++) {
+    $valori[] = sprintf("('%s', '%s', 'client%d@exemplu.ro', 'x')", $prenumeT[$i % 10], $numeT[$i % 5], $i);
+}
+$tc->exec('INSERT INTO users (first_name, last_name, email, password_hash) VALUES ' . implode(', ', $valori));
+$valori = [];
+for ($i = 1; $i <= 60; $i++) {
+    $valori[] = sprintf("('Pagina de test %d', 'pagina-test-%d', '', 1)", $i, $i);
+}
+$tc->exec('INSERT INTO pages (title, slug, html_content, is_published) VALUES ' . implode(', ', $valori));
+$valori = [];
+for ($i = 1; $i <= 150; $i++) {
+    $valori[] = sprintf("('Articol despre %s %d', 'articol-%d', '', 1, '2026-09-01 10:00:00')", $cuvinteProdus[$i % 10], $i, $i);
+}
+$tc->exec('INSERT INTO blog_posts (title, slug, content, is_published, published_at) VALUES ' . implode(', ', $valori));
+Plugins::folosesteStari(array_fill_keys(array_keys($catalogPluginuri['pluginuri']), Plugins::PORNIT));
+$tc->setAttribute(PDO::ATTR_STATEMENT_CLASS, [InstructiuneInregistrata::class]);
+$cautariViteza = ['T001234', '1234', 'Ana Exemplu', 'client77@exemplu.ro', 'T-0042', 'ceai', 'miere bio', 'cătină', 'pagina test', 'articol', 'ex', 'zzzz'];
+$celMaiLent = 0;
+$detaliiViteza = [];
+$grupuriCeai = [];
+foreach ($cautariViteza as $q) {
+    for ($k = 0; $k < 3; $k++) {
+        InstructiuneInregistrata::$jurnal = [];
+        $r = \App\Support\CautareAdmin::cauta($tc, $q, [\App\Support\Auth::ROLE_GENERAL]);
+        $celMaiLent = max($celMaiLent, $r['ms']);
+    }
+    $detaliiViteza[] = $q . ' ' . $r['ms'] . ' ms';
+    if ($q === 'ceai') {
+        $grupuriCeai = $r['grupuri'];
+    }
+}
+$tc->setAttribute(PDO::ATTR_STATEMENT_CLASS, [PDOStatement::class]);
+$verifica('viteza: ' . count($cautariViteza) . ' căutări × 3 pe 500 de produse, 4.000 de comenzi, 1.000 de clienți; cea mai lentă ' . $celMaiLent
+    . ' ms (cel mult 300)', $celMaiLent < 300, implode(', ', $detaliiViteza));
+$limitate = true;
+$faraTextInSql = true;
+InstructiuneInregistrata::$jurnal = [];
+$tc->setAttribute(PDO::ATTR_STATEMENT_CLASS, [InstructiuneInregistrata::class]);
+\App\Support\CautareAdmin::cauta($tc, "ceai' OR '1'='1", [\App\Support\Auth::ROLE_GENERAL]);
+$injectie = \App\Support\CautareAdmin::cauta($tc, "zz' OR '1'='1", [\App\Support\Auth::ROLE_GENERAL]);
+$procente = \App\Support\CautareAdmin::cauta($tc, '%%', [\App\Support\Auth::ROLE_GENERAL]);
+$liniute = \App\Support\CautareAdmin::cauta($tc, '__', [\App\Support\Auth::ROLE_GENERAL]);
+$tc->setAttribute(PDO::ATTR_STATEMENT_CLASS, [PDOStatement::class]);
+$esteMaria = stripos((string) $tc->getAttribute(PDO::ATTR_SERVER_VERSION), 'mariadb') !== false;
+foreach (InstructiuneInregistrata::$jurnal as $instructiune) {
+    $sql = $instructiune['sql'];
+    $limitate = $limitate && preg_match('/\bLIMIT \d+$/', trim($sql)) === 1
+        && ($esteMaria ? str_starts_with($sql, 'SET STATEMENT max_statement_time = 0.250 FOR SELECT ') : str_contains($sql, 'MAX_EXECUTION_TIME(250)'));
+    $faraTextInSql = $faraTextInSql && !str_contains($sql, "'1'='1") && !str_contains($sql, 'ceai') && $instructiune['parametri'] !== [];
+}
+$doarDinBaza = static fn (array $r): array => array_values(array_diff(array_column($r['grupuri'], 'sursa'), ['setari', 'actiuni']));
+$verifica('interogările: ' . count(InstructiuneInregistrata::$jurnal) . ', fiecare cu LIMIT, cu limita de timp a serverului ('
+    . ($esteMaria ? 'max_statement_time 0,25 s' : 'MAX_EXECUTION_TIME 250') . ') și cu textul căutat doar ca parametru legat', $limitate && $faraTextInSql
+    && count(InstructiuneInregistrata::$jurnal) >= 15, json_encode(array_slice(array_column(InstructiuneInregistrata::$jurnal, 'sql'), 0, 3)));
+$verifica('„zz\' OR \'1\'=\'1”, „%%” și „__” se caută ca text (niciun rând din bază), fără erori', $doarDinBaza($injectie) === []
+    && $doarDinBaza($procente) === [] && $doarDinBaza($liniute) === [], json_encode([$injectie, $procente, $liniute], JSON_UNESCAPED_UNICODE));
+$verifica('cel mult ' . \App\Support\CautareAdmin::LIMITA . ' rezultate pe sursă („ceai” găsește 50 de produse și 15 postări)',
+    $grupuriCeai !== [] && max(array_map(static fn (array $g): int => count($g['rezultate']), $grupuriCeai)) <= \App\Support\CautareAdmin::LIMITA + 2
+    && count(array_values(array_filter($grupuriCeai, static fn (array $g): bool => $g['sursa'] === 'produse'))[0]['rezultate'] ?? []) === \App\Support\CautareAdmin::LIMITA);
+Plugins::reseteaza();
+Plugins::incarca();
+$db->exec('DROP DATABASE IF EXISTS ' . $bazaCautare);
+
+// În browser, pe serverul testului: fereastra de la Ctrl+K pentru fiecare rol, lista de la „?”, „G <literă>”, tastarea în câmpuri,
+// lista comenzilor cu o comandă bifată (tools/dev/plimbare-cautare.cjs). Licența „toate” (toate rolurile), apoi „grafoanaytis”.
+@mkdir($dosarTest . '/licenta', 0770, true);
+putenv('LICENTA_DOSAR=' . $dosarTest . '/licenta');
+$activariInainteE = $db->query("SELECT `value` FROM settings WHERE `key` = 'activari_pluginuri'")->fetchColumn();
+$sumaE = static fn (): string => json_encode($db->query('CHECKSUM TABLE orders, order_items, products, users, pages, blog_posts')->fetchAll(PDO::FETCH_NUM));
+$inainteE = $sumaE();
+$server = $pornesteServer();
+$emailuriRol = ['adm' => (string) (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro'), 'magazin' => 'magazin@exemplu.ro', 'blog' => 'blog@exemplu.ro',
+    'emailuri' => 'emailuri@exemplu.ro'];
+$rolAuth = ['adm' => 'general', 'magazin' => 'magazin', 'blog' => 'blog', 'emailuri' => 'emailuri'];
+$plimbaCautare = static function (string $licenta, array $roluri, bool $comenzi) use ($phpDev, $radacina, $portTest, $dosarTest, $dosarDev, $cazuriCautare, $emailuriRol): ?array {
+    exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php', $licenta]))) . ' 2>&1', $_, $codLicenta);
+    $intrare = $dosarTest . '/plimbare-cautare-' . $licenta . '-intrare.json';
+    $fisier = $dosarTest . '/plimbare-cautare-' . $licenta . '.json';
+    @unlink($fisier);
+    file_put_contents($intrare, json_encode([
+        'cazuri' => array_map(static fn (string $nume, array $c): array => ['nume' => $nume, 'q' => $c[0]], array_keys($cazuriCautare), $cazuriCautare),
+        'roluri' => array_map(static fn (string $rol): array => ['rol' => $rol, 'email' => $emailuriRol[$rol]], $roluri),
+        'comanda' => $cazuriCautare['comanda'][0],
+        'comenzi' => $comenzi,
+        'campText' => ['pagina' => '/admin/settings/store?tab=general', 'selector' => 'input[name="maintenance_title"]'],
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $env = ['CMS_DEV_URL=http://127.0.0.1:' . $portTest, 'CMS_DEV_PAROLA=' . trim((string) @file_get_contents($dosarDev . '/admin-parola.txt')),
+        'CMS_DEV_PLIMBARE=' . $intrare, 'CMS_DEV_REZULTAT=' . $fisier,
+        'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'), 'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers')];
+    exec('env ' . implode(' ', array_map('escapeshellarg', $env)) . ' node ' . escapeshellarg($radacina . '/tools/dev/plimbare-cautare.cjs') . ' 2>&1', $iesire, $cod);
+    $date = json_decode((string) @file_get_contents($fisier), true);
+    return $codLicenta === 0 && $cod === 0 && is_array($date) ? $date : ['eroare' => implode(' ', array_slice($iesire, -3))];
+};
+// Pe grafoanaytis nu există comenzi: doar rolurile, căutările, lista de la „?” și „G <literă>”.
+$rezultateBrowser = ['toate' => $plimbaCautare('toate', ['adm', 'magazin', 'blog', 'emailuri'], true),
+    'grafoanaytis' => $plimbaCautare('grafoanaytis', ['adm', 'magazin'], false)];
+$stareServer = proc_get_status($server);
+exec('pkill -TERM -P ' . (int) $stareServer['pid'] . ' 2>/dev/null');
+proc_terminate($server);
+proc_close($server);
+putenv('LICENTA_DOSAR');
+if ($activariInainteE !== false) {
+    $db->prepare("UPDATE settings SET `value` = ? WHERE `key` = 'activari_pluginuri'")->execute([$activariInainteE]);
+}
+foreach ($rezultateBrowser as $licentaBrowser => $plimbareCautare) {
+    if (!isset($plimbareCautare['roluri'])) {
+        $verifica('plimbarea căutării (licența ' . $licentaBrowser . ') s-a terminat', false, (string) ($plimbareCautare['eroare'] ?? '') . ' (vezi ' . $dosarTest . ')');
+        continue;
+    }
+    // Ce trebuie să vadă fiecare rol pe licența serverului: aceleași calcule, în acest proces, cu aceeași licență.
+    Plugins::folosesteStari(array_fill_keys($preseturi[$licentaBrowser], Plugins::PORNIT));
+    $probleme = $plimbareCautare['probleme'];
+    $rezumat = [];
+    foreach ($plimbareCautare['roluri'] as $rol => $dateRol) {
+        $roluri = $roluriAuth[$rolAuth[$rol]];
+        foreach ($cazuriCautare as $numeCaz => [$q]) {
+            $asteptat = array_column(\App\Support\CautareAdmin::cauta($db, $q, $roluri)['grupuri'], 'sursa');
+            $primit = array_column((array) ($dateRol['cazuri'][$numeCaz] ?? []), 'sursa');
+            if ($primit !== $asteptat) {
+                $probleme[] = $rol . ' ' . $numeCaz . ': ' . implode(',', $primit) . ' în loc de ' . implode(',', $asteptat);
+            }
+        }
+        $salturiAsteptate = array_map(static fn (array $s): string => $s['litera'] . ' ' . $s['url'], \App\Support\CautareAdmin::salturi($roluri));
+        $salturiPrimite = array_map(static fn (array $s): string => $s['litera'] . ' ' . $s['url'], (array) $dateRol['salturi']);
+        if ($salturiPrimite !== $salturiAsteptate) {
+            $probleme[] = $rol . ': lista „G” ' . implode(', ', $salturiPrimite) . ' în loc de ' . implode(', ', $salturiAsteptate);
+        }
+        if (($dateRol['salt']['ajuns'] ?? null) !== ($dateRol['salt']['asteptat'] ?? '')) {
+            $probleme[] = $rol . ': „G ' . strtoupper((string) ($dateRol['salt']['litera'] ?? '?')) . '” a dus la ' . ($dateRol['salt']['ajuns'] ?? '-');
+        }
+        foreach (array_unique($semneAscunse((string) ($dateRol['textTaste'] ?? ''))) as $semn) {
+            $probleme[] = $rol . ' lista de la „?”: ' . $semn;
+        }
+        foreach ((array) $dateRol['erori'] as $eroare) {
+            $probleme[] = $rol . ' JavaScript: ' . $eroare;
+        }
+        $rezumat[] = $rol . ' G ' . implode('', array_column((array) $dateRol['salturi'], 'litera'));
+    }
+    foreach ((array) $plimbareCautare['postari'] as $post) {
+        $probleme[] = 'cerere POST (oprită): ' . $post;
+    }
+    foreach ((array) $plimbareCautare['blocate'] as $gazda) {
+        $probleme[] = 'cerere spre alt server: ' . $gazda;
+    }
+    $verifica('în browser, licența „' . $licentaBrowser . '”: Ctrl+K și cele ' . count($cazuriCautare) . ' căutări pe fiecare rol dau exact sursele permise; '
+        . 'lista de la „?” are doar grupurile vizibile (' . implode('; ', $rezumat) . '), „G <literă>” duce acolo; nicio eroare JavaScript, nicio cerere POST '
+        . 'sau spre alt server', $probleme === [], implode('; ', array_slice($probleme, 0, 10)));
+    $g = (array) ($plimbareCautare['general'] ?? []);
+    $nrComanda = $cazuriCautare['comanda'][0];
+    if ($licentaBrowser === 'toate') {
+        $verifica('Enter pe primul rezultat al numărului comenzii ' . $nrComanda . ': lista comenzilor cu panoul comenzii deschis; Esc închide fereastra căutării '
+            . 'și focusul revine pe căutarea din antet', ($g['primul'] ?? '') === '/admin/orders?q=' . $nrComanda
+            && ($g['dupaEnter']['url'] ?? '') === '/admin/orders?q=' . $nrComanda && !empty($g['dupaEnter']['panou']) && !empty($g['focusInapoi']), json_encode($g));
+        $verifica('într-un câmp de text, „?”, „g”, „c”, Ctrl+K și „gp” se scriu în câmp: nicio fereastră, nicio notă „G”, aceeași pagină',
+            ($g['inCamp']['valoare'] ?? '') === '?gcgp' && ($g['inCamp']['deschise'] ?? ['?']) === [] && !empty($g['inCamp']['aceeasiPagina'])
+            && empty($g['inCamp']['nota']), json_encode($g['inCamp'] ?? null, JSON_UNESCAPED_UNICODE));
+        $verifica('lista comenzilor, o comandă bifată: „G X” nu face nimic, „G C” deschide Comenzi fără nicio confirmare (tasta C nu ajunge la „Confirmă”), '
+            . '„C” singur cere tot confirmarea (refuzată: nimic trimis)', ($g['gNecunoscut']['confirmari'] ?? -1) === 0 && ($g['gNecunoscut']['url'] ?? '') === '/admin/orders'
+            && !empty($g['gNecunoscut']['bifata']) && ($g['gc']['confirmari'] ?? -1) === 0 && ($g['gc']['url'] ?? '') === '/admin/orders'
+            && count((array) ($g['cSingur']['confirmari'] ?? [])) === 1 && ($g['cSingur']['url'] ?? '') === '/admin/orders', json_encode($g, JSON_UNESCAPED_UNICODE));
+        $verifica('fără sesiune, JSON-ul căutării răspunde 401 și nu dă nimic', ($plimbareCautare['anonim']['cod'] ?? 0) === 401
+            && !str_contains((string) ($plimbareCautare['anonim']['corp'] ?? ''), $nrComanda), json_encode($plimbareCautare['anonim'] ?? null, JSON_UNESCAPED_UNICODE));
+    }
+}
+Plugins::reseteaza();
+Plugins::incarca();
+$verifica('baza neatinsă de plimbarea căutării (CHECKSUM TABLE orders, order_items, products, users, pages, blog_posts)', $sumaE() === $inainteE);
 
 $scrie('');
 $scrie(sprintf('Rezultat: %d trecute, %d eșuate. Raport: %s', $trecute, $esuate, $fisierRaport));

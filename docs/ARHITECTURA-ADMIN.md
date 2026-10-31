@@ -49,6 +49,18 @@ cu numele paginii: de exemplu pe grafoanaytis grupul „Comenzi” are doar „C
 | IA-09 | **Setări plăți** cu un tab pe fiecare fel de plată din abonament: Ordin de plată, Card – EuPlătesc, Card – Stripe (sau „Stripe”, fără magazin), Banca Transilvania. | `/admin/settings/payments?tab=op|euplatesc|stripe`, `?tab=bt` ca înainte |
 | IA-10 | Numele noi din meniu (lista de mai jos). | — |
 
+## Căutarea și scurtăturile (WP-36, 31 octombrie)
+
+Căutarea de sus merge din orice pagină: un clic pe ea sau **Ctrl K** (pe Mac ⌘ K). Găsește comenzile (după număr, nume, email),
+produsele (după nume sau cod), clienții, paginile, postările, paginile și tab-urile din admin (de exemplu „tva”, „Curier FAN”,
+„cookie”) și câteva acțiuni (produs nou, pagină nouă, postare nouă, coșurile de gunoi). Fiecare admin vede doar ce poate deschide:
+cel de magazin comenzi și produse, cel de blog și cel de emailuri postările; nimic al unui modul pe care site-ul nu-l are. O
+comandă găsită se deschide direct în panoul ei; nicio acțiune nu se face din căutare.
+
+**„G”, apoi o literă**, duce la un grup din meniu (prima lui pagină pe care o vezi): A Acasă, C Comenzi, P Produse, L Clienți,
+M Marketing, T Conținut, R Rapoarte, S Setări. Lista întreagă e la „?”, doar cu grupurile pe care le are site-ul și rolul tău.
+Nicio scurtătură nu pornește cât scrii într-un câmp.
+
 ## Meniul de acum (după WP-35)
 
 - **Acasă**
@@ -198,6 +210,10 @@ are voie la ea. Rolurile (magazin, blog, emailuri) rămân exact cum sunt.
   `marketing`, `continut`, `rapoarte`, `setari`) și intrările din `meniu` ale fiecărui plugin (câmpul `grup`).
   Un grup cu o singură intrare vizibilă se scrie ca link (`views/admin/layout.php`). Instantaneele rutelor
   (`tools/dev/instantanee/rute-*.txt`, G-rute) arată meniul fiecărei licențe.
+- Căutarea (WP-36): `App\Support\CautareAdmin` (sursele, permisiunile, interogările, literele „G”), `GET /admin/cauta`
+  (`CautareAdminController`), `public/assets/js/admin/cautare.js` (fereastra) și `cadru.js` („G, apoi litera”). O pagină nouă
+  din meniu intră singură în căutare și, dacă e prima a grupului ei, în „G <literă>”; un tab nou de setări se adaugă în
+  `CautareAdmin::paginiAdmin()`, cu pluginul lui.
 - O propunere aprobată se face în WP-ul paginii, cu componentele din WP-31 (`views/admin/componente/`), iar diferențele
   ei de contract se declară în `tools/dev/lib/contract-admin-declarat.php` (`$contractAdminPorturi`, sub-tabloul WP-35). O
   pagină împărțită în tab-uri păstrează adresa veche ca tab ales (alias-urile din `adm_tab_ales()`); o pagină unită păstrează

@@ -16,6 +16,7 @@ use App\Http\Controllers\OferteBbdController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CereriOfertaController;
+use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
 use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\SiteController;
@@ -353,5 +354,7 @@ return static function (Router $router): void {
     $router->get('/admin/abonament', [AbonamentController::class, 'arata']);
     // WP-35 (IA-05): „Oferte BBD”, toate ofertele cu dată minimă de valabilitate din toate produsele (doar citire).
     $router->get('/admin/products/oferte-bbd', [OferteBbdController::class, 'lista']);
+    // WP-36 (faza D): căutarea în tot adminul (Ctrl+K): JSON pentru fereastra ei, pagina rezultatelor fără JavaScript.
+    $router->get('/admin/cauta', [CautareAdminController::class, 'cauta']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };
