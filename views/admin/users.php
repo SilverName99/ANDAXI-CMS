@@ -83,20 +83,20 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
 
 ?>
 
+<?php
+// WP-35 (IA-10): „Listă utilizatori” se numește „Clienți”; lista și importul sunt două tab-uri (?panel=, ca înainte).
+admin_componenta('antet-pagina', [
+    'titlu' => 'Clienți',
+    'nivel' => 1,
+    'subtitlu' => 'Conturile clienților: caută un client și deschide-i fișa (date, comenzi' . ($areFidelitate ? ', puncte' : '') . '); importul conturilor din fișier.',
+]);
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Clienții', 'taburi' => [
+    ['eticheta' => 'Toți clienții', 'href' => '/admin/users?panel=list', 'activ' => $panel === 'list'],
+    ['eticheta' => 'Import clienți', 'href' => '/admin/users?panel=import', 'activ' => $panel === 'import'],
+]]);
+?>
 <section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Utilizatori</h1>
-            <p>Listă clienți + detalii la click.</p>
-        </div>
-    </div>
-
-    <div class="store-settings-tabs" data-admin-simple-tabs data-default-tab="<?= htmlspecialchars($panel, ENT_QUOTES) ?>" style="margin:6px 0 12px;">
-        <button class="btn btn-secondary <?= $panel === 'list' ? 'is-active' : '' ?>" type="button" data-admin-simple-tab="list">Toți utilizatorii</button>
-        <button class="btn btn-secondary <?= $panel === 'import' ? 'is-active' : '' ?>" type="button" data-admin-simple-tab="import">Import utilizatori</button>
-    </div>
-
-    <article class="panel store-settings-panel" data-admin-simple-panel="import" <?= $panel !== 'import' ? 'hidden' : '' ?> style="margin:12px 0;">
+    <article class="panel" <?= $panel !== 'import' ? 'hidden' : '' ?> style="margin:0;">
         <?php
         $wpDumpFiles = is_array($wpDumpFiles ?? null) ? $wpDumpFiles : [];
         $wpDumpDir = (string) ($wpDumpDir ?? '/storage/import');
@@ -111,7 +111,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
 
 <?php if ($areMigrareWp): ?>
         <h3 style="margin:0 0 6px;font-size:16px;">Import din backup WordPress</h3>
-        <p style="margin:0 0 12px;color:#64748b;font-size:13px;line-height:1.5;">
+        <p style="margin:0 0 12px;color:var(--ax-text-3);font-size:13px;line-height:1.5;">
             Citește direct arhiva bazei de date de la UpdraftPlus (fișierul care se termină în
             <strong>-db.gz</strong>). Nu o dezarhiva și nu o urca prin formular — pune-o prin FTP sau File Manager
             în folderul <code><?= htmlspecialchars($wpDumpDir, ENT_QUOTES) ?></code> de pe server, apoi apare mai jos.
@@ -120,15 +120,15 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
         </p>
 
         <?php if ($wpDumpFiles === []): ?>
-            <div style="border-radius:10px;background:#fef3c7;color:#92400e;padding:12px 14px;font-size:13px;">
+            <div style="border-radius:var(--ax-raza-mare);background:var(--ax-atentie-fundal);color:var(--ax-atentie);padding:12px 14px;font-size:13px;">
                 Niciun fișier găsit în <code><?= htmlspecialchars($wpDumpDir, ENT_QUOTES) ?></code>.
                 Creează folderul dacă nu există și pune arhiva acolo (se acceptă <code>.gz</code> și <code>.sql</code>).
             </div>
         <?php else: ?>
             <form method="post" action="/admin/users/import-backup" style="display:grid;gap:10px;max-width:760px;">
-                <label style="display:grid;gap:4px;font-size:13px;color:#334155;">
+                <label style="display:grid;gap:4px;font-size:13px;color:var(--ax-text-2);">
                     Fișierul de backup
-                    <select name="dump_file" required style="height:38px;border:1px solid #cbd5e1;border-radius:8px;padding:0 8px;">
+                    <select name="dump_file" required style="height:38px;border:1px solid var(--ax-linie-tare);border-radius:8px;padding:0 8px;">
                         <?php foreach ($wpDumpFiles as $f): ?>
                             <option value="<?= htmlspecialchars((string) $f['nume'], ENT_QUOTES) ?>">
                                 <?= htmlspecialchars((string) $f['nume'], ENT_QUOTES) ?>
@@ -140,9 +140,9 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                 </label>
 
                 <?php if ($newsletterLists !== []): ?>
-                    <label style="display:grid;gap:4px;font-size:13px;color:#334155;">
+                    <label style="display:grid;gap:4px;font-size:13px;color:var(--ax-text-2);">
                         Abonații găsiți intră în lista
-                        <select name="newsletter_list_id" style="height:38px;border:1px solid #cbd5e1;border-radius:8px;padding:0 8px;">
+                        <select name="newsletter_list_id" style="height:38px;border:1px solid var(--ax-linie-tare);border-radius:8px;padding:0 8px;">
                             <?php foreach ($newsletterLists as $l): ?>
                                 <option value="<?= (int) ($l['id'] ?? 0) ?>"><?= htmlspecialchars((string) ($l['name'] ?? ''), ENT_QUOTES) ?></option>
                             <?php endforeach; ?>
@@ -156,15 +156,15 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                             onclick="return confirm('Se importă conturile și abonații găsiți în arhivă. Conturile deja existente pe site nu sunt modificate. Continui?');">
                         Importă acum
                     </button>
-                    <small style="color:#64748b;">Citirea unei arhive de câteva sute de MB durează câteva minute — nu închide pagina.</small>
+                    <small style="color:var(--ax-text-3);">Citirea unei arhive de câteva sute de MB durează câteva minute — nu închide pagina.</small>
                 </div>
             </form>
         <?php endif; ?>
 
         <?php if ($raport !== null): ?>
-            <div style="margin-top:14px;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc;font-size:13px;">
+            <div style="margin-top:14px;border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);padding:12px 14px;background:var(--ax-suprafata-2);font-size:13px;">
                 <strong><?= !empty($raport['scris']) ? 'Rezultatul importului' : 'Verificare — nu s-a scris nimic' ?></strong>
-                <div style="color:#64748b;margin:2px 0 10px;">
+                <div style="color:var(--ax-text-3);margin:2px 0 10px;">
                     <?= htmlspecialchars((string) ($raport['fisier'] ?? ''), ENT_QUOTES) ?>
                     <?php if (($raport['prefix'] ?? '') !== ''): ?>
                         · prefix tabele: <code><?= htmlspecialchars((string) $raport['prefix'], ENT_QUOTES) ?></code>
@@ -187,31 +187,31 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                         <tr><td>Abonați săriți (pe lista „nu trimite”)</td><td style="text-align:right;"><?= (int) $raport['abonati_suprimati'] ?></td></tr>
                         <?php endif; ?>
                         <?php if ((int) ($raport['esuate'] ?? 0) > 0): ?>
-                            <tr><td style="color:#b91c1c;">Rânduri eșuate</td><td style="text-align:right;color:#b91c1c;"><?= (int) $raport['esuate'] ?></td></tr>
+                            <tr><td style="color:var(--ax-eroare);">Rânduri eșuate</td><td style="text-align:right;color:var(--ax-eroare);"><?= (int) $raport['esuate'] ?></td></tr>
                         <?php endif; ?>
                     <?php endif; ?>
                     </tbody>
                 </table>
                 <?php if (!empty($raport['tabele']) && is_array($raport['tabele'])): ?>
-                    <div style="margin-top:8px;color:#64748b;">
+                    <div style="margin-top:8px;color:var(--ax-text-3);">
                         Tabele recunoscute: <?= htmlspecialchars(implode(', ', array_map('strval', $raport['tabele'])), ENT_QUOTES) ?>
                     </div>
                 <?php endif; ?>
             </div>
         <?php endif; ?>
 
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:18px 0 14px;">
+        <hr style="border:none;border-top:1px solid var(--ax-linie);margin:18px 0 14px;">
 <?php endif; ?>
 
         <h3 style="margin:0 0 8px;font-size:16px;">Import din fișier CSV/XLSX</h3>
         <form method="post" action="/admin/users/import" enctype="multipart/form-data" class="users-search-row" style="margin-bottom:0;">
             <input type="file" name="users_file" accept=".csv,.xlsx" required>
             <button class="btn" type="submit">Import utilizatori (CSV/XLSX)</button>
-            <small style="color:#64748b;">Coloane recomandate: user_email, user_pass, first_name, last_name, phone, user_registered.</small>
+            <small style="color:var(--ax-text-3);">Coloane recomandate: user_email, user_pass, first_name, last_name, phone, user_registered.</small>
         </form>
     </article>
 
-    <article class="panel store-settings-panel" data-admin-simple-panel="list" <?= $panel !== 'list' ? 'hidden' : '' ?> style="margin:12px 0;">
+    <article class="panel" <?= $panel !== 'list' ? 'hidden' : '' ?> style="margin:0;">
         <form method="get" action="/admin/users" class="users-search-row">
             <input type="text" name="q" value="<?= htmlspecialchars($search, ENT_QUOTES) ?>" placeholder="Caută după nume sau email...">
             <input type="hidden" name="sort" value="<?= htmlspecialchars($sort, ENT_QUOTES) ?>">
@@ -245,7 +245,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                 </div>
 
                 <div class="users-list-toolbar admin-filters-inline" style="justify-content:space-between;">
-                    <small style="color:#64748b;">Total utilizatori: <strong><?= (int) $totalUsers ?></strong></small>
+                    <small style="color:var(--ax-text-3);">Total utilizatori: <strong><?= (int) $totalUsers ?></strong></small>
                     <label class="admin-per-page-control">
                         <span>Pe pagină</span>
                         <select name="per_page" onchange="window.location.href='<?= htmlspecialchars($buildUsersUrl(['user' => $selectedId > 0 ? $selectedId : null, 'page' => 1, 'per_page' => null]), ENT_QUOTES) ?>&per_page=' + this.value">
@@ -430,7 +430,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
                             <article class="panel" style="margin:0;">
                                 <h4 style="margin-top:0;">Facturare (ultima comandă)</h4>
                                 <?php if (!is_array($selectedBilling)): ?>
-                                    <p style="margin:0;color:#64748b;">Nu există date de facturare.</p>
+                                    <p style="margin:0;color:var(--ax-text-3);">Nu există date de facturare.</p>
                                 <?php else: ?>
                                     <div class="order-modal-grid">
                                         <div><small>Nume</small><p><?= htmlspecialchars(trim((string) ($selectedBilling['billing_first_name'] ?? '') . ' ' . (string) ($selectedBilling['billing_last_name'] ?? '')), ENT_QUOTES) ?></p></div>
@@ -445,6 +445,42 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
 <?php endif; ?>
                             </div>
                         </article>
+<?php if ($areFidelitate): ?>
+                        <?php
+                        // WP-35 (IA-07): istoricul punctelor clientului (fosta fereastră „Detalii” din Puncte fidelitate), aici în fișa lui.
+                        $puncteClient = is_array($selectedUserPuncte ?? null) ? $selectedUserPuncte : [];
+                        $randuriPuncte = [];
+                        foreach ($puncteClient as $tx) {
+                            $delta = (int) ($tx['points_delta'] ?? 0);
+                            $randuriPuncte[] = ['celule' => [
+                                '<span class="adm-mono">' . adm_e((string) ($tx['created_at'] ?? '')) . '</span>',
+                                '<span class="status-pill">' . adm_e((string) ($tx['tx_type'] ?? '')) . '</span>',
+                                '<strong class="adm-mono ' . ($delta >= 0 ? 'adm-puncte--plus' : 'adm-puncte--minus') . '">' . ($delta > 0 ? '+' : '') . $delta . '</strong>',
+                                '<span class="adm-mono">' . (int) ($tx['balance_after'] ?? 0) . '</span>',
+                                adm_e(trim((string) ($tx['order_number'] ?? '')) !== '' ? (string) $tx['order_number'] : '-'),
+                                adm_e(trim((string) ($tx['admin_email'] ?? '')) !== '' ? (string) $tx['admin_email'] : '-'),
+                                adm_e(trim((string) ($tx['reason'] ?? '')) !== '' ? (string) $tx['reason'] : '-'),
+                            ]];
+                        }
+                        ob_start();
+                        admin_componenta('tabel', [
+                            'legenda' => 'Istoricul punctelor clientului',
+                            'dens' => true,
+                            'coloane' => ['Data', 'Tip', ['eticheta' => 'Puncte', 'aliniere' => 'dreapta'], ['eticheta' => 'Sold după', 'aliniere' => 'dreapta'],
+                                'Comandă', 'Admin', 'Detalii'],
+                            'randuri' => $randuriPuncte,
+                            'gol' => '<p class="adm-text-slab">Nu există tranzacții cu puncte pentru acest client.</p>',
+                        ]);
+                        $tabelPuncte = (string) ob_get_clean();
+                        admin_componenta('sectiune-formular', [
+                            'id' => 'client-puncte',
+                            'titlu' => 'Puncte de fidelitate',
+                            'descriere' => 'Sold: ' . (int) ($selectedUser['loyalty_points'] ?? 0) . ' puncte. Ultimele ' . count($puncteClient) . ' tranzacții, cele mai noi întâi.',
+                            'actiuni' => '<a class="btn btn-secondary" href="/admin/users/points?tab=clienti">Ajustează punctele</a>',
+                            'continut' => $tabelPuncte,
+                        ]);
+                        ?>
+<?php endif; ?>
                     </article>
                 <?php endif; ?>
             </div>
@@ -538,31 +574,5 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
     });
 
     syncState();
-})();
-</script>
-<script>
-(() => {
-    const tabsWrap = document.querySelector('[data-admin-simple-tabs]');
-    if (!(tabsWrap instanceof HTMLElement)) return;
-    const tabs = Array.from(tabsWrap.querySelectorAll('[data-admin-simple-tab]'));
-    const panels = Array.from(document.querySelectorAll('[data-admin-simple-panel]'));
-    const setActive = (key) => {
-        tabs.forEach((tab) => tab.classList.toggle('is-active', tab.getAttribute('data-admin-simple-tab') === key));
-        panels.forEach((panel) => {
-            panel.hidden = panel.getAttribute('data-admin-simple-panel') !== key;
-        });
-    };
-    tabs.forEach((tab) => {
-        tab.addEventListener('click', () => {
-            const key = tab.getAttribute('data-admin-simple-tab') || 'list';
-            const url = new URL(window.location.href);
-            url.searchParams.set('panel', key);
-            if (key === 'import') {
-                url.searchParams.delete('user');
-            }
-            window.location.href = url.toString();
-        });
-    });
-    setActive('<?= htmlspecialchars($panel, ENT_QUOTES) ?>');
 })();
 </script>

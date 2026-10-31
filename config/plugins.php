@@ -106,7 +106,9 @@ return [
                 'activ' => $activExact('/admin')],
             // Încercările de înregistrare (conturi de clienți) și de comandă (magazin), cu protecția anti-robot.
             ['grup' => 'rapoarte', 'ordine' => 20, 'eticheta' => 'Încercări de înregistrare și comandă', 'href' => '/admin/users/security',
-                'icon' => 'shield', 'activ' => ['/admin/users/security'], 'oricare_din' => ['magazin', 'conturi_clienti']],
+                'icon' => 'shield', 'activ' => ['/admin/users/security'], 'oricare_din' => ['magazin', 'conturi_clienti'],
+                // WP-35 (IA-10): fără magazin sunt doar înregistrări, fără conturi de clienți doar comenzi.
+                'eticheta_fara' => ['magazin' => 'Încercări de înregistrare', 'conturi_clienti' => 'Încercări de comandă']],
             // Pagina e a nucleului (SEO, cache, mentenanță…); fără magazin pe site se numește „Setări site”.
             ['grup' => 'setari', 'ordine' => 10, 'eticheta' => 'Setări magazin', 'href' => '/admin/settings/store',
                 'icon' => 'settings', 'activ' => ['/admin/settings/store', '/admin/settings/google'], 'eticheta_fara' => ['magazin' => 'Setări site']],

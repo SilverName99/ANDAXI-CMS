@@ -60,13 +60,17 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
 }
 ?>
 
-<section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Securitate formulare</h1>
-            <p>Monitorizare tentative <?= htmlspecialchars($descriereSurse, ENT_QUOTES) ?> pentru detecție bot/spam.</p>
-        </div>
-    </div>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => \App\Support\Plugins::vizibil('magazin') ? (\App\Support\Plugins::vizibil('conturi_clienti') ? 'Încercări de înregistrare și comandă' : 'Încercări de comandă') : 'Încercări de înregistrare',
+    'nivel' => 1,
+    'subtitlu' => 'Monitorizare tentative ' . (string) ($descriereSurse) . ' pentru detecție bot/spam.',
+    'ajutor' => [
+        'Fiecare încercare de ' . $descriereSurse . ', cu verdictul protecției anti-robot: așa vezi dacă un robot încearcă formularele.',
+    ],
+]);
+?>
+<div class="adm-pagina">
 
     <article class="panel" style="margin:12px 0;">
         <form method="get" action="/admin/users/security" class="admin-filters-inline">
@@ -114,7 +118,7 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
 
     <article class="panel" style="margin:12px 0;">
         <div class="users-list-toolbar" style="margin-bottom:8px;">
-            <small style="color:#64748b;">Total evenimente: <strong><?= (int) $total ?></strong></small>
+            <small style="color:var(--ax-text-3);">Total evenimente: <strong><?= (int) $total ?></strong></small>
         </div>
 
         <div class="users-table-wrap">
@@ -171,4 +175,4 @@ for ($i = $paginationStart; $i <= $paginationEnd; $i++) {
             </div>
         <?php endif; ?>
     </article>
-</section>
+</div>

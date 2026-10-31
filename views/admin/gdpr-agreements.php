@@ -49,16 +49,29 @@ $campuriOperator = [
 ];
 ?>
 
+<?php ob_start(); ?>
+    <a class="btn btn-secondary" href="<?= htmlspecialchars($buildExportUrl(), ENT_QUOTES) ?>">Export Excel (cu semnături)</a>
+    <a class="btn btn-secondary" href="/admin/users">Înapoi la clienți</a>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Acorduri GDPR',
+    'nivel' => 1,
+    'subtitlu' => 'Înregistrări salvate din formularul public de acord GDPR.',
+    'actiuni' => $antetActiuni,
+]);
+?>
 <?= \App\Support\Dev::marcaj('gr:gdpr-setari') ?>
-<section class="panel" style="margin-bottom:18px;">
-    <div class="section-head">
-        <h2 style="margin:0;">Datele operatorului</h2>
-        <p style="margin:6px 0 0;color:#64748b;">
+<section class="adm-sectiune" id="gdpr-operator" aria-labelledby="gdpr-operator-titlu">
+    <div class="adm-sectiune__antet"><div>
+        <h2 class="adm-sectiune__titlu" id="gdpr-operator-titlu">Datele operatorului</h2>
+        <p class="adm-sectiune__descriere">
             Apar în textul acordului semnat de vizitatori. Câmpurile marcate cu * sunt date juridice: cât timp lipsesc,
             formularul le arată ca spații de completat.
         </p>
-    </div>
-    <form method="post" action="/admin/pages/gdpr-agreements/settings" class="form-grid" style="margin-top:14px;">
+    </div></div>
+    <div class="adm-sectiune__corp">
+    <form method="post" action="/admin/pages/gdpr-agreements/settings" class="form-grid">
         <div class="field">
             <label for="gdpr-varianta">Textul formularului</label>
             <select id="gdpr-varianta" name="gdpr_formular_varianta">
@@ -81,19 +94,10 @@ $campuriOperator = [
             <button class="btn" type="submit">Salvează datele operatorului</button>
         </div>
     </form>
+    </div>
 </section>
 <?= \App\Support\Dev::marcaj('gr:gdpr-setari', true) ?>
-<section class="panel">
-    <div class="section-head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
-        <div>
-            <h1 style="margin:0;">Acorduri GDPR</h1>
-            <p style="margin:6px 0 0;color:#64748b;">Înregistrări salvate din formularul public de acord GDPR.</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <a class="btn btn-secondary" href="<?= htmlspecialchars($buildExportUrl(), ENT_QUOTES) ?>">Export Excel (cu semnături)</a>
-            <a class="btn btn-secondary" href="/admin/users">Înapoi la Utilizatori</a>
-        </div>
-    </div>
+<div class="adm-pagina">
 
     <form method="get" action="/admin/users/gdpr-agreements" class="admin-filters-inline" style="margin:12px 0;">
         <div class="admin-filter-field admin-filter-field--search">
@@ -115,7 +119,7 @@ $campuriOperator = [
         </div>
     </form>
 
-    <p style="margin:0 0 10px;color:#64748b;">Afișare <?= count($items) ?> din <?= $totalItems ?> acorduri.</p>
+    <p style="margin:0 0 10px;color:var(--ax-text-3);">Afișare <?= count($items) ?> din <?= $totalItems ?> acorduri.</p>
 
     <table class="table">
         <thead>
@@ -168,9 +172,9 @@ $campuriOperator = [
                     </td>
                     <td>
                         <?php if ($hasSignature): ?>
-                            <img src="<?= htmlspecialchars($signatureDataUrl, ENT_QUOTES) ?>" alt="Semnătură" style="max-width:120px;max-height:56px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;">
+                            <img src="<?= htmlspecialchars($signatureDataUrl, ENT_QUOTES) ?>" alt="Semnătură" style="max-width:120px;max-height:56px;border:1px solid var(--ax-linie-tare);border-radius:6px;background:var(--ax-suprafata);">
                         <?php else: ?>
-                            <span style="color:#ef4444;">Lipsă</span>
+                            <span style="color:var(--ax-eroare);">Lipsă</span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -191,4 +195,4 @@ $campuriOperator = [
             <span class="product-reviews-pagination__label">Pagina <?= $page ?> / <?= $totalPages ?></span>
         </nav>
     <?php endif; ?>
-</section>
+</div>

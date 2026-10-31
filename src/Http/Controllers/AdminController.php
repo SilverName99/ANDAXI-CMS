@@ -647,6 +647,12 @@ final class AdminController
         if (!$this->guard()) {
             return;
         }
+        // WP-35 (IA-07): salvările programului de fidelitate se întorc (ca înainte) la /admin/users/settings?tab=points,
+        // fosta pagină a punctelor; adresa duce acum la pagina Fidelitate (ancora #import rămâne în browser).
+        if ((string) ($_GET['tab'] ?? '') === 'points' && \App\Support\Plugins::vizibil('fidelitate')) {
+            header('Location: /admin/users/points', true, 302);
+            return;
+        }
 
         $db = $this->db();
         $settings = [
@@ -1198,6 +1204,7 @@ final class AdminController
         $selectedUser = null;
         $selectedUserOrders = [];
         $selectedBilling = null;
+        $selectedUserPuncte = [];
 
         if ($db instanceof PDO) {
             $this->ensureOptionalSchema($db);
@@ -1219,6 +1226,14 @@ final class AdminController
                     if (!empty($selectedUserOrders) && is_array($selectedUserOrders[0])) {
                         $selectedBilling = $selectedUserOrders[0];
                     }
+                    // WP-35 (IA-07): istoricul punctelor clientului stă în fișa lui (pagina Fidelitate ține programul).
+                    if (\App\Support\Plugins::vizibil('fidelitate')) {
+                        try {
+                            $selectedUserPuncte = $this->loadUserLoyaltyHistory($db, (int) ($selectedUser['id'] ?? 0), 300);
+                        } catch (Throwable) {
+                            $selectedUserPuncte = [];
+                        }
+                    }
                 }
             }
         }
@@ -1230,6 +1245,7 @@ final class AdminController
             'editingUser' => $selectedUser,
             'selectedUserOrders' => $selectedUserOrders,
             'selectedBilling' => $selectedBilling,
+            'selectedUserPuncte' => $selectedUserPuncte,
             'search' => $search,
             'sort' => $sort,
             'dir' => $dir,

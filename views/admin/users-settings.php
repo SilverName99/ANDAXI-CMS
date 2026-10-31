@@ -14,30 +14,41 @@ $googleClientSecret = (string) ($settings['customer_google_client_secret'] ?? ''
 $googleCallbackUrl = (string) ($googleCallbackUrl ?? '');
 ?>
 
-<section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Setări utilizatori</h1>
-            <p>Configurează câmpurile de înregistrare și paginile necesare pentru cont.</p>
-        </div>
-    </div>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Conturi clienți',
+    'nivel' => 1,
+    'subtitlu' => 'Configurează câmpurile de înregistrare și paginile necesare pentru cont.',
+    'ajutor' => [
+        'Paginile contului clientului, logarea cu Google și câmpurile cerute la înregistrare.',
+    ],
+]);
+?>
+<div class="adm-pagina">
 
-    <article class="panel" style="margin:12px 0;">
-        <h3 style="margin-top:0;">Pagini utilizatori</h3>
-        <p style="margin:0 0 10px;color:#64748b;">
-            Verifică și creează automat paginile: Login, Register, Contul meu, Resetare parolă.
-        </p>
+    <section class="adm-sectiune" id="users-settings-pagini-utilizatori" aria-labelledby="users-settings-pagini-utilizatori-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="users-settings-pagini-utilizatori-titlu">Pagini utilizatori</h2>
+                <p class="adm-sectiune__descriere">Verifică și creează automat paginile: Login, Register, Contul meu, Resetare parolă.</p>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <form method="post" action="/admin/users/settings">
             <input type="hidden" name="action" value="generate_pages">
             <button class="btn" type="submit">Generează pagini necesare</button>
         </form>
-    </article>
+        </div>
+    </section>
 
-    <article class="panel" style="margin:12px 0;">
-        <h3 style="margin-top:0;">Login cu Google</h3>
-        <p style="margin:0 0 10px;color:#64748b;">
-            Configurează OAuth 2.0 pentru autentificarea clienților cu Google.
-        </p>
+    <section class="adm-sectiune" id="users-settings-login-cu-google" aria-labelledby="users-settings-login-cu-google-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="users-settings-login-cu-google-titlu">Login cu Google</h2>
+                <p class="adm-sectiune__descriere">Configurează OAuth 2.0 pentru autentificarea clienților cu Google.</p>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <form method="post" action="/admin/users/settings" class="field">
             <input type="hidden" name="action" value="save_google_auth">
             <label style="display:flex;align-items:center;gap:8px;">
@@ -54,11 +65,17 @@ $googleCallbackUrl = (string) ($googleCallbackUrl ?? '');
                 <button class="btn" type="submit">Salvează setările Google</button>
             </div>
         </form>
-    </article>
+        </div>
+    </section>
 
-    <article class="panel" style="margin:12px 0 0;">
-        <h3 style="margin-top:0;">Câmpuri formular înregistrare</h3>
-        <p style="margin:0 0 10px;color:#64748b;">Controlezi afișarea fiecărui câmp din formularul de înregistrare.</p>
+    <section class="adm-sectiune" id="users-settings-campuri-formular-inregistrare" aria-labelledby="users-settings-campuri-formular-inregistrare-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="users-settings-campuri-formular-inregistrare-titlu">Câmpuri formular înregistrare</h2>
+                <p class="adm-sectiune__descriere">Controlezi afișarea fiecărui câmp din formularul de înregistrare.</p>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <form method="post" action="/admin/users/settings" class="field">
             <input type="hidden" name="action" value="save_fields">
             <label style="display:flex;align-items:center;gap:8px;">
@@ -97,5 +114,6 @@ $googleCallbackUrl = (string) ($googleCallbackUrl ?? '');
                 <button class="btn" type="submit">Salvează setările</button>
             </div>
         </form>
-    </article>
-</section>
+        </div>
+    </section>
+</div>

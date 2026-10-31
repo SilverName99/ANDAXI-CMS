@@ -23,29 +23,7 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
 }
 ?>
 
-<section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Puncte fidelitate</h1>
-            <p>Configurează programul de puncte și gestionează punctajele clienților.</p>
-        </div>
-    </div>
-
     <style>
-        .loyalty-tabs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-        .loyalty-tabs .btn.is-active {
-            background: #0f766e;
-            color: #fff;
-            border-color: #0f766e;
-        }
-        .loyalty-panel[hidden] {
-            display: none !important;
-        }
         .loyalty-points-summary {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -53,19 +31,19 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
             margin: 8px 0 12px;
         }
         .loyalty-points-summary article {
-            border: 1px solid #dbe4ef;
+            border: 1px solid var(--ax-linie);
             border-radius: 10px;
             background: #f8fbff;
             padding: 10px 12px;
         }
         .loyalty-points-summary article small {
-            color: #64748b;
+            color: var(--ax-text-3);
             display: block;
             margin-bottom: 4px;
         }
         .loyalty-points-summary article strong {
             font-size: 18px;
-            color: #0f172a;
+            color: var(--ax-text);
         }
         .loyalty-inline-search {
             display: flex;
@@ -77,16 +55,6 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
             min-width: 260px;
             flex: 1 1 260px;
         }
-        .loyalty-history-modal__meta {
-            margin: 8px 0 10px;
-            color: #64748b;
-            font-size: 13px;
-        }
-        .loyalty-history-modal__empty {
-            margin: 0;
-            color: #64748b;
-            font-size: 14px;
-        }
         .loyalty-status-pill {
             display: inline-flex;
             align-items: center;
@@ -95,39 +63,57 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
             border-radius: 999px;
             font-size: 12px;
             font-weight: 600;
-            border: 1px solid #cbd5e1;
-            color: #334155;
-            background: #f8fafc;
+            border: 1px solid var(--ax-linie-tare);
+            color: var(--ax-text-2);
+            background: var(--ax-suprafata-2);
         }
         .loyalty-status-pill.pending {
-            border-color: #f59e0b;
-            color: #92400e;
-            background: #fffbeb;
+            border-color: var(--ax-atentie);
+            color: var(--ax-atentie);
+            background: var(--ax-atentie-fundal);
         }
         .loyalty-status-pill.completed {
             border-color: #10b981;
-            color: #065f46;
-            background: #ecfdf5;
+            color: var(--ax-ok);
+            background: var(--ax-ok-fundal);
         }
         .loyalty-unclaimed-note {
             margin: 8px 0 12px;
-            color: #64748b;
+            color: var(--ax-text-3);
             font-size: 13px;
         }
     </style>
-
-    <div class="loyalty-tabs" data-loyalty-tabs data-default-tab="<?= htmlspecialchars($defaultLoyaltyPanel, ENT_QUOTES) ?>">
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'settings' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="settings">Setări program puncte</button>
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'adjust' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="adjust">Ajustare manuală puncte</button>
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'promo' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="promo">Reguli promo puncte</button>
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'history' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="history">Istoric tranzacții puncte</button>
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'claimed' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="claimed">Puncte revendicate</button>
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'unclaimed' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="unclaimed">Puncte nerevendicate</button>
-        <button class="btn btn-secondary <?= $defaultLoyaltyPanel === 'import' ? 'is-active' : '' ?>" type="button" data-loyalty-tab="import">Import puncte</button>
-    </div>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="settings" <?= $defaultLoyaltyPanel !== 'settings' ? 'hidden' : '' ?> style="margin:12px 0;">
-        <h3 style="margin-top:0;">Setări program puncte</h3>
+<?php
+// WP-35 (IA-07, docs/ARHITECTURA-ADMIN.md): pagina „Fidelitate” ține programul (setările, regulile promo, importul) și
+// punctele clienților; istoricul punctelor unui client e în fișa lui (/admin/users/{id}, partea „Puncte de fidelitate”), unde
+// duce butonul fiecărui rând. Tab-urile sunt părți ale paginii (taburi.js); adresele vechi (?panel=claimed …) deschid tab-ul lor.
+[$tabFidelitate, $tintaFidelitate] = adm_tab_ales(['program', 'promo', 'clienti', 'istoric', 'import'], [
+    'settings' => ['program', ''], 'adjust' => ['clienti', 'fidelitate-adjust'], 'claimed' => ['clienti', 'fidelitate-claimed'],
+    'unclaimed' => ['clienti', 'fidelitate-unclaimed'], 'history' => ['istoric', ''],
+], is_scalar($_GET['tab'] ?? null) ? (string) $_GET['tab'] : $defaultLoyaltyPanel);
+admin_componenta('antet-pagina', [
+    'titlu' => 'Fidelitate',
+    'nivel' => 1,
+    'subtitlu' => 'Programul de puncte: cât câștigă și cât folosesc clienții, regulile promo, punctele fiecărui client și importul.',
+    'ajutor' => [
+        'Istoricul punctelor unui client e în fișa lui (Clienți): butonul „Istoricul clientului” de pe fiecare rând duce acolo.',
+        'Punctele nerevendicate sunt ale comenzilor fără cont; ele trec la client când își confirmă adresa de email.',
+    ],
+]);
+admin_componenta('tab-uri-cu-numar', [
+    'eticheta' => 'Părțile programului de fidelitate',
+    'panouri' => true,
+    'tinta' => $tintaFidelitate,
+    'taburi' => array_map(static fn (array $t): array => ['cheie' => $t[0], 'eticheta' => $t[1], 'href' => '/admin/users/points?tab=' . $t[0],
+        'activ' => $t[0] === $tabFidelitate], [['program', 'Program'], ['promo', 'Reguli promo'], ['clienti', 'Puncte clienți'],
+        ['istoric', 'Toate tranzacțiile'], ['import', 'Import']]),
+]);
+?>
+<div class="adm-setari">
+    <div class="adm-tab-panou" data-adm-tab-panou="program"<?= $tabFidelitate !== 'program' ? ' hidden' : '' ?>>
+        <section class="adm-sectiune" id="fidelitate-settings" aria-labelledby="fidelitate-settings-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-settings-titlu">Setări program puncte</h2></div></header>
+            <div class="adm-sectiune__corp">
         <form method="post" action="/admin/users/points" class="field" id="loyalty-settings-form">
             <input type="hidden" name="action" value="save_settings">
             <label style="display:flex;align-items:center;gap:8px;">
@@ -149,7 +135,7 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
             <label>Procent maxim din coș acoperit cu puncte (%)</label>
             <input type="number" name="loyalty_points_max_redeem_percent" min="1" max="100" step="1"
                    value="<?= htmlspecialchars((string) ($loyalty['max_redeem_percent'] ?? 50), ENT_QUOTES) ?>">
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:8px 0;">
+            <hr style="border:none;border-top:1px solid var(--ax-linie);margin:8px 0;">
             <label style="display:flex;align-items:center;gap:8px;">
                 <input type="checkbox" name="loyalty_points_promo_active" <?= !empty($loyalty['promo_active']) ? 'checked' : '' ?>>
                 Activează reguli promo puncte
@@ -182,45 +168,13 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
             });
         })();
         </script>
-    </article>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="adjust" <?= $defaultLoyaltyPanel !== 'adjust' ? 'hidden' : '' ?> style="margin:12px 0;">
-        <h3 style="margin-top:0;">Ajustare manuală puncte</h3>
-        <form method="post" action="/admin/users/points" class="form-grid">
-            <input type="hidden" name="action" value="adjust_points">
-            <div class="field" style="grid-column:1/-1;">
-                <label>Utilizator</label>
-                <input type="text" id="points-user-search" placeholder="Caută rapid după nume sau email...">
-                <select name="user_id" required>
-                    <option value="">Selectează utilizator...</option>
-                    <?php foreach ($users as $user): ?>
-                        <?php
-                        $name = trim((string) ($user['first_name'] ?? '') . ' ' . (string) ($user['last_name'] ?? ''));
-                        $email = (string) ($user['email'] ?? '');
-                        $points = (int) ($user['loyalty_points'] ?? 0);
-                        ?>
-                        <option value="<?= (int) ($user['id'] ?? 0) ?>">
-                            <?= htmlspecialchars(($name !== '' ? $name : 'Utilizator') . ' (' . $email . ') - ' . $points . ' puncte', ENT_QUOTES) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
             </div>
-            <div class="field">
-                <label>Puncte (+ / -)</label>
-                <input type="number" name="points_delta" step="1" required placeholder="ex: 50 sau -20">
-            </div>
-            <div class="field">
-                <label>Motiv</label>
-                <input type="text" name="reason" placeholder="Ajustare promoțională / corecție">
-            </div>
-            <div class="field" style="grid-column:1/-1;">
-                <button class="btn" type="submit">Aplică ajustarea</button>
-            </div>
-        </form>
-    </article>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="promo" <?= $defaultLoyaltyPanel !== 'promo' ? 'hidden' : '' ?> style="margin:12px 0;">
-        <h3 style="margin-top:0;">Reguli promo puncte</h3>
+        </section>
+    </div>
+    <div class="adm-tab-panou" data-adm-tab-panou="promo"<?= $tabFidelitate !== 'promo' ? ' hidden' : '' ?>>
+        <section class="adm-sectiune" id="fidelitate-promo" aria-labelledby="fidelitate-promo-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-promo-titlu">Reguli promo puncte</h2></div></header>
+            <div class="adm-sectiune__corp">
         <form method="post" action="/admin/users/points" class="form-grid">
             <input type="hidden" name="action" value="save_promo_rule">
             <div class="field">
@@ -304,69 +258,13 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                 </tbody>
             </table>
         </div>
-    </article>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="history" <?= $defaultLoyaltyPanel !== 'history' ? 'hidden' : '' ?> style="margin:12px 0 0;">
-        <h3 style="margin-top:0;">Istoric tranzacții puncte</h3>
-        <div class="users-table-wrap">
-            <table class="table users-table">
-                <thead>
-                <tr>
-                    <th>Data</th>
-                    <th>Client</th>
-                    <th>Tip</th>
-                    <th>Delta</th>
-                    <th>Sold după</th>
-                    <th>Total înainte</th>
-                    <th>Total după puncte</th>
-                    <th>Comandă</th>
-                    <th>Detalii</th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php if ($transactions === []): ?>
-                    <tr><td colspan="9">Nu există tranzacții de puncte încă.</td></tr>
-                <?php else: ?>
-                    <?php foreach ($transactions as $tx): ?>
-                        <?php
-                        $delta = (int) ($tx['points_delta'] ?? 0);
-                        $deltaLabel = $delta > 0 ? '+' . $delta : (string) $delta;
-                        $name = trim((string) ($tx['first_name'] ?? '') . ' ' . (string) ($tx['last_name'] ?? ''));
-                        $orderNo = trim((string) ($tx['order_number'] ?? ''));
-                        $txType = (string) ($tx['tx_type'] ?? '');
-                        $orderSubtotal = $tx['subtotal'] !== null ? (float) $tx['subtotal'] : null;
-                        $orderTotal = $tx['total'] !== null ? (float) $tx['total'] : null;
-                        $loyaltyDiscount = $tx['loyalty_points_discount'] !== null ? (float) $tx['loyalty_points_discount'] : null;
-                        $totalBeforePoints = ($orderTotal !== null && $loyaltyDiscount !== null)
-                            ? $orderTotal + $loyaltyDiscount
-                            : null;
-                        ?>
-                        <tr>
-                            <td><?= htmlspecialchars((string) ($tx['created_at'] ?? ''), ENT_QUOTES) ?></td>
-                            <td><?= htmlspecialchars(($name !== '' ? $name : 'Utilizator') . ' · ' . (string) ($tx['email'] ?? ''), ENT_QUOTES) ?></td>
-                            <td><span class="status-pill"><?= htmlspecialchars($txType, ENT_QUOTES) ?></span></td>
-                            <td><strong style="color:<?= $delta >= 0 ? '#166534' : '#991b1b' ?>;"><?= htmlspecialchars($deltaLabel, ENT_QUOTES) ?></strong></td>
-                            <td><?= (int) ($tx['balance_after'] ?? 0) ?></td>
-                            <td><?= $totalBeforePoints !== null ? number_format($totalBeforePoints, 2, '.', '') . ' lei' : '-' ?></td>
-                            <td><?= $orderTotal !== null ? number_format($orderTotal, 2, '.', '') . ' lei' : '-' ?></td>
-                            <td>
-                                <?php if ($orderNo !== ''): ?>
-                                    <a href="/admin/orders?q=<?= urlencode($orderNo) ?>" target="_blank" style="font-family:monospace;"><?= htmlspecialchars($orderNo, ENT_QUOTES) ?></a>
-                                <?php else: ?>
-                                    -
-                                <?php endif; ?>
-                            </td>
-                            <td><?= htmlspecialchars((string) ($tx['reason'] ?? '-'), ENT_QUOTES) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </article>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="claimed" <?= $defaultLoyaltyPanel !== 'claimed' ? 'hidden' : '' ?> style="margin:12px 0;">
-        <h3 style="margin-top:0;">Puncte revendicate</h3>
+            </div>
+        </section>
+    </div>
+    <div class="adm-tab-panou" data-adm-tab-panou="clienti"<?= $tabFidelitate !== 'clienti' ? ' hidden' : '' ?>>
+        <section class="adm-sectiune" id="fidelitate-claimed" aria-labelledby="fidelitate-claimed-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-claimed-titlu">Puncte revendicate</h2></div></header>
+            <div class="adm-sectiune__corp">
         <?php
         $claimedTotalPoints = 0;
         foreach ($claimedPointsAccounts as $account) {
@@ -427,15 +325,7 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                             <td><?= number_format((float) ($account['total_spent'] ?? 0), 2) ?> lei</td>
                             <td><?= htmlspecialchars((string) ($account['last_order_at'] ?? '-') ?: '-', ENT_QUOTES) ?></td>
                             <td>
-                                <button
-                                    type="button"
-                                    class="btn btn-secondary"
-                                    data-loyalty-history-btn
-                                    data-user-id="<?= $uid ?>"
-                                    data-user-name="<?= htmlspecialchars($fullName !== '' ? $fullName : 'Utilizator', ENT_QUOTES) ?>"
-                                >
-                                    Detalii
-                                </button>
+                                <a class="btn btn-secondary" href="/admin/users/<?= $uid ?>#client-puncte">Istoricul clientului</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -443,10 +333,11 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                 </tbody>
             </table>
         </div>
-    </article>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="unclaimed" <?= $defaultLoyaltyPanel !== 'unclaimed' ? 'hidden' : '' ?> style="margin:12px 0;">
-        <h3 style="margin-top:0;">Puncte nerevendicate</h3>
+            </div>
+        </section>
+        <section class="adm-sectiune" id="fidelitate-unclaimed" aria-labelledby="fidelitate-unclaimed-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-unclaimed-titlu">Puncte nerevendicate</h2></div></header>
+            <div class="adm-sectiune__corp">
         <?php
         $unclaimedTotalPoints = 0;
         $unclaimedPendingPoints = 0;
@@ -522,7 +413,7 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                             <td><?= htmlspecialchars((string) ($entry['email'] ?? ''), ENT_QUOTES) ?></td>
                             <td>
                                 <strong><?= $pointsTotal ?></strong> pct
-                                <div style="margin-top:4px;color:#64748b;font-size:12px;">
+                                <div style="margin-top:4px;color:var(--ax-text-3);font-size:12px;">
                                     confirmate: <?= $confirmedPoints ?> · pending: <?= $pendingPoints ?>
                                 </div>
                                 <details style="margin-top:6px;">
@@ -530,8 +421,8 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                                     <form method="post" action="/admin/users/points" style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">
                                         <input type="hidden" name="action" value="adjust_unclaimed">
                                         <input type="hidden" name="email" value="<?= htmlspecialchars((string) ($entry['email'] ?? ''), ENT_QUOTES) ?>">
-                                        <input type="number" name="new_total" min="0" max="<?= $pointsTotal ?>" value="<?= $pointsTotal ?>" style="width:80px;padding:3px 6px;border:1px solid #d1d5db;border-radius:5px;font-size:13px;">
-                                        <span style="font-size:12px;color:#64748b;">pct (max <?= $pointsTotal ?>)</span>
+                                        <input type="number" name="new_total" min="0" max="<?= $pointsTotal ?>" value="<?= $pointsTotal ?>" style="width:80px;padding:3px 6px;border:1px solid var(--ax-linie-tare);border-radius:5px;font-size:13px;">
+                                        <span style="font-size:12px;color:var(--ax-text-3);">pct (max <?= $pointsTotal ?>)</span>
                                         <button type="submit" class="btn" style="padding:3px 10px;font-size:12px;" onclick="return confirm('Sigur vrei să modifici punctele pentru <?= htmlspecialchars((string) ($entry['email'] ?? ''), ENT_QUOTES) ?>?')">Salvează</button>
                                     </form>
                                 </details>
@@ -541,7 +432,7 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                                 <span class="loyalty-status-pill <?= $isPendingBucket ? 'pending' : 'completed' ?>">
                                     <?= $isPendingBucket ? 'Pending' : 'Finalizată' ?>
                                 </span>
-                                <div style="margin-top:4px;color:#64748b;font-size:12px;">
+                                <div style="margin-top:4px;color:var(--ax-text-3);font-size:12px;">
                                     comenzi finalizate: <?= $confirmedOrdersCount ?> · comenzi pending: <?= $pendingOrdersCount ?>
                                 </div>
                             </td>
@@ -552,20 +443,121 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                 </tbody>
             </table>
         </div>
-    </article>
-
-    <article class="panel loyalty-panel" data-loyalty-panel="import" <?= $defaultLoyaltyPanel !== 'import' ? 'hidden' : '' ?> style="margin:12px 0;">
-        <h3 style="margin-top:0;">Import puncte</h3>
+            </div>
+        </section>
+        <section class="adm-sectiune" id="fidelitate-adjust" aria-labelledby="fidelitate-adjust-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-adjust-titlu">Ajustare manuală puncte</h2></div></header>
+            <div class="adm-sectiune__corp">
+        <form method="post" action="/admin/users/points" class="form-grid">
+            <input type="hidden" name="action" value="adjust_points">
+            <div class="field" style="grid-column:1/-1;">
+                <label>Utilizator</label>
+                <input type="text" id="points-user-search" placeholder="Caută rapid după nume sau email...">
+                <select name="user_id" required>
+                    <option value="">Selectează utilizator...</option>
+                    <?php foreach ($users as $user): ?>
+                        <?php
+                        $name = trim((string) ($user['first_name'] ?? '') . ' ' . (string) ($user['last_name'] ?? ''));
+                        $email = (string) ($user['email'] ?? '');
+                        $points = (int) ($user['loyalty_points'] ?? 0);
+                        ?>
+                        <option value="<?= (int) ($user['id'] ?? 0) ?>">
+                            <?= htmlspecialchars(($name !== '' ? $name : 'Utilizator') . ' (' . $email . ') - ' . $points . ' puncte', ENT_QUOTES) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="field">
+                <label>Puncte (+ / -)</label>
+                <input type="number" name="points_delta" step="1" required placeholder="ex: 50 sau -20">
+            </div>
+            <div class="field">
+                <label>Motiv</label>
+                <input type="text" name="reason" placeholder="Ajustare promoțională / corecție">
+            </div>
+            <div class="field" style="grid-column:1/-1;">
+                <button class="btn" type="submit">Aplică ajustarea</button>
+            </div>
+        </form>
+            </div>
+        </section>
+    </div>
+    <div class="adm-tab-panou" data-adm-tab-panou="istoric"<?= $tabFidelitate !== 'istoric' ? ' hidden' : '' ?>>
+        <section class="adm-sectiune" id="fidelitate-history" aria-labelledby="fidelitate-history-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-history-titlu">Toate tranzacțiile cu puncte</h2></div></header>
+            <div class="adm-sectiune__corp">
+        <div class="users-table-wrap">
+            <table class="table users-table">
+                <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Client</th>
+                    <th>Tip</th>
+                    <th>Delta</th>
+                    <th>Sold după</th>
+                    <th>Total înainte</th>
+                    <th>Total după puncte</th>
+                    <th>Comandă</th>
+                    <th>Detalii</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if ($transactions === []): ?>
+                    <tr><td colspan="9">Nu există tranzacții de puncte încă.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($transactions as $tx): ?>
+                        <?php
+                        $delta = (int) ($tx['points_delta'] ?? 0);
+                        $deltaLabel = $delta > 0 ? '+' . $delta : (string) $delta;
+                        $name = trim((string) ($tx['first_name'] ?? '') . ' ' . (string) ($tx['last_name'] ?? ''));
+                        $orderNo = trim((string) ($tx['order_number'] ?? ''));
+                        $txType = (string) ($tx['tx_type'] ?? '');
+                        $orderSubtotal = $tx['subtotal'] !== null ? (float) $tx['subtotal'] : null;
+                        $orderTotal = $tx['total'] !== null ? (float) $tx['total'] : null;
+                        $loyaltyDiscount = $tx['loyalty_points_discount'] !== null ? (float) $tx['loyalty_points_discount'] : null;
+                        $totalBeforePoints = ($orderTotal !== null && $loyaltyDiscount !== null)
+                            ? $orderTotal + $loyaltyDiscount
+                            : null;
+                        ?>
+                        <tr>
+                            <td><?= htmlspecialchars((string) ($tx['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                            <td><?= htmlspecialchars(($name !== '' ? $name : 'Utilizator') . ' · ' . (string) ($tx['email'] ?? ''), ENT_QUOTES) ?></td>
+                            <td><span class="status-pill"><?= htmlspecialchars($txType, ENT_QUOTES) ?></span></td>
+                            <td><strong style="color:<?= $delta >= 0 ? 'var(--ax-ok)' : 'var(--ax-eroare)' ?>;"><?= htmlspecialchars($deltaLabel, ENT_QUOTES) ?></strong></td>
+                            <td><?= (int) ($tx['balance_after'] ?? 0) ?></td>
+                            <td><?= $totalBeforePoints !== null ? number_format($totalBeforePoints, 2, '.', '') . ' lei' : '-' ?></td>
+                            <td><?= $orderTotal !== null ? number_format($orderTotal, 2, '.', '') . ' lei' : '-' ?></td>
+                            <td>
+                                <?php if ($orderNo !== ''): ?>
+                                    <a href="/admin/orders?q=<?= urlencode($orderNo) ?>" target="_blank" style="font-family:var(--ax-font-mono);"><?= htmlspecialchars($orderNo, ENT_QUOTES) ?></a>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                            <td><?= htmlspecialchars((string) ($tx['reason'] ?? '-'), ENT_QUOTES) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+            </div>
+        </section>
+    </div>
+    <div class="adm-tab-panou" data-adm-tab-panou="import"<?= $tabFidelitate !== 'import' ? ' hidden' : '' ?>>
+        <section class="adm-sectiune" id="fidelitate-import" aria-labelledby="fidelitate-import-titlu">
+            <header class="adm-sectiune__antet"><div><h2 class="adm-sectiune__titlu" id="fidelitate-import-titlu">Import puncte</h2></div></header>
+            <div class="adm-sectiune__corp">
         <form method="post" action="/admin/users/points/import" enctype="multipart/form-data" class="users-search-row" style="margin-bottom:10px;">
             <input type="file" name="points_file" accept=".csv,.xlsx" required>
             <button class="btn" type="submit">Import puncte (CSV/XLSX)</button>
-            <small style="color:#64748b;">Coloane acceptate: email + puncte (current_balance / received_points / points).</small>
+            <small style="color:var(--ax-text-3);">Coloane acceptate: email + puncte (current_balance / received_points / points).</small>
         </form>
         <?php if ($pointsImportMissingEmails !== []): ?>
-            <div class="panel" style="margin:8px 0 0;border-color:#f59e0b;background:#fffbeb;">
-                <h4 style="margin:0 0 8px;color:#92400e;">Email-uri negăsite în site (import puncte)</h4>
-                <p style="margin:0 0 8px;color:#92400e;">Primele <?= min(80, count($pointsImportMissingEmails)) ?> email-uri care nu au fost asociate:</p>
-                <div style="max-height:200px;overflow:auto;padding:8px;border:1px solid #fcd34d;border-radius:8px;background:#fff;">
+            <div class="panel" style="margin:8px 0 0;border-color:var(--ax-atentie);background:var(--ax-atentie-fundal);">
+                <h4 style="margin:0 0 8px;color:var(--ax-atentie);">Email-uri negăsite în site (import puncte)</h4>
+                <p style="margin:0 0 8px;color:var(--ax-atentie);">Primele <?= min(80, count($pointsImportMissingEmails)) ?> email-uri care nu au fost asociate:</p>
+                <div style="max-height:200px;overflow:auto;padding:8px;border:1px solid var(--ax-atentie-linie);border-radius:8px;background:var(--ax-suprafata);">
                     <ul style="margin:0;padding-left:18px;display:grid;gap:4px;">
                         <?php foreach (array_slice($pointsImportMissingEmails, 0, 80) as $missingEmail): ?>
                             <li style="font-size:13px;color:#78350f;"><?= htmlspecialchars((string) $missingEmail, ENT_QUOTES) ?></li>
@@ -574,33 +566,8 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
                 </div>
             </div>
         <?php endif; ?>
-    </article>
-</section>
-<div class="modal-overlay" id="loyalty-history-modal">
-    <div class="modal-card" style="max-width:920px;">
-        <div class="modal-head">
-            <h3 id="loyalty-history-title">Istoric puncte</h3>
-            <button type="button" class="icon-btn" id="loyalty-history-close-btn" aria-label="Închide">✕</button>
-        </div>
-        <p class="loyalty-history-modal__meta" id="loyalty-history-meta"></p>
-        <div class="users-table-wrap">
-            <table class="table users-table">
-                <thead>
-                <tr>
-                    <th>Data</th>
-                    <th>Tip</th>
-                    <th>Delta</th>
-                    <th>Sold după</th>
-                    <th>Comandă</th>
-                    <th>Admin</th>
-                    <th>Detalii</th>
-                </tr>
-                </thead>
-                <tbody id="loyalty-history-body">
-                <tr><td colspan="7" class="loyalty-history-modal__empty">Selectează un cont pentru a vedea istoricul.</td></tr>
-                </tbody>
-            </table>
-        </div>
+            </div>
+        </section>
     </div>
 </div>
 <script>
@@ -619,133 +586,6 @@ if (!in_array($defaultLoyaltyPanel, ['settings', 'adjust', 'promo', 'history', '
             });
         });
     }
-
-    const tabsWrap = document.querySelector('[data-loyalty-tabs]');
-    if (!(tabsWrap instanceof HTMLElement)) {
-        return;
-    }
-    const tabs = Array.from(tabsWrap.querySelectorAll('[data-loyalty-tab]'));
-    const panels = Array.from(document.querySelectorAll('[data-loyalty-panel]'));
-    if (tabs.length === 0 || panels.length === 0) {
-        return;
-    }
-
-    const setActive = (key) => {
-        tabs.forEach((btn) => {
-            if (!(btn instanceof HTMLElement)) {
-                return;
-            }
-            btn.classList.toggle('is-active', btn.getAttribute('data-loyalty-tab') === key);
-        });
-        panels.forEach((panel) => {
-            if (!(panel instanceof HTMLElement)) {
-                return;
-            }
-            panel.hidden = panel.getAttribute('data-loyalty-panel') !== key;
-        });
-    };
-
-    const hashKey = String(window.location.hash || '').replace('#', '').trim();
-    const hasHash = tabs.some((btn) => btn.getAttribute('data-loyalty-tab') === hashKey);
-    if (hasHash) {
-        setActive(hashKey);
-    } else {
-        const defaultKey = String(tabsWrap.getAttribute('data-default-tab') || 'settings').trim();
-        setActive(defaultKey !== '' ? defaultKey : 'settings');
-    }
-
-    tabs.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const key = btn.getAttribute('data-loyalty-tab') || 'settings';
-            setActive(key);
-            if (window.history && typeof window.history.replaceState === 'function') {
-                window.history.replaceState(null, '', '#' + key);
-            }
-        });
-    });
 })();
 
-(() => {
-    const modal = document.getElementById('loyalty-history-modal');
-    const closeBtn = document.getElementById('loyalty-history-close-btn');
-    const title = document.getElementById('loyalty-history-title');
-    const meta = document.getElementById('loyalty-history-meta');
-    const body = document.getElementById('loyalty-history-body');
-    const buttons = Array.from(document.querySelectorAll('[data-loyalty-history-btn]'));
-    if (!(modal instanceof HTMLElement) || !(closeBtn instanceof HTMLElement) || !(title instanceof HTMLElement) || !(meta instanceof HTMLElement) || !(body instanceof HTMLElement) || buttons.length === 0) {
-        return;
-    }
-
-    const closeModal = () => modal.classList.remove('open');
-    closeBtn.addEventListener('click', closeModal);
-    modal.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            closeModal();
-        }
-    });
-
-    const renderRows = (history) => {
-        if (!Array.isArray(history) || history.length === 0) {
-            body.innerHTML = '<tr><td colspan="7" class="loyalty-history-modal__empty">Nu există tranzacții pentru acest cont.</td></tr>';
-            return;
-        }
-        body.innerHTML = history.map((tx) => {
-            const delta = Number.parseInt(String(tx.points_delta ?? 0), 10) || 0;
-            const deltaLabel = delta > 0 ? `+${delta}` : String(delta);
-            const color = delta >= 0 ? '#166534' : '#991b1b';
-            const order = String(tx.order_number || '').trim();
-            const adminEmail = String(tx.admin_email || '').trim();
-            const details = String(tx.reason || '').trim();
-            return `
-                <tr>
-                    <td>${String(tx.created_at || '')}</td>
-                    <td><span class="status-pill">${String(tx.tx_type || '')}</span></td>
-                    <td><strong style="color:${color};">${deltaLabel}</strong></td>
-                    <td>${Number.parseInt(String(tx.balance_after ?? 0), 10) || 0}</td>
-                    <td>${order !== '' ? order : '-'}</td>
-                    <td>${adminEmail !== '' ? adminEmail : '-'}</td>
-                    <td>${details !== '' ? details : '-'}</td>
-                </tr>
-            `;
-        }).join('');
-    };
-
-    buttons.forEach((btn) => {
-        btn.addEventListener('click', async () => {
-            const userId = Number.parseInt(String(btn.getAttribute('data-user-id') || '0'), 10);
-            const userName = String(btn.getAttribute('data-user-name') || 'Utilizator');
-            if (!Number.isFinite(userId) || userId <= 0) {
-                return;
-            }
-
-            title.textContent = `Istoric puncte - ${userName}`;
-            meta.textContent = 'Se încarcă istoricul...';
-            body.innerHTML = '<tr><td colspan="7" class="loyalty-history-modal__empty">Se încarcă...</td></tr>';
-            modal.classList.add('open');
-
-            try {
-                const response = await fetch(`/admin/users/points/history?user_id=${encodeURIComponent(String(userId))}`, {
-                    method: 'GET',
-                    headers: { Accept: 'application/json' },
-                    credentials: 'same-origin',
-                });
-                const payload = await response.json();
-                if (!payload || payload.ok !== true) {
-                    meta.textContent = 'Nu am putut încărca istoricul.';
-                    body.innerHTML = '<tr><td colspan="7" class="loyalty-history-modal__empty">A apărut o eroare la încărcare.</td></tr>';
-                    return;
-                }
-
-                const user = payload.user || {};
-                const email = String(user.email || '').trim();
-                const points = Number.parseInt(String(user.loyalty_points || 0), 10) || 0;
-                meta.textContent = `${email !== '' ? email + ' - ' : ''}${points} puncte disponibile`;
-                renderRows(payload.history || []);
-            } catch (_error) {
-                meta.textContent = 'Nu am putut încărca istoricul.';
-                body.innerHTML = '<tr><td colspan="7" class="loyalty-history-modal__empty">A apărut o eroare la încărcare.</td></tr>';
-            }
-        });
-    });
-})();
 </script>
