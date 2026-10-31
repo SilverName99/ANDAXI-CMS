@@ -206,8 +206,10 @@ $golesteMail = static function (string $server) use ($dosareMail): void {
         @unlink($fisier);
     }
 };
+/** Valorile unui antet al unui email citit de $emailuriServer (antete: nume → listă de valori), unite cu „, ”. */
+$antetEmail = static fn (array $email, string $nume): string => implode(', ', (array) ($email['antete'][$nume] ?? []));
 $emailuriServer = static function (string $server, string $eticheta, ?callable $curata = null, bool $sterge = true)
-    use ($dosareMail, $dosarDiff, $portBaza, $portCurent, $dosarBaza, $radacina): array {
+    use ($dosareMail, $dosarDiff, $portBaza, $portCurent, $dosarBaza, $radacina, $antetEmail): array {
     $emailuri = [];
     foreach (glob($dosareMail[$server] . '/*.eml') ?: [] as $fisier) {
         $text = strtr(str_replace("\r\n", "\n", (string) file_get_contents($fisier)), ['127.0.0.1:' . $portBaza => '127.0.0.1:' . $portCurent]
@@ -229,18 +231,21 @@ $emailuriServer = static function (string $server, string $eticheta, ?callable $
             [$nume, $valoare] = array_pad(explode(':', $linie, 2), 2, '');
             $nume = strtolower(trim($nume));
             if ($nume !== '' && !in_array($nume, ['date', 'message-id', 'x-mailer'], true)) {
-                $antete[$nume] = trim((string) preg_replace('/\s+/', ' ', $valoare));
+                // Un antet repetat (două Received, două To …) își păstrează fiecare valoare, în ordine.
+                $antete[$nume][] = trim((string) preg_replace('/\s+/', ' ', $valoare));
             }
         }
         ksort($antete);
         $emailuri[] = ['antete' => $antete, 'corp' => $corp];
     }
-    usort($emailuri, static fn (array $a, array $b): int => [$a['antete']['to'] ?? '', $a['antete']['subject'] ?? '', $a['corp']]
-        <=> [$b['antete']['to'] ?? '', $b['antete']['subject'] ?? '', $b['corp']]);
+    usort($emailuri, static fn (array $a, array $b): int => [$antetEmail($a, 'to'), $antetEmail($a, 'subject'), $a['corp']]
+        <=> [$antetEmail($b, 'to'), $antetEmail($b, 'subject'), $b['corp']]);
     foreach ($emailuri as $n => $email) {
         $antet = '';
-        foreach ($email['antete'] as $nume => $valoare) {
-            $antet .= $nume . ': ' . $valoare . "\n";
+        foreach ($email['antete'] as $nume => $valori) {
+            foreach ($valori as $valoare) {
+                $antet .= $nume . ': ' . $valoare . "\n";
+            }
         }
         file_put_contents($dosarDiff . '/email-' . (preg_replace('/[^a-z0-9]+/i', '-', $eticheta) ?: 'caz') . '-' . $server . '-' . ($n + 1) . '.eml',
             $antet . "\n" . $email['corp']);
@@ -3514,11 +3519,20 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         return ['nume' => $rand['name'], 'stare' => $rand['status'], 'cerut' => $rand['pending_at'] !== null,
             'confirmat' => $rand['confirmed_at'] !== null, 'liste' => array_map('intval', $liste)];
     };
-    // Emailurile trimise (faza emailurilor, WP-14), întregi: linkul de confirmare are momentul cererii (al fiecărui server),
-    // deci tokenul lui devine <TOKEN>; restul (linkul de dezabonare, cel de urmărire, cu id-urile trimiterilor aceleași pe
-    // ambele servere) rămâne cum e.
-    $emlNl = static fn (string $server, string $eticheta): array => $emailuriServer($server, 'newsletter-' . $eticheta,
-        static fn (string $text): string => (string) preg_replace('#/newsletter/confirmare/[A-Za-z0-9_.%-]+#', '/newsletter/confirmare/<TOKEN>', $text));
+    // Emailurile trimise (faza emailurilor, WP-14), întregi. Linkul de confirmare are momentul cererii (al fiecărui server):
+    // tokenul se decodează, semnătura lui se verifică cu cheia fixă a cazurilor ($cheieNlTest) și doar câmpul momentului
+    // devine <MOMENT> (tipul, id-ul abonatului și adresa rămân în comparație; o semnătură greșită se vede în email).
+    // Restul (linkul de dezabonare, cel de urmărire, cu id-urile trimiterilor aceleași pe ambele servere) rămâne cum e.
+    $curataConfirmareNl = static fn (string $text): string => (string) preg_replace_callback('#/newsletter/confirmare/([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)#',
+        static function (array $m) use ($cheieNlTest, $b64Nl): string {
+            $parti = explode('|', (string) base64_decode(strtr($m[1], '-_', '+/'), true));
+            $semnat = hash_equals($b64Nl(hash_hmac('sha256', $m[1], $cheieNlTest, true)), $m[2]);
+            if (count($parti) === 4 && $parti[0] === 'c' && ctype_digit($parti[3])) {
+                $parti[3] = '<MOMENT>';
+            }
+            return '/newsletter/confirmare/<' . implode('|', $parti) . ($semnat ? '' : ' SEMNĂTURĂ GREȘITĂ') . '>';
+        }, $text);
+    $emlNl = static fn (string $server, string $eticheta): array => $emailuriServer($server, 'newsletter-' . $eticheta, $curataConfirmareNl);
     $emailNou = 'confirmare-test@exemplu.ro';
     // Momentul din linkurile de confirmare: același pe ambele servere.
     $momentNl = time();
@@ -3567,6 +3581,12 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 }
                 if (count(array_filter($stare['emailuri'], static fn (string $e): bool => str_starts_with($e, 'newsletter_confirmare → '))) !== 2) {
                     $probleme[] = 'aștept exact două emailuri de confirmare: ' . json_encode($stare['emailuri'], JSON_UNESCAPED_UNICODE);
+                }
+                // Linkul din fiecare email de confirmare: decodat, semnat cu cheia cazului, cu adresa cererii.
+                $linkuriConfirmare = implode("\n", array_map(static fn (array $e): string => $e['corp'], $stare['eml']));
+                if (substr_count($linkuriConfirmare, '/newsletter/confirmare/<c|') < 2 || str_contains($linkuriConfirmare, 'SEMNĂTURĂ GREȘITĂ')
+                    || !str_contains($linkuriConfirmare, '|' . $emailNou . '|<MOMENT>>') || !str_contains($linkuriConfirmare, '|' . $emailExpirat . '|<MOMENT>>')) {
+                    $probleme[] = 'linkurile de confirmare din emailuri nu sunt tokenuri semnate cu cheia cazului, cu adresa cererii';
                 }
                 foreach ([[0, 'Aproape gata!'], [1, 'Confirm abonarea</button>'], [2, 'Gata, te-ai abonat!'], [3, 'Ești abonat'],
                     [4, 'Aproape gata!'], [6, 'a expirat'], [7, 'Linkul de confirmare nu este valid.'],
@@ -3886,13 +3906,13 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                     '_antete' => ['Content-Type: application/json']], 'viz'],
             ],
             // Reply-To ca rol: adresa vizitatorului, a expeditorului (From) sau alta.
-            'stare' => static function (PDO $db, string $server = 'curent') use ($emailuriServer, $istoricEmailuri): array {
+            'stare' => static function (PDO $db, string $server = 'curent') use ($emailuriServer, $istoricEmailuri, $antetEmail): array {
                 $eml = $emailuriServer($server, 'contact');
                 $roluri = [];
                 foreach ($eml as $n => $email) {
-                    $raspuns = (string) ($email['antete']['reply-to'] ?? '');
+                    $raspuns = $antetEmail($email, 'reply-to');
                     $roluri[] = $raspuns === 'vizitator-contact@exemplu.ro' ? 'vizitatorul'
-                        : (str_contains((string) ($email['antete']['from'] ?? ''), $raspuns) && $raspuns !== '' ? 'expeditorul' : 'altul');
+                        : (str_contains($antetEmail($email, 'from'), $raspuns) && $raspuns !== '' ? 'expeditorul' : 'altul');
                     unset($eml[$n]['antete']['reply-to']);
                 }
                 return ['eml' => $eml, 'reply_to' => array_values(array_unique($roluri)), 'istoric' => $istoricEmailuri($db)];
@@ -4045,9 +4065,9 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 'istoric' => $istoricEmailuri($db),
                 'tranzactii' => $db->query('SELECT kind, mode, bt_order_number, state, deposit_attempts, reminder_sent_at IS NOT NULL AS reamintit,
                     last_error FROM bt_ipay_transactions ORDER BY id')->fetchAll(PDO::FETCH_ASSOC)],
-            'verifica' => static function (array $stare, array $raspunsuri): array {
+            'verifica' => static function (array $stare, array $raspunsuri) use ($antetEmail): array {
                 $a = array_values(array_filter($stare['tranzactii'], static fn (array $t): bool => $t['bt_order_number'] === 'CMP-BT-0001'));
-                $reamintiri = array_filter($stare['eml'], static fn (array $e): bool => str_contains((string) ($e['antete']['to'] ?? ''), 'bt-notificari@exemplu.ro'));
+                $reamintiri = array_filter($stare['eml'], static fn (array $e): bool => str_contains($antetEmail($e, 'to'), 'bt-notificari@exemplu.ro'));
                 return $reamintiri !== [] && (int) ($a[0]['reamintit'] ?? 0) === 1
                     ? [] : ['aștept reamintirea BT (emailul spre bt-notificari@, reminder_sent_at): ' . count($reamintiri) . ' emailuri, ' . json_encode($a)];
             },
@@ -4066,7 +4086,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             },
             'cereri' => [['GET', '/blog/articol-fara-autor-si-categorie', [], 'viz'], ['GET', '/blog', [], 'viz']],
             // Data publicării (acum, ca articolul să fie primul în listă) e a fiecărui server.
-            'curata' => static fn (string $text): string => (string) preg_replace('/\d{4}-\d\d-\d\d(T\d\d:\d\d:\d\d[^"]*)?/', '<DATA>', $text),
+            'curata' => static fn (string $text): string => (string) preg_replace('/\d{4}-\d\d-\d\d(T\d\d:\d\d:\d\d[0-9:.+\-Z]*)?/', '<DATA>', $text),
             'stare' => static fn (PDO $db): array => [],
             'verifica' => static fn (array $stare, array $raspunsuri): array => (int) ($raspunsuri[0]['cod'] ?? 0) === 200
                 && $contine($raspunsuri[0], 'Articol fără autor și categorie') && $contine($raspunsuri[1], 'articol-fara-autor-si-categorie')
