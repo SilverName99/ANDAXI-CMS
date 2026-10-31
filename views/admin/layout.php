@@ -57,9 +57,10 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
 <?php endforeach; ?>
 <?php endif; ?>
 </head>
-<?php $adminLogat = \App\Support\Auth::check(); ?>
-<body class="<?= $adminLogat ? 'ax-admin' : 'ax-admin-login' ?>" style="--ax-accent:<?= $adminAccent ?>;--ax-accent-text:<?= \App\Support\AdminAspect::textPeAccent($adminAccent) ?>;">
-    <?php echo \App\Support\Verificare::banner($adminLogat ? 'admin' : 'site'); /* bannerul copiei de verificare (adresa întreagă doar cu adminul logat); gol în rest */ if ($adminLogat): ?>
+<?php // Clasa corpului: cadrul nou doar cu adminul logat. Rândul bannerului de mai jos rămâne exact cum îl caută garda 14 din
+// tools/verificare/stare.php. ?>
+<body class="<?= \App\Support\Auth::esteLogatFaraReimprospatare() ? 'ax-admin' : 'ax-admin-login' ?>" style="--ax-accent:<?= $adminAccent ?>;--ax-accent-text:<?= \App\Support\AdminAspect::textPeAccent($adminAccent) ?>;">
+    <?php $adminLogat = \App\Support\Auth::check(); echo \App\Support\Verificare::banner($adminLogat ? 'admin' : 'site'); /* bannerul copiei de verificare (adresa întreagă doar cu adminul logat); gol în rest */ if ($adminLogat): ?>
         <?php
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/admin', PHP_URL_PATH) ?: '/admin';
         $isActive = static function (array $prefixes) use ($path): bool {
