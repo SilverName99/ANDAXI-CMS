@@ -1201,7 +1201,7 @@ $porturiBiovitality = [
 $tokenuriBlogNoi = '';
 foreach (['Cuprins (din titlurile articolului)' => '{{blog_toc}}', 'Referințe (bibliografie)' => '{{blog_references}}',
     'Etichete' => '{{blog_tags}}', 'Articole similare' => '{{blog_related_posts}}'] as $etichetaToken => $tokenNou) {
-    $tokenuriBlogNoi .= "                                    <div style=\"padding:8px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;\">\n"
+    $tokenuriBlogNoi .= "                                    <div style=\"padding:8px;border:1px solid var(--ax-linie);border-radius:8px;background:var(--ax-suprafata);\">\n"
         . "                        <strong style=\"display:block;font-size:13px;\">" . $etichetaToken . "</strong>\n"
         . "                        <code>" . $tokenNou . "</code>\n                    </div>\n";
 }

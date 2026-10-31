@@ -160,7 +160,7 @@ TXT,
                             </datalist>
             <div class="blog-tag-chips" id="blog-post-tag-chips" aria-live="polite"></div>
                             <details style="margin-top:8px;">
-                    <summary style="cursor:pointer;font-size:12px;color:#64748b;">Etichete folosite până acum (2)</summary>
+                    <summary style="cursor:pointer;font-size:12px;color:var(--ax-text-3);">Etichete folosite până acum (2)</summary>
                     <div class="blog-tag-chips blog-tag-chips--pick" style="margin-top:8px;">
                                                     <button type="button" class="blog-tag-chip blog-tag-chip--add" data-tag-add="Ceaiuri demo">
                                 + Ceaiuri demo                            </button>
