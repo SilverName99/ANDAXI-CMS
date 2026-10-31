@@ -4212,8 +4212,15 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 $fara = static fn (array $randuri, array $coloane = []): array => array_map(
                     static fn (array $r): array => salvari_fara_coloane($r, $coloane), $randuri);
                 return [
-                    'comenzi' => $fara($citeste('SELECT * FROM orders WHERE id IN (' . $lista . ') ORDER BY id'),
-                        ['deleted_at', 'erp_last_attempt_at', 'erp_next_retry_at', 'fan_tracking_synced_at']),
+                    // Momentul acordării punctelor (loyalty_points_awarded_at) e ora cererii pe fiecare server: cele două cereri pot
+                    // cădea în secunde diferite (WP-35: picase de trei ori din patru rulări). Se compară doar dacă e pus sau nu.
+                    'comenzi' => array_map(static function (array $r): array {
+                        if (array_key_exists('loyalty_points_awarded_at', $r)) {
+                            $r['loyalty_points_awarded_at'] = $r['loyalty_points_awarded_at'] === null ? null : '<MOMENT>';
+                        }
+                        return $r;
+                    }, $fara($citeste('SELECT * FROM orders WHERE id IN (' . $lista . ') ORDER BY id'),
+                        ['deleted_at', 'erp_last_attempt_at', 'erp_next_retry_at', 'fan_tracking_synced_at'])),
                     'sterse' => array_map('intval', array_column($citeste('SELECT id FROM orders WHERE id IN (' . $lista . ') AND deleted_at IS NOT NULL ORDER BY id'), 'id')),
                     'stoc' => $citeste('SELECT id, stock, out_of_stock FROM products ORDER BY id'),
                     'puncte_clienti' => $citeste('SELECT id, loyalty_points FROM users ORDER BY id'),
