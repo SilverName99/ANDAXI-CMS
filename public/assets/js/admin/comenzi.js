@@ -31,6 +31,16 @@
     spune.t = setTimeout(function () { nota.hidden = true; }, 4000);
   }
 
+  // Enter în câmpul transportului = „Corectează transportul” (butonul vizibil, cu confirmarea lui), niciodată altă acțiune.
+  if (campTransport) {
+    campTransport.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      var buton = formular.querySelector('button[name="bulk_action"][value="shipping"]:not([data-implicit-transport])');
+      if (buton) buton.click();
+    });
+  }
+
   formular.addEventListener('submit', function (e) {
     var buton = e.submitter;
     if (!buton || buton.name !== 'bulk_action') return;

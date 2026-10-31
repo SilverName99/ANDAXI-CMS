@@ -11,7 +11,8 @@ use App\Support\View;
  * „Abonamentul tău” (faza D, WP-32; decizia OD-52 = b, G-m12): `GET /admin/abonament`, doar pentru administratorul
  * general (nicio listă de roluri nu are adresa). Arată ce module are site-ul acum: pluginurile în starea „pornit” sau „se
  * oprește” (Plugins::stari(), adică licența aplicată), cu numele și descrierea din catalog (config/plugins.php), iar pentru
- * cele care se opresc, data din care se opresc (Plugins::seOpresteDin). Nu numește niciodată un plugin absent sau oprit și
+ * cele care se opresc, data din care se opresc (Plugins::seOpresteDin). Fără uneltele interne ANDAXI (`'intern' => true`, de
+ * exemplu migrarea din WordPress): nu se vând, deci nu sunt în abonament. Nu numește niciodată un plugin absent sau oprit și
  * nu cere nimic de la CRM: e doar licența de pe server, citită.
  */
 final class AbonamentController
@@ -31,6 +32,9 @@ final class AbonamentController
                 continue;
             }
             $definitie = Plugins::definitie((string) $cheie) ?? [];
+            if (!empty($definitie['intern'])) {
+                continue;
+            }
             $module[] = [
                 'cheie' => (string) $cheie,
                 'nume' => (string) ($definitie['nume'] ?? $cheie),

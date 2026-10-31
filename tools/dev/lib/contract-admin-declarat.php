@@ -92,9 +92,11 @@ return [
             'cale' => '^/admin/orders(\?|$)', 'motiv' => 'butoanele barei acțiunilor în masă: aceleași valori ale lui bulk_action, aceeași adresă; '
                 . '„Confirmă” și „Schimbă statusul” trimit amândouă bulk_action=status (Confirmă cu statusul „În procesare”)'],
         'masa-date' => ['ce' => 'adaugat', 'cale' => '^/admin/orders(\?|$)',
-            'rand' => '^data (data-tasta-comenzi = [acp]|data-bulk-status = processing|data-adm-masa-tabel = comenzi-tabel|data-adm-confirmare = .+)$',
+            'rand' => '^data (data-tasta-comenzi = [acp]|data-bulk-status = processing|data-adm-masa-tabel = comenzi-tabel|data-adm-confirmare = .+'
+                . '|data-implicit-transport = )$',
             'motiv' => 'bara acțiunilor în masă: scurtăturile A/C/P, statusul pus de „Confirmă”, tabelul ei, întrebările dinaintea trimiterii '
-                . '(aceleași texte ca vechile confirmări)'],
+                . '(aceleași texte ca vechile confirmări); butonul implicit ascuns al formularului („Corectează transportul”, primul, ca Enter '
+                . 'în câmpul transportului să nu trimită altă acțiune)'],
         'filtre-camp-cautare' => ['ce' => 'adaugat', 'rand' => '^camp GET /admin/orders input:search q$', 'cale' => '^/admin/orders(\?|$)',
             'motiv' => 'căutarea din bara de filtre e un câmp de căutare (același nume q)'],
         'filtre-camp-text' => ['ce' => 'scos', 'rand' => '^camp GET /admin/orders input:text q$', 'cale' => '^/admin/orders(\?|$)',

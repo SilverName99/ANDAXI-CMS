@@ -350,6 +350,10 @@ if (!is_array($plimbare)) {
     $r = $plimbare['randuri'];
     $verifica('formularele rândurilor: AWB ' . $r['awb'] . ', ERP ' . $r['erp'] . ', precomandă ' . $r['precomanda'] . ', OP ' . $r['op'] . ', coș ' . $r['cos']
         . ', acțiuni ' . $r['actiuni'], $r['awb'] > 0 && $r['erp'] > 0 && $r['precomanda'] > 0 && $r['op'] > 0 && $r['cos'] > 0 && $r['actiuni'] === $plimbare['comenzi']);
+    $verifica('Enter în „Transport (lei)”: ' . json_encode($plimbare['enterTransport'] ?? null) . '; butonul implicit al barei: ' . ($plimbare['implicit'] ?? '')
+        . ' (fără JavaScript, Enter tot transportul trimite)', ($plimbare['enterTransport']['actiune'] ?? '') === 'shipping'
+        && ($plimbare['enterTransport']['valoare'] ?? '') === '30' && ($plimbare['implicit'] ?? '') === 'bulk_action=shipping'
+        && is_array($plimbareFara) && ($plimbareFara['implicit'] ?? '') === 'bulk_action=shipping' && ($plimbareFara['enterTransport']['actiune'] ?? '') === 'shipping');
     $verifica('scurtăturile paginii la „?”: ' . implode(' ', (array) $plimbare['scurtaturi']), in_array('A', (array) $plimbare['scurtaturi'], true)
         && in_array('C', (array) $plimbare['scurtaturi'], true) && in_array('P', (array) $plimbare['scurtaturi'], true) && !empty($plimbare['areFan']));
     $verifica('nicio cerere spre alt server', (array) $plimbare['blocate'] === [], implode(', ', (array) $plimbare['blocate']));

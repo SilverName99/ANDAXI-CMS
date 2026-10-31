@@ -713,15 +713,17 @@ try {
             && str_contains($corpDashboard, 'FAN Courier: contul') === Plugins::vizibil('livrare_fan'));
         $paginaAbonament = $cerere('GET', '/admin/abonament', $jar);
         preg_match_all('#data-modul="([a-z_]+)"#', $paginaAbonament['corp'], $moduleAbonament);
-        $moduleVizibile = array_keys(array_filter(Plugins::stari(), static fn (string $s): bool => $s !== Plugins::OPRIT));
+        // Fără uneltele interne (migrarea din WordPress): nu sunt în abonament.
+        $moduleVizibile = array_values(array_filter(array_keys(array_filter(Plugins::stari(), static fn (string $s): bool => $s !== Plugins::OPRIT)),
+            static fn (string $k): bool => empty(Plugins::definitie($k)['intern'])));
         $numeAscunse = [];
-        foreach (array_diff(Plugins::chei(), $moduleVizibile) as $cheieAscunsa) {
+        foreach (array_diff(Plugins::chei(), array_keys(array_filter(Plugins::stari(), static fn (string $s): bool => $s !== Plugins::OPRIT))) as $cheieAscunsa) {
             $numeAscuns = (string) (Plugins::definitie($cheieAscunsa)['nume'] ?? '');
             if ($numeAscuns !== '' && str_contains(html_entity_decode(strip_tags($paginaAbonament['corp'])), $numeAscuns)) {
                 $numeAscunse[] = $numeAscuns;
             }
         }
-        $verifica('Abonamentul tău: ' . count($moduleAbonament[1]) . ' module, exact cele vizibile, niciun nume de modul absent',
+        $verifica('Abonamentul tău: ' . count($moduleAbonament[1]) . ' module, exact cele vizibile (fără uneltele interne), niciun nume de modul absent',
             $paginaAbonament['cod'] === 200 && $moduleAbonament[1] === array_values(array_intersect(Plugins::chei(), $moduleVizibile)) && $numeAscunse === [],
             'pe pagină: ' . implode(', ', $moduleAbonament[1]) . '; vizibile: ' . implode(', ', $moduleVizibile) . '; nume ascunse: ' . implode(', ', $numeAscunse));
         $verifica('„Licența lipsește” apare doar fără licență', str_contains($corpDashboard, 'Licența lipsește') === Plugins::licentaLipseste());

@@ -275,7 +275,11 @@ $optiuniStatusMasa = '<option value="">Alege status</option>';
 foreach ($bulkStatusOptions as $statusOption) {
     $optiuniStatusMasa .= '<option value="' . $e($statusOption) . '">' . $e($statusLabels[(string) $statusOption] ?? $statusOption) . '</option>';
 }
-$campuriMasa = \App\Support\AdminCsrf::camp()
+// Primul buton de trimitere al formularului e cel implicit: Enter într-un câmp (transportul) trimite prin el. E „Corectează
+// transportul”, ascuns, ca Enter în câmpul transportului să nu pornească altă acțiune (AWB, Confirmă) nici fără JavaScript.
+$campuriMasa = '<button type="submit" class="adm-ascuns" name="bulk_action" value="shipping" formaction="/admin/orders/bulk"'
+    . ' tabindex="-1" aria-hidden="true" data-implicit-transport>Corectează transportul</button>'
+    . \App\Support\AdminCsrf::camp()
     . '<input type="hidden" name="back_url" value="' . $e($ordersBackUrl) . '">'
     . '<label class="adm-masa__camp"><span>Status nou</span><select name="bulk_status" id="orders-bulk-status">' . $optiuniStatusMasa . '</select></label>'
     . '<label class="adm-masa__camp"><span>Transport (lei)</span><input type="number" name="bulk_shipping_value" id="orders-bulk-shipping" step="0.01" min="0"'

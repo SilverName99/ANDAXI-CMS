@@ -6,7 +6,9 @@
 //  - pe rânduri: formularele care existau (AWB FAN, retrimiterea în ERP, eliberarea precomenzii, confirmarea OP, coșul);
 //  - bara acțiunilor în masă: o tastă fără bife doar spune ce trebuie făcut; cu o bifă, bara apare, A (cu FAN) și C cer
 //    confirmarea (refuzată aici: nimic nu se trimite), P pregătește foaia de tipărit, Esc golește bifele;
-//  - „?” arată scurtăturile paginii.
+//  - „?” arată scurtăturile paginii;
+//  - Enter în câmpul transportului trimite „Corectează transportul” cu valoarea scrisă (cererea e oprită înainte de server), iar
+//    butonul implicit al formularului (Enter fără JavaScript) e tot al transportului.
 // Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_REZULTAT (JSON de ieșire). Nu scrie nimic în bază.
 'use strict';
 
@@ -33,7 +35,8 @@ const gazdaLocala = new URL(baza).host;
   const erori = [];
   const dialoguri = [];
   page.on('pageerror', (e) => erori.push(String(e.message).split('\n')[0]));
-  page.on('dialog', (d) => { dialoguri.push(d.message()); d.dismiss(); });
+  let acceptaDialog = false;
+  page.on('dialog', (d) => { dialoguri.push(d.message()); if (acceptaDialog) d.accept(); else d.dismiss(); });
   await page.goto(baza + '/admin/login');
   await page.fill('input[name="email"]', email);
   await page.fill('input[name="password"]', parola);
@@ -132,6 +135,30 @@ const gazdaLocala = new URL(baza).host;
   await page.waitForTimeout(150);
   rez.scurtaturi = await page.evaluate(() => Array.from(document.querySelectorAll('#ax-taste-pagina kbd')).map((k) => k.textContent.trim()));
   await page.keyboard.press('Escape');
+
+  // Enter în câmpul transportului trimite „Corectează transportul” cu valoarea scrisă (cererea e oprită înainte de server,
+  // deci nimic nu se schimbă); fără JavaScript, butonul implicit al formularului (primul) e tot cel al transportului.
+  rez.implicit = await page.evaluate(() => {
+    const f = document.getElementById('comenzi-masa-formular');
+    const primul = f && Array.from(document.querySelectorAll('button[type="submit"], input[type="submit"]')).find((b) => b.form === f);
+    return primul ? primul.name + '=' + primul.value : '';
+  });
+  if (rez.implicit !== 'bulk_action=shipping') rez.probleme.push('butonul implicit al barei (Enter fără JavaScript) e „' + rez.implicit + '”, nu transportul');
+  if (!(await bifa.isChecked())) await bifa.check();
+  let trimis = null;
+  await page.route('**/admin/orders/bulk', (r) => { trimis = r.request().postData() || ''; r.abort(); });
+  acceptaDialog = true;
+  await page.fill('#comenzi-masa input[name="bulk_shipping_value"]', '30');
+  await page.focus('#comenzi-masa input[name="bulk_shipping_value"]');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(800);
+  acceptaDialog = false;
+  await page.unroute('**/admin/orders/bulk');
+  const date = new URLSearchParams(trimis || '');
+  rez.enterTransport = trimis === null ? null : { actiune: date.get('bulk_action'), valoare: date.get('bulk_shipping_value'), comenzi: date.getAll('order_ids[]').length };
+  if (!rez.enterTransport || rez.enterTransport.actiune !== 'shipping' || rez.enterTransport.valoare !== '30' || rez.enterTransport.comenzi < 1) {
+    rez.probleme.push('Enter în „Transport (lei)” a trimis ' + JSON.stringify(rez.enterTransport) + ', nu bulk_action=shipping cu 30');
+  }
 
   rez.probleme.push(...erori.map((e) => 'eroare JavaScript: ' + e));
   rez.blocate = [...blocate].sort();

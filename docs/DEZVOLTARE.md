@@ -518,7 +518,8 @@ aspectul, nu ce trimite adminul.
   `magazin/0029` și `catalog/0025`, MIG-19). Lista „De făcut” și rândul de sănătate vin din punctele `acasa.de_facut` și
   `acasa.sanatate` (`App\Support\Hooks`, agățările în `config/hooks.php`, câte una pe plugin), deci rândul unui plugin ascuns
   nu apare (textele lor în `$semneText`). `GET /admin/abonament` (`AbonamentController`, nucleu, doar generalul; intrare în
-  Setări): modulele pornite sau care se opresc, din `Plugins::stari()`, cu data din `Plugins::seOpresteDin()`. Testul:
+  Setări): modulele pornite sau care se opresc, din `Plugins::stari()`, cu data din `Plugins::seOpresteDin()`, fără uneltele
+  interne (`'intern' => true`); butonul de pe Acasă doar pentru administratorul general. Testul:
   `tools/dev/test-admin-faza-d.php` (în `smoke.sh`), partea A: `EXPLAIN` pe o bază separată cu 4.000 de comenzi și cifrele
   numărate direct.
 - **Lista comenzilor (WP-33).** `views/admin/orders.php` pe componente: tab-urile de status cu numărul lor (aceleași filtre, fără
@@ -528,7 +529,8 @@ aspectul, nu ce trimite adminul.
   (sertarul `#comanda-panou`, cu conținutul vechii ferestre, făcut de același script). Bara trimite **aceeași cerere** ca vechea
   listă: `POST /admin/orders/bulk` cu `_csrf`, `back_url`, `bulk_action` (awb, status, erp_retry, shipping, delete),
   `bulk_status`, `bulk_shipping_value`, `order_ids[]`; „Confirmă” = `bulk_action=status` + `bulk_status=processing`; „Tipărește”
-  face foaia în browser, din datele rândurilor. `AdminController::ordersBulkAction` doar adună în plus rezultatul pe comandă
+  face foaia în browser, din datele rândurilor. Primul buton de trimitere al barei (cel implicit, ascuns) e „Corectează
+  transportul”, iar Enter în câmpul transportului apasă butonul vizibil al transportului: Enter nu poate porni altă acțiune. `AdminController::ordersBulkAction` doar adună în plus rezultatul pe comandă
   (`App\Support\RezultatMasaComenzi`, în sesiune, arătat o dată deasupra listei). Filtrele noi `livrare` și `erp` (lista,
   exportul, adresa de întoarcere) sunt în `ordersFiltreNoiSql`. Tastele (`public/assets/js/admin/comenzi.js`): A (doar cu FAN),
   C, P, „/”, Esc; lista de la „?” are partea paginii (`$adminScurtaturiPagina`, pusă de vedere, citită de `layout.php`).

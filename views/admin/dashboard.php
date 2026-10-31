@@ -29,7 +29,10 @@ if ($areComenzi) {
         $actiuniAntet .= '<a class="btn" href="/admin/orders?status=pending">Procesează comenzile noi</a>';
     }
 }
-$actiuniAntet .= '<a class="btn btn-secondary" href="/admin/abonament">Abonamentul tău</a>';
+// „Abonamentul tău” doar pentru administratorul general, ca adresa lui (AbonamentController).
+if (\App\Support\Auth::isGeneralAdmin()) {
+    $actiuniAntet .= '<a class="btn btn-secondary" href="/admin/abonament">Abonamentul tău</a>';
+}
 admin_componenta('antet-pagina', [
     'titlu' => 'Acasă',
     'nivel' => 1,
