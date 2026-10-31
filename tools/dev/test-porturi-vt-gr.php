@@ -734,7 +734,7 @@ $aruncat = static function (callable $f): string {
     return '';
 };
 Hooks::reseteaza();
-$verifica('fără agățări (config/hooks.php gol): html() gol, ruleaza() [], oricare() false, primul() null',
+$verifica('fără agățări pe aceste puncte (config/hooks.php are doar punctele paginii Acasă, WP-32): html() gol, ruleaza() [], oricare() false, primul() null',
     Hooks::html('layout.final_body') === '' && Hooks::ruleaza('utilizator.sters', $db, [1], 'admin') === []
     && Hooks::oricare('continut.membru_activ', $db, []) === false && Hooks::primul('inregistrare.dupa_creare', $db, 1, []) === null);
 $verifica('un punct necunoscut sau un plugin care nu e în catalog e refuzat', str_contains($aruncat(static fn () => Hooks::adauga('layout.nu_exista', 'membri', static fn () => '')), 'nu există')

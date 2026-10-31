@@ -30,7 +30,12 @@ namespace App\Support;
  *  - `utilizator.sters($db, int[] $iduri, 'admin'|'cont')`: conturi șterse din admin sau de client → `membri`
  *    (documente, rânduri, poza de profil), `donatii` (abonamentele active oprite, `user_id` dezlegat);
  *  - `layout.final_body` (HTML): înainte de `</body>` pe paginile publice → `donatii` (fereastra și scripturile ei);
- *  - `plugin.lucruri_in_curs($db)` → int: ce are pluginul în curs (codul lucrurilor în curs, WP-27, Etapa 2).
+ *  - `plugin.lucruri_in_curs($db)` → int: ce are pluginul în curs (codul lucrurilor în curs, WP-27, Etapa 2);
+ *  - `acasa.de_facut($db, $setari)` → listă de `{numar, text, href, actiune, ton?}`: intrările listei „De făcut” de pe
+ *    pagina Acasă a adminului (WP-32, App\Support\AcasaAdmin::deFacut; una cu `numar` 0 nu se arată) → `magazin`,
+ *    `livrare_fan`, `erp`, `recenzii`, `precomenzi`, `link_plata` (config/hooks.php, din Etapa 1);
+ *  - `acasa.sanatate($db, $setari)` → listă de `{text, ton?, href?}`: bucățile rândului de sănătate de pe Acasă (WP-32)
+ *    → `erp`, `livrare_fan`.
  */
 final class Hooks
 {
@@ -39,6 +44,8 @@ final class Hooks
         'inregistrare.formular', 'inregistrare.valideaza', 'inregistrare.cont_existent', 'inregistrare.dupa_creare',
         'cont.taburi', 'cont.antet', 'continut.membru_activ', 'continut.nota', 'editor.pagina.campuri',
         'editor.articol.campuri', 'utilizator.sters', 'layout.final_body', 'plugin.lucruri_in_curs',
+        // WP-32: pagina Acasă a adminului.
+        'acasa.de_facut', 'acasa.sanatate',
     ];
 
     /** @var array<string, list<array{plugin: string, fn: callable, stare: string}>>|null */

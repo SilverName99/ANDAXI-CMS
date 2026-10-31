@@ -623,3 +623,70 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .adm-detalii dd { margin: 0; }
 .adm-proba-titlu { margin: 22px 0 10px; }
 .adm-proba-coloane { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+
+/* ── 5. Paginile refăcute (WP-32 … WP-34) ───────────────────────────────────────────────── */
+/* Stările unei comenzi, ca pastile (Acasă, lista comenzilor). */
+.adm-stare--comanda-pending { background: #dbeafe; color: #1e40af; }
+.adm-stare--comanda-pending_payment { background: #fef9c3; color: #854d0e; }
+.adm-stare--comanda-processing { background: #ede9fe; color: #5b21b6; }
+.adm-stare--comanda-completed { background: #dcfce7; color: #166534; }
+.adm-stare--comanda-cancelled, .adm-stare--comanda-failed { background: #fee2e2; color: #991b1b; }
+.adm-stare--comanda-refunded, .adm-stare--comanda-returned { background: #f1f5f9; color: #475569; }
+
+/* Acasă (WP-32; macheta B-Acasa) */
+.adm-acasa__cifre { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.adm-acasa__scurt { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 12px; font-size: var(--ax-text-mic); color: var(--ax-text-3); }
+.adm-acasa__scurt a { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--ax-text-2); text-decoration: none; }
+.adm-acasa__scurt a:hover { color: var(--ax-text); text-decoration: underline; }
+.adm-acasa__scurt .adm-mono { font-weight: 600; color: var(--ax-text); }
+.adm-acasa__grila { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; align-items: start; }
+.adm-acasa__principal, .adm-acasa__lateral { display: grid; gap: 12px; min-width: 0; }
+.adm-acasa__bloc { background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: var(--ax-raza-mare); padding: 12px 14px; min-width: 0; }
+.adm-acasa__bloc .adm-tabel__cadru { border: 0; border-radius: 0; margin: 0 -14px -12px; }
+.adm-acasa__bloc .adm-tabel td { white-space: nowrap; }
+.adm-acasa__bloc-antet { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+.adm-acasa__bloc-antet h2 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.adm-acasa__bloc-antet a { font-size: var(--ax-text-mic); font-weight: 500; display: inline-flex; align-items: center; min-height: 32px; }
+.adm-acasa__total { margin: 0 0 6px; font-size: var(--ax-text-mic); color: var(--ax-text-3); }
+.adm-acasa__total .adm-mono { font-size: 18px; font-weight: 600; color: var(--ax-text); }
+.adm-acasa__nota { margin: 6px 0 0; font-size: var(--ax-text-mai-mic); color: var(--ax-text-3); }
+.adm-acasa__nimic { margin: 0; font-size: var(--ax-text-mic); color: var(--ax-text-3); }
+.adm-grafic { display: block; width: 100%; height: 220px; }
+.adm-grafic__linie { stroke: var(--ax-linie); stroke-width: 1; }
+.adm-grafic__axa, .adm-grafic__zi { fill: var(--ax-text-3); font-family: var(--ax-font-mono); font-size: 11px; }
+.adm-grafic__zi--nume { font-family: var(--ax-font); }
+.adm-grafic__zi--azi { fill: var(--ax-text); font-weight: 600; }
+.adm-grafic__bara { fill: color-mix(in srgb, var(--ax-accent) 45%, #ffffff); }
+.adm-grafic__bara--azi { fill: var(--ax-accent); }
+.adm-acasa__lista { list-style: none; margin: 0; padding: 0; }
+.adm-acasa__lista li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; }
+.adm-acasa__lista li:last-child { border-bottom: 0; }
+.adm-acasa__lista a { display: flex; flex-direction: column; min-width: 0; padding: 4px 0; color: var(--ax-text); text-decoration: none; }
+.adm-acasa__lista a span { color: var(--ax-text-3); font-size: var(--ax-text-mai-mic); overflow: hidden; text-overflow: ellipsis; }
+.adm-acasa__lista a:hover strong { text-decoration: underline; }
+.adm-acasa__dreapta { flex: 0 0 auto; }
+.adm-acasa__sarcini { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.adm-acasa__sarcina { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; padding: 4px 0 4px 10px; border-left: 3px solid var(--ax-linie-tare); }
+.adm-acasa__sarcina--atentie { border-left-color: #d97706; }
+.adm-acasa__sarcina--eroare { border-left-color: var(--ax-eroare); }
+.adm-acasa__sarcina--info { border-left-color: var(--ax-info); }
+.adm-acasa__sarcina--ok { border-left-color: var(--ax-ok); }
+.adm-acasa__sarcina-numar { font-size: 18px; font-weight: 600; text-align: right; }
+.adm-acasa__sarcina-text { font-size: 13.5px; }
+.ax-continut .adm-acasa__sarcina .btn { min-height: 36px; padding: 0 10px; }
+.adm-acasa__sanatate { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 14px 0 0; padding: 10px 0 0; border-top: 1px solid var(--ax-linie); font-size: var(--ax-text-mai-mic); color: var(--ax-text-3); }
+.adm-acasa__sanatate-bucata { display: inline-flex; align-items: center; gap: 6px; }
+.adm-acasa__sanatate-bucata::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ax-ok); }
+.adm-acasa__sanatate-bucata--atentie::before { background: #d97706; }
+.adm-acasa__sanatate-bucata--eroare::before { background: var(--ax-eroare); }
+.ax-continut .adm-acasa__sanatate a { color: var(--ax-text-2); display: inline-flex; min-height: 28px; align-items: center; }
+@media (max-width: 1100px) { .adm-acasa__grila { grid-template-columns: minmax(0, 1fr); } }
+
+/* Abonamentul tău (WP-32) */
+.adm-abonament { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.adm-abonament__modul { background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-left: 4px solid var(--ax-ok); border-radius: var(--ax-raza-mare); padding: 12px 14px; }
+.adm-abonament__modul--se-opreste { border-left-color: #d97706; }
+.adm-abonament__nume { margin: 0 0 4px; font-size: 14.5px; font-weight: 600; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.adm-abonament__descriere { margin: 0; font-size: var(--ax-text-mic); color: var(--ax-text-3); line-height: 1.55; }
+@media (max-width: 1100px) { .adm-acasa__lateral { order: -1; } }
+@media (max-width: 600px) { .adm-grafic { height: 170px; } }

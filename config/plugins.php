@@ -95,6 +95,8 @@ return [
             '/admin/emails', '/admin/emails/test', '/admin/emails/history/*', '/admin/emails/contact-recipients',
             // WP-31: pagina de probă a componentelor adminului (faza D).
             '/admin/componente',
+            // WP-32: „Abonamentul tău” (modulele din licență).
+            '/admin/abonament',
         ],
         // /_andaxi/*: adresele platformei (pingul monitorizării; în Etapa 2 și preluarea licenței).
         'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],
@@ -112,6 +114,9 @@ return [
                 'icon' => 'settings', 'activ' => ['/admin/settings/google']],
             ['grup' => 'setari', 'ordine' => 110, 'eticheta' => 'Administratori', 'href' => '/admin/settings/admins',
                 'icon' => 'users', 'activ' => ['/admin/settings/admins']],
+            // WP-32 (OD-52 = b): modulele site-ului, din licența aplicată.
+            ['grup' => 'setari', 'ordine' => 120, 'eticheta' => 'Abonamentul tău', 'href' => '/admin/abonament',
+                'icon' => 'shield', 'activ' => ['/admin/abonament']],
             ['grup' => 'rapoarte', 'ordine' => 10, 'eticheta' => 'Jurnal activitate', 'href' => '/admin/activity-log',
                 'icon' => 'shield', 'activ' => ['/admin/activity-log']],
             ['grup' => 'continut', 'ordine' => 10, 'eticheta' => 'Pagini', 'href' => '/admin/pages', 'icon' => 'pages',
@@ -329,7 +334,7 @@ return [
 
         'precomenzi' => [
             'nume' => 'Precomenzi',
-            'descriere' => 'Vânzare fără stoc, cu limite pe comandă și în total; comenzile așteaptă eliberarea spre ERP.',
+            'descriere' => 'Vânzare fără stoc, cu limite pe comandă și în total; comenzile așteaptă până le eliberezi, când vine marfa.',
             'necesita' => ['magazin'],
             'rute_admin' => ['/admin/orders/{id}/precomanda-elibereaza'],
             'tabele' => ['products.preorder_*', 'orders.preorder_*'],
@@ -554,7 +559,7 @@ return [
 
         'migrare_wordpress' => [
             'nume' => 'Migrare din WordPress',
-            'descriere' => 'Unealtă internă ANDAXI: importul clienților și al abonaților dintr-o copie WordPress.',
+            'descriere' => 'Unealtă internă ANDAXI: importul clienților și al listelor de email dintr-o copie WordPress.',
             'necesita' => [],
             'intern' => true,
             'rute_admin' => ['POST /admin/users/import-backup'],

@@ -41,6 +41,8 @@ rămâne exact ca azi.
 | Admin → Setări site → primul tab (lângă Favicon site) | Câmp nou „Culoarea adminului”: culoarea butoanelor și a paginii alese din meniu, doar în admin (vizitatorii nu o văd); implicit albastru, „Resetează” îl pune la loc. | Ca să deosebești site-urile când lucrezi pe mai multe deodată | WP-30 |
 | Cele patru editoare de cod (Design site, editorul paginilor, al șabloanelor de produs și al șabloanelor de blog) | CodeMirror și js-beautify vin de pe site, nu de pe cdn.jsdelivr.net (aceleași versiuni, 5.65.18 și 1.15.1); editoarele arată și merg la fel. | Adminul nu mai cere nimic de pe alt server (nici fonturi, nici scripturi) | WP-30 |
 | Mesajele de după o salvare, în admin (reușită, eroare) | Aceleași texte, într-o casetă nouă (bandă colorată în stânga, citită și de cititoarele de ecran). Pagina `/admin/componente` (doar administratorul general, fără intrare în meniu) arată piesele din care se refac paginile adminului, cu date inventate. | Componentele adminului refăcut (faza D) | WP-31 (31 octombrie) |
+| Admin → Acasă (`/admin`, doar administratorul general) | Pagina se reface în aspectul nou: numărul produselor, lista „De făcut” (goală cât timp modulele site-ului nu au nimic de cerut) și butonul „Abonamentul tău”. Cifrele și graficul vânzărilor sunt ale magazinului, deci nu apar. | Macheta „B — Compact” (WP-32) | WP-32 (31 octombrie) |
+| Admin → Setări → Abonamentul tău (`/admin/abonament`, intrare nouă, doar administratorul general) | Lista modulelor pe care le are site-ul (din licență), cu ce face fiecare; la un modul care se oprește, data din care se oprește. Nu apare niciun modul pe care site-ul nu-l are. | Decizia OD-52 (b) | WP-32 |
 
 
 ## Ce nu se vede

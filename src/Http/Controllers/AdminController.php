@@ -83,60 +83,59 @@ final class AdminController
             'orders' => 0,
             'users' => 0,
         ];
-        $recentOrder = null;
         $recentUsers = [];
-        // Fiecare bucată a dashboard-ului e a unui plugin: cele ale pluginurilor
+        // Fiecare bucată a paginii Acasă e a unui plugin: cele ale pluginurilor
         // pe care site-ul nu le are nu apar (și nici nu se mai citesc din bază).
         $widgeturi = [
             'produse' => \App\Support\Plugins::vizibil('catalog'),
             'comenzi' => \App\Support\Plugins::vizibil('magazin'),
             'utilizatori' => \App\Support\Plugins::vizibil('conturi_clienti'),
         ];
+        // Acasă „B — Compact” (faza D, WP-32): cifrele zilei, graficul pe 14 zile, comenzile recente, „De făcut” și
+        // rândul de sănătate (App\Support\AcasaAdmin, fiecare interogare pe un index; MIG-19).
+        $acum = new \DateTimeImmutable();
+        $acasa = ['acum' => $acum, 'de_procesat' => null, 'vanzari' => null, 'cosuri' => null, 'stoc' => null, 'grafic' => null,
+            'recente' => [], 'de_facut' => [], 'sanatate' => []];
 
         if ($db instanceof PDO) {
             $this->ensureOptionalSchema($db);
+            $setari = Settings::all($db);
             if ($widgeturi['produse']) {
                 $metrics['products'] = (int) $db->query('SELECT COUNT(*) FROM products WHERE deleted_at IS NULL')->fetchColumn();
             }
             if ($widgeturi['comenzi']) {
                 $metrics['orders'] = (int) $db->query('SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL')->fetchColumn();
+                $acasa['de_procesat'] = \App\Support\AcasaAdmin::deProcesat($db);
+                $acasa['vanzari'] = \App\Support\AcasaAdmin::vanzariAzi($db, $acum);
+                $acasa['cosuri'] = \App\Support\AcasaAdmin::cosuriAzi($db, $acum, $setari);
+                $acasa['stoc'] = \App\Support\AcasaAdmin::stocScazut($db);
+                $acasa['grafic'] = \App\Support\AcasaAdmin::grafic($db, $acum);
+                $acasa['recente'] = \App\Support\AcasaAdmin::comenziRecente($db, 7);
             }
             if ($widgeturi['utilizatori']) {
                 $metrics['users'] = (int) $db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+                $recentUsers = $db->query(
+                    'SELECT u.id, u.first_name, u.last_name, u.email, u.created_at,
+                            COUNT(o.id) AS orders_count
+                     FROM users u
+                     LEFT JOIN orders o
+                        ON (o.user_id = u.id OR (o.user_id IS NULL AND o.billing_email = u.email))
+                       AND o.deleted_at IS NULL
+                     GROUP BY u.id
+                     ORDER BY u.id DESC
+                     LIMIT 6'
+                )->fetchAll();
             }
-        }
-
-        if ($db instanceof PDO && $widgeturi['comenzi']) {
-            $recentOrder = $db->query(
-                'SELECT order_number, billing_first_name, billing_last_name, total, status'
-                . ($this->tableHasColumn($db, 'orders', 'erp_client_agresiv') ? ', erp_client_agresiv' : '') . '
-                 FROM orders
-                 WHERE deleted_at IS NULL
-                 ORDER BY id DESC
-                 LIMIT 1'
-            )->fetch() ?: null;
-        }
-
-        if ($db instanceof PDO && $widgeturi['utilizatori']) {
-            $recentUsers = $db->query(
-                'SELECT u.id, u.first_name, u.last_name, u.email, u.created_at,
-                        COUNT(o.id) AS orders_count
-                 FROM users u
-                 LEFT JOIN orders o
-                    ON (o.user_id = u.id OR (o.user_id IS NULL AND o.billing_email = u.email))
-                   AND o.deleted_at IS NULL
-                 GROUP BY u.id
-                 ORDER BY u.id DESC
-                 LIMIT 6'
-            )->fetchAll();
+            $acasa['de_facut'] = \App\Support\AcasaAdmin::deFacut($db, $setari);
+            $acasa['sanatate'] = \App\Support\AcasaAdmin::sanatate($db, $setari);
         }
 
         View::render('admin/dashboard', [
-            'title' => 'Dashboard',
+            'title' => 'Acasă',
             'metrics' => $metrics,
-            'recentOrder' => $recentOrder,
             'recentUsers' => $recentUsers,
             'widgeturi' => $widgeturi,
+            'acasa' => $acasa,
         ], 'admin/layout');
     }
 

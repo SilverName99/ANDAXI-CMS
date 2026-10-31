@@ -234,7 +234,8 @@ try {
         // probă a componentelor, ca administrator general, pe fiecare licență aleasă. Fără contract.
         $dosarPlimbare = $dosarLucru . '/plimbare';
         @mkdir($dosarPlimbare, 0770, true);
-        $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente']),
+        // Plus paginile noi ale fazei D, care nu există la eticheta contractului (WP-32: „Abonamentul tău”).
+        $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente', '/admin/abonament']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;

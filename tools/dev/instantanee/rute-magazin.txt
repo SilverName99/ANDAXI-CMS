@@ -2,12 +2,13 @@
 # Pe site: catalog, magazin, livrare_fan, plata_stripe, plata_euplatesc, plata_bt
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (278)
+RUTE (279)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
 GET  /acorduri-gdpr -> 404 [acorduri_gdpr]
 GET  /admin -> CONTROLLER [nucleu]
+GET  /admin/abonament -> CONTROLLER [nucleu]
 GET  /admin/activity-log -> CONTROLLER [nucleu]
 GET  /admin/blog/authors -> 403 [blog]
 GET  /admin/blog/categories -> 403 [blog]
@@ -282,7 +283,7 @@ POST /webhook/bt-ipay -> MEREU [plata_bt]
 POST /webhook/euplatesc -> MEREU [plata_euplatesc]
 POST /webhook/stripe -> MEREU [plata_stripe]
 
-MENIU (23)
+MENIU (24)
 Acasă -> /admin [nucleu]
 Comenzi > Comenzi -> /admin/orders [magazin]
 Produse > Produse -> /admin/products [catalog]
@@ -306,6 +307,7 @@ Setări > Setări trimitere -> /admin/emails/sender [nucleu]
 Setări > Trimite email test -> /admin/emails/test [nucleu]
 Setări > Google -> /admin/settings/google [nucleu]
 Setări > Administratori -> /admin/settings/admins [nucleu]
+Setări > Abonamentul tău -> /admin/abonament [nucleu]
 
 CRON (7)
 scripts/abandoned-cart-emails.php -> RULEAZA [magazin, cere pornit]

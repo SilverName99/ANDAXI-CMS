@@ -703,7 +703,27 @@ try {
         $verifica('dashboard: „Comenzi recente” doar cu magazinul', str_contains($corpDashboard, 'Comenzi recente') === Plugins::vizibil('magazin'));
         $verifica('dashboard: „Utilizatori recenți” doar cu conturile de clienți',
             str_contains($corpDashboard, 'Utilizatori recenți') === Plugins::vizibil('conturi_clienti'));
-        $verifica('dashboard: cardul „Produse” doar cu catalogul', str_contains($corpDashboard, '<p>Produse</p>') === Plugins::vizibil('catalog'));
+        $verifica('Acasă: numărul „Produse” doar cu catalogul', str_contains($corpDashboard, '</span> Produse</a>') === Plugins::vizibil('catalog'));
+        // WP-32: cifrele zilei doar cu magazinul; rândurile „De făcut” și rândul de sănătate ale pluginurilor ascunse lipsesc
+        // (textele lor sunt în $semneText, verificate pe fiecare pagină); „Abonamentul tău” arată exact pluginurile vizibile.
+        $verifica('Acasă: „Vânzări azi” și „Stoc scăzut” doar cu magazinul', (str_contains($corpDashboard, 'Vânzări azi')
+            && str_contains($corpDashboard, 'Stoc scăzut')) === Plugins::vizibil('magazin'));
+        $verifica('Acasă: rândul de sănătate al ERP-ului doar cu ERP, al FAN Courier doar cu livrarea FAN',
+            str_contains($corpDashboard, 'Legătura cu ERP-ul') === Plugins::vizibil('erp')
+            && str_contains($corpDashboard, 'FAN Courier: contul') === Plugins::vizibil('livrare_fan'));
+        $paginaAbonament = $cerere('GET', '/admin/abonament', $jar);
+        preg_match_all('#data-modul="([a-z_]+)"#', $paginaAbonament['corp'], $moduleAbonament);
+        $moduleVizibile = array_keys(array_filter(Plugins::stari(), static fn (string $s): bool => $s !== Plugins::OPRIT));
+        $numeAscunse = [];
+        foreach (array_diff(Plugins::chei(), $moduleVizibile) as $cheieAscunsa) {
+            $numeAscuns = (string) (Plugins::definitie($cheieAscunsa)['nume'] ?? '');
+            if ($numeAscuns !== '' && str_contains(html_entity_decode(strip_tags($paginaAbonament['corp'])), $numeAscuns)) {
+                $numeAscunse[] = $numeAscuns;
+            }
+        }
+        $verifica('Abonamentul tău: ' . count($moduleAbonament[1]) . ' module, exact cele vizibile, niciun nume de modul absent',
+            $paginaAbonament['cod'] === 200 && $moduleAbonament[1] === array_values(array_intersect(Plugins::chei(), $moduleVizibile)) && $numeAscunse === [],
+            'pe pagină: ' . implode(', ', $moduleAbonament[1]) . '; vizibile: ' . implode(', ', $moduleVizibile) . '; nume ascunse: ' . implode(', ', $numeAscunse));
         $verifica('„Licența lipsește” apare doar fără licență', str_contains($corpDashboard, 'Licența lipsește') === Plugins::licentaLipseste());
 
         // Cronurile pluginurilor care nu au voie să ruleze ies imediat, fără să facă nimic.
@@ -960,7 +980,9 @@ try {
             '/Poziție în liste/u', '/Link de ciornă/u', '/Ordinea din catalog/u', '/Pagina se vede doar prin acest link/u', '/Produse asemănătoare/u'],
         // Avertismentul pe produs (Bioscem 333ba9e, fa76c4f): cardul din editorul produsului și codul din emailuri.
         'magazin' => ['/Adaugă în coș/u', '/Finalizează comanda/u', '/Comenzi recente/u', '/Numerotare comenzi/u', '/Coș flotant/u',
-            '/Avertisment la coș/u', '/Avertismentele confirmate/u', '/Comandă online pe/u'],
+            '/Avertisment la coș/u', '/Avertismentele confirmate/u', '/Comandă online pe/u',
+            // WP-32: cifrele zilei și rândurile magazinului din „De făcut” pe Acasă.
+            '/Vânzări azi/u', '/Coșuri abandonate/u', '/Stoc scăzut/u', '/de verificat în bancă/u', '/no(i|uă) de confirmat/u'],
         'livrare_fan' => ['/FAN Courier/u', '/FANbox/u', '/\bAWB\b/u', '/Setări livrare/u'],
         // Procesatorii: textele lor, nu datele comenzilor vechi („euplatesc” ca metodă,
         // „ID tranzacție EuPlătesc”, „Card BT” rămân pe comenzile plătite așa).
@@ -968,11 +990,12 @@ try {
         'plata_euplatesc' => ['/prin EuPlătesc/u', '/pe EuPlătesc/u', '/procesatorului EuPlătesc/u', '/Card bancar — EuPlătesc/u',
             '/comerciant EuPlătesc/u'],
         'plata_bt' => ['/Banca Transilvania/u', '/\bBT iPay\b/u', '/\bSTAR\b/u'],
-        'link_plata' => ['/Trimite link de plată/u'],
+        'link_plata' => ['/Trimite link de plată/u', '/diferență de încasat/u'],
         'erp' => ['/\bERP\b/u'],
         'cupoane' => ['/Cod cupon/u', '/Cupon folosit/u', '/Cupoane unice/u'],
         'fidelitate' => ['/Puncte fidelit/u', '/Puncte fidelizare/u', '/Punctele mele/u', '/Reducere puncte/u', '/puncte la această comandă/u'],
-        'recenzii' => ['/Lasă o recenzie/u', '/\bRecenzii\b/u'],
+        // WP-32: rândul lor din „De făcut” pe Acasă.
+        'recenzii' => ['/Lasă o recenzie/u', '/\bRecenzii\b/u', '/recenzi[ei] no(i|uă) de aprobat/u'],
         'precomenzi' => ['/Precomand[ăa]/u', '/Precomenzi/u'],
         'oferte_bbd' => ['/\bBBD\b/u', '/Sertar Oferte/u', '/Sertar lateral „Oferte”/u'],
         'produse_promo' => ['/[Pp]romoțional/u'],

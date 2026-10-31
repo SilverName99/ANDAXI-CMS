@@ -11,6 +11,7 @@ declare(strict_types=1);
  * nucleul sau un plugin). O rută nouă fără proprietar face verificarea să pice.
  */
 
+use App\Http\Controllers\AbonamentController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CereriOfertaController;
@@ -347,5 +348,7 @@ return static function (Router $router): void {
     });
     // WP-31 (faza D): pagina de probă a componentelor adminului (doar administratorul general, fără intrare în meniu).
     $router->get('/admin/componente', [ComponenteAdminController::class, 'proba']);
+    // WP-32 (faza D, OD-52 = b): „Abonamentul tău”, modulele din licența aplicată (doar administratorul general).
+    $router->get('/admin/abonament', [AbonamentController::class, 'arata']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

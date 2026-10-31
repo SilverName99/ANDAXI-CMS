@@ -21,7 +21,7 @@ adresa veche (de exemplu cu un tab ales), ca linkurile salvate și obiceiurile o
 
 | Grup | Ce găsești acolo, pe scurt |
 |---|---|
-| **Acasă** | Ce e de făcut azi: cifrele zilei, comenzile de lucrat (pagina se reface în WP-32) |
+| **Acasă** | Ce e de făcut azi: cifrele zilei, graficul pe 14 zile, comenzile recente, lista „De făcut”, stocul scăzut, rândul de sănătate (refăcută în WP-32) |
 | **Comenzi** | Comenzile magazinului și cererile de ofertă (pe un site de prezentare, cererile sunt „comenzile”) |
 | **Produse** | Produsele și tot ce ține de pagina unui produs: categorii, câmpuri, șabloane, recenzii, produse promoționale |
 | **Clienți** | Oamenii: conturile clienților, setările conturilor, acordurile GDPR semnate, mesajele din formularul de contact |
@@ -120,7 +120,8 @@ Doar locul paginilor în meniu; paginile, adresele și butoanele rămân. Ordine
 - **Conținut**: Pagini · Postări blog · Categorii · Template blog · Autori blog · Galerie · Header/Footer/Meniu
 - **Rapoarte**: Jurnal activitate · Securitate formulare · Statistici · Istoric trimitere
 - **Setări**: Setări magazin (Setări site fără magazin) · Setări plăți · Setări livrare · ERP ANDAXI · Coș flotant ·
-  Configurare manechin · Email-uri ecommerce · Setări trimitere · Trimite email test · Google · Administratori
+  Configurare manechin · Email-uri ecommerce · Setări trimitere · Trimite email test · Google · Administratori ·
+  Abonamentul tău (WP-32: modulele site-ului, din licență; doar administratorul general)
 
 Ce vede fiecare site (cu pluginurile lui de azi):
 

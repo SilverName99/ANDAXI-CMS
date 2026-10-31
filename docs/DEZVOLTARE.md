@@ -513,6 +513,14 @@ aspectul, nu ce trimite adminul.
 - **Tastatura (G-tastatura, WP-31).** `tools/dev/php.sh tools/dev/contract-admin.php --plimbare`: plimbarea cu Tab prin
   fiecare pagină a contractului și prin pagina de probă, pe trei licențe (focusul vizibil, „?”/Esc, panoul lateral, filtrele
   la Înapoi). E poartă la WP-31 … WP-36 (`porti.sh`).
+- **Acasă și „Abonamentul tău” (WP-32).** `views/admin/dashboard.php` pe componente; datele din `App\Support\AcasaAdmin`
+  (cifrele zilei, graficul SVG pe 14 zile, comenzile recente, stocul scăzut; fiecare interogare pe un index, migrările
+  `magazin/0029` și `catalog/0025`, MIG-19). Lista „De făcut” și rândul de sănătate vin din punctele `acasa.de_facut` și
+  `acasa.sanatate` (`App\Support\Hooks`, agățările în `config/hooks.php`, câte una pe plugin), deci rândul unui plugin ascuns
+  nu apare (textele lor în `$semneText`). `GET /admin/abonament` (`AbonamentController`, nucleu, doar generalul; intrare în
+  Setări): modulele pornite sau care se opresc, din `Plugins::stari()`, cu data din `Plugins::seOpresteDin()`. Testul:
+  `tools/dev/test-admin-faza-d.php` (în `smoke.sh`), partea A: `EXPLAIN` pe o bază separată cu 4.000 de comenzi și cifrele
+  numărate direct.
 - **Regulile de admin din `app.css` (G-M3).** `app.css` rămâne încărcat în admin: paginile încă nerefăcute își au regulile
   acolo. O regulă de admin iese din `app.css` doar când (1) G-vizual arată aceleași stiluri calculate pe toate paginile
   publice ale setului, ca vizitator și ca client, și (2) niciuna dintre clasele ei nu apare în setul V-CSS al celor patru

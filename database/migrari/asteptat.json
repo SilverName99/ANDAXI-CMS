@@ -1130,6 +1130,12 @@
                     ],
                     "unic": true
                 },
+                "idx_cart_abandonments_vazut": {
+                    "coloane": [
+                        "last_seen_at"
+                    ],
+                    "unic": false
+                },
                 "session_id": {
                     "coloane": [
                         "session_id"
@@ -4461,10 +4467,23 @@
                     ],
                     "unic": false
                 },
+                "idx_orders_creata": {
+                    "coloane": [
+                        "created_at"
+                    ],
+                    "unic": false
+                },
                 "idx_orders_erp_status": {
                     "coloane": [
                         "erp_status",
                         "erp_next_retry_at"
+                    ],
+                    "unic": false
+                },
+                "idx_orders_stare": {
+                    "coloane": [
+                        "status",
+                        "deleted_at"
                     ],
                     "unic": false
                 },
@@ -5352,6 +5371,19 @@
                         "id"
                     ],
                     "unic": true
+                },
+                "idx_products_epuizat": {
+                    "coloane": [
+                        "out_of_stock"
+                    ],
+                    "unic": false
+                },
+                "idx_products_stoc": {
+                    "coloane": [
+                        "is_active",
+                        "stock"
+                    ],
+                    "unic": false
                 },
                 "slug": {
                     "coloane": [

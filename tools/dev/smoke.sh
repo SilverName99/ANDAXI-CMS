@@ -467,7 +467,7 @@ scrie "== Admin"
 verifica "admin fără login" 302 adm GET /admin
 verifica "pagina de login" 200 adm GET /admin/login "Autentificare"
 verifica "login admin" 302 adm POST /admin/login "" "email=$CMS_DEV_ADMIN_EMAIL" "password=$PAROLA"
-verifica "dashboard" 200 adm GET /admin "Dashboard"
+verifica "acasă" 200 adm GET /admin "Acasă"
 cp "$TMP/corp" "$TMP/dashboard.html"
 sed -n '/<nav class="ax-meniu"/,/<\/nav>/p' "$TMP/dashboard.html" \
     | grep -o 'href="/admin[^"#]*"' | sed 's/^href="//; s/"$//; s/&amp;/\&/g' | awk '!vazut[$0]++' > "$TMP/meniu.txt"
@@ -646,6 +646,21 @@ if [ "$PACHET" = "toate" ]; then
         ESECURI=$((ESECURI + 1))
         scrie "  EȘEC  test-newsletter.php:"
         grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-newsletter.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
+# Paginile refăcute ale fazei D, partea a doua (WP-32 … WP-34): tools/dev/test-admin-faza-d.php, pe licența „toate”: indecșii și
+# cifrele paginii Acasă (pe o bază separată, ștearsă la final), plus ce adaugă WP-33/WP-34.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Adminul refăcut, faza D partea a doua (tools/dev/test-admin-faza-d.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-admin-faza-d.php" > "$TMP/test-admin-faza-d.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-admin-faza-d.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-admin-faza-d.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-admin-faza-d.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
     fi
 fi
 
