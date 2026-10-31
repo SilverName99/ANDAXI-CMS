@@ -202,7 +202,7 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                     </button>
                     <div class="ax-cautare" title="Căutarea în tot adminul (comenzi, produse, clienți) vine în curând">
                         <span class="nav-icon"><?= $icon('search') ?></span>
-                        <span class="ax-cautare-text">Căutarea în tot adminul vine în curând</span>
+                        <span class="ax-cautare-text">Căutarea în tot adminul vine în curând</span><span class="ax-cautare-scurt">Caută (în curând)</span>
                         <span class="ax-taste" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span>
                     </div>
                     <button type="button" class="ax-buton-text" id="ax-buton-taste" aria-haspopup="dialog" aria-controls="ax-taste" aria-keyshortcuts="Shift+?">

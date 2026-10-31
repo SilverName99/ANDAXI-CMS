@@ -259,6 +259,7 @@ body.ax-admin [tabindex]:not([tabindex="-1"]):focus-visible {
 }
 .ax-cautare-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ax-taste { display: inline-flex; gap: 3px; }
+.ax-cautare-scurt { display: none; white-space: nowrap; }
 
 .ax-continut {
     width: 100%;
@@ -312,6 +313,7 @@ body.ax-admin [tabindex]:not([tabindex="-1"]):focus-visible {
     .ax-antet { padding: 4px 10px; }
     .ax-cautare { flex-basis: 120px; }
     .ax-cautare-text, .ax-taste, .ax-ascuns-mic { display: none; }
+    .ax-cautare-scurt { display: inline; }
     .ax-buton-text { padding: 0 8px; }
     .ax-continut { padding: 12px 12px 24px; }
     .ax-continut--plin { padding: 8px 16px 24px; }
