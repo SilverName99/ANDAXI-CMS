@@ -9,13 +9,13 @@ trecerea aceea: inventarul de azi, meniul nou și propunerile care au nevoie de 
 nou”). Paginile rămân aceleași, la aceleași adrese, cu aceleași butoane și câmpuri; se mută doar locul lor în
 meniu. Asta intră acum (WP-30).
 
-**Ce are nevoie de „da”-ul tău:** unirea sau împărțirea unor pagini (secțiunea „Propuneri”, IA-01 … IA-12). Până
-nu spui „da”, paginile rămân cum sunt; fiecare propunere aprobată se face când îi vine rândul paginii (WP-32 … WP-35).
-Poți răspunde simplu: „da la toate”, sau „da la IA-01, IA-03; nu la IA-05”.
+**Decizia ta (31 octombrie):** IA-01 … IA-10 aprobate, **făcute în WP-35** (secțiunea „Ce s-a făcut”, mai jos); IA-11
+(pagina de rapoarte a vânzărilor) și IA-12 (lista coșurilor abandonate) amânate: nu se fac acum.
 
-Pentru oricine se uită după noi: nicio propunere nu schimbă adresele paginilor, numele câmpurilor sau ce trimite
-un formular (contractul adminului, `tools/dev/contract-admin.php`, poarta G-admin). O pagină împărțită își păstrează
-adresa veche (de exemplu cu un tab ales), ca linkurile salvate și obiceiurile oamenilor să meargă în continuare.
+Pentru oricine se uită după noi: nicio propunere nu schimbă numele câmpurilor sau ce trimite un formular (contractul
+adminului, `tools/dev/contract-admin.php`, poarta G-admin; partea D din `tools/dev/test-admin-faza-d.php`). O pagină
+împărțită își păstrează adresa veche (cu un tab ales), o pagină unită își păstrează ambele adrese, iar o adresă mutată trimite
+la noua ei adresă, ca linkurile salvate, obiceiurile oamenilor și legăturile cu ERP-ul sau aplicațiile să meargă în continuare.
 
 ## Grupurile meniului nou
 
@@ -34,7 +34,35 @@ Un grup fără nicio pagină pe un site nu apare (ca azi). Un grup cu o singură
 cu numele paginii: de exemplu pe grafoanaytis grupul „Comenzi” are doar „Cereri de ofertă”, deci în meniu scrie
 „Cereri de ofertă”. Fiecare intrare se vede doar dacă rolul adminului are voie la ea (ca azi).
 
-## Inventarul de azi
+## Ce s-a făcut (WP-35, 31 octombrie)
+
+| # | Cum arată acum | Adresele |
+|---|---|---|
+| IA-01 | „Email-uri” e împărțită după cine o folosește; fiecare bucată are titlul ei și doar tab-urile ei: **Newsletter** (Newslettere, Șabloane newsletter, Liste abonați, Formulare opt-in), **Emailuri de comandă** (Emailuri de comandă, Setări trimitere, Trimite email test; fără magazin se numește „Trimiterea emailurilor”), **Mesaje de contact**, **Emailuri trimise** (Emailuri trimise, Statistici newsletter), **Automatizări**. | Aceleași: `/admin/emails/newsletters?tab=…`, `/admin/emails/{sender,test,automation}` |
+| IA-02 | O pagină **Câmpuri și șabloane**, cu tab-urile „Câmpuri suplimentare” și „Șabloane produse”; o singură intrare în meniu. | Ambele rămân: `/admin/products/fields`, `/admin/products/templates` (fiecare cu tab-ul ei) |
+| IA-03 | **Setări magazin / site** în șase tab-uri: General (numele în titluri, paginile, favicon, culoarea adminului, mentenanța), Magazin (TVA, numerotarea, cantitatea, sertarul „Oferte”; „Produse” pe un catalog fără magazin), SEO și Google, Cookie și popup, Viteză, Chat live. Fiecare casetă se salvează ca înainte; după salvare rămâi în tab. | `/admin/settings/store?tab=general|magazin|seo|cookies|viteza|chat`; cele vechi (`?tab=tva`, `?tab=caching` …) deschid tab-ul nou la caseta lor |
+| IA-04 | Pagina **Google** e caseta „Google” din tab-ul „SEO și Google”; fără intrare în meniu. | `/admin/settings/google` → `/admin/settings/store?tab=google` (302); formularul postează tot la `/admin/settings/google` |
+| IA-05 | Pagină nouă **Oferte BBD** (Produse): toate ofertele, după data de valabilitate, cu căutare și stări (valabile, oprite, expirate); doar citire, „Deschide produsul” duce la editor. Doar cu pluginul oferte BBD. | `/admin/products/oferte-bbd` (nouă) |
+| IA-06 | O pagină **Cupoane**, cu tab-urile „Cupoane” și „Coduri unice”; în meniu doar „Cupoane”. | Ambele rămân: `/admin/coupons`, `/admin/coupons/unique` |
+| IA-07 | **Fidelitate** ține programul, în tab-uri (Program, Reguli promo, Puncte clienți, Toate tranzacțiile, Import); istoricul punctelor unui client e în **fișa lui** (Clienți → clientul → „Puncte de fidelitate”). | `/admin/users/points?tab=…` (vechile `?panel=…` deschid tab-ul lor); `/admin/users/settings?tab=points` (unde se întorc salvările) → `/admin/users/points` |
+| IA-08 | **Setări livrare** în două tab-uri: „Livrare” și „Curier FAN”; contul FAN se salvează împreună cu livrarea, din oricare tab. | `/admin/settings/shipping?tab=livrare|fan`; cele vechi (`?tab=fanbox` …) deschid tab-ul nou |
+| IA-09 | **Setări plăți** cu un tab pe fiecare fel de plată din abonament: Ordin de plată, Card – EuPlătesc, Card – Stripe (sau „Stripe”, fără magazin), Banca Transilvania. | `/admin/settings/payments?tab=op|euplatesc|stripe`, `?tab=bt` ca înainte |
+| IA-10 | Numele noi din meniu (lista de mai jos). | — |
+
+## Meniul de acum (după WP-35)
+
+- **Acasă**
+- **Comenzi**: Comenzi · Cereri de ofertă
+- **Produse**: Produse · Categorii produse · Câmpuri și șabloane · Oferte BBD · Recenzii · Produse promoționale
+- **Clienți**: Clienți · Conturi clienți · Acorduri GDPR · Mesaje de contact
+- **Marketing**: Cupoane · Fidelitate · Newslettere · Șabloane newsletter · Liste abonați · Formulare opt-in · Automatizări
+- **Conținut**: Pagini · Postări blog · Categorii · Șabloane blog · Autori blog · Galerie · Antet, subsol și meniu
+- **Rapoarte**: Jurnal activitate · Încercări de înregistrare și comandă (fără magazin: „Încercări de înregistrare”) ·
+  Statistici newsletter · Emailuri trimise
+- **Setări**: Setări magazin (Setări site fără magazin) · Setări plăți · Setări livrare · ERP ANDAXI · Coș flotant · Manechin ·
+  Emailuri de comandă · Setări trimitere · Trimite email test · Administratori · Abonamentul tău
+
+## Inventarul de dinainte de WP-35 (cu meniul din WP-30)
 
 Site-uri: **B** = Bioscem, **BV** = Biovitality, **VT** = vertij, **GR** = grafoanaytis (după licențele lor de
 dezvoltare, `config/plugins.php` → `licente_dev`). „Toate” = orice site (nucleul).
@@ -108,7 +136,7 @@ site-ul nu-l are).
 | migrare din WordPress | importul din backup în Listă utilizatori (unealtă internă ANDAXI) |
 | donații, membri, fișiere în cloud, analiza concurenței, pachete de produse | nu sunt încă aduse în codul comun; paginile lor se fac direct în stilul nou (Etapa 4, OD-40) |
 
-## Meniul nou (intră acum, în WP-30)
+## Meniul din WP-30 (înainte de etichetele IA-10)
 
 Doar locul paginilor în meniu; paginile, adresele și butoanele rămân. Ordinea din fiecare grup:
 
@@ -141,7 +169,7 @@ De ce așa, pe scurt:
 - **Coșul flotant, emailurile de comandă și trimiterea emailurilor la Setări**: se configurează o dată și rămân.
 - **Formularul de contact la Clienți**: e cutia cu mesajele oamenilor, nu o setare.
 
-## Propuneri care au nevoie de „da”-ul tău
+## Propunerile (aprobate 31 octombrie: IA-01 … IA-10; IA-11, IA-12 amânate)
 
 Fiecare: ce facem, de ce (un rând), când. Recomandarea noastră e „da” la toate; cele marcate „opțional” se pot
 lăsa pe mai târziu fără să strice nimic.
@@ -171,6 +199,8 @@ are voie la ea. Rolurile (magazin, blog, emailuri) rămân exact cum sunt.
   Un grup cu o singură intrare vizibilă se scrie ca link (`views/admin/layout.php`). Instantaneele rutelor
   (`tools/dev/instantanee/rute-*.txt`, G-rute) arată meniul fiecărei licențe.
 - O propunere aprobată se face în WP-ul paginii, cu componentele din WP-31 (`views/admin/componente/`), iar diferențele
-  ei de contract se declară în `tools/dev/lib/contract-admin-declarat.php` (`$contractAdminPorturi`). O pagină împărțită
-  în tab-uri păstrează adresa veche ca tab ales; o pagină unită păstrează ambele adrese (a doua duce la tab-ul ei).
+  ei de contract se declară în `tools/dev/lib/contract-admin-declarat.php` (`$contractAdminPorturi`, sub-tabloul WP-35). O
+  pagină împărțită în tab-uri păstrează adresa veche ca tab ales (alias-urile din `adm_tab_ales()`); o pagină unită păstrează
+  ambele adrese, fiecare cu tab-ul ei; o pagină mutată trimite la noua adresă (302), iar G-admin o compară cu noua adresă
+  (`contract_mutata`). Tab-urile unei pagini de setări: [ui/README.md](ui/README.md) și DEZVOLTARE.md („Adminul refăcut”).
 - Inventarul de mai sus e și lista paginilor contractului: `tools/dev/lib/pagini-admin.php`.

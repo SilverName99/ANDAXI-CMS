@@ -211,20 +211,19 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                 </header>
 
                 <main class="admin-content ax-continut<?= $continutPlin ? ' ax-continut--plin' : '' ?>" id="continut" tabindex="-1">
+<?php // Notele licenței și ale schemei (WP-35: componenta mesaj, fără culori scrise pe elemente). ?>
 <?php if (\App\Support\Plugins::licentaLipseste()): ?>
-                <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
-                    <strong>Licența lipsește.</strong> Site-ul funcționează doar cu funcțiile de bază. Vă rugăm să contactați ANDAXI WEB SOLUTIONS.
-                </section>
+                <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'titlu' => 'Licența lipsește.',
+                    'text' => 'Site-ul funcționează doar cu funcțiile de bază. Vă rugăm să contactați ANDAXI WEB SOLUTIONS.']); ?>
 <?php endif; ?>
 <?php if (($notaLicenta = \App\Support\Plugins::notaLicentaAdmin()) !== null): ?>
-                <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
-                    <?= htmlspecialchars($notaLicenta, ENT_QUOTES) ?>
-                </section>
+                <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'text' => $notaLicenta]); ?>
 <?php endif; ?>
 <?php if (\App\Support\Auth::isGeneralAdmin() && ($stareSchema = \App\Support\Migrari\Garda::stare($adminDb)) !== \App\Support\Migrari\Garda::LA_ZI): ?>
-                <section class="panel" style="border-color:#fca5a5;background:#fef2f2;color:#991b1b;" data-schema="<?= htmlspecialchars($stareSchema, ENT_QUOTES) ?>">
-                    <strong>Baza de date nu e la zi cu codul.</strong> <?= htmlspecialchars(\App\Support\Migrari\Garda::explicatie($stareSchema), ENT_QUOTES) ?>
-                </section>
+                <div data-schema="<?= htmlspecialchars($stareSchema, ENT_QUOTES) ?>">
+                    <?php admin_componenta('mesaj', ['tip' => 'eroare', 'titlu' => 'Baza de date nu e la zi cu codul.',
+                        'text' => \App\Support\Migrari\Garda::explicatie($stareSchema)]); ?>
+                </div>
 <?php endif; ?>
                 <?php // Mesajul de după o salvare (reușită sau eroare): componenta mesaj (WP-31). ?>
                 <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>

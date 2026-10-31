@@ -173,7 +173,7 @@ Fiecare rută din `src/Http/rute.php` are un proprietar în catalog:
   depinde de un parametru (de exemplu `/admin/emails/newsletters?tab=ecommerce` e
   al magazinului, `?tab=templates` al newsletterului, `?tab=contact_forms` al
   nucleului). Se pot da și liste „oricare dintre”: pagina Setări plăți se vede
-  dacă e pe site magazinul sau oricare plată, Securitate formulare (încercările de
+  dacă e pe site magazinul sau oricare plată, Încercări de înregistrare și comandă (încercările de
   înregistrare și de comandă) dacă e pe site magazinul sau conturile de clienți.
   Acțiunile în masă din comenzi (`POST /admin/orders/bulk`) sunt ale magazinului,
   dar „AWB” e a livrării FAN, iar „Retrimite în ERP” a ERP-ului.
@@ -385,8 +385,8 @@ dispar, iar linkurile spre el se scot din pagini.
 
 ### Catalog produse (`catalog`)
 
-- **Conține**: meniul Magazin → Produse, Categorii produse, Câmpuri suplimentare,
-  Template-uri produse; paginile `/magazin`, `/categorie/…`, `/marca/…`,
+- **Conține**: meniul Produse → Produse, Categorii produse, Câmpuri și șabloane (tab-urile Câmpuri suplimentare și
+  Șabloane produse, WP-35); paginile `/magazin`, `/categorie/…`, `/marca/…`,
   `/eticheta/…`, `/produs/…`, căutarea și API-urile de produse; codurile
   `{{shop_catalog}}`, `{{shop_category}}`, `{{shop_title}}`,
   `{{featured_products}}`, `{{product_categories}}`, `{{products_by_template:…}}`, `{{produse_serviciu}}`; cardul „Produse” din
@@ -421,7 +421,7 @@ dispar, iar linkurile spre el se scot din pagini.
     harta site-ului și linkurile de rezervă („Vezi toate produsele”, pagina 404, coșul gol, mulțumirea, linkul de plată)
     duc acolo. Catalogul apare doar pe pagina din setare (verificarea BS-V1 din WP-10, o pagină Bioscem cu
     `{{shop_catalog}}` în afara „magazin”, n-a rulat; până atunci regula strictă);
-  - câmpurile suplimentare (Admin → Câmpuri suplimentare): tipul „Imagine” (adresa unei imagini din galerie) și bifa
+  - câmpurile suplimentare (Admin → Câmpuri și șabloane → Câmpuri suplimentare): tipul „Imagine” (adresa unei imagini din galerie) și bifa
     „Apare doar la template-urile care îl folosesc” (`product_extra_fields.template_only`, `catalog/0027`): în editorul
     produsului câmpul apare doar când șablonul ales îl conține (cu mesajul celor ascunse și „Arată-le oricum”), iar pe
     pagina produsului nu intră în lista de informații și nici ca tab (nici câmpurile „Imagine”). Un câmp „html” intră în
@@ -445,7 +445,7 @@ dispar, iar linkurile spre el se scot din pagini.
 
 ### Magazin online (`magazin`)
 
-- **Conține**: meniul Comenzi, Coș flotant, Automatizări, Email-uri ecommerce și
+- **Conține**: meniul Comenzi, Coș flotant, Automatizări, Emailuri de comandă și
   ordinul de plată din Setări plăți; coșul, checkout-ul, `/checkout/succes/…`,
   coșul flotant, numărul din coș, prețurile și butoanele „Adaugă în coș”;
   emailurile de comandă (comandă nouă, schimbările de status, datele de plată
@@ -648,7 +648,7 @@ dispar, iar linkurile spre el se scot din pagini.
 
 ### Cupoane (`cupoane`)
 
-- **Conține**: meniul Cupoane și Cupoane unice (cu produsele schimbate în masă, WP-21 C12, din
+- **Conține**: meniul Cupoane (tab-urile Cupoane și Coduri unice, WP-35; cu produsele schimbate în masă, WP-21 C12, din
   Biovitality `222ed71`); câmpul de cupon din coș, din
   coșul flotant și din checkout; reducerea cu cupon din fereastra comenzii.
   Tabel: `coupons`. Un cod scris cu spații („AZ 987”) găsește cuponul AZ987 când nu există
@@ -665,7 +665,7 @@ dispar, iar linkurile spre el se scot din pagini.
 
 ### Puncte de fidelitate (`fidelitate`)
 
-- **Conține**: meniul Puncte fidelitate; punctele din coș, checkout și contul
+- **Conține**: meniul Fidelitate (din WP-35 cu tab-uri; istoricul unui client e în fișa lui, la Clienți); punctele din coș, checkout și contul
   clientului; punctele din fereastra comenzii și din fișa clientului. Tabele:
   `loyalty_points_*`, `users.loyalty_points`, `orders.loyalty_*`.
 - **Are nevoie de**: magazin și conturi de clienți.
@@ -718,12 +718,15 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Oferte BBD (`oferte_bbd`)
 
 - **Conține**: alegerea lotului cu dată minimă de valabilitate pe produs, panoul
-  lateral „Oferte”, câmpurile BBD din formularul de produs, tab-ul „Widgeturi” din
-  Setări magazin. Coloane: `products.bbd_*`, `order_items.bbd_key`.
+  lateral „Oferte”, câmpurile BBD din formularul de produs, caseta „Sertar lateral
+  „Oferte”” din Setări magazin (tab-ul Magazin) și pagina **Oferte BBD** (meniul Produse,
+  `GET /admin/products/oferte-bbd`, `OferteBbdController`, WP-35 IA-05: toate ofertele, doar
+  citire). Coloane: `products.bbd_*`, `order_items.bbd_key`.
 - **Are nevoie de**: magazin.
 - **Se oprește**: ofertele nu mai apar și nu se mai aplică în coș; comenzile cu
   oferte își păstrează prețul.
-- **Oprit**: la fel, plus câmpurile din admin (rămân salvate pe produs).
+- **Oprit**: la fel, plus câmpurile din admin (rămân salvate pe produs) și pagina Oferte BBD
+  („Modulul nu este inclus”).
 
 ### Produse promoționale (`produse_promo`)
 
@@ -741,7 +744,7 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: `/login`, `/register`, `/contul-meu/…` (profil, comenzi, adrese,
   resetarea parolei), autentificarea cu Google, `{{account_section}}`,
-  `{{auth_google_button}}`; meniul Listă utilizatori și Setări utilizatori;
+  `{{auth_google_button}}`; meniul Clienți și Conturi clienți;
   dashboard: „Utilizatori” și „Utilizatori recenți”; emailul de bun venit. Tabele:
   `users`, `user_addresses`, `customer_password_resets`.
 - **Din vertij** (WP-25): `{{auth_form}}` (VT-C5: formularul de intrare și de înregistrare, doar pe paginile cu adresa
@@ -772,7 +775,7 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (clienții își văd contul și comenzile).
 - **Oprit**: fără conturi pe site (linkurile „Contul meu”/„Autentificare” se scot);
-  Securitate formulare arată doar încercările de comandă (și dispare cu totul fără
+  „Încercări de comandă” (fosta Securitate formulare) arată doar încercările de comandă (și dispare cu totul fără
   magazin);
   emailurile de comandă duc la prima pagină în loc de „Comenzile mele”; emailul
   de bun venit nu mai pleacă (nici în „Trimite email test”). La cupoane,
@@ -829,7 +832,7 @@ dispar, iar linkurile spre el se scot din pagini.
 
 ### Newsletter (`newsletter`)
 
-- **Conține**: meniul Template-uri, Liste abonați, Formulare opt-in, Statistici
+- **Conține**: meniul Newslettere, Șabloane newsletter, Liste abonați, Formulare opt-in, Statistici newsletter
   (și campaniile); formularele de abonare; cronul
   `scripts/newsletter-campaigns.php` („vizibil”); dezabonarea și urmărirea
   deschiderilor/clickurilor (mereu deschise). Tabele: `newsletter_*`,
@@ -888,7 +891,7 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Manechin (`manechin`)
 
 - **Conține**: `{{mannequin_section}}` (zonele corpului cu produsele recomandate),
-  Configurare → Configurare manechin. Setări: `mannequin_*` (punctele în
+  Setări → Manechin. Setări: `mannequin_*` (punctele în
   `mannequin_points_json`).
 - **Are nevoie de**: catalog.
 - **Se oprește**: ca pornit.
@@ -1027,7 +1030,7 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
 - **Precomenzile ținute**: cu pluginul oprit, butonul de eliberare dispare, deci
   precomenzile plasate și neeliberate rămân ținute până la repornire.
 - **Textul implicit al emailului „Comandă livrată”** invită la o recenzie; e text
-  editabil de client în Email-uri ecommerce, nu se ascunde singur fără recenzii.
+  editabil de client în Emailuri de comandă, nu se ascunde singur fără recenzii.
 - **Emailurile tranzacționale și formularele de contact** stau, ca în Bioscem, în
   aceeași pagină cu newsletterul (tab-urile nucleului rămân și fără newsletter).
 - **Schema bazei**: migrările fac pe orice site și tabelele și coloanele
@@ -1062,7 +1065,7 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
   pagini de admin are nevoie de o declarație de rol în catalog. Până atunci,
   `/admin/cereri-oferta` (WP-26) e scris la „Administrator magazin”, lângă comenzi.
 - **Șabloanele de email ale magazinului** („Comandă expediată”, „Comandă livrată”)
-  rămân în Email-uri ecommerce și fără FAN (sunt textul clientului); nu se mai
+  rămân în Emailuri de comandă și fără FAN (sunt textul clientului); nu se mai
   trimit singure (vezi „Livrarea fără FAN”).
 - **Ultima licență aplicată** (`stare-aplicata.json`) nu e semnată: cine poate
   scrie în `storage/` și șterge licențele poate pune acolo alte stări. Oricum,

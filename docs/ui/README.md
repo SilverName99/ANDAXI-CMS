@@ -34,7 +34,7 @@ Sursa: proiectul de machete „ANDAXI CMS – 3 variante de admin”, varianta B
 
 Paginile adminului se refac (WP-32 … WP-35) din piese mici, aceleași peste tot. Fiecare e un fișier în
 `views/admin/componente/`, chemat cu `admin_componenta('<nume>', [...])` (`_incarca.php`, încărcat de
-`views/admin/layout.php`); primește doar ce i se dă explicit și are clasele `adm-…`. Stilul: `public/assets/css/admin.css`
+`views/admin/layout.php` și, din WP-35, de `App\Support\View::render` pentru orice vedere `admin/…`); primește doar ce i se dă explicit și are clasele `adm-…`. Stilul: `public/assets/css/admin.css`
 (variabilele `--ax-…`; numele vechi `--adm-…` trimit la ele), comportamentul: `public/assets/js/admin/` (încărcate pe
 fiecare pagină de admin). Toate se văd împreună, cu date inventate, pe pagina de probă **`/admin/componente`** (doar
 administratorul general, fără intrare în meniu; `App\Http\Controllers\ComponenteAdminController`).
@@ -42,12 +42,12 @@ administratorul general, fără intrare în meniu; `App\Http\Controllers\Compone
 | Componenta | Ce e | Comportamentul (JS) |
 |---|---|---|
 | `antet-pagina` | titlul paginii (`'nivel' => 1`) sau al unui pas, propoziția de sub el, butoanele din dreapta, ajutorul din spatele lui „?” | `componente.js`: clic, Enter, Esc |
-| `tab-uri-cu-numar` | tab-urile unei liste (statusuri), fiecare cu numărul lui și, opțional, culoarea; sunt linkuri, deci filtrul stă în adresă | — |
+| `tab-uri-cu-numar` | tab-urile unei liste (statusuri), fiecare cu numărul lui și, opțional, culoarea; sunt linkuri, deci filtrul stă în adresă. Din WP-35, cu `'panouri' => true` și o `cheie` pe tab: tab-urile unei pagini de setări, ale căror părți sunt deja în pagină (`data-adm-tab-panou="<cheie>"`; `adm_tab_ales()` alege tab-ul din `?tab=`, cu adresele vechi ca alias-uri, și partea la care coboară pagina, `'tinta'`) | `taburi.js` (WP-35): schimbă tab-ul fără reîncărcare, ține `?tab=` în adresă, redeschide tab-ul după o salvare, deschide tab-ul unei ancore (`#stripe-webhook`) |
 | `bara-filtre` | formular GET: căutare (cu o tastă, de exemplu `/`), liste, date, căsuțe (`bifa`, WP-33); „Resetează” | `filtre.js`: aplicare imediată (`'automat' => true`), tasta căutării |
 | `tabel` | tabelul listelor: coloane sortabile (link cu `?sort=&dir=`, restul adresei păstrat), antet fix, rânduri dense, bife (din WP-33 și o bifă dezactivată pe rând, `bifa_atribute`, și clase în plus, `clasa`) | `tabel.js`: „toate” (fără bifele dezactivate), Shift+clic, Esc golește |
 | `bara-actiuni-masa` | bara care apare cu rânduri bifate: câte, butoanele acțiunilor (fiecare `formaction` spre o adresă care **există deja**), „Renunță”; din WP-33 și câmpurile formularului (`campuri`, de exemplu statusul nou), adresa formularului, atribute `data-*` și butoane care nu trimit (Tipărește) | `tabel.js`: arată/ascunde, confirmarea, Esc |
 | `panou-lateral` | `'mod' => 'coloana'` (lângă conținut, ca în pașii newsletterului) sau `'sertar'` (din dreapta, peste pagină; corpul se poate încărca de la o adresă de detalii existentă: `data-adm-panou-sursa`; răspunsul ei, fără cadru: layout-ul `admin/fragment`) | `panou.js`: deschide, Esc, × sau fundalul închid, Tab rămâne în panou, focusul revine |
-| `sectiune-formular` | o parte a unui formular lung: titlu, propoziție, câmpuri; opțional pliabilă (`<details>`) | — |
+| `sectiune-formular` | o parte a unui formular lung: titlu, propoziție, câmpuri; opțional pliabilă (`<details>`). În paginile cu mult PHP înăuntrul unei părți (setările, WP-35) se scrie direct markupul ei (`<section class="adm-sectiune">`, `adm-sectiune__antet`, `__titlu`, `__descriere`, `__corp`), același | — |
 | `card` | o cifră a zilei sau un rezumat, cu ton (ok, atenție, eroare, info); opțional tot cardul e link | — |
 | `mesaj` | informare, reușită, avertisment, eroare (și mesajul de după o salvare, în cadru) | — |
 | `stare-goala` | ce vede omul când lista e goală și ce poate face | — |

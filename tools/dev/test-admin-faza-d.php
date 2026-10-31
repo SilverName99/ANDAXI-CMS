@@ -22,6 +22,12 @@ declare(strict_types=1);
  *    1 după o literă, Esc întreabă) și le salvează neatinse cu Ctrl+S: rândul produsului (fără updated_at), categoriile,
  *    câmpurile suplimentare și SEO-ul lui rămân aceleași. A doua oară cu ofertele BBD și precomenzile oprite: secțiunile lor
  *    lipsesc, iar salvarea păstrează ce era scris (regula 3 din plan). Baza se pune la loc.
+ * D. Paginile unite, împărțite sau puse pe tab-uri în WP-35 (IA-01 … IA-10): tools/dev/salvare-setari.cjs trimite formularele
+ *    lor (livrarea și contul FAN, plățile pe tab-uri, Google în „SEO și Google”, câteva părți ale setărilor, fidelitatea,
+ *    emailurile) pe codul etichetei admin-inainte-b și pe codul curent; cererile se opresc înainte de server și trebuie să aibă
+ *    aceleași perechi câmp = valoare (contul FAN salvat din „Curier FAN” se întoarce la tab-ul lui: doar „tab” diferă). Plus
+ *    constructorul de emailuri: o campanie salvată neatinsă de două ori are același JSON al blocurilor, octet cu octet.
+ *    Setările, campaniile și punctele rămân neatinse (CHECKSUM TABLE), campania se pune la loc.
  *
  * Raportul: $CMS_DEV_DIR/test-admin-faza-d-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
  */
@@ -499,6 +505,103 @@ $verifica('fără ofertele BBD și fără precomenzi: salvarea păstrează ofert
 $puneLaLoc();
 $db->prepare('UPDATE products SET preorder_enabled = ?, preorder_max_per_order = ?, preorder_max_total = ?, updated_at = ? WHERE id = ?')
     ->execute([$randPre['preorder_enabled'], $randPre['preorder_max_per_order'], $randPre['preorder_max_total'], $randPre['updated_at'], $idProdusPre]);
+
+// =====================================================================
+// D. Paginile WP-35: aceeași cerere la salvare; constructorul de emailuri
+// =====================================================================
+$scrie('');
+$scrie('== D. Formularele paginilor unite, împărțite sau pe tab-uri (WP-35): aceeași cerere ca înainte (tools/dev/salvare-setari.cjs)');
+$tabeleD = 'settings, newsletter_campaigns, loyalty_points_rules, loyalty_points_transactions, users';
+$sumaD = static fn (): string => json_encode($db->query('CHECKSUM TABLE ' . $tabeleD)->fetchAll(PDO::FETCH_NUM));
+$idCampanie = (int) $db->query("SELECT id FROM newsletter_campaigns WHERE status = 'draft' ORDER BY id LIMIT 1")->fetchColumn();
+$randCampanie = $idCampanie > 0 ? $db->query('SELECT * FROM newsletter_campaigns WHERE id = ' . $idCampanie)->fetch() : null;
+@mkdir($dosarTest . '/licenta', 0770, true);
+putenv('LICENTA_DOSAR=' . $dosarTest . '/licenta');
+exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php', 'toate']))) . ' 2>&1', $_, $codLicentaD);
+// După licență (pașii de activare ai pluginurilor se notează în settings la schimbarea ei).
+$inainteD = $sumaD();
+$trimite = static function (int $port, bool $vechi, string $nume, int $campanie = 0) use ($radacina, $dosarTest, $dosarDev): array {
+    $fisier = $dosarTest . '/salvare-setari-' . $nume . '.json';
+    @unlink($fisier);
+    $env = ['CMS_DEV_URL=http://127.0.0.1:' . $port, 'CMS_DEV_PAROLA=' . trim((string) @file_get_contents($dosarDev . '/admin-parola.txt')),
+        'CMS_DEV_ADMIN_EMAIL=' . (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro'), 'CMS_DEV_REZULTAT=' . $fisier,
+        'CMS_DEV_VECHI=' . ($vechi ? '1' : '0'), 'CMS_DEV_CAMPANIE=' . $campanie,
+        'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'), 'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers')];
+    exec('env ' . implode(' ', array_map('escapeshellarg', $env)) . ' node ' . escapeshellarg($radacina . '/tools/dev/salvare-setari.cjs') . ' 2>&1', $iesire, $cod);
+    $date = json_decode((string) @file_get_contents($fisier), true);
+    return $cod === 0 && is_array($date) ? $date : ['cazuri' => [], 'probleme' => array_merge(['codul ' . $cod], array_slice($iesire, -3)), 'blocate' => [], 'builder' => []];
+};
+// Perechile unei cereri, în ordine alfabetică (jetonul CSRF al sesiunii înlocuit); multipart: câmpurile simple.
+$perechi = static function (array $cerere): array {
+    $corp = (string) ($cerere['corp'] ?? '');
+    $lista = [];
+    if (str_contains((string) ($cerere['tip'] ?? ''), 'multipart')) {
+        preg_match_all('/name="([^"]+)"(?:; filename="[^"]*")?\r\n(?:[^\r\n]+\r\n)*\r\n(.*?)\r\n--/s', $corp, $m, PREG_SET_ORDER);
+        foreach ($m as $camp) {
+            $lista[] = $camp[1] . '=' . $camp[2];
+        }
+    } else {
+        foreach (explode('&', $corp) as $bucata) {
+            if ($bucata !== '') {
+                [$k, $v] = array_pad(explode('=', $bucata, 2), 2, '');
+                $lista[] = urldecode($k) . '=' . urldecode($v);
+            }
+        }
+    }
+    $lista = array_map(static fn (string $p): string => (string) preg_replace('/\b[0-9a-f]{64}\b/', '<TOKEN>', $p), $lista);
+    sort($lista, SORT_STRING);
+    return ['adresa' => (string) ($cerere['adresa'] ?? ''), 'perechi' => $lista];
+};
+$radacinaEticheta = dirname((glob($dosarDev . '/baza-admin-*/public/index.php') ?: [''])[0], 2);
+$portEticheta = $portTest + 1;
+$serverEticheta = proc_open(array_merge($phpDev, ['-S', '127.0.0.1:' . $portEticheta, '-t', $radacinaEticheta . '/public', $radacina . '/tools/dev/router.php']),
+    [0 => ['file', '/dev/null', 'r'], 1 => ['file', $dosarTest . '/server-eticheta.log', 'a'], 2 => ['file', $dosarTest . '/server-eticheta.log', 'a']], $_, $radacinaEticheta);
+usleep(800000);
+$vechiD = $trimite($portEticheta, true, 'vechi', $idCampanie);
+// JSON-ul blocurilor scris de constructorul de dinainte după două salvări neatinse (prima pornește de la blocul implicit al unei
+// campanii goale; a doua citește JSON-ul salvat, deci are toate câmpurile blocurilor).
+$blocuriEticheta = $idCampanie > 0 ? (string) $db->query('SELECT blocks_json FROM newsletter_campaigns WHERE id = ' . $idCampanie)->fetchColumn() : '';
+$stareEticheta = proc_get_status($serverEticheta);
+exec('pkill -TERM -P ' . (int) $stareEticheta['pid'] . ' 2>/dev/null');
+proc_terminate($serverEticheta);
+proc_close($serverEticheta);
+$server = $pornesteServer();
+// Constructorul nou pornește de la JSON-ul scris de cel vechi: după două salvări neatinse trebuie să fie același, octet cu octet.
+$blocuriInainte = $blocuriEticheta;
+$nouD = $trimite($portTest, false, 'nou', $idCampanie);
+$blocuriDupa = $idCampanie > 0 ? (string) $db->query('SELECT blocks_json FROM newsletter_campaigns WHERE id = ' . $idCampanie)->fetchColumn() : '';
+$stareServer = proc_get_status($server);
+exec('pkill -TERM -P ' . (int) $stareServer['pid'] . ' 2>/dev/null');
+proc_terminate($server);
+proc_close($server);
+putenv('LICENTA_DOSAR');
+$verifica('licența „toate” pusă; ' . count($vechiD['cazuri']) . ' formulare trimise pe codul de dinainte, ' . count($nouD['cazuri']) . ' pe codul nou; nicio eroare JavaScript, nicio cerere spre alt server',
+    $codLicentaD === 0 && $vechiD['probleme'] === [] && $nouD['probleme'] === [] && $vechiD['blocate'] === [] && $nouD['blocate'] === []
+    && count($vechiD['cazuri']) === count($nouD['cazuri']) && count($nouD['cazuri']) >= 16,
+    implode('; ', array_merge($vechiD['probleme'], $nouD['probleme'], $vechiD['blocate'], $nouD['blocate'])));
+foreach ($nouD['cazuri'] as $numeCaz => $cerereNoua) {
+    $asteptat = $perechi((array) ($vechiD['cazuri'][$numeCaz] ?? []));
+    if (str_starts_with($numeCaz, 'livrare: contul FAN')) {
+        // Contul FAN salvat din „Curier FAN”: aceeași cerere, cu întoarcerea la tab-ul lui (?tab=fan-api, adresă veche cunoscută).
+        $asteptat['perechi'] = array_map(static fn (string $p): string => $p === 'tab=delivery-settings' ? 'tab=fan-api' : $p, $asteptat['perechi']);
+        sort($asteptat['perechi'], SORT_STRING);
+    }
+    $primit = $perechi((array) $cerereNoua);
+    $verifica('„' . $numeCaz . '”: ' . $primit['adresa'] . ', ' . count($primit['perechi']) . ' câmpuri, aceleași ca înainte', $primit === $asteptat,
+        json_encode(['lipsă' => array_values(array_diff($asteptat['perechi'], $primit['perechi'])), 'în plus' => array_values(array_diff($primit['perechi'], $asteptat['perechi'])),
+            'adresa' => [$asteptat['adresa'], $primit['adresa']]], JSON_UNESCAPED_UNICODE));
+}
+$verifica('constructorul de emailuri: campania ' . $idCampanie . ' (JSON-ul scris de constructorul de dinainte) salvată neatinsă de două ori cu cel nou (răspunsuri '
+    . implode(', ', $nouD['builder']) . '), JSON-ul blocurilor identic octet cu octet (' . strlen($blocuriInainte) . ' octeți)',
+    $idCampanie > 0 && count($vechiD['builder']) === 2 && count($nouD['builder']) === 2 && !in_array(0, $nouD['builder'], true)
+    && $blocuriDupa === $blocuriInainte && $blocuriInainte !== '', md5($blocuriInainte) . ' → ' . md5($blocuriDupa) . ' ' . $blocuriDupa);
+$verifica('„Oferte BBD”: „Deschide produsul” deschide editorul produsului, cu secțiunea ofertelor', ($nouD['bbd']['deschis'] ?? false) === true
+    && ($nouD['bbd']['bbd'] ?? false) === true, json_encode($nouD['bbd'] ?? null));
+if (is_array($randCampanie)) {
+    $coloane = array_keys($randCampanie);
+    $db->prepare('UPDATE newsletter_campaigns SET `' . implode('` = ?, `', $coloane) . '` = ? WHERE id = ?')->execute(array_merge(array_values($randCampanie), [$randCampanie['id']]));
+}
+$verifica('setările, campaniile, regulile și tranzacțiile punctelor, clienții: neatinse (cererile s-au oprit înainte de server; campania pusă la loc)', $sumaD() === $inainteD);
 
 $scrie('');
 $scrie(sprintf('Rezultat: %d trecute, %d eșuate. Raport: %s', $trecute, $esuate, $fisierRaport));
