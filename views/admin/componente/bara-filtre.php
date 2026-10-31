@@ -7,7 +7,8 @@
  * @var string $actiune    adresa listei (implicit pagina curentă, fără parametri)
  * @var list<array{tip: string, nume: string, eticheta: string, valoare?: string, optiuni?: array<string, string>,
  *                 placeholder?: string, tasta?: string}> $campuri
- *      tip: 'cautare' | 'select' | 'data'; „optiuni” (select): valoare => eticheta, prima de obicei '' => 'Toate';
+ *      tip: 'cautare' | 'select' | 'data' | 'bifa' (WP-33: o căsuță, trimite „1” bifată); „optiuni” (select): valoare => eticheta,
+ *      prima de obicei '' => 'Toate';
  *      „tasta” (căutare): o tastă care mută focusul în câmp, de exemplu „/” (apare în dreapta câmpului)
  * @var array<string, string> $pastreaza   parametri păstrați (ascunși), de exemplu tab-ul ales
  * @var string $reseteaza  adresa fără filtre (implicit $actiune)
@@ -43,6 +44,11 @@ foreach ((array) ($campuri ?? []) as $camp) {
                         <option value="<?= adm_e($valoare) ?>"<?= (string) $valoare === (string) ($camp['valoare'] ?? '') ? ' selected' : '' ?>><?= adm_e($text) ?></option>
                     <?php endforeach; ?>
                 </select>
+            </label>
+        <?php elseif ($tip === 'bifa'): ?>
+            <label class="adm-filtre__camp adm-filtre__bifa" for="<?= adm_e($idCamp) ?>">
+                <input type="checkbox" id="<?= adm_e($idCamp) ?>" name="<?= adm_e($camp['nume'] ?? '') ?>" value="1"<?= trim((string) ($camp['valoare'] ?? '')) !== '' ? ' checked' : '' ?>>
+                <span><?= adm_e($camp['eticheta'] ?? '') ?></span>
             </label>
         <?php else: ?>
             <label class="adm-filtre__camp" for="<?= adm_e($idCamp) ?>">

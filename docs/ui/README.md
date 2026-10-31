@@ -43,9 +43,9 @@ administratorul general, fără intrare în meniu; `App\Http\Controllers\Compone
 |---|---|---|
 | `antet-pagina` | titlul paginii (`'nivel' => 1`) sau al unui pas, propoziția de sub el, butoanele din dreapta, ajutorul din spatele lui „?” | `componente.js`: clic, Enter, Esc |
 | `tab-uri-cu-numar` | tab-urile unei liste (statusuri), fiecare cu numărul lui și, opțional, culoarea; sunt linkuri, deci filtrul stă în adresă | — |
-| `bara-filtre` | formular GET: căutare (cu o tastă, de exemplu `/`), liste, date; „Resetează” | `filtre.js`: aplicare imediată (`'automat' => true`), tasta căutării |
-| `tabel` | tabelul listelor: coloane sortabile (link cu `?sort=&dir=`, restul adresei păstrat), antet fix, rânduri dense, bife | `tabel.js`: „toate”, Shift+clic, Esc golește |
-| `bara-actiuni-masa` | bara care apare cu rânduri bifate: câte, butoanele acțiunilor (fiecare `formaction` spre o adresă care **există deja**), „Renunță” | `tabel.js`: arată/ascunde, confirmarea, Esc |
+| `bara-filtre` | formular GET: căutare (cu o tastă, de exemplu `/`), liste, date, căsuțe (`bifa`, WP-33); „Resetează” | `filtre.js`: aplicare imediată (`'automat' => true`), tasta căutării |
+| `tabel` | tabelul listelor: coloane sortabile (link cu `?sort=&dir=`, restul adresei păstrat), antet fix, rânduri dense, bife (din WP-33 și o bifă dezactivată pe rând, `bifa_atribute`, și clase în plus, `clasa`) | `tabel.js`: „toate” (fără bifele dezactivate), Shift+clic, Esc golește |
+| `bara-actiuni-masa` | bara care apare cu rânduri bifate: câte, butoanele acțiunilor (fiecare `formaction` spre o adresă care **există deja**), „Renunță”; din WP-33 și câmpurile formularului (`campuri`, de exemplu statusul nou), adresa formularului, atribute `data-*` și butoane care nu trimit (Tipărește) | `tabel.js`: arată/ascunde, confirmarea, Esc |
 | `panou-lateral` | `'mod' => 'coloana'` (lângă conținut, ca în pașii newsletterului) sau `'sertar'` (din dreapta, peste pagină; corpul se poate încărca de la o adresă de detalii existentă: `data-adm-panou-sursa`; răspunsul ei, fără cadru: layout-ul `admin/fragment`) | `panou.js`: deschide, Esc, × sau fundalul închid, Tab rămâne în panou, focusul revine |
 | `sectiune-formular` | o parte a unui formular lung: titlu, propoziție, câmpuri; opțional pliabilă (`<details>`) | — |
 | `card` | o cifră a zilei sau un rezumat, cu ton (ok, atenție, eroare, info); opțional tot cardul e link | — |
@@ -64,8 +64,9 @@ se portează în secțiunea 4 din `admin.css` (`docs/de-portat.md`).
 trece cu Tab prin fiecare pagină a contractului și prin `/admin/componente`, pe licențele `toate`, `bioscem`, `grafoanaytis`:
 focusul vizibil pe fiecare element, „?” deschide lista scurtăturilor și Esc o închide, panoul lateral se închide cu Esc și
 focusul revine, iar pe pagina de probă bara acțiunilor în masă, tasta `/` și filtrele păstrate la Înapoi. O scurtătură
-nouă a unei pagini (WP-33, WP-36) se adaugă în `--plimbare` (`contract-admin.php`), cu pluginul ei: cu pluginul ascuns,
-lista „absente” cere să nu existe.
+nouă a unei pagini (WP-33, WP-36) se adaugă în lista de la „?” prin `$adminScurtaturiPagina` (pusă de vederea paginii) și se
+verifică într-o plimbare a paginii, cu pluginul ei pornit și oprit (lista comenzilor: `tools/dev/plimbare-comenzi.cjs`, din
+`tools/dev/test-admin-faza-d.php`).
 
 **Pentru contractul adminului (WP-29, `$contractAdminPorturi`)** — adrese, câmpuri și atribute noi: `POST /admin/emails/builder/verificare`
 (JSON, nu trimite nimic); `POST /newsletter/unsubscribe/{token}` (cu `confirmare=1`, cu `trimite_link=1` sau „cu un clic”, RFC 8058);

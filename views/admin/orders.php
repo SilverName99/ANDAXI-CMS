@@ -117,209 +117,199 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
     : 'Sortare curentă: descrescător. Click pentru crescător.';
 ?>
 
+<?php
+// Lista „B — Compact” (faza D, WP-33; macheta docs/ui/B-Comenzi.dc.html): antetul, tab-urile de status cu numărul lor,
+// tab-urile precomenzilor, bara de filtre (în adresă), rezultatul ultimei acțiuni în masă, bara acțiunilor în masă (aceeași
+// adresă, POST /admin/orders/bulk, aceleași câmpuri ca vechea bară) și tabelul (componenta tabel; celulele rândurilor au
+// rămas cele de dinainte). Comportamentul: public/assets/js/admin/comenzi.js.
+require_once __DIR__ . '/componente/_incarca.php';
+$e = static fn (mixed $text): string => htmlspecialchars((string) $text, ENT_QUOTES);
+$numaratoriStari = is_array($ordersStatusCounts ?? null) ? $ordersStatusCounts : [];
+$rezultatMasa = is_array($rezultatMasa ?? null) ? $rezultatMasa : null;
+$filtruLivrare = (string) ($filters['livrare'] ?? '');
+$filtruErp = (string) ($filters['erp'] ?? '');
+$filtruStarePlata = (string) ($filters['payment_status'] ?? '');
+$arePlataCard = \App\Support\Plugins::oricareVizibil(['plata_stripe', 'plata_euplatesc', 'plata_bt']);
+/** Aceeași listă cu alți parametri (null = scos); pagina se pierde. */
+$urlCu = static function (array $schimba): string {
+    $query = is_array($_GET) ? $_GET : [];
+    foreach ($schimba as $cheie => $valoare) {
+        if ($valoare === null || $valoare === '') {
+            unset($query[$cheie]);
+        } else {
+            $query[$cheie] = $valoare;
+        }
+    }
+    unset($query['page']);
+    $qs = http_build_query($query);
+    return '/admin/orders' . ($qs !== '' ? '?' . $qs : '');
+};
+$etichetaTab = ['pending' => 'Noi', 'pending_payment' => 'Plată în așteptare', 'processing' => 'În procesare', 'completed' => 'Finalizate',
+    'cancelled' => 'Anulate', 'refunded' => 'Rambursate', 'returned' => 'Returnate', 'failed' => 'Eșuate'];
+$culoareTab = ['pending' => '#2563eb', 'pending_payment' => '#ca8a04', 'processing' => '#7c3aed', 'completed' => '#16a34a',
+    'cancelled' => '#dc2626', 'refunded' => '#64748b', 'returned' => '#64748b', 'failed' => '#dc2626'];
+// Scurtăturile paginii, în lista de la „?” (views/admin/layout.php); „A” doar cu livrarea FAN.
+$adminScurtaturiPagina = [['/', 'Caută în comenzi'], ['Shift + clic', 'Bifează un șir de comenzi'], ['Esc', 'Golește bifele sau închide panoul comenzii']];
+if ($areFan) {
+    $adminScurtaturiPagina[] = ['A', 'Generează AWB pentru comenzile bifate'];
+}
+$adminScurtaturiPagina[] = ['C', 'Confirmă comenzile bifate (trec „În procesare”)'];
+$adminScurtaturiPagina[] = ['P', 'Tipărește comenzile bifate'];
+?>
+
 <?php if (!empty($erpModulBanner)): ?>
-    <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
-        <?= htmlspecialchars((string) $erpModulBanner, ENT_QUOTES) ?>
-    </section>
+    <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'text' => (string) $erpModulBanner]); ?>
 <?php endif; ?>
 
-<section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Comenzi</h1>
-            <p>Vizualizează și gestionează comenzile.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <?php $exportQuery = trim((string) ($_SERVER['QUERY_STRING'] ?? '')); ?>
-            <a class="btn" href="/admin/orders/export<?= $exportQuery !== '' ? ('?' . htmlspecialchars($exportQuery, ENT_QUOTES)) : '' ?>" title="Descarcă lista de comenzi (se deschide în Excel)">⬇ Export Excel</a>
-            <a class="btn btn-secondary" href="/admin/orders/trash">Coș comenzi</a>
-        </div>
-    </div>
+<section class="adm-comenzi">
+<?php
+$deProcesat = (int) ($numaratoriStari['pending'] ?? 0) + (int) ($numaratoriStari['processing'] ?? 0);
+$exportQuery = trim((string) ($_SERVER['QUERY_STRING'] ?? ''));
+admin_componenta('antet-pagina', [
+    'titlu' => 'Comenzi',
+    'nivel' => 1,
+    'id' => 'comenzi-antet',
+    'subtitlu' => (int) ($summary['total_count'] ?? 0) . ' în listă · valoare ' . number_format((float) ($summary['total_value'] ?? 0.0), 2) . ' RON'
+        . ' · de procesat: ' . $deProcesat . ' · finalizate ' . (int) ($summary['completed_count'] ?? 0) . ', anulate ' . (int) ($summary['cancelled_count'] ?? 0)
+        . ', în lucru ' . (int) ($summary['pending_like_count'] ?? 0),
+    'actiuni' => '<a class="btn" href="/admin/orders/export' . ($exportQuery !== '' ? ('?' . htmlspecialchars($exportQuery, ENT_QUOTES)) : '')
+        . '" title="Descarcă lista de comenzi (se deschide în Excel)">⬇ Export Excel</a>'
+        . '<a class="btn btn-secondary" href="/admin/orders/trash">Coș comenzi</a>',
+    'ajutor' => [
+        'Tab-urile filtrează după status; numărul din fiecare ține cont de celelalte filtre. Filtrele stau în adresă: Înapoi și '
+            . 'reîncărcarea duc la aceeași listă.',
+        'Bifează comenzile (Shift+clic alege un șir) ca să apară bara acțiunilor în masă. Lista arată cel mult 400 de comenzi; '
+            . 'restringe filtrele pentru restul.',
+        'Ochiul de pe rând deschide comanda în panoul din dreapta; Esc îl închide.',
+    ],
+]);
 
-    <div class="orders-kpis">
-        <article class="orders-kpi-card">
-            <span class="orders-kpi-icon orders-kpi-icon--all">📦</span>
-            <small>Total comenzi</small>
-            <strong><?= (int) ($summary['total_count'] ?? 0) ?></strong>
-        </article>
-        <article class="orders-kpi-card">
-            <span class="orders-kpi-icon orders-kpi-icon--ok">✅</span>
-            <small>Finalizate</small>
-            <strong class="ok"><?= (int) ($summary['completed_count'] ?? 0) ?></strong>
-        </article>
-        <article class="orders-kpi-card">
-            <span class="orders-kpi-icon orders-kpi-icon--off">⛔</span>
-            <small>Anulate</small>
-            <strong class="off"><?= (int) ($summary['cancelled_count'] ?? 0) ?></strong>
-        </article>
-        <article class="orders-kpi-card">
-            <span class="orders-kpi-icon orders-kpi-icon--warn">⏳</span>
-            <small>În așteptare</small>
-            <strong class="warn"><?= (int) ($summary['pending_like_count'] ?? 0) ?></strong>
-        </article>
-        <article class="orders-kpi-card">
-            <span class="orders-kpi-icon orders-kpi-icon--sum">📈</span>
-            <small>Valoare totală</small>
-            <strong><?= number_format((float) ($summary['total_value'] ?? 0.0), 2) ?> RON</strong>
-        </article>
-    </div>
-
+$totalTaburi = array_sum($numaratoriStari);
+$taburiStare = [['eticheta' => 'Toate', 'href' => $urlCu(['status' => null]), 'numar' => $totalTaburi, 'activ' => $selectedStatus === '']];
+foreach ($allowedStatuses as $stareTab) {
+    $stareTab = (string) $stareTab;
+    if ((int) ($numaratoriStari[$stareTab] ?? 0) === 0 && $selectedStatus !== $stareTab) {
+        continue;
+    }
+    $taburiStare[] = ['eticheta' => $etichetaTab[$stareTab] ?? (string) ($statusLabels[$stareTab] ?? $stareTab), 'href' => $urlCu(['status' => $stareTab]),
+        'numar' => (int) ($numaratoriStari[$stareTab] ?? 0), 'activ' => $selectedStatus === $stareTab, 'culoare' => $culoareTab[$stareTab] ?? ''];
+}
+admin_componenta('tab-uri-cu-numar', ['taburi' => $taburiStare, 'eticheta' => 'Filtrează după status', 'id' => 'comenzi-stari']);
+?>
     <?php if ($arePrecomanda): ?>
-        <?php
-        $stilTab = 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid #e2e8f0;'
-            . 'border-bottom:none;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;text-decoration:none;';
-        $stilActiv = $stilTab . 'background:#fff;color:#0f172a;border-color:#cbd5e1;box-shadow:0 -2px 0 #2563eb inset;';
-        $stilInactiv = $stilTab . 'background:#f8fafc;color:#64748b;';
-        ?>
-        <nav style="display:flex;gap:4px;margin:4px 0 -1px;border-bottom:1px solid #cbd5e1;flex-wrap:wrap;">
-            <a href="<?= htmlspecialchars($urlTabPrecomanda(''), ENT_QUOTES) ?>"
-               style="<?= $tabPrecomanda === '' ? $stilActiv : $stilInactiv ?>">Toate comenzile</a>
-            <a href="<?= htmlspecialchars($urlTabPrecomanda('asteptare'), ENT_QUOTES) ?>"
-               title="Comenzi cu produse în precomandă. <?= $cuErp('Nu pleacă în „Comenzi site” din ERP până nu apeși ▶ pe fiecare.', 'Așteaptă până apeși ▶ pe fiecare.') ?>"
-               style="<?= $tabPrecomanda === 'asteptare' ? $stilActiv : $stilInactiv ?>">
-                ⏳ Precomenzi
-                <?php if ($precomenziAsteptare > 0): ?>
-                    <span style="background:#b45309;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;"><?= $precomenziAsteptare ?></span>
-                <?php endif; ?>
-            </a>
-            <a href="<?= htmlspecialchars($urlTabPrecomanda('eliberata'), ENT_QUOTES) ?>"
-               title="<?= $cuErp('Precomenzi deja trimise în ERP.', 'Precomenzi deja eliberate.') ?>"
-               style="<?= $tabPrecomanda === 'eliberata' ? $stilActiv : $stilInactiv ?>">
-                ✅ Precomenzi eliberate
-                <?php if ($precomenziEliberate > 0): ?>
-                    <span style="background:#e2e8f0;color:#334155;border-radius:999px;padding:1px 7px;font-size:11px;"><?= $precomenziEliberate ?></span>
-                <?php endif; ?>
-            </a>
-        </nav>
+        <?php admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Precomenzi', 'id' => 'comenzi-precomenzi', 'taburi' => [
+            ['eticheta' => 'Toate comenzile', 'href' => $urlTabPrecomanda(''), 'activ' => $tabPrecomanda === ''],
+            ['eticheta' => '⏳ Precomenzi', 'href' => $urlTabPrecomanda('asteptare'), 'activ' => $tabPrecomanda === 'asteptare',
+                'numar' => $precomenziAsteptare > 0 ? $precomenziAsteptare : null],
+            ['eticheta' => '✅ Precomenzi eliberate', 'href' => $urlTabPrecomanda('eliberata'), 'activ' => $tabPrecomanda === 'eliberata',
+                'numar' => $precomenziEliberate > 0 ? $precomenziEliberate : null],
+        ]]); ?>
         <?php if ($tabPrecomanda === 'asteptare'): ?>
-            <p style="margin:12px 0 0;color:#64748b;font-size:13px;">
+            <p class="adm-comenzi__nota-tab">
                 Comenzi cu produse bifate „Valabil pentru precomandă". Marfa încă n-a venit, deci
                 <?= $cuErp('comanda nu pleacă în „Comenzi site" din ERP — apasă', 'comanda așteaptă — apasă') ?> ▶ pe rândul ei când poți onora.
             </p>
         <?php endif; ?>
     <?php endif; ?>
+<?php
+$optiuniPlata = ['' => 'Toate'];
+if ($arePlataCard) {
+    $optiuniPlata['card'] = 'Card';
+}
+$optiuniPlata['cod'] = 'Ramburs';
+$optiuniPlata['bank_transfer'] = 'OP (transfer)';
+$campuriFiltre = [
+    ['tip' => 'cautare', 'nume' => 'q', 'eticheta' => 'Caută în comenzi', 'valoare' => $search, 'placeholder' => 'Caută după număr, client, email, telefon, firmă…', 'tasta' => '/'],
+    ['tip' => 'data', 'nume' => 'date_from', 'eticheta' => 'De la', 'valoare' => $dateFrom],
+    ['tip' => 'data', 'nume' => 'date_to', 'eticheta' => 'Până la', 'valoare' => $dateTo],
+    ['tip' => 'select', 'nume' => 'payment_method', 'eticheta' => 'Plată', 'valoare' => $paymentFilter, 'optiuni' => $optiuniPlata],
+];
+if ($areFan) {
+    $campuriFiltre[] = ['tip' => 'select', 'nume' => 'livrare', 'eticheta' => 'Livrare', 'valoare' => $filtruLivrare,
+        'optiuni' => ['' => 'Toate', 'fara_awb' => 'Fără AWB', 'cu_awb' => 'Cu AWB', 'fanbox' => 'FANbox']];
+}
+if ($areErp) {
+    $campuriFiltre[] = ['tip' => 'select', 'nume' => 'erp', 'eticheta' => 'ERP', 'valoare' => $filtruErp,
+        'optiuni' => ['' => 'Toate', 'trimise' => 'Trimise în ERP', 'asteptare' => 'În așteptare', 'esuate' => 'Eșuate']];
+}
+$campuriFiltre[] = ['tip' => 'bifa', 'nume' => 'rest_incasat', 'eticheta' => 'Doar cu rest de încasat', 'valoare' => $doarRestDeIncasat ? '1' : ''];
+$pastreazaFiltre = array_filter([
+    'status' => $selectedStatus, 'precomanda' => $tabPrecomanda, 'payment_status' => $filtruStarePlata,
+    'sort' => $sortBy !== 'date' ? $sortBy : '', 'dir' => $sortDir,
+], static fn ($v): bool => (string) $v !== '');
+admin_componenta('bara-filtre', [
+    'actiune' => '/admin/orders',
+    'id' => 'comenzi-filtre',
+    'eticheta' => 'Filtrele comenzilor',
+    'automat' => true,
+    'campuri' => $campuriFiltre,
+    'pastreaza' => $pastreazaFiltre,
+    'reseteaza' => '/admin/orders' . ($tabPrecomanda !== '' ? ('?precomanda=' . urlencode($tabPrecomanda)) : ''),
+]);
 
-    <form method="get" action="/admin/orders" class="orders-filters orders-filters--compact">
-        <?php if ($tabPrecomanda !== ''): ?>
-            <input type="hidden" name="precomanda" value="<?= htmlspecialchars($tabPrecomanda, ENT_QUOTES) ?>">
-        <?php endif; ?>
-        <div class="orders-filters-grid">
-            <div class="orders-filter-field orders-filter-field--search">
-                <span class="orders-filter-label">Căutare</span>
-                <input type="text" name="q" value="<?= htmlspecialchars($search, ENT_QUOTES) ?>" placeholder="Caută după ID, client, email...">
-            </div>
-            <div class="orders-filter-field">
-                <span class="orders-filter-label">Status</span>
-                <select name="status">
-                    <option value="">Toate statusurile</option>
-                    <?php foreach ($allowedStatuses as $statusOption): ?>
-                        <option value="<?= htmlspecialchars((string) $statusOption, ENT_QUOTES) ?>" <?= $selectedStatus === (string) $statusOption ? 'selected' : '' ?>>
-                            <?= htmlspecialchars((string) ($statusLabels[(string) $statusOption] ?? (string) $statusOption), ENT_QUOTES) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="orders-filter-field">
-                <span class="orders-filter-label">Plată</span>
-                <select name="payment_method">
-                    <option value="">Toate</option>
-                    <option value="card" <?= $paymentFilter === 'card' ? 'selected' : '' ?>>Card</option>
-                    <option value="cod" <?= $paymentFilter === 'cod' ? 'selected' : '' ?>>Ramburs</option>
-                    <option value="bank_transfer" <?= $paymentFilter === 'bank_transfer' ? 'selected' : '' ?>>OP (transfer)</option>
-                </select>
-            </div>
-            <div class="orders-filter-field">
-                <span class="orders-filter-label">Încasare</span>
-                <label style="display:flex;align-items:center;gap:6px;height:38px;font-size:13px;color:#334155;white-space:nowrap;">
-                    <input type="checkbox" name="rest_incasat" value="1" <?= $doarRestDeIncasat ? 'checked' : '' ?>>
-                    Doar cu rest de încasat
-                </label>
-            </div>
-            <div class="orders-filter-field">
-                <span class="orders-filter-label">De la data</span>
-                <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom, ENT_QUOTES) ?>">
-            </div>
-            <div class="orders-filter-field">
-                <span class="orders-filter-label">Până la data</span>
-                <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo, ENT_QUOTES) ?>">
-            </div>
-            <div class="orders-filter-field">
-                <span class="orders-filter-label">Sortare</span>
-                <select name="sort">
-                    <option value="date" <?= $sortBy === 'date' ? 'selected' : '' ?>>Data</option>
-                    <option value="status" <?= $sortBy === 'status' ? 'selected' : '' ?>>Status</option>
-                    <option value="total" <?= $sortBy === 'total' ? 'selected' : '' ?>>Preț</option>
-                </select>
-            </div>
-            <input type="hidden" name="dir" value="<?= htmlspecialchars($sortDir, ENT_QUOTES) ?>">
-            <div class="orders-filter-actions">
-                <button class="btn" type="submit">Aplică</button>
-                <a class="btn btn-secondary" href="/admin/orders<?= $tabPrecomanda !== '' ? ('?precomanda=' . urlencode($tabPrecomanda)) : '' ?>">Reset</a>
-            </div>
-        </div>
-    </form>
+// Rezultatul pe comandă al ultimei acțiuni în masă (App\Support\RezultatMasaComenzi), sub mesajul ei din cadru.
+$rezultatePeComanda = (array) ($rezultatMasa['rezultate'] ?? []);
+if ($rezultatMasa !== null && $rezultatePeComanda !== []) {
+    $numereComenzi = [];
+    foreach ($orders as $comandaLista) {
+        $numereComenzi[(int) ($comandaLista['id'] ?? 0)] = (string) ($comandaLista['order_number'] ?? '');
+    }
+    $reusite = count(array_filter($rezultatePeComanda, static fn (array $r): bool => !empty($r['ok'])));
+    $listaRezultate = '<ul class="adm-comenzi__rezultate">';
+    foreach ($rezultatePeComanda as $idRezultat => $rezultatComanda) {
+        $listaRezultate .= '<li class="' . (!empty($rezultatComanda['ok']) ? 'este-ok' : 'este-eroare') . '"><span class="adm-mono">'
+            . $e($numereComenzi[(int) $idRezultat] ?? ('#' . (int) $idRezultat)) . '</span> ' . (!empty($rezultatComanda['ok']) ? '✓' : '✕') . ' '
+            . $e($rezultatComanda['mesaj'] ?? '') . '</li>';
+    }
+    $listaRezultate .= '</ul>';
+    admin_componenta('mesaj', [
+        'tip' => $reusite === count($rezultatePeComanda) ? 'succes' : ($reusite === 0 ? 'eroare' : 'avertisment'),
+        'titlu' => \App\Support\RezultatMasaComenzi::eticheta((string) $rezultatMasa['actiune']) . ': ' . $reusite . ' din ' . count($rezultatePeComanda) . ' reușite',
+        'id' => 'comenzi-rezultat-masa',
+    ]);
+    echo $listaRezultate;
+}
 
-    <form method="post" action="/admin/orders/bulk" id="orders-bulk-form">
-        <?= \App\Support\AdminCsrf::camp() ?>
-        <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
-        <div id="orders-bulk-ids"></div>
-        <div class="orders-bulk-toolbar">
-            <div class="orders-bulk-toolbar__left">
-                <label style="display:inline-flex;align-items:center;gap:8px;">
-                    <input type="checkbox" id="orders-select-all">
-                    Selectează toate
-                </label>
-            </div>
-            <div class="orders-bulk-toolbar__right">
-                <select name="bulk_action" id="orders-bulk-action">
-                    <option value="">Acțiune în masă</option>
-                    <option value="delete">Șterge (mută în coș)</option>
-                    <option value="status">Schimbă status</option>
-<?php if ($areFan): ?>
-                    <option value="awb">Generează AWB</option>
-<?php endif; ?>
-                    <option value="shipping">Corectează transportul</option>
-<?php if ($areErp): ?>
-                    <option value="erp_retry">Retrimite în ERP</option>
-<?php endif; ?>
-                </select>
-                <input type="number" name="bulk_shipping_value" id="orders-bulk-shipping" step="0.01" min="0"
-                       placeholder="Transport (lei)" style="display:none;width:150px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;">
-                <select name="bulk_status" id="orders-bulk-status" style="display:none;">
-                    <option value="">Alege status</option>
-                    <?php foreach ($bulkStatusOptions as $statusOption): ?>
-                        <option value="<?= htmlspecialchars((string) $statusOption, ENT_QUOTES) ?>">
-                            <?= htmlspecialchars((string) $statusOption, ENT_QUOTES) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-secondary" type="submit">Aplică pe selecție</button>
-            </div>
-        </div>
-    </form>
+// Bara acțiunilor în masă: fiecare buton trimite bifele la POST /admin/orders/bulk, cu bulk_action-ul vechii liste.
+$optiuniStatusMasa = '<option value="">Alege status</option>';
+foreach ($bulkStatusOptions as $statusOption) {
+    $optiuniStatusMasa .= '<option value="' . $e($statusOption) . '">' . $e($statusLabels[(string) $statusOption] ?? $statusOption) . '</option>';
+}
+$campuriMasa = \App\Support\AdminCsrf::camp()
+    . '<input type="hidden" name="back_url" value="' . $e($ordersBackUrl) . '">'
+    . '<label class="adm-masa__camp"><span>Status nou</span><select name="bulk_status" id="orders-bulk-status">' . $optiuniStatusMasa . '</select></label>'
+    . '<label class="adm-masa__camp"><span>Transport (lei)</span><input type="number" name="bulk_shipping_value" id="orders-bulk-shipping" step="0.01" min="0"'
+    . ' placeholder="ex. 30"></label>';
+$actiuniMasa = [];
+if ($areFan) {
+    $actiuniMasa[] = ['eticheta' => 'Generează AWB', 'actiune' => '/admin/orders/bulk', 'nume' => 'bulk_action', 'valoare' => 'awb', 'tip' => 'principal',
+        'tasta' => 'A', 'date' => ['tasta-comenzi' => 'a'], 'confirmare' => 'Generezi AWB FAN pentru comenzile selectate?'];
+}
+$actiuniMasa[] = ['eticheta' => 'Confirmă', 'actiune' => '/admin/orders/bulk', 'nume' => 'bulk_action', 'valoare' => 'status', 'tasta' => 'C',
+    'date' => ['tasta-comenzi' => 'c', 'bulk-status' => 'processing'],
+    'confirmare' => 'Confirmi comenzile selectate? Trec în „' . ($statusLabels['processing'] ?? 'processing') . '”, ca la „Schimbă statusul”.'];
+if ($areErp) {
+    $actiuniMasa[] = ['eticheta' => 'Trimite în ERP', 'actiune' => '/admin/orders/bulk', 'nume' => 'bulk_action', 'valoare' => 'erp_retry',
+        'confirmare' => "Retrimiți comenzile selectate în ERP?\n\nCele pe care ERP-ul le are deja se actualizează cu ce e acum pe site, nu se dublează.\n"
+            . 'Durează câteva secunde per comandă — nu închide pagina.'];
+}
+$actiuniMasa[] = ['eticheta' => 'Tipărește', 'buton' => true, 'id' => 'comenzi-tipareste', 'tasta' => 'P', 'date' => ['tasta-comenzi' => 'p']];
+$actiuniMasa[] = ['eticheta' => 'Schimbă statusul', 'actiune' => '/admin/orders/bulk', 'nume' => 'bulk_action', 'valoare' => 'status'];
+$actiuniMasa[] = ['eticheta' => 'Corectează transportul', 'actiune' => '/admin/orders/bulk', 'nume' => 'bulk_action', 'valoare' => 'shipping'];
+$actiuniMasa[] = ['eticheta' => 'Mută în coș', 'actiune' => '/admin/orders/bulk', 'nume' => 'bulk_action', 'valoare' => 'delete', 'tip' => 'pericol',
+    'confirmare' => 'Muți comenzile selectate în coș?'];
+admin_componenta('bara-actiuni-masa', [
+    'id' => 'comenzi-masa',
+    'tabel' => 'comenzi-tabel',
+    'unitate' => 'comenzi selectate',
+    'formular_actiune' => '/admin/orders/bulk',
+    'campuri' => $campuriMasa,
+    'actiuni' => $actiuniMasa,
+]);
+?>
+    <p class="adm-comenzi__tasta-nota" id="comenzi-tasta-nota" role="status" hidden></p>
 
-    <?php if ($orders === []): ?>
-        <p style="margin:0;color:#64748b;">Nu există comenzi pentru filtrele selectate.</p>
-    <?php else: ?>
-        <div class="orders-list-head">
-            <p class="orders-count-note"><?= count($orders) ?> comenzi</p>
-            <a class="orders-sort-toggle" href="<?= htmlspecialchars($sortToggleUrl, ENT_QUOTES) ?>" title="<?= htmlspecialchars($sortToggleLabel, ENT_QUOTES) ?>">↕️</a>
-        </div>
-        <div class="orders-table-wrap">
-            <table class="table orders-table">
-                <thead>
-                <tr>
-                    <th style="width:44px;"></th>
-                    <th>Client / ID</th>
-                    <th>Data</th>
-                    <th>Sumă</th>
-                    <th>Status</th>
-                    <th>Livrare</th>
-                    <th style="width:190px;">Observații interne</th>
-                    <th style="width:220px;">Acțiuni</th>
-                </tr>
-                </thead>
-                <tbody>
+<?php $randuriComenzi = []; ?>
                 <?php foreach ($orders as $order): ?>
                     <?php
                         // Nume de afișat în modal: cel real sau, pentru conturile
@@ -440,11 +430,12 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                         $precomandaStare = $arePrecomenzi ? strtolower(trim((string) ($order['preorder_status'] ?? ''))) : '';
                         $ePrecomandaInAsteptare = $precomandaStare === 'asteptare';
                     ?>
-                    <tr class="<?= $isCancelled ? 'is-cancelled' : '' ?><?= $eClientAgresiv ? ($isCancelled ? ' ' : '') . 'is-client-agresiv' : '' ?>">
-                        <td class="orders-table__check">
-                            <input type="checkbox" class="order-bulk-checkbox" data-order-id="<?= $orderId ?>" <?= $isCancelled ? 'disabled' : '' ?>>
-                        </td>
-                        <td>
+                    <?php
+                    $celule = [];
+                    $claseRand = trim(($isCancelled ? 'is-cancelled' : '') . ($eClientAgresiv ? ' is-client-agresiv' : '')
+                        . (isset($rezultatePeComanda[$orderId]) ? (!empty($rezultatePeComanda[$orderId]['ok']) ? ' are-rezultat-ok' : ' are-rezultat-eroare') : ''));
+                    ?>
+                        <?php ob_start(); ?>
                             <small style="display:block;color:#94a3b8;">#<?= (int) $orderId ?> / <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?></small>
                             <strong><?= htmlspecialchars($customerName !== '' ? $customerName : 'Client', ENT_QUOTES) ?></strong>
                             <?php if ($eClientAgresiv): ?><span class="client-agresiv-badge" title="În ERP, clientul acestei comenzi are semnul „Client agresiv” pe fișă.">Client agresiv</span><?php endif; ?><small style="display:block;color:#64748b;"><?= htmlspecialchars((string) ($order['billing_email'] ?? ''), ENT_QUOTES) ?></small>
@@ -454,9 +445,9 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     📣 Google Ads
                                 </span>
                             <?php endif; ?>
-                        </td>
-                        <td><?= htmlspecialchars($formatDateTime((string) ($order['created_at'] ?? '')), ENT_QUOTES) ?></td>
-                        <td>
+                        <?php $celule[] = (string) ob_get_clean(); ?>
+                        <?php ob_start(); ?><?= htmlspecialchars($formatDateTime((string) ($order['created_at'] ?? '')), ENT_QUOTES) ?><?php $celule[] = (string) ob_get_clean(); ?>
+                        <?php ob_start(); ?>
                             <strong><?= number_format((float) ($order['total'] ?? 0), 2) ?> RON</strong>
                             <?php
                                 // Transportul e inclus în total, dar până acum se vedea
@@ -469,8 +460,8 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                             <?php else: ?>
                                 <small style="display:block;color:#64748b;">transport gratuit</small>
                             <?php endif; ?>
-                        </td>
-                        <td>
+                        <?php $celule[] = (string) ob_get_clean(); ?>
+                        <?php ob_start(); ?>
                             <div class="orders-status-stack">
                                 <span class="status-pill status-pill--<?= htmlspecialchars($statusPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($statusLabels[$statusRaw] ?? $statusRaw), ENT_QUOTES) ?></span>
                                 <?php if (!$isCod): ?>
@@ -535,7 +526,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     </small>
                                 <?php endif; ?>
                             </div>
-                        </td>
+                        <?php $celule[] = (string) ob_get_clean(); ?>
                         <?php
                             // Semnul roșu de lângă livrare: comanda are produse fără
                             // gramaj în fișă, deci AWB-ul pleacă declarat mai ușor decât e.
@@ -548,7 +539,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     . " — produsele astea cântăresc zero la AWB, iar FAN recântărește și taxează diferența."
                                     . $cuErp(" Completează „Greutate (g)” în ERP → Produse.", " Completează greutatea în fișa produsului.");
                         ?>
-                        <td>
+                        <?php ob_start(); ?>
                             <?php if ($areFan && $faraGreutate !== []): ?>
                                 <span class="orders-fara-greutate"
                                       title="<?= htmlspecialchars($faraGreutateTitlu, ENT_QUOTES) ?>">!</span>
@@ -577,7 +568,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                             <?php elseif ($areFidelitate): ?>
                                 <small style="color:#94a3b8;">Puncte: <?= $pointsAwarded ?> / <?= (int) ($order['loyalty_points_pending_claim'] ?? 0) ?></small>
                             <?php endif; ?>
-                        </td>
+                        <?php $celule[] = (string) ob_get_clean(); ?>
                         <?php
                             // Nota se citește din listă, fără să mai deschizi comanda:
                             // asta era rostul ei — să vezi dintr-o privire cu cine s-a
@@ -590,7 +581,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     ? mb_strimwidth($notaInterna, 0, 90, '…', 'UTF-8')
                                     : substr($notaInterna, 0, 90));
                         ?>
-                        <td class="orders-col-notes">
+                        <?php ob_start(); ?>
                             <?php if ($notaInterna !== ''): ?>
                                 <span class="order-note-pill" title="<?= htmlspecialchars($notaInterna, ENT_QUOTES) ?>">
                                     <?= nl2br(htmlspecialchars($notaScurt, ENT_QUOTES)) ?>
@@ -598,15 +589,15 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                             <?php else: ?>
                                 <small style="color:#cbd5e1;">—</small>
                             <?php endif; ?>
-                        </td>
-                        <td class="orders-col-actions">
+                        <?php $celule[] = (string) ob_get_clean(); ?>
+                        <?php ob_start(); ?>
                             <?php if ($isCancelled): ?>
                                 <?php /* Anularea nu mai e fundătură: comanda se poate vedea
                                         și readuce într-o stare de lucru. Fără butoanele astea,
                                         o comandă anulată din greșeală rămânea așa pentru
                                         totdeauna, iar singura ieșire era prin baza de date. */ ?>
                                 <div class="order-actions">
-                                    <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" title="Detalii">👁</button>
+                                    <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" data-adm-panou="comanda-panou" title="Detalii" aria-label="Detalii comanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>">👁</button>
                                     <button
                                         type="button"
                                         class="order-action-btn order-action-btn--edit"
@@ -622,7 +613,7 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                 </div>
                             <?php else: ?>
                                 <div class="order-actions">
-                                    <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" title="Detalii">👁</button>
+                                    <button type="button" class="order-action-btn view-order-btn" data-order="<?= $orderJson ?>" data-adm-panou="comanda-panou" title="Detalii" aria-label="Detalii comanda <?= htmlspecialchars((string) ($order['order_number'] ?? ''), ENT_QUOTES) ?>">👁</button>
 <?php if ($arePromo): ?>
                                     <button type="button" class="order-action-btn client-promo-btn" data-order-id="<?= $orderId ?>" title="Toate promoționalele clientului">🎁</button>
 <?php endif; ?>
@@ -709,24 +700,50 @@ $sortToggleLabel = strtolower($sortDir) === 'asc'
                                     </form>
                                 </div>
                             <?php endif; ?>
-                        </td>
-                    </tr>
+                        <?php $celule[] = (string) ob_get_clean(); ?>
+                    <?php
+                    $randuriComenzi[] = ['celule' => $celule, 'id' => $orderId,
+                        'atribute' => $claseRand !== '' ? 'class="' . $claseRand . '"' : '',
+                        'bifa_atribute' => 'data-order-id="' . $orderId . '"' . ($isCancelled ? ' disabled' : '')];
+                    ?>
                 <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    <?php endif; ?>
+<?php
+ob_start();
+admin_componenta('stare-goala', ['titlu' => 'Nu există comenzi pentru filtrele selectate.', 'text' => 'Schimbă tab-ul sau filtrele de mai sus.',
+    'actiune' => '<a class="btn btn-secondary" href="/admin/orders">Toate comenzile</a>']);
+$golComenzi = (string) ob_get_clean();
+admin_componenta('tabel', [
+    'id' => 'comenzi-tabel',
+    'clasa' => 'orders-table',
+    'legenda' => 'Comenzile',
+    'dens' => true,
+    'antet_fix' => true,
+    'sortare' => ['cheie' => $sortBy, 'dir' => $sortDir],
+    'selectie' => ['nume' => 'order_ids[]', 'formular' => 'comenzi-masa-formular', 'eticheta' => 'Alege toate comenzile de pe pagină'],
+    'coloane' => [
+        ['eticheta' => 'Client / ID', 'clasa' => 'orders-col-client'],
+        ['eticheta' => 'Data', 'cheie' => 'date'],
+        ['eticheta' => 'Sumă', 'cheie' => 'total'],
+        ['eticheta' => 'Status · plată', 'cheie' => 'status'],
+        ['eticheta' => 'Livrare', 'clasa' => 'orders-col-delivery'],
+        ['eticheta' => 'Observații interne', 'clasa' => 'orders-col-notes'],
+        ['eticheta' => 'Acțiuni', 'clasa' => 'orders-col-actions'],
+    ],
+    'randuri' => $randuriComenzi,
+    'gol' => $golComenzi,
+]);
+?>
+<?php if ($orders !== []): ?>
+    <p class="adm-acasa__nota"><?= count($orders) ?> comenzi<?= count($orders) >= 400 ? ' (cele mai noi 400; restrânge filtrele pentru restul)' : '' ?>.</p>
+<?php endif; ?>
 </section>
 
-<div class="modal-overlay" id="order-modal">
-    <div class="modal-card order-modal-card">
-        <div class="modal-head">
-            <h3 id="order-modal-title">Detalii comandă</h3>
-            <button type="button" class="icon-btn" id="close-order-modal">✕</button>
-        </div>
-        <div id="order-modal-content"></div>
-    </div>
-</div>
+<?php
+// Panoul comenzii (WP-33): sertarul din dreapta (componenta panou-lateral). Conținutul e cel al vechii ferestre a comenzii,
+// construit de același script din datele rândului (data-order), în #order-modal-content.
+admin_componenta('panou-lateral', ['mod' => 'sertar', 'id' => 'comanda-panou', 'titlu' => 'Detalii comandă',
+    'continut' => '<div id="order-modal-content"></div>']);
+?>
 
 <div id="client-promo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;padding:20px;">
     <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:0 24px 64px rgba(0,0,0,.3);">
@@ -817,148 +834,13 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
     return ['id' => (int) ($p['id'] ?? 0), 'name' => (string) ($p['name'] ?? ''), 'price' => ($sale > 0 && $sale < $price) ? round($sale, 2) : round($price, 2)];
 }, is_array($orderProducts ?? null) ? $orderProducts : []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 (() => {
-    const bulkForm = document.getElementById('orders-bulk-form');
-    const selectAll = document.getElementById('orders-select-all');
-    const rowCheckboxes = Array.from(document.querySelectorAll('.order-bulk-checkbox'));
-    const bulkAction = document.getElementById('orders-bulk-action');
-    const bulkStatus = document.getElementById('orders-bulk-status');
-    const bulkIds = document.getElementById('orders-bulk-ids');
-    const selectableRowCheckboxes = () => rowCheckboxes.filter((input) => input instanceof HTMLInputElement && !input.disabled);
+    // WP-33: vechea bară a acțiunilor în masă (select + „Aplică pe selecție”) a devenit componenta bara-actiuni-masa; bifele,
+    // confirmările și scurtăturile ei sunt în public/assets/js/admin/comenzi.js (aceleași câmpuri, aceeași adresă).
 
-    const syncSelectAllState = () => {
-        if (!(selectAll instanceof HTMLInputElement)) {
-            return;
-        }
-        const selectable = selectableRowCheckboxes();
-        if (selectable.length === 0) {
-            selectAll.checked = false;
-            selectAll.indeterminate = false;
-            selectAll.disabled = true;
-            return;
-        }
-        selectAll.disabled = false;
-        const checkedCount = selectable.filter((input) => input.checked).length;
-        selectAll.checked = checkedCount > 0 && checkedCount === selectable.length;
-        selectAll.indeterminate = checkedCount > 0 && checkedCount < selectable.length;
-    };
-
-    selectAll?.addEventListener('change', () => {
-        selectableRowCheckboxes().forEach((input) => {
-            input.checked = selectAll.checked;
-        });
-        syncSelectAllState();
-    });
-
-    rowCheckboxes.forEach((input) => {
-        input.addEventListener('change', syncSelectAllState);
-    });
-
-    const syncBulkStatusVisibility = () => {
-        if (!(bulkAction instanceof HTMLSelectElement) || !(bulkStatus instanceof HTMLSelectElement)) {
-            return;
-        }
-        const isStatusAction = bulkAction.value === 'status';
-        bulkStatus.style.display = isStatusAction ? '' : 'none';
-        bulkStatus.required = isStatusAction;
-        if (!isStatusAction) {
-            bulkStatus.value = '';
-        }
-        const bulkShipping = document.getElementById('orders-bulk-shipping');
-        if (bulkShipping instanceof HTMLInputElement) {
-            const isShippingAction = bulkAction.value === 'shipping';
-            bulkShipping.style.display = isShippingAction ? '' : 'none';
-            bulkShipping.required = isShippingAction;
-            if (!isShippingAction) {
-                bulkShipping.value = '';
-            }
-        }
-    };
-
-    bulkAction?.addEventListener('change', syncBulkStatusVisibility);
-
-    bulkForm?.addEventListener('submit', (event) => {
-        if (!(bulkAction instanceof HTMLSelectElement)) {
-            return;
-        }
-        const selectedIds = selectableRowCheckboxes().filter((input) => input.checked);
-        if (selectedIds.length === 0) {
-            event.preventDefault();
-            window.alert('Selectează cel puțin o comandă.');
-            return;
-        }
-        if (!bulkAction.value) {
-            event.preventDefault();
-            window.alert('Alege o acțiune în masă.');
-            return;
-        }
-        if (bulkAction.value === 'status' && bulkStatus instanceof HTMLSelectElement && !bulkStatus.value) {
-            event.preventDefault();
-            window.alert('Selectează statusul pentru actualizarea în masă.');
-            return;
-        }
-        if (bulkAction.value === 'delete' && !window.confirm('Muți comenzile selectate în coș?')) {
-            event.preventDefault();
-            return;
-        }
-        if (bulkAction.value === 'awb' && !window.confirm('Generezi AWB FAN pentru comenzile selectate?')) {
-            event.preventDefault();
-            return;
-        }
-        if (bulkAction.value === 'erp_retry' && !window.confirm(
-            'Retrimiți ' + selectedIds.length + ' comenzi în ERP?\n\n'
-            + 'Cele pe care ERP-ul le are deja se actualizează cu ce e acum pe site, nu se dublează.\n'
-            + 'Durează câteva secunde per comandă — nu închide pagina.'
-        )) {
-            event.preventDefault();
-            return;
-        }
-        if (bulkAction.value === 'shipping') {
-            const bulkShipping = document.getElementById('orders-bulk-shipping');
-            const valoare = bulkShipping instanceof HTMLInputElement ? bulkShipping.value.trim() : '';
-            if (valoare === '' || !Number.isFinite(Number(valoare)) || Number(valoare) < 0) {
-                event.preventDefault();
-                window.alert('Scrie valoarea transportului (ex. 30).');
-                return;
-            }
-            // Scrie peste transportul tuturor comenzilor bifate, deci merită o
-            // oprire: o selecție greșită s-ar vedea abia pe facturi.
-            if (!window.confirm('Pui transportul pe ' + Number(valoare).toFixed(2) + ' lei la '
-                + selectedIds.length + ' comenzi? Totalul fiecărei comenzi se reface.')) {
-                event.preventDefault();
-                return;
-            }
-        }
-
-        if (bulkIds instanceof HTMLElement) {
-            bulkIds.innerHTML = '';
-            selectedIds.forEach((input) => {
-                if (!(input instanceof HTMLInputElement)) {
-                    return;
-                }
-                const orderId = String(input.dataset.orderId || '').trim();
-                if (!orderId) {
-                    return;
-                }
-                const hidden = document.createElement('input');
-                hidden.type = 'hidden';
-                hidden.name = 'order_ids[]';
-                hidden.value = orderId;
-                bulkIds.appendChild(hidden);
-            });
-        }
-
-        if (!(bulkIds instanceof HTMLElement) || bulkIds.querySelectorAll('input[name="order_ids[]"]').length === 0) {
-            event.preventDefault();
-            window.alert('Selectează cel puțin o comandă validă.');
-        }
-    });
-
-    syncSelectAllState();
-    syncBulkStatusVisibility();
-
-    const modal = document.getElementById('order-modal');
-    const closeBtn = document.getElementById('close-order-modal');
-    const title = document.getElementById('order-modal-title');
+    // WP-33: fereastra comenzii e acum panoul lateral (sertarul #comanda-panou, componenta panou-lateral): îl deschide
+    // public/assets/js/admin/panou.js, la clicul pe ochi (data-adm-panou), după ce scriptul de mai jos îi pune conținutul.
+    const modal = document.getElementById('comanda-panou');
+    const title = document.getElementById('comanda-panou-titlu');
     const content = document.getElementById('order-modal-content');
     // ── Emitere AWB: confirmarea, cu alegerea trimiterii emailului ──────
     // Înlocuiește un `confirm()` simplu, ca să încapă și bifa. Emailul e bifat
@@ -1659,15 +1541,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                     if (!deschis) deseneazaHartaComanda(order.id);
                 });
             }
-            modal.classList.add('open');
         });
-    });
-
-    closeBtn?.addEventListener('click', () => modal?.classList.remove('open'));
-    modal?.addEventListener('click', (event) => {
-        if (event.target === modal) {
-            modal.classList.remove('open');
-        }
     });
 })();
 
@@ -2356,3 +2230,4 @@ function saveOrderPromo(orderId){
     });
 })();
 </script>
+<script src="/assets/js/admin/comenzi.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/comenzi.js')) ?: 1) ?>" defer></script>

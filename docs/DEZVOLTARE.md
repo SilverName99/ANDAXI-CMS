@@ -521,6 +521,24 @@ aspectul, nu ce trimite adminul.
   Setări): modulele pornite sau care se opresc, din `Plugins::stari()`, cu data din `Plugins::seOpresteDin()`. Testul:
   `tools/dev/test-admin-faza-d.php` (în `smoke.sh`), partea A: `EXPLAIN` pe o bază separată cu 4.000 de comenzi și cifrele
   numărate direct.
+- **Lista comenzilor (WP-33).** `views/admin/orders.php` pe componente: tab-urile de status cu numărul lor (aceleași filtre, fără
+  status; indexul `idx_orders_stare`), tab-urile precomenzilor, bara de filtre (perioada, plata — „Card” doar cu o plată cu
+  cardul vizibilă —, livrarea doar cu `livrare_fan`, ERP-ul doar cu `erp`, restul de încasat), tabelul (sortarea din antet,
+  bifele legate de formularul barei; celulele rândurilor sunt cele de dinainte), bara acțiunilor în masă și panoul comenzii
+  (sertarul `#comanda-panou`, cu conținutul vechii ferestre, făcut de același script). Bara trimite **aceeași cerere** ca vechea
+  listă: `POST /admin/orders/bulk` cu `_csrf`, `back_url`, `bulk_action` (awb, status, erp_retry, shipping, delete),
+  `bulk_status`, `bulk_shipping_value`, `order_ids[]`; „Confirmă” = `bulk_action=status` + `bulk_status=processing`; „Tipărește”
+  face foaia în browser, din datele rândurilor. `AdminController::ordersBulkAction` doar adună în plus rezultatul pe comandă
+  (`App\Support\RezultatMasaComenzi`, în sesiune, arătat o dată deasupra listei). Filtrele noi `livrare` și `erp` (lista,
+  exportul, adresa de întoarcere) sunt în `ordersFiltreNoiSql`. Tastele (`public/assets/js/admin/comenzi.js`): A (doar cu FAN),
+  C, P, „/”, Esc; lista de la „?” are partea paginii (`$adminScurtaturiPagina`, pusă de vedere, citită de `layout.php`).
+  Dovezile: cazurile de salvare „comenzi în masă (bara nouă, WP-33)” din `compara-cu-baza.php` (același efect ca la codul
+  Bioscem: comenzi, stoc, BT, puncte, emailuri, jurnal, Location) și partea B din `tools/dev/test-admin-faza-d.php`
+  (`tools/dev/plimbare-comenzi.cjs`: fiecare comandă demo în panou, bucățile FAN/BT/link/promo, formularele rândurilor, tastele,
+  fără FAN și ERP nimic din ale lor).
+- **Componentele, extinse în WP-33.** `tabel`: `clasa` (pe tabel și pe coloană), `bifa_atribute` pe rând (de exemplu `disabled`;
+  bifele dezactivate nu se aleg); `bara-actiuni-masa`: `formular_actiune`, `campuri` (HTML înaintea butoanelor), `date` (atribute
+  `data-*`) și `buton` (fără trimitere) pe acțiune; `bara-filtre`: tipul `bifa`.
 - **Regulile de admin din `app.css` (G-M3).** `app.css` rămâne încărcat în admin: paginile încă nerefăcute își au regulile
   acolo. O regulă de admin iese din `app.css` doar când (1) G-vizual arată aceleași stiluri calculate pe toate paginile
   publice ale setului, ca vizitator și ca client, și (2) niciuna dintre clasele ei nu apare în setul V-CSS al celor patru

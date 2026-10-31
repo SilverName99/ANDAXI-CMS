@@ -5528,6 +5528,7 @@ final class AdminController
             'card' => 'Card',
             'bank_transfer' => 'OP',
         ];
+        $ordersStatusCounts = [];
 
         if ($db instanceof PDO) {
             $this->ensureOptionalSchema($db);
@@ -5631,6 +5632,24 @@ final class AdminController
             if ($filters['to_date'] !== '') {
                 $where[] = 'created_at <= :to_date';
                 $params['to_date'] = $filters['to_date'] . ' 23:59:59';
+            }
+            // WP-33: filtrele noi (livrarea, ERP-ul).
+            [$whereNoi, $paramsNoi] = $this->ordersFiltreNoiSql($db, $filters);
+            $where = array_merge($where, $whereNoi);
+            $params += $paramsNoi;
+
+            // WP-33: numărul din fiecare tab de status: aceleași filtre, fără status (indexul idx_orders_stare, magazin/0029).
+            try {
+                $whereFaraStare = array_values(array_filter($where, static fn (string $w): bool => $w !== 'status = :status'));
+                $paramsFaraStare = $params;
+                unset($paramsFaraStare['status']);
+                $stmtStari = $db->prepare('SELECT status, COUNT(*) AS n FROM orders WHERE ' . implode(' AND ', $whereFaraStare) . ' GROUP BY status');
+                $stmtStari->execute($paramsFaraStare);
+                foreach ($stmtStari->fetchAll() ?: [] as $randStare) {
+                    $ordersStatusCounts[(string) $randStare['status']] = (int) $randStare['n'];
+                }
+            } catch (Throwable) {
+                // Numerele tab-urilor sunt informative; lista se afișează oricum.
             }
 
             $orderBySql = $this->ordersSortSql($filters['sort_by'], $filters['sort_dir']);
@@ -5879,6 +5898,9 @@ final class AdminController
             'settings' => $setariComenzi,
             'erpTinuteDePrag' => $erpTinuteDePrag,
             'erpModulBanner' => \App\Support\Plugins::vizibil('erp') ? \App\Support\ErpModul::banner($db, $setariComenzi) : '',
+            // WP-33: numerele tab-urilor de status și rezultatul pe comandă al ultimei acțiuni în masă.
+            'ordersStatusCounts' => $ordersStatusCounts,
+            'rezultatMasa' => \App\Support\RezultatMasaComenzi::ia(),
         ], 'admin/layout');
     }
 
@@ -7933,6 +7955,7 @@ final class AdminController
             $stmt = $db->prepare('UPDATE orders SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL');
             $deleted = 0;
             $sterse = [];
+            $rezultatePeComanda = [];
             foreach ($orderIds as $orderId) {
                 $rezumat = $this->rezumatComandaPentruJurnal($db, $orderId);
                 $stmt->execute(['id' => $orderId]);
@@ -7941,7 +7964,11 @@ final class AdminController
                     $sterse[] = ($rezumat['comanda'] ?? (string) $orderId)
                         . (isset($rezumat['client']) ? ' (' . $rezumat['client'] . ')' : '');
                 }
+                $rezultatePeComanda[$orderId] = $stmt->rowCount() > 0
+                    ? ['ok' => true, 'mesaj' => 'Mutată în coș.'] : ['ok' => false, 'mesaj' => 'Nu s-a putut muta în coș (ștearsă deja?).'];
             }
+            // WP-33: rezultatul pe comandă, doar pentru afișare (lista de după redirecționare).
+            \App\Support\RezultatMasaComenzi::pune('delete', $rezultatePeComanda);
             if ($deleted > 0) {
                 AdminActivityLog::log($db, 'comenzi_sterse_in_masa', [
                     'numar' => (string) $deleted,
@@ -7962,8 +7989,12 @@ final class AdminController
             // actualizează, nu se dublează.
             $trimise = 0;
             $esuate = [];
+            $rezultatePeComanda = [];
             foreach ($orderIds as $orderId) {
                 $rezultat = \App\Support\ErpSync::push($db, $orderId, true);
+                $rezultatePeComanda[$orderId] = ['ok' => (bool) ($rezultat['ok'] ?? false),
+                    'mesaj' => trim((string) ($rezultat['message'] ?? '')) !== '' ? (string) $rezultat['message']
+                        : (($rezultat['ok'] ?? false) ? 'Trimisă în ERP.' : 'Retrimiterea a eșuat.')];
                 if ($rezultat['ok'] ?? false) {
                     $trimise++;
                     continue;
@@ -7973,6 +8004,7 @@ final class AdminController
                     . ': ' . trim((string) ($rezultat['message'] ?? 'retrimiterea a eșuat'));
             }
 
+            \App\Support\RezultatMasaComenzi::pune('erp_retry', $rezultatePeComanda);
             AdminActivityLog::log($db, 'comenzi_retrimise_in_erp', [
                 'numar' => (string) $trimise,
                 'esuate' => $esuate,
@@ -8005,14 +8037,17 @@ final class AdminController
             }
             $updated = 0;
             $failed = 0;
+            $rezultatePeComanda = [];
             foreach ($orderIds as $orderId) {
                 $result = $this->updateOrderStatusInternal($db, $orderId, $status);
+                $rezultatePeComanda[$orderId] = ['ok' => ($result['ok'] ?? false) === true, 'mesaj' => (string) ($result['message'] ?? '')];
                 if (($result['ok'] ?? false) === true) {
                     $updated++;
                 } else {
                     $failed++;
                 }
             }
+            \App\Support\RezultatMasaComenzi::pune('status', $rezultatePeComanda);
             $message = 'Status actualizat pentru ' . $updated . ' comenzi.';
             if ($failed > 0) {
                 $message .= ' Eșecuri: ' . $failed . '.';
@@ -8026,8 +8061,10 @@ final class AdminController
             $generated = 0;
             $failed = 0;
             $errors = [];
+            $rezultatePeComanda = [];
             foreach ($orderIds as $orderId) {
                 $result = $this->createFanAwbInternal($db, $orderId);
+                $rezultatePeComanda[$orderId] = ['ok' => ($result['ok'] ?? false) === true, 'mesaj' => (string) ($result['message'] ?? '')];
                 if (($result['ok'] ?? false) === true) {
                     $generated++;
                     continue;
@@ -8038,6 +8075,7 @@ final class AdminController
                     $errors[] = '#' . $orderId . ': ' . $message;
                 }
             }
+            \App\Support\RezultatMasaComenzi::pune('awb', $rezultatePeComanda);
             if ($generated > 0) {
                 $message = 'AWB generate: ' . $generated . '.';
                 if ($failed > 0) {
@@ -8078,8 +8116,13 @@ final class AdminController
             $actualizate = 0;
             $erori = [];
             $atentionari = [];
+            $rezultatePeComanda = [];
             foreach ($orderIds as $orderId) {
                 $rezultat = $this->seteazaTransportComanda($db, $orderId, $transport, $settings);
+                $rezultatePeComanda[$orderId] = !empty($rezultat['ok'])
+                    ? ['ok' => true, 'mesaj' => trim('Transport ' . number_format($transport, 2) . ' lei. '
+                        . implode(' ', array_map('strval', (array) ($rezultat['warnings'] ?? []))) . ' ' . (string) ($rezultat['erp_note'] ?? ''))]
+                    : ['ok' => false, 'mesaj' => (string) ($rezultat['error'] ?? 'eroare')];
                 if (!empty($rezultat['ok'])) {
                     $actualizate++;
                     foreach ((array) ($rezultat['warnings'] ?? []) as $avertisment) {
@@ -8093,6 +8136,7 @@ final class AdminController
                 }
             }
 
+            \App\Support\RezultatMasaComenzi::pune('shipping', $rezultatePeComanda);
             if ($actualizate > 0) {
                 $mesaj = 'Transport pus pe ' . number_format($transport, 2) . ' lei la '
                     . $actualizate . ' ' . ($actualizate === 1 ? 'comandă' : 'comenzi') . '.';
@@ -8164,6 +8208,10 @@ final class AdminController
             $where[] = 'created_at <= :to_date';
             $params['to_date'] = $filters['to_date'] . ' 23:59:59';
         }
+        // WP-33: aceleași filtre noi ca lista (livrarea, ERP-ul).
+        [$whereNoi, $paramsNoi] = $this->ordersFiltreNoiSql($db, $filters);
+        $where = array_merge($where, $whereNoi);
+        $params += $paramsNoi;
 
         $orderBySql = $this->ordersSortSql($filters['sort_by'], $filters['sort_dir']);
         $stmt = $db->prepare(
@@ -8418,9 +8466,21 @@ final class AdminController
             $precomanda = '';
         }
 
+        // WP-33: filtrele noi ale listei (bara de filtre „B — Compact”), fiecare doar cu pluginul ei.
+        $livrare = trim(strtolower((string) ($input['livrare'] ?? '')));
+        if (!\App\Support\Plugins::vizibil('livrare_fan') || !in_array($livrare, ['fara_awb', 'cu_awb', 'fanbox'], true)) {
+            $livrare = '';
+        }
+        $erp = trim(strtolower((string) ($input['erp'] ?? '')));
+        if (!\App\Support\Plugins::vizibil('erp') || !in_array($erp, ['trimise', 'asteptare', 'esuate'], true)) {
+            $erp = '';
+        }
+
         return [
             'q' => $q,
             'precomanda' => $precomanda,
+            'livrare' => $livrare,
+            'erp' => $erp,
             'status' => $status,
             'payment_method' => strtolower($paymentMethod),
             'payment_status' => strtolower($paymentStatus),
@@ -8431,6 +8491,38 @@ final class AdminController
             'sort_by' => $sortBy,
             'sort_dir' => $sortDir,
         ];
+    }
+
+    /**
+     * Condițiile filtrelor noi ale listei de comenzi (WP-33): livrarea (fără AWB, cu AWB, FANbox) și ERP-ul (trimise, în
+     * așteptare, eșuate). „Eșuate” e aceeași regulă ca rândul din „De făcut” de pe Acasă (AcasaAdmin::deFacutErp): comenzi
+     * neanulate a căror trimitere a eșuat și care pot pleca după pragul erp_trimite_din (WP-12 E1).
+     *
+     * @return array{0: list<string>, 1: array<string, string>}
+     */
+    private function ordersFiltreNoiSql(PDO $db, array $filters): array
+    {
+        $where = [];
+        $params = [];
+        $livrare = (string) ($filters['livrare'] ?? '');
+        if ($livrare === 'fara_awb') {
+            $where[] = "COALESCE(fan_awb, '') = ''";
+        } elseif ($livrare === 'cu_awb') {
+            $where[] = "COALESCE(fan_awb, '') <> ''";
+        } elseif ($livrare === 'fanbox') {
+            $where[] = "COALESCE(fan_locker_id, '') <> ''";
+        }
+        $erp = (string) ($filters['erp'] ?? '');
+        if ($erp === 'trimise') {
+            $where[] = "erp_status = 'sent'";
+        } elseif ($erp === 'asteptare') {
+            $where[] = "erp_status = 'pending'";
+        } elseif ($erp === 'esuate') {
+            [$sqlPrag, $parametriPrag] = \App\Support\ErpSync::filtruPrag(\App\Support\ErpSync::pragTrimitere($db));
+            $where[] = "erp_status = 'failed' AND status NOT IN ('cancelled', 'refunded', 'failed', 'returned')" . $sqlPrag;
+            $params += $parametriPrag;
+        }
+        return [$where, $params];
     }
 
     private function ordersSortSql(string $sortBy, string $sortDir): string
@@ -8482,6 +8574,13 @@ final class AdminController
         $toDate = trim((string) ($filters['to_date'] ?? ''));
         if ($this->isValidIsoDate($toDate)) {
             $query['date_to'] = $toDate;
+        }
+
+        // WP-33: filtrele noi (livrarea, ERP-ul), ca după o acțiune în masă lista să rămână aceeași.
+        foreach (['livrare', 'erp'] as $filtruNou) {
+            if (trim((string) ($filters[$filtruNou] ?? '')) !== '') {
+                $query[$filtruNou] = (string) $filters[$filtruNou];
+            }
         }
 
         $sortBy = trim(strtolower((string) ($filters['sort_by'] ?? 'date')));

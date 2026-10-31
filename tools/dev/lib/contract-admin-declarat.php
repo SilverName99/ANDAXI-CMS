@@ -78,4 +78,45 @@ return [
         'acasa-celula-client' => ['ce' => 'adaugat', 'rand' => "^celula (\\p{Lu}[\\p{L}'. -]*( \\d+)?|[\\w.+-]+@[\\w.-]+)( Client agresiv)?$", 'cale' => '^/admin$',
             'rol' => 'adm', 'motiv' => 'coloana „Client” a comenzilor recente (numele sau, fără nume, adresa de email)'],
     ],
+
+    // WP-33: lista comenzilor pe componente: tab-urile de status, bara de filtre (în adresă, cu livrarea și ERP-ul), sortarea
+    // din antetul tabelului, bara acțiunilor în masă (aceeași adresă, POST /admin/orders/bulk, aceleași câmpuri; acțiunea e
+    // acum butonul apăsat, nu o listă), bifele rândurilor legate de formularul barei și panoul comenzii (sertarul).
+    'WP-33' => [
+        'masa-bife' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/orders/bulk input:checkbox order_ids\[\] = \d+$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'bifa fiecărui rând trimite id-ul comenzii direct în formularul barei (order_ids[], atributul form=); înainte un script '
+                . 'copia bifele în câmpuri ascunse cu același nume, la trimitere'],
+        'masa-actiune-lista' => ['ce' => 'scos', 'rand' => '^(camp POST /admin/orders/bulk select bulk_action|optiuni POST /admin/orders/bulk bulk_action: \|delete\|status\|awb\|shipping\|erp_retry)$',
+            'cale' => '^/admin/orders(\?|$)', 'motiv' => 'lista „Acțiune în masă” + „Aplică pe selecție” devine câte un buton pe acțiune (rândul următor)'],
+        'masa-butoane' => ['ce' => 'adaugat', 'rand' => '^buton POST /admin/orders/bulk bulk_action = (awb|status|erp_retry|shipping|delete) -> POST /admin/orders/bulk$',
+            'cale' => '^/admin/orders(\?|$)', 'motiv' => 'butoanele barei acțiunilor în masă: aceleași valori ale lui bulk_action, aceeași adresă; '
+                . '„Confirmă” și „Schimbă statusul” trimit amândouă bulk_action=status (Confirmă cu statusul „În procesare”)'],
+        'masa-date' => ['ce' => 'adaugat', 'cale' => '^/admin/orders(\?|$)',
+            'rand' => '^data (data-tasta-comenzi = [acp]|data-bulk-status = processing|data-adm-masa-tabel = comenzi-tabel|data-adm-confirmare = .+)$',
+            'motiv' => 'bara acțiunilor în masă: scurtăturile A/C/P, statusul pus de „Confirmă”, tabelul ei, întrebările dinaintea trimiterii '
+                . '(aceleași texte ca vechile confirmări)'],
+        'filtre-camp-cautare' => ['ce' => 'adaugat', 'rand' => '^camp GET /admin/orders input:search q$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'căutarea din bara de filtre e un câmp de căutare (același nume q)'],
+        'filtre-camp-text' => ['ce' => 'scos', 'rand' => '^camp GET /admin/orders input:text q$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'același câmp q, acum de tip search'],
+        'filtre-status-sort' => ['ce' => 'scos', 'cale' => '^/admin/orders(\?|$)',
+            'rand' => '^(camp GET /admin/orders select (status|sort)|optiuni GET /admin/orders status: \|pending\|pending_payment\|processing\|completed\|cancelled\|refunded\|failed\|returned'
+                . '|optiuni GET /admin/orders sort: date\|status\|total)$',
+            'motiv' => 'statusul se alege din tab-uri, sortarea din antetul coloanelor (aceiași parametri status, sort, dir în adresă)'],
+        'filtre-noi' => ['ce' => 'adaugat', 'cale' => '^/admin/orders(\?|$)',
+            'rand' => '^(camp GET /admin/orders select (livrare|erp)|optiuni GET /admin/orders livrare: \|fara_awb\|cu_awb\|fanbox|optiuni GET /admin/orders erp: \|trimise\|asteptare\|esuate)$',
+            'motiv' => 'filtrele noi ale machetei: livrarea (doar cu livrarea FAN) și ERP-ul (doar cu ERP); citite de lista și de export'],
+        'filtre-date' => ['ce' => 'adaugat', 'rand' => '^data (data-adm-tasta = /|data-adm-filtre-automat = )$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'bara de filtre: „/” mută focusul în căutare, listele se aplică imediat'],
+        'tab-uri-stare' => ['ce' => 'adaugat', 'rand' => '^link /admin/orders\?(search=\d+(&status=[a-z_]+)?|status=[a-z_]+)$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'tab-urile de status (Toate, Noi, În procesare…), cu restul filtrelor păstrate'],
+        'sortare-antet' => ['ce' => 'adaugat', 'rand' => '^link \?(search=\d+&)?sort=(date|total|status)&dir=(asc|desc)$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'sortarea din antetul coloanelor Data, Sumă, Status (componenta tabel)'],
+        'sortare-veche' => ['ce' => 'scos', 'rand' => '^link /admin/orders\?(search=\d+&)?dir=(asc|desc)$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'butonul ↕️ al direcției sortării, înlocuit de antetul coloanelor'],
+        'resetare' => ['ce' => 'scos', 'rand' => '^link /admin/orders$', 'cale' => '^/admin/orders\?search=',
+            'motiv' => '„Reset” apare doar cu un filtru ales (componenta bara-filtre); pe lista căutată, tab-ul „Toate” păstrează căutarea'],
+        'panou-comanda' => ['ce' => 'adaugat', 'rand' => '^data data-adm-panou = comanda-panou$', 'cale' => '^/admin/orders(\?|$)',
+            'motiv' => 'ochiul fiecărui rând deschide comanda în panoul din dreapta (sertarul), cu același conținut ca vechea fereastră'],
+    ],
 ];

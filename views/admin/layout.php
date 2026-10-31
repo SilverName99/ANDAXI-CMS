@@ -247,7 +247,16 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                 <div><dt><kbd>Esc</kbd></dt><dd>Închide fereastra, panoul sau meniul deschis</dd></div>
                 <div><dt><kbd>Tab</kbd></dt><dd>Treci la următorul buton sau câmp (cel ales are un contur colorat)</dd></div>
             </dl>
-            <p class="ax-dialog-nota">Căutarea în tot adminul (<kbd>Ctrl</kbd> <kbd>K</kbd>) și scurtăturile paginilor de comenzi vin odată cu paginile refăcute.</p>
+<?php // Scurtăturile paginii deschise (WP-33: lista comenzilor), puse de vederea ei în $adminScurtaturiPagina: [tasta, ce face]. ?>
+<?php if (is_array($adminScurtaturiPagina ?? null) && $adminScurtaturiPagina !== []): ?>
+            <h3 class="ax-taste-titlu">Pe pagina aceasta</h3>
+            <dl class="ax-taste-lista" id="ax-taste-pagina">
+<?php foreach ($adminScurtaturiPagina as [$adminTasta, $adminFapta]): ?>
+                <div><dt><kbd><?= $e((string) $adminTasta) ?></kbd></dt><dd><?= $e((string) $adminFapta) ?></dd></div>
+<?php endforeach; ?>
+            </dl>
+<?php endif; ?>
+            <p class="ax-dialog-nota">Căutarea în tot adminul (<kbd>Ctrl</kbd> <kbd>K</kbd>) vine odată cu ultimele pagini refăcute.</p>
         </dialog>
 <?php // Componentele (WP-31) întâi: panoul deschis își prinde Esc-ul înaintea cadrului. ?>
 <?php foreach (['panou', 'componente', 'tabel', 'filtre', 'cadru'] as $adminScript): ?>

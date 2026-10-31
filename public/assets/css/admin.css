@@ -690,3 +690,44 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .adm-abonament__descriere { margin: 0; font-size: var(--ax-text-mic); color: var(--ax-text-3); line-height: 1.55; }
 @media (max-width: 1100px) { .adm-acasa__lateral { order: -1; } }
 @media (max-width: 600px) { .adm-grafic { height: 170px; } }
+
+/* Lista comenzilor (WP-33; macheta B-Comenzi). Celulele rândurilor sunt cele de dinainte (clasele lor din app.css). */
+.adm-comenzi .adm-antet__subtitlu { max-width: none; }
+.adm-comenzi__nota-tab { margin: -4px 0 10px; color: var(--ax-text-3); font-size: var(--ax-text-mic); }
+.adm-comenzi #comenzi-precomenzi { margin-top: -4px; }
+.adm-comenzi .adm-filtre__bifa { gap: 8px; min-height: var(--ax-tinta); cursor: pointer; }
+.adm-comenzi .adm-filtre__bifa input { width: 18px; height: 18px; }
+.adm-comenzi__tasta-nota { margin: 0 0 8px; padding: 6px 12px; border-radius: var(--ax-raza); background: var(--ax-info-fundal); color: #1e3a8a; font-size: var(--ax-text-mic); }
+.adm-comenzi__rezultate { list-style: none; margin: -6px 0 12px; padding: 8px 14px; max-height: 220px; overflow: auto; background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: var(--ax-raza); font-size: var(--ax-text-mic); }
+.adm-comenzi__rezultate li { padding: 3px 0; }
+.adm-comenzi__rezultate li.este-ok { color: var(--ax-ok); }
+.adm-comenzi__rezultate li.este-eroare { color: var(--ax-eroare); }
+.adm-comenzi__rezultate .adm-mono { color: var(--ax-text); font-weight: 600; margin-right: 4px; }
+.adm-masa__camp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ax-text-mai-mic); color: #e5e7eb; }
+.adm-masa__camp select, .adm-masa__camp input {
+    height: 36px; padding: 0 8px; border: 1px solid #4b5563; border-radius: var(--ax-raza); background: var(--ax-bara-2); color: #f9fafb; font-size: var(--ax-text-mic);
+}
+.adm-masa__camp input { width: 96px; }
+.ax-continut .adm-comenzi .orders-table { font-size: 13px; }
+.ax-continut .adm-comenzi .orders-table thead th { padding: 0 10px; }
+.ax-continut .adm-comenzi .orders-table tbody td { padding: 6px 10px; height: auto; vertical-align: top; border-bottom: 1px solid #f1f5f9; }
+.ax-continut .adm-comenzi .orders-table tbody td.adm-tabel__bifa { vertical-align: middle; }
+.adm-comenzi .orders-table .status-pill { font-size: 11.5px; }
+.adm-comenzi .orders-table tbody tr.are-rezultat-ok td:first-child { box-shadow: inset 3px 0 0 var(--ax-ok); }
+.adm-comenzi .orders-table tbody tr.are-rezultat-eroare td:first-child { box-shadow: inset 3px 0 0 var(--ax-eroare); }
+.adm-comenzi .orders-col-actions { min-width: 236px; }
+.adm-comenzi .order-action-btn { width: 36px; height: 36px; }
+#comanda-panou .adm-panou--sertar { width: min(880px, 100vw); }
+#comanda-panou .adm-sertar__corp { padding: 14px 18px; }
+@media (max-width: 900px) {
+    .adm-comenzi .adm-tabel__cadru:has(.adm-tabel--antet-fix) { overflow-x: auto; }
+    .adm-comenzi .adm-tabel--antet-fix thead th { position: static; }
+    .adm-masa__camp { flex: 1 1 140px; }
+}
+
+/* Lista scurtăturilor: partea paginii deschise. */
+.ax-taste-titlu { margin: 14px 0 6px; font-size: var(--ax-text-mic); font-weight: 600; color: var(--ax-text-3); }
+.ax-continut .adm-comenzi .orders-table thead th { vertical-align: middle; }
+.adm-comenzi .orders-table tbody td:nth-child(3), .adm-comenzi .orders-table tbody td:nth-child(4) { white-space: nowrap; }
+.adm-comenzi .orders-table tbody td:nth-child(4) small { white-space: normal; max-width: 140px; }
+.adm-comenzi .order-actions { opacity: 1; pointer-events: auto; transform: none; flex-wrap: wrap; }

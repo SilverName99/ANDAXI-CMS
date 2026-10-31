@@ -7,7 +7,8 @@
   'use strict';
 
   function bare() { return Array.prototype.slice.call(document.querySelectorAll('.adm-masa[data-adm-masa-tabel]')); }
-  function bifeRanduri(tabel) { return Array.prototype.slice.call(tabel.querySelectorAll('input.adm-tabel__rand')); }
+  // Bifele dezactivate (de exemplu o comandă anulată, WP-33) nu se aleg și nu se numără.
+  function bifeRanduri(tabel) { return Array.prototype.slice.call(tabel.querySelectorAll('input.adm-tabel__rand:not(:disabled)')); }
 
   function actualizeaza(tabel) {
     var bife = bifeRanduri(tabel);

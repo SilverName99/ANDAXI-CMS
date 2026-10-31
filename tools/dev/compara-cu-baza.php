@@ -4165,6 +4165,86 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         },
     ];
 
+    // WP-33 (faza D): acțiunile în masă din lista comenzilor refăcută. Bara nouă trimite aceeași cerere ca vechea listă
+    // „Acțiune în masă” (POST /admin/orders/bulk: _csrf, back_url, bulk_action, bulk_status, bulk_shipping_value, order_ids[]),
+    // iar AdminController::ordersBulkAction doar adună acum și rezultatul pe comandă, pentru afișare (RezultatMasaComenzi).
+    // Fiecare caz trimite exact câmpurile formularului nou și cere același efect ca la codul Bioscem: comenzile, produsele
+    // (stocul), plățile BT și jurnalul lor, punctele, emailurile, jurnalul adminilor și Location. Plățile, curierul și ERP-ul
+    // ajung la portul închis (GAURA_NEAGRA), pe ambele servere la fel.
+    $idMaxActivitate = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM admin_activity_log');
+    $idMaxEmailMasa = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_logs');
+    $idMaxBtLog = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM bt_ipay_log');
+    $idMaxPuncte = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM loyalty_points_transactions');
+    $comenziMasa = static function (string $unde, int $cate) use ($db): array {
+        return array_map('intval', $db->query('SELECT id FROM orders WHERE deleted_at IS NULL AND ' . $unde . ' ORDER BY id LIMIT ' . $cate)
+            ->fetchAll(PDO::FETCH_COLUMN));
+    };
+    $cazMasa = static function (string $nume, array $ids, array $campuri) use ($citeste, $idMaxActivitate, $idMaxEmailMasa, $idMaxBtLog, $idMaxPuncte, $tokenCache): array {
+        $lista = implode(', ', $ids ?: [0]);
+        return [
+            'nume' => 'comenzi în masă (bara nouă, WP-33): ' . $nume,
+            'tip' => 'regresie',
+            'din' => '739f58c',
+            'tabele' => [
+                ['tabel' => 'orders', 'unde' => 'id IN (' . $lista . ')', 'cheie' => 'id'],
+                ['tabel' => 'order_items', 'unde' => 'order_id IN (' . $lista . ')', 'cheie' => 'id'],
+                ['tabel' => 'products', 'unde' => '1 = 1', 'cheie' => 'id'],
+                // Soldul punctelor de fidelitate al clienților (o comandă finalizată acordă puncte).
+                ['tabel' => 'users', 'unde' => '1 = 1', 'cheie' => 'id'],
+                ['tabel' => 'bt_ipay_transactions', 'unde' => 'order_id IN (' . $lista . ')', 'cheie' => 'id'],
+                ['tabel' => 'bt_ipay_log', 'unde' => 'id > :b1', 'param' => ['b1' => $idMaxBtLog], 'cheie' => 'id'],
+                ['tabel' => 'loyalty_points_transactions', 'unde' => 'id > :l1', 'param' => ['l1' => $idMaxPuncte], 'cheie' => 'id'],
+                ['tabel' => 'email_logs', 'unde' => 'id > :e1', 'param' => ['e1' => $idMaxEmailMasa], 'cheie' => 'id'],
+                ['tabel' => 'admin_activity_log', 'unde' => 'id > :a1', 'param' => ['a1' => $idMaxActivitate], 'cheie' => 'id'],
+                $tokenCache,
+            ],
+            'pregateste' => static function (PDO $db): void {
+            },
+            'cereri' => [
+                ['GET', '/admin/orders', []],
+                static function (array $raspunsuri) use ($ids, $campuri): array {
+                    preg_match('/name="_csrf" value="([0-9a-f]{64})"/', (string) ($raspunsuri[0]['corp'] ?? ''), $jeton);
+                    return ['POST', '/admin/orders/bulk', array_merge(['_csrf' => (string) ($jeton[1] ?? ''), 'back_url' => '/admin/orders',
+                        'bulk_status' => '', 'bulk_shipping_value' => '', 'order_ids' => array_map('strval', $ids)], $campuri)];
+                },
+            ],
+            'stare' => static function (PDO $db) use ($citeste, $lista, $idMaxActivitate, $idMaxEmailMasa, $idMaxBtLog, $idMaxPuncte): array {
+                $fara = static fn (array $randuri, array $coloane = []): array => array_map(
+                    static fn (array $r): array => salvari_fara_coloane($r, $coloane), $randuri);
+                return [
+                    'comenzi' => $fara($citeste('SELECT * FROM orders WHERE id IN (' . $lista . ') ORDER BY id'),
+                        ['deleted_at', 'erp_last_attempt_at', 'erp_next_retry_at', 'fan_tracking_synced_at']),
+                    'sterse' => array_map('intval', array_column($citeste('SELECT id FROM orders WHERE id IN (' . $lista . ') AND deleted_at IS NOT NULL ORDER BY id'), 'id')),
+                    'stoc' => $citeste('SELECT id, stock, out_of_stock FROM products ORDER BY id'),
+                    'puncte_clienti' => $citeste('SELECT id, loyalty_points FROM users ORDER BY id'),
+                    'produse' => $fara($citeste('SELECT * FROM order_items WHERE order_id IN (' . $lista . ') ORDER BY id')),
+                    'bt' => $fara($citeste('SELECT * FROM bt_ipay_transactions WHERE order_id IN (' . $lista . ') ORDER BY id'),
+                        ['last_checked_at', 'deposit_requested_at', 'reversed_at', 'refunded_at', 'deposited_at']),
+                    'bt_jurnal' => $fara($citeste('SELECT * FROM bt_ipay_log WHERE id > ? ORDER BY id', [$idMaxBtLog]), ['id', 'duration_ms']),
+                    'puncte' => $fara($citeste('SELECT * FROM loyalty_points_transactions WHERE id > ? ORDER BY id', [$idMaxPuncte]), ['id']),
+                    'emailuri' => $fara($citeste('SELECT * FROM email_logs WHERE id > ? ORDER BY id', [$idMaxEmailMasa]), ['id', 'sent_at']),
+                    'jurnal' => $fara($citeste('SELECT admin_email, action, context_json FROM admin_activity_log WHERE id > ? ORDER BY id', [$idMaxActivitate])),
+                ];
+            },
+            'verifica' => static fn (array $stare, array $raspunsuri): array => (int) ($raspunsuri[1]['cod'] ?? 0) === 302
+                && str_ends_with((string) ($raspunsuri[1]['location'] ?? ''), '/admin/orders')
+                ? [] : ['acțiunea în masă nu a dus înapoi la listă (' . (int) ($raspunsuri[1]['cod'] ?? 0) . ' ' . (string) ($raspunsuri[1]['location'] ?? '') . ')'],
+        ];
+    };
+    $noiMasa = $comenziMasa("status = 'pending' AND payment_method = 'cod'", 2);
+    $inLucruMasa = $comenziMasa("status = 'processing' AND payment_method = 'cod' AND COALESCE(fan_awb, '') = ''", 2);
+    $deAnulat = array_merge($comenziMasa("status = 'pending' AND payment_method = 'btipay'", 1),
+        $comenziMasa("status = 'processing' AND payment_method IN ('bank_transfer', 'euplatesc')", 2));
+    $salvari[] = $cazMasa('„Confirmă” (status În procesare) pe două comenzi noi', $noiMasa, ['bulk_action' => 'status', 'bulk_status' => 'processing']);
+    $salvari[] = $cazMasa('„Schimbă statusul” → Anulată (BT, OP, card)', $deAnulat, ['bulk_action' => 'status', 'bulk_status' => 'cancelled']);
+    $salvari[] = $cazMasa('status Finalizată trimis direct (în bară nu e în listă, ca înainte)', $inLucruMasa,
+        ['bulk_action' => 'status', 'bulk_status' => 'completed']);
+    $salvari[] = $cazMasa('„Corectează transportul” la 25 lei', array_merge($noiMasa, $inLucruMasa), ['bulk_action' => 'shipping', 'bulk_shipping_value' => '25']);
+    $salvari[] = $cazMasa('„Generează AWB” (curierul nu răspunde)', $inLucruMasa, ['bulk_action' => 'awb']);
+    $salvari[] = $cazMasa('„Trimite în ERP” (ERP-ul nu răspunde)', array_merge($noiMasa, $inLucruMasa), ['bulk_action' => 'erp_retry']);
+    $salvari[] = $cazMasa('„Mută în coș”', $noiMasa, ['bulk_action' => 'delete']);
+    $salvari[] = $cazMasa('fără jetonul formularului: refuzat, nimic schimbat', $noiMasa, ['bulk_action' => 'delete', '_csrf' => 'gresit']);
+
     foreach ($salvari as $caz) {
         $regresie = ($caz['tip'] ?? 'schimbare') === 'regresie';
         $reparatie = ($caz['tip'] ?? 'schimbare') === 'reparatie';

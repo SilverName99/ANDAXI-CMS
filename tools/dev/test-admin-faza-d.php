@@ -13,6 +13,10 @@ declare(strict_types=1);
  *    fiecare tabel al ei (nicio citire a întregului tabel; indecșii magazin/0029 și catalog/0025, MIG-19), iar cifrele sunt
  *    cele numărate direct (de procesat, vânzările de azi și de săptămâna trecută, graficul, coșurile, stocul, „De făcut”).
  *    Baza se șterge la final.
+ * B. Lista comenzilor (WP-33), cu un server al testului (portul CMS_DEV_PORT + 41, licența „toate” într-un dosar al lui):
+ *    plimbarea tools/dev/plimbare-comenzi.cjs (fiecare comandă demo în panoul din dreapta, Esc și focusul, bucățile FAN, BT,
+ *    linkul de plată, promoționalele; formularele rândurilor; bara acțiunilor în masă cu A/C/P/Esc fără să trimită nimic;
+ *    scurtăturile de la „?”); nicio cerere spre alt server; baza neatinsă (CHECKSUM TABLE pe orders înainte = după).
  *
  * Raportul: $CMS_DEV_DIR/test-admin-faza-d-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
  */
@@ -250,6 +254,107 @@ Plugins::incarca();
 \App\Support\Hooks::reseteaza();
 
 $db->exec('DROP DATABASE IF EXISTS ' . $bazaTest);
+
+// =====================================================================
+// B. Lista comenzilor (WP-33)
+// =====================================================================
+$scrie('');
+$scrie('== B. Lista comenzilor: panoul comenzii, bara acțiunilor în masă, scurtăturile (tools/dev/plimbare-comenzi.cjs)');
+$portTest = (int) (getenv('CMS_DEV_PORT') ?: 8701) + 41;
+$dosarTest = $dosarDev . '/test-admin-faza-d';
+exec('rm -rf ' . escapeshellarg($dosarTest));
+@mkdir($dosarTest . '/licenta', 0770, true);
+putenv('LICENTA_DOSAR=' . $dosarTest . '/licenta');
+$phpDev = [PHP_BINARY];
+foreach (['pdo_mysql.default_socket', 'sendmail_path', 'memory_limit', 'error_reporting'] as $ini) {
+    if ((string) ini_get($ini) !== '') {
+        array_push($phpDev, '-d', $ini . '=' . ini_get($ini));
+    }
+}
+array_push($phpDev, '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' . $dosarTest . '/php-erori.log');
+$pornesteServer = static function () use ($phpDev, $portTest, $radacina, $dosarTest) {
+    $server = proc_open(array_merge($phpDev, ['-S', '127.0.0.1:' . $portTest, '-t', $radacina . '/public', $radacina . '/tools/dev/router.php']),
+        [0 => ['file', '/dev/null', 'r'], 1 => ['file', $dosarTest . '/server.log', 'a'], 2 => ['file', $dosarTest . '/server.log', 'a']], $_, $radacina);
+    for ($i = 0; $i < 60; $i++) {
+        usleep(200000);
+        $c = curl_init('http://127.0.0.1:' . $portTest . '/health');
+        curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_NOPROXY => '*', CURLOPT_PROXY => '', CURLOPT_TIMEOUT => 2]);
+        curl_exec($c);
+        $gata = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE) === 200;
+        curl_close($c);
+        if ($gata) {
+            return $server;
+        }
+    }
+    return $server;
+};
+$sumaComenzi = static fn (): string => json_encode($db->query('CHECKSUM TABLE orders, order_items, settings')->fetchAll(PDO::FETCH_NUM));
+$inainte = $sumaComenzi();
+// Ca panoul să aibă și bucățile care cer o stare anume (datele demo nu o au): ERP-ul pornit din setări (formularele 🔄) și o
+// comandă plătită cu cardul cu 10 lei de încasat în plus (linkul de plată pentru diferență). Puse la loc după plimbare.
+$erpInainte = $db->query("SELECT `value` FROM settings WHERE `key` = 'erp_enabled'")->fetchColumn();
+// Schimbarea licenței (a doua plimbare) notează din nou pașii de activare ai pluginurilor (momentul lor): se pun la loc.
+$activariInainte = $db->query("SELECT `value` FROM settings WHERE `key` = 'activari_pluginuri'")->fetchColumn();
+$db->exec("INSERT INTO settings (`key`, `value`) VALUES ('erp_enabled', '1') ON DUPLICATE KEY UPDATE `value` = '1'");
+$comandaRest = $db->query("SELECT id, paid_amount, updated_at FROM orders WHERE deleted_at IS NULL AND LOWER(payment_status) = 'paid'
+    AND payment_method IN ('euplatesc', 'stripe', 'btipay', 'card') AND status <> 'cancelled' ORDER BY id LIMIT 1")->fetch() ?: null;
+if ($comandaRest !== null) {
+    $db->prepare('UPDATE orders SET paid_amount = total - 10, updated_at = updated_at WHERE id = ?')->execute([(int) $comandaRest['id']]);
+}
+$server = $pornesteServer();
+/** O plimbare cu licența dată (argumentele lui licenta.php); rezultatul ei sau null. */
+$plimba = static function (array $licenta, string $nume) use ($phpDev, $radacina, $portTest, $dosarTest, $dosarDev): ?array {
+    exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php'], $licenta))) . ' 2>&1', $_, $codLicenta);
+    $fisier = $dosarTest . '/plimbare-comenzi-' . $nume . '.json';
+    $env = ['CMS_DEV_URL=http://127.0.0.1:' . $portTest, 'CMS_DEV_PAROLA=' . trim((string) @file_get_contents($dosarDev . '/admin-parola.txt')),
+        'CMS_DEV_ADMIN_EMAIL=' . (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro'), 'CMS_DEV_REZULTAT=' . $fisier,
+        'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'), 'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers')];
+    exec('env ' . implode(' ', array_map('escapeshellarg', $env)) . ' node ' . escapeshellarg($radacina . '/tools/dev/plimbare-comenzi.cjs') . ' 2>&1', $iesire, $cod);
+    $date = json_decode((string) @file_get_contents($fisier), true);
+    return $codLicenta === 0 && $cod === 0 && is_array($date) ? $date : null;
+};
+$plimbare = $plimba(['toate'], 'toate');
+// Fără livrarea FAN și fără ERP: „A”, „Generează AWB”, filtrul livrării, filtrul ERP și „Trimite în ERP” nu există.
+$plimbareFara = $plimba(['toate', 'livrare_fan=oprit', 'erp=oprit'], 'fara-fan-erp');
+$stareServer = proc_get_status($server);
+exec('pkill -TERM -P ' . (int) $stareServer['pid'] . ' 2>/dev/null');
+proc_terminate($server);
+proc_close($server);
+putenv('LICENTA_DOSAR');
+if ($comandaRest !== null) {
+    $db->prepare('UPDATE orders SET paid_amount = ?, updated_at = ? WHERE id = ?')
+        ->execute([$comandaRest['paid_amount'], $comandaRest['updated_at'], (int) $comandaRest['id']]);
+}
+if ($activariInainte !== false) {
+    $db->prepare("UPDATE settings SET `value` = ? WHERE `key` = 'activari_pluginuri'")->execute([$activariInainte]);
+}
+if ($erpInainte === false) {
+    $db->exec("DELETE FROM settings WHERE `key` = 'erp_enabled'");
+} else {
+    $db->prepare("UPDATE settings SET `value` = ? WHERE `key` = 'erp_enabled'")->execute([$erpInainte]);
+}
+if (!is_array($plimbare)) {
+    $verifica('plimbarea prin lista comenzilor s-a terminat', false, 'vezi ' . $dosarTest);
+} else {
+    $b = $plimbare['bucati'];
+    $verifica('fiecare comandă demo (' . $plimbare['comenzi'] . ') se deschide în panou, cu numărul, clientul și produsele; Esc îl închide și focusul revine; '
+        . 'nicio eroare JavaScript', $plimbare['comenzi'] > 0 && $plimbare['deschise'] === $plimbare['comenzi'] && $b['produse'] === $plimbare['comenzi']
+        && $plimbare['probleme'] === [], implode('; ', array_slice($plimbare['probleme'], 0, 10)));
+    $verifica('bucățile panoului pe comenzile demo: FANbox ' . $b['fanbox'] . ', plata BT ' . $b['bt'] . ', link de plată ' . $b['link_plata']
+        . ', promoționale ' . $b['promo'], $b['fanbox'] > 0 && $b['bt'] > 0 && $b['link_plata'] > 0 && $b['promo'] > 0);
+    $r = $plimbare['randuri'];
+    $verifica('formularele rândurilor: AWB ' . $r['awb'] . ', ERP ' . $r['erp'] . ', precomandă ' . $r['precomanda'] . ', OP ' . $r['op'] . ', coș ' . $r['cos']
+        . ', acțiuni ' . $r['actiuni'], $r['awb'] > 0 && $r['erp'] > 0 && $r['precomanda'] > 0 && $r['op'] > 0 && $r['cos'] > 0 && $r['actiuni'] === $plimbare['comenzi']);
+    $verifica('scurtăturile paginii la „?”: ' . implode(' ', (array) $plimbare['scurtaturi']), in_array('A', (array) $plimbare['scurtaturi'], true)
+        && in_array('C', (array) $plimbare['scurtaturi'], true) && in_array('P', (array) $plimbare['scurtaturi'], true) && !empty($plimbare['areFan']));
+    $verifica('nicio cerere spre alt server', (array) $plimbare['blocate'] === [], implode(', ', (array) $plimbare['blocate']));
+}
+$verifica('fără livrarea FAN și fără ERP: nici „A” (scurtătura și lista de la „?”), nici „Generează AWB”, filtrele livrării și ERP-ului, „Trimite în ERP”',
+    is_array($plimbareFara) && empty($plimbareFara['areFan']) && !in_array('A', (array) $plimbareFara['scurtaturi'], true)
+    && $plimbareFara['filtre'] === ['livrare' => false, 'erp' => false, 'trimiteErp' => false, 'awb' => false]
+    && is_array($plimbare) && $plimbare['filtre'] === ['livrare' => true, 'erp' => true, 'trimiteErp' => true, 'awb' => true]
+    && $plimbareFara['probleme'] === [], json_encode($plimbareFara['filtre'] ?? null) . ' ' . implode('; ', (array) ($plimbareFara['probleme'] ?? [])));
+$verifica('baza neatinsă de plimbare, după ce s-au pus la loc cele două pregătiri (CHECKSUM TABLE orders, order_items, settings)', $sumaComenzi() === $inainte);
 
 $scrie('');
 $scrie(sprintf('Rezultat: %d trecute, %d eșuate. Raport: %s', $trecute, $esuate, $fisierRaport));
