@@ -2065,9 +2065,6 @@ try {
     $scrie('B8. --demo: copia demonstrativă, fără nicio bază sursă');
     rename($live, $live . '-ascuns');
     $raspunsuriDemo = ['', $parolaAdmin, $parolaAdmin, $parolaPersonal, $parolaPersonal];
-    $r = $incarca(['--demo', '--da'], ['', $parolaAdmin, $parolaAdmin, $parolaAdmin, $parolaAdmin]);
-    $verifica('--demo: parola personalului = parola contului tău → refuzat', $r['cod'] === 2 && str_contains($r['tot'], 'alta decât parola contului tău') && $tabele($tinta) === [],
-        $descrie($r));
     $r = $incarca(['--demo', '--da'], $raspunsuriDemo);
     $verifica('--demo: cod 0, „GATA”, „nicio bază sursă nu se deschide”, A1 A3 A5 A6 DA', $r['cod'] === 0 && $ultimul($r['iesire']) === 'GATA: copia e anonimizată, toate verificările au trecut'
         && str_contains($r['iesire'], 'nicio bază sursă nu se deschide') && preg_match_all('/^  DA    A[1356] /m', $r['iesire']) === 4 && $curat($r), $descrie($r));

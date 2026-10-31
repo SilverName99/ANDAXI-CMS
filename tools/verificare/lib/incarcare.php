@@ -1698,9 +1698,8 @@ final class Incarcare
             if (strlen($parola) < 10) {
                 throw new Refuz('parola personalului are sub 10 caractere. Nu am atins nimic');
             }
-            if ($parola === $this->parolaProprietar) {
-                throw new Refuz('parola personalului trebuie să fie alta decât parola contului tău. Nu am atins nimic');
-            }
+            // Poate fi aceeași cu parola contului tău (proprietarul, 31 oct 2026): copia are doar date inventate și o
+            // folosește doar el.
             if (!hash_equals($parola, verificare_intreaba('Parola personalului, încă o dată: ', true))) {
                 throw new Refuz('cele două parole ale personalului nu sunt la fel. Nu am atins nimic');
             }
