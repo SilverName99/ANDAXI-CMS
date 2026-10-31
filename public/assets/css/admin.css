@@ -731,3 +731,45 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .adm-comenzi .orders-table tbody td:nth-child(3), .adm-comenzi .orders-table tbody td:nth-child(4) { white-space: nowrap; }
 .adm-comenzi .orders-table tbody td:nth-child(4) small { white-space: normal; max-width: 140px; }
 .adm-comenzi .order-actions { opacity: 1; pointer-events: auto; transform: none; flex-wrap: wrap; }
+
+/* Editorul produsului (WP-34; macheta B-Produs): aceeași fereastră peste listă, pe toată înălțimea, cu antet fix (titlul,
+   modificările nesalvate, Salvează), cuprins în stânga și secțiunile (componenta sectiune-formular). */
+#product-modal.adm-produs-editor { padding: 0; justify-content: flex-end; }
+#product-modal.adm-produs-editor .modal-card { width: min(1280px, 100vw); height: 100vh; max-height: 100vh; border-radius: 0; border-width: 0 0 0 1px; overflow: hidden; background: var(--ax-pagina); }
+#product-modal.adm-produs-editor .modal-head.adm-produs__antet { border-radius: 0; gap: 12px; padding: 8px 12px 8px 18px; min-height: 60px; background: var(--ax-suprafata); }
+.adm-produs__antet h3 { margin-right: auto; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-produs__nesalvate { padding: 4px 10px; border-radius: 999px; background: var(--ax-atentie-fundal); border: 1px solid var(--ax-atentie-linie); color: #713f12; font-size: var(--ax-text-mai-mic); font-weight: 600; white-space: nowrap; }
+.ax-continut .adm-produs__antet .btn kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 40%, transparent); font-size: 11px; }
+.adm-produs__antet .icon-btn { width: var(--ax-tinta); height: var(--ax-tinta); }
+#product-modal.adm-produs-editor .product-editor-form { flex: 1 1 auto; overflow-y: auto; min-height: 0; scroll-padding-top: 12px; }
+.adm-produs { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 16px 18px 40px; align-items: start; }
+.adm-produs__cuprins { position: sticky; top: 0; }
+.adm-produs__cuprins ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.adm-produs__cuprins a { display: flex; align-items: center; min-height: 36px; padding: 0 10px; border-left: 2px solid transparent; border-radius: 0 var(--ax-raza) var(--ax-raza) 0; color: var(--ax-text-2); font-size: var(--ax-text-mic); font-weight: 500; text-decoration: none; }
+.ax-continut .adm-produs__cuprins a { color: var(--ax-text-2); }
+.adm-produs__cuprins a:hover, .ax-continut .adm-produs__cuprins a:hover { background: var(--ax-suprafata); color: var(--ax-text); }
+.adm-produs__cuprins a.este-activ, .ax-continut .adm-produs__cuprins a.este-activ { border-left-color: var(--ax-accent); background: var(--ax-suprafata); color: var(--ax-text); font-weight: 600; }
+.adm-produs__sectiuni { min-width: 0; }
+.adm-produs__sectiuni .adm-sectiune { scroll-margin-top: 12px; }
+.adm-produs__google { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--ax-linie); border-radius: var(--ax-raza); background: var(--ax-suprafata); font-family: arial, sans-serif; }
+.adm-produs__google-eticheta { font-family: var(--ax-font); font-size: var(--ax-text-mai-mic); color: var(--ax-text-3); margin-bottom: 4px; }
+.adm-produs__google-adresa { font-size: 12px; color: #202124; overflow-wrap: anywhere; }
+.adm-produs__google-titlu { font-size: 18px; line-height: 1.3; color: #1a0dab; }
+.adm-produs__google-text { font-size: 13px; line-height: 1.5; color: #4d5156; }
+.adm-produs__google-numar { margin-top: 4px; font-family: var(--ax-font-mono); font-size: 11.5px; color: var(--ax-text-3); }
+.adm-produs__google-numar.este-lung { color: var(--ax-eroare); }
+@media (max-width: 900px) {
+    .adm-produs { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+    .adm-produs__cuprins { position: static; overflow-x: auto; }
+    .adm-produs__cuprins ul { display: flex; gap: 4px; }
+    .adm-produs__cuprins a { white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; border-radius: 0; }
+    .adm-produs__cuprins a.este-activ { border-bottom-color: var(--ax-accent); }
+    .ax-continut .adm-produs__antet .btn kbd { display: none; }
+}
+@media (max-width: 600px) {
+    #product-modal.adm-produs-editor .modal-head.adm-produs__antet { flex-wrap: wrap; row-gap: 6px; }
+    .adm-produs__antet h3 { flex: 1 1 calc(100% - 60px); order: 0; }
+    .adm-produs__antet .icon-btn { order: 1; }
+    .adm-produs__nesalvate { order: 2; }
+    .adm-produs__antet #produs-salveaza { order: 3; margin-left: auto; }
+}

@@ -539,6 +539,15 @@ aspectul, nu ce trimite adminul.
 - **Componentele, extinse în WP-33.** `tabel`: `clasa` (pe tabel și pe coloană), `bifa_atribute` pe rând (de exemplu `disabled`;
   bifele dezactivate nu se aleg); `bara-actiuni-masa`: `formular_actiune`, `campuri` (HTML înaintea butoanelor), `date` (atribute
   `data-*`) și `buton` (fără trimitere) pe acțiune; `bara-filtre`: tipul `bifa`.
+- **Editorul produsului (WP-34).** `views/admin/products.php`: aceeași fereastră peste listă și același formular (`#product-form`,
+  aceleași câmpuri, aceeași adresă), pe toată înălțimea, în secțiuni (`sectiune-formular`: Informații de bază, Preț și TVA, Stoc
+  și coduri, Imagini, Descriere, Câmpuri suplimentare, Oferte BBD doar cu `oferte_bbd`, Precomandă doar cu `precomenzi`, Afișare
+  și asocieri, Avertisment doar cu `magazin`, SEO cu previzualizarea „Cum apare în Google”, locul cardului SEO din WP-37) și cu
+  cuprins. `public/assets/js/admin/produs.js`: modificările nesalvate (ce ar trimite formularul la deschidere față de acum),
+  Ctrl+S, Esc și închiderea care întreabă, cuprinsul. Dovada (partea C din `tools/dev/test-admin-faza-d.php`,
+  `tools/dev/salvare-produs.cjs`): o salvare neatinsă cu editorul nou scrie exact ce scrie editorul de dinainte (pe codul
+  etichetei `admin-inainte-b`, pe al doilea server), a doua salvare nu schimbă nicio coloană, iar cu ofertele BBD și
+  precomenzile oprite secțiunile lor lipsesc și valorile rămân.
 - **Regulile de admin din `app.css` (G-M3).** `app.css` rămâne încărcat în admin: paginile încă nerefăcute își au regulile
   acolo. O regulă de admin iese din `app.css` doar când (1) G-vizual arată aceleași stiluri calculate pe toate paginile
   publice ale setului, ca vizitator și ca client, și (2) niciuna dintre clasele ei nu apare în setul V-CSS al celor patru

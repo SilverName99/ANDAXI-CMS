@@ -119,4 +119,15 @@ return [
         'panou-comanda' => ['ce' => 'adaugat', 'rand' => '^data data-adm-panou = comanda-panou$', 'cale' => '^/admin/orders(\?|$)',
             'motiv' => 'ochiul fiecărui rând deschide comanda în panoul din dreapta (sertarul), cu același conținut ca vechea fereastră'],
     ],
+
+    // WP-34: editorul produsului pe secțiuni. Doar așezarea: niciun nume, tip, valoare ascunsă sau opțiune nu se schimbă.
+    'WP-34' => [
+        'cuprins-linkuri' => ['ce' => 'adaugat', 'rand' => '^link #produs-(baza|pret|stoc|imagini|descriere|campuri|bbd|precomanda|afisare|avertisment|seo)$',
+            'cale' => '^/admin/products$', 'motiv' => 'cuprinsul editorului (stânga): câte un link spre fiecare secțiune; Oferte BBD, Precomandă și '
+                . 'Avertismentul doar cu pluginul lor'],
+        'cuprins-date' => ['ce' => 'adaugat', 'rand' => '^data data-produs-sectiune = produs-(baza|pret|stoc|imagini|descriere|campuri|bbd|precomanda|afisare|avertisment|seo)$',
+            'cale' => '^/admin/products$', 'motiv' => 'legătura dintre linkul cuprinsului și secțiunea lui (produs.js: derularea și secțiunea vizibilă)'],
+        'cautare-tasta' => ['ce' => 'adaugat', 'rand' => '^data data-adm-tasta = /$', 'cale' => '^/admin/products$',
+            'motiv' => '„/” mută focusul în căutarea listei de produse (filtre.js)'],
+    ],
 ];

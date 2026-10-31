@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/componente/_incarca.php';
 /** @var array<int, list<string>> $categoriiExtra Numele celorlalte rafturi în care stă produsul. */
 $categoriiExtra = is_array($categoriiExtra ?? null) ? $categoriiExtra : [];
 // Câmpurile pluginurilor din fișa produsului (ofertele BBD, precomanda, nota de
@@ -10,18 +11,22 @@ $areMagazin = \App\Support\Plugins::vizibil('magazin');
 // Textele care pomenesc ERP-ul doar pe site-urile cu legătura ERP.
 $areErpProduse = \App\Support\Plugins::vizibil('erp');
 ?>
-<section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Produse</h1>
-            <p>Gestionează produsele <?= \App\Support\Plugins::vizibil('magazin') ? 'magazinului tău' : 'tale' ?>.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <a class="btn btn-secondary" href="/admin/products/export" title="Descarcă lista de produse (CSV)<?= $areErpProduse ? ' pentru import în ERP' : '' ?>">⭳ Export produse</a>
-            <a class="btn btn-secondary" href="/admin/products/trash">Coș produse</a>
-            <button class="btn" type="button" id="add-product-btn">+ Adaugă produs</button>
-        </div>
-    </div>
+<section class="panel adm-produse">
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Produse',
+    'nivel' => 1,
+    'id' => 'produse-antet',
+    'subtitlu' => 'Gestionează produsele ' . (\App\Support\Plugins::vizibil('magazin') ? 'magazinului tău' : 'tale') . '.',
+    'actiuni' => '<a class="btn btn-secondary" href="/admin/products/export" title="Descarcă lista de produse (CSV)' . ($areErpProduse ? ' pentru import în ERP' : '')
+        . '">⭳ Export produse</a><a class="btn btn-secondary" href="/admin/products/trash">Coș produse</a>'
+        . '<button class="btn" type="button" id="add-product-btn">+ Adaugă produs</button>',
+    'ajutor' => [
+        '✎ deschide produsul în editor: secțiunile au un cuprins în stânga, iar sus vezi câte modificări n-ai salvat încă. Ctrl+S salvează.',
+        'Secțiunile unui modul apar doar dacă site-ul are modulul; la salvare, ce era scris în ele rămâne neatins.',
+    ],
+]);
+?>
 
     <div class="product-search">
         <div class="product-search__field">
@@ -29,6 +34,7 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
             <input
                 type="search"
                 id="product-search-input"
+                data-adm-tasta="/"
                 placeholder="Caută după denumire, SKU sau categorie…"
                 autocomplete="off"
                 aria-label="Caută produs"
@@ -154,10 +160,35 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
     </div>
 </section>
 
-<div class="modal-overlay" id="product-modal">
+<?php
+// Editorul produsului „B — Compact” (faza D, WP-34; macheta docs/ui/B-Produs.dc.html): aceeași fereastră peste listă și
+// același formular (POST /admin/products sau /admin/products/{id}/update, aceleași câmpuri), așezat pe secțiuni (componenta
+// sectiune-formular) cu un cuprins în stânga, numărul modificărilor nesalvate și Ctrl+S (public/assets/js/admin/produs.js).
+// Secțiunile pluginurilor (Oferte BBD, Precomandă, Avertismentul) apar doar cu pluginul lor; la salvare, valorile lor rămân
+// în bază (AdminController::updateProduct).
+$cuprinsProdus = ['produs-baza' => 'Informații de bază', 'produs-pret' => 'Preț și TVA', 'produs-stoc' => 'Stoc și coduri',
+    'produs-imagini' => 'Imagini', 'produs-descriere' => 'Descriere', 'produs-campuri' => 'Câmpuri suplimentare'];
+if ($areBbd) {
+    $cuprinsProdus['produs-bbd'] = 'Oferte BBD';
+}
+if ($arePrecomenzi) {
+    $cuprinsProdus['produs-precomanda'] = 'Precomandă';
+}
+$cuprinsProdus['produs-afisare'] = 'Afișare și asocieri';
+if ($areMagazin) {
+    $cuprinsProdus['produs-avertisment'] = 'Avertisment la coș';
+}
+$cuprinsProdus['produs-seo'] = 'SEO';
+// Scurtăturile editorului, în lista de la „?” (views/admin/layout.php).
+$adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'], ['Esc', 'Închide editorul (întreabă dacă ai modificări nesalvate)'],
+    ['/', 'Caută în lista produselor']];
+?>
+<div class="modal-overlay adm-produs-editor" id="product-modal">
     <div class="modal-card">
-        <div class="modal-head product-modal-head">
+        <div class="modal-head product-modal-head adm-produs__antet">
             <h3 id="product-modal-title">Adaugă produs</h3>
+            <span class="adm-produs__nesalvate" id="produs-nesalvate" aria-live="polite" hidden></span>
+            <button class="btn" type="submit" form="product-form" id="produs-salveaza" aria-keyshortcuts="Control+S">Salvează produsul <kbd aria-hidden="true">Ctrl S</kbd></button>
             <button type="button" class="icon-btn" id="close-product-modal" aria-label="Închide">
                 <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                     <path fill="currentColor" d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.29-6.3z"/>
@@ -165,21 +196,20 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
             </button>
         </div>
         <form method="post" action="/admin/products" id="product-form" class="product-editor-form">
-            <div class="product-editor-columns">
-                <div class="product-editor-main">
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Informații de bază</h4>
-                            <p>Detalii esențiale despre produs.</p>
-                        </div>
+            <div class="adm-produs">
+                <nav class="adm-produs__cuprins" aria-label="Părțile produsului">
+                    <ul>
+                        <?php foreach ($cuprinsProdus as $ancoraProdus => $etichetaProdus): ?>
+                            <li><a href="#<?= $ancoraProdus ?>" data-produs-sectiune="<?= $ancoraProdus ?>"><?= htmlspecialchars($etichetaProdus, ENT_QUOTES) ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </nav>
+                <div class="adm-produs__sectiuni">
+<?php ob_start(); ?>
                         <div class="product-editor-grid">
                             <div class="field">
                                 <label>Nume produs *</label>
                                 <input type="text" name="name" id="p_name" required>
-                            </div>
-                            <div class="field">
-                                <label>SKU</label>
-                                <input type="text" name="sku" id="p_sku">
                             </div>
                             <div class="field">
                                 <label>Slug *</label>
@@ -220,72 +250,6 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                 </select>
                             </div>
                             <div class="field">
-                                <label>TVA (%)</label>
-                                <input type="number" min="0" max="100" step="0.01" name="vat_percent" id="p_vat_percent" value="<?= htmlspecialchars(number_format((float) ($defaultVat ?? 19), 2, '.', ''), ENT_QUOTES) ?>">
-                            </div>
-                            <div class="field">
-                                <label>TVA în preț</label>
-                                <select name="vat_included" id="p_vat_included">
-                                    <option value="1" selected>Da (inclus în preț)</option>
-                                    <option value="0">Nu (se adaugă peste preț)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Prețuri & stoc</h4>
-                            <p>Gestionează prețul, promoțiile și disponibilitatea.</p>
-                        </div>
-                        <div class="product-editor-grid">
-                            <div class="field">
-                                <label>Preț (RON) *</label>
-                                <input type="number" step="0.01" name="price" id="p_price" required>
-                            </div>
-                            <div class="field">
-                                <label>Preț redus (RON)</label>
-                                <input type="number" step="0.01" name="sale_price" id="p_sale_price">
-                            </div>
-                            <div class="field">
-                                <label>Bulină reducere</label>
-                                <select name="discount_badge_mode" id="p_discount_badge_mode">
-                                    <option value="percent">Procentual (ex: -23%)</option>
-                                    <option value="value">Valoric (ex: -20 lei)</option>
-                                </select>
-                                <small class="muted">Cum apare reducerea în bulina roșie de pe cardul produsului.</small>
-                            </div>
-                            <div class="field full">
-                                <label>Programare preț redus (mai multe perioade)</label>
-                                <input type="hidden" name="sale_price_periods_json" id="p_sale_price_periods_json" value="[]">
-                                <div id="p_sale_periods_list" style="display:grid;gap:8px;"></div>
-                                <button class="btn btn-secondary" type="button" id="p_add_sale_period" style="margin-top:8px;">+ Adaugă perioadă</button>
-                                <small class="muted">Ex: 12.06.2026 - 20.06.2026 (preț X), apoi 05.09.2026 - 22.10.2026 (preț Y).</small>
-                            </div>
-<?php if ($areBbd): ?>
-                            <div class="field full">
-                                <label style="display:inline-flex;align-items:center;gap:8px;">
-                                    <input type="checkbox" name="bbd_enabled" id="p_bbd_enabled" value="1">
-                                    Activează BBD-uri
-                                </label>
-                                <input type="hidden" name="bbd_entries_json" id="p_bbd_entries_json" value="[]">
-                                <div id="p_bbd_list" style="display:grid;gap:8px;margin-top:8px;"></div>
-                                <button class="btn btn-secondary" type="button" id="p_add_bbd_entry" style="margin-top:8px;">+ Adaugă ofertă</button>
-                                <small class="muted">Setează data de expirare, opțional un preț redus și opțional stoc separat per ofertă.</small>
-                            </div>
-<?php endif; ?>
-                            <div class="field">
-                                <label>Stoc</label>
-                                <input type="number" name="stock" id="p_stock">
-                                <small class="muted" id="p_stock_erp" style="display:none;color:#0f766e;">
-                                    Stocul vine din ERP (gestiune) și nu se editează aici. Corectează-l în ERP.
-                                </small>
-                            </div>
-                            <div class="field">
-                                <label>Greutate (g)</label>
-                                <input type="number" name="weight_grams" id="p_weight_grams">
-                            </div>
-                            <div class="field">
                                 <label>Brand (marcă)</label>
                                 <input type="text" name="brand" id="p_brand" maxlength="120" list="p_brand_list" placeholder="ex. Farabella">
                                 <datalist id="p_brand_list">
@@ -306,13 +270,98 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                 <small class="muted">Separate prin virgulă. Fiecare are pagină proprie (/eticheta/&lt;nume&gt;) și intră în căutarea de pe site.</small>
                             </div>
                         </div>
-                    </section>
-
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Descriere & marketing</h4>
-                            <p>Textele afișate pe pagina produsului.</p>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-baza', 'titlu' => 'Informații de bază', 'descriere' => 'Numele, adresa, categoriile, șablonul paginii, marca și etichetele.', 'continut' => (string) ob_get_clean()]); ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid">
+                            <div class="field">
+                                <label>Preț (RON) *</label>
+                                <input type="number" step="0.01" name="price" id="p_price" required>
+                            </div>
+                            <div class="field">
+                                <label>Preț redus (RON)</label>
+                                <input type="number" step="0.01" name="sale_price" id="p_sale_price">
+                            </div>
+                            <div class="field">
+                                <label>Bulină reducere</label>
+                                <select name="discount_badge_mode" id="p_discount_badge_mode">
+                                    <option value="percent">Procentual (ex: -23%)</option>
+                                    <option value="value">Valoric (ex: -20 lei)</option>
+                                </select>
+                                <small class="muted">Cum apare reducerea în bulina roșie de pe cardul produsului.</small>
+                            </div>
+                            <div class="field">
+                                <label>TVA (%)</label>
+                                <input type="number" min="0" max="100" step="0.01" name="vat_percent" id="p_vat_percent" value="<?= htmlspecialchars(number_format((float) ($defaultVat ?? 19), 2, '.', ''), ENT_QUOTES) ?>">
+                            </div>
+                            <div class="field">
+                                <label>TVA în preț</label>
+                                <select name="vat_included" id="p_vat_included">
+                                    <option value="1" selected>Da (inclus în preț)</option>
+                                    <option value="0">Nu (se adaugă peste preț)</option>
+                                </select>
+                            </div>
+                            <div class="field full">
+                                <label>Programare preț redus (mai multe perioade)</label>
+                                <input type="hidden" name="sale_price_periods_json" id="p_sale_price_periods_json" value="[]">
+                                <div id="p_sale_periods_list" style="display:grid;gap:8px;"></div>
+                                <button class="btn btn-secondary" type="button" id="p_add_sale_period" style="margin-top:8px;">+ Adaugă perioadă</button>
+                                <small class="muted">Ex: 12.06.2026 - 20.06.2026 (preț X), apoi 05.09.2026 - 22.10.2026 (preț Y).</small>
+                            </div>
                         </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-pret', 'titlu' => 'Preț și TVA', 'descriere' => 'Prețul, prețul redus și perioadele lui, bulina reducerii, cota de TVA.', 'continut' => (string) ob_get_clean()]); ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid">
+                            <div class="field">
+                                <label>SKU</label>
+                                <input type="text" name="sku" id="p_sku">
+                            </div>
+                            <div class="field">
+                                <label>Stoc</label>
+                                <input type="number" name="stock" id="p_stock">
+                                <small class="muted" id="p_stock_erp" style="display:none;color:#0f766e;">
+                                    Stocul vine din ERP (gestiune) și nu se editează aici. Corectează-l în ERP.
+                                </small>
+                            </div>
+                            <div class="field">
+                                <label>Greutate (g)</label>
+                                <input type="number" name="weight_grams" id="p_weight_grams">
+                            </div>
+                            <div class="field">
+                                <label>Disponibilitate</label>
+                                <div class="product-status-flags">
+                                    <label>
+                                        <input type="checkbox" name="out_of_stock" id="p_out_of_stock" value="1">
+                                        Fără stoc
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-stoc', 'titlu' => 'Stoc și coduri', 'descriere' => 'Codul produsului (SKU), stocul, greutatea pentru curier și disponibilitatea.', 'continut' => (string) ob_get_clean()]); ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid product-editor-grid--single">
+                            <div class="field full">
+                                <label>Imagine produs</label>
+                                <input type="hidden" name="image_url" id="p_image_url">
+                                <div class="product-image-picker-inline">
+                                    <img id="p_image_preview" src="/assets/img/product-placeholder.svg" alt="Preview imagine produs" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+                                    <div>
+                                        <button class="btn btn-secondary" type="button" id="open-image-picker">Selectează imagine</button>
+                                        <p id="p_image_label" class="muted" style="margin:8px 0 0;font-size:12px;">/assets/img/product-placeholder.svg</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="field full">
+                                <label>Imagini secundare (carusel)</label>
+                                <input type="hidden" name="gallery_images_json" id="p_gallery_images_json" value="[]">
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                                    <button class="btn btn-secondary" type="button" id="open-gallery-picker">+ Adaugă imagine secundară</button>
+                                    <button class="btn btn-secondary" type="button" id="clear-gallery-btn">Golește lista</button>
+                                </div>
+                                <div id="product-gallery-selected" class="product-gallery-selected"></div>
+                            </div>
+                        </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-imagini', 'titlu' => 'Imagini', 'descriere' => 'Imaginea principală și galeria (trage o imagine ca să schimbi ordinea).', 'continut' => (string) ob_get_clean()]); ?>
+<?php ob_start(); ?>
                         <div class="product-editor-grid">
                             <div class="field full">
                                 <label>Descriere scurtă</label>
@@ -342,42 +391,8 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                             </div>
 <?php endif; ?>
                         </div>
-                    </section>
-
-<?php if ($areMagazin): ?>
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Avertisment la coș și la finalizarea comenzii</h4>
-                            <p>De ex. pentru produsele refrigerate. Activ doar dacă „Text avertisment” e completat.</p>
-                        </div>
-                        <div class="product-editor-grid">
-                            <div class="field full">
-                                <label for="p_avertisment_titlu">Titlu avertisment</label>
-                                <input type="text" name="avertisment_titlu" id="p_avertisment_titlu" maxlength="<?= \App\Support\AvertismentProduse::MAX_TITLU ?>" placeholder="ex. ATENȚIE – PRODUS REFRIGERAT">
-                            </div>
-                            <div class="field full">
-                                <label for="p_avertisment_text">Text avertisment</label>
-                                <textarea name="avertisment_text" id="p_avertisment_text" rows="6" maxlength="<?= \App\Support\AvertismentProduse::MAX_TEXT ?>" placeholder="Textul pe care îl vede clientul. Un rând gol = paragraf nou."></textarea>
-                            </div>
-                            <div class="field full">
-                                <label for="p_avertisment_eticheta">Text bifă la finalizarea comenzii</label>
-                                <input type="text" name="avertisment_eticheta" id="p_avertisment_eticheta" maxlength="<?= \App\Support\AvertismentProduse::MAX_ETICHETA ?>" placeholder="ex. Am citit și am înțeles condițiile pentru produsul refrigerat">
-                                <small class="muted">
-                                    Text simplu, fără HTML (un rând gol în text = paragraf nou). Cu text completat: la adăugarea în coș
-                                    apare o fereastră cu titlul și textul, iar la finalizarea comenzii o casetă deasupra butonului și
-                                    bifa obligatorie cu acest text (gol = „<?= htmlspecialchars(\App\Support\AvertismentProduse::ETICHETA_IMPLICITA, ENT_QUOTES) ?>”).
-                                    Confirmarea rămâne pe comandă și apare în emailul de confirmare.
-                                </small>
-                            </div>
-                        </div>
-                    </section>
-<?php endif; ?>
-
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Conținut produs</h4>
-                            <p>Câmpuri suplimentare pentru template-ul produsului.</p>
-                        </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-descriere', 'titlu' => 'Descriere', 'descriere' => 'Textele afișate pe pagina produsului.', 'continut' => (string) ob_get_clean()]); ?>
+<?php ob_start(); ?>
                         <div class="product-editor-grid">
                             <?php foreach (($extraFields ?? []) as $field): ?>
                                 <?php
@@ -435,98 +450,61 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                             </p>
 <?= \App\Support\Dev::marcaj('bv:campuri-sablon', true) ?>
                         </div>
-                    </section>
-                </div>
-
-                <aside class="product-editor-side">
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Imagini</h4>
-                            <p>Imagine principală și galerie produs.</p>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-campuri', 'titlu' => 'Câmpuri suplimentare', 'descriere' => 'Câmpurile în plus ale șablonului produsului.', 'continut' => (string) ob_get_clean()]); ?>
+<?php if ($areBbd): ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid">
+                            <div class="field full">
+                                <label style="display:inline-flex;align-items:center;gap:8px;">
+                                    <input type="checkbox" name="bbd_enabled" id="p_bbd_enabled" value="1">
+                                    Activează BBD-uri
+                                </label>
+                                <input type="hidden" name="bbd_entries_json" id="p_bbd_entries_json" value="[]">
+                                <div id="p_bbd_list" style="display:grid;gap:8px;margin-top:8px;"></div>
+                                <button class="btn btn-secondary" type="button" id="p_add_bbd_entry" style="margin-top:8px;">+ Adaugă ofertă</button>
+                                <small class="muted">Setează data de expirare, opțional un preț redus și opțional stoc separat per ofertă.</small>
+                            </div>
                         </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-bbd', 'titlu' => 'Oferte BBD', 'descriere' => 'Loturi cu dată minimă de valabilitate, cu preț și stoc proprii.', 'continut' => (string) ob_get_clean()]); ?>
+<?php endif; ?>
+<?php if ($arePrecomenzi): ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid">
+                            <div class="field full">
+                                <div class="product-status-flags">
+                                    <label>
+                                        <input type="checkbox" name="preorder_enabled" id="p_preorder_enabled" value="1">
+                                        Valabil pentru precomandă
+                                    </label>
+                                </div>
+                                <p class="field-hint" style="margin-top:6px;">
+                                    Produsul de precomandă se poate cumpăra și fără stoc. Comenzile
+                                    cu el <?= $areErpProduse ? 'nu pleacă în ERP până nu le eliberezi' : 'așteaptă până le eliberezi' ?> din „Precomenzi".
+                                </p>
+                            </div>
+                            <div class="field">
+                                <label for="p_preorder_max_per_order">Maxim per comandă</label>
+                                <input type="number" min="1" step="1" name="preorder_max_per_order" id="p_preorder_max_per_order" placeholder="fără limită">
+                                <p class="field-hint">Câte bucăți poate lua un client într-o comandă.</p>
+                            </div>
+                            <div class="field">
+                                <label for="p_preorder_max_total">Maxim precomandat (total)</label>
+                                <input type="number" min="1" step="1" name="preorder_max_total" id="p_preorder_max_total" placeholder="fără limită">
+                                <p class="field-hint">Câte bucăți se pot precomanda cu totul, pe toate comenzile.</p>
+                            </div>
+                        </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-precomanda', 'titlu' => 'Precomandă', 'descriere' => 'Vânzare fără stoc, cu limite pe comandă și în total.', 'continut' => (string) ob_get_clean()]); ?>
+<?php endif; ?>
+<?php ob_start(); ?>
                         <div class="product-editor-grid product-editor-grid--single">
                             <div class="field full">
-                                <label>Imagine produs</label>
-                                <input type="hidden" name="image_url" id="p_image_url">
-                                <div class="product-image-picker-inline">
-                                    <img id="p_image_preview" src="/assets/img/product-placeholder.svg" alt="Preview imagine produs" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
-                                    <div>
-                                        <button class="btn btn-secondary" type="button" id="open-image-picker">Selectează imagine</button>
-                                        <p id="p_image_label" class="muted" style="margin:8px 0 0;font-size:12px;">/assets/img/product-placeholder.svg</p>
-                                    </div>
+                                <label>Status produs</label>
+                                <div class="product-status-flags">
+                                    <label>
+                                        <input type="checkbox" name="is_active" id="p_is_active" checked>
+                                        Activ
+                                    </label>
                                 </div>
-                            </div>
-                            <div class="field full">
-                                <label>Imagini secundare (carusel)</label>
-                                <input type="hidden" name="gallery_images_json" id="p_gallery_images_json" value="[]">
-                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-                                    <button class="btn btn-secondary" type="button" id="open-gallery-picker">+ Adaugă imagine secundară</button>
-                                    <button class="btn btn-secondary" type="button" id="clear-gallery-btn">Golește lista</button>
-                                </div>
-                                <div id="product-gallery-selected" class="product-gallery-selected"></div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>SEO</h4>
-                            <p>Setări individuale SEO pentru produs.</p>
-                        </div>
-                        <div class="product-editor-grid product-editor-grid--single">
-                            <div class="field full">
-                                <label for="p_seo_title">Meta title</label>
-                                <input type="text" name="seo_title" id="p_seo_title" placeholder="Titlu SEO produs">
-                            </div>
-                            <div class="field full">
-                                <label for="p_seo_description">Meta description</label>
-                                <textarea name="seo_description" id="p_seo_description" rows="3" placeholder="Descriere scurtă pentru Google"></textarea>
-                            </div>
-                            <div class="field full">
-                                <label for="p_seo_canonical_url">Canonical URL (opțional)</label>
-                                <input type="url" name="seo_canonical_url" id="p_seo_canonical_url" placeholder="https://exemplu.ro/produs/slug">
-                            </div>
-                            <div class="field full">
-                                <label>Imagine social preview (OG/Twitter)</label>
-                                <input type="hidden" name="seo_image_url" id="p_seo_image_url">
-                                <div class="product-image-picker-inline">
-                                    <img id="p_seo_image_preview" src="/assets/img/product-placeholder.svg" alt="Preview imagine SEO" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
-                                    <div>
-                                        <button class="btn btn-secondary" type="button" id="open-seo-image-picker">Selectează imagine</button>
-                                        <p id="p_seo_image_label" class="muted" style="margin:8px 0 0;font-size:12px;">/assets/img/product-placeholder.svg</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
-                    <section class="panel product-editor-card">
-                        <div class="product-editor-card__head">
-                            <h4>Produse similare & setări</h4>
-                            <p>Asocieri, badge-uri și stare produs.</p>
-                        </div>
-                        <div class="product-editor-grid product-editor-grid--single">
-                            <div class="field full">
-                                <label>Produse similare (carusel)</label>
-                                <input type="hidden" name="similar_products_json" id="p_similar_products_json" value="[]">
-                                <div class="similar-products-admin-picker" id="similar-products-admin-picker">
-                                    <?php foreach ($products as $candidate): ?>
-                                        <?php
-                                        if (!is_array($candidate)) {
-                                            continue;
-                                        }
-                                        $candidateId = (int) ($candidate['id'] ?? 0);
-                                        if ($candidateId <= 0) {
-                                            continue;
-                                        }
-                                        ?>
-                                        <label class="similar-products-admin-picker__item">
-                                            <input type="checkbox" value="<?= $candidateId ?>" data-similar-product-id="1">
-                                            <span><?= htmlspecialchars((string) ($candidate['name'] ?? ('Produs #' . $candidateId)), ENT_QUOTES) ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <small class="muted">Selectează până la 12 produse similare.</small>
                             </div>
                             <div class="field full">
                                 <label>Badge-uri produs</label>
@@ -544,31 +522,6 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                         De sezon
                                     </label>
                                 </div>
-                            </div>
-                            <div class="field full">
-                                <label>Status produs</label>
-                                <div class="product-status-flags">
-                                    <label>
-                                        <input type="checkbox" name="is_active" id="p_is_active" checked>
-                                        Activ
-                                    </label>
-                                    <label>
-                                        <input type="checkbox" name="out_of_stock" id="p_out_of_stock" value="1">
-                                        Fără stoc
-                                    </label>
-<?php if ($arePrecomenzi): ?>
-                                    <label>
-                                        <input type="checkbox" name="preorder_enabled" id="p_preorder_enabled" value="1">
-                                        Valabil pentru precomandă
-                                    </label>
-<?php endif; ?>
-                                </div>
-<?php if ($arePrecomenzi): ?>
-                                <p class="field-hint" style="margin-top:6px;">
-                                    Produsul de precomandă se poate cumpăra și fără stoc. Comenzile
-                                    cu el <?= $areErpProduse ? 'nu pleacă în ERP până nu le eliberezi' : 'așteaptă până le eliberezi' ?> din „Precomenzi".
-                                </p>
-<?php endif; ?>
                             </div>
 <?= \App\Support\Dev::marcaj('bv:produs-catalog') ?>
                             <div class="field full" id="p_catalog_campuri">
@@ -616,25 +569,90 @@ $areErpProduse = \App\Support\Plugins::vizibil('erp');
                                 <p class="field-hint">Produsul e inactiv: pagina lui se vede doar prin acest link (fără cache, fără indexare în Google).</p>
                             </div>
 <?= \App\Support\Dev::marcaj('bv:produs-catalog', true) ?>
-<?php if ($arePrecomenzi): ?>
-                            <div class="field">
-                                <label for="p_preorder_max_per_order">Maxim per comandă</label>
-                                <input type="number" min="1" step="1" name="preorder_max_per_order" id="p_preorder_max_per_order" placeholder="fără limită">
-                                <p class="field-hint">Câte bucăți poate lua un client într-o comandă.</p>
+                            <div class="field full">
+                                <label>Produse similare (carusel)</label>
+                                <input type="hidden" name="similar_products_json" id="p_similar_products_json" value="[]">
+                                <div class="similar-products-admin-picker" id="similar-products-admin-picker">
+                                    <?php foreach ($products as $candidate): ?>
+                                        <?php
+                                        if (!is_array($candidate)) {
+                                            continue;
+                                        }
+                                        $candidateId = (int) ($candidate['id'] ?? 0);
+                                        if ($candidateId <= 0) {
+                                            continue;
+                                        }
+                                        ?>
+                                        <label class="similar-products-admin-picker__item">
+                                            <input type="checkbox" value="<?= $candidateId ?>" data-similar-product-id="1">
+                                            <span><?= htmlspecialchars((string) ($candidate['name'] ?? ('Produs #' . $candidateId)), ENT_QUOTES) ?></span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <small class="muted">Selectează până la 12 produse similare.</small>
                             </div>
-                            <div class="field">
-                                <label for="p_preorder_max_total">Maxim precomandat (total)</label>
-                                <input type="number" min="1" step="1" name="preorder_max_total" id="p_preorder_max_total" placeholder="fără limită">
-                                <p class="field-hint">Câte bucăți se pot precomanda cu totul, pe toate comenzile.</p>
-                            </div>
-<?php endif; ?>
                         </div>
-                    </section>
-
-                    <div class="product-editor-save">
-                        <button class="btn" type="submit">Salvează produsul</button>
-                    </div>
-                </aside>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-afisare', 'titlu' => 'Afișare și asocieri', 'descriere' => 'Starea produsului, insignele, locul în liste, transportul și produsele similare.', 'continut' => (string) ob_get_clean()]); ?>
+<?php if ($areMagazin): ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid">
+                            <div class="field full">
+                                <label for="p_avertisment_titlu">Titlu avertisment</label>
+                                <input type="text" name="avertisment_titlu" id="p_avertisment_titlu" maxlength="<?= \App\Support\AvertismentProduse::MAX_TITLU ?>" placeholder="ex. ATENȚIE – PRODUS REFRIGERAT">
+                            </div>
+                            <div class="field full">
+                                <label for="p_avertisment_text">Text avertisment</label>
+                                <textarea name="avertisment_text" id="p_avertisment_text" rows="6" maxlength="<?= \App\Support\AvertismentProduse::MAX_TEXT ?>" placeholder="Textul pe care îl vede clientul. Un rând gol = paragraf nou."></textarea>
+                            </div>
+                            <div class="field full">
+                                <label for="p_avertisment_eticheta">Text bifă la finalizarea comenzii</label>
+                                <input type="text" name="avertisment_eticheta" id="p_avertisment_eticheta" maxlength="<?= \App\Support\AvertismentProduse::MAX_ETICHETA ?>" placeholder="ex. Am citit și am înțeles condițiile pentru produsul refrigerat">
+                                <small class="muted">
+                                    Text simplu, fără HTML (un rând gol în text = paragraf nou). Cu text completat: la adăugarea în coș
+                                    apare o fereastră cu titlul și textul, iar la finalizarea comenzii o casetă deasupra butonului și
+                                    bifa obligatorie cu acest text (gol = „<?= htmlspecialchars(\App\Support\AvertismentProduse::ETICHETA_IMPLICITA, ENT_QUOTES) ?>”).
+                                    Confirmarea rămâne pe comandă și apare în emailul de confirmare.
+                                </small>
+                            </div>
+                        </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-avertisment', 'titlu' => 'Avertisment la coș și la finalizarea comenzii', 'descriere' => 'De ex. pentru produsele refrigerate. Activ doar dacă „Text avertisment” e completat.', 'continut' => (string) ob_get_clean()]); ?>
+<?php endif; ?>
+<?php ob_start(); ?>
+                        <div class="product-editor-grid product-editor-grid--single">
+                            <div class="field full adm-produs__google" aria-live="polite">
+                                <span class="adm-produs__google-eticheta">Cum apare în Google (aproximativ)</span>
+                                <span class="adm-produs__google-adresa" id="produs-google-adresa"></span>
+                                <span class="adm-produs__google-titlu" id="produs-google-titlu"></span>
+                                <span class="adm-produs__google-text" id="produs-google-text"></span>
+                                <span class="adm-produs__google-numar"><span id="produs-google-titlu-n">0</span>/60 caractere în titlu · <span id="produs-google-text-n">0</span>/160 în descriere</span>
+                                <small class="muted">Gol = titlul și descrierea scurtă a produsului. Câmpurile SEO complete ale fiecărui fel de pagină vin în etapa SEO (WP-37).</small>
+                            </div>
+                            <div class="field full">
+                                <label for="p_seo_title">Meta title</label>
+                                <input type="text" name="seo_title" id="p_seo_title" placeholder="Titlu SEO produs">
+                            </div>
+                            <div class="field full">
+                                <label for="p_seo_description">Meta description</label>
+                                <textarea name="seo_description" id="p_seo_description" rows="3" placeholder="Descriere scurtă pentru Google"></textarea>
+                            </div>
+                            <div class="field full">
+                                <label for="p_seo_canonical_url">Canonical URL (opțional)</label>
+                                <input type="url" name="seo_canonical_url" id="p_seo_canonical_url" placeholder="https://exemplu.ro/produs/slug">
+                            </div>
+                            <div class="field full">
+                                <label>Imagine social preview (OG/Twitter)</label>
+                                <input type="hidden" name="seo_image_url" id="p_seo_image_url">
+                                <div class="product-image-picker-inline">
+                                    <img id="p_seo_image_preview" src="/assets/img/product-placeholder.svg" alt="Preview imagine SEO" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+                                    <div>
+                                        <button class="btn btn-secondary" type="button" id="open-seo-image-picker">Selectează imagine</button>
+                                        <p id="p_seo_image_label" class="muted" style="margin:8px 0 0;font-size:12px;">/assets/img/product-placeholder.svg</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+<?php admin_componenta('sectiune-formular', ['id' => 'produs-seo', 'titlu' => 'SEO', 'descriere' => 'Cum apare produsul în Google și în rețelele sociale.', 'continut' => (string) ob_get_clean()]); ?>
+                </div>
             </div>
         </form>
     </div>
@@ -1985,3 +2003,4 @@ $dateCatalogProduse = [
 })();
 </script>
 <?= \App\Support\Dev::marcaj('bv:produse-catalog-js', true) ?>
+<script src="/assets/js/admin/produs.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/produs.js')) ?: 1) ?>" defer></script>

@@ -17,6 +17,11 @@ declare(strict_types=1);
  *    plimbarea tools/dev/plimbare-comenzi.cjs (fiecare comandă demo în panoul din dreapta, Esc și focusul, bucățile FAN, BT,
  *    linkul de plată, promoționalele; formularele rândurilor; bara acțiunilor în masă cu A/C/P/Esc fără să trimită nimic;
  *    scurtăturile de la „?”); nicio cerere spre alt server; baza neatinsă (CHECKSUM TABLE pe orders înainte = după).
+ * C. Editorul produsului (WP-34), pe același fel de server: tools/dev/salvare-produs.cjs deschide câteva produse (unul cu
+ *    oferte BBD, unul cu precomandă și limite, unul cu câmpuri suplimentare), verifică contorul modificărilor (0 la deschidere,
+ *    1 după o literă, Esc întreabă) și le salvează neatinse cu Ctrl+S: rândul produsului (fără updated_at), categoriile,
+ *    câmpurile suplimentare și SEO-ul lui rămân aceleași. A doua oară cu ofertele BBD și precomenzile oprite: secțiunile lor
+ *    lipsesc, iar salvarea păstrează ce era scris (regula 3 din plan). Baza se pune la loc.
  *
  * Raportul: $CMS_DEV_DIR/test-admin-faza-d-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
  */
@@ -355,6 +360,141 @@ $verifica('fără livrarea FAN și fără ERP: nici „A” (scurtătura și lis
     && is_array($plimbare) && $plimbare['filtre'] === ['livrare' => true, 'erp' => true, 'trimiteErp' => true, 'awb' => true]
     && $plimbareFara['probleme'] === [], json_encode($plimbareFara['filtre'] ?? null) . ' ' . implode('; ', (array) ($plimbareFara['probleme'] ?? [])));
 $verifica('baza neatinsă de plimbare, după ce s-au pus la loc cele două pregătiri (CHECKSUM TABLE orders, order_items, settings)', $sumaComenzi() === $inainte);
+
+// =====================================================================
+// C. Editorul produsului (WP-34)
+// =====================================================================
+$scrie('');
+$scrie('== C. Editorul produsului: salvarea neatinsă, contorul modificărilor, Ctrl+S, secțiunile pluginurilor (tools/dev/salvare-produs.cjs)');
+$idProdusBbd = (int) $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND bbd_enabled = 1 ORDER BY id LIMIT 1')->fetchColumn();
+$idProdusPre = (int) $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND bbd_enabled = 0 ORDER BY id LIMIT 1')->fetchColumn();
+$idProdusCampuri = (int) $db->query('SELECT v.product_id FROM product_extra_field_values v JOIN products p ON p.id = v.product_id
+    WHERE p.deleted_at IS NULL ORDER BY v.product_id LIMIT 1')->fetchColumn();
+$idsProduse = array_values(array_unique(array_filter([$idProdusPre, $idProdusBbd, $idProdusCampuri])));
+$listaProduse = implode(', ', $idsProduse);
+$randPre = $db->query('SELECT preorder_enabled, preorder_max_per_order, preorder_max_total, updated_at FROM products WHERE id = ' . $idProdusPre)->fetch();
+// Precomanda cu limite pe un produs fără oferte, ca salvarea fără plugin să aibă ce păstra.
+$db->prepare('UPDATE products SET preorder_enabled = 1, preorder_max_per_order = 3, preorder_max_total = 20, updated_at = updated_at WHERE id = ?')
+    ->execute([$idProdusPre]);
+$amprentaProduse = static function () use ($db, $listaProduse): array {
+    $fara = static function (array $randuri, array $coloane): array {
+        return array_map(static function (array $r) use ($coloane): array {
+            foreach ($coloane as $c) {
+                unset($r[$c]);
+            }
+            return $r;
+        }, $randuri);
+    };
+    return [
+        'produse' => $fara($db->query('SELECT * FROM products WHERE id IN (' . $listaProduse . ') ORDER BY id')->fetchAll(), ['updated_at']),
+        'categorii' => $db->query('SELECT product_id, category_id FROM product_category_links WHERE product_id IN (' . $listaProduse . ') ORDER BY product_id, category_id')->fetchAll(),
+        'campuri' => $fara($db->query('SELECT * FROM product_extra_field_values WHERE product_id IN (' . $listaProduse . ') ORDER BY product_id, field_id')->fetchAll(),
+            ['id', 'created_at', 'updated_at']),
+        'seo' => $fara($db->query("SELECT * FROM seo_pages WHERE page_type = 'product' AND page_ref IN ('" . str_replace(', ', "', '", $listaProduse) . "') ORDER BY page_ref")
+            ->fetchAll(), ['id', 'created_at', 'updated_at']),
+    ];
+};
+$inainteProduse = $amprentaProduse();
+// Copiile rândurilor atinse (doar ale produselor testului; produsele nu se șterg niciodată: order_items le-ar pierde legătura).
+$refuriSeo = "'" . str_replace(', ', "', '", $listaProduse) . "'";
+$copiiProduse = [
+    'products' => $db->query('SELECT * FROM products WHERE id IN (' . $listaProduse . ')')->fetchAll(),
+    'product_category_links' => $db->query('SELECT * FROM product_category_links WHERE product_id IN (' . $listaProduse . ')')->fetchAll(),
+    'product_extra_field_values' => $db->query('SELECT * FROM product_extra_field_values WHERE product_id IN (' . $listaProduse . ')')->fetchAll(),
+    'seo_pages' => $db->query("SELECT * FROM seo_pages WHERE page_type = 'product' AND page_ref IN (" . $refuriSeo . ')')->fetchAll(),
+    'settings' => $db->query('SELECT * FROM settings')->fetchAll(),
+];
+@mkdir($dosarTest . '/licenta', 0770, true);
+putenv('LICENTA_DOSAR=' . $dosarTest . '/licenta');
+$server = $pornesteServer();
+$salveaza = static function (array $licenta, string $nume, int $port = 0, bool $vechi = false) use ($phpDev, $radacina, $portTest, $dosarTest, $dosarDev, $idsProduse): ?array {
+    exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php'], $licenta))) . ' 2>&1', $_, $codLicenta);
+    $fisier = $dosarTest . '/salvare-produs-' . $nume . '.json';
+    $env = ['CMS_DEV_URL=http://127.0.0.1:' . ($port > 0 ? $port : $portTest), 'CMS_DEV_PAROLA=' . trim((string) @file_get_contents($dosarDev . '/admin-parola.txt')),
+        'CMS_DEV_ADMIN_EMAIL=' . (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro'), 'CMS_DEV_REZULTAT=' . $fisier,
+        'CMS_DEV_PRODUSE=' . implode(',', $idsProduse), 'CMS_DEV_VECHI=' . ($vechi ? '1' : '0'),
+        'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'), 'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers')];
+    exec('env ' . implode(' ', array_map('escapeshellarg', $env)) . ' node ' . escapeshellarg($radacina . '/tools/dev/salvare-produs.cjs') . ' 2>&1', $iesire, $cod);
+    $date = json_decode((string) @file_get_contents($fisier), true);
+    return $codLicenta === 0 && $cod === 0 && is_array($date) ? $date : ['salvate' => [], 'probleme' => array_merge(['codul ' . $cod], array_slice($iesire, -3)), 'blocate' => [], 'sectiuni' => []];
+};
+$puneLaLoc = static function () use ($db, $copiiProduse, $listaProduse, $refuriSeo): void {
+    $insereaza = static function (string $tabel, array $randuri) use ($db): void {
+        foreach ($randuri as $rand) {
+            $coloane = array_keys($rand);
+            $db->prepare('INSERT INTO ' . $tabel . ' (`' . implode('`, `', $coloane) . '`) VALUES (' . implode(', ', array_fill(0, count($coloane), '?')) . ')')
+                ->execute(array_values($rand));
+        }
+    };
+    foreach ($copiiProduse['products'] as $rand) {
+        $coloane = array_keys($rand);
+        $db->prepare('UPDATE products SET `' . implode('` = ?, `', $coloane) . '` = ? WHERE id = ?')->execute(array_merge(array_values($rand), [$rand['id']]));
+    }
+    $db->exec('DELETE FROM product_category_links WHERE product_id IN (' . $listaProduse . ')');
+    $insereaza('product_category_links', $copiiProduse['product_category_links']);
+    $db->exec('DELETE FROM product_extra_field_values WHERE product_id IN (' . $listaProduse . ')');
+    $insereaza('product_extra_field_values', $copiiProduse['product_extra_field_values']);
+    $db->exec("DELETE FROM seo_pages WHERE page_type = 'product' AND page_ref IN (" . $refuriSeo . ')');
+    $insereaza('seo_pages', $copiiProduse['seo_pages']);
+    $db->exec('DELETE FROM settings');
+    $insereaza('settings', $copiiProduse['settings']);
+};
+// 1. Editorul de dinainte (codul etichetei admin-inainte-b, scos de contract-admin.php în $CMS_DEV_DIR/baza-admin-<commit>), pe al
+//    doilea server: ce scrie o salvare neatinsă acolo e referința (salvarea normalizează valorile goale, de exemplu NULL → „[]”).
+$dosarEticheta = (glob($dosarDev . '/baza-admin-*/public/index.php') ?: [])[0] ?? '';
+if ($dosarEticheta === '') {
+    exec('git -C ' . escapeshellarg($radacina) . ' rev-parse --short 167232d6ce4b0e8c6333a6b86b6b44f85c31641f 2>/dev/null', $scurt);
+    $dosarEticheta = $dosarDev . '/baza-admin-' . trim((string) ($scurt[0] ?? '167232d'));
+    @mkdir($dosarEticheta, 0770, true);
+    exec('git -C ' . escapeshellarg($radacina) . ' archive 167232d6ce4b0e8c6333a6b86b6b44f85c31641f | tar -x -C ' . escapeshellarg($dosarEticheta));
+    $dosarEticheta .= '/public/index.php';
+}
+$radacinaEticheta = dirname($dosarEticheta, 2);
+$portEticheta = $portTest + 1;
+$serverEticheta = proc_open(array_merge($phpDev, ['-S', '127.0.0.1:' . $portEticheta, '-t', $radacinaEticheta . '/public', $radacina . '/tools/dev/router.php']),
+    [0 => ['file', '/dev/null', 'r'], 1 => ['file', $dosarTest . '/server-eticheta.log', 'a'], 2 => ['file', $dosarTest . '/server-eticheta.log', 'a']], $_, $radacinaEticheta);
+usleep(800000);
+$vechi = $salveaza(['toate'], 'vechi', $portEticheta, true);
+$dupaVechi = $amprentaProduse();
+$stareEticheta = proc_get_status($serverEticheta);
+exec('pkill -TERM -P ' . (int) $stareEticheta['pid'] . ' 2>/dev/null');
+proc_terminate($serverEticheta);
+proc_close($serverEticheta);
+$puneLaLoc();
+// 2. Editorul nou, aceeași salvare neatinsă: același rezultat. 3. A doua salvare neatinsă: nicio coloană schimbată.
+// 4. Fără ofertele BBD și precomenzi: tot nicio coloană schimbată (valorile secțiunilor ascunse rămân).
+$cuToate = $salveaza(['toate'], 'toate');
+$dupaToate = $amprentaProduse();
+$aDoua = $salveaza(['toate'], 'a-doua');
+$dupaADoua = $amprentaProduse();
+$faraPluginuri = $salveaza(['toate', 'oferte_bbd=oprit', 'precomenzi=oprit'], 'fara-bbd-precomenzi');
+$dupaFara = $amprentaProduse();
+$stareServer = proc_get_status($server);
+exec('pkill -TERM -P ' . (int) $stareServer['pid'] . ' 2>/dev/null');
+proc_terminate($server);
+proc_close($server);
+putenv('LICENTA_DOSAR');
+$verifica('editorul de dinainte (eticheta admin-inainte-b): ' . count($vechi['salvate']) . ' produse salvate neatinse, ca referință',
+    count($vechi['salvate']) === count($idsProduse) && $vechi['probleme'] === [], implode('; ', $vechi['probleme']));
+$verifica('cu toate pluginurile: ' . count($cuToate['salvate']) . ' produse (' . $listaProduse . ') deschise și salvate cu Ctrl+S, contorul 0 / 1 / 0, Esc întreabă; '
+    . 'nicio eroare JavaScript', count($cuToate['salvate']) === count($idsProduse) && $cuToate['probleme'] === [] && $cuToate['blocate'] === [],
+    implode('; ', $cuToate['probleme']));
+$verifica('editorul nou scrie la o salvare neatinsă exact ce scria editorul de dinainte (produsul fără updated_at, categoriile, câmpurile, SEO-ul)',
+    $dupaToate === $dupaVechi, json_encode(array_map(null, $dupaVechi['produse'], $dupaToate['produse'])));
+$verifica('a doua salvare neatinsă nu schimbă nicio coloană', count($aDoua['salvate']) === count($idsProduse) && $dupaADoua === $dupaToate,
+    json_encode(array_map(null, $dupaToate['produse'], $dupaADoua['produse'])));
+$verifica('secțiunile: cu toate pluginurile ' . count($cuToate['sectiuni']) . ' (cu Oferte BBD și Precomandă), fără ele '
+    . count($faraPluginuri['sectiuni']) . ' (fără)', in_array('produs-bbd', $cuToate['sectiuni'], true) && in_array('produs-precomanda', $cuToate['sectiuni'], true)
+    && !in_array('produs-bbd', $faraPluginuri['sectiuni'], true) && !in_array('produs-precomanda', $faraPluginuri['sectiuni'], true)
+    && in_array('produs-seo', $faraPluginuri['sectiuni'], true));
+$verifica('fără ofertele BBD și fără precomenzi: salvarea păstrează ofertele, precomanda și limitele ei, nicio coloană schimbată',
+    count($faraPluginuri['salvate']) === count($idsProduse) && $faraPluginuri['probleme'] === [] && $dupaFara === $dupaToate
+    && (int) ($dupaFara['produse'][0]['preorder_max_total'] ?? 0) === 20,
+    implode('; ', $faraPluginuri['probleme']) . ' ' . json_encode(array_map(null, $dupaToate['produse'], $dupaFara['produse'])));
+// Baza la loc: tabelele atinse, rând cu rând (salvarea scrie updated_at, iar schimbarea licenței pașii de activare).
+$puneLaLoc();
+$db->prepare('UPDATE products SET preorder_enabled = ?, preorder_max_per_order = ?, preorder_max_total = ?, updated_at = ? WHERE id = ?')
+    ->execute([$randPre['preorder_enabled'], $randPre['preorder_max_per_order'], $randPre['preorder_max_total'], $randPre['updated_at'], $idProdusPre]);
 
 $scrie('');
 $scrie(sprintf('Rezultat: %d trecute, %d eșuate. Raport: %s', $trecute, $esuate, $fisierRaport));
