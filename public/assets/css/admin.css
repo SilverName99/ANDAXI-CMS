@@ -773,3 +773,33 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
     .adm-produs__nesalvate { order: 2; }
     .adm-produs__antet #produs-salveaza { order: 3; margin-left: auto; }
 }
+
+/* ── 6. Restul paginilor (WP-35) ─────────────────────────────────────────────────────────── */
+/* Tab-urile unei pagini de setări (componenta tab-uri-cu-numar cu „panouri”, taburi.js): partea ascunsă nu se vede deloc. */
+[data-adm-tab-panou][hidden] { display: none !important; }
+.adm-tab-panou { display: grid; gap: 0; }
+.adm-tab-panou > .adm-sectiune { scroll-margin-top: 64px; }
+/* Pagina rămasă în cadrul vechi („panel”) cu un antet nou deasupra: fără margine în plus sus. */
+.adm-antet--pagina + .panel, .adm-antet--pagina + .adm-taburi { margin-top: 0; }
+/* Casetele din interiorul unei secțiuni (pașii de configurare, starea cache-ului, ce face un plugin). */
+.ax-continut .adm-sectiune__corp .panel { box-shadow: none; padding: 12px 14px; }
+.ax-continut .adm-sectiune__corp .settings-card,
+.ax-continut .adm-setari .settings-card { border: 1px solid var(--ax-linie); border-radius: var(--ax-raza-mare); padding: 14px 16px; background: var(--ax-suprafata); }
+.ax-continut .adm-sectiune__corp h4 { font-size: 13.5px; font-weight: 600; margin: 0 0 8px; }
+.ax-continut .adm-sectiune__corp > form + form,
+.ax-continut .adm-sectiune__corp > form + .panel { margin-top: 12px; }
+/* Textul secundar (fostele culori gri scrise pe elemente). */
+.adm-text-slab { color: var(--ax-text-3); }
+/* Setări plăți (IA-09): fiecare fel de plată e o parte a aceluiași formular, pe toată lățimea grilei lui. */
+.adm-plati-metoda { grid-column: 1 / -1; }
+/* Pagina fără învelișul alb de dinainte (adm-pagina): secțiunile sunt casetele; ce nu e secțiune primește o casetă la fel. */
+.adm-pagina > :not(.adm-sectiune):not(script):not(style):not(template):not(.modal-overlay):not(dialog):not(input):not(.adm-taburi):not(.adm-filtre):not(.adm-mesaj):not(.adm-tabel__cadru):not([hidden]) {
+    background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: var(--ax-raza-mare); padding: 14px 16px; margin: 0 0 12px;
+}
+.adm-pagina > .adm-tabel__cadru { margin: 0 0 12px; }
+/* Cifrele de sus ale unei pagini (ERP, statisticile newsletterului…): cardurile pe un rând care se rupe. */
+.adm-carduri { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 0 0 12px; }
+/* Stări generale (WP-35: ofertele BBD, coduri…): bun, problemă, neutru. */
+.adm-stare--ok { background: var(--ax-ok-fundal); color: var(--ax-ok); }
+.adm-stare--eroare { background: var(--ax-eroare-fundal); color: var(--ax-eroare); }
+.adm-stare--neutru { background: var(--ax-suprafata-2); color: var(--ax-text-3); }

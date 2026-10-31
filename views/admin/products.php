@@ -2004,3 +2004,18 @@ $dateCatalogProduse = [
 </script>
 <?= \App\Support\Dev::marcaj('bv:produse-catalog-js', true) ?>
 <script src="/assets/js/admin/produs.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/produs.js')) ?: 1) ?>" defer></script>
+<script>
+// WP-35 (IA-05): un link „/admin/products#editeaza-<id>” (lista „Oferte BBD”) deschide direct editorul produsului.
+(() => {
+    const potrivire = /^#editeaza-(\d+)$/.exec(window.location.hash || '');
+    if (!potrivire) {
+        return;
+    }
+    const buton = Array.from(document.querySelectorAll('.edit-product-btn')).find((b) => {
+        try { return String(JSON.parse(b.getAttribute('data-product') || '{}').id) === potrivire[1]; } catch (_e) { return false; }
+    });
+    if (buton instanceof HTMLElement) {
+        window.addEventListener('load', () => buton.click());
+    }
+})();
+</script>

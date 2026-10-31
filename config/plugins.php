@@ -105,13 +105,12 @@ return [
             ['grup' => 'acasa', 'ordine' => 10, 'eticheta' => 'Acasă', 'href' => '/admin', 'icon' => 'dashboard',
                 'activ' => $activExact('/admin')],
             // Încercările de înregistrare (conturi de clienți) și de comandă (magazin), cu protecția anti-robot.
-            ['grup' => 'rapoarte', 'ordine' => 20, 'eticheta' => 'Securitate formulare', 'href' => '/admin/users/security',
+            ['grup' => 'rapoarte', 'ordine' => 20, 'eticheta' => 'Încercări de înregistrare și comandă', 'href' => '/admin/users/security',
                 'icon' => 'shield', 'activ' => ['/admin/users/security'], 'oricare_din' => ['magazin', 'conturi_clienti']],
             // Pagina e a nucleului (SEO, cache, mentenanță…); fără magazin pe site se numește „Setări site”.
             ['grup' => 'setari', 'ordine' => 10, 'eticheta' => 'Setări magazin', 'href' => '/admin/settings/store',
-                'icon' => 'settings', 'activ' => ['/admin/settings/store'], 'eticheta_fara' => ['magazin' => 'Setări site']],
-            ['grup' => 'setari', 'ordine' => 100, 'eticheta' => 'Google', 'href' => '/admin/settings/google',
-                'icon' => 'settings', 'activ' => ['/admin/settings/google']],
+                'icon' => 'settings', 'activ' => ['/admin/settings/store', '/admin/settings/google'], 'eticheta_fara' => ['magazin' => 'Setări site']],
+            // WP-35 (IA-04): „Google” nu mai are intrare: e partea „Google” a tab-ului „SEO și Google” din Setări magazin / site.
             ['grup' => 'setari', 'ordine' => 110, 'eticheta' => 'Administratori', 'href' => '/admin/settings/admins',
                 'icon' => 'users', 'activ' => ['/admin/settings/admins']],
             // WP-32 (OD-52 = b): modulele site-ului, din licența aplicată.
@@ -123,15 +122,15 @@ return [
                 'activ' => ['/admin/pages']],
             ['grup' => 'continut', 'ordine' => 60, 'eticheta' => 'Galerie', 'href' => '/admin/gallery', 'icon' => 'gallery',
                 'activ' => ['/admin/gallery']],
-            ['grup' => 'continut', 'ordine' => 70, 'eticheta' => 'Header/Footer/Meniu', 'href' => '/admin/design',
+            ['grup' => 'continut', 'ordine' => 70, 'eticheta' => 'Antet, subsol și meniu', 'href' => '/admin/design',
                 'icon' => 'design', 'activ' => ['/admin/design']],
             ['grup' => 'setari', 'ordine' => 80, 'eticheta' => 'Setări trimitere', 'href' => '/admin/emails/sender',
                 'icon' => 'emails', 'activ' => ['/admin/emails/sender']],
             ['grup' => 'setari', 'ordine' => 90, 'eticheta' => 'Trimite email test', 'href' => '/admin/emails/test',
                 'icon' => 'orders', 'activ' => ['/admin/emails/test'], 'icon_fara' => ['magazin' => 'emails']],
-            ['grup' => 'clienti', 'ordine' => 40, 'eticheta' => 'Formulare contact',
+            ['grup' => 'clienti', 'ordine' => 40, 'eticheta' => 'Mesaje de contact',
                 'href' => '/admin/emails/newsletters?tab=contact_forms', 'icon' => 'emails', 'activ' => $activTab('contact_forms')],
-            ['grup' => 'rapoarte', 'ordine' => 40, 'eticheta' => 'Istoric trimitere',
+            ['grup' => 'rapoarte', 'ordine' => 40, 'eticheta' => 'Emailuri trimise',
                 'href' => '/admin/emails/newsletters?tab=history', 'icon' => 'emails', 'activ' => $activTab('history')],
         ],
         'tabele' => ['admins', 'settings', 'pages', 'seo_pages', 'gallery_images', 'gallery_folders', 'contact_form_messages',
@@ -157,10 +156,9 @@ return [
                     'activ' => $activExact('/admin/products')],
                 ['grup' => 'produse', 'ordine' => 20, 'eticheta' => 'Categorii produse', 'href' => '/admin/categories',
                     'icon' => 'categories', 'activ' => ['/admin/categories']],
-                ['grup' => 'produse', 'ordine' => 30, 'eticheta' => 'Câmpuri suplimentare', 'href' => '/admin/products/fields',
-                    'icon' => 'settings', 'activ' => ['/admin/products/fields']],
-                ['grup' => 'produse', 'ordine' => 40, 'eticheta' => 'Template-uri produse', 'href' => '/admin/products/templates',
-                    'icon' => 'design', 'activ' => ['/admin/products/templates']],
+                // WP-35 (IA-02): câmpurile suplimentare și șabloanele produselor sunt o pagină cu două tab-uri (ambele adrese rămân).
+                ['grup' => 'produse', 'ordine' => 30, 'eticheta' => 'Câmpuri și șabloane', 'href' => '/admin/products/fields',
+                    'icon' => 'design', 'activ' => ['/admin/products/fields', '/admin/products/templates']],
             ],
             'tabele' => ['products', 'product_categories', 'product_category_links', 'product_extra_fields',
                 'product_extra_field_values', 'product_templates', 'product_template_fields'],
@@ -194,7 +192,7 @@ return [
                     'oricare_din' => ['magazin', 'plata_stripe', 'plata_euplatesc', 'plata_bt']],
                 ['grup' => 'marketing', 'ordine' => 80, 'eticheta' => 'Automatizări', 'href' => '/admin/emails/automation',
                     'icon' => 'automation', 'activ' => ['/admin/emails/automation']],
-                ['grup' => 'setari', 'ordine' => 70, 'eticheta' => 'Email-uri ecommerce',
+                ['grup' => 'setari', 'ordine' => 70, 'eticheta' => 'Emailuri de comandă',
                     'href' => '/admin/emails/newsletters?tab=ecommerce', 'icon' => 'orders', 'activ' => $activTab('ecommerce')],
             ],
             // Emailurile de coș abandonat invită clientul să termine comanda: nu și cu checkout-ul închis.
@@ -295,9 +293,8 @@ return [
             'rute_publice' => ['/cos/cupon/*', '/api/cart/coupon/*'],
             'meniu' => [
                 ['grup' => 'marketing', 'ordine' => 10, 'eticheta' => 'Cupoane', 'href' => '/admin/coupons', 'icon' => 'coupon',
-                    'activ' => $activExact('/admin/coupons')],
-                ['grup' => 'marketing', 'ordine' => 20, 'eticheta' => 'Cupoane unice', 'href' => '/admin/coupons/unique',
-                    'icon' => 'coupon', 'activ' => ['/admin/coupons/unique']],
+                    'activ' => ['/admin/coupons']],
+                // WP-35 (IA-06): „Cupoane unice” e tab-ul „Coduri unice” al paginii Cupoane (adresa rămâne), fără intrare proprie.
             ],
             'tabele' => ['coupons'],
         ],
@@ -309,7 +306,7 @@ return [
             'rute_admin' => ['/admin/users/points/*'],
             'rute_publice' => ['/cos/puncte/*'],
             'meniu' => [
-                ['grup' => 'marketing', 'ordine' => 30, 'eticheta' => 'Puncte fidelitate', 'href' => '/admin/users/points',
+                ['grup' => 'marketing', 'ordine' => 30, 'eticheta' => 'Fidelitate', 'href' => '/admin/users/points',
                     'icon' => 'stats',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users/points'])
                         || ($prefix(['/admin/users/settings']) && ($tab ?? 'settings') === 'points')],
@@ -344,6 +341,12 @@ return [
             'nume' => 'Oferte BBD',
             'descriere' => 'Loturi cu dată minimă de valabilitate și preț propriu, alese înainte de adăugarea în coș; panoul lateral „Oferte”.',
             'necesita' => ['magazin'],
+            // WP-35 (IA-05): lista tuturor ofertelor, în Produse (rolul magazin o vede: e sub /admin/products).
+            'rute_admin' => ['/admin/products/oferte-bbd'],
+            'meniu' => [
+                ['grup' => 'produse', 'ordine' => 35, 'eticheta' => 'Oferte BBD', 'href' => '/admin/products/oferte-bbd',
+                    'icon' => 'products', 'activ' => ['/admin/products/oferte-bbd']],
+            ],
             'tabele' => ['products.bbd_*', 'order_items.bbd_key'],
         ],
 
@@ -381,10 +384,10 @@ return [
             // WP-25 (VT-C5): {{auth_form}} = formularul de intrare / înregistrare, pe paginile „login” și „register”.
             'tokenuri' => ['account_section', 'auth_google_button', 'auth_form'],
             'meniu' => [
-                ['grup' => 'clienti', 'ordine' => 10, 'eticheta' => 'Listă utilizatori', 'href' => '/admin/users', 'icon' => 'users',
+                ['grup' => 'clienti', 'ordine' => 10, 'eticheta' => 'Clienți', 'href' => '/admin/users', 'icon' => 'users',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users'])
                         && !$prefix(['/admin/users/settings', '/admin/users/points', '/admin/users/security', '/admin/users/gdpr-agreements'])],
-                ['grup' => 'clienti', 'ordine' => 20, 'eticheta' => 'Setări utilizatori', 'href' => '/admin/users/settings',
+                ['grup' => 'clienti', 'ordine' => 20, 'eticheta' => 'Conturi clienți', 'href' => '/admin/users/settings',
                     'icon' => 'settings',
                     'activ' => static fn (callable $prefix, string $cale, ?string $tab): bool => $prefix(['/admin/users/settings'])
                         && ($tab ?? 'settings') !== 'points'],
@@ -410,7 +413,7 @@ return [
                 // Ca în codul de dinainte de pluginuri: „Categorii” apare cui are voie la postări.
                 ['grup' => 'continut', 'ordine' => 30, 'eticheta' => 'Categorii', 'href' => '/admin/blog/categories', 'icon' => 'pages',
                     'activ' => ['/admin/blog/categories'], 'permisiune' => '/admin/blog/posts'],
-                ['grup' => 'continut', 'ordine' => 40, 'eticheta' => 'Template blog', 'href' => '/admin/blog/templates', 'icon' => 'design',
+                ['grup' => 'continut', 'ordine' => 40, 'eticheta' => 'Șabloane blog', 'href' => '/admin/blog/templates', 'icon' => 'design',
                     'activ' => ['/admin/blog/templates']],
                 ['grup' => 'continut', 'ordine' => 50, 'eticheta' => 'Autori blog', 'href' => '/admin/blog/authors', 'icon' => 'users',
                     'activ' => ['/admin/blog/authors']],
@@ -439,13 +442,13 @@ return [
                 // WP-30: campaniile (trimiterea unui newsletter) au intrare în meniu; până atunci se ajungea la ele doar din tab-uri.
                 ['grup' => 'marketing', 'ordine' => 40, 'eticheta' => 'Newslettere',
                     'href' => '/admin/emails/newsletters?tab=campaigns', 'icon' => 'newsletter', 'activ' => $activTab('campaigns')],
-                ['grup' => 'marketing', 'ordine' => 50, 'eticheta' => 'Template-uri',
+                ['grup' => 'marketing', 'ordine' => 50, 'eticheta' => 'Șabloane newsletter',
                     'href' => '/admin/emails/newsletters?tab=templates', 'icon' => 'pages', 'activ' => $activTab('templates')],
                 ['grup' => 'marketing', 'ordine' => 60, 'eticheta' => 'Liste abonați',
                     'href' => '/admin/emails/newsletters?tab=subscribers', 'icon' => 'dashboard', 'activ' => $activTab('subscribers')],
                 ['grup' => 'marketing', 'ordine' => 70, 'eticheta' => 'Formulare opt-in',
                     'href' => '/admin/emails/newsletters?tab=optin', 'icon' => 'emails', 'activ' => $activTab('optin')],
-                ['grup' => 'rapoarte', 'ordine' => 30, 'eticheta' => 'Statistici',
+                ['grup' => 'rapoarte', 'ordine' => 30, 'eticheta' => 'Statistici newsletter',
                     'href' => '/admin/emails/newsletters?tab=stats', 'icon' => 'stats', 'activ' => $activTab('stats')],
             ],
             'cron' => ['scripts/newsletter-campaigns.php' => 'vizibil'],
@@ -535,7 +538,7 @@ return [
             'rute_admin' => ['/admin/settings/mannequin'],
             'tokenuri' => ['mannequin_section'],
             'meniu' => [
-                ['grup' => 'setari', 'ordine' => 60, 'eticheta' => 'Configurare manechin', 'href' => '/admin/settings/mannequin',
+                ['grup' => 'setari', 'ordine' => 60, 'eticheta' => 'Manechin', 'href' => '/admin/settings/mannequin',
                     'icon' => 'design', 'activ' => ['/admin/settings/mannequin']],
             ],
             'tabele' => ['settings.mannequin_points_json'],

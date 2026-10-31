@@ -32,22 +32,29 @@ $pageUrl = static function (int $p) use ($view, $q, $batch, $perPage): string {
 };
 ?>
 
+<?php
+// WP-35 (IA-06): Cupoanele și codurile unice sunt o singură pagină, „Cupoane”, cu două tab-uri; ambele adrese rămân
+// (/admin/coupons și /admin/coupons/unique), fiecare cu tab-ul ei ales.
+admin_componenta('antet-pagina', [
+    'titlu' => 'Cupoane',
+    'nivel' => 1,
+    'subtitlu' => 'Codurile de reducere de la casă: cupoanele cu reguli și codurile unice, de o singură folosire.',
+    'ajutor' => [
+        'Codurile unice se importă pe loturi (fișier sau lipite). Când unul e folosit într-o comandă trece la „Coduri folosite”, de unde îl poți reactiva pentru teste.',
+    ],
+]);
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Felurile de cupoane', 'taburi' => [
+    ['eticheta' => 'Cupoane', 'href' => '/admin/coupons', 'activ' => false],
+    ['eticheta' => 'Coduri unice', 'href' => '/admin/coupons/unique', 'activ' => true],
+]]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Cupoane unice</h1>
-            <p>Importă loturi de coduri unice (single-use). Când un cupon e folosit într-o comandă, trece automat în „Cupoane folosite", de unde îl poți reactiva pentru teste.</p>
-        </div>
-    </div>
-
-    <div class="vuc-tabs">
-        <a href="/admin/coupons/unique?view=active" class="vuc-tab <?= $view === 'active' ? 'is-active' : '' ?>">
-            Cupoane unice <span class="vuc-badge"><?= $activeCount ?></span>
-        </a>
-        <a href="/admin/coupons/unique?view=used" class="vuc-tab <?= $view === 'used' ? 'is-active' : '' ?>">
-            Cupoane folosite <span class="vuc-badge"><?= $usedCount ?></span>
-        </a>
-    </div>
+    <?php
+    admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Codurile unice, după stare', 'taburi' => [
+        ['eticheta' => 'Coduri active', 'href' => '/admin/coupons/unique?view=active', 'numar' => $activeCount, 'activ' => $view === 'active'],
+        ['eticheta' => 'Coduri folosite', 'href' => '/admin/coupons/unique?view=used', 'numar' => $usedCount, 'activ' => $view === 'used'],
+    ]]);
+    ?>
 
     <?php if ($view === 'active'): ?>
         <details class="vuc-import" <?= $activeCount === 0 ? 'open' : '' ?>>
@@ -138,7 +145,7 @@ $pageUrl = static function (int $p) use ($view, $q, $batch, $perPage): string {
                     <input type="checkbox" name="stacks_with_discounts" value="1" checked>
                     <span>Se cumulează cu alte reduceri / promoții</span>
                 </label>
-                <small style="display:block;margin:-4px 0 10px;color:#6b7280;">Debifat: cupoanele reduc doar produsele la preț întreg (produsele deja la promoție sunt ignorate).</small>
+                <small style="display:block;margin:-4px 0 10px;color:var(--ax-text-3);">Debifat: cupoanele reduc doar produsele la preț întreg (produsele deja la promoție sunt ignorate).</small>
 
                 <label class="coupon-admin-active-check">
                     <input type="checkbox" name="is_active" value="1" checked>
@@ -273,11 +280,11 @@ $dateProduseCupoane = ['cupoane' => (object) (is_array($produseCupoane ?? null) 
                 .vuc-editrow--top{align-items:flex-start;}
                 .vuc-editrow--top .vuc-editchk{padding-top:8px;}
                 .vuc-products{flex:1;min-width:260px;max-width:640px;display:flex;flex-direction:column;gap:6px;}
-                .vuc-products .coupon-admin-check-search{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13.5px;margin-bottom:0;}
+                .vuc-products .coupon-admin-check-search{padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font-size:13.5px;margin-bottom:0;}
                 .vuc-products .coupon-admin-checklist{max-height:220px;}
-                .vuc-products .coupon-admin-active-check{margin:2px 0 0;font-weight:600;font-size:13.5px;color:#374151;align-items:center;gap:8px;}
+                .vuc-products .coupon-admin-active-check{margin:2px 0 0;font-weight:600;font-size:13.5px;color:var(--ax-text-2);align-items:center;gap:8px;}
                 .vuc-products .coupon-admin-active-check input[type=checkbox]{width:16px;height:16px;min-width:16px;min-height:16px;margin:0;}
-                .vuc-products-note{color:#6b7280;font-size:12.5px;line-height:1.45;}
+                .vuc-products-note{color:var(--ax-text-3);font-size:12.5px;line-height:1.45;}
                 </style>
                 <script>
                 // După încărcarea paginii: cupoanele (.vuc-rowcheck) sunt în tabelul de sub panou.
@@ -489,62 +496,57 @@ $dateProduseCupoane = ['cupoane' => (object) (is_array($produseCupoane ?? null) 
 </script>
 
 <style>
-.vuc-tabs{display:flex;gap:10px;margin:6px 0 18px;border-bottom:1px solid #e5e7eb;}
-.vuc-tab{padding:10px 16px;text-decoration:none;color:#6b7280;font-weight:600;border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:8px;}
-.vuc-tab.is-active{color:#111827;border-bottom-color:#ea4968;}
-.vuc-badge{background:#f3f4f6;color:#374151;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700;}
-.vuc-tab.is-active .vuc-badge{background:#fdeef2;color:#ea4968;}
 
-.vuc-import{border:1px solid #e5e7eb;border-radius:12px;padding:6px 16px;margin-bottom:18px;background:#fafafa;}
-.vuc-import>summary{cursor:pointer;font-weight:700;padding:10px 0;color:#111827;}
+.vuc-import{border:1px solid var(--ax-linie);border-radius:12px;padding:6px 16px;margin-bottom:18px;background:var(--ax-suprafata-2);}
+.vuc-import>summary{cursor:pointer;font-weight:700;padding:10px 0;color:var(--ax-text);}
 .vuc-import-form{padding:8px 0 14px;}
-.vuc-sub{margin:16px 0 8px;font-size:14px;color:#374151;}
+.vuc-sub{margin:16px 0 8px;font-size:14px;color:var(--ax-text-2);}
 .vuc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:10px;}
 .vuc-grid .field{display:flex;flex-direction:column;gap:5px;}
-.vuc-grid .field label{font-size:13px;font-weight:600;color:#374151;}
-.vuc-grid .field small{color:#9ca3af;font-size:12px;}
+.vuc-grid .field label{font-size:13px;font-weight:600;color:var(--ax-text-2);}
+.vuc-grid .field small{color:var(--ax-text-3);font-size:12px;}
 .vuc-span-full{grid-column:1 / -1;}
 .vuc-import-actions{margin-top:14px;}
 
 .vuc-search{display:flex;gap:8px;margin:6px 0 14px;flex-wrap:wrap;}
-.vuc-search input[type=text]{flex:1;min-width:220px;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;}
-.vuc-batch-select{padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;min-width:180px;}
+.vuc-search input[type=text]{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--ax-linie-tare);border-radius:8px;}
+.vuc-batch-select{padding:9px 12px;border:1px solid var(--ax-linie-tare);border-radius:8px;background:var(--ax-suprafata);min-width:180px;}
 
-.vuc-bulkbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px;padding:10px 12px;background:#f9fafb;border:1px solid #eef0f2;border-radius:10px;}
-.vuc-selinfo{color:#374151;font-size:13px;}
+.vuc-bulkbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px;padding:10px 12px;background:var(--ax-suprafata-2);border:1px solid #eef0f2;border-radius:10px;}
+.vuc-selinfo{color:var(--ax-text-2);font-size:13px;}
 .vuc-batchbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 12px;background:#fdf2f6;border:1px solid #f6d6e0;border-radius:10px;}
 .vuc-batchbar__label{color:#8a2148;font-size:13px;}
 .vuc-editpanel__actions{display:flex;gap:8px;flex-wrap:wrap;}
-.vuc-muted{color:#9ca3af;}
-.vuc-editpanel{border:1px solid #e5e7eb;border-radius:12px;padding:14px 16px;margin:0 0 14px;background:#fff;}
-.vuc-editpanel__hint{margin:0 0 12px;font-size:13px;color:#6b7280;}
+.vuc-muted{color:var(--ax-text-3);}
+.vuc-editpanel{border:1px solid var(--ax-linie);border-radius:12px;padding:14px 16px;margin:0 0 14px;background:var(--ax-suprafata);}
+.vuc-editpanel__hint{margin:0 0 12px;font-size:13px;color:var(--ax-text-3);}
 .vuc-editgrid{display:flex;flex-direction:column;gap:12px;margin-bottom:12px;}
 .vuc-editrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-.vuc-editchk{min-width:190px;font-weight:600;font-size:13.5px;color:#374151;display:inline-flex;align-items:center;gap:8px;}
-.vuc-editrow select,.vuc-editrow input[type=number],.vuc-editrow input[type=datetime-local]{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13.5px;}
-.vuc-editsub{display:inline-flex;flex-direction:column;gap:3px;font-size:12px;color:#6b7280;}
+.vuc-editchk{min-width:190px;font-weight:600;font-size:13.5px;color:var(--ax-text-2);display:inline-flex;align-items:center;gap:8px;}
+.vuc-editrow select,.vuc-editrow input[type=number],.vuc-editrow input[type=datetime-local]{padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font-size:13.5px;}
+.vuc-editsub{display:inline-flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ax-text-3);}
 .vuc-check-col{width:34px;text-align:center;}
 
 .vuc-bulk{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
 .vuc-bulk form{display:inline;}
 
-.vuc-empty{color:#6b7280;font-style:italic;padding:16px 0;}
+.vuc-empty{color:var(--ax-text-3);font-style:italic;padding:16px 0;}
 
 .vuc-table-wrap{overflow-x:auto;}
 .vuc-table{width:100%;border-collapse:collapse;font-size:14px;}
-.vuc-table th,.vuc-table td{text-align:left;padding:10px 12px;border-bottom:1px solid #eee;vertical-align:middle;}
-.vuc-table th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;}
-.vuc-table code{background:#f3f4f6;padding:2px 7px;border-radius:6px;font-size:13px;}
+.vuc-table th,.vuc-table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--ax-linie);vertical-align:middle;}
+.vuc-table th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ax-text-3);}
+.vuc-table code{background:var(--ax-suprafata-2);padding:2px 7px;border-radius:6px;font-size:13px;}
 .vuc-actions-col{white-space:nowrap;display:flex;gap:6px;align-items:center;}
 .btn-sm{padding:6px 12px;font-size:13px;}
 
 .vuc-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;}
-.vuc-pill--on{background:#dcfce7;color:#166534;}
-.vuc-pill--off{background:#f3f4f6;color:#6b7280;}
-.vuc-pill--used{background:#fef3c7;color:#92400e;}
+.vuc-pill--on{background:var(--ax-ok-fundal);color:var(--ax-accent);}
+.vuc-pill--off{background:var(--ax-suprafata-2);color:var(--ax-text-3);}
+.vuc-pill--used{background:var(--ax-atentie-fundal);color:var(--ax-atentie);}
 
 .vuc-pagination{display:flex;align-items:center;gap:14px;margin-top:16px;}
-.vuc-page-info{color:#6b7280;font-size:13px;}
+.vuc-page-info{color:var(--ax-text-3);font-size:13px;}
 
 @media(max-width:720px){.vuc-grid{grid-template-columns:1fr;}}
 </style>

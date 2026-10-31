@@ -1260,7 +1260,7 @@ $porturiBiovitality[] = [
                 <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
                     <input type="hidden" name="tab" value="stats">
                     <input type="hidden" name="campaign_id" value="{ID}">
-                    <select name="recip_f" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                    <select name="recip_f" style="padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font:inherit;">
                                                     <option value="all" selected>
                                 Toți destinatarii ({T})                            </option>
                                                     <option value="opened">
@@ -1275,8 +1275,8 @@ $porturiBiovitality[] = [
                                 Doar eșuate (0)                            </option>
                                             </select>
                     <input type="text" name="recip_q" value="" placeholder="Caută după email…"
-                           style="flex:1 1 220px;min-width:180px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
-                    <select name="recip_per_page" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                           style="flex:1 1 220px;min-width:180px;padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font:inherit;">
+                    <select name="recip_per_page" style="padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font:inherit;">
                                                     <option value="25">25 / pagină</option>
                                                     <option value="50" selected>50 / pagină</option>
                                                     <option value="100">100 / pagină</option>

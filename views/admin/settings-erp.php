@@ -12,42 +12,39 @@ $cuFan = \App\Support\Plugins::vizibil('livrare_fan');
 $cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 ?>
 
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'ERP ANDAXI',
+    'nivel' => 1,
+    'subtitlu' => 'Trimite automat comenzile din magazin către ERP și citește stocul real din gestiune.',
+    'ajutor' => [
+        'Cifrele de sus arată coada trimiterilor: ce a ajuns în ERP, ce așteaptă, ce a eșuat și anulările sau retururile încă netrimise.',
+        'Cronul reia singur trimiterile eșuate; din lista comenzilor poți retrimite o comandă anume.',
+    ],
+]);
+?>
 <?php if (!empty($erpModulBanner)): ?>
-    <section class="panel" style="border-color:#fcd34d;background:#fffbeb;color:#92400e;">
-        <?= htmlspecialchars((string) $erpModulBanner, ENT_QUOTES) ?>
-    </section>
+    <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'text' => (string) $erpModulBanner]); ?>
 <?php endif; ?>
 
-<section class="panel">
-    <h1>ERP ANDAXI</h1>
-    <p>Trimite automat comenzile din magazin către ERP și citește stocul real din gestiune.</p>
+<div class="adm-carduri">
+    <?php
+    admin_componenta('card', ['titlu' => 'Trimise', 'valoare' => (string) (int) $queue['sent'], 'ton' => 'ok']);
+    admin_componenta('card', ['titlu' => 'În așteptare', 'valoare' => (string) (int) $queue['pending'], 'ton' => 'atentie']);
+    admin_componenta('card', ['titlu' => 'Eșuate', 'valoare' => (string) (int) $queue['failed'], 'ton' => (int) $queue['failed'] > 0 ? 'eroare' : 'neutru']);
+    admin_componenta('card', ['titlu' => 'Anulări și retururi în curs', 'valoare' => (string) $inCurs, 'ton' => 'atentie',
+        'detaliu' => 'Netrimise încă în ERP; cronul le reia la fiecare rulare.']);
+    ?>
+</div>
 
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0;">
-        <div class="panel" style="flex:1;min-width:150px;margin:0;padding:12px;">
-            <div style="font-size:12px;text-transform:uppercase;color:#64748b;">Trimise</div>
-            <div style="font-size:22px;font-weight:700;color:#166534;"><?= (int) $queue['sent'] ?></div>
-        </div>
-        <div class="panel" style="flex:1;min-width:150px;margin:0;padding:12px;">
-            <div style="font-size:12px;text-transform:uppercase;color:#64748b;">În așteptare</div>
-            <div style="font-size:22px;font-weight:700;color:#92400e;"><?= (int) $queue['pending'] ?></div>
-        </div>
-        <div class="panel" style="flex:1;min-width:150px;margin:0;padding:12px;">
-            <div style="font-size:12px;text-transform:uppercase;color:#64748b;">Eșuate</div>
-            <div style="font-size:22px;font-weight:700;color:#991b1b;"><?= (int) $queue['failed'] ?></div>
-        </div>
-        <div class="panel" style="flex:1;min-width:150px;margin:0;padding:12px;"
-             title="Comenzi anulate sau returnate aici, a căror anulare ori retur n-a ajuns încă în ERP. Cron-ul le reia la fiecare rulare.">
-            <div style="font-size:12px;text-transform:uppercase;color:#64748b;">Anulări și retururi în curs</div>
-            <div style="font-size:22px;font-weight:700;color:#92400e;"><?= $inCurs ?></div>
-        </div>
-    </div>
+<section class="panel">
 <?php if ($pragErp['stare'] === 'data'): ?>
     <p class="muted" data-prag-erp="data" style="margin:0 0 16px;">
         Comenzile plasate înainte de <strong><?= htmlspecialchars(date('d.m.Y H:i', (int) strtotime((string) $pragErp['din'])), ENT_QUOTES) ?></strong>, momentul legării site-ului cu ERP-ul, pe care ERP-ul nu le-a primit niciodată, nu se trimit automat (<?= $inainteDePrag ?> netrimise; nu intră în „În așteptare” și „Eșuate”). Una anume se trimite din Comenzi, cu 🔄; de atunci e ca oricare alta: o trimitere eșuată se reîncearcă singură.
     </p>
 <?php endif; ?>
 <?php if ($pragErp['stare'] === 'lipsa' || $pragErp['stare'] === 'gresit'): ?>
-    <p class="muted" data-prag-erp="<?= htmlspecialchars((string) $pragErp['stare'], ENT_QUOTES) ?>" style="margin:0 0 16px;color:#92400e;">
+    <p class="muted" data-prag-erp="<?= htmlspecialchars((string) $pragErp['stare'], ENT_QUOTES) ?>" style="margin:0 0 16px;color:var(--ax-atentie);">
         Pragul trimiterii (setarea <code>erp_trimite_din</code>) <?= $pragErp['stare'] === 'lipsa' ? 'nu e încă scris' : 'nu e o dată' ?>: nicio comandă netrimisă nu pleacă automat în ERP (<?= $inainteDePrag ?> așteaptă). Îl scrie pasul de activare al ERP-ului, la prima cerere după ce baza e la zi cu migrările (<code>scripts/migreaza.php --aplica</code>).
     </p>
 <?php endif; ?>
@@ -123,7 +120,7 @@ $cuFidelitate = \App\Support\Plugins::vizibil('fidelitate');
         (după 1 minut, 5 minute, 15 minute, 1 oră, 6 ore, apoi la 12 ore, maximum 12 încercări).
         Ca reîncercările să ruleze și fără să intri în admin, adaugă un cron pe server:
     </p>
-    <pre style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;overflow:auto;">*/5 * * * * php <?= htmlspecialchars(dirname(__DIR__, 2), ENT_QUOTES) ?>/scripts/erp-sync.php >/dev/null 2>&1</pre>
+    <pre style="background:var(--ax-text);color:var(--ax-linie);padding:12px;border-radius:8px;overflow:auto;">*/5 * * * * php <?= htmlspecialchars(dirname(__DIR__, 2), ENT_QUOTES) ?>/scripts/erp-sync.php >/dev/null 2>&1</pre>
     <p>
         Comenzile plătite cu cardul pleacă spre ERP abia după confirmarea plății;
         cele cu ramburs pleacă imediat ce sunt plasate.

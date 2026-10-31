@@ -123,7 +123,7 @@ $panouRezumat = (string) ob_get_clean();
                     <input type="hidden" name="section" value="newsletter-campaign-send-now">
                     <input type="hidden" name="campaign_id" value="<?= (int) $nlId ?>">
                     <input type="hidden" name="from_builder" value="1">
-                    <p style="margin:0 0 12px;color:#475569;">Pleacă acum la toți abonații aleși.</p>
+                    <p style="margin:0 0 12px;color:var(--ax-text-3);">Pleacă acum la toți abonații aleși.</p>
                     <button type="submit" class="btn nlp-btn-mare" data-nlp-trimite>Trimite acum</button>
                 </form>
                 <?php admin_componenta('panou-lateral', ['id' => 'nlp-panou-acum', 'titlu' => 'Trimite acum', 'continut' => (string) ob_get_clean()]); ?>

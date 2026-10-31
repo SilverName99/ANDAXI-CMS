@@ -132,4 +132,63 @@ return [
         'cautare-tasta' => ['ce' => 'adaugat', 'rand' => '^data data-adm-tasta = /$', 'cale' => '^/admin/products$',
             'motiv' => '„/” mută focusul în căutarea listei de produse (filtre.js)'],
     ],
+
+    // WP-35: restul paginilor pe componente și propunerile aprobate IA-01 … IA-10 (docs/ARHITECTURA-ADMIN.md). O pagină mutată
+    // (unită cu alta sau devenită tab-ul alteia) are rândul „mutat” (contract_mutata: nimic din ce trimitea nu lipsește la noua
+    // adresă). Tab-urile paginilor de setări sunt linkuri cu ?tab= (adresa ține tab-ul), iar părțile lor sunt deja în pagină
+    // (taburi.js le arată pe rând), deci formularele rămân aceleași.
+    'WP-35' => [
+        // Meniul (IA-02, IA-05, IA-06, IA-10: doar etichetele, care nu intră în contract).
+        'meniu-oferte-bbd' => ['ce' => 'adaugat', 'rand' => '^link /admin/products/oferte-bbd$',
+            'motiv' => 'IA-05: intrarea nouă „Oferte BBD” din Produse (doar cu pluginul oferte_bbd și doar pentru cine are voie la produse)'],
+        'meniu-sabloane-produse' => ['ce' => 'scos', 'rand' => '^link /admin/products/templates$',
+            'motiv' => 'IA-02: „Câmpuri suplimentare” și „Template-uri produse” sunt o intrare, „Câmpuri și șabloane”; șabloanele sunt tab-ul ei'],
+        'meniu-coduri-unice' => ['ce' => 'scos', 'rand' => '^link /admin/coupons/unique$',
+            'motiv' => 'IA-06: „Cupoane unice” e tab-ul „Coduri unice” al paginii Cupoane, fără intrare proprie în meniu'],
+        // Cupoane (IA-06) și Câmpuri și șabloane (IA-02): tab-urile paginii unite.
+        'cupoane-tab' => ['ce' => 'adaugat', 'rand' => '^link /admin/coupons$', 'cale' => '^/admin/coupons',
+            'motiv' => 'IA-06: tab-ul „Cupoane” al paginii unite (pe pagina codurilor unice și pe pagina cupoanelor)'],
+        'campuri-tab' => ['ce' => 'adaugat', 'rand' => '^link /admin/products/fields$', 'cale' => '^/admin/products/fields$',
+            'motiv' => 'IA-02: tab-ul „Câmpuri suplimentare” al paginii „Câmpuri și șabloane” (pe pagina șabloanelor ține locul vechiului buton „← Câmpuri suplimentare”)'],
+        // Emailurile (IA-01): fiecare bucată își vede doar tab-urile ei.
+        'emailuri-taburi-scoase' => ['ce' => 'scos', 'cale' => '^/admin/emails/newsletters\?tab=',
+            'rand' => '^link /admin/emails/newsletters\?tab=(templates|campaigns|ecommerce|subscribers|optin|contact_forms|stats|history)$',
+            'motiv' => 'IA-01: bara cu opt tab-uri amestecate se împarte: Newsletter (4 tab-uri), Emailuri de comandă (3), Mesaje de contact, Emailuri trimise și Statistici'],
+        'emailuri-comanda-taburi' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/(sender|test|newsletters\?tab=ecommerce)$',
+            'rand' => '^link /admin/emails/(sender|test|newsletters\?tab=ecommerce)$',
+            'motiv' => 'IA-01: tab-urile „Emailuri de comandă” (cu magazinul), „Setări trimitere”, „Trimite email test”, pe paginile lor'],
+        // Setări magazin / site (IA-03) și Google (IA-04).
+        'google-mutat' => ['ce' => 'adaugat', 'rand' => '^mutat 302 -> /admin/settings/store\?tab=google$', 'cale' => '^/admin/settings/google$', 'rol' => 'adm',
+            'motiv' => 'IA-04: pagina Google e partea „Google” a tab-ului „SEO și Google” din Setări magazin / Setări site; adresa veche duce acolo'],
+        'google-meniu' => ['ce' => 'scos', 'rand' => '^link /admin/settings/google$', 'rol' => 'adm',
+            'motiv' => 'IA-04: intrarea „Google” din Setări iese din meniu (pagina e un tab al Setărilor magazin / site)'],
+        'google-in-setari' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/store$', 'rol' => 'adm',
+            'rand' => '^(form POST /admin/settings/google|camp POST /admin/settings/google (input:checkbox google_(ads|analytics|tag_manager)_enabled = '
+                . '|input:hidden code_fields_b64 = 1|input:text google_(ads_conversion_id|ads_conversion_label|analytics_id|site_verification|tag_manager_id)'
+                . '|textarea google_(analytics_code|tag_manager_body_code|tag_manager_head_code)))$',
+            'motiv' => 'IA-04: formularul paginii Google (aceeași adresă, aceleași câmpuri), în tab-ul „SEO și Google”'],
+        'setari-taburi' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/store$', 'rol' => 'adm',
+            'rand' => '^(link /admin/settings/store\?tab=(general|magazin|seo|cookies|viteza|chat)|data data-adm-tab(-panou)? = (general|magazin|seo|cookies|viteza|chat)'
+                . '|data data-adm-taburi-panouri = )$',
+            'motiv' => 'IA-03: cele șase tab-uri (General, Magazin, SEO și Google, Cookie și popup, Viteză, Chat live), fiecare cu partea lui din pagină'],
+        'setari-taburi-vechi' => ['ce' => 'scos', 'cale' => '^/admin/settings/store$', 'rol' => 'adm',
+            'rand' => '^data (data-store-settings-(tab|panel) = (pages|sitemap|branding|seo|clarity|chat|maintenance|numerotare|tva|quantity|widgets|caching|popup|cookies)'
+                . '|data-store-settings-tabs = |data-default-tab = pages)$',
+            'motiv' => 'IA-03: cele 14 butoane de dinainte și părțile lor; adresele lor (?tab=tva …) deschid tab-ul nou la partea lor'],
+        // Setări livrare (IA-08).
+        'livrare-taburi' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/shipping$', 'rol' => 'adm',
+            'rand' => '^(link /admin/settings/shipping\?tab=(livrare|fan)|data data-adm-tab(-panou)? = (livrare|fan)|data data-adm-taburi-panouri = )$',
+            'motiv' => 'IA-08: tab-urile „Livrare” și „Curier FAN”; contul FAN rămâne în formularul livrării (atributul form=)'],
+        'livrare-taburi-vechi' => ['ce' => 'scos', 'cale' => '^/admin/settings/shipping$', 'rol' => 'adm',
+            'rand' => '^data (data-shipping-settings-(tab|panel) = (fan-localities|fan-streets|fan-extra-km|fanbox|fan-api|delivery-settings)'
+                . '|data-shipping-settings-tabs = |data-default-tab = fan-localities|data-shipping-go-tab = delivery-settings)$',
+            'motiv' => 'IA-08: cele șase tab-uri de dinainte; adresele lor (?tab=fanbox …) deschid „Curier FAN” la partea lor'],
+        // Setări plăți (IA-09).
+        'plati-taburi' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/payments', 'rol' => 'adm',
+            'rand' => '^(link /admin/settings/payments\?tab=(op|euplatesc|stripe)|data data-adm-tab(-panou)? = (op|euplatesc|stripe)|data data-adm-taburi-panouri = )$',
+            'motiv' => 'IA-09: câte un tab pe fiecare fel de plată (Ordin de plată, Card – EuPlătesc, Card – Stripe), părți ale aceluiași formular; BT rămâne ?tab=bt'],
+        'plati-tab-vechi' => ['ce' => 'scos', 'rand' => '^link /admin/settings/payments$', 'cale' => '^/admin/settings/payments', 'rol' => 'adm',
+            'motiv' => 'IA-09: tab-ul unic „EuPlătesc, Stripe, ordin de plată” devine cele trei tab-uri de mai sus'],
+    ],
 ];
+

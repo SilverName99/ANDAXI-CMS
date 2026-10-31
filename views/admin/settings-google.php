@@ -1,4 +1,7 @@
 <?php
+// WP-35 (IA-04): fosta pagină „Google”, acum o parte a tab-ului „SEO și Google” din Setări magazin / Setări site
+// (views/admin/settings-store.php o include; GET /admin/settings/google trimite acolo). Formularul e același.
+$settings = is_array($settings ?? null) ? $settings : [];
 $verification = (string) ($settings['google_site_verification'] ?? '');
 $gaEnabled = (string) ($settings['google_analytics_enabled'] ?? '0') === '1';
 $gaId = (string) ($settings['google_analytics_id'] ?? '');
@@ -11,20 +14,21 @@ $adsEnabled = (string) ($settings['google_ads_enabled'] ?? '0') === '1';
 $adsId = (string) ($settings['google_ads_conversion_id'] ?? '');
 $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
 ?>
-<section class="panel">
-    <div class="section-head">
+<section class="adm-sectiune" id="setari-google" aria-labelledby="setari-google-titlu">
+    <header class="adm-sectiune__antet">
         <div>
-            <h1>Google</h1>
-            <p>Verificare proprietate, Google Analytics (GA4), Tag Manager și Google Ads. Toate într-un singur loc.</p>
+            <h2 class="adm-sectiune__titlu" id="setari-google-titlu">Google</h2>
+            <p class="adm-sectiune__descriere">Verificare proprietate, Google Analytics (GA4), Tag Manager și Google Ads. Toate într-un singur loc.</p>
         </div>
-    </div>
+    </header>
+    <div class="adm-sectiune__corp">
 
     <form method="post" action="/admin/settings/google" class="form-grid" style="gap:24px;" id="google-settings-form">
         <input type="hidden" name="code_fields_b64" value="1">
 
         <!-- Verificare proprietate -->
-        <div class="settings-card" style="grid-column:1/-1;border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff;">
-            <h2 style="margin:0 0 4px;font-size:17px;">Verificare proprietate</h2>
+        <div class="settings-card" style="grid-column:1/-1;">
+            <h3 style="margin:0 0 4px;">Verificare proprietate</h3>
             <p class="muted" style="margin:0 0 14px;font-size:13px;">
                 Pentru Google Search Console<?= \App\Support\Plugins::vizibil('catalog') ? ' și Merchant Center' : '' ?>. Lipește aici meta tag-ul întreg
                 (<code>&lt;meta name="google-site-verification" content="..."&gt;</code>) sau doar codul — îl curățăm automat.
@@ -36,7 +40,7 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
                        placeholder='<meta name="google-site-verification" content="..." /> sau doar codul'
                        value="<?= htmlspecialchars($verification, ENT_QUOTES) ?>">
                 <?php if ($verification !== ''): ?>
-                    <small class="muted" style="display:block;margin-top:6px;color:#16a34a;">
+                    <small class="muted" style="display:block;margin-top:6px;color:var(--ax-ok);">
                         ✓ Activ — token salvat: <code><?= htmlspecialchars($verification, ENT_QUOTES) ?></code>
                     </small>
                 <?php endif; ?>
@@ -44,8 +48,8 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
         </div>
 
         <!-- Google Analytics 4 -->
-        <div class="settings-card" style="grid-column:1/-1;border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff;">
-            <label style="display:flex;align-items:center;gap:10px;margin:0 0 4px;font-weight:600;font-size:17px;cursor:pointer;">
+        <div class="settings-card" style="grid-column:1/-1;">
+            <label style="display:flex;align-items:center;gap:10px;margin:0 0 4px;font-weight:600;cursor:pointer;">
                 <input type="checkbox" name="google_analytics_enabled" <?= $gaEnabled ? 'checked' : '' ?>>
                 Google Analytics 4
             </label>
@@ -68,8 +72,8 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
         </div>
 
         <!-- Google Tag Manager -->
-        <div class="settings-card" style="grid-column:1/-1;border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff;">
-            <label style="display:flex;align-items:center;gap:10px;margin:0 0 4px;font-weight:600;font-size:17px;cursor:pointer;">
+        <div class="settings-card" style="grid-column:1/-1;">
+            <label style="display:flex;align-items:center;gap:10px;margin:0 0 4px;font-weight:600;cursor:pointer;">
                 <input type="checkbox" name="google_tag_manager_enabled" <?= $gtmEnabled ? 'checked' : '' ?>>
                 Google Tag Manager
             </label>
@@ -98,8 +102,8 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
         </div>
 
         <!-- Google Ads -->
-        <div class="settings-card" style="grid-column:1/-1;border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff;">
-            <label style="display:flex;align-items:center;gap:10px;margin:0 0 4px;font-weight:600;font-size:17px;cursor:pointer;">
+        <div class="settings-card" style="grid-column:1/-1;">
+            <label style="display:flex;align-items:center;gap:10px;margin:0 0 4px;font-weight:600;cursor:pointer;">
                 <input type="checkbox" name="google_ads_enabled" <?= $adsEnabled ? 'checked' : '' ?>>
                 Google Ads
             </label>
@@ -125,6 +129,7 @@ $adsLabel = (string) ($settings['google_ads_conversion_label'] ?? '');
             <button class="btn" type="submit">Salvează setările Google</button>
         </div>
     </form>
+    </div>
 </section>
 
 <script>

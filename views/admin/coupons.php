@@ -20,13 +20,22 @@ if (is_array($selectedCoupon)) {
 }
 ?>
 
+<?php
+// WP-35 (IA-06): pagina „Cupoane”, tab-ul „Cupoane” (codurile unice sunt tab-ul de alături, /admin/coupons/unique).
+admin_componenta('antet-pagina', [
+    'titlu' => 'Cupoane',
+    'nivel' => 1,
+    'subtitlu' => 'Codurile de reducere de la casă: cupoanele cu reguli și codurile unice, de o singură folosire.',
+    'ajutor' => [
+        'Un cupon are o reducere procentuală sau o sumă fixă și regulile lui: perioada, produsele sau categoriile, coșul minim, câte folosiri.',
+    ],
+]);
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Felurile de cupoane', 'taburi' => [
+    ['eticheta' => 'Cupoane', 'href' => '/admin/coupons', 'activ' => true],
+    ['eticheta' => 'Coduri unice', 'href' => '/admin/coupons/unique', 'activ' => false],
+]]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Cupoane</h1>
-            <p>Configurează reduceri procentuale/valorice și reguli de aplicare în coș.</p>
-        </div>
-    </div>
 
     <div class="coupon-admin-shell">
         <aside class="coupon-admin-aside">

@@ -53,7 +53,7 @@ if ($esecuriAutotest !== []) {
     echo 'Contractul adminului: autotestul a picat (', count($esecuriAutotest), ").\n";
     exit(1);
 }
-echo "  OK    autotestul contractului (extragerea, aspectul fără diferențe, 15 mutații, declarațiile, normalizarea)\n";
+echo "  OK    autotestul contractului (extragerea, aspectul fără diferențe, 15 mutații, declarațiile, paginile mutate, normalizarea)\n";
 if (isset($optiuni['autotest'])) {
     exit(0);
 }
@@ -234,8 +234,10 @@ try {
         // probă a componentelor, ca administrator general, pe fiecare licență aleasă. Fără contract.
         $dosarPlimbare = $dosarLucru . '/plimbare';
         @mkdir($dosarPlimbare, 0770, true);
-        // Plus paginile noi ale fazei D, care nu există la eticheta contractului (WP-32: „Abonamentul tău”).
-        $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente', '/admin/abonament']),
+        // Plus paginile noi ale fazei D, care nu există la eticheta contractului (WP-32: „Abonamentul tău”; WP-35: „Oferte BBD”).
+        $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente', '/admin/abonament',
+            // WP-35: „Oferte BBD” (IA-05), pagină nouă.
+            '/admin/products/oferte-bbd']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;
@@ -341,16 +343,39 @@ try {
                     continue;
                 }
                 $raspunsuri = [];
+                $coduri = [];
+                $gazde = ['127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent];
                 foreach (['baza' => $portBaza, 'curent' => $portCurent] as $server => $port) {
                     $r = $cerere($port, 'GET', $pagina['cale'], $jaruri[$server]);
-                    $html = contract_normalizeaza($r['corp'], ['127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent]);
-                    $raspunsuri[$server] = contract_extrage($r['cod'], contract_normalizeaza($r['location'],
-                        ['127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent]), $html);
+                    $html = contract_normalizeaza($r['corp'], $gazde);
+                    $coduri[$server] = [$r['cod'], contract_normalizeaza($r['location'], $gazde)];
+                    $raspunsuri[$server] = contract_extrage($r['cod'], $coduri[$server][1], $html);
                     file_put_contents($dosarRol . '/' . $pagina['nume'] . '.' . $server . '.txt', implode("\n", $raspunsuri[$server]) . "\n");
+                }
+                // WP-35: o pagină mutată (unită cu alta sau devenită tab-ul alteia) trimite, pe codul curent, la noua ei adresă
+                // din admin. Atunci se compară pagina veche cu noua adresă (contract_mutata: nimic din pagina veche nu lipsește
+                // acolo), iar mutarea însăși e un rând de declarat. Cel mult trei redirecționări la rând.
+                [$codCurent, $undeCurent] = $coduri['curent'];
+                $undeCale = (string) parse_url(contract_adresa($undeCurent), PHP_URL_PATH);
+                $mutata = $coduri['baza'][0] === 200 && in_array($codCurent, [301, 302, 303, 307, 308], true)
+                    && str_starts_with($undeCale, '/admin') && $undeCale !== '/admin/login';
+                if ($mutata) {
+                    $adresa = contract_adresa($undeCurent);
+                    for ($salt = 0; $salt < 3; $salt++) {
+                        $r = $cerere($portCurent, 'GET', $adresa, $jaruri['curent']);
+                        $locatie = contract_adresa(contract_normalizeaza($r['location'], $gazde));
+                        if (!in_array($r['cod'], [301, 302, 303, 307, 308], true) || !str_starts_with($locatie, '/admin')) {
+                            break;
+                        }
+                        $adresa = $locatie;
+                    }
+                    $tinta = contract_extrage($r['cod'], $locatie, contract_normalizeaza($r['corp'], $gazde));
+                    file_put_contents($dosarRol . '/' . $pagina['nume'] . '.tinta.txt', $adresa . "\n" . implode("\n", $tinta) . "\n");
                 }
                 $numarPagini++;
                 $numarRanduri += count($raspunsuri['curent']);
-                $diferente = contract_diferente($raspunsuri['baza'], $raspunsuri['curent']);
+                $diferente = $mutata ? contract_mutata($raspunsuri['baza'], $codCurent, $undeCurent, $tinta)
+                    : contract_diferente($raspunsuri['baza'], $raspunsuri['curent']);
                 $inainte = $folosite;
                 $ramase = contract_fara_declarate($diferente, $declarateToate, $pagina['cale'], $licenta, $rol, $folosite);
                 $declarateGasite += array_sum($folosite) - array_sum($inainte);

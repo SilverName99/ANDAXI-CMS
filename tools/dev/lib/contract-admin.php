@@ -18,6 +18,8 @@ declare(strict_types=1);
  *   link <href>                                         fiecare link
  *   data <atribut> = <valoare>                          fiecare atribut data-* (o valoare lungă: amprenta ei)
  *   celula <text>                                       textul fiecărei celule de tabel (td), spațiile strânse
+ *   mutat <cod> -> <adresă>                             (WP-35) o pagină veche care trimite acum, în admin, la noua ei adresă
+ *                                                       (o pagină unită cu alta sau un tab al alteia: contract_mutata())
  * „<formular>” = „<METODĂ> <acțiune>” al formularului din jurul controlului (sau al celui numit în atributul form=), „-” fără.
  */
 
@@ -183,6 +185,25 @@ function contract_diferente(array $baza, array $curent): array
 }
 
 /**
+ * O pagină mutată (WP-35, docs/ARHITECTURA-ADMIN.md, IA-01 … IA-10): adresa veche răspunde cu o redirecționare în admin spre
+ * noua ei adresă (de exemplu Google → tab-ul „SEO și Google” din Setări magazin). Diferențele ei: rândul „mutat” (+1, de
+ * declarat cu adresa exactă) și fiecare rând al paginii vechi care lipsește la noua adresă (−n). Rândurile în plus de la noua
+ * adresă nu intră aici: noua adresă e ea însăși o pagină a contractului, comparată cu pagina ei de la etichetă, cu
+ * declarațiile ei. Așa nimic din ce trimitea pagina veche nu se poate pierde la mutare.
+ *
+ * @param list<string> $baza    contractul paginii vechi (codul etichetei)
+ * @param list<string> $tinta   contractul noii adrese (codul curent, după redirecționare)
+ * @return array<string, int>
+ */
+function contract_mutata(array $baza, int $cod, string $location, array $tinta): array
+{
+    $diferente = array_filter(contract_diferente($baza, $tinta), static fn (int $n): bool => $n < 0);
+    $diferente['mutat ' . $cod . ' -> ' . contract_adresa($location)] = 1;
+    ksort($diferente, SORT_STRING);
+    return $diferente;
+}
+
+/**
  * Scoate din diferențele unei pagini ce e declarat ($contractAdminPorturi; expresiile regulate fără delimitator, se pun între ~). O declarație:
  *   ['wp' => 'WP-30', 'ce' => 'adaugat'|'scos', 'rand' => '<regex pe rând>', 'cale' => '<regex pe cale>' (implicit orice),
  *    'licenta' => 'toate'|…|null, 'rol' => 'adm'|…|null, 'motiv' => '…']
@@ -299,6 +320,15 @@ function contract_autotest(): array
     $declaratii['t']['ce'] = 'scos';
     if (contract_fara_declarate($d, $declaratii, '/admin', 'toate', 'adm', $folosite) === []) {
         $esecuri[] = 'o declarație „scos” a acoperit un rând adăugat';
+    }
+    // O pagină mutată: doar rândul „mutat” și ce lipsește la noua adresă; ce e în plus acolo nu (îl compară pagina ei).
+    $tinta = contract_extrage(200, '', str_replace('</form>', '<input name="nou"></form>', $pagina));
+    if (contract_mutata($baza, 302, '/admin/nou?tab=x', $tinta) !== ['mutat 302 -> /admin/nou?tab=x' => 1]) {
+        $esecuri[] = 'pagina mutată cu tot contractul ei la noua adresă: ' . json_encode(contract_mutata($baza, 302, '/admin/nou?tab=x', $tinta), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+    if (contract_mutata($baza, 302, '/admin/nou', contract_extrage(200, '', str_replace('<input name="q">', '', $pagina))) !== [
+        'camp POST /admin/orders/bulk input:text q' => -1, 'mutat 302 -> /admin/nou' => 1]) {
+        $esecuri[] = 'un câmp pierdut la mutarea paginii n-a dat diferență';
     }
     $normalizat = contract_normalizeaza('<a href="http://127.0.0.1:8733/admin?x=1">x</a><input name="_csrf" value="'
         . str_repeat('ab', 32) . '"><a href="/assets/css/app.css?v=123">c</a>', ['127.0.0.1:8733']);

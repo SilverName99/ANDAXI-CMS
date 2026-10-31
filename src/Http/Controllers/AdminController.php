@@ -667,7 +667,7 @@ final class AdminController
         }
 
         View::render('admin/users-settings', [
-            'title' => 'Setări utilizatori',
+            'title' => 'Conturi clienți',
             'settings' => $settings,
             'googleCallbackUrl' => $this->appUrl() . '/auth/google/callback',
             'tab' => $this->usersSettingsTab(),
@@ -777,7 +777,7 @@ final class AdminController
         }
 
         View::render('admin/users-points', [
-            'title' => 'Puncte fidelitate',
+            'title' => 'Fidelitate',
             'settings' => $settings,
             'loyalty' => $loyalty,
             'transactions' => $transactions,
@@ -1152,7 +1152,7 @@ final class AdminController
         }
 
         View::render('admin/users-security', [
-            'title' => 'Securitate formulare',
+            'title' => 'Încercări de înregistrare și comandă',
             'logs' => is_array($logs) ? $logs : [],
             'search' => $search,
             'source' => $source,
@@ -1224,7 +1224,7 @@ final class AdminController
         }
 
         View::render('admin/users', [
-            'title' => 'Utilizatori',
+            'title' => 'Clienți',
             'users' => $users,
             'selectedUser' => $selectedUser,
             'editingUser' => $selectedUser,
@@ -1841,7 +1841,7 @@ final class AdminController
         }
 
         View::render('admin/product-templates', [
-            'title' => 'Template-uri produse',
+            'title' => 'Șabloane produse',
             'templates' => $templates,
             'templateUsage' => $templateUsage,
             'assignableProducts' => $assignableProducts,
@@ -2019,7 +2019,7 @@ final class AdminController
 
         $templates = $this->loadProductTemplates($db);
         View::render('admin/product-templates', [
-            'title' => 'Template-uri produse',
+            'title' => 'Șabloane produse',
             'templates' => $templates,
             'selectedTemplate' => null,
             'newMode' => true,
@@ -2473,7 +2473,7 @@ final class AdminController
 
         $newRequested = trim((string) ($_GET['new'] ?? '')) === '1';
         View::render('admin/blog-templates', [
-            'title' => 'Template blog',
+            'title' => 'Șabloane blog',
             'templates' => $this->loadBlogTemplates($db),
             'newRequested' => $newRequested,
         ], 'admin/layout');
@@ -11208,7 +11208,7 @@ final class AdminController
         $products = $this->loadMannequinProducts($db);
 
         View::render('admin/settings-mannequin', [
-            'title' => 'Configurare manechin',
+            'title' => 'Manechin',
             'settings' => $settings,
             'points' => $points,
             'products' => $products,
@@ -13214,13 +13214,9 @@ final class AdminController
             return;
         }
 
-        $db = $this->db();
-        $settings = Settings::all($db);
-
-        View::render('admin/settings-google', [
-            'title' => 'Google',
-            'settings' => $settings,
-        ], 'admin/layout');
+        // WP-35 (IA-04, docs/ARHITECTURA-ADMIN.md): pagina Google e acum partea „Google” a tab-ului „SEO și Google” din Setări
+        // magazin / Setări site. Adresa veche (linkuri salvate, întoarcerea după salvare) duce acolo; formularul postează tot aici.
+        header('Location: /admin/settings/store?tab=google', true, 302);
     }
 
     public function googleSettingsSave(): void
@@ -17379,7 +17375,7 @@ final class AdminController
         }
 
         View::render('admin/coupons-unique', [
-            'title' => 'Cupoane unice',
+            'title' => 'Coduri unice — Cupoane',
             'coupons' => is_array($coupons) ? $coupons : [],
             'produseCupoane' => $produseCupoane,
             'products' => is_array($products) ? $products : [],
@@ -17947,7 +17943,7 @@ final class AdminController
         }
 
         View::render('admin/design-site', [
-            'title' => 'Design Site',
+            'title' => 'Antet, subsol și meniu',
             'settings' => $settings,
             'section' => $section,
             'availableMenuPages' => $availableMenuPages,

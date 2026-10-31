@@ -6,16 +6,28 @@ $newRequested = (bool) ($newRequested ?? false);
 $modalOpen = $selectedFieldId > 0 || $newRequested;
 ?>
 
+<?php ob_start(); ?>
+<button class="btn" type="button" id="add-field-btn">+ Câmp nou</button>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+// WP-35 (IA-02): câmpurile suplimentare și șabloanele produselor sunt o singură pagină, „Câmpuri și șabloane”, cu două
+// tab-uri; ambele adrese rămân (/admin/products/fields și /admin/products/templates), fiecare cu tab-ul ei ales.
+admin_componenta('antet-pagina', [
+    'titlu' => 'Câmpuri și șabloane',
+    'nivel' => 1,
+    'subtitlu' => 'Ce câmpuri în plus au produsele (codurile lor de inserat în șabloane) și șabloanele paginii de produs care le folosesc.',
+    'ajutor' => [
+        'Un câmp suplimentar (de exemplu „Mod de administrare”) primește o valoare în fiecare produs și apare unde pui codul lui într-un șablon.',
+        'Un șablon e pagina de produs scrisă în HTML/CSS/JS; un produs își alege șablonul în editor.',
+    ],
+    'actiuni' => $antetActiuni,
+]);
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Câmpuri și șabloane', 'taburi' => [
+    ['eticheta' => 'Câmpuri suplimentare', 'href' => '/admin/products/fields', 'activ' => true],
+    ['eticheta' => 'Șabloane produse', 'href' => '/admin/products/templates', 'activ' => false],
+]]);
+?>
 <section class="panel">
-    <div class="section-head">
-        <div>
-            <h1>Câmpuri suplimentare</h1>
-            <p>Definește câmpuri extra pentru produse și codurile lor de embed.</p>
-        </div>
-        <div style="display:flex;gap:8px;">
-            <button class="btn" type="button" id="add-field-btn">+ Câmp nou</button>
-        </div>
-    </div>
 
     <div class="users-table-wrap">
         <table class="table users-table">
@@ -80,7 +92,7 @@ $modalOpen = $selectedFieldId > 0 || $newRequested;
             <div class="field">
                 <label>Cod câmp *</label>
                 <input type="text" name="field_key" required value="<?= htmlspecialchars((string) ($editingField['field_key'] ?? ''), ENT_QUOTES) ?>" placeholder="mod_de_utilizare">
-                <small style="color:#64748b;">Doar litere mici, cifre și underscore.</small>
+                <small style="color:var(--ax-text-3);">Doar litere mici, cifre și underscore.</small>
             </div>
             <div class="field">
                 <label>Tip</label>
@@ -116,7 +128,7 @@ $modalOpen = $selectedFieldId > 0 || $newRequested;
                     <input type="checkbox" name="template_only" <?= (int) ($editingField['template_only'] ?? 0) === 1 ? 'checked' : '' ?>>
                     Apare doar la template-urile care îl folosesc
                 </label>
-                <small style="color:#64748b;">
+                <small style="color:var(--ax-text-3);">
                     Bifat, câmpul se arată în editorul de produs doar dacă template-ul ales conține codul lui
                     (<code>{{field_cod}}</code>), iar pe pagina produsului nu intră în lista de informații și nici ca tab.
                     Nebifat, apare la toate produsele.

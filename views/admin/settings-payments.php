@@ -1,9 +1,10 @@
 <?php
 /**
- * Setări plăți, pe două tab-uri:
- *  - „Plăți": EuPlătesc, ordinul de plată și Stripe (rezervă);
+ * Setări plăți, câte un tab pe fiecare fel de plată din abonament (WP-35, IA-09):
+ *  - „Ordin de plată”, „Card – EuPlătesc”, „Card – Stripe”: părțile aceluiași formular (POST /admin/settings/payments, ca
+ *    înainte), arătate pe rând fără reîncărcare (taburi.js); butonul de salvare le trimite pe toate, deci nimic nu se pierde;
  *  - „Banca Transilvania": BT iPay (rate și puncte STAR), cu datele de acces
- *    în .env, testul de conexiune, cronul și plata de test de 1 leu.
+ *    în .env, testul de conexiune, cronul și plata de test de 1 leu (?tab=bt, ca înainte).
  *
  * Cheile secrete nu se mai scriu niciodată înapoi în pagină: câmpul gol la
  * salvare înseamnă „păstrează cheia salvată".
@@ -52,12 +53,6 @@ $cuMagazinPlati = (bool) ($cuMagazin ?? true);
 $btPoatePorni = \App\Support\Plugins::permiteInceput('plata_bt');
 // Textele care pomenesc ERP-ul doar pe site-urile cu legătura ERP.
 $areErpPlati = \App\Support\Plugins::vizibil('erp');
-$etichetaTabPlati = ucfirst(implode(', ', array_keys(array_filter([
-    'EuPlătesc' => $areEu,
-    'Stripe' => $areStripe,
-    'ordin de plată' => $areOrdin,
-]))));
-$areTabPlati = $etichetaTabPlati !== '';
 
 /** Eticheta „configurat / lipsește" — niciodată valoarea. */
 $insigna = static function (bool $ok, string $textOk = 'configurat', string $textLipsa = 'lipsește') use ($e): string {
@@ -78,9 +73,6 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
 ?>
 
 <style>
-    .pay-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
-    .pay-tabs a{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;text-decoration:none;font-weight:600;font-size:14px;}
-    .pay-tabs a.is-active{background:#0f766e;border-color:#0f766e;color:#fff;}
     .pay-badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.6;vertical-align:middle;}
     .pay-badge--ok{background:#dcfce7;color:#166534;}
     .pay-badge--off{background:#f1f5f9;color:#64748b;}
@@ -112,24 +104,39 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
     .bt-ok{padding:10px 12px;border-radius:8px;border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;font-size:14px;}
 </style>
 
+<?php
+// WP-35 (IA-09): un tab pe fiecare fel de plată. Primele trei sunt părți ale aceluiași formular (pe pagina BT sunt linkuri
+// simple), BT rămâne pagina lui (?tab=bt). Adresa fără tab sau cu ?tab=plati deschide primul tab.
+$taburiMetode = array_keys(array_filter(['op' => $areOrdin, 'euplatesc' => $areEu, 'stripe' => $areStripe]));
+[$tabMetoda] = $tab === 'plati' ? adm_tab_ales($taburiMetode, ['plati' => [(string) ($taburiMetode[0] ?? ''), '']]) : [''];
+$eticheteMetode = ['op' => 'Ordin de plată', 'euplatesc' => 'Card – EuPlătesc', 'stripe' => $cuMagazinPlati ? 'Card – Stripe' : 'Stripe'];
+$taburiPlati = [];
+foreach ($taburiMetode as $cheieMetoda) {
+    $taburiPlati[] = ['cheie' => $cheieMetoda, 'eticheta' => $eticheteMetode[$cheieMetoda],
+        'href' => '/admin/settings/payments?tab=' . $cheieMetoda, 'activ' => $tab === 'plati' && $tabMetoda === $cheieMetoda];
+}
+if ($areBt) {
+    $taburiPlati[] = ['eticheta' => 'Banca Transilvania', 'href' => '/admin/settings/payments?tab=bt', 'activ' => $tab === 'bt'];
+}
+admin_componenta('antet-pagina', [
+    'titlu' => 'Setări plăți',
+    'nivel' => 1,
+    'subtitlu' => 'Câte un tab pe fiecare fel de plată din abonament. Bifa fiecăruia ascunde doar opțiunea din checkout.',
+    'ajutor' => [
+        'Ordinul de plată, EuPlătesc și Stripe se salvează împreună, cu butonul de jos, din oricare tab ai fi.',
+        'Banca Transilvania are pagina ei: datele de acces stau în fișierul de configurare al serverului, nu aici.',
+    ],
+]);
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Felurile de plată', 'panouri' => $tab === 'plati', 'taburi' => $taburiPlati]);
+?>
 <section class="panel">
-    <h1>Setări plăți</h1>
-
-    <nav class="pay-tabs" aria-label="Secțiuni plăți">
-<?php if ($areTabPlati): ?>
-        <a href="/admin/settings/payments" class="<?= $tab === 'plati' ? 'is-active' : '' ?>"<?= $tab === 'plati' ? ' aria-current="page"' : '' ?>><?= $e($etichetaTabPlati) ?></a>
-<?php endif; ?>
-<?php if ($areBt): ?>
-        <a href="/admin/settings/payments?tab=bt" class="<?= $tab === 'bt' ? 'is-active' : '' ?>"<?= $tab === 'bt' ? ' aria-current="page"' : '' ?>>Banca Transilvania (BT iPay)</a>
-<?php endif; ?>
-    </nav>
 
 <?php if ($tab === 'plati'): ?>
     <p>Fiecare procesator de card are bifa lui. Bifa ascunde doar opțiunea din checkout: plățile deja începute cu un procesator oprit
         (confirmări, întoarceri, notificări, butoanele din comandă) merg mai departe, ca nicio comandă plătită să nu rămână în aer.</p>
 
 <?php if ($areCard): ?>
-    <article class="panel" style="margin:0 0 14px;background:#f8fafc;border-color:#cbd5e1;">
+    <article class="panel" style="margin:0 0 14px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
         <h3 style="margin:0 0 8px;">Plata cu cardul în checkout</h3>
         <table class="pay-overview">
             <tr><th>Procesator</th><th>În checkout</th><th>Date</th></tr>
@@ -171,9 +178,10 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
     <form method="post" action="/admin/settings/payments" class="form-grid" autocomplete="off">
         <?= $campCsrf ?>
 <?php if ($areEu): ?>
-        <article class="panel" style="grid-column:1/-1;margin:0 0 4px;background:#f8fafc;border-color:#cbd5e1;">
+        <div class="adm-tab-panou form-grid adm-plati-metoda" data-adm-tab-panou="euplatesc"<?= $tabMetoda !== 'euplatesc' ? ' hidden' : '' ?>>
+        <article class="panel" style="grid-column:1/-1;margin:0 0 4px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
             <h3 style="margin:0;">EuPlătesc</h3>
-            <p style="margin:6px 0 0;color:#64748b;">
+            <p style="margin:6px 0 0;color:var(--ax-text-3);">
                 Datele se iau din panoul de comerciant EuPlătesc, secțiunea de integrare.
                 Cheia secretă e un șir hexazecimal — se copiază exact, fără spații.
             </p>
@@ -184,7 +192,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                 <input type="checkbox" name="euplatesc_enabled" value="1" <?= $euActiv ? 'checked' : '' ?>>
                 Acceptă plata cu cardul prin EuPlătesc
             </label>
-            <small style="color:#64748b;">
+            <small style="color:var(--ax-text-3);">
                 Fără bifă (sau fără date complete), EuPlătesc nu mai apare în checkout. Plățile deja începute se confirmă în continuare.
             </small>
         </div>
@@ -203,38 +211,40 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
                    value="<?= htmlspecialchars((string) ($settings['euplatesc_currency'] ?? 'RON'), ENT_QUOTES) ?>">
         </div>
 
-        <article class="panel" style="grid-column:1/-1;margin:4px 0 0;background:#ecfdf5;border-color:#a7f3d0;">
+        <article class="panel" style="grid-column:1/-1;margin:4px 0 0;background:var(--ax-ok-fundal);border-color:var(--ax-ok-linie);">
             <h4 style="margin:0 0 6px;">Adresele folosite la plată</h4>
-            <p style="margin:0 0 8px;color:#475569;">
+            <p style="margin:0 0 8px;color:var(--ax-text-3);">
                 Se trimit automat cu fiecare tranzacție, deci nu trebuie configurate nicăieri.
                 Le poți trece și în panoul EuPlătesc (Setări), ca plasă de siguranță, dacă
                 procesatorul îți cere adrese fixe pe cont.
             </p>
             <table style="width:100%;border-collapse:collapse;font-size:14px;">
                 <tr>
-                    <td style="padding:4px 8px 4px 0;color:#64748b;white-space:nowrap;">URL notificare (silent / IPN)</td>
+                    <td style="padding:4px 8px 4px 0;color:var(--ax-text-3);white-space:nowrap;">URL notificare (silent / IPN)</td>
                     <td><code><?= htmlspecialchars($appUrl . '/webhook/euplatesc', ENT_QUOTES) ?></code></td>
                 </tr>
                 <tr>
-                    <td style="padding:4px 8px 4px 0;color:#64748b;white-space:nowrap;">Retur plată reușită</td>
+                    <td style="padding:4px 8px 4px 0;color:var(--ax-text-3);white-space:nowrap;">Retur plată reușită</td>
                     <td><code><?= htmlspecialchars($appUrl . '/checkout/succes/{numar_comanda}?euplatesc=1', ENT_QUOTES) ?></code></td>
                 </tr>
                 <tr>
-                    <td style="padding:4px 8px 4px 0;color:#64748b;white-space:nowrap;">Retur plată eșuată</td>
+                    <td style="padding:4px 8px 4px 0;color:var(--ax-text-3);white-space:nowrap;">Retur plată eșuată</td>
                     <td><code><?= htmlspecialchars($appUrl . '/checkout?euplatesc_failed=1', ENT_QUOTES) ?></code></td>
                 </tr>
             </table>
-            <p style="margin:8px 0 0;color:#64748b;font-size:13px;">
+            <p style="margin:8px 0 0;color:var(--ax-text-3);font-size:13px;">
                 URL-ul de notificare e cel care marchează comanda ca plătită. Dacă plata reușește
                 dar comanda rămâne „plată în așteptare", el e primul lucru de verificat.
             </p>
         </article>
+        </div>
 <?php endif; ?>
 
 <?php if ($areOrdin): ?>
-        <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
+        <div class="adm-tab-panou form-grid adm-plati-metoda" data-adm-tab-panou="op"<?= $tabMetoda !== 'op' ? ' hidden' : '' ?>>
+        <article class="panel" style="grid-column:1/-1;margin:0 0 4px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
             <h3 style="margin:0;">Ordin de plată (transfer bancar)</h3>
-            <p style="margin:6px 0 0;color:#64748b;">
+            <p style="margin:6px 0 0;color:var(--ax-text-3);">
                 Clientul primește datele de plată pe pagina de confirmare și în emailul de comandă,
                 cu numărul comenzii ca referință. <?= $areErpPlati ? 'Comanda pleacă în ERP abia după ce confirmi' : 'Confirmi' ?> plata
                 din lista de comenzi (butonul „Confirmă plata OP").
@@ -251,19 +261,21 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <label>Instrucțiuni de plată (IBAN, bancă, beneficiar…)</label>
             <textarea name="bank_transfer_instructiuni" rows="5"
                 placeholder="Beneficiar: FIRMA S.R.L.&#10;IBAN: RO...&#10;Banca: ...&#10;Comanda se procesează după încasare."><?= htmlspecialchars((string) ($settings['bank_transfer_instructiuni'] ?? ''), ENT_QUOTES) ?></textarea>
-            <p style="margin:4px 0 0;color:#64748b;font-size:13px;">
+            <p style="margin:4px 0 0;color:var(--ax-text-3);font-size:13px;">
                 Textul apare exact așa la client. În șabloanele de email se poate folosi și
                 variabila <code>{{payment_instructions}}</code>; dacă lipsește din șablon,
                 caseta se adaugă singură la finalul emailului de comandă nouă.
             </p>
         </div>
+        </div>
 <?php endif; ?>
 
 <?php if ($areStripe): ?>
+        <div class="adm-tab-panou form-grid adm-plati-metoda" data-adm-tab-panou="stripe"<?= $tabMetoda !== 'stripe' ? ' hidden' : '' ?>>
 <?php if ($cuMagazinPlati): ?>
-        <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
+        <article class="panel" style="grid-column:1/-1;margin:0 0 4px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
             <h3 style="margin:0;">Stripe (rezervă)</h3>
-            <p style="margin:6px 0 0;color:#64748b;">
+            <p style="margin:6px 0 0;color:var(--ax-text-3);">
                 Se folosește doar dacă îl bifezi; atunci clientul are două butoane de card în checkout.
             </p>
         </article>
@@ -275,9 +287,9 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             </label>
         </div>
 <?php else: ?>
-        <article class="panel" style="grid-column:1/-1;margin:16px 0 4px;background:#f8fafc;border-color:#cbd5e1;">
+        <article class="panel" style="grid-column:1/-1;margin:0 0 4px;background:var(--ax-suprafata-2);border-color:var(--ax-linie-tare);">
             <h3 style="margin:0;">Stripe</h3>
-            <p style="margin:6px 0 0;color:#64748b;">
+            <p style="margin:6px 0 0;color:var(--ax-text-3);">
                 Plățile cu cardul ale site-ului (de exemplu donațiile sau cotizațiile) trec prin contul tău Stripe.
             </p>
         </article>
@@ -305,19 +317,19 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
 <?= \App\Support\Dev::marcaj('vt:stripe-evenimente') ?>
         <div class="field" style="grid-column:1/-1;" id="stripe-webhook">
             <label>Evenimentele pe care le cere site-ul în webhook-ul Stripe</label>
-            <p style="margin:4px 0 8px;color:#64748b;font-size:13px;">
+            <p style="margin:4px 0 8px;color:var(--ax-text-3);font-size:13px;">
                 În contul Stripe (Developers → Webhooks), endpoint-ul de mai sus trebuie să primească:
                 <code><?= htmlspecialchars(implode(', ', $stripeEvenimente), ENT_QUOTES) ?></code>.
             </p>
 <?php if ($stripeUltimele !== []): ?>
-            <p style="margin:0 0 8px;color:#64748b;font-size:13px;">Ultimul eveniment primit:
+            <p style="margin:0 0 8px;color:var(--ax-text-3);font-size:13px;">Ultimul eveniment primit:
 <?php foreach ($stripeUltimele as $tipEveniment => $momentEveniment): ?>
                 <span style="display:inline-block;margin-right:10px;"><code><?= htmlspecialchars((string) $tipEveniment, ENT_QUOTES) ?></code> <?= htmlspecialchars((string) $momentEveniment, ENT_QUOTES) ?></span>
 <?php endforeach; ?>
             </p>
 <?php endif; ?>
 <?php if (is_array($stripeVerificare)): ?>
-            <div class="panel" style="margin:0 0 8px;padding:10px 12px;border-color:<?= !empty($stripeVerificare['gasit']) && !empty($stripeVerificare['activ']) && empty($stripeVerificare['lipsa']) ? '#34d399' : '#fca5a5' ?>;">
+            <div class="panel" style="margin:0 0 8px;padding:10px 12px;border-color:<?= !empty($stripeVerificare['gasit']) && !empty($stripeVerificare['activ']) && empty($stripeVerificare['lipsa']) ? '#34d399' : 'var(--ax-eroare-linie)' ?>;">
 <?php if (($stripeVerificare['eroare'] ?? '') !== ''): ?>
                 <?= htmlspecialchars((string) $stripeVerificare['eroare'], ENT_QUOTES) ?>
 <?php elseif (empty($stripeVerificare['gasit'])): ?>
@@ -332,10 +344,11 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
             <button class="btn btn-secondary" type="submit" form="stripe-verifica-webhook">Verifică webhook-ul</button>
         </div>
 <?= \App\Support\Dev::marcaj('vt:stripe-evenimente', true) ?>
+        </div>
 <?php endif; ?>
 
         <div style="grid-column:1/-1;">
-            <p style="margin:0 0 8px;color:#64748b;font-size:13px;">
+            <p style="margin:0 0 8px;color:var(--ax-text-3);font-size:13px;">
                 Cheile secrete nu se mai afișează. Lasă câmpul gol ca să păstrezi cheia salvată; scrie în el doar ca s-o înlocuiești.
             </p>
             <button class="btn" type="submit">Salvează setările de plată</button>
@@ -358,7 +371,7 @@ $campSecret = static function (string $nume, string $eticheta, bool $configurat)
     $jurnal = is_array($bt['jurnal'] ?? null) ? $bt['jurnal'] : [];
     ?>
     <div class="bt-grid">
-        <p style="margin:0;color:#475569;">
+        <p style="margin:0;color:var(--ax-text-3);">
             Plata cu cardul pe pagina securizată a Băncii Transilvania. Clienții cu <strong>STAR Card</strong> pot plăti acolo
             în <strong>3 rate fără dobândă</strong> sau cu <strong>puncte STAR</strong>; site-ul nu are nimic de setat pentru asta.
             La comandă banca doar <strong>blochează</strong> suma; banii se <strong>încasează</strong> <?= $areErpPlati ? "când comanda e aprobată (facturată)\n            în ERP, din butonul" : 'din butonul' ?> „Încasează" din comandă sau, automat, în ziua 4. Comanda anulată înainte de încasare își eliberează
@@ -451,7 +464,7 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                                 <?php if (($v['avertisment'] ?? '') !== ''): ?>
                                     <span class="pay-badge pay-badge--warn"><?= $e($v['avertisment']) ?></span>
                                 <?php endif; ?>
-                                <br><small style="color:#94a3b8;"><code><?= $e($v['variabila'] ?? '') ?></code></small>
+                                <br><small style="color:var(--ax-text-3);"><code><?= $e($v['variabila'] ?? '') ?></code></small>
                             </td>
                         <?php endforeach; ?>
                     </tr>
@@ -488,14 +501,14 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                     <input type="checkbox" name="bt_ipay_enabled" value="1" <?= $btActiv ? 'checked' : '' ?>>
                     Acceptă plata cu cardul prin Banca Transilvania în checkout
                 </label>
-                <small style="color:#64748b;">Oprit, opțiunea dispare din checkout; plățile deja începute (retur, notificări, cron, butoanele din comandă) merg mai departe.</small>
+                <small style="color:var(--ax-text-3);">Oprit, opțiunea dispare din checkout; plățile deja începute (retur, notificări, cron, butoanele din comandă) merg mai departe.</small>
             </div>
             <div class="field" style="grid-column:1/-1;">
                 <label style="display:flex;align-items:center;gap:8px;">
                     <input type="checkbox" name="bt_ipay_admin_only" value="1" <?= !empty($btSetari['doar_admin']) ? 'checked' : '' ?>>
                     Doar pentru administratorii generali logați (clienții nu văd opțiunea)
                 </label>
-                <small style="color:#64748b;">Doar în modul producție: pentru o comandă reală de probă, plasată din același browser în care ești logat ca administrator general. Cât e bifată, linkurile pentru diferență <?= $areEu ? 'rămân pe EuPlătesc' : 'nu se trimit prin BT' ?>. În modul test, BT nu apare deloc în checkout.</small>
+                <small style="color:var(--ax-text-3);">Doar în modul producție: pentru o comandă reală de probă, plasată din același browser în care ești logat ca administrator general. Cât e bifată, linkurile pentru diferență <?= $areEu ? 'rămân pe EuPlătesc' : 'nu se trimit prin BT' ?>. În modul test, BT nu apare deloc în checkout.</small>
             </div>
 <?php if ($areErpPlati): ?>
             <div class="field" style="grid-column:1/-1;">
@@ -503,7 +516,7 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                     <input type="checkbox" name="bt_ipay_deposit_on_erp" value="1" <?= !empty($btSetari['incaseaza_la_aprobare']) ? 'checked' : '' ?>>
                     Încasează automat când comanda e aprobată (facturată) în ERP
                 </label>
-                <small style="color:#64748b;">Suma încasată = cât a mai rămas de încasat pe comandă (totalul de acum minus ce s-a încasat deja altfel: diferențe plătite prin link, încasări înregistrate), cel mult suma blocată. Dacă nu mai e nimic de încasat, suma blocată se eliberează (cu email către magazin).</small>
+                <small style="color:var(--ax-text-3);">Suma încasată = cât a mai rămas de încasat pe comandă (totalul de acum minus ce s-a încasat deja altfel: diferențe plătite prin link, încasări înregistrate), cel mult suma blocată. Dacă nu mai e nimic de încasat, suma blocată se eliberează (cu email către magazin).</small>
             </div>
 <?php endif; ?>
             <div class="field">
@@ -513,7 +526,7 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
             <div class="field">
                 <label for="bt-ore-automat">Încasare automată după (ore)</label>
                 <input type="number" id="bt-ore-automat" name="bt_ipay_autodeposit_hours" min="24" max="110" value="<?= (int) ($btSetari['ore_incasare_automata'] ?? 96) ?>">
-                <small style="color:#64748b;">Banca cere încasarea în cel mult 5 zile (120 de ore); limita aici e 110.</small>
+                <small style="color:var(--ax-text-3);">Banca cere încasarea în cel mult 5 zile (120 de ore); limita aici e 110.</small>
             </div>
             <div class="field">
                 <label for="bt-minute-expirare">Plată neterminată expiră după (minute)</label>
@@ -534,11 +547,11 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
             <table class="bt-table">
                 <tr>
                     <td style="white-space:nowrap;">Callback (notificarea băncii)</td>
-                    <td><code><?= $e($bt['url_callback'] ?? '') ?></code><br><small style="color:#64748b;">Trimite-o băncii: ei o setează pe contul de comerciant.</small></td>
+                    <td><code><?= $e($bt['url_callback'] ?? '') ?></code><br><small style="color:var(--ax-text-3);">Trimite-o băncii: ei o setează pe contul de comerciant.</small></td>
                 </tr>
                 <tr>
                     <td style="white-space:nowrap;">Întoarcerea clientului</td>
-                    <td><code><?= $e($bt['url_retur'] ?? '') ?></code><br><small style="color:#64748b;">Se trimite automat cu fiecare plată.</small></td>
+                    <td><code><?= $e($bt['url_retur'] ?? '') ?></code><br><small style="color:var(--ax-text-3);">Se trimite automat cu fiecare plată.</small></td>
                 </tr>
             </table>
         </article>
@@ -593,12 +606,12 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                     <tr><th>Plată</th><th>Pornită</th><th>Stare</th><th>Sume</th><th>Acțiuni</th></tr>
                     <?php foreach ($teste as $test): ?>
                         <tr>
-                            <td><code><?= $e($test['numar_bt'] ?? '') ?></code><br><small style="color:#94a3b8;"><?= $e(($test['mod'] ?? '') === 'live' ? 'producție' : 'test') ?></small></td>
+                            <td><code><?= $e($test['numar_bt'] ?? '') ?></code><br><small style="color:var(--ax-text-3);"><?= $e(($test['mod'] ?? '') === 'live' ? 'producție' : 'test') ?></small></td>
                             <td><?= $e(date('d.m.Y H:i', strtotime((string) ($test['creat_la'] ?? 'now')) ?: time())) ?></td>
                             <td>
                                 <span class="pay-badge pay-badge--<?= $e(in_array($test['clasa'] ?? '', ['ok', 'warn', 'off'], true) ? $test['clasa'] : 'off') ?>"><?= $e($test['eticheta'] ?? '') ?></span>
                                 <?php if (($test['eroare'] ?? '') !== ''): ?>
-                                    <br><small style="color:#b91c1c;"><?= $e($test['eroare']) ?></small>
+                                    <br><small style="color:var(--ax-eroare);"><?= $e($test['eroare']) ?></small>
                                 <?php endif; ?>
                             </td>
                             <td><small>încasat <?= $e(number_format((float) ($test['incasat'] ?? 0), 2, ',', '.')) ?> · rambursat <?= $e(number_format((float) ($test['rambursat'] ?? 0), 2, ',', '.')) ?></small></td>
@@ -636,7 +649,7 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
             <h3>Ultimele apeluri către bancă</h3>
             <p>Fără parole și fără date de card. Se păstrează 180 de zile.</p>
             <?php if ($jurnal === []): ?>
-                <p style="color:#94a3b8;">Niciun apel încă.</p>
+                <p style="color:var(--ax-text-3);">Niciun apel încă.</p>
             <?php else: ?>
                 <div style="overflow-x:auto;">
                     <table class="bt-table">
@@ -644,7 +657,7 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                         <?php foreach ($jurnal as $rand): ?>
                             <tr>
                                 <td style="white-space:nowrap;"><?= $e(date('d.m H:i:s', strtotime((string) ($rand['created_at'] ?? 'now')) ?: time())) ?></td>
-                                <td><?= $e($rand['action'] ?? '') ?> <small style="color:#94a3b8;"><?= $e($rand['mode'] ?? '') ?></small></td>
+                                <td><?= $e($rand['action'] ?? '') ?> <small style="color:var(--ax-text-3);"><?= $e($rand['mode'] ?? '') ?></small></td>
                                 <td><?= $e($rand['source'] ?? '') ?></td>
                                 <td><code><?= $e($rand['bt_order_number'] ?? '') ?></code></td>
                                 <td><?= $e($rand['http_code'] ?? '') ?></td>

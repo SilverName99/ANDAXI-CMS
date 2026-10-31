@@ -259,7 +259,7 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
             <p class="ax-dialog-nota">Căutarea în tot adminul (<kbd>Ctrl</kbd> <kbd>K</kbd>) vine odată cu ultimele pagini refăcute.</p>
         </dialog>
 <?php // Componentele (WP-31) întâi: panoul deschis își prinde Esc-ul înaintea cadrului. ?>
-<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'cadru'] as $adminScript): ?>
+<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'taburi', 'cadru'] as $adminScript): ?>
         <script src="/assets/js/admin/<?= $adminScript ?>.js?v=<?= $adminVersiune('assets/js/admin/' . $adminScript . '.js') ?>" defer></script>
 <?php endforeach; ?>
     <?php else: ?>

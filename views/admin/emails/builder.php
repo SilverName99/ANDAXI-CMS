@@ -38,72 +38,72 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
 /* ── Email Builder ─────────────────────────────────────────── */
 .eb-wrap{display:flex;flex-direction:column;height:calc(100vh - 52px);margin:-8px -16px -24px;overflow:hidden;}
 /* Height is overridden by JS below to fill exactly the remaining viewport */
-.eb-topbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#fff;border-bottom:1px solid #e5e7eb;flex-shrink:0;flex-wrap:wrap;}
-.eb-topbar .eb-back{color:#374151;text-decoration:none;font-size:13px;padding:5px 8px;border-radius:5px;}
-.eb-topbar .eb-back:hover{background:#f3f4f6;}
+.eb-topbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--ax-suprafata);border-bottom:1px solid var(--ax-linie);flex-shrink:0;flex-wrap:wrap;}
+.eb-topbar .eb-back{color:var(--ax-text-2);text-decoration:none;font-size:13px;padding:5px 8px;border-radius:5px;}
+.eb-topbar .eb-back:hover{background:var(--ax-suprafata-2);}
 .eb-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
-.eb-title small{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;}
-.eb-title strong{font-size:14px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.eb-title small{font-size:11px;color:var(--ax-text-3);text-transform:uppercase;letter-spacing:.5px;}
+.eb-title strong{font-size:14px;color:var(--ax-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .eb-topbar-actions{display:flex;align-items:center;gap:6px;}
-.eb-history-btns button{padding:5px 9px;font-size:13px;background:#fff;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;color:#374151;}
+.eb-history-btns button{padding:5px 9px;font-size:13px;background:var(--ax-suprafata);border:1px solid var(--ax-linie-tare);border-radius:5px;cursor:pointer;color:var(--ax-text-2);}
 .eb-history-btns button:disabled{opacity:.35;cursor:default;}
-.eb-history-btns button:not(:disabled):hover{background:#f9fafb;}
-.eb-preview-tabs{display:flex;border:1px solid #d1d5db;border-radius:6px;overflow:hidden;}
-.eb-preview-tabs button{padding:5px 11px;font-size:12px;background:#fff;border:none;cursor:pointer;color:#6b7280;border-right:1px solid #d1d5db;}
+.eb-history-btns button:not(:disabled):hover{background:var(--ax-suprafata-2);}
+.eb-preview-tabs{display:flex;border:1px solid var(--ax-linie-tare);border-radius:6px;overflow:hidden;}
+.eb-preview-tabs button{padding:5px 11px;font-size:12px;background:var(--ax-suprafata);border:none;cursor:pointer;color:var(--ax-text-3);border-right:1px solid var(--ax-linie-tare);}
 .eb-preview-tabs button:last-child{border-right:none;}
-.eb-preview-tabs button.active{background:#1e6b50;color:#fff;}
-.eb-preview-tabs button:not(.active):hover{background:#f3f4f6;}
-.eb-dirty-dot{width:7px;height:7px;border-radius:50%;background:#ef4444;display:none;}
+.eb-preview-tabs button.active{background:var(--ax-accent);color:#fff;}
+.eb-preview-tabs button:not(.active):hover{background:var(--ax-suprafata-2);}
+.eb-dirty-dot{width:7px;height:7px;border-radius:50%;background:var(--ax-eroare);display:none;}
 .eb-dirty-dot.visible{display:inline-block;}
 
 /* ── Body layout ────────────────────────────────────────── */
 .eb-body{display:flex;flex:1;min-height:0;overflow:hidden;}
 
 /* ── Left palette ───────────────────────────────────────── */
-.eb-palette{width:190px;flex-shrink:0;background:#f9fafb;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;}
+.eb-palette{width:190px;flex-shrink:0;background:var(--ax-suprafata-2);border-right:1px solid var(--ax-linie);display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;}
 .eb-palette-section{padding:10px 8px 6px;}
-.eb-palette-title{font-size:10px;font-weight:700;letter-spacing:.6px;color:#9ca3af;text-transform:uppercase;margin-bottom:5px;padding:0 4px;}
-.eb-block-btn{display:flex;align-items:center;gap:7px;width:100%;padding:7px 8px;margin:1px 0;border:1px solid transparent;border-radius:6px;background:#fff;cursor:grab;font-size:12.5px;color:#374151;text-align:left;transition:background .15s,border-color .15s;}
-.eb-block-btn:hover{background:#f0fdf4;border-color:#a7f3d0;}
-.eb-block-btn .eb-block-icon{width:22px;height:22px;border-radius:4px;background:#e5e7eb;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:#374151;}
+.eb-palette-title{font-size:10px;font-weight:700;letter-spacing:.6px;color:var(--ax-text-3);text-transform:uppercase;margin-bottom:5px;padding:0 4px;}
+.eb-block-btn{display:flex;align-items:center;gap:7px;width:100%;padding:7px 8px;margin:1px 0;border:1px solid transparent;border-radius:6px;background:var(--ax-suprafata);cursor:grab;font-size:12.5px;color:var(--ax-text-2);text-align:left;transition:background .15s,border-color .15s;}
+.eb-block-btn:hover{background:var(--ax-ok-fundal);border-color:var(--ax-ok-linie);}
+.eb-block-btn .eb-block-icon{width:22px;height:22px;border-radius:4px;background:var(--ax-linie);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:var(--ax-text-2);}
 .eb-colix{display:flex;gap:2px;width:18px;height:12px;}
-.eb-colix span{background:#6b7280;border-radius:1px;min-width:0;}
-.eb-palette-divider{border:none;border-top:1px solid #e5e7eb;margin:6px 4px;}
+.eb-colix span{background:var(--ax-text-3);border-radius:1px;min-width:0;}
+.eb-palette-divider{border:none;border-top:1px solid var(--ax-linie);margin:6px 4px;}
 
 /* ── Settings panel (bottom of left) ───────────────────── */
-.eb-settings-panel{border-top:1px solid #e5e7eb;padding:10px 8px;flex-shrink:0;}
-.eb-settings-panel label{font-size:11.5px;color:#374151;display:block;margin-bottom:2px;margin-top:8px;}
+.eb-settings-panel{border-top:1px solid var(--ax-linie);padding:10px 8px;flex-shrink:0;}
+.eb-settings-panel label{font-size:11.5px;color:var(--ax-text-2);display:block;margin-bottom:2px;margin-top:8px;}
 .eb-settings-panel label:first-of-type{margin-top:0;}
-.eb-settings-panel input[type=text],.eb-settings-panel select,.eb-settings-panel textarea{width:100%;padding:5px 7px;border:1px solid #d1d5db;border-radius:5px;font-size:12px;color:#111827;background:#fff;}
+.eb-settings-panel input[type=text],.eb-settings-panel select,.eb-settings-panel textarea{width:100%;padding:5px 7px;border:1px solid var(--ax-linie-tare);border-radius:5px;font-size:12px;color:var(--ax-text);background:var(--ax-suprafata);}
 .eb-settings-panel textarea{resize:vertical;min-height:54px;}
 .eb-settings-panel input[type=checkbox]{margin-right:5px;}
 
 /* ── Center canvas ──────────────────────────────────────── */
-.eb-center{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:#f3f4f6;}
+.eb-center{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:var(--ax-suprafata-2);}
 .eb-canvas-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:16px;display:flex;justify-content:center;}
 .eb-canvas-inner{width:600px;max-width:100%;}
 .eb-canvas-inner.mobile-view{width:375px;}
 
 /* ── Block cards ────────────────────────────────────────── */
-.eb-block-card{background:#fff;border:2px solid transparent;border-radius:6px;margin:2px 0;cursor:pointer;transition:border-color .15s;position:relative;}
-.eb-block-card:hover{border-color:#6ee7b7;}
-.eb-block-card.selected{border-color:#1e6b50;}
+.eb-block-card{background:var(--ax-suprafata);border:2px solid transparent;border-radius:6px;margin:2px 0;cursor:pointer;transition:border-color .15s;position:relative;}
+.eb-block-card:hover{border-color:var(--ax-ok-linie);}
+.eb-block-card.selected{border-color:var(--ax-accent);}
 .eb-block-card.dragging{opacity:.4;}
-.eb-block-toolbar{display:flex;align-items:center;gap:4px;padding:0 6px;max-height:0;overflow:hidden;opacity:0;background:#fff;border-bottom:1px solid #e5e7eb;border-radius:4px 4px 0 0;transition:max-height .15s ease,opacity .15s ease,padding .15s ease;}
+.eb-block-toolbar{display:flex;align-items:center;gap:4px;padding:0 6px;max-height:0;overflow:hidden;opacity:0;background:var(--ax-suprafata);border-bottom:1px solid var(--ax-linie);border-radius:4px 4px 0 0;transition:max-height .15s ease,opacity .15s ease,padding .15s ease;}
 .eb-block-card:hover .eb-block-toolbar{max-height:36px;padding:4px 6px;opacity:1;}
-.eb-block-drag-handle{cursor:grab;color:#9ca3af;font-size:14px;padding:1px 4px;flex-shrink:0;line-height:1;}
+.eb-block-drag-handle{cursor:grab;color:var(--ax-text-3);font-size:14px;padding:1px 4px;flex-shrink:0;line-height:1;}
 .eb-block-drag-handle:active{cursor:grabbing;}
-.eb-block-type-tag{font-size:10px;color:#6b7280;flex:1;font-weight:600;text-transform:uppercase;letter-spacing:.4px;}
+.eb-block-type-tag{font-size:10px;color:var(--ax-text-3);flex:1;font-weight:600;text-transform:uppercase;letter-spacing:.4px;}
 .eb-block-btns{display:flex;flex-direction:row;gap:2px;margin-left:auto;}
-.eb-block-btns button{padding:2px 6px;font-size:11px;background:transparent;border:1px solid #e5e7eb;border-radius:4px;cursor:pointer;color:#6b7280;}
-.eb-block-btns button:hover:not(:disabled){background:#f3f4f6;color:#111827;}
+.eb-block-btns button{padding:2px 6px;font-size:11px;background:transparent;border:1px solid var(--ax-linie);border-radius:4px;cursor:pointer;color:var(--ax-text-3);}
+.eb-block-btns button:hover:not(:disabled){background:var(--ax-suprafata-2);color:var(--ax-text);}
 .eb-block-btns button:disabled{opacity:.3;cursor:default;}
-.eb-block-btns button.danger:hover{background:#fef2f2;border-color:#fca5a5;color:#dc2626;}
+.eb-block-btns button.danger:hover{background:var(--ax-eroare-fundal);border-color:var(--ax-eroare-linie);color:var(--ax-eroare);}
 .eb-block-preview{overflow:hidden;border-radius:0 0 4px 4px;}
 
 /* ── Drop zones ─────────────────────────────────────────── */
 .eb-drop-zone{height:6px;border-radius:3px;transition:height .15s,background .15s;margin:0;}
-.eb-drop-zone.drag-over{height:24px;background:#d1fae5;border:2px dashed #34d399;}
+.eb-drop-zone.drag-over{height:24px;background:var(--ax-ok-fundal);border:2px dashed #34d399;}
 .eb-canvas-inner.dragging-active .eb-drop-zone{height:28px;}
 
 /* ── Animations ─────────────────────────────────────────── */
@@ -114,80 +114,80 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
 .eb-block-card.anim-down {animation:ebMoveDown .22s ease both;}
 .eb-block-card.removing  {animation:ebRemove   .2s ease forwards;overflow:hidden;pointer-events:none;}
 /* ── Column drop cells ─────────────────────────────────── */
-.eb-col-cell{flex:1;min-height:56px;border:1px dashed #d1d5db;border-radius:4px;padding:3px;transition:background .15s,border-color .15s;}
-.eb-col-cell.col-drag-over{background:#d1fae5;border-color:#34d399;border-style:dashed;}
+.eb-col-cell{flex:1;min-height:56px;border:1px dashed var(--ax-linie-tare);border-radius:4px;padding:3px;transition:background .15s,border-color .15s;}
+.eb-col-cell.col-drag-over{background:var(--ax-ok-fundal);border-color:#34d399;border-style:dashed;}
 
 /* ── Empty state ─────────────────────────────────────────── */
-.eb-empty-state{padding:40px 20px;text-align:center;color:#9ca3af;font-size:13px;}
+.eb-empty-state{padding:40px 20px;text-align:center;color:var(--ax-text-3);font-size:13px;}
 .eb-empty-state button{margin-top:10px;}
 
 /* ── Preview pane ───────────────────────────────────────── */
-.eb-preview-pane{flex:1;overflow:auto;overscroll-behavior:contain;padding:16px;display:flex;justify-content:center;align-items:flex-start;background:#f3f4f6;}
-.eb-preview-frame{background:#fff;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}
+.eb-preview-pane{flex:1;overflow:auto;overscroll-behavior:contain;padding:16px;display:flex;justify-content:center;align-items:flex-start;background:var(--ax-suprafata-2);}
+.eb-preview-frame{background:var(--ax-suprafata);border:1px solid var(--ax-linie-tare);border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.08);}
 .eb-preview-frame.mobile-preview{border-radius:20px;box-shadow:0 8px 32px rgba(0,0,0,.18);}
 .eb-preview-frame iframe{display:block;width:100%;min-height:500px;border:none;}
-.eb-preview-loading{padding:48px;text-align:center;color:#6b7280;font-size:13px;}
+.eb-preview-loading{padding:48px;text-align:center;color:var(--ax-text-3);font-size:13px;}
 
 /* ── Right properties ───────────────────────────────────── */
-.eb-props{width:270px;flex-shrink:0;background:#fff;border-left:1px solid #e5e7eb;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;}
-.eb-props-header{padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;background:#f9fafb;flex-shrink:0;}
+.eb-props{width:270px;flex-shrink:0;background:var(--ax-suprafata);border-left:1px solid var(--ax-linie);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;}
+.eb-props-header{padding:10px 12px;border-bottom:1px solid var(--ax-linie);font-size:12px;font-weight:700;color:var(--ax-text-2);text-transform:uppercase;letter-spacing:.5px;background:var(--ax-suprafata-2);flex-shrink:0;}
 .eb-props-body{padding:12px;flex:1;}
 .eb-props-group{margin-bottom:14px;}
-.eb-props-group label{display:block;font-size:11.5px;color:#6b7280;margin-bottom:3px;font-weight:500;}
+.eb-props-group label{display:block;font-size:11.5px;color:var(--ax-text-3);margin-bottom:3px;font-weight:500;}
 .eb-props-group input[type=text],
 .eb-props-group input[type=number],
 .eb-props-group input[type=url],
 .eb-props-group select,
-.eb-props-group textarea{width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:5px;font-size:12.5px;color:#111827;background:#fff;box-sizing:border-box;}
+.eb-props-group textarea{width:100%;padding:6px 8px;border:1px solid var(--ax-linie-tare);border-radius:5px;font-size:12.5px;color:var(--ax-text);background:var(--ax-suprafata);box-sizing:border-box;}
 .eb-props-group textarea{resize:vertical;min-height:70px;line-height:1.5;}
-.eb-props-group input[type=range]{width:100%;accent-color:#1e6b50;}
-.eb-props-empty{padding:24px 12px;text-align:center;color:#9ca3af;font-size:12.5px;line-height:1.6;}
+.eb-props-group input[type=range]{width:100%;accent-color:var(--ax-accent);}
+.eb-props-empty{padding:24px 12px;text-align:center;color:var(--ax-text-3);font-size:12.5px;line-height:1.6;}
 .eb-color-row{display:flex;gap:6px;align-items:center;}
-.eb-color-row input[type=color]{width:36px;height:32px;padding:2px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;flex-shrink:0;}
+.eb-color-row input[type=color]{width:36px;height:32px;padding:2px;border:1px solid var(--ax-linie-tare);border-radius:5px;cursor:pointer;flex-shrink:0;}
 .eb-color-row input[type=text]{flex:1;}
 .eb-align-row-wrap{display:flex;flex-direction:column;gap:6px;}
 .eb-align-row{display:flex;gap:4px;}
-.eb-align-row button{flex:1;padding:5px 3px;border:1px solid #d1d5db;border-radius:5px;background:#fff;cursor:pointer;color:#6b7280;display:flex;flex-direction:column;align-items:center;gap:1px;}
+.eb-align-row button{flex:1;padding:5px 3px;border:1px solid var(--ax-linie-tare);border-radius:5px;background:var(--ax-suprafata);cursor:pointer;color:var(--ax-text-3);display:flex;flex-direction:column;align-items:center;gap:1px;}
 .eb-align-row button span:first-child{font-size:11px;font-weight:500;}
 .eb-align-row button span:last-child{font-size:13px;line-height:1;}
-.eb-align-row button.active{background:#1e6b50;border-color:#1e6b50;color:#fff;}
-.eb-align-gear{flex:0 0 auto;padding:4px 7px!important;font-size:13px!important;background:#f9fafb!important;border:1px solid #d1d5db!important;border-radius:5px!important;cursor:pointer!important;color:#6b7280!important;}
-.eb-align-gear:hover{background:#e5e7eb!important;color:#111!important;}
-.eb-align-margins{padding:6px 8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:5px;}
+.eb-align-row button.active{background:var(--ax-accent);border-color:var(--ax-accent);color:#fff;}
+.eb-align-gear{flex:0 0 auto;padding:4px 7px!important;font-size:13px!important;background:var(--ax-suprafata-2)!important;border:1px solid var(--ax-linie-tare)!important;border-radius:5px!important;cursor:pointer!important;color:var(--ax-text-3)!important;}
+.eb-align-gear:hover{background:var(--ax-linie)!important;color:var(--ax-text)!important;}
+.eb-align-margins{padding:6px 8px;background:var(--ax-suprafata-2);border:1px solid var(--ax-linie);border-radius:5px;}
 .eb-image-row{display:flex;gap:5px;}
 .eb-image-row input{flex:1;}
 .eb-image-row button{padding:5px 8px;font-size:11px;white-space:nowrap;}
 .eb-rich-bar{display:flex;gap:4px;margin-bottom:4px;}
-.eb-rich-btn{padding:3px 9px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;font-size:13px;color:#374151;}
-.eb-rich-btn:hover{background:#f3f4f6;border-color:#9ca3af;}
+.eb-rich-btn{padding:3px 9px;border:1px solid var(--ax-linie-tare);border-radius:4px;background:var(--ax-suprafata);cursor:pointer;font-size:13px;color:var(--ax-text-2);}
+.eb-rich-btn:hover{background:var(--ax-suprafata-2);border-color:var(--ax-text-3);}
 .eb-social-links{display:flex;flex-direction:column;gap:6px;margin-bottom:6px;}
 .eb-social-link-row{display:flex;gap:5px;align-items:center;}
 .eb-social-link-row select{width:90px;flex-shrink:0;padding:4px 5px;font-size:11.5px;}
 .eb-social-link-row input{flex:1;padding:4px 6px;font-size:12px;}
 .eb-social-link-row button{padding:3px 6px;font-size:11px;flex-shrink:0;}
 .eb-tokens-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
-.eb-token-btn{padding:2px 6px;font-size:10.5px;background:#f0fdf4;border:1px solid #a7f3d0;border-radius:4px;cursor:pointer;color:#166534;font-family:monospace;}
-.eb-token-btn:hover{background:#dcfce7;}
-.eb-props-sep{border:none;border-top:1px solid #f3f4f6;margin:12px 0;}
+.eb-token-btn{padding:2px 6px;font-size:10.5px;background:var(--ax-ok-fundal);border:1px solid var(--ax-ok-linie);border-radius:4px;cursor:pointer;color:var(--ax-accent);font-family:monospace;}
+.eb-token-btn:hover{background:var(--ax-ok-fundal);}
+.eb-props-sep{border:none;border-top:1px solid var(--ax-suprafata-2);margin:12px 0;}
 
 /* ── Modals ─────────────────────────────────────────────── */
 .eb-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:flex;align-items:center;justify-content:center;}
-.eb-modal{background:#fff;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.18);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;}
-.eb-modal-header{padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.eb-modal{background:var(--ax-suprafata);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.18);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;}
+.eb-modal-header{padding:14px 18px;border-bottom:1px solid var(--ax-linie);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .eb-modal-header h3{margin:0;font-size:15px;}
-.eb-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:#9ca3af;line-height:1;}
+.eb-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--ax-text-3);line-height:1;}
 .eb-modal-body{padding:16px 18px;overflow-y:auto;flex:1;}
 .eb-starter-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
-.eb-starter-card{border:2px solid #e5e7eb;border-radius:8px;padding:12px;cursor:pointer;text-align:center;transition:border-color .15s,background .15s;}
-.eb-starter-card:hover{border-color:#1e6b50;background:#f0fdf4;}
+.eb-starter-card{border:2px solid var(--ax-linie);border-radius:8px;padding:12px;cursor:pointer;text-align:center;transition:border-color .15s,background .15s;}
+.eb-starter-card:hover{border-color:var(--ax-accent);background:var(--ax-ok-fundal);}
 .eb-starter-card .eb-starter-icon{font-size:28px;margin-bottom:6px;}
 .eb-starter-card h4{margin:0 0 3px;font-size:12.5px;}
-.eb-starter-card p{margin:0;font-size:11px;color:#9ca3af;}
+.eb-starter-card p{margin:0;font-size:11px;color:var(--ax-text-3);}
 .eb-gallery-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
-.eb-gallery-img{border:2px solid #e5e7eb;border-radius:5px;overflow:hidden;cursor:pointer;aspect-ratio:1;transition:border-color .15s;}
-.eb-gallery-img:hover{border-color:#1e6b50;}
+.eb-gallery-img{border:2px solid var(--ax-linie);border-radius:5px;overflow:hidden;cursor:pointer;aspect-ratio:1;transition:border-color .15s;}
+.eb-gallery-img:hover{border-color:var(--ax-accent);}
 .eb-gallery-img img{width:100%;height:100%;object-fit:cover;display:block;}
-.eb-modal-url-input{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-top:8px;box-sizing:border-box;}
+.eb-modal-url-input{width:100%;padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:6px;font-size:13px;margin-top:8px;box-sizing:border-box;}
 
 </style>
 
@@ -254,7 +254,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
   ]);
   ?>
   <?php if (!$bPoateModifica): ?>
-  <div style="padding:10px 14px 0;background:#fff;">
+  <div style="padding:10px 14px 0;background:var(--ax-suprafata);">
     <?php admin_componenta('mesaj', [
         'tip' => 'info',
         'titlu' => 'Newsletterul a început să plece, așa că nu se mai poate modifica.',
@@ -270,7 +270,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
     <!-- ── Left Palette ── -->
     <aside class="eb-palette">
       <?php if ($bType === 'campaign'): ?>
-      <div class="eb-settings-panel" style="border-top:0;border-bottom:1px solid #e5e7eb;">
+      <div class="eb-settings-panel" style="border-top:0;border-bottom:1px solid var(--ax-linie);">
         <div class="eb-palette-title">Newsletter</div>
         <label for="eb-set-subject">Subiect (îl văd abonații în inbox)</label>
         <input type="text" id="eb-set-subject" maxlength="190" value="<?= htmlspecialchars($bSubject, ENT_QUOTES) ?>" placeholder="ex. Reduceri de toamnă la ceaiuri">
@@ -350,7 +350,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
           <button type="button" class="eb-token-btn" data-token="<?= htmlspecialchars($tok, ENT_QUOTES) ?>" title="Click pentru a copia"><?= htmlspecialchars($tok, ENT_QUOTES) ?></button>
           <?php endforeach; ?>
         </div>
-        <div style="font-size:10px;color:#9ca3af;margin-top:3px;">Click pe un token pentru a-l copia în clipboard</div>
+        <div style="font-size:10px;color:var(--ax-text-3);margin-top:3px;">Click pe un token pentru a-l copia în clipboard</div>
         <?php endif; ?>
         <label style="margin-top:10px;display:flex;align-items:center;gap:6px;cursor:pointer;">
           <input type="checkbox" id="eb-set-active" <?= $bIsActive ? 'checked' : '' ?>> Template activ
@@ -487,10 +487,10 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
         <button type="button" class="eb-modal-close" onclick="ebCloseFullPreview()">✕</button>
       </div>
     </div>
-    <div class="eb-modal-body" style="padding:0;overflow:auto;display:flex;justify-content:center;background:#f3f4f6;">
+    <div class="eb-modal-body" style="padding:0;overflow:auto;display:flex;justify-content:center;background:var(--ax-suprafata-2);">
       <div id="eb-fprev-wrap" style="padding:16px;width:100%;display:flex;justify-content:center;">
-        <div id="eb-fprev-loading" style="padding:60px;color:#6b7280;font-size:13px;">Se generează previzualizarea...</div>
-        <iframe id="eb-fprev-iframe" title="Full preview" style="display:none;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.1);background:#fff;" frameborder="0"></iframe>
+        <div id="eb-fprev-loading" style="padding:60px;color:var(--ax-text-3);font-size:13px;">Se generează previzualizarea...</div>
+        <iframe id="eb-fprev-iframe" title="Full preview" style="display:none;border:1px solid var(--ax-linie-tare);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.1);background:var(--ax-suprafata);" frameborder="0"></iframe>
       </div>
     </div>
   </div>
@@ -505,8 +505,8 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
     </div>
     <div class="eb-modal-body">
       <input type="text" class="eb-modal-url-input" id="eb-img-url-input" placeholder="Sau lipește URL imagine direct...">
-      <div style="margin:10px 0;font-size:12px;color:#9ca3af;text-align:center;">sau alege din galerie</div>
-      <input type="text" id="eb-gallery-search" placeholder="🔍 Caută imagini după titlu..." style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12.5px;margin-bottom:8px;box-sizing:border-box;">
+      <div style="margin:10px 0;font-size:12px;color:var(--ax-text-3);text-align:center;">sau alege din galerie</div>
+      <input type="text" id="eb-gallery-search" placeholder="🔍 Caută imagini după titlu..." style="width:100%;padding:6px 10px;border:1px solid var(--ax-linie-tare);border-radius:6px;font-size:12.5px;margin-bottom:8px;box-sizing:border-box;">
       <div class="eb-gallery-grid" id="eb-gallery-grid">
         <?php foreach ($bGallery as $img): ?>
         <div class="eb-gallery-img" data-url="<?= htmlspecialchars((string)($img['image_url']??''), ENT_QUOTES) ?>" onclick="ebPickGalleryImg(this.dataset.url)" title="<?= htmlspecialchars((string)($img['alt_text']??$img['title']??''), ENT_QUOTES) ?>">
@@ -514,7 +514,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
         </div>
         <?php endforeach; ?>
         <?php if (empty($bGallery)): ?>
-        <p style="grid-column:1/-1;text-align:center;color:#9ca3af;padding:20px;">Nicio imagine în galerie. Adaugă imagini din secțiunea Galerie.</p>
+        <p style="grid-column:1/-1;text-align:center;color:var(--ax-text-3);padding:20px;">Nicio imagine în galerie. Adaugă imagini din secțiunea Galerie.</p>
         <?php endif; ?>
       </div>
       <div id="eb-gallery-pager" style="display:none;justify-content:center;gap:12px;margin-top:10px;align-items:center;"></div>

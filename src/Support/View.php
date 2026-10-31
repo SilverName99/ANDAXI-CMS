@@ -23,6 +23,10 @@ final class View
         self::$vedereCurenta = $template;
 
         extract($data, EXTR_SKIP);
+        // Componentele adminului (WP-31; views/admin/componente/) le folosesc toate paginile adminului (WP-35).
+        if (str_starts_with($template, 'admin/')) {
+            require_once __DIR__ . '/../../views/admin/componente/_incarca.php';
+        }
 
         ob_start();
         require $templateFile;

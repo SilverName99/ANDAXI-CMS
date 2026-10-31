@@ -27,6 +27,26 @@ if (!function_exists('admin_componenta')) {
         })($fisier, $date);
     }
 
+    /**
+     * Tab-ul ales al unei pagini de setări cu tab-uri (WP-35, IA-03/IA-08/IA-09): din ?tab=, cu adresele vechi ale paginii
+     * (alias → [tab, id-ul părții la care coboară pagina]), altfel primul tab. Întoarce [tab, id-ul părții sau ''].
+     *
+     * @param list<string> $taburi
+     * @param array<string, array{0: string, 1?: string}> $alias
+     * @return array{0: string, 1: string}
+     */
+    function adm_tab_ales(array $taburi, array $alias = [], ?string $cerut = null): array
+    {
+        $cerut ??= is_scalar($_GET['tab'] ?? null) ? trim((string) $_GET['tab']) : '';
+        if (in_array($cerut, $taburi, true)) {
+            return [$cerut, ''];
+        }
+        if (isset($alias[$cerut]) && in_array($alias[$cerut][0], $taburi, true)) {
+            return [$alias[$cerut][0], (string) ($alias[$cerut][1] ?? '')];
+        }
+        return [(string) ($taburi[0] ?? ''), ''];
+    }
+
     /** Escapare scurtă pentru componente. */
     function adm_e(mixed $valoare): string
     {

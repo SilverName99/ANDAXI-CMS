@@ -63,11 +63,64 @@ $campaignHourlyOpens = is_array($campaignHourlyOpens ?? null) ? $campaignHourlyO
 $limitaOptinAtinsa = trim((string) ($settings['newsletter_limita_globala_atinsa'] ?? ''));
 $limitaOptinTs = $limitaOptinAtinsa !== '' ? strtotime($limitaOptinAtinsa) : false;
 $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
-    ? '<div role="status" style="margin:0 0 12px;padding:10px 14px;border:1px solid #fde68a;border-left:4px solid #ca8a04;border-radius:10px;background:#fefce8;color:#713f12;font-size:13px;line-height:1.55;">'
+    ? '<div role="status" style="margin:0 0 12px;padding:10px 14px;border:1px solid var(--ax-atentie-linie);border-left:4px solid #ca8a04;border-radius:var(--ax-raza-mare);background:var(--ax-atentie-fundal);color:#713f12;font-size:13px;line-height:1.55;">'
         . '<strong>Formularul de abonare a atins limita de ' . \App\Support\NewsletterService::LIMITA_GLOBALA_ORA . ' de emailuri pe oră</strong> (ultima dată: '
         . htmlspecialchars(date('d.m.Y, H:i', (int) $limitaOptinTs), ENT_QUOTES) . '). Unele cereri de abonare n-au primit email (linkurile de dezabonare nu sunt afectate). '
         . 'Dacă nu ai o campanie mare de înscrieri, poate fi un atac: spune-i programatorului.</div>'
     : '';
+?>
+
+<?php
+// WP-35 (IA-01, docs/ARHITECTURA-ADMIN.md): pagina „Email-uri” (opt tab-uri amestecate) e împărțită după cine o folosește. Fiecare
+// bucată își vede doar tab-urile ei; adresele rămân aceleași (/admin/emails/newsletters?tab=…, /admin/emails/{sender,test,automation}).
+//  - Marketing › Newsletter: Newslettere, Șabloane newsletter, Liste abonați, Formulare opt-in;
+//  - Setări › Emailuri de comandă: Emailuri de comandă (cu magazinul), Setări trimitere, Trimite email test;
+//  - Clienți › Mesaje de contact; Rapoarte › Emailuri trimise și Statistici newsletter; Marketing › Automatizări.
+$cuNewsletterEmail = \App\Support\Plugins::vizibil('newsletter');
+$cuMagazinEmail = \App\Support\Plugins::vizibil('magazin');
+$bucataEmail = match (true) {
+    $currentSection === 'sender', $currentSection === 'test' => 'comanda',
+    $currentSection === 'automation' => 'automatizari',
+    in_array($newsletterTab, ['campaigns', 'templates', 'subscribers', 'optin'], true) => 'newsletter',
+    $newsletterTab === 'ecommerce' => 'comanda',
+    $newsletterTab === 'contact_forms' => 'contact',
+    default => 'trimise',
+};
+$tabEmail = $currentSection === 'newsletters' ? $newsletterTab : $currentSection;
+$taburiEmail = match ($bucataEmail) {
+    'newsletter' => [
+        ['campaigns', 'Newslettere', '/admin/emails/newsletters?tab=campaigns', $cuNewsletterEmail],
+        ['templates', 'Șabloane newsletter', '/admin/emails/newsletters?tab=templates', $cuNewsletterEmail],
+        ['subscribers', 'Liste abonați', '/admin/emails/newsletters?tab=subscribers', $cuNewsletterEmail],
+        ['optin', 'Formulare opt-in', '/admin/emails/newsletters?tab=optin', $cuNewsletterEmail],
+    ],
+    'comanda' => [
+        ['ecommerce', 'Emailuri de comandă', '/admin/emails/newsletters?tab=ecommerce', $cuMagazinEmail],
+        ['sender', 'Setări trimitere', '/admin/emails/sender', true],
+        ['test', 'Trimite email test', '/admin/emails/test', true],
+    ],
+    'trimise' => [
+        ['history', 'Emailuri trimise', '/admin/emails/newsletters?tab=history', true],
+        ['stats', 'Statistici newsletter', '/admin/emails/newsletters?tab=stats', $cuNewsletterEmail],
+    ],
+    default => [],
+};
+$taburiEmail = array_values(array_filter($taburiEmail, static fn (array $t): bool => $t[3]));
+[$titluEmail, $subtitluEmail] = match ($bucataEmail) {
+    'newsletter' => ['Newsletter', 'Campaniile, șabloanele lor, listele de abonați și formularele de abonare de pe site.'],
+    'comanda' => [$cuMagazinEmail ? 'Emailuri de comandă' : 'Trimiterea emailurilor',
+        ($cuMagazinEmail ? 'Textele emailurilor trimise la fiecare pas al comenzii, ' : 'Ce ') . 'de la ce adresă și prin ce server pleacă emailurile, un email de probă.'],
+    'automatizari' => ['Automatizări', 'Emailurile trimise singure: pașii comenzii și coșul abandonat.'],
+    'contact' => ['Mesaje de contact', 'Mesajele trimise din formularul de contact al site-ului și cine le primește.'],
+    default => ['Emailuri trimise', 'Toate emailurile plecate de pe site, cu retrimiterea' . ($cuNewsletterEmail ? '; deschiderile și clicurile campaniilor.' : '.')],
+};
+admin_componenta('antet-pagina', ['titlu' => $titluEmail, 'nivel' => 1, 'subtitlu' => $subtitluEmail]);
+if (count($taburiEmail) > 1) {
+    admin_componenta('tab-uri-cu-numar', [
+        'eticheta' => 'Părțile paginii',
+        'taburi' => array_map(static fn (array $t): array => ['eticheta' => $t[1], 'href' => $t[2], 'activ' => $t[0] === $tabEmail], $taburiEmail),
+    ]);
+}
 ?>
 
 <?php if ($currentSection === 'sender'): ?>
@@ -230,7 +283,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                 <button class="btn" type="submit">Salvează setările de automatizare</button>
             </div>
         </form>
-        <p style="margin-top:12px;color:#64748b;">
+        <p style="margin-top:12px;color:var(--ax-text-3);">
             Cron recomandat:
             <code>php /home/USER/public_html/scripts/abandoned-cart-emails.php --limit=100</code>
         </p>
@@ -358,23 +411,6 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
     $optInEditing = is_array($selectedOptInForm);
     ?>
     <section class="panel">
-        <div class="newsletter-page-head">
-            <h2 style="margin:0;">Email-uri</h2>
-            <p style="margin:4px 0 0;color:#64748b;"><?= \App\Support\Plugins::vizibil('newsletter')
-                ? 'Gestionează template-uri, liste de abonați și formulare opt-in.'
-                : 'Gestionează ' . (\App\Support\Plugins::vizibil('magazin') ? 'emailurile magazinului, ' : '') . 'formularele de contact și istoricul trimiterilor.' ?></p>
-        </div>
-        <div class="newsletter-tabs">
-            <a class="newsletter-tab <?= $newsletterTab === 'templates' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=templates">Template-uri</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'campaigns' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=campaigns">Newslettere</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'ecommerce' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=ecommerce">Email-uri ecommerce</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'subscribers' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=subscribers">Liste abonați</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'optin' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=optin">Formulare opt-in</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'contact_forms' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=contact_forms">Formulare contact</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'stats' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=stats">Statistici</a>
-            <a class="newsletter-tab <?= $newsletterTab === 'history' ? 'active' : '' ?>" href="/admin/emails/newsletters?tab=history">Istoric trimitere email-uri</a>
-        </div>
-
         <?php if ($newsletterTab === 'campaigns'): ?>
             <?php require_once __DIR__ . '/componente/_incarca.php'; ?>
             <?php // Stilul și scriptul componentelor le încarcă views/admin/layout.php pe fiecare pagină (WP-31). ?>
@@ -435,7 +471,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                                         <p><small>Programat: <?= htmlspecialchars(date('d.m.Y, H:i', (int) strtotime((string) $campaign['scheduled_at'])), ENT_QUOTES) ?></small></p>
                                     <?php endif; ?>
                                     <?php if ($cardStatus === 'paused' && trim((string) ($campaign['last_error'] ?? '')) !== ''): ?>
-                                        <p style="color:#b91c1c;"><small>Oprit: <?= htmlspecialchars((string) $campaign['last_error'], ENT_QUOTES) ?> Deschide-l și apasă „Reia trimiterea”.</small></p>
+                                        <p style="color:var(--ax-eroare);"><small>Oprit: <?= htmlspecialchars((string) $campaign['last_error'], ENT_QUOTES) ?> Deschide-l și apasă „Reia trimiterea”.</small></p>
                                     <?php endif; ?>
                                 </div>
                                 <div class="newsletter-campaign-meta">
@@ -488,17 +524,17 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         $maxHourly     = $hourlyData ? max($hourlyData) : 0;
                         ?>
                         <?php if ((string) ($selectedCampaign['status'] ?? '') === 'sent'): ?>
-                        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin-bottom:14px;">
+                        <div style="background:var(--ax-suprafata-2);border:1px solid var(--ax-linie);border-radius:8px;padding:14px 18px;margin-bottom:14px;">
                             <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:12px;">
-                                <div><strong><?= $scTotalSent ?></strong> <span style="color:#64748b;font-size:13px;">Trimise</span></div>
-                                <div><strong><?= $scTotalOpens ?> (<?= $scOpenRate ?>%)</strong> <span style="color:#64748b;font-size:13px;">Deschideri</span></div>
-                                <div><strong><?= $scTotalClicks ?> (<?= $scClickRate ?>%)</strong> <span style="color:#64748b;font-size:13px;">Click-uri</span></div>
-                                <div><strong><?= (int) ($selectedCampaign['total_failed'] ?? 0) ?></strong> <span style="color:#64748b;font-size:13px;">Eșuate</span></div>
+                                <div><strong><?= $scTotalSent ?></strong> <span style="color:var(--ax-text-3);font-size:13px;">Trimise</span></div>
+                                <div><strong><?= $scTotalOpens ?> (<?= $scOpenRate ?>%)</strong> <span style="color:var(--ax-text-3);font-size:13px;">Deschideri</span></div>
+                                <div><strong><?= $scTotalClicks ?> (<?= $scClickRate ?>%)</strong> <span style="color:var(--ax-text-3);font-size:13px;">Click-uri</span></div>
+                                <div><strong><?= (int) ($selectedCampaign['total_failed'] ?? 0) ?></strong> <span style="color:var(--ax-text-3);font-size:13px;">Eșuate</span></div>
                             </div>
                             <?php if (!empty($hourlyData)): ?>
                             <div style="margin-top:8px;">
-                                <p style="margin:0 0 6px;font-size:12px;color:#64748b;font-weight:600;">Deschideri pe oră</p>
-                                <div style="display:flex;align-items:flex-end;gap:3px;height:80px;border-bottom:1px solid #e2e8f0;padding-bottom:2px;">
+                                <p style="margin:0 0 6px;font-size:12px;color:var(--ax-text-3);font-weight:600;">Deschideri pe oră</p>
+                                <div style="display:flex;align-items:flex-end;gap:3px;height:80px;border-bottom:1px solid var(--ax-linie);padding-bottom:2px;">
                                     <?php for ($hr = 0; $hr < 24; $hr++): ?>
                                         <?php
                                         $cnt = (int) ($hourlyData[$hr] ?? 0);
@@ -512,7 +548,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                                 </div>
                                 <div style="display:flex;gap:3px;margin-top:2px;">
                                     <?php for ($hr = 0; $hr < 24; $hr += 6): ?>
-                                        <div style="flex:6;font-size:10px;color:#94a3b8;text-align:left;"><?= $hr ?>h</div>
+                                        <div style="flex:6;font-size:10px;color:var(--ax-text-3);text-align:left;"><?= $hr ?>h</div>
                                     <?php endfor; ?>
                                 </div>
                             </div>
@@ -858,7 +894,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         <input type="file" class="newsletter-input-polish" name="newsletter_subscribers_file" accept=".csv,.xlsx" required>
                         <button class="btn btn-secondary" type="submit">Importă CSV/XLSX</button>
                     </form>
-                    <p style="margin:0 0 10px;color:#64748b;font-size:12px;">
+                    <p style="margin:0 0 10px;color:var(--ax-text-3);font-size:12px;">
                         Format suportat: perechi repetate de coloane <strong>Email</strong> + <strong>Listă</strong>. Listele inexistente se creează automat.
                     </p>
 
@@ -868,12 +904,12 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         <input type="file" class="newsletter-input-polish" name="mailchimp_file" accept=".csv,.zip" required>
                         <button class="btn btn-secondary" type="submit">Importă export Mailchimp</button>
                     </form>
-                    <p style="margin:0 0 10px;color:#64748b;font-size:12px;">
+                    <p style="margin:0 0 10px;color:var(--ax-text-3);font-size:12px;">
                         Acceptă CSV-ul sau chiar arhiva ZIP descărcată din Mailchimp (Audience → Contacts → Export).
                         Intră în lista selectată mai sus. Se importă <strong>doar abonații activi</strong>: dezabonații
                         și adresele curățate sunt ignorate automat, chiar dacă exportul le conține.
                     </p>
-                    <p style="margin:0 0 10px;color:#64748b;font-size:12px;">
+                    <p style="margin:0 0 10px;color:var(--ax-text-3);font-size:12px;">
                         <strong>neconfirmat</strong> = s-a înscris din formularul de pe site și n-a apăsat încă linkul din emailul
                         de confirmare (nu primește newslettere; cererea expiră după 30 de zile). Un abonat șters intră pe lista
                         „nu trimite”: importurile și adăugarea din admin îl sar; doar el se poate reabona, de pe site.
@@ -907,7 +943,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         <?php if ($subQuery !== ''): ?>
                             <a class="btn btn-secondary" href="?tab=subscribers&list=<?= $selectedListId ?>">Renunță</a>
                         <?php endif; ?>
-                        <span style="color:#64748b;font-size:12px;">
+                        <span style="color:var(--ax-text-3);font-size:12px;">
                             <?php if ($subTotal > 0): ?>
                                 <?= $primul ?>–<?= $ultimul ?> din <strong><?= number_format($subTotal, 0, ',', '.') ?></strong>
                             <?php else: ?>
@@ -927,7 +963,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         </thead>
                         <tbody>
                         <?php if ($listSubscribers === []): ?>
-                            <tr><td colspan="4" style="text-align:center;color:#64748b;padding:18px;">
+                            <tr><td colspan="4" style="text-align:center;color:var(--ax-text-3);padding:18px;">
                                 <?= $subQuery !== '' ? 'Nicio potrivire pentru căutarea asta.' : 'Lista nu are abonați.' ?>
                             </td></tr>
                         <?php endif; ?>
@@ -984,7 +1020,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                                 <a class="btn btn-secondary" href="<?= htmlspecialchars($subUrl($subPage - 1), ENT_QUOTES) ?>">‹ Înapoi</a>
                             <?php endif; ?>
 
-                            <span style="color:#64748b;font-size:13px;">
+                            <span style="color:var(--ax-text-3);font-size:13px;">
                                 Pagina <strong><?= $subPage ?></strong> din <?= number_format($subPages, 0, ',', '.') ?>
                             </span>
 
@@ -999,9 +1035,9 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                                 <?php if ($subQuery !== ''): ?>
                                     <input type="hidden" name="sub_q" value="<?= htmlspecialchars($subQuery, ENT_QUOTES) ?>">
                                 <?php endif; ?>
-                                <label style="color:#64748b;font-size:13px;">Sari la pagina</label>
+                                <label style="color:var(--ax-text-3);font-size:13px;">Sari la pagina</label>
                                 <input type="number" name="sub_page" min="1" max="<?= $subPages ?>" value="<?= $subPage ?>"
-                                       style="width:90px;height:34px;border:1px solid #cbd5e1;border-radius:8px;padding:0 8px;">
+                                       style="width:90px;height:34px;border:1px solid var(--ax-linie-tare);border-radius:8px;padding:0 8px;">
                                 <button class="btn btn-secondary" type="submit">Mergi</button>
                             </form>
                         </div>
@@ -1178,7 +1214,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
         <?php if ($newsletterTab === 'contact_forms'): ?>
             <article class="panel" style="margin-top:12px;">
                 <h3 style="margin:0 0 8px;">Cine primește mesajele</h3>
-                <p style="margin:0 0 10px;color:#64748b;">
+                <p style="margin:0 0 10px;color:var(--ax-text-3);">
                     Una sau mai multe adrese, separate prin virgulă. Fiecare primește
                     câte o copie a mesajului. Mesajele se salvează oricum în lista de mai jos,
                     chiar dacă un email nu ajunge.
@@ -1220,17 +1256,17 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         $destinatariContact = \App\Support\Brand::emailContact(null, $settings) ?: 'adresa primului administrator general';
                     }
                     ?>
-                    <p style="margin:0 0 10px;color:#64748b;">
+                    <p style="margin:0 0 10px;color:var(--ax-text-3);">
                         Ca formularul să trimită corect către <strong><?= htmlspecialchars($destinatariContact, ENT_QUOTES) ?></strong>, trebuie să respecte pașii de mai jos.
                     </p>
-                    <ol style="margin:0 0 10px 18px;line-height:1.7;color:#334155;">
+                    <ol style="margin:0 0 10px 18px;line-height:1.7;color:var(--ax-text-2);">
                         <li>Formularul din front-end trebuie să trimită <code>POST</code> JSON la endpoint-ul <code>/contact/send</code>.</li>
                         <li>Payload-ul trebuie să includă câmpurile: <code>name</code>, <code>email</code>, <code>phone</code>, <code>subject</code>, <code>message</code>.</li>
                         <li>Câmpurile obligatorii validate în backend sunt: <code>name</code>, <code>email</code>, <code>subject</code>, <code>message</code>.</li>
                         <li>Transportul de email folosește setările deja configurate în <strong>Setări trimitere</strong> (SMTP / SendGrid).</li>
                         <li>Fiecare mesaj trimis este salvat automat în lista de mai jos, în această secțiune.</li>
                     </ol>
-                    <pre style="margin:0;white-space:pre-wrap;background:#0f172a;color:#e2e8f0;padding:10px;border-radius:10px;overflow:auto;"><code>fetch('/contact/send', {
+                    <pre style="margin:0;white-space:pre-wrap;background:var(--ax-text);color:var(--ax-linie);padding:10px;border-radius:var(--ax-raza-mare);overflow:auto;"><code>fetch('/contact/send', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
@@ -1270,7 +1306,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         <?php endforeach; ?>
                         <?php if ($contactMessages === []): ?>
                             <tr>
-                                <td colspan="6" style="color:#64748b;">Nu există încă mesaje primite din formularul de contact.</td>
+                                <td colspan="6" style="color:var(--ax-text-3);">Nu există încă mesaje primite din formularul de contact.</td>
                             </tr>
                         <?php endif; ?>
                     </tbody>
@@ -1321,35 +1357,35 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
         <style>
         .nl-stats-wrap { font-family: inherit; }
         .nl-stats-kpi-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
-        .nl-stats-kpi { flex: 1 1 160px; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+        .nl-stats-kpi { flex: 1 1 160px; background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: 10px; padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.05); }
         .nl-stats-kpi .nl-kpi-icon { font-size: 1.5rem; margin-bottom: 6px; }
-        .nl-stats-kpi .nl-kpi-val { font-size: 1.7rem; font-weight: 700; color: #0f172a; line-height: 1.1; }
-        .nl-stats-kpi .nl-kpi-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
-        .nl-stats-kpi .nl-kpi-label { font-size: 13px; color: #64748b; margin-top: 2px; }
-        .nl-stats-section-title { font-size: 15px; font-weight: 700; color: #0f172a; margin: 0 0 12px; }
-        .nl-stats-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+        .nl-stats-kpi .nl-kpi-val { font-size: 1.7rem; font-weight: 700; color: var(--ax-text); line-height: 1.1; }
+        .nl-stats-kpi .nl-kpi-sub { font-size: 12px; color: var(--ax-text-3); margin-top: 4px; }
+        .nl-stats-kpi .nl-kpi-label { font-size: 13px; color: var(--ax-text-3); margin-top: 2px; }
+        .nl-stats-section-title { font-size: 15px; font-weight: 700; color: var(--ax-text); margin: 0 0 12px; }
+        .nl-stats-panel { background: var(--ax-suprafata); border: 1px solid var(--ax-linie); border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
         .nl-stats-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .nl-stats-table th { background: #f0fdf4; color: #1a7a5e; font-weight: 600; padding: 8px 10px; text-align: left; border-bottom: 2px solid #e5e7eb; }
-        .nl-stats-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .nl-stats-table th { background: var(--ax-ok-fundal); color: var(--ax-accent); font-weight: 600; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--ax-linie); }
+        .nl-stats-table td { padding: 9px 10px; border-bottom: 1px solid var(--ax-suprafata-2); vertical-align: middle; }
         .nl-stats-table tr:last-child td { border-bottom: none; }
-        .nl-stats-table tr:hover td { background: #f8fafc; }
-        .nl-stats-prog { background: #e5e7eb; border-radius: 99px; height: 6px; min-width: 60px; display: inline-block; vertical-align: middle; }
-        .nl-stats-prog-fill { background: #1a7a5e; border-radius: 99px; height: 6px; display: block; }
-        .nl-stats-badge { display: inline-block; background: #e5e7eb; color: #0f172a; border-radius: 99px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
-        .nl-stats-badge.green { background: #dcfce7; color: #166534; }
-        .nl-stats-badge.blue { background: #dbeafe; color: #1e40af; }
+        .nl-stats-table tr:hover td { background: var(--ax-suprafata-2); }
+        .nl-stats-prog { background: var(--ax-linie); border-radius: 99px; height: 6px; min-width: 60px; display: inline-block; vertical-align: middle; }
+        .nl-stats-prog-fill { background: var(--ax-accent); border-radius: 99px; height: 6px; display: block; }
+        .nl-stats-badge { display: inline-block; background: var(--ax-linie); color: var(--ax-text); border-radius: 99px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+        .nl-stats-badge.green { background: var(--ax-ok-fundal); color: var(--ax-accent); }
+        .nl-stats-badge.blue { background: var(--ax-info-fundal); color: var(--ax-info); }
         .nl-stats-breadcrumb { margin-bottom: 16px; font-size: 13px; }
-        .nl-stats-breadcrumb a { color: #1a7a5e; text-decoration: none; }
+        .nl-stats-breadcrumb a { color: var(--ax-accent); text-decoration: none; }
         .nl-stats-breadcrumb a:hover { text-decoration: underline; }
         .nl-stats-campaign-header { margin-bottom: 20px; }
-        .nl-stats-campaign-header h2 { margin: 0 0 4px; font-size: 1.2rem; color: #0f172a; }
-        .nl-stats-campaign-header p { margin: 0; color: #64748b; font-size: 13px; }
+        .nl-stats-campaign-header h2 { margin: 0 0 4px; font-size: 1.2rem; color: var(--ax-text); }
+        .nl-stats-campaign-header p { margin: 0; color: var(--ax-text-3); font-size: 13px; }
         .nl-stats-chart-wrap { overflow-x: auto; }
-        .nl-stats-empty { text-align: center; padding: 32px 16px; color: #64748b; font-size: 14px; }
-        .nl-stats-search { width: 100%; max-width: 340px; padding: 7px 12px; border: 1px solid #e5e7eb; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
-        .nl-stats-detalii-btn { display: inline-block; padding: 4px 12px; background: #1a7a5e; color: #fff; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 600; }
+        .nl-stats-empty { text-align: center; padding: 32px 16px; color: var(--ax-text-3); font-size: 14px; }
+        .nl-stats-search { width: 100%; max-width: 340px; padding: 7px 12px; border: 1px solid var(--ax-linie); border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
+        .nl-stats-detalii-btn { display: inline-block; padding: 4px 12px; background: var(--ax-accent); color: #fff; border-radius: 6px; font-size: 12px; text-decoration: none; font-weight: 600; }
         .nl-stats-detalii-btn:hover { background: #15654e; }
-        .nl-stats-nota { margin: -12px 0 20px; color: #64748b; font-size: 12.5px; line-height: 1.55; }
+        .nl-stats-nota { margin: -12px 0 20px; color: var(--ax-text-3); font-size: 12.5px; line-height: 1.55; }
         </style>
         <div class="nl-stats-wrap">
         <?php
@@ -1431,19 +1467,19 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         <tr>
                             <td>
                                 <strong><?= htmlspecialchars((string) ($sc['name'] ?? ''), ENT_QUOTES) ?></strong>
-                                <br><span style="color:#64748b;font-size:11px;"><?= htmlspecialchars((string) ($sc['subject'] ?? ''), ENT_QUOTES) ?></span>
+                                <br><span style="color:var(--ax-text-3);font-size:11px;"><?= htmlspecialchars((string) ($sc['subject'] ?? ''), ENT_QUOTES) ?></span>
                             </td>
                             <td style="white-space:nowrap;"><?= htmlspecialchars((string) ($sc['sent_at'] ?? '—'), ENT_QUOTES) ?></td>
                             <td><?= htmlspecialchars((string) ($sc['list_name'] ?? '—'), ENT_QUOTES) ?></td>
                             <td><?= number_format($scSent) ?></td>
                             <td>
                                 <span style="font-weight:600;"><?= $openPct ?>%</span>
-                                <span style="color:#64748b;font-size:11px;">(<?= number_format($scOpens) ?>)</span>
+                                <span style="color:var(--ax-text-3);font-size:11px;">(<?= number_format($scOpens) ?>)</span>
                                 <div class="nl-stats-prog" style="width:80px;"><div class="nl-stats-prog-fill" style="width:<?= $openBarW ?>%;"></div></div>
                             </td>
                             <td>
                                 <span style="font-weight:600;"><?= $clickPct ?>%</span>
-                                <span style="color:#64748b;font-size:11px;">(<?= number_format($scClicks) ?>)</span>
+                                <span style="color:var(--ax-text-3);font-size:11px;">(<?= number_format($scClicks) ?>)</span>
                                 <div class="nl-stats-prog" style="width:80px;"><div class="nl-stats-prog-fill" style="background:#0ea5e9;width:<?= $clickBarW ?>%;"></div></div>
                             </td>
                             <td>
@@ -1608,7 +1644,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                 <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
                     <input type="hidden" name="tab" value="stats">
                     <input type="hidden" name="campaign_id" value="<?= (int) $statsCampaignId ?>">
-                    <select name="recip_f" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                    <select name="recip_f" style="padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font:inherit;">
                         <?php foreach ($rcOptiuni as $rcVal => $rcEticheta): ?>
                             <option value="<?= $rcVal ?>"<?= $rcFilter === $rcVal ? ' selected' : '' ?>>
                                 <?= htmlspecialchars($rcEticheta, ENT_QUOTES) ?><?= isset($rcCounts[$rcVal]) ? ' (' . number_format((int) $rcCounts[$rcVal]) . ')' : '' ?>
@@ -1616,8 +1652,8 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                         <?php endforeach; ?>
                     </select>
                     <input type="text" name="recip_q" value="<?= htmlspecialchars($rcQuery, ENT_QUOTES) ?>" placeholder="Caută după email…"
-                           style="flex:1 1 220px;min-width:180px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
-                    <select name="recip_per_page" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;">
+                           style="flex:1 1 220px;min-width:180px;padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font:inherit;">
+                    <select name="recip_per_page" style="padding:8px 10px;border:1px solid var(--ax-linie-tare);border-radius:8px;font:inherit;">
                         <?php foreach ([25, 50, 100, 200] as $rcPp): ?>
                             <option value="<?= $rcPp ?>"<?= $rcPerPage === $rcPp ? ' selected' : '' ?>><?= $rcPp ?> / pagină</option>
                         <?php endforeach; ?>
@@ -1646,22 +1682,22 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                             ?>
                             <td><span class="nl-stats-badge <?= $rStatus === 'sent' ? 'green' : '' ?>" <?= $rEroare !== '' ? 'title="' . htmlspecialchars($rEroare, ENT_QUOTES) . '"' : '' ?>><?= htmlspecialchars($rStatusText, ENT_QUOTES) ?></span></td>
                             <td>
-                                <?= $rOpened ? '<span style="color:#1a7a5e;font-weight:700;">&#10003;</span>' : '<span style="color:#cbd5e1;">—</span>' ?>
+                                <?= $rOpened ? '<span style="color:#1a7a5e;font-weight:700;">&#10003;</span>' : '<span style="color:var(--ax-linie-tare);">—</span>' ?>
                                 <?php if ($rOpenCnt > 0): ?><span class="nl-stats-badge"><?= $rOpenCnt ?>x</span><?php endif; ?>
                             </td>
                             <td>
-                                <?= $rClicked ? '<span style="color:#0ea5e9;font-weight:700;">&#10003;</span>' : '<span style="color:#cbd5e1;">—</span>' ?>
+                                <?= $rClicked ? '<span style="color:#0ea5e9;font-weight:700;">&#10003;</span>' : '<span style="color:var(--ax-linie-tare);">—</span>' ?>
                                 <?php if ($rClickCnt > 0): ?><span class="nl-stats-badge blue"><?= $rClickCnt ?>x</span><?php endif; ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
-                    <?php if (empty($statsRecipients)): ?><tr><td colspan="4" style="text-align:center;color:#64748b;padding:18px;"><?= ($rcFilter !== 'all' || $rcQuery !== '') ? 'Niciun destinatar pentru filtrul ales.' : 'Nu există date de destinatari.' ?></td></tr><?php endif; ?>
+                    <?php if (empty($statsRecipients)): ?><tr><td colspan="4" style="text-align:center;color:var(--ax-text-3);padding:18px;"><?= ($rcFilter !== 'all' || $rcQuery !== '') ? 'Niciun destinatar pentru filtrul ales.' : 'Nu există date de destinatari.' ?></td></tr><?php endif; ?>
                     </tbody>
                 </table>
                 </div>
                 <?php if ($rcPages > 1): ?>
                 <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:12px;">
-                    <span style="color:#64748b;font-size:13px;">
+                    <span style="color:var(--ax-text-3);font-size:13px;">
                         Pagina <?= $rcPage ?> din <?= $rcPages ?> — <?= number_format($rcTotal) ?> destinatari
                     </span>
                     <span style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
@@ -1781,7 +1817,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
         <?php if ($newsletterTab === 'history'): ?>
             <article class="panel" style="margin-top:12px;">
                 <h3 style="margin:0 0 8px;">Istoric trimitere email-uri</h3>
-                <p style="margin:0 0 10px;color:#64748b;">
+                <p style="margin:0 0 10px;color:var(--ax-text-3);">
                     Aici vezi fiecare email trimis/respins de sistem (inclusiv emailurile automate<?= \App\Support\Plugins::vizibil('livrare_fan') ? ' după AWB/completed' : '' ?>).
                 </p>
                 <?php
@@ -1841,7 +1877,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                     </div>
                 </form>
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px;">
-                    <p style="margin:0;color:#64748b;">Total email-uri în istoric: <strong><?= (int) $emailSendHistoryTotal ?></strong></p>
+                    <p style="margin:0;color:var(--ax-text-3);">Total email-uri în istoric: <strong><?= (int) $emailSendHistoryTotal ?></strong></p>
 <?php if (\App\Support\Plugins::vizibil('magazin')): ?>
                     <form method="post" action="/admin/emails/history/resend" style="margin:0;"
                           onsubmit="return confirm('Se retrimit toate emailurile eșuate care se pot reconstrui din comandă. Continui?');">
@@ -1920,7 +1956,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                     $historyEnd = min($emailSendHistoryTotalPages, $emailSendHistoryPage + 2);
                     ?>
                     <div class="users-search-row" style="margin-top:10px;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                        <small style="color:#64748b;">Pagina <?= $emailSendHistoryPage ?> din <?= $emailSendHistoryTotalPages ?></small>
+                        <small style="color:var(--ax-text-3);">Pagina <?= $emailSendHistoryPage ?> din <?= $emailSendHistoryTotalPages ?></small>
                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                             <a class="btn btn-secondary" href="<?= htmlspecialchars($buildHistoryUrl(['history_page' => max(1, $emailSendHistoryPage - 1)]), ENT_QUOTES) ?>" <?= $emailSendHistoryPage <= 1 ? 'style="pointer-events:none;opacity:.6;"' : '' ?>>‹ Anterior</a>
                             <?php for ($h = $historyStart; $h <= $historyEnd; $h++): ?>
@@ -1991,15 +2027,15 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                     <h3>Coduri Email Ecommerce</h3>
                     <button type="button" class="icon-btn" data-modal-close="ecommerce-codes-modal">✕</button>
                 </div>
-                <p style="margin:10px 0 14px;color:#64748b;">
+                <p style="margin:10px 0 14px;color:var(--ax-text-3);">
                     Poți folosi aceste coduri în Subiect sau în blocurile de tip text/buton. Se înlocuiesc automat la trimitere.
                 </p>
                 <div style="display:grid;gap:8px;max-height:52vh;overflow:auto;padding-right:4px;">
                     <?php foreach ($ecommerceEmailCodes as $token): ?>
-                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+                        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);background:var(--ax-suprafata-2);">
                             <div>
-                                <code style="font-weight:700;color:#0f172a;"><?= htmlspecialchars((string) ($token['code'] ?? ''), ENT_QUOTES) ?></code>
-                                <div style="margin-top:4px;color:#64748b;font-size:13px;line-height:1.45;">
+                                <code style="font-weight:700;color:var(--ax-text);"><?= htmlspecialchars((string) ($token['code'] ?? ''), ENT_QUOTES) ?></code>
+                                <div style="margin-top:4px;color:var(--ax-text-3);font-size:13px;line-height:1.45;">
                                     <?= htmlspecialchars((string) ($token['description'] ?? ''), ENT_QUOTES) ?>
                                 </div>
                             </div>
@@ -2014,11 +2050,11 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                     <h3>Trimitere acest email la</h3>
                     <button type="button" class="icon-btn" data-modal-close="ecommerce-recipients-modal">✕</button>
                 </div>
-                <p style="margin:10px 0 14px;color:#64748b;">
+                <p style="margin:10px 0 14px;color:var(--ax-text-3);">
                     Alege unde se trimite acest template ecommerce.
                 </p>
                 <div style="display:grid;gap:10px;">
-                    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+                    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);background:var(--ax-suprafata-2);">
                         <input
                             type="radio"
                             name="ecommerce_template_recipient_mode"
@@ -2028,15 +2064,15 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                             <?= $selectedEcommerceRecipientMode === 'client' ? 'checked' : '' ?>
                         >
                         <span>
-                            <strong style="display:block;color:#0f172a;">Client</strong>
-                            <small style="color:#64748b;">Emailul se trimite către clientul comenzii.</small>
+                            <strong style="display:block;color:var(--ax-text);">Client</strong>
+                            <small style="color:var(--ax-text-3);">Emailul se trimite către clientul comenzii.</small>
                         </span>
                     </label>
-                    <div style="padding:10px 12px;border:1px dashed #cbd5e1;border-radius:10px;background:#ffffff;color:#334155;">
+                    <div style="padding:10px 12px;border:1px dashed var(--ax-linie-tare);border-radius:var(--ax-raza-mare);background:var(--ax-suprafata);color:var(--ax-text-2);">
                         Destinatar: <strong>Client</strong>
                     </div>
 
-                    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+                    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);background:var(--ax-suprafata-2);">
                         <input
                             type="radio"
                             name="ecommerce_template_recipient_mode"
@@ -2046,11 +2082,11 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                             <?= $selectedEcommerceRecipientMode === 'admin' ? 'checked' : '' ?>
                         >
                         <span>
-                            <strong style="display:block;color:#0f172a;">Admin</strong>
-                            <small style="color:#64748b;">Emailul se trimite către adresele de mai jos.</small>
+                            <strong style="display:block;color:var(--ax-text);">Admin</strong>
+                            <small style="color:var(--ax-text-3);">Emailul se trimite către adresele de mai jos.</small>
                         </span>
                     </label>
-                    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+                    <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--ax-linie);border-radius:var(--ax-raza-mare);background:var(--ax-suprafata-2);">
                         <input
                             type="radio"
                             name="ecommerce_template_recipient_mode"
@@ -2060,12 +2096,12 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                             <?= $selectedEcommerceRecipientMode === 'client_admin' ? 'checked' : '' ?>
                         >
                         <span>
-                            <strong style="display:block;color:#0f172a;">Client & Admin</strong>
-                            <small style="color:#64748b;">Emailul se trimite și către client, și către adresele de admin.</small>
+                            <strong style="display:block;color:var(--ax-text);">Client & Admin</strong>
+                            <small style="color:var(--ax-text-3);">Emailul se trimite și către client, și către adresele de admin.</small>
                         </span>
                     </label>
-                    <div data-ecommerce-admin-wrap style="display:grid;gap:8px;padding:10px 12px;border:1px dashed #cbd5e1;border-radius:10px;background:#ffffff;">
-                        <label style="font-weight:600;color:#0f172a;">Email-uri admin</label>
+                    <div data-ecommerce-admin-wrap style="display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--ax-linie-tare);border-radius:var(--ax-raza-mare);background:var(--ax-suprafata);">
+                        <label style="font-weight:600;color:var(--ax-text);">Email-uri admin</label>
                         <textarea
                             name="ecommerce_template_admin_recipients"
                             form="ecommerce-template-builder-form"
@@ -2073,7 +2109,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                             rows="4"
                             placeholder="admin@site.ro, owner@site.ro"
                         ><?= htmlspecialchars($selectedEcommerceAdminRecipientsRaw, ENT_QUOTES) ?></textarea>
-                        <small style="color:#64748b;">Separă adresele prin virgulă, spațiu sau Enter.</small>
+                        <small style="color:var(--ax-text-3);">Separă adresele prin virgulă, spațiu sau Enter.</small>
                     </div>
                 </div>
                 <div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px;">
@@ -2316,8 +2352,8 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                 return `${origin}/${raw.replace(/^\/+/, '')}`;
             };
             const responsiveMailStyles = `<style>
-                .nl-mail-body{margin:0;padding:0;background:#ffffff;font-family:Arial,sans-serif;color:#1f2937;}
-                .nl-mail-container{width:100%;max-width:100%;margin:0;background:#ffffff;border:none;border-radius:0;padding:0;}
+                .nl-mail-body{margin:0;padding:0;background:var(--ax-suprafata);font-family:Arial,sans-serif;color:var(--ax-text-2);}
+                .nl-mail-container{width:100%;max-width:100%;margin:0;background:var(--ax-suprafata);border:none;border-radius:0;padding:0;}
                 .nl-text-desktop{display:block;}
                 .nl-text-mobile{display:none;}
                 @media only screen and (max-width:620px){
@@ -4084,14 +4120,14 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
                     return `<div class="optin-item"${wrapperStyle}><label style="${styles.label}">${label}${required !== '' ? ' *' : ''}</label><input style="${styles.input}" type="${esc(type)}" name="${esc(field.name || '')}" placeholder="${placeholder}"${required}></div>`;
                 }).join('');
                 return `<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-                    body{margin:0;padding:20px;background:#f3f4f6;font-family:Arial,sans-serif;color:#0f172a;}
-                    .card{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;}
+                    body{margin:0;padding:20px;background:var(--ax-suprafata-2);font-family:Arial,sans-serif;color:var(--ax-text);}
+                    .card{max-width:760px;margin:0 auto;background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:12px;padding:16px;}
                     form{display:flex;flex-direction:column;gap:14px;}
                     .grid{display:grid;grid-template-columns:repeat(${columns},minmax(0,1fr));gap:10px 12px;}
                     .optin-item{display:flex;flex-direction:column;gap:6px;}
                     .submit-row button{align-self:flex-start;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;}
                     label{font-weight:600;font-size:13px;}
-                    input,textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px 10px;font:inherit;box-sizing:border-box;}
+                    input,textarea{width:100%;border:1px solid var(--ax-linie-tare);border-radius:8px;padding:9px 10px;font:inherit;box-sizing:border-box;}
                     textarea{min-height:110px;resize:vertical;}
                     .optin-checkbox{display:flex;align-items:center;gap:8px;font-weight:500;}
                     .optin-checkbox input{width:auto;}

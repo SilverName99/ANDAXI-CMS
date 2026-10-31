@@ -17,7 +17,7 @@ foreach ($nlListe as $lista) {
         'celule' => [
             '<label><input type="checkbox" class="nlp-lista" value="' . $lid . '" data-activi="' . $activi . '"'
                 . ($ales ? ' checked' : '') . ($nlPoateModifica ? '' : ' disabled') . '> '
-                . '<span>' . adm_e($lista['name'] ?? '') . ((int) ($lista['is_default'] ?? 0) === 1 ? ' <small style="color:#64748b;">(toată lumea)</small>' : '') . '</span></label>',
+                . '<span>' . adm_e($lista['name'] ?? '') . ((int) ($lista['is_default'] ?? 0) === 1 ? ' <small style="color:var(--ax-text-3);">(toată lumea)</small>' : '') . '</span></label>',
             '<strong>' . number_format($activi, 0, ',', '.') . '</strong>',
         ],
     ];

@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 
 use App\Http\Controllers\AbonamentController;
+use App\Http\Controllers\OferteBbdController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CereriOfertaController;
@@ -350,5 +351,7 @@ return static function (Router $router): void {
     $router->get('/admin/componente', [ComponenteAdminController::class, 'proba']);
     // WP-32 (faza D, OD-52 = b): „Abonamentul tău”, modulele din licența aplicată (doar administratorul general).
     $router->get('/admin/abonament', [AbonamentController::class, 'arata']);
+    // WP-35 (IA-05): „Oferte BBD”, toate ofertele cu dată minimă de valabilitate din toate produsele (doar citire).
+    $router->get('/admin/products/oferte-bbd', [OferteBbdController::class, 'lista']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

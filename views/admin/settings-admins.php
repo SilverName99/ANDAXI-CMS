@@ -39,16 +39,22 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
 };
 ?>
 
-<section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Administratori</h1>
-            <p style="margin:0;color:#64748b;">Gestionează conturile de admin și rolurile lor.</p>
-        </div>
-    </div>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Administratori',
+    'nivel' => 1,
+    'subtitlu' => 'Gestionează conturile de admin și rolurile lor.',
+]);
+?>
+<div class="adm-pagina">
 
-    <article class="panel" style="margin:12px 0;">
-        <h3 style="margin-top:0;">Adaugă administrator</h3>
+    <section class="adm-sectiune" id="settings-admins-adauga-administrator" aria-labelledby="settings-admins-adauga-administrator-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="settings-admins-adauga-administrator-titlu">Adaugă administrator</h2>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <form method="post" action="/admin/settings/admins" style="display:grid;gap:10px;max-width:620px;">
             <input type="hidden" name="action" value="create_admin">
             <div class="field">
@@ -79,10 +85,16 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
                 <button class="btn" type="submit">Creează administrator</button>
             </div>
         </form>
-    </article>
+        </div>
+    </section>
 
-    <article class="panel" style="margin:12px 0;">
-        <h3 style="margin-top:0;">Lista administratori</h3>
+    <section class="adm-sectiune" id="settings-admins-lista-administratori" aria-labelledby="settings-admins-lista-administratori-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="settings-admins-lista-administratori-titlu">Lista administratori</h2>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <table class="table">
             <thead>
             <tr>
@@ -111,7 +123,7 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
                     ?>
                     <tr>
                         <td><?= $adminId ?></td>
-                        <td><?= htmlspecialchars((string) ($admin['email'] ?? ''), ENT_QUOTES) ?><?= $isSelf ? ' <strong style="color:#0f766e;">(tu)</strong>' : '' ?></td>
+                        <td><?= htmlspecialchars((string) ($admin['email'] ?? ''), ENT_QUOTES) ?><?= $isSelf ? ' <strong style="color:var(--ax-accent);">(tu)</strong>' : '' ?></td>
                         <td>
                             <form method="post" action="/admin/settings/admins" style="display:grid;gap:8px;">
                                 <input type="hidden" name="action" value="update_role">
@@ -146,7 +158,7 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
                         <td><?= htmlspecialchars((string) ($admin['created_at'] ?? ''), ENT_QUOTES) ?></td>
                         <td>
                             <?php if ($isSelf): ?>
-                                <span style="color:#94a3b8;font-size:12px;">Nu poți șterge contul curent</span>
+                                <span style="color:var(--ax-text-3);font-size:12px;">Nu poți șterge contul curent</span>
                             <?php else: ?>
                                 <form method="post" action="/admin/settings/admins" onsubmit="return confirm('Ștergi acest administrator?');">
                                     <input type="hidden" name="action" value="delete_admin">
@@ -160,5 +172,6 @@ $normalizeRoles = static function (array $admin) use ($roles): array {
             <?php endif; ?>
             </tbody>
         </table>
-    </article>
-</section>
+        </div>
+    </section>
+</div>

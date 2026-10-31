@@ -7,23 +7,26 @@ $mannequinEmpty = (string) ($settings['mannequin_empty_text'] ?? 'Nu sunt produs
 $mannequinCode = (string) ($settings['mannequin_code'] ?? '{{mannequin_section}}');
 ?>
 
-<section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Configurare manechin</h1>
-            <p style="margin:6px 0 0;color:#64748b;">
-                Configurează punctele de pe manechin prin drag & drop și asociază produse direct din catalog.
-            </p>
-        </div>
-    </div>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Manechin',
+    'nivel' => 1,
+    'subtitlu' => 'Configurează punctele de pe manechin prin drag & drop și asociază produse direct din catalog.',
+]);
+?>
+<div class="adm-pagina">
 
-    <article class="panel" style="margin:12px 0;background:#f8fafc;border-color:#cbd5e1;">
-        <h3 style="margin:0 0 8px;">Cod disponibil pentru template/page builder</h3>
-        <p style="margin:0 0 8px;color:#64748b;">
-            Inserează codul de mai jos în HTML-ul paginii pentru a afișa secțiunea manechin configurată din admin.
-        </p>
-        <code style="display:inline-block;padding:8px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;"><?= htmlspecialchars($mannequinCode, ENT_QUOTES) ?></code>
-    </article>
+    <section class="adm-sectiune" id="settings-mannequin-cod-disponibil-pentru-template-page-buil" aria-labelledby="settings-mannequin-cod-disponibil-pentru-template-page-buil-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="settings-mannequin-cod-disponibil-pentru-template-page-buil-titlu">Cod disponibil pentru template/page builder</h2>
+                <p class="adm-sectiune__descriere">Inserează codul de mai jos în HTML-ul paginii pentru a afișa secțiunea manechin configurată din admin.</p>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
+        <code style="display:inline-block;padding:8px 10px;background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:8px;"><?= htmlspecialchars($mannequinCode, ENT_QUOTES) ?></code>
+        </div>
+    </section>
 
     <form method="post" action="/admin/settings/mannequin" id="mannequin-settings-form">
         <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
@@ -68,7 +71,7 @@ $mannequinCode = (string) ($settings['mannequin_code'] ?? '{{mannequin_section}}
             <button class="btn" type="submit">Salvează configurarea manechinului</button>
         </div>
     </form>
-</section>
+</div>
 
 <style>
 .mannequin-admin-grid {

@@ -9,17 +9,28 @@ $current = [
 ];
 ?>
 
+<?php ob_start(); ?>
+<button class="btn" type="button" id="new-template-btn">+ Template nou</button>
+<?php $antetActiuni = (string) ob_get_clean(); ?>
+<?php
+// WP-35 (IA-02): câmpurile suplimentare și șabloanele produselor sunt o singură pagină, „Câmpuri și șabloane”, cu două
+// tab-uri; ambele adrese rămân (/admin/products/fields și /admin/products/templates), fiecare cu tab-ul ei ales.
+admin_componenta('antet-pagina', [
+    'titlu' => 'Câmpuri și șabloane',
+    'nivel' => 1,
+    'subtitlu' => 'Ce câmpuri în plus au produsele (codurile lor de inserat în șabloane) și șabloanele paginii de produs care le folosesc.',
+    'ajutor' => [
+        'Un câmp suplimentar (de exemplu „Mod de administrare”) primește o valoare în fiecare produs și apare unde pui codul lui într-un șablon.',
+        'Un șablon e pagina de produs scrisă în HTML/CSS/JS; un produs își alege șablonul în editor.',
+    ],
+    'actiuni' => $antetActiuni,
+]);
+admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Câmpuri și șabloane', 'taburi' => [
+    ['eticheta' => 'Câmpuri suplimentare', 'href' => '/admin/products/fields', 'activ' => false],
+    ['eticheta' => 'Șabloane produse', 'href' => '/admin/products/templates', 'activ' => true],
+]]);
+?>
 <section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Template-uri produse</h1>
-            <p>Creează template-uri HTML/CSS/JS pentru afișarea produselor.</p>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-            <a class="btn btn-secondary" href="/admin/products/fields">← Câmpuri suplimentare</a>
-            <button class="btn" type="button" id="new-template-btn">+ Template nou</button>
-        </div>
-    </div>
     <article class="panel" style="margin:0;">
         <h3 style="margin-top:0;">Template-uri existente</h3>
         <div class="users-table-wrap">
@@ -65,7 +76,7 @@ $current = [
                                 <?php if ($usedBy > 0): ?>
                                     <span class="status-pill ok"><?= $usedBy ?> / <?= $assignableProducts ?></span>
                                 <?php else: ?>
-                                    <small style="color:#64748b;">niciun produs</small>
+                                    <small style="color:var(--ax-text-3);">niciun produs</small>
                                 <?php endif; ?>
                             </td>
                             <td>

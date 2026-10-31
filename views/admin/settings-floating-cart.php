@@ -36,16 +36,22 @@ if ($panelWidth > 640) {
 }
 ?>
 
-<section class="panel">
-    <div class="section-head" style="margin-bottom:10px;">
-        <div>
-            <h1>Coș flotant</h1>
-            <p>Configurează comportamentul și afișarea coșului flotant în storefront.</p>
-        </div>
-    </div>
+<?php
+admin_componenta('antet-pagina', [
+    'titlu' => 'Coș flotant',
+    'nivel' => 1,
+    'subtitlu' => 'Configurează comportamentul și afișarea coșului flotant în storefront.',
+]);
+?>
+<div class="adm-pagina">
 
-    <article class="panel" style="margin:12px 0;">
-        <h3 style="margin-top:0;">Setări generale</h3>
+    <section class="adm-sectiune" id="settings-floating-cart-setari-generale" aria-labelledby="settings-floating-cart-setari-generale-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="settings-floating-cart-setari-generale-titlu">Setări generale</h2>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
         <form method="post" action="/admin/settings/floating-cart" class="form-grid">
             <input type="hidden" name="action" value="save_floating_cart_settings">
 
@@ -77,7 +83,7 @@ if ($panelWidth > 640) {
             <div class="field">
                 <label>Text buton (opțional)</label>
                 <input type="text" name="floating_cart_trigger_label" value="<?= htmlspecialchars($triggerLabel, ENT_QUOTES) ?>" placeholder="(gol = doar icon)">
-                <small style="color:#64748b;">Lasă gol pentru buton cu icon-only + bulină număr produse.</small>
+                <small style="color:var(--ax-text-3);">Lasă gol pentru buton cu icon-only + bulină număr produse.</small>
             </div>
             <div class="field">
                 <label>Titlu panel</label>
@@ -128,7 +134,7 @@ if ($panelWidth > 640) {
             <div class="field" style="grid-column:1/-1;">
                 <label>URL-uri unde NU se afișează coșul flotant</label>
                 <textarea name="floating_cart_excluded_urls" rows="4" placeholder="/checkout&#10;/contul-meu&#10;https://domeniul-tau.ro/contact"><?= htmlspecialchars($excludedUrls, ENT_QUOTES) ?></textarea>
-                <small style="color:#64748b;">Un URL pe rând. Poți pune path-uri (ex: /checkout) sau URL complet (se păstrează doar path-ul).</small>
+                <small style="color:var(--ax-text-3);">Un URL pe rând. Poți pune path-uri (ex: /checkout) sau URL complet (se păstrează doar path-ul).</small>
             </div>
             <div class="field">
                 <label style="display:flex;align-items:center;gap:8px;">
@@ -197,7 +203,7 @@ if ($panelWidth > 640) {
                     <input type="checkbox" name="floating_cart_show_points_earned" <?= $showPointsEarn ? 'checked' : '' ?>>
                     Afișează punctele obținute pentru comanda curentă
                 </label>
-                <small style="color:#64748b;">Se calculează automat pe baza setărilor programului de fidelitate și coșului curent.</small>
+                <small style="color:var(--ax-text-3);">Se calculează automat pe baza setărilor programului de fidelitate și coșului curent.</small>
             </div>
             <div class="field">
                 <label>Poziție rând puncte</label>
@@ -217,5 +223,6 @@ if ($panelWidth > 640) {
                 <button class="btn" type="submit">Salvează setările coșului flotant</button>
             </div>
         </form>
-    </article>
-</section>
+        </div>
+    </section>
+</div>
