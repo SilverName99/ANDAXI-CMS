@@ -93,6 +93,8 @@ return [
             '/admin/activity-log',
             '/admin/pages/*', '/admin/gallery/*', '/admin/design/*',
             '/admin/emails', '/admin/emails/test', '/admin/emails/history/*', '/admin/emails/contact-recipients',
+            // WP-31: pagina de probă a componentelor adminului (faza D).
+            '/admin/componente',
         ],
         // /_andaxi/*: adresele platformei (pingul monitorizării; în Etapa 2 și preluarea licenței).
         'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],

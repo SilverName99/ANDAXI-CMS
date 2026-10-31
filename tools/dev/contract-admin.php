@@ -16,6 +16,9 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/contract-admin.php --licente=toate --roluri=adm --pagini='^/admin/orders'
  *   tools/dev/php.sh tools/dev/contract-admin.php --lista-json       # lista paginilor, JSON (pentru uneltele din browser)
  *   tools/dev/php.sh tools/dev/contract-admin.php --eticheta=<commit>  # față de alt commit decât eticheta
+ *   tools/dev/php.sh tools/dev/contract-admin.php --plimbare         # plimbarea cu tastatura (WP-31) pe paginile contractului
+ *                                                                    # și pe /admin/componente, pe fiecare licență
+ *   tools/dev/php.sh tools/dev/contract-admin.php --capturi          # capturile fazei D: eticheta și codul curent
  *
  * Serverele: codul curent pe CMS_DEV_PORT + 32, codul etichetei (git archive în $CMS_DEV_DIR/baza-admin-<commit>) pe + 33,
  * ambele cu licența într-un dosar al comparației ($CMS_DEV_DIR/contract-admin/licenta), deci licența bazei de dezvoltare
@@ -50,7 +53,7 @@ if ($esecuriAutotest !== []) {
     echo 'Contractul adminului: autotestul a picat (', count($esecuriAutotest), ").\n";
     exit(1);
 }
-echo "  OK    autotestul contractului (extragerea, aspectul fără diferențe, 13 mutații, declarațiile, normalizarea)\n";
+echo "  OK    autotestul contractului (extragerea, aspectul fără diferențe, 15 mutații, declarațiile, normalizarea)\n";
 if (isset($optiuni['autotest'])) {
     exit(0);
 }
@@ -216,6 +219,66 @@ try {
     $porneste('baza', $portBaza, $dosarBaza);
     echo "  INFO  cod curent pe portul {$portCurent}, {$eticheta} ({$commit}) pe portul {$portBaza}; licențe: ", implode(', ', $licente),
         '; roluri: ', implode(', ', $roluri), '; ', count($pagini), " pagini (+ login)\n";
+
+    if (isset($optiuni['plimbare'])) {
+        // Plimbarea cu tastatura (WP-31, tools/dev/plimbare-tastatura.cjs): fiecare pagină a contractului plus pagina de
+        // probă a componentelor, ca administrator general, pe fiecare licență aleasă. Fără contract.
+        $dosarPlimbare = $dosarLucru . '/plimbare';
+        @mkdir($dosarPlimbare, 0770, true);
+        $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente']),
+            static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
+        $probleme = [];
+        $numarPagini = 0;
+        $numarTab = 0;
+        foreach ($licente as $licenta) {
+            $iesire = [];
+            exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php', $licenta]))) . ' 2>&1', $iesire, $cod);
+            $cod === 0 || throw new RuntimeException('licența „' . $licenta . '” nu s-a pus');
+            // Scurtăturile cadrului (views/admin/layout.php): „?” deschide lista, Esc o închide. Scurtăturile paginilor (WP-33,
+            // WP-36) se adaugă aici, fiecare cu pluginul ei; cele ale pluginurilor ascunse intră în „absente”.
+            $intrarePlimbare = ['pagini' => $paginiPlimbare, 'scurtaturi' => [['tasta' => '?', 'deschide' => '#ax-taste[open]', 'inchide' => 'Escape']],
+                'absente' => []];
+            file_put_contents($dosarPlimbare . '/intrare-' . $licenta . '.json', json_encode($intrarePlimbare, JSON_UNESCAPED_SLASHES));
+            $rezultat = $dosarPlimbare . '/rezultat-' . $licenta . '.json';
+            @unlink($rezultat);
+            $env = ['CMS_DEV_URL=http://127.0.0.1:' . $portCurent, 'CMS_DEV_PAROLA=' . $parola, 'CMS_DEV_ADMIN_EMAIL=' . $emailRol['adm'],
+                'CMS_DEV_PLIMBARE=' . $dosarPlimbare . '/intrare-' . $licenta . '.json', 'CMS_DEV_REZULTAT=' . $rezultat,
+                'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'),
+                'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers')];
+            passthru('env ' . implode(' ', array_map('escapeshellarg', $env)) . ' node ' . escapeshellarg($radacina . '/tools/dev/plimbare-tastatura.cjs')
+                . ' 2>&1', $codNode);
+            $date = json_decode((string) @file_get_contents($rezultat), true);
+            if ($codNode !== 0 || !is_array($date)) {
+                $probleme[] = $licenta . ': plimbarea nu s-a terminat (codul ' . $codNode . ')';
+                continue;
+            }
+            foreach ((array) $date['blocate'] as $gazda) {
+                $probleme[] = $licenta . ': cerere spre alt server, blocată: ' . $gazda;
+            }
+            foreach ((array) $date['pagini'] as $p) {
+                $numarPagini++;
+                $numarTab += (int) $p['tabulari'];
+                $info = array_values(array_unique((array) $p['info']));
+                $eticheta = sprintf('%-12s %-48s', $licenta, $p['cale']);
+                if ($p['erori'] !== [] || $p['faraFocusVizibil'] !== []) {
+                    foreach ($p['erori'] as $eroare) {
+                        $probleme[] = $eticheta . ' ' . $eroare;
+                    }
+                    if ($p['faraFocusVizibil'] !== []) {
+                        $probleme[] = $eticheta . ' focus nevăzut pe: ' . implode('; ', array_slice($p['faraFocusVizibil'], 0, 8));
+                    }
+                    echo '  EȘEC  ', $eticheta, ' ', $p['tabulari'], " elemente\n";
+                } else {
+                    echo '  OK    ', $eticheta, ' ', $p['status'], ', ', $p['tabulari'], ' elemente cu focusul vizibil', $info !== [] ? ' (' . implode('; ', $info) . ')' : '', "\n";
+                }
+            }
+        }
+        foreach ($probleme as $problema) {
+            echo '  DIFERĂ ', $problema, "\n";
+        }
+        echo "Plimbarea cu tastatura: {$numarPagini} pagini × licență, {$numarTab} elemente cu Tab; probleme ", count($probleme), "\n";
+        exit($probleme === [] ? 0 : 1);
+    }
 
     if (isset($optiuni['capturi'])) {
         // Capturile de referință ale fazei D (tools/dev/capturi.cjs, setul „faza-d”), cu licența „toate”: codul etichetei

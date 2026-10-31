@@ -377,8 +377,7 @@ $notaLimitaOptin = ($limitaOptinTs !== false && $limitaOptinTs > time() - 86400)
 
         <?php if ($newsletterTab === 'campaigns'): ?>
             <?php require_once __DIR__ . '/componente/_incarca.php'; ?>
-            <link rel="stylesheet" href="/assets/css/admin-componente.css?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/css/admin-componente.css')) ?: 1) ?>">
-            <script src="/assets/js/admin/componente.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/componente.js')) ?: 1) ?>" defer></script>
+            <?php // Stilul și scriptul componentelor le încarcă views/admin/layout.php pe fiecare pagină (WP-31). ?>
             <div style="margin-top:14px;">
             <?php admin_componenta('antet-pagina', [
                 'id' => 'nl-antet-newslettere',

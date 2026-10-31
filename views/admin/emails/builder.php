@@ -29,12 +29,10 @@ $bSabloane       = is_array($builder['sabloane'] ?? null) ? $builder['sabloane']
 $bPoateModifica  = $bType !== 'campaign' || (bool) ($builder['poate_modifica'] ?? true);
 $bPasInitial     = $bType === 'campaign' ? max(1, min(4, (int) ($_GET['pas'] ?? ($bPoateModifica ? 1 : 4)))) : 1;
 require_once __DIR__ . '/../componente/_incarca.php';
-$adminCssComp    = @filemtime(\App\Support\Paths::public('assets/css/admin-componente.css')) ?: 1;
 $adminCssNl      = @filemtime(\App\Support\Paths::public('assets/css/admin-newsletter.css')) ?: 1;
 $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsletter-pasi.js')) ?: 1;
-$adminJsComp     = @filemtime(\App\Support\Paths::public('assets/js/admin/componente.js')) ?: 1;
 ?>
-<link rel="stylesheet" href="/assets/css/admin-componente.css?v=<?= (int) $adminCssComp ?>">
+<?php // Stilul și scriptul componentelor le încarcă views/admin/layout.php (WP-31: admin.css, js/admin/componente.js). ?>
 <link rel="stylesheet" href="/assets/css/admin-newsletter.css?v=<?= (int) $adminCssNl ?>">
 <style>
 /* ── Email Builder ─────────────────────────────────────────── */
@@ -2166,7 +2164,6 @@ setTimeout(() => ebShowStarterModal(), 300);
 
 })(); // end IIFE
 </script>
-<script src="/assets/js/admin/componente.js?v=<?= (int) $adminJsComp ?>" defer></script>
 <?php if ($bType === 'campaign'): ?>
 <script src="/assets/js/admin/newsletter-pasi.js?v=<?= (int) $adminJsNl ?>" defer
         data-id="<?= $bId ?>" data-pas="<?= $bPasInitial ?>" data-poate-modifica="<?= $bPoateModifica ? '1' : '0' ?>"></script>

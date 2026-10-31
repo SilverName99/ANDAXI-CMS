@@ -567,11 +567,12 @@ $mobileMenuEmbedToken = '{{mobile_menu}}';
         let headerHtml = (sections.header.html || '').trim();
         let footerHtml = (sections.footer.html || '').trim();
         const menuHtml = (sections.menu.html || '').trim();
-<?= \App\Support\Dev::marcaj('gr:an-previzualizare') ?>
+<?php // Marcajul de port (doar în dezvoltare) pe rândul lui: în JavaScript, „<!--…-->” face din tot rândul un comentariu (WP-31). ?>
+<?= ($marcajAn = \App\Support\Dev::marcaj('gr:an-previzualizare')) !== '' ? $marcajAn . "\n" : '' ?>
         const anCurent = String(new Date().getFullYear());
         headerHtml = headerHtml.split('{{an}}').join(anCurent);
         footerHtml = footerHtml.split('{{an}}').join(anCurent);
-<?= \App\Support\Dev::marcaj('gr:an-previzualizare', true) ?>
+<?= ($marcajAn = \App\Support\Dev::marcaj('gr:an-previzualizare', true)) !== '' ? $marcajAn . "\n" : '' ?>
         if (headerHtml !== '' && menuHtml !== '') {
             headerHtml = headerHtml.replace(/\{\{\s*menu\s*\}\}/gi, menuHtml);
         }

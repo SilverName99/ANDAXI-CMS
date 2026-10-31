@@ -438,6 +438,44 @@ settings.… cheie necunoscută codului”, Biovitality are o coloană sau o set
 iar după ce scriem regula rulezi din nou. Dacă generatorul de la început spune „EȘEC … nu e codul revizuit”, codul de pe
 biovitality.ro nu e commit-ul revizuit: ne trimiți rândul și nu încarci (înghețarea se reface întâi).
 
+### 6c. Adminul nou („B — Compact”, faza D) pe copia demonstrativă (oricând, nu doar noaptea)
+
+Ca să vezi adminul refăcut cu date inventate, în forma site-ului Bioscem (pachetul `bioscem`: meniul, setările și
+pluginurile lui; clienții, comenzile și produsele sunt inventate, deci nu e nevoie de noapte și nu se citește nicio bază
+live). Cam 5 minute.
+
+```sh
+ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
+cd ~/domains/<domeniul-verificare>/public_html
+git pull --ff-only                                         # codul nou (ca la „Codul nou, mai târziu”)
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
+$PHP tools/verificare/stare.php
+#   ultimul rând: „GATA: site-ul de verificare e pregătit (toate verificările DA)”
+$PHP tools/verificare/incarca.php --demo --pachet=bioscem
+#   dacă spune „REFUZAT: pe copie e deja o încărcare (sursa demo, …)”: aceeași comandă cu --reincarca la sfârșit;
+#   dacă sursa e alta (bioscem, biovitality: o copie reală de noapte): întâi $PHP tools/verificare/sterge.php („da”), apoi din nou
+#   întreabă: „da”; emailul contului tău de admin pe copie (Enter = adresa ta din .env); parola lui, de două ori
+#   (cel puțin 10 caractere); apoi parola personalului, de două ori (alta decât a ta; o primesc adminii cu rol parțial)
+#   ultimul rând: „GATA: copia e anonimizată, toate verificările au trecut”
+```
+
+Apoi, în browser: `https://<domeniul-verificare>/admin/login` → parola porții → emailul și parola contului tău de mai sus.
+Ce să te uiți (și ce să ne spui):
+
+- **Meniul din stânga**, în cele opt grupuri (Acasă, Comenzi, Produse, Clienți, Marketing, Conținut, Rapoarte, Setări).
+  Lista completă și propunerile de unire sau împărțire a paginilor, care așteaptă „da”-ul tău (IA-01 … IA-12), sunt în
+  `docs/ARHITECTURA-ADMIN.md` (în repo, pe GitHub).
+- **Culoarea adminului**: Setări → Setări magazin → primul tab, „Culoarea adminului” (de exemplu verdele Bioscem); se vede
+  imediat în meniu și pe butoane, doar în admin.
+- **Tastatura**: tasta `?` deschide lista scurtăturilor, `Tab` arată cu un contur colorat unde ești, `Esc` închide.
+- **Pe telefon**: butonul ☰ din stânga sus deschide meniul.
+- Paginile însele (comenzile, produsul, setările…) au deocamdată aspectul de azi, doar cu fontul și culorile noi; se
+  refac una câte una în pașii următori ai fazei D. Componentele noi (antetul paginii cu „?”, tab-urile cu număr, filtrele,
+  tabelul, bara acțiunilor în masă, panoul lateral) le vezi împreună pe pagina de probă **`/admin/componente`** (doar
+  administratorul general; nu e în meniu).
+
+La final, ca după orice sesiune: pasul 8 (`sterge.php`), sau o lași: se închide singură după 7 zile.
+
 ### 7. Licența copiei (pachetul de pluginuri)
 
 Ce pluginuri are copia (de exemplu cele ale Bioscem, sau un pachet cu blogul oprit, ca să vezi ce

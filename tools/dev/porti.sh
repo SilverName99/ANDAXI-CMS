@@ -75,6 +75,8 @@ poarta G-nestrict "al doilea MariaDB, în modul Hostinger (sql_mode fără STRIC
     "tools/dev/mariadb-nestrict.sh porneste ;; tools/dev/mariadb-nestrict.sh ruleaza tools/dev/compara-cu-baza.sh ;; tools/dev/mariadb-nestrict.sh opreste" WP-14
 poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de eticheta dinaintea refacerii" \
     "tools/dev/php.sh tools/dev/contract-admin.php" WP-29
+poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecare element, „?” și Esc, panoul lateral, filtrele la Înapoi) pe licențele toate, bioscem, grafoanaytis" \
+    "tools/dev/php.sh tools/dev/contract-admin.php --plimbare" WP-31
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
@@ -135,6 +137,8 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # demonstrativă de verificare) și instaleaza.sh s-au schimbat; G-smoke verifică pachetul (verifica-pachet.php) și înghețarea.
 # WP-11b (golden master-ul Biovitality): pe lângă porțile din plan, G-verif (regulile Biovitality ale încărcării, testate în
 # test-incarcare.php).
+# Faza D (WP-29 … WP-36): G-admin (contractul adminului) la fiecare WP; din WP-31 și G-tastatura (plimbarea cu tastatura,
+# planul: „Every Phase D WP passes … the keyboard walk of WP-31”), pe toate paginile contractului și pe /admin/componente.
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -170,12 +174,12 @@ declare -A PORTI=(
     [WP-28]="G-rute G-paths G-mig G-cmp G-plug G-smoke G-php"
     [WP-29]="G-rute G-admin G-cmp G-php"
     [WP-30]="G-rute G-admin G-vizual G-cmp G-plug G-smoke G-php"
-    [WP-31]="G-rute G-admin G-cmp G-plug G-php"
-    [WP-32]="G-rute G-admin G-cmp G-plug G-smoke G-php"
-    [WP-33]="G-rute G-admin G-cmp G-plug G-smoke G-php"
-    [WP-34]="G-rute G-admin G-cmp G-plug G-smoke G-php"
-    [WP-35]="G-rute G-admin G-vizual G-cmp G-plug G-smoke G-php"
-    [WP-36]="G-rute G-admin G-cmp G-plug G-php"
+    [WP-31]="G-rute G-admin G-tastatura G-cmp G-plug G-php"
+    [WP-32]="G-rute G-admin G-tastatura G-cmp G-plug G-smoke G-php"
+    [WP-33]="G-rute G-admin G-tastatura G-cmp G-plug G-smoke G-php"
+    [WP-34]="G-rute G-admin G-tastatura G-cmp G-plug G-smoke G-php"
+    [WP-35]="G-rute G-admin G-tastatura G-vizual G-cmp G-plug G-smoke G-php"
+    [WP-36]="G-rute G-admin G-tastatura G-cmp G-plug G-php"
     [WP-37]="G-rute G-mig G-cmp G-seo G-plug G-admin G-php"
     [WP-38]="G-rute G-mig G-cmp G-seo G-plug G-php"
     [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"
@@ -189,7 +193,7 @@ WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

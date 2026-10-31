@@ -12,7 +12,9 @@ declare(strict_types=1);
  *   form <METODĂ> <acțiune> [multipart]                 fiecare formular (acțiunea fără gazdă; goală = „(pagina)”)
  *   camp <formular> <tag>:<tip> <nume> [= <valoare>]   fiecare control cu nume: valoarea doar la hidden, checkbox, radio
  *   optiuni <formular> <nume>: <v1>|<v2>|…              valorile opțiunilor unui select (în ordinea lor)
- *   buton <formular> <nume> = <valoare>                 butoanele cu nume (button, input submit/image)
+ *   buton <formular> <nume> = <valoare> [-> <METODĂ> <adresă>]   butoanele cu nume (button, input submit/image); cu
+ *                                                       formaction, și adresa la care trimit (un buton fără nume cu formaction:
+ *                                                       „buton <formular> (fără nume) -> …”)
  *   link <href>                                         fiecare link
  *   data <atribut> = <valoare>                          fiecare atribut data-* (o valoare lungă: amprenta ei)
  *   celula <text>                                       textul fiecărei celule de tabel (td), spațiile strânse
@@ -112,7 +114,9 @@ function contract_extrage(int $cod, string $location, string $html): array
         $form = $formularul($control);
         $tip = strtolower($control->getAttribute('type'));
         if ($tag === 'button' || ($tag === 'input' && in_array($tip, ['submit', 'image'], true))) {
-            $randuri[] = 'buton ' . $form . ' ' . $nume . ' = ' . contract_valoare($control->getAttribute('value'));
+            $randuri[] = 'buton ' . $form . ' ' . $nume . ' = ' . contract_valoare($control->getAttribute('value'))
+                . ($control->hasAttribute('formaction') ? ' -> ' . strtoupper($control->getAttribute('formmethod') ?: 'post') . ' '
+                    . contract_adresa($control->getAttribute('formaction')) : '');
             continue;
         }
         if ($tag === 'input') {
@@ -132,6 +136,13 @@ function contract_extrage(int $cod, string $location, string $html): array
             continue;
         }
         $randuri[] = 'camp ' . $form . ' textarea ' . $nume;
+    }
+    // Un buton fără nume care trimite formularul altundeva (formaction; bara acțiunilor în masă, WP-31/WP-33) schimbă și el
+    // ce trimite pagina.
+    foreach ($xp->query('//button[@formaction and not(@name)] | //input[@formaction and not(@name)]') ?: [] as $buton) {
+        /** @var DOMElement $buton */
+        $randuri[] = 'buton ' . $formularul($buton) . ' (fără nume) -> ' . strtoupper($buton->getAttribute('formmethod') ?: 'post') . ' '
+            . contract_adresa($buton->getAttribute('formaction'));
     }
     foreach ($xp->query('//a[@href]') ?: [] as $link) {
         /** @var DOMElement $link */
@@ -258,6 +269,8 @@ function contract_autotest(): array
         'o celulă' => ['<td> CMD-1 </td>', '<td>CMD-2</td>'],
         'un câmp mutat în afara formularului' => ['<textarea name="nota"></textarea>', ''],
         'enctype' => [' enctype="multipart/form-data"', ''],
+        'formaction pe un buton' => ['<button name="actiune" value="confirma">', '<button name="actiune" value="confirma" formaction="/admin/orders/1/delete">'],
+        'un buton fără nume cu formaction' => ['<button type="button">Închide</button>', '<button formaction="/admin/orders/1/delete">Închide</button>'],
     ];
     foreach ($mutatii as $ce => [$din, $in]) {
         $mutata = str_replace($din, $in, $pagina);

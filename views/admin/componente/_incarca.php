@@ -1,12 +1,13 @@
 <?php
 /**
- * Componentele de admin (vocabularul din planul Fazei D, WP-31): antet de
- * pagină, bară de pași, tabel, panou lateral, mesaj, stare goală.
+ * Componentele de admin (faza D, WP-31; docs/ui/README.md): antet-pagina (cu ajutorul din spatele lui „?”),
+ * tab-uri-cu-numar, bara-filtre, tabel (sortare, antet fix, bife), bara-actiuni-masa, panou-lateral (coloană sau sertar),
+ * sectiune-formular, card, mesaj, stare-goala, bara-pasi. Primele au venit cu newsletterul (portat în 77759ef, docs/de-portat.md); WP-31 le-a extins, fără să schimbe ce primeau.
  *
- * Fiecare componentă e un fișier mic din acest dosar și primește doar ce i se
- * dă explicit (fără variabile din pagina care o cheamă). Stilul e în
- * public/assets/css/admin-componente.css, cu clase „adm-…”; Faza D schimbă
- * doar acel fișier (aspectul), nu și paginile.
+ * Fiecare componentă e un fișier mic din acest dosar și primește doar ce i se dă explicit (fără variabile din pagina
+ * care o cheamă). Stilul: public/assets/css/admin.css (clasele „adm-…”, variabilele „--ax-…”); comportamentul:
+ * public/assets/js/admin/{componente,tabel,panou,filtre}.js, încărcate de views/admin/layout.php pe fiecare pagină.
+ * Toate se văd împreună pe pagina de probă /admin/componente (views/admin/proba-componente.php).
  *
  * Folosire:  admin_componenta('mesaj', ['tip' => 'eroare', 'titlu' => '…']);
  */

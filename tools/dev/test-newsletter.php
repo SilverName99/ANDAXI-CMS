@@ -243,6 +243,10 @@ $licenta = static function (string ...$argumente) use ($radacina, &$licentaSchim
 };
 /** Mesajul flash din sesiune, citit din pagina următoare. */
 $flash = static function (string $html): string {
+    // Din WP-31 adminul arată mesajul cu componenta mesaj (id ax-mesaj-succes / ax-mesaj-eroare); paginile site-ului, ca înainte.
+    if (preg_match('#<div class="adm-mesaj [^"]*" id="ax-mesaj-(?:succes|eroare)"[^>]*>(.*?)</div>\s*</div>#s', $html, $m) === 1) {
+        return trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES, 'UTF-8'));
+    }
     return preg_match('#<section class="panel" style="border-color:\#(?:34d399|fca5a5);[^"]*">(.*?)</section>#s', $html, $m) === 1
         ? trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES, 'UTF-8')) : '';
 };

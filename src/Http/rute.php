@@ -14,6 +14,7 @@ declare(strict_types=1);
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CereriOfertaController;
+use App\Http\Controllers\ComponenteAdminController;
 use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\SiteController;
 use App\Http\Router;
@@ -344,5 +345,7 @@ return static function (Router $router): void {
     $router->get('/_andaxi/export/{token}', static function (array $params): void {
         \App\Support\ExportDateLegale::serveste((string) ($params['token'] ?? ''));
     });
+    // WP-31 (faza D): pagina de probă a componentelor adminului (doar administratorul general, fără intrare în meniu).
+    $router->get('/admin/componente', [ComponenteAdminController::class, 'proba']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

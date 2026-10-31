@@ -1,6 +1,7 @@
 /*
- * Componentele de admin (WP-31): ajutorul din spatele lui „?” de lângă titlu.
- * Un clic îl deschide sau îl închide; Esc îl închide.
+ * Componentele de admin (WP-31): ajutorul din spatele lui „?” de lângă titlul paginii (antet-pagina). Un clic (sau Enter,
+ * Spațiu) îl deschide sau îl închide; Esc îl închide și pune focusul înapoi pe „?”. Celelalte componente: tabel.js
+ * (bifele, bara acțiunilor în masă), panou.js (sertarul din dreapta), filtre.js (filtrele în adresă).
  */
 (function () {
   'use strict';
@@ -16,7 +17,11 @@
     comuta(buton, buton.getAttribute('aria-expanded') !== 'true');
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
-    document.querySelectorAll('.adm-ajutor__buton[aria-expanded="true"]').forEach(function (b) { comuta(b, false); });
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    const deschise = document.querySelectorAll('.adm-ajutor__buton[aria-expanded="true"]');
+    if (!deschise.length) return;
+    deschise.forEach(function (b) { comuta(b, false); });
+    if (document.activeElement && document.activeElement.closest('.adm-ajutor')) deschise[0].focus();
+    e.preventDefault();
   });
 })();

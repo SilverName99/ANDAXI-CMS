@@ -20,6 +20,7 @@ $adminNumeSite = \App\Support\Brand::numeSite($adminSettings);
 // Versiunea fișierelor statice ale adminului: data lor pe disc (ca app.css).
 $adminVersiune = static fn (string $fisier): int => (int) (@filemtime(\App\Support\Paths::public($fisier)) ?: 1);
 $adminAccent = \App\Support\AdminAspect::accent($adminSettings);
+require_once __DIR__ . '/componente/_incarca.php';
 ?>
 <html lang="ro">
 <head>
@@ -224,15 +225,12 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                     <strong>Baza de date nu e la zi cu codul.</strong> <?= htmlspecialchars(\App\Support\Migrari\Garda::explicatie($stareSchema), ENT_QUOTES) ?>
                 </section>
 <?php endif; ?>
+                <?php // Mesajul de după o salvare (reușită sau eroare): componenta mesaj (WP-31). ?>
                 <?php if (($message = \App\Support\Flash::get('success')) !== null): ?>
-                    <section class="panel" style="border-color:#34d399;background:#ecfdf5;color:#065f46;">
-                        <?= htmlspecialchars($message, ENT_QUOTES) ?>
-                    </section>
+                    <?php admin_componenta('mesaj', ['tip' => 'succes', 'text' => $message, 'id' => 'ax-mesaj-succes']); ?>
                 <?php endif; ?>
                 <?php if (($message = \App\Support\Flash::get('error')) !== null): ?>
-                    <section class="panel" style="border-color:#fca5a5;background:#fef2f2;color:#991b1b;">
-                        <?= htmlspecialchars($message, ENT_QUOTES) ?>
-                    </section>
+                    <?php admin_componenta('mesaj', ['tip' => 'eroare', 'text' => $message, 'id' => 'ax-mesaj-eroare']); ?>
                 <?php endif; ?>
                 <?= $content ?>
                 </main>
@@ -250,7 +248,10 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
             </dl>
             <p class="ax-dialog-nota">Căutarea în tot adminul (<kbd>Ctrl</kbd> <kbd>K</kbd>) și scurtăturile paginilor de comenzi vin odată cu paginile refăcute.</p>
         </dialog>
-        <script src="/assets/js/admin/cadru.js?v=<?= $adminVersiune('assets/js/admin/cadru.js') ?>" defer></script>
+<?php // Componentele (WP-31) întâi: panoul deschis își prinde Esc-ul înaintea cadrului. ?>
+<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'cadru'] as $adminScript): ?>
+        <script src="/assets/js/admin/<?= $adminScript ?>.js?v=<?= $adminVersiune('assets/js/admin/' . $adminScript . '.js') ?>" defer></script>
+<?php endforeach; ?>
     <?php else: ?>
         <main class="container">
             <?= $content ?>

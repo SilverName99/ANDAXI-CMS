@@ -30,36 +30,42 @@ Ce trebuie știut când le folosești:
 
 Sursa: proiectul de machete „ANDAXI CMS – 3 variante de admin”, varianta B (19 octombrie 2026).
 
-## Componentele deja în cod (newsletterul, din Bioscem `42984c1`)
+## Componentele (WP-31)
 
-Pașii newsletterului din builder (Conținut → Destinatari → Verificare → Trimite / Programează, WP-R din 30 octombrie) sunt
-făcuți deja cu vocabularul de componente al WP-31, în aspectul de azi al adminului. Sunt ale nucleului: orice pagină de admin
-le poate folosi. În Faza D se schimbă doar **aspectul** (variabilele și regulile CSS), nu paginile.
+Paginile adminului se refac (WP-32 … WP-35) din piese mici, aceleași peste tot. Fiecare e un fișier în
+`views/admin/componente/`, chemat cu `admin_componenta('<nume>', [...])` (`_incarca.php`, încărcat de
+`views/admin/layout.php`); primește doar ce i se dă explicit și are clasele `adm-…`. Stilul: `public/assets/css/admin.css`
+(variabilele `--ax-…`; numele vechi `--adm-…` trimit la ele), comportamentul: `public/assets/js/admin/` (încărcate pe
+fiecare pagină de admin). Toate se văd împreună, cu date inventate, pe pagina de probă **`/admin/componente`** (doar
+administratorul general, fără intrare în meniu; `App\Http\Controllers\ComponenteAdminController`).
 
-Fiecare componentă e un fișier mic în `views/admin/componente/`, chemat cu `admin_componenta('<nume>', [...])`
-(`_incarca.php`); primește doar ce i se dă explicit și are clasele `adm-…`. Stilul: `public/assets/css/admin-componente.css`,
-cu toate culorile, razele și inelul de focus ca variabile `--adm-…`. Când WP-30 aduce `admin.css` cu tokenurile lui, fie se
-leagă variabilele `--adm-…` de tokenurile noi, fie regulile `adm-…` se mută în `admin.css`.
+| Componenta | Ce e | Comportamentul (JS) |
+|---|---|---|
+| `antet-pagina` | titlul paginii (`'nivel' => 1`) sau al unui pas, propoziția de sub el, butoanele din dreapta, ajutorul din spatele lui „?” | `componente.js`: clic, Enter, Esc |
+| `tab-uri-cu-numar` | tab-urile unei liste (statusuri), fiecare cu numărul lui și, opțional, culoarea; sunt linkuri, deci filtrul stă în adresă | — |
+| `bara-filtre` | formular GET: căutare (cu o tastă, de exemplu `/`), liste, date; „Resetează” | `filtre.js`: aplicare imediată (`'automat' => true`), tasta căutării |
+| `tabel` | tabelul listelor: coloane sortabile (link cu `?sort=&dir=`, restul adresei păstrat), antet fix, rânduri dense, bife | `tabel.js`: „toate”, Shift+clic, Esc golește |
+| `bara-actiuni-masa` | bara care apare cu rânduri bifate: câte, butoanele acțiunilor (fiecare `formaction` spre o adresă care **există deja**), „Renunță” | `tabel.js`: arată/ascunde, confirmarea, Esc |
+| `panou-lateral` | `'mod' => 'coloana'` (lângă conținut, ca în pașii newsletterului) sau `'sertar'` (din dreapta, peste pagină; corpul se poate încărca de la o adresă de detalii existentă: `data-adm-panou-sursa`; răspunsul ei, fără cadru: layout-ul `admin/fragment`) | `panou.js`: deschide, Esc, × sau fundalul închid, Tab rămâne în panou, focusul revine |
+| `sectiune-formular` | o parte a unui formular lung: titlu, propoziție, câmpuri; opțional pliabilă (`<details>`) | — |
+| `card` | o cifră a zilei sau un rezumat, cu ton (ok, atenție, eroare, info); opțional tot cardul e link | — |
+| `mesaj` | informare, reușită, avertisment, eroare (și mesajul de după o salvare, în cadru) | — |
+| `stare-goala` | ce vede omul când lista e goală și ce poate face | — |
+| `bara-pasi` | pașii unui flux (newsletterul: Conținut → Destinatari → Verificare → Trimite) | al paginii (`newsletter-pasi.js`) |
+| pastila `adm-stare`, `adm-numar`, `adm-mono` | starea (Ciornă, Programat, Se trimite, Oprit, Trimis), un număr, cifre egale | — |
 
-| Piesa | Fișierul | Componenta WP-31 | Ce rămâne în Faza D |
-|---|---|---|---|
-| Antet de pagină cu „?” (ajutorul) | `antet-pagina.php` | `antet-pagina` + ajutorul din spatele lui „?” | stilul; ajutorul se deschide cu `public/assets/js/admin/componente.js` (clic, Esc) |
-| Bara de pași | `bara-pasi.php` | **nouă** (WP-31 n-o are): se adaugă ca `bara-pasi` | stilul |
-| Mesajul (info / reușită / avertisment / eroare) | `mesaj.php` | `mesaj` | stilul |
-| Panoul lateral (rezumatul, „Trimite un test”, lista de verificare) | `panou-lateral.php` | `panou-lateral` | azi în coloana din dreapta; poate deveni panoul care se deschide din dreapta, fără schimbări în pași |
-| Tabelul listelor (cu bife) | `tabel.php` | `tabel` | sortarea și antetul fix nu trebuie aici |
-| Starea goală („Nu ai încă nicio listă…”) | `stare-goala.php` | **nouă**: se adaugă ca `stare-goala` | stilul |
-| Pastila de stare (Ciornă, Programat, Se trimite, Oprit, Trimis) | clasa `adm-stare` | parte din `tabel` / `tab-uri-cu-numar` | stilul |
-| Butoanele | `btn`, `btn-secondary`, `btn-danger` | butoanele shell-ului (WP-30) | se restilizează odată cu `app.css` → `admin.css` |
+**Unificarea cu newsletterul.** Primele șase componente (antet, bara de pași, tabel, panou, mesaj, stare goală) au venit cu
+newsletterul (Bioscem `42984c1`, portat în `77759ef`), cu propriul `admin-componente.css`. WP-31 le-a extins, nu le-a
+dublat: aceleași fișiere și clase, aceleași date primite (pașii newsletterului arată la fel), plus opțiunile noi; stilul
+s-a mutat în `admin.css`, iar `admin-componente.css` s-a scos. Un commit Bioscem viitor care schimbă `admin-componente.css`
+se portează în secțiunea 4 din `admin.css` (`docs/de-portat.md`).
 
-Pașii stau în `views/admin/emails/newsletter/` (`pas-destinatari.php`: antet-pagina, tabel, stare-goala; `pas-verificare.php`:
-antet-pagina, panou-lateral; `pas-trimitere.php`: antet-pagina, mesaj, panou-lateral), așezarea lor în
-`public/assets/css/admin-newsletter.css` (clasele `nlp-…`, cu aceleași variabile `--adm-…`), mutarea între pași în
-`public/assets/js/admin/newsletter-pasi.js` (WP-35: pasul în adresă, `?pas=N`; salvarea înaintea oricărei trimiteri;
-previzualizarea; lista de verificare). Pasul 1 („Conținut”) e builderul (`views/admin/emails/builder.php`, clasele `eb-…`), refăcut
-în WP-35; builderul expune `window.ebBuilder`, iar `newsletter-pasi.js` nu umblă în interiorul lui. Plimbarea cu tastatura: pașii
-sunt butoane, fiecare element are inel de focus (`--adm-focus`), Esc închide ajutorul. Textele newsletterului (și ajutorul) sunt
-doar pe paginile pluginului `newsletter`, deci dispar cu el oprit (test-pluginuri C).
+**Tastatura (G-tastatura).** `tools/dev/php.sh tools/dev/contract-admin.php --plimbare` (`tools/dev/plimbare-tastatura.cjs`)
+trece cu Tab prin fiecare pagină a contractului și prin `/admin/componente`, pe licențele `toate`, `bioscem`, `grafoanaytis`:
+focusul vizibil pe fiecare element, „?” deschide lista scurtăturilor și Esc o închide, panoul lateral se închide cu Esc și
+focusul revine, iar pe pagina de probă bara acțiunilor în masă, tasta `/` și filtrele păstrate la Înapoi. O scurtătură
+nouă a unei pagini (WP-33, WP-36) se adaugă în `--plimbare` (`contract-admin.php`), cu pluginul ei: cu pluginul ascuns,
+lista „absente” cere să nu existe.
 
 **Pentru contractul adminului (WP-29, `$contractAdminPorturi`)** — adrese, câmpuri și atribute noi: `POST /admin/emails/builder/verificare`
 (JSON, nu trimite nimic); `POST /newsletter/unsubscribe/{token}` (cu `confirmare=1`, cu `trimite_link=1` sau „cu un clic”, RFC 8058);
