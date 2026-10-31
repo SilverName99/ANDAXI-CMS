@@ -648,8 +648,9 @@ final class AdminController
             return;
         }
         // WP-35 (IA-07): salvările programului de fidelitate se întorc (ca înainte) la /admin/users/settings?tab=points,
-        // fosta pagină a punctelor; adresa duce acum la pagina Fidelitate (ancora #import rămâne în browser).
-        if ((string) ($_GET['tab'] ?? '') === 'points' && \App\Support\Plugins::vizibil('fidelitate')) {
+        // fosta pagină a punctelor; adresa duce acum la pagina Fidelitate (ancora #import rămâne în browser). Fără bază nu: pagina
+        // Fidelitate trimite atunci tot aici, cu eroarea (s-ar învârti).
+        if ((string) ($_GET['tab'] ?? '') === 'points' && \App\Support\Plugins::vizibil('fidelitate') && $this->db() instanceof PDO) {
             header('Location: /admin/users/points', true, 302);
             return;
         }

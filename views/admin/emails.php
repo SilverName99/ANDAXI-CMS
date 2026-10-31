@@ -2352,8 +2352,8 @@ if (count($taburiEmail) > 1) {
                 return `${origin}/${raw.replace(/^\/+/, '')}`;
             };
             const responsiveMailStyles = `<style>
-                .nl-mail-body{margin:0;padding:0;background:var(--ax-suprafata);font-family:Arial,sans-serif;color:var(--ax-text-2);}
-                .nl-mail-container{width:100%;max-width:100%;margin:0;background:var(--ax-suprafata);border:none;border-radius:0;padding:0;}
+                .nl-mail-body{margin:0;padding:0;background:#ffffff;font-family:Arial,sans-serif;color:#1f2937;}
+                .nl-mail-container{width:100%;max-width:100%;margin:0;background:#ffffff;border:none;border-radius:0;padding:0;}
                 .nl-text-desktop{display:block;}
                 .nl-text-mobile{display:none;}
                 @media only screen and (max-width:620px){
@@ -4120,14 +4120,14 @@ if (count($taburiEmail) > 1) {
                     return `<div class="optin-item"${wrapperStyle}><label style="${styles.label}">${label}${required !== '' ? ' *' : ''}</label><input style="${styles.input}" type="${esc(type)}" name="${esc(field.name || '')}" placeholder="${placeholder}"${required}></div>`;
                 }).join('');
                 return `<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-                    body{margin:0;padding:20px;background:var(--ax-suprafata-2);font-family:Arial,sans-serif;color:var(--ax-text);}
-                    .card{max-width:760px;margin:0 auto;background:var(--ax-suprafata);border:1px solid var(--ax-linie);border-radius:12px;padding:16px;}
+                    body{margin:0;padding:20px;background:#f3f4f6;font-family:Arial,sans-serif;color:#0f172a;}
+                    .card{max-width:760px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;}
                     form{display:flex;flex-direction:column;gap:14px;}
                     .grid{display:grid;grid-template-columns:repeat(${columns},minmax(0,1fr));gap:10px 12px;}
                     .optin-item{display:flex;flex-direction:column;gap:6px;}
                     .submit-row button{align-self:flex-start;padding:10px 16px;border-radius:8px;font-weight:700;cursor:pointer;}
                     label{font-weight:600;font-size:13px;}
-                    input,textarea{width:100%;border:1px solid var(--ax-linie-tare);border-radius:8px;padding:9px 10px;font:inherit;box-sizing:border-box;}
+                    input,textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:9px 10px;font:inherit;box-sizing:border-box;}
                     textarea{min-height:110px;resize:vertical;}
                     .optin-checkbox{display:flex;align-items:center;gap:8px;font-weight:500;}
                     .optin-checkbox input{width:auto;}

@@ -6,7 +6,8 @@
 // compară cele două coduri: aceleași perechi (ordinea câmpurilor nu contează: un câmp cu form= vine la sfârșitul cererii).
 // Plus constructorul de emailuri: deschide o campanie și o salvează de două ori (cererea trece; pe ambele coduri), ca testul să
 // compare JSON-ul blocurilor.
-// Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_REZULTAT, CMS_DEV_VECHI, CMS_DEV_CAMPANIE (id).
+// Variabile: CMS_DEV_URL, CMS_DEV_ADMIN_EMAIL, CMS_DEV_PAROLA, CMS_DEV_REZULTAT, CMS_DEV_VECHI, CMS_DEV_CAMPANIE (id),
+// CMS_DEV_SABLON (id-ul unui șablon de newsletter), CMS_DEV_DOAR_EMAILURI=1 (doar editoarele de emailuri: pe codul Bioscem).
 'use strict';
 
 const fs = require('fs');
@@ -39,7 +40,17 @@ const cazuri = [
   ['fidelitate: o regulă promo', '/admin/users/points', '/admin/users/points?tab=promo', 'promo', 'form[action="/admin/users/points"]', 'Adaugă regulă promo'],
   ['emailuri: abandonul coșului (Automatizări)', '/admin/emails/automation', '/admin/emails/automation', '', 'form[action="/admin/emails"]', ''],
   ['emailuri: setările de trimitere', '/admin/emails/sender', '/admin/emails/sender', '', 'form[action="/admin/emails"]', ''],
+  // Editoarele de emailuri din pagină (revizuirea WP-35): HTML-ul emailului (ecommerce_template_html, newsletter_html,
+  // campaign_html_content) îl construiește scriptul paginii la trimitere și se salvează ca atare: octet cu octet același.
+  ['emailuri: șablonul emailului „Comandă nouă” (HTML-ul emailului)', '/admin/emails/newsletters?tab=ecommerce&etype=new_order',
+    '/admin/emails/newsletters?tab=ecommerce&etype=new_order', '', '#ecommerce-template-builder-form', 'Salvează template'],
+  ['emailuri: un șablon de newsletter (HTML-ul emailului)', '/admin/emails/newsletters?tab=templates&template={SABLON}',
+    '/admin/emails/newsletters?tab=templates&template={SABLON}', '', '#newsletter-template-builder-form', 'Salvează template'],
+  ['emailuri: o campanie (HTML-ul emailului)', '/admin/emails/newsletters?tab=campaigns&campaign={CAMPANIE}',
+    '/admin/emails/newsletters?tab=campaigns&campaign={CAMPANIE}', '', '#campaign-builder-form', 'Salvează newsletter'],
 ];
+const sablon = String(process.env.CMS_DEV_SABLON || '0');
+const doarEmailuri = process.env.CMS_DEV_DOAR_EMAILURI === '1';
 
 (async () => {
   const browser = await chromium.launch();
@@ -70,9 +81,12 @@ const cazuri = [
   await Promise.all([page.waitForURL(baza + '/admin'), page.click('form[action="/admin/login"] [type="submit"], form[action="/admin/login"] button')]);
   const rez = { cazuri: {}, probleme: [], blocate: [], builder: [] };
   for (const [nume, adresaVeche, adresaNoua, tab, formular, butonNou, butonVechi] of cazuri) {
+    if (doarEmailuri && !nume.startsWith('emailuri: ')) continue;
     const buton = vechi && butonVechi !== undefined ? butonVechi : butonNou;
     prinsa = null;
-    await page.goto(baza + (vechi ? adresaVeche : adresaNoua), { waitUntil: 'load' });
+    const adresa = (vechi ? adresaVeche : adresaNoua).replace('{SABLON}', sablon).replace('{CAMPANIE}', String(campanie));
+    await page.goto(baza + adresa, { waitUntil: 'load' });
+    await page.waitForTimeout(150);
     if (!vechi && tab) {
       const activ = await page.evaluate((t) => {
         const a = document.querySelector('[data-adm-taburi-panouri] a[data-adm-tab="' + t + '"]');
@@ -104,7 +118,7 @@ const cazuri = [
     rez.cazuri[nume] = prinsa;
   }
   // Constructorul de emailuri: salvarea unei campanii neatinse, de două ori (cererea ajunge la server: testul compară JSON-ul).
-  if (campanie > 0) {
+  if (campanie > 0 && !doarEmailuri) {
     for (let n = 0; n < 2; n++) {
       await page.goto(baza + '/admin/emails/builder?type=campaign&id=' + campanie, { waitUntil: 'load' });
       await page.waitForTimeout(400);
@@ -116,7 +130,7 @@ const cazuri = [
     }
   }
   // „Oferte BBD” (IA-05): „Deschide produsul” duce la editorul produsului, deschis (/admin/products#editeaza-<id>).
-  if (!vechi) {
+  if (!vechi && !doarEmailuri) {
     await page.goto(baza + '/admin/products/oferte-bbd', { waitUntil: 'load' });
     const link = await page.evaluate(() => (document.querySelector('#oferte-bbd a[href^="/admin/products#editeaza-"]') || {}).getAttribute?.call(document.querySelector('#oferte-bbd a[href^="/admin/products#editeaza-"]'), 'href') || '');
     if (link) {

@@ -26,7 +26,9 @@ declare(strict_types=1);
  *    lor (livrarea și contul FAN, plățile pe tab-uri, Google în „SEO și Google”, câteva părți ale setărilor, fidelitatea,
  *    emailurile) pe codul etichetei admin-inainte-b și pe codul curent; cererile se opresc înainte de server și trebuie să aibă
  *    aceleași perechi câmp = valoare (contul FAN salvat din „Curier FAN” se întoarce la tab-ul lui: doar „tab” diferă). Plus
- *    constructorul de emailuri: o campanie salvată neatinsă de două ori are același JSON al blocurilor, octet cu octet.
+ *    constructorul de emailuri: o campanie salvată neatinsă de două ori are același JSON al blocurilor, octet cu octet. Editoarele
+ *    de emailuri din pagină (șablonul unui email de comandă, al unui newsletter, o campanie) trimit HTML-ul emailului octet cu
+ *    octet ca pe codul Bioscem însuși (arborele scos de compara-cu-baza.sh, rulat întâi), nu doar ca pe codul etichetei.
  *    Setările, campaniile și punctele rămân neatinse (CHECKSUM TABLE), campania se pune la loc.
  *
  * Raportul: $CMS_DEV_DIR/test-admin-faza-d-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -515,17 +517,34 @@ $tabeleD = 'settings, newsletter_campaigns, loyalty_points_rules, loyalty_points
 $sumaD = static fn (): string => json_encode($db->query('CHECKSUM TABLE ' . $tabeleD)->fetchAll(PDO::FETCH_NUM));
 $idCampanie = (int) $db->query("SELECT id FROM newsletter_campaigns WHERE status = 'draft' ORDER BY id LIMIT 1")->fetchColumn();
 $randCampanie = $idCampanie > 0 ? $db->query('SELECT * FROM newsletter_campaigns WHERE id = ' . $idCampanie)->fetch() : null;
+$puneCampania = static function () use ($db, $randCampanie): void {
+    if (is_array($randCampanie)) {
+        $coloane = array_keys($randCampanie);
+        $db->prepare('UPDATE newsletter_campaigns SET `' . implode('` = ?, `', $coloane) . '` = ? WHERE id = ?')->execute(array_merge(array_values($randCampanie), [$randCampanie['id']]));
+    }
+};
+// Un șablon de newsletter al testului (datele demo n-au niciunul), cu blocuri de text, buton și imagine: editorul lui din pagină
+// construiește HTML-ul emailului (newsletter_html) la salvare. Se șterge la final.
+$db->prepare('INSERT INTO newsletter_templates (name, subject, blocks_json, html_content, is_active) VALUES (?, ?, ?, ?, 1)')->execute([
+    'Șablon demo al testului', 'Noutăți demo', json_encode([
+        ['type' => 'header', 'content' => 'Titlu demo', 'align' => 'center', 'background' => '#1a7a5e', 'text_color' => '#ffffff'],
+        ['type' => 'text', 'content' => 'Text demo pentru abonați.', 'align' => 'left', 'background' => '#ffffff', 'text_color' => '#1f2937'],
+        ['type' => 'button', 'label' => 'Vezi oferta', 'url' => 'https://exemplu.ro/oferta', 'align' => 'center', 'background' => '#1a7a5e',
+            'text_color' => '#ffffff', 'radius' => 6],
+    ], JSON_UNESCAPED_UNICODE), '']);
+$idSablonNl = (int) $db->lastInsertId();
 @mkdir($dosarTest . '/licenta', 0770, true);
 putenv('LICENTA_DOSAR=' . $dosarTest . '/licenta');
 exec(implode(' ', array_map('escapeshellarg', array_merge($phpDev, [$radacina . '/tools/dev/licenta.php', 'toate']))) . ' 2>&1', $_, $codLicentaD);
 // După licență (pașii de activare ai pluginurilor se notează în settings la schimbarea ei).
 $inainteD = $sumaD();
-$trimite = static function (int $port, bool $vechi, string $nume, int $campanie = 0) use ($radacina, $dosarTest, $dosarDev): array {
+$trimite = static function (int $port, bool $vechi, string $nume, int $campanie = 0) use ($radacina, $dosarTest, $dosarDev, $idSablonNl): array {
     $fisier = $dosarTest . '/salvare-setari-' . $nume . '.json';
     @unlink($fisier);
     $env = ['CMS_DEV_URL=http://127.0.0.1:' . $port, 'CMS_DEV_PAROLA=' . trim((string) @file_get_contents($dosarDev . '/admin-parola.txt')),
         'CMS_DEV_ADMIN_EMAIL=' . (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro'), 'CMS_DEV_REZULTAT=' . $fisier,
-        'CMS_DEV_VECHI=' . ($vechi ? '1' : '0'), 'CMS_DEV_CAMPANIE=' . $campanie,
+        'CMS_DEV_VECHI=' . ($vechi ? '1' : '0'), 'CMS_DEV_CAMPANIE=' . $campanie, 'CMS_DEV_SABLON=' . $idSablonNl,
+        'CMS_DEV_DOAR_EMAILURI=' . ($nume === 'bioscem' ? '1' : '0'),
         'NODE_PATH=' . (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'), 'PLAYWRIGHT_BROWSERS_PATH=' . (getenv('PLAYWRIGHT_BROWSERS_PATH') ?: '/opt/pw-browsers')];
     exec('env ' . implode(' ', array_map('escapeshellarg', $env)) . ' node ' . escapeshellarg($radacina . '/tools/dev/salvare-setari.cjs') . ' 2>&1', $iesire, $cod);
     $date = json_decode((string) @file_get_contents($fisier), true);
@@ -565,8 +584,24 @@ $stareEticheta = proc_get_status($serverEticheta);
 exec('pkill -TERM -P ' . (int) $stareEticheta['pid'] . ' 2>/dev/null');
 proc_terminate($serverEticheta);
 proc_close($serverEticheta);
+// Codul Bioscem însuși (arborele scos de compara-cu-baza.sh, Nou-site-bioscem la ultimul commit revizuit), pe aceeași bază:
+// editoarele de emailuri din pagină trebuie să construiască același HTML al emailului (revizuirea WP-35).
+$puneCampania();
+$radacinaBioscem = dirname((glob($dosarDev . '/baza-Nou-site-bioscem-*/public/index.php') ?: [''])[0], 2);
+$bioscemD = null;
+if ($radacinaBioscem !== '.' && is_dir($radacinaBioscem)) {
+    $serverBioscem = proc_open(array_merge($phpDev, ['-S', '127.0.0.1:' . $portEticheta, '-t', $radacinaBioscem . '/public', $radacina . '/tools/dev/router.php']),
+        [0 => ['file', '/dev/null', 'r'], 1 => ['file', $dosarTest . '/server-bioscem.log', 'a'], 2 => ['file', $dosarTest . '/server-bioscem.log', 'a']], $_, $radacinaBioscem);
+    usleep(800000);
+    $bioscemD = $trimite($portEticheta, true, 'bioscem', $idCampanie);
+    $stareBioscem = proc_get_status($serverBioscem);
+    exec('pkill -TERM -P ' . (int) $stareBioscem['pid'] . ' 2>/dev/null');
+    proc_terminate($serverBioscem);
+    proc_close($serverBioscem);
+    $puneCampania();
+}
 $server = $pornesteServer();
-// Constructorul nou pornește de la JSON-ul scris de cel vechi: după două salvări neatinse trebuie să fie același, octet cu octet.
+// Constructorul nou pornește, ca cel vechi, de la campania goală: după două salvări neatinse, același JSON, octet cu octet.
 $blocuriInainte = $blocuriEticheta;
 $nouD = $trimite($portTest, false, 'nou', $idCampanie);
 $blocuriDupa = $idCampanie > 0 ? (string) $db->query('SELECT blocks_json FROM newsletter_campaigns WHERE id = ' . $idCampanie)->fetchColumn() : '';
@@ -577,7 +612,7 @@ proc_close($server);
 putenv('LICENTA_DOSAR');
 $verifica('licența „toate” pusă; ' . count($vechiD['cazuri']) . ' formulare trimise pe codul de dinainte, ' . count($nouD['cazuri']) . ' pe codul nou; nicio eroare JavaScript, nicio cerere spre alt server',
     $codLicentaD === 0 && $vechiD['probleme'] === [] && $nouD['probleme'] === [] && $vechiD['blocate'] === [] && $nouD['blocate'] === []
-    && count($vechiD['cazuri']) === count($nouD['cazuri']) && count($nouD['cazuri']) >= 16,
+    && count($vechiD['cazuri']) === count($nouD['cazuri']) && count($nouD['cazuri']) >= 19,
     implode('; ', array_merge($vechiD['probleme'], $nouD['probleme'], $vechiD['blocate'], $nouD['blocate'])));
 foreach ($nouD['cazuri'] as $numeCaz => $cerereNoua) {
     $asteptat = $perechi((array) ($vechiD['cazuri'][$numeCaz] ?? []));
@@ -591,7 +626,21 @@ foreach ($nouD['cazuri'] as $numeCaz => $cerereNoua) {
         json_encode(['lipsă' => array_values(array_diff($asteptat['perechi'], $primit['perechi'])), 'în plus' => array_values(array_diff($primit['perechi'], $asteptat['perechi'])),
             'adresa' => [$asteptat['adresa'], $primit['adresa']]], JSON_UNESCAPED_UNICODE));
 }
-$verifica('constructorul de emailuri: campania ' . $idCampanie . ' (JSON-ul scris de constructorul de dinainte) salvată neatinsă de două ori cu cel nou (răspunsuri '
+$verifica('codul Bioscem însuși: ' . count((array) ($bioscemD['cazuri'] ?? [])) . ' editoare de emailuri trimise, nicio eroare JavaScript', is_array($bioscemD)
+    && ($bioscemD['probleme'] ?? []) === [] && count($bioscemD['cazuri']) === 5, implode('; ', (array) ($bioscemD['probleme'] ?? ['arborele Bioscem lipsește: rulează întâi compara-cu-baza.sh'])));
+foreach ($nouD['cazuri'] as $numeCaz => $cerereNoua) {
+    if (!str_starts_with($numeCaz, 'emailuri: ')) {
+        continue;
+    }
+    $bioscem = (array) ($bioscemD['cazuri'][$numeCaz] ?? []);
+    // Corpul întreg, octet cu octet (doar jetonul CSRF al sesiunii înlocuit): HTML-ul emailului se salvează exact așa.
+    $corp = static fn (array $c): string => (string) preg_replace('/\b[0-9a-f]{64}\b/', '<TOKEN>', (string) ($c['corp'] ?? ''));
+    $verifica('„' . $numeCaz . '”: cererea codului nou e octet cu octet cea a codului Bioscem (' . strlen($corp((array) $cerereNoua)) . ' octeți)',
+        $bioscem !== [] && $corp($bioscem) === $corp((array) $cerereNoua),
+        json_encode(['lipsă' => array_values(array_diff($perechi($bioscem)['perechi'], $perechi((array) $cerereNoua)['perechi'])),
+            'în plus' => array_values(array_diff($perechi((array) $cerereNoua)['perechi'], $perechi($bioscem)['perechi']))], JSON_UNESCAPED_UNICODE));
+}
+$verifica('constructorul de emailuri: campania ' . $idCampanie . ' (pornind, pe ambele coduri, de la campania goală) salvată neatinsă de două ori cu cel nou (răspunsuri '
     . implode(', ', $nouD['builder']) . '), JSON-ul blocurilor identic octet cu octet (' . strlen($blocuriInainte) . ' octeți)',
     $idCampanie > 0 && count($vechiD['builder']) === 2 && count($nouD['builder']) === 2 && !in_array(0, $nouD['builder'], true)
     && $blocuriDupa === $blocuriInainte && $blocuriInainte !== '', md5($blocuriInainte) . ' → ' . md5($blocuriDupa) . ' ' . $blocuriDupa);
@@ -602,6 +651,7 @@ if (is_array($randCampanie)) {
     $db->prepare('UPDATE newsletter_campaigns SET `' . implode('` = ?, `', $coloane) . '` = ? WHERE id = ?')->execute(array_merge(array_values($randCampanie), [$randCampanie['id']]));
 }
 $verifica('setările, campaniile, regulile și tranzacțiile punctelor, clienții: neatinse (cererile s-au oprit înainte de server; campania pusă la loc)', $sumaD() === $inainteD);
+$db->prepare('DELETE FROM newsletter_templates WHERE id = ?')->execute([$idSablonNl]);
 
 $scrie('');
 $scrie(sprintf('Rezultat: %d trecute, %d eșuate. Raport: %s', $trecute, $esuate, $fisierRaport));
