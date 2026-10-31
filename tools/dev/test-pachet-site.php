@@ -35,6 +35,8 @@ declare(strict_types=1);
  *  B15 (WP-18) acordul GDPR: varianta „medical”, fiecare valoare înghețată (și cele private) e în textul acordului din codul
  *      Bioscem, cele personale sunt private, iar fraza operatorului și cea a retragerii, scrise de codul comun cu valorile
  *      înghețate, sunt rândurile codului Bioscem (pagina întreagă o compară G-cmp, /acorduri-gdpr).
+ *  B16 (WP-R) aspectul newsletterului din tema pachetului = constantele codului Bioscem;
+ *  B17 (WP-14) pluginuri.json = licente_dev.bioscem (licenta.php site=bioscem), README.md există.
  *
  * **neutru** (pachetul tools/dev/site-demo, baza de dezvoltare, un server al codului curent pe CMS_DEV_PORT+24): nicio
  * potrivire din lista neagră a de-bioscem §7.4 (numele Bioscem, firma și reprezentantul de pe acordul GDPR, conferința,
@@ -340,6 +342,15 @@ if ($mod === 'bioscem') {
         && $tema['culori'] === $asteptate, json_encode($tema, JSON_UNESCAPED_UNICODE));
     $verifica('B16 paginile publice ale newsletterului: titlul și butonul cu culorile din codul Bioscem (inchisa, principala)',
         str_contains($paginaVeche, 'color:' . $tema['culori']['inchisa'] . ';">') && str_contains($paginaVeche, 'background:' . $tema['culori']['principala'] . ';color:#fff;'));
+
+    // WP-14. B17: pluginuri.json (copia contractului, doar pentru unelte) = licente_dev.bioscem, citit de licenta.php site=bioscem;
+    // README.md există. Baza în forma Bioscem (cms_dev_bioscem) o face și o folosește comparația (G-cmp), cu faza emailurilor.
+    $pluginuriPachet = json_decode((string) @file_get_contents($radacina . '/site-uri/bioscem/pluginuri.json'), true);
+    $catalogPluginuri = require $radacina . '/config/plugins.php';
+    $verifica('B17 pluginuri.json: formatul 1, site-ul bioscem, aceeași listă ca config/plugins.php → licente_dev.bioscem; README.md există',
+        is_array($pluginuriPachet) && ($pluginuriPachet['format'] ?? null) === 1 && ($pluginuriPachet['site'] ?? null) === 'bioscem'
+        && ($pluginuriPachet['pluginuri'] ?? null) === ($catalogPluginuri['licente_dev']['bioscem'] ?? [])
+        && is_file($radacina . '/site-uri/bioscem/README.md'), json_encode($pluginuriPachet['pluginuri'] ?? null));
 
     } catch (Throwable $e) {
         $verifica('citirea codului Bioscem și a pachetului', false, $e->getMessage());

@@ -21,8 +21,15 @@ final class Agregate
     public const BUGET_IMPLICIT = 300;
     public const BUGET_MAXIM = 1800;
 
-    /** @param list<string> $argv */
-    public static function ruleaza(array $argv, string $radacina): int
+    /**
+     * @param list<string> $argv
+     * @param null|\Closure(string): ?array $definitiaSitului altă unealtă cu același mecanism (tools/sonda/pachet-site.php,
+     *        DB-24): numele dat cu --site → definiția setului (null = site necunoscut); fără ea, --set=<set> din seturi/
+     * @param string $titlu primul rând al rezultatului
+     * @param string $prefix numele fișierului rezultatului din storage/verificare/sonde/
+     */
+    public static function ruleaza(array $argv, string $radacina, ?\Closure $definitiaSitului = null,
+        string $titlu = 'verificări agregate pe un site live (WP-10)', string $prefix = 'agregate'): int
     {
         set_error_handler(static function (int $nivel, string $mesaj, string $fisier, int $linie): bool {
             if ((error_reporting() & $nivel) === 0) {
@@ -33,10 +40,17 @@ final class Agregate
         });
         try {
             Rulare::faraSesiune();
-            $argumente = Rulare::argumente($argv, ['set', 'dosar', 'fara-fisier', 'buget']);
-            $set = is_string($argumente['set'] ?? null) ? $argumente['set'] : '';
+            $optiune = $definitiaSitului === null ? 'set' : 'site';
+            $argumente = Rulare::argumente($argv, [$optiune, 'dosar', 'fara-fisier', 'buget']);
+            $set = is_string($argumente[$optiune] ?? null) ? $argumente[$optiune] : '';
             $fisierSet = dirname(__DIR__) . '/seturi/' . $set . '.php';
-            if (preg_match('/^[a-z]{2,30}$/', $set) !== 1 || $set === 'comun' || !is_file($fisierSet)) {
+            $definitie = null;
+            if ($definitiaSitului !== null) {
+                $definitie = preg_match('/^[a-z]{2,30}$/', $set) === 1 && isset(Locul::SITE_URI[$set]) ? $definitiaSitului($set) : null;
+                if ($definitie === null) {
+                    throw new Refuz('lipsește --site=<site cu pachet: ' . implode('|', array_keys(Locul::SITE_URI)) . '> (vezi capul fișierului)');
+                }
+            } elseif (preg_match('/^[a-z]{2,30}$/', $set) !== 1 || $set === 'comun' || !is_file($fisierSet)) {
                 throw new Refuz('lipsește --set=<' . implode('|', array_keys(Locul::SITE_URI)) . '> (vezi capul fișierului)');
             }
             $buget = self::BUGET_IMPLICIT;
@@ -49,7 +63,7 @@ final class Agregate
             $faraFisier = isset($argumente['fara-fisier']);
             [$acasa] = Locul::verificare($radacina);
             /** @var array{site: string, verificari: list<array{cheie: string, titlu: string, ruleaza: callable(Context): void}>} $definitie */
-            $definitie = require $fisierSet;
+            $definitie ??= require $fisierSet;
             $dosarDat = isset($argumente['dosar']) && is_string($argumente['dosar']) ? $argumente['dosar'] : null;
             $site = SiteLive::gaseste($definitie['site'], $dosarDat, $acasa, $radacina);
             $citire = CitireLive::deschide($site);
@@ -70,15 +84,15 @@ final class Agregate
         $grupCurent = null;
         // Rezultatul: pe ecran și în storage/verificare/sonde/. Și după o eroare fatală (lib/intrare.php),
         // cu verificările de până acolo și grupul oprit ca EROARE.
-        $termina = static function (?string $oprit) use (&$grupCurent, $raport, $citire, $site, $set, $start, $faraFisier): int {
+        $termina = static function (?string $oprit) use (&$grupCurent, $raport, $citire, $site, $set, $start, $faraFisier, $titlu, $prefix, $optiune): int {
             if ($oprit !== null) {
                 $raport->eroare($grupCurent ?? 'verificare', 'rularea s-a oprit: ' . $oprit);
             }
             $durata = (int) round(microtime(true) - $start);
             $n = $raport->numarate();
             $moment = date('Y-m-d H:i');
-            $text = 'ANDAXI-CMS — verificări agregate pe un site live (WP-10)' . "\n"
-                . 'Setul: ' . $set . ' — ' . $site->titlu . ', domeniul ' . $site->gazda . ', dosarul ' . $site->dosarRelativ . "\n"
+            $text = 'ANDAXI-CMS — ' . $titlu . "\n"
+                . ($optiune === 'set' ? 'Setul: ' : 'Site-ul: ') . $set . ' — ' . $site->titlu . ', domeniul ' . $site->gazda . ', dosarul ' . $site->dosarRelativ . "\n"
                 . 'Rulat: ' . $moment . ' (' . date_default_timezone_get() . '), PHP ' . PHP_VERSION . ', baza ' . ($citire->familie === 'mariadb' ? 'MariaDB' : 'MySQL')
                 . ' ' . $citire->versiune . ', sesiune doar de citire' . "\n"
                 . 'Doar numere, DA/NU și nume de structură: niciun rând, nicio valoare din bază, nicio parolă.' . "\n"
@@ -94,7 +108,7 @@ final class Agregate
                 echo $final . ' Nimic scris (--fara-fisier).' . "\n";
             } else {
                 try {
-                    $cale = Rulare::salveaza('agregate-' . $set . '-' . date('Ymd-His') . '.txt', $text . $final . "\n");
+                    $cale = Rulare::salveaza($prefix . '-' . $set . '-' . date('Ymd-His') . '.txt', $text . $final . "\n");
                     echo $final . ' Rezultatul e și în ' . $cale . ': trimite-ni-l (are doar numere).' . "\n";
                 } catch (Refuz $e) {
                     echo $final . "\n";

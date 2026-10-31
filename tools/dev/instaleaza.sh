@@ -120,7 +120,12 @@ if [ -n "$site" ]; then
     # Licența de dezvoltare a site-ului (config/plugins.php → licente_dev), în dosarul ei (alege_site_dev); pe o bază la
     # zi, licenta.php rulează și pașii de activare (pagina /acorduri-gdpr, pragul ERP), ca prima cerere de după adoptare.
     echo "== Licența de dezvoltare a site-ului $site"
-    "${PHP_DEV[@]}" tools/dev/licenta.php "$site"
+    # Din pachet (pluginuri.json, WP-14), dacă îl are; altfel lista din config/plugins.php → licente_dev.
+    if [ -f "site-uri/$site/pluginuri.json" ]; then
+        "${PHP_DEV[@]}" tools/dev/licenta.php "site=$site"
+    else
+        "${PHP_DEV[@]}" tools/dev/licenta.php "$site"
+    fi
     # Garda (planul de-Bioscem §7.2): nicio adresă reală, nici după datele demo.
     "${PHP_DEV[@]}" tools/dev/pachet-site.php garda "site-uri/$site"
 else

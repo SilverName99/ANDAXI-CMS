@@ -1089,17 +1089,21 @@ $verifica('T4, T10: licența locală (storage/licenta) neatinsă de scripturile 
 
 // ------------------------------------------------------------------ T9
 $scrie('');
-$scrie('T9. Aceeași amprentă pe MariaDB și pe MySQL 8');
-if (count($servere) === 2) {
+$scrie('T9. Aceeași amprentă pe fiecare server (' . implode(', ', array_keys($servere)) . ')');
+if (count($servere) >= 2) {
     foreach ($ampPeServer as $ce => $amprente) {
         $valori = array_values($amprente);
-        $verifica('T9: aceeași amprentă pe ambele servere: ' . $ce, count($valori) === 2 && $valori[0] === $valori[1],
-            count($valori) === 2 ? implode('; ', array_slice(array_merge(Amprenta::compara(json_decode($valori[0], true), json_decode($valori[1], true))['lipsa'],
-                Amprenta::compara(json_decode($valori[0], true), json_decode($valori[1], true))['in_plus'],
-                Amprenta::compara(json_decode($valori[0], true), json_decode($valori[1], true))['avertismente']), 0, 10)) : 'lipsește un server');
+        $diferente = [];
+        foreach (array_slice($valori, 1) as $alta) {
+            $c = Amprenta::compara(json_decode($valori[0], true), json_decode($alta, true));
+            $diferente = array_merge($diferente, $c['lipsa'], $c['in_plus'], $c['avertismente']);
+        }
+        $verifica('T9: aceeași amprentă pe fiecare server (' . count($servere) . '): ' . $ce,
+            count($valori) === count($servere) && count(array_unique($valori)) === 1,
+            count($valori) === count($servere) ? implode('; ', array_slice($diferente, 0, 10)) : 'lipsește un server');
     }
 } else {
-    $scrie('  SĂRIT T9: doar MariaDB (' . ($doarMariaDb ? '--doar-mariadb' : 'MySQL 8 nu merge') . '): rezultatul e parțial');
+    $scrie('  SĂRIT T9: un singur server (' . ($doarMariaDb ? '--doar-mariadb' : 'MySQL 8 nu merge') . '): rezultatul e parțial');
 }
 
 // ------------------------------------------------------------------ T11

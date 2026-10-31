@@ -11,7 +11,8 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/test-migrari.php --runner       # doar runner-ul (U, D, R, I, T, S; poarta G-runner)
  *   tools/dev/php.sh tools/dev/test-migrari.php --migrari      # doar migrările adevărate (U, M, S; fără D și R)
  *   CMS_DEV_PHP=php8.3 tools/dev/php.sh tools/dev/test-migrari.php   # cu PHP-ul minim
- *   … --doar-mariadb                                           # fără MySQL 8 (parțial, spus în rezultat)
+ *   … --doar-mariadb                                           # fără MySQL 8 (parțial, spus în rezultat; decizia A1, 27 oct)
+ *   … --fara-nestrict                                          # fără al doilea MariaDB, cel non-strict (parțial, spus în rezultat)
  *
  * U. Fără bază: Server (versiuni, ce știe fiecare, lanțul de clauze), Amprenta (aceleași rânduri
  *    în forma MariaDB și în forma MySQL dau aceeași amprentă, inclusiv tinyint(1) unsigned, un
@@ -19,8 +20,9 @@ declare(strict_types=1);
  *    și COLLATE semnalate); corpul unui CREATE TABLE; compararea), mesajele fără valori (și cu ghilimele, \ sau „' for key '” în valoare, pe care
  *    serverele nu le dublează), Registru (ordinea, numerele, proprietarii, migrari.lock, pașii
  *    site-ului).
- * Pe fiecare server (MariaDB din CMS_DEV_SOCK, MySQL 8 din CMS_DEV_SOCK_MYSQL8, pornit cu
- * tools/dev/mysql8.sh dacă nu merge):
+ * Pe fiecare server (MariaDB din CMS_DEV_SOCK; „MariaDB nestrict”, al doilea MariaDB, în modul Hostinger
+ * NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION, din CMS_DEV_SOCK_NESTRICT, pornit cu tools/dev/mariadb-nestrict.sh
+ * dacă nu merge (WP-14); MySQL 8 din CMS_DEV_SOCK_MYSQL8, pornit cu tools/dev/mysql8.sh dacă nu merge):
  * D. Detectarea: un tabel cu toate felurile de coloane și chei, citit înapoi, e exact ce înțelege
  *    Amprenta din corpul lui; Schema direct (creare, „există”, altă definiție = avertisment, index
  *    echivalent sub alt nume, cursa cu alt proces acceptată, valori repetate sub un index unic
@@ -41,7 +43,9 @@ declare(strict_types=1);
  *    (11, baza neatinsă), parametrii site-ului (15), lacătele (3, inclusiv al sincronizării FAN),
  *    starea (_platforma_stare) neatinsă de un runner refuzat (3, 12) și scrisă cu codul final (0,
  *    14), un tabel ocupat (reîncercări, apoi 1 și reluare), mărimea tabelelor în plan, un tabel
- *    #sql-* rămas, sql_mode în ieșire și în jurnal, verificarea (14), configurarea (2), pașii
+ *    #sql-* rămas, sql_mode în ieșire și în jurnal (al serverului; migrările cu STRICT_TRANS_TABLES adăugat
+ *    pe un server non-strict: o migrare care îngustează o coloană cu date mai lungi se oprește cu 1, datele
+ *    rămân, iar sesiunea revine la modul serverului, WP-14), verificarea (14), configurarea (2), pașii
  *    site-ului, --json, nicio valoare din rânduri (nici cu ghilimele sau \ în ea, din date(),
  *    peBucati(), 1062 și 1366) și nicio parolă în ieșire. Garda (Garda::stare) cu o migrare nouă
  *    numerotată sub una deja aplicată (numerele rezervate pe pachete de lucru): in_urma până o aplică
@@ -52,7 +56,7 @@ declare(strict_types=1);
  *    (15, și cu --permite-provizoriu în afara copiei de verificare; pe copie aplicat), pasi_site ({site, pasi}) în
  *    _platforma_stare până termină pașii din ea (o rulare cu --site care nu-i vede: 2, cheia neatinsă), dosarul
  *    pachetului lipsă sau fără înghețarea din site-uri/<site>/ (2), setare() doar în pașii site-ului.
- * T. Aceeași amprentă pe MariaDB și pe MySQL 8 după aceleași migrări; o conexiune MariaDB care
+ * T. Aceeași amprentă pe fiecare server după aceleași migrări; o conexiune MariaDB care
  *    primește id-ul de obiect al uneia MySQL eliberate (Amprenta nu-și amintește serverul vechi).
  * S. Linia de comandă nu mai lasă fișiere de sesiune (bootstrap.php): 3 rulări ale lui
  *    migreaza.php și una a lui diagnostic.php, numărul fișierelor din storage/sessions neschimbat;
@@ -105,7 +109,7 @@ declare(strict_types=1);
  *        obișnuite care încep cu numele unui tip ('text', 'Date invalide.', 'DATE(o.created_at) >= ?').
  *
  * Bazele (cms_mig_t_*) și dosarul de lucru ($CMS_DEV_DIR/test-migrari) se fac și se șterg aici;
- * MySQL 8 se oprește la final dacă l-a pornit testul. Doar date inventate. Raportul:
+ * MySQL 8 și MariaDB nestrict se opresc la final dacă i-a pornit testul. Doar date inventate. Raportul:
  * $CMS_DEV_DIR/test-migrari-raport.txt; cod de ieșire 0 doar dacă totul a trecut.
  */
 
@@ -127,12 +131,13 @@ use App\Support\Migrari\Server;
 
 $argumente = array_slice($argv, 1);
 foreach ($argumente as $argument) {
-    if (!in_array($argument, ['--runner', '--migrari', '--doar-mariadb'], true)) {
-        fwrite(STDERR, 'argument necunoscut: ' . $argument . " (--runner, --migrari, --doar-mariadb)\n");
+    if (!in_array($argument, ['--runner', '--migrari', '--doar-mariadb', '--fara-nestrict'], true)) {
+        fwrite(STDERR, 'argument necunoscut: ' . $argument . " (--runner, --migrari, --doar-mariadb, --fara-nestrict)\n");
         exit(2);
     }
 }
 $doarMariaDb = in_array('--doar-mariadb', $argumente, true);
+$faraNestrict = in_array('--fara-nestrict', $argumente, true);
 $cuRunner = !in_array('--migrari', $argumente, true);
 $cuMigrari = !in_array('--runner', $argumente, true);
 if (!$cuRunner && !$cuMigrari) {
@@ -507,6 +512,7 @@ $utilizator = (string) (getenv('CMS_DEV_DB_USER') ?: 'root');
 $parola = (string) (getenv('CMS_DEV_DB_PAROLA') ?: '');
 $sockMaria = (string) (getenv('CMS_DEV_SOCK') ?: '/tmp/claude-0/maria/sock');
 $sockMy8 = (string) (getenv('CMS_DEV_SOCK_MYSQL8') ?: '/tmp/claude-0/my8/run/sock');
+$sockNestrict = (string) (getenv('CMS_DEV_SOCK_NESTRICT') ?: (getenv('CMS_DEV_NESTRICT_DIR') ?: '/tmp/claude-0/maria-nestrict') . '/run/sock');
 $conectare = static function (string $sock, ?string $baza = null) use ($utilizator, $parola): PDO {
     return new PDO('mysql:unix_socket=' . $sock . ($baza !== null ? ';dbname=' . $baza : '') . ';charset=utf8mb4', $utilizator, $parola,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
@@ -520,7 +526,26 @@ $merge = static function (string $sock) use ($conectare): bool {
     }
 };
 $mysql8Pornit = false;
+$nestrictPornit = false;
 $servere = ['MariaDB' => $sockMaria];
+if (!$faraNestrict) {
+    // Al doilea MariaDB, în modul serverului Hostinger (non-strict; tools/dev/mariadb-nestrict.sh, WP-14).
+    if (!$merge($sockNestrict)) {
+        $iesire = [];
+        exec(escapeshellarg($radacina . '/tools/dev/mariadb-nestrict.sh') . ' porneste 2>&1', $iesire, $cod);
+        $nestrictPornit = $cod === 0 && $merge($sockNestrict);
+        if (!$nestrictPornit) {
+            $verifica('MariaDB nestrict merge (CMS_DEV_SOCK_NESTRICT sau tools/dev/mariadb-nestrict.sh porneste)', false, implode("\n", $iesire)
+                . "\nFără el testul e doar parțial: --fara-nestrict (spus explicit).");
+        }
+    }
+    if ($merge($sockNestrict)) {
+        $modNestrict = (string) $conectare($sockNestrict)->query('SELECT @@GLOBAL.sql_mode')->fetchColumn();
+        $verifica('MariaDB nestrict: serverul e chiar non-strict (fără STRICT_TRANS_TABLES / STRICT_ALL_TABLES)',
+            preg_match('/STRICT_(TRANS|ALL)_TABLES/', $modNestrict) !== 1, $modNestrict);
+        $servere['MariaDB nestrict'] = $sockNestrict;
+    }
+}
 if (!$doarMariaDb) {
     if (!$merge($sockMy8)) {
         exec(escapeshellarg($radacina . '/tools/dev/mysql8.sh') . ' porneste 2>&1', $iesire, $cod);
@@ -535,7 +560,7 @@ if (!$doarMariaDb) {
     }
 }
 $bazeFacute = [];
-register_shutdown_function(static function () use (&$bazeFacute, $conectare, $sterge, $lucru, &$mysql8Pornit, $radacina): void {
+register_shutdown_function(static function () use (&$bazeFacute, $conectare, $sterge, $lucru, &$mysql8Pornit, &$nestrictPornit, $radacina): void {
     foreach ($bazeFacute as $sock => $baze) {
         try {
             $pdo = $conectare($sock);
@@ -548,6 +573,9 @@ register_shutdown_function(static function () use (&$bazeFacute, $conectare, $st
     $sterge($lucru);
     if ($mysql8Pornit) {
         exec(escapeshellarg($radacina . '/tools/dev/mysql8.sh') . ' opreste > /dev/null 2>&1');
+    }
+    if ($nestrictPornit) {
+        exec(escapeshellarg($radacina . '/tools/dev/mariadb-nestrict.sh') . ' opreste > /dev/null 2>&1');
     }
 });
 $bazaNoua = static function (string $sock, string $nume) use (&$bazeFacute, $conectare): PDO {
@@ -986,10 +1014,14 @@ foreach ($cuRunner ? $servere : [] as $numeServer => $sock) {
         && $a->query("SELECT valoare FROM _platforma_stare WHERE cheie = 'ultima_ord'")->fetchColumn() === '3'
         && $codUltimaRulare($a) === 0 && $amprenta($a) === $json);
     $sqlMode = (string) $a->query('SELECT @@GLOBAL.sql_mode')->fetchColumn();
+    $serverStrict = preg_match('/STRICT_(TRANS|ALL)_TABLES/', $sqlMode) === 1;
     $jurnalTest = (string) @file_get_contents($lucru . '/jurnal.log');
-    $verifica('--aplica scrie sql_mode-ul serverului (neschimbat) în ieșire și în migrari.log',
+    $verifica('--aplica scrie sql_mode-ul serverului în ieșire și în migrari.log, și dacă migrările l-au făcut strict ('
+        . ($serverStrict ? 'deja strict' : 'non-strict: + STRICT_TRANS_TABLES') . ')',
         str_contains($out, 'sql_mode: ' . ($sqlMode !== '' ? $sqlMode : '(gol)')) && str_contains($jurnalTest, '--aplica: 3 de aplicat')
-        && str_contains($jurnalTest, 'sql_mode ' . ($sqlMode !== '' ? $sqlMode : '(gol)')), $out . "\n" . $jurnalTest);
+        && str_contains($jurnalTest, 'sql_mode ' . ($sqlMode !== '' ? $sqlMode : '(gol)'))
+        && ($serverStrict ? str_contains($out, '(al serverului, deja strict)') && !str_contains($jurnalTest, '+ STRICT_TRANS_TABLES')
+            : str_contains($out, 'STRICT_TRANS_TABLES adăugat') && str_contains($jurnalTest, '(migrările: + STRICT_TRANS_TABLES)')), $out . "\n" . $jurnalTest);
     [$cod, $out] = $ruleaza($sock, $b('a'), $jucarii, ['--aplica']);
     [$codPlan, $outPlan] = $ruleaza($sock, $b('a'), $jucarii, ['--plan']);
     $verifica('a doua oară: --aplica „nimic de făcut” (0 operații), --plan 0',
@@ -1222,6 +1254,35 @@ PHP, 'contract');
     $verifica('cu ambele: aplicate (tipul schimbat prin copie, coloana nouă, cea veche ștearsă)',
         $cod === 0 && ($st['coloane']['cantitate']['tip'] ?? '') === 'bigint' && isset($st['coloane']['nota'])
         && !isset($st['coloane']['veche']) && count(array_filter($randuri($bl), static fn ($x) => $x['rezultat'] === 'aplicata')) === 4, $out . $err);
+    // WP-14: o migrare care îngustează o coloană cu date mai lungi. Pe un server non-strict ALTER-ul ar tăia datele cu
+    // un avertisment (1265) și ar merge mai departe; runner-ul rulează migrările cu STRICT_TRANS_TABLES, deci pe fiecare
+    // server se oprește cu 1, iar datele rămân întregi. Aici în proces (Runner direct, ca install.php): după rulare
+    // sesiunea are din nou modul serverului.
+    $ingust = $lucru . '/ingusteaza-' . $cheiServer;
+    $scrieMigrare($ingust, 'nucleu/0001_baza', <<<'PHP'
+        $s->tabel('note', 'id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, text VARCHAR(40) NOT NULL DEFAULT \'\'');
+PHP);
+    $scrieMigrare($ingust, 'nucleu/0002_nota', <<<'PHP'
+        $s->date('o notă lungă', "INSERT INTO note (text) VALUES ('douazeci-si-cinci-de-caractere')");
+PHP, 'date');
+    $scrieMigrare($ingust, 'nucleu/0003_ingusteaza', <<<'PHP'
+        $s->modificaColoana('note', 'text', "VARCHAR(10) NOT NULL DEFAULT ''");
+PHP);
+    $in = $bazaNoua($sock, $b('in'));
+    $modInainte = (string) $in->query('SELECT @@SESSION.sql_mode')->fetchColumn();
+    $runnerIngust = new \App\Support\Migrari\Runner($in, Server::detecteaza($in), $registru($ingust),
+        ['permite_blocante' => true, 'jurnal' => $lucru . '/jurnal-ingust.log', 'pauze' => [0.1]]);
+    $rIngust = $runnerIngust->aplica();
+    $textIngust = (string) $in->query('SELECT text FROM note')->fetchColumn();
+    $lungime = (int) ($in->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'note' AND COLUMN_NAME = 'text'")->fetchColumn());
+    $verifica('o migrare care îngustează o coloană cu date mai lungi (' . (preg_match('/STRICT_(TRANS|ALL)_TABLES/', $modInainte) === 1
+        ? 'server strict' : 'server NON-STRICT') . '): oprită cu 1, datele întregi, coloana neschimbată',
+        ($rIngust['cod'] ?? null) === Eroare::MIGRARE && $textIngust === 'douazeci-si-cinci-de-caractere' && $lungime === 40
+        && (array_column($randuri($in), 'rezultat', 'id')['nucleu/0002_nota'] ?? '') === 'aplicata',
+        'cod ' . json_encode($rIngust['cod'] ?? null) . ', text de ' . strlen($textIngust) . ' caractere, coloana ' . $lungime . ': ' . (string) ($rIngust['mesaj'] ?? ''));
+    $verifica('… după rulare sesiunea are din nou sql_mode-ul de dinainte (al serverului)',
+        (string) $in->query('SELECT @@SESSION.sql_mode')->fetchColumn() === $modInainte);
     $schemaContract = $lucru . '/sterge-in-schema-' . $cheiServer;
     $scrieMigrare($schemaContract, 'nucleu/0001_x', "        \$s->tabel('de_sters', 'id INT');\n        \$s->stergeTabel('de_sters');");
     $bazaNoua($sock, $b('sc'));
@@ -1423,15 +1484,20 @@ PHP);
 // T. Aceleași amprente pe ambele servere
 // =====================================================================
 $scrie('');
-$scrie('T. MariaDB și MySQL 8');
+$scrie('T. ' . implode(', ', array_keys($servere)));
 if (!$cuRunner) {
     $scrie('  SĂRIT runner-ul (--migrari)');
-} elseif (count($servere) === 2) {
+} elseif (count($servere) < 2) {
+    $scrie('  SĂRIT un singur server (' . ($doarMariaDb ? '--doar-mariadb' : 'MySQL 8 nu merge') . ($faraNestrict ? ', --fara-nestrict' : '') . '): rezultatul e parțial');
+} else {
     foreach ($amprentePeServer as $ce => $amprente) {
         $valori = array_values($amprente);
-        $verifica('aceeași amprentă pe ambele servere: ' . $ce, count($valori) === 2 && $valori[0] === $valori[1],
-            count($valori) === 2 ? implode("\n---\n", $valori) : 'lipsește un server');
+        $verifica('aceeași amprentă pe fiecare server (' . count($servere) . '): ' . $ce,
+            count($valori) === count($servere) && count(array_unique($valori)) === 1,
+            count($valori) === count($servere) ? implode("\n---\n", $valori) : 'lipsește un server');
     }
+}
+if ($cuRunner && isset($servere['MySQL 8'])) {
     // O conexiune MariaDB nouă primește id-ul de obiect al uneia MySQL 8 tocmai eliberate (PHP refolosește
     // id-urile): Amprenta nu are voie să-și amintească de la cea veche că serverul are STATISTICS.EXPRESSION.
     $pdoMy = $conectare($servere['MySQL 8']);
@@ -1444,8 +1510,8 @@ if (!$cuRunner) {
     $verifica('o conexiune MariaDB cu id-ul de obiect al uneia MySQL 8 eliberate: Amprenta citește fără eroare',
         $acelasiId && $ex === null, ($acelasiId ? '' : 'id-ul nu s-a refolosit (testul n-ar dovedi nimic); ') . ($ex?->getMessage() ?? ''));
     unset($pdoMaria);
-} else {
-    $scrie('  SĂRIT doar MariaDB (' . ($doarMariaDb ? '--doar-mariadb' : 'MySQL 8 nu merge') . '): rezultatul e parțial');
+} elseif ($cuRunner) {
+    $scrie('  SĂRIT MySQL 8 (' . ($doarMariaDb ? '--doar-mariadb' : 'nu merge') . '): rezultatul e parțial');
 }
 
 // =====================================================================
@@ -1488,8 +1554,8 @@ if ($cuMigrari) {
 
 $scrie('');
 $total = 'test-migrari: ' . $trecute . ' trecute, ' . $esuate . ' eșuate'
-    . (count($servere) === 2 ? ' (MariaDB și MySQL 8)' : ' (DOAR MariaDB: parțial)') . ', PHP ' . PHP_VERSION
+    . ' (' . implode(', ', array_keys($servere)) . (isset($servere['MySQL 8'], $servere['MariaDB nestrict']) ? '' : ': parțial') . ')' . ', PHP ' . PHP_VERSION
     . (!$cuMigrari ? ', doar runner-ul' : '') . (!$cuRunner ? ', fără D și R' : '')
     . ($saritLive !== [] ? '; T2-live sărit pentru ' . implode(', ', array_keys($saritLive)) . ' (sonda live n-a venit încă)' : '') . '.';
 $scrie($total);
-exit($esuate === 0 && (count($servere) === 2 || $doarMariaDb) ? 0 : 1);
+exit($esuate === 0 && (isset($servere['MySQL 8']) || $doarMariaDb) && (isset($servere['MariaDB nestrict']) || $faraNestrict) ? 0 : 1);

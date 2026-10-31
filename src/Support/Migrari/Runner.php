@@ -143,9 +143,20 @@ final class Runner
         // Starea se scrie doar după ce rularea a trecut de toate verificările și a început să aplice
         // (vezi capul clasei): un runner refuzat nu-i schimbă ultima_ord, amprenta sau ultima rulare.
         $scrieStarea = false;
+        $modulServerului = null;
         try {
             $raport = $this->raport('aplica');
             $this->paznic();
+            // Migrările rulează cu STRICT_TRANS_TABLES în sesiunea lor (WP-14): pe un server non-strict (Hostinger:
+            // NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION) un ALTER care îngustează sau schimbă tipul unei coloane ar tăia
+            // datele cu un simplu avertisment (1265) și ar merge mai departe; strict, se oprește cu eroare și datele rămân.
+            // Testele migrărilor rulează oricum pe servere stricte (MariaDB 10.11 și MySQL 8 implicit), deci pe site
+            // migrările merg exact ca în teste. Modul serverului se pune la loc la final (install.php continuă pe aceeași
+            // conexiune, cu codul site-ului, care rămâne în modul serverului).
+            $modulServerului = $raport['sql_mode'];
+            if ($raport['sql_mode_migrari'] !== $modulServerului) {
+                $this->db->prepare('SET SESSION sql_mode = ?')->execute([$raport['sql_mode_migrari']]);
+            }
             $this->verificaPachetul();
             $areLacat = (int) $this->db->query('SELECT GET_LOCK(' . self::LACAT . ', 0)')->fetchColumn() === 1;
             if (!$areLacat) {
@@ -180,7 +191,8 @@ final class Runner
             $this->actualizeazaMarcajul($randuri, false);
             if ($deAplicat !== []) {
                 $this->scrieRandJurnal('--aplica: ' . count($deAplicat) . ' de aplicat, ' . $this->server->nume()
-                    . ', sql_mode ' . ($raport['sql_mode'] !== '' ? $raport['sql_mode'] : '(gol)'));
+                    . ', sql_mode ' . ($raport['sql_mode'] !== '' ? $raport['sql_mode'] : '(gol)')
+                    . ($raport['sql_mode_migrari'] !== $raport['sql_mode'] ? ' (migrările: + STRICT_TRANS_TABLES)' : ''));
             }
             foreach ($deAplicat as $m) {
                 if ($this->timpScurs() >= (float) $this->optiuni['buget']) {
@@ -218,6 +230,13 @@ final class Runner
                     $this->db->query('SELECT RELEASE_LOCK(' . self::LACAT . ')');
                 } catch (Throwable) {
                     // Conexiunea închisă eliberează oricum lacătul.
+                }
+            }
+            if ($modulServerului !== null && ($raport['sql_mode_migrari'] ?? $modulServerului) !== $modulServerului) {
+                try {
+                    $this->db->prepare('SET SESSION sql_mode = ?')->execute([$modulServerului]);
+                } catch (Throwable) {
+                    // O conexiune pierdută nu mai are sesiune de pus la loc.
                 }
             }
         }
@@ -904,12 +923,15 @@ final class Runner
     private function raport(string $comanda): array
     {
         $pasi = $this->optiuni['site'] !== null ? count($this->registru->pasiSite((string) $this->optiuni['site'], (string) $this->optiuni['dosar_site'])) : 0;
+        $mod = (string) $this->db->query('SELECT @@SESSION.sql_mode')->fetchColumn();
         return [
             'comanda' => $comanda,
             'server' => ['familie' => $this->server->familie(), 'versiune' => $this->server->versiune(), 'text' => $this->server->text()],
             'baza' => (string) $this->db->query('SELECT DATABASE()')->fetchColumn(),
-            // Se scrie, nu se schimbă: migrările rulează cu sql_mode-ul serverului, ca site-ul.
-            'sql_mode' => (string) $this->db->query('SELECT @@SESSION.sql_mode')->fetchColumn(),
+            // Modul serverului (al sesiunii, la pornire) și cel cu care rulează migrările la --aplica: același, plus
+            // STRICT_TRANS_TABLES dacă serverul nu e strict (vezi aplica()).
+            'sql_mode' => $mod,
+            'sql_mode_migrari' => self::modStrict($mod),
             'site' => $this->optiuni['site'],
             'registru' => [
                 'migrari' => count($this->registru->migrari()),
@@ -917,6 +939,16 @@ final class Runner
                 'pasi_site' => $pasi,
             ],
         ];
+    }
+
+    /** sql_mode-ul dat, cu STRICT_TRANS_TABLES adăugat dacă nu e deja strict (STRICT_TRANS_TABLES sau STRICT_ALL_TABLES). */
+    public static function modStrict(string $mod): string
+    {
+        $parti = array_values(array_filter(array_map('trim', explode(',', $mod)), static fn (string $p): bool => $p !== ''));
+        if (array_intersect(array_map('strtoupper', $parti), ['STRICT_TRANS_TABLES', 'STRICT_ALL_TABLES']) !== []) {
+            return $mod;
+        }
+        return implode(',', array_merge(['STRICT_TRANS_TABLES'], $parti));
     }
 
     /** @param list<array<string, mixed>> $aplicate */

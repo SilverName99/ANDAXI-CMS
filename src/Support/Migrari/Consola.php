@@ -152,7 +152,9 @@ final class Consola
                 . ($r['site'] !== null ? ', ' . $r['registru']['pasi_site'] . ' pași ai site-ului' : '');
         }
         if ($r['comanda'] === 'aplica' && isset($r['sql_mode'])) {
-            $iesire[] = 'sql_mode: ' . ($r['sql_mode'] !== '' ? $r['sql_mode'] : '(gol)') . ' (al serverului, neschimbat)';
+            $iesire[] = 'sql_mode: ' . ($r['sql_mode'] !== '' ? $r['sql_mode'] : '(gol)') . (($r['sql_mode_migrari'] ?? $r['sql_mode']) !== $r['sql_mode']
+                ? ' (al serverului; migrările rulează cu STRICT_TRANS_TABLES adăugat, ca un ALTER care ar tăia date să se oprească)'
+                : ' (al serverului, deja strict)');
         }
         foreach ($r['migrari'] ?? [] as $m) {
             if ($r['comanda'] === 'aplica' && isset($m['operatii_acum'])) {

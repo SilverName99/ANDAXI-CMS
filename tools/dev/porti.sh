@@ -36,7 +36,7 @@ declare -A DESCRIERE=() COMENZI=() ADUSA_DE=()
 poarta() { DESCRIERE["$1"]="$2"; COMENZI["$1"]="$3"; ADUSA_DE["$1"]="$4"; }
 poarta G-rute "fiecare rută are proprietar; instantaneul rutelor pe fiecare licență de test" \
     "tools/dev/php.sh tools/dev/verifica-rute.php --scurt ;; tools/dev/php.sh tools/dev/instantaneu-rute.php" WP-01
-poarta G-cmp "HTML identic cu codul Bioscem (ultimul commit revizuit), licența „toate” și licența Bioscem" \
+poarta G-cmp "HTML identic cu codul Bioscem (ultimul commit revizuit), pe baza în forma Bioscem (cms_dev_bioscem, din WP-14; cu faza emailurilor), licența „toate” și licența Bioscem" \
     "tools/dev/compara-cu-baza.sh ;; tools/dev/compara-cu-baza.sh --licenta=bioscem" WP-01
 poarta G-cmp-istoric "la fel, față de f5ae5ea (codul dinaintea pluginurilor; livrarea 1 SEO și fiecare port din Bioscem de după el scoase explicit, pe commit-uri)" \
     "tools/dev/compara-cu-baza.sh --baza=f5ae5ea ;; tools/dev/compara-cu-baza.sh --baza=f5ae5ea --licenta=bioscem" WP-01
@@ -71,6 +71,8 @@ poarta G-vizual "stilurile calculate ale paginilor publice față de codul Biosc
 poarta G-pachet "pachetul Bioscem, pachetul Biovitality (cu baza în forma Biovitality) și pachetul neutru" \
     "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php biovitality ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-16
 poarta G-lic "sincronizarea licenței cu CRM-ul (CRM fals)" "tools/dev/php.sh tools/dev/test-licenta-crm.php" WP-27
+poarta G-nestrict "al doilea MariaDB, în modul Hostinger (sql_mode fără STRICT_TRANS_TABLES, max_allowed_packet 1G; tools/dev/mariadb-nestrict.sh): comparația cu Bioscem cu baza în forma Bioscem făcută pe el (testele migrărilor pe el sunt în G-mig)" \
+    "tools/dev/mariadb-nestrict.sh porneste ;; tools/dev/mariadb-nestrict.sh ruleaza tools/dev/compara-cu-baza.sh ;; tools/dev/mariadb-nestrict.sh opreste" WP-14
 poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de eticheta dinaintea refacerii" \
     "tools/dev/php.sh tools/dev/contract-admin.php" WP-29
 
@@ -121,6 +123,12 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
 # G-pachet (tools/dev/test-pachet-site.php) e adus de WP-16, nu de WP-14: ordinea proprietarului din 28 oct pune WP-16…WP-18
 # înaintea lui WP-14, iar porțile lor îl cer (valorile pachetului Bioscem față de codul Bioscem; nimic din lista neagră cu
 # pachetul demo). WP-14 îl mută pe baza cms_dev_bioscem și îi adaugă faza emailurilor.
+# WP-14: G-cmp rulează implicit pe baza cms_dev_bioscem (compara-cu-baza.sh --site=bioscem, făcută de instaleaza.sh --site=bioscem
+# când lipsește sau e veche), cu faza emailurilor (fiecare server își scrie emailurile în dosarul lui); G-nestrict (nouă) repetă
+# comparația pe al doilea MariaDB, cel în modul Hostinger (non-strict), cu dosarul de lucru $CMS_DEV_DIR/nestrict (parola
+# adminului și cheile licenței lui, deci baza cms_dev a serverului comun rămâne neatinsă); test-migrari.php (G-mig) rulează
+# pe el ca al treilea server. G-cmp-istoric fiindcă compara-cu-baza.php s-a schimbat (aceeași normalizare, în ambele moduri),
+# G-sonde fiindcă tools/sonda/pachet-site.php e nou și tools/verificare/lib/agregate.php s-a schimbat.
 # Pachetul Biovitality (BV-pachet; ordinea proprietarului din 28 oct, pasul 3, și B5: Biovitality e primul site pe codul comun)
 # n-are un WP al lui în plan: e perechea lui WP-14 pentru Biovitality. G-pachet îi verifică valorile față de codul Biovitality și
 # baza în forma Biovitality (instaleaza.sh --site=biovitality); G-cmp și G-verif fiindcă date-demo.php (și în copia
@@ -145,7 +153,7 @@ declare -A PORTI=(
     [WP-12]="G-rute G-mig G-cmp G-plug G-smoke G-php"
     [WP-12b]="G-rute G-mig G-cmp G-plug G-smoke G-calc G-verif G-sonde G-php"
     [WP-13]="G-rute G-mig G-cmp G-cmp-istoric G-vizual G-plug G-smoke G-seo G-php"
-    [WP-14]="G-rute G-mig G-cmp G-pachet G-plug G-smoke G-php"
+    [WP-14]="G-rute G-mig G-nestrict G-cmp G-cmp-istoric G-pachet G-plug G-smoke G-sonde G-php"
     [WP-15]="G-rute G-mig G-cmp G-plug G-smoke G-verif G-php"
     [WP-16]="G-rute G-mig G-inst G-cmp G-pachet G-vizual G-plug G-smoke G-verif G-php"
     [WP-17]="G-rute G-mig G-cmp G-pachet G-plug G-smoke G-php"
@@ -181,7 +189,7 @@ WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

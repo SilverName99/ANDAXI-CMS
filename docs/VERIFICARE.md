@@ -43,6 +43,7 @@ site-ul live și pe copie, apoi cele două comparate câmp cu câmp).
 | `tools/verificare/lib/roboti-gazda.php` | robots.txt-ul CDN-ului Hostinger pe domeniul temporar: recunoscut exact, rând INFO în `stare.php` (mai jos) |
 | `tools/verificare/agregate.php` (+ `seturi/`, `lib/`) | Verificările agregate pe un site live (WP-10, mai jos) |
 | `tools/sonda/amprenta-schema.php` (+ `lib/`) | Sonda schemei unui site live (WP-10, MIG-08) |
+| `tools/sonda/pachet-site.php` (+ `lib/pachet-site.php`) | Sonda pachetului unui site pe baza lui (WP-14, DB-24): V1–V12, doar numere și stări |
 | `tools/verificare/compara-calcule.php` (+ `lucrator-calcule.php`, `lib/calcule.php`) | Comparația calculelor (golden master, WP-11): codul vechi din `cod-vechi/` și codul comun, pe copie, pentru aceleași comenzi; doar numere (mai jos) |
 | `tools/verificare/amprenta-site.php` (+ `lib/amprenta.php`, `tools/dev/lib/normalizeaza-html.php`) | Amprenta paginilor unui site, live sau de verificare (WP-11): pentru fiecare adresă publică codul, unde trimite, titlul, robots, canonical, H1, JSON-LD…; două amprente se compară (mai jos) |
 | `tools/dev/test-calcule.php`, `tools/dev/test-amprenta-site.php`, `tools/dev/test-calcule-bv.php` (prin `tools/dev/compara-calcule-local.sh`) | Testele lor (poarta G-calc): local, față de codul Bioscem însuși și (WP-11b) față de codul Biovitality, și pe un site de verificare simulat |
@@ -200,9 +201,22 @@ $PHP tools/sonda/amprenta-schema.php --site=bioscem
 $PHP tools/sonda/amprenta-schema.php --site=grafoanaytis
 $PHP tools/sonda/amprenta-schema.php --site=biovitality
 $PHP tools/sonda/amprenta-schema.php --site=vertij
+$PHP tools/sonda/pachet-site.php --site=bioscem          # WP-14: întâi pe copia de verificare, apoi o dată pe live, chiar înainte de adoptare
 ls -l storage/verificare/sonde/
-#   8 fișiere: agregate-<site>-<data>.txt și amprenta-<site>-<data>.json
+#   8 fișiere: agregate-<site>-<data>.txt și amprenta-<site>-<data>.json (plus pachet-site-bioscem-<data>.txt)
 ```
+
+**Sonda pachetului** (`tools/sonda/pachet-site.php --site=bioscem`, DB-24; planul de-Bioscem §7.5): aceleași garanții ca
+verificările agregate (același mecanism, `tools/verificare/lib/agregate.php`), pe pachetul `site-uri/<site>/` al site-ului
+de verificare (clona codului; fără `privat/`). V1 pentru fiecare cheie din `setari-inghetate.json`: `lipsa` / `gol` / `egal`
+/ `diferit`, egalitatea calculată în SQL (valoarea înghețată e doar un parametru, nu se tipărește nimic din bază); secretele
+(`*_password`, `*_secret*`, `*_api_key`, `smtp_*`) și cheile private (fără fișierul lor) doar `lipsa` / `gol` / `nevid`.
+V2 paginile publicate cu slug gol, „acasa” sau „home”; V3 cele „checkout/succes”; V4 antetul din bază (nevid, cu
+`{{mobile_menu}}`) și logo-ul `public/uploads/gallery/<site>-logo.{webp,png,jpg,svg}`; V5 paginile „404”; V6 articolele
+publicate fără categorie și fără autor; V7 produsele active fără descriere scurtă; V8 produsele, articolele și autorii cu
+poza de rezervă sau fără poză; V9 campaniile trimise în ultimele 365 de zile; V10 numerotarea secvențială și contorul ei;
+V11 o adresă validă la destinatarii formularului de contact și numele expeditorului; V12 pachetul față de `pachet.json`.
+Testele: `tools/dev/test-sonde.php` B10.
 
 Fiecare comandă găsește singură dosarul site-ului live (`~/domains/<domeniu>/public_html` sau
 `~/public_html`) după domeniul din `.env`-ul lui și îl scrie în primele rânduri. Ultimul rând trebuie

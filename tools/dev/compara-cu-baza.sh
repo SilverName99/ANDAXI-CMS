@@ -12,6 +12,15 @@
 #                                                               # licente_dev), pusă înainte; la final se pune la loc „toate”
 #   tools/dev/compara-cu-baza.sh --vizual                       # pe aceleași servere, stilurile calculate (G-vizual) în
 #                                                               # locul HTML-ului; îl folosește tools/dev/capturi-publice.sh
+#   tools/dev/compara-cu-baza.sh --fara-site                    # față de Bioscem, dar pe baza cms_dev (cum era până la WP-14)
+#
+# Față de codul Bioscem (implicit, WP-14) comparația rulează pe baza în forma Bioscem, cms_dev_bioscem (--site=bioscem:
+# tools/dev/instaleaza.sh --site=bioscem, cu pachetul site-uri/bioscem/, înghețarea emulată, datele demo cu antetul
+# Bioscem și licența ei în $CMS_DEV_DIR/licenta-bioscem), făcută aici dacă lipsește sau dacă s-a schimbat ceva din ce o
+# face (migrările, seed-ul, datele demo, pachetul, parola adminului: amprenta în $CMS_DEV_DIR/baza-cms_dev_bioscem.amprenta).
+# Serverele: codul curent pe $CMS_DEV_PORT + 4, codul Bioscem pe + 5; licența implicită e „toate”. Cu CMS_DEV_DB dat din
+# mediu (G-vechi: cms_dev_vechi) baza e aceea. Faza emailurilor (WP-14, G-m10): fiecare server scrie emailurile în dosarul
+# lui ($CMS_DEV_DIR/compara-mail/baza, …/curent), comparate apoi în cazurile de salvare din compara-cu-baza.php.
 #
 # Codul de bază se scoate cu `git archive`: din repo-ul vechi în
 # $CMS_DEV_DIR/baza-<repo>-<commit>, dintr-un commit al acestui repo în
@@ -177,8 +186,10 @@ REPO_BAZA=""
 COMMIT=""
 LICENTA_COMPARATIE=""
 VIZUAL=0
+FARA_SITE=0
 for argument in "$@"; do
     case "$argument" in
+        --fara-site) FARA_SITE=1 ;;
         --licenta=*) LICENTA_COMPARATIE="${argument#--licenta=}" ;;
         --vizual) VIZUAL=1 ;;
         --baza-repo=*)
@@ -226,6 +237,25 @@ if [ "$MOD" = "repo" ]; then
     # Un server al codului curent doar pentru comparație (portul +4), cu datele de mai sus:
     # serverul de dezvoltare, dacă merge, rămâne neatins.
     PORT_CURENT=$((CMS_DEV_PORT + 4))
+    # Față de Bioscem: baza în forma Bioscem (WP-14), făcută din nou când s-a schimbat ce o face.
+    # Cu CMS_DEV_DB dat din mediu (G-vechi: cms_dev_vechi, o bază făcută altfel) comparația rămâne pe baza aceea.
+    if [ "$SITE_BAZA" = "bioscem" ] && [ "$FARA_SITE" = 0 ] && [ -z "$CMS_DEV_DB_DIN_MEDIU" ]; then
+        alege_site_dev bioscem
+        exporta_mediul_aplicatiei
+        LICENTA_COMPARATIE="${LICENTA_COMPARATIE:-toate}"
+        AMPRENTA_SITE="$(cat "$RADACINA/database/migrari/migrari.lock" "$RADACINA/scripts/install.php" "$RADACINA/scripts/seed.php" \
+            "$RADACINA/tools/dev/date-demo.php" "$RADACINA/tools/dev/pachet-site.php" "$RADACINA/site-uri/bioscem/pachet.json" \
+            "$CMS_DEV_DIR/admin-parola.txt" 2>/dev/null | sha256sum | cut -c1-16)"
+        FISIER_AMPRENTA="$CMS_DEV_DIR/baza-$CMS_DEV_DB.amprenta"
+        if [ "$(cat "$FISIER_AMPRENTA" 2>/dev/null)" != "$AMPRENTA_SITE" ] \
+            || ! mysql_dev -N -e "SELECT 1 FROM \`$CMS_DEV_DB\`.settings LIMIT 1" >/dev/null 2>&1; then
+            echo "  INFO  baza $CMS_DEV_DB lipsește sau e veche: tools/dev/instaleaza.sh --site=bioscem"
+            rm -f "$FISIER_AMPRENTA"
+            "$RADACINA/tools/dev/instaleaza.sh" --site=bioscem > "$CMS_DEV_DIR/instaleaza-$CMS_DEV_DB.log" 2>&1 \
+                || die "instaleaza.sh --site=bioscem a căzut (vezi $CMS_DEV_DIR/instaleaza-$CMS_DEV_DB.log)"
+            echo "$AMPRENTA_SITE" > "$FISIER_AMPRENTA"
+        fi
+    fi
 else
     COMMIT="${COMMIT:-f5ae5ea}"
     # Istoric: codul de atunci avea scrise în nucleu constantele și tema Bioscem pe care WP-16 le-a mutat în pachetul
@@ -247,6 +277,11 @@ else
     ETICHETA_BAZA="$COMMIT_SCURT"
 fi
 PORT_BAZA=$((CMS_DEV_PORT + 1))
+[ -n "${CMS_DEV_SITE:-}" ] && PORT_BAZA=$((CMS_DEV_PORT + 5))
+# Emailurile fiecărui server, în dosarul lui (tools/dev/mail-capturat.sh citește CMS_DEV_MAIL_DIR).
+export CMS_DEV_MAIL_DIR_BAZA="$CMS_DEV_DIR/compara-mail/baza" CMS_DEV_MAIL_DIR_CURENT="$CMS_DEV_DIR/compara-mail/curent"
+rm -rf "$CMS_DEV_DIR/compara-mail"
+mkdir -p "$CMS_DEV_MAIL_DIR_BAZA" "$CMS_DEV_MAIL_DIR_CURENT"
 PID_BAZA="$CMS_DEV_DIR/server-baza.pid"
 PID_CURENT="$CMS_DEV_DIR/server-compara.pid"
 
@@ -376,9 +411,9 @@ curata() {
 }
 trap curata EXIT
 
-# porneste_server <pid> <port> <dosar> <router> <jurnal-erori> <jurnal-server>
+# porneste_server <pid> <port> <dosar> <router> <jurnal-erori> <jurnal-server> <dosarul emailurilor>
 porneste_server() {
-    local pid="$1" port="$2" dosar="$3" router="$4" erori="$5" jurnal="$6"
+    local pid="$1" port="$2" dosar="$3" router="$4" erori="$5" jurnal="$6" mail="$7"
     opreste_pid "$pid"
     # Un server rămas pe port (pornit de altcineva) ar răspunde în locul celui de aici.
     if curl -fsS --noproxy '*' -o /dev/null "http://127.0.0.1:$port/health" 2>/dev/null; then
@@ -386,7 +421,7 @@ porneste_server() {
     fi
     (
         cd "$dosar"
-        PHP_CLI_SERVER_WORKERS=4 nohup "${PHP_DEV[@]}" -d "error_log=$erori" \
+        CMS_DEV_MAIL_DIR="$mail" PHP_CLI_SERVER_WORKERS=4 nohup "${PHP_DEV[@]}" -d "error_log=$erori" \
             -S "127.0.0.1:$port" -t "$dosar/public" "$router" >> "$jurnal" 2>&1 &
         echo $! > "$pid"
     )
@@ -407,13 +442,13 @@ if [ "$PORT_CURENT" = "$CMS_DEV_PORT" ]; then
     fi
 else
     porneste_server "$PID_CURENT" "$PORT_CURENT" "$RADACINA" "$RADACINA/tools/dev/router.php" \
-        "$CMS_DEV_DIR/php-erori.log" "$CMS_DEV_DIR/server-compara.log"
+        "$CMS_DEV_DIR/php-erori.log" "$CMS_DEV_DIR/server-compara.log" "$CMS_DEV_MAIL_DIR_CURENT"
 fi
 # Codul de bază nu scrie marcaje de port (doar codul curent le are).
 (
     unset CMS_DEV_MARCAJE_PORT
     porneste_server "$PID_BAZA" "$PORT_BAZA" "$BAZA_DIR" "$ROUTER_BAZA" \
-        "$CMS_DEV_DIR/php-erori-baza.log" "$CMS_DEV_DIR/server-baza.log"
+        "$CMS_DEV_DIR/php-erori-baza.log" "$CMS_DEV_DIR/server-baza.log" "$CMS_DEV_MAIL_DIR_BAZA"
 )
 
 cd "$RADACINA"

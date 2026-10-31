@@ -1,0 +1,7 @@
+{
+    "_despre": "Pluginurile Bioscem (docs/PACHETE.md): copia contractului, doar pentru unelte (tools/dev/licenta.php site=bioscem, baza de dezvoltare în forma Bioscem, verificarea de la adoptare). Licența site-ului vine numai de la CRM. Lista = ce are codul Bioscem (config/plugins.php → licente_dev.bioscem, tot ce era portat, fără unealta internă migrare_wordpress), confirmată de numărătoarea cheilor de pe site-ul live (WP-10, OD-33: plata_stripe rămâne până la decizia proprietarului). tools/dev/test-pachet-site.php bioscem verifică că e aceeași cu licente_dev.bioscem.",
+    "format": 1,
+    "site": "bioscem",
+    "pluginuri": ["catalog", "magazin", "livrare_fan", "plata_stripe", "plata_euplatesc", "plata_bt", "link_plata", "erp", "cupoane", "fidelitate",
+        "recenzii", "precomenzi", "oferte_bbd", "produse_promo", "conturi_clienti", "blog", "newsletter", "chat_live", "manechin", "acorduri_gdpr"]
+}

@@ -123,7 +123,8 @@ $unu = static fn (string $sql): string => (string) ($db->query($sql)->fetchColum
  * Baza în forma Bioscem pe durata comparației (tools/dev/lib/forma-bioscem.php): setările înghețate ale Bioscem
  * (`site-uri/bioscem/setari-inghetate.json`, cu valorile private din `privat/`, scris local de generator) și un antet ca
  * al Bioscem, cu sertarul de meniu. Codul Bioscem le are scrise în cod (sau în implicitele lui), codul curent le ia din
- * bază și din pachet (regula R1 din port-biovitality.md; din WP-14, baza cms_dev_bioscem le are de la instalare). Pe baza
+ * bază și din pachet (regula R1 din port-biovitality.md; din WP-14 comparația rulează pe baza cms_dev_bioscem, care le are
+ * de la instalare, cu înlocuitorii valorilor private: cele adevărate se pun doar aici, pe durata comparației). Pe baza
  * de dezvoltare pasul de activare al ERP-ului a scris data instalării, deci fără înghețare Setări → ERP ANDAXI ar număra
  * separat comenzile demo de dinainte de prag. La final, și la o oprire, fiecare setare revine cum era (și o cheie lipsă).
  */
@@ -185,6 +186,66 @@ $cerere = static function (string $port, string $metoda, string $cale, string $j
     $antet = substr($raspuns, 0, $marimeAntet);
     $location = preg_match('/^Location:\s*(\S+)/mi', $antet, $m) === 1 ? $m[1] : '';
     return ['cod' => $cod, 'corp' => substr($raspuns, $marimeAntet), 'location' => $location, 'antete' => $antet];
+};
+
+/**
+ * Faza emailurilor (WP-14, G-m10): fiecare server al comparației scrie emailurile trimise cu mail() în dosarul lui
+ * (CMS_DEV_MAIL_DIR, pus de compara-cu-baza.sh); fără ele (alt apelant), ambele în $CMS_DEV_DIR/mail. Un caz de salvare
+ * golește dosarul serverului în „pregateste” și citește în „stare” ce a scris serverul între timp: antetele (fără Date,
+ * Message-ID și X-Mailer, pe care sendmail-ul de dezvoltare nu le pune oricum) și corpul, cu limitele părților MIME
+ * înlocuite, portul codului de bază ca al celui curent; ordonate după destinatar, subiect și corp. Copiile, pentru ochi:
+ * $CMS_DEV_DIR/compara/email-<caz>-<server>-<n>.eml.
+ */
+$dosareMail = [
+    'baza' => rtrim((string) (getenv('CMS_DEV_MAIL_DIR_BAZA') ?: $dosarDev . '/mail'), '/'),
+    'curent' => rtrim((string) (getenv('CMS_DEV_MAIL_DIR_CURENT') ?: $dosarDev . '/mail'), '/'),
+];
+$golesteMail = static function (string $server) use ($dosareMail): void {
+    @mkdir($dosareMail[$server], 0770, true);
+    foreach (glob($dosareMail[$server] . '/*.eml') ?: [] as $fisier) {
+        @unlink($fisier);
+    }
+};
+$emailuriServer = static function (string $server, string $eticheta, ?callable $curata = null, bool $sterge = true)
+    use ($dosareMail, $dosarDiff, $portBaza, $portCurent, $dosarBaza, $radacina): array {
+    $emailuri = [];
+    foreach (glob($dosareMail[$server] . '/*.eml') ?: [] as $fisier) {
+        $text = strtr(str_replace("\r\n", "\n", (string) file_get_contents($fisier)), ['127.0.0.1:' . $portBaza => '127.0.0.1:' . $portCurent]
+            + ($dosarBaza !== '' ? [$dosarBaza => $radacina] : []));
+        if ($sterge) {
+            @unlink($fisier);
+        }
+        if (preg_match_all('/boundary="?([^";\s]+)"?/i', $text, $limite) > 0) {
+            foreach (array_values(array_unique($limite[1])) as $i => $limita) {
+                $text = str_replace($limita, '<LIMITA-' . ($i + 1) . '>', $text);
+            }
+        }
+        if ($curata !== null) {
+            $text = $curata($text);
+        }
+        [$cap, $corp] = array_pad(explode("\n\n", $text, 2), 2, '');
+        $antete = [];
+        foreach (preg_split('/\n(?![ \t])/', $cap) ?: [] as $linie) {
+            [$nume, $valoare] = array_pad(explode(':', $linie, 2), 2, '');
+            $nume = strtolower(trim($nume));
+            if ($nume !== '' && !in_array($nume, ['date', 'message-id', 'x-mailer'], true)) {
+                $antete[$nume] = trim((string) preg_replace('/\s+/', ' ', $valoare));
+            }
+        }
+        ksort($antete);
+        $emailuri[] = ['antete' => $antete, 'corp' => $corp];
+    }
+    usort($emailuri, static fn (array $a, array $b): int => [$a['antete']['to'] ?? '', $a['antete']['subject'] ?? '', $a['corp']]
+        <=> [$b['antete']['to'] ?? '', $b['antete']['subject'] ?? '', $b['corp']]);
+    foreach ($emailuri as $n => $email) {
+        $antet = '';
+        foreach ($email['antete'] as $nume => $valoare) {
+            $antet .= $nume . ': ' . $valoare . "\n";
+        }
+        file_put_contents($dosarDiff . '/email-' . (preg_replace('/[^a-z0-9]+/i', '-', $eticheta) ?: 'caz') . '-' . $server . '-' . ($n + 1) . '.eml',
+            $antet . "\n" . $email['corp']);
+    }
+    return $emailuri;
 };
 
 // Anteturile răspunsului se compară și ele (tools/dev/lib/diferente-asteptate.php → diferente_antete).
@@ -2356,12 +2417,12 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         ['tabel' => 'cart_abandonments', 'unde' => 'id > :c1', 'param' => ['c1' => $idMaxCosuri], 'cheie' => 'id'],
         ['tabel' => 'checkout_submit_logs', 'unde' => 'id > :j1 OR created_at >= :j2', 'param' => ['j1' => $idMaxJurnal, 'j2' => $deLaJurnal], 'cheie' => 'id'],
     ]);
-    $dosarMail = $dosarDev . '/mail';
+    // Emailurile comenzii: din dosarul serverului care o plasează (faza emailurilor, mai sus).
     $mailInainte = [];
-    $pregatesteComanda = static function (PDO $db) use ($punAvertisment, $idMentaInt, $deLaJurnal, $dosarMail, &$mailInainte): void {
+    $pregatesteComanda = static function (PDO $db, string $server = 'curent') use ($punAvertisment, $idMentaInt, $deLaJurnal, $dosareMail, &$mailInainte): void {
         $punAvertisment($db, $idMentaInt);
         $db->prepare('DELETE FROM checkout_submit_logs WHERE created_at >= ?')->execute([$deLaJurnal]);
-        $mailInainte = glob($dosarMail . '/*.eml') ?: [];
+        $mailInainte = glob($dosareMail[$server] . '/*.eml') ?: [];
     };
     $tokenDin = static function (string $corp): array {
         preg_match('/name="checkout_form_token"\s+value="([^"]*)"/', $corp, $t);
@@ -2376,7 +2437,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
     ];
     // Ora apare în pagini și emailuri (comanda se plasează pe rând, pe cele două servere).
     $faraOra = static fn (string $text): string => (string) preg_replace('/\b([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?\b/', '<ORA>', $text);
-    $stareComanda = static function (PDO $db) use ($citeste, $idMaxComenzi, $idMaxEmailuri, $idMaxJurnal, $dosarMail, &$mailInainte, $faraOra): array {
+    $stareComanda = static function (PDO $db, string $server = 'curent') use ($citeste, $idMaxComenzi, $idMaxEmailuri, $idMaxJurnal, $dosareMail, &$mailInainte, $faraOra): array {
         $comenzi = $citeste('SELECT * FROM orders WHERE id > :id ORDER BY id', ['id' => $idMaxComenzi]);
         $inlocuiri = [];
         foreach ($comenzi as $comanda) {
@@ -2394,7 +2455,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 static fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $v) === 1 ? '<MOMENT>' : $v,
                 salvari_fara_coloane($r, $coloane)), $randuri);
         $emailuri = [];
-        foreach (array_diff(glob($dosarMail . '/*.eml') ?: [], $mailInainte) as $fisier) {
+        foreach (array_diff(glob($dosareMail[$server] . '/*.eml') ?: [], $mailInainte) as $fisier) {
             $text = (string) @file_get_contents($fisier);
             @unlink($fisier);
             $emailuri[] = $faraOra(strtr($text, $inlocuiri));
@@ -3040,7 +3101,10 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 ['tabel' => 'email_logs', 'unde' => 'order_id IN (:l1, :l2, :l3)', 'param' => ['l1' => $comenziStripe[0], 'l2' => $comenziStripe[1],
                     'l3' => $comenziStripe[2]], 'cheie' => 'id'],
             ],
-            'pregateste' => static function (PDO $db) use ($comenziStripe): void {
+            'pregateste' => static function (PDO $db) use ($comenziStripe, $golesteMail): void {
+                // WP-14: emailurile plății (clientul și magazinul), întregi, din dosarul fiecărui server.
+                $golesteMail('baza');
+                $golesteMail('curent');
                 $db->prepare("INSERT INTO settings (`key`, `value`) VALUES ('stripe_webhook_secret', 'whsec_comparatie')
                     ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)")->execute();
                 $db->prepare("UPDATE orders SET payment_status = 'pending', status = 'pending_payment', paid_at = NULL, payment_error = NULL
@@ -3060,12 +3124,12 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                     'payment_status' => 'unpaid', 'metadata' => ['order_number' => $numereStripe[2]]]]],
                 ['id' => 'evt_cmp_4', 'type' => 'customer.created', 'data' => ['object' => ['id' => 'cus_cmp', 'object' => 'customer']]],
             ]),
-            'stare' => static function (PDO $db) use ($comenziStripe): array {
+            'stare' => static function (PDO $db, string $server = 'curent') use ($comenziStripe, $emailuriServer): array {
                 $comenzi = $db->query('SELECT id, status, payment_status, stripe_session_id, stripe_payment_intent_id, paid_at IS NOT NULL AS platita,
                     payment_error FROM orders WHERE id IN (' . implode(',', array_map('intval', $comenziStripe)) . ') ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
                 $emailuri = $db->query("SELECT email_type, recipient, status, order_id, subject FROM email_send_history WHERE id > " . (int) $GLOBALS['ultimulEmailStripe']
                     . ' AND order_id IN (' . implode(',', array_map('intval', $comenziStripe)) . ') ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
-                return ['comenzi' => $comenzi, 'emailuri' => $emailuri];
+                return ['comenzi' => $comenzi, 'emailuri' => $emailuri, 'eml' => $emailuriServer($server, 'stripe')];
             },
             'verifica' => static function (array $stare, array $raspunsuri) use ($comenziStripe): array {
                 $probleme = [];
@@ -3420,7 +3484,10 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         ['tabel' => 'email_send_history', 'unde' => 'id > :n4', 'param' => ['n4' => $ultimulEmailNl], 'cheie' => 'id'],
         $tokenCache,
     ];
-    $pregatesteNl = static function (PDO $db, array $limita = ['campanie' => 0, 'abonat' => 0]) use ($cheieNlTest): void {
+    $pregatesteNl = static function (PDO $db, array $limita = ['campanie' => 0, 'abonat' => 0]) use ($cheieNlTest, $golesteMail): void {
+        // Faza emailurilor (WP-14): fiecare caz pornește cu dosarele de emailuri goale (cazurile rulează pe rând, pe servere).
+        $golesteMail('baza');
+        $golesteMail('curent');
         $pune = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
         $pune->execute(['newsletter_cheie_semnare', $cheieNlTest]);
         $pune->execute(['newsletter_cheie_limita', json_encode($limita)]);
@@ -3447,6 +3514,11 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
         return ['nume' => $rand['name'], 'stare' => $rand['status'], 'cerut' => $rand['pending_at'] !== null,
             'confirmat' => $rand['confirmed_at'] !== null, 'liste' => array_map('intval', $liste)];
     };
+    // Emailurile trimise (faza emailurilor, WP-14), întregi: linkul de confirmare are momentul cererii (al fiecărui server),
+    // deci tokenul lui devine <TOKEN>; restul (linkul de dezabonare, cel de urmărire, cu id-urile trimiterilor aceleași pe
+    // ambele servere) rămâne cum e.
+    $emlNl = static fn (string $server, string $eticheta): array => $emailuriServer($server, 'newsletter-' . $eticheta,
+        static fn (string $text): string => (string) preg_replace('#/newsletter/confirmare/[A-Za-z0-9_.%-]+#', '/newsletter/confirmare/<TOKEN>', $text));
     $emailNou = 'confirmare-test@exemplu.ro';
     // Momentul din linkurile de confirmare: același pe ambele servere.
     $momentNl = time();
@@ -3482,9 +3554,9 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             // Lista abonaților arată minutul cererii și al confirmării (NOW() al fiecărui server): la o trecere de minut
             // între cele două servere ar diferi.
             'curata' => static fn (string $text): string => (string) preg_replace('/abonarea pe \d\d\.\d\d\.\d{4} \d\d:\d\d/', 'abonarea pe <DATA>', $text),
-            'stare' => static fn (PDO $db): array => ['confirmat' => $abonatNl($db, $emailNou), 'neconfirmat' => $abonatNl($db, $emailExpirat),
+            'stare' => static fn (PDO $db, string $server = 'curent'): array => ['confirmat' => $abonatNl($db, $emailNou), 'neconfirmat' => $abonatNl($db, $emailExpirat),
                 'cereri' => $db->query('SELECT tip, COUNT(*) AS n FROM newsletter_cereri_confirmare GROUP BY tip ORDER BY tip')->fetchAll(PDO::FETCH_KEY_PAIR),
-                'emailuri' => $emailuriNl($db)],
+                'emailuri' => $emailuriNl($db), 'eml' => $emlNl($server, 'confirmare')],
             'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $emailNou, $emailExpirat): array {
                 $probleme = [];
                 if (($stare['confirmat']['stare'] ?? '') !== 'active' || empty($stare['confirmat']['confirmat']) || !empty($stare['confirmat']['cerut'])) {
@@ -3558,7 +3630,8 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 ['POST', '/newsletter/unsubscribe/' . rawurlencode($tokenDezabonareNl($abonatiNl[3]['id'], $abonatiNl[3]['email'], $cheieVecheNl)),
                     ['trimite_link' => '1'], 'viz'],
             ],
-            'stare' => static fn (PDO $db): array => ['abonat' => $abonatNl($db, $abonatiNl[3]['email']), 'emailuri' => $emailuriNl($db),
+            'stare' => static fn (PDO $db, string $server = 'curent'): array => ['abonat' => $abonatNl($db, $abonatiNl[3]['email']), 'emailuri' => $emailuriNl($db),
+                'eml' => $emlNl($server, 'link-nou'),
                 'cereri' => $db->query('SELECT tip, COUNT(*) AS n FROM newsletter_cereri_confirmare GROUP BY tip ORDER BY tip')->fetchAll(PDO::FETCH_KEY_PAIR)],
             'verifica' => static function (array $stare, array $raspunsuri) use ($contine, $abonatiNl): array {
                 $probleme = [];
@@ -3635,11 +3708,12 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 ['POST', '/admin/emails', ['section' => 'newsletter-campaign-send-now', 'campaign_id' => (string) $ciornaNl]],
                 ['GET', '/admin/emails/newsletters?tab=campaigns&campaign=' . $ciornaNl, []],
             ],
-            'stare' => static function (PDO $db) use ($ciornaNl, $emailuriNl): array {
+            'stare' => static function (PDO $db, string $server = 'curent') use ($ciornaNl, $emailuriNl, $emlNl): array {
                 $campanie = $db->query('SELECT status, total_recipients, total_sent, total_failed, last_error FROM newsletter_campaigns WHERE id = '
                     . $ciornaNl)->fetch(PDO::FETCH_ASSOC);
                 return ['campanie' => $campanie, 'trimiteri' => $db->query('SELECT subscriber_id, email, status, attempts FROM newsletter_campaign_sends
-                    WHERE campaign_id = ' . $ciornaNl . ' ORDER BY subscriber_id')->fetchAll(PDO::FETCH_ASSOC), 'emailuri' => $emailuriNl($db)];
+                    WHERE campaign_id = ' . $ciornaNl . ' ORDER BY subscriber_id')->fetchAll(PDO::FETCH_ASSOC), 'emailuri' => $emailuriNl($db),
+                    'eml' => $emlNl($server, 'trimite-acum')];
             },
             // Ora trimiterii, în lista destinatarilor din statistici (diferă de la un server la altul la schimbarea secundei).
             'curata' => static fn (string $text): string => (string) preg_replace('/\d{4}-\d\d-\d\d \d\d:\d\d:\d\d/', '<MOMENT>', $text),
@@ -3736,6 +3810,267 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 }
                 return $probleme;
             },
+        ],
+    );
+
+    // ── WP-14 (G-m10): faza emailurilor. Fiecare email trimis cu mail() de un flux real (și fiecare șablon din Admin →
+    // Email-uri → Test) se compară întreg, antet cu antet și corp cu corp, cu emailul codului Bioscem: fiecare server scrie
+    // în dosarul lui (compara-cu-baza.sh), golit la începutul cazului ($golesteMail, $emailuriServer, mai sus). Emailurile
+    // newsletterului (dubla confirmare, linkul nou de dezabonare, „Trimite acum”) sunt în cazurile lui, mai sus; emailurile
+    // comenzii plasate de un vizitator, în cazul avertismentelor; cele plătite cu cardul, în cazul webhook-ului Stripe.
+    // Nu se poate atinge din niciun flux (nici în codul Bioscem): OrderMailer::sendCompletedAwb (AdminController::
+    // maybeSendCompletedAwbEmail nu e chemată de nimeni, în ambele coduri; docs/DEZVOLTARE.md, „Erori moștenite”); șablonul
+    // lui e în emailurile de test („delivered”, „shipped”).
+    $ultimulEmailFaza = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_send_history');
+    $ultimulJurnalFaza = (int) $unu('SELECT COALESCE(MAX(id), 0) FROM email_logs');
+    $tabeleEmailuri = [
+        ['tabel' => 'email_send_history', 'unde' => 'id > :ef', 'param' => ['ef' => $ultimulEmailFaza], 'cheie' => 'id'],
+        ['tabel' => 'email_logs', 'unde' => 'id > :lf', 'param' => ['lf' => $ultimulJurnalFaza], 'cheie' => 'id'],
+    ];
+    // Istoricul emailurilor: felul, destinatarul, subiectul, starea (fără id și oră).
+    $istoricEmailuri = static fn (PDO $db): array => $db->query('SELECT email_type, recipient, subject, status FROM email_send_history WHERE id > '
+        . $ultimulEmailFaza . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    $golesteAmbele = static function () use ($golesteMail): void {
+        $golesteMail('baza');
+        $golesteMail('curent');
+    };
+    /**
+     * Un script din linia de comandă al codului unui server (scripts/<…>.php al codului Bioscem sau al celui curent), cu
+     * mediul serverelor (aceeași bază, același APP_URL) și emailurile în dosarul serverului: [cod, ieșire].
+     */
+    $scriptServer = static function (string $server, string $script, array $argumente = []) use ($dosareMail, $dosarBaza, $radacina): array {
+        $dosarCod = $server === 'baza' ? $dosarBaza : $radacina;
+        $mediu = getenv();
+        $mediu['CMS_DEV_MAIL_DIR'] = $dosareMail[$server];
+        if ($server === 'baza') {
+            unset($mediu['CMS_DEV_MARCAJE_PORT']);
+        }
+        $proces = proc_open(array_merge([PHP_BINARY, '-d', 'pdo_mysql.default_socket=' . (string) (getenv('CMS_DEV_SOCK') ?: '/tmp/claude-0/maria/sock'),
+            '-d', 'sendmail_path=' . $radacina . '/tools/dev/mail-capturat.sh', '-d', 'display_errors=stderr', '-d', 'log_errors=0',
+            $dosarCod . '/scripts/' . $script], $argumente), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tevi, $dosarCod, $mediu);
+        $iesire = (string) stream_get_contents($tevi[1]) . (string) stream_get_contents($tevi[2]);
+        fclose($tevi[1]);
+        fclose($tevi[2]);
+        return [proc_close($proces), $iesire];
+    };
+    $tipuriTest = ['', 'new_order', 'new_order_op', 'processing', 'shipped', 'delivered', 'cancelled', 'account_created', 'abandoned_cart'];
+    array_push($salvari,
+        [
+            'nume' => 'emailuri: fiecare șablon trimis din Admin → Email-uri → Test (' . count($tipuriTest) . ' emailuri)',
+            'din' => '739f58c',
+            'tabele' => $tabeleEmailuri,
+            'pregateste' => static fn (PDO $db) => $golesteAmbele(),
+            'cereri' => array_merge(array_map(static fn (string $tip): array => ['POST', '/admin/emails/test',
+                ['template_type' => $tip, 'test_email' => 'test-sablon@exemplu.ro']], $tipuriTest), [['GET', '/admin/emails/test', []]]),
+            'stare' => static fn (PDO $db, string $server = 'curent'): array => ['eml' => $emailuriServer($server, 'test'),
+                'istoric' => $istoricEmailuri($db)],
+            'verifica' => static function (array $stare, array $raspunsuri) use ($tipuriTest, $contine): array {
+                $probleme = count($stare['eml']) === count($tipuriTest) ? [] : ['aștept ' . count($tipuriTest) . ' emailuri, sunt ' . count($stare['eml'])];
+                return $contine($raspunsuri[count($tipuriTest)] ?? [], 'Email test trimis cu succes.') ? $probleme
+                    : array_merge($probleme, ['pagina nu spune „Email test trimis cu succes.”']);
+            },
+        ],
+        [
+            // GR-01 (OD-21, WP-15): emailul formularului de contact are Reply-To = adresa vizitatorului (codul Bioscem pune
+            // adresa magazinului), ca un „Răspunde” să ajungă la el. E singura diferență: restul emailului e același.
+            'nume' => 'emailuri: mesajul din formularul de contact (Reply-To = vizitatorul)',
+            'din' => '739f58c',
+            'tip' => 'reparatie',
+            'reparatie' => 'WP-15 GR-01 (OD-21)',
+            'tabele' => array_merge($tabeleEmailuri, [['tabel' => 'contact_form_messages', 'unde' => 'id > :cf',
+                'param' => ['cf' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM contact_form_messages')], 'cheie' => 'id']]),
+            'pregateste' => static fn (PDO $db) => $golesteAmbele(),
+            'cereri' => [
+                ['POST', '/contact/send', ['_corp_brut' => json_encode(['name' => 'Vizitator Contact', 'email' => 'vizitator-contact@exemplu.ro',
+                    'phone' => '0700000888', 'subject' => 'Întrebare de test', 'message' => "Bună ziua,\nam o întrebare."], JSON_UNESCAPED_UNICODE),
+                    '_antete' => ['Content-Type: application/json']], 'viz'],
+            ],
+            // Reply-To ca rol: adresa vizitatorului, a expeditorului (From) sau alta.
+            'stare' => static function (PDO $db, string $server = 'curent') use ($emailuriServer, $istoricEmailuri): array {
+                $eml = $emailuriServer($server, 'contact');
+                $roluri = [];
+                foreach ($eml as $n => $email) {
+                    $raspuns = (string) ($email['antete']['reply-to'] ?? '');
+                    $roluri[] = $raspuns === 'vizitator-contact@exemplu.ro' ? 'vizitatorul'
+                        : (str_contains((string) ($email['antete']['from'] ?? ''), $raspuns) && $raspuns !== '' ? 'expeditorul' : 'altul');
+                    unset($eml[$n]['antete']['reply-to']);
+                }
+                return ['eml' => $eml, 'reply_to' => array_values(array_unique($roluri)), 'istoric' => $istoricEmailuri($db)];
+            },
+            'diferente' => ['bază: reply_to.0: "expeditorul" → "vizitatorul"'],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => $stare['eml'] !== [] && $stare['reply_to'] === ['expeditorul']
+                ? [] : ['codul Bioscem: aștept emailuri cu Reply-To = expeditorul: ' . json_encode($stare['reply_to']) . ', ' . count($stare['eml']) . ' emailuri'],
+            'verifica_curent' => static fn (array $stare, array $raspunsuri): array => $stare['eml'] !== [] && $stare['reply_to'] === ['vizitatorul']
+                ? [] : ['Reply-To nu e vizitatorul: ' . json_encode($stare['reply_to'])],
+        ],
+        [
+            'nume' => 'emailuri: resetarea parolei unui client (linkul cu tokenul)',
+            'din' => '739f58c',
+            'tabele' => array_merge($tabeleEmailuri, [['tabel' => 'customer_password_resets', 'unde' => '1 = 1', 'cheie' => 'id']]),
+            'pregateste' => static fn (PDO $db) => $golesteAmbele(),
+            'cereri' => [
+                ['POST', '/contul-meu/resetare-parola', ['email' => 'andrei.exemplu@exemplu.ro'], 'viz'],
+                ['GET', '/contul-meu/resetare-parola', [], 'viz'],
+                // Linkul din email, deschis (tokenul e al fiecărui server).
+                static function (array $raspunsuri, string $server) use ($dosareMail): array {
+                    $text = '';
+                    foreach (glob($dosareMail[$server] . '/*.eml') ?: [] as $fisier) {
+                        $text .= (string) file_get_contents($fisier);
+                    }
+                    return ['GET', preg_match('#/contul-meu/resetare-parola/([A-Za-z0-9%_.-]+)#', $text, $m) === 1
+                        ? '/contul-meu/resetare-parola/' . $m[1] : '/contul-meu/resetare-parola/lipsa', [], 'viz'];
+                },
+            ],
+            // Tokenul din link (al fiecărui server) apare și în pagina deschisă (canonical, og:url, formularul).
+            'curata' => static fn (string $text): string => (string) preg_replace('#/contul-meu/resetare-parola/[A-Za-z0-9%_.-]+#',
+                '/contul-meu/resetare-parola/<TOKEN>', $text),
+            'stare' => static fn (PDO $db, string $server = 'curent'): array => ['eml' => $emailuriServer($server, 'resetare',
+                static fn (string $text): string => (string) preg_replace('#/contul-meu/resetare-parola/[A-Za-z0-9%_.-]+#', '/contul-meu/resetare-parola/<TOKEN>', $text)),
+                'istoric' => $istoricEmailuri($db),
+                'cereri' => (int) $db->query('SELECT COUNT(*) FROM customer_password_resets WHERE used_at IS NULL')->fetchColumn()],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => count($stare['eml']) === 1 && (int) ($raspunsuri[2]['cod'] ?? 0) === 200
+                ? [] : ['aștept un email cu linkul și pagina lui (200): ' . count($stare['eml']) . ' emailuri, codul ' . (int) ($raspunsuri[2]['cod'] ?? 0)],
+        ],
+        [
+            // Coșul abandonat: scripts/abandoned-cart-emails.php al fiecărui cod, pe un coș inventat, vechi de două ore.
+            'nume' => 'emailuri: scripts/abandoned-cart-emails.php pe un coș abandonat',
+            'din' => '739f58c',
+            'tabele' => array_merge($tabeleEmailuri, [
+                ['tabel' => 'cart_abandonments', 'unde' => '1 = 1', 'cheie' => 'id'],
+                ['tabel' => 'settings', 'unde' => "`key` IN ('email_template_abandoned_cart_active', 'email_abandoned_after_minutes')", 'cheie' => 'key'],
+            ]),
+            'pregateste' => static function (PDO $db, string $server = 'curent') use ($golesteAmbele, $scriptServer): void {
+                $golesteAmbele();
+                $pune = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+                $pune->execute(['email_template_abandoned_cart_active', '1']);
+                $pune->execute(['email_abandoned_after_minutes', '60']);
+                $db->exec('UPDATE cart_abandonments SET abandoned_email_sent_at = COALESCE(abandoned_email_sent_at, NOW())');
+                $db->prepare('INSERT INTO cart_abandonments (session_id, email, customer_name, cart_snapshot, last_seen_at, created_at)
+                    VALUES (?, ?, ?, ?, NOW() - INTERVAL 2 HOUR, NOW() - INTERVAL 3 HOUR)')->execute(['sesiune-cos-test', 'cos-abandonat-test@exemplu.ro',
+                    'Vizitator Coș', json_encode(['items' => [['product_id' => 5, 'name' => 'Ceai de mușețel', 'quantity' => 2, 'price' => 13.9]], 'total' => 27.8],
+                    JSON_UNESCAPED_UNICODE)]);
+                $scriptServer($server, 'abandoned-cart-emails.php', ['--limit=10']);
+            },
+            'cereri' => [['GET', '/admin/emails/test', []]],
+            'stare' => static fn (PDO $db, string $server = 'curent'): array => ['eml' => $emailuriServer($server, 'cos-abandonat'),
+                'istoric' => $istoricEmailuri($db), 'trimis' => (int) $db->query("SELECT COUNT(*) FROM cart_abandonments WHERE email = 'cos-abandonat-test@exemplu.ro'
+                    AND abandoned_email_sent_at IS NOT NULL")->fetchColumn()],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => count($stare['eml']) === 1 && $stare['trimis'] === 1
+                ? [] : ['aștept un email al coșului abandonat: ' . count($stare['eml']) . ' emailuri, trimis ' . $stare['trimis']],
+        ],
+        [
+            // Un newsletter programat, trimis de scripts/newsletter-campaigns.php al fiecărui cod; linkurile din email (dezabonarea,
+            // urmărirea clicului) se deschid apoi pe serverul care l-a trimis: aceleași pagini, aceeași stare a abonatului (DB-17).
+            'nume' => 'emailuri: newsletterul programat, trimis de scripts/newsletter-campaigns.php; linkurile lui deschise',
+            'din' => 'e2e2d77, 9aae46a, 739f58c',
+            'tabele' => $tabeleNl,
+            'pregateste' => static function (PDO $db, string $server = 'curent') use ($pregatesteNl, $ciornaNl, $listeNl, $scriptServer): void {
+                $pregatesteNl($db);
+                $db->prepare('UPDATE newsletter_campaigns SET subscriber_list_id = ?, subscriber_list_ids = NULL, status = \'scheduled\',
+                    scheduled_at = NOW() - INTERVAL 5 MINUTE, sent_at = NULL, html_content = ? WHERE id = ?')->execute([$listeNl[1] ?? $listeNl[0],
+                    '<p>Salut, {{subscriber_name}}!</p><p><a href="https://exemplu.ro/oferta">Vezi oferta</a></p>', $ciornaNl]);
+                $db->prepare('DELETE FROM newsletter_campaign_sends WHERE campaign_id = ?')->execute([$ciornaNl]);
+                $scriptServer($server, 'newsletter-campaigns.php');
+            },
+            'cereri' => [
+                // Primul email (al primului abonat): linkul de dezabonare și primul link urmărit, cum le deschide clientul de email.
+                static function (array $raspunsuri, string $server) use ($dosareMail): array {
+                    $text = '';
+                    foreach (glob($dosareMail[$server] . '/*.eml') ?: [] as $fisier) {
+                        $text .= quoted_printable_decode((string) file_get_contents($fisier));
+                    }
+                    return ['GET', preg_match('#https?://[^/"\s]+(/newsletter/unsubscribe/[A-Za-z0-9%_.-]+)#', $text, $m) === 1 ? $m[1]
+                        : '/newsletter/unsubscribe/lipsa', [], 'viz'];
+                },
+                static function (array $raspunsuri, string $server) use ($dosareMail): array {
+                    $text = '';
+                    foreach (glob($dosareMail[$server] . '/*.eml') ?: [] as $fisier) {
+                        $text .= quoted_printable_decode((string) file_get_contents($fisier));
+                    }
+                    return ['GET', preg_match('#https?://[^/"\s]+(/newsletter/(?:c|click|track/click)/[^"\s<]+)#', $text, $m) === 1
+                        ? html_entity_decode($m[1]) : '/newsletter/click/lipsa', [], 'viz'];
+                },
+            ],
+            'stare' => static function (PDO $db, string $server = 'curent') use ($ciornaNl, $emlNl, $emailuriNl): array {
+                return ['campanie' => $db->query('SELECT status, total_recipients, total_sent, total_failed, total_clicks FROM newsletter_campaigns WHERE id = '
+                    . $ciornaNl)->fetch(PDO::FETCH_ASSOC), 'trimiteri' => $db->query('SELECT subscriber_id, email, status, attempts, click_count
+                    FROM newsletter_campaign_sends WHERE campaign_id = ' . $ciornaNl . ' ORDER BY subscriber_id')->fetchAll(PDO::FETCH_ASSOC),
+                    'abonati' => $db->query("SELECT id, status FROM newsletter_subscribers ORDER BY id")->fetchAll(PDO::FETCH_KEY_PAIR),
+                    'emailuri' => $emailuriNl($db), 'eml' => $emlNl($server, 'programat')];
+            },
+            'verifica' => static function (array $stare, array $raspunsuri): array {
+                $probleme = [];
+                if (($stare['campanie']['status'] ?? '') !== 'sent' || count($stare['eml']) < 1 || count($stare['eml']) !== count($stare['trimiteri'])) {
+                    $probleme[] = 'campania programată nu e trimisă de script: ' . json_encode($stare['campanie']) . ', ' . count($stare['eml']) . ' emailuri';
+                }
+                if ((int) ($raspunsuri[0]['cod'] ?? 0) !== 200) {
+                    $probleme[] = 'linkul de dezabonare din email: codul ' . (int) ($raspunsuri[0]['cod'] ?? 0);
+                }
+                if ((int) ($raspunsuri[1]['cod'] ?? 0) !== 302 || !str_contains((string) ($raspunsuri[1]['location'] ?? ''), 'exemplu.ro/oferta')) {
+                    $probleme[] = 'linkul urmărit din email: ' . (int) ($raspunsuri[1]['cod'] ?? 0) . ' ' . (string) ($raspunsuri[1]['location'] ?? '');
+                }
+                return $probleme;
+            },
+        ],
+        [
+            // Notificările BT iPay către magazin (BtIpayPayments, BT_IPAY_MODE=test, adresa băncii = gaura neagră): o plată
+            // autorizată acum 80 de ore și neîncasată primește reamintirea (pragul 72 h, încasarea automată la 96 h), trimisă
+            // de scripts/bt-ipay-sync.php al fiecărui cod. Rândul tranzacției și emailul se compară întregi.
+            'nume' => 'emailuri: reamintirea BT iPay (plată autorizată, neîncasată), din scripts/bt-ipay-sync.php',
+            'din' => '739f58c',
+            'tabele' => array_merge($tabeleEmailuri, [
+                ['tabel' => 'bt_ipay_transactions', 'unde' => '1 = 1', 'cheie' => 'id'],
+                ['tabel' => 'bt_ipay_log', 'unde' => '1 = 1', 'cheie' => 'id'],
+                ['tabel' => 'settings', 'unde' => "`key` LIKE 'bt\\_ipay\\_%'", 'cheie' => 'key'],
+            ]),
+            'pregateste' => static function (PDO $db, string $server = 'curent') use ($golesteAmbele, $scriptServer): void {
+                $golesteAmbele();
+                $pune = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+                foreach (['bt_ipay_enabled' => '1', 'bt_ipay_notify_emails' => 'bt-notificari@exemplu.ro', 'bt_ipay_reminder_hours' => '72',
+                    'bt_ipay_autodeposit_hours' => '96'] as $cheie => $valoare) {
+                    $pune->execute([$cheie, $valoare]);
+                }
+                $comanda = $db->query("SELECT id, total FROM orders WHERE deleted_at IS NULL AND status NOT IN ('cancelled', 'refunded', 'returned', 'failed')
+                    ORDER BY id LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+                $db->prepare('ALTER TABLE bt_ipay_transactions AUTO_INCREMENT = 1')->execute();
+                $db->prepare("INSERT INTO bt_ipay_transactions (order_id, kind, mode, bt_order_number, bt_order_id, amount_minor, approved_minor, state,
+                    bt_status, in_comanda, authorized_at, created_at, updated_at) VALUES (?, 'order', 'live', 'CMP-BT-0001', 'bt-cmp-0001', ?, ?,
+                    'authorized', 1, 1, NOW() - INTERVAL 80 HOUR, NOW() - INTERVAL 80 HOUR, NOW() - INTERVAL 80 HOUR)")->execute([(int) $comanda['id'], (int) round((float) $comanda['total'] * 100),
+                    (int) round((float) $comanda['total'] * 100)]);
+                $scriptServer($server, 'bt-ipay-sync.php');
+            },
+            'cereri' => [['GET', '/admin/emails/test', []]],
+            'stare' => static fn (PDO $db, string $server = 'curent'): array => ['eml' => $emailuriServer($server, 'bt-reamintire',
+                static fn (string $text): string => (string) preg_replace('/\b\d\d\.\d\d\.\d{4}(,? \d\d:\d\d)?\b/', '<DATA>', $text)),
+                'istoric' => $istoricEmailuri($db),
+                'tranzactii' => $db->query('SELECT kind, mode, bt_order_number, state, deposit_attempts, reminder_sent_at IS NOT NULL AS reamintit,
+                    last_error FROM bt_ipay_transactions ORDER BY id')->fetchAll(PDO::FETCH_ASSOC)],
+            'verifica' => static function (array $stare, array $raspunsuri): array {
+                $a = array_values(array_filter($stare['tranzactii'], static fn (array $t): bool => $t['bt_order_number'] === 'CMP-BT-0001'));
+                $reamintiri = array_filter($stare['eml'], static fn (array $e): bool => str_contains((string) ($e['antete']['to'] ?? ''), 'bt-notificari@exemplu.ro'));
+                return $reamintiri !== [] && (int) ($a[0]['reamintit'] ?? 0) === 1
+                    ? [] : ['aștept reamintirea BT (emailul spre bt-notificari@, reminder_sent_at): ' . count($reamintiri) . ' emailuri, ' . json_encode($a)];
+            },
+        ],
+        [
+            // WP-14: un articol publicat fără autor și fără categorie, cu șablonul implicit (pagina lui și cardul din /blog): categoria
+            // și inițiala autorului de rezervă vin din înghețare (WP-16, DB-14), pe ambele coduri aceleași.
+            'nume' => 'blog: un articol fără autor și fără categorie (pagina lui și cardul din /blog)',
+            'din' => '739f58c',
+            'tabele' => [['tabel' => 'blog_posts', 'unde' => 'id > :bp', 'param' => ['bp' => (int) $unu('SELECT COALESCE(MAX(id), 0) FROM blog_posts')],
+                'cheie' => 'id']],
+            'pregateste' => static function (PDO $db): void {
+                $db->prepare('INSERT INTO blog_posts (title, slug, excerpt, category, category_id, content, reading_minutes, published_at, is_published,
+                    author_id, featured_image_url) VALUES (?, ?, ?, NULL, NULL, ?, 2, NOW() - INTERVAL 1 MINUTE, 1, NULL, NULL)')->execute([
+                    'Articol fără autor și categorie', 'articol-fara-autor-si-categorie', 'Rezumat inventat.', '<p>Text inventat, fără autor și fără categorie.</p>']);
+            },
+            'cereri' => [['GET', '/blog/articol-fara-autor-si-categorie', [], 'viz'], ['GET', '/blog', [], 'viz']],
+            // Data publicării (acum, ca articolul să fie primul în listă) e a fiecărui server.
+            'curata' => static fn (string $text): string => (string) preg_replace('/\d{4}-\d\d-\d\d(T\d\d:\d\d:\d\d[^"]*)?/', '<DATA>', $text),
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => (int) ($raspunsuri[0]['cod'] ?? 0) === 200
+                && $contine($raspunsuri[0], 'Articol fără autor și categorie') && $contine($raspunsuri[1], 'articol-fara-autor-si-categorie')
+                ? [] : ['articolul fără autor și categorie nu se vede (' . (int) ($raspunsuri[0]['cod'] ?? 0) . ')'],
         ],
     );
 

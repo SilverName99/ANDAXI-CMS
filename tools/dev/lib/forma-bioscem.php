@@ -20,8 +20,10 @@ declare(strict_types=1);
  *     pagină ar arăta antetul de rezervă, scris altfel de cele două coduri. Antetul de rezervă îl verifică
  *     tools/dev/test-pachet-site.php neutru.
  *
- * WP-14 face o bază separată, cms_dev_bioscem, construită așa de la instalare; până atunci, aceeași stare se pune aici
- * la începutul comparației și se scoate la final (și la o oprire), fiecare setare cum era (și o cheie lipsă).
+ * Din WP-14 comparația rulează pe baza separată cms_dev_bioscem (instaleaza.sh --site=bioscem: înghețarea emulată, cu
+ * înlocuitorii valorilor private, și antetul demo al site-ului); starea de aici se pune și peste ea, la începutul
+ * comparației, și se scoate la final (și la o oprire), fiecare setare cum era (și o cheie lipsă): valorile private
+ * adevărate nu intră niciodată în bază la instalare (OD-49), doar pe durata comparației.
  */
 
 use App\Support\Migrari\Inghetare;

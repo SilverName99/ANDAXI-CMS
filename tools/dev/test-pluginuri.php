@@ -1397,6 +1397,9 @@ try {
     $jurnalEmail = $db->query("SELECT * FROM email_logs WHERE order_id = " . $idComanda . " AND email_type = 'new_order'")->fetch(PDO::FETCH_ASSOC);
     $db->exec("DELETE FROM email_logs WHERE order_id = " . $idComanda . " AND email_type = 'new_order'");
     $mailuriInainte = glob($dosarDev . '/mail/*') ?: [];
+    // Evenimentul de test, din rularea de dinainte (WP-25: stripe_events ține fiecare eveniment primit, deci la a doua
+    // rulare pe aceeași bază ar fi „duplicate”); scos și la final.
+    $db->exec("DELETE FROM stripe_events WHERE event_id = 'evt_test'");
     $eveniment = json_encode(['id' => 'evt_test', 'type' => 'checkout.session.completed', 'data' => ['object' => [
         'id' => 'cs_test_pluginuri', 'payment_status' => 'paid', 'payment_intent' => 'pi_test_pluginuri',
         'client_reference_id' => (string) $rand['order_number'],
@@ -1433,6 +1436,7 @@ try {
     } else {
         $db->exec("DELETE FROM settings WHERE `key` = 'stripe_webhook_secret'");
     }
+    $db->exec("DELETE FROM stripe_events WHERE event_id = 'evt_test'");
 
     // ERP „se oprește”: comenzile plasate înainte de oprire (plătite sau confirmate
     // abia acum) pleacă în ERP; doar cele plasate după oprire stau „în așteptare”.

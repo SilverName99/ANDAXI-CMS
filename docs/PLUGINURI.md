@@ -1030,7 +1030,10 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
   pluginurilor oprite (OD-02, [MIGRARI.md](MIGRARI.md)); nu se văd, dar există.
 - **Pagina de prezentare de rezervă** (`views/site/home.php`, folosită când nu e
   nicio pagină „acasă” în admin) are texte Bioscem; linkurile ei spre pluginuri
-  ascunse se scot, textul rămâne.
+  ascunse se scot, textul rămâne. E pe lista rămasă a verificării 11 din
+  `verifica-rute.php` (modul ratchet: lista poate doar să scadă); dacă Bioscem o
+  folosește azi spune sonda pachetului înaintea adoptării (`tools/sonda/pachet-site.php
+  --site=bioscem`, V2: paginile publicate cu slug gol, „acasa” sau „home”; WP-14).
 - **Constructorul de meniu** din Design arată mai departe intrările deja puse în
   meniu spre pagini ale pluginurilor ascunse (sunt datele clientului; pe site
   filtrul le scoate). Doar lista de pagini propuse e filtrată.

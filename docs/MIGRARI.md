@@ -58,7 +58,8 @@ mărimea lui, după estimarea serverului (`information_schema.TABLES`: `~N rând
 câmpurile `randuri` și `octeti`): o copiere a tabelului durează cât copierea acestor octeți. Tot planul
 arată tabelele `#sql-*` rămase de la un ALTER omorât la jumătate (pe serverele fără DDL atomic, MariaDB
 sub 10.6): nu intră în amprentă și se șterg de mână, după o copie a bazei. `--aplica` scrie
-`sql_mode`-ul serverului (pe care nu-l schimbă) în ieșire și în `storage/logs/migrari.log`.
+`sql_mode`-ul serverului în ieșire și în `storage/logs/migrari.log`, și dacă migrările rulează cu `STRICT_TRANS_TABLES`
+adăugat (vezi pasul 1 de mai jos).
 
 ## Codurile de ieșire
 
@@ -193,8 +194,19 @@ Fiecare metodă se uită întâi în `information_schema` și face doar ce lipse
 ## Cum rulează `--aplica`
 
 1. Conexiunea, cu setările lui `Database::connection` (utf8mb4, fusul orar al aplicației), și
-   `lock_wait_timeout` scurt. Serverul sub MariaDB 10.3 / MySQL 8.0 → codul 2. `sql_mode` rămâne al
-   serverului (cel cu care scrie și site-ul) și se scrie în raport și în jurnal.
+   `lock_wait_timeout` scurt. Serverul sub MariaDB 10.3 / MySQL 8.0 → codul 2. Pe durata lui
+   `--aplica`, sesiunea runner-ului are `sql_mode`-ul serverului **plus `STRICT_TRANS_TABLES`** dacă serverul nu e
+   deja strict (WP-14; decizia din 30 oct 2026): serverul celor patru site-uri (Hostinger, MariaDB 11.8.9) e non-strict
+   (`NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION`), iar acolo un ALTER care îngustează sau schimbă tipul unei coloane cu
+   date care nu încap le-ar tăia (sau ar pune zero) cu un simplu avertisment (1265) și ar merge mai departe; strict,
+   migrarea se oprește cu codul 1 și datele rămân întregi (reluarea ca la orice eroare). Testele migrărilor rulează oricum
+   pe servere stricte (implicitul MariaDB 10.11 și MySQL 8), deci pe site migrările merg ca în teste; `test-migrari.php`
+   le rulează și pe al doilea MariaDB, non-strict (`tools/dev/mariadb-nestrict.sh`), cu o migrare care îngustează o
+   coloană cu date mai lungi (oprită cu 1, datele întregi, pe fiecare server). Verificarea de după aplicare n-ar fi prins
+   asta: compară doar structura, nu datele. La final (și după o eroare) sesiunea revine la modul serverului: `install.php`
+   continuă pe aceeași conexiune, cu codul site-ului, iar site-ul scrie mai departe în modul serverului (un text prea
+   lung se taie, ca în codul vechi). Modul serverului și dacă s-a adăugat `STRICT_TRANS_TABLES` se scriu în raport și în
+   jurnal.
 2. Baza e a unui site ANDAXI (codul 4 altfel), apoi lacătul `platforma_migrari:<MD5(baza)>`
    (serverul e împărțit între site-uri; codul 3 dacă îl ține altcineva).
 3. Registrul și `migrari.lock`; o migrare aplicată schimbată sau dispărută → codul 12. Pachetul site-ului care nu se

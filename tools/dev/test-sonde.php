@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Testele verificărilor pe site-urile live (WP-10, poarta G-sonde): tools/verificare/agregate.php
- * cu cele patru seturi, tools/sonda/amprenta-schema.php și tools/dev/migrari/din-sonda.php
+ * cu cele patru seturi, tools/sonda/amprenta-schema.php, tools/sonda/pachet-site.php (WP-14) și tools/dev/migrari/din-sonda.php
  * (docs/VERIFICARE.md, „Verificările pe site-urile live”).
  *
  *   tools/dev/php.sh tools/dev/test-sonde.php
@@ -52,6 +52,10 @@ declare(strict_types=1);
  *       (ATENȚIE); unul cu 300.000 de atribute class termină memoria în V-CSS (32M): „OPRIT”,
  *       cod 1, fără să se agațe, verificările de până acolo scrise, fără mesajul PHP-ului (calea
  *       contului). Fiecare rulare are un termen (300 s): o unealtă agățată e un eșec.
+ *    B10 tools/sonda/pachet-site.php --site=bioscem (DB-24, V1–V12): cod 0, un rând V1 pentru fiecare cheie înghețată
+ *       (cele private, fără fișierul lor, necomparate), pachetul verificat (V12); patru chei puse egal / diferit / lipsă /
+ *       gol, pagini, articole, produse, o campanie și setări cunoscute mută fiecare V exact cât trebuie; puse la loc, același
+ *       rezultat; niciun marcaj și nicio adresă în ieșire; un site necunoscut refuzat (2).
  *    Pe tot parcursul: niciun marcaj, nicio parolă, niciun nume de bază sau de utilizator și
  *    nicio adresă de email în ieșiri sau în fișierele scrise; baza neschimbată (CHECKSUM TABLE
  *    înainte și după); în dosarele site-urilor live niciun fișier nou sau schimbat (și nicio
@@ -462,6 +466,16 @@ try {
     copy($radacina . '/src/Support/Paths.php', $verif . '/src/Support/Paths.php');
     copy($radacina . '/src/Support/ParolaAdmin.php', $verif . '/src/Support/ParolaAdmin.php');
     copy($radacina . '/config/app.php', $verif . '/config/app.php');
+    // Sonda pachetului (tools/sonda/pachet-site.php, DB-24): înghețarea și manifestul pachetului, cu pachetul Bioscem din
+    // git (fără privat/, ca o clonă; pe site-ul de verificare codul e o clonă întreagă).
+    @mkdir($verif . '/src/Support/Migrari', 0770, true);
+    foreach (['src/Support/PachetSite.php', 'src/Support/Migrari/Eroare.php', 'src/Support/Migrari/ParametruLipsa.php', 'src/Support/Migrari/Inghetare.php'] as $fisierCod) {
+        copy($radacina . '/' . $fisierCod, $verif . '/' . $fisierCod);
+    }
+    // (git archive nu-l scoate: /site-uri e export-ignore, .gitattributes; site-ul de verificare ia codul cu git clone.)
+    @mkdir($verif . '/site-uri', 0770, true);
+    exec('cp -r ' . escapeshellarg($radacina . '/site-uri/bioscem') . ' ' . escapeshellarg($verif . '/site-uri/bioscem') . ' && rm -rf '
+        . escapeshellarg($verif . '/site-uri/bioscem/privat'));
     $scrieEnv($verif, ['APP_URL' => 'https://verificare.exemplu.test', 'SITE_COPIE_VERIFICARE' => '1', 'DB_HOST' => 'localhost', 'DB_DATABASE' => 'cms_verif_inexistenta']);
 
     // ── Site-urile „live”: .env spre cms_sonde_t, cod și dosare inventate ──
@@ -754,6 +768,133 @@ try {
     file_put_contents($live['grafoanaytis'] . '/database/pagini/blog.html', '<p>altul</p>');
     file_put_contents($live['grafoanaytis'] . '/database/pagini/lipsa-test.html', '<p>x</p>');
     file_put_contents($live['grafoanaytis'] . '/database/design/antet.css', '.clasa-test-css{color:red}');
+
+    // ── B10. Sonda pachetului (tools/sonda/pachet-site.php, V1–V12; DB-24) ──
+    $scrie('');
+    $scrie('B10. Sonda pachetului site-ului (V1–V12)');
+    foreach (['Eroare', 'ParametruLipsa', 'Inghetare'] as $clasaMigrari) {
+        require_once $radacina . '/src/Support/Migrari/' . $clasaMigrari . '.php';
+    }
+    $inghetareBs = \App\Support\Migrari\Inghetare::dinFisier($radacina . '/site-uri/bioscem/setari-inghetate.json');
+    $cheiInghetate = array_keys($inghetareBs->setari());
+    $privateBs = $inghetareBs->cheiPrivate();
+    $sonda = static function () use ($ruleaza, $parseaza): array {
+        $r = $ruleaza('tools/sonda/pachet-site.php', ['--site=bioscem']);
+        return [$r, $parseaza($r['iesire'])];
+    };
+    [$rP1, $p1] = $sonda();
+    $eroriP = array_keys(array_filter($p1, static fn (array $v): bool => in_array($v[0], ['EROARE', 'SĂRIT', 'LIPSĂ'], true)));
+    $verifica('pachet-site --site=bioscem: cod 0, „GATA”, nicio EROARE/SĂRIT/LIPSĂ, fără avertismente PHP, rezultatul în storage/verificare/sonde/',
+        $rP1['cod'] === 0 && str_contains($rP1['iesire'], 'GATA:') && $eroriP === [] && !preg_match('/(Warning|Notice|Deprecated|Fatal|AVERTISMENT PHP|OPRIT)/', $rP1['tot'])
+        && count(glob($verif . '/storage/verificare/sonde/pachet-site-bioscem-*.txt') ?: []) === 1, implode(', ', $eroriP) . "\n" . mb_substr($rP1['tot'], -2000));
+    $stariV1 = [];
+    foreach ($cheiInghetate as $cheie) {
+        $stariV1[$cheie] = $p1['v1.' . $cheie][1] ?? '?';
+    }
+    $totalV1 = array_sum(array_map(static fn (string $s): int => (int) ($p1['v1.total.' . $s][1] ?? 0), ['lipsa', 'gol', 'egal', 'diferit', 'nevid']));
+    $verifica('V1: un rând pentru fiecare din cele ' . count($cheiInghetate) . ' chei înghețate, cu o stare din listă; totalurile adunate = numărul cheilor',
+        array_diff($stariV1, ['lipsa', 'gol', 'egal', 'diferit', 'nevid']) === [] && $totalV1 === count($cheiInghetate), json_encode($stariV1));
+    $verifica('V1: cheile private (' . count($privateBs) . ', fără fișierul privat) nu se compară: doar lipsa / gol / nevid',
+        array_diff(array_intersect_key($stariV1, array_flip($privateBs)), ['lipsa', 'gol', 'nevid']) === []);
+    $verifica('V12: pachetul site-uri/bioscem/ se verifică față de pachet.json', ($p1['v12.pachet_verificat'] ?? []) === ['OK', 'DA'] && ($p1['v12.probleme'][1] ?? '') === '0');
+
+    // Schimbări cunoscute, apoi puse la loc: fiecare V se mișcă exact cât trebuie.
+    $publice = array_values(array_filter($cheiInghetate, static fn (string $k): bool => !in_array($k, $privateBs, true)
+        && preg_match('/(_password$|_secret|_api_key$|^smtp_)/', $k) !== 1));
+    [$cheieEgala, $cheieDiferita, $cheieLipsa, $cheieGoala] = array_slice($publice, 0, 4);
+    $valoareInghetata = static fn (string $k): string => (string) $inghetareBs->setari()[$k]['valoare'];
+    $setariSalvate = [];
+    foreach (array_merge([$cheieEgala, $cheieDiferita, $cheieLipsa, $cheieGoala], ['design_header_html', 'order_number_mode', 'order_number_next',
+        'contact_form_recipients', 'order_email_from_name']) as $k) {
+        $st = $db->prepare('SELECT `value` FROM settings WHERE `key` = ?');
+        $st->execute([$k]);
+        $v = $st->fetchColumn();
+        $setariSalvate[$k] = $v === false ? null : (string) $v;
+    }
+    $puneSetare = static function (string $k, ?string $v) use ($db): void {
+        if ($v === null) {
+            $db->prepare('DELETE FROM settings WHERE `key` = ?')->execute([$k]);
+        } else {
+            $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)')->execute([$k, $v]);
+        }
+    };
+    $puneSetare($cheieEgala, $valoareInghetata($cheieEgala));
+    $puneSetare($cheieDiferita, $valoareInghetata($cheieDiferita) . '-altfel-' . $m);
+    $puneSetare($cheieLipsa, null);
+    $puneSetare($cheieGoala, '  ');
+    $puneSetare('design_header_html', '<header class="x">{{menu}}{{mobile_menu}}</header>');
+    $puneSetare('order_number_mode', 'sequential');
+    $puneSetare('order_number_next', '1001');
+    $puneSetare('contact_form_recipients', 'contact.' . $m . '@exemplu.ro, altul');
+    $puneSetare('order_email_from_name', 'Expeditor ' . $m);
+    // Paginile „404”, „checkout/succes” și „home”: una existentă (din datele demo) se nepublică sau se publică, una lipsă se
+    // face publicată; delta așteptată după caz, apoi totul la loc.
+    $paginiSalvate = [];
+    $deltaPagini = [];
+    $idsPaginiNoi = [];
+    foreach (['404' => 'v5.pagini_404', 'checkout/succes' => 'v3.pagini_succes', 'home' => 'v2.pagini_acasa'] as $slugP => $cheieV) {
+        $slugP = (string) $slugP; // cheia „404” e un întreg în PHP
+        $rand = $db->query('SELECT id, is_published, deleted_at FROM pages WHERE slug = ' . $db->quote($slugP))->fetch();
+        if (is_array($rand)) {
+            $paginiSalvate[(int) $rand['id']] = $rand;
+            $publicata = (int) $rand['is_published'] === 1 && $rand['deleted_at'] === null;
+            $db->prepare('UPDATE pages SET is_published = ?, deleted_at = NULL WHERE id = ?')->execute([$publicata ? 0 : 1, (int) $rand['id']]);
+            $deltaPagini[$cheieV] = $publicata ? -1 : 1;
+        } else {
+            $idsPaginiNoi[] = $ins('pages', [['title' => 'Test ' . $slugP, 'slug' => $slugP, 'html_content' => '<p>x</p>', 'is_published' => 1]]);
+            $deltaPagini[$cheieV] = 1;
+        }
+    }
+    $idsP = [
+        'pages' => $idsPaginiNoi,
+        'blog_posts' => [$ins('blog_posts', [['title' => 'Fără autor ' . $m, 'slug' => 'fara-autor-' . $m, 'content' => '<p>x</p>', 'is_published' => 1,
+            'author_id' => null, 'category' => '', 'featured_image_url' => '/assets/img/product-placeholder.svg', 'published_at' => date('Y-m-d H:i:s')]])],
+        'products' => [$ins('products', [['name' => 'Fără descriere ' . $m, 'slug' => 'fara-descriere-' . $m, 'price' => 1, 'is_active' => 1,
+            'short_description' => '', 'image_url' => '/assets/img/product-placeholder.svg']])],
+        'newsletter_campaigns' => [$ins('newsletter_campaigns', [['name' => 'Trimisă ' . $m, 'subject' => 'Subiect', 'html_content' => '<p>x</p>', 'status' => 'sent',
+            'sent_at' => date('Y-m-d H:i:s', time() - 86400)]])],
+    ];
+    [$rP2, $p2] = $sonda();
+    $delta = static fn (string $k): int => (int) ($p2[$k][1] ?? 0) - (int) ($p1[$k][1] ?? 0);
+    $verifica('V1: egal / diferit / lipsa / gol pentru patru chei înghețate puse așa',
+        ($p2['v1.' . $cheieEgala][1] ?? '') === 'egal' && ($p2['v1.' . $cheieDiferita][1] ?? '') === 'diferit'
+        && ($p2['v1.' . $cheieLipsa][1] ?? '') === 'lipsa' && ($p2['v1.' . $cheieGoala][1] ?? '') === 'gol',
+        json_encode(array_map(static fn (string $k): string => $k . '=' . ($p2['v1.' . $k][1] ?? '?'), [$cheieEgala, $cheieDiferita, $cheieLipsa, $cheieGoala])));
+    $verifica('V2, V3, V5: paginile acasă/home, checkout/succes și 404 publicate sau nepublicate se văd exact (' . json_encode($deltaPagini) . ')',
+        $delta('v2.pagini_acasa') === $deltaPagini['v2.pagini_acasa'] && $delta('v3.pagini_succes') === $deltaPagini['v3.pagini_succes']
+        && $delta('v5.pagini_404') === $deltaPagini['v5.pagini_404'], $rP2['iesire']);
+    $verifica('V4: antetul nevid, cu {{mobile_menu}}; niciun logo bioscem-logo.* în dosarul live', ($p2['v4.antet_nevid'][1] ?? '') === 'DA'
+        && ($p2['v4.antet_cu_mobile_menu'][1] ?? '') === 'DA' && ($p2['v4.logo_png'][1] ?? '') === 'NU');
+    $verifica('V6–V9: +1 articol fără categorie și fără autor, +1 produs fără descriere scurtă, +1 produs și +1 articol cu poza de rezervă, +1 campanie trimisă',
+        $delta('v6.fara_categorie') === 1 && $delta('v6.fara_autor') === 1 && $delta('v7.fara_descriere_scurta') === 1
+        && $delta('v8.produse_poza_rezerva') === 1 && $delta('v8.articole_poza_rezerva') === 1 && $delta('v9.campanii_trimise_365z') === 1, $rP2['iesire']);
+    $verifica('V10, V11: numerotarea secvențială cu numărul următor, o adresă validă la contact, expeditorul nevid',
+        ($p2['v10.order_number_mode_sequential'][1] ?? '') === 'DA' && ($p2['v10.order_number_next_exista'][1] ?? '') === 'DA'
+        && ($p2['v11.contact_form_recipients_valid'][1] ?? '') === 'DA' && ($p2['v11.order_email_from_name_nevid'][1] ?? '') === 'DA');
+    $verifica('pachet-site: nicio valoare de setare (niciun marcaj, nicio adresă de email) în ieșire',
+        !str_contains($rP2['tot'], $m) && preg_match('/@[A-Za-z0-9-]+\./', $rP2['tot']) !== 1, $rP2['tot']);
+    foreach ($idsP as $tabel => $ids) {
+        foreach ($ids as $id) {
+            $db->prepare('DELETE FROM `' . $tabel . '` WHERE id = ?')->execute([$id]);
+        }
+    }
+    foreach ($setariSalvate as $k => $v) {
+        $puneSetare($k, $v);
+    }
+    foreach ($paginiSalvate as $idP => $rand) {
+        $db->prepare('UPDATE pages SET is_published = ?, deleted_at = ? WHERE id = ?')->execute([(int) $rand['is_published'], $rand['deleted_at'], $idP]);
+    }
+    [$rP3] = $sonda();
+    $verifica('pachet-site după punerea la loc: același rezultat ca prima rulare (fără ora și durata)',
+        preg_replace('/(Rulat: .*|REZUMAT: .*|GATA: .*)/', '', $rP3['iesire']) === preg_replace('/(Rulat: .*|REZUMAT: .*|GATA: .*)/', '', $rP1['iesire']));
+    $refuz = $ruleaza('tools/sonda/pachet-site.php', ['--site=altul']);
+    $refuzFara = $ruleaza('tools/sonda/pachet-site.php', ['--set=bioscem']);
+    $verifica('pachet-site: un site necunoscut și --set (opțiunea agregatelor) refuzate cu 2', $refuz['cod'] === 2 && $refuzFara['cod'] === 2,
+        $refuz['tot'] . $refuzFara['tot']);
+    foreach (glob($verif . '/storage/verificare/sonde/pachet-site-*.txt') ?: [] as $fisierSonda) {
+        unlink($fisierSonda);
+    }
+
     $instantaneuInainte = $instantaneu($acasa, $exceptiiVerif);
     $sumeInainte = $sumeTabele($db);
 

@@ -310,6 +310,10 @@ cele scrise, fără regula de mai jos).
   niciodată schimbat, a doua rulare „Nimic de schimbat”). Bioscem: `site-uri/bioscem/seo-continut.json`
   (căștile AIRCALL și 30 de linkuri; deja aplicat pe site, 21 octombrie).
 
+Dovada că titlurile, descrierile și distribuirea Bioscem ies neschimbate: comparația cu codul Bioscem (G-cmp,
+`tools/dev/compara-cu-baza.sh`), din WP-14 pe baza în forma Bioscem (`cms_dev_bioscem`) cu pachetul `site-uri/bioscem/`
+(`seo.json`: sufixele vechi, cuvintele generice ale mărcilor, `logo_antet`), deci cu datele pe care le va avea site-ul.
+
 ## 8. Fluxul pentru Google Merchant Center
 
 `/feed/google-merchant.xml` (livrarea 2, Bioscem `d277727`, `1e46f9f`; `FluxGoogleMerchant`;

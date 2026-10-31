@@ -11,6 +11,8 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/licenta.php toate                 # toate pluginurile pornite
  *   tools/dev/php.sh tools/dev/licenta.php bioscem               # licența de dezvoltare a Bioscem (licente_dev, fără unealta internă)
  *   tools/dev/php.sh tools/dev/licenta.php grafoanaytis          # la fel: biovitality, vertij, grafoanaytis
+ *   tools/dev/php.sh tools/dev/licenta.php site=bioscem          # din pachetul site-ului: site-uri/<slug>/pluginuri.json (WP-14;
+ *                                                                # copia contractului, doar pentru unelte; licența vine de la CRM)
  *   tools/dev/php.sh tools/dev/licenta.php magazin               # pachetul Magazin
  *   tools/dev/php.sh tools/dev/licenta.php magazin cupoane=pornit magazin=se_opreste
  *   tools/dev/php.sh tools/dev/licenta.php lista blog=pornit     # doar ce scrie (restul oprit)
@@ -185,6 +187,20 @@ if ($comanda === 'toate') {
             $opreste('licente_dev.' . $comanda . ' are pluginul necunoscut „' . $cheie . '”.');
         }
         $pluginuri[(string) $cheie] = 'pornit';
+    }
+} elseif (preg_match('/^site=([a-z0-9][a-z0-9-]{0,40})$/', $comanda, $mSite) === 1) {
+    // Pachetul site-ului (docs/PACHETE.md): pluginuri.json = {"format": 1, "site": "<slug>", "pluginuri": [...]}.
+    $fisierPluginuri = $radacina . '/site-uri/' . $mSite[1] . '/pluginuri.json';
+    $listaSite = json_decode((string) @file_get_contents($fisierPluginuri), true);
+    if (!is_array($listaSite) || ($listaSite['format'] ?? null) !== 1 || ($listaSite['site'] ?? null) !== $mSite[1]
+        || !is_array($listaSite['pluginuri'] ?? null) || !array_is_list($listaSite['pluginuri'])) {
+        $opreste('site-uri/' . $mSite[1] . '/pluginuri.json lipsește sau nu are forma {"format": 1, "site": "' . $mSite[1] . '", "pluginuri": [...]}.');
+    }
+    foreach ($listaSite['pluginuri'] as $cheie) {
+        if (!is_string($cheie) || !in_array($cheie, $chei, true)) {
+            $opreste('site-uri/' . $mSite[1] . '/pluginuri.json are pluginul necunoscut „' . (is_string($cheie) ? $cheie : '?') . '”.');
+        }
+        $pluginuri[$cheie] = 'pornit';
     }
 } elseif ($comanda === 'lista') {
     // doar perechile date

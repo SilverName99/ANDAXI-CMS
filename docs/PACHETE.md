@@ -194,8 +194,10 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
 
 ## Ce urmează
 
-- WP-14: restul pachetului Bioscem (`pluginuri.json`, `README.md`), baza de dezvoltare făcută ca a Bioscem
-  (`cms_dev_bioscem`) și comparația cu pachetul ei (`--site=bioscem`), faza emailurilor.
+- **Făcut în WP-14:** restul pachetului Bioscem (`pluginuri.json` = `licente_dev.bioscem`, citit de `tools/dev/licenta.php
+  site=bioscem` și de `instaleaza.sh --site=bioscem`; `README.md`), baza de dezvoltare făcută ca a Bioscem (`cms_dev_bioscem`)
+  și comparația pe ea (`compara-cu-baza.sh`, implicit `--site=bioscem`), faza emailurilor, sonda pachetului pe server
+  (`tools/sonda/pachet-site.php --site=bioscem`, V1–V12, [VERIFICARE.md](VERIFICARE.md)).
 - **Făcut în WP-16:** identitatea Bioscem a ieșit din nucleu în pachetul ei: logo-ul sertarului (`logo_meniu_mobil`),
   iconițele (`iconite_categorii`), blocul paginii de mulțumire (`tema/pagina-succes.css`, `css_inline.pagina_succes`),
   cookie-ul și popup-ul (`site.json`); BV și GR au `site.json` cu cookie-ul lor (`bv_cookie_consent`). Testul pachetului
