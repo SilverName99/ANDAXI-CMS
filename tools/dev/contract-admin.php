@@ -97,6 +97,15 @@ $git = static function (string ...$argumente) use ($radacina): ?string {
     return $cod === 0 ? trim(implode("\n", $iesire)) : null;
 };
 $commit = $git('rev-parse', '--short', $eticheta . '^{commit}');
+// Eticheta admin-inainte-b e commit-ul WP-29 (167232d). Dacă o clonă n-o are (eticheta n-a putut fi urcată prin proxy-ul
+// sesiunii din 31 oct; `git push origin refs/tags/admin-inainte-b` o urcă), poarta folosește direct commit-ul.
+const ADMIN_INAINTE_B = '167232d6ce4b0e8c6333a6b86b6b44f85c31641f';
+if (($commit === null || $commit === '') && $eticheta === 'admin-inainte-b') {
+    $commit = $git('rev-parse', '--short', ADMIN_INAINTE_B . '^{commit}');
+    if ($commit !== null && $commit !== '') {
+        echo "  INFO  eticheta admin-inainte-b lipsește din clonă: folosesc commit-ul ei, {$commit}\n";
+    }
+}
 if ($commit === null || $commit === '') {
     echo "  EȘEC  eticheta „{$eticheta}” nu există în repo (git fetch origin tag {$eticheta}; WP-29 o pune pe commit-ul dinaintea WP-30)\n";
     exit(1);
