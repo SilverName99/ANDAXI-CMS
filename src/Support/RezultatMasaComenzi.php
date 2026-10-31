@@ -13,7 +13,8 @@ namespace App\Support;
  */
 final class RezultatMasaComenzi
 {
-    private const CHEIE = 'adm_comenzi_masa_rezultat';
+    /** Locul notei în sesiune (nu e o setare: numele nu începe cu CHEIE, ca lista albă a setărilor să n-o ia drept una). */
+    private const IN_SESIUNE = 'adm_comenzi_masa_rezultat';
 
     /** Cele mai multe rânduri ținute (acțiunea în masă nu are o limită a bifelor; lista are cel mult 400 de comenzi). */
     private const MAXIM = 400;
@@ -30,7 +31,7 @@ final class RezultatMasaComenzi
             }
             $curate[(int) $id] = ['ok' => (bool) ($rezultat['ok'] ?? false), 'mesaj' => mb_substr(trim((string) ($rezultat['mesaj'] ?? '')), 0, 300)];
         }
-        $_SESSION[self::CHEIE] = ['actiune' => $actiune, 'rezultate' => $curate];
+        $_SESSION[self::IN_SESIUNE] = ['actiune' => $actiune, 'rezultate' => $curate];
     }
 
     /**
@@ -40,8 +41,8 @@ final class RezultatMasaComenzi
      */
     public static function ia(): ?array
     {
-        $rezultat = $_SESSION[self::CHEIE] ?? null;
-        unset($_SESSION[self::CHEIE]);
+        $rezultat = $_SESSION[self::IN_SESIUNE] ?? null;
+        unset($_SESSION[self::IN_SESIUNE]);
         if (!is_array($rezultat) || !is_array($rezultat['rezultate'] ?? null)) {
             return null;
         }

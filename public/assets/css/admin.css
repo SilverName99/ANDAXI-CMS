@@ -703,7 +703,7 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .adm-comenzi__rezultate li.este-ok { color: var(--ax-ok); }
 .adm-comenzi__rezultate li.este-eroare { color: var(--ax-eroare); }
 .adm-comenzi__rezultate .adm-mono { color: var(--ax-text); font-weight: 600; margin-right: 4px; }
-.adm-masa__camp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ax-text-mai-mic); color: #e5e7eb; }
+.adm-masa__camp, .ax-continut .adm-masa__camp { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ax-text-mai-mic); color: #e5e7eb; }
 .adm-masa__camp select, .adm-masa__camp input {
     height: 36px; padding: 0 8px; border: 1px solid #4b5563; border-radius: var(--ax-raza); background: var(--ax-bara-2); color: #f9fafb; font-size: var(--ax-text-mic);
 }
@@ -736,7 +736,7 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
    modificările nesalvate, Salvează), cuprins în stânga și secțiunile (componenta sectiune-formular). */
 #product-modal.adm-produs-editor { padding: 0; justify-content: flex-end; }
 #product-modal.adm-produs-editor .modal-card { width: min(1280px, 100vw); height: 100vh; max-height: 100vh; border-radius: 0; border-width: 0 0 0 1px; overflow: hidden; background: var(--ax-pagina); }
-#product-modal.adm-produs-editor .modal-head.adm-produs__antet { border-radius: 0; gap: 12px; padding: 8px 12px 8px 18px; min-height: 60px; background: var(--ax-suprafata); }
+#product-modal.adm-produs-editor .modal-head.adm-produs__antet { flex-shrink: 0; border-radius: 0; gap: 12px; padding: 8px 12px 8px 18px; min-height: 60px; background: var(--ax-suprafata); }
 .adm-produs__antet h3 { margin-right: auto; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm-produs__nesalvate { padding: 4px 10px; border-radius: 999px; background: var(--ax-atentie-fundal); border: 1px solid var(--ax-atentie-linie); color: #713f12; font-size: var(--ax-text-mai-mic); font-weight: 600; white-space: nowrap; }
 .ax-continut .adm-produs__antet .btn kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 40%, transparent); font-size: 11px; }
