@@ -135,6 +135,8 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
 
 // WP-39: /sitemap.xml e indexul; adresele sunt în sitemap-urile pe tipuri, citite toate aici.
 $sitemapPlat = static function () use (&$cerere): string {
+    // Adresele sitemap-urilor stau 15 minute în storage/cache/sitemap/; testul schimbă baza direct, deci le golește.
+    \App\Support\Sitemap::golesteCache();
     $corp = '';
     preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $cerere('GET', '/sitemap.xml')['corp'], $m);
     foreach ($m[1] as $loc) {

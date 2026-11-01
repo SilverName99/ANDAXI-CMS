@@ -129,6 +129,8 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
 
 // WP-39: /sitemap.xml e indexul; adresele sunt în sitemap-urile pe tipuri, citite toate aici.
 $sitemapPlat = static function () use (&$cerere): string {
+    // Adresele sitemap-urilor stau 15 minute în storage/cache/sitemap/; testul schimbă baza direct, deci le golește.
+    \App\Support\Sitemap::golesteCache();
     $corp = '';
     preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $cerere('GET', '/sitemap.xml')['corp'], $m);
     foreach ($m[1] as $loc) {
@@ -347,8 +349,11 @@ $setare('cache_pages_rules_json', json_encode([['path_pattern' => '/produs/*', '
 ResponseCache::purgePageCache();
 $cerere('GET', '/produs/' . $slugInactiv . '?draft=' . $cheieInactiv);
 $r = $cerere('GET', '/produs/' . $slugInactiv . '?draft=' . $cheieInactiv);
-$verifica('… cu cache-ul pornit pe /produs/*: a doua cerere a ciornei tot BYPASS, cu bara',
-    ($r['antete']['x-page-cache'] ?? '') === 'BYPASS' && str_contains($r['corp'], 'class="produs-ciorna"'),
+// Revizuirea WP-39/40: ?draft= nu e un parametru permis al cache-ului, deci cererea ocolește cache-ul de la început (fără
+// antetul X-Page-Cache) — tot niciodată din cache.
+$verifica('… cu cache-ul pornit pe /produs/*: a doua cerere a ciornei tot nu e din cache (BYPASS sau ocolită), cu bara',
+    in_array($r['antete']['x-page-cache'] ?? '', ['BYPASS', ''], true) && str_contains($r['corp'], 'class="produs-ciorna"')
+    && count(glob(ResponseCache::cacheDirectory() . '/*.json') ?: []) === 0,
     'x-page-cache: ' . ($r['antete']['x-page-cache'] ?? '-'));
 $setare('cache_pages_enabled', '0');
 $setare('cache_pages_rules_json', null);
