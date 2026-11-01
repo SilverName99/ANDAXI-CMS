@@ -783,6 +783,14 @@ a.adm-card--link:hover, .ax-continut a.adm-card--link:hover { border-color: var(
 .adm-seo__campuri .field { margin: 0; }
 .adm-seo__campuri input, .adm-seo__campuri textarea, .adm-seo__campuri select { width: 100%; }
 .adm-seo__rand { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+
+/* WP-38: Redirecționări și 404, propunerea de după ștergerea unei pagini. */
+.adm-redir-actiuni { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.adm-redir-actiuni form { margin: 0; }
+.adm-redir-bifa { display: flex; align-items: center; gap: 8px; }
+.adm-paginare { display: flex; gap: 10px; align-items: center; margin: 12px 0; }
+.adm-propunere-redirect { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+.adm-propunere-redirect input[type="text"] { min-width: 220px; font-family: var(--ax-font-mono); }
 @media (max-width: 900px) {
     .adm-produs { grid-template-columns: minmax(0, 1fr); padding: 12px; }
     .adm-produs__cuprins { position: static; overflow-x: auto; }

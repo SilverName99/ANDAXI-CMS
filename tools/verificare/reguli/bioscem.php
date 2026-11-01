@@ -76,7 +76,9 @@ return [
     // linkurilor, pragul cheii vechi și starea limitei / cronului neutralizate.
     // 12 (WP-37, nucleu/0041, catalog/0042): robots, og:type, textul listelor și data paginilor SEO; textul categoriilor;
     // mărcile, etichetele produselor și legăturile lor (conținut public, copiat cum e).
-    'versiune' => 12,
+    // 13 (WP-38, nucleu/0046, nucleu/0047): redirecționările site-ului copiate (adresele sunt publice; adminul care a adăugat
+    // regula, cu pseudonimul emailului); jurnalul 404 doar structura (o copie nu are nevoie de el).
+    'versiune' => 13,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -89,7 +91,7 @@ return [
     'grupuri' => [
         'setari' => ['settings'],
         'platforma' => ['_platforma_migrari', '_platforma_stare'],
-        'continut' => ['pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points', 'mannequin_point_products',
+        'continut' => ['pages', 'seo_pages', 'seo_redirects', 'gallery_folders', 'gallery_images', 'mannequin_points', 'mannequin_point_products',
             'promotional_products', 'loyalty_points_rules'],
         'catalog' => ['product_categories', 'products', 'product_category_links', 'product_extra_fields', 'product_extra_field_values',
             'product_templates', 'product_template_fields', 'product_warnings', 'product_brands', 'product_tags', 'product_tag_links'],
@@ -130,6 +132,8 @@ return [
         // cunoscută se poate verifica împotriva ei, deci e o dată personală (pseudonimă); pe copie nu trebuie (fail-closed).
         'newsletter_suprimate' => ['mod' => 'doar_structura', 'motiv' => 'lista „nu trimite”: amprenta SHA-256 a adresei fiecărui abonat șters'],
         'newsletter_cereri_confirmare' => ['mod' => 'doar_structura', 'motiv' => 'cererile de abonare și de link de dezabonare: amprenta adresei și IP-ul (2 zile)'],
+        // WP-38 (nucleu/0047): adresele negăsite ale site-ului live (fără IP, dar o cale poate avea orice a scris cineva).
+        'seo_404_log' => ['mod' => 'doar_structura', 'motiv' => 'adresele cerute pe site-ul live care au dat 404 (texte scrise de vizitatori)'],
 
         // ── Setările ──
         'settings' => ['mod' => 'setari', 'pastreaza' => ['key', 'value'], 'emailuri_publice' => 'textele site-ului (antet, subsol, '
@@ -150,6 +154,12 @@ return [
         'seo_pages' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'page_type', 'page_ref', 'title', 'description', 'canonical_url', 'image_url',
             'robots', 'og_type', 'intro_html', 'updated_at'],
             'emailuri_publice' => 'textele pentru Google ale paginilor sunt publice'],
+        // WP-38 (nucleu/0046): harta adreselor vechi (publică: adresele și țintele site-ului); emailul adminului care a pus regula,
+        // pseudonim.
+        'seo_redirects' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'from_hash', 'from_path', 'is_prefix', 'to_url', 'code', 'is_active',
+            'source', 'note', 'hits', 'last_hit_at', 'created_at', 'updated_at'], 'motive' => ['note' => 'nota publică a unei redirecționări',
+            'from_path' => 'adresa veche, publică', 'to_url' => 'ținta, publică'],
+            'transforma' => ['created_by' => ['email']]],
         'gallery_folders' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'],
             'motive' => ['name' => 'numele unui dosar al galeriei']],
         'gallery_images' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'title', 'media_type', 'image_url', 'folder_id', 'alt_text', 'sort_order',

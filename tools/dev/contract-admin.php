@@ -235,12 +235,14 @@ try {
         $dosarPlimbare = $dosarLucru . '/plimbare';
         @mkdir($dosarPlimbare, 0770, true);
         // Plus paginile noi ale fazei D, care nu există la eticheta contractului (WP-32: „Abonamentul tău”; WP-35: „Oferte BBD”;
-        // WP-36: rezultatele căutării).
+        // WP-36: rezultatele căutării), și ale fazei E (WP-38: Redirecționări și 404).
         $paginiPlimbare = array_values(array_filter(array_merge(array_column($pagini, 'cale'), ['/admin/componente', '/admin/abonament',
             // WP-35: „Oferte BBD” (IA-05), pagină nouă.
             '/admin/products/oferte-bbd',
             // WP-36: pagina rezultatelor căutării în tot adminul.
-            '/admin/cauta?q=demo']),
+            '/admin/cauta?q=demo',
+            // WP-38: Redirecționări și 404 (lista, cu formularul precompletat din jurnal) și jurnalul 404, pagini noi.
+            '/admin/seo/redirectionari', '/admin/seo/redirectionari?din=/nu-exista&sursa_noua=404', '/admin/seo/404']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;

@@ -234,6 +234,12 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                 <?php if (($message = \App\Support\Flash::get('error')) !== null): ?>
                     <?php admin_componenta('mesaj', ['tip' => 'eroare', 'text' => $message, 'id' => 'ax-mesaj-eroare']); ?>
                 <?php endif; ?>
+<?php // WP-38: după ștergerea unei pagini (produs, categorie, pagină, articol), ce se întâmplă cu adresa ei veche: 301 spre
+// pagina propusă, 410 sau nimic (404, ca până acum). Doar cine are voie la Redirecționări (administratorul general).
+if (($propunereRedirect = \App\Support\Redirectionari::propunereDinSesiune()) !== null
+    && \App\Support\Auth::canAccessPath('/admin/seo/redirectionari')) {
+    admin_componenta('propunere-redirect', $propunereRedirect);
+} ?>
                 <?= $content ?>
                 </main>
             </div>

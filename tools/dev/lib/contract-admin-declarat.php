@@ -279,4 +279,13 @@ return [
         'seo-date-vechi' => ['ce' => 'scos', 'rand' => '^data data-seo-((count|google) =\s*|limit = (60|155))$', 'cale' => '^/admin/categories$',
             'motiv' => 'numărătoarea veche de lângă câmpurile SEO ale categoriilor și mărcilor, înlocuită de panoul SEO (seo.js)'],
     ],
+
+    // WP-38 (SEO partea B, B2): intrarea nouă „Redirecționări și 404” din Setări (doar administratorul general). Paginile ei
+    // (lista, jurnalul 404) sunt noi, deci nu sunt în contractul etichetei: le plimbă G-tastatura, iar ce trimit le verifică
+    // tools/dev/test-seo.php E2. Ștergerile (produs, categorie, pagină, articol) postează exact ca înainte; propunerea de după
+    // ele apare doar în pagina următoare și postează la adresa nouă a managerului.
+    'WP-38' => [
+        'meniu-redirectionari' => ['ce' => 'adaugat', 'rand' => '^link /admin/seo/redirectionari$', 'rol' => 'adm',
+            'motiv' => 'intrarea „Redirecționări și 404” din Setări (harta adreselor vechi și jurnalul 404)'],
+    ],
 ];

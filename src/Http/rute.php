@@ -19,6 +19,7 @@ use App\Http\Controllers\CereriOfertaController;
 use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
 use App\Http\Controllers\ConfirmareEmailController;
+use App\Http\Controllers\RedirectionariController;
 use App\Http\Controllers\SeoAdminController;
 use App\Http\Controllers\SiteController;
 use App\Http\Router;
@@ -364,5 +365,16 @@ return static function (Router $router): void {
     $router->get('/admin/seo/verifica', [SeoAdminController::class, 'verifica']);
     // WP-37 (B1): SEO-ul unei etichete de blog, din Categorii blog (al pluginului blog, /admin/blog/*).
     $router->post('/admin/blog/categories/eticheta-seo', [AdminController::class, 'blogTagSeoUpdate']);
+    // WP-38 (B2): Setări → Redirecționări și 404 (nucleu, administratorul general; App\Support\Redirectionari, Jurnal404).
+    $router->get('/admin/seo/redirectionari', [RedirectionariController::class, 'lista']);
+    $router->get('/admin/seo/redirectionari/export', [RedirectionariController::class, 'export']);
+    $router->post('/admin/seo/redirectionari/adauga', [RedirectionariController::class, 'adauga']);
+    $router->post('/admin/seo/redirectionari/importa', [RedirectionariController::class, 'importa']);
+    $router->post('/admin/seo/redirectionari/pachet', [RedirectionariController::class, 'pachet']);
+    $router->post('/admin/seo/redirectionari/{id}/stare', [RedirectionariController::class, 'stare']);
+    $router->post('/admin/seo/redirectionari/{id}/sterge', [RedirectionariController::class, 'sterge']);
+    $router->get('/admin/seo/404', [RedirectionariController::class, 'jurnal']);
+    $router->post('/admin/seo/404/goleste', [RedirectionariController::class, 'goleste404']);
+    $router->post('/admin/seo/404/{id}/sterge', [RedirectionariController::class, 'sterge404']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

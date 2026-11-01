@@ -14,6 +14,8 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | Fișier | Ce e |
 |---|---|
 | `src/Support/SeoRedirects.php` | Adresa unică (gazdă, „/” final) și harta adreselor vechi; rulează în `public/index.php`, înaintea sesiunii |
+| `src/Support/Redirectionari.php` | Harta adreselor vechi în baza de date (`seo_redirects`; WP-38): verificările unei reguli noi, pachetul ca sămânță, CSV, redirecționările automate, copia citită de `SeoRedirects` |
+| `src/Support/Jurnal404.php` | Jurnalul paginilor negăsite (`seo_404_log`; WP-38), fără date personale, cu păstrare limitată |
 | `src/Support/Robots.php` | Regulile din robots.txt (și pentru sitemap) |
 | `src/Support/Sitemap.php` | `/sitemap.xml`, din baza de date, la fiecare cerere |
 | `src/Support/JsonLd.php` | Datele structurate (produs, ofertă, firimituri, firmă, site) |
@@ -95,8 +97,9 @@ robots.txt și datele structurate rămân).
 
 ## 2. Adresele vechi ale site-ului (harta)
 
-Nucleul nu conține nicio regulă. Fiecare site are lista lui, `redirecturi.json` în
-dosarul site-ului:
+Nucleul nu conține nicio regulă. Din WP-38 harta stă în baza de date (`seo_redirects`, migrarea `nucleu/0046`) și se
+schimbă din admin (Setări → Redirecționări și 404, §2b); fiecare site are și lista lui de pornire, `redirecturi.json` în
+dosarul site-ului (sămânța, mai jos):
 
 ```json
 {
@@ -127,6 +130,52 @@ dosarul site-ului:
   are legătură cu subiectul; fără redirecționări în masă spre prima pagină; fără ținte
   care ies din Google (etichete scoase din sitemap); un produs șters fără înlocuitor
   sigur rămâne 404; regulile rămân cel puțin un an.
+
+## 2b. Managerul redirecționărilor, jurnalul 404, redirecționările automate (WP-38, SEO partea B, B2)
+
+**Harta din bază, pachetul ca sămânță.** Regulile din `redirecturi.json` intră în `seo_redirects` ca rânduri „pachet”,
+exact cum sunt (aceleași ținte, coduri, prefixe și lanțuri: harta se aplică la fel ca înainte), singure la prima cerere de
+după ce fișierul s-a schimbat (semnătura lui: mărimea și momentul) și din admin („Reia regulile din pachet”). O regulă din
+pachet editată în admin devine „manuală” (pachetul nu o mai atinge); una ștearsă din admin doar se oprește (pachetul nu o
+readuce); una scoasă din fișier dispare și din tabel (doar dacă fișierul se citește). `SeoRedirects` nu citește baza:
+citește o copie a regulilor pornite, `storage/cache/redirecturi-<site>.json`, refăcută la fiecare schimbare; cât copia
+lipsește sau e a altui pachet, cererea folosește regulile din fișier, ca înainte, iar la finalul ei copia se reface din bază
+(fără tabel, adică înainte de migrare: o copie doar din pachet, reverificată la 5 minute). **Aceleași reguli ca până acum:**
+doar unde aplicația ar răspunde 404/410 sau ar ghici, un singur salt, parametrii păstrați, fără `Set-Cookie`, căile excluse
+(§1) niciodată; `SEO_REDIRECTURI=0` oprește tot. Fiecare aplicare a unei reguli îi numără accesările (`hits`, `last_hit_at`).
+
+**O regulă nouă** (din formular, din CSV, din jurnalul 404, de la ștergerea unei pagini; `Redirectionari::valideaza`):
+- adresa veche: o cale a site-ului (o adresă întreagă pe gazda site-ului devine cale), nu prima pagină, **niciodată o cale
+  exclusă** (coș, plată, cont, admin, API, confirmări, fiecare adresă mereu deschisă a pluginurilor, `cai_excluse`);
+- ținta: o pagină a acestui site (o adresă întreagă doar pe gazda site-ului, cu sau fără www; **niciodată alt site**: nici
+  `//gazdă`, `\`, `javascript:`, alt port, spații, rânduri noi), nu o cale exclusă; doar 301 și 410 (410 fără țintă);
+- **fără buclă și fără lanț**: o regulă spre ea însăși, spre o adresă care trimite deja înapoi (buclă) sau spre o adresă
+  redirecționată la rândul ei (lanț; mesajul spune ținta finală) se refuză; o regulă nouă pe ținta altor reguli le
+  aplatizează (A → B, apoi B → C: A trimite direct la C). Admin → Redirecționări arată lanțurile rămase din pachet;
+- cheia e calea decodată, cu litere mici, fără „/” final; unicitatea e pe amprenta ei (`from_hash`), deci o adresă cu
+  diacriticele tăiate e altă regulă decât cea cu diacritice.
+
+**Importul CSV** (Admin → Redirecționări și 404 → Importă din CSV, fișier sau text lipit): un rând pe adresă,
+`adresa veche, ținta[, cod][, notă]`, separat prin virgulă, punct și virgulă sau tab; un antet se sare; ținta goală sau
+codul 410 = dispărută. Fiecare rând trece prin aceleași verificări; cele refuzate se arată cu motivul. Așa se pun, de
+exemplu, adresele vechi ale articolelor Biovitality cu diacriticele tăiate din slug (lista e la proprietar, nu în git,
+OD-49). Exportul CSV dă toate regulile, cu accesările lor.
+
+**Redirecționări automate.** Când adminul schimbă slug-ul unui produs, al unei categorii de produse, al unei pagini, al unui
+articol sau al unei categorii de blog, adresa veche primește 301 la cea nouă (sursa „Automată”;
+`Redirectionari::laSchimbareaAdresei`): regulile care trimiteau la adresa veche trimit la cea nouă, iar o regulă rămasă pe
+adresa nouă (acum o pagină) se scoate, deci înapoi la un slug vechi nu face buclă. **La ștergere** (produs, categorie,
+pagină, articol) pagina următoare din admin propune ce se întâmplă cu adresa veche: 301 spre pagina cea mai apropiată
+(categoria produsului, altfel lista produselor; la o categorie lista produselor, fiindcă categoriile n-au părinte; la un
+articol blogul; la o pagină prima pagină), 410 sau nimic (404, ca până acum). Doar administratorul general vede propunerea și
+pagina managerului.
+
+**Jurnalul 404** (`seo_404_log`, `nucleu/0047`; Admin → Redirecționări și 404 → Jurnalul 404): fiecare adresă publică la
+care site-ul a răspuns 404 la un GET, de câte ori, prima și ultima dată, și gazda altui site de pe care a venit omul. Doar
+calea (cheia hărții), **fără parametri, fără IP, fără browser**; nu intră căile excluse, o cale cu „@”, încercările
+roboților de scanare (`.php`, `.env`, `wp-admin`…). Rândurile mai vechi de 90 de zile pleacă singure și jurnalul ține cel
+mult 5.000 de adrese (cele văzute cel mai demult pleacă). Din jurnal: „Redirecționează” (formularul completat cu adresa),
+„410”, „Ignoră”. Oprire: `SEO_JURNAL_404=0`.
 
 ## 3. robots.txt
 
@@ -449,6 +498,13 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   lui, după ștergere totul e din nou ca la început; formularele vechi nu șterg câmpurile noi; verificările panoului (lipsă,
   prea lung, duplicat); migrarea `catalog/0042` rulată din nou de două ori și sincronizarea dau aceleași rânduri, iar fiecare
   marcă și etichetă are pagina 200;
+- `tools/dev/test-seo.php` E2 (WP-38, `tools/dev/lib/test-seo-redirectionari.php`): harta din bază = pachetul (rândurile și,
+  cheie cu cheie, aceeași regulă și aceeași țintă finală cu copia din bază ca doar cu fișierul, pe pachetul demo și pe cel
+  Bioscem, 128 + 6); refuzurile (redirecționare deschisă în 9 forme, fiecare cale exclusă ca adresă veche și ca țintă,
+  buclă, lanț) și aplatizarea; din admin: 301 într-un salt cu parametrii, fără `Set-Cookie`, accesările, oprirea, regula din
+  pachet ștearsă care rămâne oprită, importul și exportul CSV, fără jeton refuzat; jurnalul 404 (fără parametri, fără „@”,
+  fără scanări, doar gazda de pe care a venit omul, păstrarea); slug-ul schimbat de trei ori (un salt, fără buclă la
+  întoarcere), propunerea după ștergerea unui produs și a unei categorii (410 ales și salvat);
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;
 - `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
   cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere
@@ -491,8 +547,6 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
 
 ## 11. Ce nu e aici (încă)
 
-- Managerul de redirecționări din admin, jurnalul de 404 și redirecționarea automată
-  la schimbarea unui slug (Etapa 1, B2): azi harta se scrie în `redirecturi.json`.
 - Noindex pe etichetele mici, H1, linkurile interne, termenul de livrare pentru Google
   (livrările 3–4 Bioscem, apoi în nucleu).
 - Livrarea și returul din setări (Etapa 1, B4): azi stau în `seo.json` → `livrare_retur`.

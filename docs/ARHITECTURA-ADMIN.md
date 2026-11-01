@@ -70,6 +70,15 @@ categorie și „Etichete blog — SEO Google”. Formularele etichetelor și li
 (`/admin/categories/brand-seo`, cu `seo_tip`), cel al etichetelor de blog la `/admin/blog/categories/eticheta-seo` (pluginul
 blog). Rolurile rămân aceleași (Categorii produse: rolul magazinului; Categorii blog: administratorul general).
 
+## Redirecționări și 404 (WP-38, 1 noiembrie)
+
+O pagină nouă în **Setări**, după Setări magazin: „Redirecționări și 404” (`/admin/seo/redirectionari`, nucleu, doar
+administratorul general), cu două părți: lista regulilor (tab-uri Toate / Pornite / Oprite / Din pachet / Automate /
+Adăugate, căutarea, adăugarea și editarea, importul și exportul CSV, reluarea pachetului) și **Jurnalul 404**
+(`/admin/seo/404`: „Redirecționează”, „410”, „Ignoră”, „Golește”). Fiecare formular cere jetonul formularului (`_csrf`) și
+se notează în Jurnal activitate. După ștergerea unui produs, a unei categorii, pagini sau articol, cadrul arată o dată
+propunerea pentru adresa veche (componenta `propunere-redirect`). `docs/SEO.md` §2b.
+
 ## Meniul de acum (după WP-35)
 
 - **Acasă**

@@ -764,6 +764,12 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    `newsletter_cheie_semnare`, făcută la prima semnare), iar cheia derivată de mai sus verifică doar linkurile trimise înainte,
    până la pragul `newsletter_cheie_limita` (cea mai mare campanie și cel mai mare abonat din ziua adoptării; îl scrie migrarea
    `newsletter/0040` dacă lipsește; pe Bioscem există deja). Fără rândul din `.env`, deci, se pierd doar linkurile vechi.
+7. **Harta adreselor vechi** (WP-38, [SEO.md](SEO.md) §2b): nimic de rulat. La prima pagină servită de codul comun după
+   migrări, regulile din `redirecturi.json` al pachetului intră singure în `seo_redirects` (aceleași reguli, aceleași
+   răspunsuri). Adresele vechi pe care le are doar proprietarul (de exemplu articolele Biovitality cu diacriticele tăiate,
+   lista din raportul rulării de noapte, OD-49) se pun din admin: Setări → Redirecționări și 404 → Importă din CSV, întâi pe
+   copia de verificare (verificate cu `tools/verificare/verifica-redirecturi.php`, WP-39), apoi pe site-ul live. După
+   adoptare, Jurnalul 404 arată ce mai caută oamenii și Google.
 
 Comparația calculelor de pe copie (`tools/verificare/compara-calcule.php`, WP-11; [VERIFICARE.md](VERIFICARE.md),
 „Comparația calculelor”) cere baza la zi cu codul comun: dacă garda spune `in_urma` (cod nou urcat după încărcare),

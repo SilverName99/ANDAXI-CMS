@@ -5796,6 +5796,75 @@
             },
             "motor": "InnoDB"
         },
+        "seo_404_log": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "first_seen_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "hits": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "last_seen_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "path": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(500)"
+                },
+                "path_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(40)"
+                },
+                "referrer_host": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_seo_404_vazut": {
+                    "coloane": [
+                        "last_seen_at"
+                    ],
+                    "unic": false
+                },
+                "uniq_seo_404_path": {
+                    "coloane": [
+                        "path_hash"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "seo_pages": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -5878,6 +5947,118 @@
                     "coloane": [
                         "page_type",
                         "page_ref"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "seo_redirects": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "code": {
+                    "extra": "",
+                    "implicit": "301",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "created_by": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "from_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(40)"
+                },
+                "from_path": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(500)"
+                },
+                "hits": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "is_prefix": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "last_hit_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "note": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "source": {
+                    "extra": "",
+                    "implicit": "'manual'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "to_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_seo_redirects_activ": {
+                    "coloane": [
+                        "is_active",
+                        "is_prefix"
+                    ],
+                    "unic": false
+                },
+                "uniq_seo_redirects_from": {
+                    "coloane": [
+                        "from_hash"
                     ],
                     "unic": true
                 }

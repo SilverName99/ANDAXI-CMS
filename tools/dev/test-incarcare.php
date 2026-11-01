@@ -264,7 +264,9 @@ $oracolConditii = [
 $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs', 'register_submit_logs', 'customer_password_resets', 'cart_abandonments',
     'gdpr_agreements', 'customer_email_confirmations', 'stripe_events', 'quote_submit_logs',
     // WP-R din 30 oct (newsletterul Bioscem 739f58c): lista „nu trimite” (amprenta adresei) și jurnalul cererilor de confirmare.
-    'newsletter_suprimate', 'newsletter_cereri_confirmare'];
+    'newsletter_suprimate', 'newsletter_cereri_confirmare',
+    // WP-38 (nucleu/0047): jurnalul 404 al site-ului live.
+    'seo_404_log'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
@@ -272,6 +274,8 @@ $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages'
     'fan_nomenclator_sync', 'fan_streets', 'order_items',
     // WP-37 (catalog/0042): mărcile și etichetele produselor și legăturile lor.
     'product_brands', 'product_tags', 'product_tag_links',
+    // WP-38 (nucleu/0046): harta adreselor vechi (publică; emailul adminului, pseudonim).
+    'seo_redirects',
     'order_promo_items', 'order_product_warnings', 'newsletter_lists', 'newsletter_list_subscribers', 'newsletter_templates', 'newsletter_optin_forms',
     'newsletter_campaigns'];
 $tipuriText = ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'set'];

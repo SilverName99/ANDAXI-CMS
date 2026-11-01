@@ -99,6 +99,10 @@ if (\App\Support\Ping::eCererea()) {
     return;
 }
 
+// Jurnalul paginilor negăsite (WP-38, App\Support\Jurnal404): la oprirea scriptului, după SeoRedirects::termina (deci cu
+// codul final), o adresă publică la care site-ul a răspuns 404 se notează (doar calea, fără parametri, fără IP).
+register_shutdown_function([\App\Support\Jurnal404::class, 'laFinal']);
+
 use App\Http\GardaPluginuri;
 use App\Http\Router;
 use App\Support\Database;

@@ -25,9 +25,14 @@ namespace App\Support;
  *     pe gazda veche rămâne acolo (cookie-ul de sesiune e legat de gazdă);
  *     roboții și vizitatorii noi se mută;
  *  2. calea: „/x/" și „/x//y" → „/x" și „/x/y" (prima pagină rămâne „/");
- *  3. harta adreselor vechi ale site-ului (`redirecturi.json` din dosarul
- *     site-ului, vezi DateSite): adresa veche → pagina nouă, cu 301, sau 410
- *     pentru resturi tehnice. Nucleul nu conține nicio regulă.
+ *  3. harta adreselor vechi ale site-ului: adresa veche → pagina nouă, cu 301,
+ *     sau 410 pentru resturi tehnice. Nucleul nu conține nicio regulă. Din
+ *     WP-38 harta stă în baza de date (`seo_redirects`, managerul din admin,
+ *     App\Support\Redirectionari), cu regulile din `redirecturi.json` al site-ului
+ *     (vezi DateSite) ca sămânță; aici se citește o copie a ei din
+ *     storage/cache (fără bază, înaintea sesiunii). Cât copia lipsește sau e
+ *     veche (pachetul schimbat), cererea folosește regulile pachetului, ca
+ *     înainte, iar la final (termina) copia se reface din bază.
  *
  * Cum: când o cerere are ceva de reparat, aplicația rulează normal pe calea
  * curată, cu răspunsul ținut în buffer. La final (funcție de oprire, deci și
@@ -85,8 +90,14 @@ final class SeoRedirects
 
     /** @var array<string, array{0: ?string, 1: int}>|null */
     private static ?array $harta = null;
-    /** @var list<array{0: string, 1: ?string, 2: int}>|null */
+    /** @var list<array{0: string, 1: ?string, 2: int, 3: int}>|null prefixul, ținta, codul, rândul din seo_redirects */
     private static ?array $prefixe = null;
+    /** @var array<string, int> rândul din seo_redirects al fiecărei chei exacte (0 = din pachet, fără bază) */
+    private static array $iduri = [];
+    /** Harta vine din pachet pentru că copia din bază lipsește sau e veche: la final se reface (WP-38). */
+    private static bool $hartaDeRefacut = false;
+    /** Doar pentru teste: fără copie (harta = pachetul, ca înainte de WP-38). */
+    private static bool $faraCopie = false;
     /** @var list<string>|null lista completă (nucleu + catalog + site) */
     private static ?array $caiExcluse = null;
 
@@ -154,8 +165,12 @@ final class SeoRedirects
         // merge ca GET (mai jos), iar răspunsul aplicației pleacă neschimbat.
         // Din Bioscem `bb11ae0` (livrarea 4 SEO).
         $headCuMajuscule = $metoda === 'HEAD' && preg_match('/[A-Z]/', $caleCurata) === 1;
+        // WP-38: copia hărții din bază lipsește sau e veche: cererea merge ca înainte (cu regulile pachetului), dar la
+        // final se reface copia și se hotărăște cu ea. Doar la GET (un HEAD activat ar fi cerut ca GET, deci ar schimba
+        // răspunsul unei pagini care există: 404 → 200).
+        $deRefacut = self::$hartaDeRefacut && $metoda === 'GET';
 
-        if (!$gazdaGresita && !$caleGresita && $regula === null && !$headCuMajuscule) {
+        if (!$gazdaGresita && !$caleGresita && $regula === null && !$headCuMajuscule && !$deRefacut) {
             return;
         }
         // Abia acum lista completă (cu adresele de confirmare ale pluginurilor și ale site-ului).
@@ -205,6 +220,11 @@ final class SeoRedirects
         if (headers_sent() || ob_get_level() < self::$nivelBuffer) {
             return;
         }
+        // WP-38: copia hărții refăcută din bază (pachetul sincronizat, regulile din admin), apoi regula cererii din nou.
+        if (self::$hartaDeRefacut) {
+            self::refaHarta();
+            self::$regula = self::regulaPentru(self::$caleCurata);
+        }
 
         // Cine are deja coș sau cont deschis pe gazda veche rămâne acolo: cookie-ul
         // de sesiune e legat de gazdă, iar pe gazda nouă coșul ar apărea gol.
@@ -227,6 +247,7 @@ final class SeoRedirects
                 if (in_array($cod, self::CODURI_NEGASIT, true)) {
                     // Pagina „nu există" a aplicației rămâne, doar codul spune „dispărut definitiv".
                     http_response_code(410);
+                    self::numaraAccesarea(self::$caleCurata);
                     return;
                 }
             } elseif ($tinta !== null) {
@@ -238,6 +259,7 @@ final class SeoRedirects
                 // 404 după redirecționare: atunci adresa veche rămâne 404.
                 if ($tinta !== null && self::tintaVizibila($tinta)) {
                     self::redirectioneaza(self::adresaCompleta($tinta, self::$query), 301);
+                    self::numaraAccesarea(self::$caleCurata);
                     return;
                 }
             }
@@ -589,6 +611,35 @@ final class SeoRedirects
         }
         self::$harta = [];
         self::$prefixe = [];
+        self::$iduri = [];
+        // WP-38: copia hărții din bază (regulile pornite, cu pachetul sincronizat), dacă e a pachetului de acum.
+        $copie = self::$faraCopie ? null : self::citesteCopia();
+        if ($copie !== null) {
+            foreach ((array) ($copie['exacte'] ?? []) as $cheie => $regula) {
+                if (!is_array($regula) || !in_array((int) ($regula[1] ?? 0), [301, 410], true)) {
+                    continue;
+                }
+                $tinta = is_string($regula[0] ?? null) ? $regula[0] : null;
+                if ((int) $regula[1] === 301 && ($tinta === null || !self::tintaValida($tinta))) {
+                    continue;
+                }
+                self::$harta[(string) $cheie] = [(int) $regula[1] === 410 ? null : $tinta, (int) $regula[1]];
+                self::$iduri[(string) $cheie] = (int) ($regula[2] ?? 0);
+            }
+            foreach ((array) ($copie['prefixe'] ?? []) as $regula) {
+                if (!is_array($regula) || !is_string($regula[0] ?? null) || !in_array((int) ($regula[2] ?? 0), [301, 410], true)) {
+                    continue;
+                }
+                $tinta = is_string($regula[1] ?? null) ? $regula[1] : null;
+                if ((int) $regula[2] === 301 && ($tinta === null || !self::tintaValida($tinta))) {
+                    continue;
+                }
+                self::$prefixe[] = [(string) $regula[0], (int) $regula[2] === 410 ? null : $tinta, (int) $regula[2], (int) ($regula[3] ?? 0)];
+            }
+            return;
+        }
+        // Fără copie (sau veche): regulile pachetului, exact ca înainte; la finalul cererii copia se reface.
+        self::$hartaDeRefacut = !self::$faraCopie;
         $reguli = self::reguli();
         foreach ($reguli['exacte'] as $rand) {
             if (!isset($rand[0]) || !is_string($rand[0]) || !str_starts_with($rand[0], '/')) {
@@ -610,8 +661,126 @@ final class SeoRedirects
             if ($cod !== 410 && ($tinta === null || !self::tintaValida($tinta))) {
                 continue;
             }
-            self::$prefixe[] = [strtolower($rand[0]), $cod === 410 ? null : $tinta, $cod === 410 ? 410 : 301];
+            self::$prefixe[] = [strtolower($rand[0]), $cod === 410 ? null : $tinta, $cod === 410 ? 410 : 301, 0];
         }
+    }
+
+    // ───────────────────────────────────────────────────────────
+    // Copia hărții din bază (WP-38; o scrie App\Support\Redirectionari)
+    // ───────────────────────────────────────────────────────────
+
+    /** Fișierul copiei: unul pe dosarul de date al site-ului (două site-uri pe același cod nu-și împart copia). */
+    public static function fisierCopie(): string
+    {
+        if (!class_exists(DateSite::class, false)) {
+            require_once __DIR__ . '/DateSite.php';
+        }
+        return Paths::stocare('cache') . '/redirecturi-' . substr(sha1(DateSite::dosar()), 0, 12) . '.json';
+    }
+
+    /** Semnătura pachetului: mărimea și momentul lui `redirecturi.json` (o copie făcută din alt pachet e veche). */
+    public static function semnaturaPachet(): string
+    {
+        if (!class_exists(DateSite::class, false)) {
+            require_once __DIR__ . '/DateSite.php';
+        }
+        $fisier = DateSite::dosar() . '/redirecturi.json';
+        clearstatcache(true, $fisier);
+        return is_file($fisier) ? (string) filesize($fisier) . ':' . (string) filemtime($fisier) : 'fara';
+    }
+
+    /**
+     * Copia, dacă e bună: a pachetului de acum și, când e făcută doar din pachet (fără tabel), mai nouă de 5 minute.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function citesteCopia(): ?array
+    {
+        $fisier = self::fisierCopie();
+        $text = is_file($fisier) ? @file_get_contents($fisier) : false;
+        $copie = is_string($text) ? json_decode($text, true) : null;
+        if (!is_array($copie) || ($copie['semnatura'] ?? null) !== self::semnaturaPachet()) {
+            return null;
+        }
+        if (($copie['sursa'] ?? '') !== 'baza' && (int) ($copie['facuta'] ?? 0) < time() - 300) {
+            return null;
+        }
+        return $copie;
+    }
+
+    /**
+     * Scrie copia (atomic: un fișier temporar mutat peste cel vechi) și uită harta din memorie.
+     *
+     * @param array<string, mixed> $copie sursa, facuta, exacte, prefixe
+     */
+    public static function scrieCopia(array $copie): bool
+    {
+        $copie['semnatura'] = self::semnaturaPachet();
+        $fisier = self::fisierCopie();
+        $dosar = dirname($fisier);
+        if (!is_dir($dosar)) {
+            @mkdir($dosar, 0775, true);
+        }
+        $temporar = $fisier . '.' . getmypid() . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        $json = json_encode($copie, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $ok = is_string($json) && @file_put_contents($temporar, $json, LOCK_EX) !== false && @rename($temporar, $fisier);
+        if (!$ok) {
+            @unlink($temporar);
+        }
+        self::$harta = null;
+        self::$prefixe = null;
+        self::$iduri = [];
+        return $ok;
+    }
+
+    /** Reface copia din bază (la finalul unei cereri cu copia lipsă sau veche) și reîncarcă harta. */
+    private static function refaHarta(): void
+    {
+        self::$hartaDeRefacut = false;
+        try {
+            if (class_exists(Redirectionari::class) && class_exists(Database::class)) {
+                $config = require dirname(__DIR__, 2) . '/config/app.php';
+                Redirectionari::reconstruieste(Database::connection((array) ($config['db'] ?? [])));
+            }
+        } catch (\Throwable) {
+            // Rămâne harta pachetului, ca înainte.
+        }
+        self::$harta = null;
+        self::incarcaHarta();
+        // O copie care nu s-a putut scrie nu face din fiecare cerere o refacere.
+        self::$hartaDeRefacut = false;
+    }
+
+    /** Rândul din seo_redirects care s-a aplicat (exact sau prefix): o accesare în plus (după răspuns, fără să-l întârzie). */
+    private static function numaraAccesarea(string $cale): void
+    {
+        try {
+            $cheie = self::cheie($cale);
+            $id = self::$iduri[$cheie] ?? 0;
+            if ($id === 0 && !isset(self::$harta[$cheie])) {
+                foreach (self::$prefixe ?? [] as [$prefix, , , $idPrefix]) {
+                    if (str_starts_with($cheie, $prefix)) {
+                        $id = (int) $idPrefix;
+                        break;
+                    }
+                }
+            }
+            if ($id > 0 && class_exists(Redirectionari::class) && class_exists(Database::class)) {
+                $config = require dirname(__DIR__, 2) . '/config/app.php';
+                Redirectionari::numaraAccesare(Database::connection((array) ($config['db'] ?? [])), $id);
+            }
+        } catch (\Throwable) {
+        }
+    }
+
+    /** Doar pentru teste: harta doar din pachet (true) sau cu copia din bază (false, ca pe site). */
+    public static function faraCopie(bool $da): void
+    {
+        self::$faraCopie = $da;
+        self::$harta = null;
+        self::$prefixe = null;
+        self::$iduri = [];
+        self::$hartaDeRefacut = false;
     }
 
     // ───────────────────────────────────────────────────────────
@@ -744,6 +913,8 @@ final class SeoRedirects
     {
         self::$harta = null;
         self::$prefixe = null;
+        self::$iduri = [];
+        self::$hartaDeRefacut = false;
         self::$caiExcluse = null;
         self::$activ = false;
         self::$redirectCanonic = false;

@@ -120,6 +120,9 @@ return [
             ['grup' => 'setari', 'ordine' => 110, 'eticheta' => 'Administratori', 'href' => '/admin/settings/admins',
                 'icon' => 'users', 'activ' => ['/admin/settings/admins']],
             // WP-32 (OD-52 = b): modulele site-ului, din licența aplicată.
+            // WP-38 (B2): harta adreselor vechi și jurnalul 404 (o pagină cu două părți).
+            ['grup' => 'setari', 'ordine' => 15, 'eticheta' => 'Redirecționări și 404', 'href' => '/admin/seo/redirectionari',
+                'icon' => 'pages', 'activ' => ['/admin/seo/redirectionari', '/admin/seo/404']],
             ['grup' => 'setari', 'ordine' => 120, 'eticheta' => 'Abonamentul tău', 'href' => '/admin/abonament',
                 'icon' => 'shield', 'activ' => ['/admin/abonament']],
             ['grup' => 'rapoarte', 'ordine' => 10, 'eticheta' => 'Jurnal activitate', 'href' => '/admin/activity-log',
@@ -143,7 +146,9 @@ return [
             'email_send_history', 'admin_activity_log', 'checkout_submit_logs', 'register_submit_logs',
             // WP-24 (VT-X2): fanionul „doar pentru membri” al articolelor e al nucleului (poarta, App\Support\AccesMembri),
             // nu al blogului (migrarea nucleu/0034).
-            'blog_posts.requires_active_account'],
+            'blog_posts.requires_active_account',
+            // WP-38 (B2): redirecționările site-ului și jurnalul 404 (nucleu/0046, nucleu/0047; docs/SEO.md §2).
+            'seo_redirects', 'seo_404_log'],
     ],
 
     'pluginuri' => [

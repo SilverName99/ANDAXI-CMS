@@ -28,7 +28,10 @@ declare(strict_types=1);
  *    www, răspunde exact ca pe gazda corectă; coșul și contul rămân pe www.
  * D. Oprirea de urgență (SEO_REDIRECTURI=0): nicio redirecționare SEO.
  * E. SEO partea B: E1 (WP-37) modelul SEO al paginilor, panoul din admin, mărcile și etichetele ca entități
- *    (tools/dev/lib/test-seo-model.php).
+ *    (tools/dev/lib/test-seo-model.php); E2 (WP-38) harta din bază = pachetul (demo și Bioscem), verificările unei reguli
+ *    noi (fără redirecționare deschisă, căi excluse, buclă, lanț), managerul din admin și importul CSV, jurnalul 404 (fără
+ *    date personale, păstrarea), redirecționările automate la schimbarea slug-ului și propunerea de la ștergere
+ *    (tools/dev/lib/test-seo-redirectionari.php).
  *
  * Serverele în plus pornesc pe CMS_DEV_PORT+2 și +3 și se opresc la final; la
  * final se pune la loc licența „toate”. Raportul: $CMS_DEV_DIR/test-seo-raport.txt;
@@ -1177,6 +1180,7 @@ try {
     // E. SEO partea B (WP-37, WP-38), pe serverul de dezvoltare
     // =================================================================
     require __DIR__ . '/lib/test-seo-model.php';
+    require __DIR__ . '/lib/test-seo-redirectionari.php';
 } catch (Throwable $e) {
     $verifica('testul a mers până la capăt', false, $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')');
 } finally {

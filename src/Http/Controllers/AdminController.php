@@ -2949,10 +2949,15 @@ final class AdminController
         if ($action === 'delete') {
             $id = (int) ($_POST['id'] ?? 0);
             if ($id > 0) {
+                $slugSters = $this->slugActual($db, 'blog_posts', $id);
                 $stmt = $db->prepare('UPDATE blog_posts SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL');
                 $stmt->execute(['id' => $id]);
                 $this->refreshCacheAfterPublicContentChange($db);
                 Flash::set('success', 'Postarea a fost mutată în coș.');
+                // WP-38: ce se întâmplă cu adresa veche (propunere: lista blogului, sau 410).
+                if ($stmt->rowCount() > 0 && $slugSters !== '') {
+                    \App\Support\Redirectionari::propuneLaStergere('articolul', '/blog/' . $slugSters, '/blog');
+                }
             }
             header('Location: /admin/blog/posts');
             return;
@@ -3170,6 +3175,8 @@ final class AdminController
             $authorId = 0;
         }
 
+        // WP-38: adresa de acum a articolului (o adresă schimbată primește 301 automat după salvare).
+        $slugVechiPostare = $id > 0 ? $this->slugActual($db, 'blog_posts', $id) : '';
         $savedPost = false;
         try {
             if ($id > 0) {
@@ -3250,6 +3257,12 @@ final class AdminController
                 'canonical_url' => $seoCanonicalUrl,
                 'image_url' => $seoImageUrl,
             ]);
+        }
+        if ($savedPost && $slugVechiPostare !== '') {
+            $redirectPostare = $this->redirectLaSlugNou($db, '/blog/', $slugVechiPostare, 'blog_posts', $id);
+            if ($redirectPostare !== '') {
+                Flash::set('success', 'Postarea de blog a fost actualizată.' . $redirectPostare);
+            }
         }
         if ($savedPost && $id > 0) {
             // Sincronizează apartenența la categorii (many-to-many).
@@ -3564,6 +3577,8 @@ final class AdminController
             return;
         }
         $this->ensureOptionalSchema($db);
+        // WP-38: adresa de acum a categoriei blogului (o adresă schimbată primește 301 automat).
+        $slugVechiCategorieBlog = $this->slugActual($db, 'blog_categories', $id);
         try {
             $db->beginTransaction();
             $stmt = $db->prepare('UPDATE blog_categories SET name = :name, slug = :slug, sort_order = :sort_order WHERE id = :id');
@@ -3579,7 +3594,8 @@ final class AdminController
             $db->commit();
             // WP-37: SEO-ul categoriei blogului (doar dacă e în formular).
             $this->saveListingSeo($db, 'blog_category', (string) $id);
-            Flash::set('success', 'Categoria a fost actualizată.');
+            $redirectCategorieBlog = $this->redirectLaSlugNou($db, '/blog/categorie/', $slugVechiCategorieBlog, 'blog_categories', $id);
+            Flash::set('success', 'Categoria a fost actualizată.' . $redirectCategorieBlog);
         } catch (Throwable) {
             if ($db->inTransaction()) {
                 $db->rollBack();
@@ -4781,6 +4797,8 @@ final class AdminController
             return;
         }
         $this->ensureOptionalSchema($db);
+        // WP-38: adresa de acum a categoriei (o adresă schimbată primește 301 automat).
+        $slugVechiCategorie = $this->slugActual($db, 'product_categories', $id);
 
         try {
             $db->beginTransaction();
@@ -4811,7 +4829,8 @@ final class AdminController
                 } catch (Throwable) {
                 }
             }
-            Flash::set('success', 'Categoria a fost actualizată.');
+            $redirectCategorie = $this->redirectLaSlugNou($db, '/categorie/', $slugVechiCategorie, 'product_categories', $id);
+            Flash::set('success', 'Categoria a fost actualizată.' . $redirectCategorie);
         } catch (Throwable) {
             if ($db->inTransaction()) {
                 $db->rollBack();
@@ -4848,11 +4867,18 @@ final class AdminController
             $stmtProducts = $db->prepare('UPDATE products SET category_id = NULL, category = NULL WHERE category_id = :id');
             $stmtProducts->execute(['id' => $id]);
 
+            $slugSters = $this->slugActual($db, 'product_categories', $id);
             $stmtDelete = $db->prepare('DELETE FROM product_categories WHERE id = :id');
             $stmtDelete->execute(['id' => $id]);
             $db->commit();
             $this->saveSeoSettings($db, 'category', (string) $id, []);
             Flash::set('success', 'Categoria a fost ștearsă.');
+            // WP-38: ce se întâmplă cu adresa veche. Categoriile n-au părinte, deci propunerea e nivelul de deasupra: lista
+            // tuturor produselor (catalog_pagina); sau 410.
+            if ($slugSters !== '') {
+                \App\Support\Redirectionari::propuneLaStergere('categoria', '/categorie/' . $slugSters,
+                    \App\Support\Catalog::url(\App\Support\Settings::all($db)));
+            }
         } catch (Throwable) {
             if ($db->inTransaction()) {
                 $db->rollBack();
@@ -5222,6 +5248,8 @@ final class AdminController
             header('Location: /admin/products');
             return;
         }
+        // WP-38: adresa de acum a produsului (o adresă schimbată primește 301 automat după salvare).
+        $slugVechiProdus = $this->slugActual($db, 'products', $id);
 
         $salePriceRaw = trim((string) ($_POST['sale_price'] ?? ''));
         $salePrice = $salePriceRaw !== '' ? (float) $salePriceRaw : null;
@@ -5398,6 +5426,8 @@ final class AdminController
         ]);
         // WP-37: marca și etichetele produsului ca entități (lista din admin, harta site-ului).
         \App\Support\MarciEtichete::sincronizeazaProdus($db, $id);
+        // WP-38: adresa veche → cea nouă, dacă slug-ul s-a schimbat.
+        $redirectProdus = $this->redirectLaSlugNou($db, '/produs/', $slugVechiProdus, 'products', $id);
         $avertismentSalvat = $this->saveProductWarningFromPost($db, $id);
         $this->refreshCacheAfterPublicContentChange($db);
 
@@ -5406,7 +5436,7 @@ final class AdminController
             header('Location: /admin/products');
             return;
         }
-        Flash::set('success', 'Produsul a fost actualizat.');
+        Flash::set('success', 'Produsul a fost actualizat.' . $redirectProdus);
         header('Location: /admin/products');
     }
 
@@ -5534,9 +5564,14 @@ final class AdminController
 
         $db = $this->db();
         if ($db instanceof PDO) {
+            $slugSters = $this->slugActual($db, 'products', $id);
             $stmt = $db->prepare('UPDATE products SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL');
             $stmt->execute(['id' => $id]);
             $this->refreshCacheAfterPublicContentChange($db);
+            // WP-38: ce se întâmplă cu adresa veche (propunere: categoria produsului, altfel lista produselor; sau 410).
+            if ($stmt->rowCount() > 0 && $slugSters !== '') {
+                \App\Support\Redirectionari::propuneLaStergere('produsul', '/produs/' . $slugSters, $this->propunereProdusSters($db, $id));
+            }
         }
 
         Flash::set('success', 'Produsul a fost mutat în coșul de gunoi.');
@@ -16248,9 +16283,11 @@ final class AdminController
             'canonical_url' => $seoCanonicalUrl,
             'image_url' => $seoImageUrl,
         ]);
+        // WP-38: adresa veche a paginii → cea nouă (o pagină existentă cu alt slug; nu prima pagină).
+        $redirectPagina = isset($existingSlug) ? $this->redirectLaSlugNou($db, '/', (string) $existingSlug, 'pages', $id) : '';
         $this->refreshCacheAfterPublicContentChange($db);
 
-        Flash::set('success', 'Pagina a fost salvată.');
+        Flash::set('success', 'Pagina a fost salvată.' . $redirectPagina);
         header('Location: /admin/pages/' . $id . '/edit');
     }
 
@@ -16336,6 +16373,58 @@ final class AdminController
         \App\Support\Seo::salveaza($db, $pageType, $pageRef, $campuri);
     }
 
+    /** Slug-ul de acum al unui rând (produs, categorie, pagină, articol), înaintea unei salvări (WP-38). */
+    private function slugActual(PDO $db, string $tabel, int $id): string
+    {
+        if ($id <= 0 || !in_array($tabel, ['products', 'product_categories', 'pages', 'blog_posts', 'blog_categories'], true)) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare('SELECT slug FROM ' . $tabel . ' WHERE id = ? LIMIT 1');
+            $stmt->execute([$id]);
+            $slug = $stmt->fetchColumn();
+            return is_string($slug) ? trim($slug) : '';
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    /**
+     * WP-38 (B2): adresa unei pagini s-a schimbat (slug nou) → 301 automat de la adresa veche la cea nouă
+     * (App\Support\Redirectionari::laSchimbareaAdresei). Întoarce o propoziție pentru mesajul de după salvare, sau ''.
+     */
+    private function redirectLaSlugNou(PDO $db, string $prefix, string $slugVechi, string $tabel, int $id): string
+    {
+        $slugNou = $this->slugActual($db, $tabel, $id);
+        if ($slugVechi === '' || $slugNou === '' || $slugVechi === $slugNou) {
+            return '';
+        }
+        $email = '';
+        try {
+            $stmt = $db->prepare('SELECT email FROM admins WHERE id = ? LIMIT 1');
+            $stmt->execute([(int) \App\Support\Auth::id()]);
+            $email = (string) ($stmt->fetchColumn() ?: '');
+        } catch (Throwable) {
+        }
+        $mesaj = \App\Support\Redirectionari::laSchimbareaAdresei($db, $prefix . $slugVechi, $prefix . $slugNou, $email);
+        return $mesaj !== '' ? ' ' . $mesaj . '.' : '';
+    }
+
+    /** Unde propunem să ducă adresa unui produs șters: categoria lui principală, altfel lista produselor (WP-38). */
+    private function propunereProdusSters(PDO $db, int $id): string
+    {
+        try {
+            $stmt = $db->prepare('SELECT c.slug FROM products p JOIN product_categories c ON c.id = p.category_id WHERE p.id = ? LIMIT 1');
+            $stmt->execute([$id]);
+            $slug = trim((string) ($stmt->fetchColumn() ?: ''));
+            if ($slug !== '') {
+                return '/categorie/' . $slug;
+            }
+        } catch (Throwable) {
+        }
+        return \App\Support\Catalog::url(\App\Support\Settings::all($db));
+    }
+
     /** Setările (pentru numele magazinului din panoul SEO, WP-37). */
     private function cachedSettingsSeo(?PDO $db): array
     {
@@ -16385,10 +16474,15 @@ final class AdminController
         $id = (int) ($params['id'] ?? 0);
         $db = $this->db();
         if ($db instanceof PDO && $id > 0) {
+            $slugSters = $this->slugActual($db, 'pages', $id);
             $stmt = $db->prepare('UPDATE pages SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL');
             $stmt->execute(['id' => $id]);
             $this->refreshCacheAfterPublicContentChange($db);
             Flash::set('success', 'Pagina a fost mutată în coș.');
+            // WP-38: ce se întâmplă cu adresa veche (propunere: prima pagină, sau 410).
+            if ($stmt->rowCount() > 0 && $slugSters !== '') {
+                \App\Support\Redirectionari::propuneLaStergere('pagina', '/' . $slugSters, '/');
+            }
         }
 
         header('Location: /admin/pages');
