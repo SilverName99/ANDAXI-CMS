@@ -1319,7 +1319,7 @@ try {
     $verifica('/admin/login → 200, noindex, no-store', $r['cod'] === 200 && $antetPoarta($r), (string) $r['cod']);
     $r = $cerere('GET', '/sitemap.xml', ['basic' => $bunaBasic]);
     $verifica('/sitemap.xml: antetul aplicației (noindex) înlocuit cu al porții', $r['cod'] === 200 && $antetPoarta($r)
-        && str_contains($r['corp'], '<urlset'), ($r['antete']['x-robots-tag'] ?? '-'));
+        && str_contains($r['corp'], '<sitemapindex'), ($r['antete']['x-robots-tag'] ?? '-'));
     $r = $cerere('GET', '/robots.txt', ['basic' => $bunaBasic]);
     $verifica('/robots.txt rămâne „Disallow: /” și cu parola', $r['corp'] === "User-agent: *\nDisallow: /\n");
     // /health, cu copia încărcată: îl dă aplicația (fără parolă), cu starea schemei, ca o repetiție a deploy-ului să vadă
