@@ -517,7 +517,7 @@ final class SiteController
             [$this->jsonLdListaProduse($produseAfisate, $shopCategoryLabel !== '' ? $shopCategoryLabel : (is_array($shopPage) ? (string) ($shopPage['title'] ?? '') : 'Magazin'))])));
         // WP-37: textul de deasupra listei: al categoriei (product_categories.intro_html) sau al listei tuturor produselor
         // (seo_pages, tipul „listing_default”). Gol = lista ca înainte. Nu pe căutarea internă.
-        if (trim((string) ($_GET['q'] ?? '')) === '') {
+        if (!is_string($_GET['q'] ?? null) || trim($_GET['q']) === '') {
             $catalogHtml = $this->introLista($shopCategoryLabel !== ''
                 ? $this->introCategorie($pdo, $this->idCategoriePentruNume($pdo, $shopCategoryLabel))
                 : \App\Support\Seo::citeste($pdo, 'listing_default', \App\Support\Seo::REF_LISTA)['intro_html']) . $catalogHtml;
@@ -668,7 +668,8 @@ final class SiteController
         $robots = array_merge($robots, $this->seoListaBlog($pdo, $filtru));
         // WP-39 (B4): articolele afișate (ItemList), nu pe căutare.
         $jsonLdBlog = [];
-        if (trim((string) ($filtru['q'] ?? '')) === '' && trim((string) ($_GET['q'] ?? '')) === '') {
+        // Fără blogul avansat filtrul e gol (parametrii nu schimbă lista), deci nici lista din JSON-LD nu se schimbă.
+        if (trim((string) ($filtru['q'] ?? '')) === '') {
             $bazaBlog = rtrim($this->appUrl(), '/');
             $jsonLdBlog = array_values(array_filter([\App\Support\JsonLd::lista(array_map(
                 static fn (array $a): string => $bazaBlog . '/blog/' . rawurlencode((string) ($a['slug'] ?? '')),
@@ -5737,7 +5738,7 @@ final class SiteController
      */
     private function jsonLdListaProduse(array $produse, string $nume): array
     {
-        if (trim((string) ($_GET['q'] ?? '')) !== '' || $produse === []) {
+        if ((is_string($_GET['q'] ?? null) && trim($_GET['q']) !== '') || $produse === []) {
             return [];
         }
         $baza = rtrim($this->appUrl(), '/');

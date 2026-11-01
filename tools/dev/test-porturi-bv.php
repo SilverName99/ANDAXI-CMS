@@ -127,6 +127,16 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
     return ['cod' => $cod, 'antete' => $antete, 'corp' => $corp];
 };
 
+// WP-39: /sitemap.xml e indexul; adresele sunt în sitemap-urile pe tipuri, citite toate aici.
+$sitemapPlat = static function () use (&$cerere): string {
+    $corp = '';
+    preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $cerere('GET', '/sitemap.xml')['corp'], $m);
+    foreach ($m[1] as $loc) {
+        $corp .= $cerere('GET', (string) parse_url(html_entity_decode($loc, ENT_QUOTES | ENT_XML1, 'UTF-8'), PHP_URL_PATH))['corp'];
+    }
+    return $corp;
+};
+
 // Serverul de dezvoltare: îl pornește testul dacă nu merge.
 $amPornitServerul = false;
 if ($cerere('GET', '/health')['cod'] !== 200) {
@@ -375,7 +385,7 @@ $verifica('produsul ascuns lipsește din {{shop_catalog}} (/magazin, /categorie/
 $verifica('… numărătoarea categoriei scade cu 1', $numarCategorie($magazin, 'Ceaiuri') === $activeCeaiuri - 1,
     'găsit ' . var_export($numarCategorie($magazin, 'Ceaiuri'), true));
 $verifica('… are pagina lui (200)', $cerere('GET', '/produs/ceai-de-tei')['cod'] === 200);
-$verifica('… e în harta site-ului', str_contains($cerere('GET', '/sitemap.xml')['corp'], '/produs/ceai-de-tei<'));
+$verifica('… e în harta site-ului', str_contains($sitemapPlat(), '/produs/ceai-de-tei<'));
 $verifica('… se poate pune în coș', $cerere('POST', '/cos/adauga/' . $idAscuns, $jarViz, ['quantity' => '1'])['cod'] === 302
     && str_contains($cerere('GET', '/api/cart/summary', $jarViz)['corp'], 'Ceai de tei'));
 $db->prepare('UPDATE products SET hidden_in_catalog = 0 WHERE id = :id')->execute(['id' => $idAscuns]);
@@ -431,14 +441,18 @@ $r = $cerere('GET', '/produse');
 $verifica('catalog_pagina = produse: /produse arată catalogul', $r['cod'] === 200 && count($sluguriCatalog($r['corp'])) > 10
     && str_contains($r['corp'], 'Produsele noastre'));
 $verifica('… sortarea rămâne pe /produse', str_contains($r['corp'], 'href="/produse?sort=price_asc"'));
+// WP-39 (OD-24): pe pagina catalogului, ?categorie=x e pagina categoriei: un 301 la /categorie/{slug}, care arată doar ceaiurile.
 $r = $cerere('GET', '/produse?categorie=Ceaiuri');
-$verifica('… /produse?categorie=Ceaiuri arată doar ceaiurile', $r['cod'] === 200 && $sluguriCatalog($r['corp']) !== []
-    && array_filter($sluguriCatalog($r['corp']), static fn (string $s): bool => !str_starts_with($s, 'ceai')) === []);
+$tinta = (string) ($r['antete']['location'] ?? '');
+$rc = $tinta !== '' ? $cerere('GET', $tinta) : ['cod' => 0, 'corp' => ''];
+$verifica('… /produse?categorie=Ceaiuri: 301 la pagina categoriei, care arată doar ceaiurile', $r['cod'] === 301
+    && str_starts_with($tinta, '/categorie/') && $rc['cod'] === 200 && $sluguriCatalog($rc['corp']) !== []
+    && array_filter($sluguriCatalog($rc['corp']), static fn (string $s): bool => !str_starts_with($s, 'ceai')) === [], $r['cod'] . ' ' . $tinta);
 $verifica('… căutarea /produse?q=ceai are noindex', str_contains($cerere('GET', '/produse?q=ceai')['corp'], 'noindex,follow'));
 $r = $cerere('GET', '/magazin?sort=price_asc&utm_source=test');
 $verifica('… /magazin face 301 la /produse, cu parametrii', $r['cod'] === 301
     && ($r['antete']['location'] ?? '') === '/produse?sort=price_asc&utm_source=test', $r['cod'] . ' ' . ($r['antete']['location'] ?? ''));
-$harta = $cerere('GET', '/sitemap.xml')['corp'];
+$harta = $sitemapPlat();
 $verifica('… harta site-ului are /produse o dată și nu /magazin', substr_count($harta, '/produse</loc>') === 1 && !str_contains($harta, '/magazin</loc>'));
 // Pagina 404 a nucleului (vederea not-found.php), fără pagina „404” din bază.
 $db->exec("UPDATE pages SET is_published = 0 WHERE slug = '404'");

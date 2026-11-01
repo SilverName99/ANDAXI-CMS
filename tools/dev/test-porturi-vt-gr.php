@@ -133,6 +133,16 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
     return ['cod' => $cod, 'antete' => $primite, 'corp' => $corp];
 };
 
+// WP-39: /sitemap.xml e indexul; adresele sunt în sitemap-urile pe tipuri, citite toate aici.
+$sitemapPlat = static function () use (&$cerere): string {
+    $corp = '';
+    preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $cerere('GET', '/sitemap.xml')['corp'], $m);
+    foreach ($m[1] as $loc) {
+        $corp .= $cerere('GET', (string) parse_url(html_entity_decode($loc, ENT_QUOTES | ENT_XML1, 'UTF-8'), PHP_URL_PATH))['corp'];
+    }
+    return $corp;
+};
+
 // Serverul de dezvoltare: îl pornește testul dacă nu merge.
 $amPornitServerul = false;
 if ($cerere('GET', '/health')['cod'] !== 200) {
@@ -853,7 +863,7 @@ $verifica('{{next_event_title}}: un eveniment doar pentru membri nu apare niciod
 $verifica('sliderul: cardul de eveniment (data în colț, locația, „Vezi detalii”) pentru postarea cu event_start_date',
     str_contains($tok, 'vtcs__card vtcs__card--event') && str_contains($tok, 'vtcs__date-day') && str_contains($tok, 'Sala membrilor')
     && str_contains($tok, 'Vezi detalii →'));
-$sitemap = $cerere('GET', '/sitemap.xml')['corp'];
+$sitemap = $sitemapPlat();
 $verifica('sitemap.xml: fără pagina și articolul restricționate (mereu)', !str_contains($sitemap, 'pagina-membri-test')
     && !str_contains($sitemap, 'atelier-secret-membri') && str_contains($sitemap, 'tokenuri-membri-test'));
 $verifica('linkul spre pagina restricționată rămâne cât timp membri e pe site', str_contains($tok, 'href="/pagina-membri-test"'));

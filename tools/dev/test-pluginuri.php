@@ -960,7 +960,7 @@ try {
     $cerere('POST', '/admin/settings/store', $jar, ['action' => 'generate_sitemap', 'sitemap_filename' => 'sitemap.xml']);
     $hartaGenerata = $cerere('GET', '/sitemap.xml');
     $verifica('harta site-ului construită din bază (/sitemap.xml), fără fișier static în public/', !is_file($fisierHarta)
-        && $hartaGenerata['cod'] === 200 && str_contains($hartaGenerata['corp'], '<urlset'));
+        && $hartaGenerata['cod'] === 200 && str_contains($hartaGenerata['corp'], '<sitemapindex')); // WP-39: indexul sitemap-urilor pe tipuri
 
     $nodePath = (string) (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules');
     $areBrowser = !in_array('--fara-browser', $argv, true) && is_dir($nodePath . '/playwright');
@@ -1106,6 +1106,12 @@ try {
         $cerere('GET', '/health');
         $cerere('GET', '/');
         $harta = $cerere('GET', '/sitemap.xml');
+        // WP-39: /sitemap.xml e indexul; adresele sunt în sitemap-urile pe tipuri (fiecare cerut, tot cu licența de acum).
+        preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $harta['corp'], $hartiTip);
+        foreach ($hartiTip[1] as $locHarta) {
+            $harta['corp'] .= $cerere('GET', (string) parse_url(html_entity_decode((string) $locHarta, ENT_QUOTES | ENT_XML1, 'UTF-8'), PHP_URL_PATH))['corp'];
+        }
+        $harta['corp'] = (string) preg_replace('#<sitemap>\s*<loc>[^<]+</loc>#', '<sitemap>', $harta['corp']);
         preg_match_all('#<loc>(.*?)</loc>#', $harta['corp'], $locuri);
         $dinHarta = [];
         $ascunseInHarta = [];

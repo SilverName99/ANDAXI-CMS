@@ -324,11 +324,15 @@ confirma "ping: nicio sesiune nouă în storage/sessions (6 cereri, și cu „/�
 
 scrie ""
 scrie "== SEO (docs/SEO.md; pe larg: tools/dev/test-seo.php)"
-verifica_p nucleu "sitemap.xml construit din bază" 200 - GET /sitemap.xml "<urlset"
+# WP-39: /sitemap.xml e indexul sitemap-urilor pe tipuri; produsele sunt în /sitemap-produse.xml (doar cu catalogul).
+verifica_p nucleu "sitemap.xml construit din bază (indexul sitemap-urilor pe tipuri)" 200 - GET /sitemap.xml "<sitemapindex"
+verifica_p nucleu "sitemap-ul paginilor" 200 - GET /sitemap-pagini.xml "<urlset"
 if vizibil catalog; then
+    verifica_p nucleu "sitemap-ul produselor" 200 - GET /sitemap-produse.xml "<urlset"
     confirma "sitemap: produsele (catalog)" grep -qF "/produs/ceai-de-menta</loc>" "$TMP/corp"
 else
-    confirma "sitemap: fără produse (catalog nu e în pachet)" bash -c "! grep -qF '/produs/' '$TMP/corp'"
+    verifica_p nucleu "sitemap.xml fără sitemap-ul produselor" 200 - GET /sitemap.xml "<sitemapindex"
+    confirma "sitemap: fără produse (catalog nu e în pachet)" bash -c "! grep -qF 'sitemap-produse.xml' '$TMP/corp'"
 fi
 verifica_p nucleu "robots.txt cu sitemap-ul" 200 - GET /robots.txt "Sitemap: $B/sitemap.xml"
 confirma "robots.txt: adresele platformei închise (Disallow: /_andaxi/)" grep -qxF 'Disallow: /_andaxi/' "$TMP/corp"
@@ -493,7 +497,7 @@ magazin /admin/orders/export
 catalog /admin/products/export
 EOF
 verifica "generează sitemap" 302 adm POST /admin/settings/store "" "action=generate_sitemap" "sitemap_filename=sitemap.xml"
-verifica "sitemap.xml" 200 - GET /sitemap.xml "<urlset"
+verifica "sitemap.xml" 200 - GET /sitemap.xml "<sitemapindex"
 verifica "logout admin" 302 adm POST /admin/logout
 
 scrie ""
