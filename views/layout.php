@@ -202,43 +202,11 @@ $requestPath = rtrim($requestPath, '/');
 if ($requestPath === '') {
     $requestPath = '/';
 }
-// Numele magazinului din titluri: Admin → Setări magazin → SEO Google; gol = seo.json →
-// organizatie.nume al site-ului, altfel APP_NAME (SeoMeta::numeMagazin).
-$siteBaseTitle = \App\Support\SeoMeta::numeMagazin($designSettings);
-$pageTitle = trim((string) ($title ?? ''));
-$homeSeoTitle = trim((string) ($designSettings['store_seo_home_title'] ?? ''));
-$homeSeoDescription = trim((string) ($designSettings['store_seo_home_description'] ?? ''));
-$metaTitleFinal = trim((string) ($metaTitle ?? ''));
-$metaDescriptionFinal = trim((string) ($metaDescription ?? ''));
-if (\App\Support\SeoMeta::activ()) {
-    // Prima pagină: titlul și descrierea din Setări magazin → SEO Google au
-    // întâietate (acolo le caută proprietarul); apoi cele din pagina „Acasă”.
-    if ($requestPath === '/' && $homeSeoTitle !== '') {
-        $metaTitleFinal = $homeSeoTitle;
-    }
-    if ($requestPath === '/' && $homeSeoDescription !== '') {
-        $metaDescriptionFinal = $homeSeoDescription;
-    }
-    // Aceeași regulă peste tot: titlul scris, altfel „{titlul paginii} | {magazin}”,
-    // fără „|”, „–” sau „-” rămase la final.
-    $metaTitleFinal = \App\Support\SeoMeta::titluPagina($metaTitleFinal, $pageTitle, $siteBaseTitle);
-} elseif ($metaTitleFinal === '') {
-    if ($requestPath === '/' && $homeSeoTitle !== '') {
-        $metaTitleFinal = $homeSeoTitle;
-    } elseif ($pageTitle === '' || strcasecmp($pageTitle, $siteBaseTitle) === 0) {
-        $metaTitleFinal = $siteBaseTitle;
-    } else {
-        $metaTitleFinal = $pageTitle . ' | ' . $siteBaseTitle;
-    }
-}
-if ($metaDescriptionFinal === '') {
-    if ($requestPath === '/') {
-        $metaDescriptionFinal = $homeSeoDescription;
-    }
-    if ($metaDescriptionFinal === '') {
-        $metaDescriptionFinal = trim((string) ($designSettings['store_seo_default_description'] ?? ''));
-    }
-}
+// Titlul, descrierea, canonicalul, robots și og:type ale paginii: App\Support\Seo::rezolva (WP-37), aceeași regulă ca
+// până acum. Numele magazinului din titluri: Admin → Setări magazin → SEO Google; gol = seo.json → organizatie.nume
+// al site-ului, altfel APP_NAME (SeoMeta::numeMagazin). Fără canonical (și fără og:url) pe pagina „nu există”
+// (404/410) și unde controllerul o cere (căutarea internă cu noindex); paginile de coș, comandă, plată și cont
+// rămân exact ca înainte, și pe 404 (SeoIndexare).
 $appUrl = rtrim((string) ($appConfig['url'] ?? ''), '/');
 if ($appUrl === '') {
     $https = (string) ($_SERVER['HTTPS'] ?? '');
@@ -246,17 +214,25 @@ if ($appUrl === '') {
     $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
     $appUrl = $scheme . '://' . $host;
 }
-$canonicalUrlFinal = trim((string) ($metaCanonicalUrl ?? ''));
-if ($canonicalUrlFinal === '') {
-    $canonicalUrlFinal = $appUrl . ($requestPath === '/' ? '/' : $requestPath);
-}
-// Fără canonical (și fără og:url) pe pagina „nu există” (404/410) și unde
-// controllerul o cere (căutarea internă cu noindex). Vezi App\Support\SeoIndexare.
-// Paginile de coș, comandă, plată și cont rămân exact ca înainte, și pe 404.
-if (!empty($faraCanonical)
-    || \App\Support\SeoIndexare::faraCanonicalPentruCod((int) http_response_code(), (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
-    $canonicalUrlFinal = '';
-}
+$seoFinal = \App\Support\Seo::rezolva([
+    'metaTitle' => $metaTitle ?? '',
+    'metaDescription' => $metaDescription ?? '',
+    'metaCanonicalUrl' => $metaCanonicalUrl ?? '',
+    'metaRobots' => $metaRobots ?? '',
+    'metaOgType' => $metaOgType ?? '',
+    'faraCanonical' => !empty($faraCanonical),
+    'title' => $title ?? '',
+    'cale' => $requestPath,
+    'cerere' => (string) ($_SERVER['REQUEST_URI'] ?? '/'),
+    'cod' => (int) http_response_code(),
+    'appUrl' => $appUrl,
+    'setari' => $designSettings,
+]);
+$siteBaseTitle = $seoFinal['nume_magazin'];
+$pageTitle = $seoFinal['titlu_pagina'];
+$metaTitleFinal = $seoFinal['titlu'];
+$metaDescriptionFinal = $seoFinal['descriere'];
+$canonicalUrlFinal = $seoFinal['canonical'];
 $metaImageUrlFinal = trim((string) ($metaImageUrl ?? ''));
 // Poza de distribuire (Facebook, WhatsApp, X): varianta 1200×630 a pozei
 // paginii (produsul: poza lui principală), altfel cea implicită din Setări
@@ -380,9 +356,10 @@ if (trim($designHeaderOutput) !== '' && preg_match($mobileMenuTokenPattern, $des
         <link rel="canonical" href="<?= htmlspecialchars($canonicalUrlFinal, ENT_QUOTES) ?>">
     <?php endif; ?>
 <?php /* „noindex,follow” trimis de controller în $metaRobots: căutarea internă (/magazin?q=…)
-și /blog fără articole publicate (vezi App\Support\SeoIndexare). Celelalte pagini nu au etichetă. */
-if (isset($metaRobots) && preg_match('/^[a-z ,-]+$/i', trim((string) $metaRobots)) === 1) {
-    echo '    <meta name="robots" content="', htmlspecialchars(trim((string) $metaRobots), ENT_QUOTES), '">', "\n";
+și /blog fără articole publicate (vezi App\Support\SeoIndexare), sau robots-ul scris pentru pagină în panoul SEO (WP-37).
+Celelalte pagini nu au etichetă. */
+if ($seoFinal['robots'] !== '') {
+    echo '    <meta name="robots" content="', htmlspecialchars($seoFinal['robots'], ENT_QUOTES), '">', "\n";
 } ?>
 <?php /* Date structurate (produs, firimituri, firmă, site): un bloc <script> pentru fiecare tip. */
 foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
@@ -391,7 +368,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
         echo '    ', $jsonLdScript, "\n";
     }
 } ?>
-    <meta property="og:type" content="website">
+    <meta property="og:type" content="<?= htmlspecialchars($seoFinal['og_type'], ENT_QUOTES) ?>">
 <?php if ($distribuireNoua): ?>
     <meta property="og:site_name" content="<?= htmlspecialchars($siteBaseTitle, ENT_QUOTES) ?>">
     <meta property="og:locale" content="ro_RO">

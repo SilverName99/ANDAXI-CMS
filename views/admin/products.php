@@ -619,25 +619,20 @@ $adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'],
 <?php endif; ?>
 <?php ob_start(); ?>
                         <div class="product-editor-grid product-editor-grid--single">
-                            <div class="field full adm-produs__google" aria-live="polite">
-                                <span class="adm-produs__google-eticheta">Cum apare în Google (aproximativ)</span>
-                                <span class="adm-produs__google-adresa" id="produs-google-adresa"></span>
-                                <span class="adm-produs__google-titlu" id="produs-google-titlu"></span>
-                                <span class="adm-produs__google-text" id="produs-google-text"></span>
-                                <span class="adm-produs__google-numar"><span id="produs-google-titlu-n">0</span>/60 caractere în titlu · <span id="produs-google-text-n">0</span>/160 în descriere</span>
-                                <small class="muted">Gol = titlul și descrierea scurtă a produsului. Câmpurile SEO complete ale fiecărui fel de pagină vin în etapa SEO (WP-37).</small>
-                            </div>
-                            <div class="field full">
-                                <label for="p_seo_title">Meta title</label>
-                                <input type="text" name="seo_title" id="p_seo_title" placeholder="Titlu SEO produs">
-                            </div>
-                            <div class="field full">
-                                <label for="p_seo_description">Meta description</label>
-                                <textarea name="seo_description" id="p_seo_description" rows="3" placeholder="Descriere scurtă pentru Google"></textarea>
-                            </div>
-                            <div class="field full">
-                                <label for="p_seo_canonical_url">Canonical URL (opțional)</label>
-                                <input type="url" name="seo_canonical_url" id="p_seo_canonical_url" placeholder="https://exemplu.ro/produs/slug">
+                            <div class="field full" id="produs-panou-seo">
+<?php
+// WP-37: panoul SEO comun (views/admin/componente/panou-seo.php): previzualizarea, numărătoarea, verificările (lipsă,
+// prea lung, duplicat) și câmpurile; aceleași nume și id-uri ca până acum, plus robots și og:type.
+admin_componenta('panou-seo', [
+    'tip' => 'product', 'ref' => '', 'id' => 'produs-seo-panou',
+    'campuri' => ['titlu', 'descriere', 'canonical', 'robots', 'og'],
+    'iduri' => ['titlu' => 'p_seo_title', 'descriere' => 'p_seo_description', 'canonical' => 'p_seo_canonical_url',
+        'robots' => 'p_seo_robots', 'og' => 'p_seo_og_type'],
+    'prefix_adresa' => '/produs/', 'sursa_slug' => '#p_slug', 'sursa_titlu' => '#p_name', 'sursa_descriere' => '#p_short_description',
+    'nume_magazin' => (string) ($numeMagazinSeo ?? ''),
+    'nota' => 'Gol = titlul și descrierea scurtă a produsului (titlul: „{nume} – {marcă} | {magazin}” cât încape).',
+]);
+?>
                             </div>
                             <div class="field full">
                                 <label>Imagine social preview (OG/Twitter)</label>
@@ -1215,6 +1210,8 @@ $adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'],
         seoTitleInput.value = '';
         seoDescriptionInput.value = '';
         seoCanonicalInput.value = '';
+        ['p_seo_robots', 'p_seo_og_type'].forEach((id) => { const el = document.getElementById(id); if (el instanceof HTMLSelectElement) { el.value = ''; } });
+        window.axSeo?.puneRef(document.querySelector('#produs-panou-seo [data-adm-seo]'), '');
         syncSeoImagePreview('/assets/img/product-placeholder.svg');
         selectedGalleryImages = [];
         syncGalleryInput();
@@ -1336,6 +1333,12 @@ $adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'],
             seoTitleInput.value = product.seo_title || '';
             seoDescriptionInput.value = product.seo_description || '';
             seoCanonicalInput.value = product.seo_canonical_url || '';
+            // WP-37: robots și og:type (în datele produsului doar când sunt puse) și id-ul pentru verificarea duplicatelor.
+            const seoRobotsInput = document.getElementById('p_seo_robots');
+            if (seoRobotsInput instanceof HTMLSelectElement) { seoRobotsInput.value = product.seo_robots || ''; }
+            const seoOgInput = document.getElementById('p_seo_og_type');
+            if (seoOgInput instanceof HTMLSelectElement) { seoOgInput.value = product.seo_og_type || ''; }
+            window.axSeo?.puneRef(document.querySelector('#produs-panou-seo [data-adm-seo]'), product.id || '');
             syncSeoImagePreview(product.seo_image_url || '/assets/img/product-placeholder.svg');
             syncImagePreview(product.image_url || '/assets/img/product-placeholder.svg');
             selectedGalleryImages = Array.isArray(product.image_gallery) ? product.image_gallery.map((item) => String(item || '').trim()).filter(Boolean) : [];

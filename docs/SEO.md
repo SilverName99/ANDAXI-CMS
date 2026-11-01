@@ -29,6 +29,9 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | `src/Support/SeoIndexare.php` | noindex pe căutarea internă și pe /blog gol, canonicalul pe 404, pagina 404 a magazinului pe /blog/x și /categorie/x, H1-ul din titlu (livrarea 4) |
 | `src/Support/PozeOptimizate.php` | width/height pe pozele din șabloane; pozele mari afișate din fișierele WebP ale pachetului (livrarea 4) |
 | `src/Support/ProduseSimilare.php` | „Produse similare” din aceeași categorie, cu cardurile în HTML (livrarea 4) |
+| `src/Support/Seo.php` | Modelul SEO al paginilor (WP-37): rândul `seo_pages` al fiecărui fel de pagină, valorile finale din `<head>`, verificările panoului din admin |
+| `src/Support/MarciEtichete.php` | Mărcile și etichetele produselor ca entități (`product_brands`, `product_tags`, `product_tag_links`; WP-37) |
+| `views/admin/componente/panou-seo.php`, `public/assets/js/admin/seo.js` | Panoul SEO din admin, același în fiecare editor (WP-37) |
 | `scripts/seo-texte.php` | Aplică textele Google scrise de mână ale unui site (`seo-texte.json` din dosarul lui) |
 | `scripts/seo-continut.php` | Schimbă o dată conținutul din bază al unui site: produse redenumite, linkuri din texte (`seo-continut.json` din dosarul lui) |
 | `site-uri/bioscem/` | Pachetul de date Bioscem (harta și regulile SEO din livrarea 1) |
@@ -314,6 +317,56 @@ Dovada că titlurile, descrierile și distribuirea Bioscem ies neschimbate: comp
 `tools/dev/compara-cu-baza.sh`), din WP-14 pe baza în forma Bioscem (`cms_dev_bioscem`) cu pachetul `site-uri/bioscem/`
 (`seo.json`: sufixele vechi, cuvintele generice ale mărcilor, `logo_antet`), deci cu datele pe care le va avea site-ul.
 
+## 7b. Modelul SEO al paginilor (WP-37, SEO partea B, B1)
+
+Fiecare pagină publică are un singur loc pentru SEO-ul scris de om: rândul ei din `seo_pages` (`page_type` + `page_ref`),
+citit și scris prin `App\Support\Seo`. Felurile de pagină (`Seo::TIPURI`):
+
+| `page_type` | `page_ref` | Pagina | Se editează în |
+|---|---|---|---|
+| `custom_page` | id-ul paginii | o pagină din constructor | Pagini → editorul paginii |
+| `product` | id-ul produsului | `/produs/{slug}` | Produse → editorul produsului |
+| `blog_post` | id-ul articolului | `/blog/{slug}` | Blog → editorul articolului |
+| `category` | id-ul categoriei | `/categorie/{slug}` | Categorii produse (rândul categoriei) |
+| `brand` | slug-ul | `/marca/{slug}` | Categorii produse → Mărci |
+| `tag` | slug-ul | `/eticheta/{slug}` | Categorii produse → Etichete |
+| `listing_default` | `magazin` | lista tuturor produselor (`/magazin` sau pagina catalogului); SEO-ul scris pe pagina ei din constructor are întâietate | Categorii produse → Lista tuturor produselor |
+| `blog_category` | id-ul | `/blog/categorie/{slug}` | Blog → Categorii |
+| `blog_tag` | id-ul | `/blog/eticheta/{slug}` | Blog → Categorii → Etichete blog |
+
+Câmpurile: titlul și descrierea pentru Google, canonicalul (o adresă http/https întreagă), poza de distribuire, **robots**
+(gol = fără etichetă, deci în Google; `noindex,follow`, `noindex,nofollow`), **og:type** (gol = `website`; `article`,
+`product`), **textul de deasupra listei** (`intro_html`, la mărci, etichete, lista produselor, categoriile și etichetele
+blogului; la categoriile de produse în `product_categories.intro_html`), curățat de scripturi și atribute `on…`
+(`RichText::sanitize`), și `updated_at`. Migrările: `nucleu/0041` (coloanele `seo_pages`), `catalog/0042` (textul
+categoriei, mărcile și etichetele).
+
+- **Un câmp gol nu schimbă nimic.** Fără rând (sau cu câmpurile noi goale) pagina iese exact ca înainte: valorile finale
+  din `<head>` le face `Seo::rezolva`, regula mutată din `views/layout.php` fără nicio schimbare (`test-seo.php` E1 o
+  compară cu regula veche pe 3.456 de combinații; G-cmp față de codul Bioscem). Robots-ul dat de controller (căutarea
+  internă, `/blog` gol) are întâietate față de cel scris; canonicalul scris nu se folosește pe liste (marca, eticheta,
+  categoria, categoria blogului: adresa listei e canonicalul ei).
+- **Un formular care nu are un câmp nou nu-l șterge** (de exemplu o pagină din cache, un formular vechi): titlul,
+  descrierea, canonicalul și poza se scriu ca până acum; robots, og:type și textul listei doar când sunt în formular
+  (`seo_robots`, `seo_og_type`, `seo_intro_html`; la categorie `intro_html`). Rândul dispare când toate câmpurile sunt goale
+  sau pagina însăși e ștearsă.
+- Un controller poate da SEO-ul și ca un singur tablou `seo` (`titlu`, `descriere`, `canonical`, `imagine`, `robots`,
+  `og_type`, `fara_canonical`; `View::render` îl desface în cheile `meta*` de până acum).
+
+**Panoul SEO din admin** (`admin_componenta('panou-seo', …)`): „Cum apare în Google” (titlul, adresa, descrierea, refăcute
+cât scrii; fără titlu scris: „{nume} | {magazin}”), numărul caracterelor (60 / 155, cu roșu peste) și verificările
+(`Seo::verificari`): titlu sau descriere lipsă, peste 60 / 155 de caractere, același titlu sau aceeași descriere scrise pe
+altă pagină (fără diferență de litere mari și spații), cu linkul ei din admin. Verificările se cer, doar în citire, la
+`GET /admin/products/seo-verifica` (produse, categorii, mărci, etichete, lista produselor: rolul magazinului),
+`/admin/blog/posts/seo-verifica` (articolele: rolurile blogului) și `/admin/seo/verifica` (restul: administratorul general).
+
+**Mărcile și etichetele ca entități** (`product_brands`, `product_tags`, `product_tag_links`): sursa rămâne câmpul „Marcă”
+și etichetele produsului, iar paginile `/marca/{slug}` și `/eticheta/{slug}` le citesc tot de acolo, deci adresele nu se
+schimbă (slug-ul e `Slug::simplu`, ca azi; două nume cu același slug sunt același rând). Migrarea `catalog/0042` le
+completează pe bucăți de câte 500 de produse; `MarciEtichete::sincronizeaza` (la deschiderea Categoriilor produse) și
+`sincronizeazaProdus` (la salvarea unui produs) le țin la zi, și după un import; de două ori = aceleași rânduri. SEO-ul unei
+mărci sau etichete e rândul ei din `seo_pages` după slug.
+
 ## 8. Fluxul pentru Google Merchant Center
 
 `/feed/google-merchant.xml` (livrarea 2, Bioscem `d277727`, `1e46f9f`; `FluxGoogleMerchant`;
@@ -391,6 +444,11 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   sufixul vechi, prefixul fluxului, returul, livrarea cu prețuri fixe, logo-ul WebP) și
   pachetul demo neutru, opririle `SEO_LIVRARE_RETUR=0` și `AVERTISMENT_PRODUSE=0`, pe fiecare
   pachet `Allow` pentru flux, fluxul (200 sau 404) și `/magazin?category=` (301 sau 404);
+- `tools/dev/test-seo.php` E1 (WP-37, `tools/dev/lib/test-seo-model.php`): `Seo::rezolva` = regula veche a layout-ului;
+  fiecare pagină demo fără rânduri noi e ca înainte, un rând de fiecare fel schimbă exact câmpurile lui și doar pe pagina
+  lui, după ștergere totul e din nou ca la început; formularele vechi nu șterg câmpurile noi; verificările panoului (lipsă,
+  prea lung, duplicat); migrarea `catalog/0042` rulată din nou de două ori și sincronizarea dau aceleași rânduri, iar fiecare
+  marcă și etichetă are pagina 200;
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;
 - `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
   cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere

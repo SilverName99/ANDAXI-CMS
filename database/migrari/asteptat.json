@@ -4583,6 +4583,51 @@
             },
             "motor": "InnoDB"
         },
+        "product_brands": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "product_categories": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -4597,6 +4642,12 @@
                     "implicit": null,
                     "null": false,
                     "tip": "int unsigned"
+                },
+                "intro_html": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
                 },
                 "name": {
                     "extra": "",
@@ -4944,6 +4995,85 @@
                         "is_spam"
                     ],
                     "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_tag_links": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "tag_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "product_id",
+                        "tag_id"
+                    ],
+                    "unic": true
+                },
+                "idx_product_tag_links_tag": {
+                    "coloane": [
+                        "tag_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "product_tags": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
                 }
             },
             "motor": "InnoDB"
@@ -5693,6 +5823,18 @@
                     "null": true,
                     "tip": "varchar(255)"
                 },
+                "intro_html": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "og_type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
                 "page_ref": {
                     "extra": "",
                     "implicit": null,
@@ -5705,11 +5847,23 @@
                     "null": false,
                     "tip": "varchar(50)"
                 },
+                "robots": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(40)"
+                },
                 "title": {
                     "extra": "",
                     "implicit": null,
                     "null": true,
                     "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
                 }
             },
             "fk": [],

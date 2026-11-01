@@ -142,6 +142,10 @@ poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecar
 # WP-36 încheie faza D, deci are porțile acceptanței ei (planul, „Phase D acceptance”): G-vizual (paginile publice neschimbate),
 # G-plug-fiecare (fiecare plugin oprit pe rând), G-smoke pe fiecare pachet (cu test-admin-faza-d.php, partea E: căutarea pe
 # licențe și roluri) și, ca la WP-35, G-cmp-istoric și G-pachet (ce-se-schimba.md și manifestele celor patru pachete).
+# Faza E (WP-37, WP-38) adaugă pagini și panouri de admin: și G-admin, G-tastatura și G-vizual (paginile publice ale Bioscem
+# neschimbate, în afara diferențelor SEO declarate); WP-38 schimbă harta adreselor vechi (SeoRedirects) și jurnalul 404 din
+# public/index.php, deci și G-cmp-istoric, G-smoke (fiecare pachet) și G-pachet. Decizia A1: test-migrari și test-incarcare
+# se rulează de mână cu --doar-mariadb (fără MySQL 8).
 declare -A PORTI=(
     [WP-01]="G-rute G-cmp G-cmp-istoric G-plug G-smoke G-php"
     [WP-02]="G-rute G-runner G-cmp G-smoke G-php"
@@ -183,8 +187,8 @@ declare -A PORTI=(
     [WP-34]="G-rute G-admin G-tastatura G-cmp G-plug G-smoke G-php"
     [WP-35]="G-rute G-admin G-tastatura G-vizual G-cmp G-plug G-smoke G-php"
     [WP-36]="G-rute G-admin G-tastatura G-vizual G-cmp G-cmp-istoric G-plug-fiecare G-smoke G-pachet G-php"
-    [WP-37]="G-rute G-mig G-cmp G-seo G-plug G-admin G-php"
-    [WP-38]="G-rute G-mig G-cmp G-seo G-plug G-php"
+    [WP-37]="G-rute G-mig G-cmp G-seo G-plug G-admin G-tastatura G-vizual G-php"
+    [WP-38]="G-rute G-mig G-cmp G-cmp-istoric G-seo G-plug G-admin G-tastatura G-vizual G-smoke G-pachet G-php"
     [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"
     [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-seo G-php"
     [WP-41]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"

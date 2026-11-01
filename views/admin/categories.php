@@ -2,20 +2,20 @@
 $categoriesSeo = is_array($categoriesSeo ?? null) ? $categoriesSeo : [];
 $brands = is_array($brands ?? null) ? $brands : [];
 $brandsSeo = is_array($brandsSeo ?? null) ? $brandsSeo : [];
+// WP-37 (B1): etichetele, lista tuturor produselor și textul de deasupra fiecărei categorii.
+$tags = is_array($tags ?? null) ? $tags : [];
+$tagsSeo = is_array($tagsSeo ?? null) ? $tagsSeo : [];
+$listaSeo = is_array($listaSeo ?? null) ? $listaSeo : [];
+$introCategorii = is_array($introCategorii ?? null) ? $introCategorii : [];
+$urlCatalog = (string) ($urlCatalog ?? '/magazin');
+$areSeo = static fn (array $seo): bool => trim((string) ($seo['title'] ?? '')) !== '' || trim((string) ($seo['description'] ?? '')) !== ''
+    || trim((string) ($seo['robots'] ?? '')) !== '' || trim((string) ($seo['intro_html'] ?? '')) !== '';
 ?>
-<style>
-.seo-google-fields{display:grid;gap:8px;margin-top:8px;max-width:620px;}
-.seo-google-fields label{font-size:12px;color:var(--ax-text-3);}
-.seo-google-fields input,.seo-google-fields textarea{width:100%;}
-.seo-google-count{font-size:12px;color:var(--ax-text-3);}
-.seo-google-count.is-long{color:var(--ax-atentie);}
-.seo-google-summary{cursor:pointer;color:var(--ax-accent);font-size:13px;}
-</style>
 <?php
 admin_componenta('antet-pagina', [
     'titlu' => 'Categorii produse',
     'nivel' => 1,
-    'subtitlu' => 'Creează și administrează categoriile din magazin.',
+    'subtitlu' => 'Creează și administrează categoriile din magazin; SEO-ul categoriilor, mărcilor, etichetelor și al listei de produse.',
 ]);
 ?>
 <section class="panel">
@@ -38,7 +38,7 @@ admin_componenta('antet-pagina', [
         <strong>SEO Google</strong>: titlul și descrierea care apar în Google pentru pagina categoriei
         (/categorie/slug). Titlul: cel mult circa 60 de caractere. Descrierea: circa 120–155 de caractere.
         Gol = titlul „Nume | magazin” și o descriere făcută automat din produsele categoriei.
-        Schimbarea slug-ului schimbă adresa paginii din Google; adresa veche poate ajunge la „pagina nu există”, deci cereți atunci o redirecționare.
+        Schimbarea slug-ului schimbă adresa paginii din Google; adresa veche trimite singură la cea nouă (Setări → Redirecționări și 404).
     </p>
 
     <table class="table">
@@ -56,8 +56,8 @@ admin_componenta('antet-pagina', [
             <?php
             $updateFormId = 'category-update-' . (int) $category['id'];
             $categorySeo = $categoriesSeo[(string) (int) $category['id']] ?? [];
-            $categorySeoTitle = trim((string) ($categorySeo['title'] ?? ''));
-            $categorySeoDescription = trim((string) ($categorySeo['description'] ?? ''));
+            $categorySeo['intro_html'] = $introCategorii[(string) (int) $category['id']] ?? '';
+            $categorieCuSeo = $areSeo($categorySeo);
             ?>
             <tr>
                 <td><?= (int) $category['id'] ?></td>
@@ -70,21 +70,14 @@ admin_componenta('antet-pagina', [
                         required
                         style="min-width:220px;"
                     >
-                    <details style="margin-top:6px;"<?= ($categorySeoTitle !== '' || $categorySeoDescription !== '') ? ' open' : '' ?>>
-                        <summary class="seo-google-summary">SEO Google<?= ($categorySeoTitle !== '' || $categorySeoDescription !== '') ? ' (completat)' : '' ?></summary>
-                        <div class="seo-google-fields" data-seo-google>
-                            <label>Titlu Google
-                                <input type="text" name="seo_title" maxlength="120" form="<?= htmlspecialchars($updateFormId, ENT_QUOTES) ?>"
-                                       value="<?= htmlspecialchars($categorySeoTitle, ENT_QUOTES) ?>" data-seo-limit="60"
-                                       placeholder="<?= htmlspecialchars((string) $category['name'], ENT_QUOTES) ?> | …">
-                            </label>
-                            <span class="seo-google-count" data-seo-count></span>
-                            <label>Descriere Google
-                                <textarea name="seo_description" rows="3" maxlength="320" form="<?= htmlspecialchars($updateFormId, ENT_QUOTES) ?>"
-                                          data-seo-limit="155" placeholder="Gol = descriere automată din produsele categoriei"><?= htmlspecialchars($categorySeoDescription, ENT_QUOTES) ?></textarea>
-                            </label>
-                            <span class="seo-google-count" data-seo-count></span>
-                        </div>
+                    <details style="margin-top:6px;"<?= $categorieCuSeo ? ' open' : '' ?>>
+                        <summary class="seo-google-summary">SEO Google<?= $categorieCuSeo ? ' (completat)' : '' ?></summary>
+<?php admin_componenta('panou-seo', [
+    'tip' => 'category', 'ref' => (string) (int) $category['id'], 'id' => 'categorie-seo-' . (int) $category['id'],
+    'form' => $updateFormId, 'valori' => $categorySeo, 'campuri' => ['titlu', 'descriere', 'robots', 'intro'],
+    'nume' => ['intro' => 'intro_html'], 'max_titlu' => 120, 'max_descriere' => 320,
+    'adresa' => '/categorie/' . (string) $category['slug'], 'titlu_implicit' => (string) $category['name'],
+]); ?>
                     </details>
                 </td>
                 <td>
@@ -111,6 +104,24 @@ admin_componenta('antet-pagina', [
         <?php endforeach; ?>
         </tbody>
     </table>
+</section>
+
+<section class="panel" id="lista-produse" style="margin-top:16px;">
+    <div class="section-head">
+        <div>
+            <h2>Lista tuturor produselor — SEO Google</h2>
+            <p>Pagina <?= htmlspecialchars($urlCatalog, ENT_QUOTES) ?>. Dacă pagina ei din constructor are SEO scris (Pagini), acela are întâietate.
+                Gol = titlul paginii și o descriere făcută automat din produse.</p>
+        </div>
+    </div>
+    <form method="post" action="/admin/categories/brand-seo">
+        <input type="hidden" name="seo_tip" value="listing_default">
+<?php admin_componenta('panou-seo', [
+    'tip' => 'listing_default', 'ref' => \App\Support\Seo::REF_LISTA, 'id' => 'lista-seo', 'valori' => $listaSeo,
+    'campuri' => ['titlu', 'descriere', 'robots', 'og', 'intro'], 'max_titlu' => 120, 'max_descriere' => 320, 'adresa' => $urlCatalog,
+]); ?>
+        <div style="margin-top:8px;"><button class="btn btn-secondary" type="submit">Salvează</button></div>
+    </form>
 </section>
 
 <?php if ($brands !== []): ?>
@@ -143,20 +154,17 @@ admin_componenta('antet-pagina', [
                 <td><a href="/marca/<?= rawurlencode($brandSlug) ?>" target="_blank" rel="noopener">/marca/<?= htmlspecialchars($brandSlug, ENT_QUOTES) ?></a></td>
                 <td><?= (int) ($brand['products_count'] ?? 0) ?></td>
                 <td>
-                    <form id="<?= htmlspecialchars($brandFormId, ENT_QUOTES) ?>" method="post" action="/admin/categories/brand-seo" class="seo-google-fields" data-seo-google>
+                    <form id="<?= htmlspecialchars($brandFormId, ENT_QUOTES) ?>" method="post" action="/admin/categories/brand-seo">
                         <input type="hidden" name="brand_slug" value="<?= htmlspecialchars($brandSlug, ENT_QUOTES) ?>">
-                        <label>Titlu Google
-                            <input type="text" name="seo_title" maxlength="120" data-seo-limit="60"
-                                   value="<?= htmlspecialchars(trim((string) ($brandSeo['title'] ?? '')), ENT_QUOTES) ?>"
-                                   placeholder="<?= htmlspecialchars((string) ($brand['name'] ?? ''), ENT_QUOTES) ?> | …">
-                        </label>
-                        <span class="seo-google-count" data-seo-count></span>
-                        <label>Descriere Google
-                            <textarea name="seo_description" rows="2" maxlength="320" data-seo-limit="155"
-                                      placeholder="Gol = descriere automată din produsele mărcii"><?= htmlspecialchars(trim((string) ($brandSeo['description'] ?? '')), ENT_QUOTES) ?></textarea>
-                        </label>
-                        <span class="seo-google-count" data-seo-count></span>
-                        <div><button class="btn btn-secondary" type="submit">Salvează</button></div>
+                        <details<?= $areSeo($brandSeo) ? ' open' : '' ?>>
+                            <summary class="seo-google-summary">SEO Google<?= $areSeo($brandSeo) ? ' (completat)' : '' ?></summary>
+<?php admin_componenta('panou-seo', [
+    'tip' => 'brand', 'ref' => $brandSlug, 'id' => 'marca-seo-' . $brandSlug, 'valori' => $brandSeo,
+    'campuri' => ['titlu', 'descriere', 'robots', 'intro'], 'max_titlu' => 120, 'max_descriere' => 320,
+    'adresa' => '/marca/' . $brandSlug, 'titlu_implicit' => (string) ($brand['name'] ?? ''),
+]); ?>
+                            <div style="margin-top:8px;"><button class="btn btn-secondary" type="submit">Salvează</button></div>
+                        </details>
                     </form>
                 </td>
             </tr>
@@ -166,22 +174,55 @@ admin_componenta('antet-pagina', [
 </section>
 <?php endif; ?>
 
-<script>
-// Numărătoarea de caractere de lângă câmpurile SEO (orientativ: Google taie după lățime).
-(() => {
-  document.querySelectorAll('[data-seo-google]').forEach((box) => {
-    box.querySelectorAll('[data-seo-limit]').forEach((field) => {
-      const counter = field.closest('label')?.nextElementSibling;
-      if (!counter || !counter.hasAttribute('data-seo-count')) return;
-      const limit = Number(field.getAttribute('data-seo-limit')) || 0;
-      const update = () => {
-        const length = field.value.trim().length;
-        counter.textContent = length > 0 ? length + ' caractere (recomandat: cel mult ' + limit + ')' : '';
-        counter.classList.toggle('is-long', limit > 0 && length > limit);
-      };
-      field.addEventListener('input', update);
-      update();
-    });
-  });
-})();
-</script>
+<?php if ($tags !== []): ?>
+<section class="panel" id="etichete" style="margin-top:16px;">
+    <div class="section-head">
+        <div>
+            <h2>Etichete — SEO Google</h2>
+            <p>Titlul și descrierea din Google pentru pagina fiecărei etichete (/eticheta/slug). Etichetele vin din etichetele produselor.
+                Gol = titlul „Produse: etichetă | magazin” și o descriere făcută automat din produsele etichetei.</p>
+        </div>
+    </div>
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Etichetă</th>
+            <th>Pagina</th>
+            <th>Produse active</th>
+            <th>SEO Google</th>
+        </tr>
+        </thead>
+        <tbody>
+        <?php foreach ($tags as $tag): ?>
+            <?php
+            $tagSlug = (string) ($tag['slug'] ?? '');
+            $tagSeo = $tagsSeo[$tagSlug] ?? [];
+            ?>
+            <tr>
+                <td><?= htmlspecialchars((string) ($tag['name'] ?? ''), ENT_QUOTES) ?></td>
+                <td><a href="/eticheta/<?= rawurlencode($tagSlug) ?>" target="_blank" rel="noopener">/eticheta/<?= htmlspecialchars($tagSlug, ENT_QUOTES) ?></a></td>
+                <td><?= (int) ($tag['products_count'] ?? 0) ?></td>
+                <td>
+                    <form method="post" action="/admin/categories/brand-seo">
+                        <input type="hidden" name="seo_tip" value="tag">
+                        <input type="hidden" name="tag_slug" value="<?= htmlspecialchars($tagSlug, ENT_QUOTES) ?>">
+                        <details<?= $areSeo($tagSeo) ? ' open' : '' ?>>
+                            <summary class="seo-google-summary">SEO Google<?= $areSeo($tagSeo) ? ' (completat)' : '' ?></summary>
+<?php admin_componenta('panou-seo', [
+    'tip' => 'tag', 'ref' => $tagSlug, 'id' => 'eticheta-seo-' . $tagSlug, 'valori' => $tagSeo,
+    'campuri' => ['titlu', 'descriere', 'robots', 'intro'], 'max_titlu' => 120, 'max_descriere' => 320,
+    'adresa' => '/eticheta/' . $tagSlug, 'titlu_implicit' => 'Produse: ' . (string) ($tag['name'] ?? ''),
+]); ?>
+                            <div style="margin-top:8px;"><button class="btn btn-secondary" type="submit">Salvează</button></div>
+                        </details>
+                    </form>
+                </td>
+            </tr>
+        <?php endforeach; ?>
+        </tbody>
+    </table>
+</section>
+<?php endif; ?>
+<style>
+.seo-google-summary{cursor:pointer;color:var(--ax-accent);font-size:13px;}
+</style>

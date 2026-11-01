@@ -180,22 +180,22 @@ if (!is_string($previewAppCssContent)) {
         </div>
 
         <article class="panel" style="margin-top:12px;">
-            <h3 style="margin-top:0;">SEO de bază pentru această pagină</h3>
+            <h3 style="margin-top:0;">SEO pentru această pagină</h3>
             <p style="margin:0 0 10px;color:var(--ax-text-3);">
                 Aceste valori suprascriu setările SEO globale doar pentru pagina curentă.
             </p>
-            <div class="field" style="max-width:720px;">
-                <label for="seo_title">Meta title</label>
-                <input id="seo_title" type="text" name="seo_title" value="<?= htmlspecialchars($pageSeoTitle, ENT_QUOTES) ?>" maxlength="120" placeholder="Ex: Numele site-ului - Titlu pagină">
-            </div>
-            <div class="field" style="max-width:720px;">
-                <label for="seo_description">Meta description</label>
-                <textarea id="seo_description" name="seo_description" rows="4" maxlength="320" placeholder="Descriere scurtă care apare în Google..."><?= htmlspecialchars($pageSeoDescription, ENT_QUOTES) ?></textarea>
-            </div>
-            <div class="field" style="max-width:720px;">
-                <label for="seo_canonical_url">Canonical URL (opțional)</label>
-                <input id="seo_canonical_url" type="url" name="seo_canonical_url" value="<?= htmlspecialchars($pageSeoCanonicalUrl, ENT_QUOTES) ?>" placeholder="https://domeniu.ro/pagina">
-            </div>
+<?php
+// WP-37: panoul SEO comun (previzualizarea, numărătoarea, verificările; câmpurile cu aceleași nume și id-uri, plus robots
+// și og:type).
+admin_componenta('panou-seo', [
+    'tip' => 'custom_page', 'ref' => $pageId > 0 ? (string) $pageId : '', 'id' => 'pagina-seo',
+    'valori' => $pageSeo,
+    'iduri' => ['titlu' => 'seo_title', 'descriere' => 'seo_description', 'canonical' => 'seo_canonical_url', 'robots' => 'seo_robots', 'og' => 'seo_og_type'],
+    'max_titlu' => 120, 'max_descriere' => 320,
+    'prefix_adresa' => '/', 'sursa_slug' => '#page-slug', 'sursa_titlu' => '#page-title',
+    'verificari' => $pageId > 0 ? \App\Support\Seo::verificari(\App\Support\Database::connection([]), 'custom_page', (string) $pageId, $pageSeoTitle, $pageSeoDescription) : [],
+]);
+?>
             <div class="field" style="max-width:720px;">
                 <label for="seo_image_url">Imagine social preview (OG/Twitter)</label>
                 <input id="seo_image_url" type="text" name="seo_image_url" value="<?= htmlspecialchars($pageSeoImageUrl, ENT_QUOTES) ?>" placeholder="/uploads/gallery/imagine-seo.jpg sau https://...">

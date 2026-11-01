@@ -22,6 +22,13 @@ final class View
 
         self::$vedereCurenta = $template;
 
+        // WP-37: un controller poate da SEO-ul paginii ca un singur tablou `seo` (titlu, descriere, canonical, imagine,
+        // robots, og_type, fara_canonical; App\Support\Seo::dateVedere); cheile `meta*` date direct au întâietate.
+        if (is_array($data['seo'] ?? null)) {
+            $data += Seo::dateVedere($data['seo']);
+            unset($data['seo']);
+        }
+
         extract($data, EXTR_SKIP);
         // Componentele adminului (WP-31; views/admin/componente/) le folosesc toate paginile adminului (WP-35).
         if (str_starts_with($template, 'admin/')) {

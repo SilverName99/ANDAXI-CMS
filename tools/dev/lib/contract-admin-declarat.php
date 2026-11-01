@@ -233,4 +233,50 @@ return [
         'salt-adresa' => ['ce' => 'adaugat', 'rand' => '^data data-ax-salt-adresa = /admin(/[a-z-]+){0,3}(\?tab=[a-z_]+)?$',
             'motiv' => 'prima pagină a grupului, pe care o deschide „G <literă>” (prima intrare din meniu la care are voie adminul)'],
     ],
+
+    // WP-37 (SEO partea B, B1): panoul SEO comun (views/admin/componente/panou-seo.php) în editorul produsului, al paginii, al
+    // articolului, la categoriile de produse și de blog, la mărci, și secțiunile noi „Lista tuturor produselor”, „Etichete”
+    // (Categorii produse) și „Etichete blog” (Categorii blog). Câmpurile de până acum rămân (aceleași nume); se adaugă robots,
+    // og:type și textul de deasupra listelor. Formularele noi postează la adrese care existau (brand-seo, cu „seo_tip”), în afară
+    // de eticheta blogului (o adresă nouă a pluginului blog).
+    'WP-37' => [
+        'seo-panou' => ['ce' => 'adaugat', 'rand' => '^data data-adm-seo = (\{"tip":"[a-z_]+".*|#[0-9a-f]{16} \(\d+ octeți\))$',
+            'cale' => '^/admin/(products|categories|pages/(new|\d+/edit)|blog/posts/editor\?.*|blog/categories)$',
+            'motiv' => 'configurarea panoului SEO (tipul paginii, adresa ei, unde se cer verificările), citită de public/assets/js/admin/seo.js'],
+        'seo-robots-og' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/(products|pages/save|blog/posts|categories/brand-seo) select seo_(robots|og_type)$',
+            'motiv' => 'robots („În Google”) și tipul la distribuire (og:type) ale paginii, în panoul SEO (seo_pages.robots, og_type)'],
+        'seo-robots-categorii' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/(blog/)?categories/\d+/update select seo_robots$',
+            'motiv' => 'robots al categoriei de produse sau de blog, în panoul SEO al rândului ei'],
+        'seo-optiuni' => ['ce' => 'adaugat',
+            'rand' => '^optiuni POST /admin/(products|pages/save|blog/posts|categories/brand-seo|(blog/)?categories/\d+/update|blog/categories/eticheta-seo) '
+                . 'seo_(robots: \|noindex,follow\|noindex,nofollow|og_type: \|website\|article\|product)$',
+            'motiv' => 'valorile robots (gol = în Google, ca până acum) și og:type (gol = website) — App\Support\Seo::ROBOTS, OG_TIPURI'],
+        'seo-intro-categorie' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/categories/\d+/update textarea intro_html$', 'cale' => '^/admin/categories$',
+            'motiv' => 'textul de deasupra listei categoriei (product_categories.intro_html, migrarea catalog/0042)'],
+        'seo-intro' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/(categories/brand-seo|blog/categories/(\d+/update|eticheta-seo)) textarea seo_intro_html$',
+            'motiv' => 'textul de deasupra listei mărcii, etichetei, listei de produse, categoriei și etichetei de blog (seo_pages.intro_html)'],
+        'seo-blog-categorii' => ['ce' => 'adaugat',
+            'rand' => '^camp POST /admin/blog/categories/(\d+/update|eticheta-seo) (input:text seo_title|textarea seo_description|select seo_robots)$',
+            'cale' => '^/admin/blog/categories$', 'motiv' => 'SEO-ul categoriilor și etichetelor de blog (seo_pages, „blog_category”, „blog_tag”)'],
+        'seo-formulare' => ['ce' => 'adaugat', 'rand' => '^form POST /admin/(categories/brand-seo|blog/categories/eticheta-seo)$',
+            'cale' => '^/admin/(blog/)?categories$',
+            'motiv' => 'un formular pe fiecare etichetă și pe lista produselor (la adresa SEO-ului mărcilor) și pe fiecare etichetă de blog (adresă nouă)'],
+        'seo-liste-campuri' => ['ce' => 'adaugat', 'cale' => '^/admin/categories$',
+            'rand' => '^camp POST /admin/categories/brand-seo (input:hidden seo_tip = (tag|listing_default)|input:hidden tag_slug = [a-z0-9-]+|input:text seo_title'
+                . '|textarea seo_description)$',
+            'motiv' => 'ce salvează formularul mărcilor pentru o etichetă (seo_tip=tag, tag_slug) și pentru lista produselor (seo_tip=listing_default)'],
+        'seo-eticheta-blog-id' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/blog/categories/eticheta-seo input:hidden tag_id = \d+$',
+            'cale' => '^/admin/blog/categories$', 'motiv' => 'eticheta de blog a cărei SEO se salvează'],
+        'seo-etichete-linkuri' => ['ce' => 'adaugat', 'rand' => '^link /(blog/)?eticheta/[a-z0-9-]+$', 'cale' => '^/admin/(blog/)?categories$',
+            'motiv' => 'pagina publică a fiecărei etichete, în tabelul etichetelor'],
+        'seo-etichete-celule' => ['ce' => 'adaugat', 'cale' => '^/admin/(blog/)?categories$',
+            'rand' => '^celula (/(blog/)?eticheta/[a-z0-9-]+|\d+|demo|precomanda|reducere|Ceaiuri demo|Sfaturi demo)$',
+            'motiv' => 'tabelul etichetelor: numele (datele demo), pagina, numărul produselor sau articolelor'],
+        'seo-celule-panou' => ['ce' => 'adaugat', 'rand' => '^celula #[0-9a-f]{16} \(\d+ octeți\)$', 'cale' => '^/admin/(blog/)?categories$',
+            'motiv' => 'celula cu numele categoriei, mărcii sau etichetei conține acum și panoul SEO pliat (previzualizarea, etichetele câmpurilor)'],
+        'seo-celule-vechi' => ['ce' => 'scos', 'rand' => '^celula (SEO Google Titlu Google Descriere Google|Titlu Google Descriere Google Salvează)$',
+            'cale' => '^/admin/categories$', 'motiv' => 'aceleași celule, cu textele panoului SEO (rândul de mai sus)'],
+        'seo-date-vechi' => ['ce' => 'scos', 'rand' => '^data data-seo-((count|google) =\s*|limit = (60|155))$', 'cale' => '^/admin/categories$',
+            'motiv' => 'numărătoarea veche de lângă câmpurile SEO ale categoriilor și mărcilor, înlocuită de panoul SEO (seo.js)'],
+    ],
 ];

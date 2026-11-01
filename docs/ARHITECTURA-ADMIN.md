@@ -61,6 +61,15 @@ comandă găsită se deschide direct în panoul ei; nicio acțiune nu se face di
 M Marketing, T Conținut, R Rapoarte, S Setări. Lista întreagă e la „?”, doar cu grupurile pe care le are site-ul și rolul tău.
 Nicio scurtătură nu pornește cât scrii într-un câmp.
 
+## SEO în admin (WP-37, 1 noiembrie)
+
+Panoul SEO e o componentă (`panou-seo`, `docs/ui/README.md`), aceeași în editorul produsului, al paginii, al articolului, pe
+rândurile Categoriilor produse și ale Categoriilor blog. Nicio pagină nouă în meniu: Categorii produse primește secțiunile
+„Lista tuturor produselor — SEO Google” și „Etichete — SEO Google” (lângă „Mărci”), iar Blog → Categorii, SEO pe fiecare
+categorie și „Etichete blog — SEO Google”. Formularele etichetelor și listei postează la adresa SEO-ului mărcilor
+(`/admin/categories/brand-seo`, cu `seo_tip`), cel al etichetelor de blog la `/admin/blog/categories/eticheta-seo` (pluginul
+blog). Rolurile rămân aceleași (Categorii produse: rolul magazinului; Categorii blog: administratorul general).
+
 ## Meniul de acum (după WP-35)
 
 - **Acasă**

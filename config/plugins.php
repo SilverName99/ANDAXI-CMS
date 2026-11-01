@@ -99,6 +99,8 @@ return [
             '/admin/abonament',
             // WP-36: căutarea în tot adminul (fiecare rol vede doar sursele lui; App\Support\CautareAdmin).
             '/admin/cauta',
+            // WP-37, WP-38: SEO-ul nucleului (verificările panoului SEO; managerul redirecționărilor și jurnalul 404).
+            '/admin/seo/*',
         ],
         // /_andaxi/*: adresele platformei (pingul monitorizării; în Etapa 2 și preluarea licenței).
         'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],
@@ -165,7 +167,9 @@ return [
                     'icon' => 'design', 'activ' => ['/admin/products/fields', '/admin/products/templates']],
             ],
             'tabele' => ['products', 'product_categories', 'product_category_links', 'product_extra_fields',
-                'product_extra_field_values', 'product_templates', 'product_template_fields'],
+                'product_extra_field_values', 'product_templates', 'product_template_fields',
+                // WP-37 (B1): mărcile și etichetele ca entități (migrarea catalog/0042; App\Support\MarciEtichete).
+                'product_brands', 'product_tags', 'product_tag_links'],
         ],
 
         'magazin' => [

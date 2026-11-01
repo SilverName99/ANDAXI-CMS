@@ -292,7 +292,8 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
             </div>
         </dialog>
 <?php // Componentele (WP-31) întâi: panoul deschis își prinde Esc-ul înaintea cadrului. ?>
-<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'taburi', 'cadru', 'cautare'] as $adminScript): ?>
+<?php // WP-37: seo.js (panoul SEO al paginilor; nu face nimic pe o pagină fără panou). ?>
+<?php foreach (['panou', 'componente', 'tabel', 'filtre', 'taburi', 'cadru', 'cautare', 'seo'] as $adminScript): ?>
         <script src="/assets/js/admin/<?= $adminScript ?>.js?v=<?= $adminVersiune('assets/js/admin/' . $adminScript . '.js') ?>" defer></script>
 <?php endforeach; ?>
     <?php else: ?>

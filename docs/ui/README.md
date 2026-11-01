@@ -52,6 +52,7 @@ administratorul general, fără intrare în meniu; `App\Http\Controllers\Compone
 | `mesaj` | informare, reușită, avertisment, eroare (și mesajul de după o salvare, în cadru) | — |
 | `stare-goala` | ce vede omul când lista e goală și ce poate face | — |
 | `bara-pasi` | pașii unui flux (newsletterul: Conținut → Destinatari → Verificare → Trimite) | al paginii (`newsletter-pasi.js`) |
+| `panou-seo` (WP-37) | SEO-ul unei pagini: „Cum apare în Google”, numărul caracterelor (60 / 155), verificările (lipsă, prea lung, același titlu sau aceeași descriere pe altă pagină, cu linkul ei) și câmpurile (titlu, descriere, canonical, robots, og:type, textul de deasupra listei; aceleași nume ca până acum). Configurarea într-un singur atribut, `data-adm-seo` (JSON); `form` pentru câmpuri în afara formularului (rândurile tabelului categoriilor) | `seo.js`: previzualizarea cât scrii, verificările cerute la adresa tipului paginii (GET, JSON, doar citire); `window.axSeo.actualizeaza()` / `puneRef()` pentru editorul produsului |
 | pastila `adm-stare`, `adm-numar`, `adm-mono` | starea (Ciornă, Programat, Se trimite, Oprit, Trimis), un număr, cifre egale | — |
 
 **Unificarea cu newsletterul.** Primele șase componente (antet, bara de pași, tabel, panou, mesaj, stare goală) au venit cu

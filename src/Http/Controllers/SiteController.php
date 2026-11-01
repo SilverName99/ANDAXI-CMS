@@ -342,6 +342,10 @@ final class SiteController
             $produseAfisate
         );
 
+        if ($eticheta !== '' && $db instanceof PDO) {
+            // WP-37: textul scris deasupra listei mărcii sau etichetei (gol = lista ca înainte).
+            $catalog = $this->introLista(\App\Support\Seo::citeste($db, $tip === 'brand' ? 'brand' : 'tag', $slug)['intro_html']) . $catalog;
+        }
         $shopPage = $this->findPublishedPageBySlug('magazin');
         if (is_array($shopPage)) {
             $settings = $this->cachedSettings($db instanceof PDO ? $db : null);
@@ -383,8 +387,9 @@ final class SiteController
             return [];
         }
         $seo = [];
-        if ($tip === 'brand' && $db instanceof PDO) {
-            $seo = $this->seoMetaFor($db, 'brand', $slug);
+        if ($db instanceof PDO) {
+            // WP-37: și eticheta are rândul ei (seo_pages, tipul „tag”, după slug), ca marca.
+            $seo = $this->seoMetaFor($db, $tip === 'brand' ? 'brand' : 'tag', $slug);
             unset($seo['metaCanonicalUrl']);
         }
         if (trim((string) ($seo['metaDescription'] ?? '')) === ''
@@ -501,6 +506,13 @@ final class SiteController
             $produseAfisate
         );
         $seoLista = $this->seoListaMagazin($pdo, $shopCategoryLabel, $caleCategorie, $produseAfisate, $shopPage);
+        // WP-37: textul de deasupra listei: al categoriei (product_categories.intro_html) sau al listei tuturor produselor
+        // (seo_pages, tipul „listing_default”). Gol = lista ca înainte. Nu pe căutarea internă.
+        if (trim((string) ($_GET['q'] ?? '')) === '') {
+            $catalogHtml = $this->introLista($shopCategoryLabel !== ''
+                ? $this->introCategorie($pdo, $this->idCategoriePentruNume($pdo, $shopCategoryLabel))
+                : \App\Support\Seo::citeste($pdo, 'listing_default', \App\Support\Seo::REF_LISTA)['intro_html']) . $catalogHtml;
+        }
 
         if (is_array($shopPage)) {
             $settings = $this->cachedSettings($db);
@@ -547,6 +559,11 @@ final class SiteController
         $activ = \App\Support\SeoMeta::activ();
         if ($categorie === '') {
             $seo = is_array($shopPage) ? $this->customPageSeoMeta($db, $shopPage) : [];
+            if ($seo === []) {
+                // WP-37: lista tuturor produselor are rândul ei (seo_pages, „listing_default”), folosit când pagina
+                // catalogului din constructor n-are SEO scris (sau nu există).
+                $seo = $this->seoMetaFor($db, 'listing_default', \App\Support\Seo::REF_LISTA);
+            }
             if ($activ && trim((string) ($seo['metaDescription'] ?? '')) === '') {
                 $seo['metaDescription'] = \App\Support\SeoMeta::descriereLista(
                     'magazin',
@@ -639,6 +656,14 @@ final class SiteController
         // /blog fără niciun articol publicat: noindex,follow (decizia D7, A10).
         $robots = \App\Support\SeoIndexare::pentruBlog(count($this->loadPublishedBlogPosts($pdo, 1)));
 
+        // WP-37: SEO-ul scris pentru categoria sau eticheta blogului (seo_pages, „blog_category”/„blog_tag”, după id) și
+        // textul de deasupra listei; fără căutare. Fără rând: pagina ca înainte.
+        $seoTermen = $this->seoTermenBlog($pdo, $filtru);
+        if (($seoTermen['intro'] ?? '') !== '') {
+            $blogPostsHtml = $this->introLista((string) $seoTermen['intro']) . $blogPostsHtml;
+        }
+        $seoTermen = (array) ($seoTermen['meta'] ?? []);
+
         // Titlul spune pe ce s-a filtrat, altfel toate paginile de categorie ar avea același titlu ca /blog și s-ar
         // bate cap în cap în Google.
         $titluFiltru = '';
@@ -662,7 +687,7 @@ final class SiteController
                 'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina($titlu, 'blog', (string) ($blogPage['html_content'] ?? '')),
             ], $titluFiltru !== ''
                 // Pe pagina filtrată nu folosim meta-urile paginii de blog: ar descrie altceva decât se vede.
-                ? []
+                ? $seoTermen
                 : $this->customPageSeoMeta($pdo, $blogPage), $robots));
             return;
         }
@@ -677,7 +702,46 @@ final class SiteController
             'blogPostsHtml' => $blogPostsHtml,
             'mannequinSectionHtml' => '',
             'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina('Blog', 'blog'),
-        ], $robots));
+        ], $seoTermen, $robots));
+    }
+
+    /**
+     * SEO-ul unei categorii sau etichete de blog (WP-37): rândul ei din seo_pages (după id) ca meta și textul de
+     * deasupra listei. Doar pe lista filtrată după categorie sau etichetă, fără căutare.
+     *
+     * @param array<string, mixed> $filtru
+     * @return array{meta?: array<string, string>, intro?: string}
+     */
+    private function seoTermenBlog(?PDO $db, array $filtru): array
+    {
+        if (!$db instanceof PDO || trim((string) ($filtru['q'] ?? '')) !== '') {
+            return [];
+        }
+        [$tip, $tabela, $slug] = trim((string) ($filtru['category'] ?? '')) !== ''
+            ? ['blog_category', 'blog_categories', trim((string) $filtru['category'])]
+            : ['blog_tag', 'blog_tags', trim((string) ($filtru['tag'] ?? ''))];
+        if ($slug === '') {
+            return [];
+        }
+        try {
+            $stmt = $db->prepare("SELECT id FROM {$tabela} WHERE slug = ? LIMIT 1");
+            $stmt->execute([$slug]);
+            $id = (int) ($stmt->fetchColumn() ?: 0);
+        } catch (Throwable) {
+            return [];
+        }
+        if ($id <= 0) {
+            return [];
+        }
+        $harta = \App\Support\Seo::citesteHarta($db, $tip, [(string) $id]);
+        $rand = $harta[(string) $id] ?? null;
+        if ($rand === null) {
+            return [];
+        }
+        $meta = \App\Support\Seo::meta($rand);
+        // Canonicalul rămâne al paginii (adresa listei), ca la mărci și categorii.
+        unset($meta['metaCanonicalUrl']);
+        return ['meta' => array_filter($meta, static fn ($v): bool => $v !== ''), 'intro' => $rand['intro_html']];
     }
 
     public function blogPostsApi(): void
@@ -5270,23 +5334,43 @@ final class SiteController
         return is_array($page) ? $page : null;
     }
 
+    /**
+     * SEO-ul scris pentru o pagină (rândul ei din seo_pages, App\Support\Seo): titlul, descrierea, canonicalul, poza și,
+     * din WP-37, robots și og:type (doar când sunt puse). Fără rând: [] (pagina iese ca înainte).
+     */
     private function seoMetaFor(?PDO $db, string $pageType, string $pageRef): array
     {
         if (!$db instanceof PDO) {
             return [];
         }
+        $this->ensureOptionalPageSchema($db);
+        $harta = \App\Support\Seo::citesteHarta($db, $pageType, [$pageRef]);
+        return \App\Support\Seo::meta($harta[trim($pageRef)] ?? null);
+    }
 
-        $seo = $this->loadSeoSettings($db, $pageType, $pageRef);
-        if ($seo === []) {
-            return [];
+    /**
+     * Textul de deasupra unei liste (WP-37, `intro_html`): al mărcii, etichetei, listei tuturor produselor, categoriei
+     * blogului (seo_pages) sau al categoriei de produse (product_categories.intro_html). Gol: lista rămâne ca înainte.
+     */
+    private function introLista(string $html): string
+    {
+        $html = trim($html);
+        return $html === '' ? '' : '<div class="lista-intro">' . $html . '</div>';
+    }
+
+    /** product_categories.intro_html al unei categorii (WP-37); gol fără migrarea catalog/0042. */
+    private function introCategorie(?PDO $db, int $idCategorie): string
+    {
+        if (!$db instanceof PDO || $idCategorie <= 0) {
+            return '';
         }
-
-        return [
-            'metaTitle' => (string) ($seo['title'] ?? ''),
-            'metaDescription' => (string) ($seo['description'] ?? ''),
-            'metaCanonicalUrl' => (string) ($seo['canonical_url'] ?? ''),
-            'metaImageUrl' => (string) ($seo['image_url'] ?? ''),
-        ];
+        try {
+            $stmt = $db->prepare('SELECT intro_html FROM product_categories WHERE id = ? LIMIT 1');
+            $stmt->execute([$idCategorie]);
+            return trim((string) ($stmt->fetchColumn() ?: ''));
+        } catch (Throwable) {
+            return '';
+        }
     }
 
     private function customPageSeoMeta(?PDO $db, array $page): array
@@ -5296,52 +5380,6 @@ final class SiteController
             return [];
         }
         return $this->seoMetaFor($db, 'custom_page', (string) $pageId);
-    }
-
-    private function normalizeSeoPageType(string $pageType): string
-    {
-        $pageType = trim($pageType);
-        if (!in_array($pageType, ['custom_page', 'product', 'blog_post', 'category', 'brand'], true)) {
-            return '';
-        }
-        return $pageType;
-    }
-
-    private function loadSeoSettings(PDO $db, string $pageType, string $pageRef): array
-    {
-        $pageType = $this->normalizeSeoPageType($pageType);
-        $pageRef = trim($pageRef);
-        if ($pageType === '' || $pageRef === '') {
-            return [];
-        }
-        $this->ensureOptionalPageSchema($db);
-
-        try {
-            $stmt = $db->prepare(
-                'SELECT title, description, canonical_url, image_url
-                 FROM seo_pages
-                 WHERE page_type = :page_type
-                   AND page_ref = :page_ref
-                 LIMIT 1'
-            );
-            $stmt->execute([
-                'page_type' => $pageType,
-                'page_ref' => $pageRef,
-            ]);
-            $row = $stmt->fetch() ?: null;
-            if (!is_array($row)) {
-                return [];
-            }
-
-            return [
-                'title' => trim((string) ($row['title'] ?? '')),
-                'description' => trim((string) ($row['description'] ?? '')),
-                'canonical_url' => trim((string) ($row['canonical_url'] ?? '')),
-                'image_url' => trim((string) ($row['image_url'] ?? '')),
-            ];
-        } catch (Throwable) {
-            return [];
-        }
     }
 
     private function requestCategoryFilter(): string

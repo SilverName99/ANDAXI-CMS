@@ -270,6 +270,8 @@ $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages'
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
     'blog_post_categories', 'blog_templates', 'blog_tags', 'blog_post_tags', 'fan_localities', 'fan_localities_extra_km', 'fan_lockers',
     'fan_nomenclator_sync', 'fan_streets', 'order_items',
+    // WP-37 (catalog/0042): mărcile și etichetele produselor și legăturile lor.
+    'product_brands', 'product_tags', 'product_tag_links',
     'order_promo_items', 'order_product_warnings', 'newsletter_lists', 'newsletter_list_subscribers', 'newsletter_templates', 'newsletter_optin_forms',
     'newsletter_campaigns'];
 $tipuriText = ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'set'];

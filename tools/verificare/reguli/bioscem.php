@@ -74,7 +74,9 @@ return [
     // jurnalul cererilor de confirmare (amprenta adresei, IP-ul) doar structura; pending_at/confirmed_at și attempts păstrate,
     // motivul opririi unei campanii anonimizat (răspunsul serverului de email poate avea o adresă); cheia de semnare a
     // linkurilor, pragul cheii vechi și starea limitei / cronului neutralizate.
-    'versiune' => 11,
+    // 12 (WP-37, nucleu/0041, catalog/0042): robots, og:type, textul listelor și data paginilor SEO; textul categoriilor;
+    // mărcile, etichetele produselor și legăturile lor (conținut public, copiat cum e).
+    'versiune' => 12,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -90,7 +92,7 @@ return [
         'continut' => ['pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points', 'mannequin_point_products',
             'promotional_products', 'loyalty_points_rules'],
         'catalog' => ['product_categories', 'products', 'product_category_links', 'product_extra_fields', 'product_extra_field_values',
-            'product_templates', 'product_template_fields', 'product_warnings'],
+            'product_templates', 'product_template_fields', 'product_warnings', 'product_brands', 'product_tags', 'product_tag_links'],
         'blog' => ['blog_authors', 'blog_categories', 'blog_posts', 'blog_post_categories', 'blog_templates', 'blog_tags', 'blog_post_tags'],
         'fan' => ['fan_localities', 'fan_localities_extra_km', 'fan_lockers', 'fan_nomenclator_sync', 'fan_streets'],
         'comenzi' => ['coupons', 'users', 'user_addresses', 'orders', 'order_items', 'order_payment_links', 'bt_ipay_transactions',
@@ -144,7 +146,9 @@ return [
             // WP-24 (nucleu/0034): pagina e doar pentru membri.
             'requires_active_account'], 'emailuri_publice' => 'paginile site-ului (contact, termeni) au adresa magazinului'],
         // Categoriile și mărcile au titlul și descrierea pentru Google aici (page_type „category” și „brand”, Bioscem 93d803f).
-        'seo_pages' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'page_type', 'page_ref', 'title', 'description', 'canonical_url', 'image_url'],
+        // WP-37 (nucleu/0041): robots, og:type, textul de deasupra listelor și data ultimei schimbări, publice.
+        'seo_pages' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'page_type', 'page_ref', 'title', 'description', 'canonical_url', 'image_url',
+            'robots', 'og_type', 'intro_html', 'updated_at'],
             'emailuri_publice' => 'textele pentru Google ale paginilor sunt publice'],
         'gallery_folders' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'],
             'motive' => ['name' => 'numele unui dosar al galeriei']],
@@ -160,7 +164,13 @@ return [
             'emailuri_publice' => 'descrierile regulilor de puncte, publice'],
 
         // ── Catalogul ──
-        'product_categories' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele categoriei']],
+        'product_categories' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at',
+            // WP-37 (catalog/0042): textul public de deasupra listei categoriei.
+            'intro_html'], 'motive' => ['name' => 'numele categoriei']],
+        // WP-37 (catalog/0042): mărcile și etichetele produselor (din câmpul Marcă și din etichete) și legăturile lor, publice.
+        'product_brands' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele public al unei mărci']],
+        'product_tags' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele public al unei etichete de produs']],
+        'product_tag_links' => ['mod' => 'copiaza', 'pastreaza' => ['product_id', 'tag_id']],
         'products' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'sku', 'category', 'category_id', 'product_template_id', 'slug',
             'short_description', 'description', 'product_highlights', 'price', 'vat_percent', 'vat_included', 'sale_price', 'sale_price_periods_json',
             'discount_badge_mode', 'bbd_enabled', 'bbd_entries_json', 'post_cart_note_enabled', 'post_cart_note_text', 'stock', 'out_of_stock',

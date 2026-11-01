@@ -1587,6 +1587,12 @@ final class AdminController
                 $product['seo_description'] = (string) ($seo['description'] ?? '');
                 $product['seo_canonical_url'] = (string) ($seo['canonical_url'] ?? '');
                 $product['seo_image_url'] = (string) ($seo['image_url'] ?? '');
+                // WP-37: robots și og:type, doar când sunt puse (datele produsului rămân altfel cum erau).
+                foreach (['robots' => 'seo_robots', 'og_type' => 'seo_og_type'] as $cheieSeo => $campSeo) {
+                    if ((string) ($seo[$cheieSeo] ?? '') !== '') {
+                        $product[$campSeo] = (string) $seo[$cheieSeo];
+                    }
+                }
             }
             unset($product);
 
@@ -1661,6 +1667,8 @@ final class AdminController
             'extraFields' => $extraFields,
             'productTemplates' => $productTemplates,
             'defaultVat' => $defaultVat,
+            // WP-37: numele magazinului din titluri, pentru previzualizarea panoului SEO.
+            'numeMagazinSeo' => \App\Support\SeoMeta::numeMagazin($this->cachedSettingsSeo($db)),
         ], 'admin/layout');
     }
 
@@ -2247,6 +2255,27 @@ final class AdminController
             $brands = $this->brandsForSeo($db);
             $brandsSeo = $this->loadSeoSettingsMap($db, 'brand', array_column($brands, 'slug'));
         }
+        // WP-37 (B1): etichetele (entitățile catalog/0042, ținute la zi aici: MarciEtichete::sincronizeaza), lista tuturor
+        // produselor (seo_pages, „listing_default”) și textul de deasupra fiecărei categorii (product_categories.intro_html).
+        $tags = [];
+        $tagsSeo = [];
+        $listaSeo = \App\Support\Seo::gol();
+        $introCategorii = [];
+        if ($db instanceof PDO) {
+            if (\App\Support\MarciEtichete::disponibil($db)) {
+                \App\Support\MarciEtichete::sincronizeaza($db);
+                $tags = array_values(array_filter(\App\Support\MarciEtichete::etichete($db), static fn (array $t): bool => $t['products_count'] > 0));
+                $tagsSeo = $this->loadSeoSettingsMap($db, 'tag', array_column($tags, 'slug'));
+            }
+            $listaSeo = $this->loadSeoSettings($db, 'listing_default', \App\Support\Seo::REF_LISTA);
+            try {
+                foreach ($db->query('SELECT id, intro_html FROM product_categories WHERE intro_html IS NOT NULL')->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
+                    $introCategorii[(string) (int) $r['id']] = (string) $r['intro_html'];
+                }
+            } catch (Throwable) {
+                $introCategorii = [];
+            }
+        }
 
         View::render('admin/categories', [
             'title' => 'Categorii produse',
@@ -2254,6 +2283,11 @@ final class AdminController
             'categoriesSeo' => $categoriesSeo,
             'brands' => $brands,
             'brandsSeo' => $brandsSeo,
+            'tags' => $tags,
+            'tagsSeo' => $tagsSeo,
+            'listaSeo' => $listaSeo,
+            'introCategorii' => $introCategorii,
+            'urlCatalog' => \App\Support\Catalog::url($db instanceof PDO ? \App\Support\Settings::all($db) : []),
         ], 'admin/layout');
     }
 
@@ -2292,23 +2326,33 @@ final class AdminController
         return array_values($brands);
     }
 
-    /** Salvează titlul și descrierea pentru Google ale unei mărci (pagina /marca/{slug}). */
+    /**
+     * Salvează SEO-ul unei mărci (pagina /marca/{slug}); din WP-37 și al unei etichete (/eticheta/{slug}, `seo_tip=tag`)
+     * și al listei tuturor produselor (`seo_tip=listing_default`): același formular, aceeași adresă.
+     */
     public function brandSeoUpdate(): void
     {
         if (!$this->guard()) {
             return;
         }
-        $slug = \App\Support\Slug::simplu((string) ($_POST['brand_slug'] ?? ''));
+        $tip = (string) ($_POST['seo_tip'] ?? 'brand');
+        [$tip, $ancora, $nume] = match ($tip) {
+            'tag' => ['tag', '#etichete', 'etichetei'],
+            'listing_default' => ['listing_default', '#lista-produse', 'listei de produse'],
+            default => ['brand', '#marci', 'mărcii'],
+        };
+        $ref = $tip === 'listing_default' ? \App\Support\Seo::REF_LISTA
+            : \App\Support\Slug::simplu((string) ($_POST[$tip === 'tag' ? 'tag_slug' : 'brand_slug'] ?? ''));
         $db = $this->db();
-        if ($slug === '' || !$db instanceof PDO) {
-            Flash::set('error', 'Marcă invalidă.');
-            header('Location: /admin/categories#marci');
+        if ($ref === '' || !$db instanceof PDO) {
+            Flash::set('error', $tip === 'tag' ? 'Etichetă invalidă.' : 'Marcă invalidă.');
+            header('Location: /admin/categories' . $ancora);
             return;
         }
         $this->ensureOptionalSchema($db);
-        $this->saveListingSeo($db, 'brand', $slug);
-        Flash::set('success', 'SEO-ul mărcii a fost salvat.');
-        header('Location: /admin/categories#marci');
+        $this->saveListingSeo($db, $tip, $ref);
+        Flash::set('success', 'SEO-ul ' . $nume . ' a fost salvat.');
+        header('Location: /admin/categories' . $ancora);
     }
 
     /**
@@ -2324,6 +2368,12 @@ final class AdminController
         $seo = $this->loadSeoSettings($db, $pageType, $pageRef);
         $seo['title'] = trim((string) preg_replace('/\s+/u', ' ', (string) ($_POST['seo_title'] ?? '')));
         $seo['description'] = trim((string) preg_replace('/\s+/u', ' ', (string) ($_POST['seo_description'] ?? '')));
+        // WP-37: robots, og:type și textul de deasupra listei, doar dacă sunt în formular.
+        foreach (['robots' => 'seo_robots', 'og_type' => 'seo_og_type', 'intro_html' => 'seo_intro_html'] as $cheie => $camp) {
+            if (array_key_exists($camp, $_POST) && is_scalar($_POST[$camp])) {
+                $seo[$cheie] = (string) $_POST[$camp];
+            }
+        }
         $this->saveSeoSettings($db, $pageType, $pageRef, $seo);
         // Titlurile noi se văd imediat, nu după expirarea paginilor din cache.
         ResponseCache::purgePageCache();
@@ -3408,10 +3458,50 @@ final class AdminController
                 $categories = [];
             }
         }
+        // WP-37 (B1): SEO-ul categoriilor și etichetelor blogului (seo_pages, „blog_category”/„blog_tag”, după id).
+        $categoriiSeo = [];
+        $etichete = [];
+        $eticheteSeo = [];
+        if ($db instanceof PDO) {
+            $categoriiSeo = $this->loadSeoSettingsMap($db, 'blog_category', array_map(static fn (array $c): string => (string) (int) ($c['id'] ?? 0),
+                is_array($categories) ? $categories : []));
+            try {
+                $etichete = $db->query('SELECT t.id, t.name, t.slug, COUNT(DISTINCT p.id) AS posts_count
+                    FROM blog_tags t
+                    LEFT JOIN blog_post_tags pt ON pt.tag_id = t.id
+                    LEFT JOIN blog_posts p ON p.id = pt.post_id AND p.deleted_at IS NULL
+                    GROUP BY t.id, t.name, t.slug
+                    ORDER BY t.name ASC')->fetchAll() ?: [];
+            } catch (Throwable) {
+                $etichete = [];
+            }
+            $eticheteSeo = $this->loadSeoSettingsMap($db, 'blog_tag', array_map(static fn (array $t): string => (string) (int) ($t['id'] ?? 0), $etichete));
+        }
         View::render('admin/blog-categories', [
             'title' => 'Categorii blog',
             'categories' => is_array($categories) ? $categories : [],
+            'categoriiSeo' => $categoriiSeo,
+            'eticheteBlog' => $etichete,
+            'eticheteBlogSeo' => $eticheteSeo,
         ], 'admin/layout');
+    }
+
+    /** WP-37 (B1): SEO-ul unei etichete de blog (/blog/eticheta/{slug}; seo_pages, „blog_tag”, după id). */
+    public function blogTagSeoUpdate(): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        $id = (int) ($_POST['tag_id'] ?? 0);
+        $db = $this->db();
+        if ($id <= 0 || !$db instanceof PDO) {
+            Flash::set('error', 'Etichetă invalidă.');
+            header('Location: /admin/blog/categories#etichete-blog');
+            return;
+        }
+        $this->saveListingSeo($db, 'blog_tag', (string) $id);
+        Flash::set('success', 'SEO-ul etichetei a fost salvat.');
+        header('Location: /admin/blog/categories#etichete-blog');
     }
 
     public function blogCategoryCreate(): void
@@ -3487,6 +3577,8 @@ final class AdminController
             $stmtPosts = $db->prepare('UPDATE blog_posts SET category = :category WHERE category_id = :id');
             $stmtPosts->execute(['id' => $id, 'category' => $name]);
             $db->commit();
+            // WP-37: SEO-ul categoriei blogului (doar dacă e în formular).
+            $this->saveListingSeo($db, 'blog_category', (string) $id);
             Flash::set('success', 'Categoria a fost actualizată.');
         } catch (Throwable) {
             if ($db->inTransaction()) {
@@ -3527,6 +3619,7 @@ final class AdminController
             $stmtDelete = $db->prepare('DELETE FROM blog_categories WHERE id = :id');
             $stmtDelete->execute(['id' => $id]);
             $db->commit();
+            \App\Support\Seo::sterge($db, 'blog_category', (string) $id);
             Flash::set('success', 'Categoria a fost ștearsă.');
         } catch (Throwable) {
             if ($db->inTransaction()) {
@@ -4709,6 +4802,15 @@ final class AdminController
             // Titlul și descrierea pentru Google (după tranzacție: un SEO nesalvat
             // nu are voie să anuleze redenumirea).
             $this->saveListingSeo($db, 'category', (string) $id);
+            // WP-37: textul de deasupra listei categoriei (product_categories.intro_html), doar dacă e în formular.
+            if (array_key_exists('intro_html', $_POST) && is_scalar($_POST['intro_html'])) {
+                try {
+                    $intro = \App\Support\Seo::curataIntro((string) $_POST['intro_html']);
+                    $db->prepare('UPDATE product_categories SET intro_html = ? WHERE id = ?')->execute([$intro !== '' ? $intro : null, $id]);
+                    ResponseCache::purgePageCache();
+                } catch (Throwable) {
+                }
+            }
             Flash::set('success', 'Categoria a fost actualizată.');
         } catch (Throwable) {
             if ($db->inTransaction()) {
@@ -4931,6 +5033,8 @@ final class AdminController
                 'canonical_url' => $seoCanonicalUrl,
                 'image_url' => $seoImageUrl,
             ]);
+            // WP-37: marca și etichetele produsului ca entități (lista din admin, harta site-ului).
+            \App\Support\MarciEtichete::sincronizeazaProdus($db, $productId);
         }
         $avertismentSalvat = $this->saveProductWarningFromPost($db, $productId);
         $this->refreshCacheAfterPublicContentChange($db);
@@ -5292,6 +5396,8 @@ final class AdminController
             'canonical_url' => $seoCanonicalUrl,
             'image_url' => $seoImageUrl,
         ]);
+        // WP-37: marca și etichetele produsului ca entități (lista din admin, harta site-ului).
+        \App\Support\MarciEtichete::sincronizeazaProdus($db, $id);
         $avertismentSalvat = $this->saveProductWarningFromPost($db, $id);
         $this->refreshCacheAfterPublicContentChange($db);
 
@@ -5490,6 +5596,7 @@ final class AdminController
             $stmt = $db->prepare('DELETE FROM products WHERE id = :id');
             $stmt->execute(['id' => $id]);
             $this->saveSeoSettings($db, 'product', (string) $id, []);
+            \App\Support\MarciEtichete::sincronizeazaProdus($db, $id);
             $this->refreshCacheAfterPublicContentChange($db);
             Flash::set('success', 'Produs șters definitiv.');
         }
@@ -16188,130 +16295,51 @@ final class AdminController
         return $normalized;
     }
 
+    /**
+     * Rândul SEO al unei pagini (App\Support\Seo, WP-37): titlul, descrierea, canonicalul, poza și, din WP-37, robots,
+     * og:type și textul listei. Fără rând: toate goale.
+     */
     private function loadSeoSettings(PDO $db, string $pageType, string $pageRef): array
     {
-        $pageType = $this->normalizeSeoPageType($pageType);
-        $pageRef = trim($pageRef);
-        if ($pageType === '' || $pageRef === '') {
-            return $this->defaultSeoSettings();
-        }
-        try {
-            $stmt = $db->prepare(
-                'SELECT title, description, canonical_url, image_url
-                 FROM seo_pages
-                 WHERE page_type = :page_type
-                   AND page_ref = :page_ref
-                 LIMIT 1'
-            );
-            $stmt->execute([
-                'page_type' => $pageType,
-                'page_ref' => $pageRef,
-            ]);
-            $row = $stmt->fetch() ?: null;
-            return is_array($row) ? $this->normalizeSeoSettings($row) : $this->defaultSeoSettings();
-        } catch (Throwable) {
-            return $this->defaultSeoSettings();
-        }
+        return \App\Support\Seo::citeste($db, $pageType, $pageRef);
     }
 
     private function loadSeoSettingsMap(PDO $db, string $pageType, array $pageRefs): array
     {
-        $pageType = $this->normalizeSeoPageType($pageType);
-        if ($pageType === '') {
-            return [];
-        }
-        $normalizedRefs = [];
-        foreach ($pageRefs as $ref) {
-            $value = trim((string) $ref);
-            if ($value === '' || in_array($value, $normalizedRefs, true)) {
-                continue;
-            }
-            $normalizedRefs[] = $value;
-        }
-        if ($normalizedRefs === []) {
-            return [];
-        }
-
-        $result = [];
-        $placeholders = implode(',', array_fill(0, count($normalizedRefs), '?'));
-        try {
-            $stmt = $db->prepare(
-                'SELECT page_ref, title, description, canonical_url, image_url
-                 FROM seo_pages
-                 WHERE page_type = ?
-                   AND page_ref IN (' . $placeholders . ')'
-            );
-            $stmt->execute(array_merge([$pageType], $normalizedRefs));
-            $rows = $stmt->fetchAll();
-            if (is_array($rows)) {
-                foreach ($rows as $row) {
-                    if (!is_array($row)) {
-                        continue;
-                    }
-                    $ref = trim((string) ($row['page_ref'] ?? ''));
-                    if ($ref === '') {
-                        continue;
-                    }
-                    $result[$ref] = $this->normalizeSeoSettings($row);
-                }
-            }
-        } catch (Throwable) {
-            return [];
-        }
-
-        return $result;
+        return \App\Support\Seo::citesteHarta($db, $pageType, $pageRefs);
     }
 
+    /**
+     * Scrie SEO-ul unei pagini. Titlul, descrierea, canonicalul și poza se scriu mereu (ca până acum); robots, og:type și
+     * textul listei (WP-37) doar când sunt în $seo sau în formular (seo_robots, seo_og_type, seo_intro_html), deci un
+     * formular care nu le are nu le șterge. Cu $seo gol (pagina însăși a fost ștearsă), rândul dispare.
+     */
     private function saveSeoSettings(PDO $db, string $pageType, string $pageRef, array $seo): void
     {
-        $pageType = $this->normalizeSeoPageType($pageType);
-        $pageRef = trim($pageRef);
-        if ($pageType === '' || $pageRef === '') {
+        if ($seo === []) {
+            \App\Support\Seo::sterge($db, $pageType, $pageRef);
             return;
         }
-        $normalized = $this->normalizeSeoSettings($seo);
-
-        if (
-            $normalized['title'] === ''
-            && $normalized['description'] === ''
-            && $normalized['canonical_url'] === ''
-            && $normalized['image_url'] === ''
-        ) {
-            try {
-                $delete = $db->prepare(
-                    'DELETE FROM seo_pages
-                     WHERE page_type = :page_type
-                       AND page_ref = :page_ref'
-                );
-                $delete->execute([
-                    'page_type' => $pageType,
-                    'page_ref' => $pageRef,
-                ]);
-            } catch (Throwable) {
+        $campuri = [
+            'title' => (string) ($seo['title'] ?? ''),
+            'description' => (string) ($seo['description'] ?? ''),
+            'canonical_url' => (string) ($seo['canonical_url'] ?? ''),
+            'image_url' => (string) ($seo['image_url'] ?? ''),
+        ];
+        foreach (['robots' => 'seo_robots', 'og_type' => 'seo_og_type', 'intro_html' => 'seo_intro_html'] as $cheie => $camp) {
+            if (array_key_exists($cheie, $seo)) {
+                $campuri[$cheie] = (string) $seo[$cheie];
+            } elseif (array_key_exists($camp, $_POST) && is_scalar($_POST[$camp])) {
+                $campuri[$cheie] = (string) $_POST[$camp];
             }
-            return;
         }
+        \App\Support\Seo::salveaza($db, $pageType, $pageRef, $campuri);
+    }
 
-        try {
-            $stmt = $db->prepare(
-                'INSERT INTO seo_pages (page_type, page_ref, title, description, canonical_url, image_url)
-                 VALUES (:page_type, :page_ref, :title, :description, :canonical_url, :image_url)
-                 ON DUPLICATE KEY UPDATE
-                    title = VALUES(title),
-                    description = VALUES(description),
-                    canonical_url = VALUES(canonical_url),
-                    image_url = VALUES(image_url)'
-            );
-            $stmt->execute([
-                'page_type' => $pageType,
-                'page_ref' => $pageRef,
-                'title' => $normalized['title'] !== '' ? $normalized['title'] : null,
-                'description' => $normalized['description'] !== '' ? $normalized['description'] : null,
-                'canonical_url' => $normalized['canonical_url'] !== '' ? $normalized['canonical_url'] : null,
-                'image_url' => $normalized['image_url'] !== '' ? $normalized['image_url'] : null,
-            ]);
-        } catch (Throwable) {
-        }
+    /** Setările (pentru numele magazinului din panoul SEO, WP-37). */
+    private function cachedSettingsSeo(?PDO $db): array
+    {
+        return $db instanceof PDO ? \App\Support\Settings::all($db) : [];
     }
 
     private function loadCustomPageSeoSettings(PDO $db, int $pageId): array

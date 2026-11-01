@@ -27,6 +27,8 @@ declare(strict_types=1);
  *    necunoscută rămâne neatinsă; FIECARE rută GET exclusă și FIECARE POST, pe
  *    www, răspunde exact ca pe gazda corectă; coșul și contul rămân pe www.
  * D. Oprirea de urgență (SEO_REDIRECTURI=0): nicio redirecționare SEO.
+ * E. SEO partea B: E1 (WP-37) modelul SEO al paginilor, panoul din admin, mărcile și etichetele ca entități
+ *    (tools/dev/lib/test-seo-model.php).
  *
  * Serverele în plus pornesc pe CMS_DEV_PORT+2 și +3 și se opresc la final; la
  * final se pune la loc licența „toate”. Raportul: $CMS_DEV_DIR/test-seo-raport.txt;
@@ -1170,6 +1172,11 @@ try {
         $o === ['www' => 200, 'harta' => 404, '/ final' => 200, 'majuscule' => 200, 'categorie' => 200]);
     $verifica('sitemap, robots.txt și datele structurate rămân', $cerere($portOprit, 'GET', '/sitemap.xml', $corect)['cod'] === 200
         && str_contains($cerere($portOprit, 'GET', '/', $corect)['corp'], 'application/ld+json'));
+
+    // =================================================================
+    // E. SEO partea B (WP-37, WP-38), pe serverul de dezvoltare
+    // =================================================================
+    require __DIR__ . '/lib/test-seo-model.php';
 } catch (Throwable $e) {
     $verifica('testul a mers până la capăt', false, $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')');
 } finally {

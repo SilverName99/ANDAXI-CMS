@@ -293,16 +293,17 @@ admin_componenta('antet-pagina', [
                     </label>
                 </div>
                 <div class="field" style="grid-column:1/-1;">
-                    <label>Meta title</label>
-                    <input type="text" name="seo_title" value="<?= htmlspecialchars((string) (($editingPostSeo['title'] ?? '') ?: ''), ENT_QUOTES) ?>">
-                </div>
-                <div class="field" style="grid-column:1/-1;">
-                    <label>Meta description</label>
-                    <textarea name="seo_description" rows="3"><?= htmlspecialchars((string) (($editingPostSeo['description'] ?? '') ?: ''), ENT_QUOTES) ?></textarea>
-                </div>
-                <div class="field" style="grid-column:1/-1;">
-                    <label>Canonical URL (opțional)</label>
-                    <input type="url" name="seo_canonical_url" value="<?= htmlspecialchars((string) (($editingPostSeo['canonical_url'] ?? '') ?: ''), ENT_QUOTES) ?>">
+<?php
+// WP-37: panoul SEO comun, fără a doua previzualizare (cardul „Cum arată în Google” de deasupra, BV 49c4f5b, rămâne): verificările
+// (lipsă, prea lung, duplicat) și câmpurile, cu aceleași nume, plus robots și og:type.
+$idPostareSeo = (int) ($editingPost['id'] ?? 0);
+admin_componenta('panou-seo', [
+    'tip' => 'blog_post', 'ref' => $idPostareSeo > 0 ? (string) $idPostareSeo : '', 'id' => 'postare-seo',
+    'valori' => is_array($editingPostSeo ?? null) ? $editingPostSeo : [], 'previzualizare' => false,
+    'verificari' => $idPostareSeo > 0 ? \App\Support\Seo::verificari(\App\Support\Database::connection([]), 'blog_post', (string) $idPostareSeo,
+        (string) ($editingPostSeo['title'] ?? ''), (string) ($editingPostSeo['description'] ?? '')) : [],
+]);
+?>
                 </div>
                 <div class="field" style="grid-column:1/-1;">
                     <label>Imagine social preview (OG/Twitter)</label>

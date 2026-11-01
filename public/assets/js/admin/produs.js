@@ -1,6 +1,6 @@
 /*
  * Editorul produsului (faza D, WP-34; views/admin/products.php): numărul modificărilor nesalvate, Ctrl+S, Esc, cuprinsul
- * secțiunilor și previzualizarea „Cum apare în Google”. Nu schimbă nimic din ce trimite formularul: același formular
+ * secțiunilor și reîmprospătarea panoului SEO („Cum apare în Google”, public/assets/js/admin/seo.js). Nu schimbă nimic din ce trimite formularul: același formular
  * (#product-form), aceleași câmpuri, aceeași adresă; scriptul paginii îl completează și îl deschide, ca înainte.
  *
  * Modificările nesalvate: la deschiderea editorului se ține minte ce ar trimite formularul (FormData, câmp cu câmp); un câmp
@@ -120,20 +120,9 @@
     linkuri.forEach(function (l) { var s = document.getElementById(l.getAttribute('data-produs-sectiune')); if (s) observator.observe(s); });
   }
 
-  // „Cum apare în Google”: titlul SEO (sau numele), descrierea SEO (sau descrierea scurtă), adresa produsului.
-  function valoare(id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+  // „Cum apare în Google” (WP-37): panoul SEO comun (seo.js) se reface cât editorul e deschis (câmpurile le completează
+  // scriptul paginii, fără evenimente „input”).
   function previzualizareGoogle() {
-    var titlu = valoare('p_seo_title') || valoare('p_name');
-    var text = (valoare('p_seo_description') || valoare('p_short_description')).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-    var adresa = document.getElementById('produs-google-adresa');
-    if (!adresa) return;
-    adresa.textContent = window.location.host + ' › produs › ' + (valoare('p_slug') || '…');
-    document.getElementById('produs-google-titlu').textContent = titlu.length > 60 ? titlu.slice(0, 59) + '…' : (titlu || 'Titlul produsului');
-    document.getElementById('produs-google-text').textContent = text.length > 160 ? text.slice(0, 159) + '…' : text;
-    var nTitlu = document.getElementById('produs-google-titlu-n');
-    var nText = document.getElementById('produs-google-text-n');
-    nTitlu.textContent = String(titlu.length);
-    nText.textContent = String(text.length);
-    nTitlu.parentNode.classList.toggle('este-lung', titlu.length > 60 || text.length > 160);
+    if (window.axSeo) window.axSeo.actualizeaza();
   }
 })();

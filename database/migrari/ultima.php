@@ -8,8 +8,8 @@ declare(strict_types=1);
 // decât la ultima rulare a runner-ului), fiecare id de mai jos trebuie să fie terminat în _platforma_migrari.
 
 return [
-    'ord' => 40,
-    'amprenta' => '6cdf587e8e6261fdf96650c339d3e6f91ada9b2762d72317dc529005a201013b',
+    'ord' => 42,
+    'amprenta' => '443b293054b803e41eac135bb9e1ef050b5fb07e3ec0da7464f9e135d618b892',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',
@@ -51,5 +51,7 @@ return [
         'conturi_clienti/0038_confirmare_legata_de_adresa',
         'plata_stripe/0039_evenimente_in_lucru',
         'newsletter/0040_newsletter_dubla_confirmare',
+        'nucleu/0041_seo_model',
+        'catalog/0042_marci_etichete',
     ],
 ];

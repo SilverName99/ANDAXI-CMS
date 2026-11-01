@@ -19,6 +19,7 @@ use App\Http\Controllers\CereriOfertaController;
 use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
 use App\Http\Controllers\ConfirmareEmailController;
+use App\Http\Controllers\SeoAdminController;
 use App\Http\Controllers\SiteController;
 use App\Http\Router;
 
@@ -356,5 +357,12 @@ return static function (Router $router): void {
     $router->get('/admin/products/oferte-bbd', [OferteBbdController::class, 'lista']);
     // WP-36 (faza D): căutarea în tot adminul (Ctrl+K): JSON pentru fereastra ei, pagina rezultatelor fără JavaScript.
     $router->get('/admin/cauta', [CautareAdminController::class, 'cauta']);
+    // WP-37 (B1): verificările panoului SEO (lipsă, prea lung, duplicat; JSON, doar citire), sub paginile fiecărui rol:
+    // produsele și listele lor (catalog), articolele (blog), restul (nucleu, administratorul general).
+    $router->get('/admin/products/seo-verifica', [SeoAdminController::class, 'verifica']);
+    $router->get('/admin/blog/posts/seo-verifica', [SeoAdminController::class, 'verifica']);
+    $router->get('/admin/seo/verifica', [SeoAdminController::class, 'verifica']);
+    // WP-37 (B1): SEO-ul unei etichete de blog, din Categorii blog (al pluginului blog, /admin/blog/*).
+    $router->post('/admin/blog/categories/eticheta-seo', [AdminController::class, 'blogTagSeoUpdate']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };
