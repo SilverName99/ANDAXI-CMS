@@ -90,10 +90,16 @@ namespace App\Support;
  */
 final class PoliticaLivrare
 {
+    /** Cheile termenului, ca nume (lista albă a setărilor de pe copia de verificare le găsește după `CHEIE_`). */
+    public const CHEIE_PREGATIRE_MIN = 'seo_livrare_pregatire_min';
+    public const CHEIE_PREGATIRE_MAX = 'seo_livrare_pregatire_max';
+    public const CHEIE_TRANSPORT_MIN = 'seo_livrare_transport_min';
+    public const CHEIE_TRANSPORT_MAX = 'seo_livrare_transport_max';
+
     /** Setările care pot schimba termenul (cheile din tabelul settings). */
     public const SETARI_TERMEN = [
-        'pregatire' => ['seo_livrare_pregatire_min', 'seo_livrare_pregatire_max'],
-        'transport' => ['seo_livrare_transport_min', 'seo_livrare_transport_max'],
+        'pregatire' => [self::CHEIE_PREGATIRE_MIN, self::CHEIE_PREGATIRE_MAX],
+        'transport' => [self::CHEIE_TRANSPORT_MIN, self::CHEIE_TRANSPORT_MAX],
     ];
 
     /** Cel mai mare număr de zile acceptat într-o setare de termen. */

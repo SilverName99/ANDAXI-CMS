@@ -255,7 +255,13 @@ try {
     $verifica('o comandă plasată de un vizitator venit din Google primește sursa „google”', is_array($comandaNoua)
         && ($comandaNoua['sursa'] ?? '') === 'google', $trimisa['cod'] . ' ' . json_encode($comandaNoua));
     if (is_array($comandaNoua)) {
-        $db->prepare('DELETE FROM order_items WHERE order_id = ?')->execute([(int) $comandaNoua['id']]);
+        // Comanda de test pleacă de tot: și rândurile legate de ea (emailurile trimise, liniile, istoricul…), din fiecare tabel
+        // cu `order_id`, ca baza de dezvoltare (din care se fac copiile testelor) să nu păstreze rânduri fără comandă.
+        $legate = $db->query("SELECT DISTINCT TABLE_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+            AND COLUMN_NAME = 'order_id' AND TABLE_NAME <> 'orders'")->fetchAll(PDO::FETCH_COLUMN);
+        foreach ($legate as $tabel) {
+            $db->prepare('DELETE FROM `' . str_replace('`', '', (string) $tabel) . '` WHERE order_id = ?')->execute([(int) $comandaNoua['id']]);
+        }
         $db->prepare('DELETE FROM orders WHERE id = ?')->execute([(int) $comandaNoua['id']]);
     }
     // Raportul: sursele puse pe comenzile demo, apoi numărate.

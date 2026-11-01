@@ -79,7 +79,8 @@ return [
     // 13 (WP-38, nucleu/0046, nucleu/0047): redirecționările site-ului copiate (adresele sunt publice; adminul care a adăugat
     // regula, cu pseudonimul emailului); jurnalul 404 doar structura (o copie nu are nevoie de el).
     // 14 (WP-39, catalog/0048): codul EAN al produselor (public, de pe ambalaj), copiat cum e.
-    'versiune' => 14,
+    // 15 (WP-40, magazin/0051): sursa comenzii (felul vizitei: google, email, direct …; o categorie), copiată cum e.
+    'versiune' => 15,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -287,8 +288,9 @@ return [
             'fan_tracking_last_event_at', 'fan_tracking_synced_at', 'completed_awb_email_sent_at', 'deleted_at', 'created_at', 'updated_at',
             'ad_source', 'nl_campaign_id', 'erp_status', 'erp_order_id', 'erp_attempts', 'erp_last_attempt_at', 'erp_next_retry_at', 'erp_synced_at',
             'erp_factura_numar', 'paid_amount', 'edit_unlocked_at', 'erp_client_agresiv', 'erp_client_agresiv_versiune', 'manual_discount',
-            'manual_discount_percent', 'terms_accepted_at'],
-            'motive' => ['fan_locker_name' => 'FANbox-ul ales: date publice ale lockerului', 'fan_locker_address' => 'adresa publică a FANbox-ului',
+            'manual_discount_percent', 'terms_accepted_at', 'sursa'],
+            'motive' => ['sursa' => 'felul vizitei (google, email, direct …; WP-40, magazin/0051): o categorie, fără nicio dată a clientului',
+                'fan_locker_name' => 'FANbox-ul ales: date publice ale lockerului', 'fan_locker_address' => 'adresa publică a FANbox-ului',
                 'fan_locker_postcode' => 'codul poștal public al FANbox-ului', 'completed_awb_email_sent_at' => 'doar data trimiterii, fără adresă'],
             'transforma' => [
                 'stripe_session_id' => ['ref'],
