@@ -16,6 +16,8 @@ declare(strict_types=1);
  *  3. Verificările panoului: lipsă, peste 60/155 de caractere, același titlu pe altă pagină (cu linkul ei).
  *  4. Mărcile și etichetele: migrarea rulată din nou de două ori dă aceleași rânduri; sincronizarea nu mai schimbă nimic;
  *     fiecare /marca/{slug} și /eticheta/{slug} din produse răspunde 200 și are rândul ei.
+ *  5. Revizuirea WP-37/38: HtmlSigur (formele XSS cunoscute), lungimile, duplicatele doar pe pagini publice și editabile,
+ *     paginile „noindex” scoase din sitemap și din fluxul Google Merchant; formularul mărcii fără jeton refuzat (la 2).
  */
 
 use App\Support\MarciEtichete;
@@ -246,14 +248,21 @@ try {
     // Admin: salvările păstrează câmpurile noi pe care formularul nu le are și le scriu pe cele pe care le are.
     $jarSeo = $jarNou('seo-e1');
     $cerere($port, 'POST', '/admin/login', [], $jarSeo, ['email' => $adminEmail, 'password' => $parola]);
+    // Revizuirea WP-37/38: formularele SEO ale mărcii, etichetei și listei cer jetonul formularului (_csrf).
+    preg_match('/name="_csrf" value="([0-9a-f]{64})"/', $cerere($port, 'GET', '/admin/categories', [], $jarSeo)['corp'], $mJeton);
+    $jetonSeo = (string) ($mJeton[1] ?? '');
     Seo::salveaza($db, 'brand', 'livada-demo', ['robots' => 'noindex,follow', 'intro_html' => '<p>Păstrat.</p>']);
-    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['brand_slug' => 'livada-demo', 'seo_title' => 'Titlu nou', 'seo_description' => '']);
+    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['brand_slug' => 'livada-demo', 'seo_title' => 'Fără jeton', 'seo_description' => '']);
+    $faraJeton = Seo::citeste($db, 'brand', 'livada-demo');
+    $verifica('admin: formularul SEO al mărcii fără jetonul formularului (_csrf) nu salvează nimic', $jetonSeo !== ''
+        && $faraJeton['title'] === '' && $faraJeton['robots'] === 'noindex,follow', json_encode($faraJeton, JSON_UNESCAPED_UNICODE));
+    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['_csrf' => $jetonSeo, 'brand_slug' => 'livada-demo', 'seo_title' => 'Titlu nou', 'seo_description' => '']);
     $dupaVechi = Seo::citeste($db, 'brand', 'livada-demo');
-    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['brand_slug' => 'livada-demo', 'seo_title' => 'Titlu nou', 'seo_description' => 'D',
+    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['_csrf' => $jetonSeo, 'brand_slug' => 'livada-demo', 'seo_title' => 'Titlu nou', 'seo_description' => 'D',
         'seo_robots' => '', 'seo_intro_html' => '<p>Nou</p><script>x()</script>']);
     $dupaNou = Seo::citeste($db, 'brand', 'livada-demo');
-    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['seo_tip' => 'tag', 'tag_slug' => 'demo', 'seo_title' => 'Eticheta demo E1', 'seo_robots' => 'noindex,follow']);
-    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['seo_tip' => 'listing_default', 'seo_title' => '', 'seo_description' => 'Lista E1']);
+    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['_csrf' => $jetonSeo, 'seo_tip' => 'tag', 'tag_slug' => 'demo', 'seo_title' => 'Eticheta demo E1', 'seo_robots' => 'noindex,follow']);
+    $cerere($port, 'POST', '/admin/categories/brand-seo', [], $jarSeo, ['_csrf' => $jetonSeo, 'seo_tip' => 'listing_default', 'seo_title' => '', 'seo_description' => 'Lista E1']);
     $verifica('admin: un formular fără robots și text de listă nu le șterge; cu ele le scrie (curățate); etichetele și lista produselor se '
         . 'salvează prin același formular', $dupaVechi['robots'] === 'noindex,follow' && $dupaVechi['intro_html'] === '<p>Păstrat.</p>'
         && $dupaVechi['title'] === 'Titlu nou' && $dupaNou['robots'] === '' && str_contains($dupaNou['intro_html'], '<p>Nou</p>')
@@ -384,3 +393,116 @@ try {
     MarciEtichete::sincronizeaza($db);
 }
 $verifica('după test: entitățile sunt exact cele ale migrării', $instantaneu() === $dupaMigrare);
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 5. Revizuirea WP-37/38: textul de deasupra listelor curățat după lista albă (HtmlSigur), lungimile, duplicatele doar pe
+//    pagini publice și pe care adminul le poate edita, paginile „noindex” scoase din sitemap și din fluxul Google Merchant.
+// ---------------------------------------------------------------------------------------------------------------------
+$vectori = [
+    '<img src=x onerror=alert(1)>', '<svg onload=alert(1)><circle/></svg>', '<a href="javascript:alert(1)">a</a>',
+    '<a href="&#106;avascript:alert(1)">b</a>', '<a href="java&#9;script:alert(1)">c</a>', '<a href=" JaVaScRiPt:alert(1)">d</a>',
+    '<img src="data:image/svg+xml;base64,PHN2Zz4=">', '<math><mtext><img src=x onerror=alert(1)></mtext></math>',
+    '<p style="background:url(javascript:alert(1))" onclick="x()">e</p>', '<iframe src="https://exemplu.test"></iframe>',
+    '<object data="x.swf"></object>', '<form action="/x"><input name=a></form>', '<!-- <script>alert(1)</script> -->',
+    '<details open ontoggle=alert(1)>f</details>', '<a href="vbscript:msgbox(1)">g</a>', '<scr<script>ipt>alert(1)</script>',
+];
+$rauRamas = [];
+foreach ($vectori as $vector) {
+    $curat = \App\Support\HtmlSigur::curata($vector);
+    if (preg_match('/<(script|svg|math|iframe|object|form|input|details)\b|\bon[a-z]+\s*=|javascript:|vbscript:|data:|style=/i', $curat) === 1) {
+        $rauRamas[] = $vector . ' => ' . $curat;
+    }
+}
+$bun = \App\Support\HtmlSigur::curata('<h2>Titlu</h2><p class="mare">Text <strong>tare</strong>, <a href="/produs/x" target="_blank">link</a>, '
+    . '<a href="https://exemplu.test/a?b=1#c">extern</a>, <a href="mailto:a@exemplu.test">mail</a></p><ul><li>unu</li></ul><img src="/poze/a.jpg" alt="A">');
+$verifica('HtmlSigur: niciun vector XSS cunoscut nu trece (on…, javascript:/vbscript:/data:, svg, math, iframe, formulare, comentarii)',
+    $rauRamas === [], implode(' | ', $rauRamas));
+$verifica('HtmlSigur: ce scrie omul obișnuit rămâne (titluri, paragrafe, liste, linkuri relative/http/mailto, poze; target=_blank cu rel)',
+    str_contains($bun, '<h2>Titlu</h2>') && str_contains($bun, '<p class="mare">') && str_contains($bun, '<strong>tare</strong>')
+    && str_contains($bun, 'href="/produs/x" target="_blank" rel="noopener noreferrer"') && str_contains($bun, 'href="https://exemplu.test/a?b=1#c"')
+    && str_contains($bun, 'href="mailto:a@exemplu.test"') && str_contains($bun, '<li>unu</li>') && str_contains($bun, '<img src="/poze/a.jpg" alt="A">'), $bun);
+// Un rând scris altfel (o copie, o unealtă), cu script: pagina îl afișează curățat.
+$idCategorieIntro = (int) $db->query("SELECT id FROM product_categories WHERE slug = 'ceaiuri'")->fetchColumn();
+try {
+    $db->prepare('UPDATE product_categories SET intro_html = ? WHERE id = ?')
+        ->execute(['<p>Intro E1</p><img src=x onerror=alert(1)><script>alert(2)</script>', $idCategorieIntro]);
+    \App\Support\ResponseCache::purgePageCache();
+    $corpIntro = $cerere($port, 'GET', '/categorie/ceaiuri')['corp'];
+    preg_match('#<div class="lista-intro">(.*?)</div>#s', $corpIntro, $mIntro);
+    $verifica('un text de listă cu script scris direct în bază iese curățat pe pagină', str_contains($mIntro[1] ?? '', '<p>Intro E1</p>')
+        && !str_contains($mIntro[1] ?? '', 'onerror') && !str_contains($mIntro[1] ?? '', 'alert(2)'), $mIntro[1] ?? '(fără)');
+} finally {
+    $db->prepare('UPDATE product_categories SET intro_html = NULL WHERE id = ?')->execute([$idCategorieIntro]);
+    \App\Support\ResponseCache::purgePageCache();
+}
+
+// Lungimile: un titlu peste 255 de caractere nu se pierde în tăcere.
+$eroareLung = Seo::salveaza($db, 'product', $idProdus, ['title' => str_repeat('t', 256)]);
+$verifica('Seo::salveaza: un titlu de 256 de caractere e refuzat cu un mesaj clar, rândul rămâne neschimbat',
+    is_string($eroareLung) && str_contains($eroareLung, '255') && Seo::citeste($db, 'product', $idProdus)['title'] !== str_repeat('t', 256), (string) $eroareLung);
+
+// Duplicatele: doar pe pagini publice, doar pe cele pe care adminul le poate edita.
+$idPaginaCiorna = (string) (int) $db->query("SELECT id FROM pages WHERE slug = 'despre-noi' AND deleted_at IS NULL")->fetchColumn();
+$titluD = 'Titlu E1 dublat pe o ciornă';
+$areRandPagina = Seo::areRand($db, 'custom_page', $idPaginaCiorna);
+$inaintePagina = Seo::citeste($db, 'custom_page', $idPaginaCiorna);
+try {
+    Seo::salveaza($db, 'custom_page', $idPaginaCiorna, ['title' => $titluD]);
+    $cuPagina = Seo::verificari($db, 'product', $idProdus, $titluD, '');
+    $faraDrept = Seo::verificari($db, 'product', $idProdus, $titluD, '', static fn (string $link): bool => !str_starts_with($link, '/admin/pages'));
+    $db->prepare('UPDATE pages SET is_published = 0 WHERE id = ?')->execute([(int) $idPaginaCiorna]);
+    $ciorna = Seo::verificari($db, 'product', $idProdus, $titluD, '');
+    $db->prepare('UPDATE pages SET is_published = 1, deleted_at = NOW() WHERE id = ?')->execute([(int) $idPaginaCiorna]);
+    $stearsa = Seo::verificari($db, 'product', $idProdus, $titluD, '');
+    $verifica('duplicatele: o pagină publicată se arată; nu unui admin care n-o poate edita, nu dacă e ciornă sau ștearsă',
+        $coduri($cuPagina, 'titlu') === ['duplicat'] && $coduri($faraDrept, 'titlu') === [] && $coduri($ciorna, 'titlu') === []
+        && $coduri($stearsa, 'titlu') === [], json_encode([$cuPagina, $faraDrept, $ciorna, $stearsa], JSON_UNESCAPED_UNICODE));
+} finally {
+    $db->prepare('UPDATE pages SET is_published = 1, deleted_at = NULL WHERE id = ?')->execute([(int) $idPaginaCiorna]);
+    if ($areRandPagina) {
+        Seo::salveaza($db, 'custom_page', $idPaginaCiorna, $inaintePagina);
+    } else {
+        Seo::sterge($db, 'custom_page', $idPaginaCiorna);
+    }
+}
+
+// Paginile „noindex” nu intră în sitemap, iar produsele „noindex” nici în fluxul Google Merchant.
+$fluxFisier = \App\Support\FluxGoogleMerchant::fisierCache();
+$locuri = static function () use ($cerere, $port): array {
+    preg_match_all('#<loc>https?://[^/<]+(/[^<]*)</loc>#', $cerere($port, 'GET', '/sitemap.xml')['corp'], $mm);
+    return $mm[1];
+};
+$inainteSitemap = $locuri();
+@unlink($fluxFisier);
+$inainteFlux = $cerere($port, 'GET', '/feed/google-merchant.xml')['corp'];
+$scoaseNoindex = [['product', $idProdus], ['custom_page', $idPagina], ['brand', 'livada-demo'], ['tag', 'demo'], ['category', (string) $idCategorie]];
+$randuriInainte = [];
+foreach ($scoaseNoindex as [$tip, $ref]) {
+    $randuriInainte[] = [Seo::areRand($db, $tip, $ref), Seo::citeste($db, $tip, $ref)];
+}
+try {
+    foreach ($scoaseNoindex as [$tip, $ref]) {
+        Seo::salveaza($db, $tip, $ref, ['robots' => 'noindex,follow']);
+    }
+    $dupaSitemap = $locuri();
+    @unlink($fluxFisier);
+    $dupaFlux = $cerere($port, 'GET', '/feed/google-merchant.xml')['corp'];
+    $lipsa = array_values(array_diff($inainteSitemap, $dupaSitemap));
+    sort($lipsa);
+    $asteptatLipsa = array_values(array_intersect(['/categorie/ceaiuri', '/despre-noi', '/eticheta/demo', '/marca/livada-demo', '/produs/ceai-de-menta'], $inainteSitemap));
+    $verifica('sitemap.xml: paginile „noindex” (produs, pagină, marcă, etichetă, categorie) ies; restul rămân exact',
+        $lipsa === $asteptatLipsa && in_array('/produs/ceai-de-menta', $lipsa, true) && array_diff($dupaSitemap, $inainteSitemap) === [],
+        json_encode([$lipsa, $asteptatLipsa], JSON_UNESCAPED_UNICODE));
+    $verifica('fluxul Google Merchant: produsul „noindex” iese, celelalte rămân', str_contains($inainteFlux, '/produs/ceai-de-menta')
+        && !str_contains($dupaFlux, '/produs/ceai-de-menta') && substr_count($dupaFlux, '<item>') === substr_count($inainteFlux, '<item>') - 1);
+} finally {
+    foreach ($scoaseNoindex as $i => [$tip, $ref]) {
+        if ($randuriInainte[$i][0]) {
+            Seo::salveaza($db, $tip, $ref, $randuriInainte[$i][1]);
+        } else {
+            Seo::sterge($db, $tip, $ref);
+        }
+    }
+    @unlink($fluxFisier);
+}
+$verifica('după test: sitemap-ul e din nou cel de la început', $locuri() === $inainteSitemap);

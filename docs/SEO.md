@@ -136,17 +136,29 @@ dosarul site-ului (sămânța, mai jos):
 **Harta din bază, pachetul ca sămânță.** Regulile din `redirecturi.json` intră în `seo_redirects` ca rânduri „pachet”,
 exact cum sunt (aceleași ținte, coduri, prefixe și lanțuri: harta se aplică la fel ca înainte), singure la prima cerere de
 după ce fișierul s-a schimbat (semnătura lui: mărimea și momentul) și din admin („Reia regulile din pachet”). O regulă din
-pachet editată în admin devine „manuală” (pachetul nu o mai atinge); una ștearsă din admin doar se oprește (pachetul nu o
-readuce); una scoasă din fișier dispare și din tabel (doar dacă fișierul se citește). `SeoRedirects` nu citește baza:
-citește o copie a regulilor pornite, `storage/cache/redirecturi-<site>.json`, refăcută la fiecare schimbare; cât copia
-lipsește sau e a altui pachet, cererea folosește regulile din fișier, ca înainte, iar la finalul ei copia se reface din bază
-(fără tabel, adică înainte de migrare: o copie doar din pachet, reverificată la 5 minute). **Aceleași reguli ca până acum:**
+pachet editată în admin devine „manuală” (pachetul nu o mai atinge: sincronizarea scrie doar rândurile `source = 'pachet'`);
+una ștearsă din admin doar se oprește și rămâne oprită ca „piatră de mormânt” (pachetul nu o readuce, nici după ce iese din
+fișier); una pornită scoasă din fișier dispare și din tabel (doar dacă fișierul se citește). **Sincronizarea automată nu
+scoate mai mult de o cincime** din regulile pachetului pornite (cel puțin 3): un fișier înlocuit greșit nu golește harta;
+atunci nu scoate nimic și scrie o dată pe zi în jurnalul PHP. „Reia regulile din pachet” (adminul) le scoate.
+`SeoRedirects` nu citește baza: citește o copie a regulilor pornite, `storage/cache/redirecturi-<site>.json`, refăcută la
+fiecare schimbare. Copia poartă o **generație** (`<copie>.generatie`): fiecare schimbare o crește înainte de a reface copia,
+iar o copie cu generația mai mică e veche; refacerea (citirea bazei și scrierea copiei) stă sub un lacăt (`<copie>.lacat`,
+`flock`), deci două refaceri nu se încrucișează și una mai veche nu scrie peste una mai nouă. Cât copia lipsește, e veche
+sau e a altui pachet, cererea folosește regulile din fișier, ca înainte, iar la finalul ei copia se reface din bază (fără
+tabel, adică înainte de migrare: o copie doar din pachet, reverificată la 5 minute). Lista din admin nu reface copia la
+fiecare deschidere, doar când nu e la zi. **Dosarul cache nescriibil:** harta refăcută rămâne în memorie pentru cererea de
+acum, următoarea încercare vine după 5 minute (un fișier-semn `<copie>.esec`, în cache sau în dosarul temporar), eșecul
+se scrie în jurnalul PHP și pagina Redirecționări și 404 îl arată. **Aceleași reguli ca până acum:**
 doar unde aplicația ar răspunde 404/410 sau ar ghici, un singur salt, parametrii păstrați, fără `Set-Cookie`, căile excluse
 (§1) niciodată; `SEO_REDIRECTURI=0` oprește tot. Fiecare aplicare a unei reguli îi numără accesările (`hits`, `last_hit_at`).
 
 **O regulă nouă** (din formular, din CSV, din jurnalul 404, de la ștergerea unei pagini; `Redirectionari::valideaza`):
 - adresa veche: o cale a site-ului (o adresă întreagă pe gazda site-ului devine cale), nu prima pagină, **niciodată o cale
-  exclusă** (coș, plată, cont, admin, API, confirmări, fiecare adresă mereu deschisă a pluginurilor, `cai_excluse`);
+  exclusă** (coș, plată, cont, admin, API, confirmări, fiecare adresă mereu deschisă a pluginurilor, `cai_excluse`); un
+  prefix nu poate fi nici începutul unei căi excluse (`/c` ar prinde `/cos` și `/checkout`), nici în interiorul uneia;
+- nici adresa veche, nici ținta nu au segmente `.`/`..` (scrise sau codate, `%2e`, `%252e`), `\`, spații sau caractere de
+  control, verificate și după decodare (`%00`, `%0d%0a`);
 - ținta: o pagină a acestui site (o adresă întreagă doar pe gazda site-ului, cu sau fără www; **niciodată alt site**: nici
   `//gazdă`, `\`, `javascript:`, alt port, spații, rânduri noi), nu o cale exclusă; doar 301 și 410 (410 fără țintă);
 - **fără buclă și fără lanț**: o regulă spre ea însăși, spre o adresă care trimite deja înapoi (buclă) sau spre o adresă
@@ -157,24 +169,36 @@ doar unde aplicația ar răspunde 404/410 sau ar ghici, un singur salt, parametr
 
 **Importul CSV** (Admin → Redirecționări și 404 → Importă din CSV, fișier sau text lipit): un rând pe adresă,
 `adresa veche, ținta[, cod][, notă]`, separat prin virgulă, punct și virgulă sau tab; un antet se sare; ținta goală sau
-codul 410 = dispărută. Fiecare rând trece prin aceleași verificări; cele refuzate se arată cu motivul. Așa se pun, de
+codul 410 = dispărută. Cel mult 2 MB (fișier sau text lipit). Tabelul se citește o dată, fiecare rând trece prin aceleași
+verificări pe imaginea din memorie (cu rândurile de deasupra deja puse), iar la final totul se scrie **într-o singură
+tranzacție**: fie toate regulile, fie niciuna (cu mesaj); copia hărții se reface oricum. Cele refuzate se arată cu
+motivul. Așa se pun, de
 exemplu, adresele vechi ale articolelor Biovitality cu diacriticele tăiate din slug (lista e la proprietar, nu în git,
-OD-49). Exportul CSV dă toate regulile, cu accesările lor.
+OD-49). Exportul CSV dă toate regulile, cu accesările lor; o celulă care începe cu `=`, `+`, `-`, `@` (sau tab, CR) primește
+un apostrof în față, ca un program de calcul să n-o ia drept formulă.
 
 **Redirecționări automate.** Când adminul schimbă slug-ul unui produs, al unei categorii de produse, al unei pagini, al unui
 articol sau al unei categorii de blog, adresa veche primește 301 la cea nouă (sursa „Automată”;
 `Redirectionari::laSchimbareaAdresei`): regulile care trimiteau la adresa veche trimit la cea nouă, iar o regulă rămasă pe
-adresa nouă (acum o pagină) se scoate, deci înapoi la un slug vechi nu face buclă. **La ștergere** (produs, categorie,
+adresa nouă (acum o pagină) se scoate, deci înapoi la un slug vechi nu face buclă. Totul se verifică întâi și se scrie
+într-o singură tranzacție. **Nu înlocuiește o regulă scrisă de om** (manuală, din CSV, din jurnal, de la o ștergere, din
+pachet) pe adresa veche: o lasă cum era și adminul vede de ce; dacă un prefix acoperă adresa nouă, nu face nimic și spune
+(ar fi un lanț). Slug-ul unui produs se curăță la salvare (fără `/`, `?`, `#`, spații, `.`/`..`, nici codate; un slug trimis
+neschimbat rămâne exact cum e în bază). **La ștergere** (produs, categorie,
 pagină, articol) pagina următoare din admin propune ce se întâmplă cu adresa veche: 301 spre pagina cea mai apropiată
 (categoria produsului, altfel lista produselor; la o categorie lista produselor, fiindcă categoriile n-au părinte; la un
 articol blogul; la o pagină prima pagină), 410 sau nimic (404, ca până acum). Doar administratorul general vede propunerea și
-pagina managerului.
+pagina managerului. Propunerile stau pe site (`storage/…/seo/propuneri-redirectionare.json`, sub `flock`, cel mult 20), nu
+în sesiunea celui care a șters: o ștergere făcută de un admin cu rol parțial (magazin, blog) așteaptă până o vede
+administratorul general; una se scoate doar când se arată. Pagina Redirecționări și 404 spune câte așteaptă.
 
 **Jurnalul 404** (`seo_404_log`, `nucleu/0047`; Admin → Redirecționări și 404 → Jurnalul 404): fiecare adresă publică la
 care site-ul a răspuns 404 la un GET, de câte ori, prima și ultima dată, și gazda altui site de pe care a venit omul. Doar
 calea (cheia hărții), **fără parametri, fără IP, fără browser**; nu intră căile excluse, o cale cu „@”, încercările
 roboților de scanare (`.php`, `.env`, `wp-admin`…). Rândurile mai vechi de 90 de zile pleacă singure și jurnalul ține cel
-mult 5.000 de adrese (cele văzute cel mai demult pleacă). Din jurnal: „Redirecționează” (formularul completat cu adresa),
+mult 5.000 de adrese (cele văzute cel mai demult pleacă): cele vechi pleacă la fiecare 404, și când cererea nu se notează
+și cu jurnalul oprit (curățarea completă, cu limita de 5.000, rulează la întâmplare, cam o dată la 50 de rânduri notate). „@” se caută și codat de mai multe ori
+(`%40`, `%2540`) și ca „＠”. Din jurnal: „Redirecționează” (formularul completat cu adresa),
 „410”, „Ignoră”. Oprire: `SEO_JURNAL_404=0`.
 
 ## 3. robots.txt
@@ -386,8 +410,19 @@ citit și scris prin `App\Support\Seo`. Felurile de pagină (`Seo::TIPURI`):
 Câmpurile: titlul și descrierea pentru Google, canonicalul (o adresă http/https întreagă), poza de distribuire, **robots**
 (gol = fără etichetă, deci în Google; `noindex,follow`, `noindex,nofollow`), **og:type** (gol = `website`; `article`,
 `product`), **textul de deasupra listei** (`intro_html`, la mărci, etichete, lista produselor, categoriile și etichetele
-blogului; la categoriile de produse în `product_categories.intro_html`), curățat de scripturi și atribute `on…`
-(`RichText::sanitize`), și `updated_at`. Migrările: `nucleu/0041` (coloanele `seo_pages`), `catalog/0042` (textul
+blogului; la categoriile de produse în `product_categories.intro_html`), și `updated_at`. **Textul de deasupra listei** se
+curăță după o listă albă (`HtmlSigur::curata`, DOMDocument, fără dependențe noi), la scriere și din nou la afișare (un rând
+scris altfel, dintr-o copie sau o unealtă, iese tot curățat): doar paragrafe, titluri h2–h6, liste, sublinieri, citate,
+linkuri, poze, tabele simple; `script`, `style`, `iframe`, `svg`, `math`, formularele pleacă cu tot conținutul, orice altă
+etichetă pleacă și textul ei rămâne; niciun atribut `on…` sau `style`; `href` doar relativ, `http`, `https`, `mailto`, `tel`,
+`src` doar relativ, `http`, `https` (entitățile și caracterele de control din schemă, `&#106;avascript:`, `java&#9;script:`,
+sunt decodate înainte de verificare); un link `target="_blank"` primește `rel="noopener noreferrer"`. Descrierile
+produselor rămân pe `RichText::sanitize`, ca până acum (decizia proprietarului: lista albă ar putea scoate din descrierile
+reale `style`, `h1`, `font`, `iframe`). Titlul, canonicalul și poza au cel mult 255 de caractere: peste, salvarea se
+refuză cu un mesaj (nu se taie în tăcere). Robots „noindex”: pagina iese și din `sitemap.xml` (produs, pagină, categorie,
+marcă, etichetă, lista produselor, articol), iar produsul și din fluxul Google Merchant. `seo_pages.updated_at` al rândurilor
+de dinainte de `nucleu/0041` e momentul migrării (coloana nouă primește `CURRENT_TIMESTAMP`): nu spune când s-a schimbat
+pagina și nu se folosește la `<lastmod>`. Migrările: `nucleu/0041` (coloanele `seo_pages`), `catalog/0042` (textul
 categoriei, mărcile și etichetele).
 
 - **Un câmp gol nu schimbă nimic.** Fără rând (sau cu câmpurile noi goale) pagina iese exact ca înainte: valorile finale
@@ -405,7 +440,10 @@ categoriei, mărcile și etichetele).
 **Panoul SEO din admin** (`admin_componenta('panou-seo', …)`): „Cum apare în Google” (titlul, adresa, descrierea, refăcute
 cât scrii; fără titlu scris: „{nume} | {magazin}”), numărul caracterelor (60 / 155, cu roșu peste) și verificările
 (`Seo::verificari`): titlu sau descriere lipsă, peste 60 / 155 de caractere, același titlu sau aceeași descriere scrise pe
-altă pagină (fără diferență de litere mari și spații), cu linkul ei din admin. Verificările se cer, doar în citire, la
+altă pagină (fără diferență de litere mari și spații), cu linkul ei din admin; doar pagini publice (nu ciorne, pagini șterse
+sau inactive) și doar cele pe care adminul de acum le poate edita (rolul magazinului nu vede titlurile paginilor sau ale
+articolelor). Formularele SEO ale mărcii, etichetei, listei produselor și etichetei blogului cer jetonul formularului
+(`_csrf`). Verificările se cer, doar în citire, la
 `GET /admin/products/seo-verifica` (produse, categorii, mărci, etichete, lista produselor: rolul magazinului),
 `/admin/blog/posts/seo-verifica` (articolele: rolurile blogului) și `/admin/seo/verifica` (restul: administratorul general).
 
@@ -496,15 +534,22 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
 - `tools/dev/test-seo.php` E1 (WP-37, `tools/dev/lib/test-seo-model.php`): `Seo::rezolva` = regula veche a layout-ului;
   fiecare pagină demo fără rânduri noi e ca înainte, un rând de fiecare fel schimbă exact câmpurile lui și doar pe pagina
   lui, după ștergere totul e din nou ca la început; formularele vechi nu șterg câmpurile noi; verificările panoului (lipsă,
-  prea lung, duplicat); migrarea `catalog/0042` rulată din nou de două ori și sincronizarea dau aceleași rânduri, iar fiecare
+  prea lung, duplicat; duplicatele doar pe pagini publice și editabile de rolul de acum); `HtmlSigur` pe 16 forme XSS cunoscute
+  și pe un text obișnuit, un text de listă cu script scris direct în bază iese curățat; titlul de 256 de caractere refuzat cu
+  mesaj; formularul mărcii fără jeton refuzat; paginile „noindex” ies din sitemap și produsul din flux; migrarea `catalog/0042` rulată din nou de două ori și sincronizarea dau aceleași rânduri, iar fiecare
   marcă și etichetă are pagina 200;
 - `tools/dev/test-seo.php` E2 (WP-38, `tools/dev/lib/test-seo-redirectionari.php`): harta din bază = pachetul (rândurile și,
   cheie cu cheie, aceeași regulă și aceeași țintă finală cu copia din bază ca doar cu fișierul, pe pachetul demo și pe cel
   Bioscem, 128 + 6); refuzurile (redirecționare deschisă în 9 forme, fiecare cale exclusă ca adresă veche și ca țintă,
-  buclă, lanț) și aplatizarea; din admin: 301 într-un salt cu parametrii, fără `Set-Cookie`, accesările, oprirea, regula din
+  buclă, lanț, `.`/`..` scrise și codate, caractere de control după decodare, prefixe peste căile excluse) și aplatizarea;
+  pachetul (piatra de mormânt rămâne, regula omului nu e atinsă, sincronizarea automată nu scoate peste o cincime, cea cerută
+  da); CSV-ul (4.000 de rânduri dintr-o tranzacție, peste 2 MB refuzat, un import blocat la mijloc nu scrie nimic, exportul
+  cu apostrof la formule); din admin: 301 într-un salt cu parametrii, fără `Set-Cookie`, accesările, oprirea, regula din
   pachet ștearsă care rămâne oprită, importul și exportul CSV, fără jeton refuzat; jurnalul 404 (fără parametri, fără „@”,
-  fără scanări, doar gazda de pe care a venit omul, păstrarea); slug-ul schimbat de trei ori (un salt, fără buclă la
-  întoarcere), propunerea după ștergerea unui produs și a unei categorii (410 ales și salvat);
+  `%2540`, „＠”, fără scanări, doar gazda de pe care a venit omul, păstrarea, rândurile vechi plecate și la un 404 nenotat);
+  slug-ul schimbat de trei ori (un salt, fără buclă la întoarcere), regula omului pe adresa veche păstrată și prefixul peste
+  adresa nouă (cu mesaj), slug-ul curățat; propunerea după ștergerea unui produs și a unei categorii (410 ales și salvat) și
+  după o ștergere a rolului magazin (o vede administratorul general);
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;
 - `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
   cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere

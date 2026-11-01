@@ -15,12 +15,12 @@ use Throwable;
  * **Fără date personale în plus:** doar calea (decodată, cu litere mici, fără „/” final — cheia hărții), fără parametri
  * (acolo pot sta tokenuri, emailuri, coduri de reducere), fără IP, fără browser; de unde a venit omul, doar gazda altui
  * site (fără calea paginii de pe care a venit). Nu intră: altceva decât GET, căile excluse (coș, plată, cont, admin, API,
- * fișiere, confirmări), o cale cu „@” sau mai lungă de 500 de caractere, încercările roboților de scanare (fișiere
+ * fișiere, confirmări), o cale cu „@” (și „＠”, „%40” codat oricât) sau mai lungă de 500 de caractere, încercările roboților de scanare (fișiere
  * `.php`, `.env`, `.git`, `wp-admin`… — dau 404 pe orice site și n-au ce redirecționa).
  *
- * **Cât se ține:** 90 de zile de la ultima accesare (`ZILE_PASTRARE`) și cel mult `MAX_RANDURI` adrese (cele mai vechi
- * pleacă primele); curățarea se face la întâmplare, o dată la ~50 de 404-uri, și la fiecare deschidere a jurnalului în admin.
- * Oprire: `SEO_JURNAL_404=0` în .env.
+ * **Cât se ține:** 90 de zile de la ultima accesare (`ZILE_PASTRARE`; vechimea se curăță la fiecare 404, și cu jurnalul
+ * oprit) și cel mult `MAX_RANDURI` adrese (cele mai vechi pleacă primele; numărătoarea se face la întâmplare, o dată la ~50
+ * de 404-uri, și la fiecare deschidere a jurnalului în admin). Oprire: `SEO_JURNAL_404=0` în .env (nu mai notează nimic).
  */
 final class Jurnal404
 {
@@ -43,21 +43,25 @@ final class Jurnal404
 
     private static function laFinalIntern(): void
     {
-        if ((int) http_response_code() !== 404 || self::oprit()) {
+        if ((int) http_response_code() !== 404) {
             return;
         }
         $metoda = strtoupper((string) ($_SERVER['SEO_REQUEST_METHOD_ORIGINAL'] ?? $_SERVER['REQUEST_METHOD'] ?? 'GET'));
         if ($metoda !== 'GET') {
             return;
         }
-        $uri = (string) ($_SERVER['SEO_REQUEST_URI_ORIGINAL'] ?? $_SERVER['REQUEST_URI'] ?? '/');
-        $cale = self::caleDeNotat($uri);
-        if ($cale === null) {
-            return;
-        }
         $config = require dirname(__DIR__, 2) . '/config/app.php';
         $db = Database::connection((array) ($config['db'] ?? []));
-        if ($db instanceof PDO) {
+        if (!$db instanceof PDO) {
+            return;
+        }
+        // Rândurile mai vechi de ZILE_PASTRARE pleacă la fiecare 404, și cu jurnalul oprit (SEO_JURNAL_404=0).
+        self::curataVechi($db);
+        if (self::oprit()) {
+            return;
+        }
+        $cale = self::caleDeNotat((string) ($_SERVER['SEO_REQUEST_URI_ORIGINAL'] ?? $_SERVER['REQUEST_URI'] ?? '/'));
+        if ($cale !== null) {
             self::noteaza($db, $cale, self::gazdaReferer((string) ($_SERVER['HTTP_REFERER'] ?? '')));
         }
     }
@@ -69,8 +73,15 @@ final class Jurnal404
         if (preg_match('#^https?://[^/]+(/.*)?$#i', $caleBruta, $m) === 1) {
             $caleBruta = $m[1] ?? '/';
         }
-        if ($caleBruta === '' || $caleBruta[0] !== '/' || str_contains($caleBruta, '@') || str_contains(rawurldecode($caleBruta), '@')
-            || strlen($caleBruta) > self::MAX_CALE * 3) {
+        if ($caleBruta === '' || $caleBruta[0] !== '/' || strlen($caleBruta) > self::MAX_CALE * 3) {
+            return null;
+        }
+        // „@” (o adresă de email în cale), și scris ca „＠” sau codat de mai multe ori („%2540”).
+        $decodata = $caleBruta;
+        for ($i = 0; $i < 3; $i++) {
+            $decodata = rawurldecode($decodata);
+        }
+        if (str_contains($decodata, '@') || str_contains($decodata, "\u{FF20}") || stripos($decodata, '%40') !== false) {
             return null;
         }
         $cale = SeoRedirects::cheie($caleBruta);
@@ -106,6 +117,15 @@ final class Jurnal404
             }
         } catch (Throwable) {
             // Fără tabel (migrarea nucleu/0047 n-a rulat): nimic.
+        }
+    }
+
+    /** Șterge rândurile mai vechi de ZILE_PASTRARE zile (index pe last_seen_at). */
+    public static function curataVechi(PDO $db): void
+    {
+        try {
+            $db->exec('DELETE FROM seo_404_log WHERE last_seen_at < (NOW() - INTERVAL ' . self::ZILE_PASTRARE . ' DAY)');
+        } catch (Throwable) {
         }
     }
 

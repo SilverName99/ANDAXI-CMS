@@ -68,7 +68,8 @@ rândurile Categoriilor produse și ale Categoriilor blog. Nicio pagină nouă �
 „Lista tuturor produselor — SEO Google” și „Etichete — SEO Google” (lângă „Mărci”), iar Blog → Categorii, SEO pe fiecare
 categorie și „Etichete blog — SEO Google”. Formularele etichetelor și listei postează la adresa SEO-ului mărcilor
 (`/admin/categories/brand-seo`, cu `seo_tip`), cel al etichetelor de blog la `/admin/blog/categories/eticheta-seo` (pluginul
-blog). Rolurile rămân aceleași (Categorii produse: rolul magazinului; Categorii blog: administratorul general).
+blog), toate cu jetonul formularului (`_csrf`; revizuirea WP-37/38). Rolurile rămân aceleași (Categorii produse: rolul
+magazinului; Categorii blog: administratorul general).
 
 ## Redirecționări și 404 (WP-38, 1 noiembrie)
 
@@ -77,7 +78,9 @@ administratorul general), cu două părți: lista regulilor (tab-uri Toate / Por
 Adăugate, căutarea, adăugarea și editarea, importul și exportul CSV, reluarea pachetului) și **Jurnalul 404**
 (`/admin/seo/404`: „Redirecționează”, „410”, „Ignoră”, „Golește”). Fiecare formular cere jetonul formularului (`_csrf`) și
 se notează în Jurnal activitate. După ștergerea unui produs, a unei categorii, pagini sau articol, cadrul arată o dată
-propunerea pentru adresa veche (componenta `propunere-redirect`). `docs/SEO.md` §2b.
+propunerea pentru adresa veche (componenta `propunere-redirect`); propunerile stau pe site până le vede cine are voie la
+Redirecționări (și cele lăsate de un admin cu rol parțial), iar pagina spune câte așteaptă și dacă copia hărții nu se poate
+scrie. `docs/SEO.md` §2b.
 
 ## Meniul de acum (după WP-35)
 

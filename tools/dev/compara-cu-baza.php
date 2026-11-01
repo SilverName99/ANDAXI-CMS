@@ -2609,10 +2609,19 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             'pregateste' => static function (PDO $db): void {
                 $db->exec("DELETE FROM seo_pages WHERE page_type = 'brand'");
             },
+            // Revizuirea WP-37/38: formularul cere acum jetonul formularului (_csrf, din pagina Categorii); codul Bioscem îl
+            // ignoră, deci aceeași cerere, cu jetonul paginii fiecărui server (la Bioscem gol).
             'cereri' => [
-                ['POST', '/admin/categories/brand-seo', ['brand_slug' => 'Livada-Demo', 'seo_title' => 'Livada Demo: ceaiuri și uleiuri de test',
-                    'seo_description' => 'Descrierea de test a mărcii.']],
-                ['POST', '/admin/categories/brand-seo', ['brand_slug' => '', 'seo_title' => 'Fără marcă']],
+                ['GET', '/admin/categories', []],
+                static function (array $raspunsuri): array {
+                    preg_match('/name="_csrf" value="([0-9a-f]{64})"/', (string) ($raspunsuri[0]['corp'] ?? ''), $jeton);
+                    return ['POST', '/admin/categories/brand-seo', ['_csrf' => (string) ($jeton[1] ?? ''), 'brand_slug' => 'Livada-Demo',
+                        'seo_title' => 'Livada Demo: ceaiuri și uleiuri de test', 'seo_description' => 'Descrierea de test a mărcii.']];
+                },
+                static function (array $raspunsuri): array {
+                    preg_match('/name="_csrf" value="([0-9a-f]{64})"/', (string) ($raspunsuri[0]['corp'] ?? ''), $jeton);
+                    return ['POST', '/admin/categories/brand-seo', ['_csrf' => (string) ($jeton[1] ?? ''), 'brand_slug' => '', 'seo_title' => 'Fără marcă']];
+                },
                 ['GET', '/marca/livada-demo', [], 'viz'],
             ],
             'stare' => static fn (PDO $db): array => ['seo' => array_map(static fn (array $r): array => salvari_fara_coloane($r, ['id']),
@@ -2621,7 +2630,7 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 count($stare['seo']) === 1 && ($stare['seo'][0]['page_ref'] ?? '') === 'livada-demo'
                     && ($stare['seo'][0]['title'] ?? '') === 'Livada Demo: ceaiuri și uleiuri de test'
                     ? [] : ['SEO-ul mărcii: ' . json_encode($stare['seo'], JSON_UNESCAPED_UNICODE)],
-                $contine($raspunsuri[2], '<title>Livada Demo: ceaiuri și uleiuri de test') ? [] : ['pagina mărcii nu are titlul salvat']),
+                $contine($raspunsuri[3], '<title>Livada Demo: ceaiuri și uleiuri de test') ? [] : ['pagina mărcii nu are titlul salvat']),
         ],
         [
             'nume' => 'numele magazinului din titluri: se salvează din Setări magazin → SEO',

@@ -47,7 +47,9 @@ final class SeoAdminController
         $text = static fn (string $cheie, int $max): string => mb_substr(is_scalar($_GET[$cheie] ?? null) ? (string) $_GET[$cheie] : '', 0, $max);
         $this->jsonResponse([
             'ok' => true,
-            'verificari' => Seo::verificari($this->db(), $tip, $text('ref', 190), $text('titlu', 500), $text('descriere', 2000)),
+            // Duplicatele doar dintre paginile pe care adminul de acum le poate edita (Auth, după adresa lor din admin).
+            'verificari' => Seo::verificari($this->db(), $tip, $text('ref', 190), $text('titlu', 500), $text('descriere', 2000),
+                static fn (string $link): bool => Auth::canAccessPath($link)),
         ]);
     }
 }

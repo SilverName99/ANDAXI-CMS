@@ -116,6 +116,7 @@ admin_componenta('antet-pagina', [
     </div>
     <form method="post" action="/admin/categories/brand-seo">
         <input type="hidden" name="seo_tip" value="listing_default">
+                        <?= \App\Support\AdminCsrf::camp() ?>
 <?php admin_componenta('panou-seo', [
     'tip' => 'listing_default', 'ref' => \App\Support\Seo::REF_LISTA, 'id' => 'lista-seo', 'valori' => $listaSeo,
     'campuri' => ['titlu', 'descriere', 'robots', 'og', 'intro'], 'max_titlu' => 120, 'max_descriere' => 320, 'adresa' => $urlCatalog,
@@ -155,6 +156,7 @@ admin_componenta('antet-pagina', [
                 <td><?= (int) ($brand['products_count'] ?? 0) ?></td>
                 <td>
                     <form id="<?= htmlspecialchars($brandFormId, ENT_QUOTES) ?>" method="post" action="/admin/categories/brand-seo">
+                        <?= \App\Support\AdminCsrf::camp() ?>
                         <input type="hidden" name="brand_slug" value="<?= htmlspecialchars($brandSlug, ENT_QUOTES) ?>">
                         <details<?= $areSeo($brandSeo) ? ' open' : '' ?>>
                             <summary class="seo-google-summary">SEO Google<?= $areSeo($brandSeo) ? ' (completat)' : '' ?></summary>
@@ -205,6 +207,7 @@ admin_componenta('antet-pagina', [
                 <td>
                     <form method="post" action="/admin/categories/brand-seo">
                         <input type="hidden" name="seo_tip" value="tag">
+                        <?= \App\Support\AdminCsrf::camp() ?>
                         <input type="hidden" name="tag_slug" value="<?= htmlspecialchars($tagSlug, ENT_QUOTES) ?>">
                         <details<?= $areSeo($tagSeo) ? ' open' : '' ?>>
                             <summary class="seo-google-summary">SEO Google<?= $areSeo($tagSeo) ? ' (completat)' : '' ?></summary>

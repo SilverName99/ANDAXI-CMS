@@ -5354,7 +5354,8 @@ final class SiteController
      */
     private function introLista(string $html): string
     {
-        $html = trim($html);
+        // Curățat și aici (HtmlSigur, lista albă): un rând scris pe altă cale decât adminul nu ajunge în pagină cum e.
+        $html = \App\Support\HtmlSigur::curata(trim($html));
         return $html === '' ? '' : '<div class="lista-intro">' . $html . '</div>';
     }
 
@@ -9317,9 +9318,11 @@ CSS;
             }
         }
 
+        // Revizuirea WP-37/38: produsele scoase din Google de om (robots „noindex”, panoul SEO) nu intră nici în flux.
+        $scoase = \App\Support\Seo::refuriNoindex($db)['product'] ?? [];
         $produse = [];
         foreach ($rows as $row) {
-            if (!is_array($row)) {
+            if (!is_array($row) || isset($scoase[(string) ($row['id'] ?? '')])) {
                 continue;
             }
             $product = $this->normalizeProduct($row);

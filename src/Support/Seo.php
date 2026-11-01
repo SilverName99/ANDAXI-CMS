@@ -15,7 +15,7 @@ use Throwable;
  * ei). Câmpurile: titlul și descrierea pentru Google, canonicalul (doar o adresă http/https întreagă), poza de
  * distribuire, robots (`ROBOTS`: gol = indexată, ca până acum), tipul la distribuire (`OG_TIPURI`: gol = „website”, ca
  * până acum), textul de deasupra listei (`intro_html`, la liste: marcă, etichetă, magazin, categoria și eticheta
- * blogului; categoria de produse îl are în `product_categories.intro_html`) și momentul ultimei schimbări. Un câmp gol
+ * blogului; categoria de produse îl are în `product_categories.intro_html`; curățat de HtmlSigur) și momentul ultimei schimbări. Un câmp gol
  * nu schimbă nimic: fără rând, pagina iese exact ca înainte (G-cmp, comparația cu codul site-ului de referință).
  *
  * `rezolva()` face valorile finale din `<head>` (aceeași regulă pe care o avea `views/layout.php`, mutată aici, ca
@@ -57,6 +57,10 @@ final class Seo
         'article' => 'article (articol)',
         'product' => 'product (produs)',
     ];
+
+    /** Cât încape în coloanele seo_pages (VARCHAR(255)) și cum se numește câmpul pentru om. */
+    private const MAX_CAMPURI = ['title' => [255, 'titlul pentru Google'], 'canonical_url' => [255, 'adresa canonică'],
+        'image_url' => [255, 'poza de distribuire']];
 
     /** Lungimile după care Google taie de obicei (orientativ: Google taie după lățime). */
     public const LIMITA_TITLU = 60;
@@ -106,8 +110,9 @@ final class Seo
     }
 
     /**
-     * Textul de deasupra unei liste (marcă, etichetă, categorie): HTML-ul scris de admin, fără `<script>`, `<style>`,
-     * `<iframe>`, atribute `on…` și linkuri `javascript:` (același fel de curățare ca descrierea produsului).
+     * Textul de deasupra unei liste (marcă, etichetă, categorie): HTML-ul scris de admin, curățat după o listă albă
+     * (HtmlSigur: doar etichetele și atributele de formatare, adrese relative sau http/https/mailto/tel, fără `on…`,
+     * `style`, script, svg, iframe; revizuirea WP-37/38). Se curăță și la afișare.
      */
     public static function curataIntro(string $html): string
     {
@@ -115,7 +120,7 @@ final class Seo
         if ($html === '') {
             return '';
         }
-        return trim(RichText::sanitize($html));
+        return HtmlSigur::curata($html);
     }
 
     /**
@@ -182,12 +187,12 @@ final class Seo
      *
      * @param array<string, mixed> $campuri
      */
-    public static function salveaza(PDO $db, string $tip, string $ref, array $campuri): void
+    public static function salveaza(PDO $db, string $tip, string $ref, array $campuri): ?string
     {
         $tip = self::tipValid($tip);
         $ref = trim($ref);
         if ($tip === '' || $ref === '') {
-            return;
+            return null;
         }
         $noi = self::coloaneNoi($db);
         $existent = self::citeste($db, $tip, $ref);
@@ -201,7 +206,13 @@ final class Seo
                 $db->prepare('DELETE FROM seo_pages WHERE page_type = ? AND page_ref = ?')->execute([$tip, $ref]);
             } catch (Throwable) {
             }
-            return;
+            return null;
+        }
+        // Revizuirea WP-37/38: ce nu încape în coloane (VARCHAR(255)) se spune, nu se pierde în tăcere.
+        foreach (self::MAX_CAMPURI as $camp => [$max, $nume]) {
+            if (mb_strlen($date[$camp]) > $max) {
+                return 'SEO-ul nu s-a salvat: ' . $nume . ' are ' . mb_strlen($date[$camp]) . ' de caractere; încap cel mult ' . $max . '.';
+            }
         }
         $coloane = ['title', 'description', 'canonical_url', 'image_url'];
         if ($noi) {
@@ -216,9 +227,11 @@ final class Seo
                 . implode(', ', array_fill(0, count($coloane) + 2, '?')) . ') ON DUPLICATE KEY UPDATE '
                 . implode(', ', array_map(static fn (string $c): string => $c . ' = VALUES(' . $c . ')', $coloane)))
                 ->execute($valori);
-        } catch (Throwable) {
-            // Ca până acum: o valoare care nu încape (titlu peste 255 de caractere) nu strică salvarea paginii.
+        } catch (Throwable $e) {
+            // Salvarea paginii însăși rămâne; adminul află că SEO-ul nu s-a scris.
+            return 'SEO-ul nu s-a salvat (' . $e->getMessage() . ').';
         }
+        return null;
     }
 
     /** Șterge rândul unei pagini (pagina însăși a fost ștearsă). */
@@ -383,7 +396,7 @@ final class Seo
      *
      * @return list<array{cod: string, camp: string, text: string, alte?: list<array{tip: string, ref: string, nume: string, link: string}>}>
      */
-    public static function verificari(?PDO $db, string $tip, string $ref, string $titlu, string $descriere): array
+    public static function verificari(?PDO $db, string $tip, string $ref, string $titlu, string $descriere, ?callable $poateEdita = null): array
     {
         $titlu = trim((string) preg_replace('/\s+/u', ' ', $titlu));
         $descriere = trim((string) preg_replace('/\s+/u', ' ', $descriere));
@@ -404,7 +417,7 @@ final class Seo
             if ($valoare === '') {
                 continue;
             }
-            $alte = self::duplicate($db, $tip, $ref, $coloana, $valoare);
+            $alte = self::duplicate($db, $tip, $ref, $coloana, $valoare, $poateEdita);
             if ($alte !== []) {
                 $rez[] = ['cod' => 'duplicat', 'camp' => $camp, 'text' => ($camp === 'titlu' ? 'Același titlu' : 'Aceeași descriere')
                     . ' și pe ' . (count($alte) === 1 ? 'altă pagină' : count($alte) . ' alte pagini') . ': Google le vede ca duplicate.', 'alte' => $alte];
@@ -419,7 +432,7 @@ final class Seo
      *
      * @return list<array{tip: string, ref: string, nume: string, link: string}>
      */
-    public static function duplicate(?PDO $db, string $tip, string $ref, string $coloana, string $valoare): array
+    public static function duplicate(?PDO $db, string $tip, string $ref, string $coloana, string $valoare, ?callable $poateEdita = null): array
     {
         if (!$db instanceof PDO || !in_array($coloana, ['title', 'description'], true) || trim($valoare) === '') {
             return [];
@@ -427,7 +440,7 @@ final class Seo
         try {
             $stmt = $db->prepare('SELECT page_type, page_ref FROM seo_pages
                 WHERE LOWER(TRIM(' . $coloana . ')) = LOWER(?) AND NOT (page_type = ? AND page_ref = ?)
-                ORDER BY page_type, page_ref LIMIT 5');
+                ORDER BY page_type, page_ref LIMIT 50');
             $stmt->execute([trim((string) preg_replace('/\s+/u', ' ', $valoare)), $tip, trim($ref)]);
             $randuri = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
@@ -437,9 +450,45 @@ final class Seo
         foreach ($randuri as $rand) {
             $t = (string) $rand['page_type'];
             $r = (string) $rand['page_ref'];
-            $rez[] = ['tip' => $t, 'ref' => $r, 'nume' => self::numePagina($db, $t, $r), 'link' => self::linkAdmin($t, $r)];
+            $link = self::linkAdmin($t, $r);
+            // Revizuirea WP-37/38: doar paginile pe care Google le vede (nu ciorne, nu pagini șterse sau inactive) și pe care
+            // adminul de acum are voie să le editeze (rolul magazinului nu vede titlurile paginilor sau ale articolelor).
+            if (!self::paginaPublica($db, $t, $r) || ($poateEdita !== null && !$poateEdita($link))) {
+                continue;
+            }
+            $rez[] = ['tip' => $t, 'ref' => $r, 'nume' => self::numePagina($db, $t, $r), 'link' => $link];
+            if (count($rez) >= 5) {
+                break;
+            }
         }
         return $rez;
+    }
+
+    /** Pagina unui rând seo_pages e publică acum (există, nu e ștearsă, e publicată sau activă)? */
+    public static function paginaPublica(PDO $db, string $tip, string $ref): bool
+    {
+        $sql = match ($tip) {
+            'custom_page' => 'SELECT 1 FROM pages WHERE id = ? AND deleted_at IS NULL AND is_published = 1',
+            'product' => 'SELECT 1 FROM products WHERE id = ? AND deleted_at IS NULL AND is_active = 1',
+            'blog_post' => 'SELECT 1 FROM blog_posts WHERE id = ? AND deleted_at IS NULL AND is_published = 1',
+            'category' => 'SELECT 1 FROM product_categories WHERE id = ?',
+            'blog_category' => 'SELECT 1 FROM blog_categories WHERE id = ? AND is_active = 1',
+            'blog_tag' => 'SELECT 1 FROM blog_tags WHERE id = ?',
+            default => null,
+        };
+        if ($sql === null) {
+            return true;
+        }
+        if (!ctype_digit($ref)) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare($sql . ' LIMIT 1');
+            $stmt->execute([(int) $ref]);
+            return $stmt->fetchColumn() !== false;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /** Numele unei pagini din `seo_pages`, pentru oameni („produsul Ceai de mentă”). */
@@ -509,6 +558,31 @@ final class Seo
         $rez = self::gol();
         foreach (array_keys($rez) as $cheie) {
             $rez[$cheie] = trim((string) ($rand[$cheie] ?? ''));
+        }
+        return $rez;
+    }
+
+    /**
+     * Paginile scoase din Google de om (robots „noindex…”), pe tipuri: page_type => [page_ref => true]. Slug-urile (marcă,
+     * etichetă) sunt cu litere mici. Sitemap-ul și fluxul Google Merchant le lasă pe dinafară (revizuirea WP-37/38).
+     *
+     * @return array<string, array<string, true>>
+     */
+    public static function refuriNoindex(PDO $db): array
+    {
+        if (!self::coloaneNoi($db)) {
+            return [];
+        }
+        $rez = [];
+        try {
+            $stmt = $db->query("SELECT page_type, page_ref FROM seo_pages WHERE robots LIKE 'noindex%'");
+            foreach (($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : []) ?: [] as $rand) {
+                $tip = (string) $rand['page_type'];
+                $ref = trim((string) $rand['page_ref']);
+                $rez[$tip][in_array($tip, ['brand', 'tag'], true) ? mb_strtolower($ref) : $ref] = true;
+            }
+        } catch (Throwable) {
+            return [];
         }
         return $rez;
     }

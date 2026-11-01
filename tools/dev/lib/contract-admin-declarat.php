@@ -287,5 +287,8 @@ return [
     'WP-38' => [
         'meniu-redirectionari' => ['ce' => 'adaugat', 'rand' => '^link /admin/seo/redirectionari$', 'rol' => 'adm',
             'motiv' => 'intrarea „Redirecționări și 404” din Setări (harta adreselor vechi și jurnalul 404)'],
+        // Revizuirea WP-37/38: formularele SEO ale mărcii, etichetei, listei produselor și etichetei blogului cer jetonul formularului.
+        'seo-formulare-csrf' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/(categories/brand-seo|blog/categories/eticheta-seo) input:hidden _csrf = <TOKEN>$',
+            'motiv' => 'jetonul formularului (_csrf) pe formularele SEO ale mărcii, etichetei, listei produselor și etichetei blogului (revizuirea WP-37/38)'],
     ],
 ];

@@ -301,7 +301,8 @@ admin_componenta('panou-seo', [
     'tip' => 'blog_post', 'ref' => $idPostareSeo > 0 ? (string) $idPostareSeo : '', 'id' => 'postare-seo',
     'valori' => is_array($editingPostSeo ?? null) ? $editingPostSeo : [], 'previzualizare' => false,
     'verificari' => $idPostareSeo > 0 ? \App\Support\Seo::verificari(\App\Support\Database::connection([]), 'blog_post', (string) $idPostareSeo,
-        (string) ($editingPostSeo['title'] ?? ''), (string) ($editingPostSeo['description'] ?? '')) : [],
+        (string) ($editingPostSeo['title'] ?? ''), (string) ($editingPostSeo['description'] ?? ''),
+        static fn (string $link): bool => \App\Support\Auth::canAccessPath($link)) : [],
 ]);
 ?>
                 </div>

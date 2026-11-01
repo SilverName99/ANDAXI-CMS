@@ -20,6 +20,10 @@ declare(strict_types=1);
  *  5. Automat: un produs cu slug schimbat → 301 de la adresa veche la cea nouă (un singur rând, apoi 200), redenumit din nou →
  *     tot un singur salt, înapoi la primul slug → fără regulă pe o adresă care există; o categorie ștearsă propune lista
  *     produselor (categoriile n-au părinte) și se salvează 410 când e ales.
+ *  Revizuirea WP-37/38: ocolirile prin „.”/„..” și caractere de control (și codate), prefixele peste căile excluse, piatra de
+ *  mormânt și pragul de o cincime al sincronizării pachetului, CSV-ul (4.000 de rânduri dintr-o tranzacție, 2 MB, un import
+ *  blocat nu scrie nimic, formulele din export), „@” codat în jurnal, curățarea la orice 404, regula omului și prefixul la
+ *  slug schimbat, slug-ul curățat, propunerea lăsată de un admin cu rol parțial.
  */
 
 use App\Support\DateSite;
@@ -94,7 +98,11 @@ $dosarDemoE2 = DateSite::dosar();
 try {
     DateSite::reseteaza($radacina . '/site-uri/bioscem');
     SeoRedirects::reseteaza();
-    $import = Redirectionari::importaPachet($db);
+    // Alt pachet întreg: sincronizarea automată n-ar scoate atâtea reguli (peste o cincime), deci ca „Reia regulile din pachet”.
+    $automat = Redirectionari::importaPachet($db);
+    $import = Redirectionari::importaPachet($db, true);
+    $verifica('alt pachet întreg: sincronizarea automată nu scoate regulile vechi (peste o cincime), „Reia regulile din pachet” da',
+        $automat['scoase'] === 0 && $automat['nescoase'] > 0 && $import['scoase'] === $automat['nescoase'], json_encode([$automat, $import]));
     [$nrBs, $diferiteBs] = $comparaHarta();
     $verifica('pachetul Bioscem (127 exacte, 6 prefixe): importat cum e, apoi aceeași hartă cheie cu cheie pe ' . $nrBs . ' de adrese, '
         . 'aceleași reguli în bază ca în fișier', $diferiteBs === [] && $randuriPachet() === $dinFisier()
@@ -104,6 +112,7 @@ try {
     @unlink(SeoRedirects::fisierCopie());
     DateSite::reseteaza($dosarDemoE2);
     SeoRedirects::reseteaza();
+    Redirectionari::importaPachet($db, true);
     Redirectionari::reconstruieste($db);
 }
 $verifica('înapoi pe pachetul demo: rândurile Bioscem au plecat, cele demo sunt la loc', $randuriPachet() === $dinFisier());
@@ -140,6 +149,18 @@ $verifica('… și nici ca țintă', $tinteNeRefuzate === [], implode(', ', $tin
 $verifica('fără regulă spre ea însăși, fără prima pagină ca adresă veche, doar 301 și 410', $eroare('/e2-sine', '/E2-SINE/') !== ''
     && $eroare('/', '/magazin') !== '' && $eroare('/e2-cod', '/magazin', 302) !== '' && $eroare('/e2-disparuta', '', 410) === ''
     && $eroare('/e2-fara-tinta', '') !== '' && $eroare('/e2-prefix/', '/e2-prefix/alta', 301, true) !== '');
+// Revizuirea WP-37/38: segmentele „.”/„..” (și codate), caracterele de control după decodare, prefixele peste căile excluse.
+$ocoliri = ['/e2/../admin', '/e2/%2e%2e/admin', '/e2/%2E%2e/cos', '/e2/%252e%252e/admin', '/e2/./x', '/cos%00', '/e2%0d%0ax', '/e2%09x',
+    '/e2/%2e%2e%2fadmin', '/e2%5c..%5cadmin'];
+$ocoliriAcceptate = array_values(array_filter($ocoliri, static fn (string $c): bool => $eroare($c, '/magazin') === ''));
+$tinteOcolite = array_values(array_filter(['/e2/../cos', '/magazin/%2e%2e/admin', '/x%00y', '/e2/%252e%252e/checkout'],
+    static fn (string $t): bool => $eroare('/e2-ocolire', $t) === ''));
+$verifica('fără ocolire prin „.”/„..” (scrise, %2e, %252e), „\\” sau caractere de control (%00, %0d%0a, %09), ca adresă veche sau ca țintă',
+    $ocoliriAcceptate === [] && $tinteOcolite === [], implode(', ', array_merge($ocoliriAcceptate, $tinteOcolite)));
+$prefixeRele = array_values(array_filter(['/c', '/co', '/che', '/admi', '/a', '/api', '/cont', '/contul-meu/x'],
+    static fn (string $p): bool => $eroare($p, '/magazin', 301, true) === ''));
+$verifica('un prefix care ar prinde o cale exclusă („/c” prinde /cos și /checkout) sau e în interiorul uneia e refuzat; „/e2-pref” nu',
+    $prefixeRele === [] && $eroare('/e2-pref', '/magazin', 301, true) === '', implode(', ', $prefixeRele));
 try {
     $a = Redirectionari::adauga($db, '/e2-a', '/e2-b', 301, 'manual', 'E2 lanț');
     $lant = Redirectionari::adauga($db, '/e2-c', '/e2-a', 301, 'manual', 'E2 lanț');
@@ -212,6 +233,80 @@ try {
     $export = $cerere($port, 'GET', '/admin/seo/redirectionari/export', [], $jarRedir);
     $verifica('exportul CSV: toate regulile, cu antetul', $export['cod'] === 200 && str_contains($export['corp'], 'adresa_veche,tinta,cod')
         && str_contains($export['corp'], '/blog/e2-sntatea-copiilor,/blog/' . $slugPostare . ',301'));
+    // Revizuirea WP-37/38: o celulă care începe cu = + - @ iese cu apostrof (nu e luată drept formulă de un program de calcul).
+    Redirectionari::adauga($db, '/e2-formula', '', 410, 'manual', '=HYPERLINK("http://alt-site.example","x")');
+    Redirectionari::adauga($db, '/e2-formula-2', '', 410, 'manual', '@SUM(1+1)');
+    $exportF = Redirectionari::exportCsv($db);
+    $verifica('exportul CSV: celulele care încep cu =, +, -, @ primesc un apostrof în față', str_contains($exportF, "\"'=HYPERLINK(")
+        && str_contains($exportF, ",'@SUM(1+1)") && !preg_match('/(^|,)[=+@]/m', $exportF));
+    // Textul lipit: cel mult 2 MB; peste, refuzat fără să scrie nimic.
+    $mare = Redirectionari::importaCsv($db, str_repeat("/e2-mare;/magazin\n", (int) (Redirectionari::MAX_CSV / 17) + 10));
+    $verifica('importul CSV: peste 2 MB e refuzat cu un mesaj, nimic scris', isset($mare['eroare']) && $mare['adaugate'] === 0
+        && Redirectionari::dupaCheie($db, '/e2-mare', false) === null, json_encode(['eroare' => $mare['eroare'] ?? '', 'adaugate' => $mare['adaugate']]));
+    // 4.000 de rânduri: o singură citire și o singură tranzacție, repede; apoi toate răspund.
+    $linii = [];
+    for ($i = 0; $i < 4000; $i++) {
+        $linii[] = '/e2-multe-' . $i . ';' . ($i % 2 === 1 ? '/magazin' : '/e2-multe-' . ($i + 1)) . ';301;E2 multe';
+    }
+    $t0 = microtime(true);
+    $multe = Redirectionari::importaCsv($db, implode("\n", $linii));
+    $durata = microtime(true) - $t0;
+    $nrMulte = (int) $db->query("SELECT COUNT(*) FROM seo_redirects WHERE from_path LIKE '/e2-multe-%'")->fetchColumn();
+    $lanturiMulte = array_filter(Redirectionari::lanturi($db), static fn (array $l): bool => str_contains($l['din'], 'e2-multe'));
+    $verifica('importul CSV: 4.000 de rânduri (jumătate trimit la cele de dedesubt, aplatizate) în ' . round($durata, 1) . ' s, toate scrise, fără lanțuri',
+        $multe['adaugate'] === 4000 && $nrMulte === 4000 && $durata < 20 && $lanturiMulte === [] && $cerereSimpla('/e2-multe-0')['cod'] === 301
+        && $locatie($cerereSimpla('/e2-multe-0')) === '/magazin', json_encode(['adaugate' => $multe['adaugate'], 'refuzate' => count($multe['refuzate'])]));
+    $db->exec("DELETE FROM seo_redirects WHERE from_path LIKE '/e2-multe-%' OR from_path LIKE '/e2-formula%'");
+    Redirectionari::reconstruieste($db);
+    // Fie toate, fie niciunul: un import care nu se poate scrie până la capăt (aici: rândul pe care l-ar aplatiza e ținut de altă
+    // conexiune, deci așteptarea expiră) nu lasă nimic scris, iar copia hărții e refăcută.
+    Redirectionari::adauga($db, '/e2-at-sursa', '/e2-at-tinta', 301, 'manual', 'E2 atomic');
+    $idSursa = (int) (Redirectionari::dupaCheie($db, '/e2-at-sursa', false)['id'] ?? 0);
+    $cfg = (array) $app['db'];
+    $alta = new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $cfg['host'], $cfg['port'], $cfg['database']),
+        (string) $cfg['username'], (string) $cfg['password'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $alta->beginTransaction();
+    $alta->query('SELECT id FROM seo_redirects WHERE id = ' . $idSursa . ' FOR UPDATE')->fetchAll();
+    $db->exec('SET SESSION innodb_lock_wait_timeout = 1');
+    try {
+        $blocat = Redirectionari::importaCsv($db, "/e2-at-1;/magazin\n/e2-at-2;/magazin\n/e2-at-tinta;/magazin\n/e2-at-3;/magazin");
+    } finally {
+        $alta->rollBack();
+        $alta = null;
+        $db->exec('SET SESSION innodb_lock_wait_timeout = 50');
+    }
+    $verifica('importul CSV care nu se poate scrie până la capăt: nimic scris (nici rândurile dinaintea celui blocat), cu mesaj',
+        isset($blocat['eroare']) && $blocat['adaugate'] === 0 && Redirectionari::dupaCheie($db, '/e2-at-1', false) === null
+        && Redirectionari::dupaCheie($db, '/e2-at-tinta', false) === null
+        && (string) (Redirectionari::dupaCheie($db, '/e2-at-sursa', false)['to_url'] ?? '') === '/e2-at-tinta', json_encode($blocat, JSON_UNESCAPED_UNICODE));
+    $db->exec("DELETE FROM seo_redirects WHERE from_path LIKE '/e2-at-%'");
+    Redirectionari::reconstruieste($db);
+
+    // Pachetul: un rând „pachet” oprit (piatră de mormânt) rămâne și când regula iese din fișier; o regulă a omului peste
+    // aceeași adresă nu e atinsă; sincronizarea automată nu scoate mai mult de o cincime.
+    $puneFals = $db->prepare("INSERT INTO seo_redirects (from_hash, from_path, is_prefix, to_url, code, is_active, source) VALUES (?, ?, 0, '/magazin', 301, ?, 'pachet')");
+    $puneFals->execute([Redirectionari::amprenta('/e2-piatra', false), '/e2-piatra', 0]);
+    $puneFals->execute([Redirectionari::amprenta('/e2-pachet-vechi', false), '/e2-pachet-vechi', 1]);
+    $omPeste = Redirectionari::dupaCheie($db, '/produse', false);
+    $db->prepare("UPDATE seo_redirects SET source = 'manual', to_url = '/categorie/ceaiuri' WHERE id = ?")->execute([(int) $omPeste['id']]);
+    $p1 = Redirectionari::importaPachet($db);
+    $piatra = Redirectionari::dupaCheie($db, '/e2-piatra', false);
+    $omDupa = Redirectionari::dupaCheie($db, '/produse', false);
+    $verifica('pachetul: piatra de mormânt (oprită) rămâne, o regulă „pachet” pornită care nu mai e în fișier pleacă, iar regula omului pe o '
+        . 'adresă din pachet rămâne a lui', $piatra !== null && (int) $piatra['is_active'] === 0 && Redirectionari::dupaCheie($db, '/e2-pachet-vechi', false) === null
+        && (string) $omDupa['source'] === 'manual' && (string) $omDupa['to_url'] === '/categorie/ceaiuri' && $p1['scoase'] === 1, json_encode($p1));
+    $db->prepare("UPDATE seo_redirects SET source = 'pachet', to_url = '/magazin' WHERE id = ?")->execute([(int) $omPeste['id']]);
+    for ($i = 0; $i < 10; $i++) {
+        $puneFals->execute([Redirectionari::amprenta('/e2-pachet-vechi-' . $i, false), '/e2-pachet-vechi-' . $i, 1]);
+    }
+    $p2 = Redirectionari::importaPachet($db);
+    $ramase = (int) $db->query("SELECT COUNT(*) FROM seo_redirects WHERE from_path LIKE '/e2-pachet-vechi-%'")->fetchColumn();
+    $p3 = Redirectionari::importaPachet($db, true);
+    $verifica('pachetul: sincronizarea automată nu scoate 10 reguli din ' . (10 + count($dinFisier())) . ' (peste o cincime) și spune; „Reia regulile '
+        . 'din pachet” le scoate; piatra de mormânt rămâne', $p2['scoase'] === 0 && $p2['nescoase'] === 10 && $ramase === 10 && $p3['scoase'] === 10
+        && Redirectionari::dupaCheie($db, '/e2-piatra', false) !== null, json_encode([$p2, $p3]));
+    $db->exec("DELETE FROM seo_redirects WHERE from_path LIKE '/e2-pachet-vechi%' OR from_path = '/e2-piatra'");
+    Redirectionari::reconstruieste($db);
 
     // -----------------------------------------------------------------------------------------------------------------
     // 4. Jurnalul 404.
@@ -219,6 +314,9 @@ try {
     $cerere($port, 'GET', '/nu-exista-e2-unu?email=cineva%40exemplu.ro&token=secret', ['Referer: https://www.google.com/search?q=ceva+personal']);
     $cerere($port, 'GET', '/Nu-Exista-E2-Unu/', ['Referer: http://127.0.0.1:' . $port . '/alta-pagina']);
     $cerere($port, 'GET', '/nu-exista-e2-cineva@exemplu.ro');
+    $cerere($port, 'GET', '/nu-exista-e2-cineva%2540exemplu.ro');
+    $cerere($port, 'GET', '/nu-exista-e2-cineva%EF%BC%A0exemplu.ro');
+    $cerere($port, 'GET', '/nu-exista-e2-cineva%40exemplu.ro');
     $cerere($port, 'GET', '/nu-exista-e2-scanare.php');
     $cerere($port, 'GET', '/cos/nu-exista-e2');
     $cerere($port, 'POST', '/nu-exista-e2-post');
@@ -226,7 +324,7 @@ try {
     $jurnal = $db->query("SELECT path, hits, referrer_host FROM seo_404_log WHERE path LIKE '/nu-exista-e2%' OR path LIKE '/cos/%' ORDER BY path")->fetchAll(PDO::FETCH_ASSOC);
     $text = (string) json_encode($db->query("SELECT * FROM seo_404_log WHERE path LIKE '%e2%'")->fetchAll(PDO::FETCH_ASSOC));
     $verifica('jurnalul 404: doar calea (litere mici, fără „/” final, fără parametri), de câte ori, gazda Google (fără căutare); nimic cu „@”, '
-        . 'scanare, coș, POST, HEAD; nicio urmă din parametri sau din adresa de pe care a venit', $jurnal === [['path' => '/nu-exista-e2-unu', 'hits' => 2,
+        . '(nici „%40”, „%2540”, „＠”), scanare, coș, POST, HEAD; nicio urmă din parametri sau din adresa de pe care a venit', $jurnal === [['path' => '/nu-exista-e2-unu', 'hits' => 2,
         'referrer_host' => 'www.google.com']] && !str_contains($text, 'secret') && !str_contains($text, 'exemplu.ro') && !str_contains($text, 'personal'),
         json_encode($jurnal));
     $jurnalPagina = $cerere($port, 'GET', '/admin/seo/404', [], $jarRedir)['corp'];
@@ -252,11 +350,21 @@ try {
         && (int) $db->query('SELECT COUNT(*) FROM seo_404_log')->fetchColumn() === Jurnal404::MAX_RANDURI && $sterse >= 4
         && (int) $db->query("SELECT COUNT(*) FROM seo_404_log WHERE path = '/nu-exista-e2-unu'")->fetchColumn() === 1);
     $db->exec("DELETE FROM seo_404_log WHERE path LIKE '/e2-umplere-%'");
+    // Revizuirea WP-37/38: rândurile vechi pleacă la orice 404, nu doar la curățarea din 50 în 50 și nici doar când se notează
+    // ceva (o cerere nenotată: o scanare; la fel cu jurnalul oprit, SEO_JURNAL_404=0, verificat înainte de notare).
+    $db->exec("INSERT INTO seo_404_log (path_hash, path, hits, first_seen_at, last_seen_at) VALUES (SHA1('/e2-vechi-2'), '/e2-vechi-2', 1,
+        NOW() - INTERVAL 100 DAY, NOW() - INTERVAL 91 DAY)");
+    $scanare = $cerere($port, 'GET', '/nu-exista-e2-alta-scanare.php');
+    $verifica('păstrarea: un rând mai vechi de 90 de zile pleacă la prima cerere 404, chiar una care nu se notează (o scanare)', $scanare['cod'] === 404
+        && (int) $db->query("SELECT COUNT(*) FROM seo_404_log WHERE path = '/e2-vechi-2'")->fetchColumn() === 0);
 
     // -----------------------------------------------------------------------------------------------------------------
     // 5. Automat: slug schimbat, ștergeri.
     // -----------------------------------------------------------------------------------------------------------------
     $db->exec("DELETE FROM products WHERE slug LIKE 'produs-e2-%'");
+    while (Redirectionari::propunereDeAratat() !== null) {
+        // propunerile rămase de la alte teste
+    }
     $db->prepare("INSERT INTO products (name, slug, price, stock, is_active, description, short_description) VALUES ('Produs E2', 'produs-e2-vechi', 10, 5, 1, '', '')")
         ->execute();
     $idProdusE2 = (int) $db->lastInsertId();
@@ -278,6 +386,27 @@ try {
     $verifica('înapoi la primul slug: nicio regulă pe adresa care există din nou, celelalte două trimit la ea, fără buclă',
         $randuriInapoi === [['/produs/produs-e2-al-treilea', '/produs/produs-e2-vechi'], ['/produs/produs-e2-nou', '/produs/produs-e2-vechi']]
         && $cerereSimpla('/produs/produs-e2-vechi')['cod'] === 200, json_encode($randuriInapoi));
+    // Revizuirea WP-37/38: o regulă scrisă de om pe adresa veche nu se înlocuiește (rămâne, cu un mesaj); un prefix care
+    // acoperă adresa nouă oprește redirecționarea automată (cu un mesaj); slug-ul trimis e curățat.
+    Redirectionari::adauga($db, '/produs/produs-e2-vechi-om', '/categorie/ceaiuri', 301, 'manual', 'E2 omul');
+    $om = Redirectionari::laSchimbareaAdresei($db, '/produs/produs-e2-vechi-om', '/produs/produs-e2-vechi', $adminEmail);
+    $randOm = Redirectionari::dupaCheie($db, '/produs/produs-e2-vechi-om', false);
+    Redirectionari::adauga($db, '/e2-pref', '/magazin', 301, 'manual', 'E2 prefix', '', true);
+    $acoperit = Redirectionari::laSchimbareaAdresei($db, '/produs/produs-e2-x', '/e2-pref/nou', $adminEmail);
+    $verifica('slug schimbat peste o regulă a omului: regula rămâne cum era și adminul află; o adresă nouă acoperită de un prefix: nimic '
+        . 'făcut, cu mesaj', !$om['ok'] && str_contains($om['mesaj'], 'a rămas cum era') && (string) ($randOm['to_url'] ?? '') === '/categorie/ceaiuri'
+        && (string) ($randOm['source'] ?? '') === 'manual' && !$acoperit['ok'] && str_contains($acoperit['mesaj'], '/e2-pref')
+        && Redirectionari::dupaCheie($db, '/produs/produs-e2-x', false) === null, json_encode([$om, $acoperit], JSON_UNESCAPED_UNICODE));
+    $db->exec("DELETE FROM seo_redirects WHERE from_path IN ('/produs/produs-e2-vechi-om', '/e2-pref')");
+    Redirectionari::reconstruieste($db);
+    $redenumeste('../Produs E2 /%2f/curățat?x#y');
+    $slugCuratat = (string) $db->query('SELECT slug FROM products WHERE id = ' . $idProdusE2)->fetchColumn();
+    $redenumeste('produs-e2-vechi');
+    $verifica('slug-ul produsului trimis cu „/”, „..”, „%2f”, spații, „?”, „#” iese curățat (diacriticele rămân)',
+        $slugCuratat === 'Produs-E2-2f-curățat-x-y', $slugCuratat);
+    $db->exec("DELETE FROM seo_redirects WHERE from_path LIKE '/produs/produs-e2-2f%' OR to_url LIKE '/produs/Produs-E2-2f%'");
+    Redirectionari::reconstruieste($db);
+
     // Produsul șters: propunerea (categoria lui sau lista produselor) apare o dată, pe pagina următoare.
     $post('/admin/products/' . $idProdusE2 . '/delete', []);
     $dupaStergere = $cerere($port, 'GET', '/admin/products', [], $jarRedir)['corp'];
@@ -285,6 +414,23 @@ try {
     $verifica('produsul șters: propunerea (301 spre lista produselor, 410 sau nimic) apare o singură dată', str_contains($dupaStergere, 'id="ax-propunere-redirect"')
         && str_contains($dupaStergere, 'value="/produs/produs-e2-vechi"') && str_contains($dupaStergere, 'value="/magazin"')
         && !str_contains($aDoua, 'ax-propunere-redirect'));
+    // Revizuirea WP-37/38: șters de un admin cu rol parțial (magazin), care n-are voie la Redirecționări: propunerea nu i se arată
+    // lui și nu se pierde; o vede administratorul general, o singură dată.
+    $db->prepare("INSERT INTO products (name, slug, price, stock, is_active, description, short_description) VALUES ('Produs E2 rol', 'produs-e2-rol', 10, 5, 1, '', '')")
+        ->execute();
+    $idProdusRol = (int) $db->lastInsertId();
+    $jarMagazin = $jarNou('redir-e2-magazin');
+    $cerere($port, 'POST', '/admin/login', [], $jarMagazin, ['email' => 'magazin@exemplu.ro', 'password' => $parola]);
+    preg_match('/name="_csrf" value="([0-9a-f]{64})"/', $cerere($port, 'GET', '/admin/products', [], $jarMagazin)['corp'], $mMag);
+    $cerere($port, 'POST', '/admin/products/' . $idProdusRol . '/delete', [], $jarMagazin, ['_csrf' => (string) ($mMag[1] ?? '')]);
+    $laMagazin = $cerere($port, 'GET', '/admin/products', [], $jarMagazin);
+    $inAsteptare = Redirectionari::propuneriInAsteptare();
+    $laGeneral = $cerere($port, 'GET', '/admin/products', [], $jarRedir)['corp'];
+    $verifica('ștergere de către rolul magazin: propunerea nu apare la el, așteaptă pe site și o vede administratorul general',
+        $laMagazin['cod'] === 200 && !str_contains($laMagazin['corp'], 'ax-propunere-redirect') && $inAsteptare === 1
+        && str_contains($laGeneral, 'value="/produs/produs-e2-rol"') && Redirectionari::propuneriInAsteptare() === 0,
+        'cod ' . $laMagazin['cod'] . ', în așteptare ' . $inAsteptare . ', la general: '
+        . (preg_match('/name="din" value="([^"]*)"/', $laGeneral, $mG) === 1 ? $mG[1] : 'fără propunere') . ', rămase ' . Redirectionari::propuneriInAsteptare());
     // Categoria ștearsă: propunerea e lista produselor (categoriile n-au părinte); alegerea 410 se salvează.
     $db->exec("DELETE FROM product_categories WHERE slug = 'categorie-e2'");
     $post('/admin/categories', ['name' => 'Categorie E2', 'slug' => 'categorie-e2']);

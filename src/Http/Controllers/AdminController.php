@@ -2343,6 +2343,12 @@ final class AdminController
         };
         $ref = $tip === 'listing_default' ? \App\Support\Seo::REF_LISTA
             : \App\Support\Slug::simplu((string) ($_POST[$tip === 'tag' ? 'tag_slug' : 'brand_slug'] ?? ''));
+        // Revizuirea WP-37/38: jetonul formularului (AdminCsrf), ca la acțiunile cu bani.
+        if (!\App\Support\AdminCsrf::valid()) {
+            Flash::set('error', 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.');
+            header('Location: /admin/categories' . $ancora);
+            return;
+        }
         $db = $this->db();
         if ($ref === '' || !$db instanceof PDO) {
             Flash::set('error', $tip === 'tag' ? 'Etichetă invalidă.' : 'Marcă invalidă.');
@@ -3507,6 +3513,11 @@ final class AdminController
         }
         $id = (int) ($_POST['tag_id'] ?? 0);
         $db = $this->db();
+        if (!\App\Support\AdminCsrf::valid()) {
+            Flash::set('error', 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.');
+            header('Location: /admin/blog/categories#etichete-blog');
+            return;
+        }
         if ($id <= 0 || !$db instanceof PDO) {
             Flash::set('error', 'Etichetă invalidă.');
             header('Location: /admin/blog/categories#etichete-blog');
@@ -4943,7 +4954,9 @@ final class AdminController
         \App\Support\Precomanda::ensureSchema($db);
 
         $name = trim($_POST['name'] ?? '');
-        $slug = trim($_POST['slug'] ?? '');
+        // Revizuirea WP-37/38: slug-ul produsului fără „/”, „?”, „#”, spații, caractere de control, „.” sau „..” (o adresă
+        // `/produs/{slug}` sigură, și pentru redirecționările automate); un slug obișnuit rămâne exact cum e.
+        $slug = $this->curataSlugProdus((string) ($_POST['slug'] ?? ''));
         $sku = trim($_POST['sku'] ?? '');
         $categoryId = (int) ($_POST['category_id'] ?? 0);
         $category = $this->categoryNameById($categoryId);
@@ -5242,14 +5255,18 @@ final class AdminController
         \App\Support\Precomanda::ensureSchema($db);
 
         $name = trim($_POST['name'] ?? '');
-        $slug = trim($_POST['slug'] ?? '');
+        // Revizuirea WP-37/38: slug-ul produsului fără „/”, „?”, „#”, spații, caractere de control, „.” sau „..” (o adresă
+        // `/produs/{slug}` sigură, și pentru redirecționările automate); un slug obișnuit rămâne exact cum e.
+        // WP-38: adresa de acum a produsului (o adresă schimbată primește 301 automat după salvare). Un slug trimis neschimbat
+        // rămâne exact cum e în bază (un slug vechi, importat, nu se „curăță” doar pentru că produsul s-a salvat).
+        $slugVechiProdus = $this->slugActual($db, 'products', $id);
+        $slugTrimis = trim((string) ($_POST['slug'] ?? ''));
+        $slug = $slugVechiProdus !== '' && $slugTrimis === $slugVechiProdus ? $slugVechiProdus : $this->curataSlugProdus($slugTrimis);
         if ($name === '' || $slug === '') {
             Flash::set('error', 'Numele și slug-ul sunt obligatorii.');
             header('Location: /admin/products');
             return;
         }
-        // WP-38: adresa de acum a produsului (o adresă schimbată primește 301 automat după salvare).
-        $slugVechiProdus = $this->slugActual($db, 'products', $id);
 
         $salePriceRaw = trim((string) ($_POST['sale_price'] ?? ''));
         $salePrice = $salePriceRaw !== '' ? (float) $salePriceRaw : null;
@@ -16370,7 +16387,28 @@ final class AdminController
                 $campuri[$cheie] = (string) $_POST[$camp];
             }
         }
-        \App\Support\Seo::salveaza($db, $pageType, $pageRef, $campuri);
+        $eroare = \App\Support\Seo::salveaza($db, $pageType, $pageRef, $campuri);
+        if ($eroare !== null) {
+            Flash::set('error', $eroare);
+        }
+    }
+
+    /**
+     * Slug-ul unui produs, curățat (revizuirea WP-37/38): litere (și cu diacritice, ca slug-urile importate), cifre, „.”, „_”, „~”,
+     * „-” și „%xx” (slug-urile codate ale WordPress), dacă decodat nu ascunde „/”, „.”/„..”, spații sau caractere de control;
+     * orice altceva (spații, „/”, „?”, „#”, „%”, caractere de control) devine „-”; fără „-” sau „.” la capete; „.” și „..” singure = gol. Literele mari rămân (adresele vechi importate le pot avea; potrivirea lor o face SeoRedirects).
+     */
+    private function curataSlugProdus(string $slug): string
+    {
+        // „%xx” (un slug codat, cum le scrie WordPress) rămâne; orice alt „%” devine „-”.
+        $slug = (string) preg_replace('/(?:%(?![0-9A-Fa-f]{2})|[^\p{L}\p{N}._~%-])+/u', '-', trim($slug));
+        $decodat = rawurldecode($slug);
+        if (preg_match('#[/\\\\?\#%\s\x00-\x1f\x7f]#u', $decodat) === 1 || trim($decodat, '.') === '') {
+            // Codat, ar ascunde „/”, „..”, spații sau caractere de control („%2f”, „%2e%2e”): fără „%”.
+            $slug = str_replace('%', '-', $slug);
+        }
+        $slug = trim((string) preg_replace('/-{2,}/', '-', $slug), '-.');
+        return $slug === '.' || $slug === '..' || $slug === '' ? '' : $slug;
     }
 
     /** Slug-ul de acum al unui rând (produs, categorie, pagină, articol), înaintea unei salvări (WP-38). */
@@ -16406,8 +16444,9 @@ final class AdminController
             $email = (string) ($stmt->fetchColumn() ?: '');
         } catch (Throwable) {
         }
-        $mesaj = \App\Support\Redirectionari::laSchimbareaAdresei($db, $prefix . $slugVechi, $prefix . $slugNou, $email);
-        return $mesaj !== '' ? ' ' . $mesaj . '.' : '';
+        // Și când nu s-a făcut (o regulă scrisă de om pe adresa veche, un prefix care acoperă adresa nouă), adminul află de ce.
+        $rezultat = \App\Support\Redirectionari::laSchimbareaAdresei($db, $prefix . $slugVechi, $prefix . $slugNou, $email);
+        return $rezultat['mesaj'] !== '' ? ' ' . rtrim($rezultat['mesaj'], '.') . '.' : '';
     }
 
     /** Unde propunem să ducă adresa unui produs șters: categoria lui principală, altfel lista produselor (WP-38). */

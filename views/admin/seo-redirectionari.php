@@ -13,6 +13,8 @@
  * @var array<string, mixed>|null $editeaza
  * @var array{din: string, spre: string, cod: int, prefix: bool, nota: string, sursa: string} $precompletat
  * @var int $nr404
+ * @var array{la_zi: bool, eroare: ?string} $stareCopie
+ * @var int $propuneri
  * @var string $csrf
  */
 $csrfCamp = '<input type="hidden" name="_csrf" value="' . adm_e($csrf) . '">';
@@ -41,6 +43,13 @@ admin_componenta('antet-pagina', [
 <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'titlu' => 'Tabelul redirecționărilor lipsește',
     'text' => 'Rulează migrările (scripts/migreaza.php --aplica). Până atunci se aplică doar regulile din pachetul site-ului (redirecturi.json), ca înainte.']); ?>
 <?php else: ?>
+<?php if (($stareCopie['eroare'] ?? null) !== null): ?>
+<?php admin_componenta('mesaj', ['tip' => 'eroare', 'titlu' => 'Regulile de aici nu ajung pe site', 'text' => (string) $stareCopie['eroare']]); ?>
+<?php endif; ?>
+<?php if (($propuneri ?? 0) > 0): ?>
+<?php admin_componenta('mesaj', ['tip' => 'info', 'titlu' => (int) $propuneri . ' ' . ((int) $propuneri === 1 ? 'pagină ștearsă așteaptă' : 'pagini șterse așteaptă')
+    . ' o alegere pentru adresa veche', 'text' => 'Propunerile apar pe rând, deasupra paginilor adminului (una la fiecare pagină deschisă).']); ?>
+<?php endif; ?>
 <?php if ($lanturi !== []): ?>
 <?php admin_componenta('mesaj', ['tip' => 'info', 'titlu' => count($lanturi) . ' ' . (count($lanturi) === 1 ? 'regulă trimite' : 'reguli trimit') . ' la o adresă redirecționată la rândul ei',
     'text' => implode(' · ', array_map(static fn (array $l): string => $l['din'] . ' → ' . $l['spre'] . ($l['finala'] !== null ? ' (vizitatorul ajunge direct la ' . $l['finala'] . ')'

@@ -88,6 +88,10 @@ final class Sitemap
         $cuBlog = Plugins::vizibil('blog');
         $articole = $cuBlog ? self::articolePublicate($db) : [];
         $produse = $cuCatalog ? self::produseActive($db) : [];
+        // Revizuirea WP-37/38: paginile pe care omul le-a scos din Google (robots „noindex”, panoul SEO) nu intră.
+        $noindex = Seo::refuriNoindex($db);
+        $scoasa = static fn (string $tip, string $ref): bool => isset($noindex[$tip][$ref]);
+        $catalogScos = $scoasa('listing_default', Seo::REF_LISTA);
 
         // Prima pagină, cu data paginii „Acasă” din constructor.
         $acasa = self::interogare($db,
@@ -98,7 +102,7 @@ final class Sitemap
 
         // Paginile din constructor.
         // WP-24 (VT-X2): paginile doar pentru membri nu intră niciodată (403 sau 404, după pluginul `membri`).
-        foreach (self::interogare($db, 'SELECT slug, updated_at, created_at FROM pages WHERE is_published = 1 AND deleted_at IS NULL'
+        foreach (self::interogare($db, 'SELECT id, slug, updated_at, created_at FROM pages WHERE is_published = 1 AND deleted_at IS NULL'
             . AccesMembri::conditieSql($db, 'pages', 'pages', true) . ' ORDER BY id ASC') as $pagina) {
             $slug = trim(trim((string) ($pagina['slug'] ?? '')), '/');
             $slugMic = mb_strtolower($slug);
@@ -120,6 +124,9 @@ final class Sitemap
             if ($slugMic === 'magazin' && $paginaCatalog !== 'magazin' && $cuCatalog) {
                 continue;
             }
+            if ($scoasa('custom_page', (string) ($pagina['id'] ?? '')) || ($slugMic === $paginaCatalog && $cuCatalog && $catalogScos)) {
+                continue;
+            }
             $lastmod = self::lastmod($pagina);
             if ($slugMic === $paginaCatalog) {
                 $lastmod = self::celMaiNou([$lastmod, ...array_column($produse, 'lastmod')]);
@@ -127,7 +134,7 @@ final class Sitemap
             $adauga('/' . self::codeazaCale($slug), $lastmod);
         }
 
-        if ($cuCatalog) {
+        if ($cuCatalog && !$catalogScos) {
             // Rutele fixe ale catalogului (există și fără pagină în constructor).
             $adauga('/' . self::codeazaCale($paginaCatalog), self::celMaiNou(array_column($produse, 'lastmod')));
         }
@@ -135,7 +142,7 @@ final class Sitemap
 
         if ($cuCatalog) {
             // Categoriile cu cel puțin un produs activ (principală sau suplimentară).
-            foreach (self::categorii($db, $produse) as $categorie) {
+            foreach (self::categorii($db, $produse, array_keys($noindex['category'] ?? [])) as $categorie) {
                 $adauga('/categorie/' . rawurlencode($categorie['slug']), $categorie['lastmod']);
             }
 
@@ -160,15 +167,21 @@ final class Sitemap
             ksort($marci);
             ksort($etichete);
             foreach ($marci as $slug => $lastmod) {
+                if ($scoasa('brand', mb_strtolower((string) $slug))) {
+                    continue;
+                }
                 $adauga('/marca/' . rawurlencode((string) $slug), $lastmod);
             }
             foreach ($etichete as $slug => $lastmod) {
-                if (self::etichetaInSitemap((string) $slug, count($produsePeEticheta[$slug] ?? []))) {
+                if (self::etichetaInSitemap((string) $slug, count($produsePeEticheta[$slug] ?? [])) && !$scoasa('tag', mb_strtolower((string) $slug))) {
                     $adauga('/eticheta/' . rawurlencode((string) $slug), $lastmod);
                 }
             }
 
             foreach ($produse as $produs) {
+                if ($scoasa('product', (string) $produs['id'])) {
+                    continue;
+                }
                 $adauga('/produs/' . rawurlencode((string) $produs['slug']), $produs['lastmod']);
             }
         }
@@ -177,6 +190,9 @@ final class Sitemap
             $adauga('/blog', self::celMaiNou(array_column($articole, 'lastmod')));
         }
         foreach ($articole as $articol) {
+            if ($scoasa('blog_post', (string) $articol['id'])) {
+                continue;
+            }
             $adauga('/blog/' . rawurlencode((string) $articol['slug']), $articol['lastmod']);
         }
 
@@ -233,16 +249,16 @@ final class Sitemap
         return $produse;
     }
 
-    /** @return list<array{slug: string, lastmod: string}> */
+    /** @return list<array{id: int, slug: string, lastmod: string}> */
     private static function articolePublicate(PDO $db): array
     {
         $articole = [];
         foreach (self::interogare($db,
-            'SELECT slug, updated_at, created_at, published_at FROM blog_posts
+            'SELECT id, slug, updated_at, created_at, published_at FROM blog_posts
              WHERE deleted_at IS NULL AND is_published = 1 AND published_at <= NOW() AND TRIM(COALESCE(slug, "")) <> ""'
              . AccesMembri::conditieSql($db, 'blog_posts', 'blog_posts', true) . '
              ORDER BY published_at DESC, id DESC') as $rand) {
-            $articole[] = ['slug' => trim((string) $rand['slug']), 'lastmod' => self::lastmod($rand)];
+            $articole[] = ['id' => (int) ($rand['id'] ?? 0), 'slug' => trim((string) $rand['slug']), 'lastmod' => self::lastmod($rand)];
         }
         return $articole;
     }
@@ -252,9 +268,10 @@ final class Sitemap
      * recunoaște (cel salvat; altfel cel generat din nume, ca în magazin).
      *
      * @param list<array{id: int, category: string, lastmod: string}> $produse
+     * @param list<string|int> $scoase id-urile categoriilor scoase din Google (robots „noindex”)
      * @return list<array{slug: string, lastmod: string}>
      */
-    private static function categorii(PDO $db, array $produse): array
+    private static function categorii(PDO $db, array $produse, array $scoase = []): array
     {
         $dupaNume = [];
         foreach ($produse as $produs) {
@@ -277,8 +294,13 @@ final class Sitemap
         }
 
         $slugSalvat = [];
-        foreach (self::interogare($db, 'SELECT name, slug FROM product_categories ORDER BY id ASC') as $rand) {
+        $numeScoase = [];
+        $scoase = array_map('strval', $scoase);
+        foreach (self::interogare($db, 'SELECT id, name, slug FROM product_categories ORDER BY id ASC') as $rand) {
             $nume = mb_strtolower(trim((string) ($rand['name'] ?? '')));
+            if ($nume !== '' && in_array((string) ($rand['id'] ?? ''), $scoase, true)) {
+                $numeScoase[$nume] = true;
+            }
             $slug = trim((string) ($rand['slug'] ?? ''));
             if ($nume !== '' && $slug !== '' && !isset($slugSalvat[$nume])) {
                 // Exact cum e salvat: e forma la care /categorie/{slug} nu mai redirecționează.
@@ -291,7 +313,7 @@ final class Sitemap
         ksort($dupaNume);
         foreach ($dupaNume as $nume => $lastmod) {
             $slug = $slugSalvat[$nume] ?? Slug::categorie((string) $nume);
-            if ($slug === '' || isset($slugVazut[mb_strtolower($slug)])) {
+            if ($slug === '' || isset($numeScoase[$nume]) || isset($slugVazut[mb_strtolower($slug)])) {
                 continue;
             }
             $slugVazut[mb_strtolower($slug)] = true;

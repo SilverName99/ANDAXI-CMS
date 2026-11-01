@@ -136,6 +136,7 @@ admin_componenta('antet-pagina', [
                 <td><?= (int) ($etichetaBlog['posts_count'] ?? 0) ?></td>
                 <td>
                     <form method="post" action="/admin/blog/categories/eticheta-seo">
+                        <?= \App\Support\AdminCsrf::camp() ?>
                         <input type="hidden" name="tag_id" value="<?= (int) $etichetaBlog['id'] ?>">
                         <details<?= $areSeoBlog($seoEticheta) ? ' open' : '' ?>>
                             <summary class="seo-google-summary">SEO Google<?= $areSeoBlog($seoEticheta) ? ' (completat)' : '' ?></summary>

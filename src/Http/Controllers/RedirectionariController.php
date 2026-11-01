@@ -40,14 +40,16 @@ final class RedirectionariController
         $sursa = is_scalar($_GET['sursa'] ?? null) ? (string) $_GET['sursa'] : '';
         $stare = is_scalar($_GET['stare'] ?? null) ? (string) $_GET['stare'] : '';
         $q = mb_substr(trim(is_scalar($_GET['q'] ?? null) ? (string) $_GET['q'] : ''), 0, 200);
-        $pagina = max(1, (int) ($_GET['pagina'] ?? 1));
+        $pagina = max(1, min(100000, (int) ($_GET['pagina'] ?? 1)));
         $reguli = [];
         $numere = ['toate' => 0, 'pornite' => 0, 'oprite' => 0, 'pachet' => 0, 'slug' => 0, 'adaugate' => 0];
         $total = 0;
         $lanturi = [];
         if ($disponibil && $db instanceof PDO) {
-            // Copia hărții la zi (și pachetul sincronizat) înainte de listă.
-            Redirectionari::reconstruieste($db);
+            // Copia hărții se reface doar dacă e veche (pachetul schimbat, o schimbare nescrisă), nu la fiecare deschidere.
+            if (!\App\Support\SeoRedirects::copieLaZi()) {
+                Redirectionari::reconstruieste($db, false);
+            }
             foreach ($db->query("SELECT COUNT(*) toate, SUM(is_active = 1) pornite, SUM(is_active = 0) oprite, SUM(source = 'pachet') pachet,
                 SUM(source = 'slug') slug, SUM(source NOT IN ('pachet', 'slug')) adaugate FROM seo_redirects")->fetch(PDO::FETCH_ASSOC) ?: [] as $k => $v) {
                 $numere[$k] = (int) $v;
@@ -56,6 +58,7 @@ final class RedirectionariController
             $stmt = $db->prepare('SELECT COUNT(*) FROM seo_redirects' . $unde);
             $stmt->execute($parametri);
             $total = (int) $stmt->fetchColumn();
+            $pagina = min($pagina, max(1, (int) ceil($total / self::PE_PAGINA)));
             $ordine = match ((string) ($_GET['sort'] ?? '')) {
                 'hits' => 'hits', 'ultima' => 'last_hit_at', 'creata' => 'created_at', default => 'from_path',
             };
@@ -90,6 +93,8 @@ final class RedirectionariController
                 'sursa' => in_array((string) ($_GET['sursa_noua'] ?? ''), ['404', 'stergere'], true) ? (string) $_GET['sursa_noua'] : 'manual',
             ],
             'nr404' => Jurnal404::disponibil($db) && $db instanceof PDO ? (int) $db->query('SELECT COUNT(*) FROM seo_404_log')->fetchColumn() : 0,
+            'stareCopie' => \App\Support\SeoRedirects::stareCopie(),
+            'propuneri' => Redirectionari::propuneriInAsteptare(),
             'csrf' => AdminCsrf::token(),
         ], 'admin/layout');
     }
@@ -196,9 +201,14 @@ final class RedirectionariController
         }
         $db = $this->db();
         $text = (string) ($_POST['csv'] ?? '');
+        if (strlen($text) > Redirectionari::MAX_CSV) {
+            Flash::set('error', 'Textul lipit are peste 2 MB: împarte lista în mai multe importuri.');
+            header('Location: ' . self::LISTA . '#importa');
+            return;
+        }
         $fisier = $_FILES['fisier'] ?? null;
         if (is_array($fisier) && (int) ($fisier['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK && is_uploaded_file((string) $fisier['tmp_name'])) {
-            if ((int) $fisier['size'] > 2 * 1024 * 1024) {
+            if ((int) $fisier['size'] > Redirectionari::MAX_CSV) {
                 Flash::set('error', 'Fișierul e prea mare (cel mult 2 MB).');
                 header('Location: ' . self::LISTA . '#importa');
                 return;
@@ -215,6 +225,11 @@ final class RedirectionariController
         }
         $rez = Redirectionari::importaCsv($db, $text, $this->autor($db));
         ResponseCache::purgePageCache();
+        if (isset($rez['eroare'])) {
+            Flash::set('error', $rez['eroare']);
+            header('Location: ' . self::LISTA . '#importa');
+            return;
+        }
         AdminActivityLog::log($db, 'Redirecționări importate din CSV', ['adaugate' => $rez['adaugate'], 'refuzate' => count($rez['refuzate'])]);
         $mesaj = $rez['adaugate'] . ' ' . ($rez['adaugate'] === 1 ? 'regulă adăugată' : 'reguli adăugate');
         if ($rez['refuzate'] !== []) {
@@ -234,7 +249,8 @@ final class RedirectionariController
         }
         $db = $this->db();
         if ($db instanceof PDO && Redirectionari::disponibil($db)) {
-            $rez = Redirectionari::importaPachet($db);
+            // Apăsat de admin: și când pachetul ar scoate multe reguli (o sincronizare automată s-ar opri).
+            $rez = Redirectionari::importaPachet($db, true);
             Redirectionari::reconstruieste($db);
             ResponseCache::purgePageCache();
             AdminActivityLog::log($db, 'Redirecționări reluate din pachet', $rez);
@@ -274,7 +290,7 @@ final class RedirectionariController
         $db = $this->db();
         $disponibil = Jurnal404::disponibil($db);
         $q = mb_substr(trim(is_scalar($_GET['q'] ?? null) ? (string) $_GET['q'] : ''), 0, 200);
-        $pagina = max(1, (int) ($_GET['pagina'] ?? 1));
+        $pagina = max(1, min(100000, (int) ($_GET['pagina'] ?? 1)));
         $randuri = [];
         $total = 0;
         if ($disponibil && $db instanceof PDO) {
@@ -284,6 +300,7 @@ final class RedirectionariController
             $stmt = $db->prepare('SELECT COUNT(*) FROM seo_404_log' . $unde);
             $stmt->execute($parametri);
             $total = (int) $stmt->fetchColumn();
+            $pagina = min($pagina, max(1, (int) ceil($total / self::PE_PAGINA)));
             $ordine = (string) ($_GET['sort'] ?? '') === 'ultima' ? 'last_seen_at' : ((string) ($_GET['sort'] ?? '') === 'cale' ? 'path' : 'hits');
             $dir = strtolower((string) ($_GET['dir'] ?? 'desc')) === 'asc' ? 'ASC' : 'DESC';
             $stmt = $db->prepare('SELECT * FROM seo_404_log' . $unde . ' ORDER BY ' . $ordine . ' ' . $dir . ', id DESC LIMIT ' . self::PE_PAGINA

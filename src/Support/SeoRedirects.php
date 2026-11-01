@@ -98,6 +98,11 @@ final class SeoRedirects
     private static bool $hartaDeRefacut = false;
     /** Doar pentru teste: fără copie (harta = pachetul, ca înainte de WP-38). */
     private static bool $faraCopie = false;
+    /** @var array<string, mixed>|null copia refăcută în această cerere (folosită și când fișierul n-a putut fi scris) */
+    private static ?array $copieMemorie = null;
+
+    /** După o copie care n-a putut fi scrisă, atâtea secunde fără încercări noi (harta pachetului, ca înainte). */
+    public const PAUZA_ESEC = 300;
     /** @var list<string>|null lista completă (nucleu + catalog + site) */
     private static ?array $caiExcluse = null;
 
@@ -638,8 +643,9 @@ final class SeoRedirects
             }
             return;
         }
-        // Fără copie (sau veche): regulile pachetului, exact ca înainte; la finalul cererii copia se reface.
-        self::$hartaDeRefacut = !self::$faraCopie;
+        // Fără copie (sau veche): regulile pachetului, exact ca înainte; la finalul cererii copia se reface (dacă o scriere
+        // n-a eșuat de curând: atunci fără încercare, până trece pauza).
+        self::$hartaDeRefacut = !self::$faraCopie && !self::inPauza();
         $reguli = self::reguli();
         foreach ($reguli['exacte'] as $rand) {
             if (!isset($rand[0]) || !is_string($rand[0]) || !str_starts_with($rand[0], '/')) {
@@ -696,10 +702,17 @@ final class SeoRedirects
      */
     private static function citesteCopia(): ?array
     {
+        if (self::$copieMemorie !== null && (self::$copieMemorie['semnatura'] ?? null) === self::semnaturaPachet()) {
+            return self::$copieMemorie;
+        }
         $fisier = self::fisierCopie();
         $text = is_file($fisier) ? @file_get_contents($fisier) : false;
         $copie = is_string($text) ? json_decode($text, true) : null;
         if (!is_array($copie) || ($copie['semnatura'] ?? null) !== self::semnaturaPachet()) {
+            return null;
+        }
+        // O schimbare a regulilor după care copia n-a fost scrisă: generația ei e mai mică decât cea de acum.
+        if ((int) ($copie['generatie'] ?? 0) < self::generatie()) {
             return null;
         }
         if (($copie['sursa'] ?? '') !== 'baza' && (int) ($copie['facuta'] ?? 0) < time() - 300) {
@@ -727,10 +740,126 @@ final class SeoRedirects
         if (!$ok) {
             @unlink($temporar);
         }
+        // Cererea de acum folosește harta refăcută, scrisă sau nu.
+        self::$copieMemorie = $copie;
+        self::semnaleazaEsec(!$ok);
         self::$harta = null;
         self::$prefixe = null;
         self::$iduri = [];
         return $ok;
+    }
+
+    /** Fișierul generației: crește la fiecare schimbare a regulilor (o copie cu o generație mai mică e veche). */
+    private static function fisierGeneratie(): string
+    {
+        return self::fisierCopie() . '.generatie';
+    }
+
+    public static function generatie(): int
+    {
+        $text = @file_get_contents(self::fisierGeneratie());
+        return is_string($text) ? max(0, (int) trim($text)) : 0;
+    }
+
+    public static function scrieGeneratia(int $generatie): void
+    {
+        $fisier = self::fisierGeneratie();
+        $temporar = $fisier . '.' . getmypid() . '.tmp';
+        if (@file_put_contents($temporar, (string) $generatie) !== false) {
+            @rename($temporar, $fisier);
+        }
+    }
+
+    /**
+     * Lacătul copiei (flock exclusiv pe `<copie>.lacat`): refacerea citește baza și scrie copia ținându-l, deci două
+     * refaceri nu se încrucișează. Fără drept de scriere: null (refacerea merge, fără lacăt).
+     *
+     * @return resource|null
+     */
+    public static function lacat()
+    {
+        $dosar = dirname(self::fisierCopie());
+        if (!is_dir($dosar)) {
+            @mkdir($dosar, 0775, true);
+        }
+        $f = @fopen(self::fisierCopie() . '.lacat', 'c');
+        if ($f === false) {
+            return null;
+        }
+        if (!flock($f, LOCK_EX)) {
+            fclose($f);
+            return null;
+        }
+        return $f;
+    }
+
+    /** @param resource|null $lacat */
+    public static function elibereaza($lacat): void
+    {
+        if (is_resource($lacat)) {
+            flock($lacat, LOCK_UN);
+            fclose($lacat);
+        }
+    }
+
+    /** Semnul „copia nu s-a putut scrie”: în dosarul copiei sau, dacă nici acolo nu se poate, în dosarul temporar al serverului. */
+    private static function fisierEsec(): string
+    {
+        $dosar = dirname(self::fisierCopie());
+        $nume = 'redirecturi-' . substr(sha1(self::fisierCopie()), 0, 12) . '.esec';
+        return is_dir($dosar) && is_writable($dosar) ? $dosar . '/' . $nume : rtrim(sys_get_temp_dir(), '/') . '/andaxi-' . $nume;
+    }
+
+    private static function semnaleazaEsec(bool $esec): void
+    {
+        $fisier = self::fisierEsec();
+        if (!$esec) {
+            if (is_file($fisier)) {
+                @unlink($fisier);
+            }
+            return;
+        }
+        if (!self::inPauza()) {
+            error_log('ANDAXI SeoRedirects: copia hărții (' . self::fisierCopie() . ') nu s-a putut scrie; cererile folosesc regulile din '
+                . 'redirecturi.json până la următoarea încercare (' . self::PAUZA_ESEC . ' s). Verifică dreptul de scriere în storage/cache.');
+        }
+        @file_put_contents($fisier, (string) time());
+    }
+
+    /** O scriere a copiei a eșuat de curând: fără încercări noi (fiecare cerere ar reface harta din bază). */
+    private static function inPauza(): bool
+    {
+        $text = @file_get_contents(self::fisierEsec());
+        return is_string($text) && (int) $text > time() - self::PAUZA_ESEC;
+    }
+
+    /**
+     * Pentru pagina din admin: ultima scriere a copiei a reușit? (Altfel mesajul pentru om.)
+     *
+     * @return array{la_zi: bool, eroare: ?string}
+     */
+    public static function stareCopie(): array
+    {
+        $memorie = self::$copieMemorie;
+        self::$copieMemorie = null;
+        $laZi = self::citesteCopia() !== null;
+        self::$copieMemorie = $memorie;
+        $text = @file_get_contents(self::fisierEsec());
+        $eroare = is_string($text) && (int) $text > 0
+            ? 'Copia hărții nu s-a putut scrie în ' . dirname(self::fisierCopie()) . ' (ultima încercare: ' . date('d.m.Y H:i', (int) $text)
+                . '). Până se repară dreptul de scriere, site-ul aplică doar regulile din pachet (redirecturi.json); regulile adăugate aici nu se aplică.'
+            : null;
+        return ['la_zi' => $laZi, 'eroare' => $eroare];
+    }
+
+    /** Copia din fișier e la zi (a pachetului și a generației de acum)? */
+    public static function copieLaZi(): bool
+    {
+        $memorie = self::$copieMemorie;
+        self::$copieMemorie = null;
+        $laZi = self::citesteCopia() !== null;
+        self::$copieMemorie = $memorie;
+        return $laZi;
     }
 
     /** Reface copia din bază (la finalul unei cereri cu copia lipsă sau veche) și reîncarcă harta. */
@@ -740,7 +869,7 @@ final class SeoRedirects
         try {
             if (class_exists(Redirectionari::class) && class_exists(Database::class)) {
                 $config = require dirname(__DIR__, 2) . '/config/app.php';
-                Redirectionari::reconstruieste(Database::connection((array) ($config['db'] ?? [])));
+                Redirectionari::reconstruieste(Database::connection((array) ($config['db'] ?? [])), false);
             }
         } catch (\Throwable) {
             // Rămâne harta pachetului, ca înainte.
@@ -777,6 +906,7 @@ final class SeoRedirects
     public static function faraCopie(bool $da): void
     {
         self::$faraCopie = $da;
+        self::$copieMemorie = null;
         self::$harta = null;
         self::$prefixe = null;
         self::$iduri = [];
@@ -915,6 +1045,7 @@ final class SeoRedirects
         self::$prefixe = null;
         self::$iduri = [];
         self::$hartaDeRefacut = false;
+        self::$copieMemorie = null;
         self::$caiExcluse = null;
         self::$activ = false;
         self::$redirectCanonic = false;

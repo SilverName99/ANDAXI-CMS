@@ -193,7 +193,8 @@ admin_componenta('panou-seo', [
     'iduri' => ['titlu' => 'seo_title', 'descriere' => 'seo_description', 'canonical' => 'seo_canonical_url', 'robots' => 'seo_robots', 'og' => 'seo_og_type'],
     'max_titlu' => 120, 'max_descriere' => 320,
     'prefix_adresa' => '/', 'sursa_slug' => '#page-slug', 'sursa_titlu' => '#page-title',
-    'verificari' => $pageId > 0 ? \App\Support\Seo::verificari(\App\Support\Database::connection([]), 'custom_page', (string) $pageId, $pageSeoTitle, $pageSeoDescription) : [],
+    'verificari' => $pageId > 0 ? \App\Support\Seo::verificari(\App\Support\Database::connection([]), 'custom_page', (string) $pageId, $pageSeoTitle, $pageSeoDescription,
+        static fn (string $link): bool => \App\Support\Auth::canAccessPath($link)) : [],
 ]);
 ?>
             <div class="field" style="max-width:720px;">
