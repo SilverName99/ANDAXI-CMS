@@ -28,8 +28,9 @@ declare(strict_types=1);
  *    toate trei pe aceeași bază:
  *    B1 codul comun de două ori (cu --gazda-sursa a serverului Bioscem): --strict „LA FEL” (normalizarea scoate tot ce
  *       diferă de la o cerere la alta);
- *    B2 codul Bioscem față de codul comun, cu poza de produs a codului Bioscem cu altă dată (altă versiune /og/): câmpurile
- *       structurale „LA FEL”, adresele din linkurile absolute cerute pe ambele; cu --strict „DIFERĂ” doar la corpul lui
+ *    B2 codul Bioscem față de codul comun, cu poza de produs a codului Bioscem cu altă dată (altă versiune /og/): întâi
+ *       diferențele voite ale WP-39 găsite și scoase, doar ele ($faraSeoB: sitemap-urile pe tipuri, categoriile blogului,
+ *       indexul /sitemap.xml, JSON-LD-ul nou pe liste și articole), apoi câmpurile structurale „LA FEL”, adresele din linkurile absolute cerute pe ambele; cu --strict „DIFERĂ” doar la corpul lui
  *       /robots.txt (diferența declarată în $deBioscem din compara-cu-baza.php); fără --gazda-sursa refuzul comparației, iar
  *       paginile codului comun citite fără ea au alte linkuri și alt canonical decât cele Bioscem (cu ea, aceleași);
  *       politețea (doar GET, nicio adresă interzisă, User-Agent, pauza);
@@ -168,6 +169,65 @@ $compara = static function (string $a, string $b, bool $strict = false): array {
         $cod = 2;
     }
     return ['cod' => $cod, 'iesire' => (string) ob_get_clean()];
+};
+/**
+ * WP-39 (SEO partea B, B3/B4): diferențele voite ale codului comun față de codul Bioscem, scoase din amprenta codului comun
+ * doar dacă sunt exact cele declarate (aceleași ca `$seoB` din compara-cu-baza.php, unde restul paginii e comparat octet cu
+ * octet; aici, câmpurile structurale ale tuturor celorlalte adrese):
+ *  - adresele în plus: sitemap-urile pe tipuri (`/sitemap-<tip>.xml`, 200, XML) și categoriile blogului găsite în ele
+ *    (`/blog/categorie/<slug>`, 200), doar în B;
+ *  - `/sitemap.xml`: corpul (indexul în loc de lista plată), restul câmpurilor la fel;
+ *  - JSON-LD: pe liste (magazinul, categoriile, mărcile, etichetele, /blog) exact tipurile Bioscem plus `ItemList`,
+ *    `ListItem`; pe articole (Bioscem: niciunul) `BlogPosting` și `BreadcrumbList` (cu tipurile lor: Organization, Person,
+ *    ListItem, iar la un eveniment Event, Place, Offer); pe aceste pagini corpul diferă doar prin blocurile JSON-LD.
+ * Scrie amprenta B „cu diferențele declarate scoase” și întoarce calea ei, numărătorile și problemele (o diferență
+ * nedeclarată rămâne în amprentă și o vede comparația).
+ *
+ * @param array{copie: bool, sursa: string, randuri: array<string, array<string, string>>} $a
+ * @param array{copie: bool, sursa: string, randuri: array<string, array<string, string>>} $b
+ * @return array{fisier: string, adrese: int, jsonld: int, sitemap: bool}
+ */
+$faraSeoB = static function (array $a, array $b, string $fisier): array {
+    $tipuri = static fn (string $v): array => $v === '-' ? [] : explode(',', $v);
+    $randuri = [];
+    $adrese = 0;
+    $jsonld = 0;
+    $sitemap = false;
+    foreach ($b['randuri'] as $cale => $rand) {
+        $vechi = $a['randuri'][$cale] ?? null;
+        if ($vechi === null) {
+            if ((preg_match('#^/sitemap-[a-z-]+\.xml$#', $cale) === 1 && $rand['cod'] === '200' && str_contains($rand['tip'], 'xml'))
+                || (preg_match('#^/blog/categorie/[a-z0-9-]+$#', $cale) === 1 && $rand['cod'] === '200')) {
+                $adrese++;
+                continue;
+            }
+        } else {
+            if ($cale === '/sitemap.xml' && $rand['corp'] !== $vechi['corp'] && str_contains($rand['tip'], 'xml')) {
+                $rand['corp'] = $vechi['corp'];
+                $sitemap = true;
+            }
+            if ($rand['jsonld'] !== $vechi['jsonld']) {
+                $tA = $tipuri($vechi['jsonld']);
+                $tB = $tipuri($rand['jsonld']);
+                $cuLista = array_values(array_unique(array_merge($tA, ['ItemList', 'ListItem'])));
+                $faraDublura = array_values(array_unique($tB));
+                sort($cuLista);
+                sort($faraDublura);
+                $lista = preg_match('#^/(magazin|categorie/|marca/|eticheta/|blog$)#', $cale) === 1 && $cuLista === $faraDublura;
+                $articol = preg_match('#^/blog/(?!categorie/|eticheta/)[a-z0-9-]+$#', $cale) === 1 && $tA === []
+                    && in_array('BlogPosting', $tB, true) && in_array('BreadcrumbList', $tB, true)
+                    && array_diff($tB, ['BlogPosting', 'BreadcrumbList', 'ListItem', 'Organization', 'Person', 'Event', 'Place', 'Offer', 'ImageObject']) === [];
+                if ($lista || $articol) {
+                    $rand['jsonld'] = $vechi['jsonld'];
+                    $rand['corp'] = $vechi['corp'];
+                    $jsonld++;
+                }
+            }
+        }
+        $randuri[] = $rand;
+    }
+    FisierAmprenta::scrie($fisier, $randuri, $b['copie'], $b['sursa']);
+    return ['fisier' => $fisier, 'adrese' => $adrese, 'jsonld' => $jsonld, 'sitemap' => $sitemap];
 };
 
 try {
@@ -582,8 +642,21 @@ try {
     // Cererile amprentei, văzute de serverul Bioscem (înaintea celor de mai jos ale testului, cu alt User-Agent).
     $notate = $cereri($jurnalVechi);
     $av = FisierAmprenta::citeste($tsvVechi);
-    $verifica('amprenta codului Bioscem: cod 0, aceleași adrese ca a codului comun', $r['cod'] === 0 && array_keys($av['randuri']) == array_keys($an['randuri']),
-        $r['tot']);
+    // WP-39: diferențele voite (sitemap-ul pe tipuri, datele structurate noi) se scot din amprenta codului comun, doar ele.
+    $seoB = $faraSeoB($av, $an, $dosarTest . '/nou-fara-seob.tsv');
+    $tsvNouDeclarat = $seoB['fisier'];
+    $anDeclarat = FisierAmprenta::citeste($tsvNouDeclarat);
+    $verifica('diferențele declarate ale WP-39 (SEO partea B) găsite în amprenta codului comun: ' . $seoB['adrese'] . ' adrese noi (sitemap-urile pe '
+        . 'tipuri, categoriile blogului), ' . $seoB['jsonld'] . ' pagini cu JSON-LD nou (ItemList pe liste, BlogPosting pe articole), /sitemap.xml index',
+        $seoB['adrese'] >= 8 && $seoB['jsonld'] >= 10 && $seoB['sitemap'], json_encode($seoB) ?: '');
+    $verifica('amprenta codului Bioscem: cod 0, aceleași adrese ca a codului comun (fără adresele declarate ale WP-39)', $r['cod'] === 0
+        && (static function (array $x, array $y): bool {
+            $x = array_keys($x);
+            $y = array_keys($y);
+            sort($x);
+            sort($y);
+            return $x === $y;
+        })($av['randuri'], $anDeclarat['randuri']), $r['tot']);
     // Linkurile absolute ale conținutului: interne pe ambele (cerute și numărate), canonical-ul pus de mână cu {GAZDA}.
     $dinLink = static fn (array $amp): bool => ($amp['randuri']['/doar-din-link-absolut']['de_unde'] ?? '') === 'link'
         && ($amp['randuri']['/wp-content/uploads/2020/01/ceai.jpg']['de_unde'] ?? '') === 'link'
@@ -606,12 +679,13 @@ try {
     $verifica('poza de distribuire: altă versiune în codul Bioscem (' . $vOgVechi . ') decât în codul comun (' . $vOgNou . '), aceleași rânduri /og/{V}/… în ambele amprente',
         $vOgVechi !== '' && $vOgNou !== '' && $vOgVechi !== $vOgNou && $pozeAv !== [] && str_starts_with($pozeAv[0], '/og/{V}/')
         && $pozeAv === array_values(array_filter(array_keys($an['randuri']), static fn (string $c): bool => str_starts_with($c, '/og/'))), implode(' ', $pozeAv));
-    $r = $compara($tsvVechi, $tsvNou);
+    $r = $compara($tsvVechi, $tsvNouDeclarat);
     foreach (explode("\n", trim($r['iesire'])) as $rand) {
         $scrie('        | ' . $rand);
     }
-    $verifica('Bioscem față de codul comun: câmpurile structurale „LA FEL”', $r['cod'] === 0 && str_contains($r['iesire'], 'diferențe pe câmp: —'), $r['iesire']);
-    $rs = $compara($tsvVechi, $tsvNou, true);
+    $verifica('Bioscem față de codul comun (fără diferențele declarate ale WP-39): câmpurile structurale „LA FEL”', $r['cod'] === 0
+        && str_contains($r['iesire'], 'diferențe pe câmp: —'), $r['iesire']);
+    $rs = $compara($tsvVechi, $tsvNouDeclarat, true);
     // WP-21 (C10): paginile de produs ale codului comun au în plus cele două câmpuri ascunse ale formularului de recenzie;
     // normalizarea le scoate (AmprentaSite::CAMPURI_RECENZIE), deci fiecare pagină de produs are corpul codului Bioscem.
     $verifica('cu --strict: „DIFERĂ” doar la corpul lui /robots.txt (regulile declarate în $deBioscem din compara-cu-baza.php); '
@@ -690,18 +764,19 @@ try {
     $verifica('cu parola: „copie de verificare: DA”, X-Robots-Tag al porții pe fiecare adresă, bannerul nu intră în amprentă, parola nicăieri', $r['cod'] === 0
         && $ac['copie'] === true && $xRobots === ['noindex, nofollow, noarchive'] && $cuParola === [true] && !str_contains((string) @file_get_contents($tsvCopie), 'SITE DE VERIFICARE')
         && !str_contains($r['tot'], $parolaPoarta) && !str_contains((string) @file_get_contents($tsvCopie), $parolaPoarta), $r['tot']);
-    $r = $compara($tsvVechi, $tsvCopie);
+    $tsvCopieDeclarat = $faraSeoB($av, $ac, $dosarTest . '/copie-fara-seob.tsv')['fisier'];
+    $r = $compara($tsvVechi, $tsvCopieDeclarat);
     foreach (explode("\n", trim($r['iesire'])) as $rand) {
         $scrie('        | ' . $rand);
     }
-    $verifica('Bioscem față de copia de verificare a codului comun: „LA FEL”, cu X-Robots-Tag, poza de distribuire și /og/ spuse ca necomparate',
+    $verifica('Bioscem față de copia de verificare a codului comun (fără diferențele declarate ale WP-39): „LA FEL”, cu X-Robots-Tag, poza de distribuire și /og/ spuse ca necomparate',
         $r['cod'] === 0 && str_contains($r['iesire'], 'necomparate (doar B e copia de verificare)') && preg_match('#adresele /og/ și /uploads/: [1-9]\d* \(garda 13\)#', $r['iesire']) === 1
         && str_contains($r['iesire'], 'diferențe pe câmp: —'), $r['iesire']);
     $verifica('pe copie, linkurile absolute ale conținutului copiat sunt ale copiei (--gazda-sursa): aceleași linkuri și canonical ca pe Bioscem, adresele lor cerute',
         $dinLink($ac) && ($ac['randuri']['/']['linkuri'] ?? '') === ($av['randuri']['/']['linkuri'] ?? '-')
         && ($ac['randuri']['/produs/ceai-de-menta']['linkuri'] ?? '') === ($av['randuri']['/produs/ceai-de-menta']['linkuri'] ?? '-'),
         json_encode([$ac['randuri']['/'] ?? null, $av['randuri']['/'] ?? null]) ?: '');
-    $rs = $compara($tsvVechi, $tsvCopie, true);
+    $rs = $compara($tsvVechi, $tsvCopieDeclarat, true);
     $verifica('--strict între Bioscem și copie: refuzat (cod 2)', $rs['cod'] === 2, $rs['iesire']);
     $pozeCopie = array_filter($ac['randuri'], static fn (array $x): bool => str_starts_with($x['cale'], '/og/'));
     $verifica('pe copie, poza de distribuire lipsă trimite 302 spre site-ul sursă (garda 13), fără să fie urmată', $pozeCopie === []

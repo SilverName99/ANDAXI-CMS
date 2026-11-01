@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Trecerea o singură dată prin pozele existente (WP-40, SEO partea B, B5; după scriptul optimizeaza-imagini al
- * grafoanaytis): fiecare poză JPEG, PNG, WebP sau GIF din /uploads/ (implicit products, gallery, blog, demo) primește
+ * Trecerea o singură dată prin pozele existente (WP-40, SEO partea B, B5; după scriptul optimizeaza-imagini al unui
+ * site existent, docs/de-portat.md): fiecare poză JPEG, PNG, WebP sau GIF din /uploads/ (implicit products, gallery, blog, demo) primește
  * variantele WebP de 160, 400, 800 și 1200 px (doar cele mai mici decât ea) și dimensiunile ei în cache, exact ca o poză
  * încărcată acum din admin (App\Support\VarianteImagini). Poza originală nu se atinge; variantele stau în
  * /uploads/_variante/. Pozele de profil ale membrilor (uploads/gallery/profile/, date personale) nu se ating.
