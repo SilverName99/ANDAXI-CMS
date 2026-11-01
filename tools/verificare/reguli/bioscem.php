@@ -78,7 +78,8 @@ return [
     // mărcile, etichetele produselor și legăturile lor (conținut public, copiat cum e).
     // 13 (WP-38, nucleu/0046, nucleu/0047): redirecționările site-ului copiate (adresele sunt publice; adminul care a adăugat
     // regula, cu pseudonimul emailului); jurnalul 404 doar structura (o copie nu are nevoie de el).
-    'versiune' => 13,
+    // 14 (WP-39, catalog/0048): codul EAN al produselor (public, de pe ambalaj), copiat cum e.
+    'versiune' => 14,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -186,7 +187,7 @@ return [
             'discount_badge_mode', 'bbd_enabled', 'bbd_entries_json', 'post_cart_note_enabled', 'post_cart_note_text', 'stock', 'out_of_stock',
             'preorder_enabled', 'preorder_max_per_order', 'preorder_max_total', 'weight_grams', 'image_url', 'gallery_json', 'gallery_images_json',
             'similar_products_json', 'badge_popular', 'badge_best_seller', 'badge_seasonal', 'is_active', 'deleted_at', 'created_at', 'updated_at',
-            'brand', 'tags_json', 'preview_token', 'sort_position', 'hidden_in_catalog', 'free_shipping'], 'motive' => ['name' => 'numele produsului',
+            'brand', 'tags_json', 'preview_token', 'sort_position', 'hidden_in_catalog', 'free_shipping', 'ean'], 'motive' => ['name' => 'numele produsului',
             'preview_token' => 'cheia linkului de ciornă al unui produs inactiv (WP-19): a produsului, nu a unui client; copia e privată'],
             'emailuri_publice' => 'descrierile produselor pot avea adresa magazinului'],
         'product_category_links' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'product_id', 'category_id']],

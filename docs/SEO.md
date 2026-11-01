@@ -17,7 +17,7 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | `src/Support/Redirectionari.php` | Harta adreselor vechi în baza de date (`seo_redirects`; WP-38): verificările unei reguli noi, pachetul ca sămânță, CSV, redirecționările automate, copia citită de `SeoRedirects` |
 | `src/Support/Jurnal404.php` | Jurnalul paginilor negăsite (`seo_404_log`; WP-38), fără date personale, cu păstrare limitată |
 | `src/Support/Robots.php` | Regulile din robots.txt (și pentru sitemap) |
-| `src/Support/Sitemap.php` | `/sitemap.xml`, din baza de date, la fiecare cerere |
+| `src/Support/Sitemap.php` | `/sitemap.xml` (indexul) și `/sitemap-{tip}.xml` (WP-39), din baza de date, la fiecare cerere |
 | `src/Support/JsonLd.php` | Datele structurate (produs, ofertă, firimituri, firmă, site) |
 | `src/Support/ImageDimensions.php` | width/height ale pozelor (cache în `storage/cache/image-dimensions.json`) |
 | `src/Support/Slug.php` | Slug-urile de marcă, etichetă și categorie (aceleași în pagini și în sitemap) |
@@ -201,6 +201,20 @@ mult 5.000 de adrese (cele văzute cel mai demult pleacă): cele vechi pleacă l
 (`%40`, `%2540`) și ca „＠”. Din jurnal: „Redirecționează” (formularul completat cu adresa),
 „410”, „Ignoră”. Oprire: `SEO_JURNAL_404=0`.
 
+## 2c. Verificarea adreselor vechi (WP-39, G-M7)
+
+`tools/verificare/verifica-redirecturi.php --lista=<csv> --baza=<url> [--ua=googlebot|browser] [--pachet=<site>]
+[--intentionate=<csv>] [--pauza=1] [--poarta=verificare]`: condiția fermă a planului SEO (PLAN-SEO §3 B) — niciun site nu
+trece pe codul comun fără lista adreselor lui vechi (sitemap-ul vechi, paginile din Search Console pe 16 luni, linkurile
+externe) verificată. Fiecare adresă trebuie să dea 200 (pagină HTML indexabilă, cu canonicalul spre ea), un 301 (sau 308)
+într-un singur salt, pe același site, spre o astfel de pagină, sau 410 doar dacă e o regulă 410 a pachetului (`--pachet`)
+sau o adresă din `--intentionate` (de exemplu exportul regulilor 410 din admin). Orice altceva (404, 302, lanț, țintă pe alt
+site, noindex, canonicalul altei pagini) e o problemă. Scrie câte adrese au dat fiecare rezultat și căile publice care pică,
+cu motivul; codul 0 doar fără probleme (1 cu probleme, 2 argumente greșite, fără nicio cerere). Doar GET, fără cookie-uri,
+cel puțin o secundă între cereri pe un site care nu e local; parola porții doar în `VERIFICARE_POARTA_PAROLA`, pe https.
+Rulează pe verificare cu pachetul site-ului înainte de trecere și pe domeniul live imediat după ([VERIFICARE.md](VERIFICARE.md)).
+GR (OD-44): lista e a site-ului GR de azi (sitemap-ul lui + Search Console), care trebuie să răspundă la fel după trecere.
+
 ## 3. robots.txt
 
 Reguli exacte (`Robots::DISALLOW`), fiecare cu pluginul ei: robots.txt pomenește
@@ -222,23 +236,30 @@ la `/robots.txt` cu `Disallow: /`, iar fiecare răspuns are
 
 ## 4. sitemap.xml
 
-`/sitemap.xml` se construiește din baza de date la fiecare cerere (`Sitemap::urls`),
-doar cu paginile care răspund 200 și doar ale pluginurilor de pe site:
+**WP-39 (SEO partea B, B3): `/sitemap.xml` e indexul sitemap-urilor pe tipuri** (`<sitemapindex>`, fiecare cu data celei
+mai noi adrese din el), construite din baza de date la fiecare cerere (`Sitemap::grupuri`, `Sitemap::index`):
+`/sitemap-pagini.xml`, `-produse`, `-categorii`, `-marci`, `-etichete`, `-articole`, `-blog-categorii`, `-blog-etichete`
+(`Sitemap::TIPURI`; în index doar tipurile cu adrese; un tip gol sau necunoscut răspunde 404). După adoptare, indexul se
+trimite din nou în Search Console (aceeași adresă, `/sitemap.xml`). Doar paginile care răspund 200 și doar ale
+pluginurilor de pe site:
 
 | Al cui | Ce intră |
 |---|---|
-| nucleu | prima pagină, paginile publicate (fără coș, checkout, cont, login, înregistrare, 404, acorduri GDPR și fără paginile pluginurilor ascunse), `/contact` |
-| catalog | `/magazin`, categoriile și mărcile cu cel puțin un produs activ, etichetele după regula site-ului, produsele active (fără cele inactive sau șterse) |
-| blog | `/blog` (doar dacă are articole) și articolele publicate |
+| nucleu (`pagini`) | prima pagină, paginile publicate (fără coș, checkout, cont, login, înregistrare, 404, acorduri GDPR, fără paginile doar pentru membri și fără paginile pluginurilor ascunse), `/contact`, `/blog` (doar dacă are articole) |
+| catalog | `/magazin` (pagina catalogului), categoriile și mărcile cu cel puțin un produs activ, etichetele după regula site-ului, produsele active (fără cele inactive sau șterse), cu pozele lor (`<image:image>`: poza principală și galeria, absolute, fără poza goală) |
+| blog | articolele publicate (fără cele doar pentru membri), cu poza lor; categoriile active cu cel puțin un articol publicat; etichetele cu cel puțin `seo.json` → `blog.eticheta_minim_articole` articole publicate (implicit 1) |
 
-Nimic din ce blochează robots.txt; `<lastmod>` din data ultimei modificări (la
-categorii, mărci, etichete și `/magazin`: cel mai nou produs al lor). Etichetele
-intră de la `seo.json` → `sitemap.eticheta_minim_produse` produse active (implicit
-1), plus `etichete_pastrate` (dacă au produse), niciodată `etichete_excluse`.
-Lipsa din sitemap nu schimbă pagina etichetei.
+Nimic din ce blochează robots.txt și **nicio pagină scoasă din Google în panoul SEO** (robots „noindex”, `Seo::refuriNoindex`:
+pagină, produs, categorie, marcă, etichetă, lista produselor, articol, categoria și eticheta blogului). **Fiecare adresă are
+`<lastmod>`**: data ultimei modificări (la categorii, mărci, etichete și `/magazin`: cel mai nou produs al lor; la `/blog`,
+categoriile și etichetele blogului: cel mai nou articol); una fără dată proprie (o rută fixă, `/contact`) ia data celei mai
+noi pagini, apoi a celei mai noi adrese din sitemap. **Niciodată `seo_pages.updated_at`**: rândurile de dinainte de
+`nucleu/0041` au acolo momentul migrării, nu al unei schimbări a paginii. Etichetele de produse intră de la `seo.json` →
+`sitemap.eticheta_minim_produse` produse active (implicit 1), plus `etichete_pastrate` (dacă au produse), niciodată
+`etichete_excluse`. Lipsa din sitemap nu schimbă pagina etichetei; o etichetă de blog sub minim e și `noindex,follow` (§5b).
 
-`public/.htaccess` (și `tools/dev/router.php`) trimit `/sitemap.xml` mereu la
-aplicație, ca un fișier vechi rămas pe server să nu-l acopere. Butonul din Setări
+`public/.htaccess` (și `deploy/stub/.htaccess`, `tools/dev/router.php`) trimit `/sitemap.xml` și
+`/sitemap-{tip}.xml` mereu la aplicație, ca un fișier vechi rămas pe server să nu le acopere. Butonul din Setări
 magazin → Sitemap șterge fișierul vechi `public/sitemap.xml` (cu alt nume de fișier
 scrie, ca înainte, o copie statică).
 
@@ -249,9 +270,13 @@ Doar date care se văd în pagină; adrese absolute (din `APP_URL`).
 
 | Pagina | Ce se scrie |
 |---|---|
-| prima pagină (nucleu) | `Organization` (nume, adresa site-ului, logo, email, telefon, `sameAs`) și `WebSite` |
-| produs (catalog) | `BreadcrumbList` (Acasă → categorie → produs); `Product` după regulile de mai jos |
-| categorie (catalog) | `BreadcrumbList` (Acasă → categorie) |
+| prima pagină (nucleu) | `Organization` (nume, adresa site-ului, logo, email, telefon, `sameAs`; tipul din `seo.json` → `organizatie.tip`, de exemplu `NGO` la vertij, WP-39 VT-S1) și `WebSite` |
+| produs (catalog) | `BreadcrumbList` (Acasă → categorie → produs); `Product` după regulile de mai jos (cu `gtin8/12/13/14` din codul EAN valid al produsului, WP-39) |
+| categorie (catalog) | `BreadcrumbList` (Acasă → categorie) și `ItemList` (WP-39) |
+| `/magazin` (pagina catalogului), marcă, etichetă (catalog) | `ItemList` (WP-39): adresele produselor afișate, în ordinea din pagină, cel mult 50; nu pe căutare |
+| articol (blog; WP-39, BV-B5) | `BlogPosting` (titlul, data publicării și a ultimei schimbări, autorul din Blog → Autori sau firma, poza articolului sau poza de distribuire implicită, descrierea, firma) și `BreadcrumbList` (Acasă → Blog → categoria activă → articolul); cu dată de eveniment și loc, și `Event` (WP-39, VT-S1: începutul, sfârșitul, locul ca `Place`, poza, prețul — „gratuit” = 0 lei — cu linkul biletelor) |
+| `/blog`, categoria și eticheta blogului (WP-39) | `ItemList` cu articolele afișate; nu pe căutare |
+| pagină doar pentru membri | nimic (nota pentru nemembri nu are date structurate) |
 
 **Product și Offer, pe pluginuri** (Google cere la un `Product` cel puțin una dintre
 `offers`, `review`, `aggregateRating`; altfel îl raportează ca eroare și nu-l folosește):
@@ -283,6 +308,12 @@ Doar date care se văd în pagină; adrese absolute (din `APP_URL`).
   Returul (zilele, pagina cu
   condițiile, cine plătește transportul înapoi) se scrie și la firmă
   (`Organization.hasMerchantReturnPolicy`). Oprire: `SEO_LIVRARE_RETUR=0`.
+  **Din admin (WP-39, B4, PLAN-SEO D10)**: Setări magazin → SEO Google → „Livrare și retur în Google” (doar cu magazinul):
+  „ca în pachet” (implicit: `seo.json` decide), „da, cu valorile de mai jos” sau „nu”; numele livrării în flux, cele patru
+  numere ale termenului, zilele de retur, pagina condițiilor (o cale din site), cine plătește transportul înapoi. Un câmp gol
+  ia valoarea din `seo.json` (arătată în câmp); fără nicio valoare, nu se spune nimic (doar condițiile completate apar).
+  Setările: `seo_livrare_retur`, `seo_livrare_serviciu`, `seo_retur_zile`, `seo_retur_pagina`, `seo_retur_taxe`
+  (`PoliticaLivrare::SETARI_ADMIN`), plus cele ale termenului; salvarea golește fluxul din cache.
 
 **Organization**: numele din Setări magazin (`store_name`), altfel `seo.json` →
 `organizatie.nume`, altfel `APP_NAME` (același nume ca în titluri, `SeoMeta::numeMagazin`); email și telefon din setări sau din linkurile
@@ -305,6 +336,17 @@ Livrarea 4, Bioscem `ef22b23`, `682843c`, `9fe175d`, `dd41c59`, `a64afb6` (`SeoI
   cu coșul, comanda, contul) primește titlul ei ca H1, cu un stil fără specificitate (`:where`);
   pe `/blog`, titlul listei („Blog & Resurse”) e H1-ul paginii când textul ei n-are unul.
 - Opriri: `SEO_NOINDEX=0`, `SEO_H1=0`.
+- **Lista blogului (WP-39, BV-B5)**, cu blogul avansat (cel care citește filtrele din adresă): căutarea (`/blog?q=…`) e
+  `noindex,follow`, fără canonical; `/blog?categorie=x` și `/blog?eticheta=x` au canonicalul paginii categoriei sau
+  etichetei (`/blog/categorie/x`, `/blog/eticheta/x`), când ea există. Fără blogul avansat (Bioscem, înghețat) parametrii nu
+  schimbă lista, deci pagina e `/blog` însuși și canonicalul rămâne `/blog`, ca înainte. Pe orice site: pagina 2, 3… a unei
+  liste are canonicalul ei (`?page=N`; o pagină cerută peste ultima e ultima, cu canonicalul ei); o etichetă de blog cu mai
+  puține articole publicate decât `seo.json` → `blog.eticheta_minim_articole` (implicit 1) e `noindex,follow` și lipsește din
+  sitemap.
+- **Catalogul pe altă pagină (WP-39, GR, OD-24)**: cu `catalog_pagina` alta decât `magazin` (GR: `produse`),
+  `/produse?categorie=x` (sau `?category=x`) face 301 la `/categorie/x` într-un singur salt, cu sortarea și parametrii de
+  reclamă păstrați, după aceeași regulă ca `/magazin?categorie=` (`LinkuriCategorii`); categoria se afișează în pagina
+  catalogului și are canonicalul ei, `/categorie/x`.
 
 ## 6. Viteza paginilor (LCP, CLS)
 
@@ -458,7 +500,8 @@ mărci sau etichete e rândul ei din `seo_pages` după slug.
 
 `/feed/google-merchant.xml` (livrarea 2, Bioscem `d277727`, `1e46f9f`; `FluxGoogleMerchant`;
 pluginul magazin): produsele active cu prețul afișat (și reducerea activă, cu perioada ei),
-disponibilitatea după ERP, pozele reale, marca, GTIN-ul doar valid (fără
+disponibilitatea după ERP, pozele reale, marca, GTIN-ul doar valid (codul EAN al produsului, `products.ean`,
+`catalog/0048`, scris în editorul produsului — WP-39; unul cu cifra de control greșită nu se salvează; fără
 `identifier_exists=no`), fără precomenzi; livrarea din `PoliticaLivrare` (ca în datele
 structurate). Id-ul produsului: SKU-ul, altfel prefixul site-ului (`seo.json` →
 `flux_merchant.prefix_id`, implicit `P-`) și id-ul. `X-Robots-Tag: noindex`; fluxul stă 15
@@ -479,7 +522,8 @@ hartă, etichetele de la 1 produs, logo-ul = iconița). Un fișier stricat se ig
 ```json
 {
   "sitemap": {"eticheta_minim_produse": 3, "etichete_pastrate": ["vitamina-d"], "etichete_excluse": ["insomnie"]},
-  "organizatie": {"nume": "Numele firmei", "logo": ["/uploads/gallery/logo-patrat.png"]},
+  "organizatie": {"nume": "Numele firmei", "logo": ["/uploads/gallery/logo-patrat.png"], "tip": "NGO"},
+  "blog": {"eticheta_minim_articole": 2},
   "robots_disallow": ["/pagina-de-sistem"],
   "cai_excluse": ["/pagina-de-sistem"],
   "titluri": {"sufixe_vechi": ["NUME VECHI"], "cuvinte_generice_marca": ["cuvânt"]},
@@ -550,6 +594,13 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   slug-ul schimbat de trei ori (un salt, fără buclă la întoarcere), regula omului pe adresa veche păstrată și prefixul peste
   adresa nouă (cu mesaj), slug-ul curățat; propunerea după ștergerea unui produs și a unei categorii (410 ales și salvat) și
   după o ștergere a rolului magazin (o vede administratorul general);
+- `tools/dev/test-seo.php` E3 (WP-39, `tools/dev/lib/test-seo-sitemap-jsonld.php`): indexul și fiecare sitemap pe tip (200, XML);
+  fiecare adresă din fiecare sitemap 200, cu canonicalul spre ea, fără noindex; `<lastmod>` pe fiecare; pozele produselor și
+  articolelor; ce nu intră (pagina ștearsă, ciorna, doar pentru membri, de sistem, produsul inactiv, categoria de blog
+  „noindex”, eticheta de blog fără articole); datele structurate pe tipuri (Product cu gtin13, BreadcrumbList, BlogPosting,
+  Event, Organization și NGO, ItemList; nimic pe o pagină doar pentru membri); livrarea și returul din admin; codul EAN din
+  editor (unul greșit nu se salvează); lista blogului (căutarea, filtrele, paginile 2+); `/produse?categorie=` pe catalogul
+  GR; `verifica-redirecturi.php` pe 40 de adrese inventate (30 × 200, 6 × 301, 3 × 410 voit, o problemă voită);
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;
 - `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
   cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere
@@ -594,5 +645,4 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
 
 - Noindex pe etichetele mici, H1, linkurile interne, termenul de livrare pentru Google
   (livrările 3–4 Bioscem, apoi în nucleu).
-- Livrarea și returul din setări (Etapa 1, B4): azi stau în `seo.json` → `livrare_retur`.
 - `HEAD` pe o adresă corectă răspunde 404 (routerul n-are rute HEAD; moștenit, neschimbat).

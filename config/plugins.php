@@ -103,7 +103,7 @@ return [
             '/admin/seo/*',
         ],
         // /_andaxi/*: adresele platformei (pingul monitorizării; în Etapa 2 și preluarea licenței).
-        'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/contact/*', '/{slug*}'],
+        'rute_publice' => ['/', '/health', '/_andaxi/*', '/robots\.txt', '/sitemap\.xml', '/sitemap-{tip}\.xml', '/contact/*', '/{slug*}'],
         'meniu' => [
             // WP-30: „Acasă” (machetele), activă doar pe pagina ei.
             ['grup' => 'acasa', 'ordine' => 10, 'eticheta' => 'Acasă', 'href' => '/admin', 'icon' => 'dashboard',

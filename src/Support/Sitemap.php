@@ -58,14 +58,19 @@ final class Sitemap
     }
 
     /**
-     * @return list<array{loc: string, lastmod: string}>
+     * Toate adresele, în ordinea de până acum (prima pagină, paginile, catalogul, contactul, categoriile, mărcile,
+     * etichetele, produsele, blogul, articolele, apoi categoriile și etichetele blogului), fiecare cu tipul sitemap-ului
+     * ei (`TIPURI`), data ultimei modificări (mereu: vezi `lastmod` mai jos) și pozele (produsele, articolele).
+     *
+     * @return list<array{loc: string, lastmod: string, tip: string, imagini: list<string>}>
      */
     public static function urls(PDO $db, string $baseUrl): array
     {
         $baseUrl = rtrim($baseUrl, '/');
         $urls = [];
         $vazute = [];
-        $adauga = static function (string $cale, string $lastmod = '') use (&$urls, &$vazute, $baseUrl): void {
+        $adauga = static function (string $cale, string $lastmod = '', string $tip = 'pagini', array $imagini = [])
+            use (&$urls, &$vazute, $baseUrl): void {
             if ($cale !== '/' && Robots::blocheaza($cale)) {
                 return;
             }
@@ -78,7 +83,7 @@ final class Sitemap
                 return;
             }
             $vazute[$loc] = true;
-            $urls[] = ['loc' => $loc, 'lastmod' => $lastmod];
+            $urls[] = ['loc' => $loc, 'lastmod' => $lastmod, 'tip' => $tip, 'imagini' => $imagini];
         };
 
         $cuCatalog = Plugins::vizibil('catalog');
@@ -138,12 +143,13 @@ final class Sitemap
             // Rutele fixe ale catalogului (există și fără pagină în constructor).
             $adauga('/' . self::codeazaCale($paginaCatalog), self::celMaiNou(array_column($produse, 'lastmod')));
         }
-        $adauga('/contact');
+        // Contactul (o rută fixă, fără rând propriu dacă nu e o pagină din constructor): data celei mai noi pagini.
+        $adauga('/contact', self::celMaiNou(array_column(array_filter($urls, static fn (array $u): bool => $u['tip'] === 'pagini'), 'lastmod')));
 
         if ($cuCatalog) {
             // Categoriile cu cel puțin un produs activ (principală sau suplimentară).
             foreach (self::categorii($db, $produse, array_keys($noindex['category'] ?? [])) as $categorie) {
-                $adauga('/categorie/' . rawurlencode($categorie['slug']), $categorie['lastmod']);
+                $adauga('/categorie/' . rawurlencode($categorie['slug']), $categorie['lastmod'], 'categorii');
             }
 
             // Mărcile cu cel puțin un produs activ; etichetele după regulile site-ului (sus).
@@ -170,11 +176,11 @@ final class Sitemap
                 if ($scoasa('brand', mb_strtolower((string) $slug))) {
                     continue;
                 }
-                $adauga('/marca/' . rawurlencode((string) $slug), $lastmod);
+                $adauga('/marca/' . rawurlencode((string) $slug), $lastmod, 'marci');
             }
             foreach ($etichete as $slug => $lastmod) {
                 if (self::etichetaInSitemap((string) $slug, count($produsePeEticheta[$slug] ?? [])) && !$scoasa('tag', mb_strtolower((string) $slug))) {
-                    $adauga('/eticheta/' . rawurlencode((string) $slug), $lastmod);
+                    $adauga('/eticheta/' . rawurlencode((string) $slug), $lastmod, 'etichete');
                 }
             }
 
@@ -182,7 +188,8 @@ final class Sitemap
                 if ($scoasa('product', (string) $produs['id'])) {
                     continue;
                 }
-                $adauga('/produs/' . rawurlencode((string) $produs['slug']), $produs['lastmod']);
+                $adauga('/produs/' . rawurlencode((string) $produs['slug']), $produs['lastmod'], 'produse',
+                    self::imaginiAbsolute($baseUrl, $produs['imagini']));
             }
         }
 
@@ -193,16 +200,158 @@ final class Sitemap
             if ($scoasa('blog_post', (string) $articol['id'])) {
                 continue;
             }
-            $adauga('/blog/' . rawurlencode((string) $articol['slug']), $articol['lastmod']);
+            $adauga('/blog/' . rawurlencode((string) $articol['slug']), $articol['lastmod'], 'articole',
+                self::imaginiAbsolute($baseUrl, [$articol['imagine']]));
+        }
+
+        // WP-39 (B3): categoriile blogului (active, cu cel puțin un articol publicat) și etichetele lui (cu cel puțin
+        // `seo.json → blog.eticheta_minim_articole` articole, implicit 1), fără cele scoase din Google.
+        if ($articole !== []) {
+            foreach (self::termeniBlog($db, 'categorii', $articole) as $termen) {
+                if (!$scoasa('blog_category', (string) $termen['id'])) {
+                    $adauga('/blog/categorie/' . rawurlencode($termen['slug']), $termen['lastmod'], 'blog-categorii');
+                }
+            }
+            foreach (self::termeniBlog($db, 'etichete', $articole) as $termen) {
+                if ($termen['articole'] >= self::minimArticoleEticheta() && !$scoasa('blog_tag', (string) $termen['id'])) {
+                    $adauga('/blog/eticheta/' . rawurlencode($termen['slug']), $termen['lastmod'], 'blog-etichete');
+                }
+            }
+        }
+
+        // Fiecare adresă are <lastmod> (WP-39): una fără dată proprie (o pagină fără dată, o rută fixă) ia data celei mai
+        // noi schimbări din sitemap; un site gol, momentul de acum. Niciodată `seo_pages.updated_at`: rândurile de dinainte
+        // de nucleu/0041 au acolo momentul migrării, nu al unei schimbări a paginii.
+        $celMaiNou = self::celMaiNou(array_column($urls, 'lastmod'));
+        if ($celMaiNou === '') {
+            $celMaiNou = gmdate('Y-m-d\TH:i:s\Z');
+        }
+        foreach ($urls as $i => $url) {
+            if ($url['lastmod'] === '') {
+                $urls[$i]['lastmod'] = $celMaiNou;
+            }
         }
 
         return $urls;
     }
 
-    /** @param list<array{loc: string, lastmod: string}> $urls */
-    public static function xml(array $urls): string
+    /** Sitemap-urile pe tipuri, în ordinea din index, cu numele adresei lor (/sitemap-{tip}.xml). */
+    public const TIPURI = ['pagini', 'produse', 'categorii', 'marci', 'etichete', 'articole', 'blog-categorii', 'blog-etichete'];
+
+    /**
+     * Adresele pe tipuri (doar tipurile cu cel puțin o adresă), în ordinea din `TIPURI`.
+     *
+     * @return array<string, list<array{loc: string, lastmod: string, tip: string, imagini: list<string>}>>
+     */
+    public static function grupuri(PDO $db, string $baseUrl): array
     {
-        $xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+        $grupuri = array_fill_keys(self::TIPURI, []);
+        foreach (self::urls($db, $baseUrl) as $url) {
+            $grupuri[$url['tip']][] = $url;
+        }
+        return array_filter($grupuri, static fn (array $lista): bool => $lista !== []);
+    }
+
+    /**
+     * /sitemap.xml (WP-39, B3): indexul sitemap-urilor pe tipuri, fiecare cu data celei mai noi adrese din el.
+     *
+     * @param array<string, list<array{loc: string, lastmod: string}>> $grupuri
+     */
+    public static function index(array $grupuri, string $baseUrl): string
+    {
+        $baseUrl = rtrim($baseUrl, '/');
+        $xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
+        foreach ($grupuri as $tip => $lista) {
+            $xml[] = '  <sitemap>';
+            $xml[] = '    <loc>' . htmlspecialchars($baseUrl . '/sitemap-' . $tip . '.xml', ENT_QUOTES | ENT_XML1, 'UTF-8') . '</loc>';
+            $lastmod = self::celMaiNou(array_column($lista, 'lastmod'));
+            if ($lastmod !== '') {
+                $xml[] = '    <lastmod>' . htmlspecialchars($lastmod, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</lastmod>';
+            }
+            $xml[] = '  </sitemap>';
+        }
+        $xml[] = '</sitemapindex>';
+        return implode("\n", $xml) . "\n";
+    }
+
+    /** Câte articole publicate trebuie să aibă o etichetă de blog ca să intre în Google (seo.json → blog.eticheta_minim_articole). */
+    public static function minimArticoleEticheta(): int
+    {
+        return max(1, (int) DateSite::seo('blog.eticheta_minim_articole', 1));
+    }
+
+    /**
+     * Pozele unei adrese, absolute și codate, fără poza goală (product-placeholder), cel mult 10.
+     *
+     * @param list<string> $imagini
+     * @return list<string>
+     */
+    private static function imaginiAbsolute(string $baseUrl, array $imagini): array
+    {
+        $rez = [];
+        foreach ($imagini as $imagine) {
+            $imagine = trim((string) $imagine);
+            if ($imagine === '' || str_contains($imagine, 'product-placeholder') || str_starts_with($imagine, 'data:')) {
+                continue;
+            }
+            if (str_starts_with($imagine, '//')) {
+                $imagine = 'https:' . $imagine;
+            } elseif (preg_match('#^https?://#i', $imagine) !== 1) {
+                $imagine = $baseUrl . implode('/', array_map(
+                    static fn (string $bucata): string => rawurlencode(rawurldecode($bucata)),
+                    explode('/', '/' . ltrim($imagine, '/'))
+                ));
+            }
+            $rez[$imagine] = true;
+        }
+        return array_slice(array_keys($rez), 0, 10);
+    }
+
+    /**
+     * Categoriile (active) sau etichetele blogului care au articole publicate (din lista sitemap-ului, deci fără cele
+     * doar pentru membri), cu numărul lor și data celui mai nou.
+     *
+     * @param list<array{id: int, slug: string, lastmod: string}> $articole
+     * @return list<array{id: int, slug: string, articole: int, lastmod: string}>
+     */
+    private static function termeniBlog(PDO $db, string $fel, array $articole): array
+    {
+        $dupaArticol = [];
+        foreach ($articole as $articol) {
+            $dupaArticol[(int) $articol['id']] = $articol['lastmod'];
+        }
+        $legaturi = $fel === 'categorii'
+            ? self::interogare($db, 'SELECT c.id, c.slug, x.post_id FROM blog_categories c
+                JOIN (SELECT post_id, category_id FROM blog_post_categories UNION SELECT id, category_id FROM blog_posts WHERE category_id IS NOT NULL) x
+                  ON x.category_id = c.id
+                WHERE c.is_active = 1 AND TRIM(COALESCE(c.slug, "")) <> "" ORDER BY c.sort_order, c.name, c.id')
+            : self::interogare($db, 'SELECT t.id, t.slug, l.post_id FROM blog_tags t JOIN blog_post_tags l ON l.tag_id = t.id
+                WHERE TRIM(COALESCE(t.slug, "")) <> "" ORDER BY t.name, t.id');
+        $termeni = [];
+        foreach ($legaturi as $rand) {
+            $idArticol = (int) ($rand['post_id'] ?? 0);
+            if (!isset($dupaArticol[$idArticol])) {
+                continue;
+            }
+            $id = (int) $rand['id'];
+            $termeni[$id] ??= ['id' => $id, 'slug' => trim((string) $rand['slug']), 'articole' => [], 'lastmod' => ''];
+            $termeni[$id]['articole'][$idArticol] = true;
+            $termeni[$id]['lastmod'] = self::celMaiNou([$termeni[$id]['lastmod'], $dupaArticol[$idArticol]]);
+        }
+        return array_values(array_map(static fn (array $t): array => ['id' => $t['id'], 'slug' => $t['slug'],
+            'articole' => count($t['articole']), 'lastmod' => $t['lastmod']], $termeni));
+    }
+
+    /**
+     * Un `<urlset>`; cu pozele adreselor (`<image:image>`, WP-39) doar când $cuPoze (sitemap-urile pe tipuri).
+     *
+     * @param list<array{loc: string, lastmod: string, imagini?: list<string>}> $urls
+     */
+    public static function xml(array $urls, bool $cuPoze = false): string
+    {
+        $arePoze = $cuPoze && array_filter($urls, static fn (array $u): bool => ($u['imagini'] ?? []) !== []) !== [];
+        $xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"'
+            . ($arePoze ? ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"' : '') . '>'];
         foreach ($urls as $intrare) {
             $loc = trim((string) ($intrare['loc'] ?? ''));
             if ($loc === '') {
@@ -213,6 +362,9 @@ final class Sitemap
             $lastmod = trim((string) ($intrare['lastmod'] ?? ''));
             if ($lastmod !== '') {
                 $xml[] = '    <lastmod>' . htmlspecialchars($lastmod, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</lastmod>';
+            }
+            foreach ($arePoze ? (array) ($intrare['imagini'] ?? []) : [] as $imagine) {
+                $xml[] = '    <image:image><image:loc>' . htmlspecialchars((string) $imagine, ENT_QUOTES | ENT_XML1, 'UTF-8') . '</image:loc></image:image>';
             }
             $xml[] = '  </url>';
         }
@@ -227,7 +379,7 @@ final class Sitemap
     private static function produseActive(PDO $db): array
     {
         $randuri = self::interogare($db,
-            'SELECT id, slug, brand, category, tags_json, updated_at, created_at FROM products
+            'SELECT id, slug, brand, category, tags_json, image_url, gallery_images_json, updated_at, created_at FROM products
              WHERE deleted_at IS NULL AND is_active = 1 AND TRIM(COALESCE(slug, "")) <> "" ORDER BY id DESC');
         if ($randuri === []) {
             // Schema veche, fără mărci și etichete.
@@ -244,21 +396,38 @@ final class Sitemap
                 'category' => trim((string) ($rand['category'] ?? '')),
                 'tags_json' => $rand['tags_json'] ?? null,
                 'lastmod' => self::lastmod($rand),
+                'imagini' => self::pozeProdus($rand),
             ];
         }
         return $produse;
     }
 
-    /** @return list<array{id: int, slug: string, lastmod: string}> */
+    /**
+     * Poza principală și galeria unui produs (căile, cum sunt în bază).
+     *
+     * @return list<string>
+     */
+    private static function pozeProdus(array $rand): array
+    {
+        $poze = [trim((string) ($rand['image_url'] ?? ''))];
+        $galerie = json_decode((string) ($rand['gallery_images_json'] ?? ''), true);
+        foreach (is_array($galerie) ? $galerie : [] as $poza) {
+            $poze[] = is_array($poza) ? trim((string) ($poza['url'] ?? $poza['src'] ?? '')) : trim((string) $poza);
+        }
+        return array_values(array_filter($poze, static fn (string $p): bool => $p !== ''));
+    }
+
+    /** @return list<array{id: int, slug: string, lastmod: string, imagine: string}> */
     private static function articolePublicate(PDO $db): array
     {
         $articole = [];
         foreach (self::interogare($db,
-            'SELECT id, slug, updated_at, created_at, published_at FROM blog_posts
+            'SELECT id, slug, featured_image_url, updated_at, created_at, published_at FROM blog_posts
              WHERE deleted_at IS NULL AND is_published = 1 AND published_at <= NOW() AND TRIM(COALESCE(slug, "")) <> ""'
              . AccesMembri::conditieSql($db, 'blog_posts', 'blog_posts', true) . '
              ORDER BY published_at DESC, id DESC') as $rand) {
-            $articole[] = ['id' => (int) ($rand['id'] ?? 0), 'slug' => trim((string) $rand['slug']), 'lastmod' => self::lastmod($rand)];
+            $articole[] = ['id' => (int) ($rand['id'] ?? 0), 'slug' => trim((string) $rand['slug']), 'lastmod' => self::lastmod($rand),
+                'imagine' => trim((string) ($rand['featured_image_url'] ?? ''))];
         }
         return $articole;
     }

@@ -8,8 +8,8 @@ declare(strict_types=1);
 // decât la ultima rulare a runner-ului), fiecare id de mai jos trebuie să fie terminat în _platforma_migrari.
 
 return [
-    'ord' => 47,
-    'amprenta' => '783e602e19079cc7f9b56926f97a6a64660db16f18addac3d3f8785175e8cc34',
+    'ord' => 48,
+    'amprenta' => 'bbe04e0c6afd43ee363c5989b9f2eee5b520247f5a98c33ff775a91257fc7456',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',
@@ -55,5 +55,6 @@ return [
         'catalog/0042_marci_etichete',
         'nucleu/0046_redirectionari',
         'nucleu/0047_jurnal_404',
+        'catalog/0048_produse_ean',
     ],
 ];

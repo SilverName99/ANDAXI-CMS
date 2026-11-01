@@ -91,6 +91,15 @@ final class FluxGoogleMerchant
         return is_string($xml) && $xml !== '' ? $xml : null;
     }
 
+    /** Uită fluxul din cache (după o schimbare a setărilor lui): următoarea cerere îl face din nou. */
+    public static function sterge(): void
+    {
+        $fisier = self::fisierCache();
+        if (is_file($fisier)) {
+            @unlink($fisier);
+        }
+    }
+
     /** Scrie fluxul în cache (fișier temporar + redenumire; o scriere eșuată nu strică nimic). */
     public static function salveaza(string $xml): void
     {

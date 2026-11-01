@@ -2,7 +2,7 @@
 # Pe site: plata_stripe, conturi_clienti, donatii, membri
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (295)
+RUTE (296)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -132,6 +132,7 @@ GET  /produs/{slug} -> 404 [catalog]
 GET  /register -> CONTROLLER [conturi_clienti]
 GET  /resetare-parola -> CONTROLLER [conturi_clienti]
 GET  /robots.txt -> CONTROLLER [nucleu]
+GET  /sitemap-{tip}.xml -> CONTROLLER [nucleu]
 GET  /sitemap.xml -> CONTROLLER [nucleu]
 GET  /{slug*} -> CONTROLLER [nucleu]
 POST /admin/blog/authors -> 403 [blog]

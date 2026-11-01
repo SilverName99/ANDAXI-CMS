@@ -189,8 +189,8 @@ declare -A PORTI=(
     [WP-36]="G-rute G-admin G-tastatura G-vizual G-cmp G-cmp-istoric G-plug-fiecare G-smoke G-pachet G-php"
     [WP-37]="G-rute G-mig G-cmp G-seo G-plug G-admin G-tastatura G-vizual G-php"
     [WP-38]="G-rute G-mig G-cmp G-cmp-istoric G-seo G-plug G-admin G-tastatura G-vizual G-smoke G-pachet G-php"
-    [WP-39]="G-rute G-mig G-cmp G-plug-fiecare G-seo G-php"
-    [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-seo G-php"
+    [WP-39]="G-rute G-mig G-cmp G-cmp-istoric G-plug-fiecare G-seo G-admin G-tastatura G-pachet G-php"
+    [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-cmp-istoric G-seo G-plug G-admin G-tastatura G-pachet G-paths G-verif G-php"
     [WP-41]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
     [WP-R]="G-rute G-cmp G-cmp-istoric G-plug G-php"
 )

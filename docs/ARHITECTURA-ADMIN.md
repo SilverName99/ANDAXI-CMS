@@ -71,6 +71,14 @@ categorie și „Etichete blog — SEO Google”. Formularele etichetelor și li
 blog), toate cu jetonul formularului (`_csrf`; revizuirea WP-37/38). Rolurile rămân aceleași (Categorii produse: rolul
 magazinului; Categorii blog: administratorul general).
 
+## Codul EAN și livrarea pentru Google (WP-39, 1 noiembrie)
+
+Nicio pagină nouă. Editorul produsului (secțiunea „Stoc și coduri”, lângă SKU) primește „Cod EAN (GTIN)”: doar cifre, 8, 12, 13
+sau 14, cu cifra de control verificată; unul greșit nu se salvează și mesajul de după salvare spune de ce. Setări magazin →
+tabul „SEO Google” primește secțiunea „Livrare și retur în Google” (doar cu pluginul magazinului; un formular separat, cu
+jetonul formularului, acțiunea `save_livrare_retur_google`): ce spune site-ul lui Google despre livrare și retur, peste
+condițiile din pachetul site-ului; câmpurile goale arată, estompat, valoarea din pachet. `docs/SEO.md` §5.
+
 ## Redirecționări și 404 (WP-38, 1 noiembrie)
 
 O pagină nouă în **Setări**, după Setări magazin: „Redirecționări și 404” (`/admin/seo/redirectionari`, nucleu, doar

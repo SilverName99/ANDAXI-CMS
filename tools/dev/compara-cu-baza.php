@@ -261,6 +261,68 @@ $normalizeazaAntete = static fn (string $antet): array => diferente_antete($ante
  * paginilor din tools/verificare/amprenta-site.php): portul codului de bază și, în instrucțiunile de cron din admin,
  * dosarul copiei lui devin ale codului curent.
  */
+/**
+ * WP-39 (B3): adresele tuturor sitemap-urilor din indexul curent, ca un singur <urlset>, pentru comparația cu /sitemap.xml
+ * al bazei: în ordinea bazei (adresele noi la sfârșit), fără <image:image> (declarat: pozele adreselor) și fără <lastmod>
+ * acolo unde baza n-avea unul (declarat: fiecare adresă are acum o dată). Problemele (un sitemap din index care nu
+ * răspunde 200 cu XML, unul gol) în $probleme.
+ *
+ * @param callable(string): array{cod: int, corp: string, antete: string} $cere
+ * @param list<string> $probleme
+ */
+function sitemap_din_index(string $index, string $baza, callable $cere, array &$probleme): string
+{
+    $blocuri = [];
+    preg_match_all('#<loc>([^<]+)</loc>#', $index, $m);
+    foreach ($m[1] as $loc) {
+        $cale = (string) (parse_url(html_entity_decode($loc, ENT_QUOTES | ENT_XML1, 'UTF-8'), PHP_URL_PATH) ?? '');
+        if (preg_match('#^/sitemap-[a-z-]+\.xml$#', $cale) !== 1) {
+            $probleme[] = 'indexul are o adresă care nu e un sitemap pe tip: ' . $cale;
+            continue;
+        }
+        $raspuns = $cere($cale);
+        if ((int) ($raspuns['cod'] ?? 0) !== 200 || !str_contains((string) ($raspuns['corp'] ?? ''), '<urlset')) {
+            $probleme[] = $cale . ' răspunde ' . (int) ($raspuns['cod'] ?? 0) . ' fără <urlset>';
+            continue;
+        }
+        if (preg_match_all('#  <url>\n.*?  </url>\n#s', (string) $raspuns['corp'], $u) < 1) {
+            $probleme[] = $cale . ' e gol';
+        }
+        foreach ($u[0] as $bloc) {
+            $bloc = (string) preg_replace('#    <image:image>.*?</image:image>\n#', '', $bloc);
+            if (preg_match('#<loc>([^<]+)</loc>#', $bloc, $l) === 1) {
+                $blocuri[$l[1]] = $bloc;
+            }
+        }
+    }
+    preg_match_all('#  <url>\n.*?  </url>\n#s', $baza, $ub);
+    $ordine = [];
+    foreach ($ub[0] as $blocBaza) {
+        if (preg_match('#<loc>([^<]+)</loc>#', $blocBaza, $l) !== 1) {
+            continue;
+        }
+        $ordine[] = $l[1];
+        if (isset($blocuri[$l[1]]) && !str_contains($blocBaza, '<lastmod>')) {
+            $blocuri[$l[1]] = (string) preg_replace('#    <lastmod>[^<]*</lastmod>\n#', '', $blocuri[$l[1]]);
+        }
+    }
+    // Declarat (WP-39): categoriile și etichetele blogului cu articole, noi în sitemap.
+    foreach (array_keys($blocuri) as $loc) {
+        if (!in_array($loc, $ordine, true) && preg_match('#^https?://[^/]+/blog/(categorie|eticheta)/[^/]+$#', $loc) === 1) {
+            unset($blocuri[$loc]);
+        }
+    }
+    $plat = [];
+    foreach ($ordine as $loc) {
+        if (isset($blocuri[$loc])) {
+            $plat[] = $blocuri[$loc];
+            unset($blocuri[$loc]);
+        }
+    }
+    $antet = preg_match('#^.*?<urlset[^>]*>\n#s', $baza, $a) === 1 ? $a[0] : "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+    return $antet . implode('', array_merge($plat, array_values($blocuri))) . "</urlset>\n";
+}
+
 $inlocuiriBaza = ['127.0.0.1:' . $portBaza => '127.0.0.1:' . $portCurent];
 if ($dosarBaza !== '') {
     $inlocuiriBaza[$dosarBaza] = $radacina;
@@ -1080,6 +1142,14 @@ $deBioscem = [
             . 'leagă postarea de ea; în Bioscem nicio bifă, iar re-salvarea ștergea categoria.',
         'mod' => 'repo',
     ],
+    // WP-39 (B4): editorul produsului completează și codul EAN (catalog/0048); câmpul e în marcajul seo:produs-ean.
+    [
+        'nume' => 'editorul produsului: codul EAN completat la deschidere',
+        'cale' => '/admin/products',
+        'nou' => "\n            document.getElementById('p_ean').value = product.ean || ''; // WP-39 (B4): codul EAN (catalog/0048)",
+        'vechi' => '',
+        'motiv' => 'WP-39 (B4): câmpul nou „Cod EAN (GTIN)” primește valoarea produsului când se deschide editorul.',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
@@ -1594,6 +1664,12 @@ $marcajePort = [
         . 'cod în tabul „Toate”'],
     'gr:previzualizare-oferta' => ['cale' => '/admin/products/templates/' . $idSablonProdus . '/builder', 'motiv' => 'WP-26 (GR-15): '
         . 'butonul în previzualizarea șablonului'],
+    // WP-39 (SEO partea B, B4): codul EAN al produsului (catalog/0048) în editorul produsului și livrarea și returul pentru
+    // Google în Setări magazin → SEO Google (PLAN-SEO D10; goale la Bioscem: datele structurate rămân cele din pachet).
+    'seo:produs-ean' => ['cale' => '/admin/products', 'motiv' => 'WP-39 (B4): câmpul „Cod EAN (GTIN)” al produsului, pentru datele '
+        . 'structurate (gtin13) și fluxul Merchant'],
+    'seo:livrare-retur' => ['cale' => '/admin/settings/store', 'motiv' => 'WP-39 (B4, D10): secțiunea „Livrare și retur în Google” '
+        . '(peste condițiile din pachetul site-ului; goală = ca în pachet)'],
 ];
 // WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
 // dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de
@@ -1611,6 +1687,29 @@ foreach (Plugins::catalog()['pluginuri'] as $cheiePlugin => $definitiePlugin) {
             . preg_quote((string) $intrareMeniu['eticheta'], '#') . '\s*</a>#s';
     }
 }
+// WP-39 (SEO partea B, B3/B4, BV-B5): diferențele voite ale SEO B pe paginile publice (planul, „Bioscem identity”;
+// site-uri/bioscem/ce-se-schimba.md), scoase din pagina codului curent înainte de comparare: blocurile de date structurate
+// noi (după tipar, fiindcă au adresele și datele paginii), fiecare de cel mult „max” ori pe o pagină din „cale” și găsit
+// măcar o dată în rulare. Sitemap-ul pe tipuri se compară separat (sitemap_din_index): adresele lui, toate la un loc, sunt
+// cele din /sitemap.xml al Bioscem.
+$seoB = [
+    'SEO B: ItemList pe listele de produse' => ['cale' => ['/magazin*', '/categorie/*', '/marca/*', '/eticheta/*'],
+        'tipar' => '#    <script type="application/ld\+json">\{"@context":"https://schema\.org","@type":"ItemList","name":"[^"]*","itemListElement":\[\{"@type":"ListItem","position":1,"url":"[^"]*/produs/[^\n]*?</script>\n#', 'max' => 1,
+        'motiv' => 'WP-39 (B4): lista produselor afișate (ItemList, adresele lor în ordinea din pagină); nu pe căutare'],
+    'SEO B: ItemList pe listele blogului' => ['cale' => ['/blog', '/blog?*', '/blog/categorie/*', '/blog/eticheta/*'],
+        'tipar' => '#    <script type="application/ld\+json">\{"@context":"https://schema\.org","@type":"ItemList","itemListElement":\[\{"@type":"ListItem","position":1,"url":"[^"]*/blog/[^\n]*?</script>\n#', 'max' => 1,
+        'motiv' => 'WP-39 (B4): articolele afișate (ItemList); nu pe căutare'],
+    'SEO B: BlogPosting pe articole' => ['cale' => ['/blog/*'],
+        'tipar' => '#    <script type="application/ld\+json">\{"@context":"https://schema\.org","@type":"BlogPosting",[^\n]*?</script>\n#', 'max' => 1,
+        'motiv' => 'WP-39 (BV-B5): datele structurate ale articolului (titlul, datele, autorul, poza, firma)'],
+    'SEO B: firimiturile articolelor' => ['cale' => ['/blog/*'],
+        'tipar' => '#    <script type="application/ld\+json">\{"@context":"https://schema\.org","@type":"BreadcrumbList","itemListElement":\[\{"@type":"ListItem","position":1,"name":"Acasă","item":"[^"]*/"\},\{"@type":"ListItem","position":2,"name":"Blog",[^\n]*?</script>\n#',
+        'max' => 1, 'motiv' => 'WP-39 (BV-B5): firimiturile articolului (Acasă → Blog → categoria → articolul)'],
+    'SEO B: Event pe articolele-eveniment' => ['cale' => ['/blog/*'],
+        'tipar' => '#    <script type="application/ld\+json">\{"@context":"https://schema\.org","@type":"Event",[^\n]*?</script>\n#', 'max' => 1,
+        'motiv' => 'WP-39 (VT-S1): un articol cu dată și loc de eveniment primește Event'],
+];
+$seoBGasite = array_fill_keys(array_keys($seoB), 0);
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
 if ($fataDeCommit) {
@@ -1651,8 +1750,29 @@ $coduriGasite = [];
 // Fiecare declarație găsită măcar o dată în toată rularea (WP-12): una pe care n-o atinge nicio pagină cerută (o pagină
 // scoasă din listă, un caz de salvare care nu mai rulează) n-ar dovedi nimic, deci pică la final.
 $gasiteInRulare = [];
+/**
+ * WP-39: scoate blocurile SEO B (datele structurate noi) din pagina codului curent, doar pe paginile lor și de cel mult
+ * „max” ori; înaintea celorlalte declarații și, față de un commit vechi, înaintea diferențelor SEO ale livrării 1.
+ */
+$faraSeoB = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($seoB, &$seoBGasite): string {
+    // WP-39: blocurile SEO B (datele structurate noi), doar pe paginile lor și de cel mult „max” ori.
+    foreach ($seoB as $numeSeoB => $declaratieSeoB) {
+        $html = (string) preg_replace($declaratieSeoB['tipar'], '', $html, -1, $deCateSeoB);
+        if ($deCateSeoB > 0 && !diferenta_pe_pagina($declaratieSeoB['cale'], $cale)) {
+            $probleme[] = $numeSeoB . ': găsit pe ' . $cale . ', care nu e una din paginile lui';
+        } elseif ($deCateSeoB > (int) $declaratieSeoB['max']) {
+            $probleme[] = $numeSeoB . ': găsit de ' . $deCateSeoB . ' ori, cel mult ' . (int) $declaratieSeoB['max'];
+        }
+        if ($deCateSeoB > 0) {
+            $seoBGasite[$numeSeoB] += $deCateSeoB;
+            $gasite[$numeSeoB] = ($gasite[$numeSeoB] ?? 0) + $deCateSeoB;
+        }
+    }
+    return $html;
+};
 $faraDeclarate = static function (string $cale, string $html, array &$gasite, array &$probleme) use ($listeDeclarate, $marcajePort, &$gasiteInRulare,
     $meniuFaraBioscem): string {
+
     // Jetonul de sesiune al unui formular de admin (_csrf) e la întâmplare: o declarație care îl conține îl scrie <TOKEN>,
     // cum îl lasă oricum normalizeaza_html() după (revizuirea WP-23: editorul postării are acum jetonul în formular).
     $html = (string) preg_replace('/(name="_csrf" value=")[0-9a-f]{64}"/', '$1<TOKEN>"', $html);
@@ -1946,6 +2066,20 @@ foreach ($pagini as $pagina) {
     foreach (['curent' => $portCurent, 'baza' => $portBaza] as $eticheta => $port) {
         $r[$eticheta] = $cerere($port, 'GET', $cale, $jaruri[$eticheta][$rol]);
     }
+    // WP-39 (B3): /sitemap.xml e acum indexul sitemap-urilor pe tipuri. Se cer toate, iar adresele lor, la un loc, în ordinea
+    // din sitemap-ul de bază, se compară cu el (diferențele declarate: pozele adreselor și <lastmod> pe adresele care nu
+    // aveau unul; fiecare sitemap din index răspunde 200, XML).
+    if ($cale === '/sitemap.xml' && str_contains((string) $r['curent']['corp'], '<sitemapindex')) {
+        $problemeIndex = [];
+        $r['curent']['corp'] = sitemap_din_index((string) $r['curent']['corp'],
+            str_replace(array_keys($inlocuiriBaza), array_values($inlocuiriBaza), (string) $r['baza']['corp']),
+            static fn (string $c): array => $cerere($portCurent, 'GET', $c, $jaruri['curent'][$rol]), $problemeIndex);
+        $diferentePorturi[str_pad($rol, 13) . $cale] = 'SEO B: indexul sitemap-urilor pe tipuri';
+        foreach ($problemeIndex as $problemaIndex) {
+            $diferite[] = str_pad($rol, 13) . $cale . ' (' . $problemaIndex . ')';
+            echo '  DIFERĂ ', str_pad($rol, 13), $cale, ': ', $problemaIndex, "\n";
+        }
+    }
     // O pagină cu codul de stare declarat ($coduriDeBioscem): doar codurile și textul ei.
     $problemeCod = [];
     $declaratieCod = diferente_coduri($listeCoduri, $cale, $r['baza']['cod'], $r['baza']['corp'], $r['curent']['cod'],
@@ -1967,7 +2101,8 @@ foreach ($pagini as $pagina) {
     $porturiGasite = [];
     $problemePorturi = [];
     $a = $normalizeaza($r['baza']['corp']);
-    $corpCurent = $fataDeCommit ? $faraSeo($cale, $r['curent']['corp'], $gasite) : $r['curent']['corp'];
+    $corpCurent = $faraSeoB($cale, (string) $r['curent']['corp'], $porturiGasite, $problemePorturi);
+    $corpCurent = $fataDeCommit ? $faraSeo($cale, $corpCurent, $gasite) : $corpCurent;
     // O redirecționare (3xx) nu e o pagină: declarațiile de texte nu se aplică pe ea (de exemplu „/admin” al unui rol
     // parțial, care duce la pagina rolului); corpul ei se compară neatins.
     $esteRedirectionare = $r['curent']['cod'] >= 300 && $r['curent']['cod'] < 400;
@@ -4310,12 +4445,20 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 $curata = $caz['curata'] ?? static fn (string $text): string => $text;
                 $raspunsuri = [];
                 foreach ($raspunsuriBrute as $n => $r) {
+                    // WP-39 (B3): /sitemap.xml e indexul; adresele sitemap-urilor lui, la un loc, se compară cu sitemap-ul bazei.
+                    if ($server === 'curent' && $cereriFacute[$server][$n][0] === 'GET' && $cereriFacute[$server][$n][1] === '/sitemap.xml'
+                        && str_contains((string) $r['corp'], '<sitemapindex')) {
+                        $r['corp'] = sitemap_din_index((string) $r['corp'],
+                            str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, (string) ($rezultate['baza']['raspunsuri'][$n]['corp_brut'] ?? '')),
+                            static fn (string $c): array => $cerere($port, 'GET', $c, $jaruriCaz['viz']), $probleme);
+                    }
                     // O salvare din admin face un token nou, la întâmplare, pentru versiunea fișierelor
                     // statice (ResponseCache::generateAssetVersionToken): diferă de la un server la altul.
                     $corp = (string) preg_replace('/(&(?:amp;)?v=)[0-9a-f]{12}\b/', '$1<TOKEN-CACHE>', $curata(strtr($r['corp'], $inlocuiri)));
                     // Diferențele declarate se scot, ca în lista de pagini, doar din paginile cerute cu GET (nu din redirecționări).
                     if ($server === 'curent' && $cereriFacute[$server][$n][0] === 'GET' && ($r['cod'] < 300 || $r['cod'] >= 400)) {
                         $gasiteSalvare = [];
+                        $corp = $faraSeoB((string) $cereriFacute[$server][$n][1], $corp, $gasiteSalvare, $probleme);
                         $corp = $faraDeclarate((string) $cereriFacute[$server][$n][1], $corp, $gasiteSalvare, $probleme);
                     }
                     $raspunsuri[$n] = [
@@ -4445,6 +4588,8 @@ if ($marcajePort !== []) {
 if ($meniuFaraBioscem !== []) {
     $declarate[] = count($meniuFaraBioscem) . ' intrări de meniu ale pluginurilor fără Bioscem';
 }
+// WP-39: blocurile SEO B găsite în rulare (fiecare de câte ori; cele negăsite cu 0 — de exemplu Event, doar pe datele demo).
+$declarate[] = '$seoB ' . implode('/', array_map(static fn (int $n): string => (string) $n, array_values($seoBGasite)));
 echo "\n", 'Față de ', $commitBaza, ': ', $identice, ' pagini identice (cod, Location, anteturi, corp), ', count($diferite), ' diferite; ',
     $fataDeCommit ? count($diferenteSeoAsteptate) . ' pagini cu diferențele SEO așteptate (livrarea 1 SEO), ' : '',
     count($diferentePorturi), ' pagini cu diferențe declarate (', $declarate === [] ? 'nicio declarație' : implode(', ', $declarate),

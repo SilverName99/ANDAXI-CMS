@@ -315,6 +315,13 @@ $adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'],
                                 <label>SKU</label>
                                 <input type="text" name="sku" id="p_sku">
                             </div>
+<!--port:seo:produs-ean-->
+                            <div class="field">
+                                <label for="p_ean">Cod EAN (GTIN)</label>
+                                <input type="text" name="ean" id="p_ean" inputmode="numeric" maxlength="14" pattern="[0-9]{8}|[0-9]{12,14}" spellcheck="false">
+                                <small class="muted">Codul de bare de pe ambalaj (8, 12, 13 sau 14 cifre). Ajunge în Google (datele structurate și fluxul Merchant); gol = fără cod.</small>
+                            </div>
+<!--/port:seo:produs-ean-->
                             <div class="field">
                                 <label>Stoc</label>
                                 <input type="number" name="stock" id="p_stock">
@@ -1272,6 +1279,7 @@ admin_componenta('panou-seo', [
             form.action = '/admin/products/' + product.id + '/update';
             document.getElementById('p_name').value = product.name || '';
             document.getElementById('p_sku').value = product.sku || '';
+            document.getElementById('p_ean').value = product.ean || ''; // WP-39 (B4): codul EAN (catalog/0048)
             document.getElementById('p_slug').value = product.slug || '';
             document.getElementById('p_category_id').value = product.category_id || '';
             setExtraCategories(product.extra_category_ids || []);

@@ -1,6 +1,7 @@
 # Docroot-ul (public_html/) unui site în așezarea din Etapa 2, lângă stub-ul index.php (docs/DEZVOLTARE.md,
 # „Unde scrie codul”). Ca public/.htaccess de azi: fișierele care există (assets/, uploads/, sitemap-urile scrise
-# de admin, .well-known/) se servesc direct, restul ajunge la index.php; /sitemap.xml e mereu cel construit din bază.
+# de admin, .well-known/) se servesc direct, restul ajunge la index.php; /sitemap.xml și
+# /sitemap-{tip}.xml sunt mereu cele construite din bază.
 # În plus: niciun fișier cu punct în față (un .env sau .git rămas) și nicio listă de fișiere a unui dosar.
 Options -Indexes
 DirectoryIndex index.php
@@ -10,6 +11,7 @@ RewriteEngine On
 RewriteRule (^|/)\.(?!well-known/) - [F,L]
 
 RewriteRule ^sitemap\.xml$ index.php [L,QSA]
+RewriteRule ^sitemap-(pagini|produse|categorii|marci|etichete|articole|blog-categorii|blog-etichete)\.xml$ index.php [L,QSA]
 
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d

@@ -151,7 +151,7 @@ $cap = static function (string $html): array {
         'intro' => str_contains($html, '<div class="lista-intro">') ? 'da' : null,
     ];
 };
-$sitemap = $cerere($port, 'GET', '/sitemap.xml')['corp'];
+$sitemap = $sitemapPlat($port)['corp'];
 preg_match_all('#<loc>https?://[^/<]+(/[^<]*)</loc>#', $sitemap, $m);
 $pagini = array_values(array_unique(array_merge($m[1], ['/magazin', '/marca/livada-demo', '/eticheta/demo', '/eticheta/reducere',
     '/blog/categorie/noutati', '/blog/eticheta/ceaiuri-demo', '/categorie/ceaiuri', '/produs/nu-exista-e1', '/blog'])));
@@ -468,8 +468,8 @@ try {
 
 // Paginile „noindex” nu intră în sitemap, iar produsele „noindex” nici în fluxul Google Merchant.
 $fluxFisier = \App\Support\FluxGoogleMerchant::fisierCache();
-$locuri = static function () use ($cerere, $port): array {
-    preg_match_all('#<loc>https?://[^/<]+(/[^<]*)</loc>#', $cerere($port, 'GET', '/sitemap.xml')['corp'], $mm);
+$locuri = static function () use ($sitemapPlat, $port): array {
+    preg_match_all('#<loc>https?://[^/<]+(/[^<]*)</loc>#', $sitemapPlat($port)['corp'], $mm);
     return $mm[1];
 };
 $inainteSitemap = $locuri();

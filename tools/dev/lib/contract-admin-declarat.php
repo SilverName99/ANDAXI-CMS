@@ -291,4 +291,17 @@ return [
         'seo-formulare-csrf' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/(categories/brand-seo|blog/categories/eticheta-seo) input:hidden _csrf = <TOKEN>$',
             'motiv' => 'jetonul formularului (_csrf) pe formularele SEO ale mărcii, etichetei, listei produselor și etichetei blogului (revizuirea WP-37/38)'],
     ],
+    // WP-39 (SEO partea B, B3/B4): codul EAN al produsului (catalog/0048) în editorul produsului; „Livrare și retur în Google” în
+    // Setări magazin → SEO Google (un formular nou, cu jetonul lui, la aceeași adresă, acțiunea save_livrare_retur_google). Doar
+    // cu pluginul magazinului (secțiunea) și al catalogului (editorul). tools/dev/test-seo.php E3.
+    'WP-39' => [
+        'produs-ean' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/products input:text ean$',
+            'motiv' => 'câmpul „Cod EAN (GTIN)” al produsului (gtin13 în datele structurate, g:gtin în fluxul Merchant)'],
+        'livrare-retur-campuri' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store (input:hidden action = save_livrare_retur_google'
+            . '|input:hidden _csrf = <TOKEN>|select seo_(livrare_retur|retur_taxe)|input:text seo_(retur_pagina|livrare_serviciu)'
+            . '|input:number seo_(retur_zile|livrare_(pregatire|transport)_(min|max)))$', 'cale' => '^/admin/settings/store',
+            'motiv' => 'câmpurile livrării și returului pentru Google (peste cele din pachetul site-ului; goale = ca în pachet)'],
+        'livrare-retur-optiuni' => ['ce' => 'adaugat', 'rand' => '^optiuni POST /admin/settings/store seo_(livrare_retur: \|1\|0|retur_taxe: \|client\|gratuit)$',
+            'cale' => '^/admin/settings/store', 'motiv' => 'opțiunile celor două liste (implicit „ca în pachet”)'],
+    ],
 ];

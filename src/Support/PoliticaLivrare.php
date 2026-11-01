@@ -76,6 +76,17 @@ namespace App\Support;
  * Din Bioscem `dfcf6bd` și `1e46f9f` (livrarea 2 SEO, A5), `5359ec6` (termenul
  * din setări) și `196fa46` (regula D), cu condițiile mutate din constante în
  * datele site-ului.
+ *
+ * WP-39 (B4, PLAN-SEO D10): condițiile se pot scrie și din admin (Setări magazin →
+ * SEO Google → „Livrare și retur în Google”), fără să atingi pachetul site-ului:
+ *  - `seo_livrare_retur`: '' = cum spune seo.json (implicit), '1' = le spunem lui
+ *    Google (cu valorile de mai jos peste cele din seo.json), '0' = nu spunem nimic;
+ *  - `seo_livrare_serviciu`: numele livrării la adresă în flux;
+ *  - `seo_retur_zile`, `seo_retur_pagina`, `seo_retur_taxe` (client | gratuit):
+ *    returul; o valoare goală ia valoarea din seo.json;
+ *  - termenul: setările de mai sus (SETARI_TERMEN).
+ * Un site fără seo.json → livrare_retur și fără setări nu declară nimic (doar
+ * condițiile completate apar). Un site cu seo.json și fără setări spune exact ce spunea înainte.
  */
 final class PoliticaLivrare
 {
@@ -91,12 +102,22 @@ final class PoliticaLivrare
     /** Zilele lucrătoare (pregătire și transport): luni–vineri, ca nume schema.org. */
     public const ZILE_LUCRATOARE = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-    /** Livrarea și returul apar în datele pentru Google? (oprire: SEO_LIVRARE_RETUR=0; site fără condiții confirmate: nu) */
-    public static function activ(): bool
+    /** Setările din admin (WP-39), după cheie. */
+    public const SETARI_ADMIN = ['seo_livrare_retur', 'seo_livrare_serviciu', 'seo_retur_zile', 'seo_retur_pagina', 'seo_retur_taxe'];
+
+    /**
+     * Livrarea și returul apar în datele pentru Google? (oprire: SEO_LIVRARE_RETUR=0; setarea `seo_livrare_retur` '0' sau
+     * '1'; altfel doar cu condițiile confirmate din seo.json)
+     */
+    public static function activ(array $setari = []): bool
     {
         $valoare = strtolower(trim((string) Env::get('SEO_LIVRARE_RETUR', '1')));
         if (in_array($valoare, ['0', 'false', 'off', 'nu'], true)) {
             return false;
+        }
+        $dinAdmin = trim((string) ($setari['seo_livrare_retur'] ?? ''));
+        if ($dinAdmin === '0' || $dinAdmin === '1') {
+            return $dinAdmin === '1';
         }
         $conditii = DateSite::seo('livrare_retur', null);
         return is_array($conditii) && $conditii !== [];
@@ -109,9 +130,9 @@ final class PoliticaLivrare
      *
      * @return array{0: int, 1: int, 2: int, 3: int}|null
      */
-    public static function termenLivrare(): ?array
+    public static function termenLivrare(array $setari = []): ?array
     {
-        if (!self::activ()) {
+        if (!self::activ($setari)) {
             return null;
         }
         $termen = DateSite::seo('livrare_retur.termen_livrare', null);
@@ -132,9 +153,12 @@ final class PoliticaLivrare
     }
 
     /** Numele livrării la adresă din flux (Merchant Center îl cere ASCII); gol = fără nume. */
-    public static function serviciuAdresa(): string
+    public static function serviciuAdresa(array $setari = []): string
     {
-        $serviciu = trim((string) DateSite::seo('livrare_retur.serviciu', ''));
+        $serviciu = trim((string) ($setari['seo_livrare_serviciu'] ?? ''));
+        if ($serviciu === '') {
+            $serviciu = trim((string) DateSite::seo('livrare_retur.serviciu', ''));
+        }
         return preg_match('/^[\x20-\x7e]{1,100}$/', $serviciu) === 1 ? $serviciu : '';
     }
 
@@ -152,7 +176,7 @@ final class PoliticaLivrare
      */
     public static function optiuni(array $setari, float $pretAfisat, bool $transportGratuit = false): array
     {
-        if (!self::activ() || !ShippingPricing::esteActiv($setari)) {
+        if (!self::activ($setari) || !ShippingPricing::esteActiv($setari)) {
             return [];
         }
         $adresa = ShippingPricing::pretDeBaza($setari, false);
@@ -170,7 +194,7 @@ final class PoliticaLivrare
         }
 
         $optiune = [
-            'serviciu' => self::serviciuAdresa(),
+            'serviciu' => self::serviciuAdresa($setari),
             'pret' => $gratuitBucuresti ? 0.0 : round($adresa, 2),
         ];
         $termen = self::termen($setari);
@@ -208,10 +232,10 @@ final class PoliticaLivrare
      */
     public static function termen(array $setari): ?array
     {
-        if (!self::activ()) {
+        if (!self::activ($setari)) {
             return null;
         }
-        $implicit = self::termenLivrare();
+        $implicit = self::termenLivrare($setari);
         $termen = $implicit === null
             ? null
             : ['pregatire' => [$implicit[0], $implicit[1]], 'transport' => [$implicit[2], $implicit[3]]];
@@ -253,13 +277,24 @@ final class PoliticaLivrare
      *
      * @return array{}|array{zile: int, pagina: string, taxe: string}
      */
-    public static function retur(): array
+    public static function retur(array $setari = []): array
     {
-        if (!self::activ()) {
+        if (!self::activ($setari)) {
             return [];
         }
         $retur = DateSite::seo('livrare_retur.retur', null);
-        if (!is_array($retur)) {
+        $retur = is_array($retur) ? $retur : [];
+        // WP-39: valorile scrise în admin au întâietate (o valoare goală ia valoarea din seo.json).
+        $zileAdmin = trim((string) ($setari['seo_retur_zile'] ?? ''));
+        if ($zileAdmin !== '') {
+            $retur['zile'] = ctype_digit($zileAdmin) ? (int) $zileAdmin : null;
+        }
+        foreach (['pagina' => 'seo_retur_pagina', 'taxe' => 'seo_retur_taxe'] as $camp => $cheie) {
+            if (trim((string) ($setari[$cheie] ?? '')) !== '') {
+                $retur[$camp] = trim((string) $setari[$cheie]);
+            }
+        }
+        if ($retur === []) {
             return [];
         }
         $zile = $retur['zile'] ?? null;
@@ -274,9 +309,9 @@ final class PoliticaLivrare
     }
 
     /** Linkul absolut spre condițiile de retur (gol fără politică de retur). */
-    public static function linkRetur(string $baseUrl): string
+    public static function linkRetur(string $baseUrl, array $setari = []): string
     {
-        $retur = self::retur();
+        $retur = self::retur($setari);
         return $retur === [] ? '' : rtrim($baseUrl, '/') . $retur['pagina'];
     }
 }

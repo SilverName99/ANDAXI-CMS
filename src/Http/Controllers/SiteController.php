@@ -68,6 +68,10 @@ final class SiteController
     private array $cachedSettings = [];
     /** Blocurile JSON-LD ale paginii curente (de exemplu firimiturile unei categorii). */
     private array $jsonLdPagina = [];
+    /** @var list<array<string, mixed>> articolele afișate de ultima listă a blogului (WP-39: ItemList) */
+    private array $articoleAfisate = [];
+    /** Pagina afișată de ultima listă a blogului (cererea, limitată la ultima pagină; WP-39: canonicalul paginilor 2+). */
+    private int $paginaBlog = 1;
     public function home(): void
     {
         $homePage = $this->findPublishedRootPage();
@@ -356,6 +360,8 @@ final class SiteController
                 'shopCatalogHtml' => $catalog,
                 'shopCategoryLabel' => $titlu,
                 'shopPageTitle' => $titlu,
+                // WP-39 (B4): lista produselor mărcii sau etichetei (ItemList).
+                'jsonLd' => $eticheta !== '' ? array_values(array_filter([$this->jsonLdListaProduse($produseAfisate, $titlu)])) : [],
             ], $this->seoListaFiltrata($db instanceof PDO ? $db : null, $tip, $slug, $eticheta, $produseAfisate, $shopPage)));
             return;
         }
@@ -506,6 +512,9 @@ final class SiteController
             $produseAfisate
         );
         $seoLista = $this->seoListaMagazin($pdo, $shopCategoryLabel, $caleCategorie, $produseAfisate, $shopPage);
+        // WP-39 (B4): lista produselor afișate (ItemList), lângă firimiturile categoriei.
+        $jsonLdLista = array_values(array_filter(array_merge($this->jsonLdPagina,
+            [$this->jsonLdListaProduse($produseAfisate, $shopCategoryLabel !== '' ? $shopCategoryLabel : (is_array($shopPage) ? (string) ($shopPage['title'] ?? '') : 'Magazin'))])));
         // WP-37: textul de deasupra listei: al categoriei (product_categories.intro_html) sau al listei tuturor produselor
         // (seo_pages, tipul „listing_default”). Gol = lista ca înainte. Nu pe căutarea internă.
         if (trim((string) ($_GET['q'] ?? '')) === '') {
@@ -530,7 +539,7 @@ final class SiteController
                 'shopCatalogHtml' => $catalogHtml,
                 'shopCategoryLabel' => $shopCategoryLabel,
                 'shopPageTitle' => (string) ($shopPage['title'] ?? 'Magazin'),
-                'jsonLd' => $this->jsonLdPagina,
+                'jsonLd' => $jsonLdLista,
             ], $seoLista, $robots));
             return;
         }
@@ -540,7 +549,7 @@ final class SiteController
             'products' => $products,
             'title' => 'Magazin',
             'activeCategory' => $categoryFilter,
-            'jsonLd' => $this->jsonLdPagina,
+            'jsonLd' => $jsonLdLista,
         ], $seoLista, $robots));
     }
 
@@ -655,6 +664,17 @@ final class SiteController
         );
         // /blog fără niciun articol publicat: noindex,follow (decizia D7, A10).
         $robots = \App\Support\SeoIndexare::pentruBlog(count($this->loadPublishedBlogPosts($pdo, 1)));
+        // WP-39 (BV-B5): căutarea, canonicalul filtrelor din adresă și al paginilor 2+, etichetele cu prea puține articole.
+        $robots = array_merge($robots, $this->seoListaBlog($pdo, $filtru));
+        // WP-39 (B4): articolele afișate (ItemList), nu pe căutare.
+        $jsonLdBlog = [];
+        if (trim((string) ($filtru['q'] ?? '')) === '' && trim((string) ($_GET['q'] ?? '')) === '') {
+            $bazaBlog = rtrim($this->appUrl(), '/');
+            $jsonLdBlog = array_values(array_filter([\App\Support\JsonLd::lista(array_map(
+                static fn (array $a): string => $bazaBlog . '/blog/' . rawurlencode((string) ($a['slug'] ?? '')),
+                array_filter($this->articoleAfisate, static fn (array $a): bool => trim((string) ($a['slug'] ?? '')) !== '')
+            ))]));
+        }
 
         // WP-37: SEO-ul scris pentru categoria sau eticheta blogului (seo_pages, „blog_category”/„blog_tag”, după id) și
         // textul de deasupra listei; fără căutare. Fără rând: pagina ca înainte.
@@ -685,6 +705,7 @@ final class SiteController
                 'mannequinSectionHtml' => $this->renderMannequinSection($pdo, $settings),
                 'blogPostsHtml' => $blogPostsHtml,
                 'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina($titlu, 'blog', (string) ($blogPage['html_content'] ?? '')),
+                'jsonLd' => $jsonLdBlog,
             ], $titluFiltru !== ''
                 // Pe pagina filtrată nu folosim meta-urile paginii de blog: ar descrie altceva decât se vede.
                 ? $seoTermen
@@ -702,7 +723,57 @@ final class SiteController
             'blogPostsHtml' => $blogPostsHtml,
             'mannequinSectionHtml' => '',
             'h1Implicit' => \App\Support\SeoIndexare::h1PentruPagina('Blog', 'blog'),
+            'jsonLd' => $jsonLdBlog,
         ], $seoTermen, $robots));
+    }
+
+    /**
+     * Ce mai spune lista blogului lui Google (WP-39, BV-B5):
+     *  - cu blogul avansat (care citește filtrele din adresă): o căutare (?q= cu text) e noindex,follow, fără canonical
+     *    (ca /magazin?q=), iar /blog?categorie=x și /blog?eticheta=x au canonicalul paginii categoriei sau etichetei
+     *    (/blog/categorie/x, /blog/eticheta/x), când ea există; fără el, parametrii nu schimbă lista (pagina e /blog
+     *    însuși), deci canonicalul rămâne /blog, ca înainte;
+     *  - pagina 2, 3… a unei liste are canonicalul ei (cu ?page=N), nu al primei pagini;
+     *  - o etichetă cu mai puține articole decât seo.json → blog.eticheta_minim_articole (implicit 1) e noindex,follow și
+     *    lipsește din sitemap.
+     * Fără niciuna, nimic (pagina ca înainte). Cu SEO_NOINDEX=0, nimic.
+     *
+     * @param array<string, mixed> $filtru
+     * @return array{metaRobots?: string, faraCanonical?: bool, metaCanonicalUrl?: string}
+     */
+    private function seoListaBlog(?PDO $db, array $filtru): array
+    {
+        if (!\App\Support\SeoIndexare::activ()) {
+            return [];
+        }
+        $text = static fn (string $cheie): string => is_string($_GET[$cheie] ?? null) ? trim((string) $_GET[$cheie]) : '';
+        $avansat = \App\Support\BlogAvansat::pornit($this->cachedSettings($db));
+        if ($avansat && $text('q') !== '') {
+            return ['metaRobots' => 'noindex,follow', 'faraCanonical' => true];
+        }
+        $baza = rtrim($this->appUrl(), '/');
+        $cale = rtrim((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/blog'), PHP_URL_PATH), '/');
+        $rez = [];
+        if ($avansat && $cale === '/blog') {
+            foreach (['categorie' => ['blog_categories', '/blog/categorie/'], 'eticheta' => ['blog_tags', '/blog/eticheta/']] as $cheie => [$tabela, $prefix]) {
+                $slug = \App\Support\Slug::make($text($cheie));
+                if ($slug !== '' && $this->loadBlogTermName($db, $tabela, $slug) !== '') {
+                    $rez['metaCanonicalUrl'] = $baza . $prefix . rawurlencode($slug);
+                    break;
+                }
+            }
+        }
+        $pagina = $this->paginaBlog;
+        if (!isset($rez['metaCanonicalUrl']) && $pagina > 1) {
+            $rez['metaCanonicalUrl'] = $baza . ($cale === '' ? '/blog' : implode('/', array_map('rawurlencode', array_map('rawurldecode', explode('/', $cale)))))
+                . '?page=' . $pagina;
+        }
+        $eticheta = trim((string) ($filtru['tag'] ?? ''));
+        if ($eticheta !== '' && str_starts_with($cale, '/blog/eticheta/')
+            && $this->countPublishedBlogPosts($db, ['category' => '', 'tag' => $eticheta, 'q' => '']) < \App\Support\Sitemap::minimArticoleEticheta()) {
+            $rez['metaRobots'] = 'noindex,follow';
+        }
+        return $rez;
     }
 
     /**
@@ -834,7 +905,99 @@ final class SiteController
                 'js_content' => (string) ($render['js'] ?? ''),
             ],
             'mannequinSectionHtml' => '',
+            // WP-39 (BV-B5, VT-S1): BlogPosting, firimiturile și, la un articol-eveniment, Event.
+            'jsonLd' => $this->jsonLdArticol($db, $post),
         ], $seoMeta));
+    }
+
+    /**
+     * Datele structurate ale unui articol publicat (WP-39): BlogPosting (titlul, datele, autorul din Blog → Autori, poza,
+     * descrierea, firma), firimiturile (Acasă → Blog → categoria activă a articolului → articolul) și, când articolul are o
+     * dată de eveniment și un loc, Event. Pagina „doar pentru membri” nu ajunge aici (nota nu are date structurate).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function jsonLdArticol(PDO $db, array $post): array
+    {
+        try {
+            $baza = rtrim($this->appUrl(), '/');
+            $url = $baza . '/blog/' . rawurlencode((string) ($post['slug'] ?? ''));
+            $settings = $this->cachedSettings($db);
+            $firma = \App\Support\SeoMeta::numeMagazin($settings);
+            $absolut = static function (string $adresa) use ($baza): string {
+                $adresa = trim($adresa);
+                if ($adresa === '' || str_contains($adresa, 'product-placeholder')) {
+                    return '';
+                }
+                if (str_starts_with($adresa, '//')) {
+                    return 'https:' . $adresa;
+                }
+                return preg_match('#^https?://#i', $adresa) === 1 ? $adresa : $baza . implode('/', array_map(
+                    static fn (string $bucata): string => rawurlencode(rawurldecode($bucata)),
+                    explode('/', '/' . ltrim($adresa, '/'))
+                ));
+            };
+            $poza = $absolut((string) ($post['featured_image_url'] ?? ''));
+            if ($poza === '') {
+                $poza = $absolut((string) ($settings['store_seo_default_image_url'] ?? ''));
+            }
+            $descriere = trim(strip_tags((string) ($post['excerpt'] ?? '')));
+            if ($descriere === '') {
+                $descriere = (string) ($post['content'] ?? '');
+            }
+            $noduri = [];
+            $articol = \App\Support\JsonLd::articol([
+                'url' => $url,
+                'titlu' => (string) ($post['title'] ?? ''),
+                'publicat' => (string) ($post['published_at'] ?? ''),
+                'modificat' => (string) ($post['updated_at'] ?? ''),
+                'autor' => (string) ($post['author_name'] ?? ''),
+                'imagini' => $poza !== '' ? [$poza] : [],
+                'descriere' => $descriere,
+                'firma' => $firma,
+            ]);
+            if ($articol !== []) {
+                $noduri[] = $articol;
+            }
+            $firimituri = [['name' => 'Acasă', 'url' => $baza . '/'], ['name' => 'Blog', 'url' => $baza . '/blog']];
+            $idCategorie = (int) ($post['category_id'] ?? 0);
+            if ($idCategorie > 0) {
+                $stmt = $db->prepare('SELECT name, slug FROM blog_categories WHERE id = ? AND is_active = 1 LIMIT 1');
+                $stmt->execute([$idCategorie]);
+                $categorie = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (is_array($categorie) && trim((string) $categorie['slug']) !== '' && trim((string) $categorie['name']) !== '') {
+                    $firimituri[] = ['name' => (string) $categorie['name'], 'url' => $baza . '/blog/categorie/' . rawurlencode((string) $categorie['slug'])];
+                }
+            }
+            $firimituri[] = ['name' => (string) ($post['title'] ?? '')];
+            $nodFirimituri = \App\Support\JsonLd::firimituri($firimituri);
+            if ($nodFirimituri !== []) {
+                $noduri[] = $nodFirimituri;
+            }
+            if (trim((string) ($post['event_start_date'] ?? '')) !== '') {
+                $pret = trim((string) ($post['event_price'] ?? ''));
+                $eveniment = \App\Support\JsonLd::eveniment([
+                    'url' => $url,
+                    'nume' => (string) ($post['title'] ?? ''),
+                    'inceput' => (string) $post['event_start_date'],
+                    'sfarsit' => (string) ($post['event_end_date'] ?? ''),
+                    'loc' => (string) ($post['event_location'] ?? ''),
+                    'imagini' => $poza !== '' ? [$poza] : [],
+                    'descriere' => $descriere,
+                    // Prețul scris în articol: un număr (lei) sau „gratuit” (0); altfel fără ofertă.
+                    'pret' => preg_match('/^\s*(gratuit|gratis|liber|free)\b/iu', $pret) === 1 ? 0.0
+                        : (preg_match('/^\s*(\d+(?:[.,]\d+)?)/', $pret, $mPret) === 1 ? (float) str_replace(',', '.', $mPret[1]) : null),
+                    'bilete' => (string) ($post['event_ticket_url'] ?? ''),
+                    'organizator' => $firma,
+                ]);
+                if ($eveniment !== []) {
+                    $noduri[] = $eveniment;
+                }
+            }
+            return $noduri;
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     /**
@@ -4889,6 +5052,19 @@ final class SiteController
                 return;
             }
         }
+        // WP-39 (OD-24, GR): pe pagina catalogului din constructor (catalog_pagina, de exemplu /produse), ?categorie=x
+        // (sau ?category=x) e pagina categoriei: 301 la /categorie/{slug}, cu sortarea și parametrii de reclamă păstrați,
+        // după aceeași regulă ca /magazin (LinkuriCategorii). /magazin însuși nu trece pe aici (ruta lui e shop()).
+        if ($slugSalvat !== '' && $slugSalvat !== 'magazin' && \App\Support\Plugins::vizibil('catalog')
+            && '/' . $slugSalvat === \App\Support\Catalog::url($this->cachedSettings($db))) {
+            $tintaCatalog = \App\Support\LinkuriCategorii::tintaPentruMagazin(
+                $db,
+                (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY) ?? '')
+            );
+            if ($tintaCatalog !== null && \App\Support\SeoRedirects::redirectCanonic($tintaCatalog['cale'], $tintaCatalog['query'])) {
+                return;
+            }
+        }
 
         if ($page === null) {
             $notFoundPage = $this->findPublishedPageBySlug('404');
@@ -5551,6 +5727,28 @@ final class SiteController
     /**
      * @param array{tip: string, slug: string}|null $filtruExtra brand sau etichetă
      */
+    /**
+     * ItemList cu produsele afișate într-o listă (WP-39, B4): adresele lor, în ordinea din pagină. Gol pe căutarea internă
+     * (noindex) și fără produse.
+     *
+     * @param list<array<string, mixed>> $produse
+     */
+    private function jsonLdListaProduse(array $produse, string $nume): array
+    {
+        if (trim((string) ($_GET['q'] ?? '')) !== '' || $produse === []) {
+            return [];
+        }
+        $baza = rtrim($this->appUrl(), '/');
+        $adrese = [];
+        foreach ($produse as $produs) {
+            $slug = trim((string) ($produs['slug'] ?? ''));
+            if ($slug !== '') {
+                $adrese[] = $baza . '/produs/' . rawurlencode($slug);
+            }
+        }
+        return \App\Support\JsonLd::lista($adrese, $nume);
+    }
+
     private function renderShopCatalogSection(
         ?PDO $db,
         string $categoryFilter = '',
@@ -5650,6 +5848,8 @@ final class SiteController
         $currentPage = min($this->requestBlogPostsPage(), $totalPages);
         $offset = ($currentPage - 1) * $perPage;
         $posts = $this->loadPublishedBlogPosts($db, $perPage, $offset, $filtru);
+        $this->articoleAfisate = array_values(array_filter($posts, 'is_array'));
+        $this->paginaBlog = $currentPage;
 
         // La căutare, fiecare rezultat primește titlul și un fragment cu
         // termenul evidențiat — altfel nu se vede de ce a ieșit în listă.
@@ -9229,11 +9429,40 @@ CSS;
             echo 'Sitemap indisponibil momentan.';
             return;
         }
-        $xml = \App\Support\Sitemap::xml(\App\Support\Sitemap::urls($db, rtrim($this->appUrl(), '/')));
+        // WP-39 (B3): /sitemap.xml e indexul sitemap-urilor pe tipuri (pagini, produse, categorii, mărci, etichete, articole,
+        // categoriile și etichetele blogului), fiecare la /sitemap-{tip}.xml.
+        $baza = rtrim($this->appUrl(), '/');
+        $xml = \App\Support\Sitemap::index(\App\Support\Sitemap::grupuri($db, $baza), $baza);
         header('Content-Type: application/xml; charset=utf-8');
         header('Cache-Control: public, max-age=3600');
         header('X-Robots-Tag: noindex');
         echo $xml;
+    }
+
+    /** /sitemap-{tip}.xml (WP-39, B3): adresele unui tip, cu data ultimei modificări și pozele; un tip gol sau necunoscut = 404. */
+    public function sitemapTip(array $params): void
+    {
+        $tip = (string) ($params['tip'] ?? '');
+        $db = in_array($tip, \App\Support\Sitemap::TIPURI, true) ? $this->db() : null;
+        if (in_array($tip, \App\Support\Sitemap::TIPURI, true) && !$db instanceof PDO) {
+            http_response_code(503);
+            header('Retry-After: 600');
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Sitemap indisponibil momentan.';
+            return;
+        }
+        $urls = $db instanceof PDO ? (\App\Support\Sitemap::grupuri($db, rtrim($this->appUrl(), '/'))[$tip] ?? []) : [];
+        if ($urls === []) {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            header('X-Robots-Tag: noindex');
+            echo 'Sitemap inexistent.';
+            return;
+        }
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Cache-Control: public, max-age=3600');
+        header('X-Robots-Tag: noindex');
+        echo \App\Support\Sitemap::xml($urls, true);
     }
 
     /**
@@ -9392,7 +9621,7 @@ CSS;
                 'reducere_pana_la' => $panaLa,
                 'marca' => (string) ($product['brand'] ?? ''),
                 'categorie' => trim((string) (($product['category_name'] ?? $product['category']) ?? '')),
-                // Coloana EAN nu există încă; când apare (B4), intră singură.
+                // Codul EAN (catalog/0048, WP-39).
                 'gtin' => (string) ($product['gtin'] ?? $product['ean'] ?? ''),
                 'livrare' => \App\Support\PoliticaLivrare::optiuni($settings, $pretAfisat, (int) ($product['free_shipping'] ?? 0) === 1),
             ];
@@ -9508,6 +9737,7 @@ CSS;
                 'images' => $imagini,
                 'description' => $descriere,
                 'sku' => (string) ($product['sku'] ?? ''),
+                'gtin' => (string) ($product['ean'] ?? ''),
                 'brand' => (string) ($product['brand'] ?? ''),
                 'oferta' => $cuOferta,
                 'price' => (float) ($product['price'] ?? 0),
@@ -9515,7 +9745,8 @@ CSS;
                 'priceValidUntil' => $panaLa,
                 'reviews' => $recenzii,
                 'shipping' => $livrare,
-                'returnPolicy' => \App\Support\PoliticaLivrare::activ() ? \App\Support\JsonLd::politicaRetur($baza) : [],
+                'returnPolicy' => \App\Support\PoliticaLivrare::activ($this->cachedSettings($this->db()))
+                    ? \App\Support\JsonLd::politicaRetur($baza, $this->cachedSettings($this->db())) : [],
             ]);
             if ($nodProdus !== []) {
                 $noduri[] = $nodProdus;
@@ -9600,13 +9831,15 @@ CSS;
                 \App\Support\JsonLd::organizatie([
                     'name' => $nume,
                     'url' => $baza,
+                    // WP-39 (VT-S1): tipul firmei din seo.json → organizatie.tip (vertij: NGO); implicit Organization.
+                    'tip' => (string) \App\Support\DateSite::seo('organizatie.tip', ''),
                     'logo' => $logo,
                     'email' => $email,
                     'telephone' => $telefon,
                     'sameAs' => \App\Support\JsonLd::profiluriSociale($htmlDesign),
                     // Politica de retur e a magazinului: fără el (sau cu el oprindu-se), nu se scrie.
-                    'returnPolicy' => \App\Support\Plugins::permiteInceput('magazin') && \App\Support\PoliticaLivrare::activ()
-                        ? \App\Support\JsonLd::politicaRetur($baza) : [],
+                    'returnPolicy' => \App\Support\Plugins::permiteInceput('magazin') && \App\Support\PoliticaLivrare::activ($settings)
+                        ? \App\Support\JsonLd::politicaRetur($baza, $settings) : [],
                 ]),
                 \App\Support\JsonLd::site($nume, $baza),
             ]));

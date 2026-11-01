@@ -523,6 +523,83 @@ admin_componenta('antet-pagina', [
             </form>
             </div>
         </section>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
+<!--port:seo:livrare-retur-->
+            <?php
+            // WP-39 (B4, PLAN-SEO D10): livrarea și returul spuse lui Google (datele structurate ale produselor și ale firmei,
+            // fluxul Merchant), scrise aici peste cele din pachetul site-ului (seo.json → livrare_retur). Gol = ca în pachet.
+            $lrMod = trim((string) ($settings['seo_livrare_retur'] ?? ''));
+            $lrPachet = \App\Support\DateSite::seo('livrare_retur', null);
+            $lrPachet = is_array($lrPachet) ? $lrPachet : [];
+            $lrReturPachet = is_array($lrPachet['retur'] ?? null) ? $lrPachet['retur'] : [];
+            $lrTermenPachet = is_array($lrPachet['termen_livrare'] ?? null) ? array_values($lrPachet['termen_livrare']) : [];
+            $lrCampuri = [
+                ['seo_livrare_pregatire_min', 'Pregătire: minim (zile lucrătoare)', $lrTermenPachet[0] ?? ''],
+                ['seo_livrare_pregatire_max', 'Pregătire: maxim', $lrTermenPachet[1] ?? ''],
+                ['seo_livrare_transport_min', 'Transport: minim (zile lucrătoare)', $lrTermenPachet[2] ?? ''],
+                ['seo_livrare_transport_max', 'Transport: maxim', $lrTermenPachet[3] ?? ''],
+            ];
+            ?>
+        <section class="adm-sectiune" id="setari-livrare-retur" aria-labelledby="setari-livrare-retur-titlu">
+            <header class="adm-sectiune__antet">
+                <div>
+                    <h2 class="adm-sectiune__titlu" id="setari-livrare-retur-titlu">Livrare și retur în Google</h2>
+                    <p class="adm-sectiune__descriere">
+                Ce spune site-ul lui Google despre livrare (costul livrării la adresă, din Setări livrare → prețuri fixe, și termenul) și
+                despre retur, în paginile produselor și în fluxul Merchant. Scrie doar condiții pe care le respecți. Un câmp gol ia
+                valoarea din pachetul site-ului (arătată în câmp, estompat); fără nicio valoare, nu se spune nimic.
+                    </p>
+                </div>
+            </header>
+            <div class="adm-sectiune__corp">
+            <form method="post" action="/admin/settings/store">
+                <?= \App\Support\AdminCsrf::camp() ?>
+                <input type="hidden" name="action" value="save_livrare_retur_google">
+                <div class="field" style="max-width:420px;">
+                    <label for="seo_livrare_retur">Spune lui Google livrarea și returul</label>
+                    <select id="seo_livrare_retur" name="seo_livrare_retur">
+                        <option value=""<?= $lrMod === '' ? ' selected' : '' ?>>Ca în pachetul site-ului (<?= $lrPachet !== [] ? 'da' : 'nu' ?>)</option>
+                        <option value="1"<?= $lrMod === '1' ? ' selected' : '' ?>>Da, cu valorile de mai jos</option>
+                        <option value="0"<?= $lrMod === '0' ? ' selected' : '' ?>>Nu</option>
+                    </select>
+                </div>
+                <div class="field" style="max-width:420px;">
+                    <label for="seo_livrare_serviciu">Numele livrării la adresă (în fluxul Merchant)</label>
+                    <input id="seo_livrare_serviciu" type="text" name="seo_livrare_serviciu" maxlength="100" value="<?= htmlspecialchars((string) ($settings['seo_livrare_serviciu'] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string) ($lrPachet['serviciu'] ?? 'de exemplu FAN Courier'), ENT_QUOTES) ?>">
+                </div>
+                <div class="product-editor-grid">
+<?php foreach ($lrCampuri as [$lrCheie, $lrEticheta, $lrImplicit]): ?>
+                    <div class="field">
+                        <label for="<?= $lrCheie ?>"><?= htmlspecialchars($lrEticheta, ENT_QUOTES) ?></label>
+                        <input id="<?= $lrCheie ?>" type="number" min="0" max="30" step="1" name="<?= $lrCheie ?>" value="<?= htmlspecialchars((string) ($settings[$lrCheie] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string) $lrImplicit, ENT_QUOTES) ?>">
+                    </div>
+<?php endforeach; ?>
+                    <div class="field">
+                        <label for="seo_retur_zile">Retur: zile de la primire</label>
+                        <input id="seo_retur_zile" type="number" min="1" max="365" step="1" name="seo_retur_zile" value="<?= htmlspecialchars((string) ($settings['seo_retur_zile'] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string) ($lrReturPachet['zile'] ?? ''), ENT_QUOTES) ?>">
+                    </div>
+                    <div class="field">
+                        <label for="seo_retur_pagina">Retur: pagina cu condițiile</label>
+                        <input id="seo_retur_pagina" type="text" name="seo_retur_pagina" maxlength="190" value="<?= htmlspecialchars((string) ($settings['seo_retur_pagina'] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string) ($lrReturPachet['pagina'] ?? '/termeni-conditii'), ENT_QUOTES) ?>">
+                    </div>
+                    <div class="field">
+                        <label for="seo_retur_taxe">Retur: transportul înapoi</label>
+                        <?php $lrTaxe = trim((string) ($settings['seo_retur_taxe'] ?? '')); ?>
+                        <select id="seo_retur_taxe" name="seo_retur_taxe">
+                            <option value=""<?= $lrTaxe === '' ? ' selected' : '' ?>>Ca în pachet (<?= htmlspecialchars(($lrReturPachet['taxe'] ?? '') === 'gratuit' ? 'gratuit' : (($lrReturPachet['taxe'] ?? '') === 'client' ? 'plătit de client' : '—'), ENT_QUOTES) ?>)</option>
+                            <option value="client"<?= $lrTaxe === 'client' ? ' selected' : '' ?>>Plătit de client</option>
+                            <option value="gratuit"<?= $lrTaxe === 'gratuit' ? ' selected' : '' ?>>Gratuit</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top:10px;">
+                    <button class="btn" type="submit">Salvează livrarea și returul</button>
+                </div>
+            </form>
+            </div>
+        </section>
+<!--/port:seo:livrare-retur-->
+<?php endif; ?>
             <?php $sitemapUrl = (string) ($sitemapUrl ?? '/sitemap.xml'); ?>
             <?php $sitemapFilename = trim((string) ($sitemapFilename ?? 'sitemap.xml')); ?>
         <section class="adm-sectiune" id="setari-sitemap" aria-labelledby="setari-sitemap-titlu">

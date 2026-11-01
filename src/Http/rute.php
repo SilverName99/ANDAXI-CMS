@@ -49,6 +49,8 @@ return static function (Router $router): void {
     // sitemap.xml e construit din baza de date la fiecare cerere (public/.htaccess
     // îl trimite mereu aici, chiar dacă pe server a rămas un fișier vechi).
     $router->get('/sitemap\.xml', [SiteController::class, 'sitemap']);
+    // WP-39 (B3): sitemap-urile pe tipuri din indexul de mai sus (App\Support\Sitemap::TIPURI).
+    $router->get('/sitemap-{tip}\.xml', [SiteController::class, 'sitemapTip']);
 
     $router->get('/', [SiteController::class, 'home']);
     $router->get('/magazin', [SiteController::class, 'shop']);

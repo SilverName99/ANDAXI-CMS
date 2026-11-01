@@ -5313,6 +5313,12 @@
                     "null": false,
                     "tip": "varchar(10)"
                 },
+                "ean": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(14)"
+                },
                 "free_shipping": {
                     "extra": "",
                     "implicit": "0",

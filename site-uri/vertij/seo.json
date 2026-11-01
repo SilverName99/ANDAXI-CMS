@@ -1,0 +1,7 @@
+{
+    "_despre": "Regulile SEO ale site-ului vertij (DateSite::seo, docs/SEO.md). Doar ce diferă de nucleu.",
+    "organizatie": {
+        "_despre": "Datele structurate de pe prima pagină (WP-39, VT-S1): vertij e o asociație, deci tipul firmei e NGO (schema.org), nu Organization.",
+        "tip": "NGO"
+    }
+}

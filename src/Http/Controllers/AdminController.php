@@ -5065,6 +5065,7 @@ final class AdminController
         );
         $this->saveProductExtraFieldValues($db, $productId, $extraValues);
         $this->saveProductCatalogFromPost($db, $productId, true);
+        $mesajEan = $this->salveazaEanDinPost($db, $productId);
         if ($productId > 0) {
             $this->saveSeoSettings($db, 'product', (string) $productId, [
                 'title' => $seoTitle,
@@ -5083,7 +5084,7 @@ final class AdminController
             header('Location: /admin/products');
             return;
         }
-        Flash::set('success', 'Produsul a fost adăugat.');
+        Flash::set('success', 'Produsul a fost adăugat.' . $mesajEan);
         header('Location: /admin/products');
     }
 
@@ -5176,6 +5177,29 @@ final class AdminController
      * `sort_position` în POST, bifa „ascuns din catalog” doar cu marcajul `catalog_campuri_trimise`. Un produs nou, sau
      * unul fără cheie de ciornă (adăugat de codul de dinainte), primește cheia lui.
      */
+    /**
+     * Codul EAN (GTIN) al produsului (WP-39, B4; catalog/0048): doar cifrele, și doar un cod valid (8, 12, 13 sau 14 cifre,
+     * cifra de control corectă). Doar când formularul are câmpul (un formular vechi nu-l șterge). Un cod greșit nu se
+     * salvează (rămâne cel de dinainte) și adminul află; fără migrare, nimic.
+     */
+    private function salveazaEanDinPost(PDO $db, int $productId): string
+    {
+        if ($productId <= 0 || !array_key_exists('ean', $_POST)) {
+            return '';
+        }
+        $ean = (string) preg_replace('/\D+/', '', (string) $_POST['ean']);
+        if ($ean !== '' && !\App\Support\FluxGoogleMerchant::gtinValid($ean)) {
+            return ' Codul EAN „' . mb_substr(trim((string) $_POST['ean']), 0, 20) . '” nu e valid (8, 12, 13 sau 14 cifre, cu cifra de control '
+                . 'corectă) și nu s-a salvat.';
+        }
+        try {
+            $db->prepare('UPDATE products SET ean = :ean WHERE id = :id')->execute(['ean' => $ean !== '' ? $ean : null, 'id' => $productId]);
+        } catch (Throwable) {
+            // Fără catalog/0048 încă: produsul e salvat, codul vine după migrare.
+        }
+        return '';
+    }
+
     private function saveProductCatalogFromPost(PDO $db, int $productId, bool $nou): void
     {
         if ($productId <= 0) {
@@ -5435,6 +5459,7 @@ final class AdminController
         );
         $this->saveProductExtraFieldValues($db, $id, $extraValues);
         $this->saveProductCatalogFromPost($db, $id, false);
+        $mesajEan = $this->salveazaEanDinPost($db, $id);
         $this->saveSeoSettings($db, 'product', (string) $id, [
             'title' => $seoTitle,
             'description' => $seoDescription,
@@ -5453,7 +5478,7 @@ final class AdminController
             header('Location: /admin/products');
             return;
         }
-        Flash::set('success', 'Produsul a fost actualizat.' . $redirectProdus);
+        Flash::set('success', 'Produsul a fost actualizat.' . $redirectProdus . $mesajEan);
         header('Location: /admin/products');
     }
 
@@ -10835,6 +10860,42 @@ final class AdminController
             ]);
             ResponseCache::purgePageCache();
             Flash::set('success', 'Numele magazinului a fost salvat.');
+            header('Location: /admin/settings/store?tab=seo');
+            return;
+        }
+        if ($action === 'save_livrare_retur_google') {
+            // WP-39 (B4, PLAN-SEO D10): livrarea și returul pentru Google, peste cele din pachetul site-ului (PoliticaLivrare).
+            if (!\App\Support\AdminCsrf::valid()) {
+                Flash::set('error', 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.');
+                header('Location: /admin/settings/store?tab=seo');
+                return;
+            }
+            $zile = static function (string $cheie, int $max): string {
+                $text = trim((string) ($_POST[$cheie] ?? ''));
+                return preg_match('/^\d{1,3}$/', $text) === 1 && (int) $text <= $max ? (string) (int) $text : '';
+            };
+            $mod = (string) ($_POST['seo_livrare_retur'] ?? '');
+            $pagina = trim((string) ($_POST['seo_retur_pagina'] ?? ''));
+            $serviciu = trim((string) ($_POST['seo_livrare_serviciu'] ?? ''));
+            $valori = [
+                'seo_livrare_retur' => in_array($mod, ['0', '1'], true) ? $mod : '',
+                'seo_livrare_serviciu' => preg_match('/^[\x20-\x7e]{1,100}$/', $serviciu) === 1 ? $serviciu : '',
+                'seo_retur_zile' => $zile('seo_retur_zile', 365) === '0' ? '' : $zile('seo_retur_zile', 365),
+                // Doar o cale a site-ului („/termeni-conditii”).
+                'seo_retur_pagina' => $pagina !== '' && $pagina[0] === '/' && !str_starts_with($pagina, '//') && preg_match('/[\s<>"\\\\]/', $pagina) !== 1
+                    ? mb_substr($pagina, 0, 190) : '',
+                'seo_retur_taxe' => in_array((string) ($_POST['seo_retur_taxe'] ?? ''), ['client', 'gratuit'], true) ? (string) $_POST['seo_retur_taxe'] : '',
+            ];
+            foreach (\App\Support\PoliticaLivrare::SETARI_TERMEN as [$cheieMin, $cheieMax]) {
+                $valori[$cheieMin] = $zile($cheieMin, \App\Support\PoliticaLivrare::ZILE_MAXIM);
+                $valori[$cheieMax] = $zile($cheieMax, \App\Support\PoliticaLivrare::ZILE_MAXIM);
+            }
+            $ignorate = ($serviciu !== '' && $valori['seo_livrare_serviciu'] === '') || ($pagina !== '' && $valori['seo_retur_pagina'] === '');
+            Settings::save($db, $valori);
+            ResponseCache::purgePageCache();
+            \App\Support\FluxGoogleMerchant::sterge();
+            Flash::set('success', 'Livrarea și returul pentru Google au fost salvate.'
+                . ($ignorate ? ' Numele livrării (doar litere fără diacritice) sau pagina returului (o cale din site, de exemplu /termeni-conditii) n-au fost bune și au rămas goale.' : ''));
             header('Location: /admin/settings/store?tab=seo');
             return;
         }

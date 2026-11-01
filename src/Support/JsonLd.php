@@ -27,6 +27,10 @@ final class JsonLd
 {
     public const DISPONIBILITATI = ['InStock', 'OutOfStock', 'PreOrder'];
 
+    /** Tipurile de firmă acceptate în seo.json → organizatie.tip (subtipuri schema.org ale Organization). */
+    public const TIPURI_ORGANIZATIE = ['Organization', 'NGO', 'Corporation', 'OnlineStore', 'LocalBusiness', 'MedicalOrganization',
+        'EducationalOrganization'];
+
     /** Eticheta <script> gata de pus în <head>; gol dacă nodul nu se poate scrie. */
     public static function script(array $nod): string
     {
@@ -52,7 +56,7 @@ final class JsonLd
      * aggregateRating).
      *
      * @param array{
-     *   url: string, name: string, images: list<string>, description: string, sku: string,
+     *   url: string, name: string, images: list<string>, description: string, sku: string, gtin?: string,
      *   brand: string, oferta?: bool, price?: float, availability?: string, priceValidUntil?: string,
      *   reviews?: array{count: int, average: float, items: list<array<string, mixed>>},
      *   shipping?: list<array{serviciu: string, pret: float}>, returnPolicy?: array<string, mixed>
@@ -105,6 +109,11 @@ final class JsonLd
         $sku = trim((string) ($p['sku'] ?? ''));
         if ($sku !== '') {
             $nod['sku'] = $sku;
+        }
+        // WP-39 (B4): codul EAN al produsului (catalog/0048), doar valid: gtin8, gtin12, gtin13 sau gtin14, după lungime.
+        $gtin = (string) preg_replace('/\D+/', '', (string) ($p['gtin'] ?? ''));
+        if ($gtin !== '' && FluxGoogleMerchant::gtinValid($gtin)) {
+            $nod['gtin' . strlen($gtin)] = $gtin;
         }
         $marca = self::text((string) ($p['brand'] ?? ''), 200);
         if ($marca !== '') {
@@ -244,9 +253,9 @@ final class JsonLd
      * transportul înapoi): România, fereastră de retur finită, prin curier. Gol
      * dacă site-ul n-a confirmat o politică de retur (atunci nu se scrie nimic).
      */
-    public static function politicaRetur(string $baseUrl): array
+    public static function politicaRetur(string $baseUrl, array $setari = []): array
     {
-        $retur = PoliticaLivrare::retur();
+        $retur = PoliticaLivrare::retur($setari);
         if ($retur === []) {
             return [];
         }
@@ -260,7 +269,7 @@ final class JsonLd
             'returnFees' => $retur['taxe'] === 'gratuit'
                 ? 'https://schema.org/FreeReturn'
                 : 'https://schema.org/ReturnFeesCustomerResponsibility',
-            'merchantReturnLink' => PoliticaLivrare::linkRetur($baseUrl),
+            'merchantReturnLink' => PoliticaLivrare::linkRetur($baseUrl, $setari),
         ];
     }
 
@@ -296,13 +305,14 @@ final class JsonLd
      * Firma, pe prima pagină. Doar ce e completat în setări; sameAs doar cu
      * profiluri reale (o adresă de rețea socială fără cont după domeniu nu intră).
      *
-     * @param array{name: string, url: string, logo?: string, email?: string, telephone?: string, sameAs?: list<string>, returnPolicy?: array<string, mixed>} $f
+     * @param array{name: string, url: string, tip?: string, logo?: string, email?: string, telephone?: string, sameAs?: list<string>, returnPolicy?: array<string, mixed>} $f
      */
     public static function organizatie(array $f): array
     {
         $baza = rtrim((string) ($f['url'] ?? ''), '/');
         $nod = [
-            '@type' => 'Organization',
+            // WP-39 (VT-S1): tipul firmei din seo.json → organizatie.tip (de exemplu „NGO” la o asociație); implicit Organization.
+            '@type' => in_array((string) ($f['tip'] ?? ''), self::TIPURI_ORGANIZATIE, true) ? (string) $f['tip'] : 'Organization',
             '@id' => $baza . '/#organization',
             'name' => self::text((string) ($f['name'] ?? ''), 200),
             'url' => $baza . '/',
@@ -324,6 +334,152 @@ final class JsonLd
             $nod['hasMerchantReturnPolicy'] = $retur;
         }
         return $nod;
+    }
+
+    /**
+     * Un articol de blog (WP-39, BV-B5): BlogPosting cu titlul, data publicării și a ultimei schimbări (ISO 8601, cu fusul
+     * orar), autorul (persoana din Blog → Autori, altfel firma), poza (absolută), descrierea și firma care publică (numele,
+     * logo-ul dacă există). Gol fără titlu sau fără dată de publicare.
+     *
+     * @param array{url: string, titlu: string, publicat: string, modificat?: string, autor?: string, autor_url?: string,
+     *              imagini?: list<string>, descriere?: string, firma: string, logo?: string} $a
+     */
+    public static function articol(array $a): array
+    {
+        $titlu = self::text((string) ($a['titlu'] ?? ''), 110);
+        $publicat = self::dataIso((string) ($a['publicat'] ?? ''));
+        if ($titlu === '' || $publicat === '') {
+            return [];
+        }
+        $url = (string) ($a['url'] ?? '');
+        $firma = self::text((string) ($a['firma'] ?? ''), 200);
+        $nod = [
+            '@type' => 'BlogPosting',
+            '@id' => $url . '#article',
+            'mainEntityOfPage' => $url,
+            'headline' => $titlu,
+            'datePublished' => $publicat,
+            'dateModified' => self::dataIso((string) ($a['modificat'] ?? '')) ?: $publicat,
+        ];
+        $autor = self::text((string) ($a['autor'] ?? ''), 200);
+        if ($autor !== '') {
+            $nod['author'] = ['@type' => 'Person', 'name' => $autor];
+            if (trim((string) ($a['autor_url'] ?? '')) !== '') {
+                $nod['author']['url'] = trim((string) $a['autor_url']);
+            }
+        } elseif ($firma !== '') {
+            $nod['author'] = ['@type' => 'Organization', 'name' => $firma];
+        }
+        $imagini = array_values(array_unique(array_filter(array_map('strval', (array) ($a['imagini'] ?? [])))));
+        if ($imagini !== []) {
+            $nod['image'] = array_slice($imagini, 0, 5);
+        }
+        $descriere = self::text((string) ($a['descriere'] ?? ''), 300);
+        if ($descriere !== '') {
+            $nod['description'] = $descriere;
+        }
+        if ($firma !== '') {
+            $nod['publisher'] = ['@type' => 'Organization', 'name' => $firma];
+            if (trim((string) ($a['logo'] ?? '')) !== '') {
+                $nod['publisher']['logo'] = ['@type' => 'ImageObject', 'url' => trim((string) $a['logo'])];
+            }
+        }
+        return $nod;
+    }
+
+    /**
+     * Un eveniment (WP-39, VT-S1: articolele cu dată de eveniment): Event cu numele, începutul (și sfârșitul), locul (un
+     * Place cu adresa scrisă în articol, ca text), pagina, poza, descrierea și, cu preț, oferta (RON, linkul biletelor).
+     * Google cere locul: fără loc, nimic. Un articol doar pentru membri nu ajunge aici (pagina lui nu are date structurate).
+     *
+     * @param array{url: string, nume: string, inceput: string, sfarsit?: string, loc?: string, imagini?: list<string>,
+     *              descriere?: string, pret?: ?float, bilete?: string, organizator?: string} $e
+     */
+    public static function eveniment(array $e): array
+    {
+        $nume = self::text((string) ($e['nume'] ?? ''), 200);
+        $inceput = self::dataIso((string) ($e['inceput'] ?? ''));
+        $loc = self::text((string) ($e['loc'] ?? ''), 300);
+        if ($nume === '' || $inceput === '' || $loc === '') {
+            return [];
+        }
+        $url = (string) ($e['url'] ?? '');
+        $nod = [
+            '@type' => 'Event',
+            '@id' => $url . '#event',
+            'name' => $nume,
+            'startDate' => $inceput,
+            'eventAttendanceMode' => 'https://schema.org/OfflineEventAttendanceMode',
+            'eventStatus' => 'https://schema.org/EventScheduled',
+            'location' => ['@type' => 'Place', 'name' => $loc, 'address' => $loc],
+            'url' => $url,
+        ];
+        $sfarsit = self::dataIso((string) ($e['sfarsit'] ?? ''));
+        if ($sfarsit !== '' && $sfarsit >= $inceput) {
+            $nod['endDate'] = $sfarsit;
+        }
+        $imagini = array_values(array_unique(array_filter(array_map('strval', (array) ($e['imagini'] ?? [])))));
+        if ($imagini !== []) {
+            $nod['image'] = array_slice($imagini, 0, 5);
+        }
+        $descriere = self::text((string) ($e['descriere'] ?? ''), 300);
+        if ($descriere !== '') {
+            $nod['description'] = $descriere;
+        }
+        $organizator = self::text((string) ($e['organizator'] ?? ''), 200);
+        if ($organizator !== '') {
+            $nod['organizer'] = ['@type' => 'Organization', 'name' => $organizator];
+        }
+        $pret = $e['pret'] ?? null;
+        if ($pret !== null && is_numeric($pret) && (float) $pret >= 0) {
+            $nod['offers'] = [
+                '@type' => 'Offer',
+                'price' => number_format((float) $pret, 2, '.', ''),
+                'priceCurrency' => 'RON',
+                'url' => trim((string) ($e['bilete'] ?? '')) !== '' ? trim((string) $e['bilete']) : $url,
+                'availability' => 'https://schema.org/InStock',
+            ];
+        }
+        return $nod;
+    }
+
+    /**
+     * O listă de pagini (WP-39, B4): ItemList cu adresele elementelor afișate (produsele unei categorii, ale magazinului,
+     * ale unei mărci sau etichete; articolele blogului), în ordinea din pagină, cel mult 50. Gol fără elemente.
+     *
+     * @param list<string> $adrese
+     */
+    public static function lista(array $adrese, string $nume = ''): array
+    {
+        $elemente = [];
+        $pozitie = 1;
+        foreach (array_slice(array_values(array_unique(array_filter(array_map('strval', $adrese)))), 0, 50) as $adresa) {
+            $elemente[] = ['@type' => 'ListItem', 'position' => $pozitie++, 'url' => $adresa];
+        }
+        if ($elemente === []) {
+            return [];
+        }
+        $nod = ['@type' => 'ItemList', 'itemListElement' => $elemente, 'numberOfItems' => count($elemente)];
+        $nume = self::text($nume, 200);
+        if ($nume !== '') {
+            $nod = ['@type' => 'ItemList', 'name' => $nume] + $nod;
+        }
+        return $nod;
+    }
+
+    /** O dată din bază („2026-10-31 09:00:00”) ca ISO 8601 cu fusul orar al aplicației; gol dacă nu e o dată. */
+    public static function dataIso(string $data): string
+    {
+        $data = trim($data);
+        if ($data === '' || str_starts_with($data, '0000')) {
+            return '';
+        }
+        // Doar ziua (o coloană DATE, de exemplu începutul unui eveniment): rămâne doar ziua, fără oră inventată.
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $data) === 1) {
+            return $data;
+        }
+        $ts = strtotime($data);
+        return $ts === false ? '' : date('c', $ts);
     }
 
     public static function site(string $nume, string $baseUrl): array
