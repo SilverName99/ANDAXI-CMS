@@ -665,7 +665,17 @@ try {
         curl_close($c);
         return $corp;
     };
-    $faraJsonLd = static fn (string $corp): string => (string) preg_replace('#\n?[ \t]*<script type="application/ld\+json">.*?</script>#s', '', $corp);
+    // Blocurile JSON-LD scoase din ambele corpuri; în <head> (unde stau ele) și spațiile dintre etichete se strâng la un rând
+    // nou: un bloc scos lasă altfel altă indentare decât lipsa lui în codul Bioscem (bucla goală a șablonului). Restul
+    // paginii (<body>) rămâne octet cu octet.
+    $faraJsonLd = static function (string $corp): string {
+        $corp = (string) preg_replace('#<script type="application/ld\+json">.*?</script>#s', '', $corp);
+        $poz = stripos($corp, '</head>');
+        if ($poz === false) {
+            return $corp;
+        }
+        return (string) preg_replace('#>\s+<#', ">\n<", substr($corp, 0, $poz)) . substr($corp, $poz);
+    };
     $cai = static function (string $xml): array {
         preg_match_all('#<loc>([^<]+)</loc>#', $xml, $m);
         $rez = array_map(static function (string $loc): string {
