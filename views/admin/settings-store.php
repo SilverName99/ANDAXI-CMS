@@ -545,7 +545,7 @@ admin_componenta('antet-pagina', [
                 <div>
                     <h2 class="adm-sectiune__titlu" id="setari-livrare-retur-titlu">Livrare și retur în Google</h2>
                     <p class="adm-sectiune__descriere">
-                Ce spune site-ul lui Google despre livrare (costul livrării la adresă, din Setări livrare → prețuri fixe, și termenul) și
+                Ce spune site-ul lui Google despre livrare (costul livrării la adresă<?= \App\Support\Plugins::vizibil('livrare_fan') ? ', din Setări livrare → prețuri fixe,' : '' ?> și termenul) și
                 despre retur, în paginile produselor și în fluxul Merchant. Scrie doar condiții pe care le respecți. Un câmp gol ia
                 valoarea din pachetul site-ului (arătată în câmp, estompat); fără nicio valoare, nu se spune nimic.
                     </p>
