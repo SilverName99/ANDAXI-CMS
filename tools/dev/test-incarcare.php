@@ -1647,8 +1647,11 @@ try {
             // Coloanele pe care o migrare le umple cu valori aleatoare (catalog/0026: cheia linkului de ciornă, din
             // random_bytes) nu se pot compara: referința (sursa trecută prin migrări) are chei proprii, iar copia, făcută din
             // rândurile unei surse care nu are încă coloana, le are goale (le primește produsul la prima salvare). Tabelul
-            // se compară fără ele.
-            $aleatoare = ['products' => ['preview_token']][$tabel] ?? [];
+            // se compară fără ele. La fel momentele puse de ceasul bazei când rulează o migrare (WP-37: nucleu/0041 adaugă
+            // seo_pages.updated_at cu valoarea „acum” pe rândurile existente; catalog/0042 face mărcile și etichetele din produse,
+            // cu created_at „acum”): copia și referința trec prin migrări în momente diferite. Restul coloanelor, egale.
+            $aleatoare = ['products' => ['preview_token'], 'seo_pages' => ['updated_at'], 'product_brands' => ['created_at'],
+                'product_tags' => ['created_at']][$tabel] ?? [];
             if ($aleatoare !== []) {
                 $coloane = array_values(array_diff(array_keys($coloaneTabel($tinta, $tabel)), $aleatoare));
                 if ($amprentaColoane($tinta, $tabel, $coloane, '', $cheiePrimara($tinta, $tabel)) === $amprentaColoane($ref, $tabel, $coloane, '', $cheiePrimara($ref, $tabel))) {
