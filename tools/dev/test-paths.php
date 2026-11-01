@@ -576,8 +576,12 @@ try {
         }
         return '';
     };
-    $idA = $idSesiune($pagini['a']);
-    $idB = $idSesiune($pagini['b']);
+    // WP-40 (B6): prima pagină a unui vizitator nou nu pornește sesiunea; coșul (o cale cu sesiune) o pornește.
+    $verifica('prima pagină, vizitator nou: nicio sesiune (sesiune_doar_la_nevoie), pe ambele site-uri', $idSesiune($pagini['a']) === ''
+        && $idSesiune($pagini['b']) === '' && $sesiuni($siteuri['a']['site'] . '/storage/sessions') === []
+        && $sesiuni($siteuri['b']['site'] . '/storage/sessions') === []);
+    $idA = $idSesiune($cerere('a', 'GET', '/cos'));
+    $idB = $idSesiune($cerere('b', 'GET', '/cos'));
     $verifica('fiecare site: sesiunea în site/storage/sessions al lui (cu gardul .htaccess), nicio sesiune în versiune',
         $idA !== '' && $idB !== '' && $sesiuni($siteuri['a']['site'] . '/storage/sessions') === ['sess_' . $idA]
         && $sesiuni($siteuri['b']['site'] . '/storage/sessions') === ['sess_' . $idB] && $sesiuni($cod . '/storage/sessions') === []
