@@ -8,6 +8,26 @@ final class ResponseCache
 {
     /** Cache-Control-ul paginilor HTML din cache cu politica „revalidate” (VT-C2; vertij PAGE_CACHE_CONTROL). */
     private const CACHE_CONTROL_REVALIDARE = 'no-cache, must-revalidate';
+    /**
+     * Revizuirea WP-39/40: paginile regulilor extinse (WP-40) nu sunt niciodată publice în browser sau în CDN, oricare ar fi
+     * page_cache_browser_policy (înghețată „max_age” pe unele site-uri): antetul coșului, al contului și scripturile de analiză
+     * (după consimțământ) diferă de la un vizitator la altul, deci browserul revalidează mereu (ETag), iar un CDN nu le ține.
+     */
+    private const CACHE_CONTROL_EXTINS = 'private, no-cache, must-revalidate';
+    /**
+     * Parametrii adresei care pot face o pagină ținută în cache (paginarea, sortarea, filtrele cunoscute). Orice alt parametru
+     * (fbclid, utm_*, gclid, o căutare, gunoi) ocolește cache-ul: altfel fiecare adresă inventată ar fi o intrare nouă.
+     */
+    public const PARAMETRI_PERMISI = ['page', 'pagina', 'blog_page', 'sort', 'category', 'categorie', 'brand', 'marca', 'tag', 'eticheta'];
+    /** Câte pagini ține cache-ul cel mult; peste, la o curățenie, pleacă cele expirate, apoi cele mai vechi. */
+    public const MAX_INTRARI = 5000;
+    /** O dată la câte salvări în cache rulează curățenia (o trecere prin fișierele .json). */
+    private const CURATENIE_LA = 100;
+    /**
+     * Câmpurile care trebuie să fie ale cererii de acum, nu ale celei care a salvat pagina: momentul deschiderii formularului
+     * de recenzie (ReviewGuard: „trimis prea repede”). La servirea din cache valoarea se pune la ora de acum.
+     */
+    private const CAMPURI_LA_CERERE = '/(<input type="hidden" name="review_opened_at" value=")\d+(")/';
 
     /**
      * @return list<string>
@@ -64,7 +84,11 @@ final class ResponseCache
         }
 
         $queryRaw = parse_url($requestUri, PHP_URL_QUERY);
+        if (!self::parametriPermisi(is_string($queryRaw) ? $queryRaw : '')) {
+            return $disabled;
+        }
         $query = self::canonicalizeQueryString(is_string($queryRaw) ? $queryRaw : '');
+        $extins = ($rule['extins'] ?? false) === true;
         // Consimțământul intră în cheie: paginile diferă prin scripturile de
         // urmărire, iar o variantă „cu Analytics" nu are voie să ajungă la un
         // vizitator care a refuzat.
@@ -91,7 +115,7 @@ final class ResponseCache
             if ($expiresAt > time()) {
                 $etag = trim((string) ($meta['etag'] ?? ''));
                 $lastModifiedTs = (int) ($meta['last_modified_ts'] ?? 0);
-                $cacheControl = self::cacheControlCitit($settings, $meta, $ttlSeconds);
+                $cacheControl = $extins ? self::CACHE_CONTROL_EXTINS : self::cacheControlCitit($settings, $meta, $ttlSeconds);
 
                 // Din vertij (VT-C1, 1fbd151/6d50d39/fd766f6): fișierul se citește o singură dată și se
                 // verifică: hash-ul conținutului trebuie să fie ETag-ul salvat (sha1). Un fișier trunchiat
@@ -112,6 +136,9 @@ final class ResponseCache
                         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT');
                     }
                     header('Cache-Control: ' . $cacheControl);
+                    if ($extins) {
+                        header('Vary: Cookie');
+                    }
                     header('X-Page-Cache: HIT-304');
                     http_response_code(304);
                     return [
@@ -139,8 +166,11 @@ final class ResponseCache
                         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModifiedTs) . ' GMT');
                     }
                     header('Cache-Control: ' . $cacheControl);
+                    if ($extins) {
+                        header('Vary: Cookie');
+                    }
                     header('X-Page-Cache: HIT');
-                    echo $body;
+                    echo self::campuriLaCerere($body);
                     return [
                         'served' => true,
                         'buffering' => false,
@@ -167,8 +197,8 @@ final class ResponseCache
             'ttl_seconds' => $ttlSeconds,
             'path' => $path,
             'query' => $query,
-            'cache_control' => self::cacheControlNou($settings, $ttlSeconds),
-            'extins' => ($rule['extins'] ?? false) === true,
+            'cache_control' => $extins ? self::CACHE_CONTROL_EXTINS : self::cacheControlNou($settings, $ttlSeconds),
+            'extins' => $extins,
         ];
     }
 
@@ -228,6 +258,9 @@ final class ResponseCache
             header('ETag: ' . $etag, true);
             header('Last-Modified: ' . $lastModifiedHttp, true);
             header('Cache-Control: ' . $cacheControl, true);
+            if (($context['extins'] ?? false) === true) {
+                header('Vary: Cookie', true);
+            }
             header('X-Page-Cache: MISS', true);
 
             self::ensureCacheDirectory();
@@ -246,6 +279,9 @@ final class ResponseCache
                     'cache_control' => $cacheControl,
                 ];
                 self::atomicWrite($metaFile, json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}');
+                if (random_int(1, self::CURATENIE_LA) === 1) {
+                    self::curata();
+                }
             }
         } else {
             header('X-Page-Cache: BYPASS', true);
@@ -256,6 +292,8 @@ final class ResponseCache
 
     public static function purgePageCache(?string $pathPattern = null): int
     {
+        // Adresele sitemap-urilor (Sitemap::grupuri) urmează conținutul la fel ca paginile.
+        Sitemap::golesteCache();
         $dir = self::cacheDirectory();
         if (!is_dir($dir)) {
             return 0;
@@ -592,6 +630,72 @@ final class ResponseCache
             $path = '/';
         }
         return self::normalizePathPattern($path);
+    }
+
+    /** Un POST la această adresă poate schimba conținutul paginilor publice (orice POST din admin, afară de logare/ieșire)? */
+    public static function schimbaContinut(string $cale): bool
+    {
+        $cale = '/' . trim(strtolower($cale), '/');
+        return ($cale === '/admin' || str_starts_with($cale, '/admin/'))
+            && !in_array($cale, ['/admin/login', '/admin/logout', '/admin/cauta'], true);
+    }
+
+    /** Adresa are doar parametri care pot face o pagină din cache (PARAMETRI_PERMISI, cu valori simple)? */
+    public static function parametriPermisi(string $query): bool
+    {
+        if (trim($query) === '') {
+            return true;
+        }
+        $params = [];
+        parse_str($query, $params);
+        foreach ($params as $cheie => $valoare) {
+            if (!in_array((string) $cheie, self::PARAMETRI_PERMISI, true) || !is_string($valoare) || strlen($valoare) > 200) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Corpul unei pagini servite din cache, cu câmpurile cererii de acum (CAMPURI_LA_CERERE). */
+    public static function campuriLaCerere(string $body): string
+    {
+        return (string) preg_replace(self::CAMPURI_LA_CERERE, '${1}' . time() . '${2}', $body);
+    }
+
+    /**
+     * Curățenia cache-ului de pagini: intrările expirate (și fișierele fără pereche) pleacă; dacă rămân peste MAX_INTRARI,
+     * pleacă cele mai vechi. Întoarce câte intrări au plecat.
+     */
+    public static function curata(?int $maxIntrari = null): int
+    {
+        $dir = self::cacheDirectory();
+        if (!is_dir($dir)) {
+            return 0;
+        }
+        $maxIntrari ??= self::MAX_INTRARI;
+        $acum = time();
+        $sterse = 0;
+        $vii = [];
+        foreach (glob($dir . '/*.json') ?: [] as $metaFile) {
+            $cacheFile = substr($metaFile, 0, -5) . '.html';
+            $meta = self::readMeta($metaFile);
+            if (!is_array($meta) || (int) ($meta['expires_at'] ?? 0) <= $acum || !is_file($cacheFile)) {
+                self::deleteFile($metaFile);
+                self::deleteFile($cacheFile);
+                $sterse++;
+                continue;
+            }
+            $vii[$metaFile] = (int) ($meta['created_at'] ?? 0);
+        }
+        if (count($vii) > $maxIntrari) {
+            asort($vii);
+            foreach (array_slice(array_keys($vii), 0, count($vii) - $maxIntrari) as $metaFile) {
+                self::deleteFile($metaFile);
+                self::deleteFile(substr($metaFile, 0, -5) . '.html');
+                $sterse++;
+            }
+        }
+        return $sterse;
     }
 
     private static function canonicalizeQueryString(string $query): string

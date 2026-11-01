@@ -35,7 +35,8 @@ use App\Support\VarianteImagini;
 $scrie('');
 $scrie('== E4. Viteza, pozele, fluxul Merchant, sursa comenzilor (WP-40)');
 
-$cheiViteza = ['sesiune_doar_la_nevoie', 'cache_pagini_extins', 'css_js_in_fisiere', 'imagini_srcset', 'merchant_feed', 'sursa_comenzii',
+$cheiViteza = ['sesiune_doar_la_nevoie', 'cache_pagini_extins', 'css_js_in_fisiere', 'imagini_srcset', 'merchant_feed', 'sursa_comenzii', 'hsts',
+    'page_cache_browser_policy',
     'cache_pages_enabled'];
 $vitezaInainte = array_intersect_key(Settings::all($db), array_flip($cheiViteza));
 $seteaza = static function (array $valori) use ($db): void {
@@ -45,6 +46,12 @@ $seteaza = static function (array $valori) use ($db): void {
 $dosarSesiuni = \App\Support\Paths::stocareSite('sessions');
 $numarSesiuni = static fn (): int => count(glob($dosarSesiuni . '/sess_*') ?: []);
 $paginiPublice = ['/', '/magazin', '/produs/ceai-de-menta', '/categorie/ceaiuri', '/blog', '/contact', '/api/cart/summary'];
+// Un borcan de cookie-uri cu acordul vizitatorului pentru urmărire (bannerul de cookie-uri: „Accept toate”).
+$jarCuAcord = static function (string $nume) use ($jarNou): string {
+    $jar = $jarNou($nume);
+    file_put_contents($jar, "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t" . \App\Support\CookieConsent::TOATE . "\n");
+    return $jar;
+};
 
 try {
     // -----------------------------------------------------------------------------------------------------------------
@@ -75,6 +82,21 @@ try {
     $verifica('comutatorul oprit (Bioscem, înghețat): fiecare pagină pornește sesiunea, ca înainte', $numarSesiuni() === $inainte + 1
         && array_filter($r['cookies'], static fn (string $c): bool => str_starts_with($c, session_name() . '=')) !== []);
     $seteaza(['sesiune_doar_la_nevoie' => '1']);
+    // Revizuirea WP-39/40: fișierele tehnice nu pornesc sesiunea nici cu cookie-ul ei; o pagină publică fără sesiune și fără
+    // cache are Cache-Control-ul ei (niciun CDN nu o ține).
+    $inainte = $numarSesiuni();
+    $tehnice = [];
+    foreach (['/robots.txt', '/sitemap.xml', '/sitemap-pagini.xml', '/health', '/favicon.ico'] as $cale) {
+        $r = $cerere($port, 'GET', $cale, [], $jarCos);
+        if (array_filter($r['cookies'], static fn (string $c): bool => str_starts_with($c, session_name() . '=')) !== []) {
+            $tehnice[] = $cale;
+        }
+    }
+    $contactFara = $cerere($port, 'GET', '/contact');
+    $verifica('robots.txt, sitemap-urile, /health, /favicon.ico: nicio sesiune (nici cu cookie-ul ei); /contact fără sesiune: „Cache-Control: '
+        . \App\Support\SesiuneLaNevoie::CACHE_CONTROL_FARA_SESIUNE . '”', $tehnice === [] && $numarSesiuni() === $inainte
+        && ($contactFara['antete']['cache-control'] ?? '') === \App\Support\SesiuneLaNevoie::CACHE_CONTROL_FARA_SESIUNE,
+        implode(', ', $tehnice) . ' | ' . ($contactFara['antete']['cache-control'] ?? '-'));
 
     // -----------------------------------------------------------------------------------------------------------------
     // 2. Cache-ul de pagini extins.
@@ -90,6 +112,62 @@ try {
         ($prima['antete']['x-page-cache'] ?? '') !== 'HIT' && ($aDoua['antete']['x-page-cache'] ?? '') === 'HIT' && $aDoua['corp'] === $prima['corp']
         && ($cuCos['antete']['x-page-cache'] ?? '') !== 'HIT' && ($contact2['antete']['x-page-cache'] ?? '') !== 'HIT' && $altaPagina['cod'] === 200,
         json_encode([$prima['antete']['x-page-cache'] ?? '', $aDoua['antete']['x-page-cache'] ?? '', $cuCos['antete']['x-page-cache'] ?? '']));
+    // Revizuirea WP-39/40: paginile regulilor extinse sunt private în browser (niciodată public/max-age, nici cu
+    // page_cache_browser_policy = max_age, înghețată pe unele site-uri) și variază după cookie.
+    $seteaza(['page_cache_browser_policy' => 'max_age']);
+    $miss = $cerere($port, 'GET', '/categorie/ceaiuri');
+    $hit = $cerere($port, 'GET', '/categorie/ceaiuri');
+    $verifica('pagini extinse: „Cache-Control: private, no-cache, must-revalidate” și „Vary: Cookie” la MISS și la HIT, și cu politica „max_age”',
+        ($miss['antete']['cache-control'] ?? '') === 'private, no-cache, must-revalidate' && ($hit['antete']['cache-control'] ?? '') === 'private, no-cache, must-revalidate'
+        && ($miss['antete']['vary'] ?? '') === 'Cookie' && ($hit['antete']['vary'] ?? '') === 'Cookie' && ($hit['antete']['x-page-cache'] ?? '') === 'HIT',
+        json_encode([$miss['antete']['cache-control'] ?? '', $hit['antete']['cache-control'] ?? '', $hit['antete']['x-page-cache'] ?? '']));
+    $seteaza(['page_cache_browser_policy' => (string) ($vitezaInainte['page_cache_browser_policy'] ?? 'revalidate')]);
+    // Parametrii: doar paginarea, sortarea și filtrele cunoscute fac o intrare; utm_*, fbclid, gunoi ocolesc cache-ul.
+    $fisiereCache = static fn (): int => count(glob(\App\Support\ResponseCache::cacheDirectory() . '/*.json') ?: []);
+    $cerere($port, 'GET', '/categorie/ceaiuri?sort=price_asc');
+    $sortat = $cerere($port, 'GET', '/categorie/ceaiuri?sort=price_asc');
+    $inainteGunoi = $fisiereCache();
+    $gunoi = [];
+    foreach (['?utm_source=x', '?fbclid=abc', '?x=1', '?sort=price_asc&utm_medium=email', '?sort[]=a'] as $q) {
+        $cerere($port, 'GET', '/categorie/ceaiuri' . $q);
+        $r = $cerere($port, 'GET', '/categorie/ceaiuri' . $q);
+        if (($r['antete']['x-page-cache'] ?? '') === 'HIT') {
+            $gunoi[] = $q;
+        }
+    }
+    $verifica('parametrii adresei: ?sort= din cache (HIT); utm_*, fbclid, un parametru necunoscut, un tablou: niciodată din cache, nicio intrare nouă',
+        ($sortat['antete']['x-page-cache'] ?? '') === 'HIT' && $gunoi === [] && $fisiereCache() === $inainteGunoi, implode(', ', $gunoi));
+    // Plafonul și curățenia: intrările expirate pleacă, apoi cele mai vechi peste plafon.
+    $dirCache = \App\Support\ResponseCache::cacheDirectory();
+    foreach (range(1, 6) as $k) {
+        file_put_contents($dirCache . '/e4test' . $k . '.html', '<html></html>');
+        file_put_contents($dirCache . '/e4test' . $k . '.json', json_encode(['path' => '/e4', 'created_at' => $k, 'expires_at' => $k <= 3 ? time() - 10 : time() + 600]));
+    }
+    $total = $fisiereCache();
+    $sterse = \App\Support\ResponseCache::curata($total - 3 - 1);
+    $ramase = count(glob($dirCache . '/e4test*.json') ?: []);
+    $verifica('curățenia cache-ului: 3 intrări expirate plecate, apoi cea mai veche peste plafon (' . $sterse . ' plecate)', $sterse === 4 && $ramase === 2,
+        $sterse . ' / ' . $ramase);
+    foreach (glob($dirCache . '/e4test*') ?: [] as $f) {
+        @unlink($f);
+    }
+    // Recenzia pe o pagină de produs din cache: momentul deschiderii formularului e al cererii de acum, nu al salvării.
+    $cerere($port, 'GET', '/produs/ceai-de-menta');
+    sleep(2);
+    $produsHit = $cerere($port, 'GET', '/produs/ceai-de-menta');
+    $areFormular = preg_match('/name="review_opened_at" value="(\d+)"/', $produsHit['corp'], $mDeschis) === 1;
+    $verifica('produsul din cache: review_opened_at = ora cererii (anti-spamul recenziilor „trimis prea repede” merge și pe pagina din cache)',
+        ($produsHit['antete']['x-page-cache'] ?? '') === 'HIT' && (!$areFormular || abs((int) $mDeschis[1] - time()) <= 1),
+        ($produsHit['antete']['x-page-cache'] ?? '') . ' ' . ($mDeschis[1] ?? 'fără formular') . ' / ' . time());
+    // Orice salvare din admin golește cache-ul de pagini (aici: fluxul Merchant salvat din Setări magazin).
+    $jarAdmin = $jarNou('viteza-admin');
+    $cerere($port, 'POST', '/admin/login', [], $jarAdmin, ['email' => $adminEmail, 'password' => $parola]);
+    $setariMagazin = $cerere($port, 'GET', '/admin/settings/store?tab=seo', [], $jarAdmin)['corp'];
+    preg_match('/name="_csrf" value="([^"]+)"/', $setariMagazin, $mCsrf);
+    $inaintePost = $fisiereCache();
+    $cerere($port, 'POST', '/admin/settings/store', [], $jarAdmin, ['action' => 'save_flux_merchant', 'merchant_feed' => '1', '_csrf' => $mCsrf[1] ?? '']);
+    $verifica('o salvare din admin golește cache-ul de pagini (' . $inaintePost . ' intrări → ' . $fisiereCache() . ')', $inaintePost > 0 && $fisiereCache() === 0);
+
     $seteaza(['cache_pagini_extins' => '0']);
     $cerere($port, 'GET', '/categorie/ceaiuri');
     $verifica('cache-ul extins oprit (Bioscem): nicio pagină din cache fără regulile din admin',
@@ -107,9 +185,93 @@ try {
         }
     }
     $verifica('fișierele minificate ale șablonului sunt la zi față de sursele lor (tools/dev/minifica-sablon.php)', $laZi === [], implode(', ', $laZi));
+    // Revizuirea WP-39/40: minificarea JavaScript-ului nu schimbă niciun jeton (cuvinte, numere, texte, șabloane `…` cu
+    // spațiile lor, expresii regulate, semne): aceeași listă de jetoane în sursă și în fișierul minificat; plus node --check.
+    $jetoane = static function (string $js): array {
+        $rez = [];
+        $n = strlen($js);
+        $i = 0;
+        $ultim = '';
+        $inaintea = ['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^', 'return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', '=>', '&&', '||'];
+        while ($i < $n) {
+            $c = $js[$i];
+            if (ctype_space($c)) {
+                $i++;
+                continue;
+            }
+            if ($c === '/' && ($js[$i + 1] ?? '') === '/') {
+                $i = ($p = strpos($js, "\n", $i)) === false ? $n : $p;
+                continue;
+            }
+            if ($c === '/' && ($js[$i + 1] ?? '') === '*') {
+                $i = ($p = strpos($js, '*/', $i + 2)) === false ? $n : $p + 2;
+                continue;
+            }
+            $start = $i;
+            if ($c === '"' || $c === "'" || $c === '`') {
+                $adancime = 0;
+                for ($i++; $i < $n; $i++) {
+                    if ($js[$i] === '\\') {
+                        $i++;
+                    } elseif ($c === '`' && $js[$i] === '$' && ($js[$i + 1] ?? '') === '{') {
+                        $adancime++;
+                        $i++;
+                    } elseif ($c === '`' && $adancime > 0 && $js[$i] === '}') {
+                        $adancime--;
+                    } elseif ($js[$i] === $c && $adancime === 0) {
+                        break;
+                    }
+                }
+                $i++;
+            } elseif ($c === '/' && in_array($ultim, $inaintea, true)) {
+                $clasa = false;
+                for ($i++; $i < $n; $i++) {
+                    if ($js[$i] === '\\') {
+                        $i++;
+                    } elseif ($js[$i] === '[') {
+                        $clasa = true;
+                    } elseif ($js[$i] === ']') {
+                        $clasa = false;
+                    } elseif ($js[$i] === '/' && !$clasa) {
+                        break;
+                    }
+                }
+                for ($i++; $i < $n && ctype_alpha($js[$i]); $i++) {
+                }
+            } elseif (ctype_alnum($c) || $c === '_' || $c === '$') {
+                for ($i++; $i < $n && (ctype_alnum($js[$i]) || $js[$i] === '_' || $js[$i] === '$' || $js[$i] === '.'); $i++) {
+                }
+            } else {
+                $i++;
+                foreach (['=>', '&&', '||', '===', '!==', '==', '!=', '<=', '>=', '++', '--', '?.', '??'] as $op) {
+                    if (substr($js, $start, strlen($op)) === $op) {
+                        $i = $start + strlen($op);
+                        break;
+                    }
+                }
+            }
+            $ultim = substr($js, $start, $i - $start);
+            $rez[] = $ultim;
+        }
+        return $rez;
+    };
+    $jeton = [];
+    foreach (SablonSite::SURSE as $nume) {
+        if (!str_ends_with($nume, '.js')) {
+            continue;
+        }
+        $fisierMin = $radacina . '/public' . SablonSite::caleMinificata($nume);
+        $tSursa = $jetoane((string) file_get_contents(SablonSite::sursa($nume)));
+        $tMin = $jetoane((string) @file_get_contents($fisierMin));
+        exec('node --check ' . escapeshellarg($fisierMin) . ' 2>&1', $iesireNode, $codNode);
+        if ($tSursa !== $tMin || count($tSursa) < 20 || $codNode !== 0) {
+            $jeton[] = $nume . ' (' . count($tSursa) . '/' . count($tMin) . ' jetoane, node ' . $codNode . ')';
+        }
+    }
+    $verifica('JavaScript-ul minificat: aceleași jetoane ca sursa (fiecare fișier), sintaxă bună (node --check)', $jeton === [], implode(', ', $jeton));
     $seteaza(['css_js_in_fisiere' => '1']);
     $paginaNoua = $cerere($port, 'GET', '/magazin')['corp'];
-    preg_match_all('#(?:href|src)="(/assets/(?:css/sablon-site|js/sablon/[a-z-]+)\.min\.(?:css|js)\?v=\d+)"#', $paginaNoua, $mFis);
+    preg_match_all('#(?:href|src)="(/assets/(?:css/sablon-site|js/sablon/[a-z-]+)\.min\.(?:css|js)\?v=[0-9a-f]{12})"#', $paginaNoua, $mFis);
     $raspunsuriFis = array_map(static fn (string $u): int => $cerere($port, 'GET', $u)['cod'], $mFis[1]);
     $verifica('cu comutatorul: pagina leagă CSS-ul și scripturile șablonului (' . count($mFis[1]) . ' fișiere, fiecare 200) și nu le mai are în ea',
         count($mFis[1]) >= 4 && array_unique($raspunsuriFis) === [200] && !str_contains($paginaNoua, '.bv-header-search-shell{')
@@ -141,9 +303,22 @@ try {
         && str_contains($acasa['corp'], '/assets/vendor/fonturi/dm-sans/dm-sans.css'), json_encode($familii));
     $https = $cerere($port, 'GET', '/', ['X-Forwarded-Proto: https']);
     $htaccess = (string) file_get_contents($radacina . '/public/.htaccess') . (string) file_get_contents($radacina . '/deploy/stub/.htaccess');
-    $verifica('HSTS doar pe https (un an, fără subdomenii); fișierele din /assets/ cu ?v= „immutable” un an (.htaccess și stub-ul)',
-        ($https['antete']['strict-transport-security'] ?? '') === 'max-age=31536000' && !isset($acasa['antete']['strict-transport-security'])
-        && substr_count($htaccess, 'Header always set Cache-Control "public, max-age=31536000, immutable" env=AX_VERSIONAT') === 2);
+    $seteaza(['hsts' => 'oprit']);
+    $httpsOprit = $cerere($port, 'GET', '/', ['X-Forwarded-Proto: https']);
+    $seteaza(['hsts' => '0']);
+    $httpsUrgenta = $cerere($port, 'GET', '/', ['X-Forwarded-Proto: https']);
+    $seteaza(['hsts' => '86400']);
+    $httpsTreapta = $cerere($port, 'GET', '/', ['X-Forwarded-Proto: https']);
+    $seteaza(['hsts' => (string) ($vitezaInainte['hsts'] ?? '300')]);
+    $verifica('HSTS doar pe https, după setarea hsts: implicit 300 s (prima treaptă), 86400, „oprit” = nimic, „0” = max-age=0 (oprirea de urgență); '
+        . 'fișierele din /assets/ cu ?v=<12 hex> „immutable” un an (.htaccess și stub-ul), altă versiune nu',
+        ($https['antete']['strict-transport-security'] ?? '') === 'max-age=300' && !isset($acasa['antete']['strict-transport-security'])
+        && !isset($httpsOprit['antete']['strict-transport-security']) && ($httpsUrgenta['antete']['strict-transport-security'] ?? '') === 'max-age=0'
+        && ($httpsTreapta['antete']['strict-transport-security'] ?? '') === 'max-age=86400'
+        && substr_count($htaccess, 'Header always set Cache-Control "public, max-age=31536000, immutable" env=AX_VERSIONAT') === 2
+        && substr_count($htaccess, 'RewriteCond %{QUERY_STRING} (^|&)v=[0-9a-f]{12}(&|$)') === 2
+        && preg_match('#^/assets/css/sablon-site\.min\.css\?v=[0-9a-f]{12}$#', SablonSite::url('sablon-site.css')) === 1,
+        json_encode([$https['antete']['strict-transport-security'] ?? '-', $httpsUrgenta['antete']['strict-transport-security'] ?? '-']));
 
     // -----------------------------------------------------------------------------------------------------------------
     // 5. Pozele în mărimile ecranului.
@@ -173,6 +348,37 @@ try {
         preg_match('#srcset="/uploads/_variante/[^"]+ 160w, [^"]+ 400w, /uploads/[^"]+ \d+w" sizes="#', $cuSrcset) === 1
         && !str_contains($faraSrcset, 'srcset=') && $faraSrcsetCurat === $faraSrcset);
     $seteaza(['imagini_srcset' => '1']);
+    // Revizuirea WP-39/40: ceai.png și ceai.jpg au variante diferite (extensia e în nume); o poză înlocuită cu una mai mică
+    // nu păstrează variantele mai mari; ștergerea scoate toate variantele.
+    $dosarProba = \App\Support\Paths::uploads() . '/products';
+    $poza = static function (string $fisier, int $latime, array $culoare): void {
+        $im = imagecreatetruecolor($latime, (int) ($latime * 3 / 4));
+        imagefill($im, 0, 0, (int) imagecolorallocate($im, ...$culoare));
+        str_ends_with($fisier, '.png') ? imagepng($im, $fisier) : imagejpeg($im, $fisier, 90);
+        imagedestroy($im);
+    };
+    $poza($dosarProba . '/e4-proba.png', 900, [200, 30, 30]);
+    $poza($dosarProba . '/e4-proba.jpg', 900, [30, 30, 200]);
+    try {
+        VarianteImagini::genereaza('products/e4-proba.png');
+        VarianteImagini::genereaza('products/e4-proba.jpg');
+        $vPng = \App\Support\Paths::uploads() . '/' . VarianteImagini::caleVarianta('products/e4-proba.png', 800);
+        $vJpg = \App\Support\Paths::uploads() . '/' . VarianteImagini::caleVarianta('products/e4-proba.jpg', 800);
+        $separate = is_file($vPng) && is_file($vJpg) && $vPng !== $vJpg && md5_file($vPng) !== md5_file($vJpg);
+        sleep(1);
+        $poza($dosarProba . '/e4-proba.png', 500, [10, 200, 10]);
+        VarianteImagini::genereaza('products/e4-proba.png');
+        $dupaInlocuire = !is_file($vPng) && is_file(\App\Support\Paths::uploads() . '/' . VarianteImagini::caleVarianta('products/e4-proba.png', 400));
+        $plecate = VarianteImagini::sterge('products/e4-proba.jpg');
+        $verifica('variantele: ceai.png și ceai.jpg separate (' . basename($vPng) . '), o poză înlocuită cu una mai mică fără variantele mai mari, '
+            . 'ștergerea scoate toate variantele (' . $plecate . ')', $separate && $dupaInlocuire && $plecate === 3
+            && !is_file($vJpg) && str_ends_with($vPng, 'e4-proba.png-800w.webp'));
+    } finally {
+        VarianteImagini::sterge('products/e4-proba.png');
+        VarianteImagini::sterge('products/e4-proba.jpg');
+        @unlink($dosarProba . '/e4-proba.png');
+        @unlink($dosarProba . '/e4-proba.jpg');
+    }
 
     // -----------------------------------------------------------------------------------------------------------------
     // 6. Fluxul Merchant.
@@ -223,17 +429,26 @@ try {
             $gresite[] = json_encode($get) . ' ' . $referer . ' → ' . var_export(SursaComenzii::dinCerere($get, $referer, $gazda), true);
         }
     }
-    $verifica('felul vizitei: reclamă Google (gclid, cpc), email, campanie, căutarea Google, alt site; din site sau direct nimic',
-        $gresite === [] && SursaComenzii::pentruComanda([]) === 'direct' && SursaComenzii::pentruComanda(['bv_gclid' => 'x']) === 'google_ads'
-        && SursaComenzii::pentruComanda(['ax_sursa' => 'google']) === 'google' && SursaComenzii::pentruComanda(['ax_sursa' => 'inventat']) === 'direct',
+    $verifica('felul vizitei: reclamă Google (gclid, cpc), email, campanie (și utm_source=google fără mediu plătit), căutarea Google, alt site; '
+        . 'din site sau direct nimic; la comandă ultima sursă câștigă (ax_sursa înaintea reclamei vechi), „utm-google” nu e reclamă, fără acord „necunoscuta”',
+        $gresite === [] && SursaComenzii::dinCerere(['utm_source' => 'google'], '', $gazda) === 'campanie'
+        && SursaComenzii::pentruComanda([], true) === 'direct' && SursaComenzii::pentruComanda(['bv_gclid' => 'x'], true) === 'google_ads'
+        && SursaComenzii::pentruComanda(['bv_gclid' => 'utm-google'], true) === 'direct'
+        && SursaComenzii::pentruComanda(['bv_gclid' => 'x', 'ax_sursa' => 'email'], true) === 'email'
+        && SursaComenzii::pentruComanda(['ax_sursa' => 'google'], true) === 'google' && SursaComenzii::pentruComanda(['ax_sursa' => 'inventat'], true) === 'direct'
+        && SursaComenzii::pentruComanda(['ax_sursa' => 'google', 'bv_gclid' => 'x'], false) === 'necunoscuta',
         implode('; ', $gresite));
-    $cuGoogle = $cerere($port, 'GET', '/produs/ceai-de-menta', ['Referer: https://www.google.ro/']);
-    $dinSite = $cerere($port, 'GET', '/magazin', ['Referer: http://127.0.0.1:' . $port . '/']);
-    $verifica('la intrare, cookie-ul ax_sursa doar cu felul (venit din Google: „google”), fără nimic pentru o pagină cerută din site',
-        array_filter($cuGoogle['cookies'], static fn (string $c): bool => str_starts_with($c, 'ax_sursa=google;')) !== []
-        && array_filter($dinSite['cookies'], static fn (string $c): bool => str_starts_with($c, 'ax_sursa=')) === []);
-    // O comandă adevărată, de la un vizitator venit din Google: comanda are sursa „google”.
-    $jarComanda = $jarNou('viteza-comanda');
+    $faraAcord = $cerere($port, 'GET', '/produs/ceai-de-menta?gclid=e4test', ['Referer: https://www.google.ro/']);
+    $jarAcord = $jarCuAcord('viteza-acord');
+    $cuGoogle = $cerere($port, 'GET', '/produs/ceai-de-menta', ['Referer: https://www.google.ro/'], $jarAcord);
+    $dinSite = $cerere($port, 'GET', '/magazin', ['Referer: http://127.0.0.1:' . $port . '/'], $jarAcord);
+    $areCookie = static fn (array $r, string $nume): bool => array_filter($r['cookies'], static fn (string $c): bool => str_starts_with($c, $nume . '=')) !== [];
+    $verifica('fără acordul pentru urmărire: niciun cookie ax_sursa și niciun bv_gclid (nici cu gclid); cu acord, ax_sursa doar cu felul (venit din '
+        . 'Google: „google”), nimic pentru o pagină cerută din site', !$areCookie($faraAcord, 'ax_sursa') && !$areCookie($faraAcord, 'bv_gclid')
+        && array_filter($cuGoogle['cookies'], static fn (string $c): bool => str_starts_with($c, 'ax_sursa=google;')) !== []
+        && !$areCookie($dinSite, 'ax_sursa'), implode(' | ', array_merge($faraAcord['cookies'], $cuGoogle['cookies'])));
+    // O comandă adevărată, de la un vizitator venit din Google (cu acord): comanda are sursa „google”.
+    $jarComanda = $jarCuAcord('viteza-comanda');
     $cerere($port, 'GET', '/produs/ceai-de-menta', ['Referer: https://www.google.ro/'], $jarComanda);
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, [], $jarComanda, ['quantity' => '1']);
     $pagCheckout = $cerere($port, 'GET', '/checkout', [], $jarComanda)['corp'];
@@ -318,14 +533,21 @@ try {
     $opriteBaza = Settings::all($db);
     [$codPornit, $iesirePornit] = $ruleaza('--porneste');
     $pornitBaza = Settings::all($db);
+    [$codSursa] = $ruleaza('--porneste=sursa_comenzii');
+    $sursaBaza = Settings::all($db);
+    [$codHsts] = $ruleaza('--hsts=86400');
+    $hstsBaza = Settings::all($db);
     [$codGresit] = $ruleaza('--porneste=inventat');
+    [$codHstsGresit] = $ruleaza('--hsts=mult');
     [$codArata, $iesireArata] = $ruleaza('--arata');
-    $verifica('scripts/comutatoare-seo.php: --opreste=a,b scrie „0” doar pentru ele, --porneste pe toate „1”, --arata nu scrie, o cheie necunoscută refuzată (2)',
+    $verifica('scripts/comutatoare-seo.php: --opreste=a,b scrie „0” doar pentru ele, --porneste pe „1” toate afară de sursa_comenzii (doar scrisă), '
+        . '--porneste=sursa_comenzii, --hsts=86400, --arata nu scrie; o cheie sau o valoare HSTS greșită refuzată (2)',
         $codOprit === 0 && $opriteBaza['imagini_srcset'] === '0' && $opriteBaza['sursa_comenzii'] === '0'
         && $opriteBaza['css_js_in_fisiere'] === '1' && $codPornit === 0
-        && array_filter(array_slice($cheiViteza, 0, 6), static fn (string $c): bool => ($pornitBaza[$c] ?? '') !== '1') === []
-        && $codGresit === 2 && $codArata === 0 && substr_count($iesireArata, 'PORNIT ') === 6,
-        $iesireOprit . ' | ' . $iesirePornit);
+        && array_filter(array_slice($cheiViteza, 0, 5), static fn (string $c): bool => ($pornitBaza[$c] ?? '') !== '1') === []
+        && $pornitBaza['sursa_comenzii'] === '0' && $codSursa === 0 && $sursaBaza['sursa_comenzii'] === '1' && $codHsts === 0 && $hstsBaza['hsts'] === '86400'
+        && $codGresit === 2 && $codHstsGresit === 2 && $codArata === 0 && substr_count($iesireArata, 'PORNIT ') === 7,
+        $iesireOprit . ' | ' . $iesirePornit . ' | ' . $iesireArata);
 } finally {
     Settings::save($db, array_merge(array_fill_keys($cheiViteza, ''), $vitezaInainte));
     \App\Support\ResponseCache::purgePageCache();

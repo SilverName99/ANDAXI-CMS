@@ -286,6 +286,25 @@ final class FluxGoogleMerchant
     }
 
     /** GTIN-8/12/13/14 cu cifra de control corectă (regulile GS1). */
+    /**
+     * Un GTIN valid dar cu un prefix GS1 de uz restrâns (revizuirea WP-39/40): 020–029, 040–049, 200–299 (EAN-13) sau 2/4
+     * (UPC-A, 12 cifre): coduri puse de magazin sau de o firmă pentru uz intern, pe care Google Merchant le poate respinge ca
+     * „GTIN rezervat”. Se salvează, dar adminul e avertizat.
+     */
+    public static function gtinRestrans(string $gtin): bool
+    {
+        if (!self::gtinValid($gtin)) {
+            return false;
+        }
+        if (strlen($gtin) === 8) {
+            return str_starts_with($gtin, '0') || str_starts_with($gtin, '2');
+        }
+        // UPC-A (12) ca EAN-13 cu 0 în față; GTIN-14 fără cifra indicatorului.
+        $gtin13 = strlen($gtin) === 12 ? '0' . $gtin : (strlen($gtin) === 14 ? substr($gtin, 1) : $gtin);
+        $prefix = (int) substr($gtin13, 0, 3);
+        return ($prefix >= 20 && $prefix <= 29) || ($prefix >= 40 && $prefix <= 49) || ($prefix >= 200 && $prefix <= 299);
+    }
+
     public static function gtinValid(string $gtin): bool
     {
         if (!in_array(strlen($gtin), [8, 12, 13, 14], true) || preg_match('/^\d+$/', $gtin) !== 1 || ltrim($gtin, '0') === '') {

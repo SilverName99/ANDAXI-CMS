@@ -11,11 +11,12 @@ RewriteEngine On
 RewriteRule (^|/)\.(?!well-known/) - [F,L]
 
 RewriteRule ^sitemap\.xml$ index.php [L,QSA]
-RewriteRule ^sitemap-(pagini|produse|categorii|marci|etichete|articole|blog-categorii|blog-etichete)\.xml$ index.php [L,QSA]
+RewriteRule ^sitemap-(pagini|produse|categorii|marci|etichete|articole|blog-categorii|blog-etichete)(-[0-9]+)?\.xml$ index.php [L,QSA]
 
-# WP-40 (B6): un fișier din /assets/ cerut cu ?v= (versiunea lui, data fișierului) nu se mai schimbă la aceeași adresă:
-# browserul îl ține un an, fără să mai întrebe (immutable). Fără ?v=, ca înainte.
-RewriteCond %{QUERY_STRING} (^|&)v=
+# WP-40 (B6): un fișier din /assets/ cerut cu ?v=<12 hex> (versiunea lui: sha1 conținutului, App\Support\SablonSite) nu se
+# mai schimbă la aceeași adresă: browserul îl ține un an, fără să mai întrebe (immutable). Altă versiune (data fișierului) sau
+# fără ?v=: ca înainte (un fișier scris pe jumătate la deploy nu rămâne un an în browser).
+RewriteCond %{QUERY_STRING} (^|&)v=[0-9a-f]{12}(&|$)
 RewriteRule ^assets/ - [E=AX_VERSIONAT:1]
 <IfModule mod_headers.c>
     Header always set Cache-Control "public, max-age=31536000, immutable" env=AX_VERSIONAT

@@ -9,7 +9,8 @@ declare(strict_types=1);
  * variabilele lui ($verifica, $scrie, $cerere, $port, $db, $radacina, $jarNou, $adminEmail, $parola, $locatie, $app).
  *
  *  1. /sitemap.xml e indexul; fiecare sitemap din el răspunde 200 (XML); fiecare adresă din fiecare sitemap răspunde
- *     200, are canonicalul spre ea și nu are noindex; fiecare <url> are <lastmod>; produsele cu poze au <image:image>.
+ *     200, are canonicalul spre ea și nu are noindex; <lastmod> unde adresa are o dată (nicio dată inventată); împărțirea peste
+ *     50.000 de adrese; produsele cu poze au <image:image>.
  *  2. Nu intră: pagina ștearsă, nepublicată, de sistem, doar pentru membri, produsul inactiv, categoria de blog
  *     „noindex”, eticheta de blog sub minimul de articole (intră cu un articol publicat).
  *  3. Datele structurate: Product (name, image, offers.price/priceCurrency/availability; gtin13 cu un EAN valid),
@@ -18,7 +19,8 @@ declare(strict_types=1);
  *     niciun bloc pe o pagină doar pentru membri.
  *  4. Livrarea și returul din admin (Setări magazin → SEO Google), codul EAN din editorul produsului (unul greșit nu se
  *     salvează), blogul (căutarea, filtrele din adresă, paginile 2+), /produse?categorie= pe catalogul GR.
- *  5. verifica-redirecturi.php pe o listă inventată de 40 de adrese (200, 301, 410 voit și o problemă voită).
+ *  5. verifica-redirecturi.php pe o listă inventată de 40 de adrese (200, 301, 410 voit și o problemă voită); ținta și canonicalul
+ *     pe exact gazda lui --baza, Location relativ, parametrii de urmărire, 301 spre prima pagină.
  */
 
 use App\Support\DateSite;
@@ -35,6 +37,7 @@ $cale = static fn (string $adresa): string => (string) (parse_url($adresa, PHP_U
     . (parse_url($adresa, PHP_URL_QUERY) !== null ? '?' . parse_url($adresa, PHP_URL_QUERY) : '');
 /** Toate adresele sitemap-urilor: [tip => [loc => ['lastmod' => …, 'poze' => n]]]. */
 $citesteSitemapuri = static function () use ($cerere, $port, $cale): array {
+    Sitemap::golesteCache(); // testul schimbă baza direct; adresele ținute 15 minute se refac
     $index = $cerere($port, 'GET', '/sitemap.xml')['corp'];
     preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $index, $m);
     $tipuri = [];
@@ -69,13 +72,20 @@ $verifica('/sitemap.xml e indexul sitemap-urilor pe tipuri (pagini, produse, cat
     'blog-categorii'], array_keys($s['tipuri'])) === [] && array_filter($s['tipuri'], static fn (array $t): bool => $t['cod'] !== 200 || !$t['xml']) === [],
     implode(', ', array_keys($s['tipuri'])));
 $verifica('un tip necunoscut sau gol: 404 (/sitemap-nimic.xml, /sitemap-blog-etichete.xml fără etichete cu articole)',
-    $cerere($port, 'GET', '/sitemap-nimic.xml')['cod'] === 404 && $cerere($port, 'GET', '/sitemap-blog-etichete.xml')['cod'] === 404);
+    $cerere($port, 'GET', '/sitemap-nimic.xml')['cod'] === 404 && (static function () use ($cerere, $port): bool {
+        Sitemap::golesteCache();
+        return $cerere($port, 'GET', '/sitemap-blog-etichete.xml')['cod'] === 404;
+    })());
 $toate = $toateAdresele($s);
 $rele = [];
 $faraData = [];
 foreach ($toate as $loc => $info) {
-    if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $info['lastmod']) !== 1) {
-        $faraData[] = $cale($loc);
+    // Revizuirea WP-39/40: <lastmod> doar unde adresa are o dată a ei (nicio dată inventată): produsele, categoriile, articolele,
+    // paginile cu date, listele după produsele/articolele lor; rutele fixe (/contact) fără.
+    $cuDataProprie = preg_match('#^/(produs|categorie|marca|eticheta|blog)(/|$)#', $cale($loc)) === 1;
+    if (($info['lastmod'] !== '' && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $info['lastmod']) !== 1)
+        || ($cuDataProprie && $info['lastmod'] === '') || ($cale($loc) === '/contact' && $info['lastmod'] !== '')) {
+        $faraData[] = $cale($loc) . ' „' . $info['lastmod'] . '”';
     }
     $r = $cerere($port, 'GET', $cale($loc));
     preg_match('#<link rel="canonical" href="([^"]+)"#', $r['corp'], $c);
@@ -86,7 +96,10 @@ foreach ($toate as $loc => $info) {
 }
 $verifica('fiecare adresă din fiecare sitemap (' . count($toate) . ') răspunde 200, are canonicalul spre ea și nu are noindex', $rele === [],
     implode('; ', array_slice($rele, 0, 5)));
-$verifica('fiecare <url> are <lastmod> (data ultimei schimbări, UTC)', $faraData === [], implode(', ', array_slice($faraData, 0, 5)));
+$verifica('<lastmod> (data ultimei schimbări, UTC) pe fiecare produs, categorie, marcă, etichetă, articol și listă; fără dată inventată pe o rută fixă (/contact)',
+    $faraData === [], implode(', ', array_slice($faraData, 0, 5)));
+$verifica('un tip cu peste MAX_PE_FISIER adrese se împarte (Sitemap::fisiere): 5 adrese câte 2 → produse, produse-2, produse-3',
+    array_map('count', Sitemap::fisiere(['produse' => array_fill(0, 5, ['loc' => 'x', 'lastmod' => ''])], 2)) === ['produse' => 2, 'produse-2' => 2, 'produse-3' => 1]);
 $produseCuPoze = array_filter($s['tipuri']['produse']['adrese'], static fn (array $i): bool => $i['poze'] > 0);
 $verifica('produsele cu poze au <image:image> în sitemap-ul produselor (' . count($produseCuPoze) . ' din '
     . count($s['tipuri']['produse']['adrese']) . '); articolele cu poză la fel', count($produseCuPoze) > 0
@@ -361,3 +374,34 @@ $verifica('verifica-redirecturi.php: 40 de adrese (30 din sitemap → 200, 6 reg
 exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($radacina . '/tools/verificare/verifica-redirecturi.php') . ' --lista=/nu/exista.csv --baza=http://127.0.0.1:'
     . $port . ' 2>&1', $iesire2, $cod2);
 $verifica('verifica-redirecturi.php: o listă care nu există e refuzată (cod 2, nicio cerere)', $cod2 === 2);
+
+// Revizuirea WP-39/40: ținta adevărată a unui 301 (Location relativ rezolvat, schema și gazda), canonicalul pe exact gazda
+// lui --baza, parametrii de urmărire ignorați, 301 în masă spre prima pagină semnalat.
+require_once $radacina . '/tools/verificare/lib/redirecturi.php';
+$vr = \Unelte\Verificare\VerificaRedirecturi::class;
+$verifica('verifica-redirecturi: un Location relativ („c”, „../x”, „?p=2”, „//alt”) se rezolvă față de adresa cerută; schema://gazda[:port] '
+    . 'cu portul implicit scos; utm_*, gclid și fbclid ignorați la comparație',
+    $vr::rezolva('http://h.test/a/b', 'c') === 'http://h.test/a/c' && $vr::rezolva('http://h.test/a/b/c', '../x') === 'http://h.test/a/x'
+    && $vr::rezolva('https://h.test/a', '?p=2') === 'https://h.test/a?p=2' && $vr::rezolva('https://h.test/a', '//alt.test/z') === 'https://alt.test/z'
+    && $vr::rezolva('https://h.test/a', '/z#sus') === 'https://h.test/z' && $vr::rezolva('https://h.test/a', "/z\r\nX: y") === null
+    && $vr::origine('HTTPS://H.Test:443/x') === 'https://h.test' && $vr::origine('http://h.test:8080/') === 'http://h.test:8080'
+    && $vr::normalizeaza('/p?utm_source=a&x=1&gclid=2&fbclid=3') === '/p?x=1' && $vr::normalizeaza('/p?utm_medium=e') === '/p');
+$amprentaRegula = static fn (string $de): string => \App\Support\Redirectionari::amprenta($de, false);
+$puneRegula = $db->prepare("INSERT INTO seo_redirects (from_hash, from_path, is_prefix, to_url, code, is_active, source) VALUES (?, ?, 0, ?, 301, 1, 'manual')");
+try {
+    $puneRegula->execute([$amprentaRegula('/e3-spre-acasa'), '/e3-spre-acasa', '/']);
+    $puneRegula->execute([$amprentaRegula('/index.php'), '/index.php', '/']);
+    \App\Support\Redirectionari::reconstruieste($db);
+    $fisierLista2 = sys_get_temp_dir() . '/lista-e3b-' . getmypid() . '.csv';
+    file_put_contents($fisierLista2, "/e3-spre-acasa\n/index.php\n/magazin?utm_source=test&gclid=x\n");
+    exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($radacina . '/tools/verificare/verifica-redirecturi.php') . ' --lista=' . escapeshellarg($fisierLista2)
+        . ' --baza=http://127.0.0.1:' . $port . ' --pauza=0 2>&1', $iesire3, $cod3);
+    @unlink($fisierLista2);
+    $text3 = implode("\n", $iesire3);
+    $verifica('verifica-redirecturi: 301 spre prima pagină = problemă (afară de /index.php, un alias al ei); /magazin?utm_source=…&gclid=… = 200 bun '
+        . '(parametrii de urmărire ignorați la canonical)', $cod3 === 1 && str_contains($text3, 'PROBLEME (1)')
+        && str_contains($text3, '/e3-spre-acasa  →  301 → /') && str_contains($text3, '1  301 într-un salt') && str_contains($text3, '1  200 (pagină indexabilă'), $text3);
+} finally {
+    $db->exec("DELETE FROM seo_redirects WHERE from_path IN ('/e3-spre-acasa', '/index.php') AND source = 'manual'");
+    \App\Support\Redirectionari::reconstruieste($db);
+}

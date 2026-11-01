@@ -12,17 +12,21 @@ use Throwable;
  * (`orders.sursa`, magazin/0051), și raportul săptămânal din admin (Rapoarte → Sursa comenzilor). Google Analytics numără
  * doar vizitatorii care acceptă cookie-urile; comenzile le avem pe toate.
  *
+ * Doar cu acordul vizitatorului pentru urmărire (`CookieConsent::permiteUrmarire`, revizuirea WP-39/40): fără el nu se
+ * scrie niciun cookie, iar comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
+ *
  * La intrarea pe site (o pagină publică cerută cu GET, `laIntrare`), felul vizitei se ține într-un cookie
  * (`ax_sursa`, 30 de zile; doar felul, niciun id, nicio adresă), suprascris de o vizită nouă venită de undeva (ultima
  * sursă care nu e „direct” câștigă, ca în Google Analytics):
- *  - `google_ads`: un link de reclamă Google (gclid, gbraid, wbraid) sau o campanie plătită cu utm_source=google;
+ *  - `google_ads`: un link de reclamă Google (gclid, gbraid, wbraid) sau o campanie plătită (utm_medium cpc/ppc/paid…) cu
+ *    utm_source=google; utm_source=google fără mediu plătit e o `campanie`;
  *  - `email`: utm_medium email/newsletter (newsletterul pune și cookie-ul nl_cid);
  *  - `campanie`: alt link cu utm_source (o rețea socială, un partener);
  *  - `google`: venit din căutarea Google (antetul Referer), fără reclamă;
  *  - `alt_site`: venit de pe alt site (altă căutare, un link);
  *  - fără nimic de mai sus: nimic scris (rămâne ce era; fără cookie, la comandă = `direct`).
- * La comandă (`pentruComanda`): cookie-ul bv_gclid (reclama Google, deja citit pentru `ad_source`) sau nl_cid (o campanie
- * de newsletter) au întâietate, apoi `ax_sursa`, altfel `direct`.
+ * La comandă (`pentruComanda`): `ax_sursa` (ultima sursă); fără el, cookie-ul bv_gclid cu un id de clic (reclama Google,
+ * citit și pentru `ad_source`; „utm-google” nu e reclamă) sau nl_cid (o campanie de newsletter); altfel `direct`.
  *
  * Comutatorul: setarea `sursa_comenzii` (implicit pornită; înghețată la „0” pe site-ul înghețat până o vede pe site-ul de
  * verificare). Oprită: niciun cookie nou, comanda fără sursă.
@@ -92,7 +96,10 @@ final class SursaComenzii
      */
     public static function laIntrare(array $setari): void
     {
-        if (PHP_SAPI === 'cli' || !self::pornita($setari) || headers_sent()
+        // Revizuirea WP-39/40: cookie-ul se scrie doar cu acordul vizitatorului pentru urmărire (GDPR) și doar pe un site cu
+        // magazin (fără comenzi n-are rost).
+        if (PHP_SAPI === 'cli' || !self::pornita($setari) || headers_sent() || !CookieConsent::permiteUrmarire()
+            || !Plugins::vizibil('magazin')
             || !in_array(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')), ['GET', 'HEAD'], true)) {
             return;
         }
@@ -115,16 +122,27 @@ final class SursaComenzii
      *
      * @param array<string, mixed> $cookie
      */
-    public static function pentruComanda(array $cookie): string
+    public static function pentruComanda(array $cookie, ?bool $acord = null): string
     {
-        if (trim((string) ($cookie['bv_gclid'] ?? '')) !== '') {
+        // Fără acordul pentru urmărire nu citim cookie-urile de urmărire: comanda are sursa „necunoscută”.
+        if (!($acord ?? CookieConsent::permiteUrmarire())) {
+            return 'necunoscuta';
+        }
+        // Ultima sursă care nu e „direct” câștigă: cookie-ul ax_sursa e rescris la fiecare vizită venită de undeva (și la una
+        // dintr-o reclamă), deci el spune ultima. Cookie-urile mai vechi (reclama Google, newsletterul) doar fără el.
+        $sursa = (string) ($cookie[self::COOKIE] ?? '');
+        if (isset(self::SURSE[$sursa])) {
+            return $sursa;
+        }
+        $clic = trim((string) ($cookie['bv_gclid'] ?? ''));
+        // „utm-google” = doar utm_source=google, fără id de clic: nu e o reclamă (poate fi un link organic etichetat).
+        if ($clic !== '' && $clic !== 'utm-google') {
             return 'google_ads';
         }
         if ((int) ($cookie['nl_cid'] ?? 0) > 0) {
             return 'email';
         }
-        $sursa = (string) ($cookie[self::COOKIE] ?? '');
-        return isset(self::SURSE[$sursa]) ? $sursa : 'direct';
+        return 'direct';
     }
 
     /** Scrie sursa pe comanda nou creată (fără coloană: nimic). */

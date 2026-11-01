@@ -624,6 +624,9 @@ $cerere = static function (int $port, string $metoda, string $cale, array $antet
 $locatie = static fn (array $r): string => (string) ($r['antete']['location'] ?? '');
 // WP-39 (B3): /sitemap.xml e indexul sitemap-urilor pe tipuri; aici adresele tuturor, la un loc (codul și antetele indexului).
 $sitemapPlat = static function (int $port, array $antete = []) use ($cerere): array {
+    // Adresele sitemap-urilor stau 15 minute în storage/cache/sitemap/; testele schimbă baza direct (nu din admin, care le
+    // golește), deci le golesc ele înainte.
+    \App\Support\Sitemap::golesteCache();
     $index = $cerere($port, 'GET', '/sitemap.xml', $antete);
     $corp = '';
     preg_match_all('#<sitemap>\s*<loc>([^<]+)</loc>#', $index['corp'], $m);
@@ -795,9 +798,11 @@ try {
         $r['cod'] . ' ' . $locatie($r));
 
     $jarSesiune = $jarNou('sesiune');
+    // Revizuirea WP-39/40: bv_gclid doar cu acordul pentru urmărire (bannerul de cookie-uri), deci vizitatorul l-a dat.
+    file_put_contents($jarSesiune, "127.0.0.1\tFALSE\t/\tFALSE\t0\t" . \App\Support\CookieConsent::nume() . "\t" . \App\Support\CookieConsent::TOATE . "\n");
     $cerere($port, 'POST', '/cos/adauga/' . $idMenta, [], $jarSesiune, ['quantity' => '1']);
     $r = $cerere($port, 'GET', '/produse?gclid=TestSeo1', [], $jarSesiune);
-    $verifica('cine are sesiune își primește cookie-urile pe 301 (bv_gclid)', $r['cod'] === 301
+    $verifica('cine are sesiune (și acordul pentru urmărire) își primește cookie-urile pe 301 (bv_gclid)', $r['cod'] === 301
         && array_filter($r['cookies'], static fn ($c) => str_starts_with($c, 'bv_gclid=TestSeo1')) !== [], implode(' | ', $r['cookies']));
     $r = $cerere($port, 'GET', '/produse?gclid=TestSeo2');
     $verifica('vizitator nou: 301 fără cookie, cu gclid păstrat în adresă', $r['cod'] === 301 && $r['cookies'] === []

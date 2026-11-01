@@ -121,16 +121,17 @@ $cacheSettings = Settings::all($cacheDb);
 if (!$faraSesiune) {
     \App\Support\SesiuneLaNevoie::decide($cacheSettings);
 }
-// WP-40 (B6): HSTS pe https (browserul cere de acum doar https, un an), fără subdomenii și fără preload; HSTS=0 în .env
-// îl oprește. Pe http (dezvoltarea, un site fără certificat) nimic.
-if (((($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
-    && !in_array(strtolower(trim((string) \App\Support\Env::get('HSTS', '1'))), ['0', 'false', 'off', 'nu'], true)) {
-    header('Strict-Transport-Security: max-age=31536000');
-}
+// WP-40 (B6): HSTS pe https, după setarea `hsts` (App\Support\Hsts: oprit, treptele 300 → 86400 → 31536000, 0 = oprirea de
+// urgență cu max-age=0; HSTS=0 în .env). Pe http (dezvoltarea, un site fără certificat) nimic.
+\App\Support\Hsts::trimite($cacheSettings);
 
 // Capture Google Ads click id (gclid / gbraid / wbraid) so an order placed
 // later in the session can be attributed to the ad that brought the visitor.
+// Revizuirea WP-39/40 (GDPR): doar cu acordul vizitatorului pentru urmărire (cookie-urile de marketing); fără el, nimic.
 (static function (): void {
+    if (!\App\Support\CookieConsent::permiteUrmarire()) {
+        return;
+    }
     $clickId = '';
     foreach (['gclid', 'gbraid', 'wbraid'] as $param) {
         $value = trim((string) ($_GET[$param] ?? ''));
@@ -196,8 +197,16 @@ $router = new Router([GardaPluginuri::class, 'permite']);
 (require __DIR__ . '/../src/Http/rute.php')($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
-ResponseCache::finishRequest($pageCacheContext);
-// WP-40 (B6): o pagină fără sesiune care a scris totuși în $_SESSION primește acum sesiunea (o dată; și la oprire).
+// Revizuirea WP-39/40: orice POST reușit din admin (o salvare: designul, o categorie, o promoție, setările Google…) golește
+// cache-ul de pagini și adresele sitemap-urilor, ca nicio pagină să nu rămână cu conținutul de dinainte; nu doar salvările
+// care o făceau singure. Logarea și ieșirea nu schimbă conținut.
+if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST' && http_response_code() < 400
+    && ResponseCache::schimbaContinut((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/'))) {
+    ResponseCache::purgePageCache();
+}
+// WP-40 (B6): o pagină fără sesiune care a scris totuși în $_SESSION primește acum sesiunea (o dată; și la oprire), înaintea
+// cache-ului de pagini: cookie-ul ei face pagina „necacheabilă”, deci o pagină care a scris în sesiune nu ajunge în cache.
 \App\Support\SesiuneLaNevoie::laFinal();
+ResponseCache::finishRequest($pageCacheContext);
 // Exporturile de date legale expirate (WP-26, OD-51): șterse cel mult o dată pe zi, după răspuns.
 \App\Support\ExportDateLegale::curataOdataPeZi();

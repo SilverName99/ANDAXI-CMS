@@ -47,10 +47,11 @@ final class LogoAntet
         if (!is_array($dimensiuni) || [(int) $dimensiuni[0], (int) $dimensiuni[1]] !== $config['dimensiuni']) {
             return $html;
         }
-        $versiune = (string) @filemtime($radacinaPublic . $config['webp_2x']);
+        // Fiecare fișier cu versiunea lui (revizuirea WP-39/40: 1x primea data fișierului 2x, deci un 1x schimbat singur
+        // rămânea în browser cu adresa veche).
         $sursa = '<source type="image/webp" srcset="'
-            . $config['webp_1x'] . '?v=' . $versiune . ' 1x, '
-            . $config['webp_2x'] . '?v=' . $versiune . ' 2x">';
+            . $config['webp_1x'] . '?v=' . (string) @filemtime($radacinaPublic . $config['webp_1x']) . ' 1x, '
+            . $config['webp_2x'] . '?v=' . (string) @filemtime($radacinaPublic . $config['webp_2x']) . ' 2x">';
         return (string) preg_replace_callback(
             '#<img\b[^>]*\bsrc\s*=\s*(["\'])' . preg_quote($config['png'], '#') . '\1[^>]*>#i',
             // display:contents: <picture> nu face o cutie proprie, deci <img>-ul se

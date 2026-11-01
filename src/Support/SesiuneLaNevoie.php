@@ -36,6 +36,14 @@ final class SesiuneLaNevoie
     public const API_FARA_SESIUNE = ['/api/cart/summary', '/api/cart/avertismente', '/api/products/best-sellers', '/api/search/products',
         '/api/shop/catalog', '/api/blog', '/api/fan/localities', '/api/fan/lockers'];
 
+    /**
+     * Fișierele „tehnice” cerute de roboți și de monitorizare: nu pornesc niciodată sesiunea (nici cu cookie-ul ei, nici cu
+     * comutatorul oprit nu au nevoie de ea; revizuirea WP-39/40). Sitemap-urile pe tipuri se potrivesc după tipar.
+     */
+    public const FARA_SESIUNE = ['/robots.txt', '/sitemap.xml', '/health', '/favicon.ico'];
+    /** Cache-Control-ul unei pagini publice fără sesiune care nu vine din cache: niciun CDN nu o ține, browserul revalidează. */
+    public const CACHE_CONTROL_FARA_SESIUNE = 'no-cache, must-revalidate';
+
     private static bool $amanata = false;
     private static bool $terminat = false;
 
@@ -70,10 +78,23 @@ final class SesiuneLaNevoie
     }
 
     /** Cererea are nevoie de sesiune de la început? */
+    /** O cale „tehnică” (FARA_SESIUNE, /sitemap-<tip>.xml) cerută cu GET sau HEAD? */
+    public static function tehnica(string $metoda, string $uri): bool
+    {
+        if (!in_array(strtoupper($metoda), ['GET', 'HEAD'], true)) {
+            return false;
+        }
+        $cale = strtolower((string) (parse_url($uri, PHP_URL_PATH) ?? '/'));
+        return in_array($cale, self::FARA_SESIUNE, true) || preg_match('#^/sitemap-[a-z-]+(-\d+)?\.xml$#', $cale) === 1;
+    }
+
     public static function trebuie(string $metoda, string $uri, array $cookie): bool
     {
         if (!in_array(strtoupper($metoda), ['GET', 'HEAD'], true)) {
             return true;
+        }
+        if (self::tehnica($metoda, $uri)) {
+            return false;
         }
         if (isset($cookie[session_name()]) && (string) $cookie[session_name()] !== '') {
             return true;
@@ -105,12 +126,20 @@ final class SesiuneLaNevoie
             return;
         }
         $pornit = (string) ($setari['sesiune_doar_la_nevoie'] ?? '1') === '1';
-        if (!$pornit || self::trebuie((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'), (string) ($_SERVER['REQUEST_URI'] ?? '/'), $_COOKIE)) {
+        $metoda = (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET');
+        $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+        if (!$pornit || self::trebuie($metoda, $uri, $_COOKIE)) {
             self::porneste();
             return;
         }
         $_SESSION = [];
         self::$amanata = true;
+        // Fără sesiune, PHP nu mai trimite antetele ei (session.cache_limiter): o pagină publică pe care nu o pune nici cache-ul
+        // de pagini (care își scrie antetul lui) nu are voie să fie ținută de un CDN. Un controller care își pune antetul îl
+        // înlocuiește pe acesta.
+        if (!self::tehnica($metoda, $uri) && !headers_sent()) {
+            header('Cache-Control: ' . self::CACHE_CONTROL_FARA_SESIUNE);
+        }
         // Toată pagina în buffer, ca, dacă ceva scrie în sesiune, cookie-ul ei să mai poată pleca la final.
         ob_start();
         register_shutdown_function([self::class, 'laFinal']);

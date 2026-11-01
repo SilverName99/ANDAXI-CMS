@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
+    "amprenta_nucleu": "d3228176801f592f912fd4cf11e69e33875b415c18b8bee9f4294565cec78b88",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -747,6 +747,11 @@
             "motiv": "Etichetele Google din setări sunt noi pentru VT: fără rând sunt oprite",
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
+        },
+        "hsts": {
+            "motiv": "revizuirea WP-39/40 (B6): HSTS din nucleu, prima treaptă (300 de secunde) la adoptare, apoi 86400 și 31536000 cu scripts/comutatoare-seo.php --hsts=…; în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"300\""
         },
         "imagini_srcset": {
             "motiv": "WP-40 (B5): pozele cu variantele WebP (srcset) pornite la adoptare, după trecerea o dată prin poze (scripts/optimizeaza-imagini.php); în ce-se-schimba.md",

@@ -29,6 +29,12 @@ final class VerificaRedirecturi
     /** @var \CurlHandle */
     private $curl;
     private string $gazda;
+    /** schema://gazda[:port] a lui --baza, cu litere mici: canonicalul și ținta unui 301 trebuie să fie exact aici. */
+    private string $origine;
+    /** Parametrii de urmărire, ignorați când se compară o adresă cu canonicalul ei. */
+    public const PARAMETRI_URMARIRE = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'dclid', 'mc_cid', 'mc_eid'];
+    /** Căile vechi care pot duce firesc la prima pagină (altfel un 301 spre „/” e o problemă: Google îl ia drept 404 moale). */
+    public const ALIASURI_ACASA = ['/', '/index.php', '/index.html', '/index.htm', '/home', '/acasa', '/default.aspx'];
 
     /**
      * @param list<string> $cai
@@ -39,6 +45,7 @@ final class VerificaRedirecturi
     {
         $parti = parse_url($baza);
         $this->gazda = strtolower((string) ($parti['host'] ?? ''));
+        $this->origine = self::origine($baza) ?? '';
         $curl = curl_init();
         if (!$curl instanceof \CurlHandle) {
             throw new RefuzRedirecturi('curl nu pornește');
@@ -244,11 +251,24 @@ final class VerificaRedirecturi
             return $this->eIntentionata($cale) ? ['410 (dispărută voit)', null] : ['problemă: 410 nedeclarat', '410, dar nu e o regulă 410 a site-ului'];
         }
         if (in_array($r['cod'], [301, 308], true)) {
-            $tinta = $this->caleDeAici($r['location']);
-            if ($tinta === null) {
-                return ['problemă: redirecționare în afara site-ului', $r['cod'] . ' spre ' . self::scurt($r['location'])];
+            // Ținta adevărată: Location-ul rezolvat față de adresa cerută (și unul relativ), cu schema și gazda lui.
+            $tintaUrl = self::rezolva($this->baza . $cale, $r['location']);
+            if ($tintaUrl === null) {
+                return ['problemă: redirecționare fără țintă', $r['cod'] . ' cu Location „' . self::scurt($r['location']) . '”'];
             }
-            $r2 = $this->cere($tinta);
+            if (self::origine($tintaUrl) !== $this->origine) {
+                $faraWww = static fn (string $g): string => str_starts_with($g, 'www.') ? substr($g, 4) : $g;
+                $acelasiSite = $faraWww(strtolower((string) parse_url($tintaUrl, PHP_URL_HOST))) === $faraWww($this->gazda);
+                return $acelasiSite
+                    ? ['problemă: 301 spre altă schemă sau gazdă a site-ului', $r['cod'] . ' spre ' . self::scurt($tintaUrl) . ' (canonicul e ' . $this->origine . '; încă un salt)']
+                    : ['problemă: redirecționare în afara site-ului', $r['cod'] . ' spre ' . self::scurt($tintaUrl)];
+            }
+            $tinta = self::caleDin($tintaUrl);
+            if (self::cheie($tinta) === '/' && !in_array(self::cheie($cale), array_map([self::class, 'cheie'], self::ALIASURI_ACASA), true)) {
+                return ['problemă: 301 spre prima pagină', $r['cod'] . ' → / (o redirecționare în masă spre prima pagină e pentru Google o pagină negăsită; '
+                    . 'trimite-o la pagina care o înlocuiește sau 410)'];
+            }
+            $r2 = $this->cere($tintaUrl);
             if ($r2['cod'] === 200) {
                 $motiv = $this->paginaBuna($tinta, $r2);
                 return $motiv === null ? ['301 într-un salt spre o pagină bună', null] : ['problemă: 301 spre o pagină neindexabilă', $r['cod'] . ' → ' . $tinta . ': ' . $motiv];
@@ -312,10 +332,12 @@ final class VerificaRedirecturi
         if ($canonical === '') {
             return 'fără canonical';
         }
-        $caleCanonical = $this->caleDeAici($canonical);
-        if ($caleCanonical === null) {
-            return 'canonicalul e pe alt site (' . self::scurt($canonical) . ')';
+        // Canonicalul: absolut (sau relativ, rezolvat față de pagină), pe exact schema și gazda lui --baza.
+        $canonicalUrl = self::rezolva($this->baza . $cale, $canonical);
+        if ($canonicalUrl === null || self::origine($canonicalUrl) !== $this->origine) {
+            return 'canonicalul nu e pe ' . $this->origine . ' (' . self::scurt($canonical) . ')';
         }
+        $caleCanonical = self::caleDin($canonicalUrl);
         if (self::normalizeaza($caleCanonical) !== self::normalizeaza($cale)) {
             return 'canonicalul trimite la ' . self::scurt($caleCanonical);
         }
@@ -323,42 +345,97 @@ final class VerificaRedirecturi
     }
 
     /** Calea cu interogarea, cu codările unificate (%c8%99 = %C8%99 = ș), pentru comparație. */
-    private static function normalizeaza(string $cale): string
+    public static function normalizeaza(string $cale): string
     {
-        [$drum, $interogare] = array_pad(explode('?', $cale, 2), 2, '');
+        [$drum, $interogare] = array_pad(explode('?', explode('#', $cale, 2)[0], 2), 2, '');
         $drum = rawurldecode($drum);
-        return $drum . ($interogare !== '' ? '?' . rawurldecode($interogare) : '');
+        // Parametrii de urmărire (utm_*, gclid, fbclid …) nu fac altă pagină: se scot înainte de comparație.
+        $pastrati = [];
+        foreach ($interogare === '' ? [] : explode('&', $interogare) as $pereche) {
+            $nume = strtolower(rawurldecode((string) explode('=', $pereche, 2)[0]));
+            if ($nume === '' || str_starts_with($nume, 'utm_') || in_array($nume, self::PARAMETRI_URMARIRE, true)) {
+                continue;
+            }
+            $pastrati[] = rawurldecode($pereche);
+        }
+        return $drum . ($pastrati !== [] ? '?' . implode('&', $pastrati) : '');
     }
 
-    /** Calea (cu interogarea) unei adrese de pe același site (cu sau fără www, http sau https), sau null. */
-    private function caleDeAici(string $adresa): ?string
+    /** schema://gazda[:port] a unei adrese absolute (litere mici, fără portul implicit), sau null. */
+    public static function origine(string $url): ?string
+    {
+        $p = parse_url($url);
+        $schema = strtolower((string) ($p['scheme'] ?? ''));
+        if (!is_array($p) || !in_array($schema, ['http', 'https'], true) || ($p['host'] ?? '') === '') {
+            return null;
+        }
+        $port = isset($p['port']) && !(($schema === 'http' && (int) $p['port'] === 80) || ($schema === 'https' && (int) $p['port'] === 443))
+            ? ':' . (int) $p['port'] : '';
+        return $schema . '://' . strtolower((string) $p['host']) . $port;
+    }
+
+    /** Calea cu interogarea a unei adrese absolute (fără fragment). */
+    private static function caleDin(string $url): string
+    {
+        $p = parse_url($url);
+        return (string) (($p['path'] ?? '') === '' ? '/' : $p['path']) . (isset($p['query']) ? '?' . $p['query'] : '');
+    }
+
+    /**
+     * O adresă dintr-un Location sau dintr-un canonical, rezolvată față de adresa paginii (RFC 3986: absolută, „//gazdă”,
+     * „/cale”, „cale” relativă, „?x”), sau null.
+     */
+    public static function rezolva(string $baza, string $adresa): ?string
     {
         $adresa = trim(html_entity_decode($adresa, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        if ($adresa === '') {
+        if ($adresa === '' || preg_match('/[\x00-\x1f\x7f]/', $adresa) === 1) {
             return null;
         }
-        if (str_starts_with($adresa, '/') && !str_starts_with($adresa, '//')) {
-            return explode('#', $adresa, 2)[0];
+        $adresa = explode('#', $adresa, 2)[0];
+        if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $adresa) === 1) {
+            return self::origine($adresa) !== null ? $adresa : null;
         }
-        $parti = parse_url(str_starts_with($adresa, '//') ? 'https:' . $adresa : $adresa);
-        if (!is_array($parti) || !in_array(strtolower((string) ($parti['scheme'] ?? '')), ['http', 'https'], true)) {
+        $b = parse_url($baza);
+        if (!is_array($b) || !isset($b['scheme'], $b['host'])) {
             return null;
         }
-        $faraWww = static fn (string $g): string => str_starts_with($g, 'www.') ? substr($g, 4) : $g;
-        if ($faraWww(strtolower((string) ($parti['host'] ?? ''))) !== $faraWww($this->gazda)) {
-            return null;
+        if (str_starts_with($adresa, '//')) {
+            return $b['scheme'] . ':' . $adresa;
         }
-        return ($parti['path'] ?? '/') . (isset($parti['query']) ? '?' . $parti['query'] : '');
+        $origine = $b['scheme'] . '://' . $b['host'] . (isset($b['port']) ? ':' . $b['port'] : '');
+        $caleBaza = (string) ($b['path'] ?? '/');
+        if ($adresa === '' || str_starts_with($adresa, '?')) {
+            return $origine . $caleBaza . $adresa;
+        }
+        $cale = str_starts_with($adresa, '/') ? $adresa : substr($caleBaza, 0, (int) strrpos($caleBaza, '/') + 1) . $adresa;
+        [$drum, $interogare] = array_pad(explode('?', $cale, 2), 2, null);
+        // . și .. din cale (RFC 3986, 5.2.4)
+        $iesire = [];
+        foreach (explode('/', (string) $drum) as $i => $segment) {
+            if ($segment === '..') {
+                if (count($iesire) > 1) {
+                    array_pop($iesire);
+                }
+            } elseif ($segment !== '.') {
+                $iesire[] = $segment;
+            }
+        }
+        $drum = implode('/', $iesire);
+        if (in_array(basename((string) $cale), ['.', '..'], true)) {
+            $drum .= '/';
+        }
+        return $origine . ('/' . ltrim($drum, '/')) . ($interogare !== null ? '?' . $interogare : '');
     }
 
     /** @return array{cod: int, location: string, tip: string, x_robots: string, corp: string, eroare: string} */
     private function cere(string $cale): array
     {
+        $url = preg_match('#^https?://#i', $cale) === 1 ? $cale : $this->baza . $cale;
         $corp = '';
         $prea = false;
         $antete = [];
         $optiuni = [
-            CURLOPT_URL => $this->baza . $cale,
+            CURLOPT_URL => $url,
             CURLOPT_HTTPGET => true,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_RETURNTRANSFER => false,

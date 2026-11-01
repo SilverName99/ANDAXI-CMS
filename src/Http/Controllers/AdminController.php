@@ -5197,6 +5197,10 @@ final class AdminController
         } catch (Throwable) {
             // Fără catalog/0048 încă: produsul e salvat, codul vine după migrare.
         }
+        if ($ean !== '' && \App\Support\FluxGoogleMerchant::gtinRestrans($ean)) {
+            return ' Codul EAN „' . $ean . '” s-a salvat, dar începe cu un prefix de uz intern (02, 04 sau 2…): Google Merchant îl poate '
+                . 'respinge; folosește codul de pe ambalaj dat de producător.';
+        }
         return '';
     }
 
@@ -27349,6 +27353,11 @@ HTML;
         $absolute = \App\Support\Paths::public() . '/' . $relativePath;
         if (is_file($absolute)) {
             @unlink($absolute);
+        }
+        // WP-40 (B5): variantele pozei pleacă odată cu ea (revizuirea WP-39/40).
+        $relUploads = \App\Support\VarianteImagini::caleUploads($urlPath);
+        if ($relUploads !== null) {
+            \App\Support\VarianteImagini::sterge($relUploads);
         }
     }
 }

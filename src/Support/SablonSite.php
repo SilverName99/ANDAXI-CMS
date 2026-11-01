@@ -10,8 +10,8 @@ namespace App\Support;
  * browserul le descărca din nou la fiecare pagină. Sursele stau în `views/sablon-site/` (`sablon-site.css`, `chat.js`,
  * `catalog.js`, `meniu-mobil.js`, `bbd.js`, `sus.js`); variantele minificate, servite, în `public/assets/css/` și
  * `public/assets/js/sablon/` (`*.min.css`, `*.min.js`), făcute de `tools/dev/minifica-sablon.php` (testul E4 cere ca ele
- * să fie la zi). Adresele au `?v=<data fișierului>`, deci se pot ține în browser un an (`immutable`, vezi
- * ResponseCache::applyAssetCacheHeaders și public/.htaccess).
+ * să fie la zi). Adresele au `?v=<12 hex din sha1 conținutului>`, deci se pot ține în browser un an (`immutable`, vezi
+ * public/.htaccess: doar o versiune de 12 hex).
  *
  * Comutatorul: setarea `css_js_in_fisiere` (implicit pornită; înghețată la „0” pe site-ul înghețat: atunci blocurile se pun în
  * pagină exact ca înainte, octet cu octet, din aceleași surse). Scripturile rămân sincrone (fără defer), în același loc:
@@ -51,11 +51,19 @@ final class SablonSite
         return str_ends_with($nume, '.css') ? '/assets/css/' . $baza . '.min.css' : '/assets/js/sablon/' . $baza . '.min.js';
     }
 
-    /** Adresa servită, cu versiunea fișierului. */
+    /** @var array<string, string> */
+    private static array $versiuni = [];
+
+    /**
+     * Adresa servită, cu versiunea fișierului: primele 12 caractere hex ale sha1 din conținutul lui (revizuirea WP-39/40: nu
+     * data fișierului; un fișier scris pe jumătate la deploy are alt conținut, deci altă adresă, iar adresa cu versiunea bună
+     * nu primește niciodată conținutul greșit). Doar o astfel de versiune e ținută un an (`immutable`, public/.htaccess).
+     */
     public static function url(string $nume): string
     {
         $cale = self::caleMinificata($nume);
-        return $cale . '?v=' . (int) (@filemtime(Paths::public(ltrim($cale, '/'))) ?: 1);
+        $versiune = self::$versiuni[$cale] ??= substr((string) (@sha1_file(Paths::public(ltrim($cale, '/'))) ?: str_repeat('0', 40)), 0, 12);
+        return $cale . '?v=' . $versiune;
     }
 
     /**

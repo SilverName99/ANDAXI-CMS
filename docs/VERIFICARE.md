@@ -489,7 +489,7 @@ PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3
 $PHP tools/verificare/incarca.php --demo --pachet=bioscem --reincarca
 #   ultimul rând: „GATA: copia e anonimizată, toate verificările au trecut” (întrebările ca la 6c)
 $PHP scripts/comutatoare-seo.php --arata
-#   șase rânduri; pe Bioscem „OPRIT” la toate, afară de merchant_feed (PORNIT)
+#   șapte rânduri; pe Bioscem „OPRIT” la toate, afară de merchant_feed (PORNIT); ultimul e HSTS („nimic trimis”)
 ```
 
 În browser, întâi cu ele oprite (așa arată Bioscem în ziua trecerii):
@@ -508,15 +508,20 @@ blogul), pe telefon și pe calculator:
 $PHP scripts/optimizeaza-imagini.php --aplica
 #   „optimizeaza-imagini: N poze …; scrise: M”; dacă spune „PHP-ul acesta n-are GD cu WebP”, ne trimiți rândul
 $PHP scripts/comutatoare-seo.php --porneste
-#   șase rânduri „PORNIT”
+#   „PORNIT” la toate, afară de sursa_comenzii (un cookie de urmărire: se pornește doar scris)
+$PHP scripts/comutatoare-seo.php --porneste=sursa_comenzii
+$PHP scripts/comutatoare-seo.php --hsts=300
+#   HSTS: prima treaptă (5 minute); pe site-ul live, după o zi bună, --hsts=86400, apoi --hsts=31536000; --hsts=0 = oprirea de urgență
 ```
 
 - Paginile trebuie să arate **exact la fel**. Ce se schimbă e dedesubt: în codul paginii (clic dreapta → „Vezi sursa”)
   pozele au `srcset="/uploads/_variante/…"`, CSS-ul vine din `/assets/css/sablon-site.min.css?v=…`; în instrumentele
   browserului (F12 → Rețea), o pagină publică deschisă într-o fereastră privată nu primește cookie-ul `PHPSESSID`, iar a
-  doua deschidere a magazinului are antetul `X-Page-Cache: HIT`.
-- Pune un produs în coș și comandă (ramburs): coșul și comanda merg ca înainte. Venit dintr-un link cu
-  `?utm_source=test&utm_medium=email`, comanda apare în Rapoarte → Sursa comenzilor la „Email”.
+  doua deschidere a magazinului are antetul `X-Page-Cache: HIT` (și `Cache-Control: private, no-cache, must-revalidate`).
+- Pune un produs în coș și comandă (ramburs): coșul și comanda merg ca înainte. **Acceptă întâi cookie-urile** („Accept
+  toate”), apoi intră dintr-un link cu `?utm_source=test&utm_medium=email`: comanda apare în Rapoarte → Sursa comenzilor la
+  „Email”. Fără acord (sau cu „Doar necesare”) apare la „Necunoscută” (așa trebuie: fără acord nu se scrie niciun cookie de
+  urmărire).
 - Fonturile: Bioscem rămâne pe Google Fonts până decizi (`tema/tema.json` → `"fonturi_google": true`); celelalte site-uri
   le iau de pe site (aceleași familii și greutăți, dovedit în `tools/dev/test-seo.php` E4).
 
@@ -524,6 +529,7 @@ La final, înapoi ca în ziua trecerii, apoi ne spui ce ai văzut (și dacă vre
 
 ```sh
 $PHP scripts/comutatoare-seo.php --opreste=imagini_srcset,sesiune_doar_la_nevoie,cache_pagini_extins,css_js_in_fisiere,sursa_comenzii
+$PHP scripts/comutatoare-seo.php --hsts=oprit
 ```
 
 ### 7. Licența copiei (pachetul de pluginuri)

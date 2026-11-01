@@ -13,10 +13,10 @@ use Throwable;
  * cache-ul dimensiunilor (ImageDimensions). Paginile pun atunci pe <img> și `srcset` (variantele care există pe disc,
  * plus poza întreagă) cu `sizes`, deci un telefon descarcă poza de 400 px, nu pe cea de 2.000.
  *
- * Variantele stau lângă încărcări, într-un dosar separat, ca galeria să nu le arate: `/uploads/_variante/<dosar>/<nume>-<lățime>w.webp`
- * (de exemplu /uploads/products/ceai.png → /uploads/_variante/products/ceai-400w.webp). Poza încărcată nu se schimbă
+ * Variantele stau lângă încărcări, într-un dosar separat, ca galeria să nu le arate: `/uploads/_variante/<dosar>/<nume.ext>-<lățime>w.webp`
+ * (de exemplu /uploads/products/ceai.png → /uploads/_variante/products/ceai.png-400w.webp). Poza încărcată nu se schimbă
  * niciodată (datele structurate, fluxul Merchant și linkurile vechi o folosesc). O variantă se reface doar dacă poza e
- * mai nouă decât ea. Fără GD cu WebP (`imagewebp`, de verificat pe Hostinger cu `php -m`), nu se face nimic și paginile
+ * mai nouă decât ea; atunci toate variantele ei vechi pleacă întâi (și la ștergerea pozei din admin, `sterge`). Fără GD cu WebP (`imagewebp`, de verificat pe Hostinger cu `php -m`), nu se face nimic și paginile
  * rămân ca înainte.
  *
  * Nu se ating: pozele altor site-uri, SVG-urile, dosarul pozelor de profil ale membrilor (`uploads/gallery/profile/`,
@@ -31,7 +31,8 @@ final class VarianteImagini
     public const DOSAR = '_variante';
     public const EXCLUSE = ['gallery/profile/', '_variante/'];
     private const CALITATE = 80;
-    private const PIXELI_MAXIM = 40000000;
+    /** Peste 25 MP (de exemplu 6000 × 4000) poza nu primește variante: memoria ar trece de ce dă o găzduire obișnuită. */
+    private const PIXELI_MAXIM = 25000000;
 
     private static ?bool $activ = null;
 
@@ -77,11 +78,59 @@ final class VarianteImagini
         return $rel;
     }
 
-    /** Calea relativă (la /uploads/) a variantei de $latime px a unei poze. */
+    /**
+     * Calea relativă (la /uploads/) a variantei de $latime px a unei poze. Numele păstrează extensia pozei (ceai.png →
+     * ceai.png-400w.webp), ca ceai.png și ceai.jpg din același dosar să nu aibă aceleași variante.
+     */
     public static function caleVarianta(string $rel, int $latime): string
     {
         $dosar = dirname($rel);
-        return self::DOSAR . '/' . ($dosar === '.' ? '' : $dosar . '/') . pathinfo($rel, PATHINFO_FILENAME) . '-' . $latime . 'w.webp';
+        return self::DOSAR . '/' . ($dosar === '.' ? '' : $dosar . '/') . basename($rel) . '-' . $latime . 'w.webp';
+    }
+
+    /** Șterge variantele unei poze (la ștergerea ei și înainte să fie refăcute). Întoarce câte au plecat. */
+    public static function sterge(string $rel): int
+    {
+        $sterse = 0;
+        foreach (self::MARIMI as $marime) {
+            $cale = Paths::uploads() . '/' . self::caleVarianta($rel, $marime);
+            if (is_file($cale) && @unlink($cale)) {
+                $sterse++;
+            }
+        }
+        return $sterse;
+    }
+
+    /**
+     * Memoria pentru o poză de $latime × $inaltime: o cere (ridică memory_limit, ca ImagineDistribuire) dacă e nevoie;
+     * false = nu se poate (atunci poza rămâne fără variante, fără eroare fatală la încărcare).
+     */
+    private static function memoriePentru(int $latime, int $inaltime): bool
+    {
+        // Poza decodată (~5 octeți pe pixel, cu GD) plus cea mai mare variantă și o rezervă.
+        $nevoie = memory_get_usage() + $latime * $inaltime * 5 + 1200 * 1200 * 5 + 16 * 1024 * 1024;
+        $limita = self::octeti((string) ini_get('memory_limit'));
+        if ($limita < 0 || $limita >= $nevoie) {
+            return true;
+        }
+        @ini_set('memory_limit', (string) (int) ceil($nevoie / 1048576) . 'M');
+        $dupa = self::octeti((string) ini_get('memory_limit'));
+        return $dupa < 0 || $dupa >= $nevoie;
+    }
+
+    private static function octeti(string $valoare): int
+    {
+        $valoare = trim($valoare);
+        if ($valoare === '' || $valoare === '-1') {
+            return -1;
+        }
+        $numar = (int) $valoare;
+        return match (strtolower(substr($valoare, -1))) {
+            'g' => $numar * 1073741824,
+            'm' => $numar * 1048576,
+            'k' => $numar * 1024,
+            default => $numar,
+        };
     }
 
     /**
@@ -102,17 +151,27 @@ final class VarianteImagini
         // Dimensiunile intră în cache-ul lor (width/height pe <img>), citite acum, la încărcare, nu la prima afișare.
         ImageDimensions::pentru('/uploads/' . $rel);
         $deFacut = [];
+        $laZi = true;
         foreach (self::MARIMI as $marime) {
+            $tinta = Paths::uploads() . '/' . self::caleVarianta($rel, $marime);
             if ($marime >= $latime) {
+                // O variantă mai mare decât poza de acum (rămasă de la o poză mai mare, înlocuită) nu mai e bună.
+                $laZi = $laZi && !is_file($tinta);
                 continue;
             }
-            $tinta = Paths::uploads() . '/' . self::caleVarianta($rel, $marime);
-            if (!is_file($tinta) || (int) @filemtime($tinta) < (int) @filemtime($sursa)) {
-                $deFacut[$marime] = $tinta;
-            }
+            $deFacut[$marime] = $tinta;
+            $laZi = $laZi && is_file($tinta) && (int) @filemtime($tinta) >= (int) @filemtime($sursa);
         }
+        if ($laZi) {
+            return 0;
+        }
+        // Poza s-a schimbat (sau e nouă): variantele vechi pleacă toate, apoi se fac din nou.
+        self::sterge($rel);
         if ($deFacut === []) {
             return 0;
+        }
+        if (!self::memoriePentru($latime, $inaltime)) {
+            return null;
         }
         $imagine = match ((int) $info[2]) {
             IMAGETYPE_JPEG => @imagecreatefromjpeg($sursa),

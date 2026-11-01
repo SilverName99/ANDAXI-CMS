@@ -172,39 +172,49 @@ $compara = static function (string $a, string $b, bool $strict = false): array {
 };
 /**
  * WP-39 (SEO partea B, B3/B4): diferențele voite ale codului comun față de codul Bioscem, scoase din amprenta codului comun
- * doar dacă sunt exact cele declarate (aceleași ca `$seoB` din compara-cu-baza.php, unde restul paginii e comparat octet cu
- * octet; aici, câmpurile structurale ale tuturor celorlalte adrese):
- *  - adresele în plus: sitemap-urile pe tipuri (`/sitemap-<tip>.xml`, 200, XML) și categoriile blogului găsite în ele
+ * doar dacă sunt exact cele declarate (ca `$seoB` din compara-cu-baza.php) și dovedite pe paginile însele (revizuirea
+ * WP-39/40: nu doar după câmpuri):
+ *  - adresele în plus: sitemap-urile pe tipuri (`/sitemap-<tip>[-<n>].xml`, 200, XML) și categoriile blogului găsite în ele
  *    (`/blog/categorie/<slug>`, 200), doar în B;
- *  - `/sitemap.xml`: corpul (indexul în loc de lista plată), restul câmpurilor la fel;
+ *  - `/sitemap.xml`: corpul (indexul în loc de lista plată) doar dacă adresele lui Bioscem sunt exact adresele tuturor
+ *    sitemap-urilor pe tipuri, fără categoriile blogului (`$egale('/sitemap.xml')`);
  *  - JSON-LD: pe liste (magazinul, categoriile, mărcile, etichetele, /blog) exact tipurile Bioscem plus `ItemList`,
- *    `ListItem`; pe articole (Bioscem: niciunul) `BlogPosting` și `BreadcrumbList` (cu tipurile lor: Organization, Person,
- *    ListItem, iar la un eveniment Event, Place, Offer); pe aceste pagini corpul diferă doar prin blocurile JSON-LD.
- * Scrie amprenta B „cu diferențele declarate scoase” și întoarce calea ei, numărătorile și problemele (o diferență
- * nedeclarată rămâne în amprentă și o vede comparația).
+ *    `ListItem`; pe articole (Bioscem: niciunul) `BlogPosting` și `BreadcrumbList` (cu tipurile lor); și pe fiecare astfel de
+ *    pagină corpul celor două coduri, fără blocurile `<script type="application/ld+json">` (din ambele), e același octet cu
+ *    octet după normalizare (`$egale($cale)`). Doar atunci rândul ia corpul și JSON-LD-ul Bioscem.
+ * Scrie amprenta B „cu diferențele declarate scoase” și întoarce calea ei, numărătorile și adresele dovedite; o diferență
+ * nedeclarată (sau o pagină al cărei rest diferă) rămâne în amprentă și o vede comparația.
  *
  * @param array{copie: bool, sursa: string, randuri: array<string, array<string, string>>} $a
  * @param array{copie: bool, sursa: string, randuri: array<string, array<string, string>>} $b
- * @return array{fisier: string, adrese: int, jsonld: int, sitemap: bool}
+ * @param callable(string): bool $egale
+ * @return array{fisier: string, adrese: int, jsonld: int, sitemap: bool, dovedite: list<string>, respinse: list<string>}
  */
-$faraSeoB = static function (array $a, array $b, string $fisier): array {
+$faraSeoB = static function (array $a, array $b, string $fisier, callable $egale): array {
     $tipuri = static fn (string $v): array => $v === '-' ? [] : explode(',', $v);
     $randuri = [];
     $adrese = 0;
     $jsonld = 0;
     $sitemap = false;
+    $dovedite = [];
+    $respinse = [];
     foreach ($b['randuri'] as $cale => $rand) {
         $vechi = $a['randuri'][$cale] ?? null;
         if ($vechi === null) {
-            if ((preg_match('#^/sitemap-[a-z-]+\.xml$#', $cale) === 1 && $rand['cod'] === '200' && str_contains($rand['tip'], 'xml'))
+            if ((preg_match('#^/sitemap-[a-z-]+(-\d+)?\.xml$#', $cale) === 1 && $rand['cod'] === '200' && str_contains($rand['tip'], 'xml'))
                 || (preg_match('#^/blog/categorie/[a-z0-9-]+$#', $cale) === 1 && $rand['cod'] === '200')) {
                 $adrese++;
                 continue;
             }
         } else {
             if ($cale === '/sitemap.xml' && $rand['corp'] !== $vechi['corp'] && str_contains($rand['tip'], 'xml')) {
-                $rand['corp'] = $vechi['corp'];
-                $sitemap = true;
+                if ($egale($cale)) {
+                    $rand['corp'] = $vechi['corp'];
+                    $sitemap = true;
+                    $dovedite[] = $cale;
+                } else {
+                    $respinse[] = $cale;
+                }
             }
             if ($rand['jsonld'] !== $vechi['jsonld']) {
                 $tA = $tipuri($vechi['jsonld']);
@@ -217,17 +227,20 @@ $faraSeoB = static function (array $a, array $b, string $fisier): array {
                 $articol = preg_match('#^/blog/(?!categorie/|eticheta/)[a-z0-9-]+$#', $cale) === 1 && $tA === []
                     && in_array('BlogPosting', $tB, true) && in_array('BreadcrumbList', $tB, true)
                     && array_diff($tB, ['BlogPosting', 'BreadcrumbList', 'ListItem', 'Organization', 'Person', 'Event', 'Place', 'Offer', 'ImageObject']) === [];
-                if ($lista || $articol) {
+                if (($lista || $articol) && $egale($cale)) {
                     $rand['jsonld'] = $vechi['jsonld'];
                     $rand['corp'] = $vechi['corp'];
                     $jsonld++;
+                    $dovedite[] = $cale;
+                } elseif ($lista || $articol) {
+                    $respinse[] = $cale;
                 }
             }
         }
         $randuri[] = $rand;
     }
     FisierAmprenta::scrie($fisier, $randuri, $b['copie'], $b['sursa']);
-    return ['fisier' => $fisier, 'adrese' => $adrese, 'jsonld' => $jsonld, 'sitemap' => $sitemap];
+    return ['fisier' => $fisier, 'adrese' => $adrese, 'jsonld' => $jsonld, 'sitemap' => $sitemap, 'dovedite' => $dovedite, 'respinse' => $respinse];
 };
 
 try {
@@ -643,12 +656,48 @@ try {
     $notate = $cereri($jurnalVechi);
     $av = FisierAmprenta::citeste($tsvVechi);
     // WP-39: diferențele voite (sitemap-ul pe tipuri, datele structurate noi) se scot din amprenta codului comun, doar ele.
-    $seoB = $faraSeoB($av, $an, $dosarTest . '/nou-fara-seob.tsv');
+    // Paginile însele, de pe ambele servere: fără blocurile JSON-LD, după normalizarea amprentei, trebuie să fie aceleași.
+    $corpPagina = static function (int $portServer, string $cale): string {
+        $c = curl_init('http://127.0.0.1:' . $portServer . $cale);
+        curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30, CURLOPT_PROXY => '', CURLOPT_NOPROXY => '*',
+            CURLOPT_USERAGENT => AmprentaSite::USER_AGENT]);
+        $corp = (string) curl_exec($c);
+        curl_close($c);
+        return $corp;
+    };
+    $faraJsonLd = static fn (string $corp): string => (string) preg_replace('#\n?[ \t]*<script type="application/ld\+json">.*?</script>#s', '', $corp);
+    $cai = static function (string $xml): array {
+        preg_match_all('#<loc>([^<]+)</loc>#', $xml, $m);
+        $rez = array_map(static function (string $loc): string {
+            $p = parse_url(html_entity_decode($loc, ENT_QUOTES | ENT_XML1, 'UTF-8'));
+            return (string) ($p['path'] ?? '/') . (isset($p['query']) ? '?' . $p['query'] : '');
+        }, $m[1]);
+        sort($rez);
+        return $rez;
+    };
+    $egaleB2 = static function (string $cale) use ($corpPagina, $faraJsonLd, $cai, $portVechi, $portNou, $gazdaVechi): bool {
+        if ($cale === '/sitemap.xml') {
+            $nou = [];
+            foreach ($cai($corpPagina($portNou, '/sitemap.xml')) as $harta) {
+                $nou = array_merge($nou, $cai($corpPagina($portNou, $harta)));
+            }
+            $nou = array_values(array_filter($nou, static fn (string $c): bool => !str_starts_with($c, '/blog/categorie/')));
+            sort($nou);
+            return $nou !== [] && $nou === $cai($corpPagina($portVechi, '/sitemap.xml'));
+        }
+        $aleator = 'seobx' . bin2hex(random_bytes(3));
+        $cerere = str_replace('{ALEATOR}', $aleator, $cale);
+        $vechi = AmprentaSite::normalizeazaCorp($faraJsonLd($corpPagina($portVechi, $cerere)), [$gazdaVechi], [$aleator]);
+        $nou = AmprentaSite::normalizeazaCorp($faraJsonLd($corpPagina($portNou, $cerere)), ['127.0.0.1:' . $portNou, $gazdaVechi], [$aleator]);
+        return $vechi !== '' && $vechi === $nou;
+    };
+    $seoB = $faraSeoB($av, $an, $dosarTest . '/nou-fara-seob.tsv', $egaleB2);
     $tsvNouDeclarat = $seoB['fisier'];
     $anDeclarat = FisierAmprenta::citeste($tsvNouDeclarat);
     $verifica('diferențele declarate ale WP-39 (SEO partea B) găsite în amprenta codului comun: ' . $seoB['adrese'] . ' adrese noi (sitemap-urile pe '
-        . 'tipuri, categoriile blogului), ' . $seoB['jsonld'] . ' pagini cu JSON-LD nou (ItemList pe liste, BlogPosting pe articole), /sitemap.xml index',
-        $seoB['adrese'] >= 8 && $seoB['jsonld'] >= 10 && $seoB['sitemap'], json_encode($seoB) ?: '');
+        . 'tipuri, categoriile blogului), ' . $seoB['jsonld'] . ' pagini cu JSON-LD nou (ItemList pe liste, BlogPosting pe articole) al căror rest e '
+        . 'octet cu octet al Bioscem, /sitemap.xml index cu exact adresele Bioscem (fără categoriile blogului)',
+        $seoB['adrese'] >= 8 && $seoB['jsonld'] >= 10 && $seoB['sitemap'] && $seoB['respinse'] === [], json_encode($seoB) ?: '');
     $verifica('amprenta codului Bioscem: cod 0, aceleași adrese ca a codului comun (fără adresele declarate ale WP-39)', $r['cod'] === 0
         && (static function (array $x, array $y): bool {
             $x = array_keys($x);
@@ -764,7 +813,8 @@ try {
     $verifica('cu parola: „copie de verificare: DA”, X-Robots-Tag al porții pe fiecare adresă, bannerul nu intră în amprentă, parola nicăieri', $r['cod'] === 0
         && $ac['copie'] === true && $xRobots === ['noindex, nofollow, noarchive'] && $cuParola === [true] && !str_contains((string) @file_get_contents($tsvCopie), 'SITE DE VERIFICARE')
         && !str_contains($r['tot'], $parolaPoarta) && !str_contains((string) @file_get_contents($tsvCopie), $parolaPoarta), $r['tot']);
-    $tsvCopieDeclarat = $faraSeoB($av, $ac, $dosarTest . '/copie-fara-seob.tsv')['fisier'];
+    // Copia rulează același cod ca serverul codului comun: paginile dovedite la B2 (corpul fără JSON-LD = al Bioscem) sunt cele acceptate.
+    $tsvCopieDeclarat = $faraSeoB($av, $ac, $dosarTest . '/copie-fara-seob.tsv', static fn (string $cale): bool => in_array($cale, $seoB['dovedite'], true))['fisier'];
     $r = $compara($tsvVechi, $tsvCopieDeclarat);
     foreach (explode("\n", trim($r['iesire'])) as $rand) {
         $scrie('        | ' . $rand);

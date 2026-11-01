@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@739f58c",
-    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
+    "amprenta_nucleu": "d3228176801f592f912fd4cf11e69e33875b415c18b8bee9f4294565cec78b88",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -299,6 +299,14 @@
             },
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
+        },
+        "hsts": {
+            "valoare": "oprit",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie revizuirea WP-39/40 (B6, regula R1): codul Bioscem nu trimite HSTS; proprietarul îl pornește cu celelalte comutatoare, în trepte (300 → 86400 → 31536000), după ce vede site-ul de verificare",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"300\""
         },
         "imagini_srcset": {
             "valoare": "0",

@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
+    "amprenta_nucleu": "d3228176801f592f912fd4cf11e69e33875b415c18b8bee9f4294565cec78b88",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Biovitality",
@@ -532,6 +532,11 @@
             "motiv": "Codul vechi scria „Contul meu” în sertarul de meniu mobil și în antetul de rezervă (views/layout.php); implicitul nou al etichetei (WP-16, VT-C6) e același text",
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
+        },
+        "hsts": {
+            "motiv": "revizuirea WP-39/40 (B6): HSTS din nucleu, prima treaptă (300 de secunde) la adoptare, apoi 86400 și 31536000 cu scripts/comutatoare-seo.php --hsts=…; în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"300\""
         },
         "imagini_srcset": {
             "motiv": "WP-40 (B5): pozele cu variantele WebP (srcset) pornite la adoptare, după trecerea o dată prin poze (scripts/optimizeaza-imagini.php); în ce-se-schimba.md",

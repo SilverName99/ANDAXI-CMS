@@ -5570,8 +5570,8 @@ final class SiteController
     private function requestShopCatalogSort(): string
     {
         // WP-19 (GR-08): fără ?sort=, sortarea implicită din setări (catalog_sortare_implicita; nucleul: alfabetică).
-        return $this->normalizeShopCatalogSort((string) ($_GET['sort']
-            ?? \App\Support\Catalog::sortareImplicita($this->cachedSettings($this->db()))));
+        return $this->normalizeShopCatalogSort(is_string($_GET['sort'] ?? null) ? $_GET['sort']
+            : \App\Support\Catalog::sortareImplicita($this->cachedSettings($this->db())));
     }
 
     /**
@@ -9445,7 +9445,9 @@ CSS;
     /** /sitemap-{tip}.xml (WP-39, B3): adresele unui tip, cu data ultimei modificări și pozele; un tip gol sau necunoscut = 404. */
     public function sitemapTip(array $params): void
     {
-        $tip = (string) ($params['tip'] ?? '');
+        // /sitemap-{tip}.xml sau, peste Sitemap::MAX_PE_FISIER adrese, /sitemap-{tip}-{n}.xml.
+        $nume = (string) ($params['tip'] ?? '');
+        $tip = preg_match('/^(.+?)(?:-([2-9]|[1-9]\d+))?$/', $nume, $mTip) === 1 ? $mTip[1] : '';
         $db = in_array($tip, \App\Support\Sitemap::TIPURI, true) ? $this->db() : null;
         if (in_array($tip, \App\Support\Sitemap::TIPURI, true) && !$db instanceof PDO) {
             http_response_code(503);
@@ -9454,7 +9456,7 @@ CSS;
             echo 'Sitemap indisponibil momentan.';
             return;
         }
-        $urls = $db instanceof PDO ? (\App\Support\Sitemap::grupuri($db, rtrim($this->appUrl(), '/'))[$tip] ?? []) : [];
+        $urls = $db instanceof PDO ? (\App\Support\Sitemap::fisiere(\App\Support\Sitemap::grupuri($db, rtrim($this->appUrl(), '/')))[$nume] ?? []) : [];
         if ($urls === []) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');

@@ -60,7 +60,7 @@ final class Sitemap
     /**
      * Toate adresele, în ordinea de până acum (prima pagină, paginile, catalogul, contactul, categoriile, mărcile,
      * etichetele, produsele, blogul, articolele, apoi categoriile și etichetele blogului), fiecare cu tipul sitemap-ului
-     * ei (`TIPURI`), data ultimei modificări (mereu: vezi `lastmod` mai jos) și pozele (produsele, articolele).
+     * ei (`TIPURI`), data ultimei modificări (doar unde există; altfel goală) și pozele (produsele, articolele).
      *
      * @return list<array{loc: string, lastmod: string, tip: string, imagini: list<string>}>
      */
@@ -143,8 +143,9 @@ final class Sitemap
             // Rutele fixe ale catalogului (există și fără pagină în constructor).
             $adauga('/' . self::codeazaCale($paginaCatalog), self::celMaiNou(array_column($produse, 'lastmod')));
         }
-        // Contactul (o rută fixă, fără rând propriu dacă nu e o pagină din constructor): data celei mai noi pagini.
-        $adauga('/contact', self::celMaiNou(array_column(array_filter($urls, static fn (array $u): bool => $u['tip'] === 'pagini'), 'lastmod')));
+        // Contactul: o rută fixă, fără dată proprie, deci fără <lastmod> (revizuirea WP-39/40: nicio dată inventată). Dacă e o
+        // pagină din constructor, a intrat mai sus, cu data ei.
+        $adauga('/contact');
 
         if ($cuCatalog) {
             // Categoriile cu cel puțin un produs activ (principală sau suplimentară).
@@ -219,41 +220,84 @@ final class Sitemap
             }
         }
 
-        // Fiecare adresă are <lastmod> (WP-39): una fără dată proprie (o pagină fără dată, o rută fixă) ia data celei mai
-        // noi schimbări din sitemap; un site gol, momentul de acum. Niciodată `seo_pages.updated_at`: rândurile de dinainte
-        // de nucleu/0041 au acolo momentul migrării, nu al unei schimbări a paginii.
-        $celMaiNou = self::celMaiNou(array_column($urls, 'lastmod'));
-        if ($celMaiNou === '') {
-            $celMaiNou = gmdate('Y-m-d\TH:i:s\Z');
-        }
-        foreach ($urls as $i => $url) {
-            if ($url['lastmod'] === '') {
-                $urls[$i]['lastmod'] = $celMaiNou;
-            }
-        }
-
+        // <lastmod> doar din data adresei (WP-39; revizuirea WP-39/40: o adresă fără dată proprie, o rută fixă sau o pagină
+        // fără date, nu primește una inventată). Niciodată `seo_pages.updated_at`: rândurile de dinainte de nucleu/0041 au acolo
+        // momentul migrării, nu al unei schimbări a paginii.
         return $urls;
     }
 
     /** Sitemap-urile pe tipuri, în ordinea din index, cu numele adresei lor (/sitemap-{tip}.xml). */
     public const TIPURI = ['pagini', 'produse', 'categorii', 'marci', 'etichete', 'articole', 'blog-categorii', 'blog-etichete'];
 
+    /** Cel mult atâtea adrese într-un sitemap (limita Google: 50.000 și 50 MB); peste, tipul se împarte în -2, -3 … */
+    public const MAX_PE_FISIER = 50000;
+    /** Cât stau adresele calculate în storage/cache/sitemap/ (golite odată cu cache-ul de pagini, la orice schimbare). */
+    public const TTL_CACHE = 900;
+
     /**
-     * Adresele pe tipuri (doar tipurile cu cel puțin o adresă), în ordinea din `TIPURI`.
+     * Adresele pe tipuri (doar tipurile cu cel puțin o adresă), în ordinea din `TIPURI`. Ținute TTL_CACHE secunde în
+     * storage/cache/sitemap/ (cheia: adresa site-ului și pluginurile), ca roboții care cer indexul și fiecare sitemap să nu
+     * refacă toate interogările la fiecare cerere.
      *
      * @return array<string, list<array{loc: string, lastmod: string, tip: string, imagini: list<string>}>>
      */
     public static function grupuri(PDO $db, string $baseUrl): array
     {
+        $fisier = self::dosarCache() . '/grupuri-' . substr(sha1($baseUrl . '|' . Plugins::amprenta()), 0, 16) . '.json';
+        $citit = is_file($fisier) && (int) @filemtime($fisier) > time() - self::TTL_CACHE ? json_decode((string) @file_get_contents($fisier), true) : null;
+        if (is_array($citit)) {
+            return $citit;
+        }
         $grupuri = array_fill_keys(self::TIPURI, []);
         foreach (self::urls($db, $baseUrl) as $url) {
             $grupuri[$url['tip']][] = $url;
         }
-        return array_filter($grupuri, static fn (array $lista): bool => $lista !== []);
+        $grupuri = array_filter($grupuri, static fn (array $lista): bool => $lista !== []);
+        $json = json_encode($grupuri, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (is_string($json) && (is_dir(dirname($fisier)) || @mkdir(dirname($fisier), 0775, true))) {
+            $temporar = $fisier . '.' . getmypid() . '.tmp';
+            if (@file_put_contents($temporar, $json) === strlen($json)) {
+                @rename($temporar, $fisier);
+            }
+            @unlink($temporar);
+        }
+        return $grupuri;
+    }
+
+    public static function dosarCache(): string
+    {
+        return Paths::stocare('cache/sitemap');
+    }
+
+    /** Golește adresele ținute (ResponseCache::purgePageCache, la orice schimbare de conținut). */
+    public static function golesteCache(): void
+    {
+        foreach (glob(self::dosarCache() . '/*.json') ?: [] as $fisier) {
+            @unlink($fisier);
+        }
     }
 
     /**
-     * /sitemap.xml (WP-39, B3): indexul sitemap-urilor pe tipuri, fiecare cu data celei mai noi adrese din el.
+     * Sitemap-urile de servit: numele (fără /sitemap- și .xml) → adresele. Un tip cu peste $max adrese se împarte:
+     * `produse`, `produse-2`, `produse-3` …
+     *
+     * @param array<string, list<array<string, mixed>>> $grupuri
+     * @return array<string, list<array<string, mixed>>>
+     */
+    public static function fisiere(array $grupuri, int $max = self::MAX_PE_FISIER): array
+    {
+        $rez = [];
+        foreach ($grupuri as $tip => $lista) {
+            foreach (array_chunk($lista, max(1, $max)) as $i => $bucata) {
+                $rez[$i === 0 ? $tip : $tip . '-' . ($i + 1)] = $bucata;
+            }
+        }
+        return $rez;
+    }
+
+    /**
+     * /sitemap.xml (WP-39, B3): indexul sitemap-urilor pe tipuri (împărțite peste MAX_PE_FISIER), fiecare cu data celei mai
+     * noi adrese din el (fără, când nicio adresă n-are dată).
      *
      * @param array<string, list<array{loc: string, lastmod: string}>> $grupuri
      */
@@ -261,7 +305,7 @@ final class Sitemap
     {
         $baseUrl = rtrim($baseUrl, '/');
         $xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'];
-        foreach ($grupuri as $tip => $lista) {
+        foreach (self::fisiere($grupuri) as $tip => $lista) {
             $xml[] = '  <sitemap>';
             $xml[] = '    <loc>' . htmlspecialchars($baseUrl . '/sitemap-' . $tip . '.xml', ENT_QUOTES | ENT_XML1, 'UTF-8') . '</loc>';
             $lastmod = self::celMaiNou(array_column($lista, 'lastmod'));

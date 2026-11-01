@@ -214,7 +214,12 @@ externe) verificată. Fiecare adresă trebuie să dea 200 (pagină HTML indexabi
 într-un singur salt, pe același site, spre o astfel de pagină, sau 410 doar dacă e o regulă 410 a pachetului (`--pachet`)
 sau o adresă din `--intentionate` (de exemplu exportul regulilor 410 din admin). Orice altceva (404, 302, lanț, țintă pe alt
 site, noindex, canonicalul altei pagini) e o problemă. Scrie câte adrese au dat fiecare rezultat și căile publice care pică,
-cu motivul; codul 0 doar fără probleme (1 cu probleme, 2 argumente greșite, fără nicio cerere). Doar GET, fără cookie-uri,
+cu motivul; codul 0 doar fără probleme (1 cu probleme, 2 argumente greșite, fără nicio cerere). **Revizuirea WP-39/40:** ținta
+unui 301 e Location-ul adevărat (și unul relativ, rezolvat față de adresa cerută), cerut de la schema și gazda lui; ținta și
+canonicalul trebuie să fie pe **exact** schema și gazda lui `--baza` (un 301 spre `www.` sau spre http e încă un salt, deci
+o problemă); un 301 spre prima pagină e o problemă (Google îl ia drept o pagină negăsită), afară de aliasurile ei
+(`/index.php`, `/index.html`, `/home`, `/acasa` …); la compararea canonicalului se ignoră `utm_*`, `gclid`, `gbraid`,
+`wbraid`, `fbclid`, `msclkid`. Doar GET, fără cookie-uri,
 cel puțin o secundă între cereri pe un site care nu e local; parola porții doar în `VERIFICARE_POARTA_PAROLA`, pe https.
 Rulează pe verificare cu pachetul site-ului înainte de trecere și pe domeniul live imediat după ([VERIFICARE.md](VERIFICARE.md)).
 GR (OD-44): lista e a site-ului GR de azi (sitemap-ul lui + Search Console), care trebuie să răspundă la fel după trecere.
@@ -241,7 +246,9 @@ la `/robots.txt` cu `Disallow: /`, iar fiecare răspuns are
 ## 4. sitemap.xml
 
 **WP-39 (SEO partea B, B3): `/sitemap.xml` e indexul sitemap-urilor pe tipuri** (`<sitemapindex>`, fiecare cu data celei
-mai noi adrese din el), construite din baza de date la fiecare cerere (`Sitemap::grupuri`, `Sitemap::index`):
+mai noi adrese din el), construite din baza de date (`Sitemap::grupuri`, `Sitemap::index`; revizuirea WP-39/40: adresele
+stau 15 minute în `storage/cache/sitemap/`, golite odată cu cache-ul de pagini, deci la orice salvare din admin; un tip cu
+peste 50.000 de adrese se împarte în `/sitemap-<tip>-2.xml`, `-3` …, `Sitemap::fisiere`):
 `/sitemap-pagini.xml`, `-produse`, `-categorii`, `-marci`, `-etichete`, `-articole`, `-blog-categorii`, `-blog-etichete`
 (`Sitemap::TIPURI`; în index doar tipurile cu adrese; un tip gol sau necunoscut răspunde 404). După adoptare, indexul se
 trimite din nou în Search Console (aceeași adresă, `/sitemap.xml`). Doar paginile care răspund 200 și doar ale
@@ -254,16 +261,16 @@ pluginurilor de pe site:
 | blog | articolele publicate (fără cele doar pentru membri), cu poza lor; categoriile active cu cel puțin un articol publicat; etichetele cu cel puțin `seo.json` → `blog.eticheta_minim_articole` articole publicate (implicit 1) |
 
 Nimic din ce blochează robots.txt și **nicio pagină scoasă din Google în panoul SEO** (robots „noindex”, `Seo::refuriNoindex`:
-pagină, produs, categorie, marcă, etichetă, lista produselor, articol, categoria și eticheta blogului). **Fiecare adresă are
-`<lastmod>`**: data ultimei modificări (la categorii, mărci, etichete și `/magazin`: cel mai nou produs al lor; la `/blog`,
-categoriile și etichetele blogului: cel mai nou articol); una fără dată proprie (o rută fixă, `/contact`) ia data celei mai
-noi pagini, apoi a celei mai noi adrese din sitemap. **Niciodată `seo_pages.updated_at`**: rândurile de dinainte de
+pagină, produs, categorie, marcă, etichetă, lista produselor, articol, categoria și eticheta blogului). **`<lastmod>` doar
+unde adresa are o dată**: data ultimei modificări (la categorii, mărci, etichete și `/magazin`: cel mai nou produs al lor; la
+`/blog`, categoriile și etichetele blogului: cel mai nou articol); una fără dată proprie (o rută fixă, `/contact`, o pagină
+fără date) n-are `<lastmod>` (revizuirea WP-39/40: nicio dată inventată). **Niciodată `seo_pages.updated_at`**: rândurile de dinainte de
 `nucleu/0041` au acolo momentul migrării, nu al unei schimbări a paginii. Etichetele de produse intră de la `seo.json` →
 `sitemap.eticheta_minim_produse` produse active (implicit 1), plus `etichete_pastrate` (dacă au produse), niciodată
 `etichete_excluse`. Lipsa din sitemap nu schimbă pagina etichetei; o etichetă de blog sub minim e și `noindex,follow` (§5b).
 
 `public/.htaccess` (și `deploy/stub/.htaccess`, `tools/dev/router.php`) trimit `/sitemap.xml` și
-`/sitemap-{tip}.xml` mereu la aplicație, ca un fișier vechi rămas pe server să nu le acopere. Butonul din Setări
+`/sitemap-{tip}[-<n>].xml` mereu la aplicație, ca un fișier vechi rămas pe server să nu le acopere. Butonul din Setări
 magazin → Sitemap șterge fișierul vechi `public/sitemap.xml` (cu alt nume de fișier
 scrie, ca înainte, o copie statică).
 
@@ -401,8 +408,15 @@ a doua parte, compară aspectul cu valorile vechi și cu cele noi). Din linia de
   de 160, 400, 800 și 1200 px (doar mai mici decât ea) în `/uploads/_variante/<dosar>/<nume>-<lățime>w.webp`. Cardurile,
   magazinul, produsul (poza mare și miniaturile), lista categoriei și prima pagină pun `srcset` (variantele de pe disc plus
   poza întreagă) cu `sizes`, `width`, `height`. Poza încărcată nu se schimbă (datele structurate și fluxul rămân pe ea);
-  pozele de profil ale membrilor (`uploads/gallery/profile/`) nu se ating. Fără GD cu WebP nu se face nimic.
-- **Sesiunea doar la nevoie** (`sesiune_doar_la_nevoie`; `SesiuneLaNevoie`): un vizitator nou care cere cu GET o pagină
+  pozele de profil ale membrilor (`uploads/gallery/profile/`) nu se ating. Fără GD cu WebP nu se face nimic. Revizuirea
+  WP-39/40: numele variantei păstrează extensia (`ceai.png-400w.webp`, deci `ceai.png` și `ceai.jpg` nu se ciocnesc); o poză
+  schimbată își pierde întâi toate variantele vechi; ștergerea pozei din admin le șterge; peste 25 MP poza nu primește
+  variante, iar memoria (lățime × înălțime × 5 octeți) se cere înainte (`memory_limit` ridicat ca la `ImagineDistribuire`; dacă
+  nu se poate, fără variante, fără eroare la încărcare).
+- **Sesiunea doar la nevoie** (`sesiune_doar_la_nevoie`; `SesiuneLaNevoie`; revizuirea WP-39/40: `/robots.txt`, sitemap-urile,
+  `/health`, `/favicon.ico` nu pornesc sesiunea nici cu cookie-ul ei; o pagină publică fără sesiune care nu vine din cache
+  are `Cache-Control: no-cache, must-revalidate`; o pagină care a scris în sesiune o primește înaintea cache-ului de pagini,
+  deci nu ajunge în cache): un vizitator nou care cere cu GET o pagină
   publică nu primește sesiune (niciun fișier, niciun cookie), deci pagina poate veni din cache și din CDN. Sesiunea pornește la
   orice POST, când browserul are deja cookie-ul ei și pe căile care o folosesc (adminul, coșul, comanda, plata, contul,
   logarea, API-ul coșului, adresele mereu deschise ale pluginurilor); API-urile citite pe fiecare pagină (sumarul coșului,
@@ -412,18 +426,30 @@ a doua parte, compară aspectul cu valorile vechi și cu cele noi). Din linia de
 - **Cache-ul de pagini extins** (`cache_pagini_extins`; `ResponseCache::REGULI_EXTINSE`): prima pagină, magazinul (și
   adresa catalogului), produsele, categoriile, mărcile, etichetele, 10 minute, fără reguli în admin (regulile din admin au
   întâietate). Doar pentru cine n-are coș, cont sau un mesaj în sesiune; golit la orice schimbare de conținut.
+  **Revizuirea WP-39/40:** aceste pagini au mereu `Cache-Control: private, no-cache, must-revalidate` și `Vary: Cookie`
+  (niciodată `public, max-age`, nici cu `page_cache_browser_policy = max_age`), deci un CDN nu le ține; momentul deschiderii
+  formularului de recenzie (`review_opened_at`) e pus la ora cererii când pagina vine din cache. Pentru orice regulă (și din
+  admin): doar parametrii `ResponseCache::PARAMETRI_PERMISI` (paginarea, sortarea, filtrele cunoscute) fac o intrare, orice
+  alt parametru (fbclid, utm_*, o căutare, gunoi) ocolește cache-ul; cel mult `MAX_INTRARI` (5.000) pagini, cu o curățenie
+  a celor expirate cam la 100 de salvări; **orice POST reușit din admin** (afară de logare) golește cache-ul și adresele
+  sitemap-urilor (`public/index.php`, `ResponseCache::schimbaContinut`).
 - **CSS-ul și JavaScript-ul șablonului în fișiere** (`css_js_in_fisiere`; `SablonSite`): cele șase blocuri fixe din
   `views/layout.php` (~19 KB CSS, ~40 KB JS) stau în `views/sablon-site/`; pagina leagă variantele minificate
-  (`public/assets/css/sablon-site.min.css`, `public/assets/js/sablon/*.min.js`, cu `?v=<data fișierului>`). Scripturile rămân
+  (`public/assets/css/sablon-site.min.css`, `public/assets/js/sablon/*.min.js`, cu `?v=<12 hex din sha1 conținutului>`). Scripturile rămân
   sincrone, în același loc. După o schimbare în `views/sablon-site/`: `tools/dev/php.sh tools/dev/minifica-sablon.php`
   (E4 și G-vizual cer fișierele la zi). Oprit, blocurile se pun în pagină din aceleași surse, octet cu octet ca înainte.
 - **Fonturile din nucleu** (tema, `Tema::IMPLICIT`): DM Sans și Playfair Display din `/assets/vendor/fonturi/` (aceleași
   familii și greutăți ca cererea spre Google Fonts), fără legătură spre Google; un site care rămâne pe Google o spune în
   tema lui (`"fonturi_google": true, "fonturi": []`).
-- **HSTS** pe https (`Strict-Transport-Security: max-age=31536000`, fără subdomenii, fără preload); `HSTS=0` în `.env` îl
-  oprește.
-- **Fișierele versionate** (`/assets/…?v=`): `Cache-Control: public, max-age=31536000, immutable` (`public/.htaccess`,
-  `deploy/stub/.htaccess`; regula `AX_VERSIONAT`). Fără `?v=`, ca înainte.
+- **HSTS** pe https (`App\Support\Hsts`, setarea `hsts`; revizuirea WP-39/40): `oprit` = nimic (înghețat așa pe site-ul de
+  referință), un număr = `Strict-Transport-Security: max-age=<N>` (fără subdomenii, fără preload). Implicit în nucleu 300 (prima
+  treaptă); se urcă cu `php scripts/comutatoare-seo.php --hsts=86400`, apoi `--hsts=31536000`, câte o treaptă după ce site-ul
+  a mers bine pe https. Oprirea de urgență: `--hsts=0` (sau `HSTS=0` în `.env`) trimite `max-age=0`, care șterge din browsere
+  ce au ținut minte (a nu trimite nimic nu le-ar șterge).
+- **Fișierele versionate după conținut** (`/assets/…?v=<12 hex>`): `Cache-Control: public, max-age=31536000, immutable`
+  (`public/.htaccess`, `deploy/stub/.htaccess`; regula `AX_VERSIONAT`, doar pentru o versiune de 12 hex: sha1 conținutului,
+  deci un fișier scris pe jumătate la deploy are altă adresă și nu rămâne un an în browser). O versiune după data fișierului
+  sau fără `?v=`: ca înainte. Logo-ul din antet (`LogoAntet`): fiecare variantă (1x, 2x) cu data fișierului ei.
 
 ## 7. Titluri, descrieri și distribuire
 
@@ -560,8 +586,12 @@ Sursa comenzilor, `/admin/orders/sursa-comenzilor`, doar cu pluginul magazinului
 săptămâni. Felurile: `google_ads` (gclid, gbraid, wbraid sau o campanie plătită utm_source=google), `email` (utm_medium
 email/newsletter sau cookie-ul newsletterului), `campanie` (alt utm_source), `google` (venit din căutarea Google),
 `alt_site`, `direct`. La intrarea pe site felul vizitei se ține în cookie-ul `ax_sursa` (30 de zile; **doar felul**, niciun
-id, nicio adresă); la comandă, reclama Google (`bv_gclid`, ca pentru `ad_source`) și newsletterul au întâietate. Comutatorul
-`sursa_comenzii` (implicit pornit; înghețat la „0” pe site-ul de referință). Coloana `ad_source` rămâne neschimbată.
+id, nicio adresă), rescris de fiecare vizită venită de undeva: la comandă câștigă el (ultima sursă care nu e „direct”); fără
+el, reclama Google (`bv_gclid` cu un id de clic; `utm_source=google` fără mediu plătit e o campanie, nu o reclamă) și
+newsletterul. **Revizuirea WP-39/40 (GDPR):** `ax_sursa` și `bv_gclid` se scriu doar cu acordul vizitatorului pentru
+urmărire (`CookieConsent::permiteUrmarire`); fără el comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
+Comutatorul `sursa_comenzii` (implicit pornit; înghețat la „0” pe site-ul de referință; `comutatoare-seo.php --porneste` fără
+listă nu-l pornește, doar `--porneste=sursa_comenzii`). Coloana `ad_source` rămâne neschimbată.
 
 ## 9. Datele unui site
 
@@ -661,7 +691,10 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   șablonului (la zi, 200, `Cache-Control`; oprit, blocurile octet cu octet); fonturile (aceleași familii și greutăți, nicio
   legătură spre Google), HSTS, regula `immutable`; variantele pozelor și `srcset` (oprit, pagina octet cu octet); fluxul
   (câmpurile cerute de Merchant Center; oprit, 404); sursa comenzii (felul vizitei, cookie-ul, o comandă venită din Google,
-  raportul fără date ale clienților);
+  raportul fără date ale clienților); din revizuirea WP-39/40: antetele paginilor extinse, parametrii permiși, plafonul și
+  curățenia, `review_opened_at` pe pagina din cache, golirea după o salvare din admin, fișierele tehnice fără sesiune, HSTS
+  (treptele, „oprit”, `max-age=0`), versiunea de 12 hex, variantele (extensia, înlocuirea, ștergerea), acordul pentru cookie-uri,
+  jetoanele JavaScript-ului minificat egale cu ale sursei (și `node --check`), `comutatoare-seo.php` (`--hsts`, sursa doar scrisă);
 - `tools/dev/vizual-valori-noi.sh` (în G-vizual): stilurile calculate ale paginilor publice cu valorile vechi față de cele noi
   ale vitezei, pe codul curent, 0 diferențe;
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;

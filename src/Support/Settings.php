@@ -339,6 +339,9 @@ final class Settings
         // WP-40 (SEO partea B, B5/B6/B8/B9): fiecare punct al vitezei și al Google pe un comutator, pornit în nucleu și
         // înghețat la valoarea de azi pe site-urile care nu-l aveau (setari-inghetate.json; acolo oprite, pornite după
         // ce proprietarul le vede pe site-ul de verificare). Fără câmp în admin, afară de fluxul Merchant (Setări magazin → SEO Google).
+        // Revizuirea WP-39/40: HSTS pe un comutator (App\Support\Hsts): „oprit”, secunde (treptele 300 → 86400 → 31536000) sau „0”
+        // (oprirea de urgență, max-age=0). Înghețat „oprit” pe un site existent până decide proprietarul.
+        'hsts' => '300',
         'imagini_srcset' => '1',          // B5: pozele cu variantele WebP (srcset, sizes, width, height)
         'sesiune_doar_la_nevoie' => '1',  // B6: fără sesiune pe paginile publice ale unui vizitator fără coș și fără cont
         'cache_pagini_extins' => '1',     // B6: cache-ul de pagini și pe /, /produs/*, /categorie/*, /marca/*, /eticheta/*, /magazin
