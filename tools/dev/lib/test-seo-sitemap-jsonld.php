@@ -196,7 +196,9 @@ $verifica('BlogPosting: headline, datePublished, author, image; firimiturile Aca
 $eveniment = $jsonLd($cerere($port, 'GET', '/blog/atelier-demo-de-degustare')['corp']);
 $lipsa = $are($eveniment['Event'] ?? [], ['name', 'startDate', 'location.name']);
 $verifica('Event pe articolul-eveniment: name, startDate (ziua), location; „Gratuit” = ofertă de 0 lei', $lipsa === []
-    && ($eveniment['Event']['startDate'] ?? '') === '2026-11-21' && ($eveniment['Event']['offers']['price'] ?? '') === '0.00'
+    // Ziua din bază (datele demo pun evenimentul la 20 de zile de la încărcarea lor), nu o dată scrisă în test.
+    && ($eveniment['Event']['startDate'] ?? '') === substr((string) $db->query("SELECT event_start_date FROM blog_posts WHERE slug = 'atelier-demo-de-degustare'")->fetchColumn(), 0, 10)
+    && ($eveniment['Event']['offers']['price'] ?? '') === '0.00'
     && !isset($articol['Event']), implode(', ', $lipsa) . ' ' . json_encode($eveniment['Event'] ?? null, JSON_UNESCAPED_UNICODE));
 $acasa = $jsonLd($cerere($port, 'GET', '/')['corp']);
 $lipsa = $are($acasa['Organization'] ?? [], ['name', 'url', 'logo']);
