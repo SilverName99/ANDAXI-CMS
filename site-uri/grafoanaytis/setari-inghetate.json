@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "9d50cc2c41c5d42c9017d4a66c037b38a7666e4fa967951ecc18f593741c918e",
+    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",
@@ -391,6 +391,11 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
         },
+        "cache_pagini_extins": {
+            "motiv": "WP-40 (B6): cache-ul de pagini extins pornit la adoptare (prima pagină, magazinul, produsele, categoriile, mărcile, etichetele, 10 minute; golit la orice schimbare); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "catalog_similare_titlu": {
             "motiv": "Același titlu în ambele coduri: banda „Produse asemănătoare” a codului vechi (SiteController, product_produse_similare) e titlul implicit al nucleului (WP-19, GR-16)",
             "vechi": "lipsește",
@@ -400,6 +405,11 @@
             "motiv": "Aceeași valoare (niciuna) în ambele coduri când cheia lipsește: datele structurate ale codului comun lasă emailul afară dacă e gol, iar pagina de mentenanță citește din WP-16 doar contact_email (rezerva veche, order_email_from_email, era o cheie care n-a existat niciodată)",
             "vechi": "cod expresie",
             "nucleu": "implicit \"\""
+        },
+        "css_js_in_fisiere": {
+            "motiv": "WP-40 (B6): CSS-ul și JavaScript-ul fix al șablonului din fișiere versionate, pornit la adoptare (același aspect, dovedit de G-vizual cu valorile noi); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "customer_email_confirmation_required": {
             "motiv": "Codul vechi n-are confirmarea adresei la înregistrare: implicitul 0 al codului comun e aceeași purtare (contul intră imediat). Confirmarea pentru comenzile fără cont e o regulă a nucleului, fără setare (OD-47, ce-se-schimba.md)",
@@ -436,6 +446,16 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
         },
+        "imagini_srcset": {
+            "motiv": "WP-40 (B5): pozele cu variantele WebP (srcset) pornite la adoptare, după trecerea o dată prin poze (scripts/optimizeaza-imagini.php); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "merchant_feed": {
+            "motiv": "WP-40 (B8): fluxul Google Merchant pornit la adoptare (doar cu magazinul; fără el, fluxul nu există); se oprește din Setări magazin → SEO Google",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "recenzii_insigna_meniu": {
             "motiv": "Fără pluginul recenzii în abonament (catalog, cereri_oferta): meniul n-are intrarea Recenzii, setarea nu se folosește",
             "vechi": "lipsește",
@@ -446,10 +466,20 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"90\""
         },
+        "sesiune_doar_la_nevoie": {
+            "motiv": "WP-40 (B6): sesiunea doar unde e nevoie, pornită la adoptare (coșul, contul, plata și formularele o pornesc ca înainte); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "stripe_enabled": {
             "motiv": "GR nu are magazin (licența GR: catalog și cereri de ofertă, OD-23): plata nu apare nicăieri, iar cheile Stripe trebuie să fie goale pe GR (port-grafoanaytis.md GR-22)",
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
+        },
+        "sursa_comenzii": {
+            "motiv": "WP-40 (B9): sursa comenzii și raportul ei pornite la adoptare (doar cu magazinul); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "welcome_popup_version": {
             "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",

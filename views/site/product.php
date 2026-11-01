@@ -67,7 +67,7 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
             <img
                 id="product-default-main-image"
                 src="<?= htmlspecialchars((string) ($galleryUrls[0] ?? '/assets/img/product-placeholder.svg'), ENT_QUOTES) ?>"
-                alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>"<?= /* width/height rezervă locul pozei; ea e elementul principal al paginii (LCP), deci se încarcă imediat și cu prioritate */ \App\Support\ImageDimensions::atribute((string) ($galleryUrls[0] ?? '')) . "\n" ?>
+                alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>"<?= /* width/height rezervă locul pozei; ea e elementul principal al paginii (LCP), deci se încarcă imediat și cu prioritate */ \App\Support\ImageDimensions::atribute((string) ($galleryUrls[0] ?? '')) . \App\Support\VarianteImagini::atribute((string) ($galleryUrls[0] ?? ''), '(max-width: 480px) 100vw, 420px') . "\n" ?>
                 loading="eager"
                 fetchpriority="high"
                 decoding="async"
@@ -80,7 +80,7 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
                         <button type="button" class="product-default-thumb" data-image-url="<?= htmlspecialchars((string) $url, ENT_QUOTES) ?>">
                             <img
                                 src="<?= htmlspecialchars((string) $url, ENT_QUOTES) ?>"
-                                alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>"<?= \App\Support\ImageDimensions::atribute((string) $url) . "\n" ?>
+                                alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>"<?= \App\Support\ImageDimensions::atribute((string) $url) . \App\Support\VarianteImagini::atribute((string) $url, '96px') . "\n" ?>
                                 loading="lazy"
                                 decoding="async"
                                 onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';"

@@ -1,0 +1,272 @@
+
+        (() => {
+            const normalize = (value) => String(value ?? '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+            const escapeHtml = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const splitTerms = (query) => normalize(query)
+                .split(/\s+/)
+                .map((part) => part.trim())
+                .filter((part) => part.length >= 2)
+                .slice(0, 6);
+            const isSearchTrigger = (el) => {
+                if (!(el instanceof HTMLElement)) {
+                    return false;
+                }
+                const haystack = normalize([
+                    el.id,
+                    el.className,
+                    el.getAttribute('aria-label') || '',
+                    el.getAttribute('title') || '',
+                    el.getAttribute('data-action') || '',
+                    el.getAttribute('data-icon') || '',
+                    el.getAttribute('href') || '',
+                    (el.textContent || '').trim(),
+                ].join(' '));
+                if (/(search|cauta|lupa)/.test(haystack)) {
+                    return true;
+                }
+                return (el.textContent || '').trim() === '🔍';
+            };
+            const findHeader = () => document.querySelector('header') || document.querySelector('.header');
+            const findSearchTriggers = (header) => {
+                if (!(header instanceof HTMLElement)) {
+                    return [];
+                }
+                const controls = Array.from(header.querySelectorAll('a, button, [role="button"]'));
+                const direct = controls.filter(isSearchTrigger);
+                if (direct.length > 0) {
+                    return direct;
+                }
+
+                // Fallback: detect icon actions cluster (search/account/cart) and use first control.
+                const groups = Array.from(header.querySelectorAll('div, nav, ul'));
+                for (const group of groups) {
+                    const children = Array.from(group.querySelectorAll(':scope > a, :scope > button, :scope > [role="button"]'));
+                    if (children.length < 2) {
+                        continue;
+                    }
+                    const hasCartLike = children.some((child) => normalize((child.getAttribute('href') || '') + ' ' + (child.textContent || '')).includes('cos'));
+                    if (!hasCartLike) {
+                        continue;
+                    }
+                    const iconLikeChildren = children.filter((child) => {
+                        const text = (child.textContent || '').replace(/\s+/g, '').trim();
+                        const hasSvg = child.querySelector('svg') !== null;
+                        return text.length <= 2 || (hasSvg && text.length <= 6);
+                    });
+                    if (iconLikeChildren.length < children.length) {
+                        continue;
+                    }
+                    const first = children[0];
+                    if (first instanceof HTMLElement) {
+                        return [first];
+                    }
+                }
+                return [];
+            };
+            const buildSearchShell = () => {
+                const shell = document.createElement('section');
+                shell.className = 'bv-header-search-shell';
+                shell.setAttribute('aria-hidden', 'true');
+                shell.innerHTML = `
+                    <div class="bv-header-search-shell__inner">
+                        <div class="bv-header-search-box">
+                            <div class="bv-header-search-input-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"></circle><path d="M20 20l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+                                <input class="bv-header-search-input" type="search" placeholder="Caută produse..." autocomplete="off">
+                                <button type="button" class="bv-header-search-close" aria-label="Închide căutarea">×</button>
+                            </div>
+                            <div class="bv-header-search-results" hidden></div>
+                        </div>
+                    </div>
+                `;
+                return shell;
+            };
+            const highlightText = (text, query) => {
+                const safe = escapeHtml(text);
+                const terms = splitTerms(query).map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+                if (terms.length === 0) {
+                    return safe;
+                }
+                return safe.replace(new RegExp('(' + terms.join('|') + ')', 'gi'), '<mark>$1</mark>');
+            };
+            const snippetForItem = (item, query) => {
+                const source = String(item.short_description || item.description || '').trim();
+                if (source === '') {
+                    return '';
+                }
+                const terms = splitTerms(query);
+                const sourceNorm = normalize(source);
+                let firstPos = -1;
+                for (const term of terms) {
+                    const pos = sourceNorm.indexOf(term);
+                    if (pos >= 0 && (firstPos === -1 || pos < firstPos)) {
+                        firstPos = pos;
+                    }
+                }
+                if (firstPos < 0) {
+                    return source.slice(0, 170) + (source.length > 170 ? '…' : '');
+                }
+                const start = Math.max(0, firstPos - 65);
+                const end = Math.min(source.length, firstPos + 130);
+                const prefix = start > 0 ? '…' : '';
+                const suffix = end < source.length ? '…' : '';
+                return prefix + source.slice(start, end).trim() + suffix;
+            };
+
+            const initHeaderSearch = () => {
+                const header = findHeader();
+                if (!(header instanceof HTMLElement)) {
+                    return;
+                }
+                const triggers = findSearchTriggers(header);
+                if (triggers.length === 0) {
+                    return;
+                }
+
+                const shell = buildSearchShell();
+                header.insertAdjacentElement('afterend', shell);
+                const input = shell.querySelector('.bv-header-search-input');
+                const closeBtn = shell.querySelector('.bv-header-search-close');
+                const results = shell.querySelector('.bv-header-search-results');
+                if (!(input instanceof HTMLInputElement) || !(closeBtn instanceof HTMLButtonElement) || !(results instanceof HTMLElement)) {
+                    return;
+                }
+
+                let open = false;
+                let debounce = null;
+                let activeController = null;
+                const setOpen = (value) => {
+                    open = Boolean(value);
+                    shell.classList.toggle('is-open', open);
+                    shell.setAttribute('aria-hidden', open ? 'false' : 'true');
+                    triggers.forEach((trigger) => {
+                        if (!(trigger instanceof HTMLElement)) {
+                            return;
+                        }
+                        trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+                    });
+                    if (open) {
+                        window.setTimeout(() => input.focus(), 40);
+                    } else {
+                        results.hidden = true;
+                        results.innerHTML = '';
+                    }
+                };
+                const setResultsState = (text) => {
+                    results.hidden = false;
+                    results.innerHTML = '<p class="bv-header-search-state">' + escapeHtml(text) + '</p>';
+                };
+                const renderItems = (items, query) => {
+                    if (!Array.isArray(items) || items.length === 0) {
+                        setResultsState('Nu am găsit produse pentru căutarea ta.');
+                        return;
+                    }
+                    const html = items.map((item) => {
+                        const name = highlightText(item.name || 'Produs', query);
+                        const snippet = highlightText(snippetForItem(item, query), query);
+                        const imageUrl = escapeHtml(item.image_url || '/assets/img/product-placeholder.svg');
+                        const url = escapeHtml(item.url || '/magazin');
+                        return `
+                            <a class="bv-header-search-item" href="${url}">
+                                <img src="${imageUrl}" alt="">
+                                <div>
+                                    <h4>${name}</h4>
+                                    ${snippet !== '' ? '<p>' + snippet + '</p>' : ''}
+                                </div>
+                            </a>
+                        `;
+                    }).join('');
+                    results.hidden = false;
+                    results.innerHTML = html;
+                };
+                const fetchItems = (query) => {
+                    if (activeController) {
+                        activeController.abort();
+                    }
+                    activeController = new AbortController();
+                    setResultsState('Căutăm produse…');
+                    fetch('/api/search/products?q=' + encodeURIComponent(query), {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' },
+                        signal: activeController.signal,
+                    })
+                        .then((response) => response.ok ? response.json() : Promise.reject(new Error('Eroare de rețea')))
+                        .then((payload) => {
+                            if (!open) {
+                                return;
+                            }
+                            if (!payload || payload.ok !== true) {
+                                setResultsState('Nu am putut încărca rezultatele.');
+                                return;
+                            }
+                            renderItems(Array.isArray(payload.items) ? payload.items : [], query);
+                        })
+                        .catch((error) => {
+                            if (error && error.name === 'AbortError') {
+                                return;
+                            }
+                            if (open) {
+                                setResultsState('A apărut o eroare la căutare.');
+                            }
+                        });
+                };
+
+                const onQueryChange = () => {
+                    const query = input.value.trim();
+                    if (!open) {
+                        return;
+                    }
+                    if (debounce) {
+                        window.clearTimeout(debounce);
+                    }
+                    if (query.length < 2) {
+                        setResultsState('Scrie cel puțin 2 caractere ca să căutăm.');
+                        return;
+                    }
+                    debounce = window.setTimeout(() => fetchItems(query), 220);
+                };
+
+                triggers.forEach((trigger) => {
+                    trigger.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        setOpen(!open);
+                        if (open) {
+                            onQueryChange();
+                        }
+                    });
+                });
+                closeBtn.addEventListener('click', () => setOpen(false));
+                input.addEventListener('input', onQueryChange);
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && open) {
+                        setOpen(false);
+                    }
+                });
+                document.addEventListener('click', (event) => {
+                    const target = event.target;
+                    if (!(target instanceof Node) || !open) {
+                        return;
+                    }
+                    const clickedInside = shell.contains(target) || triggers.some((trigger) => trigger.contains(target));
+                    if (!clickedInside) {
+                        setOpen(false);
+                    }
+                });
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initHeaderSearch);
+            } else {
+                initHeaderSearch();
+            }
+        })();
+    

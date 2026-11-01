@@ -943,7 +943,7 @@ $whyItems = [
             <a class="bs-product-card__media" href="/produs/<?= rawurlencode($slug) ?>">
               <img
                 src="<?= htmlspecialchars(\App\Support\PozeOptimizate::src((string) ($product['image_url'] ?? '/assets/img/product-placeholder.svg')), ENT_QUOTES) ?>"
-                alt="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
+                alt="<?= htmlspecialchars($name, ENT_QUOTES) ?>"<?= \App\Support\VarianteImagini::atribute(\App\Support\PozeOptimizate::src((string) ($product['image_url'] ?? ''))) . "\n" ?>
                 loading="lazy"
                 decoding="async"
                 onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';"

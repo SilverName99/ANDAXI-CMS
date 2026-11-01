@@ -1,0 +1,145 @@
+
+            (() => {
+                const initMobileMenuToken = (root) => {
+                    if (!(root instanceof HTMLElement) || root.dataset.mobileMenuReady === '1') {
+                        return;
+                    }
+                    root.dataset.mobileMenuReady = '1';
+                    const maybeRow = root.closest('.bv-mainbar-row');
+                    if (maybeRow instanceof HTMLElement) {
+                        maybeRow.classList.add('bv-mobile-menu-token-row');
+                    }
+                    const toggle = root.querySelector('[data-bv-mobile-menu-toggle]');
+                    const overlay = root.querySelector('[data-bv-mobile-menu-overlay]');
+                    const drawer = root.querySelector('[data-bv-mobile-menu-drawer]');
+                    const close = root.querySelector('[data-bv-mobile-menu-close]');
+                    const nav = root.querySelector('.bv-mobile-menu-token__nav');
+                    if (!(toggle instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement) || !(drawer instanceof HTMLElement)) {
+                        return;
+                    }
+
+                    if (nav instanceof HTMLElement) {
+                        nav.querySelectorAll('.menu-root > li').forEach((item) => {
+                            if (!(item instanceof HTMLElement)) {
+                                return;
+                            }
+                            const submenu = item.querySelector(':scope > .submenu');
+                            if (!(submenu instanceof HTMLElement)) {
+                                return;
+                            }
+                            item.classList.add('has-submenu');
+                            const link = item.querySelector(':scope > a');
+                            if (!(link instanceof HTMLAnchorElement) || link.dataset.bvSubmenuBound === '1') {
+                                return;
+                            }
+                            link.dataset.bvSubmenuBound = '1';
+
+                            // O categorie de meniu e și ea o pagină. Clicul pe titlu
+                            // duce acolo, iar subpaginile se deschid din săgeata de
+                            // alături — altfel titlul nu era decât un buton de deschis
+                            // și pagina lui rămânea de neatins de pe telefon.
+                            const href = (link.getAttribute('href') || '').trim();
+                            const areDestinatie = href !== '' && href !== '#';
+
+                            const toggle = document.createElement('button');
+                            toggle.type = 'button';
+                            toggle.className = 'bv-submenu-toggle';
+                            toggle.setAttribute('aria-expanded', 'false');
+                            toggle.setAttribute(
+                                'aria-label',
+                                'Arată subpaginile pentru ' + (link.textContent || '').trim(),
+                            );
+                            const comuta = () => {
+                                const isOpen = item.classList.toggle('is-open');
+                                toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                            };
+                            toggle.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                comuta();
+                            });
+                            link.insertAdjacentElement('afterend', toggle);
+
+                            // Fără o pagină proprie (link gol sau „#"), titlul n-are
+                            // unde să ducă; atunci rămâne el butonul de deschidere.
+                            if (!areDestinatie) {
+                                link.setAttribute('aria-expanded', 'false');
+                                link.addEventListener('click', (event) => {
+                                    event.preventDefault();
+                                    comuta();
+                                    link.setAttribute(
+                                        'aria-expanded',
+                                        item.classList.contains('is-open') ? 'true' : 'false',
+                                    );
+                                });
+                            }
+                        });
+                    }
+
+                    const setOpen = (open) => {
+                        const isOpen = Boolean(open);
+                        document.body.classList.toggle('bv-mobile-menu-open', isOpen);
+                        root.classList.toggle('is-open', isOpen);
+                        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                        drawer.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+                        overlay.hidden = !isOpen;
+                        // Bulina de chat stă peste sertar; coșul flotant îl ascunde CSS-ul.
+                        if (isOpen) {
+                            window.bvChatWidget?.ascunde('meniu-mobil');
+                        } else {
+                            window.bvChatWidget?.arata('meniu-mobil');
+                        }
+                    };
+
+                    toggle.addEventListener('click', () => {
+                        const isOpen = document.body.classList.contains('bv-mobile-menu-open');
+                        setOpen(!isOpen);
+                    });
+                    overlay.addEventListener('click', () => setOpen(false));
+                    close?.addEventListener('click', () => setOpen(false));
+                    nav?.addEventListener('click', (event) => {
+                        const target = event.target;
+                        if (!(target instanceof HTMLElement)) {
+                            return;
+                        }
+                        const link = target.closest('a');
+                        if (!(link instanceof HTMLAnchorElement)) {
+                            return;
+                        }
+                        // Titlul de categorie duce acum într-o pagină, deci
+                        // sertarul se închide ca la orice alt link. Excepția
+                        // rămâne doar pentru cel fără destinație, care doar
+                        // deschide submeniul.
+                        const owner = link.closest('li.has-submenu');
+                        const href = (link.getAttribute('href') || '').trim();
+                        if (
+                            owner instanceof HTMLElement
+                            && owner.firstElementChild === link
+                            && (href === '' || href === '#')
+                        ) {
+                            return;
+                        }
+                        setOpen(false);
+                    });
+                    document.addEventListener('keydown', (event) => {
+                        if (event.key === 'Escape' && document.body.classList.contains('bv-mobile-menu-open')) {
+                            setOpen(false);
+                        }
+                    });
+                    window.addEventListener('resize', () => {
+                        if (window.innerWidth > 980 && document.body.classList.contains('bv-mobile-menu-open')) {
+                            setOpen(false);
+                        }
+                    });
+                };
+
+                const boot = () => {
+                    document.querySelectorAll('[data-bv-mobile-menu]').forEach((node) => initMobileMenuToken(node));
+                };
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', boot);
+                } else {
+                    boot();
+                }
+            })();
+        

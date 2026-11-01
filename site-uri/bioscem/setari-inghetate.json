@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@739f58c",
-    "amprenta_nucleu": "9d50cc2c41c5d42c9017d4a66c037b38a7666e4fa967951ecc18f593741c918e",
+    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -73,6 +73,14 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
         },
+        "cache_pagini_extins": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-40 (B6, regula R1): codul Bioscem ține în cache doar paginile din regulile adminului; cache-ul extins (/, produse, categorii, mărci, etichete, magazinul) se pornește după ce clientul îl vede pe site-ul de verificare",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "catalog_ascunde_inactive": {
             "valoare": "0",
             "mod": "lipsa",
@@ -108,6 +116,14 @@
             "privat": true,
             "sursa": "Settings::DEFAULTS",
             "nota": "Gol sau fără nicio adresă validă: codul vechi trimitea la adresa lui (SiteController::destinatariFormularContact, BtIpayPayments::setari), codul comun la adresa de contact a site-ului (Brand::emailContact); de aici lipsa_sau_gol"
+        },
+        "css_js_in_fisiere": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-40 (B6, regula R1): codul Bioscem pune CSS-ul și JavaScript-ul șablonului în fiecare pagină; fișierele versionate se pornesc după ce clientul le vede pe site-ul de verificare",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "default_vat_percent": {
             "valoare": "19",
@@ -284,6 +300,22 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
         },
+        "imagini_srcset": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-40 (B5, regula R1): codul Bioscem n-are variantele pozelor (srcset); se pornesc după trecerea o dată prin poze (scripts/optimizeaza-imagini.php) și după ce clientul le vede pe site-ul de verificare",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "merchant_feed": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-40 (B8): Bioscem are azi fluxul Google Merchant (livrarea 2 SEO, d277727); rămâne pornit",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "order_email_from_name": {
             "valoare": "Bioscem",
             "mod": "lipsa_sau_gol",
@@ -322,6 +354,22 @@
             "mod": "lipsa",
             "din": "manual",
             "sursa": "decizie WP-21 (C10): codul Bioscem nu are bulina recenziilor în meniul adminului (views/admin/layout.php); fiecare pagină de admin rămâne identică până o pornește clientul din setări (recenzii_insigna_meniu = 1)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "sesiune_doar_la_nevoie": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-40 (B6, regula R1): codul Bioscem pornește sesiunea pe fiecare pagină; sesiunea doar la nevoie (atinge coșul) se pornește după ce clientul o vede pe site-ul de verificare, cu testele de coș și plată",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "sursa_comenzii": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizie WP-40 (B9, regula R1): codul Bioscem nu notează sursa comenzii; se pornește după ce clientul vede raportul pe site-ul de verificare",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
         },

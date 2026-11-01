@@ -66,8 +66,8 @@ poarta G-sonde "verificările pe site-urile live (agregate, sonda schemei, din-s
     "tools/dev/php.sh tools/dev/test-sonde.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-sonde.php" WP-10
 poarta G-calc "golden master-ul local (compara-calcule.php --local și pe un site de verificare simulat: diferite 0, mutațiile care trebuie să pice, diferențele declarate, refuzurile) și amprenta paginilor (amprenta-site.php pe codul Bioscem și pe codul comun, cu gazda sursă), față de același cod de bază ca G-cmp; din WP-11b și golden master-ul Biovitality (--profil=biovitality, față de codul Biovitality revizuit, pe o bază făcută ca a lui); și cu php$MINIM (rulează pe servere)" \
     "tools/dev/compara-calcule-local.sh ;; CMS_DEV_PHP=php$MINIM tools/dev/compara-calcule-local.sh" WP-11
-poarta G-vizual "stilurile calculate ale paginilor publice față de codul Bioscem însuși, pe serverele lui G-cmp, licența „toate” și licența Bioscem (capturile, doar pentru ochi); întâi autotestul instrumentului" \
-    "tools/dev/capturi-publice.sh --autotest ;; tools/dev/capturi-publice.sh ;; tools/dev/capturi-publice.sh --licenta=bioscem" WP-13
+poarta G-vizual "stilurile calculate ale paginilor publice față de codul Bioscem însuși, pe serverele lui G-cmp, licența „toate” și licența Bioscem (capturile, doar pentru ochi); întâi autotestul instrumentului; apoi valorile noi ale vitezei (WP-40) față de cele vechi, pe codul curent" \
+    "tools/dev/capturi-publice.sh --autotest ;; tools/dev/capturi-publice.sh ;; tools/dev/capturi-publice.sh --licenta=bioscem ;; tools/dev/vizual-valori-noi.sh" WP-13
 poarta G-pachet "pachetul Bioscem, pachetul Biovitality (cu baza în forma Biovitality) și pachetul neutru" \
     "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php biovitality ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-16
 poarta G-lic "sincronizarea licenței cu CRM-ul (CRM fals)" "tools/dev/php.sh tools/dev/test-licenta-crm.php" WP-27

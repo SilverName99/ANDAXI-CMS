@@ -44,7 +44,8 @@
         "catalog/0042_marci_etichete": "29d769ece9d5bd27171b9b89f3c56b398c43d1fe31ebf66ed7d4342547b750fa",
         "nucleu/0046_redirectionari": "e3ff069014109d01c8464940e657a910e8274da064f760e7d9b025d1b9120931",
         "nucleu/0047_jurnal_404": "0badd095b26bfe128ef2e8e34b4f69866f387c389c719037d56f3bd7a2e3a7fe",
-        "catalog/0048_produse_ean": "0b8dd255a7c12271635ecb9c14f2aac419d16ee8e78c842beb80af165f886c2f"
+        "catalog/0048_produse_ean": "0b8dd255a7c12271635ecb9c14f2aac419d16ee8e78c842beb80af165f886c2f",
+        "magazin/0051_sursa_comenzii": "8d19807543ae01ac089f2e7f451c604b8218ebe924bba28f5d684d0100b1ef31"
     },
     "retrase": {}
 }

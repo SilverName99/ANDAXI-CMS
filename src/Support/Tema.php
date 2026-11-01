@@ -16,8 +16,8 @@ namespace App\Support;
  * |---|---|---|
  * | `css` | `[]` | foi de stil ale temei (`/tema/…css`), după `app.css`, înaintea CSS-ului din Design |
  * | `incarca_app_css` | `true` | `false`: paginile publice nu mai încarcă `/assets/css/app.css` (adminul da, din layoutul lui) |
- * | `fonturi` | `[]` | fonturile din nucleu (`/assets/vendor/fonturi/<familie>/<familie>.css`) |
- * | `fonturi_google` | `true` | `false`: fără legătura spre Google Fonts (DM Sans, Playfair) |
+ * | `fonturi` | DM Sans și Playfair din nucleu | fonturile din nucleu (`/assets/vendor/fonturi/<familie>/<familie>.css`); `[]` = niciunul |
+ * | `fonturi_google` | `false` | `true`: legătura spre Google Fonts (DM Sans, Playfair), ca înainte de WP-40 |
  * | `bootstrap` | `false` | `true`: Bootstrap 5.3.8 din nucleu (CSS în head, JS cu defer la final) |
  * | `js_final` | `[]` | scripturile temei (`/tema/…js`), cu defer, înainte de `</body>` |
  * | `main` | `container` | `lat`: `<main class="site-container">`, fără `.container` (secțiunile își pun singure containerul) |
@@ -51,8 +51,12 @@ final class Tema
     public const IMPLICIT = [
         'css' => [],
         'incarca_app_css' => true,
-        'fonturi' => [],
-        'fonturi_google' => true,
+        // WP-40 (SEO partea B, B6): fonturile paginilor publice (DM Sans, Playfair) din nucleu, nu de la Google Fonts: adresa
+        // vizitatorului nu pleacă la un terț înainte de acordul pentru cookie-uri și pagina nu așteaptă alt server. Aceleași
+        // familii și greutăți (fișierele pe care le dă Google pentru aceeași cerere), deci același aspect. Un site care
+        // rămâne pe Google o spune în tema lui (de pildă site-ul înghețat: "fonturi_google": true, "fonturi": [], până decide).
+        'fonturi' => ['/assets/vendor/fonturi/dm-sans/dm-sans.css', '/assets/vendor/fonturi/playfair/playfair.css'],
+        'fonturi_google' => false,
         'bootstrap' => false,
         'js_final' => [],
         'main' => 'container',

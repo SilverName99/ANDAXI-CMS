@@ -33,7 +33,9 @@ declare(strict_types=1);
  *    date personale, păstrarea), redirecționările automate la schimbarea slug-ului și propunerea de la ștergere
  *    (tools/dev/lib/test-seo-redirectionari.php); E3 (WP-39) sitemap-ul pe tipuri, datele structurate ale fiecărui fel de
  *    pagină, livrarea și returul din admin, codul EAN, lista blogului, catalogul GR și verifica-redirecturi.php pe 40 de
- *    adrese inventate (tools/dev/lib/test-seo-sitemap-jsonld.php).
+ *    adrese inventate (tools/dev/lib/test-seo-sitemap-jsonld.php); E4 (WP-40) sesiunea doar la nevoie, cache-ul extins,
+ *    CSS-ul și JavaScript-ul șablonului în fișiere, fonturile din nucleu, HSTS, pozele cu variantele lor, fluxul Merchant
+ *    pornit/oprit și sursa comenzilor (tools/dev/lib/test-seo-viteza.php).
  *
  * Serverele în plus pornesc pe CMS_DEV_PORT+2 și +3 și se opresc la final; la
  * final se pune la loc licența „toate”. Raportul: $CMS_DEV_DIR/test-seo-raport.txt;
@@ -1189,11 +1191,12 @@ try {
         && str_contains($cerere($portOprit, 'GET', '/', $corect)['corp'], 'application/ld+json'));
 
     // =================================================================
-    // E. SEO partea B (WP-37, WP-38, WP-39), pe serverul de dezvoltare
+    // E. SEO partea B (WP-37 … WP-40), pe serverul de dezvoltare
     // =================================================================
     require __DIR__ . '/lib/test-seo-model.php';
     require __DIR__ . '/lib/test-seo-redirectionari.php';
     require __DIR__ . '/lib/test-seo-sitemap-jsonld.php';
+    require __DIR__ . '/lib/test-seo-viteza.php';
 } catch (Throwable $e) {
     $verifica('testul a mers până la capăt', false, $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')');
 } finally {

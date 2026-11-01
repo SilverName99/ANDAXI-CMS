@@ -336,6 +336,15 @@ final class Settings
         // revalidează la fiecare cerere) sau „max_age” (o ține până la o zi fără să întrebe; înghețat pe site-urile
         // care îl aveau). Fără câmp în admin (o schimbă ANDAXI).
         'page_cache_browser_policy' => 'revalidate',
+        // WP-40 (SEO partea B, B5/B6/B8/B9): fiecare punct al vitezei și al Google pe un comutator, pornit în nucleu și
+        // înghețat la valoarea de azi pe site-urile care nu-l aveau (setari-inghetate.json; acolo oprite, pornite după
+        // ce proprietarul le vede pe site-ul de verificare). Fără câmp în admin, afară de fluxul Merchant (Setări magazin → SEO Google).
+        'imagini_srcset' => '1',          // B5: pozele cu variantele WebP (srcset, sizes, width, height)
+        'sesiune_doar_la_nevoie' => '1',  // B6: fără sesiune pe paginile publice ale unui vizitator fără coș și fără cont
+        'cache_pagini_extins' => '1',     // B6: cache-ul de pagini și pe /, /produs/*, /categorie/*, /marca/*, /eticheta/*, /magazin
+        'css_js_in_fisiere' => '1',       // B6: CSS-ul și JavaScript-ul fix al șablonului în fișiere versionate, nu în fiecare pagină
+        'merchant_feed' => '1',           // B8: fluxul /feed/google-merchant.xml pornit (cu magazinul)
+        'sursa_comenzii' => '1',          // B9: sursa fiecărei comenzi (Google, reclamă, email, alt site, direct) și raportul ei
     ];
 
     /**

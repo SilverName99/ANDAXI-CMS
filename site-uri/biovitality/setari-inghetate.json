@@ -4,7 +4,7 @@
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@779e0d8",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
-    "amprenta_nucleu": "9d50cc2c41c5d42c9017d4a66c037b38a7666e4fa967951ecc18f593741c918e",
+    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Biovitality",
@@ -443,6 +443,11 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
         },
+        "cache_pagini_extins": {
+            "motiv": "WP-40 (B6): cache-ul de pagini extins pornit la adoptare (prima pagină, magazinul, produsele, categoriile, mărcile, etichetele, 10 minute; golit la orice schimbare); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "catalog_pagina": {
             "motiv": "Același catalog la /magazin în ambele coduri (WP-19, GR-09: catalog_pagina = magazin)",
             "vechi": "lipsește",
@@ -493,6 +498,11 @@
             "vechi": "cod expresie",
             "nucleu": "implicit \"\""
         },
+        "css_js_in_fisiere": {
+            "motiv": "WP-40 (B6): CSS-ul și JavaScript-ul fix al șablonului din fișiere versionate, pornit la adoptare (același aspect, dovedit de G-vizual cu valorile noi); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "email_brand_color": {
             "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",
             "vechi": "lipsește",
@@ -523,6 +533,16 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
         },
+        "imagini_srcset": {
+            "motiv": "WP-40 (B5): pozele cu variantele WebP (srcset) pornite la adoptare, după trecerea o dată prin poze (scripts/optimizeaza-imagini.php); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "merchant_feed": {
+            "motiv": "WP-40 (B8): fluxul Google Merchant pornit la adoptare (doar cu magazinul; fără el, fluxul nu există); se oprește din Setări magazin → SEO Google",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "recenzii_insigna_meniu": {
             "motiv": "Biovitality arată deja bulina recenziilor neaprobate în meniu (84e29a9, views/admin/layout.php); implicitul nucleului (1) e comportamentul de azi",
             "vechi": "lipsește",
@@ -532,6 +552,16 @@
             "motiv": "OD-15: codul Biovitality ține adresa recenziei pe termen nelimitat; codul comun o golește după 90 de zile (declarat în ce-se-schimba.md)",
             "vechi": "lipsește",
             "nucleu": "implicit \"90\""
+        },
+        "sesiune_doar_la_nevoie": {
+            "motiv": "WP-40 (B6): sesiunea doar unde e nevoie, pornită la adoptare (coșul, contul, plata și formularele o pornesc ca înainte); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "sursa_comenzii": {
+            "motiv": "WP-40 (B9): sursa comenzii și raportul ei pornite la adoptare (doar cu magazinul); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "welcome_popup_version": {
             "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",

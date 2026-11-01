@@ -231,7 +231,7 @@ grafoanaytis nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO a
 | `50f5d28` | — | Pagina Produse în meniu | pachetul GR (GR-20); implicitul → GR-22 |
 | `2c11526` | — | Formularul GDPR adaptat | de portat (WP-18, GR-03) |
 | `86ca09b` | — | Fontul Rubik, meniu cu majuscule | Rubik portat (WP-13, 22 octombrie, GR-07: `public/assets/vendor/fonturi/rubik/`, aceleași greutăți și fișierul variabil al lui GR, o singură copie pe subset; `tema.json` → `fonturi`, `fonturi_google: false`); restul pachetul GR |
-| `94a44db` | — | Banda de clienți, imaginile clientului | pachetul GR; `optimizeaza-imagini` → WP-40 (B5); `mapeaza-imagini` nu se portează |
+| `94a44db` | — | Banda de clienți, imaginile clientului | pachetul GR; `optimizeaza-imagini` portat în WP-40 (B5: `scripts/optimizeaza-imagini.php`, variantele 160–1200 px ale nucleului); `mapeaza-imagini` nu se portează |
 | `873383e` | — | Imaginile lipsă arată a machetă (`imagini.js`) | pachetul GR (`js_final`, GR-19) |
 | `9e21659` | — | Banner de proiect, pagina Companie, `install`/`seed` | codurile de ieșire portate în WP-05 (GR-02: `install.php` și `seed.php` ies cu 1, mesajul pe stderr); restul pachetul GR |
 | `2ec6c26` `6b41718` `69b1852` | — | Inventarul golurilor, documentul pentru client, marcajele „[DE COMPLETAT]” | nu se portează (unelte GR, GR-21) |

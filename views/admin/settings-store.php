@@ -600,6 +600,35 @@ admin_componenta('antet-pagina', [
         </section>
 <!--/port:seo:livrare-retur-->
 <?php endif; ?>
+<?php if (\App\Support\Plugins::vizibil('magazin')): ?>
+<!--port:seo:flux-merchant-->
+            <?php $fluxPornit = (string) ($settings['merchant_feed'] ?? '1') === '1'; ?>
+        <section class="adm-sectiune" id="setari-flux-merchant" aria-labelledby="setari-flux-merchant-titlu">
+            <header class="adm-sectiune__antet">
+                <div>
+                    <h2 class="adm-sectiune__titlu" id="setari-flux-merchant-titlu">Fluxul pentru Google Merchant</h2>
+                    <p class="adm-sectiune__descriere">
+                Lista produselor active pentru Google Merchant Center (prețul, stocul, pozele, codul EAN, livrarea), la
+                <a href="/feed/google-merchant.xml" target="_blank" rel="noopener">/feed/google-merchant.xml</a>. Oprit, adresa răspunde 404.
+                    </p>
+                </div>
+            </header>
+            <div class="adm-sectiune__corp">
+            <form method="post" action="/admin/settings/store">
+                <?= \App\Support\AdminCsrf::camp() ?>
+                <input type="hidden" name="action" value="save_flux_merchant">
+                <label style="display:flex;align-items:center;gap:8px;" for="merchant_feed">
+                    <input type="checkbox" id="merchant_feed" name="merchant_feed" value="1"<?= $fluxPornit ? ' checked' : '' ?>>
+                    Fluxul pornit
+                </label>
+                <div style="margin-top:10px;">
+                    <button class="btn" type="submit">Salvează fluxul</button>
+                </div>
+            </form>
+            </div>
+        </section>
+<!--/port:seo:flux-merchant-->
+<?php endif; ?>
             <?php $sitemapUrl = (string) ($sitemapUrl ?? '/sitemap.xml'); ?>
             <?php $sitemapFilename = trim((string) ($sitemapFilename ?? 'sitemap.xml')); ?>
         <section class="adm-sectiune" id="setari-sitemap" aria-labelledby="setari-sitemap-titlu">

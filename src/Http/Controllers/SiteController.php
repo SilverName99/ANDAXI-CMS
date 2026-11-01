@@ -2039,6 +2039,8 @@ final class SiteController
                 }
             } catch (\Throwable) {
             }
+            // WP-40 (B9): de unde a venit clientul (Google, reclamă, email, alt site, direct), pentru raportul din admin.
+            \App\Support\SursaComenzii::salveaza($db, (int) $orderId, $this->cachedSettings($db));
 
             $itemStmt = $db->prepare(
                 'INSERT INTO order_items (order_id, product_id, product_name, bbd_key, quantity, unit_price, line_total)
@@ -9472,6 +9474,15 @@ CSS;
      */
     public function fluxGoogleMerchant(): void
     {
+        // WP-40 (B8): fluxul se oprește din Setări magazin → SEO Google (setarea merchant_feed): atunci 404, ca un site fără el.
+        $dbFlux = $this->db();
+        if ((string) ($this->cachedSettings($dbFlux instanceof PDO ? $dbFlux : null)['merchant_feed'] ?? '1') !== '1') {
+            http_response_code(404);
+            header('Content-Type: text/plain; charset=utf-8');
+            header('X-Robots-Tag: noindex');
+            echo 'Fluxul de produse nu e pornit pe acest site.';
+            return;
+        }
         // Cât magazinul se oprește nu se mai poate cumpăra nimic: canalul rămâne, fără produse,
         // imediat (nu după cele 15 minute ale cache-ului, care ține doar fluxul cu produse).
         $cuProduse = \App\Support\Plugins::permiteInceput('magazin');

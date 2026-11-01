@@ -66,32 +66,10 @@ if (PHP_SAPI === 'cli' && !defined('ANDAXI_CU_SESIUNE')) {
     if (!isset($_SESSION) || !is_array($_SESSION)) {
         $_SESSION = [];
     }
-} elseif (session_status() === PHP_SESSION_NONE && !$faraSesiune) {
-    $viataSesiune = 60 * 60 * 24 * 30; // 30 de zile
-
-    // Dosarul îl face Paths dacă lipsește, cu gardul .htaccess în el.
-    $dosarSesiuni = App\Support\Paths::stocareSite('sessions');
-    if (is_dir($dosarSesiuni) && is_writable($dosarSesiuni)) {
-        ini_set('session.save_path', $dosarSesiuni);
-        // Curățenia o facem noi, pe dosarul nostru: altfel fișierele s-ar
-        // strânge la nesfârșit, fiindcă gc-ul serverului nu se uită aici.
-        ini_set('session.gc_probability', '1');
-        ini_set('session.gc_divisor', '200');
-    }
-    ini_set('session.gc_maxlifetime', (string) $viataSesiune);
-    ini_set('session.use_strict_mode', '1');
-
-    $peHttps = (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off')
-        || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
-    session_set_cookie_params([
-        'lifetime' => $viataSesiune,
-        'path' => '/',
-        'httponly' => true,
-        'samesite' => 'Lax',
-        'secure' => $peHttps,
-    ]);
-
-    session_start();
+} elseif (session_status() === PHP_SESSION_NONE && !$faraSesiune && !defined('ANDAXI_SESIUNE_AMANATA')) {
+    // Pornirea însăși (30 de zile, dosarul site-ului, cookie-ul): App\Support\SesiuneLaNevoie::porneste. public/index.php
+    // o amână (ANDAXI_SESIUNE_AMANATA) până citește setările: WP-40 (B6), sesiunea doar unde e nevoie.
+    App\Support\SesiuneLaNevoie::porneste();
 }
 
 App\Support\Env::load(App\Support\Paths::env());

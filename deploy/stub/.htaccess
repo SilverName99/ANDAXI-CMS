@@ -13,6 +13,14 @@ RewriteRule (^|/)\.(?!well-known/) - [F,L]
 RewriteRule ^sitemap\.xml$ index.php [L,QSA]
 RewriteRule ^sitemap-(pagini|produse|categorii|marci|etichete|articole|blog-categorii|blog-etichete)\.xml$ index.php [L,QSA]
 
+# WP-40 (B6): un fișier din /assets/ cerut cu ?v= (versiunea lui, data fișierului) nu se mai schimbă la aceeași adresă:
+# browserul îl ține un an, fără să mai întrebe (immutable). Fără ?v=, ca înainte.
+RewriteCond %{QUERY_STRING} (^|&)v=
+RewriteRule ^assets/ - [E=AX_VERSIONAT:1]
+<IfModule mod_headers.c>
+    Header always set Cache-Control "public, max-age=31536000, immutable" env=AX_VERSIONAT
+</IfModule>
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]

@@ -59,11 +59,13 @@ $tImplicitExplicit = array_filter(Tema::IMPLICIT, static fn ($v): bool => $v !==
 DateSite::reseteaza($tTemp . '/fara-pachet');
 Tema::reseteaza();
 $verifica('fără dosarul site-ului: fiecare cheie la implicit, nicio problemă', Tema::valori() === Tema::IMPLICIT && Tema::probleme() === []);
-// Implicitul scris aici de mână, nu luat din Tema::IMPLICIT: e ce face codul de dinainte de WP-13 (docs/PACHETE.md).
-$tImplicitAzi = ['css' => [], 'incarca_app_css' => true, 'fonturi' => [], 'fonturi_google' => true, 'bootstrap' => false, 'js_final' => [],
+// Implicitul scris aici de mână, nu luat din Tema::IMPLICIT: e ce face codul de dinainte de WP-13 (docs/PACHETE.md), cu
+// fonturile din nucleu în loc de Google Fonts (WP-40, B6: aceleași familii, servite de site).
+$tImplicitAzi = ['css' => [], 'incarca_app_css' => true, 'fonturi' => ['/assets/vendor/fonturi/dm-sans/dm-sans.css',
+    '/assets/vendor/fonturi/playfair/playfair.css'], 'fonturi_google' => false, 'bootstrap' => false, 'js_final' => [],
     'main' => 'container', 'flash' => 'panou', 'buton_sus' => false, 'culoare_principala' => '#2f8d5b', 'logo_meniu_mobil' => null,
     'iconite_categorii' => null, 'css_inline' => [], 'newsletter' => null];
-$verifica('valorile implicite ale celor ' . count($tImplicitAzi) . ' chei sunt comportamentul de azi (Google Fonts, app.css, .container, '
+$verifica('valorile implicite ale celor ' . count($tImplicitAzi) . ' chei sunt comportamentul de azi (fonturile din nucleu, app.css, .container, '
     . 'panourile, fără buton „sus”, #2f8d5b …)', Tema::IMPLICIT === $tImplicitAzi,
     (string) json_encode(array_diff_assoc(array_map('json_encode', Tema::IMPLICIT), array_map('json_encode', $tImplicitAzi)), JSON_UNESCAPED_SLASHES));
 [$v, $p] = Tema::valideaza([], $tPachet);

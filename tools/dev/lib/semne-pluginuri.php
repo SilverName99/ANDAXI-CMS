@@ -17,7 +17,7 @@ return [
     'catalog' => ['/Categorii produse/u', '/Vezi toate produsele/u', '/Câmpuri suplimentare/u', '/Ascuns din lista magazinului/u',
         '/Poziție în liste/u', '/Link de ciornă/u', '/Ordinea din catalog/u', '/Pagina se vede doar prin acest link/u', '/Produse asemănătoare/u'],
     // Avertismentul pe produs (Bioscem 333ba9e, fa76c4f): cardul din editorul produsului și codul din emailuri.
-    'magazin' => ['/Adaugă în coș/u', '/Finalizează comanda/u', '/Comenzi recente/u', '/Numerotare comenzi/u', '/Coș flotant/u',
+    'magazin' => ['/Sursa comenzilor/u', '/Fluxul pentru Google Merchant/u', '/Livrare și retur în Google/u', '/Adaugă în coș/u', '/Finalizează comanda/u', '/Comenzi recente/u', '/Numerotare comenzi/u', '/Coș flotant/u',
         '/Avertisment la coș/u', '/Avertismentele confirmate/u', '/Comandă online pe/u',
         // WP-32: cifrele zilei și rândurile magazinului din „De făcut” pe Acasă.
         '/Vânzări azi/u', '/Coșuri abandonate/u', '/Stoc scăzut/u', '/de verificat în bancă/u', '/no(i|uă) de confirmat/u',

@@ -1670,6 +1670,8 @@ $marcajePort = [
         . 'structurate (gtin13) și fluxul Merchant'],
     'seo:livrare-retur' => ['cale' => '/admin/settings/store', 'motiv' => 'WP-39 (B4, D10): secțiunea „Livrare și retur în Google” '
         . '(peste condițiile din pachetul site-ului; goală = ca în pachet)'],
+    'seo:flux-merchant' => ['cale' => '/admin/settings/store', 'motiv' => 'WP-40 (B8): comutatorul fluxului Google Merchant '
+        . '(setarea merchant_feed, înghețată la „1”: fluxul rămâne ca azi)'],
 ];
 // WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
 // dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de

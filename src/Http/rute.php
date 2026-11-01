@@ -22,6 +22,7 @@ use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\RedirectionariController;
 use App\Http\Controllers\SeoAdminController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\SursaComenziiController;
 use App\Http\Router;
 
 return static function (Router $router): void {
@@ -208,6 +209,8 @@ return static function (Router $router): void {
     $router->post('/admin/products/image-upload', [AdminController::class, 'productImageUpload']);
     $router->get('/admin/orders', [AdminController::class, 'orders']);
     $router->get('/admin/orders/export', [AdminController::class, 'ordersExport']);
+    // WP-40 (B9): Rapoarte → Sursa comenzilor (pluginul magazin; App\Support\SursaComenzii).
+    $router->get('/admin/orders/sursa-comenzilor', [SursaComenziiController::class, 'raport']);
     $router->post('/admin/orders/{id}/erp-retry', [AdminController::class, 'orderErpRetry']);
     $router->post('/admin/orders/{id}/confirma-plata-op', [AdminController::class, 'orderMarkPaid']);
     $router->get('/admin/orders/trash', [AdminController::class, 'ordersTrash']);

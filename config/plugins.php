@@ -197,6 +197,9 @@ return [
             'meniu' => [
                 ['grup' => 'comenzi', 'ordine' => 10, 'eticheta' => 'Comenzi', 'href' => '/admin/orders', 'icon' => 'orders',
                     'activ' => $activExact('/admin/orders', '/admin/orders/trash')],
+                // WP-40 (B9): comenzile pe săptămâni și pe surse (Google, reclamă, email, alt site, direct).
+                ['grup' => 'rapoarte', 'ordine' => 15, 'eticheta' => 'Sursa comenzilor', 'href' => '/admin/orders/sursa-comenzilor', 'icon' => 'stats',
+                    'activ' => ['/admin/orders/sursa-comenzilor']],
                 ['grup' => 'setari', 'ordine' => 50, 'eticheta' => 'Coș flotant', 'href' => '/admin/settings/floating-cart',
                     'icon' => 'store', 'activ' => ['/admin/settings/floating-cart']],
                 // Pagina de plăți are și ordinul de plată (al magazinului), și procesatorii de card.

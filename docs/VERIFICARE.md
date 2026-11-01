@@ -477,6 +477,55 @@ Ce să te uiți (și ce să ne spui):
 
 La final, ca după orice sesiune: pasul 8 (`sterge.php`), sau o lași: se închide singură după 7 zile.
 
+### 6d. SEO partea B (WP-37 … WP-40) pe copia demonstrativă (oricând)
+
+Pe copia demonstrativă de la 6c (pachetul `bioscem`, date inventate). Pe ea, ca pe Bioscem după trecere, punctele de viteză
+ale WP-40 sunt **oprite** (înghețate); le pornești tu, le vezi, apoi le oprești la loc. Cam 15 minute.
+
+```sh
+cd ~/domains/<domeniul-verificare>/public_html
+git pull --ff-only
+PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3
+$PHP tools/verificare/incarca.php --demo --pachet=bioscem --reincarca
+#   ultimul rând: „GATA: copia e anonimizată, toate verificările au trecut” (întrebările ca la 6c)
+$PHP scripts/comutatoare-seo.php --arata
+#   șase rânduri; pe Bioscem „OPRIT” la toate, afară de merchant_feed (PORNIT)
+```
+
+În browser, întâi cu ele oprite (așa arată Bioscem în ziua trecerii):
+
+- `/sitemap.xml`: indexul, cu sitemap-urile pe tipuri (`/sitemap-produse.xml` …), fiecare adresă cu data ei (WP-39).
+- Admin → Produse → un produs → „Cod EAN (GTIN)” (încearcă `5901234123457`, bun, și `5901234123458`, greșit: nu se
+  salvează, mesajul spune de ce); Setări magazin → SEO Google → „Livrare și retur în Google” și „Fluxul pentru Google
+  Merchant” (adresa fluxului, `/feed/google-merchant.xml`, se deschide).
+- Admin → Setări → „Redirecționări și 404” (WP-38) și panoul SEO din editorul unui produs, al unei categorii (WP-37).
+- Admin → Rapoarte → „Sursa comenzilor”: comenzile demo, toate „Necunoscută” (sursa e oprită).
+
+Apoi pornești valorile noi și te uiți din nou la aceleași pagini publice (prima pagină, magazinul, un produs, o categorie,
+blogul), pe telefon și pe calculator:
+
+```sh
+$PHP scripts/optimizeaza-imagini.php --aplica
+#   „optimizeaza-imagini: N poze …; scrise: M”; dacă spune „PHP-ul acesta n-are GD cu WebP”, ne trimiți rândul
+$PHP scripts/comutatoare-seo.php --porneste
+#   șase rânduri „PORNIT”
+```
+
+- Paginile trebuie să arate **exact la fel**. Ce se schimbă e dedesubt: în codul paginii (clic dreapta → „Vezi sursa”)
+  pozele au `srcset="/uploads/_variante/…"`, CSS-ul vine din `/assets/css/sablon-site.min.css?v=…`; în instrumentele
+  browserului (F12 → Rețea), o pagină publică deschisă într-o fereastră privată nu primește cookie-ul `PHPSESSID`, iar a
+  doua deschidere a magazinului are antetul `X-Page-Cache: HIT`.
+- Pune un produs în coș și comandă (ramburs): coșul și comanda merg ca înainte. Venit dintr-un link cu
+  `?utm_source=test&utm_medium=email`, comanda apare în Rapoarte → Sursa comenzilor la „Email”.
+- Fonturile: Bioscem rămâne pe Google Fonts până decizi (`tema/tema.json` → `"fonturi_google": true`); celelalte site-uri
+  le iau de pe site (aceleași familii și greutăți, dovedit în `tools/dev/test-seo.php` E4).
+
+La final, înapoi ca în ziua trecerii, apoi ne spui ce ai văzut (și dacă vrei punctele pornite pe Bioscem, una câte una):
+
+```sh
+$PHP scripts/comutatoare-seo.php --opreste=imagini_srcset,sesiune_doar_la_nevoie,cache_pagini_extins,css_js_in_fisiere,sursa_comenzii
+```
+
 ### 7. Licența copiei (pachetul de pluginuri)
 
 Ce pluginuri are copia (de exemplu cele ale Bioscem, sau un pachet cu blogul oprit, ca să vezi ce

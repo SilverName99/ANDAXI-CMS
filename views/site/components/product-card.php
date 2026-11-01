@@ -43,7 +43,7 @@
         <article class="bv-popular-card shop-catalog-v2__card" data-product-category="<?= htmlspecialchars((string) ($product['category'] ?? ''), ENT_QUOTES) ?>">
           <div class="bv-popular-card__media-wrap">
             <a class="bv-popular-card__media" href="/produs/<?= rawurlencode($slug) ?>">
-              <img class="bv-popular-card__img" src="<?= htmlspecialchars($image, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($name, ENT_QUOTES) ?>"<?= \App\Support\ImageDimensions::atribute($image) ?> loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+              <img class="bv-popular-card__img" src="<?= htmlspecialchars($image, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($name, ENT_QUOTES) ?>"<?= \App\Support\ImageDimensions::atribute($image) ?><?= \App\Support\VarianteImagini::atribute($image) ?> loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
 <?php if ($arePreturi): ?>
               <?php if ($discount > 0): ?>
                 <?php if ($discountMode === 'value'): ?>

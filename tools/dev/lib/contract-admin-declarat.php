@@ -304,4 +304,16 @@ return [
         'livrare-retur-optiuni' => ['ce' => 'adaugat', 'rand' => '^optiuni POST /admin/settings/store seo_(livrare_retur: \|1\|0|retur_taxe: \|client\|gratuit)$',
             'cale' => '^/admin/settings/store', 'motiv' => 'opțiunile celor două liste (implicit „ca în pachet”)'],
     ],
+    // WP-40 (SEO partea B, B8/B9): raportul „Sursa comenzilor” din Rapoarte (pagină nouă, doar cu pluginul magazinului; o plimbă
+    // G-tastatura, iar datele lui le verifică tools/dev/test-seo.php E4) și comutatorul fluxului Google Merchant din Setări
+    // magazin → SEO Google (un formular nou, cu jetonul lui, la aceeași adresă, acțiunea save_flux_merchant).
+    'WP-40' => [
+        'meniu-sursa-comenzilor' => ['ce' => 'adaugat', 'rand' => '^link /admin/orders/sursa-comenzilor$',
+            'motiv' => 'intrarea „Sursa comenzilor” din Rapoarte (de unde au venit comenzile: Google, reclame, email, alt site, direct)'],
+        'flux-merchant-campuri' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/store (input:hidden action = save_flux_merchant'
+            . '|input:hidden _csrf = <TOKEN>|input:checkbox merchant_feed = 1)$', 'cale' => '^/admin/settings/store',
+            'motiv' => 'comutatorul fluxului Google Merchant (setarea merchant_feed; oprit, /feed/google-merchant.xml răspunde 404)'],
+        'flux-merchant-link' => ['ce' => 'adaugat', 'rand' => '^link /feed/google-merchant\\.xml$', 'cale' => '^/admin/settings/store',
+            'motiv' => 'adresa fluxului, de dat în Google Merchant Center'],
+    ],
 ];

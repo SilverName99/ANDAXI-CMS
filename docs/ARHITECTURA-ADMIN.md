@@ -71,6 +71,15 @@ categorie și „Etichete blog — SEO Google”. Formularele etichetelor și li
 blog), toate cu jetonul formularului (`_csrf`; revizuirea WP-37/38). Rolurile rămân aceleași (Categorii produse: rolul
 magazinului; Categorii blog: administratorul general).
 
+## Sursa comenzilor și fluxul Merchant (WP-40, 1 noiembrie)
+
+O pagină nouă în **Rapoarte**: „Sursa comenzilor” (`/admin/orders/sursa-comenzilor`, pluginul magazinului, cine are voie
+la comenzi): comenzile și valoarea lor pe săptămâni (ultimele 4, 8, 12, 26 sau 52) și pe surse (Google, reclame Google,
+email, campanie, alt site, direct, necunoscută pentru comenzile de dinainte); doar numere, niciun client. Setări magazin →
+tabul „SEO Google” primește secțiunea „Fluxul pentru Google Merchant” (un formular separat, cu jetonul formularului,
+acțiunea `save_flux_merchant`): comutatorul fluxului și adresa lui. Celelalte comutatoare ale WP-40 (viteza, pozele, sursa
+comenzilor) n-au câmp în admin: `php scripts/comutatoare-seo.php`. `docs/SEO.md` §6b, §8, §8b.
+
 ## Codul EAN și livrarea pentru Google (WP-39, 1 noiembrie)
 
 Nicio pagină nouă. Editorul produsului (secțiunea „Stoc și coduri”, lângă SKU) primește „Cod EAN (GTIN)”: doar cifre, 8, 12, 13

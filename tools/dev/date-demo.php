@@ -114,6 +114,9 @@ Settings::save($db, [
     'welcome_popup_body' => "Acesta este un site de test al Firma Demo SRL.\n\nToate produsele, comenzile și persoanele sunt inventate.",
     'welcome_popup_version' => '1',
     'cookie_banner_policy_url' => '/politica-cookie',
+    // WP-40 (B6): cache-ul de pagini extins oprit pe baza de dezvoltare: testele schimbă baza direct (fără golirea pe care
+    // o face salvarea din admin) și cer pagina imediat; testele vitezei îl pornesc ele (tools/dev/test-seo.php E4).
+    'cache_pagini_extins' => '0',
 
     // EuPlătesc nu are o adresă de test separată în cod: rămâne oprit.
     'euplatesc_enabled' => '0',

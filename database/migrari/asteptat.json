@@ -4410,6 +4410,12 @@
                     "null": false,
                     "tip": "decimal(10,2)"
                 },
+                "sursa": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
                 "terms_accepted_at": {
                     "extra": "",
                     "implicit": null,

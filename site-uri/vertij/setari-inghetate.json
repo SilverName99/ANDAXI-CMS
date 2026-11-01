@@ -4,7 +4,7 @@
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@0fc2b2c",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "9d50cc2c41c5d42c9017d4a66c037b38a7666e4fa967951ecc18f593741c918e",
+    "amprenta_nucleu": "65d6ed4e22a8d854150a9c75926464ea172bb8ba22d34eee59dc611885435bca",
     "setari": {
         "account_activation_active_text": {
             "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
@@ -613,6 +613,11 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
         },
+        "cache_pagini_extins": {
+            "motiv": "WP-40 (B6): cache-ul de pagini extins pornit la adoptare (prima pagină, magazinul, produsele, categoriile, mărcile, etichetele, 10 minute; golit la orice schimbare); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "catalog_pagina": {
             "motiv": "Același catalog la /magazin în ambele coduri (WP-19, GR-09: catalog_pagina = magazin)",
             "vechi": "lipsește",
@@ -667,6 +672,11 @@
             "motiv": "Textul bannerului de cookie-uri (vezi cookie_banner_enabled): textul neutru al codului comun",
             "vechi": "lipsește",
             "nucleu": "implicit sha256:ab965d24798c193e (160 caractere)"
+        },
+        "css_js_in_fisiere": {
+            "motiv": "WP-40 (B6): CSS-ul și JavaScript-ul fix al șablonului din fișiere versionate, pornit la adoptare (același aspect, dovedit de G-vizual cu valorile noi); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "donations_currency": {
             "motiv": "Pluginul donatii (Etapa 4, VT-D1) își aduce setările; înghețarea lor vine atunci",
@@ -738,6 +748,11 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
         },
+        "imagini_srcset": {
+            "motiv": "WP-40 (B5): pozele cu variantele WebP (srcset) pornite la adoptare, după trecerea o dată prin poze (scripts/optimizeaza-imagini.php); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
         "maintenance_enabled": {
             "motiv": "Modul mentenanță e nou pentru VT: fără rând e oprit (maintenance_enabled = 0), iar textele lui se văd doar cu el pornit",
             "vechi": "lipsește",
@@ -752,6 +767,11 @@
             "motiv": "Modul mentenanță e nou pentru VT: fără rând e oprit (maintenance_enabled = 0), iar textele lui se văd doar cu el pornit",
             "vechi": "lipsește",
             "nucleu": "implicit \"Revenim în curând\""
+        },
+        "merchant_feed": {
+            "motiv": "WP-40 (B8): fluxul Google Merchant pornit la adoptare (doar cu magazinul; fără el, fluxul nu există); se oprește din Setări magazin → SEO Google",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "order_number_next": {
             "motiv": "Cu numerotarea „legacy” (order_number_mode, mai sus) contorul nu se folosește",
@@ -772,6 +792,11 @@
             "motiv": "Fără pluginul recenzii în abonament: nicio recenzie, nicio adresă",
             "vechi": "lipsește",
             "nucleu": "implicit \"90\""
+        },
+        "sesiune_doar_la_nevoie": {
+            "motiv": "WP-40 (B6): sesiunea doar unde e nevoie, pornită la adoptare (coșul, contul, plata și formularele o pornesc ca înainte); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "shipping_fixed_base": {
             "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
@@ -797,6 +822,11 @@
             "motiv": "Prețurile fixe de transport sunt noi: fără rând sunt oprite (shipping_fixed_enabled = 0); magazinul VT e oprit (licența VT fără catalog și magazin, port-vertij.md §8)",
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
+        },
+        "sursa_comenzii": {
+            "motiv": "WP-40 (B9): sursa comenzii și raportul ei pornite la adoptare (doar cu magazinul); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "tawk_enabled": {
             "motiv": "Chat-ul Tawk e nou pentru VT: fără rând e oprit (tawk_enabled = 0)",

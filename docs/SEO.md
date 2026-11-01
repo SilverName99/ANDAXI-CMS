@@ -34,6 +34,10 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | `src/Support/Seo.php` | Modelul SEO al paginilor (WP-37): rândul `seo_pages` al fiecărui fel de pagină, valorile finale din `<head>`, verificările panoului din admin |
 | `src/Support/MarciEtichete.php` | Mărcile și etichetele produselor ca entități (`product_brands`, `product_tags`, `product_tag_links`; WP-37) |
 | `views/admin/componente/panou-seo.php`, `public/assets/js/admin/seo.js` | Panoul SEO din admin, același în fiecare editor (WP-37) |
+| `src/Support/VarianteImagini.php`, `scripts/optimizeaza-imagini.php` | Pozele în mărimile ecranului: variantele WebP și `srcset` (WP-40, B5) |
+| `src/Support/SesiuneLaNevoie.php`, `src/Support/SablonSite.php`, `views/sablon-site/` | Sesiunea doar la nevoie; CSS-ul și JavaScript-ul șablonului în fișiere (WP-40, B6) |
+| `src/Support/SursaComenzii.php`, `views/admin/sursa-comenzilor.php` | Sursa comenzilor și raportul ei (WP-40, B9) |
+| `scripts/comutatoare-seo.php` | Comutatoarele WP-40 pe un site, din linia de comandă (`--arata`, `--porneste`, `--opreste`) |
 | `scripts/seo-texte.php` | Aplică textele Google scrise de mână ale unui site (`seo-texte.json` din dosarul lui) |
 | `scripts/seo-continut.php` | Schimbă o dată conținutul din bază al unui site: produse redenumite, linkuri din texte (`seo-continut.json` din dosarul lui) |
 | `site-uri/bioscem/` | Pachetul de date Bioscem (harta și regulile SEO din livrarea 1) |
@@ -384,6 +388,43 @@ Livrarea 4, Bioscem `ef22b23`, `682843c`, `9fe175d`, `dd41c59`, `a64afb6` (`SeoI
   Oprire: `SEO_PRODUSE_SIMILARE=0`.
 - **HEAD** pe o adresă cu litere mari primește același răspuns ca GET (livrarea 4, `bb11ae0`).
 
+### 6b. Viteza în nucleu (WP-40, SEO partea B, B5/B6)
+
+Fiecare punct are un comutator în `settings` (fără câmp în admin), **pornit în nucleu** și înghețat la valoarea de azi pe
+site-urile existente care nu-l aveau (`setari-inghetate.json`, `din: "manual"`; pe site-ul de referință „0”, pornite după ce
+proprietarul le vede pe site-ul de verificare). Oprit, pagina e octet cu octet ca înainte (G-cmp pe înghețare; G-vizual,
+a doua parte, compară aspectul cu valorile vechi și cu cele noi). Din linia de comandă, pe un site (verificare sau live):
+`php scripts/comutatoare-seo.php --arata | --porneste[=a,b] | --opreste[=a,b]` (golește și cache-ul de pagini).
+
+- **Pozele în mărimile ecranului** (`imagini_srcset`; `VarianteImagini`): la încărcare din admin și o dată pentru pozele
+  existente (`php scripts/optimizeaza-imagini.php --plan|--aplica`), fiecare poză JPEG/PNG/WebP/GIF primește variante WebP
+  de 160, 400, 800 și 1200 px (doar mai mici decât ea) în `/uploads/_variante/<dosar>/<nume>-<lățime>w.webp`. Cardurile,
+  magazinul, produsul (poza mare și miniaturile), lista categoriei și prima pagină pun `srcset` (variantele de pe disc plus
+  poza întreagă) cu `sizes`, `width`, `height`. Poza încărcată nu se schimbă (datele structurate și fluxul rămân pe ea);
+  pozele de profil ale membrilor (`uploads/gallery/profile/`) nu se ating. Fără GD cu WebP nu se face nimic.
+- **Sesiunea doar la nevoie** (`sesiune_doar_la_nevoie`; `SesiuneLaNevoie`): un vizitator nou care cere cu GET o pagină
+  publică nu primește sesiune (niciun fișier, niciun cookie), deci pagina poate veni din cache și din CDN. Sesiunea pornește la
+  orice POST, când browserul are deja cookie-ul ei și pe căile care o folosesc (adminul, coșul, comanda, plata, contul,
+  logarea, API-ul coșului, adresele mereu deschise ale pluginurilor); API-urile citite pe fiecare pagină (sumarul coșului,
+  căutarea, catalogul, lockerele) nu o pornesc. Plasa de siguranță: dacă o pagină fără sesiune scrie totuși în `$_SESSION`,
+  pagina e ținută în buffer și sesiunea pornește la final cu ce s-a scris; doar după ce antetele au plecat scrierea se
+  pierde, cu un rând în jurnalul PHP („ANDAXI SesiuneLaNevoie”).
+- **Cache-ul de pagini extins** (`cache_pagini_extins`; `ResponseCache::REGULI_EXTINSE`): prima pagină, magazinul (și
+  adresa catalogului), produsele, categoriile, mărcile, etichetele, 10 minute, fără reguli în admin (regulile din admin au
+  întâietate). Doar pentru cine n-are coș, cont sau un mesaj în sesiune; golit la orice schimbare de conținut.
+- **CSS-ul și JavaScript-ul șablonului în fișiere** (`css_js_in_fisiere`; `SablonSite`): cele șase blocuri fixe din
+  `views/layout.php` (~19 KB CSS, ~40 KB JS) stau în `views/sablon-site/`; pagina leagă variantele minificate
+  (`public/assets/css/sablon-site.min.css`, `public/assets/js/sablon/*.min.js`, cu `?v=<data fișierului>`). Scripturile rămân
+  sincrone, în același loc. După o schimbare în `views/sablon-site/`: `tools/dev/php.sh tools/dev/minifica-sablon.php`
+  (E4 și G-vizual cer fișierele la zi). Oprit, blocurile se pun în pagină din aceleași surse, octet cu octet ca înainte.
+- **Fonturile din nucleu** (tema, `Tema::IMPLICIT`): DM Sans și Playfair Display din `/assets/vendor/fonturi/` (aceleași
+  familii și greutăți ca cererea spre Google Fonts), fără legătură spre Google; un site care rămâne pe Google o spune în
+  tema lui (`"fonturi_google": true, "fonturi": []`).
+- **HSTS** pe https (`Strict-Transport-Security: max-age=31536000`, fără subdomenii, fără preload); `HSTS=0` în `.env` îl
+  oprește.
+- **Fișierele versionate** (`/assets/…?v=`): `Cache-Control: public, max-age=31536000, immutable` (`public/.htaccess`,
+  `deploy/stub/.htaccess`; regula `AX_VERSIONAT`). Fără `?v=`, ca înainte.
+
 ## 7. Titluri, descrieri și distribuire
 
 Livrarea 2, Bioscem `93d803f`, `0250480`, `7455b77`, `6a42030` (`SeoMeta`,
@@ -508,6 +549,20 @@ structurate). Id-ul produsului: SKU-ul, altfel prefixul site-ului (`seo.json` �
 minute în `storage/cache/`; cât magazinul se oprește, canalul rămâne, fără produse, imediat
 (nu din cache). Fără pluginul magazin, 404.
 
+Comutatorul fluxului (WP-40, B8): Setări magazin → SEO Google → „Fluxul pentru Google Merchant” (setarea `merchant_feed`,
+implicit pornită, înghețată la „1” pe site-urile existente). Oprit, `/feed/google-merchant.xml` răspunde 404 și fișierul din
+cache se șterge. Secțiunea arată adresa fluxului, de dat în Merchant Center.
+
+## 8b. Sursa comenzilor (WP-40, SEO partea B, B9)
+
+De unde a venit clientul care a comandat, pe comandă (`orders.sursa`, `magazin/0051`), și raportul din admin (Rapoarte →
+Sursa comenzilor, `/admin/orders/sursa-comenzilor`, doar cu pluginul magazinului): comenzile și valoarea lor pe surse și pe
+săptămâni. Felurile: `google_ads` (gclid, gbraid, wbraid sau o campanie plătită utm_source=google), `email` (utm_medium
+email/newsletter sau cookie-ul newsletterului), `campanie` (alt utm_source), `google` (venit din căutarea Google),
+`alt_site`, `direct`. La intrarea pe site felul vizitei se ține în cookie-ul `ax_sursa` (30 de zile; **doar felul**, niciun
+id, nicio adresă); la comandă, reclama Google (`bv_gclid`, ca pentru `ad_source`) și newsletterul au întâietate. Comutatorul
+`sursa_comenzii` (implicit pornit; înghețat la „0” pe site-ul de referință). Coloana `ad_source` rămâne neschimbată.
+
 ## 9. Datele unui site
 
 Dosarul: `SITE_DATE_DOSAR` din `.env` (cale absolută sau relativă la rădăcină); gol =
@@ -601,6 +656,14 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   Event, Organization și NGO, ItemList; nimic pe o pagină doar pentru membri); livrarea și returul din admin; codul EAN din
   editor (unul greșit nu se salvează); lista blogului (căutarea, filtrele, paginile 2+); `/produse?categorie=` pe catalogul
   GR; `verifica-redirecturi.php` pe 40 de adrese inventate (30 × 200, 6 × 301, 3 × 410 voit, o problemă voită);
+- `tools/dev/test-seo.php` E4 (WP-40, `tools/dev/lib/test-seo-viteza.php`): sesiunea (paginile publice fără fișier și fără
+  cookie, coșul pornește sesiunea și rămâne, oprit ca înainte); cache-ul extins (HIT, nu pentru cine are coș); fișierele
+  șablonului (la zi, 200, `Cache-Control`; oprit, blocurile octet cu octet); fonturile (aceleași familii și greutăți, nicio
+  legătură spre Google), HSTS, regula `immutable`; variantele pozelor și `srcset` (oprit, pagina octet cu octet); fluxul
+  (câmpurile cerute de Merchant Center; oprit, 404); sursa comenzii (felul vizitei, cookie-ul, o comandă venită din Google,
+  raportul fără date ale clienților);
+- `tools/dev/vizual-valori-noi.sh` (în G-vizual): stilurile calculate ale paginilor publice cu valorile vechi față de cele noi
+  ale vitezei, pe codul curent, 0 diferențe;
 - `tools/dev/smoke.sh` (pe fiecare pachet): secțiunea „SEO”;
 - `tools/dev/compara-cu-baza.sh`: față de **codul Bioscem însuși** (care are livrarea 1),
   cu datele din `site-uri/bioscem/`: paginile-cheie, `/sitemap.xml`, adresa unică (litere

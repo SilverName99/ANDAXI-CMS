@@ -10863,6 +10863,19 @@ final class AdminController
             header('Location: /admin/settings/store?tab=seo');
             return;
         }
+        if ($action === 'save_flux_merchant') {
+            // WP-40 (B8): fluxul Google Merchant pornit sau oprit pe acest site.
+            if (!\App\Support\AdminCsrf::valid()) {
+                Flash::set('error', 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.');
+                header('Location: /admin/settings/store?tab=seo');
+                return;
+            }
+            Settings::save($db, ['merchant_feed' => isset($_POST['merchant_feed']) ? '1' : '0']);
+            \App\Support\FluxGoogleMerchant::sterge();
+            Flash::set('success', isset($_POST['merchant_feed']) ? 'Fluxul Google Merchant e pornit.' : 'Fluxul Google Merchant e oprit (adresa lui răspunde 404).');
+            header('Location: /admin/settings/store?tab=seo');
+            return;
+        }
         if ($action === 'save_livrare_retur_google') {
             // WP-39 (B4, PLAN-SEO D10): livrarea și returul pentru Google, peste cele din pachetul site-ului (PoliticaLivrare).
             if (!\App\Support\AdminCsrf::valid()) {
@@ -27235,6 +27248,14 @@ HTML;
 
         if (!move_uploaded_file($tmpPath, $targetPath)) {
             return null;
+        }
+        // WP-40 (B5): dimensiunile pozei și variantele ei WebP (160/400/800/1200 px), pentru srcset (VarianteImagini).
+        // O poză pe care GD n-o poate citi rămâne doar cum a fost încărcată.
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+            try {
+                \App\Support\VarianteImagini::genereaza($namespace . '/' . $filename);
+            } catch (Throwable) {
+            }
         }
 
         return [

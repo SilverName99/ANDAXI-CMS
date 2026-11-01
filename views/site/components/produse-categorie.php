@@ -36,7 +36,7 @@ if ($produse === []) {
              href="/produs/<?= rawurlencode((string) ($produs['slug'] ?? '')) ?>">
             <div class="ratio ratio-4x3 overflow-hidden">
               <img src="<?= $e(\App\Support\PozeOptimizate::src((string) (($produs['image_url'] ?? '') !== '' ? $produs['image_url'] : '/assets/img/product-placeholder.svg'))) ?>"
-                   alt="<?= $e((string) ($produs['name'] ?? '')) ?>"
+                   alt="<?= $e((string) ($produs['name'] ?? '')) ?>"<?= \App\Support\VarianteImagini::atribute(\App\Support\PozeOptimizate::src((string) ($produs['image_url'] ?? ''))) . "\n" ?>
                    class="object-fit-cover" loading="lazy" decoding="async">
             </div>
             <div class="card-body">

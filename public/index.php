@@ -89,6 +89,8 @@ if (str_starts_with((string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '')
 require_once __DIR__ . '/../src/Support/SeoRedirects.php';
 \App\Support\SeoRedirects::incepe();
 
+// WP-40 (B6): sesiunea pornește după ce se citesc setările (App\Support\SesiuneLaNevoie::decide, mai jos), nu în bootstrap.
+define('ANDAXI_SESIUNE_AMANATA', true);
 require_once __DIR__ . '/../bootstrap.php';
 
 // Pingul monitorizării și al deploy-ului (GET/HEAD /_andaxi/ping, App\Support\Ping): imediat după bootstrap (fără
@@ -109,6 +111,22 @@ use App\Support\Database;
 use App\Support\Plugins;
 use App\Support\ResponseCache;
 use App\Support\Settings;
+
+// Setările site-ului (o singură citire, folosită și de cache-ul de pagină, mentenanță, pluginuri), apoi sesiunea: pornită
+// ca înainte sau, cu sesiune_doar_la_nevoie, doar unde e nevoie (WP-40, B6; SesiuneLaNevoie). În același loc în care
+// bootstrap.php o pornea până acum (înaintea cookie-ului reclamei), deci antetele pleacă în aceeași ordine.
+$appConfig = require __DIR__ . '/../config/app.php';
+$cacheDb = Database::connection((array) ($appConfig['db'] ?? []));
+$cacheSettings = Settings::all($cacheDb);
+if (!$faraSesiune) {
+    \App\Support\SesiuneLaNevoie::decide($cacheSettings);
+}
+// WP-40 (B6): HSTS pe https (browserul cere de acum doar https, un an), fără subdomenii și fără preload; HSTS=0 în .env
+// îl oprește. Pe http (dezvoltarea, un site fără certificat) nimic.
+if (((($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+    && !in_array(strtolower(trim((string) \App\Support\Env::get('HSTS', '1'))), ['0', 'false', 'off', 'nu'], true)) {
+    header('Strict-Transport-Security: max-age=31536000');
+}
 
 // Capture Google Ads click id (gclid / gbraid / wbraid) so an order placed
 // later in the session can be attributed to the ad that brought the visitor.
@@ -139,9 +157,6 @@ use App\Support\Settings;
     $_COOKIE['bv_gclid'] = $clickId;
 })();
 
-$appConfig = require __DIR__ . '/../config/app.php';
-$cacheDb = Database::connection((array) ($appConfig['db'] ?? []));
-$cacheSettings = Settings::all($cacheDb);
 ResponseCache::applyAssetCacheHeaders($cacheSettings, (string) ($_SERVER['REQUEST_URI'] ?? ''));
 // Mod mentenanță: se verifică înaintea cache-ului de pagină, ca vizitatorii să
 // nu primească o pagină salvată dinainte de activare.
@@ -152,6 +167,10 @@ if (\App\Support\Maintenance::intercepteaza(
 )) {
     return;
 }
+// WP-40 (B5): pozele cu variantele lor (srcset), după comutatorul imagini_srcset.
+\App\Support\VarianteImagini::configureaza($cacheSettings);
+// WP-40 (B9): felul vizitei (Google, reclamă, email, alt site) într-un cookie, pentru sursa comenzii (App\Support\SursaComenzii).
+\App\Support\SursaComenzii::laIntrare($cacheSettings);
 // Pluginurile site-ului, din licență. Înaintea cache-ului de pagină: dacă
 // licența s-a schimbat, cache-ul se golește aici, ca nimeni să nu primească o
 // pagină salvată de când pluginul avea altă stare.
@@ -178,5 +197,7 @@ $router = new Router([GardaPluginuri::class, 'permite']);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
 ResponseCache::finishRequest($pageCacheContext);
+// WP-40 (B6): o pagină fără sesiune care a scris totuși în $_SESSION primește acum sesiunea (o dată; și la oprire).
+\App\Support\SesiuneLaNevoie::laFinal();
 // Exporturile de date legale expirate (WP-26, OD-51): șterse cel mult o dată pe zi, după răspuns.
 \App\Support\ExportDateLegale::curataOdataPeZi();

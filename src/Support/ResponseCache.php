@@ -168,6 +168,7 @@ final class ResponseCache
             'path' => $path,
             'query' => $query,
             'cache_control' => self::cacheControlNou($settings, $ttlSeconds),
+            'extins' => ($rule['extins'] ?? false) === true,
         ];
     }
 
@@ -216,7 +217,7 @@ final class ResponseCache
 
         $statusCode = http_response_code();
         $headers = headers_list();
-        $shouldCache = self::isResponseCacheable($statusCode, $headers, $body);
+        $shouldCache = self::isResponseCacheable($statusCode, $headers, $body, ($context['extins'] ?? false) === true);
         if ($shouldCache) {
             $ttlSeconds = max(60, (int) ($context['ttl_seconds'] ?? 1800));
             $etag = '"' . sha1($body) . '"';
@@ -510,19 +511,39 @@ final class ResponseCache
         return 'none';
     }
 
+    /**
+     * WP-40 (B6): paginile publice ținute în cache și fără regulile din admin, cu comutatorul `cache_pagini_extins`
+     * (implicit pornit; înghețat la „0” pe site-ul înghețat): prima pagină, magazinul (și pagina catalogului), produsele,
+     * categoriile, mărcile, etichetele. 10 minute (cu ERP-ul de stoc, 60 de secunde, ca orice regulă); doar pentru cine
+     * n-are coș, cont sau un mesaj în sesiune (hasUnsafeSessionContext), golite la orice schimbare de conținut.
+     */
+    public const REGULI_EXTINSE = ['/', '/magazin', '/produs/*', '/categorie/*', '/marca/*', '/eticheta/*'];
+    public const TTL_EXTINS = 600;
+
     private static function resolveRuleForPath(string $path, array $settings): ?array
     {
-        if ((string) ($settings['cache_pages_enabled'] ?? '0') !== '1') {
-            return null;
-        }
-        $rules = self::parseRules((string) ($settings['cache_pages_rules_json'] ?? '[]'));
-        foreach ($rules as $rule) {
-            $pattern = (string) ($rule['path_pattern'] ?? '');
-            if ($pattern === '') {
-                continue;
+        if ((string) ($settings['cache_pages_enabled'] ?? '0') === '1') {
+            $rules = self::parseRules((string) ($settings['cache_pages_rules_json'] ?? '[]'));
+            foreach ($rules as $rule) {
+                $pattern = (string) ($rule['path_pattern'] ?? '');
+                if ($pattern === '') {
+                    continue;
+                }
+                if (self::matchesPattern($path, $pattern)) {
+                    return $rule;
+                }
             }
-            if (self::matchesPattern($path, $pattern)) {
-                return $rule;
+        }
+        if ((string) ($settings['cache_pagini_extins'] ?? '1') === '1') {
+            $extinse = self::REGULI_EXTINSE;
+            $catalog = Catalog::url($settings);
+            if ($catalog !== '/magazin') {
+                $extinse[] = $catalog;
+            }
+            foreach ($extinse as $pattern) {
+                if (self::matchesPattern($path, $pattern)) {
+                    return ['path_pattern' => $pattern, 'ttl_seconds' => self::TTL_EXTINS, 'extins' => true];
+                }
             }
         }
         return null;
@@ -636,7 +657,12 @@ final class ResponseCache
         return false;
     }
 
-    private static function isResponseCacheable(int $statusCode, array $headers, string $body): bool
+    /**
+     * $tipImplicitHtml (WP-40, B6, doar regulile extinse): o pagină fără antetul Content-Type scris de cod (cele randate
+     * prin View) primește tipul implicit al PHP (default_mimetype, text/html), deci e HTML; regulile din admin rămân ca
+     * înainte (doar cu antetul scris).
+     */
+    private static function isResponseCacheable(int $statusCode, array $headers, string $body, bool $tipImplicitHtml = false): bool
     {
         if ($statusCode !== 200) {
             return false;
@@ -657,12 +683,27 @@ final class ResponseCache
                 return false;
             }
         }
+        if (!$hasHtmlContentType && $tipImplicitHtml && !self::areAntet($headers, 'content-type:')
+            && strtolower((string) ini_get('default_mimetype')) === 'text/html') {
+            $hasHtmlContentType = true;
+        }
         // Din vertij (VT-C1, 4ac772b): o pagină HTML fără </html> e incompletă (de exemplu randarea oprită de o
         // eroare fatală) și nu se ține niciodată în cache, altfel s-ar servi trunchiată tuturor.
         if ($hasHtmlContentType && !str_contains($body, '</html>')) {
             return false;
         }
         return $hasHtmlContentType;
+    }
+
+    /** @param list<string> $headers */
+    private static function areAntet(array $headers, string $prefix): bool
+    {
+        foreach ($headers as $header) {
+            if (str_starts_with(strtolower((string) $header), $prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static function matchesNotModified(string $etag, int $lastModifiedTs): bool
