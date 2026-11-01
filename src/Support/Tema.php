@@ -375,6 +375,7 @@ final class Tema
                     break;
                 case 'fonturi':
                     $lista = [];
+                    $problemeInainte = count($probleme);
                     foreach (self::lista($valoare, $cheie, $probleme) as $adresa) {
                         if (preg_match('#^/assets/vendor/fonturi/([a-z0-9-]+)/\1\.css$#', $adresa) !== 1) {
                             $probleme[] = 'fonturi: „' . $adresa . '” nu e un font din nucleu (/assets/vendor/fonturi/<familie>/<familie>.css)';
@@ -384,7 +385,11 @@ final class Tema
                             $lista[] = $adresa;
                         }
                     }
-                    $valori[$cheie] = $lista;
+                    // O listă doar cu adrese greșite lasă fonturile implicite (din WP-40 implicitul nu mai e gol); `[]` scris
+                    // de mână rămâne „fără fonturi din nucleu”.
+                    if ($lista !== [] || count($probleme) === $problemeInainte) {
+                        $valori[$cheie] = $lista;
+                    }
                     break;
                 case 'logo_meniu_mobil':
                     $logo = self::logoValid($valoare);

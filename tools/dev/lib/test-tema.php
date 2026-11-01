@@ -378,7 +378,10 @@ try {
         . 'cu defer, în ordine', str_contains($acasa, "<body class=\"site-shell\">\n<span id=\"inceput-pagina\"></span>\n")
         && preg_match('#<script src="/assets/vendor/bootstrap/js/bootstrap\.bundle\.min\.js\?v=\d+" defer></script>\n'
             . '<script src="/tema/js/tema-demo\.js\?v=\d+" defer></script>\n<a class="sus" href="\#inceput-pagina" aria-label="Înapoi sus" hidden>#u', $acasa) === 1
-        && preg_match('#inceput\.focus\(\{ preventScroll: true \}\);.*</script>\n</body>#s', $acasa) === 1);
+        // Scriptul butonului: în pagină sau, cu css_js_in_fisiere (WP-40, implicit), din fișierul lui minificat; tot ultimul.
+        && (preg_match('#inceput\.focus\(\{ preventScroll: true \}\);.*</script>\n</body>#s', $acasa) === 1
+            || (preg_match('#<script src="/assets/js/sablon/sus\.min\.js\?v=\d+"></script>\n</body>#', $acasa) === 1
+                && str_contains(\App\Support\SablonSite::continut('sus.js'), 'inceput.focus({ preventScroll: true });'))));
     $verifica('iconite_categorii: „Ceaiuri” și „Miere” cu iconițele temei; celelalte categorii cu cea implicită a nucleului',
         str_contains($acasa, '<path d="M4 8h12v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/>')
         && str_contains($acasa, '<circle cx="12" cy="12" r="6"/><path d="M12 6v12"/>') && str_contains($acasa, 'M19.1 5.1c-6'));
@@ -519,14 +522,17 @@ try {
     // Implicitul însuși e comportamentul de azi (o valoare implicită schimbată ar schimba la fel toate cele trei variante).
     $acasaImplicit = $referinta['/'];
     $semneVechi = [
-        'Google Fonts' => str_contains($acasaImplicit, 'https://fonts.googleapis.com/css2?'),
+        // WP-40 (B6): fonturile implicite vin din nucleu (aceleași familii), nu de la Google; docs/PACHETE.md.
+        'fonturile din nucleu, fără Google Fonts' => str_contains($acasaImplicit, '/assets/vendor/fonturi/dm-sans/dm-sans.css')
+            && !str_contains($acasaImplicit, 'fonts.googleapis.com'),
         'app.css' => preg_match('#<link rel="stylesheet" href="/assets/css/app\.css\?v=[^"]+">#', $acasaImplicit) === 1,
         '<main class="container site-container">' => str_contains($acasaImplicit, '<main class="container site-container">'),
         'fără ținta butonului „sus”' => !str_contains($acasaImplicit, 'inceput-pagina') && !str_contains($acasaImplicit, 'class="sus"'),
-        'fără /assets/vendor/ și /tema/' => !str_contains($acasaImplicit, '/assets/vendor/') && !str_contains($acasaImplicit, '"/tema/'),
+        'fără /assets/vendor/ (afară de fonturi) și /tema/' => preg_match('#/assets/vendor/(?!fonturi/(dm-sans|playfair)/)#', $acasaImplicit) !== 1
+            && !str_contains($acasaImplicit, '"/tema/'),
         'culoarea #2f8d5b pe 404' => str_contains($referinta['/pagina-care-nu-exista'], 'background:#2f8d5b;'),
     ];
-    $verifica('fără temă paginile sunt cele de dinainte de WP-13: ' . implode(', ', array_keys($semneVechi)), !in_array(false, $semneVechi, true),
+    $verifica('fără temă paginile sunt cele de dinainte de WP-13 (cu fonturile din nucleu, WP-40): ' . implode(', ', array_keys($semneVechi)), !in_array(false, $semneVechi, true),
         implode(', ', array_keys(array_filter($semneVechi, static fn (bool $ok): bool => !$ok))));
 } catch (Throwable $e) {
     $verifica('testul temei', false, $e->getMessage());
