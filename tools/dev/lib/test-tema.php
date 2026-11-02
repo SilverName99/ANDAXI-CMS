@@ -380,7 +380,7 @@ try {
             . '<script src="/tema/js/tema-demo\.js\?v=\d+" defer></script>\n<a class="sus" href="\#inceput-pagina" aria-label="Înapoi sus" hidden>#u', $acasa) === 1
         // Scriptul butonului: în pagină sau, cu css_js_in_fisiere (WP-40, implicit), din fișierul lui minificat; tot ultimul.
         && (preg_match('#inceput\.focus\(\{ preventScroll: true \}\);.*</script>\n</body>#s', $acasa) === 1
-            || (preg_match('#<script src="/assets/js/sablon/sus\.min\.js\?v=\d+"></script>\n</body>#', $acasa) === 1
+            || (preg_match('#<script src="/assets/js/sablon/sus\.min\.js\?v=[0-9a-f]{12}"></script>\n</body>#', $acasa) === 1
                 && str_contains(\App\Support\SablonSite::continut('sus.js'), 'inceput.focus({ preventScroll: true });'))));
     $verifica('iconite_categorii: „Ceaiuri” și „Miere” cu iconițele temei; celelalte categorii cu cea implicită a nucleului',
         str_contains($acasa, '<path d="M4 8h12v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M16 10h2a2 2 0 0 1 0 4h-2"/>')
