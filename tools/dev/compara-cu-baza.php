@@ -1157,6 +1157,21 @@ $deBioscem = [
  * oricare alta și trece doar cu exact codurile declarate și cu textul ei pe pagina curentă
  * (lipsă din răspunsul Bioscem). Fiecare intră și în site-uri/bioscem/ce-se-schimba.md.
  */
+// Revizuirea WP-39/40: antetele pe care codul Bioscem le trimite, iar codul comun voit nu (o diferență declarată, nu o
+// pagină). `cale` e un tipar pe adresa cerută, `rol` vizitatorul, `doar_baza` rândul normalizat al antetului (ca în
+// diferente_antete). O declarație trebuie folosită de fiecare dată când adresa ei e cerută (altfel pică la final).
+$anteteDeBioscem = [
+    'bv_gclid fără acord' => [
+        'cale' => '#[?&]gclid=#', 'rol' => 'anon',
+        'doar_baza' => 'set-cookie: bv_gclid=<VALOARE>; expires=<DATA>; Max-Age=2592000; path=/; SameSite=Lax',
+        'motiv' => 'cookie-ul reclamei Google (bv_gclid, pentru ad_source) se scrie doar cu acordul vizitatorului pentru urmărire '
+            . '(GDPR; revizuirea WP-39/40, decizia proprietarului în așteptare); vizitatorul nou al comparației n-a dat acordul. '
+            . 'site-uri/bioscem/ce-se-schimba.md',
+    ],
+];
+$anteteDeBioscemCerute = [];
+$anteteDeBioscemFolosite = [];
+
 $coduriDeBioscem = [
     // WP-R (20 oct): găsită din nou la revizuirea Bioscem 9f59e79 (DEZVOLTARE, „Erori moștenite” 7).
     [
@@ -2137,6 +2152,17 @@ foreach ($pagini as $pagina) {
     $locatieBaza = str_replace('127.0.0.1:' . $portBaza, '127.0.0.1:' . $portCurent, $r['baza']['location']);
     $anteteBaza = $normalizeazaAntete($r['baza']['antete']);
     $anteteCurente = $normalizeazaAntete($r['curent']['antete']);
+    foreach ($anteteDeBioscem as $numeAntet => $declaratieAntet) {
+        if (preg_match($declaratieAntet['cale'], $cale) !== 1 || $declaratieAntet['rol'] !== $rol) {
+            continue;
+        }
+        $anteteDeBioscemCerute[$numeAntet] = ($anteteDeBioscemCerute[$numeAntet] ?? 0) + 1;
+        if (in_array($declaratieAntet['doar_baza'], $anteteBaza, true) && !in_array($declaratieAntet['doar_baza'], $anteteCurente, true)) {
+            $anteteBaza = array_values(array_filter($anteteBaza, static fn (string $l): bool => $l !== $declaratieAntet['doar_baza']));
+            $anteteDeBioscemFolosite[$numeAntet] = ($anteteDeBioscemFolosite[$numeAntet] ?? 0) + 1;
+            $porturiGasite['$anteteDeBioscem „' . $numeAntet . '”'] = true;
+        }
+    }
     if ($problemeSeo === [] && $problemePorturi === [] && $r['baza']['cod'] === $r['curent']['cod']
         && $locatieBaza === $r['curent']['location'] && $anteteBaza === $anteteCurente && $a === $b) {
         $identice++;
@@ -4567,6 +4593,13 @@ foreach ([] as $etichetaMeniu) {
         echo '  DIFERĂ ', $etichetaMeniu, ": intrarea de meniu a unui plugin pe care Bioscem nu-l are, negăsită în nicio pagină de admin\n";
     }
 }
+foreach ($anteteDeBioscemCerute as $numeAntet => $cerute) {
+    if (($anteteDeBioscemFolosite[$numeAntet] ?? 0) !== $cerute) {
+        $diferite[] = '$anteteDeBioscem „' . $numeAntet . '”';
+        echo '  DIFERĂ $anteteDeBioscem „', $numeAntet, '”: adresa ei cerută de ', $cerute, ' ori, diferența găsită de ',
+            (int) ($anteteDeBioscemFolosite[$numeAntet] ?? 0), " ori (declarația nu mai e adevărată?)\n";
+    }
+}
 foreach ($marcajePort as $numeMarcaj => $declaratieMarcaj) {
     if (($gasiteInRulare['marcaj ' . $numeMarcaj] ?? 0) === 0 && !$doarInAdmin($declaratieMarcaj['cale'] ?? '')) {
         $diferite[] = 'marcaj ' . $numeMarcaj;
@@ -4586,6 +4619,9 @@ foreach ($listeDeclarate + $listeCoduri as $numeLista => $lista) {
 }
 if ($marcajePort !== []) {
     $declarate[] = count($marcajePort) . ' marcaje de port';
+}
+if ($anteteDeBioscemFolosite !== []) {
+    $declarate[] = '$anteteDeBioscem ' . array_sum($anteteDeBioscemFolosite);
 }
 if ($meniuFaraBioscem !== []) {
     $declarate[] = count($meniuFaraBioscem) . ' intrări de meniu ale pluginurilor fără Bioscem';
