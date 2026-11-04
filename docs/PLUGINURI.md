@@ -516,11 +516,26 @@ dispar, iar linkurile spre el se scot din pagini.
   un singur AWB; pe AWB-urile per depozit nu se aplică și se notează în jurnalul de
   activitate); `/api/fan/…`; cronurile `fan-tracking-sync`,
   `fan-lockers-sync`, `fan-nomenclator-sync` (cer „vizibil”). Tabele: `fan_*`,
-  `orders.fan_*`, `orders.completed_awb_email_*` (emailul cu AWB-ul la finalizare).
+  `orders.fan_*`, `orders.completed_awb_email_*` (emailul cu AWB-ul la finalizare),
+  `orders.pickup_*` (ridicarea personală, `livrare_fan/0052`).
+- **Ridicarea personală de la sediu** (din Bioscem `807058e`, `fe122fd`; `App\Support\RidicarePersonala`): în Setări
+  livrare, bifa „Oferă ridicare personală de la sediu” (`shipping_pickup_enabled`, implicit `0`), adresa sediului
+  (`shipping_pickup_address`, implicit goală: fără ea opțiunea nu apare) și programul (`shipping_pickup_program`). Cât e
+  oprită, checkout-ul, stilurile și scriptul lui ies exact ca înainte, iar o bifă `ridicare_personala` trimisă de mână e
+  refuzată. Pornită: în checkout bifa cu adresa și programul; transportul 0 (fără prag, fără km suplimentari, fără tarif
+  FAN; și în cotare, la plasare, în suma trimisă la BT, EuPlătesc, Stripe și în recalculările din admin), doar datele de
+  facturare (FANbox și adresa de livrare separată dispar), rambursul ca „Plată la ridicare (numerar sau card)”; comanda
+  îngheață `pickup_in_person` și adresa. Niciun AWB pentru ea, pe niciun drum (butonul, emiterea în masă, aprobarea din
+  ERP, reîncercările, emiterea automată, previzualizarea), oricare ar fi starea pluginului; fără „Comandă expediată”. În
+  Comenzi: „Ridicare personală — fără AWB”, butonul 🏬 „Gata de ridicare” (`POST /admin/orders/{id}/gata-de-ridicare`,
+  emailul `pickup_ready` din Emailuri de comandă, cu `{{ridicare_personala}}`, `{{pickup_address}}`, `{{pickup_program}}`;
+  contează doar dacă a ajuns la adresa clientului; retrimiterea cere confirmare) și destinația adresă / FANbox / ridicare
+  înainte de facturare. ERP: `ridicarePersonala`, `ridicareAdresa` (doar pe comenzile cu ridicare), livrarea = sediul
+  (județul și localitatea expeditorului FAN), `transport` 0. Șablonul de email și codurile lui apar doar cu pluginul pe site.
 - **Are nevoie de**: magazin.
-- **Se oprește**: comenzile noi nu mai primesc FANbox și tarif live (rămân regulile
+- **Se oprește**: comenzile noi nu mai primesc FANbox, tarif live și ridicarea de la sediu (rămân regulile
   de transport generale); comenzile existente își fac AWB-ul, urmărirea și
-  emailul cu AWB; cronurile rulează.
+  emailul cu AWB, iar cele cu ridicare își primesc anunțul „Gata de ridicare”; cronurile rulează.
 - **Oprit**: nimic FAN în checkout, în comandă sau în meniu; niciun AWB nu se mai
   cere la FAN, de nicăieri: nici automat la plată, nici din aprobarea venită din
   ERP (comanda trece doar în procesare; răspunsul către ERP spune că livrarea nu

@@ -226,12 +226,13 @@ $oracolPastrate = [
     // Orașul și județul: regulile livrării depind de ele.
     'user_addresses' => ['city', 'county', 'created_at'],
     // Numărul, stările și metodele; orașele și județele; FANbox-ul ales (date publice ale lockerului); starea coletului dată de FAN;
-    // sursa reclamei și felul vizitei (orders.sursa, WP-40); starea și numerele din ERP; datele.
+    // sursa reclamei și felul vizitei (orders.sursa, WP-40); adresa sediului la ridicarea personală (livrare_fan/0052) și momentul
+    // anunțului ei; starea și numerele din ERP; datele.
     'orders' => ['order_number', 'status', 'preorder_status', 'payment_method', 'payment_status', 'shipping_method', 'billing_city', 'billing_county',
         'shipping_city', 'shipping_county', 'fan_locker_name', 'fan_locker_address', 'fan_locker_city', 'fan_locker_county', 'fan_locker_postcode',
         'fan_tracking_status', 'ad_source', 'erp_status', 'erp_order_id', 'erp_factura_numar', 'preorder_released_at', 'paid_at', 'loyalty_points_awarded_at',
         'fan_tracking_last_event_at', 'fan_tracking_synced_at', 'completed_awb_email_sent_at', 'deleted_at', 'created_at', 'updated_at', 'erp_last_attempt_at',
-        'erp_next_retry_at', 'erp_synced_at', 'edit_unlocked_at', 'terms_accepted_at', 'sursa'],
+        'erp_next_retry_at', 'erp_synced_at', 'edit_unlocked_at', 'terms_accepted_at', 'sursa', 'pickup_address', 'pickup_ready_notified_at'],
     'order_payment_links' => ['referinta', 'status', 'procesator', 'created_at', 'expires_at', 'paid_at'],
     // Felul, modul, numărul comenzii la bancă, starea, descrierea codului de răspuns al băncii, operația în curs (sume și cine a
     // pornit-o: admin, erp…), datele.

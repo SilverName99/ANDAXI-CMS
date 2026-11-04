@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@739f58c",
-    "amprenta_nucleu": "d3228176801f592f912fd4cf11e69e33875b415c18b8bee9f4294565cec78b88",
+    "amprenta_nucleu": "0eeb8c0229f53a17b40ca13acd2a59f621bec2192e3578a5654677ce9191fdfb",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -480,6 +480,11 @@
             "motiv": "Nou (WP-21, C10, OD-15): codul Bioscem nu ține adresa de la care vine o recenzie; codul comun o ține 90 de zile, pentru limita anti-spam (declarat în ce-se-schimba.md)",
             "vechi": "lipsește",
             "nucleu": "implicit \"90\""
+        },
+        "shipping_pickup_enabled": {
+            "motiv": "Ridicarea personală de la sediu (pluginul livrare_fan, Bioscem 807058e) pornește oprită: checkout-ul rămâne cel din codul vechi până o pornește magazinul din Setări livrare (cu adresa sediului)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
         }
     }
 }

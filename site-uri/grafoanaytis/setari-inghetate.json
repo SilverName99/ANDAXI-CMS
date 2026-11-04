@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "d3228176801f592f912fd4cf11e69e33875b415c18b8bee9f4294565cec78b88",
+    "amprenta_nucleu": "0eeb8c0229f53a17b40ca13acd2a59f621bec2192e3578a5654677ce9191fdfb",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",
@@ -475,6 +475,11 @@
             "motiv": "WP-40 (B6): sesiunea doar unde e nevoie, pornită la adoptare (coșul, contul, plata și formularele o pornesc ca înainte); în ce-se-schimba.md",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
+        },
+        "shipping_pickup_enabled": {
+            "motiv": "Ridicarea personală de la sediu (pluginul livrare_fan, Bioscem 807058e) pornește oprită: checkout-ul rămâne cel din codul vechi până o pornește magazinul din Setări livrare (cu adresa sediului)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
         },
         "stripe_enabled": {
             "motiv": "GR nu are magazin (licența GR: catalog și cereri de ofertă, OD-23): plata nu apare nicăieri, iar cheile Stripe trebuie să fie goale pe GR (port-grafoanaytis.md GR-22)",

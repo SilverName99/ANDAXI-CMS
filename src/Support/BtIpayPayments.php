@@ -680,7 +680,19 @@ final class BtIpayPayments
         );
         $stmt->execute(['id' => $orderId]);
         $comanda = $stmt->fetch();
-        return is_array($comanda) ? $comanda : null;
+        if (!is_array($comanda)) {
+            return null;
+        }
+        // Ridicare personală de la sediu (portul 807058e; livrare_fan/0052, citită separat): marfa se ridică de la
+        // sediu, deci acolo e „livrarea” (localitatea: a expeditorului FAN, altfel cea de facturare).
+        $campuriRidicare = RidicarePersonala::campuriComanda($db, $orderId);
+        if (RidicarePersonala::esteComanda($campuriRidicare)) {
+            $setari = Settings::all($db);
+            $comanda += $campuriRidicare;
+            $comanda['pickup_address'] = RidicarePersonala::adresaComenzii($campuriRidicare, $setari);
+            $comanda['pickup_city'] = RidicarePersonala::localitateSediu($setari)['localitate'];
+        }
+        return $comanda;
     }
 
     /**
@@ -695,7 +707,10 @@ final class BtIpayPayments
             trim((string) ($comanda['billing_address_line1'] ?? '')),
             trim((string) ($comanda['billing_address_line2'] ?? '')),
         ])));
-        if (!empty($comanda['fan_locker_id'])) {
+        if (RidicarePersonala::esteComanda($comanda)) {
+            $orasLivrare = trim((string) ($comanda['pickup_city'] ?? '')) ?: (string) ($comanda['billing_city'] ?? '');
+            $adresaLivrare = trim((string) ($comanda['pickup_address'] ?? '')) ?: $adresaFacturare;
+        } elseif (!empty($comanda['fan_locker_id'])) {
             $orasLivrare = (string) ($comanda['fan_locker_city'] ?? '');
             $adresaLivrare = (string) ($comanda['fan_locker_address'] ?? '');
         } elseif ((int) ($comanda['shipping_same_as_billing'] ?? 1) === 1) {

@@ -797,6 +797,28 @@ final class ErpSync
             $payload['coleteCalcul'] = self::coleteCalcul(Settings::all($db));
         }
 
+        // Ridicare personală de la sediu (portul 807058e; ERP-ul o știe din ANDAXI-ERP 2fd1c0e): marfa nu pleacă
+        // nicăieri, deci „livrarea” e chiar sediul (ERP-ul alege după ea depozitul). Factura rămâne pe adresa de
+        // facturare, ca la orice comandă. Cheile pleacă doar pe comenzile cu ridicare: o comandă obișnuită, retrimisă
+        // după actualizare, ajunge în ERP octet cu octet ca înainte (acolo o retrimitere identică nu rescrie nimic).
+        if (RidicarePersonala::esteComanda($order)) {
+            $setariRidicare = Settings::all($db);
+            $adresaRidicare = mb_substr(RidicarePersonala::adresaComenzii($order, $setariRidicare), 0, 255);
+            $sediu = RidicarePersonala::localitateSediu($setariRidicare);
+            $payload['ridicarePersonala'] = true;
+            $payload['ridicareAdresa'] = $adresaRidicare;
+            $payload['livrareAdresa'] = $adresaRidicare;
+            // Județul și localitatea sediului: ale expeditorului FAN (codul vechi le avea scrise în cod); fără
+            // ele, rămân cele de facturare de mai sus.
+            if ($sediu['judet'] !== '' && $sediu['localitate'] !== '') {
+                $payload['livrareOras'] = $sediu['localitate'];
+                $payload['livrareJudet'] = $sediu['judet'];
+            }
+            $payload['livrareCodPostal'] = '';
+            // Nicio comandă ridicată de la sediu n-are transport, orice ar scrie pe rând.
+            $payload['transport'] = 0.0;
+        }
+
         return $payload;
     }
 

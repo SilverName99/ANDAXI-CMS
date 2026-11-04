@@ -214,7 +214,7 @@ ob_start();
             <?php endif; ?>
         </div>
 
-        <?= (string) ($notaPrecomanda ?? '') ?>
+        <?= (string) ($notaPrecomanda ?? '') ?><?php /* Ridicare personală de la sediu: adresa și programul (HTML gata escapat; gol = nimic). */ ?><?= trim((string) ($notaRidicare ?? '')) !== '' ? '<div style="text-align:left;">' . (string) $notaRidicare . '</div>' : '' ?>
 
         <?php if ($instructiuni !== ''): ?>
             <div class="bs-succes__plata">

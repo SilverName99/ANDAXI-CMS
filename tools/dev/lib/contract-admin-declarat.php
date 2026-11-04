@@ -316,4 +316,27 @@ return [
         'flux-merchant-link' => ['ce' => 'adaugat', 'rand' => '^link /feed/google-merchant\\.xml$', 'cale' => '^/admin/settings/store',
             'motiv' => 'adresa fluxului, de dat în Google Merchant Center'],
     ],
+    // Portul Bioscem 807058e, fe122fd (4 nov): ridicarea personală de la sediu, a pluginului livrare_fan (docs/PLUGINURI.md).
+    // Oprită implicit: în admin apar doar cele trei câmpuri noi din Setări livrare și șablonul de email „Comandă gata de
+    // ridicare” (în lista emailurilor de comandă și printre șabloanele trimise de test). Butonul „Gata de ridicare”, eticheta
+    // „fără AWB” și a treia destinație din fereastra comenzii apar doar pe o comandă cu ridicare sau cu opțiunea pornită,
+    // deci pe datele demo nu (le verifică tools/dev/test-pluginuri.php, D).
+    'port-ridicare' => [
+        'ridicare-setari' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/shipping$',
+            'rand' => '^camp POST /admin/settings/shipping (input:checkbox shipping_pickup_enabled = 1|input:text shipping_pickup_address'
+                . '|textarea shipping_pickup_program)$',
+            'motiv' => 'Setări livrare → „Ridicare personală de la sediu”: bifa (implicit oprită), adresa sediului (fără ea opțiunea nu apare) '
+                . 'și programul (shipping_pickup_enabled, shipping_pickup_address, shipping_pickup_program)'],
+        'ridicare-sablon' => ['ce' => 'adaugat', 'rand' => '^link /admin/emails/builder\\?type=ecommerce&ref=pickup_ready$',
+            'cale' => '^/admin/emails/newsletters\\?tab=ecommerce$',
+            'motiv' => 'șablonul „Comandă gata de ridicare” (pickup_ready) în lista emailurilor de comandă, cu linkul spre builder (doar cu livrarea FAN)'],
+        'ridicare-test-nou' => ['ce' => 'adaugat', 'cale' => '^/admin/emails/test$',
+            'rand' => '^optiuni POST /admin/emails/test template_type: \\|new_order\\|new_order_op\\|processing\\|shipped\\|delivered\\|cancelled'
+                . '\\|pickup_ready\\|account_created\\|abandoned_cart$',
+            'motiv' => 'Email-uri → Test: șablonul „Comandă gata de ridicare” se poate trimite de test (doar cu livrarea FAN)'],
+        'ridicare-test-vechi' => ['ce' => 'scos', 'cale' => '^/admin/emails/test$',
+            'rand' => '^optiuni POST /admin/emails/test template_type: \\|new_order\\|new_order_op\\|processing\\|shipped\\|delivered\\|cancelled'
+                . '\\|account_created\\|abandoned_cart$',
+            'motiv' => 'aceeași listă de șabloane, de dinainte, fără pickup_ready (rândul de mai sus)'],
+    ],
 ];

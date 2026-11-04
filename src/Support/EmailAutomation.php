@@ -138,6 +138,11 @@ final class EmailAutomation
         if (!is_array($order)) {
             return;
         }
+        // Ridicarea de la sediu (livrare_fan/0052): citită separat, ca o bază încă fără migrare să trimită emailurile ca înainte.
+        $campuriRidicare = RidicarePersonala::campuriComanda($db, $orderId);
+        if (RidicarePersonala::esteComanda($campuriRidicare)) {
+            $order += $campuriRidicare;
+        }
 
         self::sendOrderTemplate($db, $settings, $order, $templateType);
     }
@@ -160,6 +165,13 @@ final class EmailAutomation
             && OrderMailer::isTemplateActive('new_order_op', $settings)
         ) {
             $templateType = 'new_order_op';
+        }
+
+        // Comanda ridicată de la sediu nu se expediază (portul 807058e): „Comandă expediată”, cu link de urmărire,
+        // n-ar spune nimic adevărat. Clientul primește în schimb „Comandă gata de ridicare”, din butonul din Comenzi.
+        $ridicare = RidicarePersonala::esteComanda($order);
+        if ($ridicare && $templateType === 'shipped') {
+            return;
         }
 
         if (!OrderMailer::isTemplateActive($templateType, $settings)) {
@@ -267,6 +279,20 @@ final class EmailAutomation
                 . $instructiuni;
         }
 
+        // Ridicare personală de la sediu: confirmarea spune unde și când vine clientul după comandă (caseta se așază
+        // singură, vezi OrderMailer::sendTemplate). Fără ridicare, nimic în plus.
+        if ($ridicare) {
+            $context = array_merge($context, self::contextRidicare($order, $settings));
+            if (in_array($templateType, ['new_order', 'new_order_op'], true)) {
+                $context['ridicare_personala_html'] = RidicarePersonala::htmlCaseta(
+                    $context['pickup_address'],
+                    $context['pickup_program'],
+                    RidicarePersonala::ETICHETA,
+                    RidicarePersonala::TEXT_CONFIRMARE
+                );
+            }
+        }
+
         // Produsele cu avertisment (ex. refrigerate): confirmarea comenzii
         // repetă ce a confirmat clientul la plasare. Fără ele, nimic în plus.
         if (in_array($templateType, ['new_order', 'new_order_op'], true)) {
@@ -333,6 +359,132 @@ final class EmailAutomation
             'error',
             $lastErrorMessage !== '' ? $lastErrorMessage : 'Nu am putut trimite emailul.'
         );
+    }
+
+    /** Adresa și programul ridicării, pentru variabilele șablonului. */
+    private static function contextRidicare(array $order, array $settings): array
+    {
+        return [
+            'pickup_address' => RidicarePersonala::adresaComenzii($order, $settings),
+            'pickup_program' => RidicarePersonala::program($settings),
+        ];
+    }
+
+    /**
+     * „Comanda e gata de ridicare” (portul 807058e, fe122fd): emailul trimis de butonul din Comenzi.
+     *
+     * Spre deosebire de restul emailurilor de comandă, se poate retrimite (cu confirmare în pagină): clientul a pierdut
+     * mesajul, s-a schimbat programul. Momentul trimiterii rămâne pe comandă (`pickup_ready_notified_at`) și contează doar
+     * dacă emailul a ajuns la adresa clientului (o copie doar către magazin nu-l anunță pe client). Adresa e cea de pe
+     * comandă, programul cel de acum din Setări livrare.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public static function sendPickupReady(PDO $db, array $settings, int $orderId): array
+    {
+        if ($orderId <= 0) {
+            return ['ok' => false, 'message' => 'Comanda nu a fost găsită.'];
+        }
+        self::ensureSchema($db);
+
+        $stmt = $db->prepare(
+            'SELECT id, order_number, status, payment_method, billing_first_name, billing_last_name, billing_email,
+                    created_at, total, subtotal, shipping_cost, discount_total, loyalty_points_discount,
+                    pickup_in_person, pickup_address
+             FROM orders
+             WHERE id = :id AND deleted_at IS NULL
+             LIMIT 1'
+        );
+        $stmt->execute(['id' => $orderId]);
+        $order = $stmt->fetch() ?: null;
+        if (!is_array($order)) {
+            return ['ok' => false, 'message' => 'Comanda nu a fost găsită.'];
+        }
+        if (!RidicarePersonala::esteComanda($order)) {
+            return ['ok' => false, 'message' => 'Comanda nu e cu ridicare personală de la sediu.'];
+        }
+
+        $tip = RidicarePersonala::EMAIL_GATA;
+        if (!OrderMailer::isTemplateActive($tip, $settings)) {
+            return ['ok' => false, 'message' => 'Șablonul „Comandă gata de ridicare” e oprit din Emailuri → Emailuri de comandă.'];
+        }
+        $customerEmail = trim((string) ($order['billing_email'] ?? ''));
+        $recipients = OrderMailer::resolveTemplateRecipients($tip, $settings, $customerEmail);
+        if ($recipients === []) {
+            return ['ok' => false, 'message' => 'Comanda nu are o adresă de email validă la care să trimit anunțul.'];
+        }
+
+        $customerName = trim((string) ($order['billing_first_name'] ?? '') . ' ' . (string) ($order['billing_last_name'] ?? ''));
+        $items = self::loadOrderItems($db, $orderId);
+        $ridicare = self::contextRidicare($order, $settings);
+        $context = array_merge([
+            'customer_name' => $customerName !== '' ? $customerName : 'Client',
+            'order_number' => (string) ($order['order_number'] ?? ''),
+            'customer_email' => $customerEmail,
+            'store_name' => Brand::numeExpeditor($settings),
+            'year' => date('Y'),
+            'order_date' => self::orderDateLabel((string) ($order['created_at'] ?? '')),
+            'order_total' => self::formatLei((float) ($order['total'] ?? 0)),
+            'order_status' => self::orderStatusLabel((string) ($order['status'] ?? '')),
+            'order_summary' => self::orderItemsSummaryText($items),
+            'order_items_html' => self::orderItemsSummaryRowsHtml($items),
+            'order_summary_rows' => self::orderItemsSummaryRowsHtml($items),
+            'order_totals_html' => self::orderTotalsRowsHtml($order, $items),
+            'order_action_url' => Plugins::vizibil('conturi_clienti') ? '/contul-meu?section=orders' : '/',
+            'cart_summary' => '',
+        ], $ridicare);
+        $context['ridicare_personala_html'] = RidicarePersonala::htmlCaseta(
+            $ridicare['pickup_address'],
+            $ridicare['pickup_program'],
+            'Unde și când o ridici'
+        );
+
+        $trimise = 0;
+        $laClient = false;
+        $subiect = '';
+        $eroare = '';
+        foreach ($recipients as $recipient) {
+            $cuDestinatar = $context;
+            $cuDestinatar['to'] = $recipient;
+            if (trim((string) $cuDestinatar['customer_email']) === '') {
+                $cuDestinatar['customer_email'] = $recipient;
+            }
+            try {
+                $mail = OrderMailer::sendTemplate($tip, $cuDestinatar, $settings, $db, [
+                    'order_id' => $orderId,
+                    'source' => 'order_pickup_ready',
+                    'meta' => [
+                        'automation_template' => $tip,
+                        'recipient_mode' => OrderMailer::templateRecipientMode($tip, $settings),
+                    ],
+                ]);
+                $subiect = $subiect !== '' ? $subiect : trim((string) ($mail['subject'] ?? ''));
+                $trimise++;
+                if ($customerEmail !== '' && strcasecmp(trim($recipient), $customerEmail) === 0) {
+                    $laClient = true;
+                }
+            } catch (RuntimeException $exception) {
+                $eroare = $exception->getMessage();
+            }
+        }
+
+        // Doar emailul ajuns la client contează ca anunț: copia către magazin singură nu-l face pe client să știe.
+        if ($trimise > 0 && !$laClient) {
+            self::writeOrderEmailLog($db, $orderId, $tip, implode(', ', $recipients), $subiect, 'sent', null);
+            return ['ok' => false, 'message' => 'Emailul nu a ajuns la client'
+                . ($eroare !== '' ? ': ' . $eroare : ' (șablonul trimite doar către magazin sau adresa clientului lipsește).')
+                . ' Anunță clientul altfel.'];
+        }
+
+        if ($trimise === 0) {
+            self::writeOrderEmailLog($db, $orderId, $tip, implode(', ', $recipients), '', 'error', $eroare !== '' ? $eroare : 'Nu am putut trimite emailul.');
+            return ['ok' => false, 'message' => 'Emailul nu a plecat: ' . ($eroare !== '' ? $eroare : 'eroare necunoscută.')];
+        }
+
+        self::writeOrderEmailLog($db, $orderId, $tip, implode(', ', $recipients), $subiect, 'sent', null);
+        $db->prepare('UPDATE orders SET pickup_ready_notified_at = NOW() WHERE id = :id')->execute(['id' => $orderId]);
+
+        return ['ok' => true, 'message' => 'Clientul a primit emailul „Comanda e gata de ridicare” (' . implode(', ', $recipients) . ').'];
     }
 
     private static function orderStatusLabel(string $status): string
@@ -542,7 +694,12 @@ final class EmailAutomation
         if ($puncte > 0) {
             $randuri .= $rand('Puncte de fidelitate', '−' . self::formatLei($puncte));
         }
-        $randuri .= $rand('Transport', $transport > 0 ? self::formatLei($transport) : 'Gratuit');
+        $randuri .= $rand(
+            'Transport',
+            RidicarePersonala::esteComanda($order)
+                ? 'Ridicare de la sediu'
+                : ($transport > 0 ? self::formatLei($transport) : 'Gratuit')
+        );
         $randuri .= $rand('Total', self::formatLei($total), true, true);
 
         $cota = self::cotaTvaUnica($items);

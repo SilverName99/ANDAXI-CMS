@@ -32,8 +32,14 @@ final class CheckoutCalculator
      * sumarul și prețul transportului să se potrivească cu ce vede clientul
      * pe ecran înainte de a trimite comanda.
      */
-    public static function livrareAleasaLaFanbox(): bool
+    public static function livrareAleasaLaFanbox(?array $settings = null): bool
     {
+        // Ridicarea de la sediu și FANbox se exclud (portul 807058e, fe122fd): cu ridicarea bifată și opțiunea
+        // pornită, nicio bifă FANbox rămasă în sesiune nu mai schimbă prețul. Cu opțiunea oprită (sau fără setări:
+        // implicitele), o bifă de ridicare rămasă nu contează.
+        if (RidicarePersonala::aleasa($settings ?? Settings::all(null))) {
+            return false;
+        }
         // Prețul îl dă alegerea modului de livrare, nu punctul concret: clientul
         // bifează „Livrare la FANbox" înainte să apuce să aleagă lockerul, iar
         // până atunci sumarul arăta tariful de livrare la adresă.
@@ -278,6 +284,8 @@ final class CheckoutCalculator
         $shipping = $transportGratuitDinProdus
             ? 0.0
             : self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);
+        // Ridicarea personală de la sediu (calculateShipping a dat deja 0).
+        $ridicarePersonala = RidicarePersonala::aleasa($settings);
         $isBucharest = mb_strtolower(trim($county)) === 'bucuresti';
         $includeCoupons = ((string) ($settings['shipping_include_coupons'] ?? '1')) === '1';
         $shippingFreeThreshold = $isBucharest
@@ -313,6 +321,11 @@ final class CheckoutCalculator
             // ca sumarul unui coș obișnuit să rămână exact cel de dinainte.
             $rezumat['shipping_free_by_product'] = true;
             $rezumat['shipping_reference'] = max($shippingReference, $shippingFreeThreshold);
+        }
+        if ($ridicarePersonala) {
+            // Ridicare personală de la sediu: transportul de mai sus e deja 0. Cheia apare doar atunci, ca sumarul unei
+            // comenzi obișnuite să rămână exact cel de dinainte.
+            $rezumat['ridicare_personala'] = true;
         }
         return $rezumat;
     }
@@ -1168,12 +1181,18 @@ final class CheckoutCalculator
 
     private static function calculateShipping(?PDO $db, array $settings, string $county, float $subtotal, float $discount): float
     {
+        // Ridicarea de la sediu nu are transport: nici preț fix, nici taxă de km suplimentari, nici tarif FAN.
+        // Înaintea oricărui alt calcul.
+        if (RidicarePersonala::aleasa($settings)) {
+            return 0.0;
+        }
+
         $isBucharest = strtolower(trim($county)) === 'bucuresti';
 
         // Prețul fix are prioritate. Include și taxa de km suplimentari, dacă
         // localitatea completată în formular e în lista importată de la FAN:
         // sumarul trebuie să arate exact cât se va plăti, nu prețul de bază.
-        $laFanbox = self::livrareAleasaLaFanbox();
+        $laFanbox = self::livrareAleasaLaFanbox($settings);
         $pretFix = ShippingPricing::pret($db, $settings, $county, self::localitate(), $laFanbox);
         if ($pretFix !== null) {
             return self::transportGratuit($settings, $isBucharest, $subtotal, $discount)
@@ -1240,8 +1259,14 @@ final class CheckoutCalculator
         float $discount,
         float $currentShipping,
         bool $shippingManual = false,
-        bool $gratuitDinProdus = false
+        bool $gratuitDinProdus = false,
+        bool $ridicarePersonala = false
     ): float {
+        // Comanda ridicată de la sediu nu are transport, orice s-ar schimba pe ea (produse, reduceri): fără ramura asta,
+        // un transport 0 era „estimat din setări” și reapărea la prima editare (portul 807058e).
+        if ($ridicarePersonala) {
+            return 0.0;
+        }
         // Transportul pus de mână e o decizie, nu o valoare de recalculat:
         // pragul de gratuitate îl ștergea la fiecare „Recalculează și salvează",
         // deși operatorul tocmai îl scrisese (comandă peste prag, dar cu
@@ -1265,7 +1290,7 @@ final class CheckoutCalculator
             return round($currentShipping, 2);
         }
         // Fără un transport deja stabilit, prețul fix (dacă e activ) e referința.
-        $pretFix = ShippingPricing::pretDeBaza($settings, self::livrareAleasaLaFanbox());
+        $pretFix = ShippingPricing::pretDeBaza($settings, self::livrareAleasaLaFanbox($settings));
         if ($pretFix !== null) {
             return $pretFix;
         }

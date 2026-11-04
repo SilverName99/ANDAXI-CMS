@@ -237,8 +237,13 @@ if (count($taburiEmail) > 1) {
                     <select name="template_type">
                         <option value="">Fără template (email simplu)</option>
                         <?php foreach (array_filter($templateRows, static fn (array $rand): bool => \App\Support\Plugins::vizibil(
-                            // Emailurile de comandă sunt ale magazinului, cel de bun venit al conturilor de clienți.
-                            $rand['key'] === 'account_created' ? 'conturi_clienti' : 'magazin'
+                            // Emailurile de comandă sunt ale magazinului, cel de bun venit al conturilor de clienți, „Gata de
+                            // ridicare” al livrării (ridicarea personală de la sediu e în Setări livrare).
+                            match ($rand['key']) {
+                                'account_created' => 'conturi_clienti',
+                                \App\Support\RidicarePersonala::EMAIL_GATA => 'livrare_fan',
+                                default => 'magazin',
+                            }
                         )) as $row): ?>
                             <option value="<?= htmlspecialchars($row['key'], ENT_QUOTES) ?>"><?= htmlspecialchars($row['label'], ENT_QUOTES) ?></option>
                         <?php endforeach; ?>
@@ -324,6 +329,8 @@ if (count($taburiEmail) > 1) {
         'shipped' => 'Comandă expediată',
         'delivered' => 'Comandă livrată/finalizată',
         'cancelled' => 'Comandă anulată',
+        // Ridicare personală de la sediu (portul 807058e): doar cu livrarea FAN pe site (ecommerceTemplatesFromSettings).
+        'pickup_ready' => 'Comandă gata de ridicare',
         'abandoned_cart' => 'Abandon coș',
     ];
     $ecommerceEmailCodes = [
@@ -351,6 +358,14 @@ if (count($taburiEmail) > 1) {
         ['code' => '{{payment_details}}', 'description' => 'Datele bancare din Setări plăți (doar la „Comandă nouă — plată prin OP")'],
         ['code' => '{{avertismente_produse}}', 'description' => 'Avertismentele confirmate la comandă (ex. produs refrigerat); fără cod, apar singure sub produse'],
     ];
+    if (\App\Support\Plugins::vizibil('livrare_fan')) {
+        // Ridicare personală de la sediu (Setări livrare, portul 807058e).
+        array_push($ecommerceEmailCodes,
+            ['code' => '{{ridicare_personala}}', 'description' => 'Caseta cu adresa și programul de ridicare (doar la comenzile cu ridicare personală de la sediu); fără cod, apare singură sub totaluri'],
+            ['code' => '{{pickup_address}}', 'description' => 'Adresa sediului de la care se ridică comanda (Setări livrare)'],
+            ['code' => '{{pickup_program}}', 'description' => 'Programul de ridicare (Setări livrare)'],
+        );
+    }
     $orderedEcommerceRows = [];
     foreach ($ecommerceOrder as $etype => $label) {
         if (isset($ecommerceTemplates[$etype])) {

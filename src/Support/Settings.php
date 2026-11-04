@@ -21,6 +21,11 @@ final class Settings
         'shipping_fixed_extra_km' => '0',
         'shipping_fixed_fanbox' => '0',
         'shipping_fixed_fanbox_enabled' => '0',
+        // Ridicare personală de la sediu (portul 807058e; App\Support\RidicarePersonala): oprită implicit, fără adresă
+        // (codul comun n-are sediul vreunui client; fără adresă opțiunea nu apare), fără program.
+        'shipping_pickup_enabled' => '0',
+        'shipping_pickup_address' => '',
+        'shipping_pickup_program' => '',
         'fan_live_tariff_enabled' => '0',
         'fan_awb_auto' => '0',
         // Un singur AWB per comandă, chiar dacă marfa vine din mai multe

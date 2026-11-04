@@ -4302,6 +4302,24 @@
                     "null": false,
                     "tip": "varchar(50)"
                 },
+                "pickup_address": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "pickup_in_person": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "pickup_ready_notified_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
                 "preorder_released_at": {
                     "extra": "",
                     "implicit": null,

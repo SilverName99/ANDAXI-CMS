@@ -1561,6 +1561,152 @@ try {
     array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte));
     @unlink($jarFaraFan);
 
+    // Ridicarea personală de la sediu (din Bioscem 807058e, fe122fd; pluginul livrare_fan, App\Support\RidicarePersonala).
+    // Oprită (implicit): checkout-ul n-o oferă, iar o bifă trimisă de mână e refuzată. Pornită, cu adresa: transport 0 în
+    // cotare și pe comandă, comanda îngheață adresa, niciun AWB, ERP-ul primește ridicarePersonala și transport 0, anunțul
+    // „Gata de ridicare” ajunge la client. Fără livrarea FAN pe site, nimic din ea, nici cu bifa pusă în setări.
+    $puneLicenta($pachet('toate'));
+    $cerere('GET', '/health');
+    $cheiRidicare = ['shipping_pickup_enabled', 'shipping_pickup_address', 'shipping_pickup_program'];
+    $ridicareInainte = [];
+    foreach ($cheiRidicare as $cheieRidicare) {
+        $stRid = $db->prepare('SELECT `value` FROM settings WHERE `key` = ?');
+        $stRid->execute([$cheieRidicare]);
+        $valRid = $stRid->fetchColumn();
+        $ridicareInainte[$cheieRidicare] = $valRid === false ? null : (string) $valRid;
+    }
+    $puneRidicarea = static function (?array $valori) use ($db, $cheiRidicare): void {
+        foreach ($cheiRidicare as $cheieRidicare) {
+            $db->prepare('DELETE FROM settings WHERE `key` = ?')->execute([$cheieRidicare]);
+        }
+        if ($valori !== null) {
+            $valori = array_filter($valori, static fn ($v): bool => $v !== null);
+            if ($valori !== []) {
+                \App\Support\Settings::save($db, $valori);
+            }
+        }
+    };
+    $adresaRidicareTest = 'Strada Exemplului 1, Localitate Demo';
+    $comandaRidicare = static function (string $jarRid, bool $cuBifa) use ($cerere, $db, $idMenta): array {
+        @unlink($jarRid);
+        $cerere('POST', '/cos/adauga/' . $idMenta, $jarRid, ['quantity' => '1']);
+        $pagina = $cerere('GET', '/checkout', $jarRid)['corp'];
+        preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagina, $token);
+        preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagina, $randat);
+        sleep(3); // garda anti-bot cere câteva secunde între afișare și trimitere
+        $ultima = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM orders')->fetchColumn();
+        $trimis = $cerere('POST', '/checkout', $jarRid, [
+            'checkout_form_token' => $token[1] ?? '', 'checkout_form_rendered_at' => $randat[1] ?? '',
+            'billing_first_name' => 'Test', 'billing_last_name' => 'Ridicare', 'billing_phone' => '0700000779',
+            'billing_email' => 'ridicare@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '9',
+            'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400001',
+            'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+        ] + ($cuBifa ? ['ridicare_personala' => '1'] : []));
+        $comanda = $db->query('SELECT id, order_number, shipping_cost, shipping_method, total, subtotal, pickup_in_person, pickup_address
+            FROM orders WHERE id > ' . $ultima . ' ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+        return ['pagina' => $pagina, 'trimis' => $trimis, 'comanda' => is_array($comanda) ? $comanda : null];
+    };
+    $stergeComanda = static function (?array $comanda) use ($db): void {
+        if (is_array($comanda)) {
+            foreach (['order_items', 'email_logs', 'order_product_warnings'] as $tabel) {
+                $db->exec('DELETE FROM ' . $tabel . ' WHERE order_id = ' . (int) $comanda['id']);
+            }
+            $db->exec('DELETE FROM orders WHERE id = ' . (int) $comanda['id']);
+        }
+    };
+    $mailuriRidicare = glob($dosarDev . '/mail/*') ?: [];
+    $jarRidicare = $dosarDev . '/test-pluginuri-ridicare-' . getmypid() . '.txt';
+    try {
+        // 1. Oprită (setările implicite).
+        $puneRidicarea(null);
+        $oprita = $comandaRidicare($jarRidicare, true);
+        $verifica('ridicarea de la sediu oprită (implicit): checkout-ul fără ea, bifa trimisă de mână e refuzată, nicio comandă',
+            !str_contains($oprita['pagina'], 'ridicare_personala') && !str_contains($oprita['pagina'], 'data-ridicare')
+            && $oprita['trimis']['cod'] === 302 && ($oprita['trimis']['antete']['location'] ?? '') === '/checkout' && $oprita['comanda'] === null,
+            'cod ' . $oprita['trimis']['cod'] . ' → ' . ($oprita['trimis']['antete']['location'] ?? '') . '; ' . json_encode($oprita['comanda']));
+        $stergeComanda($oprita['comanda']);
+        // Bifa pusă, dar fără adresă: tot oprită.
+        $puneRidicarea(['shipping_pickup_enabled' => '1']);
+        $faraAdresa = $cerere('GET', '/checkout', $jarRidicare)['corp'];
+        $verifica('ridicarea bifată fără adresa sediului nu apare în checkout', !str_contains($faraAdresa, 'name="ridicare_personala"'));
+
+        // 2. Pornită, cu adresa și programul.
+        $puneRidicarea(['shipping_pickup_enabled' => '1', 'shipping_pickup_address' => $adresaRidicareTest,
+            'shipping_pickup_program' => "Luni–Vineri 09:00–17:00"]);
+        @unlink($jarRidicare);
+        $cerere('POST', '/cos/adauga/' . $idMenta, $jarRidicare, ['quantity' => '1']);
+        $cotare = json_decode($cerere('POST', '/api/checkout/shipping-quote', $jarRidicare, ['ridicare_personala' => '1',
+            'billing_county' => 'Cluj'])['corp'], true);
+        $verifica('ridicarea pornită: cotarea transportului dă 0 pe loc, fără adresa completă',
+            is_array($cotare) && ($cotare['ok'] ?? false) === true && (float) ($cotare['shipping'] ?? -1) === 0.0
+            && ($cotare['ridicare_personala'] ?? false) === true, substr((string) json_encode($cotare, JSON_UNESCAPED_UNICODE), 0, 300));
+        $pornita = $comandaRidicare($jarRidicare, true);
+        $c = $pornita['comanda'];
+        $verifica('ridicarea pornită: checkout-ul o oferă cu adresa; comanda are transport 0, ridicarea și adresa înghețate',
+            str_contains($pornita['pagina'], 'name="ridicare_personala"') && str_contains($pornita['pagina'], htmlspecialchars($adresaRidicareTest, ENT_QUOTES))
+            && $pornita['trimis']['cod'] === 302 && str_starts_with((string) ($pornita['trimis']['antete']['location'] ?? ''), '/checkout/succes/')
+            && is_array($c) && (int) $c['pickup_in_person'] === 1 && (float) $c['shipping_cost'] === 0.0
+            && (string) $c['shipping_method'] === \App\Support\RidicarePersonala::SHIPPING_METHOD
+            && (string) $c['pickup_address'] === $adresaRidicareTest && abs((float) $c['total'] - (float) $c['subtotal']) < 0.005,
+            'cod ' . $pornita['trimis']['cod'] . ' → ' . ($pornita['trimis']['antete']['location'] ?? '') . '; ' . json_encode($c, JSON_UNESCAPED_UNICODE));
+        if (is_array($c)) {
+            $succes = $cerere('GET', (string) ($pornita['trimis']['antete']['location'] ?? ''), $jarRidicare)['corp'];
+            $verifica('ridicarea: pagina de confirmare arată adresa și programul', str_contains($succes, htmlspecialchars($adresaRidicareTest, ENT_QUOTES))
+                && str_contains($succes, 'Luni–Vineri 09:00–17:00'));
+            $adminControllerRid = new \App\Http\Controllers\AdminController();
+            $awbRid = new ReflectionMethod($adminControllerRid, 'createFanAwbInternal');
+            $awbRid->setAccessible(true);
+            $rezAwb = $awbRid->invoke($adminControllerRid, $db, (int) $c['id']);
+            $randRid = (array) $db->query('SELECT * FROM orders WHERE id = ' . (int) $c['id'])->fetch(PDO::FETCH_ASSOC);
+            $payloadRid = \App\Support\ErpSync::buildPayload($db, $randRid);
+            $verifica('ridicarea: niciun AWB (refuzat înainte de FAN), ERP-ul primește ridicarePersonala, adresa și transport 0',
+                ($rezAwb['ok'] ?? true) === false && ($rezAwb['message'] ?? '') === \App\Support\RidicarePersonala::REFUZ_AWB
+                && ($payloadRid['ridicarePersonala'] ?? false) === true && ($payloadRid['ridicareAdresa'] ?? '') === $adresaRidicareTest
+                && ($payloadRid['transport'] ?? null) === 0.0,
+                json_encode($rezAwb, JSON_UNESCAPED_UNICODE) . '; ' . json_encode(array_intersect_key($payloadRid,
+                    array_flip(['ridicarePersonala', 'ridicareAdresa', 'livrareAdresa', 'transport'])), JSON_UNESCAPED_UNICODE));
+            $jarAdminRid = $dosarDev . '/test-pluginuri-ridicare-admin-' . getmypid() . '.txt';
+            @unlink($jarAdminRid);
+            $cerere('POST', '/admin/login', $jarAdminRid, ['email' => $adminEmail, 'password' => $parolaAdmin]);
+            $listaRid = $cerere('GET', '/admin/orders?search=' . rawurlencode((string) $c['order_number']), $jarAdminRid);
+            $faraJeton = $cerere('POST', '/admin/orders/' . (int) $c['id'] . '/gata-de-ridicare', $jarAdminRid, ['retrimite' => '0']);
+            $anuntatFaraJeton = (string) $db->query('SELECT COALESCE(pickup_ready_notified_at, \'\') FROM orders WHERE id = ' . (int) $c['id'])->fetchColumn();
+            @unlink($jarAdminRid);
+            $verifica('ridicarea în Comenzi: „fără AWB”, „Plată la ridicare”, butonul „Gata de ridicare” în locul AWB-ului; fără jeton, butonul nu trimite nimic',
+                $listaRid['cod'] === 200 && str_contains($listaRid['corp'], \App\Support\RidicarePersonala::ETICHETA_FARA_AWB)
+                && str_contains($listaRid['corp'], 'Plată la ridicare') && str_contains($listaRid['corp'], '/admin/orders/' . (int) $c['id'] . '/gata-de-ridicare')
+                && !str_contains($listaRid['corp'], 'action="/admin/orders/' . (int) $c['id'] . '/fan-awb"')
+                && $faraJeton['cod'] === 302 && $anuntatFaraJeton === '',
+                'cod ' . $listaRid['cod'] . '; fără jeton ' . $faraJeton['cod'] . ', anunțat „' . $anuntatFaraJeton . '”');
+            $anunt = \App\Support\EmailAutomation::sendPickupReady($db, \App\Support\Settings::all($db), (int) $c['id']);
+            $anuntatLa = (string) $db->query('SELECT pickup_ready_notified_at FROM orders WHERE id = ' . (int) $c['id'])->fetchColumn();
+            $verifica('ridicarea: „Gata de ridicare” ajunge la client, momentul rămâne pe comandă', ($anunt['ok'] ?? false) === true
+                && $anuntatLa !== '', json_encode($anunt, JSON_UNESCAPED_UNICODE));
+            $faraClient = $db->prepare("UPDATE orders SET billing_email = '' WHERE id = ?");
+            $faraClient->execute([(int) $c['id']]);
+            $anuntFaraClient = \App\Support\EmailAutomation::sendPickupReady($db, \App\Support\Settings::all($db), (int) $c['id']);
+            $verifica('ridicarea: fără adresa clientului, anunțul nu contează ca trimis', ($anuntFaraClient['ok'] ?? true) === false,
+                json_encode($anuntFaraClient, JSON_UNESCAPED_UNICODE));
+        }
+        $stergeComanda($c);
+
+        // 3. Fără livrarea FAN pe site: nimic din ridicare, nici cu bifa pusă în setări.
+        $puneLicenta(array_merge($pachet('toate'), ['livrare_fan' => 'oprit']));
+        $cerere('GET', '/health');
+        $faraFanRid = $comandaRidicare($jarRidicare, true);
+        $verifica('fără FAN: ridicarea nu apare în checkout și bifa trimisă e refuzată (cu opțiunea pornită în setări)',
+            !str_contains($faraFanRid['pagina'], 'ridicare_personala') && $faraFanRid['trimis']['cod'] === 302
+            && ($faraFanRid['trimis']['antete']['location'] ?? '') === '/checkout' && $faraFanRid['comanda'] === null,
+            'cod ' . $faraFanRid['trimis']['cod'] . ' → ' . ($faraFanRid['trimis']['antete']['location'] ?? ''));
+        $stergeComanda($faraFanRid['comanda']);
+    } finally {
+        $puneRidicarea($ridicareInainte);
+        $puneLicenta($pachet('toate'));
+        $cerere('GET', '/health');
+        array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriRidicare));
+        @unlink($jarRidicare);
+    }
+
     // Cupoanele și punctele „se opresc” (magazinul e pornit): nu se mai aplică unei
     // comenzi noi, iar comenzile vechi își păstrează cuponul și reducerea.
     $puneLicenta(array_merge($pachet('toate'), ['cupoane' => 'se_opreste', 'fidelitate' => 'se_opreste']));

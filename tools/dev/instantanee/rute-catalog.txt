@@ -2,7 +2,7 @@
 # Pe site: catalog
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (297)
+RUTE (298)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -196,6 +196,7 @@ POST /admin/orders/{id}/fan-awb -> 403 [livrare_fan]
 POST /admin/orders/{id}/fan-tracking -> 403 [livrare_fan]
 POST /admin/orders/{id}/fanbox -> 403 [livrare_fan]
 POST /admin/orders/{id}/force-delete -> 403 [magazin]
+POST /admin/orders/{id}/gata-de-ridicare -> 403 [livrare_fan]
 POST /admin/orders/{id}/incasare -> 403 [magazin]
 POST /admin/orders/{id}/items -> 403 [magazin]
 POST /admin/orders/{id}/note-interne -> 403 [magazin]

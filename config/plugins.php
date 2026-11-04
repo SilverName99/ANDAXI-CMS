@@ -224,7 +224,9 @@ return [
             'descriere' => 'Tarif, AWB, urmărirea coletelor, FANbox și nomenclatorul de localități și străzi FAN.',
             'necesita' => ['magazin'],
             'rute_admin' => ['/admin/settings/shipping/*', '/admin/orders/{id}/fan-awb', '/admin/orders/{id}/fan-awb-preview',
-                '/admin/orders/{id}/fan-tracking', '/admin/orders/{id}/fanbox'],
+                '/admin/orders/{id}/fan-tracking', '/admin/orders/{id}/fanbox',
+                // Ridicarea personală de la sediu (portul 807058e): anunțul „Gata de ridicare” din Comenzi.
+                'POST /admin/orders/{id}/gata-de-ridicare'],
             'rute_publice' => ['/api/fan/*'],
             'meniu' => [
                 ['grup' => 'setari', 'ordine' => 30, 'eticheta' => 'Setări livrare', 'href' => '/admin/settings/shipping',
@@ -235,8 +237,9 @@ return [
                 'scripts/fan-lockers-sync.php' => 'vizibil',
                 'scripts/fan-nomenclator-sync.php' => 'vizibil',
             ],
+            // Ridicarea personală de la sediu (portul 807058e): orders.pickup_* (livrare_fan/0052).
             'tabele' => ['fan_lockers', 'fan_localities', 'fan_localities_extra_km', 'fan_streets', 'fan_nomenclator_sync', 'orders.fan_*',
-                'orders.completed_awb_email_*'],
+                'orders.completed_awb_email_*', 'orders.pickup_*'],
         ],
 
         'plata_stripe' => [

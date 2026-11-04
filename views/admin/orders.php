@@ -10,6 +10,10 @@ $arePromo = \App\Support\Plugins::vizibil('produse_promo');
 $arePrecomenzi = \App\Support\Plugins::vizibil('precomenzi');
 $areFidelitate = \App\Support\Plugins::vizibil('fidelitate');
 $areCupoane = \App\Support\Plugins::vizibil('cupoane');
+// Ridicarea personală de la sediu (portul 807058e): destinația din fereastra comenzii are a treia variantă doar cât opțiunea
+// e pornită sau lista are o comandă cu ridicare; altfel fereastra e cea de dinainte.
+$ridicareInPagina = $areFan && (\App\Support\RidicarePersonala::activa(is_array($settings ?? null) ? $settings : [])
+    || array_filter(is_array($orders ?? null) ? $orders : [], static fn ($o): bool => is_array($o) && \App\Support\RidicarePersonala::esteComanda($o)) !== []);
 $areBt = \App\Support\Plugins::vizibil('plata_bt');
 $poateLinkPlata = \App\Support\Plugins::permiteInceput('link_plata');
 $orders = is_array($orders ?? null) ? $orders : [];
@@ -433,6 +437,9 @@ admin_componenta('bara-actiuni-masa', [
                         $erpFactura = trim((string) ($order['erp_factura_numar'] ?? ''));
                         $precomandaStare = $arePrecomenzi ? strtolower(trim((string) ($order['preorder_status'] ?? ''))) : '';
                         $ePrecomandaInAsteptare = $precomandaStare === 'asteptare';
+                        // Ridicare personală de la sediu (portul 807058e): fără AWB, cu butonul „Gata de ridicare”.
+                        $eRidicare = \App\Support\RidicarePersonala::esteComanda($order);
+                        $ridicareAnuntataLa = trim((string) ($order['pickup_ready_notified_at'] ?? ''));
                     ?>
                     <?php
                     $celule = [];
@@ -478,7 +485,7 @@ admin_componenta('bara-actiuni-masa', [
                                         <span class="status-pill status-pill--<?= htmlspecialchars($paymentStatusPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($paymentStatusLabels[$paymentStatusKey] ?? $paymentStatus), ENT_QUOTES) ?></span>
                                     <?php endif; ?>
                                 <?php endif; ?>
-                                <span class="status-pill status-pill--<?= htmlspecialchars($paymentMethodPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($paymentMethodLabels[$paymentMethodKey] ?? $paymentMethodRaw), ENT_QUOTES) ?></span>
+                                <span class="status-pill status-pill--<?= htmlspecialchars($paymentMethodPillClass, ENT_QUOTES) ?>"><?= htmlspecialchars($eRidicare && $paymentMethodKey === 'cod' ? 'Plată la ridicare' : (string) ($paymentMethodLabels[$paymentMethodKey] ?? $paymentMethodRaw), ENT_QUOTES) ?></span>
 <?php if ($areBt && is_array($order['bt'] ?? null)): ?>
 <?php
     $btRand = $order['bt'];
@@ -569,6 +576,15 @@ admin_componenta('bara-actiuni-masa', [
                             <?php elseif ($areFan && $awb !== ''): ?>
                                 <small style="display:block;">FAN: <?= htmlspecialchars($awb, ENT_QUOTES) ?></small>
                                 <small style="display:block;color:#64748b;"><?= htmlspecialchars($trackingStatus !== '' ? $trackingStatus : 'AWB generat', ENT_QUOTES) ?></small>
+                            <?php elseif ($eRidicare): ?>
+                                <small style="display:inline-block;padding:2px 8px;border-radius:999px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-weight:600;">
+                                    <?= htmlspecialchars(\App\Support\RidicarePersonala::ETICHETA_FARA_AWB, ENT_QUOTES) ?>
+                                </small>
+                                <small style="display:block;color:#64748b;margin-top:2px;">
+                                    <?= $ridicareAnuntataLa !== ''
+                                        ? 'Anunțat „gata de ridicare": ' . htmlspecialchars($ridicareAnuntataLa, ENT_QUOTES)
+                                        : 'Clientul nu a fost încă anunțat' ?>
+                                </small>
                             <?php elseif ($areFidelitate): ?>
                                 <small style="color:#94a3b8;">Puncte: <?= $pointsAwarded ?> / <?= (int) ($order['loyalty_points_pending_claim'] ?? 0) ?></small>
                             <?php endif; ?>
@@ -638,7 +654,26 @@ admin_componenta('bara-actiuni-masa', [
                                                 . 'Cel vechi NU se anulează automat la FAN — anulează-l în SelfAWB, '
                                                 . 'altfel rămân două expedieri pe aceeași comandă.';
                                     ?>
-                                    <?php if ($poateReemite): ?>
+                                    <?php if ($eRidicare): ?>
+                                        <?php
+                                        // Ridicarea de la sediu nu are AWB: în locul camionului, anunțul „Gata de ridicare”. A doua
+                                        // trimitere cere o confirmare explicită (retrimite=1), ca un dublu-clic să nu-i ducă
+                                        // clientului două emailuri.
+                                        $nrComandaRidicare = (string) ($order['order_number'] ?? '');
+                                        $confirmareRidicare = $ridicareAnuntataLa === ''
+                                            ? 'Trimiți clientului emailul „Comanda e gata de ridicare” pentru comanda ' . $nrComandaRidicare . "?\n\nEmailul conține adresa și programul din Setări livrare."
+                                            : 'Clientul a fost deja anunțat la ' . $ridicareAnuntataLa . ".\n\nRetrimiți emailul „Comanda e gata de ridicare” pentru comanda " . $nrComandaRidicare . '?';
+                                        ?>
+                                        <form method="post" action="/admin/orders/<?= $orderId ?>/gata-de-ridicare"
+                                              onsubmit="<?= htmlspecialchars('if (!confirm(' . json_encode($confirmareRidicare, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) . ')) return false; this.querySelector(\'button\').disabled = true; return true;', ENT_QUOTES) ?>">
+                                            <input type="hidden" name="back_url" value="<?= htmlspecialchars($ordersBackUrl, ENT_QUOTES) ?>">
+                                            <?= \App\Support\AdminCsrf::camp() ?>
+                                            <input type="hidden" name="retrimite" value="<?= $ridicareAnuntataLa !== '' ? '1' : '0' ?>">
+                                            <button type="submit" class="order-action-btn"
+                                                    title="<?= $ridicareAnuntataLa === '' ? 'Gata de ridicare — trimite clientului emailul cu adresa și programul' : 'Gata de ridicare — anunțat la ' . htmlspecialchars($ridicareAnuntataLa, ENT_QUOTES) . '; apasă pentru a retrimite' ?>"
+                                                    <?= $ridicareAnuntataLa !== '' ? 'style="opacity:.55;"' : '' ?>>🏬</button>
+                                        </form>
+                                    <?php elseif ($poateReemite): ?>
                                         <form method="post" action="/admin/orders/<?= $orderId ?>/fan-awb" data-awb-form
                                               data-awb-comanda="<?= $orderId ?>"
                                               data-awb-confirm="<?= htmlspecialchars($confirmareAwb, ENT_QUOTES) ?>">
@@ -1186,6 +1221,11 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                     <p><span>TVA</span><strong>${formatRon(vatTotal)}</strong></p>
             `;
             const couponCode = String(order.coupon_code || '').trim();
+            // Ridicare personală de la sediu (portul 807058e): fără AWB; destinația se poate schimba din fereastră.
+            // Fără ridicare pe comandă și cu opțiunea oprită, fereastra e cea de dinainte.
+            const esteRidicare = Number(order.pickup_in_person || 0) === 1;
+            const ridicareActiva = <?= json_encode($areFan && \App\Support\RidicarePersonala::activa(is_array($settings ?? null) ? $settings : [])) ?>;
+            const cuRidicare = esteRidicare || ridicareActiva;
             if (couponDiscount > 0.004 || couponCode !== '') {
                 const codeLabel = couponCode !== '' ? ` (${esc(couponCode)})` : '';
                 totalsHtml += `<p><span>Reducere cupon${codeLabel}</span><strong>- ${formatRon(couponDiscount)}</strong></p>`;
@@ -1222,7 +1262,9 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
             const shipSame = Number(order.shipping_same_as_billing ?? 1) === 1;
             const shipName = [order.shipping_first_name, order.shipping_last_name].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
             const shipParts = [order.shipping_address_line1, order.shipping_city, order.shipping_postcode, order.shipping_county].map((x) => String(x || '').trim()).filter(Boolean);
-            const shippingHtml = shipSame
+            const shippingHtml = esteRidicare
+                ? `<p><small>Adresă livrare</small><br>Fără livrare — ridicare personală de la sediu${String(order.pickup_address || '').trim() ? ' (' + esc(order.pickup_address) + ')' : ''}</p>`
+                : shipSame
                 ? `<p><small>Adresă livrare</small><br>Identică cu adresa de facturare</p>`
                 : `<p><small>Adresă livrare</small><br>${shipName ? esc(shipName) + ' — ' : ''}${shipParts.length ? shipParts.map(esc).join(', ') : '-'}${String(order.shipping_phone || '').trim() ? ' — tel: ' + esc(order.shipping_phone) : ''}</p>`;
 
@@ -1306,10 +1348,12 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                     <div><small>Client</small><p id="order-client-name-${order.id}">${esc(order.display_name || ((order.billing_first_name||'') + ' ' + (order.billing_last_name||'')).trim())}</p></div>
                     <div><small>Email</small><p id="order-client-email-${order.id}">${esc(order.billing_email)}</p></div>
                     <div><small>Telefon</small><p id="order-client-phone-${order.id}">${esc(order.billing_phone)} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
-                    <div><small>Plată</small><p id="order-payment-method-${order.id}">${esc(order.payment_method)} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
+                    <div><small>Plată</small><p id="order-payment-method-${order.id}">${esc(order.payment_method)}${esteRidicare && String(order.payment_method || '').toLowerCase() === 'cod' ? ' — plată la ridicare (numerar sau card)' : ''} <button type="button" onclick="toggleAddressEdit(${order.id})" style="font-size:11px;padding:1px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;cursor:pointer;color:#374151;">✎</button></p></div>
                     ${paymentStatusHtml}
 <?php if ($areFan): ?>
-                    <div><small>AWB FAN</small><p>${esc(order.fan_awb || '-')}</p></div>
+                    <div><small>AWB FAN</small><p>${esteRidicare && !String(order.fan_awb || '').trim()
+                        ? `<strong style="color:#065f46;">${esc(<?= json_encode(\App\Support\RidicarePersonala::ETICHETA_FARA_AWB, JSON_UNESCAPED_UNICODE) ?>)}</strong>`
+                        : esc(order.fan_awb || '-')}</p></div>
 <?php endif; ?>
 <?php if ($areCupoane): ?>
                     <div><small>Cupon folosit</small><p>${couponCode !== '' ? esc(couponCode) : '— (fără cupon)'}</p></div>
@@ -1321,10 +1365,35 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
 <?php if ($areFan): ?>
                 <div id="order-fanbox-${order.id}" style="background:#f6faf8;border:1px solid #d5e5dc;border-radius:8px;padding:12px;margin-bottom:10px;">
                   <small style="display:block;margin-bottom:6px;color:#475569;">Destinație livrare</small>
+<?php if ($ridicareInPagina): ?>
+                  ${esteRidicare ? `<div style="margin:0 0 8px;padding:8px 10px;border:1px solid #a7f3d0;border-radius:6px;background:#ecfdf5;color:#065f46;font-size:13px;line-height:1.45;">
+                    <strong>${esc(<?= json_encode(\App\Support\RidicarePersonala::ETICHETA_FARA_AWB, JSON_UNESCAPED_UNICODE) ?>)}</strong>
+                    ${String(order.pickup_address || '').trim() ? '<br>' + esc(order.pickup_address) : ''}
+                    <br>${String(order.pickup_ready_notified_at || '').trim()
+                        ? 'Anunțat „gata de ridicare": ' + esc(order.pickup_ready_notified_at)
+                        : 'Clientul nu a fost încă anunțat (butonul 🏬 din listă).'}
+                  </div>` : ''}
+                  ${cuRidicare ? `<label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                    <input type="radio" name="order-dest-${order.id}" value="adresa" ${!order.fan_locker_id && !esteRidicare ? 'checked' : ''}>
+                    Livrare prin curier la adresă
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                    <input type="radio" name="order-dest-${order.id}" value="fanbox" id="order-fanbox-toggle-${order.id}" ${order.fan_locker_id && !esteRidicare ? 'checked' : ''}>
+                    Livrare la FANbox
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                    <input type="radio" name="order-dest-${order.id}" value="ridicare" ${esteRidicare ? 'checked' : ''}>
+                    Ridicare personală de la sediu (fără transport, fără AWB)
+                  </label>` : `<label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                    <input type="checkbox" id="order-fanbox-toggle-${order.id}" ${order.fan_locker_id ? 'checked' : ''}>
+                    Livrare la FANbox
+                  </label>`}
+<?php else: ?>
                   <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
                     <input type="checkbox" id="order-fanbox-toggle-${order.id}" ${order.fan_locker_id ? 'checked' : ''}>
                     Livrare la FANbox
                   </label>
+<?php endif; ?>
                   <div id="order-fanbox-pick-${order.id}" style="margin-top:8px;${order.fan_locker_id ? '' : 'display:none;'}">
                     <select id="order-fanbox-select-${order.id}" style="width:100%;padding:7px;border:1px solid #d1d5db;border-radius:6px;">
                       <option value="">Se încarcă…</option>
@@ -1532,7 +1601,13 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         );
                     }
                 };
-                fbToggle.addEventListener('change', sincro);
+                // Cu ridicarea, destinația e una din trei (radio): „change” vine doar pe cel ales, deci ascultăm toate.
+                const fbRadiouri = document.querySelectorAll('input[name="order-dest-' + order.id + '"]');
+                if (fbRadiouri.length > 0) {
+                    fbRadiouri.forEach((r) => r.addEventListener('change', sincro));
+                } else {
+                    fbToggle.addEventListener('change', sincro);
+                }
                 if (fbToggle.checked) sincro();
             }
             const fbMapBtn = document.getElementById('order-fanbox-maptoggle-' + order.id);
@@ -1634,9 +1709,15 @@ async function incarcaFanboxComanda(orderId, judet, localitate, alesId) {
 async function salveazaFanbox(orderId) {
   const toggle = document.getElementById('order-fanbox-toggle-' + orderId);
   const sel = document.getElementById('order-fanbox-select-' + orderId);
-  const laFanbox = toggle && toggle.checked;
+  // Cu ridicarea de la sediu în fereastră, destinația e un radio din trei (adresă, FANbox, ridicare).
+  const ales = document.querySelector('input[name="order-dest-' + orderId + '"]:checked');
+  const laFanbox = ales ? ales.value === 'fanbox' : (toggle && toggle.checked);
   if (laFanbox && (!sel || !sel.value)) { alert('Alege punctul FANbox.'); return; }
+  if (ales && ales.value === 'ridicare' && !confirm('Comanda trece pe ridicare personală de la sediu: transportul devine 0 și nu se mai emite AWB. Continui?')) { return; }
   const body = new URLSearchParams();
+  if (ales) {
+    body.set('destinatie', ales.value);
+  }
   body.set('fan_locker_id', laFanbox && sel ? sel.value : '0');
   try {
     const r = await fetch('/admin/orders/' + orderId + '/fanbox', { method: 'POST', body: body });

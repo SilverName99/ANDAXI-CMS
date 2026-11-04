@@ -80,7 +80,9 @@ return [
     // regula, cu pseudonimul emailului); jurnalul 404 doar structura (o copie nu are nevoie de el).
     // 14 (WP-39, catalog/0048): codul EAN al produselor (public, de pe ambalaj), copiat cum e.
     // 15 (WP-40, magazin/0051): sursa comenzii (felul vizitei: google, email, direct …; o categorie), copiată cum e.
-    'versiune' => 15,
+    // 16 (portul Bioscem 807058e, livrare_fan/0052): ridicarea personală de la sediu pe comandă (bifa, adresa sediului — publică,
+    // a magazinului — și momentul anunțului „gata de ridicare”), copiată cum e.
+    'versiune' => 16,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -288,8 +290,9 @@ return [
             'fan_tracking_last_event_at', 'fan_tracking_synced_at', 'completed_awb_email_sent_at', 'deleted_at', 'created_at', 'updated_at',
             'ad_source', 'nl_campaign_id', 'erp_status', 'erp_order_id', 'erp_attempts', 'erp_last_attempt_at', 'erp_next_retry_at', 'erp_synced_at',
             'erp_factura_numar', 'paid_amount', 'edit_unlocked_at', 'erp_client_agresiv', 'erp_client_agresiv_versiune', 'manual_discount',
-            'manual_discount_percent', 'terms_accepted_at', 'sursa'],
-            'motive' => ['sursa' => 'felul vizitei (google, email, direct …; WP-40, magazin/0051): o categorie, fără nicio dată a clientului',
+            'manual_discount_percent', 'terms_accepted_at', 'sursa', 'pickup_in_person', 'pickup_address', 'pickup_ready_notified_at'],
+            'motive' => ['pickup_address' => 'adresa sediului magazinului de la care se ridică comanda (publică; livrare_fan/0052), nu a clientului',
+                'sursa' => 'felul vizitei (google, email, direct …; WP-40, magazin/0051): o categorie, fără nicio dată a clientului',
                 'fan_locker_name' => 'FANbox-ul ales: date publice ale lockerului', 'fan_locker_address' => 'adresa publică a FANbox-ului',
                 'fan_locker_postcode' => 'codul poștal public al FANbox-ului', 'completed_awb_email_sent_at' => 'doar data trimiterii, fără adresă'],
             'transforma' => [
