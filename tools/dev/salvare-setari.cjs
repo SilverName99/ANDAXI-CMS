@@ -71,10 +71,20 @@ const doarEmailuri = process.env.CMS_DEV_DOAR_EMAILURI === '1';
     }
     return r.continue();
   });
-  const page = await context.newPage();
   const erori = [];
-  page.on('pageerror', (e) => erori.push(String(e.message).split('\n')[0]));
-  page.on('dialog', (d) => d.accept());
+  // Fiecare caz pe un tab nou (aceeași sesiune: cookie-urile sunt ale contextului). Cererea POST oprită mai sus face ca
+  // navigarea formularului să se termine, cândva după ce cererea a fost prinsă, pe pagina de eroare a browserului
+  // (chrome-error://); pe același tab, acea navigare putea întrerupe page.goto-ul cazului următor („interrupted by another
+  // navigation”), iar ce caz pica depindea de cât de repede răspundea serverul. Tabul vechi se închide, cu navigarea lui.
+  let page = null;
+  const tabNou = async () => {
+    if (page) await page.close();
+    page = await context.newPage();
+    page.on('pageerror', (e) => erori.push(String(e.message).split('\n')[0]));
+    page.on('dialog', (d) => d.accept());
+    return page;
+  };
+  await tabNou();
   await page.goto(baza + '/admin/login');
   await page.fill('input[name="email"]', process.env.CMS_DEV_ADMIN_EMAIL || 'admin@exemplu.ro');
   await page.fill('input[name="password"]', process.env.CMS_DEV_PAROLA || '');
@@ -83,6 +93,7 @@ const doarEmailuri = process.env.CMS_DEV_DOAR_EMAILURI === '1';
   for (const [nume, adresaVeche, adresaNoua, tab, formular, butonNou, butonVechi] of cazuri) {
     if (doarEmailuri && !nume.startsWith('emailuri: ')) continue;
     const buton = vechi && butonVechi !== undefined ? butonVechi : butonNou;
+    await tabNou();
     prinsa = null;
     const adresa = (vechi ? adresaVeche : adresaNoua).replace('{SABLON}', sablon).replace('{CAMPANIE}', String(campanie));
     await page.goto(baza + adresa, { waitUntil: 'load' });
@@ -119,6 +130,7 @@ const doarEmailuri = process.env.CMS_DEV_DOAR_EMAILURI === '1';
   }
   // Constructorul de emailuri: salvarea unei campanii neatinse, de două ori (cererea ajunge la server: testul compară JSON-ul).
   if (campanie > 0 && !doarEmailuri) {
+    await tabNou();
     for (let n = 0; n < 2; n++) {
       await page.goto(baza + '/admin/emails/builder?type=campaign&id=' + campanie, { waitUntil: 'load' });
       await page.waitForTimeout(400);
@@ -131,6 +143,7 @@ const doarEmailuri = process.env.CMS_DEV_DOAR_EMAILURI === '1';
   }
   // „Oferte BBD” (IA-05): „Deschide produsul” duce la editorul produsului, deschis (/admin/products#editeaza-<id>).
   if (!vechi && !doarEmailuri) {
+    await tabNou();
     await page.goto(baza + '/admin/products/oferte-bbd', { waitUntil: 'load' });
     const link = await page.evaluate(() => (document.querySelector('#oferte-bbd a[href^="/admin/products#editeaza-"]') || {}).getAttribute?.call(document.querySelector('#oferte-bbd a[href^="/admin/products#editeaza-"]'), 'href') || '');
     if (link) {

@@ -126,6 +126,9 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
     $corp = (string) curl_exec($c);
     $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
     curl_close($c);
+    // Serverul a putut șterge sau scrie fișiere (sursa importului, jurnalul erorilor): PHP ține în cache starea ultimului
+    // fișier găsit (is_file, filesize), deci fără asta o verificare de după cerere ar vedea fișierul cum era înainte.
+    clearstatcache();
     return ['cod' => $cod, 'antete' => $antete, 'corp' => $corp];
 };
 
@@ -790,6 +793,7 @@ $script = escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg
 /** Rulează importul; cu $local = true și cu CMS_DEV_IMPORT_ADRESE_LOCALE=1 (pozele de pe 127.0.0.1). */
 $importa = static function (string $fisier, string $optiuni = '', bool $local = false) use ($script): array {
     exec(($local ? 'CMS_DEV_IMPORT_ADRESE_LOCALE=1 ' : '') . $script . ' ' . escapeshellarg($fisier) . ' ' . $optiuni . ' 2>&1', $iesire, $cod);
+    clearstatcache(); // scriptul a putut șterge sursa (vezi $cerere)
     return ['cod' => $cod, 'text' => implode("\n", $iesire)];
 };
 $fisierWxr = $dosarImport . '/export-test-' . $sufix . '.xml';

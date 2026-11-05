@@ -626,11 +626,24 @@ $verifica('licența „toate” pusă; ' . count($vechiD['cazuri']) . ' formular
     $codLicentaD === 0 && $vechiD['probleme'] === [] && $nouD['probleme'] === [] && $vechiD['blocate'] === [] && $nouD['blocate'] === []
     && count($vechiD['cazuri']) === count($nouD['cazuri']) && count($nouD['cazuri']) >= 19,
     implode('; ', array_merge($vechiD['probleme'], $nouD['probleme'], $vechiD['blocate'], $nouD['blocate'])));
+// Ridicarea personală de la sediu (portul Bioscem 807058e, fe122fd; declarată în lib/contract-admin-declarat.php → port-ridicare):
+// formularul Setări livrare are, după eticheta admin-inainte-b, cele trei câmpuri ale ei. Pe codul nou cererea are deci în plus
+// exact ce trimite browserul pentru ele cu setările de acum: adresa și programul (textarea: rândurile cu CRLF), bifa doar pusă.
+$setariRidicare = \App\Support\Settings::all($db);
+$campuriRidicare = ['shipping_pickup_address=' . \App\Support\RidicarePersonala::adresa($setariRidicare),
+    'shipping_pickup_program=' . str_replace("\n", "\r\n", \App\Support\RidicarePersonala::program($setariRidicare))];
+if (\App\Support\RidicarePersonala::bifata($setariRidicare)) {
+    $campuriRidicare[] = 'shipping_pickup_enabled=1';
+}
 foreach ($nouD['cazuri'] as $numeCaz => $cerereNoua) {
     $asteptat = $perechi((array) ($vechiD['cazuri'][$numeCaz] ?? []));
     if (str_starts_with($numeCaz, 'livrare: contul FAN')) {
         // Contul FAN salvat din „Curier FAN”: aceeași cerere, cu întoarcerea la tab-ul lui (?tab=fan-api, adresă veche cunoscută).
         $asteptat['perechi'] = array_map(static fn (string $p): string => $p === 'tab=delivery-settings' ? 'tab=fan-api' : $p, $asteptat['perechi']);
+        sort($asteptat['perechi'], SORT_STRING);
+    }
+    if (str_starts_with($numeCaz, 'livrare: ') && $asteptat['perechi'] !== []) {
+        $asteptat['perechi'] = array_merge($asteptat['perechi'], $campuriRidicare);
         sort($asteptat['perechi'], SORT_STRING);
     }
     $primit = $perechi((array) $cerereNoua);

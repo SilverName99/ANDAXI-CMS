@@ -379,15 +379,35 @@ $martori = [
 $verifica('căutarea pică pe citiri puse anume (martorul: alt fișier, o vedere, o citire nouă în Verificare, Forwarded/Client-IP)',
     count(array_filter($martori, static fn (string $text, string $relativ): bool => $cautaAdresa($relativ, $text) !== [], ARRAY_FILTER_USE_BOTH)) === count($martori));
 
+// Cheia clientului logat se scrie ca 'customer_user_id', CustomerAuth::SESSION_KEY sau, doar în CustomerAuth, self::SESSION_KEY.
+// Alte clase au și ele o constantă SESSION_KEY a lor, care nu e o logare (RidicarePersonala: bifa ridicării din checkout,
+// 'checkout_ridicare_sediu'): un self::SESSION_KEY din alt fișier nu e cheia clientului.
+$cautaLogare = static function (string $relativ, string $text): array {
+    $cheiClient = '\'customer_user_id\'|"customer_user_id"|\\\\?(?:App\\\\Support\\\\)?CustomerAuth::SESSION_KEY'
+        . ($relativ === 'src/Support/CustomerAuth.php' ? '|self::SESSION_KEY|static::SESSION_KEY' : '');
+    $gasite = [];
+    foreach (preg_split('/\R/', $text) ?: [] as $i => $linie) {
+        if (preg_match('/\$_SESSION\[\s*(\'admin_id\'|"admin_id"|' . $cheiClient . ')\s*\]\s*=[^=]/', $linie) === 1) {
+            $gasite[] = $relativ . ':' . ($i + 1);
+        }
+    }
+    return $gasite;
+};
 $scrieriLogare = [];
 foreach ($fisiereCod as $fisier) {
     $relativ = substr($fisier, strlen($radacina) + 1);
-    foreach (preg_split('/\R/', (string) file_get_contents($fisier)) ?: [] as $i => $linie) {
-        if (preg_match('/\$_SESSION\[\s*(\'admin_id\'|"admin_id"|\'customer_user_id\'|"customer_user_id"|self::SESSION_KEY)\s*\]\s*=[^=]/', $linie) === 1) {
-            $scrieriLogare[] = $relativ . ':' . ($i + 1);
-        }
-    }
+    $scrieriLogare = array_merge($scrieriLogare, $cautaLogare($relativ, (string) file_get_contents($fisier)));
 }
+$martoriLogare = [
+    'src/Support/Martor.php' => '$_SESSION[CustomerAuth::SESSION_KEY] = $id;',
+    'src/Http/Controllers/SiteController.php' => '$_SESSION[\App\Support\CustomerAuth::SESSION_KEY] = 7;',
+    'views/martor.php' => "<?php \$_SESSION['admin_id'] = 1; ?>",
+    'src/Support/CustomerAuth.php' => '$_SESSION[self::SESSION_KEY] = $userId;',
+];
+$verifica('căutarea scrierilor de logare pică pe scrieri puse anume (CustomerAuth::SESSION_KEY din alt fișier, admin_id într-o vedere), '
+    . 'dar nu pe self::SESSION_KEY al altei clase (RidicarePersonala::alege)',
+    count(array_filter($martoriLogare, static fn (string $text, string $relativ): bool => $cautaLogare($relativ, $text) !== [], ARRAY_FILTER_USE_BOTH)) === count($martoriLogare)
+    && $cautaLogare('src/Support/RidicarePersonala.php', '$_SESSION[self::SESSION_KEY] = true;') === []);
 $corpLogare = static function (string $fisier, string $functie, string $scriere) use ($radacina): bool {
     $text = (string) file_get_contents($radacina . '/' . $fisier);
     $inceput = strpos($text, 'public static function ' . $functie . '(');

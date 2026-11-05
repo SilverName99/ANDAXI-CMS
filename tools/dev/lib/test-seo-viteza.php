@@ -351,6 +351,9 @@ try {
     // Revizuirea WP-39/40: ceai.png și ceai.jpg au variante diferite (extensia e în nume); o poză înlocuită cu una mai mică
     // nu păstrează variantele mai mari; ștergerea scoate toate variantele.
     $dosarProba = \App\Support\Paths::uploads() . '/products';
+    // Într-o clonă nouă dosarul nu există încă (îl face prima poză de produs încărcată din admin; uploads/ nu e în git): îl face
+    // testul și îl scoate la final, dacă l-a făcut el.
+    $dosarProbaFacut = !is_dir($dosarProba) && @mkdir($dosarProba, 0775, true);
     $poza = static function (string $fisier, int $latime, array $culoare): void {
         $im = imagecreatetruecolor($latime, (int) ($latime * 3 / 4));
         imagefill($im, 0, 0, (int) imagecolorallocate($im, ...$culoare));
@@ -378,6 +381,9 @@ try {
         VarianteImagini::sterge('products/e4-proba.jpg');
         @unlink($dosarProba . '/e4-proba.png');
         @unlink($dosarProba . '/e4-proba.jpg');
+        if ($dosarProbaFacut) {
+            @rmdir($dosarProba);
+        }
     }
 
     // -----------------------------------------------------------------------------------------------------------------

@@ -130,6 +130,9 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
     $corp = (string) curl_exec($c);
     $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
     curl_close($c);
+    // Serverul a putut șterge fișiere (exportul folosit sau expirat): PHP ține în cache starea ultimului fișier găsit
+    // (is_file, fileperms), deci fără asta o verificare de după cerere ar vedea fișierul cum era înainte.
+    clearstatcache();
     return ['cod' => $cod, 'antete' => $primite, 'corp' => $corp];
 };
 
@@ -1600,6 +1603,7 @@ $exportInainte = array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExp
 $ruleaza = static function (string ...$argumente) use ($radacina): array {
     exec(escapeshellarg($radacina . '/tools/dev/php.sh') . ' ' . escapeshellarg($radacina . '/scripts/exporta-date-legale.php') . ' '
         . implode(' ', array_map('escapeshellarg', $argumente)) . ' 2>&1', $iesire, $cod);
+    clearstatcache(); // scriptul scrie și șterge exporturi (vezi $cerere)
     return ['cod' => $cod, 'iesire' => implode("\n", $iesire)];
 };
 $e = $ruleaza('--ce=comenzi');
