@@ -189,7 +189,8 @@ exit(porneste(static function () use ($argv): int {
     $a->stare->pune('optiuni', $optiuni);
     if (($reia = $o->text('reia')) !== null) {
         $i = array_search($reia, FAZE, true);
-        if ($i === false || ($i <= 3 && $a->stare->facuta('mentenanta'))) {
+        // Înainte de migrări doar cât comutarea nu e făcută sau începută: după ea, copia de acum ar fi a stub-ului, nu a codului vechi.
+        if ($i === false || ($i <= 3 && ($a->stare->facuta('mentenanta') || $a->comutat()))) {
             throw new Oprire('--reia=' . $reia . ': ' . ($i === false ? 'fazele sunt ' . implode(', ', FAZE) : 'site-ul e deja comutat; poți relua doar de la migrari încolo'), 2);
         }
         if ($a->stare->facuta('migrari') && $i <= array_search('migrari', FAZE, true)) {

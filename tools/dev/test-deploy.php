@@ -531,6 +531,13 @@ PHP);
     // revino.sh nu-l ia drept „înainte de comutare” (n-ar scoate MENTENANTA cu stub-ul pe baza nemigrată).
     file_put_contents($fisierStareA, $stareSalvataA);
     rename($siteuri['a']['dosar'] . '/public_html.nou', $siteuri['a']['public']);
+    // Sfatul la perechea imposibilă pomenește --rezolvat-de-mana doar unde scriptul îl primește (revino.sh, nu adopta.sh).
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica']);
+    [$c2, $o2] = $deploy('adopta', array_merge($argA, ['--aplica']));
+    $verifica('o pereche imposibilă („amândouă există”): revino.sh și adopta.sh se opresc (cod 1) cu „lași doar unul”; --rezolvat-de-mana doar în sfatul lui revino.sh',
+        $c === 1 && $contine($o, 'nu se mai poate face', 'lași doar unul', 'aceeași comandă cu --rezolvat-de-mana') && $c2 === 1
+        && $contine($o2, 'nu se mai poate face', 'lași doar unul') && !str_contains($o2, '--rezolvat-de-mana')
+        && (string) file_get_contents($fisierStareA) === $stareSalvataA, $scurt($o . ' || ' . $o2));
     [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--rezolvat-de-mana']);
     [$c2, $o2] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica']);
     $st = json_decode((string) @file_get_contents($fisierStareA), true);
@@ -540,6 +547,14 @@ PHP);
         && (string) @file_get_contents($siteuri['a']['site'] . '/MENTENANTA') === $mentenantaComutare && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'),
         $scurt($o . ' || ' . $o2));
     rename($siteuri['a']['public'], $siteuri['a']['dosar'] . '/public_html.nou');
+    // „comutat” din stare ajunge și singur: fără urma redenumirii, planul revenirii nu spune „înainte de comutare”.
+    $st = json_decode($stareSalvataA, true);
+    unset($st['redenumiri']['comutare']);
+    $st['comutat'] = true;
+    file_put_contents($fisierStareA, json_encode($st, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n");
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url']]);
+    $verifica('starea cu „comutat” dar fără urma comutării: revino.sh --plan o ia drept comutată (nu „înainte de comutare”)', $c === 0
+        && !str_contains($o, 'înainte de comutare') && str_contains($o, 'public_html.vechi → '), $scurt($o));
     file_put_contents($fisierStareA, $stareSalvataA);
     // Fără liniște pe bază după comutare (o tranzacție deschisă): oprit în „mentenanta”, iar mentenanța rămâne strictă, nu
     // ușoară (codul nou e deja în docroot, baza încă nemigrată: /webhook/ n-are voie să ajungă la el).
@@ -558,6 +573,10 @@ PHP);
     $verifica('reluarea termină comutarea începută („comutare”); fără liniște pe bază: oprit în „mentenanta” (cod 1), mentenanța tot strictă '
         . '(/webhook/stripe → 503, nu codul nou pe baza nemigrată)', $c === 1 && $contine($o, 'la jumătatea pasului „comutare”', 'faza „mentenanta”',
             'conexiuni lucrează încă', 'MENTENANȚA STRICTĂ') && $strict('a') && $webhook['cod'] === 503, $webhook['cod'] . ' | ' . $scurt($o));
+    $stareInainteReia = (string) file_get_contents($fisierStareA);
+    [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica', '--reia=copie']));
+    $verifica('--reia=copie după comutare (faza „mentenanta” încă nemarcată): refuz (cod 2), starea neatinsă (copia ar fi a stub-ului)', $c === 2
+        && $contine($o, '--reia=copie', 'site-ul e deja comutat') && (string) file_get_contents($fisierStareA) === $stareInainteReia, $scurt($o));
     [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica']), ['PLATFORMA_TEST_OPRESTE_DUPA' => 'inainte-migrari']);
     $verifica('reluată cu liniște: face mentenanța (copia bazei de revenire; oprită apoi înainte de migrări, cod 9)', $c === 9
         && $contine($o, 'copia bazei de revenire') && is_dir($siteuri['a']['public']) && !is_dir($siteuri['a']['dosar'] . '/public_html.nou'), $scurt($o));
@@ -632,26 +651,25 @@ PHP);
     [$c2, $o2] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--forteaza-liniste']);
     $verifica('reluarea după o încărcare oprită cu --forteaza-liniste: refuz (cod 2, „a doua încărcare”), nimic schimbat', $c2 === 2
         && str_contains($o2, 'a doua încărcare') && $strict('a') && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'), $scurt($o2));
-    // O bază pusă la loc care diferă de copie (amprenta copiei schimbată aici): codul nu se întoarce pe ea.
-    $info = json_decode($infoOriginal, true);
-    $info['amprenta']['tabele']['settings'] = 'proba: alta amprenta';
-    file_put_contents($infoCopie, json_encode($info, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica']);
-    file_put_contents($infoCopie, $infoOriginal);
-    $stareA = json_decode((string) file_get_contents($siteuri['a']['site'] . '/deploy/adopta.stare'), true);
-    $verifica('baza pusă la loc diferă de copie: oprit (cod 1, „diferă de copie”), mentenanța strictă, codul neîntors, încărcarea rămasă „în curs”', $c === 1
-        && $contine($o, 'diferă de copie', 'tabelul settings diferă', 'mentenanța rămâne strictă') && $strict('a') && is_dir($siteuri['a']['dosar'] . '/public_html.vechi')
-        && str_contains((string) @file_get_contents($siteuri['a']['public'] . '/index.php'), 'PLATFORMA_SITE_DIR') && !empty($stareA['revino']['baza_in_curs'])
-        && empty($stareA['revino']['baza']), $scurt($o));
     $inceput = microtime(true);
     [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica'], ['PLATFORMA_TEST_OPRESTE_DUPA' => 'revino-cod:1']);
     $verifica('reluarea fără --fara-baza: „încărcarea copiei a rămas la jumătate”, o reface de la început („exact ca la copie”); oprită apoi între cele două '
         . 'redenumiri ale codului (cod 9)', $c === 9 && !file_exists($siteuri['a']['public']) && $contine($o, 'A RĂMAS LA JUMĂTATE', 'exact ca la copie')
         && !str_contains($o, 'nicio dată scrisă'), $scurt($o));
+    // Întoarcerea codului terminată de mână (public_html.vechi → public_html): pasul e acum imposibil. Lăsat cu
+    // --rezolvat-de-mana, cu un dosar în plus (public_html.vechi gol): refuz cu așezările așteptate; fără el: socotit făcut.
+    rename($siteuri['a']['dosar'] . '/public_html.vechi', $siteuri['a']['public']);
+    mkdir($siteuri['a']['dosar'] . '/public_html.vechi');
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--rezolvat-de-mana']);
+    $st = json_decode((string) file_get_contents($fisierStareA), true);
+    $verifica('„revino-cod” lăsat de mână, dosarele în altă așezare: refuz (cod 1) cu cele două așezări recunoscute, MENTENANTA rămâne', $c === 1
+        && $contine($o, '--rezolvat-de-mana: las pasul „revino-cod”', 'niciuna dintre cele două așezări', 'întoarcerea făcută', 'neîncepută')
+        && in_array('revino-cod', (array) ($st['redenumiri_lasate'] ?? []), true) && $strict('a'), $scurt($o));
+    rmdir($siteuri['a']['dosar'] . '/public_html.vechi');
     [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica']);
     $durata = microtime(true) - $inceput;
-    $verifica('revino.sh din nou: termină redenumirea, nu mai pune baza a doua oară, cod 0 (' . round($durata, 1) . ' s în total); codul „octet cu octet”', $c === 0
-        && $contine($o, 'la jumătatea pasului „revino-cod”', 'deja pusă la loc', 'octet cu octet', 'site-ul vechi răspunde') && $durata < 120, $scurt($o));
+    $verifica('așezarea „întoarcerea făcută”: socotită făcută, nu mai pune baza a doua oară, cod 0 (' . round($durata, 1) . ' s în total); codul „octet cu octet”', $c === 0
+        && $contine($o, 'îl socotesc făcut', 'deja pusă la loc', 'octet cu octet', 'site-ul vechi răspunde') && $durata < 120, $scurt($o));
     $verifica('codul vechi al lui A e exact cel de dinainte (fiecare fișier, cu .git, .env, poze, sitemap, error_log)',
         $amprentaCod($siteuri['a']['public']) === $amprente['a']['cod'], $diferente($amprentaCod($siteuri['a']['public']), $amprente['a']['cod']));
     $verifica('baza lui A e exact cea de dinainte (structura și rândurile fiecărui tabel, declanșatorul; fără tabelele migrărilor)',
@@ -851,8 +869,27 @@ PHP);
     $verifica('după deschidere (și un UPDATE pe orders): revino.sh --aplica refuză (cod 1), spune că site-ul a fost deschis și tabelele schimbate; '
         . 'site-ul rămâne deschis pe ' . $v2, $c === 1 && $contine($o, 'site-ul a fost deschis vizitatorilor', 'orders', '--fara-baza', '--pierde-datele-noi')
         && ($ping('a')['cod'] ?? null) === $v2 && !is_file($siteuri['a']['site'] . '/MENTENANTA') && $cerere($siteuri['a']['url'] . '/')['cod'] === 200, $scurt($o));
+    // O bază pusă la loc care diferă de copie (amprenta copiei schimbată aici): codul nu se întoarce pe ea, iar reluarea nu
+    // încarcă la nesfârșit: omul alege (--accepta-baza-diferita sau --fara-baza).
+    $copieA = (string) json_decode((string) file_get_contents($siteuri['a']['site'] . '/deploy/adopta.stare'), true)['copie_baza'];
+    $infoA = (string) file_get_contents($copieA . '.json');
+    $info = json_decode($infoA, true);
+    $info['amprenta']['tabele']['settings'] = 'proba: alta amprenta';
+    file_put_contents($copieA . '.json', json_encode($info, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--pierde-datele-noi']);
-    $verifica('--pierde-datele-noi: cod 0; codul vechi octet cu octet, baza exact cea de dinaintea adoptării', $c === 0
+    file_put_contents($copieA . '.json', $infoA);
+    $stareA = json_decode((string) file_get_contents($siteuri['a']['site'] . '/deploy/adopta.stare'), true);
+    $verifica('baza pusă la loc diferă de copie: oprit (cod 1, „diferă de copie”, cele două alegeri), mentenanța strictă, codul neîntors, „baza_diferita” în stare',
+        $c === 1 && $contine($o, 'diferă de copie', 'tabelul settings diferă', 'mentenanța rămâne strictă', '--accepta-baza-diferita', '--fara-baza') && $strict('a')
+        && is_dir($siteuri['a']['dosar'] . '/public_html.vechi') && str_contains((string) @file_get_contents($siteuri['a']['public'] . '/index.php'), 'PLATFORMA_SITE_DIR')
+        && !empty($stareA['revino']['baza_diferita']) && empty($stareA['revino']['baza_in_curs']) && empty($stareA['revino']['baza']), $scurt($o));
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--pierde-datele-noi']);
+    $verifica('reluată fără alegere: refuz (cod 2), nicio încărcare nouă, mentenanța strictă, codul neîntors', $c === 2
+        && $contine($o, 'încărcată întreagă', '--accepta-baza-diferita') && !str_contains($o, 'pusă la loc din') && $strict('a')
+        && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'), $scurt($o));
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--pierde-datele-noi', '--accepta-baza-diferita']);
+    $verifica('--accepta-baza-diferita (după --pierde-datele-noi): cod 0, fără a doua încărcare; codul vechi octet cu octet, baza exact cea de dinaintea adoptării', $c === 0
+        && str_contains($o, '--accepta-baza-diferita: codul vechi pornește') && !str_contains($o, 'exact ca la copie')
         && $amprentaCod($siteuri['a']['public']) === $amprente['a']['cod'] && $amprentaBaza('cms_dep_a') === $bazaInainteA
         && str_contains($cerere($siteuri['a']['url'] . '/')['corp'], 'COD VECHI'), $scurt($o) . ' | ' . $diferente($amprentaCod($siteuri['a']['public']), $amprente['a']['cod'])
         . ' | ' . $diferente($amprentaBaza('cms_dep_a'), $bazaInainteA));

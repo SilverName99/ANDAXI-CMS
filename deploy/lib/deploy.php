@@ -1283,10 +1283,11 @@ final class Redenumiri
      * Termină redenumirile rămase la jumătate de la o rulare oprită. Una imposibilă (amândouă dosarele există, sau
      * niciunul) oprește scriptul, afară de $rezolvatDeMana: atunci e doar raportată și uitată (omul a pus dosarele la
      * loc), iar cheia ei se ține minte în `redenumiri_lasate` (revino.sh nu mai știe din ea dacă pasul s-a făcut). O
-     * mutare care n-a mers (drepturile, discul) oprește mereu: --rezolvat-de-mana nu sare peste ea.
+     * mutare care n-a mers (drepturile, discul) oprește mereu: --rezolvat-de-mana nu sare peste ea. $cuRezolvatDeMana:
+     * scriptul care cheamă primește --rezolvat-de-mana (doar revino.sh), deci sfatul îl poate pomeni.
      * @return list<string> cheile terminate
      */
-    public static function termina(Stare $stare, bool $rezolvatDeMana = false): array
+    public static function termina(Stare $stare, bool $rezolvatDeMana = false, bool $cuRezolvatDeMana = false): array
     {
         $rez = [];
         foreach (array_keys((array) $stare->ia('redenumiri', [])) as $cheie) {
@@ -1296,7 +1297,11 @@ final class Redenumiri
                 $rez[] = (string) $cheie;
             } catch (RedenumireImposibila $e) {
                 if (!$rezolvatDeMana) {
-                    throw new Oprire($e->getMessage(), 1, ['după ce ai pus dosarele la loc de mână: aceeași comandă cu --rezolvat-de-mana']);
+                    $pasi = ['lași doar unul dintre cele două dosare (cum erau înainte de pas, sau cum ar fi după el), apoi aceeași comandă: pasul se termină singur'];
+                    $pasi[] = $cuRezolvatDeMana
+                        ? 'sau, după ce ai pus dosarele la loc de mână altfel: aceeași comandă cu --rezolvat-de-mana'
+                        : 'sau ne trimiți ce vezi în cele două dosare (ls -la)';
+                    throw new Oprire($e->getMessage(), 1, $pasi);
                 }
                 Iesire::atentie('--rezolvat-de-mana: las pasul „' . $cheie . '” cum l-ai lăsat tu (' . $e->getMessage() . ')');
                 $inCurs = (array) $stare->ia('redenumiri', []);

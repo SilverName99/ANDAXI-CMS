@@ -29,7 +29,9 @@ declare(strict_types=1);
  *   deploy/revino.sh --site=biovitality --aplica
  *
  * --fara-baza lasă baza cum e (migrările doar adaugă, deci codul vechi merge și pe ea, docs/MIGRARI.md, „Regulile”):
- * nicio dată nu se pierde. Alte opțiuni: --domeniu=<d> (în locul lui --site), --url=<adresa>, --acasa=<dosar> (teste).
+ * nicio dată nu se pierde. După o încărcare întreagă a copiei care diferă de copie, revenirea se oprește în mentenanța
+ * strictă până alegi: --accepta-baza-diferita (codul vechi pe baza încărcată, cu diferențele arătate) sau --fara-baza
+ * (baza lăsată cum e acum, fără altă încărcare). Alte opțiuni: --domeniu=<d> (în locul lui --site), --url=<adresa>, --acasa=<dosar> (teste).
  */
 
 namespace Platforma\Deploy;
@@ -37,7 +39,7 @@ namespace Platforma\Deploy;
 require __DIR__ . '/deploy.php';
 
 exit(porneste(static function () use ($argv): int {
-    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'url=', 'acasa=', 'fara-baza', 'pierde-datele-noi', 'forteaza-liniste', 'rezolvat-de-mana', 'plan', 'aplica']);
+    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'url=', 'acasa=', 'fara-baza', 'pierde-datele-noi', 'forteaza-liniste', 'rezolvat-de-mana', 'accepta-baza-diferita', 'plan', 'aplica']);
     $aplica = $o->aplica();
     $s = Site::gaseste($o);
     $lacat = $s->lacat();
@@ -52,15 +54,47 @@ exit(porneste(static function () use ($argv): int {
     $inceput = microtime(true);
     if ($aplica) {
         Iesire::jurnal($s->lucru . '/jurnale/revino-' . date('Ymd-His') . '.log');
-        Redenumiri::termina($stare, $o->are('rezolvat-de-mana'));
+        Redenumiri::termina($stare, $o->are('rezolvat-de-mana'), true);
     } elseif ((array) $stare->ia('redenumiri', []) !== []) {
         Iesire::atentie('o rulare de dinainte s-a oprit la jumătatea unei redenumiri (' . implode(', ', array_keys((array) $stare->ia('redenumiri'))) . '); --aplica o termină întâi');
     }
     $facute = (array) $stare->ia('redenumiri_facute', []);
-    $comutat = in_array('comutare', $facute, true) || isset($stare->date['redenumiri']['comutare']);
+    $lasate = (array) $stare->ia('redenumiri_lasate', []);
     $rev = (array) $stare->ia('revino', []);
+    // Întoarcerea codului lăsată de mână (--rezolvat-de-mana): ce s-a făcut o spun dosarele. Gata: codul vechi (checkout-ul,
+    // la commit-ul de la verificări) în public_html, codul nou în public_html.esuat-…, fără public_html.vechi. Neîncepută:
+    // stub-ul în public_html, codul vechi în public_html.vechi, fără public_html.esuat-… (pasul se face din nou). Altfel, refuz.
+    if (in_array('revino-cod', $lasate, true) && !in_array('revino-cod', $facute, true)) {
+        $esuatLasat = (string) ($rev['esuat'] ?? '');
+        $asteptat = (string) $stare->ia('commit_vechi_complet', '');
+        $head = is_dir($s->docroot . '/.git') ? trim(Comanda::ruleaza(['git', '-C', $s->docroot, 'rev-parse', 'HEAD'])['iesire']) : '';
+        if ($asteptat !== '' && $head === $asteptat && $esuatLasat !== '' && is_dir($esuatLasat) && !file_exists($s->vechi)) {
+            Iesire::atentie('pasul „revino-cod” lăsat de mână: codul vechi e în ' . $s->docroot . ' (commit ' . substr($head, 0, 12) . '), codul nou în '
+                . $esuatLasat . '; îl socotesc făcut');
+            if ($aplica) {
+                $facute[] = 'revino-cod';
+                $stare->pune('redenumiri_facute', array_values(array_unique($facute)));
+            } else {
+                $facute[] = 'revino-cod';
+            }
+        } elseif ($s->cuStub() && is_dir($s->vechi) && ($esuatLasat === '' || !file_exists($esuatLasat))) {
+            Iesire::atentie('pasul „revino-cod” lăsat de mână: dosarele sunt cum erau înainte de el; îl fac din nou');
+            if ($aplica) {
+                $stare->pune('redenumiri_lasate', array_values(array_diff($lasate, ['revino-cod'])));
+            }
+        } else {
+            throw new Oprire('pasul „revino-cod” a fost lăsat de mână (--rezolvat-de-mana), dar dosarele nu sunt în niciuna dintre cele două așezări pe care le '
+                . 'recunosc; nu schimb nimic', 1, [
+                'întoarcerea făcută: codul vechi (checkout-ul git la ' . ($asteptat !== '' ? substr($asteptat, 0, 12) : '?') . ') în ' . $s->docroot . ', codul nou în '
+                    . ($esuatLasat !== '' ? $esuatLasat : $s->dosar . '/public_html.esuat-<data>') . ', fără ' . $s->vechi,
+                'sau neîncepută: codul nou (stub-ul) în ' . $s->docroot . ', codul vechi în ' . $s->vechi . ($esuatLasat !== '' ? ', fără ' . $esuatLasat : ''),
+                'pui dosarele într-una dintre ele, apoi aceeași comandă; sau ne trimiți ce vezi în ' . $s->dosar . ' (ls -la)',
+            ]);
+        }
+    }
+    $comutat = in_array('comutare', $facute, true) || isset($stare->date['redenumiri']['comutare']) || (bool) $stare->ia('comutat', false);
 
-    $comutareLasata = in_array('comutare', (array) $stare->ia('redenumiri_lasate', []), true);
+    $comutareLasata = in_array('comutare', $lasate, true);
     if (!$comutat && ($comutareLasata || $s->cuStub())) {
         // Comutarea lăsată de mână (--rezolvat-de-mana) nu mai spune dacă s-a făcut: o spune docroot-ul, care trebuie să fie
         // checkout-ul vechi, la commit-ul de la verificări. Altfel (stub-ul, alt commit) nu e „înainte de comutare”.
@@ -99,8 +133,24 @@ exit(porneste(static function () use ($argv): int {
     // O revenire începută continuă cu aceeași alegere despre bază: una cu --fara-baza nu devine, la reluare, una care pune
     // baza la loc sub codul vechi deja pornit, și invers.
     $restaurareInCurs = !empty($rev['baza_in_curs']) && empty($rev['baza']);
+    // O încărcare întreagă care a ieșit altfel decât copia: nu se reface singură (ar ieși la fel); omul alege.
+    $bazaDiferita = !empty($rev['baza_diferita']) && empty($rev['baza']) && !$restaurareInCurs;
     $alegere = $o->are('fara-baza') ? 'fara-baza' : 'cu-baza';
-    if (isset($rev['alegere']) && $rev['alegere'] !== $alegere && !$restaurareInCurs) {
+    if ($bazaDiferita && !$o->are('fara-baza') && !$o->are('accepta-baza-diferita')) {
+        if ($aplica && $s->cuStub() && Mentenanta::mod($s) !== 'strict') {
+            Mentenanta::pune($s, bin2hex(random_bytes(16)), true);
+        }
+        throw new Oprire('copia bazei a fost încărcată întreagă (' . (string) ($rev['baza_diferita']['facuta'] ?? '?') . '), dar baza diferă de copie: '
+            . implode('; ', array_slice((array) ($rev['baza_diferita']['diferente'] ?? []), 0, 8)) . '. Codul e tot cel nou, în mentenanța strictă; alegi', 2, [
+            'codul vechi pe baza încărcată, cu diferențele de mai sus: aceeași comandă cu --accepta-baza-diferita',
+            'sau baza lăsată cum e acum (fără altă încărcare), doar codul întors: aceeași comandă cu --fara-baza',
+            'sau ne trimiți ieșirea; codul vechi e neatins în ' . $s->vechi . ', copia bazei în ' . (string) $stare->ia('copie_baza', ''),
+        ]);
+    }
+    if ($o->are('accepta-baza-diferita') && !$bazaDiferita) {
+        Iesire::atentie('--accepta-baza-diferita: nu e nicio încărcare a bazei diferită de copie de acceptat; o las deoparte');
+    }
+    if (isset($rev['alegere']) && $rev['alegere'] !== $alegere && !$restaurareInCurs && !$bazaDiferita) {
         throw new Oprire('revenirea începută a ales ' . ($rev['alegere'] === 'fara-baza' ? '--fara-baza' : 'să pună baza la loc')
             . '; continu-o cu aceeași alegere (aceeași comandă ' . ($rev['alegere'] === 'fara-baza' ? 'cu' : 'fără') . ' --fara-baza)', 2);
     }
@@ -114,7 +164,7 @@ exit(porneste(static function () use ($argv): int {
         throw new Oprire('o încărcare a copiei bazei a început și nu s-a terminat: baza e pe jumătate încărcată. Codul vechi nu pornește pe ea; '
             . 'rulezi aceeași comandă fără --fara-baza (copia se încarcă din nou, de la început)', 2);
     }
-    $cuBaza = $restaurareInCurs || ((bool) $stare->ia('migrari_pornite', false) && !$o->are('fara-baza') && empty($rev['baza']));
+    $cuBaza = $restaurareInCurs || ((bool) $stare->ia('migrari_pornite', false) && !$o->are('fara-baza') && empty($rev['baza']) && !$bazaDiferita);
     if ($cuBaza && $codIntors) {
         throw new Oprire('codul vechi e deja din nou în ' . $s->docroot . ' (revenirea cu --fara-baza a mers până acolo); nu mai pun baza la loc sub el', 2);
     }
@@ -131,9 +181,10 @@ exit(porneste(static function () use ($argv): int {
 
     Iesire::info('codul vechi  : ' . ($codIntors ? 'deja în ' . $s->docroot : $s->vechi . ' → ' . $s->docroot));
     Iesire::info('pozele       : ' . $s->docroot . '/uploads → ' . $s->vechi . '/' . ($stare->ia('uploads') ?: '(n-au fost mutate)'));
-    Iesire::info('baza         : ' . (!empty($rev['baza']) ? 'deja pusă la loc' : ($restaurareInCurs ? 'ÎNCĂRCAREA COPIEI A RĂMAS LA JUMĂTATE: o reiau de la început din ' . $copieBaza
+    Iesire::info('baza         : ' . (!empty($rev['baza']) ? 'deja pusă la loc' : ($bazaDiferita ? 'încărcată din copie, dar diferită de ea; '
+        . ($o->are('fara-baza') ? 'lăsată așa (--fara-baza)' : 'acceptată așa (--accepta-baza-diferita)') : ($restaurareInCurs ? 'ÎNCĂRCAREA COPIEI A RĂMAS LA JUMĂTATE: o reiau de la început din ' . $copieBaza
         : ($cuBaza ? 'pusă la loc din ' . $copieBaza . ' (făcută ' . (string) ($info['facuta'] ?? '?') . ')'
-            : ($o->are('fara-baza') ? 'lăsată cum e (--fara-baza): codul vechi merge pe baza migrată' : 'neatinsă (migrările n-au pornit)')))));
+            : ($o->are('fara-baza') ? 'lăsată cum e (--fara-baza): codul vechi merge pe baza migrată' : 'neatinsă (migrările n-au pornit)'))))));
 
     // 1. Nicio scriere nouă (doar cu --aplica). Mentenanța de dinainte se ține minte în stare o singură dată, la prima
     // scriere a celei stricte, ca o revenire oprită și reluată s-o pună la loc pe cea adevărată, nu pe a ei.
@@ -143,7 +194,8 @@ exit(porneste(static function () use ($argv): int {
     // La un refuz înainte ca revenirea să schimbe ceva: mentenanța cum era și alegerea uitată. După ce a început (o încărcare
     // a bazei pornită, poate încă vie; o redenumire revino-* începută sau făcută), mentenanța rămâne strictă: cea de dinainte
     // ar deschide codul nou pe o bază pe jumătate încărcată sau fără poze.
-    $inceputa = !empty($rev['baza_in_curs']) || !empty($rev['baza']) || array_filter(array_merge($facute, array_keys((array) $stare->ia('redenumiri', []))),
+    $inceputa = !empty($rev['baza_in_curs']) || !empty($rev['baza']) || !empty($rev['baza_diferita'])
+        || array_filter(array_merge($facute, $lasate, array_keys((array) $stare->ia('redenumiri', []))),
         static fn ($k): bool => str_starts_with((string) $k, 'revino-')) !== [];
     $puneLaLoc = static function () use ($s, $stare, &$rev, $inceputa): void {
         if ($inceputa) {
@@ -197,17 +249,28 @@ exit(porneste(static function () use ($argv): int {
 
     // 3. Baza. „În curs” se scrie înainte: o încărcare omorâtă la jumătate se reia de la început, niciodată sărită.
     $probleme = [];
+    if ($bazaDiferita && $o->are('accepta-baza-diferita') && !$o->are('fara-baza')) {
+        $rev['baza'] = date('c');
+        $rev['baza_acceptata'] = $rev['baza_diferita'];
+        unset($rev['baza_diferita']);
+        $stare->pune('revino', $rev);
+        Iesire::atentie('--accepta-baza-diferita: codul vechi pornește pe baza încărcată, care diferă de copie (mai sus)');
+    }
     if ($cuBaza) {
         $t = microtime(true);
         $rev['baza_in_curs'] = date('c');
         $stare->pune('revino', $rev);
         $diferente = $baza->restaureaza($copieBaza);
         if ($diferente !== []) {
-            // „În curs” rămâne: codul vechi nu pornește pe o bază altfel decât la copie, iar reluarea încarcă din nou copia.
+            // Încărcarea s-a terminat (nu mai e „în curs”), dar baza diferă: codul nu se întoarce până nu alege omul.
+            unset($rev['baza_in_curs']);
+            $rev['baza_diferita'] = ['facuta' => date('c'), 'diferente' => array_slice($diferente, 0, 40)];
+            $stare->pune('revino', $rev);
             throw new Oprire('baza pusă la loc diferă de copie: ' . implode('; ', array_slice($diferente, 0, 8)) . '. Nu întorc codul pe ea; '
                 . 'mentenanța rămâne strictă', 1, [
-                'rulezi din nou aceeași comandă: copia se încarcă din nou, de la început',
-                'dacă diferă și a doua oară, ne trimiți ieșirea; codul vechi e neatins în ' . $s->vechi . ', copia bazei în ' . $copieBaza,
+                'codul vechi pe baza încărcată, cu diferențele de mai sus: aceeași comandă cu --accepta-baza-diferita',
+                'sau baza lăsată cum e acum (fără altă încărcare), doar codul întors: aceeași comandă cu --fara-baza',
+                'sau ne trimiți ieșirea; codul vechi e neatins în ' . $s->vechi . ', copia bazei în ' . $copieBaza,
             ]);
         }
         $rev['baza'] = date('c');
