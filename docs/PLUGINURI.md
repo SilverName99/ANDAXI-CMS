@@ -981,8 +981,8 @@ loc de comenzi.
 ### Campanii pe site (`campanii`)
 
 Cerut pentru Biovitality (5 noiembrie 2026), făcut generic. `App\Support\Campanii`, `CampaniiController`, migrările
-`campanii/0054`, `campanii/0056` (pagina fără antet și subsol, codul `{{campanie_produse}}`) și `campanii/0057` (colțurile
-cardurilor), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
+`campanii/0054`, `campanii/0056` (pagina fără antet și subsol, codul `{{campanie_produse}}`), `campanii/0057` (colțurile
+cardurilor) și `campanii/0058` (oferta campaniei, `App\Support\OfertaCampanie`), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
 **Oprit pe orice site**: nu e în niciun pachet și în nicio licență de dezvoltare (`licente_dev`); îl pune doar CRM-ul în
 licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/licenta.php biovitality campanii=pornit`.
 
@@ -1080,6 +1080,44 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   campaniei). Editorul are o **previzualizare** care se schimbă cât scrii (un chenar care se derulează, ca să se vadă și
   „lipit”), plus a insignei. Un antet al site-ului lipit și el sus poate sta peste banner (`z-index` 1040): de verificat cu
   tema site-ului.
+- **Oferta campaniei** (secțiunea „Oferta campaniei” din editor; `campanii.oferta_tip`, `oferta_n`, `oferta_m`, `oferta_procent`,
+  `campanii_produse.pret_campanie`; `App\Support\OfertaCampanie`): o reducere fără cod, doar pe produsele alese ale campaniei,
+  doar cât campania e activă (și cu magazinul pornit). Tipurile:
+  - **„Al N-lea la −Y%”** (`al_n`; „1+1 −50%” = N 2, Y 50; eticheta „1+1 −50%”, altfel „Al N-lea la −Y%”);
+  - **„N la preț de M”** (`n_la_m`, N > M ≥ 1; de exemplu 3 la preț de 2): cele mai ieftine N−M bucăți din fiecare grupă, gratuite;
+  - **„−X%”** (`procent`) pe fiecare linie eligibilă;
+  - **„Preț de campanie”** (`pret_fix`): prețul scris lângă fiecare produs în lista din editor (mai mic decât prețul lui; altfel
+    salvarea dă 422); un produs fără preț nu are reducere.
+  **Perechile și grupele** (`al_n`, `n_la_m`), deterministe: toate bucățile eligibile din coș (peste linii) se pun în ordinea
+  prețului, de la cel mai scump; la preț egal, în ordinea liniilor din coș, apoi a bucăților; se iau câte N la rând, iar în
+  fiecare grupă întreagă reducerea merge pe ultimele bucăți (cele mai ieftine ale grupei). Bucățile care nu fac o grupă întreagă
+  rămân la preț întreg. **Rotunjirea**, în bani întregi (cenți): reducerea unei bucăți (`al_n`) sau a unei linii (`procent`) =
+  prețul × procentul, rotunjit la cent, jumătatea în sus (de exemplu 45,99 la −50% = 23,00); gratuitatea și prețul fix sunt
+  exacte. **Eligibile**: produsele campaniei, fără o reducere proprie în clipa aceea (aceeași regulă ca la alegere,
+  `Campanii::motivReducere`: un produs redus după ce a fost ales e sărit) și fără o ofertă BBD aleasă pe linie.
+  **Calculul** (`CheckoutCalculator::buildSummary`): reducerea scade din prețul liniei înaintea TVA-ului, deci linia, prețul
+  mediu al bucății, TVA-ul liniei (cu cota ei), subtotalul și totalul sunt cele de după ofertă; linia păstrează prețul și
+  totalul de dinainte (`campanie_pret_initial`, `campanie_total_inainte`) și reducerea (`campanie_reducere`), iar sumarul are
+  `campanie_oferta` (textul „<campania>: <eticheta>”, reducerea totală, îndemnul, nota cuponului) doar cu cel puțin o bucată
+  eligibilă în coș. **Transportul gratuit și punctele** socotesc oferta ca pe un cupon: pragul pe subtotalul de dinainte de
+  ofertă, minus reducerile (oferta, cuponul, punctele) doar cu „shipping_include_coupons” (implicit da, deci pe ce se plătește);
+  punctele (folosite și câștigate) pe subtotal minus cupon, adică pe prețurile de după ofertă, ca la un cupon. **Cuponul** nu
+  se aplică liniilor reduse de ofertă: se socotește doar pe celelalte (subtotalul eligibil, ca la un cupon „fără cumulare”),
+  iar coșul și checkout-ul spun „Cuponul nu se aplică produselor din oferta campaniei”. **Îndemnul** „Mai adaugă un produs din
+  ofertă ca să primești reducerea” (sub sumar, în coș, coșul plutitor și checkout) cât lipsește o bucată pentru prima grupă
+  (cu mai multe lipsă: „Mai adaugă N produse …”). **Afișarea**: pe fiecare linie redusă, prețul de dinainte tăiat și „<eticheta>:
+  −X lei”; în sumar, rândul „<campania>: <eticheta> (inclusă în prețuri) −X lei” (în pagina coșului, coșul plutitor,
+  checkout, emailurile comenzii, sub produse, și Admin → Comenzi, cu reducerea pe linie). **Pe comandă** (separat de INSERT,
+  ca o comandă fără ofertă să se scrie exact ca înainte): `orders.campanie_id`, `campanie_oferta` (textul, înghețat),
+  `campanie_reducere`; pe linii `order_items.campanie_reducere`, `campanie_pret_initial`, `line_total` redus și `unit_price` =
+  media la cent. **ERP**: cuponul pleacă azi pe comandă (`discountCupon`, o linie de serviciu la cota dominantă), iar ERP-ul
+  ține o singură linie pe produs (două linii pe același produs opresc aprobarea), fără reducere pe linie la primire; de aceea
+  oferta nu pleacă ca un cupon, ci în prețul liniei: `pretUnitar` = totalul redus al liniei / cantitate, cu 4 zecimale (cât ține
+  ERP-ul), deci factura are prețul plătit și TVA-ul cu cota fiecărui produs; `total` e al comenzii. Pentru cantități sub 100,
+  totalul liniei din ERP iese la cent cel al site-ului. Liniile fără ofertă pleacă exact ca înainte. **De știut**: o editare
+  manuală a cantității unei linii cu ofertă din Admin → Comenzi (sau o schimbare venită din ERP) o reprețuiește la prețul mediu
+  (cel mult 1 ban față de totalul exact) și nu refăce oferta. Fără ofertă aleasă (implicit) sau fără campanie activă, coșul,
+  comanda și ERP-ul sunt octet cu octet cele de dinainte (sumarul coșului nu are nicio cheie nouă).
 - **Cache-ul paginilor**: cheia primește `|campanie:<id>:<updated_at>` doar cât e o campanie activă (fără ea, cheia e exact
   cea de dinainte); salvarea și ștergerea golesc cache-ul. Un CDN care ține pagini HTML întregi pentru vizitatori le-ar servi
   fără PHP (atunci nici trimiterea, nici bannerul nu se schimbă până expiră copia).

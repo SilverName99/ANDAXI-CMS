@@ -19,6 +19,8 @@ $erori = is_array($erori ?? null) ? $erori : [];
 $pagini = is_array($pagini ?? null) ? $pagini : [];
 $produse = is_array($produse ?? null) ? $produse : [];
 $alese = array_flip(is_array($produseAlese ?? null) ? $produseAlese : []);
+$preturiCampanie = is_array($c['preturi'] ?? null) ? $c['preturi'] : [];
+$tipOferta = (string) ($c['oferta_tip'] ?? '');
 $areCatalog = \App\Support\Plugins::vizibil('catalog');
 $stare = $id > 0 ? Campanii::stare($c) : null;
 $bifat = static fn (mixed $v): string => (int) $v === 1 ? ' checked' : '';
@@ -163,6 +165,12 @@ admin_componenta('antet-pagina', [
                     <label data-cauta="<?= adm_e(mb_strtolower((string) $p['name'] . ' ' . (string) ($p['sku'] ?? ''))) ?>"<?= $motivReducere !== '' ? ' data-are-reducere style="opacity:.6;"' : '' ?>>
                         <input type="checkbox" name="produse[]" value="<?= (int) $p['id'] ?>"<?= $motivReducere !== '' ? ' disabled' : (isset($alese[(int) $p['id']]) ? ' checked' : '') ?>>
                         <span><?= adm_e((string) $p['name']) ?><?= trim((string) ($p['sku'] ?? '')) !== '' ? ' <small class="muted adm-mono">' . adm_e((string) $p['sku']) . '</small>' : '' ?><?= (int) ($p['is_active'] ?? 1) !== 1 ? ' <small class="muted">(inactiv)</small>' : '' ?><?= $motivReducere !== '' ? ' <small class="muted">(are deja o reducere: ' . adm_e($motivReducere) . (isset($alese[(int) $p['id']]) ? '; scos din campanie la salvare' : '') . ')</small>' : '' ?></span>
+<?php if ($motivReducere === ''): ?>
+                        <span class="campanie-pret-fix" data-oferta-camp="pret_fix" style="margin-left:auto;display:<?= $tipOferta === 'pret_fix' ? 'inline-flex' : 'none' ?>;gap:6px;align-items:center;white-space:nowrap;">
+                            <small class="muted"><?= number_format((float) ($p['price'] ?? 0), 2) ?> lei →</small>
+                            <input type="text" inputmode="decimal" name="pret_campanie[<?= (int) $p['id'] ?>]" value="<?= isset($preturiCampanie[(int) $p['id']]) ? adm_e(number_format((float) $preturiCampanie[(int) $p['id']], 2, '.', '')) : '' ?>" placeholder="preț" aria-label="Prețul de campanie: <?= adm_e((string) $p['name']) ?>" style="width:90px;">
+                        </span>
+<?php endif; ?>
                     </label>
                 <?php endforeach; ?>
             </div>
@@ -192,6 +200,48 @@ admin_componenta('antet-pagina', [
         </div>
     </div>
 <?php admin_componenta('sectiune-formular', ['id' => 'campanie-produse-sectiune', 'titlu' => 'Produsele cu insignă', 'continut' => (string) ob_get_clean()]); ?>
+
+<?php ob_start(); ?>
+    <div class="form-grid">
+        <div class="field campanie-camp-lat">
+            <label for="campanie-oferta-tip">Oferta campaniei (pe produsele de mai sus)</label>
+            <select id="campanie-oferta-tip" name="oferta_tip" data-oferta-tip>
+                <option value=""<?= $tipOferta === '' ? ' selected' : '' ?>>— nicio ofertă (doar insigna) —</option>
+                <?php foreach (\App\Support\OfertaCampanie::TIPURI as $cheieTip => $numeTip): ?>
+                    <option value="<?= adm_e($cheieTip) ?>"<?= $tipOferta === $cheieTip ? ' selected' : '' ?>><?= adm_e($numeTip) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <small class="muted">Cât campania e activă, coșul scade singur reducerea pe produsele campaniei (fără cod). Perechile se fac de la cel mai scump produs eligibil din coș în jos; în fiecare grupă, reducerea merge pe cel mai ieftin. Un cupon nu se aplică produselor reduse de ofertă. Un produs care primește între timp o reducere proprie e sărit.</small>
+        </div>
+        <div class="field" data-oferta-camp="al_n n_la_m"<?= in_array($tipOferta, ['al_n', 'n_la_m'], true) ? '' : ' hidden' ?>>
+            <label for="campanie-oferta-n">N (câte produse fac o grupă)</label>
+            <input type="number" id="campanie-oferta-n" name="oferta_n" min="2" max="10" value="<?= (int) ($c['oferta_n'] ?? 2) ?>">
+            <small class="muted">1+1 −50%: N = 2, Y = 50. 3 la preț de 2: N = 3, M = 2.</small>
+        </div>
+        <div class="field" data-oferta-camp="al_n procent"<?= in_array($tipOferta, ['al_n', 'procent'], true) ? '' : ' hidden' ?>>
+            <label for="campanie-oferta-procent">Reducerea (%)</label>
+            <input type="text" inputmode="decimal" id="campanie-oferta-procent" name="oferta_procent" value="<?= adm_e(rtrim(rtrim(number_format((float) ($c['oferta_procent'] ?? 50), 2, '.', ''), '0'), '.')) ?>">
+        </div>
+        <div class="field" data-oferta-camp="n_la_m"<?= $tipOferta === 'n_la_m' ? '' : ' hidden' ?>>
+            <label for="campanie-oferta-m">M (câte se plătesc din grupă)</label>
+            <input type="number" id="campanie-oferta-m" name="oferta_m" min="1" max="9" value="<?= (int) ($c['oferta_m'] ?? 1) ?>">
+        </div>
+        <div class="field campanie-camp-lat" data-oferta-camp="pret_fix"<?= $tipOferta === 'pret_fix' ? '' : ' hidden' ?>>
+            <small class="muted">Prețul de campanie al fiecărui produs se scrie în lista de mai sus, lângă produs (mai mic decât prețul lui).</small>
+        </div>
+    </div>
+    <script>
+    (() => {
+        const tip = document.querySelector('[data-oferta-tip]');
+        if (!tip) return;
+        const arata = () => document.querySelectorAll('[data-oferta-camp]').forEach((el) => {
+            const vizibil = String(el.getAttribute('data-oferta-camp')).split(' ').includes(tip.value);
+            if (el.classList.contains('campanie-pret-fix')) { el.style.display = vizibil ? 'inline-flex' : 'none'; } else { el.hidden = !vizibil; }
+        });
+        tip.addEventListener('change', arata);
+    })();
+    </script>
+<?php admin_componenta('sectiune-formular', ['id' => 'campanie-oferta-sectiune', 'titlu' => 'Oferta campaniei', 'continut' => (string) ob_get_clean()]); ?>
 <?php endif; ?>
 
 <?php ob_start(); ?>

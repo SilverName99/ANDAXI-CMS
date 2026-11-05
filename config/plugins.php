@@ -601,7 +601,8 @@ return [
                 ['grup' => 'marketing', 'ordine' => 90, 'eticheta' => 'Campanii pe site', 'href' => '/admin/campanii', 'icon' => 'stats',
                     'activ' => ['/admin/campanii']],
             ],
-            'tabele' => ['campanii', 'campanii_produse'],
+            // campanii/0058: oferta campaniei, păstrată pe comandă și pe liniile ei.
+            'tabele' => ['campanii', 'campanii_produse', 'orders.campanie_*', 'order_items.campanie_*'],
         ],
 
         'migrare_wordpress' => [

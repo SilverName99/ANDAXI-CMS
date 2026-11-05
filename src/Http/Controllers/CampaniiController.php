@@ -107,6 +107,7 @@ final class CampaniiController
             header('Location: /admin/campanii');
             return;
         }
+        $campanie['preturi'] = Campanii::preturiCampanie($db, $id);
         $this->editor($campanie, Campanii::idProduse($db, $id), []);
     }
 

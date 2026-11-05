@@ -173,6 +173,32 @@ final class CheckoutCalculator
         $totalWeightGrams = 0;
         $nowTs = (new DateTimeImmutable('now'))->getTimestamp();
 
+        // Pluginul campanii: oferta campaniei active (OfertaCampanie), socotită înaintea liniilor, pe bucățile eligibile ale
+        // întregului coș (perechile „1+1” trec peste linii). Eligibile: produsele campaniei fără reducere proprie acum
+        // (Campanii::motivReducere: unul redus după ce a fost ales e sărit) și fără o ofertă BBD aleasă. Reducerea scade din
+        // prețul liniei, mai jos. Fără ofertă activă: nimic, liniile și sumele exact ca înainte.
+        $ofertaCampanie = OfertaCampanie::activa($db);
+        $calculOferta = null;
+        if ($ofertaCampanie !== null) {
+            $liniiOferta = [];
+            foreach ($cartItems as $cartItem) {
+                $idOferta = (int) ($cartItem['product_id'] ?? 0);
+                $produsOferta = $productMap[$idOferta] ?? null;
+                if (!is_array($produsOferta) || !array_key_exists($idOferta, $ofertaCampanie['produse'])
+                    || (string) ($cartItem['bbd_key'] ?? '') !== '' || Campanii::motivReducere($produsOferta) !== '') {
+                    continue;
+                }
+                $liniiOferta[] = [
+                    'cheie' => (string) ($cartItem['item_key'] ?? ''),
+                    'produs' => $idOferta,
+                    'pret' => (int) round(self::effectiveProductPrice($produsOferta, $nowTs) * 100),
+                    'cantitate' => max(1, (int) ($cartItem['quantity'] ?? 1)),
+                ];
+            }
+            $calculOferta = OfertaCampanie::calculeaza($ofertaCampanie, $liniiOferta);
+        }
+        $reducereOfertaTotal = 0.0;
+
         foreach ($cartItems as $cartItem) {
             if (!is_array($cartItem)) {
                 continue;
@@ -193,6 +219,16 @@ final class CheckoutCalculator
                 $bbdSelection['reduced_price'] ?? null
             );
             $lineTotal = $price * $qty;
+            // Oferta campaniei pe această linie (în cenți, din calculul de mai sus): prețul liniei scade, iar prețul unei bucăți
+            // devine media (în coș și în ERP; pe comandă se păstrează și prețul de dinainte).
+            $reducereOferta = (int) ($calculOferta['reduceri'][(string) ($cartItem['item_key'] ?? '')] ?? 0);
+            $pretInainteOferta = $price;
+            $totalInainteOferta = $lineTotal;
+            if ($reducereOferta > 0) {
+                $lineTotal = max(0, (int) round($lineTotal * 100) - $reducereOferta) / 100;
+                $price = $lineTotal / $qty;
+                $reducereOfertaTotal += $reducereOferta / 100;
+            }
             $vatPercent = max(0.0, min(100.0, (float) ($product['vat_percent'] ?? 19.0)));
             $vatIncluded = ((int) ($product['vat_included'] ?? 1)) === 1;
             $lineVat = $vatPercent > 0
@@ -247,6 +283,13 @@ final class CheckoutCalculator
                 'coupon_discount' => 0.0,
                 'line_total_after_coupon' => $lineTotal,
             ];
+            if ($reducereOferta > 0) {
+                $lines[array_key_last($lines)] += [
+                    'campanie_reducere' => $reducereOferta / 100,
+                    'campanie_pret_initial' => $pretInainteOferta,
+                    'campanie_total_inainte' => $totalInainteOferta,
+                ];
+            }
         }
 
         $couponCode = Cart::coupon();
@@ -285,9 +328,13 @@ final class CheckoutCalculator
         // fără transport, peste prag și peste tariful curierului.
         $transportGratuitDinProdus = $db instanceof PDO
             && self::produseAuTransportGratuit($db, array_map(static fn (array $l): int => (int) ($l['id'] ?? 0), $lines));
+        // Transportul gratuit socotește oferta campaniei ca pe un cupon: subtotalul de dinainte de ofertă, minus reducerile
+        // (oferta, cuponul, punctele) doar cu „shipping_include_coupons” (implicit da). Fără ofertă: adunări cu 0.
+        $subtotalInainteOferta = $subtotal + $reducereOfertaTotal;
+        $shippingDiscountReference += $reducereOfertaTotal;
         $shipping = $transportGratuitDinProdus
             ? 0.0
-            : self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);
+            : self::calculateShipping($db, $settings, $county, $subtotalInainteOferta, $shippingDiscountReference);
         // Ridicarea personală de la sediu (calculateShipping a dat deja 0).
         $ridicarePersonala = RidicarePersonala::aleasa($settings);
         $isBucharest = mb_strtolower(trim($county)) === 'bucuresti';
@@ -296,8 +343,8 @@ final class CheckoutCalculator
             ? (float) ($settings['shipping_free_bucharest'] ?? 200)
             : (float) ($settings['shipping_free_province'] ?? 200);
         $shippingReference = $includeCoupons
-            ? max(0.0, $subtotal - $shippingDiscountReference)
-            : max(0.0, $subtotal);
+            ? max(0.0, $subtotalInainteOferta - $shippingDiscountReference)
+            : max(0.0, $subtotalInainteOferta);
         $total = max(0, $subtotal - $discount - $pointsDiscount + $shipping + $vatAdditional);
 
         $rezumat = [
@@ -318,6 +365,18 @@ final class CheckoutCalculator
             'shipping_free_threshold' => max(0.0, $shippingFreeThreshold),
             'total_weight_kg' => $totalWeightGrams > 0 ? ($totalWeightGrams / 1000) : 0.0,
         ];
+        // Oferta campaniei: cheia există doar cu o ofertă activă și cel puțin o bucată eligibilă în coș (altfel sumarul e
+        // cel de dinainte). `reducere` e deja scăzută din liniile și din subtotal.
+        if ($ofertaCampanie !== null && is_array($calculOferta) && $calculOferta['unitati'] > 0) {
+            $rezumat['campanie_oferta'] = [
+                'id' => $ofertaCampanie['id'],
+                'text' => OfertaCampanie::textSumar($ofertaCampanie),
+                'eticheta' => $ofertaCampanie['eticheta'],
+                'reducere' => round($reducereOfertaTotal, 2),
+                'indiciu' => OfertaCampanie::indiciu((int) $calculOferta['lipsesc']),
+                'cupon_exclus' => $coupon !== null && $reducereOfertaTotal > 0,
+            ];
+        }
         if ($transportGratuitDinProdus) {
             // Transportul e gratuit fiindcă un produs din coș îl oferă așa, nu fiindcă s-a atins pragul: curierul nu se
             // mai întreabă (requiresFanLiveShippingCharge), iar referința pragului ajunge la prag, ca orice ecran care
@@ -949,7 +1008,16 @@ final class CheckoutCalculator
                 'quantity' => $qty,
                 'line_total' => max(0.0, (float) ($line['line_total'] ?? 0.0)),
                 'is_discounted' => !empty($line['is_discounted']),
+                // Pluginul campanii: o linie redusă de oferta campaniei nu primește și cuponul.
+                'campanie' => !empty($line['campanie_reducere']),
             ];
+        }
+        // Un cupon nu se aplică liniilor reduse de oferta campaniei: ca la un cupon „fără cumulare”, reducerea se socotește
+        // doar pe subtotalul liniilor rămase (eligible_subtotal). Fără ofertă în coș, nimic nu se schimbă.
+        $areOferta = in_array(true, array_column($cartRows, 'campanie'), true);
+        if ($areOferta) {
+            $coupon['use_eligible_subtotal'] = 1;
+            $cartRows = array_values(array_filter($cartRows, static fn (array $r): bool => !$r['campanie']));
         }
 
         $minItems = max(0, (int) ($coupon['min_items_count'] ?? 0));

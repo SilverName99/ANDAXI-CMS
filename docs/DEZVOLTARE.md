@@ -146,7 +146,7 @@ tools/dev/php.sh tools/dev/test-incarcare.php       # încărcarea copiei de ver
 tools/dev/php.sh tools/dev/test-securitate.php      # securitatea nucleului (WP-12b): parolele adminilor, id-ul sesiunii la logare, adresa vizitatorului (și în testul de fum)
 tools/dev/php.sh tools/dev/test-porturi-vt-gr.php   # porturile din vertij și grafoanaytis (WP-15, WP-24…WP-26; și în testul de fum)
 tools/dev/php.sh tools/dev/test-newsletter.php      # newsletterul portat din Bioscem (WP-R din 30 oct; și în testul de fum)
-tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, Chromium 1366/390 px (și în testul de fum)
+tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, oferta campaniei (calculul, coșul, comanda, ERP), Chromium 1366/390 px (și în testul de fum)
 tools/dev/compara-calcule-local.sh                  # golden master-ul (codul Bioscem însuși față de codul comun, aceleași comenzi: diferite 0) și amprenta paginilor (docs/VERIFICARE.md)
 tools/dev/php.sh tools/dev/test-paths.php           # căile site-ului (Paths), stub-ul, MENTENANTA și pingul, pe o găzduire simulată din Etapa 2 (mai jos, „Unde scrie codul”)
 tools/dev/php.sh tools/dev/test-deploy.php          # deploy-ul din Etapa 2: release, adopta, actualizeaza, revino, pe o găzduire simulată cu două site-uri (docs/DEPLOY.md)

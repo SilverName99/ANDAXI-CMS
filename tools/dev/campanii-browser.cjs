@@ -150,6 +150,54 @@ async function paginaGrila(browser, latime, eticheta) {
   await context.close();
 }
 
+// Oferta campaniei în coș (CMS_DEV_COS=1, CMS_DEV_PRODUSE="id,id": două produse ale campaniei, cu oferta „1+1 −50%” pusă de
+// test-campanii.php): pagina coșului, coșul plutitor și checkout-ul arată rândul ofertei și reducerea pe linie.
+async function cosOferta(browser, latime, eticheta) {
+  const context = await browser.newContext({ viewport: { width: latime, height: latime < 500 ? 844 : 900 }, isMobile: latime < 500,
+    hasTouch: latime < 500, deviceScaleFactor: 1, userAgent: latime < 500
+      ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
+      : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' });
+  await blocheazaExterne(context);
+  await context.addCookies([{ name: 'campanie_vazuta', value: String(campanie), url: baza }]);
+  const pagina = await context.newPage();
+  const erori = [];
+  pagina.on('pageerror', (e) => erori.push(String(e)));
+  for (const id of String(process.env.CMS_DEV_PRODUSE || '').split(',').filter(Boolean)) {
+    await pagina.request.post(baza + '/cos/adauga/' + id, { form: { quantity: '1' }, maxRedirects: 0 });
+  }
+  await pagina.goto(baza + '/cos', { waitUntil: 'load' });
+  const sumar = pagina.locator('[data-campanie-sumar]').first();
+  nota(eticheta + ': pagina coșului: rândul ofertei și reducerea pe linie se văd', await sumar.isVisible()
+    && await pagina.locator('[data-campanie-linie]').first().isVisible() && (await sumar.innerText()).includes('1+1 −50%'), await sumar.innerText().catch(() => ''));
+  nota(eticheta + ': pagina coșului fără derulare laterală', await faraDerulareLaterala(pagina));
+  if (capturi) {
+    await pagina.screenshot({ path: path.join(capturi, 'cos-oferta-' + latime + '.png'), fullPage: true });
+  }
+  await pagina.goto(baza + '/magazin', { waitUntil: 'load' });
+  const buton = pagina.locator('.floating-cart__trigger');
+  let plutitor = false;
+  if (await buton.count() > 0 && await buton.first().isVisible()) {
+    // Bannerul de cookie-uri poate sta peste buton: clicul direct pe element, ca al unui om care a închis bannerul.
+    await buton.first().evaluate((el) => el.click());
+    await pagina.waitForTimeout(500);
+    plutitor = await pagina.locator('.floating-cart [data-campanie-sumar]').first().isVisible()
+      && await pagina.locator('.floating-cart [data-campanie-linie]').first().isVisible();
+  }
+  nota(eticheta + ': coșul plutitor: rândul ofertei și reducerea pe linie', plutitor);
+  if (capturi) {
+    await pagina.screenshot({ path: path.join(capturi, 'cos-plutitor-oferta-' + latime + '.png'), fullPage: false });
+  }
+  await pagina.goto(baza + '/checkout', { waitUntil: 'load' });
+  nota(eticheta + ': checkout: rândul ofertei și reducerea pe linie', await pagina.locator('[data-campanie-sumar]').first().isVisible()
+    && await pagina.locator('[data-campanie-linie]').first().isVisible());
+  nota(eticheta + ': checkout fără derulare laterală', await faraDerulareLaterala(pagina));
+  if (capturi) {
+    await pagina.screenshot({ path: path.join(capturi, 'checkout-oferta-' + latime + '.png'), fullPage: true });
+  }
+  nota(eticheta + ': nicio eroare JavaScript (coș, coș plutitor, checkout)', erori.length === 0, erori.join(' | '));
+  await context.close();
+}
+
 async function admin(browser, latime, eticheta) {
   const context = await browser.newContext({ viewport: { width: latime, height: 900 }, isMobile: latime < 500, hasTouch: latime < 500 });
   await blocheazaExterne(context);
@@ -188,7 +236,10 @@ async function admin(browser, latime, eticheta) {
   }
   const browser = await chromium.launch();
   try {
-    if (process.env.CMS_DEV_GRILA === '1') {
+    if (process.env.CMS_DEV_COS === '1') {
+      await cosOferta(browser, 1366, 'coș 1366');
+      await cosOferta(browser, 390, 'coș 390');
+    } else if (process.env.CMS_DEV_GRILA === '1') {
       await paginaGrila(browser, 1366, 'grila 1366');
       await paginaGrila(browser, 390, 'grila 390');
     } else {

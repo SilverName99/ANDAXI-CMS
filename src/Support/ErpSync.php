@@ -903,7 +903,7 @@ final class ErpSync
 
         try {
             $stmt = $db->prepare(
-                'SELECT oi.product_id, oi.product_name, oi.quantity, oi.unit_price,
+                'SELECT oi.id, oi.product_id, oi.product_name, oi.quantity, oi.unit_price, oi.line_total,
                         p.sku, p.vat_percent, p.vat_included
                  FROM order_items oi
                  LEFT JOIN products p ON p.id = oi.product_id
@@ -916,7 +916,7 @@ final class ErpSync
             // Schemă fără coloanele de TVA pe produs: cădem pe cota implicită
             // configurată în Setări magazin, nu pe una scrisă în cod.
             $stmt = $db->prepare(
-                'SELECT oi.product_id, oi.product_name, oi.quantity, oi.unit_price,
+                'SELECT oi.id, oi.product_id, oi.product_name, oi.quantity, oi.unit_price, oi.line_total,
                         p.sku, :cota_implicita AS vat_percent, 1 AS vat_included
                  FROM order_items oi
                  LEFT JOIN products p ON p.id = oi.product_id
@@ -925,6 +925,18 @@ final class ErpSync
             );
             $stmt->execute(['order_id' => $orderId, 'cota_implicita' => $cotaImplicita]);
             $rows = $stmt->fetchAll() ?: [];
+        }
+
+        // Pluginul campanii: liniile reduse de oferta campaniei (order_items.campanie_reducere, campanii/0058). Prețul lor pe
+        // comandă e media bucăților, la cent; în ERP pleacă totalul exact al liniei împărțit la cantitate (4 zecimale, cât
+        // ține și ERP-ul), ca factura să aibă prețul plătit și TVA-ul liniei. Celelalte linii: exact ca înainte.
+        $reduseOferta = [];
+        try {
+            $stmtOferta = $db->prepare('SELECT id FROM order_items WHERE order_id = :order_id AND campanie_reducere > 0');
+            $stmtOferta->execute(['order_id' => $orderId]);
+            $reduseOferta = array_fill_keys(array_map('intval', $stmtOferta->fetchAll(PDO::FETCH_COLUMN) ?: []), true);
+        } catch (Throwable) {
+            // O bază fără migrarea campanii/0058: nicio linie cu ofertă.
         }
 
         $lines = [];
@@ -939,7 +951,9 @@ final class ErpSync
                 'sku' => $sku,
                 'denumire' => (string) ($row['product_name'] ?? 'Produs'),
                 'cantitate' => max(1, (int) ($row['quantity'] ?? 1)),
-                'pretUnitar' => round((float) ($row['unit_price'] ?? 0), 4),
+                'pretUnitar' => isset($reduseOferta[(int) ($row['id'] ?? 0)])
+                    ? round((float) ($row['line_total'] ?? 0) / max(1, (int) ($row['quantity'] ?? 1)), 4)
+                    : round((float) ($row['unit_price'] ?? 0), 4),
                 'tvaInclus' => ((int) ($row['vat_included'] ?? 1)) === 1,
                 'cotaTva' => round((float) ($row['vat_percent'] ?? $cotaImplicita), 2),
             ];

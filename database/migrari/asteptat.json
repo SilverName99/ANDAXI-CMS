@@ -1175,6 +1175,30 @@
                     "null": false,
                     "tip": "varchar(160)"
                 },
+                "oferta_m": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "smallint unsigned"
+                },
+                "oferta_n": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "smallint unsigned"
+                },
+                "oferta_procent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(5,2)"
+                },
+                "oferta_tip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
                 "pagina_id": {
                     "extra": "",
                     "implicit": null,
@@ -1257,6 +1281,12 @@
                     "implicit": null,
                     "null": false,
                     "tip": "int unsigned"
+                },
+                "pret_campanie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
                 },
                 "product_id": {
                     "extra": "",
@@ -3753,6 +3783,18 @@
                     "null": true,
                     "tip": "varchar(64)"
                 },
+                "campanie_pret_initial": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "campanie_reducere": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
                 "created_at": {
                     "extra": "",
                     "implicit": "current_timestamp",
@@ -4214,6 +4256,24 @@
                     "implicit": null,
                     "null": false,
                     "tip": "varchar(20)"
+                },
+                "campanie_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "campanie_oferta": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(200)"
+                },
+                "campanie_reducere": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
                 },
                 "completed_awb_email_error": {
                     "extra": "",

@@ -5900,6 +5900,11 @@ final class AdminController
             if ($cuRidicare) {
                 $selectPlata .= ', pickup_in_person, pickup_address, pickup_ready_notified_at';
             }
+            // Oferta campaniei (pluginul campanii, campanii/0058): textul și reducerea, în detaliile comenzii.
+            $cuOferta = $this->tableHasColumn($db, 'orders', 'campanie_reducere') && $this->tableHasColumn($db, 'order_items', 'campanie_reducere');
+            if ($cuOferta) {
+                $selectPlata .= ', campanie_oferta, campanie_reducere';
+            }
             $stmt = $db->prepare(
                 'SELECT id, order_number, status, payment_method, payment_status, total, shipping_cost, subtotal, discount_total,
                         coupon_code,
@@ -5933,6 +5938,14 @@ final class AdminController
                     }
                 }
             }
+            if ($cuOferta) {
+                // Doar comenzile cu oferta campaniei poartă cheile: restul rămân exact ca înainte.
+                foreach ($orders as $k => $randOferta) {
+                    if ((float) ($randOferta['campanie_reducere'] ?? 0) <= 0) {
+                        unset($orders[$k]['campanie_oferta'], $orders[$k]['campanie_reducere']);
+                    }
+                }
+            }
             $ordersSummary['total_count'] = count($orders);
             foreach ($orders as $orderRow) {
                 $status = strtolower(trim((string) ($orderRow['status'] ?? '')));
@@ -5954,7 +5967,7 @@ final class AdminController
                 $placeholders = implode(',', array_fill(0, count($ids), '?'));
                 $itemsStmt = $db->prepare(
                     "SELECT oi.order_id, oi.product_id, oi.product_name, oi.quantity, oi.unit_price, oi.line_total,
-                            oi.erp_discount_percent, oi.erp_price_before,
+                            oi.erp_discount_percent, oi.erp_price_before," . ($cuOferta ? ' oi.campanie_reducere, oi.campanie_pret_initial,' : '') . "
                             COALESCE(p.vat_percent, 19.00) AS vat_percent,
                             COALESCE(p.vat_included, 1) AS vat_included,
                             p.weight_grams AS product_weight_grams
@@ -5993,6 +6006,9 @@ final class AdminController
                         : 0.0;
                     $lineSubtotalWithoutVat = $vatIncluded ? max(0.0, $lineTotal - $lineVat) : $lineTotal;
 
+                    if ($cuOferta && (float) ($row['campanie_reducere'] ?? 0) <= 0) {
+                        unset($row['campanie_reducere'], $row['campanie_pret_initial']);
+                    }
                     $row['unit_price'] = $unitPrice;
                     $row['vat_percent'] = $vatPercent;
                     $row['vat_included'] = $vatIncluded ? 1 : 0;

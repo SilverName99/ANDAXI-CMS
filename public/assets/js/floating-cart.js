@@ -456,7 +456,15 @@
                             Number(line.line_total_after_coupon ?? (lineTotal - lineCouponDiscount))
                         );
                         const hasLineCouponDiscount = lineCouponDiscount > 0.0001;
-                        const linePriceHtml = hasLineCouponDiscount
+                        // Pluginul campanii: linia redusă de oferta campaniei (prețul de dinainte tăiat, eticheta ofertei).
+                        const lineCampaignDiscount = Math.max(0, Number(line.campanie_reducere || 0));
+                        const linePriceHtml = lineCampaignDiscount > 0.0001
+                            ? `
+                                    <span class="floating-cart__item-price-old">${formatMoney(Number(line.campanie_total_inainte || lineTotal))}</span>
+                                    <strong>${formatMoney(lineTotal)}</strong>
+                                    <small class="floating-cart__item-price-discount" data-campanie-linie>${escapeHtml(line.campanie_eticheta || "Ofertă")}: -${formatMoney(lineCampaignDiscount)}</small>
+                            `
+                            : hasLineCouponDiscount
                             ? `
                                     <span class="floating-cart__item-price-old">${formatMoney(lineTotal)}</span>
                                     <strong>${formatMoney(lineTotalAfterCoupon)}</strong>
@@ -561,6 +569,17 @@
             : escapeHtml(shippingLabel);
 
         const rows = [];
+        // Pluginul campanii: oferta campaniei (deja inclusă în prețuri) și îndemnul, doar când sumarul o are.
+        const campaignOffer = summary.campanie_oferta && typeof summary.campanie_oferta === "object" ? summary.campanie_oferta : null;
+        if (campaignOffer && Number(campaignOffer.reducere || 0) > 0) {
+            rows.push(`<p class="floating-cart__line" data-campanie-sumar><span>${escapeHtml(campaignOffer.text || "")} <small>(inclusă în prețuri)</small></span><strong>-${formatMoney(Number(campaignOffer.reducere))}</strong></p>`);
+        }
+        if (campaignOffer && campaignOffer.indiciu) {
+            rows.push(`<p class="floating-cart__shipping-note" data-campanie-indiciu>${escapeHtml(campaignOffer.indiciu)} (${escapeHtml(campaignOffer.text || "")}).</p>`);
+        }
+        if (campaignOffer && campaignOffer.cupon_exclus) {
+            rows.push(`<p class="floating-cart__shipping-note" data-campanie-cupon>Cuponul nu se aplică produselor din oferta campaniei.</p>`);
+        }
         if (config.showSubtotal) {
             rows.push(`<p class="floating-cart__subtotal"><span>Subtotal produse</span><strong>${formatMoney(summary.subtotal_without_vat ?? summary.subtotal ?? 0)}</strong></p>`);
         }

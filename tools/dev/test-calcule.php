@@ -776,8 +776,9 @@ try {
     $scrie('A6. Diferențele declarate (--declarate): o diferență voită în codul comun, pe o singură comandă inventată');
     // Diferența voită: transport gratuit doar pe comanda „sub prag, provincie” (singura din Vaslui), ca transportul gratuit pe
     // produs din WP-20. Diferă exact shipping și total (punctele, transportul din admin și payload-ul ERP nu depind de el).
-    $mutatieVoita = ['src/Support/CheckoutCalculator.php', ': self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference);',
-        ': self::calculateShipping($db, $settings, $county, $subtotal, $shippingDiscountReference); if ($county === \'Vaslui\') { $shipping = 0.0; }'];
+    // Pluginul campanii (campanii/0058): transportul se cere cu subtotalul de dinainte de oferta campaniei (fără ofertă, același).
+    $mutatieVoita = ['src/Support/CheckoutCalculator.php', ': self::calculateShipping($db, $settings, $county, $subtotalInainteOferta, $shippingDiscountReference);',
+        ': self::calculateShipping($db, $settings, $county, $subtotalInainteOferta, $shippingDiscountReference); if ($county === \'Vaslui\') { $shipping = 0.0; }'];
     // A doua, pe aceeași comandă: o cheie a payload-ului ERP (județul de facturare scris prescurtat).
     $mutatieVoitaErp = ['src/Support/ErpSync.php', "'facturareJudet' => (string) (\$order['billing_county'] ?? ''),",
         "'facturareJudet' => ((string) (\$order['billing_county'] ?? '')) === 'Vaslui' ? 'VS' : (string) (\$order['billing_county'] ?? ''),"];

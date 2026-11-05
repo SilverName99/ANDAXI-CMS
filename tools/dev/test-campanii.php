@@ -26,6 +26,10 @@ declare(strict_types=1);
  *    bifa, fără antet, subsol, sertarul „Oferte” și butonul coșului plutitor, cu bara „Înapoi” (închisă), bannerul de cookie-uri și
  *    GTM-ul; codul {{campanie_produse}} (cardurile, prețul redus, „Text sub preț”, „Adaugă în coș” = formularul cardului din
  *    magazin, epuizat, ascuns, cardurile închise), gol la adresa proprie a paginii și fără produse.
+ * A2. Oferta campaniei fără server: perechile, grupele, procentul, prețul fix, rotunjirea la cent, invariante pe coșuri inventate.
+ * F. Oferta campaniei: editorul (salvarea, refuzurile), coșul (îndemnul, perechile, cantitatea, TVA-ul, cuponul doar pe celelalte
+ *    produse, un produs redus între timp sărit, celelalte tipuri, fără ofertă = campania oprită), comanda și liniile ei, emailul,
+ *    Admin → Comenzi, payload-ul ERP.
  * D. În Chromium (tools/dev/campanii-browser.cjs), desktop 1366 px și telefon 390 px: vizitatorul nou, butonul în stânga sus,
  *    întoarcerea, insigna, bannerul lipit, fără derulare laterală; editorul cu previzualizarea bannerului și a insignei.
  * E. Curățenia: toată baza (fiecare tabel) e pusă la loc, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
@@ -44,6 +48,7 @@ require_once $radacina . '/bootstrap.php';
 require_once __DIR__ . '/lib/salvari-admin.php';
 
 use App\Support\Campanii;
+use App\Support\OfertaCampanie;
 use App\Support\Database;
 use App\Support\Paths;
 use App\Support\Plugins;
@@ -165,6 +170,101 @@ $verifica('starea: activă în fereastră, programată înainte, încheiată dup
     && Campanii::stare($fereastra, $acum + 7200) === 'incheiata' && Campanii::stare(['pornita' => 0] + $fereastra, $acum) === 'oprita'
     && Campanii::stare(['incepe_la' => null] + $fereastra, $acum) === 'oprita');
 $verifica('fără campanie activă, cheia cache-ului paginilor e exact cea de dinainte (partea campaniei goală)', Campanii::cheieCache() === '');
+
+// ── A2. Oferta campaniei: calculul, fără server (OfertaCampanie) ───────────────────────────────────────────────────────
+$scrie('');
+$scrie('== A2. Oferta campaniei: perechile și rotunjirea, fără server');
+$oferta = static fn (string $tip, int $n = 2, int $m = 1, float $procent = 50, array $preturi = [1 => null, 2 => null, 3 => null, 4 => null])
+    => OfertaCampanie::dinCampanie(['id' => 7, 'nume' => 'Black Weekends', 'oferta_tip' => $tip, 'oferta_n' => $n, 'oferta_m' => $m,
+        'oferta_procent' => $procent], $preturi);
+$linie = static fn (string $cheie, int $pret, int $cantitate, int $produs = 1): array => ['cheie' => $cheie, 'produs' => $produs, 'pret' => $pret, 'cantitate' => $cantitate];
+$calc = static fn (?array $o, array $linii): array => OfertaCampanie::calculeaza((array) $o, $linii);
+$unuPlusUnu = $oferta('al_n');
+$cazuriOferta = [
+    // [eticheta, oferta, linii, reducerile așteptate (cheie → cenți), unități, lipsesc]
+    ['1+1 −50%: o bucată, nicio reducere, îndemnul', $unuPlusUnu, [$linie('a', 1000, 1)], [], 1, 1],
+    ['1+1 −50%: 2 × 10,00 → 5,00', $unuPlusUnu, [$linie('a', 1000, 2)], ['a' => 500], 2, 0],
+    ['1+1 −50%: 3 × 10,00 (impar) → 5,00, a treia la preț întreg', $unuPlusUnu, [$linie('a', 1000, 3)], ['a' => 500], 3, 0],
+    ['1+1 −50%: 4 × 10,00 → 10,00', $unuPlusUnu, [$linie('a', 1000, 4)], ['a' => 1000], 4, 0],
+    ['1+1 −50%: prețuri amestecate, cel mai ieftin din pereche (19,99 + 10,00 → 5,00 pe 10,00)', $unuPlusUnu,
+        [$linie('a', 1999, 1), $linie('b', 1000, 1, 2)], ['b' => 500], 2, 0],
+    ['1+1 −50%: 45,99 + 79,50 + 14,50 → perechea (79,50, 45,99): 23,00 (22,995 rotunjit în sus); 14,50 rămâne', $unuPlusUnu,
+        [$linie('a', 4599, 1), $linie('b', 7950, 1, 2), $linie('c', 1450, 1, 3)], ['a' => 2300], 3, 0],
+    ['1+1 −50%: ordinea prețurilor, nu a coșului (30, 10, 20, 40 → perechile (40, 30) și (20, 10))', $unuPlusUnu,
+        [$linie('a', 3000, 1), $linie('b', 1000, 1, 2), $linie('c', 2000, 1, 3), $linie('d', 4000, 1, 4)], ['a' => 1500, 'b' => 500], 4, 0],
+    ['1+1 −50%: la preț egal, a doua bucată din pereche e a liniei de mai jos din coș', $unuPlusUnu,
+        [$linie('a', 1000, 1), $linie('b', 1000, 1, 2)], ['b' => 500], 2, 0],
+    ['1+1 −50%: două linii ale aceluiași produs (2 + 1 bucăți, 12,00) → o pereche', $unuPlusUnu,
+        [$linie('a', 1200, 2), $linie('b', 1200, 1)], ['a' => 600], 3, 0],
+    ['1+1 −50%: 9,99 la jumătate = 4,995 → 5,00 (jumătatea în sus)', $unuPlusUnu, [$linie('a', 999, 2)], ['a' => 500], 2, 0],
+    ['Al 3-lea la −30%: 5 × 10,00 → o grupă, 3,00; două bucăți rămân', $oferta('al_n', 3, 1, 30), [$linie('a', 1000, 5)], ['a' => 300], 5, 0],
+    ['Al 3-lea la −30%: 2 bucăți, mai lipsește una', $oferta('al_n', 3, 1, 30), [$linie('a', 1000, 2)], [], 2, 1],
+    ['Al 2-lea la −33,33%: 10,00 → 3,33', $oferta('al_n', 2, 1, 33.33), [$linie('a', 1000, 2)], ['a' => 333], 2, 0],
+    ['3 la preț de 2: 30 + 20 + 10 → cea de 10 gratuită', $oferta('n_la_m', 3, 2), [$linie('a', 3000, 1), $linie('b', 2000, 1, 2), $linie('c', 1000, 1, 3)],
+        ['c' => 1000], 3, 0],
+    ['3 la preț de 2: 6 × 7,49 → două gratuite (14,98)', $oferta('n_la_m', 3, 2), [$linie('a', 749, 6)], ['a' => 1498], 6, 0],
+    ['4 la preț de 2: 40, 30, 20, 10, 5 → 20 și 10 gratuite, 5 rămâne', $oferta('n_la_m', 4, 2),
+        [$linie('a', 4000, 1), $linie('b', 3000, 1, 2), $linie('c', 2000, 1, 3), $linie('d', 1000, 1, 4), $linie('e', 500, 1, 1)], ['c' => 2000, 'd' => 1000], 5, 0],
+    ['−20%: 3 × 9,99 = 29,97 → 5,99 (5,994 rotunjit)', $oferta('procent', 2, 1, 20), [$linie('a', 999, 3)], ['a' => 599], 3, 0],
+    ['−20%: pe fiecare linie, fără îndemn', $oferta('procent', 2, 1, 20), [$linie('a', 1000, 1), $linie('b', 2550, 2, 2)], ['a' => 200, 'b' => 1020], 3, 0],
+    ['preț de campanie: 10,00 → 7,99 pe 2 bucăți (4,02); fără preț sau cu un preț nu mai mic, nimic', $oferta('pret_fix', 2, 1, 0,
+        [1 => 799, 2 => 1500, 3 => null]), [$linie('a', 1000, 2, 1), $linie('b', 1500, 1, 2), $linie('c', 1000, 3, 3)], ['a' => 402], 6, 0],
+];
+$gresiteOferta = [];
+foreach ($cazuriOferta as [$eticheta, $o, $linii, $reduceri, $unitati, $lipsesc]) {
+    $r = $calc($o, $linii);
+    if ($r['reduceri'] !== $reduceri || $r['unitati'] !== $unitati || $r['lipsesc'] !== $lipsesc || $r['total'] !== array_sum($reduceri)) {
+        $gresiteOferta[] = $eticheta . ': ' . json_encode($r);
+    }
+}
+$verifica('calculul ofertei pe ' . count($cazuriOferta) . ' cazuri (1+1, al N-lea, N la preț de M, procent, preț de campanie; impare, linii ale aceluiași produs, rotunjirea)',
+    $gresiteOferta === [], implode(' | ', $gresiteOferta));
+// Invariante pe coșuri inventate (aceeași sămânță la fiecare rulare): reducerea unei linii nu trece de linie, totalul e suma
+// liniilor, ordinea liniilor nu schimbă nimic când prețurile diferă, iar o bucată în plus nu scade reducerea (cantitatea crește).
+mt_srand(20261105);
+$invariante = [];
+foreach ([$unuPlusUnu, $oferta('al_n', 3, 1, 25), $oferta('n_la_m', 3, 2), $oferta('procent', 2, 1, 15), $oferta('pret_fix', 2, 1, 0, [1 => 500, 2 => 900, 3 => 100, 4 => 2000])] as $o) {
+    for ($k = 0; $k < 300; $k++) {
+        $linii = [];
+        $preturiFolosite = [];
+        foreach (range(1, mt_rand(1, 4)) as $nr) {
+            do {
+                $pret = mt_rand(100, 30000);
+            } while (isset($preturiFolosite[$pret]));
+            $preturiFolosite[$pret] = true;
+            $linii[] = $linie('l' . $nr, $pret, mt_rand(1, 5), $nr);
+        }
+        $r = $calc($o, $linii);
+        foreach ($linii as $l) {
+            if (($r['reduceri'][$l['cheie']] ?? 0) > $l['pret'] * $l['cantitate']) {
+                $invariante[] = 'reducere peste linie ' . json_encode($linii);
+            }
+        }
+        $amestecate = $linii;
+        shuffle($amestecate);
+        $r2 = $calc($o, $amestecate);
+        ksort($r['reduceri']);
+        ksort($r2['reduceri']);
+        if ($r2['reduceri'] !== $r['reduceri'] || $r['total'] !== array_sum($r['reduceri'])) {
+            $invariante[] = 'ordinea liniilor ' . json_encode($linii);
+        }
+        $maiMult = $linii;
+        $maiMult[0]['cantitate']++;
+        if ($calc($o, $maiMult)['total'] < $r['total']) {
+            $invariante[] = 'o bucată în plus a scăzut reducerea ' . json_encode($linii);
+        }
+    }
+}
+$verifica('invariantele pe 1.500 de coșuri inventate: reducerea nu trece de linie, totalul = suma liniilor, ordinea liniilor nu contează, o bucată în plus nu scade reducerea',
+    $invariante === [], implode(' | ', array_slice($invariante, 0, 3)));
+$verifica('etichetele: „1+1 −50%”, „Al 3-lea la −30%”, „3 la preț de 2”, „−20%”, „Preț de campanie”; textul sumarului',
+    $unuPlusUnu['eticheta'] === '1+1 −50%' && $oferta('al_n', 3, 1, 30)['eticheta'] === 'Al 3-lea la −30%'
+    && $oferta('n_la_m', 3, 2)['eticheta'] === '3 la preț de 2' && $oferta('procent', 2, 1, 20)['eticheta'] === '−20%'
+    && $oferta('pret_fix')['eticheta'] === 'Preț de campanie' && OfertaCampanie::textSumar($unuPlusUnu) === 'Black Weekends: 1+1 −50%'
+    && OfertaCampanie::indiciu(1) === 'Mai adaugă un produs din ofertă ca să primești reducerea' && OfertaCampanie::indiciu(0) === '');
+$verifica('setările greșite nu fac o ofertă (N 1, M ≥ N, 0%, 100% la procent, tip necunoscut, fără produse)',
+    $oferta('al_n', 1) === null && $oferta('n_la_m', 3, 3) === null && $oferta('al_n', 2, 1, 0) === null && $oferta('procent', 2, 1, 100) === null
+    && $oferta('altceva') === null && OfertaCampanie::dinCampanie(['oferta_tip' => 'al_n', 'oferta_n' => 2, 'oferta_procent' => 50], []) === null);
 
 // ── Serverul și baza ─────────────────────────────────────────────────────────────────────────────────────────────────
 $port = (int) (getenv('CMS_DEV_PORT') ?: '8701');
@@ -660,6 +760,205 @@ $inapoiC1 = static function () use ($db, $tabeleBaza, $instantaneu, $idPagina, $
 };
 $inapoiC1();
 
+// ── F. Oferta campaniei: editorul, coșul, comanda, emailul, adminul, ERP-ul ───────────────────────────────────────────
+$scrie('');
+$scrie('== F. Oferta campaniei: editorul, coșul, comanda, emailul, adminul și ERP-ul');
+$campDateF = ['_csrf' => $csrf, 'id' => (string) $idCampanie] + $campDate;
+$corpProduse = '';
+foreach ($produseCampanie as $idProdus) {
+    $corpProduse .= '&' . rawurlencode('produse[]') . '=' . $idProdus;
+}
+$editorF = $cerere('GET', '/admin/campanii/' . $idCampanie, $jarAdmin);
+$verifica('editorul: secțiunea „Oferta campaniei” cu cele patru tipuri și „nicio ofertă” aleasă', str_contains($editorF['corp'], 'name="oferta_tip"')
+    && str_contains($editorF['corp'], '<option value="" selected>— nicio ofertă (doar insigna) —</option>')
+    && substr_count($editorF['corp'], 'name="pret_campanie[') >= count($produseCampanie));
+$r = $cerereCorp('/admin/campanii/salveaza', http_build_query(['oferta_tip' => 'n_la_m', 'oferta_n' => '3', 'oferta_m' => '3'] + $campDateF) . $corpProduse);
+$r2 = $cerereCorp('/admin/campanii/salveaza', http_build_query(['oferta_tip' => 'pret_fix', 'pret_campanie' => [$produseCampanie[0] => '99999']] + $campDateF) . $corpProduse);
+$verifica('oferta greșită refuzată la salvare: „3 la preț de 3” și un preț de campanie nu mai mic decât prețul (422)', $r['cod'] === 422 && $r2['cod'] === 422
+    && $unu('SELECT COALESCE(oferta_tip, "") FROM campanii WHERE id = :id', ['id' => $idCampanie]) === '', $r['cod'] . ' / ' . $r2['cod']);
+$r = $cerereCorp('/admin/campanii/salveaza', http_build_query(['oferta_tip' => 'al_n', 'oferta_n' => '2', 'oferta_procent' => '50'] + $campDateF) . $corpProduse);
+$verifica('oferta „1+1 −50%” salvată din editor', $r['cod'] === 302
+    && $unu('SELECT CONCAT(oferta_tip, ":", oferta_n, ":", oferta_procent) FROM campanii WHERE id = :id', ['id' => $idCampanie]) === 'al_n:2:50.00', $r['cod'] . ' ' . $r['location']);
+$numeCampanie = $unu('SELECT nume FROM campanii WHERE id = :id', ['id' => $idCampanie]);
+$centi = static fn (int $id): int => (int) round((float) $unu('SELECT price FROM products WHERE id = :id', ['id' => $id]) * 100);
+[$pA, $pB, $pC] = [$produseCampanie[0], $produseCampanie[1], $produseCampanie[2]];
+$idAfara = (int) $unu('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""' . $faraReducere . ' AND id NOT IN ('
+    . implode(',', $produseCampanie) . ') ORDER BY id LIMIT 1');
+$jarF = $dosarDev . '/test-campanii-oferta-' . getmypid() . '.txt';
+$sumar = static function () use ($cerere, $jarF): array {
+    return (array) json_decode($cerere('GET', '/api/cart/summary', $jarF, [], ['Accept: application/json'])['corp'], true);
+};
+$liniePe = static function (array $s, int $idProdus): array {
+    foreach ((array) ($s['lines'] ?? []) as $l) {
+        if ((int) ($l['product_id'] ?? 0) === $idProdus) {
+            return $l;
+        }
+    }
+    return [];
+};
+// Oracolul de aici, scris altfel: bucățile în ordinea prețului, a doua din fiecare pereche la jumătate (în sus, la cent).
+$asteptat11 = static function (array $bucati): array {
+    rsort($bucati);
+    $reduceri = [];
+    foreach ($bucati as $i => $pret) {
+        if ($i % 2 === 1) {
+            $reduceri[] = intdiv($pret + 1, 2);
+        }
+    }
+    return $reduceri;
+};
+@unlink($jarF);
+$cerere('POST', '/cos/adauga/' . $pA, $jarF, ['quantity' => '1']);
+$s = $sumar();
+$verifica('o singură bucată din ofertă: nicio reducere, îndemnul „Mai adaugă un produs din ofertă ca să primești reducerea”',
+    (float) ($s['campanie_oferta']['reducere'] ?? -1) === 0.0 && ($s['campanie_oferta']['indiciu'] ?? '') === OfertaCampanie::INDICIU
+    && !isset($liniePe($s, $pA)['campanie_reducere']), json_encode($s['campanie_oferta'] ?? null, JSON_UNESCAPED_UNICODE));
+$cerere('POST', '/cos/adauga/' . $pB, $jarF, ['quantity' => '1']);
+$s = $sumar();
+$redAB = array_sum($asteptat11([$centi($pA), $centi($pB)]));
+$ieftin = $centi($pA) <= $centi($pB) ? $pA : $pB;
+$liniiSuma = array_sum(array_map(static fn (array $l): float => (float) $l['line_total'], (array) $s['lines']));
+$verifica('1+1 −50% pe două produse: jumătate din cel mai ieftin, pe linia lui (prețul de dinainte păstrat), subtotalul = liniile reduse',
+    (int) round((float) ($s['campanie_oferta']['reducere'] ?? 0) * 100) === $redAB
+    && (int) round((float) ($liniePe($s, $ieftin)['campanie_reducere'] ?? 0) * 100) === $redAB
+    && (int) round((float) ($liniePe($s, $ieftin)['campanie_total_inainte'] ?? 0) * 100) === $centi($ieftin)
+    && abs($liniiSuma - (float) $s['subtotal']) < 0.001 && ($s['campanie_oferta']['indiciu'] ?? 'x') === ''
+    && ($s['campanie_oferta']['text'] ?? '') === $numeCampanie . ': 1+1 −50%', json_encode($s, JSON_UNESCAPED_UNICODE));
+$cerere('POST', '/cos/adauga/' . $pA, $jarF, ['quantity' => '2']);
+$s = $sumar();
+$red3 = array_sum($asteptat11([$centi($pA), $centi($pA), $centi($pA), $centi($pB)]));
+$verifica('cantitatea crește (3 × A + 1 × B): două perechi, aceleași reguli; totalul = subtotal + transport', (int) round((float) $s['campanie_oferta']['reducere'] * 100) === $red3
+    && abs((float) $s['total'] - ((float) $s['subtotal'] + (float) $s['shipping'] - (float) $s['discount'] - (float) $s['points_discount'])) < 0.001,
+    json_encode($s['campanie_oferta'], JSON_UNESCAPED_UNICODE) . ' așteptat ' . $red3);
+// TVA-ul liniilor din prețul redus: subtotalul fără TVA + TVA = subtotalul (prețuri cu TVA inclus în datele demo).
+$verifica('TVA-ul pe prețurile reduse: subtotal fără TVA + TVA = subtotal', abs((float) $s['subtotal_without_vat'] + (float) $s['vat_total'] - (float) $s['subtotal']) < 0.01,
+    $s['subtotal_without_vat'] . ' + ' . $s['vat_total'] . ' vs ' . $s['subtotal']);
+// Un cupon nu se aplică liniilor reduse de ofertă (doar celorlalte, ca la un cupon „fără cumulare”), iar coșul spune asta.
+$cerere('POST', '/cos/adauga/' . $idAfara, $jarF, ['quantity' => '1']);
+$cerere('POST', '/cos/cupon', $jarF, ['coupon_code' => 'DEMO10']);
+$s = $sumar();
+$baseCupon = (float) ($liniePe($s, $idAfara)['line_total'] ?? 0) + (float) ($liniePe($s, $pC)['line_total'] ?? 0);
+$verifica('cuponul DEMO10 (10%) doar pe produsele din afara ofertei; „Cuponul nu se aplică produselor din oferta campaniei”',
+    ($s['coupon']['code'] ?? '') === 'DEMO10' && abs((float) $s['discount'] - round($baseCupon * 0.10, 2)) < 0.006
+    && !empty($s['campanie_oferta']['cupon_exclus']) && (float) ($liniePe($s, $ieftin)['coupon_discount'] ?? 0) === 0.0,
+    $s['discount'] . ' vs ' . round($baseCupon * 0.10, 2));
+$cos = $cerere('GET', '/cos', $jarF);
+$verifica('pagina coșului: rândul ofertei, reducerea pe linie și nota cuponului', str_contains($cos['corp'], 'data-campanie-sumar')
+    && str_contains($cos['corp'], htmlspecialchars($numeCampanie . ': 1+1 −50%', ENT_QUOTES)) && str_contains($cos['corp'], 'data-campanie-linie')
+    && str_contains($cos['corp'], 'data-campanie-cupon'));
+// Comanda: oferta înghețată pe comandă și pe linii; totalul e al sumarului; emailul, adminul și ERP-ul o au.
+$sumarComanda = $s;
+$pagCheckout = $cerere('GET', '/checkout', $jarF)['corp'];
+$verifica('checkout-ul: rândul ofertei și reducerea pe linie', str_contains($pagCheckout, 'data-campanie-sumar') && str_contains($pagCheckout, 'data-campanie-linie'));
+preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagCheckout, $tokenF);
+preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagCheckout, $randatF);
+sleep(3);
+$ultimaComanda = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM orders')->fetchColumn();
+$mailuriInainte = glob($dosarDev . '/mail/*') ?: [];
+$trimis = $cerere('POST', '/checkout', $jarF, [
+    'checkout_form_token' => $tokenF[1] ?? '', 'checkout_form_rendered_at' => $randatF[1] ?? '',
+    'billing_first_name' => 'Test', 'billing_last_name' => 'Oferta', 'billing_phone' => '0700000781',
+    'billing_email' => 'oferta-campanie@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '11',
+    'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400001',
+    'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+]);
+$comanda = $db->query('SELECT * FROM orders WHERE id > ' . $ultimaComanda . ' ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+$verifica('comanda plasată cu oferta: campania, textul ofertei și reducerea pe comandă; totalul și reducerea cuponului ale sumarului',
+    $trimis['cod'] === 302 && is_array($comanda) && (int) $comanda['campanie_id'] === $idCampanie
+    && $comanda['campanie_oferta'] === $numeCampanie . ': 1+1 −50%'
+    && abs((float) $comanda['campanie_reducere'] - (float) $sumarComanda['campanie_oferta']['reducere']) < 0.001
+    && abs((float) $comanda['total'] - (float) $sumarComanda['total']) < 0.001 && abs((float) $comanda['discount_total'] - (float) $sumarComanda['discount']) < 0.001
+    && abs((float) $comanda['subtotal'] - (float) $sumarComanda['subtotal']) < 0.001,
+    $trimis['cod'] . ' ' . ($trimis['antete']['location'] ?? '') . ' ' . json_encode($comanda ? array_intersect_key($comanda, array_flip(['campanie_id', 'campanie_oferta', 'campanie_reducere', 'total', 'discount_total'])) : null, JSON_UNESCAPED_UNICODE));
+$idComanda = is_array($comanda) ? (int) $comanda['id'] : 0;
+$liniiComanda = $db->query('SELECT * FROM order_items WHERE order_id = ' . $idComanda . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$sumaReduceriLinii = array_sum(array_map(static fn (array $l): float => (float) ($l['campanie_reducere'] ?? 0), $liniiComanda));
+$liniaA = array_values(array_filter($liniiComanda, static fn (array $l): bool => (int) $l['product_id'] === $pA))[0] ?? [];
+$verifica('liniile comenzii: reducerea pe linie (suma = reducerea comenzii), totalul liniei redus, prețul de dinainte; celelalte linii fără ofertă',
+    $liniiComanda !== [] && abs($sumaReduceriLinii - (float) ($comanda['campanie_reducere'] ?? 0)) < 0.001
+    && abs((float) ($liniaA['line_total'] ?? 0) - (float) $liniePe($sumarComanda, $pA)['line_total']) < 0.001
+    && (int) round((float) ($liniaA['campanie_pret_initial'] ?? 0) * 100) === $centi($pA)
+    && array_filter($liniiComanda, static fn (array $l): bool => (int) $l['product_id'] === $idAfara && $l['campanie_reducere'] !== null) === [],
+    json_encode($liniiComanda, JSON_UNESCAPED_UNICODE));
+$payload = is_array($comanda) ? \App\Support\ErpSync::buildPayload($db, $comanda) : [];
+$sumaErp = 0.0;
+$pretLiniaA = null;
+foreach ((array) ($payload['linii'] ?? []) as $i => $l) {
+    $sumaErp += round((float) $l['pretUnitar'] * (float) $l['cantitate'], 2);
+    if ((int) ($liniiComanda[$i]['product_id'] ?? 0) === $pA) {
+        $pretLiniaA = (float) $l['pretUnitar'];
+    }
+}
+$verifica('ERP: prețul unitar al liniei reduse = totalul ei / cantitate (4 zecimale), suma liniilor = subtotalul comenzii, cuponul și totalul ale comenzii',
+    $payload !== [] && abs($sumaErp - (float) $comanda['subtotal']) < 0.001
+    && $pretLiniaA !== null && abs($pretLiniaA - round((float) $liniaA['line_total'] / (int) $liniaA['quantity'], 4)) < 0.00001
+    && abs((float) $payload['discountCupon'] - (float) $comanda['discount_total']) < 0.001 && abs((float) $payload['total'] - (float) $comanda['total']) < 0.001
+    && abs($sumaErp + (float) $payload['transport'] - (float) $payload['discountCupon'] - (float) $payload['discountPuncte'] - (float) $payload['total']) < 0.011,
+    json_encode($payload['linii'] ?? null, JSON_UNESCAPED_UNICODE) . ' suma ' . $sumaErp);
+$mailuriNoi = array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte);
+$textMailuri = '';
+foreach ($mailuriNoi as $fisierMail) {
+    $brut = (string) file_get_contents($fisierMail);
+    $textMailuri .= quoted_printable_decode($brut) . base64_decode((string) preg_replace('/[^A-Za-z0-9+\/=]/', '', $brut), false);
+}
+$verifica('emailul comenzii: rândul ofertei („inclusă în prețuri”) și reducerea pe linie', $mailuriNoi !== []
+    && str_contains($textMailuri, 'inclusă în prețuri') && str_contains($textMailuri, 'ofertă: −'), count($mailuriNoi) . ' emailuri: '
+    . (str_contains($textMailuri, 'inclusă în prețuri') ? 'rândul da' : 'rândul nu') . ', ' . (str_contains($textMailuri, 'ofertă: −') ? 'linia da' : 'linia nu')
+    . ' | ' . mb_substr((string) preg_replace('/\s+/', ' ', strip_tags($textMailuri)), 0, 900));
+$adminComenzi = $cerere('GET', '/admin/orders', $jarAdmin);
+$verifica('Admin → Comenzi: oferta în datele comenzii și ale liniei', $adminComenzi['cod'] === 200
+    && str_contains($adminComenzi['corp'], 'campanie_reducere') && str_contains($adminComenzi['corp'], 'data-campanie-sumar'), $adminComenzi['cod'] . ' '
+    . (str_contains($adminComenzi['corp'], 'campanie_reducere') ? 'date da' : 'date nu') . ', ' . (str_contains($adminComenzi['corp'], 'data-campanie-sumar') ? 'js da' : 'js nu'));
+if ($idComanda > 0) {
+    foreach (['order_items', 'email_logs'] as $tabel) {
+        $db->exec('DELETE FROM ' . $tabel . ' WHERE order_id = ' . $idComanda);
+    }
+    $db->exec('DELETE FROM orders WHERE id = ' . $idComanda);
+}
+array_map('unlink', $mailuriNoi);
+// Un produs redus după ce a fost ales e sărit în coș (fără reducere dublă).
+@unlink($jarF);
+$cerere('POST', '/cos/adauga/' . $pA, $jarF, ['quantity' => '1']);
+$cerere('POST', '/cos/adauga/' . $pB, $jarF, ['quantity' => '1']);
+$db->prepare('UPDATE products SET sale_price = ROUND(price * 0.9, 2) WHERE id = :id')->execute(['id' => $pB]);
+$s = $sumar();
+$verifica('un produs al campaniei redus între timp e sărit de ofertă (rămâne o singură bucată eligibilă: îndemnul)', !isset($liniePe($s, $pB)['campanie_reducere'])
+    && (float) ($s['campanie_oferta']['reducere'] ?? -1) === 0.0 && ($s['campanie_oferta']['indiciu'] ?? '') === OfertaCampanie::INDICIU,
+    json_encode($s['campanie_oferta'] ?? null, JSON_UNESCAPED_UNICODE));
+$db->prepare('UPDATE products SET sale_price = NULL WHERE id = :id')->execute(['id' => $pB]);
+// Celelalte tipuri, pe același coș (A + B + C, câte una).
+$cerere('POST', '/cos/adauga/' . $pC, $jarF, ['quantity' => '1']);
+$preturiABC = [$centi($pA), $centi($pB), $centi($pC)];
+$tipuri = [
+    ['n_la_m', 3, 2, 0, min($preturiABC), '3 la preț de 2'],
+    ['procent', 0, 0, 10, array_sum(array_map(static fn (int $c): int => intdiv($c * 1000 + 5000, 10000), $preturiABC)), '−10%'],
+];
+foreach ($tipuri as [$tip, $n, $m, $procent, $asteptatCenti, $eticheta]) {
+    $db->prepare('UPDATE campanii SET oferta_tip = :t, oferta_n = :n, oferta_m = :m, oferta_procent = :p WHERE id = :id')
+        ->execute(['t' => $tip, 'n' => $n, 'm' => $m, 'p' => $procent, 'id' => $idCampanie]);
+    $s = $sumar();
+    $verifica('„' . $eticheta . '” pe A + B + C: ' . number_format($asteptatCenti / 100, 2) . ' lei', (int) round((float) ($s['campanie_oferta']['reducere'] ?? 0) * 100) === $asteptatCenti
+        && ($s['campanie_oferta']['text'] ?? '') === $numeCampanie . ': ' . $eticheta, json_encode($s['campanie_oferta'] ?? null, JSON_UNESCAPED_UNICODE));
+}
+$db->prepare("UPDATE campanii SET oferta_tip = 'pret_fix' WHERE id = :id")->execute(['id' => $idCampanie]);
+$db->prepare('UPDATE campanii_produse SET pret_campanie = ROUND((SELECT price FROM products WHERE id = :p) - 1, 2) WHERE campanie_id = :c AND product_id = :p2')
+    ->execute(['p' => $pA, 'c' => $idCampanie, 'p2' => $pA]);
+$s = $sumar();
+$verifica('„Preț de campanie” (A cu 1 leu mai ieftin, B și C fără preț): 1,00 lei, doar pe A', (int) round((float) ($s['campanie_oferta']['reducere'] ?? 0) * 100) === 100
+    && (int) round((float) ($liniePe($s, $pA)['campanie_reducere'] ?? 0) * 100) === 100 && !isset($liniePe($s, $pB)['campanie_reducere']),
+    json_encode($s['campanie_oferta'] ?? null, JSON_UNESCAPED_UNICODE));
+// Fără ofertă (doar insigna): sumarul coșului e exact cel cu campania oprită.
+$db->prepare('UPDATE campanii SET oferta_tip = NULL WHERE id = :id')->execute(['id' => $idCampanie]);
+$faraOferta = $cerere('GET', '/api/cart/summary', $jarF, [], ['Accept: application/json'])['corp'];
+$db->prepare('UPDATE campanii SET pornita = 0 WHERE id = :id')->execute(['id' => $idCampanie]);
+$oprita = $cerere('GET', '/api/cart/summary', $jarF, [], ['Accept: application/json'])['corp'];
+$db->prepare('UPDATE campanii SET pornita = 1 WHERE id = :id')->execute(['id' => $idCampanie]);
+$verifica('campania fără ofertă: sumarul coșului octet cu octet cel cu campania oprită (fără cheia ofertei)', $faraOferta === $oprita
+    && !str_contains($faraOferta, 'campanie_oferta') && !str_contains($faraOferta, 'campanie_reducere'));
+@unlink($jarF);
+$db->prepare('UPDATE campanii_produse SET pret_campanie = NULL WHERE campanie_id = :c')->execute(['c' => $idCampanie]);
+ResponseCache::purgePageCache();
+
 // ── D. Chromium ───────────────────────────────────────────────────────────────────────────────────────────────────────
 if (!$faraBrowser) {
     $scrie('');
@@ -693,6 +992,10 @@ if (!$faraBrowser) {
     ResponseCache::purgePageCache();
     $ruleazaBrowser(array_merge($env, ['CMS_DEV_GRILA=1']));
     $inapoiC1();
+    // Oferta campaniei „1+1 −50%” în coș, coșul plutitor și checkout.
+    $db->prepare("UPDATE campanii SET oferta_tip = 'al_n', oferta_n = 2, oferta_procent = 50 WHERE id = :id")->execute(['id' => $idCampanie]);
+    $ruleazaBrowser(array_merge($env, ['CMS_DEV_COS=1', 'CMS_DEV_PRODUSE=' . $produseCampanie[0] . ',' . $produseCampanie[1]]));
+    $db->prepare('UPDATE campanii SET oferta_tip = NULL WHERE id = :id')->execute(['id' => $idCampanie]);
 }
 
 // ── C. În afara ferestrei, oprită, previzualizarea, pluginul oprit ─────────────────────────────────────────────────────

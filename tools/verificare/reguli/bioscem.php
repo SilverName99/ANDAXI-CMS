@@ -90,7 +90,9 @@ return [
     // 19 (campanii/0056): pagina campaniei fără antet și subsol, bara și cardurile închise (bife) și textul de sub prețul
     // cardurilor (public, pe pagina campaniei), copiate cum sunt.
     // 20 (campanii/0057): colțurile cardurilor (o bifă), copiată cum e.
-    'versiune' => 20,
+    // 21 (campanii/0058): oferta campaniei (tipul, numerele ei, prețul de campanie al produselor) și urma ei pe comenzi (campania,
+    // textul ofertei, reducerea pe comandă și pe linie, prețul de dinainte al liniei): sume și texte ale magazinului, copiate cum sunt.
+    'versiune' => 21,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -200,10 +202,11 @@ return [
         'campanii' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'nume', 'slug', 'pornita', 'incepe_la', 'se_termina_la', 'pagina_id',
             'pagina_la_intrare', 'text_inapoi', 'insigna_text', 'insigna_fundal', 'insigna_culoare', 'banner_pornit', 'banner_text',
             'banner_link', 'banner_fundal', 'banner_culoare', 'banner_font', 'banner_marime', 'banner_lipit', 'created_at', 'updated_at',
-            'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret', 'carduri_drepte'],
+            'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret', 'carduri_drepte', 'oferta_tip', 'oferta_n', 'oferta_m',
+            'oferta_procent'],
             'motive' => ['nume' => 'numele campaniei, dat de magazin (de exemplu „Black Friday”), nu al unei persoane'],
             'emailuri_publice' => 'textul bannerului și al insignei e public (pe fiecare pagină a site-ului) și poate avea adresa magazinului'],
-        'campanii_produse' => ['mod' => 'copiaza', 'pastreaza' => ['campanie_id', 'product_id']],
+        'campanii_produse' => ['mod' => 'copiaza', 'pastreaza' => ['campanie_id', 'product_id', 'pret_campanie']],
         'products' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'sku', 'category', 'category_id', 'product_template_id', 'slug',
             'short_description', 'description', 'product_highlights', 'price', 'vat_percent', 'vat_included', 'sale_price', 'sale_price_periods_json',
             'discount_badge_mode', 'bbd_enabled', 'bbd_entries_json', 'post_cart_note_enabled', 'post_cart_note_text', 'stock', 'out_of_stock',
@@ -310,7 +313,9 @@ return [
             'fan_tracking_last_event_at', 'fan_tracking_synced_at', 'completed_awb_email_sent_at', 'deleted_at', 'created_at', 'updated_at',
             'ad_source', 'nl_campaign_id', 'erp_status', 'erp_order_id', 'erp_attempts', 'erp_last_attempt_at', 'erp_next_retry_at', 'erp_synced_at',
             'erp_factura_numar', 'paid_amount', 'edit_unlocked_at', 'erp_client_agresiv', 'erp_client_agresiv_versiune', 'manual_discount',
-            'manual_discount_percent', 'terms_accepted_at', 'sursa', 'pickup_in_person', 'pickup_address', 'pickup_ready_notified_at'],
+            'manual_discount_percent', 'terms_accepted_at', 'sursa', 'pickup_in_person', 'pickup_address', 'pickup_ready_notified_at',
+            // campanii/0058: oferta campaniei pe comandă (id-ul campaniei, textul ofertei dat de magazin, reducerea).
+            'campanie_id', 'campanie_oferta', 'campanie_reducere'],
             'motive' => ['pickup_address' => 'adresa sediului magazinului de la care se ridică comanda (publică; livrare_fan/0052), nu a clientului',
                 'sursa' => 'felul vizitei (google, email, direct …; WP-40, magazin/0051): o categorie, fără nicio dată a clientului',
                 'fan_locker_name' => 'FANbox-ul ales: date publice ale lockerului', 'fan_locker_address' => 'adresa publică a FANbox-ului',
@@ -354,7 +359,7 @@ return [
                 'manual_discount_reason' => ['text'],
             ]],
         'order_items' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'order_id', 'product_id', 'product_name', 'bbd_key', 'quantity', 'unit_price',
-            'line_total', 'created_at', 'erp_discount_percent', 'erp_price_before'], 'motive' => ['product_name' => 'numele produsului cumpărat']],
+            'line_total', 'created_at', 'erp_discount_percent', 'erp_price_before', 'campanie_reducere', 'campanie_pret_initial'], 'motive' => ['product_name' => 'numele produsului cumpărat']],
         'order_payment_links' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'order_id', 'referinta', 'amount', 'status', 'procesator',
             'created_at', 'expires_at', 'paid_at'],
             'transforma' => [

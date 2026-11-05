@@ -183,6 +183,22 @@ final class Campanii
         }
     }
 
+    /** @return array<int, float> prețurile de campanie ale produselor (tipul pret_fix), id → preț */
+    public static function preturiCampanie(PDO $db, int $idCampanie): array
+    {
+        try {
+            $stmt = $db->prepare('SELECT product_id, pret_campanie FROM campanii_produse WHERE campanie_id = :id AND pret_campanie IS NOT NULL');
+            $stmt->execute(['id' => $idCampanie]);
+            $preturi = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+                $preturi[(int) $rand['product_id']] = (float) $rand['pret_campanie'];
+            }
+            return $preturi;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
     // ── Insigna ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -888,6 +904,8 @@ final class Campanii
             // de dinainte rămâne cum era până o bifează cineva).
             'fara_antet_subsol' => 1, 'bara_inchisa' => 0, 'carduri_inchise' => 0, 'text_sub_pret' => '',
             'carduri_drepte' => 0,
+            // campanii/0058: oferta campaniei (OfertaCampanie), niciuna implicit.
+            'oferta_tip' => null, 'oferta_n' => 2, 'oferta_m' => 1, 'oferta_procent' => 50, 'preturi' => [],
         ];
     }
 
@@ -928,6 +946,10 @@ final class Campanii
             'carduri_inchise' => (string) ($post['carduri_inchise'] ?? '') === '1' ? 1 : 0,
             'text_sub_pret' => $text('text_sub_pret', 160),
             'carduri_drepte' => (string) ($post['carduri_drepte'] ?? '') === '1' ? 1 : 0,
+            'oferta_tip' => isset(OfertaCampanie::TIPURI[(string) ($post['oferta_tip'] ?? '')]) ? (string) $post['oferta_tip'] : null,
+            'oferta_n' => max(0, min(99, (int) ($post['oferta_n'] ?? 0))),
+            'oferta_m' => max(0, min(99, (int) ($post['oferta_m'] ?? 0))),
+            'oferta_procent' => round(max(0.0, min(100.0, (float) str_replace(',', '.', (string) ($post['oferta_procent'] ?? '0')))), 2),
         ];
         $produse = [];
         foreach ((array) ($post['produse'] ?? []) as $idProdus) {
@@ -936,6 +958,14 @@ final class Campanii
             }
         }
         $c['produse'] = array_keys($produse);
+        // Prețurile de campanie (tipul pret_fix), doar pentru produsele bifate.
+        $c['preturi'] = [];
+        foreach ((array) ($post['pret_campanie'] ?? []) as $idProdus => $pret) {
+            $pret = trim(str_replace(',', '.', (string) $pret));
+            if (isset($produse[(int) $idProdus]) && $pret !== '') {
+                $c['preturi'][(int) $idProdus] = is_numeric($pret) ? round((float) $pret, 2) : -1.0;
+            }
+        }
         // Un produs care are deja o reducere proprie nu intră în campanie (editorul îl arată dezactivat; aici, aceeași regulă).
         if ($c['produse'] !== []) {
             try {
@@ -945,12 +975,35 @@ final class Campanii
                 $randuri = [];
             }
             foreach ($randuri as $rand) {
+                if ($c['oferta_tip'] === 'pret_fix') {
+                    $pretFix = $c['preturi'][(int) $rand['id']] ?? null;
+                    if ($pretFix === null || $pretFix <= 0 || $pretFix >= (float) $rand['price']) {
+                        $erori[] = 'Prețul de campanie al produsului „' . (string) $rand['name'] . '”: un preț mai mic decât prețul lui ('
+                            . number_format((float) $rand['price'], 2) . ' lei).';
+                    }
+                }
                 $motiv = self::motivReducere($rand);
                 if ($motiv !== '') {
                     $erori[] = 'Produsul „' . (string) $rand['name'] . '” are deja o reducere: ' . $motiv . '. Scoate-l din campanie sau '
                         . 'scoate întâi reducerea lui.';
                 }
             }
+        }
+
+        // Oferta campaniei: setările tipului ales (aceleași margini ca OfertaCampanie::dinCampanie).
+        $procentOferta = (float) $c['oferta_procent'];
+        if ($c['oferta_tip'] === 'al_n' && ($c['oferta_n'] < 2 || $c['oferta_n'] > 10 || $procentOferta <= 0 || $procentOferta > 100)) {
+            $erori[] = 'Oferta „Al N-lea la −Y%”: N între 2 și 10, Y între 1 și 100.';
+        } elseif ($c['oferta_tip'] === 'n_la_m' && ($c['oferta_n'] < 2 || $c['oferta_n'] > 10 || $c['oferta_m'] < 1 || $c['oferta_m'] >= $c['oferta_n'])) {
+            $erori[] = 'Oferta „N la preț de M”: N între 2 și 10, M cel puțin 1 și mai mic decât N.';
+        } elseif ($c['oferta_tip'] === 'procent' && ($procentOferta <= 0 || $procentOferta >= 100)) {
+            $erori[] = 'Oferta „Reducere de X%”: X între 1 și 99.';
+        }
+        if ($c['oferta_tip'] !== null && $c['produse'] === []) {
+            $erori[] = 'Oferta campaniei se aplică produselor campaniei: alege cel puțin un produs.';
+        }
+        if ($c['oferta_tip'] !== 'pret_fix') {
+            $c['preturi'] = [];
         }
 
         if ($c['nume'] === '') {
@@ -1008,7 +1061,8 @@ final class Campanii
     {
         $coloane = ['nume', 'slug', 'pornita', 'incepe_la', 'se_termina_la', 'pagina_id', 'pagina_la_intrare', 'text_inapoi', 'insigna_text',
             'insigna_fundal', 'insigna_culoare', 'banner_pornit', 'banner_text', 'banner_link', 'banner_fundal', 'banner_culoare',
-            'banner_font', 'banner_marime', 'banner_lipit', 'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret', 'carduri_drepte'];
+            'banner_font', 'banner_marime', 'banner_lipit', 'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret', 'carduri_drepte',
+            'oferta_tip', 'oferta_n', 'oferta_m', 'oferta_procent'];
         $valori = [];
         foreach ($coloane as $coloana) {
             $valori[$coloana] = $c[$coloana] ?? null;
@@ -1027,9 +1081,10 @@ final class Campanii
             }
             $db->prepare('DELETE FROM campanii_produse WHERE campanie_id = :id')->execute(['id' => $id]);
             if (($c['produse'] ?? []) !== []) {
-                $adauga = $db->prepare('INSERT INTO campanii_produse (campanie_id, product_id) VALUES (:c, :p)');
+                $adauga = $db->prepare('INSERT INTO campanii_produse (campanie_id, product_id, pret_campanie) VALUES (:c, :p, :pret)');
                 foreach ((array) $c['produse'] as $idProdus) {
-                    $adauga->execute(['c' => $id, 'p' => (int) $idProdus]);
+                    $pretCampanie = $c['preturi'][(int) $idProdus] ?? null;
+                    $adauga->execute(['c' => $id, 'p' => (int) $idProdus, 'pret' => $pretCampanie !== null && $pretCampanie > 0 ? $pretCampanie : null]);
                 }
             }
             $db->commit();
@@ -1121,6 +1176,7 @@ final class Campanii
         self::$activa = false;
         self::$produseActive = null;
         self::$paginaCurenta = null;
+        OfertaCampanie::reseteaza();
     }
 
     private static function dataFormular(string $valoare): ?string

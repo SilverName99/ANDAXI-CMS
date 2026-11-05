@@ -143,6 +143,8 @@ final class EmailAutomation
         if (RidicarePersonala::esteComanda($campuriRidicare)) {
             $order += $campuriRidicare;
         }
+        // Oferta campaniei (campanii/0058), citită separat, ca o bază încă fără migrare să trimită emailurile ca înainte.
+        $order += self::ofertaComenzii($db, $orderId);
 
         self::sendOrderTemplate($db, $settings, $order, $templateType);
     }
@@ -230,7 +232,7 @@ final class EmailAutomation
         $storeName = Brand::numeExpeditor($settings);
         $orderItems = self::loadOrderItems($db, $orderId);
         $orderSummaryText = self::orderItemsSummaryText($orderItems);
-        $orderSummaryRows = self::orderItemsSummaryRowsHtml($orderItems);
+        $orderSummaryRows = self::orderItemsSummaryRowsHtml($orderItems, $order);
 
         $context = [
             'customer_name' => $customerName,
@@ -416,6 +418,7 @@ final class EmailAutomation
 
         $customerName = trim((string) ($order['billing_first_name'] ?? '') . ' ' . (string) ($order['billing_last_name'] ?? ''));
         $items = self::loadOrderItems($db, $orderId);
+        $order += self::ofertaComenzii($db, $orderId);
         $ridicare = self::contextRidicare($order, $settings);
         $context = array_merge([
             'customer_name' => $customerName !== '' ? $customerName : 'Client',
@@ -427,8 +430,8 @@ final class EmailAutomation
             'order_total' => self::formatLei((float) ($order['total'] ?? 0)),
             'order_status' => self::orderStatusLabel((string) ($order['status'] ?? '')),
             'order_summary' => self::orderItemsSummaryText($items),
-            'order_items_html' => self::orderItemsSummaryRowsHtml($items),
-            'order_summary_rows' => self::orderItemsSummaryRowsHtml($items),
+            'order_items_html' => self::orderItemsSummaryRowsHtml($items, $order),
+            'order_summary_rows' => self::orderItemsSummaryRowsHtml($items, $order),
             'order_totals_html' => self::orderTotalsRowsHtml($order, $items),
             'order_action_url' => Plugins::vizibil('conturi_clienti') ? '/contul-meu?section=orders' : '/',
             'cart_summary' => '',
@@ -586,8 +589,41 @@ final class EmailAutomation
         );
         $stmt->execute(['order_id' => $orderId]);
         $rows = $stmt->fetchAll();
+        $rows = is_array($rows) ? $rows : [];
 
-        return is_array($rows) ? $rows : [];
+        // Pluginul campanii: reducerea ofertei pe linie (campanii/0058), citită separat (o bază fără migrare: nimic) și pusă
+        // doar pe liniile reduse, ca emailul unei comenzi fără ofertă să rămână exact cel de dinainte.
+        try {
+            $oferta = $db->prepare('SELECT campanie_reducere, campanie_pret_initial FROM order_items WHERE order_id = :order_id ORDER BY id ASC');
+            $oferta->execute(['order_id' => $orderId]);
+            foreach ($oferta->fetchAll(PDO::FETCH_ASSOC) ?: [] as $i => $randOferta) {
+                if (isset($rows[$i]) && (float) ($randOferta['campanie_reducere'] ?? 0) > 0) {
+                    $rows[$i]['campanie_reducere'] = (float) $randOferta['campanie_reducere'];
+                    $rows[$i]['campanie_pret_initial'] = (float) ($randOferta['campanie_pret_initial'] ?? 0);
+                }
+            }
+        } catch (Throwable) {
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Oferta campaniei a comenzii (`campanie_oferta`, `campanie_reducere`; campanii/0058), sau [] (fără ofertă, bază fără
+     * migrare): se adaugă la rândul comenzii doar când există.
+     *
+     * @return array<string, mixed>
+     */
+    private static function ofertaComenzii(PDO $db, int $orderId): array
+    {
+        try {
+            $stmt = $db->prepare('SELECT campanie_oferta, campanie_reducere FROM orders WHERE id = :id AND campanie_reducere > 0 LIMIT 1');
+            $stmt->execute(['id' => $orderId]);
+            $rand = $stmt->fetch(PDO::FETCH_ASSOC);
+            return is_array($rand) ? $rand : [];
+        } catch (Throwable) {
+            return [];
+        }
     }
 
     private static function orderItemsSummaryText(array $items): string
@@ -604,13 +640,14 @@ final class EmailAutomation
             }
             $qty = max(1, (int) ($item['quantity'] ?? 1));
             $lineTotal = self::formatLei((float) ($item['line_total'] ?? 0));
-            $lines[] = $name . ' x' . $qty . ' - ' . $lineTotal;
+            $lines[] = $name . ' x' . $qty . ' - ' . $lineTotal
+                . (!empty($item['campanie_reducere']) ? ' (ofertă: −' . self::formatLei((float) $item['campanie_reducere']) . ')' : '');
         }
 
         return implode("\n", $lines);
     }
 
-    private static function orderItemsSummaryRowsHtml(array $items): string
+    private static function orderItemsSummaryRowsHtml(array $items, array $order = []): string
     {
         if ($items === []) {
             return '<p style="margin:0;color:#64748b;font-size:14px;line-height:1.5;">Nu există produse în această comandă.</p>';
@@ -633,6 +670,11 @@ final class EmailAutomation
             $subtitlu = $unitPrice > 0
                 ? $qty . ' × ' . htmlspecialchars(self::formatLei($unitPrice), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
                 : 'Cantitate: ' . $qty;
+            // Oferta campaniei pe linie: prețul de dinainte al bucății și reducerea (totalul liniei e deja redus).
+            if (!empty($item['campanie_reducere'])) {
+                $subtitlu = $qty . ' × ' . htmlspecialchars(self::formatLei((float) ($item['campanie_pret_initial'] ?? 0)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                    . ' · ofertă: −' . htmlspecialchars(self::formatLei((float) $item['campanie_reducere']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            }
 
             $rows .= '<tr>'
                 . '<td style="padding:12px 0;border-bottom:1px solid #e5e7eb;color:#0f2532;'
@@ -647,6 +689,17 @@ final class EmailAutomation
                 . '</tr>';
         }
 
+        // Pluginul campanii: oferta campaniei a comenzii, sub produse (deja inclusă în prețurile lor), oricare ar fi șablonul
+        // emailului; fără ofertă, tabelul e cel de dinainte.
+        if ((float) ($order['campanie_reducere'] ?? 0) > 0) {
+            $rows .= '<tr>'
+                . '<td style="padding:12px 0;border-bottom:1px solid #e5e7eb;color:#b45309;font-size:14px;line-height:1.4;text-align:left;">'
+                . htmlspecialchars(trim((string) ($order['campanie_oferta'] ?? 'Oferta campaniei')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . ' <span style="color:#5f7680;">(inclusă în prețuri)</span></td>'
+                . '<td style="padding:12px 0 12px 14px;border-bottom:1px solid #e5e7eb;color:#b45309;font-size:14px;font-weight:700;'
+                . 'text-align:right;white-space:nowrap;">−' . htmlspecialchars(self::formatLei((float) $order['campanie_reducere']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . '</td></tr>';
+        }
         return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
             . ' style="border-collapse:collapse;width:100%;">' . $rows . '</table>';
     }

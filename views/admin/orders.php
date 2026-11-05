@@ -1226,6 +1226,10 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
             const esteRidicare = Number(order.pickup_in_person || 0) === 1;
             const ridicareActiva = <?= json_encode($areFan && \App\Support\RidicarePersonala::activa(is_array($settings ?? null) ? $settings : [])) ?>;
             const cuRidicare = esteRidicare || ridicareActiva;
+            // Pluginul campanii: oferta campaniei, deja inclusă în prețurile liniilor (și în subtotal).
+            if (toAmount(order.campanie_reducere || 0) > 0.004) {
+                totalsHtml += `<p data-campanie-sumar><span>${esc(String(order.campanie_oferta || 'Oferta campaniei'))} <small>(inclusă în prețuri)</small></span><strong>- ${formatRon(toAmount(order.campanie_reducere))}</strong></p>`;
+            }
             if (couponDiscount > 0.004 || couponCode !== '') {
                 const codeLabel = couponCode !== '' ? ` (${esc(couponCode)})` : '';
                 totalsHtml += `<p><span>Reducere cupon${codeLabel}</span><strong>- ${formatRon(couponDiscount)}</strong></p>`;
@@ -1295,11 +1299,17 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                 // pară că s-a schimbat singur.
                 const reducereErp = Number(it.erp_discount_percent || 0);
                 const pretInainte = Number(it.erp_price_before || 0);
+                // Pluginul campanii: oferta campaniei pe linie (prețul liniei e deja cel redus; prețul unei bucăți e media).
+                const reducereOferta = Number(it.campanie_reducere || 0);
                 const eticheta = reducereErp > 0
                     ? `<div style="font-size:11px;color:#b45309;margin-top:2px;">
                         🏷️ Discount ${reducereErp.toFixed(2).replace(/\.?0+$/, '')}% setat din ERP${pretInainte > 0 ? ` — era ${orderMoney(pretInainte)}` : ''}
                        </div>`
-                    : '';
+                    : (reducereOferta > 0
+                        ? `<div style="font-size:11px;color:#b45309;margin-top:2px;" data-campanie-linie>
+                        🏷️ ${esc(String(order.campanie_oferta || 'Oferta campaniei'))}: −${orderMoney(reducereOferta)} pe linie${Number(it.campanie_pret_initial || 0) > 0 ? ` — ${qty} × ${orderMoney(Number(it.campanie_pret_initial))} înainte` : ''}
+                       </div>`
+                        : '');
                 if (comandaBlocata) {
                     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
                         <span style="flex:1;">${esc(it.product_name || '')}${eticheta}</span>

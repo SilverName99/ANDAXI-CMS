@@ -2035,6 +2035,15 @@ final class SiteController
                 $db->prepare('UPDATE orders SET pickup_in_person = 1, pickup_address = :adresa WHERE id = :id')
                     ->execute(['adresa' => \App\Support\RidicarePersonala::adresa($settings), 'id' => $orderId]);
             }
+            // Pluginul campanii: oferta campaniei se îngheață pe comandă (campanii/0058; reducerea e deja în prețurile liniilor
+            // și în subtotal). Separat de INSERT, în aceeași tranzacție: o comandă fără ofertă se scrie exact ca înainte.
+            $ofertaComanda = is_array($summary['campanie_oferta'] ?? null) && (float) $summary['campanie_oferta']['reducere'] > 0
+                ? $summary['campanie_oferta'] : null;
+            if ($ofertaComanda !== null) {
+                $db->prepare('UPDATE orders SET campanie_id = :c, campanie_oferta = :o, campanie_reducere = :r WHERE id = :id')
+                    ->execute(['c' => (int) $ofertaComanda['id'], 'o' => mb_substr((string) $ofertaComanda['text'], 0, 200),
+                        'r' => round((float) $ofertaComanda['reducere'], 2), 'id' => $orderId]);
+            }
 
             // Numele scris la checkout repară contul rămas „Client Nou": data
             // viitoare clientul se vede cu numele lui, nu cu marcajul generic.
@@ -2103,9 +2112,16 @@ final class SiteController
                     'product_name' => $productName,
                     'bbd_key' => trim((string) ($line['bbd_key'] ?? '')) !== '' ? trim((string) ($line['bbd_key'] ?? '')) : null,
                     'quantity' => $line['quantity'],
-                    'unit_price' => $line['price'],
+                    // O linie redusă de oferta campaniei are ca preț media bucăților (de exemplu 1+1 −50% pe 3 bucăți): pe
+                    // comandă, la cent; totalul liniei rămâne exact, iar ERP-ul îl ia din el (ErpSync::buildLines).
+                    'unit_price' => !empty($line['campanie_reducere']) ? round((float) $line['price'], 2) : $line['price'],
                     'line_total' => $line['line_total'],
                 ]);
+                if (!empty($line['campanie_reducere'])) {
+                    $db->prepare('UPDATE order_items SET campanie_reducere = :r, campanie_pret_initial = :p WHERE id = :id')
+                        ->execute(['r' => round((float) $line['campanie_reducere'], 2), 'p' => round((float) $line['campanie_pret_initial'], 2),
+                            'id' => (int) $db->lastInsertId()]);
+                }
             }
             // Ce a confirmat clientul rămâne pe comandă, chiar dacă textul
             // produsului se schimbă mai târziu.
@@ -8441,6 +8457,14 @@ CSS;
                 'vat_included' => $vatIncluded,
                 'vat_value' => $vatValue,
             ];
+            // Pluginul campanii: oferta campaniei pe linie (doar pe liniile reduse; altfel linia e cea de dinainte).
+            if (!empty($line['campanie_reducere'])) {
+                $lines[count($lines) - 1] += [
+                    'campanie_reducere' => (float) $line['campanie_reducere'],
+                    'campanie_total_inainte' => (float) ($line['campanie_total_inainte'] ?? $lineTotal),
+                    'campanie_eticheta' => (string) ($summary['campanie_oferta']['eticheta'] ?? ''),
+                ];
+            }
             // Pachetele din care face parte produsul (pluginul pachete_produse, din Biovitality 7391226): coșul flotant le arată pe
             // linie, cu „Vezi pachetul” și „Schimbă în pachet”. Doar pe liniile care au (fără plugin, niciuna).
             if (is_array($line['bundle_hints'] ?? null) && $line['bundle_hints'] !== []) {
@@ -8489,6 +8513,15 @@ CSS;
         if ($gratuitDinProdus) {
             // Doar atunci: răspunsul unui coș obișnuit rămâne exact cel de dinainte.
             $raspuns['shipping_free_by_product'] = true;
+        }
+        // Pluginul campanii: oferta campaniei (textul, reducerea deja inclusă în prețuri, îndemnul), doar cu ea în coș.
+        if (is_array($summary['campanie_oferta'] ?? null)) {
+            $raspuns['campanie_oferta'] = [
+                'text' => (string) $summary['campanie_oferta']['text'],
+                'reducere' => (float) $summary['campanie_oferta']['reducere'],
+                'indiciu' => (string) $summary['campanie_oferta']['indiciu'],
+                'cupon_exclus' => (bool) $summary['campanie_oferta']['cupon_exclus'],
+            ];
         }
         // Pluginul pachete_produse: foaia de stil a casetei pachetelor, doar când o linie are pachete propuse.
         $stiluriPachete = \App\Support\PacheteProduse::adresaStiluri((array) ($summary['lines'] ?? []));

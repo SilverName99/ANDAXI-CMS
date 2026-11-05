@@ -21,6 +21,8 @@ $total = (float) ($summary['total'] ?? 0);
 $coupon = is_array($summary['coupon'] ?? null) ? $summary['coupon'] : null;
 $couponCode = trim((string) ($coupon['code'] ?? ''));
 $couponAppliesOnlySelectedProducts = ((int) (($coupon['applies_only_selected_products'] ?? 0))) === 1;
+// Pluginul campanii: oferta campaniei din sumar (doar cu o ofertă activă și produse ale ei în coș).
+$ofertaCampanie = is_array($summary['campanie_oferta'] ?? null) ? $summary['campanie_oferta'] : null;
 // Câmpul de cupon doar cât pluginul „Cupoane” e pornit (punctele le oprește deja sumarul coșului).
 $poateCupon = \App\Support\Plugins::permiteInceput('cupoane');
 // Produsele de precomanda se platesc acum, dar pleaca abia cand vine marfa.
@@ -503,6 +505,10 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
                                 <?php endif; ?>
                             </div>
                             <div class="bv-checkout-v3__item-value-wrap">
+<?php /* Oferta campaniei pe linie: prețul de dinainte tăiat. */ ?>
+<?php if (!empty($line['campanie_reducere'])): ?>
+                                    <span class="bv-checkout-v3__item-value-old"><?= number_format((float) $line['campanie_total_inainte'], 2) ?> lei</span>
+<?php endif; ?>
                                 <?php if ($lineCouponDiscount > 0.0): ?>
                                     <span class="bv-checkout-v3__item-value-old"><?= number_format($lineTotal, 2) ?> lei</span>
                                 <?php endif; ?>
@@ -510,6 +516,9 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
                                 <?php if ($lineCouponDiscount > 0.0): ?>
                                     <span class="bv-checkout-v3__item-value-discount">Reducere cupon: -<?= number_format($lineCouponDiscount, 2) ?> lei</span>
                                 <?php endif; ?>
+<?php if (!empty($line['campanie_reducere']) && $ofertaCampanie !== null): ?>
+                                    <span class="bv-checkout-v3__item-value-discount" data-campanie-linie><?= htmlspecialchars((string) $ofertaCampanie['eticheta'], ENT_QUOTES) ?>: -<?= number_format((float) $line['campanie_reducere'], 2) ?> lei</span>
+<?php endif; ?>
                             </div>
                         </li>
                     <?php endforeach; ?>
@@ -529,6 +538,9 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
                             <?php if ($couponAppliesOnlySelectedProducts): ?>
                                 • se aplică doar pe produsele selectate
                             <?php endif; ?>
+<?php if ($ofertaCampanie !== null && !empty($ofertaCampanie['cupon_exclus'])): ?>
+                                • nu se aplică produselor din oferta campaniei
+<?php endif; ?>
                         </p>
                     <?php endif; ?>
                     <?php if ($pointsEnabled): ?>
@@ -572,6 +584,12 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
                 </div>
 <?php endif; ?>
                 <div class="bv-checkout-v3__totals">
+<?php if ($ofertaCampanie !== null && (float) $ofertaCampanie['reducere'] > 0): ?>
+                    <div class="bv-checkout-v3__row bv-checkout-v3__row--danger" data-campanie-sumar><span><?= htmlspecialchars((string) $ofertaCampanie['text'], ENT_QUOTES) ?> <small>(inclusă în prețuri)</small></span><strong>-<?= number_format((float) $ofertaCampanie['reducere'], 2) ?> lei</strong></div>
+<?php endif; ?>
+<?php if ($ofertaCampanie !== null && (string) $ofertaCampanie['indiciu'] !== ''): ?>
+                    <p class="bv-checkout-v3__coupon-meta" data-campanie-indiciu><?= htmlspecialchars((string) $ofertaCampanie['indiciu'], ENT_QUOTES) ?> (<?= htmlspecialchars((string) $ofertaCampanie['text'], ENT_QUOTES) ?>).</p>
+<?php endif; ?>
                     <div class="bv-checkout-v3__row"><span>Subtotal</span><strong><?= number_format($subtotalWithoutVat, 2) ?> lei</strong></div>
                     <div class="bv-checkout-v3__row"><span>TVA</span><strong data-checkout-vat data-vat-initial="<?= htmlspecialchars(number_format($vat, 2, '.', ''), ENT_QUOTES) ?>"><?= number_format($vat, 2) ?> lei</strong></div>
                     <div class="bv-checkout-v3__row"><span>Transport</span><strong data-checkout-shipping><?= number_format($shipping, 2) ?> lei</strong></div>

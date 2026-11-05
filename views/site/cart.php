@@ -45,6 +45,8 @@ $couponCode = trim((string) (($summary['coupon']['code'] ?? '')));
 $couponAppliesOnlySelectedProducts = ((int) (($summary['coupon']['applies_only_selected_products'] ?? 0))) === 1;
 // Câmpul de cupon doar cât pluginul „Cupoane” e pornit (punctele le oprește deja sumarul coșului).
 $poateCupon = \App\Support\Plugins::permiteInceput('cupoane');
+// Pluginul campanii: oferta campaniei din sumar (CheckoutCalculator; doar cu o ofertă activă și produse ale ei în coș).
+$ofertaCampanie = is_array($summary['campanie_oferta'] ?? null) ? $summary['campanie_oferta'] : null;
 $heartbeatSnapshot = [];
 foreach ($lines as $line) {
     if (!is_array($line)) {
@@ -261,6 +263,10 @@ $pachetePropuse = is_array($line['bundle_hints'] ?? null) ? $line['bundle_hints'
                                 $lineTotalAfterCoupon = max(0.0, (float) ($line['line_total_after_coupon'] ?? ($lineTotal - $lineCouponDiscount)));
                                 ?>
                                 <div class="bv-cart-v2__price-box">
+<?php /* Oferta campaniei pe linie: prețul de dinainte tăiat. */ ?>
+<?php if (!empty($line['campanie_reducere'])): ?>
+                                        <span class="bv-cart-v2__price-old"><?= number_format((float) $line['campanie_total_inainte'], 2) ?> lei</span>
+<?php endif; ?>
                                     <?php if ($lineCouponDiscount > 0.0): ?>
                                         <span class="bv-cart-v2__price-old"><?= number_format($lineTotal, 2) ?> lei</span>
                                     <?php endif; ?>
@@ -268,6 +274,9 @@ $pachetePropuse = is_array($line['bundle_hints'] ?? null) ? $line['bundle_hints'
                                     <?php if ($lineCouponDiscount > 0.0): ?>
                                         <small class="bv-cart-v2__price-discount">Reducere cupon: -<?= number_format($lineCouponDiscount, 2) ?> lei</small>
                                     <?php endif; ?>
+<?php if (!empty($line['campanie_reducere']) && $ofertaCampanie !== null): ?>
+                                        <small class="bv-cart-v2__price-discount" data-campanie-linie><?= htmlspecialchars((string) $ofertaCampanie['eticheta'], ENT_QUOTES) ?>: -<?= number_format((float) $line['campanie_reducere'], 2) ?> lei</small>
+<?php endif; ?>
                                 </div>
                                 <button class="bv-cart-v2__remove" type="submit" formaction="/cos/sterge/<?= rawurlencode((string) ($line['cart_item_key'] ?? $line['id'] ?? '')) ?>" formmethod="post" title="Șterge produs">🗑</button>
                             </article>
@@ -288,6 +297,9 @@ $pachetePropuse = is_array($line['bundle_hints'] ?? null) ? $line['bundle_hints'
                     <?php if ($couponCode !== '' && $couponAppliesOnlySelectedProducts): ?>
                         <p class="bv-cart-v2__coupon-note">Cuponul este activ doar pentru produsele selectate; celelalte produse rămân la preț întreg.</p>
                     <?php endif; ?>
+<?php if ($ofertaCampanie !== null && !empty($ofertaCampanie['cupon_exclus'])): ?>
+                        <p class="bv-cart-v2__coupon-note" data-campanie-cupon>Cuponul nu se aplică produselor din oferta campaniei; se aplică doar celorlalte produse.</p>
+<?php endif; ?>
 
                     <?php if ($pointsEnabled): ?>
                         <?php if (!$isLoggedIn): ?>
@@ -338,6 +350,12 @@ $pachetePropuse = is_array($line['bundle_hints'] ?? null) ? $line['bundle_hints'
                     <div class="bv-cart-v2__progress"><span style="width:<?= htmlspecialchars(number_format($freeShippingProgress, 2, '.', ''), ENT_QUOTES) ?>%;"></span></div>
                 </div>
                 <div class="bv-cart-v2__rows">
+<?php if ($ofertaCampanie !== null && (float) $ofertaCampanie['reducere'] > 0): ?>
+                    <div class="bv-cart-v2__row bv-cart-v2__row--danger" data-campanie-sumar><span><?= htmlspecialchars((string) $ofertaCampanie['text'], ENT_QUOTES) ?> <small>(inclusă în prețuri)</small></span><strong>-<?= number_format((float) $ofertaCampanie['reducere'], 2) ?> lei</strong></div>
+<?php endif; ?>
+<?php if ($ofertaCampanie !== null && (string) $ofertaCampanie['indiciu'] !== ''): ?>
+                    <p class="bv-cart-v2__coupon-note" data-campanie-indiciu><?= htmlspecialchars((string) $ofertaCampanie['indiciu'], ENT_QUOTES) ?> (<?= htmlspecialchars((string) $ofertaCampanie['text'], ENT_QUOTES) ?>).</p>
+<?php endif; ?>
                     <div class="bv-cart-v2__row"><span>Subtotal</span><strong><?= number_format($subtotalWithoutVat, 2) ?> lei</strong></div>
                     <div class="bv-cart-v2__row"><span>TVA</span><strong><?= number_format($vat, 2) ?> lei</strong></div>
                     <?php if ($shippingGratuit): ?>
