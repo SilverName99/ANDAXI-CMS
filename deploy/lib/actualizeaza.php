@@ -28,7 +28,7 @@ declare(strict_types=1);
  *
  * Opțiuni: --domeniu=<d> (în locul lui --site), --url=<adresa>, --repo=<clonă>, --pachet=<dosar>, --produs=<slug>,
  * --permite-blocante, --inapoi (o versiune mai veche decât baza: fără migrări; migreaza --plan dă atunci codul 12),
- * --acasa=<dosar> (teste).
+ * --pastreaza-copii=N (câte copii ale actualizărilor rămân după una reușită; implicit 10), --acasa=<dosar> (teste).
  */
 
 namespace Platforma\Deploy;
@@ -47,9 +47,18 @@ final class Actualizare
     public string $noua;
     public string $url;
     public bool $aplica;
+    /** Câte copii ale actualizărilor (site/deploy/copii/<data>-actualizare-<v>) rămân după una reușită (--pastreaza-copii). */
+    public int $pastreazaCopii = 10;
 
     public function __construct(public Optiuni $o)
     {
+        $n = $o->text('pastreaza-copii');
+        if ($n !== null) {
+            if (preg_match('/^\d{1,4}$/', $n) !== 1) {
+                throw new Oprire('--pastreaza-copii=' . $n . ' nu e un număr (câte copii ale actualizărilor rămân; implicit 10)', 2);
+            }
+            $this->pastreazaCopii = (int) $n;
+        }
         $this->s = Site::gaseste($o);
         $this->noua = $o->cere('versiune', '<versiune> (făcută cu deploy/release.sh)');
         if (preg_match(Versiune::TIPAR, $this->noua) !== 1) {
@@ -90,7 +99,7 @@ final class Actualizare
 }
 
 exit(porneste(static function () use ($argv): int {
-    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'url=', 'repo=', 'pachet=', 'produs=', 'permite-blocante', 'inapoi', 'forteaza-liniste', 'accepta-revenirea', 'acasa=', 'plan', 'aplica']);
+    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'url=', 'repo=', 'pachet=', 'produs=', 'permite-blocante', 'inapoi', 'forteaza-liniste', 'accepta-revenirea', 'pastreaza-copii=', 'acasa=', 'plan', 'aplica']);
     $u = new Actualizare($o);
     $lacat = $u->s->lacat();
     $stare = $u->stare;
@@ -186,6 +195,7 @@ exit(porneste(static function () use ($argv): int {
     }
     $stare->pune('gata', true);
     curataResturi($u);
+    curataCopii($u);
     Iesire::titlu('GATA');
     Iesire::scrie('Site-ul ' . $u->s->domeniu . ' merge pe versiunea ' . $u->noua . ' (înainte: ' . $u->veche . ').');
     Iesire::scrie('Înapoi, dacă e nevoie: deploy/actualizeaza.sh --site=' . $u->slug . ' --versiune=' . $u->veche . ' --inapoi --aplica (baza rămâne).');
@@ -505,6 +515,52 @@ function intoarce(Actualizare $u): void
     $st->pune('intoarsa', true);
     $st->pune('intoarcere_in_curs', false);
     Iesire::ok('versiunea ' . $u->veche . ' trece verificarea; MENTENANTA ștearsă, site-ul e deschis');
+}
+
+/**
+ * După o actualizare reușită: copiile actualizărilor (site/deploy/copii/<data>-actualizare-<v>, copia bazei de dinaintea
+ * fiecăreia) se păstrează doar cele mai noi $u->pastreazaCopii (--pastreaza-copii, implicit 10). Nu se șterg niciodată
+ * copia adoptării (copii/<data>, fără „-actualizare-”) și nicio copie pomenită în starea adoptării sau a actualizării de
+ * acum (o revenire sau o întoarcere o caută acolo). O ștergere care nu merge e doar spusă: actualizarea a reușit.
+ */
+function curataCopii(Actualizare $u): void
+{
+    $radacina = $u->s->lucru . '/copii';
+    $copii = glob($radacina . '/*-actualizare-*', GLOB_ONLYDIR) ?: [];
+    sort($copii);
+    $pomenite = '';
+    foreach ([$u->s->lucru . '/adopta.stare', $u->stare->fisier] as $f) {
+        $pomenite .= (string) @file_get_contents($f);
+    }
+    $pomenite = str_replace('\\/', '/', $pomenite);
+    $deSters = [];
+    foreach (array_slice(array_reverse($copii), $u->pastreazaCopii) as $d) {
+        if (str_contains($pomenite, $d . '/') || str_contains($pomenite, '"' . $d . '"')) {
+            Iesire::info('copia ' . basename($d) . ' rămâne: e pomenită în starea deploy-ului');
+            continue;
+        }
+        $deSters[] = $d;
+    }
+    if ($deSters === []) {
+        Iesire::ok('copiile actualizărilor: ' . count($copii) . ', păstrate toate (cel mult ' . $u->pastreazaCopii . ', --pastreaza-copii)');
+        return;
+    }
+    $eliberat = 0;
+    $sterse = 0;
+    foreach (array_reverse($deSters) as $d) {
+        $marime = Fisiere::marime($d);
+        try {
+            Fisiere::sterge($d, [$radacina]);
+        } catch (Oprire $e) {
+            Iesire::atentie('n-am putut șterge copia veche ' . $d . ': ' . $e->getMessage());
+            continue;
+        }
+        $eliberat += $marime;
+        $sterse++;
+        Iesire::info('ștearsă copia veche ' . basename($d) . ' (' . Fisiere::om($marime) . ')');
+    }
+    Iesire::ok('copiile actualizărilor: șterse ' . $sterse . ' mai vechi, eliberat ' . Fisiere::om($eliberat) . '; rămân ' . (count($copii) - $sterse)
+        . ' (cele mai noi ' . $u->pastreazaCopii . ', --pastreaza-copii, și cele din stare); copia adoptării nu se atinge');
 }
 
 /** După o actualizare reușită: păstrează doar resturile versiunii de dinainte (pentru o întoarcere de mână). */
