@@ -143,7 +143,7 @@ Fazele lui `--aplica` (fiecare ține minte că s-a terminat, în `site/deploy/ad
 | `migrari` | `migreaza.php --plan` (arătat), apoi `--aplica --site=<site>`, reluat cât cere bugetul de timp; la sfârșit **amprenta bazei** (CHECKSUM TABLE pe fiecare tabel), apoi mentenanța **ușoară** | „Revenim…”; plățile trec după migrări |
 | `diagnostic` | `diagnostic.php --pachet` și `--licenta` | „Revenim…” |
 | `verificare` | pingul (versiunea, schema `la_zi`), `/health` (și pachetul), prima pagină, un produs, `/admin/login`, `/cos`, un fișier din `assets/`, o poză, jurnalele PHP fără erori fatale noi | „Revenim…” |
-| `deschidere` | `MENTENANTA` ștearsă; prima pagină verificată fără jeton | site-ul nou |
+| `deschidere` | `/health` (cu jetonul) trebuie să spună `schema: la_zi` (altfel `MENTENANTA` rămâne: baza nu e cea migrată, de exemplu una pusă la loc de o revenire); `MENTENANTA` ștearsă; prima pagină verificată fără jeton | site-ul nou |
 
 La sfârșit scrie rândurile de cron (mai jos) și unde a pus copiile.
 
@@ -162,6 +162,9 @@ La sfârșit scrie rândurile de cron (mai jos) și unde a pus copiile.
   timp, instrucțiune) și lasă mentenanța **strictă** (codul nou e deja în `public_html`, iar baza încă nemigrată: plățile
   și ERP-ul primesc 503 și retrimit după reluare); rulezi din nou peste câteva minute, sau, dacă știi ce sunt,
   `--forteaza-liniste`.
+- o adoptare a cărei revenire a început (`revino.sh` a pus baza la loc, a încărcat-o, sau a mutat dosare) nu se mai
+  continuă: `adopta.sh` refuză (codul 2) și spune să termini revenirea cu `revino.sh`; la fel `actualizeaza.sh`. O revenire
+  refuzată înainte de orice schimbare (datele noi, liniștea) nu contează: adoptarea continuă și o uită.
 - migrările pornesc doar dacă baza e exact cea din copia de revenire (nimic scris de la copie); amprenta de după
   migrări se scrie o singură dată, după primele cereri ale codului nou (pașii de activare ai pluginurilor), și nu se
   rescrie: un `--reia=migrari` după o scriere de după migrări e refuzat.
@@ -174,7 +177,8 @@ deploy/revino.sh --site=<site> --aplica   # 1–3 minute (cât încărcarea copi
 ```
 
 1. mentenanța **strictă** (nimic nu mai scrie: nici vizitatorii, nici plățile, ERP-ul sau cronurile), apoi așteptarea
-   conexiunilor rămase;
+   conexiunilor rămase (liniște = trei probe la rând, la o secundă, fără nicio conexiune care lucrează; după o încărcare
+   oprită, și fără conexiuni ale aceluiași utilizator care doar dorm pe bază, ca clientul `mysql` al încărcării);
 2. **ce s-ar pierde**: amprenta bazei de acum (structura și `CHECKSUM TABLE` pe fiecare tabel) față de cea de la sfârșitul
    migrărilor. Orice tabel schimbat de atunci înseamnă date care s-ar pierde, oricare ar fi ele: o plată confirmată
    (un UPDATE pe `orders`), o comandă, o schimbare de stare sau un AWB din admin, un stoc venit din ERP, puncte de
@@ -184,8 +188,10 @@ deploy/revino.sh --site=<site> --aplica   # 1–3 minute (cât încărcarea copi
    șterge tabelele, vederile, rutinele și evenimentele de după copie, încarcă copia și o compară cu amprenta de la copie:
    „exact ca la copie”. Dacă diferă, se oprește în mentenanța strictă, fără să întoarcă codul, și ține minte asta în
    stare (o nouă încărcare ar ieși, de obicei, la fel). Până alegi, aceeași comandă refuză (codul 2) și site-ul rămâne în
-   mentenanța strictă: `--accepta-baza-diferita` (codul vechi pornește pe baza încărcată, cu diferențele arătate) sau
-   `--fara-baza` (baza rămâne cum e acum, fără altă încărcare; doar codul se întoarce). Oricare, ne trimiți ieșirea;
+   mentenanța strictă; alegi una: `--accepta-baza-diferita` (codul vechi pornește pe baza încărcată, cu diferențele
+   arătate; refuzat dacă baza s-a schimbat de la încărcare: amprenta de atunci e ținută în stare), `--fara-baza` (baza
+   rămâne cum e acum, fără altă încărcare; doar codul se întoarce) sau `--reincarca-baza` (copia se încarcă din nou, de
+   la început, pentru o diferență întâmplătoare). Oricare, ne trimiți ieșirea;
 4. pozele înapoi în codul vechi; `public_html` → `public_html.esuat-<data>`, `public_html.vechi` → `public_html`;
 5. codul vechi comparat cu amprenta lui de la comutare (fiecare fișier, octet cu octet; la poze mărimea și data);
 6. prima pagină a site-ului vechi verificată.
@@ -204,8 +210,11 @@ dosarelor, un refuz lasă mentenanța strictă), iar o încărcare a copiei baze
 oprită poate lucra încă pe bază, iar a doua ar porni peste ea). Rândurile noi din `orders`, `users`,
 `product_reviews`… față de sfârșitul migrărilor se arată doar ca informație (o migrare poate adăuga rânduri: recenziile
 copiate din tabelul vechi); hotărăște amprenta tabelelor. O redenumire imposibilă (amândouă dosarele există, sau niciunul)
-o rezolvi de mână: lași doar unul dintre cele două dosare (cum erau înainte de pas, sau cum ar fi după el) și pasul se
-termină singur la aceeași comandă (la fel la `adopta.sh` și `actualizeaza.sh`); dacă le-ai pus altfel, `revino.sh` are
+o rezolvi de mână, fără să ștergi ceva: **înainte** de pas există doar sursa, **după** el doar ținta. Când amândouă
+există, muți deoparte pe cea care nu trebuie (`mv <ținta> <ținta>.deoparte` dacă pasul nu s-a făcut,
+`mv <sursa> <sursa>.deoparte` dacă s-a făcut); când niciuna nu există, pui una la loc (dintr-un `….deoparte` sau din
+copie). Scriptul îți scrie căile exacte. Apoi aceeași comandă: pasul se termină singur (la fel la `adopta.sh` și
+`actualizeaza.sh`); dacă le-ai pus altfel, `revino.sh` are
 `--rezolvat-de-mana` (doar perechea imposibilă se lasă așa; o mutare care nu merge, de exemplu din lipsă de drepturi sau
 de spațiu, oprește și cu el). Dacă pasul lăsat așa e comutarea, `revino.sh` mai merge pe drumul „adoptarea s-a oprit
 înainte de comutare” doar cu codul vechi în `public_html` (checkout-ul git, la commit-ul de la verificări); altfel refuză
@@ -336,7 +345,7 @@ Când apare `GATA`:
 - **Plățile din timpul mentenanței stricte** primesc 503 și sunt retrimise de procesator mai târziu (Stripe: în câteva
   minute până la câteva ore); o comandă plătită chiar atunci apare „neplătită” până la retrimitere.
 - **Un proces pornit înainte de mentenanță** (un cron lung al codului vechi) poate scrie încă: scriptul așteaptă cel
-  mult un minut să termine și se oprește dacă nu, iar amprenta bazei înainte și după copie prinde orice scriere.
+  mult un minut să termine (trei probe liniștite la rând) și se oprește dacă nu, iar amprenta bazei înainte și după copie prinde orice scriere.
 - **Cronurile** nu se schimbă singure: hPanel nu se poate scrie din SSH. Dacă `crontab -l` nu le arată, le dai cu
   `--cron-vechi=`.
 - **`.htaccess`-ul din `public_html`** e al stub-ului: rândurile puse acolo de altcineva (hPanel, un plugin de cache)
@@ -357,6 +366,8 @@ Când apare `GATA`:
   deschidere, lacătul migrărilor ținut la o actualizare, open_basedir, o tranzacție deschisă pe bază (liniștea care nu
   vine, după comutare și într-o revenire reluată), o bază pusă la loc diferită de copie, `--rezolvat-de-mana` pe o mutare
   care nu merge, pe o comutare și pe o întoarcere a codului terminate de mână, `--reia=copie` după comutare,
-  `--accepta-revenirea` fără `--aplica`, `--accepta-baza-diferita`; codul și baza comparate octet cu octet.
+  `--accepta-revenirea` fără `--aplica`, `--accepta-baza-diferita` (și după o scriere), `--reincarca-baza`, adopta.sh și
+  actualizeaza.sh în timpul unei reveniri începute, deschiderea pe o bază care nu e la zi, o conexiune care doarme după o
+  încărcare oprită, liniștea cu probe la rând; codul și baza comparate octet cu octet.
   `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat.
 - Stub-ul și `bin/platforma` le verifică și `tools/dev/test-paths.php` (B).

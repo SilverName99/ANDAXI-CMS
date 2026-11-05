@@ -61,6 +61,9 @@ final class Actualizare
             throw new Oprire($this->s->domeniu . ' nu e încă adoptat (fără stub în public_html sau fără SITE_SLUG în site/.env): întâi deploy/adopta.sh', 2);
         }
         $adoptare = new Stare($this->s->lucru . '/adopta.stare');
+        if (is_file($adoptare->fisier) && revenireInceputa($adoptare)) {
+            throw new Oprire('o revenire a lui ' . $this->s->domeniu . ' la codul vechi a început (deploy/revino.sh); termin-o întâi (aceeași comandă de revenire)', 2);
+        }
         if (is_file($adoptare->fisier) && !$adoptare->facuta('deschidere')) {
             throw new Oprire('adoptarea lui ' . $this->s->domeniu . ' nu e terminată: întâi o termini (deploy/adopta.sh, aceeași comandă) sau revii (deploy/revino.sh)', 2);
         }

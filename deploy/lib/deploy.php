@@ -30,6 +30,22 @@ class Oprire extends RuntimeException
 /** O redenumire rămasă la jumătate care nu se mai poate face (amândouă dosarele există, sau niciunul): doar ea se poate lăsa cu --rezolvat-de-mana. */
 final class RedenumireImposibila extends Oprire
 {
+    public function __construct(string $mesaj, public readonly string $din, public readonly string $in, public readonly bool $amandoua)
+    {
+        parent::__construct($mesaj, 1);
+    }
+
+    /** Ce poate face omul: înainte de pas există doar sursa, după el doar ținta; nimic nu se șterge, se mută deoparte. */
+    public function sfat(): string
+    {
+        if ($this->amandoua) {
+            return 'amândouă există: muți deoparte (nu ștergi) pe cel care nu trebuie să fie acolo. Pasul nefăcut (înainte de el): rămâne doar '
+                . $this->din . ', deci mv ' . $this->in . ' ' . $this->in . '.deoparte; pasul făcut (după el): rămâne doar ' . $this->in . ', deci mv '
+                . $this->din . ' ' . $this->din . '.deoparte. Apoi aceeași comandă: pasul se termină singur';
+        }
+        return 'niciunul nu există: pui unul la loc (de exemplu dintr-un ….deoparte sau din copie): ' . $this->din . ' dacă pasul nu s-a făcut (înainte de el), '
+            . 'sau ' . $this->in . ' dacă s-a făcut (după el). Apoi aceeași comandă: pasul se termină singur';
+    }
 }
 
 final class Iesire
@@ -698,6 +714,9 @@ final class Baza
         return $rez;
     }
 
+    /** Câte probe liniștite la rând (la o secundă) înseamnă liniște (asteaptaLiniste). */
+    public const LINISTE_PROBE = 3;
+
     /**
      * Așteaptă (cel mult $secunde) până nu mai lucrează nicio altă conexiune pe această bază: o cerere a codului vechi,
      * un cron pornit înainte de mentenanță, sau o conexiune care doarme cu o tranzacție deschisă (INNODB_TRX; fără
@@ -705,16 +724,28 @@ final class Baza
      * bazei (pe găzduirea comună, ale site-ului). Întoarce cele care au rămas (gol = liniște), cu ID, TIME și începutul
      * instrucțiunii, pentru mesaj.
      *
+     * Liniștea înseamnă LINISTE_PROBE probe la rând fără nicio conexiune, la o secundă una de alta (o singură probă poate
+     * cădea între două instrucțiuni ale unui cron sau ale unei încărcări). $siInactive: și conexiunile care doar dorm
+     * (Sleep) ale aceluiași utilizator pe această bază, de exemplu clientul mysql al unei încărcări oprite, între două
+     * instrucțiuni.
+     *
      * @return list<string>
      */
-    public function asteaptaLiniste(int $secunde): array
+    public function asteaptaLiniste(int $secunde, bool $siInactive = false): array
     {
         $sfarsit = microtime(true) + $secunde;
-        do {
+        $linistite = 0;
+        while (true) {
             $q = $this->pdo()->prepare("SELECT ID, TIME, COMMAND, LEFT(COALESCE(INFO, ''), 80) FROM information_schema.PROCESSLIST "
                 . "WHERE DB = ? AND ID <> CONNECTION_ID() AND COMMAND NOT IN ('Sleep', 'Daemon', 'Binlog Dump')");
             $q->execute([$this->nume()]);
             $randuri = $q->fetchAll(PDO::FETCH_NUM);
+            if ($siInactive) {
+                $q = $this->pdo()->prepare("SELECT ID, TIME, 'Sleep (același utilizator)', '' FROM information_schema.PROCESSLIST WHERE DB = ? "
+                    . "AND ID <> CONNECTION_ID() AND COMMAND = 'Sleep' AND USER = SUBSTRING_INDEX(USER(), '@', 1)");
+                $q->execute([$this->nume()]);
+                $randuri = array_merge($randuri, $q->fetchAll(PDO::FETCH_NUM));
+            }
             try {
                 $q = $this->pdo()->prepare("SELECT p.ID, p.TIME, 'Sleep cu tranzacție deschisă', LEFT(COALESCE(t.trx_query, ''), 80) FROM information_schema.INNODB_TRX t "
                     . "JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id WHERE p.DB = ? AND p.ID <> CONNECTION_ID() AND p.COMMAND = 'Sleep'");
@@ -723,10 +754,24 @@ final class Baza
             } catch (Throwable) {
             }
             if ($randuri === []) {
-                return [];
+                // O probă liniștită nu ajunge: încă LINISTE_PROBE - 1, la o secundă (și după termen, cât rămâne liniște).
+                if (++$linistite >= self::LINISTE_PROBE) {
+                    return [];
+                }
+                usleep(1000000);
+                continue;
+            }
+            $linistite = 0;
+            if (microtime(true) >= $sfarsit) {
+                break;
             }
             usleep(500000);
-        } while (microtime(true) < $sfarsit);
+        }
+        $unice = [];
+        foreach ($randuri as $r) {
+            $unice[(string) $r[0]] ??= $r;
+        }
+        $randuri = array_values($unice);
         return array_map(static fn (array $r): string => 'ID ' . $r[0] . ', ' . $r[1] . ' s, ' . $r[2] . ($r[3] !== '' ? ': ' . self::faraValori((string) $r[3]) : ''), $randuri);
     }
 
@@ -734,11 +779,11 @@ final class Baza
      * Liniștea pe bază înaintea unei copii sau a unei încărcări: oprește dacă rămân conexiuni (cu lista lor), afară de
      * --forteaza-liniste, care doar avertizează. $laOprire rulează înaintea opririi (de exemplu mentenanța pusă la loc).
      */
-    public function cereLiniste(bool $forteaza, ?callable $laOprire = null): void
+    public function cereLiniste(bool $forteaza, ?callable $laOprire = null, bool $siInactive = false): void
     {
         // PLATFORMA_TEST_LINISTE_SECUNDE (doar testele, tools/dev/test-deploy.php): o așteptare mai scurtă, niciodată mai lungă.
         $test = (int) getenv('PLATFORMA_TEST_LINISTE_SECUNDE');
-        $ramase = $this->asteaptaLiniste($test > 0 && $test < 60 ? $test : 60);
+        $ramase = $this->asteaptaLiniste($test > 0 && $test < 60 ? $test : 60, $siInactive);
         if ($ramase === []) {
             Iesire::ok('nicio altă conexiune nu mai lucrează pe bază');
             return;
@@ -1245,6 +1290,29 @@ final class Mentenanta
     }
 }
 
+/**
+ * O revenire (revino.sh) a schimbat deja ceva în adoptarea dată: baza (o încărcare a copiei începută, terminată, diferită
+ * de copie sau acceptată așa) sau dosarele (o redenumire revino-* începută, făcută sau lăsată de mână). Atunci doar revino.sh
+ * o mai poate duce la capăt; adopta.sh și actualizeaza.sh refuză (codul nou ar porni pe baza veche pusă la loc).
+ * O revenire refuzată înainte de orice schimbare (datele noi, liniștea) nu contează.
+ */
+function revenireInceputa(Stare $stare): bool
+{
+    $rev = (array) $stare->ia('revino', []);
+    foreach (['baza_in_curs', 'baza', 'baza_diferita', 'baza_acceptata', 'esuat'] as $k) {
+        if (!empty($rev[$k])) {
+            return true;
+        }
+    }
+    $chei = array_merge((array) $stare->ia('redenumiri_facute', []), (array) $stare->ia('redenumiri_lasate', []), array_keys((array) $stare->ia('redenumiri', [])));
+    foreach ($chei as $k) {
+        if (str_starts_with((string) $k, 'revino-')) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /** Punctele de oprire ale testelor (PLATFORMA_TEST_OPRESTE_DUPA=<punct>): exact ce lasă un proces omorât acolo. */
 function testOpreste(string $punct): void
 {
@@ -1297,7 +1365,7 @@ final class Redenumiri
                 $rez[] = (string) $cheie;
             } catch (RedenumireImposibila $e) {
                 if (!$rezolvatDeMana) {
-                    $pasi = ['lași doar unul dintre cele două dosare (cum erau înainte de pas, sau cum ar fi după el), apoi aceeași comandă: pasul se termină singur'];
+                    $pasi = [$e->sfat()];
                     $pasi[] = $cuRezolvatDeMana
                         ? 'sau, după ce ai pus dosarele la loc de mână altfel: aceeași comandă cu --rezolvat-de-mana'
                         : 'sau ne trimiți ce vezi în cele două dosare (ls -la)';
@@ -1346,7 +1414,7 @@ final class Redenumiri
                 }
             } elseif ($existaDin || !$existaIn) {
                 throw new RedenumireImposibila('pasul „' . $cheie . '” (' . ($i + 1) . '/' . count($pasi) . ': ' . $din . ' → ' . $in . ') nu se mai poate face: '
-                    . ($existaDin ? 'amândouă există' : 'niciunul nu există') . '. Nu schimb nimic; uită-te la cele două dosare (ne trimiți ce vezi)');
+                    . ($existaDin ? 'amândouă există' : 'niciunul nu există') . '. Nu schimb nimic; uită-te la cele două dosare (ne trimiți ce vezi)', $din, $in, $existaDin);
             }
             $inCurs[$cheie]['facuti'] = $i + 1;
             $stare->pune('redenumiri', $inCurs);

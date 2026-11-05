@@ -172,6 +172,19 @@ exit(porneste(static function () use ($argv): int {
     }
     Iesire::jurnal($a->s->lucru . '/jurnale/adopta-' . date('Ymd-His') . '.log');
     Redenumiri::termina($a->stare);
+    // O revenire începută (revino.sh a pus baza la loc sau a mutat dosare) nu se continuă cu adoptarea: codul nou ar porni
+    // pe baza veche. Una refuzată înainte de orice schimbare se uită: o revenire de mai târziu o ia de la capăt.
+    if (revenireInceputa($a->stare)) {
+        throw new Oprire('revenirea a început (deploy/revino.sh a schimbat deja baza sau dosarele); termin-o cu revino.sh, nu continui adoptarea', 2, [
+            'aceeași comandă de revenire: deploy/revino.sh --site=' . $a->slug . ' --domeniu=' . $a->s->domeniu . ' --aplica (cu aceeași alegere ca la început)',
+            'după revenire, o adoptare nouă pornește de la început',
+        ]);
+    }
+    if ($a->stare->ia('revino') !== null) {
+        Iesire::info('o revenire încercată s-a oprit înainte să schimbe ceva; o uit și continui adoptarea');
+        unset($a->stare->date['revino']);
+        $a->stare->salveaza();
+    }
     // O adoptare începută continuă doar cu aceleași opțiuni: altă versiune, alt pachet sau altă cheie ar amesteca ce s-a
     // pregătit cu ce urmează. Înainte de comutare se poate începe din nou (--reia=verificari); după, nu.
     $optiuni = $a->optiuni();
@@ -1024,6 +1037,16 @@ function verificare(Adoptare $a): void
 function deschidere(Adoptare $a): void
 {
     $s = $a->s;
+    // Ultima plasă înainte de deschidere: baza trebuie să fie cea migrată (nu una pusă la loc de o revenire, de exemplu).
+    $h = Http::cere($a->url . '/health', ['X-Andaxi-Deploy' => (string) $a->stare->ia('jeton', '')]);
+    if ($h['cod'] !== 200 || !str_starts_with($h['corp'], "ok\n") || !str_contains($h['corp'], 'schema: la_zi')) {
+        preg_match('/schema: (\S+)/', $h['corp'], $m);
+        throw new Oprire('/health nu spune „schema: la_zi” (HTTP ' . $h['cod'] . ', schema ' . ($m[1] ?? '?') . '): baza nu e cea migrată; '
+            . 'nu scot MENTENANTA', 1, [
+            'dacă o revenire a pus baza veche la loc: o termini cu deploy/revino.sh',
+            'altfel: deploy/adopta.sh … --aplica --reia=migrari, apoi aceeași comandă',
+        ]);
+    }
     Mentenanta::scoate($s);
     $r = Http::cere($a->url . '/');
     $p = Http::cere($a->url . '/_andaxi/ping');
