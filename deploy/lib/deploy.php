@@ -859,7 +859,7 @@ final class Baza
         $optiuni = $this->fisierOptiuni(dirname($fisier));
         $inceput = microtime(true);
         try {
-            $comanda = escapeshellarg($dump) . ' --defaults-extra-file=' . escapeshellarg($optiuni)
+            $comanda = escapeshellarg($dump) . ' --defaults-file=' . escapeshellarg($optiuni)
                 . ' --single-transaction --quick --hex-blob --default-character-set=utf8mb4 --no-tablespaces --triggers'
                 . ' --add-drop-table --skip-dump-date' . ($obiecte['rutine'] > 0 ? ' --routines' : '') . ($obiecte['evenimente'] > 0 ? ' --events' : '')
                 . ' ' . escapeshellarg($this->nume()) . ' | gzip -c > ' . escapeshellarg($fisier . '.tmp');
@@ -962,7 +962,7 @@ final class Baza
         testOpreste('restaurare');
         $optiuni = $this->fisierOptiuni(dirname($fisier));
         try {
-            $r = Comanda::shell('gzip -dc ' . escapeshellarg($fisier) . ' | ' . escapeshellarg($client) . ' --defaults-extra-file=' . escapeshellarg($optiuni)
+            $r = Comanda::shell('gzip -dc ' . escapeshellarg($fisier) . ' | ' . escapeshellarg($client) . ' --defaults-file=' . escapeshellarg($optiuni)
                 . ' --default-character-set=utf8mb4 ' . escapeshellarg($this->nume()));
         } finally {
             @unlink($optiuni);
