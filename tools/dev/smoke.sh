@@ -653,6 +653,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Pluginul campanii (5 nov 2026, pentru Biovitality): tools/dev/test-campanii.php, pe licența „toate”, pe serverul pornit aici:
+# regulile (întoarcerea, roboții, adresele neoprite), adminul, prima intrare, insigna, bannerul, fereastra, pluginul oprit, Chromium
+# pe desktop și pe telefon. Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Campaniile (tools/dev/test-campanii.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-campanii.php" > "$TMP/test-campanii.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-campanii.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-campanii.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-campanii.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Paginile refăcute ale fazei D, partea a doua (WP-32 … WP-34): tools/dev/test-admin-faza-d.php, pe licența „toate”: indecșii și
 # cifrele paginii Acasă (pe o bază separată, ștearsă la final), plus ce adaugă WP-33/WP-34.
 if [ "$PACHET" = "toate" ]; then

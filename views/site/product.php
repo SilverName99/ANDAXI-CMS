@@ -47,8 +47,14 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
     Produsul nu e activ, deci nu apare în magazin și nu poate fi cumpărat. Pagina se vede doar prin acest link.
 </div>
 <?php endif; ?>
+<?php /* Pluginul campanii: insigna produsului din campania activă (App\Support\Campanii), în capul panoului; fără campanie, nimic. */ ?>
+<?php $insignaCampanie = \App\Support\Campanii::insignaPagina($product); ?>
 <?php if ($hasTemplateRender): ?>
     <section class="panel product-template-render">
+<?php if ($insignaCampanie !== ''): ?>
+        <?= $insignaCampanie ?>
+
+<?php endif; ?>
         <?php if (trim((string) ($templateRender['css'] ?? '')) !== ''): ?>
             <style><?= (string) ($templateRender['css'] ?? '') ?></style>
         <?php endif; ?>
@@ -59,6 +65,10 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
     </section>
 <?php else: ?>
     <section class="panel">
+<?php if ($insignaCampanie !== ''): ?>
+        <?= $insignaCampanie ?>
+
+<?php endif; ?>
         <h1><?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?></h1>
         <div class="product-default-gallery">
             <?php if ($badgeHtml !== ''): ?>

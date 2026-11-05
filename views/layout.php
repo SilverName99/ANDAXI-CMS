@@ -448,6 +448,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
 <?php endif; ?>
 </head>
 <body class="site-shell">
+<?= \App\Support\Hooks::html('layout.inceput_body') /* bannerul campaniei active (pluginul campanii); gol în rest */ ?>
 <?php if (\App\Support\Tema::butonSus()): ?>
 <?php /* Ținta butonului „Înapoi sus” (tema.json → buton_sus, GR b4159bd): fără ea, ancora n-ar avea unde duce focusul. */ ?>
 <span id="inceput-pagina"></span>
@@ -650,7 +651,9 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     <?php
     // Popup de anunț la intrarea pe site (Admin → Setări magazin → Popup anunț).
     // Stilurile stau inline pentru că CSS-ul site-ului poate fi servit din cache.
-    $popupActiv = (string) ($designSettings['welcome_popup_enabled'] ?? '0') === '1';
+    // Pe pagina campaniei (pluginul campanii) nu: ea e deja prima impresie, iar popup-ul ar acoperi butonul „Înapoi”; apare pe
+    // pagina următoare.
+    $popupActiv = (string) ($designSettings['welcome_popup_enabled'] ?? '0') === '1' && !\App\Support\Campanii::ePaginaCampaniei();
     $popupTitlu = trim((string) ($designSettings['welcome_popup_title'] ?? ''));
     $popupText = trim((string) ($designSettings['welcome_popup_body'] ?? ''));
     $popupVersiune = trim((string) ($designSettings['welcome_popup_version'] ?? '1'));

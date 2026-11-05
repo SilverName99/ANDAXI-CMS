@@ -72,7 +72,7 @@ return [
         ['cheie' => 'clienti', 'tip' => 'grup', 'eticheta' => 'Clienți', 'icon' => 'users',
             'deschis' => ['/admin/users/settings', '/admin/users/gdpr-agreements', '/admin/pages/gdpr-agreements']],
         ['cheie' => 'marketing', 'tip' => 'grup', 'eticheta' => 'Marketing', 'icon' => 'coupon',
-            'deschis' => ['/admin/coupons', '/admin/users/points', '/admin/emails/automation', '/admin/emails/builder']],
+            'deschis' => ['/admin/coupons', '/admin/users/points', '/admin/emails/automation', '/admin/emails/builder', '/admin/campanii']],
         ['cheie' => 'continut', 'tip' => 'grup', 'eticheta' => 'Conținut', 'icon' => 'pages',
             'deschis' => ['/admin/pages', '/admin/blog', '/admin/gallery', '/admin/design']],
         ['cheie' => 'rapoarte', 'tip' => 'grup', 'eticheta' => 'Rapoarte', 'icon' => 'stats',
@@ -578,6 +578,24 @@ return [
                     'icon' => 'pages', 'activ' => ['/admin/users/gdpr-agreements']],
             ],
             'tabele' => ['gdpr_agreements'],
+        ],
+
+        // Cerut pentru Biovitality (5 nov 2026), generic: o campanie programată (început, sfârșit) cu pagina ei de deschidere,
+        // arătată o dată pe vizită la prima intrare pe site (cu butonul „← Înapoi în site-ul principal”), insigna produselor
+        // alese și bannerul de sus. Oprit pe orice site până îl pune CRM-ul în licență; nu e în niciun pachet și în nicio
+        // licență de dezvoltare. App\Support\Campanii, CampaniiController; docs/PLUGINURI.md, „Campanii pe site”.
+        'campanii' => [
+            'nume' => 'Campanii pe site',
+            'descriere' => 'O campanie programată: pagina ei arătată o dată pe vizită la intrarea pe site, insigna pe produsele '
+                . 'alese și bannerul de sus, doar între data de început și cea de sfârșit.',
+            'necesita' => [],
+            'rute_admin' => ['/admin/campanii', '/admin/campanii/*'],
+            'rute_publice' => ['/campanie/*'],
+            'meniu' => [
+                ['grup' => 'marketing', 'ordine' => 90, 'eticheta' => 'Campanii pe site', 'href' => '/admin/campanii', 'icon' => 'stats',
+                    'activ' => ['/admin/campanii']],
+            ],
+            'tabele' => ['campanii', 'campanii_produse'],
         ],
 
         'migrare_wordpress' => [

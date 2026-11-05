@@ -30,6 +30,8 @@ namespace App\Support;
  *  - `utilizator.sters($db, int[] $iduri, 'admin'|'cont')`: conturi șterse din admin sau de client → `membri`
  *    (documente, rânduri, poza de profil), `donatii` (abonamentele active oprite, `user_id` dezlegat);
  *  - `layout.final_body` (HTML): înainte de `</body>` pe paginile publice → `donatii` (fereastra și scripturile ei);
+ *  - `layout.inceput_body` (HTML): imediat după `<body>` pe paginile publice → `campanii` (bannerul de sus al campaniei
+ *    active; pe pagina campaniei, bara cu butonul „Înapoi în site-ul principal”; config/hooks.php);
  *  - `plugin.lucruri_in_curs($db)` → int: ce are pluginul în curs (codul lucrurilor în curs, WP-27, Etapa 2);
  *  - `acasa.de_facut($db, $setari)` → listă de `{numar, text, href, actiune, ton?}`: intrările listei „De făcut” de pe
  *    pagina Acasă a adminului (WP-32, App\Support\AcasaAdmin::deFacut; una cu `numar` 0 nu se arată) → `magazin`,
@@ -46,6 +48,8 @@ final class Hooks
         'editor.articol.campuri', 'utilizator.sters', 'layout.final_body', 'plugin.lucruri_in_curs',
         // WP-32: pagina Acasă a adminului.
         'acasa.de_facut', 'acasa.sanatate',
+        // Pluginul campanii (5 nov 2026): începutul paginilor publice.
+        'layout.inceput_body',
     ];
 
     /** @var array<string, list<array{plugin: string, fn: callable, stare: string}>>|null */

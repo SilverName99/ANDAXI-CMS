@@ -105,7 +105,8 @@ scrie. `docs/SEO.md` §2b.
 - **Comenzi**: Comenzi · Cereri de ofertă
 - **Produse**: Produse · Categorii produse · Câmpuri și șabloane · Oferte BBD · Recenzii · Produse promoționale
 - **Clienți**: Clienți · Conturi clienți · Acorduri GDPR · Mesaje de contact
-- **Marketing**: Cupoane · Fidelitate · Newslettere · Șabloane newsletter · Liste abonați · Formulare opt-in · Automatizări
+- **Marketing**: Cupoane · Fidelitate · Newslettere · Șabloane newsletter · Liste abonați · Formulare opt-in · Automatizări ·
+  Campanii pe site (pluginul `campanii`, 5 nov 2026: doar unde licența îl pornește; doar administratorul general)
 - **Conținut**: Pagini · Postări blog · Categorii · Șabloane blog · Autori blog · Galerie · Antet, subsol și meniu
 - **Rapoarte**: Jurnal activitate · Încercări de înregistrare și comandă (fără magazin: „Încercări de înregistrare”) ·
   Statistici newsletter · Emailuri trimise

@@ -146,6 +146,7 @@ tools/dev/php.sh tools/dev/test-incarcare.php       # încărcarea copiei de ver
 tools/dev/php.sh tools/dev/test-securitate.php      # securitatea nucleului (WP-12b): parolele adminilor, id-ul sesiunii la logare, adresa vizitatorului (și în testul de fum)
 tools/dev/php.sh tools/dev/test-porturi-vt-gr.php   # porturile din vertij și grafoanaytis (WP-15, WP-24…WP-26; și în testul de fum)
 tools/dev/php.sh tools/dev/test-newsletter.php      # newsletterul portat din Bioscem (WP-R din 30 oct; și în testul de fum)
+tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, Chromium 1366/390 px (și în testul de fum)
 tools/dev/compara-calcule-local.sh                  # golden master-ul (codul Bioscem însuși față de codul comun, aceleași comenzi: diferite 0) și amprenta paginilor (docs/VERIFICARE.md)
 tools/dev/php.sh tools/dev/test-paths.php           # căile site-ului (Paths), stub-ul, MENTENANTA și pingul, pe o găzduire simulată din Etapa 2 (mai jos, „Unde scrie codul”)
 tools/dev/php.sh tools/dev/test-deploy.php          # deploy-ul din Etapa 2: release, adopta, actualizeaza, revino, pe o găzduire simulată cu două site-uri (docs/DEPLOY.md)
@@ -459,7 +460,7 @@ Pornește de la o bază goală și verifică, în ordine:
    local), apoi `scripts/migreaza.php --stare` și `--plan` pe baza de test (făcută prin
    migrări: `--plan` iese cu 0, nimic de făcut); niciunul nu lasă un fișier de sesiune nou;
    pe pachetul „toate”, `test-reparatii.php` (reparațiile WP-12, mai sus, pe serverul pornit
-   aici), `test-securitate.php` (parolele adminilor, id-ul sesiunii la logare, adresa vizitatorului, WP-12b), `test-porturi-bv.php` (WP-19…WP-21), `test-blog-avansat.php` (blogul avansat, WP-22, WP-23), `test-porturi-vt-gr.php` (porturile din vertij și grafoanaytis, WP-15, WP-24…WP-26) și `test-newsletter.php` (newsletterul, WP-R din 30 oct); apoi instrucțiunile SQL ale tuturor cererilor de mai sus (contorul serverului,
+   aici), `test-securitate.php` (parolele adminilor, id-ul sesiunii la logare, adresa vizitatorului, WP-12b), `test-porturi-bv.php` (WP-19…WP-21), `test-blog-avansat.php` (blogul avansat, WP-22, WP-23), `test-porturi-vt-gr.php` (porturile din vertij și grafoanaytis, WP-15, WP-24…WP-26) `test-newsletter.php` (newsletterul, WP-R din 30 oct) și `test-campanii.php` (pluginul campanii, 5 nov); apoi instrucțiunile SQL ale tuturor cererilor de mai sus (contorul serverului,
    `CMS_DEV_NUMARA_SQL=1`): niciuna nu are voie să trimită DDL;
 8. jurnalul PHP: niciun `Warning`, `Notice` sau `Fatal` (mesajele `Deprecated`
    se raportează, dar nu opresc testul);

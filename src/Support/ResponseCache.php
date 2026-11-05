@@ -95,7 +95,10 @@ final class ResponseCache
         // Amprenta pluginurilor intră și ea: o pagină randată sub alte stări (de
         // exemplu cu „Adaugă în coș” chiar când magazinul trecea în „se oprește”)
         // nu se mai servește după schimbare, chiar dacă s-a salvat după golire.
-        $cacheKey = sha1($path . '|' . $query . '|' . CookieConsent::cheieCache() . '|' . Plugins::amprenta());
+        // Campania activă (pluginul campanii) intră și ea, doar când există: bannerul și insignele sunt în pagină, deci o pagină
+        // randată înainte de începutul campaniei sau cu bannerul de dinainte de o salvare nu se mai servește. Fără campanie
+        // activă, cheia e exact cea de dinainte.
+        $cacheKey = sha1($path . '|' . $query . '|' . CookieConsent::cheieCache() . '|' . Plugins::amprenta() . Campanii::cheieCache());
         $cacheDir = self::cacheDirectory();
         $cacheFile = $cacheDir . '/' . $cacheKey . '.html';
         $metaFile = $cacheDir . '/' . $cacheKey . '.json';

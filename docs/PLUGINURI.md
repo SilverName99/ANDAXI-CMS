@@ -227,7 +227,8 @@ redirecționare a pluginului înseamnă fără logare automată), `cont.taburi` 
 `continut.membru_activ` și `continut.nota` (poarta de mai jos), `editor.pagina.campuri` / `editor.articol.campuri`
 (câmpurile din editorul paginii și al articolului), `utilizator.sters` (din Admin → Utilizatori și din „Șterge contul”,
 înaintea ștergerii, în aceeași tranzacție), `layout.final_body` (înainte de `</body>` pe paginile publice),
-`plugin.lucruri_in_curs` (pentru lucrurile în curs, WP-27). În dezvoltare (`APP_ENV=local`), `CMS_DEV_HOOKS` poate da un
+`plugin.lucruri_in_curs` (pentru lucrurile în curs, WP-27), `layout.inceput_body` (imediat după `<body>` pe paginile publice:
+bannerul pluginului `campanii`). În dezvoltare (`APP_ENV=local`), `CMS_DEV_HOOKS` poate da un
 fișier cu agățări de probă (`tools/dev/test-porturi-vt-gr.php`).
 
 **Conținutul pentru membri** (`App\Support\AccesMembri`, migrarea `nucleu/0034`): o pagină sau un articol cu
@@ -977,6 +978,72 @@ loc de comenzi.
 - **Oprit**: `/api/cerere-oferta` dă 404 (JSON), adminul 403, meniul dispare; rândurile
   rămân (exportul de mai sus nu le cuprinde: nu sunt date cu păstrare legală).
 
+### Campanii pe site (`campanii`)
+
+Cerut pentru Biovitality (5 noiembrie 2026), făcut generic. `App\Support\Campanii`, `CampaniiController`, migrarea
+`campanii/0054`, testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
+**Oprit pe orice site**: nu e în niciun pachet și în nicio licență de dezvoltare (`licente_dev`); îl pune doar CRM-ul în
+licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/licenta.php biovitality campanii=pornit`.
+
+- **Conține**: Marketing → **Campanii pe site** (`/admin/campanii`, lista; `/admin/campanii/noua`, `/admin/campanii/{id}`,
+  editorul; `POST /admin/campanii/salveaza`, `POST /admin/campanii/{id}/sterge`, cu jetonul formularului și un rând în Jurnal
+  activitate; doar administratorul general, rolurile parțiale nu au adresa în `Auth::canAccessPath`); pagina campaniei
+  `/campanie/{slug}`; agățarea de punctul nou `layout.inceput_body` (bannerul și bara paginii campaniei); insigna din
+  `views/site/components/product-card.php` și `views/site/product.php`; trimiterea de la prima intrare din `public/index.php`.
+  Tabele: `campanii`, `campanii_produse`.
+- **O campanie** are o fereastră (început, sfârșit, ora României, câmpurile `datetime-local`) și bifa „Pornită”; în afara
+  ferestrei (sau nebifată) **nu se vede nimic**: nici pagina (404), nici insignele, nici bannerul. Se pot pregăti oricâte
+  campanii, dar **două campanii pornite nu au voie să aibă ferestre care se suprapun** (refuzat la salvare, 422, cu numele
+  celeilalte), deci pe site e activă cel mult una (decizia de simplitate; dacă totuși ar fi două, din bază, câștigă cea care a
+  început ultima). Lista arată starea: Activă acum, Programată, Încheiată, Oprită.
+- **Pagina de deschidere**: o pagină din Conținut → Pagini (editorul de pagini al nucleului, cu codurile lui), aleasă în
+  campanie; se recomandă o pagină **nepublicată** (ciornă): așa se vede doar prin campanie și doar cât campania e activă
+  (o pagină publicată rămâne și la adresa ei, ca orice pagină). Se randează în aspectul site-ului (antetul, subsolul, bannerul
+  de cookie-uri), cu o bară lipită sus și butonul **„← Înapoi în site-ul principal”** în stânga (textul se poate schimba),
+  spre adresa cerută la intrare. Popup-ul de anunț al nucleului nu se pune peste ea (apare pe pagina următoare). Codurile care
+  cer pregătire în controller (`{{shop_catalog}}`, coșul, checkout-ul, contul, formularul de recenzii, `{{products_by_template:…}}`,
+  `{{produse_serviciu}}`) ies goale pe ea; celelalte (`{{featured_products}}`, `{{latest_posts}}`, categoriile…) merg.
+  `noindex, follow` (meta și `X-Robots-Tag`), fără canonical, `Cache-Control: no-store, private`, nu e în harta site-ului.
+  Administratorul logat o vede și în afara ferestrei, ca **previzualizare** (cu o notă), fără să primească cookie-ul.
+- **Prima intrare pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini): un om care vine din afara site-ului
+  (de pe Google, dintr-un email, de pe o rețea socială, un link tastat) primește `302` la
+  `/campanie/<slug>?inapoi=<calea și parametrii ceruți>` (`Cache-Control: no-store, private`) și cookie-ul
+  `campanie_vazuta=<id>`. `inapoi` e verificat ca o cale a acestui site (`/…`, fără `//`, `\`, schemă, gazdă, caractere de
+  control, nici `/campanie/…`); orice altceva duce la `/` (nicio redirecționare deschisă). **Nu se trimite niciodată**: altă
+  metodă decât GET (POST, HEAD), roboții și previzualizările de linkuri (Googlebot, Bing, AdsBot, rețelele sociale, unelte,
+  `HeadlessChrome`, fără User-Agent; `Campanii::eRobot`), o cerere care nu cere `text/html` sau nu e navigarea unui document
+  (`Sec-Fetch-Dest`/`Sec-Fetch-Mode`, preîncărcările, AJAX), navigarea din interiorul site-ului (`Referer` de pe același site:
+  așa nici un vizitator cu cookie-urile blocate nu e trimis la fiecare clic), un administrator logat, cine are deja cookie-ul
+  campaniei, adresele excluse din stratul SEO (`SeoRedirects::eExclusa`: admin, API, `/_andaxi/`, coș, checkout, cont, login,
+  plăți și întoarcerile lor, webhook-uri, newsletter, fișiere, `/uploads`, `/assets`, adresele mereu deschise ale tuturor
+  pluginurilor, `cai_excluse` din `seo.json`) și cele blocate în `robots.txt`, `/campanie`, `/cont`, `/og`, `/tema`,
+  `/sitemap…`, `/feed`, `/review-form`, orice cale cu extensie de fișier, paginile altor pluginuri decât catalogul și blogul
+  (cele din `pagini`, ex. `checkout/succes`, `acorduri-gdpr`) și paginile de sistem ale hărții site-ului, linkul de ciornă al
+  unui produs (`?draft=`). Fără pagină aleasă sau cu „Arată pagina campaniei la prima intrare” debifată, nu se trimite nimeni
+  (insigna și bannerul rămân).
+- **Cookie-ul** `campanie_vazuta`: strict necesar (ține minte doar că vizitatorul a văzut deja pagina, ca să nu fie trimis
+  la ea la fiecare pagină), deci fără acordul pentru cookie-uri (`CookieConsent`); de sesiune (fără `Expires`: dispare la
+  închiderea browserului), `HttpOnly`, `SameSite=Lax`, `Secure` pe https; doar id-ul campaniei, nimic despre vizitator. O
+  campanie nouă (alt id) se vede din nou o dată. De trecut în politica de cookie-uri a site-ului, la „strict necesare”.
+- **Insigna** (textul, implicit „Campanie”, și două culori): pe produsele alese (lista cu căutare din editor), pe pagina
+  produsului (deasupra produsului, în ambele aspecte: cu șablon și fără) și pe cardurile catalogului (`{{shop_catalog}}`,
+  `/magazin`, `/categorie/…`, `{{products_by_template:…}}`), jos în stânga pozei (sus sunt reducerea și ofertele BBD). Doar cu
+  catalogul pe site. Alte carduri (cele simple ale produselor similare, `{{featured_products}}` din prima pagină) nu o au încă.
+- **Bannerul de sus**: textul (cu link opțional: o cale a site-ului sau `http(s)://…`), fundalul și culoarea textului, fontul
+  (al site-ului; DM Sans, Playfair, Rubik, IBM Plex din nucleu, locale; Arial, Georgia, Verdana, al sistemului), mărimea (11–32
+  px), lipit sus la derulare (`position: sticky`) sau nu; imediat după `<body>`, pe toate paginile publice (nu pe pagina
+  campaniei). Editorul are o **previzualizare** care se schimbă cât scrii (un chenar care se derulează, ca să se vadă și
+  „lipit”), plus a insignei. Un antet al site-ului lipit și el sus poate sta peste banner (`z-index` 1040): de verificat cu
+  tema site-ului.
+- **Cache-ul paginilor**: cheia primește `|campanie:<id>:<updated_at>` doar cât e o campanie activă (fără ea, cheia e exact
+  cea de dinainte); salvarea și ștergerea golesc cache-ul. Un CDN care ține pagini HTML întregi pentru vizitatori le-ar servi
+  fără PHP (atunci nici trimiterea, nici bannerul nu se schimbă până expiră copia).
+- **Fără campanie activă** (cazul de pe orice site azi): o singură interogare pe cerere (cu pluginul pe site), niciun octet
+  schimbat în pagini (comparația cu Bioscem, G-cmp, pe licența „toate”, care îl are pornit).
+- **Are nevoie de**: nimic (insigna, de catalog). **Se oprește**: ca pornit (nu începe nimic cu bani). **Oprit**: `/campanie/…`
+  404, adminul 403, meniul dispare, nicio trimitere, insignă sau banner; campaniile rămân în bază, la repornire revin.
+- **SEO**: vezi [SEO.md](SEO.md), §5b, „Pagina campaniei (interstițial)”.
+
 ### Neportate încă
 
 Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
@@ -1126,6 +1193,7 @@ tools/dev/php.sh tools/dev/test-pluginuri.php                # toate testele (po
 tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus fiecare plugin oprit pe rând, cu restul pornite (~20 min)
 tools/dev/php.sh tools/dev/test-pluginuri.php --fara-garda   # fără cererea fiecărei rute (mai repede)
 tools/dev/php.sh tools/dev/test-pluginuri.php --capturi=DIR  # capturile meniului adminului, pe pachete, în DIR
+tools/dev/php.sh tools/dev/test-campanii.php                 # pluginul campanii (regulile, adminul, site-ul, Chromium 1366/390 px)
 tools/dev/compara-cu-baza.sh                                 # „toate” = HTML identic cu codul Bioscem
 tools/dev/compara-cu-baza.sh --licenta=bioscem               # la fel, cu licența de dezvoltare a Bioscem (fără unealta internă)
 tools/dev/smoke.sh --toate-pachetele                         # testul de fum pe fiecare pachet

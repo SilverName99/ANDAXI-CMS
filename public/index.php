@@ -182,6 +182,11 @@ Plugins::incarca();
 if (Plugins::hartaSiteDeRefacut()) {
     (new \App\Http\Controllers\AdminController())->refaHartaSiteDupaPluginuri();
 }
+// Pluginul campanii: la prima intrare pe site, vizitatorul (un om, pe o pagină de conținut) vede o dată pagina campaniei
+// active; înaintea cache-ului de pagini, ca o pagină din cache să nu-l ocolească. Fără campanie activă nu face nimic.
+if (\App\Support\Campanii::intercepteaza($cacheDb)) {
+    return;
+}
 $pageCacheContext = ResponseCache::beginRequest(
     (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
     (string) ($_SERVER['REQUEST_URI'] ?? '/'),

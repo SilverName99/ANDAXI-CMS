@@ -13,7 +13,7 @@ declare(strict_types=1);
  *  4. fiecare intrare din meniu duce la o rută a aceluiași plugin;
  *  5. cronurile din catalog există și au garda; orice script cu gardă e în catalog;
  *  6. dependențele și pachetele folosesc chei cunoscute, fără cerc;
- *  7. cheile pluginurilor sunt exact cele 26 hotărâte + unealta internă;
+ *  7. cheile pluginurilor sunt exact cele 26 hotărâte + unealta internă + campaniile (5 nov 2026);
  *  8. codul întreabă doar de chei care există (Plugins::activ('…') etc.);
  *  9. în șabloane (views/), fiecare bloc `<?php if (…): ?>` … `<?php endif; ?>`
  *     scris pe coloana 0 (așa se ascunde bucata unui plugin) închide tot ce
@@ -65,7 +65,9 @@ $cheiValide = array_merge(['nucleu'], array_keys($pluginuri));
 $cheiHotarate = ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_euplatesc', 'plata_bt', 'link_plata', 'erp',
     'cupoane', 'fidelitate', 'recenzii', 'precomenzi', 'oferte_bbd', 'produse_promo', 'pachete_produse', 'conturi_clienti',
     'blog', 'newsletter', 'chat_live', 'donatii', 'membri', 'cereri_oferta', 'fisiere_cloud', 'concurenta', 'manechin',
-    'acorduri_gdpr', 'migrare_wordpress'];
+    'acorduri_gdpr', 'migrare_wordpress',
+    // Pluginul nou cerut de proprietar pe 5 nov 2026 (campaniile de pe site, pentru Biovitality; docs/PLUGINURI.md).
+    'campanii'];
 $lipsa = array_diff($cheiHotarate, array_keys($pluginuri));
 $inPlus = array_diff(array_keys($pluginuri), $cheiHotarate);
 if ($lipsa !== []) {

@@ -348,4 +348,11 @@ return [
             'motiv' => 'Conturi clienți → „Confirmare email la înregistrare”: formularul cu bifa „Cere confirmarea adresei de email” '
                 . '(customer_email_confirmation_required), ca în Utilizatori → Setări al Biovitality'],
     ],
+    // Pluginul campanii (5 nov 2026, pentru Biovitality): intrarea nouă „Campanii pe site” din Marketing, doar cu pluginul pornit
+    // (licența „toate”; nu e în nicio licență de dezvoltare a unui site) și doar pentru administratorul general. Paginile lui sunt
+    // noi, deci nu sunt în contractul etichetei: le plimbă G-tastatura, iar ce trimit le verifică tools/dev/test-campanii.php (B).
+    'campanii' => [
+        'meniu-campanii' => ['ce' => 'adaugat', 'rand' => '^link /admin/campanii$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „Campanii pe site” din Marketing (pagina campaniei la intrare, insigna produselor, bannerul de sus)'],
+    ],
 ];

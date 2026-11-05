@@ -242,7 +242,9 @@ try {
             // WP-36: pagina rezultatelor căutării în tot adminul.
             '/admin/cauta?q=demo',
             // WP-38: Redirecționări și 404 (lista, cu formularul precompletat din jurnal) și jurnalul 404, pagini noi.
-            '/admin/seo/redirectionari', '/admin/seo/redirectionari?din=/nu-exista&sursa_noua=404', '/admin/seo/404']),
+            '/admin/seo/redirectionari', '/admin/seo/redirectionari?din=/nu-exista&sursa_noua=404', '/admin/seo/404',
+            // Pluginul campanii (5 nov 2026): lista campaniilor și editorul unei campanii noi (doar cu pluginul pornit).
+            '/admin/campanii', '/admin/campanii/noua']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;

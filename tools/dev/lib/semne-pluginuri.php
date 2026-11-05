@@ -52,4 +52,6 @@ return [
     'membri' => ['/Conținut pentru membri/u', '/Doar cont activ/u'],
     // WP-26 (GR-15): lista din admin, butonul (textul implicit și cel înghețat al grafoanaytis) și linkul cardurilor simple.
     'cereri_oferta' => ['/Cereri de ofertă/u', '/ofertă de preț/u', '/Cere ofertă/u'],
+    // Campaniile (5 nov 2026): intrarea din Marketing și butonul paginii campaniei.
+    'campanii' => ['/Campanii pe site/u', '/Înapoi în site-ul principal/u'],
 ];

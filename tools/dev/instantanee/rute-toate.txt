@@ -1,8 +1,8 @@
 # Instantaneul rutelor pentru licența „toate”. Nu se scrie de mână: tools/dev/php.sh tools/dev/instantaneu-rute.php --actualizeaza
-# Pe site: catalog, magazin, livrare_fan, plata_stripe, plata_euplatesc, plata_bt, link_plata, erp, cupoane, fidelitate, recenzii, precomenzi, oferte_bbd, produse_promo, pachete_produse, conturi_clienti, blog, newsletter, chat_live, donatii, membri, cereri_oferta, fisiere_cloud, concurenta, manechin, acorduri_gdpr, migrare_wordpress
+# Pe site: catalog, magazin, livrare_fan, plata_stripe, plata_euplatesc, plata_bt, link_plata, erp, cupoane, fidelitate, recenzii, precomenzi, oferte_bbd, produse_promo, pachete_produse, conturi_clienti, blog, newsletter, chat_live, donatii, membri, cereri_oferta, fisiere_cloud, concurenta, manechin, acorduri_gdpr, campanii, migrare_wordpress
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (299)
+RUTE (305)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -20,6 +20,9 @@ GET  /admin/blog/posts/trash -> CONTROLLER [blog]
 GET  /admin/blog/templates -> CONTROLLER [blog]
 GET  /admin/blog/templates/builder -> CONTROLLER [blog]
 GET  /admin/blog/templates/{id}/builder -> CONTROLLER [blog]
+GET  /admin/campanii -> CONTROLLER [campanii]
+GET  /admin/campanii/noua -> CONTROLLER [campanii]
+GET  /admin/campanii/{id} -> CONTROLLER [campanii]
 GET  /admin/categories -> CONTROLLER [catalog]
 GET  /admin/cauta -> CONTROLLER [nucleu]
 GET  /admin/cereri-oferta -> CONTROLLER [cereri_oferta]
@@ -106,6 +109,7 @@ GET  /blog -> CONTROLLER [blog]
 GET  /blog/categorie/{slug} -> CONTROLLER [blog]
 GET  /blog/eticheta/{slug} -> CONTROLLER [blog]
 GET  /blog/{slug} -> CONTROLLER [blog]
+GET  /campanie/{slug} -> CONTROLLER [campanii]
 GET  /categorie/{slug} -> CONTROLLER [catalog]
 GET  /checkout -> CONTROLLER [magazin]
 GET  /checkout/bt/retur -> MEREU [plata_bt]
@@ -147,6 +151,8 @@ POST /admin/blog/posts/image-upload -> CONTROLLER [blog]
 POST /admin/blog/posts/import -> CONTROLLER [blog]
 POST /admin/blog/posts/preview -> CONTROLLER [blog]
 POST /admin/blog/templates -> CONTROLLER [blog]
+POST /admin/campanii/salveaza -> CONTROLLER [campanii]
+POST /admin/campanii/{id}/sterge -> CONTROLLER [campanii]
 POST /admin/categories -> CONTROLLER [catalog]
 POST /admin/categories/brand-seo -> CONTROLLER [catalog]
 POST /admin/categories/{id}/delete -> CONTROLLER [catalog]
@@ -303,7 +309,7 @@ POST /webhook/bt-ipay -> MEREU [plata_bt]
 POST /webhook/euplatesc -> MEREU [plata_euplatesc]
 POST /webhook/stripe -> MEREU [plata_stripe]
 
-MENIU (44)
+MENIU (45)
 Acasă -> /admin [nucleu]
 Comenzi > Comenzi -> /admin/orders [magazin]
 Comenzi > Cereri de ofertă -> /admin/cereri-oferta [cereri_oferta]
@@ -324,6 +330,7 @@ Marketing > Șabloane newsletter -> /admin/emails/newsletters?tab=templates [new
 Marketing > Liste abonați -> /admin/emails/newsletters?tab=subscribers [newsletter]
 Marketing > Formulare opt-in -> /admin/emails/newsletters?tab=optin [newsletter]
 Marketing > Automatizări -> /admin/emails/automation [magazin]
+Marketing > Campanii pe site -> /admin/campanii [campanii]
 Conținut > Pagini -> /admin/pages [nucleu]
 Conținut > Postări blog -> /admin/blog/posts [blog]
 Conținut > Categorii -> /admin/blog/categories [blog]

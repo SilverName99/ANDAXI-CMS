@@ -15,6 +15,7 @@ use App\Http\Controllers\AbonamentController;
 use App\Http\Controllers\OferteBbdController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CampaniiController;
 use App\Http\Controllers\CereriOfertaController;
 use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
@@ -384,5 +385,13 @@ return static function (Router $router): void {
     $router->get('/admin/seo/404', [RedirectionariController::class, 'jurnal']);
     $router->post('/admin/seo/404/goleste', [RedirectionariController::class, 'goleste404']);
     $router->post('/admin/seo/404/{id}/sterge', [RedirectionariController::class, 'sterge404']);
+    // Pluginul campanii (5 nov 2026, pentru Biovitality; App\Support\Campanii): pagina de deschidere a campaniei active și
+    // Marketing → Campanii pe site (administratorul general).
+    $router->get('/campanie/{slug}', [CampaniiController::class, 'pagina']);
+    $router->get('/admin/campanii', [CampaniiController::class, 'lista']);
+    $router->get('/admin/campanii/noua', [CampaniiController::class, 'noua']);
+    $router->post('/admin/campanii/salveaza', [CampaniiController::class, 'salveaza']);
+    $router->get('/admin/campanii/{id}', [CampaniiController::class, 'editeaza']);
+    $router->post('/admin/campanii/{id}/sterge', [CampaniiController::class, 'sterge']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

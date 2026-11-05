@@ -56,6 +56,11 @@
               <?php if ($hasBbdOffers): ?>
                 <span class="bv-popular-card__bubble bv-popular-card__bubble--offer">OFERTE PREȚ</span>
               <?php endif; ?>
+<?php /* Pluginul campanii: insigna produsului din campania activă (App\Support\Campanii); fără campanie, nimic. */ ?>
+<?php if (($insignaCampanie = \App\Support\Campanii::insignaCard($product)) !== ''): ?>
+              <?= $insignaCampanie ?>
+
+<?php endif; ?>
             </a>
           </div>
 
