@@ -77,8 +77,8 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
     "tools/dev/php.sh tools/dev/contract-admin.php" WP-29
 poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecare element, „?” și Esc, panoul lateral, filtrele la Înapoi) pe licențele toate, bioscem, grafoanaytis" \
     "tools/dev/php.sh tools/dev/contract-admin.php --plimbare" WP-31
-poarta G-deploy "deploy-ul din Etapa 2 (docs/DEPLOY.md) pe o găzduire simulată cu două site-uri: release.sh, bin/platforma, adopta.sh (o migrare care pică, un test de fum care pică, reluarea), actualizeaza.sh (întoarcerea singură), revino.sh (codul și baza exact cele de dinainte); și cu php$MINIM" \
-    "tools/dev/php.sh tools/dev/test-deploy.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-deploy.php" E2-deploy
+poarta G-deploy "deploy-ul din Etapa 2 (docs/DEPLOY.md) pe o găzduire simulată cu două site-uri, pe al doilea MariaDB (privat, modul Hostinger): release.sh, bin/platforma, adopta.sh (o migrare care pică, un test de fum care pică, reluarea), actualizeaza.sh (întoarcerea singură), revino.sh (codul și baza exact cele de dinainte); și cu php$MINIM" \
+    "tools/dev/mariadb-nestrict.sh porneste ;; tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php ;; CMS_DEV_PHP=php$MINIM tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php" E2-deploy
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).

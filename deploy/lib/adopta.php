@@ -12,9 +12,11 @@ declare(strict_types=1);
  *   pregatire   site/ (.env, RELEASE, pachetul, storage/) și public_html.nou/ (stub-ul, assets/, tema/); diagnostic
  *               --pachet și --licenta, migreaza --plan; vizitatorii nu văd nimic
  *   copie       copia codului vechi (tar.gz) și o copie a bazei, cu site-ul încă pornit
- *   mentenanta  MENTENANTA, comutarea (public_html → public_html.vechi, public_html.nou → public_html), uploads/ și
- *               fișierele site-ului aduse în docroot, copia bazei de revenire (cu scrierile oprite)
- *   migrari     migreaza --plan (arătat), apoi --aplica, reluat cât spune bugetul de timp (codul 13)
+ *   mentenanta  MENTENANTA strictă (nici plățile, ERP-ul sau cronurile nu scriu), comutarea (public_html →
+ *               public_html.vechi, public_html.nou → public_html), uploads/ și fișierele site-ului aduse în docroot,
+ *               liniștea pe bază, copia bazei de revenire (amprenta înainte și după ea)
+ *   migrari     migreaza --plan (arătat), apoi --aplica, reluat cât spune bugetul de timp (codul 13); amprenta bazei
+ *               după migrări (pentru revino.sh), apoi mentenanța ușoară (plățile și ERP-ul trec din nou)
  *   diagnostic  diagnostic.php --pachet și --licenta
  *   verificare  testul de fum: pingul, /health, prima pagină, un produs, logarea din admin, coșul, assets/, o poză
  *   deschidere  MENTENANTA ștearsă, site-ul deschis
@@ -26,6 +28,10 @@ declare(strict_types=1);
  *
  *   deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=2026.11.05-e4f5a6b --commit-vechi=d95598e
  *   deploy/adopta.sh … --aplica
+ *
+ * O reluare cu alte opțiuni (versiune, pachet, cheia licenței, commit-ul vechi) e refuzată: înainte de comutare se ia de
+ * la capăt cu --reia=verificari, după comutare doar cu aceleași opțiuni (sau revino.sh). --cron-de-mana: rândurile de cron
+ * „DE VERIFICAT” le rescrii tu (altfel verificările se opresc).
  *
  * Obligatorii: --site=<slug> (pachetul din site-uri/<slug>/), --domeniu=<d> (~/domains/<d>/public_html),
  * --versiune=<v> (făcută cu release.sh), --commit-vechi=<commit> (commit-ul revizuit al codului vechi, docs/de-portat.md).
@@ -77,6 +83,13 @@ final class Adoptare
         $this->cod = $this->s->releases . '/' . $this->versiune;
     }
 
+    /** Opțiunile de care depinde ce se pregătește (cheia licenței doar ca sha256). @return array<string, string> */
+    public function optiuni(): array
+    {
+        return ['versiune' => $this->versiune, 'commit-vechi' => $this->commitVechi, 'pachet' => (string) $this->o->text('pachet'),
+            'repo' => $this->repo(), 'cheie-licenta' => hash('sha256', (string) $this->o->text('cheie-licenta'))];
+    }
+
     public function codSite(): string
     {
         return $this->s->cod($this->versiune);
@@ -105,18 +118,21 @@ final class Adoptare
         return citestePachet($this->slug, $this->o->text('pachet'), $this->repo(), $this->commitVersiune());
     }
 
-    /** Textul noului .env: cel vechi, cu cheile Etapei 2 puse. */
-    public function envNou(string $dosarPachet): string
+    /** Cheile Etapei 2 din .env. @return array<string, string> */
+    public function cheiEnv(string $dosarPachet): array
     {
-        $chei = ['SITE_SLUG' => $this->slug, 'SITE_DATE_DOSAR' => $dosarPachet];
-        if (($this->envVechi['LICENTA_SITE'] ?? '') !== $this->slug) {
-            $chei['LICENTA_SITE'] = $this->slug;
-        }
+        $chei = ['SITE_SLUG' => $this->slug, 'SITE_DATE_DOSAR' => $dosarPachet, 'LICENTA_SITE' => $this->slug];
         $cheie = $this->o->text('cheie-licenta');
         if ($cheie !== null) {
             $chei['LICENTA_CHEIE_PUBLICA'] = $cheie;
         }
-        return Env::cuChei((string) file_get_contents($this->s->docroot . '/.env'), $chei,
+        return $chei;
+    }
+
+    /** Textul noului .env: cel vechi, cu cheile Etapei 2 puse. */
+    public function envNou(string $dosarPachet): string
+    {
+        return Env::cuChei((string) file_get_contents($this->s->docroot . '/.env'), $this->cheiEnv($dosarPachet),
             'Etapa 2 (deploy/adopta.sh, ' . date('Y-m-d H:i') . '): pachetul site-ului și licența');
     }
 
@@ -130,9 +146,10 @@ final class Adoptare
 
 exit(porneste(static function () use ($argv): int {
     $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'commit-vechi=', 'url=', 'repo=', 'pachet=', 'cheie-licenta=', 'cron-vechi=',
-        'php-cron=', 'produs=', 'permite-blocante', 'accepta-fisiere-noi', 'fara-sonda-web', 'reia=', 'acasa=', 'plan', 'aplica']);
+        'php-cron=', 'produs=', 'permite-blocante', 'accepta-fisiere-noi', 'fara-sonda-web', 'cron-de-mana', 'reia=', 'acasa=', 'plan', 'aplica']);
     $a = new Adoptare($o);
     $lacat = $a->s->lacat();
+    stergeSonde($a);
     Iesire::titlu('Adoptarea site-ului ' . $a->slug . ' (' . $a->s->domeniu . ') pe versiunea ' . $a->versiune . ($a->aplica ? '' : ' — PLAN'));
     Iesire::info('dosarul : ' . $a->s->dosar);
     Iesire::info('adresa  : ' . $a->url);
@@ -146,9 +163,22 @@ exit(porneste(static function () use ($argv): int {
         return 0;
     }
     Iesire::jurnal($a->s->lucru . '/jurnale/adopta-' . date('Ymd-His') . '.log');
-    if ($a->stare->ia('versiune') !== null && $a->stare->ia('versiune') !== $a->versiune && $a->stare->facuta('mentenanta')) {
-        throw new Oprire('adoptarea începută pe versiunea ' . $a->stare->ia('versiune') . ' n-a terminat; continu-o cu aceeași versiune sau revino (deploy/revino.sh)', 2);
+    Redenumiri::termina($a->stare);
+    // O adoptare începută continuă doar cu aceleași opțiuni: altă versiune, alt pachet sau altă cheie ar amesteca ce s-a
+    // pregătit cu ce urmează. Înainte de comutare se poate începe din nou (--reia=verificari); după, nu.
+    $optiuni = $a->optiuni();
+    $vechi = $a->stare->ia('optiuni');
+    if (is_array($vechi) && $a->stare->date['faze'] !== [] && $vechi !== $optiuni) {
+        $diferite = implode(', ', array_keys(array_diff_assoc(array_map('strval', $optiuni), array_map('strval', $vechi))
+            + array_diff_assoc(array_map('strval', $vechi), array_map('strval', $optiuni))));
+        if ($a->stare->ia('comutat', false)) {
+            throw new Oprire('adoptarea începută (comutată deja) a avut alte opțiuni (' . $diferite . '): continu-o cu aceleași, sau revino (deploy/revino.sh)', 2);
+        }
+        if ($o->text('reia') !== 'verificari') {
+            throw new Oprire('adoptarea începută a avut alte opțiuni (' . $diferite . '); pentru a o lua de la capăt cu cele noi: aceeași comandă cu --reia=verificari', 2);
+        }
     }
+    $a->stare->pune('optiuni', $optiuni);
     if (($reia = $o->text('reia')) !== null) {
         $i = array_search($reia, FAZE, true);
         if ($i === false || ($i <= 3 && $a->stare->facuta('mentenanta'))) {
@@ -186,7 +216,7 @@ exit(porneste(static function () use ($argv): int {
 /** @return list<string> ce poate face omul după o oprire în faza dată */
 function dupaEsec(Adoptare $a, string $faza): array
 {
-    if (!$a->stare->ia('comutat', false)) {
+    if (!$a->stare->ia('comutat', false) && !isset($a->stare->date['redenumiri']['comutare'])) {
         return ['site-ul a rămas pe codul vechi, neatins; vizitatorii n-au văzut nimic',
             'după reparare rulezi din nou aceeași comandă (cu --aplica): continuă de la faza „' . $faza . '”'];
     }
@@ -307,6 +337,10 @@ function verificari(Adoptare $a): void
                 . ($obiecte['declansatoare'] + $obiecte['rutine'] + $obiecte['vederi'] > 0 ? ' (declanșatoare ' . $obiecte['declansatoare'] . ', rutine '
                     . $obiecte['rutine'] . ', vederi ' . $obiecte['vederi'] . ': intră în copie)' : ''));
         }
+        $straini = $baza->definitoriStraini();
+        if ($straini !== []) {
+            $nu('obiecte ale bazei cu alt DEFINER decât utilizatorul din .env (copia nu s-ar putea pune la loc): ' . implode(', ', array_slice($straini, 0, 5)));
+        }
         $drepturi = $baza->drepturi();
         if (!in_array('ALL PRIVILEGES', $drepturi, true)) {
             $lipsa = array_values(array_diff(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'INDEX'], $drepturi));
@@ -379,12 +413,28 @@ function verificari(Adoptare $a): void
                 . (($sonda['pdo_mysql'] ?? false) ? '' : ', PDO MySQL NU'));
             Iesire::info($citibil ? 'site-ul poate citi versiunea comună (' . $s->releases . ')'
                 : 'site-ul NU poate citi în afara dosarului lui (open_basedir): versiunea se pune și în ' . $s->site . '/releases/ (legături, fără spațiu în plus)');
+            if (($sonda['site_citibil'] ?? null) === false) {
+                $nu('PHP-ul site-ului nu poate citi ' . $s->site . ' (open_basedir sau drepturi): acolo stau .env-ul, RELEASE și storage/ ale codului nou');
+            } elseif (($sonda['site_citibil'] ?? null) === true) {
+                Iesire::ok('PHP-ul site-ului poate citi ' . $s->site . ' (.env, RELEASE, storage/)');
+            }
         }
     }
 
-    // Cronurile vechi (doar informativ aici).
+    // Cronurile vechi: fiecare rând care rulează codul vechi trebuie să aibă un rând nou; ce nu se poate rescrie singur se
+    // verifică de mână (--cron-de-mana, după ce l-ai rescris tu în hPanel).
     $linii = cronuriVechi($a);
-    Iesire::info('cronuri vechi ale site-ului: ' . ($linii === null ? 'nu le văd (crontab -l nu merge; dă --cron-vechi=<fișier> cu rândurile din hPanel)' : count($linii)));
+    if ($linii === null) {
+        Iesire::atentie('cronurile vechi nu le văd (crontab -l nu merge): dă --cron-vechi=<fișier> cu rândurile din hPanel');
+    } else {
+        $deVerificat = array_values(array_filter(array_map(static fn (string $l): array => clasificaCron($a, $l), $linii),
+            static fn (array $c): bool => $c['fel'] === 'verifica'));
+        Iesire::info('cronuri vechi ale site-ului: ' . count($linii) . ($deVerificat === [] ? '' : ', din care ' . count($deVerificat) . ' DE VERIFICAT'));
+        foreach ($deVerificat as $c) {
+            ($a->o->are('cron-de-mana') ? [Iesire::class, 'atentie'] : $nu)('cron DE VERIFICAT (nu-l pot rescrie singur: ' . $c['motiv'] . '): ' . $c['linie']
+                . ($a->o->are('cron-de-mana') ? ' (--cron-de-mana: îl rescrii tu în hPanel)' : '; îl rescrii tu în hPanel și rulezi cu --cron-de-mana'));
+        }
+    }
 
     if ($probleme !== []) {
         throw new Oprire(count($probleme) . ' verificări au ieșit NU (mai sus); nu schimb nimic', 1);
@@ -401,10 +451,26 @@ function sondaWeb(Adoptare $a): ?array
     $nume = '_andaxi_sonda_' . bin2hex(random_bytes(8)) . '.php';
     $fisier = $a->dosarSonda() . '/' . $nume;
     $tinta = $a->cod . '/public/index.php';
+    $site = $a->s->site;
     $cod = '<?php header("Cache-Control: no-store"); header("Content-Type: application/json");' . "\n"
         . 'echo json_encode(["php" => PHP_VERSION, "sodium" => extension_loaded("sodium") && function_exists("sodium_crypto_sign_verify_detached"), '
         . '"pdo_mysql" => extension_loaded("pdo_mysql"), "mbstring" => extension_loaded("mbstring"), "curl" => extension_loaded("curl"), '
-        . '"open_basedir" => (string) ini_get("open_basedir"), "cod_citibil" => @is_file(' . var_export($tinta, true) . ')]);' . "\n";
+        . '"open_basedir" => (string) ini_get("open_basedir"), "cod_citibil" => @is_file(' . var_export($tinta, true) . '), '
+        . '"site_citibil" => ' . (is_dir($site) ? '@is_dir(' . var_export($site, true) . ') && @is_readable(' . var_export($site, true) . ')' : 'null') . ']);' . "\n";
+    // Sonda nu are voie să rămână în docroot: o șterg la ieșire (și la Ctrl+C sau un SSH căzut), iar la pornire scriptul
+    // șterge orice sondă rămasă de la o rulare omorâtă (stergeSonde).
+    register_shutdown_function(static function () use ($fisier): void {
+        @unlink($fisier);
+    });
+    if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+        pcntl_async_signals(true);
+        foreach ([SIGINT, SIGTERM, SIGHUP] as $semnal) {
+            pcntl_signal($semnal, static function () use ($fisier): void {
+                @unlink($fisier);
+                exit(130);
+            });
+        }
+    }
     if (@file_put_contents($fisier, $cod) === false) {
         return null;
     }
@@ -413,12 +479,55 @@ function sondaWeb(Adoptare $a): ?array
         $r = Http::cere($a->url . '/' . $nume);
     } finally {
         @unlink($fisier);
+        if (function_exists('pcntl_signal')) {
+            foreach ([SIGINT, SIGTERM, SIGHUP] as $semnal) {
+                pcntl_signal($semnal, SIG_DFL);
+            }
+        }
     }
     $d = $r['cod'] === 200 ? json_decode($r['corp'], true) : null;
     return is_array($d) && isset($d['php']) ? $d : null;
 }
 
-/** @return list<string>|null rândurile de cron care pomenesc dosarul site-ului, sau null dacă nu se pot citi */
+/** Șterge sondele web rămase în docroot de la o rulare omorâtă (_andaxi_sonda_<16 hex>.php). */
+function stergeSonde(Adoptare $a): void
+{
+    foreach ([$a->s->docroot, $a->s->docroot . '/public', $a->s->vechi, $a->s->vechi . '/public'] as $d) {
+        foreach (glob($d . '/_andaxi_sonda_*.php') ?: [] as $f) {
+            if (preg_match('/^_andaxi_sonda_[0-9a-f]{16}\.php$/', basename($f)) === 1 && @unlink($f)) {
+                Iesire::atentie('am șters o sondă rămasă de la o rulare oprită: ' . $f);
+            }
+        }
+    }
+}
+
+/**
+ * Căile sub care cronurile pot pomeni docroot-ul site-ului: ~/domains/<d>/public_html și ~/public_html, când e o
+ * legătură spre el (pe Hostinger, la domeniul principal al contului). @return list<string>
+ */
+function aliasuri(Adoptare $a): array
+{
+    $rez = [$a->s->docroot];
+    $legatura = $a->s->acasa . '/public_html';
+    if (is_link($legatura) && preg_match('#(^|/)domains/' . preg_quote($a->s->domeniu, '#') . '/public_html/?$#', (string) readlink($legatura)) === 1) {
+        $rez[] = $legatura;
+    }
+    return $rez;
+}
+
+/** Numele scripturilor din codul vechi și din versiune (scripts/*.php), după care se recunoaște un cron al site-ului. @return list<string> */
+function scripturiCunoscute(Adoptare $a): array
+{
+    $rez = [];
+    foreach ([$a->s->docroot, $a->s->vechi, $a->cod] as $d) {
+        foreach (glob($d . '/scripts/*.php') ?: [] as $f) {
+            $rez[] = basename($f);
+        }
+    }
+    return array_values(array_unique($rez));
+}
+
+/** @return list<string>|null rândurile de cron ale site-ului, sau null dacă nu se pot citi */
 function cronuriVechi(Adoptare $a): ?array
 {
     $fisier = $a->o->text('cron-vechi');
@@ -434,13 +543,114 @@ function cronuriVechi(Adoptare $a): ?array
         }
         $text = $r['iesire'];
     }
+    $aliasuri = aliasuri($a);
+    $scripturi = scripturiCunoscute($a);
     $rez = [];
     foreach (explode("\n", $text) as $l) {
         $l = trim($l);
-        if ($l !== '' && !str_starts_with($l, '#') && (str_contains($l, 'domains/' . $a->s->domeniu . '/') || str_contains($l, $a->s->domeniu))) {
+        if ($l === '' || str_starts_with($l, '#') || preg_match('/^[A-Z_]+=/', $l) === 1) {
+            continue;
+        }
+        $alSau = str_contains($l, 'domains/' . $a->s->domeniu . '/') || str_contains($l, $a->s->domeniu);
+        foreach ($aliasuri as $al) {
+            $alSau = $alSau || preg_match('#' . preg_quote($al, '#') . '(/|\s|$)#', $l) === 1;
+        }
+        // Un script cunoscut, fără dosarul vreunui alt site: poate fi al acestuia (rulat cu „cd” sau o cale relativă).
+        if (!$alSau && !str_contains($l, 'domains/')) {
+            foreach ($scripturi as $sc) {
+                $alSau = $alSau || str_contains($l, $sc);
+            }
+        }
+        if ($alSau) {
             $rez[] = $l;
         }
     }
+    return $rez;
+}
+
+/**
+ * Un rând de cron vechi: „nou” (rulează un script din scripts/ al codului vechi, care există în codul comun: rândul nou
+ * are același program, aceleași opțiuni PHP și aceleași argumente), „sterge” (scriptul nu mai există în codul comun),
+ * „ramane” (nu rulează codul vechi: un curl spre /health) sau „verifica” (pomenește public_html, dosarul de acasă sau un
+ * script cunoscut, dar nu-l pot rescrie sigur).
+ *
+ * @return array{fel: string, linie: string, program: string, nou: string, motiv: string}
+ */
+function clasificaCron(Adoptare $a, string $linie): array
+{
+    $rez = ['fel' => 'verifica', 'linie' => $linie, 'program' => '', 'nou' => '', 'motiv' => ''];
+    $comanda = $linie;
+    $camp = '(\*|[0-9A-Za-z*\/,\-]+)';
+    if (preg_match('/^(@\w+)\s+(.*)$/', $linie, $m) === 1 || preg_match('/^((?:' . $camp . '\s+){4}' . $camp . ')\s+(.*)$/', $linie, $m) === 1) {
+        $rez['program'] = $m[1];
+        $comanda = (string) end($m);
+    }
+    $pomeneste = str_contains($comanda, 'public_html') || str_contains($comanda, $a->s->acasa);
+    foreach (scripturiCunoscute($a) as $sc) {
+        $pomeneste = $pomeneste || str_contains($comanda, $sc);
+    }
+    if (preg_match('/["\'`$()|]/', (string) preg_replace('/\s[12]?>\S+|\s[12]?>&[12]|\s[12]?>>\s*\S+|\s[12]?>\s*\S+/', '', $comanda)) === 1) {
+        $rez['motiv'] = 'ghilimele, variabile sau o conductă';
+        return $pomeneste ? $rez : ['fel' => 'ramane'] + $rez;
+    }
+    $t = preg_split('/\s+/', trim($comanda)) ?: [];
+    $dosar = null;
+    if (($t[0] ?? '') === 'cd' && isset($t[1])) {
+        $dosar = rtrim($t[1], ';');
+        $t = array_slice($t, str_ends_with($t[1], ';') ? 2 : (($t[2] ?? '') === '&&' || ($t[2] ?? '') === ';' ? 3 : 2));
+    }
+    $php = $t[0] ?? '';
+    if (preg_match('#(^|/)(php[0-9.]*|lsphp[0-9]*|php-cli)$#', $php) !== 1) {
+        $rez['motiv'] = 'nu pornește PHP';
+        return $pomeneste ? $rez : ['fel' => 'ramane'] + $rez;
+    }
+    $optiuni = [];
+    $script = null;
+    $argumente = [];
+    for ($i = 1; $i < count($t); $i++) {
+        if ($script !== null) {
+            $argumente[] = $t[$i];
+        } elseif ($t[$i] === '-d' && isset($t[$i + 1])) {
+            $optiuni[] = '-d ' . $t[++$i];
+        } elseif ($t[$i] === '-f') {
+            continue;
+        } elseif (str_starts_with($t[$i], '-')) {
+            $optiuni[] = $t[$i];
+        } else {
+            $script = $t[$i];
+        }
+    }
+    if ($script === null || !str_ends_with($script, '.php')) {
+        $rez['motiv'] = 'nu găsesc scriptul PHP';
+        return $rez;
+    }
+    $relativ = null;
+    if (str_starts_with($script, '/')) {
+        foreach (aliasuri($a) as $al) {
+            if (str_starts_with($script, $al . '/')) {
+                $relativ = substr($script, strlen($al) + 1);
+            }
+        }
+    } elseif ($dosar !== null && in_array(rtrim($dosar, '/'), aliasuri($a), true)) {
+        $relativ = (string) preg_replace('#^\./#', '', $script);
+    }
+    if ($relativ === null) {
+        $rez['motiv'] = 'scriptul nu e sub ' . $a->s->docroot . ' (sau e relativ, fără „cd” în el)';
+        return $pomeneste ? $rez : ['fel' => 'ramane'] + $rez;
+    }
+    if (!str_starts_with($relativ, 'scripts/') || str_contains($relativ, '..')) {
+        $rez['motiv'] = $relativ . ' nu e în scripts/';
+        return $rez;
+    }
+    if (!is_file($a->cod . '/' . $relativ)) {
+        return ['fel' => 'sterge', 'motiv' => $relativ . ' nu mai există în codul comun'] + $rez;
+    }
+    $optiuni = array_values(array_filter($optiuni, static fn (string $x): bool => !str_contains($x, 'extension=sodium')));
+    $phpCron = $a->o->text('php-cron') ?? '/opt/alt/php83/usr/bin/php -d extension=sodium.so';
+    $rez['fel'] = 'nou';
+    $rez['nou'] = trim($phpCron . ' ' . implode(' ', $optiuni) . ' ' . $a->s->acasa . '/platforma/bin/platforma --site=' . $a->s->site
+        . ' ' . $relativ . ($argumente !== [] ? ' ' . implode(' ', $argumente) : ''));
+    $rez['nou'] = (string) preg_replace('/\s+/', ' ', $rez['nou']);
     return $rez;
 }
 
@@ -512,11 +722,10 @@ function pregatire(Adoptare $a): void
         Fisiere::scrie($s->site . '/.env', $a->envNou($s->site . '/pachet'), 0600);
         Iesire::ok('.env: cel vechi, plus SITE_SLUG=' . $a->slug . ', SITE_DATE_DOSAR, LICENTA_SITE' . ($a->o->text('cheie-licenta') !== null ? ', LICENTA_CHEIE_PUBLICA' : ''));
     } else {
-        $env = Env::citeste($s->site . '/.env');
-        if (($env['SITE_SLUG'] ?? '') !== $a->slug || ($env['SITE_DATE_DOSAR'] ?? '') !== $s->site . '/pachet') {
-            throw new Oprire($s->site . '/.env există, dar SITE_SLUG sau SITE_DATE_DOSAR nu sunt ' . $a->slug . ' și ' . $s->site . '/pachet');
-        }
-        Iesire::ok('.env există deja (de la o rulare de dinainte), cu SITE_SLUG și SITE_DATE_DOSAR bune; îl las');
+        // Un .env de la o rulare de dinainte (sau scris de proprietar): cheile deploy-ului puse la zi, restul lăsat.
+        Fisiere::scrie($s->site . '/.env', Env::cuChei((string) file_get_contents($s->site . '/.env'), $a->cheiEnv($s->site . '/pachet'),
+            'Etapa 2 (deploy/adopta.sh, ' . date('Y-m-d H:i') . '): pachetul site-ului și licența'), 0600);
+        Iesire::ok('.env există deja (de la o rulare de dinainte): SITE_SLUG, SITE_DATE_DOSAR și licența puse la zi, restul lăsat');
     }
     Fisiere::scrie($s->site . '/RELEASE', $a->versiune . "\n", 0644);
     golesteCacheCod($s);
@@ -596,7 +805,7 @@ function copie(Adoptare $a): void
     Iesire::ok('codul vechi: ' . $dosar . '/cod-vechi.tar.gz (' . Fisiere::om((int) filesize($dosar . '/cod-vechi.tar.gz')) . ', '
         . round(microtime(true) - $inceput, 1) . ' s; fără public/uploads, care rămân pe loc)');
     $baza = new Baza(Env::citeste($s->docroot . '/.env'));
-    $secunde = $baza->copie($dosar . '/baza-inainte.sql.gz');
+    $secunde = $baza->copie($dosar . '/baza-inainte.sql.gz', false);
     Iesire::ok('baza (cu site-ul încă pornit): ' . $dosar . '/baza-inainte.sql.gz (' . Fisiere::om((int) filesize($dosar . '/baza-inainte.sql.gz'))
         . ', ' . round($secunde, 1) . ' s; copia de revenire se face din nou în mentenanță)');
     $a->stare->pune('copii', $dosar);
@@ -605,44 +814,42 @@ function copie(Adoptare $a): void
 function mentenanta(Adoptare $a): void
 {
     $s = $a->s;
-    $git = Comanda::ruleaza(['git', '-C', $s->docroot, 'rev-parse', 'HEAD']);
     $comutat = (bool) $a->stare->ia('comutat', false);
-    if (!$comutat && trim($git['iesire']) !== (string) $a->stare->ia('commit_vechi_complet', '')) {
-        throw new Oprire('codul vechi s-a schimbat de la verificări (alt commit); rulează din nou de la început (--reia=verificari)');
+    if (!$comutat && !in_array('comutare', (array) $a->stare->ia('redenumiri_facute', []), true)) {
+        $git = Comanda::ruleaza(['git', '-C', $s->docroot, 'rev-parse', 'HEAD']);
+        if (trim($git['iesire']) !== (string) $a->stare->ia('commit_vechi_complet', '')) {
+            throw new Oprire('codul vechi s-a schimbat de la verificări (alt commit); rulează din nou de la început (--reia=verificari)');
+        }
     }
     $jeton = (string) $a->stare->ia('jeton', '') ?: bin2hex(random_bytes(16));
     $a->stare->pune('jeton', $jeton);
-    Fisiere::scrie($s->site . '/MENTENANTA', $jeton . "\n", 0640);
+    // Strictă: din clipa comutării nici plățile, nici ERP-ul, nici cronurile nu scriu în bază până după migrări.
+    Mentenanta::pune($s, $jeton, true);
+    // Intenția se scrie înainte de prima redenumire (Redenumiri): o rulare oprită între ele e terminată la pornire.
+    Redenumiri::fa($a->stare, 'comutare', [[$s->docroot, $s->vechi], [$s->nou, $s->docroot]]);
+    $a->stare->pune('comutat', true);
+    @unlink($s->docroot . '/.andaxi-nou');
     if (!$comutat) {
-        Fisiere::muta($s->docroot, $s->vechi);
-        try {
-            Fisiere::muta($s->nou, $s->docroot);
-        } catch (Oprire $e) {
-            @rename($s->vechi, $s->docroot);
-            throw $e;
-        }
-        $a->stare->pune('comutat', true);
-        @unlink($s->docroot . '/.andaxi-nou');
         Iesire::ok('comutat: codul vechi în ' . $s->vechi . ', stub-ul în ' . $s->docroot . ' (vizitatorii văd acum „Revenim în câteva minute”)');
-        Fisiere::scrie($a->stare->ia('copii') . '/cod-vechi.amprenta', Fisiere::amprenta($s->vechi, ['public/uploads', 'uploads']), 0600);
-        Iesire::ok('amprenta codului vechi, exact cum era la comutare: ' . $a->stare->ia('copii') . '/cod-vechi.amprenta');
+    }
+    $amprenta = $a->stare->ia('copii') . '/cod-vechi.amprenta';
+    if (!is_file($amprenta)) {
+        Fisiere::scrie($amprenta, Fisiere::amprenta($s->vechi, ['public/uploads', 'uploads']), 0600);
+        Iesire::ok('amprenta codului vechi, cum era la comutare: ' . $amprenta);
     }
 
-    // Pozele: mutate (nu copiate: pot fi mulți GB), înapoi la revenire.
+    // Pozele: mutate (nu copiate: pot fi mulți GB), înapoi la revenire. Unde erau se scrie înainte de mutare.
     if ($a->stare->ia('uploads') === null) {
-        foreach (['public/uploads', 'uploads'] as $rel) {
-            if (is_dir($s->vechi . '/' . $rel)) {
-                Fisiere::muta($s->vechi . '/' . $rel, $s->docroot . '/uploads');
-                $a->stare->pune('uploads', $rel);
-                Iesire::ok('pozele: ' . $s->vechi . '/' . $rel . ' → ' . $s->docroot . '/uploads');
-                break;
-            }
-        }
-        if ($a->stare->ia('uploads') === null) {
-            Fisiere::dosar($s->docroot . '/uploads', 0755);
-            $a->stare->pune('uploads', '');
-            Iesire::info('codul vechi n-avea uploads/; am făcut unul gol');
-        }
+        $rel = is_dir($s->vechi . '/public/uploads') ? 'public/uploads' : (is_dir($s->vechi . '/uploads') ? 'uploads' : '');
+        $a->stare->pune('uploads', $rel);
+    }
+    $rel = (string) $a->stare->ia('uploads');
+    if ($rel !== '') {
+        Redenumiri::fa($a->stare, 'uploads', [[$s->vechi . '/' . $rel, $s->docroot . '/uploads']]);
+        Iesire::ok('pozele: ' . $s->vechi . '/' . $rel . ' → ' . $s->docroot . '/uploads');
+    } elseif (!is_dir($s->docroot . '/uploads')) {
+        Fisiere::dosar($s->docroot . '/uploads', 0755);
+        Iesire::info('codul vechi n-avea uploads/; am făcut unul gol');
     }
 
     // Fișierele site-ului din public/ (ignorate de git: sitemap-uri, assets/.htaccess, fișiere de verificare a domeniului),
@@ -669,8 +876,12 @@ function mentenanta(Adoptare $a): void
     Iesire::ok('fișierele site-ului aduse în docroot: ' . ($preluate === [] ? 'niciunul' : count($preluate) . ' (' . implode(', ', array_slice($preluate, 0, 6))
         . (count($preluate) > 6 ? ', …' : '') . ')'));
 
-    // Copia bazei de revenire: cu scrierile oprite.
+    // Copia bazei de revenire: cu scrierile oprite (după ce s-au terminat și cererile sau cronurile pornite înainte).
     $baza = new Baza(Env::citeste($s->site . '/.env'));
+    $ramase = $baza->asteaptaLiniste(60);
+    if ($ramase > 0) {
+        throw new Oprire($ramase . ' conexiuni lucrează încă pe bază după un minut (un cron sau o cerere a codului vechi); rulează din nou peste câteva minute');
+    }
     $fisier = $a->stare->ia('copii') . '/baza.sql.gz';
     $secunde = $baza->copie($fisier);
     $a->stare->pune('copie_baza', $fisier);
@@ -680,26 +891,38 @@ function mentenanta(Adoptare $a): void
 function migrari(Adoptare $a): void
 {
     $cod = $a->codSite();
+    $jeton = (string) $a->stare->ia('jeton');
+    Mentenanta::pune($a->s, $jeton, true);
     $a->stare->pune('migrari_pornite', true);
     $plan = planMigrari($a, $cod);
     if ($plan === 0) {
         Iesire::ok('nicio migrare de aplicat');
-        return;
     }
-    for ($i = 1; $i <= 30; $i++) {
+    for ($i = 1; $plan !== 0 && $i <= 30; $i++) {
         $inceput = microtime(true);
         $r = platforma($a->s->site, $cod, $a->versiune, array_merge(['scripts/migreaza.php', '--aplica', '--site=' . $a->slug, '--buget=300'],
             $a->o->are('permite-blocante') ? ['--permite-blocante'] : []), true);
         Iesire::info('migreaza.php --aplica: codul ' . $r['cod'] . ' (' . sensMigrari($r['cod']) . '), ' . round(microtime(true) - $inceput, 1) . ' s');
         if ($r['cod'] === 0) {
             Iesire::ok('migrările sunt aplicate și verificate');
-            return;
+            $plan = 0;
+            break;
         }
         if ($r['cod'] !== 13) {
             throw new Oprire('migreaza.php --aplica: ' . sensMigrari($r['cod']));
         }
     }
-    throw new Oprire('migrările n-au terminat după 30 de reluări');
+    if ($plan !== 0) {
+        throw new Oprire('migrările n-au terminat după 30 de reluări');
+    }
+    // Amprenta bazei după migrări, încă cu scrierile oprite: revino.sh o compară cu baza de atunci, ca orice scriere de
+    // după (o plată confirmată, o comandă, o schimbare din admin) să fie văzută înainte să fie pierdută.
+    $baza = new Baza(Env::citeste($a->s->site . '/.env'));
+    Fisiere::scrie($a->stare->ia('copii') . '/dupa-migrari.json', (string) json_encode(['facuta' => date('c'), 'baza' => $baza->nume(),
+        'amprenta' => $baza->amprenta()], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", 0600);
+    Iesire::ok('amprenta bazei după migrări: ' . $a->stare->ia('copii') . '/dupa-migrari.json');
+    // De aici, mentenanța ușoară: plățile și ERP-ul trec din nou (codul nou e pe baza migrată), vizitatorii încă nu.
+    Mentenanta::pune($a->s, $jeton, false);
 }
 
 function diagnostic(Adoptare $a): void
@@ -727,11 +950,11 @@ function verificare(Adoptare $a): void
 function deschidere(Adoptare $a): void
 {
     $s = $a->s;
-    @unlink($s->site . '/MENTENANTA');
+    Mentenanta::scoate($s);
     $r = Http::cere($a->url . '/');
     $p = Http::cere($a->url . '/_andaxi/ping');
     if ($r['cod'] !== 200 || str_contains($r['corp'], 'Revenim în câteva minute') || $p['cod'] !== 200) {
-        Fisiere::scrie($s->site . '/MENTENANTA', (string) $a->stare->ia('jeton') . "\n", 0640);
+        Mentenanta::pune($s, (string) $a->stare->ia('jeton'), false);
         throw new Oprire('fără MENTENANTA site-ul nu răspunde ca la verificare (/ → HTTP ' . $r['cod'] . ', ping → ' . $p['cod'] . '); l-am pus la loc în mentenanță');
     }
     Iesire::ok('MENTENANTA ștearsă: ' . $a->url . '/ răspunde 200 oricui (' . round($r['timp'], 2) . ' s)');
@@ -751,20 +974,19 @@ function cron(Adoptare $a): void
         Iesire::atentie('nu văd cronurile vechi (crontab -l); dă --cron-vechi=<fișier> cu rândurile din hPanel, sau scrie-le după modelul de mai jos');
         $linii = [];
     }
-    $tipar = '#^((?:@\w+|(?:\S+\s+){5}))(.*?)(\S*domains/' . preg_quote($s->domeniu, '#') . '/public_html/(scripts/[A-Za-z0-9_.-]+\.php))(.*)$#';
     foreach ($linii as $l) {
-        if (preg_match($tipar, $l, $m) === 1) {
-            $program = trim($m[1]);
-            if (is_file($a->codSite() . '/' . $m[4])) {
-                $nou = $php . ' ' . $lansator . ' --site=' . $s->site . ' ' . $m[4] . $m[5];
-                Iesire::info('ȘTERGI  : ' . $l);
-                Iesire::info('ADAUGI  : ' . $program . '  ' . $nou);
-                $text .= $program . ' ' . $nou . "\n";
-            } else {
-                Iesire::info('ȘTERGI  : ' . $l . '   (' . $m[4] . ' nu mai există în codul comun)');
-            }
-        } else {
+        $c = clasificaCron($a, $l);
+        if ($c['fel'] === 'nou') {
+            Iesire::info('ȘTERGI  : ' . $l);
+            Iesire::info('ADAUGI  : ' . ($c['program'] !== '' ? $c['program'] . '  ' : '(programul celui vechi)  ') . $c['nou']);
+            $text .= ($c['program'] !== '' ? $c['program'] . ' ' : '# programul celui vechi: ') . $c['nou'] . "\n";
+        } elseif ($c['fel'] === 'sterge') {
+            Iesire::info('ȘTERGI  : ' . $l . '   (' . $c['motiv'] . ')');
+        } elseif ($c['fel'] === 'ramane') {
             Iesire::info('RĂMÂNE : ' . $l . '   (nu rulează un script din codul vechi)');
+        } else {
+            Iesire::atentie('DE VERIFICAT: ' . $l . '   (' . $c['motiv'] . '; îl rescrii tu, după modelul de mai jos)');
+            $text .= '# DE VERIFICAT, de rescris de mână: ' . $l . "\n";
         }
     }
     Iesire::info('modelul unui rând nou: ' . $php . ' ' . $lansator . ' --site=' . $s->site . ' scripts/<script>.php');

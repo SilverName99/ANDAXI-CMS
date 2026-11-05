@@ -333,6 +333,7 @@ final class Fisiere
         if (!@rename($din, $in)) {
             throw new Oprire('nu pot muta ' . $din . ' în ' . $in);
         }
+        clearstatcache();
     }
 
     /**
@@ -355,8 +356,13 @@ final class Fisiere
         if (!$bun) {
             throw new Oprire('refuz să șterg ' . $cale . ' (nu e un dosar al deploy-ului)');
         }
-        Comanda::ruleaza(['chmod', '-R', 'u+w', $cale]);
+        // Doar dosarele devin scriibile (ca rm să poată șterge din ele), niciodată fișierele: o copie a unei versiuni
+        // făcută cu legături fixe (site/releases/<v>) împarte fișierele cu versiunea comună, care rămân doar de citit.
+        if (is_dir($cale) && !is_link($cale)) {
+            Comanda::ruleaza(['find', $cale, '-type', 'd', '-exec', 'chmod', 'u+w', '{}', '+']);
+        }
         $r = Comanda::ruleaza(['rm', '-rf', '--', $cale]);
+        clearstatcache();
         if ($r['cod'] !== 0 || file_exists($cale)) {
             throw new Oprire('nu pot șterge ' . $cale . ': ' . trim($r['erori']));
         }
@@ -615,8 +621,9 @@ final class Baza
     }
 
     /**
-     * Amprenta bazei, pentru „pusă la loc exact”: fiecare tabel cu `SHOW CREATE TABLE` și `CHECKSUM TABLE`, plus
-     * declanșatoarele și vederile. Doar structură și sume, fără valori.
+     * Amprenta bazei, pentru „pusă la loc exact” și pentru „s-a scris ceva de atunci”: fiecare tabel cu `SHOW CREATE
+     * TABLE` și `CHECKSUM TABLE` (orice INSERT, UPDATE sau DELETE o schimbă), plus declanșatoarele, vederile, rutinele și
+     * evenimentele. Doar structură și sume, fără valori.
      *
      * @return array<string, mixed>
      */
@@ -627,15 +634,83 @@ final class Baza
         foreach ($this->tabele() as $t) {
             $creare = (string) ($pdo->query('SHOW CREATE TABLE `' . str_replace('`', '``', $t) . '`')->fetch(PDO::FETCH_NUM)[1] ?? '');
             $suma = (string) ($pdo->query('CHECKSUM TABLE `' . str_replace('`', '``', $t) . '`')->fetch(PDO::FETCH_NUM)[1] ?? '');
-            $tabele[$t] = hash('sha256', $creare) . ' ' . $suma;
+            // AUTO_INCREMENT=N din CREATE TABLE se schimbă și la un INSERT anulat; suma rândurilor spune dacă s-a scris ceva.
+            $tabele[$t] = hash('sha256', (string) preg_replace('/ AUTO_INCREMENT=\d+/', '', $creare)) . ' ' . $suma;
         }
-        $declansatoare = [];
-        $q = $pdo->prepare('SELECT TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ? ORDER BY TRIGGER_NAME');
-        $q->execute([$this->nume()]);
-        foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
-            $declansatoare[(string) $r[0]] = hash('sha256', implode('|', array_map('strval', $r)));
+        $rez = ['tabele' => $tabele, 'vederi' => $this->tabele('VIEW')];
+        foreach (['declansatoare' => ['TRIGGERS', 'TRIGGER_SCHEMA', 'TRIGGER_NAME, EVENT_OBJECT_TABLE, ACTION_TIMING, EVENT_MANIPULATION, ACTION_STATEMENT'],
+            'rutine' => ['ROUTINES', 'ROUTINE_SCHEMA', 'ROUTINE_NAME, ROUTINE_TYPE, ROUTINE_DEFINITION'],
+            'evenimente' => ['EVENTS', 'EVENT_SCHEMA', 'EVENT_NAME, EVENT_DEFINITION, STATUS']] as $cheie => [$tabel, $coloanaBaza, $coloane]) {
+            $rez[$cheie] = [];
+            $q = $pdo->prepare('SELECT ' . $coloane . ' FROM information_schema.' . $tabel . ' WHERE ' . $coloanaBaza . ' = ? ORDER BY 1');
+            $q->execute([$this->nume()]);
+            foreach ($q->fetchAll(PDO::FETCH_NUM) as $r) {
+                $rez[$cheie][(string) $r[0]] = hash('sha256', implode('|', array_map('strval', $r)));
+            }
         }
-        return ['tabele' => $tabele, 'declansatoare' => $declansatoare, 'vederi' => $this->tabele('VIEW')];
+        return $rez;
+    }
+
+    /**
+     * Tabelele în care s-a scris (sau care s-au schimbat) față de o amprentă de dinainte: tabelele cu altă sumă sau
+     * structură, cele noi și cele dispărute. Gol = nimic scris de atunci.
+     *
+     * @return list<string>
+     */
+    public function tabeleSchimbate(array $amprentaVeche): array
+    {
+        $acum = $this->amprenta()['tabele'];
+        $atunci = (array) ($amprentaVeche['tabele'] ?? []);
+        $rez = [];
+        foreach (array_unique(array_merge(array_keys($atunci), array_keys($acum))) as $t) {
+            if (($atunci[$t] ?? null) !== ($acum[$t] ?? null)) {
+                $rez[] = $t . (!isset($atunci[$t]) ? ' (nou)' : (!isset($acum[$t]) ? ' (șters)' : ''));
+            }
+        }
+        sort($rez);
+        return $rez;
+    }
+
+    /**
+     * Obiectele bazei (declanșatoare, rutine, evenimente, vederi) al căror DEFINER nu e utilizatorul de acum: o copie
+     * încărcată de alt utilizator le-ar refuza la jumătatea încărcării (pe Hostinger nu există SUPER). @return list<string>
+     */
+    public function definitoriStraini(): array
+    {
+        $eu = (string) $this->pdo()->query('SELECT CURRENT_USER()')->fetchColumn();
+        $normal = static fn (string $d): string => strtolower(str_replace('`', '', $d));
+        $rez = [];
+        foreach ([['TRIGGERS', 'TRIGGER_SCHEMA', 'TRIGGER_NAME'], ['ROUTINES', 'ROUTINE_SCHEMA', 'ROUTINE_NAME'], ['EVENTS', 'EVENT_SCHEMA', 'EVENT_NAME'],
+            ['VIEWS', 'TABLE_SCHEMA', 'TABLE_NAME']] as [$tabel, $coloanaBaza, $nume]) {
+            $q = $this->pdo()->prepare('SELECT ' . $nume . ', DEFINER FROM information_schema.' . $tabel . ' WHERE ' . $coloanaBaza . ' = ?');
+            $q->execute([$this->nume()]);
+            foreach ($q->fetchAll(PDO::FETCH_NUM) as [$n, $d]) {
+                if ($normal((string) $d) !== $normal($eu)) {
+                    $rez[] = strtolower($tabel) . ' ' . $n . ' (DEFINER ' . $d . ')';
+                }
+            }
+        }
+        return $rez;
+    }
+
+    /**
+     * Așteaptă (cel mult $secunde) până nu mai lucrează nicio altă conexiune pe această bază: o cerere a codului vechi
+     * sau un cron pornit înainte de mentenanță. Întoarce câte au rămas (0 = liniște). Vede doar conexiunile
+     * utilizatorului bazei (pe găzduirea comună, ale site-ului).
+     */
+    public function asteaptaLiniste(int $secunde): int
+    {
+        $sfarsit = microtime(true) + $secunde;
+        do {
+            $q = $this->pdo()->prepare("SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB = ? AND ID <> CONNECTION_ID() AND COMMAND NOT IN ('Sleep', 'Daemon', 'Binlog Dump')");
+            $q->execute([$this->nume()]);
+            $n = (int) $q->fetchColumn();
+            if ($n === 0) {
+                return 0;
+            }
+            usleep(500000);
+        } while (microtime(true) < $sfarsit);
+        return $n;
     }
 
     /** Cele mai mari id-uri din tabelele cu date noi ale clienților (comenzi, conturi…), care există. @return array<string, int> */
@@ -677,7 +752,11 @@ final class Baza
      * Copia bazei: mysqldump | gzip, apoi amprenta bazei și lista tabelelor lângă ea (`<fișier>.json`). Întoarce
      * secundele.
      */
-    public function copie(string $fisier): float
+    /**
+     * $consecventa: copia de revenire, cu scrierile oprite: o scriere în timpul ei (amprenta diferă înainte și după) o
+     * oprește. Fără, copia de siguranță cu site-ul pornit: doar un avertisment.
+     */
+    public function copie(string $fisier, bool $consecventa = true): float
     {
         $dump = Comanda::primul('mysqldump', 'mariadb-dump') ?? throw new Oprire('nu găsesc mysqldump (nici mariadb-dump)');
         $obiecte = $this->obiecte();
@@ -688,6 +767,7 @@ final class Baza
                 . ' --single-transaction --quick --hex-blob --default-character-set=utf8mb4 --no-tablespaces --triggers'
                 . ' --add-drop-table --skip-dump-date' . ($obiecte['rutine'] > 0 ? ' --routines' : '') . ($obiecte['evenimente'] > 0 ? ' --events' : '')
                 . ' ' . escapeshellarg($this->nume()) . ' | gzip -c > ' . escapeshellarg($fisier . '.tmp');
+            // Amprenta înainte și după copie: dacă diferă, cineva a scris în timpul copiei (copia n-ar mai fi cea a amprentei).
             $amprenta = $this->amprenta();
             $iduri = $this->ultimeleIduri();
             $r = Comanda::shell($comanda);
@@ -695,14 +775,23 @@ final class Baza
                 @unlink($fisier . '.tmp');
                 throw new Oprire('copia bazei n-a mers: ' . self::faraValori(trim($r['erori'])));
             }
+            $scrise = $this->tabeleSchimbate($amprenta);
+            if ($scrise !== [] && !$consecventa) {
+                Iesire::info('cu site-ul pornit, în timpul copiei s-a scris în ' . implode(', ', array_slice($scrise, 0, 5))
+                    . ' (normal; copia de revenire se face din nou, cu scrierile oprite)');
+                $amprenta = $this->amprenta();
+            } elseif ($scrise !== []) {
+                @unlink($fisier . '.tmp');
+                throw new Oprire('în timpul copiei bazei s-a scris în ' . implode(', ', array_slice($scrise, 0, 8)) . '; copia nu e consecventă (alt proces lucrează pe bază)');
+            }
             $verifica = Comanda::ruleaza(['gzip', '-t', $fisier . '.tmp']);
             if ($verifica['cod'] !== 0 || (int) filesize($fisier . '.tmp') < 100) {
                 throw new Oprire('copia bazei e stricată sau goală (' . $fisier . '.tmp)');
             }
             chmod($fisier . '.tmp', 0600);
             rename($fisier . '.tmp', $fisier);
-            Fisiere::scrie($fisier . '.json', (string) json_encode(['baza' => $this->nume(), 'facuta' => date('c'), 'amprenta' => $amprenta,
-                'ultimele_iduri' => $iduri, 'obiecte' => $obiecte], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", 0600);
+            Fisiere::scrie($fisier . '.json', (string) json_encode(['baza' => $this->nume(), 'gazda' => $this->gazda(), 'facuta' => date('c'),
+                'amprenta' => $amprenta, 'ultimele_iduri' => $iduri, 'obiecte' => $obiecte], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", 0600);
         } finally {
             @unlink($optiuni);
         }
@@ -710,29 +799,67 @@ final class Baza
     }
 
     /**
-     * Pune la loc copia: șterge tabelele și vederile care nu erau în ea (făcute de migrări), apoi încarcă fișierul.
-     * Întoarce diferențele de amprentă față de cea de la copie (gol = baza e exact cum era).
+     * Copia e întreagă (gzip -t) și e a acestei baze (numele și gazda din .env-ul ei)? Întoarce informațiile ei.
      *
-     * @return list<string>
+     * @return array<string, mixed>
      */
-    public function restaureaza(string $fisier): array
+    public function verificaCopia(string $fisier): array
     {
         $info = json_decode((string) @file_get_contents($fisier . '.json'), true);
         if (!is_array($info) || !is_file($fisier)) {
             throw new Oprire('copia bazei lipsește sau n-are fișierul ei .json: ' . $fisier);
         }
+        if (($info['baza'] ?? null) !== $this->nume() || ($info['gazda'] ?? null) !== $this->gazda()) {
+            throw new Oprire('copia ' . $fisier . ' e a bazei ' . (string) ($info['baza'] ?? '?') . ' de pe ' . (string) ($info['gazda'] ?? '?')
+                . ', nu a lui ' . $this->nume() . ' de pe ' . $this->gazda() . ' (din .env); n-o încarc și n-am atins baza');
+        }
+        if (Comanda::ruleaza(['gzip', '-t', $fisier])['cod'] !== 0) {
+            throw new Oprire('copia bazei e stricată (gzip -t): ' . $fisier . '; n-am atins baza');
+        }
+        return $info;
+    }
+
+    /** Gazda și portul bazei, așa cum le scrie .env-ul („localhost:3306”). */
+    public function gazda(): string
+    {
+        return (string) ($this->env['DB_HOST'] ?? 'localhost') . ':' . (int) ($this->env['DB_PORT'] ?? 3306);
+    }
+
+    /**
+     * Pune la loc copia: verifică întâi că fișierul e întreg și că e copia acestei baze (numele, gazda), apoi șterge
+     * tabelele, vederile, rutinele și evenimentele care nu erau în ea (făcute după copie) și încarcă fișierul. Întoarce
+     * diferențele de amprentă față de cea de la copie (gol = baza e exact cum era).
+     *
+     * @return list<string>
+     */
+    public function restaureaza(string $fisier): array
+    {
+        $info = $this->verificaCopia($fisier);
         $client = Comanda::primul('mysql', 'mariadb') ?? throw new Oprire('nu găsesc clientul mysql (nici mariadb)');
         $pdo = $this->pdo();
-        $aveau = array_keys((array) ($info['amprenta']['tabele'] ?? []));
+        $amprenta = (array) ($info['amprenta'] ?? []);
+        $aveau = array_keys((array) ($amprenta['tabele'] ?? []));
+        $acum = $this->amprenta();
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
         foreach ($this->tabele('VIEW') as $v) {
-            if (!in_array($v, (array) ($info['amprenta']['vederi'] ?? []), true)) {
+            if (!in_array($v, (array) ($amprenta['vederi'] ?? []), true)) {
                 $pdo->exec('DROP VIEW `' . str_replace('`', '``', $v) . '`');
             }
         }
         foreach ($this->tabele() as $t) {
             if (!in_array($t, $aveau, true)) {
                 $pdo->exec('DROP TABLE `' . str_replace('`', '``', $t) . '`');
+            }
+        }
+        foreach (array_keys((array) ($acum['rutine'] ?? [])) as $r) {
+            if (!isset($amprenta['rutine'][$r])) {
+                $tip = (string) $pdo->query("SELECT ROUTINE_TYPE FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_NAME = " . $pdo->quote($r))->fetchColumn();
+                $pdo->exec('DROP ' . ($tip === 'FUNCTION' ? 'FUNCTION' : 'PROCEDURE') . ' IF EXISTS `' . str_replace('`', '``', $r) . '`');
+            }
+        }
+        foreach (array_keys((array) ($acum['evenimente'] ?? [])) as $e) {
+            if (!isset($amprenta['evenimente'][$e])) {
+                $pdo->exec('DROP EVENT IF EXISTS `' . str_replace('`', '``', $e) . '`');
             }
         }
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
@@ -747,14 +874,14 @@ final class Baza
             throw new Oprire('încărcarea copiei bazei n-a mers: ' . self::faraValori(trim($r['erori'])));
         }
         $this->pdo = null;
-        return self::diferente((array) $info['amprenta'], $this->amprenta());
+        return self::diferente($amprenta, $this->amprenta());
     }
 
     /** @return list<string> */
     public static function diferente(array $inainte, array $acum): array
     {
         $rez = [];
-        foreach (['tabele' => 'tabelul', 'declansatoare' => 'declanșatorul'] as $cheie => $nume) {
+        foreach (['tabele' => 'tabelul', 'declansatoare' => 'declanșatorul', 'rutine' => 'rutina', 'evenimente' => 'evenimentul'] as $cheie => $nume) {
             $a = (array) ($inainte[$cheie] ?? []);
             $b = (array) ($acum[$cheie] ?? []);
             foreach (array_unique(array_merge(array_keys($a), array_keys($b))) as $t) {
@@ -987,6 +1114,12 @@ final class Versiune
             return array_merge($probleme, ['SHA256SUMS lipsește sau e gol']);
         }
         $reale = array_values(array_diff(Fisiere::lista($dosar), ['SHA256SUMS']));
+        $scriibile = trim(Comanda::ruleaza(['find', $dosar, '-perm', '/222', '!', '-type', 'l'])['iesire']);
+        if ($scriibile !== '') {
+            $n = substr_count($scriibile, "\n") + 1;
+            $probleme[] = $n . ' fișiere sau dosare scriibile (versiunea trebuie să fie doar de citit), de exemplu '
+                . substr(strtok($scriibile, "\n") ?: '', strlen($dosar) + 1);
+        }
         foreach ($reale as $rel) {
             if (!isset($sume[$rel])) {
                 $probleme[] = 'fișier în plus: ' . $rel;
@@ -1005,6 +1138,120 @@ final class Versiune
     {
         preg_match("/'php_min'\s*=>\s*'([0-9.]+)'/", (string) @file_get_contents($dosar . '/config/app.php'), $m);
         return $m[1] ?? '8.3';
+    }
+}
+
+/**
+ * Mentenanța deploy-ului: fișierul site/MENTENANTA, citit de stub (deploy/stub/index.php) și de bin/platforma.
+ *
+ *  - „ușoară”: vizitatorii văd „Revenim în câteva minute”, dar plățile (/webhook/), ERP-ul (/api/erp/) și pingul trec;
+ *    cronurile (bin/platforma) nu rulează;
+ *  - „strictă” (al doilea rând „strict”): și plățile și ERP-ul primesc 503 cu Retry-After (procesatorii de plăți și
+ *    ERP-ul retrimit la un 5xx), deci nimic nu scrie în bază cât se copiază, se migrează sau se pune la loc baza.
+ *
+ * Cererile cu jetonul (primul rând) trec în ambele: așa verifică deploy-ul site-ul nou.
+ */
+final class Mentenanta
+{
+    public static function pune(Site $s, string $jeton, bool $stricta): void
+    {
+        Fisiere::scrie($s->site . '/MENTENANTA', $jeton . "\n" . ($stricta ? "strict\n" : ''), 0640);
+    }
+
+    /** Conținutul de acum (null = fără mentenanță), ca să poată fi pus la loc exact. */
+    public static function citeste(Site $s): ?string
+    {
+        return is_file($s->site . '/MENTENANTA') ? (string) file_get_contents($s->site . '/MENTENANTA') : null;
+    }
+
+    public static function puneLaLoc(Site $s, ?string $continut): void
+    {
+        if ($continut === null) {
+            @unlink($s->site . '/MENTENANTA');
+        } else {
+            Fisiere::scrie($s->site . '/MENTENANTA', $continut, 0640);
+        }
+    }
+
+    public static function scoate(Site $s): void
+    {
+        @unlink($s->site . '/MENTENANTA');
+    }
+}
+
+/**
+ * Redenumirile unui pas (de exemplu public_html → public_html.vechi, apoi public_html.nou → public_html), ținute minte
+ * în starea deploy-ului: intenția se scrie înainte de prima redenumire, iar după fiecare, câte s-au făcut. Un script oprit
+ * între două redenumiri (SSH-ul căzut, procesul omorât) lasă deci o urmă: la rularea următoare `termina()` face ce a
+ * rămas, înainte de orice altceva, așa că nu rămâne niciun dosar lipsă și nu se șterge niciodată singura copie.
+ *
+ * PLATFORMA_TEST_OPRESTE_DUPA=<cheie>:<pas> (doar testele, tools/dev/test-deploy.php) oprește procesul imediat după
+ * redenumirea cu numărul dat, înainte să-și scrie progresul: exact ce lasă un proces omorât.
+ */
+final class Redenumiri
+{
+    /** @param list<array{0: string, 1: string}> $pasi */
+    public static function fa(Stare $stare, string $cheie, array $pasi): void
+    {
+        if (in_array($cheie, (array) $stare->ia('redenumiri_facute', []), true)) {
+            return;
+        }
+        $inCurs = (array) $stare->ia('redenumiri', []);
+        if (!isset($inCurs[$cheie])) {
+            $inCurs[$cheie] = ['pasi' => $pasi, 'facuti' => 0];
+            $stare->pune('redenumiri', $inCurs);
+        }
+        self::continua($stare, $cheie);
+    }
+
+    /** Termină redenumirile rămase la jumătate de la o rulare oprită. @return list<string> cheile terminate */
+    public static function termina(Stare $stare): array
+    {
+        $rez = [];
+        foreach (array_keys((array) $stare->ia('redenumiri', [])) as $cheie) {
+            Iesire::atentie('o rulare de dinainte s-a oprit la jumătatea pasului „' . $cheie . '”; îl termin acum');
+            self::continua($stare, (string) $cheie);
+            $rez[] = (string) $cheie;
+        }
+        return $rez;
+    }
+
+    /** Uită un pas făcut (de exemplu după o întoarcere, ca o rulare nouă să-l poată face din nou). */
+    public static function uita(Stare $stare, string ...$chei): void
+    {
+        $stare->pune('redenumiri_facute', array_values(array_diff((array) $stare->ia('redenumiri_facute', []), $chei)));
+    }
+
+    private static function continua(Stare $stare, string $cheie): void
+    {
+        $inCurs = (array) $stare->ia('redenumiri', []);
+        $pasi = (array) ($inCurs[$cheie]['pasi'] ?? []);
+        $test = (string) getenv('PLATFORMA_TEST_OPRESTE_DUPA');
+        for ($i = (int) ($inCurs[$cheie]['facuti'] ?? 0); $i < count($pasi); $i++) {
+            [$din, $in] = $pasi[$i];
+            clearstatcache();
+            $existaDin = file_exists($din) || is_link($din);
+            $existaIn = file_exists($in) || is_link($in);
+            if ($existaDin && !$existaIn) {
+                if (!@rename($din, $in)) {
+                    throw new Oprire('nu pot muta ' . $din . ' în ' . $in);
+                }
+                if ($test === $cheie . ':' . ($i + 1)) {
+                    fwrite(STDERR, "PLATFORMA_TEST_OPRESTE_DUPA: oprit după pasul " . ($i + 1) . " al lui „" . $cheie . "”\n");
+                    exit(9);
+                }
+            } elseif ($existaDin || !$existaIn) {
+                throw new Oprire('pasul „' . $cheie . '” (' . ($i + 1) . '/' . count($pasi) . ': ' . $din . ' → ' . $in . ') nu se mai poate face: '
+                    . ($existaDin ? 'amândouă există' : 'niciunul nu există') . '. Nu schimb nimic; uită-te la cele două dosare (ne trimiți ce vezi)');
+            }
+            $inCurs[$cheie]['facuti'] = $i + 1;
+            $stare->pune('redenumiri', $inCurs);
+        }
+        unset($inCurs[$cheie]);
+        $stare->pune('redenumiri', $inCurs);
+        $facute = (array) $stare->ia('redenumiri_facute', []);
+        $facute[] = $cheie;
+        $stare->pune('redenumiri_facute', array_values(array_unique($facute)));
     }
 }
 
@@ -1325,7 +1572,7 @@ function problemePachet(Site $s, string $slug, ?array $manifest, ?array $ingheta
  */
 function platforma(string $dosarSite, string $cod, string $versiune, array $argumente, bool $afiseaza = false, ?string $public = null): array
 {
-    $comanda = array_merge(Comanda::php(), [$cod . '/bin/platforma', '--site=' . $dosarSite, '--versiune=' . $versiune],
+    $comanda = array_merge(Comanda::php(), [$cod . '/bin/platforma', '--site=' . $dosarSite, '--versiune=' . $versiune, '--in-mentenanta'],
         $public !== null ? ['--public=' . $public] : [], $argumente);
     return Comanda::ruleaza($comanda, ['afiseaza' => $afiseaza, 'cwd' => $cod]);
 }

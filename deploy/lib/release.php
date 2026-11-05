@@ -258,6 +258,12 @@ function sterge(string $acasa, string $releases, string $v, bool $aplica): int
         Iesire::scrie('PLAN: aș șterge ' . $releases . '/' . $v . ' (n-o folosește niciun site). Cu --aplica o șterge.');
         return 0;
     }
+    // Copiile locale din site/releases/ (open_basedir) întâi: legături fixe spre aceleași fișiere, șterse fără să le facă
+    // scriibile (Fisiere::sterge schimbă doar dosarele).
+    foreach (glob($acasa . '/domains/*/site/releases/' . $v, GLOB_ONLYDIR) ?: [] as $copie) {
+        Fisiere::sterge($copie, [dirname($copie)]);
+        Iesire::ok('ștearsă copia locală: ' . $copie);
+    }
     Fisiere::sterge($releases . '/' . $v, [$releases]);
     Iesire::ok('ștearsă: ' . $releases . '/' . $v);
     return 0;

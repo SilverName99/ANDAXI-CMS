@@ -37,9 +37,16 @@ fără nicio schimbare) și face ceva doar cu `--aplica`.
 
 Stub-ul (`deploy/stub/index.php`) e același pe fiecare site: citește `site/RELEASE` și încarcă versiunea aceea (din
 `site/releases/<v>/` dacă există, altfel din `~/platforma/releases/<v>/`). Cu `site/MENTENANTA` răspunde 503 cu pagina
-„Revenim în câteva minute”, afară de plăți (`/webhook/`), ERP (`/api/erp/`) și ping (`/_andaxi/`). Dacă fișierul
-conține jetonul deploy-ului, o cerere cu același jeton trece: așa se verifică site-ul nou înainte să-l vadă oricine, iar
-tu îl vezi în browser cu adresa `https://<domeniu>/?andaxi_deploy=<jeton>` (scriptul ți-o scrie când e cazul).
+„Revenim în câteva minute”. Mentenanța are două trepte:
+
+- **strictă** (cât se copiază baza, cât rulează migrările și cât se pune baza la loc): trece doar pingul (`/_andaxi/`).
+  Plățile (`/webhook/`) și ERP-ul (`/api/erp/`) primesc și ele 503 cu `Retry-After`, iar procesatorii de plăți și ERP-ul
+  le retrimit mai târziu; nimic nu scrie în bază;
+- **ușoară** (după migrări, cât se verifică site-ul nou): plățile și ERP-ul trec din nou, vizitatorii încă nu.
+
+În amândouă, **cronurile nu rulează**: `bin/platforma` vede `MENTENANTA` și iese fără să facă nimic. Pe primul rând al
+fișierului stă jetonul deploy-ului: o cerere cu același jeton trece, așa se verifică site-ul nou înainte să-l vadă
+oricine, iar tu îl vezi în browser cu adresa `https://<domeniu>/?andaxi_deploy=<jeton>` (scriptul ți-o scrie când e cazul).
 
 ## O dată, pe server (aproximativ 10 minute)
 
@@ -53,6 +60,18 @@ export PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
 
 Scripturile își aleg singure PHP-ul (variabila `PHP`, altfel `/opt/alt/php83/usr/bin/php`, cu sodium adăugat dacă
 lipsește). Ele rulează din `~/platforma/repo/deploy/`.
+
+**Rulează-le așa încât un SSH căzut să nu le oprească.** Cu `screen` sau `tmux`, dacă le are serverul (`screen -S deploy`,
+iar după o reconectare `screen -r deploy`). Altfel, fără ele:
+
+```sh
+setsid nohup deploy/adopta.sh … --aplica > ~/deploy-$(date +%H%M).log 2>&1 &
+tail -f ~/deploy-*.log          # urmărești; Ctrl+C oprește doar urmărirea, nu scriptul
+```
+
+Un script oprit totuși la jumătate (procesul omorât) se reia cu aceeași comandă: fiecare fază și fiecare redenumire de
+dosar se țin minte, iar o redenumire rămasă la jumătate (de exemplu `public_html` mutat, dar cel nou încă nu pus) se
+termină prima, înainte de orice altceva.
 
 ## O versiune de cod
 
@@ -103,11 +122,11 @@ Fazele lui `--aplica` (fiecare ține minte că s-a terminat, în `site/deploy/ad
 
 | Faza | Ce face | Vizitatorii |
 |---|---|---|
-| `verificari` | sodium (web și linia de comandă), PHP-ul, uneltele, spațiul, baza (și drepturile), pachetul, `privat/`, licența, codul vechi curat și la commit-ul revizuit, site-ul răspunde | nu văd nimic |
+| `verificari` | sodium (web și linia de comandă), PHP-ul, uneltele, spațiul, baza (drepturile, DEFINER-ul declanșatoarelor și rutinelor), pachetul, `privat/`, licența, codul vechi curat și la commit-ul revizuit, site-ul răspunde, PHP-ul web citește `site/`, cronurile vechi (fiecare trebuie să poată fi rescris) | nu văd nimic |
 | `pregatire` | `site/` (`.env`, `RELEASE`, pachetul, `storage/`), `public_html.nou/` (stub-ul, `assets/`, `tema/`); `diagnostic.php --pachet` și `--licenta`, `migreaza.php --plan` | nu văd nimic |
 | `copie` | copia codului vechi (`cod-vechi.tar.gz`, fără poze) și o copie a bazei | nu văd nimic |
-| `mentenanta` | `MENTENANTA`; `public_html` → `public_html.vechi`, `public_html.nou` → `public_html`; pozele mutate în `public_html/uploads/`; fișierele site-ului (sitemap-uri, `assets/.htaccess`, `.well-known/`…) aduse; **copia bazei de revenire** | „Revenim în câteva minute” |
-| `migrari` | `migreaza.php --plan` (arătat), apoi `--aplica --site=<site>`, reluat cât cere bugetul de timp | „Revenim…” |
+| `mentenanta` | mentenanța **strictă**; `public_html` → `public_html.vechi`, `public_html.nou` → `public_html`; pozele mutate în `public_html/uploads/`; fișierele site-ului (sitemap-uri, `assets/.htaccess`, `.well-known/`…) aduse; așteptarea conexiunilor rămase pe bază; **copia bazei de revenire** (amprenta bazei înainte și după ea: dacă a scris cineva în timpul copiei, se oprește) | „Revenim în câteva minute”; plățile așteaptă |
+| `migrari` | `migreaza.php --plan` (arătat), apoi `--aplica --site=<site>`, reluat cât cere bugetul de timp; la sfârșit **amprenta bazei** (CHECKSUM TABLE pe fiecare tabel), apoi mentenanța **ușoară** | „Revenim…”; plățile trec după migrări |
 | `diagnostic` | `diagnostic.php --pachet` și `--licenta` | „Revenim…” |
 | `verificare` | pingul (versiunea, schema `la_zi`), `/health` (și pachetul), prima pagină, un produs, `/admin/login`, `/cos`, un fișier din `assets/`, o poză, jurnalele PHP fără erori fatale noi | „Revenim…” |
 | `deschidere` | `MENTENANTA` ștearsă; prima pagină verificată fără jeton | site-ul nou |
@@ -121,31 +140,38 @@ La sfârșit scrie rândurile de cron (mai jos) și unde a pus copiile.
 - după comutare: site-ul rămâne în mentenanță. **Drumul 1**: repari și rulezi din nou aceeași comandă (continuă de la
   faza care a picat; migrările se pot relua oricând). **Drumul 2**: `deploy/revino.sh --site=<site> --aplica`.
   `--reia=<faza>` rulează din nou o fază terminată (de la `migrari` încolo).
+- o reluare cu alte opțiuni (altă `--versiune`, alt `--pachet`, altă `--cheie-licenta`) e refuzată: înainte de comutare
+  o iei de la capăt cu `--reia=verificari`; după comutare continui doar cu aceleași opțiuni sau revii.
 
 ## Revenirea
 
 ```sh
-deploy/revino.sh --site=<site>            # planul: ce ar face și ce date noi s-ar pierde
+deploy/revino.sh --site=<site>            # planul: ce ar face și ce date noi s-ar pierde (o estimare, cu site-ul pornit)
 deploy/revino.sh --site=<site> --aplica   # 1–3 minute (cât încărcarea copiei bazei)
 ```
 
-1. `MENTENANTA` (nimic nou nu se scrie cât se pune baza la loc);
-2. dacă migrările au pornit: baza din **copia de revenire** (făcută în mentenanță, chiar înainte de migrări): tabelele
-   făcute de migrări se șterg, copia se încarcă, apoi fiecare tabel (structura și `CHECKSUM TABLE`) și fiecare
-   declanșator se compară cu cele de la copie: „exact ca la copie”;
-3. pozele înapoi în codul vechi; `public_html` → `public_html.esuat-<data>`, `public_html.vechi` → `public_html`;
-4. codul vechi comparat cu amprenta lui de la comutare (fiecare fișier, octet cu octet; la poze mărimea și data);
-5. prima pagină a site-ului vechi verificată.
+1. mentenanța **strictă** (nimic nu mai scrie: nici vizitatorii, nici plățile, ERP-ul sau cronurile), apoi așteptarea
+   conexiunilor rămase;
+2. **ce s-ar pierde**: amprenta bazei de acum (structura și `CHECKSUM TABLE` pe fiecare tabel) față de cea de la sfârșitul
+   migrărilor. Orice tabel schimbat de atunci înseamnă date care s-ar pierde, oricare ar fi ele: o plată confirmată
+   (un UPDATE pe `orders`), o comandă, o schimbare de stare sau un AWB din admin, un stoc venit din ERP, puncte de
+   fidelitate, un cupon folosit, o adresă, o resetare de parolă, o recenzie. Atunci, și oricum după ce site-ul a fost
+   deschis vizitatorilor, `--aplica` **refuză** și spune tabelele; mentenanța revine cum era;
+3. dacă migrările au pornit: verifică copia (`gzip -t`, și că e copia **acestei** baze: numele și gazda din `.env`),
+   șterge tabelele, vederile, rutinele și evenimentele de după copie, încarcă copia și o compară cu amprenta de la copie:
+   „exact ca la copie”;
+4. pozele înapoi în codul vechi; `public_html` → `public_html.esuat-<data>`, `public_html.vechi` → `public_html`;
+5. codul vechi comparat cu amprenta lui de la comutare (fiecare fișier, octet cu octet; la poze mărimea și data);
+6. prima pagină a site-ului vechi verificată.
 
-**Datele scrise pe codul nou** (comenzi, conturi, abonați) s-ar pierde odată cu baza. Planul le numără, iar `--aplica`
-refuză dacă există. Atunci ai două feluri:
+Când refuză, ai două feluri:
 
 - `--fara-baza`: doar codul se întoarce, baza rămâne cum e (migrările doar adaugă coloane și tabele, deci codul vechi
-  merge pe ea). Așa nu se pierde nicio comandă. E alegerea obișnuită după ce site-ul nou a mers câteva ore.
-- `--pierde-datele-noi`: baza exact cea de dinainte; comenzile noi le notezi întâi din admin.
+  merge pe ea). **Nu se pierde nimic.** E alegerea obișnuită după ce site-ul nou a fost deschis.
+- `--pierde-datele-noi`: baza exact cea de dinaintea migrărilor; tot ce arată lista se pierde (notezi întâi din admin).
 
-După revenire pui înapoi în hPanel cronurile vechi (dacă le-ai schimbat). `site/` rămâne; o adoptare nouă pornește de
-la început.
+O revenire oprită la jumătate se reia cu aceeași comandă (baza nu se pune a doua oară). După revenire pui înapoi în
+hPanel cronurile vechi (dacă le-ai schimbat). `site/` rămâne; o adoptare nouă pornește de la început.
 
 ## O versiune nouă
 
@@ -155,10 +181,12 @@ deploy/actualizeaza.sh --site=<site> --versiune=<v>                     # planul
 deploy/actualizeaza.sh --site=<site> --versiune=<v> --aplica
 ```
 
-Fazele: verificări, pregătire (pachetul, `assets/` și `tema/` noi alături), copia bazei, mentenanța, comutarea
-(pachetul, `assets/`, `tema/`, stub-ul, `RELEASE`, cache-ul paginilor golit), migrările cu codul nou, diagnosticul,
-testul de fum, deschiderea. **Dacă ceva pică după comutare, se întoarce singur**: `RELEASE`, pachetul, `assets/`,
-`tema/` și stub-ul de dinainte, verificarea versiunii vechi și, dacă trece, site-ul deschis (codul de ieșire rămâne 1).
+Fazele: verificări, pregătire (pachetul, `assets/` și `tema/` noi alături, copia stub-ului de acum), mentenanța
+**strictă**, copia bazei, comutarea (pachetul, `assets/`, `tema/`, stub-ul), **migrările cu codul nou, înainte ca
+`RELEASE` să se schimbe**, apoi `RELEASE` (cache-ul paginilor golit) și mentenanța ușoară, diagnosticul, testul de fum,
+deschiderea. **Dacă ceva pică după comutare, se întoarce singur**: `RELEASE` (dacă apucase să se schimbe), pachetul,
+`assets/`, `tema/` și stub-ul de dinainte, verificarea versiunii vechi și, dacă trece, site-ul deschis (codul de ieșire
+rămâne 1). O întoarcere oprită la jumătate se termină la rularea următoare.
 Baza rămâne cum au lăsat-o migrările (doar adăugări); copia ei e în `site/deploy/copii/`. Celelalte site-uri de pe
 versiunea veche nu se schimbă. Înapoi pe versiunea de dinainte, de mână: aceeași comandă cu `--versiune=<veche>`
 (și `--inapoi`, dacă baza are deja migrări pe care versiunea veche nu le știe).
@@ -171,10 +199,13 @@ Rândurile noi pornesc prin lansator și citesc `RELEASE`, deci după o actualiz
 */10 * * * *  /opt/alt/php83/usr/bin/php -d extension=sodium.so /home/uXXXXXXXXX/platforma/bin/platforma --site=/home/uXXXXXXXXX/domains/biovitality.ro/site scripts/erp-sync.php
 ```
 
-`adopta.sh` le scrie din cele vechi (același program, același script, aceleași argumente) în
+`adopta.sh` le scrie din cele vechi (același program, același script, aceleași opțiuni PHP și argumente; și pentru
+`~/public_html/…`, legătura Hostinger spre domeniul principal, și pentru `cd …/public_html && php scripts/…`) în
 `site/deploy/cron-nou.txt` și pe ecran: **ȘTERGI** rândul vechi, **ADAUGI** pe cel nou; un script care nu mai există
 în codul comun (de exemplu o unealtă de depanare) doar se șterge; un rând care nu rulează codul vechi (un `curl` spre
-`/health`) **RĂMÂNE**. Le schimbi în hPanel → Advanced → Cron Jobs, imediat după `GATA`. Până atunci cronurile vechi
+`/health`) **RĂMÂNE**. Un rând care pomenește `public_html`, dosarul de acasă sau un script cunoscut, dar nu poate fi
+rescris sigur (un script din afara `scripts/`, ghilimele, o conductă) e **DE VERIFICAT**: verificările se opresc până îl
+rescrii tu și rulezi cu `--cron-de-mana`. Le schimbi în hPanel → Advanced → Cron Jobs, imediat după `GATA`. Până atunci cronurile vechi
 pică inofensiv (fișierul lor nu mai e în `public_html`).
 
 Orice script, de mână: `$PHP ~/platforma/bin/platforma --site=<domeniu> scripts/diagnostic.php --licenta`.
@@ -214,6 +245,7 @@ codul 10 („de aplicat, toate fără blocare”). Orice `NU` sau alt cod: ne tr
 ### Noaptea (la o oră cu puține comenzi, de exemplu 23:30)
 
 ```sh
+screen -S deploy            # dacă există; altfel comanda de mai jos cu setsid nohup … > ~/deploy-bv.log 2>&1 & și tail -f
 deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=$V --commit-vechi=<commit-ul confirmat> \
     --cheie-licenta=<cheia CRM-ului> --cron-vechi=$HOME/cron-bv.txt --aplica
 ```
@@ -234,10 +266,11 @@ Când apare `GATA`:
 
 - Scriptul s-a oprit după comutare: site-ul e în mentenanță. Dacă motivul e clar și mic, repari și rulezi aceeași
   comandă. Altfel, fără să mai cauți: `deploy/revino.sh --site=biovitality --aplica` (1–3 minute), apoi ne trimiți
-  jurnalul (`~/domains/biovitality.ro/site/deploy/jurnale/`).
+  jurnalul (`~/domains/biovitality.ro/site/deploy/jurnale/`). Dacă revenirea refuză („tabele schimbate după
+  migrări”: o plată a ajuns între timp), rulezi aceeași comandă cu `--fara-baza`.
 - Site-ul e deschis, dar găsești o problemă gravă (comenzile nu se pot plasa): `deploy/revino.sh --site=biovitality`
-  (planul spune câte comenzi noi există), apoi `--aplica --fara-baza` (comenzile noi rămân) și cronurile vechi înapoi
-  în hPanel.
+  (planul spune ce tabele s-au schimbat de la deschidere), apoi `--aplica --fara-baza` (nimic nu se pierde) și
+  cronurile vechi înapoi în hPanel. Cu baza pusă la loc (`--pierde-datele-noi`) doar dacă ai notat tot ce s-a schimbat.
 
 ### A doua zi dimineața
 
@@ -248,13 +281,16 @@ Când apare `GATA`:
 - Cronurile noi au rulat (hPanel → Cron Jobs, ultima rulare) și FAN-ul își actualizează AWB-urile.
 - Monitorul CRM-ului (pingul `/_andaxi/ping`) verde; în admin, Jurnalul 404 (adresele vechi căutate).
 - Clienții logați aseară trebuie să se logheze din nou (sesiunile codului vechi nu trec); coșurile vechi se pierd.
+- Stripe → Developers → Webhooks: livrările refuzate cu 503 în timpul mentenanței au fost retrimise cu succes.
 - După 7 zile fără probleme: `public_html.vechi/` și copiile din `site/deploy/copii/` se pot șterge (ne întrebi întâi).
 
 ## Ce nu face (încă)
 
 - **Sesiunile codului vechi nu trec**: clienții și adminii se loghează din nou, coșurile deschise se pierd.
-- **Webhook-urile din timpul mentenanței** (plăți, ERP) ajung la codul nou chiar în timpul migrărilor, ca să nu se
-  piardă; o revenire cu baza le șterge odată cu restul datelor de după copie (de aceea `--fara-baza`).
+- **Plățile din timpul mentenanței stricte** primesc 503 și sunt retrimise de procesator mai târziu (Stripe: în câteva
+  minute până la câteva ore); o comandă plătită chiar atunci apare „neplătită” până la retrimitere.
+- **Un proces pornit înainte de mentenanță** (un cron lung al codului vechi) poate scrie încă: scriptul așteaptă cel
+  mult un minut să termine și se oprește dacă nu, iar amprenta bazei înainte și după copie prinde orice scriere.
 - **Cronurile** nu se schimbă singure: hPanel nu se poate scrie din SSH. Dacă `crontab -l` nu le arată, le dai cu
   `--cron-vechi=`.
 - **`.htaccess`-ul din `public_html`** e al stub-ului: rândurile puse acolo de altcineva (hPanel, un plugin de cache)
@@ -267,8 +303,11 @@ Când apare `GATA`:
 - Codul: `deploy/lib/deploy.php` (ce au în comun: ieșirea, comenzile, baza, docroot-ul, testul de fum),
   `deploy/lib/{release,adopta,actualizeaza,revino}.php`, `deploy/lib/php.sh` (alegerea PHP-ului), `bin/platforma`.
   Scripturile nu încarcă aplicația: codul unui site îl rulează doar prin `bin/platforma` al versiunii.
-- Testul: `tools/dev/php.sh tools/dev/test-deploy.php` (poarta **G-deploy**, și cu PHP-ul minim): o găzduire simulată
-  cu două site-uri vechi (checkout git, baze făcute ca a codului Biovitality), trei versiuni (una cu prima pagină
-  stricată), o migrare care pică, un test de fum care pică, open_basedir, actualizări cu întoarcerea singură și
-  revenirile, cu codul și baza comparate octet cu octet. `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat.
+- Testul: `tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php` (poarta **G-deploy**, și cu
+  PHP-ul minim; cere un MariaDB privat, `CMS_DEV_SOCK` dat explicit, și refuză serverul comun): o găzduire simulată cu
+  două site-uri vechi (checkout git, baze făcute ca a codului Biovitality), trei versiuni (una cu prima pagină stricată)
+  și injectări: o migrare care pică, un test de fum care pică, o licență stricată, o reluare cu altă versiune, procesul
+  oprit între redenumiri (adoptare, revenire, actualizare), o copie a altei baze, un UPDATE după migrări și după
+  deschidere, lacătul migrărilor ținut la o actualizare, open_basedir; codul și baza comparate octet cu octet.
+  `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat.
 - Stub-ul și `bin/platforma` le verifică și `tools/dev/test-paths.php` (B).

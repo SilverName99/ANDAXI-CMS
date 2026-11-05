@@ -19,6 +19,9 @@ declare(strict_types=1);
  *                           scripturile de deploy, ca să ruleze codul nou înainte să schimbe `RELEASE`.
  *   --public=<dosar>        docroot-ul; implicit `public_html/` de lângă dosarul site-ului.
  *   --arata                 scrie dosarul site-ului, versiunea, codul și docroot-ul, apoi iese (0).
+ *   --in-mentenanta         rulează și când site-ul e în mentenanța deploy-ului (`<site>/MENTENANTA`). Fără ea, atunci
+ *                           nu rulează nimic și iese cu 0: un cron nu scrie în bază cât deploy-ul o copiază, o migrează
+ *                           sau o pune la loc. O folosesc doar scripturile din deploy/.
  *
  * Versiunea se caută ca în stub: `<site>/releases/<v>/` (o găzduire care nu lasă site-ul să citească în afara dosarului
  * lui), apoi `~/platforma/releases/<v>/` (unde `~` e dosarul de trei ori deasupra dosarului site-ului). Scriptul trebuie
@@ -43,6 +46,7 @@ $__platforma = (static function (array $argv): array {
     $versiune = null;
     $public = null;
     $arata = false;
+    $inMentenanta = false;
     $rest = array_slice($argv, 1);
     while ($rest !== [] && str_starts_with((string) $rest[0], '--')) {
         $optiune = (string) array_shift($rest);
@@ -51,6 +55,10 @@ $__platforma = (static function (array $argv): array {
         }
         if ($optiune === '--arata') {
             $arata = true;
+            continue;
+        }
+        if ($optiune === '--in-mentenanta') {
+            $inMentenanta = true;
             continue;
         }
         if (preg_match('/^--(site|versiune|public)=(.*)$/s', $optiune, $m) !== 1 || $m[2] === '') {
@@ -118,6 +126,10 @@ $__platforma = (static function (array $argv): array {
     }
     if ($rest === []) {
         $opreste('lipsește scriptul (de exemplu scripts/migreaza.php --stare)');
+    }
+    if (!$inMentenanta && is_file($dosarSite . '/MENTENANTA')) {
+        fwrite(STDERR, 'platforma: ' . $dosarSite . " e în mentenanța deploy-ului (MENTENANTA); nu rulez nimic acum\n");
+        exit(0);
     }
     $relativ = (string) array_shift($rest);
     $script = realpath(str_starts_with($relativ, '/') ? $relativ : $cod . '/' . $relativ);

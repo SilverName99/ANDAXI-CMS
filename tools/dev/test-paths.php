@@ -41,7 +41,8 @@ declare(strict_types=1);
  *       doar în site/storage/logs/php.log al acelui site, nimic în jurnalul serverului; pluginuri.log tot acolo;
  *    B7 MENTENANTA: 503, Retry-After: 120, mentenanta.html (HEAD fără corp); /_andaxi/, /webhook/ și /api/erp/ trec;
  *       celălalt site neatins; cu jetonul deploy-ului în fișier, antetul X-Andaxi-Deploy sau cookie-ul andaxi_deploy trec, iar
- *       ?andaxi_deploy=<jeton> pune cookie-ul și trimite la aceeași adresă fără el; fără fișier, din nou 200;
+ *       ?andaxi_deploy=<jeton> pune cookie-ul și trimite la aceeași adresă fără el; strictă („strict” pe al doilea rând):
+ *       /webhook/ și /api/erp/ primesc și ele 503, pingul și jetonul trec; fără fișier, din nou 200;
  *    B8 RELEASE lipsă, goală, de altă formă (și una care, fără verificarea formei, ar ajunge la versiunea care există:
  *       „../releases/<v>”, „./<v>”) sau spre o versiune care lipsește → 503; versiunea din site/releases/ găsită;
  *    B9 pingul: baza lipsă → 503 repede; un server care acceptă conexiunea și tace → 503 în aproximativ 2 secunde;
@@ -701,6 +702,15 @@ try {
         $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/magazin?pagina=2' && str_contains(implode(' ', $r['cookies']), 'andaxi_deploy=' . $jeton)
         && str_contains(strtolower(implode(' ', $r['cookies'])), 'httponly') && $rRau['cod'] === 302 && ($rRau['antete']['location'] ?? '') === '/',
         $r['cod'] . ' ' . ($r['antete']['location'] ?? '-') . ' ' . implode(' ', $r['cookies']) . ' | ' . $rRau['cod'] . ' ' . ($rRau['antete']['location'] ?? '-'));
+    // Mentenanța strictă (copia bazei, migrările, revenirea): nici plățile, nici ERP-ul nu trec; pingul și jetonul da.
+    file_put_contents($siteuri['a']['site'] . '/MENTENANTA', $jeton . "\nstrict\n");
+    $rStripe = $cerere('a', 'POST', '/webhook/stripe');
+    $rErp = $cerere('a', 'POST', '/api/erp/notificare');
+    $rPing = $cerere('a', 'GET', '/_andaxi/ping');
+    $rAntet = $cerere('a', 'GET', '/admin/login', ['antete' => ['X-Andaxi-Deploy: ' . $jeton]]);
+    $verifica('MENTENANTA strictă („strict” pe al doilea rând): /webhook/ și /api/erp/ → 503 cu Retry-After: 120; pingul 200; cu jetonul, pagina (200)',
+        $rStripe['cod'] === 503 && ($rStripe['antete']['retry-after'] ?? '') === '120' && $rErp['cod'] === 503 && $rPing['cod'] === 200 && $rAntet['cod'] === 200,
+        $rStripe['cod'] . ' ' . $rErp['cod'] . ' ' . $rPing['cod'] . ' ' . $rAntet['cod']);
     unlink($siteuri['a']['site'] . '/MENTENANTA');
     $r = $cerere('a', 'GET', '/');
     $verifica('fără MENTENANTA, site-ul A din nou 200', $r['cod'] === 200, (string) $r['cod']);

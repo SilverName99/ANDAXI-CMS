@@ -7,11 +7,13 @@ declare(strict_types=1);
  * Implicit doar planul; cu --aplica, fazele:
  *
  *   verificari  versiunea nouă (și cea de acum) urcate și neatinse, pachetul, licența și migreaza --plan cu codul nou
- *   pregatire   pachetul nou (site/pachet.nou), assets/ și tema/ noi (public_html/.assets-nou, .tema-nou), stub-ul
- *   copie       copia bazei
- *   mentenanta  MENTENANTA (cu jetonul verificărilor)
- *   comutare    pachetul, assets/, tema/, fișierele din rădăcina docroot-ului și RELEASE, pe rând, ținute minte
- *   migrari     migreaza --aplica cu codul nou (reluat la codul 13)
+ *   pregatire   pachetul nou (site/pachet.nou), assets/ și tema/ noi (public_html/.assets-nou, .tema-nou), copia
+ *               fișierelor din rădăcina docroot-ului (stub-ul) de acum
+ *   mentenanta  MENTENANTA strictă (nici plățile, ERP-ul sau cronurile nu scriu), apoi liniștea pe bază
+ *   copie       copia bazei (amprenta înainte și după: nimic scris în timpul ei)
+ *   comutare    pachetul, assets/, tema/ și fișierele din rădăcina docroot-ului, pe rând, fiecare redenumire ținută minte
+ *   migrari     migreaza --aplica cu codul nou (--versiune, încă fără RELEASE schimbat; reluat la codul 13)
+ *   release     RELEASE pe versiunea nouă, cache-ul paginilor golit, mentenanța ușoară (plățile trec din nou)
  *   diagnostic  diagnostic.php --pachet și --licenta
  *   verificare  testul de fum (pingul spune versiunea nouă)
  *   deschidere  MENTENANTA ștearsă
@@ -33,8 +35,8 @@ namespace Platforma\Deploy;
 
 require __DIR__ . '/deploy.php';
 
-const FAZE_ACTUALIZARE = ['verificari', 'pregatire', 'copie', 'mentenanta', 'comutare', 'migrari', 'diagnostic', 'verificare', 'deschidere'];
-const FAZE_CU_INTOARCERE = ['comutare', 'migrari', 'diagnostic', 'verificare', 'deschidere'];
+const FAZE_ACTUALIZARE = ['verificari', 'pregatire', 'mentenanta', 'copie', 'comutare', 'migrari', 'release', 'diagnostic', 'verificare', 'deschidere'];
+const FAZE_CU_INTOARCERE = ['comutare', 'migrari', 'release', 'diagnostic', 'verificare', 'deschidere'];
 
 final class Actualizare
 {
@@ -109,12 +111,18 @@ exit(porneste(static function () use ($argv): int {
     if (!$u->aplica) {
         verificari($u);
         Iesire::scrie('');
-        Iesire::scrie('PLAN: nimic schimbat. Cu --aplica: pregătirea, copia bazei, mentenanța, comutarea, migrările, diagnosticul, testul de fum, deschiderea '
+        Iesire::scrie('PLAN: nimic schimbat. Cu --aplica: pregătirea, mentenanța strictă, copia bazei, comutarea, migrările, RELEASE, diagnosticul, testul de fum, deschiderea '
             . '(cu întoarcerea singură la ' . $u->veche . ' dacă ceva pică după comutare).');
         return 0;
     }
     Iesire::jurnal($u->s->lucru . '/jurnale/actualizeaza-' . date('Ymd-His') . '.log');
     $stare->salveaza();
+    Redenumiri::termina($stare);
+    if ($stare->ia('intoarcere_in_curs', false)) {
+        Iesire::atentie('o întoarcere la ' . $u->veche . ' a rămas la jumătate (procesul s-a oprit); o termin acum');
+        intoarce($u);
+        throw new Oprire('actualizarea spre ' . $u->noua . ' a fost întoarsă; site-ul e din nou pe ' . $u->veche . ', deschis');
+    }
     foreach (FAZE_ACTUALIZARE as $faza) {
         if ($stare->facuta($faza)) {
             Iesire::titlu($faza . ': făcută deja (' . $stare->date['faze'][$faza] . '), o sar');
@@ -125,7 +133,7 @@ exit(porneste(static function () use ($argv): int {
             ('Platforma\\Deploy\\' . $faza . 'Actualizare')($u);
         } catch (Oprire $e) {
             if (!in_array($faza, FAZE_CU_INTOARCERE, true)) {
-                @unlink($u->s->site . '/MENTENANTA');
+                Mentenanta::scoate($u->s);
                 throw new Oprire('faza „' . $faza . '”: ' . $e->getMessage(), $e->getCode(), array_merge($e->pasi,
                     ['site-ul a rămas pe ' . $u->veche . ', deschis; după reparare, aceeași comandă continuă de la „' . $faza . '”']));
             }
@@ -233,6 +241,16 @@ function pregatireActualizare(Actualizare $u): void
     }
     $cod = $s->cod($u->noua);
     $codVechi = $s->cod($u->veche);
+    // Resturile unei încercări de dinainte se șterg doar dacă originalul e la locul lui: niciodată singura copie.
+    foreach ([[$s->site . '/.pachet-' . $u->veche, $s->site . '/pachet'], [$s->docroot . '/.assets-' . $u->veche, $s->docroot . '/assets'],
+        [$s->docroot . '/.tema-' . $u->veche, $s->docroot . '/tema']] as [$rest, $original]) {
+        if (is_dir($rest) && (is_dir($original) || !str_contains($rest, '.tema-'))) {
+            if (!is_dir($original)) {
+                throw new Oprire($original . ' lipsește, iar ' . $rest . ' e singura lui copie; nu continui (ne trimiți ce vezi)');
+            }
+            Fisiere::sterge($rest, [$s->site, $s->docroot]);
+        }
+    }
     Fisiere::sterge($s->site . '/pachet.nou', [$s->site]);
     scriePachet($s, $u->slug, $u->o->text('pachet'), $u->repo(), $u->commit($u->noua), $s->site . '/pachet.nou');
     Iesire::ok('pachetul nou: ' . $s->site . '/pachet.nou');
@@ -243,6 +261,24 @@ function pregatireActualizare(Actualizare $u): void
     $cuTema = Docroot::tema($s->site . '/pachet.nou', $s->docroot . '/.tema-nou');
     Iesire::ok('assets/' . ($cuTema ? ' și tema/' : '') . ' noi, pregătite alături (' . $s->docroot . '/.assets-nou)');
     $u->stare->pune('cu_tema', $cuTema);
+    $u->stare->pune('avea_tema', is_dir($s->docroot . '/tema'));
+    // Fișierele din rădăcina docroot-ului (stub-ul, fișierele publice ale pachetului), copiate acum, cât sunt încă cele vechi.
+    $veche = Docroot::radacina($codVechi, $s->site . '/pachet');
+    $noua = Docroot::radacina($cod, $s->site . '/pachet.nou');
+    $copie = $u->radacinaVeche();
+    Fisiere::sterge($copie, [$s->lucru]);
+    Fisiere::dosar($copie, 0700);
+    $existau = [];
+    foreach (array_keys($veche + $noua) as $rel) {
+        $f = $s->docroot . '/' . $rel;
+        $existau[$rel] = is_file($f);
+        if (is_file($f)) {
+            Fisiere::dosar(dirname($copie . '/' . $rel), 0700);
+            Fisiere::copiaza($f, $copie . '/' . $rel);
+        }
+    }
+    $u->stare->pune('radacina', $existau);
+    Iesire::ok('rădăcina docroot-ului de acum copiată (' . count($existau) . ' fișiere): ' . $copie);
 }
 
 function copieActualizare(Actualizare $u): void
@@ -258,76 +294,51 @@ function mentenantaActualizare(Actualizare $u): void
 {
     $jeton = (string) $u->stare->ia('jeton', '') ?: bin2hex(random_bytes(16));
     $u->stare->pune('jeton', $jeton);
-    Fisiere::scrie($u->s->site . '/MENTENANTA', $jeton . "\n", 0640);
-    Iesire::ok('MENTENANTA: vizitatorii văd „Revenim în câteva minute” (plățile, ERP-ul și pingul trec)');
+    Mentenanta::pune($u->s, $jeton, true);
+    Iesire::ok('mentenanța strictă: vizitatorii văd „Revenim în câteva minute”; plățile și ERP-ul primesc 503 și retrimit; cronurile nu rulează');
+    $ramase = (new Baza(Env::citeste($u->s->site . '/.env')))->asteaptaLiniste(60);
+    if ($ramase > 0) {
+        throw new Oprire($ramase . ' conexiuni lucrează încă pe bază după un minut (un cron lung?); rulează din nou peste câteva minute');
+    }
+    Iesire::ok('nicio altă conexiune nu mai lucrează pe bază');
 }
 
-/** Fiecare pas al comutării se ține minte, ca întoarcerea să-l desfacă exact. */
+/**
+ * Pachetul, assets/, tema/ și rădăcina docroot-ului, fiecare cu redenumirile ținute minte (Redenumiri): o comutare oprită
+ * la jumătate se termină la rularea următoare, fără să șteargă nimic. RELEASE se schimbă abia după migrări (faza release).
+ */
 function comutareActualizare(Actualizare $u): void
 {
     $s = $u->s;
-    $facute = (array) $u->stare->ia('comutari', []);
-    $pas = static function (string $nume, callable $f) use ($u, &$facute): void {
-        if (!in_array($nume, $facute, true)) {
-            $f();
-            $facute[] = $nume;
-            $u->stare->pune('comutari', $facute);
-        }
-    };
-    $pas('pachet', static function () use ($s, $u): void {
-        Fisiere::sterge($s->site . '/.pachet-' . $u->veche, [$s->site]);
-        Fisiere::muta($s->site . '/pachet', $s->site . '/.pachet-' . $u->veche);
-        Fisiere::muta($s->site . '/pachet.nou', $s->site . '/pachet');
-    });
-    $pas('assets', static function () use ($s, $u): void {
-        Fisiere::sterge($s->docroot . '/.assets-' . $u->veche, [$s->docroot]);
-        Fisiere::muta($s->docroot . '/assets', $s->docroot . '/.assets-' . $u->veche);
-        Fisiere::muta($s->docroot . '/.assets-nou', $s->docroot . '/assets');
-    });
-    $pas('tema', static function () use ($s, $u): void {
-        Fisiere::sterge($s->docroot . '/.tema-' . $u->veche, [$s->docroot]);
-        $u->stare->pune('avea_tema', is_dir($s->docroot . '/tema'));
-        if (is_dir($s->docroot . '/tema')) {
-            Fisiere::muta($s->docroot . '/tema', $s->docroot . '/.tema-' . $u->veche);
-        }
-        if (is_dir($s->docroot . '/.tema-nou')) {
-            Fisiere::muta($s->docroot . '/.tema-nou', $s->docroot . '/tema');
-        }
-    });
-    $pas('radacina', static function () use ($s, $u): void {
-        $veche = Docroot::radacina($s->cod($u->veche), $s->site . '/.pachet-' . $u->veche);
-        $noua = Docroot::radacina($s->cod($u->noua), $s->site . '/pachet');
-        $copie = $u->radacinaVeche();
-        Fisiere::sterge($copie, [$s->lucru]);
-        Fisiere::dosar($copie, 0700);
-        $existau = [];
-        foreach (array_keys($veche + $noua) as $rel) {
-            $f = $s->docroot . '/' . $rel;
-            $existau[$rel] = is_file($f);
-            if (is_file($f)) {
-                Fisiere::dosar(dirname($copie . '/' . $rel), 0700);
-                Fisiere::copiaza($f, $copie . '/' . $rel);
+    Redenumiri::fa($u->stare, 'pachet', [[$s->site . '/pachet', $s->site . '/.pachet-' . $u->veche], [$s->site . '/pachet.nou', $s->site . '/pachet']]);
+    Redenumiri::fa($u->stare, 'assets', [[$s->docroot . '/assets', $s->docroot . '/.assets-' . $u->veche], [$s->docroot . '/.assets-nou', $s->docroot . '/assets']]);
+    $tema = [];
+    if ($u->stare->ia('avea_tema', false)) {
+        $tema[] = [$s->docroot . '/tema', $s->docroot . '/.tema-' . $u->veche];
+    }
+    if ($u->stare->ia('cu_tema', false)) {
+        $tema[] = [$s->docroot . '/.tema-nou', $s->docroot . '/tema'];
+    }
+    if ($tema !== []) {
+        Redenumiri::fa($u->stare, 'tema', $tema);
+    }
+    // Rădăcina: fișierele noi scrise peste (fiecare dintr-o bucată); copia celor vechi e din pregătire, deci o reluare
+    // nu o strică.
+    $noua = Docroot::radacina($s->cod($u->noua), $s->site . '/pachet');
+    foreach (array_keys((array) $u->stare->ia('radacina', [])) as $rel) {
+        $f = $s->docroot . '/' . $rel;
+        if (isset($noua[$rel])) {
+            if (!is_file($f) || hash_file('sha256', $f) !== hash_file('sha256', $noua[$rel])) {
+                Fisiere::dosar(dirname($f), 0755);
+                Fisiere::scrie($f, (string) file_get_contents($noua[$rel]), 0644);
             }
+        } else {
+            @unlink($f);
         }
-        $u->stare->pune('radacina', $existau);
-        foreach (array_keys($veche + $noua) as $rel) {
-            $f = $s->docroot . '/' . $rel;
-            if (isset($noua[$rel])) {
-                if (!is_file($f) || hash_file('sha256', $f) !== hash_file('sha256', $noua[$rel])) {
-                    Fisiere::dosar(dirname($f), 0755);
-                    Fisiere::scrie($f, (string) file_get_contents($noua[$rel]), 0644);
-                }
-            } else {
-                @unlink($f);
-            }
-        }
-    });
-    $pas('release', static function () use ($s, $u): void {
-        Fisiere::scrie($s->site . '/RELEASE', $u->noua . "\n", 0644);
-    });
-    Iesire::ok('cache-ul paginilor golit (' . golesteCacheCod($s) . ' fișiere): nicio pagină a versiunii de dinainte nu se mai servește');
-    Iesire::ok('comutat pe ' . $u->noua . ': pachetul, assets/, tema/, stub-ul și RELEASE (de dinainte: ' . $s->docroot . '/.assets-' . $u->veche . ', '
-        . $s->site . '/.pachet-' . $u->veche . ')');
+    }
+    $u->stare->pune('radacina_scrisa', true);
+    Iesire::ok('comutat: pachetul, assets/, tema/ și stub-ul versiunii ' . $u->noua . ' (de dinainte: ' . $s->docroot . '/.assets-' . $u->veche . ', '
+        . $s->site . '/.pachet-' . $u->veche . '); RELEASE rămâne ' . $u->veche . ' până după migrări');
 }
 
 function migrariActualizare(Actualizare $u): void
@@ -352,6 +363,16 @@ function migrariActualizare(Actualizare $u): void
     throw new Oprire('migrările n-au terminat după 30 de reluări');
 }
 
+/** RELEASE pe versiunea nouă (după migrări), cache-ul paginilor golit, apoi mentenanța ușoară pentru verificări. */
+function releaseActualizare(Actualizare $u): void
+{
+    $u->stare->pune('release_schimbat', true);
+    Fisiere::scrie($u->s->site . '/RELEASE', $u->noua . "\n", 0644);
+    Iesire::ok('RELEASE = ' . $u->noua . '; cache-ul paginilor golit (' . golesteCacheCod($u->s) . ' fișiere)');
+    Mentenanta::pune($u->s, (string) $u->stare->ia('jeton'), false);
+    Iesire::ok('mentenanța ușoară: plățile și ERP-ul trec din nou (la codul nou), vizitatorii încă nu');
+}
+
 function diagnosticActualizare(Actualizare $u): void
 {
     foreach (['--pachet', '--licenta'] as $opt) {
@@ -373,10 +394,10 @@ function verificareActualizare(Actualizare $u): void
 
 function deschidereActualizare(Actualizare $u): void
 {
-    @unlink($u->s->site . '/MENTENANTA');
+    Mentenanta::scoate($u->s);
     $r = Http::cere($u->url . '/');
     if ($r['cod'] !== 200 || str_contains($r['corp'], 'Revenim în câteva minute')) {
-        Fisiere::scrie($u->s->site . '/MENTENANTA', (string) $u->stare->ia('jeton') . "\n", 0640);
+        Mentenanta::pune($u->s, (string) $u->stare->ia('jeton'), false);
         throw new Oprire('fără MENTENANTA prima pagină nu răspunde 200 (HTTP ' . $r['cod'] . ')');
     }
     Iesire::ok('MENTENANTA ștearsă: ' . $u->url . '/ răspunde 200 oricui');
@@ -387,26 +408,21 @@ function deschidereActualizare(Actualizare $u): void
 function intoarce(Actualizare $u): void
 {
     $s = $u->s;
+    $st = $u->stare;
     Iesire::titlu('Întoarcerea la ' . $u->veche);
-    if (!is_file($s->site . '/MENTENANTA')) {
-        Fisiere::scrie($s->site . '/MENTENANTA', (string) $u->stare->ia('jeton', bin2hex(random_bytes(16))) . "\n", 0640);
-    }
-    $facute = (array) $u->stare->ia('comutari', []);
-    // Un pas oprit la jumătate (între cele două redenumiri) se pune la loc aici.
-    foreach ([[$s->docroot . '/assets', $s->docroot . '/.assets-' . $u->veche, $s->docroot . '/.assets-nou'],
-        [$s->site . '/pachet', $s->site . '/.pachet-' . $u->veche, $s->site . '/pachet.nou']] as [$loc, $vechi, $nou]) {
-        if (!is_dir($loc) && is_dir($vechi)) {
-            Fisiere::muta($vechi, $loc);
-            Iesire::ok('pus la loc, după un pas oprit la jumătate: ' . $loc);
-            $facute = array_values(array_diff($facute, [basename($loc) === 'assets' ? 'assets' : 'pachet']));
-        }
-    }
-    if (in_array('release', $facute, true)) {
+    $st->pune('intoarcere_in_curs', true);
+    Mentenanta::pune($s, (string) $st->ia('jeton', '') ?: bin2hex(random_bytes(16)), true);
+    // O redenumire rămasă la jumătate (de exemplu procesul oprit) se termină întâi, ca să se poată desface întreagă.
+    Redenumiri::termina($st);
+    $facute = (array) $st->ia('redenumiri_facute', []);
+    if ($st->ia('release_schimbat', false)) {
         Fisiere::scrie($s->site . '/RELEASE', $u->veche . "\n", 0644);
         Iesire::ok('RELEASE = ' . $u->veche . '; cache-ul paginilor golit (' . golesteCacheCod($s) . ' fișiere)');
+    } else {
+        Iesire::ok('RELEASE a rămas ' . $u->veche . ' (nu ajunsese să se schimbe)');
     }
-    if (in_array('radacina', $facute, true)) {
-        foreach ((array) $u->stare->ia('radacina', []) as $rel => $exista) {
+    if ($st->ia('radacina_scrisa', false) || in_array('assets', $facute, true)) {
+        foreach ((array) $st->ia('radacina', []) as $rel => $exista) {
             $f = $s->docroot . '/' . $rel;
             if ($exista) {
                 Fisiere::scrie($f, (string) file_get_contents($u->radacinaVeche() . '/' . $rel), 0644);
@@ -417,39 +433,37 @@ function intoarce(Actualizare $u): void
         Iesire::ok('stub-ul și fișierele din rădăcina docroot-ului, cele de dinainte');
     }
     if (in_array('tema', $facute, true)) {
-        if (is_dir($s->docroot . '/tema')) {
-            Fisiere::sterge($s->docroot . '/.tema-nou', [$s->docroot]);
-            Fisiere::muta($s->docroot . '/tema', $s->docroot . '/.tema-nou');
+        $pasi = [];
+        if ($st->ia('cu_tema', false)) {
+            $pasi[] = [$s->docroot . '/tema', $s->docroot . '/.tema-nou'];
         }
-        if ($u->stare->ia('avea_tema', false)) {
-            Fisiere::muta($s->docroot . '/.tema-' . $u->veche, $s->docroot . '/tema');
+        if ($st->ia('avea_tema', false)) {
+            $pasi[] = [$s->docroot . '/.tema-' . $u->veche, $s->docroot . '/tema'];
         }
+        Redenumiri::fa($st, 'inapoi-tema', $pasi);
     }
     if (in_array('assets', $facute, true)) {
-        Fisiere::sterge($s->docroot . '/.assets-nou', [$s->docroot]);
-        Fisiere::muta($s->docroot . '/assets', $s->docroot . '/.assets-nou');
-        Fisiere::muta($s->docroot . '/.assets-' . $u->veche, $s->docroot . '/assets');
+        Redenumiri::fa($st, 'inapoi-assets', [[$s->docroot . '/assets', $s->docroot . '/.assets-nou'], [$s->docroot . '/.assets-' . $u->veche, $s->docroot . '/assets']]);
         Iesire::ok('assets/' . (in_array('tema', $facute, true) ? ' și tema/' : '') . ' de dinainte');
     }
     if (in_array('pachet', $facute, true)) {
-        Fisiere::sterge($s->site . '/pachet.nou', [$s->site]);
-        Fisiere::muta($s->site . '/pachet', $s->site . '/pachet.nou');
-        Fisiere::muta($s->site . '/.pachet-' . $u->veche, $s->site . '/pachet');
+        Redenumiri::fa($st, 'inapoi-pachet', [[$s->site . '/pachet', $s->site . '/pachet.nou'], [$s->site . '/.pachet-' . $u->veche, $s->site . '/pachet']]);
         Iesire::ok('pachetul de dinainte');
     }
-    $u->stare->pune('comutari', []);
-    $u->stare->pune('intoarsa', true);
     Iesire::scrie('');
     Iesire::scrie('Verificarea versiunii ' . $u->veche . ', după întoarcere:');
-    $probleme = verificaSiteul($s, $u->url, (string) $u->stare->ia('jeton'), $u->veche, $u->o->text('produs'));
+    Mentenanta::pune($s, (string) $st->ia('jeton', '') ?: bin2hex(random_bytes(16)), false);
+    $probleme = verificaSiteul($s, $u->url, trim((string) strtok((string) Mentenanta::citeste($s), "\n")), $u->veche, $u->o->text('produs'));
     if ($probleme !== []) {
         throw new Oprire('nici versiunea ' . $u->veche . ' nu trece verificarea după întoarcere: ' . implode('; ', $probleme) . '; site-ul rămâne în MENTENANȚĂ', 1, [
             'uită-te în ' . $s->site . '/storage/logs/php.log și fatal.log',
-            'site-ul nou îl vezi cu ' . $u->url . '/?andaxi_deploy=' . $u->stare->ia('jeton'),
+            'site-ul îl vezi cu ' . $u->url . '/?andaxi_deploy=' . trim((string) strtok((string) Mentenanta::citeste($s), "\n")),
             'deschis de mână, cu riscul tău: rm ' . $s->site . '/MENTENANTA',
         ]);
     }
-    @unlink($s->site . '/MENTENANTA');
+    Mentenanta::scoate($s);
+    $st->pune('intoarsa', true);
+    $st->pune('intoarcere_in_curs', false);
     Iesire::ok('versiunea ' . $u->veche . ' trece verificarea; MENTENANTA ștearsă, site-ul e deschis');
 }
 
@@ -466,5 +480,12 @@ function curataResturi(Actualizare $u): void
     }
     foreach ([$s->docroot . '/.assets-nou', $s->docroot . '/.tema-nou', $s->site . '/pachet.nou'] as $d) {
         Fisiere::sterge($d, [$s->docroot, $s->site]);
+    }
+    // Copiile locale ale versiunilor (open_basedir): doar cea nouă și cea de dinainte. Ștergerea nu atinge fișierele
+    // versiunii comune (legături fixe; Fisiere::sterge face scriibile doar dosarele copiei).
+    foreach (glob($s->site . '/releases/*', GLOB_ONLYDIR) ?: [] as $d) {
+        if (!in_array(basename($d), [$u->noua, $u->veche], true)) {
+            Fisiere::sterge($d, [$s->site . '/releases']);
+        }
     }
 }

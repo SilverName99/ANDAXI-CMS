@@ -12,7 +12,9 @@ declare(strict_types=1);
  *  2. ../site/MENTENANTA există (mentenanța deploy-ului, pentru o migrare care oprește scrierile) → 503,
  *     Retry-After: 120 și mentenanta.html, în afară de /webhook/, /api/erp/ și /_andaxi/: confirmările de plată,
  *     ERP-ul și pingul merg mai departe. E alta decât „Revenim în curând” din admin (App\Support\Maintenance) și
- *     merge și când baza sau codul nou sunt stricate. Dacă MENTENANTA conține un jeton (32–64 de cifre hexazecimale,
+ *     merge și când baza sau codul nou sunt stricate. Cu „strict” pe al doilea rând al fișierului (mentenanța strictă
+ *     a deploy-ului: copia bazei, migrările, revenirea) trece doar pingul: plățile și ERP-ul primesc și ele 503 cu
+ *     Retry-After și retrimit mai târziu, deci nimic nu scrie în bază. Dacă MENTENANTA conține pe primul rând un jeton (32–64 de cifre hexazecimale,
  *     scris de scripturile din deploy/), o cerere cu același jeton în antetul X-Andaxi-Deploy sau în cookie-ul
  *     andaxi_deploy trece și ea: așa verifică deploy-ul (și proprietarul, în browser) site-ul nou înainte să-l
  *     deschidă. ?andaxi_deploy=<jeton> pune cookie-ul (sesiune, HttpOnly) și trimite la aceeași adresă fără el.
@@ -50,14 +52,18 @@ require (static function (): string {
 
     if (is_file($site . '/MENTENANTA')) {
         $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/');
+        $continut = (string) @file_get_contents($site . '/MENTENANTA');
+        $randuri = preg_split('/\R/', $continut) ?: [];
+        // Mentenanța strictă (al doilea rând „strict”): nici plățile, nici ERP-ul nu trec (503 + Retry-After; ele retrimit).
+        $stricta = trim((string) ($randuri[1] ?? '')) === 'strict';
         $trece = false;
-        foreach (['/webhook/', '/api/erp/', '/_andaxi/'] as $prefix) {
+        foreach ($stricta ? ['/_andaxi/'] : ['/webhook/', '/api/erp/', '/_andaxi/'] as $prefix) {
             if (str_starts_with($cale, $prefix)) {
                 $trece = true;
                 break;
             }
         }
-        $jeton = $trece ? '' : trim((string) @file_get_contents($site . '/MENTENANTA'));
+        $jeton = $trece ? '' : trim((string) ($randuri[0] ?? ''));
         if (preg_match('/^[0-9a-f]{32,64}$/', $jeton) === 1) {
             $dinAdresa = $_GET['andaxi_deploy'] ?? null;
             if (is_string($dinAdresa) && hash_equals($jeton, $dinAdresa)) {
