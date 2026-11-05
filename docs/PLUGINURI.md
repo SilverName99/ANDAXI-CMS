@@ -1102,21 +1102,32 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   eligibilă în coș. **Transportul gratuit și punctele** socotesc oferta ca pe un cupon: pragul pe subtotalul de dinainte de
   ofertă, minus reducerile (oferta, cuponul, punctele) doar cu „shipping_include_coupons” (implicit da, deci pe ce se plătește);
   punctele (folosite și câștigate) pe subtotal minus cupon, adică pe prețurile de după ofertă, ca la un cupon. **Cuponul** nu
-  se aplică liniilor reduse de ofertă: se socotește doar pe celelalte (subtotalul eligibil, ca la un cupon „fără cumulare”),
-  iar coșul și checkout-ul spun „Cuponul nu se aplică produselor din oferta campaniei”. **Îndemnul** „Mai adaugă un produs din
+  se aplică niciunei linii eligibile pentru ofertă (redusă sau rămasă fără pereche): se socotește doar pe produsele din afara
+  campaniei (subtotalul eligibil, ca la un cupon „fără cumulare”), iar coșul și checkout-ul spun „Cuponul nu se aplică
+  produselor din oferta campaniei”. Dacă, fără produsele ofertei, cuponul nu mai are pe ce să se aplice, e **refuzat** cu
+  mesajul „Cuponul nu se aplică produselor din oferta campaniei, iar în coș nu sunt alte produse pe care să se aplice.”
+  (`CheckoutCalculator::MESAJ_CUPON_OFERTA`): la aplicare (scos din coș, cu mesajul) și la trimiterea comenzii (comanda nu
+  se plasează, clientul e întors în coș cu mesajul), deci nu se atașează comenzii și nu consumă un cupon unic sau o
+  folosire din `max_uses_total`. **Îndemnul** „Mai adaugă un produs din
   ofertă ca să primești reducerea” (sub sumar, în coș, coșul plutitor și checkout) cât lipsește o bucată pentru prima grupă
   (cu mai multe lipsă: „Mai adaugă N produse …”). **Afișarea**: pe fiecare linie redusă, prețul de dinainte tăiat și „<eticheta>:
   −X lei”; în sumar, rândul „<campania>: <eticheta> (inclusă în prețuri) −X lei” (în pagina coșului, coșul plutitor,
-  checkout, emailurile comenzii, sub produse, și Admin → Comenzi, cu reducerea pe linie). **Pe comandă** (separat de INSERT,
+  checkout, emailurile comenzii, sub produse, o singură dată chiar dacă șablonul are și `{{order_items_html}}`, și
+  `{{order_summary_rows}}`, și Admin → Comenzi, cu reducerea pe linie). **Pe comandă** (separat de INSERT,
   ca o comandă fără ofertă să se scrie exact ca înainte): `orders.campanie_id`, `campanie_oferta` (textul, înghețat),
   `campanie_reducere`; pe linii `order_items.campanie_reducere`, `campanie_pret_initial`, `line_total` redus și `unit_price` =
   media la cent. **ERP**: cuponul pleacă azi pe comandă (`discountCupon`, o linie de serviciu la cota dominantă), iar ERP-ul
   ține o singură linie pe produs (două linii pe același produs opresc aprobarea), fără reducere pe linie la primire; de aceea
   oferta nu pleacă ca un cupon, ci în prețul liniei: `pretUnitar` = totalul redus al liniei / cantitate, cu 4 zecimale (cât ține
   ERP-ul), deci factura are prețul plătit și TVA-ul cu cota fiecărui produs; `total` e al comenzii. Pentru cantități sub 100,
-  totalul liniei din ERP iese la cent cel al site-ului. Liniile fără ofertă pleacă exact ca înainte. **De știut**: o editare
-  manuală a cantității unei linii cu ofertă din Admin → Comenzi (sau o schimbare venită din ERP) o reprețuiește la prețul mediu
-  (cel mult 1 ban față de totalul exact) și nu refăce oferta. Fără ofertă aleasă (implicit) sau fără campanie activă, coșul,
+  totalul liniei din ERP iese la cent cel al site-ului. Liniile fără ofertă pleacă exact ca înainte. **Admin → Comenzi**: produsele unei
+  comenzi cu ofertă **nu se editează** (`POST /admin/orders/{id}/items` răspunde „Comanda are oferta campaniei: produsele nu
+  se pot modifica aici. Anulează comanda și plaseaz-o din nou, sau modific-o în ERP.”, iar editorul arată liniile doar de
+  citit, cu același text): refacerea liniilor le-ar reprețui fără ofertă. Reducerea comercială și destinația (FANbox, ridicare)
+  se schimbă ca la orice comandă; transportul lor recalculat socotește oferta ca în coș (subtotalul de dinainte de ofertă,
+  oferta printre reduceri). **Din ERP** (o comandă schimbată acolo și trimisă înapoi): liniile primite sunt cele facturate
+  de ERP (prețul și totalul lor, deci sumele rămân corecte), iar coloanele ofertei rămân pe liniile păstrate; textul ofertei
+  de pe comandă poate rămâne cel de la plasare (doar informativ). Fără ofertă aleasă (implicit) sau fără campanie activă, coșul,
   comanda și ERP-ul sunt octet cu octet cele de dinainte (sumarul coșului nu are nicio cheie nouă).
 - **Cache-ul paginilor**: cheia primește `|campanie:<id>:<updated_at>` doar cât e o campanie activă (fără ea, cheia e exact
   cea de dinainte); salvarea și ștergerea golesc cache-ul. Un CDN care ține pagini HTML întregi pentru vizitatori le-ar servi

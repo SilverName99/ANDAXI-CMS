@@ -1280,6 +1280,8 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
             const sePoateDebloca = ['processing', 'completed'].includes(statusComanda);
             const comandaBlocata = ['processing', 'completed', 'cancelled', 'refunded']
                 .includes(statusComanda) && !deblocataPtCorectie;
+            // Pluginul campanii: produsele unei comenzi cu oferta campaniei nu se editează aici (serverul refuză și el).
+            const cuOfertaCampanie = toAmount(order.campanie_reducere || 0) > 0.004;
             // Plătită cu cardul, dar totalul a crescut ulterior → diferență de încasat.
             const platitCard = String(order.payment_status || '').toLowerCase() === 'paid';
             const sumaIncasata = order.paid_amount === null || order.paid_amount === undefined || order.paid_amount === ''
@@ -1310,11 +1312,11 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         🏷️ ${esc(String(order.campanie_oferta || 'Oferta campaniei'))}: −${orderMoney(reducereOferta)} pe linie${Number(it.campanie_pret_initial || 0) > 0 ? ` — ${qty} × ${orderMoney(Number(it.campanie_pret_initial))} înainte` : ''}
                        </div>`
                         : '');
-                if (comandaBlocata) {
+                if (comandaBlocata || cuOfertaCampanie) {
                     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
                         <span style="flex:1;">${esc(it.product_name || '')}${eticheta}</span>
                         <span style="width:60px;text-align:center;">${qty}</span>
-                        <span style="min-width:92px;text-align:right;font-weight:600;">${orderMoney(unitPrice * qty)}</span>
+                        <span style="min-width:92px;text-align:right;font-weight:600;">${orderMoney(cuOfertaCampanie ? lineTotal : unitPrice * qty)}</span>
                     </div>`;
                 }
                 if (eticheta !== '') {
@@ -1548,11 +1550,11 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                         <button type="button" onclick="blocheazaComanda(${order.id})" style="margin-top:8px;padding:6px 12px;background:#fff;border:1px solid #059669;border-radius:5px;cursor:pointer;font-size:13px;color:#065f46;">🔒 Blochează la loc</button>
                         <span id="order-unlock-status-${order.id}" style="font-size:13px;margin-left:8px;"></span>
                     </div>` : ''}
-                    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+                    ${cuOfertaCampanie ? `<p data-campanie-blocata style="margin:8px 0 0;padding:8px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;color:#92400e;font-size:13px;"><?= htmlspecialchars(\App\Http\Controllers\AdminController::MESAJ_OFERTA_PRODUSE, ENT_QUOTES) ?></p>` : `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
                         <button type="button" onclick="addOrderItemRow(${order.id})" style="padding:6px 12px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;font-size:13px;">+ Adaugă produs</button>
                         <button type="button" onclick="saveOrderItems(${order.id})" style="padding:6px 14px;background:#1a7a5e;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;">Recalculează și salvează</button>
                         <span id="order-items-status-${order.id}" style="font-size:13px;"></span>
-                    </div>
+                    </div>`}
                     <div style="margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
                         <div style="font-size:13px;font-weight:600;color:#334155;margin-bottom:6px;">Reducere comercială</div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">

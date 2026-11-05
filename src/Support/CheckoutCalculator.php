@@ -196,6 +196,8 @@ final class CheckoutCalculator
                 ];
             }
             $calculOferta = OfertaCampanie::calculeaza($ofertaCampanie, $liniiOferta);
+            // Liniile eligibile (reduse sau nu în grupe): cuponul nu se aplică niciuneia dintre ele.
+            $calculOferta['eligibile'] = array_fill_keys(array_column($liniiOferta, 'cheie'), true);
         }
         $reducereOfertaTotal = 0.0;
 
@@ -283,6 +285,9 @@ final class CheckoutCalculator
                 'coupon_discount' => 0.0,
                 'line_total_after_coupon' => $lineTotal,
             ];
+            if (isset($calculOferta['eligibile'][(string) ($cartItem['item_key'] ?? '')])) {
+                $lines[array_key_last($lines)]['campanie_eligibila'] = true;
+            }
             if ($reducereOferta > 0) {
                 $lines[array_key_last($lines)] += [
                     'campanie_reducere' => $reducereOferta / 100,
@@ -303,8 +308,14 @@ final class CheckoutCalculator
         // pornit (comenzile deja plasate își păstrează reducerea).
         if ($couponCode !== null && $couponCode !== '' && Plugins::permiteInceput('cupoane')) {
             $coupon = self::validateCoupon($db, $couponCode, $lines);
+            // Pluginul campanii: un cupon care, fără produsele ofertei campaniei, nu mai are pe ce să se aplice e refuzat (nu se
+            // atașează comenzii, deci nici un cupon unic sau cu număr limitat de folosiri nu se consumă degeaba).
+            if ($coupon !== null && !empty($coupon['exclus_de_oferta']) && (float) ($coupon['eligible_subtotal'] ?? 0) <= 0.0) {
+                $coupon = null;
+                $couponError = self::MESAJ_CUPON_OFERTA;
+            }
             if ($coupon === null) {
-                $couponError = 'Cupon invalid sau inactiv.';
+                $couponError ??= 'Cupon invalid sau inactiv.';
             } else {
                 $discountBase = self::couponDiscountBaseSubtotal($coupon, $subtotal);
                 $discount = self::calculateDiscount($coupon, $discountBase);
@@ -374,7 +385,7 @@ final class CheckoutCalculator
                 'eticheta' => $ofertaCampanie['eticheta'],
                 'reducere' => round($reducereOfertaTotal, 2),
                 'indiciu' => OfertaCampanie::indiciu((int) $calculOferta['lipsesc']),
-                'cupon_exclus' => $coupon !== null && $reducereOfertaTotal > 0,
+                'cupon_exclus' => $coupon !== null && !empty($calculOferta['eligibile']),
             ];
         }
         if ($transportGratuitDinProdus) {
@@ -491,6 +502,9 @@ final class CheckoutCalculator
 
         return $produse;
     }
+
+    /** Cuponul refuzat fiindcă se aplica doar produselor din oferta campaniei (pluginul campanii). */
+    public const MESAJ_CUPON_OFERTA = 'Cuponul nu se aplică produselor din oferta campaniei, iar în coș nu sunt alte produse pe care să se aplice.';
 
     private static bool $orderShippingSchemaEnsured = false;
 
@@ -1008,8 +1022,8 @@ final class CheckoutCalculator
                 'quantity' => $qty,
                 'line_total' => max(0.0, (float) ($line['line_total'] ?? 0.0)),
                 'is_discounted' => !empty($line['is_discounted']),
-                // Pluginul campanii: o linie redusă de oferta campaniei nu primește și cuponul.
-                'campanie' => !empty($line['campanie_reducere']),
+                // Pluginul campanii: o linie eligibilă pentru oferta campaniei (redusă sau nu în grupe) nu primește cuponul.
+                'campanie' => !empty($line['campanie_eligibila']),
             ];
         }
         // Un cupon nu se aplică liniilor reduse de oferta campaniei: ca la un cupon „fără cumulare”, reducerea se socotește
@@ -1017,6 +1031,7 @@ final class CheckoutCalculator
         $areOferta = in_array(true, array_column($cartRows, 'campanie'), true);
         if ($areOferta) {
             $coupon['use_eligible_subtotal'] = 1;
+            $coupon['exclus_de_oferta'] = 1;
             $cartRows = array_values(array_filter($cartRows, static fn (array $r): bool => !$r['campanie']));
         }
 
@@ -1097,6 +1112,12 @@ final class CheckoutCalculator
         }
 
         if ($eligibleCount <= 0) {
+            // Cu oferta campaniei în coș, produsele cuponului erau doar ale ofertei: buildSummary îl refuză cu mesajul lui.
+            if ($areOferta) {
+                $coupon['eligible_cart_item_keys'] = [];
+                $coupon['eligible_subtotal'] = 0.0;
+                return true;
+            }
             return false;
         }
         $coupon['eligible_cart_item_keys'] = array_values(array_unique($eligibleKeys));

@@ -1160,7 +1160,20 @@ HTML;
 
     private static function applyTemplate(string $template, array $vars): string
     {
-        return strtr($template, $vars);
+        $rezultat = strtr($template, $vars);
+        // Pluginul campanii: rândul ofertei campaniei vine cu tabelul produselor ({{order_items_html}} și
+        // {{order_summary_rows}}); un șablon care le are pe amândouă îl arată o singură dată (primul). Fără ofertă, nimic.
+        if (substr_count($rezultat, EmailAutomation::SEMN_OFERTA) > 1) {
+            $gasite = 0;
+            $rezultat = (string) preg_replace_callback(
+                '/' . preg_quote(EmailAutomation::SEMN_OFERTA, '/') . '.*?' . preg_quote(EmailAutomation::SEMN_OFERTA_SFARSIT, '/') . '/s',
+                static function (array $m) use (&$gasite): string {
+                    return ++$gasite === 1 ? $m[0] : '';
+                },
+                $rezultat
+            );
+        }
+        return $rezultat;
     }
 
     /** Caseta cu datele plății prin OP, gata stilizată pentru email. */

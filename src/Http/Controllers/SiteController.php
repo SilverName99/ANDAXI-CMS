@@ -1809,6 +1809,14 @@ final class SiteController
         CheckoutCalculator::setLocalitate((string) ($billing['billing_city'] ?? ''));
         $settings = Settings::all($db);
         $summary = CheckoutCalculator::buildSummary($db, $settings);
+        // Pluginul campanii: un cupon refuzat fiindcă se aplica doar produselor din oferta campaniei nu dispare tăcut din
+        // comandă: clientul e întors în coș, cu mesajul (cuponul nu se atașează, deci nu se consumă).
+        if (($summary['coupon_error'] ?? null) === CheckoutCalculator::MESAJ_CUPON_OFERTA && Cart::coupon() !== null) {
+            Cart::clearCoupon();
+            Flash::set('error', CheckoutCalculator::MESAJ_CUPON_OFERTA);
+            header('Location: /cos');
+            return;
+        }
         $requiresShippingCharge = $this->requiresFanLiveShippingCharge($settings, $summary);
         $shippingError = null;
         $liveShippingCost = $this->resolveFanLiveShipping($settings, $summary, $billing, $shippingError);

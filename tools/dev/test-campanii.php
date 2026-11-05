@@ -909,6 +909,16 @@ $adminComenzi = $cerere('GET', '/admin/orders', $jarAdmin);
 $verifica('Admin → Comenzi: oferta în datele comenzii și ale liniei', $adminComenzi['cod'] === 200
     && str_contains($adminComenzi['corp'], 'campanie_reducere') && str_contains($adminComenzi['corp'], 'data-campanie-sumar'), $adminComenzi['cod'] . ' '
     . (str_contains($adminComenzi['corp'], 'campanie_reducere') ? 'date da' : 'date nu') . ', ' . (str_contains($adminComenzi['corp'], 'data-campanie-sumar') ? 'js da' : 'js nu'));
+// Produsele unei comenzi cu oferta nu se editează din Admin → Comenzi (serverul refuză, editorul nu le arată).
+$liniiInainteEditare = json_encode($liniiComanda);
+$editare = $cerere('POST', '/admin/orders/' . $idComanda . '/items', $jarAdmin, ['_csrf' => $jeton($adminComenzi['corp']) ?: $csrf,
+    'product_id' => [$pA], 'quantity' => ['1']]);
+$raspunsEditare = (array) json_decode($editare['corp'], true);
+$verifica('Admin → Comenzi: editarea produselor unei comenzi cu oferta e refuzată, liniile și comanda rămân; editorul arată de ce',
+    ($raspunsEditare['ok'] ?? null) === false && ($raspunsEditare['error'] ?? '') === \App\Http\Controllers\AdminController::MESAJ_OFERTA_PRODUSE
+    && json_encode($db->query('SELECT * FROM order_items WHERE order_id = ' . $idComanda . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) ?: []) === $liniiInainteEditare
+    && abs((float) $unu('SELECT total FROM orders WHERE id = :id', ['id' => $idComanda]) - (float) $comanda['total']) < 0.001
+    && str_contains($adminComenzi['corp'], 'data-campanie-blocata'), $editare['cod'] . ' ' . mb_substr($editare['corp'], 0, 300));
 if ($idComanda > 0) {
     foreach (['order_items', 'email_logs'] as $tabel) {
         $db->exec('DELETE FROM ' . $tabel . ' WHERE order_id = ' . $idComanda);
@@ -926,6 +936,68 @@ $verifica('un produs al campaniei redus între timp e sărit de ofertă (rămân
     && (float) ($s['campanie_oferta']['reducere'] ?? -1) === 0.0 && ($s['campanie_oferta']['indiciu'] ?? '') === OfertaCampanie::INDICIU,
     json_encode($s['campanie_oferta'] ?? null, JSON_UNESCAPED_UNICODE));
 $db->prepare('UPDATE products SET sale_price = NULL WHERE id = :id')->execute(['id' => $pB]);
+// Cuponul nu se aplică niciunei linii eligibile pentru ofertă, nici celei rămase fără pereche (A + B + C, C singură).
+@unlink($jarF);
+foreach ([$pA, $pB, $pC, $idAfara] as $idProdus) {
+    $cerere('POST', '/cos/adauga/' . $idProdus, $jarF, ['quantity' => '1']);
+}
+$cerere('POST', '/cos/cupon', $jarF, ['coupon_code' => 'DEMO10']);
+$s = $sumar();
+$faraPereche = array_values(array_filter([$pA, $pB, $pC], static fn (int $id): bool => !isset($liniePe($s, $id)['campanie_reducere'])));
+$faraCupon = array_filter([$pA, $pB, $pC], static fn (int $id): bool => (float) ($liniePe($s, $id)['coupon_discount'] ?? 0) === 0.0);
+$verifica('cuponul nu se aplică niciunei linii a ofertei, nici celor nereduse în perechi: doar produsului din afara campaniei', count($faraPereche) >= 1
+    && abs((float) $s['discount'] - round((float) $liniePe($s, $idAfara)['line_total'] * 0.10, 2)) < 0.006
+    && count($faraCupon) === 3 && !empty($s['campanie_oferta']['cupon_exclus']),
+    $s['discount'] . ' ' . json_encode($faraPereche));
+// Fără alte produse decât cele ale ofertei, cuponul e refuzat cu mesajul lui (nu se atașează, deci nu se consumă).
+$cerere('POST', '/cos/sterge/' . $idAfara, $jarF, []);
+$s = $sumar();
+$verifica('doar produse din ofertă în coș: cuponul nu se mai aplică (fără reducere, cu mesajul)', ($s['coupon'] ?? null) === null
+    && (float) $s['discount'] === 0.0 && ($s['coupon_error'] ?? '') === \App\Support\CheckoutCalculator::MESAJ_CUPON_OFERTA,
+    json_encode(['coupon' => $s['coupon'] ?? null, 'err' => $s['coupon_error'] ?? null], JSON_UNESCAPED_UNICODE));
+$pagCheckout = $cerere('GET', '/checkout', $jarF)['corp'];
+preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagCheckout, $tokenF);
+preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagCheckout, $randatF);
+// Pagina checkout-ului a scos deja cuponul (ca pentru orice cupon invalid); îl punem la loc direct în sesiune, ca la o
+// trimitere venită fără ea (alt tab), și trimitem comanda.
+$cerere('POST', '/cos/adauga/' . $idAfara, $jarF, ['quantity' => '1']);
+$cerere('POST', '/cos/cupon', $jarF, ['coupon_code' => 'DEMO10']);
+$cerere('POST', '/cos/sterge/' . $idAfara, $jarF, []);
+sleep(3);
+$ultimaComanda = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM orders')->fetchColumn();
+$trimis = $cerere('POST', '/checkout', $jarF, [
+    'checkout_form_token' => $tokenF[1] ?? '', 'checkout_form_rendered_at' => $randatF[1] ?? '',
+    'billing_first_name' => 'Test', 'billing_last_name' => 'Oferta', 'billing_phone' => '0700000781',
+    'billing_email' => 'oferta-campanie@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '11',
+    'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400001',
+    'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+]);
+$comenziNoi = (int) $db->query('SELECT COUNT(*) FROM orders WHERE id > ' . $ultimaComanda)->fetchColumn();
+$cosDupa = $cerere('GET', '/cos', $jarF)['corp'];
+$verifica('checkout cu un cupon care se aplica doar produselor ofertei: comanda nu se plasează, înapoi în coș cu mesajul, cuponul scos',
+    $trimis['cod'] === 302 && ($trimis['antete']['location'] ?? '') === '/cos' && $comenziNoi === 0
+    && str_contains($cosDupa, htmlspecialchars(\App\Support\CheckoutCalculator::MESAJ_CUPON_OFERTA, ENT_QUOTES)) && ($sumar()['coupon'] ?? null) === null,
+    $trimis['cod'] . ' ' . ($trimis['antete']['location'] ?? '') . ' comenzi noi: ' . $comenziNoi);
+if ($comenziNoi > 0) {
+    foreach ($db->query('SELECT id FROM orders WHERE id > ' . $ultimaComanda)->fetchAll(PDO::FETCH_COLUMN) as $idNou) {
+        $db->exec('DELETE FROM order_items WHERE order_id = ' . (int) $idNou);
+        $db->exec('DELETE FROM email_logs WHERE order_id = ' . (int) $idNou);
+        $db->exec('DELETE FROM orders WHERE id = ' . (int) $idNou);
+    }
+}
+array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte));
+@unlink($jarF);
+$cerere('POST', '/cos/adauga/' . $pA, $jarF, ['quantity' => '1']);
+$cerere('POST', '/cos/adauga/' . $pB, $jarF, ['quantity' => '1']);
+// Emailul cu ambele coduri ale tabelului produselor ({{order_items_html}} și {{order_summary_rows}}): rândul ofertei o dată.
+$aplicaSablon = new ReflectionMethod(\App\Support\OrderMailer::class, 'applyTemplate');
+$randOferta = \App\Support\EmailAutomation::SEMN_OFERTA . '<tr><td>Oferta</td></tr>' . \App\Support\EmailAutomation::SEMN_OFERTA_SFARSIT;
+$tabel = '<table><tr><td>Produs</td></tr>' . $randOferta . '</table>';
+$dublu = $aplicaSablon->invoke(null, '<p>{{order_items_html}}</p><p>{{order_summary_rows}}</p>', ['{{order_items_html}}' => $tabel, '{{order_summary_rows}}' => $tabel]);
+$simplu = $aplicaSablon->invoke(null, '<p>{{order_items_html}}</p>', ['{{order_items_html}}' => $tabel]);
+$verifica('emailul: un șablon cu {{order_items_html}} și {{order_summary_rows}} arată rândul ofertei o singură dată; cu unul singur, rămâne',
+    substr_count($dublu, '<td>Oferta</td>') === 1 && substr_count($dublu, '<td>Produs</td>') === 2 && substr_count($simplu, '<td>Oferta</td>') === 1
+    && $aplicaSablon->invoke(null, 'a {{x}} b', ['{{x}}' => 'y']) === 'a y b');
 // Celelalte tipuri, pe același coș (A + B + C, câte una).
 $cerere('POST', '/cos/adauga/' . $pC, $jarF, ['quantity' => '1']);
 $preturiABC = [$centi($pA), $centi($pB), $centi($pC)];

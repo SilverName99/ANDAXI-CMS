@@ -11,6 +11,10 @@ use Throwable;
 
 final class EmailAutomation
 {
+    /** Semnele rândului ofertei campaniei din tabelul produselor (OrderMailer îl păstrează o dată pe email). */
+    public const SEMN_OFERTA = '<!--ax-oferta-campaniei-->';
+    public const SEMN_OFERTA_SFARSIT = '<!--/ax-oferta-campaniei-->';
+
     public static function ensureSchema(PDO $db): void
     {
         if (\App\Support\Migrari\Garda::stare($db) === 'la_zi') { return; } // R1: schema o fac migrările (docs/MIGRARI.md)
@@ -692,13 +696,13 @@ final class EmailAutomation
         // Pluginul campanii: oferta campaniei a comenzii, sub produse (deja inclusă în prețurile lor), oricare ar fi șablonul
         // emailului; fără ofertă, tabelul e cel de dinainte.
         if ((float) ($order['campanie_reducere'] ?? 0) > 0) {
-            $rows .= '<tr>'
+            $rows .= self::SEMN_OFERTA . '<tr>'
                 . '<td style="padding:12px 0;border-bottom:1px solid #e5e7eb;color:#b45309;font-size:14px;line-height:1.4;text-align:left;">'
                 . htmlspecialchars(trim((string) ($order['campanie_oferta'] ?? 'Oferta campaniei')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
                 . ' <span style="color:#5f7680;">(inclusă în prețuri)</span></td>'
                 . '<td style="padding:12px 0 12px 14px;border-bottom:1px solid #e5e7eb;color:#b45309;font-size:14px;font-weight:700;'
                 . 'text-align:right;white-space:nowrap;">−' . htmlspecialchars(self::formatLei((float) $order['campanie_reducere']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
-                . '</td></tr>';
+                . '</td></tr>' . self::SEMN_OFERTA_SFARSIT;
         }
         return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"'
             . ' style="border-collapse:collapse;width:100%;">' . $rows . '</table>';

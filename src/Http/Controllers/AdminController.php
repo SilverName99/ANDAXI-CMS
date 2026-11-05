@@ -6806,6 +6806,8 @@ final class AdminController
         // destinație, deci nu are ce să conteze aici. Un produs cu transport
         // gratuit în comandă (WP-20, C14a) îl face 0 oricum.
         $gratuitDinProdus = \App\Support\CheckoutCalculator::comandaAreTransportGratuit($db, $orderId);
+        // Oferta campaniei, ca în coș (reducereOfertaComanda); 0 fără ofertă.
+        $ofertaTransport = $this->reducereOfertaComanda($db, $orderId);
         $transport = \App\Support\ShippingPricing::pret(
             $db,
             $settings,
@@ -6817,8 +6819,8 @@ final class AdminController
             $transport = \App\Support\CheckoutCalculator::adminRecalcShipping(
                 $settings,
                 (string) ($order['billing_county'] ?? ''),
-                $subtotal,
-                $discountRef + $reducereComerciala,
+                $subtotal + $ofertaTransport,
+                $discountRef + $reducereComerciala + $ofertaTransport,
                 0.0,
                 false,
                 $gratuitDinProdus
@@ -6826,8 +6828,8 @@ final class AdminController
         } elseif (\App\Support\CheckoutCalculator::adminRecalcShipping(
             $settings,
             (string) ($order['billing_county'] ?? ''),
-            $subtotal,
-            $discountRef + $reducereComerciala,
+            $subtotal + $ofertaTransport,
+            $discountRef + $reducereComerciala + $ofertaTransport,
             0.0,
             false,
             $gratuitDinProdus
@@ -7137,11 +7139,13 @@ final class AdminController
         $discountRef = round((float) ($order['discount_total'] ?? 0), 2)
             + round((float) ($order['loyalty_points_discount'] ?? 0), 2)
             + $reducere;
+        // Oferta campaniei, ca în coș (reducereOfertaComanda); 0 fără ofertă.
+        $ofertaTransport = $this->reducereOfertaComanda($db, $orderId);
         $shipping = \App\Support\CheckoutCalculator::adminRecalcShipping(
             $settings,
             (string) ($order['billing_county'] ?? ''),
-            $subtotal,
-            $discountRef,
+            $subtotal + $ofertaTransport,
+            $discountRef + $ofertaTransport,
             (float) ($order['shipping_cost'] ?? 0),
             (int) ($order['shipping_manual'] ?? 0) === 1,
             \App\Support\CheckoutCalculator::comandaAreTransportGratuit($db, $orderId),
@@ -7504,6 +7508,26 @@ final class AdminController
         echo json_encode(['ok' => true, 'message' => 'Comandă blocată la loc.'], JSON_UNESCAPED_UNICODE);
     }
 
+    /** Refuzul editării produselor unei comenzi cu oferta campaniei (orderItemsSave). */
+    public const MESAJ_OFERTA_PRODUSE = 'Comanda are oferta campaniei: produsele nu se pot modifica aici. Anulează comanda și '
+        . 'plaseaz-o din nou, sau modific-o în ERP.';
+
+    /**
+     * Reducerea ofertei campaniei pe o comandă (orders.campanie_reducere, campanii/0058), 0 fără ofertă sau pe o bază fără
+     * migrare. Transportul recalculat din admin o socotește ca pe un cupon, ca în coș: subtotalul de dinainte de ofertă și
+     * reducerea printre reduceri (cu „shipping_include_coupons” același rezultat ca fără ea).
+     */
+    private function reducereOfertaComanda(PDO $db, int $orderId): float
+    {
+        try {
+            $stmt = $db->prepare('SELECT campanie_reducere FROM orders WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => $orderId]);
+            return max(0.0, round((float) $stmt->fetchColumn(), 2));
+        } catch (Throwable) {
+            return 0.0;
+        }
+    }
+
     public function orderItemsSave(array $params): void
     {
         if (!$this->guard()) {
@@ -7535,6 +7559,13 @@ final class AdminController
             echo json_encode(['ok' => false, 'error' => 'Comanda procesată nu mai poate fi modificată.'
                 . (\App\Support\Plugins::vizibil('erp') ? ' Factura există deja în ERP.' : '')
                 . ' Apasă „Deblochează pentru corecție" dacă trebuie corectată.']);
+            return;
+        }
+
+        // Pluginul campanii (campanii/0058): o comandă cu oferta campaniei are prețurile liniilor socotite de ofertă (perechile,
+        // grupele) și reducerea pe linie; refacerea liniilor de aici le-ar reprețui fără ofertă. Produsele ei nu se modifică aici.
+        if ($this->reducereOfertaComanda($db, $orderId) > 0) {
+            echo json_encode(['ok' => false, 'error' => self::MESAJ_OFERTA_PRODUSE]);
             return;
         }
 
