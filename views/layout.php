@@ -735,7 +735,8 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
             window.floatingCartConfig = <?= json_encode($floatingCartConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         </script>
         <script src="/assets/js/floating-cart.js?v=<?= $floatingCartJsVersion ?><?= $assetVersionQuery ?>" defer></script>
-<?php if ($faraAntetSubsol): /* pagina campaniei fără antet: coșul plutitor prinde „Adaugă în coș”, fără butonul lui */ ?>
+<?php /* pagina campaniei fără antet: coșul plutitor prinde „Adaugă în coș”, fără butonul lui */ ?>
+<?php if ($faraAntetSubsol): ?>
         <style>.floating-cart__trigger{display:none!important;}</style>
 <?php endif; ?>
     <?php endif; ?>
