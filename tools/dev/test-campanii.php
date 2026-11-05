@@ -304,14 +304,22 @@ $db->prepare("INSERT INTO pages (title, slug, html_content, is_published) VALUES
 $idPagina = (int) $db->lastInsertId();
 // Primul produs activ, primul lui produs similar (banda de pe pagina lui), încă două și cel mai nou (grila {{featured_products}} de
 // pe prima pagină arată cele mai noi produse).
-$primele = array_map('intval', $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""
+// Doar produse fără reducere proprie (prețul redus, perioadele, BBD): pe celelalte campania le refuză (Campanii::motivReducere).
+$faraReducere = ' AND (sale_price IS NULL OR sale_price <= 0 OR sale_price >= price) AND COALESCE(bbd_enabled, 0) = 0'
+    . " AND (sale_price_periods_json IS NULL OR sale_price_periods_json IN ('', '[]'))";
+$primele = array_map('intval', $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""' . $faraReducere . '
     ORDER BY id LIMIT 3')->fetchAll(PDO::FETCH_COLUMN));
 $paginaPrimului = $cerere('GET', '/produs/' . rawurlencode($unu('SELECT slug FROM products WHERE id = :id', ['id' => $primele[0]])),
     null, [], ['User-Agent: Googlebot/2.1'])['corp'];
 $similareDate = preg_match('#<script type="application/json" class="similar-products__data">(.*?)</script>#s', $paginaPrimului, $m) === 1
     ? (array) json_decode($m[1], true) : [];
-$produseCampanie = array_values(array_unique(array_filter([$primele[0], (int) ($similareDate[0]['id'] ?? 0), $primele[1], $primele[2],
-    (int) $db->query('SELECT MAX(id) FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""')->fetchColumn()])));
+$similarFaraReducere = (int) $unu('SELECT id FROM products WHERE id = :id' . $faraReducere, ['id' => (int) ($similareDate[0]['id'] ?? 0)]);
+$produseCampanie = array_values(array_unique(array_filter([$primele[0], $similarFaraReducere, $primele[1], $primele[2],
+    (int) $db->query('SELECT MAX(id) FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""' . $faraReducere)->fetchColumn()])));
+// Cel mai nou produs fără reducere: în grila {{featured_products}} (cele mai noi 4) dacă printre ultimele 4 e unul fără reducere.
+$verifica('datele testului: produsele campaniei fără reducere proprie', array_filter($produseCampanie, static fn (int $id): bool
+    => $unu('SELECT COUNT(*) FROM products WHERE id = :id' . $faraReducere, ['id' => $id]) !== '1') === [], implode(',', $produseCampanie));
+$idCuReducere = (int) $unu('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND sale_price > 0 AND sale_price < price ORDER BY id LIMIT 1');
 $slugInCampanie = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $produseCampanie[0]]);
 $slugInafara = $unu('SELECT slug FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> "" AND id NOT IN ('
     . implode(',', $produseCampanie) . ') ORDER BY id LIMIT 1');
@@ -389,6 +397,14 @@ $verifica('o a doua campanie pornită care se suprapune: 422, „Se suprapune”
     && $unu('SELECT COUNT(*) FROM campanii') === '1', (string) $r['cod']);
 $r = $cerere('POST', '/admin/campanii/salveaza', $jarAdmin, ['nume' => 'Altă campanie', 'slug' => 'saptamana-demo', 'pornita' => '0'] + $campDate);
 $verifica('aceeași adresă la altă campanie: 422', $r['cod'] === 422 && str_contains($r['corp'], 'e deja a campaniei'), (string) $r['cod']);
+// Un produs care are deja o reducere proprie (prețul redus din datele demo): dezactivat în listă, refuzat la salvare.
+$verifica('editorul: un produs cu preț redus e dezactivat, cu „are deja o reducere: preț redus”', $idCuReducere > 0
+    && str_contains($formular['corp'], 'name="produse[]" value="' . $idCuReducere . '" disabled>')
+    && str_contains($formular['corp'], 'are deja o reducere: preț redus'), (string) $idCuReducere);
+$r = $cerereCorp('/admin/campanii/salveaza', http_build_query(['nume' => 'Cu reducere', 'slug' => 'cu-reducere', 'pornita' => '0'] + $campDate)
+    . '&' . rawurlencode('produse[]') . '=' . $idCuReducere);
+$verifica('salvarea cu un produs care are deja o reducere: 422, nimic scris (serverul aplică aceeași regulă)', $r['cod'] === 422
+    && $unu("SELECT COUNT(*) FROM campanii WHERE slug = 'cu-reducere'") === '0', (string) $r['cod']);
 $r = $cerere('POST', '/admin/campanii/salveaza', $jarAdmin, ['nume' => 'Campania de iarnă', 'slug' => '', 'pornita' => '1',
     'incepe_la' => date('Y-m-d\TH:i', time() + 86400 * 30), 'se_termina_la' => date('Y-m-d\TH:i', time() + 86400 * 37)] + $campDate);
 $idProgramata = (int) $unu("SELECT id FROM campanii WHERE slug = 'campania-de-iarna'");
@@ -616,17 +632,19 @@ $r = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
 $verifica('niciun produs vizibil al campaniei: codul gol, fără grilă', $r['cod'] === 200 && !str_contains($r['corp'], 'campanie-grila')
     && !str_contains($r['corp'], 'campanie_produse'), (string) $r['cod']);
 // Înapoi la datele de dinainte (C2 le folosește; baza toată se pune la loc oricum la final).
-$db->prepare('UPDATE products SET is_active = 1 WHERE id IN (' . implode(',', $produseCampanie) . ')')->execute();
-foreach ($tabeleBaza as $i => $t) {
-    if (in_array($t['tabel'], ['products', 'settings'], true)) {
-        salvari_pune_la_loc($db, [$t], [$instantaneu[$i]]);
+$inapoiC1 = static function () use ($db, $tabeleBaza, $instantaneu, $idPagina, $idCampanie): void {
+    foreach ($tabeleBaza as $i => $t) {
+        if (in_array($t['tabel'], ['products', 'settings'], true)) {
+            salvari_pune_la_loc($db, [$t], [$instantaneu[$i]]);
+        }
     }
-}
-$db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
-    'h' => '<section style="padding:32px 16px;text-align:center"><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p></section>']);
-$db->prepare('UPDATE campanii SET fara_antet_subsol = 0, bara_inchisa = 0, carduri_inchise = 0, text_sub_pret = NULL WHERE id = :id')
-    ->execute(['id' => $idCampanie]);
-ResponseCache::purgePageCache();
+    $db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
+        'h' => '<section style="padding:32px 16px;text-align:center"><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p></section>']);
+    $db->prepare('UPDATE campanii SET fara_antet_subsol = 0, bara_inchisa = 0, carduri_inchise = 0, text_sub_pret = NULL WHERE id = :id')
+        ->execute(['id' => $idCampanie]);
+    ResponseCache::purgePageCache();
+};
+$inapoiC1();
 
 // ── D. Chromium ───────────────────────────────────────────────────────────────────────────────────────────────────────
 if (!$faraBrowser) {
@@ -636,18 +654,31 @@ if (!$faraBrowser) {
     @mkdir($dosarCapturi, 0775, true);
     $env = ['CMS_DEV_URL=' . $baza, 'CMS_DEV_PRODUS=' . $slugInCampanie, 'CMS_DEV_PRODUS_SIMILARE=' . $slugCuSimilare, 'CMS_DEV_CAMPANIE=' . $idCampanie, 'CMS_DEV_ADMIN_EMAIL=' . $adminEmail,
         'CMS_DEV_PAROLA=' . $parolaAdmin, 'CMS_DEV_CAPTURI=' . $dosarCapturi, 'NO_PROXY=*', 'no_proxy=*'];
-    $iesire = [];
-    exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy ' . implode(' ', array_map('escapeshellarg', $env))
-        . ' node ' . escapeshellarg(__DIR__ . '/campanii-browser.cjs') . ' 2>&1', $iesire, $codNode);
-    $rezultate = json_decode((string) end($iesire), true);
-    if (!is_array($rezultate) || $rezultate === []) {
-        $verifica('Chromium a rulat', false, 'cod ' . $codNode . ': ' . implode("\n", array_slice($iesire, -15)));
-    } else {
-        foreach ($rezultate as $rezultat) {
-            $verifica((string) $rezultat['eticheta'], (bool) $rezultat['ok'], (string) $rezultat['detalii']);
+    $ruleazaBrowser = static function (array $env) use ($verifica, $scrie, $dosarCapturi): void {
+        $iesire = [];
+        exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy ' . implode(' ', array_map('escapeshellarg', $env))
+            . ' node ' . escapeshellarg(__DIR__ . '/campanii-browser.cjs') . ' 2>&1', $iesire, $codNode);
+        $rezultate = json_decode((string) end($iesire), true);
+        if (!is_array($rezultate) || $rezultate === []) {
+            $verifica('Chromium a rulat', false, 'cod ' . $codNode . ': ' . implode("\n", array_slice($iesire, -15)));
+        } else {
+            foreach ($rezultate as $rezultat) {
+                $verifica((string) $rezultat['eticheta'], (bool) $rezultat['ok'], (string) $rezultat['detalii']);
+            }
+            $scrie('  INFO  capturile: ' . $dosarCapturi);
         }
-        $scrie('  INFO  capturile: ' . $dosarCapturi);
-    }
+    };
+    $ruleazaBrowser($env);
+    // Pagina campaniei fără antet și subsol, cu bara și cardurile închise și grila {{campanie_produse}}.
+    $setare->execute(['k' => 'design_header_html', 'v' => '<div class="antet-proba-bf">ANTET-PROBA</div>']);
+    $setare->execute(['k' => 'design_footer_html', 'v' => '<footer class="subsol-proba-bf">SUBSOL-PROBA</footer>']);
+    $db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
+        'h' => '<section style="background:#000;color:#fff;padding:24px 0"><h1 style="text-align:center">Săptămâna demo</h1>{{campanie_produse}}</section>']);
+    $db->prepare("UPDATE campanii SET fara_antet_subsol = 1, bara_inchisa = 1, carduri_inchise = 1, text_sub_pret = '2 bucăți: {pret*1.5}' WHERE id = :id")
+        ->execute(['id' => $idCampanie]);
+    ResponseCache::purgePageCache();
+    $ruleazaBrowser(array_merge($env, ['CMS_DEV_GRILA=1']));
+    $inapoiC1();
 }
 
 // ── C. În afara ferestrei, oprită, previzualizarea, pluginul oprit ─────────────────────────────────────────────────────

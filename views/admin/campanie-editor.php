@@ -159,16 +159,17 @@ admin_componenta('antet-pagina', [
                     <p class="muted">Niciun produs în catalog.</p>
                 <?php endif; ?>
                 <?php foreach ($produse as $p): ?>
-                    <label data-cauta="<?= adm_e(mb_strtolower((string) $p['name'] . ' ' . (string) ($p['sku'] ?? ''))) ?>">
-                        <input type="checkbox" name="produse[]" value="<?= (int) $p['id'] ?>"<?= isset($alese[(int) $p['id']]) ? ' checked' : '' ?>>
-                        <span><?= adm_e((string) $p['name']) ?><?= trim((string) ($p['sku'] ?? '')) !== '' ? ' <small class="muted adm-mono">' . adm_e((string) $p['sku']) . '</small>' : '' ?><?= (int) ($p['is_active'] ?? 1) !== 1 ? ' <small class="muted">(inactiv)</small>' : '' ?></span>
+                    <?php $motivReducere = (string) ($p['motiv_reducere'] ?? ''); ?>
+                    <label data-cauta="<?= adm_e(mb_strtolower((string) $p['name'] . ' ' . (string) ($p['sku'] ?? ''))) ?>"<?= $motivReducere !== '' ? ' data-are-reducere style="opacity:.6;"' : '' ?>>
+                        <input type="checkbox" name="produse[]" value="<?= (int) $p['id'] ?>"<?= $motivReducere !== '' ? ' disabled' : (isset($alese[(int) $p['id']]) ? ' checked' : '') ?>>
+                        <span><?= adm_e((string) $p['name']) ?><?= trim((string) ($p['sku'] ?? '')) !== '' ? ' <small class="muted adm-mono">' . adm_e((string) $p['sku']) . '</small>' : '' ?><?= (int) ($p['is_active'] ?? 1) !== 1 ? ' <small class="muted">(inactiv)</small>' : '' ?><?= $motivReducere !== '' ? ' <small class="muted">(are deja o reducere: ' . adm_e($motivReducere) . (isset($alese[(int) $p['id']]) ? '; scos din campanie la salvare' : '') . ')</small>' : '' ?></span>
                     </label>
                 <?php endforeach; ?>
             </div>
-            <small class="muted">Produsele alese primesc insigna pe pagina lor și pe cardurile din magazin și din categorii, doar cât campania e activă.</small>
+            <small class="muted">Produsele alese primesc insigna pe pagina lor și pe cardurile din magazin și din categorii, doar cât campania e activă. Un produs care are deja o reducere (preț redus, o perioadă de reducere în curs, oferte BBD) nu se poate alege.</small>
         </div>
         <div class="field campanie-camp-lat">
-            <p class="muted" style="margin:0;">Codul <code>{{campanie_produse}}</code>, scris în conținutul paginii campaniei, pune acolo produsele alese, ca o grilă de carduri (poza, numele, insigna, prețul, „Vezi produsul”). Doar pe /campanie/…; la adresa proprie a paginii iese gol.</p>
+            <p class="muted" style="margin:0;">Codul <code>{{campanie_produse}}</code>, scris în conținutul paginii campaniei, pune acolo produsele alese, ca o grilă de carduri (poza, numele, insigna, prețul, „Adaugă în coș”, „Vezi produsul”). Doar pe /campanie/…; la adresa proprie a paginii iese gol.</p>
         </div>
         <div class="field">
             <label for="campanie-carduri">Cardurile produselor</label>

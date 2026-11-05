@@ -95,6 +95,55 @@ async function vizitator(browser, latime, eticheta) {
   await context.close();
 }
 
+// Pagina campaniei fără antetul și subsolul site-ului, cu bara închisă și grila {{campanie_produse}} închisă (CMS_DEV_GRILA=1;
+// test-campanii.php pregătește campania, un antet și un subsol de probă, apoi le pune la loc).
+async function paginaGrila(browser, latime, eticheta) {
+  const context = await browser.newContext({ viewport: { width: latime, height: latime < 500 ? 844 : 900 }, isMobile: latime < 500,
+    hasTouch: latime < 500, deviceScaleFactor: 1, userAgent: latime < 500
+      ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
+      : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' });
+  await blocheazaExterne(context);
+  const pagina = await context.newPage();
+  const erori = [];
+  pagina.on('pageerror', (e) => erori.push(String(e)));
+  await pagina.goto(baza + '/campanie/saptamana-demo?inapoi=%2Fmagazin', { waitUntil: 'load' });
+  nota(eticheta + ': fără antetul și subsolul site-ului', (await pagina.locator('.antet-proba-bf, .subsol-proba-bf, header.header').count()) === 0);
+  const bara = pagina.locator('[data-campanie-inapoi]');
+  const stilBara = await bara.evaluate((el) => ({ fundal: getComputedStyle(el).backgroundColor, y: el.getBoundingClientRect().y }));
+  nota(eticheta + ': bara „Înapoi” închisă, sus', stilBara.fundal === 'rgb(0, 0, 0)' && Math.abs(stilBara.y) <= 1, JSON.stringify(stilBara));
+  const carduri = pagina.locator('.campanie-grila__card');
+  const n = await carduri.count();
+  const cutii = [];
+  for (let i = 0; i < n; i++) {
+    cutii.push(await carduri.nth(i).boundingBox());
+  }
+  const peRand = cutii.filter((c) => c && Math.abs(c.y - cutii[0].y) < 2).length;
+  nota(eticheta + ': grila produselor: ' + (latime < 500 ? 'două' : 'cel puțin trei') + ' carduri pe rând', n >= 3
+    && (latime < 500 ? peRand === 2 : peRand >= 3), n + ' carduri, ' + peRand + ' pe rând');
+  const stilCard = await carduri.first().evaluate((el) => ({ fundal: getComputedStyle(el).backgroundColor, text: getComputedStyle(el).color }));
+  nota(eticheta + ': cardurile închise (#161616, text alb)', stilCard.fundal === 'rgb(22, 22, 22)' && stilCard.text === 'rgb(255, 255, 255)',
+    JSON.stringify(stilCard));
+  nota(eticheta + ': pagina campaniei cu grila, fără derulare laterală', await faraDerulareLaterala(pagina));
+  const butonCos = pagina.locator('.floating-cart__trigger');
+  nota(eticheta + ': butonul coșului plutitor nu se vede', (await butonCos.count()) === 0 || !(await butonCos.first().isVisible()));
+  if (capturi) {
+    await pagina.screenshot({ path: path.join(capturi, 'campanie-grila-' + latime + '.png'), fullPage: true });
+  }
+  const adauga = pagina.locator('form.campanie-grila__formular button').first();
+  const raspunsAdauga = pagina.waitForResponse((r) => /\/api\/cart\/items\/\d+\/add$/.test(new URL(r.url()).pathname), { timeout: 8000 });
+  await adauga.click();
+  const r = await raspunsAdauga.catch(() => null);
+  await pagina.waitForTimeout(400);
+  nota(eticheta + ': „Adaugă în coș” pune produsul în coș pe loc (coșul plutitor, ca în magazin), fără să plece de pe pagină',
+    r !== null && r.status() === 200 && new URL(pagina.url()).pathname.startsWith('/campanie/')
+    && await pagina.locator('.floating-cart__panel.is-open, .is-open').count() >= 1, r ? String(r.status()) : 'fără răspuns');
+  if (capturi) {
+    await pagina.screenshot({ path: path.join(capturi, 'campanie-grila-cos-' + latime + '.png'), fullPage: false });
+  }
+  nota(eticheta + ': nicio eroare JavaScript pe pagina campaniei', erori.length === 0, erori.join(' | '));
+  await context.close();
+}
+
 async function admin(browser, latime, eticheta) {
   const context = await browser.newContext({ viewport: { width: latime, height: 900 }, isMobile: latime < 500, hasTouch: latime < 500 });
   await blocheazaExterne(context);
@@ -133,10 +182,15 @@ async function admin(browser, latime, eticheta) {
   }
   const browser = await chromium.launch();
   try {
-    await vizitator(browser, 1366, 'desktop 1366');
-    await vizitator(browser, 390, 'telefon 390');
-    await admin(browser, 1366, 'admin 1366');
-    await admin(browser, 390, 'admin 390');
+    if (process.env.CMS_DEV_GRILA === '1') {
+      await paginaGrila(browser, 1366, 'grila 1366');
+      await paginaGrila(browser, 390, 'grila 390');
+    } else {
+      await vizitator(browser, 1366, 'desktop 1366');
+      await vizitator(browser, 390, 'telefon 390');
+      await admin(browser, 1366, 'admin 1366');
+      await admin(browser, 390, 'admin 390');
+    }
   } catch (e) {
     nota('browserul a mers până la capăt', false, String(e && e.stack || e));
   } finally {

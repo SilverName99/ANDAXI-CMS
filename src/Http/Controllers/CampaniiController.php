@@ -193,12 +193,8 @@ final class CampaniiController
                 $pagini = [];
             }
             if (\App\Support\Plugins::vizibil('catalog')) {
-                try {
-                    $produse = $db->query('SELECT id, name, sku, is_active FROM products WHERE deleted_at IS NULL ORDER BY name, id')
-                        ->fetchAll(PDO::FETCH_ASSOC) ?: [];
-                } catch (Throwable) {
-                    $produse = [];
-                }
+                // Cu motivul reducerii fiecărui produs: cele care au deja o reducere nu se pot alege (Campanii::motivReducere).
+                $produse = Campanii::produsePentruEditor($db);
             }
         }
         View::render('admin/campanie-editor', [

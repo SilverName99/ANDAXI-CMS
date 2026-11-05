@@ -578,6 +578,46 @@ final class Campanii
         return [$baza, null];
     }
 
+    // ── Produsele campaniei: fără cele care au deja o reducere ────────────────────────────────────────────────────────
+
+    /**
+     * De ce un produs nu poate intra în campanie (are deja propria schimbare de preț), sau '': prețul redus sau o perioadă de
+     * reducere în curs (prețul de pe card sub prețul lui, ca în magazin), oferte BBD de ales (pluginul „Oferte BBD” pornit).
+     * Precomanda nu schimbă prețul în acest cod (nu are preț propriu). Aceeași regulă în editor (bifa dezactivată) și la salvare.
+     *
+     * @param array<string, mixed> $produs id, price, sale_price, sale_price_periods_json, bbd_enabled, bbd_entries_json
+     */
+    public static function motivReducere(array $produs): string
+    {
+        [$pret, $vechi] = self::preturi($produs);
+        if ($vechi !== null && $pret < $vechi) {
+            return 'preț redus (' . number_format($pret, 2) . ' lei în loc de ' . number_format($vechi, 2) . ' lei)';
+        }
+        if (BbdOferte::cereAlegere($produs)) {
+            return 'oferte BBD (termen de valabilitate)';
+        }
+        return '';
+    }
+
+    /**
+     * Produsele din catalog pentru lista din editor, cu motivul reducerii fiecăruia (cheia `motiv_reducere`, '' = se poate alege).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function produsePentruEditor(PDO $db): array
+    {
+        try {
+            $produse = $db->query('SELECT id, name, sku, is_active, price, sale_price, sale_price_periods_json, bbd_enabled, bbd_entries_json
+                FROM products WHERE deleted_at IS NULL ORDER BY name, id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+        foreach ($produse as $i => $p) {
+            $produse[$i]['motiv_reducere'] = self::motivReducere($p);
+        }
+        return $produse;
+    }
+
     // ── Prima intrare pe site ─────────────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -883,6 +923,22 @@ final class Campanii
             }
         }
         $c['produse'] = array_keys($produse);
+        // Un produs care are deja o reducere proprie nu intră în campanie (editorul îl arată dezactivat; aici, aceeași regulă).
+        if ($c['produse'] !== []) {
+            try {
+                $randuri = $db->query('SELECT id, name, price, sale_price, sale_price_periods_json, bbd_enabled, bbd_entries_json FROM products
+                    WHERE id IN (' . implode(',', array_map('intval', $c['produse'])) . ')')->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            } catch (Throwable) {
+                $randuri = [];
+            }
+            foreach ($randuri as $rand) {
+                $motiv = self::motivReducere($rand);
+                if ($motiv !== '') {
+                    $erori[] = 'Produsul „' . (string) $rand['name'] . '” are deja o reducere: ' . $motiv . '. Scoate-l din campanie sau '
+                        . 'scoate întâi reducerea lui.';
+                }
+            }
+        }
 
         if ($c['nume'] === '') {
             $erori[] = 'Scrie numele campaniei.';

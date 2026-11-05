@@ -1053,6 +1053,13 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   la ea la fiecare pagină), deci fără acordul pentru cookie-uri (`CookieConsent`); de sesiune (fără `Expires`: dispare la
   închiderea browserului), `HttpOnly`, `SameSite=Lax`, `Secure` pe https; doar id-ul campaniei, nimic despre vizitator. O
   campanie nouă (alt id) se vede din nou o dată. De trecut în politica de cookie-uri a site-ului, la „strict necesare”.
+- **Produsele campaniei fără reducere proprie** (cerut pe 5 nov, ca să nu se cumuleze două reduceri): un produs care are deja
+  o schimbare de preț nu se poate alege (`Campanii::motivReducere`): prețul redus sau o perioadă de reducere în curs (prețul de
+  pe card sub prețul lui, ca în magazin) și ofertele BBD de ales (pluginul „Oferte BBD” pornit). Precomanda nu are preț propriu
+  în acest cod, deci nu contează. În editor bifa lui e dezactivată, cu „(are deja o reducere: <motiv>)”; un produs ales înainte
+  și redus între timp e arătat așa, cu „scos din campanie la salvare”. Serverul aplică aceeași regulă la salvare (422, cu
+  numele produsului și motivul), deci nici un formular trimis altfel nu trece. Un produs redus după salvare rămâne în campanie
+  (insigna și cardul din `{{campanie_produse}}` îl arată cu prețul lui redus) până la următoarea salvare.
 - **Insigna** (textul, implicit „Campanie”, și două culori): pe produsele alese (lista cu căutare din editor), pe pagina
   produsului (în capul panoului, în ambele aspecte: cu șablon și fără), pe cardurile catalogului (`{{shop_catalog}}`,
   `/magazin`, `/categorie/…`, `{{products_by_template:…}}`; jos în stânga pozei, sus sunt reducerea și ofertele BBD), în grila
