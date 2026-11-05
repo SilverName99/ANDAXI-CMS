@@ -186,16 +186,15 @@ exit(porneste(static function () use ($argv): int {
 /** @return list<string> ce poate face omul după o oprire în faza dată */
 function dupaEsec(Adoptare $a, string $faza): array
 {
-    $comanda = 'deploy/adopta.sh --site=' . $a->slug . ' --domeniu=' . $a->s->domeniu . ' --versiune=' . $a->versiune . ' --commit-vechi=' . $a->commitVechi . ' --aplica';
     if (!$a->stare->ia('comutat', false)) {
         return ['site-ul a rămas pe codul vechi, neatins; vizitatorii n-au văzut nimic',
-            'după reparare, aceeași comandă continuă de la faza „' . $faza . '”: ' . $comanda];
+            'după reparare rulezi din nou aceeași comandă (cu --aplica): continuă de la faza „' . $faza . '”'];
     }
     $jeton = (string) $a->stare->ia('jeton', '');
     return [
         'site-ul e în MENTENANȚĂ: vizitatorii văd „Revenim în câteva minute” (plățile, ERP-ul și pingul trec)',
         'site-ul nou îl vezi în browser cu ' . $a->url . '/?andaxi_deploy=' . $jeton,
-        'drumul 1, repari și continui de la faza „' . $faza . '”: ' . $comanda,
+        'drumul 1: repari, apoi rulezi din nou aceeași comandă (cu --aplica); continuă de la faza „' . $faza . '”',
         'drumul 2, te întorci la codul vechi (câteva minute): deploy/revino.sh --site=' . $a->slug . ' --domeniu=' . $a->s->domeniu . ' --aplica',
     ];
 }
@@ -350,7 +349,7 @@ function verificari(Adoptare $a): void
     }
 
     // Spațiul.
-    $cod = Fisiere::marime($s->docroot, ['public/uploads']);
+    $cod = Fisiere::marime($s->docroot, ['*/public/uploads']);
     $nevoie = (int) ($octeti * 2 + $cod + 50 * 1024 * 1024);
     $liber = (float) @disk_free_space($s->acasa);
     if ($liber > 0 && $liber < $nevoie) {
