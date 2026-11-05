@@ -96,8 +96,14 @@ exit(porneste(static function () use ($argv): int {
     $mentenantaLaPornire = Mentenanta::citeste($u->s);
     // O întoarcere ale cărei redenumiri s-au terminat, dar a cărei versiune veche nu trece testul de fum, lasă site-ul în
     // mentenanță. De acolo: o versiune nouă (reparația, fix-forward), sau --accepta-revenirea (deschis cu versiunea veche).
+    // Doar cu --aplica se schimbă ceva (MENTENANTA, starea); planul doar spune ce ar face.
     if ($stare->ia('intoarcere_in_curs', false) && $stare->ia('intoarcere_pasi_gata', false)) {
         if ($o->are('accepta-revenirea')) {
+            if (!$u->aplica) {
+                Iesire::scrie('PLAN: nimic schimbat. Cu --aplica, --accepta-revenirea deschide site-ul pe ' . (string) $stare->ia('versiune_veche')
+                    . ' (MENTENANTA ștearsă), deși n-a trecut testul de fum după întoarcere.');
+                return 0;
+            }
             Mentenanta::scoate($u->s);
             $stare->pune('intoarsa', true);
             $stare->pune('intoarcere_in_curs', false);
@@ -106,9 +112,16 @@ exit(porneste(static function () use ($argv): int {
             return 0;
         }
         if ($stare->ia('versiune_noua') !== $u->noua) {
-            Iesire::atentie('întoarcerea la ' . (string) $stare->ia('versiune_veche') . ' a rămas fără testul de fum trecut; merg mai departe spre ' . $u->noua . ' (reparația)');
-            $stare->pune('intoarsa', true);
-            $stare->pune('intoarcere_in_curs', false);
+            Iesire::atentie('întoarcerea la ' . (string) $stare->ia('versiune_veche') . ' a rămas fără testul de fum trecut; ' . ($u->aplica ? 'merg' : 'cu --aplica aș merge')
+                . ' mai departe spre ' . $u->noua . ' (reparația)');
+            if ($u->aplica) {
+                $stare->pune('intoarsa', true);
+                $stare->pune('intoarcere_in_curs', false);
+            } else {
+                // Planul continuă ca după --aplica, dar fără să scrie starea.
+                $stare->date['intoarsa'] = true;
+                $stare->date['intoarcere_in_curs'] = false;
+            }
         }
     }
     // O actualizare neterminată spre aceeași versiune continuă; spre alta, nu; una terminată lasă loc uneia noi.

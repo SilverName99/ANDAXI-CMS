@@ -892,8 +892,10 @@ function mentenanta(Adoptare $a): void
 
     // Copia bazei de revenire: cu scrierile oprite (după ce s-au terminat și cererile sau cronurile pornite înainte).
     $baza = new Baza(Env::citeste($s->site . '/.env'));
-    // Dacă liniștea nu vine, nu las mentenanța strictă doar din cauza așteptării: cea ușoară (plățile trec) până la reluare.
-    $baza->cereLiniste($a->o->are('forteaza-liniste'), static fn () => Mentenanta::pune($s, $jeton, false));
+    // Dacă liniștea nu vine, mentenanța rămâne strictă: codul nou e deja în docroot, iar baza încă nemigrată; cu cea ușoară,
+    // /webhook/ și /api/erp/ ar ajunge la codul nou pe schema veche (funcțiile ensure* ar face DDL pe ea). Plățile și ERP-ul
+    // primesc 503 cu Retry-After și retrimit după reluare.
+    $baza->cereLiniste($a->o->are('forteaza-liniste'));
     $fisier = $a->stare->ia('copii') . '/baza.sql.gz';
     $secunde = $baza->copie($fisier);
     $a->stare->pune('copie_baza', $fisier);

@@ -18,13 +18,18 @@ use RuntimeException;
 use Throwable;
 
 /** O oprire cu mesaj pentru om și cod de ieșire (1 = o verificare sau o fază a picat, 2 = folosire, 3 = alt deploy rulează). */
-final class Oprire extends RuntimeException
+class Oprire extends RuntimeException
 {
     /** @param list<string> $pasi ce poate face omul mai departe */
     public function __construct(string $mesaj, int $cod = 1, public readonly array $pasi = [])
     {
         parent::__construct($mesaj, $cod);
     }
+}
+
+/** O redenumire rămasă la jumătate care nu se mai poate face (amândouă dosarele există, sau niciunul): doar ea se poate lăsa cu --rezolvat-de-mana. */
+final class RedenumireImposibila extends Oprire
+{
 }
 
 final class Iesire
@@ -731,7 +736,9 @@ final class Baza
      */
     public function cereLiniste(bool $forteaza, ?callable $laOprire = null): void
     {
-        $ramase = $this->asteaptaLiniste(60);
+        // PLATFORMA_TEST_LINISTE_SECUNDE (doar testele, tools/dev/test-deploy.php): o așteptare mai scurtă, niciodată mai lungă.
+        $test = (int) getenv('PLATFORMA_TEST_LINISTE_SECUNDE');
+        $ramase = $this->asteaptaLiniste($test > 0 && $test < 60 ? $test : 60);
         if ($ramase === []) {
             Iesire::ok('nicio altă conexiune nu mai lucrează pe bază');
             return;
@@ -1275,7 +1282,9 @@ final class Redenumiri
     /**
      * Termină redenumirile rămase la jumătate de la o rulare oprită. Una imposibilă (amândouă dosarele există, sau
      * niciunul) oprește scriptul, afară de $rezolvatDeMana: atunci e doar raportată și uitată (omul a pus dosarele la
-     * loc). @return list<string> cheile terminate
+     * loc), iar cheia ei se ține minte în `redenumiri_lasate` (revino.sh nu mai știe din ea dacă pasul s-a făcut). O
+     * mutare care n-a mers (drepturile, discul) oprește mereu: --rezolvat-de-mana nu sare peste ea.
+     * @return list<string> cheile terminate
      */
     public static function termina(Stare $stare, bool $rezolvatDeMana = false): array
     {
@@ -1285,7 +1294,7 @@ final class Redenumiri
             try {
                 self::continua($stare, (string) $cheie);
                 $rez[] = (string) $cheie;
-            } catch (Oprire $e) {
+            } catch (RedenumireImposibila $e) {
                 if (!$rezolvatDeMana) {
                     throw new Oprire($e->getMessage(), 1, ['după ce ai pus dosarele la loc de mână: aceeași comandă cu --rezolvat-de-mana']);
                 }
@@ -1293,6 +1302,13 @@ final class Redenumiri
                 $inCurs = (array) $stare->ia('redenumiri', []);
                 unset($inCurs[$cheie]);
                 $stare->pune('redenumiri', $inCurs);
+                $lasate = (array) $stare->ia('redenumiri_lasate', []);
+                $lasate[] = (string) $cheie;
+                $stare->pune('redenumiri_lasate', array_values(array_unique($lasate)));
+            } catch (Oprire $e) {
+                throw new Oprire('pasul „' . $cheie . '”: ' . $e->getMessage(), 1, [
+                    'repari cauza (drepturile dosarelor, spațiul pe disc), apoi aceeași comandă; --rezolvat-de-mana nu trece peste o mutare care n-a mers',
+                ]);
             }
         }
         return $rez;
@@ -1324,7 +1340,7 @@ final class Redenumiri
                     exit(9);
                 }
             } elseif ($existaDin || !$existaIn) {
-                throw new Oprire('pasul „' . $cheie . '” (' . ($i + 1) . '/' . count($pasi) . ': ' . $din . ' → ' . $in . ') nu se mai poate face: '
+                throw new RedenumireImposibila('pasul „' . $cheie . '” (' . ($i + 1) . '/' . count($pasi) . ': ' . $din . ' → ' . $in . ') nu se mai poate face: '
                     . ($existaDin ? 'amândouă există' : 'niciunul nu există') . '. Nu schimb nimic; uită-te la cele două dosare (ne trimiți ce vezi)');
             }
             $inCurs[$cheie]['facuti'] = $i + 1;

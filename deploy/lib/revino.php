@@ -11,11 +11,12 @@ declare(strict_types=1);
  *   2. verificarea datelor noi: amprenta bazei de acum (structura și CHECKSUM TABLE ale fiecărui tabel) comparată cu
  *      cea de la sfârșitul migrărilor. Orice tabel schimbat de atunci (o plată confirmată, o comandă, o schimbare din
  *      admin, un stoc din ERP) înseamnă date care s-ar pierde: refuz, cu lista tabelelor, afară de --pierde-datele-noi;
- *      la fel după ce site-ul a fost deschis (deschidere), oricum ar arăta amprenta. La refuz mentenanța revine cum era;
+ *      la fel după ce site-ul a fost deschis (deschidere), oricum ar arăta amprenta. La un refuz înainte ca revenirea să
+ *      schimbe ceva, mentenanța revine cum era; după ce a început (baza sau dosarele), rămâne strictă;
  *   3. baza pusă la loc din copia de revenire (făcută în mentenanța strictă, înainte de migrări), dacă migrările au
  *      pornit: întâi se verifică fișierul (gzip -t) și că e copia acestei baze (numele și gazda din .env), apoi
  *      tabelele, vederile, rutinele și evenimentele de după copie se șterg, copia se încarcă și amprenta se compară cu
- *      cea de la copie;
+ *      cea de la copie (dacă diferă: oprire în mentenanța strictă, codul neîntors; reluarea încarcă din nou copia);
  *   4. pozele (uploads/) mutate înapoi în codul vechi;
  *   5. public_html (codul nou) → public_html.esuat-<data>, public_html.vechi → public_html;
  *   6. codul vechi comparat cu amprenta lui de la comutare (fiecare fișier, octet cu octet; la poze mărimea și data);
@@ -59,6 +60,22 @@ exit(porneste(static function () use ($argv): int {
     $comutat = in_array('comutare', $facute, true) || isset($stare->date['redenumiri']['comutare']);
     $rev = (array) $stare->ia('revino', []);
 
+    $comutareLasata = in_array('comutare', (array) $stare->ia('redenumiri_lasate', []), true);
+    if (!$comutat && ($comutareLasata || $s->cuStub())) {
+        // Comutarea lăsată de mână (--rezolvat-de-mana) nu mai spune dacă s-a făcut: o spune docroot-ul, care trebuie să fie
+        // checkout-ul vechi, la commit-ul de la verificări. Altfel (stub-ul, alt commit) nu e „înainte de comutare”.
+        $head = is_dir($s->docroot . '/.git') ? trim(Comanda::ruleaza(['git', '-C', $s->docroot, 'rev-parse', 'HEAD'])['iesire']) : '';
+        $asteptat = (string) $stare->ia('commit_vechi_complet', '');
+        if ($asteptat === '' || $head !== $asteptat) {
+            throw new Oprire(($comutareLasata ? 'pasul „comutare” a fost lăsat de mână (--rezolvat-de-mana)' : 'starea nu spune că site-ul a fost comutat')
+                . ', iar în ' . $s->docroot . ' nu e codul vechi (git HEAD '
+                . ($head !== '' && preg_match('/^[0-9a-f]{40}$/', $head) === 1 ? substr($head, 0, 12) : 'lipsă') . ', așteptat '
+                . ($asteptat !== '' ? substr($asteptat, 0, 12) : '?') . '): nu știu dacă site-ul a fost comutat, deci nu schimb nimic', 1, [
+                'pui codul vechi înapoi în ' . $s->docroot . ' (și codul nou în ' . $s->nou . '), apoi aceeași comandă',
+                'sau ne trimiți ce vezi în ' . $s->dosar . ' (ls -la) și ' . $fisierStare,
+            ]);
+        }
+    }
     if (!$comutat) {
         Iesire::info('adoptarea s-a oprit înainte de comutare: codul vechi e încă în ' . $s->docroot . ', neatins, și vizitatorii n-au văzut nimic');
         if (!$aplica) {
@@ -86,6 +103,12 @@ exit(porneste(static function () use ($argv): int {
     if (isset($rev['alegere']) && $rev['alegere'] !== $alegere && !$restaurareInCurs) {
         throw new Oprire('revenirea începută a ales ' . ($rev['alegere'] === 'fara-baza' ? '--fara-baza' : 'să pună baza la loc')
             . '; continu-o cu aceeași alegere (aceeași comandă ' . ($rev['alegere'] === 'fara-baza' ? 'cu' : 'fără') . ' --fara-baza)', 2);
+    }
+    if ($restaurareInCurs && $o->are('forteaza-liniste')) {
+        throw new Oprire('o încărcare a copiei bazei a început și nu s-a terminat: încărcarea rulării oprite (gzip | mysql) poate lucra încă pe bază, '
+            . 'iar --forteaza-liniste ar porni a doua încărcare peste ea. Rulezi aceeași comandă fără --forteaza-liniste (așteaptă să se termine)', 2, [
+            'dacă o conexiune rămâne mult (lista o dă aceeași comandă fără --forteaza-liniste) și știi că e încărcarea oprită, o oprești din phpMyAdmin, apoi aceeași comandă',
+        ]);
     }
     if ($restaurareInCurs && $o->are('fara-baza')) {
         throw new Oprire('o încărcare a copiei bazei a început și nu s-a terminat: baza e pe jumătate încărcată. Codul vechi nu pornește pe ea; '
@@ -117,8 +140,19 @@ exit(porneste(static function () use ($argv): int {
     if (!isset($rev['mentenanta_inainte'])) {
         $rev['mentenanta_inainte'] = ['continut' => Mentenanta::citeste($s)];
     }
-    // La un refuz de dinaintea bazei: mentenanța cum era și alegerea uitată (nimic nu s-a schimbat încă).
-    $puneLaLoc = static function () use ($s, $stare, &$rev): void {
+    // La un refuz înainte ca revenirea să schimbe ceva: mentenanța cum era și alegerea uitată. După ce a început (o încărcare
+    // a bazei pornită, poate încă vie; o redenumire revino-* începută sau făcută), mentenanța rămâne strictă: cea de dinainte
+    // ar deschide codul nou pe o bază pe jumătate încărcată sau fără poze.
+    $inceputa = !empty($rev['baza_in_curs']) || !empty($rev['baza']) || array_filter(array_merge($facute, array_keys((array) $stare->ia('redenumiri', []))),
+        static fn ($k): bool => str_starts_with((string) $k, 'revino-')) !== [];
+    $puneLaLoc = static function () use ($s, $stare, &$rev, $inceputa): void {
+        if ($inceputa) {
+            if (Mentenanta::mod($s) !== 'strict') {
+                Mentenanta::pune($s, bin2hex(random_bytes(16)), true);
+            }
+            Iesire::atentie('revenirea începută a schimbat deja baza sau dosarele: mentenanța rămâne strictă până o termini (aceeași comandă)');
+            return;
+        }
         Mentenanta::puneLaLoc($s, $rev['mentenanta_inainte']['continut'] ?? null);
         unset($rev['alegere']);
         $stare->pune('revino', $rev);
@@ -168,16 +202,19 @@ exit(porneste(static function () use ($argv): int {
         $rev['baza_in_curs'] = date('c');
         $stare->pune('revino', $rev);
         $diferente = $baza->restaureaza($copieBaza);
+        if ($diferente !== []) {
+            // „În curs” rămâne: codul vechi nu pornește pe o bază altfel decât la copie, iar reluarea încarcă din nou copia.
+            throw new Oprire('baza pusă la loc diferă de copie: ' . implode('; ', array_slice($diferente, 0, 8)) . '. Nu întorc codul pe ea; '
+                . 'mentenanța rămâne strictă', 1, [
+                'rulezi din nou aceeași comandă: copia se încarcă din nou, de la început',
+                'dacă diferă și a doua oară, ne trimiți ieșirea; codul vechi e neatins în ' . $s->vechi . ', copia bazei în ' . $copieBaza,
+            ]);
+        }
         $rev['baza'] = date('c');
         unset($rev['baza_in_curs']);
         $stare->pune('revino', $rev);
-        if ($diferente === []) {
-            Iesire::ok('baza pusă la loc, exact ca la copie (structura și CHECKSUM TABLE ale fiecărui tabel, declanșatoarele, rutinele; '
-                . round(microtime(true) - $t, 1) . ' s)');
-        } else {
-            Iesire::nu('baza pusă la loc, dar diferă de copie: ' . implode('; ', array_slice($diferente, 0, 8)));
-            $probleme[] = 'baza';
-        }
+        Iesire::ok('baza pusă la loc, exact ca la copie (structura și CHECKSUM TABLE ale fiecărui tabel, declanșatoarele, rutinele; '
+            . round(microtime(true) - $t, 1) . ' s)');
     }
     // 4. Pozele: înapoi doar dacă au fost mutate și nu sunt deja acolo.
     $uploads = (string) $stare->ia('uploads', '');

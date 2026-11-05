@@ -157,7 +157,8 @@ La sfârșit scrie rândurile de cron (mai jos) și unde a pus copiile.
 - o reluare cu alte opțiuni (altă `--versiune`, alt `--pachet`, altă `--cheie-licenta`) e refuzată: înainte de comutare
   o iei de la capăt cu `--reia=verificari`; după comutare continui doar cu aceleași opțiuni sau revii.
 - dacă după un minut mai lucrează conexiuni pe bază (un cron lung al codului vechi), scriptul se oprește cu lista lor (ID,
-  timp, instrucțiune) și lasă mentenanța ușoară; rulezi din nou peste câteva minute, sau, dacă știi ce sunt,
+  timp, instrucțiune) și lasă mentenanța **strictă** (codul nou e deja în `public_html`, iar baza încă nemigrată: plățile
+  și ERP-ul primesc 503 și retrimit după reluare); rulezi din nou peste câteva minute, sau, dacă știi ce sunt,
   `--forteaza-liniste`.
 - migrările pornesc doar dacă baza e exact cea din copia de revenire (nimic scris de la copie); amprenta de după
   migrări se scrie o singură dată, după primele cereri ale codului nou (pașii de activare ai pluginurilor), și nu se
@@ -179,7 +180,8 @@ deploy/revino.sh --site=<site> --aplica   # 1–3 minute (cât încărcarea copi
    deschis vizitatorilor, `--aplica` **refuză** și spune tabelele; mentenanța revine cum era;
 3. dacă migrările au pornit: verifică copia (`gzip -t`, și că e copia **acestei** baze: numele și gazda din `.env`),
    șterge tabelele, vederile, rutinele și evenimentele de după copie, încarcă copia și o compară cu amprenta de la copie:
-   „exact ca la copie”;
+   „exact ca la copie”. Dacă diferă, se oprește în mentenanța strictă, fără să întoarcă codul; aceeași comandă încarcă
+   copia din nou, de la început;
 4. pozele înapoi în codul vechi; `public_html` → `public_html.esuat-<data>`, `public_html.vechi` → `public_html`;
 5. codul vechi comparat cu amprenta lui de la comutare (fiecare fișier, octet cu octet; la poze mărimea și data);
 6. prima pagină a site-ului vechi verificată.
@@ -192,11 +194,16 @@ Când refuză, ai două feluri:
 
 O revenire oprită la jumătate se reia cu **aceeași** comandă: aceeași alegere despre bază (una pornită cu `--fara-baza`
 nu devine, la reluare, una care pune baza la loc sub codul vechi deja pornit, și invers), mentenanța de dinaintea primei
-rulări pusă la loc la un refuz, iar o încărcare a copiei bazei rămasă la jumătate se reface de la început (atunci
-`--fara-baza` e refuzat: baza nu e întreagă, codul vechi nu pornește pe ea). Rândurile noi din `orders`, `users`,
+rulări pusă la loc la un refuz cât revenirea n-a schimbat încă nimic (după ce a pornit încărcarea bazei sau o mutare a
+dosarelor, un refuz lasă mentenanța strictă), iar o încărcare a copiei bazei rămasă la jumătate se reface de la început
+(atunci `--fara-baza` e refuzat: baza nu e întreagă, codul vechi nu pornește pe ea; și `--forteaza-liniste`: încărcarea
+oprită poate lucra încă pe bază, iar a doua ar porni peste ea). Rândurile noi din `orders`, `users`,
 `product_reviews`… față de sfârșitul migrărilor se arată doar ca informație (o migrare poate adăuga rânduri: recenziile
 copiate din tabelul vechi); hotărăște amprenta tabelelor. O redenumire imposibilă (amândouă dosarele există, sau niciunul)
-o rezolvi de mână, apoi aceeași comandă cu `--rezolvat-de-mana`. După revenire pui înapoi în
+o rezolvi de mână, apoi aceeași comandă cu `--rezolvat-de-mana` (doar ea se lasă așa; o mutare care nu merge, de exemplu
+din lipsă de drepturi sau de spațiu, oprește și cu `--rezolvat-de-mana`). Dacă pasul lăsat așa e comutarea, `revino.sh`
+mai merge pe drumul „adoptarea s-a oprit înainte de comutare” doar cu codul vechi în `public_html` (checkout-ul git, la
+commit-ul de la verificări); altfel refuză și nu schimbă nimic. După revenire pui înapoi în
 hPanel cronurile vechi (dacă le-ai schimbat). `site/` rămâne; o adoptare nouă pornește de la început.
 
 ## O versiune nouă
@@ -214,7 +221,8 @@ deschiderea. **Dacă ceva pică după comutare, se întoarce singur**: `RELEASE`
 `assets/`, `tema/` și stub-ul de dinainte, verificarea versiunii vechi și, dacă trece, site-ul deschis (codul de ieșire
 rămâne 1). O întoarcere oprită la jumătate se termină la rularea următoare. Dacă nici versiunea veche nu trece testul de
 fum după întoarcere, site-ul rămâne în mentenanță; de acolo: o versiune reparată (`--versiune=<reparația> --aplica`
-merge mai departe), sau `--accepta-revenirea` (deschide site-ul pe versiunea veche, cu un avertisment). `release.sh
+merge mai departe), sau `--accepta-revenirea` (deschide site-ul pe versiunea veche, cu un avertisment); amândouă schimbă
+ceva doar cu `--aplica`, fără el sunt doar planul. `release.sh
 --sterge` nu atinge versiunile unei actualizări în curs.
 Baza rămâne cum au lăsat-o migrările (doar adăugări); copia ei e în `site/deploy/copii/`. Celelalte site-uri de pe
 versiunea veche nu se schimbă. Înapoi pe versiunea de dinainte, de mână: aceeași comandă cu `--versiune=<veche>`
@@ -337,6 +345,9 @@ Când apare `GATA`:
   două site-uri vechi (checkout git, baze făcute ca a codului Biovitality), trei versiuni (una cu prima pagină stricată)
   și injectări: o migrare care pică, un test de fum care pică, o licență stricată, o reluare cu altă versiune, procesul
   oprit între redenumiri (adoptare, revenire, actualizare), o copie a altei baze, un UPDATE după migrări și după
-  deschidere, lacătul migrărilor ținut la o actualizare, open_basedir; codul și baza comparate octet cu octet.
+  deschidere, lacătul migrărilor ținut la o actualizare, open_basedir, o tranzacție deschisă pe bază (liniștea care nu
+  vine, după comutare și într-o revenire reluată), o bază pusă la loc diferită de copie, `--rezolvat-de-mana` pe o mutare
+  care nu merge și pe o comutare terminată de mână, `--accepta-revenirea` fără `--aplica`; codul și baza comparate octet
+  cu octet.
   `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat.
 - Stub-ul și `bin/platforma` le verifică și `tools/dev/test-paths.php` (B).
