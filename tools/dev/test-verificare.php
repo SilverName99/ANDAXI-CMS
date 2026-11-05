@@ -490,7 +490,9 @@ $emailProprietar = 'proprietar.verificare@exemplu.ro';
 $secrete = [$parolaDb, $parolaPoarta, $parolaPoarta2, $emailProprietar];
 $pidServer = 0;
 
-$root = new PDO('mysql:host=localhost', (string) getenv('DB_USERNAME'), (string) getenv('DB_PASSWORD'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+// Cu setul de caractere scris: fără el legătura ia setul implicit al serverului (latin1 la un MariaDB pornit fără fișierele de
+// configurare), iar textele cu diacritice scrise de test (titlul avertismentului) ajungeau în bază codate de două ori.
+$root = new PDO('mysql:host=localhost;charset=utf8mb4', (string) getenv('DB_USERNAME'), (string) getenv('DB_PASSWORD'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $tabeleIn = static function (string $baza) use ($root): int {
     $s = $root->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ?');
     $s->execute([$baza]);
@@ -567,7 +569,11 @@ $ruleaza = static function (string $script, array $argumente, string $intrare, ?
     fclose($tevi[0]);
     $iesire = (string) stream_get_contents($tevi[1]);
     fclose($tevi[1]);
-    return ['cod' => proc_close($proces), 'iesire' => $iesire];
+    $cod = proc_close($proces);
+    // Scriptul a putut șterge fișiere (sterge.php: incarcat-la, temporarele, cache-ul): PHP ține în cache starea ultimului fișier
+    // găsit, deci un is_file() de după ar vedea fișierul cum era înainte.
+    clearstatcache();
+    return ['cod' => $cod, 'iesire' => $iesire];
 };
 /** O cerere spre copie, fără redirecționări urmate. */
 $cerere = static function (string $metoda, string $cale, array $optiuni = []) use (&$port): array {
@@ -613,6 +619,7 @@ $cerere = static function (string $metoda, string $cale, array $optiuni = []) us
     $corp = (string) curl_exec($c);
     $cod = (int) curl_getinfo($c, CURLINFO_RESPONSE_CODE);
     curl_close($c);
+    clearstatcache(); // copia a putut scrie sau șterge fișiere (vezi $ruleaza)
     return ['cod' => $cod, 'antete' => $antete, 'cookies' => $cookies, 'corp' => $corp];
 };
 $pornesteServerul = static function () use (&$pidServer, &$port, $copie, $mediu, $acasa, $ini, $cerere, $dosarTest, $opresteServerul): bool {

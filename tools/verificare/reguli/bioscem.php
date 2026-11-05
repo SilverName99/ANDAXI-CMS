@@ -84,7 +84,10 @@ return [
     // a magazinului — și momentul anunțului „gata de ridicare”), copiată cum e.
     // 17 (pluginul pachete_produse, pachete_produse/0055): conținutul pachetelor (`products.bundle_items_json`: din ce produse e
     // făcut un pachet, conținut public al catalogului), copiat cum e; până acum o coloană doar a codului Biovitality.
-    'versiune' => 17,
+    // 18 (pluginul campanii, campanii/0054): campaniile de pe site și produsele lor, copiate cum sunt. Nicio dată personală:
+    // numele campaniei, fereastra ei, pagina de deschidere (id-ul unei pagini), textele și culorile insignei și ale bannerului
+    // (publice, pe site), id-uri de produse; niciun admin, nicio adresă. Pe o sursă fără ele (codul vechi) grupul nu are ce copia.
+    'versiune' => 18,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -101,6 +104,8 @@ return [
             'promotional_products', 'loyalty_points_rules'],
         'catalog' => ['product_categories', 'products', 'product_category_links', 'product_extra_fields', 'product_extra_field_values',
             'product_templates', 'product_template_fields', 'product_warnings', 'product_brands', 'product_tags', 'product_tag_links'],
+        // După catalog și conținut: o campanie arată spre o pagină și spre produse (id-uri, fără chei străine).
+        'campanii' => ['campanii', 'campanii_produse'],
         'blog' => ['blog_authors', 'blog_categories', 'blog_posts', 'blog_post_categories', 'blog_templates', 'blog_tags', 'blog_post_tags'],
         'fan' => ['fan_localities', 'fan_localities_extra_km', 'fan_lockers', 'fan_nomenclator_sync', 'fan_streets'],
         'comenzi' => ['coupons', 'users', 'user_addresses', 'orders', 'order_items', 'order_payment_links', 'bt_ipay_transactions',
@@ -187,6 +192,14 @@ return [
         'product_brands' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele public al unei mărci']],
         'product_tags' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'], 'motive' => ['name' => 'numele public al unei etichete de produs']],
         'product_tag_links' => ['mod' => 'copiaza', 'pastreaza' => ['product_id', 'tag_id']],
+
+        // ── Campaniile de pe site (pluginul campanii, campanii/0054): conținut public, copiat cum e ──
+        'campanii' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'nume', 'slug', 'pornita', 'incepe_la', 'se_termina_la', 'pagina_id',
+            'pagina_la_intrare', 'text_inapoi', 'insigna_text', 'insigna_fundal', 'insigna_culoare', 'banner_pornit', 'banner_text',
+            'banner_link', 'banner_fundal', 'banner_culoare', 'banner_font', 'banner_marime', 'banner_lipit', 'created_at', 'updated_at'],
+            'motive' => ['nume' => 'numele campaniei, dat de magazin (de exemplu „Black Friday”), nu al unei persoane'],
+            'emailuri_publice' => 'textul bannerului și al insignei e public (pe fiecare pagină a site-ului) și poate avea adresa magazinului'],
+        'campanii_produse' => ['mod' => 'copiaza', 'pastreaza' => ['campanie_id', 'product_id']],
         'products' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'sku', 'category', 'category_id', 'product_template_id', 'slug',
             'short_description', 'description', 'product_highlights', 'price', 'vat_percent', 'vat_included', 'sale_price', 'sale_price_periods_json',
             'discount_badge_mode', 'bbd_enabled', 'bbd_entries_json', 'post_cart_note_enabled', 'post_cart_note_text', 'stock', 'out_of_stock',

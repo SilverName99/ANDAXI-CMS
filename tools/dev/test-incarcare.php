@@ -277,6 +277,9 @@ $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages'
     'product_brands', 'product_tags', 'product_tag_links',
     // WP-38 (nucleu/0046): harta adreselor vechi (publică; emailul adminului, pseudonim).
     'seo_redirects',
+    // Pluginul campanii (campanii/0054): campaniile de pe site și produsele lor (numele campaniei, fereastra, textele și culorile
+    // insignei și ale bannerului, id-uri; niciun client, niciun admin).
+    'campanii', 'campanii_produse',
     'order_promo_items', 'order_product_warnings', 'newsletter_lists', 'newsletter_list_subscribers', 'newsletter_templates', 'newsletter_optin_forms',
     'newsletter_campaigns'];
 $tipuriText = ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'set'];

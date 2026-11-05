@@ -278,6 +278,9 @@ $curataBv = static function () use ($unealta, $radacina, $dosarLicentaBv, $dosar
     if (str_starts_with($dosarLicentaBv, $dosarDev . '/') && is_dir($dosarLicentaBv)) {
         exec('rm -rf ' . escapeshellarg($dosarLicentaBv));
     }
+    // Dosarul l-a șters alt proces (rm), deci PHP ar răspunde din cache-ul stării fișierelor că is_dir() de mai sus e tot
+    // adevărat: verificarea de la final vedea „rămas” un dosar șters.
+    clearstatcache();
 };
 register_shutdown_function($curataBv);
 try {

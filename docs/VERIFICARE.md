@@ -961,6 +961,13 @@ jurnalul cererilor de confirmare (`newsletter_cereri_confirmare`: amprenta adres
 newsletterele site-ului adevărat nu merg pe copie —, pragul cheii vechi (`newsletter_cheie_limita`) „0” (niciun link vechi
 crezut), nota limitei globale și ora ultimei rulări a cronului golite.
 
+**Campaniile de pe site** (reguli v18, pluginul `campanii`, migrarea `campanii/0054`): `campanii` și `campanii_produse`
+**copiate** cum sunt, în grupul lor, după catalog. Nu au date personale: numele campaniei (dat de magazin), fereastra ei, id-ul
+paginii de deschidere, textele și culorile insignei și ale bannerului (publice, pe fiecare pagină; scoase din căutarea A1 a
+adreselor de email, ca paginile), id-uri de produse; nicio coloană cu un admin sau o adresă. O sursă fără ele (un site încă pe
+codul vechi, de exemplu biovitality.ro azi) se încarcă la fel: scanerul se uită doar la tabelele sursei, iar grupul nu are ce
+copia; pe copie tabelele le fac migrările, goale.
+
 **Biovitality** (WP-11b, `tools/verificare/reguli/biovitality.php`): regulile Bioscem (fișierul îl include, deci o regulă
 Bioscem schimbată se aplică și aici; `versiune` = cea Bioscem × 100 + a Biovitality, deci orice schimbare oprește un `--reia`),
 plus ce are în plus codul Biovitality la `d95598e` (`tools/dev/migrari/vechi/bv.sql`): **doar structura** pentru
