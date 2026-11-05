@@ -273,7 +273,7 @@ merge mai departe), sau `--accepta-revenirea` (deschide site-ul pe versiunea vec
 ceva doar cu `--aplica`, fără el sunt doar planul. `release.sh
 --sterge` nu atinge versiunile unei actualizări în curs.
 Baza rămâne cum au lăsat-o migrările (doar adăugări); copia ei e în `site/deploy/copii/<data>-actualizare-<v>/`.
-După o actualizare reușită rămân doar cele mai noi 10 copii ale actualizărilor (`--pastreaza-copii=N` schimbă numărul);
+După o actualizare reușită rămân doar cele mai noi 5 copii ale actualizărilor (`--pastreaza-copii=N` schimbă numărul);
 cele mai vechi se șterg, cu numele și spațiul eliberat în ieșire. Copia adoptării (`site/deploy/copii/<data>/`) și orice
 copie pomenită în starea adoptării sau a actualizării de acum nu se șterg niciodată. Celelalte site-uri de pe
 versiunea veche nu se schimbă. Înapoi pe versiunea de dinainte, de mână: aceeași comandă cu `--versiune=<veche>`

@@ -863,9 +863,21 @@ PHP);
     [$cs, $os] = $deploy('release', ['--sterge=' . $v2, '--aplica']);
     $verifica('release.sh --sterge=' . $v2 . ' în timpul actualizării oprite spre ea: refuzat („o actualizare în curs”)', $cs === 1
         && str_contains($os, 'o actualizare în curs') && is_dir($acasa . '/platforma/releases/' . $v2), $scurt($os));
-    [$c, $o] = $deploy('actualizeaza', ['--site=proba-a', '--versiune=' . $v2, '--url=' . $siteuri['a']['url'], '--aplica']);
+    // Copii vechi inventate ale actualizărilor lui A (7, din 2020): cu --pastreaza-copii=2 rămân cea de acum și cea mai nouă inventată.
+    $inventateA = [];
+    for ($i = 1; $i <= 7; $i++) {
+        $d = $siteuri['a']['site'] . sprintf('/deploy/copii/20200101-0000%02d-actualizare-2020.01.01-abcdef0', $i);
+        mkdir($d, 0700, true);
+        file_put_contents($d . '/baza.sql.gz', str_repeat('x', 4096));
+        $inventateA[] = $d;
+    }
+    [$c, $o] = $deploy('actualizeaza', ['--site=proba-a', '--versiune=' . $v2, '--url=' . $siteuri['a']['url'], '--aplica', '--pastreaza-copii=2']);
     $verifica('reluată: termină redenumirea („assets”), nu șterge copia veche, continuă', str_contains($o, 'la jumătatea pasului „assets”')
         && is_file($siteuri['a']['public'] . '/.assets-' . $v1 . '/css/app.css'), $scurt($o));
+    $verifica('--pastreaza-copii=2: 6 copii vechi ale actualizărilor șterse, rămân cea de acum și cea mai nouă inventată; copia adoptării rămâne',
+        count(glob($siteuri['a']['site'] . '/deploy/copii/*-actualizare-*', GLOB_ONLYDIR) ?: []) === 2 && is_dir($inventateA[6]) && !is_dir($inventateA[5])
+        && is_dir((string) json_decode((string) file_get_contents($siteuri['a']['site'] . '/deploy/adopta.stare'), true)['copii'])
+        && str_contains($o, 'șterse 6 mai vechi'), $scurt($o));
     $verifica('A pe ' . $v2 . ': cod 0, pingul spune ' . $v2 . ', RELEASE schimbat; B rămâne pe ' . $v1, $c === 0 && str_contains($o, 'GATA')
         && ($ping('a')['cod'] ?? null) === $v2 && trim((string) file_get_contents($siteuri['a']['site'] . '/RELEASE')) === $v2
         && ($ping('b')['cod'] ?? null) === $v1, $scurt($o));
@@ -908,8 +920,8 @@ PHP);
     $verifica('B pe ' . $v2 . ' cu lacătul migrărilor ținut: oprit în „migrari” (codul 3), RELEASE a rămas ' . $v1 . ', întors și deschis, cod 1', $c === 1
         && $contine($o, 'faza „migrari”', 'RELEASE a rămas ' . $v1, 'trece verificarea; MENTENANTA ștearsă') && ($ping('b')['cod'] ?? null) === $v1
         && trim((string) file_get_contents($siteuri['b']['site'] . '/RELEASE')) === $v1 && !is_file($siteuri['b']['site'] . '/MENTENANTA'), $scurt($o));
-    // Copiile vechi ale actualizărilor: 12 inventate (2020), una dintre ele pomenită în starea adoptării; cu --pastreaza-copii=3
-    // rămân cele mai noi 3, cea pomenită și copia adoptării.
+    // Copiile vechi ale actualizărilor: 12 inventate (2020), una dintre ele pomenită în starea adoptării; implicit rămân cele
+    // mai noi 5, cea pomenită și copia adoptării.
     $copiiB = $siteuri['b']['site'] . '/deploy/copii';
     $inventate = [];
     for ($i = 1; $i <= 12; $i++) {
@@ -926,14 +938,14 @@ PHP);
     $copieAdoptareB = (string) $st['copii'];
     [$c, $o] = $deploy('actualizeaza', ['--site=proba-b', '--versiune=' . $v2, '--url=' . $siteuri['b']['url'], '--pastreaza-copii=x']);
     $verifica('--pastreaza-copii=x: refuz (cod 2)', $c === 2 && str_contains($o, 'nu e un număr'), $scurt($o));
-    [$c, $o] = $deploy('actualizeaza', ['--site=proba-b', '--versiune=' . $v2, '--url=' . $siteuri['b']['url'], '--aplica', '--pastreaza-copii=3']);
+    [$c, $o] = $deploy('actualizeaza', ['--site=proba-b', '--versiune=' . $v2, '--url=' . $siteuri['b']['url'], '--aplica']);
     $verifica('B pe ' . $v2 . ': cod 0, versiunea pusă și în site/releases/ (open_basedir), tema păstrată', $c === 0 && ($ping('b')['cod'] ?? null) === $v2
         && is_file($siteuri['b']['site'] . '/releases/' . $v2 . '/VERSION') && $cerere($siteuri['b']['url'] . '/tema/css/tema-demo.css')['cod'] === 200, $scurt($o));
     $ramase = glob($copiiB . '/*-actualizare-*', GLOB_ONLYDIR) ?: [];
-    $verifica('după actualizare, --pastreaza-copii=3: 10 copii vechi șterse (spus, cu spațiul eliberat); rămân cele mai noi 3 (cea de acum, cea a actualizării '
-        . 'întoarse, cea mai nouă inventată), cea pomenită în stare și copia adoptării', count($ramase) === 4 && is_dir($inventate[0]) && is_dir($inventate[11])
-        && !is_dir($inventate[1]) && !is_dir($inventate[10]) && is_dir($copieAdoptareB) && is_file((string) json_decode((string) file_get_contents($siteuri['b']['site']
-        . '/deploy/actualizare.stare'), true)['copie_baza']) && $contine($o, 'șterse 10 mai vechi', 'eliberat', 'ștearsă copia veche 20200101-000002', 'e pomenită în starea'),
+    $verifica('după actualizare, implicit (5): 8 copii vechi șterse (spus, cu spațiul eliberat); rămân cele mai noi 5 (cea de acum, cea a actualizării '
+        . 'întoarse, cele mai noi 3 inventate), cea pomenită în stare și copia adoptării', count($ramase) === 6 && is_dir($inventate[0]) && is_dir($inventate[9])
+        && !is_dir($inventate[1]) && !is_dir($inventate[8]) && is_dir($copieAdoptareB) && is_file((string) json_decode((string) file_get_contents($siteuri['b']['site']
+        . '/deploy/actualizare.stare'), true)['copie_baza']) && $contine($o, 'șterse 8 mai vechi', 'eliberat', 'ștearsă copia veche 20200101-000002', 'e pomenită în starea'),
         count($ramase) . ' | ' . $scurt($o));
     file_put_contents($adoptareB, $adoptareBText);
     $scriibile = trim((string) shell_exec('find ' . escapeshellarg($acasa . '/platforma/releases') . ' -mindepth 1 -perm /222 ! -type l | head -3'));

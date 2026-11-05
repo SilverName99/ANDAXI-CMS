@@ -28,7 +28,7 @@ declare(strict_types=1);
  *
  * Opțiuni: --domeniu=<d> (în locul lui --site), --url=<adresa>, --repo=<clonă>, --pachet=<dosar>, --produs=<slug>,
  * --permite-blocante, --inapoi (o versiune mai veche decât baza: fără migrări; migreaza --plan dă atunci codul 12),
- * --pastreaza-copii=N (câte copii ale actualizărilor rămân după una reușită; implicit 10), --acasa=<dosar> (teste).
+ * --pastreaza-copii=N (câte copii ale actualizărilor rămân după una reușită; implicit 5), --acasa=<dosar> (teste).
  */
 
 namespace Platforma\Deploy;
@@ -48,14 +48,14 @@ final class Actualizare
     public string $url;
     public bool $aplica;
     /** Câte copii ale actualizărilor (site/deploy/copii/<data>-actualizare-<v>) rămân după una reușită (--pastreaza-copii). */
-    public int $pastreazaCopii = 10;
+    public int $pastreazaCopii = 5;
 
     public function __construct(public Optiuni $o)
     {
         $n = $o->text('pastreaza-copii');
         if ($n !== null) {
             if (preg_match('/^\d{1,4}$/', $n) !== 1) {
-                throw new Oprire('--pastreaza-copii=' . $n . ' nu e un număr (câte copii ale actualizărilor rămân; implicit 10)', 2);
+                throw new Oprire('--pastreaza-copii=' . $n . ' nu e un număr (câte copii ale actualizărilor rămân; implicit 5)', 2);
             }
             $this->pastreazaCopii = (int) $n;
         }
@@ -519,7 +519,7 @@ function intoarce(Actualizare $u): void
 
 /**
  * După o actualizare reușită: copiile actualizărilor (site/deploy/copii/<data>-actualizare-<v>, copia bazei de dinaintea
- * fiecăreia) se păstrează doar cele mai noi $u->pastreazaCopii (--pastreaza-copii, implicit 10). Nu se șterg niciodată
+ * fiecăreia) se păstrează doar cele mai noi $u->pastreazaCopii (--pastreaza-copii, implicit 5). Nu se șterg niciodată
  * copia adoptării (copii/<data>, fără „-actualizare-”) și nicio copie pomenită în starea adoptării sau a actualizării de
  * acum (o revenire sau o întoarcere o caută acolo). O ștergere care nu merge e doar spusă: actualizarea a reușit.
  */
