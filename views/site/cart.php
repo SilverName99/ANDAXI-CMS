@@ -158,6 +158,7 @@ foreach ($lines as $line) {
                     <div>Preț</div>
                     <div></div>
                 </div>
+<?= \App\Support\PacheteProduse::linkStiluri($lines) ?>
                 <form method="post" action="/cos/actualizeaza" id="cart-update-form">
                     <div class="bv-cart-v2__items">
                         <?php foreach ($lines as $line): ?>
@@ -210,6 +211,50 @@ foreach ($lines as $line) {
                                         <input class="bv-cart-v2__qty-input" type="number" min="0"<?= $stocMaximLinie !== null ? ' max="' . $stocMaximLinie . '" data-stoc-maxim="' . $stocMaximLinie . '"' : '' ?> name="quantities[<?= htmlspecialchars((string) ($line['cart_item_key'] ?? $line['id'] ?? ''), ENT_QUOTES) ?>]" value="<?= (int) ($line['quantity'] ?? 1) ?>">
                                     <?php endif; ?>
                                 </div>
+<?php
+// Pachetele din care face parte produsul (pluginul pachete_produse, din Biovitality afc6fd7, 7391226), sub cantitate. Butonul de
+// schimbare își poartă ambele valori lipite („cheie:idPachet”), fiindcă toate rândurile sunt în același formular.
+$pachetePropuse = is_array($line['bundle_hints'] ?? null) ? $line['bundle_hints'] : [];
+?>
+<?php if ($pachetePropuse !== []): ?>
+<?php $cheieLinie = (string) ($line['cart_item_key'] ?? $line['id'] ?? ''); ?>
+                                    <div class="cart-bundles">
+                                        <p class="cart-bundles__title">
+                                            <?= count($pachetePropuse) === 1
+                                                ? 'Face parte dintr-un pachet'
+                                                : 'Face parte din ' . count($pachetePropuse) . ' pachete' ?>
+                                        </p>
+                                        <?php foreach ($pachetePropuse as $pachet): ?>
+                                            <?php
+                                            $pNume = trim((string) ($pachet['name'] ?? 'Pachet'));
+                                            $pUrl = trim((string) ($pachet['url'] ?? '#'));
+                                            $pPret = (float) ($pachet['price'] ?? 0);
+                                            $pImg = trim((string) ($pachet['image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg';
+                                            $pId = (int) ($pachet['id'] ?? 0);
+                                            ?>
+                                            <div class="cart-bundle">
+                                                <img class="cart-bundle__img" src="<?= htmlspecialchars($pImg, ENT_QUOTES) ?>" alt="<?= htmlspecialchars($pNume, ENT_QUOTES) ?>" loading="lazy" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+                                                <div class="cart-bundle__info">
+                                                    <span class="cart-bundle__name"><?= htmlspecialchars($pNume, ENT_QUOTES) ?></span>
+                                                    <?php if ($pPret > 0): ?>
+                                                        <span class="cart-bundle__price"><?= number_format($pPret, 2) ?> lei</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="cart-bundle__actions">
+                                                    <a class="cart-bundle__btn" href="<?= htmlspecialchars($pUrl, ENT_QUOTES) ?>">Vezi pachetul</a>
+                                                    <button
+                                                        class="cart-bundle__btn cart-bundle__btn--main"
+                                                        type="submit"
+                                                        name="swap_bundle"
+                                                        value="<?= htmlspecialchars($cheieLinie . ':' . $pId, ENT_QUOTES) ?>"
+                                                        formaction="/cos/schimba-pachet"
+                                                        formmethod="post"
+                                                    >Schimbă în pachet</button>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+<?php endif; ?>
                                 <?php
                                 $lineTotal = max(0.0, (float) ($line['line_total'] ?? 0.0));
                                 $lineCouponDiscount = max(0.0, (float) ($line['coupon_discount'] ?? 0.0));

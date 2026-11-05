@@ -348,6 +348,14 @@ return [
             'motiv' => 'Conturi clienți → „Confirmare email la înregistrare”: formularul cu bifa „Cere confirmarea adresei de email” '
                 . '(customer_email_confirmation_required), ca în Utilizatori → Setări al Biovitality'],
     ],
+    // Pluginul pachete_produse (5 nov 2026, din Biovitality 90afd46): în editorul produsului, conținutul pachetului (câmpul ascuns pe
+    // care îl completează caseta „Conținutul pachetului”, arătată doar când șablonul ales folosește un slot {{bundle_item_…}}). Doar cu
+    // pluginul pe site (licența „toate” aici; Biovitality); cu licența Bioscem lipsește.
+    'pachete_produse' => [
+        'pachet-continut' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/products input:hidden bundle_items_json = \\[\\]$',
+            'cale' => '^/admin/products$', 'licenta' => 'toate', 'rol' => ['adm', 'magazin'],
+            'motiv' => 'conținutul pachetului (products.bundle_items_json), salvat doar când formularul îl trimite'],
+    ],
     // Pluginul campanii (5 nov 2026, pentru Biovitality): intrarea nouă „Campanii pe site” din Marketing, doar cu pluginul pornit
     // (licența „toate”; nu e în nicio licență de dezvoltare a unui site) și doar pentru administratorul general. Paginile lui sunt
     // noi, deci nu sunt în contractul etichetei: le plimbă G-tastatura, iar ce trimit le verifică tools/dev/test-campanii.php (B).

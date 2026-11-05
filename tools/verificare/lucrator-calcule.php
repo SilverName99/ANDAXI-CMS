@@ -25,7 +25,8 @@ declare(strict_types=1);
  * transportul salvat și cu 0, ca la trecerea pe FANbox din admin; cu argumentul transportului gratuit din produs al
  * comenzii, WP-20 C14a, pe care un cod fără el îl ignoră), `LoyaltyService::estimateEarnPoints` (din sumar și din
  * comanda salvată) și `ErpSync::buildPayload` pe comanda salvată (sha1 pe JSON-ul canonic, plus câte un sha1 pe fiecare
- * cheie de sus, ca să se vadă care diferă). Sesiunea e un array în memorie: un handler de sesiune gol pornit înainte de
+ * cheie de sus, ca să se vadă care diferă); pe fiecare linie a sumarului, și pachetele propuse în coș (`bundle_hints`, pluginul
+ * pachete_produse: o amprentă și câte sunt). Sesiunea e un array în memorie: un handler de sesiune gol pornit înainte de
  * bootstrap.php (bootstrap-ul Bioscem pornește altfel o sesiune și în linia de comandă), deci niciun fișier de sesiune.
  *
  * Răspunsul: un rând JSON pe caz (`i`, valorile rotunjite la 2 zecimale; nimic nu se tipărește pe ecran: le compară
@@ -277,10 +278,18 @@ foreach ((array) ($cerere['cazuri'] ?? []) as $caz) {
         $s = \App\Support\CheckoutCalculator::buildSummary($db, $settings);
         $linii = [];
         foreach ((array) ($s['lines'] ?? []) as $l) {
+            // Pachetele propuse pe linie (pluginul pachete_produse; codul Biovitality: ProductBundles, aceeași cheie `bundle_hints`), în
+            // ordine: o amprentă a ce vede clientul (id, nume, adresă, preț, poză), plus câte sunt.
+            $pachete = [];
+            foreach ((is_array($l['bundle_hints'] ?? null) ? $l['bundle_hints'] : []) as $p) {
+                $pachete[] = is_array($p) ? [(int) ($p['id'] ?? 0), (string) ($p['name'] ?? ''), (string) ($p['url'] ?? ''),
+                    $r2($p['price'] ?? 0), (string) ($p['image_url'] ?? '')] : [];
+            }
             $linii[] = [
                 'price' => $r2($l['price'] ?? 0), 'line_total' => $r2($l['line_total'] ?? 0), 'vat_value' => $r2($l['vat_value'] ?? 0),
                 'coupon_discount' => $r2($l['coupon_discount'] ?? 0), 'line_total_after_coupon' => $r2($l['line_total_after_coupon'] ?? 0),
                 'bbd_key' => (string) ($l['bbd_key'] ?? ''),
+                'pachete' => $sha($pachete), 'n_pachete' => count($pachete),
             ];
         }
         $rezumat = [

@@ -1112,7 +1112,10 @@ final class SiteController
                 (int) ($product['product_template_id'] ?? 0)
             );
             if (is_array($template)) {
-                $templateRender = $this->buildProductTemplateRender($template, $product, $extraFields, $settings, $productReviews, $similarProducts);
+                // Pluginul pachete_produse (din Biovitality 90afd46): produsele pachetului, pentru sloturile {{bundle_item_N_*}}.
+                $elementePachet = \App\Support\PacheteProduse::pentruPagina($db, $product['bundle_items_json'] ?? '[]');
+                $templateRender = $this->buildProductTemplateRender($template, $product, $extraFields, $settings, $productReviews, $similarProducts,
+                    $elementePachet);
             }
         }
 
@@ -8302,6 +8305,36 @@ CSS;
         return $product;
     }
 
+    /**
+     * Pluginul pachete_produse (PacheteProduseController, „Schimbă în pachet”): verificările lui „Adaugă în coș” pentru pachetul
+     * care ia locul produsului (găsit și activ, nu epuizat, în limita stocului din ERP, cu ce e deja în coș), în ordinea și cu
+     * mesajele codului Biovitality (7391226).
+     *
+     * @return array{ok: bool, message: string, status: int, nume: string}
+     */
+    public function verificaPachetPentruCos(int $idPachet, int $cantitate): array
+    {
+        $pachet = $this->findProductById($idPachet);
+        if ($pachet === null) {
+            return ['ok' => false, 'message' => 'Pachetul nu a fost găsit.', 'status' => 404, 'nume' => ''];
+        }
+        if ((int) ($pachet['out_of_stock'] ?? 0) === 1) {
+            return ['ok' => false, 'message' => 'Pachetul este epuizat momentan.', 'status' => 409, 'nume' => ''];
+        }
+        $limita = $this->limitaStocProdus($pachet);
+        if ($limita !== null && $this->cantitateInCos($idPachet) + $cantitate > $limita) {
+            return ['ok' => false, 'message' => $this->mesajStocInsuficient($limita), 'status' => 409, 'nume' => ''];
+        }
+
+        return ['ok' => true, 'message' => '', 'status' => 200, 'nume' => (string) ($pachet['name'] ?? 'ales')];
+    }
+
+    /** Pluginul pachete_produse (PacheteProduseController): răspunsul coșului flotant, ca după orice schimbare din el. */
+    public function raspunsCosFlotant(?PDO $db): array
+    {
+        return $this->buildFloatingCartPayload($db);
+    }
+
     private function buildFloatingCartPayload(?PDO $db): array
     {
         $settings = Settings::all($db);
@@ -8408,6 +8441,17 @@ CSS;
                 'vat_included' => $vatIncluded,
                 'vat_value' => $vatValue,
             ];
+            // Pachetele din care face parte produsul (pluginul pachete_produse, din Biovitality 7391226): coșul flotant le arată pe
+            // linie, cu „Vezi pachetul” și „Schimbă în pachet”. Doar pe liniile care au (fără plugin, niciuna).
+            if (is_array($line['bundle_hints'] ?? null) && $line['bundle_hints'] !== []) {
+                $lines[count($lines) - 1]['bundle_hints'] = array_map(static fn (array $p): array => [
+                    'id' => (int) ($p['id'] ?? 0),
+                    'name' => (string) ($p['name'] ?? ''),
+                    'url' => (string) ($p['url'] ?? ''),
+                    'price' => (float) ($p['price'] ?? 0),
+                    'image_url' => (string) ($p['image_url'] ?? ''),
+                ], $line['bundle_hints']);
+            }
         }
 
         $raspuns = [
@@ -8445,6 +8489,11 @@ CSS;
         if ($gratuitDinProdus) {
             // Doar atunci: răspunsul unui coș obișnuit rămâne exact cel de dinainte.
             $raspuns['shipping_free_by_product'] = true;
+        }
+        // Pluginul pachete_produse: foaia de stil a casetei pachetelor, doar când o linie are pachete propuse.
+        $stiluriPachete = \App\Support\PacheteProduse::adresaStiluri((array) ($summary['lines'] ?? []));
+        if ($stiluriPachete !== '') {
+            $raspuns['pachete_css'] = $stiluriPachete;
         }
         return $raspuns;
     }
@@ -12348,7 +12397,8 @@ CSS;
         array $extraFields,
         array $settings = [],
         array $productReviews = [],
-        array $similarProducts = []
+        array $similarProducts = [],
+        array $bundleItems = []
     ): array
     {
         $shortDescription = (string) ($product['short_description'] ?? '');
@@ -12574,6 +12624,9 @@ CSS;
                 $tokenuriBrute['field:' . $key] = true;
             }
         }
+        // Sloturile pachetului (pluginul pachete_produse, din Biovitality 90afd46): toate, și cele necompletate, ca un șablon cu
+        // patru carduri să nu rămână cu „{{bundle_item_4_name}}” pe ecran; fără plugin pe site, goale.
+        \App\Support\PacheteProduse::sloturi($bundleItems, $map, $tokenuriBrute);
 
         $html = $templateHtmlRaw;
         $css = (string) ($template['css_content'] ?? '');

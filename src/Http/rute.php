@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\AbonamentController;
 use App\Http\Controllers\OferteBbdController;
+use App\Http\Controllers\PacheteProduseController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CampaniiController;
@@ -385,6 +386,10 @@ return static function (Router $router): void {
     $router->get('/admin/seo/404', [RedirectionariController::class, 'jurnal']);
     $router->post('/admin/seo/404/goleste', [RedirectionariController::class, 'goleste404']);
     $router->post('/admin/seo/404/{id}/sterge', [RedirectionariController::class, 'sterge404']);
+    // Pluginul pachete_produse (din Biovitality 7391226; App\Support\PacheteProduse): „Schimbă în pachet” din pagina coșului
+    // (formularul coșului) și din coșul flotant (JSON).
+    $router->post('/cos/schimba-pachet', [PacheteProduseController::class, 'schimbaInCos']);
+    $router->post('/api/cart/swap-bundle', [PacheteProduseController::class, 'schimbaInCosApi']);
     // Pluginul campanii (5 nov 2026, pentru Biovitality; App\Support\Campanii): pagina de deschidere a campaniei active și
     // Marketing → Campanii pe site (administratorul general).
     $router->get('/campanie/{slug}', [CampaniiController::class, 'pagina']);

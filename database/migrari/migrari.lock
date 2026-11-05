@@ -48,7 +48,8 @@
         "magazin/0051_sursa_comenzii": "8d19807543ae01ac089f2e7f451c604b8218ebe924bba28f5d684d0100b1ef31",
         "livrare_fan/0052_ridicare_personala": "150cabace00c1fe9954a4d579ff9d56cfd5c42bbdff0fbf8ff16241d60fabd62",
         "conturi_clienti/0053_confirmare_din_biovitality": "08c9fa4297bf53e4ddf29346b668da45f01c8071e8b62645875c7564a09ba93c",
-        "campanii/0054_campanii": "460d4686553833f835597dc12e19281ccccf765baaeb62c3291070946c798f71"
+        "campanii/0054_campanii": "460d4686553833f835597dc12e19281ccccf765baaeb62c3291070946c798f71",
+        "pachete_produse/0055_continut_pachete": "bd00cd4d00debefa304e162ae5b8ddc3f6fa1bac7194ffff9618819edc1c49bc"
     },
     "retrase": {}
 }

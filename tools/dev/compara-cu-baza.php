@@ -1628,6 +1628,12 @@ $marcajePort = [
         . 'șablonul ales nu le folosește'],
     'bv:produse-catalog-js' => ['cale' => '/admin/products', 'motiv' => 'WP-19: datele și scriptul câmpurilor catalogului (editor, '
         . 'filtrul câmpurilor după șablon, câmpurile „Imagine”, linkul de ciornă din listă), separat de scriptul editorului'],
+    // Pluginul pachete_produse (din Biovitality 90afd46): conținutul pachetului în editorul produsului (ascuns cât șablonul ales
+    // nu folosește un slot {{bundle_item_…}}) și scriptul lui; marcajele apar goale fără plugin (licența Bioscem).
+    'bv:pachet-editor' => ['cale' => '/admin/products', 'motiv' => 'pachete_produse (Biovitality 90afd46): caseta „Conținutul pachetului” '
+        . 'din editorul produsului'],
+    'bv:pachet-editor-js' => ['cale' => '/admin/products', 'motiv' => 'pachete_produse (Biovitality 90afd46): datele, stilul și scriptul '
+        . 'casetei (produsele care se pot alege, conținutul fiecărui pachet, șabloanele cu sloturi)'],
     'bv:token-produse-sablon' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-19 (C14e, '
         . 'GR-17): codurile {{products_by_template:…}} și {{produse_serviciu}} în lista codurilor editorului de pagini'],
     'bv:previzualizare-produse-sablon' => ['cale' => ['/admin/pages/new', '/admin/pages/' . $idPagina . '/edit'], 'motiv' => 'WP-19 '

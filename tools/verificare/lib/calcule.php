@@ -29,7 +29,9 @@ declare(strict_types=1);
  * Cazurile (o singură interogare, pe baza copiei): ultimele `--n` comenzi (implicit 500; `deleted_at IS NULL`, fără cele
  * `failed`), plus fiecare comandă din ultimele 12 luni cu cupon, puncte, o linie cu ofertă BBD sau FANbox (cel mult 300).
  * Profilul (`--profil=bioscem`, implicit, sau `--profil=biovitality`, WP-11b) e site-ul copiat; la Biovitality comenzile cu un
- * produs-pachet (`products.bundle_items_json`) se scot dintre cazuri și se numără, „excluse: pachete N” (PROFILURI_CU_PACHETE).
+ * produs-pachet (`products.bundle_items_json`) se compară ca toate celelalte (din pachete_produse portat: până atunci se scoteau
+ * dintre cazuri) și se numără, „pachete: N coșuri cu un produs-pachet, comparate” (PROFILURI_CU_PACHETE), cu tipurile de caz
+ * `pachet` și `in_pachet`; pe fiecare linie se compară și pachetele propuse în coș (`linie.pachete`).
  * Lucrătorilor ajung doar câmpurile de care are nevoie coșul (produsele, cantitățile, cheile BBD, cuponul, clientul,
  * punctele, județul și localitatea de facturare, FANbox) și cele ale comenzii salvate pentru recalculul din admin.
  *
@@ -83,9 +85,10 @@ final class ComparaCalcule
     public const PROFILURI = ['bioscem', 'biovitality'];
 
     /**
-     * Profilurile ale căror coșuri cu un produs-pachet (`products.bundle_items_json` nevid) nu se compară, doar se numără
-     * („excluse: pachete N”): pluginul `pachete_produse` se portează abia în Etapa 4, deci acolo ar diferi prin construcție; ele se
-     * compară în repetiția din Etapa 4 (planul Etapei 1, WP-11b).
+     * Profilurile cu pachete de produse (`products.bundle_items_json`, pluginul `pachete_produse`): baza trebuie să aibă coloana (altfel
+     * nu e o copie a site-ului), coșurile cu un produs-pachet se numără („pachete: N coșuri cu un produs-pachet, comparate”) și se
+     * compară ca oricare altele, cu tipurile de caz `pachet` (are un produs-pachet) și `in_pachet` (are un produs care intră într-un
+     * pachet activ). Până la portarea pluginului (WP-11b … 5 noiembrie 2026) se scoteau dintre cazuri, „excluse: pachete N”.
      */
     public const PROFILURI_CU_PACHETE = ['biovitality'];
 
@@ -123,6 +126,12 @@ final class ComparaCalcule
     /** Câmpurile fiecărei linii din sumar comparate. */
     public const CAMPURI_LINIE = ['price', 'line_total', 'vat_value', 'coupon_discount', 'line_total_after_coupon'];
 
+    /**
+     * Câmpurile text ale fiecărei linii, comparate exact: cheia ofertei BBD și pachetele propuse pe linie (`bundle_hints` din
+     * sumar: id, nume, adresă, preț, poză, în ordine; o amprentă, pluginul pachete_produse).
+     */
+    public const CAMPURI_LINIE_TEXT = ['bbd_key', 'pachete'];
+
     /** Câmpurile de dincolo de sumar: recalculul transportului din admin și punctele promise. */
     public const CAMPURI_ALTE = ['transport_admin', 'transport_admin_0', 'puncte_estimate', 'puncte_estimate_salvat'];
 
@@ -158,7 +167,7 @@ final class ComparaCalcule
     private ?array $declarate = null;
     /** @var array<string, list<string>> argumentele `-d extension=…` ale fiecărui PHP copil, după sonda lui (o dată pe PHP) */
     private array $extensiiCopil = [];
-    /** Câte comenzi cu un produs-pachet s-au scos dintre cazuri (PROFILURI_CU_PACHETE); null = profilul nu le scoate. */
+    /** Câte cazuri au un produs-pachet (PROFILURI_CU_PACHETE; comparate ca toate); null = profilul n-are pachete. */
     private ?int $pachete = null;
     /** Liniile cu produse epuizate scoase din coșuri și în câte cazuri (DECLARATE_PROFIL, fara_epuizate); null = profilul nu le scoate. */
     private ?array $epuizate = null;
@@ -261,7 +270,7 @@ final class ComparaCalcule
         // ── Cazurile ──
         $cazuri = $this->cazuri((int) $n);
         if ($this->pachete !== null) {
-            $this->spune('  excluse: pachete ' . $this->pachete . ' (coșuri cu un produs-pachet, numărate, necomparate: pachete_produse vine în Etapa 4)');
+            $this->spune('  pachete: ' . $this->pachete . ' coșuri cu un produs-pachet, comparate ca toate (pachete_produse)');
         }
         if ($this->epuizate !== null) {
             $this->spune('  excluse: epuizate ' . $this->epuizate['excluse'] . ' (coșuri doar cu produse epuizate: gol în ambele coduri, necomparate)');
@@ -547,26 +556,41 @@ final class ComparaCalcule
              ORDER BY o.id DESC LIMIT " . self::SPECIALE_MAXIM)->fetchAll(PDO::FETCH_COLUMN));
         $toate = array_values(array_unique(array_merge($ids, $speciale)));
         sort($toate);
-        $this->pachete = null;
+        $this->pachete = in_array($this->profil, self::PROFILURI_CU_PACHETE, true) ? 0 : null;
+        // Produsele-pachet și produsele care intră într-un pachet activ (PROFILURI_CU_PACHETE): pentru tipurile de caz și numărătoare.
+        $produsePachet = [];
+        $produseInPachet = [];
         if (in_array($this->profil, self::PROFILURI_CU_PACHETE, true)) {
-            // Coșurile cu un produs-pachet: doar numărate, nu comparate (PROFILURI_CU_PACHETE).
             $coloana = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products'
                 AND COLUMN_NAME = 'bundle_items_json'")->fetchColumn();
             if ($coloana !== 1) {
                 throw new Refuz('baza n-are products.bundle_items_json: nu e o copie ' . $this->profil . ' (incarca.php --din=' . $this->profil . ')');
             }
-            $cuPachet = [];
-            foreach (array_chunk($toate, 500) as $bucata) {
-                $st = $db->prepare("SELECT DISTINCT oi.order_id FROM order_items oi INNER JOIN products p ON p.id = oi.product_id
-                    WHERE oi.order_id IN (" . implode(',', array_fill(0, count($bucata), '?')) . ") AND p.bundle_items_json IS NOT NULL
-                    AND TRIM(p.bundle_items_json) NOT IN ('', '[]', '{}', 'null')");
-                $st->execute($bucata);
-                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $id) {
-                    $cuPachet[(int) $id] = true;
+            // Din pachete_produse/0055 coloana e pe orice bază migrată: copia site-ului o arată pasul lui de înghețare
+            // (scripts/migreaza.php --aplica --site=<profil>, la încărcare), nu coloana.
+            try {
+                $pasSite = (int) $db->query('SELECT COUNT(*) FROM _platforma_migrari WHERE id = ' . $db->quote('site/' . $this->profil . '/setari-inghetate')
+                    . " AND rezultat IN ('aplicata', 'detectata')")->fetchColumn();
+            } catch (Throwable) {
+                $pasSite = 0;
+            }
+            if ($pasSite !== 1) {
+                throw new Refuz('baza n-are pasul site/' . $this->profil . '/setari-inghetate al migrărilor: nu e o copie ' . $this->profil
+                    . ' (incarca.php --din=' . $this->profil . ')');
+            }
+            $st = $db->query("SELECT id, is_active, deleted_at, bundle_items_json FROM products WHERE bundle_items_json IS NOT NULL
+                AND TRIM(bundle_items_json) NOT IN ('', '[]', '{}', 'null')");
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $p) {
+                $produsePachet[(int) $p['id']] = true;
+                $continut = json_decode((string) $p['bundle_items_json'], true);
+                if ((int) $p['is_active'] === 1 && $p['deleted_at'] === null && is_array($continut)) {
+                    foreach ($continut as $element) {
+                        if (is_array($element) && (int) ($element['id'] ?? 0) > 0) {
+                            $produseInPachet[(int) $element['id']] = true;
+                        }
+                    }
                 }
             }
-            $this->pachete = count($cuPachet);
-            $toate = array_values(array_filter($toate, static fn (int $id): bool => !isset($cuPachet[$id])));
         }
         $cazuri = [];
         $linii = [];
@@ -656,10 +680,23 @@ final class ComparaCalcule
             if ((int) ($o['billing_is_company'] ?? 0) === 1) {
                 $tipuri[] = 'firma';
             }
+            if ($produsePachet !== [] || $produseInPachet !== []) {
+                foreach ([['pachet', $produsePachet], ['in_pachet', $produseInPachet]] as [$tipPachet, $produseTip]) {
+                    foreach ($liniiCaz as $l) {
+                        if (isset($produseTip[$l[0]])) {
+                            $tipuri[] = $tipPachet;
+                            break;
+                        }
+                    }
+                }
+            }
             if (mb_strtolower(trim((string) ($o['billing_county'] ?? ''))) === 'bucuresti') {
                 $tipuri[] = 'judet_bucuresti';
             }
             sort($tipuri);
+            if (in_array('pachet', $tipuri, true)) {
+                $this->pachete = ($this->pachete ?? 0) + 1;
+            }
             $rezultat[$id] = [
                 'i' => ++$i,
                 'id' => (int) $id,
@@ -1008,7 +1045,7 @@ final class ComparaCalcule
             throw new Refuz('fișierul diferențelor declarate nu e o listă JSON ([{"comanda": …, "campuri": […], "motiv": "…"}])');
         }
         $permise = array_merge(self::CAMPURI, self::CAMPURI_DECLARABILE, self::CAMPURI_ALTE,
-            array_map(static fn (string $c): string => 'linie.' . $c, array_merge(self::CAMPURI_LINIE, ['bbd_key'])));
+            array_map(static fn (string $c): string => 'linie.' . $c, array_merge(self::CAMPURI_LINIE, self::CAMPURI_LINIE_TEXT)));
         $declarate = [];
         $comenzi = [];
         foreach ($date as $k => $d) {
@@ -1092,6 +1129,7 @@ final class ComparaCalcule
         $peTip = [];
         $cupoaneOk = ['vechi' => 0, 'nou' => 0];
         $puncteFolosite = ['vechi' => 0, 'nou' => 0];
+        $liniiCuPachete = ['vechi' => 0, 'nou' => 0];
         $faraErori = 0;
         // Diferențele declarate (--declarate): după comanda cazului; ce s-a găsit pentru fiecare declarație.
         $declaratiaComenzii = [];
@@ -1127,6 +1165,11 @@ final class ComparaCalcule
                 }
                 if ((int) ($rez['rezumat']['puncte_aplicate'] ?? 0) > 0) {
                     $puncteFolosite[$parte]++;
+                }
+                foreach ((array) ($rez['rezumat']['linii'] ?? []) as $linieRez) {
+                    if (is_array($linieRez) && (int) ($linieRez['n_pachete'] ?? 0) > 0) {
+                        $liniiCuPachete[$parte]++;
+                    }
                 }
             }
             $cheiCaz = [];
@@ -1175,7 +1218,8 @@ final class ComparaCalcule
         $nrEroriNou = array_sum($eroriNou);
         $this->spune('cazuri ' . $total . ' | identice ' . $identice . ' | diferite ' . $diferite . ' | erori vechi ' . $nrEroriVechi . ' | erori nou ' . $nrEroriNou);
         if ($this->pachete !== null) {
-            $this->spune('excluse: pachete ' . $this->pachete . ' (necomparate; în repetiția din Etapa 4, cu pachete_produse portat)');
+            $this->spune('pachete: ' . $this->pachete . ' cazuri cu un produs-pachet, comparate | linii cu pachete propuse în coș: vechi '
+                . $liniiCuPachete['vechi'] . ', nou ' . $liniiCuPachete['nou']);
         }
         if ($this->epuizate !== null) {
             $this->spune('excluse: epuizate ' . $this->epuizate['excluse'] . ' (coșuri doar cu produse epuizate, necomparate)');
@@ -1262,8 +1306,10 @@ final class ComparaCalcule
                         $dif[] = 'linie.' . $camp;
                     }
                 }
-                if ((string) ($linie['bbd_key'] ?? '') !== (string) ($alta['bbd_key'] ?? '') && !in_array('linie.bbd_key', $dif, true)) {
-                    $dif[] = 'linie.bbd_key';
+                foreach (self::CAMPURI_LINIE_TEXT as $camp) {
+                    if ((string) ($linie[$camp] ?? '') !== (string) ($alta[$camp] ?? '') && !in_array('linie.' . $camp, $dif, true)) {
+                        $dif[] = 'linie.' . $camp;
+                    }
                 }
             }
         }

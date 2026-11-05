@@ -272,6 +272,10 @@ final class CheckoutCalculator
             }
         }
 
+        // Pachetele din care face parte un produs din coș (pluginul pachete_produse, din Biovitality afc6fd7, 7391226): pagina
+        // coșului și coșul flotant le propun pe linia lui. Doar `bundle_hints` pe linii; sumele nu se schimbă.
+        $lines = PacheteProduse::cuPropuneri($db, $lines);
+
         $points = LoyaltyService::cartRedemptionSummary($db, $settings, $subtotal, $discount);
         $pointsDiscount = (float) ($points['discount'] ?? 0.0);
 

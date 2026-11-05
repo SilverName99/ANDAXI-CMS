@@ -1667,6 +1667,9 @@ final class AdminController
             // WP-19: câmpurile catalogului pe produs (C8, C14b, C14c) și câmpurile suplimentare pe șablon (C14d).
             'catalogProduse' => $this->catalogProduseAdmin($db),
             'campuriPeSablon' => $this->campuriSuplimentarePeSablon($productTemplates, $extraFields),
+            // Pluginul pachete_produse (din Biovitality 90afd46): conținutul pachetelor, produsele care se pot alege și șabloanele
+            // cu sloturi; null fără plugin pe site (editorul nu arată nimic).
+            'pacheteEditor' => \App\Support\PacheteProduse::pentruEditor($db, $products, $productTemplates),
             'categoriiExtra' => $categoriiExtra,
             'products' => $products,
             'brands' => array_values($brands),
@@ -1989,6 +1992,10 @@ final class AdminController
             // WP-19 (GR-16): banda simplă a produselor din aceeași categorie (fără preț, stele și coș).
             ['code' => '{{product_produse_similare}}', 'label' => 'Produse din aceeași categorie (bandă simplă, fără preț)'],
         ];
+        // Pluginul pachete_produse (din Biovitality 90afd46): sloturile conținutului pachetului.
+        if (\App\Support\PacheteProduse::activ()) {
+            $availablePlaceholders = array_merge($availablePlaceholders, \App\Support\PacheteProduse::coduriSablon());
+        }
         foreach ($this->loadProductExtraFields($db) as $field) {
             if (!is_array($field) || (int) ($field['is_active'] ?? 1) !== 1) {
                 continue;
@@ -5074,6 +5081,8 @@ final class AdminController
         );
         $this->saveProductExtraFieldValues($db, $productId, $extraValues);
         $this->saveProductCatalogFromPost($db, $productId, true);
+        // Pluginul pachete_produse: conținutul pachetului, doar când formularul l-a trimis (cu pluginul pe site).
+        \App\Support\PacheteProduse::salveazaDinFormular($db, $productId);
         $mesajEan = $this->salveazaEanDinPost($db, $productId);
         if ($productId > 0) {
             $this->saveSeoSettings($db, 'product', (string) $productId, [
@@ -5472,6 +5481,8 @@ final class AdminController
         );
         $this->saveProductExtraFieldValues($db, $id, $extraValues);
         $this->saveProductCatalogFromPost($db, $id, false);
+        // Pluginul pachete_produse: conținutul pachetului, doar când formularul l-a trimis (cu pluginul pe site).
+        \App\Support\PacheteProduse::salveazaDinFormular($db, $id);
         $mesajEan = $this->salveazaEanDinPost($db, $id);
         $this->saveSeoSettings($db, 'product', (string) $id, [
             'title' => $seoTitle,

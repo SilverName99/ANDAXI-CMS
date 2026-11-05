@@ -703,7 +703,8 @@ try {
         'fără --cod-vechi' => [['--local'], [], 'cere --cod-vechi'],
         'codul vechi nu e un cod de site' => [['--local', '--cod-vechi=' . $dosarTest], [], 'nu e dosarul codului unui site'],
         'un profil necunoscut' => [['--local', '--cod-vechi=' . $codVechi, '--profil=vertij'], [], 'profil necunoscut (vertij)'],
-        // WP-11b: profilul Biovitality pe o bază fără produse-pachet (aici baza demo, în forma Bioscem).
+        // WP-11b: profilul Biovitality pe o bază care nu e a lui (aici baza demo, în forma Bioscem: are products.bundle_items_json din
+        // pachete_produse/0055, dar nu pasul migrărilor site/biovitality/setari-inghetate).
         'profilul Biovitality pe o bază care nu e a lui' => [['--local', '--cod-vechi=' . $codVechi, '--profil=biovitality'], [], 'nu e o copie biovitality'],
         'un argument necunoscut' => [['--local', '--cod-vechi=' . $codVechi, '--orice'], [], 'argument necunoscut'],
         '--n greșit' => [['--local', '--cod-vechi=' . $codVechi, '--n=0'], [], '--n trebuie'],

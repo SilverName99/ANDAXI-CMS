@@ -5496,6 +5496,12 @@
                     "null": true,
                     "tip": "varchar(120)"
                 },
+                "bundle_items_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
                 "category": {
                     "extra": "",
                     "implicit": null,

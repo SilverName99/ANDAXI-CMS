@@ -414,7 +414,8 @@ $PHP tools/verificare/stare.php
 # e) comparația calculelor: codul vechi Biovitality (copiat la c, în cod-vechi/biovitality/) față de codul comun
 $PHP tools/verificare/compara-calcule.php --profil=biovitality
 #   pe ecran doar numere și nume de câmpuri; rânduri de citit:
-#   „excluse: pachete N” (coșurile cu un produs-pachet: numărate, necomparate, până la Etapa 4),
+#   „pachete: N coșuri cu un produs-pachet, comparate ca toate (pachete_produse)” și, la final, „pachete: N cazuri cu un
+#   produs-pachet, comparate | linii cu pachete propuse în coș: vechi M, nou M” (aceleași două numere M),
 #   „excluse: epuizate N” (coșurile doar cu produse epuizate acum: goale în ambele coduri, deci necomparate),
 #   „produse epuizate scoase din coș, în ambele coduri: …” și „payload ERP: chei noi ale codului comun …” (diferențele
 #   declarate pe profil, mai jos);
@@ -1019,10 +1020,12 @@ totalul salvat e doar informativă).
 - **Cazurile** (o interogare, pe baza copiei): ultimele `--n` comenzi (implicit 500; fără cele șterse și cele `failed`),
   plus fiecare comandă din ultimele 12 luni cu cupon, puncte, o linie cu ofertă BBD sau FANbox (cel mult 300). Fiecare are
   un tip, din ce are: `cupon_procent`, `cupon_fix`, `cupon_inexistent`, `puncte`, `bbd`, `fanbox`, `firma`, `judet_bucuresti`
-  (sau `simplu`). Cu profilul `biovitality`, comenzile cu un produs-pachet (`products.bundle_items_json` nevid) se scot dintre
-  cazuri și se numără (`excluse: pachete N`): pluginul `pachete_produse` vine în Etapa 4, deci acolo s-ar compara două coduri
-  care tratează pachetul diferit prin construcție; ele se compară în repetiția din Etapa 4. Pe o bază fără coloană, profilul
-  refuză (nu e o copie Biovitality).
+  (sau `simplu`). Cu profilul `biovitality` și tipurile `pachet` (comanda are un produs-pachet, `products.bundle_items_json`
+  nevid) și `in_pachet` (are un produs care intră într-un pachet activ): din portarea pluginului `pachete_produse` (5 noiembrie
+  2026), comenzile cu pachete se compară ca toate celelalte (până atunci se scoteau dintre cazuri, „excluse: pachete N”) și se
+  numără („pachete: N coșuri cu un produs-pachet, comparate”). Pe o bază fără coloană sau fără pasul migrărilor
+  `site/biovitality/setari-inghetate` (din `pachete_produse/0055` coloana e pe orice bază migrată, deci copia Biovitality o arată
+  pasul ei de la încărcare), profilul refuză (nu e o copie Biovitality).
 - **Diferențele declarate pe profil** (`ComparaCalcule::DECLARATE_PROFIL`, aceleași local și pe server, pe clase, nu pe
   comandă; fiecare îngustă, numărată pe ecran și scrisă în `site-uri/<profil>/ce-se-schimba.md`). Biovitality: (1) **produsele
   marcate epuizate** se scot din coșul cazului, în ambele coduri: codul Biovitality nu le pune în sumar (`fetchProducts` cu
@@ -1055,7 +1058,8 @@ totalul salvat e doar informativă).
   localitatea de facturare, `CheckoutCalculator::alegeFanbox`), rotunjit la 2 zecimale, cu toleranța 0,005:
   `CheckoutCalculator::buildSummary` (subtotalul, fără TVA, reducerea, punctele, TVA-ul și cel adăugat, transportul,
   totalul, dacă cuponul a mers, punctele aplicate; pe fiecare linie prețul, totalul, TVA-ul, reducerea, totalul după
-  reducere, cheia BBD), `adminRecalcShipping` (cu transportul salvat și cu 0, ca la trecerea pe FANbox din admin),
+  reducere, cheia BBD și pachetele propuse în coș, `linie.pachete`: id-ul, numele, adresa, prețul și poza fiecăruia, în ordine,
+  ca amprentă, plus câte linii au propuneri în fiecare cod), `adminRecalcShipping` (cu transportul salvat și cu 0, ca la trecerea pe FANbox din admin),
   `LoyaltyService::estimateEarnPoints` (din sumar și din comanda salvată) și `ErpSync::buildPayload` pe comanda salvată
   (sha1 pe JSON-ul canonic; la o diferență, numele cheilor de sus care diferă).
 - **Cupoanele** (`--cupoane-valide`, implicit; `--fara-cupoane-valide` le lasă): cele folosite de cazuri devin valabile pe
@@ -1482,15 +1486,22 @@ servere.
 [de-portat.md](de-portat.md), aceeași copie ca la `compara-cu-baza.sh`) și, din WP-11b, pe cel Biovitality (la commit-ul lui
 revizuit) și rulează trei teste. **`tools/dev/test-calcule-bv.php`** (WP-11b): baza `cms_calc_bv` făcută ca a codului
 Biovitality (`bv.sql`, rândurile demo în coloanele comune, plățile doar ramburs și Stripe, plus comenzi inventate: un produs cu
-transport gratuit singur în coș, un cupon cerut „ vara 10 ”, un produs-pachet, o plată Stripe, peste 13 kg), trecută prin
-migrările cu `--site=biovitality` (pachetul într-o copie, cu valori private inventate și fără „provizoriu”) și cu licența
-Biovitality: `compara-calcule.php --local --profil=biovitality` „TRECE”, „diferite 0”, „excluse: pachete 1”, „excluse: epuizate N” (comenzile doar
-cu produse epuizate, cât numără baza), produsele epuizate scoase din celelalte cât numără baza, cheile ERP noi numărate pe fiecare caz; mutațiile (transportul gratuit pe produs ignorat, cuponul cu
-spații necăutat compact, coletele la 13 kg, fără regula epuizatelor, fără excluderea coșurilor doar cu epuizate, fără
-excluderea pachetelor, un cod vechi care trimite și el
-o cheie declarată nouă) pică fiecare cu câmpul ei; refuzurile (alt profil; profilul Biovitality pe o bază fără
-`bundle_items_json`); apoi amprenta paginilor pe codul Biovitality (+26) și pe codul comun cu pachetul Biovitality (+27), pe
-aceeași bază, și comparația lor (informativă, în raport). **`tools/dev/test-calcule.php`**:
+transport gratuit singur în coș, un cupon cerut „ vara 10 ”, o plată Stripe, peste 13 kg și pachetele de produse în forma
+codului Biovitality: două pachete active cu același produs, unul cu preț redus, fără poză și cu transport gratuit, unul inactiv,
+unul epuizat, un șablon de produs cu sloturile `{{bundle_item_N_*}}`, o pagină cu `{{products_by_template:…}}`, cinci comenzi cu
+pachete), trecută prin migrările cu `--site=biovitality` (pachetul într-o copie, cu valori private inventate și fără
+„provizoriu”) și cu licența Biovitality: `compara-calcule.php --local --profil=biovitality` „TRECE”, „diferite 0”, coșurile cu
+pachete printre cazuri („pachete: N cazuri cu un produs-pachet, comparate”, cât numără baza, aceleași linii cu pachete propuse în
+ambele coduri), „excluse: epuizate N” (comenzile doar cu produse epuizate, cât numără baza), produsele epuizate scoase din celelalte cât numără baza, cheile ERP noi numărate pe fiecare caz; mutațiile (transportul gratuit pe produs ignorat, cuponul cu
+spații necăutat compact, coletele la 13 kg, pachetele propuse de la cel mai scump, și cu cele din coș, și cu cele inactive,
+deloc, fără regula epuizatelor, fără excluderea coșurilor doar cu epuizate, un cod vechi care trimite și el o cheie declarată
+nouă) pică fiecare cu câmpul ei, iar fără câmpul `linie.pachete` mutația ordinii trece (deci el o prinde); refuzurile (alt
+profil; profilul Biovitality pe o bază fără `bundle_items_json`); apoi amprenta paginilor pe codul Biovitality (+26) și pe codul
+comun cu pachetul Biovitality (+27), pe aceeași bază, și comparația lor (informativă, în raport); pe aceleași servere, ca un
+client, pagina pachetului (sloturile, și în CSS-ul și JS-ul șablonului), cardurile `{{products_by_template:…}}` (DOM-ul și regulile
+CSS, afară de culoarea prețului tăiat, declarată), caseta din pagina coșului, coșul flotant și „Schimbă în pachet” (perechea bună,
+una greșită, un pachet inactiv, unul epuizat, un produs scos din coș, din coșul flotant și din pagina coșului), apoi în Chromium la
+1366 și 390 px (`tools/dev/pachete-browser.cjs`, stilurile calculate ale casetei): aceleași în ambele coduri. **`tools/dev/test-calcule.php`**:
 `compara-calcule.php --local` pe `cms_calc_t`, o copie a bazei de dezvoltare în care fiecare ramură a calculelor contează
 (transportul 12 lei în București și 45 în provincie, plafonul de 40 sub el, gratuit de la 150 / 250 lei; TVA adăugat la preț
 la două produse, cota de 11% la două), cu 35 de comenzi inventate (puncte peste disponibil, sub minim, fără cont, cu cupon;

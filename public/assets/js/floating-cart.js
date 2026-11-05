@@ -478,6 +478,29 @@
                                         <button type="button" data-action="increase">+</button>
                                     </div>
                             `;
+                        // Produsul se găsește și în unul sau mai multe pachete (pluginul pachete_produse, din Biovitality 7391226):
+                        // le arătăm pe toate, ca să poată alege. Fără pachete, nimic.
+                        const bundles = Array.isArray(line.bundle_hints) ? line.bundle_hints : [];
+                        const bundleHtml = bundles.length === 0 ? "" : `
+                                    <div class="fc-bundles">
+                                        <p class="fc-bundles__title">${bundles.length === 1 ? "Face parte dintr-un pachet" : "Face parte din " + bundles.length + " pachete"}</p>
+                                        ${bundles
+                                            .map((bundle) => `
+                                            <div class="fc-bundle">
+                                                <img class="fc-bundle__img" src="${escapeHtml(bundle.image_url || "/assets/img/product-placeholder.svg")}" alt="${escapeHtml(bundle.name || "Pachet")}" loading="lazy" onerror="this.onerror=null;this.src='/assets/img/product-placeholder.svg';">
+                                                <div class="fc-bundle__info">
+                                                    <span class="fc-bundle__name">${escapeHtml(bundle.name || "Pachet")}</span>
+                                                    ${Number(bundle.price) > 0 ? `<span class="fc-bundle__price">${formatMoney(Number(bundle.price))}</span>` : ""}
+                                                </div>
+                                                <div class="fc-bundle__actions">
+                                                    <a class="fc-bundle__btn" href="${escapeHtml(bundle.url || "#")}">Vezi pachetul</a>
+                                                    <button type="button" class="fc-bundle__btn fc-bundle__btn--main" data-action="swap-bundle" data-bundle-id="${Number(bundle.id) || 0}">Schimbă în pachet</button>
+                                                </div>
+                                            </div>
+                                        `)
+                                            .join("")}
+                                    </div>
+                        `;
                         return `
                             <li class="floating-cart__item${config.showImages ? "" : " floating-cart__item--no-image"}" data-item-key="${escapeHtml(itemKey)}">
                                 ${config.showImages ? `<img src="${safeImage}" alt="${safeName}">` : ""}
@@ -494,12 +517,23 @@
                                         <svg class="floating-cart__trash-icon" viewBox="0 0 24 24"><path d="M9 4.5h6m-8 2h10m-9 0v12a1.5 1.5 0 0 0 1.5 1.5h5A1.5 1.5 0 0 0 16.5 18v-12m-5 3.5v6m3-6v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path></svg>
                                     </button>
                                 </div>
+                                ${bundleHtml}
                             </li>
                         `;
                     })
                     .join("")}
             </ul>
         `;
+
+        // Foaia de stil a casetei pachetelor, doar când răspunsul o cere (o linie are pachete), o singură dată.
+        const pacheteCss = String(summary.pachete_css || "");
+        if (pacheteCss.startsWith("/assets/") && !document.querySelector("link[data-pachete-css]")) {
+            const foaie = document.createElement("link");
+            foaie.rel = "stylesheet";
+            foaie.href = pacheteCss;
+            foaie.setAttribute("data-pachete-css", "1");
+            document.head.appendChild(foaie);
+        }
 
         const shippingAmount = Number(summary.shipping || 0);
         const shippingRemaining = Number(summary.shipping_remaining_for_free || 0);
@@ -614,7 +648,7 @@
         }
     };
 
-    const updateItem = async (itemKey, action) => {
+    const updateItem = async (itemKey, action, bundleId = null) => {
         const safeItemKey = String(itemKey || "").trim();
         if (safeItemKey === "" || !state.summary) {
             return;
@@ -633,6 +667,13 @@
         } else if (action === "remove") {
             endpoint = `/api/cart/items/${encodeURIComponent(safeItemKey)}/remove`;
             payload = null;
+        } else if (action === "swap-bundle") {
+            const id = Number(bundleId || 0);
+            if (!id) {
+                return;
+            }
+            endpoint = "/api/cart/swap-bundle";
+            payload = { item_key: safeItemKey, bundle_id: id };
         }
 
         try {
@@ -693,7 +734,7 @@
             return;
         }
         const itemKey = String(item.getAttribute("data-item-key") || "").trim();
-        updateItem(itemKey, action);
+        updateItem(itemKey, action, actionTarget.getAttribute("data-bundle-id"));
     });
 
     couponForm.addEventListener("submit", async (event) => {

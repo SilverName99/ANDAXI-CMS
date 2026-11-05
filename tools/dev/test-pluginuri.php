@@ -1770,7 +1770,7 @@ try {
             preg_match_all('#href="([^"]+)"#', $nav[1] ?? '', $hrefuriMeniu);
             $meniu = array_values(array_unique(array_map(static fn ($h): string => html_entity_decode((string) $h), $hrefuriMeniu[1])));
             $oprite = array_keys(array_filter(Plugins::stari(), static fn (string $st): bool => $st === 'oprit'));
-            $scrie('-- fără „' . $cheie . '” (oprite: ' . implode(', ', array_diff($oprite, ['pachete_produse', 'donatii', 'membri',
+            $scrie('-- fără „' . $cheie . '” (oprite: ' . implode(', ', array_diff($oprite, ['donatii', 'membri',
                 'fisiere_cloud', 'concurenta'])) . ')');
             $rez = $treceCuBrowserul($publicFix, array_values(array_unique(array_merge($meniu, $paginiAdminExtra()))), '');
             if ($rez === null) {

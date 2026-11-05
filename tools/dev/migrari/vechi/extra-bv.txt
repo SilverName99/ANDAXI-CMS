@@ -5,7 +5,6 @@ coloana customer_email_confirmations.email
 coloana customer_email_confirmations.expires_at
 coloana customer_email_confirmations.ip_address
 coloana customer_email_confirmations.reason
-coloana products.bundle_items_json
 coloana products.gallery_json
 indexul customer_email_confirmations.idx_customer_email_confirmations_ip
 tabelul admin_app_tokens

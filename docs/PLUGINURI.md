@@ -1055,6 +1055,44 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   o campanie anume); pentru o promoție lungă, doar bannerul și insignele (debifat „Arată pagina campaniei la prima intrare”).
   Detaliile: [SEO.md](SEO.md), §5b, „Pagina campaniei (interstițial)”. Adminul rămâne doar al administratorului general.
 
+### Pachete de produse (`pachete_produse`)
+
+Din Biovitality (`90afd46`, `83067d3`, `afc6fd7`, `7391226`; „ultimul commit revizuit” `d95598e`). `App\Support\PacheteProduse`,
+`PacheteProduseController`, migrarea `pachete_produse/0055`. Pe Biovitality (`licente_dev.biovitality`, deci și licența copiei de
+verificare) și pe „toate”; pe niciun alt site și în niciun pachet de abonament (îl pune CRM-ul în licență doar unui site care
+vinde pachete).
+
+- **Un pachet e un produs ca oricare altul**: prețul (cu reducerea și perioadele ei), TVA-ul, stocul (și cel din ERP), greutatea,
+  transportul gratuit, cuponul, punctele, linia comenzii și ce pleacă în ERP sunt ale lui, deci coșul, checkout-ul, comanda și
+  ERP-ul îl socotesc exact ca pe orice produs (ca în codul Biovitality, nu se desface în componente). În plus știe din ce produse
+  ale magazinului e făcut: `products.bundle_items_json`, `[{"id": <produs>, "qty": "<cantitatea, text>", "desc": "<descrierea
+  proprie>"}]`, în ordinea din editor, cel mult 12, fiecare produs o dată.
+- **Conține**: în editorul produsului (Produse, secțiunea „Câmpuri suplimentare”), caseta „Conținutul pachetului” (produsul ales
+  din listă, cantitatea, descrierea proprie, ordinea ↑ ↓, ✕), arătată doar când șablonul ales folosește un slot
+  `{{bundle_item_…}}`; salvată într-o instrucțiune separată, doar când formularul a trimis câmpul. În șablonul produsului, sloturile
+  `{{bundle_item_N_name}}`, `_desc` (descrierea proprie, altfel descrierea scurtă a produsului), `_qty`, `_url`, `_image_url`,
+  `_image` (un `<img>` gata făcut; restul se escapează) pentru N = 1…12 și `{{bundle_items_count}}`: numele, poza și descrierea se
+  citesc din produsul ales la fiecare afișare, un produs șters e sărit, sloturile necompletate ies goale. În coș (pagina coșului și
+  coșul flotant), pe linia unui produs care intră în pachete, caseta „Face parte dintr-un pachet” / „Face parte din N pachete”:
+  fiecare pachet activ, cu stoc și care nu e deja în coș, de la cel mai ieftin (prețul redus, altfel prețul), cu poza, „Vezi
+  pachetul” și „Schimbă în pachet” (`POST /cos/schimba-pachet`, formularul coșului, butonul cu „cheie:idPachet”; `POST
+  /api/cart/swap-bundle`, JSON, pentru coșul flotant): produsul iese din coș și intră pachetul, o bucată, după ce perechea e
+  verificată în bază (pachetul activ chiar conține produsul: altfel 422) și pachetul ca la „Adaugă în coș” (găsit, nu epuizat, în
+  limita stocului din ERP; altfel 404/409, cu mesajele codului Biovitality). Stilurile casetei stau în
+  `public/assets/css/pachete-produse.css` (regulile din `app.css` al codului Biovitality), încărcată doar când un produs din coș
+  are pachete (pagina coșului o pune înaintea listei, coșul flotant o cere din răspunsul lui, `pachete_css`); `bundle_hints` apare
+  în liniile sumarului și ale coșului flotant doar unde sunt propuneri. Cu niciun pachet pe site (azi pe orice site în afară de
+  Biovitality), paginile, coșul și răspunsurile lui sunt octet cu octet cele de dinainte (G-cmp).
+- **Paginile cu pachete** (`/pachete` la Biovitality): pagini din Conținut → Pagini cu `{{products_by_template:…}}` (al catalogului,
+  WP-19), în cardurile catalogului.
+- **Are nevoie de**: magazin. **Se oprește**: ca pornit (nu începe nimic cu bani; „Schimbă în pachet” e refuzat oricum cât magazinul
+  se oprește, „Momentan nu se mai pot plasa comenzi online.”). **Oprit**: nicio casetă în coș și în editor, adresele de schimbare
+  404, sloturile șablonului ies goale; produsele-pachet rămân produse obișnuite (se vând, cu prețul lor), conținutul lor rămâne în
+  bază, neatins la salvarea produsului.
+- **Dovada**: `tools/dev/test-calcule-bv.php` (în G-calc) față de codul Biovitality la `d95598e`, pe o bază făcută ca a lui, cu
+  pachete inventate: calculele coșurilor cu pachete (și pachetele propuse pe linii), pagina pachetului, cardurile, caseta din coș,
+  coșul flotant și „Schimbă în pachet”, și în Chromium; pe copia de verificare, `compara-calcule.php --profil=biovitality`.
+
 ### Neportate încă
 
 Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
@@ -1063,7 +1101,6 @@ nu schimbă încă nimic):
 
 | Cheie | Din site-ul | Are nevoie de | Tabele (la portare) |
 |---|---|---|---|
-| `pachete_produse` | Biovitality | magazin | `products.bundle_items_json` |
 | `donatii` | vertij-tinitus.ro | plata_stripe | `donations` |
 | `membri` | vertij-tinitus.ro | conturi_clienti, plata_stripe | `professions`, `profession_fields`, `account_verification*`, `account_activations` |
 | `fisiere_cloud` | Biovitality | nimic | `admin_app_tokens`, `bunny_*`, `file_locks`, `file_versions` |

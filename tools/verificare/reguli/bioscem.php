@@ -82,7 +82,9 @@ return [
     // 15 (WP-40, magazin/0051): sursa comenzii (felul vizitei: google, email, direct …; o categorie), copiată cum e.
     // 16 (portul Bioscem 807058e, livrare_fan/0052): ridicarea personală de la sediu pe comandă (bifa, adresa sediului — publică,
     // a magazinului — și momentul anunțului „gata de ridicare”), copiată cum e.
-    'versiune' => 16,
+    // 17 (pluginul pachete_produse, pachete_produse/0055): conținutul pachetelor (`products.bundle_items_json`: din ce produse e
+    // făcut un pachet, conținut public al catalogului), copiat cum e; până acum o coloană doar a codului Biovitality.
+    'versiune' => 17,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -190,7 +192,8 @@ return [
             'discount_badge_mode', 'bbd_enabled', 'bbd_entries_json', 'post_cart_note_enabled', 'post_cart_note_text', 'stock', 'out_of_stock',
             'preorder_enabled', 'preorder_max_per_order', 'preorder_max_total', 'weight_grams', 'image_url', 'gallery_json', 'gallery_images_json',
             'similar_products_json', 'badge_popular', 'badge_best_seller', 'badge_seasonal', 'is_active', 'deleted_at', 'created_at', 'updated_at',
-            'brand', 'tags_json', 'preview_token', 'sort_position', 'hidden_in_catalog', 'free_shipping', 'ean'], 'motive' => ['name' => 'numele produsului',
+            'brand', 'tags_json', 'preview_token', 'sort_position', 'hidden_in_catalog', 'free_shipping', 'ean', 'bundle_items_json'],
+            'motive' => ['name' => 'numele produsului',
             'preview_token' => 'cheia linkului de ciornă al unui produs inactiv (WP-19): a produsului, nu a unui client; copia e privată'],
             'emailuri_publice' => 'descrierile produselor pot avea adresa magazinului'],
         'product_category_links' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'product_id', 'category_id']],

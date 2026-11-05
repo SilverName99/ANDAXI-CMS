@@ -457,6 +457,20 @@ $adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'],
                             </p>
 <?= \App\Support\Dev::marcaj('bv:campuri-sablon', true) ?>
                         </div>
+<?= \App\Support\Dev::marcaj('bv:pachet-editor') ?>
+<?php if (is_array($pacheteEditor ?? null)): ?>
+                        <div class="pachet-editor" id="pachet-editor" hidden>
+                            <h4 style="margin:14px 0 4px;">Conținutul pachetului</h4>
+                            <p class="muted" style="margin:0 0 10px;">Alege produsele care intră în pachet. Denumirea, imaginea și descrierea se iau din produsul ales.</p>
+                            <input type="hidden" name="bundle_items_json" id="p_bundle_items_json" value="[]">
+                            <div id="pachet-lista" class="pachet-lista"></div>
+                            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+                                <button class="btn btn-secondary" type="button" id="pachet-adauga">+ Adaugă produs în pachet</button>
+                                <small class="muted">Primul produs din listă umple <code>{{bundle_item_1_*}}</code>, al doilea <code>{{bundle_item_2_*}}</code>, și tot așa.</small>
+                            </div>
+                        </div>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('bv:pachet-editor', true) ?>
 <?php admin_componenta('sectiune-formular', ['id' => 'produs-campuri', 'titlu' => 'Câmpuri suplimentare', 'descriere' => 'Câmpurile în plus ale șablonului produsului.', 'continut' => (string) ob_get_clean()]); ?>
 <?php if ($areBbd): ?>
 <?php ob_start(); ?>
@@ -2014,6 +2028,228 @@ $dateCatalogProduse = [
 })();
 </script>
 <?= \App\Support\Dev::marcaj('bv:produse-catalog-js', true) ?>
+<?= \App\Support\Dev::marcaj('bv:pachet-editor-js') ?>
+<?php if (is_array($pacheteEditor ?? null)): ?>
+<?php
+/*
+ * Pluginul pachete_produse (din Biovitality 90afd46): conținutul pachetului în editorul produsului, produse alese din magazin, în
+ * ordine (cel mult 12; același produs o singură dată), cu cantitatea și o descriere proprie. Caseta apare doar când șablonul ales
+ * folosește un slot {{bundle_item_…}}; conținutul pleacă în `bundle_items_json` la fiecare salvare (și cu caseta ascunsă: ce
+ * era scris rămâne). Un script separat, care ascultă aceleași butoane ca editorul de mai sus (rulează după el).
+ */
+?>
+<style>
+.pachet-lista { display: flex; flex-direction: column; gap: 8px; }
+.pachet-rand { display: grid; grid-template-columns: 24px minmax(0, 1.3fr) 110px minmax(0, 1.8fr) auto; gap: 8px; align-items: center; }
+.pachet-rand__nr { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: #eef2f7;
+    color: #475569; font-size: 12px; font-weight: 600; }
+.pachet-rand select, .pachet-rand input { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; min-width: 0; }
+.pachet-rand__actiuni { display: flex; gap: 4px; }
+.pachet-rand__actiuni .icon-btn[disabled] { opacity: .35; cursor: default; }
+@media (max-width: 900px) {
+    .pachet-rand { grid-template-columns: 24px 1fr; }
+    .pachet-rand__actiuni { grid-column: 2; justify-content: flex-end; }
+}
+</style>
+<script type="application/json" id="pachete-editor-date"><?= json_encode([
+    'continut' => (object) $pacheteEditor['continut'],
+    'produse' => $pacheteEditor['produse'],
+    'sabloane' => (object) $pacheteEditor['sabloane'],
+    'maxim' => \App\Support\PacheteProduse::MAX_ELEMENTE,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+<script>
+(() => {
+    let date = { continut: {}, produse: [], sabloane: {}, maxim: 12 };
+    try {
+        date = JSON.parse(document.getElementById('pachete-editor-date')?.textContent || '{}') || date;
+    } catch {
+        return;
+    }
+    const MAXIM = Number(date.maxim || 12);
+    const continut = date.continut || {};
+    const produseCandidate = Array.isArray(date.produse) ? date.produse : [];
+    const sabloane = date.sabloane || {};
+    const sectiune = document.getElementById('pachet-editor');
+    const lista = document.getElementById('pachet-lista');
+    const intrare = document.getElementById('p_bundle_items_json');
+    const adauga = document.getElementById('pachet-adauga');
+    const selectSablon = document.getElementById('p_product_template_id');
+    let elemente = [];
+
+    const sincronizeaza = () => {
+        if (intrare instanceof HTMLInputElement) {
+            intrare.value = JSON.stringify(elemente);
+        }
+    };
+    const deseneaza = () => {
+        if (!(lista instanceof HTMLElement)) {
+            return;
+        }
+        lista.innerHTML = '';
+        if (elemente.length === 0) {
+            const gol = document.createElement('p');
+            gol.className = 'muted';
+            gol.style.margin = '0';
+            gol.textContent = 'Niciun produs în pachet încă.';
+            lista.appendChild(gol);
+        }
+        elemente.forEach((element, index) => {
+            const rand = document.createElement('div');
+            rand.className = 'pachet-rand';
+            const pozitie = document.createElement('span');
+            pozitie.className = 'pachet-rand__nr';
+            pozitie.textContent = String(index + 1);
+            rand.appendChild(pozitie);
+            const alege = document.createElement('select');
+            alege.dataset.pachetProdus = String(index);
+            alege.setAttribute('aria-label', 'Produsul ' + (index + 1) + ' din pachet');
+            const golOpt = document.createElement('option');
+            golOpt.value = '';
+            golOpt.textContent = '— alege produsul —';
+            alege.appendChild(golOpt);
+            produseCandidate.forEach((pr) => {
+                const opt = document.createElement('option');
+                opt.value = String(pr.id);
+                opt.textContent = pr.nume || ('Produs #' + pr.id);
+                if (Number(element.id) === Number(pr.id)) {
+                    opt.selected = true;
+                }
+                alege.appendChild(opt);
+            });
+            rand.appendChild(alege);
+            const cantitate = document.createElement('input');
+            cantitate.type = 'text';
+            cantitate.className = 'pachet-rand__qty';
+            cantitate.placeholder = 'Cant. (ex: 2)';
+            cantitate.value = element.qty || '';
+            cantitate.dataset.pachetCantitate = String(index);
+            cantitate.setAttribute('aria-label', 'Cantitatea produsului ' + (index + 1));
+            rand.appendChild(cantitate);
+            const descriere = document.createElement('input');
+            descriere.type = 'text';
+            descriere.placeholder = 'Descriere proprie (gol = descrierea scurtă a produsului)';
+            descriere.value = element.desc || '';
+            descriere.dataset.pachetDescriere = String(index);
+            descriere.setAttribute('aria-label', 'Descrierea produsului ' + (index + 1));
+            rand.appendChild(descriere);
+            const actiuni = document.createElement('div');
+            actiuni.className = 'pachet-rand__actiuni';
+            [['↑', 'pachetSus', index === 0, 'Mută mai sus'], ['↓', 'pachetJos', index === elemente.length - 1, 'Mută mai jos'],
+                ['✕', 'pachetSterge', false, 'Scoate din pachet']].forEach(([semn, cheie, dezactivat, titlu]) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'icon-btn' + (cheie === 'pachetSterge' ? ' danger' : '');
+                btn.textContent = semn;
+                btn.title = titlu;
+                btn.setAttribute('aria-label', titlu);
+                btn.dataset[cheie] = String(index);
+                btn.disabled = Boolean(dezactivat);
+                actiuni.appendChild(btn);
+            });
+            rand.appendChild(actiuni);
+            lista.appendChild(rand);
+        });
+        if (adauga instanceof HTMLButtonElement) {
+            adauga.disabled = elemente.length >= MAXIM;
+        }
+        sincronizeaza();
+    };
+    const aplicaVizibilitatea = () => {
+        if (!(sectiune instanceof HTMLElement)) {
+            return;
+        }
+        const idSablon = selectSablon instanceof HTMLSelectElement ? String(selectSablon.value || '') : '';
+        sectiune.hidden = sabloane[idSablon] !== true;
+    };
+    const puneProdus = (id) => {
+        const brut = Array.isArray(continut[String(id || '')]) ? continut[String(id || '')] : [];
+        elemente = brut.filter((el) => el && Number(el.id) > 0).slice(0, MAXIM)
+            .map((el) => ({ id: Number(el.id), qty: String(el.qty || ''), desc: String(el.desc || '') }));
+        deseneaza();
+        aplicaVizibilitatea();
+    };
+
+    adauga?.addEventListener('click', () => {
+        if (elemente.length >= MAXIM) {
+            return;
+        }
+        elemente.push({ id: 0, qty: '', desc: '' });
+        deseneaza();
+    });
+    lista?.addEventListener('input', (ev) => {
+        const tinta = ev.target;
+        if (!(tinta instanceof HTMLInputElement)) {
+            return;
+        }
+        const iCant = tinta.dataset.pachetCantitate;
+        const iDesc = tinta.dataset.pachetDescriere;
+        if (iCant !== undefined && elemente[Number(iCant)]) {
+            elemente[Number(iCant)].qty = tinta.value;
+            sincronizeaza();
+        } else if (iDesc !== undefined && elemente[Number(iDesc)]) {
+            elemente[Number(iDesc)].desc = tinta.value;
+            sincronizeaza();
+        }
+    });
+    lista?.addEventListener('change', (ev) => {
+        const tinta = ev.target;
+        if (!(tinta instanceof HTMLSelectElement)) {
+            return;
+        }
+        const index = Number(tinta.dataset.pachetProdus);
+        if (!elemente[index]) {
+            return;
+        }
+        const idNou = Number(tinta.value || '0');
+        // Același produs de două ori în pachet n-are sens; alegerea se refuză.
+        if (idNou > 0 && elemente.some((el, i) => i !== index && Number(el.id) === idNou)) {
+            tinta.value = String(elemente[index].id || '');
+            return;
+        }
+        elemente[index].id = idNou;
+        sincronizeaza();
+    });
+    lista?.addEventListener('click', (ev) => {
+        const tinta = ev.target;
+        if (!(tinta instanceof HTMLButtonElement)) {
+            return;
+        }
+        const { pachetSus, pachetJos, pachetSterge } = tinta.dataset;
+        if (pachetSterge !== undefined) {
+            elemente.splice(Number(pachetSterge), 1);
+        } else if (pachetSus !== undefined) {
+            const i = Number(pachetSus);
+            if (i > 0) {
+                [elemente[i - 1], elemente[i]] = [elemente[i], elemente[i - 1]];
+            }
+        } else if (pachetJos !== undefined) {
+            const i = Number(pachetJos);
+            if (i < elemente.length - 1) {
+                [elemente[i], elemente[i + 1]] = [elemente[i + 1], elemente[i]];
+            }
+        } else {
+            return;
+        }
+        deseneaza();
+    });
+    selectSablon?.addEventListener('change', aplicaVizibilitatea);
+    document.querySelectorAll('.edit-product-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            let produs = {};
+            try {
+                produs = JSON.parse(btn.dataset.product || '{}');
+            } catch {
+                produs = {};
+            }
+            puneProdus(produs.id);
+        });
+    });
+    document.getElementById('add-product-btn')?.addEventListener('click', () => puneProdus(''));
+    puneProdus('');
+})();
+</script>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('bv:pachet-editor-js', true) ?>
 <script src="/assets/js/admin/produs.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/produs.js')) ?: 1) ?>" defer></script>
 <script>
 // WP-35 (IA-05): un link „/admin/products#editeaza-<id>” (lista „Oferte BBD”) deschide direct editorul produsului.

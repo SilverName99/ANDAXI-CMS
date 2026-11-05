@@ -8,8 +8,8 @@ declare(strict_types=1);
 // decât la ultima rulare a runner-ului), fiecare id de mai jos trebuie să fie terminat în _platforma_migrari.
 
 return [
-    'ord' => 54,
-    'amprenta' => 'fd8df2348e004074a44449055081880ed822ddf38a0d92510d7a18bb9bdd0bcf',
+    'ord' => 55,
+    'amprenta' => 'd1166b13ae1908dac51d4778001e3aa4d5f340389ce75245f3cdd39193f4dc76',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',
@@ -60,5 +60,6 @@ return [
         'livrare_fan/0052_ridicare_personala',
         'conturi_clienti/0053_confirmare_din_biovitality',
         'campanii/0054_campanii',
+        'pachete_produse/0055_continut_pachete',
     ],
 ];

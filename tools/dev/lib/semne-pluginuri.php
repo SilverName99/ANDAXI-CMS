@@ -39,6 +39,9 @@ return [
     'precomenzi' => ['/Precomand[ăa]/u', '/Precomenzi/u'],
     'oferte_bbd' => ['/\bBBD\b/u', '/Sertar Oferte/u', '/Sertar lateral „Oferte”/u'],
     'produse_promo' => ['/[Pp]romoțional/u'],
+    // Pachetele de produse (din Biovitality 90afd46, 7391226): conținutul pachetului în editorul produsului, caseta din coș.
+    'pachete_produse' => ['/Conținutul pachetului/u', '/Adaugă produs în pachet/u', '/Face parte din(tr-un pachet| \d+ pachete)/u',
+        '/Schimbă în pachet/u'],
     'conturi_clienti' => ['/Contul meu/u', '/Creează cont/u', '/Conturi clienți/u'],
     // WP-22, WP-23: căutarea din listă și articolele similare ale blogului avansat; editorul postării.
     'blog' => ['/\bBlog\b/u', '/Articole recente/u', '/Pornește videoclipul/u', '/Caută în articole/u', '/Articole similare/u',

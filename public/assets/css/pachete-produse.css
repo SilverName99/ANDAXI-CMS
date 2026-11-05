@@ -1,0 +1,151 @@
+/*
+ * Pachetele de produse (pluginul pachete_produse, din Biovitality afc6fd7 și 7391226): caseta „Face parte dintr-un pachet”
+ * de pe linia unui produs din coș, în pagina coșului și în coșul flotant. Regulile sunt cele din app.css al codului
+ * Biovitality, neschimbate; fișierul se încarcă doar când un produs din coș chiar are pachete (pagina coșului îl pune
+ * înaintea listei, coșul flotant îl cere din răspunsul lui, `pachete_css`), deci paginile fără pachete rămân cele de dinainte.
+ */
+
+/* Pachetele propuse în coș, sub selectorul de cantitate. Aceleași reguli
+   servesc și coșul flotant, și pagina coșului. */
+/* În coșul flotant rândul e o grilă de trei coloane; caseta stă pe toată
+   lățimea lui, sub tot, ca să nu se înghesuie în coloana din mijloc. */
+.floating-cart__item > .fc-bundles {
+    grid-column: 1 / -1;
+}
+
+.fc-bundles,
+.cart-bundles {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #cfe4d6;
+    border-radius: 14px;
+    background: #f2f9f4;
+}
+
+.fc-bundles__title,
+.cart-bundles__title {
+    margin: 0 0 8px;
+    color: #5f756a;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+
+.fc-bundle,
+.cart-bundle {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: center;
+    padding: 8px;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.fc-bundle + .fc-bundle,
+.cart-bundle + .cart-bundle {
+    margin-top: 8px;
+}
+
+/* `.floating-cart__item img` fixeaza 92px pentru poza produsului din cos;
+   miniatura pachetului e tot un img acolo, deci o tintim mai precis. */
+.floating-cart__item img.fc-bundle__img,
+.cart-bundle__img {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #eef4f0;
+    display: block;
+}
+
+.fc-bundle__info,
+.cart-bundle__info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.fc-bundle__name,
+.cart-bundle__name {
+    color: #14532d;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.fc-bundle__price,
+.cart-bundle__price {
+    color: #0f7b53;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.fc-bundle__actions,
+.cart-bundle__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.fc-bundle__btn,
+.cart-bundle__btn {
+    flex: 1 1 auto;
+    padding: 7px 10px;
+    border: 1px solid #b6d8c3;
+    border-radius: 999px;
+    background: #fff;
+    color: #0f7b53;
+    font: 700 12px/1.2 "DM Sans", Arial, sans-serif;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.fc-bundle__btn:hover,
+.cart-bundle__btn:hover {
+    background: #eaf5ee;
+}
+
+.fc-bundle__btn--main,
+.cart-bundle__btn--main {
+    border-color: #1f8b57;
+    background: #1f8b57;
+    color: #fff;
+}
+
+.fc-bundle__btn--main:hover,
+.cart-bundle__btn--main:hover {
+    background: #176b43;
+}
+
+/* În coșul flotant, `.floating-cart__meta a` taie linkurile la o linie cu „…",
+   ca numele produsului să nu rupă layoutul; butoanele noastre sunt tot linkuri
+   acolo, deci le scoatem din regula aceea. */
+.floating-cart__meta a.fc-bundle__btn {
+    display: block;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    margin-bottom: 0;
+    font-size: 12px;
+}
+
+/* Rândul din coș e o grilă; caseta trebuie să stea sub cantitate, pe lățimea
+   coloanei ei, nu să ocupe celula prețului. */
+.cart-bundles {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    max-width: 460px;
+}
+
+@media (min-width: 781px) {
+    .cart-bundles {
+        grid-row: 2;
+    }
+}

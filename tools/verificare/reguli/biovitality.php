@@ -16,8 +16,8 @@ declare(strict_types=1);
  *   `file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota lui și căile documentelor
  *   firmei, care pot avea nume de oameni; pluginul `fisiere_cloud` nu e portat, deci copia nu le folosește);
  * - **copiate cum sunt:** `competition_partners`, `competition_prices` (concurenții și prețurile lor: date de business ale
- *   produselor, publice); coloana Biovitality a tabelelor comune `products.bundle_items_json` (din ce produse e făcut un
- *   pachet). Etichetele blogului (`blog_tags`, `blog_post_tags`) și coloanele `blog_posts.references_html`,
+ *   produselor, publice). Conținutul pachetelor (`products.bundle_items_json`) îl are din pluginul pachete_produse și codul comun
+ *   (migrarea pachete_produse/0055), deci regula lui e cea Bioscem (copiat cum e). Etichetele blogului (`blog_tags`, `blog_post_tags`) și coloanele `blog_posts.references_html`,
  *   `featured_image_width`, `wp_post_id` le are din WP-22 și codul comun (migrarea blog/0033), deci regulile lor sunt cele
  *   Bioscem (`wp_post_id` o pune importul `scripts/import-wordpress-posts.php` al codului Biovitality, nu instalarea, deci nu
  *   e în bv.sql, dar e pe site: setul tools/verificare/seturi/biovitality.php o numără);
@@ -45,7 +45,8 @@ $reguli['site'] = 'biovitality';
 // găsite la prima încărcare de pe server. 5 (WP-22): etichetele și coloanele blogului avansat trec în regulile Bioscem
 // (codul comun le are acum, blog/0033). 6 (portul 0e54737, 5 nov): schema codului Biovitality de la d95598e, cu confirmarea
 // adresei (users.email_confirmed_at și session_version, păstrate ca la Bioscem; customer_email_confirmations, cu coloanele BV
-// email, reason, ip_address, expires_at, doar structura, ca la Bioscem).
+// email, reason, ip_address, expires_at, doar structura, ca la Bioscem). Din regulile Bioscem 17: products.bundle_items_json e a
+// codului comun (pachete_produse/0055), regula ei a trecut acolo (aceeași: copiată cum e).
 $reguli['versiune'] = $reguli['versiune'] * 100 + 6;
 $reguli['schema'] = 'Mutare-Site-Biovitality@d95598e (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
@@ -69,8 +70,6 @@ $reguli['tabele'] += [
         'campaign_end', 'out_of_stock', 'only_in_store', 'product_url', 'updated_at']],
 ];
 
-// Coloana Biovitality a tabelelor comune (conținut public).
-$reguli['tabele']['products']['pastreaza'][] = 'bundle_items_json';
 // Găsită la prima încărcare de pe server (30 oct 2026): coloana există în baza biovitality.ro, dar niciun cod din
 // depozite n-o scrie sau citește. E machetarea unui șablon de pagină de produs, făcută de admin: conținut public.
 $reguli['tabele']['product_templates']['pastreaza'][] = 'builder_json';

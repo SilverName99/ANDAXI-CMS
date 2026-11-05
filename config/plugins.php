@@ -381,12 +381,18 @@ return [
             'tabele' => ['promotional_products', 'order_promo_items'],
         ],
 
+        // Din Biovitality (90afd46, 83067d3, afc6fd7, 7391226; App\Support\PacheteProduse, PacheteProduseController, migrarea
+        // pachete_produse/0055): un pachet e un produs ca oricare altul (prețul, TVA-ul, stocul, linia comenzii și ERP-ul sunt ale
+        // lui), care știe din ce produse ale magazinului e făcut. Pluginul adaugă conținutul pachetului în editorul produsului,
+        // sloturile {{bundle_item_N_*}} în șablonul paginii lui și, în coș, pachetele din care face parte un produs, cu „Schimbă
+        // în pachet”. docs/PLUGINURI.md, „Pachete de produse”.
         'pachete_produse' => [
             'nume' => 'Pachete de produse',
-            'descriere' => 'Produse vândute împreună, ca pachet.',
+            'descriere' => 'Produse vândute împreună, ca pachet: conținutul pachetului ales din magazin (pe pagina lui, din șablonul '
+                . 'produsului) și, în coș, pachetele din care face parte un produs, cu schimbarea dintr-un clic.',
             'necesita' => ['magazin'],
-            'portat' => false,
             'sursa' => 'Biovitality',
+            'rute_publice' => ['POST /cos/schimba-pachet', 'POST /api/cart/swap-bundle'],
             'tabele' => ['products.bundle_items_json'],
         ],
 
@@ -709,7 +715,8 @@ return [
         'bioscem' => ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_euplatesc', 'plata_bt', 'link_plata', 'erp',
             'cupoane', 'fidelitate', 'recenzii', 'precomenzi', 'oferte_bbd', 'produse_promo', 'conturi_clienti', 'blog',
             'newsletter', 'chat_live', 'manechin', 'acorduri_gdpr'],
-        // Codul Biovitality: fără EuPlătesc, BT și precomenzi; cu pachete, fișiere în cloud și concurența (neportate încă).
+        // Codul Biovitality: fără EuPlătesc, BT și precomenzi; cu pachetele (pachete_produse, portat), fișierele în cloud și concurența
+        // (neportate încă).
         'biovitality' => ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'link_plata', 'erp', 'cupoane', 'fidelitate',
             'recenzii', 'oferte_bbd', 'produse_promo', 'pachete_produse', 'conturi_clienti', 'blog', 'newsletter', 'chat_live',
             'fisiere_cloud', 'concurenta', 'manechin', 'acorduri_gdpr'],
