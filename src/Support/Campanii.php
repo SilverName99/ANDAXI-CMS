@@ -498,8 +498,14 @@ final class Campanii
             . '.campanie-grila__grila{box-sizing:border-box;max-width:1200px;margin:0 auto;display:grid;'
             . 'grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px;}'
             . '.campanie-grila__card{box-sizing:border-box;display:flex;flex-direction:column;min-width:0;background:' . $card . ';'
-            . 'color:' . $text . ';border:1px solid ' . $margine . ';border-radius:' . $razaCard . ';overflow:hidden;}'
-            . '.campanie-grila__poza{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;background:#ffffff;border-radius:0;}'
+            . 'color:' . $text . ';border:1px solid ' . $margine . ';}'
+            // Colțurile: tema site-ului poate pune `border-radius: 0 !important` pe orice `article` din pagină (app.css,
+            // `.site-shell article`), deci aici cu o regulă mai specifică și tot `!important`; poza își rotunjește colțurile de
+            // sus prin `overflow` al cardului.
+            . '.site-shell .campanie-grila article.campanie-grila__card,.campanie-grila article.campanie-grila__card{border-radius:'
+            . $razaCard . '!important;overflow:hidden!important;}'
+            . '.campanie-grila__poza{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;background:#ffffff;}'
+            . '.site-shell .campanie-grila a.campanie-grila__poza,.campanie-grila a.campanie-grila__poza{border-radius:0!important;}'
             . '.campanie-grila__poza img{display:block;width:100%;height:100%;object-fit:contain;}'
             . '.campanie-grila__corp{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:8px;padding:14px 16px 16px;'
             . 'font-family:inherit;}'
@@ -520,6 +526,8 @@ final class Campanii
             . 'line-height:1.2;text-align:center;text-decoration:none;cursor:pointer;}'
             . '.campanie-grila__cos{border:0;background:' . $fundal . ';color:' . $culoare . ';}'
             . '.campanie-grila__buton{border:1px solid ' . $text . ';background:transparent;color:' . $text . ';}'
+            . '.site-shell .campanie-grila .campanie-grila__cos,.site-shell .campanie-grila .campanie-grila__buton,'
+            . '.site-shell .campanie-grila .campanie-grila__stoc{border-radius:' . $razaButon . '!important;}'
             . '@media (max-width:600px){.campanie-grila{padding:16px 12px;}.campanie-grila__grila{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}'
             . '.campanie-grila__corp{padding:10px 10px 12px;}.campanie-grila__nume{font-size:15px;}.campanie-grila__pret{font-size:17px;}'
             . '.campanie-grila__vechi{display:block;margin-left:0;}.campanie-grila__cos,.campanie-grila__buton,.campanie-grila__stoc{font-size:14px;padding:8px 10px;}}';

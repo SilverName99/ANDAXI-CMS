@@ -123,6 +123,12 @@ async function paginaGrila(browser, latime, eticheta) {
   const stilCard = await carduri.first().evaluate((el) => ({ fundal: getComputedStyle(el).backgroundColor, text: getComputedStyle(el).color }));
   nota(eticheta + ': cardurile închise (#161616, text alb)', stilCard.fundal === 'rgb(22, 22, 22)' && stilCard.text === 'rgb(255, 255, 255)',
     JSON.stringify(stilCard));
+  // Colțurile rotunjite (implicit) se văd și cu foile de stil ale site-ului (app.css pune `border-radius: 0 !important` pe orice
+  // `article` din `.site-shell`): cardul 16px, butoanele rotunde, poza tăiată de card.
+  const colturi = await carduri.first().evaluate((el) => ({ card: getComputedStyle(el).borderTopLeftRadius, overflow: getComputedStyle(el).overflow,
+    buton: getComputedStyle(el.querySelector('.campanie-grila__buton')).borderTopLeftRadius }));
+  nota(eticheta + ': colțurile rotunjite ale cardului și ale butoanelor, peste regula temei', colturi.card === '16px' && colturi.overflow === 'hidden'
+    && colturi.buton === '999px', JSON.stringify(colturi));
   nota(eticheta + ': pagina campaniei cu grila, fără derulare laterală', await faraDerulareLaterala(pagina));
   const butonCos = pagina.locator('.floating-cart__trigger');
   nota(eticheta + ': butonul coșului plutitor nu se vede', (await butonCos.count()) === 0 || !(await butonCos.first().isVisible()));
