@@ -189,7 +189,7 @@ Orice script, de mână: `$PHP ~/platforma/bin/platforma --site=<domeniu> script
       provizorie, `adopta.sh` se oprește la verificări.
 - [ ] Commit-ul live al Biovitality: `git -C ~/domains/biovitality.ro/public_html log -1 --format=%H` și
       `git -C ~/domains/biovitality.ro/public_html status --short` (trebuie gol). Ni-l trimiți; noi confirmăm că e
-      cel revizuit (azi `779e0d8`, [de-portat.md](de-portat.md)).
+      cel revizuit (azi `d95598e`, [de-portat.md](de-portat.md)).
 - [ ] hPanel → biovitality.ro: PHP 8.3, **sodium** bifat, Auto deployment (GIT) oprit; o copie Hostinger recentă
       (hPanel → Backups), ca plasă în plus.
 - [ ] `~/domains/biovitality.ro/site/privat/setari-inghetate.json` (de la noi) și

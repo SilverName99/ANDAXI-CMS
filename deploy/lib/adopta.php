@@ -24,7 +24,7 @@ declare(strict_types=1);
  * neterminată. La prima problemă se oprește cu un mesaj clar; după comutare site-ul rămâne în mentenanță până la
  * reparare (aceeași comandă) sau la revenire (deploy/revino.sh).
  *
- *   deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=2026.11.05-e4f5a6b --commit-vechi=779e0d8
+ *   deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=2026.11.05-e4f5a6b --commit-vechi=d95598e
  *   deploy/adopta.sh … --aplica
  *
  * Obligatorii: --site=<slug> (pachetul din site-uri/<slug>/), --domeniu=<d> (~/domains/<d>/public_html),
