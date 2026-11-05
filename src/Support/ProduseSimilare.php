@@ -190,6 +190,9 @@ final class ProduseSimilare
             . '</a>'
             . '</div>'
             . '<div class="similar-product-card__body">'
+            // Pluginul campanii: insigna produsului din campania activă (cheia o pune Campanii::cuInsigne; altfel lipsește).
+            . (isset($p['campanie_insigna']) ? '<span class="campanie-insigna campanie-insigna--similar" style="' . Campanii::stilInsignaInline() . '">'
+                . self::e((string) $p['campanie_insigna']) . '</span>' : '')
             . '<p class="similar-product-card__desc">' . $descriere . '</p>'
             . '<h4 class="similar-product-card__name"><a href="' . $url . '">' . $nume . '</a></h4>'
             . (Plugins::vizibil('recenzii') ? '<div class="similar-product-card__rating"><span class="similar-product-card__stars" aria-label="Rating ' . number_format($medie, 1, '.', '') . ' din 5">' . $steleHtml . '</span><span class="similar-product-card__reviews">(' . $recenzii . ')</span></div>' : '')

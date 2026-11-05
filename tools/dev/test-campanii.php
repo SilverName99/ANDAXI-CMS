@@ -16,8 +16,10 @@ declare(strict_types=1);
  *    (fără jeton, sfârșit înainte de început, suprapunerea cu altă campanie pornită, pornită fără pagină), jurnalul adminilor.
  * C. Pe site, cu campania activă: prima intrare (302 la /campanie/<slug>?inapoi=…, cookie de sesiune HttpOnly, fără cache),
  *    pagina campaniei (butonul spre adresa cerută, noindex, fără cache), nicio trimitere pentru roboți, POST, coș, checkout,
- *    cont, API, /_andaxi/, fișiere, admin, navigarea din site, cu cookie-ul; insigna doar pe produsele alese, bannerul (lipit
- *    sau nu, cu linkul lui); în afara ferestrei și oprită: nimic (pagina 404, fără banner, fără insignă), afară de
+ *    cont, API, /_andaxi/, fișiere, admin, navigarea din site, cu cookie-ul; trimiterea și fără Referer și de pe alt site
+ *    (decizia proprietarului din 5 nov: la fiecare intrare nouă); insigna doar pe produsele alese (pagina produsului,
+ *    magazinul, categoria, {{featured_products}}, produsele similare, {{product_produse_similare}}), bannerul (lipit sau nu,
+ *    cu linkul lui; fără link, spre pagina campaniei cu întoarcerea la pagina curentă, și clicul pe el); în afara ferestrei și oprită: nimic (pagina 404, fără banner, fără insignă), afară de
  *    previzualizarea administratorului; cu pluginul oprit: garda (404 pe site, 403 în admin), nicio trimitere, nicio insignă;
  *    fără nicio campanie, paginile fără niciun semn al pluginului.
  * D. În Chromium (tools/dev/campanii-browser.cjs), desktop 1366 px și telefon 390 px: vizitatorul nou, butonul în stânga sus,
@@ -296,8 +298,16 @@ $db->prepare("INSERT INTO pages (title, slug, html_content, is_published) VALUES
     'h' => '<section style="padding:32px 16px;text-align:center"><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p></section>',
 ]);
 $idPagina = (int) $db->lastInsertId();
-$produseCampanie = array_map('intval', $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""
-    ORDER BY id LIMIT 5')->fetchAll(PDO::FETCH_COLUMN));
+// Primul produs activ, primul lui produs similar (banda de pe pagina lui), încă două și cel mai nou (grila {{featured_products}} de
+// pe prima pagină arată cele mai noi produse).
+$primele = array_map('intval', $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""
+    ORDER BY id LIMIT 3')->fetchAll(PDO::FETCH_COLUMN));
+$paginaPrimului = $cerere('GET', '/produs/' . rawurlencode($unu('SELECT slug FROM products WHERE id = :id', ['id' => $primele[0]])),
+    null, [], ['User-Agent: Googlebot/2.1'])['corp'];
+$similareDate = preg_match('#<script type="application/json" class="similar-products__data">(.*?)</script>#s', $paginaPrimului, $m) === 1
+    ? (array) json_decode($m[1], true) : [];
+$produseCampanie = array_values(array_unique(array_filter([$primele[0], (int) ($similareDate[0]['id'] ?? 0), $primele[1], $primele[2],
+    (int) $db->query('SELECT MAX(id) FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""')->fetchColumn()])));
 $slugInCampanie = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $produseCampanie[0]]);
 $slugInafara = $unu('SELECT slug FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> "" AND id NOT IN ('
     . implode(',', $produseCampanie) . ') ORDER BY id LIMIT 1');
@@ -362,12 +372,12 @@ $cerereCorp = static function (string $cale, string $corp) use ($baza, $browser,
 };
 $r = $cerereCorp('/admin/campanii/salveaza', $corp);
 $idCampanie = (int) $unu("SELECT id FROM campanii WHERE slug = 'saptamana-demo'");
-$verifica('campania nouă salvată (adresa din nume, fără diacritice) cu cele 5 produse', $r['cod'] === 302 && $idCampanie > 0
+$verifica('campania nouă salvată (adresa din nume, fără diacritice) cu cele ' . count($produseCampanie) . ' produse', $r['cod'] === 302 && $idCampanie > 0
     && $r['location'] === '/admin/campanii/' . $idCampanie
-    && $unu('SELECT COUNT(*) FROM campanii_produse WHERE campanie_id = :id', ['id' => $idCampanie]) === '5', $r['cod'] . ' ' . $r['location']);
+    && $unu('SELECT COUNT(*) FROM campanii_produse WHERE campanie_id = :id', ['id' => $idCampanie]) === (string) count($produseCampanie), $r['cod'] . ' ' . $r['location']);
 $editor = $cerere('GET', '/admin/campanii/' . $idCampanie, $jarAdmin);
 $verifica('după salvare: „Campania a fost salvată.”, starea „Activă acum”, produsele bifate', $flash($editor['corp']) === 'Campania a fost salvată.'
-    && str_contains($editor['corp'], 'Activă acum') && substr_count($editor['corp'], '" checked>') >= 5, $flash($editor['corp']));
+    && str_contains($editor['corp'], 'Activă acum') && substr_count($editor['corp'], '" checked>') >= count($produseCampanie), $flash($editor['corp']));
 $verifica('Jurnal activitate: „campanie_salvata”', $unu("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'campanie_salvata'") === '1');
 $r = $cerere('POST', '/admin/campanii/salveaza', $jarAdmin, ['nume' => 'Altă campanie', 'slug' => 'alta-campanie',
     'incepe_la' => date('Y-m-d\TH:i', time() + 3600), 'se_termina_la' => date('Y-m-d\TH:i', time() + 172800)] + $campDate);
@@ -388,6 +398,14 @@ ResponseCache::purgePageCache();
 $tinta = '/produs/' . $slugInCampanie . '?utm_source=test&gclid=demo';
 $r = $cerere('GET', $tinta, null, [], ['Referer: https://www.google.com/']);
 $asteptat = '/campanie/saptamana-demo?inapoi=' . rawurlencode($tinta);
+// Decizia proprietarului (5 nov): la fiecare intrare nouă, și fără Referer (adresa scrisă, semn de carte, o aplicație).
+$faraRef = $cerere('GET', $tinta);
+$deLaFacebook = $cerere('GET', '/blog', null, [], ['Referer: https://m.facebook.com/']);
+$deLaWww = $cerere('GET', '/magazin', null, [], ['Referer: http://www.127.0.0.1:' . $port . '/']);
+$verifica('intrarea fără Referer (adresa scrisă, semn de carte, aplicație) și de pe alt site: trimise la campanie; navigarea din site (și www.) nu',
+    $faraRef['cod'] === 302 && ($faraRef['antete']['location'] ?? '') === $asteptat && $deLaFacebook['cod'] === 302
+    && str_starts_with((string) ($deLaFacebook['antete']['location'] ?? ''), '/campanie/saptamana-demo?inapoi=%2Fblog')
+    && !isset($deLaWww['antete']['location']), $faraRef['cod'] . ' / ' . $deLaFacebook['cod'] . ' / ' . $deLaWww['cod']);
 $verifica('prima intrare (de pe Google): 302 la pagina campaniei, cu adresa cerută în „inapoi”', $r['cod'] === 302
     && ($r['antete']['location'] ?? '') === $asteptat, $r['cod'] . ' ' . ($r['antete']['location'] ?? ''));
 $cookie = (string) ($r['antete']['set-cookie'] ?? '');
@@ -411,12 +429,56 @@ $verifica('cu cookie-ul: pagina cerută, cu insigna produsului și bannerul (lip
     && str_contains($r['corp'], 'campanie-insigna--pagina') && str_contains($r['corp'], 'data-campanie-banner data-lipit="1"')
     && str_contains($r['corp'], 'href="/magazin" style="color:inherit') && str_contains($r['corp'], '/assets/vendor/fonturi/rubik/rubik.css')
     && str_contains($r['corp'], 'Reduceri demo de -20% până duminică'), (string) $r['cod']);
+// Bannerul fără link scris: duce la pagina campaniei, cu întoarcerea la pagina curentă (singurul drum spre ea în aceeași vizită).
+$db->prepare("UPDATE campanii SET banner_link = '' WHERE id = :id")->execute(['id' => $idCampanie]);
+ResponseCache::purgePageCache();
+$r = $cerere('GET', '/magazin?sort=alpha_asc', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$linkBanner = '/campanie/saptamana-demo?inapoi=' . rawurlencode('/magazin?sort=alpha_asc');
+$verifica('bannerul fără link scris: duce la pagina campaniei, cu „inapoi” = pagina curentă', $r['cod'] === 200
+    && str_contains($r['corp'], 'href="' . htmlspecialchars($linkBanner, ENT_QUOTES) . '" style="color:inherit'), (string) $r['cod']);
+$r = $cerere('GET', $linkBanner, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie, 'Referer: ' . $baza . '/magazin?sort=alpha_asc']);
+$verifica('clicul pe banner (vizitatorul a văzut deja campania): pagina campaniei, cu butonul înapoi la pagina de pe care a venit', $r['cod'] === 200
+    && str_contains($r['corp'], 'class="campanie-inapoi__buton" href="/magazin?sort=alpha_asc"'), (string) $r['cod']);
+$db->prepare("UPDATE campanii SET pagina_la_intrare = 0 WHERE id = :id")->execute(['id' => $idCampanie]);
+ResponseCache::purgePageCache();
+$r = $cerere('GET', '/magazin', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$verifica('bannerul fără link, cu pagina campaniei oprită: fără link', $r['cod'] === 200 && str_contains($r['corp'], 'data-campanie-banner')
+    && !preg_match('#campanie-banner__text[^>]*><a #', $r['corp']), (string) $r['cod']);
+$db->prepare("UPDATE campanii SET pagina_la_intrare = 1, banner_link = '/magazin' WHERE id = :id")->execute(['id' => $idCampanie]);
+ResponseCache::purgePageCache();
 $r = $cerere('GET', '/produs/' . $slugInafara, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
-$verifica('un produs care nu e în campanie: fără insignă (bannerul da)', $r['cod'] === 200 && !str_contains($r['corp'], 'campanie-insigna')
+$verifica('un produs care nu e în campanie: fără insigna produsului (bannerul da)', $r['cod'] === 200 && !str_contains($r['corp'], 'campanie-insigna--pagina')
     && str_contains($r['corp'], 'data-campanie-banner'), (string) $r['cod']);
 $r = $cerere('GET', '/magazin', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
 $verifica('magazinul: insigna pe cardurile produselor din campanie', $r['cod'] === 200 && substr_count($r['corp'], 'campanie-insigna--card') >= 1
-    && substr_count($r['corp'], 'campanie-insigna--card') <= 5, (string) substr_count($r['corp'], 'campanie-insigna--card'));
+    && substr_count($r['corp'], 'campanie-insigna--card') <= count($produseCampanie), (string) substr_count($r['corp'], 'campanie-insigna--card'));
+$acasa = $cerere('GET', '/', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$verifica('prima pagină: insigna în grila {{featured_products}} (cel mai nou produs e în campanie)', $acasa['cod'] === 200
+    && str_contains($acasa['corp'], 'campanie-insigna--acasa'), (string) $acasa['cod']);
+$similare = 0;
+$similareJson = 0;
+$slugCuSimilare = '';
+foreach ($produseCampanie as $idProdus) {
+    $slugProdus = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $idProdus]);
+    $corp = $cerere('GET', '/produs/' . rawurlencode($slugProdus), null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie])['corp'];
+    // Cardurile scrise de server (nu șablonul din JavaScript, care are aceeași clasă).
+    $n = preg_match_all('#class="campanie-insigna campanie-insigna--similar" style="[^"]*">Campanie</span>#', $corp);
+    $similare += $n;
+    $similareJson += substr_count($corp, '"campanie_insigna":"Campanie"');
+    if ($n > 0 && $slugCuSimilare === '') {
+        $slugCuSimilare = $slugProdus;
+    }
+}
+$verifica('produsele similare de pe pagina produsului: insigna pe carduri (HTML-ul serverului și datele din care le reface JavaScript-ul)',
+    $similare >= 1 && $similareJson >= 1, $similare . ' carduri, ' . $similareJson . ' în date');
+// Banda {{product_produse_similare}} (views/site/components/produse-categorie.php), randată direct: insigna doar pe produsul din campanie.
+Campanii::reseteaza();
+ob_start();
+$produse = [['id' => $produseCampanie[0], 'name' => 'În campanie', 'slug' => 'in-campanie'], ['id' => 999999, 'name' => 'În afara ei', 'slug' => 'altul']];
+$titlu = 'Produse asemănătoare';
+include $radacina . '/views/site/components/produse-categorie.php';
+$banda = (string) ob_get_clean();
+$verifica('banda {{product_produse_similare}}: insigna doar pe cardul produsului din campanie', substr_count($banda, 'campanie-insigna--banda') === 1);
 $categorie = $unu('SELECT c.slug FROM product_categories c JOIN product_category_links l ON l.category_id = c.id
     WHERE l.product_id = :p AND c.slug <> "" LIMIT 1', ['p' => $produseCampanie[0]]);
 if ($categorie !== '') {
@@ -461,7 +523,7 @@ if (!$faraBrowser) {
     $scrie('== D. În Chromium (desktop 1366 px, telefon 390 px)');
     $dosarCapturi = $dosarDev . '/campanii';
     @mkdir($dosarCapturi, 0775, true);
-    $env = ['CMS_DEV_URL=' . $baza, 'CMS_DEV_PRODUS=' . $slugInCampanie, 'CMS_DEV_CAMPANIE=' . $idCampanie, 'CMS_DEV_ADMIN_EMAIL=' . $adminEmail,
+    $env = ['CMS_DEV_URL=' . $baza, 'CMS_DEV_PRODUS=' . $slugInCampanie, 'CMS_DEV_PRODUS_SIMILARE=' . $slugCuSimilare, 'CMS_DEV_CAMPANIE=' . $idCampanie, 'CMS_DEV_ADMIN_EMAIL=' . $adminEmail,
         'CMS_DEV_PAROLA=' . $parolaAdmin, 'CMS_DEV_CAPTURI=' . $dosarCapturi, 'NO_PROXY=*', 'no_proxy=*'];
     $iesire = [];
     exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy ' . implode(' ', array_map('escapeshellarg', $env))

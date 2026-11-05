@@ -136,6 +136,8 @@ final class HomeSections
                 . '<img src="' . self::e($image) . '" alt="' . self::e($name) . '" loading="lazy" decoding="async"'
                 . ' onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></a>'
                 . '<div class="bs-product-card__body">'
+                // Pluginul campanii: insigna produsului din campania activă (altfel nimic).
+                . Campanii::insignaInline($row, 'acasa')
                 . '<a class="bs-product-card__name" href="' . self::e($url) . '">' . self::e($name) . '</a>'
                 . ($priceHtml !== '' ? '<p class="bs-product-card__price">' . $priceHtml . '</p>' : '')
                 . $action

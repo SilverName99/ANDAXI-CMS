@@ -68,6 +68,17 @@ async function vizitator(browser, latime, eticheta) {
     await pagina.screenshot({ path: path.join(capturi, 'produs-' + latime + '.png'), fullPage: false });
   }
 
+  await pagina.goto(baza + '/', { waitUntil: 'load' });
+  nota(eticheta + ': prima pagină: insigna în grila produselor noi', await pagina.locator('.campanie-insigna--acasa').first().isVisible());
+  nota(eticheta + ': prima pagină fără derulare laterală', await faraDerulareLaterala(pagina));
+  const cuSimilare = process.env.CMS_DEV_PRODUS_SIMILARE || '';
+  if (cuSimilare) {
+    await pagina.goto(baza + '/produs/' + encodeURIComponent(cuSimilare), { waitUntil: 'load' });
+    await pagina.waitForTimeout(300);
+    // Banda produselor similare e refăcută din JavaScript (după lățimea ecranului): insigna trebuie să rămână.
+    nota(eticheta + ': produsele similare: insigna rămâne pe carduri după ce JavaScript-ul reface banda',
+      (await pagina.locator('.similar-products .campanie-insigna--similar').count()) >= 1);
+  }
   await pagina.goto(baza + '/magazin', { waitUntil: 'load' });
   nota(eticheta + ': la a doua pagină nu mai e trimis la campanie', new URL(pagina.url()).pathname === '/magazin', pagina.url());
   const insigne = await pagina.locator('.campanie-insigna--card').count();

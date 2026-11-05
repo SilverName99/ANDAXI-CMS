@@ -1005,8 +1005,9 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   `{{produse_serviciu}}`) ies goale pe ea; celelalte (`{{featured_products}}`, `{{latest_posts}}`, categoriile…) merg.
   `noindex, follow` (meta și `X-Robots-Tag`), fără canonical, `Cache-Control: no-store, private`, nu e în harta site-ului.
   Administratorul logat o vede și în afara ferestrei, ca **previzualizare** (cu o notă), fără să primească cookie-ul.
-- **Prima intrare pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini): un om care vine din afara site-ului
-  (de pe Google, dintr-un email, de pe o rețea socială, un link tastat) primește `302` la
+- **Prima intrare pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini; decizia proprietarului din 5 nov: **la
+  fiecare intrare nouă**, adică la fiecare vizită nouă): un om care intră pe site, de pe orice link din afară (Google, un email,
+  o rețea socială) sau fără Referer (adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), primește `302` la
   `/campanie/<slug>?inapoi=<calea și parametrii ceruți>` (`Cache-Control: no-store, private`) și cookie-ul
   `campanie_vazuta=<id>`. `inapoi` e verificat ca o cale a acestui site (`/…`, fără `//`, `\`, schemă, gazdă, caractere de
   control, nici `/campanie/…`); orice altceva duce la `/` (nicio redirecționare deschisă). **Nu se trimite niciodată**: altă
@@ -1020,16 +1021,24 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   `/sitemap…`, `/feed`, `/review-form`, orice cale cu extensie de fișier, paginile altor pluginuri decât catalogul și blogul
   (cele din `pagini`, ex. `checkout/succes`, `acorduri-gdpr`) și paginile de sistem ale hărții site-ului, linkul de ciornă al
   unui produs (`?draft=`). Fără pagină aleasă sau cu „Arată pagina campaniei la prima intrare” debifată, nu se trimite nimeni
-  (insigna și bannerul rămân).
+  (insigna și bannerul rămân). Odată intrat, cât se plimbă prin site vizitatorul nu mai e trimis la ea; în aceeași vizită o mai
+  vede doar dacă apasă bannerul (mai jos).
 - **Cookie-ul** `campanie_vazuta`: strict necesar (ține minte doar că vizitatorul a văzut deja pagina, ca să nu fie trimis
   la ea la fiecare pagină), deci fără acordul pentru cookie-uri (`CookieConsent`); de sesiune (fără `Expires`: dispare la
   închiderea browserului), `HttpOnly`, `SameSite=Lax`, `Secure` pe https; doar id-ul campaniei, nimic despre vizitator. O
   campanie nouă (alt id) se vede din nou o dată. De trecut în politica de cookie-uri a site-ului, la „strict necesare”.
 - **Insigna** (textul, implicit „Campanie”, și două culori): pe produsele alese (lista cu căutare din editor), pe pagina
-  produsului (deasupra produsului, în ambele aspecte: cu șablon și fără) și pe cardurile catalogului (`{{shop_catalog}}`,
-  `/magazin`, `/categorie/…`, `{{products_by_template:…}}`), jos în stânga pozei (sus sunt reducerea și ofertele BBD). Doar cu
-  catalogul pe site. Alte carduri (cele simple ale produselor similare, `{{featured_products}}` din prima pagină) nu o au încă.
-- **Bannerul de sus**: textul (cu link opțional: o cale a site-ului sau `http(s)://…`), fundalul și culoarea textului, fontul
+  produsului (în capul panoului, în ambele aspecte: cu șablon și fără), pe cardurile catalogului (`{{shop_catalog}}`,
+  `/magazin`, `/categorie/…`, `{{products_by_template:…}}`; jos în stânga pozei, sus sunt reducerea și ofertele BBD), în grila
+  `{{featured_products}}` de pe prima pagină (`HomeSections`), pe cardurile produselor similare de pe pagina produsului (cele
+  scrise de server, `ProduseSimilare`, și cele refăcute din JavaScript: datele lor primesc `campanie_insigna`, iar rândul din
+  șablonul JavaScript din `views/site/product.php` există doar cât e o campanie activă) și în banda
+  `{{product_produse_similare}}` / `{{produse_serviciu}}` (`produse-categorie.php`); pe ultimele trei, ca o etichetă în corpul
+  cardului (stilul lor vine din pagină sau din temă). Doar cu catalogul pe site. Pagina de prezentare de rezervă
+  (`views/site/home.php`, fără pagina „acasă” în admin) nu o are.
+- **Bannerul de sus**: textul, linkul (decizia proprietarului din 5 nov: **fără link scris, cât pagina campaniei e pornită,
+  bannerul duce la pagina campaniei**, `/campanie/<slug>?inapoi=<pagina curentă>`, deci butonul „Înapoi” de acolo îl întoarce
+  pe vizitator unde era; un link scris în campanie, o cale a site-ului sau `http(s)://…`, are întâietate), fundalul și culoarea textului, fontul
   (al site-ului; DM Sans, Playfair, Rubik, IBM Plex din nucleu, locale; Arial, Georgia, Verdana, al sistemului), mărimea (11–32
   px), lipit sus la derulare (`position: sticky`) sau nu; imediat după `<body>`, pe toate paginile publice (nu pe pagina
   campaniei). Editorul are o **previzualizare** care se schimbă cât scrii (un chenar care se derulează, ca să se vadă și
@@ -1042,7 +1051,9 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   schimbat în pagini (comparația cu Bioscem, G-cmp, pe licența „toate”, care îl are pornit).
 - **Are nevoie de**: nimic (insigna, de catalog). **Se oprește**: ca pornit (nu începe nimic cu bani). **Oprit**: `/campanie/…`
   404, adminul 403, meniul dispare, nicio trimitere, insignă sau banner; campaniile rămân în bază, la repornire revin.
-- **SEO**: vezi [SEO.md](SEO.md), §5b, „Pagina campaniei (interstițial)”.
+- **Folosirea recomandată** (proprietarul a acceptat prudența SEO pe 5 nov): pagina campaniei doar pe **perioade scurte** (zile,
+  o campanie anume); pentru o promoție lungă, doar bannerul și insignele (debifat „Arată pagina campaniei la prima intrare”).
+  Detaliile: [SEO.md](SEO.md), §5b, „Pagina campaniei (interstițial)”. Adminul rămâne doar al administratorului general.
 
 ### Neportate încă
 

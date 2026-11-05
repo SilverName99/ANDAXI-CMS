@@ -40,6 +40,10 @@ if ($produse === []) {
                    class="object-fit-cover" loading="lazy" decoding="async">
             </div>
             <div class="card-body">
+<?php if (($insignaCampanie = \App\Support\Campanii::insignaInline((array) $produs, 'banda')) !== ''): ?>
+              <?= $insignaCampanie ?>
+
+<?php endif; ?>
               <h3 class="h5 mb-2"><?= $e((string) ($produs['name'] ?? '')) ?></h3>
               <p class="text-secondary small mb-3"><?= $e(strip_tags((string) ($produs['short_description'] ?? ''))) ?></p>
               <span class="btn btn-link px-0 fw-semibold text-uppercase banda-alternanta__actiune">

@@ -11,14 +11,18 @@ use Throwable;
  * Pluginul `campanii` (cerut pentru Biovitality, 5 nov 2026; docs/PLUGINURI.md, „Campanii pe site”): o campanie programată,
  * cu fereastra ei (început, sfârșit), care pe site are trei bucăți, toate doar cât campania e în fereastră:
  *
- *  1. **Pagina de deschidere.** Vizitatorul care intră pe site (de pe orice link, din afara site-ului) e trimis o dată pe
+ *  1. **Pagina de deschidere.** La fiecare intrare nouă pe site (o vizită nouă: de pe orice link din afară, dar și fără
+ *     Referer: adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), vizitatorul e trimis o dată pe
  *     vizită (cookie de sesiune, strict necesar) la `/campanie/<slug>?inapoi=<adresa cerută>`, unde vede pagina aleasă din
  *     Conținut → Pagini (editorul de pagini al nucleului) și, în stânga sus, butonul „← Înapoi în site-ul principal”, care
  *     duce la adresa cerută la început. Niciodată pentru roboți (Google vede site-ul ca înainte), admin, coș, checkout, cont,
  *     plăți și confirmările lor, API, adresele platformei, fișiere, cereri care nu sunt GET de document, navigarea din
  *     interiorul site-ului și pagina campaniei însăși (`deInterceptat`).
- *  2. **Insigna** (textul ales, implicit „Campanie”) pe produsele alese: pe pagina produsului și pe cardurile catalogului.
- *  3. **Bannerul de sus**: textul (cu link opțional), culorile, fontul, mărimea, lipit sau nu la derulare.
+ *  2. **Insigna** (textul ales, implicit „Campanie”) pe produsele alese: pe pagina produsului, pe cardurile catalogului,
+ *     în grila `{{featured_products}}` și pe cardurile produselor similare (banda de pe produs și `{{product_produse_similare}}`).
+ *  3. **Bannerul de sus**: textul, culorile, fontul, mărimea, lipit sau nu la derulare; linkul scris în campanie sau, fără el
+ *     (cât pagina campaniei e pornită), pagina campaniei cu întoarcerea la pagina curentă: singurul drum prin care
+ *     vizitatorul o mai vede în aceeași vizită.
  *
  * Mai multe campanii se pot pregăti, dar două campanii pornite nu au voie să aibă ferestre care se suprapun (refuzat la
  * salvare), deci în orice clipă e cel mult una activă. Fără nicio campanie activă (sau cu pluginul oprit) site-ul iese
@@ -212,7 +216,48 @@ final class Campanii
             . self::e($text) . '</span></p>';
     }
 
-    private static function textInsigna(array $produs): string
+    /**
+     * Insigna în fluxul cardului (nu peste poză), pentru cardurile al căror stil vine din pagină sau din temă: grila
+     * `{{featured_products}}` (HomeSections), banda `{{product_produse_similare}}` și cardurile produselor similare. ''
+     * fără campanie activă sau pentru un produs care nu e în ea.
+     */
+    public static function insignaInline(array $produs, string $varianta): string
+    {
+        $text = self::textInsigna($produs);
+        return $text === '' ? '' : '<span class="campanie-insigna campanie-insigna--' . self::e($varianta) . '" style="'
+            . self::stilInsignaInline() . '">' . self::e($text) . '</span>';
+    }
+
+    /** Stilul insignei din fluxul cardului (fără apostrofuri: intră și într-un șir JavaScript, în views/site/product.php). */
+    public static function stilInsignaInline(): string
+    {
+        [$fundal, $culoare] = self::culoriInsigna();
+        return 'display:inline-block;max-width:100%;margin:0 0 8px;padding:5px 10px;border-radius:999px;background:' . $fundal
+            . ';color:' . $culoare . ';font:800 11px/1.2 &quot;DM Sans&quot;,Arial,sans-serif;letter-spacing:.04em;'
+            . 'text-transform:uppercase;overflow-wrap:anywhere;';
+    }
+
+    /**
+     * Produsele similare (lista din JSON-ul benzii de pe pagina produsului): cele din campania activă primesc cheia
+     * `campanie_insigna` (textul insignei). Fără campanie activă lista rămâne exact aceeași.
+     *
+     * @param list<array<string, mixed>> $produse
+     * @return list<array<string, mixed>>
+     */
+    public static function cuInsigne(array $produse): array
+    {
+        if (self::activa() === null) {
+            return $produse;
+        }
+        foreach ($produse as $i => $produs) {
+            if (is_array($produs) && ($text = self::textInsigna($produs)) !== '') {
+                $produse[$i]['campanie_insigna'] = $text;
+            }
+        }
+        return $produse;
+    }
+
+    public static function textInsigna(array $produs): string
     {
         $id = (int) ($produs['id'] ?? 0);
         if ($id <= 0 || !Plugins::vizibil('catalog')) {
@@ -252,7 +297,19 @@ final class Campanii
         if ($activa === null || (int) ($activa['banner_pornit'] ?? 0) !== 1 || trim((string) ($activa['banner_text'] ?? '')) === '') {
             return '';
         }
-        return self::htmlBanner($activa);
+        return self::htmlBanner($activa, false, self::linkImplicitBanner($activa, (string) ($_SERVER['REQUEST_URI'] ?? '/')));
+    }
+
+    /**
+     * Linkul bannerului fără un link scris în campanie: pagina campaniei, cu întoarcerea la pagina pe care e vizitatorul
+     * acum (doar cât campania are pagina pornită: pagină aleasă și „Arată pagina campaniei la prima intrare”); altfel ''.
+     */
+    public static function linkImplicitBanner(array $c, string $cerere): string
+    {
+        if ((int) ($c['pagina_la_intrare'] ?? 0) !== 1 || (int) ($c['pagina_id'] ?? 0) <= 0 || trim((string) ($c['slug'] ?? '')) === '') {
+            return '';
+        }
+        return self::adresaPagina((string) $c['slug'], self::inapoiSigur($cerere));
     }
 
     /**
@@ -260,7 +317,7 @@ final class Campanii
      *
      * @param array<string, mixed> $c
      */
-    public static function htmlBanner(array $c, bool $previzualizare = false): string
+    public static function htmlBanner(array $c, bool $previzualizare = false, string $linkImplicit = ''): string
     {
         $font = self::FONTURI[(string) ($c['banner_font'] ?? '')] ?? self::FONTURI['site'];
         $marime = self::marime($c['banner_marime'] ?? null);
@@ -268,7 +325,11 @@ final class Campanii
         $culoare = self::culoare((string) ($c['banner_culoare'] ?? ''), self::IMPLICITE['banner_culoare']);
         $lipit = (int) ($c['banner_lipit'] ?? 0) === 1 && !$previzualizare;
         $text = self::e(trim((string) ($c['banner_text'] ?? '')));
+        // Linkul scris în campanie are întâietate; fără el, pagina campaniei (linkImplicitBanner), cât ea e pornită.
         $link = self::linkBanner((string) ($c['banner_link'] ?? ''));
+        if ($link === '') {
+            $link = $linkImplicit;
+        }
         $continut = $link !== ''
             ? '<a href="' . self::e($link) . '" style="color:inherit;text-decoration:underline;text-underline-offset:3px;">' . $text . '</a>'
             : $text;
@@ -375,8 +436,10 @@ final class Campanii
             || trim((string) ($server['HTTP_X_REQUESTED_WITH'] ?? '')) !== '') {
             return false;
         }
-        // Navigarea din interiorul site-ului (un link al site-ului, butonul „Înapoi” al campaniei): niciodată. Așa nici un
-        // vizitator fără cookie-uri nu e trimis la campanie la fiecare clic.
+        // O intrare nouă: fără Referer (adresa scrisă, semn de carte, aplicație) sau cu Referer de pe alt site, da (decizia
+        // proprietarului din 5 nov). Navigarea din interiorul site-ului (un link al site-ului, butonul „Înapoi” al campaniei):
+        // niciodată; așa nici un vizitator fără cookie-uri nu e trimis la campanie la fiecare clic. În aceeași vizită pagina
+        // campaniei se mai vede doar din banner.
         $deUnde = strtolower((string) parse_url((string) ($server['HTTP_REFERER'] ?? ''), PHP_URL_HOST));
         $gazda = strtolower((string) preg_replace('/:\d+$/', '', (string) ($server['HTTP_HOST'] ?? '')));
         $faraWww = static fn (string $g): string => str_starts_with($g, 'www.') ? substr($g, 4) : $g;

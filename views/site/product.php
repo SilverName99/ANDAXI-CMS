@@ -971,6 +971,9 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
                         + '<a class="similar-product-card__media" href="' + url + '"><img class="similar-product-card__img" src="' + image + '" alt="' + name + '" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';">' + (discount > 0 ? '<span class="similar-product-card__bubble' + (badgeMode === 'value' ? ' similar-product-card__bubble--value' : '') + '">' + bubbleText + '</span>' : '') + '</a>'
                         + '</div>'
                         + '<div class="similar-product-card__body">'
+<?php if (\App\Support\Campanii::activa() !== null): ?>
+                        + (item.campanie_insigna ? '<span class="campanie-insigna campanie-insigna--similar" style="<?= \App\Support\Campanii::stilInsignaInline() ?>">' + escapeHtml(String(item.campanie_insigna)) + '</span>' : '')
+<?php endif; ?>
                         + '<p class="similar-product-card__desc">' + description + '</p>'
                         + '<h4 class="similar-product-card__name"><a href="' + url + '">' + name + '</a></h4>'
 <?php if ($areRecenzii): ?>

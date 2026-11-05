@@ -5678,6 +5678,8 @@ final class SiteController
     {
         return $this->renderPhpView('site/components/produse-categorie', [
             'produse' => array_map(static fn (array $p): array => [
+                // Id-ul: insigna pluginului campanii (Campanii::insignaInline); banda nu-l afișează.
+                'id' => (int) ($p['id'] ?? 0),
                 'name' => (string) ($p['name'] ?? ''),
                 'slug' => (string) ($p['slug'] ?? ''),
                 'short_description' => (string) ($p['short_description'] ?? ''),
@@ -13656,6 +13658,8 @@ CSS;
         if ($similarProducts === []) {
             return '';
         }
+        // Pluginul campanii: produsele din campania activă primesc textul insignei (fără campanie, lista e aceeași).
+        $similarProducts = \App\Support\Campanii::cuInsigne(array_values($similarProducts));
         $json = (string) json_encode(
             array_values($similarProducts),
             JSON_UNESCAPED_UNICODE

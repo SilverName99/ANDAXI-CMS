@@ -359,7 +359,7 @@ Livrarea 4, Bioscem `ef22b23`, `682843c`, `9fe175d`, `dd41c59`, `a64afb6` (`SeoI
   reclamă păstrați, după aceeași regulă ca `/magazin?categorie=` (`LinkuriCategorii`); categoria se afișează în pagina
   catalogului și are canonicalul ei, `/categorie/x`.
 - **Pagina campaniei (interstițial; pluginul `campanii`, 5 nov 2026, [PLUGINURI.md](PLUGINURI.md), „Campanii pe site”)**: cât e o
-  campanie activă, un om care intră pe site din afara lui e trimis o dată pe vizită (302, fără cache) la
+  campanie activă, un om care intră pe site (o vizită nouă, de pe un link din afară sau fără Referer) e trimis o dată pe vizită (302, fără cache) la
   `/campanie/<slug>?inapoi=…`, iar butonul din stânga sus îl duce la pagina cerută. **Roboții nu sunt trimiși niciodată**
   (Googlebot, Bing, AdsBot, previzualizările rețelelor sociale, uneltele de măsurat viteza): Google vede și indexează pagina cerută,
   cu canonicalul, datele structurate și viteza ei, neschimbate. Pagina campaniei e `noindex, follow` (meta și `X-Robots-Tag`), fără
@@ -368,7 +368,7 @@ Livrarea 4, Bioscem `ef22b23`, `682843c`, `9fe175d`, `dd41c59`, `a64afb6` (`SeoI
   conținut, mai ales pe telefon, și poate coborî paginile site-ului în rezultate dacă îl vede (de exemplu în rapoartele de
   experiență a paginii, din datele vizitatorilor Chrome); iar un răspuns diferit pentru roboți și pentru oameni seamănă, la
   limită, cu „cloaking”. Riscul e mic cât pagina e una de campanie, scurtă (zile, nu luni), arătată o dată pe vizită, cu ieșirea
-  vizibilă imediat, dar recomandarea rămâne: campanii scurte; pentru o promoție lungă, doar bannerul și insignele (debifat „Arată
+  vizibilă imediat, dar recomandarea rămâne (acceptată de proprietar pe 5 nov 2026: pagina campaniei doar pe perioade scurte): campanii scurte; pentru o promoție lungă, doar bannerul și insignele (debifat „Arată
   pagina campaniei la prima intrare”). Vizitatorii veniți dintr-o reclamă Google ajung tot pe pagina campaniei, deci „pagina de
   destinație” a reclamei văzută de om nu e cea din reclamă: de verificat cu politica Google Ads înainte de o campanie cu reclame.
   Parametrii adresei (`gclid`, `utm_…`) rămân în `inapoi`, deci atribuirea comenzii nu se pierde.

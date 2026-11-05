@@ -171,7 +171,8 @@ admin_componenta('antet-pagina', [
         </div>
         <div class="field">
             <label for="campanie-banner-link">Link (opțional)</label>
-            <input type="text" id="campanie-banner-link" name="banner_link" maxlength="500" value="<?= adm_e((string) ($c['banner_link'] ?? '')) ?>" placeholder="/categorie/vitamine sau https://…" spellcheck="false">
+            <input type="text" id="campanie-banner-link" name="banner_link" maxlength="500" value="<?= adm_e((string) ($c['banner_link'] ?? '')) ?>" placeholder="gol = pagina campaniei" spellcheck="false">
+            <small class="muted">Gol: bannerul duce la pagina campaniei (cât ea e pornită), iar butonul „Înapoi” de acolo întoarce vizitatorul la pagina de pe care a apăsat. Altfel: o adresă a site-ului (/categorie/vitamine) sau https://….</small>
         </div>
         <div class="field">
             <span>Culorile bannerului (fundal, text)</span>
@@ -201,7 +202,7 @@ admin_componenta('antet-pagina', [
         <div class="field campanie-camp-lat">
             <span>Previzualizare (derulează în chenar)</span>
             <div class="campanie-previzualizare" data-campanie-previzualizare>
-                <?= Campanii::htmlBanner(array_merge($c, ['banner_text' => trim((string) $c['banner_text']) !== '' ? $c['banner_text'] : 'Textul bannerului'])) ?>
+                <?= Campanii::htmlBanner(array_merge($c, ['banner_text' => trim((string) $c['banner_text']) !== '' ? $c['banner_text'] : 'Textul bannerului']), false, Campanii::linkImplicitBanner($c, '/')) ?>
                 <div class="campanie-previzualizare__pagina" aria-hidden="true">
                     <p><strong>Antetul site-ului</strong></p>
                     <?php for ($i = 1; $i <= 8; $i++): ?>
@@ -248,7 +249,8 @@ admin_componenta('antet-pagina', [
     function actualizeaza() {
         if (banner) {
             var text = ($('#campanie-banner-text').value || '').trim() || 'Textul bannerului';
-            var link = ($('#campanie-banner-link').value || '').trim();
+            var link = ($('#campanie-banner-link').value || '').trim()
+                || ($('[name="pagina_la_intrare"]').checked && $('#campanie-pagina').value !== '0' ? '/campanie/' : '');
             var tinta = banner.querySelector('.campanie-banner__text');
             tinta.textContent = '';
             var nod = tinta;
