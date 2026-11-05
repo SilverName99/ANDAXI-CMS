@@ -47,7 +47,8 @@ $reguli['site'] = 'biovitality';
 // adresei (users.email_confirmed_at și session_version, păstrate ca la Bioscem; customer_email_confirmations, cu coloanele BV
 // email, reason, ip_address, expires_at, doar structura, ca la Bioscem). Din regulile Bioscem 17: products.bundle_items_json e a
 // codului comun (pachete_produse/0055), regula ei a trecut acolo (aceeași: copiată cum e). Din regulile Bioscem 18: campaniile de pe site
-// (campanii, campanii_produse; campanii/0054, codul comun), copiate cum sunt; baza biovitality.ro de pe codul vechi nu le are.
+// (campanii, campanii_produse; campanii/0054, codul comun), copiate cum sunt; baza biovitality.ro de pe codul vechi nu le are. Din
+// regulile Bioscem 19: coloanele campanii/0056, copiate cum sunt.
 $reguli['versiune'] = $reguli['versiune'] * 100 + 6;
 $reguli['schema'] = 'Mutare-Site-Biovitality@d95598e (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';

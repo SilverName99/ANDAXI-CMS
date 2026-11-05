@@ -191,6 +191,14 @@ if (!\App\Support\Plugins::permiteInceput('cupoane')) {
 // Sertarul lateral „Oferte” se poate dezactiva din Admin -> Setări magazin.
 // Pluginul „Oferte BBD”: ofertele noi se arată doar cât pluginul e pornit.
 $bbdSidebarEnabled = \App\Support\Plugins::permiteInceput('oferte_bbd') && (string) ($designSettings['store_bbd_sidebar_enabled'] ?? '1') !== '0';
+// Pluginul campanii: pagina campaniei cu „fără antetul și subsolul site-ului” (Campanii::faraAntetSubsol, doar pe
+// /campanie/<slug>): fără antet, subsol, sertarul „Oferte” și butonul coșului plutitor (scriptul lui rămâne, pentru „Adaugă
+// în coș” din {{campanie_produse}}); bara „Înapoi”, cookie-urile, GTM-ul și scripturile rămân. În rest false: pagina e cea
+// de dinainte.
+$faraAntetSubsol = \App\Support\Campanii::faraAntetSubsol();
+if ($faraAntetSubsol) {
+    $bbdSidebarEnabled = false;
+}
 $bbdSidebarOffers = $bbdSidebarEnabled ? \App\Support\BbdSidebarOffers::load($db, 10) : [];
 $siteFaviconUrl = trim((string) ($designSettings['store_favicon_url'] ?? ''));
 if ($siteFaviconUrl === '') {
@@ -461,7 +469,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <?php endif; ?>
-    <?php if (trim($designHeaderOutput) !== ''): ?>
+    <?php if ($faraAntetSubsol): /* pagina campaniei fără antet (pluginul campanii) */ elseif (trim($designHeaderOutput) !== ''): ?>
         <?= $designHeaderOutput ?>
     <?php else: ?>
         <header class="header">
@@ -579,7 +587,7 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
         <?= $content ?>
     </main>
 
-    <?php if (trim($designFooter) !== ''): ?>
+    <?php if (trim($designFooter) !== '' && !$faraAntetSubsol): ?>
         <?php
         // Aceleasi token-uri ca in header: meniul si numarul de produse din cos.
         $designFooterOutput = str_replace('{{an}}', date('Y'), $designFooter);
@@ -727,6 +735,9 @@ foreach ((isset($jsonLd) && is_array($jsonLd) ? $jsonLd : []) as $jsonLdNod) {
             window.floatingCartConfig = <?= json_encode($floatingCartConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         </script>
         <script src="/assets/js/floating-cart.js?v=<?= $floatingCartJsVersion ?><?= $assetVersionQuery ?>" defer></script>
+<?php if ($faraAntetSubsol): /* pagina campaniei fără antet: coșul plutitor prinde „Adaugă în coș”, fără butonul lui */ ?>
+        <style>.floating-cart__trigger{display:none!important;}</style>
+<?php endif; ?>
     <?php endif; ?>
     <?php if ($designJs !== ''): ?>
         <script><?= $designJs ?></script>

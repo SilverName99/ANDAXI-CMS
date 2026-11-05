@@ -980,8 +980,8 @@ loc de comenzi.
 
 ### Campanii pe site (`campanii`)
 
-Cerut pentru Biovitality (5 noiembrie 2026), făcut generic. `App\Support\Campanii`, `CampaniiController`, migrarea
-`campanii/0054`, testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
+Cerut pentru Biovitality (5 noiembrie 2026), făcut generic. `App\Support\Campanii`, `CampaniiController`, migrările
+`campanii/0054` și `campanii/0056` (pagina fără antet și subsol, codul `{{campanie_produse}}`), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
 **Oprit pe orice site**: nu e în niciun pachet și în nicio licență de dezvoltare (`licente_dev`); îl pune doar CRM-ul în
 licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/licenta.php biovitality campanii=pornit`.
 
@@ -1005,6 +1005,32 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   `{{produse_serviciu}}`) ies goale pe ea; celelalte (`{{featured_products}}`, `{{latest_posts}}`, categoriile…) merg.
   `noindex, follow` (meta și `X-Robots-Tag`), fără canonical, `Cache-Control: no-store, private`, nu e în harta site-ului.
   Administratorul logat o vede și în afara ferestrei, ca **previzualizare** (cu o notă), fără să primească cookie-ul.
+- **„Pagina campaniei fără antetul și subsolul site-ului”** (bifa din „Pagina de deschidere”; `campanii.fara_antet_subsol`,
+  `campanii/0056`): **bifată la o campanie nouă**; în bază 0, deci o campanie făcută înainte de `0056` rămâne cum era până o
+  bifează cineva (și se salvează). Bifată, **doar la `/campanie/<slug>`** (`Campanii::faraAntetSubsol`; niciodată la adresa
+  proprie a paginii), `views/layout.php` nu mai pune antetul (`$designHeaderOutput` sau antetul de rezervă), subsolul
+  (`$designFooterOutput`), sertarul „Oferte” (BBD) și butonul coșului plutitor (scriptul coșului rămâne, ascuns doar butonul,
+  ca „Adaugă în coș” de pe carduri să meargă ca în magazin); bannerul de sus al campaniei și popup-ul de anunț nu erau oricum pe
+  ea. Rămân: bara „← Înapoi în site-ul principal”, bannerul de cookie-uri, bannerul copiei de verificare, GTM-ul (și
+  `noscript`-ul lui), CSS-ul și scripturile site-ului (inclusiv JavaScript-ul antetului și al subsolului, care trebuie să nu
+  cadă fără markup-ul lor: de verificat cu tema site-ului; un antet fix care pune `padding-top` pe `body` din CSS lasă spațiul).
+  **„Bara de sus”** (lista de lângă bifă; `bara_inchisa`): deschisă (albă, ca până acum) sau închisă (neagră, linia de jos gri
+  închis), pentru o pagină cu fundal închis; butonul rămâne în culoarea principală a temei.
+- **Codul `{{campanie_produse}}`** (în conținutul paginii campaniei, Conținut → Pagini): pe `/campanie/<slug>` devine grila
+  produselor alese ale campaniei (`Campanii::htmlProduse`, randată pe server, în `views/site/custom-page.php`); în rest (la
+  adresa proprie a paginii, pe orice altă pagină, cu pluginul oprit) și fără niciun produs vizibil iese **gol**; o pagină fără
+  cod nu se schimbă. Produsele: cele bifate în campanie, active, neșterse și **neascunse din catalog** (ca lista magazinului),
+  după nume; disponibilitatea din ERP, ca în catalog. Fiecare card: poza (fișierul refăcut, dimensiunile, variantele, ca pe
+  cardul magazinului), numele, insigna campaniei (textul și culorile ei), prețul curent (prețul redus sau al unei perioade de
+  reducere în curs, ca pe cardul magazinului, același format) cu prețul vechi tăiat, rândul opțional **„Text sub preț”**,
+  **„Adaugă în coș”** și **„Vezi produsul”** (spre `/produs/<slug>`). „Adaugă în coș” are regulile cardului din magazin
+  (`views/site/components/product-card.php`): același formular (`POST /cos/adauga/<id>`, o bucată, prins de coșul plutitor,
+  deci aceleași reguli de coș, stoc și precomandă); epuizat = „Stoc epuizat”, fără formular; precomanda („Precomandă”) și un
+  produs cu oferte BBD de ales („Alege oferta”) duc la pagina produsului; fără magazin pornit, fără buton (și fără preț, fără
+  magazin pe site). „Text sub preț” (`text_sub_pret`, 160 de caractere, escapat): `{pret}` = prețul curent, `{pret*1.5}` (sau
+  `{pret x 1.5}`, `{pret×1,5}`) = prețul curent înmulțit, de exemplu „2 bucăți: {pret*1.5}”; gol = fără rând. **„Cardurile
+  produselor”** (`carduri_inchise`): deschise (albe, chenar gri) sau închise (card `#161616` pe fundal negru, text alb, ca pe
+  pagina Biovitality). Responsivă: câte încap de minimum 230 px pe desktop, două pe rând sub 600 px.
 - **Prima intrare pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini; decizia proprietarului din 5 nov: **la
   fiecare intrare nouă**, adică la fiecare vizită nouă): un om care intră pe site, de pe orice link din afară (Google, un email,
   o rețea socială) sau fără Referer (adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), primește `302` la

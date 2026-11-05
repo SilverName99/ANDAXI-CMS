@@ -63,6 +63,12 @@ $pageHtml = str_replace('{{auth_form}}', $authFormHtml, $pageHtml);
 $pageHtml = str_replace('{{product_review_form}}', $productReviewFormHtml, $pageHtml);
 $pageHtml = str_replace('{{gdpr_agreements_form}}', $gdprAgreementsFormHtml, $pageHtml);
 $pageHtml = str_replace('{{checkout_success_order_info}}', $checkoutSuccessOrderInfoHtml, $pageHtml);
+// Pluginul campanii: {{campanie_produse}}, grila produselor campaniei, doar pe /campanie/<slug> (altfel, și la adresa proprie
+// a paginii, gol; App\Support\Campanii::htmlProduse). Fără codul în pagină nu se schimbă nimic.
+if (str_contains($pageHtml, 'campanie_produse')) {
+    $pageHtml = (string) preg_replace_callback('/\{\{\s*campanie_produse\s*\}\}/i',
+        static fn (): string => \App\Support\Campanii::htmlProduse(), $pageHtml);
+}
 $nextEventConfig = require __DIR__ . '/../../config/app.php';
 $nextEventDb = \App\Support\Database::connection((array) ($nextEventConfig['db'] ?? []));
 foreach (\App\Support\NextEvent::tokens($nextEventDb) as $nextEventNeedle => $nextEventValue) {

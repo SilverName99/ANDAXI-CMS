@@ -52,7 +52,7 @@ final class CampaniiController
         header('Cache-Control: no-store, private');
         header('X-Robots-Tag: noindex, follow');
         $inapoi = Campanii::inapoiSigur(is_string($_GET['inapoi'] ?? null) ? (string) $_GET['inapoi'] : '/');
-        Campanii::randeazaPagina($inapoi, (string) ($campanie['text_inapoi'] ?? ''), $previzualizare);
+        Campanii::randeazaPagina($inapoi, (string) ($campanie['text_inapoi'] ?? ''), $previzualizare, $campanie);
         View::render('site/custom-page', [
             'title' => (string) ($pagina['title'] ?? $campanie['nume']),
             'page' => $pagina,

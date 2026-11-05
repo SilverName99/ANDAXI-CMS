@@ -22,6 +22,10 @@ declare(strict_types=1);
  *    cu linkul lui; fără link, spre pagina campaniei cu întoarcerea la pagina curentă, și clicul pe el); în afara ferestrei și oprită: nimic (pagina 404, fără banner, fără insignă), afară de
  *    previzualizarea administratorului; cu pluginul oprit: garda (404 pe site, 403 în admin), nicio trimitere, nicio insignă;
  *    fără nicio campanie, paginile fără niciun semn al pluginului.
+ * C1. Pagina campaniei fără antetul și subsolul site-ului (campanii/0056): implicit bifată în editor; fără bifă, ca înainte; cu
+ *    bifa, fără antet, subsol, sertarul „Oferte” și butonul coșului plutitor, cu bara „Înapoi” (închisă), bannerul de cookie-uri și
+ *    GTM-ul; codul {{campanie_produse}} (cardurile, prețul redus, „Text sub preț”, „Adaugă în coș” = formularul cardului din
+ *    magazin, epuizat, ascuns, cardurile închise), gol la adresa proprie a paginii și fără produse.
  * D. În Chromium (tools/dev/campanii-browser.cjs), desktop 1366 px și telefon 390 px: vizitatorul nou, butonul în stânga sus,
  *    întoarcerea, insigna, bannerul lipit, fără derulare laterală; editorul cu previzualizarea bannerului și a insignei.
  * E. Curățenia: toată baza (fiecare tabel) e pusă la loc, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
@@ -516,6 +520,113 @@ $verifica('Googlebot vede pagina produsului (200), nu pagina campaniei', $r['cod
 $r = $cerere('GET', '/', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . ($idCampanie + 1000)]);
 $verifica('cookie-ul altei campanii: trimis din nou (o campanie nouă se vede o dată)', $r['cod'] === 302
     && str_starts_with((string) ($r['antete']['location'] ?? ''), '/campanie/saptamana-demo'), (string) $r['cod']);
+
+// ── C1. Pagina fără antet și subsol, {{campanie_produse}} (campanii/0056) ──────────────────────────────────────────────────
+$scrie('');
+$scrie('== C1. Pagina campaniei fără antetul și subsolul site-ului, codul {{campanie_produse}}');
+$verifica('editorul unei campanii noi: „Pagina campaniei fără antetul și subsolul site-ului” bifată, bara și cardurile deschise, „Text sub preț”',
+    str_contains($formular['corp'], 'name="fara_antet_subsol" value="1" checked') && str_contains($formular['corp'], '<option value="0" selected>Deschisă (albă)</option>')
+    && str_contains($formular['corp'], '<option value="0" selected>Deschise (albe)</option>') && str_contains($formular['corp'], 'name="text_sub_pret"'));
+$verifica('campania salvată fără bifa (formularul de mai sus): fara_antet_subsol = 0, bara și cardurile deschise',
+    $unu('SELECT CONCAT(fara_antet_subsol, bara_inchisa, carduri_inchise) FROM campanii WHERE id = :id', ['id' => $idCampanie]) === '000');
+// Un antet și un subsol scrise în admin (semne fără „campanie” în ele: C2 caută „campanie-” în pagini), produsele: unul ascuns din
+// catalog, unul epuizat, unul cu preț redus cunoscut.
+$setare = $db->prepare('INSERT INTO settings (`key`, value) VALUES (:k, :v) ON DUPLICATE KEY UPDATE value = VALUES(value)');
+$setare->execute(['k' => 'design_header_html', 'v' => '<div class="antet-proba-bf">ANTET-PROBA</div>']);
+$setare->execute(['k' => 'design_footer_html', 'v' => '<footer class="subsol-proba-bf">SUBSOL-PROBA</footer>']);
+[$pRedus, $pAscuns, $pEpuizat] = [$produseCampanie[0], $produseCampanie[1], $produseCampanie[2]];
+$db->prepare('UPDATE products SET price = 100, sale_price = 80, sale_price_periods_json = NULL, bbd_enabled = 0, preorder_enabled = 0,
+    out_of_stock = 0, hidden_in_catalog = 0 WHERE id = :id')->execute(['id' => $pRedus]);
+$db->prepare('UPDATE products SET hidden_in_catalog = 1 WHERE id = :id')->execute(['id' => $pAscuns]);
+$db->prepare('UPDATE products SET out_of_stock = 1, preorder_enabled = 0 WHERE id = :id')->execute(['id' => $pEpuizat]);
+$db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
+    'h' => '<section><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p>{{campanie_produse}}</section>']);
+ResponseCache::purgePageCache();
+$cuCookie = ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie];
+$adresaCampanie = '/campanie/saptamana-demo?inapoi=%2Fmagazin';
+$r = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
+$verifica('fără bifă: pagina campaniei cu antetul, subsolul și coșul plutitor ale site-ului (ca înainte), bara deschisă',
+    $r['cod'] === 200 && str_contains($r['corp'], 'ANTET-PROBA') && str_contains($r['corp'], 'SUBSOL-PROBA')
+    && str_contains($r['corp'], '/assets/js/floating-cart.js') && !str_contains($r['corp'], '.floating-cart__trigger{display:none')
+    && str_contains($r['corp'], 'data-campanie-inapoi') && !str_contains($r['corp'], 'data-bara-inchisa'), (string) $r['cod']);
+$numarCarduri = substr_count($r['corp'], '<article class="campanie-grila__card">');
+$verifica('{{campanie_produse}}: un card pe produs vizibil (fără cel ascuns din catalog), codul înlocuit', $numarCarduri === count($produseCampanie) - 1
+    && !str_contains($r['corp'], '{{campanie_produse}}') && str_contains($r['corp'], 'campanie-grila--deschise'), $numarCarduri . ' carduri');
+$slugRedus = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $pRedus]);
+$verifica('cardul: poza, numele, insigna campaniei, prețul redus și cel vechi tăiat, „Vezi produsul” spre produs',
+    str_contains($r['corp'], '80.00 lei <del class="campanie-grila__vechi">100.00 lei</del>')
+    && str_contains($r['corp'], '<a class="campanie-grila__buton" href="/produs/' . rawurlencode($slugRedus) . '">Vezi produsul</a>')
+    && str_contains($r['corp'], '<span class="campanie-grila__insigna" style="background:#e31c23;color:#ffffff;">Campanie</span>')
+    && !str_contains($r['corp'], '/produs/' . rawurlencode($unu('SELECT slug FROM products WHERE id = :id', ['id' => $pAscuns])) . '"'));
+// „Adaugă în coș”: același formular ca pe cardul din magazin (views/site/components/product-card.php): POST /cos/adauga/<id>.
+$magazin = $cerere('GET', '/magazin', null, [], $cuCookie);
+$verifica('„Adaugă în coș” pe card: formularul cardului din magazin (POST /cos/adauga/<id>, același drum ca în /magazin); epuizat: „Stoc epuizat”, fără formular',
+    str_contains($r['corp'], '<form class="campanie-grila__formular" method="post" action="/cos/adauga/' . $pRedus . '">')
+    && str_contains($magazin['corp'], '<form method="post" action="/cos/adauga/')
+    && preg_match('#action="/cos/adauga/' . $pEpuizat . '"#', $r['corp']) !== 1
+    && str_contains($r['corp'], '<span class="campanie-grila__stoc bv-popular-card__stock-out">Stoc epuizat</span>'));
+$jarCos = $dosarDev . '/test-campanii-cos-' . getmypid() . '.txt';
+$cerere('GET', '/', $jarCos, [], $cuCookie);
+$adaugat = $cerere('POST', '/cos/adauga/' . $pRedus, $jarCos, []);
+$cos = $cerere('GET', '/cos', $jarCos);
+@unlink($jarCos);
+$verifica('formularul de pe card pune produsul în coș (o bucată), ca în magazin', in_array($adaugat['cod'], [302, 303], true)
+    && $cos['cod'] === 200 && str_contains($cos['corp'], '/produs/' . rawurlencode($slugRedus)), $adaugat['cod'] . ' ' . ($adaugat['antete']['location'] ?? '') . ' / ' . $cos['cod']);
+$verifica('fără „Text sub preț”: niciun rând sub preț', !str_contains($r['corp'], '<p class="campanie-grila__sub">'));
+
+$db->prepare("UPDATE campanii SET fara_antet_subsol = 1, bara_inchisa = 1, carduri_inchise = 1, text_sub_pret = :t WHERE id = :id")
+    ->execute(['id' => $idCampanie, 't' => '2 bucăți: {pret*1.5} <b>'] );
+$setare->execute(['k' => 'google_tag_manager_enabled', 'v' => '1']);
+$setare->execute(['k' => 'google_tag_manager_id', 'v' => 'GTM-PROBA1']);
+ResponseCache::purgePageCache();
+$r = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
+$verifica('cu bifa: fără antetul, subsolul, sertarul „Oferte” și butonul coșului plutitor (scriptul coșului rămâne, pentru „Adaugă în coș”)',
+    $r['cod'] === 200 && !str_contains($r['corp'], 'ANTET-PROBA') && !str_contains($r['corp'], 'SUBSOL-PROBA')
+    && !str_contains($r['corp'], '<header class="header">') && !str_contains($r['corp'], 'data-bv-bbd-sidebar>')
+    && str_contains($r['corp'], '/assets/js/floating-cart.js') && str_contains($r['corp'], '.floating-cart__trigger{display:none!important;}'),
+    (string) $r['cod']);
+$verifica('cu bifa: bara „Înapoi” (închisă), bannerul de cookie-uri, conținutul paginii și sfârșitul paginii rămân',
+    str_contains($r['corp'], 'data-campanie-inapoi') && str_contains($r['corp'], 'data-bara-inchisa="1"') && str_contains($r['corp'], 'background:#000000')
+    && str_contains($r['corp'], 'id="cookie-banner"') && str_contains($r['corp'], 'Reduceri inventate la produsele demo')
+    && str_contains($r['corp'], '</main>') && str_contains($r['corp'], '</body>'));
+$cuAcord = $cerere('GET', $adresaCampanie, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie . '; ' . \App\Support\CookieConsent::nume() . '=all']);
+$verifica('cu bifa și acordul pentru cookie-uri: Google Tag Manager (și noscript-ul lui) rămâne', str_contains($cuAcord['corp'], 'googletagmanager.com/ns.html?id=GTM-PROBA1')
+    && !str_contains($cuAcord['corp'], 'ANTET-PROBA'));
+$pret15 = number_format(80 * 1.5, 2);
+$verifica('cardurile închise (#161616 pe negru, text alb) și „Text sub preț” cu {pret*1.5} (escapat)', str_contains($r['corp'], 'campanie-grila--inchise')
+    && str_contains($r['corp'], 'background:#161616') && str_contains($r['corp'], 'background:#000000;}')
+    && str_contains($r['corp'], '<p class="campanie-grila__sub">2 bucăți: ' . $pret15 . ' lei &lt;b&gt;</p>'));
+$verifica('Campanii::textSubPret: {pret}, {pret*1.5}, {pret x 2}, {pret×1,5}, text gol',
+    Campanii::textSubPret('{pret}', 10.0) === '10.00 lei' && Campanii::textSubPret('2 buc: {pret*1.5}', 10.0) === '2 buc: 15.00 lei'
+    && Campanii::textSubPret('{pret x 2}', 10.0) === '20.00 lei' && Campanii::textSubPret('{pret×1,5}', 10.0) === '15.00 lei'
+    && Campanii::textSubPret('  ', 10.0) === '');
+// La adresa proprie a paginii (publicată, pentru test): site-ul ca de obicei, codul gol.
+$db->prepare('UPDATE pages SET is_published = 1 WHERE id = :id')->execute(['id' => $idPagina]);
+ResponseCache::purgePageCache();
+$proprie = $cerere('GET', '/test-campanie-saptamana-demo', null, [], $cuCookie);
+$verifica('la adresa proprie a paginii: antetul și subsolul site-ului, codul {{campanie_produse}} gol (nici grila, nici textul codului)',
+    $proprie['cod'] === 200 && str_contains($proprie['corp'], 'ANTET-PROBA') && str_contains($proprie['corp'], 'SUBSOL-PROBA')
+    && !str_contains($proprie['corp'], 'campanie-grila') && !str_contains($proprie['corp'], 'campanie_produse')
+    && !str_contains($proprie['corp'], 'data-campanie-inapoi') && !str_contains($proprie['corp'], '.floating-cart__trigger{display:none'), (string) $proprie['cod']);
+$db->prepare('UPDATE pages SET is_published = 0 WHERE id = :id')->execute(['id' => $idPagina]);
+// Fără produse: codul gol.
+$db->prepare('UPDATE products SET is_active = 0 WHERE id IN (' . implode(',', $produseCampanie) . ')')->execute();
+ResponseCache::purgePageCache();
+$r = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
+$verifica('niciun produs vizibil al campaniei: codul gol, fără grilă', $r['cod'] === 200 && !str_contains($r['corp'], 'campanie-grila')
+    && !str_contains($r['corp'], 'campanie_produse'), (string) $r['cod']);
+// Înapoi la datele de dinainte (C2 le folosește; baza toată se pune la loc oricum la final).
+$db->prepare('UPDATE products SET is_active = 1 WHERE id IN (' . implode(',', $produseCampanie) . ')')->execute();
+foreach ($tabeleBaza as $i => $t) {
+    if (in_array($t['tabel'], ['products', 'settings'], true)) {
+        salvari_pune_la_loc($db, [$t], [$instantaneu[$i]]);
+    }
+}
+$db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
+    'h' => '<section style="padding:32px 16px;text-align:center"><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p></section>']);
+$db->prepare('UPDATE campanii SET fara_antet_subsol = 0, bara_inchisa = 0, carduri_inchise = 0, text_sub_pret = NULL WHERE id = :id')
+    ->execute(['id' => $idCampanie]);
+ResponseCache::purgePageCache();
 
 // ── D. Chromium ───────────────────────────────────────────────────────────────────────────────────────────────────────
 if (!$faraBrowser) {

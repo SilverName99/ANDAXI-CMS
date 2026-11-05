@@ -119,6 +119,18 @@ admin_componenta('antet-pagina', [
                 <span>Arată pagina campaniei la prima intrare pe site (o dată pe vizită)</span></label>
             <small class="muted">Doar oamenilor care vin din afara site-ului, pe o pagină obișnuită: nu roboților (Google vede site-ul ca de obicei), nu în coș, la plată sau în cont.</small>
         </div>
+        <div class="field">
+            <label class="campanie-bifa"><input type="checkbox" name="fara_antet_subsol" value="1"<?= $bifat($c['fara_antet_subsol'] ?? 0) ?>>
+                <span>Pagina campaniei fără antetul și subsolul site-ului</span></label>
+            <small class="muted">Doar la /campanie/…: fără meniul de sus, subsol, sertarul „Oferte” și coșul plutitor. Bara „Înapoi” și bannerul de cookie-uri rămân. La adresa proprie a paginii, site-ul arată ca de obicei.</small>
+        </div>
+        <div class="field">
+            <label for="campanie-bara">Bara de sus (butonul „Înapoi”)</label>
+            <select id="campanie-bara" name="bara_inchisa">
+                <option value="0"<?= (int) ($c['bara_inchisa'] ?? 0) !== 1 ? ' selected' : '' ?>>Deschisă (albă)</option>
+                <option value="1"<?= (int) ($c['bara_inchisa'] ?? 0) === 1 ? ' selected' : '' ?>>Închisă (neagră), pentru o pagină cu fundal închis</option>
+            </select>
+        </div>
     </div>
 <?php admin_componenta('sectiune-formular', ['id' => 'campanie-pagina-sectiune', 'titlu' => 'Pagina de deschidere', 'continut' => (string) ob_get_clean()]); ?>
 
@@ -154,6 +166,21 @@ admin_componenta('antet-pagina', [
                 <?php endforeach; ?>
             </div>
             <small class="muted">Produsele alese primesc insigna pe pagina lor și pe cardurile din magazin și din categorii, doar cât campania e activă.</small>
+        </div>
+        <div class="field campanie-camp-lat">
+            <p class="muted" style="margin:0;">Codul <code>{{campanie_produse}}</code>, scris în conținutul paginii campaniei, pune acolo produsele alese, ca o grilă de carduri (poza, numele, insigna, prețul, „Vezi produsul”). Doar pe /campanie/…; la adresa proprie a paginii iese gol.</p>
+        </div>
+        <div class="field">
+            <label for="campanie-carduri">Cardurile produselor</label>
+            <select id="campanie-carduri" name="carduri_inchise">
+                <option value="0"<?= (int) ($c['carduri_inchise'] ?? 0) !== 1 ? ' selected' : '' ?>>Deschise (albe)</option>
+                <option value="1"<?= (int) ($c['carduri_inchise'] ?? 0) === 1 ? ' selected' : '' ?>>Închise (#161616 pe negru, text alb)</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="campanie-text-sub-pret">Text sub preț (opțional)</label>
+            <input type="text" id="campanie-text-sub-pret" name="text_sub_pret" maxlength="160" value="<?= adm_e((string) ($c['text_sub_pret'] ?? '')) ?>" placeholder="ex: 2 bucăți: {pret*1.5}">
+            <small class="muted"><code>{pret}</code> = prețul produsului; <code>{pret*1.5}</code> = prețul înmulțit cu 1,5. Gol = fără rând.</small>
         </div>
     </div>
 <?php admin_componenta('sectiune-formular', ['id' => 'campanie-produse-sectiune', 'titlu' => 'Produsele cu insignă', 'continut' => (string) ob_get_clean()]); ?>

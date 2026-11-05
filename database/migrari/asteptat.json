@@ -1109,11 +1109,29 @@
                     "null": true,
                     "tip": "varchar(300)"
                 },
+                "bara_inchisa": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "carduri_inchise": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "created_at": {
                     "extra": "",
                     "implicit": "current_timestamp",
                     "null": true,
                     "tip": "timestamp"
+                },
+                "fara_antet_subsol": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
                 },
                 "id": {
                     "extra": "auto_increment",
@@ -1186,6 +1204,12 @@
                     "implicit": null,
                     "null": true,
                     "tip": "varchar(120)"
+                },
+                "text_sub_pret": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(160)"
                 },
                 "updated_at": {
                     "extra": "on update current_timestamp",

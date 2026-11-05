@@ -291,7 +291,8 @@ final class Campanii
     {
         if (self::$paginaCurenta !== null) {
             return self::baraInapoi((string) self::$paginaCurenta['inapoi'], (string) self::$paginaCurenta['text'],
-                (bool) (self::$paginaCurenta['previzualizare'] ?? false));
+                (bool) (self::$paginaCurenta['previzualizare'] ?? false),
+                (int) (self::$paginaCurenta['campanie']['bara_inchisa'] ?? 0) === 1);
         }
         $activa = self::activa();
         if ($activa === null || (int) ($activa['banner_pornit'] ?? 0) !== 1 || trim((string) ($activa['banner_text'] ?? '')) === '') {
@@ -343,8 +344,11 @@ final class Campanii
         return $html;
     }
 
-    /** Bara de sus a paginii campaniei: butonul „Înapoi în site-ul principal”, în stânga. */
-    public static function baraInapoi(string $inapoi, string $text, bool $previzualizare = false): string
+    /**
+     * Bara de sus a paginii campaniei: butonul „Înapoi în site-ul principal”, în stânga. `$inchisa` („Bara de sus: închisă”,
+     * pentru o pagină cu fundal închis): bara neagră, cu linia de jos gri închis; butonul rămâne la fel.
+     */
+    public static function baraInapoi(string $inapoi, string $text, bool $previzualizare = false, bool $inchisa = false): string
     {
         $text = trim($text) !== '' ? trim($text) : self::TEXT_INAPOI;
         $principala = Tema::culoarePrincipala();
@@ -353,8 +357,10 @@ final class Campanii
                 . 'border:1px solid #f59e0b;border-radius:8px;padding:6px 10px;">Previzualizare: campania nu e activă acum</span>'
             : '';
         return '<div class="campanie-inapoi" data-campanie-inapoi style="position:sticky;top:0;z-index:1050;box-sizing:border-box;'
-            . 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;padding:10px 16px;background:#ffffff;'
-            . 'border-bottom:1px solid #e5e7eb;box-shadow:0 2px 10px rgba(15,23,42,.06);">'
+            . 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;padding:10px 16px;'
+            . ($inchisa ? 'background:#000000;border-bottom:1px solid #2a2a2a;box-shadow:0 2px 10px rgba(0,0,0,.5);"'
+                . ' data-bara-inchisa="1">'
+                : 'background:#ffffff;border-bottom:1px solid #e5e7eb;box-shadow:0 2px 10px rgba(15,23,42,.06);">')
             . '<a class="campanie-inapoi__buton" href="' . self::e($inapoi) . '" style="display:inline-flex;align-items:center;'
             . 'min-height:44px;box-sizing:border-box;max-width:100%;padding:10px 18px;border-radius:999px;background:' . self::e($principala) . ';'
             . 'color:#ffffff;font:700 15px/1.2 system-ui,-apple-system,\'Segoe UI\',Roboto,Arial,sans-serif;text-decoration:none;'
@@ -367,10 +373,209 @@ final class Campanii
         return self::$paginaCurenta !== null;
     }
 
-    /** Marchează pagina curentă ca pagina campaniei (o cheamă CampaniiController înaintea randării). */
-    public static function randeazaPagina(string $inapoi, string $text, bool $previzualizare): void
+    /**
+     * Marchează pagina curentă ca pagina campaniei (o cheamă CampaniiController înaintea randării), cu campania arătată
+     * (cea activă sau, la previzualizarea adminului, cea cerută): de aici iau bara, aspectul fără antet și produsele.
+     *
+     * @param array<string, mixed> $campanie
+     */
+    public static function randeazaPagina(string $inapoi, string $text, bool $previzualizare, array $campanie = []): void
     {
-        self::$paginaCurenta = ['inapoi' => $inapoi, 'text' => $text, 'previzualizare' => $previzualizare];
+        self::$paginaCurenta = ['inapoi' => $inapoi, 'text' => $text, 'previzualizare' => $previzualizare, 'campanie' => $campanie];
+    }
+
+    /**
+     * „Pagina campaniei fără antetul și subsolul site-ului”: true doar pe `/campanie/<slug>` (nu la adresa proprie a paginii),
+     * cu bifa campaniei. views/layout.php nu mai pune atunci antetul, subsolul, sertarul „Oferte” și coșul plutitor; bara
+     * „Înapoi”, bannerul de cookie-uri, bannerul copiei de verificare, GTM-ul și scripturile rămân.
+     */
+    public static function faraAntetSubsol(): bool
+    {
+        return self::$paginaCurenta !== null && (int) (self::$paginaCurenta['campanie']['fara_antet_subsol'] ?? 0) === 1;
+    }
+
+    // ── Codul {{campanie_produse}} (doar pe pagina campaniei) ─────────────────────────────────────────────────────────
+
+    /**
+     * Grila produselor campaniei, pentru codul `{{campanie_produse}}` din pagina campaniei (views/site/custom-page.php): un
+     * card pe produs, cu poza, numele, insigna, prețul (ca pe cardul magazinului: reducerea și perioadele ei, prețul vechi
+     * tăiat), rândul opțional „Text sub preț”, „Adaugă în coș” (formularul cardului din magazin) și „Vezi produsul”. Produsele inactive, șterse sau ascunse din catalog
+     * nu apar (ca în lista magazinului); cele epuizate apar, cu „Stoc epuizat”. '' în afara paginii campaniei, fără catalog
+     * pe site sau fără produse.
+     */
+    public static function htmlProduse(?PDO $db = null): string
+    {
+        if (self::$paginaCurenta === null || !Plugins::vizibil('catalog')) {
+            return '';
+        }
+        $campanie = (array) (self::$paginaCurenta['campanie'] ?? []);
+        $db ??= self::db();
+        $id = (int) ($campanie['id'] ?? 0);
+        $idProduse = $db instanceof PDO && $id > 0 ? self::idProduse($db, $id) : [];
+        if ($idProduse === []) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare('SELECT id, name, slug, price, sale_price, sale_price_periods_json, image_url, out_of_stock, preorder_enabled,
+                bbd_enabled, bbd_entries_json
+                FROM products WHERE id IN (' . implode(',', array_map('intval', $idProduse)) . ')
+                AND deleted_at IS NULL AND is_active = 1 AND hidden_in_catalog = 0 ORDER BY name, id');
+            $stmt->execute();
+            $produse = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        } catch (Throwable) {
+            return '';
+        }
+        // Disponibilitatea reală, când site-ul e legat de ERP (ca în catalog).
+        ErpStock::applyToProducts($db, $produse);
+        $inchise = (int) ($campanie['carduri_inchise'] ?? 0) === 1;
+        $arePreturi = Plugins::vizibil('magazin');
+        $poateCumpara = Plugins::permiteInceput('magazin');
+        $insigna = trim((string) ($campanie['insigna_text'] ?? ''));
+        $insigna = $insigna !== '' ? $insigna : self::INSIGNA_IMPLICITA;
+        $fundal = self::culoare((string) ($campanie['insigna_fundal'] ?? ''), self::IMPLICITE['insigna_fundal']);
+        $culoare = self::culoare((string) ($campanie['insigna_culoare'] ?? ''), self::IMPLICITE['insigna_culoare']);
+        $textSubPret = trim((string) ($campanie['text_sub_pret'] ?? ''));
+        $carduri = '';
+        foreach ($produse as $p) {
+            $slug = trim((string) ($p['slug'] ?? ''));
+            $nume = trim((string) ($p['name'] ?? ''));
+            if ($slug === '' || $nume === '') {
+                continue;
+            }
+            [$pret, $pretVechi] = self::preturi($p);
+            $url = '/produs/' . rawurlencode($slug);
+            $poza = trim((string) ($p['image_url'] ?? ''));
+            $poza = PozeOptimizate::src($poza !== '' ? $poza : '/assets/img/product-placeholder.svg');
+            $ePrecomanda = Precomanda::estePrecomanda($p);
+            $epuizat = (int) ($p['out_of_stock'] ?? 0) === 1 && !$ePrecomanda;
+            // „Adaugă în coș”, cu regulile cardului din magazin (views/site/components/product-card.php): epuizat = „Stoc
+            // epuizat” fără buton, precomanda și ofertele BBD duc la produs, altfel același formular (POST /cos/adauga/<id>,
+            // o bucată), prins de coșul plutitor ca în magazin. Fără magazin pornit, fără buton.
+            $cumpara = '';
+            if ($poateCumpara) {
+                if ($epuizat) {
+                    $cumpara = '<span class="campanie-grila__stoc bv-popular-card__stock-out">Stoc epuizat</span>';
+                } elseif ($ePrecomanda) {
+                    $cumpara = '<a class="campanie-grila__cos" href="' . self::e($url) . '" title="Se livrează după ce marfa ajunge la noi">Precomandă</a>';
+                } elseif (BbdOferte::cereAlegere($p)) {
+                    $cumpara = '<a class="campanie-grila__cos" href="' . self::e($url) . '">Alege oferta</a>';
+                } else {
+                    $cumpara = '<form class="campanie-grila__formular" method="post" action="/cos/adauga/' . (int) ($p['id'] ?? 0) . '">'
+                        . '<button type="submit" class="campanie-grila__cos" aria-label="Adaugă în coș: ' . self::e($nume) . '">Adaugă în coș</button></form>';
+                }
+            }
+            $pretHtml = '';
+            if ($arePreturi) {
+                $pretHtml = '<p class="campanie-grila__pret">' . number_format($pret, 2) . ' lei'
+                    . ($pretVechi !== null ? ' <del class="campanie-grila__vechi">' . number_format($pretVechi, 2) . ' lei</del>' : '')
+                    . '</p>';
+                $sub = self::textSubPret($textSubPret, $pret);
+                if ($sub !== '') {
+                    $pretHtml .= '<p class="campanie-grila__sub">' . $sub . '</p>';
+                }
+            }
+            $carduri .= '<article class="campanie-grila__card">'
+                . '<a class="campanie-grila__poza" href="' . self::e($url) . '"><img src="' . self::e($poza) . '" alt="' . self::e($nume) . '"'
+                . ImageDimensions::atribute($poza) . VarianteImagini::atribute($poza) . ' loading="lazy" decoding="async"'
+                . ' onerror="this.onerror=null;this.src=\'/assets/img/product-placeholder.svg\';"></a>'
+                . '<div class="campanie-grila__corp">'
+                . '<span class="campanie-grila__insigna" style="background:' . $fundal . ';color:' . $culoare . ';">' . self::e($insigna) . '</span>'
+                . '<h3 class="campanie-grila__nume"><a href="' . self::e($url) . '">' . self::e($nume) . '</a></h3>'
+                . $pretHtml
+                . '<div class="campanie-grila__actiuni">' . $cumpara
+                . '<a class="campanie-grila__buton" href="' . self::e($url) . '">Vezi produsul</a></div>'
+                . '</div></article>';
+        }
+        if ($carduri === '') {
+            return '';
+        }
+        [$pagina, $card, $text, $margine, $slab] = $inchise
+            ? ['#000000', '#161616', '#ffffff', '#2a2a2a', '#a3a3a3']
+            : ['transparent', '#ffffff', '#111827', '#e5e7eb', '#6b7280'];
+        $css = '.campanie-grila{box-sizing:border-box;width:100%;padding:24px 16px;background:' . $pagina . ';}'
+            . '.campanie-grila__grila{box-sizing:border-box;max-width:1200px;margin:0 auto;display:grid;'
+            . 'grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px;}'
+            . '.campanie-grila__card{box-sizing:border-box;display:flex;flex-direction:column;min-width:0;background:' . $card . ';'
+            . 'color:' . $text . ';border:1px solid ' . $margine . ';border-radius:16px;overflow:hidden;}'
+            . '.campanie-grila__poza{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;background:#ffffff;}'
+            . '.campanie-grila__poza img{display:block;width:100%;height:100%;object-fit:contain;}'
+            . '.campanie-grila__corp{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:8px;padding:14px 16px 16px;'
+            . 'font-family:inherit;}'
+            . '.campanie-grila__insigna{display:inline-block;max-width:100%;padding:5px 10px;border-radius:999px;'
+            . 'font:800 11px/1.2 "DM Sans",Arial,sans-serif;letter-spacing:.04em;text-transform:uppercase;overflow-wrap:anywhere;}'
+            . '.campanie-grila__nume{margin:0;font-size:17px;line-height:1.3;font-weight:700;overflow-wrap:anywhere;}'
+            . '.campanie-grila__nume a{color:inherit;text-decoration:none;}'
+            . '.campanie-grila__pret{margin:0;font-size:20px;line-height:1.2;font-weight:800;}'
+            . '.campanie-grila__vechi{margin-left:6px;font-size:14px;font-weight:500;color:' . $slab . ';}'
+            . '.campanie-grila__sub{margin:0;font-size:14px;line-height:1.35;font-weight:600;color:' . $slab . ';}'
+            . '.campanie-grila__actiuni{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:auto;padding-top:4px;}'
+            . '.campanie-grila__formular{margin:0;width:100%;}'
+            . '.campanie-grila__stoc{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-height:44px;'
+            . 'margin:0;padding:10px 16px;border-radius:999px;border:1px dashed ' . $margine . ';background:transparent;font-size:14px;'
+            . 'font-weight:700;color:' . $slab . ';cursor:not-allowed;}'
+            . '.campanie-grila__cos,.campanie-grila__buton{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;'
+            . 'width:100%;min-height:44px;margin:0;padding:10px 16px;border-radius:999px;font:inherit;font-weight:700;font-size:15px;'
+            . 'line-height:1.2;text-align:center;text-decoration:none;cursor:pointer;}'
+            . '.campanie-grila__cos{border:0;background:' . $fundal . ';color:' . $culoare . ';}'
+            . '.campanie-grila__buton{border:1px solid ' . $text . ';background:transparent;color:' . $text . ';}'
+            . '@media (max-width:600px){.campanie-grila{padding:16px 12px;}.campanie-grila__grila{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}'
+            . '.campanie-grila__corp{padding:10px 10px 12px;}.campanie-grila__nume{font-size:15px;}.campanie-grila__pret{font-size:17px;}'
+            . '.campanie-grila__vechi{display:block;margin-left:0;}.campanie-grila__cos,.campanie-grila__buton,.campanie-grila__stoc{font-size:14px;padding:8px 10px;}}';
+        return '<section class="campanie-grila campanie-grila--' . ($inchise ? 'inchise' : 'deschise') . '" data-campanie-grila>'
+            . '<style>' . $css . '</style><div class="campanie-grila__grila">' . $carduri . '</div></section>';
+    }
+
+    /**
+     * Rândul „Text sub preț”: textul scris în campanie (escapat), cu `{pret}` = prețul curent și `{pret*1.5}` (sau `{pret x
+     * 1.5}`, `{pret×1,5}`) = prețul curent înmulțit, în formatul prețului de pe card; '' fără text.
+     */
+    public static function textSubPret(string $sablon, float $pret): string
+    {
+        $sablon = trim($sablon);
+        if ($sablon === '') {
+            return '';
+        }
+        return (string) preg_replace_callback('/\{\s*pret\s*(?:(?:\*|x|×)\s*(\d{1,4}(?:[.,]\d{1,4})?)\s*)?\}/iu',
+            static fn (array $m): string => number_format($pret * (isset($m[1]) && $m[1] !== '' ? (float) str_replace(',', '.', $m[1]) : 1.0), 2) . ' lei',
+            self::e($sablon));
+    }
+
+    /**
+     * Prețul curent și cel vechi (tăiat, doar cu o reducere), ca pe cardul magazinului (SiteController::normalizeProduct):
+     * prețul redus sau cel al unei perioade de reducere în curs (cel mai mic), doar dacă e sub preț.
+     *
+     * @return array{0: float, 1: ?float}
+     */
+    private static function preturi(array $p): array
+    {
+        $baza = max(0.0, (float) ($p['price'] ?? 0));
+        $redus = null;
+        if (($p['sale_price'] ?? null) !== null && $p['sale_price'] !== '' && (float) $p['sale_price'] > 0) {
+            $redus = (float) $p['sale_price'];
+        }
+        $perioade = json_decode((string) ($p['sale_price_periods_json'] ?? ''), true);
+        $acum = new \DateTimeImmutable('now');
+        $dinPerioada = null;
+        foreach (is_array($perioade) ? $perioade : [] as $perioada) {
+            $valoare = is_array($perioada) ? max(0.0, (float) ($perioada['sale_price'] ?? 0)) : 0.0;
+            if ($valoare <= 0.0 || (string) ($perioada['start_date'] ?? '') === '' || (string) ($perioada['end_date'] ?? '') === '') {
+                continue;
+            }
+            try {
+                $inceput = new \DateTimeImmutable((string) $perioada['start_date']);
+                $sfarsit = new \DateTimeImmutable((string) $perioada['end_date']);
+            } catch (Throwable) {
+                continue;
+            }
+            if ($acum >= $inceput && $acum <= $sfarsit && ($dinPerioada === null || $valoare < $dinPerioada)) {
+                $dinPerioada = $valoare;
+            }
+        }
+        $redus = $dinPerioada ?? $redus;
+        if ($redus !== null && ($baza <= 0.0 || $redus < $baza)) {
+            return [$redus, $baza > 0.0 ? $baza : null];
+        }
+        return [$baza, null];
     }
 
     // ── Prima intrare pe site ─────────────────────────────────────────────────────────────────────────────────────────
@@ -628,6 +833,9 @@ final class Campanii
             'banner_pornit' => 0, 'banner_text' => '', 'banner_link' => '', 'banner_fundal' => self::IMPLICITE['banner_fundal'],
             'banner_culoare' => self::IMPLICITE['banner_culoare'], 'banner_font' => self::IMPLICITE['banner_font'],
             'banner_marime' => self::IMPLICITE['banner_marime'], 'banner_lipit' => 0,
+            // campanii/0056: o campanie nouă are pagina fără antetul și subsolul site-ului (în bază, implicit 0: o campanie
+            // de dinainte rămâne cum era până o bifează cineva).
+            'fara_antet_subsol' => 1, 'bara_inchisa' => 0, 'carduri_inchise' => 0, 'text_sub_pret' => '',
         ];
     }
 
@@ -663,6 +871,10 @@ final class Campanii
             'banner_font' => isset(self::FONTURI[(string) ($post['banner_font'] ?? '')]) ? (string) $post['banner_font'] : self::IMPLICITE['banner_font'],
             'banner_marime' => self::marime($post['banner_marime'] ?? null),
             'banner_lipit' => !empty($post['banner_lipit']) ? 1 : 0,
+            'fara_antet_subsol' => !empty($post['fara_antet_subsol']) ? 1 : 0,
+            'bara_inchisa' => (string) ($post['bara_inchisa'] ?? '') === '1' ? 1 : 0,
+            'carduri_inchise' => (string) ($post['carduri_inchise'] ?? '') === '1' ? 1 : 0,
+            'text_sub_pret' => $text('text_sub_pret', 160),
         ];
         $produse = [];
         foreach ((array) ($post['produse'] ?? []) as $idProdus) {
@@ -727,7 +939,7 @@ final class Campanii
     {
         $coloane = ['nume', 'slug', 'pornita', 'incepe_la', 'se_termina_la', 'pagina_id', 'pagina_la_intrare', 'text_inapoi', 'insigna_text',
             'insigna_fundal', 'insigna_culoare', 'banner_pornit', 'banner_text', 'banner_link', 'banner_fundal', 'banner_culoare',
-            'banner_font', 'banner_marime', 'banner_lipit'];
+            'banner_font', 'banner_marime', 'banner_lipit', 'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret'];
         $valori = [];
         foreach ($coloane as $coloana) {
             $valori[$coloana] = $c[$coloana] ?? null;
