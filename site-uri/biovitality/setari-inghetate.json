@@ -3,8 +3,8 @@
     "format": 2,
     "site": "biovitality",
     "sursa": "Mutare-Site-Biovitality@d95598e",
-    "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
     "amprenta_nucleu": "0eeb8c0229f53a17b40ca13acd2a59f621bec2192e3578a5654677ce9191fdfb",
+    "inchis": "pleacă pe biovitality.ro la adoptare (Etapa 2): sursa Mutare-Site-Biovitality@d95598e e commit-ul live, confirmat de proprietar pe 5 noiembrie 2026 (git log -1 în public_html; genereaza-setari.php --cod-vechi pe server dă aceeași înghețare); de acum o corectură e setari-inghetate-2.json",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Biovitality",

@@ -227,8 +227,8 @@ try {
     $scrie('Baza în forma Biovitality');
     exec('mkdir -p ' . escapeshellarg($pachetCopie) . ' ' . escapeshellarg($dosarLicenta) . ' && cp -a ' . escapeshellarg($radacina . '/site-uri/biovitality/.')
         . ' ' . escapeshellarg($pachetCopie) . ' && rm -rf ' . escapeshellarg($pachetCopie . '/privat'));
-    // Înghețarea Biovitality e provizorie (sursa nu e încă confirmată ca live, Etapa 0): pe server merge doar cu --permite-provizoriu pe
-    // copia de verificare (încărcarea îl dă); aici, în copia testului, fără câmpul „provizoriu” (aceleași setări).
+    // Înghețarea Biovitality e confirmată și închisă din 5 noiembrie (pleacă așa pe site); o copie mai veche, provizorie, ar merge pe
+    // server doar cu --permite-provizoriu pe copia de verificare: aici, în copia testului, fără câmpul „provizoriu” (aceleași setări).
     $inghetare = json_decode((string) file_get_contents($pachetCopie . '/setari-inghetate.json'), true);
     unset($inghetare['provizoriu']);
     $textInghetare = json_encode($inghetare, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";

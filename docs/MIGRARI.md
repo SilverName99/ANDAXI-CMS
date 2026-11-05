@@ -597,7 +597,7 @@ Pe server stă în pachetul site-ului (`SITE_DATE_DOSAR`). Îl scrie generatorul
 | `nota` | o explicație, păstrată de la o generare la alta |
 | `fara_inghetare` | cheile la care codurile diferă, dar nu se îngheață nimic, fiecare cu motivul (o funcție nouă oprită oricum, un text care nu se arată, aceeași comportare) |
 | `provizoriu` | sursa nu e încă cea confirmată ca live (raportul „live față de repo” din Etapa 0): pasul se oprește cu codul **15**, afară de `--permite-provizoriu` pe copia de verificare (`SITE_COPIE_VERIFICARE=1`; repetiția adoptării). Pe orice alt site opțiunea nu are efect: tot 15, cu motivul |
-| `inchis` | fișierul pleacă pe site-ul live (se pune înaintea adoptării, nu după: ar schimba sha-ul); generatorul nu-l mai rescrie, verificarea nu-l mai cere reprodus |
+| `inchis` | fișierul pleacă pe site-ul live (se pune înaintea adoptării, nu după: ar schimba sha-ul); generatorul nu-l mai rescrie, verificarea nu-l mai cere reprodus. Se scrie de mână, un text care spune de ce, după `amprenta_nucleu` (ordinea din `Inghetare`), după `--confirmat`; apoi `tools/dev/verifica-pachet.php --actualizeaza-manifest` (sha-ul din `pachet.json`). Valorile private se fac după el (`pentru` = sha256 al fișierului închis): pe server, `--cod-vechi` |
 
 Valorile private, `privat/setari-inghetate.json` lângă fișier (ignorat de git: `/site-uri/*/privat/` în
 `.gitignore`), au forma `{"_despre", "site", "sursa", "pentru": "<sha256 al fișierului de mai sus>", "setari":
@@ -650,7 +650,9 @@ $PHP tools/inghetare/genereaza-setari.php --site=biovitality --cod-vechi=<dosaru
 codul site-ului citit din dosarul lui (doar fișierele `.php` pe care le citește `lib/citeste-cod.php`, fără legături,
 `.env` sau `public/uploads/`, copiate într-un dosar temporar șters la final), și numai dacă înghețarea generată e octet
 cu octet cea din pachet (aceeași sursă, aceleași decizii); fișierul din pachet și `pachet.json` nu se ating. Așa
-valorile private (OD-49) nu pleacă de pe server.
+valorile private (OD-49) nu pleacă de pe server. Merge și pe un fișier `inchis` (refăcut cu `inchis` păstrat, deci
+`pentru` = sha256 al fișierului care pleacă pe site): așa se fac, în seara dinaintea adoptării, valorile private ale
+site-ului live, din checkout-ul codului comun al versiunii urcate (pe alt commit, cu alte valori ale codului comun, refuză).
 
 Codul vechi e clona site-ului (`CMS_DEV_REPO_BS`, `_BV`, `_VT`, `_GR` din `tools/dev/comun.sh`) la „ultimul commit
 revizuit” din [de-portat.md](de-portat.md), copiat cu `git archive` în `$CMS_DEV_DIR/inghetare/` (clona nu se
@@ -679,12 +681,14 @@ uneltelor.
 **`amprenta_nucleu`** = sha256 al valorilor codului comun (implicitele și rezervele) la generare. **Orice schimbare a
 lui `Settings::DEFAULTS` sau a unei rezerve din codul comun cere `genereaza-setari.php --toate`** în același commit
 (cu deciziile noi, dacă le cere): verificarea, în testul de fum și în G-mig, pică altfel, chiar fără clonele codurilor
-vechi. Un fișier `inchis` nu se mai generează: `--toate` îl sare (`SĂRIT`), `--site=<el>` e o eroare.
+vechi. Un fișier `inchis` nu se mai generează: `--toate` îl sare (`SĂRIT`), `--site=<el>` e o eroare (doar `--cod-vechi`
+îl citește, mai sus).
 
 Azi: **Bioscem** din `4254ca4` (implicitele codului Bioscem sunt exact ale codului comun: doar `erp_trimite_din` = gol,
-decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă); **Biovitality**, **vertij** și **grafoanaytis** din
-capetele ramurilor din de-portat.md, `provizoriu` până la raportul „live față de repo” din Etapa 0 (apoi `--confirmat`,
-eventual cu `--repo=` pe commit-ul confirmat, trecut întâi în de-portat.md).
+decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă); **Biovitality** din `d95598e`, confirmat live pe 5 noiembrie
+(`git log -1` pe server și `--cod-vechi`, aceeași înghețare), `--confirmat` și `inchis` (pleacă pe site la adoptare);
+**vertij** și **grafoanaytis** din capetele ramurilor din de-portat.md, `provizoriu` până la raportul „live față de repo”
+din Etapa 0 (apoi `--confirmat`, eventual cu `--repo=` pe commit-ul confirmat, trecut întâi în de-portat.md).
 
 ### Verificarea (`tools/inghetare/verifica-inghetare.php`)
 
@@ -756,8 +760,10 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
    din dezvoltare lângă pachet. Cu doar una dintre ele runner-ul refuză (`--site` altul decât `SITE_SLUG`, sau pachetul
    altui site: codul 2), deci nu se poate repeta din greșeală înghețarea Bioscem pe copia altui site. După repetiție
    se pun la loc valorile Bioscem.
-3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe site-ul live `--plan`, apoi `--aplica` (fără
-   `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12): o corectură e `setari-inghetate-2.json`.
+3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe server valorile private din nou, pentru fișierul
+   închis (`genereaza-setari.php --cod-vechi`, din checkout-ul versiunii; cele de dinainte sunt pentru alt sha, codul 15);
+   pe site-ul live `--plan`, apoi `--aplica` (fără `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12):
+   o corectură e `setari-inghetate-2.json`. Biovitality: făcut pe 5 noiembrie, [DEPLOY.md](DEPLOY.md), „Noaptea comutării”.
 4. Pe site-ul live, `--aplica` rulează **imediat după urcarea codului comun** și se reia până termină (codul 13,
    bugetul de timp: rulezi din nou). Până la pasul site-ului (înghețarea setărilor) cheia `erp_trimite_din` lipsește,
    iar fără ea ERP-ul nu primește nimic automat (WP-12 E1; [PLUGINURI.md](PLUGINURI.md), `erp`): comenzile noi pleacă

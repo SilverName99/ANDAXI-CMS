@@ -109,17 +109,37 @@ de sintaxă e refuzat. Nu schimbă niciun site. `--verifica=<v>` spune dacă o v
 
 1. hPanel → site-ul → **PHP Configuration**: PHP 8.3, în **PHP extensions** bifat **sodium** (codul vechi nu-l cerea).
 2. hPanel → site-ul → **GIT**: dacă are „Auto deployment”, oprește-l (după comutare `public_html` nu mai e un repo).
-3. Valorile private ale înghețării, primite de la noi (nu sunt în git):
-   `~/domains/<domeniu>/site/privat/setari-inghetate.json` (`mkdir -p ~/domains/<domeniu>/site/privat` întâi).
+3. Valorile private ale înghețării (nu sunt în git): `~/domains/<domeniu>/site/privat/setari-inghetate.json`
+   (`mkdir -p ~/domains/<domeniu>/site/privat` întâi). Trebuie să fie pentru exact fișierul de înghețare din versiunea
+   urcată (câmpul `pentru` = sha256 al lui; altfel migrările se opresc cu codul 15): le primești de la noi sau, pentru
+   Biovitality, le faci chiar pe server din codul live, cu `genereaza-setari.php --cod-vechi` (mai jos, „Noaptea comutării
+   Biovitality”). Cele făcute pe site-ul de verificare înainte ca fișierul să fie închis nu mai sunt bune.
 4. Licența din CRM: `~/domains/<domeniu>/site/storage/licenta/licenta.json`, și cheia publică a CRM-ului la îndemână
-   (`--cheie-licenta=`).
+   (`--cheie-licenta=`); mai jos, „Licența”.
 5. Rândurile de cron ale site-ului, copiate din hPanel → Advanced → **Cron Jobs** într-un fișier, de exemplu
    `~/cron-<site>.txt`, câte unul pe rând, cu programul în față (`*/10 * * * * /usr/bin/php …/public_html/scripts/erp-sync.php`).
    Dacă `crontab -l` le arată, nu trebuie.
 6. Dacă site-ul are un CDN în față: `IP_PROXY_DE_INCREDERE=<rețelele lui>` în `.env`-ul vechi (codul vechi nu-l citește;
    adoptarea îl copiază) — [MIGRARI.md](MIGRARI.md), „Pe server, la adoptare”, pasul 5.
 
-Apoi:
+### Licența
+
+`licenta.json` îl semnează CRM-ul (crm.andaxi.ro: perechea de chei Ed25519 stă acolo, lista de pluginuri e a fiecărui
+site), în formatul din [PLUGINURI.md](PLUGINURI.md), „Licența”: `"site"` = slug-ul (`biovitality`, același cu
+`LICENTA_SITE`, pe care îl scrie adopta.sh), `versiune` ≥ 1, pluginurile pornite. Cheia privată nu iese din CRM. Pe server:
+
+```sh
+mkdir -p -m 770 ~/domains/<domeniu>/site/storage/licenta
+install -m 640 <licenta.json din CRM> ~/domains/<domeniu>/site/storage/licenta/licenta.json
+```
+
+Dosarul trebuie să rămână scriibil pentru PHP-ul site-ului (pe Hostinger, același utilizator): acolo scrie site-ul
+`licenta-buna.json` și `stare-aplicata.json`. Cheia publică a CRM-ului (base64, 32 de octeți) merge la `--cheie-licenta=`
+și ajunge în `site/.env` ca `LICENTA_CHEIE_PUBLICA`; la pregătire `diagnostic.php --licenta` verifică semnătura cu ea.
+Pentru Biovitality licența are `config/plugins.php` → `licente_dev.biovitality` plus `campanii` (cerut pe 5 noiembrie;
+fără o campanie activă nu schimbă nimic în pagini, [PLUGINURI.md](PLUGINURI.md), „Campanii pe site”), toate `pornit`.
+
+### Comenzile
 
 ```sh
 deploy/adopta.sh --site=<site> --domeniu=<domeniu> --versiune=<v> --commit-vechi=<commit> \
@@ -279,40 +299,75 @@ Orice script, de mână: `$PHP ~/platforma/bin/platforma --site=<domeniu> script
 
 ### Înainte (zilele dinainte)
 
-- [ ] Repetiția pe site-ul de verificare, cu o copie a bazei Biovitality ([VERIFICARE.md](VERIFICARE.md); [MIGRARI.md](MIGRARI.md),
-      „Pe server, la adoptare”, pasul 2): migrările trec, paginile și calculele arată ca pe live.
-- [ ] Înghețarea setărilor Biovitality confirmată (`provizoriu` scos, fișierul `inchis`, commit; o facem noi). Cu ea încă
-      provizorie, `adopta.sh` se oprește la verificări.
-- [ ] Commit-ul live al Biovitality: `git -C ~/domains/biovitality.ro/public_html log -1 --format=%H` și
-      `git -C ~/domains/biovitality.ro/public_html status --short` (trebuie gol). Ni-l trimiți; noi confirmăm că e
-      cel revizuit (azi `d95598e`, [de-portat.md](de-portat.md)).
-- [ ] hPanel → biovitality.ro: PHP 8.3, **sodium** bifat, Auto deployment (GIT) oprit; o copie Hostinger recentă
-      (hPanel → Backups), ca plasă în plus.
-- [ ] `~/domains/biovitality.ro/site/privat/setari-inghetate.json` (de la noi) și
-      `~/domains/biovitality.ro/site/storage/licenta/licenta.json` (din CRM) puse.
-- [ ] Cronurile Biovitality copiate din hPanel în `~/cron-bv.txt`.
+- [x] Repetiția pe site-ul de verificare, cu o copie a bazei Biovitality ([VERIFICARE.md](VERIFICARE.md); [MIGRARI.md](MIGRARI.md),
+      „Pe server, la adoptare”, pasul 2): încărcarea trecută, `compara-calcule.php --profil=biovitality` 511 identice,
+      0 diferite (cu 102 coșuri cu pachete), amprenta paginilor diferă doar prin ce scrie în `site-uri/biovitality/ce-se-schimba.md`
+      (5 noiembrie).
+- [x] Înghețarea setărilor Biovitality confirmată: `provizoriu` scos (`genereaza-setari.php --confirmat`), fișierul `inchis`
+      (5 noiembrie). Sursa `Mutare-Site-Biovitality@d95598e` e commit-ul live: `git log -1` în `public_html` a dat `d95598e`,
+      iar `genereaza-setari.php --cod-vechi` pe server a dat exact înghețarea din pachet.
+- [ ] `git -C ~/domains/biovitality.ro/public_html status --short`: niciun fișier urmărit schimbat (`adopta.sh` îl verifică
+      oricum). Fișierele noi (`??`) de pe biovitality.ro (5 noiembrie) cer `--accepta-fisiere-noi` la plan și la noapte;
+      ce face adoptarea cu fiecare e mai jos, „Fișierele noi din codul vechi”. Exportul WordPress `.xml` mutat afară din
+      `public_html` (făcut).
+- [x] hPanel → biovitality.ro: PHP 8.3, **sodium** bifat, Auto deployment (GIT) oprit.
+- [ ] O copie Hostinger recentă (hPanel → Backups), ca plasă în plus, chiar înainte de noapte.
+- [ ] `~/domains/biovitality.ro/site/privat/setari-inghetate.json` și
+      `~/domains/biovitality.ro/site/storage/licenta/licenta.json`: seara, mai jos.
+- [x] Cronurile Biovitality copiate din hPanel în `~/cron-bv.txt`, câte unul pe rând, cu programul în față.
 
-### Seara, înainte (aproximativ 10 minute, fără nicio schimbare)
+### Fișierele noi din codul vechi (`--accepta-fisiere-noi`)
+
+Codul vechi trimite orice cerere în `public/` (`.htaccess`-ul din rădăcină: `RewriteRule ^(.*)$ public/$1`), deci un fișier
+din rădăcina lui `public_html` nu se vede pe web. Cu `--accepta-fisiere-noi`, la comutare:
+
+- din `public/` (în afară de `public/uploads/`), fișierele noi se aduc în noul docroot, fără `public/` în cale, dacă acolo
+  nu există deja: `public/assets/.htaccess` → `public_html/assets/.htaccess`, `public/sitemap.xml` și `public/sitemap-nou.xml`
+  → `public_html/`. Restul rămâne în `public_html.vechi/` (de acolo îl pune la loc `revino.sh`);
+- `public/uploads/` (pozele) se **mută** în `public_html/uploads/`, deci `https://<domeniu>/uploads/…` merge ca azi (azi
+  merge prin aceeași regulă spre `public/uploads/`, nu prin legătura `uploads` din rădăcină); legătura rămâne în
+  `public_html.vechi/` și nu mai servește nimic;
+- `erp/default.php`, `magazin/default.php` (pagina goală Hostinger), `storage/newsletter-cron.lock`: rămân în
+  `public_html.vechi/`; nici azi nu se servesc (`/magazin/` e ruta magazinului, nu `magazin/default.php`). Nimic de mutat de mână;
+- `/sitemap.xml` (și `/sitemap-pagini.xml` …) le face mereu codul comun din bază (`.htaccess`-ul stub-ului le trimite la
+  `index.php` înaintea fișierelor), deci `sitemap.xml` adus nu se servește; `sitemap-nou.xml` nu e un nume al codului
+  comun și se servește, neschimbat, ca azi;
+- `assets/.htaccess` (Admin → Setări magazin → Caching) îl scrie codul comun din aceleași setări, în `public_html/assets/`
+  (și `public_html/uploads/.htaccess`), la fiecare salvare a paginii Caching; `actualizeaza.sh` îl păstrează.
+
+### Seara, înainte (aproximativ 15 minute; site-ul nu se schimbă)
 
 ```sh
 ssh -p 65002 uXXXXXXXXX@<IP>
 export PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
 cd ~/platforma/repo && git fetch origin && git checkout --detach origin/claude/etapa1-cod-comun
+# valorile private ale înghețării, pentru fișierul închis din acest commit, din codul live (doar citit):
+$PHP tools/inghetare/genereaza-setari.php --site=biovitality --cod-vechi=$HOME/domains/biovitality.ro/public_html
+#   „OK    biovitality: înghețarea din codul site-ului = cea din pachet (Mutare-Site-Biovitality@d95598e); scris …
+#   (0600; 4 valori private: …); pachetul neatins”; altceva: te oprești și ne trimiți rândul
+mkdir -m 700 -p ~/domains/biovitality.ro/site/privat
+install -m 600 site-uri/biovitality/privat/setari-inghetate.json ~/domains/biovitality.ro/site/privat/setari-inghetate.json
+mkdir -p -m 770 ~/domains/biovitality.ro/site/storage/licenta       # licența din CRM („Licența”, mai sus)
+install -m 640 <licenta.json din CRM> ~/domains/biovitality.ro/site/storage/licenta/licenta.json
 deploy/release.sh --ref=origin/claude/etapa1-cod-comun --aplica        # notezi versiunea: V=2026.11.…-…
 V=<versiunea>
-deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=$V --commit-vechi=<commit-ul confirmat> \
-    --cheie-licenta=<cheia CRM-ului> --cron-vechi=$HOME/cron-bv.txt
+deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=$V --commit-vechi=d95598e \
+    --cheie-licenta=<cheia publică din CRM> --cron-vechi=$HOME/cron-bv.txt --accepta-fisiere-noi
 ```
 
 Ultimul rând trebuie să fie `PLAN: site-ul n-a fost schimbat …`, fiecare verificare `OK`, iar planul migrărilor cu
 codul 10 („de aplicat, toate fără blocare”). Orice `NU` sau alt cod: ne trimiți ieșirea și nu mergi mai departe.
+Valorile private se fac din nou (aceeași comandă) doar dacă se schimbă commit-ul: după un `git checkout` pe alt commit al
+codului comun, `--cod-vechi` poate refuza („nu dă înghețarea din pachet”), fiindcă un fișier închis nu se mai generează.
 
 ### Noaptea (la o oră cu puține comenzi, de exemplu 23:30)
 
 ```sh
 screen -S deploy            # dacă există; altfel comanda de mai jos cu setsid nohup … > ~/deploy-bv.log 2>&1 & și tail -f
-deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=$V --commit-vechi=<commit-ul confirmat> \
-    --cheie-licenta=<cheia CRM-ului> --cron-vechi=$HOME/cron-bv.txt --aplica
+export PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
+cd ~/platforma/repo && V=<versiunea de seară>
+deploy/adopta.sh --site=biovitality --domeniu=biovitality.ro --versiune=$V --commit-vechi=d95598e \
+    --cheie-licenta=<cheia publică din CRM> --cron-vechi=$HOME/cron-bv.txt --accepta-fisiere-noi --aplica
 ```
 
 Cât durează: verificările, pregătirea și copiile 2–5 minute (site-ul merge); mentenanța 3–10 minute (comutarea e

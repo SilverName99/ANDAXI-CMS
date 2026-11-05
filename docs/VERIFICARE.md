@@ -981,7 +981,7 @@ comenzilor `anon-<id>`, procesatorul linkurilor de plată păstrat (vechile link
 dosarul de bază, cheia API și orice cheie `bunny_*` nouă (tiparul golește toate cheile `bunny_*` în afara celor de configurare
 știute: `timeout`, `upload_target`, dosarele, `lock_expire_hours`, `versions_keep`, `app_download_path`), ca o copie să nu
 atingă niciodată fișierele adevărate. Licența copiei: `licente_dev.biovitality`; migrările cu `--site=biovitality` (înghețarea
-Biovitality, provizorie: pe copie merge cu `--permite-provizoriu`, pe care încărcarea îl dă). O singură sursă odată: pe o copie
+Biovitality e confirmată și închisă din 5 noiembrie; `--permite-provizoriu`, pe care încărcarea îl dă, nu mai schimbă nimic la ea). O singură sursă odată: pe o copie
 cu altă sursă, `--din=biovitality` (și `--reincarca`) refuză până la `sterge.php`. Copia demonstrativă `--demo
 --pachet=biovitality` neutralizează setările după aceleași reguli.
 

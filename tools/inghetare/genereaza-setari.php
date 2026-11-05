@@ -21,7 +21,9 @@ declare(strict_types=1);
  * în citire: se copiază într-un dosar temporar numai fișierele .php citite, fără legături, .env sau poze; copia se
  * șterge la final). Fișierul din pachet și pachet.json rămân neatinse: înghețarea generată acum trebuie să fie, octet
  * cu octet, cea din pachet (aceeași sursă, aceleași decizii), altfel codul de pe site nu e cel revizuit și nu scrie
- * nimic (cod 1). Așa valorile private nu pleacă de pe server și nu trec pe la noi.
+ * nimic (cod 1). Așa valorile private nu pleacă de pe server și nu trec pe la noi. Merge și pe un fișier „inchis” (cu
+ * „inchis” păstrat, „pentru” = sha256 al fișierului închis): așa se fac, în seara dinaintea adoptării, valorile private
+ * ale fișierului care pleacă pe site-ul live, cu același commit al codului comun ca versiunea urcată.
  *
  * Codul vechi: clona site-ului (CMS_DEV_REPO_BS, _BV, _VT, _GR din tools/dev/comun.sh) la „ultimul commit
  * revizuit” din docs/de-portat.md, sau `--repo=<clonă>@<commit>` (doar cu --site; apoi verificarea cere
@@ -37,7 +39,7 @@ declare(strict_types=1);
  * --lucru=<dosar> (copiile codurilor vechi; implicit $CMS_DEV_DIR/inghetare).
  *
  * Un fișier „inchis” (aplicat pe site-ul live) nu se mai generează: --toate îl sare (SĂRIT, cu motivul), --site=<el> e
- * o eroare.
+ * o eroare; doar --cod-vechi îl citește (scrie privat/, fișierul rămâne neatins).
  *
  * Cod de ieșire: 0 = scris (sau, cu --verifica, la zi); 1 = o eroare, o decizie lipsă, sau (--verifica) diferit.
  */
@@ -133,7 +135,8 @@ if ($codVechiDosar !== null) {
         $dosarCod = $generator->copieDinDosar((string) realpath($codVechiDosar) ?: $codVechiDosar);
         $citireNucleu = $generator->citesteCod($nucleu);
         $citireVeche = $generator->citesteCod($dosarCod, Generator::cereriExtrase($existent));
-        $rezultat = $generator->genereaza($site, (string) ($existent['sursa'] ?? ''), $existent, $citireVeche, $citireNucleu);
+        // Și pe un fișier „inchis” (pus înaintea adoptării): privat/ trebuie să fie pentru fișierul care pleacă pe site.
+        $rezultat = $generator->genereaza($site, (string) ($existent['sursa'] ?? ''), $existent, $citireVeche, $citireNucleu, null, true);
         if ($rezultat['erori'] !== []) {
             throw new RuntimeException(count($rezultat['erori']) . ' erori ale generării (codul site-ului nu e cel revizuit, ' . ($existent['sursa'] ?? '?') . ')');
         }

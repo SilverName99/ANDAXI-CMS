@@ -290,9 +290,13 @@ final class Generator
      * @param array<string, mixed> $vechi citirea codului vechi (cu extrase)
      * @param array<string, mixed> $nucleu citirea codului comun
      * @param string|false|null $provizoriu text = provizoriu cu acest motiv; false = confirmat; null = ca înainte
+     * @param bool $cuInchis doar pentru `--cod-vechi` (pe server): un fișier „inchis” se refăce cu „inchis” păstrat, ca textul
+     *             să poată fi comparat cu cel din pachet și „pentru” din privat/ să fie sha256 al fișierului închis (care pleacă
+     *             pe site); fără el, un fișier închis e o eroare (nu se mai generează)
      * @return array{text: string, privat: ?string, erori: list<string>, scoase: list<string>, rezumat: string}
      */
-    public function genereaza(string $site, string $sursa, ?array $existent, array $vechi, array $nucleu, string|false|null $provizoriu = null): array
+    public function genereaza(string $site, string $sursa, ?array $existent, array $vechi, array $nucleu, string|false|null $provizoriu = null,
+        bool $cuInchis = false): array
     {
         $erori = [];
         $scoase = [];
@@ -304,7 +308,7 @@ final class Generator
         foreach ((array) ($existent['fara_inghetare'] ?? []) as $cheie => $intrare) {
             $existentFara[(string) $cheie] = is_string($intrare) ? ['motiv' => $intrare] : (array) $intrare;
         }
-        if (isset($existent['inchis'])) {
+        if (isset($existent['inchis']) && !$cuInchis) {
             $erori[] = 'fișierul e închis („inchis”: ' . $existent['inchis'] . '): aplicat pe site, nu se mai schimbă; o corectură merge în '
                 . 'setari-inghetate-2.json (docs/MIGRARI.md)';
         }
@@ -444,6 +448,11 @@ final class Generator
             return $ordonat;
         }, $setari);
         $document['fara_inghetare'] = $fara === [] ? new stdClass() : $fara;
+        if ($cuInchis && is_string($existent['inchis'] ?? null)) {
+            // „inchis” l-a pus un om, oriunde în fișier: cheile de sus în ordinea fișierului, ca textul să-l poată reface exact.
+            $document['inchis'] = $existent['inchis'];
+            $document = array_merge(array_intersect_key(array_fill_keys(array_keys($existent), null), $document), $document);
+        }
         $text = self::json($document);
 
         $textPrivat = null;

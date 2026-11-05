@@ -21,7 +21,8 @@ declare(strict_types=1);
  *     gol, deciziile lipsă (nimic scris), deciziile scrise (legate de valorile de atunci), determinismul, --verifica,
  *     o decizie veche după o schimbare a codului comun (și confirmarea ei din nou), o valoare privată scrisă de mână,
  *     un „extrage” greșit, un fara_inghetare fără obiect scos, provizoriu și --confirmat, un fișier închis; pe server
- *     (--cod-vechi=<dosar>): doar privat/, din dosarul codului, dacă dă exact înghețarea din pachet (altfel nimic scris).
+ *     (--cod-vechi=<dosar>): doar privat/, din dosarul codului, dacă dă exact înghețarea din pachet (altfel nimic scris),
+ *     și pe un fișier închis („pentru” = sha256 al lui).
  *  V. Verificarea (tools/inghetare/verifica-inghetare.php) pe pachetele din repo (0) și pe o copie a lor cu câte o
  *     greșeală: o adresă reală într-o notă, o valoare privată care nu e înlocuitor, o setare nouă în codul comun
  *     (amprenta și reproducerea), un parametru necunoscut sau o valoare nepermisă în migrari.json, sursa altă decât
@@ -481,6 +482,18 @@ file_put_contents($fisierProba, $json($doc14));
 [$c14, $o14] = $gen();
 $verifica('un fișier închis (aplicat pe site) nu se mai generează: 1, „o corectură merge în setari-inghetate-2.json”',
     $c14 === 1 && str_contains($o14, 'setari-inghetate-2.json'), $o14);
+// Pe server, înaintea adoptării: fișierul e deja „inchis” (pleacă așa pe site), deci privat/ se face pentru el, din codul live.
+$textInchis = (string) file_get_contents($fisierProba);
+@unlink($privatProba);
+$liveInchis = $lucru . '/live-proba-inchis';
+@mkdir($liveInchis, 0777, true);
+exec('git -C ' . escapeshellarg($vechiRepo) . ' archive ' . escapeshellarg($commitVechi) . ' | tar -x -C ' . escapeshellarg($liveInchis));
+[$c14s, $o14s] = $genServer($liveInchis);
+$privatInchis = json_decode((string) @file_get_contents($privatProba), true);
+$verifica('--cod-vechi pe un fișier închis: 0, privat/ scris cu „pentru” = sha256 al fișierului închis (cel care pleacă pe site), citit de runner; '
+    . 'fișierul neatins, „inchis” păstrat',
+    $c14s === 0 && (string) file_get_contents($fisierProba) === $textInchis && Inghetare::dinFisier($fisierProba)->inchis() === 'aplicat pe site (test)'
+    && ($privatInchis['pentru'] ?? '') === hash('sha256', $textInchis) && count(Inghetare::dinFisier($fisierProba)->valoriPrivate('x')) === 2, $o14s);
 // Fără valori private: fișierul privat rămas se șterge.
 $scrieFisier($vechiRepo . '/src/Support/Settings.php', $settingsPhp(['email_vechi' => '', 'telefon_vechi' => ''] + $vechiImplicite));
 exec('cd ' . escapeshellarg($vechiRepo) . ' && git -c user.email=test@exemplu.ro -c user.name=Test commit -qam fara-privat 2>&1');
@@ -500,9 +513,15 @@ $scrie('V. Verificarea (tools/inghetare/verifica-inghetare.php)');
 $verificaIng = static function (array $extra = [], array $mediu = []) use ($ruleaza, $radacina): array {
     return $ruleaza(array_merge([$radacina . '/tools/inghetare/verifica-inghetare.php'], $extra), $mediu);
 };
+// Fișierele închise din repo (aplicate sau gata de plecat pe un site live; Biovitality din 5 noiembrie) nu se mai reproduc.
+$inchiseRepo = array_values(array_filter(array_keys(Generator::SITURI), static fn (string $site): bool =>
+    Inghetare::dinFisier($radacina . '/site-uri/' . $site . '/' . Inghetare::FISIER)->inchis() !== null));
+$deschiseRepo = array_values(array_diff(array_keys(Generator::SITURI), $inchiseRepo));
 [$cv, $ov] = $verificaIng();
-$verifica('pe pachetele din repo (cele patru site-uri): 0, cu reproducerea din clone', $cv === 0 && !str_contains($ov, 'SĂRIT')
-    && substr_count($ov, 'generatorul dă acum exact același fișier') === 4, $ov);
+$verifica('pe pachetele din repo (cele patru site-uri): 0, cu reproducerea din clone' . ($inchiseRepo !== [] ? ' (închise: ' . implode(', ', $inchiseRepo) . ')' : ''),
+    $cv === 0 && !str_contains($ov, 'SĂRIT')
+    && substr_count($ov, 'generatorul dă acum exact același fișier') === count($deschiseRepo)
+    && substr_count($ov, 'INFO  fișier închis') === count($inchiseRepo), $ov);
 $copie = $lucru . '/site-uri';
 exec('cp -r ' . escapeshellarg($radacina . '/site-uri') . ' ' . escapeshellarg($copie));
 $cuCopie = ['--pachete=' . $copie];
@@ -561,9 +580,10 @@ $strica('bioscem', static function (array $d): array {
 [$ci, $oi] = $verificaIng($cuCopie);
 [$cg, $og] = $ruleaza([$radacina . '/tools/inghetare/genereaza-setari.php', '--toate', '--verifica', '--pachete=' . $copie,
     '--lucru=' . $lucru . '/lucru-gen']);
-$verifica('un fișier închis: verificarea 0 („nu se mai generează”), genereaza-setari --toate îl sare (SĂRIT bioscem) și le face pe celelalte trei',
+$verifica('un fișier închis: verificarea 0 („nu se mai generează”), genereaza-setari --toate îl sare (SĂRIT bioscem) și le face pe celelalte',
     $ci === 0 && str_contains($oi, 'fișier închis') && $cg === 0 && str_contains($og, 'SĂRIT bioscem: fișierul e închis')
-    && substr_count($og, '— la zi') === 3, $oi . $og);
+    && substr_count($og, '— la zi') === count(array_diff($deschiseRepo, ['bioscem'])) && substr_count($og, 'SĂRIT ') === count(array_unique(array_merge($inchiseRepo, ['bioscem']))),
+    $oi . $og);
 
 // O setare nouă în codul comun: amprenta și reproducerea pică pe toate patru, chiar și fără clone.
 $refa();
@@ -579,12 +599,15 @@ file_put_contents($fisierSettings, str_replace("private const DEFAULTS = [\n", "
     'CMS_DEV_REPO_VT' => '/nu/exista', 'CMS_DEV_REPO_GR' => '/nu/exista']);
 $verifica('o setare nouă în codul comun (setare_noua_de_test): amprenta pică pe toate patru, reproducerea cere decizia ei; fără clone '
     . '(--fara-clone) tot pică, din amprentă',
-    $cn === 1 && substr_count($on, 'EȘEC  valorile codului comun') === 4 && str_contains($on, '„setare_noua_de_test”')
-    && $cnf === 1 && substr_count($onf, 'EȘEC  valorile codului comun') === 4 && str_contains($onf, 'SĂRIT reproducerea'), $on . $onf);
-[$cc, $oc] = $verificaIng([], ['CMS_DEV_REPO_BV' => '/nu/exista']);
-[$ccf, $ocf] = $verificaIng(['--fara-clone'], ['CMS_DEV_REPO_BV' => '/nu/exista']);
-$verifica('clona unui site lipsă: 1 (nu se sare în tăcere); cu --fara-clone 0, „reproducerea SĂRITĂ pentru biovitality” în rezumat',
-    $cc === 1 && str_contains($oc, 'clona /nu/exista lipsește') && $ccf === 0 && str_contains($ocf, 'reproducerea SĂRITĂ pentru biovitality'), $oc . $ocf);
+    $cn === 1 && substr_count($on, 'EȘEC  valorile codului comun') === count($deschiseRepo) && str_contains($on, '„setare_noua_de_test”')
+    && $cnf === 1 && substr_count($onf, 'EȘEC  valorile codului comun') === count($deschiseRepo) && str_contains($onf, 'SĂRIT reproducerea'), $on . $onf);
+// Clona lipsă: a unui site cu fișierul încă deschis (unul închis nu se mai reproduce, deci nu-i cere clona).
+$faraClona = $deschiseRepo[0] ?? 'bioscem';
+$varClona = Generator::SITURI[$faraClona];
+[$cc, $oc] = $verificaIng([], [$varClona => '/nu/exista']);
+[$ccf, $ocf] = $verificaIng(['--fara-clone'], [$varClona => '/nu/exista']);
+$verifica('clona unui site lipsă (' . $faraClona . '): 1 (nu se sare în tăcere); cu --fara-clone 0, „reproducerea SĂRITĂ pentru ' . $faraClona . '” în rezumat',
+    $cc === 1 && str_contains($oc, 'clona /nu/exista lipsește') && $ccf === 0 && str_contains($ocf, 'reproducerea SĂRITĂ pentru ' . $faraClona), $oc . $ocf);
 
 $scrie('');
 $scrie('test-inghetare: ' . $trecute . ' trecute, ' . $esuate . ' eșuate, PHP ' . PHP_VERSION . '.');

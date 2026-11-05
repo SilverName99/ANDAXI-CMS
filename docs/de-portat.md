@@ -19,9 +19,16 @@ pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|
 | Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `739f58c` (30.10.2026) | CMS pornește din `11b1040` |
-| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `d95598e` (03.11.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
+| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `d95598e` (03.11.2026; live pe biovitality.ro, confirmat 05.11.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
 | vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `0fc2b2c` (20.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
 | grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (20.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |
+
+**Biovitality, live = `d95598e`** (5 noiembrie 2026): pe server `git -C ~/domains/biovitality.ro/public_html log -1` dă
+`d95598e`, iar `genereaza-setari.php --cod-vechi` din codul live dă exact înghețarea din pachet; deci înghețarea e
+`--confirmat` și `inchis` ([MIGRARI.md](MIGRARI.md), „Înghețarea setărilor”). Checkout-ul de pe server e pe o ramură locală
+numită `claude/backend-migration-plan-tjpbjb` (pe GitHub ramura cu acest nume e la `baa2ac2`, mai veche); contează doar
+commit-ul, pe care `adopta.sh --commit-vechi=d95598e` îl verifică. Până la comutare nu se mai urcă nimic pe codul vechi
+Biovitality: un commit nou ar trebui revizuit și ar schimba înghețarea (un fișier închis nu se mai generează).
 
 ## Bioscem (de la `11b1040`)
 
