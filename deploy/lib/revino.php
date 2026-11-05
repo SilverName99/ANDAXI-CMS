@@ -51,6 +51,16 @@ exit(porneste(static function () use ($argv): int {
     if (!is_file($fisierStare)) {
         throw new Oprire('nu există ' . $fisierStare . ': site-ul n-a fost adoptat cu deploy/adopta.sh (sau a fost deja întors)');
     }
+    // O actualizare neterminată (actualizeaza.sh) are mentenanța și întoarcerea ei: revenirea ar amesteca două deploy-uri
+    // (și ar pune la loc o mentenanță de dinaintea actualizării).
+    $act = new Stare($s->lucru . '/actualizare.stare');
+    if (is_file($act->fisier) && !$act->ia('gata', false) && !$act->ia('intoarsa', false)) {
+        $spre = (string) $act->ia('versiune_noua', '?');
+        throw new Oprire('o actualizare spre ' . $spre . ' a rămas neterminată (' . $act->fisier . '); o termini întâi, apoi revii', 2, [
+            'aceeași comandă de actualizare: deploy/actualizeaza.sh --site=' . $s->domeniu . ' --versiune=' . $spre . ' --aplica (merge mai departe sau se întoarce singură)',
+            'dacă întoarcerea ei a rămas fără testul de fum trecut: aceeași comandă cu --accepta-revenirea (deschide versiunea de dinainte), sau o versiune reparată',
+        ]);
+    }
     Mentenanta::avertizeazaVeche($s);
     $inceput = microtime(true);
     if ($aplica) {
@@ -117,7 +127,14 @@ exit(porneste(static function () use ($argv): int {
             Iesire::scrie('PLAN: aș șterge doar ' . $s->nou . ' (pregătirea) și aș încheia adoptarea începută; site/ rămâne. Cu --aplica o face.');
             return 0;
         }
-        if (is_dir($s->nou) && is_file($s->nou . '/.andaxi-nou')) {
+        // Urma se scrie înainte, iar semnul .andaxi-nou se șterge primul: o ștergere omorâtă la jumătate se termină la reluare,
+        // iar adopta.sh nu comută pe un public_html.nou pe jumătate șters (nici nu continuă: revenirea a început).
+        $stergereInceputa = !empty($rev['sterge_nou']);
+        if (is_dir($s->nou) && (is_file($s->nou . '/.andaxi-nou') || $stergereInceputa)) {
+            $rev['sterge_nou'] = $rev['sterge_nou'] ?? date('c');
+            $stare->pune('revino', $rev);
+            @unlink($s->nou . '/.andaxi-nou');
+            testOpreste('revino-sterge-nou');
             Fisiere::sterge($s->nou, [$s->dosar]);
             Iesire::ok('șters ' . $s->nou);
         }
@@ -214,7 +231,8 @@ exit(porneste(static function () use ($argv): int {
             return;
         }
         Mentenanta::puneLaLoc($s, $rev['mentenanta_inainte']['continut'] ?? null);
-        unset($rev['alegere']);
+        // Și mentenanța de dinainte se uită: o revenire de mai târziu (după o actualizare, de exemplu) o citește din nou.
+        unset($rev['alegere'], $rev['mentenanta_inainte']);
         $stare->pune('revino', $rev);
     };
     if ($aplica && $s->cuStub() && !$codIntors) {

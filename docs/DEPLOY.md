@@ -164,7 +164,11 @@ La sfârșit scrie rândurile de cron (mai jos) și unde a pus copiile.
   `--forteaza-liniste`.
 - o adoptare a cărei revenire a început (`revino.sh` a pus baza la loc, a încărcat-o, sau a mutat dosare) nu se mai
   continuă: `adopta.sh` refuză (codul 2) și spune să termini revenirea cu `revino.sh`; la fel `actualizeaza.sh`. O revenire
-  refuzată înainte de orice schimbare (datele noi, liniștea) nu contează: adoptarea continuă și o uită.
+  refuzată înainte de orice schimbare (datele noi, liniștea) nu contează: adoptarea continuă și o uită (una omorâtă după ce
+  și-a pus mentenanța strictă: adoptarea pune la loc mentenanța ei, cu jetonul ei). La fel o revenire de dinainte de
+  comutare care a început să șteargă `public_html.nou`: o termini cu `revino.sh`.
+- comutarea pornește doar pe un `public_html.nou` întreg (cu semnul `.andaxi-nou`, pe care o revenire îl șterge primul);
+  altfel refuză și îl refaci cu `--reia=pregatire`.
 - migrările pornesc doar dacă baza e exact cea din copia de revenire (nimic scris de la copie); amprenta de după
   migrări se scrie o singură dată, după primele cereri ale codului nou (pașii de activare ai pluginurilor), și nu se
   rescrie: un `--reia=migrari` după o scriere de după migrări e refuzat.
@@ -176,9 +180,14 @@ deploy/revino.sh --site=<site>            # planul: ce ar face și ce date noi s
 deploy/revino.sh --site=<site> --aplica   # 1–3 minute (cât încărcarea copiei bazei)
 ```
 
+Cât o actualizare (`actualizeaza.sh`) e neterminată (`site/deploy/actualizare.stare` fără „gata” sau „intoarsa”),
+`revino.sh` refuză (codul 2): întâi o termini (aceeași comandă de actualizare merge mai departe sau se întoarce singură;
+o întoarcere rămasă fără testul de fum trecut: `--accepta-revenirea` sau o versiune reparată), apoi revii.
+
 1. mentenanța **strictă** (nimic nu mai scrie: nici vizitatorii, nici plățile, ERP-ul sau cronurile), apoi așteptarea
    conexiunilor rămase (liniște = trei probe la rând, la o secundă, fără nicio conexiune care lucrează; după o încărcare
-   oprită, și fără conexiuni ale aceluiași utilizator care doar dorm pe bază, ca clientul `mysql` al încărcării);
+   oprită, și fără conexiuni ale aceluiași utilizator care doar dorm pe bază, ca clientul `mysql` al încărcării: dacă
+   rămâne una, o oprești din phpMyAdmin, „Kill” pe ID-ul din mesaj, sau cu `KILL <ID>`; `--forteaza-liniste` nu merge acolo);
 2. **ce s-ar pierde**: amprenta bazei de acum (structura și `CHECKSUM TABLE` pe fiecare tabel) față de cea de la sfârșitul
    migrărilor. Orice tabel schimbat de atunci înseamnă date care s-ar pierde, oricare ar fi ele: o plată confirmată
    (un UPDATE pe `orders`), o comandă, o schimbare de stare sau un AWB din admin, un stoc venit din ERP, puncte de
@@ -204,8 +213,9 @@ Când refuză, ai două feluri:
 
 O revenire oprită la jumătate se reia cu **aceeași** comandă: aceeași alegere despre bază (una pornită cu `--fara-baza`
 nu devine, la reluare, una care pune baza la loc sub codul vechi deja pornit, și invers), mentenanța de dinaintea primei
-rulări pusă la loc la un refuz cât revenirea n-a schimbat încă nimic (după ce a pornit încărcarea bazei sau o mutare a
-dosarelor, un refuz lasă mentenanța strictă), iar o încărcare a copiei bazei rămasă la jumătate se reface de la început
+rulări pusă la loc la un refuz cât revenirea n-a schimbat încă nimic, apoi uitată (o revenire de mai târziu, de exemplu
+după o actualizare, o citește din nou; după ce a pornit încărcarea bazei sau o mutare a dosarelor, un refuz lasă
+mentenanța strictă), iar o încărcare a copiei bazei rămasă la jumătate se reface de la început
 (atunci `--fara-baza` e refuzat: baza nu e întreagă, codul vechi nu pornește pe ea; și `--forteaza-liniste`: încărcarea
 oprită poate lucra încă pe bază, iar a doua ar porni peste ea). Rândurile noi din `orders`, `users`,
 `product_reviews`… față de sfârșitul migrărilor se arată doar ca informație (o migrare poate adăuga rânduri: recenziile

@@ -796,10 +796,17 @@ final class Baza
         if ($laOprire !== null) {
             $laOprire();
         }
-        throw new Oprire(count($ramase) . ' conexiuni lucrează încă pe bază după un minut: ' . implode('; ', array_slice($ramase, 0, 5)), 1, [
+        // După o încărcare oprită, o conexiune rămasă poate fi chiar clientul ei: --forteaza-liniste nu e un drum (ar porni a
+        // doua încărcare peste ea), doar oprirea ei.
+        $pasi = $siInactive ? [
+            'dacă e încărcarea rulării oprite (clientul mysql, o conexiune care doarme sau lucrează a aceluiași utilizator): o oprești din phpMyAdmin '
+                . '(Stare → Procese, „Kill” pe ID-ul de mai sus) sau cu KILL <ID>, apoi aceeași comandă',
+            'altfel rulezi din nou aceeași comandă peste câteva minute (un cron lung termină singur)',
+        ] : [
             'rulezi din nou aceeași comandă peste câteva minute (un cron lung termină singur)',
             'dacă știi ce sunt și că nu scriu nimic important: aceeași comandă cu --forteaza-liniste',
-        ]);
+        ];
+        throw new Oprire(count($ramase) . ' conexiuni lucrează încă pe bază după un minut: ' . implode('; ', array_slice($ramase, 0, 5)), 1, $pasi);
     }
 
     /** Cele mai mari id-uri din tabelele cu date noi ale clienților (comenzi, conturi…), care există. @return array<string, int> */
@@ -1299,7 +1306,7 @@ final class Mentenanta
 function revenireInceputa(Stare $stare): bool
 {
     $rev = (array) $stare->ia('revino', []);
-    foreach (['baza_in_curs', 'baza', 'baza_diferita', 'baza_acceptata', 'esuat'] as $k) {
+    foreach (['baza_in_curs', 'baza', 'baza_diferita', 'baza_acceptata', 'esuat', 'sterge_nou'] as $k) {
         if (!empty($rev[$k])) {
             return true;
         }

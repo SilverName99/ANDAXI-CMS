@@ -182,6 +182,11 @@ exit(porneste(static function () use ($argv): int {
     }
     if ($a->stare->ia('revino') !== null) {
         Iesire::info('o revenire încercată s-a oprit înainte să schimbe ceva; o uit și continui adoptarea');
+        // Una omorâtă după ce a pus mentenanța ei strictă (alt jeton): mentenanța adoptării, cea de dinaintea ei, la loc.
+        $rev = (array) $a->stare->ia('revino');
+        if (array_key_exists('mentenanta_inainte', $rev)) {
+            Mentenanta::puneLaLoc($a->s, $rev['mentenanta_inainte']['continut'] ?? null);
+        }
         unset($a->stare->date['revino']);
         $a->stare->salveaza();
     }
@@ -848,6 +853,12 @@ function mentenanta(Adoptare $a): void
         if (trim($git['iesire']) !== (string) $a->stare->ia('commit_vechi_complet', '')) {
             throw new Oprire('codul vechi s-a schimbat de la verificări (alt commit); rulează din nou de la început (--reia=verificari)');
         }
+    }
+    // Comutarea pornește doar pe un public_html.nou întreg: făcut de pregătire (faza marcată) și cu semnul lui (o revenire
+    // de dinainte de comutare îl șterge primul, deci unul pe jumătate șters nu-l mai are).
+    if (!$comutat && !$a->comutat() && (!is_dir($s->nou) || !is_file($s->nou . '/.andaxi-nou'))) {
+        throw new Oprire($s->nou . ' nu e întreg (lipsește ' . (is_dir($s->nou) ? '.andaxi-nou din el' : 'cu totul') . '): nu comut pe el; '
+            . 'îl faci din nou cu aceeași comandă și --reia=pregatire', 1);
     }
     $jeton = (string) $a->stare->ia('jeton', '') ?: bin2hex(random_bytes(16));
     $a->stare->pune('jeton', $jeton);
