@@ -179,6 +179,13 @@ admin_componenta('antet-pagina', [
             </select>
         </div>
         <div class="field">
+            <label for="campanie-colturi">Colțurile cardurilor</label>
+            <select id="campanie-colturi" name="carduri_drepte">
+                <option value="0"<?= (int) ($c['carduri_drepte'] ?? 0) !== 1 ? ' selected' : '' ?>>Rotunjite</option>
+                <option value="1"<?= (int) ($c['carduri_drepte'] ?? 0) === 1 ? ' selected' : '' ?>>Drepte (cardul, poza și butoanele fără rotunjire)</option>
+            </select>
+        </div>
+        <div class="field">
             <label for="campanie-text-sub-pret">Text sub preț (opțional)</label>
             <input type="text" id="campanie-text-sub-pret" name="text_sub_pret" maxlength="160" value="<?= adm_e((string) ($c['text_sub_pret'] ?? '')) ?>" placeholder="ex: 2 bucăți: {pret*1.5}">
             <small class="muted"><code>{pret}</code> = prețul produsului; <code>{pret*1.5}</code> = prețul înmulțit cu 1,5. Gol = fără rând.</small>

@@ -428,6 +428,8 @@ final class Campanii
         // Disponibilitatea reală, când site-ul e legat de ERP (ca în catalog).
         ErpStock::applyToProducts($db, $produse);
         $inchise = (int) ($campanie['carduri_inchise'] ?? 0) === 1;
+        // „Colțurile cardurilor: drepte” (campanii/0057): cardul, cutia pozei și butoanele fără rotunjire; implicit rotunjite.
+        [$razaCard, $razaButon] = (int) ($campanie['carduri_drepte'] ?? 0) === 1 ? ['0', '0'] : ['16px', '999px'];
         $arePreturi = Plugins::vizibil('magazin');
         $poateCumpara = Plugins::permiteInceput('magazin');
         $insigna = trim((string) ($campanie['insigna_text'] ?? ''));
@@ -496,8 +498,8 @@ final class Campanii
             . '.campanie-grila__grila{box-sizing:border-box;max-width:1200px;margin:0 auto;display:grid;'
             . 'grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:20px;}'
             . '.campanie-grila__card{box-sizing:border-box;display:flex;flex-direction:column;min-width:0;background:' . $card . ';'
-            . 'color:' . $text . ';border:1px solid ' . $margine . ';border-radius:16px;overflow:hidden;}'
-            . '.campanie-grila__poza{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;background:#ffffff;}'
+            . 'color:' . $text . ';border:1px solid ' . $margine . ';border-radius:' . $razaCard . ';overflow:hidden;}'
+            . '.campanie-grila__poza{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;background:#ffffff;border-radius:0;}'
             . '.campanie-grila__poza img{display:block;width:100%;height:100%;object-fit:contain;}'
             . '.campanie-grila__corp{display:flex;flex:1;flex-direction:column;align-items:flex-start;gap:8px;padding:14px 16px 16px;'
             . 'font-family:inherit;}'
@@ -511,17 +513,18 @@ final class Campanii
             . '.campanie-grila__actiuni{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:auto;padding-top:4px;}'
             . '.campanie-grila__formular{margin:0;width:100%;}'
             . '.campanie-grila__stoc{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-height:44px;'
-            . 'margin:0;padding:10px 16px;border-radius:999px;border:1px dashed ' . $margine . ';background:transparent;font-size:14px;'
+            . 'margin:0;padding:10px 16px;border-radius:' . $razaButon . ';border:1px dashed ' . $margine . ';background:transparent;font-size:14px;'
             . 'font-weight:700;color:' . $slab . ';cursor:not-allowed;}'
             . '.campanie-grila__cos,.campanie-grila__buton{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;'
-            . 'width:100%;min-height:44px;margin:0;padding:10px 16px;border-radius:999px;font:inherit;font-weight:700;font-size:15px;'
+            . 'width:100%;min-height:44px;margin:0;padding:10px 16px;border-radius:' . $razaButon . ';font:inherit;font-weight:700;font-size:15px;'
             . 'line-height:1.2;text-align:center;text-decoration:none;cursor:pointer;}'
             . '.campanie-grila__cos{border:0;background:' . $fundal . ';color:' . $culoare . ';}'
             . '.campanie-grila__buton{border:1px solid ' . $text . ';background:transparent;color:' . $text . ';}'
             . '@media (max-width:600px){.campanie-grila{padding:16px 12px;}.campanie-grila__grila{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}'
             . '.campanie-grila__corp{padding:10px 10px 12px;}.campanie-grila__nume{font-size:15px;}.campanie-grila__pret{font-size:17px;}'
             . '.campanie-grila__vechi{display:block;margin-left:0;}.campanie-grila__cos,.campanie-grila__buton,.campanie-grila__stoc{font-size:14px;padding:8px 10px;}}';
-        return '<section class="campanie-grila campanie-grila--' . ($inchise ? 'inchise' : 'deschise') . '" data-campanie-grila>'
+        return '<section class="campanie-grila campanie-grila--' . ($inchise ? 'inchise' : 'deschise') . ($razaCard === '0' ? ' campanie-grila--drepte' : '')
+            . '" data-campanie-grila>'
             . '<style>' . $css . '</style><div class="campanie-grila__grila">' . $carduri . '</div></section>';
     }
 
@@ -876,6 +879,7 @@ final class Campanii
             // campanii/0056: o campanie nouă are pagina fără antetul și subsolul site-ului (în bază, implicit 0: o campanie
             // de dinainte rămâne cum era până o bifează cineva).
             'fara_antet_subsol' => 1, 'bara_inchisa' => 0, 'carduri_inchise' => 0, 'text_sub_pret' => '',
+            'carduri_drepte' => 0,
         ];
     }
 
@@ -915,6 +919,7 @@ final class Campanii
             'bara_inchisa' => (string) ($post['bara_inchisa'] ?? '') === '1' ? 1 : 0,
             'carduri_inchise' => (string) ($post['carduri_inchise'] ?? '') === '1' ? 1 : 0,
             'text_sub_pret' => $text('text_sub_pret', 160),
+            'carduri_drepte' => (string) ($post['carduri_drepte'] ?? '') === '1' ? 1 : 0,
         ];
         $produse = [];
         foreach ((array) ($post['produse'] ?? []) as $idProdus) {
@@ -995,7 +1000,7 @@ final class Campanii
     {
         $coloane = ['nume', 'slug', 'pornita', 'incepe_la', 'se_termina_la', 'pagina_id', 'pagina_la_intrare', 'text_inapoi', 'insigna_text',
             'insigna_fundal', 'insigna_culoare', 'banner_pornit', 'banner_text', 'banner_link', 'banner_fundal', 'banner_culoare',
-            'banner_font', 'banner_marime', 'banner_lipit', 'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret'];
+            'banner_font', 'banner_marime', 'banner_lipit', 'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret', 'carduri_drepte'];
         $valori = [];
         foreach ($coloane as $coloana) {
             $valori[$coloana] = $c[$coloana] ?? null;

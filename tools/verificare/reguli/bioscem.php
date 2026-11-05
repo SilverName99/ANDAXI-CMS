@@ -89,7 +89,8 @@ return [
     // (publice, pe site), id-uri de produse; niciun admin, nicio adresă. Pe o sursă fără ele (codul vechi) grupul nu are ce copia.
     // 19 (campanii/0056): pagina campaniei fără antet și subsol, bara și cardurile închise (bife) și textul de sub prețul
     // cardurilor (public, pe pagina campaniei), copiate cum sunt.
-    'versiune' => 19,
+    // 20 (campanii/0057): colțurile cardurilor (o bifă), copiată cum e.
+    'versiune' => 20,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -199,7 +200,7 @@ return [
         'campanii' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'nume', 'slug', 'pornita', 'incepe_la', 'se_termina_la', 'pagina_id',
             'pagina_la_intrare', 'text_inapoi', 'insigna_text', 'insigna_fundal', 'insigna_culoare', 'banner_pornit', 'banner_text',
             'banner_link', 'banner_fundal', 'banner_culoare', 'banner_font', 'banner_marime', 'banner_lipit', 'created_at', 'updated_at',
-            'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret'],
+            'fara_antet_subsol', 'bara_inchisa', 'carduri_inchise', 'text_sub_pret', 'carduri_drepte'],
             'motive' => ['nume' => 'numele campaniei, dat de magazin (de exemplu „Black Friday”), nu al unei persoane'],
             'emailuri_publice' => 'textul bannerului și al insignei e public (pe fiecare pagină a site-ului) și poate avea adresa magazinului'],
         'campanii_produse' => ['mod' => 'copiaza', 'pastreaza' => ['campanie_id', 'product_id']],

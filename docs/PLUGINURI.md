@@ -981,7 +981,8 @@ loc de comenzi.
 ### Campanii pe site (`campanii`)
 
 Cerut pentru Biovitality (5 noiembrie 2026), făcut generic. `App\Support\Campanii`, `CampaniiController`, migrările
-`campanii/0054` și `campanii/0056` (pagina fără antet și subsol, codul `{{campanie_produse}}`), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
+`campanii/0054`, `campanii/0056` (pagina fără antet și subsol, codul `{{campanie_produse}}`) și `campanii/0057` (colțurile
+cardurilor), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
 **Oprit pe orice site**: nu e în niciun pachet și în nicio licență de dezvoltare (`licente_dev`); îl pune doar CRM-ul în
 licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/licenta.php biovitality campanii=pornit`.
 
@@ -1030,7 +1031,9 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   magazin pe site). „Text sub preț” (`text_sub_pret`, 160 de caractere, escapat): `{pret}` = prețul curent, `{pret*1.5}` (sau
   `{pret x 1.5}`, `{pret×1,5}`) = prețul curent înmulțit, de exemplu „2 bucăți: {pret*1.5}”; gol = fără rând. **„Cardurile
   produselor”** (`carduri_inchise`): deschise (albe, chenar gri) sau închise (card `#161616` pe fundal negru, text alb, ca pe
-  pagina Biovitality). Responsivă: câte încap de minimum 230 px pe desktop, două pe rând sub 600 px.
+  pagina Biovitality). **„Colțurile cardurilor”** (`carduri_drepte`, `campanii/0057`): rotunjite (implicit, aspectul de până
+  acum) sau drepte (cardul, cutia pozei și butoanele cu `border-radius: 0`; insigna rămâne rotunjită). Editorul nu are o
+  previzualizare a cardurilor (se vede pe pagina campaniei, și ca previzualizare a administratorului). Responsivă: câte încap de minimum 230 px pe desktop, două pe rând sub 600 px.
 - **Prima intrare pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini; decizia proprietarului din 5 nov: **la
   fiecare intrare nouă**, adică la fiecare vizită nouă): un om care intră pe site, de pe orice link din afară (Google, un email,
   o rețea socială) sau fără Referer (adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), primește `302` la

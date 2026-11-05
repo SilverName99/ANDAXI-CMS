@@ -1115,6 +1115,12 @@
                     "null": false,
                     "tip": "tinyint(1)"
                 },
+                "carduri_drepte": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "carduri_inchise": {
                     "extra": "",
                     "implicit": "0",

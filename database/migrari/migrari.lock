@@ -50,7 +50,8 @@
         "conturi_clienti/0053_confirmare_din_biovitality": "08c9fa4297bf53e4ddf29346b668da45f01c8071e8b62645875c7564a09ba93c",
         "campanii/0054_campanii": "460d4686553833f835597dc12e19281ccccf765baaeb62c3291070946c798f71",
         "pachete_produse/0055_continut_pachete": "bd00cd4d00debefa304e162ae5b8ddc3f6fa1bac7194ffff9618819edc1c49bc",
-        "campanii/0056_campanii_pagina": "8c51bea73c39f12102f5d8f3762467938872182b99165673cd980d2fa85a32f1"
+        "campanii/0056_campanii_pagina": "8c51bea73c39f12102f5d8f3762467938872182b99165673cd980d2fa85a32f1",
+        "campanii/0057_campanii_colturi": "4c2169a0fadb9fb7a47eb9120c854525f473ed78b6d72d5a459ba80d4153432a"
     },
     "retrase": {}
 }

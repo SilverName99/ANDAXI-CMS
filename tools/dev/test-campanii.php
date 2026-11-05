@@ -612,6 +612,17 @@ $pret15 = number_format(80 * 1.5, 2);
 $verifica('cardurile închise (#161616 pe negru, text alb) și „Text sub preț” cu {pret*1.5} (escapat)', str_contains($r['corp'], 'campanie-grila--inchise')
     && str_contains($r['corp'], 'background:#161616') && str_contains($r['corp'], 'background:#000000;}')
     && str_contains($r['corp'], '<p class="campanie-grila__sub">2 bucăți: ' . $pret15 . ' lei &lt;b&gt;</p>'));
+$verifica('colțurile cardurilor implicit rotunjite (16px, butoanele 999px)', str_contains($r['corp'], 'border-radius:16px;overflow:hidden')
+    && !str_contains($r['corp'], 'campanie-grila--drepte'));
+$db->prepare('UPDATE campanii SET carduri_drepte = 1 WHERE id = :id')->execute(['id' => $idCampanie]);
+$drepte = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
+$verifica('„Colțurile cardurilor: drepte”: cardul, poza și butoanele cu border-radius 0', str_contains($drepte['corp'], 'campanie-grila--drepte')
+    && str_contains($drepte['corp'], 'border-radius:0;overflow:hidden') && !str_contains($drepte['corp'], 'border-radius:16px')
+    && preg_match('/\.campanie-grila__cos,\.campanie-grila__buton\{[^}]*border-radius:0;/', $drepte['corp']) === 1
+    && str_contains($drepte['corp'], '.campanie-grila__poza{display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;background:#ffffff;border-radius:0;}'));
+$db->prepare('UPDATE campanii SET carduri_drepte = 0 WHERE id = :id')->execute(['id' => $idCampanie]);
+$verifica('editorul: „Colțurile cardurilor” cu „Rotunjite” implicit', str_contains($formular['corp'], 'name="carduri_drepte"')
+    && str_contains($formular['corp'], '<option value="0" selected>Rotunjite</option>'));
 $verifica('Campanii::textSubPret: {pret}, {pret*1.5}, {pret x 2}, {pret×1,5}, text gol',
     Campanii::textSubPret('{pret}', 10.0) === '10.00 lei' && Campanii::textSubPret('2 buc: {pret*1.5}', 10.0) === '2 buc: 15.00 lei'
     && Campanii::textSubPret('{pret x 2}', 10.0) === '20.00 lei' && Campanii::textSubPret('{pret×1,5}', 10.0) === '15.00 lei'
