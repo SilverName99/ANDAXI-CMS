@@ -227,8 +227,20 @@ function folosite(string $acasa): array
     // După o actualizare reușită, versiunea de dinainte rămâne pentru o întoarcere de mână: nici ea nu se șterge.
     foreach (glob($acasa . '/domains/*/site/deploy/actualizare.stare') ?: [] as $f) {
         $d = json_decode((string) file_get_contents($f), true);
-        if (is_array($d) && ($d['gata'] ?? false) === true && is_string($d['versiune_veche'] ?? null)) {
-            $rez[$d['versiune_veche']][] = basename(dirname($f, 3)) . ' (versiunea de dinaintea ultimei actualizări)';
+        if (!is_array($d)) {
+            continue;
+        }
+        $site = basename(dirname($f, 3));
+        if (($d['gata'] ?? false) === true && is_string($d['versiune_veche'] ?? null)) {
+            $rez[$d['versiune_veche']][] = $site . ' (versiunea de dinaintea ultimei actualizări)';
+        }
+        // O actualizare în curs (nici terminată, nici întoarsă) are nevoie de amândouă versiunile.
+        if (($d['gata'] ?? false) !== true && ($d['intoarsa'] ?? false) !== true) {
+            foreach (['versiune_noua', 'versiune_veche'] as $k) {
+                if (is_string($d[$k] ?? null)) {
+                    $rez[$d[$k]][] = $site . ' (o actualizare în curs)';
+                }
+            }
         }
     }
     return $rez;

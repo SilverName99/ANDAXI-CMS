@@ -548,8 +548,8 @@ try {
     $scrie('B2. GET /_andaxi/ping');
     foreach (array_keys($siteuri) as $x) {
         $r = $cerere($x, 'GET', '/_andaxi/ping');
-        $verifica('site ' . $x . ': 200 {"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi"}, JSON, no-store, fără cookie',
-            $r['cod'] === 200 && $r['corp'] === '{"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi"}'
+        $verifica('site ' . $x . ': 200 {"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi","mentenanta":"nu","mentenanta_de":null}, JSON, no-store, fără cookie',
+            $r['cod'] === 200 && $r['corp'] === '{"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi","mentenanta":"nu","mentenanta_de":null}'
             && str_starts_with($r['antete']['content-type'] ?? '', 'application/json') && ($r['antete']['cache-control'] ?? '') === 'no-store'
             && $faraCookie($r), $r['cod'] . ' ' . $r['corp']);
     }
@@ -561,7 +561,7 @@ try {
     $r = $cerere('a', 'GET', '/_andaxi/ping/');
     $rHead = $cerere('a', 'HEAD', '/_andaxi/ping/?x=1');
     $verifica('cu „/” la sfârșit (GET și HEAD cu parametri): tot pingul, același JSON, no-store, fără cookie', $r['cod'] === 200
-        && $r['corp'] === '{"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi"}' && ($r['antete']['cache-control'] ?? '') === 'no-store'
+        && $r['corp'] === '{"ok":true,"db":true,"cod":"' . $versiune . '","schema":"la_zi","mentenanta":"nu","mentenanta_de":null}' && ($r['antete']['cache-control'] ?? '') === 'no-store'
         && $faraCookie($r) && $rHead['cod'] === 200 && $rHead['corp'] === '' && $faraCookie($rHead),
         $r['cod'] . ' ' . $r['corp'] . ' | ' . implode(' | ', array_merge($r['cookies'], $rHead['cookies'])));
     $verifica('.env-ul din versiune ignorat, niciun fișier de sesiune', $sesiuni($siteuri['a']['site'] . '/storage/sessions') === []
@@ -708,9 +708,14 @@ try {
     $rErp = $cerere('a', 'POST', '/api/erp/notificare');
     $rPing = $cerere('a', 'GET', '/_andaxi/ping');
     $rAntet = $cerere('a', 'GET', '/admin/login', ['antete' => ['X-Andaxi-Deploy: ' . $jeton]]);
-    $verifica('MENTENANTA strictă („strict” pe al doilea rând): /webhook/ și /api/erp/ → 503 cu Retry-After: 120; pingul 200; cu jetonul, pagina (200)',
-        $rStripe['cod'] === 503 && ($rStripe['antete']['retry-after'] ?? '') === '120' && $rErp['cod'] === 503 && $rPing['cod'] === 200 && $rAntet['cod'] === 200,
-        $rStripe['cod'] . ' ' . $rErp['cod'] . ' ' . $rPing['cod'] . ' ' . $rAntet['cod']);
+    $rPostJeton = $cerere('a', 'POST', '/admin/login', ['antete' => ['X-Andaxi-Deploy: ' . $jeton], 'post' => ['email' => 'x@exemplu.ro']]);
+    $rAltAndaxi = $cerere('a', 'POST', '/_andaxi/jurnal-404');
+    $verifica('MENTENANTA strictă („strict” pe al doilea rând): /webhook/ și /api/erp/ → 503 cu Retry-After: 120; pingul 200 și spune '
+        . '„mentenanta: strict”; jetonul deschide doar GET (POST cu jeton 503); alt /_andaxi/ (POST) 503',
+        $rStripe['cod'] === 503 && ($rStripe['antete']['retry-after'] ?? '') === '120' && $rErp['cod'] === 503 && $rPing['cod'] === 200
+        && ($json($rPing)['mentenanta'] ?? '') === 'strict' && is_int($json($rPing)['mentenanta_de'] ?? null) && $rAntet['cod'] === 200
+        && $rPostJeton['cod'] === 503 && $rAltAndaxi['cod'] === 503,
+        $rStripe['cod'] . ' ' . $rErp['cod'] . ' ' . $rPing['corp'] . ' ' . $rAntet['cod'] . ' ' . $rPostJeton['cod'] . ' ' . $rAltAndaxi['cod']);
     unlink($siteuri['a']['site'] . '/MENTENANTA');
     $r = $cerere('a', 'GET', '/');
     $verifica('fără MENTENANTA, site-ul A din nou 200', $r['cod'] === 200, (string) $r['cod']);
@@ -746,7 +751,7 @@ try {
     $scrie('B9. Pingul fără bază, cu o bază care tace, goală sau în urma codului');
     $scrieEnv('a', ['DB_DATABASE' => 'cms_paths_lipsa']);
     $r = $cerere('a', 'GET', '/_andaxi/ping');
-    $verifica('baza lipsă → 503 {"ok":false,"db":false}, no-store, fără cookie, repede', $r['cod'] === 503 && $r['corp'] === '{"ok":false,"db":false}'
+    $verifica('baza lipsă → 503 {"ok":false,"db":false,"mentenanta":"nu",…}, no-store, fără cookie, repede', $r['cod'] === 503 && $r['corp'] === '{"ok":false,"db":false,"mentenanta":"nu","mentenanta_de":null}'
         && ($r['antete']['cache-control'] ?? '') === 'no-store' && $faraCookie($r) && $r['durata'] < 2.0, $r['cod'] . ' ' . $r['corp'] . ' ' . round($r['durata'], 2) . ' s');
     // Un „server” care acceptă conexiunea și nu trimite nimic: fără limita de citire, cererea ar aștepta minute.
     $scriptTacut = $dosarTest . '/tacut.php';
@@ -757,7 +762,7 @@ try {
     $scrieEnv('a', ['DB_DATABASE' => 'cms_paths_a', 'DB_HOST' => '127.0.0.1', 'DB_PORT' => (string) $portTacut]);
     $r = $cerere('a', 'GET', '/_andaxi/ping');
     $verifica('o bază care tace → 503 în aproximativ ' . Ping::LIMITA_BAZA . ' secunde (' . round($r['durata'], 2) . ' s)',
-        $r['cod'] === 503 && $r['corp'] === '{"ok":false,"db":false}' && $r['durata'] >= 1.5 && $r['durata'] < 6.0, $r['cod'] . ' ' . round($r['durata'], 2) . ' s');
+        $r['cod'] === 503 && $r['corp'] === '{"ok":false,"db":false,"mentenanta":"nu","mentenanta_de":null}' && $r['durata'] >= 1.5 && $r['durata'] < 6.0, $r['cod'] . ' ' . round($r['durata'], 2) . ' s');
     $opreste($pidTacut);
     $pidTacut = 0;
     $scrieEnv('a', ['DB_HOST' => 'localhost', 'DB_PORT' => '3306', 'DB_DATABASE' => 'cms_paths_gol']);

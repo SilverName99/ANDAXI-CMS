@@ -36,7 +36,7 @@ namespace Platforma\Deploy;
 require __DIR__ . '/deploy.php';
 
 exit(porneste(static function () use ($argv): int {
-    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'url=', 'acasa=', 'fara-baza', 'pierde-datele-noi', 'plan', 'aplica']);
+    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'url=', 'acasa=', 'fara-baza', 'pierde-datele-noi', 'forteaza-liniste', 'rezolvat-de-mana', 'plan', 'aplica']);
     $aplica = $o->aplica();
     $s = Site::gaseste($o);
     $lacat = $s->lacat();
@@ -47,10 +47,11 @@ exit(porneste(static function () use ($argv): int {
     if (!is_file($fisierStare)) {
         throw new Oprire('nu există ' . $fisierStare . ': site-ul n-a fost adoptat cu deploy/adopta.sh (sau a fost deja întors)');
     }
+    Mentenanta::avertizeazaVeche($s);
     $inceput = microtime(true);
     if ($aplica) {
         Iesire::jurnal($s->lucru . '/jurnale/revino-' . date('Ymd-His') . '.log');
-        Redenumiri::termina($stare);
+        Redenumiri::termina($stare, $o->are('rezolvat-de-mana'));
     } elseif ((array) $stare->ia('redenumiri', []) !== []) {
         Iesire::atentie('o rulare de dinainte s-a oprit la jumătatea unei redenumiri (' . implode(', ', array_keys((array) $stare->ia('redenumiri'))) . '); --aplica o termină întâi');
     }
@@ -78,7 +79,22 @@ exit(porneste(static function () use ($argv): int {
     if (!$codIntors && !is_dir($s->vechi)) {
         throw new Oprire('lipsește ' . $s->vechi . ' (codul vechi): nu am ce pune la loc. Copia lui: ' . $stare->ia('copii') . '/cod-vechi.tar.gz');
     }
-    $cuBaza = (bool) $stare->ia('migrari_pornite', false) && !$o->are('fara-baza') && empty($rev['baza']);
+    // O revenire începută continuă cu aceeași alegere despre bază: una cu --fara-baza nu devine, la reluare, una care pune
+    // baza la loc sub codul vechi deja pornit, și invers.
+    $restaurareInCurs = !empty($rev['baza_in_curs']) && empty($rev['baza']);
+    $alegere = $o->are('fara-baza') ? 'fara-baza' : 'cu-baza';
+    if (isset($rev['alegere']) && $rev['alegere'] !== $alegere && !$restaurareInCurs) {
+        throw new Oprire('revenirea începută a ales ' . ($rev['alegere'] === 'fara-baza' ? '--fara-baza' : 'să pună baza la loc')
+            . '; continu-o cu aceeași alegere (aceeași comandă ' . ($rev['alegere'] === 'fara-baza' ? 'cu' : 'fără') . ' --fara-baza)', 2);
+    }
+    if ($restaurareInCurs && $o->are('fara-baza')) {
+        throw new Oprire('o încărcare a copiei bazei a început și nu s-a terminat: baza e pe jumătate încărcată. Codul vechi nu pornește pe ea; '
+            . 'rulezi aceeași comandă fără --fara-baza (copia se încarcă din nou, de la început)', 2);
+    }
+    $cuBaza = $restaurareInCurs || ((bool) $stare->ia('migrari_pornite', false) && !$o->are('fara-baza') && empty($rev['baza']));
+    if ($cuBaza && $codIntors) {
+        throw new Oprire('codul vechi e deja din nou în ' . $s->docroot . ' (revenirea cu --fara-baza a mers până acolo); nu mai pun baza la loc sub el', 2);
+    }
     $copieBaza = (string) $stare->ia('copie_baza', '');
     $envVechi = is_file($s->vechi . '/.env') ? $s->vechi . '/.env' : ($codIntors ? $s->docroot . '/.env' : $s->site . '/.env');
     $baza = new Baza(Env::citeste($envVechi));
@@ -92,42 +108,50 @@ exit(porneste(static function () use ($argv): int {
 
     Iesire::info('codul vechi  : ' . ($codIntors ? 'deja în ' . $s->docroot : $s->vechi . ' → ' . $s->docroot));
     Iesire::info('pozele       : ' . $s->docroot . '/uploads → ' . $s->vechi . '/' . ($stare->ia('uploads') ?: '(n-au fost mutate)'));
-    Iesire::info('baza         : ' . (!empty($rev['baza']) ? 'deja pusă la loc' : ($cuBaza ? 'pusă la loc din ' . $copieBaza . ' (făcută ' . (string) ($info['facuta'] ?? '?') . ')'
-        : ($o->are('fara-baza') ? 'lăsată cum e (--fara-baza): codul vechi merge pe baza migrată' : 'neatinsă (migrările n-au pornit)'))));
+    Iesire::info('baza         : ' . (!empty($rev['baza']) ? 'deja pusă la loc' : ($restaurareInCurs ? 'ÎNCĂRCAREA COPIEI A RĂMAS LA JUMĂTATE: o reiau de la început din ' . $copieBaza
+        : ($cuBaza ? 'pusă la loc din ' . $copieBaza . ' (făcută ' . (string) ($info['facuta'] ?? '?') . ')'
+            : ($o->are('fara-baza') ? 'lăsată cum e (--fara-baza): codul vechi merge pe baza migrată' : 'neatinsă (migrările n-au pornit)')))));
 
-    // 1. Nicio scriere nouă (doar cu --aplica), apoi 2. ce s-ar pierde.
-    $mentenantaInainte = Mentenanta::citeste($s);
-    $amPusMentenanta = false;
-    if ($aplica && $s->cuStub() && !$codIntors) {
-        Mentenanta::pune($s, bin2hex(random_bytes(16)), true);
-        $amPusMentenanta = true;
-        Iesire::ok('mentenanța strictă: nici vizitatorii, nici plățile, ERP-ul sau cronurile nu mai scriu');
-        $ramase = $baza->asteaptaLiniste(60);
-        if ($ramase > 0) {
-            Mentenanta::puneLaLoc($s, $mentenantaInainte);
-            throw new Oprire($ramase . ' conexiuni lucrează încă pe bază după un minut; rulează din nou peste câteva minute (mentenanța e cum era)');
-        }
+    // 1. Nicio scriere nouă (doar cu --aplica). Mentenanța de dinainte se ține minte în stare o singură dată, la prima
+    // scriere a celei stricte, ca o revenire oprită și reluată s-o pună la loc pe cea adevărată, nu pe a ei.
+    if (!isset($rev['mentenanta_inainte'])) {
+        $rev['mentenanta_inainte'] = ['continut' => Mentenanta::citeste($s)];
     }
-    if ($cuBaza) {
-        $probleme = dateNoi($stare, $baza);
-        foreach ($probleme as $p) {
+    // La un refuz de dinaintea bazei: mentenanța cum era și alegerea uitată (nimic nu s-a schimbat încă).
+    $puneLaLoc = static function () use ($s, $stare, &$rev): void {
+        Mentenanta::puneLaLoc($s, $rev['mentenanta_inainte']['continut'] ?? null);
+        unset($rev['alegere']);
+        $stare->pune('revino', $rev);
+    };
+    if ($aplica && $s->cuStub() && !$codIntors) {
+        $rev['alegere'] = $alegere;
+        $stare->pune('revino', $rev);
+        Mentenanta::pune($s, bin2hex(random_bytes(16)), true);
+        Iesire::ok('mentenanța strictă: nici vizitatorii, nici plățile, ERP-ul sau cronurile nu mai scriu');
+        testOpreste('revino-mentenanta');
+        $baza->cereLiniste($o->are('forteaza-liniste'), $puneLaLoc);
+    }
+    // 2. Ce s-ar pierde (nu și când o încărcare a rămas la jumătate: atunci baza nu mai e a nimănui, se reface din copie).
+    if ($cuBaza && !$restaurareInCurs) {
+        [$blocante, $informative] = dateNoi($stare, $baza);
+        foreach (array_merge($blocante, $informative) as $p) {
             Iesire::atentie($p);
         }
-        if ($probleme !== [] && !$o->are('pierde-datele-noi')) {
-            if ($amPusMentenanta) {
-                Mentenanta::puneLaLoc($s, $mentenantaInainte);
+        if ($blocante !== [] && !$o->are('pierde-datele-noi')) {
+            if ($aplica) {
+                $puneLaLoc();
             }
             if (!$aplica) {
                 Iesire::scrie('');
-                Iesire::scrie('PLAN: nimic schimbat. Cu datele noi de mai sus, --aplica refuză: --fara-baza (le păstrezi) sau --pierde-datele-noi.');
+                Iesire::scrie('PLAN: nimic schimbat. Cu datele noi de mai sus, --aplica refuză: --fara-baza (baza rămâne cum e, cu ele) sau --pierde-datele-noi.');
                 return 0;
             }
             throw new Oprire('baza are date scrise după migrări (mai sus); nu le șterg fără --pierde-datele-noi. Mentenanța e cum era', 1, [
-                'păstrezi baza și întorci doar codul: aceeași comandă cu --fara-baza (codul vechi merge pe baza migrată; nu se pierde nimic)',
+                'păstrezi baza și întorci doar codul: aceeași comandă cu --fara-baza (codul vechi merge pe baza migrată; datele de mai sus rămân în ea)',
                 'sau notezi întâi din admin ce s-a schimbat în tabelele de mai sus, apoi aceeași comandă cu --pierde-datele-noi',
             ]);
         }
-        if ($probleme === []) {
+        if ($blocante === []) {
             Iesire::ok('nicio dată scrisă de la sfârșitul migrărilor (amprenta fiecărui tabel e aceeași)' . ($aplica ? '' : ' — o estimare; --aplica verifică din nou cu scrierile oprite'));
         }
     }
@@ -137,12 +161,15 @@ exit(porneste(static function () use ($argv): int {
         return 0;
     }
 
-    // 3. Baza.
+    // 3. Baza. „În curs” se scrie înainte: o încărcare omorâtă la jumătate se reia de la început, niciodată sărită.
     $probleme = [];
     if ($cuBaza) {
         $t = microtime(true);
+        $rev['baza_in_curs'] = date('c');
+        $stare->pune('revino', $rev);
         $diferente = $baza->restaureaza($copieBaza);
         $rev['baza'] = date('c');
+        unset($rev['baza_in_curs']);
         $stare->pune('revino', $rev);
         if ($diferente === []) {
             Iesire::ok('baza pusă la loc, exact ca la copie (structura și CHECKSUM TABLE ale fiecărui tabel, declanșatoarele, rutinele; '
@@ -208,30 +235,35 @@ exit(porneste(static function () use ($argv): int {
 }));
 
 /**
- * Ce s-ar pierde punând baza la loc: tabelele schimbate de la sfârșitul migrărilor (amprenta dupa-migrari.json, luată cu
- * scrierile oprite) și, dacă site-ul a fost deschis, asta însuși. Rândurile noi din tabelele cu comenzi și conturi, ca
- * informație în plus. @return list<string>
+ * Ce s-ar pierde punând baza la loc: [blocante, informative]. Blocante: tabelele schimbate de la sfârșitul migrărilor
+ * (amprenta din dupa-migrari.json, luată cu scrierile oprite) și, dacă site-ul a fost deschis, asta însuși. Informative:
+ * rândurile noi din tabelele cu comenzi și conturi față de cele de după migrări (o migrare de date poate adăuga rânduri,
+ * de exemplu recenziile copiate din tabelul vechi, deci față de copia de dinainte nu spun nimic).
+ *
+ * @return array{0: list<string>, 1: list<string>}
  */
 function dateNoi(Stare $stare, Baza $baza): array
 {
-    $rez = [];
+    $blocante = [];
+    $informative = [];
     $deschis = $stare->date['faze']['deschidere'] ?? null;
     $dupa = json_decode((string) @file_get_contents($stare->ia('copii') . '/dupa-migrari.json'), true);
     $schimbate = is_array($dupa) ? $baza->tabeleSchimbate((array) ($dupa['amprenta'] ?? [])) : [];
     if ($deschis !== null) {
-        $rez[] = 'site-ul a fost deschis vizitatorilor (' . $deschis . '): tot ce s-a scris de atunci s-ar pierde';
+        $blocante[] = 'site-ul a fost deschis vizitatorilor (' . $deschis . '): tot ce s-a scris de atunci s-ar pierde';
     }
     if ($schimbate !== []) {
-        $rez[] = 'tabele schimbate după migrări (' . count($schimbate) . '): ' . implode(', ', array_slice($schimbate, 0, 20)) . (count($schimbate) > 20 ? ', …' : '');
+        $blocante[] = 'tabele schimbate după migrări (' . count($schimbate) . '): ' . implode(', ', array_slice($schimbate, 0, 20)) . (count($schimbate) > 20 ? ', …' : '');
     } elseif (!is_array($dupa) && $deschis !== null) {
-        $rez[] = 'amprenta de după migrări lipsește: nu pot spune ce tabele s-au schimbat';
+        $blocante[] = 'amprenta de după migrări lipsește: nu pot spune ce tabele s-au schimbat';
     }
-    $info = json_decode((string) @file_get_contents((string) $stare->ia('copie_baza') . '.json'), true);
-    foreach ($baza->ultimeleIduri() as $tabel => $id) {
-        $atunci = (int) ($info['ultimele_iduri'][$tabel] ?? 0);
-        if ($id > $atunci) {
-            $rez[] = $tabel . ': ' . ($id - $atunci) . ' rânduri noi (id ' . ($atunci + 1) . '–' . $id . ')';
+    if (is_array($dupa)) {
+        foreach ($baza->ultimeleIduri() as $tabel => $id) {
+            $atunci = (int) ($dupa['ultimele_iduri'][$tabel] ?? 0);
+            if ($id > $atunci) {
+                $informative[] = $tabel . ': ' . ($id - $atunci) . ' rânduri noi după migrări (id ' . ($atunci + 1) . '–' . $id . ')';
+            }
         }
     }
-    return $rez;
+    return [$blocante, $informative];
 }

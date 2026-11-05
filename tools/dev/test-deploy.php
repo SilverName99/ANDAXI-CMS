@@ -446,6 +446,8 @@ PHP);
         $b->prepare("INSERT INTO settings (`key`, `value`) VALUES ('store_name', ?), ('maintenance_enabled', '0')")->execute([$s['nume']]);
         $b->prepare("INSERT INTO admins (email, password_hash, role) VALUES ('admin@exemplu.ro', ?, '')")->execute([password_hash('Parola-' . $x . '-1234', PASSWORD_DEFAULT)]);
         $b->exec("INSERT INTO products (name, slug, price, stock, is_active) VALUES ('Produs de proba', 'produs-de-proba', 25.50, 10, 1)");
+        // O recenzie în tabelul vechi `reviews`: migrarea recenzii/0023 o copiază în product_reviews (un rând nou, legitim).
+        $b->exec("INSERT INTO reviews (product_id, user_name, rating, review_text, is_approved) VALUES (1, 'Client proba', 5, 'Bun', 1)");
         // Ca serverul Hostinger (non-strict): coloanele NOT NULL fără valoare implicită primesc ''.
         $b->exec("SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION'");
         $b->exec("INSERT INTO orders (order_number, billing_first_name, billing_last_name, billing_phone, billing_email, billing_address_line1, billing_city, billing_county, total) "
@@ -508,24 +510,43 @@ PHP);
     [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica']), ['PLATFORMA_TEST_OPRESTE_DUPA' => 'comutare:1']);
     $verifica('procesul oprit între cele două redenumiri ale comutării (cod 9): public_html lipsește, codul vechi e în public_html.vechi', $c === 9
         && !file_exists($siteuri['a']['public']) && is_dir($siteuri['a']['dosar'] . '/public_html.vechi') && is_dir($siteuri['a']['dosar'] . '/public_html.nou'), $scurt($o));
+    [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica']), ['PLATFORMA_TEST_OPRESTE_DUPA' => 'inainte-migrari']);
+    $verifica('reluarea termină comutarea începută („comutare”) și face mentenanța (oprită apoi înainte de migrări, cod 9)', $c === 9
+        && $contine($o, 'la jumătatea pasului „comutare”', 'copia bazei de revenire') && is_dir($siteuri['a']['public']) && !is_dir($siteuri['a']['dosar'] . '/public_html.nou'), $scurt($o));
+    // Ceva scrie în bază după copia de revenire (un proces rămas): migrările nu pornesc.
+    $numeA = (string) $root->query("SELECT `value` FROM cms_dep_a.settings WHERE `key` = 'store_name'")->fetchColumn();
+    $root->exec("UPDATE cms_dep_a.settings SET `value` = 'scris dupa copie' WHERE `key` = 'store_name'");
+    [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica']));
+    $verifica('o scriere după copia de revenire (settings): „migrari” refuză să pornească (cod 1), cu tabelul numit; nicio migrare aplicată', $c === 1
+        && $contine($o, 'de la copia de revenire s-a scris în bază', 'settings') && !in_array('_platforma_stare', $root->query("SELECT TABLE_NAME FROM "
+            . "information_schema.TABLES WHERE TABLE_SCHEMA = 'cms_dep_a'")->fetchAll(PDO::FETCH_COLUMN), true), $scurt($o));
+    $root->prepare("UPDATE cms_dep_a.settings SET `value` = ? WHERE `key` = 'store_name'")->execute([$numeA]);
     [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica']));
     $rasp = $cerere($siteuri['a']['url'] . '/');
-    $verifica('reluarea termină comutarea începută („comutare”), apoi o migrare care pică (nucleu/0020): oprit în „migrari”, cod 1, cu cele două drumuri',
-        $c === 1 && $contine($o, 'la jumătatea pasului „comutare”', 'faza „migrari”', 'MENTENANȚĂ', 'deploy/revino.sh --site=proba-a') && is_dir($siteuri['a']['public'])
-        && !is_dir($siteuri['a']['dosar'] . '/public_html.nou'), $scurt($o));
+    $verifica('scrierea pusă la loc (aceeași bază ca la copie): migrările pornesc; una pică (nucleu/0020): oprit în „migrari”, cod 1, cu cele două drumuri',
+        $c === 1 && $contine($o, 'faza „migrari”', 'MENTENANȚA STRICTĂ', 'deploy/revino.sh --site=proba-a'), $scurt($o));
     $webhook = $cerere($siteuri['a']['url'] . '/webhook/stripe', ['_post' => '1']);
     [$cc, $oc] = $ruleaza([PHP_BINARY, '-d', 'pdo_mysql.default_socket=' . $sock, $bin, '--site=a.exemplu.test', 'scripts/migreaza.php', '--stare'], ['HOME' => $acasa]);
-    $verifica('mentenanța strictă după o migrare oprită: /webhook/stripe → 503 (plata se retrimite), un cron prin bin/platforma nu rulează (cod 0, fără ieșirea scriptului)',
-        $webhook['cod'] === 503 && $cc === 0 && str_contains($oc, 'mentenanța deploy-ului') && !str_contains($oc, 'ultima_ord')
-        && str_contains((string) file_get_contents($siteuri['a']['site'] . '/MENTENANTA'), "strict"), $webhook['cod'] . ' ' . $cc . ' ' . $scurt($oc));
+    $pingStrict = $ping('a');
+    $verifica('mentenanța strictă după o migrare oprită: /webhook/stripe → 503; un cron prin bin/platforma nu rulează (cod 75, un rând în '
+        . 'storage/logs/platforma.log); pingul spune „mentenanta: strict” și de când',
+        $webhook['cod'] === 503 && $cc === 75 && str_contains($oc, 'mentenanța deploy-ului') && !str_contains($oc, 'ultima_ord')
+        && str_contains((string) @file_get_contents($siteuri['a']['site'] . '/storage/logs/platforma.log'), 'scripts/migreaza.php')
+        && ($pingStrict['mentenanta'] ?? '') === 'strict' && is_int($pingStrict['mentenanta_de'] ?? null), $webhook['cod'] . ' ' . $cc . ' ' . json_encode($pingStrict));
     $verifica('site-ul A e în mentenanță: / → 503 „Revenim”; pingul trece (/_andaxi/); codul vechi în public_html.vechi',
         $rasp['cod'] === 503 && str_contains($rasp['corp'], 'Revenim') && isset($ping('a')['ok']) && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'),
         $rasp['cod'] . ' ' . json_encode($ping('a')));
     $jeton = trim((string) strtok((string) @file_get_contents($siteuri['a']['site'] . '/MENTENANTA'), "\n"));
     $cuJeton = $cerere($siteuri['a']['url'] . '/admin/login', ['X-Andaxi-Deploy' => $jeton]);
     $cuGresit = $cerere($siteuri['a']['url'] . '/admin/login', ['X-Andaxi-Deploy' => str_repeat('0', 32)]);
-    $verifica('jetonul din MENTENANTA trece de stub (/admin/login 200); un jeton greșit nu (503)', preg_match('/^[0-9a-f]{32}$/', $jeton) === 1
-        && $cuJeton['cod'] === 200 && $cuGresit['cod'] === 503, $cuJeton['cod'] . ' ' . $cuGresit['cod']);
+    $postJeton = $cerere($siteuri['a']['url'] . '/admin/login', ['X-Andaxi-Deploy' => $jeton, '_post' => '1']);
+    $verifica('jetonul din MENTENANTA trece de stub (GET /admin/login 200); un jeton greșit nu (503); în mentenanța strictă nici POST cu jeton (503)',
+        preg_match('/^[0-9a-f]{32}$/', $jeton) === 1 && $cuJeton['cod'] === 200 && $cuGresit['cod'] === 503 && $postJeton['cod'] === 503,
+        $cuJeton['cod'] . ' ' . $cuGresit['cod'] . ' ' . $postJeton['cod']);
+    touch($siteuri['a']['site'] . '/MENTENANTA', time() - 5 * 3600);
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url']]);
+    $verifica('o MENTENANTA de 5 ore: scripturile o semnalează („e acolo de 5 ore”)', str_contains($o, 'e acolo de 5'), $scurt($o));
+    touch($siteuri['a']['site'] . '/MENTENANTA');
     [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica']));
     $verifica('reluarea: fazele terminate se sar (verificari … mentenanta), pică din nou la „migrari”', $c === 1
         && $contine($o, 'verificari: făcută deja', 'mentenanta: făcută deja', 'faza „migrari”') && !str_contains($o, 'comutat: codul vechi'), $scurt($o));
@@ -543,10 +564,17 @@ PHP);
         && $contine($o, 'e a bazei cms_dep_b', 'n-am atins baza') && (string) file_get_contents($siteuri['a']['site'] . '/MENTENANTA') === $mentenantaInainte
         && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'), $scurt($o));
     file_put_contents($infoCopie, $infoOriginal);
+    // Încărcarea copiei bazei omorâtă la jumătate (tabelele migrărilor șterse, copia încă neîncărcată).
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica'], ['PLATFORMA_TEST_OPRESTE_DUPA' => 'restaurare']);
+    $verifica('revino.sh omorât în timpul încărcării copiei bazei (cod 9): codul vechi încă nu e pus la loc', $c === 9 && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'), $scurt($o));
+    [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica', '--fara-baza']);
+    $verifica('reluarea cu --fara-baza după o încărcare oprită: refuz (cod 2: baza e pe jumătate încărcată), codul vechi tot nepus; fără „nu se pierde nimic”', $c === 2
+        && str_contains($o, 'pe jumătate încărcată') && !str_contains($o, 'nu se pierde nimic') && is_dir($siteuri['a']['dosar'] . '/public_html.vechi'), $scurt($o));
     $inceput = microtime(true);
     [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica'], ['PLATFORMA_TEST_OPRESTE_DUPA' => 'revino-cod:1']);
-    $verifica('revino.sh oprit între cele două redenumiri ale codului (cod 9), după ce a pus baza la loc: public_html lipsește', $c === 9
-        && !file_exists($siteuri['a']['public']) && $contine($o, 'exact ca la copie'), $scurt($o));
+    $verifica('reluarea fără --fara-baza: „încărcarea copiei a rămas la jumătate”, o reface de la început („exact ca la copie”); oprită apoi între cele două '
+        . 'redenumiri ale codului (cod 9)', $c === 9 && !file_exists($siteuri['a']['public']) && $contine($o, 'A RĂMAS LA JUMĂTATE', 'exact ca la copie')
+        && !str_contains($o, 'nicio dată scrisă'), $scurt($o));
     [$c, $o] = $deploy('revino', ['--site=proba-a', '--url=' . $siteuri['a']['url'], '--aplica']);
     $durata = microtime(true) - $inceput;
     $verifica('revino.sh din nou: termină redenumirea, nu mai pune baza a doua oară, cod 0 (' . round($durata, 1) . ' s în total); codul „octet cu octet”', $c === 0
@@ -632,12 +660,25 @@ PHP);
     $webhookB = $cerere($siteuri['b']['url'] . '/webhook/stripe', ['_post' => '1']);
     $verifica('după migrări mentenanța e ușoară: /webhook/stripe ajunge la codul nou (nu 503), / tot 503', !in_array($webhookB['cod'], [0, 503], true)
         && $cerere($siteuri['b']['url'] . '/')['cod'] === 503, (string) $webhookB['cod']);
+    [$c, $o] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url']]);
+    $verifica('rândurile adăugate de o migrare (recenzia copiată de recenzii/0023 în product_reviews) nu opresc revenirea: planul spune „nicio dată scrisă”',
+        $c === 0 && str_contains($o, 'nicio dată scrisă de la sfârșitul migrărilor') && !str_contains($o, 'tabele schimbate')
+        && (int) $root->query('SELECT COUNT(*) FROM cms_dep_b.product_reviews')->fetchColumn() === 1, $scurt($o));
     // O plată confirmată după migrări (un UPDATE, nu un rând nou): revino.sh trebuie s-o vadă și să refuze.
     $root->exec("UPDATE cms_dep_b.orders SET payment_status = 'paid' WHERE order_number = 'BV-1'");
     $mentenantaB = (string) file_get_contents($siteuri['b']['site'] . '/MENTENANTA');
+    $dupaB = (string) file_get_contents((string) glob($siteuri['b']['site'] . '/deploy/copii/*/dupa-migrari.json')[0]);
+    [$c, $o] = $deploy('adopta', array_merge($argB, ['--aplica', '--reia=migrari']));
+    $verifica('--reia=migrari după o scriere de după migrări: refuz (cod 1, „nu rescriu amprenta”), dupa-migrari.json neschimbat, mentenanța din nou ușoară', $c === 1
+        && $contine($o, 'nu rescriu amprenta de după migrări', 'orders') && (string) file_get_contents((string) glob($siteuri['b']['site'] . '/deploy/copii/*/dupa-migrari.json')[0]) === $dupaB
+        && (string) file_get_contents($siteuri['b']['site'] . '/MENTENANTA') === $mentenantaB, $scurt($o));
+    [$c, $o] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url'], '--aplica'], ['PLATFORMA_TEST_OPRESTE_DUPA' => 'revino-mentenanta']);
+    $verifica('revino.sh omorât imediat după ce a pus mentenanța strictă (cod 9): MENTENANTA e acum strictă', $c === 9
+        && str_contains((string) file_get_contents($siteuri['b']['site'] . '/MENTENANTA'), 'strict'), $scurt($o));
     [$c, $o] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url']]);
     [$c2, $o2] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url'], '--aplica']);
-    $verifica('un UPDATE după migrări (orders): revino.sh îl vede (planul și --aplica), refuză (cod 1) cu tabelul numit; mentenanța pusă la loc exact, baza neatinsă',
+    $verifica('un UPDATE după migrări (orders): revino.sh îl vede (planul și --aplica), refuză (cod 1) cu tabelul numit; mentenanța pusă la loc exact pe cea '
+        . 'de dinaintea primei rulări (cea ușoară, nu strictă de la rularea omorâtă), baza neatinsă',
         $c === 0 && str_contains($o, 'tabele schimbate după migrări') && $c2 === 1 && $contine($o2, 'tabele schimbate după migrări', 'orders', '--fara-baza')
         && (string) file_get_contents($siteuri['b']['site'] . '/MENTENANTA') === $mentenantaB
         && (string) $root->query("SELECT payment_status FROM cms_dep_b.orders WHERE order_number = 'BV-1'")->fetchColumn() === 'paid', $scurt($o2));
@@ -671,6 +712,9 @@ PHP);
     $verifica('actualizarea oprită între cele două redenumiri ale assets/ (cod 9): assets/ lipsește, cel vechi e în .assets-' . $v1 . ', RELEASE tot ' . $v1, $c === 9
         && !is_dir($siteuri['a']['public'] . '/assets') && is_file($siteuri['a']['public'] . '/.assets-' . $v1 . '/css/app.css')
         && trim((string) file_get_contents($siteuri['a']['site'] . '/RELEASE')) === $v1, $scurt($o));
+    [$cs, $os] = $deploy('release', ['--sterge=' . $v2, '--aplica']);
+    $verifica('release.sh --sterge=' . $v2 . ' în timpul actualizării oprite spre ea: refuzat („o actualizare în curs”)', $cs === 1
+        && str_contains($os, 'o actualizare în curs') && is_dir($acasa . '/platforma/releases/' . $v2), $scurt($os));
     [$c, $o] = $deploy('actualizeaza', ['--site=proba-a', '--versiune=' . $v2, '--url=' . $siteuri['a']['url'], '--aplica']);
     $verifica('reluată: termină redenumirea („assets”), nu șterge copia veche, continuă', str_contains($o, 'la jumătatea pasului „assets”')
         && is_file($siteuri['a']['public'] . '/.assets-' . $v1 . '/css/app.css'), $scurt($o));
@@ -721,6 +765,11 @@ PHP);
         && $amprentaCod($siteuri['a']['public']) === $amprente['a']['cod'] && $amprentaBaza('cms_dep_a') === $bazaInainteA
         && str_contains($cerere($siteuri['a']['url'] . '/')['corp'], 'COD VECHI'), $scurt($o) . ' | ' . $diferente($amprentaCod($siteuri['a']['public']), $amprente['a']['cod'])
         . ' | ' . $diferente($amprentaBaza('cms_dep_a'), $bazaInainteA));
+    [$c, $o] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url'], '--aplica', '--fara-baza'], ['PLATFORMA_TEST_OPRESTE_DUPA' => 'revino-cod:1']);
+    [$c2, $o2] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url'], '--aplica', '--pierde-datele-noi']);
+    $verifica('B: revenirea cu --fara-baza omorâtă la cod (9); reluată fără --fara-baza (cu baza) → refuz (cod 2, „aceeași alegere”), baza neatinsă', $c === 9
+        && $c2 === 2 && str_contains($o2, 'continu-o cu aceeași alegere') && in_array('_platforma_stare', $root->query("SELECT TABLE_NAME FROM information_schema.TABLES "
+            . "WHERE TABLE_SCHEMA = 'cms_dep_b'")->fetchAll(PDO::FETCH_COLUMN), true), $scurt($o2));
     [$c, $o] = $deploy('revino', ['--site=proba-b', '--url=' . $siteuri['b']['url'], '--aplica', '--fara-baza']);
     $verifica('B cu --fara-baza: cod 0, codul vechi octet cu octet, baza rămâne migrată (_platforma_stare), codul vechi merge pe ea', $c === 0
         && $amprentaCod($siteuri['b']['public']) === $amprente['b']['cod'] && in_array('_platforma_stare', $root->query("SELECT TABLE_NAME FROM information_schema.TABLES "

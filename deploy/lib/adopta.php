@@ -83,6 +83,13 @@ final class Adoptare
         $this->cod = $this->s->releases . '/' . $this->versiune;
     }
 
+    /** Comutarea a început (sau s-a făcut)? După starea ei și după jurnalul redenumirilor. */
+    public function comutat(): bool
+    {
+        return (bool) $this->stare->ia('comutat', false) || isset($this->stare->date['redenumiri']['comutare'])
+            || in_array('comutare', (array) $this->stare->ia('redenumiri_facute', []), true);
+    }
+
     /** Opțiunile de care depinde ce se pregătește (cheia licenței doar ca sha256). @return array<string, string> */
     public function optiuni(): array
     {
@@ -146,10 +153,11 @@ final class Adoptare
 
 exit(porneste(static function () use ($argv): int {
     $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'commit-vechi=', 'url=', 'repo=', 'pachet=', 'cheie-licenta=', 'cron-vechi=',
-        'php-cron=', 'produs=', 'permite-blocante', 'accepta-fisiere-noi', 'fara-sonda-web', 'cron-de-mana', 'reia=', 'acasa=', 'plan', 'aplica']);
+        'php-cron=', 'produs=', 'permite-blocante', 'accepta-fisiere-noi', 'fara-sonda-web', 'cron-de-mana', 'forteaza-liniste', 'reia=', 'acasa=', 'plan', 'aplica']);
     $a = new Adoptare($o);
     $lacat = $a->s->lacat();
     stergeSonde($a);
+    Mentenanta::avertizeazaVeche($a->s);
     Iesire::titlu('Adoptarea site-ului ' . $a->slug . ' (' . $a->s->domeniu . ') pe versiunea ' . $a->versiune . ($a->aplica ? '' : ' — PLAN'));
     Iesire::info('dosarul : ' . $a->s->dosar);
     Iesire::info('adresa  : ' . $a->url);
@@ -171,7 +179,7 @@ exit(porneste(static function () use ($argv): int {
     if (is_array($vechi) && $a->stare->date['faze'] !== [] && $vechi !== $optiuni) {
         $diferite = implode(', ', array_keys(array_diff_assoc(array_map('strval', $optiuni), array_map('strval', $vechi))
             + array_diff_assoc(array_map('strval', $vechi), array_map('strval', $optiuni))));
-        if ($a->stare->ia('comutat', false)) {
+        if ($a->comutat()) {
             throw new Oprire('adoptarea începută (comutată deja) a avut alte opțiuni (' . $diferite . '): continu-o cu aceleași, sau revino (deploy/revino.sh)', 2);
         }
         if ($o->text('reia') !== 'verificari') {
@@ -183,6 +191,9 @@ exit(porneste(static function () use ($argv): int {
         $i = array_search($reia, FAZE, true);
         if ($i === false || ($i <= 3 && $a->stare->facuta('mentenanta'))) {
             throw new Oprire('--reia=' . $reia . ': ' . ($i === false ? 'fazele sunt ' . implode(', ', FAZE) : 'site-ul e deja comutat; poți relua doar de la migrari încolo'), 2);
+        }
+        if ($a->stare->facuta('migrari') && $i <= array_search('migrari', FAZE, true)) {
+            verificaReluareaMigrarilor($a);
         }
         foreach (array_slice(FAZE, (int) $i) as $f) {
             unset($a->stare->date['faze'][$f]);
@@ -198,6 +209,7 @@ exit(porneste(static function () use ($argv): int {
         }
         Iesire::titlu($faza);
         try {
+            testOpreste('inainte-' . $faza);
             ('Platforma\\Deploy\\' . $faza)($a);
         } catch (Oprire $e) {
             throw new Oprire('faza „' . $faza . '”: ' . $e->getMessage(), $e->getCode(), array_merge($e->pasi, dupaEsec($a, $faza)));
@@ -216,13 +228,15 @@ exit(porneste(static function () use ($argv): int {
 /** @return list<string> ce poate face omul după o oprire în faza dată */
 function dupaEsec(Adoptare $a, string $faza): array
 {
-    if (!$a->stare->ia('comutat', false) && !isset($a->stare->date['redenumiri']['comutare'])) {
+    if (!$a->comutat()) {
         return ['site-ul a rămas pe codul vechi, neatins; vizitatorii n-au văzut nimic',
             'după reparare rulezi din nou aceeași comandă (cu --aplica): continuă de la faza „' . $faza . '”'];
     }
     $jeton = (string) $a->stare->ia('jeton', '');
     return [
-        'site-ul e în MENTENANȚĂ: vizitatorii văd „Revenim în câteva minute” (plățile, ERP-ul și pingul trec)',
+        Mentenanta::mod($a->s) === 'strict'
+            ? 'site-ul e în MENTENANȚA STRICTĂ: vizitatorii văd „Revenim în câteva minute”, plățile și ERP-ul primesc 503 și retrimit mai târziu, cronurile nu rulează'
+            : 'site-ul e în MENTENANȚĂ: vizitatorii văd „Revenim în câteva minute” (plățile, ERP-ul și pingul trec; cronurile nu rulează)',
         'site-ul nou îl vezi în browser cu ' . $a->url . '/?andaxi_deploy=' . $jeton,
         'drumul 1: repari, apoi rulezi din nou aceeași comandă (cu --aplica); continuă de la faza „' . $faza . '”',
         'drumul 2, te întorci la codul vechi (câteva minute): deploy/revino.sh --site=' . $a->slug . ' --domeniu=' . $a->s->domeniu . ' --aplica',
@@ -878,10 +892,8 @@ function mentenanta(Adoptare $a): void
 
     // Copia bazei de revenire: cu scrierile oprite (după ce s-au terminat și cererile sau cronurile pornite înainte).
     $baza = new Baza(Env::citeste($s->site . '/.env'));
-    $ramase = $baza->asteaptaLiniste(60);
-    if ($ramase > 0) {
-        throw new Oprire($ramase . ' conexiuni lucrează încă pe bază după un minut (un cron sau o cerere a codului vechi); rulează din nou peste câteva minute');
-    }
+    // Dacă liniștea nu vine, nu las mentenanța strictă doar din cauza așteptării: cea ușoară (plățile trec) până la reluare.
+    $baza->cereLiniste($a->o->are('forteaza-liniste'), static fn () => Mentenanta::pune($s, $jeton, false));
     $fisier = $a->stare->ia('copii') . '/baza.sql.gz';
     $secunde = $baza->copie($fisier);
     $a->stare->pune('copie_baza', $fisier);
@@ -892,7 +904,31 @@ function migrari(Adoptare $a): void
 {
     $cod = $a->codSite();
     $jeton = (string) $a->stare->ia('jeton');
+    $modInainte = Mentenanta::mod($a->s);
     Mentenanta::pune($a->s, $jeton, true);
+    $baza = new Baza(Env::citeste($a->s->site . '/.env'));
+    $laOprire = static fn () => Mentenanta::pune($a->s, $jeton, $modInainte === 'strict');
+    $dupaFisier = $a->stare->ia('copii') . '/dupa-migrari.json';
+    $dupa = json_decode((string) @file_get_contents($dupaFisier), true);
+    if (is_array($dupa)) {
+        // O reluare după migrări terminate (--reia=migrari): baza trebuie să fie cea de atunci. Altfel s-a scris în ea între
+        // timp (o plată, cu mentenanța ușoară), iar amprenta de după migrări, cu care revino.sh vede datele noi, nu se rescrie.
+        $schimbate = $baza->tabeleSchimbate((array) ($dupa['amprenta'] ?? []));
+        if ($schimbate !== []) {
+            $laOprire();
+            throw new Oprire('de la sfârșitul migrărilor (' . (string) ($dupa['facuta'] ?? '?') . ') s-a scris în ' . implode(', ', array_slice($schimbate, 0, 10))
+                . '; nu rescriu amprenta de după migrări (cu ea revino.sh vede datele noi). Migrările sunt deja făcute: continui cu aceeași comandă fără --reia');
+        }
+    } elseif (!$a->stare->ia('migrari_pornite', false)) {
+        // Prima intrare în migrări: baza trebuie să fie exact cea din copia de revenire (nimic scris de la copie).
+        $copie = json_decode((string) @file_get_contents((string) $a->stare->ia('copie_baza') . '.json'), true);
+        $schimbate = is_array($copie) ? $baza->tabeleSchimbate((array) ($copie['amprenta'] ?? [])) : ['(copia de revenire lipsește)'];
+        if ($schimbate !== []) {
+            $laOprire();
+            throw new Oprire('de la copia de revenire s-a scris în bază (' . implode(', ', array_slice($schimbate, 0, 10)) . '): copia n-ar mai fi cea de dinaintea '
+                . 'migrărilor, deci nu migrez. Revii (deploy/revino.sh --aplica: baza nu fusese atinsă de migrări) și iei adoptarea de la capăt');
+        }
+    }
     $a->stare->pune('migrari_pornite', true);
     $plan = planMigrari($a, $cod);
     if ($plan === 0) {
@@ -915,14 +951,49 @@ function migrari(Adoptare $a): void
     if ($plan !== 0) {
         throw new Oprire('migrările n-au terminat după 30 de reluări');
     }
-    // Amprenta bazei după migrări, încă cu scrierile oprite: revino.sh o compară cu baza de atunci, ca orice scriere de
-    // după (o plată confirmată, o comandă, o schimbare din admin) să fie văzută înainte să fie pierdută.
-    $baza = new Baza(Env::citeste($a->s->site . '/.env'));
-    Fisiere::scrie($a->stare->ia('copii') . '/dupa-migrari.json', (string) json_encode(['facuta' => date('c'), 'baza' => $baza->nume(),
-        'amprenta' => $baza->amprenta()], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", 0600);
-    Iesire::ok('amprenta bazei după migrări: ' . $a->stare->ia('copii') . '/dupa-migrari.json');
+    // Amprenta bazei după migrări, încă cu scrierile oprite, o singură dată: revino.sh o compară cu baza de atunci, ca orice
+    // scriere de după (o plată confirmată, o comandă, o schimbare din admin) să fie văzută înainte să fie pierdută.
+    if (!is_array($dupa)) {
+        incalzeste($a);
+        Fisiere::scrie($dupaFisier, (string) json_encode(['facuta' => date('c'), 'baza' => $baza->nume(), 'amprenta' => $baza->amprenta(),
+            'ultimele_iduri' => $baza->ultimeleIduri()], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", 0600);
+        Iesire::ok('amprenta bazei după migrări: ' . $dupaFisier);
+    } else {
+        Iesire::ok('amprenta bazei după migrări e cea de atunci (' . (string) ($dupa['facuta'] ?? '?') . '); n-o rescriu');
+    }
     // De aici, mentenanța ușoară: plățile și ERP-ul trec din nou (codul nou e pe baza migrată), vizitatorii încă nu.
     Mentenanta::pune($a->s, $jeton, false);
+}
+
+/**
+ * Primele cereri ale codului nou, cu jetonul, încă în mentenanța strictă: pașii de activare ai pluginurilor (pagina
+ * /acorduri-gdpr, pragul ERP, rândurile lor din jurnal), regulile de redirecționare ale pachetului și ce mai scrie codul o
+ * singură dată la prima pagină se fac acum, deci intră în amprenta de după migrări. Altfel testul de fum le-ar scrie
+ * după ea, iar revino.sh le-ar vedea ca date noi.
+ */
+function incalzeste(Adoptare $a): void
+{
+    $jeton = (string) $a->stare->ia('jeton');
+    $antete = ['X-Andaxi-Deploy' => $jeton, 'Cookie' => 'andaxi_deploy=' . $jeton, 'Cache-Control' => 'no-cache'];
+    $coduri = [];
+    foreach (['/', '/magazin', '/cos', '/admin/login', '/health'] as $cale) {
+        $coduri[] = $cale . ' ' . Http::cere($a->url . $cale, $antete)['cod'];
+    }
+    Iesire::info('primele cereri ale codului nou (pașii de activare, redirecționările pachetului): ' . implode(', ', $coduri));
+}
+
+/** --reia=migrari după migrări terminate: refuzat dacă s-a scris în bază de atunci (amprenta de după migrări rămâne). */
+function verificaReluareaMigrarilor(Adoptare $a): void
+{
+    $dupa = json_decode((string) @file_get_contents($a->stare->ia('copii') . '/dupa-migrari.json'), true);
+    if (!is_array($dupa)) {
+        return;
+    }
+    $schimbate = (new Baza(Env::citeste($a->s->site . '/.env')))->tabeleSchimbate((array) ($dupa['amprenta'] ?? []));
+    if ($schimbate !== []) {
+        throw new Oprire('--reia: de la sfârșitul migrărilor (' . (string) ($dupa['facuta'] ?? '?') . ') s-a scris în ' . implode(', ', array_slice($schimbate, 0, 10))
+            . '; nu rescriu amprenta de după migrări (cu ea revino.sh vede datele noi). Migrările sunt deja făcute: aceeași comandă fără --reia continuă', 1);
+    }
 }
 
 function diagnostic(Adoptare $a): void

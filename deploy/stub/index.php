@@ -13,8 +13,9 @@ declare(strict_types=1);
  *     Retry-After: 120 și mentenanta.html, în afară de /webhook/, /api/erp/ și /_andaxi/: confirmările de plată,
  *     ERP-ul și pingul merg mai departe. E alta decât „Revenim în curând” din admin (App\Support\Maintenance) și
  *     merge și când baza sau codul nou sunt stricate. Cu „strict” pe al doilea rând al fișierului (mentenanța strictă
- *     a deploy-ului: copia bazei, migrările, revenirea) trece doar pingul: plățile și ERP-ul primesc și ele 503 cu
- *     Retry-After și retrimit mai târziu, deci nimic nu scrie în bază. Dacă MENTENANTA conține pe primul rând un jeton (32–64 de cifre hexazecimale,
+ *     a deploy-ului: copia bazei, migrările, revenirea) trece doar GET/HEAD pe /_andaxi/ping: plățile și ERP-ul primesc
+ *     și ele 503 cu Retry-After și retrimit mai târziu, iar jetonul de mai jos deschide doar GET și HEAD, deci nimic nu
+ *     scrie în bază. Dacă MENTENANTA conține pe primul rând un jeton (32–64 de cifre hexazecimale,
  *     scris de scripturile din deploy/), o cerere cu același jeton în antetul X-Andaxi-Deploy sau în cookie-ul
  *     andaxi_deploy trece și ea: așa verifică deploy-ul (și proprietarul, în browser) site-ul nou înainte să-l
  *     deschidă. ?andaxi_deploy=<jeton> pune cookie-ul (sesiune, HttpOnly) și trimite la aceeași adresă fără el.
@@ -56,11 +57,17 @@ require (static function (): string {
         $randuri = preg_split('/\R/', $continut) ?: [];
         // Mentenanța strictă (al doilea rând „strict”): nici plățile, nici ERP-ul nu trec (503 + Retry-After; ele retrimit).
         $stricta = trim((string) ($randuri[1] ?? '')) === 'strict';
+        $citire = $metoda === 'GET' || $metoda === 'HEAD';
         $trece = false;
-        foreach ($stricta ? ['/_andaxi/'] : ['/webhook/', '/api/erp/', '/_andaxi/'] as $prefix) {
-            if (str_starts_with($cale, $prefix)) {
-                $trece = true;
-                break;
+        if ($stricta) {
+            // Strictă: doar pingul (GET/HEAD, cu sau fără „/” la sfârșit), care nu scrie nimic.
+            $trece = $citire && rtrim($cale, '/') === '/_andaxi/ping';
+        } else {
+            foreach (['/webhook/', '/api/erp/', '/_andaxi/'] as $prefix) {
+                if (str_starts_with($cale, $prefix)) {
+                    $trece = true;
+                    break;
+                }
             }
         }
         $jeton = $trece ? '' : trim((string) ($randuri[0] ?? ''));
@@ -78,7 +85,8 @@ require (static function (): string {
                 exit;
             }
             $dat = $_SERVER['HTTP_X_ANDAXI_DEPLOY'] ?? $_COOKIE['andaxi_deploy'] ?? '';
-            $trece = is_string($dat) && $dat !== '' && hash_equals($jeton, $dat);
+            // În mentenanța strictă jetonul deschide doar citiri (verificările deploy-ului): nicio scriere prin el.
+            $trece = is_string($dat) && $dat !== '' && hash_equals($jeton, $dat) && (!$stricta || $citire);
         }
         if (!$trece) {
             $indisponibil(120);

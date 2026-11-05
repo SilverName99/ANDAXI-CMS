@@ -645,8 +645,9 @@ dosar) și `deploy/stub/mentenanta.html`; le copiază acolo scripturile de deplo
    hexazecimale), o cerere cu același jeton în antetul `X-Andaxi-Deploy` sau în cookie-ul `andaxi_deploy` trece:
    testul de fum al deploy-ului și proprietarul, în browser, cu `?andaxi_deploy=<jeton>` (pune cookie-ul și trimite
    la aceeași adresă fără el). Cu `strict` pe al doilea rând (mentenanța strictă a deploy-ului: copia bazei, migrările,
-   revenirea) trece doar `/_andaxi/`: plățile și ERP-ul primesc și ele 503 cu `Retry-After` și retrimit. `bin/platforma`
-   nu rulează nimic cât fișierul există (afară de `--in-mentenanta`, al scripturilor de deploy), deci nici cronurile;
+   revenirea) trece doar GET/HEAD pe `/_andaxi/ping`, iar jetonul doar GET/HEAD: plățile și ERP-ul primesc și ele 503 cu
+   `Retry-After` și retrimit. `bin/platforma` nu rulează nimic cât fișierul există (codul 75 și un rând în
+   `storage/logs/platforma.log`; afară de `--in-mentenanta`, al scripturilor de deploy), deci nici cronurile;
 3. ia versiunea din `../site/releases/<versiune>/` dacă există (o găzduire care nu lasă un site să citească în
    afara dosarului lui), altfel din `~/platforma/releases/<versiune>/`; lipsă → 503 static;
 4. definește `PLATFORMA_SITE_DIR` (`../site`) și `PLATFORMA_PUBLIC_DIR` (`public_html`), apoi încarcă
@@ -689,7 +690,8 @@ linia. Explică o pagină trunchiată fără să caute prin tot jurnalul PHP.
 `.env`-ul și `storage/`.
 
 **Pingul** (`GET /_andaxi/ping`, `App\Support\Ping`), pentru monitorul CRM-ului (la 5 minute) și verificarea de
-după un deploy: `200 {"ok":true,"db":true,"cod":"<versiune>","schema":"<stare>"}` (`cod` din fișierul `VERSION`
+după un deploy: `200 {"ok":true,"db":true,"cod":"<versiune>","schema":"<stare>"}` (în așezarea din Etapa 2 și
+`"mentenanta":"strict"|"usoara"|"nu"`, `"mentenanta_de":<secunde>|null`: mentenanța deploy-ului, [DEPLOY.md](DEPLOY.md)) (`cod` din fișierul `VERSION`
 al versiunii urcate, `null` fără el, de exemplu aici; `schema` e starea gărzii migrărilor, [MIGRARI.md](MIGRARI.md),
 „Garda”, și cu `in_urma` tot 200), `503 {"ok":false,"db":false}` fără bază. `SELECT 1` pe o conexiune a lui, cu
 limita de 2 secunde la conectare și la fiecare citire (`PDO::ATTR_TIMEOUT` și `mysqlnd.net_read_timeout`: un

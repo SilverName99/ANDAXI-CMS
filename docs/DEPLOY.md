@@ -39,14 +39,28 @@ Stub-ul (`deploy/stub/index.php`) e același pe fiecare site: citește `site/REL
 `site/releases/<v>/` dacă există, altfel din `~/platforma/releases/<v>/`). Cu `site/MENTENANTA` răspunde 503 cu pagina
 „Revenim în câteva minute”. Mentenanța are două trepte:
 
-- **strictă** (cât se copiază baza, cât rulează migrările și cât se pune baza la loc): trece doar pingul (`/_andaxi/`).
-  Plățile (`/webhook/`) și ERP-ul (`/api/erp/`) primesc și ele 503 cu `Retry-After`, iar procesatorii de plăți și ERP-ul
-  le retrimit mai târziu; nimic nu scrie în bază;
+- **strictă** (cât se copiază baza, cât rulează migrările și cât se pune baza la loc): trece doar pingul (GET pe
+  `/_andaxi/ping`). Plățile (`/webhook/`) și ERP-ul (`/api/erp/`) primesc și ele 503 cu `Retry-After`, iar procesatorii de
+  plăți și ERP-ul le retrimit mai târziu; jetonul de mai jos deschide doar citiri (GET); nimic nu scrie în bază;
 - **ușoară** (după migrări, cât se verifică site-ul nou): plățile și ERP-ul trec din nou, vizitatorii încă nu.
 
-În amândouă, **cronurile nu rulează**: `bin/platforma` vede `MENTENANTA` și iese fără să facă nimic. Pe primul rând al
+În amândouă, **cronurile nu rulează**: `bin/platforma` vede `MENTENANTA`, scrie un rând în
+`site/storage/logs/platforma.log` și iese cu codul 75, fără să facă nimic. Pe primul rând al
 fișierului stă jetonul deploy-ului: o cerere cu același jeton trece, așa se verifică site-ul nou înainte să-l vadă
 oricine, iar tu îl vezi în browser cu adresa `https://<domeniu>/?andaxi_deploy=<jeton>` (scriptul ți-o scrie când e cazul).
+
+### Mentenanța rămasă
+
+O rulare oprită și uitată poate lăsa `site/MENTENANTA`: site-ul rămâne închis. Se vede:
+
+- în ping: `curl -s https://<domeniu>/_andaxi/ping` arată `"mentenanta":"strict"` sau `"usoara"` și de câte secunde
+  (`"mentenanta_de"`); `"nu"` când site-ul e deschis. Monitorul CRM-ului citește același ping;
+- `ls -la ~/domains/<domeniu>/site/MENTENANTA` (data fișierului) și `tail ~/domains/<domeniu>/site/storage/logs/platforma.log`
+  (cronurile sărite);
+- scripturile din `deploy/` avertizează când fișierul are peste 3 ore.
+
+Ce faci: rulezi din nou comanda care a rămas la jumătate (o continuă) sau `deploy/revino.sh`. Doar dacă știi sigur că nu
+mai rulează niciun deploy și că site-ul nou e bun, îl ștergi de mână: `rm ~/domains/<domeniu>/site/MENTENANTA`.
 
 ## O dată, pe server (aproximativ 10 minute)
 
@@ -142,6 +156,12 @@ La sfârșit scrie rândurile de cron (mai jos) și unde a pus copiile.
   `--reia=<faza>` rulează din nou o fază terminată (de la `migrari` încolo).
 - o reluare cu alte opțiuni (altă `--versiune`, alt `--pachet`, altă `--cheie-licenta`) e refuzată: înainte de comutare
   o iei de la capăt cu `--reia=verificari`; după comutare continui doar cu aceleași opțiuni sau revii.
+- dacă după un minut mai lucrează conexiuni pe bază (un cron lung al codului vechi), scriptul se oprește cu lista lor (ID,
+  timp, instrucțiune) și lasă mentenanța ușoară; rulezi din nou peste câteva minute, sau, dacă știi ce sunt,
+  `--forteaza-liniste`.
+- migrările pornesc doar dacă baza e exact cea din copia de revenire (nimic scris de la copie); amprenta de după
+  migrări se scrie o singură dată, după primele cereri ale codului nou (pașii de activare ai pluginurilor), și nu se
+  rescrie: un `--reia=migrari` după o scriere de după migrări e refuzat.
 
 ## Revenirea
 
@@ -170,7 +190,13 @@ Când refuză, ai două feluri:
   merge pe ea). **Nu se pierde nimic.** E alegerea obișnuită după ce site-ul nou a fost deschis.
 - `--pierde-datele-noi`: baza exact cea de dinaintea migrărilor; tot ce arată lista se pierde (notezi întâi din admin).
 
-O revenire oprită la jumătate se reia cu aceeași comandă (baza nu se pune a doua oară). După revenire pui înapoi în
+O revenire oprită la jumătate se reia cu **aceeași** comandă: aceeași alegere despre bază (una pornită cu `--fara-baza`
+nu devine, la reluare, una care pune baza la loc sub codul vechi deja pornit, și invers), mentenanța de dinaintea primei
+rulări pusă la loc la un refuz, iar o încărcare a copiei bazei rămasă la jumătate se reface de la început (atunci
+`--fara-baza` e refuzat: baza nu e întreagă, codul vechi nu pornește pe ea). Rândurile noi din `orders`, `users`,
+`product_reviews`… față de sfârșitul migrărilor se arată doar ca informație (o migrare poate adăuga rânduri: recenziile
+copiate din tabelul vechi); hotărăște amprenta tabelelor. O redenumire imposibilă (amândouă dosarele există, sau niciunul)
+o rezolvi de mână, apoi aceeași comandă cu `--rezolvat-de-mana`. După revenire pui înapoi în
 hPanel cronurile vechi (dacă le-ai schimbat). `site/` rămâne; o adoptare nouă pornește de la început.
 
 ## O versiune nouă
@@ -186,7 +212,10 @@ Fazele: verificări, pregătire (pachetul, `assets/` și `tema/` noi alături, c
 `RELEASE` să se schimbe**, apoi `RELEASE` (cache-ul paginilor golit) și mentenanța ușoară, diagnosticul, testul de fum,
 deschiderea. **Dacă ceva pică după comutare, se întoarce singur**: `RELEASE` (dacă apucase să se schimbe), pachetul,
 `assets/`, `tema/` și stub-ul de dinainte, verificarea versiunii vechi și, dacă trece, site-ul deschis (codul de ieșire
-rămâne 1). O întoarcere oprită la jumătate se termină la rularea următoare.
+rămâne 1). O întoarcere oprită la jumătate se termină la rularea următoare. Dacă nici versiunea veche nu trece testul de
+fum după întoarcere, site-ul rămâne în mentenanță; de acolo: o versiune reparată (`--versiune=<reparația> --aplica`
+merge mai departe), sau `--accepta-revenirea` (deschide site-ul pe versiunea veche, cu un avertisment). `release.sh
+--sterge` nu atinge versiunile unei actualizări în curs.
 Baza rămâne cum au lăsat-o migrările (doar adăugări); copia ei e în `site/deploy/copii/`. Celelalte site-uri de pe
 versiunea veche nu se schimbă. Înapoi pe versiunea de dinainte, de mână: aceeași comandă cu `--versiune=<veche>`
 (și `--inapoi`, dacă baza are deja migrări pe care versiunea veche nu le știe).

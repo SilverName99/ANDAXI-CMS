@@ -87,10 +87,30 @@ final class Actualizare
 }
 
 exit(porneste(static function () use ($argv): int {
-    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'url=', 'repo=', 'pachet=', 'produs=', 'permite-blocante', 'inapoi', 'acasa=', 'plan', 'aplica']);
+    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'url=', 'repo=', 'pachet=', 'produs=', 'permite-blocante', 'inapoi', 'forteaza-liniste', 'accepta-revenirea', 'acasa=', 'plan', 'aplica']);
     $u = new Actualizare($o);
     $lacat = $u->s->lacat();
     $stare = $u->stare;
+    Mentenanta::avertizeazaVeche($u->s);
+    // Mentenanța de la pornire: o fază fără întoarcere care pică o lasă cum era (de obicei: niciuna).
+    $mentenantaLaPornire = Mentenanta::citeste($u->s);
+    // O întoarcere ale cărei redenumiri s-au terminat, dar a cărei versiune veche nu trece testul de fum, lasă site-ul în
+    // mentenanță. De acolo: o versiune nouă (reparația, fix-forward), sau --accepta-revenirea (deschis cu versiunea veche).
+    if ($stare->ia('intoarcere_in_curs', false) && $stare->ia('intoarcere_pasi_gata', false)) {
+        if ($o->are('accepta-revenirea')) {
+            Mentenanta::scoate($u->s);
+            $stare->pune('intoarsa', true);
+            $stare->pune('intoarcere_in_curs', false);
+            Iesire::atentie('--accepta-revenirea: site-ul e deschis pe ' . (string) $stare->ia('versiune_veche') . ' deși n-a trecut testul de fum după întoarcere; '
+                . 'verifică-l acum în browser și în ' . $u->s->site . '/storage/logs/');
+            return 0;
+        }
+        if ($stare->ia('versiune_noua') !== $u->noua) {
+            Iesire::atentie('întoarcerea la ' . (string) $stare->ia('versiune_veche') . ' a rămas fără testul de fum trecut; merg mai departe spre ' . $u->noua . ' (reparația)');
+            $stare->pune('intoarsa', true);
+            $stare->pune('intoarcere_in_curs', false);
+        }
+    }
     // O actualizare neterminată spre aceeași versiune continuă; spre alta, nu; una terminată lasă loc uneia noi.
     if ($stare->ia('gata', false) || $stare->ia('intoarsa', false) || $stare->ia('versiune_noua') === null) {
         if ($u->aplica && is_file($stare->fisier)) {
@@ -133,7 +153,8 @@ exit(porneste(static function () use ($argv): int {
             ('Platforma\\Deploy\\' . $faza . 'Actualizare')($u);
         } catch (Oprire $e) {
             if (!in_array($faza, FAZE_CU_INTOARCERE, true)) {
-                Mentenanta::scoate($u->s);
+                $inainte = $stare->ia('mentenanta_inainte');
+                Mentenanta::puneLaLoc($u->s, is_array($inainte) ? ($inainte['continut'] ?? null) : $mentenantaLaPornire);
                 throw new Oprire('faza „' . $faza . '”: ' . $e->getMessage(), $e->getCode(), array_merge($e->pasi,
                     ['site-ul a rămas pe ' . $u->veche . ', deschis; după reparare, aceeași comandă continuă de la „' . $faza . '”']));
             }
@@ -294,13 +315,13 @@ function mentenantaActualizare(Actualizare $u): void
 {
     $jeton = (string) $u->stare->ia('jeton', '') ?: bin2hex(random_bytes(16));
     $u->stare->pune('jeton', $jeton);
+    if (!is_array($u->stare->ia('mentenanta_inainte'))) {
+        $u->stare->pune('mentenanta_inainte', ['continut' => Mentenanta::citeste($u->s)]);
+    }
     Mentenanta::pune($u->s, $jeton, true);
     Iesire::ok('mentenanța strictă: vizitatorii văd „Revenim în câteva minute”; plățile și ERP-ul primesc 503 și retrimit; cronurile nu rulează');
-    $ramase = (new Baza(Env::citeste($u->s->site . '/.env')))->asteaptaLiniste(60);
-    if ($ramase > 0) {
-        throw new Oprire($ramase . ' conexiuni lucrează încă pe bază după un minut (un cron lung?); rulează din nou peste câteva minute');
-    }
-    Iesire::ok('nicio altă conexiune nu mai lucrează pe bază');
+    // Fără liniște, faza se oprește, iar mentenanța se scoate (faza nu are întoarcere): site-ul rămâne pe versiunea de acum.
+    (new Baza(Env::citeste($u->s->site . '/.env')))->cereLiniste($u->o->are('forteaza-liniste'));
 }
 
 /**
@@ -411,6 +432,7 @@ function intoarce(Actualizare $u): void
     $st = $u->stare;
     Iesire::titlu('Întoarcerea la ' . $u->veche);
     $st->pune('intoarcere_in_curs', true);
+    $st->pune('intoarcere_pasi_gata', false);
     Mentenanta::pune($s, (string) $st->ia('jeton', '') ?: bin2hex(random_bytes(16)), true);
     // O redenumire rămasă la jumătate (de exemplu procesul oprit) se termină întâi, ca să se poată desface întreagă.
     Redenumiri::termina($st);
@@ -450,6 +472,7 @@ function intoarce(Actualizare $u): void
         Redenumiri::fa($st, 'inapoi-pachet', [[$s->site . '/pachet', $s->site . '/pachet.nou'], [$s->site . '/.pachet-' . $u->veche, $s->site . '/pachet']]);
         Iesire::ok('pachetul de dinainte');
     }
+    $st->pune('intoarcere_pasi_gata', true);
     Iesire::scrie('');
     Iesire::scrie('Verificarea versiunii ' . $u->veche . ', după întoarcere:');
     Mentenanta::pune($s, (string) $st->ia('jeton', '') ?: bin2hex(random_bytes(16)), false);
@@ -458,7 +481,8 @@ function intoarce(Actualizare $u): void
         throw new Oprire('nici versiunea ' . $u->veche . ' nu trece verificarea după întoarcere: ' . implode('; ', $probleme) . '; site-ul rămâne în MENTENANȚĂ', 1, [
             'uită-te în ' . $s->site . '/storage/logs/php.log și fatal.log',
             'site-ul îl vezi cu ' . $u->url . '/?andaxi_deploy=' . trim((string) strtok((string) Mentenanta::citeste($s), "\n")),
-            'deschis de mână, cu riscul tău: rm ' . $s->site . '/MENTENANTA',
+            'o versiune care repară problema: actualizeaza.sh --versiune=<versiunea reparată> --aplica (merge mai departe de aici)',
+            'sau deschis cu versiunea veche, cu riscul tău: aceeași comandă cu --accepta-revenirea',
         ]);
     }
     Mentenanta::scoate($s);

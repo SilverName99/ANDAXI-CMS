@@ -694,23 +694,60 @@ final class Baza
     }
 
     /**
-     * Așteaptă (cel mult $secunde) până nu mai lucrează nicio altă conexiune pe această bază: o cerere a codului vechi
-     * sau un cron pornit înainte de mentenanță. Întoarce câte au rămas (0 = liniște). Vede doar conexiunile
-     * utilizatorului bazei (pe găzduirea comună, ale site-ului).
+     * Așteaptă (cel mult $secunde) până nu mai lucrează nicio altă conexiune pe această bază: o cerere a codului vechi,
+     * un cron pornit înainte de mentenanță, sau o conexiune care doarme cu o tranzacție deschisă (INNODB_TRX; fără
+     * dreptul PROCESS nu se vede, și atunci contează doar cele care lucrează). Vede doar conexiunile utilizatorului
+     * bazei (pe găzduirea comună, ale site-ului). Întoarce cele care au rămas (gol = liniște), cu ID, TIME și începutul
+     * instrucțiunii, pentru mesaj.
+     *
+     * @return list<string>
      */
-    public function asteaptaLiniste(int $secunde): int
+    public function asteaptaLiniste(int $secunde): array
     {
         $sfarsit = microtime(true) + $secunde;
         do {
-            $q = $this->pdo()->prepare("SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB = ? AND ID <> CONNECTION_ID() AND COMMAND NOT IN ('Sleep', 'Daemon', 'Binlog Dump')");
+            $q = $this->pdo()->prepare("SELECT ID, TIME, COMMAND, LEFT(COALESCE(INFO, ''), 80) FROM information_schema.PROCESSLIST "
+                . "WHERE DB = ? AND ID <> CONNECTION_ID() AND COMMAND NOT IN ('Sleep', 'Daemon', 'Binlog Dump')");
             $q->execute([$this->nume()]);
-            $n = (int) $q->fetchColumn();
-            if ($n === 0) {
-                return 0;
+            $randuri = $q->fetchAll(PDO::FETCH_NUM);
+            try {
+                $q = $this->pdo()->prepare("SELECT p.ID, p.TIME, 'Sleep cu tranzacție deschisă', LEFT(COALESCE(t.trx_query, ''), 80) FROM information_schema.INNODB_TRX t "
+                    . "JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id WHERE p.DB = ? AND p.ID <> CONNECTION_ID() AND p.COMMAND = 'Sleep'");
+                $q->execute([$this->nume()]);
+                $randuri = array_merge($randuri, $q->fetchAll(PDO::FETCH_NUM));
+            } catch (Throwable) {
+            }
+            if ($randuri === []) {
+                return [];
             }
             usleep(500000);
         } while (microtime(true) < $sfarsit);
-        return $n;
+        return array_map(static fn (array $r): string => 'ID ' . $r[0] . ', ' . $r[1] . ' s, ' . $r[2] . ($r[3] !== '' ? ': ' . self::faraValori((string) $r[3]) : ''), $randuri);
+    }
+
+    /**
+     * Liniștea pe bază înaintea unei copii sau a unei încărcări: oprește dacă rămân conexiuni (cu lista lor), afară de
+     * --forteaza-liniste, care doar avertizează. $laOprire rulează înaintea opririi (de exemplu mentenanța pusă la loc).
+     */
+    public function cereLiniste(bool $forteaza, ?callable $laOprire = null): void
+    {
+        $ramase = $this->asteaptaLiniste(60);
+        if ($ramase === []) {
+            Iesire::ok('nicio altă conexiune nu mai lucrează pe bază');
+            return;
+        }
+        if ($forteaza) {
+            Iesire::atentie('--forteaza-liniste: merg mai departe deși ' . count($ramase) . ' conexiuni lucrează pe bază (' . implode('; ', array_slice($ramase, 0, 3))
+                . '); ce scriu ele acum poate lipsi din copie sau se poate pierde');
+            return;
+        }
+        if ($laOprire !== null) {
+            $laOprire();
+        }
+        throw new Oprire(count($ramase) . ' conexiuni lucrează încă pe bază după un minut: ' . implode('; ', array_slice($ramase, 0, 5)), 1, [
+            'rulezi din nou aceeași comandă peste câteva minute (un cron lung termină singur)',
+            'dacă știi ce sunt și că nu scriu nimic important: aceeași comandă cu --forteaza-liniste',
+        ]);
     }
 
     /** Cele mai mari id-uri din tabelele cu date noi ale clienților (comenzi, conturi…), care există. @return array<string, int> */
@@ -863,6 +900,7 @@ final class Baza
             }
         }
         $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        testOpreste('restaurare');
         $optiuni = $this->fisierOptiuni(dirname($fisier));
         try {
             $r = Comanda::shell('gzip -dc ' . escapeshellarg($fisier) . ' | ' . escapeshellarg($client) . ' --defaults-extra-file=' . escapeshellarg($optiuni)
@@ -1177,6 +1215,36 @@ final class Mentenanta
     {
         @unlink($s->site . '/MENTENANTA');
     }
+
+    /** „strict”, „usoara” sau null (fără mentenanță). */
+    public static function mod(Site $s): ?string
+    {
+        $c = self::citeste($s);
+        if ($c === null) {
+            return null;
+        }
+        return trim((string) (preg_split('/\R/', $c)[1] ?? '')) === 'strict' ? 'strict' : 'usoara';
+    }
+
+    /** Un avertisment dacă MENTENANTA a rămas de mult (o rulare oprită și uitată): site-ul e închis de atunci. */
+    public static function avertizeazaVeche(Site $s, int $ore = 3): void
+    {
+        $f = $s->site . '/MENTENANTA';
+        clearstatcache(true, $f);
+        if (is_file($f) && time() - (int) filemtime($f) > $ore * 3600) {
+            Iesire::atentie('site/MENTENANTA (' . self::mod($s) . ') e acolo de ' . round((time() - (int) filemtime($f)) / 3600, 1)
+                . ' ore: site-ul e închis vizitatorilor de atunci. O rulare oprită? (docs/DEPLOY.md, „Mentenanța rămasă”)');
+        }
+    }
+}
+
+/** Punctele de oprire ale testelor (PLATFORMA_TEST_OPRESTE_DUPA=<punct>): exact ce lasă un proces omorât acolo. */
+function testOpreste(string $punct): void
+{
+    if ((string) getenv('PLATFORMA_TEST_OPRESTE_DUPA') === $punct) {
+        fwrite(STDERR, "PLATFORMA_TEST_OPRESTE_DUPA: oprit la „" . $punct . "”\n");
+        exit(9);
+    }
 }
 
 /**
@@ -1204,14 +1272,28 @@ final class Redenumiri
         self::continua($stare, $cheie);
     }
 
-    /** Termină redenumirile rămase la jumătate de la o rulare oprită. @return list<string> cheile terminate */
-    public static function termina(Stare $stare): array
+    /**
+     * Termină redenumirile rămase la jumătate de la o rulare oprită. Una imposibilă (amândouă dosarele există, sau
+     * niciunul) oprește scriptul, afară de $rezolvatDeMana: atunci e doar raportată și uitată (omul a pus dosarele la
+     * loc). @return list<string> cheile terminate
+     */
+    public static function termina(Stare $stare, bool $rezolvatDeMana = false): array
     {
         $rez = [];
         foreach (array_keys((array) $stare->ia('redenumiri', [])) as $cheie) {
             Iesire::atentie('o rulare de dinainte s-a oprit la jumătatea pasului „' . $cheie . '”; îl termin acum');
-            self::continua($stare, (string) $cheie);
-            $rez[] = (string) $cheie;
+            try {
+                self::continua($stare, (string) $cheie);
+                $rez[] = (string) $cheie;
+            } catch (Oprire $e) {
+                if (!$rezolvatDeMana) {
+                    throw new Oprire($e->getMessage(), 1, ['după ce ai pus dosarele la loc de mână: aceeași comandă cu --rezolvat-de-mana']);
+                }
+                Iesire::atentie('--rezolvat-de-mana: las pasul „' . $cheie . '” cum l-ai lăsat tu (' . $e->getMessage() . ')');
+                $inCurs = (array) $stare->ia('redenumiri', []);
+                unset($inCurs[$cheie]);
+                $stare->pune('redenumiri', $inCurs);
+            }
         }
         return $rez;
     }
@@ -1236,6 +1318,7 @@ final class Redenumiri
                 if (!@rename($din, $in)) {
                     throw new Oprire('nu pot muta ' . $din . ' în ' . $in);
                 }
+                clearstatcache();
                 if ($test === $cheie . ':' . ($i + 1)) {
                     fwrite(STDERR, "PLATFORMA_TEST_OPRESTE_DUPA: oprit după pasul " . ($i + 1) . " al lui „" . $cheie . "”\n");
                     exit(9);

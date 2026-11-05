@@ -15,6 +15,8 @@ use Throwable;
  *    al versiunii urcate; null fără el, de exemplu în dezvoltare), `schema` e starea migrărilor după gardă
  *    (`la_zi`, `in_urma`, `fara_registru`, `eroare`; docs/MIGRARI.md, „Garda”). O bază în urma codului e tot 200: site-ul
  *    merge; verificarea deploy-ului citește `schema` (sau `/health`, care dă atunci 503).
+ *  - în așezarea din Etapa 2, în plus `"mentenanta": "strict"|"usoara"|"nu"` și `"mentenanta_de": <secunde>|null`
+ *    (mentenanța deploy-ului, `site/MENTENANTA`: una uitată de o rulare oprită se vede în monitor);
  *  - `503 {"ok":false,"db":false}`: baza nu răspunde la `SELECT 1` în 2 secunde (conectarea și citirea au fiecare
  *    limita lor, `PDO::ATTR_TIMEOUT` și `mysqlnd.net_read_timeout`: un server care acceptă conexiunea și apoi tace
  *    ar ține altfel cererea minute întregi).
@@ -53,12 +55,34 @@ final class Ping
         $raspuns = $db !== null
             ? ['ok' => true, 'db' => true, 'cod' => self::versiuneCod(), 'schema' => Migrari\Garda::stare($db)]
             : ['ok' => false, 'db' => false];
+        $raspuns += self::mentenantaDeploy();
         http_response_code($db !== null ? 200 : 503);
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
         if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'HEAD') {
             echo json_encode($raspuns, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         }
+    }
+
+    /**
+     * Doar în așezarea din Etapa 2 (stub-ul): mentenanța deploy-ului (`site/MENTENANTA`, docs/DEPLOY.md) și de câte
+     * secunde e pusă, ca una rămasă de la o rulare oprită să se vadă în monitor: `"mentenanta": "strict"|"usoara"|"nu"`,
+     * `"mentenanta_de": <secunde>|null`. În așezarea de azi nimic (răspunsul rămâne cel de până acum).
+     *
+     * @return array<string, mixed>
+     */
+    public static function mentenantaDeploy(): array
+    {
+        if (!Paths::cuStub()) {
+            return [];
+        }
+        $fisier = rtrim((string) constant('PLATFORMA_SITE_DIR'), '/') . '/MENTENANTA';
+        if (!is_file($fisier)) {
+            return ['mentenanta' => 'nu', 'mentenanta_de' => null];
+        }
+        $randuri = preg_split('/\R/', (string) @file_get_contents($fisier)) ?: [];
+        return ['mentenanta' => trim((string) ($randuri[1] ?? '')) === 'strict' ? 'strict' : 'usoara',
+            'mentenanta_de' => max(0, time() - (int) @filemtime($fisier))];
     }
 
     /** Versiunea codului din `VERSION` (scris în versiunea urcată, analiza infra §4.5), sau null. */
