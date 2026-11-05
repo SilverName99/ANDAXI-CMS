@@ -80,7 +80,7 @@ O temă aduce doar ce cheile de mai jos permit; tot restul înfățișării unui
 | `css` | `[]` | foile de stil ale temei (`/tema/…css`), după `app.css`, înaintea CSS-ului din Design |
 | `incarca_app_css` | `true` | `false`: paginile publice nu încarcă `/assets/css/app.css` (adminul îl încarcă din layoutul lui) |
 | `fonturi` | DM Sans + Playfair (WP-40) | fonturile din nucleu: `/assets/vendor/fonturi/<familie>/<familie>.css` (`rubik`, `dm-sans`, `playfair`; OFL); implicit `dm-sans` și `playfair`, aceleași familii și greutăți ca cererea spre Google Fonts |
-| `fonturi_google` | `false` (WP-40) | `true`: legătura spre Google Fonts (DM Sans și Playfair), ca înainte de WP-40; Bioscem o păstrează în `tema.json` (`"fonturi_google": true, "fonturi": []`) până decide proprietarul (SEO B6) |
+| `fonturi_google` | `false` (WP-40) | `true`: legătura spre Google Fonts (DM Sans și Playfair), ca înainte de WP-40; Bioscem și Biovitality o păstrează în `tema.json` (`"fonturi_google": true, "fonturi": []`): fiecare site își păstrează fonturile (decizia proprietarului din 5 nov 2026; SEO B6) |
 | `bootstrap` | `false` | `true`: Bootstrap 5.3.8 din nucleu (`/assets/vendor/bootstrap/`, MIT), CSS-ul în `<head>`, JavaScript-ul cu `defer` înainte de `</body>` |
 | `js_final` | `[]` | scripturile temei (`/tema/…js`), cu `defer`, în ordine, înainte de `</body>` |
 | `main` | `"container"` | `"lat"`: `<main class="site-container">`, fără `.container` (secțiunile își pun singure containerul) |
@@ -207,7 +207,7 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   cookie-ul și popup-ul (`site.json`); BV și GR au `site.json` cu cookie-ul lor (`bv_cookie_consent`). Testul pachetului
   (G-pachet, `tools/dev/test-pachet-site.php bioscem|neutru`) compară valorile pachetului Bioscem cu cele scrise în
   codul Bioscem și caută numele unui client în paginile, emailurile și implicitele nucleului cu pachetul demo.
-- **Făcut în WP-17:** sarea semnăturii newsletterului în `site.json` (Bioscem, Biovitality, vertij, grafoanaytis). SEO B6: fonturile locale pentru Bioscem (`fonturi`; din WP-40 implicitul nucleului, Bioscem rămâne pe Google prin `tema.json` până decide).
+- **Făcut în WP-17:** sarea semnăturii newsletterului în `site.json` (Bioscem, Biovitality, vertij, grafoanaytis). SEO B6: fonturile locale pentru Bioscem (`fonturi`; din WP-40 implicitul nucleului, Bioscem rămâne pe Google prin `tema.json`, ca Biovitality: decizia proprietarului din 5 nov 2026).
 - **Făcut în pachetul Biovitality** (30 octombrie; ordinea proprietarului din 28 octombrie, B5: Biovitality e primul site pe
   codul comun): `tema/tema.json` cu logo-ul sertarului din codul Biovitality (`tema/tema.json` obligatoriu, ca la Bioscem),
   `README.md` (ce e și ce nu e în pachet, și de ce), baza de dezvoltare în forma unui site (`tools/dev/instaleaza.sh

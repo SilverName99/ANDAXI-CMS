@@ -10,7 +10,7 @@ declare(strict_types=1);
  *
  *   tools/dev/php.sh tools/dev/test-calcule-bv.php --cod-vechi=<copia codului Biovitality>
  *
- * Baza cms_calc_bv: structura din tools/dev/migrari/vechi/bv.sql (schema pe care o face codul Biovitality la 779e0d8), rândurile
+ * Baza cms_calc_bv: structura din tools/dev/migrari/vechi/bv.sql (schema pe care o face codul Biovitality la d95598e), rândurile
  * demo ale bazei de dezvoltare copiate în coloanele comune (setările fără cheile pe care înghețarea Biovitality le scrie doar unde
  * lipsesc, ca pe site, unde codul vechi nu le avea), plus comenzi inventate pentru ce e al Biovitality: un produs cu transport
  * gratuit (WP-20, C14a) singur în coș, sub pragul de gratuitate; un cupon cerut cu spații și litere mici („ vara 10 ”, C9), un
@@ -243,7 +243,9 @@ try {
     }
     foreach ($creari as [, $tabel]) {
         $comune = array_values(array_intersect(array_keys($coloane($db, $tabel)), array_keys($coloane($dev, $tabel))));
-        if ($comune === []) {
+        // Linkurile de confirmare a adresei: tabelul codului Biovitality (0e54737) cere coloanele lui email și expires_at (NOT NULL,
+        // fără implicit), pe care rândurile codului comun nu le au; calculele nu le citesc.
+        if ($comune === [] || $tabel === 'customer_email_confirmations') {
             continue;
         }
         $lista = '`' . implode('`, `', $comune) . '`';

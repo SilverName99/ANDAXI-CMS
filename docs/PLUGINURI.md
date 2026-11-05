@@ -787,6 +787,12 @@ dispar, iar linkurile spre el se scot din pagini.
   poate confirma prin proprietarul adresei). Resetarea parolei închide celelalte sesiuni ale contului
   (`users.session_version`, verificată de `CustomerAuth`); prima intrare cu Google într-un cont neconfirmat, cu parolă,
   anulează parola veche și sesiunile lui (rândul „cont_parola_anulata_google” în Jurnal activitate).
+- **Din Biovitality** (`0e54737`, 5 noiembrie; aceeași regulă, pe care codul comun o avea deja): bifa „Cere confirmarea
+  adresei de email” în Conturi clienți (`customer_email_confirmation_required`, acțiunea `save_email_confirmation`);
+  `GET /contul-meu/confirmare/{token}` (mereu deschisă), adresa linkului din emailurile trimise de codul Biovitality, duce
+  (302) la `/cont/confirmare/{token}`; migrarea adoptivă `conturi_clienti/0053` aduce schema confirmării făcută de codul
+  Biovitality la regula de aici (implicitul NULL al lui `users.email_confirmed_at`, linkurile BV legate de adresa lor), iar
+  pasul `site/biovitality/0001_confirmare_email` păstrează bifa BV oprită (`customer_email_confirmation_enabled` = 0).
 - **Are nevoie de**: nimic.
 - **Se oprește**: ca pornit (clienții își văd contul și comenzile).
 - **Oprit**: fără conturi pe site (linkurile „Contul meu”/„Autentificare” se scot);

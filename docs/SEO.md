@@ -440,9 +440,10 @@ a doua parte, compară aspectul cu valorile vechi și cu cele noi). Din linia de
   (E4 și G-vizual cer fișierele la zi). Oprit, blocurile se pun în pagină din aceleași surse, octet cu octet ca înainte.
 - **Fonturile din nucleu** (tema, `Tema::IMPLICIT`): DM Sans și Playfair Display din `/assets/vendor/fonturi/` (aceleași
   familii și greutăți ca cererea spre Google Fonts), fără legătură spre Google; un site care rămâne pe Google o spune în
-  tema lui (`"fonturi_google": true, "fonturi": []`).
-- **HSTS** pe https (`App\Support\Hsts`, setarea `hsts`; revizuirea WP-39/40): `oprit` = nimic (înghețat așa pe site-ul de
-  referință), un număr = `Strict-Transport-Security: max-age=<N>` (fără subdomenii, fără preload). Implicit în nucleu 300 (prima
+  tema lui (`"fonturi_google": true, "fonturi": []`). Bioscem și Biovitality rămân pe Google Fonts (decizia proprietarului din
+  5 noiembrie 2026: fiecare site își păstrează fonturile de azi).
+- **HSTS** pe https (`App\Support\Hsts`, setarea `hsts`; revizuirea WP-39/40): `oprit` = nimic (înghețat așa pe Bioscem și
+  Biovitality: oprit la trecere, decizia proprietarului din 5 noiembrie 2026, apoi urcat în trepte), un număr = `Strict-Transport-Security: max-age=<N>` (fără subdomenii, fără preload). Implicit în nucleu 300 (prima
   treaptă); se urcă cu `php scripts/comutatoare-seo.php --hsts=86400`, apoi `--hsts=31536000`, câte o treaptă după ce site-ul
   a mers bine pe https. Oprirea de urgență: `--hsts=0` (sau `HSTS=0` în `.env`) trimite `max-age=0`, care șterge din browsere
   ce au ținut minte (a nu trimite nimic nu le-ar șterge).
@@ -590,7 +591,8 @@ id, nicio adresă), rescris de fiecare vizită venită de undeva: la comandă c�
 el, reclama Google (`bv_gclid` cu un id de clic; `utm_source=google` fără mediu plătit e o campanie, nu o reclamă) și
 newsletterul. **Revizuirea WP-39/40 (GDPR):** `ax_sursa` și `bv_gclid` se scriu doar cu acordul vizitatorului pentru
 urmărire (`CookieConsent::permiteUrmarire`); fără el comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
-Comutatorul `sursa_comenzii` (implicit pornit; înghețat la „0” pe site-ul de referință; `comutatoare-seo.php --porneste` fără
+Comutatorul `sursa_comenzii` (implicit pornit; înghețat la „0” pe Bioscem și Biovitality, oprit până după trecere: decizia
+proprietarului din 5 noiembrie 2026; `comutatoare-seo.php --porneste` fără
 listă nu-l pornește, doar `--porneste=sursa_comenzii`). Coloana `ad_source` rămâne neschimbată.
 
 ## 9. Datele unui site

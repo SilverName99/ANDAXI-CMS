@@ -6,7 +6,8 @@ namespace App\Support;
 
 /**
  * HSTS (WP-40, SEO partea B, B6; revizuirea WP-39/40): browserul ține minte că site-ul se cere doar pe https. Setarea `hsts`:
- *  - `oprit`: nu se trimite nimic (ca înainte; înghețată așa pe un site existent până decide proprietarul);
+ *  - `oprit`: nu se trimite nimic (ca înainte; înghețată așa pe site-urile existente: oprit la trecere, decizia
+ *    proprietarului din 5 nov 2026, apoi urcat în trepte cu scripts/comutatoare-seo.php --hsts=…);
  *  - un număr de secunde: `Strict-Transport-Security: max-age=<N>`, fără subdomenii și fără preload. Se urcă în trepte,
  *    câte una după ce site-ul a mers fără probleme pe https: 300 (implicit în nucleu) → 86400 → 31536000
  *    (`php scripts/comutatoare-seo.php --hsts=86400`);

@@ -28,6 +28,8 @@ declare(strict_types=1);
  *  V11 pluginurile de dezvoltare (licente_dev.biovitality): fără BT, EuPlătesc și precomenzi, pe care codul Biovitality nu le
  *     are, cu Stripe, pe care îl are;
  *  V12 pachetul e întreg (manifestul, site.json și tema/tema.json obligatorii) și nicio valoare a lui nu numește Bioscem.
+ *  V13 deciziile proprietarului din 5 nov 2026 (HSTS oprit, sursa comenzii oprită, fonturile de azi de la Google) și
+ *     confirmarea adresei la înregistrare (portul 0e54737) dau ce face codul Biovitality.
  * Cu server (baza cms_pachet_bv, făcută de instaleaza.sh --site=biovitality, serverul pe CMS_DEV_PORT+25 cu server.sh
  * --site=biovitality; la final serverul oprit, baza și dosarul licenței ei șterse):
  *  S1 /health: „pachet: <amprenta pachetului Biovitality>”, baza la zi;
@@ -221,6 +223,24 @@ try {
     $verifica('V12 pachetul e întreg (manifestul; site.json și tema/tema.json obligatorii), iar nicio valoare a lui (site.json, tema, înghețarea) nu '
         . 'numește Bioscem', $probleme === [] && array_values((array) ($manifest['obligatorii'] ?? [])) === ['site.json', 'tema/tema.json']
         && preg_match('/bioscem/i', $valoriPachet) !== 1, implode('; ', $probleme));
+
+    // V13: deciziile proprietarului din 5 nov 2026 și confirmarea adresei (portul 0e54737), față de codul Biovitality.
+    $settingsVechi = $vechi('src/Support/Settings.php');
+    $verifica('V13 HSTS oprit la trecere (hsts = „oprit”: nimic trimis), ca în codul Biovitality, care nu trimite Strict-Transport-Security',
+        $faraRand['hsts'] === 'oprit' && \App\Support\Hsts::maxAge($faraRand) === null
+        && !str_contains($layoutVechi . $vechi('public/index.php') . $vechi('public/.htaccess', true), 'Strict-Transport-Security'));
+    $verifica('V13 sursa comenzii oprită până după trecere (sursa_comenzii = 0), ca în codul Biovitality, care n-o notează (niciun ax_sursa)',
+        $faraRand['sursa_comenzii'] === '0' && !str_contains($siteVechi . $vechi('public/index.php'), 'ax_sursa'));
+    $verifica('V13 fonturile de azi: Google Fonts (tema.json: fonturi_google, fără fonturile nucleului), aceeași legătură ca în views/layout.php al Biovitality',
+        Tema::fonturiGoogle() && Tema::fonturi() === []
+        && str_contains($layoutVechi, 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap')
+        && str_contains((string) file_get_contents($radacina . '/views/layout.php'),
+            'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap'));
+    $verifica('V13 confirmarea adresei la înregistrare pornită (customer_email_confirmation_required = 1) = implicitul bifei codului Biovitality '
+        . '(customer_email_confirmation_enabled = „1”); cheia BV nu se îngheață (o duce pasul site/biovitality/0001_confirmare_email)',
+        $faraRand['customer_email_confirmation_required'] === '1' && $implicitVechi('customer_email_confirmation_enabled') === '1'
+        && !isset($inghetare->setari()['customer_email_confirmation_enabled'])
+        && is_file($radacina . '/database/migrari/site/biovitality/0001_confirmare_email.php'));
 } catch (Throwable $e) {
     $verifica('citirea codului Biovitality și a pachetului', false, $e->getMessage());
 }
@@ -354,8 +374,11 @@ try {
 } finally {
     $curataBv();
 }
+$sanatateDupa = $cerereBv('/health')['cod'];
 $verifica('la final: serverul oprit, baza ' . $bazaBv . ' și dosarul licenței ei șterse, licența bazei cms_dev neatinsă', !is_dir($dosarLicentaBv)
-    && $cerereBv('/health')['cod'] === 0 && $licentaDev() === $licentaInainte);
+    && $sanatateDupa === 0 && $licentaDev() === $licentaInainte, 'dosarul licenței: ' . (is_dir($dosarLicentaBv) ? 'rămas' : 'șters')
+    . '; /health: ' . $sanatateDupa . '; licența cms_dev: ' . ($licentaDev() === $licentaInainte ? 'neatinsă' : 'schimbată: '
+    . implode(', ', array_keys(array_diff_assoc($licentaDev(), $licentaInainte) + array_diff_assoc($licentaInainte, $licentaDev())))));
 
 $scrie('test-pachet-site biovitality: ' . $verificari . ' verificări, ' . $esecuri . ' greșite');
 exit($esecuri === 0 ? 0 : 1);

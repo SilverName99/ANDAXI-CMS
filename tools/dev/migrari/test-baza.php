@@ -207,6 +207,8 @@ $tabeleDate = [
     'catalog/0026_vizibilitate_ordine' => ['products'],
     // WP-R (newsletterul Bioscem 739f58c): pragul cheii vechi de semnare (newsletter_cheie_limita), scris o dată, la adoptare.
     'newsletter/0040_newsletter_dubla_confirmare' => ['settings'],
+    // Portul Biovitality 0e54737: adresa linkurilor trimise de codul BV (email_hash din coloana lui email), doar pe schema BV.
+    'conturi_clienti/0053_confirmare_din_biovitality' => ['customer_email_confirmations'],
 ];
 $tabeleAtinse = static function (array $raport) use ($tabeleDate): array {
     $t = [];
@@ -369,6 +371,16 @@ $asteptatB = [
 ];
 /** Ce are voie baseline-ul să scoată de pe o bază veche: indexul unic de dinainte de row_key (pasul vechi din livrare_fan/0005). */
 $scoaseVoit = ['indexul fan_streets.uniq_fan_streets'];
+// Ce schimbă voit o migrare pe o schemă veche (doar valoarea implicită a unei coloane a codului vechi; avertismentul exact al
+// comparației de dinainte și de după): conturi_clienti/0053 pe schema codului Biovitality 0e54737 (bv.sql), ca un link scris
+// de codul comun să încapă în coloanele BV NOT NULL fără implicit.
+$schimbateVoit = [
+    "coloana customer_email_confirmations.email: varchar(190) NOT NULL DEFAULT '', se așteaptă varchar(190) NOT NULL",
+    "coloana customer_email_confirmations.expires_at: datetime NOT NULL DEFAULT '2000-01-01 00:00:00', se așteaptă datetime NOT NULL",
+    'coloana users.email_confirmed_at: datetime NULL, se așteaptă datetime NULL DEFAULT current_timestamp',
+];
+// … și diferențele de definiție față de asteptat.json pe care aceeași migrare le îndreaptă (nu mai rămân după --aplica).
+$reparateVoit = ['coloana users.email_confirmed_at: datetime NULL DEFAULT current_timestamp, se așteaptă datetime NULL'];
 /**
  * Ce scriu funcțiile ensure* pe o bază nouă, T10: date, nu schemă, pe care migrările nu le scriu. Tabel (în ordine) →
  * [citirea, rândurile]. Ale codului comun: nimic, pe orice bază la zi (garda R1, WP-05). Ale Bioscem (codul vechi, fără
@@ -440,7 +452,7 @@ $verifica('T2: extra-cms.txt = exact excluderile instalării noi (tools/dev/migr
  */
 $baseline = static function (string $sock, string $baza, PDO $db, string $eticheta, ?array $asteptatePlan, array $extra, bool $cuProcesator)
     use ($mig, $verifica, $amp, $asteptatReal, $asteptatJson, $operatii, $stari, $operatiiFacute, $instantaneu, $sortat, $listaScurta,
-        $faraParametru, $tabele, $numarB, $numarC, $scoaseVoit): array {
+        $faraParametru, $tabele, $numarB, $numarC, $scoaseVoit, $schimbateVoit, $reparateVoit): array {
     $P = $amp($db);
     $fata = Amprenta::compara($asteptatReal, $P);
     // O bază de dinainte de fan_streets.row_key: pasul vechi al lui 0005 (docs/MIGRARI.md, „Străzile FAN de dinainte de row_key”).
@@ -496,19 +508,20 @@ $baseline = static function (string $sock, string $baza, PDO $db, string $etiche
     $extra = array_values(array_diff($extra, $scoaseVoit));
     // Acolo pasul vechi al lui 0005 adaugă row_key cu DEFAULT '', cum o adăuga codul, deci după baseline coloana
     // diferă de cea a unei instalări noi (un avertisment în plus, voit).
-    $avAsteptate = $fata['avertismente'];
+    $avAsteptate = array_values(array_diff($fata['avertismente'], $reparateVoit));
     $avNoi = array_values(array_diff($av, $avAsteptate));
     $avPermiseNoi = $faraRowKey && count($avNoi) === 1 && str_starts_with($avNoi[0], "coloana fan_streets.row_key: char(40) NOT NULL DEFAULT ''");
     $verifica($eticheta . ': --verifica iese cu 0; în plus exact ' . count($extra) . ' obiecte (extra), avertismentele = diferențele de definiție de dinainte ('
-        . count($fata['avertismente']) . ($faraRowKey ? ', plus fan_streets.row_key cu DEFAULT \'\' de la pasul vechi al lui 0005' : '') . ')',
+        . count($avAsteptate) . (count($avAsteptate) < count($fata['avertismente']) ? ', fără cele îndreptate voit' : '') . ($faraRowKey ? ', plus fan_streets.row_key cu DEFAULT \'\' de la pasul vechi al lui 0005' : '') . ')',
         $cv === 0 && (array) ($rv['verificare']['lipsa'] ?? ['?']) === [] && $inPlus === $sortat($extra)
         && array_diff($avAsteptate, $av) === [] && ($avNoi === [] || $avPermiseNoi),
         'cod ' . $cv . "\nîn plus neașteptat: " . $listaScurta(array_diff($inPlus, $extra)) . "\nîn extra, dar nu în plus: " . $listaScurta(array_diff($extra, $inPlus))
         . "\navertismente: " . implode(' | ', array_slice($av, 0, 6)) . "\nde dinainte: " . implode(' | ', array_slice($fata['avertismente'], 0, 6)));
     $Q = $amp($db);
     $dif = Amprenta::compara($P, $Q);
+    $dif['avertismente'] = array_values(array_diff($dif['avertismente'], $schimbateVoit));
     $verifica($eticheta . ': baseline-ul n-a șters (afară de indexul vechi uniq_fan_streets, dacă era: îl înlocuiește uniq_fan_streets_row) '
-        . 'și n-a schimbat nimic din ce exista; a adăugat exact ce lipsea (' . count($fata['lipsa']) . ' obiecte)',
+        . 'și n-a schimbat nimic din ce exista (afară de implicitele declarate în $schimbateVoit); a adăugat exact ce lipsea (' . count($fata['lipsa']) . ' obiecte)',
         array_diff($dif['lipsa'], $scoaseVoit) === [] && $dif['avertismente'] === [] && $sortat($dif['in_plus']) === $sortat($fata['lipsa']),
         'șterse: ' . $listaScurta($dif['lipsa']) . "\nschimbate: " . implode(' | ', array_slice($dif['avertismente'], 0, 6))
         . "\nadăugate în plus: " . $listaScurta(array_diff($dif['in_plus'], $fata['lipsa'])) . "\nlipsă și neadăugate: " . $listaScurta(array_diff($fata['lipsa'], $dif['in_plus'])));
@@ -671,6 +684,80 @@ foreach ($servere as $numeServer => $sock) {
         }
         [$Q] = $baseline($sock, $b('t2_' . $codF), $dbF, 'T2 ' . $codF, $plan, $extra, in_array($codF, $cuProcesatorLipsa, true));
         $ampPeServer['T2 ' . $codF][$numeServer] = Amprenta::json($Q);
+    }
+
+    // conturi_clienti/0053 pe schema codului Biovitality 0e54737 (bv.sql), cu rânduri inventate: un cont de dinainte
+    // (confirmat de implicitul BV), unul înregistrat cu parolă și neconfirmat, cu linkul lui trimis de codul BV.
+    $eroare = null;
+    $dbR = null;
+    try {
+        $dbR = $incarca($sock, $b('t2_bv_confirmare'), [$dosarVechi . '/bv.sql']);
+        $dbR->exec("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Vechi', 'Test', 'vechi.bv@exemplu.ro', 'x')");
+        $dbR->exec("INSERT INTO users (first_name, last_name, email, email_confirmed_at, password_hash) VALUES ('Nou', 'Test', 'nou.bv@exemplu.ro', NULL, 'x')");
+        $idNouBv = (int) $dbR->lastInsertId();
+        $tokenBv = str_repeat('ab', 32);
+        $dbR->prepare("INSERT INTO customer_email_confirmations (user_id, email, token_hash, reason, ip_address, expires_at, created_at)
+            VALUES (:u, 'nou.bv@exemplu.ro', :h, 'register', NULL, NOW() + INTERVAL 7 DAY, NOW())")->execute(['u' => $idNouBv, 'h' => hash('sha256', $tokenBv)]);
+    } catch (Throwable $e) {
+        $eroare = $e->getMessage();
+    }
+    if ($dbR !== null && $eroare === null) {
+        [$cR, $rR] = $mig($sock, $b('t2_bv_confirmare'), ['--aplica', '--json']);
+        $dbR->exec("INSERT INTO users (first_name, last_name, email, password_hash) VALUES ('Dupa', 'Test', 'dupa.bv@exemplu.ro', 'x')");
+        $idDupa = (int) $dbR->lastInsertId();
+        $scrisDeNucleu = true;
+        try {
+            $dbR->prepare("INSERT INTO customer_email_confirmations (user_id, token_hash, scop, email_hash, created_at) VALUES (:u, :h, 'inregistrare', :a, NOW())")
+                ->execute(['u' => $idDupa, 'h' => hash('sha256', str_repeat('cd', 32)), 'a' => hash('sha256', 'dupa.bv@exemplu.ro')]);
+        } catch (Throwable) {
+            $scrisDeNucleu = false;
+        }
+        $rand = static function (string $sql, array $p = []) use ($dbR): array {
+            $st = $dbR->prepare($sql);
+            $st->execute($p);
+            return (array) ($st->fetch(PDO::FETCH_ASSOC) ?: []);
+        };
+        $linkBv = $rand('SELECT email_hash, scop FROM customer_email_confirmations WHERE user_id = :u', ['u' => $idNouBv]);
+        \App\Support\ConfirmareEmail::reseteaza();
+        $valid = \App\Support\ConfirmareEmail::linkValid($dbR, $tokenBv);
+        \App\Support\ConfirmareEmail::reseteaza();
+        $verifica('T2 bv: conturi_clienti/0053 pe schema Biovitality cu rânduri: --aplica 0; un cont nou scris fără coloană nu mai e confirmat '
+            . '(implicitul NULL), cel de dinainte rămâne confirmat; linkul trimis de codul BV primește adresa lui (email_hash) și e bun pentru '
+            . 'ConfirmareEmail::linkValid (scop „inregistrare”); un link scris de codul comun încape în coloanele BV (server ' . $numeServer . ')',
+            $cR === 0
+            && $rand('SELECT email_confirmed_at FROM users WHERE id = :u', ['u' => $idDupa]) === ['email_confirmed_at' => null]
+            && ($rand("SELECT email_confirmed_at FROM users WHERE email = 'vechi.bv@exemplu.ro'")['email_confirmed_at'] ?? null) !== null
+            && ($linkBv['email_hash'] ?? '') === hash('sha256', 'nou.bv@exemplu.ro') && ($linkBv['scop'] ?? '') === 'inregistrare'
+            && is_array($valid) && $valid['user_id'] === $idNouBv && $scrisDeNucleu,
+            'cod ' . $cR . ' ' . json_encode($linkBv) . ' ' . json_encode($valid) . ' ' . mb_substr((string) ($rR['mesaj'] ?? ''), 0, 400));
+
+        // Pasul site/biovitality/0001_confirmare_email (rulează după înghețare, care a scris customer_email_confirmation_required
+        // = 1): bifa BV oprită pe site („0”) o oprește și pe cea a codului comun; lipsă sau „1”, nimic.
+        $pasBv = require $radacina . '/database/migrari/site/biovitality/0001_confirmare_email.php';
+        $nimicPas = static function (): void {
+        };
+        $executiePas = static fn (): \App\Support\Migrari\Executie => new \App\Support\Migrari\Executie('site/biovitality/0001_confirmare_email', 'site',
+            false, false, '', $nimicPas, static function (int $d, ?array $c): void {
+            }, $nimicPas, static function (string $f, string $o, string $c, float $ms): void {
+            }, [0.1], 0);
+        $serverR = \App\Support\Migrari\Server::detecteaza($dbR);
+        $cerutaR = static fn (): ?string => ($v = $dbR->query("SELECT `value` FROM settings WHERE `key` = 'customer_email_confirmation_required'")->fetchColumn()) === false
+            ? null : (string) $v;
+        $dbR->exec("DELETE FROM settings WHERE `key` IN ('customer_email_confirmation_enabled', 'customer_email_confirmation_required')");
+        $dbR->exec("INSERT INTO settings (`key`, `value`) VALUES ('customer_email_confirmation_required', '1')");
+        $treceri = [];
+        foreach ([null, '1', '0'] as $bifaBv) {
+            $dbR->exec("DELETE FROM settings WHERE `key` = 'customer_email_confirmation_enabled'");
+            if ($bifaBv !== null) {
+                $dbR->prepare("INSERT INTO settings (`key`, `value`) VALUES ('customer_email_confirmation_enabled', :v)")->execute(['v' => $bifaBv]);
+            }
+            ($pasBv['sus'])(new \App\Support\Migrari\Schema($dbR, $serverR, $executiePas()));
+            $treceri[] = ($bifaBv ?? 'lipsă') . '→' . ($cerutaR() ?? 'lipsă');
+        }
+        $verifica('T2 bv: pasul site/biovitality/0001_confirmare_email: bifa BV lipsă sau „1” lasă „1” (înghețarea), „0” dă „0” (server ' . $numeServer . ')',
+            ($pasBv['tip'] ?? '') === 'site' && $treceri === ['lipsă→1', '1→1', '0→0'], implode(', ', $treceri));
+    } else {
+        $verifica('T2 bv: bv.sql se încarcă pentru cazul cu rânduri al lui conturi_clienti/0053', false, (string) $eroare);
     }
 
     // Baza veche: cms.sql + variante.sql, o dată prin funcțiile codului, o dată prin migrări.

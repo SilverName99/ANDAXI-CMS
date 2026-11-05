@@ -703,6 +703,15 @@ final class AdminController
             header('Location: /admin/users/settings?tab=settings');
             return;
         }
+        // Portul Biovitality 0e54737: bifa „Cere confirmarea adresei de email” (customer_email_confirmation_required, WP-25).
+        if ($action === 'save_email_confirmation') {
+            Settings::save($db, [
+                'customer_email_confirmation_required' => isset($_POST['email_confirmation_required']) ? '1' : '0',
+            ]);
+            Flash::set('success', 'Setarea pentru confirmarea emailului a fost salvată.');
+            header('Location: /admin/users/settings?tab=settings');
+            return;
+        }
         if ($action === 'save_google_auth') {
             $enabled = isset($_POST['google_enabled']) ? '1' : '0';
             $clientId = trim((string) ($_POST['google_client_id'] ?? ''));

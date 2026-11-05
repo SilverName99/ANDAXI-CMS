@@ -312,8 +312,8 @@ foreach ((array) ($cerere['cazuri'] ?? []) as $caz) {
         $transportAdmin0 = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere, 0.0,
             false, $gratuitDinProdus);
         // Codul Biovitality (WP-11b) are transportul gratuit al produsului în admin, nu în funcție: după adminRecalcShipping, fiecare
-        // recalcul pune 0 dacă comanda are un astfel de produs (AdminController::comandaAreTransportGratuit, la 779e0d8 :5324, :5465,
-        // :5628). Codul comun îl are în funcție (al șaptelea argument); un cod fără acel argument și cu regula în admin primește aici
+        // recalcul pune 0 dacă comanda are un astfel de produs (AdminController::comandaAreTransportGratuit, la d95598e :5333, :5474,
+        // :5637). Codul comun îl are în funcție (al șaptelea argument); un cod fără acel argument și cu regula în admin primește aici
         // exact ce face adminul lui.
         if ($gratuitDinProdus && ($cerere['profil'] ?? '') === 'biovitality'
             && (new ReflectionMethod(\App\Support\CheckoutCalculator::class, 'adminRecalcShipping'))->getNumberOfParameters() < 7) {

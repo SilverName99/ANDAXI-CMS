@@ -369,16 +369,25 @@ codul 2, „… codul 15 …”): patru valori, toate date de contact ale firmei
 formularului de contact, adresa de email și telefonul operatorului de pe acordul GDPR și numele reprezentantului lui (o
 persoană, deci date personale). Nu ți-l trimitem: îl faci chiar pe server, din codul biovitality.ro (citit doar, din
 dosarul lui), cu generatorul înghețării, care scrie **doar** acest fișier și numai dacă codul de pe site dă exact
-înghețarea din pachet (`Mutare-Site-Biovitality@779e0d8`); altfel nu scrie nimic (cod 1, „nu e codul revizuit”) și ne
+înghețarea din pachet (`Mutare-Site-Biovitality@d95598e`); altfel nu scrie nimic (cod 1, „nu e codul revizuit”) și ne
 trimiți textul.
+
+**Întâi, codul biovitality.ro = commit-ul revizuit `d95598e`** (ramura `claude/migrate-bioscem-site-bz38y4` a lui
+`Mutare-Site-Biovitality`, 3 noiembrie: confirmarea adresei la înregistrare, „Detalii” pe comanda anulată, AWB-ul FAN cu un
+singur colet). Dacă site-ul live e încă la un commit mai vechi, generatorul de mai jos refuză („nu e codul revizuit”): aduci
+codul pe site-ul live (hPanel → biovitality.ro → GIT → Deploy, sau prin SSH ca mai jos), apoi verifici commit-ul. Codul
+vechi își face singur, la prima pagină de cont deschisă, coloana și tabelul confirmării; pe copie le aduce încărcarea.
 
 ```sh
 ssh -p 65002 uXXXXXXXXX@<IP-ul din hPanel>
+git -C "$HOME/domains/biovitality.ro/public_html" pull --ff-only   # site-ul live: codul revizuit (sau hPanel → biovitality.ro → GIT → Deploy)
+git -C "$HOME/domains/biovitality.ro/public_html" log -1 --format=%h
+#   trebuie să spună d95598e; altceva (sau „Not possible to fast-forward”): te oprești și ne trimiți rândul
 cd ~/domains/<domeniul-verificare>/public_html
 PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"   # ca la pasul 3 (fără -d dacă sodium (CLI) e DA și așa)
 git pull --ff-only                                       # codul nou (sau hPanel → GIT → Deploy)
 $PHP tools/inghetare/genereaza-setari.php --site=biovitality --cod-vechi="$HOME/domains/biovitality.ro/public_html"
-#   un rând: „OK    biovitality: înghețarea din codul site-ului = cea din pachet (Mutare-Site-Biovitality@779e0d8); scris
+#   un rând: „OK    biovitality: înghețarea din codul site-ului = cea din pachet (Mutare-Site-Biovitality@d95598e); scris
 #   site-uri/biovitality/privat/setari-inghetate.json (0600; 4 valori private: contact_form_recipients, gdpr_operator_email,
 #   gdpr_operator_reprezentant, gdpr_operator_telefon); pachetul neatins”
 #   (dacă dosarul biovitality.ro e altul, dosarul care are src/ și .env-ul site-ului)
@@ -522,8 +531,9 @@ $PHP scripts/comutatoare-seo.php --hsts=300
   toate”), apoi intră dintr-un link cu `?utm_source=test&utm_medium=email`: comanda apare în Rapoarte → Sursa comenzilor la
   „Email”. Fără acord (sau cu „Doar necesare”) apare la „Necunoscută” (așa trebuie: fără acord nu se scrie niciun cookie de
   urmărire).
-- Fonturile: Bioscem rămâne pe Google Fonts până decizi (`tema/tema.json` → `"fonturi_google": true`); celelalte site-uri
-  le iau de pe site (aceleași familii și greutăți, dovedit în `tools/dev/test-seo.php` E4).
+- Fonturile: Bioscem și Biovitality rămân pe Google Fonts (decizia ta din 5 noiembrie: fiecare site își păstrează fonturile;
+  `tema/tema.json` → `"fonturi_google": true`); un site fără această cheie le ia de pe site (aceleași familii și greutăți,
+  dovedit în `tools/dev/test-seo.php` E4).
 
 La final, înapoi ca în ziua trecerii, apoi ne spui ce ai văzut (și dacă vrei punctele pornite pe Bioscem, una câte una):
 
@@ -952,7 +962,7 @@ crezut), nota limitei globale și ora ultimei rulări a cronului golite.
 
 **Biovitality** (WP-11b, `tools/verificare/reguli/biovitality.php`): regulile Bioscem (fișierul îl include, deci o regulă
 Bioscem schimbată se aplică și aici; `versiune` = cea Bioscem × 100 + a Biovitality, deci orice schimbare oprește un `--reia`),
-plus ce are în plus codul Biovitality la `779e0d8` (`tools/dev/migrari/vechi/bv.sql`): **doar structura** pentru
+plus ce are în plus codul Biovitality la `d95598e` (`tools/dev/migrari/vechi/bv.sql`): **doar structura** pentru
 `admin_app_tokens` (jetoanele aplicației Windows), `bunny_protected_folders` (parolele dosarelor din cloud), `bunny_folder_unlocks`,
 `file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota, căile documentelor); **copiate** cum
 sunt concurenții și prețurile lor (`competition_partners`, `competition_prices`), etichetele blogului (`blog_tags`,
@@ -1449,7 +1459,7 @@ schimbat (cod 1 și copia ștearsă, nu cod 2), `--demo`
 (aceleași date inventate ca baza de dezvoltare, personalul se loghează; vertij fără și cu valori private inventate)
 și aceeași încărcare pe MySQL 8 (`--doar-mariadb` o sare, spus în raport: decizia A1 a proprietarului). **Biovitality**
 (WP-11b): în A regulile Biovitality (fără greșeli, versiunea legată de a Bioscem) acoperă fiecare tabel și coloană a schemei
-codului Biovitality 779e0d8 (`bv.sql`) și a codului comun, oracolul cu tabelele doar ale Biovitality (jetoanele aplicației,
+codului Biovitality d95598e (`bv.sql`) și a codului comun, oracolul cu tabelele doar ale Biovitality (jetoanele aplicației,
 dosarele și jurnalele fișierelor din cloud fără rânduri; concurența și etichetele blogului publice) și o mutație care copiază
 jurnalul fișierelor cum e, scanerul fail-closed (o coloană nouă cu date personale, `competition_partners.contact_email`, și una
 doar necunoscută opresc, cu numele lor; un tabel nou fără rânduri), cheile `bunny_*` golite și A6 pe ele, id-urile Stripe,

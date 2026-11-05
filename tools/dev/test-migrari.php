@@ -961,6 +961,25 @@ foreach ($cuRunner ? $servere : [] as $numeServer => $sock) {
     $ex2 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->schimbaImplicit('tcv', 'nu_exista', '0'));
     $verifica('Schema: schimbaImplicit refuză altceva decât un text simplu sau un număr, și o coloană care lipsește',
         $ex instanceof Eroare && $ex2 instanceof Eroare && isset(Amprenta::citeste($db, $server, ['t'])['tabele']['t']));
+    // NULL (conturi_clienti/0053): implicitul CURRENT_TIMESTAMP al unei coloane NULL devine NULL, rândurile rămân; pe o coloană
+    // NOT NULL e refuzat înainte de orice ALTER.
+    $db->exec('ALTER TABLE tcv ADD COLUMN confirmat_la DATETIME NULL DEFAULT CURRENT_TIMESTAMP');
+    $inainte = (int) $db->query('SELECT COUNT(*) FROM tcv WHERE confirmat_la IS NOT NULL')->fetchColumn();
+    $toate = (int) $db->query('SELECT COUNT(*) FROM tcv')->fetchColumn();
+    $s12 = new Schema($db, $server, $e12 = $executie());
+    $s12->schimbaImplicit('tcv', 'confirmat_la', 'NULL');
+    $s12->schimbaImplicit('tcv', 'confirmat_la', 'NULL');
+    $db->exec("INSERT INTO tcv (cod) VALUES ('d')");
+    $ex3 = $aruncat(static fn () => (new Schema($db, $server, $executie()))->schimbaImplicit('tcv', 'procesator', 'NULL'));
+    $verifica('Schema: schimbaImplicit NULL pe o coloană NULL (rândurile vechi rămân, unul nou primește NULL), a doua oară „există”; '
+        . 'pe una NOT NULL refuzat',
+        array_column($e12->operatii, 'clasa') === ['instant', 'fara_efect'] && $inainte === $toate && $toate > 0
+        && (int) $db->query('SELECT COUNT(*) FROM tcv WHERE confirmat_la IS NOT NULL')->fetchColumn() === $toate
+        && $db->query("SELECT confirmat_la FROM tcv WHERE cod = 'd'")->fetchColumn() === null
+        && Amprenta::citeste($db, $server, ['tcv'])['tabele']['tcv']['coloane']['confirmat_la']['implicit'] === null
+        && $ex3 instanceof Eroare
+        && Amprenta::citeste($db, $server, ['tcv'])['tabele']['tcv']['coloane']['procesator']['implicit'] === "'euplatesc'",
+        json_encode($e12->operatii) . ' ' . $inainte);
 
     // ---------------------------------------------------------------- R
     $scrie('R. scripts/migreaza.php');

@@ -7,8 +7,8 @@ trebuie la adoptare din ce nucleul nu mai scrie în cod.
 | Fișier | Ce e |
 |---|---|
 | `site.json` | constantele codului vechi: numele cookie-ului acordului (`bv_cookie_consent`) și sarea semnăturii newsletterului (`biovitality`); fereastra de bun venit nu există pe site, deci nici cheia ei |
-| `tema/tema.json` | logo-ul sertarului de meniu mobil (`/uploads/gallery/biovitality-logo.png`, „BioVitality”), ca în `views/layout.php` al codului vechi; restul cheilor la implicitul nucleului |
-| `setari-inghetate.json` | înghețarea setărilor (numerotarea „BV”, Stripe, `fan_kg_max_colet` = 0, acordul GDPR, câmpurile înregistrării …); valorile private (adrese, telefon, reprezentantul) stau în `privat/`, în afara git-ului (OD-49) |
+| `tema/tema.json` | logo-ul sertarului de meniu mobil (`/uploads/gallery/biovitality-logo.png`, „BioVitality”), ca în `views/layout.php` al codului vechi; fonturile de azi, de la Google Fonts (`fonturi_google`, decizia proprietarului din 5 nov 2026); restul cheilor la implicitul nucleului |
+| `setari-inghetate.json` | înghețarea setărilor (numerotarea „BV”, Stripe, `fan_kg_max_colet` = 0, acordul GDPR, câmpurile înregistrării, confirmarea adresei la înregistrare, HSTS și sursa comenzii oprite la trecere …); valorile private (adrese, telefon, reprezentantul) stau în `privat/`, în afara git-ului (OD-49) |
 | `migrari.json` | parametrii migrărilor: linkurile de plată vechi sunt Stripe |
 | `ce-se-schimba.md` | ce vede altfel clientul pe codul comun (se predă la adoptare) |
 

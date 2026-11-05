@@ -37,7 +37,7 @@ declare(strict_types=1);
  * B. /webhook/stripe: semnătura, notarea în stripe_events, duplicatele, proprietarul oprit.
  * C. Setări plăți: evenimentele cerute, ultimul primit, „Verifică webhook-ul” pe Stripe-ul fals.
  * D. {{auth_form}}, regula comenzilor fără cont, confirmarea adresei (link o dată, 7 zile, retrimiterea limitată),
- *    tab-urile contului.
+ *    tab-urile contului; din portul Biovitality 0e54737, adresa linkului codului BV (302) și bifa din Conturi clienți.
  *
  * WP-26 — cererile de ofertă, meniul fără magazin, uneltele de operare (GR-15, GR-14c, GR-21, VT-O1):
  * A. App\Support\CereriOferta (hash-ul adresei, limita), grupul „Produse” fără magazin, regula anonimizării.
@@ -1385,6 +1385,24 @@ for ($i = 0; $i < 6; $i++) {
 $verifica('retrimiterea: 5 la 15 minute de la aceeași adresă, a șasea refuzată; bugetul nu se amestecă cu al înregistrărilor (VT-C8)',
     $coduri === ['trimis', 'trimis', 'trimis', 'trimis', 'trimis', 'limita']
     && (int) $unu("SELECT COUNT(*) FROM register_submit_logs WHERE status = 'resend'") === 5, implode(',', $coduri));
+$db->exec('DELETE FROM register_submit_logs');
+// Portul Biovitality 0e54737: adresa linkului din emailurile trimise de codul Biovitality și bifa din Conturi clienți.
+$tokenVechi = str_repeat('ab', 32);
+$r = $cerere('GET', '/contul-meu/confirmare/' . $tokenVechi);
+$verifica('linkul din emailurile codului Biovitality (/contul-meu/confirmare/<token>): 302 spre /cont/confirmare/<token>, fără cache, fără să folosească '
+    . 'nimic', $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/cont/confirmare/' . $tokenVechi
+    && str_contains((string) ($r['antete']['cache-control'] ?? ''), 'no-store'), $r['cod'] . ' ' . ($r['antete']['location'] ?? ''));
+$logareAdmin();
+$cerere('POST', '/admin/users/settings', $jarAdmin, ['action' => 'save_email_confirmation']);
+$oprita = $unu("SELECT `value` FROM settings WHERE `key` = 'customer_email_confirmation_required'");
+$paginaOprita = $cerere('GET', '/admin/users/settings', $jarAdmin)['corp'];
+$cerere('POST', '/admin/users/settings', $jarAdmin, ['action' => 'save_email_confirmation', 'email_confirmation_required' => '1']);
+$pornita = $unu("SELECT `value` FROM settings WHERE `key` = 'customer_email_confirmation_required'");
+$paginaPornita = $cerere('GET', '/admin/users/settings', $jarAdmin)['corp'];
+$bifa = '#<input type="checkbox" name="email_confirmation_required" value="1"\s*checked>#';
+$verifica('Conturi clienți → „Confirmare email la înregistrare”: bifa scoasă scrie customer_email_confirmation_required = 0, bifată = 1, iar pagina o '
+    . 'arată așa', $oprita === '0' && $pornita === '1' && preg_match($bifa, $paginaOprita) !== 1
+    && preg_match($bifa, $paginaPornita) === 1 && str_contains($paginaPornita, 'value="save_email_confirmation"'), $oprita . '/' . $pornita);
 $db->exec('DELETE FROM register_submit_logs');
 $setare('customer_email_confirmation_required', null);
 // Tab-urile contului (agățări de probă pe al doilea server).

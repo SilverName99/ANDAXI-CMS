@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Regulile încărcării anonimizate pentru Biovitality (tools/verificare/incarca.php --din=biovitality; docs/VERIFICARE.md,
  * „Încărcarea copiei”; planul Etapei 1, WP-11b). Sunt **regulile Bioscem** (tools/verificare/reguli/bioscem.php, cu toate
- * modurile, transformările și explicațiile din capul lui), plus ce are în plus schema codului Biovitality la `779e0d8`
+ * modurile, transformările și explicațiile din capul lui), plus ce are în plus schema codului Biovitality la `d95598e`
  * (tools/dev/migrari/vechi/bv.sql; migrari.md §2.4): o regulă a Bioscem schimbată se aplică deci și aici, iar versiunea
  * de aici o urmează (mai jos).
  *
@@ -43,9 +43,11 @@ $reguli['site'] = 'biovitality';
 // încărcare oprită să nu mai fie continuată cu --reia. 1 (WP-11b): prima. 2 (revizuirea WP-11b): blog_posts.wp_post_id și
 // lista albă a setărilor (cea Biovitality, mai jos). 3, 4: product_templates.builder_json, tipografia temei (typo_*),
 // găsite la prima încărcare de pe server. 5 (WP-22): etichetele și coloanele blogului avansat trec în regulile Bioscem
-// (codul comun le are acum, blog/0033).
-$reguli['versiune'] = $reguli['versiune'] * 100 + 5;
-$reguli['schema'] = 'Mutare-Site-Biovitality@779e0d8 (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
+// (codul comun le are acum, blog/0033). 6 (portul 0e54737, 5 nov): schema codului Biovitality de la d95598e, cu confirmarea
+// adresei (users.email_confirmed_at și session_version, păstrate ca la Bioscem; customer_email_confirmations, cu coloanele BV
+// email, reason, ip_address, expires_at, doar structura, ca la Bioscem).
+$reguli['versiune'] = $reguli['versiune'] * 100 + 6;
+$reguli['schema'] = 'Mutare-Site-Biovitality@d95598e (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
 $reguli['pachet'] = 'biovitality';
 

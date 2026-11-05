@@ -304,7 +304,7 @@
             "valoare": "oprit",
             "mod": "lipsa",
             "din": "manual",
-            "sursa": "decizie revizuirea WP-39/40 (B6, regula R1): codul Bioscem nu trimite HSTS; proprietarul îl pornește cu celelalte comutatoare, în trepte (300 → 86400 → 31536000), după ce vede site-ul de verificare",
+            "sursa": "decizie revizuirea WP-39/40 (B6, regula R1), confirmată de proprietar pe 5 nov 2026 (2): codul Bioscem nu trimite HSTS; oprit la trecere, apoi pornit în trepte (300 → 86400 → 31536000) cu scripts/comutatoare-seo.php --hsts=…",
             "vechi": "lipsește",
             "nucleu": "implicit \"300\""
         },
@@ -377,7 +377,7 @@
             "valoare": "0",
             "mod": "lipsa",
             "din": "manual",
-            "sursa": "decizie WP-40 (B9, regula R1): codul Bioscem nu notează sursa comenzii; se pornește după ce clientul vede raportul pe site-ul de verificare",
+            "sursa": "decizie WP-40 (B9, regula R1), confirmată de proprietar pe 5 nov 2026 (3): codul Bioscem nu notează sursa comenzii; oprită până după trecere, apoi pornită cu scripts/comutatoare-seo.php --porneste=sursa_comenzii",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
         },

@@ -1,5 +1,7 @@
 {
-    "_despre": "Tema Biovitality: doar ce scotea nucleul din codul Biovitality (docs/PACHETE.md, „Tema”). Logo-ul sertarului de meniu mobil ({{mobile_menu}}) e cel din views/layout.php al codului Biovitality: o singură poză, fără alte variante căutate, cu textul alternativ „BioVitality”. Restul cheilor lipsesc, deci au implicitul nucleului. Banda partenerilor și scripturile ei (P5) vin cu tema completă a site-ului, în Etapa 4.",
+    "_despre": "Tema Biovitality: doar ce scotea nucleul din codul Biovitality (docs/PACHETE.md, „Tema”). Fonturile rămân cele de azi, de la Google Fonts (DM Sans, Playfair Display, legătura din views/layout.php al codului Biovitality), nu cele ale nucleului servite de site (decizia proprietarului din 5 nov 2026, (4)): fonturi_google = true și fonturi = [], ca la Bioscem. Logo-ul sertarului de meniu mobil ({{mobile_menu}}) e cel din views/layout.php al codului Biovitality: o singură poză, fără alte variante căutate, cu textul alternativ „BioVitality”. Restul cheilor lipsesc, deci au implicitul nucleului. Banda partenerilor și scripturile ei (P5) vin cu tema completă a site-ului, în Etapa 4.",
+    "fonturi_google": true,
+    "fonturi": [],
     "logo_meniu_mobil": {
         "candidati": [],
         "implicit": "/uploads/gallery/biovitality-logo.png",

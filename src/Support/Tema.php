@@ -54,7 +54,8 @@ final class Tema
         // WP-40 (SEO partea B, B6): fonturile paginilor publice (DM Sans, Playfair) din nucleu, nu de la Google Fonts: adresa
         // vizitatorului nu pleacă la un terț înainte de acordul pentru cookie-uri și pagina nu așteaptă alt server. Aceleași
         // familii și greutăți (fișierele pe care le dă Google pentru aceeași cerere), deci același aspect. Un site care
-        // rămâne pe Google o spune în tema lui (de pildă site-ul înghețat: "fonturi_google": true, "fonturi": [], până decide).
+        // rămâne pe Google o spune în tema lui ("fonturi_google": true, "fonturi": []: site-urile existente, care își păstrează
+        // fonturile de azi, decizia proprietarului din 5 nov 2026).
         'fonturi' => ['/assets/vendor/fonturi/dm-sans/dm-sans.css', '/assets/vendor/fonturi/playfair/playfair.css'],
         'fonturi_google' => false,
         'bootstrap' => false,

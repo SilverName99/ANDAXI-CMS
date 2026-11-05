@@ -19,7 +19,7 @@ pe commit-uri Bioscem, cu pagina (sau paginile) și numărul exact de apariții.
 | Site | Repo, ramura | Ultimul commit revizuit | Punctul de plecare (fork) |
 |---|---|---|---|
 | Bioscem | `Nou-site-bioscem`, `claude/migrate-bioscem-site-bz38y4` | `739f58c` (30.10.2026) | CMS pornește din `11b1040` |
-| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `779e0d8` (21.10.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
+| Biovitality | `Mutare-Site-Biovitality`, `claude/migrate-bioscem-site-bz38y4` | `d95598e` (03.11.2026) | Bioscem s-a desprins din BV `f7d15ba` (10.08.2026) |
 | vertij | `vertij-tinitus-refacut`, `claude/site-dashboard-updates-3qcr5b` | `0fc2b2c` (20.10.2026) | import din BV `b792224` în `6d48cd8` (29.06.2026) |
 | grafoanaytis | `site-nou-grafoanaytis.ro`, `claude/client-website-rebuild-e5o9z1` | `d3c4b79` (20.10.2026) | import din BV `88b7f4d` în `87aaa90` (26.08.2026) |
 
@@ -169,6 +169,9 @@ dacă BV live le are, devin CSS de temă BV în Etapa 4), `5ef9706` + anularea `
 `claude/bunny-admin-access-zone-8eqier` → `63dc58b` (același conținut ca `f5486ee`).
 
 | `779e0d8` | 21.10 | Aplicația de desktop: executabilul construit se păstrează 14 zile | nu se portează (doar `.github/workflows/`, construirea aplicației Windows a BV; CMS-ul n-are `.github/`) |
+| `0e54737` | 30.10 | Conturi: adresa de email se confirmă înainte de puncte și comenzi (contul nou cu `email_confirmed_at` NULL și linkul pe email, GET = butonul, POST = confirmarea; login-ul refuzat până la confirmare, cu „Retrimite emailul”; punctele și comenzile fără cont doar pentru o adresă confirmată; Google confirmă, iar pe un cont cu parolă neconfirmat golește parola; resetarea parolei confirmă și închide celelalte sesiuni, `users.session_version`; setarea „Confirmare email la înregistrare”, `customer_email_confirmation_enabled`, implicit pornită) | portat: regula era deja în nucleu, mai strictă (WP-25, VT-C9 și revizuirea G-M4: `ConfirmareEmail`, `CustomerAuth`, `conturi_clienti/0036` și `0038`; BV înghețat `customer_email_confirmation_required` = 1 din 30 oct); în plus acum, în pluginul `conturi_clienti`: migrarea adoptivă `conturi_clienti/0053` pentru schema pe care o face codul BV (implicitul `CURRENT_TIMESTAMP` al lui `users.email_confirmed_at` devine NULL, altfel orice cont nou ar fi confirmat; `customer_email_confirmations.email`/`expires_at` primesc valori implicite; `email_hash` din `email`, ca linkurile trimise de BV să meargă), linkul vechi `GET /contul-meu/confirmare/{token}` → 302 spre `/cont/confirmare/{token}`, bifa „Confirmare email la înregistrare” în Admin → Conturi clienți (pe `customer_email_confirmation_required`), iar pasul `site/biovitality/0001_confirmare_email` duce pe codul comun valoarea `customer_email_confirmation_enabled` = 0 scrisă pe site (înghețarea: cheia BV în `fara_inghetare`); diferențele în `site-uri/biovitality/ce-se-schimba.md`. Bioscem n-are funcția (`739f58c`): neschimbat, bifa nouă e oprită |
+| `1b12286` | 02.11 | Comenzi: comanda anulată se poate deschide cu „Detalii” | deja în CMS (Bioscem `739f58c` are „Detalii” și „Restaurează” pe comanda anulată, deci și codul comun; lista refăcută în faza D le păstrează): nimic de portat; „Restaurează” e în plus pentru BV (rând în `ce-se-schimba.md`) |
+| `d95598e` | 03.11 | FAN: serviciul care primește un singur colet — AWB-ul se reîncearcă cu 1 colet | portat (`e7e95f1`, din Bioscem `3fa8ad2`, același cod) |
 
 Biovitality nu are livrarea 2 SEO, avertismentul pe produs și livrarea 4 SEO ale Bioscem (`6c8c789` … `070e1af`,
 20–21.10): le primește odată cu codul comun, la adoptare (Etapa 4; lista din `site-uri/biovitality/ce-se-schimba.md` le

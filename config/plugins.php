@@ -397,8 +397,9 @@ return [
             'rute_admin' => ['/admin/users/*'],
             'rute_publice' => ['/contul-meu/*', '/login', '/register', '/auth/google/*'],
             // WP-25 (VT-C9): linkul de confirmare a adresei din emailurile trimise merge în orice stare a pluginului.
-            // Revizuirea WP-25: pagina cu butonul (GET) și confirmarea (POST).
-            'rute_mereu_deschise' => ['GET /cont/confirmare/{token}', 'POST /cont/confirmare/{token}'],
+            // Revizuirea WP-25: pagina cu butonul (GET) și confirmarea (POST). Portul Biovitality 0e54737: adresa linkului din
+            // emailurile trimise de codul Biovitality (GET, duce la prima).
+            'rute_mereu_deschise' => ['GET /cont/confirmare/{token}', 'POST /cont/confirmare/{token}', 'GET /contul-meu/confirmare/{token}'],
             'pagini' => ['resetare-parola'],
             // WP-25 (VT-C5): {{auth_form}} = formularul de intrare / înregistrare, pe paginile „login” și „register”.
             'tokenuri' => ['account_section', 'auth_google_button', 'auth_form'],

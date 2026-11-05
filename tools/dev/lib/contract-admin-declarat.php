@@ -339,4 +339,13 @@ return [
                 . '\\|account_created\\|abandoned_cart$',
             'motiv' => 'aceeași listă de șabloane, de dinainte, fără pickup_ready (rândul de mai sus)'],
     ],
+    // Portul Biovitality 0e54737 (5 nov): bifa „Cere confirmarea adresei de email” în Conturi clienți, a pluginului
+    // conturi_clienti, pe setarea customer_email_confirmation_required (WP-25; nebifată implicit, Biovitality înghețat 1).
+    'port-confirmare-email' => [
+        'confirmare-email-setare' => ['ce' => 'adaugat', 'cale' => '^/admin/users/settings$',
+            'rand' => '^(form POST /admin/users/settings|camp POST /admin/users/settings (input:hidden action = save_email_confirmation'
+                . '|input:checkbox email_confirmation_required = 1))$',
+            'motiv' => 'Conturi clienți → „Confirmare email la înregistrare”: formularul cu bifa „Cere confirmarea adresei de email” '
+                . '(customer_email_confirmation_required), ca în Utilizatori → Setări al Biovitality'],
+    ],
 ];

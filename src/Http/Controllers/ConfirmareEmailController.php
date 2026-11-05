@@ -54,6 +54,18 @@ final class ConfirmareEmailController
         ]);
     }
 
+    /**
+     * `GET /contul-meu/confirmare/{token}`: adresa linkului din emailurile de confirmare trimise de codul Biovitality
+     * (`0e54737`, valabile 7 zile; tokenul și hash-ul lui sunt la fel, `conturi_clienti/0053` le leagă de adresă). Duce,
+     * fără să folosească linkul, la pagina lui de aici (care spune și când e expirat sau greșit).
+     */
+    public function linkVechi(array $params): void
+    {
+        header('Cache-Control: no-store');
+        header('X-Robots-Tag: noindex, nofollow');
+        header('Location: /cont/confirmare/' . rawurlencode((string) ($params['token'] ?? '')), true, 302);
+    }
+
     /** `POST /cont/confirmare/{token}`: apăsarea butonului; abia acum se folosește linkul. */
     public function confirmaPost(array $params): void
     {

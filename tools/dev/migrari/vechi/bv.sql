@@ -1,7 +1,7 @@
 -- Fixture-ul migrărilor pentru Biovitality (cod bv): schema pe care o face codul vechi pe o bază goală:
 -- scripts/install.php, apoi funcțiile ensure…/asigura… până nu se mai schimbă (MariaDB 10.11.14-MariaDB-0ubuntu0.24.04.1).
 -- Doar structură, niciun rând; nimic din datele unui site. Îl încarcă tools/dev/test-migrari.php (T2).
--- sursa: Mutare-Site-Biovitality@779e0d8
+-- sursa: Mutare-Site-Biovitality@d95598e
 -- Generat de tools/dev/migrari/genereaza-fixture.php --fixture-uri; nu se editează de mână.
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -262,6 +262,22 @@ CREATE TABLE `coupons` (
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customer_email_confirmations` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `user_id` int(10) unsigned NOT NULL,
+  `email` varchar(190) NOT NULL,
+  `token_hash` char(64) NOT NULL,
+  `reason` varchar(20) NOT NULL DEFAULT 'register',
+  `ip_address` varchar(64) DEFAULT NULL,
+  `expires_at` datetime NOT NULL,
+  `used_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_customer_email_confirmations_token` (`token_hash`),
+  KEY `idx_customer_email_confirmations_user` (`user_id`,`created_at`),
+  KEY `idx_customer_email_confirmations_ip` (`ip_address`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `customer_password_resets` (
@@ -981,12 +997,14 @@ CREATE TABLE `users` (
   `first_name` varchar(100) NOT NULL,
   `last_name` varchar(100) NOT NULL,
   `email` varchar(190) NOT NULL,
+  `email_confirmed_at` datetime DEFAULT current_timestamp(),
   `phone` varchar(30) DEFAULT NULL,
   `birth_date` date DEFAULT NULL,
   `gender` varchar(20) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
   `google_id` varchar(120) DEFAULT NULL,
   `loyalty_points` int(11) NOT NULL DEFAULT 0,
+  `session_version` int(10) unsigned NOT NULL DEFAULT 0,
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),

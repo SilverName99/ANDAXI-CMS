@@ -158,6 +158,8 @@ $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /
     // WP-25: linkul de confirmare a adresei din emailul de după înregistrare (un cont creat cât `conturi_clienti` era
     // pornit se confirmă și după oprirea lui).
     'GET /cont/confirmare/{token}', 'POST /cont/confirmare/{token}',
+    // Portul Biovitality 0e54737: același link, la adresa din emailurile trimise de codul Biovitality (duce la cel de mai sus).
+    'GET /contul-meu/confirmare/{token}',
     // WP-R din 30 oct 2026 (codul vechi e2e2d77, 7123076): dezabonarea „cu un clic” a clientului de email (antetul
     // List-Unsubscribe-Post al unui newsletter trimis) și butonul „Confirm dezabonarea” din pagina linkului, la aceeași adresă.
     'POST /newsletter/unsubscribe/{token}'];

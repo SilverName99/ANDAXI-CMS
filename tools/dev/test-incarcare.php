@@ -561,17 +561,17 @@ $verifica('A6 se socotește din lista regulilor, nu cu transformarea: o valoare 
     && $cuLista('order_email_from_name', 'Bioscem') === false && $cuLista('order_email_from_name', 'VERIFICARE Bioscem') === true
     && $cuLista('maintenance_key', 'cheie-veche') === false && $cuLista('maintenance_key', str_repeat('a', 24)) === true && $cuLista('store_name', 'orice') === null);
 
-// ── Biovitality (WP-11b): regulile Bioscem plus ce are în plus schema codului Biovitality 779e0d8 (bv.sql) ──
+// ── Biovitality (WP-11b): regulile Bioscem plus ce are în plus schema codului Biovitality d95598e (bv.sql) ──
 $reguliBv = Reguli::incarca($radacina, 'biovitality');
 $verifica('regulile Biovitality se încarcă (cele Bioscem plus ale lui), fără nicio greșeală de formă; versiunea urmează și versiunea regulilor Bioscem',
     $reguliBv->probleme() === [] && $reguliBv->date['licenta'] === 'biovitality' && $reguliBv->date['pachet'] === 'biovitality'
-    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 5, implode('; ', $reguliBv->probleme()));
+    && (int) $reguliBv->versiune() === (int) $reguli->versiune() * 100 + 6, implode('; ', $reguliBv->probleme()));
 $bv = $coloaneSql($radacina . '/tools/dev/migrari/vechi/bv.sql');
 // Coloanele pe care le pune pe site un script al codului Biovitality, nu instalarea (deci nu sunt în bv.sql): importul WordPress
 // (scripts/import-wordpress-posts.php:314). Setul tools/verificare/seturi/biovitality.php le numără; regulile trebuie să le știe.
 $bv['blog_posts']['wp_post_id'] = ['tip' => 'int', 'nul' => true, 'lungime' => null, 'generata' => false];
 $scanBv = $reguliBv->scaneaza($structuraDin($bv));
-$verifica('scanerul pe schema Biovitality 779e0d8 (bv.sql, ' . count($bv) . ' tabele): fiecare tabel are regulă (' . count($scanBv['copiate']) . ' copiate, '
+$verifica('scanerul pe schema Biovitality d95598e (bv.sql, ' . count($bv) . ' tabele): fiecare tabel are regulă (' . count($scanBv['copiate']) . ' copiate, '
     . count($scanBv['doar_structura']) . ' doar structura), fiecare coloană a unui tabel copiat e în reguli', $scanBv['probleme'] === [] && $scanBv['necunoscute'] === []
     && count($bv) >= 63, implode('; ', array_merge($scanBv['probleme'], $scanBv['necunoscute'])));
 $scanBvCms = $reguliBv->scaneaza($structuraDin($cms));
@@ -2150,7 +2150,7 @@ try {
 
     // =================================================================
     $scrie('');
-    $scrie('B10. Biovitality (WP-11b): o sursă făcută ca baza codului Biovitality 779e0d8 (bv.sql) cu datele demo, încărcată cu --din=biovitality');
+    $scrie('B10. Biovitality (WP-11b): o sursă făcută ca baza codului Biovitality d95598e (bv.sql) cu datele demo, încărcată cu --din=biovitality');
     // Pe server proprietarul pune lângă pachet valorile private ale înghețării Biovitality (docs/VERIFICARE.md); aici, inventate, cu marcaj:
     // după migrări încărcarea trebuie să le golească sau să le schimbe cu adresa proprietarului (A6), deci niciuna nu rămâne pe copie.
     $fisierBv = $copie . '/site-uri/biovitality/setari-inghetate.json';
@@ -2194,6 +2194,13 @@ try {
         }
         $lista = '`' . implode('`, `', $comune) . '`';
         $unde = $tabelBv === 'settings' ? ' WHERE `key` NOT IN (' . implode(', ', array_map([$sursaBv, 'quote'], $faraInSursa)) . ')' : '';
+        if ($tabelBv === 'customer_email_confirmations') {
+            // Tabelul codului Biovitality (0e54737) cere și adresa linkului și expirarea lui (NOT NULL, fără implicit), ca pe site.
+            $copiateDinDev += (int) $sursaBv->exec('INSERT INTO customer_email_confirmations (' . $lista . ', `email`, `expires_at`) SELECT '
+                . implode(', ', array_map(static fn (string $c): string => 'c.`' . $c . '`', $comune)) . ", COALESCE(u.email, ''), c.created_at + INTERVAL 7 DAY FROM `"
+                . $bazaDev . '`.customer_email_confirmations c LEFT JOIN `' . $bazaDev . '`.users u ON u.id = c.user_id');
+            continue;
+        }
         $copiateDinDev += (int) $sursaBv->exec('INSERT INTO `' . $tabelBv . '` (' . $lista . ') SELECT ' . $lista . ' FROM `' . $bazaDev . '`.`' . $tabelBv . '`' . $unde);
     }
     $sursaBv->exec('SET FOREIGN_KEY_CHECKS = 1');
@@ -2229,7 +2236,7 @@ try {
         'bunny_timeout' => '20'] as $cheie => $v) {
         $s->execute([$cheie, $v]);
     }
-    $verifica('baza „live” Biovitality: aceleași tabele și coloane ca bv.sql (codul Biovitality 779e0d8), ' . $copiateDinDev . ' rânduri demo, rândurile cu marcaj '
+    $verifica('baza „live” Biovitality: aceleași tabele și coloane ca bv.sql (codul Biovitality d95598e), ' . $copiateDinDev . ' rânduri demo, rândurile cu marcaj '
         . 'în tabelele clienților și în cele fără rânduri (și ale Biovitality: jetoanele aplicației, dosarele din cloud, jurnalele fișierelor), plus conținutul '
         . 'Biovitality', $diferenteBv === [] && $copiateDinDev > 500 && isset($idsBv['admin_app_tokens'], $idsBv['bunny_protected_folders'], $idsBv['file_locks'],
             $idsBv['orders'], $idsBv['recenzie_aprobata']), implode(', ', $diferenteBv));

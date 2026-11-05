@@ -1165,7 +1165,7 @@ $anteteDeBioscem = [
         'cale' => '#[?&]gclid=#', 'rol' => 'anon',
         'doar_baza' => 'set-cookie: bv_gclid=<VALOARE>; expires=<DATA>; Max-Age=2592000; path=/; SameSite=Lax',
         'motiv' => 'cookie-ul reclamei Google (bv_gclid, pentru ad_source) se scrie doar cu acordul vizitatorului pentru urmărire '
-            . '(GDPR; revizuirea WP-39/40, decizia proprietarului în așteptare); vizitatorul nou al comparației n-a dat acordul. '
+            . '(GDPR; revizuirea WP-39/40, hotărât de proprietar pe 5 nov 2026: da); vizitatorul nou al comparației n-a dat acordul. '
             . 'site-uri/bioscem/ce-se-schimba.md',
     ],
 ];

@@ -328,13 +328,19 @@ final class Schema
         $this->numeValid($tabel);
         $this->numeValid($coloana);
         $valoare = trim($valoare);
-        if (preg_match("/^('[A-Za-z0-9_ .,:\\/@-]*'|-?[0-9]+(\\.[0-9]+)?)$/", $valoare) !== 1) {
-            throw new Eroare($this->executie->id . ': schimbaImplicit(' . $tabel . '.' . $coloana . '): valoarea e un text simplu între ghilimele sau un număr', Eroare::MIGRARE);
+        // NULL doar pe o coloană care primește NULL (conturi_clienti/0053: implicitul CURRENT_TIMESTAMP pus de codul
+        // Biovitality pe users.email_confirmed_at); pe una NOT NULL serverul ar refuza ALTER-ul.
+        if (preg_match("/^('[A-Za-z0-9_ .,:\\/@-]*'|-?[0-9]+(\\.[0-9]+)?|NULL)$/", $valoare) !== 1) {
+            throw new Eroare($this->executie->id . ': schimbaImplicit(' . $tabel . '.' . $coloana . '): valoarea e un text simplu între ghilimele, un număr sau NULL', Eroare::MIGRARE);
         }
         $structura = $this->structuraObligatorie($tabel, 'schimbaImplicit');
         $existenta = $structura['coloane'][$coloana] ?? null;
         if ($existenta === null) {
             throw new Eroare($this->executie->id . ': schimbaImplicit: ' . $tabel . '.' . $coloana . ' nu există', Eroare::MIGRARE);
+        }
+        if ($valoare === 'NULL' && (!$existenta['null'] || $existenta['extra'] !== '' || isset($existenta['colatie']))) {
+            throw new Eroare($this->executie->id . ': schimbaImplicit: ' . $tabel . '.' . $coloana . ' e NOT NULL, are un „extra” sau o colație a ei, '
+                . 'deci nu primește implicitul NULL', Eroare::MIGRARE);
         }
         $ceruta = Amprenta::coloanaDinDefinitie($existenta['tip'] . ' DEFAULT ' . $valoare)['implicit'];
         if ($existenta['implicit'] === $ceruta) {
@@ -349,8 +355,18 @@ final class Schema
             $this->noteaza($this->server->clasaEstimata('implicit'), 'implicit', $tabel . '.' . $coloana, 'DEFAULT ' . $valoare, $tabel);
             return;
         }
-        $this->alter('implicit', $tabel, $tabel . '.' . $coloana, 'ALTER TABLE `' . $tabel . '` ALTER COLUMN `' . $coloana . '` SET DEFAULT ' . $valoare,
-            fn (): bool => ($this->structura($tabel)['coloane'][$coloana]['implicit'] ?? null) === $ceruta);
+        // MariaDB (10.11) primește „ALTER COLUMN … SET DEFAULT NULL” (și DROP DEFAULT) fără eroare, dar nu schimbă nimic când
+        // implicitul de acum e o expresie (CURRENT_TIMESTAMP); MODIFY cu aceeași definiție și DEFAULT NULL e tot doar al
+        // definiției (INSTANT), iar la NULL coloana n-are „extra” sau colația ei (verificat mai sus), deci nu pierde nimic.
+        $sql = $valoare === 'NULL'
+            ? 'ALTER TABLE `' . $tabel . '` MODIFY COLUMN `' . $coloana . '` ' . $existenta['tip'] . ' NULL DEFAULT NULL'
+            : 'ALTER TABLE `' . $tabel . '` ALTER COLUMN `' . $coloana . '` SET DEFAULT ' . $valoare;
+        $dorita = fn (): bool => ($this->structura($tabel)['coloane'][$coloana]['implicit'] ?? null) === $ceruta;
+        $this->alter('implicit', $tabel, $tabel . '.' . $coloana, $sql, $dorita);
+        if (!$dorita()) {
+            throw new Eroare($this->executie->id . ': schimbaImplicit: serverul a primit ALTER-ul, dar ' . $tabel . '.' . $coloana
+                . ' n-are implicitul ' . $valoare, Eroare::MIGRARE);
+        }
     }
 
     /**

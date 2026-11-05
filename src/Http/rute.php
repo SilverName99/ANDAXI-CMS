@@ -346,6 +346,8 @@ return static function (Router $router): void {
     // Revizuirea WP-25: linkul confirmă doar la apăsarea butonului din pagina lui (POST), nu la deschidere.
     $router->post('/cont/confirmare/{token}', [ConfirmareEmailController::class, 'confirmaPost']);
     $router->post('/contul-meu/confirmare-email', [ConfirmareEmailController::class, 'retrimite']);
+    // Portul Biovitality 0e54737: linkul din emailurile de confirmare trimise de codul Biovitality duce la cel de aici.
+    $router->get('/contul-meu/confirmare/{token}', [ConfirmareEmailController::class, 'linkVechi']);
     // WP-26 (GR-15, din grafoanaytis): cererea de ofertă din sertarul de pe produs și lista cererilor în admin (cereri_oferta).
     $router->post('/api/cerere-oferta', [CereriOfertaController::class, 'trimite']);
     $router->get('/admin/cereri-oferta', [CereriOfertaController::class, 'lista']);

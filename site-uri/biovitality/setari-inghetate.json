@@ -2,7 +2,7 @@
     "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
     "format": 2,
     "site": "biovitality",
-    "sursa": "Mutare-Site-Biovitality@779e0d8",
+    "sursa": "Mutare-Site-Biovitality@d95598e",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat (BV poate rula altă ramură decât cea de lucru, constatarea N2 din planul Etapei 1)",
     "amprenta_nucleu": "0eeb8c0229f53a17b40ca13acd2a59f621bec2192e3578a5654677ce9191fdfb",
     "setari": {
@@ -148,7 +148,7 @@
             "valoare": "1",
             "mod": "lipsa",
             "din": "manual",
-            "sursa": "decizia proprietarului din 30 oct (revizuirea WP-25, G-M4): Biovitality cere confirmarea adresei la înregistrare, ca vertij; punctele și comenzile fără cont se revendică doar pentru o adresă confirmată. Conturile de dinainte intră ca înainte",
+            "sursa": "decizia proprietarului din 30 oct (revizuirea WP-25, G-M4), aceeași cu purtarea codului Biovitality de la 0e54737 (bifa customer_email_confirmation_enabled, implicit pornită): Biovitality cere confirmarea adresei la înregistrare, ca vertij; punctele și comenzile fără cont se revendică doar pentru o adresă confirmată. Conturile de dinainte intră ca înainte. O bifă oprită pe site o duce pasul site/biovitality/0001_confirmare_email",
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
         },
@@ -315,6 +315,14 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
         },
+        "hsts": {
+            "valoare": "oprit",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizia proprietarului din 5 nov 2026 (2): HSTS oprit la trecere, ca la codul Biovitality, care nu-l trimite; se pornește după aceea, în trepte, cu scripts/comutatoare-seo.php --hsts=300, apoi 86400, apoi 31536000",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"300\""
+        },
         "maintenance_message": {
             "valoare": "",
             "mod": "lipsa",
@@ -382,6 +390,14 @@
             "sursa": "BV oferă plata cu cardul prin Stripe fără comutator, doar cu stripe_secret_key (SiteController); codul comun arată Stripe doar cu stripe_enabled = 1 și cheia secretă, deci aceeași condiție; port-biovitality.md §7",
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
+        },
+        "sursa_comenzii": {
+            "valoare": "0",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "decizia proprietarului din 5 nov 2026 (3): sursa comenzii (cookie-ul ax_sursa și raportul) oprită până după trecere, ca la codul Biovitality, care n-o notează; se pornește apoi cu scripts/comutatoare-seo.php --porneste=sursa_comenzii",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
         },
         "welcome_popup_enabled": {
             "valoare": "0",
@@ -503,6 +519,11 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
         },
+        "customer_email_confirmation_enabled": {
+            "motiv": "cheia bifei „Confirmare email la înregistrare” a codului Biovitality (0e54737, implicit pornită); codul comun n-o citește: aceeași regulă e pe cheia lui, customer_email_confirmation_required, înghețată „1” mai sus, iar o bifă oprită pe site („0”) o duce pe codul comun pasul site/biovitality/0001_confirmare_email (database/migrari/site/biovitality/)",
+            "vechi": "implicit \"1\"",
+            "nucleu": "lipsește"
+        },
         "email_brand_color": {
             "motiv": "Codul vechi n-avea emailurile conturilor și ale pluginurilor cu BrandedEmail (WP-17, VT-C7), deci nicio culoare de păstrat; emailurile comenzilor nu le folosesc",
             "vechi": "lipsește",
@@ -533,11 +554,6 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"Contul meu\""
         },
-        "hsts": {
-            "motiv": "revizuirea WP-39/40 (B6): HSTS din nucleu, prima treaptă (300 de secunde) la adoptare, apoi 86400 și 31536000 cu scripts/comutatoare-seo.php --hsts=…; în ce-se-schimba.md",
-            "vechi": "lipsește",
-            "nucleu": "implicit \"300\""
-        },
         "imagini_srcset": {
             "motiv": "WP-40 (B5): pozele cu variantele WebP (srcset) pornite la adoptare, după trecerea o dată prin poze (scripts/optimizeaza-imagini.php); în ce-se-schimba.md",
             "vechi": "lipsește",
@@ -567,11 +583,6 @@
             "motiv": "Ridicarea personală de la sediu (pluginul livrare_fan, Bioscem 807058e) pornește oprită: checkout-ul rămâne cel din codul vechi până o pornește magazinul din Setări livrare (cu adresa sediului)",
             "vechi": "lipsește",
             "nucleu": "implicit \"0\""
-        },
-        "sursa_comenzii": {
-            "motiv": "WP-40 (B9): sursa comenzii și raportul ei pornite la adoptare (doar cu magazinul); în ce-se-schimba.md",
-            "vechi": "lipsește",
-            "nucleu": "implicit \"1\""
         },
         "welcome_popup_version": {
             "motiv": "Fereastra de bun venit e oprită pentru acest site (welcome_popup_enabled = 0, mai sus): textul ei nu se arată",

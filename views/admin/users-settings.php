@@ -9,6 +9,7 @@ $genderEnabled = (string) ($settings['customer_registration_field_gender'] ?? '0
 $passwordEnabled = (string) ($settings['customer_registration_field_password'] ?? '1') !== '0';
 $passwordConfirmEnabled = (string) ($settings['customer_registration_field_password_confirm'] ?? '1') !== '0';
 $googleEnabled = (string) ($settings['customer_google_auth_enabled'] ?? '0') === '1';
+$emailConfirmationRequired = (string) ($settings['customer_email_confirmation_required'] ?? '0') === '1';
 $googleClientId = (string) ($settings['customer_google_client_id'] ?? '');
 $googleClientSecret = (string) ($settings['customer_google_client_secret'] ?? '');
 $googleCallbackUrl = (string) ($googleCallbackUrl ?? '');
@@ -37,6 +38,28 @@ admin_componenta('antet-pagina', [
         <form method="post" action="/admin/users/settings">
             <input type="hidden" name="action" value="generate_pages">
             <button class="btn" type="submit">Generează pagini necesare</button>
+        </form>
+        </div>
+    </section>
+
+    <?php /* Portul Biovitality 0e54737: confirmarea adresei la înregistrare (customer_email_confirmation_required, WP-25). */ ?>
+    <section class="adm-sectiune" id="users-settings-confirmare-email" aria-labelledby="users-settings-confirmare-email-titlu">
+        <header class="adm-sectiune__antet">
+            <div>
+                <h2 class="adm-sectiune__titlu" id="users-settings-confirmare-email-titlu">Confirmare email la înregistrare</h2>
+                <p class="adm-sectiune__descriere">Contul nou intră abia după ce clientul deschide linkul primit pe email. Comenzile făcute fără cont pe acea adresă și punctele lor apar în cont doar după confirmarea adresei, oricum ar fi bifa.</p>
+            </div>
+        </header>
+        <div class="adm-sectiune__corp">
+        <form method="post" action="/admin/users/settings" class="field">
+            <input type="hidden" name="action" value="save_email_confirmation">
+            <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" name="email_confirmation_required" value="1" <?= $emailConfirmationRequired ? 'checked' : '' ?>>
+                Cere confirmarea adresei de email
+            </label>
+            <div>
+                <button class="btn" type="submit">Salvează</button>
+            </div>
         </form>
         </div>
     </section>

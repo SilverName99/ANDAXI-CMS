@@ -46,7 +46,8 @@
         "nucleu/0047_jurnal_404": "0badd095b26bfe128ef2e8e34b4f69866f387c389c719037d56f3bd7a2e3a7fe",
         "catalog/0048_produse_ean": "0b8dd255a7c12271635ecb9c14f2aac419d16ee8e78c842beb80af165f886c2f",
         "magazin/0051_sursa_comenzii": "8d19807543ae01ac089f2e7f451c604b8218ebe924bba28f5d684d0100b1ef31",
-        "livrare_fan/0052_ridicare_personala": "150cabace00c1fe9954a4d579ff9d56cfd5c42bbdff0fbf8ff16241d60fabd62"
+        "livrare_fan/0052_ridicare_personala": "150cabace00c1fe9954a4d579ff9d56cfd5c42bbdff0fbf8ff16241d60fabd62",
+        "conturi_clienti/0053_confirmare_din_biovitality": "08c9fa4297bf53e4ddf29346b668da45f01c8071e8b62645875c7564a09ba93c"
     },
     "retrase": {}
 }
