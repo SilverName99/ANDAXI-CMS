@@ -120,7 +120,18 @@ admin_componenta('antet-pagina', [
         (după 1 minut, 5 minute, 15 minute, 1 oră, 6 ore, apoi la 12 ore, maximum 12 încercări).
         Ca reîncercările să ruleze și fără să intri în admin, adaugă un cron pe server:
     </p>
-    <pre style="background:var(--ax-text);color:var(--ax-linie);padding:12px;border-radius:8px;overflow:auto;">*/5 * * * * php <?= htmlspecialchars(dirname(__DIR__, 2), ENT_QUOTES) ?>/scripts/erp-sync.php >/dev/null 2>&1</pre>
+    <pre style="background:var(--ax-text);color:var(--ax-linie);padding:12px;border-radius:8px;overflow:auto;">*/5 * * * * <?php
+        // Cu stub (Etapa 2), codul stă în …/platforma/releases/<versiune>/ și se schimbă la fiecare actualizare:
+        // cron-ul trece prin lansatorul stabil bin/platforma, nu prin calea versiunii.
+        if (\App\Support\Paths::cuStub()) {
+            $dosarPlatforma = dirname(\App\Support\Paths::radacina(), 2);
+            echo 'php ' . htmlspecialchars($dosarPlatforma . '/bin/platforma', ENT_QUOTES)
+                . ' --site=' . htmlspecialchars(rtrim((string) constant('PLATFORMA_SITE_DIR'), '/'), ENT_QUOTES)
+                . ' scripts/erp-sync.php';
+        } else {
+            echo 'php ' . htmlspecialchars(dirname(__DIR__, 2), ENT_QUOTES) . '/scripts/erp-sync.php';
+        }
+    ?> >/dev/null 2>&1</pre>
     <p>
         Comenzile plătite cu cardul pleacă spre ERP abia după confirmarea plății;
         cele cu ramburs pleacă imediat ce sunt plasate.
