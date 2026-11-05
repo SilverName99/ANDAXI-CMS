@@ -11,9 +11,9 @@ use Throwable;
  * Pluginul `campanii` (cerut pentru Biovitality, 5 nov 2026; docs/PLUGINURI.md, „Campanii pe site”): o campanie programată,
  * cu fereastra ei (început, sfârșit), care pe site are trei bucăți, toate doar cât campania e în fereastră:
  *
- *  1. **Pagina de deschidere.** La fiecare intrare nouă pe site (o vizită nouă: de pe orice link din afară, dar și fără
- *     Referer: adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), vizitatorul e trimis o dată pe
- *     vizită (cookie de sesiune, strict necesar) la `/campanie/<slug>?inapoi=<adresa cerută>`, unde vede pagina aleasă din
+ *  1. **Pagina de deschidere.** La fiecare intrare pe site din afară (de pe orice link din afară, dar și fără Referer:
+ *     adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), chiar dacă vizitatorul a văzut-o deja,
+ *     vizitatorul e trimis la `/campanie/<slug>?inapoi=<adresa cerută>`, fără niciun cookie, unde vede pagina aleasă din
  *     Conținut → Pagini (editorul de pagini al nucleului) și, în stânga sus, butonul „← Înapoi în site-ul principal”, care
  *     duce la adresa cerută la început. Niciodată pentru roboți (Google vede site-ul ca înainte), admin, coș, checkout, cont,
  *     plăți și confirmările lor, API, adresele platformei, fișiere, cereri care nu sunt GET de document, navigarea din
@@ -30,7 +30,11 @@ use Throwable;
  */
 final class Campanii
 {
-    /** Cookie-ul „am văzut pagina campaniei <id>”: de sesiune (fără Expires), HttpOnly, SameSite=Lax. */
+    /**
+     * Cookie-ul de dinainte („am văzut pagina campaniei <id>”): din 5 nov (a doua decizie a proprietarului, trimiterea la
+     * fiecare intrare din afară) nu se mai pune și nu se mai citește; numele rămâne doar pentru teste (un cookie rămas de
+     * la o versiune veche nu schimbă nimic).
+     */
     public const COOKIE = 'campanie_vazuta';
 
     public const TEXT_INAPOI = '← Înapoi în site-ul principal';
@@ -453,6 +457,10 @@ final class Campanii
         $fundal = self::culoare((string) ($campanie['insigna_fundal'] ?? ''), self::IMPLICITE['insigna_fundal']);
         $culoare = self::culoare((string) ($campanie['insigna_culoare'] ?? ''), self::IMPLICITE['insigna_culoare']);
         $textSubPret = trim((string) ($campanie['text_sub_pret'] ?? ''));
+        // Oferta campaniei (OfertaCampanie), doar cât campania arătată e chiar cea activă (nu la previzualizarea adminului)
+        // și cu magazinul pornit: rândul ofertei pe card, cu aceeași rotunjire ca în coș.
+        $ofertaActiva = OfertaCampanie::activa($db);
+        $ofertaCard = $ofertaActiva !== null && (int) $ofertaActiva['id'] === $id ? $ofertaActiva : null;
         $carduri = '';
         foreach ($produse as $p) {
             $slug = trim((string) ($p['slug'] ?? ''));
@@ -487,6 +495,11 @@ final class Campanii
                 $pretHtml = '<p class="campanie-grila__pret">' . number_format($pret, 2) . ' lei'
                     . ($pretVechi !== null ? ' <del class="campanie-grila__vechi">' . number_format($pretVechi, 2) . ' lei</del>' : '')
                     . '</p>';
+                $randOferta = $ofertaCard !== null && $pretVechi === null && self::motivReducere($p) === ''
+                    ? self::randOfertaCard($ofertaCard, (int) $p['id'], (int) round($pret * 100)) : '';
+                if ($randOferta !== '') {
+                    $pretHtml .= '<p class="campanie-grila__oferta">' . $randOferta . '</p>';
+                }
                 $sub = self::textSubPret($textSubPret, $pret);
                 if ($sub !== '') {
                     $pretHtml .= '<p class="campanie-grila__sub">' . $sub . '</p>';
@@ -532,6 +545,9 @@ final class Campanii
             . '.campanie-grila__pret{margin:0;font-size:20px;line-height:1.2;font-weight:800;}'
             . '.campanie-grila__vechi{margin-left:6px;font-size:14px;font-weight:500;color:' . $slab . ';}'
             . '.campanie-grila__sub{margin:0;font-size:14px;line-height:1.35;font-weight:600;color:' . $slab . ';}'
+            . '.campanie-grila__oferta{margin:0;font-size:15px;line-height:1.35;font-weight:600;overflow-wrap:anywhere;}'
+            . '.campanie-grila__oferta del{font-weight:500;color:' . ($inchise ? '#f87171' : '#c0392b') . ';text-decoration:line-through;}'
+            . '.campanie-grila__oferta strong{font-weight:800;}'
             . '.campanie-grila__actiuni{display:flex;flex-direction:column;gap:8px;width:100%;margin-top:auto;padding-top:4px;}'
             . '.campanie-grila__formular{margin:0;width:100%;}'
             . '.campanie-grila__stoc{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-height:44px;'
@@ -550,6 +566,74 @@ final class Campanii
         return '<section class="campanie-grila campanie-grila--' . ($inchise ? 'inchise' : 'deschise') . ($razaCard === '0' ? ' campanie-grila--drepte' : '')
             . '" data-campanie-grila>'
             . '<style>' . $css . '</style><div class="campanie-grila__grila">' . $carduri . '</div></section>';
+    }
+
+    /**
+     * Rândul ofertei campaniei pe cardul din `{{campanie_produse}}` (HTML, sumele escapate de number_format), cu aceeași
+     * rotunjire ca în coș (OfertaCampanie::procentDin, la cent, jumătatea în sus):
+     *  - al_n, N 2: „71.67 lei + ~~71.67~~ 35.83 lei” (reducerea 35,835 → 35,84, deci a doua bucată 35,83, exact ca în coș);
+     *    N > 2: „Al 3-lea: ~~71.67~~ 50.17 lei”;
+     *  - n_la_m: „3 la preț de 2: ~~215.01~~ 143.34 lei”;
+     *  - procent: „~~71.67~~ 64.50 lei”; pret_fix: „~~71.67~~ <prețul de campanie> lei” (doar sub prețul produsului).
+     * '' fără ofertă de arătat.
+     *
+     * @param array{tip: string, n: int, m: int, procent_bp: int, produse: array<int, ?int>} $oferta
+     */
+    public static function randOfertaCard(array $oferta, int $idProdus, int $pretCenti, array $etichete = ['del', 'strong']): string
+    {
+        if ($pretCenti <= 0 || !array_key_exists($idProdus, $oferta['produse'])) {
+            return '';
+        }
+        [$t, $g] = $etichete;
+        $bani = static fn (int $centi): string => number_format($centi / 100, 2);
+        $taiat = static fn (int $centi): string => '<' . $t . '>' . number_format($centi / 100, 2) . '</' . $t . '>';
+        $n = (int) $oferta['n'];
+        switch ($oferta['tip']) {
+            case 'al_n':
+                $redus = $pretCenti - OfertaCampanie::procentDin($pretCenti, (int) $oferta['procent_bp']);
+                return $n === 2
+                    ? $bani($pretCenti) . ' lei + ' . $taiat($pretCenti) . ' <' . $g . '>' . $bani($redus) . ' lei</' . $g . '>'
+                    : 'Al ' . $n . '-lea: ' . $taiat($pretCenti) . ' <' . $g . '>' . $bani($redus) . ' lei</' . $g . '>';
+            case 'n_la_m':
+                $m = (int) $oferta['m'];
+                return $n . ' la preț de ' . $m . ': ' . $taiat($pretCenti * $n) . ' <' . $g . '>' . $bani($pretCenti * $m) . ' lei</' . $g . '>';
+            case 'procent':
+                return $taiat($pretCenti) . ' <' . $g . '>' . $bani($pretCenti - OfertaCampanie::procentDin($pretCenti, (int) $oferta['procent_bp'])) . ' lei</' . $g . '>';
+            case 'pret_fix':
+                $fix = $oferta['produse'][$idProdus] ?? null;
+                return $fix !== null && $fix > 0 && $fix < $pretCenti ? $taiat($pretCenti) . ' <' . $g . '>' . $bani($fix) . ' lei</' . $g . '>' : '';
+        }
+        return '';
+    }
+
+    /**
+     * Rândul ofertei campaniei pe pagina produsului (views/site/product.php, sub preț; în aspectul cu șablon, mutat lângă preț
+     * de scriptul paginii), cu aceleași reguli ca pe carduri (randOfertaCard), sau '': nicio ofertă activă, produsul nu e al
+     * ei, are o reducere proprie (preț redus, perioadă, BBD) sau magazinul nu arată prețuri. Prețul tăiat e `<s>`, cel nou
+     * `<b>`: scriptul paginii, care caută prețul printre `span`/`strong` cu textul prețului, nu le ia drept prețul produsului.
+     *
+     * @param array<string, mixed> $produs rândul normalizat al produsului (price, has_sale_price, bbd_*)
+     */
+    public static function ofertaPagina(array $produs): string
+    {
+        $id = (int) ($produs['id'] ?? 0);
+        if ($id <= 0 || !Plugins::vizibil('magazin') || self::activa() === null) {
+            return '';
+        }
+        $oferta = OfertaCampanie::activa(self::db());
+        if ($oferta === null || !array_key_exists($id, $oferta['produse']) || !empty($produs['has_sale_price'])
+            || BbdOferte::cereAlegere($produs)) {
+            return '';
+        }
+        $rand = self::randOfertaCard($oferta, $id, (int) round((float) ($produs['price'] ?? 0) * 100), ['s', 'b']);
+        if ($rand === '') {
+            return '';
+        }
+        return '<p class="campanie-oferta-pret" data-campanie-oferta-pret style="margin:6px 0 12px;font-weight:600;font-size:17px;line-height:1.35;'
+            . 'overflow-wrap:anywhere;"><span style="display:inline-block;margin-right:6px;padding:2px 8px;border-radius:999px;'
+            . 'background:#fef2f2;color:#b91c1c;font-size:12px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;">'
+            . self::e($oferta['eticheta']) . '</span>' . str_replace(['<s>', '<b>'], ['<s style="color:#c0392b;font-weight:500;">',
+                '<b style="font-weight:800;">'], $rand) . '</p>';
     }
 
     /**
@@ -665,7 +749,6 @@ final class Campanii
             || !self::arePagina($db ?? self::db(), $activa)) {
             return false;
         }
-        self::marcheazaVazuta((int) $activa['id']);
         $cerere = (string) ($_SERVER['REQUEST_URI'] ?? '/');
         header('Cache-Control: no-store, private');
         header('Location: ' . self::adresaPagina((string) $activa['slug'], self::inapoiSigur($cerere)), true, 302);
@@ -732,7 +815,9 @@ final class Campanii
             || trim((string) ($campanie['slug'] ?? '')) === '') {
             return false;
         }
-        return (string) ($cookie[self::COOKIE] ?? '') !== (string) (int) ($campanie['id'] ?? 0);
+        // Decizia proprietarului (5 nov, a doua): la fiecare intrare din afară (fără Referer sau cu Referer de pe alt site),
+        // chiar dacă vizitatorul a văzut deja pagina în aceeași sesiune; navigarea din site o oprește Referer-ul de mai sus.
+        return true;
     }
 
     /** O pagină a site-ului pe care se poate pune campania în față (nu coș, plată, cont, admin, API, fișiere…). */
@@ -798,22 +883,6 @@ final class Campanii
     public static function adresaPagina(string $slug, string $inapoi = '/'): string
     {
         return '/campanie/' . rawurlencode($slug) . ($inapoi !== '' ? '?inapoi=' . rawurlencode($inapoi) : '');
-    }
-
-    /**
-     * Cookie-ul „am văzut pagina campaniei”: strict necesar (ține minte doar că vizitatorul a trecut deja prin pagină, ca
-     * să n-o mai vadă la fiecare clic), deci fără acordul pentru cookie-uri; de sesiune (dispare la închiderea browserului),
-     * doar id-ul campaniei, nimic despre vizitator.
-     */
-    public static function marcheazaVazuta(int $idCampanie): void
-    {
-        if (headers_sent() || $idCampanie <= 0) {
-            return;
-        }
-        $https = (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off')
-            || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
-        setcookie(self::COOKIE, (string) $idCampanie, ['path' => '/', 'samesite' => 'Lax', 'secure' => $https, 'httponly' => true]);
-        $_COOKIE[self::COOKIE] = (string) $idCampanie;
     }
 
     /** Pagina de deschidere a campaniei, din Conținut → Pagini (publicată sau ciornă; nu una din coș), sau null. */

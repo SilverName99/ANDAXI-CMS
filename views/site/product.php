@@ -49,16 +49,47 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
 <?php endif; ?>
 <?php /* Pluginul campanii: insigna produsului din campania activă (App\Support\Campanii), în capul panoului; fără campanie, nimic. */ ?>
 <?php $insignaCampanie = \App\Support\Campanii::insignaPagina($product); ?>
+<?php
+// Pluginul campanii: oferta campaniei sub preț (Campanii::ofertaPagina) și, în aspectul cu șablon, insigna chiar deasupra
+// titlului (primul <h1> al șablonului), nu în colțul panoului. Fără campanie: ambele goale, pagina e cea de dinainte.
+$ofertaPretCampanie = \App\Support\Campanii::ofertaPagina($product);
+$htmlSablonProdus = (string) ($templateRender['html'] ?? '');
+$insignaLaTitlu = $insignaCampanie !== '' && preg_match('/<h1\b/i', $htmlSablonProdus) === 1;
+if ($insignaLaTitlu) {
+    $htmlSablonProdus = (string) preg_replace('/<h1\b/i', $insignaCampanie . '<h1', $htmlSablonProdus, 1);
+}
+?>
 <?php if ($hasTemplateRender): ?>
     <section class="panel product-template-render">
-<?php if ($insignaCampanie !== ''): ?>
+<?php if ($insignaCampanie !== '' && !$insignaLaTitlu): ?>
         <?= $insignaCampanie ?>
 
 <?php endif; ?>
         <?php if (trim((string) ($templateRender['css'] ?? '')) !== ''): ?>
             <style><?= (string) ($templateRender['css'] ?? '') ?></style>
         <?php endif; ?>
-        <?= (string) ($templateRender['html'] ?? '') ?>
+        <?= $htmlSablonProdus ?>
+<?php if ($ofertaPretCampanie !== ''): ?>
+        <template data-campanie-oferta-sablon data-pret="<?= htmlspecialchars(number_format((float) ($product['price'] ?? 0), 2) . ' lei', ENT_QUOTES) ?>"><?= $ofertaPretCampanie ?></template>
+        <script>
+            (() => {
+                // Oferta campaniei lângă prețul din șablon (primul element de preț, altfel sub titlu).
+                const sablon = document.querySelector('template[data-campanie-oferta-sablon]');
+                const rand = sablon && sablon.content.firstElementChild;
+                const radacina = sablon && sablon.closest('.product-template-render');
+                if (!rand || !radacina) return;
+                const textPret = sablon.getAttribute('data-pret') || '';
+                const pret = Array.from(radacina.querySelectorAll('.pdp-price, .product-price, [data-product-price], .price'))
+                    .find((n) => !n.matches('.pdp-price-old, .product-price-old, [data-product-old-price], .price-old'))
+                    || Array.from(radacina.querySelectorAll('p, div, span, strong'))
+                        .find((n) => n.children.length === 0 && !n.closest('button, a, label, form, script, style')
+                            && (n.textContent || '').replace(/\s+/g, ' ').includes(textPret));
+                const tinta = pret ? (pret.closest('p') || pret) : radacina.querySelector('h1');
+                if (tinta) { tinta.insertAdjacentElement('afterend', rand); } else { sablon.after(rand); }
+                sablon.remove();
+            })();
+        </script>
+<?php endif; ?>
         <?php if (trim((string) ($templateRender['js'] ?? '')) !== ''): ?>
             <script><?= str_replace('</script>', '<\/script>', (string) ($templateRender['js'] ?? '')) ?></script>
         <?php endif; ?>
@@ -131,6 +162,10 @@ $esteCiorna = (bool) ($esteCiorna ?? false);
             <?php endif; ?>
             <span class="price-current"><?= number_format((float) ($product['price'] ?? 0), 2) ?> lei</span>
         </p>
+<?php if ($ofertaPretCampanie !== ''): ?>
+        <?= $ofertaPretCampanie ?>
+
+<?php endif; ?>
 <?php endif; ?>
         <?php
             // Precomanda arată altfel decât un produs epuizat: acolo clientul

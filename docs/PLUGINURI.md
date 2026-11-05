@@ -1031,31 +1031,41 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   magazin pe site). „Text sub preț” (`text_sub_pret`, 160 de caractere, escapat): `{pret}` = prețul curent, `{pret*1.5}` (sau
   `{pret x 1.5}`, `{pret×1,5}`) = prețul curent înmulțit, de exemplu „2 bucăți: {pret*1.5}”; gol = fără rând. **„Cardurile
   produselor”** (`carduri_inchise`): deschise (albe, chenar gri) sau închise (card `#161616` pe fundal negru, text alb, ca pe
-  pagina Biovitality). **„Colțurile cardurilor”** (`carduri_drepte`, `campanii/0057`): rotunjite (implicit, aspectul de până
+  pagina Biovitality). **Prețul ofertei** (cu oferta campaniei aleasă, doar cât campania arătată e cea activă, nu la
+  previzualizarea adminului, și doar pe produsele ei fără reducere proprie; `Campanii::randOfertaCard`, aceeași rotunjire ca în
+  coș): un rând sub preț, cu prețul tăiat în roșu (`#c0392b`; `#f87171` pe cardurile închise) și prețul de ofertă îngroșat:
+  „1+1 −50%”: „71.67 lei + ~~71.67~~ 35.83 lei” (reducerea 35,835 se rotunjește la 35,84, deci a doua bucată costă 35,83, ca în
+  coș); „Al 3-lea la −30%”: „Al 3-lea: ~~71.67~~ 50.17 lei”; „3 la preț de 2”: „3 la preț de 2: ~~215.01~~ 143.34 lei” (N ×
+  prețul tăiat, M × prețul); „−10%”: „~~71.67~~ 64.50 lei”; prețul de campanie: „~~71.67~~ 59.99 lei” (doar sub prețul
+  produsului). Fără ofertă, campanie inactivă sau produs neeligibil: cardul de dinainte. **Pagina produsului** are același
+  rând (`Campanii::ofertaPagina`, cu eticheta ofertei într-o pastilă): sub preț în aspectul fără șablon; în aspectul cu șablon,
+  scriptul paginii îl mută după primul element de preț al șablonului (`.pdp-price`, `.product-price`, `[data-product-price]`,
+  `.price`, altfel elementul cu textul prețului), altfel sub titlu. Prețul tăiat e `<s>`, cel nou `<b>` (scriptul paginii care
+  caută prețul printre `span`/`strong` nu le ia drept prețul produsului). **Insigna** produsului din campanie stă, în aspectul cu
+  șablon, chiar deasupra titlului (înaintea primului `<h1>` al șablonului; fără `<h1>`, în capul panoului, ca înainte).
+  **„Colțurile cardurilor”** (`carduri_drepte`, `campanii/0057`): rotunjite (implicit, aspectul de până
   acum) sau drepte (cardul, cutia pozei și butoanele cu `border-radius: 0`; insigna rămâne rotunjită). Editorul nu are o
   previzualizare a cardurilor (se vede pe pagina campaniei, și ca previzualizare a administratorului). Responsivă: câte încap de minimum 230 px pe desktop, două pe rând sub 600 px.
-- **Prima intrare pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini; decizia proprietarului din 5 nov: **la
-  fiecare intrare nouă**, adică la fiecare vizită nouă): un om care intră pe site, de pe orice link din afară (Google, un email,
-  o rețea socială) sau fără Referer (adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), primește `302` la
-  `/campanie/<slug>?inapoi=<calea și parametrii ceruți>` (`Cache-Control: no-store, private`) și cookie-ul
-  `campanie_vazuta=<id>`. `inapoi` e verificat ca o cale a acestui site (`/…`, fără `//`, `\`, schemă, gazdă, caractere de
+- **Intrarea pe site** (`Campanii::intercepteaza`, înaintea cache-ului de pagini; deciziile proprietarului din 5 nov: **la
+  fiecare intrare din afară**, și când vizitatorul a văzut deja pagina în aceeași sesiune, de exemplu a închis fila și a venit
+  iar de pe Google): un om care intră pe site, de pe orice link din afară (Google, un email, o rețea socială) sau fără Referer
+  (adresa scrisă de mână, un semn de carte, o aplicație care nu trimite Referer), primește `302` la
+  `/campanie/<slug>?inapoi=<calea și parametrii ceruți>` (`Cache-Control: no-store, private`), fără niciun cookie. `inapoi` e verificat ca o cale a acestui site (`/…`, fără `//`, `\`, schemă, gazdă, caractere de
   control, nici `/campanie/…`); orice altceva duce la `/` (nicio redirecționare deschisă). **Nu se trimite niciodată**: altă
   metodă decât GET (POST, HEAD), roboții și previzualizările de linkuri (Googlebot, Bing, AdsBot, rețelele sociale, unelte,
   `HeadlessChrome`, fără User-Agent; `Campanii::eRobot`), o cerere care nu cere `text/html` sau nu e navigarea unui document
-  (`Sec-Fetch-Dest`/`Sec-Fetch-Mode`, preîncărcările, AJAX), navigarea din interiorul site-ului (`Referer` de pe același site:
-  așa nici un vizitator cu cookie-urile blocate nu e trimis la fiecare clic), un administrator logat, cine are deja cookie-ul
-  campaniei, adresele excluse din stratul SEO (`SeoRedirects::eExclusa`: admin, API, `/_andaxi/`, coș, checkout, cont, login,
+  (`Sec-Fetch-Dest`/`Sec-Fetch-Mode`, preîncărcările, AJAX), navigarea din interiorul site-ului (`Referer` de pe același site,
+  și `www.`: singurul lucru care oprește trimiterea după prima intrare; un browser sau o extensie care nu trimite Referer nici
+  pe clicurile din site ar fi trimis la campanie la fiecare clic, caz rar), un administrator logat, adresele excluse din stratul SEO (`SeoRedirects::eExclusa`: admin, API, `/_andaxi/`, coș, checkout, cont, login,
   plăți și întoarcerile lor, webhook-uri, newsletter, fișiere, `/uploads`, `/assets`, adresele mereu deschise ale tuturor
   pluginurilor, `cai_excluse` din `seo.json`) și cele blocate în `robots.txt`, `/campanie`, `/cont`, `/og`, `/tema`,
   `/sitemap…`, `/feed`, `/review-form`, orice cale cu extensie de fișier, paginile altor pluginuri decât catalogul și blogul
   (cele din `pagini`, ex. `checkout/succes`, `acorduri-gdpr`) și paginile de sistem ale hărții site-ului, linkul de ciornă al
   unui produs (`?draft=`). Fără pagină aleasă sau cu „Arată pagina campaniei la prima intrare” debifată, nu se trimite nimeni
-  (insigna și bannerul rămân). Odată intrat, cât se plimbă prin site vizitatorul nu mai e trimis la ea; în aceeași vizită o mai
-  vede doar dacă apasă bannerul (mai jos).
-- **Cookie-ul** `campanie_vazuta`: strict necesar (ține minte doar că vizitatorul a văzut deja pagina, ca să nu fie trimis
-  la ea la fiecare pagină), deci fără acordul pentru cookie-uri (`CookieConsent`); de sesiune (fără `Expires`: dispare la
-  închiderea browserului), `HttpOnly`, `SameSite=Lax`, `Secure` pe https; doar id-ul campaniei, nimic despre vizitator. O
-  campanie nouă (alt id) se vede din nou o dată. De trecut în politica de cookie-uri a site-ului, la „strict necesare”.
+  (insigna și bannerul rămân). Cât se plimbă prin site (clicurile din site), vizitatorul nu e trimis la ea; o mai vede la
+  următoarea intrare din afară sau dacă apasă bannerul (mai jos).
+- **Fără cookie** (de la a doua decizie din 5 nov): `campanie_vazuta` nu se mai pune și nu se mai citește (unul rămas de la
+  versiunea de dinainte nu schimbă nimic); se poate scoate din politica de cookie-uri a site-ului.
 - **Produsele campaniei fără reducere proprie** (cerut pe 5 nov, ca să nu se cumuleze două reduceri): un produs care are deja
   o schimbare de preț nu se poate alege (`Campanii::motivReducere`): prețul redus sau o perioadă de reducere în curs (prețul de
   pe card sub prețul lui, ca în magazin) și ofertele BBD de ales (pluginul „Oferte BBD” pornit). Precomanda nu are preț propriu

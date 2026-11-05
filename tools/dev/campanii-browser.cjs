@@ -68,19 +68,21 @@ async function vizitator(browser, latime, eticheta) {
     await pagina.screenshot({ path: path.join(capturi, 'produs-' + latime + '.png'), fullPage: false });
   }
 
-  await pagina.goto(baza + '/', { waitUntil: 'load' });
+  // Mai departe, clicuri din site (Referer al site-ului): fără trimitere la campanie.
+  const dinSite = { waitUntil: 'load', referer: baza + '/' };
+  await pagina.goto(baza + '/', dinSite);
   nota(eticheta + ': prima pagină: insigna în grila produselor noi', await pagina.locator('.campanie-insigna--acasa').first().isVisible());
   nota(eticheta + ': prima pagină fără derulare laterală', await faraDerulareLaterala(pagina));
   const cuSimilare = process.env.CMS_DEV_PRODUS_SIMILARE || '';
   if (cuSimilare) {
-    await pagina.goto(baza + '/produs/' + encodeURIComponent(cuSimilare), { waitUntil: 'load' });
+    await pagina.goto(baza + '/produs/' + encodeURIComponent(cuSimilare), dinSite);
     await pagina.waitForTimeout(300);
     // Banda produselor similare e refăcută din JavaScript (după lățimea ecranului): insigna trebuie să rămână.
     nota(eticheta + ': produsele similare: insigna rămâne pe carduri după ce JavaScript-ul reface banda',
       (await pagina.locator('.similar-products .campanie-insigna--similar').count()) >= 1);
   }
-  await pagina.goto(baza + '/magazin', { waitUntil: 'load' });
-  nota(eticheta + ': la a doua pagină nu mai e trimis la campanie', new URL(pagina.url()).pathname === '/magazin', pagina.url());
+  await pagina.goto(baza + '/magazin', dinSite);
+  nota(eticheta + ': navigarea din site nu e trimisă la campanie', new URL(pagina.url()).pathname === '/magazin', pagina.url());
   const insigne = await pagina.locator('.campanie-insigna--card').count();
   nota(eticheta + ': insigna pe cardurile din magazin', insigne >= 1, String(insigne));
   nota(eticheta + ': magazinul fără derulare laterală', await faraDerulareLaterala(pagina));
@@ -91,6 +93,10 @@ async function vizitator(browser, latime, eticheta) {
   if (capturi) {
     await pagina.screenshot({ path: path.join(capturi, 'magazin-' + latime + '.png'), fullPage: false });
   }
+  // O nouă intrare din afară în aceeași sesiune (fila închisă, apoi de pe Google): trimis din nou la campanie.
+  await pagina.goto(baza + '/produs/' + encodeURIComponent(produs), { waitUntil: 'load', referer: 'https://www.google.com/' });
+  nota(eticheta + ': o nouă intrare de pe Google, în aceeași sesiune: din nou pe pagina campaniei',
+    new URL(pagina.url()).pathname.startsWith('/campanie/'), pagina.url());
   nota(eticheta + ': nicio eroare JavaScript', erori.length === 0, erori.join(' | '));
   await context.close();
 }
@@ -158,7 +164,6 @@ async function cosOferta(browser, latime, eticheta) {
       ? 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36'
       : 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' });
   await blocheazaExterne(context);
-  await context.addCookies([{ name: 'campanie_vazuta', value: String(campanie), url: baza }]);
   const pagina = await context.newPage();
   const erori = [];
   pagina.on('pageerror', (e) => erori.push(String(e)));
@@ -173,7 +178,7 @@ async function cosOferta(browser, latime, eticheta) {
   if (capturi) {
     await pagina.screenshot({ path: path.join(capturi, 'cos-oferta-' + latime + '.png'), fullPage: true });
   }
-  await pagina.goto(baza + '/magazin', { waitUntil: 'load' });
+  await pagina.goto(baza + '/magazin', { waitUntil: 'load', referer: baza + '/cos' });
   const buton = pagina.locator('.floating-cart__trigger');
   let plutitor = false;
   if (await buton.count() > 0 && await buton.first().isVisible()) {

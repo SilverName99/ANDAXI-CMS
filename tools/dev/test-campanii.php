@@ -11,12 +11,12 @@ declare(strict_types=1);
  *
  * A. Fără server: adresa de întoarcere (doar o cale a site-ului: nicio redirecționare deschisă), roboții, adresele care nu se
  *    opresc niciodată (coș, checkout, cont, plăți, API, platforma, fișiere, admin), regula cererii (doar GET de document, nu din
- *    interiorul site-ului, nu cu cookie-ul), culorile, linkul bannerului, starea unei campanii, cheia cache-ului fără campanie.
+ *    interiorul site-ului; la fiecare intrare din afară, și cu un cookie vechi), culorile, linkul bannerului, starea unei campanii, cheia cache-ului fără campanie.
  * B. Adminul (administratorul general): lista goală, o campanie nouă salvată din formular (cu jetonul formularului), refuzurile
  *    (fără jeton, sfârșit înainte de început, suprapunerea cu altă campanie pornită, pornită fără pagină), jurnalul adminilor.
- * C. Pe site, cu campania activă: prima intrare (302 la /campanie/<slug>?inapoi=…, cookie de sesiune HttpOnly, fără cache),
+ * C. Pe site, cu campania activă: prima intrare (302 la /campanie/<slug>?inapoi=…, fără cookie, fără cache; și la a doua intrare din afară),
  *    pagina campaniei (butonul spre adresa cerută, noindex, fără cache), nicio trimitere pentru roboți, POST, coș, checkout,
- *    cont, API, /_andaxi/, fișiere, admin, navigarea din site, cu cookie-ul; trimiterea și fără Referer și de pe alt site
+ *    cont, API, /_andaxi/, fișiere, admin, navigarea din site; trimiterea și fără Referer și de pe alt site
  *    (decizia proprietarului din 5 nov: la fiecare intrare nouă); insigna doar pe produsele alese (pagina produsului,
  *    magazinul, categoria, {{featured_products}}, produsele similare, {{product_produse_similare}}), bannerul (lipit sau nu,
  *    cu linkul lui; fără link, spre pagina campaniei cu întoarcerea la pagina curentă, și clicul pe el); în afara ferestrei și oprită: nimic (pagina 404, fără banner, fără insignă), afară de
@@ -130,8 +130,8 @@ $campanieProba = ['id' => 7, 'slug' => 'proba', 'pagina_id' => 3, 'pagina_la_int
 $cazuriCerere = [
     'un om venit de pe Google' => [$om, [], [], true],
     'fără Referer (link tastat, aplicație, email)' => [array_diff_key($om, ['HTTP_REFERER' => 1]), [], [], true],
-    'cu cookie-ul acestei campanii' => [$om, [Campanii::COOKIE => '7'], [], false],
-    'cu cookie-ul altei campanii (o campanie nouă se vede din nou)' => [$om, [Campanii::COOKIE => '6'], [], true],
+    // Decizia proprietarului (5 nov, a doua): la fiecare intrare din afară, și după ce a văzut-o (un cookie vechi nu contează).
+    'de pe Google, cu un cookie rămas de la versiunea veche' => [$om, [Campanii::COOKIE => '7'], [], true],
     'navigarea din interiorul site-ului' => [['HTTP_REFERER' => 'http://127.0.0.1:8701/magazin'] + $om, [], [], false],
     'POST' => [['REQUEST_METHOD' => 'POST'] + $om, [], [], false],
     'HEAD' => [['REQUEST_METHOD' => 'HEAD'] + $om, [], [], false],
@@ -529,9 +529,7 @@ $verifica('intrarea fără Referer (adresa scrisă, semn de carte, aplicație) �
 $verifica('prima intrare (de pe Google): 302 la pagina campaniei, cu adresa cerută în „inapoi”', $r['cod'] === 302
     && ($r['antete']['location'] ?? '') === $asteptat, $r['cod'] . ' ' . ($r['antete']['location'] ?? ''));
 $cookie = (string) ($r['antete']['set-cookie'] ?? '');
-$verifica('cookie-ul de sesiune: doar id-ul campaniei, fără Expires, HttpOnly, SameSite=Lax; răspunsul fără cache',
-    str_starts_with($cookie, Campanii::COOKIE . '=' . $idCampanie . ';') && stripos($cookie, 'expires') === false
-    && stripos($cookie, 'httponly') !== false && stripos($cookie, 'samesite=lax') !== false
+$verifica('trimiterea nu mai pune niciun cookie al campaniei; răspunsul fără cache', !str_contains($cookie, Campanii::COOKIE)
     && str_contains((string) ($r['antete']['cache-control'] ?? ''), 'no-store'), $cookie . ' | ' . ($r['antete']['cache-control'] ?? ''));
 $pagina = $cerere('GET', $asteptat);
 $verifica('pagina campaniei: 200, conținutul paginii-ciornă, butonul „← Înapoi în site-ul principal” spre adresa cerută', $pagina['cod'] === 200
@@ -544,35 +542,35 @@ $verifica('pagina campaniei: noindex (meta și X-Robots-Tag), fără canonical, 
     ($pagina['antete']['x-robots-tag'] ?? '') . ' ' . ($pagina['antete']['cache-control'] ?? ''));
 $rau = $cerere('GET', '/campanie/saptamana-demo?inapoi=' . rawurlencode('//rau.exemplu/x'));
 $verifica('pagina campaniei cu „inapoi” spre alt site: butonul duce la prima pagină', str_contains($rau['corp'], 'class="campanie-inapoi__buton" href="/"'));
-$r = $cerere('GET', $tinta, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
-$verifica('cu cookie-ul: pagina cerută, cu insigna produsului și bannerul (lipit, cu linkul lui, fontul Rubik)', $r['cod'] === 200
+$r = $cerere('GET', $tinta, null, [], ['Referer: ' . $baza . '/']);
+$verifica('din site (Referer al site-ului): pagina cerută, cu insigna produsului și bannerul (lipit, cu linkul lui, fontul Rubik)', $r['cod'] === 200
     && str_contains($r['corp'], 'campanie-insigna--pagina') && str_contains($r['corp'], 'data-campanie-banner data-lipit="1"')
     && str_contains($r['corp'], 'href="/magazin" style="color:inherit') && str_contains($r['corp'], '/assets/vendor/fonturi/rubik/rubik.css')
     && str_contains($r['corp'], 'Reduceri demo de -20% până duminică'), (string) $r['cod']);
 // Bannerul fără link scris: duce la pagina campaniei, cu întoarcerea la pagina curentă (singurul drum spre ea în aceeași vizită).
 $db->prepare("UPDATE campanii SET banner_link = '' WHERE id = :id")->execute(['id' => $idCampanie]);
 ResponseCache::purgePageCache();
-$r = $cerere('GET', '/magazin?sort=alpha_asc', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$r = $cerere('GET', '/magazin?sort=alpha_asc', null, [], ['Referer: ' . $baza . '/']);
 $linkBanner = '/campanie/saptamana-demo?inapoi=' . rawurlencode('/magazin?sort=alpha_asc');
 $verifica('bannerul fără link scris: duce la pagina campaniei, cu „inapoi” = pagina curentă', $r['cod'] === 200
     && str_contains($r['corp'], 'href="' . htmlspecialchars($linkBanner, ENT_QUOTES) . '" style="color:inherit'), (string) $r['cod']);
-$r = $cerere('GET', $linkBanner, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie, 'Referer: ' . $baza . '/magazin?sort=alpha_asc']);
+$r = $cerere('GET', $linkBanner, null, [], ['Referer: ' . $baza . '/magazin?sort=alpha_asc']);
 $verifica('clicul pe banner (vizitatorul a văzut deja campania): pagina campaniei, cu butonul înapoi la pagina de pe care a venit', $r['cod'] === 200
     && str_contains($r['corp'], 'class="campanie-inapoi__buton" href="/magazin?sort=alpha_asc"'), (string) $r['cod']);
 $db->prepare("UPDATE campanii SET pagina_la_intrare = 0 WHERE id = :id")->execute(['id' => $idCampanie]);
 ResponseCache::purgePageCache();
-$r = $cerere('GET', '/magazin', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$r = $cerere('GET', '/magazin', null, [], ['Referer: ' . $baza . '/']);
 $verifica('bannerul fără link, cu pagina campaniei oprită: fără link', $r['cod'] === 200 && str_contains($r['corp'], 'data-campanie-banner')
     && !preg_match('#campanie-banner__text[^>]*><a #', $r['corp']), (string) $r['cod']);
 $db->prepare("UPDATE campanii SET pagina_la_intrare = 1, banner_link = '/magazin' WHERE id = :id")->execute(['id' => $idCampanie]);
 ResponseCache::purgePageCache();
-$r = $cerere('GET', '/produs/' . $slugInafara, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$r = $cerere('GET', '/produs/' . $slugInafara, null, [], ['Referer: ' . $baza . '/']);
 $verifica('un produs care nu e în campanie: fără insigna produsului (bannerul da)', $r['cod'] === 200 && !str_contains($r['corp'], 'campanie-insigna--pagina')
     && str_contains($r['corp'], 'data-campanie-banner'), (string) $r['cod']);
-$r = $cerere('GET', '/magazin', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$r = $cerere('GET', '/magazin', null, [], ['Referer: ' . $baza . '/']);
 $verifica('magazinul: insigna pe cardurile produselor din campanie', $r['cod'] === 200 && substr_count($r['corp'], 'campanie-insigna--card') >= 1
     && substr_count($r['corp'], 'campanie-insigna--card') <= count($produseCampanie), (string) substr_count($r['corp'], 'campanie-insigna--card'));
-$acasa = $cerere('GET', '/', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$acasa = $cerere('GET', '/', null, [], ['Referer: ' . $baza . '/']);
 $verifica('prima pagină: insigna în grila {{featured_products}} (cel mai nou produs e în campanie)', $acasa['cod'] === 200
     && str_contains($acasa['corp'], 'campanie-insigna--acasa'), (string) $acasa['cod']);
 $similare = 0;
@@ -580,7 +578,7 @@ $similareJson = 0;
 $slugCuSimilare = '';
 foreach ($produseCampanie as $idProdus) {
     $slugProdus = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $idProdus]);
-    $corp = $cerere('GET', '/produs/' . rawurlencode($slugProdus), null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie])['corp'];
+    $corp = $cerere('GET', '/produs/' . rawurlencode($slugProdus), null, [], ['Referer: ' . $baza . '/'])['corp'];
     // Cardurile scrise de server (nu șablonul din JavaScript, care are aceeași clasă).
     $n = preg_match_all('#class="campanie-insigna campanie-insigna--similar" style="[^"]*">Campanie</span>#', $corp);
     $similare += $n;
@@ -602,7 +600,7 @@ $verifica('banda {{product_produse_similare}}: insigna doar pe cardul produsului
 $categorie = $unu('SELECT c.slug FROM product_categories c JOIN product_category_links l ON l.category_id = c.id
     WHERE l.product_id = :p AND c.slug <> "" LIMIT 1', ['p' => $produseCampanie[0]]);
 if ($categorie !== '') {
-    $r = $cerere('GET', '/categorie/' . rawurlencode($categorie), null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+    $r = $cerere('GET', '/categorie/' . rawurlencode($categorie), null, [], ['Referer: ' . $baza . '/']);
     $verifica('pagina categoriei: insigna pe card', $r['cod'] === 200 && str_contains($r['corp'], 'campanie-insigna--card'), $categorie . ' ' . $r['cod']);
 }
 
@@ -610,7 +608,6 @@ $faraTrimitere = [];
 $cazuriSite = [
     'Googlebot pe un produs' => ['GET', $tinta, ['User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)']],
     'navigarea din site' => ['GET', '/magazin', ['Referer: ' . $baza . '/']],
-    'cu cookie-ul' => ['GET', '/', ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]],
     'coșul' => ['GET', '/cos', []], 'checkout' => ['GET', '/checkout', []], 'contul clientului' => ['GET', '/contul-meu', []],
     'login' => ['GET', '/login', []], 'API' => ['GET', '/api/cart/count', ['Accept: application/json']],
     'API cerut ca pagină' => ['GET', '/api/shop/catalog', []], 'pingul platformei' => ['GET', '/_andaxi/ping', []],
@@ -633,9 +630,15 @@ $verifica('nicio trimitere la campanie pentru: ' . implode(', ', array_keys($caz
     implode(', ', $faraTrimitere));
 $r = $cerere('GET', $tinta, null, [], ['User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)']);
 $verifica('Googlebot vede pagina produsului (200), nu pagina campaniei', $r['cod'] === 200 && !str_contains($r['corp'], 'campanie-inapoi'), (string) $r['cod']);
-$r = $cerere('GET', '/', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . ($idCampanie + 1000)]);
-$verifica('cookie-ul altei campanii: trimis din nou (o campanie nouă se vede o dată)', $r['cod'] === 302
-    && str_starts_with((string) ($r['antete']['location'] ?? ''), '/campanie/saptamana-demo'), (string) $r['cod']);
+// La fiecare intrare din afară (decizia proprietarului din 5 nov, a doua): după ce a văzut pagina și a închis fila, un om care
+// vine iar de pe Google (sau fără Referer) e trimis din nou; un clic din site (Referer de pe site) nu.
+$din1 = $cerere('GET', $tinta, null, [], ['Referer: https://www.google.com/', 'Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$din2 = $cerere('GET', '/blog', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$dinSite = $cerere('GET', $tinta, null, [], ['Referer: ' . $baza . '/campanie/saptamana-demo', 'Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+$verifica('a doua intrare din afară (Google, fără Referer), și cu cookie-ul vechi: trimis din nou; din site (Referer al site-ului): nu',
+    $din1['cod'] === 302 && str_starts_with((string) ($din1['antete']['location'] ?? ''), '/campanie/saptamana-demo')
+    && $din2['cod'] === 302 && $dinSite['cod'] === 200 && !isset($dinSite['antete']['location']),
+    $din1['cod'] . ' / ' . $din2['cod'] . ' / ' . $dinSite['cod']);
 
 // ── C1. Pagina fără antet și subsol, {{campanie_produse}} (campanii/0056) ──────────────────────────────────────────────────
 $scrie('');
@@ -658,7 +661,7 @@ $db->prepare('UPDATE products SET out_of_stock = 1, preorder_enabled = 0 WHERE i
 $db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
     'h' => '<section><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p>{{campanie_produse}}</section>']);
 ResponseCache::purgePageCache();
-$cuCookie = ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie];
+$cuCookie = ['Referer: ' . $baza . '/'];
 $adresaCampanie = '/campanie/saptamana-demo?inapoi=%2Fmagazin';
 $r = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
 $verifica('fără bifă: pagina campaniei cu antetul, subsolul și coșul plutitor ale site-ului (ca înainte), bara deschisă',
@@ -705,7 +708,7 @@ $verifica('cu bifa: bara „Înapoi” (închisă), bannerul de cookie-uri, con�
     str_contains($r['corp'], 'data-campanie-inapoi') && str_contains($r['corp'], 'data-bara-inchisa="1"') && str_contains($r['corp'], 'background:#000000')
     && str_contains($r['corp'], 'id="cookie-banner"') && str_contains($r['corp'], 'Reduceri inventate la produsele demo')
     && str_contains($r['corp'], '</main>') && str_contains($r['corp'], '</body>'));
-$cuAcord = $cerere('GET', $adresaCampanie, null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie . '; ' . \App\Support\CookieConsent::nume() . '=all']);
+$cuAcord = $cerere('GET', $adresaCampanie, null, [], ['Cookie: ' . \App\Support\CookieConsent::nume() . '=all']);
 $verifica('cu bifa și acordul pentru cookie-uri: Google Tag Manager (și noscript-ul lui) rămâne', str_contains($cuAcord['corp'], 'googletagmanager.com/ns.html?id=GTM-PROBA1')
     && !str_contains($cuAcord['corp'], 'ANTET-PROBA'));
 $pret15 = number_format(80 * 1.5, 2);
@@ -784,6 +787,38 @@ $centi = static fn (int $id): int => (int) round((float) $unu('SELECT price FROM
 [$pA, $pB, $pC] = [$produseCampanie[0], $produseCampanie[1], $produseCampanie[2]];
 $idAfara = (int) $unu('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 AND slug <> ""' . $faraReducere . ' AND id NOT IN ('
     . implode(',', $produseCampanie) . ') ORDER BY id LIMIT 1');
+// Prețul ofertei pe cardurile {{campanie_produse}} și pe pagina produsului (aceeași rotunjire ca în coș); insigna deasupra titlului.
+$pretA = $centi($pA);
+$bani = static fn (int $c): string => number_format($c / 100, 2);
+$redusA = $pretA - OfertaCampanie::procentDin($pretA, 5000);
+$db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina, 'h' => '<section>{{campanie_produse}}</section>']);
+$paginaOferta = $cerere('GET', '/campanie/saptamana-demo?inapoi=%2F')['corp'];
+$verifica('cardul din {{campanie_produse}}: „P lei + ~~P~~ P/2 lei” pentru 1+1 −50% (jumătatea rotunjită ca în coș)',
+    str_contains($paginaOferta, '<p class="campanie-grila__oferta">' . $bani($pretA) . ' lei + <del>' . $bani($pretA) . '</del> <strong>' . $bani($redusA) . ' lei</strong></p>')
+    && str_contains($paginaOferta, '.campanie-grila__oferta del{'), $bani($pretA) . ' → ' . $bani($redusA));
+$db->prepare('UPDATE pages SET html_content = :h WHERE id = :id')->execute(['id' => $idPagina,
+    'h' => '<section style="padding:32px 16px;text-align:center"><h1>Săptămâna demo</h1><p>Reduceri inventate la produsele demo.</p></section>']);
+$slugA = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $pA]);
+$paginaProdus = $cerere('GET', '/produs/' . rawurlencode($slugA), null, [], ['Referer: ' . $baza . '/'])['corp'];
+$cuSablon = $unu('SELECT COALESCE(product_template_id, 0) FROM products WHERE id = :id', ['id' => $pA]) !== '0';
+$verifica('pagina produsului: rândul ofertei (eticheta, ~~P~~ P/2 cu <s>/<b>), insigna chiar deasupra titlului' . ($cuSablon ? ' (în șablon)' : ''),
+    str_contains($paginaProdus, 'data-campanie-oferta-pret') && str_contains($paginaProdus, $bani($pretA) . ' lei + <s style="color:#c0392b;font-weight:500;">'
+        . $bani($pretA) . '</s> <b style="font-weight:800;">' . $bani($redusA) . ' lei</b>')
+    && preg_match('#campanie-insigna--pagina"[^>]*>[^<]*</span></p>\s*<h1#u', $paginaProdus) === 1, ($cuSablon ? 'cu șablon' : 'fără șablon')
+    . (str_contains($paginaProdus, 'data-campanie-oferta-pret') ? ', rândul da' : ', rândul nu'));
+$slugAfara = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $idCuReducere]);
+$paginaRedusa = $cerere('GET', '/produs/' . rawurlencode($slugAfara), null, [], ['Referer: ' . $baza . '/'])['corp'];
+$verifica('pagina unui produs din afara ofertei (cu reducere proprie): fără rândul ofertei', !str_contains($paginaRedusa, 'data-campanie-oferta-pret'));
+$ofertaDin = static fn (string $tip, int $n, int $m, float $p, array $preturi = []): array => (array) OfertaCampanie::dinCampanie(['id' => 1,
+    'nume' => 'X', 'oferta_tip' => $tip, 'oferta_n' => $n, 'oferta_m' => $m, 'oferta_procent' => $p], $preturi + [5 => null]);
+$verifica('rândul ofertei pe tipuri (7167 cenți): Al 3-lea, 3 la preț de 2, −10%, preț de campanie (doar sub preț)',
+    Campanii::randOfertaCard($ofertaDin('al_n', 3, 1, 30), 5, 7167) === 'Al 3-lea: <del>71.67</del> <strong>50.17 lei</strong>'
+    && Campanii::randOfertaCard($ofertaDin('n_la_m', 3, 2, 0), 5, 7167) === '3 la preț de 2: <del>215.01</del> <strong>143.34 lei</strong>'
+    && Campanii::randOfertaCard($ofertaDin('procent', 2, 1, 10), 5, 7167) === '<del>71.67</del> <strong>64.50 lei</strong>'
+    && Campanii::randOfertaCard($ofertaDin('pret_fix', 2, 1, 0, [5 => 5999]), 5, 7167) === '<del>71.67</del> <strong>59.99 lei</strong>'
+    && Campanii::randOfertaCard($ofertaDin('pret_fix', 2, 1, 0, [5 => 9999]), 5, 7167) === ''
+    && Campanii::randOfertaCard($ofertaDin('al_n', 2, 1, 50), 5, 7167) === '71.67 lei + <del>71.67</del> <strong>35.83 lei</strong>'
+    && Campanii::randOfertaCard($ofertaDin('al_n', 2, 1, 50), 6, 7167) === '');
 $jarF = $dosarDev . '/test-campanii-oferta-' . getmypid() . '.txt';
 $sumar = static function () use ($cerere, $jarF): array {
     return (array) json_decode($cerere('GET', '/api/cart/summary', $jarF, [], ['Accept: application/json'])['corp'], true);
@@ -1073,10 +1108,10 @@ if (!$faraBrowser) {
 // ── C. În afara ferestrei, oprită, previzualizarea, pluginul oprit ─────────────────────────────────────────────────────
 $scrie('');
 $scrie('== C2. În afara ferestrei, oprită, pluginul oprit');
-$verificaNimic = static function (string $eticheta) use ($cerere, $verifica, $tinta, $slugInCampanie, $idCampanie): void {
+$verificaNimic = static function (string $eticheta) use ($cerere, $verifica, $tinta, $slugInCampanie, $idCampanie, $baza): void {
     $r1 = $cerere('GET', $tinta, null, [], ['Referer: https://www.google.com/']);
     $r2 = $cerere('GET', '/campanie/saptamana-demo?inapoi=%2F');
-    $r3 = $cerere('GET', '/magazin', null, [], ['Cookie: ' . Campanii::COOKIE . '=' . $idCampanie]);
+    $r3 = $cerere('GET', '/magazin', null, [], ['Referer: ' . $baza . '/']);
     $verifica($eticheta . ': nicio trimitere, pagina campaniei 404, fără banner și fără insigne', $r1['cod'] === 200
         && !isset($r1['antete']['location']) && !str_contains($r1['corp'], 'campanie-') && $r2['cod'] === 404
         && $r3['cod'] === 200 && !str_contains($r3['corp'], 'campanie-insigna') && !str_contains($r3['corp'], 'data-campanie-banner'),

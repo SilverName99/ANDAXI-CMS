@@ -46,9 +46,6 @@ final class CampaniiController
             (new SiteController())->paginaNegasita();
             return;
         }
-        if (!$previzualizare) {
-            Campanii::marcheazaVazuta((int) $campanie['id']);
-        }
         header('Cache-Control: no-store, private');
         header('X-Robots-Tag: noindex, follow');
         $inapoi = Campanii::inapoiSigur(is_string($_GET['inapoi'] ?? null) ? (string) $_GET['inapoi'] : '/');
