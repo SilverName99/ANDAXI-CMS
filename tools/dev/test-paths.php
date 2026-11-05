@@ -27,8 +27,8 @@ declare(strict_types=1);
  *    (platforma/releases/<versiune>/: fișierele din git cu modificările necomise, VERSION, plus un .env și o poză
  *    „capcană” pe care nu are voie să le folosească nimeni) și două site-uri (domains/a.exemplu.test,
  *    domains/b.exemplu.test: site/ cu .env, RELEASE și storage/; public_html/ cu stub-ul, assets/ copiat și
- *    uploads/), fiecare cu baza lui (cms_paths_a, cms_paths_b), instalate din linia de comandă ca
- *    `bin/platforma --site=` (Etapa 2) și servite de `php -S` pe CMS_DEV_PORT+9 și +10, cu un mediu gol:
+ *    uploads/), fiecare cu baza lui (cms_paths_a, cms_paths_b), instalate din linia de comandă cu
+ *    `bin/platforma --site=` al versiunii și servite de `php -S` pe CMS_DEV_PORT+9 și +10, cu un mediu gol:
  *    B1 instalarea: jurnalul migrărilor în site/storage/logs, versiunea în _platforma_migrari, nicio sesiune;
  *    B2 pingul: 200, JSON, versiunea din VERSION, „la_zi”, no-store, fără cookie și fără sesiune, și cu „/” la
  *       sfârșit (routerul îl duce tot la ping); .env-ul versiunii ignorat;
@@ -40,12 +40,14 @@ declare(strict_types=1);
  *    B6 jurnalul PHP al site-ului: o eroare scrisă de aplicație (seo.json stricat, citit și înaintea bootstrap-ului)
  *       doar în site/storage/logs/php.log al acelui site, nimic în jurnalul serverului; pluginuri.log tot acolo;
  *    B7 MENTENANTA: 503, Retry-After: 120, mentenanta.html (HEAD fără corp); /_andaxi/, /webhook/ și /api/erp/ trec;
- *       celălalt site neatins; fără fișier, din nou 200;
+ *       celălalt site neatins; cu jetonul deploy-ului în fișier, antetul X-Andaxi-Deploy sau cookie-ul andaxi_deploy trec, iar
+ *       ?andaxi_deploy=<jeton> pune cookie-ul și trimite la aceeași adresă fără el; fără fișier, din nou 200;
  *    B8 RELEASE lipsă, goală, de altă formă (și una care, fără verificarea formei, ar ajunge la versiunea care există:
  *       „../releases/<v>”, „./<v>”) sau spre o versiune care lipsește → 503; versiunea din site/releases/ găsită;
  *    B9 pingul: baza lipsă → 503 repede; un server care acceptă conexiunea și tace → 503 în aproximativ 2 secunde;
  *       baza goală → „fara_registru”; fără ultima_ord → „in_urma”;
- *    B10 linia de comandă: diagnostic.php arată .env-ul și storage/ ale site-ului; migreaza.php --stare; nicio sesiune;
+ *    B10 linia de comandă (bin/platforma --site=): diagnostic.php arată .env-ul și storage/ ale site-ului; migreaza.php
+ *       --stare; nicio sesiune;
  *    B11 versiunea de cod neatinsă de tot ce a rulat (aceleași fișiere, aceleași mărimi și date).
  * Bazele cms_paths_* se fac și se șterg aici; serverele se opresc și dosarul se șterge la final. Raport:
  * $CMS_DEV_DIR/test-paths-raport.txt; cod de ieșire 0 doar dacă totul a trecut.
@@ -351,11 +353,15 @@ $mediu = static function () use ($gauraNeagra, $acasa, $dosarTest): array {
         'CMS_DEV_DIR' => $dosarTest,
     ];
 };
-/** Un script al versiunii, din linia de comandă, pentru un site (ca `bin/platforma --site=`): [cod, ieșire, erori]. */
+/**
+ * Un script din linia de comandă, pentru un site: [cod, ieșire, erori]. Un script al versiunii (cale relativă) rulează prin
+ * `bin/platforma --site=` al versiunii, ca pe server (versiunea din RELEASE); unul al testului (cale absolută, în afara
+ * versiunii, pe care bin/platforma l-ar refuza) prin `ruleaza.php`, care face la fel: constanta stub-ului, apoi scriptul.
+ */
 $cli = static function (string $x, string $scriptCod, array $argumente = []) use (&$siteuri, $ruleazaCli, $cod, $sock, $mediu): array {
     $comanda = array_merge([PHP_BINARY, '-d', 'pdo_mysql.default_socket=' . $sock, '-d', 'display_errors=stderr', '-d', 'log_errors=1',
-        '-d', 'error_reporting=E_ALL', '-d', 'allow_url_fopen=0', $ruleazaCli, $siteuri[$x]['site'],
-        str_starts_with($scriptCod, '/') ? $scriptCod : $cod . '/' . $scriptCod], $argumente);
+        '-d', 'error_reporting=E_ALL', '-d', 'allow_url_fopen=0'], str_starts_with($scriptCod, '/')
+            ? [$ruleazaCli, $siteuri[$x]['site'], $scriptCod] : [$cod . '/bin/platforma', '--site=' . $siteuri[$x]['site'], $scriptCod], $argumente);
     $proces = proc_open($comanda, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $tevi, $cod, $mediu());
     if (!is_resource($proces)) {
         return [-1, '', 'nu pornește'];
@@ -388,6 +394,9 @@ $cerere = static function (string $x, string $metoda, string $cale, array $optiu
     ]);
     if (isset($optiuni['cookie'])) {
         curl_setopt($c, CURLOPT_COOKIE, $optiuni['cookie']);
+    }
+    if (isset($optiuni['antete'])) {
+        curl_setopt($c, CURLOPT_HTTPHEADER, $optiuni['antete']);
     }
     if (isset($optiuni['post'])) {
         curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($optiuni['post']));
@@ -676,6 +685,22 @@ try {
         && !in_array($rStripe['cod'], [0, 503], true) && !in_array($rErp['cod'], [0, 503], true), $rPing['cod'] . ' ' . $rStripe['cod'] . ' ' . $rErp['cod']);
     $r = $cerere('b', 'GET', '/');
     $verifica('site-ul B (aceeași versiune) neatins: 200', $r['cod'] === 200, (string) $r['cod']);
+    // Jetonul deploy-ului (deploy/adopta.sh, actualizeaza.sh): cu el în MENTENANTA, verificările trec de stub.
+    $jeton = bin2hex(random_bytes(16));
+    file_put_contents($siteuri['a']['site'] . '/MENTENANTA', $jeton . "\n");
+    $rAntet = $cerere('a', 'GET', '/admin/login', ['antete' => ['X-Andaxi-Deploy: ' . $jeton]]);
+    $rCookie = $cerere('a', 'GET', '/admin/login', ['cookie' => 'andaxi_deploy=' . $jeton]);
+    $rGresit = $cerere('a', 'GET', '/admin/login', ['antete' => ['X-Andaxi-Deploy: ' . str_repeat('0', 32)], 'cookie' => 'andaxi_deploy=x']);
+    $rFara = $cerere('a', 'GET', '/admin/login');
+    $verifica('MENTENANTA cu jeton: cu antetul X-Andaxi-Deploy sau cookie-ul andaxi_deploy → pagina (200); fără, sau cu altul → 503',
+        $rAntet['cod'] === 200 && $rCookie['cod'] === 200 && $rGresit['cod'] === 503 && $rFara['cod'] === 503,
+        $rAntet['cod'] . ' ' . $rCookie['cod'] . ' ' . $rGresit['cod'] . ' ' . $rFara['cod']);
+    $r = $cerere('a', 'GET', '/magazin?andaxi_deploy=' . $jeton . '&pagina=2');
+    $rRau = $cerere('a', 'GET', '//rau.exemplu.test/?andaxi_deploy=' . $jeton);
+    $verifica('?andaxi_deploy=<jeton>: 302 spre aceeași adresă fără el (/magazin?pagina=2), cookie HttpOnly; „//gazdă” trimite la „/”',
+        $r['cod'] === 302 && ($r['antete']['location'] ?? '') === '/magazin?pagina=2' && str_contains(implode(' ', $r['cookies']), 'andaxi_deploy=' . $jeton)
+        && str_contains(strtolower(implode(' ', $r['cookies'])), 'httponly') && $rRau['cod'] === 302 && ($rRau['antete']['location'] ?? '') === '/',
+        $r['cod'] . ' ' . ($r['antete']['location'] ?? '-') . ' ' . implode(' ', $r['cookies']) . ' | ' . $rRau['cod'] . ' ' . ($rRau['antete']['location'] ?? '-'));
     unlink($siteuri['a']['site'] . '/MENTENANTA');
     $r = $cerere('a', 'GET', '/');
     $verifica('fără MENTENANTA, site-ul A din nou 200', $r['cod'] === 200, (string) $r['cod']);
@@ -784,6 +809,7 @@ try {
     $verifica('testul a mers până la capăt', false, $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')');
 } finally {
     $curata();
+    clearstatcache();
     $verifica('curățenia: bazele cms_paths_* șterse, serverele oprite, găzduirea simulată ștearsă', !is_dir($dosarTest)
         && (int) $root->query("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME LIKE 'cms\\_paths\\_%'")->fetchColumn() === 0);
 }

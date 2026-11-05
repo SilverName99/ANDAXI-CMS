@@ -8,7 +8,8 @@
 #   CMS_DEV_PHP=php8.4 tools/dev/verifica-php.sh   # cu altă versiune
 #
 # Dosarele: src/ views/ config/ scripts/ public/ bootstrap.php, database/ (migrările, pe care
-# le rulează scripts/migreaza.php pe servere), deploy/ (stub-ul din public_html, Etapa 2) și, când
+# le rulează scripts/migreaza.php pe servere), deploy/ (stub-ul din public_html și scripturile deploy-ului, Etapa 2),
+# bin/platforma (linia de comandă a site-urilor, fără extensia .php) și, când
 # există, tools/verificare/, tools/sonda/ și tools/migrare-wordpress/ (rulează pe servere), plus tools/dev/lib/normalizeaza-html.php (normalizarea
 # paginilor, pe care o încarcă tools/verificare/amprenta-site.php pe server, WP-11). Restul uneltelor din tools/dev/
 # nu ajung pe site-uri; ele se verifică rulându-le cu CMS_DEV_PHP (smoke.sh,
@@ -44,7 +45,7 @@ while IFS= read -r -d '' fisier; do
         erori=$((erori + 1))
         echo "  EȘEC  ${fisier#"$RADACINA"/}: $(echo "$iesire" | tr '\n' ' ')"
     fi
-done < <(find "${tinte[@]}" -type f -name '*.php' -print0 | sort -z)
+done < <({ find "${tinte[@]}" -type f -name '*.php' -print0; [ -f "$RADACINA/bin/platforma" ] && printf '%s\0' "$RADACINA/bin/platforma"; } | sort -z)
 
 versiune="$("$PHP_LINT" -r 'echo PHP_VERSION;')"
 case "$versiune" in

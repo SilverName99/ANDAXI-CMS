@@ -20,4 +20,5 @@ sitemap, robots.txt, date structurate; datele fiecărui site în `site-uri/`),
 [docs/MIGRARI.md](docs/MIGRARI.md) (schimbările schemei bazei de date, `scripts/migreaza.php`),
 [docs/de-portat.md](docs/de-portat.md) (ce trebuie adus din codurile vechi ale site-urilor),
 [docs/VERIFICARE.md](docs/VERIFICARE.md) (site-ul de verificare: poarta, configurarea pe server,
-pașii proprietarului) și [docs/ui/](docs/ui/README.md) (machetele adminului nou).
+pașii proprietarului), [docs/DEPLOY.md](docs/DEPLOY.md) (Etapa 2: o versiune de cod, adoptarea unui site live,
+actualizările și revenirea, pe Hostinger) și [docs/ui/](docs/ui/README.md) (machetele adminului nou).

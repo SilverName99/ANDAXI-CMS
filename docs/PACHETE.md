@@ -189,8 +189,12 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   neobservat: valorile ar reveni la cele implicite (de exemplu numele cookie-ului de acord: fiecare vizitator ar vedea
   din nou bannerul). De aceea `site.json` și `tema/tema.json` sunt obligatorii în pachetele Bioscem și Biovitality, iar `/health` arată
   pe al treilea rând `pachet: <primele 12 caractere ale sha256-ului lui pachet.json>` sau `pachet: lipsa` (WP-16).
-- **Deploy-ul din Etapa 2** (`actualizeaza.sh`) înlocuiește pachetul dintr-o bucată și refuză comutarea dacă
-  verificarea pică (planul de-Bioscem §5.2).
+- **Deploy-ul din Etapa 2** ([DEPLOY.md](DEPLOY.md)): pachetul vine din repo, la commit-ul versiunii
+  (`git archive <commit>:site-uri/<site>`), în `site/pachet/` (`SITE_DATE_DOSAR`), cu `privat/` copiat din `site/privat/`
+  (pus o dată de proprietar, niciodată șters). `adopta.sh` și `actualizeaza.sh` copiază `tema/public/` în
+  `public_html/tema/` și `public/` peste `public_html/`, rulează `diagnostic.php --pachet` și cer `pachet: <amprenta>` pe
+  `/health`. `actualizeaza.sh` înlocuiește pachetul dintr-o bucată (`site/pachet.nou` → `site/pachet`, cel vechi în
+  `site/.pachet-<versiune>`) și îl pune la loc singur dacă diagnosticul sau testul de fum pică (planul de-Bioscem §5.2).
 
 ## Ce urmează
 

@@ -706,6 +706,15 @@ doar chei citite de migrările din `database/migrari/`, valori permise și chei 
 
 ### Pe server, la adoptare
 
+**În Etapa 2 pașii de mai jos îi face `deploy/adopta.sh`** ([DEPLOY.md](DEPLOY.md), „Adoptarea unui site” și „Noaptea
+comutării Biovitality”): verifică sodium-ul site-ului (o sondă PHP în docroot) și al liniei de comandă, pachetul și
+`privat/`, licența, înghețarea neprovizorie; pune pachetul în `site/pachet/` (`SITE_DATE_DOSAR`) cu `privat/` copiat din
+`site/privat/`, `SITE_SLUG` și `LICENTA_SITE` în `site/.env`, fișierele publice ale pachetului în `public_html/`; rulează
+`diagnostic.php --pachet` și `--licenta`, `migreaza.php --plan`, apoi, în mentenanță și după copia bazei de revenire,
+`--aplica --site=<site>` (reluat la codul 13); scrie `NEWSLETTER_CHEIE_SEMNARE` (pasul 6) și rândurile noi de cron
+(`$PHP ~/platforma/bin/platforma --site=… scripts/…`, cu `-d extension=sodium.so`). Explicațiile de mai jos rămân valabile:
+ele spun ce verifică scriptul și de ce.
+
 Întâi, pe fiecare site live, **extensia sodium** (văzut pe site-ul de verificare, 21 oct 2026). Licența
 (`Licenta::verifica`, semnătura Ed25519) are nevoie de sodium în PHP-ul site-ului (web) și în cel al liniei de comandă.
 Pe Hostinger fiecare website are lista lui de extensii, iar codul vechi n-a avut nevoie de sodium, deci pe site-urile
@@ -717,7 +726,9 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
   deploy-ul din Etapa 2 (planul Etapei 1, §0c, predarea (c)). După urcare, în admin nu trebuie să apară „Licența lipsește”.
 - **Linia de comandă**: `/opt/alt/php83/usr/bin/php` nu încarcă sodium singur (bifa din hPanel e doar pentru web), deci
   comenzile se dau cu `PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"` și `$PHP scripts/migreaza.php …`,
-  `$PHP scripts/diagnostic.php --licenta`, iar liniile de cron din hPanel cu același `-d extension=sodium.so`.
+  `$PHP scripts/diagnostic.php --licenta`, iar liniile de cron din hPanel cu același `-d extension=sodium.so`. În
+  Etapa 2: `$PHP ~/platforma/bin/platforma --site=<domeniu> scripts/migreaza.php …` (scripturile din `deploy/` adaugă
+  singure `-d extension=sodium.so` când lipsește).
   `diagnostic.php --licenta` arată doar sodium-ul liniei de comandă, nu pe al site-ului.
 
 1. Pachetul site-ului (cu `setari-inghetate.json` și `migrari.json`) în `SITE_DATE_DOSAR`, iar `privat/` lângă el,

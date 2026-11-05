@@ -12,7 +12,11 @@ declare(strict_types=1);
  *  2. ../site/MENTENANTA există (mentenanța deploy-ului, pentru o migrare care oprește scrierile) → 503,
  *     Retry-After: 120 și mentenanta.html, în afară de /webhook/, /api/erp/ și /_andaxi/: confirmările de plată,
  *     ERP-ul și pingul merg mai departe. E alta decât „Revenim în curând” din admin (App\Support\Maintenance) și
- *     merge și când baza sau codul nou sunt stricate.
+ *     merge și când baza sau codul nou sunt stricate. Dacă MENTENANTA conține un jeton (32–64 de cifre hexazecimale,
+ *     scris de scripturile din deploy/), o cerere cu același jeton în antetul X-Andaxi-Deploy sau în cookie-ul
+ *     andaxi_deploy trece și ea: așa verifică deploy-ul (și proprietarul, în browser) site-ul nou înainte să-l
+ *     deschidă. ?andaxi_deploy=<jeton> pune cookie-ul (sesiune, HttpOnly) și trimite la aceeași adresă fără el.
+ *     Jetonul moare odată cu fișierul.
  *  3. Versiunea: ../site/releases/<versiune>/ dacă există (o găzduire care nu lasă un site să citească în afara
  *     dosarului lui), altfel ~/platforma/releases/<versiune>/, comună contului. Lipsă → 503 static.
  *  4. PLATFORMA_SITE_DIR (../site) și PLATFORMA_PUBLIC_DIR (acest dosar), citite de App\Support\Paths, apoi
@@ -52,6 +56,23 @@ require (static function (): string {
                 $trece = true;
                 break;
             }
+        }
+        $jeton = $trece ? '' : trim((string) @file_get_contents($site . '/MENTENANTA'));
+        if (preg_match('/^[0-9a-f]{32,64}$/', $jeton) === 1) {
+            $dinAdresa = $_GET['andaxi_deploy'] ?? null;
+            if (is_string($dinAdresa) && hash_equals($jeton, $dinAdresa)) {
+                $https = strtolower((string) ($_SERVER['HTTPS'] ?? '')) === 'on' || ($_SERVER['HTTPS'] ?? '') === '1'
+                    || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+                setcookie('andaxi_deploy', $jeton, ['path' => '/', 'httponly' => true, 'samesite' => 'Lax', 'secure' => $https]);
+                $rest = $_GET;
+                unset($rest['andaxi_deploy']);
+                http_response_code(302);
+                header('Cache-Control: no-store');
+                header('Location: ' . (str_starts_with($cale, '/') && !str_starts_with($cale, '//') ? $cale : '/') . ($rest !== [] ? '?' . http_build_query($rest) : ''));
+                exit;
+            }
+            $dat = $_SERVER['HTTP_X_ANDAXI_DEPLOY'] ?? $_COOKIE['andaxi_deploy'] ?? '';
+            $trece = is_string($dat) && $dat !== '' && hash_equals($jeton, $dat);
         }
         if (!$trece) {
             $indisponibil(120);

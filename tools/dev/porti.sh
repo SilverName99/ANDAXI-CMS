@@ -77,6 +77,8 @@ poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de et
     "tools/dev/php.sh tools/dev/contract-admin.php" WP-29
 poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecare element, „?” și Esc, panoul lateral, filtrele la Înapoi) pe licențele toate, bioscem, grafoanaytis" \
     "tools/dev/php.sh tools/dev/contract-admin.php --plimbare" WP-31
+poarta G-deploy "deploy-ul din Etapa 2 (docs/DEPLOY.md) pe o găzduire simulată cu două site-uri: release.sh, bin/platforma, adopta.sh (o migrare care pică, un test de fum care pică, reluarea), actualizeaza.sh (întoarcerea singură), revino.sh (codul și baza exact cele de dinainte); și cu php$MINIM" \
+    "tools/dev/php.sh tools/dev/test-deploy.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-deploy.php" E2-deploy
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
@@ -193,14 +195,16 @@ declare -A PORTI=(
     [WP-40]="G-rute G-mig G-calc G-smoke G-vizual G-cmp G-cmp-istoric G-seo G-plug G-admin G-tastatura G-pachet G-paths G-verif G-php"
     [WP-41]="G-rute G-paths G-mig G-inst G-cmp G-plug G-smoke G-seo G-vechi G-calc G-vizual G-pachet G-verif G-sonde G-admin G-php"
     [WP-R]="G-rute G-cmp G-cmp-istoric G-plug G-php"
+    # Etapa 2, deploy-ul (docs/DEPLOY.md): stub-ul (G-paths, cu jetonul din MENTENANTA), uneltele (G-deploy), sintaxa (G-php).
+    [E2-deploy]="G-rute G-paths G-deploy G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33
-WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R"
+WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

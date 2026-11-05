@@ -1,0 +1,144 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Linia de comandă a unui site în așezarea din Etapa 2 (docs/DEPLOY.md; docs/DEZVOLTARE.md, „Unde scrie codul”):
+ * rulează un script al versiunii de cod (`scripts/migreaza.php`, `scripts/diagnostic.php`, un cron) pentru un site,
+ * cu `.env`-ul, `storage/`-ul și docroot-ul lui, exact ca stub-ul din `public_html/`.
+ *
+ *   php bin/platforma --site=~/domains/exemplu.ro/site scripts/migreaza.php --plan
+ *   php bin/platforma --site=exemplu.ro scripts/diagnostic.php --licenta     # domeniul: ~/domains/exemplu.ro/site
+ *   php bin/platforma --site=exemplu.ro --arata                              # ce dosare ar folosi, fără să ruleze nimic
+ *
+ * Opțiuni (înaintea scriptului):
+ *   --site=<dosar|domeniu>  dosarul site-ului (cu `.env`, `RELEASE`, `storage/`), sau doar domeniul, dacă
+ *                           `~/domains/<domeniu>/site` există. Obligatoriu.
+ *   --versiune=<v>          versiunea de cod (`2026.11.05-e4f5a6b`); implicit cea din `<site>/RELEASE`. O folosesc
+ *                           scripturile de deploy, ca să ruleze codul nou înainte să schimbe `RELEASE`.
+ *   --public=<dosar>        docroot-ul; implicit `public_html/` de lângă dosarul site-ului.
+ *   --arata                 scrie dosarul site-ului, versiunea, codul și docroot-ul, apoi iese (0).
+ *
+ * Versiunea se caută ca în stub: `<site>/releases/<v>/` (o găzduire care nu lasă site-ul să citească în afara dosarului
+ * lui), apoi `~/platforma/releases/<v>/` (unde `~` e dosarul de trei ori deasupra dosarului site-ului). Scriptul trebuie
+ * să fie un fișier al versiunii (cale relativă la ea). Codul de ieșire e al scriptului; 2 dacă nu se poate porni.
+ *
+ * Fișierul nu depinde de versiunea în care stă (citește doar `RELEASE`), deci aceeași copie, `~/platforma/bin/platforma`,
+ * servește cronurile tuturor site-urilor: după o actualizare, cronul rulează singur codul nou.
+ */
+
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
+$__platforma = (static function (array $argv): array {
+    $opreste = static function (string $mesaj): never {
+        fwrite(STDERR, 'platforma: ' . $mesaj . "\n");
+        fwrite(STDERR, "Folosire: php bin/platforma --site=<dosarul site-ului|domeniul> [--versiune=<v>] [--public=<dosar>] <script.php> [argumente]\n");
+        exit(2);
+    };
+    $site = null;
+    $versiune = null;
+    $public = null;
+    $arata = false;
+    $rest = array_slice($argv, 1);
+    while ($rest !== [] && str_starts_with((string) $rest[0], '--')) {
+        $optiune = (string) array_shift($rest);
+        if ($optiune === '--') {
+            break;
+        }
+        if ($optiune === '--arata') {
+            $arata = true;
+            continue;
+        }
+        if (preg_match('/^--(site|versiune|public)=(.*)$/s', $optiune, $m) !== 1 || $m[2] === '') {
+            $opreste('opțiune necunoscută sau goală: ' . $optiune);
+        }
+        match ($m[1]) {
+            'site' => $site = $m[2],
+            'versiune' => $versiune = $m[2],
+            default => $public = $m[2],
+        };
+    }
+    if ($site === null) {
+        $opreste('lipsește --site=');
+    }
+    $acasa = (string) (getenv('HOME') ?: (function_exists('posix_getpwuid') ? (posix_getpwuid(posix_geteuid())['dir'] ?? '') : ''));
+    if (str_starts_with($site, '~/') && $acasa !== '') {
+        $site = $acasa . substr($site, 1);
+    }
+    if (!str_contains($site, '/') && $site !== '.' && $acasa !== '' && is_dir($acasa . '/domains/' . $site . '/site')) {
+        $site = $acasa . '/domains/' . $site . '/site';
+    }
+    $dosarSite = realpath($site);
+    if ($dosarSite === false || !is_dir($dosarSite)) {
+        $opreste('dosarul site-ului nu există: ' . $site);
+    }
+    if (!is_file($dosarSite . '/.env')) {
+        $opreste('dosarul site-ului n-are .env: ' . $dosarSite);
+    }
+    if ($versiune === null) {
+        $versiune = trim((string) @file_get_contents($dosarSite . '/RELEASE'));
+        if ($versiune === '') {
+            $opreste('dosarul site-ului n-are RELEASE (și nici --versiune=): ' . $dosarSite);
+        }
+    }
+    if (preg_match('/^[0-9][0-9.]*-[0-9a-f]{7}$/', $versiune) !== 1) {
+        $opreste('versiunea „' . $versiune . '” nu are forma 2026.11.05-e4f5a6b');
+    }
+    $cod = null;
+    foreach ([$dosarSite . '/releases/' . $versiune, dirname($dosarSite, 3) . '/platforma/releases/' . $versiune] as $candidat) {
+        if (is_file($candidat . '/public/index.php') && is_file($candidat . '/bootstrap.php')) {
+            $cod = (string) realpath($candidat);
+            break;
+        }
+    }
+    if ($cod === null) {
+        $opreste('versiunea ' . $versiune . ' nu există nici în ' . $dosarSite . '/releases/, nici în '
+            . dirname($dosarSite, 3) . '/platforma/releases/');
+    }
+    $versiuneCod = trim((string) @file_get_contents($cod . '/VERSION'));
+    if ($versiuneCod !== $versiune) {
+        $opreste('versiunea din ' . $cod . '/VERSION („' . $versiuneCod . '”) nu e ' . $versiune);
+    }
+    if ($public !== null) {
+        $dosarPublic = realpath($public);
+        if ($dosarPublic === false || !is_dir($dosarPublic)) {
+            $opreste('docroot-ul nu există: ' . $public);
+        }
+    } else {
+        $dosarPublic = null;
+    }
+    if ($arata) {
+        echo 'site      : ', $dosarSite, "\n", 'versiune  : ', $versiune, "\n", 'cod       : ', $cod, "\n",
+            'docroot   : ', $dosarPublic ?? dirname($dosarSite) . '/public_html', "\n";
+        exit(0);
+    }
+    if ($rest === []) {
+        $opreste('lipsește scriptul (de exemplu scripts/migreaza.php --stare)');
+    }
+    $relativ = (string) array_shift($rest);
+    $script = realpath(str_starts_with($relativ, '/') ? $relativ : $cod . '/' . $relativ);
+    if ($script === false || !is_file($script) || !str_starts_with($script, $cod . '/')) {
+        $opreste('scriptul nu e un fișier al versiunii ' . $versiune . ': ' . $relativ);
+    }
+    return ['site' => $dosarSite, 'public' => $dosarPublic, 'cod' => $cod, 'script' => $script, 'argv' => array_merge([$script], $rest)];
+})($argv);
+
+define('PLATFORMA_SITE_DIR', $__platforma['site']);
+if ($__platforma['public'] !== null) {
+    define('PLATFORMA_PUBLIC_DIR', $__platforma['public']);
+}
+chdir($__platforma['cod']);
+$argv = $__platforma['argv'];
+$argc = count($argv);
+$_SERVER['argv'] = $argv;
+$_SERVER['argc'] = $argc;
+$_SERVER['SCRIPT_FILENAME'] = $__platforma['script'];
+$_SERVER['SCRIPT_NAME'] = $__platforma['script'];
+$_SERVER['PHP_SELF'] = $__platforma['script'];
+$__script = $__platforma['script'];
+unset($__platforma);
+require $__script;
