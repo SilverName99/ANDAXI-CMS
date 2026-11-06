@@ -40,6 +40,12 @@ final class FisiereCloud
         $folder = BunnyStorage::normalizePath(
             (string) ($settings['bunny_gallery_folder'] ?? 'galerie') . '/' . $namespace
         );
+        // Un fișier public (Galerie, produse, blog) nu se pune într-un folder cu parolă și nici în arhiva de versiuni: rămâne
+        // atunci pe server (revizia de securitate). Fără bază de date nu se poate ști, deci tot pe server.
+        if (!$db instanceof PDO || FileVersions::isArchivePath($folder) || FolderPasswords::guardFor($db, $folder) !== null) {
+            return null;
+        }
+
         $name = BunnyStorage::pickFreeName(BunnyStorage::sanitizeName($filename), $client->existingNames($folder));
         if ($name === '') {
             return null;

@@ -31,8 +31,13 @@ use Throwable;
  * instalată (`desktop/BiovitalityFiles` din repo-ul Biovitality) vorbește cu el neschimbată, deci adresele `/api/desktop/*`,
  * antetele, codurile de stare și cheile JSON sunt exact cele de dinainte (tools/dev/test-fisiere-cloud.php le compară cu
  * codul Biovitality). Cu pluginul oprit, garda pluginurilor răspunde la `/api/desktop/*` cu JSON-ul ei 404, care are și
- * `error` (singurul câmp citit de aplicație la o eroare). Singura schimbare: fără `ensureSchema` (tabelele le face
- * migrarea `fisiere_cloud/0059`).
+ * `error` (singurul câmp citit de aplicație la o eroare). Fără `ensureSchema` (tabelele le face migrarea `fisiere_cloud/0059`).
+ *
+ * Revizia de securitate a schimbat doar cererile care acum sunt refuzate pe drept (aceleași forme de răspuns pe care
+ * aplicația le știe deja): copiile din `_versiuni` sunt păzite de parola folderului original și cele închise nu apar în
+ * listă (423 `folder_locked` la intrare); ștergerea unui folder cu un subfolder cu parolă închis dă 423; nimic nu se
+ * scrie în `_versiuni` (409 `archive`); dacă parolele nu se pot citi, 503 în loc de „deschis”; încercările greșite se
+ * numără pe administrator, nu pe cheie.
  */
 final class DesktopApiController
 {
@@ -41,6 +46,9 @@ final class DesktopApiController
 
     /** Versiunea protocolului, ca aplicația să știe dacă trebuie actualizată. */
     private const API_VERSION = 1;
+
+    /** Lista folderelor cu parolă nu se poate citi: nu se deschide nimic. */
+    private const FARA_PAROLE = 'Nu pot verifica acum parolele folderelor, așa că nu deschid nimic. Încearcă din nou peste puțin.';
 
     /** Verifică cheia și spune aplicației cine este și ce poate. */
     public function ping(): void
@@ -99,6 +107,15 @@ final class DesktopApiController
             ));
         }
 
+        // În `_versiuni`, copiile fișierelor dintr-un folder cu parolă închis nu apar deloc (nici numele lor).
+        $who = FolderPasswords::whoToken($identity['token_id']);
+        if (FileVersions::isArchivePath($path) && $db instanceof PDO) {
+            $vizibil = static fn (array $item): bool =>
+                FolderPasswords::lockedFor($db, $who, (string) $item['path'], false) === null;
+            $contents['files'] = array_values(array_filter($contents['files'], $vizibil));
+            $contents['folders'] = array_values(array_filter($contents['folders'], $vizibil));
+        }
+
         $files = array_map(function (array $file) use ($locks, $identity): array {
             $lock = $locks[(string) $file['path']] ?? null;
 
@@ -115,7 +132,6 @@ final class DesktopApiController
 
         // Fiecare subfolder spune dacă are parolă și dacă e închis acum, ca
         // aplicația să-l poată marca în listă în loc să afle abia la intrare.
-        $who = FolderPasswords::whoToken($identity['token_id']);
         $folders = array_map(function (array $folder) use ($db, $who): array {
             $inchis = $db instanceof PDO
                 && FolderPasswords::lockedFor($db, $who, (string) $folder['path'], false) !== null;
@@ -248,6 +264,9 @@ final class DesktopApiController
         }
 
         if ($this->folderLocked($db, $identity, $path)) {
+            return;
+        }
+        if ($this->inArhiva($path)) {
             return;
         }
 
@@ -383,6 +402,9 @@ final class DesktopApiController
         if ($this->folderLocked($this->db(), $identity, $folder)) {
             return;
         }
+        if ($this->inArhiva($folder)) {
+            return;
+        }
 
         $upload = $_FILES['file'] ?? null;
         if (!is_array($upload) || (int) ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
@@ -407,6 +429,9 @@ final class DesktopApiController
 
         $name = BunnyStorage::pickFreeName($wanted, $client->existingNames($folder));
         $path = $folder === '' ? $name : $folder . '/' . $name;
+        if ($this->inArhiva($path)) {
+            return;
+        }
 
         try {
             $client->uploadFile($path, $tmp);
@@ -462,6 +487,9 @@ final class DesktopApiController
             $this->renameFolder($identity, $db, $path, $wanted);
             return;
         }
+        if ($this->inArhiva($path)) {
+            return;
+        }
 
         $lock = FileLocks::find($db, $path);
         if ($lock !== null && (int) ($lock['admin_id'] ?? 0) !== $identity['admin_id']) {
@@ -478,6 +506,9 @@ final class DesktopApiController
 
         if ($target === $path) {
             $this->json(['ok' => true, 'path' => $path, 'name' => $wanted, 'unchanged' => true]);
+            return;
+        }
+        if ($this->inArhiva($target)) {
             return;
         }
 
@@ -526,6 +557,11 @@ final class DesktopApiController
                 'error' => 'Folderul „' . FileVersions::ARCHIVE_FOLDER . '” ține copiile de siguranță ale '
                     . 'fișierelor. Redenumit, istoricul ar arăta spre fișiere care nu mai există.',
             ], 409);
+            return;
+        }
+
+        $parinte = str_contains($path, '/') ? substr($path, 0, (int) strrpos($path, '/')) : '';
+        if ($this->inArhiva($parinte === '' ? $wanted : $parinte . '/' . $wanted)) {
             return;
         }
 
@@ -606,6 +642,9 @@ final class DesktopApiController
         }
 
         $target = $parent === '' ? $name : $parent . '/' . $name;
+        if ($this->inArhiva($target)) {
+            return;
+        }
 
         try {
             if (isset($client->existingNames($parent)[strtolower($name)])) {
@@ -676,6 +715,12 @@ final class DesktopApiController
         }
 
         if ($isFolder) {
+            // Un subfolder cu parolă închis pentru cheia asta: n-ai voie să ștergi ce n-ai voie să vezi.
+            $sub = FolderPasswords::lockedUnder($db, FolderPasswords::whoToken($identity['token_id']), $path);
+            if ($sub !== null) {
+                $this->raspundeInchis($db, $identity, $sub);
+                return;
+            }
             $blocking = FileLocks::blockedUnder($db, $path, $identity['admin_id']);
             if ($blocking !== null) {
                 $this->json([
@@ -894,6 +939,19 @@ final class DesktopApiController
             return false;
         }
 
+        $this->raspundeInchis($db, $identity, $guard);
+
+        return true;
+    }
+
+    /** Răspunsul pentru un folder cu parolă închis (423, pe care aplicația îl știe), sau 503 dacă parolele nu se pot citi. */
+    private function raspundeInchis(PDO $db, array $identity, array $guard): void
+    {
+        if (($guard['no_db'] ?? false) === true) {
+            $this->json(['ok' => false, 'error' => self::FARA_PAROLE], 503);
+            return;
+        }
+
         $folder = (string) $guard['folder_path'];
         $this->json([
             'ok' => false,
@@ -901,9 +959,32 @@ final class DesktopApiController
             'folder' => $folder,
             'folder_name' => basename($folder),
             'hint' => (string) ($guard['hint'] ?? ''),
-            'wait_minutes' => FolderPasswords::waitMinutes($db, FolderPasswords::whoToken($identity['token_id']), $folder),
+            'wait_minutes' => FolderPasswords::waitMinutes(
+                $db,
+                FolderPasswords::whoToken($identity['token_id']),
+                $folder,
+                $identity['admin_id']
+            ),
             'error' => 'Folderul „' . basename($folder) . '” are parolă.',
         ], 423);
+    }
+
+    /**
+     * Calea e în arhiva de versiuni? Acolo scrie doar codul care face copiile (FileVersions::archive); un fișier urcat
+     * sau un folder făcut de mână ar amesteca istoricul. Dacă da, trimite singur 409 `archive` și întoarce true.
+     */
+    private function inArhiva(string $path): bool
+    {
+        if (!FileVersions::isArchivePath($path)) {
+            return false;
+        }
+
+        $this->json([
+            'ok' => false,
+            'reason' => 'archive',
+            'error' => 'Folderul „' . FileVersions::ARCHIVE_FOLDER . '” ține copiile de siguranță ale '
+                . 'fișierelor și se completează singur. Nu se scrie nimic în el de mână.',
+        ], 409);
 
         return true;
     }
@@ -941,10 +1022,18 @@ final class DesktopApiController
             $this->json(['ok' => true, 'reason' => 'not_protected', 'folder' => $path]);
             return;
         }
+        if (($guard['no_db'] ?? false) === true) {
+            $this->json(['ok' => false, 'error' => self::FARA_PAROLE], 503);
+            return;
+        }
 
         $folder = (string) $guard['folder_path'];
         $who = FolderPasswords::whoToken($identity['token_id']);
-        $result = FolderPasswords::unlock($db, $who, $folder, (string) ($input['password'] ?? ''));
+        $result = FolderPasswords::unlock($db, $who, $folder, (string) ($input['password'] ?? ''), $identity['admin_id']);
+        if ($result['reason'] === 'unavailable') {
+            $this->json(['ok' => false, 'error' => self::FARA_PAROLE], 503);
+            return;
+        }
 
         if (!$result['ok']) {
             AdminActivityLog::log($db, 'bunny_folder_unlock_failed', [

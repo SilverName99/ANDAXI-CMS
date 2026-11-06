@@ -1204,16 +1204,22 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   ștergere; un folder cu peste 400 de elemente se refuză; dacă ceva pică la mijloc, originalul rămâne neatins), trimiterea pozelor și
   clipurilor în Galerie (cu adresa de pe CDN). **Preluarea pentru editare**: lacătul pe fișier (cine, de când, nota), expiră după
   `bunny_lock_expire_hours` (24); doar cel care l-a preluat salvează versiunea nouă, iar copia de dinainte merge în `_versiuni/<cale>/
-  <AAAALLZZ-HHMMSS>-<nume>` (se păstrează `bunny_versions_keep`, 10); arhiva `_versiuni` nu se redenumește și nu se șterge de aici;
+  <AAAALLZZ-HHMMSS>-<nume>` (se păstrează `bunny_versions_keep`, 10); arhiva `_versiuni` nu se redenumește, nu se șterge și nu se
+  scrie nimic în ea de aici (nici din aplicație: o scrie doar codul care face copiile);
   Administratorul General eliberează forțat (scris în Jurnal activitate). Descărcarea trece prin server, cu cheia zonei (nu prin
   adresa publică). **Folderele cu parolă**: parola (`password_hash`, cel puțin 6 caractere, indiciu opțional) apără tot ce e înăuntru,
-  oricât de adânc (câștigă folderul cel mai adânc); deschiderea ține o oră de la ultima folosire, legată de sesiune (browserul) sau de
-  cheia de aplicație; 5 parole greșite = 5 minute de pauză; schimbarea parolei închide folderul pentru toți; o parolă se schimbă sau
-  se scoate doar cu cea veche (Administratorul General poate fără ea, scris în jurnal); redenumirea mută parola după folder, ștergerea
-  o șterge. Într-un folder cu parolă nu se arată adresele publice și nu se trimite nimic în Galerie. E o barieră între colegi: fișierul
-  din bunny.net rămâne necriptat, iar adresa lui publică merge pentru cine o știe.
+  oricât de adânc, și copiile lui din `_versiuni` (câștigă folderul cel mai adânc; de aceea parola unui subfolder o pune doar cine are
+  deschise folderele de deasupra; căile se compară fără litere mari); deschiderea ține o oră de la ultima folosire, legată de sesiune
+  (browserul) sau de cheia de aplicație; 5 parole greșite = 5 minute de pauză, numărate pe administrator și folder (oricâte sesiuni
+  sau chei ar avea); schimbarea parolei închide folderul pentru toți; o parolă se pune doar pe un folder și se schimbă sau se scoate
+  doar cu cea veche, verificată prin aceeași frână (Administratorul General poate fără ea, scris în jurnal); redenumirea mută parola
+  după folder, ștergerea o șterge (un folder cu un subfolder cu parolă închis nu se șterge). Într-un folder cu parolă nu se arată
+  adresele publice și miniaturile de pe CDN, iar în Galerie nu pleacă nimic (nici deschis). Dacă lista folderelor cu parolă nu se poate
+  citi, totul e închis. E o barieră între colegi: fișierul din bunny.net rămâne necriptat, iar adresa lui publică merge pentru cine o
+  știe.
 - **Aplicația de desktop** (`/admin/bunny/app`): fiecare administrator își face chei (`bvd_` + 48 hex, arătate o singură dată; în bază
-  rămâne doar amprenta sha256), câte una pe calculator, și le retrage; butonul de descărcare a programului din zonă
+  rămâne doar amprenta sha256), câte una pe calculator (cel mult 10 active), și le retrage; Administratorul General le vede și le
+  retrage și pe ale celorlalți (un calculator pierdut); butonul de descărcare a programului din zonă
   (`bunny_app_download_path`). **API-ul aplicației Windows** (`/api/desktop/*`: ping, files, locks, download, checkout, upload,
   release, release-all, upload-new, rename, folders, delete, folders/unlock, folders/lock; `Authorization: Bearer` sau `X-App-Token`,
   fără sesiune; drepturile adminului care a făcut cheia, `Auth::canAccessPath('/admin/bunny')`): adresele, codurile de stare (200, 401,
@@ -1222,7 +1228,7 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   `BunnyStorage::normalizePath` (fără `..`, `.`, segmente goale, `\`), deci nu iese din zonă.
 - **Setări → bunny.net** (`/admin/settings/bunny`, doar administratorul general): zona, parola ei (păstrată când rândul e lăsat gol,
   arătată doar cu ultimele 4 caractere), regiunea, adresa CDN, dosarul de bază, „Testează conexiunea”, „Detectează zonele din cont”
-  (cu cheia API a contului), ținta încărcărilor din admin (`bunny_upload_target`: „În bunny.net (CDN)” trimite pozele urcate din
+  (cu cheia API a contului; parolele zonelor găsite rămân 15 minute în sesiune, pe server, iar formularul trimite doar numărul zonei), ținta încărcărilor din admin (`bunny_upload_target`: „În bunny.net (CDN)” trimite pozele urcate din
   Galerie, produse, blog direct în zonă, `galerie/<secțiune>`; dacă Bunny nu răspunde, rămân pe server), orele lacătului, versiunile
   păstrate, locul programului. Setările stau în `settings` (`bunny_*`; fără valori implicite în `Settings::DEFAULTS`: rezervele din cod
   sunt cele ale codului Biovitality, iar pe Biovitality înghețarea le-a scris la adoptare).
@@ -1231,11 +1237,37 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   codul Biovitality. Rolul e cunoscut pe orice site (altfel `Auth::normalizeRole` l-ar face Administrator General); în Administratori se
   oferă doar cu pluginul pe site, iar un cont care îl are îl păstrează la salvare (câmp ascuns). **De știut:** migrarea de date
   `nucleu/0020` (rolurile adminilor, din WP-03) știe doar cele patru roluri, deci la adoptarea Biovitality (5 noiembrie) orice cont
-  „Cloud user” a devenit Administrator General în bază (`role` și `roles_json` rescrise); rolul se pune la loc din Administratori, după
-  ce pluginul e pe site (lista conturilor e în copia bazei de dinaintea adoptării).
+  „Cloud user” a devenit Administrator General în bază (`role` și `roles_json` rescrise). Lista ei de roluri stă doar în 0020, care e
+  publicată și aplicată (o schimbare ar da codul 12 pe fiecare site) și nu mai rulează pe nicio bază pe care a rulat; în rest, codul
+  (`Auth::roles`, și rezerva `Auth::ensureSchema`) știe rolul, deci nimic nu-l mai rescrie. **Rolul Cloud user după adoptare**: îl pune
+  la loc `scripts/restaureaza-roluri-cloud.php` (prin `bin/platforma`, ca celelalte scripturi), din copia de dinainte
+  (`--copie=<…>/copii/<data>/baza-inainte.sql.gz`): citește din ea doar rândurile din `admins` (trecute rând cu rând, fără s-o
+  încarce), arată „email: acum <roluri> → <roluri vechi>”, iar cu `--aplica` scrie, într-o tranzacție, role și roles_json de atunci
+  doar conturilor pe care 0020 le-a lăsat cum le-a lăsat (cele schimbate de mână după adoptare și cele șterse doar se arată) și retrage
+  cheile de aplicație ale acestor conturi făcute după 5 noiembrie, 20:00 (`--din=`); fără hash-uri de parolă în ieșire, un rând în
+  Jurnal activitate. Sesiunile deja deschise țin rolul de la logare: după el, oamenii se deloghează și se loghează din nou.
 - **CSRF** (în plus față de codul Biovitality, care se baza doar pe cookie-ul `SameSite=Lax`): fiecare POST din admin cere jetonul
-  formularului (`App\Support\AdminCsrf`); fără el, nimic nu se face („Sesiunea formularului a expirat…”). API-ul aplicației nu are
-  sesiune, deci nici cookie: cheia din antet e singura dovadă.
+  formularului (`App\Support\AdminCsrf`); fără el, nimic nu se face („Sesiunea formularului a expirat…”). O cerere mai mare decât
+  `post_max_size` (PHP îi aruncă tot corpul, cu jeton cu tot) primește „Fișierul e prea mare”; din browser, ca în aplicație, cel mult
+  64 MB pe fișier. API-ul aplicației nu are sesiune, deci nici cookie: cheia din antet e singura dovadă.
+- **Ce s-a strâns după revizia de securitate** (6 noiembrie, înainte de pornire): copiile din `_versiuni` păzite de parola
+  originalului și ascunse din listă cât folderul e închis (browser, aplicație, Galerie); căile cu alte litere mari (`Contracte/…`)
+  păzite la fel; parola unui subfolder doar cu folderele de deasupra deschise, doar pe foldere; parola actuală (schimbare, scoatere)
+  prin frâna deblocării; frâna pe administrator și folder, cu o scriere atomică înaintea verificării (10 cereri trimise deodată primesc
+  tot cel mult 5 verificări); Galeria verifică fiecare cale bifată și refuză tot ce e într-un folder cu parolă; ștergerea unui folder cu
+  un subfolder cu parolă închis se refuză; fără adrese CDN și miniaturi într-un folder cu parolă; nimic scris de mână în `_versiuni`;
+  parolele care nu se pot citi închid tot (în aplicație 503, în browser „Nu pot verifica acum parolele folderelor”); textele din
+  `confirm()` (numele folderului, emailul din lacăt, numele partenerului la `concurenta`) ca JSON, nu ca șir care se poate închide;
+  limita de 64 MB și mesajul la `post_max_size`; parolele zonelor detectate nu mai ajung în pagină; cel mult 10 chei active pe
+  administrator, iar Administratorul General le retrage pe ale oricui; încărcările din admin nu merg într-un folder de galerie cu
+  parolă (rămân pe server). **API-ul aplicației**: aceleași adrese și forme de răspuns; se schimbă doar cererile refuzate acum pe drept,
+  cu coduri pe care aplicația le știe deja: 423 `folder_locked` (o copie din `_versiuni` a unui folder închis, ștergerea unui folder cu
+  un subfolder închis), 409 `archive` (scrieri în `_versiuni`), 503 (parolele nu se pot citi), iar pauza după greșeli ține pentru toate
+  cheile aceluiași administrator. **Rămâne, de știut**: un fișier HTML sau SVG urcat în zonă se deschide de pe adresa CDN ca pagină, cu
+  scripturile lui (pe domeniul CDN-ului, nu al site-ului, deci fără sesiunea adminului); fișierele de lucru nu se filtrează după tip,
+  iar dacă trebuie, din bunny.net (Pull Zone → Edge Rules: `Content-Disposition: attachment` pentru `.html`, `.htm`, `.svg`). Tot
+  neschimbate: un id de administrator refolosit după ștergerea contului (lacătele și cheile se leagă de id) și fereastra dintre
+  verificarea și mutarea de la redenumirea unui folder.
 - **Se oprește**: ca pornit (nu e nimic cu bani; fișierele în lucru se pot termina). **Oprit**: paginile dau „Modulul nu este inclus în
   abonament”, meniul și butonul din Galerie dispar, `/api/desktop/*` răspunde cu JSON-ul 404 al gărzii (cu `error`, pe care aplicația
   îl arată), încărcările din admin rămân pe server; tabelele, setările și fișierele din zonă rămân neatinse.
@@ -1247,7 +1279,9 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   setările `bunny_*` neschimbate de migrări); B aceleași 90 de cereri ale aplicației pe ambele coduri (fiecare adresă, Bearer și
   X-App-Token, JSON și multipart, parola de folder cu frâna, lacătele, versiunile, redenumirile, integrarea oprită): același cod,
   același Content-Type, același JSON octet cu octet (momentele înlocuite), același fișier descărcat, apoi aceleași fișiere în zonă,
-  aceleași rânduri în tabele și în jurnal, aceleași cereri spre Bunny; C doar pe codul comun: pluginul oprit, CSRF, „Cloud user”.
+  aceleași rânduri în tabele și în jurnal, aceleași cereri spre Bunny (singura cerere cu alt răspuns, declarată: ștergerea unui folder
+  cu un subfolder cu parolă închis, 409 → 423; pauza după greșeli e pe administrator, nu pe cheie); C doar pe codul comun: pluginul
+  oprit, CSRF, „Cloud user”; D revizia de securitate, punct cu punct; plus, în A, scriptul de roluri pe o copie făcută ca la adoptare.
 
 ### Analiza prețurilor concurenței (`concurenta`)
 

@@ -20,7 +20,8 @@ declare(strict_types=1);
  *    aceleași răspunsuri (codul, Location, JSON-ul) și aceleași rânduri în tabele după fiecare; drepturile rolurilor;
  * C  bifa „Doar în magazin” (only_in_store): pe codul comun se vede după reîncărcare și în export; în codul Biovitality nu ajungea în
  *    celulă (singura diferență, declarată aici, exact pe celula ei);
- * D  doar pe codul comun: fiecare POST fără jetonul formularului (CSRF) e refuzat, nimic schimbat; pluginul oprit.
+ * D  doar pe codul comun: fiecare POST fără jetonul formularului (CSRF) e refuzat, nimic schimbat; numele partenerului în confirm()
+ *    ca JSON (revizia de securitate, M4; în B confirmările se compară după textul văzut de om); pluginul oprit.
  *
  * Își face și își șterge bazele cms_cc_vechi, cms_cc_nou și dosarul $CMS_DEV_DIR/concurenta. Raportul:
  * $CMS_DEV_DIR/test-concurenta-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Toate datele sunt inventate.
@@ -300,7 +301,14 @@ try {
         $i = strpos($html, '<!-- Parteneri: fiecare adaugă în tabel o pereche de coloane -->');
         $j = strpos($html, '</section>', (int) $i);
         $parte = $i !== false && $j !== false ? substr($html, $i, $j - $i) : '';
-        return (string) preg_replace('/\n\s*<input type="hidden" name="_csrf" value="[0-9a-f]{64}">/', '', $parte);
+        $parte = (string) preg_replace('/\n\s*<input type="hidden" name="_csrf" value="[0-9a-f]{64}">/', '', $parte);
+        // Confirmarea ștergerii unui partener: codul Biovitality o scrie ca șir JS între apostrofuri (un nume cu apostrof ieșea din
+        // șir), codul comun ca JSON (revizia de securitate, M4). Se compară textul pe care îl vede omul.
+        return (string) preg_replace_callback('/onsubmit="return confirm\((\'.*?\'|&quot;.*?&quot;)\);"/u', static function (array $m): string {
+            $brut = html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text = str_starts_with($brut, "'") ? substr($brut, 1, -1) : (string) json_decode($brut);
+            return 'onsubmit="return confirm(«' . htmlspecialchars($text, ENT_QUOTES) . '»);"';
+        }, $parte);
     };
     $jetonNou = static function () use ($adm): string {
         return (string) $adm['nou']('GET', '/admin/competition')['jeton'];
@@ -455,6 +463,14 @@ try {
         $x = $adm['nou']('POST', $cale, $cale === '/admin/competition/save-all' ? ['cells' => [1 => [$p0 => ['price' => '7']]]] : []);
         $verifica('D ' . $cale . ' fără jeton: refuzat, nimic schimbat', $x['cod'] === 302 && $starea('nou') === $inainte);
     }
+    // M4: numele partenerului ajunge în confirm() ca JSON, nu ca text care poate închide șirul JS.
+    $adm['nou']('POST', '/admin/competition/partners', ['id' => '0', 'name' => "O'Brien \"<b>\" & Co", 'website' => '', 'is_active' => '1',
+        'sort_order' => '9', '_csrf' => $jetonNou()]);
+    $x = $adm['nou']('GET', '/admin/competition');
+    $verifica('D M4 confirmarea ștergerii unui partener cu apostrof și ghilimele în nume: JSON (\\u0027, \\u0022, \\u003C, \\u0026)',
+        str_contains($x['corp'], 'confirm(&quot;Ștergi partenerul „O\\u0027Brien \\u0022\\u003Cb\\u003E\\u0022 \\u0026 Co”')
+        && !str_contains($x['corp'], "confirm('Ștergi partenerul „O"));
+    $inainte = $starea('nou');
     $php('nou', 'tools/dev/licenta.php', ['biovitality', 'concurenta=oprit']);
     $x = $adm['nou']('GET', '/admin/competition');
     $verifica('D pluginul oprit: /admin/competition → 403 „Modulul nu este inclus în abonament”', $x['cod'] === 403 && str_contains($x['corp'], 'nu este inclus'));

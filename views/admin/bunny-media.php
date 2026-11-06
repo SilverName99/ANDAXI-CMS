@@ -22,6 +22,14 @@ $currentProtected = is_array($currentProtected ?? null) ? $currentProtected : nu
 $openGuard = is_array($openGuard ?? null) ? $openGuard : null;
 $isGeneralAdmin = (bool) ($isGeneralAdmin ?? false);
 $lockWaitMinutes = (int) ($lockWaitMinutes ?? 0);
+// În `_versiuni` scrie doar codul care face copiile: fără „Folder nou” și „Urcă fișiere”.
+$inArchive = (bool) ($inArchive ?? false);
+// Textul unui confirm() dintr-un atribut: JSON cu ghilimelele și `<>&` scăpate, apoi escapat pentru atribut (numele
+// folderului sau emailul nu pot ieși din șirul JS).
+$confirmJs = static fn (string $text): string => htmlspecialchars(
+    (string) json_encode($text, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE),
+    ENT_QUOTES
+);
 // Într-un folder cu parolă nu se arată adresele publice de pe CDN și nu se
 // trimite nimic în Galerie: parola apără panoul, dar adresa aceea e deschisă
 // oricui o cunoaște, iar Galeria ar publica fișierul pe site.
@@ -47,7 +55,7 @@ if ($breadcrumbs !== []) {
 ?>
 <link rel="stylesheet" href="/assets/css/fisiere-cloud.css?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/css/fisiere-cloud.css')) ?: 1) ?>">
 <?php ob_start(); ?>
-<?php if ($enabled && $client !== null && $lockedFolder === null): ?>
+<?php if ($enabled && $client !== null && $lockedFolder === null && !$inArchive): ?>
     <button class="btn btn-secondary" type="button" id="bunny-open-folder-modal">+ Folder nou</button>
     <button class="btn" type="button" id="bunny-open-upload-modal">+ Urcă fișiere</button>
 <?php endif; ?>
@@ -85,6 +93,12 @@ admin_componenta('antet-pagina', [
             <?php if (\App\Support\Auth::canAccessPath('/admin/settings/bunny')): ?>
                 <p><a class="btn btn-secondary" href="/admin/settings/bunny">Verifică setările</a></p>
             <?php endif; ?>
+        </div>
+    <?php elseif ($lockedFolder !== null && ($lockedFolder['no_db'] ?? false) === true): ?>
+        <div class="bunny-gate">
+            <div class="bunny-gate-icon">🔒</div>
+            <h3>Nu pot verifica acum parolele folderelor</h3>
+            <p>Până răspunde baza de date, nu deschid nimic. Încearcă din nou peste puțin.</p>
         </div>
     <?php elseif ($lockedFolder !== null): ?>
         <?php
@@ -223,7 +237,7 @@ admin_componenta('antet-pagina', [
                                         data-target="<?= htmlspecialchars($folderPath, ENT_QUOTES) ?>"
                                         data-name="<?= htmlspecialchars((string) $folder['name'], ENT_QUOTES) ?>"
                                         title="Redenumește folderul">✎</button>
-                                <form method="post" action="/admin/bunny/delete" onsubmit="return confirm('Ștergi folderul „<?= htmlspecialchars((string) $folder['name'], ENT_QUOTES) ?>” din Bunny, cu tot ce conține? Operația nu poate fi anulată.');">
+                                <form method="post" action="/admin/bunny/delete" onsubmit="return confirm(<?= $confirmJs('Ștergi folderul „' . (string) $folder['name'] . '” din Bunny, cu tot ce conține? Operația nu poate fi anulată.') ?>);">
                                     <?= \App\Support\AdminCsrf::camp() . "\n" ?>
                                     <input type="hidden" name="path" value="<?= htmlspecialchars($path, ENT_QUOTES) ?>">
                                     <input type="hidden" name="target" value="<?= htmlspecialchars($folderPath, ENT_QUOTES) ?>">
@@ -317,7 +331,14 @@ admin_componenta('antet-pagina', [
                             </div>
 
                             <div class="bunny-card-actions">
-                                <?php if ($lock === null): ?>
+                                <?php if ($inArchive): ?>
+                                <div class="bunny-act-row">
+                                    <a class="btn btn-secondary" href="/admin/bunny/download?path=<?= rawurlencode((string) $file['path']) ?>">Descarcă copia</a>
+                                    <?php if ($fileUrl !== '' && !$inProtected): ?>
+                                        <button class="btn btn-secondary" type="button" data-action="bunny-copy-url" data-url="<?= htmlspecialchars($fileUrl, ENT_QUOTES) ?>">Copiază link</button>
+                                    <?php endif; ?>
+                                </div>
+                                <?php elseif ($lock === null): ?>
                                     <button class="btn bunny-act-main" type="button"
                                             data-action="bunny-checkout"
                                             data-target="<?= htmlspecialchars((string) $file['path'], ENT_QUOTES) ?>"
@@ -335,11 +356,12 @@ admin_componenta('antet-pagina', [
                                     <button class="btn btn-secondary bunny-act-main" type="submit"
                                             formaction="/admin/bunny/release" formmethod="post"
                                             name="target" value="<?= htmlspecialchars((string) $file['path'], ENT_QUOTES) ?>"
-                                            onclick="return confirm('Eliberezi forțat fișierul preluat de <?= htmlspecialchars((string) $lock['owner_label'], ENT_QUOTES) ?>? Dacă lucrează chiar acum, munca lui se poate pierde.');">
+                                            onclick="return confirm(<?= $confirmJs('Eliberezi forțat fișierul preluat de ' . (string) $lock['owner_label'] . '? Dacă lucrează chiar acum, munca lui se poate pierde.') ?>);">
                                         Eliberează forțat
                                     </button>
                                 <?php endif; ?>
 
+                                <?php if (!$inArchive): ?>
                                 <div class="bunny-act-row">
                                     <?php if ($lockIsMine): ?>
                                         <a class="btn btn-secondary" href="/admin/bunny/download?path=<?= rawurlencode((string) $file['path']) ?>">Descarcă</a>
@@ -368,6 +390,7 @@ admin_componenta('antet-pagina', [
                                             onclick="return confirm('Ștergi fișierul din Bunny? Linkurile care îl folosesc pe site nu vor mai funcționa.');"
                                     >🗑</button>
                                 </div>
+                                <?php endif; ?>
                             </div>
                         </article>
                     <?php endforeach; ?>

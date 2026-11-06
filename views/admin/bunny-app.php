@@ -1,6 +1,8 @@
 <?php
 $settings = is_array($settings ?? null) ? $settings : [];
 $tokens = is_array($tokens ?? null) ? $tokens : [];
+$otherTokens = is_array($otherTokens ?? null) ? $otherTokens : [];
+$maxTokens = (int) ($maxTokens ?? 10);
 $freshToken = (string) ($freshToken ?? '');
 $adminEmail = (string) ($adminEmail ?? '');
 $apiBaseUrl = rtrim((string) ($apiBaseUrl ?? ''), '/');
@@ -81,6 +83,7 @@ admin_componenta('antet-pagina', [
     <p class="bunny-muted">
         Câte una pentru fiecare calculator pe care instalezi aplicația. Cheia poartă drepturile contului tău
         (<?= htmlspecialchars($adminEmail !== '' ? $adminEmail : 'contul curent', ENT_QUOTES) ?>) și poate fi retrasă oricând.
+        Cel mult <?= $maxTokens ?> chei active deodată.
     </p>
 
     <?php if ($tokens === []): ?>
@@ -113,6 +116,47 @@ admin_componenta('antet-pagina', [
                     <td style="text-align:right;">
                         <form method="post" action="/admin/bunny/app/tokens/revoke"
                               onsubmit="return confirm('Retragi cheia? Aplicația de pe acel calculator nu va mai avea acces.');">
+                            <?= \App\Support\AdminCsrf::camp() . "\n" ?>
+                            <input type="hidden" name="token_id" value="<?= (int) ($token['id'] ?? 0) ?>">
+                            <button class="btn btn-secondary" type="submit">Retrage</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php endif; ?>
+
+    <?php if ($otherTokens !== []): ?>
+        <h2 style="margin-top:24px;">Cheile celorlalți administratori</h2>
+        <p class="bunny-muted">
+            Le vezi ca Administrator General: dacă un calculator s-a pierdut sau un coleg a plecat, retragi cheia de aici.
+        </p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Administrator</th>
+                    <th>Calculator</th>
+                    <th>Creată</th>
+                    <th>Folosită ultima dată</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($otherTokens as $token): ?>
+                <tr>
+                    <td><?= htmlspecialchars((string) ($token['email'] ?? ('#' . (int) ($token['admin_id'] ?? 0))), ENT_QUOTES) ?></td>
+                    <td><strong><?= htmlspecialchars((string) ($token['name'] ?? ''), ENT_QUOTES) ?></strong></td>
+                    <td><?= htmlspecialchars($humanDate($token['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                    <td>
+                        <?= htmlspecialchars($humanDate($token['last_used_at'] ?? ''), ENT_QUOTES) ?>
+                        <?php if (trim((string) ($token['last_used_ip'] ?? '')) !== ''): ?>
+                            <span class="bunny-muted">(<?= htmlspecialchars((string) $token['last_used_ip'], ENT_QUOTES) ?>)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td style="text-align:right;">
+                        <form method="post" action="/admin/bunny/app/tokens/revoke"
+                              onsubmit="return confirm('Retragi cheia colegului? Aplicația de pe acel calculator nu va mai avea acces.');">
                             <?= \App\Support\AdminCsrf::camp() . "\n" ?>
                             <input type="hidden" name="token_id" value="<?= (int) ($token['id'] ?? 0) ?>">
                             <button class="btn btn-secondary" type="submit">Retrage</button>

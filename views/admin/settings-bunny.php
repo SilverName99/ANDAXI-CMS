@@ -175,7 +175,7 @@ admin_componenta('antet-pagina', [
             </tr>
         </thead>
         <tbody>
-        <?php foreach ($detectedZones as $detected): ?>
+        <?php foreach ($detectedZones as $zoneIndex => $detected): ?>
             <tr>
                 <td><strong><?= htmlspecialchars((string) ($detected['name'] ?? ''), ENT_QUOTES) ?></strong></td>
                 <td><?= htmlspecialchars((string) ($regions[(string) ($detected['region'] ?? '')] ?? '—'), ENT_QUOTES) ?></td>
@@ -186,10 +186,8 @@ admin_componenta('antet-pagina', [
                 <td style="text-align:right;">
                     <form method="post" action="/admin/settings/bunny/use-zone">
                         <?= \App\Support\AdminCsrf::camp() . "\n" ?>
-                        <input type="hidden" name="zone_name" value="<?= htmlspecialchars((string) ($detected['name'] ?? ''), ENT_QUOTES) ?>">
-                        <input type="hidden" name="zone_password" value="<?= htmlspecialchars((string) ($detected['password'] ?? ''), ENT_QUOTES) ?>">
-                        <input type="hidden" name="zone_region" value="<?= htmlspecialchars((string) ($detected['region'] ?? ''), ENT_QUOTES) ?>">
-                        <input type="hidden" name="zone_cdn_url" value="<?= htmlspecialchars($detectedUrl, ENT_QUOTES) ?>">
+                        <?php /* Doar numărul zonei: parola ei rămâne în sesiune, pe server (FisiereCloudController::zoneDetectate). */ ?>
+                        <input type="hidden" name="zone_index" value="<?= (int) $zoneIndex ?>">
                         <button class="btn btn-secondary" type="submit">Folosește zona</button>
                     </form>
                 </td>

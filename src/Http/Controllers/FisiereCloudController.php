@@ -28,10 +28,24 @@ use Throwable;
  * Copiat cum e (aceleași texte, aceleași reguli, aceleași adrese și câmpuri), cu două schimbări: fiecare POST cere jetonul
  * formularului (AdminCsrf; codul Biovitality se baza doar pe cookie-ul `SameSite=Lax`), iar schema o face migrarea
  * `fisiere_cloud/0059`, nu `ensureSchema` la fiecare cerere.
+ *
+ * Revizia de securitate (docs/PLUGINURI.md, „Fișiere în cloud” → „Ce s-a strâns după revizie”): copiile din `_versiuni`
+ * păzite ca originalul și ascunse cât folderul e închis; parola unui folder se pune sau se scoate doar cu folderele de
+ * deasupra deschise, doar pe foldere, iar parola actuală se verifică cu aceeași numărătoare de greșeli ca deblocarea;
+ * Galeria refuză orice fișier dintr-un folder cu parolă; ștergerea unui folder cu un subfolder închis se refuză; fără
+ * adrese CDN și miniaturi într-un folder cu parolă; nimic scris de mână în `_versiuni`; limita de 64 MB și mesajul clar
+ * când cererea depășește `post_max_size`; parolele zonelor detectate rămân pe server; cel mult
+ * AppTokens::MAX_ACTIVE chei pe administrator, iar Administratorul General le vede și le retrage pe ale tuturor.
  */
 final class FisiereCloudController
 {
     use Comun;
+
+    /** Cât de mare poate fi un fișier urcat din browser (aceeași limită ca în aplicația de desktop). */
+    private const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
+
+    /** Cât rămân în sesiune zonele detectate, ca să poată fi alese din formular. */
+    private const ZONE_DETECTATE_MINUTE = 15;
 
     public function bunnySettingsForm(): void
     {
@@ -42,15 +56,18 @@ final class FisiereCloudController
         $db = $this->db();
         $settings = Settings::all($db);
 
-        // Zonele descoperite cu cheia de cont sunt ținute o singură afișare, cât
-        // să poată fi alese din formular.
-        $detectedZones = $_SESSION['bunny_detected_zones'] ?? null;
-        unset($_SESSION['bunny_detected_zones']);
+        // Zonele descoperite cu cheia de cont rămân în sesiune, pe server, câteva minute, cât să poată fi alese din
+        // formular. Pagina primește doar numele, regiunea și adresa CDN; parola zonei nu ajunge în HTML (formularul
+        // trimite numărul zonei din listă).
+        $detectedZones = array_map(
+            static fn (array $zone): array => array_diff_key($zone, ['password' => true]),
+            $this->zoneDetectate()
+        );
 
         View::render('admin/settings-bunny', [
             'title' => 'bunny.net',
             'settings' => $settings,
-            'detectedZones' => is_array($detectedZones) ? $detectedZones : [],
+            'detectedZones' => $detectedZones,
             'regions' => BunnyStorage::REGIONS,
         ], 'admin/layout');
     }
@@ -118,7 +135,7 @@ final class FisiereCloudController
                 if ($zones === []) {
                     Flash::set('error', 'Contul bunny.net nu are nicio zonă de storage.');
                 } else {
-                    $_SESSION['bunny_detected_zones'] = $zones;
+                    $_SESSION['bunny_detected_zones'] = ['la' => time(), 'zone' => array_values($zones)];
                     Flash::set('success', 'Am găsit ' . count($zones) . ' zone în contul bunny.net. Alege una mai jos.');
                 }
             } catch (Throwable $e) {
@@ -165,10 +182,14 @@ final class FisiereCloudController
             return;
         }
 
-        $name = trim((string) ($_POST['zone_name'] ?? ''));
-        $password = trim((string) ($_POST['zone_password'] ?? ''));
+        // Datele zonei se iau din sesiune, după numărul ei din listă; din formular vine doar numărul.
+        $zone = $this->zoneDetectate();
+        $index = (string) ($_POST['zone_index'] ?? '');
+        $aleasa = ctype_digit($index) ? ($zone[(int) $index] ?? null) : null;
+        $name = trim((string) ($aleasa['name'] ?? ''));
+        $password = trim((string) ($aleasa['password'] ?? ''));
         if ($name === '' || $password === '') {
-            Flash::set('error', 'Zona selectată nu are datele complete.');
+            Flash::set('error', 'Zona selectată nu mai e în listă. Apasă din nou „Detectează zonele din cont”.');
             header('Location: /admin/settings/bunny');
             return;
         }
@@ -176,9 +197,10 @@ final class FisiereCloudController
         Settings::save($this->db(), [
             'bunny_storage_zone' => $name,
             'bunny_storage_password' => $password,
-            'bunny_storage_region' => BunnyStorage::normalizeRegion((string) ($_POST['zone_region'] ?? '')),
-            'bunny_cdn_url' => BunnyStorage::normalizeCdnUrl((string) ($_POST['zone_cdn_url'] ?? '')),
+            'bunny_storage_region' => BunnyStorage::normalizeRegion((string) ($aleasa['region'] ?? '')),
+            'bunny_cdn_url' => BunnyStorage::normalizeCdnUrl((string) ($aleasa['cdn_url'] ?? '')),
         ]);
+        unset($_SESSION['bunny_detected_zones']);
 
         Flash::set('success', 'Zona „' . $name . '” a fost preluată în setări. Verifică adresa CDN și salvează.');
         header('Location: /admin/settings/bunny');
@@ -202,6 +224,7 @@ final class FisiereCloudController
         $folders = [];
         $files = [];
         $error = '';
+        $adminId = (int) (Auth::id() ?? 0);
 
         // Folder cu parolă: nu se citește nimic din el până nu e deschis. Lista
         // se cere de la Bunny abia după poartă, ca nici măcar numele fișierelor
@@ -220,6 +243,17 @@ final class FisiereCloudController
                     $files = $contents['files'];
                 } catch (Throwable $e) {
                     $error = $e->getMessage();
+                }
+                // În `_versiuni`, copiile fișierelor dintr-un folder cu parolă închis nu apar deloc.
+                if (FileVersions::isArchivePath($path) && $db instanceof PDO) {
+                    $vizibil = static fn (array $item): bool => FolderPasswords::lockedFor(
+                        $db,
+                        FolderPasswords::whoSession(),
+                        (string) $item['path'],
+                        false
+                    ) === null;
+                    $folders = array_values(array_filter($folders, $vizibil));
+                    $files = array_values(array_filter($files, $vizibil));
                 }
             }
         }
@@ -256,15 +290,30 @@ final class FisiereCloudController
         $currentProtected = null;
         $openGuard = null;
         if ($db instanceof PDO) {
-            foreach (FolderPasswords::all($db) as $record) {
-                $protectedFolders[(string) $record['folder_path']] = $record;
+            // După calea din listă (fără să conteze literele mari); în arhivă nu se pune parolă.
+            foreach ($folders as $folder) {
+                $record = FileVersions::isArchivePath((string) $folder['path'])
+                    ? null
+                    : FolderPasswords::find($db, (string) $folder['path']);
+                if ($record !== null) {
+                    $protectedFolders[(string) $folder['path']] = $record;
+                }
             }
-            $currentProtected = $protectedFolders[$path] ?? null;
+            $currentProtected = FileVersions::isArchivePath($path) ? null : FolderPasswords::find($db, $path);
             // Folderul cu parolă în care ne aflăm și care e deschis acum — poate
             // fi chiar ăsta sau unul de mai sus.
             if ($lockedFolder === null) {
                 $openGuard = FolderPasswords::guardFor($db, $path);
             }
+        }
+        // Într-un folder cu parolă (sau în copiile lui din `_versiuni`) pagina nu primește adresele CDN: nici linkuri,
+        // nici miniaturi încărcate direct de pe CDN.
+        if ($openGuard !== null || $lockedFolder !== null) {
+            $files = array_map(static function (array $file): array {
+                $file['url'] = '';
+
+                return $file;
+            }, $files);
         }
 
         View::render('admin/bunny-media', [
@@ -286,8 +335,9 @@ final class FisiereCloudController
             'currentProtected' => $currentProtected,
             'openGuard' => $openGuard,
             'isGeneralAdmin' => Auth::isGeneralAdmin(),
-            'lockWaitMinutes' => $lockedFolder !== null && $db instanceof PDO
-                ? FolderPasswords::waitMinutes($db, FolderPasswords::whoSession(), (string) $lockedFolder['folder_path'])
+            'inArchive' => FileVersions::isArchivePath($path),
+            'lockWaitMinutes' => $lockedFolder !== null && $db instanceof PDO && ($lockedFolder['no_db'] ?? false) !== true
+                ? FolderPasswords::waitMinutes($db, FolderPasswords::whoSession(), (string) $lockedFolder['folder_path'], $adminId)
                 : 0,
         ], 'admin/layout');
     }
@@ -304,6 +354,11 @@ final class FisiereCloudController
         $path = BunnyStorage::normalizePath((string) ($_POST['path'] ?? ''));
         if (($inchis = $this->bunnyLocked($this->db(), $path)) !== null) {
             Flash::set('error', $this->bunnyLockedMessage($inchis));
+            header('Location: ' . $this->bunnyMediaUrl($path));
+            return;
+        }
+        if (FileVersions::isArchivePath($path)) {
+            Flash::set('error', $this->mesajArhiva());
             header('Location: ' . $this->bunnyMediaUrl($path));
             return;
         }
@@ -326,7 +381,13 @@ final class FisiereCloudController
         $done = 0;
         $errors = [];
         foreach ($uploads as $upload) {
-            if (($upload['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            $eroareUpload = (int) ($upload['error'] ?? UPLOAD_ERR_OK);
+            if (in_array($eroareUpload, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+                || (int) ($upload['size'] ?? 0) > self::MAX_UPLOAD_BYTES) {
+                $errors[] = (string) $upload['name'] . ': ' . $this->mesajPreaMare();
+                continue;
+            }
+            if ($eroareUpload !== UPLOAD_ERR_OK) {
                 $errors[] = (string) $upload['name'] . ': încărcarea a eșuat (limita PHP de upload?).';
                 continue;
             }
@@ -337,6 +398,10 @@ final class FisiereCloudController
             $name = $this->bunnyFreeName(BunnyStorage::sanitizeName((string) ($upload['name'] ?? '')), $taken);
             if ($name === '') {
                 $errors[] = 'Un fișier are un nume pe care nu îl pot folosi.';
+                continue;
+            }
+            if (FileVersions::isArchivePath($path === '' ? $name : $path . '/' . $name)) {
+                $errors[] = $name . ': ' . $this->mesajArhiva();
                 continue;
             }
             try {
@@ -378,6 +443,8 @@ final class FisiereCloudController
             Flash::set('error', 'Integrarea bunny.net nu este configurată.');
         } elseif ($name === '') {
             Flash::set('error', 'Numele folderului este obligatoriu.');
+        } elseif (FileVersions::isArchivePath($path === '' ? $name : $path . '/' . $name)) {
+            Flash::set('error', $this->mesajArhiva());
         } else {
             try {
                 $client->createFolder($path === '' ? $name : $path . '/' . $name);
@@ -491,9 +558,16 @@ final class FisiereCloudController
         $imported = 0;
         $skipped = 0;
         $unsupported = 0;
+        $protejate = 0;
         foreach ($paths as $rawPath) {
             $filePath = BunnyStorage::normalizePath((string) $rawPath);
             if ($filePath === '') {
+                continue;
+            }
+            // Fiecare cale bifată, nu doar folderul paginii: în Galerie fișierul devine public pe site, deci nimic
+            // dintr-un folder cu parolă (sau din copiile lui din `_versiuni`) nu trece, nici deschis.
+            if (FolderPasswords::guardFor($db, $filePath) !== null) {
+                $protejate++;
                 continue;
             }
             // Galeria ține doar imagini și clipuri; un PDF acolo ar apărea rupt.
@@ -538,11 +612,16 @@ final class FisiereCloudController
                 . ($skipped > 0 ? ' ' . $skipped . ' erau deja acolo.' : ''));
         } elseif ($skipped > 0) {
             Flash::set('success', 'Fișierele bifate erau deja în Galerie.');
-        } elseif ($unsupported === 0) {
+        } elseif ($unsupported === 0 && $protejate === 0) {
             Flash::set('error', 'Nu am putut importa fișierele bifate.');
         }
         if ($unsupported > 0) {
             Flash::set('error', $unsupported . ' fișiere au fost sărite: Galeria ține doar imagini și clipuri.');
+        }
+        if ($protejate > 0) {
+            Flash::set('error', $protejate === 1
+                ? 'Un fișier e într-un folder cu parolă și nu a plecat în Galerie: acolo ar deveni public pe site.'
+                : $protejate . ' fișiere sunt într-un folder cu parolă și nu au plecat în Galerie: acolo ar deveni publice pe site.');
         }
 
         header('Location: ' . $this->bunnyMediaUrl($path));
@@ -587,13 +666,13 @@ final class FisiereCloudController
             return;
         }
 
-        $existenta = FolderPasswords::find($db, $target);
         $general = Auth::isGeneralAdmin();
-        if ($existenta !== null && !$general && !FolderPasswords::verify($veche, $existenta)) {
-            Flash::set('error', 'Parola actuală a folderului nu e bună.');
+        if (($refuz = $this->refuzParola($db, $target, $veche, $general, true)) !== null) {
+            Flash::set('error', $refuz);
             header('Location: ' . $redirect);
             return;
         }
+        $existenta = FolderPasswords::find($db, $target);
 
         $rezultat = FolderPasswords::protect(
             $db,
@@ -644,18 +723,20 @@ final class FisiereCloudController
 
         $existenta = FolderPasswords::find($db, $target);
         if ($existenta === null) {
-            Flash::set('error', 'Folderul ăsta n-are parolă.');
+            Flash::set('error', FolderPasswords::indisponibil($db)
+                ? $this->bunnyLockedMessage(['no_db' => true])
+                : 'Folderul ăsta n-are parolă.');
             header('Location: ' . $redirect);
             return;
         }
 
         $general = Auth::isGeneralAdmin();
-        $stiaParola = FolderPasswords::verify($veche, $existenta);
-        if (!$general && !$stiaParola) {
-            Flash::set('error', 'Parola folderului nu e bună.');
+        if (($refuz = $this->refuzParola($db, $target, $veche, $general, false)) !== null) {
+            Flash::set('error', $refuz);
             header('Location: ' . $redirect);
             return;
         }
+        $stiaParola = FolderPasswords::verify($veche, $existenta);
 
         FolderPasswords::remove($db, $target);
 
@@ -689,15 +770,13 @@ final class FisiereCloudController
             return;
         }
 
-        $rezultat = FolderPasswords::unlock($db, FolderPasswords::whoSession(), $target, $parola);
+        $rezultat = FolderPasswords::unlock($db, FolderPasswords::whoSession(), $target, $parola, (int) (Auth::id() ?? 0));
         if (!$rezultat['ok']) {
             AdminActivityLog::log($db, 'bunny_folder_unlock_failed', [
                 'folder' => $target,
                 'motiv' => $rezultat['reason'],
             ]);
-            Flash::set('error', $rezultat['reason'] === 'throttled'
-                ? 'Prea multe încercări greșite. Mai așteaptă ' . $rezultat['wait_minutes'] . ' minute.'
-                : 'Parola nu e bună.');
+            Flash::set('error', $this->mesajParolaRefuzata($rezultat));
             header('Location: ' . $this->bunnyMediaUrl($catre));
             return;
         }
@@ -757,10 +836,22 @@ final class FisiereCloudController
             }
         }
 
+        // Administratorul General vede cheile tuturor și le poate retrage (un calculator pierdut al unui coleg).
+        $general = Auth::isGeneralAdmin();
+        $cheiAltii = [];
+        if ($general && $db instanceof PDO) {
+            $cheiAltii = array_values(array_filter(
+                AppTokens::allActive($db),
+                static fn (array $cheie): bool => (int) ($cheie['admin_id'] ?? 0) !== $adminId
+            ));
+        }
+
         View::render('admin/bunny-app', [
             'title' => 'Aplicația de desktop',
             'settings' => $settings,
             'tokens' => $db instanceof PDO ? AppTokens::forAdmin($db, $adminId) : [],
+            'otherTokens' => $cheiAltii,
+            'maxTokens' => AppTokens::MAX_ACTIVE,
             'freshToken' => $freshToken,
             'adminEmail' => $this->currentAdminEmail(),
             'apiBaseUrl' => $this->appUrl(),
@@ -782,6 +873,12 @@ final class FisiereCloudController
         $adminId = (int) (Auth::id() ?? 0);
         if (!$db instanceof PDO || $adminId <= 0) {
             Flash::set('error', 'Nu am putut genera cheia.');
+            header('Location: /admin/bunny/app');
+            return;
+        }
+
+        if (AppTokens::activeCount($db, $adminId) >= AppTokens::MAX_ACTIVE) {
+            Flash::set('error', 'Ai deja ' . AppTokens::MAX_ACTIVE . ' chei active, cât se poate. Retrage una pe care n-o mai folosești, apoi generează alta.');
             header('Location: /admin/bunny/app');
             return;
         }
@@ -813,7 +910,8 @@ final class FisiereCloudController
         $adminId = (int) (Auth::id() ?? 0);
         $tokenId = (int) ($_POST['token_id'] ?? 0);
 
-        if ($db instanceof PDO && AppTokens::revoke($db, $tokenId, $adminId)) {
+        // Administratorul General poate retrage cheia oricui; ceilalți doar pe ale lor.
+        if ($db instanceof PDO && AppTokens::revoke($db, $tokenId, $adminId, Auth::isGeneralAdmin())) {
             AdminActivityLog::log($db, 'app_token_revoke', ['token_id' => $tokenId]);
             Flash::set('success', 'Cheia a fost retrasă. Aplicația de pe acel calculator nu mai are acces.');
         } else {
@@ -904,6 +1002,11 @@ final class FisiereCloudController
             $this->bunnyRenameFolder($db, $target, $wanted, $redirect);
             return;
         }
+        if (FileVersions::isArchivePath($target)) {
+            Flash::set('error', $this->mesajArhiva());
+            header('Location: ' . $redirect);
+            return;
+        }
 
         $lock = FileLocks::find($db, $target);
         if ($lock !== null && (int) ($lock['admin_id'] ?? 0) !== (int) (Auth::id() ?? 0)) {
@@ -915,6 +1018,11 @@ final class FisiereCloudController
         $folder = str_contains($target, '/') ? substr($target, 0, (int) strrpos($target, '/')) : '';
         $destination = $folder === '' ? $wanted : $folder . '/' . $wanted;
         if ($destination === $target) {
+            header('Location: ' . $redirect);
+            return;
+        }
+        if (FileVersions::isArchivePath($destination)) {
+            Flash::set('error', $this->mesajArhiva());
             header('Location: ' . $redirect);
             return;
         }
@@ -964,6 +1072,13 @@ final class FisiereCloudController
         if (FileVersions::isArchivePath($target)) {
             Flash::set('error', 'Folderul „' . FileVersions::ARCHIVE_FOLDER . '” ține copiile de siguranță ale '
                 . 'fișierelor. Redenumit, istoricul ar arăta spre fișiere care nu mai există.');
+            header('Location: ' . $redirect);
+            return;
+        }
+
+        $parinte = str_contains($target, '/') ? substr($target, 0, (int) strrpos($target, '/')) : '';
+        if (FileVersions::isArchivePath($parinte === '' ? $wanted : $parinte . '/' . $wanted)) {
+            Flash::set('error', $this->mesajArhiva());
             header('Location: ' . $redirect);
             return;
         }
@@ -1127,6 +1242,11 @@ final class FisiereCloudController
             header('Location: ' . $redirect);
             return;
         }
+        if (FileVersions::isArchivePath($target)) {
+            Flash::set('error', $this->mesajArhiva());
+            header('Location: ' . $redirect);
+            return;
+        }
 
         $adminId = (int) (Auth::id() ?? 0);
         $lock = FileLocks::find($db, $target);
@@ -1142,6 +1262,12 @@ final class FisiereCloudController
         }
 
         $upload = $_FILES['file'] ?? null;
+        if (is_array($upload) && (in_array((int) ($upload['error'] ?? 0), [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)
+            || (int) ($upload['size'] ?? 0) > self::MAX_UPLOAD_BYTES)) {
+            Flash::set('error', $this->mesajPreaMare());
+            header('Location: ' . $redirect);
+            return;
+        }
         if (!is_array($upload) || (int) ($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             Flash::set('error', 'Nu ai ales niciun fișier.');
             header('Location: ' . $redirect);
@@ -1220,6 +1346,14 @@ final class FisiereCloudController
 
         $me = (int) (Auth::id() ?? 0);
         if ($isFolder) {
+            // Un subfolder cu parolă închis pentru cel logat: n-are voie să șteargă ce n-are voie să vadă.
+            $sub = FolderPasswords::lockedUnder($db, FolderPasswords::whoSession(), $target);
+            if ($sub !== null) {
+                return ($sub['no_db'] ?? false) === true
+                    ? $this->bunnyLockedMessage($sub)
+                    : 'În folder e un subfolder cu parolă, „' . basename((string) $sub['folder_path'])
+                        . '”. Deschide-l întâi, ca să poți șterge tot.';
+            }
             $blocking = FileLocks::blockedUnder($db, $target, $me);
 
             return $blocking === null ? null : 'În folder e ceva la lucru: „'
@@ -1253,11 +1387,111 @@ final class FisiereCloudController
         return FolderPasswords::lockedFor($db, FolderPasswords::whoSession(), $path);
     }
 
+    /**
+     * De ce nu se poate pune, schimba sau scoate parola folderului, sau null dacă se poate.
+     *
+     * Ținta trebuie să fie un folder care există (nu un fișier, nu arhiva), iar folderele cu parolă de deasupra ei
+     * trebuie să fie deschise pentru cel logat: altfel cine n-are parola lui `contracte` ar pune una a lui pe
+     * `contracte/2026` și ar intra cu ea. Parola actuală (la schimbare și la scoatere) se verifică prin aceeași
+     * numărătoare de greșeli ca deblocarea, ca formularul să nu fie o ușă fără limită de încercări. Administratorul
+     * General e scutit (resetarea lui se scrie în jurnal).
+     */
+    private function refuzParola(PDO $db, string $target, string $veche, bool $general, bool $punere): ?string
+    {
+        if (FileVersions::isArchivePath($target)) {
+            return 'Arhiva de versiuni nu poate primi parolă.';
+        }
+        if (FolderPasswords::indisponibil($db)) {
+            return $this->bunnyLockedMessage(['no_db' => true]);
+        }
+        if ($punere) {
+            $client = $this->bunnyClient();
+            if ($client === null) {
+                return 'Integrarea bunny.net nu este configurată.';
+            }
+            try {
+                $esteFolder = $client->folderExists($target);
+            } catch (Throwable $e) {
+                return $e->getMessage();
+            }
+            if (!$esteFolder) {
+                return 'Parola se pune doar pe un folder care există.';
+            }
+        }
+        if ($general) {
+            return null;
+        }
+
+        $parinte = str_contains($target, '/') ? substr($target, 0, (int) strrpos($target, '/')) : '';
+        $deasupra = $parinte === '' ? null : FolderPasswords::lockedChain($db, FolderPasswords::whoSession(), $parinte);
+        if ($deasupra !== null) {
+            return 'Folderul „' . basename((string) $deasupra['folder_path'])
+                . '” de deasupra are parolă. Deschide-l întâi, apoi pune sau schimbă parola de aici.';
+        }
+
+        if (FolderPasswords::find($db, $target) === null) {
+            return null;
+        }
+        $verificare = FolderPasswords::checkPassword(
+            $db,
+            FolderPasswords::whoSession(),
+            $target,
+            $veche,
+            (int) (Auth::id() ?? 0)
+        );
+        if ($verificare['reason'] === 'ok') {
+            return null;
+        }
+
+        return $verificare['reason'] === 'wrong_password'
+            ? ($punere ? 'Parola actuală a folderului nu e bună.' : 'Parola folderului nu e bună.')
+            : $this->mesajParolaRefuzata($verificare);
+    }
+
+    /** @param array{reason: string, wait_minutes: int} $rezultat */
+    private function mesajParolaRefuzata(array $rezultat): string
+    {
+        return match ($rezultat['reason']) {
+            'throttled' => 'Prea multe încercări greșite. Mai așteaptă ' . $rezultat['wait_minutes'] . ' minute.',
+            'unavailable' => $this->bunnyLockedMessage(['no_db' => true]),
+            default => 'Parola nu e bună.',
+        };
+    }
+
+    private function mesajArhiva(): string
+    {
+        return 'Folderul „' . FileVersions::ARCHIVE_FOLDER . '” ține copiile de siguranță ale fișierelor și se '
+            . 'completează singur. Nu se urcă, nu se creează și nu se redenumește nimic în el de mână.';
+    }
+
+    private function mesajPreaMare(): string
+    {
+        return 'Fișierul e prea mare: limita este de ' . intdiv(self::MAX_UPLOAD_BYTES, 1024 * 1024) . ' MB pe fișier.';
+    }
+
+    /**
+     * Zonele detectate cu cheia de cont, ținute în sesiune câteva minute (cu parolele lor; nu ajung în pagină).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function zoneDetectate(): array
+    {
+        $salvate = $_SESSION['bunny_detected_zones'] ?? null;
+        if (!is_array($salvate) || !is_array($salvate['zone'] ?? null)
+            || (int) ($salvate['la'] ?? 0) < time() - self::ZONE_DETECTATE_MINUTE * 60) {
+            unset($_SESSION['bunny_detected_zones']);
+
+            return [];
+        }
+
+        return array_values(array_filter($salvate['zone'], 'is_array'));
+    }
+
     /** Ce i se spune omului despre un folder închis. */
     private function bunnyLockedMessage(array $guard): string
     {
         if (($guard['no_db'] ?? false) === true) {
-            return 'Nu pot verifica parolele folderelor fără baza de date, așa că nu deschid nimic.';
+            return 'Nu pot verifica acum parolele folderelor, așa că nu deschid nimic. Încearcă din nou peste puțin.';
         }
 
         return 'Folderul „' . basename((string) $guard['folder_path'])
@@ -1316,7 +1550,7 @@ final class FisiereCloudController
     /**
      * Normalizează `$_FILES['câmp']` (multiplu sau simplu) într-o listă de fișiere.
      *
-     * @return list<array{name: string, tmp_name: string, error: int}>
+     * @return list<array{name: string, tmp_name: string, error: int, size: int}>
      */
     private function normalizeUploadedFiles(mixed $field): array
     {
@@ -1333,6 +1567,7 @@ final class FisiereCloudController
                 'name' => (string) $names,
                 'tmp_name' => (string) ($field['tmp_name'] ?? ''),
                 'error' => (int) ($field['error'] ?? UPLOAD_ERR_NO_FILE),
+                'size' => (int) ($field['size'] ?? 0),
             ]];
         }
 
@@ -1347,6 +1582,7 @@ final class FisiereCloudController
                 'name' => $name,
                 'tmp_name' => (string) ($field['tmp_name'][$index] ?? ''),
                 'error' => $error,
+                'size' => (int) ($field['size'][$index] ?? 0),
             ];
         }
 
@@ -1359,6 +1595,13 @@ final class FisiereCloudController
      */
     private function formularValid(string $inapoi): bool
     {
+        // Cerere mai mare decât `post_max_size`: PHP aruncă tot corpul, deci lipsesc și jetonul, și fișierele. Altfel
+        // omul ar citi „sesiunea a expirat” pentru un fișier prea mare.
+        if ($_POST === [] && $_FILES === [] && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+            Flash::set('error', $this->mesajPreaMare());
+            header('Location: ' . $inapoi);
+            return false;
+        }
         if (AdminCsrf::valid()) {
             return true;
         }

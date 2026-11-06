@@ -16,16 +16,26 @@ declare(strict_types=1);
  *
  * A  adoptarea: cele cinci tabele (admin_app_tokens, file_locks, file_versions, bunny_protected_folders, bunny_folder_unlocks) au
  *    după migrări exact structura (SHOW CREATE TABLE) și rândurile de dinainte, setările bunny_* la fel; migrarea fisiere_cloud/0059
- *    e „detectata” (nimic schimbat);
+ *    e „detectata” (nimic schimbat); nucleu/0020 face contul „Cloud user” Administrator General, iar
+ *    scripts/restaureaza-roluri-cloud.php îl pune la loc din copia de dinainte (mysqldump | gzip, ca deploy/adopta.php,
+ *    și una cu INSERT-uri rând cu rând): simularea, --aplica, conturile schimbate de mână și cele șterse, cheile de după adoptare,
+ *    a doua rulare, fără hash-uri de parolă în ieșire;
  * B  contractul API-ului aplicației: aceeași listă de cereri (fiecare adresă /api/desktop/*, cu antetele aplicației, Bearer și
  *    X-App-Token, JSON și multipart, ca ApiClient.cs) pe codul Biovitality și pe codul comun, una după alta: același cod de stare,
  *    același Content-Type, același corp (JSON-ul octet cu octet, după ce datele și momentele sunt înlocuite cu un semn; la descărcare
  *    conținutul și antetele Content-Disposition, Content-Length, X-File-Checksum), iar la final aceleași fișiere în zonă și aceleași
- *    rânduri în tabele (fără momente). Fiecare cod de stare al controllerului apare cel puțin o dată (200, 401, 403, 409, 413 nu: 64 MB,
+ *    rânduri în tabele (fără momente; pauza după greșeli e acum pe administrator, nu pe cheie). Singura cerere cu alt răspuns e
+ *    declarată (ștergerea unui folder cu un subfolder cu parolă închis: 409 → 423). Fiecare cod de stare al controllerului apare cel puțin o dată (200, 401, 403, 409, 413 nu: 64 MB,
  *    422, 423, 502, 503);
  * C  doar pe codul comun: cu pluginul oprit, /api/desktop/* răspunde cu JSON-ul 404 al gărzii, cu `error` (aplicația îl arată);
  *    garda căilor (`..`); adminul web: paginile, formularele fără jetonul CSRF refuzate (nimic făcut), cu el aceleași efecte ca pe
- *    codul Biovitality, rolul „Cloud user” doar la fișiere (nu Administrator General), parola de folder cu limita de încercări.
+ *    codul Biovitality, rolul „Cloud user” doar la fișiere (nu Administrator General), parola de folder cu limita de încercări;
+ * D  revizia de securitate (doar pe codul comun): copiile din `_versiuni` păzite ca originalul și ascunse (aplicația și browserul),
+ *    căile cu alte litere mari, ștergerea unui folder cu un subfolder închis, nimic scris în `_versiuni`, frâna pe administrator
+ *    (două chei; zece cereri deodată), parolele care nu se pot citi (503 / „Nu pot verifica”), parola unui subfolder doar cu cel de
+ *    deasupra deschis și doar pe foldere, scoaterea parolei prin aceeași frână, Galeria cale cu cale, fără adrese CDN într-un
+ *    folder cu parolă, confirm() cu JSON, limita de 64 MB și cererea peste post_max_size, zonele detectate fără parolă în pagină,
+ *    plafonul de 10 chei și cheile celorlalți la Administratorul General.
  *
  * Își face și își șterge bazele cms_fc_vechi, cms_fc_nou și dosarul $CMS_DEV_DIR/fisiere-cloud. Baza de dezvoltare trebuie să fie
  * făcută de tools/dev/instaleaza.sh (o citește, n-o schimbă). Raportul: $CMS_DEV_DIR/test-fisiere-cloud-raport.txt; cod de ieșire 0
@@ -260,6 +270,28 @@ try {
     $verifica('bazele cms_fc_vechi și cms_fc_nou: structura codului Biovitality (bv.sql), rândurile demo, un „Cloud user”, 5 chei de aplicație (una retrasă), '
         . 'un folder cu parolă, o deblocare, un lacăt al altui admin, o versiune, setările bunny_*', true);
 
+    // Pentru scripts/restaureaza-roluri-cloud.php (H3): încă trei conturi cu „Cloud user” pe cms_fc_nou (unul și cu
+    // Blog; unul schimbat apoi de mână; unul șters apoi), apoi copia bazei „de dinainte de adoptare”, făcută ca deploy/adopta.php
+    // (Baza::copie: mysqldump cu INSERT-uri lungi, gzip) și una cu INSERT-uri rând cu rând, cu lista coloanelor.
+    $dbNou = $conectare($baze['nou']);
+    $extra = $dbNou->prepare('INSERT INTO admins (email, password_hash, role, roles_json) VALUES (?, ?, ?, ?)');
+    $extra->execute(['cloud-blog@exemplu.ro', $hashParola, 'administrator_blog', '["administrator_blog","utilizator_cloud"]']);
+    $extra->execute(["cloud-mana@exemplu.ro", $hashParola, 'utilizator_cloud', '["utilizator_cloud"]']);
+    $extra->execute(['cloud-plecat@exemplu.ro', $hashParola, 'utilizator_cloud', null]);
+    $copieBaza = $dosarTest . '/baza-inainte.sql.gz';
+    $copieSql = $dosarTest . '/baza-inainte-randuri.sql';
+    $dump = static function (string $optiuni, string $tinta) use ($sock, $baze): int {
+        exec(escapeshellarg((string) (trim((string) shell_exec('command -v mariadb-dump')) ?: 'mysqldump'))
+            . ' --socket=' . escapeshellarg($sock) . ' -u' . escapeshellarg((string) (getenv('CMS_DEV_DB_USER') ?: 'root'))
+            . ' --single-transaction --quick --hex-blob --default-character-set=utf8mb4 --no-tablespaces --triggers --add-drop-table --skip-dump-date '
+            . $optiuni . ' ' . $baze['nou'] . ' 2>/dev/null' . $tinta, $iesireDump, $codDump);
+        return (int) $codDump;
+    };
+    $codDump = $dump('', ' | gzip -c > ' . escapeshellarg($copieBaza));
+    $codDump2 = $dump('--complete-insert --skip-extended-insert', ' > ' . escapeshellarg($copieSql));
+    $verifica('copia bazei de dinainte (mysqldump | gzip, ca la adoptare) și una cu INSERT-uri rând cu rând', $codDump === 0 && $codDump2 === 0
+        && filesize($copieBaza) > 1000 && str_contains((string) file_get_contents($copieSql), 'INSERT INTO `admins` (`id`'));
+
     // ── A: adoptarea (migrările codului comun cu --site=biovitality, pe cms_fc_nou) ──
     $scrie('');
     $scrie('A. Adoptarea: migrările nu ating tabelele și setările pluginului');
@@ -278,9 +310,58 @@ try {
     // Bioscem, deci un cont „Cloud user” devine la adoptare Administrator General (rândul se rescrie: role și roles_json). Pe
     // biovitality.ro s-a întâmplat la adoptare (5 nov): rolul se pune la loc de mână, din Administratori (docs/PLUGINURI.md).
     $rolCloud = $dbNou->query("SELECT role, roles_json FROM admins WHERE email = 'cloud@exemplu.ro'")->fetch();
-    $verifica('A (de știut) nucleu/0020 a făcut contul „Cloud user” Administrator General: ' . json_encode($rolCloud) . '; testul îi pune rolul la loc, ca '
-        . 'proprietarul din Administratori', is_array($rolCloud) && $rolCloud['role'] === 'administrator_general');
-    $dbNou->exec("UPDATE admins SET role = 'utilizator_cloud', roles_json = '[\"utilizator_cloud\"]' WHERE email = 'cloud@exemplu.ro'");
+    $verifica('A (de știut) nucleu/0020 a făcut contul „Cloud user” Administrator General: ' . json_encode($rolCloud) . '; îl pune la loc '
+        . 'scripts/restaureaza-roluri-cloud.php', is_array($rolCloud) && $rolCloud['role'] === 'administrator_general'
+        && $rolCloud['roles_json'] === '["administrator_general"]');
+
+    // ── A (H3): rolurile „Cloud user” puse la loc din copia de dinainte ──
+    $roluriAcum = static fn (): array => $dbNou->query("SELECT email, role, roles_json FROM admins WHERE email LIKE 'cloud%' ORDER BY email")
+        ->fetchAll(PDO::FETCH_UNIQUE);
+    $dbNou->exec("UPDATE admins SET role = 'administrator_magazin', roles_json = '[\"administrator_magazin\"]' WHERE email = 'cloud-mana@exemplu.ro'");
+    $dbNou->exec("DELETE FROM admins WHERE email = 'cloud-plecat@exemplu.ro'");
+    $idCloudBlog = (int) $dbNou->query("SELECT id FROM admins WHERE email = 'cloud-blog@exemplu.ro'")->fetchColumn();
+    $cheieNoua = $dbNou->prepare('INSERT INTO admin_app_tokens (admin_id, name, token_hash, created_at) VALUES (?, ?, ?, ?)');
+    $cheieNoua->execute([$idCloudBlog, 'Laptop dupa adoptare', hash('sha256', 'cheie-dupa'), '2026-11-06 08:00:00']);
+    $idCheieDupa = (int) $dbNou->lastInsertId();
+    $cheieNoua->execute([$idCloudBlog, 'Laptop dinainte', hash('sha256', 'cheie-inainte'), '2026-11-01 08:00:00']);
+    $idCheieInainte = (int) $dbNou->lastInsertId();
+    $inainteScript = $roluriAcum();
+    $script = 'scripts/restaureaza-roluri-cloud.php';
+    $sim = $php('nou', $script, ['--copie=' . $copieBaza]);
+    $asteptateSim = ['cloud@exemplu.ro: acum administrator_general → utilizator_cloud', 'cloud-blog@exemplu.ro: acum administrator_blog → '
+        . 'administrator_blog, utilizator_cloud', 'cloud-mana@exemplu.ro: acum administrator_magazin (înainte de adoptare: utilizator_cloud)',
+        'Nu mai există (1): cloud-plecat@exemplu.ro', '„Laptop dupa adoptare” (#' . $idCheieDupa . ')', 'Simulare: nimic scris.'];
+    $lipsesc = array_values(array_filter($asteptateSim, static fn (string $l): bool => !str_contains($sim['iesire'], $l)));
+    $verifica('A H3 simularea: cine se pune la loc („acum … → …”), cine a fost schimbat de mână și cine nu mai e, cheia de după adoptare; '
+        . 'nimic scris', $sim['cod'] === 0 && $lipsesc === [] && $roluriAcum() === $inainteScript && !str_contains($sim['iesire'], 'Laptop dinainte'),
+        $sim['tot'] . ' | lipsesc: ' . implode(' / ', $lipsesc));
+    $hashuri = $dbNou->query('SELECT password_hash FROM admins')->fetchAll(PDO::FETCH_COLUMN);
+    $verifica('A H3 scriptul nu afișează hash-uri de parolă', !str_contains($sim['tot'], '$2y$') && array_filter($hashuri, static fn ($h): bool
+        => str_contains($sim['tot'], (string) $h)) === []);
+    $sim2 = $php('nou', $script, ['--copie=' . $copieSql]);
+    $faraCopie = static fn (string $t): string => (string) preg_replace('/^copie .*$/m', '', $t);
+    $verifica('A H3 aceeași simulare din copia cu INSERT-uri rând cu rând (.sql, cu lista coloanelor)', $sim2['cod'] === 0
+        && $faraCopie($sim2['iesire']) === $faraCopie($sim['iesire']), $sim2['tot']);
+    $gresit = $php('nou', $script, ['--copie=' . $dosarTest . '/nu-exista.sql.gz']);
+    $verifica('A H3 fără copie: cod 2', $gresit['cod'] === 2, $gresit['tot']);
+    $apl = $php('nou', $script, ['--copie=' . $copieBaza, '--aplica']);
+    $dupaScript = $roluriAcum();
+    $chei = $dbNou->query('SELECT id, revoked_at IS NOT NULL AS retrasa FROM admin_app_tokens WHERE id IN (' . $idCheieDupa . ', ' . $idCheieInainte . ')')
+        ->fetchAll(PDO::FETCH_KEY_PAIR);
+    $verifica('A H3 --aplica: „Cloud user” și „Blog + Cloud user” la loc (role și roles_json de dinainte), cel schimbat de mână neatins, '
+        . 'cheia de după adoptare retrasă, cea dinainte nu, un rând în Jurnal', $apl['cod'] === 0
+        && ($dupaScript['cloud@exemplu.ro'] ?? null) === ['role' => 'utilizator_cloud', 'roles_json' => '["utilizator_cloud"]']
+        && ($dupaScript['cloud-blog@exemplu.ro'] ?? null) === ['role' => 'administrator_blog', 'roles_json' => '["administrator_blog","utilizator_cloud"]']
+        && ($dupaScript['cloud-mana@exemplu.ro'] ?? null) === ['role' => 'administrator_magazin', 'roles_json' => '["administrator_magazin"]']
+        && (int) ($chei[$idCheieDupa] ?? 0) === 1 && (int) ($chei[$idCheieInainte] ?? 1) === 0
+        && (int) $dbNou->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'roluri_cloud_restaurate'")->fetchColumn() === 1,
+        $apl['tot'] . ' ' . json_encode([$dupaScript, $chei]));
+    $iar = $php('nou', $script, ['--copie=' . $copieBaza, '--aplica']);
+    $verifica('A H3 a doua rulare: „Deja la loc”, nimic de scris', $iar['cod'] === 0 && str_contains($iar['iesire'], 'Deja la loc (2)')
+        && str_contains($iar['iesire'], 'Nimic de scris.') && $roluriAcum() === $dupaScript, $iar['tot']);
+    // Rândurile ajutătoare pleacă: B compară cheile de aplicație cu codul Biovitality (care nu le are).
+    $dbNou->exec('DELETE FROM admin_app_tokens WHERE id IN (' . $idCheieDupa . ', ' . $idCheieInainte . ')');
+    $dbNou->exec("DELETE FROM admins WHERE email IN ('cloud-blog@exemplu.ro', 'cloud-mana@exemplu.ro')");
     $rand0059 = $dbNou->query("SELECT rezultat, operatii FROM _platforma_migrari WHERE id = 'fisiere_cloud/0059_fisiere_cloud'")->fetch();
     $verifica('A migrarea fisiere_cloud/0059 e „detectata”, 0 operații (totul exista)', is_array($rand0059) && $rand0059['rezultat'] === 'detectata'
         && (int) $rand0059['operatii'] === 0, json_encode($rand0059) ?: 'lipsă');
@@ -385,8 +466,10 @@ try {
     $coduriVazute = [];
     $pasi = 0;
     $diferite = [];
-    $pas = static function (string $eticheta, string $metoda, string $cale, ?string $token, array $optiuni = [], ?int $codAsteptat = null)
-        use ($cere, $normalizeaza, $verifica, &$coduriVazute, &$pasi, &$diferite): array {
+    // `$declarat` = [cod Biovitality, cod comun, motivul]: o cerere pe care revizia de securitate o refuză acum pe drept (singurele
+    // diferențe permise față de codul Biovitality; docs/PLUGINURI.md).
+    $pas = static function (string $eticheta, string $metoda, string $cale, ?string $token, array $optiuni = [], ?int $codAsteptat = null,
+        ?array $declarat = null) use ($cere, $normalizeaza, $verifica, &$coduriVazute, &$pasi, &$diferite): array {
         $vechi = $cere('vechi', $metoda, $cale, $token, $optiuni);
         $nou = $cere('nou', $metoda, $cale, $token, $optiuni);
         $pasi++;
@@ -406,6 +489,10 @@ try {
         $pn = $parti($nou);
         $json = json_decode($nou['corp'], true);
         $ok = $pv === $pn && ($codAsteptat === null || $nou['cod'] === $codAsteptat) && ($descarcare || is_array($json));
+        if ($declarat !== null) {
+            $ok = $vechi['cod'] === $declarat[0] && $nou['cod'] === $declarat[1] && is_array($json);
+            $eticheta .= ' [diferență declarată, ' . $declarat[2] . ': ' . $declarat[0] . ' → ' . $declarat[1] . ']';
+        }
         if (!$ok) {
             $diferite[] = $eticheta;
         }
@@ -546,7 +633,8 @@ try {
     $pas('ștergerea fără cale', 'POST', '/api/desktop/delete', $tg, ['json' => ['type' => 'file']], 422);
     $pas('ștergerea arhivei de versiuni', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => '_versiuni/documente', 'type' => 'folder']], 409);
     $pas('ștergerea unui fișier preluat de altcineva', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => 'documente/Oferta-noua.xlsx', 'type' => 'file']], 409);
-    $pas('ștergerea unui folder în care lucrează altcineva', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => 'documente', 'type' => 'folder']], 409);
+    $pas('ștergerea unui folder în care lucrează altcineva (și cu „acte”, cu parolă, închis)', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => 'documente',
+        'type' => 'folder']], null, [409, 423, 'M3: subfolderul cu parolă închis se verifică întâi']);
     $pas('ștergerea unui fișier', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => 'documente/raport-1.xlsx', 'type' => 'file']], 200);
     $pas('ștergerea unui fișier care nu mai e', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => 'documente/raport-1.xlsx', 'type' => 'file']], 502);
     $pas('ștergerea unui folder', 'POST', '/api/desktop/delete', $tg, ['json' => ['path' => 'documente/mutat', 'type' => 'folder']], 200);
@@ -598,8 +686,11 @@ try {
             'file_versions' => array_map(static fn (array $r): array => ['version_path' => $normalizeaza((string) $r['version_path'])] + $r,
                 $db->query('SELECT file_path, path_hash, version_path, size_bytes, admin_id, admin_email FROM file_versions ORDER BY id')->fetchAll()),
             'bunny_protected_folders' => $db->query('SELECT folder_path, path_hash, hint, created_by, created_by_email FROM bunny_protected_folders ORDER BY id')->fetchAll(),
+            // Deblocările (pe sesiune sau cheie) la fel; pauza după prea multe greșeli tot pe același folder, dar ținută acum pe
+            // administrator (`admin:<id>`), nu pe cheie (`aplicatie:<id>`): diferența declarată a reviziei de securitate (M1).
             'bunny_folder_unlocks' => $db->query('SELECT who, folder_path, path_hash, greseli, unlocked_until IS NULL AS inchis, blocked_until IS NULL AS neblocat
-                FROM bunny_folder_unlocks ORDER BY who, path_hash')->fetchAll(),
+                FROM bunny_folder_unlocks WHERE unlocked_until IS NOT NULL ORDER BY who, path_hash')->fetchAll(),
+            'pauze' => $db->query('SELECT folder_path, path_hash, greseli FROM bunny_folder_unlocks WHERE blocked_until IS NOT NULL ORDER BY path_hash')->fetchAll(),
             'admin_app_tokens' => $db->query('SELECT admin_id, name, token_hash, revoked_at, last_used_at IS NULL AS nefolosita, last_used_ip FROM admin_app_tokens
                 ORDER BY id')->fetchAll(),
             'jurnal' => $db->query("SELECT action, context_json FROM admin_activity_log WHERE action LIKE 'bunny\\_%' ORDER BY id")->fetchAll(),
@@ -635,7 +726,9 @@ try {
             curl_setopt_array($h, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_PROXY => '', CURLOPT_NOPROXY => '*', CURLOPT_COOKIEJAR => $borcan,
                 CURLOPT_COOKIEFILE => $borcan, CURLOPT_CUSTOMREQUEST => $metoda, CURLOPT_HEADER => true]);
             if ($metoda === 'POST') {
-                curl_setopt($h, CURLOPT_POSTFIELDS, http_build_query($campuri));
+                // Cu un fișier (CURLFile): multipart, ca formularul de urcare; altfel ca un formular obișnuit.
+                $cuFisier = array_filter($campuri, static fn ($v): bool => $v instanceof CURLFile) !== [];
+                curl_setopt($h, CURLOPT_POSTFIELDS, $cuFisier ? $campuri : http_build_query($campuri));
             }
             $tot = (string) curl_exec($h);
             $cod = (int) curl_getinfo($h, CURLINFO_RESPONSE_CODE);
@@ -711,6 +804,245 @@ try {
     $randuri = $dbNou->query("SELECT password_hash FROM bunny_protected_folders")->fetchAll(PDO::FETCH_COLUMN);
     $verifica('C parolele folderelor stau doar ca password_hash (niciun text clar)', $randuri !== [] && array_filter($randuri, static fn ($h): bool
         => password_get_info((string) $h)['algo'] === null) === [] && !in_array('parola-pozelor', $randuri, true));
+
+    // ── D: revizia de securitate (doar pe codul comun; docs/PLUGINURI.md, „Fișiere în cloud” → „Ce s-a strâns după revizie”) ──
+    $scrie('');
+    $scrie('D. Revizia de securitate: arhiva, literele mari, folderele din folder, frâna pe administrator, cheile, Galeria, CDN-ul');
+    $zonaNou = $dosarTest . '/zona-nou/date';
+    $versiuneSecreta = '_versiuni/secret/plan.png/20260101-000000-plan.png';
+    $numeCiudat = "x'-alert(1)-'";
+    foreach (['secret/plan.png' => "\x89PNG-secret\n", 'secret/sub/x.txt' => "x\n", $versiuneSecreta => "\x89PNG-secret-v0\n", 'public/a.png' => "\x89PNG-a\n",
+        'public/' . $numeCiudat . '/.bunny-folder' => "bunny\n", 'arhiva-proiecte/intern/doc.txt' => "doc\n", 'proiecte/p.txt' => "p\n",
+        'proiecte/public2/.bunny-folder' => "bunny\n"] as $cale => $continut) {
+        @mkdir(dirname($zonaNou . '/' . $cale), 0770, true);
+        file_put_contents($zonaNou . '/' . $cale, $continut);
+    }
+    $protejeaza = $dbNou->prepare('INSERT INTO bunny_protected_folders (folder_path, path_hash, password_hash, hint) VALUES (?, ?, ?, NULL)');
+    foreach (['secret' => 'parola-secret', 'arhiva-proiecte/intern' => 'parola-intern', 'proiecte' => 'parola-proiecte'] as $folder => $parolaF) {
+        $protejeaza->execute([$folder, hash('sha256', 'folder:' . $folder), password_hash($parolaF, PASSWORD_DEFAULT)]);
+    }
+    $idAdmin = static fn (string $email): int => (int) $dbNou->query('SELECT id FROM admins WHERE email = ' . $dbNou->quote($email))->fetchColumn();
+    $nou = static fn (string $metoda, string $cale, ?string $token, array $optiuni = []): array => $cere('nou', $metoda, $cale, $token, $optiuni);
+    $j = static fn (array $r): array => is_array($x = json_decode($r['corp'], true)) ? $x : [];
+
+    // H1: copiile din _versiuni sunt păzite ca originalul și nu apar cât folderul e închis.
+    $r = $nou('GET', '/api/desktop/files?path=_versiuni', $tm);
+    $numeFoldere = array_column($j($r)['folders'] ?? [], 'name');
+    $verifica('D H1 aplicația: în _versiuni nu apare „secret” (folder cu parolă închis), apare „documente”', $r['cod'] === 200
+        && !in_array('secret', $numeFoldere, true) && in_array('documente', $numeFoldere, true), $r['corp']);
+    $r = $nou('GET', '/api/desktop/files?path=_versiuni/secret', $tm);
+    $verifica('D H1 aplicația: _versiuni/secret → 423, folderul „secret”', $r['cod'] === 423 && ($j($r)['folder'] ?? '') === 'secret', $r['corp']);
+    $r = $nou('GET', '/api/desktop/download?path=' . rawurlencode($versiuneSecreta), $tm);
+    $verifica('D H1 aplicația: descărcarea unei copii din _versiuni/secret → 423', $r['cod'] === 423, $r['cod'] . ' ' . mb_substr($r['corp'], 0, 200));
+    // Literele mari nu ocolesc parola.
+    $r = $nou('GET', '/api/desktop/download?path=SECRET/plan.png', $tm);
+    $r2 = $nou('GET', '/api/desktop/files?path=Secret/sub', $tm);
+    $verifica('D aplicația: SECRET/plan.png și Secret/sub tot închise (423)', $r['cod'] === 423 && $r2['cod'] === 423, $r['corp'] . ' ' . $r2['corp']);
+    // M3: un folder cu un subfolder cu parolă închis nu se șterge.
+    $r = $nou('POST', '/api/desktop/delete', $tm, ['json' => ['path' => 'arhiva-proiecte', 'type' => 'folder']]);
+    $verifica('D M3 aplicația: ștergerea unui folder cu un subfolder cu parolă închis → 423 (subfolderul), nimic șters', $r['cod'] === 423
+        && ($j($r)['folder'] ?? '') === 'arhiva-proiecte/intern' && is_file($zonaNou . '/arhiva-proiecte/intern/doc.txt'), $r['corp']);
+    // L4: nimic scris de mână în _versiuni.
+    $arhiva = [
+        'fișier nou în _versiuni' => ['POST', '/api/desktop/upload-new', ['multipart' => ['path' => '_versiuni', 'file' => ['x.txt', "x\n"]]]],
+        'folder nou în _versiuni' => ['POST', '/api/desktop/folders', ['json' => ['path' => '_versiuni', 'name' => 'nou']]],
+        'folder nou „_Versiuni” în rădăcină' => ['POST', '/api/desktop/folders', ['json' => ['path' => '', 'name' => '_Versiuni']]],
+        'folderul public redenumit „_versiuni”' => ['POST', '/api/desktop/rename', ['json' => ['path' => 'public', 'new_name' => '_versiuni', 'type' => 'folder']]],
+        'redenumirea unei copii din _versiuni' => ['POST', '/api/desktop/rename', ['json' => ['path' => '_versiuni/documente/preturi.xlsx/x.xlsx',
+            'new_name' => 'y.xlsx', 'type' => 'file']]],
+    ];
+    foreach ($arhiva as $eticheta => [$metoda, $cale, $optiuni]) {
+        $r = $nou($metoda, $cale, $tg, $optiuni);
+        $verifica('D L4 aplicația: ' . $eticheta . ' → 409 „archive”', $r['cod'] === 409 && ($j($r)['reason'] ?? '') === 'archive', $r['cod'] . ' ' . $r['corp']);
+    }
+    $copiaPreluata = '_versiuni/documente/preturi.xlsx/de-salvat.xlsx';
+    $nou('POST', '/api/desktop/checkout', $tg, ['json' => ['path' => $copiaPreluata, 'note' => '']]);
+    $r = $nou('POST', '/api/desktop/upload', $tg, ['multipart' => ['path' => $copiaPreluata, 'release' => '1', 'file' => ['x.xlsx', "x\n"]]]);
+    $nou('POST', '/api/desktop/release', $tg, ['json' => ['path' => $copiaPreluata, 'force' => '0']]);
+    $verifica('D L4 aplicația: salvarea peste o copie din _versiuni (preluată) → 409 „archive”, nimic scris', $r['cod'] === 409
+        && ($j($r)['reason'] ?? '') === 'archive' && !is_file($zonaNou . '/' . $copiaPreluata) && !is_dir($zonaNou . '/_versiuni/nou')
+        && !is_dir($zonaNou . '/_Versiuni'), $r['corp']);
+
+    // M1: greșelile se numără pe administrator și folder, nu pe cheie.
+    $tm2 = 'bvd_' . substr(hash('sha256', 'test-fisiere-cloud:tok-magazin-2'), 0, 48);
+    $dbNou->prepare('INSERT INTO admin_app_tokens (admin_id, name, token_hash) VALUES (?, ?, ?)')->execute([$idAdmin('magazin@exemplu.ro'), 'Al doilea',
+        hash('sha256', $tm2)]);
+    for ($i = 1; $i <= 5; $i++) {
+        $nou('POST', '/api/desktop/folders/unlock', $tm, ['json' => ['path' => 'secret', 'password' => 'gresit' . $i]]);
+    }
+    $r = $nou('POST', '/api/desktop/folders/unlock', $tm2, ['json' => ['path' => 'secret', 'password' => 'parola-secret']]);
+    $verifica('D M1 după 5 greșeli cu o cheie, a doua cheie a aceluiași administrator e oprită și cu parola bună (throttled)', $r['cod'] === 403
+        && ($j($r)['reason'] ?? '') === 'throttled', $r['corp']);
+    $r = $nou('GET', '/api/desktop/files?path=secret', $tm2);
+    $verifica('D M1 423 arată pauza administratorului (wait_minutes > 0)', $r['cod'] === 423 && (int) ($j($r)['wait_minutes'] ?? 0) > 0, $r['corp']);
+    // Zece încercări trimise deodată (serverul are 4 lucrători): cel mult 5 verificate.
+    $multi = curl_multi_init();
+    $manere = [];
+    for ($i = 0; $i < 10; $i++) {
+        $h = curl_init('http://127.0.0.1:' . $porturi['nou'] . '/api/desktop/folders/unlock');
+        curl_setopt_array($h, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_PROXY => '', CURLOPT_NOPROXY => '*', CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode(['path' => 'proiecte', 'password' => 'gresit-' . $i]),
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tb, 'Content-Type: application/json']]);
+        curl_multi_add_handle($multi, $h);
+        $manere[] = $h;
+    }
+    do {
+        $stare = curl_multi_exec($multi, $active);
+        if ($active) {
+            curl_multi_select($multi, 1.0);
+        }
+    } while ($active && $stare === CURLM_OK);
+    $motive = [];
+    foreach ($manere as $h) {
+        $motive[] = (string) (json_decode((string) curl_multi_getcontent($h), true)['reason'] ?? '?');
+        curl_multi_remove_handle($multi, $h);
+        curl_close($h);
+    }
+    curl_multi_close($multi);
+    $numarate = array_count_values($motive);
+    $verifica('D M1 10 parole greșite trimise deodată: cel mult 5 verificate (wrong_password), restul „throttled”: ' . json_encode($numarate),
+        ($numarate['wrong_password'] ?? 0) <= 5 && ($numarate['wrong_password'] ?? 0) + ($numarate['throttled'] ?? 0) === 10);
+
+    // M5: lista folderelor cu parolă nu se poate citi → totul închis.
+    $dbNou->exec('RENAME TABLE bunny_protected_folders TO bunny_protected_folders_ascuns');
+    $r = $nou('GET', '/api/desktop/files?path=public', $tg);
+    $r2 = $nou('POST', '/api/desktop/folders/unlock', $tg, ['json' => ['path' => 'secret', 'password' => 'parola-secret']]);
+    $pg = $adm('GET', '/admin/bunny?path=public');
+    $dbNou->exec('RENAME TABLE bunny_protected_folders_ascuns TO bunny_protected_folders');
+    $verifica('D M5 parolele nu se pot citi: aplicația primește 503 (lista și deblocarea), adminul „Nu pot verifica acum parolele”, fără fișiere',
+        $r['cod'] === 503 && str_contains($r['corp'], 'Nu pot verifica') && $r2['cod'] === 503 && $pg['cod'] === 200
+        && str_contains($pg['corp'], 'Nu pot verifica acum parolele') && !str_contains($pg['corp'], 'a.png'), $r['cod'] . ' ' . $r['corp'] . ' / ' . $r2['corp']);
+
+    // Adminul web: sesiuni noi (magazin, blog), jetonul fiecăreia.
+    $jetonDin = static function (callable $c, string $cale = '/admin/bunny'): string {
+        preg_match('/name="_csrf" value="([0-9a-f]{64})"/', $c('GET', $cale)['corp'], $m);
+        return (string) ($m[1] ?? '');
+    };
+    [$mag] = $sesiune('magazin@exemplu.ro');
+    $jMag = $jetonDin($mag);
+    [$blog] = $sesiune('blog@exemplu.ro');
+    $jBlog = $jetonDin($blog);
+    $jAdm = $jetonDin($adm);
+    $p = $mag('GET', '/admin/bunny?path=secret');
+    $verifica('D M1 adminul web: pauza magazinului (pusă din aplicație) se vede și în browser', str_contains($p['corp'], 'Prea multe încercări greșite'));
+
+    // H1 în browser.
+    $p = $mag('GET', '/admin/bunny?path=_versiuni');
+    $p2 = $mag('GET', '/admin/bunny?path=_versiuni/secret');
+    $x = $mag('GET', '/admin/bunny/download?path=' . rawurlencode($versiuneSecreta));
+    $verifica('D H1 adminul web: _versiuni fără „secret”, _versiuni/secret arată poarta, descărcarea copiei refuzată (302, fără conținut)',
+        $p['cod'] === 200 && str_contains($p['corp'], 'bunny-folder-name">documente<') && !str_contains($p['corp'], 'bunny-folder-name">secret<')
+        && str_contains($p2['corp'], 'are parolă') && !str_contains($p2['corp'], 'plan.png')
+        && $x['cod'] === 302 && !str_contains($x['corp'], 'PNG-secret'));
+    $p = $adm('GET', '/admin/bunny?path=_versiuni/documente');
+    $verifica('D L4 adminul web: în _versiuni fără „Folder nou”, „Urcă fișiere”, „Preia”, „Redenumește”', $p['cod'] === 200
+        && !str_contains($p['corp'], 'id="bunny-open-upload-modal"') && !str_contains($p['corp'], 'data-action="bunny-checkout"' . "\n")
+        && !str_contains($p['corp'], 'data-action="bunny-rename"' . "\n"));
+
+    // H2: parola unui subfolder doar cu folderele de deasupra deschise; doar pe foldere; parola actuală prin aceeași frână.
+    $protectie = static fn (string $tinta): int => (int) $dbNou->query('SELECT COUNT(*) FROM bunny_protected_folders WHERE folder_path = '
+        . $dbNou->quote($tinta))->fetchColumn();
+    $mag('POST', '/admin/bunny/folders/protect', ['path' => 'proiecte', 'target' => 'proiecte/public2', 'password' => 'parola-mea-1',
+        'password_confirm' => 'parola-mea-1', '_csrf' => $jMag]);
+    $p = $mag('GET', '/admin/bunny');
+    $verifica('D H2 cu „proiecte” închis, magazinul nu poate pune parolă pe proiecte/public2', $protectie('proiecte/public2') === 0
+        && str_contains($p['corp'], 'de deasupra are parolă'));
+    $adm('POST', '/admin/bunny/folders/protect', ['path' => 'public', 'target' => 'public/a.png', 'password' => 'parola-mea-1',
+        'password_confirm' => 'parola-mea-1', '_csrf' => $jAdm]);
+    $p = $adm('GET', '/admin/bunny');
+    $verifica('D H2 parola nu se pune pe un fișier (nici de Administratorul General)', $protectie('public/a.png') === 0
+        && str_contains($p['corp'], 'doar pe un folder'));
+    $mag('POST', '/admin/bunny/folders/unlock', ['target' => 'proiecte', 'path' => 'proiecte', 'password' => 'parola-proiecte', '_csrf' => $jMag]);
+    $mag('POST', '/admin/bunny/folders/protect', ['path' => 'proiecte', 'target' => 'proiecte/public2', 'password' => 'parola-mea-1',
+        'password_confirm' => 'parola-mea-1', '_csrf' => $jMag]);
+    $verifica('D H2 după deblocarea lui „proiecte”, parola pe proiecte/public2 se pune', $protectie('proiecte/public2') === 1);
+    for ($i = 1; $i <= 5; $i++) {
+        $mag('POST', '/admin/bunny/folders/unprotect', ['path' => 'proiecte', 'target' => 'proiecte/public2', 'current_password' => 'gresit' . $i,
+            '_csrf' => $jMag]);
+    }
+    $mag('POST', '/admin/bunny/folders/unprotect', ['path' => 'proiecte', 'target' => 'proiecte/public2', 'current_password' => 'parola-mea-1',
+        '_csrf' => $jMag]);
+    $p = $mag('GET', '/admin/bunny?path=proiecte');
+    $verifica('D H2 scoaterea parolei: după 5 parole actuale greșite, nici cea bună nu mai trece (aceeași frână ca deblocarea)',
+        $protectie('proiecte/public2') === 1 && str_contains($p['corp'], 'Prea multe încercări greșite'));
+
+    // M2 + L5: Galeria și adresele CDN.
+    $adm('POST', '/admin/bunny/folders/unlock', ['target' => 'secret', 'path' => 'secret', 'password' => 'parola-secret', '_csrf' => $jAdm]);
+    $p = $adm('GET', '/admin/bunny?path=secret');
+    $p2 = $adm('GET', '/admin/bunny?path=public');
+    $verifica('D L5 în „secret” (deschis) fără adrese CDN și miniaturi de pe CDN; în „public” cu ele', $p['cod'] === 200 && str_contains($p['corp'], 'plan.png')
+        && !str_contains($p['corp'], 'cdn.exemplu.invalid') && str_contains($p2['corp'], 'https://cdn.exemplu.invalid/public/a.png'));
+    $p = $adm('GET', '/admin/bunny?path=_versiuni');
+    $verifica('D H1 cu „secret” deschis, Administratorul General vede _versiuni/secret', str_contains($p['corp'], 'bunny-folder-name">secret<'));
+    $x = $adm('POST', '/admin/bunny/import', ['path' => 'public', 'folder_id' => '', '_csrf' => $jAdm, 'paths' => ['secret/plan.png', $versiuneSecreta,
+        'SECRET/plan.png', 'public/a.png']]);
+    $galerie = $dbNou->query("SELECT image_url FROM gallery_images WHERE image_url LIKE 'https://cdn.exemplu.invalid/%' ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+    $p = $adm('GET', '/admin/bunny?path=public');
+    $verifica('D M2 trimiterea în Galerie: fiecare cale verificată; ce e în „secret” (deschis sau nu, și copia din _versiuni, și SECRET/…) rămâne, '
+        . 'public/a.png pleacă', $galerie === ['https://cdn.exemplu.invalid/public/a.png'] && str_contains($p['corp'], 'într-un folder cu parolă'),
+        json_encode($galerie));
+
+    // M4: confirm() fără ieșire din șirul JS (numele folderului, emailul din lacăt).
+    $dbNou->prepare("INSERT INTO file_locks (storage, file_path, path_hash, admin_id, admin_email, note, origin, locked_at, expires_at)
+        VALUES ('bunny', 'public/a.png', ?, ?, ?, '', 'web', NOW(), DATE_ADD(NOW(), INTERVAL 1 DAY))")
+        ->execute([hash('sha256', 'bunny:public/a.png'), $idAdmin('blog@exemplu.ro'), "o'brien\"<b>@exemplu.ro"]);
+    $p = $adm('GET', '/admin/bunny?path=public');
+    $verifica('D M4 confirm(): numele folderului și emailul din lacăt ca JSON (\\u0027, \\u0022, \\u003C), nu ca text care închide șirul',
+        str_contains($p['corp'], 'confirm(&quot;Ștergi folderul „x\\u0027-alert(1)-\\u0027”') && str_contains($p['corp'], 'o\\u0027brien\\u0022\\u003Cb\\u003E@')
+        && !str_contains($p['corp'], "confirm('Ștergi folderul „x") && !str_contains($p['corp'], "preluat de o&#039;brien"));
+
+    // L4 în browser.
+    $adm('POST', '/admin/bunny/folders', ['path' => '_versiuni', 'name' => 'de-mana', '_csrf' => $jAdm]);
+    $adm('POST', '/admin/bunny/rename', ['path' => '', 'target' => 'public', 'new_name' => '_versiuni', 'type' => 'folder', '_csrf' => $jAdm]);
+    $p = $adm('GET', '/admin/bunny');
+    $verifica('D L4 adminul web: folder nou în _versiuni și redenumirea spre „_versiuni” refuzate', !is_dir($zonaNou . '/_versiuni/de-mana')
+        && is_dir($zonaNou . '/public') && str_contains($p['corp'], 'se completează singur'));
+
+    // L3 + L6: limita de 64 MB și cererea peste post_max_size (90M aici).
+    $mare = $dosarTest . '/mare.bin';
+    $foarteMare = $dosarTest . '/foarte-mare.bin';
+    foreach ([$mare => 65, $foarteMare => 95] as $fisier => $mb) {
+        $f = fopen($fisier, 'wb');
+        ftruncate($f, $mb * 1024 * 1024);
+        fclose($f);
+    }
+    $x = $adm('POST', '/admin/bunny/upload', ['path' => 'public', '_csrf' => $jAdm, 'files[0]' => new CURLFile($mare, 'application/octet-stream', 'mare.bin')]);
+    $p = $adm('GET', '/admin/bunny?path=public');
+    $verifica('D L3 un fișier de 65 MB din browser: refuzat, „Fișierul e prea mare” (64 MB), nimic urcat', $x['cod'] === 302
+        && str_contains($p['corp'], 'Fișierul e prea mare') && !is_file($zonaNou . '/public/mare.bin'));
+    $x = $adm('POST', '/admin/bunny/upload', ['path' => 'public', '_csrf' => $jAdm, 'files[0]' => new CURLFile($foarteMare, 'application/octet-stream',
+        'foarte-mare.bin')]);
+    $p = $adm('GET', '/admin/bunny');
+    $verifica('D L6 o cerere peste post_max_size: „Fișierul e prea mare”, nu „Sesiunea formularului a expirat”', $x['cod'] === 302
+        && str_contains($p['corp'], 'Fișierul e prea mare') && !str_contains($p['corp'], 'Sesiunea formularului a expirat'), $x['cod'] . ' ' . $x['location']);
+    @unlink($mare);
+    @unlink($foarteMare);
+
+    // L1: parola zonelor detectate nu ajunge în pagină și nu se ia din formular.
+    $p = $adm('GET', '/admin/settings/bunny');
+    $adm('POST', '/admin/settings/bunny/use-zone', ['zone_index' => '0', 'zone_name' => 'zona-straina', 'zone_password' => 'parola-straina', '_csrf' => $jAdm]);
+    $verifica('D L1 Setări: fără zone_password în pagină; „Folosește zona” nu ia numele și parola din formular (fără zone detectate în sesiune, refuzat)',
+        !str_contains($p['corp'], 'zone_password') && (string) $dbNou->query("SELECT `value` FROM settings WHERE `key` = 'bunny_storage_zone'")->fetchColumn()
+        === $zona);
+
+    // Cheile de aplicație: plafonul și Administratorul General.
+    $cheie = $dbNou->prepare('INSERT INTO admin_app_tokens (admin_id, name, token_hash) VALUES (?, ?, ?)');
+    $idBlog = $idAdmin('blog@exemplu.ro');
+    $activeBlog = static fn (): int => (int) $dbNou->query('SELECT COUNT(*) FROM admin_app_tokens WHERE revoked_at IS NULL AND admin_id = ' . $idBlog)->fetchColumn();
+    for ($i = $activeBlog(); $i < 10; $i++) {
+        $cheie->execute([$idBlog, 'Calculator ' . $i, hash('sha256', 'cheie-blog-' . $i)]);
+    }
+    $blog('POST', '/admin/bunny/app/tokens', ['name' => 'A unsprezecea', '_csrf' => $jBlog]);
+    $p = $blog('GET', '/admin/bunny/app');
+    $verifica('D cheile: cu 10 chei active, a unsprezecea e refuzată, cu mesaj', $activeBlog() === 10 && str_contains($p['corp'], 'Ai deja 10 chei active'));
+    $idCheieBlog = (int) $dbNou->query("SELECT id FROM admin_app_tokens WHERE admin_id = " . $idBlog . " AND revoked_at IS NULL ORDER BY id DESC LIMIT 1")
+        ->fetchColumn();
+    $mag('POST', '/admin/bunny/app/tokens/revoke', ['token_id' => (string) $idCheieBlog, '_csrf' => $jMag]);
+    $verifica('D cheile: magazinul nu poate retrage cheia altcuiva', $activeBlog() === 10);
+    $p = $adm('GET', '/admin/bunny/app');
+    $adm('POST', '/admin/bunny/app/tokens/revoke', ['token_id' => (string) $idCheieBlog, '_csrf' => $jAdm]);
+    $verifica('D cheile: Administratorul General vede cheile celorlalți (cu emailul) și o retrage pe a blogului', str_contains($p['corp'],
+        'Cheile celorlalți administratori') && str_contains($p['corp'], 'blog@exemplu.ro') && $activeBlog() === 9);
 
     // Paginile cu pluginul oprit: „Modulul nu este inclus în abonament” (403), meniul fără bunny.net.
     $php('nou', 'tools/dev/licenta.php', ['biovitality', 'fisiere_cloud=oprit']);

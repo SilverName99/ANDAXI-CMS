@@ -28,6 +28,12 @@ final class AppTokens
     private const PREFIX = 'bvd_';
 
     /**
+     * Câte chei active poate avea un administrator deodată (una pe calculator; revizia de securitate: fără plafon, o
+     * sesiune furată putea lăsa în urmă oricâte chei).
+     */
+    public const MAX_ACTIVE = 10;
+
+    /**
      * Generează o cheie nouă. Șirul întors e singura dată când se vede în clar.
      *
      * @return array{id: int, token: string}|null
@@ -41,6 +47,9 @@ final class AppTokens
         $name = trim($name);
         if ($name === '') {
             $name = 'Calculatorul meu';
+        }
+        if (self::activeCount($db, $adminId) >= self::MAX_ACTIVE) {
+            return null;
         }
 
         try {
@@ -152,6 +161,42 @@ final class AppTokens
             $stmt->execute(['admin_id' => $adminId]);
 
             return $stmt->fetchAll() ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** Câte chei neretrase are administratorul (la eroare, plafonul: nu se mai dă nicio cheie). */
+    public static function activeCount(PDO $db, int $adminId): int
+    {
+        try {
+            $stmt = $db->prepare('SELECT COUNT(*) FROM admin_app_tokens WHERE admin_id = :admin_id AND revoked_at IS NULL');
+            $stmt->execute(['admin_id' => $adminId]);
+
+            return (int) $stmt->fetchColumn();
+        } catch (Throwable) {
+            return self::MAX_ACTIVE;
+        }
+    }
+
+    /**
+     * Cheile active ale tuturor administratorilor, pentru Administratorul General (care le poate retrage pe oricare).
+     * Fără amprente.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function allActive(PDO $db): array
+    {
+        try {
+            $rows = $db->query(
+                'SELECT t.id, t.admin_id, t.name, t.last_used_at, t.last_used_ip, t.created_at, a.email
+                   FROM admin_app_tokens t
+                   LEFT JOIN admins a ON a.id = t.admin_id
+                  WHERE t.revoked_at IS NULL
+                  ORDER BY a.email ASC, t.id DESC'
+            )->fetchAll();
+
+            return is_array($rows) ? array_values($rows) : [];
         } catch (Throwable) {
             return [];
         }

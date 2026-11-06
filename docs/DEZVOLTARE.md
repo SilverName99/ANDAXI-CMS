@@ -70,6 +70,8 @@ cererea clientului: un CSV și un link unic de 24 de ore; [PLUGINURI.md](PLUGINU
 „Stările unui plugin”), `verifica-email.php` (unde ajung emailurile și dacă pot pleca;
 adresele ascunse, `--repara` doar cu valori date în linia de comandă) și
 `diagnostic.php --email` (emailurile trimise, doar numere).
+Din portul `fisiere_cloud`: `restaureaza-roluri-cloud.php` (o dată, pe biovitality.ro: rolul „Cloud user” pus
+la loc din copia bazei de dinaintea adoptării; simulare fără `--aplica`; [PLUGINURI.md](PLUGINURI.md), „Fișiere în cloud”).
 
 ### Secrete
 

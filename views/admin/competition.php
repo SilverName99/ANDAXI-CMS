@@ -292,7 +292,7 @@ admin_componenta('antet-pagina', [
                         </div>
                         <div class="cmp-partner-card-actions">
                             <a class="btn btn-secondary" href="/admin/competition?edit=<?= $pid ?>">Editează</a>
-                            <form method="post" action="/admin/competition/partners/<?= $pid ?>/delete" onsubmit="return confirm('Ștergi partenerul „<?= $esc((string) $partner['name']) ?>” și toate prețurile lui?');">
+                            <form method="post" action="/admin/competition/partners/<?= $pid ?>/delete" onsubmit="return confirm(<?= $esc((string) json_encode('Ștergi partenerul „' . (string) $partner['name'] . '” și toate prețurile lui?', JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE)) ?>);">
                                 <?= \App\Support\AdminCsrf::camp() . "\n" ?>
                                 <button class="btn btn-secondary" type="submit">Șterge</button>
                             </form>
@@ -634,7 +634,7 @@ admin_componenta('antet-pagina', [
     if (!tabel) {
         return;
     }
-    const azi = '<?= $esc($today) ?>';
+    const azi = <?= json_encode($today, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
 
     // Al doilea rând de antet trebuie să stea exact sub primul. Înălțimea
     // primului depinde de font și de numele partenerilor, deci se măsoară.

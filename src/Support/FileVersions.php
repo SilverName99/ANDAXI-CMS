@@ -148,9 +148,11 @@ final class FileVersions
      */
     public static function isArchivePath(string $path): bool
     {
-        $path = BunnyStorage::normalizePath($path);
+        // Fără să conteze literele mari: `_Versiuni/…` e tot arhiva (revizia de securitate; vezi FolderPasswords::efectiva).
+        $path = mb_strtolower(BunnyStorage::normalizePath($path));
+        $arhiva = mb_strtolower(self::ARCHIVE_FOLDER);
 
-        return $path === self::ARCHIVE_FOLDER || str_starts_with($path, self::ARCHIVE_FOLDER . '/');
+        return $path === $arhiva || str_starts_with($path, $arhiva . '/');
     }
 
     /**
