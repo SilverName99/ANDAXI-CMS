@@ -28,8 +28,10 @@ use Throwable;
  *  - copiile din `_versiuni/<cale>/…` sunt păzite de parola lui `<cale>` (calea „efectivă”, fără `_versiuni/` în față);
  *  - căile se compară fără să țină cont de litere mari și mici (`Contracte/x` e tot în `contracte`);
  *  - dacă lista folderelor cu parolă nu se poate citi, totul e închis (`no_db`), nu deschis;
- *  - încercările greșite se numără pe administrator și folder, nu pe sesiune sau cheie, cu o singură scriere
- *    atomică înaintea verificării (cereri trimise deodată nu primesc mai multe încercări).
+ *  - încercările greșite se numără pe administrator și protecție (id-ul ei, deci nici o redenumire nu le șterge), nu
+ *    pe sesiune sau cheie, cu o singură scriere atomică înaintea verificării (cereri trimise deodată nu primesc mai
+ *    multe încercări);
+ *  - redenumirea și ștergerea mută sau uită protecțiile exact pe calea mutată (cu literele ei).
  *
  * Pluginul `fisiere_cloud` (din Biovitality; docs/PLUGINURI.md, „Fișiere în cloud”), copiat cum e, fără `ensureSchema`:
  * tabelele `bunny_protected_folders` și `bunny_folder_unlocks` le face migrarea
@@ -70,7 +72,8 @@ final class FolderPasswords
         string $password,
         string $hint,
         int $adminId,
-        string $adminEmail
+        string $adminEmail,
+        bool $nou = false
     ): array {
         $folder = BunnyStorage::normalizePath($folder);
 
@@ -91,13 +94,19 @@ final class FolderPasswords
         if ($existent !== null) {
             $folder = (string) $existent['folder_path'];
         }
+        // `$nou`: cine cere a văzut folderul fără parolă (n-a dat parola veche). Dacă între timp a primit una, nu se scrie
+        // peste ea: INSERT simplu, iar cheia unică (path_hash) refuză un al doilea rând pentru același folder.
+        $folderAparutProtejat = 'Folderul a primit între timp o parolă. Reîncarcă pagina.';
+        if ($nou && $existent !== null) {
+            return ['ok' => false, 'error' => $folderAparutProtejat];
+        }
 
         try {
             $db->prepare(
                 'INSERT INTO bunny_protected_folders
                     (folder_path, path_hash, password_hash, hint, created_by, created_by_email)
-                 VALUES (:folder_path, :path_hash, :password_hash, :hint, :created_by, :created_by_email)
-                 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), hint = VALUES(hint)'
+                 VALUES (:folder_path, :path_hash, :password_hash, :hint, :created_by, :created_by_email)'
+                . ($nou ? '' : ' ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), hint = VALUES(hint)')
             )->execute([
                 'folder_path' => mb_substr($folder, 0, 700),
                 'path_hash' => self::hash($folder),
@@ -106,8 +115,10 @@ final class FolderPasswords
                 'created_by' => $adminId > 0 ? $adminId : null,
                 'created_by_email' => $adminEmail !== '' ? $adminEmail : null,
             ]);
-        } catch (Throwable) {
-            return ['ok' => false, 'error' => 'Nu am putut salva parola folderului.'];
+        } catch (Throwable $e) {
+            return ['ok' => false, 'error' => $nou && $e instanceof \PDOException && (string) $e->getCode() === '23000'
+                ? $folderAparutProtejat
+                : 'Nu am putut salva parola folderului.'];
         }
 
         // O parolă nouă închide ușa pentru toți cei care o aveau deschisă cu cea
@@ -132,6 +143,11 @@ final class FolderPasswords
         try {
             $stmt = $db->prepare('DELETE FROM bunny_protected_folders WHERE path_hash = :hash');
             $stmt->execute(['hash' => self::hash($folder)]);
+            if ($existent !== null) {
+                // Cu protecția pleacă și numărătoarea ei (cheia e id-ul, nu se mai refolosește).
+                $db->prepare('DELETE FROM bunny_folder_unlocks WHERE path_hash = :hash')
+                   ->execute(['hash' => self::cheieNumarator($existent)]);
+            }
             self::forgetUnlocks($db, $folder);
 
             return $stmt->rowCount() > 0;
@@ -362,20 +378,20 @@ final class FolderPasswords
 
         // Încercarea se numără înainte de verificare, cu o singură scriere atomică: zece cereri trimise deodată
         // primesc tot cel mult MAX_GRESELI verificări, oricâte sesiuni sau chei ar folosi administratorul.
-        $rezervare = self::rezervaIncercare($db, $numarator, $folder);
+        $rezervare = self::rezervaIncercare($db, $numarator, $record);
         if ($rezervare['wait_minutes'] > 0) {
             return ['ok' => false, 'reason' => 'throttled', 'wait_minutes' => $rezervare['wait_minutes']];
         }
 
         if (!self::verify($password, $record)) {
             if ($rezervare['greseli'] >= self::MAX_GRESELI) {
-                self::blocheaza($db, $numarator, $folder);
+                self::blocheaza($db, $numarator, $record);
             }
 
             return ['ok' => false, 'reason' => 'wrong_password', 'wait_minutes' => 0];
         }
 
-        self::uitaGreselile($db, $numarator, $folder);
+        self::uitaGreselile($db, $numarator, $record);
 
         return ['ok' => true, 'reason' => 'ok', 'wait_minutes' => 0];
     }
@@ -495,12 +511,11 @@ final class FolderPasswords
     public static function waitMinutes(PDO $db, string $who, string $folder, int $adminId = 0): int
     {
         $record = self::find($db, $folder);
+        if ($record === null) {
+            return 0;
+        }
 
-        return self::minuteDeAsteptat(self::stare(
-            $db,
-            self::whoAdmin($adminId, $who),
-            $record !== null ? (string) $record['folder_path'] : $folder
-        ));
+        return self::minuteDeAsteptat(self::stareCheie($db, self::whoAdmin($adminId, $who), self::cheieNumarator($record)));
     }
 
     // ───────────────────────────────────────────────────────────
@@ -528,7 +543,7 @@ final class FolderPasswords
             if (!self::subPrefix($vechi, $oldPrefix)) {
                 continue;
             }
-            $nou = $newPrefix . mb_substr($vechi, mb_strlen($oldPrefix));
+            $nou = $newPrefix . substr($vechi, strlen($oldPrefix));
             try {
                 $db->prepare(
                     'UPDATE bunny_protected_folders SET folder_path = :nou, path_hash = :hash_nou
@@ -585,21 +600,38 @@ final class FolderPasswords
     // Intern
     // ───────────────────────────────────────────────────────────
 
-    /** `$cale` e chiar `$prefix` sau ceva dinăuntrul lui (fără să conteze literele mari)? */
+    /**
+     * `$cale` e chiar `$prefix` sau ceva dinăuntrul lui, literă cu literă? Pentru mutarea și uitarea protecțiilor la
+     * redenumire și ștergere: Bunny mută și șterge exact calea dată, deci și protecțiile se mută exact (fără litere
+     * mari egale cu mici, altfel `a` → `b` ar lua cu el protecția lui `A/secret`, lăsând `A/secret` deschis). Doar
+     * paznicii (guardFor, lockedUnder …) compară fără litere mari, ca să refuze mai mult, niciodată mai puțin.
+     */
     private static function subPrefix(string $cale, string $prefix): bool
     {
-        $cale = mb_strtolower($cale);
-        $prefix = mb_strtolower($prefix);
-
         return $cale === $prefix || str_starts_with($cale, $prefix . '/');
     }
 
     /** @return array<string, mixed> */
     private static function stare(PDO $db, string $who, string $folder): array
     {
+        return self::stareCheie($db, $who, self::hash($folder));
+    }
+
+    /**
+     * Cheia rândului cu greșelile unui folder: id-ul protecției, nu calea. Așa, redenumirea folderului (care schimbă
+     * calea și uită deblocările) nu șterge și numărătoarea: altfel o redenumire ar da încă 5 încercări.
+     */
+    private static function cheieNumarator(array $record): string
+    {
+        return hash('sha256', 'protectie:' . (int) ($record['id'] ?? 0));
+    }
+
+    /** @return array<string, mixed> */
+    private static function stareCheie(PDO $db, string $who, string $cheie): array
+    {
         try {
             $stmt = $db->prepare('SELECT * FROM bunny_folder_unlocks WHERE who = :who AND path_hash = :hash LIMIT 1');
-            $stmt->execute(['who' => $who, 'hash' => self::hash($folder)]);
+            $stmt->execute(['who' => $who, 'hash' => $cheie]);
             $row = $stmt->fetch();
 
             return is_array($row) ? $row : [];
@@ -646,9 +678,11 @@ final class FolderPasswords
      *
      * @return array{greseli: int, wait_minutes: int}
      */
-    private static function rezervaIncercare(PDO $db, string $who, string $folder): array
+    private static function rezervaIncercare(PDO $db, string $who, array $record): array
     {
-        $asteapta = self::minuteDeAsteptat(self::stare($db, $who, $folder));
+        $folder = (string) $record['folder_path'];
+        $cheie = self::cheieNumarator($record);
+        $asteapta = self::minuteDeAsteptat(self::stareCheie($db, $who, $cheie));
         if ($asteapta > 0) {
             return ['greseli' => 0, 'wait_minutes' => $asteapta];
         }
@@ -661,13 +695,13 @@ final class FolderPasswords
             )->execute([
                 'who' => $who,
                 'folder_path' => mb_substr(BunnyStorage::normalizePath($folder), 0, 700),
-                'path_hash' => self::hash($folder),
+                'path_hash' => $cheie,
             ]);
         } catch (Throwable) {
             return ['greseli' => 0, 'wait_minutes' => 1];
         }
 
-        $stare = self::stare($db, $who, $folder);
+        $stare = self::stareCheie($db, $who, $cheie);
         if ($stare === []) {
             return ['greseli' => 0, 'wait_minutes' => 1];
         }
@@ -677,7 +711,7 @@ final class FolderPasswords
         }
         $greseli = (int) ($stare['greseli'] ?? 0);
         if ($greseli > self::MAX_GRESELI) {
-            self::blocheaza($db, $who, $folder);
+            self::blocheaza($db, $who, $record);
 
             return ['greseli' => $greseli, 'wait_minutes' => self::PAUZA_MINUTE];
         }
@@ -686,7 +720,7 @@ final class FolderPasswords
     }
 
     /** Pauza după prea multe greșeli; numărătoarea o ia de la capăt după ea. */
-    private static function blocheaza(PDO $db, string $who, string $folder): void
+    private static function blocheaza(PDO $db, string $who, array $record): void
     {
         try {
             $db->prepare(
@@ -695,7 +729,7 @@ final class FolderPasswords
             )->execute([
                 'blocat' => date('Y-m-d H:i:s', time() + self::PAUZA_MINUTE * 60),
                 'who' => $who,
-                'hash' => self::hash($folder),
+                'hash' => self::cheieNumarator($record),
                 'acum' => date('Y-m-d H:i:s'),
             ]);
         } catch (Throwable) {
@@ -703,11 +737,11 @@ final class FolderPasswords
     }
 
     /** Parola bună: greșelile de până acum nu mai contează. */
-    private static function uitaGreselile(PDO $db, string $who, string $folder): void
+    private static function uitaGreselile(PDO $db, string $who, array $record): void
     {
         try {
             $db->prepare('UPDATE bunny_folder_unlocks SET greseli = 0 WHERE who = :who AND path_hash = :hash')
-               ->execute(['who' => $who, 'hash' => self::hash($folder)]);
+               ->execute(['who' => $who, 'hash' => self::cheieNumarator($record)]);
         } catch (Throwable) {
         }
     }

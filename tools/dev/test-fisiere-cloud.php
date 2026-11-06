@@ -35,7 +35,8 @@ declare(strict_types=1);
  *    (două chei; zece cereri deodată), parolele care nu se pot citi (503 / „Nu pot verifica”), parola unui subfolder doar cu cel de
  *    deasupra deschis și doar pe foldere, scoaterea parolei prin aceeași frână, Galeria cale cu cale, fără adrese CDN într-un
  *    folder cu parolă, confirm() cu JSON, limita de 64 MB și cererea peste post_max_size, zonele detectate fără parolă în pagină,
- *    plafonul de 10 chei și cheile celorlalți la Administratorul General.
+ *    plafonul de 10 chei și cheile celorlalți la Administratorul General; redenumirea unui folder cu un subfolder închis (refuzată),
+ *    protecțiile mutate literă cu literă, numărătoarea greșelilor păstrată peste o redenumire.
  *
  * Își face și își șterge bazele cms_fc_vechi, cms_fc_nou și dosarul $CMS_DEV_DIR/fisiere-cloud. Baza de dezvoltare trebuie să fie
  * făcută de tools/dev/instaleaza.sh (o citește, n-o schimbă). Raportul: $CMS_DEV_DIR/test-fisiere-cloud-raport.txt; cod de ieșire 0
@@ -690,7 +691,8 @@ try {
             // administrator (`admin:<id>`), nu pe cheie (`aplicatie:<id>`): diferența declarată a reviziei de securitate (M1).
             'bunny_folder_unlocks' => $db->query('SELECT who, folder_path, path_hash, greseli, unlocked_until IS NULL AS inchis, blocked_until IS NULL AS neblocat
                 FROM bunny_folder_unlocks WHERE unlocked_until IS NOT NULL ORDER BY who, path_hash')->fetchAll(),
-            'pauze' => $db->query('SELECT folder_path, path_hash, greseli FROM bunny_folder_unlocks WHERE blocked_until IS NOT NULL ORDER BY path_hash')->fetchAll(),
+            // (rândul pauzei are acum cheia protecției, nu a căii: se compară folderul și numărul)
+            'pauze' => $db->query('SELECT folder_path, greseli FROM bunny_folder_unlocks WHERE blocked_until IS NOT NULL ORDER BY folder_path')->fetchAll(),
             'admin_app_tokens' => $db->query('SELECT admin_id, name, token_hash, revoked_at, last_used_at IS NULL AS nefolosita, last_used_ip FROM admin_app_tokens
                 ORDER BY id')->fetchAll(),
             'jurnal' => $db->query("SELECT action, context_json FROM admin_activity_log WHERE action LIKE 'bunny\\_%' ORDER BY id")->fetchAll(),
@@ -702,7 +704,9 @@ try {
         $verifica('B la final, ' . $tabel . ': aceleași ' . count($sn[$tabel]) . ' rânduri', $randuri === $sn[$tabel],
             json_encode([$randuri, $sn[$tabel]], JSON_UNESCAPED_UNICODE) ?: '');
     }
-    $cereri = static fn (string $parte): array => array_count_values(file($dosarTest . '/zona-' . $parte . '/cereri.log', FILE_IGNORE_NEW_LINES) ?: []);
+    // Cu momentul copiei din `_versiuni` înlocuit (cele două coduri pot cădea în secunde diferite).
+    $cereri = static fn (string $parte): array => array_count_values(array_map($normalizeaza, file($dosarTest . '/zona-' . $parte . '/cereri.log',
+        FILE_IGNORE_NEW_LINES) ?: []));
     $verifica('B aceleași cereri spre zonă (metoda și calea, de câte ori)', $cereri('vechi') == $cereri('nou'),
         json_encode([array_diff_assoc($cereri('vechi'), $cereri('nou')), array_diff_assoc($cereri('nou'), $cereri('vechi'))]) ?: '');
 
@@ -1043,6 +1047,40 @@ try {
     $adm('POST', '/admin/bunny/app/tokens/revoke', ['token_id' => (string) $idCheieBlog, '_csrf' => $jAdm]);
     $verifica('D cheile: Administratorul General vede cheile celorlalți (cu emailul) și o retrage pe a blogului', str_contains($p['corp'],
         'Cheile celorlalți administratori') && str_contains($p['corp'], 'blog@exemplu.ro') && $activeBlog() === 9);
+
+    // Redenumirea unui folder (a doua revizie): subfolderele cu parolă închise, literele mari, numărătoarea greșelilor.
+    foreach (['numarat/f.txt' => "f\n", 'ARHIVA-PROIECTE/x.txt' => "x\n"] as $cale => $continut) {
+        @mkdir(dirname($zonaNou . '/' . $cale), 0770, true);
+        file_put_contents($zonaNou . '/' . $cale, $continut);
+    }
+    $protejeaza->execute(['numarat', hash('sha256', 'folder:numarat'), password_hash('parola-numarat', PASSWORD_DEFAULT)]);
+    $protectiiSub = static fn (string $prefix): array => $dbNou->query('SELECT folder_path FROM bunny_protected_folders WHERE folder_path LIKE '
+        . $dbNou->quote($prefix . '%') . ' ORDER BY folder_path')->fetchAll(PDO::FETCH_COLUMN);
+    $r = $nou('POST', '/api/desktop/rename', $tm, ['json' => ['path' => 'arhiva-proiecte', 'new_name' => 'ap-mutat', 'type' => 'folder']]);
+    $verifica('D redenumire aplicația: un folder cu un subfolder cu parolă închis → 423 (subfolderul), nimic mutat', $r['cod'] === 423
+        && ($j($r)['folder'] ?? '') === 'arhiva-proiecte/intern' && is_file($zonaNou . '/arhiva-proiecte/intern/doc.txt') && !is_dir($zonaNou . '/ap-mutat'),
+        $r['corp']);
+    $mag('POST', '/admin/bunny/rename', ['path' => '', 'target' => 'arhiva-proiecte', 'new_name' => 'ap-mutat', 'type' => 'folder', '_csrf' => $jMag]);
+    $p = $mag('GET', '/admin/bunny');
+    $verifica('D redenumire browser: același refuz, cu mesaj', !is_dir($zonaNou . '/ap-mutat') && str_contains($p['corp'], 'subfolder cu parolă'));
+    $r = $nou('POST', '/api/desktop/rename', $tg, ['json' => ['path' => 'ARHIVA-PROIECTE', 'new_name' => 'mare-mutat', 'type' => 'folder']]);
+    $verifica('D redenumirea lui „ARHIVA-PROIECTE” (alt folder, aceleași litere) cu arhiva-proiecte/intern închis: tot 423', $r['cod'] === 423, $r['corp']);
+    $nou('POST', '/api/desktop/folders/unlock', $tg, ['json' => ['path' => 'arhiva-proiecte/intern', 'password' => 'parola-intern']]);
+    $r = $nou('POST', '/api/desktop/rename', $tg, ['json' => ['path' => 'ARHIVA-PROIECTE', 'new_name' => 'mare-mutat', 'type' => 'folder']]);
+    $r2 = $nou('GET', '/api/desktop/files?path=arhiva-proiecte/intern', $tm);
+    $verifica('D cu el deschis, „ARHIVA-PROIECTE” → „mare-mutat” se face, dar protecția lui arhiva-proiecte/intern rămâne pe loc (mutarea e '
+        . 'literă cu literă) și folderul rămâne închis pentru ceilalți', $r['cod'] === 200 && is_file($zonaNou . '/mare-mutat/x.txt')
+        && $protectiiSub('arhiva-proiecte') === ['arhiva-proiecte/intern'] && $protectiiSub('mare-mutat') === [] && $r2['cod'] === 423, $r['corp']
+        . ' ' . json_encode([$protectiiSub('arhiva-proiecte'), $protectiiSub('mare-mutat')]));
+    for ($i = 1; $i <= 5; $i++) {
+        $nou('POST', '/api/desktop/folders/unlock', $tb, ['json' => ['path' => 'numarat', 'password' => 'gresit' . $i]]);
+    }
+    $nou('POST', '/api/desktop/folders/unlock', $tg, ['json' => ['path' => 'numarat', 'password' => 'parola-numarat']]);
+    $r = $nou('POST', '/api/desktop/rename', $tg, ['json' => ['path' => 'numarat', 'new_name' => 'numarat-2', 'type' => 'folder']]);
+    $r2 = $nou('POST', '/api/desktop/folders/unlock', $tb, ['json' => ['path' => 'numarat-2', 'password' => 'parola-numarat']]);
+    $verifica('D numărătoarea greșelilor ține de protecție, nu de cale: după 5 greșeli ale blogului, redenumirea „numarat” → „numarat-2” nu-i '
+        . 'dă încercări noi (throttled și cu parola bună)', $r['cod'] === 200 && $r2['cod'] === 403 && ($j($r2)['reason'] ?? '') === 'throttled',
+        $r['corp'] . ' ' . $r2['corp']);
 
     // Paginile cu pluginul oprit: „Modulul nu este inclus în abonament” (403), meniul fără bunny.net.
     $php('nou', 'tools/dev/licenta.php', ['biovitality', 'fisiere_cloud=oprit']);

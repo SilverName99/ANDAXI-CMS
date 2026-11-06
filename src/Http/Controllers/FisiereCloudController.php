@@ -680,7 +680,8 @@ final class FisiereCloudController
             $parola,
             $indiciu,
             (int) (Auth::id() ?? 0),
-            $this->currentAdminEmail()
+            $this->currentAdminEmail(),
+            $existenta === null
         );
         if (!$rezultat['ok']) {
             Flash::set('error', $rezultat['error']);
@@ -1079,6 +1080,16 @@ final class FisiereCloudController
         $parinte = str_contains($target, '/') ? substr($target, 0, (int) strrpos($target, '/')) : '';
         if (FileVersions::isArchivePath($parinte === '' ? $wanted : $parinte . '/' . $wanted)) {
             Flash::set('error', $this->mesajArhiva());
+            header('Location: ' . $redirect);
+            return;
+        }
+        // Ca la ștergere: un subfolder cu parolă închis pentru cel logat (literele mari nu contează) oprește redenumirea.
+        $sub = FolderPasswords::lockedUnder($db, FolderPasswords::whoSession(), $target);
+        if ($sub !== null) {
+            Flash::set('error', ($sub['no_db'] ?? false) === true
+                ? $this->bunnyLockedMessage($sub)
+                : 'În folder e un subfolder cu parolă, „' . basename((string) $sub['folder_path'])
+                    . '”. Deschide-l întâi, ca să poți redenumi tot.');
             header('Location: ' . $redirect);
             return;
         }

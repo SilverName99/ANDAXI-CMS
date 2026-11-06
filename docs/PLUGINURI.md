@@ -1210,10 +1210,12 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   adresa publică). **Folderele cu parolă**: parola (`password_hash`, cel puțin 6 caractere, indiciu opțional) apără tot ce e înăuntru,
   oricât de adânc, și copiile lui din `_versiuni` (câștigă folderul cel mai adânc; de aceea parola unui subfolder o pune doar cine are
   deschise folderele de deasupra; căile se compară fără litere mari); deschiderea ține o oră de la ultima folosire, legată de sesiune
-  (browserul) sau de cheia de aplicație; 5 parole greșite = 5 minute de pauză, numărate pe administrator și folder (oricâte sesiuni
-  sau chei ar avea); schimbarea parolei închide folderul pentru toți; o parolă se pune doar pe un folder și se schimbă sau se scoate
+  (browserul) sau de cheia de aplicație; 5 parole greșite = 5 minute de pauză, numărate pe administrator și protecție (oricâte
+  sesiuni sau chei ar avea; cheia e id-ul protecției, deci nici o redenumire nu șterge numărătoarea); schimbarea parolei închide folderul pentru toți; o parolă se pune doar pe un folder și se schimbă sau se scoate
   doar cu cea veche, verificată prin aceeași frână (Administratorul General poate fără ea, scris în jurnal); redenumirea mută parola
-  după folder, ștergerea o șterge (un folder cu un subfolder cu parolă închis nu se șterge). Într-un folder cu parolă nu se arată
+  după folder, literă cu literă (exact calea mutată), ștergerea o șterge (un folder cu un subfolder cu parolă închis nu se șterge
+  și nu se redenumește; aici literele mari nu contează, ca să refuze mai mult). Dacă folderul a primit o parolă între afișare și
+  trimiterea formularului „Pune parolă”, cererea se refuză (nu scrie peste ea). Într-un folder cu parolă nu se arată
   adresele publice și miniaturile de pe CDN, iar în Galerie nu pleacă nimic (nici deschis). Dacă lista folderelor cu parolă nu se poate
   citi, totul e închis. E o barieră între colegi: fișierul din bunny.net rămâne necriptat, iar adresa lui publică merge pentru cine o
   știe.
@@ -1254,15 +1256,16 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   originalului și ascunse din listă cât folderul e închis (browser, aplicație, Galerie); căile cu alte litere mari (`Contracte/…`)
   păzite la fel; parola unui subfolder doar cu folderele de deasupra deschise, doar pe foldere; parola actuală (schimbare, scoatere)
   prin frâna deblocării; frâna pe administrator și folder, cu o scriere atomică înaintea verificării (10 cereri trimise deodată primesc
-  tot cel mult 5 verificări); Galeria verifică fiecare cale bifată și refuză tot ce e într-un folder cu parolă; ștergerea unui folder cu
+  tot cel mult 5 verificări; numărătoarea ține de protecție, nu de cale); redenumirea unui folder cu un subfolder cu parolă închis se
+  refuză ca ștergerea, iar protecțiile se mută doar pe calea mutată exact (altfel `a` → `b` lua protecția lui `A/secret`); Galeria verifică fiecare cale bifată și refuză tot ce e într-un folder cu parolă; ștergerea unui folder cu
   un subfolder cu parolă închis se refuză; fără adrese CDN și miniaturi într-un folder cu parolă; nimic scris de mână în `_versiuni`;
   parolele care nu se pot citi închid tot (în aplicație 503, în browser „Nu pot verifica acum parolele folderelor”); textele din
   `confirm()` (numele folderului, emailul din lacăt, numele partenerului la `concurenta`) ca JSON, nu ca șir care se poate închide;
   limita de 64 MB și mesajul la `post_max_size`; parolele zonelor detectate nu mai ajung în pagină; cel mult 10 chei active pe
   administrator, iar Administratorul General le retrage pe ale oricui; încărcările din admin nu merg într-un folder de galerie cu
   parolă (rămân pe server). **API-ul aplicației**: aceleași adrese și forme de răspuns; se schimbă doar cererile refuzate acum pe drept,
-  cu coduri pe care aplicația le știe deja: 423 `folder_locked` (o copie din `_versiuni` a unui folder închis, ștergerea unui folder cu
-  un subfolder închis), 409 `archive` (scrieri în `_versiuni`), 503 (parolele nu se pot citi), iar pauza după greșeli ține pentru toate
+  cu coduri pe care aplicația le știe deja: 423 `folder_locked` (o copie din `_versiuni` a unui folder închis, ștergerea sau
+  redenumirea unui folder cu un subfolder închis), 409 `archive` (scrieri în `_versiuni`), 503 (parolele nu se pot citi), iar pauza după greșeli ține pentru toate
   cheile aceluiași administrator. **Rămâne, de știut**: un fișier HTML sau SVG urcat în zonă se deschide de pe adresa CDN ca pagină, cu
   scripturile lui (pe domeniul CDN-ului, nu al site-ului, deci fără sesiunea adminului); fișierele de lucru nu se filtrează după tip,
   iar dacă trebuie, din bunny.net (Pull Zone → Edge Rules: `Content-Disposition: attachment` pentru `.html`, `.htm`, `.svg`). Tot

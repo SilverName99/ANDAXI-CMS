@@ -35,7 +35,7 @@ use Throwable;
  *
  * Revizia de securitate a schimbat doar cererile care acum sunt refuzate pe drept (aceleași forme de răspuns pe care
  * aplicația le știe deja): copiile din `_versiuni` sunt păzite de parola folderului original și cele închise nu apar în
- * listă (423 `folder_locked` la intrare); ștergerea unui folder cu un subfolder cu parolă închis dă 423; nimic nu se
+ * listă (423 `folder_locked` la intrare); ștergerea sau redenumirea unui folder cu un subfolder cu parolă închis dă 423; nimic nu se
  * scrie în `_versiuni` (409 `archive`); dacă parolele nu se pot citi, 503 în loc de „deschis”; încercările greșite se
  * numără pe administrator, nu pe cheie.
  */
@@ -562,6 +562,12 @@ final class DesktopApiController
 
         $parinte = str_contains($path, '/') ? substr($path, 0, (int) strrpos($path, '/')) : '';
         if ($this->inArhiva($parinte === '' ? $wanted : $parinte . '/' . $wanted)) {
+            return;
+        }
+        // Ca la ștergere: un subfolder cu parolă închis pentru cheia asta oprește redenumirea (423, aplicația cere parola).
+        $sub = FolderPasswords::lockedUnder($db, FolderPasswords::whoToken($identity['token_id']), $path);
+        if ($sub !== null) {
+            $this->raspundeInchis($db, $identity, $sub);
             return;
         }
 
