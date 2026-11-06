@@ -8,6 +8,7 @@ $currentAdminId = (int) ($currentAdminId ?? 0);
 $roluriAscunse = array_keys(array_filter([
     \App\Support\Auth::ROLE_STORE => !\App\Support\Plugins::vizibil('catalog'),
     \App\Support\Auth::ROLE_BLOG => !\App\Support\Plugins::vizibil('blog'),
+    \App\Support\Auth::ROLE_CLOUD => !\App\Support\Plugins::vizibil('fisiere_cloud'),
 ]));
 $roluriVizibile = array_diff_key($roles, array_flip($roluriAscunse));
 $rolImplicit = array_key_exists(\App\Support\Auth::ROLE_STORE, $roluriVizibile) ? \App\Support\Auth::ROLE_STORE : \App\Support\Auth::ROLE_EMAILS;

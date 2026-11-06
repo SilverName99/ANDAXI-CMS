@@ -13,6 +13,12 @@ final class Auth
     public const ROLE_STORE = 'administrator_magazin';
     public const ROLE_BLOG = 'administrator_blog';
     public const ROLE_EMAILS = 'administrator_emailuri';
+    /**
+     * Cont limitat la fișierele din bunny.net (pluginul `fisiere_cloud`, din Biovitality 5f1abee): nimic altceva din admin.
+     * Rolul e cunoscut pe orice site, oricare ar fi licența: un rol necunoscut s-ar normaliza la Administrator General
+     * (`normalizeRole`), deci un cont „Cloud user” venit din baza Biovitality ar primi tot adminul.
+     */
+    public const ROLE_CLOUD = 'utilizator_cloud';
 
     public static function roles(): array
     {
@@ -22,6 +28,7 @@ final class Auth
             self::ROLE_STORE => Plugins::vizibil('magazin') || !Plugins::vizibil('catalog') ? 'Administrator magazin' : 'Administrator produse',
             self::ROLE_BLOG => 'Administrator Blog',
             self::ROLE_EMAILS => 'Administrator email-uri',
+            self::ROLE_CLOUD => 'Cloud user',
         ];
     }
 
@@ -184,6 +191,7 @@ final class Auth
             self::ROLE_EMAILS,
             self::ROLE_STORE,
             self::ROLE_BLOG,
+            self::ROLE_CLOUD,
         ];
         foreach ($priority as $role) {
             if (in_array($role, $normalized, true)) {
@@ -286,6 +294,7 @@ final class Auth
             self::ROLE_EMAILS => ['/admin/emails/newsletters?tab=templates', '/admin/blog/posts', '/admin/emails/sender'],
             self::ROLE_STORE => ['/admin/products'],
             self::ROLE_BLOG => ['/admin/blog/posts', '/admin/gallery'],
+            self::ROLE_CLOUD => ['/admin/bunny'],
         ];
         $prima = null;
         foreach ($candidati as $rol => $cai) {
@@ -349,19 +358,28 @@ final class Auth
                 '/admin/coupons',
                 '/admin/promo-products',
                 '/admin/settings/floating-cart',
+                // Pluginurile Biovitality (concurenta, fisiere_cloud): aceleași drepturi ca în codul Biovitality.
+                '/admin/competition',
+                '/admin/bunny',
             ],
             self::ROLE_BLOG => [
                 '/admin/blog/posts',
                 '/admin/blog/templates',
                 '/admin/blog/authors',
                 '/admin/gallery',
+                '/admin/bunny',
             ],
             self::ROLE_EMAILS => [
                 '/admin/blog/posts',
                 '/admin/blog/templates',
                 '/admin/blog/authors',
                 '/admin/gallery',
+                '/admin/bunny',
                 '/admin/emails',
+            ],
+            // Doar fișierele din bunny.net: răsfoire, urcare, preluare pentru editare și cheia pentru aplicația de desktop.
+            self::ROLE_CLOUD => [
+                '/admin/bunny',
             ],
             default => [],
         };
