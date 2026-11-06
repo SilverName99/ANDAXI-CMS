@@ -92,7 +92,10 @@ return [
     // 20 (campanii/0057): colțurile cardurilor (o bifă), copiată cum e.
     // 21 (campanii/0058): oferta campaniei (tipul, numerele ei, prețul de campanie al produselor) și urma ei pe comenzi (campania,
     // textul ofertei, reducerea pe comandă și pe linie, prețul de dinainte al liniei): sume și texte ale magazinului, copiate cum sunt.
-    'versiune' => 21,
+    // 22 (pluginul fisiere_cloud, fisiere_cloud/0059): cheile aplicației Windows, lacătele, versiunile și folderele cu parolă ale
+    // fișierelor din cloud, doar structura (până acum doar în regulile Biovitality; codul comun le are acum pe orice bază), iar
+    // setările bunny_* care pot deschide spațiul de stocare golite și bunny_enabled = 0 (o copie nu atinge fișierele adevărate).
+    'versiune' => 22,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -150,6 +153,12 @@ return [
         'newsletter_cereri_confirmare' => ['mod' => 'doar_structura', 'motiv' => 'cererile de abonare și de link de dezabonare: amprenta adresei și IP-ul (2 zile)'],
         // WP-38 (nucleu/0047): adresele negăsite ale site-ului live (fără IP, dar o cale poate avea orice a scris cineva).
         'seo_404_log' => ['mod' => 'doar_structura', 'motiv' => 'adresele cerute pe site-ul live care au dat 404 (texte scrise de vizitatori)'],
+        // 22 (pluginul fisiere_cloud, fisiere_cloud/0059; din regulile Biovitality, aceleași): o copie nu le folosește.
+        'admin_app_tokens' => ['mod' => 'doar_structura', 'motiv' => 'jetoanele aplicației Windows a adminilor: hash-ul jetonului, IP-ul ultimei folosiri'],
+        'bunny_protected_folders' => ['mod' => 'doar_structura', 'motiv' => 'parolele dosarelor din cloud (hash) și emailul celui care le-a pus'],
+        'bunny_folder_unlocks' => ['mod' => 'doar_structura', 'motiv' => 'cine a deschis un dosar protejat din cloud (adresa lui) și încercările greșite'],
+        'file_locks' => ['mod' => 'doar_structura', 'motiv' => 'blocările fișierelor din cloud: emailul adminului, nota lui, căile documentelor'],
+        'file_versions' => ['mod' => 'doar_structura', 'motiv' => 'versiunile fișierelor din cloud: emailul adminului, căile documentelor'],
 
         // ── Setările ──
         'settings' => ['mod' => 'setari', 'pastreaza' => ['key', 'value'], 'emailuri_publice' => 'textele site-ului (antet, subsol, '
@@ -511,7 +520,10 @@ return [
     // valorile din cod.
     'setari' => [
         // Golite: cheile, parolele și id-urile conturilor externe; plus orice cheie care se potrivește tiparului.
-        'goale_tipar' => '/(password|secret|api_key|_token$|client_secret)/',
+        // 22: și orice cheie bunny_* (fișierele din cloud) în afara celor de configurare știute: zona, parola ei, regiunea, adresa CDN,
+        // dosarul de bază, cheia API și orice cheie bunny_* nouă (port-biovitality.md §11).
+        'goale_tipar' => '/(password|secret|api_key|_token$|client_secret)|^bunny_(?!(?:enabled|timeout|upload_target|gallery_folder|lock_expire_hours'
+            . '|versions_keep|work_folder|app_download_path)$)/',
         'goale' => ['fan_client_id', 'fan_api_username', 'fan_api_password', 'smtp_host', 'smtp_username', 'smtp_password', 'sendgrid_api_key',
             'stripe_publishable_key', 'stripe_secret_key', 'stripe_webhook_secret', 'euplatesc_merchant_id', 'euplatesc_secret_key', 'erp_url',
             'erp_api_key', 'customer_google_client_id', 'customer_google_client_secret', 'tawk_property_id', 'tawk_api_key', 'google_analytics_id',
@@ -525,8 +537,12 @@ return [
             // WP-R din 30 oct (newsletterul): cheia de semnare a linkurilor din newslettere (secretă, Settings::CHEI_ASCUNSE; golită, Settings::secretGenerat face alta la
             // prima semnare, deci linkurile site-ului adevărat nu merg pe ea), nota limitei globale și ora ultimei rulări a cronului
             // (starea site-ului adevărat).
-            'newsletter_cheie_semnare', 'newsletter_limita_globala_atinsa', 'newsletter_cron_ultima_rulare'],
+            'newsletter_cheie_semnare', 'newsletter_limita_globala_atinsa', 'newsletter_cron_ultima_rulare',
+            // 22: fișierele din cloud (bunny.net), ca o copie să nu poată deschide spațiul de stocare adevărat.
+            'bunny_storage_zone', 'bunny_storage_password', 'bunny_storage_region', 'bunny_cdn_url', 'bunny_base_folder', 'bunny_api_key'],
         'zero' => [
+            // 22: integrarea bunny.net oprită pe copie.
+            'bunny_enabled',
             // WP-R din 30 oct: pragul cheii vechi de semnare; „0” = niciun link semnat cu cheia veche nu e crezut pe copie (fail-closed).
             'newsletter_cheie_limita',
             'erp_enabled', 'erp_stock_enabled', 'euplatesc_enabled', 'stripe_enabled', 'bt_ipay_enabled', 'fan_awb_auto', 'fan_live_tariff_enabled',

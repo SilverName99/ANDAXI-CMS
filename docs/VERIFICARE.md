@@ -972,7 +972,9 @@ copia; pe copie tabelele le fac migrările, goale.
 Bioscem schimbată se aplică și aici; `versiune` = cea Bioscem × 100 + a Biovitality, deci orice schimbare oprește un `--reia`),
 plus ce are în plus codul Biovitality la `d95598e` (`tools/dev/migrari/vechi/bv.sql`): **doar structura** pentru
 `admin_app_tokens` (jetoanele aplicației Windows), `bunny_protected_folders` (parolele dosarelor din cloud), `bunny_folder_unlocks`,
-`file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota, căile documentelor); **copiate** cum
+`file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota, căile documentelor; din regulile Bioscem
+22, odată cu pluginul `fisiere_cloud` și migrarea `fisiere_cloud/0059`, regula lor și a setărilor `bunny_*` de mai jos e în regulile
+Bioscem, aceeași: codul comun face tabelele pe orice bază); **copiate** cum
 sunt concurenții și prețurile lor (`competition_partners`, `competition_prices`), etichetele blogului (`blog_tags`,
 `blog_post_tags`), `products.bundle_items_json`, `blog_posts.references_html` și `featured_image_width`; id-urile Stripe ale
 comenzilor `anon-<id>`, procesatorul linkurilor de plată păstrat (vechile linkuri primesc la migrare procesatorul Stripe din

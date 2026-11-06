@@ -267,7 +267,9 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     // WP-R din 30 oct (newsletterul Bioscem 739f58c): lista „nu trimite” (amprenta adresei) și jurnalul cererilor de confirmare.
     'newsletter_suprimate', 'newsletter_cereri_confirmare',
     // WP-38 (nucleu/0047): jurnalul 404 al site-ului live.
-    'seo_404_log'];
+    'seo_404_log',
+    // Regulile Bioscem 22 (pluginul fisiere_cloud, fisiere_cloud/0059): cheile aplicației, folderele cu parolă, lacătele, versiunile.
+    'admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
@@ -617,7 +619,8 @@ foreach ($bv + $cms as $tabel => $coloane) {
 }
 $verifica('Biovitality: fiecare coloană cu nume de date personale dintr-un tabel copiat e transformată sau păstrată cu motiv', $personaleBv === [], implode(', ', $personaleBv));
 // Oracolul pentru Biovitality: același oracol al clienților (tabelele lor sunt aceleași), plus tabelele doar ale Biovitality, clasificate aici.
-$oracolFaraRanduriBv = array_merge($oracolFaraRanduri, ['admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions']);
+// Tabelele fișierelor din cloud sunt, din regulile Bioscem 22, chiar în $oracolFaraRanduri (codul comun le face pe orice bază).
+$oracolFaraRanduriBv = $oracolFaraRanduri;
 // Etichetele blogului sunt din WP-22 și ale codului comun (blog/0033), deci în $oracolPublice.
 $oracolPubliceBv = array_merge($oracolPublice, ['competition_partners', 'competition_prices']);
 $schemaToataBv = $schemaToata;

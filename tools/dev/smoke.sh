@@ -669,6 +669,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Pluginul fisiere_cloud (6 nov 2026, din Biovitality): tools/dev/test-fisiere-cloud.php, pe licența „toate”: aplicația Windows față
+# de codul Biovitality (clona CMS_DEV_REPO_BV, cerere cu cerere), adoptarea, adminul, CSRF. Bazele și serverele lui (+44 … +47) sunt
+# ale testului, șterse la final; baza de dezvoltare doar o citește.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Fișierele din cloud (tools/dev/test-fisiere-cloud.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-fisiere-cloud.php" > "$TMP/test-fisiere-cloud.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-fisiere-cloud.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-fisiere-cloud.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-fisiere-cloud.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Paginile refăcute ale fazei D, partea a doua (WP-32 … WP-34): tools/dev/test-admin-faza-d.php, pe licența „toate”: indecșii și
 # cifrele paginii Acasă (pe o bază separată, ștearsă la final), plus ce adaugă WP-33/WP-34.
 if [ "$PACHET" = "toate" ]; then

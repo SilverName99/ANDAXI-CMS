@@ -1188,6 +1188,67 @@ vinde pachete).
   pachete inventate: calculele coșurilor cu pachete (și pachetele propuse pe linii), pagina pachetului, cardurile, caseta din coș,
   coșul flotant și „Schimbă în pachet”, și în Chromium; pe copia de verificare, `compara-calcule.php --profil=biovitality`.
 
+### Fișiere în cloud (`fisiere_cloud`)
+
+Din Biovitality (`f5486ee` … `f9b4d78`, 26–31 august; „ultimul commit revizuit” `d95598e`), portat pe 6 noiembrie, după adoptarea
+biovitality.ro (pe codul comun, adresele lui dădeau „Modulul nu este inclus în abonament” sau 404). `App\Support\BunnyStorage`,
+`FileLocks`, `FileVersions`, `FolderPasswords`, `AppTokens` (copiate cum sunt, fără `ensureSchema`), `App\Support\FisiereCloud`,
+`FisiereCloudController` (metodele `bunny*` ale lui `AdminController` din Biovitality), `DesktopApiController` (neschimbat), migrarea
+`fisiere_cloud/0059`, stilurile în `public/assets/css/fisiere-cloud.css` (regulile `bunny-*` ale `app.css` din Biovitality, încărcate
+doar pe paginile lui). Pe Biovitality (`licente_dev.biovitality`, deci și licența copiei de verificare) și pe „toate”; în niciun pachet
+de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl folosește).
+
+- **Conținut → bunny.net** (`/admin/bunny`): folderele și fișierele zonei de storage bunny.net (Storage Zone; adresa publică din Pull
+  Zone), căutarea în folder, folder nou (marcajul ascuns `.bunny-folder`: Bunny n-are „mkdir”), urcarea (numele curățat de diacritice
+  și spații, un nume luat primește „-1”), ștergerea și redenumirea (fișier sau folder: Bunny n-are redenumire, deci copiere +
+  ștergere; un folder cu peste 400 de elemente se refuză; dacă ceva pică la mijloc, originalul rămâne neatins), trimiterea pozelor și
+  clipurilor în Galerie (cu adresa de pe CDN). **Preluarea pentru editare**: lacătul pe fișier (cine, de când, nota), expiră după
+  `bunny_lock_expire_hours` (24); doar cel care l-a preluat salvează versiunea nouă, iar copia de dinainte merge în `_versiuni/<cale>/
+  <AAAALLZZ-HHMMSS>-<nume>` (se păstrează `bunny_versions_keep`, 10); arhiva `_versiuni` nu se redenumește și nu se șterge de aici;
+  Administratorul General eliberează forțat (scris în Jurnal activitate). Descărcarea trece prin server, cu cheia zonei (nu prin
+  adresa publică). **Folderele cu parolă**: parola (`password_hash`, cel puțin 6 caractere, indiciu opțional) apără tot ce e înăuntru,
+  oricât de adânc (câștigă folderul cel mai adânc); deschiderea ține o oră de la ultima folosire, legată de sesiune (browserul) sau de
+  cheia de aplicație; 5 parole greșite = 5 minute de pauză; schimbarea parolei închide folderul pentru toți; o parolă se schimbă sau
+  se scoate doar cu cea veche (Administratorul General poate fără ea, scris în jurnal); redenumirea mută parola după folder, ștergerea
+  o șterge. Într-un folder cu parolă nu se arată adresele publice și nu se trimite nimic în Galerie. E o barieră între colegi: fișierul
+  din bunny.net rămâne necriptat, iar adresa lui publică merge pentru cine o știe.
+- **Aplicația de desktop** (`/admin/bunny/app`): fiecare administrator își face chei (`bvd_` + 48 hex, arătate o singură dată; în bază
+  rămâne doar amprenta sha256), câte una pe calculator, și le retrage; butonul de descărcare a programului din zonă
+  (`bunny_app_download_path`). **API-ul aplicației Windows** (`/api/desktop/*`: ping, files, locks, download, checkout, upload,
+  release, release-all, upload-new, rename, folders, delete, folders/unlock, folders/lock; `Authorization: Bearer` sau `X-App-Token`,
+  fără sesiune; drepturile adminului care a făcut cheia, `Auth::canAccessPath('/admin/bunny')`): adresele, codurile de stare (200, 401,
+  403, 409, 413, 422, 423, 502, 503), antetele și cheile JSON sunt exact ale codului Biovitality, deci aplicația instalată
+  (`desktop/BiovitalityFiles` din repo-ul Biovitality) merge neschimbată. Garda căilor: orice cale trece prin
+  `BunnyStorage::normalizePath` (fără `..`, `.`, segmente goale, `\`), deci nu iese din zonă.
+- **Setări → bunny.net** (`/admin/settings/bunny`, doar administratorul general): zona, parola ei (păstrată când rândul e lăsat gol,
+  arătată doar cu ultimele 4 caractere), regiunea, adresa CDN, dosarul de bază, „Testează conexiunea”, „Detectează zonele din cont”
+  (cu cheia API a contului), ținta încărcărilor din admin (`bunny_upload_target`: „În bunny.net (CDN)” trimite pozele urcate din
+  Galerie, produse, blog direct în zonă, `galerie/<secțiune>`; dacă Bunny nu răspunde, rămân pe server), orele lacătului, versiunile
+  păstrate, locul programului. Setările stau în `settings` (`bunny_*`; fără valori implicite în `Settings::DEFAULTS`: rezervele din cod
+  sunt cele ale codului Biovitality, iar pe Biovitality înghețarea le-a scris la adoptare).
+- **Rolul „Cloud user”** (`Auth::ROLE_CLOUD` = `utilizator_cloud`): doar `/admin/bunny` (fișierele, aplicația de desktop), ajunge acolo
+  după logare. Cele patru roluri ale Bioscem au și ele `/admin/bunny`, iar „Administrator magazin” și `/admin/competition`, ca în
+  codul Biovitality. Rolul e cunoscut pe orice site (altfel `Auth::normalizeRole` l-ar face Administrator General); în Administratori se
+  oferă doar cu pluginul pe site, iar un cont care îl are îl păstrează la salvare (câmp ascuns). **De știut:** migrarea de date
+  `nucleu/0020` (rolurile adminilor, din WP-03) știe doar cele patru roluri, deci la adoptarea Biovitality (5 noiembrie) orice cont
+  „Cloud user” a devenit Administrator General în bază (`role` și `roles_json` rescrise); rolul se pune la loc din Administratori, după
+  ce pluginul e pe site (lista conturilor e în copia bazei de dinaintea adoptării).
+- **CSRF** (în plus față de codul Biovitality, care se baza doar pe cookie-ul `SameSite=Lax`): fiecare POST din admin cere jetonul
+  formularului (`App\Support\AdminCsrf`); fără el, nimic nu se face („Sesiunea formularului a expirat…”). API-ul aplicației nu are
+  sesiune, deci nici cookie: cheia din antet e singura dovadă.
+- **Se oprește**: ca pornit (nu e nimic cu bani; fișierele în lucru se pot termina). **Oprit**: paginile dau „Modulul nu este inclus în
+  abonament”, meniul și butonul din Galerie dispar, `/api/desktop/*` răspunde cu JSON-ul 404 al gărzii (cu `error`, pe care aplicația
+  îl arată), încărcările din admin rămân pe server; tabelele, setările și fișierele din zonă rămân neatinse.
+- **Schema**: `fisiere_cloud/0059`, adoptivă (definițiile codului Biovitality, `bv.sql`): pe biovitality.ro tabelele există cu
+  rânduri și migrarea le găsește („detectata”, 0 operații). Pe copia de verificare: doar structura, bunny.net oprit și fără chei
+  (regulile Bioscem 22, `tools/verificare/reguli/bioscem.php`).
+- **Dovada**: `tools/dev/test-fisiere-cloud.php` (în testul de fum, pe „toate”), față de codul Biovitality la `d95598e`, pe două baze
+  făcute ca a lui și câte o zonă bunny.net falsă (`tools/dev/lib/bunny-fals.php`): A adoptarea (cele cinci tabele, rândurile și
+  setările `bunny_*` neschimbate de migrări); B aceleași 90 de cereri ale aplicației pe ambele coduri (fiecare adresă, Bearer și
+  X-App-Token, JSON și multipart, parola de folder cu frâna, lacătele, versiunile, redenumirile, integrarea oprită): același cod,
+  același Content-Type, același JSON octet cu octet (momentele înlocuite), același fișier descărcat, apoi aceleași fișiere în zonă,
+  aceleași rânduri în tabele și în jurnal, aceleași cereri spre Bunny; C doar pe codul comun: pluginul oprit, CSRF, „Cloud user”.
+
 ### Neportate încă
 
 Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
@@ -1198,7 +1259,6 @@ nu schimbă încă nimic):
 |---|---|---|---|
 | `donatii` | vertij-tinitus.ro | plata_stripe | `donations` |
 | `membri` | vertij-tinitus.ro | conturi_clienti, plata_stripe | `professions`, `profession_fields`, `account_verification*`, `account_activations` |
-| `fisiere_cloud` | Biovitality | nimic | `admin_app_tokens`, `bunny_*`, `file_locks`, `file_versions` |
 | `concurenta` | Biovitality | nimic | `competition_partners`, `competition_prices` |
 
 ### Unealta internă `migrare_wordpress`
@@ -1290,8 +1350,8 @@ CSV/XLSX de clienți rămâne (e al conturilor de clienți); importul articolelo
   rămâne: e conținutul clientului și se schimbă din admin. La fel JavaScript-ul
   scris de client în antet sau în pagini (de exemplu o căutare de produse care
   cheamă `/api/search/products`): primește 404 de la gardă și nu arată nimic.
-- **Rolurile de administrator** sunt tot cele patru din Bioscem, cu prefixele de
-  adrese scrise în `Auth::canAccessPath`; pluginurile nu-și declară încă rolurile.
+- **Rolurile de administrator** sunt cele patru din Bioscem, plus „Cloud user” al pluginului `fisiere_cloud`
+  (mai sus), cu prefixele de adrese scrise în `Auth::canAccessPath`; pluginurile nu-și declară încă rolurile.
   Rolurile legate de un plugin se ascund (vezi mai sus), dar un plugin nou cu
   pagini de admin are nevoie de o declarație de rol în catalog. Până atunci,
   `/admin/cereri-oferta` (WP-26) e scris la „Administrator magazin”, lângă comenzi.

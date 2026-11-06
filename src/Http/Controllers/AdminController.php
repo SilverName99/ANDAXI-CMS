@@ -27557,6 +27557,14 @@ HTML;
             : ($baseFromOriginal !== '' ? $baseFromOriginal : 'media');
 
         $filename = $baseName . '.' . $ext;
+        // Pluginul fisiere_cloud (Biovitality): cu bunny.net pornit și pus pe „CDN”, fișierul pleacă direct în Storage Zone, iar în
+        // baza de date rămâne adresa publică de pe CDN. Dacă Bunny nu răspunde, rămâne pe discul serverului: încărcarea nu se pierde.
+        if (\App\Support\Plugins::vizibil('fisiere_cloud')) {
+            $inBunny = \App\Support\FisiereCloud::urcaMedia($this->db(), $tmpPath, $namespace, $filename);
+            if ($inBunny !== null) {
+                return ['url' => $inBunny['url'], 'media_type' => $this->detectMediaType($inBunny['nume'])];
+            }
+        }
         $targetPath = $publicDir . '/' . $filename;
         if (is_file($targetPath)) {
             $index = 1;

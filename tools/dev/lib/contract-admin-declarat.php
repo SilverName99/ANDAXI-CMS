@@ -363,4 +363,23 @@ return [
         'meniu-campanii' => ['ce' => 'adaugat', 'rand' => '^link /admin/campanii$', 'licenta' => 'toate', 'rol' => 'adm',
             'motiv' => 'intrarea „Campanii pe site” din Marketing (pagina campaniei la intrare, insigna produselor, bannerul de sus)'],
     ],
+    // Pluginul fisiere_cloud (din Biovitality): intrările bunny.net din Conținut (fișierele, pentru rolurile care au dreptul, ca în codul
+    // Biovitality) și din Setări (doar administratorul general), butonul „Fișiere bunny.net” din Galerie și rolul „Cloud user” din
+    // Administratori. Doar cu pluginul pe site (licența „toate” aici; Biovitality); cu licențele Bioscem și grafoanaytis lipsesc. Paginile
+    // lui sunt noi, deci nu sunt în contractul etichetei: le plimbă G-tastatura, iar ce trimit le verifică tools/dev/test-fisiere-cloud.php.
+    'fisiere_cloud' => [
+        'meniu-bunny' => ['ce' => 'adaugat', 'rand' => '^link /admin/bunny$', 'licenta' => 'toate', 'rol' => ['adm', 'magazin', 'blog', 'emailuri'],
+            'motiv' => 'intrarea „bunny.net” din Conținut (și butonul „Fișiere bunny.net” din Galerie): fișierele zonei bunny.net'],
+        'meniu-setari-bunny' => ['ce' => 'adaugat', 'rand' => '^link /admin/settings/bunny$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „bunny.net” din Setări: legătura cu zona de storage'],
+        'rol-cloud' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/settings/admins input:checkbox roles\[\] = utilizator_cloud$',
+            'cale' => '^/admin/settings/admins$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'rolul „Cloud user” (doar fișierele din bunny.net), oferit la adăugarea și la editarea fiecărui administrator'],
+        'rol-cloud-celula-veche' => ['ce' => 'scos', 'rand' => '^celula Administrator General Administrator magazin Administrator Blog Administrator email-uri '
+            . 'Salvează roluri$', 'cale' => '^/admin/settings/admins$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'celula rolurilor unui administrator are în plus „Cloud user” (rândul de mai jos)'],
+        'rol-cloud-celula' => ['ce' => 'adaugat', 'rand' => '^celula Administrator General Administrator magazin Administrator Blog Administrator email-uri '
+            . 'Cloud user Salvează roluri$', 'cale' => '^/admin/settings/admins$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'celula rolurilor unui administrator, cu „Cloud user”'],
+    ],
 ];

@@ -3,7 +3,7 @@
     "format": 2,
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@739f58c",
-    "amprenta_nucleu": "0eeb8c0229f53a17b40ca13acd2a59f621bec2192e3578a5654677ce9191fdfb",
+    "amprenta_nucleu": "2758591982aa6f9fcd943dcffc15f989813ee6b0646e94eedce8ddbc1840805f",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -405,6 +405,36 @@
             "motiv": "Același titlu al listei de articole în ambele coduri: „Blog & Resurse” (WP-22, DB-13)",
             "vechi": "lipsește",
             "nucleu": "implicit \"Blog & Resurse\""
+        },
+        "bunny_enabled": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"0\""
+        },
+        "bunny_gallery_folder": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"galerie\""
+        },
+        "bunny_lock_expire_hours": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"24\" | expresie"
+        },
+        "bunny_timeout": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"20\""
+        },
+        "bunny_upload_target": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"local\""
+        },
+        "bunny_versions_keep": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"10\" | expresie"
         },
         "catalog_pagina": {
             "motiv": "Același catalog la /magazin în ambele coduri (WP-19, GR-09: catalog_pagina = magazin)",

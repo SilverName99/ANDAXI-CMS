@@ -536,13 +536,27 @@ return [
             'tabele' => ['quote_requests', 'quote_submit_logs'],
         ],
 
+        // Din Biovitality (f5486ee … f9b4d78; FisiereCloudController, DesktopApiController, App\Support\BunnyStorage, FileLocks,
+        // FileVersions, FolderPasswords, AppTokens, FisiereCloud; migrarea fisiere_cloud/0059): fișierele unei zone de storage bunny.net
+        // în admin, cu lacăt la editare, versiunile vechi în `_versiuni`, parole pe foldere, cheile aplicației Windows și API-ul ei
+        // (`/api/desktop/*`, aceleași răspunsuri ca în codul Biovitality). Rolul „Cloud user” (Auth::ROLE_CLOUD) vede doar asta.
+        // docs/PLUGINURI.md, „Fișiere în cloud”.
         'fisiere_cloud' => [
             'nume' => 'Fișiere în cloud',
             'descriere' => 'Foldere în cloud, cu parolă și versiuni, plus aplicația Windows.',
             'necesita' => [],
             'client' => true,
-            'portat' => false,
             'sursa' => 'Biovitality',
+            'rute_admin' => ['/admin/bunny', '/admin/bunny/*', '/admin/settings/bunny', '/admin/settings/bunny/*'],
+            // Aplicația Windows a administratorilor (cheie de aplicație, fără sesiune). Nu e „mereu deschisă”: cu pluginul oprit
+            // primește JSON-ul 404 al gărzii (cu `error`, pe care aplicația îl arată).
+            'rute_publice' => ['/api/desktop/*'],
+            'meniu' => [
+                ['grup' => 'continut', 'ordine' => 65, 'eticheta' => 'bunny.net', 'href' => '/admin/bunny', 'icon' => 'cloud',
+                    'activ' => ['/admin/bunny']],
+                ['grup' => 'setari', 'ordine' => 55, 'eticheta' => 'bunny.net', 'href' => '/admin/settings/bunny', 'icon' => 'cloud',
+                    'activ' => ['/admin/settings/bunny']],
+            ],
             'tabele' => ['admin_app_tokens', 'bunny_*', 'file_locks', 'file_versions'],
         ],
 

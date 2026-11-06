@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "0eeb8c0229f53a17b40ca13acd2a59f621bec2192e3578a5654677ce9191fdfb",
+    "amprenta_nucleu": "2758591982aa6f9fcd943dcffc15f989813ee6b0646e94eedce8ddbc1840805f",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",
@@ -390,6 +390,36 @@
             "motiv": "BT iPay e nou pentru acest site (codul vechi nu-l avea): fără rând, bt_ipay_enabled e oprit în codul comun, iar plata_bt nu e în licența site-ului",
             "vechi": "lipsește",
             "nucleu": "implicit \"72\""
+        },
+        "bunny_enabled": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"0\""
+        },
+        "bunny_gallery_folder": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"galerie\""
+        },
+        "bunny_lock_expire_hours": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"24\" | expresie"
+        },
+        "bunny_timeout": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"20\""
+        },
+        "bunny_upload_target": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"local\""
+        },
+        "bunny_versions_keep": {
+            "motiv": "Setarea pluginului fisiere_cloud (fișierele din cloud, din Biovitality): codul vechi n-avea pluginul, iar codul comun o citește doar cu pluginul în licență; fără rând, rezerva codului comun e chiar valoarea implicită a codului Biovitality",
+            "vechi": "lipsește",
+            "nucleu": "cod \"10\" | expresie"
         },
         "cache_pagini_extins": {
             "motiv": "WP-40 (B6): cache-ul de pagini extins pornit la adoptare (prima pagină, magazinul, produsele, categoriile, mărcile, etichetele, 10 minute; golit la orice schimbare); în ce-se-schimba.md",

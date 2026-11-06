@@ -10,11 +10,9 @@ declare(strict_types=1);
  * de aici o urmează (mai jos).
  *
  * În plus față de Bioscem (fail-closed: un tabel nou fără rânduri, o coloană nouă oprește încărcarea până la regula ei):
- * - **doar structura, niciun rând:** `admin_app_tokens` (jetoanele aplicației Windows a adminilor: hash-uri, IP-ul ultimei
- *   folosiri), `bunny_protected_folders` (hash-urile parolelor dosarelor din cloud, emailul celui care le-a pus),
- *   `bunny_folder_unlocks` (cine a deschis un dosar: adresa lui, încercările greșite) și, în plus față de plan,
- *   `file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota lui și căile documentelor
- *   firmei, care pot avea nume de oameni; pluginul `fisiere_cloud` nu e portat, deci copia nu le folosește);
+ * - **doar structura, niciun rând:** `admin_app_tokens`, `bunny_protected_folders`, `bunny_folder_unlocks`, `file_locks` și
+ *   `file_versions` (pluginul `fisiere_cloud`): din regulile Bioscem 22 sunt acolo (codul comun le face pe orice bază, migrarea
+ *   fisiere_cloud/0059), cu aceleași reguli ca până atunci aici; copia nu le folosește (bunny.net oprit, mai jos);
  * - **copiate cum sunt:** `competition_partners`, `competition_prices` (concurenții și prețurile lor: date de business ale
  *   produselor, publice). Conținutul pachetelor (`products.bundle_items_json`) îl are din pluginul pachete_produse și codul comun
  *   (migrarea pachete_produse/0055), deci regula lui e cea Bioscem (copiat cum e). Etichetele blogului (`blog_tags`, `blog_post_tags`) și coloanele `blog_posts.references_html`,
@@ -26,11 +24,11 @@ declare(strict_types=1);
  *   plată (`order_payment_links.procesator`) rămâne, clienții importați din WordPress au parola înlocuită (`users`, ca toate
  *   parolele), iar „dat de” al produselor promoționale (`order_promo_items.given_by`, aici o coloană a codului vechi) are
  *   pseudonimul emailului;
- * - **setările:** în plus golite toate cheile `bunny_*` ale fișierelor din cloud care pot deschide sau arăta spațiul de
- *   stocare (zona, parola ei, regiunea, adresa CDN, dosarul de bază, cheia API și orice cheie `bunny_*` nouă: tiparul de
- *   mai jos le golește pe toate în afara celor de configurare știute), iar `bunny_enabled` = 0, ca o copie să nu atingă
- *   niciodată fișierele adevărate (port-biovitality.md §11); lista albă a cheilor (`cunoscute`) e a codului comun și a
- *   codului Biovitality (tools/verificare/reguli/setari-cunoscute.php), nu a celui Bioscem.
+ * - **setările:** golite toate cheile `bunny_*` ale fișierelor din cloud care pot deschide sau arăta spațiul de stocare (zona,
+ *   parola ei, regiunea, adresa CDN, dosarul de bază, cheia API și orice cheie `bunny_*` nouă), iar `bunny_enabled` = 0, ca o
+ *   copie să nu atingă niciodată fișierele adevărate (port-biovitality.md §11): din regulile Bioscem 22, regula e acolo (aceeași);
+ *   lista albă a cheilor (`cunoscute`) e a codului comun și a codului Biovitality (tools/verificare/reguli/setari-cunoscute.php),
+ *   nu a celui Bioscem.
  */
 
 $reguli = require __DIR__ . '/bioscem.php';
@@ -48,7 +46,8 @@ $reguli['site'] = 'biovitality';
 // email, reason, ip_address, expires_at, doar structura, ca la Bioscem). Din regulile Bioscem 17: products.bundle_items_json e a
 // codului comun (pachete_produse/0055), regula ei a trecut acolo (aceeași: copiată cum e). Din regulile Bioscem 18: campaniile de pe site
 // (campanii, campanii_produse; campanii/0054, codul comun), copiate cum sunt; baza biovitality.ro de pe codul vechi nu le are. Din
-// regulile Bioscem 19, 20 și 21: coloanele campanii/0056, campanii/0057 și campanii/0058, copiate cum sunt.
+// regulile Bioscem 19, 20 și 21: coloanele campanii/0056, campanii/0057 și campanii/0058, copiate cum sunt. Din regulile Bioscem 22: tabelele
+// și setările fișierelor din cloud (fisiere_cloud/0059) au trecut acolo, aceleași reguli.
 $reguli['versiune'] = $reguli['versiune'] * 100 + 6;
 $reguli['schema'] = 'Mutare-Site-Biovitality@d95598e (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
@@ -58,13 +57,6 @@ $reguli['grupuri']['catalog'][] = 'competition_partners';
 $reguli['grupuri']['catalog'][] = 'competition_prices';
 
 $reguli['tabele'] += [
-    // ── Doar structura (Biovitality) ──
-    'admin_app_tokens' => ['mod' => 'doar_structura', 'motiv' => 'jetoanele aplicației Windows a adminilor: hash-ul jetonului, IP-ul ultimei folosiri'],
-    'bunny_protected_folders' => ['mod' => 'doar_structura', 'motiv' => 'parolele dosarelor din cloud (hash) și emailul celui care le-a pus'],
-    'bunny_folder_unlocks' => ['mod' => 'doar_structura', 'motiv' => 'cine a deschis un dosar protejat din cloud (adresa lui) și încercările greșite'],
-    'file_locks' => ['mod' => 'doar_structura', 'motiv' => 'blocările fișierelor din cloud: emailul adminului, nota lui, căile documentelor'],
-    'file_versions' => ['mod' => 'doar_structura', 'motiv' => 'versiunile fișierelor din cloud: emailul adminului, căile documentelor'],
-
     // ── Concurența (prețurile concurenților, date de business publice) ──
     'competition_partners' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'website', 'has_campaign', 'campaign_start', 'campaign_end', 'is_active',
         'sort_order', 'created_at'], 'motive' => ['name' => 'numele unui magazin concurent (o firmă, public)']],
@@ -76,12 +68,7 @@ $reguli['tabele'] += [
 // depozite n-o scrie sau citește. E machetarea unui șablon de pagină de produs, făcută de admin: conținut public.
 $reguli['tabele']['product_templates']['pastreaza'][] = 'builder_json';
 
-// Setările: fișierele din cloud (bunny.net) oprite și fără nicio cheie de acces; restul ca la Bioscem.
-$reguli['setari']['goale_tipar'] = '/(password|secret|api_key|_token$|client_secret)|^bunny_(?!(?:enabled|timeout|upload_target|gallery_folder|lock_expire_hours'
-    . '|versions_keep|work_folder|app_download_path)$)/';
-$reguli['setari']['goale'] = array_merge($reguli['setari']['goale'], ['bunny_storage_zone', 'bunny_storage_password', 'bunny_storage_region', 'bunny_cdn_url',
-    'bunny_base_folder', 'bunny_api_key']);
-$reguli['setari']['zero'][] = 'bunny_enabled';
+// Setările fișierelor din cloud (bunny.net oprit, fără nicio cheie de acces) sunt în regulile Bioscem (22); restul ca la Bioscem.
 // Lista albă a setărilor: cheile codului comun și ale codului Biovitality (Settings::DEFAULTS și restul celor folosite), nu
 // ale celui Bioscem; o altă cheie a sursei oprește încărcarea.
 $cunoscute = require __DIR__ . '/setari-cunoscute.php';

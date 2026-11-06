@@ -15,6 +15,9 @@ $currentGalleryBackUrl = $currentGalleryUrl . ($currentGalleryQuery !== '' ? ('?
 ?>
 
 <?php ob_start(); ?>
+<?php if (\App\Support\Plugins::vizibil('fisiere_cloud') && \App\Support\Auth::canAccessPath('/admin/bunny')): ?>
+    <a class="btn btn-secondary" href="/admin/bunny">Fișiere bunny.net</a>
+<?php endif; ?>
     <button class="btn btn-secondary" type="button" id="open-folder-modal">+ Adaugă folder</button>
     <button class="btn" type="button" id="open-gallery-modal">+ Adaugă media</button>
 <?php $antetActiuni = (string) ob_get_clean(); ?>

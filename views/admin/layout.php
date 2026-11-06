@@ -99,6 +99,8 @@ $adminEditoareDeCod = ['admin/design-site', 'admin/page-editor', 'admin/product-
                 'keyboard' => '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>',
                 'menu' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
                 'caret' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>',
+                // Pluginul fisiere_cloud (bunny.net), iconița din meniul codului Biovitality.
+                'cloud' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18h10a3.5 3.5 0 0 0 .5-6.96A5 5 0 0 0 8.1 9.2 4 4 0 0 0 7 18Z"/><path d="M12 15V9"/><path d="m9.5 11.5 2.5-2.5 2.5 2.5"/></svg>',
                 default => '',
             };
         };

@@ -52,7 +52,8 @@
         "pachete_produse/0055_continut_pachete": "bd00cd4d00debefa304e162ae5b8ddc3f6fa1bac7194ffff9618819edc1c49bc",
         "campanii/0056_campanii_pagina": "8c51bea73c39f12102f5d8f3762467938872182b99165673cd980d2fa85a32f1",
         "campanii/0057_campanii_colturi": "4c2169a0fadb9fb7a47eb9120c854525f473ed78b6d72d5a459ba80d4153432a",
-        "campanii/0058_oferta_campaniei": "2c79e366589715a37c0551f47d72e0995f6f231d0c5c5e28ad74433d7b1d262c"
+        "campanii/0058_oferta_campaniei": "2c79e366589715a37c0551f47d72e0995f6f231d0c5c5e28ad74433d7b1d262c",
+        "fisiere_cloud/0059_fisiere_cloud": "7232c41793544f60c8ca4ac32c595c3663f43e10aa86bce6a50d67f407769dc1"
     },
     "retrase": {}
 }
