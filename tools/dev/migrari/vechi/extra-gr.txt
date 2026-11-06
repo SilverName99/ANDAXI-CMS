@@ -3,8 +3,6 @@
 # exact lista asta după --aplica. Scris de tools/dev/migrari/genereaza-fixture.php --fixture-uri.
 coloana products.gallery_json
 coloana products.sort_order
-tabelul competition_partners
-tabelul competition_prices
 tabelul mannequin_point_products
 tabelul mannequin_points
 tabelul reviews
