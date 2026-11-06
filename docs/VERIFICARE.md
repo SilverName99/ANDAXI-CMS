@@ -975,7 +975,8 @@ plus ce are în plus codul Biovitality la `d95598e` (`tools/dev/migrari/vechi/bv
 `file_locks` și `file_versions` (jurnalele fișierelor din cloud: emailul adminului, nota, căile documentelor; din regulile Bioscem
 22, odată cu pluginul `fisiere_cloud` și migrarea `fisiere_cloud/0059`, regula lor și a setărilor `bunny_*` de mai jos e în regulile
 Bioscem, aceeași: codul comun face tabelele pe orice bază); **copiate** cum
-sunt concurenții și prețurile lor (`competition_partners`, `competition_prices`), etichetele blogului (`blog_tags`,
+sunt concurenții și prețurile lor (`competition_partners`, `competition_prices`; din regulile Bioscem 23, odată cu pluginul `concurenta`
+și migrarea `concurenta/0060`, regula lor e în regulile Bioscem, aceeași), etichetele blogului (`blog_tags`,
 `blog_post_tags`), `products.bundle_items_json`, `blog_posts.references_html` și `featured_image_width`; id-urile Stripe ale
 comenzilor `anon-<id>`, procesatorul linkurilor de plată păstrat (vechile linkuri primesc la migrare procesatorul Stripe din
 `site-uri/biovitality/migrari.json`), clienții importați din WordPress cu parola înlocuită, ca toate parolele. Setările: în plus

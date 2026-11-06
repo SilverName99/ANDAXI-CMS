@@ -18951,6 +18951,17 @@ final class AdminController
         return date($endOfDay ? 'Y-m-d 23:59:59' : 'Y-m-d 00:00:00', $timestamp);
     }
 
+    /**
+     * Prețul pe care îl vede clientul (prețul redus și perioadele lui), ca în lista produselor din admin. Pentru pluginul concurenta
+     * (ConcurentaController::competitionProducts, din Biovitality): comparația cu partenerii pornește de la prețul plătit.
+     *
+     * @return array{effective_price: float, sale_price: ?float, has_sale_price: bool, periods: array}
+     */
+    public function pretulProdusului(float $pret, mixed $pretRedus, mixed $perioade): array
+    {
+        return $this->resolveProductPricing($pret, $pretRedus, $perioade);
+    }
+
     private function resolveProductPricing(float $basePrice, mixed $salePriceRaw, mixed $salePeriodsRaw): array
     {
         $basePrice = max(0.0, $basePrice);

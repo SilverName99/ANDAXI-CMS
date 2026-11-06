@@ -7,8 +7,6 @@ coloana customer_email_confirmations.ip_address
 coloana customer_email_confirmations.reason
 coloana products.gallery_json
 indexul customer_email_confirmations.idx_customer_email_confirmations_ip
-tabelul competition_partners
-tabelul competition_prices
 tabelul mannequin_point_products
 tabelul mannequin_points
 tabelul reviews

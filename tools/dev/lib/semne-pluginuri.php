@@ -60,4 +60,6 @@ return [
     // Fișierele din cloud (din Biovitality): intrările bunny.net din Conținut și Setări, butonul din Galerie, aplicația de desktop,
     // rolul „Cloud user” din Administratori.
     'fisiere_cloud' => ['/bunny\.net/u', '/Fișiere bunny/u', '/Aplicația de desktop/u', '/Cloud user/u'],
+    // Analiza prețurilor concurenței (din Biovitality): intrarea din Produse.
+    'concurenta' => ['/Analiza competiție/u'],
 ];

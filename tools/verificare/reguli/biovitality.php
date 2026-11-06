@@ -14,7 +14,7 @@ declare(strict_types=1);
  *   `file_versions` (pluginul `fisiere_cloud`): din regulile Bioscem 22 sunt acolo (codul comun le face pe orice bază, migrarea
  *   fisiere_cloud/0059), cu aceleași reguli ca până atunci aici; copia nu le folosește (bunny.net oprit, mai jos);
  * - **copiate cum sunt:** `competition_partners`, `competition_prices` (concurenții și prețurile lor: date de business ale
- *   produselor, publice). Conținutul pachetelor (`products.bundle_items_json`) îl are din pluginul pachete_produse și codul comun
+ *   produselor, publice; din regulile Bioscem 23 sunt acolo, aceleași: codul comun le face pe orice bază, concurenta/0060). Conținutul pachetelor (`products.bundle_items_json`) îl are din pluginul pachete_produse și codul comun
  *   (migrarea pachete_produse/0055), deci regula lui e cea Bioscem (copiat cum e). Etichetele blogului (`blog_tags`, `blog_post_tags`) și coloanele `blog_posts.references_html`,
  *   `featured_image_width`, `wp_post_id` le are din WP-22 și codul comun (migrarea blog/0033), deci regulile lor sunt cele
  *   Bioscem (`wp_post_id` o pune importul `scripts/import-wordpress-posts.php` al codului Biovitality, nu instalarea, deci nu
@@ -47,22 +47,12 @@ $reguli['site'] = 'biovitality';
 // codului comun (pachete_produse/0055), regula ei a trecut acolo (aceeași: copiată cum e). Din regulile Bioscem 18: campaniile de pe site
 // (campanii, campanii_produse; campanii/0054, codul comun), copiate cum sunt; baza biovitality.ro de pe codul vechi nu le are. Din
 // regulile Bioscem 19, 20 și 21: coloanele campanii/0056, campanii/0057 și campanii/0058, copiate cum sunt. Din regulile Bioscem 22: tabelele
-// și setările fișierelor din cloud (fisiere_cloud/0059) au trecut acolo, aceleași reguli.
+// și setările fișierelor din cloud (fisiere_cloud/0059) au trecut acolo, aceleași reguli. Din regulile Bioscem 23: concurenții și prețurile
+// lor (concurenta/0060) la fel, în grupul catalogului.
 $reguli['versiune'] = $reguli['versiune'] * 100 + 6;
 $reguli['schema'] = 'Mutare-Site-Biovitality@d95598e (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
 $reguli['pachet'] = 'biovitality';
-
-$reguli['grupuri']['catalog'][] = 'competition_partners';
-$reguli['grupuri']['catalog'][] = 'competition_prices';
-
-$reguli['tabele'] += [
-    // ── Concurența (prețurile concurenților, date de business publice) ──
-    'competition_partners' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'website', 'has_campaign', 'campaign_start', 'campaign_end', 'is_active',
-        'sort_order', 'created_at'], 'motive' => ['name' => 'numele unui magazin concurent (o firmă, public)']],
-    'competition_prices' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'partner_id', 'product_id', 'price', 'campaign_active', 'campaign_price', 'campaign_start',
-        'campaign_end', 'out_of_stock', 'only_in_store', 'product_url', 'updated_at']],
-];
 
 // Găsită la prima încărcare de pe server (30 oct 2026): coloana există în baza biovitality.ro, dar niciun cod din
 // depozite n-o scrie sau citește. E machetarea unui șablon de pagină de produs, făcută de admin: conținut public.

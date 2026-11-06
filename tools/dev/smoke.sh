@@ -685,6 +685,21 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Pluginul concurenta (6 nov 2026, din Biovitality): tools/dev/test-concurenta.php, pe licența „toate”: analiza prețurilor concurenței
+# față de codul Biovitality (clona CMS_DEV_REPO_BV), CSRF. Bazele și serverele lui (+48, +49) sunt ale testului, șterse la final.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Analiza prețurilor concurenței (tools/dev/test-concurenta.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-concurenta.php" > "$TMP/test-concurenta.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-concurenta.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-concurenta.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-concurenta.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Paginile refăcute ale fazei D, partea a doua (WP-32 … WP-34): tools/dev/test-admin-faza-d.php, pe licența „toate”: indecșii și
 # cifrele paginii Acasă (pe o bază separată, ștearsă la final), plus ce adaugă WP-33/WP-34.
 if [ "$PACHET" = "toate" ]; then

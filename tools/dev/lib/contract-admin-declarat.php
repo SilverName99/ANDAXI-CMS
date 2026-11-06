@@ -382,4 +382,11 @@ return [
             . 'Cloud user Salvează roluri$', 'cale' => '^/admin/settings/admins$', 'licenta' => 'toate', 'rol' => 'adm',
             'motiv' => 'celula rolurilor unui administrator, cu „Cloud user”'],
     ],
+    // Pluginul concurenta (din Biovitality): intrarea „Analiza competiție” din Produse, pentru administratorul general și „Administrator
+    // magazin” (ca în codul Biovitality). Doar cu pluginul pe site (licența „toate” aici; Biovitality). Pagina lui e nouă: ce trimite o
+    // verifică tools/dev/test-concurenta.php.
+    'concurenta' => [
+        'meniu-concurenta' => ['ce' => 'adaugat', 'rand' => '^link /admin/competition$', 'licenta' => 'toate', 'rol' => ['adm', 'magazin'],
+            'motiv' => 'intrarea „Analiza competiție” din Produse (prețurile concurenților, produs cu produs)'],
+    ],
 ];

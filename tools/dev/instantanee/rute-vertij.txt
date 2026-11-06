@@ -2,7 +2,7 @@
 # Pe site: plata_stripe, conturi_clienti, blog, newsletter, donatii, membri
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (341)
+RUTE (348)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -29,6 +29,8 @@ GET  /admin/campanii/{id} -> 403 [campanii]
 GET  /admin/categories -> 403 [catalog]
 GET  /admin/cauta -> CONTROLLER [nucleu]
 GET  /admin/cereri-oferta -> 403 [cereri_oferta]
+GET  /admin/competition -> 403 [concurenta]
+GET  /admin/competition/export -> 403 [concurenta]
 GET  /admin/componente -> CONTROLLER [nucleu]
 GET  /admin/coupons -> 403 [cupoane]
 GET  /admin/coupons/unique -> 403 [cupoane]
@@ -181,6 +183,11 @@ POST /admin/categories/{id}/delete -> 403 [catalog]
 POST /admin/categories/{id}/update -> 403 [catalog]
 POST /admin/cereri-oferta/{id}/stare -> 403 [cereri_oferta]
 POST /admin/cereri-oferta/{id}/sterge -> 403 [cereri_oferta]
+POST /admin/competition/cell -> 403 [concurenta]
+POST /admin/competition/clear -> 403 [concurenta]
+POST /admin/competition/partners -> 403 [concurenta]
+POST /admin/competition/partners/{id}/delete -> 403 [concurenta]
+POST /admin/competition/save-all -> 403 [concurenta]
 POST /admin/coupons -> 403 [cupoane]
 POST /admin/coupons/unique/action -> 403 [cupoane]
 POST /admin/coupons/unique/import -> 403 [cupoane]

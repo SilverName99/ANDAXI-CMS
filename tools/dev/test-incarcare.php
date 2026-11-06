@@ -282,6 +282,8 @@ $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages'
     // Pluginul campanii (campanii/0054): campaniile de pe site și produsele lor (numele campaniei, fereastra, textele și culorile
     // insignei și ale bannerului, id-uri; niciun client, niciun admin).
     'campanii', 'campanii_produse',
+    // Regulile Bioscem 23 (pluginul concurenta, concurenta/0060): concurenții și prețurile lor (date de business publice).
+    'competition_partners', 'competition_prices',
     'order_promo_items', 'order_product_warnings', 'newsletter_lists', 'newsletter_list_subscribers', 'newsletter_templates', 'newsletter_optin_forms',
     'newsletter_campaigns'];
 $tipuriText = ['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext', 'json', 'binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob', 'set'];
@@ -622,7 +624,8 @@ $verifica('Biovitality: fiecare coloană cu nume de date personale dintr-un tabe
 // Tabelele fișierelor din cloud sunt, din regulile Bioscem 22, chiar în $oracolFaraRanduri (codul comun le face pe orice bază).
 $oracolFaraRanduriBv = $oracolFaraRanduri;
 // Etichetele blogului sunt din WP-22 și ale codului comun (blog/0033), deci în $oracolPublice.
-$oracolPubliceBv = array_merge($oracolPublice, ['competition_partners', 'competition_prices']);
+// Concurenții și prețurile lor sunt, din regulile Bioscem 23, chiar în $oracolPublice (codul comun le face pe orice bază).
+$oracolPubliceBv = $oracolPublice;
 $schemaToataBv = $schemaToata;
 foreach ($bv as $tabel => $coloane) {
     $schemaToataBv[$tabel] = ($schemaToataBv[$tabel] ?? []) + $coloane;

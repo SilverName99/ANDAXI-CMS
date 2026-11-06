@@ -95,7 +95,9 @@ return [
     // 22 (pluginul fisiere_cloud, fisiere_cloud/0059): cheile aplicației Windows, lacătele, versiunile și folderele cu parolă ale
     // fișierelor din cloud, doar structura (până acum doar în regulile Biovitality; codul comun le are acum pe orice bază), iar
     // setările bunny_* care pot deschide spațiul de stocare golite și bunny_enabled = 0 (o copie nu atinge fișierele adevărate).
-    'versiune' => 22,
+    // 23 (pluginul concurenta, concurenta/0060): concurenții și prețurile lor (date de business ale produselor, publice; numele unui
+    // magazin concurent e al unei firme), copiate cum sunt, în grupul catalogului (până acum doar în regulile Biovitality).
+    'versiune' => 23,
     'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -111,7 +113,9 @@ return [
         'continut' => ['pages', 'seo_pages', 'seo_redirects', 'gallery_folders', 'gallery_images', 'mannequin_points', 'mannequin_point_products',
             'promotional_products', 'loyalty_points_rules'],
         'catalog' => ['product_categories', 'products', 'product_category_links', 'product_extra_fields', 'product_extra_field_values',
-            'product_templates', 'product_template_fields', 'product_warnings', 'product_brands', 'product_tags', 'product_tag_links'],
+            'product_templates', 'product_template_fields', 'product_warnings', 'product_brands', 'product_tags', 'product_tag_links',
+            // 23: concurenții și prețurile lor (o celulă arată spre un produs, fără chei străine).
+            'competition_partners', 'competition_prices'],
         // După catalog și conținut: o campanie arată spre o pagină și spre produse (id-uri, fără chei străine).
         'campanii' => ['campanii', 'campanii_produse'],
         'blog' => ['blog_authors', 'blog_categories', 'blog_posts', 'blog_post_categories', 'blog_templates', 'blog_tags', 'blog_post_tags'],
@@ -159,6 +163,13 @@ return [
         'bunny_folder_unlocks' => ['mod' => 'doar_structura', 'motiv' => 'cine a deschis un dosar protejat din cloud (adresa lui) și încercările greșite'],
         'file_locks' => ['mod' => 'doar_structura', 'motiv' => 'blocările fișierelor din cloud: emailul adminului, nota lui, căile documentelor'],
         'file_versions' => ['mod' => 'doar_structura', 'motiv' => 'versiunile fișierelor din cloud: emailul adminului, căile documentelor'],
+
+        // 23 (pluginul concurenta, concurenta/0060; din regulile Biovitality, aceleași): concurenții și prețurile lor, date de business
+        // publice, copiate cum sunt.
+        'competition_partners' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'website', 'has_campaign', 'campaign_start', 'campaign_end',
+            'is_active', 'sort_order', 'created_at'], 'motive' => ['name' => 'numele unui magazin concurent (o firmă, public)']],
+        'competition_prices' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'partner_id', 'product_id', 'price', 'campaign_active', 'campaign_price',
+            'campaign_start', 'campaign_end', 'out_of_stock', 'only_in_store', 'product_url', 'updated_at']],
 
         // ── Setările ──
         'settings' => ['mod' => 'setari', 'pastreaza' => ['key', 'value'], 'emailuri_publice' => 'textele site-ului (antet, subsol, '

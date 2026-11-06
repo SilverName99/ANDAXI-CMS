@@ -246,7 +246,9 @@ try {
             // Pluginul campanii (5 nov 2026): lista campaniilor și editorul unei campanii noi (doar cu pluginul pornit).
             '/admin/campanii', '/admin/campanii/noua',
             // Pluginul fisiere_cloud (din Biovitality): fișierele zonei bunny.net, aplicația de desktop, Setări → bunny.net.
-            '/admin/bunny', '/admin/bunny/app', '/admin/settings/bunny']),
+            '/admin/bunny', '/admin/bunny/app', '/admin/settings/bunny',
+            // Pluginul concurenta (din Biovitality): analiza prețurilor concurenței.
+            '/admin/competition']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;

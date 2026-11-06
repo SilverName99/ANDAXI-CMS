@@ -560,13 +560,20 @@ return [
             'tabele' => ['admin_app_tokens', 'bunny_*', 'file_locks', 'file_versions'],
         ],
 
+        // Din Biovitality (649c837, 7ee1a86, 729d6fa, ea927aa; ConcurentaController, migrarea concurenta/0060): Produse → Analiza
+        // competiție, prețurile concurenților produs cu produs față de prețul nostru (cel plătit), cu campaniile lor, stocul și linkul,
+        // exportul Excel. Are nevoie de catalog (produsele). docs/PLUGINURI.md, „Analiza prețurilor concurenței”.
         'concurenta' => [
             'nume' => 'Analiza prețurilor concurenței',
             'descriere' => 'Prețurile concurenților, comparate cu ale magazinului.',
-            'necesita' => [],
+            'necesita' => ['catalog'],
             'client' => true,
-            'portat' => false,
             'sursa' => 'Biovitality',
+            'rute_admin' => ['/admin/competition', '/admin/competition/*'],
+            'meniu' => [
+                ['grup' => 'produse', 'ordine' => 75, 'eticheta' => 'Analiza competiție', 'href' => '/admin/competition', 'icon' => 'stats',
+                    'activ' => ['/admin/competition']],
+            ],
             'tabele' => ['competition_partners', 'competition_prices'],
         ],
 
@@ -730,8 +737,8 @@ return [
         'bioscem' => ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'plata_euplatesc', 'plata_bt', 'link_plata', 'erp',
             'cupoane', 'fidelitate', 'recenzii', 'precomenzi', 'oferte_bbd', 'produse_promo', 'conturi_clienti', 'blog',
             'newsletter', 'chat_live', 'manechin', 'acorduri_gdpr'],
-        // Codul Biovitality: fără EuPlătesc, BT și precomenzi; cu pachetele (pachete_produse, portat), fișierele în cloud și concurența
-        // (neportate încă).
+        // Codul Biovitality: fără EuPlătesc, BT și precomenzi; cu pachetele (pachete_produse), fișierele în cloud (fisiere_cloud) și
+        // concurența (concurenta), toate portate.
         'biovitality' => ['catalog', 'magazin', 'livrare_fan', 'plata_stripe', 'link_plata', 'erp', 'cupoane', 'fidelitate',
             'recenzii', 'oferte_bbd', 'produse_promo', 'pachete_produse', 'conturi_clienti', 'blog', 'newsletter', 'chat_live',
             'fisiere_cloud', 'concurenta', 'manechin', 'acorduri_gdpr'],

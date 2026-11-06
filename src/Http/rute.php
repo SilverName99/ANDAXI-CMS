@@ -20,6 +20,7 @@ use App\Http\Controllers\CampaniiController;
 use App\Http\Controllers\CereriOfertaController;
 use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
+use App\Http\Controllers\ConcurentaController;
 use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\DesktopApiController;
 use App\Http\Controllers\FisiereCloudController;
@@ -437,5 +438,13 @@ return static function (Router $router): void {
     $router->post('/admin/bunny/folders/unprotect', [FisiereCloudController::class, 'bunnyFolderUnprotect']);
     $router->post('/admin/bunny/folders/unlock', [FisiereCloudController::class, 'bunnyFolderUnlock']);
     $router->post('/admin/bunny/folders/lock', [FisiereCloudController::class, 'bunnyFolderLock']);
+    // Pluginul concurenta (din Biovitality; App\Http\Controllers\ConcurentaController): Produse → Analiza competiție.
+    $router->get('/admin/competition/export', [ConcurentaController::class, 'competitionExport']);
+    $router->get('/admin/competition', [ConcurentaController::class, 'competition']);
+    $router->post('/admin/competition/partners', [ConcurentaController::class, 'competitionPartnerSave']);
+    $router->post('/admin/competition/partners/{id}/delete', [ConcurentaController::class, 'competitionPartnerDelete']);
+    $router->post('/admin/competition/cell', [ConcurentaController::class, 'competitionCellSave']);
+    $router->post('/admin/competition/save-all', [ConcurentaController::class, 'competitionSaveAll']);
+    $router->post('/admin/competition/clear', [ConcurentaController::class, 'competitionClear']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

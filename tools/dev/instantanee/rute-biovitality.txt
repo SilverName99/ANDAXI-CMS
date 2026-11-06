@@ -2,7 +2,7 @@
 # Pe site: catalog, magazin, livrare_fan, plata_stripe, link_plata, erp, cupoane, fidelitate, recenzii, oferte_bbd, produse_promo, pachete_produse, conturi_clienti, blog, newsletter, chat_live, fisiere_cloud, concurenta, manechin, acorduri_gdpr
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (341)
+RUTE (348)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -29,6 +29,8 @@ GET  /admin/campanii/{id} -> 403 [campanii]
 GET  /admin/categories -> CONTROLLER [catalog]
 GET  /admin/cauta -> CONTROLLER [nucleu]
 GET  /admin/cereri-oferta -> 403 [cereri_oferta]
+GET  /admin/competition -> CONTROLLER [concurenta]
+GET  /admin/competition/export -> CONTROLLER [concurenta]
 GET  /admin/componente -> CONTROLLER [nucleu]
 GET  /admin/coupons -> CONTROLLER [cupoane]
 GET  /admin/coupons/unique -> CONTROLLER [cupoane]
@@ -181,6 +183,11 @@ POST /admin/categories/{id}/delete -> CONTROLLER [catalog]
 POST /admin/categories/{id}/update -> CONTROLLER [catalog]
 POST /admin/cereri-oferta/{id}/stare -> 403 [cereri_oferta]
 POST /admin/cereri-oferta/{id}/sterge -> 403 [cereri_oferta]
+POST /admin/competition/cell -> CONTROLLER [concurenta]
+POST /admin/competition/clear -> CONTROLLER [concurenta]
+POST /admin/competition/partners -> CONTROLLER [concurenta]
+POST /admin/competition/partners/{id}/delete -> CONTROLLER [concurenta]
+POST /admin/competition/save-all -> CONTROLLER [concurenta]
 POST /admin/coupons -> CONTROLLER [cupoane]
 POST /admin/coupons/unique/action -> CONTROLLER [cupoane]
 POST /admin/coupons/unique/import -> CONTROLLER [cupoane]
@@ -345,7 +352,7 @@ POST /webhook/bt-ipay -> MEREU [plata_bt]
 POST /webhook/euplatesc -> MEREU [plata_euplatesc]
 POST /webhook/stripe -> MEREU [plata_stripe]
 
-MENIU (45)
+MENIU (46)
 Acasă -> /admin [nucleu]
 Comenzi > Comenzi -> /admin/orders [magazin]
 Produse > Produse -> /admin/products [catalog]
@@ -354,6 +361,7 @@ Produse > Câmpuri și șabloane -> /admin/products/fields [catalog]
 Produse > Oferte BBD -> /admin/products/oferte-bbd [oferte_bbd]
 Produse > Recenzii -> /admin/products/reviews [recenzii]
 Produse > Produse promoționale -> /admin/promo-products [produse_promo]
+Produse > Analiza competiție -> /admin/competition [concurenta]
 Clienți > Clienți -> /admin/users [conturi_clienti]
 Clienți > Conturi clienți -> /admin/users/settings [conturi_clienti]
 Clienți > Acorduri GDPR -> /admin/users/gdpr-agreements [acorduri_gdpr]

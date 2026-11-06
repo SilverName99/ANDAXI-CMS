@@ -1249,6 +1249,40 @@ de abonament (`client`: îl pune CRM-ul în licență doar unui site care îl fo
   același Content-Type, același JSON octet cu octet (momentele înlocuite), același fișier descărcat, apoi aceleași fișiere în zonă,
   aceleași rânduri în tabele și în jurnal, aceleași cereri spre Bunny; C doar pe codul comun: pluginul oprit, CSRF, „Cloud user”.
 
+### Analiza prețurilor concurenței (`concurenta`)
+
+Din Biovitality (`649c837`, `7ee1a86`, `729d6fa`, `ea927aa`, 20 august – 4 septembrie; „ultimul commit revizuit” `d95598e`), portat pe
+6 noiembrie, după `fisiere_cloud`. `ConcurentaController` (metodele `competition*` ale lui `AdminController` din Biovitality), vederea
+`views/admin/competition.php` (stilurile și scripturile ei, în pagină, ca în codul Biovitality), migrarea `concurenta/0060`. Prețul
+nostru vine din `AdminController::pretulProdusului` (aceeași regulă ca lista produselor: prețul redus și perioadele lui). Pe Biovitality
+(`licente_dev.biovitality`) și pe „toate”; în niciun pachet de abonament (`client`).
+
+- **Produse → Analiza competiție** (`/admin/competition`; administratorul general și „Administrator magazin”, ca în codul Biovitality):
+  partenerii (concurenții) ca o bandă de carduri (numele, site-ul, o perioadă implicită de campanie, activ sau nu, ordinea; editare,
+  ștergere cu tot cu prețurile lui), iar în tabel câte o pereche de coloane pentru fiecare partener activ: prețul lui și diferența
+  față de prețul nostru (RON și %, mai ieftin / mai scump). Prețul care contează la partener e cel de campanie dacă e bifată la acel
+  produs, completată și perioada ei (sau, fără ea, perioada implicită a partenerului) acoperă ziua de azi; altfel prețul normal. Plus,
+  pe celulă: „Out of stock”, „Doar în magazin” (nu e pe site-ul lui, dar e în magazinul fizic), linkul produsului. Fiecare câmp se
+  salvează singur (`POST /admin/competition/cell`, JSON: câmpul, valoarea curățată: sumele cu virgulă sau punct, un preț 0 = „neaflat”,
+  datele ISO, linkul cu `https://` pus dacă lipsește); „Salvează tot” (fără JavaScript) scrie tot formularul într-o tranzacție.
+  „Golește tabelul” șterge toate prețurile (partenerii rămân). **Exportul Excel** (`GET /admin/competition/export`): foaia „Comparație
+  prețuri” (produsele, prețul nostru și, pe fiecare partener activ, prețul, diferența, campania, perioada, stocul, linkul) și foaia
+  „Parteneri”.
+- **Reparat față de codul Biovitality**: bifa „Doar în magazin” se citea din bază, dar nu ajungea în celulă (`competitionPricesMap`),
+  deci după reîncărcare apărea mereu goală, „Salvează tot” o scria înapoi 0, iar exportul arăta „Disponibil”; acum se vede, se păstrează
+  și apare în export.
+- **CSRF** (în plus față de codul Biovitality): fiecare POST cere jetonul formularului (`_csrf`; la celule antetul `X-CSRF-Token`, trimis de
+  scriptul tabelului; fără el celula răspunde 403 JSON). Numele coloanei scrise de o celulă vine doar din lista fixă a câmpurilor; restul
+  SQL-ului e cu parametri.
+- **Are nevoie de**: catalog (produsele). **Se oprește**: ca pornit. **Oprit**: pagina dă „Modulul nu este inclus în abonament”, intrarea
+  din meniu dispare; partenerii și prețurile rămân în bază.
+- **Schema**: `concurenta/0060`, adoptivă (definițiile codului Biovitality, cu coloanele adăugate de ALTER-urile lui): pe biovitality.ro
+  „detectata”, 0 operații. Pe copia de verificare: copiate cum sunt (regulile Bioscem 23).
+- **Dovada**: `tools/dev/test-concurenta.php` (în testul de fum, pe „toate”), față de codul Biovitality la `d95598e`, pe două baze făcute
+  ca a lui: A adoptarea; B aceeași parte a paginii sub antet (cardurile, tabelul, prețurile efective), octet cu octet, și aceleași răspunsuri
+  și rânduri după fiecare acțiune (partenerii, celulele, „Salvează tot”, exportul celulă cu celulă, ștergerea, golirea, rolurile); C bifa
+  „Doar în magazin”, singura diferență, declarată pe celula ei; D CSRF și pluginul oprit, doar pe codul comun.
+
 ### Neportate încă
 
 Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
@@ -1259,7 +1293,6 @@ nu schimbă încă nimic):
 |---|---|---|---|
 | `donatii` | vertij-tinitus.ro | plata_stripe | `donations` |
 | `membri` | vertij-tinitus.ro | conturi_clienti, plata_stripe | `professions`, `profession_fields`, `account_verification*`, `account_activations` |
-| `concurenta` | Biovitality | nimic | `competition_partners`, `competition_prices` |
 
 ### Unealta internă `migrare_wordpress`
 

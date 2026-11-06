@@ -1678,6 +1678,175 @@
             },
             "motor": "InnoDB"
         },
+        "competition_partners": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "campaign_end": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "campaign_start": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "has_campaign": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "website": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "competition_prices": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "campaign_active": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "campaign_end": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "campaign_price": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "campaign_start": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "date"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "only_in_store": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "out_of_stock": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "partner_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "price": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "decimal(10,2)"
+                },
+                "product_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "product_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_cprices_product": {
+                    "coloane": [
+                        "product_id"
+                    ],
+                    "unic": false
+                },
+                "uniq_partner_product": {
+                    "coloane": [
+                        "partner_id",
+                        "product_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "contact_form_messages": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
