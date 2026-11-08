@@ -35,6 +35,8 @@ final class StatisticiAgregare
     /** Câte căi distincte păstrează o zi în statistici_pagini (cele mai văzute, cu cel puțin 2 vizitatori); restul „(altele)”. */
     public const MAX_PAGINI = 500;
     public const ALTELE = '(altele)';
+    /** Câți termeni de căutare păstrează o zi (ai cel puțin 2 vizitatori); restul „(altele)”. */
+    public const MAX_CAUTARI = 200;
 
     /**
      * Agregă zilele neîncheiate (cel mult `$maxZile`, de la ultima încheiată până azi), apoi șterge evenimentele brute vechi și
@@ -199,7 +201,11 @@ final class StatisticiAgregare
         $numarEvenimente = 0;
         $numarVizite = 0;
         $nrVizitator = 0;
+        // Numărul vizitatorului în vizite: aleator (32 de biți, unic în zi), altul la fiecare agregare, deci nu spune ordinea sosirii
+        // și nu leagă vizitele aceluiași om de la o agregare la alta; numărătoarea COUNT(DISTINCT zi, vizitator_nr) rămâne aceeași.
+        $numereFolosite = [];
         $atribuite = [];
+        $vizitatoriTermen = [];
 
         $db->beginTransaction();
         try {
@@ -210,8 +216,8 @@ final class StatisticiAgregare
                     utm_campanie, utm_continut, utm_termen, pagina_intrare, pagini, durata, angajata, dispozitiv, browser, os, tara,
                     adaugari_cos, checkout, comenzi)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            $insComanda = $db->prepare('INSERT INTO statistici_comenzi (comanda_id, zi, creat_la, sursa, detaliu, utm_campanie, dispozitiv, vizita_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+            $insComanda = $db->prepare('INSERT INTO statistici_comenzi (comanda_id, zi, creat_la, sursa, detaliu, utm_campanie, dispozitiv)
+                VALUES (?, ?, ?, ?, ?, ?, ?)');
             $stmt = $db->prepare('SELECT creat_la, vizitator, tip, cale, tip_pagina, produs_id, sursa, detaliu, utm_sursa, utm_mediu,
                     utm_campanie, utm_continut, utm_termen, dispozitiv, browser, os, tara, durata, cautare, rezultate
                 FROM statistici_evenimente WHERE creat_la >= ? AND creat_la < ? AND vizitator >= ? AND vizitator < ?
@@ -230,7 +236,7 @@ final class StatisticiAgregare
                 $vizita = null;
                 $viziteleLui = [];
                 $ultimulMoment = 0;
-                $inchide = static function () use (&$vizita, &$viziteleLui, $insVizita, $db, $zi, &$numarVizite): void {
+                $inchide = static function () use (&$vizita, &$viziteleLui, $insVizita, $zi, &$numarVizite): void {
                     if ($vizita === null) {
                         return;
                     }
@@ -242,7 +248,7 @@ final class StatisticiAgregare
                         $vizita['utm_continut'], $vizita['utm_termen'], $vizita['pagina_intrare'], min(65535, $vizita['pagini']), $durata,
                         $angajata, $vizita['dispozitiv'], $vizita['browser'], $vizita['os'], $vizita['tara'], min(65535, $vizita['adaugari_cos']),
                         min(65535, $vizita['checkout']), min(65535, $vizita['comenzi'])]);
-                    $viziteleLui[] = ['id' => (int) $db->lastInsertId(), 'inceput' => $vizita['inceput'], 'sursa' => $vizita['sursa'],
+                    $viziteleLui[] = ['inceput' => $vizita['inceput'], 'sursa' => $vizita['sursa'],
                         'detaliu' => $vizita['detaliu'], 'utm_campanie' => $vizita['utm_campanie'], 'dispozitiv' => $vizita['dispozitiv']];
                     $numarVizite++;
                     $vizita = null;
@@ -265,7 +271,7 @@ final class StatisticiAgregare
                             }
                             $aleasa ??= $inCare;
                             $insComanda->execute([$c['id'], $zi, $c['creat_la'], $aleasa['sursa'] ?? 'necunoscuta', $aleasa['detaliu'] ?? '',
-                                $aleasa['utm_campanie'] ?? '', $aleasa['dispozitiv'] ?? '', $aleasa['id'] ?? null]);
+                                $aleasa['utm_campanie'] ?? '', $aleasa['dispozitiv'] ?? '']);
                             $atribuite[$c['id']] = true;
                         }
                     }
@@ -279,7 +285,10 @@ final class StatisticiAgregare
                         $inchide();
                         $atribuie($vizitatorCurent);
                         $vizitatorCurent = $viz;
-                        $nrVizitator++;
+                        do {
+                            $nrVizitator = random_int(1, 4294967295);
+                        } while (isset($numereFolosite[$nrVizitator]));
+                        $numereFolosite[$nrVizitator] = true;
                         $ultimulMoment = 0;
                     }
                     $tip = (int) $ev['tip'];
@@ -368,6 +377,10 @@ final class StatisticiAgregare
                                     $vizitatoriCautare[$cheieC][$viz] = true;
                                     $cautari[$cheieC]['vizitatori']++;
                                 }
+                                if (!isset($vizitatoriCautare["\0" . $text][$viz])) {
+                                    $vizitatoriCautare["\0" . $text][$viz] = true;
+                                    $vizitatoriTermen[$text] = ($vizitatoriTermen[$text] ?? 0) + 1;
+                                }
                                 if ($ev['rezultate'] !== null && (int) $ev['rezultate'] === 0) {
                                     $cautari[$cheieC]['fara_rezultat']++;
                                 }
@@ -383,7 +396,7 @@ final class StatisticiAgregare
             foreach ($comenziPeVizitator as $lista) {
                 foreach ($lista as $c) {
                     if (!isset($atribuite[$c['id']])) {
-                        $insComanda->execute([$c['id'], $zi, $c['creat_la'], 'necunoscuta', '', '', '', null]);
+                        $insComanda->execute([$c['id'], $zi, $c['creat_la'], 'necunoscuta', '', '', '']);
                     }
                 }
             }
@@ -397,8 +410,21 @@ final class StatisticiAgregare
             foreach ($produse as $p) {
                 $insProdus->execute([$zi, $p['sursa'], $p['produs_id'], $p['vizualizari'], $p['vizitatori'], $p['adaugari_cos']]);
             }
-            $insCautare = $db->prepare('INSERT INTO statistici_cautari (zi, sursa, cautare, cautari, vizitatori, fara_rezultat) VALUES (?, ?, ?, ?, ?, ?)');
+            // Căutările păstrate: ale cel puțin 2 vizitatori diferiți ai zilei, cele mai multe MAX_CAUTARI; restul „(altele)”.
+            $termeniBuni = array_filter($vizitatoriTermen, static fn (int $n): bool => $n >= 2);
+            arsort($termeniBuni);
+            $termeniBuni = array_slice($termeniBuni, 0, self::MAX_CAUTARI, true);
+            $cautariPastrate = [];
             foreach ($cautari as $c) {
+                $termen = isset($termeniBuni[$c['cautare']]) ? $c['cautare'] : self::ALTELE;
+                $cheieC = $c['sursa'] . "\n" . $termen;
+                $cautariPastrate[$cheieC] ??= ['sursa' => $c['sursa'], 'cautare' => $termen, 'cautari' => 0, 'vizitatori' => 0, 'fara_rezultat' => 0];
+                $cautariPastrate[$cheieC]['cautari'] += $c['cautari'];
+                $cautariPastrate[$cheieC]['vizitatori'] += $c['vizitatori'];
+                $cautariPastrate[$cheieC]['fara_rezultat'] += $c['fara_rezultat'];
+            }
+            $insCautare = $db->prepare('INSERT INTO statistici_cautari (zi, sursa, cautare, cautari, vizitatori, fara_rezultat) VALUES (?, ?, ?, ?, ?, ?)');
+            foreach ($cautariPastrate as $c) {
                 $insCautare->execute([$zi, $c['sursa'], $c['cautare'], $c['cautari'], $c['vizitatori'], $c['fara_rezultat']]);
             }
             $incheiata = $acum >= (int) strtotime($panaLa) + self::INCHEIERE_DUPA ? 1 : 0;
@@ -444,6 +470,9 @@ final class StatisticiAgregare
         try {
             $db->prepare('DELETE FROM statistici_evenimente WHERE creat_la >= ? AND creat_la < ? AND tip = ?')
                 ->execute([$deLa, $panaLa, Statistici::TIP_COMANDA]);
+            // Cheia limitei pe adresă nu mai trebuie (limita privește doar ultimul minut): golită.
+            $db->prepare("UPDATE statistici_evenimente SET ip_cheie = 0x0000000000000000 WHERE creat_la >= ? AND creat_la < ?
+                AND ip_cheie <> 0x0000000000000000")->execute([$deLa, $panaLa]);
         } catch (Throwable) {
         }
     }

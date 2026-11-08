@@ -68,8 +68,13 @@ final class Statistici
      * adrese de operator mobil (CGNAT) sau al unei rețele de firmă stau mulți vizitatori.
      */
     public const LIMITA_IP_MINUT = 120;
-    /** Câte evenimente primește tot site-ul într-un minut; peste, se aruncă (204), ca un val de gunoi să nu umple baza. */
+    /**
+     * Implicitul setării `statistici_max_minut`: câte evenimente primește tot site-ul într-un minut; peste, se aruncă (204), ca un
+     * val de gunoi să nu umple baza (pentru un vârf așteptat, de exemplu o reclamă TV, se ridică din Setări).
+     */
     public const LIMITA_SITE_MINUT = 1500;
+    /** Implicitul setării `statistici_zile_brute`: câte zile se țin evenimentele brute (agregatele rămân). */
+    public const ZILE_BRUTE_IMPLICIT = 30;
     /** Implicitul setării `statistici_max_zi`: câte evenimente primește tot site-ul într-o zi; peste, se aruncă (204). */
     public const MAX_ZI_IMPLICIT = 200000;
     /** Cel mai mare corp primit (octeți). */
@@ -140,9 +145,15 @@ final class Statistici
     }
 
     /** @param array<string, mixed> $setari */
+    public static function maxMinut(array $setari): int
+    {
+        return max(60, min(100000, (int) ($setari['statistici_max_minut'] ?? self::LIMITA_SITE_MINUT) ?: self::LIMITA_SITE_MINUT));
+    }
+
+    /** @param array<string, mixed> $setari */
     public static function zileBrute(array $setari): int
     {
-        return max(7, min(400, (int) ($setari['statistici_zile_brute'] ?? 90) ?: 90));
+        return max(7, min(400, (int) ($setari['statistici_zile_brute'] ?? self::ZILE_BRUTE_IMPLICIT) ?: self::ZILE_BRUTE_IMPLICIT));
     }
 
     private static function db(): ?PDO
@@ -649,7 +660,7 @@ final class Statistici
         if (self::preaMulte($db, $cheieIp, $acum)) {
             return 429;
         }
-        if (!self::rezervaLoc(self::maxZi($setari), $acum)) {
+        if (!self::rezervaLoc(self::maxZi($setari), $acum, null, self::maxMinut($setari))) {
             return 204;
         }
         $ua3 = self::parseazaUa($ua);
@@ -775,11 +786,11 @@ final class Statistici
     }
 
     /**
-     * Plafoanele întregului site: cel mult LIMITA_SITE_MINUT evenimente pe minut și `$maxZi` pe zi, numărate într-un fișier mic
+     * Plafoanele întregului site: cel mult `$maxMinut` evenimente pe minut și `$maxZi` pe zi, numărate într-un fișier mic
      * (`storage/statistici/contor.json`, sub `flock`), fără nicio interogare. Fals = peste plafon (evenimentul se aruncă). Dacă
      * fișierul nu se poate folosi, nu oprește nimic.
      */
-    public static function rezervaLoc(int $maxZi, ?int $acum = null, ?string $dosar = null): bool
+    public static function rezervaLoc(int $maxZi, ?int $acum = null, ?string $dosar = null, int $maxMinut = self::LIMITA_SITE_MINUT): bool
     {
         $acum ??= time();
         try {
@@ -798,7 +809,7 @@ final class Statistici
                 $c = is_array($c) ? $c : [];
                 $peMinut = ($c['minut'] ?? '') === $minut ? (int) ($c['n_minut'] ?? 0) : 0;
                 $peZi = ($c['zi'] ?? '') === $zi ? (int) ($c['n_zi'] ?? 0) : 0;
-                if ($peMinut >= self::LIMITA_SITE_MINUT || $peZi >= $maxZi) {
+                if ($peMinut >= $maxMinut || $peZi >= $maxZi) {
                     return false;
                 }
                 ftruncate($f, 0);
@@ -882,7 +893,7 @@ final class Statistici
         }
         [$db, $vizitator, $cheieIp] = $context;
         try {
-            if (!self::rezervaLoc(self::maxZi(self::setari($db)), $acum)) {
+            if (!self::rezervaLoc(self::maxZi(self::setari($db)), $acum, null, self::maxMinut(self::setari($db)))) {
                 return false;
             }
             $ua = self::parseazaUa((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
@@ -945,12 +956,25 @@ final class Statistici
      */
     public static function normalizeazaCautare(string $text): string
     {
+        $text = self::curataCautare($text);
+        return $text === '' || self::cautarePersonala($text) ? '' : $text;
+    }
+
+    /** Doar curățată (litere mici, spațiile strânse, ≤ 100 de caractere; sub 2 = gol), fără filtrul datelor personale. */
+    private static function curataCautare(string $text): string
+    {
         $text = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/[\x00-\x1f\x7f]/u', ' ', $text)));
-        if (!mb_check_encoding($text, 'UTF-8') || str_contains($text, '@') || preg_match('/\d(?:[\s.\-]?\d){5,}/u', $text) === 1) {
+        if (!mb_check_encoding($text, 'UTF-8')) {
             return '';
         }
         $text = mb_substr(mb_strtolower($text, 'UTF-8'), 0, 100);
         return mb_strlen($text) < 2 ? '' : $text;
+    }
+
+    /** Pare o dată personală: un „@” sau 6 cifre la rând (și cu spații, puncte sau liniuțe între ele). */
+    private static function cautarePersonala(string $text): bool
+    {
+        return str_contains($text, '@') || preg_match('/\d(?:[\s.\-]?\d){5,}/u', $text) === 1;
     }
 
     /**
@@ -960,7 +984,7 @@ final class Statistici
      */
     public static function cautare(string $text, int $rezultate, ?PDO $db = null, ?int $acum = null): void
     {
-        $text = self::normalizeazaCautare($text);
+        $text = self::curataCautare($text);
         if ($text === '') {
             return;
         }
@@ -970,6 +994,23 @@ final class Statistici
         }
         [$db, $vizitator] = $context;
         $acum ??= time();
+        if (self::cautarePersonala($text)) {
+            // Nu se păstrează, și nici începutul ei scris până acum (de exemplu „0722 1” înainte de „0722 123 456”).
+            try {
+                $stmt = $db->prepare('SELECT id, cautare FROM statistici_evenimente WHERE vizitator = ? AND tip = ? AND creat_la >= ?
+                    ORDER BY id DESC LIMIT 1');
+                $stmt->bindValue(1, $vizitator, PDO::PARAM_LOB);
+                $stmt->bindValue(2, self::TIP_CAUTARE, PDO::PARAM_INT);
+                $stmt->bindValue(3, date('Y-m-d H:i:s', $acum - 90));
+                $stmt->execute();
+                $ultima = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (is_array($ultima) && str_starts_with($text, (string) $ultima['cautare'])) {
+                    $db->prepare('DELETE FROM statistici_evenimente WHERE id = ?')->execute([(int) $ultima['id']]);
+                }
+            } catch (Throwable) {
+            }
+            return;
+        }
         try {
             $stmt = $db->prepare('SELECT id, cautare FROM statistici_evenimente WHERE vizitator = ? AND tip = ? AND creat_la >= ?
                 ORDER BY id DESC LIMIT 1');

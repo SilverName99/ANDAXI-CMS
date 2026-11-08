@@ -268,9 +268,15 @@ for ($i = 0; $i < Statistici::LIMITA_SITE_MINUT + 5; $i++) {
 }
 $minutUrmator = Statistici::rezervaLoc(1000000, $t0 + 60, $dosarContor);
 @unlink($dosarContor . '/contor.json');
+$peMinutSetare = 0;
+for ($i = 0; $i < 12; $i++) {
+    $peMinutSetare += Statistici::rezervaLoc(1000000, $t0, $dosarContor, 10) ? 1 : 0;
+}
+@unlink($dosarContor . '/contor.json');
 @rmdir($dosarContor);
 $verifica('plafoanele site-ului: cel mult N pe zi (aici 3; a doua zi din nou), cel mult ' . Statistici::LIMITA_SITE_MINUT . ' pe minut (minutul următor din nou)',
-    $peZi === [true, true, true, false, false, true] && $peMinut === Statistici::LIMITA_SITE_MINUT && $minutUrmator,
+    $peZi === [true, true, true, false, false, true] && $peMinut === Statistici::LIMITA_SITE_MINUT && $minutUrmator && $peMinutSetare === 10
+    && Statistici::maxMinut([]) === 1500 && Statistici::maxMinut(['statistici_max_minut' => '4000']) === 4000 && Statistici::zileBrute([]) === 30,
     json_encode($peZi) . ' ' . $peMinut);
 $verifica('CSV: o celulă care începe cu = + - @ (și după spațiile rândurilor de detaliu) primește un apostrof',
     \App\Http\Controllers\StatisticiController::celulaCsv('=HYPERLINK("x")') === "'=HYPERLINK(\"x\")"
@@ -496,11 +502,14 @@ try {
     $verifica('timpul activ și „angajată”: A 75 s (angajată: 2 pagini, coș), B 3 s cu o pagină (respingere)',
         (int) $vizite[0]['durata'] === 75 && (int) $vizite[0]['angajata'] === 1 && (int) $vizite[0]['adaugari_cos'] === 1
         && (int) $vizite[1]['angajata'] === 0 && (int) $vizite[2]['comenzi'] === 1, json_encode(array_map(static fn ($v) => [$v['durata'], $v['angajata']], $vizite)));
-    $verifica('vizitatorul păstrat doar ca număr de ordine al zilei (fără hash în agregate)', count(array_unique(array_column($vizite, 'vizitator_nr'))) === 3
+    $numere1 = array_map('intval', array_column($vizite, 'vizitator_nr'));
+    $verifica('vizitatorul păstrat doar ca număr aleator al zilei (3 diferite, nu 1, 2, 3; fără hash în agregate)', count(array_unique($numere1)) === 3
+        && array_diff(array_unique($numere1), [1, 2, 3]) !== []
         && !in_array('vizitator', array_keys($vizite[0]), true));
-    $atribuiri = $db->query("SELECT comanda_id, sursa, vizita_id FROM statistici_comenzi WHERE zi = '$zi'")->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
-    $verifica('comanda lui A atribuită TikTok-ului (ultima vizită venită de undeva din aceeași zi, nu revenirea directă)',
-        ($atribuiri[$comandaA]['sursa'] ?? '') === 'tiktok' && (int) ($atribuiri[$comandaA]['vizita_id'] ?? 0) === (int) $vizite[0]['id'], json_encode($atribuiri));
+    $atribuiri = $db->query("SELECT comanda_id, sursa FROM statistici_comenzi WHERE zi = '$zi'")->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
+    $verifica('comanda lui A atribuită TikTok-ului (ultima vizită venită de undeva din aceeași zi, nu revenirea directă); fără vizita ei',
+        ($atribuiri[$comandaA]['sursa'] ?? '') === 'tiktok' && $unu("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'statistici_comenzi' AND COLUMN_NAME = 'vizita_id'") === '0', json_encode($atribuiri));
     $verifica('comanda fără vizită numărată: „necunoscuta”; comanda lui C: direct', ($atribuiri[$comandaD]['sursa'] ?? '') === 'necunoscuta'
         && ($atribuiri[$comandaC]['sursa'] ?? '') === 'direct');
     $pagini = $db->query("SELECT CONCAT(sursa, ' ', cale) AS k, vizualizari, intrari FROM statistici_pagini WHERE zi = '$zi'")->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
@@ -511,8 +520,9 @@ try {
     $verifica('produsul: o vizualizare și o adăugare în coș', is_array($produs) && (int) $produs['vizualizari'] === 1 && (int) $produs['adaugari_cos'] === 1);
     $cautari = $db->query("SELECT cautare, SUM(cautari) AS cautari, SUM(vizitatori) AS vizitatori, SUM(fara_rezultat) AS fara_rezultat
         FROM statistici_cautari WHERE zi = '$zi' GROUP BY cautare ORDER BY cautare")->fetchAll(PDO::FETCH_ASSOC);
-    $verifica('căutările: „ceai” de 2 vizitatori, cu rezultate; „xyz” de unul, fără', array_map(static fn ($c) => $c['cautare'] . ':' . $c['cautari'] . ':'
-        . $c['vizitatori'] . ':' . $c['fara_rezultat'], $cautari) === ['ceai:2:2:0', 'xyz:1:1:1'], json_encode($cautari));
+    $verifica('căutările păstrate: „ceai” (2 vizitatori, cu rezultate); „xyz” (un singur vizitator) doar în „(altele)”',
+        array_map(static fn ($c) => $c['cautare'] . ':' . $c['cautari'] . ':' . $c['vizitatori'] . ':' . $c['fara_rezultat'], $cautari)
+        === ['(altele):1:1:1', 'ceai:2:2:0'], json_encode($cautari));
     $verifica('în raport (și în CSV) doar căutările a cel puțin 2 vizitatori: „ceai” da, „xyz” nu (nici la „fără rezultat”)',
         array_column(StatisticiRaport::cautari($db, $zi, $zi, []), 'cautare') === ['ceai'] && StatisticiRaport::cautari($db, $zi, $zi, [], true) === []);
     // A doua rulare, cu ziua încă deschisă: aceleași agregate, hash-ul rămâne pe comenzi.
@@ -521,15 +531,23 @@ try {
         . json_encode($db->query("SELECT sursa, cale, vizualizari, vizitatori, intrari FROM statistici_pagini WHERE zi = '$zi' ORDER BY sursa, cale")->fetchAll(PDO::FETCH_NUM));
     $inainte = $sumaAgregate();
     StatisticiAgregare::agregaZiua($db, $zi, $acumDeschis);
+    $numere2 = array_map('intval', $db->query("SELECT vizitator_nr FROM statistici_vizite WHERE zi = '$zi' ORDER BY inceput")->fetchAll(PDO::FETCH_COLUMN));
+    $verifica('numerele vizitatorilor: altele la a doua agregare, dar aceeași împărțire (A de două ori) și aceiași 3 vizitatori unici',
+        $numere2 !== $numere1 && $numere2[0] === $numere2[2] && $numere1[0] === $numere1[2] && count(array_unique($numere2)) === 3
+        && StatisticiRaport::kpi($db, $zi, $zi, [])['vizitatori'] === 3, json_encode([$numere1, $numere2]));
+    $paginiTabel = \App\Http\Controllers\StatisticiController::tabel($db, 'pagini', StatisticiRaport::perioada(['perioada' => 'custom', 'de_la' => $zi, 'pana_la' => $zi]), []);
+    $altele = array_values(array_filter($paginiTabel['randuri'], static fn ($r) => $r['valori']['eticheta'] === '(altele)'));
+    $verifica('rândul „(altele)” din pagini fără link (nu e o adresă)', $altele !== [] && ($altele[0]['link'] ?? 'x') === '');
     $verifica('agregarea e idempotentă (a doua rulare: aceleași rânduri); o zi încă deschisă păstrează hash-ul pe comenzi', $sumaAgregate() === $inainte
         && $unu("SELECT incheiata FROM statistici_zile WHERE zi = '$zi'") === '0'
         && $unu('SELECT COUNT(*) FROM orders WHERE id = ' . $comandaA . ' AND statistici_vizitator IS NOT NULL') === '1');
     // Ziua încheiată (agregată după 00:15 a zilei următoare).
     StatisticiAgregare::agregaZiua($db, $zi, $acumInchis);
-    $verifica('ziua încheiată: aceleași agregate, marcată, hash-ul golit de pe comenzile ei, evenimentele „comandă” ale zilei șterse',
+    $verifica('ziua încheiată: aceleași agregate, marcată, hash-ul golit de pe comenzile ei, evenimentele „comandă” ale zilei șterse, cheia adresei golită',
         $sumaAgregate() === $inainte && $unu("SELECT incheiata FROM statistici_zile WHERE zi = '$zi'") === '1'
         && $unu('SELECT COUNT(*) FROM orders WHERE id IN (' . $comandaA . ',' . $comandaC . ',' . $comandaD . ') AND statistici_vizitator IS NOT NULL') === '0'
         && $unu("SELECT COUNT(*) FROM statistici_evenimente WHERE tip = 5 AND creat_la LIKE '$zi%'") === '0'
+        && $unu("SELECT COUNT(*) FROM statistici_evenimente WHERE creat_la LIKE '$zi%' AND ip_cheie <> 0x0000000000000000") === '0'
         && $unu("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'statistici_evenimente'
             AND COLUMN_NAME = 'comanda_id'") === '0');
     $kpi = StatisticiRaport::kpi($db, $zi, $zi, []);
@@ -652,6 +670,14 @@ try {
     $verifica('pagina checkout: evenimentul „început de comandă”', (int) ($ultimeleEvenimente(1)[0]['tip'] ?? 0) === Statistici::TIP_CHECKOUT, (string) $r['cod']);
     $cerere('GET', '/api/search/products?q=ceai', null, null, ['User-Agent: Googlebot/2.1', 'Accept: application/json']);
     $verifica('căutarea unui robot nu se notează', (int) $db->query('SELECT COUNT(*) FROM statistici_evenimente WHERE tip = 6')->fetchColumn() === 2);
+    // Un număr de telefon tastat literă cu literă: „07” și „072” se notează (prea scurte), „0722 12” e o dată personală: nu se
+    // păstrează, și nici începutul ei.
+    foreach (['07', '072', '0722 12', '0722 123 456'] as $q) {
+        $cerere('GET', '/api/search/products?q=' . rawurlencode($q), null, null, ['User-Agent: ' . $uaClient, 'Accept: application/json']);
+    }
+    $verifica('o căutare care devine o dată personală (un telefon tastat pe rând): nici ea, nici începutul ei nu rămân',
+        (int) $db->query("SELECT COUNT(*) FROM statistici_evenimente WHERE tip = 6 AND cautare LIKE '07%'")->fetchColumn() === 0
+        && (int) $db->query('SELECT COUNT(*) FROM statistici_evenimente WHERE tip = 6')->fetchColumn() === 2);
     // Laolaltă cu comanda: Statistici::laComanda în procesul testului, cu cererea clientului.
     $_SERVER['HTTP_USER_AGENT'] = $uaClient;
     $_SERVER['REMOTE_ADDR'] = '127.0.0.1';
@@ -709,9 +735,11 @@ try {
     $setari = $cerere('GET', '/admin/statistici/setari', $jarAdmin);
     $refuz = $cerere('POST', '/admin/statistici/setari', $jarAdmin, ['statistici_zile_brute' => '30']);
     $neschimbat = $unu("SELECT `value` FROM settings WHERE `key` = 'statistici_zile_brute'") === '';
-    $cerere('POST', '/admin/statistici/setari', $jarAdmin, ['_csrf' => $jeton($setari['corp']), 'statistici_zile_brute' => '30', 'statistici_respecta_dnt' => '1']);
+    $cerere('POST', '/admin/statistici/setari', $jarAdmin, ['_csrf' => $jeton($setari['corp']), 'statistici_zile_brute' => '30', 'statistici_respecta_dnt' => '1',
+        'statistici_max_minut' => '2500']);
     $verifica('setările: fără jetonul formularului nu se schimbă nimic; cu el, salvate (și în Jurnal activitate)', $setari['cod'] === 200 && $refuz['cod'] === 302
         && $neschimbat && $unu("SELECT `value` FROM settings WHERE `key` = 'statistici_zile_brute'") === '30'
+        && $unu("SELECT `value` FROM settings WHERE `key` = 'statistici_max_minut'") === '2500' && str_contains($setari['corp'], 'name="statistici_max_minut"')
         && $unu("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'statistici_setari_salvate'") !== '0'
         && str_contains($setari['corp'], 'politica de confidențialitate'));
     $jarMagazin = $logare('magazin@exemplu.ro');

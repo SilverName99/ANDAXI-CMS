@@ -130,7 +130,6 @@ return [
             'detaliu' => "VARCHAR(100) NOT NULL DEFAULT ''",
             'utm_campanie' => "VARCHAR(100) NOT NULL DEFAULT ''",
             'dispozitiv' => "VARCHAR(8) NOT NULL DEFAULT ''",
-            'vizita_id' => 'BIGINT UNSIGNED NULL',
         ], [
             'PRIMARY KEY (comanda_id)',
             'KEY idx_st_com_zi (zi)',

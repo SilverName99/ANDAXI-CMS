@@ -1368,7 +1368,8 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   (400); cel mult 120 de evenimente pe minut de la o adresă (`Statistici::cheieIp`: sarea zilei + adresa, IPv6 cu toată rețeaua /64, fără
   browser, deci un robot care își schimbă User-Agent-ul tot cade în ea; 120, nu 60, fiindcă în spatele unei adrese de operator mobil stau
   mulți oameni), altfel 429; plafoanele întregului site, numărate într-un fișier sub `flock` (`storage/statistici/contor.json`, fără
-  interogare): 1500 pe minut și `statistici_max_zi` pe zi (implicit 200 000, în Setări); peste ele evenimentul se aruncă (204); utm-urile în
+  interogare): `statistici_max_minut` pe minut (implicit 1500; de ridicat înaintea unui vârf așteptat) și `statistici_max_zi` pe zi (implicit
+  200 000), ambele în Setări; peste ele evenimentul se aruncă (204); utm-urile în
   litere mici, cel mult 100 de caractere, cele cu „@” aruncate; un singur `INSERT`; răspunsul 204, `Cache-Control: no-store`; orice
   eroare e prinsă (500/503 fără corp), deci nu oprește și nu încetinește pagina. Nu are nevoie de excepție CSRF: nu folosește sesiunea.
 - **Pe server**, cu același hash calculat din cerere: adăugarea în coș (`SiteController::cartAdd`, `cartItemAddApi`, înlocuirea cu un
@@ -1376,7 +1377,9 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   `orders.statistici_vizitator`), căutarea de produse din antet (`/api/search/products`: textul normalizat — litere mici, spațiile strânse,
   100 de caractere — și numărul de rezultate; literele scrise una după alta, la cel mult 90 de secunde, devin o singură căutare). O căutare
   care pare o dată personală (un „@” sau 6 cifre la rând, și cu spații sau liniuțe între ele: email, telefon, CNP, număr de comandă sau de
-  card) nu se păstrează deloc, iar tabloul și CSV-ul arată doar căutările a cel puțin 2 vizitatori. Evenimentele nu au id-ul comenzii.
+  card) nu se păstrează deloc, și nici începutul ei scris până atunci (evenimentul ultimei căutări din 90 de secunde care e începutul
+  ei se șterge). În agregatele zilei rămân doar termenii a cel puțin 2 vizitatori diferiți ai zilei (cel mult 200); restul „(altele)”,
+  care nu se arată. Evenimentele nu au id-ul comenzii.
 - **Vizita**: același vizitator, cel mult 30 de minute între două evenimente (sarea se schimbă la miezul nopții, deci o vizită nu trece în
   ziua următoare). Sursa ei e a primei pagini: întâi semnele de reclamă (gclid → Google Ads, ttclid → TikTok, fbclid → Facebook sau
   Instagram), apoi utm (cpc/ppc/paid + google → Google Ads; email/newsletter → Email; facebook, fb, ig, instagram, tiktok, youtube,
@@ -1398,8 +1401,11 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   traficul. **Gunoiul nu ajunge în agregatele păstrate**: o cale văzută de un singur vizitator (sau peste primele 500 ale zilei) devine
   „(altele)”, și ca pagină de intrare; un produs care nu e în catalog se sare. O zi agregată după 00:15 a zilei următoare e încheiată: nu
   se mai reface, hash-ul ei se golește de pe comenzi (după cheia primară, în tranzacții scurte) și evenimentele „comandă” ale zilei se
-  șterg, deci după încheiere nimic nu mai leagă o comandă de evenimentele brute (atribuirea rămâne în `statistici_comenzi`, fără hash).
-  Cronul agregă zilele neîncheiate și șterge evenimentele brute mai vechi de `statistici_zile_brute` zile (implicit 90; agregatele
+  șterg, iar cheia limitei pe adresă (`ip_cheie`) se golește, deci după încheiere nimic nu mai leagă o comandă de evenimentele brute
+  (atribuirea rămâne în `statistici_comenzi`: doar sursa, detaliul, campania și dispozitivul, fără vizita ei). În `statistici_vizite`
+  vizitatorul e un număr aleator de 32 de biți, unic în zi și altul la fiecare agregare (doar pentru numărarea vizitatorilor unici),
+  deci nu spune ordinea sosirii.
+  Cronul agregă zilele neîncheiate și șterge evenimentele brute mai vechi de `statistici_zile_brute` zile (implicit 30; agregatele
   rămân). Pagina din admin agregă la deschidere doar dacă agregarea a rămas în urmă de peste 2 ore (cronul lipsește), cel mult 2 zile pe
   cerere, cu o limită de timp; dacă rulează altă agregare sau nu merge, arată ultimele date cu nota „Statisticile se calculează”, niciodată o
   eroare. Cu cronul la oră, cifrele de azi sunt de cel mult o oră („Acum pe site” e mereu din evenimentele brute).
@@ -1415,10 +1421,10 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   postări** (`/admin/statistici/impact`): sursa (de exemplu TikTok) sau campania utm și momentul postării, apoi vizitele, comenzile și
   veniturile pe ore, lângă aceleași ore cu o săptămână înainte (și CSV). Cuvintele căutate pe Google nu se văd (Google nu le trimite):
   pagina o spune; o legătură cu Google Search Console poate veni mai târziu.
-- **Propoziția pentru politica de confidențialitate** (și în Setări): „Pentru statistici de trafic folosim o analiză proprie, fără
-  cookie-uri: nu păstrăm adresa IP și nu vă putem recunoaște de la o zi la alta; vedem doar, agregat, paginile vizitate, sursa vizitei (de
-  exemplu un link de pe o rețea socială), tipul dispozitivului și browserului. Dacă browserul dumneavoastră trimite semnalul «Do Not Track»
-  sau «Global Privacy Control», nu sunteți numărat.”
+- **Propoziția pentru politica de confidențialitate** (și în Setări, cu numărul de zile al site-ului): „Pentru statistici de trafic folosim
+  o analiză proprie, fără cookie-uri. Nu păstrăm adresa IP; pentru a număra vizitele unei zile folosim un cod care se schimbă zilnic. Datele
+  detaliate se șterg după 30 de zile, iar rapoartele (paginile vizitate, sursa vizitei, tipul dispozitivului și al browserului) sunt
+  agregate. Dacă browserul dumneavoastră trimite semnalul «Do Not Track» sau «Global Privacy Control», nu sunteți numărat.”
 - **Vizitatori unici pe mai multe zile** = suma vizitatorilor unici ai fiecărei zile („Vizitatori unici (pe zile)”): fără cookie-uri, același
   om venit în două zile se numără de două ori. Pagina o spune la „?”.
 - **Cronul** (în hPanel, ca celelalte): `17 * * * * /opt/alt/php83/usr/bin/php -d extension=sodium.so /home/uXXXXXXXXX/platforma/bin/platforma

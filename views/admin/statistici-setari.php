@@ -6,6 +6,7 @@
  * @var bool $respectaDnt
  * @var int $zileBrute
  * @var int $maxZi
+ * @var int $maxMinut
  */
 admin_componenta('antet-pagina', [
     'titlu' => 'Setări statistici',
@@ -21,13 +22,15 @@ admin_componenta('antet-pagina', [
         <input type="number" id="st-zile" name="statistici_zile_brute" min="7" max="400" value="<?= (int) $zileBrute ?>"></p>
     <p><label for="st-max-zi">Cel mult evenimente pe zi (peste, restul zilei nu se mai notează)</label><br>
         <input type="number" id="st-max-zi" name="statistici_max_zi" min="1000" max="5000000" step="1000" value="<?= (int) $maxZi ?>"></p>
+    <p><label for="st-max-minut">Cel mult evenimente pe minut, pe tot site-ul (de ridicat înaintea unui vârf așteptat)</label><br>
+        <input type="number" id="st-max-minut" name="statistici_max_minut" min="60" max="100000" step="100" value="<?= (int) $maxMinut ?>"></p>
     <p style="font-size:13px;color:var(--adm-text-secundar)">Agregatele (vizitele, paginile, produsele, căutările și comenzile pe zile) rămân. „Acum pe site” și refacerea unei zile au nevoie de evenimentele detaliate.</p>
     <button class="btn btn-primary" type="submit">Salvează</button>
 </form>
 <?php
 ob_start();
 ?>
-<p>Statisticile nu folosesc cookie-uri și nu țin nimic în browserul vizitatorului (nici localStorage, nici sessionStorage). Un vizitator e recunoscut doar în aceeași zi, după un cod calculat din adresa IP, browser și o valoare secretă schimbată în fiecare zi; valoarea zilei se șterge a doua zi, iar adresa IP și browserul nu se păstrează (doar felul browserului, al sistemului și al dispozitivului).</p>
-<p>Propoziție pentru politica de confidențialitate: <em>„Pentru statistici de trafic folosim o analiză proprie, fără cookie-uri: nu păstrăm adresa IP și nu vă putem recunoaște de la o zi la alta; vedem doar, agregat, paginile vizitate, sursa vizitei (de exemplu un link de pe o rețea socială), tipul dispozitivului și browserului. Dacă browserul dumneavoastră trimite semnalul «Do Not Track» sau «Global Privacy Control», nu sunteți numărat.”</em></p>
+<p>Statisticile nu folosesc cookie-uri și nu țin nimic în browserul vizitatorului (nici localStorage, nici sessionStorage). Ca vizitele unei zile să se numere, se folosește un cod calculat din adresa IP, browser și o valoare secretă schimbată în fiecare zi (ștearsă a doua zi); adresa IP și browserul nu se păstrează (doar felul browserului, al sistemului și al dispozitivului). Evenimentele detaliate se șterg după numărul de zile de mai sus; rapoartele rămân, agregate.</p>
+<p>Propoziție pentru politica de confidențialitate: <em>„Pentru statistici de trafic folosim o analiză proprie, fără cookie-uri. Nu păstrăm adresa IP; pentru a număra vizitele unei zile folosim un cod care se schimbă zilnic. Datele detaliate se șterg după <?= (int) $zileBrute ?> de zile, iar rapoartele (paginile vizitate, sursa vizitei, tipul dispozitivului și al browserului) sunt agregate. Dacă browserul dumneavoastră trimite semnalul «Do Not Track» sau «Global Privacy Control», nu sunteți numărat.”</em></p>
 <?php
 admin_componenta('card', ['titlu' => 'Confidențialitatea', 'continut' => (string) ob_get_clean(), 'id' => 'st-confidentialitate']);

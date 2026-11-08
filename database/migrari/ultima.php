@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 return [
     'ord' => 61,
-    'amprenta' => 'b41b8958f2435a20e2fb1b66b0661d29c5673d0a92e9c65dda5197ffec30b9fb',
+    'amprenta' => '8a80a724821147c25886b08afeeecd11e16650830ef616b9c881798a601a3178',
     'migrari' => [
         'nucleu/0001_baza_nucleu',
         'catalog/0002_baza_catalog',

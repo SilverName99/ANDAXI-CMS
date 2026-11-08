@@ -341,7 +341,7 @@ final class StatisticiRaport
         [$w, $p] = self::unde($deLa, $panaLa, $f, 'c', true);
         // Doar căutările a cel puțin 2 vizitatori (o căutare a unui singur om nu se arată și nu se exportă).
         $randuri = self::randuri($db, 'SELECT c.cautare, SUM(c.cautari) AS cautari, SUM(c.fara_rezultat) AS fara_rezultat FROM statistici_cautari c
-            WHERE ' . $w . ' GROUP BY c.cautare HAVING SUM(c.vizitatori) >= ' . self::MIN_VIZITATORI_CAUTARE
+            WHERE ' . $w . " AND c.cautare <> '" . StatisticiAgregare::ALTELE . "' GROUP BY c.cautare HAVING SUM(c.vizitatori) >= " . self::MIN_VIZITATORI_CAUTARE
             . ($doarFaraRezultat ? ' AND fara_rezultat > 0' : '') . ' ORDER BY '
             . ($doarFaraRezultat ? 'fara_rezultat' : 'cautari') . ' DESC, c.cautare LIMIT ' . max(1, $limita), $p);
         return array_map(static fn (array $r): array => ['cautare' => (string) $r['cautare'], 'cautari' => (int) $r['cautari'],

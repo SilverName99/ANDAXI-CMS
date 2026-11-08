@@ -221,10 +221,12 @@ final class StatisticiController
                 header('Location: /admin/statistici/setari');
                 return;
             }
-            $zile = (int) ($_POST['statistici_zile_brute'] ?? 90);
+            $zile = (int) ($_POST['statistici_zile_brute'] ?? Statistici::ZILE_BRUTE_IMPLICIT);
+            $maxMinut = (int) ($_POST['statistici_max_minut'] ?? Statistici::LIMITA_SITE_MINUT);
             $maxZi = (int) ($_POST['statistici_max_zi'] ?? Statistici::MAX_ZI_IMPLICIT);
             Settings::save($db, [
                 'statistici_max_zi' => (string) max(1000, min(5000000, $maxZi)),
+                'statistici_max_minut' => (string) max(60, min(100000, $maxMinut)),
                 'statistici_respecta_dnt' => ($_POST['statistici_respecta_dnt'] ?? '') === '1' ? '1' : '0',
                 'statistici_zile_brute' => (string) max(7, min(400, $zile)),
             ]);
@@ -244,6 +246,7 @@ final class StatisticiController
             'respectaDnt' => Statistici::respectaDnt($setari),
             'zileBrute' => Statistici::zileBrute($setari),
             'maxZi' => Statistici::maxZi($setari),
+            'maxMinut' => Statistici::maxMinut($setari),
         ], 'admin/layout');
     }
 
@@ -355,12 +358,14 @@ final class StatisticiController
                     'randuri' => $randuri, 'nota' => 'Linkurile cu utm_campaign (de exemplu din postări, reclame, newslettere).'];
             case 'pagini':
             case 'categorii':
-                $randuri = array_map(static fn (array $r): array => ['valori' => ['eticheta' => $r['cale']] + $r, 'link' => $r['cale']],
+                $randuri = array_map(static fn (array $r): array => ['valori' => ['eticheta' => $r['cale']] + $r,
+                    'link' => $r['cale'] === StatisticiAgregare::ALTELE ? '' : $r['cale']],
                     StatisticiRaport::pagini($db, $deLa, $panaLa, $filtre, $cheie === 'categorii' ? 'categorie' : null));
                 return ['titlu' => $titlu, 'coloane' => [$col('Pagina', 'eticheta', 'text'), $col('Vizualizări', 'vizualizari'),
                     $col('Vizitatori', 'vizitatori'), $col('Intrări', 'intrari')], 'randuri' => $randuri];
             case 'intrari':
-                $randuri = array_map(static fn (array $r): array => $randVizite($r, (string) $r['pagina_intrare']) + ['link' => (string) $r['pagina_intrare']],
+                $randuri = array_map(static fn (array $r): array => $randVizite($r, (string) $r['pagina_intrare'])
+                    + ['link' => (string) $r['pagina_intrare'] === StatisticiAgregare::ALTELE ? '' : (string) $r['pagina_intrare']],
                     StatisticiRaport::grupeVizite($db, $deLa, $panaLa, $filtre, ['pagina_intrare'], 50));
                 return ['titlu' => $titlu, 'coloane' => [$col('Pagina de intrare', 'eticheta', 'text'), $col('Vizite', 'vizite'),
                     $col('Respingere', 'respingere', 'procent'), $col('Adăugări în coș', 'adaugari'), $col('Vizite cu comandă', 'comenzi'),
