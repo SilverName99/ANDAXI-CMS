@@ -1732,6 +1732,11 @@ $seoB = [
     'SEO B: Event pe articolele-eveniment' => ['cale' => ['/blog/*'],
         'tipar' => '#    <script type="application/ld\+json">\{"@context":"https://schema\.org","@type":"Event",[^\n]*?</script>\n#', 'max' => 1,
         'motiv' => 'WP-39 (VT-S1): un articol cu dată și loc de eveniment primește Event'],
+    // Pluginul statistici (8 nov 2026; nu e în licența Bioscem): cu licența „toate”, scriptul care trimite pagina văzută, chiar
+    // înainte de </body>, pe fiecare pagină publică a unui vizitator (nu și a administratorului). Scos întreg; cu licența Bioscem, 0.
+    'statistici: scriptul paginilor (pluginul statistici)' => ['cale' => ['/*'],
+        'tipar' => '#<script data-ax-st>\(function\(w,d,n\)\{[^<]*\}\)\(window,document,navigator\);</script>#', 'max' => 1,
+        'motiv' => 'pluginul statistici: scriptul fără cookie al paginilor (layout.final_body), doar cu pluginul pe site'],
 ];
 $seoBGasite = array_fill_keys(array_keys($seoB), 0);
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,

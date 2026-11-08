@@ -5241,6 +5241,12 @@
                     "null": false,
                     "tip": "tinyint(1)"
                 },
+                "statistici_vizitator": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "binary(16)"
+                },
                 "status": {
                     "extra": "",
                     "implicit": "'pending'",
@@ -6959,6 +6965,644 @@
                 "PRIMARY": {
                     "coloane": [
                         "key"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_cautari": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cautare": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "cautari": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "fara_rezultat": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "bigint unsigned"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_st_caut_zi": {
+                    "coloane": [
+                        "zi",
+                        "sursa"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_comenzi": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "comanda_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "creat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "detaliu": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "dispozitiv": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(8)"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "utm_campanie": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "vizita_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "bigint unsigned"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "comanda_id"
+                    ],
+                    "unic": true
+                },
+                "idx_st_com_creat": {
+                    "coloane": [
+                        "creat_la"
+                    ],
+                    "unic": false
+                },
+                "idx_st_com_zi": {
+                    "coloane": [
+                        "zi"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_evenimente": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "browser": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "cale": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "cautare": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "comanda_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "creat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "detaliu": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "dispozitiv": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(8)"
+                },
+                "durata": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "bigint unsigned"
+                },
+                "latime": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
+                "os": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "produs_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "rezultate": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "tara": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "char(2)"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
+                "tip_pagina": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(12)"
+                },
+                "utm_campanie": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_continut": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_mediu": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_termen": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "vizitator": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "binary(16)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_st_ev_timp": {
+                    "coloane": [
+                        "creat_la"
+                    ],
+                    "unic": false
+                },
+                "idx_st_ev_vizitator": {
+                    "coloane": [
+                        "vizitator",
+                        "creat_la"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_pagini": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cale": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "bigint unsigned"
+                },
+                "intrari": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "tip_pagina": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(12)"
+                },
+                "vizitatori": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "vizualizari": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_st_pag_zi": {
+                    "coloane": [
+                        "zi",
+                        "sursa"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_produse": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "adaugari_cos": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "bigint unsigned"
+                },
+                "produs_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "vizitatori": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "vizualizari": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_st_prod_zi": {
+                    "coloane": [
+                        "zi",
+                        "sursa"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_vizite": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "adaugari_cos": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "angajata": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
+                "browser": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "checkout": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "comenzi": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "detaliu": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "dispozitiv": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(8)"
+                },
+                "durata": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "bigint unsigned"
+                },
+                "inceput": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "os": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "pagina_intrare": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "pagini": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "sfarsit": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "tara": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "char(2)"
+                },
+                "utm_campanie": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_continut": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_mediu": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "utm_termen": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "vizitator_nr": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_st_viz_inceput": {
+                    "coloane": [
+                        "inceput"
+                    ],
+                    "unic": false
+                },
+                "idx_st_viz_sursa": {
+                    "coloane": [
+                        "sursa",
+                        "zi"
+                    ],
+                    "unic": false
+                },
+                "idx_st_viz_zi": {
+                    "coloane": [
+                        "zi"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "statistici_zile": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "agregat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "incheiata": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint unsigned"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "zi"
                     ],
                     "unic": true
                 }

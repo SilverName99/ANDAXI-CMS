@@ -151,6 +151,7 @@ tools/dev/php.sh tools/dev/test-newsletter.php      # newsletterul portat din Bi
 tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, oferta campaniei (calculul, coșul, comanda, ERP), Chromium 1366/390 px (și în testul de fum)
 tools/dev/php.sh tools/dev/test-fisiere-cloud.php  # pluginul fisiere_cloud (6 nov): aplicația Windows față de codul Biovitality (cerere cu cerere), adoptarea, adminul, CSRF, „Cloud user” (și în testul de fum)
 tools/dev/php.sh tools/dev/test-concurenta.php     # pluginul concurenta (6 nov): analiza prețurilor concurenței față de codul Biovitality, CSRF (și în testul de fum)
+tools/dev/php.sh tools/dev/test-statistici.php     # pluginul statistici (8 nov): sursele, hash-ul și sarea zilei, agregarea, atribuirea comenzilor, punctul de primire, tabloul, Chromium (și în testul de fum)
 tools/dev/compara-calcule-local.sh                  # golden master-ul (codul Bioscem însuși față de codul comun, aceleași comenzi: diferite 0) și amprenta paginilor (docs/VERIFICARE.md)
 tools/dev/php.sh tools/dev/test-paths.php           # căile site-ului (Paths), stub-ul, MENTENANTA și pingul, pe o găzduire simulată din Etapa 2 (mai jos, „Unde scrie codul”)
 tools/dev/php.sh tools/dev/test-deploy.php          # deploy-ul din Etapa 2: release, adopta, actualizeaza, revino, pe o găzduire simulată cu două site-uri (docs/DEPLOY.md)

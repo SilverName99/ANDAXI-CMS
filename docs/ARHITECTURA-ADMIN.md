@@ -108,8 +108,9 @@ scrie. `docs/SEO.md` §2b.
 - **Marketing**: Cupoane · Fidelitate · Newslettere · Șabloane newsletter · Liste abonați · Formulare opt-in · Automatizări ·
   Campanii pe site (pluginul `campanii`, 5 nov 2026: doar unde licența îl pornește; doar administratorul general)
 - **Conținut**: Pagini · Postări blog · Categorii · Șabloane blog · Autori blog · Galerie · Antet, subsol și meniu
-- **Rapoarte**: Jurnal activitate · Încercări de înregistrare și comandă (fără magazin: „Încercări de înregistrare”) ·
-  Statistici newsletter · Emailuri trimise
+- **Rapoarte**: Statistici (pluginul `statistici`, 8 nov 2026: doar unde licența îl pornește; administratorul general,
+  „Administrator magazin”, „Administrator emailuri”) · Jurnal activitate · Încercări de înregistrare și comandă (fără magazin:
+  „Încercări de înregistrare”) · Statistici newsletter · Emailuri trimise
 - **Setări**: Setări magazin (Setări site fără magazin) · Setări plăți · Setări livrare · ERP ANDAXI · Coș flotant · Manechin ·
   Emailuri de comandă · Setări trimitere · Trimite email test · Administratori · Abonamentul tău
 

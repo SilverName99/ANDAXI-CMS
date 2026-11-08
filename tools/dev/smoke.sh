@@ -653,6 +653,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Pluginul statistici (8 nov 2026, pentru Biovitality): tools/dev/test-statistici.php, pe licența „toate”, pe serverul pornit aici:
+# sursele, hash-ul și sarea zilei, excluderile, agregarea, atribuirea comenzilor, punctul de primire și limita, coșul și căutarea,
+# pluginul oprit, tabloul, Chromium (pagina „din CDN”, tabloul la 390 px). Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Statisticile (tools/dev/test-statistici.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-statistici.php" > "$TMP/test-statistici.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-statistici.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-statistici.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-statistici.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Pluginul campanii (5 nov 2026, pentru Biovitality): tools/dev/test-campanii.php, pe licența „toate”, pe serverul pornit aici:
 # regulile (întoarcerea, roboții, adresele neoprite), adminul, prima intrare, insigna, bannerul, fereastra, pluginul oprit, Chromium
 # pe desktop și pe telefon. Pune la loc toată baza (CHECKSUM TABLE).

@@ -361,6 +361,8 @@ final class Auth
                 // Pluginurile Biovitality (concurenta, fisiere_cloud): aceleași drepturi ca în codul Biovitality.
                 '/admin/competition',
                 '/admin/bunny',
+                // Pluginul statistici (8 nov 2026): Rapoarte → Statistici (vizite, surse, comenzi și venituri pe sursă).
+                '/admin/statistici',
             ],
             self::ROLE_BLOG => [
                 '/admin/blog/posts',
@@ -376,6 +378,8 @@ final class Auth
                 '/admin/gallery',
                 '/admin/bunny',
                 '/admin/emails',
+                // Pluginul statistici (8 nov 2026): sursele vizitelor și campaniile (rolul de marketing).
+                '/admin/statistici',
             ],
             // Doar fișierele din bunny.net: răsfoire, urcare, preluare pentru editare și cheia pentru aplicația de desktop.
             self::ROLE_CLOUD => [

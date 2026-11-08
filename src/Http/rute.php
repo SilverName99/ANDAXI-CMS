@@ -17,6 +17,7 @@ use App\Http\Controllers\PacheteProduseController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CampaniiController;
+use App\Http\Controllers\StatisticiController;
 use App\Http\Controllers\CereriOfertaController;
 use App\Http\Controllers\CautareAdminController;
 use App\Http\Controllers\ComponenteAdminController;
@@ -447,5 +448,14 @@ return static function (Router $router): void {
     $router->post('/admin/competition/cell', [ConcurentaController::class, 'competitionCellSave']);
     $router->post('/admin/competition/save-all', [ConcurentaController::class, 'competitionSaveAll']);
     $router->post('/admin/competition/clear', [ConcurentaController::class, 'competitionClear']);
+    // Pluginul statistici (8 nov 2026; App\Support\Statistici): evenimentul scriptului paginilor (îl ia de obicei public/index.php
+    // înaintea sesiunii; aici doar dacă ajunge la router) și Rapoarte → Statistici.
+    $router->post('/api/statistici', [StatisticiController::class, 'eveniment']);
+    $router->get('/admin/statistici', [StatisticiController::class, 'tablou']);
+    $router->get('/admin/statistici/acum', [StatisticiController::class, 'acum']);
+    $router->get('/admin/statistici/export', [StatisticiController::class, 'export']);
+    $router->get('/admin/statistici/impact', [StatisticiController::class, 'impact']);
+    $router->get('/admin/statistici/setari', [StatisticiController::class, 'setari']);
+    $router->post('/admin/statistici/setari', [StatisticiController::class, 'setari']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

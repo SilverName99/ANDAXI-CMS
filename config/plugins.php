@@ -76,7 +76,7 @@ return [
         ['cheie' => 'continut', 'tip' => 'grup', 'eticheta' => 'Conținut', 'icon' => 'pages',
             'deschis' => ['/admin/pages', '/admin/blog', '/admin/gallery', '/admin/design']],
         ['cheie' => 'rapoarte', 'tip' => 'grup', 'eticheta' => 'Rapoarte', 'icon' => 'stats',
-            'deschis' => ['/admin/activity-log', '/admin/users/security']],
+            'deschis' => ['/admin/activity-log', '/admin/users/security', '/admin/statistici']],
         ['cheie' => 'setari', 'tip' => 'grup', 'eticheta' => 'Setări', 'icon' => 'settings',
             'deschis' => ['/admin/settings', '/admin/emails/sender', '/admin/emails/test']],
     ],
@@ -625,6 +625,26 @@ return [
             ],
             // campanii/0058: oferta campaniei, păstrată pe comandă și pe liniile ei.
             'tabele' => ['campanii', 'campanii_produse', 'orders.campanie_*', 'order_items.campanie_*'],
+        ],
+
+        // Cerut pentru Biovitality (8 nov 2026), generic: analiza proprie a vizitelor, fără cookie-uri și fără nimic ținut în
+        // browser (hash zilnic cu sare ștearsă a doua zi; nicio adresă IP păstrată). Scriptul paginilor (layout.final_body) trimite
+        // pagina văzută la POST /api/statistici (luat din public/index.php înaintea sesiunii); coșul, comanda și căutările se notează
+        // pe server. Rapoarte → Statistici. Oprit pe orice site până îl pune CRM-ul în licență; nu e în niciun pachet și în nicio
+        // licență de dezvoltare. App\Support\Statistici, StatisticiAgregare, StatisticiRaport; docs/PLUGINURI.md, „Statistici site”.
+        'statistici' => [
+            'nume' => 'Statistici site',
+            'descriere' => 'Analiza proprie a vizitelor, fără cookie-uri: vizitatori, surse (Google, rețele sociale, campanii), pagini, '
+                . 'produse, căutări pe site, comenzi și venituri pe sursă, „Acum pe site” și impactul unei postări pe ore.',
+            'necesita' => [],
+            'rute_admin' => ['/admin/statistici', '/admin/statistici/*'],
+            'rute_publice' => ['POST /api/statistici'],
+            'meniu' => [
+                ['grup' => 'rapoarte', 'ordine' => 5, 'eticheta' => 'Statistici', 'href' => '/admin/statistici', 'icon' => 'stats',
+                    'activ' => ['/admin/statistici']],
+            ],
+            'cron' => ['scripts/statistici-agregare.php' => 'vizibil'],
+            'tabele' => ['statistici_*', 'orders.statistici_*'],
         ],
 
         'migrare_wordpress' => [

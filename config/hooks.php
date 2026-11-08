@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Support\AcasaAdmin;
 use App\Support\Campanii;
+use App\Support\Statistici;
 
 /**
  * Agățările pluginurilor de punctele nucleului (App\Support\Hooks; lista punctelor și cine le cheamă e acolo).
@@ -29,4 +30,6 @@ return [
     ['punct' => 'acasa.sanatate', 'plugin' => 'livrare_fan', 'fn' => [AcasaAdmin::class, 'sanatateFan']],
     // Campaniile (5 nov 2026): bannerul campaniei active și, pe pagina campaniei, butonul „Înapoi în site-ul principal”.
     ['punct' => 'layout.inceput_body', 'plugin' => 'campanii', 'fn' => [Campanii::class, 'inceputBody']],
+    // Statisticile (8 nov 2026): scriptul care trimite pagina văzută (fără cookie), înainte de </body> pe paginile publice.
+    ['punct' => 'layout.final_body', 'plugin' => 'statistici', 'fn' => [Statistici::class, 'scriptPagina']],
 ];

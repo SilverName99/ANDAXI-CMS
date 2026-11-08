@@ -57,6 +57,8 @@ return [
     'cereri_oferta' => ['/Cereri de ofertă/u', '/ofertă de preț/u', '/Cere ofertă/u'],
     // Campaniile (5 nov 2026): intrarea din Marketing și butonul paginii campaniei.
     'campanii' => ['/Campanii pe site/u', '/Înapoi în site-ul principal/u'],
+    // Statisticile (8 nov 2026): textele paginilor lui (eticheta „Statistici” din meniu e și a tab-ului newsletterului).
+    'statistici' => ['/Impactul unei campanii/u', '/Acum pe site/u'],
     // Fișierele din cloud (din Biovitality): intrările bunny.net din Conținut și Setări, butonul din Galerie, aplicația de desktop,
     // rolul „Cloud user” din Administratori.
     'fisiere_cloud' => ['/bunny\.net/u', '/Fișiere bunny/u', '/Aplicația de desktop/u', '/Cloud user/u'],

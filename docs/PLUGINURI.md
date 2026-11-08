@@ -1336,6 +1336,86 @@ nostru vine din `AdminController::pretulProdusului` (aceeași regulă ca lista p
   și rânduri după fiecare acțiune (partenerii, celulele, „Salvează tot”, exportul celulă cu celulă, ștergerea, golirea, rolurile); C bifa
   „Doar în magazin”, singura diferență, declarată pe celula ei; D CSRF și pluginul oprit, doar pe codul comun.
 
+### Statistici site (`statistici`)
+
+Cerut pentru Biovitality (8 noiembrie 2026, după un video viral: traficul pe ore din TikTok, Instagram și Facebook și comenzile
+venite de acolo), făcut generic. `App\Support\Statistici` (colectarea, sarea, clasificările), `StatisticiAgregare`, `StatisticiRaport`,
+`StatisticiController`, vederile `views/admin/statistici*.php`, cronul `scripts/statistici-agregare.php`, migrarea `statistici/0061`,
+testele `tools/dev/test-statistici.php` (în testul de fum, pe „toate”) și `tools/dev/statistici-browser.cjs`. **Oprit pe orice site**: nu
+e în niciun pachet și în nicio licență de dezvoltare (`licente_dev`); îl pune doar CRM-ul în licență (`"statistici": "pornit"`). Pentru
+teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
+
+- **Fără cookie-uri, fără stocare în browser, fără amprentare.** Un vizitator e, pe o zi, `sha256(sarea zilei + site + IP + User-Agent)`
+  (primii 16 octeți). Sarea: 32 de octeți aleatori în `storage/statistici/sare-AAAALLZZ.bin` (0600), făcută la prima cerere a zilei
+  (atomic, cu `link`) și ștearsă a doua zi (la prima cerere a zilei noi și la fiecare rulare a cronului). Adresa IP (`IpClient`) și
+  User-Agent-ul nu se scriu nicăieri: doar familia browserului (inclusiv „TikTok / Instagram / Facebook (aplicație)”), a sistemului și
+  felul dispozitivului (desktop, telefon, tabletă), plus treapta lățimii ecranului. Fără consimțământ (nu se citește și nu se scrie nimic
+  pe dispozitivul vizitatorului), deci se numără toți vizitatorii, și cei care n-au acceptat cookie-urile.
+- **Nu se numără**: administratorii logați (scriptul nu e pus în pagina lor; punctul de primire citește sesiunea doar dacă browserul are
+  deja cookie-ul ei, fără sesiune nouă), roboții (`Campanii::eRobot`: Googlebot, previzualizările de linkuri ale rețelelor, unelte,
+  HeadlessChrome, fără User-Agent), browserele automatizate (`navigator.webdriver`), preîncărcările (`Sec-Purpose: prefetch`; scriptul
+  așteaptă `prerenderingchange` și o filă vizibilă), „Do Not Track” și „Global Privacy Control” (setarea `statistici_respecta_dnt`,
+  implicit da, în Rapoarte → Statistici → Setări).
+- **Scriptul** (`Statistici::scriptPagina`, agățat de `layout.final_body`, 1,4 KB, în HTML, deci merge și pe o pagină servită din cache-ul
+  de pagini sau dintr-un CDN): la pagina văzută trimite cu `navigator.sendBeacon` (altfel `fetch` cu `keepalive`) `{e:"v", p: calea fără
+  parametri, r: document.referrer, w: lățimea, u: utm_source/medium/campaign/content/term, c: semnele gclid/gbraid/wbraid (g), fbclid (f),
+  ttclid (t), q: are ?q=, t: felul paginii, i: id-ul produsului}`; la ascunderea filei sau la plecare, `{e:"l", p, d: secundele active}`.
+  Nimic altceva din adresă (niciun alt parametru, niciun email din adresă).
+- **Punctul de primire** `POST /api/statistici` (`Statistici::intercepteaza`, din `public/index.php`, după citirea setărilor și înaintea
+  sesiunii: niciun cookie, niciun fișier de sesiune, nicio redirecționare SEO; ruta e și în router, a pluginului, pentru gardă): `Origin`
+  al site-ului (fără el, `Sec-Fetch-Site: same-origin` sau un Referer al site-ului), altfel 403; corpul cel mult 2 KB (413), JSON validat
+  (400); cel mult 60 de evenimente pe minut pentru un vizitator (429); un singur `INSERT`; răspunsul 204, `Cache-Control: no-store`; orice
+  eroare e prinsă (500/503 fără corp), deci nu oprește și nu încetinește pagina. Nu are nevoie de excepție CSRF: nu folosește sesiunea.
+- **Pe server**, cu același hash calculat din cerere: adăugarea în coș (`SiteController::cartAdd`, `cartItemAddApi`, înlocuirea cu un
+  pachet), pagina checkout, comanda plasată (`Statistici::laComanda`, lângă `SursaComenzii::salveaza`: și hash-ul pe comandă, în
+  `orders.statistici_vizitator`), căutarea de produse din antet (`/api/search/products`: textul normalizat — litere mici, spațiile strânse,
+  100 de caractere — și numărul de rezultate; literele scrise una după alta, la cel mult 90 de secunde, devin o singură căutare).
+- **Vizita**: același vizitator, cel mult 30 de minute între două evenimente (sarea se schimbă la miezul nopții, deci o vizită nu trece în
+  ziua următoare). Sursa ei e a primei pagini: întâi semnele de reclamă (gclid → Google Ads, ttclid → TikTok, fbclid → Facebook sau
+  Instagram), apoi utm (cpc/ppc/paid + google → Google Ads; email/newsletter → Email; facebook, fb, ig, instagram, tiktok, youtube,
+  pinterest, linkedin, twitter/x, whatsapp, bing; alt `utm_source` → „Campanie (utm)”, cu sursa și mediul ca detaliu), apoi Referer-ul
+  (Facebook cu l./m./lm.facebook.com, Instagram, TikTok, YouTube, Pinterest, LinkedIn, X/t.co, WhatsApp/wa.me; Google organic; Bing;
+  DuckDuckGo, Yahoo, Yandex, Ecosia, Brave, Baidu… → „Alte motoare de căutare”; webmailurile → Email; aplicațiile Android
+  `android-app://`; orice alt domeniu → „Alte site-uri”, cu domeniul), apoi browserul aplicației (TikTok, Instagram și Facebook deschid
+  linkul în browserul lor, adesea fără Referer: se recunosc după User-Agent), altfel „Direct”. O pagină cerută din site la începutul unei
+  vizite noi = Direct. „Angajată” = cel puțin 2 pagini, 10 secunde active, o adăugare în coș sau o comandă; „rata de respingere” = restul.
+- **Comanda** se atribuie ultimei vizite a vizitatorului din aceeași zi, de dinaintea comenzii, care n-a fost Direct (ca Google Analytics);
+  fără ea, vizitei în care a comandat; fără nicio vizită (scriptul blocat de browser), „Necunoscută”. O comandă plasată a doua zi după
+  vizită nu se poate lega (hash-ul s-a schimbat): e prețul lipsei cookie-urilor. Comenzile și veniturile sunt cele de acum din `orders`:
+  fără cele șterse, anulate, eșuate, rambursate, returnate sau neplătite încă (`AcasaAdmin::FARA_VANZARE`). Lângă ele, tabelul „Sursa
+  comenzilor (cookie, cu acord)” arată `orders.sursa` (WP-40) pentru perioada aleasă.
+- **Agregarea** (`StatisticiAgregare`): fiecare zi neîncheiată se reface întreagă (șterge și scrie, într-o tranzacție, cu lacătul
+  `GET_LOCK`) în `statistici_vizite` (o vizită pe rând, cu vizitatorul doar ca număr de ordine al zilei), `statistici_pagini`,
+  `statistici_produse`, `statistici_cautari` (pe zi și sursă) și `statistici_comenzi` (atribuirea); `statistici_zile` ține ce s-a agregat.
+  O zi agregată după 00:15 a zilei următoare e încheiată: nu se mai reface, iar hash-ul ei se golește de pe comenzi. Cronul (o dată pe oră)
+  agregă zilele neîncheiate și șterge evenimentele brute mai vechi de `statistici_zile_brute` zile (implicit 90; agregatele rămân).
+  Fără cron, pagina din admin agregă la deschidere când azi n-a mai fost agregată de 2 minute. La 2–20 de mii de pagini pe zi, o zi se
+  agregă în câteva sute de milisecunde; rapoartele citesc doar agregatele.
+- **Rapoarte → Statistici** (`/admin/statistici`; administratorul general, „Administrator magazin” și „Administrator emailuri”): perioada
+  (azi, ieri, 7/30/90 de zile, altă perioadă) și comparația cu perioada dinainte; „Acum pe site” (vizitatorii din ultimele 5 minute, cu
+  paginile și sursele, reîmprospătat la 30 de secunde); cifrele (vizitatori unici, vizite, pagini, pagini/vizită, durata medie, rata de
+  respingere, adăugări în coș, comenzi, rata de conversie, venituri); graficul vizitelor și al veniturilor pe ore (1–2 zile) sau pe zile
+  (SVG în pagină, fără bibliotecă); tabelele, sortabile la clic pe antet, cu exportul CSV fiecare (`;`, UTF-8 cu BOM): Surse (cu detaliile
+  la ▸: domeniul, aplicația, utm), Campanii UTM, Pagini cele mai vizitate, Pagini de intrare, Produse cele mai văzute (cu rata de
+  adăugare în coș), Categorii, Căutări pe site, Căutări fără rezultat, Dispozitive, Browsere, Sisteme, Țări (doar dacă găzduirea trimite un
+  antet de țară: `CF-IPCountry`, `X-Country-Code`…; fără bază GeoIP; fără antet, tabelul lipsește). Un clic pe o sursă, un detaliu, o
+  campanie sau un dispozitiv filtrează tot tabloul (paginile, produsele și căutările doar după sursă). **Impactul unei campanii sau
+  postări** (`/admin/statistici/impact`): sursa (de exemplu TikTok) sau campania utm și momentul postării, apoi vizitele, comenzile și
+  veniturile pe ore, lângă aceleași ore cu o săptămână înainte (și CSV). Cuvintele căutate pe Google nu se văd (Google nu le trimite):
+  pagina o spune; o legătură cu Google Search Console poate veni mai târziu.
+- **Propoziția pentru politica de confidențialitate** (și în Setări): „Pentru statistici de trafic folosim o analiză proprie, fără
+  cookie-uri: nu păstrăm adresa IP și nu vă putem recunoaște de la o zi la alta; vedem doar, agregat, paginile vizitate, sursa vizitei (de
+  exemplu un link de pe o rețea socială), tipul dispozitivului și browserului. Dacă browserul dumneavoastră trimite semnalul «Do Not Track»
+  sau «Global Privacy Control», nu sunteți numărat.”
+- **Cronul** (în hPanel, ca celelalte): `17 * * * * /opt/alt/php83/usr/bin/php -d extension=sodium.so /home/uXXXXXXXXX/platforma/bin/platforma
+  --site=/home/uXXXXXXXXX/domains/<domeniu>/site scripts/statistici-agregare.php`.
+- **Are nevoie de**: nimic (coșul și comenzile doar cu magazinul). **Se oprește**: ca pornit. **Oprit**: niciun script în pagini (paginile
+  ies octet cu octet ca înainte), `POST /api/statistici` primește 404-ul JSON al gărzii, adminul 403, meniul dispare, cronul nu face
+  nimic, iar comenzile nu primesc hash-ul; datele rămân. Cu licența „toate”, comparația cu Bioscem (G-cmp) scoate scriptul din fiecare
+  pagină publică (`$seoB`, „statistici: scriptul paginilor”).
+- **Ce lipsește încă**: legătura cu Google Search Console (cuvintele căutate pe Google); căutarea din blog nu se notează (doar căutarea
+  de produse); o comandă plasată în altă zi decât vizita nu se leagă de sursa vizitei (fără cookie nu se poate).
+
 ### Neportate încă
 
 Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
@@ -1483,6 +1563,7 @@ tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin   # plus fiecare 
 tools/dev/php.sh tools/dev/test-pluginuri.php --fara-garda   # fără cererea fiecărei rute (mai repede)
 tools/dev/php.sh tools/dev/test-pluginuri.php --capturi=DIR  # capturile meniului adminului, pe pachete, în DIR
 tools/dev/php.sh tools/dev/test-campanii.php                 # pluginul campanii (regulile, adminul, site-ul, Chromium 1366/390 px)
+tools/dev/php.sh tools/dev/test-statistici.php               # pluginul statistici (sursele, hash-ul, agregarea, punctul de primire, tabloul, Chromium)
 tools/dev/compara-cu-baza.sh                                 # „toate” = HTML identic cu codul Bioscem
 tools/dev/compara-cu-baza.sh --licenta=bioscem               # la fel, cu licența de dezvoltare a Bioscem (fără unealta internă)
 tools/dev/smoke.sh --toate-pachetele                         # testul de fum pe fiecare pachet

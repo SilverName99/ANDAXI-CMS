@@ -411,4 +411,11 @@ return [
         'meniu-concurenta' => ['ce' => 'adaugat', 'rand' => '^link /admin/competition$', 'licenta' => 'toate', 'rol' => ['adm', 'magazin'],
             'motiv' => 'intrarea „Analiza competiție” din Produse (prețurile concurenților, produs cu produs)'],
     ],
+    // Pluginul statistici (8 nov 2026, pentru Biovitality): intrarea „Statistici” din Rapoarte, pentru administratorul general,
+    // „Administrator magazin” și „Administrator emailuri” (Auth::canAccessPath). Doar cu pluginul pe site (licența „toate”; nu e în
+    // nicio licență de dezvoltare a unui site). Paginile lui sunt noi: ce trimit le verifică tools/dev/test-statistici.php (C).
+    'statistici' => [
+        'meniu-statistici' => ['ce' => 'adaugat', 'rand' => '^link /admin/statistici$', 'licenta' => 'toate', 'rol' => ['adm', 'magazin', 'emailuri'],
+            'motiv' => 'intrarea „Statistici” din Rapoarte (vizite, surse, pagini, produse, căutări, comenzi și venituri pe sursă)'],
+    ],
 ];

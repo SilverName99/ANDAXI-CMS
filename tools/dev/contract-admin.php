@@ -248,7 +248,9 @@ try {
             // Pluginul fisiere_cloud (din Biovitality): fișierele zonei bunny.net, aplicația de desktop, Setări → bunny.net.
             '/admin/bunny', '/admin/bunny/app', '/admin/settings/bunny',
             // Pluginul concurenta (din Biovitality): analiza prețurilor concurenței.
-            '/admin/competition']),
+            '/admin/competition',
+            // Pluginul statistici (8 nov 2026): tabloul, impactul unei postări și setările (doar cu pluginul pornit).
+            '/admin/statistici', '/admin/statistici/impact', '/admin/statistici/setari']),
             static fn (string $cale): bool => $filtruPagini === '' || preg_match('#' . $filtruPagini . '#', $cale) === 1));
         $probleme = [];
         $numarPagini = 0;

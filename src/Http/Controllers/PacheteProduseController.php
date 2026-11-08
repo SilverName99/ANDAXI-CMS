@@ -77,6 +77,7 @@ final class PacheteProduseController
         }
         Cart::remove($cheie);
         Cart::add($idPachet, 1);
+        \App\Support\Statistici::laCos($idPachet);
 
         return ['ok' => true, 'message' => 'Am înlocuit produsul cu pachetul „' . $verificare['nume'] . '".', 'status' => 200];
     }

@@ -118,6 +118,11 @@ use App\Support\Settings;
 $appConfig = require __DIR__ . '/../config/app.php';
 $cacheDb = Database::connection((array) ($appConfig['db'] ?? []));
 $cacheSettings = Settings::all($cacheDb);
+// Pluginul statistici: evenimentul trimis de scriptul paginilor (POST /api/statistici), înaintea sesiunii, deci fără cookie și fără
+// fișier de sesiune; răspunde 204 și nimic altceva. Cu pluginul oprit (sau pe orice altă adresă) nu face nimic.
+if (\App\Support\Statistici::intercepteaza($cacheDb, $cacheSettings)) {
+    return;
+}
 if (!$faraSesiune) {
     \App\Support\SesiuneLaNevoie::decide($cacheSettings);
 }

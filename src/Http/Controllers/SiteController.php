@@ -1071,6 +1071,8 @@ final class SiteController
             return;
         }
 
+        // Pluginul statistici: produsul paginii, pentru scriptul ei (data paginii; nimic altceva nu se schimbă).
+        \App\Support\Statistici::$produsPagina = (int) ($product['id'] ?? 0);
         // Același produs scris altfel (litere mari, alt fel de codare): 301 la
         // adresa lui, ca Google să vadă o singură adresă.
         $slugSalvat = (string) ($product['slug'] ?? '');
@@ -1709,6 +1711,7 @@ final class SiteController
 
         $db = $this->db();
         $checkoutState = $this->buildCheckoutRenderState($db);
+        \App\Support\Statistici::laCheckout($db instanceof PDO ? $db : null);
         $summary = $checkoutState['summary'];
         $values = $checkoutState['values'];
         $fanCounties = $checkoutState['fan_counties'];
@@ -2104,6 +2107,8 @@ final class SiteController
             }
             // WP-40 (B9): de unde a venit clientul (Google, reclamă, email, alt site, direct), pentru raportul din admin.
             \App\Support\SursaComenzii::salveaza($db, (int) $orderId, $this->cachedSettings($db));
+            // Pluginul statistici: comanda legată de vizita din aceeași zi (hash-ul zilnic, fără cookie).
+            \App\Support\Statistici::laComanda($db, (int) $orderId);
 
             $itemStmt = $db->prepare(
                 'INSERT INTO order_items (order_id, product_id, product_name, bbd_key, quantity, unit_price, line_total)
@@ -3084,6 +3089,8 @@ final class SiteController
         } catch (Throwable) {
             $items = [];
         }
+        // Pluginul statistici: căutarea (normalizată) și câte rezultate a avut; literele scrise una după alta devin o căutare.
+        \App\Support\Statistici::cautare($query, count($items), $db);
 
         $this->jsonResponse([
             'ok' => true,
@@ -3159,6 +3166,7 @@ final class SiteController
         }
 
         Cart::add($productId, $quantity, (string) ($selectedBbd['key'] ?? ''));
+        \App\Support\Statistici::laCos($productId);
         $db = $this->db();
         $response = $this->buildFloatingCartPayload($db);
         $response['message'] = 'Produs adăugat în coș.';
@@ -3333,6 +3341,7 @@ final class SiteController
         }
 
         Cart::add($productId, $quantity, (string) ($selectedBbd['key'] ?? ''));
+        \App\Support\Statistici::laCos($productId);
         Flash::set('success', 'Produs adăugat în coș.');
         // Drumul fără JS-ul coșului: fereastra avertismentului apare pe /cos,
         // pagină care nu intră niciodată în cache.

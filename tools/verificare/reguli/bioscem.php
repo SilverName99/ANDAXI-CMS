@@ -97,7 +97,9 @@ return [
     // setările bunny_* care pot deschide spațiul de stocare golite și bunny_enabled = 0 (o copie nu atinge fișierele adevărate).
     // 23 (pluginul concurenta, concurenta/0060): concurenții și prețurile lor (date de business ale produselor, publice; numele unui
     // magazin concurent e al unei firme), copiate cum sunt, în grupul catalogului (până acum doar în regulile Biovitality).
-    'versiune' => 23,
+    // 24 (pluginul statistici, statistici/0061): evenimentele și agregatele statisticilor doar structura (o copie nu are nevoie de
+    // ele; evenimentele au hash-ul zilnic al vizitatorilor), iar hash-ul zilnic de pe comenzi (orders.statistici_vizitator) golit.
+    'versiune' => 24,
     'schema' => 'Nou-site-bioscem@c47f270 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -148,6 +150,14 @@ return [
         // WP-25: linkurile de confirmare a adresei (hash-ul jetonului, al cui e contul) și evenimentele Stripe primite (id-urile
         // Stripe ale plăților; o copie nu primește webhook-uri, iar un eveniment notat ar face unul adevărat „duplicat”).
         'customer_email_confirmations' => ['mod' => 'doar_structura', 'motiv' => 'jetoanele de confirmare a adresei (hash) și contul lor'],
+        // 24: statisticile site-ului (pluginul statistici): doar structura.
+        'statistici_evenimente' => ['mod' => 'doar_structura', 'motiv' => 'evenimentele statisticilor: hash-ul zilnic al vizitatorilor'],
+        'statistici_vizite' => ['mod' => 'doar_structura', 'motiv' => 'agregatele statisticilor: fără folos pe o copie'],
+        'statistici_pagini' => ['mod' => 'doar_structura', 'motiv' => 'agregatele statisticilor'],
+        'statistici_produse' => ['mod' => 'doar_structura', 'motiv' => 'agregatele statisticilor'],
+        'statistici_cautari' => ['mod' => 'doar_structura', 'motiv' => 'căutările vizitatorilor pe site'],
+        'statistici_comenzi' => ['mod' => 'doar_structura', 'motiv' => 'atribuirea comenzilor pe surse'],
+        'statistici_zile' => ['mod' => 'doar_structura', 'motiv' => 'starea agregării statisticilor'],
         'stripe_events' => ['mod' => 'doar_structura', 'motiv' => 'evenimentele Stripe primite: id-urile plăților, fără folos pe o copie'],
         // WP-26: trimiterile cererilor de ofertă (hash-ul adresei vizitatorului), doar pentru limită.
         'quote_submit_logs' => ['mod' => 'doar_structura', 'motiv' => 'trimiterile cererilor de ofertă: hash-ul adresei IP a vizitatorului'],
@@ -346,6 +356,8 @@ return [
                 'euplatesc_ep_id' => ['ref'],
                 'euplatesc_approval' => ['ref'],
                 'payment_error' => ['text'],
+                // 24: hash-ul zilnic al vizitatorului care a comandat (pluginul statistici): nu ajunge pe copie.
+                'statistici_vizitator' => ['nul'],
                 'coupon_code' => ['cupon_comanda'],
                 'billing_first_name' => ['prenume'],
                 'billing_last_name' => ['nume', 'email' => 'billing_email'],

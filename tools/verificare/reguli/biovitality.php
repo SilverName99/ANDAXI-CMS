@@ -48,7 +48,8 @@ $reguli['site'] = 'biovitality';
 // (campanii, campanii_produse; campanii/0054, codul comun), copiate cum sunt; baza biovitality.ro de pe codul vechi nu le are. Din
 // regulile Bioscem 19, 20 și 21: coloanele campanii/0056, campanii/0057 și campanii/0058, copiate cum sunt. Din regulile Bioscem 22: tabelele
 // și setările fișierelor din cloud (fisiere_cloud/0059) au trecut acolo, aceleași reguli. Din regulile Bioscem 23: concurenții și prețurile
-// lor (concurenta/0060) la fel, în grupul catalogului.
+// lor (concurenta/0060) la fel, în grupul catalogului. Din regulile Bioscem 24: statisticile (statistici/0061) doar structura, hash-ul de pe
+// comenzi golit.
 $reguli['versiune'] = $reguli['versiune'] * 100 + 6;
 $reguli['schema'] = 'Mutare-Site-Biovitality@d95598e (tools/dev/migrari/vechi/bv.sql) + database/migrari/asteptat.json';
 $reguli['licenta'] = 'biovitality';
