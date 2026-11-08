@@ -63,8 +63,15 @@ final class Statistici
         'cautare' => 'Căutare', 'pagina' => 'Pagină',
     ];
 
-    /** Câte evenimente primește un vizitator într-un minut (peste: 429). */
-    public const LIMITA_MINUT = 60;
+    /**
+     * Câte evenimente primește o adresă (IPv6: rețeaua ei /64) într-un minut, peste: 429. Mai mult decât un om: în spatele unei
+     * adrese de operator mobil (CGNAT) sau al unei rețele de firmă stau mulți vizitatori.
+     */
+    public const LIMITA_IP_MINUT = 120;
+    /** Câte evenimente primește tot site-ul într-un minut; peste, se aruncă (204), ca un val de gunoi să nu umple baza. */
+    public const LIMITA_SITE_MINUT = 1500;
+    /** Implicitul setării `statistici_max_zi`: câte evenimente primește tot site-ul într-o zi; peste, se aruncă (204). */
+    public const MAX_ZI_IMPLICIT = 200000;
     /** Cel mai mare corp primit (octeți). */
     public const MAX_CORP = 2048;
 
@@ -124,6 +131,12 @@ final class Statistici
     public static function respectaDnt(array $setari): bool
     {
         return (string) ($setari['statistici_respecta_dnt'] ?? '1') !== '0';
+    }
+
+    /** @param array<string, mixed> $setari */
+    public static function maxZi(array $setari): int
+    {
+        return max(1000, min(5000000, (int) ($setari['statistici_max_zi'] ?? self::MAX_ZI_IMPLICIT) ?: self::MAX_ZI_IMPLICIT));
     }
 
     /** @param array<string, mixed> $setari */
@@ -210,6 +223,15 @@ final class Statistici
     public static function hashVizitator(string $sare, string $site, string $ip, string $userAgent): string
     {
         return substr(hash('sha256', $sare . "\n" . $site . "\n" . $ip . "\n" . $userAgent, true), 0, 16);
+    }
+
+    /**
+     * Cheia limitei pe adresă: 8 octeți din sarea zilei, site și adresă (IPv6: rețeaua ei /64, `IpClient::cheieLimita`), fără
+     * browser, deci un robot care își schimbă User-Agent-ul la fiecare cerere tot în aceeași limită cade.
+     */
+    public static function cheieIp(string $sare, string $site, string $ip): string
+    {
+        return substr(hash('sha256', $sare . "\nip\n" . $site . "\n" . IpClient::cheieLimita($ip), true), 0, 8);
     }
 
     /** Hash-ul vizitatorului cererii de acum (null: fără sare). */
@@ -356,6 +378,11 @@ final class Statistici
                     return $rez($sursa, $gazda);
                 }
             }
+            // Rețeaua de reclame Google (clicul pe un banner sau pe o reclamă din aplicații): Google Ads, nu căutare.
+            if (self::domeniuDin($gazda, 'doubleclick.net') || self::domeniuDin($gazda, 'googlesyndication.com')
+                || self::domeniuDin($gazda, 'googleadservices.com')) {
+                return $rez('google_ads', $gazda);
+            }
             if (preg_match('/(^|\.)google\.[a-z.]{2,8}$/', $gazda) === 1) {
                 return $rez('google', $gazda);
             }
@@ -483,10 +510,11 @@ final class Statistici
             return null;
         }
         $decodata = rawurldecode($cale);
-        if (mb_check_encoding($decodata, 'UTF-8') && preg_match('/[\x00-\x1f\x7f]/', $decodata) !== 1) {
-            $cale = $decodata;
+        if (!mb_check_encoding($decodata, 'UTF-8') || preg_match('/[\x00-\x1f\x7f\\\\]/', $decodata) === 1) {
+            return null;
         }
-        return mb_substr($cale, 0, 255);
+        // Un singur „/” la început, și după decodare: nicio cale „//gazdă” sau „/\gazdă” (s-ar citi ca adresa altui site).
+        return mb_substr('/' . ltrim($decodata, '/'), 0, 255);
     }
 
     private static function textScurt(mixed $valoare, int $max = 100): string
@@ -510,7 +538,8 @@ final class Statistici
     public static function scriptPagina(): string
     {
         try {
-            if (self::eAdminInPagina()) {
+            // Nici administratorul, nici o pagină de eroare (404, 410, 503): o adresă care nu există nu ajunge în statistici.
+            if (self::eAdminInPagina() || http_response_code() >= 400) {
                 return '';
             }
             $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/');
@@ -614,14 +643,20 @@ final class Statistici
             return 503;
         }
         $ua = (string) ($server['HTTP_USER_AGENT'] ?? '');
-        $vizitator = self::hashVizitator($sare, self::site(), IpClient::dinCerere($server, (string) Env::get('IP_PROXY_DE_INCREDERE', '')), $ua);
-        if (self::preaMulte($db, $vizitator, $acum)) {
+        $ip = IpClient::dinCerere($server, (string) Env::get('IP_PROXY_DE_INCREDERE', ''));
+        $vizitator = self::hashVizitator($sare, self::site(), $ip, $ua);
+        $cheieIp = self::cheieIp($sare, self::site(), $ip);
+        if (self::preaMulte($db, $cheieIp, $acum)) {
             return 429;
+        }
+        if (!self::rezervaLoc(self::maxZi($setari), $acum)) {
+            return 204;
         }
         $ua3 = self::parseazaUa($ua);
         $rand = [
             'creat_la' => date('Y-m-d H:i:s', $acum),
             'vizitator' => $vizitator,
+            'ip_cheie' => $cheieIp,
             'tip' => $date['e'] === 'l' ? self::TIP_PLECARE : self::TIP_VIZUALIZARE,
             'cale' => $date['p'],
             'tip_pagina' => self::tipPagina($date['p'], $date['q']),
@@ -701,7 +736,7 @@ final class Statistici
                 return null;
             }
             foreach (array_keys($utm) as $cheie) {
-                $utm[$cheie] = self::textScurt($json['u'][$cheie] ?? '', 100);
+                $utm[$cheie] = self::normalizeazaUtm($json['u'][$cheie] ?? '');
             }
         }
         $clicuri = is_string($json['c'] ?? null) ? implode('', array_intersect(['g', 'f', 't'], str_split((string) $json['c']))) : '';
@@ -728,12 +763,70 @@ final class Statistici
         ];
     }
 
-    /** Peste LIMITA_MINUT evenimente ale vizitatorului în ultimul minut? */
-    private static function preaMulte(PDO $db, string $vizitator, int $acum): bool
+    /** Peste LIMITA_IP_MINUT evenimente de la aceeași adresă (IPv6: /64) în ultimul minut? (indexul ip_cheie, creat_la) */
+    private static function preaMulte(PDO $db, string $cheieIp, int $acum): bool
     {
-        $stmt = $db->prepare('SELECT COUNT(*) FROM statistici_evenimente WHERE vizitator = ? AND creat_la >= ?');
-        $stmt->execute([$vizitator, date('Y-m-d H:i:s', $acum - 60)]);
-        return (int) $stmt->fetchColumn() >= self::LIMITA_MINUT;
+        $stmt = $db->prepare('SELECT COUNT(*) FROM (SELECT 1 FROM statistici_evenimente WHERE ip_cheie = ? AND creat_la >= ? LIMIT '
+            . self::LIMITA_IP_MINUT . ') t');
+        $stmt->bindValue(1, $cheieIp, PDO::PARAM_LOB);
+        $stmt->bindValue(2, date('Y-m-d H:i:s', $acum - 60));
+        $stmt->execute();
+        return (int) $stmt->fetchColumn() >= self::LIMITA_IP_MINUT;
+    }
+
+    /**
+     * Plafoanele întregului site: cel mult LIMITA_SITE_MINUT evenimente pe minut și `$maxZi` pe zi, numărate într-un fișier mic
+     * (`storage/statistici/contor.json`, sub `flock`), fără nicio interogare. Fals = peste plafon (evenimentul se aruncă). Dacă
+     * fișierul nu se poate folosi, nu oprește nimic.
+     */
+    public static function rezervaLoc(int $maxZi, ?int $acum = null, ?string $dosar = null): bool
+    {
+        $acum ??= time();
+        try {
+            $fisier = ($dosar ?? self::dosarSare()) . '/contor.json';
+            $f = @fopen($fisier, 'c+');
+            if ($f === false) {
+                return true;
+            }
+            try {
+                if (!flock($f, LOCK_EX)) {
+                    return true;
+                }
+                $c = json_decode((string) stream_get_contents($f), true);
+                $minut = date('YmdHi', $acum);
+                $zi = date('Ymd', $acum);
+                $c = is_array($c) ? $c : [];
+                $peMinut = ($c['minut'] ?? '') === $minut ? (int) ($c['n_minut'] ?? 0) : 0;
+                $peZi = ($c['zi'] ?? '') === $zi ? (int) ($c['n_zi'] ?? 0) : 0;
+                if ($peMinut >= self::LIMITA_SITE_MINUT || $peZi >= $maxZi) {
+                    return false;
+                }
+                ftruncate($f, 0);
+                rewind($f);
+                fwrite($f, (string) json_encode(['minut' => $minut, 'n_minut' => $peMinut + 1, 'zi' => $zi, 'n_zi' => $peZi + 1]));
+                fflush($f);
+                return true;
+            } finally {
+                flock($f, LOCK_UN);
+                fclose($f);
+            }
+        } catch (Throwable) {
+            return true;
+        }
+    }
+
+    /**
+     * O valoare utm: litere mici, spațiile strânse, fără caractere de control, cel mult 100 de caractere; una cu „@” (o adresă de
+     * email pusă în link) se aruncă.
+     */
+    public static function normalizeazaUtm(mixed $valoare): string
+    {
+        $text = self::textScurt($valoare, 200);
+        $text = trim((string) preg_replace('/\s+/u', ' ', mb_strtolower($text, 'UTF-8')));
+        if ($text === '' || str_contains($text, '@') || str_contains($text, '%40')) {
+            return '';
+        }
+        return mb_substr($text, 0, 100);
     }
 
     /** @param array<string, mixed> $rand */
@@ -744,7 +837,8 @@ final class Statistici
             . implode(', ', array_fill(0, count($coloane), '?')) . ')');
         $i = 1;
         foreach ($rand as $cheie => $valoare) {
-            $stmt->bindValue($i++, $valoare, $valoare === null ? PDO::PARAM_NULL : ($cheie === 'vizitator' ? PDO::PARAM_LOB : PDO::PARAM_STR));
+            $stmt->bindValue($i++, $valoare, $valoare === null ? PDO::PARAM_NULL
+                : (in_array($cheie, ['vizitator', 'ip_cheie'], true) ? PDO::PARAM_LOB : PDO::PARAM_STR));
         }
         $stmt->execute();
     }
@@ -755,7 +849,7 @@ final class Statistici
      * Vizitatorul cererii de acum, dacă se numără (pluginul pornit, nu robot, nu administrator, fără DNT cu setarea): hash-ul și
      * baza; altfel null. Nu aruncă niciodată.
      *
-     * @return array{0: PDO, 1: string}|null
+     * @return array{0: PDO, 1: string, 2: string}|null
      */
     private static function pentruServer(?PDO $db, ?int $acum = null): ?array
     {
@@ -767,8 +861,13 @@ final class Statistici
             if (!$db instanceof PDO || self::motivExcludere($_SERVER, self::respectaDnt(self::setari($db))) !== null || self::eAdmin()) {
                 return null;
             }
-            $vizitator = self::vizitatorCerere($acum);
-            return $vizitator === null ? null : [$db, $vizitator];
+            $sare = self::sare($acum);
+            if ($sare === null) {
+                return null;
+            }
+            $ip = IpClient::adresa();
+            return [$db, self::hashVizitator($sare, self::site(), $ip, (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')),
+                self::cheieIp($sare, self::site(), $ip)];
         } catch (Throwable) {
             return null;
         }
@@ -781,12 +880,16 @@ final class Statistici
         if ($context === null) {
             return false;
         }
-        [$db, $vizitator] = $context;
+        [$db, $vizitator, $cheieIp] = $context;
         try {
+            if (!self::rezervaLoc(self::maxZi(self::setari($db)), $acum)) {
+                return false;
+            }
             $ua = self::parseazaUa((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
             self::scrie($db, array_merge([
                 'creat_la' => date('Y-m-d H:i:s', $acum ?? time()),
                 'vizitator' => $vizitator,
+                'ip_cheie' => $cheieIp,
                 'tip' => $tip,
                 'dispozitiv' => $ua['dispozitiv'], 'browser' => $ua['browser'], 'os' => $ua['os'],
                 'tara' => self::tara($_SERVER),
@@ -830,14 +933,20 @@ final class Statistici
         } catch (Throwable) {
             // Fără statistici/0061 încă: comanda e salvată, legătura vine după migrare (doar pentru comenzile de după).
         }
-        self::evenimentServer($db, self::TIP_COMANDA, ['comanda_id' => $comandaId, 'cale' => '/checkout', 'tip_pagina' => 'comanda'], $acum);
+        // Fără id-ul comenzii în evenimente: legătura comenzii cu vizita e doar hash-ul de pe comandă, golit când ziua se încheie
+        // (atunci se șterg și evenimentele „comandă” ale zilei).
+        self::evenimentServer($db, self::TIP_COMANDA, ['cale' => '/checkout', 'tip_pagina' => 'comanda'], $acum);
     }
 
-    /** O căutare normalizată: litere mici, spațiile strânse, cel mult 100 de caractere; sub 2 caractere = nimic. */
+    /**
+     * O căutare normalizată: litere mici, spațiile strânse, cel mult 100 de caractere; sub 2 caractere = nimic. Una care pare o
+     * dată personală (un „@”, de exemplu o adresă de email, sau 6 cifre la rând: telefon, CNP, număr de comandă sau de card) nu se
+     * păstrează deloc.
+     */
     public static function normalizeazaCautare(string $text): string
     {
         $text = trim((string) preg_replace('/\s+/u', ' ', (string) preg_replace('/[\x00-\x1f\x7f]/u', ' ', $text)));
-        if (!mb_check_encoding($text, 'UTF-8')) {
+        if (!mb_check_encoding($text, 'UTF-8') || str_contains($text, '@') || preg_match('/\d(?:[\s.\-]?\d){5,}/u', $text) === 1) {
             return '';
         }
         $text = mb_substr(mb_strtolower($text, 'UTF-8'), 0, 100);

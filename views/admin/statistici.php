@@ -17,6 +17,7 @@
  * @var array<string, mixed> $acum
  * @var string $ultimaAgregare
  * @var bool $respectaDnt
+ * @var bool $seCalculeaza
  */
 use App\Support\StatisticiRaport;
 
@@ -37,6 +38,7 @@ admin_componenta('antet-pagina', [
     'actiuni' => $actiuni,
     'ajutor' => [
         'Statisticile sunt ale site-ului, fără cookie-uri și fără nimic ținut în browserul vizitatorului: un vizitator e recunoscut doar în aceeași zi, după un cod calculat din adresa lui și browser, care nu se mai poate reface a doua zi. Nu se păstrează adrese IP.',
+        'Pe mai multe zile, „Vizitatori unici (pe zile)” e suma vizitatorilor unici ai fiecărei zile: fără cookie-uri, același om venit în două zile se numără de două ori.',
         'Nu se numără administratorii logați, roboții și browserele care cer „nu urmări” (Do Not Track / Global Privacy Control; vezi Setări).',
         'O vizită ține cât vizitatorul nu stă mai mult de 30 de minute fără nicio pagină. Sursa vizitei e a primei pagini: un link cu utm, o reclamă (gclid, fbclid, ttclid), site-ul de pe care a venit sau aplicația (TikTok, Instagram, Facebook); fără nimic, „Direct”.',
         'O comandă se atribuie ultimei vizite din aceeași zi venite de undeva (nu „Direct”). Veniturile sunt totalurile comenzilor de acum, fără cele anulate, eșuate, rambursate sau neplătite încă.',
@@ -136,6 +138,9 @@ $adresaExport = static function (string $tabel) use ($parametriBaza, $filtre): s
     <button class="btn btn-primary" type="submit">Arată</button>
 </form>
 <p class="st-nota" style="margin-top:-6px">Perioada: <strong><?= $e($perioada['eticheta']) ?></strong><?= $compara ? ' · comparată cu ' . $e(date('d.m.Y', (int) strtotime($perioada['inainte_de_la'])) . ' – ' . date('d.m.Y', (int) strtotime($perioada['inainte_pana_la']))) : '' ?><?= $ultimaAgregare !== '' ? ' · date la zi la ' . $e(date('d.m.Y H:i', (int) strtotime($ultimaAgregare))) : '' ?><?= !$respectaDnt ? ' · „Do Not Track” nu se respectă (Setări)' : '' ?></p>
+<?php if (!empty($seCalculeaza)): ?>
+<?php admin_componenta('mesaj', ['tip' => 'info', 'titlu' => 'Statisticile se calculează', 'text' => 'Se arată ultimele date agregate; reîncarcă pagina peste un minut.']); ?>
+<?php endif; ?>
 <?php if ($filtre !== []): ?>
 <div class="st-active">Filtrat după:
 <?php foreach ($filtre as $cheie => $valoare): ?>
@@ -188,7 +193,7 @@ $ki = $kpiInainte;
 $v = static fn (string $cheie) => $ki !== null ? (float) $ki[$cheie] : null;
 ?>
 <div class="st-kpi" id="st-kpi">
-<?= $tile('Vizitatori unici', $nr($k['vizitatori']), (float) $k['vizitatori'], $v('vizitatori')) ?>
+<?= $tile($perioada['zile'] > 1 ? 'Vizitatori unici (pe zile)' : 'Vizitatori unici', $nr($k['vizitatori']), (float) $k['vizitatori'], $v('vizitatori')) ?>
 <?= $tile('Vizite', $nr($k['vizite']), (float) $k['vizite'], $v('vizite')) ?>
 <?= $tile('Pagini vizualizate', $nr($k['pagini']), (float) $k['pagini'], $v('pagini')) ?>
 <?= $tile('Pagini / vizită', number_format((float) $k['pagini_vizita'], 1, ',', '.'), (float) $k['pagini_vizita'], $v('pagini_vizita')) ?>
@@ -351,6 +356,7 @@ if (($rand['filtru'] ?? []) !== []) {
         <p class="st-nota"><?= $e($tabel['nota']) ?></p>
 <?php endif; ?>
 <?php if ($cheieTabel === 'cautari'): ?>
+        <p class="st-nota">Doar căutările a cel puțin <?= \App\Support\StatisticiRaport::MIN_VIZITATORI_CAUTARE ?> vizitatori; cele cu „@” sau cu 6 cifre la rând (adrese, telefoane, numere) nu se păstrează deloc.</p>
         <p class="st-nota">Cuvintele căutate pe Google nu se pot vedea aici: Google nu le mai trimite site-urilor. (Se pot vedea în Google Search Console; legătura cu el poate veni mai târziu.)</p>
 <?php endif; ?>
     </section>

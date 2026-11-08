@@ -18,6 +18,8 @@ use Throwable;
 final class StatisticiRaport
 {
     public const FILTRE = ['sursa', 'detaliu', 'campanie', 'dispozitiv'];
+    /** Câți vizitatori diferiți trebuie să fi căutat ceva ca să apară în tablou și în CSV. */
+    public const MIN_VIZITATORI_CAUTARE = 2;
     public const PERIOADE = ['azi' => 'Azi', 'ieri' => 'Ieri', '7' => 'Ultimele 7 zile', '30' => 'Ultimele 30 de zile',
         '90' => 'Ultimele 90 de zile', 'custom' => 'Altă perioadă'];
 
@@ -337,8 +339,10 @@ final class StatisticiRaport
     public static function cautari(PDO $db, string $deLa, string $panaLa, array $f, bool $doarFaraRezultat = false, int $limita = 50): array
     {
         [$w, $p] = self::unde($deLa, $panaLa, $f, 'c', true);
+        // Doar căutările a cel puțin 2 vizitatori (o căutare a unui singur om nu se arată și nu se exportă).
         $randuri = self::randuri($db, 'SELECT c.cautare, SUM(c.cautari) AS cautari, SUM(c.fara_rezultat) AS fara_rezultat FROM statistici_cautari c
-            WHERE ' . $w . ' GROUP BY c.cautare' . ($doarFaraRezultat ? ' HAVING fara_rezultat > 0' : '') . ' ORDER BY '
+            WHERE ' . $w . ' GROUP BY c.cautare HAVING SUM(c.vizitatori) >= ' . self::MIN_VIZITATORI_CAUTARE
+            . ($doarFaraRezultat ? ' AND fara_rezultat > 0' : '') . ' ORDER BY '
             . ($doarFaraRezultat ? 'fara_rezultat' : 'cautari') . ' DESC, c.cautare LIMIT ' . max(1, $limita), $p);
         return array_map(static fn (array $r): array => ['cautare' => (string) $r['cautare'], 'cautari' => (int) $r['cautari'],
             'fara_rezultat' => (int) $r['fara_rezultat']], $randuri);

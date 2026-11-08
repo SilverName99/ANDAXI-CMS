@@ -9,8 +9,8 @@ use App\Support\Migrari\Schema;
  * vizitelor, fără cookie-uri și fără nimic ținut în browser.
  *
  *  - `statistici_evenimente`: evenimentele brute (o pagină văzută, plecarea de pe ea cu timpul activ, adăugarea în coș, începutul
- *    comenzii, comanda, o căutare pe site), cu vizitatorul ca un hash zilnic (16 octeți; sarea zilei se șterge a doua zi), fără
- *    adresă IP și fără User-Agent (doar familia browserului, a sistemului și felul dispozitivului). Se șterg după
+ *    comenzii, comanda, o căutare pe site), cu vizitatorul ca un hash zilnic (16 octeți; sarea zilei se șterge a doua zi) și
+ *    cheia limitei (8 octeți: sarea zilei + adresa, IPv6 pe /64), fără adresă IP, fără User-Agent, fără id de comandă (doar familia browserului, a sistemului și felul dispozitivului). Se șterg după
  *    `statistici_zile_brute` zile (implicit 90);
  *  - `statistici_vizite`, `statistici_pagini`, `statistici_produse`, `statistici_cautari`, `statistici_comenzi`: agregatele unei
  *    zile (cronul la oră și deschiderea paginii din admin), păstrate. În vizite, vizitatorul e doar un număr de ordine al zilei;
@@ -29,6 +29,7 @@ return [
             'id' => 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT',
             'creat_la' => 'DATETIME NOT NULL',
             'vizitator' => 'BINARY(16) NOT NULL',
+            'ip_cheie' => 'BINARY(8) NOT NULL',
             'tip' => 'TINYINT UNSIGNED NOT NULL',
             'cale' => "VARCHAR(255) NOT NULL DEFAULT ''",
             'tip_pagina' => "VARCHAR(12) NOT NULL DEFAULT ''",
@@ -48,11 +49,11 @@ return [
             'durata' => 'INT UNSIGNED NOT NULL DEFAULT 0',
             'cautare' => "VARCHAR(100) NOT NULL DEFAULT ''",
             'rezultate' => 'INT UNSIGNED NULL',
-            'comanda_id' => 'INT UNSIGNED NULL',
         ], [
             'PRIMARY KEY (id)',
             'KEY idx_st_ev_timp (creat_la)',
             'KEY idx_st_ev_vizitator (vizitator, creat_la)',
+            'KEY idx_st_ev_ip (ip_cheie, creat_la)',
         ]);
         $s->tabelComplet('statistici_vizite', [
             'id' => 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT',
@@ -115,6 +116,7 @@ return [
             'sursa' => "VARCHAR(20) NOT NULL DEFAULT ''",
             'cautare' => "VARCHAR(100) NOT NULL DEFAULT ''",
             'cautari' => 'INT UNSIGNED NOT NULL DEFAULT 0',
+            'vizitatori' => 'INT UNSIGNED NOT NULL DEFAULT 0',
             'fara_rezultat' => 'INT UNSIGNED NOT NULL DEFAULT 0',
         ], [
             'PRIMARY KEY (id)',

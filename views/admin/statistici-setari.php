@@ -5,6 +5,7 @@
  *
  * @var bool $respectaDnt
  * @var int $zileBrute
+ * @var int $maxZi
  */
 admin_componenta('antet-pagina', [
     'titlu' => 'Setări statistici',
@@ -18,6 +19,8 @@ admin_componenta('antet-pagina', [
     <p><label><input type="checkbox" name="statistici_respecta_dnt" value="1"<?= $respectaDnt ? ' checked' : '' ?>> Nu număra browserele care cer „nu urmări” (Do Not Track sau Global Privacy Control)</label></p>
     <p><label for="st-zile">Evenimentele detaliate se șterg după (zile)</label><br>
         <input type="number" id="st-zile" name="statistici_zile_brute" min="7" max="400" value="<?= (int) $zileBrute ?>"></p>
+    <p><label for="st-max-zi">Cel mult evenimente pe zi (peste, restul zilei nu se mai notează)</label><br>
+        <input type="number" id="st-max-zi" name="statistici_max_zi" min="1000" max="5000000" step="1000" value="<?= (int) $maxZi ?>"></p>
     <p style="font-size:13px;color:var(--adm-text-secundar)">Agregatele (vizitele, paginile, produsele, căutările și comenzile pe zile) rămân. „Acum pe site” și refacerea unei zile au nevoie de evenimentele detaliate.</p>
     <button class="btn btn-primary" type="submit">Salvează</button>
 </form>

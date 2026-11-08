@@ -68,7 +68,9 @@ final class StatisticiController
         }
         $setari = Settings::all($db);
         try {
-            StatisticiAgregare::laNevoie($db, $setari);
+            // Agregarea la deschidere (doar cu cronul rămas în urmă de peste 2 ore, cel mult 2 zile): niciodată o eroare 500; dacă
+            // rulează altă agregare sau nu a mers, pagina arată ultimele date agregate, cu nota „se calculează”.
+            $stareAgregare = StatisticiAgregare::laNevoie($db, $setari);
             $perioada = StatisticiRaport::perioada($_GET);
             $filtre = StatisticiRaport::filtre($_GET);
             $compara = ($_GET['compara'] ?? '') === '1';
@@ -94,6 +96,7 @@ final class StatisticiController
                 'acum' => StatisticiRaport::acum($db),
                 'ultimaAgregare' => (string) ($db->query('SELECT MAX(agregat_la) FROM statistici_zile')->fetchColumn() ?: ''),
                 'respectaDnt' => Statistici::respectaDnt($setari),
+                'seCalculeaza' => in_array($stareAgregare, ['ocupat', 'eroare'], true),
             ], 'admin/layout');
         } catch (Throwable $e) {
             error_log('ANDAXI statistici: tabloul nu s-a putut face: ' . $e->getMessage());
@@ -174,8 +177,7 @@ final class StatisticiController
         fputcsv($iesire, $antet, ';', '"', '');
         foreach ($randuri as $r) {
             // Celulele care încep cu = + - @ nu devin formule în Excel.
-            fputcsv($iesire, array_map(static fn (mixed $v): string => is_string($v) && preg_match('/^[=+\-@\t\r]/', $v) === 1 ? "'" . $v : (string) $v, $r),
-                ';', '"', '');
+            fputcsv($iesire, array_map([self::class, 'celulaCsv'], $r), ';', '"', '');
         }
         fclose($iesire);
     }
@@ -220,7 +222,9 @@ final class StatisticiController
                 return;
             }
             $zile = (int) ($_POST['statistici_zile_brute'] ?? 90);
+            $maxZi = (int) ($_POST['statistici_max_zi'] ?? Statistici::MAX_ZI_IMPLICIT);
             Settings::save($db, [
+                'statistici_max_zi' => (string) max(1000, min(5000000, $maxZi)),
                 'statistici_respecta_dnt' => ($_POST['statistici_respecta_dnt'] ?? '') === '1' ? '1' : '0',
                 'statistici_zile_brute' => (string) max(7, min(400, $zile)),
             ]);
@@ -239,6 +243,7 @@ final class StatisticiController
             'title' => 'Setări statistici',
             'respectaDnt' => Statistici::respectaDnt($setari),
             'zileBrute' => Statistici::zileBrute($setari),
+            'maxZi' => Statistici::maxZi($setari),
         ], 'admin/layout');
     }
 
@@ -258,6 +263,19 @@ final class StatisticiController
         $ore = (int) ($get['ore'] ?? 48);
         return ['sursa' => $sursa, 'campanie' => $campanie, 'start' => $start, 'ore' => max(6, min(168, $ore)),
             'start_text' => date('Y-m-d\TH:i', $start)];
+    }
+
+    /**
+     * O celulă CSV fără formulă: textul care, fără spațiile de la început, începe cu = + - @ (sau tab, CR) primește un apostrof în
+     * față, ca Excel să nu-l ia drept formulă (și pe rândurile de detaliu, care încep cu spații).
+     */
+    public static function celulaCsv(mixed $v): string
+    {
+        $text = (string) $v;
+        if (is_string($v) && preg_match('/^[=+\-@\t\r]/', ltrim($text, " \n\x0B\0")) === 1) {
+            return "'" . $text;
+        }
+        return $text;
     }
 
     private static function suma(float $v): string

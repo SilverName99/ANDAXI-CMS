@@ -96,6 +96,9 @@ $cazuriSursa = [
     'Google Ads (utm cpc)' => [['sursa' => 'google', 'mediu' => 'cpc'], '', '', $chrome, 'google_ads', 'google / cpc'],
     'utm google fără mediu plătit' => [['sursa' => 'google', 'mediu' => 'organic'], '', '', $chrome, 'google', 'google / organic'],
     'Bing' => [[], '', 'https://www.bing.com/', $chrome, 'bing', 'bing.com'],
+    'rețeaua de reclame Google (doubleclick)' => [[], '', 'https://googleads.g.doubleclick.net/', $chrome, 'google_ads', 'googleads.g.doubleclick.net'],
+    'rețeaua de reclame Google (*.doubleclick.net)' => [[], '', 'https://ad.doubleclick.net/x', $chrome, 'google_ads', 'ad.doubleclick.net'],
+    'rețeaua de reclame Google (googlesyndication)' => [[], '', 'https://tpc.googlesyndication.com/', $chrome, 'google_ads', 'tpc.googlesyndication.com'],
     'DuckDuckGo' => [[], '', 'https://duckduckgo.com/', $chrome, 'cautare', 'duckduckgo.com'],
     'Email (utm_medium=email)' => [['sursa' => 'newsletter', 'mediu' => 'email'], '', '', $chrome, 'email', 'newsletter / email'],
     'Email (Gmail web)' => [[], '', 'https://mail.google.com/', $chrome, 'email', 'mail.google.com'],
@@ -227,6 +230,52 @@ $verifica('scriptul respectă DNT/GPC doar cu setarea; așteaptă pagina văzut�
 $verifica('căutarea normalizată: litere mici, spațiile strânse, cel mult 100 de caractere, sub 2 nimic',
     Statistici::normalizeazaCautare("  Ceai   de MENTĂ\t") === 'ceai de mentă' && mb_strlen(Statistici::normalizeazaCautare(str_repeat('ab', 80))) === 100
     && Statistici::normalizeazaCautare('a') === '');
+$cautariPersonale = ['ion.popescu@exemplu.ro', 'comanda 203801', '0722 123 456', '1900101123456', 'card 4111-1111-1111-1111', 'cod 12345 6'];
+$verifica('căutările care par date personale (un „@”, 6 cifre la rând, și cu spații sau liniuțe) nu se păstrează; „vitamina d3 1000” da',
+    array_filter($cautariPersonale, static fn (string $t): bool => Statistici::normalizeazaCautare($t) !== '') === []
+    && Statistici::normalizeazaCautare('Vitamina D3 1000') === 'vitamina d3 1000',
+    implode(', ', array_filter($cautariPersonale, static fn (string $t): bool => Statistici::normalizeazaCautare($t) !== '')));
+$verifica('utm: litere mici, spațiile strânse, o valoare cu „@” aruncată', Statistici::normalizeazaUtm('  Black   FRIDAY ') === 'black friday'
+    && Statistici::normalizeazaUtm('ion@exemplu.ro') === '' && Statistici::normalizeazaUtm('ion%40exemplu.ro') === ''
+    && Statistici::normalizeazaUtm(['x']) === '' && mb_strlen(Statistici::normalizeazaUtm(str_repeat('a', 300))) === 100);
+$cai = ['/%2F%2Frau.exemplu/x' => '/rau.exemplu/x', '/%5Crau.exemplu' => null, '/a%00b' => null, '/produs/ceai%20verde' => '/produs/ceai verde',
+    '//rau.exemplu' => null, '/\\rau.exemplu' => null, '/x?y=1#z' => '/x', '/%E2%82' => null];
+$gresite = [];
+foreach ($cai as $intrare => $asteptat) {
+    if (Statistici::caleCurata($intrare) !== $asteptat) {
+        $gresite[] = $intrare . ' → ' . var_export(Statistici::caleCurata($intrare), true);
+    }
+}
+$verifica('calea: verificată și după decodare, un singur „/” la început (nicio „//gazdă” sau „/\\gazdă”)', $gresite === [], implode('; ', $gresite));
+$sare1 = str_repeat('s', 32);
+$verifica('cheia limitei: aceeași pentru orice browser și pentru toată rețeaua IPv6 /64; alta pentru altă adresă IPv4 sau altă /64',
+    strlen(Statistici::cheieIp($sare1, $site, '203.0.113.7')) === 8
+    && Statistici::cheieIp($sare1, $site, '2001:db8:1:2::abc') === Statistici::cheieIp($sare1, $site, '2001:db8:1:2:ffff::1')
+    && Statistici::cheieIp($sare1, $site, '2001:db8:1:2::abc') !== Statistici::cheieIp($sare1, $site, '2001:db8:1:3::abc')
+    && Statistici::cheieIp($sare1, $site, '203.0.113.7') !== Statistici::cheieIp($sare1, $site, '203.0.113.8'));
+$dosarContor = sys_get_temp_dir() . '/andaxi-test-statistici-contor-' . getmypid();
+@mkdir($dosarContor, 0700, true);
+$t0 = (int) strtotime('2026-03-10 10:00:05');
+$peZi = [];
+for ($i = 0; $i < 5; $i++) {
+    $peZi[] = Statistici::rezervaLoc(3, $t0 + $i * 61, $dosarContor);
+}
+$peZi[] = Statistici::rezervaLoc(3, (int) strtotime('2026-03-11 00:00:01'), $dosarContor);
+@unlink($dosarContor . '/contor.json');
+$peMinut = 0;
+for ($i = 0; $i < Statistici::LIMITA_SITE_MINUT + 5; $i++) {
+    $peMinut += Statistici::rezervaLoc(1000000, $t0, $dosarContor) ? 1 : 0;
+}
+$minutUrmator = Statistici::rezervaLoc(1000000, $t0 + 60, $dosarContor);
+@unlink($dosarContor . '/contor.json');
+@rmdir($dosarContor);
+$verifica('plafoanele site-ului: cel mult N pe zi (aici 3; a doua zi din nou), cel mult ' . Statistici::LIMITA_SITE_MINUT . ' pe minut (minutul următor din nou)',
+    $peZi === [true, true, true, false, false, true] && $peMinut === Statistici::LIMITA_SITE_MINUT && $minutUrmator,
+    json_encode($peZi) . ' ' . $peMinut);
+$verifica('CSV: o celulă care începe cu = + - @ (și după spațiile rândurilor de detaliu) primește un apostrof',
+    \App\Http\Controllers\StatisticiController::celulaCsv('=HYPERLINK("x")') === "'=HYPERLINK(\"x\")"
+    && \App\Http\Controllers\StatisticiController::celulaCsv('  =cmd') === "'  =cmd" && \App\Http\Controllers\StatisticiController::celulaCsv("\t@x") === "'\t@x"
+    && \App\Http\Controllers\StatisticiController::celulaCsv('google / cpc') === 'google / cpc' && \App\Http\Controllers\StatisticiController::celulaCsv(12) === '12');
 
 // ── Baza și serverul ─────────────────────────────────────────────────────────────────────────────────────────────────
 $port = (int) (getenv('CMS_DEV_PORT') ?: '8701');
@@ -391,13 +440,13 @@ $comanda = static function (string $creata, float $total, string $stare, ?string
     return (int) $db->lastInsertId();
 };
 $eveniment = static function (string $cand, string $viz, int $tip, array $extra = []) use ($db): void {
-    $rand = array_merge(['creat_la' => $cand, 'vizitator' => $viz, 'tip' => $tip, 'cale' => '/', 'tip_pagina' => 'acasa', 'dispozitiv' => 'mobil',
-        'browser' => 'Chrome', 'os' => 'Android'], $extra);
+    $rand = array_merge(['creat_la' => $cand, 'vizitator' => $viz, 'ip_cheie' => substr($viz, 0, 8), 'tip' => $tip, 'cale' => '/',
+        'tip_pagina' => 'acasa', 'dispozitiv' => 'mobil', 'browser' => 'Chrome', 'os' => 'Android'], $extra);
     $coloane = array_keys($rand);
     $stmt = $db->prepare('INSERT INTO statistici_evenimente (' . implode(', ', $coloane) . ') VALUES (' . implode(', ', array_fill(0, count($coloane), '?')) . ')');
     $i = 1;
     foreach ($rand as $c => $v) {
-        $stmt->bindValue($i++, $v, $v === null ? PDO::PARAM_NULL : ($c === 'vizitator' ? PDO::PARAM_LOB : PDO::PARAM_STR));
+        $stmt->bindValue($i++, $v, $v === null ? PDO::PARAM_NULL : (in_array($c, ['vizitator', 'ip_cheie'], true) ? PDO::PARAM_LOB : PDO::PARAM_STR));
     }
     $stmt->execute();
 };
@@ -409,8 +458,11 @@ try {
     $zi = '2026-02-10';
     $A = str_repeat("\x01", 16);
     $B = str_repeat("\x02", 16);
-    $C = str_repeat("\x03", 16);
-    $D = str_repeat("\x04", 16);
+    // Hash-uri din bucăți diferite ale agregării (primul octet: 0x01, 0x52, 0xA3, 0xF4), ca agregarea pe bucăți să fie încercată.
+    $A = str_repeat("\x01", 16);
+    $B = str_repeat("\x52", 16);
+    $C = str_repeat("\xA3", 16);
+    $D = str_repeat("\xF4", 16);
     $produsDemo = (int) $db->query('SELECT id FROM products WHERE deleted_at IS NULL AND is_active = 1 ORDER BY id LIMIT 1')->fetchColumn();
     // A: vine din TikTok la 10:00, vede un produs, îl pune în coș, pleacă; revine direct la 11:00 (pauză > 30 min) și comandă la 11:05.
     $eveniment($zi . ' 10:00:00', $A, 1, ['cale' => '/', 'sursa' => 'tiktok', 'detaliu' => 'aplicația TikTok']);
@@ -420,7 +472,7 @@ try {
     $eveniment($zi . ' 11:00:00', $A, 1, ['cale' => '/cos', 'tip_pagina' => 'cos', 'sursa' => 'direct']);
     $eveniment($zi . ' 11:03:00', $A, 4, ['cale' => '/checkout', 'tip_pagina' => 'checkout']);
     $comandaA = $comanda($zi . ' 11:05:00', 150.0, 'processing', $A);
-    $eveniment($zi . ' 11:05:00', $A, 5, ['cale' => '/checkout', 'tip_pagina' => 'comanda', 'comanda_id' => $comandaA]);
+    $eveniment($zi . ' 11:05:00', $A, 5, ['cale' => '/checkout', 'tip_pagina' => 'comanda']);
     // B: Google, o singură pagină, 3 secunde (respingere); caută „ceai” (cu rezultate) și „xyz” (fără).
     $eveniment($zi . ' 10:30:00', $B, 1, ['cale' => '/', 'sursa' => 'google', 'detaliu' => 'google.ro']);
     $eveniment($zi . ' 10:30:10', $B, 6, ['cale' => '/cautare', 'tip_pagina' => 'cautare', 'cautare' => 'ceai', 'rezultate' => 4]);
@@ -428,14 +480,16 @@ try {
     $eveniment($zi . ' 10:30:30', $B, 2, ['cale' => '/', 'durata' => 3]);
     // C: prima pagină cerută din site (intern) = direct; o comandă anulată (fără venit).
     $eveniment($zi . ' 12:00:00', $C, 1, ['cale' => '/despre', 'tip_pagina' => 'pagina', 'sursa' => 'intern']);
+    $eveniment($zi . ' 12:00:30', $C, 6, ['cale' => '/cautare', 'tip_pagina' => 'cautare', 'cautare' => 'ceai', 'rezultate' => 4]);
     $comandaC = $comanda($zi . ' 12:10:00', 99.0, 'cancelled', $C);
     // D: o comandă fără nicio pagină numărată (scriptul blocat): sursa necunoscută.
     $comandaD = $comanda($zi . ' 13:00:00', 40.0, 'processing', $D);
     $acumInchis = (int) strtotime('2026-02-11 01:00:00');
-    $rez = StatisticiAgregare::agregaZiua($db, $zi, $acumInchis);
+    $acumDeschis = (int) strtotime($zi . ' 23:00:00');
+    $rez = StatisticiAgregare::agregaZiua($db, $zi, $acumDeschis);
     $vizite = $db->query("SELECT * FROM statistici_vizite WHERE zi = '$zi' ORDER BY inceput")->fetchAll(PDO::FETCH_ASSOC);
-    $verifica('vizitele: 4 (A de două ori, după o pauză de peste 30 de minute; B; C), din 12 evenimente', $rez['vizite'] === 4 && count($vizite) === 4
-        && $rez['evenimente'] === 12, json_encode($rez));
+    $verifica('vizitele: 4 (A de două ori, după o pauză de peste 30 de minute; B; C), din 13 evenimente, citite pe bucăți după hash',
+        $rez['vizite'] === 4 && count($vizite) === 4 && $rez['evenimente'] === 13, json_encode($rez));
     $sursele = array_map(static fn (array $v): string => $v['sursa'] . ':' . $v['pagini'], $vizite);
     $verifica('sursa vizitei din prima pagină (TikTok, Google, „intern” la început = direct), paginile pe vizită',
         $sursele === ['tiktok:2', 'google:1', 'direct:1', 'direct:1'], implode(', ', $sursele));
@@ -450,29 +504,34 @@ try {
     $verifica('comanda fără vizită numărată: „necunoscuta”; comanda lui C: direct', ($atribuiri[$comandaD]['sursa'] ?? '') === 'necunoscuta'
         && ($atribuiri[$comandaC]['sursa'] ?? '') === 'direct');
     $pagini = $db->query("SELECT CONCAT(sursa, ' ', cale) AS k, vizualizari, intrari FROM statistici_pagini WHERE zi = '$zi'")->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC);
-    $verifica('paginile pe sursa vizitei, cu intrările', ($pagini['tiktok /']['intrari'] ?? 0) == 1 && ($pagini['tiktok /produs/x']['vizualizari'] ?? 0) == 1
-        && ($pagini['direct /cos']['intrari'] ?? 0) == 1, json_encode($pagini));
+    $verifica('paginile pe sursa vizitei, cu intrările; o cale văzută de un singur vizitator devine „(altele)” (și ca pagină de intrare)',
+        ($pagini['tiktok /']['intrari'] ?? 0) == 1 && ($pagini['tiktok (altele)']['vizualizari'] ?? 0) == 1 && ($pagini['direct (altele)']['intrari'] ?? 0) == 2
+        && !isset($pagini['tiktok /produs/x']) && !isset($pagini['direct /despre']) && $vizite[2]['pagina_intrare'] === '(altele)', json_encode($pagini));
     $produs = $db->query("SELECT vizualizari, adaugari_cos FROM statistici_produse WHERE zi = '$zi' AND produs_id = $produsDemo")->fetch(PDO::FETCH_ASSOC);
     $verifica('produsul: o vizualizare și o adăugare în coș', is_array($produs) && (int) $produs['vizualizari'] === 1 && (int) $produs['adaugari_cos'] === 1);
-    $cautari = $db->query("SELECT cautare, cautari, fara_rezultat FROM statistici_cautari WHERE zi = '$zi' ORDER BY cautare")->fetchAll(PDO::FETCH_ASSOC);
-    $verifica('căutările: „ceai” cu rezultate, „xyz” fără', array_map(static fn ($c) => $c['cautare'] . ':' . $c['cautari'] . ':' . $c['fara_rezultat'], $cautari)
-        === ['ceai:1:0', 'xyz:1:1'], json_encode($cautari));
-    $verifica('ziua încheiată după 00:15: marcată, iar hash-ul zilnic golit de pe comenzile ei', $unu("SELECT incheiata FROM statistici_zile WHERE zi = '$zi'") === '1'
-        && $unu('SELECT COUNT(*) FROM orders WHERE id IN (' . $comandaA . ',' . $comandaC . ',' . $comandaD . ') AND statistici_vizitator IS NOT NULL') === '0');
-    // A doua rulare (cu hash-urile puse la loc, ca o zi încă deschisă): aceleași agregate.
-    $sumaAgregate = static fn (): string => json_encode($db->query("SELECT sursa, pagini, durata, angajata, adaugari_cos, comenzi FROM statistici_vizite WHERE zi = '$zi' ORDER BY inceput")->fetchAll(PDO::FETCH_NUM))
-        . json_encode($db->query("SELECT comanda_id, sursa FROM statistici_comenzi WHERE zi = '$zi' ORDER BY comanda_id")->fetchAll(PDO::FETCH_NUM));
+    $cautari = $db->query("SELECT cautare, SUM(cautari) AS cautari, SUM(vizitatori) AS vizitatori, SUM(fara_rezultat) AS fara_rezultat
+        FROM statistici_cautari WHERE zi = '$zi' GROUP BY cautare ORDER BY cautare")->fetchAll(PDO::FETCH_ASSOC);
+    $verifica('căutările: „ceai” de 2 vizitatori, cu rezultate; „xyz” de unul, fără', array_map(static fn ($c) => $c['cautare'] . ':' . $c['cautari'] . ':'
+        . $c['vizitatori'] . ':' . $c['fara_rezultat'], $cautari) === ['ceai:2:2:0', 'xyz:1:1:1'], json_encode($cautari));
+    $verifica('în raport (și în CSV) doar căutările a cel puțin 2 vizitatori: „ceai” da, „xyz” nu (nici la „fără rezultat”)',
+        array_column(StatisticiRaport::cautari($db, $zi, $zi, []), 'cautare') === ['ceai'] && StatisticiRaport::cautari($db, $zi, $zi, [], true) === []);
+    // A doua rulare, cu ziua încă deschisă: aceleași agregate, hash-ul rămâne pe comenzi.
+    $sumaAgregate = static fn (): string => json_encode($db->query("SELECT sursa, pagini, durata, angajata, adaugari_cos, comenzi, pagina_intrare FROM statistici_vizite WHERE zi = '$zi' ORDER BY inceput")->fetchAll(PDO::FETCH_NUM))
+        . json_encode($db->query("SELECT comanda_id, sursa FROM statistici_comenzi WHERE zi = '$zi' ORDER BY comanda_id")->fetchAll(PDO::FETCH_NUM))
+        . json_encode($db->query("SELECT sursa, cale, vizualizari, vizitatori, intrari FROM statistici_pagini WHERE zi = '$zi' ORDER BY sursa, cale")->fetchAll(PDO::FETCH_NUM));
     $inainte = $sumaAgregate();
-    foreach ([[$comandaA, $A], [$comandaC, $C], [$comandaD, $D]] as [$id, $h]) {
-        $st = $db->prepare('UPDATE orders SET statistici_vizitator = ? WHERE id = ?');
-        $st->bindValue(1, $h, PDO::PARAM_LOB);
-        $st->bindValue(2, $id, PDO::PARAM_INT);
-        $st->execute();
-    }
-    StatisticiAgregare::agregaZiua($db, $zi, (int) strtotime($zi . ' 23:00:00'));
+    StatisticiAgregare::agregaZiua($db, $zi, $acumDeschis);
     $verifica('agregarea e idempotentă (a doua rulare: aceleași rânduri); o zi încă deschisă păstrează hash-ul pe comenzi', $sumaAgregate() === $inainte
         && $unu("SELECT incheiata FROM statistici_zile WHERE zi = '$zi'") === '0'
         && $unu('SELECT COUNT(*) FROM orders WHERE id = ' . $comandaA . ' AND statistici_vizitator IS NOT NULL') === '1');
+    // Ziua încheiată (agregată după 00:15 a zilei următoare).
+    StatisticiAgregare::agregaZiua($db, $zi, $acumInchis);
+    $verifica('ziua încheiată: aceleași agregate, marcată, hash-ul golit de pe comenzile ei, evenimentele „comandă” ale zilei șterse',
+        $sumaAgregate() === $inainte && $unu("SELECT incheiata FROM statistici_zile WHERE zi = '$zi'") === '1'
+        && $unu('SELECT COUNT(*) FROM orders WHERE id IN (' . $comandaA . ',' . $comandaC . ',' . $comandaD . ') AND statistici_vizitator IS NOT NULL') === '0'
+        && $unu("SELECT COUNT(*) FROM statistici_evenimente WHERE tip = 5 AND creat_la LIKE '$zi%'") === '0'
+        && $unu("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'statistici_evenimente'
+            AND COLUMN_NAME = 'comanda_id'") === '0');
     $kpi = StatisticiRaport::kpi($db, $zi, $zi, []);
     $verifica('cifrele: 3 vizitatori unici, 4 vizite, 5 pagini, 1 adăugare, 2 comenzi (fără cea anulată), venit 190 lei',
         $kpi['vizitatori'] === 3 && $kpi['vizite'] === 4 && $kpi['pagini'] === 5 && $kpi['adaugari'] === 1 && $kpi['comenzi'] === 2
@@ -517,6 +576,9 @@ try {
     $acasa = $cerere('GET', '/');
     $verifica('scriptul e pe prima pagină (vizitator nou), înainte de </body>, fără cookie nou',
         preg_match('#<script data-ax-st>.{100,2000}</script>\s*</body>#s', $acasa['corp']) === 1 && !isset($acasa['antete']['set-cookie']));
+    $pagina404 = $cerere('GET', '/nu-exista-pagina-statistici-' . getmypid());
+    $verifica('pagina 404: fără script (o adresă care nu există nu ajunge în statistici)', $pagina404['cod'] === 404
+        && !str_contains($pagina404['corp'], 'data-ax-st'), (string) $pagina404['cod']);
     $sesiuni = count(glob(Paths::stocare('sessions') . '/sess_*') ?: []);
     $r = $cerere('POST', Statistici::CALE, null, '{"e":"v","p":"/produs/test","r":"https://www.tiktok.com/","w":390,"u":{},"c":"","q":0,"i":7}',
         array_merge($origine, ['User-Agent: ' . $tiktokApp]));
@@ -555,13 +617,14 @@ try {
     $verifica('administratorul logat: pagina fără script, evenimentul ignorat (204, niciun rând)', !str_contains($paginaAdmin['corp'], 'data-ax-st')
         && $r['cod'] === 204 && $numar() === $inainte && str_contains($paginaAdmin['corp'], '</body>'));
     // Limita pe minut, cu un browser al lui.
-    $uaLimita = $chrome . ' TestLimita/' . getmypid();
+    // Limita e pe adresă (aici 127.0.0.1), nu pe browser: un robot care își schimbă User-Agent-ul la fiecare cerere cade în ea.
+    $db->exec('DELETE FROM statistici_evenimente');
     $coduri = [];
-    for ($i = 0; $i < Statistici::LIMITA_MINUT + 2; $i++) {
-        $coduri[] = $cerere('POST', Statistici::CALE, null, '{"e":"v","p":"/limita"}', array_merge($origine, ['User-Agent: ' . $uaLimita]))['cod'];
+    for ($i = 0; $i < Statistici::LIMITA_IP_MINUT + 2; $i++) {
+        $coduri[] = $cerere('POST', Statistici::CALE, null, '{"e":"v","p":"/limita"}', array_merge($origine, ['User-Agent: ' . $chrome . ' Varianta/' . $i]))['cod'];
     }
-    $verifica('limita: ' . Statistici::LIMITA_MINUT . ' evenimente pe minut pentru un vizitator, apoi 429', count(array_filter($coduri, static fn ($c) => $c === 204))
-        === Statistici::LIMITA_MINUT && end($coduri) === 429, implode(',', array_count_values(array_map('strval', $coduri)) === [] ? [] : array_map(
+    $verifica('limita: ' . Statistici::LIMITA_IP_MINUT . ' evenimente pe minut de la o adresă (oricare ar fi browserul), apoi 429',
+        count(array_filter($coduri, static fn ($c) => $c === 204)) === Statistici::LIMITA_IP_MINUT && end($coduri) === 429, implode(',', array_count_values(array_map('strval', $coduri)) === [] ? [] : array_map(
             static fn ($k, $v) => $k . '×' . $v, array_keys(array_count_values(array_map('strval', $coduri))), array_count_values(array_map('strval', $coduri)))));
     $db->exec("DELETE FROM statistici_evenimente WHERE cale = '/limita'");
     // Coșul și căutarea: același hash ca pagina văzută din același browser.
@@ -607,6 +670,10 @@ try {
     $verifica('agregarea la deschidere (fără cron): azi agregată, comanda atribuită Instagramului',
         $unu("SELECT COUNT(*) FROM statistici_zile WHERE zi = CURDATE()") === '1'
         && $unu('SELECT sursa FROM statistici_comenzi WHERE comanda_id = ?', [$comandaNoua]) === 'instagram');
+    $verifica('pe mai multe zile: „Vizitatori unici (pe zile)”', str_contains($cerere('GET', '/admin/statistici?perioada=7', $jarAdmin)['corp'], 'Vizitatori unici (pe zile)'));
+    $setariAcum = \App\Support\Settings::all($db);
+    $verifica('agregarea la deschidere: doar cu cronul rămas în urmă de peste 2 ore („proaspat” acum, „facut” peste 3 ore)',
+        StatisticiAgregare::laNevoie($db, $setariAcum) === 'proaspat' && StatisticiAgregare::laNevoie($db, $setariAcum, 7200, time() + 3 * 3600) === 'facut');
     $gresite = [];
     foreach (['perioada=ieri', 'perioada=7&compara=1', 'perioada=30', 'perioada=90', 'perioada=custom&de_la=2026-01-01&pana_la=2026-01-31',
         'perioada=7&sursa=instagram', 'perioada=7&sursa=instagram&detaliu=l.instagram.com', 'perioada=7&dispozitiv=mobil', 'perioada=7&campanie=x',
@@ -622,7 +689,7 @@ try {
         && str_contains($filtrat, 'st-chip') && str_contains($filtrat, 'Filtrat după'));
     $acumJson = json_decode($cerere('GET', '/admin/statistici/acum', $jarAdmin, null, ['Accept: application/json'])['corp'], true);
     $verifica('„Acum pe site” (JSON): vizitatorii din ultimele 5 minute', is_array($acumJson) && ($acumJson['ok'] ?? false) === true
-        && (int) $acumJson['vizitatori'] >= 2, json_encode($acumJson));
+        && (int) $acumJson['vizitatori'] >= 1, json_encode($acumJson));
     $csv = $cerere('GET', '/admin/statistici/export?perioada=azi&tabel=surse', $jarAdmin);
     $verifica('exportul CSV al unui tabel: UTF-8 cu BOM, „;”, antetul și rândurile', $csv['cod'] === 200 && str_starts_with($csv['corp'], "\xEF\xBB\xBFSursa;")
         && str_contains($csv['corp'], 'Instagram') && str_contains((string) ($csv['antete']['content-disposition'] ?? ''), 'statistici-surse-'),

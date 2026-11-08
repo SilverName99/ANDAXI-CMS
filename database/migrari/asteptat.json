@@ -7004,6 +7004,12 @@
                     "null": false,
                     "tip": "varchar(20)"
                 },
+                "vizitatori": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
                 "zi": {
                     "extra": "",
                     "implicit": null,
@@ -7125,12 +7131,6 @@
                     "null": false,
                     "tip": "varchar(100)"
                 },
-                "comanda_id": {
-                    "extra": "",
-                    "implicit": null,
-                    "null": true,
-                    "tip": "int unsigned"
-                },
                 "creat_la": {
                     "extra": "",
                     "implicit": null,
@@ -7160,6 +7160,12 @@
                     "implicit": null,
                     "null": false,
                     "tip": "bigint unsigned"
+                },
+                "ip_cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "binary(8)"
                 },
                 "latime": {
                     "extra": "",
@@ -7253,6 +7259,13 @@
                         "id"
                     ],
                     "unic": true
+                },
+                "idx_st_ev_ip": {
+                    "coloane": [
+                        "ip_cheie",
+                        "creat_la"
+                    ],
+                    "unic": false
                 },
                 "idx_st_ev_timp": {
                     "coloane": [
