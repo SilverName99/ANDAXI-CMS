@@ -1409,6 +1409,10 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   sau «Global Privacy Control», nu sunteți numărat.”
 - **Cronul** (în hPanel, ca celelalte): `17 * * * * /opt/alt/php83/usr/bin/php -d extension=sodium.so /home/uXXXXXXXXX/platforma/bin/platforma
   --site=/home/uXXXXXXXXX/domains/<domeniu>/site scripts/statistici-agregare.php`.
+- **Un CDN în fața site-ului**: hash-ul folosește adresa din `IpClient` (`REMOTE_ADDR`, sau `X-Forwarded-For` doar de la un proxy din
+  `IP_PROXY_DE_INCREDERE`). Dacă CDN-ul găzduirii e în față și rețelele lui nu sunt în `IP_PROXY_DE_INCREDERE`, toți vizitatorii au
+  adresa CDN-ului: vizitatorii unici ies mult prea puțini (doar browserele diferă) și limita de 60 pe minut se împarte. De verificat cu
+  `tools/verificare/stare.php` (clasa lui `REMOTE_ADDR`) înainte de pornire; aceeași setare ține limitele checkout-ului.
 - **Are nevoie de**: nimic (coșul și comenzile doar cu magazinul). **Se oprește**: ca pornit. **Oprit**: niciun script în pagini (paginile
   ies octet cu octet ca înainte), `POST /api/statistici` primește 404-ul JSON al gărzii, adminul 403, meniul dispare, cronul nu face
   nimic, iar comenzile nu primesc hash-ul; datele rămân. Cu licența „toate”, comparația cu Bioscem (G-cmp) scoate scriptul din fiecare

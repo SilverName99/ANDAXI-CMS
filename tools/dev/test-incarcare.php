@@ -232,7 +232,9 @@ $oracolPastrate = [
         'shipping_city', 'shipping_county', 'fan_locker_name', 'fan_locker_address', 'fan_locker_city', 'fan_locker_county', 'fan_locker_postcode',
         'fan_tracking_status', 'ad_source', 'erp_status', 'erp_order_id', 'erp_factura_numar', 'preorder_released_at', 'paid_at', 'loyalty_points_awarded_at',
         'fan_tracking_last_event_at', 'fan_tracking_synced_at', 'completed_awb_email_sent_at', 'deleted_at', 'created_at', 'updated_at', 'erp_last_attempt_at',
-        'erp_next_retry_at', 'erp_synced_at', 'edit_unlocked_at', 'terms_accepted_at', 'sursa', 'pickup_address', 'pickup_ready_notified_at'],
+        'erp_next_retry_at', 'erp_synced_at', 'edit_unlocked_at', 'terms_accepted_at', 'sursa', 'pickup_address', 'pickup_ready_notified_at',
+        // Regulile Bioscem 21 (campanii/0058): textul ofertei campaniei pe comandă (al magazinului), copiat cum e.
+        'campanie_oferta'],
     'order_payment_links' => ['referinta', 'status', 'procesator', 'created_at', 'expires_at', 'paid_at'],
     // Felul, modul, numărul comenzii la bancă, starea, descrierea codului de răspuns al băncii, operația în curs (sume și cine a
     // pornit-o: admin, erp…), datele.
@@ -269,7 +271,10 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     // WP-38 (nucleu/0047): jurnalul 404 al site-ului live.
     'seo_404_log',
     // Regulile Bioscem 22 (pluginul fisiere_cloud, fisiere_cloud/0059): cheile aplicației, folderele cu parolă, lacătele, versiunile.
-    'admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions'];
+    'admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions',
+    // Regulile Bioscem 24 (pluginul statistici, statistici/0061): evenimentele (hash-ul zilnic al vizitatorilor) și agregatele.
+    'statistici_evenimente', 'statistici_vizite', 'statistici_pagini', 'statistici_produse', 'statistici_cautari', 'statistici_comenzi',
+    'statistici_zile'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
