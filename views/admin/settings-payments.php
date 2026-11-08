@@ -589,14 +589,24 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
         </article>
 
         <article class="bt-box" id="bt-test">
-            <h3>Plată de test de 1 leu</h3>
-            <p>Pornește o plată de 1 leu care nu ține de nicio comandă: nu trimite emailuri<?= $areErpPlati ? ' și nu ajunge în ERP' : '' ?>. Ești dus pe pagina băncii,
+            <h3>Plată de test</h3>
+            <p>Pornește o plată de test (implicit 1 leu) care nu ține de nicio comandă: nu trimite emailuri<?= $areErpPlati ? ' și nu ajunge în ERP' : '' ?>. Ești dus pe pagina băncii,
                 plătești cu un card, iar la întoarcere o poți <strong>anula (reverse)</strong> sau <strong>încasa, apoi rambursa</strong> — așa
                 se verifică toate operațiile. Dacă o lași autorizată, cronul o anulează singur după 30 de minute.
                 <?= $btModLive ? '<strong>Modul e PRODUCȚIE: cardul e debitat real cu 1 leu până la anulare sau rambursare.</strong>' : '' ?></p>
+            <?php $clientTest = is_array($_SESSION['bt_test_client'] ?? null) ? $_SESSION['bt_test_client'] : []; ?>
             <form method="post" action="/admin/settings/payments/bt/test-payment" style="margin:0 0 10px;">
                 <?= $campCsrf ?>
-                <button class="btn" type="submit" <?= $btConfigurat && $btPoatePorni ? '' : 'disabled' ?>>Plată de test 1 leu (mod <?= $btModLive ? 'producție' : 'test' ?>)</button>
+                <p style="margin:0 0 6px;"><small>Datele clientului plătitor, ca la o comandă reală (banca le cere în orderBundle). Suma: 1–99 lei; pentru plata cu puncte STAR alege pe pagina băncii plata parțială cu puncte.</small></p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:0 0 8px;">
+                    <label>Nume și prenume<input class="form-control" name="test_nume" required value="<?= $e($clientTest['nume'] ?? '') ?>"></label>
+                    <label>Email<input class="form-control" type="email" name="test_email" required value="<?= $e($clientTest['email'] ?? '') ?>"></label>
+                    <label>Telefon<input class="form-control" name="test_telefon" required value="<?= $e($clientTest['telefon'] ?? '') ?>"></label>
+                    <label>Oraș<input class="form-control" name="test_oras" required value="<?= $e($clientTest['oras'] ?? '') ?>"></label>
+                    <label>Adresă<input class="form-control" name="test_adresa" required value="<?= $e($clientTest['adresa'] ?? '') ?>"></label>
+                    <label>Sumă (lei)<input class="form-control" name="test_suma" required inputmode="decimal" value="<?= $e($clientTest['suma'] ?? '1.00') ?>"></label>
+                </div>
+                <button class="btn" type="submit" <?= $btConfigurat && $btPoatePorni ? '' : 'disabled' ?>>Plată de test (mod <?= $btModLive ? 'producție' : 'test' ?>)</button>
             </form>
 <?php if (!$btPoatePorni): ?>
             <div class="bt-warn">Plățile noi prin Banca Transilvania nu mai pornesc pe acest site. Plățile de test începute se pot anula sau rambursa mai jos.</div>
@@ -606,12 +616,18 @@ BT_IPAY_LIVE_CALLBACK_KEY=cheia-callback-de-productie</code></li>
                     <tr><th>Plată</th><th>Pornită</th><th>Stare</th><th>Sume</th><th>Acțiuni</th></tr>
                     <?php foreach ($teste as $test): ?>
                         <tr>
-                            <td><code><?= $e($test['numar_bt'] ?? '') ?></code><br><small style="color:var(--ax-text-3);"><?= $e(($test['mod'] ?? '') === 'live' ? 'producție' : 'test') ?></small></td>
+                            <td><code><?= $e($test['numar_bt'] ?? '') ?></code>
+                                <?php if (($test['id_bt'] ?? '') !== ''): ?><br><small title="mdOrder (codul plății la bancă)">mdOrder: <code style="user-select:all;"><?= $e($test['id_bt']) ?></code></small><?php endif; ?>
+                                <?php if (($test['id_loy'] ?? '') !== ''): ?><br><small title="mdOrder partea cu puncte STAR">mdOrder STAR: <code style="user-select:all;"><?= $e($test['id_loy']) ?></code></small><?php endif; ?>
+                                <br><small style="color:var(--ax-text-3);"><?= $e(($test['mod'] ?? '') === 'live' ? 'producție' : 'test') ?></small></td>
                             <td><?= $e(date('d.m.Y H:i', strtotime((string) ($test['creat_la'] ?? 'now')) ?: time())) ?></td>
                             <td>
                                 <span class="pay-badge pay-badge--<?= $e(in_array($test['clasa'] ?? '', ['ok', 'warn', 'off'], true) ? $test['clasa'] : 'off') ?>"><?= $e($test['eticheta'] ?? '') ?></span>
                                 <?php if (($test['eroare'] ?? '') !== ''): ?>
                                     <br><small style="color:var(--ax-eroare);"><?= $e($test['eroare']) ?></small>
+                                <?php endif; ?>
+                                <?php if (($test['cod_banca'] ?? '') !== '' && ($test['cod_banca'] ?? '') !== '0'): ?>
+                                    <br><small style="color:var(--ax-eroare);">Cod bancă <?= $e($test['cod_banca']) ?><?= ($test['descriere_banca'] ?? '') !== '' ? ': ' . $e($test['descriere_banca']) : '' ?></small>
                                 <?php endif; ?>
                             </td>
                             <td><small>încasat <?= $e(number_format((float) ($test['incasat'] ?? 0), 2, ',', '.')) ?> · rambursat <?= $e(number_format((float) ($test['rambursat'] ?? 0), 2, ',', '.')) ?></small></td>

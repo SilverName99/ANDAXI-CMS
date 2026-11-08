@@ -339,6 +339,28 @@ return [
                 . '\\|account_created\\|abandoned_cart$',
             'motiv' => 'aceeași listă de șabloane, de dinainte, fără pickup_ready (rândul de mai sus)'],
     ],
+    // WP-R din 8 nov 2026 (Bioscem 739f58c..c47f270): formularul plății de test BT (datele clientului și suma, 5afe196), bifa
+    // „Gata de ridicare” singur la aprobarea din ERP (81766bc; doar cu erp), butonul „Ia stocul acum din ERP” din editorul
+    // produsului (6476108; jetonul lui, ca atribut) și rezumatul plăților BT din datele fiecărei comenzi (72d7a83: codul brut al
+    // băncii, „cod_banca” și „descriere_banca”, chei noi în JSON-ul din data-order, deci altă amprentă pe fiecare comandă).
+    'port-wpr-8nov' => [
+        'bt-test-formular' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/payments\?tab=bt$',
+            'rand' => '^camp POST /admin/settings/payments/bt/test-payment input:(text|email) test_(nume|email|telefon|oras|adresa|suma)$',
+            'motiv' => 'Setări plăți → Banca Transilvania → „Plată de test”: datele clientului plătitor (trimise în orderBundle) și suma, 1–99 lei '
+                . '(Bioscem 5afe196)'],
+        'ridicare-anunt-automat' => ['ce' => 'adaugat', 'cale' => '^/admin/settings/shipping$',
+            'rand' => '^camp POST /admin/settings/shipping input:checkbox shipping_pickup_auto_ready = 1$',
+            'motiv' => 'Setări livrare → „Trimite automat emailul «Gata de ridicare» când comanda e aprobată în ERP” (shipping_pickup_auto_ready, '
+                . 'Bioscem 81766bc; doar cu pluginul erp)'],
+        'stoc-erp-buton' => ['ce' => 'adaugat', 'cale' => '^/admin/products$', 'rand' => '^data data-csrf = <TOKEN>$',
+            'motiv' => 'editorul produsului: butonul „↻ Ia stocul acum din ERP” cu jetonul formularului (Bioscem 6476108; vizibil doar lângă un stoc '
+                . 'venit din ERP)'],
+        'comanda-rezumat-bt-nou' => ['ce' => 'adaugat', 'cale' => '^/admin/orders(\?|$)', 'rand' => '^data data-order = #[0-9a-f]{16} \(\d+ octeți\)$',
+            'motiv' => 'datele comenzii (data-order) au în rezumatul plăților BT și codul brut al băncii (cod_banca, descriere_banca; Bioscem 72d7a83): '
+                . 'altă amprentă a JSON-ului pe fiecare comandă'],
+        'comanda-rezumat-bt-vechi' => ['ce' => 'scos', 'cale' => '^/admin/orders(\?|$)', 'rand' => '^data data-order = #[0-9a-f]{16} \(\d+ octeți\)$',
+            'motiv' => 'amprenta de dinainte a aceluiași JSON (rândul de mai sus)'],
+    ],
     // Portul Biovitality 0e54737 (5 nov): bifa „Cere confirmarea adresei de email” în Conturi clienți, a pluginului
     // conturi_clienti, pe setarea customer_email_confirmation_required (WP-25; nebifată implicit, Biovitality înghețat 1).
     'port-confirmare-email' => [

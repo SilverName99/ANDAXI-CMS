@@ -214,7 +214,15 @@ ob_start();
             <?php endif; ?>
         </div>
 
-        <?= (string) ($notaPrecomanda ?? '') ?><?php /* Ridicare personală de la sediu: adresa și programul (HTML gata escapat; gol = nimic). */ ?><?= trim((string) ($notaRidicare ?? '')) !== '' ? '<div style="text-align:left;">' . (string) $notaRidicare . '</div>' : '' ?>
+        <?= (string) ($notaPrecomanda ?? '') ?><?php /* Ridicarea configurată (adresa sediului scrisă): spațiile codului vechi, portul c47f270. */ ?>
+<?php if (!empty($ridicareConfigurata)): ?>
+
+        <?php /* Ridicare personală de la sediu: adresa și programul (HTML gata escapat). */ ?>
+        <?php if (trim((string) ($notaRidicare ?? '')) !== ''): ?>
+            <div style="text-align:left;"><?= (string) $notaRidicare ?></div>
+        <?php endif; ?>
+<?php else: ?><?php /* Fără ridicare configurată: nota, dacă e, lipită de cea a precomenzii, ca înainte (portul 807058e). */ ?><?= trim((string) ($notaRidicare ?? '')) !== '' ? '<div style="text-align:left;">' . (string) $notaRidicare . '</div>' : '' ?>
+<?php endif; ?>
 
         <?php if ($instructiuni !== ''): ?>
             <div class="bs-succes__plata">

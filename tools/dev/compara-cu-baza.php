@@ -1324,7 +1324,7 @@ foreach (require __DIR__ . '/lib/declaratii-wp21-constructor.php' as $nrConstruc
         // Și builderul unui newsletter (cazul „newsletter: builderul pe pași” al salvărilor, WP-R din 30 oct).
         'cale' => ['/admin/emails/builder', '/admin/emails/builder?type=campaign*'],
         'nou' => $schimbareConstructor['nou'],
-        'vechi' => $schimbareConstructor['vechi'],
+        'vechi' => $modBaza === 'repo' ? ($schimbareConstructor['vechi_repo'] ?? $schimbareConstructor['vechi']) : $schimbareConstructor['vechi'],
         'motiv' => 'Biovitality 84e29a9 și b9fcaf8 (WP-21 C11c, C11d): blocul video al newsletterelor (copertă cu buton, nu player: '
             . 'clienții de email nu redau video) și blocurile din coloane fără fundal propriu, cu aliniere.',
     ];
@@ -1646,7 +1646,8 @@ $marcajePort = [
     // și marcajul pe rând (scriptul cu datele recenziilor din pagină).
     // Paginile de produs cerute (lista de pagini și cazurile de salvare); nu și produsul lipsă (404, fără formular).
     'bv:recenzie-capcana' => ['cale' => ['/produs/ceai-de-menta', '/produs/ceai-de-musetel', '/produs/' . $slugBbd, '/produs/' . $slugPre,
-        '/produs/omega-3-din-alge', '/produs/miere-de-manuka-mgo-400', '/produs/cos-cadou-cu-miere', '/produs/proteina-harrison-de-test'], 'motiv' => 'WP-21 (C10): capcana și momentul deschiderii '
+        '/produs/omega-3-din-alge', '/produs/miere-de-manuka-mgo-400', '/produs/cos-cadou-cu-miere', '/produs/proteina-harrison-de-test',
+        '/produs/polen-crud', '/produs/ceai-verde-sencha'], 'motiv' => 'WP-21 (C10): capcana și momentul deschiderii '
         . 'formularului de recenzie'],
     'bv:recenzii-filtru-spam' => ['cale' => '/admin/products/reviews', 'motiv' => 'WP-21 (C10): filtrul „Spam” al recenziilor'],
     'bv:recenzii-spam-actiuni' => ['cale' => '/admin/products/reviews', 'motiv' => 'WP-21 (C10): „Detectează spamul” și „Golește spamul”'],
@@ -1754,6 +1755,22 @@ if ($fataDeCommit) {
             'vechi' => $schimbareNewsletter['vechi'],
             'ori' => $schimbareNewsletter['ori'],
             'motiv' => 'Bioscem ' . $schimbareNewsletter['din'] . ' (newsletterul): ' . $schimbareNewsletter['ce'],
+        ];
+    }
+}
+// WP-R din 8 nov 2026 (Bioscem 807058e … c47f270): ridicarea personală configurată (scriptul și stilurile ei în checkout și cu
+// bifa oprită) și bulina cu reducerea de pe pagina produsului, cu baza în forma Bioscem, față de f5ae5ea; din
+// tools/dev/lib/declaratii-ridicare-bulina-istoric.php, după celelalte liste. Doar istoric.
+if ($fataDeCommit) {
+    $listeDeclarate['$porturiBioscemRidicare'] = [];
+    foreach (require __DIR__ . '/lib/declaratii-ridicare-bulina-istoric.php' as $nrRidicare => $schimbareRidicare) {
+        $listeDeclarate['$porturiBioscemRidicare'][] = [
+            'nume' => 'ridicarea și bulina (' . ($nrRidicare + 1) . '): ' . $schimbareRidicare['ce'],
+            'cale' => $schimbareRidicare['cale'],
+            'nou' => $schimbareRidicare['nou'],
+            'vechi' => $schimbareRidicare['vechi'],
+            'ori' => $schimbareRidicare['ori'],
+            'motiv' => 'Bioscem ' . $schimbareRidicare['din'] . ': ' . $schimbareRidicare['ce'],
         ];
     }
 }
@@ -4287,6 +4304,42 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
             'verifica' => static fn (array $stare, array $raspunsuri): array => (int) ($raspunsuri[0]['cod'] ?? 0) === 200
                 && $contine($raspunsuri[0], 'Articol fără autor și categorie') && $contine($raspunsuri[1], 'articol-fara-autor-si-categorie')
                 ? [] : ['articolul fără autor și categorie nu se vede (' . (int) ($raspunsuri[0]['cod'] ?? 0) . ')'],
+        ],
+        [
+            // WP-R din 8 nov 2026 (Bioscem 1ca7148): bulina cu reducerea pe pagina produsului, ca pe cardul din listă: în lei
+            // (modul „valoare” al produsului) și în procente, pe pagina cu șablonul produsului (scriptul o pune lângă prețul
+            // șablonului) și pe cea implicită. Pe codul comun doar cu produs_bulina_reducere (Bioscem: înghețat 1).
+            'nume' => 'pagina produsului: bulina cu reducerea, în lei și în procente',
+            'din' => '1ca7148',
+            'tabele' => [['tabel' => 'products', 'unde' => 'slug = :s', 'param' => ['s' => 'polen-crud'], 'cheie' => 'id']],
+            'pregateste' => static function (PDO $db): void {
+                $db->exec("UPDATE products SET discount_badge_mode = 'value' WHERE slug = 'polen-crud'");
+            },
+            'cereri' => [['GET', '/produs/polen-crud', [], 'viz'], ['GET', '/produs/ceai-verde-sencha', [], 'viz'],
+                ['GET', '/produs/miere-de-manuka-mgo-400', [], 'viz']],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[0], 'const text = "-6 lei";')
+                && $contine($raspunsuri[1], 'const text = "-17%";') && $contine($raspunsuri[1], 'injectTemplateDiscountBubble(document);')
+                && $contine($raspunsuri[2], '<span class="pdp-discount-bubble">-11%</span>')
+                ? [] : ['bulina cu reducerea lipsește de pe pagina produsului (-6 lei, -17% din șablon, -11% pe pagina implicită)'],
+        ],
+        [
+            // WP-R din 8 nov 2026 (Bioscem 807058e, c47f270): ridicarea personală pornită (adresa sediului din înghețare): caseta
+            // din checkout, cu adresa și programul; cu ea oprită, stilurile și scriptul ei rămân în pagină, ca în codul Bioscem
+            // (lista de pagini, /checkout).
+            'nume' => 'checkout: ridicarea personală de la sediu pornită (caseta, adresa, programul)',
+            'din' => '807058e, c47f270',
+            'tabele' => [['tabel' => 'settings', 'unde' => '`key` IN (\'shipping_pickup_enabled\', \'shipping_pickup_program\')', 'cheie' => 'key']],
+            'pregateste' => static function (PDO $db): void {
+                $stmt = $db->prepare('INSERT INTO settings (`key`, `value`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)');
+                $stmt->execute(['shipping_pickup_enabled', '1']);
+                $stmt->execute(['shipping_pickup_program', "Luni–Vineri 09:00–17:00\nSâmbătă închis"]);
+            },
+            'cereri' => [['POST', '/cos/adauga/' . $idMentaInt, ['quantity' => '1'], 'viz'], ['GET', '/checkout', [], 'viz']],
+            'stare' => static fn (PDO $db): array => [],
+            'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[1], 'data-ridicare-toggle')
+                && $contine($raspunsuri[1], 'Sâmbătă închis') && $contine($raspunsuri[1], '<p><strong>Adresa:</strong> Str. ')
+                ? [] : ['caseta ridicării personale (cu adresa și programul) lipsește din checkout'],
         ],
     );
 

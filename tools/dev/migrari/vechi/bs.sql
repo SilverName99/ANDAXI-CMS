@@ -1,7 +1,7 @@
 -- Fixture-ul migrărilor pentru Bioscem (cod bs): schema pe care o face codul vechi pe o bază goală:
 -- scripts/install.php, apoi funcțiile ensure…/asigura… până nu se mai schimbă (MariaDB 10.11.14-MariaDB-0ubuntu0.24.04.1).
 -- Doar structură, niciun rând; nimic din datele unui site. Îl încarcă tools/dev/test-migrari.php (T2).
--- sursa: Nou-site-bioscem@739f58c
+-- sursa: Nou-site-bioscem@c47f270
 -- Generat de tools/dev/migrari/genereaza-fixture.php --fixture-uri; nu se editează de mână.
 SET FOREIGN_KEY_CHECKS = 0;
 
@@ -689,6 +689,9 @@ CREATE TABLE `orders` (
   `fan_locker_city` varchar(190) DEFAULT NULL,
   `fan_locker_county` varchar(190) DEFAULT NULL,
   `fan_locker_postcode` varchar(20) DEFAULT NULL,
+  `pickup_in_person` tinyint(1) NOT NULL DEFAULT 0,
+  `pickup_address` varchar(255) DEFAULT NULL,
+  `pickup_ready_notified_at` datetime DEFAULT NULL,
   `shipping_address_line2` varchar(255) DEFAULT NULL,
   `fan_awb` varchar(100) DEFAULT NULL,
   `fan_tracking_url` text DEFAULT NULL,

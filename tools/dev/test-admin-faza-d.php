@@ -635,6 +635,11 @@ $campuriRidicare = ['shipping_pickup_address=' . \App\Support\RidicarePersonala:
 if (\App\Support\RidicarePersonala::bifata($setariRidicare)) {
     $campuriRidicare[] = 'shipping_pickup_enabled=1';
 }
+// Bifa „Gata de ridicare” singur la aprobarea din ERP (portul 81766bc; contract-admin-declarat.php → port-wpr-8nov): apare doar cu
+// erp, care e în licența „toate” a plimbării.
+if (\App\Support\RidicarePersonala::anuntAutomat($setariRidicare)) {
+    $campuriRidicare[] = 'shipping_pickup_auto_ready=1';
+}
 foreach ($nouD['cazuri'] as $numeCaz => $cerereNoua) {
     $asteptat = $perechi((array) ($vechiD['cazuri'][$numeCaz] ?? []));
     if (str_starts_with($numeCaz, 'livrare: contul FAN')) {

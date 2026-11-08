@@ -261,7 +261,7 @@ if ($mod === 'bioscem') {
         str_contains($btVechi, "'Comanda ' . \$numarComanda . ' " . substr($btPayments::descriere($btPayments::TIP_COMANDA, '', $faraRand), strlen('Comanda  ')) . "'")
         && $btPayments::descriere($btPayments::TIP_COMANDA, '203801', $faraRand) === 'Comanda 203801 ' . $dinVechi('src/Support/BtIpayPayments.php', "/'Comanda ' \\. \\\$numarComanda \\. ' ([^']+)'/")
         && $btPayments::descriere($btPayments::TIP_LINK, '203801', $faraRand) === 'Diferenta comanda 203801 ' . $dinVechi('src/Support/BtIpayPayments.php', "/'Diferenta comanda ' \\. \\(string\\) \\\$comanda\\['order_number'\\] \\. ' ([^']+)'/")
-        && $btPayments::descriere($btPayments::TIP_TEST, '', $faraRand) === $dinVechi('src/Support/BtIpayPayments.php', "/'(Plata de test 1 leu [^']+)'/"));
+        && $btPayments::descriere($btPayments::TIP_TEST, '', $faraRand) === $dinVechi('src/Support/BtIpayPayments.php', "/'(Plata de test [^']+)'/"));
     // B12: formatul vechi al numerelor de comandă și contorul.
     $numarVechi = \App\Support\OrderNumber::vechi($faraRand);
     $prefixVechiBs = $dinVechi('src/Support/OrderNumber.php', "/return '([A-Z]+)' \\. date\\('YmdHis'\\)/");
@@ -424,7 +424,7 @@ $verifica('N1 (WP-17) TVA implicit 21, numerotarea de la 1001, formatul vechi cu
     && preg_match('/^CMD\d{17}$/', \App\Support\OrderNumber::vechi(['order_number_legacy_prefix' => 'bv; drop'])) === 1);
 $verifica('N1 (WP-17) textul plății BT fără setare: gazda site-ului („' . \App\Support\BtIpayPayments::descriere('order', '1001', $implicite) . '”)',
     \App\Support\BtIpayPayments::descriere('order', '1001', $implicite) === 'Comanda 1001 ' . Brand::gazda() && Brand::gazda() !== ''
-    && \App\Support\BtIpayPayments::descriere('test', '', ['bt_ipay_descriere_magazin' => 'exemplu.ro']) === 'Plata de test 1 leu exemplu.ro');
+    && \App\Support\BtIpayPayments::descriere('test', '', ['bt_ipay_descriere_magazin' => 'exemplu.ro']) === 'Plata de test exemplu.ro');
 $verifica('N1 (WP-17) cheia linkurilor din newslettere: fără .env și fără sare în pachet, derivată din LICENTA_SITE (diagnostic.php o arată ca ATENȚIE)',
     \App\Support\NewsletterService::sursaCheiiSemnare() === 'licenta');
 $emailCont = \App\Support\BrandedEmail::render($implicite, ['title' => 'Confirmă adresa', 'greeting' => 'Bună!', 'intro' => 'Text.',

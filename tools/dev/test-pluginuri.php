@@ -1567,7 +1567,7 @@ try {
     // „Gata de ridicare” ajunge la client. Fără livrarea FAN pe site, nimic din ea, nici cu bifa pusă în setări.
     $puneLicenta($pachet('toate'));
     $cerere('GET', '/health');
-    $cheiRidicare = ['shipping_pickup_enabled', 'shipping_pickup_address', 'shipping_pickup_program'];
+    $cheiRidicare = ['shipping_pickup_enabled', 'shipping_pickup_address', 'shipping_pickup_program', 'shipping_pickup_auto_ready'];
     $ridicareInainte = [];
     foreach ($cheiRidicare as $cheieRidicare) {
         $stRid = $db->prepare('SELECT `value` FROM settings WHERE `key` = ?');
@@ -1629,6 +1629,13 @@ try {
         $puneRidicarea(['shipping_pickup_enabled' => '1']);
         $faraAdresa = $cerere('GET', '/checkout', $jarRidicare)['corp'];
         $verifica('ridicarea bifată fără adresa sediului nu apare în checkout', !str_contains($faraAdresa, 'name="ridicare_personala"'));
+        // Oprită, dar cu adresa sediului scrisă (Bioscem prin înghețare; portul c47f270): ca în codul vechi care avea ridicarea,
+        // stilurile și scriptul ei sunt în pagină, fără casetă.
+        $puneRidicarea(['shipping_pickup_address' => $adresaRidicareTest]);
+        $configurata = $cerere('GET', '/checkout', $jarRidicare)['corp'];
+        $verifica('ridicarea oprită cu adresa sediului: scriptul și stilurile ei în checkout, fără casetă (ca în codul Bioscem)',
+            str_contains($configurata, "form.querySelector('[data-ridicare-toggle]')") && str_contains($configurata, '.bv-checkout-v3__ridicare{')
+            && str_contains($configurata, 'data-shipping-same-field') && !str_contains($configurata, 'name="ridicare_personala"'));
 
         // 2. Pornită, cu adresa și programul.
         $puneRidicarea(['shipping_pickup_enabled' => '1', 'shipping_pickup_address' => $adresaRidicareTest,
@@ -1682,6 +1689,32 @@ try {
             $anuntatLa = (string) $db->query('SELECT pickup_ready_notified_at FROM orders WHERE id = ' . (int) $c['id'])->fetchColumn();
             $verifica('ridicarea: „Gata de ridicare” ajunge la client, momentul rămâne pe comandă', ($anunt['ok'] ?? false) === true
                 && $anuntatLa !== '', json_encode($anunt, JSON_UNESCAPED_UNICODE));
+            // Aprobarea din ERP trimite singură „Gata de ridicare”, o singură dată (portul 81766bc); cu bifa oprită, nu.
+            $aprobaRid = new ReflectionMethod($adminControllerRid, 'applyErpApproval');
+            $aprobaRid->setAccessible(true);
+            $anuntatAcum = static fn (): string => (string) $db->query('SELECT COALESCE(pickup_ready_notified_at, \'\') FROM orders WHERE id = '
+                . (int) $c['id'])->fetchColumn();
+            $randAprobare = static fn (): array => (array) $db->query('SELECT * FROM orders WHERE id = ' . (int) $c['id'])->fetch(PDO::FETCH_ASSOC);
+            $db->exec('UPDATE orders SET pickup_ready_notified_at = NULL WHERE id = ' . (int) $c['id']);
+            $mailuriInainte = count(glob($dosarDev . '/mail/*') ?: []);
+            $aprobare1 = $aprobaRid->invoke($adminControllerRid, $db, (int) $c['id'], $randAprobare(), ['facturaNumar' => 'TST-RID-1']);
+            $dupaAprobare1 = $anuntatAcum();
+            $mailuriAprobare1 = count(glob($dosarDev . '/mail/*') ?: []) - $mailuriInainte;
+            $aprobare2 = $aprobaRid->invoke($adminControllerRid, $db, (int) $c['id'], $randAprobare(), ['facturaNumar' => 'TST-RID-1']);
+            $mailuriAprobare2 = count(glob($dosarDev . '/mail/*') ?: []) - $mailuriInainte;
+            $verifica('ridicarea: aprobarea din ERP trimite singură „Gata de ridicare”, o singură dată (o a doua aprobare nu mai trimite)',
+                ($aprobare1['ok'] ?? false) === true && str_contains((string) ($aprobare1['message'] ?? ''), 'Clientul a primit emailul „Gata de ridicare”')
+                && $dupaAprobare1 !== '' && $mailuriAprobare1 >= 1 && $mailuriAprobare2 === $mailuriAprobare1
+                && !str_contains((string) ($aprobare2['message'] ?? ''), 'Gata de ridicare'),
+                json_encode([$aprobare1['message'] ?? '', $aprobare2['message'] ?? '', $mailuriAprobare1, $mailuriAprobare2], JSON_UNESCAPED_UNICODE));
+            \App\Support\Settings::save($db, ['shipping_pickup_auto_ready' => '0']);
+            $db->exec('UPDATE orders SET pickup_ready_notified_at = NULL WHERE id = ' . (int) $c['id']);
+            $aprobare3 = $aprobaRid->invoke($adminControllerRid, $db, (int) $c['id'], $randAprobare(), ['facturaNumar' => 'TST-RID-1']);
+            // Rândul din Jurnal activitate al anunțului automat (pomenește ERP-ul) nu rămâne după test.
+            $db->exec("DELETE FROM admin_activity_log WHERE action = 'comanda_gata_de_ridicare' AND context_json LIKE '%aprobare ERP%'");
+            $verifica('ridicarea: cu bifa „Trimite automat…” oprită, aprobarea din ERP nu anunță clientul (butonul rămâne)',
+                ($aprobare3['ok'] ?? false) === true && $anuntatAcum() === '' && !str_contains((string) ($aprobare3['message'] ?? ''), 'Gata de ridicare'),
+                json_encode($aprobare3, JSON_UNESCAPED_UNICODE));
             $faraClient = $db->prepare("UPDATE orders SET billing_email = '' WHERE id = ?");
             $faraClient->execute([(int) $c['id']]);
             $anuntFaraClient = \App\Support\EmailAutomation::sendPickupReady($db, \App\Support\Settings::all($db), (int) $c['id']);
@@ -1706,6 +1739,49 @@ try {
         array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriRidicare));
         @unlink($jarRidicare);
     }
+
+    // Bulina cu reducerea pe pagina produsului (din Bioscem 1ca7148): doar cu produs_bulina_reducere (implicit 0: pagina și
+    // scriptul ei, cele de dinainte) și doar cu prețuri (magazinul pe site).
+    $bulinaInainte = $db->query("SELECT `value` FROM settings WHERE `key` = 'produs_bulina_reducere'")->fetchColumn();
+    $slugRedus = (string) $db->query('SELECT slug FROM products WHERE deleted_at IS NULL AND is_active = 1 AND product_template_id IS NULL
+        AND sale_price IS NOT NULL AND sale_price > 0 AND sale_price < price ORDER BY id LIMIT 1')->fetchColumn();
+    try {
+        $db->exec("DELETE FROM settings WHERE `key` = 'produs_bulina_reducere'");
+        $faraBulina = $cerere('GET', '/produs/' . $slugRedus)['corp'];
+        \App\Support\Settings::save($db, ['produs_bulina_reducere' => '1']);
+        $cuBulina = $cerere('GET', '/produs/' . $slugRedus)['corp'];
+        $puneLicenta(array_merge($pachet('toate'), ['magazin' => 'oprit']));
+        $cerere('GET', '/health');
+        $bulinaFaraMagazin = $cerere('GET', '/produs/' . $slugRedus)['corp'];
+        $verifica('bulina cu reducerea pe pagina produsului (' . $slugRedus . '): fără setare nimic (nici scriptul), cu ea lângă preț, fără magazin nu',
+            $slugRedus !== '' && !str_contains($faraBulina, 'pdp-discount-bubble') && !str_contains($faraBulina, 'injectTemplateDiscountBubble')
+            && preg_match('#<span class="pdp-discount-bubble">-\d+%</span>#', $cuBulina) === 1 && str_contains($cuBulina, 'injectTemplateDiscountBubble(document);')
+            && !str_contains($bulinaFaraMagazin, '<span class="pdp-discount-bubble">'));
+    } finally {
+        $db->exec("DELETE FROM settings WHERE `key` = 'produs_bulina_reducere'");
+        if ($bulinaInainte !== false) {
+            \App\Support\Settings::save($db, ['produs_bulina_reducere' => (string) $bulinaInainte]);
+        }
+        $puneLicenta($pachet('toate'));
+        $cerere('GET', '/health');
+    }
+
+    // „Ia stocul acum din ERP” (din Bioscem 6476108): ruta pluginului erp; fără jetonul formularului 419, fără stocul din ERP
+    // pornit doar un mesaj (nimic golit, nicio cerere spre ERP); fără erp pe site, garda pluginului.
+    $paginaProduseAdmin = $cerere('GET', '/admin/products', $jar)['corp'];
+    preg_match('/id="p_stock_erp_refresh"\s+data-csrf="([0-9a-f]{64})"/', $paginaProduseAdmin, $jetonProduse);
+    $stocFaraJeton = $cerere('POST', '/admin/products/' . $idMenta . '/stoc-erp', $jar);
+    $stocCuJeton = $cerere('POST', '/admin/products/' . $idMenta . '/stoc-erp', $jar, ['_csrf' => $jetonProduse[1] ?? '']);
+    $puneLicenta(array_merge($pachet('toate'), ['erp' => 'oprit']));
+    $cerere('GET', '/health');
+    $stocFaraErp = $cerere('POST', '/admin/products/' . $idMenta . '/stoc-erp', $jar, ['_csrf' => $jetonProduse[1] ?? '']);
+    $puneLicenta($pachet('toate'));
+    $cerere('GET', '/health');
+    $verifica('„Ia stocul acum din ERP”: fără jeton 419, cu jeton și stocul din ERP oprit un mesaj JSON, fără pluginul erp 403',
+        ($jetonProduse[1] ?? '') !== '' && $stocFaraJeton['cod'] === 419
+        && $stocCuJeton['cod'] === 200 && (json_decode($stocCuJeton['corp'], true)['ok'] ?? null) === false
+        && str_contains($stocCuJeton['corp'], 'nu e pornit') && $stocFaraErp['cod'] === 403,
+        'cod ' . $stocFaraJeton['cod'] . ' / ' . $stocCuJeton['cod'] . ' ' . substr($stocCuJeton['corp'], 0, 120) . ' / ' . $stocFaraErp['cod']);
 
     // Cupoanele și punctele „se opresc” (magazinul e pornit): nu se mai aplică unei
     // comenzi noi, iar comenzile vechi își păstrează cuponul și reducerea.

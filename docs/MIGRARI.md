@@ -689,8 +689,9 @@ lui `Settings::DEFAULTS` sau a unei rezerve din codul comun cere `genereaza-seta
 vechi. Un fișier `inchis` nu se mai generează: `--toate` îl sare (`SĂRIT`), `--site=<el>` e o eroare (doar `--cod-vechi`
 îl citește, mai sus).
 
-Azi: **Bioscem** din `4254ca4` (implicitele codului Bioscem sunt exact ale codului comun: doar `erp_trimite_din` = gol,
-decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă); **Biovitality** din `d95598e`, confirmat live pe 5 noiembrie
+Azi: **Bioscem** din `c47f270` (WP-R din 8 noiembrie; implicitele codului Bioscem sunt ale codului comun, afară de adresa
+sediului pentru ridicarea personală, `shipping_pickup_address`, scrisă de generator și peste gol, și de `erp_trimite_din` = gol,
+decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă; bulina cu reducerea, `produs_bulina_reducere` = 1, decizie); **Biovitality** din `d95598e`, confirmat live pe 5 noiembrie
 (`git log -1` pe server și `--cod-vechi`, aceeași înghețare), `--confirmat` și `inchis` (pleacă pe site la adoptare);
 **vertij** și **grafoanaytis** din capetele ramurilor din de-portat.md, `provizoriu` până la raportul „live față de repo”
 din Etapa 0 (apoi `--confirmat`, eventual cu `--repo=` pe commit-ul confirmat, trecut întâi în de-portat.md).

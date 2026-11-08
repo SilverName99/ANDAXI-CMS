@@ -2,8 +2,8 @@
     "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
     "format": 2,
     "site": "bioscem",
-    "sursa": "Nou-site-bioscem@739f58c",
-    "amprenta_nucleu": "2758591982aa6f9fcd943dcffc15f989813ee6b0646e94eedce8ddbc1840805f",
+    "sursa": "Nou-site-bioscem@c47f270",
+    "amprenta_nucleu": "dce3e48b3da8efe73af5d25f5e3488badc9684094c4fc66faa4e116c4e617e9b",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",
@@ -68,7 +68,7 @@
             "sursa": "src/Support/BtIpayPayments.php: textul plății trimis băncii („Comanda <nr> …”, extrasul cumpărătorului) avea numele magazinului scris în cod; codul comun îl ia din setare, altfel din gazda site-ului (WP-17, DB-16), care pe copia de verificare e alta",
             "extrage": {
                 "fisier": "src/Support/BtIpayPayments.php",
-                "tipar": "/'Plata de test 1 leu ([^']+)'/"
+                "tipar": "/'Plata de test ([^']+)'/"
             },
             "vechi": "lipsește",
             "nucleu": "implicit \"\""
@@ -357,6 +357,14 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"revalidate\""
         },
+        "produs_bulina_reducere": {
+            "valoare": "1",
+            "mod": "lipsa",
+            "din": "manual",
+            "sursa": "views/site/product.php (Bioscem 1ca7148): bulina cu reducerea (procent sau lei) lângă prețul de pe pagina produsului, mereu; codul comun o arată doar cu setarea produs_bulina_reducere, implicit 0 (Biovitality, live, rămâne cum era)",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
         "recenzii_insigna_meniu": {
             "valoare": "0",
             "mod": "lipsa",
@@ -372,6 +380,13 @@
             "sursa": "decizie WP-40 (B6, regula R1): codul Bioscem pornește sesiunea pe fiecare pagină; sesiunea doar la nevoie (atinge coșul) se pornește după ce clientul o vede pe site-ul de verificare, cu testele de coș și plată",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
+        },
+        "shipping_pickup_address": {
+            "valoare": "Str. Constantin Georgian nr. 24, Sector 2, București",
+            "mod": "lipsa_sau_gol",
+            "din": "implicit",
+            "sursa": "Settings::DEFAULTS",
+            "nota": "Gol: codul vechi folosea tot adresa sediului (RidicarePersonala::adresa, ADRESA_IMPLICITA), iar codul comun ascunde atunci ridicarea personală din checkout; de aici lipsa_sau_gol"
         },
         "sursa_comenzii": {
             "valoare": "0",
@@ -510,11 +525,6 @@
             "motiv": "Nou (WP-21, C10, OD-15): codul Bioscem nu ține adresa de la care vine o recenzie; codul comun o ține 90 de zile, pentru limita anti-spam (declarat în ce-se-schimba.md)",
             "vechi": "lipsește",
             "nucleu": "implicit \"90\""
-        },
-        "shipping_pickup_enabled": {
-            "motiv": "Ridicarea personală de la sediu (pluginul livrare_fan, Bioscem 807058e) pornește oprită: checkout-ul rămâne cel din codul vechi până o pornește magazinul din Setări livrare (cu adresa sediului)",
-            "vechi": "lipsește",
-            "nucleu": "implicit \"0\""
         }
     }
 }

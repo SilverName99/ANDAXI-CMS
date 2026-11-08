@@ -316,10 +316,14 @@ foreach ((array) ($cerere['cazuri'] ?? []) as $caz) {
         } catch (Throwable $e) {
             $gratuitDinProdus = false;
         }
+        // Al șaptelea argument doar unui cod care îl are pentru transportul gratuit al produsului: în codul Bioscem de la 807058e
+        // al șaptelea e ridicarea personală (o comandă cu produs gratuit ar fi socotită ridicată de la sediu).
+        $parametriRecalc = (new ReflectionMethod(\App\Support\CheckoutCalculator::class, 'adminRecalcShipping'))->getParameters();
+        $argGratuit = isset($parametriRecalc[6]) && $parametriRecalc[6]->getName() === 'gratuitDinProdus' ? [$gratuitDinProdus] : [];
         $transportAdmin = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere,
-            (float) ($caz['transport'] ?? 0), (bool) ($caz['transport_manual'] ?? false), $gratuitDinProdus);
+            (float) ($caz['transport'] ?? 0), (bool) ($caz['transport_manual'] ?? false), ...$argGratuit);
         $transportAdmin0 = \App\Support\CheckoutCalculator::adminRecalcShipping($settings, $judet, (float) ($caz['subtotal'] ?? 0), $reducere, 0.0,
-            false, $gratuitDinProdus);
+            false, ...$argGratuit);
         // Codul Biovitality (WP-11b) are transportul gratuit al produsului în admin, nu în funcție: după adminRecalcShipping, fiecare
         // recalcul pune 0 dacă comanda are un astfel de produs (AdminController::comandaAreTransportGratuit, la d95598e :5333, :5474,
         // :5637). Codul comun îl are în funcție (al șaptelea argument); un cod fără acel argument și cu regula în admin primește aici

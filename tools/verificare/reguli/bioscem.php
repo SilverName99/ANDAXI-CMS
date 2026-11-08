@@ -98,7 +98,7 @@ return [
     // 23 (pluginul concurenta, concurenta/0060): concurenții și prețurile lor (date de business ale produselor, publice; numele unui
     // magazin concurent e al unei firme), copiate cum sunt, în grupul catalogului (până acum doar în regulile Biovitality).
     'versiune' => 23,
-    'schema' => 'Nou-site-bioscem@739f58c (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
+    'schema' => 'Nou-site-bioscem@c47f270 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
     'pachet' => 'bioscem',

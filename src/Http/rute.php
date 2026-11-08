@@ -208,6 +208,7 @@ return static function (Router $router): void {
     $router->get('/admin/products/new', [AdminController::class, 'createProductForm']);
     $router->post('/admin/products', [AdminController::class, 'createProduct']);
     $router->post('/admin/products/{id}/update', [AdminController::class, 'updateProduct']);
+    $router->post('/admin/products/{id}/stoc-erp', [AdminController::class, 'productErpStockRefresh']);
     $router->post('/admin/products/{id}/delete', [AdminController::class, 'deleteProduct']);
     $router->post('/admin/products/{id}/restore', [AdminController::class, 'restoreProduct']);
     $router->post('/admin/products/{id}/force-delete', [AdminController::class, 'forceDeleteProduct']);

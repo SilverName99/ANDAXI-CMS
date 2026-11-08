@@ -2,7 +2,7 @@
 # Pe site: catalog, cereri_oferta
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (348)
+RUTE (349)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -257,6 +257,7 @@ POST /admin/products/templates/create-basic -> CONTROLLER [catalog]
 POST /admin/products/{id}/delete -> CONTROLLER [catalog]
 POST /admin/products/{id}/force-delete -> CONTROLLER [catalog]
 POST /admin/products/{id}/restore -> CONTROLLER [catalog]
+POST /admin/products/{id}/stoc-erp -> 403 [erp]
 POST /admin/products/{id}/update -> CONTROLLER [catalog]
 POST /admin/promo-products -> 403 [produse_promo]
 POST /admin/promo-products/{id}/delete -> 403 [produse_promo]

@@ -1176,6 +1176,8 @@ final class SiteController
             'isOutOfStock' => $isOutOfStock,
             // Textul unui produs similar fără descriere scurtă (WP-16, DB-14; un site existent își păstrează textul prin înghețare).
             'descriereImplicita' => (string) ($settings['catalog_descriere_implicita'] ?? ''),
+            // Bulina de reducere lângă preț (portul 1ca7148), doar cu setarea (implicit oprită).
+            'bulinaReducere' => (string) ($settings['produs_bulina_reducere'] ?? '0') === '1',
             'title' => (string) $product['name'],
             'jsonLd' => $jsonLd,
         ], $productSeoMeta));
@@ -2430,6 +2432,7 @@ final class SiteController
             'orderNumber' => $orderNumber,
             'notaPrecomanda' => $estePrecomanda ? self::notaPrecomandaHtml() : '',
             'notaRidicare' => $notaRidicare,
+            'ridicareConfigurata' => \App\Support\RidicarePersonala::configurata($this->cachedSettings($db)),
             'paymentStatus' => $paymentStatus,
             'orderStatus' => $orderStatus,
             'orderTotal' => $orderTotal,
@@ -6976,6 +6979,8 @@ HTML;
             // Ridicarea personală de la sediu (Setări livrare, portul 807058e): bifa, adresa și programul. Cu opțiunea
             // oprită, formularul e exact cel de dinainte.
             'ridicareDisponibila' => \App\Support\RidicarePersonala::activa($this->cachedSettings($this->db())),
+            // Ridicarea configurată (adresa scrisă), chiar cu bifa oprită: scriptul și stilurile ei în pagină, ca în codul vechi.
+            'ridicareSchelet' => \App\Support\RidicarePersonala::configurata($this->cachedSettings($this->db())),
             'ridicareAleasa' => \App\Support\RidicarePersonala::aleasa($this->cachedSettings($this->db())),
             'ridicareAdresa' => \App\Support\RidicarePersonala::adresa($this->cachedSettings($this->db())),
             'ridicareProgram' => \App\Support\RidicarePersonala::program($this->cachedSettings($this->db())),

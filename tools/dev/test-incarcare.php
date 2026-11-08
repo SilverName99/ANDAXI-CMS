@@ -11,7 +11,7 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/test-incarcare.php --fara-baza          # doar A
  *   tools/dev/php.sh tools/dev/test-incarcare.php --doar-mariadb       # fără B9 (MySQL 8; decizia A1 a proprietarului, 27 oct), spus în raport
  *
- * A. Fără bază: regulile acoperă fiecare tabel și fiecare coloană a schemei Bioscem 739f58c (tools/dev/migrari/vechi/bs.sql:
+ * A. Fără bază: regulile acoperă fiecare tabel și fiecare coloană a schemei Bioscem c47f270 (tools/dev/migrari/vechi/bs.sql:
  *    și avertismentul pe produs; câmpurile SEO ale categoriilor și mărcilor sunt rânduri în seo_pages) și a schemei codului
  *    comun (database/migrari/asteptat.json, tabelele runner-ului), nicio regulă spre o coloană care nu există, fiecare nume de
  *    date personale cu regula sau motivul lui; greșelile din reguli (fiecare fel) sunt prinse; scanerul (o coloană personală
@@ -145,10 +145,10 @@ $structuraDin = static function (array $tabele): array {
 $reguli = Reguli::incarca($radacina, 'bioscem');
 $verifica('regulile Bioscem se încarcă, fără nicio greșeală de formă (probleme())', $reguli->probleme() === [], implode('; ', $reguli->probleme()));
 $bs = $coloaneSql($radacina . '/tools/dev/migrari/vechi/bs.sql');
-$verifica('bs.sql (schema Bioscem 739f58c) are tabelele avertismentului pe produs și seo_pages', isset($bs['product_warnings'], $bs['order_product_warnings'], $bs['seo_pages'])
+$verifica('bs.sql (schema Bioscem c47f270) are tabelele avertismentului pe produs și seo_pages', isset($bs['product_warnings'], $bs['order_product_warnings'], $bs['seo_pages'])
     && count($bs) >= 59, (string) count($bs));
 $scanBs = $reguli->scaneaza($structuraDin($bs));
-$verifica('scanerul pe schema Bioscem 739f58c: fiecare tabel are regulă (' . count($scanBs['copiate']) . ' copiate, ' . count($scanBs['doar_structura'])
+$verifica('scanerul pe schema Bioscem c47f270: fiecare tabel are regulă (' . count($scanBs['copiate']) . ' copiate, ' . count($scanBs['doar_structura'])
     . ' doar structura), fiecare coloană a unui tabel copiat e în reguli, niciun tip necopiabil', $scanBs['probleme'] === [] && $scanBs['necunoscute'] === [],
     implode('; ', array_merge($scanBs['probleme'], $scanBs['necunoscute'])));
 $asteptat = json_decode((string) file_get_contents($radacina . '/database/migrari/asteptat.json'), true);
@@ -304,7 +304,7 @@ foreach ($cms as $tabel => $coloane) {
 }
 /**
  * Regulile față de oracol, fără bază: fiecare tabel al regulilor clasificat și aici, cu un mod potrivit clasei; în fiecare tabel
- * al clienților, fiecare coloană de text sau de dată a schemei (Bioscem 739f58c și codul comun) e transformată de reguli sau e în
+ * al clienților, fiecare coloană de text sau de dată a schemei (Bioscem c47f270 și codul comun) e transformată de reguli sau e în
  * lista oracolului. Întoarce problemele (tabel.coloana cu motivul); o listă goală = regulile nu lasă nimic din afara oracolului.
  */
 $oracolStaticPe = static function (Reguli $r, array $oracolFaraRanduri, array $oracolPublice, array $schemaToata) use ($oracolPastrate, $deSchimbat): array {
@@ -1176,7 +1176,7 @@ $facSursa = static function (string $sock) use ($conectare, $construieste, $baza
             $adaugate[] = $tabel;
             continue;
         }
-        // Coloanele pe care codul Bioscem le-a adăugat după codul de dinainte de migrări (WP-R: newsletterul 739f58c), din
+        // Coloanele pe care codul Bioscem le-a adăugat după codul de dinainte de migrări (WP-R: newsletterul 739f58c, ridicarea personală 807058e), din
         // definiția lor în bs.sql, ca baza să fie a codului Bioscem revizuit.
         $exista = array_map('strval', $db->query('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '
             . $db->quote($tabel))->fetchAll(PDO::FETCH_COLUMN));
@@ -1346,7 +1346,7 @@ try {
     // ── Baza „live”: ca a unui Bioscem încă neadoptat ──
     $construita = $facSursa($sockMaria);
     $verifica('baza „live” (MariaDB): codul de dinainte de migrări (pe-vechi.php, garda: fara_registru), seed-ul, datele demo și tabelele '
-        . 'avertismentului și ale newsletterului (cu coloanele lui noi) din bs.sql; aceleași tabele și coloane ca schema Bioscem 739f58c (bs.sql)',
+        . 'avertismentului și ale newsletterului (cu coloanele lui noi) din bs.sql; aceleași tabele și coloane ca schema Bioscem c47f270 (bs.sql)',
         !isset($construita['eroare']) && str_contains((string) ($construita['iesire'] ?? ''), 'garda: fara_registru')
         && $construita['adaugate'] === ['newsletter_cereri_confirmare', 'newsletter_suprimate', 'order_product_warnings', 'product_warnings']
         && $construita['coloane_adaugate'] === ['newsletter_campaign_sends.attempts', 'newsletter_campaigns.last_error', 'newsletter_subscribers.confirmed_at',

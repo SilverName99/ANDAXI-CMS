@@ -453,7 +453,10 @@ dispar, iar linkurile spre el se scot din pagini.
   OP); cronul `scripts/abandoned-cart-emails.php`; numerotarea comenzilor și
   cantitățile din Setări magazin; dashboard: „Comenzi” și „Comenzi recente”;
   codurile `{{cart_form}}`, `{{checkout_form}}`, `{{checkout_success_order_info}}`,
-  `{{cart_count}}`; din livrarea 2 SEO (WP-R): fluxul `/feed/google-merchant.xml` (are
+  `{{cart_count}}`; bulina cu reducerea (procent sau lei, ca pe cardul din listă) lângă prețul de pe pagina produsului, și
+  lângă prețul unui șablon de produs, pusă de scriptul paginii (din Bioscem `1ca7148`; doar cu setarea
+  `produs_bulina_reducere`, implicit `0`, fără câmp în admin: fără ea pagina și scriptul ei sunt cele de dinainte; Bioscem
+  înghețat `1`); din livrarea 2 SEO (WP-R): fluxul `/feed/google-merchant.xml` (are
   prețuri; `FluxGoogleMerchant`, cu `Allow` în robots.txt) și livrarea și returul din datele
   structurate (`PoliticaLivrare`); **avertismentul pe produs** (Bioscem `0582ce9` …
   `4254ca4`, de exemplu „ATENȚIE – PRODUS REFRIGERAT”): cardul „Avertisment la coș și la
@@ -523,7 +526,9 @@ dispar, iar linkurile spre el se scot din pagini.
   livrare, bifa „Oferă ridicare personală de la sediu” (`shipping_pickup_enabled`, implicit `0`), adresa sediului
   (`shipping_pickup_address`, implicit goală: fără ea opțiunea nu apare) și programul (`shipping_pickup_program`). Cât e
   oprită, checkout-ul, stilurile și scriptul lui ies exact ca înainte, iar o bifă `ridicare_personala` trimisă de mână e
-  refuzată. Pornită: în checkout bifa cu adresa și programul; transportul 0 (fără prag, fără km suplimentari, fără tarif
+  refuzată; excepție, un site cu adresa sediului scrisă (`RidicarePersonala::configurata`, Bioscem prin înghețare): ca în
+  codul Bioscem (`c47f270`), stilurile, atributele și scriptul ridicării sunt în checkout și cu bifa oprită, iar pagina de
+  mulțumire are spațiile blocului ei, doar caseta lipsește. Pornită: în checkout bifa cu adresa și programul; transportul 0 (fără prag, fără km suplimentari, fără tarif
   FAN; și în cotare, la plasare, în suma trimisă la BT, EuPlătesc, Stripe și în recalculările din admin), doar datele de
   facturare (FANbox și adresa de livrare separată dispar), rambursul ca „Plată la ridicare (numerar sau card)”; comanda
   îngheață `pickup_in_person` și adresa. Niciun AWB pentru ea, pe niciun drum (butonul, emiterea în masă, aprobarea din
@@ -533,6 +538,11 @@ dispar, iar linkurile spre el se scot din pagini.
   contează doar dacă a ajuns la adresa clientului; retrimiterea cere confirmare) și destinația adresă / FANbox / ridicare
   înainte de facturare. ERP: `ridicarePersonala`, `ridicareAdresa` (doar pe comenzile cu ridicare), livrarea = sediul
   (județul și localitatea expeditorului FAN), `transport` 0. Șablonul de email și codurile lui apar doar cu pluginul pe site.
+  La aprobarea din ERP (Bioscem `81766bc`) emailul „Gata de ridicare” pleacă singur, o singură dată (comanda se rezervă cu
+  `pickup_ready_notified_at` IS NULL; dacă emailul nu ajunge la client, rezervarea se ridică și butonul rămâne), cu bifa
+  „Trimite automat emailul…” din Setări livrare (`shipping_pickup_auto_ready`, implicit `1`; bifa apare și se salvează doar cu
+  pluginul `erp` vizibil); mesajul aprobării spune dacă a plecat. Adresa trimisă la BT în `orderBundle` (`postAddress`, livrare
+  și facturare) e tăiată la ultimul cuvânt întreg din 50 de caractere (Bioscem `c47f270`: producția BT refuză mai lung, cod 8).
 - **Are nevoie de**: magazin.
 - **Se oprește**: comenzile noi nu mai primesc FANbox, tarif live și ridicarea de la sediu (rămân regulile
   de transport generale); comenzile existente își fac AWB-ul, urmărirea și
@@ -553,18 +563,21 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Plată Stripe / EuPlătesc / Banca Transilvania (`plata_stripe`, `plata_euplatesc`, `plata_bt`)
 
 - **Conține**: opțiunea de plată din checkout; secțiunea procesatorului din Setări
-  plăți (BT: tab-ul „Banca Transilvania”, testele, plata de 1 leu și butoanele
+  plăți (BT: tab-ul „Banca Transilvania”, testele, plata de test și butoanele
   din comandă: capturare, anulare, rambursare); adresa de confirmare
   (`/webhook/stripe`, `/webhook/euplatesc`, `/webhook/bt-ipay`,
   `/checkout/bt/retur`) — mereu deschisă; BT: cronul `bt-ipay-sync` („vizibil”).
   Tabele: `orders.stripe_*`, `orders.euplatesc_*`, `bt_ipay_transactions`,
-  `bt_ipay_log`.
+  `bt_ipay_log`. Plata de test BT (din Bioscem `c1f458b`, `72d7a83`, `5afe196`): un formular cu datele clientului plătitor
+  (nume, email, telefon, oraș, adresă; trimise în `orderBundle`, ca la o comandă reală; ținute în sesiune pentru testul
+  următor) și suma, 1–99 lei (implicit 1); textul spre bancă „Plata de test <magazin>”; lista testelor arată `mdOrder` (și
+  pe cel al părții cu puncte STAR), iar la o plată refuzată codul brut al băncii (`actionCode`, descrierea, statusul).
 - **Are nevoie de**: EuPlătesc și BT de magazin; Stripe de nimic (îl folosesc și
   donațiile, și membrii).
 - **Se oprește**: procesatorul nu mai apare în checkout și nu se mai trimit linkuri
   de plată noi prin el; plățile începute se confirmă, capturile și rambursările
   din comandă merg, linkurile deja trimise se pot plăti; setările lui se văd. BT:
-  plata de test de 1 leu nu mai pornește (butonul e inactiv, cu explicație, iar
+  plata de test nu mai pornește (butonul e inactiv, cu explicație, iar
   cererea directă e refuzată); testele începute se pot anula sau rambursa.
 - **Oprit**: dispare din checkout, din comandă și din Setări plăți (rândul lui din
   tabelul de sus, tab-ul BT); salvarea paginii nu-i atinge setările; adresa de
@@ -638,6 +651,9 @@ dispar, iar linkurile spre el se scot din pagini.
   `erp_timeout`); un eșec se ține minte 60 de secunde (`cache/erp-stock-esec`: între timp nu se mai
   întreabă deloc), la fel un SKU pe care ERP-ul nu-l cunoaște (`necunoscut_la`, în `cache/erp-stock.json`).
   Rezultatul rămâne „fail open”: fără răspuns, sau pentru un SKU necunoscut, rămâne stocul de pe site.
+  În editorul produsului, lângă un stoc venit din ERP, butonul „↻ Ia stocul acum din ERP” (din Bioscem `6476108`;
+  `POST /admin/products/{id}/stoc-erp`, al pluginului, cu jetonul formularului, JSON): golește memoria (și eșecul ținut
+  minte), cache-ul paginilor și întreabă ERP-ul pe loc de acel produs.
 - **Se oprește**: comenzile plasate **înainte** de oprire pleacă în ERP ca de
   obicei, oricând li s-ar confirma plata (EuPlătesc, BT, Stripe, OP) sau ar trece
   prin reîncercările cronului; doar o comandă plasată **după** momentul în care

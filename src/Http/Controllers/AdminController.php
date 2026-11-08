@@ -5277,6 +5277,59 @@ final class AdminController
         );
     }
 
+    /**
+     * „Ia stocul acum din ERP” (portul 6476108; pluginul erp): golește memoria de stoc (60 s, cu eșecul ținut minte)
+     * și paginile publice din cache, apoi întreabă ERP-ul pe loc de acest produs. Întoarce JSON cu stocul nou, pentru
+     * câmpul din editorul de produs.
+     */
+    public function productErpStockRefresh(array $params): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        if (!$this->guard()) {
+            return;
+        }
+        if (!\App\Support\AdminCsrf::valid()) {
+            http_response_code(419);
+            echo json_encode(['ok' => false, 'message' => 'Pagina a expirat. Reîncarcă și încearcă din nou.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $id = max(0, (int) ($params['id'] ?? 0));
+        $db = $this->db();
+        if (!$db instanceof PDO || $id <= 0) {
+            echo json_encode(['ok' => false, 'message' => 'Produsul nu a fost găsit.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!\App\Support\ErpStock::enabled($db)) {
+            echo json_encode(['ok' => false, 'message' => 'Stocul din ERP nu e pornit în setări.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $stmt = $db->prepare('SELECT id, sku, stock, out_of_stock FROM products WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $produs = $stmt->fetch();
+        if (!is_array($produs)) {
+            echo json_encode(['ok' => false, 'message' => 'Produsul nu a fost găsit.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        \App\Support\ErpStock::flush();
+        $produs = \App\Support\ErpStock::applyToProduct($db, $produs);
+        if ((int) ($produs['stock_from_erp'] ?? 0) !== 1) {
+            echo json_encode([
+                'ok' => false,
+                'message' => 'ERP-ul nu cunoaște codul „' . (string) ($produs['sku'] ?? '') . '” sau nu răspunde acum. Pe site rămâne stocul de până acum.',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        try {
+            ResponseCache::purgePageCache();
+        } catch (Throwable) {
+        }
+        echo json_encode([
+            'ok' => true,
+            'stock' => (int) ($produs['stock'] ?? 0),
+            'message' => 'Stoc luat acum din ERP: ' . (int) ($produs['stock'] ?? 0) . ' buc.',
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
     public function updateProduct(array $params): void
     {
         if (!$this->guard()) {
@@ -10461,11 +10514,13 @@ final class AdminController
 
         // Ridicare personală de la sediu (portul 807058e): aprobarea din ERP trece comanda în procesare (mai sus),
         // dar nu cere AWB — marfa nu pleacă la curier, iar rambursul (plata la ridicare) se încasează la sediu, nu de FAN.
-        // Clientul e anunțat din butonul „Gata de ridicare”. Oricare ar fi starea pluginului livrării.
+        // Oricare ar fi starea pluginului livrării. Clientul primește singur emailul „Gata de ridicare” (dacă bifa din
+        // Setări livrare e pusă; portul 81766bc); butonul din Comenzi rămâne pentru retrimitere.
         if (\App\Support\RidicarePersonala::esteComandaId($db, $orderId)) {
+            $anunt = $this->anuntaRidicareLaAprobare($db, $orderId);
             return [
                 'ok' => true,
-                'message' => 'Comandă aprobată. ' . \App\Support\RidicarePersonala::ETICHETA_FARA_AWB . '.' . $btMesaj,
+                'message' => 'Comandă aprobată. ' . \App\Support\RidicarePersonala::ETICHETA_FARA_AWB . '.' . $btMesaj . $anunt,
                 'awb' => '',
                 'trackingUrl' => '',
             ];
@@ -10632,6 +10687,51 @@ final class AdminController
             'ok' => (bool) ($rezultat['ok'] ?? false),
             'message' => (string) ($rezultat['message'] ?? ''),
         ];
+    }
+
+    /**
+     * La aprobarea din ERP a unei comenzi cu ridicare de la sediu (portul 81766bc): trimite o singură dată emailul
+     * „Gata de ridicare”. Comanda se „rezervă” cu un UPDATE … IS NULL, ca o aprobare repetată (cron, retrimitere) sau o
+     * apăsare de buton în același timp să nu trimită două emailuri; dacă emailul nu ajunge la client, rezervarea se
+     * ridică și butonul rămâne. Doar cu pluginul livrării pe site (bifa și butonul sunt ale lui); fără migrarea
+     * livrare_fan/0052 nu există comenzi cu ridicare.
+     */
+    private function anuntaRidicareLaAprobare(PDO $db, int $orderId): string
+    {
+        try {
+            if (!\App\Support\Plugins::vizibil('livrare_fan')) {
+                return '';
+            }
+            $settings = Settings::all($db);
+            if (!\App\Support\RidicarePersonala::anuntAutomat($settings)) {
+                return '';
+            }
+            $rezerva = $db->prepare(
+                'UPDATE orders SET pickup_ready_notified_at = NOW()
+                 WHERE id = :id AND pickup_ready_notified_at IS NULL AND deleted_at IS NULL'
+            );
+            $rezerva->execute(['id' => $orderId]);
+            if ($rezerva->rowCount() === 0) {
+                return '';
+            }
+            $rezultat = EmailAutomation::sendPickupReady($db, $settings, $orderId);
+            if (!$rezultat['ok']) {
+                $db->prepare('UPDATE orders SET pickup_ready_notified_at = NULL WHERE id = :id')->execute(['id' => $orderId]);
+                return ' Emailul „Gata de ridicare” nu a plecat: ' . $rezultat['message'];
+            }
+            AdminActivityLog::log($db, 'comanda_gata_de_ridicare', [
+                'comanda' => (string) $orderId,
+                'retrimis' => 'nu',
+                'automat' => 'aprobare ERP',
+            ]);
+            return ' Clientul a primit emailul „Gata de ridicare”.';
+        } catch (Throwable $e) {
+            try {
+                $db->prepare('UPDATE orders SET pickup_ready_notified_at = NULL WHERE id = :id')->execute(['id' => $orderId]);
+            } catch (Throwable) {
+            }
+            return ' Emailul „Gata de ridicare” nu a plecat.';
+        }
     }
 
     public function createFanAwb(array $params): void
@@ -12074,6 +12174,11 @@ final class AdminController
             // Ridicare personală de la sediu (portul 807058e): bifa, adresa (gol = opțiunea nu apare) și programul.
             'shipping_pickup_enabled' => isset($_POST['shipping_pickup_enabled']) ? '1' : '0',
             'shipping_pickup_address' => mb_substr(trim((string) ($_POST['shipping_pickup_address'] ?? '')), 0, 255),
+            // „Gata de ridicare” singur la aprobarea din ERP (portul 81766bc): bifa apare doar cu legătura ERP pe site; fără
+            // ea valoarea rămâne cum era.
+            ...(\App\Support\Plugins::vizibil('erp')
+                ? ['shipping_pickup_auto_ready' => isset($_POST['shipping_pickup_auto_ready']) ? '1' : '0']
+                : []),
             'shipping_pickup_program' => mb_substr(
                 trim(str_replace(["\r\n", "\r"], "\n", (string) ($_POST['shipping_pickup_program'] ?? ''))),
                 0,
@@ -13022,11 +13127,48 @@ final class AdminController
         } catch (Throwable) {
         }
 
+        // Datele clientului plătitor (banca le cere în orderBundle, ca la o comandă reală) și suma, 1–99 lei (portul 5afe196).
+        $client = [
+            'nume' => trim((string) ($_POST['test_nume'] ?? '')),
+            'email' => trim((string) ($_POST['test_email'] ?? '')),
+            'telefon' => trim((string) ($_POST['test_telefon'] ?? '')),
+            'oras' => trim((string) ($_POST['test_oras'] ?? '')),
+            'adresa' => trim((string) ($_POST['test_adresa'] ?? '')),
+        ];
+        if ($client['email'] === '') {
+            $client['email'] = $email;
+        }
+        $lipsa = [];
+        foreach (['nume' => 'nume', 'email' => 'email', 'telefon' => 'telefon', 'oras' => 'oraș', 'adresa' => 'adresă'] as $cheie => $eticheta) {
+            if ($client[$cheie] === '') {
+                $lipsa[] = $eticheta;
+            }
+        }
+        if ($client['email'] !== '' && filter_var($client['email'], FILTER_VALIDATE_EMAIL) === false) {
+            $lipsa[] = 'email valid';
+        }
+        if (\App\Support\BtIpayGateway::telefon($client['telefon']) === '') {
+            $lipsa[] = 'telefon valid';
+        }
+        $sumaText = str_replace(',', '.', trim((string) ($_POST['test_suma'] ?? '1')));
+        $sumaBani = is_numeric($sumaText) ? (int) round((float) $sumaText * 100) : 0;
+        if ($sumaBani < 100 || $sumaBani > 9900) {
+            $lipsa[] = 'suma între 1 și 99 lei';
+        }
+        if ($lipsa !== []) {
+            Flash::set('error', 'Completează datele clientului de test: ' . implode(', ', array_unique($lipsa)) . '.');
+            header('Location: ' . $inapoi);
+            return;
+        }
+        $_SESSION['bt_test_client'] = $client + ['suma' => number_format($sumaBani / 100, 2, '.', '')];
+
         $rez = \App\Support\BtIpayPayments::pornesteTest(
             $db,
             $this->appUrl() . '/admin/settings/payments/bt/test-return',
             $email,
-            (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')
+            (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+            $client,
+            $sumaBani
         );
         AdminActivityLog::log($db, 'bt_ipay_test_plata', [
             'mod' => \App\Support\BtIpayGateway::mod(),
@@ -13064,7 +13206,11 @@ final class AdminController
             Flash::set('success', 'Plata de test ' . $tx['bt_order_number'] . ' a fost autorizată: 1 leu e blocat pe card. '
                 . 'Acum alege „Anulează (reverse)" sau „Încasează, apoi rambursează". Dacă nu faci nimic, cronul o anulează în 30 de minute.');
         } elseif ($stare === \App\Support\BtIpayPayments::STARE_REFUZATA) {
-            Flash::set('error', 'Plata de test a fost refuzată: ' . \App\Support\BtIpayGateway::mesajRefuz((int) ($tx['action_code'] ?? 0)));
+            // La test arătăm și codul brut al băncii: el spune de ce a refuzat.
+            $codBanca = ($tx['action_code'] ?? null) === null ? '—' : (string) $tx['action_code'];
+            $descBanca = trim((string) ($tx['action_desc'] ?? ''));
+            Flash::set('error', 'Plata de test a fost refuzată: ' . \App\Support\BtIpayGateway::mesajRefuz((int) ($tx['action_code'] ?? 0))
+                . ' (cod bancă ' . $codBanca . ($descBanca !== '' ? ': ' . $descBanca : '') . ', status ' . (string) ($tx['bt_status'] ?? '—') . ')');
         } else {
             Flash::set('error', 'Plata de test nu a fost finalizată (' . \App\Support\BtIpayPayments::etichetaStare($stare) . ').');
         }

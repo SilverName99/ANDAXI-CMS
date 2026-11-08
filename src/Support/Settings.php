@@ -26,6 +26,8 @@ final class Settings
         'shipping_pickup_enabled' => '0',
         'shipping_pickup_address' => '',
         'shipping_pickup_program' => '',
+        // „Gata de ridicare” pleacă singur când comanda e aprobată în ERP (portul 81766bc).
+        'shipping_pickup_auto_ready' => '1',
         'fan_live_tariff_enabled' => '0',
         'fan_awb_auto' => '0',
         // Un singur AWB per comandă, chiar dacă marfa vine din mai multe
@@ -116,6 +118,10 @@ final class Settings
         'catalog_sortare_vizibila' => '1',
         'catalog_similare_titlu' => 'Produse asemănătoare',
         'catalog_similare_subtitlu' => '',
+        // Bulina cu reducerea (procent sau lei) lângă prețul de pe pagina produsului, ca pe cardul din listă (portul
+        // 1ca7148). Oprită implicit: un site live care n-o avea și un site nou rămân cum erau; site-ul care o avea o primește
+        // prin înghețare.
+        'produs_bulina_reducere' => '0',
         // WP-26 (GR-15, OD-26): textele sertarului „Cere ofertă” (pluginul cereri_oferta), neutre; grafoanaytis își
         // păstrează textele prin înghețare. Pagina de confidențialitate goală = cea a bannerului de cookie
         // (cookie_banner_policy_url); amândouă goale = fără link.

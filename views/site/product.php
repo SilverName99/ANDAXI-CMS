@@ -30,6 +30,22 @@ $galleryUrls = array_map(static fn ($url): string => \App\Support\PozeOptimizate
 $arePreturi = \App\Support\Plugins::vizibil('magazin');
 $poateCumpara = \App\Support\Plugins::permiteInceput('magazin');
 $areRecenzii = \App\Support\Plugins::vizibil('recenzii');
+// Bulina de reducere, la fel ca pe cardul din listă (procent sau lei; portul 1ca7148). Doar cu prețuri și cu
+// setarea produs_bulina_reducere (implicit oprită: un site care n-o avea rămâne cum era, scriptul ei lipsește din pagină;
+// site-ul care o avea o primește prin înghețare).
+$bulinaReducere = (bool) ($bulinaReducere ?? false);
+$pdpBaza = (float) ($product['base_price'] ?? 0);
+$pdpPret = (float) ($product['price'] ?? 0);
+$pdpBulina = '';
+if ($arePreturi && $bulinaReducere
+    && (bool) ($product['has_sale_price'] ?? false) && $pdpBaza > 0 && $pdpPret < $pdpBaza) {
+    if ((string) ($product['discount_badge_mode'] ?? 'percent') === 'value') {
+        $pdpBulina = '-' . rtrim(rtrim(number_format($pdpBaza - $pdpPret, 2, '.', ''), '0'), '.') . ' lei';
+    } else {
+        $pdpProcent = (int) round((($pdpBaza - $pdpPret) / $pdpBaza) * 100);
+        $pdpBulina = $pdpProcent > 0 ? '-' . $pdpProcent . '%' : '';
+    }
+}
 if (!$arePreturi) {
     // Nici scripturile paginii nu primesc prețul.
     $templateCurrentPriceDisplay = '';
@@ -161,6 +177,11 @@ if ($insignaLaTitlu) {
                 <span class="price-old"><?= number_format((float) ($product['base_price'] ?? 0), 2) ?> lei</span>
             <?php endif; ?>
             <span class="price-current"><?= number_format((float) ($product['price'] ?? 0), 2) ?> lei</span>
+<?php if ($bulinaReducere): ?>
+            <?php if ($pdpBulina !== ''): ?>
+                <span class="pdp-discount-bubble"><?= htmlspecialchars($pdpBulina, ENT_QUOTES) ?></span>
+            <?php endif; ?>
+<?php endif; ?>
         </p>
 <?php if ($ofertaPretCampanie !== ''): ?>
         <?= $ofertaPretCampanie ?>
@@ -1133,6 +1154,30 @@ if ($insignaLaTitlu) {
         });
     };
 
+<?php if ($bulinaReducere): ?>
+    // Bulina de reducere lângă prețul din template (pagina cu template-ul
+    // produsului își desenează singură prețul, deci o punem din JS).
+    const injectTemplateDiscountBubble = (scope = document) => {
+        const text = <?= json_encode($pdpBulina, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        if (text === '') {
+            return;
+        }
+        scope.querySelectorAll('.product-template-render').forEach((root) => {
+            if (!(root instanceof HTMLElement) || root.querySelector('.pdp-discount-bubble')) {
+                return;
+            }
+            const pret = root.querySelector('.pdp-price, .product-price, [data-product-price], .price');
+            if (!(pret instanceof HTMLElement)) {
+                return;
+            }
+            const bulina = document.createElement('span');
+            bulina.className = 'pdp-discount-bubble';
+            bulina.textContent = text;
+            pret.insertAdjacentElement('afterend', bulina);
+        });
+    };
+
+<?php endif; ?>
     const injectTemplateOldPrice = (scope = document) => {
         const toAmount = (value) => {
             const raw = String(value || '').replace(',', '.');
@@ -1257,6 +1302,9 @@ if ($insignaLaTitlu) {
     initReviewPagination(document);
     initSimilarProducts(document);
     injectTemplateOldPrice(document);
+<?php if ($bulinaReducere): ?>
+    injectTemplateDiscountBubble(document);
+<?php endif; ?>
     if (typeof window.MutationObserver === 'function') {
         const observer = new MutationObserver(() => {
             initTabs(document);
@@ -1265,6 +1313,9 @@ if ($insignaLaTitlu) {
             initReviewPagination(document);
             initSimilarProducts(document);
             injectTemplateOldPrice(document);
+<?php if ($bulinaReducere): ?>
+            injectTemplateDiscountBubble(document);
+<?php endif; ?>
         });
         observer.observe(document.body, { childList: true, subtree: true });
     }

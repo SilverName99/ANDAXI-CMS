@@ -4,7 +4,7 @@
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "2758591982aa6f9fcd943dcffc15f989813ee6b0646e94eedce8ddbc1840805f",
+    "amprenta_nucleu": "dce3e48b3da8efe73af5d25f5e3488badc9684094c4fc66faa4e116c4e617e9b",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",
@@ -491,6 +491,11 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
         },
+        "produs_bulina_reducere": {
+            "motiv": "Bulina cu reducerea pe pagina produsului (Bioscem 1ca7148) e nouă și oprită implicit: pagina produsului rămâne cea din codul vechi",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"0\""
+        },
         "recenzii_insigna_meniu": {
             "motiv": "Fără pluginul recenzii în abonament (catalog, cereri_oferta): meniul n-are intrarea Recenzii, setarea nu se folosește",
             "vechi": "lipsește",
@@ -503,6 +508,11 @@
         },
         "sesiune_doar_la_nevoie": {
             "motiv": "WP-40 (B6): sesiunea doar unde e nevoie, pornită la adoptare (coșul, contul, plata și formularele o pornesc ca înainte); în ce-se-schimba.md",
+            "vechi": "lipsește",
+            "nucleu": "implicit \"1\""
+        },
+        "shipping_pickup_auto_ready": {
+            "motiv": "„Gata de ridicare” la aprobarea din ERP (Bioscem 81766bc) contează doar cu ridicarea personală pornită (shipping_pickup_enabled, oprită implicit); pornită implicit, ca la Bioscem",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
         },

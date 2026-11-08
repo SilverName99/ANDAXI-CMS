@@ -57,6 +57,22 @@ final class RidicarePersonala
         return self::bifata($settings) && self::adresa($settings) !== '' && Plugins::permiteInceput('livrare_fan');
     }
 
+    /** „Gata de ridicare” pleacă singur la aprobarea din ERP? (implicit da; portul 81766bc) */
+    public static function anuntAutomat(array $settings): bool
+    {
+        return (string) ($settings['shipping_pickup_auto_ready'] ?? '1') === '1';
+    }
+
+    /**
+     * Site-ul are ridicarea configurată (adresa sediului scrisă în Setări livrare, cu pluginul livrării), chiar dacă bifa e
+     * oprită? Atunci checkout-ul și pagina de mulțumire au, ca în codul vechi care avea ridicarea (portul c47f270), și cu
+     * bifa oprită stilurile, atributele și scriptul ei; un site fără adresă le are exact ca înainte de ridicare.
+     */
+    public static function configurata(array $settings): bool
+    {
+        return self::adresa($settings) !== '' && Plugins::vizibil('livrare_fan');
+    }
+
     /** Adresa sediului din Setări livrare; gol = nesetată (atunci opțiunea nu apare). */
     public static function adresa(array $settings): string
     {

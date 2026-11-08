@@ -453,7 +453,7 @@ final class BtIpayPayments
 
     /**
      * Textul plății trimis băncii (îl vede cumpărătorul pe extras și în pagina băncii; WP-17, DB-16): „Comanda <nr>
-     * <magazin>”, „Diferenta comanda <nr> <magazin>” (linkul de plată al unei diferențe), „Plata de test 1 leu <magazin>”.
+     * <magazin>”, „Diferenta comanda <nr> <magazin>” (linkul de plată al unei diferențe), „Plata de test <magazin>”.
      * <magazin> = Setări → `bt_ipay_descriere_magazin`, altfel gazda site-ului fără „www.” (Brand::gazda). Un site existent
      * își păstrează textul prin înghețare (nu prin APP_URL: copia de verificare are altă gazdă). Fără diacritice, ca
      * textele de dinainte (banca le cere așa).
@@ -469,7 +469,8 @@ final class BtIpayPayments
         $text = match ($tip) {
             self::TIP_COMANDA => 'Comanda ' . $numar,
             self::TIP_LINK => 'Diferenta comanda ' . $numar,
-            default => 'Plata de test 1 leu',
+            // Suma plății de test se alege (1–99 lei, portul 5afe196), deci textul nu mai spune „1 leu”.
+            default => 'Plata de test',
         };
         return $magazin !== '' ? $text . ' ' . $magazin : $text;
     }
@@ -648,19 +649,32 @@ final class BtIpayPayments
     }
 
     /**
-     * Plata de test din admin: 1 leu, legată de nicio comandă. Nu atinge
+     * Plata de test din admin: implicit 1 leu (1–99 lei, în bani), legată de nicio comandă. Nu atinge
      * comenzi, emailuri sau ERP-ul; cronul o eliberează singur după 30 de minute.
      *
+     * @param array{nume?: string, email?: string, telefon?: string, oras?: string, adresa?: string} $client
+     *        datele clientului plătitor trimise în orderBundle, ca la o comandă reală (portul 5afe196)
      * @return array{ok: bool, url: string, eroare: string, tx_id: int, numar: string}
      */
-    public static function pornesteTest(PDO $db, string $returnUrlBaza, string $emailAdmin, string $userAgent = ''): array
+    public static function pornesteTest(PDO $db, string $returnUrlBaza, string $emailAdmin, string $userAgent = '', array $client = [], int $sumaBani = 100): array
     {
         self::ensureSchema($db);
         $numar = 'TEST-' . date('ymd-His') . '-' . bin2hex(random_bytes(2));
+        $sumaBani = max(100, min(9900, $sumaBani));
+        // Banca cere în orderBundle datele clientului plătitor, ca la o comandă
+        // reală (email, telefon, persoana de contact, livrare, facturare).
+        $oras = trim((string) ($client['oras'] ?? ''));
+        $adresa = trim((string) ($client['adresa'] ?? ''));
         return self::inregistreaza($db, self::TIP_TEST, 0, $numar, [
-            'suma' => 100,
+            'suma' => $sumaBani,
             'descriere' => self::descriere(self::TIP_TEST, '', Settings::all($db)),
-            'email' => $emailAdmin,
+            'email' => trim((string) ($client['email'] ?? '')) ?: $emailAdmin,
+            'telefon' => (string) ($client['telefon'] ?? ''),
+            'nume' => (string) ($client['nume'] ?? ''),
+            'oras_facturare' => $oras,
+            'adresa_facturare' => $adresa,
+            'oras_livrare' => $oras,
+            'adresa_livrare' => $adresa,
             'user_agent' => $userAgent,
         ], $returnUrlBaza);
     }
@@ -2606,6 +2620,8 @@ final class BtIpayPayments
             'cod_aprobare' => (string) ($tx['approval_code'] ?? ''),
             'referinta_rambursare' => (string) ($tx['refund_reference'] ?? ''),
             'eroare' => trim((string) ($tx['last_error'] ?? '')),
+            'cod_banca' => ($tx['action_code'] ?? null) === null ? '' : (string) $tx['action_code'],
+            'descriere_banca' => trim((string) ($tx['action_desc'] ?? '')),
             'in_comanda' => $inComanda,
             'comanda_activa' => !$inchisa,
             'poate_incasa' => $poateIncasa,

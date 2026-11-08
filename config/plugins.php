@@ -294,7 +294,8 @@ return [
             'necesita' => ['magazin'],
             // Comenzile pleacă în ERP (facturi, încasări): la CRM, ca orice plugin cu bani (OD-36, D7).
             'bani' => true,
-            'rute_admin' => ['/admin/settings/erp', '/admin/orders/{id}/erp-retry'],
+            // „Ia stocul acum din ERP” din editorul de produs (portul 6476108).
+            'rute_admin' => ['/admin/settings/erp', '/admin/orders/{id}/erp-retry', '/admin/products/{id}/stoc-erp'],
             'rute_mereu_deschise' => ['POST /api/erp/notificare', 'POST /api/erp/adrese'],
             'meniu' => [
                 ['grup' => 'setari', 'ordine' => 40, 'eticheta' => 'ERP ANDAXI', 'href' => '/admin/settings/erp',

@@ -9,8 +9,9 @@ declare(strict_types=1);
  * panoul, căutarea copertei) și fundalul blocurilor din coloane („Fără fundal”, alinierea textului). Fiecare intrare:
  * „nou” = rândurile scrise acum (cu un rând de context neschimbat înainte și după, ca textul să fie unic în pagină),
  * „vechi” = rândurile codului Bioscem în locul lor. Scrise din diferența dintre cele două variante ale fișierului.
+ * „vechi_repo” (opțional) = rândurile codului Bioscem revizuit, când diferă de cele de la f5ae5ea (comparația istorică).
  *
- * @return list<array{nou: string, vechi: string}>
+ * @return list<array{nou: string, vechi: string, vechi_repo?: string}>
  */
 return [
     [
@@ -154,7 +155,7 @@ function subBlockMiniInner(sb) {
   const ff  = ebFontStack(sb.font_family);
   const fontStyle = ff ? `font-family:${ff};` : '';
   switch(sb.type) {
-    case 'header': return `<div style="${bgCss}color:${esc(tc)};text-align:${ali};${fontStyle}font-size:${+(sb.font_size||24)}px;font-weight:700;padding:4px 6px;line-height:1.2;">${safeRich((sb.content||'Header').substring(0,50))}</div>`;
+    case 'header': return `<div style="${bgCss}color:${esc(tc)};text-align:${ali};${fontStyle}font-size:${+(sb.font_size||24)}px;font-weight:700;padding:4px 6px;line-height:1.2;white-space:pre-wrap;">${safeRich((sb.content||'Header').substring(0,50))}</div>`;
     case 'text':   return `<div style="${bgCss}color:${esc(tc)};text-align:${ali};${fontStyle}font-size:${+(sb.font_size||14)}px;padding:4px 6px;line-height:1.4;white-space:pre-wrap;">${safeRich((sb.content||'Text').substring(0,120))}</div>`;
     case 'image':  return sb.image_url ? `<div style="${bgCss}padding:3px;text-align:${sb.align||'center'};"><img src="${attr(sb.image_url)}" alt="" style="width:${+(sb.width||100)}%;max-width:100%;height:auto;border-radius:${+(sb.border_radius||0)}px;display:inline-block;vertical-align:top;"></div>` : `<div style="${bgCss}padding:4px 6px;color:#9ca3af;font-size:10px;border:1px dashed #d1d5db;border-radius:3px;">🖼 Imagine</div>`;
     case 'video':  return sb.thumbnail_url
@@ -173,6 +174,22 @@ function subBlockMiniInner(sb) {
   const fontStyle = ff ? `font-family:${ff};` : '';
   switch(sb.type) {
     case 'header': return `<div style="background:${esc(bg)};color:${esc(tc)};${fontStyle}font-size:${+(sb.font_size||24)}px;font-weight:700;padding:4px 6px;line-height:1.2;">${safeRich((sb.content||'Header').substring(0,50))}</div>`;
+    case 'text':   return `<div style="background:${esc(bg)};color:${esc(tc)};${fontStyle}font-size:${+(sb.font_size||14)}px;padding:4px 6px;line-height:1.4;white-space:pre-wrap;">${safeRich((sb.content||'Text').substring(0,120))}</div>`;
+    case 'image':  return sb.image_url ? `<div style="background:${esc(bg)};padding:3px;text-align:${sb.align||'center'};"><img src="${attr(sb.image_url)}" alt="" style="width:${+(sb.width||100)}%;max-width:100%;height:auto;border-radius:${+(sb.border_radius||0)}px;display:inline-block;vertical-align:top;"></div>` : `<div style="background:${esc(bg)};padding:4px 6px;color:#9ca3af;font-size:10px;border:1px dashed #d1d5db;border-radius:3px;">🖼 Imagine</div>`;
+    case 'button': { const bc=sb.button_color||'#2d7d5f'; return `<div style="background:${esc(bg)};padding:4px 6px;text-align:${sb.align||'left'};"><span style="display:inline-block;background:${esc(bc)};color:${esc(tc)};padding:${Math.min(+(sb.btn_pad_v??8),10)}px ${Math.min(+(sb.btn_pad_h??18),16)}px;border-radius:${+(sb.border_radius||6)}px;font-size:${Math.min(+(sb.font_size||14),16)}px;font-weight:600;">${esc(sb.label||'Buton')}</span></div>`; }
+    case 'divider':return `<div style="background:${esc(bg)};padding:4px 6px;"><hr style="border:none;border-top:${+(sb.thickness||1)}px solid ${esc(sb.color||'#e5e7eb')};margin:0;"></div>`;
+    case 'spacer': return `<div style="background:${esc(bg)};height:${Math.min(+(sb.height||16),24)}px;"></div>`;
+    default:       return `<div style="padding:3px 6px;font-size:10px;color:#6b7280;">${esc(sb.type||'?')}</div>`;
+TXT,
+        // Față de codul Bioscem revizuit (c1db9cc, din WP-R din 8 nov): blocul Header păstrează rândurile noi și pe pânză.
+        'vechi_repo' => <<<'TXT'
+function subBlockMiniInner(sb) {
+  const bg  = sb.background||'#ffffff';
+  const tc  = sb.text_color||'#333333';
+  const ff  = ebFontStack(sb.font_family);
+  const fontStyle = ff ? `font-family:${ff};` : '';
+  switch(sb.type) {
+    case 'header': return `<div style="background:${esc(bg)};color:${esc(tc)};${fontStyle}font-size:${+(sb.font_size||24)}px;font-weight:700;padding:4px 6px;line-height:1.2;white-space:pre-wrap;">${safeRich((sb.content||'Header').substring(0,50))}</div>`;
     case 'text':   return `<div style="background:${esc(bg)};color:${esc(tc)};${fontStyle}font-size:${+(sb.font_size||14)}px;padding:4px 6px;line-height:1.4;white-space:pre-wrap;">${safeRich((sb.content||'Text').substring(0,120))}</div>`;
     case 'image':  return sb.image_url ? `<div style="background:${esc(bg)};padding:3px;text-align:${sb.align||'center'};"><img src="${attr(sb.image_url)}" alt="" style="width:${+(sb.width||100)}%;max-width:100%;height:auto;border-radius:${+(sb.border_radius||0)}px;display:inline-block;vertical-align:top;"></div>` : `<div style="background:${esc(bg)};padding:4px 6px;color:#9ca3af;font-size:10px;border:1px dashed #d1d5db;border-radius:3px;">🖼 Imagine</div>`;
     case 'button': { const bc=sb.button_color||'#2d7d5f'; return `<div style="background:${esc(bg)};padding:4px 6px;text-align:${sb.align||'left'};"><span style="display:inline-block;background:${esc(bc)};color:${esc(tc)};padding:${Math.min(+(sb.btn_pad_v??8),10)}px ${Math.min(+(sb.btn_pad_h??18),16)}px;border-radius:${+(sb.border_radius||6)}px;font-size:${Math.min(+(sb.font_size||14),16)}px;font-weight:600;">${esc(sb.label||'Buton')}</span></div>`; }
