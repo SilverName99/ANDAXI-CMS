@@ -10,6 +10,7 @@
  * @var bool $compara
  * @var array<string, float|int> $kpi
  * @var array<string, float|int>|null $kpiInainte
+ * @var array{comenzi: int, venit: float}|null $comenziToate
  * @var list<array<string, mixed>> $serie
  * @var list<array<string, mixed>>|null $serieInainte
  * @var array<string, array<string, mixed>> $tabele
@@ -198,6 +199,9 @@ $v = static fn (string $cheie) => $ki !== null ? (float) $ki[$cheie] : null;
 <?= $tile('Rata de conversie', $procent((float) $k['conversie']), (float) $k['conversie'], $v('conversie')) ?>
 <?= $tile('Venituri', $lei((float) $k['venit']), (float) $k['venit'], $v('venit')) ?>
 </div>
+<?php if (($comenziToate ?? null) !== null && $comenziToate['comenzi'] > $k['comenzi']): ?>
+<p class="st-nota" style="margin-top:-4px">Comenzile și veniturile de mai sus sunt cele legate de o vizită numărată: <?= $nr($k['comenzi']) ?> din <?= $nr($comenziToate['comenzi']) ?> comenzi ale perioadei (<?= $e($lei((float) $k['venit'])) ?> din <?= $e($lei((float) $comenziToate['venit'])) ?>). Restul sunt plasate de administratori, din browsere care cer „nu urmări”, dintr-o vizită din altă zi sau dinainte de pornirea statisticilor.</p>
+<?php endif; ?>
 <?php
 /**
  * Un grafic: linie (cu linia perioadei dinainte, punctată) sau bare. Doar formele sunt în SVG (se întind pe lățime); eticheta

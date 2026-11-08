@@ -153,6 +153,22 @@ final class StatisticiRaport
     }
 
     /**
+     * Toate comenzile perioadei care sunt vânzări, legate sau nu de o vizită numărată (pentru nota de sub cifre).
+     *
+     * @return array{comenzi: int, venit: float}
+     */
+    public static function comenziToate(PDO $db, string $deLa, string $panaLa): array
+    {
+        try {
+            $r = self::randuri($db, 'SELECT COUNT(*) AS comenzi, COALESCE(SUM(o.total), 0) AS venit FROM orders o WHERE o.created_at >= ? AND o.created_at < ? AND '
+                . self::vanzare(), [$deLa . ' 00:00:00', date('Y-m-d', (int) strtotime($panaLa . ' +1 day')) . ' 00:00:00'])[0] ?? [];
+        } catch (Throwable) {
+            return ['comenzi' => 0, 'venit' => 0.0];
+        }
+        return ['comenzi' => (int) ($r['comenzi'] ?? 0), 'venit' => round((float) ($r['venit'] ?? 0), 2)];
+    }
+
+    /**
      * Seria graficului: pe ore (perioade de 1–2 zile) sau pe zile. Vizitele după ora începutului; comenzile după ora plasării.
      *
      * @param array<string, string> $f

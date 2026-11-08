@@ -58,8 +58,12 @@ final class StatisticiAgregare
                 $start = $prag;
             }
             $zile = [];
-            for ($zi = $start; $zi <= $azi && count($zile) < $maxZile; $zi = date('Y-m-d', (int) strtotime($zi . ' +1 day'))) {
+            for ($zi = $start; $zi <= $azi && count($zile) < $maxZile - 1; $zi = date('Y-m-d', (int) strtotime($zi . ' +1 day'))) {
                 $zile[] = $zi;
+            }
+            // Azi întotdeauna (cu multe zile rămase în urmă, restul vin la rulările următoare).
+            if (!in_array($azi, $zile, true)) {
+                $zile[] = $azi;
             }
             foreach ($zile as $zi) {
                 $facut = self::agregaZiua($db, $zi, $acum);

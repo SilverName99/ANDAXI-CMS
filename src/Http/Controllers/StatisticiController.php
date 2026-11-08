@@ -87,6 +87,7 @@ final class StatisticiController
                 'compara' => $compara,
                 'kpi' => $kpi,
                 'kpiInainte' => $kpiInainte,
+                'comenziToate' => $filtre === [] ? StatisticiRaport::comenziToate($db, $perioada['de_la'], $perioada['pana_la']) : null,
                 'serie' => $serie,
                 'serieInainte' => $serieInainte,
                 'tabele' => $tabele,

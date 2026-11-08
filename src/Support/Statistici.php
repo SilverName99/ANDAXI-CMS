@@ -255,7 +255,9 @@ final class Statistici
             if (PHP_SAPI === 'cli' || headers_sent() || !isset($_COOKIE[session_name()]) || (string) $_COOKIE[session_name()] === '') {
                 return false;
             }
-            if (preg_match('/^[A-Za-z0-9,-]{16,128}$/', (string) $_COOKIE[session_name()]) !== 1) {
+            $id = (string) $_COOKIE[session_name()];
+            // Doar o sesiune care există: altfel PHP (use_strict_mode) ar face una nouă, cu cookie nou.
+            if (preg_match('/^[A-Za-z0-9,-]{16,128}$/', $id) !== 1 || !is_file(Paths::stocareSite('sessions') . '/sess_' . $id)) {
                 return false;
             }
             SesiuneLaNevoie::porneste();
@@ -575,6 +577,8 @@ final class Statistici
             $cod = 500;
         }
         if (!headers_sent()) {
+            // Niciun cookie, orice s-ar fi întâmplat mai sus (de exemplu la citirea sesiunii unui administrator).
+            header_remove('Set-Cookie');
             http_response_code($cod);
             header('Cache-Control: no-store');
             header('X-Robots-Tag: noindex');
