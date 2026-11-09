@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use DateTimeImmutable;
 use Throwable;
 
 /**
@@ -18,10 +17,11 @@ use Throwable;
  *    `Licenta::verifica`, aceeași verificare ca pentru un fișier urcat de mână) și e pentru acest site (`LICENTA_SITE`,
  *    același `site` ca licența de acum);
  *  - `versiune` e cel puțin cea de acum (licența folosită sau, dacă nu se verifică niciuna, ultima aplicată): nicio
- *    întoarcere la o listă veche, nicio reluare a unei licențe vechi; aceeași versiune doar cu același conținut;
- *  - nu a expirat: dacă are câmpul semnat opțional `expira_la` (o dată ISO-8601), el e în viitor. CRM-ul de azi nu-l pune.
+ *    întoarcere la o listă veche, nicio reluare a unei licențe vechi; aceeași versiune doar cu același conținut.
  *
- * Apoi se scrie cu `Licenta::instaleaza()` (fișier temporar + rename, 0600), adică exact ca un `licenta.json` urcat de mână,
+ * Licența nu are dată de expirare (formatul din `Licenta`): e bună până vine una mai nouă, exact ca un fișier urcat de mână.
+ *
+ * Apoi se scrie cu `Licenta::instaleaza()` (fișier temporar + rename, 0660), adică exact ca un `licenta.json` urcat de mână,
  * iar stările pluginurilor se aplică pe loc (`Plugins`: `stare-aplicata.json`, jurnalul, golirea memoriei paginilor). Pașii de
  * activare ai unui plugin pornit (`config/activari.php`, de exemplu `erp_trimite_din`) rulează la prima cerere web de după,
  * ca la un fișier urcat de mână (`Activari::laCerere`); schema nu depinde de pluginuri, deci nu e nicio migrare de rulat.
@@ -122,7 +122,7 @@ final class LicentaSincronizare
      *
      * @return array{ok: bool, mesaj: string, versiune: int, licenta: ?array}
      */
-    public static function verificaPrimita(string $json, ?DateTimeImmutable $acum = null): array
+    public static function verificaPrimita(string $json): array
     {
         $esec = static fn (string $mesaj, int $versiune = 0): array => ['ok' => false, 'mesaj' => $mesaj, 'versiune' => $versiune, 'licenta' => null];
         $verificare = Licenta::verifica($json);
@@ -142,17 +142,6 @@ final class LicentaSincronizare
         }
         if (is_array($curenta) && $versiune === (int) $curenta['versiune'] && self::continut($curenta) !== self::continut($licenta)) {
             return $esec('licența primită are aceeași versiune (' . $versiune . ') ca cea de pe site, dar alt conținut.', $versiune);
-        }
-        if (array_key_exists('expira_la', $licenta)) {
-            $expira = $licenta['expira_la'];
-            $moment = is_string($expira) && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:?\d{2})$/', $expira) === 1
-                ? strtotime($expira) : false;
-            if ($moment === false) {
-                return $esec('„expira_la” din licența primită nu e o dată ISO-8601.', $versiune);
-            }
-            if ($moment <= ($acum ?? new DateTimeImmutable())->getTimestamp()) {
-                return $esec('licența primită a expirat (' . $expira . ').', $versiune);
-            }
         }
         return ['ok' => true, 'mesaj' => '', 'versiune' => $versiune, 'licenta' => $licenta];
     }
@@ -177,7 +166,7 @@ final class LicentaSincronizare
         // Cronul și butonul din admin nu lucrează deodată (al doilea iese: „ocupat”).
         $lacat = @fopen($dosar . '/' . self::FISIER_LACAT, 'c');
         if ($lacat !== false) {
-            @chmod($dosar . '/' . self::FISIER_LACAT, 0600);
+            @chmod($dosar . '/' . self::FISIER_LACAT, 0660);
         }
         if ($lacat === false) {
             $rezultat = self::rezultat(self::EROARE, 'nu pot scrie în ' . $dosar . ' (drepturi de scriere?); licența de acum rămâne.', 0, $curenta);
@@ -214,7 +203,7 @@ final class LicentaSincronizare
         if (is_file($fisier) && @file_get_contents($fisier) === $raspuns['corp'] && Licenta::incarca()['sursa'] === Licenta::FISIER) {
             return self::rezultat(self::LA_ZI, 'licența e la zi (v' . $versiune . ').', $versiune, $curenta);
         }
-        $instalare = Licenta::instaleaza($raspuns['corp'], 0600);
+        $instalare = Licenta::instaleaza($raspuns['corp']);
         if (!$instalare['ok']) {
             return self::rezultat(self::EROARE, 'licența v' . $versiune . ' nu a putut fi pusă: ' . $instalare['eroare'] . ' Licența de acum rămâne.', $versiune, $curenta);
         }
@@ -400,7 +389,7 @@ final class LicentaSincronizare
         ];
         $dosar = Licenta::dosar();
         if (is_dir($dosar)) {
-            Licenta::scrieAtomic($dosar . '/' . self::FISIER_STARE, (string) json_encode($nou, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 0600);
+            Licenta::scrieAtomic($dosar . '/' . self::FISIER_STARE, (string) json_encode($nou, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         }
     }
 

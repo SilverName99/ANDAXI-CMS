@@ -249,12 +249,11 @@ final class Licenta
     /**
      * Pune o licență nouă pe site: o verifică, apoi o scrie ca `licenta.json`.
      * Folosită de scriptul „site nou”, de unealta de dezvoltare și de preluarea
-     * de la CRM (`LicentaSincronizare`, cu `$mod` 0600). O licență respinsă nu se
-     * scrie (rămâne ce era).
+     * de la CRM (`LicentaSincronizare`). O licență respinsă nu se scrie (rămâne ce era).
      *
      * @return array{ok: bool, eroare: string, versiune: int}
      */
-    public static function instaleaza(string $json, int $mod = 0660): array
+    public static function instaleaza(string $json): array
     {
         $verificare = self::verifica($json);
         if (!$verificare['ok']) {
@@ -272,7 +271,7 @@ final class Licenta
         if (!is_dir(self::dosar())) {
             @mkdir(self::dosar(), 0770, true);
         }
-        if (!self::scrieAtomic(self::dosar() . '/' . self::FISIER, $json, $mod)) {
+        if (!self::scrieAtomic(self::dosar() . '/' . self::FISIER, $json)) {
             return ['ok' => false, 'eroare' => 'nu pot scrie în ' . self::dosar() . '.', 'versiune' => $versiune];
         }
         self::$rezultat = null;
@@ -348,17 +347,17 @@ final class Licenta
     }
 
     /**
-     * Scrie un fișier prin fișier temporar + rename, ca nimeni să nu citească o jumătate. Drepturile (`$mod`) se pun pe
+     * Scrie un fișier prin fișier temporar + rename, ca nimeni să nu citească o jumătate. Drepturile (0660) se pun pe
      * fișierul temporar, înainte de rename, deci fișierul final le are din prima clipă.
      */
-    public static function scrieAtomic(string $cale, string $continut, int $mod = 0660): bool
+    public static function scrieAtomic(string $cale, string $continut): bool
     {
         $temporar = $cale . '.' . bin2hex(random_bytes(4)) . '.tmp';
         if (@file_put_contents($temporar, $continut, LOCK_EX) === false) {
             @unlink($temporar);
             return false;
         }
-        @chmod($temporar, $mod);
+        @chmod($temporar, 0660);
         if (!@rename($temporar, $cale)) {
             @unlink($temporar);
             return false;

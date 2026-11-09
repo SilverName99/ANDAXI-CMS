@@ -154,16 +154,16 @@ curentă a site-ului; site-ul o preia în cel mult 5 minute (sau imediat, cu „
   (aceeași verificare `Licenta::verifica` ca pentru un fișier urcat de mână) și licența e pentru acest site
   (`LICENTA_SITE` = `site`-ul licenței de acum); `versiune` ≥ cea de acum (licența folosită sau, dacă acum nu se
   verifică niciuna, ultima aplicată din `stare-aplicata.json`), iar aceeași versiune doar cu exact același conținut:
-  nicio întoarcere la o listă veche, nicio reluare; dacă licența are câmpul semnat opțional `expira_la` (ISO-8601),
-  el trebuie să fie în viitor (CRM-ul de azi nu-l pune; o licență fără el nu expiră, ca până acum).
+  nicio întoarcere la o listă veche, nicio reluare. Licența nu are dată de expirare (nici urcată de mână): e bună
+  până vine una mai nouă.
 - **Doar HTTPS**, cu certificatul verificat, fără să urmeze redirecționări, cel mult 256 KB; `http://` doar spre
   `127.0.0.1`/`localhost` (testele). O adresă cu `user:parola@` e refuzată.
-- **Cum scrie:** `Licenta::instaleaza($json, 0600)`: fișier temporar în același dosar + `rename`, deci nimeni nu
+- **Cum scrie:** `Licenta::instaleaza($json)`, cu drepturile 0660 ale unei licențe puse de mână: fișier temporar în același dosar + `rename`, deci nimeni nu
   citește o licență pe jumătate (testul o verifică cu un cititor în buclă). Apoi stările se aplică pe loc
   (`Plugins`: `stare-aplicata.json`, jurnalul pluginurilor, golirea memoriei paginilor), exact ce ar face prima cerere
   după un fișier urcat de mână.
 - **La eșec** (CRM-ul căzut, HTTP 401/404/429/500, un răspuns respins, disc fără drept de scriere): licența de acum
-  rămâne, site-ul merge mai departe. Motivul ajunge în `storage/licenta/sincronizare.json` (0600; îl arată
+  rămâne, site-ul merge mai departe. Motivul ajunge în `storage/licenta/sincronizare.json` (0660; îl arată
   Abonamentul tău și `diagnostic.php --licenta`) și în `storage/logs/licenta-sincronizare.log` (o schimbare, sau
   același eșec cel mult o dată pe oră). Cheia nu se scrie nicăieri.
 - **Ieșirea cronului:** 0 licență nouă sau la zi, 1 un răspuns respins sau CRM-ul care nu răspunde, 2 preluarea

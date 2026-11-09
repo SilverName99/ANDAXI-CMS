@@ -10,13 +10,13 @@ declare(strict_types=1);
  *   tools/dev/php.sh tools/dev/test-licenta-sincronizare.php
  *
  * A. Fără rețea: verificarea unei licențe primite (semnătura, alt site, versiune mai veche, aceeași versiune cu alt conținut,
- *    `expira_la` trecută sau stricată) și configurarea (doar https://, în afară de 127.0.0.1/localhost; fără cheie; o adresă
+ *    licența fără dată de expirare, ca la mână) și configurarea (doar https://, în afară de 127.0.0.1/localhost; fără cheie; o adresă
  *    cu utilizator și parolă).
  * B. Cu CRM-ul simulat, pe un dosar de licență al testului: o licență mai nouă se primește (fișierul e exact răspunsul,
- *    0600, fără fișiere temporare rămase), pluginul pornit apare în stări și în `stare-aplicata.json`, ca la un fișier urcat
+ *    0660 ca la mână, fără fișiere temporare rămase), pluginul pornit apare în stări și în `stare-aplicata.json`, ca la un fișier urcat
  *    de mână (aceleași stări, aceeași licență bună, comparat cu un al doilea dosar în care fișierul e pus de mână); a doua
  *    oară „la zi”, fără scriere; oprirea unui plugin din CRM; respinse, cu licența neatinsă: semnătură greșită, altă cheie,
- *    alt site, versiune mai veche, aceeași versiune cu alt conținut, expirată, HTTP 401/404/500, JSON stricat, un răspuns
+ *    alt site, versiune mai veche, aceeași versiune cu alt conținut, HTTP 401/404/500, JSON stricat, un răspuns
  *    prea mare, o redirecționare (nu se urmează), CRM-ul oprit (și cu fișierul de stare și jurnalul: motivul, fără cheie;
  *    același eșec o singură dată în jurnal); cheia trimisă doar în antetul Authorization.
  * C. Scrierea atomică: un proces care citește `licenta.json` în buclă cât testul pune 30 de licențe la rând nu vede niciodată
@@ -199,12 +199,11 @@ $r = $vp($v5);
 $verifica('aceeași versiune, exact aceeași licență: acceptată (la zi)', $r['ok'], $r['mesaj']);
 $r = $vp($licentaText(5, $pornite(['catalog', 'magazin', 'blog'])));
 $verifica('aceeași versiune (5), alt conținut: respinsă', !$r['ok'] && str_contains($r['mesaj'], 'aceeași versiune'), $r['mesaj']);
-$r = $vp($licentaText(6, $pornite(['catalog']), ['expira_la' => gmdate('Y-m-d\TH:i:s\Z', time() - 60)]));
-$verifica('expirată (expira_la trecută): respinsă', !$r['ok'] && str_contains($r['mesaj'], 'expirat'), $r['mesaj']);
-$r = $vp($licentaText(6, $pornite(['catalog']), ['expira_la' => 'mâine']));
-$verifica('expira_la care nu e o dată: respinsă', !$r['ok'] && str_contains($r['mesaj'], 'expira_la'), $r['mesaj']);
-$r = $vp($licentaText(6, $pornite(['catalog']), ['expira_la' => gmdate('Y-m-d\TH:i:s\Z', time() + 86400)]));
-$verifica('expira_la în viitor: acceptată', $r['ok'], $r['mesaj']);
+// Formatul nu are dată de expirare: un câmp semnat necunoscut (de exemplu „expira_la” trecută) nu schimbă nimic,
+// exact ca la Licenta::verifica pentru un fișier urcat de mână.
+$cuCamp = $licentaText(6, $pornite(['catalog']), ['expira_la' => gmdate('Y-m-d\TH:i:s\Z', time() - 60)]);
+$r = $vp($cuCamp);
+$verifica('fără expirare în format: un câmp „expira_la” trecut e ignorat, ca la mână', $r['ok'] && Licenta::verifica($cuCamp)['ok'], $r['mesaj']);
 $verifica('JSON stricat: respins', !$vp('{"site":')['ok']);
 
 $cuConfig = static function (string $url, string $cheie) use ($jurnalSinc): array {
@@ -244,7 +243,7 @@ $inainte = count($cereri());
 $r = LicentaSincronizare::ruleaza('test');
 $verifica('licența mai nouă (v6, cu blogul) e primită', $r['rezultat'] === LicentaSincronizare::OK && $r['versiune'] === 6, json_encode($r, JSON_UNESCAPED_UNICODE));
 $verifica('licenta.json = exact răspunsul CRM-ului', @file_get_contents($fisier) === $v6);
-$verifica('licenta.json are drepturile 0600', $mod($fisier) === '0600', $mod($fisier));
+$verifica('licenta.json are drepturile 0660, ca o licență pusă de mână', $mod($fisier) === '0660', $mod($fisier));
 $verifica('niciun fișier temporar rămas', $temporare($dosar) === [], implode(', ', $temporare($dosar)));
 Plugins::reseteaza();
 $verifica('blogul e pornit în stările site-ului', Plugins::stare('blog') === Plugins::PORNIT);
@@ -304,8 +303,6 @@ $raspunde($v5);
 $respinsa('versiune mai veche (v5, reluată)', LicentaSincronizare::RESPINSA, 'mai veche');
 $raspunde($licentaText(6, $pornite(['catalog'])));
 $respinsa('aceeași versiune, alt conținut', LicentaSincronizare::RESPINSA, 'aceeași versiune');
-$raspunde($licentaText(7, $pornite(['catalog']), ['expira_la' => '2026-01-01T00:00:00Z']));
-$respinsa('expirată', LicentaSincronizare::RESPINSA, 'expirat');
 $raspunde($v6, 200, '', 'alta-cheie');
 $respinsa('HTTP 401 (cheia site-ului greșită)', LicentaSincronizare::EROARE, '401');
 $raspunde('{"error":"x"}', 404);
@@ -341,7 +338,7 @@ $verifica('CRM-ul oprit: eroare, licența rămâne v7, stările la fel', $r1['re
 $stare = LicentaSincronizare::ultimaStare();
 $verifica('fișierul de stare: eroarea, versiunea de acum (7), ultima reușită păstrată', ($stare['rezultat'] ?? '') === LicentaSincronizare::EROARE
     && ($stare['versiune_curenta'] ?? 0) === 7 && is_string($stare['ultima_reusita'] ?? null), json_encode($stare, JSON_UNESCAPED_UNICODE));
-$verifica('fișierul de stare are drepturile 0600', $mod($dosar . '/' . LicentaSincronizare::FISIER_STARE) === '0600');
+$verifica('fișierul de stare are drepturile 0660', $mod($dosar . '/' . LicentaSincronizare::FISIER_STARE) === '0660');
 $jurnal = (string) @file_get_contents($jurnalSinc);
 $verifica('jurnalul: eșecul o singură dată (a doua rulare cu același motiv nu se mai scrie)', substr_count($jurnal, 'nu răspunde') === 1, $jurnal);
 $tot = $jurnal . (string) @file_get_contents($dosar . '/' . LicentaSincronizare::FISIER_STARE) . (string) @file_get_contents($dosarTest . '/pluginuri.log');
@@ -420,8 +417,8 @@ $vSite = $licentaText(3, $pornite(['catalog', 'magazin', 'campanii']));
 $raspunde($vSite);
 $r = $cron();
 $verifica('copia codului pentru versiunea simulată', $codCopie === 0 && is_file($release . '/scripts/licenta-sincronizare.php'));
-$verifica('cronul: 0, licența în site/storage/licenta/licenta.json (0600)', $r['cod'] === 0 && @file_get_contents($dosarSite . '/storage/licenta/licenta.json') === $vSite
-    && $mod($dosarSite . '/storage/licenta/licenta.json') === '0600', $r['iesire']);
+$verifica('cronul: 0, licența în site/storage/licenta/licenta.json (0660)', $r['cod'] === 0 && @file_get_contents($dosarSite . '/storage/licenta/licenta.json') === $vSite
+    && $mod($dosarSite . '/storage/licenta/licenta.json') === '0660', $r['iesire']);
 $aplicataSite = json_decode((string) @file_get_contents($dosarSite . '/storage/licenta/' . Plugins::FISIER_STARE), true);
 $verifica('stările aplicate pe loc în site/storage/licenta (campanii pornit)', ($aplicataSite['efective']['campanii'] ?? '') === Plugins::PORNIT);
 $r = $cron();
