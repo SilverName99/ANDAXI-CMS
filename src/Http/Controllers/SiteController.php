@@ -9431,7 +9431,7 @@ CSS;
             'locale' => 'auto',
             // Sesiunea expiră odată cu plățile neterminate (bt_ipay_expire_minutes, 30–1440 de minute; Stripe cere 30 de
             // minute–24 de ore): după asta comanda se poate plăti doar printr-un link de plată trimis din admin.
-            'expires_at' => (string) (time() + min(86340, BtIpayPayments::setari($settings)['minute_expirare'] * 60 + 60)),
+            'expires_at' => (string) (time() + min(86340, max(31 * 60, BtIpayPayments::setari($settings)['minute_expirare'] * 60 + 60))),
         ]);
 
         $sessionId = (string) ($session['id'] ?? '');
@@ -9449,7 +9449,7 @@ CSS;
         );
         $stmt->execute([
             'session_id' => $sessionId,
-            'payment_intent_id' => (string) ($session['payment_intent'] ?? ''),
+            'payment_intent_id' => $this->idPlataStripe($session['payment_intent'] ?? ''),
             'id' => $orderId,
         ]);
 
@@ -9556,7 +9556,8 @@ CSS;
         $orderNumber = trim((string) ($session['metadata']['order_number'] ?? $session['client_reference_id'] ?? ''));
         $orderId = (int) ($session['metadata']['order_id'] ?? 0);
         $sessionId = trim((string) ($session['id'] ?? ''));
-        $paymentIntentId = trim((string) ($session['payment_intent'] ?? ''));
+        // Sesiunea citită cu expand[]=payment_intent (întoarcerea clientului) are plata ca obiect: doar id-ul ei se scrie.
+        $paymentIntentId = $this->idPlataStripe($session['payment_intent'] ?? '');
 
         if ($orderNumber === '' && $orderId <= 0) {
             return;
@@ -9604,8 +9605,14 @@ CSS;
             if ($targetOrderId > 0) {
                 if (!$trecuta) {
                     // Deja plătită: printr-un link de plată întreagă sau printr-o altă sesiune decât cea socotită.
+                    // O altă sesiune decât cea socotită doar dacă id-ul socotit e unul de sesiune (cs_…) și plata sesiunii nu e cea
+                    // socotită; altfel (aceeași plată primită pe alt drum, un id stricat) nu e o dublură.
+                    $sesiuneSocotita = (string) ($socotita['stripe_session_id'] ?? '');
+                    $plataSocotita = (string) ($socotita['stripe_payment_intent_id'] ?? '');
+                    $altaSesiune = $this->idStripeValid($sesiuneSocotita, 'cs_')
+                        && !($paymentIntentId !== '' && hash_equals($plataSocotita, $paymentIntentId)) ? $sesiuneSocotita : '';
                     \App\Support\PaymentLink::semnaleazaPlataComandaDubla($db, $targetOrderId, \App\Support\PaymentLink::PROCESATOR_STRIPE,
-                        $sessionId, ((int) ($session['amount_total'] ?? 0)) / 100, (string) ($socotita['stripe_session_id'] ?? ''));
+                        $sessionId, ((int) ($session['amount_total'] ?? 0)) / 100, $altaSesiune);
                     return;
                 }
                 \App\Support\PaymentLink::anuleazaDepasite($db, $targetOrderId);
@@ -9667,8 +9674,16 @@ CSS;
 
         if ($paid) {
             if (!$trecuta) {
+                // Altă plată decât cea socotită doar dacă id-ul socotit e unul de plată (pi_…) și plata nu ține de sesiunea socotită
+                // (metadatele ei); altfel (plata sesiunii socotite, un id lipsă sau stricat — „Array” de la o sesiune citită cu
+                // expand) nu e o dublură.
+                $plataSocotita = (string) ($socotita['stripe_payment_intent_id'] ?? '');
+                $sesiuneSocotita = (string) ($socotita['stripe_session_id'] ?? '');
+                $sesiunePlatii = trim((string) ($paymentIntent['metadata']['checkout_session_id'] ?? ''));
+                $altaPlata = $this->idStripeValid($plataSocotita, 'pi_')
+                    && !($sesiunePlatii !== '' && hash_equals($sesiuneSocotita, $sesiunePlatii)) ? $plataSocotita : '';
                 \App\Support\PaymentLink::semnaleazaPlataComandaDubla($db, $targetOrderId, \App\Support\PaymentLink::PROCESATOR_STRIPE,
-                    $paymentIntentId, ((int) ($paymentIntent['amount'] ?? 0)) / 100, (string) ($socotita['stripe_payment_intent_id'] ?? ''));
+                    $paymentIntentId, ((int) ($paymentIntent['amount'] ?? 0)) / 100, $altaPlata);
                 return;
             }
             $settings = Settings::all($db);
@@ -9682,6 +9697,18 @@ CSS;
             LoyaltyService::refundRedeemedPointsForOrder($db, $targetOrderId);
             LoyaltyService::reverseAwardedPointsForOrder($db, $targetOrderId);
         }
+    }
+
+    /** Id-ul unei plăți Stripe (PaymentIntent) dintr-un câmp care e fie id-ul, fie obiectul ei (o sesiune citită cu expand). */
+    private function idPlataStripe(mixed $plata): string
+    {
+        return trim((string) (is_array($plata) ? ($plata['id'] ?? '') : (is_scalar($plata) ? $plata : '')));
+    }
+
+    /** Un id Stripe cu prefixul dat (cs_…, pi_…), din litere, cifre și „_”? */
+    private function idStripeValid(string $id, string $prefix): bool
+    {
+        return preg_match('/^' . preg_quote($prefix, '/') . '[A-Za-z0-9_]+$/', $id) === 1;
     }
 
     /** Sesiunea și plata Stripe socotite acum pe comandă (pentru nota „Plătită de două ori”). @return array<string, mixed> */

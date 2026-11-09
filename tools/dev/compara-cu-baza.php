@@ -1160,6 +1160,44 @@ $deBioscem = [
         'motiv' => 'link_plata (revizuirea din 9 nov): POST /admin/orders/{id}/payment-link cere jetonul AdminCsrf (antetul X-CSRF-Token); '
             . 'site-uri/bioscem/ce-se-schimba.md',
     ],
+    // Revizuirea a doua (9 nov): pe o comandă „Plătită de două ori”, „Rambursează” / „Anulează autorizarea” pe plata BT socotită
+    // cere confirmarea explicită (fereastra spune care plată e socotită), apoi trimite confirm_dubla=1.
+    [
+        'nume' => 'Admin → Comenzi: btActiune primește confirmarea plății duble',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => ', confirmActiva, confirmDubla){',
+        'vechi' => ', confirmActiva){',
+        'motiv' => 'link_plata (revizuirea a doua): parametrul confirmDubla al acțiunilor BT. site-uri/bioscem/ce-se-schimba.md',
+    ],
+    [
+        'nume' => 'Admin → Comenzi: btActiune trimite confirm_dubla=1',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => '
+    if (confirmDubla) { date.append(\'confirm_dubla\', \'1\'); }',
+        'vechi' => '',
+        'motiv' => 'link_plata (revizuirea a doua): confirmarea plății duble ajunge la server (AdminController::orderBtIpayAction).',
+    ],
+    [
+        'nume' => 'Admin → Comenzi: btActiune nu mai întreabă a doua oară după confirmarea plății duble',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => "&& !confirmDubla && !window.confirm(confirmare)",
+        'vechi' => "&& !window.confirm(confirmare)",
+        'motiv' => 'link_plata (revizuirea a doua): după fereastra plății duble, cererea pleacă fără confirmarea obișnuită.',
+    ],
+    [
+        'nume' => 'Admin → Comenzi: btActiune, fereastra confirmării plății duble',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => '            if (data.cere_confirmare_dubla && !confirmDubla) {
+                // Comanda e plătită de două ori, iar aceasta e plata socotită: doar cu confirmarea explicită.
+                if (panou) { panou.querySelectorAll(\'button\').forEach((b) => { b.disabled = false; }); }
+                if (window.confirm(data.confirmare || data.error || \'\')) { btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, true); return; }
+                if (status) { status.style.color = \'#dc2626\'; status.textContent = data.error || \'Eroare\'; }
+                return;
+            }
+',
+        'vechi' => '',
+        'motiv' => 'link_plata (revizuirea a doua): răspunsul cere_confirmare_dubla deschide window.confirm cu plata socotită și reia cererea cu confirm_dubla=1.',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o

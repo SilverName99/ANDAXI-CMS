@@ -191,7 +191,8 @@ final class StripeEvenimente
         } elseif ($tipObiect === 'payment_intent') {
             $plata = (string) ($obiect['id'] ?? '');
         } elseif ($tipObiect === 'charge') {
-            $plata = (string) ($obiect['payment_intent'] ?? '');
+            // Plata ca id sau, într-un obiect citit cu expand, ca obiect: doar id-ul.
+            $plata = is_array($obiect['payment_intent'] ?? null) ? (string) ($obiect['payment_intent']['id'] ?? '') : (string) ($obiect['payment_intent'] ?? '');
         }
         if ($abonament === '' && $plata === '') {
             return false;

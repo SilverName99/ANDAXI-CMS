@@ -2114,12 +2114,13 @@ function btArataAlegere(txId, arata){
     const caseta = document.getElementById('bt-alegere-' + txId);
     if (caseta) { caseta.hidden = arata === false; }
 }
-function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
+function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, confirmDubla){
     const status = document.getElementById('bt-status-' + txId);
     const panou = document.getElementById('order-bt-' + txId);
     const date = new URLSearchParams();
     date.append('tx_id', String(txId));
     date.append('_csrf', window.BT_CSRF || '');
+    if (confirmDubla) { date.append('confirm_dubla', '1'); }
     let confirmare = '';
     if (actiune === 'deposit' || actiune === 'refund') {
         const camp = document.getElementById((actiune === 'deposit' ? 'bt-suma-incasare-' : 'bt-suma-rambursare-') + txId);
@@ -2146,7 +2147,7 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
     } else if (actiune === 'anuleaza_comanda') {
         confirmare = 'Anulezi comanda? Suma blocată se eliberează, <?= $cuErp('ERP-ul e anunțat, iar ', '') ?>clientul primește emailul de anulare.';
     }
-    if (confirmare !== '' && !window.confirm(confirmare)) {
+    if (confirmare !== '' && !confirmDubla && !window.confirm(confirmare)) {
         return;
     }
     if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = true; }); }
@@ -2165,6 +2166,13 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
             }
             // Eroarea rămâne pe ecran, ca să poată fi citită; starea reală se
             // vede după reîncărcarea paginii.
+            if (data.cere_confirmare_dubla && !confirmDubla) {
+                // Comanda e plătită de două ori, iar aceasta e plata socotită: doar cu confirmarea explicită.
+                if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+                if (window.confirm(data.confirmare || data.error || '')) { btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, true); return; }
+                if (status) { status.style.color = '#dc2626'; status.textContent = data.error || 'Eroare'; }
+                return;
+            }
             if (data.cere_confirmare) { btArataAlegere(txId, true); }
             if (status) { status.style.color = '#dc2626'; status.textContent = (data.error || 'Eroare') + ' (Reîncarcă pagina ca să vezi starea actualizată.)'; }
             if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }

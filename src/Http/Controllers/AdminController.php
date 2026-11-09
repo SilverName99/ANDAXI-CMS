@@ -13571,6 +13571,10 @@ final class AdminController
                     'error' => 'Comanda e plătită de două ori, iar aceasta (' . (string) $tx['bt_order_number'] . ') e plata SOCOTITĂ pe comandă: '
                         . 'nu o elibera și nu o rambursa. Rambursează plata de prisos, cea din notă. ' . $nota,
                     'cere_confirmare_dubla' => true,
+                    // Fereastra de confirmare a adminului (btActiune): ce plată e socotită și ce urmează.
+                    'confirmare' => 'Comanda e plătită de două ori. Plata BT ' . (string) $tx['bt_order_number'] . ' e cea SOCOTITĂ pe comandă, '
+                        . 'nu cea de prisos (aceea e în notă: ' . $nota . '). Dacă o ' . ($actiune === 'refund' ? 'rambursezi' : 'eliberezi')
+                        . ', comanda rămâne fără plata ei. Continui totuși?',
                 ], JSON_UNESCAPED_UNICODE);
                 return;
             }

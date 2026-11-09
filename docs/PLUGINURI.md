@@ -677,7 +677,8 @@ dispar, iar linkurile spre el se scot din pagini.
   întreagă rămase; un asemenea link nu mai pornește pe o comandă plătită; o plată BT de prisos doar autorizată se eliberează
   singură; banii veniți totuși de două ori lasă pe comandă nota „Plătită de două ori: …” (`PaymentLink::NOTA_DUBLA`, în
   `payment_error`), cu plata de rambursat și cea socotită, fiecare cu procesatorul și id-ul ei; plata BT socotită a unei asemenea
-  comenzi nu se eliberează / rambursează din fereastră fără `confirm_dubla=1`. Pentru toate linkurile: orice încasare anulează
+  comenzi nu se eliberează / rambursează din fereastră fără `confirm_dubla=1` (btActiune îl trimite după o fereastră de confirmare care
+  numește plata socotită). Pentru toate linkurile: orice încasare anulează
   linkurile neplătite mai mari decât restul (`anuleazaDepasite`), o diferență mai mare decât restul nu mai pornește, același link
   plătit a doua oară (alt ep_id / altă sesiune) lasă nota; confirmările EuPlătesc și Stripe sunt atomice (`UPDATE … WHERE
   payment_status <> 'paid'`), iar o scriere nereușită răspunde cu eroare (procesatorul reîncearcă). Stripe: sesiunea linkului se

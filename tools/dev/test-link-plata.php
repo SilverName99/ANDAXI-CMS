@@ -834,6 +834,34 @@ $verifica('… o sesiune expirată a comenzii plătite nu atinge nimic (nici not
     && $comanda('1047')['payment_status'] === 'paid' && PaymentLink::platitaDeDouaOri($comanda('1047'))
     && $comanda('1047')['stripe_session_id'] === 'cs_test_initiala1047');
 
+// Checkout Stripe obișnuit, cu întoarcerea clientului înaintea webhook-ului (1027): sesiunea citită cu expand[]=payment_intent are
+// plata ca obiect. Se scrie id-ul plății (nu „Array”), iar webhook-urile de după nu fac din ea o „plată de două ori”.
+$db->exec("UPDATE orders SET payment_method = 'stripe', status = 'pending_payment', payment_status = 'unpaid', paid_amount = NULL, payment_error = NULL,
+    stripe_session_id = 'cs_test_retur1027', stripe_payment_intent_id = '' WHERE order_number = '1027'");
+$id1027 = (int) $comanda('1027')['id'];
+$raspunsuriStripe(['GET /v1/checkout/sessions/cs_test_retur1027' => ['corp' => ['id' => 'cs_test_retur1027', 'object' => 'checkout.session',
+    'status' => 'complete', 'payment_status' => 'paid', 'amount_total' => 3000, 'client_reference_id' => '1027',
+    'payment_intent' => ['id' => 'pi_test_retur1027', 'object' => 'payment_intent', 'status' => 'succeeded'],
+    'metadata' => ['order_number' => '1027', 'order_id' => (string) $id1027]]]]);
+$emailuri27 = $emailuriComanda($id1027, 'new_order');
+$cerere2('GET', '/checkout/succes/1027?stripe=1&session_id=cs_test_retur1027', $jarClient);
+$dupa = $comanda('1027');
+$verifica('întoarcerea de la Stripe (sesiunea cu plata ca obiect): comanda plătită, id-ul plății scris corect (pi_test_retur1027)',
+    $dupa['payment_status'] === 'paid' && $dupa['stripe_payment_intent_id'] === 'pi_test_retur1027' && !PaymentLink::platitaDeDouaOri($dupa),
+    json_encode(array_intersect_key($dupa, array_flip(['payment_status', 'stripe_payment_intent_id', 'payment_error']))));
+$r1 = $webhook(['id' => 'evt_pi_' . bin2hex(random_bytes(4)), 'type' => 'payment_intent.succeeded', 'data' => ['object' => ['id' => 'pi_test_retur1027',
+    'object' => 'payment_intent', 'amount' => 3000, 'metadata' => ['order_number' => '1027', 'order_id' => (string) $id1027]]]]);
+$r2 = $webhook($sesiune(['order_number' => '1027', 'order_id' => (string) $id1027], 3000, '1027', 'cs_test_retur1027'));
+$dupa = $comanda('1027');
+$verifica('… apoi webhook-urile (payment_intent.succeeded, checkout.session.completed): comanda rămâne plătită, fără notă, un singur email',
+    $r1['cod'] === 200 && $r2['cod'] === 200 && $dupa['payment_status'] === 'paid' && !PaymentLink::platitaDeDouaOri($dupa)
+    && $dupa['payment_error'] === null && $emailuriComanda($id1027, 'new_order') === $emailuri27 + 1, json_encode([$r1, $r2, $dupa['payment_error']]));
+$db->exec("UPDATE orders SET stripe_payment_intent_id = 'Array' WHERE order_number = '1027'");
+$r = $webhook(['id' => 'evt_pi_' . bin2hex(random_bytes(4)), 'type' => 'payment_intent.succeeded', 'data' => ['object' => ['id' => 'pi_test_alta1027',
+    'object' => 'payment_intent', 'amount' => 3000, 'metadata' => ['order_number' => '1027', 'order_id' => (string) $id1027]]]]);
+$verifica('… un id de plată stricat pe comandă („Array”, scris de codul de dinainte): nicio notă pe baza lui', $r['cod'] === 200
+    && !PaymentLink::platitaDeDouaOri($comanda('1027')));
+
 // Sesiunea checkout-ului unei comenzi noi expiră și ea singură, odată cu plățile neterminate (bt_ipay_expire_minutes = 60).
 putenv('STRIPE_API_BASE=http://127.0.0.1:' . $portStripe);
 $_ENV['STRIPE_API_BASE'] = 'http://127.0.0.1:' . $portStripe;
@@ -847,6 +875,14 @@ parse_str((string) ($cereriStripe()[0]['corp'] ?? ''), $campuriCheckout);
 $expira = (int) ($campuriCheckout['expires_at'] ?? 0);
 $verifica('checkout-ul Stripe: sesiunea expiră după ~61 de minute (expirarea plăților + 1), nu după 24 de ore', $expira >= time() + 60 * 60
     && $expira <= time() + 63 * 60, json_encode($campuriCheckout));
+$setare('bt_ipay_expire_minutes', '30');
+(new ReflectionMethod($site, 'createStripeCheckoutSession'))->invoke($site, $db, (int) $c1026['id'], (string) $c1026['order_number'],
+    ['total' => (float) $c1026['total']], ['billing_email' => 'client@exemplu.ro']);
+parse_str((string) ($cereriStripe()[0]['corp'] ?? ''), $campuriCheckout);
+$expira = (int) ($campuriCheckout['expires_at'] ?? 0);
+$verifica('… cu expirarea la minimul ei (30 de minute): tot cel puțin 31 de minute (minimul Stripe e 30)', $expira >= time() + 31 * 60 - 5
+    && $expira <= time() + 33 * 60, json_encode($campuriCheckout));
+$setare('bt_ipay_expire_minutes', '60');
 putenv('STRIPE_API_BASE');
 unset($_ENV['STRIPE_API_BASE']);
 
@@ -931,7 +967,13 @@ $r2 = $cerere('POST', '/admin/orders/' . $id1058 . '/bt/reverse', $jarAdmin, ['t
 $verifica('comanda „Plătită de două ori”: „Rambursează” / „Anulează autorizarea” pe plata BT socotită (1058-R2) sunt refuzate, cu nota (fără niciun apel la bancă)',
     ($r['json']['ok'] ?? true) === false && ($r['json']['cere_confirmare_dubla'] ?? false) === true && str_contains((string) ($r['json']['error'] ?? ''), 'SOCOTITĂ')
     && str_contains((string) ($r['json']['error'] ?? ''), 'EPTEST') && ($r2['json']['cere_confirmare_dubla'] ?? false) === true
+    && str_contains((string) ($r['json']['confirmare'] ?? ''), 'Plata BT 1058-R2 e cea SOCOTITĂ') && str_contains((string) ($r['json']['confirmare'] ?? ''), 'rambursezi')
     && (int) $unu('SELECT COUNT(*) FROM bt_ipay_log') === $jurnalInainte, $r['corp'] . ' ' . $r2['corp']);
+$paginaBt = $cerere('GET', '/admin/orders?search=1058', $jarAdmin)['corp'];
+$verifica('… fereastra comenzii: răspunsul cere_confirmare_dubla deschide confirmarea (cu plata socotită) și reia cererea cu confirm_dubla=1',
+    str_contains($paginaBt, 'function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, confirmDubla){')
+    && str_contains($paginaBt, "if (confirmDubla) { date.append('confirm_dubla', '1'); }")
+    && str_contains($paginaBt, 'if (window.confirm(data.confirmare || data.error || \'\')) { btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, true); return; }'));
 $r = $cerere('POST', '/admin/orders/' . $id1058 . '/bt/status', $jarAdmin, ['tx_id' => (string) $start['tx_id'], '_csrf' => $csrf]);
 $r3 = $cerere('POST', '/admin/orders/' . $id1058 . '/bt/refund', $jarAdmin, ['tx_id' => (string) $start['tx_id'], 'suma' => '1,00', '_csrf' => $csrf,
     'confirm_dubla' => '1']);
