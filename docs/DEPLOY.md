@@ -1,7 +1,8 @@
 # Deploy-ul din Etapa 2 (Hostinger)
 
 Cum trece un site live de pe codul lui vechi pe codul comun, cum primește apoi versiuni noi și cum se întoarce, în
-câteva minute, dacă ceva nu merge. Primul site e Biovitality (mai jos, „Noaptea comutării Biovitality”).
+câteva minute, dacă ceva nu merge. Primul site e Biovitality (mai jos, „Noaptea comutării Biovitality”), al doilea Bioscem
+(„Comutarea Bioscem”).
 
 Totul se face din SSH, cu patru scripturi din `deploy/` și unul din `bin/`. Fiecare arată întâi **planul** (ce ar face,
 fără nicio schimbare) și face ceva doar cu `--aplica`.
@@ -12,6 +13,7 @@ fără nicio schimbare) și face ceva doar cu `--aplica`.
 | `deploy/adopta.sh` | prima trecere a unui site pe codul comun: copii, mentenanță, comutare, migrări, verificări, deschidere | da |
 | `deploy/actualizeaza.sh` | un site adoptat trece pe o versiune nouă; se întoarce singur dacă versiunea nouă pică verificările | da |
 | `deploy/revino.sh` | site-ul înapoi pe codul vechi: codul exact cum era, baza din copia de dinaintea migrărilor | da |
+| `deploy/plati-in-curs.sh` | ce e pe drum în baza site-ului (plățile BT începute sau autorizate și neîncasate, linkurile de plată, comenzile netrimise în ERP): doar numere, doar citire; înainte și după comutare | nu |
 | `bin/platforma` | rulează un script al codului (migrările, diagnosticul, un cron) pentru un site | doar cât face scriptul |
 
 ## Așezarea
@@ -112,8 +114,8 @@ de sintaxă e refuzat. Nu schimbă niciun site. `--verifica=<v>` spune dacă o v
 3. Valorile private ale înghețării (nu sunt în git): `~/domains/<domeniu>/site/privat/setari-inghetate.json`
    (`mkdir -p ~/domains/<domeniu>/site/privat` întâi). Trebuie să fie pentru exact fișierul de înghețare din versiunea
    urcată (câmpul `pentru` = sha256 al lui; altfel migrările se opresc cu codul 15): le primești de la noi sau, pentru
-   Biovitality, le faci chiar pe server din codul live, cu `genereaza-setari.php --cod-vechi` (mai jos, „Noaptea comutării
-   Biovitality”). Cele făcute pe site-ul de verificare înainte ca fișierul să fie închis nu mai sunt bune.
+   Biovitality și Bioscem, le faci chiar pe server din codul live, cu `genereaza-setari.php --cod-vechi` (mai jos, „Noaptea
+   comutării Biovitality” și „Comutarea Bioscem”). Cele făcute pe site-ul de verificare înainte ca fișierul să fie închis nu mai sunt bune.
 4. Licența din CRM: `~/domains/<domeniu>/site/storage/licenta/licenta.json`, și cheia publică a CRM-ului la îndemână
    (`--cheie-licenta=`); mai jos, „Licența”.
 5. Rândurile de cron ale site-ului, copiate din hPanel → Advanced → **Cron Jobs** într-un fișier, de exemplu
@@ -435,6 +437,246 @@ Când apare `GATA`:
 - Stripe → Developers → Webhooks: livrările refuzate cu 503 în timpul mentenanței au fost retrimise cu succes.
 - După 7 zile fără probleme: `public_html.vechi/` și copiile din `site/deploy/copii/` se pot șterge (ne întrebi întâi).
 
+## Comutarea Bioscem
+
+bioscem.ro e în același cont Hostinger ca biovitality.ro, deci `~/platforma` (repo-ul, versiunile, `bin/platforma`) e deja
+acolo. Codul vechi: `~/domains/bioscem.ro/public_html`, checkout-ul git al `Nou-site-bioscem` (ramura
+`claude/migrate-bioscem-site-bz38y4`), la **`c47f270`** (`git pull` din 6 noiembrie), commit-ul revizuit din
+[de-portat.md](de-portat.md). Înghețarea setărilor Bioscem e închisă (`inchis`) pe 9 noiembrie, din `c47f270`. Ce are
+Bioscem în plus față de Biovitality și cere grijă la comutare:
+
+- **BT iPay în producție**, cu plata în două trepte: suma se blochează la plată și se încasează la aprobarea din ERP, cu
+  butonul din comandă sau singură după 96 de ore (cronul `bt-ipay-sync.php`, la 15 minute). Banca trimite confirmarea la
+  `https://bioscem.ro/webhook/bt-ipay` (aceeași adresă în codul comun), iar clientul se întoarce pe `/checkout/bt/retur`;
+- **linkurile de plată EuPlătesc** (plata cu cardul prin EuPlătesc e oprită în checkout, dar linkurile se plătesc prin
+  ea; confirmarea vine la `/webhook/euplatesc`);
+- **ERP-ul** (comenzile pleacă în ERP, aprobarea vine din ERP pe `/api/erp/notificare`), **ridicarea personală** și FAN.
+
+Ce face codul comun cu ele (doar dacă licența are pluginurile lor, mai jos):
+
+- **Confirmările de plată din timpul mentenanței.** În mentenanța **strictă** (copia bazei, migrările: câteva minute)
+  `/webhook/bt-ipay`, `/webhook/euplatesc` și `/api/erp/` primesc 503 cu `Retry-After: 120`; din mentenanța **ușoară** trec
+  din nou. Stripe și ERP-ul retrimit o cerere refuzată. **Nu ne bazăm pe faptul că BT sau EuPlătesc retrimit**: nu
+  scrie nicăieri că o fac. Pentru BT nici nu trebuie. Cronul `bt-ipay-sync.php` al codului comun întreabă banca
+  (`getOrderStatusExtended`) de fiecare plată începută și neterminată și o trece în starea băncii. Dacă banca spune că e
+  autorizată, comanda devine plătită. Doar o plată pe care banca o arată încă neplătită expiră, după 60 de minute.
+  Clientul care se întoarce de la bancă chiar în mentenanță vede „Revenim în câteva minute”, dar banii lui sunt deja
+  blocați la bancă, iar cronul îi găsește. Fereastra de risc ține deci doar până rulează cronul nou. De aceea, după
+  `GATA`, rulezi `bt-ipay-sync.php` de mână, înaintea oricărui alt pas (mai jos). Pentru EuPlătesc codul n-are o
+  verificare la procesator: o plată pe link făcută chiar în mentenanța strictă o cauți în panoul EuPlătesc a doua zi
+  dimineața (mai jos).
+- **Plățile BT autorizate și neîncasate de dinainte de comutare** rămân în același tabel (`bt_ipay_transactions`; migrarea
+  `plata_bt/0008` doar îl găsește, nu rescrie nimic). Codul comun le citește la fel: termenul de 72 de ore (emailul cu
+  lista) și cel de 96 de ore (încasarea automată) se socotesc de la autorizarea scrisă în tabel, aprobarea din ERP le
+  încasează ca azi, iar Admin → Comenzi le arată cu „BT: autorizată — de încasat (automat la …)”. Banca cere încasarea
+  în cel mult 5 zile, deci cronurile noi trebuie puse în hPanel imediat după `GATA`, nu a doua zi.
+- **ERP-ul**: aprobările și adresele trimise în mentenanța strictă primesc 503 și ERP-ul le retrimite. `erp_trimite_din` e
+  gol în înghețarea Bioscem (decizia G-M8), deci comenzile rămase „în așteptare” pleacă la prima rulare a lui `erp-sync.php`.
+- **Linkurile EuPlătesc trimise** rămân în `order_payment_links` (procesatorul, starea, tokenul) și se deschid la aceeași
+  adresă, `/plata/<token>`. Plata cu cardul prin EuPlătesc rămâne oprită în checkout: setarea e a site-ului, din bază.
+- **Ridicarea personală**: bifa și programul din bază. Adresa sediului vine din înghețare dacă lipsește sau e goală, deci
+  opțiunea arată ca azi.
+- **Cheia linkurilor din newsletterele trimise** (`NEWSLETTER_CHEIE_SEMNARE`) o scrie `adopta.sh` în `site/.env`.
+
+`deploy/plati-in-curs.sh --domeniu=bioscem.ro` arată ce e pe drum, doar în numere și ore, nimic despre clienți:
+
+- plățile BT pe stări, câte sunt autorizate și neîncasate, de câte ore e cea mai veche și câte sunt începute și
+  neterminate;
+- linkurile de plată pe procesator și stare;
+- comenzile din ultimele 30 de zile pe starea ERP;
+- când a rulat ultima oară cronul BT.
+
+Înainte de comutare citește `.env`-ul codului vechi, după comutare pe cel din `site/`. Doar citește, deci merge oricând.
+Îl rulezi înainte și după comutare, iar textul lui ni-l trimiți așa cum e.
+
+### Înainte (zilele dinainte)
+
+- [ ] **Codul vechi rămâne `c47f270` până la comutare.** Nu mai dai `git pull` în `public_html`. Un commit nou ar trebui
+      revizuit și portat, iar înghețarea, fiind închisă, nu se mai poate reface. hPanel → bioscem.ro → **GIT**: „Auto
+      deployment” **oprit**. După comutare `public_html` nu mai e un repo, iar un deploy automat ar scrie peste stub.
+      ```sh
+      git -C ~/domains/bioscem.ro/public_html log -1 --format=%h      # trebuie: c47f270
+      git -C ~/domains/bioscem.ro/public_html status --short          # ne trimiți tot textul
+      ls -la ~/domains/bioscem.ro/public_html ~/domains/bioscem.ro/public_html/public
+      ```
+      Un fișier urmărit schimbat (` M`) oprește adoptarea: ne trimiți `git diff --stat`. Fișierele noi (`??`) cer
+      `--accepta-fisiere-noi`. Ce face adoptarea cu fiecare e în „Fișierele noi din codul vechi”, mai sus; pentru
+      Bioscem lista o facem noi din textul tău.
+- [ ] hPanel → bioscem.ro → **PHP Configuration**: PHP 8.3 și **sodium** bifat la PHP extensions. Planul `adopta.sh` îl
+      verifică oricum, cu sonda web.
+- [ ] **CDN-ul.** Rulezi comanda de mai jos și ne trimiți rândurile.
+      ```sh
+      curl -sI https://bioscem.ro/ | grep -iE '^(server|via|cf-ray|x-hcdn|x-cache)'
+      ```
+      - `server: hcdn` = CDN-ul Hostinger. Din hPanel → bioscem.ro → **Performance → CDN** vezi dacă e pornit.
+      - După comutare, Admin → Setări magazin (secțiunea mentenanței) arată „IP-ul tău curent”. Trebuie să fie adresa ta
+        de acasă, cea din `curl -s https://ifconfig.me`. Dacă e o adresă a CDN-ului, toți vizitatorii împart aceeași
+        limită a checkout-ului (10 încercări în 15 minute).
+      - În acel caz: `IP_PROXY_DE_INCREDERE=<rețelele CDN-ului>` în `~/domains/bioscem.ro/site/.env`, cu rețelele de la
+        noi ([MIGRARI.md](MIGRARI.md), „Pe server, la adoptare”, pasul 5). Dacă vrei să fie de la început, îl pui în
+        `.env`-ul codului vechi înainte de noapte: codul vechi nu-l citește, iar adoptarea îl copiază.
+- [ ] **Cronurile**: hPanel → Advanced → Cron Jobs, fiecare rând copiat în `~/cron-bs.txt`, cu programul în față.
+      Așteptăm cel puțin `bt-ipay-sync.php` (la 15 minute), `erp-sync.php`, `fan-tracking-sync.php`, `fan-lockers-sync.php`,
+      `fan-nomenclator-sync.php`, `abandoned-cart-emails.php` și `newsletter-campaigns.php`.
+      - Un script pe care codul comun nu-l are (`cos-debug.php`, `import-*.php`, `set-*.php`, `verifica-*.php`) e șters
+        din rândurile noi.
+      - Un rând „DE VERIFICAT” din plan ni-l trimiți.
+- [ ] **Licența din CRM** pentru `bioscem`. Pluginurile sunt lista din `config/plugins.php` → `licente_dev.bioscem`, aceeași
+      cu `site-uri/bioscem/pluginuri.json`, toate `pornit`: `catalog`, `magazin`, `livrare_fan`, `plata_stripe`,
+      `plata_euplatesc`, `plata_bt`, `link_plata`, `erp`, `cupoane`, `fidelitate`, `recenzii`, `precomenzi`,
+      `oferte_bbd`, `produse_promo`, `conturi_clienti`, `blog`, `newsletter`, `chat_live`, `manechin`, `acorduri_gdpr`.
+      - Fără `plata_bt` cronul BT nu face nimic, iar plățile autorizate nu se mai încasează singure.
+      - Fără `plata_euplatesc` și `link_plata` linkurile trimise nu se mai plătesc.
+      - `plata_stripe` rămâne până la decizia OD-33. `statistici` și `campanii` intră doar la cererea proprietarului.
+- [ ] **Repetiția pe site-ul de verificare** ([VERIFICARE.md](VERIFICARE.md), pasul 6), cu valorile private făcute pe server,
+      ca la Biovitality (pasul 6b). Noaptea, cu o copie a bazei din acea noapte:
+      ```sh
+      cd ~/domains/<domeniul-verificare>/public_html && git pull --ff-only
+      PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
+      git -C ~/domains/bioscem.ro/public_html log -1 --format=%h                  # c47f270
+      $PHP tools/inghetare/genereaza-setari.php --site=bioscem --cod-vechi="$HOME/domains/bioscem.ro/public_html"
+      #   „OK    bioscem: înghețarea din codul site-ului = cea din pachet (Nou-site-bioscem@c47f270); scris
+      #   site-uri/bioscem/privat/setari-inghetate.json (0600; 4 valori private: contact_form_recipients, gdpr_operator_email,
+      #   gdpr_operator_reprezentant, gdpr_operator_telefon); pachetul neatins”; altceva: mai jos, „Valorile private”
+      $PHP tools/verificare/sterge.php                 # doar dacă pe copie e altă încărcare
+      $PHP tools/verificare/stare.php                  # „GATA: site-ul de verificare e pregătit …”
+      $PHP tools/verificare/incarca.php --din=bioscem  # „GATA: copia e anonimizată, toate verificările au trecut”
+      $PHP tools/verificare/compara-calcule.php        # profilul bioscem (implicit): „REZULTAT: TRECE”, „diferite 0”
+      # amprenta paginilor: pasul 6 (f) din VERIFICARE.md, ultimul rând „REZULTAT: LA FEL” (sau doar ce scrie în
+      # site-uri/bioscem/ce-se-schimba.md)
+      $PHP tools/verificare/sterge.php && rm -r site-uri/bioscem/privat
+      ```
+      Ne trimiți tot textul: încărcarea, comparația calculelor și amprentele.
+- [ ] **Plățile de test BT**: în Setări plăți → Banca Transilvania → „Plată de test” nu rămâne niciuna „autorizată”. Le
+      anulezi (reverse) înainte.
+- [ ] O copie Hostinger recentă (hPanel → Backups), chiar înainte de noapte.
+
+### Valorile private
+
+Sunt cele patru valori „privat” ale înghețării Bioscem: destinatarii formularului de contact și datele operatorului de pe
+acordul GDPR. Toate sunt scrise în codul Bioscem (`Settings::DEFAULTS`, `SiteController`), deci se fac pe server din
+codul live, ca la Biovitality. Nu le trimitem noi.
+
+`--cod-vechi` scrie fișierul doar dacă înghețarea generată acum e exact cea din pachet. Un commit al codului comun care
+schimbă de atunci o valoare implicită o face să refuze („nu dă înghețarea din pachet”), deși fișierul închis e același.
+Atunci rulezi comanda de mai jos, dintr-o copie a repo-ului la commit-ul care a închis înghețarea. Fișierul `privat/`
+făcut acolo e bun pentru orice versiune urcată după, cât timp fișierul închis rămâne neschimbat.
+
+```sh
+cd ~/platforma/repo && C=$(git log -1 --format=%h origin/claude/etapa1-cod-comun -- site-uri/bioscem/setari-inghetate.json)
+git worktree add ~/platforma/inghetare-bs "$C"
+$PHP ~/platforma/inghetare-bs/tools/inghetare/genereaza-setari.php --site=bioscem --cod-vechi=$HOME/domains/bioscem.ro/public_html
+#   „OK    bioscem: …”; fișierul e în ~/platforma/inghetare-bs/site-uri/bioscem/privat/setari-inghetate.json
+```
+
+Dacă refuză și de acolo („nu e codul revizuit”), codul de pe bioscem.ro nu e `c47f270`: te oprești și ne trimiți rândul.
+
+### Seara, înainte (aproximativ 15 minute; site-ul nu se schimbă)
+
+```sh
+ssh -p 65002 u742855925@<IP>
+export PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
+cd ~/platforma/repo && git fetch origin && git checkout --detach origin/claude/etapa1-cod-comun
+$PHP tools/inghetare/genereaza-setari.php --site=bioscem --cod-vechi=$HOME/domains/bioscem.ro/public_html
+#   „OK    bioscem: înghețarea din codul site-ului = cea din pachet (Nou-site-bioscem@c47f270); scris …; pachetul neatins”;
+#   „nu dă înghețarea din pachet”: „Valorile private”, mai sus (atunci fișierul e în ~/platforma/inghetare-bs/…)
+mkdir -m 700 -p ~/domains/bioscem.ro/site/privat
+install -m 600 site-uri/bioscem/privat/setari-inghetate.json ~/domains/bioscem.ro/site/privat/setari-inghetate.json
+mkdir -p -m 770 ~/domains/bioscem.ro/site/storage/licenta           # licența din CRM („Licența”, mai sus)
+install -m 640 <licenta.json din CRM pentru bioscem> ~/domains/bioscem.ro/site/storage/licenta/licenta.json
+deploy/release.sh --ref=origin/claude/etapa1-cod-comun --aplica        # o versiune nouă dacă etapa1 s-a mișcat; notezi V
+V=<versiunea>
+deploy/plati-in-curs.sh --domeniu=bioscem.ro                           # ce e pe drum acum (codul vechi); ne trimiți textul
+deploy/adopta.sh --site=bioscem --domeniu=bioscem.ro --versiune=$V --commit-vechi=c47f270 \
+    --cheie-licenta=<cheia publică din CRM> --cron-vechi=$HOME/cron-bs.txt [--accepta-fisiere-noi]
+```
+
+`--accepta-fisiere-noi` intră doar dacă îți scriem, după `git status --short`. Ultimul rând trebuie să fie `PLAN: site-ul
+n-a fost schimbat …`, iar fiecare verificare `OK`. Și:
+
+- planul migrărilor cu codul 10 („de aplicat, toate fără blocare”);
+- la `diagnostic.php --pachet`: `poze refacute: 10 din 10 trec pe WebP` și niciun rând `atentie`;
+- la `--licenta`: licența `bioscem`, semnătura bună;
+- rândurile de cron: `ȘTERGI` / `ADAUGI`, fără `DE VERIFICAT`.
+
+Orice `NU`, alt cod sau alt rând: ne trimiți ieșirea și nu mergi mai departe.
+
+### Noaptea (la o oră cu puține comenzi, de exemplu 23:30)
+
+Nu în minutele în care ERP-ul aprobă comenzi în masă. Plățile BT pornite chiar atunci se rezolvă singure, mai sus.
+
+```sh
+screen -S deploy            # dacă există; altfel setsid nohup … > ~/deploy-bs.log 2>&1 & și tail -f
+export PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"
+cd ~/platforma/repo && V=<versiunea de seară>
+deploy/plati-in-curs.sh --domeniu=bioscem.ro > ~/bs-inainte.txt; cat ~/bs-inainte.txt
+deploy/adopta.sh --site=bioscem --domeniu=bioscem.ro --versiune=$V --commit-vechi=c47f270 \
+    --cheie-licenta=<cheia publică din CRM> --cron-vechi=$HOME/cron-bs.txt [--accepta-fisiere-noi] --aplica
+```
+
+Cât durează: ca la Biovitality, 2–5 minute până la mentenanță și 3–10 minute de mentenanță. Dacă SSH-ul cade, aceeași
+comandă.
+
+**Când apare `GATA`, în ordinea asta, imediat:**
+
+1. **Cronurile**: în hPanel → Cron Jobs ștergi rândurile vechi și adaugi pe cele noi din
+   `~/domains/bioscem.ro/site/deploy/cron-nou.txt`, întâi `bt-ipay-sync.php` și `erp-sync.php`.
+2. **Plățile BT rămase pe drum**, de mână, fără să aștepți cronul:
+   ```sh
+   $PHP ~/platforma/bin/platforma --site=bioscem.ro scripts/bt-ipay-sync.php
+   #   „[…] BT iPay: verificate N, expirate …, eliberate …, reîncercări încasare …, reamintiri …, încasate automat …, erori 0”
+   $PHP ~/platforma/bin/platforma --site=bioscem.ro scripts/erp-sync.php
+   deploy/plati-in-curs.sh --domeniu=bioscem.ro > ~/bs-dupa.txt; diff ~/bs-inainte.txt ~/bs-dupa.txt
+   ```
+   - „live: autorizate, neîncasate” și „cea mai veche autorizare neîncasată (ore)” trebuie să fie ca înainte. Pot crește
+     doar cu plățile din timpul comutării.
+   - „începute și neterminate” nu crește.
+   - „cronul BT, ultima rulare” e de 0 minute.
+   - Linkurile de plată sunt ca înainte.
+   - Comenzile „pending” la ERP scad.
+   - `erori` diferit de 0 sau o autorizare neîncasată mai veche de 100 de ore: ne scrii imediat.
+3. **În browser** (fereastră privată):
+   - paginile: prima pagină, o categorie, un produs, coșul și finalizarea comenzii (cu ridicarea personală, dacă era
+     pornită);
+   - Admin → Comenzi: o comandă cu plata BT autorizată arată „BT: autorizată — de încasat (automat la …)”, cu aceeași
+     dată ca înainte;
+   - Setări plăți → **Banca Transilvania**: modul **producție**, „Callback (notificarea băncii)” =
+     `https://bioscem.ro/webhook/bt-ipay`, „Ultima rulare încheiată a cronului” de acum;
+   - Setări plăți → Card – EuPlătesc: tot oprit în checkout;
+   - Setări → ERP ANDAXI (fără erori noi);
+   - Setări magazin: „IP-ul tău curent” (CDN-ul, mai sus);
+   - în admin nu trebuie să apară „Licența lipsește” sau bannerul roșu al schemei.
+4. **O plată de test BT în producție** (cu cardul tău):
+   - Setări plăți → Banca Transilvania → „Plată de test”, suma 1 leu, cu datele tale;
+   - plătești pe pagina băncii;
+   - la întoarcere trebuie să vezi „a fost autorizată”, apoi apeși „Anulează (reverse)”.
+
+   Așa verifici datele de acces ale băncii, întoarcerea și confirmarea pe codul nou.
+5. `$PHP ~/platforma/bin/platforma --site=bioscem.ro scripts/diagnostic.php`: ultimul rând trebuie să fie `Gata.`.
+
+### Dacă ceva nu merge
+
+Ca la Biovitality, cu `--site=bioscem`. Scriptul s-a oprit după comutare: aceeași comandă, sau
+`deploy/revino.sh --site=bioscem --aplica`. Dacă revenirea refuză („tabele schimbate după migrări”, de exemplu o plată
+BT confirmată între timp): `--fara-baza`, ca nimic să nu se piardă. După o revenire pui înapoi cronurile vechi în hPanel.
+Plățile BT autorizate rămân la bancă și le încasează din nou cronul codului vechi.
+
+### A doua zi dimineața
+
+- `~/domains/bioscem.ro/site/storage/logs/fatal.log` gol, iar `php.log` fără `PHP Fatal`.
+- `deploy/plati-in-curs.sh --domeniu=bioscem.ro` (ne trimiți textul): cronul BT de cel mult 15 minute, „începute și
+  neterminate” 0 sau aproape, nicio autorizare mai veche de 96 de ore.
+- **BT**, portalul de comerciant: plățile din noapte, fiecare cu comanda ei plătită în admin.
+- **EuPlătesc**, panoul de comerciant: o plată pe link din timpul nopții care în admin e încă neplătită ne-o scrii, cu
+  numărul comenzii.
+- ERP: comenzile din noapte trimise, aprobările de dimineață cu plata BT încasată.
+- Emailurile: `$PHP ~/platforma/bin/platforma --site=bioscem.ro scripts/diagnostic.php --email`.
+- Cronurile noi au rulat (hPanel → Cron Jobs). FAN își actualizează AWB-urile.
+- Monitorul CRM-ului (`/_andaxi/ping`) e verde. În admin vezi Jurnalul 404 și fluxul `/feed/google-merchant.xml`.
+- Clienții logați aseară se loghează din nou. Coșurile vechi se pierd.
+- După 7 zile fără probleme: `public_html.vechi/`, `~/platforma/inghetare-bs` (`git -C ~/platforma/repo worktree remove
+  ~/platforma/inghetare-bs`, dacă l-ai făcut) și copiile din `site/deploy/copii/` se pot șterge. Ne întrebi întâi.
+
 ## Ce nu face (încă)
 
 - **Sesiunile codului vechi nu trec**: clienții și adminii se loghează din nou, coșurile deschise se pierd.
@@ -465,5 +707,6 @@ Când apare `GATA`:
   `--accepta-revenirea` fără `--aplica`, `--accepta-baza-diferita` (și după o scriere), `--reincarca-baza`, adopta.sh și
   actualizeaza.sh în timpul unei reveniri începute, deschiderea pe o bază care nu e la zi, o conexiune care doarme după o
   încărcare oprită, liniștea cu probe la rând; codul și baza comparate octet cu octet.
-  `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat.
+  `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat. `plati-in-curs.sh` rulează acolo înainte de adoptare (codul vechi, un
+  tabel lipsă) și după (`site/.env`), iar baza trebuie să rămână neatinsă.
 - Stub-ul și `bin/platforma` le verifică și `tools/dev/test-paths.php` (B).

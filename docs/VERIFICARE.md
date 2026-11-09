@@ -356,7 +356,8 @@ $PHP tools/verificare/incarca.php --demo --pachet=biovitality   # sau bioscem, v
 `--licenta=<pachet>` alege alt pachet de pluginuri decât al site-ului (numele: `licenta.php presetari`). Pentru
 fiecare pachet (din WP-16 și pentru Bioscem: destinatarii formularului de contact; din WP-18 și datele de contact de pe
 acordul GDPR) trebuie pe server, lângă pachet, valorile private ale înghețării setărilor
-(`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi; nu e în git): fără el încărcarea refuză
+(`site-uri/<site>/privat/setari-inghetate.json`, pe care ți-l trimitem noi, iar pentru Bioscem și Biovitality îl faci pe server
+cu `genereaza-setari.php --cod-vechi`, ca la pasul 6b și în [DEPLOY.md](DEPLOY.md), „Comutarea Bioscem”; nu e în git): fără el încărcarea refuză
 de la început (codul 2, „… codul 15 …”), înainte de orice schimbare.
 
 ### 6b. Biovitality: încărcarea, comparația calculelor și amprenta (noaptea, după ce îți scriem că e pe GitHub; WP-11b)
