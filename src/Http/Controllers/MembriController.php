@@ -178,7 +178,7 @@ final class MembriController
      * schimbă niciodată din formularul de înscriere:
      *  - adresa nedovedită, ultima cerere „așteaptă confirmarea pe email”, contul nefolosit (fără comenzi, plăți, donații,
      *    puncte, Google): linkul cererii existente se trimite din nou (token nou, bugetul retrimiterilor),
-     *    celelalte sesiuni ale contului se încheie, iar pagina „Verifică-ți adresa” spune să confirme cu parola de la prima
+     *    celelalte sesiuni ale contului se încheie (doar pentru o cerere de după adoptare: un cont vechi intră ca pe vertij), iar pagina „Verifică-ți adresa” spune să confirme cu parola de la prima
      *    înscriere (sau să o reseteze); datele noi din formular nu se salvează;
      *  - altfel: „Există deja un cont … Intră în cont sau resetează parola”.
      */
@@ -194,7 +194,12 @@ final class MembriController
                 . 'folosește „Am uitat parola”.');
             return '/login';
         }
-        CustomerAuth::incheieAlteSesiuni($db, (int) $unconfirmed['user_id']);
+        // Celelalte sesiuni se încheie doar pentru o înscriere de după adoptare (contul ei n-a putut intra niciodată); un cont vechi
+        // cu cererea neconfirmată intra pe codul vertij și intră și acum (logareBlocata), deci sesiunile lui rămân.
+        $adoptare = self::momentulAdoptarii($db);
+        if ($adoptare === '' || $unconfirmed['creata'] >= $adoptare) {
+            CustomerAuth::incheieAlteSesiuni($db, (int) $unconfirmed['user_id']);
+        }
         $ip = mb_substr(IpClient::adresa(), 0, 64);
         if (!ConfirmareEmail::limitat($db, $ip, 'resend')) {
             ConfirmareEmail::noteazaRetrimitere($db, $ip);
@@ -671,7 +676,7 @@ final class MembriController
      * (fără Google, fără puncte, comenzi, plăți ale cotizației sau donații din cont; o parolă resetată sau o logare cu Google
      * dovedesc oricum adresa, deci contul nu mai e „neconfirmat”).
      *
-     * @return array{user_id: int, verification_id: int, nefolosit: bool}|null
+     * @return array{user_id: int, verification_id: int, nefolosit: bool, creata: string}|null
      */
     private static function findUnconfirmedAccount(PDO $db, string $email): ?array
     {
@@ -718,6 +723,7 @@ final class MembriController
             'user_id' => $userId,
             'verification_id' => (int) ($verification['id'] ?? 0),
             'nefolosit' => $nefolosit,
+            'creata' => (string) ($verification['created_at'] ?? ''),
         ];
     }
 

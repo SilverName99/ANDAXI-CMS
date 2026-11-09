@@ -128,6 +128,17 @@ final class StripeGateway
         return self::request('GET', '/v1/subscriptions/' . rawurlencode($subscriptionId), $secretKey, $fields, null, true);
     }
 
+    /** O factură (de exemplu cu `expand[0]=payments`, ca să-i afli plata în versiunile basil). */
+    public static function retrieveInvoice(string $secretKey, string $invoiceId, array $fields = []): array
+    {
+        $invoiceId = trim($invoiceId);
+        if ($invoiceId === '') {
+            throw new RuntimeException('Id de factură lipsă.');
+        }
+
+        return self::request('GET', '/v1/invoices/' . rawurlencode($invoiceId), $secretKey, $fields, null, true);
+    }
+
     /** Oprește un abonament imediat (verbul DELETE). */
     public static function cancelSubscription(string $secretKey, string $subscriptionId): array
     {

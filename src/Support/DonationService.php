@@ -72,11 +72,13 @@ final class DonationService
             return null;
         }
         if (is_array($randFactura)) {
-            if ($paid && (string) ($randFactura['status'] ?? '') !== 'paid') {
-                $db->prepare("UPDATE donations SET status = 'paid', paid_at = COALESCE(paid_at, NOW()),
-                        receipt_url = COALESCE(:receipt, receipt_url) WHERE id = :id AND status <> 'paid'")
-                    ->execute(['receipt' => trim((string) ($invoice['hosted_invoice_url'] ?? '')) ?: null, 'id' => (int) $randFactura['id']]);
-                return (int) $randFactura['id'];
+            // O lună plătită sau rambursată nu se mai schimbă (un eveniment întârziat nu desface o rambursare și nu trimite al
+            // doilea email de mulțumire); doar una „failed”/„pending” trece în „paid”, o singură dată.
+            if ($paid && !in_array((string) ($randFactura['status'] ?? ''), ['paid', 'refunded'], true)) {
+                $platita = $db->prepare("UPDATE donations SET status = 'paid', paid_at = COALESCE(paid_at, NOW()),
+                        receipt_url = COALESCE(:receipt, receipt_url) WHERE id = :id AND status NOT IN ('paid', 'refunded')");
+                $platita->execute(['receipt' => trim((string) ($invoice['hosted_invoice_url'] ?? '')) ?: null, 'id' => (int) $randFactura['id']]);
+                return $platita->rowCount() === 1 ? (int) $randFactura['id'] : null;
             }
             return null;
         }
@@ -87,18 +89,22 @@ final class DonationService
         // Prima factură aparține rândului deja existent: îl marcăm, nu dublăm.
         if (trim((string) ($origin['stripe_invoice_id'] ?? '')) === '') {
             try {
-                $db->prepare(
+                // Factura se leagă mereu de rând; starea trece în „paid” doar dacă nu era deja plătită sau rambursată (un
+                // rând deja plătit pe payment_intent.succeeded nu primește al doilea email, o rambursare nu se desface).
+                $db->prepare('UPDATE donations SET stripe_invoice_id = :inv WHERE id = :id')
+                    ->execute(['inv' => $invoiceId, 'id' => (int) $origin['id']]);
+                $platita = $db->prepare(
                     "UPDATE donations
-                     SET stripe_invoice_id = :inv, status = 'paid',
+                     SET status = 'paid',
                          paid_at = COALESCE(paid_at, NOW()),
                          receipt_url = COALESCE(:receipt, receipt_url)
-                     WHERE id = :id"
-                )->execute([
-                    'inv' => $invoiceId,
+                     WHERE id = :id AND status NOT IN ('paid', 'refunded')"
+                );
+                $platita->execute([
                     'receipt' => trim((string) ($invoice['hosted_invoice_url'] ?? '')) ?: null,
                     'id' => (int) $origin['id'],
                 ]);
-                return (int) $origin['id'];
+                return $platita->rowCount() === 1 ? (int) $origin['id'] : null;
             } catch (Throwable) {
                 return null;
             }
@@ -163,7 +169,7 @@ final class DonationService
         try {
             if (trim((string) ($origin['stripe_invoice_id'] ?? '')) === '') {
                 $db->prepare("UPDATE donations SET stripe_invoice_id = :inv,
-                        status = CASE WHEN status = 'paid' THEN status ELSE 'failed' END WHERE id = :id")
+                        status = CASE WHEN status IN ('paid', 'refunded') THEN status ELSE 'failed' END WHERE id = :id")
                     ->execute(['inv' => $invoiceId, 'id' => (int) $origin['id']]);
                 return (int) $origin['id'];
             }
@@ -232,6 +238,23 @@ final class DonationService
             return $donation;
         } catch (Throwable) {
             return null;
+        }
+    }
+
+    /**
+     * Un abonament din nou activ în Stripe (`customer.subscription.updated` cu `active` sau `past_due`, de exemplu după o plată
+     * reușită la reîncercare): nu mai e „oprit”, ca donatorul să-și vadă donația lunară și s-o poată opri cât Stripe încă încasează.
+     */
+    public static function markSubscriptionActive(PDO $db, string $subscriptionId): void
+    {
+        $subscriptionId = trim($subscriptionId);
+        if ($subscriptionId === '') {
+            return;
+        }
+        try {
+            $db->prepare('UPDATE donations SET cancelled_at = NULL WHERE stripe_subscription_id = :sub AND cancelled_at IS NOT NULL')
+                ->execute(['sub' => $subscriptionId]);
+        } catch (Throwable) {
         }
     }
 
@@ -312,14 +335,15 @@ final class DonationService
             $subscriptionId = trim((string) ($donation['stripe_subscription_id'] ?? ''));
             $cancelled = trim((string) ($donation['cancelled_at'] ?? ''));
             if ($subscriptionId !== '' && !isset($active[$subscriptionId]) && $cancelled === ''
-                && in_array((string) ($donation['status'] ?? ''), ['paid', 'failed'], true)) {
+                && in_array((string) ($donation['status'] ?? ''), ['paid', 'failed', 'refunded'], true)) {
                 $active[$subscriptionId] = $donation;
             }
         }
-        // Un abonament fără nicio lună plătită (doar încercări eșuate) nu e o donație activă.
+        // Un abonament fără nicio lună plătită (doar încercări eșuate) nu e o donație activă; o lună rambursată a fost plătită, iar
+        // abonamentul încasează mai departe (se poate opri).
         $platite = [];
         foreach ($donations as $donation) {
-            if ((string) ($donation['status'] ?? '') === 'paid') {
+            if (in_array((string) ($donation['status'] ?? ''), ['paid', 'refunded'], true)) {
                 $platite[trim((string) ($donation['stripe_subscription_id'] ?? ''))] = true;
             }
         }

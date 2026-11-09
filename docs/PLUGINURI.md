@@ -1517,8 +1517,11 @@ migrarea `donatii/0062`. Are nevoie de `plata_stripe`; în pachetul „Asociați
   `customer.subscription.deleted` (`cancelled_at`). Deciziile proprietarului din 9 noiembrie: prima factură a unei donații lunare încă
   „pending” o marchează plătită (orice formă a facturii, deci orice versiune API a contului Stripe); `invoice.payment_failed` (luna
   neîncasată: un rând „failed”, același rând „paid” dacă Stripe reîncasează), `customer.subscription.updated` (`canceled`, `unpaid`,
-  `incomplete_expired` = `cancelled_at`), `charge.refunded` (`refunded_cents`, `refunded_at`; întreagă = starea `refunded`; în admin,
-  în tab și în totaluri). **Handler-ele rulează în orice stare a pluginului**: un abonament lunar al unui site
+  `incomplete_expired` = `cancelled_at`; `active`, `past_due` îl golesc la loc, `unpaid` nu schimbă nimic: cât Stripe poate încasa,
+  donatorul își vede donația și o poate opri), `charge.refunded` (`refunded_cents`, `refunded_at`; întreagă = starea `refunded`; în
+  admin, în tab și în totaluri; o donație rambursată nu mai trece în „paid”/„failed” la un eveniment întârziat și nu primește alt email).
+  În versiunile basil, factura lunilor 2+ vine fără plată: plata se cere la Stripe (`expand[]=payments`), ca rambursarea lunii să se
+  găsească; dacă cererea nu reușește, rambursarea acelei luni nu se notează. **Handler-ele rulează în orice stare a pluginului**: un abonament lunar al unui site
   cu pluginul oprit se reînnoiește la Stripe și se notează mai departe (fără email).
 - **Contul donatorului** (tab-ul „Donații”, `cont.taburi`, doar pentru cine a donat; insigna „lunar”): fiecare donație lunară activă
   cu „Oprește donația lunară” (`POST /contul-meu/donatii/opreste`: formularul trimite `subscription_id`, acceptat doar dacă e al uneia din
@@ -1567,8 +1570,9 @@ Are nevoie de `conturi_clienti` și `plata_stripe`; în pachetul „Asociație�
   Orice altă dovadă a adresei (un link al nucleului, resetarea parolei, logarea cu Google: `confirmare.dupa`, din
   `ConfirmareEmail::marcheazaConfirmat`) face la fel. Cu `customer_email_confirmation_required` (vertij: înghețat 1), un cont cu cererea
   neconfirmată nu intră (`logare.blocata`), afară de cererile de dinainte de adoptare (mai vechi decât momentul în care `membri/0063` a
-  găsit tabelele vertij), care intră ca pe codul vertij. La adoptare, `site/vertij/0001` dovedește adresa membrilor care o confirmaseră
-  pe codul vertij.
+  găsit tabelele vertij), care intră ca pe codul vertij (și cărora o înscriere nouă nu le închide sesiunile). La adoptare,
+  `site/vertij/0001` dovedește adresa membrilor care o confirmaseră cu linkul pe codul vertij (nu și pe cea a „cererilor noi” născute
+  confirmate sau a cererilor decise fără confirmare).
 - **Cererile** (Clienți → Cereri conturi): pe stări, cu căutarea, numărul documentelor și **ultima plată a cotizației** (suma, perioada
   achitată, starea, intervalul, plătit la; plățile încasate întâi, altfel ultima încercare); cererea cu răspunsurile, documentele
   (`/admin/accounts/documents/{id}`: doar adminului, PDF și imaginile inline, cu `Content-Security-Policy: … sandbox`, restul descărcate),

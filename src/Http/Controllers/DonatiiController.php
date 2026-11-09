@@ -493,6 +493,9 @@ final class DonatiiController
             } catch (Throwable) {
                 $recurringDonation = null;
             }
+            if (is_array($recurringDonation) && trim((string) ($recurringDonation['stripe_payment_intent_id'] ?? '')) === '') {
+                self::completeazaPlataLunii($db, (int) $recurringDonation['id'], (string) ($obiect['id'] ?? ''));
+            }
             if (is_array($recurringDonation) && $vizibil) {
                 self::sendDonationThankYouEmail($db, $recurringDonation);
             }
@@ -509,10 +512,17 @@ final class DonatiiController
             return DonationService::recordRecurringCharge($db, $obiect, false) !== null ? 'luna_neplatita' : 'nimic_nou';
         });
         StripeEvenimente::handler('donatii', 'customer.subscription.updated', static function (PDO $db, array $obiect): ?string {
-            // Un abonament încheiat de Stripe (plățile n-au reușit, sau prima plată n-a fost confirmată la timp) nu mai e activ.
-            if (in_array((string) ($obiect['status'] ?? ''), ['canceled', 'unpaid', 'incomplete_expired'], true)) {
+            // Doar un abonament încheiat de Stripe (anulat, sau prima plată neconfirmată la timp) nu mai e activ. Unul care încă
+            // poate încasa („active”, „past_due”: Stripe reîncearcă) rămâne activ, ca donatorul să-l poată opri; „unpaid” nu
+            // schimbă nimic (abonamentul există în Stripe și se poate opri din cont).
+            $stareAbonament = (string) ($obiect['status'] ?? '');
+            if (in_array($stareAbonament, ['canceled', 'incomplete_expired'], true)) {
                 DonationService::markSubscriptionCancelled($db, (string) ($obiect['id'] ?? ''));
                 return 'abonament_oprit';
+            }
+            if (in_array($stareAbonament, ['active', 'past_due'], true)) {
+                DonationService::markSubscriptionActive($db, (string) ($obiect['id'] ?? ''));
+                return 'abonament_activ';
             }
             return 'nimic_nou';
         });
@@ -523,6 +533,31 @@ final class DonatiiController
             }
             return (string) ($donation['status'] ?? '') === 'refunded' ? 'rambursata' : 'rambursata_partial';
         });
+    }
+
+    /**
+     * Plata (PaymentIntent) unei luni a cărei factură a venit fără ea: în versiunile basil ale API-ului, factura din webhook nu
+     * mai are `payment_intent`, iar lista `payments` vine doar cerută (`expand`). Fără plată pe rând, o rambursare a acelei luni
+     * (`charge.refunded`, care spune doar plata) nu s-ar găsi. O cerere spre Stripe, doar pentru rândurile fără plată; o eroare
+     * lasă rândul cum e.
+     */
+    private static function completeazaPlataLunii(PDO $db, int $donationId, string $invoiceId): void
+    {
+        $secretKey = trim((string) (Settings::all($db)['stripe_secret_key'] ?? ''));
+        if ($donationId <= 0 || $invoiceId === '' || $secretKey === '') {
+            return;
+        }
+        try {
+            $factura = StripeGateway::retrieveInvoice($secretKey, $invoiceId, ['expand[0]' => 'payments']);
+            $plata = $factura['payments']['data'][0]['payment']['payment_intent'] ?? ($factura['payment_intent'] ?? '');
+            $plata = trim((string) (is_array($plata) ? ($plata['id'] ?? '') : $plata));
+            if ($plata !== '') {
+                $db->prepare("UPDATE donations SET stripe_payment_intent_id = :pi WHERE id = :id AND (stripe_payment_intent_id IS NULL OR stripe_payment_intent_id = '')")
+                    ->execute(['pi' => $plata, 'id' => $donationId]);
+            }
+        } catch (Throwable $exception) {
+            self::logAccountIssue('donatie_plata_lunii', $exception->getMessage());
+        }
     }
 
     /**
@@ -589,9 +624,10 @@ final class DonatiiController
 
         try {
             if ($paid) {
-                $stmt = $db->prepare("UPDATE donations SET status = 'paid', paid_at = NOW() WHERE $where AND status <> 'paid'");
+                // Plătită sau rambursată: rămâne (un eveniment întârziat nu desface o rambursare și nu trimite al doilea email).
+                $stmt = $db->prepare("UPDATE donations SET status = 'paid', paid_at = NOW() WHERE $where AND status NOT IN ('paid', 'refunded')");
             } else {
-                $stmt = $db->prepare("UPDATE donations SET status = CASE WHEN status = 'paid' THEN status ELSE 'failed' END WHERE $where");
+                $stmt = $db->prepare("UPDATE donations SET status = CASE WHEN status IN ('paid', 'refunded') THEN status ELSE 'failed' END WHERE $where");
             }
             $stmt->execute($params);
             // Doar tranziția reală în „paid" trimite emailul; reluările
