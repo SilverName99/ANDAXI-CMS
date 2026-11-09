@@ -1394,7 +1394,7 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
 - **Fără cookie-uri, fără stocare în browser, fără amprentare.** Un vizitator e, pe o zi, `sha256(sarea zilei + site + IP + User-Agent)`
   (primii 16 octeți). Sarea: 32 de octeți aleatori în `storage/statistici/sare-AAAALLZZ.bin` (0600), făcută la prima cerere a zilei
   (atomic, cu `link`) și ștearsă a doua zi (la prima cerere a zilei noi și la fiecare rulare a cronului). Adresa IP (`IpClient`) și
-  User-Agent-ul nu se scriu nicăieri: doar familia browserului (inclusiv „TikTok / Instagram / Facebook (aplicație)”), a sistemului și
+  User-Agent-ul nu se scriu nicăieri: doar familia browserului (inclusiv „TikTok (aplicație)”, „Instagram (app)”, „Facebook (aplicație)”; până pe 9 nov, „Instagram (aplicație)” avea 21 de caractere, peste coloana de 20, deci un server strict nu scria rândul), a sistemului și
   felul dispozitivului (desktop, telefon, tabletă), plus treapta lățimii ecranului. Fără consimțământ (nu se citește și nu se scrie nimic
   pe dispozitivul vizitatorului), deci se numără toți vizitatorii, și cei care n-au acceptat cookie-urile.
 - **Nu se numără**: administratorii logați (scriptul nu e pus în pagina lor; punctul de primire citește sesiunea doar dacă browserul are
@@ -1455,6 +1455,14 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
   rămân). Pagina din admin agregă la deschidere doar dacă agregarea a rămas în urmă de peste 2 ore (cronul lipsește), cel mult 2 zile pe
   cerere, cu o limită de timp; dacă rulează altă agregare sau nu merge, arată ultimele date cu nota „Statisticile se calculează”, niciodată o
   eroare. Cu cronul la oră, cifrele de azi sunt de cel mult o oră („Acum pe site” e mereu din evenimentele brute).
+- **Tab-urile** (din 9 nov, la cererea proprietarului; `?tab=`, cu perioada și filtrele păstrate la schimbare, deci se pot pune în
+  semne de carte): Prezentare (cifrele, „Acum pe site”, graficele, primele 5 din surse, pagini, produse, căutări), Surse (și campaniile
+  UTM), Pagini și produse, Căutări, Vânzări (comenzile, conversia și veniturile pe sursă, cu graficele lor), Dispozitive, Impact postare,
+  Setări (`/admin/statistici/impact` și `/admin/statistici/setari` rămân și ele). Perioada din butoane (Azi, Ieri, 7, 30, 90 de zile,
+  Personalizat); comparația, un buton. Fiecare cifră cu culoarea și iconița ei și diferența ca o pastilă verde/roșie; fiecare sursă cu
+  insigna ei (TikTok, Instagram, Facebook, Google, Google Ads, email, direct…); în tabele, bara cotei din total în spatele rândului;
+  graficele cu explicația la trecerea cu mouse-ul (sau la atingere); „Acum pe site” cu punctul verde și paginile și sursele ca etichete;
+  o perioadă fără vizite arată un mesaj („Încă nu sunt vizite înregistrate…”, și că administratorii logați nu se numără), nu zerouri.
 - **Rapoarte → Statistici** (`/admin/statistici`; administratorul general, „Administrator magazin” și „Administrator emailuri”): perioada
   (azi, ieri, 7/30/90 de zile, altă perioadă) și comparația cu perioada dinainte; „Acum pe site” (vizitatorii din ultimele 5 minute, cu
   paginile și sursele, reîmprospătat la 30 de secunde); cifrele (vizitatori unici, vizite, pagini, pagini/vizită, durata medie, rata de

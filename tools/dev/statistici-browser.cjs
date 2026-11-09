@@ -96,7 +96,8 @@ async function tablou(browser) {
     const lat = await pagina.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     nota('tabloul la ' + latime + ' px: fără derulare laterală', lat);
     const grafic = await pagina.locator('#st-grafic-vizite').boundingBox();
-    nota('tabloul la ' + latime + ' px: graficul pe toată lățimea cardului', grafic !== null && grafic.width > latime * 0.6, JSON.stringify(grafic));
+    // Pe desktop, graficele vizitelor și veniturilor stau unul lângă altul; pe telefon, unul sub altul, pe toată lățimea.
+    nota('tabloul la ' + latime + ' px: graficul pe lățimea cardului lui', grafic !== null && grafic.width > latime * (latime < 500 ? 0.6 : 0.3), JSON.stringify(grafic));
     if (latime === 1366) {
       // Sortarea la clic pe antet și desfacerea unei surse.
       const antet = pagina.locator('#st-surse thead th').nth(2).locator('button');

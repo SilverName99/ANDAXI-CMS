@@ -8,13 +8,12 @@
  * @var int $maxZi
  * @var int $maxMinut
  */
-admin_componenta('antet-pagina', [
-    'titlu' => 'Setări statistici',
-    'nivel' => 1,
-    'subtitlu' => 'Ce vizitatori nu se numără și cât timp se păstrează evenimentele detaliate.',
-    'actiuni' => '<a class="btn btn-secondary" href="/admin/statistici">← Statistici</a>',
-]);
+$tab = 'setari';
 ?>
+<div class="st-pagina">
+<?php require __DIR__ . '/statistici-cap.php'; ?>
+<section class="st-sectiune">
+<div class="st-sectiune__antet"><h2>Setări</h2></div>
 <form method="post" action="/admin/statistici/setari" class="adm-formular" id="st-setari">
     <?= \App\Support\AdminCsrf::camp() ?>
     <p><label><input type="checkbox" name="statistici_respecta_dnt" value="1"<?= $respectaDnt ? ' checked' : '' ?>> Nu număra browserele care cer „nu urmări” (Do Not Track sau Global Privacy Control)</label></p>
@@ -27,6 +26,7 @@ admin_componenta('antet-pagina', [
     <p style="font-size:13px;color:var(--adm-text-secundar)">Agregatele (vizitele, paginile, produsele, căutările și comenzile pe zile) rămân. „Acum pe site” și refacerea unei zile au nevoie de evenimentele detaliate.</p>
     <button class="btn btn-primary" type="submit">Salvează</button>
 </form>
+</section>
 <?php
 ob_start();
 ?>
@@ -34,3 +34,6 @@ ob_start();
 <p>Propoziție pentru politica de confidențialitate: <em>„Pentru statistici de trafic folosim o analiză proprie, fără cookie-uri. Nu păstrăm adresa IP; pentru a număra vizitele unei zile folosim un cod care se schimbă zilnic. Datele detaliate se șterg după <?= (int) $zileBrute ?> de zile, iar rapoartele (paginile vizitate, sursa vizitei, tipul dispozitivului și al browserului) sunt agregate. Dacă browserul dumneavoastră trimite semnalul «Do Not Track» sau «Global Privacy Control», nu sunteți numărat.”</em></p>
 <?php
 admin_componenta('card', ['titlu' => 'Confidențialitatea', 'continut' => (string) ob_get_clean(), 'id' => 'st-confidentialitate']);
+?>
+</div>
+

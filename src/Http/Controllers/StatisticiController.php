@@ -42,6 +42,25 @@ final class StatisticiController
         'comenzi_cookie' => 'Sursa comenzilor (cookie, cu acord)',
     ];
 
+    /** Tab-urile tabloului (`?tab=`), cu tabelele fiecăruia; „impact” și „setari” au paginile lor, în același cadru. */
+    public const TABURI = [
+        'prezentare' => ['eticheta' => 'Prezentare', 'tabele' => ['surse', 'pagini', 'produse', 'cautari']],
+        'surse' => ['eticheta' => 'Surse', 'tabele' => ['surse', 'campanii']],
+        'pagini' => ['eticheta' => 'Pagini și produse', 'tabele' => ['pagini', 'intrari', 'produse', 'categorii']],
+        'cautari' => ['eticheta' => 'Căutări', 'tabele' => ['cautari', 'fara_rezultat']],
+        'vanzari' => ['eticheta' => 'Vânzări', 'tabele' => ['surse', 'campanii', 'comenzi_cookie']],
+        'dispozitive' => ['eticheta' => 'Dispozitive', 'tabele' => ['dispozitive', 'browsere', 'sisteme', 'tari']],
+        'impact' => ['eticheta' => 'Impact postare', 'tabele' => []],
+        'setari' => ['eticheta' => 'Setări', 'tabele' => []],
+    ];
+
+    /** Tab-ul cerut (`?tab=`), altfel „prezentare”. */
+    public static function tabCerut(array $get): string
+    {
+        $tab = is_string($get['tab'] ?? null) ? (string) $get['tab'] : '';
+        return isset(self::TABURI[$tab]) ? $tab : 'prezentare';
+    }
+
     /** POST /api/statistici, când nu l-a luat public/index.php înainte (de exemplu în teste): același răspuns. */
     public function eveniment(): void
     {
@@ -61,9 +80,18 @@ final class StatisticiController
         if (!$this->guard()) {
             return;
         }
+        $tab = self::tabCerut($_GET);
+        if ($tab === 'impact') {
+            $this->impact();
+            return;
+        }
+        if ($tab === 'setari') {
+            $this->setari();
+            return;
+        }
         $db = $this->db();
         if (!$db instanceof PDO) {
-            View::render('admin/statistici', ['title' => 'Statistici', 'eroare' => 'Baza de date nu răspunde.'], 'admin/layout');
+            View::render('admin/statistici', ['title' => 'Statistici', 'tab' => $tab, 'eroare' => 'Baza de date nu răspunde.'], 'admin/layout');
             return;
         }
         $setari = Settings::all($db);
@@ -78,12 +106,14 @@ final class StatisticiController
             $kpiInainte = $compara ? StatisticiRaport::kpi($db, $perioada['inainte_de_la'], $perioada['inainte_pana_la'], $filtre) : null;
             $serie = StatisticiRaport::serie($db, $perioada['de_la'], $perioada['pana_la'], $filtre, $perioada['pe_ora']);
             $serieInainte = $compara ? StatisticiRaport::serie($db, $perioada['inainte_de_la'], $perioada['inainte_pana_la'], $filtre, $perioada['pe_ora']) : null;
+            // Doar tabelele tab-ului deschis.
             $tabele = [];
-            foreach (array_keys(self::TABELE) as $cheie) {
+            foreach (self::TABURI[$tab]['tabele'] as $cheie) {
                 $tabele[$cheie] = self::tabel($db, $cheie, $perioada, $filtre);
             }
             View::render('admin/statistici', [
                 'title' => 'Statistici',
+                'tab' => $tab,
                 'perioada' => $perioada,
                 'filtre' => $filtre,
                 'compara' => $compara,
@@ -100,7 +130,7 @@ final class StatisticiController
             ], 'admin/layout');
         } catch (Throwable $e) {
             error_log('ANDAXI statistici: tabloul nu s-a putut face: ' . $e->getMessage());
-            View::render('admin/statistici', ['title' => 'Statistici',
+            View::render('admin/statistici', ['title' => 'Statistici', 'tab' => $tab,
                 'eroare' => 'Statisticile nu se pot citi acum. Rulează migrările (scripts/migreaza.php --aplica) dacă pluginul e nou pe site.'], 'admin/layout');
         }
     }
@@ -218,7 +248,7 @@ final class StatisticiController
         if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
             if (!AdminCsrf::valid()) {
                 Flash::set('error', 'Sesiunea formularului a expirat. Încearcă din nou.');
-                header('Location: /admin/statistici/setari');
+                header('Location: /admin/statistici?tab=setari');
                 return;
             }
             $zile = (int) ($_POST['statistici_zile_brute'] ?? Statistici::ZILE_BRUTE_IMPLICIT);
@@ -237,7 +267,7 @@ final class StatisticiController
             } catch (Throwable) {
             }
             Flash::set('success', 'Setările statisticilor au fost salvate.');
-            header('Location: /admin/statistici/setari');
+            header('Location: /admin/statistici?tab=setari');
             return;
         }
         $setari = Settings::all($db);

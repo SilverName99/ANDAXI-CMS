@@ -132,7 +132,7 @@ $ua = [
     ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 Edg/124.0', 'Edge', 'Windows', 'desktop'],
     ['Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/24.0 Chrome/117.0 Mobile Safari/537.36', 'Samsung Internet', 'Android', 'mobil'],
     [$tiktokApp, 'TikTok (aplicație)', 'iOS', 'mobil'],
-    [$instaApp, 'Instagram (aplicație)', 'iOS', 'mobil'],
+    [$instaApp, 'Instagram (app)', 'iOS', 'mobil'],
     [$fbApp, 'Facebook (aplicație)', 'Android', 'mobil'],
 ];
 $gresite = [];
@@ -143,6 +143,8 @@ foreach ($ua as [$sir, $browser, $os, $disp]) {
     }
 }
 $verifica('browserul, sistemul și dispozitivul din User-Agent (doar familia)', $gresite === [], implode('; ', $gresite));
+$verifica('fiecare etichetă de browser încape în coloana ei (VARCHAR(20)): altfel un server strict n-ar scrie rândul',
+    array_filter($ua, static fn (array $c): bool => mb_strlen(Statistici::parseazaUa($c[0])['browser']) > 20) === []);
 $tipuri = ['/' => 'acasa', '/produs/ceai' => 'produs', '/categorie/ceaiuri' => 'categorie', '/magazin' => 'magazin', '/marca/x' => 'magazin',
     '/blog' => 'blog', '/blog/un-articol' => 'articol', '/blog/categorie/x' => 'blog', '/cos' => 'cos', '/checkout' => 'checkout',
     '/checkout/succes/123' => 'comanda', '/campanie/black-friday' => 'campanie', '/despre-noi' => 'pagina'];
@@ -696,6 +698,21 @@ try {
     $verifica('agregarea la deschidere (fără cron): azi agregată, comanda atribuită Instagramului',
         $unu("SELECT COUNT(*) FROM statistici_zile WHERE zi = CURDATE()") === '1'
         && $unu('SELECT sursa FROM statistici_comenzi WHERE comanda_id = ?', [$comandaNoua]) === 'instagram');
+    $gresite = [];
+    foreach (\App\Http\Controllers\StatisticiController::TABURI as $cheieTab => $definitieTab) {
+        $r = $cerere('GET', '/admin/statistici?tab=' . $cheieTab . '&perioada=30&sursa=instagram', $jarAdmin);
+        if ($r['cod'] !== 200 || !str_contains($r['corp'], 'aria-current="page">' . $definitieTab['eticheta'] . '</a>')
+            || ($cheieTab !== 'setari' && $cheieTab !== 'impact' && !str_contains($r['corp'], 'tab=' . ($cheieTab === 'surse' ? 'pagini' : 'surse') . '&amp;perioada=30&amp;sursa=instagram'))) {
+            $gresite[] = $cheieTab . ': ' . $r['cod'];
+        }
+    }
+    $verifica('tab-urile (?tab=): fiecare se deschide, e marcat, iar legăturile spre celelalte păstrează perioada și filtrul', $gresite === [], implode('; ', $gresite));
+    $azi = $cerere('GET', '/admin/statistici?perioada=azi', $jarAdmin)['corp'];
+    $verifica('„Azi”: butonul marcat și perioada de azi în cap (nu ultimele 7 zile)', str_contains($azi, 'aria-current="true">Azi</a>')
+        && str_contains($azi, 'Perioada: <strong>' . date('d.m.Y') . '</strong>'));
+    $gol = $cerere('GET', '/admin/statistici?perioada=custom&de_la=2020-01-01&pana_la=2020-01-02', $jarAdmin)['corp'];
+    $verifica('o perioadă fără vizite: mesajul de ajutor (și că administratorii logați nu se numără), nu cifre de zero', str_contains($gol, 'Încă nu sunt vizite înregistrate')
+        && str_contains($gol, 'Administratorii logați nu se numără') && !str_contains($gol, 'id="st-kpi"'));
     $verifica('pe mai multe zile: „Vizitatori unici (pe zile)”', str_contains($cerere('GET', '/admin/statistici?perioada=7', $jarAdmin)['corp'], 'Vizitatori unici (pe zile)'));
     $setariAcum = \App\Support\Settings::all($db);
     $verifica('agregarea la deschidere: doar cu cronul rămas în urmă de peste 2 ore („proaspat” acum, „facut” peste 3 ore)',

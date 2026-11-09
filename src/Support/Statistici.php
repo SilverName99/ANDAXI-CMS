@@ -435,7 +435,8 @@ final class Statistici
     {
         $browser = match (true) {
             preg_match('/musical_ly|BytedanceWebview|TikTok/i', $ua) === 1 => 'TikTok (aplicație)',
-            preg_match('/Instagram/', $ua) === 1 => 'Instagram (aplicație)',
+            // „Instagram (aplicație)” are 21 de caractere, peste coloana browser (VARCHAR(20)): pe un server strict rândul nu se scria.
+            preg_match('/Instagram/', $ua) === 1 => 'Instagram (app)',
             preg_match('/FBAN|FBAV|FB_IAB|FBIOS/', $ua) === 1 => 'Facebook (aplicație)',
             preg_match('/Edg(e|A|iOS)?\//', $ua) === 1 => 'Edge',
             preg_match('/OPR\/|Opera/', $ua) === 1 => 'Opera',
@@ -840,9 +841,18 @@ final class Statistici
         return mb_substr($text, 0, 100);
     }
 
+    /** Lungimea coloanelor de text din statistici_evenimente (statistici/0061): un text mai lung se taie, nu pierde rândul. */
+    private const LUNGIMI = ['cale' => 255, 'tip_pagina' => 12, 'sursa' => 20, 'detaliu' => 100, 'utm_sursa' => 100, 'utm_mediu' => 100,
+        'utm_campanie' => 100, 'utm_continut' => 100, 'utm_termen' => 100, 'dispozitiv' => 8, 'browser' => 20, 'os' => 20, 'tara' => 2, 'cautare' => 100];
+
     /** @param array<string, mixed> $rand */
     private static function scrie(PDO $db, array $rand): void
     {
+        foreach (self::LUNGIMI as $coloana => $lungime) {
+            if (is_string($rand[$coloana] ?? null) && mb_strlen($rand[$coloana]) > $lungime) {
+                $rand[$coloana] = mb_substr($rand[$coloana], 0, $lungime);
+            }
+        }
         $coloane = array_keys($rand);
         $stmt = $db->prepare('INSERT INTO statistici_evenimente (' . implode(', ', $coloane) . ') VALUES ('
             . implode(', ', array_fill(0, count($coloane), '?')) . ')');

@@ -11,18 +11,13 @@
 use App\Support\Statistici;
 
 $e = static fn (mixed $v): string => adm_e($v);
-admin_componenta('antet-pagina', [
-    'titlu' => 'Impactul unei campanii sau postări',
-    'nivel' => 1,
-    'subtitlu' => 'Alege sursa (de exemplu TikTok) sau campania și momentul postării: vezi pe ore vizitele, comenzile și veniturile venite de acolo, față de aceleași ore de acum o săptămână.',
-    'actiuni' => '<a class="btn btn-secondary" href="/admin/statistici">← Statistici</a>',
-    'ajutor' => [
-        'Vizitele se numără după ora la care au început; comenzile după ora la care au fost plasate. O comandă se atribuie ultimei vizite din aceeași zi venite de undeva (nu „Direct”).',
-        'Coloanele „săptămâna dinainte” arată aceleași ore, cu 7 zile mai devreme: diferența e efectul postării sau al campaniei.',
-        'O postare fără link (doar un video) aduce de obicei vizite din aplicație: TikTok și Instagram deschid site-ul în browserul lor, care se recunoaște și fără Referer.',
-    ],
-]);
+$tab = 'impact';
 ?>
+<div class="st-pagina">
+<?php require __DIR__ . '/statistici-cap.php'; ?>
+<section class="st-sectiune">
+    <div class="st-sectiune__antet"><h2>Impactul unei campanii sau postări</h2></div>
+    <p class="st-nota" style="margin:0 0 12px">Alege sursa (de exemplu TikTok) sau campania și momentul postării: vezi pe ore vizitele, comenzile și veniturile venite de acolo, față de aceleași ore de acum o săptămână. Vizitele se numără după ora la care au început, comenzile după ora plasării; o postare fără link (doar un video) aduce de obicei vizite din aplicație (TikTok și Instagram se recunosc și fără Referer).</p>
 <?php if (isset($eroare)): ?>
 <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'titlu' => 'Impactul nu se poate arăta', 'text' => (string) $eroare]); ?>
 <?php else: ?>
@@ -39,7 +34,8 @@ admin_componenta('antet-pagina', [
 .st-bara--inainte { background: var(--adm-text-secundar); opacity: .4; }
 .st-nota { font-size: 12px; color: var(--adm-text-secundar); }
 </style>
-<form method="get" action="/admin/statistici/impact" class="st-impact-form">
+<form method="get" action="/admin/statistici" class="st-impact-form">
+    <input type="hidden" name="tab" value="impact">
     <label>Sursa
         <select name="sursa">
 <?php foreach (Statistici::SURSE as $cheie => $nume): ?>
@@ -108,3 +104,5 @@ admin_componenta('card', ['titlu' => 'Pe ore', 'continut' => (string) ob_get_cle
 ?>
 <?php endif; ?>
 <?php endif; ?>
+</section>
+</div>
