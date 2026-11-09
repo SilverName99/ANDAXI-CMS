@@ -2180,7 +2180,7 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
 function sendPaymentLink(orderId){
     const status = document.getElementById('payment-link-status-' + orderId);
     if (status) { status.style.color = '#6b7280'; status.textContent = 'Se trimite...'; }
-    fetch('/admin/orders/' + orderId + '/payment-link', {method:'POST'})
+    fetch('/admin/orders/' + orderId + '/payment-link', {method:'POST', headers: {'X-CSRF-Token': window.LP_CSRF || ''}})
         .then((r) => r.json())
         .then((data) => {
             if (!status) return;

@@ -8837,12 +8837,17 @@ CSS;
 
         // O diferență: suma se adaugă, iar ERP-ul află noua sumă încasată. Linkul de plată întreagă al unei comenzi cu
         // plata eșuată: comanda devine plătită ca după checkout (emailul, ERP-ul; PaymentLink::efecteDupaConfirmare).
-        \App\Support\PaymentLink::efecteDupaConfirmare($db, \App\Support\PaymentLink::confirmaPlataDetaliat(
+        $confirmare = \App\Support\PaymentLink::confirmaPlataDetaliat(
             $db,
             $link,
             (string) ($response['ep_id'] ?? ''),
             (string) ($response['approval'] ?? '')
-        ));
+        );
+        if ($confirmare['eroare']) {
+            // Plata nu s-a putut scrie: EuPlătesc primește o eroare și trimite notificarea din nou.
+            return false;
+        }
+        \App\Support\PaymentLink::efecteDupaConfirmare($db, $confirmare);
         return true;
     }
 
@@ -8885,7 +8890,7 @@ CSS;
             ? '/checkout/bt/retur?ref=' . rawurlencode($refVerificare)
             : '';
 
-        $integrala = \App\Support\PaymentLink::esteIntegral($link, $order);
+        $integrala = \App\Support\PaymentLink::esteIntegral($link);
         View::render('site/payment-link', [
             'title' => ($integrala ? 'Finalizează plata' : 'Plata diferenței') . ' — comanda ' . (string) ($order['order_number'] ?? ''),
             'integrala' => $integrala,
@@ -8931,7 +8936,7 @@ CSS;
             return;
         }
 
-        $integrala = \App\Support\PaymentLink::esteIntegral($link, $order);
+        $integrala = \App\Support\PaymentLink::esteIntegral($link);
         if (\App\Support\PaymentLink::procesorEfectiv($link, $settings) === \App\Support\PaymentLink::PROCESATOR_BT) {
             // Diferența prin Banca Transilvania: o plată separată la bancă, pe
             // numărul linkului, încasată imediat după autorizare. Plata întreagă a
@@ -8958,9 +8963,14 @@ CSS;
                 return;
             }
             try {
-                $session = StripeGateway::createCheckoutSession($secretKey, $campuri);
+                $session = $this->sesiuneStripeLink($db, $link, $secretKey, $campuri);
             } catch (Throwable $e) {
                 $this->renderPagina404('Plata nu a putut fi pornită', $e->getMessage(), $db);
+                return;
+            }
+            if ($session === null) {
+                // Sesiunea pornită înainte a fost plătită între timp: linkul e plătit.
+                header('Location: /plata/' . rawurlencode((string) $link['token']) . '?platit=1');
                 return;
             }
             $checkoutUrl = trim((string) ($session['url'] ?? ''));
@@ -9006,6 +9016,58 @@ CSS;
     }
 
     /**
+     * Sesiunea Stripe Checkout a unui link: cea pornită înainte, dacă e încă deschisă (aceeași pagină de plată: a doua
+     * filă, „înapoi”, un al doilea clic), altfel una nouă, care expiră singură după LINK_STRIPE_MINUTE minute; id-ul ei
+     * rămâne pe link (`ep_id`, până la plată). O sesiune pornită înainte și plătită între timp se confirmă aici (întoarce
+     * null: linkul e plătit). Dacă Stripe nu spune ce e cu sesiunea de dinainte, nu se face alta (excepție): altfel
+     * clientul ar putea plăti de două ori. Pe rând, pe link (lacăt MySQL).
+     *
+     * @param array<string, mixed> $link
+     * @param array<string, string> $campuri
+     * @return array<string, mixed>|null
+     */
+    private function sesiuneStripeLink(PDO $db, array $link, string $secretKey, array $campuri): ?array
+    {
+        $lacat = 'link-stripe:' . (int) $link['id'];
+        if (!\App\Support\PaymentLink::blocheaza($db, $lacat, 10)) {
+            throw new RuntimeException('Plata acestui link se pornește chiar acum; reîncearcă în câteva secunde.');
+        }
+        try {
+            $link = \App\Support\PaymentLink::dupaId($db, (int) $link['id']) ?? $link;
+            if ((string) ($link['status'] ?? '') !== \App\Support\PaymentLink::STATUS_ASTEPTARE) {
+                return null;
+            }
+            $veche = trim((string) ($link['ep_id'] ?? ''));
+            if (str_starts_with($veche, 'cs_')) {
+                $sesiune = StripeGateway::retrieveCheckoutSession($secretKey, $veche);
+                $tokenSesiune = trim((string) ($sesiune['metadata']['payment_link_token'] ?? ''));
+                if ($tokenSesiune !== '' && hash_equals((string) ($link['token'] ?? ''), $tokenSesiune)) {
+                    if ($this->sesiuneStripePlatita($sesiune)) {
+                        $this->applyStripeSessionResult($db, $sesiune, true);
+                        return null;
+                    }
+                    if (strtolower((string) ($sesiune['status'] ?? '')) === 'open' && trim((string) ($sesiune['url'] ?? '')) !== '') {
+                        return $sesiune;
+                    }
+                }
+            }
+            $sesiune = StripeGateway::createCheckoutSession($secretKey, $campuri);
+            $id = trim((string) ($sesiune['id'] ?? ''));
+            if ($id !== '') {
+                $db->prepare('UPDATE order_payment_links SET ep_id = :id WHERE id = :l AND status = :s')->execute([
+                    'id' => substr($id, 0, 64), 'l' => (int) $link['id'], 's' => \App\Support\PaymentLink::STATUS_ASTEPTARE,
+                ]);
+            }
+            return $sesiune;
+        } finally {
+            \App\Support\PaymentLink::elibereaza($db, $lacat);
+        }
+    }
+
+    /** Cât trăiește sesiunea Stripe a unui link (minute; Stripe cere cel puțin 30). */
+    private const LINK_STRIPE_MINUTE = 35;
+
+    /**
      * WP-20 (X5): câmpurile sesiunii Stripe Checkout pentru diferența de pe un link: suma în subunități (bani), referința
      * linkului (`client_reference_id`, nu numărul comenzii: la întoarcere trebuie să știm că e o diferență, nu plata
      * inițială) și cheia linkului în metadate, pe sesiune și pe plată (`payment_link_token`), după care webhook-ul o
@@ -9039,10 +9101,12 @@ CSS;
             'metadata[payment_link_reference]' => (string) ($link['referinta'] ?? ''),
             'payment_intent_data[metadata][payment_link_token]' => (string) ($link['token'] ?? ''),
             'line_items[0][price_data][currency]' => $currency,
-            'line_items[0][price_data][product_data][name]' => (\App\Support\PaymentLink::esteIntegral($link, $order) ? 'Comanda ' : 'Diferență comanda ') . $numarComanda,
+            'line_items[0][price_data][product_data][name]' => (\App\Support\PaymentLink::esteIntegral($link) ? 'Comanda ' : 'Diferență comanda ') . $numarComanda,
             'line_items[0][price_data][unit_amount]' => (string) $suma,
             'line_items[0][quantity]' => '1',
             'locale' => 'auto',
+            // Sesiunea expiră singură, ca o pagină de plată uitată deschisă să nu mai poată fi plătită peste câteva zile.
+            'expires_at' => (string) (time() + self::LINK_STRIPE_MINUTE * 60),
         ];
         $email = trim((string) ($order['billing_email'] ?? ''));
         if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -9103,7 +9167,12 @@ CSS;
         $intent = $session['payment_intent'] ?? '';
         $intentId = is_array($intent) ? (string) ($intent['id'] ?? '') : (string) $intent;
         // Ca la EuPlătesc: diferența se adaugă, plata întreagă face comanda plătită ca după checkout.
-        \App\Support\PaymentLink::efecteDupaConfirmare($db, \App\Support\PaymentLink::confirmaPlataDetaliat($db, $link, (string) ($session['id'] ?? ''), $intentId));
+        $confirmare = \App\Support\PaymentLink::confirmaPlataDetaliat($db, $link, (string) ($session['id'] ?? ''), $intentId);
+        if ($confirmare['eroare']) {
+            // Webhook-ul răspunde cu o eroare, ca Stripe să-l trimită din nou (evenimentul rămâne neprocesat).
+            throw new RuntimeException('Plata linkului de plată nu s-a putut scrie; Stripe reîncearcă.');
+        }
+        \App\Support\PaymentLink::efecteDupaConfirmare($db, $confirmare);
         return true;
     }
 
@@ -9120,16 +9189,15 @@ CSS;
         }
         if ((string) ($link['status'] ?? '') === \App\Support\PaymentLink::STATUS_ANULAT) {
             // Linkul de plată întreagă anulat fiindcă plata comenzii s-a confirmat totuși: clientul nu mai are nimic de plătit.
-            return [null, [], \App\Support\PaymentLink::anulatFiindcaPlatita($db, $link)
-                ? 'Comanda a fost deja plătită; nu e nevoie să plătești din nou.'
-                : 'Linkul a fost anulat. Cere-ne unul nou.'];
+            $motivAnulare = \App\Support\PaymentLink::motivAnulare($db, $link);
+            return [null, [], $motivAnulare !== '' ? $motivAnulare : 'Linkul a fost anulat. Cere-ne unul nou.'];
         }
         if (\App\Support\PaymentLink::esteExpirat($link)) {
             return [null, [], 'Linkul a expirat. Cere-ne unul nou.'];
         }
 
         $stmt = $db->prepare(
-            'SELECT id, order_number, total, paid_amount, payment_status, status,
+            'SELECT id, order_number, total, paid_amount, payment_status, status, deleted_at,
                     billing_first_name, billing_last_name, billing_email, billing_phone,
                     billing_address_line1, billing_city, billing_county, billing_postcode
              FROM orders WHERE id = :id AND deleted_at IS NULL LIMIT 1'
@@ -9139,9 +9207,9 @@ CSS;
         if (!is_array($order)) {
             return [null, [], 'Comanda asociată nu mai există.'];
         }
-        // Linkul de plată întreagă al unei comenzi plătite între timp (plata inițială confirmată totuși), anulate sau
-        // cu totalul scăzut: nu se mai plătește, ca nimeni să nu plătească de două ori. Linkul se anulează; o diferență
-        // nu se atinge (PaymentLink::motivLinkNeplatibil).
+        // Linkul de plată întreagă al unei comenzi plătite între timp (plata inițială confirmată totuși), anulate sau cu
+        // totalul schimbat, ori o diferență mai mare decât restul de acum: nu se mai plătește, ca nimeni să nu plătească
+        // de două ori. Linkul se anulează (PaymentLink::motivLinkNeplatibil).
         $neplatibil = \App\Support\PaymentLink::motivLinkNeplatibil($link, $order);
         if ($neplatibil !== '' && !(BtIpayPayments::areTabele($db) && BtIpayPayments::plataLinkInCurs($db, (int) $link['id']) !== null)) {
             \App\Support\PaymentLink::anuleaza($db, (int) $link['id']);
@@ -9191,6 +9259,7 @@ CSS;
             return false;
         }
         $orderId = (int) $order['id'];
+        // Doar pentru refuz (o notificare de refuz nu atinge o comandă plătită); plata reușită se hotărăște atomic, mai jos.
         $eraPlatita = strtolower((string) ($order['payment_status'] ?? '')) === 'paid';
 
         $epId = substr(trim((string) ($response['ep_id'] ?? '')), 0, 64);
@@ -9227,11 +9296,18 @@ CSS;
         $incasat = round((float) ($response['amount'] ?? 0), 2);
         $datorat = round((float) ($order['total'] ?? 0), 2);
         if (abs($incasat - $datorat) > 0.01) {
+            // Nota „Plătită de două ori” rămâne (mesajul se adaugă), iar pe o comandă plătită ep_id-ul plății socotite nu se schimbă.
+            $mesaj = 'Suma încasată (' . number_format($incasat, 2) . ') diferă de totalul comenzii ('
+                . number_format($datorat, 2) . '). Verifică în panoul EuPlătesc' . ($epId !== '' ? ' (ep_id ' . $epId . ')' : '') . '.';
             $db->prepare(
-                'UPDATE orders SET payment_error = :payment_error, euplatesc_ep_id = :ep_id WHERE id = :id'
+                "UPDATE orders
+                 SET payment_error = CASE WHEN payment_error LIKE :nota THEN LEFT(CONCAT(payment_error, ' | ', :m1), 2000) ELSE :m2 END,
+                     euplatesc_ep_id = CASE WHEN payment_status = 'paid' THEN euplatesc_ep_id ELSE :ep_id END
+                 WHERE id = :id"
             )->execute([
-                'payment_error' => 'Suma încasată (' . number_format($incasat, 2) . ') diferă de totalul comenzii ('
-                    . number_format($datorat, 2) . '). Verifică în panoul EuPlătesc.',
+                'nota' => \App\Support\PaymentLink::NOTA_DUBLA . '%',
+                'm1' => $mesaj,
+                'm2' => $mesaj,
                 'ep_id' => $epId !== '' ? $epId : null,
                 'id' => $orderId,
             ]);
@@ -9239,7 +9315,9 @@ CSS;
         }
 
         \App\Support\ErpSync::ensureSchema($db);
-        $db->prepare(
+        // Doar trecerea „neplătită” → „plătită” face ceva (atomic: două confirmări deodată nu trimit de două ori
+        // emailul sau comanda în ERP).
+        $stmt = $db->prepare(
             "UPDATE orders
              SET payment_status = 'paid',
                  status = CASE WHEN status IN ('pending_payment', 'failed') THEN 'pending' ELSE status END,
@@ -9248,8 +9326,9 @@ CSS;
                  paid_amount = COALESCE(paid_amount, :incasat),
                  euplatesc_ep_id = :ep_id,
                  euplatesc_approval = :approval
-             WHERE id = :id"
-        )->execute([
+             WHERE id = :id AND payment_status <> 'paid'"
+        );
+        $stmt->execute([
             // Suma reală de la procesator; rămâne neschimbată dacă totalul
             // comenzii se modifică ulterior.
             'incasat' => number_format($incasat, 2, '.', ''),
@@ -9258,15 +9337,20 @@ CSS;
             'id' => $orderId,
         ]);
 
-        if (!$eraPlatita) {
-            // Plata comenzii s-a confirmat: un link de plată întreagă trimis între timp nu se mai plătește.
-            \App\Support\PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
+        if ($stmt->rowCount() > 0) {
+            // Plata comenzii s-a confirmat: linkurile neplătite mai mari decât restul (plata întreagă) nu se mai plătesc.
+            \App\Support\PaymentLink::anuleazaDepasite($db, $orderId);
             EmailAutomation::sendOrderTemplateById($db, $settings, $orderId, 'new_order');
             // Comanda pleacă spre ERP abia acum, după confirmarea încasării.
             \App\Support\ErpSync::push($db, $orderId);
         } else {
-            // Comanda era deja plătită printr-un link de plată întreagă: banii au venit de două ori.
-            \App\Support\PaymentLink::semnaleazaPlataInitialaDubla($db, $orderId, 'EuPlătesc', $epId);
+            // Comanda era deja plătită: printr-un link de plată întreagă, sau prin altă plată EuPlătesc (alt ep_id decât
+            // cel socotit). Aceeași confirmare primită a doua oară (același ep_id) nu schimbă nimic.
+            $stmt = $db->prepare('SELECT euplatesc_ep_id, euplatesc_approval FROM orders WHERE id = :id');
+            $stmt->execute(['id' => $orderId]);
+            $socotita = $stmt->fetch() ?: [];
+            \App\Support\PaymentLink::semnaleazaPlataComandaDubla($db, $orderId, \App\Support\PaymentLink::PROCESATOR_EUPLATESC, $epId, $incasat,
+                trim((string) ($socotita['euplatesc_approval'] ?? '')) !== '' ? trim((string) ($socotita['euplatesc_ep_id'] ?? '')) : '');
         }
         return true;
     }
@@ -9345,6 +9429,9 @@ CSS;
             'line_items[0][price_data][unit_amount]' => (string) $totalAmount,
             'line_items[0][quantity]' => '1',
             'locale' => 'auto',
+            // Sesiunea expiră odată cu plățile neterminate (bt_ipay_expire_minutes, 30–1440 de minute; Stripe cere 30 de
+            // minute–24 de ore): după asta comanda se poate plăti doar printr-un link de plată trimis din admin.
+            'expires_at' => (string) (time() + min(86340, BtIpayPayments::setari($settings)['minute_expirare'] * 60 + 60)),
         ]);
 
         $sessionId = (string) ($session['id'] ?? '');
@@ -9477,7 +9564,8 @@ CSS;
 
         \App\Support\ErpSync::ensureSchema($db);
         $where = $orderNumber !== '' ? 'order_number = :order_number AND deleted_at IS NULL' : 'id = :id AND deleted_at IS NULL';
-        $eraPlatita = $paid && $this->comandaStripeEraPlatita($db, $where, $orderNumber, $orderId);
+        // Plătită: doar trecerea „neplătită” → „plătită” scrie (atomic, cu rowCount); o comandă deja plătită își păstrează
+        // sesiunea socotită. Neplătită: pe o comandă plătită nu se schimbă nimic (nici sesiunea, nici nota).
         $sql = $paid
             ? "UPDATE orders
                SET payment_status = 'paid',
@@ -9487,15 +9575,16 @@ CSS;
                    paid_at = NOW(),
                    payment_error = NULL,
                    paid_amount = COALESCE(paid_amount, total)
-               WHERE $where"
+               WHERE $where AND payment_status <> 'paid'"
             : "UPDATE orders
-               SET payment_status = CASE WHEN payment_status = 'paid' THEN payment_status ELSE 'failed' END,
-                   status = CASE WHEN payment_status = 'paid' THEN status WHEN status IN ('pending_payment') THEN 'failed' ELSE status END,
+               SET payment_status = 'failed',
+                   status = CASE WHEN status IN ('pending_payment') THEN 'failed' ELSE status END,
                    stripe_session_id = :session_id,
                    stripe_payment_intent_id = :payment_intent_id,
                    payment_error = 'Plata nu a fost finalizată: card refuzat sau sesiune expirată.'
-               WHERE $where";
+               WHERE $where AND payment_status <> 'paid'";
 
+        $socotita = $paid ? $this->sesiuneStripeSocotita($db, $where, $orderNumber, $orderId) : [];
         $stmt = $db->prepare($sql);
         $params = [
             'session_id' => $sessionId,
@@ -9507,17 +9596,24 @@ CSS;
             $params['id'] = $orderId;
         }
         $stmt->execute($params);
+        $trecuta = $stmt->rowCount() > 0;
 
         $targetOrderId = $this->resolveOrderIdForStripeSession($db, $orderNumber, $orderId);
         if ($paid) {
             $settings = Settings::all($db);
             if ($targetOrderId > 0) {
-                $this->dupaPlataStripeComanda($db, $targetOrderId, $eraPlatita, $sessionId);
+                if (!$trecuta) {
+                    // Deja plătită: printr-un link de plată întreagă sau printr-o altă sesiune decât cea socotită.
+                    \App\Support\PaymentLink::semnaleazaPlataComandaDubla($db, $targetOrderId, \App\Support\PaymentLink::PROCESATOR_STRIPE,
+                        $sessionId, ((int) ($session['amount_total'] ?? 0)) / 100, (string) ($socotita['stripe_session_id'] ?? ''));
+                    return;
+                }
+                \App\Support\PaymentLink::anuleazaDepasite($db, $targetOrderId);
                 EmailAutomation::sendOrderTemplateById($db, $settings, $targetOrderId, 'new_order');
                 \App\Support\ErpSync::push($db, $targetOrderId);
             }
         } else {
-            if ($targetOrderId > 0) {
+            if ($targetOrderId > 0 && $trecuta) {
                 LoyaltyService::refundRedeemedPointsForOrder($db, $targetOrderId);
                 LoyaltyService::reverseAwardedPointsForOrder($db, $targetOrderId);
             }
@@ -9538,7 +9634,6 @@ CSS;
         }
 
         $where = $orderNumber !== '' ? 'order_number = :order_number AND deleted_at IS NULL' : 'id = :id AND deleted_at IS NULL';
-        $eraPlatita = $paid && $this->comandaStripeEraPlatita($db, $where, $orderNumber, $orderId);
         $sql = $paid
             ? "UPDATE orders
                SET payment_status = 'paid',
@@ -9546,14 +9641,15 @@ CSS;
                    stripe_payment_intent_id = :payment_intent_id,
                    paid_at = NOW(),
                    payment_error = NULL
-               WHERE $where"
+               WHERE $where AND payment_status <> 'paid'"
             : "UPDATE orders
-               SET payment_status = CASE WHEN payment_status = 'paid' THEN payment_status ELSE 'failed' END,
-                   status = CASE WHEN payment_status = 'paid' THEN status WHEN status IN ('pending_payment') THEN 'failed' ELSE status END,
+               SET payment_status = 'failed',
+                   status = CASE WHEN status IN ('pending_payment') THEN 'failed' ELSE status END,
                    stripe_payment_intent_id = :payment_intent_id,
                    payment_error = 'Plata nu a fost finalizată: card refuzat sau sesiune expirată.'
-               WHERE $where";
+               WHERE $where AND payment_status <> 'paid'";
 
+        $socotita = $paid ? $this->sesiuneStripeSocotita($db, $where, $orderNumber, $orderId) : [];
         $stmt = $db->prepare($sql);
         $params = ['payment_intent_id' => $paymentIntentId];
         if ($orderNumber !== '') {
@@ -9562,6 +9658,7 @@ CSS;
             $params['id'] = $orderId;
         }
         $stmt->execute($params);
+        $trecuta = $stmt->rowCount() > 0;
 
         $targetOrderId = $this->resolveOrderIdForStripeSession($db, $orderNumber, $orderId);
         if ($targetOrderId <= 0) {
@@ -9569,41 +9666,35 @@ CSS;
         }
 
         if ($paid) {
+            if (!$trecuta) {
+                \App\Support\PaymentLink::semnaleazaPlataComandaDubla($db, $targetOrderId, \App\Support\PaymentLink::PROCESATOR_STRIPE,
+                    $paymentIntentId, ((int) ($paymentIntent['amount'] ?? 0)) / 100, (string) ($socotita['stripe_payment_intent_id'] ?? ''));
+                return;
+            }
             $settings = Settings::all($db);
-            $this->dupaPlataStripeComanda($db, $targetOrderId, $eraPlatita, $paymentIntentId);
+            \App\Support\PaymentLink::anuleazaDepasite($db, $targetOrderId);
             EmailAutomation::sendOrderTemplateById($db, $settings, $targetOrderId, 'new_order');
             \App\Support\ErpSync::push($db, $targetOrderId);
             return;
         }
 
-        LoyaltyService::refundRedeemedPointsForOrder($db, $targetOrderId);
-        LoyaltyService::reverseAwardedPointsForOrder($db, $targetOrderId);
+        if ($trecuta) {
+            LoyaltyService::refundRedeemedPointsForOrder($db, $targetOrderId);
+            LoyaltyService::reverseAwardedPointsForOrder($db, $targetOrderId);
+        }
     }
 
-    /** Comanda plății Stripe era deja „plătită” înaintea acestei confirmări? (pentru gărzile linkului de plată întreagă) */
-    private function comandaStripeEraPlatita(PDO $db, string $where, string $orderNumber, int $orderId): bool
+    /** Sesiunea și plata Stripe socotite acum pe comandă (pentru nota „Plătită de două ori”). @return array<string, mixed> */
+    private function sesiuneStripeSocotita(PDO $db, string $where, string $orderNumber, int $orderId): array
     {
         try {
-            $stmt = $db->prepare('SELECT payment_status FROM orders WHERE ' . $where . ' LIMIT 1');
+            $stmt = $db->prepare("SELECT stripe_session_id, stripe_payment_intent_id FROM orders WHERE $where AND payment_status = 'paid' LIMIT 1");
             $stmt->execute($orderNumber !== '' ? ['order_number' => $orderNumber] : ['id' => $orderId]);
-            return strtolower((string) ($stmt->fetchColumn() ?: '')) === 'paid';
+            $rand = $stmt->fetch();
+            return is_array($rand) ? $rand : [];
         } catch (Throwable) {
-            return false;
+            return [];
         }
-    }
-
-    /**
-     * După confirmarea Stripe a plății inițiale a unei comenzi: dacă abia acum a devenit plătită, linkurile ei de plată
-     * întreagă rămase nu se mai plătesc; dacă era deja plătită printr-un asemenea link, banii au venit de două ori
-     * (nota „Plătită de două ori” pe comandă).
-     */
-    private function dupaPlataStripeComanda(PDO $db, int $orderId, bool $eraPlatita, string $referinta): void
-    {
-        if ($eraPlatita) {
-            \App\Support\PaymentLink::semnaleazaPlataInitialaDubla($db, $orderId, 'Stripe', $referinta);
-            return;
-        }
-        \App\Support\PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
     }
 
     private function resolveOrderIdForStripeSession(PDO $db, string $orderNumber, int $orderId): int

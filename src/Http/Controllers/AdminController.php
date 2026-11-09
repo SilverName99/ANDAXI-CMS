@@ -7825,6 +7825,11 @@ final class AdminController
             echo json_encode(['ok' => false, 'error' => 'Linkurile de plată noi nu mai sunt disponibile.']);
             return;
         }
+        // Jetonul anti-CSRF al sesiunii (antetul X-CSRF-Token din fereastra comenzii), ca la celelalte acțiuni cu bani.
+        if (!\App\Support\AdminCsrf::valid()) {
+            echo json_encode(['ok' => false, 'error' => 'Sesiunea paginii a expirat. Reîncarcă pagina și încearcă din nou.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
         $orderId = max(0, (int) ($params['id'] ?? 0));
         $db = $this->db();
         if (!$db instanceof PDO || $orderId <= 0) {
@@ -7996,7 +8001,14 @@ final class AdminController
         $inainte = $db->prepare('SELECT id FROM order_payment_links WHERE order_id = :id AND status = :s');
         $inainte->execute(['id' => $orderId, 's' => \App\Support\PaymentLink::STATUS_ASTEPTARE]);
         $neplatiteInainte = array_map('intval', $inainte->fetchAll(PDO::FETCH_COLUMN) ?: []);
-        $link = \App\Support\PaymentLink::creeaza($db, $orderId, $numarComanda, $suma, $procesator, $settings);
+        // La o comandă Stripe, sesiunea de plată a checkout-ului trebuie să nu se mai poată plăti (Stripe o ține deschisă
+        // până expiră): o expirăm întâi, iar dacă s-a plătit între timp, nu trimitem linkul.
+        $motivStripe = $this->expiraSesiuneaStripeAComenzii($order, $settings);
+        if ($motivStripe !== '') {
+            echo json_encode(['ok' => false, 'error' => $motivStripe], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $link = \App\Support\PaymentLink::creeaza($db, $orderId, $numarComanda, $suma, $procesator, $settings, \App\Support\PaymentLink::TIP_INTEGRALA);
         if ($link === null) {
             echo json_encode(['ok' => false, 'error' => 'Nu am putut genera linkul de plată.'], JSON_UNESCAPED_UNICODE);
             return;
@@ -8101,11 +8113,48 @@ final class AdminController
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    /**
+     * Sesiunea Stripe Checkout a comenzii (`stripe_session_id`), dacă are una: se expiră, ca plata inițială să nu mai
+     * poată veni peste linkul de plată întreagă. Gol = se poate trimite linkul (sesiunea expirată acum sau deja);
+     * altfel motivul: sesiunea plătită între timp, sau Stripe nu răspunde (nu trimitem linkul fără să știm).
+     *
+     * @param array<string, mixed> $order
+     */
+    private function expiraSesiuneaStripeAComenzii(array $order, array $settings): string
+    {
+        $sesiune = trim((string) ($order['stripe_session_id'] ?? ''));
+        if (strtolower((string) ($order['payment_method'] ?? '')) !== 'stripe' || !str_starts_with($sesiune, 'cs_')) {
+            return '';
+        }
+        $cheie = trim((string) ($settings['stripe_secret_key'] ?? ''));
+        if ($cheie === '') {
+            return 'Sesiunea de plată Stripe a comenzii nu se poate închide: cheia Stripe lipsește din Setări plăți.';
+        }
+        try {
+            \App\Support\StripeGateway::folosesteSetarile($settings);
+            $stare = \App\Support\StripeGateway::retrieveCheckoutSession($cheie, $sesiune);
+            if (strtolower((string) ($stare['status'] ?? '')) === 'open') {
+                $stare = \App\Support\StripeGateway::expireCheckoutSession($cheie, $sesiune);
+            }
+        } catch (Throwable $e) {
+            return 'Nu am putut închide sesiunea de plată Stripe a comenzii (' . $e->getMessage() . '); linkul nu s-a trimis, '
+                . 'ca plata inițială să nu poată veni peste el. Reîncearcă peste câteva minute.';
+        }
+        $status = strtolower((string) ($stare['status'] ?? ''));
+        $platita = in_array(strtolower((string) ($stare['payment_status'] ?? '')), ['paid', 'no_payment_required'], true);
+        if ($platita || $status === 'complete') {
+            return 'Sesiunea de plată Stripe a comenzii (' . $sesiune . ') apare plătită: așteaptă confirmarea plății (webhook-ul Stripe), '
+                . 'nu trimite un link.';
+        }
+        return $status === 'expired' ? '' : 'Sesiunea de plată Stripe a comenzii nu s-a putut închide (stare „' . $status . '”); reîncearcă.';
+    }
+
     /** @return array<string, mixed>|null */
     private function comandaPentruLinkIntegral(PDO $db, int $orderId): ?array
     {
         $stmt = $db->prepare(
             'SELECT id, order_number, total, paid_amount, payment_status, payment_method, payment_error, status, created_at, deleted_at,
+                    stripe_session_id,
                     billing_first_name, billing_last_name, billing_email
              FROM orders WHERE id = :id AND deleted_at IS NULL LIMIT 1'
         );
@@ -8210,6 +8259,8 @@ final class AdminController
             return;
         }
 
+        // Banii au venit pe lângă site: un link de plată mai mare decât restul de acum nu se mai plătește.
+        \App\Support\PaymentLink::anuleazaDepasite($db, $orderId);
         AdminActivityLog::log($db, 'order_incasare_manuala', [
             'order_id' => $orderId,
             'numar_comanda' => (string) ($order['order_number'] ?? ''),
@@ -13507,6 +13558,24 @@ final class AdminController
         $comandaActiva = $comanda !== [] && ($comanda['deleted_at'] ?? null) === null
             && !in_array((string) ($comanda['status'] ?? ''), ['cancelled', 'refunded', 'returned', 'failed'], true);
 
+        // Comanda „Plătită de două ori”: plata BT socotită pe comandă (in_comanda) nu se eliberează și nu se rambursează din
+        // greșeală în locul celei de prisos (nota spune care e aceea). Doar cu confirmarea explicită `confirm_dubla=1`.
+        if (in_array($actiune, ['reverse', 'refund'], true) && (int) ($tx['in_comanda'] ?? 0) === 1
+            && (string) ($_POST['confirm_dubla'] ?? '') !== '1') {
+            $stmtNota = $db->prepare('SELECT payment_error FROM orders WHERE id = :id');
+            $stmtNota->execute(['id' => $orderId]);
+            $nota = (string) ($stmtNota->fetchColumn() ?: '');
+            if (\App\Support\PaymentLink::platitaDeDouaOri(['payment_error' => $nota])) {
+                echo json_encode([
+                    'ok' => false,
+                    'error' => 'Comanda e plătită de două ori, iar aceasta (' . (string) $tx['bt_order_number'] . ') e plata SOCOTITĂ pe comandă: '
+                        . 'nu o elibera și nu o rambursa. Rambursează plata de prisos, cea din notă. ' . $nota,
+                    'cere_confirmare_dubla' => true,
+                ], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+        }
+
         // „Anulează autorizarea" pe plata unei comenzi încă vii: comanda ar
         // rămâne neplătită, iar ERP-ul ar ține-o plătită. Fără alegerea
         // explicită din fereastră („Doar eliberează suma"), nu facem nimic.
@@ -14020,8 +14089,8 @@ final class AdminController
                  status = CASE WHEN status IN ('pending_payment', 'failed') THEN 'pending' ELSE status END
              WHERE id = :id"
         )->execute(['id' => $orderId]);
-        // Plătită pe alt drum: un link de plată întreagă trimis înainte nu se mai plătește.
-        \App\Support\PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
+        // Plătită pe alt drum: un link trimis înainte (plata întreagă, o diferență mai mare decât restul) nu se mai plătește.
+        \App\Support\PaymentLink::anuleazaDepasite($db, $orderId);
 
         // Mailul „comandă nouă" pleacă doar dacă n-a plecat deja. La ramburs și
         // la OP a plecat din checkout; la card pleacă abia la confirmarea

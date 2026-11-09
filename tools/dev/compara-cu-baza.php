@@ -1150,6 +1150,16 @@ $deBioscem = [
         'vechi' => '',
         'motiv' => 'WP-39 (B4): câmpul nou „Cod EAN (GTIN)” primește valoarea produsului când se deschide editorul.',
     ],
+    // Linkul de plată (link_plata, revizuirea din 9 nov): „Trimite link de plată pentru diferență” trimite și jetonul anti-CSRF
+    // al sesiunii (window.LP_CSRF, din marcajul lp:linkuri-js); serverul îl cere, ca la celelalte acțiuni cu bani.
+    [
+        'nume' => 'Admin → Comenzi: linkul pentru diferență trimite jetonul anti-CSRF',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => ", headers: {'X-CSRF-Token': window.LP_CSRF || ''}})",
+        'vechi' => '})',
+        'motiv' => 'link_plata (revizuirea din 9 nov): POST /admin/orders/{id}/payment-link cere jetonul AdminCsrf (antetul X-CSRF-Token); '
+            . 'site-uri/bioscem/ce-se-schimba.md',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o

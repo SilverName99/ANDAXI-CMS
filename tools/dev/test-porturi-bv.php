@@ -906,7 +906,9 @@ $setare('bt_ipay_enabled', '0');
 $setare('stripe_secret_key', 'sk_test_inventat');
 $db->prepare("UPDATE order_payment_links SET status = 'cancelled' WHERE order_id = :id AND status = 'pending'")->execute(['id' => $idPlatita]);
 $db->prepare('UPDATE orders SET paid_amount = ROUND(total - 7, 2) WHERE id = :id')->execute(['id' => $idPlatita]);
-$r = json_decode($cerere('POST', '/admin/orders/' . $idPlatita . '/payment-link', $jarAdmin)['corp'], true) ?: [];
+// Jetonul anti-CSRF al sesiunii (link_plata, revizuirea din 9 nov: trimiterea linkului îl cere).
+$jetonLink = preg_match('/window\.LP_CSRF = "([0-9a-f]{64})"/', $cerere('GET', '/admin/orders', $jarAdmin)['corp'], $mJeton) === 1 ? $mJeton[1] : '';
+$r = json_decode($cerere('POST', '/admin/orders/' . $idPlatita . '/payment-link', $jarAdmin, ['_csrf' => $jetonLink])['corp'], true) ?: [];
 $verifica('Admin → comanda → „Trimite linkul de plată”: cu doar Stripe pornit, linkul nou e Stripe, iar răspunsul o spune',
     (($r['ok'] ?? false) === true || str_contains((string) ($r['error'] ?? ''), 'emailul nu a plecat')) && ($r['procesator'] ?? 'Stripe') === 'Stripe'
     && $unu("SELECT procesator FROM order_payment_links WHERE order_id = :id AND status = 'pending' ORDER BY id DESC LIMIT 1", ['id' => $idPlatita]) === 'stripe',

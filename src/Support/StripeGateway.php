@@ -82,6 +82,19 @@ final class StripeGateway
         return self::request('GET', '/v1/checkout/sessions/' . rawurlencode($sessionId), $secretKey, $fields);
     }
 
+    /**
+     * Expiră o sesiune de checkout încă deschisă (după asta nu se mai poate plăti). Stripe refuză o sesiune deja plătită
+     * sau expirată (excepție); apelantul citește atunci sesiunea ca să afle ce s-a întâmplat.
+     */
+    public static function expireCheckoutSession(string $secretKey, string $sessionId): array
+    {
+        $sessionId = trim($sessionId);
+        if ($sessionId === '') {
+            throw new RuntimeException('ID-ul sesiunii Stripe lipsește.');
+        }
+        return self::request('POST', '/v1/checkout/sessions/' . rawurlencode($sessionId) . '/expire', $secretKey);
+    }
+
     /** O plată unică (PaymentIntent); cu `automatic_payment_methods` Stripe oferă cardul, Google Pay și Apple Pay. */
     public static function createPaymentIntent(string $secretKey, array $fields, ?string $idempotencyKey = null): array
     {

@@ -1613,6 +1613,7 @@ final class BtIpayPayments
             PaymentLink::ensureSchema($db);
         }
         $linkIntegralPlatit = false;
+        $sumaSchimbataDinLink = false;
 
         $inTranzactie = false;
         $linkConfirmat = false;
@@ -1700,13 +1701,15 @@ final class BtIpayPayments
                         $linkIntegralPlatit = PaymentLink::marcheazaPlatit($db, $linkPlataIntegrala, (string) ($tx['bt_order_id'] ?? ''),
                             $aprobare !== '' ? $aprobare : (string) ($tx['approval_code'] ?? ''));
                     }
-                    // Plata comenzii s-a confirmat (și cea inițială, întârziată): linkurile de plată întreagă rămase se anulează.
-                    PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
+                    // Plata comenzii s-a confirmat (și cea inițială, întârziată): linkurile neplătite mai mari decât restul de
+                    // acum (cele de plată întreagă) se anulează, în aceeași tranzacție.
+                    PaymentLink::anuleazaDepasite($db, $orderId);
                 } else {
                     $efecte['alerte'][] = 'plata_in_plus';
                 }
             } elseif (isset($setariComanda['delta'])) {
                 $delta = (int) $setariComanda['delta'];
+                $sumaSchimbataDinLink = $tip === self::TIP_LINK || (int) ($tx['link_id'] ?? 0) > 0;
                 $db->prepare(
                     'UPDATE orders SET paid_amount = ROUND(COALESCE(paid_amount, total) + :delta, 2) WHERE id = :id'
                 )->execute(['delta' => number_format($delta / 100, 2, '.', ''), 'id' => $orderId]);
@@ -1782,9 +1785,10 @@ final class BtIpayPayments
                 // Cronul ERP reîncearcă.
             }
         }
-        if ($linkConfirmat) {
+        if ($linkConfirmat || $sumaSchimbataDinLink) {
             try {
-                // ERP-ul trebuie să afle noua sumă încasată pe aceeași comandă.
+                // ERP-ul trebuie să afle noua sumă încasată pe aceeași comandă (și după o eliberare sau o rambursare a
+                // unei plăți venite dintr-un link).
                 ErpSync::push($db, $orderId, true);
             } catch (Throwable) {
                 // Cronul ERP reîncearcă; banii sunt deja înregistrați pe site.
