@@ -227,7 +227,9 @@ $statusLabel = \App\Support\ProfessionAccounts::statusLabel($status);
                     <?= htmlspecialchars(strtoupper((string) ($activation['currency'] ?? 'RON')), ENT_QUOTES) ?>
                 </td>
                 <td><?= htmlspecialchars(\App\Support\ProfessionAccounts::durationLabel((int) ($activation['months'] ?? 12)), ENT_QUOTES) ?></td>
-                <td><?= \App\Support\ProfessionAccounts::activationStatusBadge((string) ($activation['status'] ?? '')) ?></td>
+                <td><?= \App\Support\ProfessionAccounts::activationStatusBadge((string) ($activation['status'] ?? ''))
+                    . \App\Support\ProfessionAccounts::refundBadge((int) ($activation['refunded_cents'] ?? 0), (float) ($activation['amount'] ?? 0),
+                        (string) ($activation['currency'] ?? 'ron')) ?></td>
                 <td>
                     <?= htmlspecialchars($formatDate($activation['period_start'] ?? '', 'd.m.Y'), ENT_QUOTES) ?>
                     &rarr;

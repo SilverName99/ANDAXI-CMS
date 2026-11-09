@@ -2,15 +2,16 @@
 /**
  * Tab-ul „Donații” din contul donatorului (pluginul `donatii`, din vertij dc52498 … ca1120c; agățarea `cont.taburi`): donația
  * lunară activă, cu oprirea ei, și istoricul donațiilor, cu chitanțele. Același HTML ca panoul din contul vertij; în plus,
- * rândul donațiilor făcute fără cont cu adresa contului, care apar după ce adresa e confirmată (regula nucleului, G-M4).
+ * rândul donațiilor făcute fără cont cu adresa contului, care apar după ce adresa e confirmată (regula nucleului, G-M4), fiecare
+ * donație lunară activă cu butonul ei (formularul trimite id-ul abonamentului) și rambursările (donatii/0064).
  *
  * @var array<int, array<string, mixed>> $donationList
- * @var array<string, mixed>|null        $donationActive
+ * @var list<array<string, mixed>>       $donationActives
  * @var int                              $donationTotalCents
  * @var int                              $donatiiAscunse
  */
 $donationList = is_array($donationList ?? null) ? $donationList : [];
-$donationActive = is_array($donationActive ?? null) ? $donationActive : null;
+$donationActives = is_array($donationActives ?? null) ? array_values(array_filter($donationActives, 'is_array')) : [];
 $donationTotalCents = (int) ($donationTotalCents ?? 0);
 $donatiiAscunse = (int) ($donatiiAscunse ?? 0);
 $esc = static fn (mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES);
@@ -66,7 +67,7 @@ $formatDate = static function (mixed $value, string $format = 'd.m.Y'): string {
                 </article>
 <?php endif; ?>
 <?php if ($donationList !== []): ?>
-                <?php if ($donationActive !== null): ?>
+                <?php foreach ($donationActives as $donationActive): ?>
                     <article class="acc-card acc-donation-active">
                         <div class="acc-head">
                             <div>
@@ -99,13 +100,14 @@ $formatDate = static function (mixed $value, string $format = 'd.m.Y'): string {
                         <form method="post" action="/contul-meu/donatii/opreste" style="margin-top:20px;"
                               data-donation-stop>
                             <?= \App\Support\AdminCsrf::camp() . "\n" ?>
+                            <input type="hidden" name="subscription_id" value="<?= $esc($donationActive['stripe_subscription_id'] ?? '') ?>">
                             <button class="acc-btn acc-btn--danger" type="submit">Oprește donația lunară</button>
                         </form>
                         <p class="acc-lead" style="margin:10px 0 0;font-size:13px;">
                             Se oprește imediat și nu îți mai retragem nicio sumă. Donațiile de până acum rămân neschimbate.
                         </p>
                     </article>
-                <?php endif; ?>
+                <?php endforeach; ?>
 
                 <article class="acc-card">
                     <div class="acc-head">
@@ -142,8 +144,16 @@ $formatDate = static function (mixed $value, string $format = 'd.m.Y'): string {
                                     'paid' => 'Plătită',
                                     'failed' => 'Eșuată',
                                     'pending' => 'În procesare',
+                                    'refunded' => 'Rambursată',
                                     default => $dStatus,
                                 };
+                                // O rambursare parțială (donatii/0064): suma dată înapoi, lângă starea plății.
+                                $dRefunded = (int) ($donation['refunded_cents'] ?? 0);
+                                if ($dStatus === 'paid' && $dRefunded > 0) {
+                                    $dLabel = 'Rambursată parțial (' . number_format($dRefunded / 100, 2, ',', '.') . ' '
+                                        . strtoupper((string) ($donation['currency'] ?? 'RON')) . ')';
+                                    $dTone = '';
+                                }
                                 ?>
                                 <tr>
                                     <td><?= $esc($formatDate($donation['paid_at'] ?? $donation['created_at'] ?? '')) ?></td>
@@ -171,13 +181,12 @@ $formatDate = static function (mixed $value, string $format = 'd.m.Y'): string {
 </div>
 <script>
 (function () {
-    var donationStop = document.querySelector('[data-donation-stop]');
-    if (donationStop) {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-donation-stop]'), function (donationStop) {
         donationStop.addEventListener('submit', function (event) {
             if (!window.confirm('Oprim donația lunară? Nu îți vom mai retrage nicio sumă.')) {
                 event.preventDefault();
             }
         });
-    }
+    });
 })();
 </script>

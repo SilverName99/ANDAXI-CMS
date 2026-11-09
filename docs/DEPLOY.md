@@ -677,6 +677,36 @@ Plățile BT autorizate rămân la bancă și le încasează din nou cronul codu
 - După 7 zile fără probleme: `public_html.vechi/`, `~/platforma/inghetare-bs` (`git -C ~/platforma/repo worktree remove
   ~/platforma/inghetare-bs`, dacă l-ai făcut) și copiile din `site/deploy/copii/` se pot șterge. Ne întrebi întâi.
 
+## Adoptarea vertij: ce cer pluginurile `donatii` și `membri`
+
+Pregătirea (nu e încă o noapte a comutării: vertij nu are înghețarea confirmată din live). Pe lângă pașii obișnuiți ai adoptării
+(mai sus) și `site-uri/vertij/ce-se-schimba.md`:
+
+- **Documentele cererilor de membru.** Codul vertij le ține în `public_html/storage/account-documents/`; codul comun în
+  `site/storage/account-documents/` (`Paths::stocareSite`, în afara docroot-ului). `adopta.sh` nu le mută: după `GATA`, înainte să
+  deschizi o cerere în admin, le copiezi păstrând numele (`cp -a ~/domains/vertij-tinitus.ro/public_html.vechi/storage/account-documents/.
+  ~/domains/vertij-tinitus.ro/site/storage/account-documents/`, dosarul 0770, fișierele 0640) și verifici că
+  `ls … | wc -l` dă același număr ca `SELECT COUNT(*) FROM account_verification_documents`. Pozele de profil
+  (`public/uploads/gallery/profile/`) le mută `adopta.sh` odată cu `uploads/`.
+- **Webhook-ul Stripe**: aceeași adresă (`https://vertij-tinitus.ro/webhook/stripe`) și același secret de semnare. Endpoint-ului din
+  Stripe i se adaugă, dacă lipsesc, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted` și
+  `charge.refunded` (lunile neîncasate, abonamentele încheiate, rambursările donațiilor și ale cotizațiilor); apoi Setări plăți →
+  „Verifică webhook-ul” trebuie să nu mai arate niciun eveniment lipsă.
+- **Versiunea API Stripe**: codul vertij nu trimite `Stripe-Version` (setarea `stripe_api_version` goală = la fel), deci contează versiunea
+  implicită a contului Stripe. Donația lunară cere factura cu `payments` și `confirmation_secret` (versiunile basil, din 2025-03-31);
+  în Stripe → Developers vezi versiunea contului. Prima factură a unei donații lunare e marcată plătită de `invoice.paid` în ambele forme
+  ale facturii (`tools/dev/test-donatii-membri.php`, D).
+- **Fusul orar**: în `site/.env`, `APP_TIMEZONE=Europe/Bucharest` (implicitul). Codul comun îl pune pe fiecare conexiune la bază, deci
+  orele noi și coloanele TIMESTAMP se arată în ora României oricare ar fi fusul serverului MySQL. Notezi o dată
+  `SELECT @@global.time_zone, @@system_time_zone` pe baza vertij: dacă nu e ora României, orele vechi de tip DATETIME scrise de MySQL
+  (`paid_at`, `confirmed_at`, `reviewed_at`, `cancelled_at`) rămân cu 2–3 ore în urmă (doar ora, nu data; nu se convertesc, fiindcă
+  aceleași coloane au și ore scrise de PHP în ora României).
+- **Membrii vechi**: pasul `site/vertij/0001` (cu `migreaza.php --aplica --site=vertij`, o singură dată) dovedește adresa celor care și-au
+  confirmat-o pe codul vertij; cei cu cererea încă neconfirmată de dinainte de adoptare intră în cont ca azi (nu se blochează nimeni),
+  cei înscriși după adoptare intră abia după confirmare. După `GATA`: `SELECT COUNT(*) FROM users WHERE email_confirmed_at IS NULL AND id IN
+  (SELECT user_id FROM account_verifications WHERE status <> 'awaiting_email')` trebuie să dea 0.
+- **Cronuri noi**: niciunul (donațiile și cotizațiile vin doar pe webhook și pe întoarcerea de la Stripe).
+
 ## Ce nu face (încă)
 
 - **Sesiunile codului vechi nu trec**: clienții și adminii se loghează din nou, coșurile deschise se pierd.

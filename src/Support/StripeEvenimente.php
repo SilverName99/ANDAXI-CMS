@@ -161,7 +161,7 @@ final class StripeEvenimente
         }
         $metadata = is_array($obiect['metadata'] ?? null) ? $obiect['metadata'] : [];
         $tipMetadata = trim((string) ($metadata['type'] ?? ''));
-        if ($tipMetadata === 'account_activation') {
+        if ($tipMetadata === 'account_activation' || self::alCotizatiilor($db, $obiect)) {
             return 'membri';
         }
         if ($tipMetadata === 'donation' || self::alDonatiilor($db, $obiect)) {
@@ -175,6 +175,25 @@ final class StripeEvenimente
             return 'magazin';
         }
         return null;
+    }
+
+    /**
+     * O încasare (de exemplu rambursată, `charge.refunded`) a plății unei cotizații (tabelul `account_activations`, al pluginului
+     * `membri`), chiar fără metadata plății pe încasare?
+     */
+    private static function alCotizatiilor(PDO $db, array $obiect): bool
+    {
+        $plata = (string) ($obiect['object'] ?? '') === 'charge' ? trim((string) ($obiect['payment_intent'] ?? '')) : '';
+        if ($plata === '') {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare('SELECT 1 FROM account_activations WHERE stripe_payment_intent_id = :v LIMIT 1');
+            $stmt->execute(['v' => $plata]);
+            return $stmt->fetchColumn() !== false;
+        } catch (Throwable) {
+            return false; // fără tabelul cotizațiilor (pluginul membri nu e pe site)
+        }
     }
 
     /** Un abonament, o factură sau o plată ale unei donații (tabelul `donations`, al pluginului `donatii`, Etapa 4)? */

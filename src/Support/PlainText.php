@@ -31,6 +31,28 @@ final class PlainText
         return trim($text);
     }
 
+    /**
+     * Ca fromHtml(), fără nicio etichetă rămasă: entitățile decodate nu pot face HTML („&lt;script&gt;” scris în text nu
+     * devine o etichetă). Pentru textul salvat sau pus undeva fără escape (titlul și rezumatul unui articol importat, blocul
+     * de text al unui newsletter nou; revizuirea de securitate din 9 nov 2026).
+     */
+    public static function fromHtmlNoTags(string $html): string
+    {
+        $text = self::fromHtml($html);
+        return str_contains($text, '<') ? trim((string) preg_replace('/\s+/u', ' ', strip_tags($text))) : $text;
+    }
+
+    /** Ca excerpt(), fără etichete (fromHtmlNoTags()). */
+    public static function excerptNoTags(string $html, int $limit): string
+    {
+        $text = self::fromHtmlNoTags($html);
+        if ($limit <= 0 || $text === '') {
+            return $text;
+        }
+
+        return mb_strlen($text) > $limit ? mb_substr($text, 0, $limit) . '…' : $text;
+    }
+
     /** Textul de mai sus, tăiat la `$limit` caractere, cu „…” dacă a rămas ceva pe dinafară. */
     public static function excerpt(string $html, int $limit): string
     {

@@ -55,6 +55,12 @@ final class MembriController
 
     public const SESIUNE_EMAIL = 'pending_verification_email';
 
+    /** Întoarcerile de la Stripe Checkout ale aceluiași vizitator în 15 minute (LimitaCereri). */
+    public const INTOARCERI_LA_15_MINUTE = 20;
+
+    /** Câte zile e valabil linkul de confirmare al unei cereri de membru (revizuirea de securitate, 9 nov 2026). */
+    public const ZILE_LINK_CONFIRMARE = 7;
+
     // ================================================================== înscrierea (agățările nucleului)
 
     /**
@@ -166,8 +172,15 @@ final class MembriController
     }
 
     /**
-     * Agățarea `inregistrare.cont_existent`: contul există, dar dacă adresa nu a fost confirmată niciodată e inutilizabil —
-     * reluăm înscrierea peste el în loc să blocăm omul.
+     * Agățarea `inregistrare.cont_existent`: adresa are deja cont. Revizuirea de securitate (9 nov 2026): codul vertij relua
+     * înscrierea peste cont (parola, numele, telefonul, cererea și documentele noi) cât adresa nu era confirmată prin linkul
+     * cererii; un cont confirmat altfel (resetarea parolei, logarea cu Google) putea fi astfel preluat. Acum contul nu se
+     * schimbă niciodată din formularul de înscriere:
+     *  - adresa nedovedită, ultima cerere „așteaptă confirmarea pe email”, contul nefolosit (fără comenzi, plăți, donații,
+     *    puncte, Google): linkul cererii existente se trimite din nou (token nou, bugetul retrimiterilor),
+     *    celelalte sesiuni ale contului se încheie, iar pagina „Verifică-ți adresa” spune să confirme cu parola de la prima
+     *    înscriere (sau să o reseteze); datele noi din formular nu se salvează;
+     *  - altfel: „Există deja un cont … Intră în cont sau resetează parola”.
      */
     public static function contExistent(PDO $db, string $email, array $date): ?string
     {
@@ -176,19 +189,20 @@ final class MembriController
             return null;
         }
         $unconfirmed = self::findUnconfirmedAccount($db, $email);
-        if ($unconfirmed === null) {
-            return null;
+        if ($unconfirmed === null || !$unconfirmed['nefolosit']) {
+            Flash::set('error', 'Există deja un cont cu această adresă de email. Intră în cont sau, dacă nu mai știi parola, '
+                . 'folosește „Am uitat parola”.');
+            return '/login';
         }
-        self::restartUnconfirmedRegistration($db, $unconfirmed, $submission, Settings::all($db), [
-            'first_name' => trim((string) ($_POST['first_name'] ?? '')),
-            'last_name' => trim((string) ($_POST['last_name'] ?? '')),
-            'email' => $email,
-            'phone' => trim((string) ($_POST['phone'] ?? '')),
-            'birth_date' => null,
-            'gender' => '',
-            'password' => (string) ($_POST['password'] ?? ''),
-        ]);
+        CustomerAuth::incheieAlteSesiuni($db, (int) $unconfirmed['user_id']);
+        $ip = mb_substr(IpClient::adresa(), 0, 64);
+        if (!ConfirmareEmail::limitat($db, $ip, 'resend')) {
+            ConfirmareEmail::noteazaRetrimitere($db, $ip);
+            self::resendVerificationEmail($db, $email, Settings::all($db));
+        }
         $_SESSION[self::SESIUNE_EMAIL] = $email;
+        Flash::set('success', 'Ai deja o înscriere care așteaptă confirmarea adresei. Ți-am trimis din nou linkul: confirmă cu parola '
+            . 'aleasă la prima înscriere (dacă n-o mai știi, folosește „Am uitat parola”). Datele noi din formular nu au fost salvate.');
         return '/cont/verifica-email';
     }
 
@@ -652,11 +666,12 @@ final class MembriController
     }
 
     /**
-     * Un cont a cărui adresă nu a fost niciodată confirmată e inutilizabil: nu poate
-     * fi folosit și nici recreat. Îl regăsim aici ca să putem relua înregistrarea
-     * sau retrimite emailul de confirmare.
+     * Contul cu adresa `$email` a cărui înscriere de membru așteaptă confirmarea: adresa nedovedită pentru nucleu
+     * (`users.email_confirmed_at`) și ultima lui cerere încă „awaiting_email”. `nefolosit`: contul nu a fost folosit deloc
+     * (fără Google, fără puncte, comenzi, plăți ale cotizației sau donații din cont; o parolă resetată sau o logare cu Google
+     * dovedesc oricum adresa, deci contul nu mai e „neconfirmat”).
      *
-     * @return array{user_id: int, verification_id: int}|null
+     * @return array{user_id: int, verification_id: int, nefolosit: bool}|null
      */
     private static function findUnconfirmedAccount(PDO $db, string $email): ?array
     {
@@ -666,105 +681,44 @@ final class MembriController
         }
 
         try {
-            $stmt = $db->prepare(
-                'SELECT v.id AS verification_id, u.id AS user_id
-                 FROM users u
-                 INNER JOIN account_verifications v ON v.user_id = u.id
-                 WHERE u.email = :email
-                   AND v.status = :status
-                 ORDER BY v.id DESC
-                 LIMIT 1'
-            );
-            $stmt->execute(['email' => $email, 'status' => ProfessionAccounts::STATUS_AWAITING_EMAIL]);
-            $row = $stmt->fetch();
+            $stmt = $db->prepare('SELECT id, google_id, loyalty_points FROM users WHERE email = :email LIMIT 1');
+            $stmt->execute(['email' => $email]);
+            $user = $stmt->fetch();
         } catch (Throwable) {
             return null;
         }
-
-        if (!is_array($row)) {
+        $userId = is_array($user) ? (int) ($user['id'] ?? 0) : 0;
+        if ($userId <= 0 || ConfirmareEmail::confirmat($db, $userId)) {
+            return null;
+        }
+        $verification = ProfessionAccounts::latestVerification($db, $userId);
+        if (!is_array($verification) || (string) ($verification['status'] ?? '') !== ProfessionAccounts::STATUS_AWAITING_EMAIL) {
             return null;
         }
 
-        return [
-            'user_id' => (int) ($row['user_id'] ?? 0),
-            'verification_id' => (int) ($row['verification_id'] ?? 0),
-        ];
-    }
-
-    /**
-     * Reia înscrierea peste un cont a cărui adresă nu a fost confirmată: actualizează
-     * datele contului, aruncă cererea veche cu documentele ei și o depune pe cea nouă.
-     *
-     * Nu e o breșă: fără accesul la căsuța de email nimeni nu poate confirma contul,
-     * deci nici nu îl poate folosi.
-     *
-     * @param array{user_id: int, verification_id: int} $account
-     */
-    private static function restartUnconfirmedRegistration(PDO $db, array $account, array $submission, array $settings, array $profile): void
-    {
-        $userId = (int) ($account['user_id'] ?? 0);
-        if ($userId <= 0) {
-            return;
-        }
-
-        try {
-            $stmt = $db->prepare(
-                'UPDATE users
-                 SET first_name = :first_name, last_name = :last_name, phone = :phone,
-                     birth_date = :birth_date, gender = :gender, password_hash = :password_hash,
-                     account_status = :status
-                 WHERE id = :id'
-            );
-            $stmt->execute([
-                'first_name' => (string) ($profile['first_name'] ?? ''),
-                'last_name' => (string) ($profile['last_name'] ?? ''),
-                'phone' => ((string) ($profile['phone'] ?? '')) !== '' ? (string) $profile['phone'] : null,
-                'birth_date' => $profile['birth_date'] ?? null,
-                'gender' => ((string) ($profile['gender'] ?? '')) !== '' ? (string) $profile['gender'] : null,
-                'password_hash' => password_hash((string) ($profile['password'] ?? ''), PASSWORD_BCRYPT),
-                'status' => ProfessionAccounts::STATUS_AWAITING_EMAIL,
-                'id' => $userId,
-            ]);
-        } catch (Throwable $exception) {
-            DonatiiController::logAccountIssue('reluare_inscriere', $exception->getMessage());
-            Flash::set('error', 'Nu am putut relua înscrierea. Te rugăm să ne contactezi.');
-            return;
-        }
-
-        self::discardUnconfirmedVerification($db, (int) ($account['verification_id'] ?? 0));
-        ProfessionAccounts::assignMemberCode($db, $userId, $settings);
-
-        self::storeProfessionSubmission(
-            $db,
-            $userId,
-            $submission,
-            $settings,
-            trim(((string) ($profile['first_name'] ?? '')) . ' ' . ((string) ($profile['last_name'] ?? ''))),
-            (string) ($profile['email'] ?? '')
-        );
-    }
-
-    /** Șterge cererea neconfirmată și documentele ei, ca reînscrierea să pornească curat. */
-    private static function discardUnconfirmedVerification(PDO $db, int $verificationId): void
-    {
-        if ($verificationId <= 0) {
-            return;
-        }
-
-        foreach (ProfessionAccounts::documents($db, $verificationId) as $document) {
-            $path = ProfessionAccounts::documentPath((string) ($document['stored_name'] ?? ''));
-            if (is_file($path)) {
-                @unlink($path);
+        $nefolosit = trim((string) ($user['google_id'] ?? '')) === '' && (int) ($user['loyalty_points'] ?? 0) === 0;
+        foreach ([
+            'SELECT COUNT(*) FROM orders WHERE user_id = :id',
+            'SELECT COUNT(*) FROM account_activations WHERE user_id = :id',
+            'SELECT COUNT(*) FROM donations WHERE user_id = :id',
+        ] as $sql) {
+            if (!$nefolosit) {
+                break;
+            }
+            try {
+                $q = $db->prepare($sql);
+                $q->execute(['id' => $userId]);
+                $nefolosit = (int) $q->fetchColumn() === 0;
+            } catch (Throwable) {
+                // Un tabel sau o coloană care lipsește (alt plugin): nimic de numărat acolo.
             }
         }
 
-        try {
-            $db->prepare('DELETE FROM account_verification_documents WHERE verification_id = :vid')
-                ->execute(['vid' => $verificationId]);
-            $db->prepare('DELETE FROM account_verifications WHERE id = :id AND status = :status')
-                ->execute(['id' => $verificationId, 'status' => ProfessionAccounts::STATUS_AWAITING_EMAIL]);
-        } catch (Throwable) {
-        }
+        return [
+            'user_id' => $userId,
+            'verification_id' => (int) ($verification['id'] ?? 0),
+            'nefolosit' => $nefolosit,
+        ];
     }
 
     // ================================================================== confirmarea adresei
@@ -777,7 +731,10 @@ final class MembriController
             return null;
         }
         try {
-            $stmt = $db->prepare('SELECT * FROM account_verifications WHERE confirm_token_hash = :hash LIMIT 1');
+            // Linkul e valabil 7 zile de la trimitere (ca linkul nucleului): `updated_at` se schimbă când se scrie tokenul (la
+            // înscriere și la fiecare retrimitere), iar o cerere în „awaiting_email” nu se schimbă altfel.
+            $stmt = $db->prepare('SELECT * FROM account_verifications WHERE confirm_token_hash = :hash
+                AND COALESCE(updated_at, created_at) >= (NOW() - INTERVAL ' . self::ZILE_LINK_CONFIRMARE . ' DAY) LIMIT 1');
             $stmt->execute(['hash' => hash('sha256', $token)]);
             $verification = $stmt->fetch() ?: null;
         } catch (Throwable) {
@@ -896,7 +853,29 @@ final class MembriController
             return false;
         }
         $verification = ProfessionAccounts::latestVerification($db, $userId);
-        return is_array($verification) && (string) ($verification['status'] ?? '') === ProfessionAccounts::STATUS_AWAITING_EMAIL;
+        if (!is_array($verification) || (string) ($verification['status'] ?? '') !== ProfessionAccounts::STATUS_AWAITING_EMAIL) {
+            return false;
+        }
+        // Cererile de dinainte de adoptare (codul vertij lăsa contul să intre și neconfirmat): nu blocăm pe nimeni care intra
+        // ieri. Adoptarea = momentul în care migrarea membri/0063 a găsit tabelele vertij („detectata”); pe un site nou nu e.
+        $adoptare = self::momentulAdoptarii($db);
+        return $adoptare === '' || (string) ($verification['created_at'] ?? '') >= $adoptare;
+    }
+
+    /** Când a găsit migrarea `membri/0063` tabelele unui site existent (adoptarea vertij), sau '' (instalare nouă). */
+    private static function momentulAdoptarii(PDO $db): string
+    {
+        static $moment = null;
+        if ($moment !== null) {
+            return $moment;
+        }
+        try {
+            $stmt = $db->query("SELECT terminata_la FROM _platforma_migrari WHERE id = 'membri/0063_membri' AND rezultat = 'detectata' LIMIT 1");
+            $moment = $stmt !== false ? trim((string) ($stmt->fetchColumn() ?: '')) : '';
+        } catch (Throwable) {
+            $moment = '';
+        }
+        return $moment;
     }
 
     /** `GET /cont/verifica-email`: pagina afișată imediat după înregistrare, cât timp adresa nu e confirmată. */
@@ -933,7 +912,7 @@ final class MembriController
             . '</ol>'
             . '<p class="verify-email-note">Nu găsești emailul? Verifică folderul Spam sau Promoții. '
             . 'Poate dura câteva minute până ajunge.</p>'
-            . '<form class="verify-email-resend" method="post" action="/cont/retrimite-confirmarea">'
+            . '<form class="verify-email-resend" method="post" action="/cont/retrimite-confirmarea">' . AdminCsrf::camp()
             . ($email !== ''
                 ? '<button type="submit" class="is-wide">Trimite-mi din nou emailul</button>'
                 : '<label for="verify-email-resend-input">Trimite-mi din nou emailul</label>'
@@ -1028,6 +1007,13 @@ final class MembriController
         if (!$db instanceof PDO) {
             Flash::set('error', 'Conexiunea la baza de date nu este disponibilă.');
             header('Location: /cont/verifica-email');
+            return;
+        }
+        // Jetonul formularului (revizuirea de securitate, 9 nov 2026): un formular de pe alt site nu poate trimite emailuri
+        // de confirmare în numele unui vizitator.
+        if (!AdminCsrf::valid()) {
+            Flash::set('error', 'Formularul a expirat. Încearcă din nou.');
+            header('Location: ' . (CustomerAuth::check() ? '/contul-meu?section=activare' : '/cont/verifica-email'));
             return;
         }
 
@@ -1561,7 +1547,9 @@ final class MembriController
         try {
             $checkoutUrl = self::createActivationCheckoutSession($db, $settings, $userId, $user ?? [], $state, $selectedOption);
         } catch (Throwable $exception) {
-            Flash::set('error', 'Plata nu a putut fi inițiată: ' . $exception->getMessage());
+            // Mesajul Stripe (sau al excepției) doar în jurnal (revizuirea de securitate, 9 nov 2026).
+            DonatiiController::logAccountIssue('activare_stripe', $exception->getMessage());
+            Flash::set('error', 'Plata nu a putut fi inițiată acum. Încearcă din nou peste câteva minute sau scrie-ne.');
             header('Location: /contul-meu?section=activare');
             return;
         }
@@ -1682,6 +1670,19 @@ final class MembriController
             return;
         }
 
+        // Fiecare întoarcere e o cerere spre Stripe: un buget pe vizitator (revizuirea de securitate, 9 nov 2026); peste el,
+        // webhook-ul notează oricum plata.
+        if (!\App\Support\LimitaCereri::incearca($db, 'activare_retur', self::INTOARCERI_LA_15_MINUTE)) {
+            Flash::set('success', 'Îți confirmăm plata imediat ce Stripe ne trimite confirmarea.');
+            header('Location: /contul-meu?section=activare');
+            return;
+        }
+        // Doar o sesiune Checkout (id-ul are forma cs_…), nu orice text dat în adresă.
+        if (preg_match('/^cs_[A-Za-z0-9_]{1,250}$/', $sessionId) !== 1) {
+            header('Location: /contul-meu?section=activare');
+            return;
+        }
+
         $settings = Settings::all($db);
         $secretKey = trim((string) ($settings['stripe_secret_key'] ?? ''));
 
@@ -1722,6 +1723,43 @@ final class MembriController
         StripeEvenimente::handler('membri', 'checkout.session.async_payment_succeeded', $sesiune(true));
         StripeEvenimente::handler('membri', 'checkout.session.expired', $sesiune(false));
         StripeEvenimente::handler('membri', 'checkout.session.async_payment_failed', $sesiune(false));
+        StripeEvenimente::handler('membri', 'charge.refunded', static fn (PDO $db, array $obiect): ?string => self::applyActivationRefund($db, $obiect));
+    }
+
+    /**
+     * O cotizație rambursată din Stripe (`charge.refunded`; decizia proprietarului din 9 nov 2026): suma rambursată pe plata ei
+     * (`membri/0065`) și un rând în jurnalul adminului; adminul o vede în Cereri conturi, în cerere și în lista utilizatorilor.
+     * Contul NU se dezactivează singur (perioada plătită rămâne), decide administratorul. Idempotent (aceeași sumă = nimic).
+     */
+    private static function applyActivationRefund(PDO $db, array $charge): string
+    {
+        $paymentIntentId = trim((string) ($charge['payment_intent'] ?? ''));
+        $refunded = max(0, (int) ($charge['amount_refunded'] ?? 0));
+        if ($paymentIntentId === '' || $refunded <= 0) {
+            return 'fara_rambursare';
+        }
+        try {
+            $stmt = $db->prepare("SELECT id, user_id FROM account_activations WHERE stripe_payment_intent_id = :pi AND status = 'paid' ORDER BY id DESC LIMIT 1");
+            $stmt->execute(['pi' => $paymentIntentId]);
+            $activation = $stmt->fetch();
+            if (!is_array($activation)) {
+                return 'fara_activare';
+            }
+            $update = $db->prepare('UPDATE account_activations SET refunded_cents = :r, refunded_at = COALESCE(refunded_at, NOW())
+                WHERE id = :id AND refunded_cents <> :r2');
+            $update->execute(['r' => $refunded, 'r2' => $refunded, 'id' => (int) $activation['id']]);
+            if ($update->rowCount() === 0) {
+                return 'nimic_nou';
+            }
+        } catch (Throwable) {
+            return 'eroare';
+        }
+        AdminActivityLog::log($db, 'account_activation_refunded', [
+            'activation_id' => (int) $activation['id'],
+            'user_id' => (int) $activation['user_id'],
+            'refunded_cents' => $refunded,
+        ]);
+        return 'rambursata';
     }
 
     /** Marchează rezultatul plății de activare. Idempotent: webhook-ul și retur-ul pot ajunge amândouă. */
@@ -2514,18 +2552,36 @@ final class MembriController
         $note = trim((string) ($_POST['review_note'] ?? ''));
         $userId = (int) ($verification['user_id'] ?? 0);
 
+        // Revizuirea de securitate (9 nov 2026): doar o cerere „în verificare” (adresa confirmată) care e ultima cerere a
+        // contului primește o decizie; una veche (înlocuită de o cerere nouă), una neconfirmată sau una deja decisă nu mai
+        // schimbă starea contului.
+        $latest = ProfessionAccounts::latestVerification($db, $userId);
+        if ((string) ($verification['status'] ?? '') !== ProfessionAccounts::STATUS_PENDING
+            || !is_array($latest) || (int) ($latest['id'] ?? 0) !== $verificationId) {
+            Flash::set('error', 'Cererea nu mai așteaptă o decizie (e deja decisă, neconfirmată sau contul are o cerere mai nouă).');
+            header('Location: /admin/accounts/verifications/' . $verificationId);
+            return;
+        }
+
         try {
             $stmt = $db->prepare(
                 'UPDATE account_verifications
                  SET status = :status, review_note = :review_note, reviewed_by = :reviewed_by, reviewed_at = NOW()
-                 WHERE id = :id'
+                 WHERE id = :id AND status = :pending'
             );
             $stmt->execute([
                 'status' => $decision,
                 'review_note' => $note !== '' ? $note : null,
                 'reviewed_by' => Auth::id(),
                 'id' => $verificationId,
+                'pending' => ProfessionAccounts::STATUS_PENDING,
             ]);
+            if ($stmt->rowCount() !== 1) {
+                // Decisă chiar acum de altă cerere.
+                Flash::set('error', 'Cererea nu mai așteaptă o decizie.');
+                header('Location: /admin/accounts/verifications/' . $verificationId);
+                return;
+            }
 
             $updateUser = $db->prepare('UPDATE users SET account_status = :status WHERE id = :id');
             $updateUser->execute(['status' => $decision, 'id' => $userId]);

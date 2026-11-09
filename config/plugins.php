@@ -516,9 +516,9 @@ return [
             ],
             // Evenimentele Stripe pe care le procesează pluginul („Verifică webhook-ul” din Setări plăți le cere endpoint-ului):
             // plata unei donații, fiecare lună plătită (invoice.paid; invoice.payment_succeeded, dacă endpoint-ul îl are, e
-            // procesat la fel), abonamentul oprit.
+            // procesat la fel) sau neplătită, abonamentul încheiat sau oprit, rambursările (decizia proprietarului, 9 nov 2026).
             'stripe_evenimente' => ['payment_intent.succeeded', 'payment_intent.payment_failed', 'invoice.paid',
-                'customer.subscription.deleted'],
+                'invoice.payment_failed', 'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded'],
             'tabele' => ['donations'],
         ],
 
@@ -546,9 +546,10 @@ return [
                 ['grup' => 'clienti', 'ordine' => 27, 'eticheta' => 'Setări conturi', 'href' => '/admin/accounts/settings',
                     'icon' => 'settings', 'activ' => ['/admin/accounts/settings']],
             ],
-            // Sesiunile de plată ale cotizației (metadata.type = account_activation; plățile lor nu au handler, ca în vertij).
+            // Sesiunile de plată ale cotizației (metadata.type = account_activation; plățile lor nu au handler, ca în vertij) și
+            // rambursarea unei cotizații (charge.refunded: semnalată în admin, contul nu se dezactivează singur; 9 nov 2026).
             'stripe_evenimente' => ['checkout.session.completed', 'checkout.session.async_payment_succeeded',
-                'checkout.session.async_payment_failed', 'checkout.session.expired'],
+                'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded'],
             'tabele' => ['professions', 'profession_fields', 'account_verifications', 'account_verification_documents',
                 'account_activations', 'users.profession_id', 'users.account_status', 'users.account_active_until',
                 'users.member_code', 'users.avatar_url', 'users.stripe_customer_id'],

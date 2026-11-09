@@ -243,6 +243,7 @@ if ($defaultMonths === 0 && $durationOptions !== []) {
             </button>
             <?php if ($status === 'awaiting_email'): ?>
                 <form method="post" action="/cont/retrimite-confirmarea" style="margin-top:12px;">
+                    <?= \App\Support\AdminCsrf::camp() . "\n" ?>
                     <button class="account-activation-btn" type="submit"
                             style="background:#fff;color:#6f2b98;border:1.5px solid #e5d9ec;">
                         Retrimite emailul de confirmare

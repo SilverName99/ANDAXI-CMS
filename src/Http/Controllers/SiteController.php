@@ -7475,9 +7475,17 @@ HTML;
 
         $contentText = \App\Support\PlainText::fromHtml($contentHtml); // vertij 7d7d8cc: fără „&nbsp;” în rezumat
         $excerpt = trim((string) ($post['excerpt'] ?? ''));
+        $excerptDinText = false;
         if ($excerpt === '' && $contentText !== '') {
             $excerpt = mb_substr($contentText, 0, 180) . (mb_strlen($contentText) > 180 ? '…' : '');
+            $excerptDinText = true;
         }
+        // Revizuirea de securitate (9 nov 2026): textul din PlainText are entitățile decodate („&lt;b&gt;” scris în articol
+        // devine „<b>”), deci intră în șablon scăpat: ca HTML în paginile și CSS-ul șablonului, ca șir JavaScript în scriptul lui.
+        // Rezumatul scris de admin rămâne cum e (ca înainte).
+        $textHtml = static fn (string $t): string => htmlspecialchars($t, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $textJs = static fn (string $t): string => substr((string) json_encode($t, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE), 1, -1);
         $image = trim((string) ($post['cover_image_url'] ?? ''));
         if ($image === '') {
             $image = '/assets/img/product-placeholder.svg';
@@ -7638,8 +7646,8 @@ CSS;
         $tokens = [
             '{{blog_title}}' => $title,
             '{{blog_slug}}' => $slug,
-            '{{blog_excerpt}}' => $excerpt,
-            '{{blog_content}}' => $contentText,
+            '{{blog_excerpt}}' => $excerptDinText ? $textHtml($excerpt) : $excerpt,
+            '{{blog_content}}' => $textHtml($contentText),
             '{{blog_content_html}}' => $contentHtml,
             '{{blog_image_url}}' => $image,
             '{{blog_category}}' => $blogCategory,
@@ -7668,10 +7676,11 @@ CSS;
         $renderHtml = $templateHtml;
         $renderCss = $templateCss;
         $renderJs = $templateJs;
+        $tokensJs = ['{{blog_content}}' => $textJs($contentText)] + ($excerptDinText ? ['{{blog_excerpt}}' => $textJs($excerpt)] : []) + $tokens;
         foreach ($tokens as $needle => $value) {
             $renderHtml = str_replace($needle, $value, $renderHtml);
             $renderCss = str_replace($needle, $value, $renderCss);
-            $renderJs = str_replace($needle, $value, $renderJs);
+            $renderJs = str_replace($needle, $tokensJs[$needle], $renderJs);
         }
 
         // Template-urile scrise înainte de bibliografie și etichete n-au

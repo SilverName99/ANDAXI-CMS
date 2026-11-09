@@ -42,7 +42,7 @@ namespace App\Support;
  *    => bool) peste cele din setări; `inregistrare.inlocuieste_campurile()` → bool: câmpurile contului le randează pluginul
  *    (formularul primește și `enctype="multipart/form-data"`); `confirmare.link_plugin($db, $token)` → bool și
  *    `confirmare.foloseste_plugin($db, $token, $parola)` → `{location, flash: [tip, text]}` sau null: un link de confirmare
- *    al pluginului pe `/cont/confirmare/{token}`; `confirmare.dupa($db, $idUtilizator)`: linkul nucleului a dovedit adresa;
+ *    al pluginului pe `/cont/confirmare/{token}`; `confirmare.dupa($db, $idUtilizator)`: adresa a fost dovedită (orice dovadă: un link, resetarea parolei, Google; din ConfirmareEmail::marcheazaConfirmat);
  *    `logare.blocata($db, $idUtilizator)` → bool (cu confirmarea cerută la înregistrare); `cont.profil($utilizator)` (HTML,
  *    în „Profilul meu”); `continut.nota_titlu($db)` → titlul notei; `admin.utilizatori.coloane($randuri)` →
  *    `{cap, celule: id => HTML, numar}` (Admin → Utilizatori).

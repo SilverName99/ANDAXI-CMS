@@ -59,4 +59,6 @@ return [
     // Etapa 4 (vertij): donațiile.
     ['punct' => 'cont.taburi', 'plugin' => 'donatii', 'fn' => [DonatiiController::class, 'tabCont']],
     ['punct' => 'layout.final_body', 'plugin' => 'donatii', 'fn' => [DonatiiController::class, 'sertar']],
+    // Ștergerea unui cont oprește donațiile lui lunare în Stripe (decizia proprietarului, 9 nov 2026).
+    ['punct' => 'utilizator.sters', 'plugin' => 'donatii', 'fn' => [DonatiiController::class, 'utilizatorSters']],
 ];

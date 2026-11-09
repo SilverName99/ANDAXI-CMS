@@ -28,7 +28,12 @@ declare(strict_types=1);
  *    rânduri, cu diferențele declarate aici, fiecare la locul ei (jetonul formularului, confirmarea cu parola);
  * D  doar pe codul comun: jetonul formularului (CSRF) pe fiecare POST, donația doar ca JSON, logarea unui cont neconfirmat,
  *    adresa dovedită de confirmare, donațiile fără cont arătate abia după dovadă, pluginurile oprite (adresele, meniul, banii
- *    notați mereu de webhook).
+ *    notați mereu de webhook); și reparațiile revizuirii de securitate din 9 nov 2026, unde codul comun diferă voit de vertij
+ *    (declarate la locul lor): înscrierea pe o adresă existentă nu mai schimbă contul (parola, datele, cererea), confirmarea
+ *    prin resetarea parolei trece cererea la verificare, linkul de confirmare expiră după 7 zile, decizia doar pe ultima cerere
+ *    „în verificare”, bugetul, suma maximă și destinația donației, mesajele Stripe ascunse, mai multe donații lunare,
+ *    rambursările, lunile neplătite, abonamentele încheiate, ștergerea contului (abonamentele oprite în Stripe), adresele
+ *    membrilor vechi dovedite la adoptare (site/vertij/0001) și cererile vechi neconfirmate care nu blochează logarea.
  *
  * Își face și își șterge bazele cms_dm_vechi, cms_dm_nou și dosarul $CMS_DEV_DIR/donatii-membri. Raportul:
  * $CMS_DEV_DIR/test-donatii-membri-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Toate datele sunt inventate.
@@ -145,15 +150,18 @@ $normal = static function (array $randuri, array $momente = [], array $aleatoare
     unset($rand);
     return $randuri;
 };
-$starea = static function (string $parte) use ($conectare, $baze, $normal): array {
+/** Coloanele adăugate de codul comun (donatii/0064, membri/0065: rambursările), scoase din comparația cu codul vertij. */
+$faraColoaneNoi = static fn (array $randuri): array => array_map(static fn (array $r): array => array_diff_key($r,
+    ['refunded_cents' => 1, 'refunded_at' => 1]), $randuri);
+$starea = static function (string $parte) use ($conectare, $baze, $normal, $faraColoaneNoi): array {
     $db = $conectare($baze[$parte]);
     return [
-        'donatii' => $normal($db->query('SELECT * FROM donations ORDER BY id')->fetchAll(), ['created_at', 'paid_at', 'cancelled_at'], ['reference']),
+        'donatii' => $normal($faraColoaneNoi($db->query('SELECT * FROM donations ORDER BY id')->fetchAll()), ['created_at', 'paid_at', 'cancelled_at'], ['reference']),
         'cereri' => $normal($db->query('SELECT id, user_id, profession_id, profession_name, status, answers_json, gdpr_accepted, gdpr_accepted_at, '
             . 'confirm_token_hash IS NOT NULL AS are_token, confirmed_at, reviewed_by, reviewed_at, review_note FROM account_verifications ORDER BY id')->fetchAll(),
             ['gdpr_accepted_at', 'confirmed_at', 'reviewed_at']),
         'documente' => $db->query('SELECT id, verification_id, field_key, field_label, original_name, mime_type, file_size FROM account_verification_documents ORDER BY id')->fetchAll(),
-        'activari' => $normal($db->query('SELECT * FROM account_activations ORDER BY id')->fetchAll(), ['created_at', 'updated_at', 'paid_at', 'period_start', 'period_end']),
+        'activari' => $normal($faraColoaneNoi($db->query('SELECT * FROM account_activations ORDER BY id')->fetchAll()), ['created_at', 'updated_at', 'paid_at', 'period_start', 'period_end']),
         'conturi' => $normal($db->query('SELECT id, email, first_name, last_name, phone, profession_id, account_status, account_active_until, member_code, '
             . 'avatar_url FROM users ORDER BY id')->fetchAll(), ['account_active_until'], ['avatar_url']),
         'profesii' => $normal($db->query('SELECT * FROM professions ORDER BY id')->fetchAll(), ['created_at', 'updated_at']),
@@ -203,6 +211,28 @@ $undeDifera = static function (string $a, string $b): string {
     $i = strspn($a ^ $b, "\0");
     $arata = static fn (string $t): string => str_replace(["\r", "\n"], ['', '⏎'], substr($t, max(0, $i - 80), 330));
     return 'de la octetul ' . $i . ': «' . $arata($a) . '» ≠ «' . $arata($b) . '»';
+};
+/** Doar rândurile care diferă între două stări (tabel => [[vechi, nou], …]), pentru mesajele scurte ale verificărilor. */
+$diferenteRanduri = static function (array $sv, array $sn): array {
+    $out = [];
+    foreach ($sv as $tabel => $randuri) {
+        $alte = $sn[$tabel] ?? [];
+        if ($randuri === $alte) {
+            continue;
+        }
+        if (!is_array($randuri) || !is_array($alte) || !array_is_list($randuri)) {
+            $out[$tabel] = [$randuri, $alte];
+            continue;
+        }
+        for ($i = 0; $i < max(count($randuri), count($alte)); $i++) {
+            if (($randuri[$i] ?? null) !== ($alte[$i] ?? null)) {
+                $a = $randuri[$i] ?? null;
+                $b = $alte[$i] ?? null;
+                $out[$tabel][] = is_array($a) && is_array($b) ? ['id' => $a['id'] ?? null, 'vechi' => array_diff_assoc($a, $b), 'nou' => array_diff_assoc($b, $a)] : [$a, $b];
+            }
+        }
+    }
+    return $out;
 };
 $faraIdempotenta = static fn (array $cereri): array => array_map(static fn (array $c): array => array_diff_key($c, ['idempotenta' => 1]), $cereri);
 /** Emailurile capturate de la ultima citire: destinatarul și subiectul, în ordine. */
@@ -389,11 +419,12 @@ try {
     // ── A: adoptarea ──
     $scrie('');
     $scrie('A. Adoptarea: migrările nu ating tabelele și coloanele pluginurilor');
-    $instantaneu = static function (PDO $db) use ($tabelePlugin): array {
+    // Coloanele rambursărilor (donatii/0064, membri/0065), noi în codul comun, la coada tabelelor: scoase aici, verificate mai jos.
+    $instantaneu = static function (PDO $db) use ($tabelePlugin, $faraColoaneNoi): array {
         $r = [];
         foreach ($tabelePlugin as $t) {
-            $r[$t] = [preg_replace('/ AUTO_INCREMENT=\d+/', '', (string) ($db->query('SHOW CREATE TABLE `' . $t . '`')->fetch(PDO::FETCH_NUM)[1] ?? '')),
-                $db->query('SELECT * FROM `' . $t . '` ORDER BY id')->fetchAll()];
+            $creare = preg_replace('/ AUTO_INCREMENT=\d+/', '', (string) ($db->query('SHOW CREATE TABLE `' . $t . '`')->fetch(PDO::FETCH_NUM)[1] ?? ''));
+            $r[$t] = [preg_replace('/\n  `refunded_(cents|at)` [^\n]*/', '', (string) $creare), $faraColoaneNoi($db->query('SELECT * FROM `' . $t . '` ORDER BY id')->fetchAll())];
         }
         $r['users'] = [$db->query("SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
             AND TABLE_NAME = 'users' AND COLUMN_NAME IN ('profession_id','account_status','account_active_until','member_code','avatar_url','stripe_customer_id')
@@ -416,6 +447,29 @@ try {
         $verifica('A ' . $idMigrare . ' „detectata”, 0 operații', is_array($rand) && $rand['rezultat'] === 'detectata' && (int) $rand['operatii'] === 0,
             json_encode($rand) ?: 'lipsă');
     }
+    // Rambursările (codul comun): două coloane la coada fiecărui tabel, cu implicitele care dau rândurile de azi.
+    foreach (['donatii/0064_donatii_rambursari' => 'donations', 'membri/0065_membri_rambursari' => 'account_activations'] as $idMigrare => $tabelR) {
+        $rand = $dbNou->query("SELECT rezultat, operatii FROM _platforma_migrari WHERE id = " . $dbNou->quote($idMigrare))->fetch();
+        $col = $dbNou->query("SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = '" . $tabelR . "' AND COLUMN_NAME LIKE 'refunded\\_%' ORDER BY ORDINAL_POSITION")->fetchAll();
+        $nenule = (int) $dbNou->query('SELECT COUNT(*) FROM ' . $tabelR . ' WHERE refunded_cents <> 0 OR refunded_at IS NOT NULL')->fetchColumn();
+        $verifica('A ' . $idMigrare . ': „aplicata”, 2 operații, ' . $tabelR . '.refunded_cents (0) și refunded_at (NULL) la coadă, niciun rând atins',
+            is_array($rand) && $rand['rezultat'] === 'aplicata' && (int) $rand['operatii'] === 2 && count($col) === 2 && $nenule === 0
+            && ($col[0]['COLUMN_NAME'] ?? '') === 'refunded_cents' && in_array((string) ($col[0]['COLUMN_DEFAULT'] ?? ''), ['0', "'0'"], true),
+            json_encode([$rand, $col, $nenule]) ?: '');
+    }
+    // Pasul site/vertij/0001: adresa membrilor cu cererea confirmată pe codul vertij devine dovedită (o singură dată).
+    $confirmati = $dbNou->query("SELECT u.id FROM users u WHERE u.email_confirmed_at IS NOT NULL AND EXISTS (SELECT 1 FROM account_verifications v
+        WHERE v.user_id = u.id) ORDER BY u.id")->fetchAll(PDO::FETCH_COLUMN);
+    $peDataCererii = (string) $dbNou->query('SELECT email_confirmed_at FROM users WHERE id = ' . (int) $uAprobat)->fetchColumn();
+    $randPas = $dbNou->query("SELECT rezultat, operatii FROM _platforma_migrari WHERE id = 'site/vertij/0001_adrese_membri_confirmate'")->fetch();
+    $verifica('A site/vertij/0001: cele patru conturi cu cererea confirmată pe codul vertij au users.email_confirmed_at (momentul confirmării lor)',
+        array_map('intval', $confirmati) === array_map('intval', [$uAprobat, $uVerificare, $uRespins, $uActiv]) && $peDataCererii === '2026-09-01 10:05:00'
+        && is_array($randPas) && $randPas['rezultat'] === 'aplicata', json_encode([$confirmati, $peDataCererii, $randPas]) ?: '');
+    $r2 = $php('nou', 'scripts/migreaza.php', ['--aplica', '--site=vertij']);
+    $verifica('A migreaza.php --aplica --site=vertij a doua oară: cod 0, nimic de făcut, aceleași conturi confirmate', $r2['cod'] === 0
+        && $dbNou->query("SELECT u.id FROM users u WHERE u.email_confirmed_at IS NOT NULL AND EXISTS (SELECT 1 FROM account_verifications v
+        WHERE v.user_id = u.id) ORDER BY u.id")->fetchAll(PDO::FETCH_COLUMN) === $confirmati, mb_substr($r2['tot'], -1500));
     $r = $php('nou', 'tools/dev/licenta.php', ['vertij']);
     $verifica('licența de dezvoltare a vertij (conturi, Stripe, donații, membri, blog, newsletter)', $r['cod'] === 0, $r['tot']);
     // Înghețarea scrie doar cheile lipsă; codul vechi le ia din implicitele lui: aceleași valori pe ambele.
@@ -507,7 +561,7 @@ try {
         $j = strpos($html, $pana, $i + strlen($de));
         return $j === false ? '' : substr($html, $i, $j - $i + ($cuPana ? strlen($pana) : 0));
     };
-    $comparaStarea = static function (string $eticheta, array $declarat = []) use ($starea, $verifica): void {
+    $comparaStarea = static function (string $eticheta, array $declarat = []) use ($starea, $verifica, $diferenteRanduri): void {
         $sv = $starea('vechi');
         $sn = $starea('nou');
         // Setările: înghețarea a scris pe codul comun, la adoptare, cheile pe care codul vertij le ia din implicitele lui; se
@@ -523,7 +577,7 @@ try {
             }
         }
         $verifica($eticheta . ': aceleași rânduri (donații, cereri, documente, plăți, conturi, categorii, setări)', $dif === [],
-            json_encode($dif, JSON_UNESCAPED_UNICODE) ?: '');
+            json_encode($diferenteRanduri($sv, $sn), JSON_UNESCAPED_UNICODE) ?: '');
     };
     $verifica('A înghețarea: setările donațiilor și ale membrilor au pe codul comun valorile codului vertij (scrise doar unde lipseau)', true);
 
@@ -549,7 +603,7 @@ try {
             'data' => ['object' => $obiect]];
     };
     $pasWebhook = static function (string $eticheta, array $ev, ?array $declaratCorp = null, ?string $semnatura = null) use ($webhook, $parti, $starea, $cereriStripe,
-        $emailuri, $verifica): void {
+        $emailuri, $verifica, $diferenteRanduri): void {
         $raspunsuri = [];
         foreach ($parti as $parte) {
             $raspunsuri[$parte] = $webhook($parte, $ev, $semnatura);
@@ -566,7 +620,7 @@ try {
         $verifica('B ' . $eticheta . ' → ' . $raspunsuri['nou']['cod'] . ' ' . $raspunsuri['nou']['corp'] . '; aceleași rânduri, ' . count($stripeN)
             . ' cereri spre Stripe, ' . count($mailN) . ' emailuri', $corpOk && $sv === $sn && $stripeV === $stripeN && $mailV === $mailN,
             json_encode(['raspuns' => $raspunsuri, 'stripe' => $stripeV === $stripeN ? count($stripeN) : [$stripeV, $stripeN],
-                'mail' => [$mailV, $mailN], 'randuri' => $sv === $sn ? '=' : array_filter(array_map(null, $sv, $sn), static fn ($p) => $p[0] !== $p[1])],
+                'mail' => [$mailV, $mailN], 'randuri' => $sv === $sn ? '=' : $diferenteRanduri($sv, $sn)],
                 JSON_UNESCAPED_UNICODE) ?: '');
     };
     $evPlatit = $eveniment('payment_intent.succeeded', ['id' => 'pi_unic_1', 'object' => 'payment_intent', 'metadata' => ['type' => 'donation', 'donation_id' => '1']]);
@@ -584,6 +638,11 @@ try {
         'hosted_invoice_url' => 'https://invoice.stripe.com/i/proba-2']));
     $pasWebhook('aceeași lună pe invoice.payment_succeeded (alt eveniment): nicio dublură, niciun email', $eveniment('invoice.payment_succeeded', ['id' => 'in_lunar_1_2',
         'object' => 'invoice', 'subscription' => 'sub_lunar_1', 'amount_paid' => 2577]));
+    // Codul vertij încearcă INSERT-ul dublurii (oprit de indexul unic pe factură, dar InnoDB consumă un id); codul comun găsește
+    // întâi factura (pentru lunile neplătite, revizuirea din 9 nov 2026). Rândurile sunt aceleași; contorul id-urilor, aliniat aici.
+    $aiVechi = (int) $conectare($baze['vechi'])->query("SELECT AUTO_INCREMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'donations'")
+        ->fetchColumn();
+    $conectare($baze['nou'])->exec('ALTER TABLE donations AUTO_INCREMENT = ' . $aiVechi);
     $pasWebhook('luna a treia (forma basil: parent.subscription_details, payments): un rând nou', $eveniment('invoice.paid', ['id' => 'in_lunar_1_3',
         'object' => 'invoice', 'parent' => ['subscription_details' => ['subscription' => 'sub_lunar_1']], 'total' => 2577,
         'payments' => ['data' => [['payment' => ['payment_intent' => 'pi_lunar_1_3']]]]]));
@@ -628,8 +687,8 @@ try {
         && md5_file($radacina . '/public/assets/js/donation-widget.js') === md5_file($codVechi . '/public/assets/js/donation-widget.js'));
 
     // Donațiile din sertar (JSON).
-    $pasIntent = static function (string $eticheta, array $date, ?string $client = null) use ($sesiune, $clientPe, $parti, $cereriStripe, $faraIdempotenta, $starea,
-        $verifica): array {
+    $pasIntent = static function (string $eticheta, array $date, ?string $client = null, ?Closure $declarat = null) use ($sesiune, $clientPe, $parti,
+        $cereriStripe, $faraIdempotenta, $starea, $verifica): array {
         $r = [];
         $stripe = [];
         foreach ($parti as $parte) {
@@ -641,13 +700,18 @@ try {
         $sv = $starea('vechi');
         $sn = $starea('nou');
         $sn['setari'] = array_intersect_key($sn['setari'], $sv['setari']);
+        $raspunsNou = $r['nou'];
+        if ($declarat !== null) {
+            // O diferență voită față de codul vertij (revizuirea de securitate): verificată aici, apoi răspunsurile aduse la fel.
+            [$r['vechi'], $r['nou']] = $declarat($r['vechi'], $r['nou']);
+        }
         $cuCheie = array_filter($stripe['nou'], static fn (array $c): bool => str_starts_with($c['cerere'], 'POST') && $c['cerere'] !== 'POST /v1/products');
         $toateCuCheie = array_reduce($cuCheie, static fn (bool $ok, array $c): bool => $ok && str_starts_with($c['idempotenta'], 'donatie-DON-'), true);
         $verifica('C ' . $eticheta . ' → ' . $r['nou']['cod'] . ' ' . mb_substr($r['nou']['json'], 0, 160) . '; aceleași cereri spre Stripe ('
             . count($stripe['nou']) . ', pe codul comun cu Idempotency-Key), aceleași rânduri', $r['vechi'] === $r['nou']
             && $faraIdempotenta($stripe['vechi']) === $faraIdempotenta($stripe['nou']) && $toateCuCheie && $sv === $sn,
             json_encode([$r, $stripe, $sv === $sn ? '=' : [$sv['donatii'], $sn['donatii'], $sv['setari'], $sn['setari']]], JSON_UNESCAPED_UNICODE) ?: '');
-        return $r['nou'];
+        return $raspunsNou;
     };
     $pasIntent('donația unică (100 lei, comisionul acoperit, destinația, newsletter)', ['amount' => 100, 'frequency' => 'once', 'designation' => 'Cercetare',
         'cover_fees' => true, 'name' => 'Ion Proba', 'email' => 'ion.proba@exemplu.ro', 'newsletter' => true, 'consent' => true]);
@@ -668,7 +732,14 @@ try {
         'corp' => ['error' => ['message' => 'Cardul de probă a fost refuzat.']]]] + $raspunsuri));
     file_put_contents($dosareStripe['nou'] . '/raspunsuri.json', (string) json_encode(['POST /v1/payment_intents' => ['cod' => 402,
         'corp' => ['error' => ['message' => 'Cardul de probă a fost refuzat.']]]] + $raspunsuri));
-    $pasIntent('Stripe refuză plata: 502 cu mesajul Stripe, donația „failed”', ['amount' => 40, 'email' => 'refuz@exemplu.ro', 'consent' => true]);
+    $mesajGeneral = 'Plata nu a putut fi inițiată. Verifică datele cardului sau încearcă din nou peste câteva minute.';
+    $pasIntent('Stripe refuză plata: 502, donația „failed”; codul comun nu arată mesajul Stripe (declarat: revizuirea de securitate, doar în jurnal)',
+        ['amount' => 40, 'email' => 'refuz@exemplu.ro', 'consent' => true], null, static function (array $v, array $n) use ($mesajGeneral): array {
+            $json = json_decode($n['json'], true);
+            $ascuns = is_array($json) && ($json['message'] ?? '') === $mesajGeneral && !str_contains($n['json'], 'Cardul de prob');
+            $faraMesaj = static fn (array $x): array => ['cod' => $x['cod'], 'json' => (string) preg_replace('/"message":"[^"]*"/', '"message":"…"', $x['json'])];
+            return [$faraMesaj($v), $ascuns ? $faraMesaj($n) : $n];
+        });
     file_put_contents($dosareStripe['vechi'] . '/raspunsuri.json', (string) json_encode($raspunsuri));
     file_put_contents($dosareStripe['nou'] . '/raspunsuri.json', (string) json_encode($raspunsuri));
 
@@ -739,15 +810,16 @@ try {
         'profession_field[1][acord_cod]' => '1'], $pdf);
     $verificaV = $paginaInscriere['vechi']('GET', '/cont/verifica-email');
     $verificaN = $paginaInscriere['nou']('GET', '/cont/verifica-email');
-    $sect = static fn (string $h): string => $bucata($h, '<section class="verify-email">', '</section>');
-    $verifica('C /cont/verifica-email: aceeași pagină (adresa din sesiune, pașii, retrimiterea)', $sect($verificaV['corp']) !== ''
+    $sect = static fn (string $h): string => (string) preg_replace('/<input type="hidden" name="_csrf" value="[0-9a-f]{64}">/', '',
+        $bucata($h, '<section class="verify-email">', '</section>'));
+    $verifica('C /cont/verifica-email: aceeași pagină (adresa din sesiune, pașii, retrimiterea; pe codul comun cu jetonul formularului)', $sect($verificaV['corp']) !== ''
         && $sect($verificaV['corp']) === $sect($verificaN['corp']) && $verificaV['cod'] === $verificaN['cod']);
-    $pasInscriere('din nou cu aceeași adresă, neconfirmată: înscrierea reluată peste cont (cererea și documentul vechi șterse)', array_merge($dateCont,
-        ['first_name' => 'Anca', 'profession_id' => '1', 'account_gdpr_accept' => '1', 'profession_field[1][specialitate]' => 'Neurologie',
-        'profession_field[1][cod_parafa]' => 'P999', 'profession_field[1][acord_cod]' => '1']), $pdf);
+    // Înscrierea din nou pe aceeași adresă neconfirmată: codul vertij o relua peste cont (parola, datele, cererea); codul comun nu
+    // mai schimbă contul (revizuirea de securitate, declarat), deci pasul e în D, doar pe codul comun.
     $r = [];
     foreach ($parti as $parte) {
-        $x = $paginaInscriere[$parte]('POST', '/cont/retrimite-confirmarea', []);
+        $jetonVerificare = $parte === 'nou' ? ['_csrf' => (string) $paginaInscriere['nou']('GET', '/cont/verifica-email')['jeton']] : [];
+        $x = $paginaInscriere[$parte]('POST', '/cont/retrimite-confirmarea', $jetonVerificare);
         $r[$parte] = [$x['cod'], $x['location']];
     }
     $verifica('C retrimiterea de pe pagina de verificare: același răspuns, un email nou pe fiecare', $r['vechi'] === $r['nou']
@@ -852,7 +924,9 @@ try {
             return '';
         }
         $j = strpos($html, '</table>', $i);
-        return $j === false ? '' : (string) preg_replace('/\s+/', ' ', $faraJeton(substr($html, $i, $j - $i)));
+        // Codul comun: formularul spune care donație lunară se oprește (id-ul abonamentului, verificat pe rândurile contului).
+        $fara = (string) preg_replace('/\n?[ \t]*<input type="hidden" name="subscription_id" value="[^"]*">/', '', $faraJeton(substr($html, $i, $j - $i)));
+        return $j === false ? '' : (string) preg_replace('/\s+/', ' ', $fara);
     };
     $donV = $clientPe('vechi', $emailActiv)('GET', '/contul-meu?section=donations');
     $donN = $clientPe('nou', $emailActiv)('GET', '/contul-meu?section=donations');
@@ -1054,6 +1128,232 @@ try {
     $dbN->exec('UPDATE users SET email_confirmed_at = NOW() WHERE id = ' . $idAprobat);
     $p = $clientPe('nou', $emailAprobat)('GET', '/contul-meu?section=donations');
     $verifica('D cu adresa dovedită: donația apare în istoric', str_contains($p['corp'], 'Istoricul donațiilor') && str_contains($p['corp'], '25,00'));
+    // ── D: revizuirea de securitate (9 nov 2026) și deciziile proprietarului, doar pe codul comun ──
+    $scrie('');
+    $scrie('D. Revizuirea de securitate și deciziile proprietarului (codul comun diferă voit de vertij)');
+    $dbN = $conectare($baze['nou']);
+    $emailuri('nou');
+    $cereriStripe('nou');
+    // Bugetele vizitatorului (înregistrările, retrimiterile, donațiile, întoarcerile) pornesc goale: testul vine de pe aceeași adresă.
+    $dbN->exec('DELETE FROM register_submit_logs');
+    $parolaNoua = 'Alta-Parola-Intrus-2';
+    $inscrieNou = static function (array $campuri) use ($sesiune): array {
+        $c = $sesiune('nou');
+        $f = $c('GET', '/register');
+        preg_match('/name="register_form_token" value="([^"]+)"/', $f['corp'], $tok);
+        preg_match('/name="register_form_rendered_at" value="(\d+)"/', $f['corp'], $la);
+        sleep(4);
+        $x = $c('POST', '/register', $campuri + ['register_form_token' => $tok[1] ?? '', 'register_form_rendered_at' => $la[1] ?? '0',
+            'register_hp_website' => '', 'next' => '/contul-meu'], null, [], true);
+        return [$c, $x];
+    };
+    $contul = static fn (string $email): array => $dbN->query('SELECT id, first_name, phone, password_hash, session_version, email_confirmed_at FROM users WHERE email = '
+        . $dbN->quote($email))->fetch() ?: [];
+    $cererile = static fn (int $id): array => $dbN->query('SELECT id, status, answers_json, confirm_token_hash FROM account_verifications WHERE user_id = ' . $id
+        . ' ORDER BY id')->fetchAll();
+    $inscriereCat2 = static fn (string $email, string $prenume, string $parola, string $unitate): array => ['first_name' => $prenume,
+        'last_name' => 'Proba', 'email' => $email, 'phone' => '0700000077', 'password' => $parola, 'password_confirm' => $parola, 'profession_id' => '2',
+        'account_gdpr_accept' => '1', 'profession_field[2][unitate]' => $unitate];
+
+    // 1. Înscrierea pe o adresă care are deja cont (codul vertij relua înscrierea peste cont, cu parola nouă).
+    [, $x] = $inscrieNou($inscriereCat2('bogdan.membru@exemplu.ro', 'Bogdan', $parolaMembri, 'Spitalul A'));
+    $b0 = $contul('bogdan.membru@exemplu.ro');
+    $c0 = $cererile((int) ($b0['id'] ?? 0));
+    $verifica('D înscrierea nouă (categoria 2): contul, cererea „awaiting_email”, emailul de confirmare', $x['location'] === '/cont/verifica-email'
+        && count($c0) === 1 && $c0[0]['status'] === 'awaiting_email' && count($emailuri('nou')) === 1, json_encode([$x['location'], $c0]) ?: '');
+    [$cInscriere, $x] = $inscrieNou($inscriereCat2('bogdan.membru@exemplu.ro', 'Intrus', $parolaNoua, 'Spitalul B'));
+    $b1 = $contul('bogdan.membru@exemplu.ro');
+    $c1 = $cererile((int) ($b0['id'] ?? 0));
+    $mail1 = $emailuri('nou');
+    $verifica('D din nou pe aceeași adresă (neconfirmată, cont nefolosit): parola, numele și cererea NESCHIMBATE, linkul retrimis (token nou), '
+        . 'celelalte sesiuni încheiate, /cont/verifica-email cu mesajul „confirmă cu parola de la prima înscriere”',
+        $x['location'] === '/cont/verifica-email' && password_verify($parolaMembri, (string) ($b1['password_hash'] ?? '')) && !password_verify($parolaNoua,
+        (string) ($b1['password_hash'] ?? '')) && ($b1['first_name'] ?? '') === 'Bogdan' && count($c1) === 1 && $c1[0]['id'] === $c0[0]['id']
+        && $c1[0]['answers_json'] === $c0[0]['answers_json'] && $c1[0]['confirm_token_hash'] !== $c0[0]['confirm_token_hash']
+        && (int) ($b1['session_version'] ?? 0) === (int) ($b0['session_version'] ?? 0) + 1 && count($mail1) === 1
+        && str_contains($cInscriere('GET', '/cont/verifica-email')['corp'], 'prima înscriere'), json_encode([$x['location'], $b0, $b1, $c0, $c1, $mail1],
+        JSON_UNESCAPED_UNICODE) ?: '');
+    // Contul a fost folosit (o donație din cont): nu se mai retrimite nimic, omul e trimis la intrare / resetarea parolei.
+    $dbN->prepare("INSERT INTO donations (reference, user_id, donor_email, amount_cents, currency, frequency, status, consent) VALUES
+        ('DON-BOGDAN01', ?, 'bogdan.membru@exemplu.ro', 1000, 'ron', 'once', 'pending', 1)")->execute([(int) $b0['id']]);
+    [$cInscriere, $x] = $inscrieNou($inscriereCat2('bogdan.membru@exemplu.ro', 'Intrus', $parolaNoua, 'Spitalul C'));
+    $b2 = $contul('bogdan.membru@exemplu.ro');
+    $verifica('D din nou pe aceeași adresă, contul folosit (o donație din cont): /login cu „Intră în cont sau … Am uitat parola”, nimic schimbat, niciun email',
+        $x['location'] === '/login' && $b2 === $b1 && $cererile((int) $b0['id']) === $c1 && $emailuri('nou') === []
+        && str_contains($cInscriere('GET', '/login')['corp'], 'Am uitat parola'), json_encode([$x['location'], $b2]) ?: '');
+    // Contul confirmat prin resetarea parolei (adresa dovedită, cererea încă „awaiting_email” pe codul vertij): preluarea de la
+    // revizuire. Resetarea trece acum și cererea la verificare (confirmare.dupa din ConfirmareEmail::marcheazaConfirmat).
+    [, $x] = $inscrieNou($inscriereCat2('carmen.membru@exemplu.ro', 'Carmen', $parolaMembri, 'Spitalul D'));
+    $emailuri('nou');
+    $tokenReset = bin2hex(random_bytes(32));
+    // Momentele scrise aici, în ora României: codul comun pune fusul site-ului pe conexiune (conexiunea testului e în ora serverului).
+    $oraRo = static fn (string $cand): string => (new DateTimeImmutable($cand, new DateTimeZone('Europe/Bucharest')))->format('Y-m-d H:i:s');
+    $dbN->prepare("INSERT INTO customer_password_resets (email, token_hash, expires_at) VALUES ('carmen.membru@exemplu.ro', ?, ?)")
+        ->execute([hash('sha256', $tokenReset), $oraRo('+1 hour')]);
+    $parolaResetata = 'Parola-Resetata-3';
+    // Adresa la care se anunță cererile (Setări conturi, golită de salvarea din C).
+    $dbN->exec("REPLACE INTO settings (`key`, `value`) VALUES ('account_verification_notify_email', 'cereri@exemplu.ro')");
+    $x = $sesiune('nou')('POST', '/contul-meu/resetare-parola/' . $tokenReset, ['password' => $parolaResetata, 'password_confirm' => $parolaResetata]);
+    $k0 = $contul('carmen.membru@exemplu.ro');
+    $ck = $cererile((int) ($k0['id'] ?? 0));
+    $mailReset = $emailuri('nou');
+    $verifica('D resetarea parolei dovedește adresa: email_confirmed_at, cererea trece „pending” (codul vertij o lăsa „awaiting_email”), adminul e anunțat',
+        (string) ($k0['email_confirmed_at'] ?? '') !== '' && ($ck[0]['status'] ?? '') === 'pending'
+        && in_array(true, array_map(static fn (string $m): bool => str_starts_with($m, 'cereri@exemplu.ro'), $mailReset), true),
+        json_encode([$x['location'], $k0, $ck, $mailReset], JSON_UNESCAPED_UNICODE) ?: '');
+    [, $x] = $inscrieNou($inscriereCat2('carmen.membru@exemplu.ro', 'Intrus', $parolaNoua, 'Spitalul E'));
+    $k1 = $contul('carmen.membru@exemplu.ro');
+    $verifica('D înscrierea peste un cont confirmat prin resetare: /login, parola resetată rămâne (nicio preluare), cererea neschimbată',
+        $x['location'] === '/login' && password_verify($parolaResetata, (string) ($k1['password_hash'] ?? '')) && ($k1['first_name'] ?? '') === 'Carmen'
+        && $cererile((int) $k0['id']) === $ck && $emailuri('nou') === [], json_encode([$x['location'], $k1]) ?: '');
+
+    // 2. Retrimiterea fără jetonul formularului.
+    $x = $sesiune('nou')('POST', '/cont/retrimite-confirmarea', ['email' => 'bogdan.membru@exemplu.ro']);
+    $verifica('D /cont/retrimite-confirmarea fără jetonul formularului: refuzat (302), niciun email', $x['cod'] === 302 && $emailuri('nou') === []);
+
+    // 3. Linkul de confirmare al cererii expiră după 7 zile.
+    $tokenVechi = bin2hex(random_bytes(32));
+    $dbN->prepare("UPDATE account_verifications SET confirm_token_hash = ?, updated_at = ? WHERE user_id = ? AND status = 'awaiting_email'")
+        ->execute([hash('sha256', $tokenVechi), $oraRo('-8 days'), (int) $b0['id']]);
+    $xVechi = $sesiune('nou')('GET', '/cont/confirmare/' . $tokenVechi);
+    $dbN->prepare("UPDATE account_verifications SET updated_at = ? WHERE user_id = ? AND status = 'awaiting_email'")->execute([$oraRo('-6 days'), (int) $b0['id']]);
+    $xProaspat = $sesiune('nou')('GET', '/cont/confirmare/' . $tokenVechi);
+    $verifica('D linkul cererii de acum 8 zile: expirat (nu mai arată pagina confirmării); cel de acum 6 zile: pagina cu parola', !str_contains($xVechi['corp'],
+        'name="password"') && $xProaspat['cod'] === 200 && str_contains($xProaspat['corp'], 'name="password"'), $xVechi['cod'] . ' ' . $xVechi['location']);
+
+    // 4. Cererile de dinainte de adoptare nu blochează logarea (codul vertij lăsa contul să intre).
+    $dbN->prepare("INSERT INTO account_verifications (user_id, profession_id, profession_name, status, created_at, updated_at) VALUES (?, 1, 'Medic de proba',
+        'awaiting_email', '2026-08-01 10:00:00', '2026-08-01 10:00:00')")->execute([$uFara]);
+    $emailFara = (string) $dbN->query('SELECT email FROM users WHERE id = ' . (int) $uFara)->fetchColumn();
+    $dbN->exec('UPDATE users SET email_confirmed_at = NULL WHERE id = ' . (int) $uFara);
+    $c = $sesiune('nou');
+    $c('GET', '/login');
+    $x = $c('POST', '/login', ['email' => $emailFara, 'password' => $parolaMembri]);
+    $verifica('D un cont cu cererea „awaiting_email” de dinainte de adoptare intră (ca pe codul vertij); cererile de după adoptare blochează (mai sus)',
+        $x['cod'] === 302 && $x['location'] !== '/login' && $c('GET', '/contul-meu')['cod'] === 200, json_encode($x['location']) ?: '');
+
+    // 5. Decizia adminului doar pe ultima cerere „în verificare”.
+    $an = $adminPe('nou');
+    $jetonAdmin = static fn (): string => (string) $an('GET', '/admin/accounts/settings')['jeton'];
+    $idCerereVeche = 3; // respinsă; contul are acum o cerere nouă (pasul „cererea nouă” din C)
+    $inainteDecizie = $starea('nou');
+    $x = $an('POST', '/admin/accounts/verifications/' . $idCerereVeche . '/decision', ['decision' => 'approved', 'review_note' => '', '_csrf' => $jetonAdmin()]);
+    $idAwaiting = (int) $c1[0]['id'];
+    $y = $an('POST', '/admin/accounts/verifications/' . $idAwaiting . '/decision', ['decision' => 'approved', 'review_note' => '', '_csrf' => $jetonAdmin()]);
+    $verifica('D decizia pe o cerere veche (înlocuită de una nouă) sau neconfirmată („awaiting_email”): refuzată, nimic schimbat, niciun email',
+        $x['cod'] === 302 && $y['cod'] === 302 && $starea('nou') === $inainteDecizie && $emailuri('nou') === []);
+
+    // 6. Donația: suma maximă, destinația din listă, bugetul vizitatorului.
+    $dbN->exec("DELETE FROM register_submit_logs WHERE status LIKE 'l:%'");
+    $inainteDon = $starea('nou');
+    $x1 = $sesiune('nou')('POST', '/api/donations/intent', [], (string) json_encode(['amount' => 100001, 'email' => 'mare@exemplu.ro', 'consent' => true]));
+    $x2 = $sesiune('nou')('POST', '/api/donations/intent', [], (string) json_encode(['amount' => 50, 'designation' => '<b>Altceva</b>', 'email' => 'x@exemplu.ro',
+        'consent' => true]));
+    $verifica('D donația peste suma maximă (100.000 lei) și cu o destinație din afara listei: 422, nicio donație, nicio cerere spre Stripe',
+        $x1['cod'] === 422 && $x2['cod'] === 422 && str_contains($x1['corp'], '100.000') && $starea('nou') === $inainteDon && $cereriStripe('nou') === [],
+        $x1['corp'] . ' ' . $x2['corp']);
+    $dbN->prepare("INSERT INTO register_submit_logs (ip_address, status, created_at) SELECT '127.0.0.1', 'l:donatie', ? FROM information_schema.COLUMNS LIMIT 10")
+        ->execute([$oraRo('now')]);
+    $x3 = $sesiune('nou')('POST', '/api/donations/intent', [], (string) json_encode(['amount' => 50, 'email' => 'x@exemplu.ro', 'consent' => true]));
+    $verifica('D a 11-a donație pornită de același vizitator în 15 minute: 429, nicio donație, nicio cerere spre Stripe', $x3['cod'] === 429
+        && $starea('nou') === $inainteDon && $cereriStripe('nou') === [], $x3['cod'] . ' ' . $x3['corp']);
+    $dbN->exec("DELETE FROM register_submit_logs WHERE status LIKE 'l:%'");
+
+    // 7. Mai multe donații lunare: fiecare se oprește cu id-ul ei, doar dintre rândurile contului.
+    $dbN->exec('UPDATE users SET email_confirmed_at = NOW() WHERE id = ' . (int) $uFara);
+    $ins = $dbN->prepare("INSERT INTO donations (reference, user_id, donor_name, donor_email, amount_cents, currency, frequency, status, consent,
+        stripe_payment_intent_id, stripe_subscription_id, stripe_customer_id, stripe_invoice_id, paid_at) VALUES (?, ?, 'Fara Cerere', ?, ?, 'ron', ?, 'paid', 1, ?, ?, ?, ?, NOW())");
+    $ins->execute(['DON-MULTI001', $uFara, $emailFara, 1500, 'monthly', 'pi_multi_1', 'sub_multi_1', 'cus_multi', 'in_multi_1']);
+    $ins->execute(['DON-MULTI002', $uFara, $emailFara, 2200, 'monthly', 'pi_multi_2', 'sub_multi_2', 'cus_multi', 'in_multi_2']);
+    // Donația altui cont cu aceeași adresă (user_id al altuia): nu e a acestui cont, chiar cu adresa dovedită.
+    $ins->execute(['DON-ALTUL001', $uActiv, $emailFara, 77700, 'once', 'pi_altul_1', null, null, null]);
+    $cf = $clientPe('nou', $emailFara);
+    $tab = $cf('GET', '/contul-meu?section=donations');
+    $verifica('D contul cu două donații lunare active: două carduri „Donația ta lunară”, fiecare cu butonul ei (id-ul abonamentului); donația altui cont '
+        . 'cu aceeași adresă nu apare', substr_count($tab['corp'], '<article class="acc-card acc-donation-active">') === 2
+        && str_contains($tab['corp'], 'name="subscription_id" value="sub_multi_1"') && str_contains($tab['corp'], 'name="subscription_id" value="sub_multi_2"')
+        && !str_contains($tab['corp'], '777,00'), mb_substr((string) strstr($tab['corp'], 'acc-panel-donatii'), 0, 1500));
+    $x = $cf('POST', '/contul-meu/donatii/opreste', ['subscription_id' => 'sub_lunar_2', '_csrf' => $tab['jeton']]);
+    $straina = $cereriStripe('nou');
+    $x = $cf('POST', '/contul-meu/donatii/opreste', ['subscription_id' => 'sub_multi_2', '_csrf' => $tab['jeton']]);
+    $oprita = $cereriStripe('nou');
+    $anulate = $dbN->query("SELECT stripe_subscription_id FROM donations WHERE stripe_subscription_id IN ('sub_multi_1', 'sub_multi_2') AND cancelled_at IS NOT NULL")
+        ->fetchAll(PDO::FETCH_COLUMN);
+    $verifica('D oprirea: id-ul unui abonament al altcuiva (sub_lunar_2) refuzat, fără nicio cerere spre Stripe; sub_multi_2 oprit (DELETE la Stripe), '
+        . 'sub_multi_1 rămâne activ', $straina === [] && count($oprita) === 1 && $oprita[0]['cerere'] === 'DELETE /v1/subscriptions/sub_multi_2'
+        && $anulate === ['sub_multi_2'], json_encode([$straina, $oprita, $anulate]) ?: '');
+
+    // 8. Evenimentele Stripe noi (decizia proprietarului): luna neplătită, prima factură, abonamentul încheiat, rambursările.
+    $nr = static fn (string $sql): string => (string) $dbN->query($sql)->fetchColumn();
+    $w = $webhook('nou', $eveniment('invoice.payment_failed', ['id' => 'in_multi_1_2', 'object' => 'invoice', 'subscription' => 'sub_multi_1', 'amount_due' => 1500]));
+    $esuata = $dbN->query("SELECT status, amount_cents FROM donations WHERE stripe_invoice_id = 'in_multi_1_2'")->fetchAll();
+    $w2 = $webhook('nou', $eveniment('invoice.paid', ['id' => 'in_multi_1_2', 'object' => 'invoice', 'subscription' => 'sub_multi_1', 'amount_paid' => 1500,
+        'payment_intent' => 'pi_multi_1_2']));
+    $platita = $dbN->query("SELECT status FROM donations WHERE stripe_invoice_id = 'in_multi_1_2'")->fetchAll(PDO::FETCH_COLUMN);
+    $verifica('D invoice.payment_failed: luna neplătită e un rând „failed”; plătită apoi (Stripe reîncearcă): același rând „paid”, nicio dublură, emailul de mulțumire',
+        $w['cod'] === 200 && $esuata === [['status' => 'failed', 'amount_cents' => 1500]] && $w2['cod'] === 200 && $platita === ['paid']
+        && count($emailuri('nou')) === 1, json_encode([$w, $esuata, $w2, $platita]) ?: '');
+    // Prima factură a unei donații lunare încă neconfirmate: invoice.paid o marchează plătită, în ambele forme ale facturii
+    // (versiunea API a contului Stripe: fără Stripe-Version, ca pe vertij, sau cu basil, parent.subscription_details).
+    $dbN->exec("INSERT INTO donations (reference, donor_email, amount_cents, currency, frequency, status, consent, stripe_payment_intent_id, stripe_subscription_id,
+        stripe_customer_id, stripe_invoice_id) VALUES ('DON-PRIMA001', 'prima1@exemplu.ro', 3000, 'ron', 'monthly', 'pending', 1, 'pi_prima_1', 'sub_prima_1', 'cus_p',
+        'in_prima_1'), ('DON-PRIMA002', 'prima2@exemplu.ro', 3000, 'ron', 'monthly', 'pending', 1, 'pi_prima_2', 'sub_prima_2', 'cus_p', 'in_prima_2')");
+    $webhook('nou', $eveniment('invoice.paid', ['id' => 'in_prima_1', 'object' => 'invoice', 'subscription' => 'sub_prima_1', 'amount_paid' => 3000,
+        'payment_intent' => 'pi_prima_1']));
+    $webhook('nou', $eveniment('invoice.paid', ['id' => 'in_prima_2', 'object' => 'invoice', 'parent' => ['subscription_details' => ['subscription' => 'sub_prima_2']],
+        'total' => 3000, 'payments' => ['data' => [['payment' => ['payment_intent' => 'pi_prima_2']]]]]));
+    $prime = $dbN->query("SELECT reference, status, paid_at FROM donations WHERE reference IN ('DON-PRIMA001', 'DON-PRIMA002') ORDER BY reference")->fetchAll();
+    $acumRo = new DateTimeImmutable('now', new DateTimeZone('Europe/Bucharest'));
+    $ora = static fn (?string $t): int => $t === null ? PHP_INT_MAX : abs((new DateTimeImmutable($t, new DateTimeZone('Europe/Bucharest')))->getTimestamp() - $acumRo->getTimestamp());
+    $verifica('D prima factură a donației lunare (invoice.paid, forma veche și forma basil): rândul „pending” devine „paid” (o singură dată), emailul de mulțumire; '
+        . 'paid_at în ora României (fusul site-ului pe conexiune, oricare ar fi fusul serverului MySQL)',
+        array_column($prime, 'status') === ['paid', 'paid'] && count($emailuri('nou')) === 2 && $ora($prime[0]['paid_at'] ?? null) < 300, json_encode($prime) ?: '');
+    $webhook('nou', $eveniment('payment_intent.succeeded', ['id' => 'pi_prima_1', 'object' => 'payment_intent']));
+    $verifica('D apoi payment_intent.succeeded pentru aceeași plată: nimic nou, niciun email', $emailuri('nou') === []);
+    $webhook('nou', $eveniment('customer.subscription.updated', ['id' => 'sub_prima_1', 'object' => 'subscription', 'status' => 'canceled']));
+    $webhook('nou', $eveniment('customer.subscription.updated', ['id' => 'sub_prima_2', 'object' => 'subscription', 'status' => 'past_due']));
+    $verifica('D customer.subscription.updated: „canceled” → cancelled_at; „past_due” (Stripe reîncearcă) → rămâne activ',
+        $nr("SELECT cancelled_at IS NOT NULL FROM donations WHERE reference = 'DON-PRIMA001'") === '1'
+        && $nr("SELECT cancelled_at IS NULL FROM donations WHERE reference = 'DON-PRIMA002'") === '1');
+    $w = $webhook('nou', $eveniment('charge.refunded', ['id' => 'ch_unic_1', 'object' => 'charge', 'payment_intent' => 'pi_unic_1', 'amount' => 10000,
+        'amount_refunded' => 3000, 'refunded' => false]));
+    $partial = $dbN->query("SELECT status, refunded_cents, refunded_at IS NOT NULL AS la FROM donations WHERE id = 1")->fetch();
+    $adminDon = $an('GET', '/admin/donations')['corp'];
+    $w2 = $webhook('nou', $eveniment('charge.refunded', ['id' => 'ch_unic_1', 'object' => 'charge', 'payment_intent' => 'pi_unic_1', 'amount' => 10000,
+        'amount_refunded' => 10000, 'refunded' => true]));
+    $intreaga = $dbN->query("SELECT status, refunded_cents FROM donations WHERE id = 1")->fetch();
+    $verifica('D charge.refunded pe o donație: parțial (30 lei) → „paid” cu refunded_cents 3000, „Rambursată parțial” în Admin → Donații; întreagă → „refunded”',
+        $w['cod'] === 200 && $partial == ['status' => 'paid', 'refunded_cents' => 3000, 'la' => 1] && str_contains($adminDon, 'Rambursată parțial: 30,00 RON')
+        && $w2['cod'] === 200 && $intreaga == ['status' => 'refunded', 'refunded_cents' => 10000]
+        && str_contains($an('GET', '/admin/donations?status=refunded')['corp'], 'DON-UNIC0001'), json_encode([$w, $partial, $w2, $intreaga]) ?: '');
+    $activInainte = $nr('SELECT account_active_until FROM users WHERE id = ' . (int) $uActiv);
+    $w = $webhook('nou', $eveniment('charge.refunded', ['id' => 'ch_vechi_1', 'object' => 'charge', 'payment_intent' => 'pi_vechi_1', 'amount' => 12000,
+        'amount_refunded' => 12000, 'refunded' => true]));
+    $cotizatie = $dbN->query('SELECT status, refunded_cents FROM account_activations WHERE id = 2')->fetch();
+    $paginaCerere = $an('GET', '/admin/accounts/verifications/4')['corp'];
+    $verifica('D charge.refunded pe o cotizație (fără metadata pe încasare: găsită după plată, proprietarul membri): semnalată în admin („Rambursată”), '
+        . 'jurnalul adminului, contul NU se dezactivează', $w['cod'] === 200 && $cotizatie == ['status' => 'paid', 'refunded_cents' => 12000]
+        && str_contains($paginaCerere, '>Rambursată</span>') && $nr('SELECT account_active_until FROM users WHERE id = ' . (int) $uActiv) === $activInainte
+        && $nr("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'account_activation_refunded'") === '1', json_encode([$w, $cotizatie]) ?: '');
+
+    // 9. Ștergerea contului oprește donațiile lui lunare în Stripe (decizia proprietarului).
+    $cereriStripe('nou');
+    $x = $an('POST', '/admin/users/delete-selected', ['user_ids' => [(string) $uFara], '_csrf' => $jetonAdmin()]);
+    $stergere = $cereriStripe('nou');
+    $verifica('D un cont șters din admin: donația lui lunară activă (sub_multi_1) oprită în Stripe (DELETE) și „cancelled_at”; rândurile rămân, dezlegate de cont',
+        in_array('DELETE /v1/subscriptions/sub_multi_1', array_column($stergere, 'cerere'), true)
+        && !in_array('DELETE /v1/subscriptions/sub_multi_2', array_column($stergere, 'cerere'), true)
+        && $nr("SELECT COUNT(*) FROM donations WHERE stripe_subscription_id = 'sub_multi_1' AND cancelled_at IS NOT NULL AND user_id IS NULL") === '2'
+        && $nr('SELECT COUNT(*) FROM users WHERE id = ' . (int) $uFara) === '0', json_encode([$x['location'], $stergere]) ?: '');
+
+    // 10. Întoarcerile de la Stripe ale cotizației au un buget pe vizitator.
+    $dbN->prepare("INSERT INTO register_submit_logs (ip_address, status, created_at) SELECT '127.0.0.1', 'l:activare_retur', ? FROM information_schema.COLUMNS LIMIT 20")
+        ->execute([$oraRo('now')]);
+    $x = $sesiune('nou')('GET', '/contul-meu/activare/retur?session_id=cs_proba_nou');
+    $verifica('D a 21-a întoarcere de la Stripe în 15 minute: fără cerere spre Stripe (webhook-ul notează plata), 302 la cont', $x['cod'] === 302
+        && $cereriStripe('nou') === []);
+    $dbN->exec("DELETE FROM register_submit_logs WHERE status LIKE 'l:%'");
+
     // Pluginurile oprite.
     $r = $php('nou', 'tools/dev/licenta.php', ['vertij', 'donatii=oprit', 'membri=oprit']);
     $verifica('D licența vertij cu donatii și membri oprite', $r['cod'] === 0, $r['tot']);

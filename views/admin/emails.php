@@ -410,7 +410,7 @@ if (count($taburiEmail) > 1) {
     }
     $campaignInitialBlocks = $selectedCampaignBlocks;
     if (is_array($selectedCampaign) && $campaignInitialBlocks === []) {
-        $campaignTextFallback = \App\Support\PlainText::fromHtml((string) ($selectedCampaign['html_content'] ?? ''));
+        $campaignTextFallback = \App\Support\PlainText::fromHtmlNoTags((string) ($selectedCampaign['html_content'] ?? ''));
         if ($campaignTextFallback === '') {
             $campaignTextFallback = 'Scrie conținutul newsletter-ului aici.';
         }

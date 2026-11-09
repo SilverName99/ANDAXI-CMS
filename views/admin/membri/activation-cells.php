@@ -35,7 +35,9 @@ $activationMonths = (int) ($activationRow['activation_months'] ?? 0);
         ? htmlspecialchars(\App\Support\ProfessionAccounts::durationLabel($activationMonths), ENT_QUOTES)
         : '&mdash;' ?>
 </td>
-<td><?= $activationStatus !== '' ? \App\Support\ProfessionAccounts::activationStatusBadge($activationStatus) : '&mdash;' ?></td>
+<td><?= $activationStatus !== '' ? \App\Support\ProfessionAccounts::activationStatusBadge($activationStatus)
+    . \App\Support\ProfessionAccounts::refundBadge((int) ($activationRow['activation_refunded_cents'] ?? 0),
+        (float) ($activationRow['activation_amount'] ?? 0), (string) ($activationRow['activation_currency'] ?? 'ron')) : '&mdash;' ?></td>
 <td style="white-space:nowrap;">
     <?php if ($activationStart !== '' || $activationEnd !== ''): ?>
         <?= htmlspecialchars($activationStart !== '' ? $activationStart : '?', ENT_QUOTES) ?>

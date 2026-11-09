@@ -76,6 +76,18 @@
                     "null": true,
                     "tip": "varchar(500)"
                 },
+                "refunded_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "refunded_cents": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
                 "status": {
                     "extra": "",
                     "implicit": "'pending'",
@@ -2646,6 +2658,18 @@
                     "implicit": null,
                     "null": false,
                     "tip": "varchar(40)"
+                },
+                "refunded_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "refunded_cents": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
                 },
                 "status": {
                     "extra": "",

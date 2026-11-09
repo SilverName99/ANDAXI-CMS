@@ -90,10 +90,7 @@ final class ConfirmareEmailController
                 return;
             }
         }
-        if ($rezultat['rezultat'] === ConfirmareEmail::LINK_CONFIRMAT && $db instanceof PDO) {
-            // Etapa 4 (pluginul membri): adresa dovedită cu linkul nucleului trece și cererea de membru la verificare.
-            \App\Support\Hooks::ruleaza('confirmare.dupa', $db, (int) $rezultat['user_id']);
-        }
+        // Pasul pluginurilor după dovadă (`confirmare.dupa`) îl face ConfirmareEmail::marcheazaConfirmat, pentru orice dovadă.
         switch ($rezultat['rezultat']) {
             case ConfirmareEmail::LINK_LOGARE:
                 Flash::set('error', 'Intră în contul pentru care ai cerut linkul, apoi apasă „Confirmă adresa”.');

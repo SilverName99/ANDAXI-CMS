@@ -38,7 +38,12 @@ use Throwable;
  *    porni donații în numele nimănui) și nu pornește nimic cu pluginul „se oprește” (`Plugins::permiteInceput`);
  *  - cererile de creare spre Stripe au `Idempotency-Key` (referința donației), deci o cerere repetată nu face două plăți;
  *  - donațiile făcute fără cont cu adresa unui cont apar în cont (și se pot opri de acolo) doar după ce adresa e dovedită
- *    (regula comenzilor fără cont, G-M4, OD-47); cele făcute din cont, mereu.
+ *    (regula comenzilor fără cont, G-M4, OD-47); cele făcute din cont, mereu;
+ *  - revizuirea de securitate (9 nov 2026): donația are un buget pe vizitator (`LimitaCereri`, 10 la 15 minute), o sumă maximă
+ *    (`DonationService::MAX_LEI`) și o destinație doar din listă; mesajele Stripe nu ajung la vizitator (doar în jurnal); mai
+ *    multe donații lunare se opresc fiecare cu id-ul ei (verificat pe rândurile contului); ștergerea contului oprește
+ *    donațiile lui lunare în Stripe (`utilizator.sters`); rambursările (`charge.refunded`), lunile neplătite
+ *    (`invoice.payment_failed`) și abonamentele încheiate (`customer.subscription.updated`) se notează.
  */
 final class DonatiiController
 {
@@ -73,6 +78,11 @@ final class DonatiiController
             $this->jsonResponse(['ok' => false, 'message' => 'Cerere invalidă.'], 415);
             return;
         }
+        // Bugetul vizitatorului: fiecare donație pornită e o cerere spre Stripe (un client, un abonament).
+        if (!\App\Support\LimitaCereri::incearca($db, 'donatie', DonationService::INCERCARI_LA_15_MINUTE)) {
+            $this->jsonResponse(['ok' => false, 'message' => 'Ai încercat de prea multe ori. Te rugăm să revii peste câteva minute.'], 429);
+            return;
+        }
         $payload = $this->requestPayload();
         $amountLei = (int) round((float) ($payload['amount'] ?? 0));
         $frequency = (($payload['frequency'] ?? 'once') === 'monthly' && $config['monthly_enabled']) ? 'monthly' : 'once';
@@ -85,6 +95,16 @@ final class DonatiiController
 
         if ($amountLei < (int) $config['min_amount']) {
             $this->jsonResponse(['ok' => false, 'message' => 'Suma minimă este ' . $config['min_amount'] . ' ' . strtoupper((string) $config['currency']) . '.'], 422);
+            return;
+        }
+        if ($amountLei > DonationService::MAX_LEI) {
+            $this->jsonResponse(['ok' => false, 'message' => 'Suma maximă a unei donații online este ' . number_format(DonationService::MAX_LEI, 0, ',', '.')
+                . ' ' . strtoupper((string) $config['currency']) . '. Pentru o sumă mai mare, te rugăm să ne scrii.'], 422);
+            return;
+        }
+        // Destinația: doar una din lista din Setări donații (sau niciuna).
+        if ($designation !== '' && !in_array($designation, array_map('strval', (array) $config['designations']), true)) {
+            $this->jsonResponse(['ok' => false, 'message' => 'Alege o destinație din listă.'], 422);
             return;
         }
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -198,8 +218,9 @@ final class DonatiiController
                 // ca încercarea următoare să creeze unul nou.
                 $this->forgetDonationProductId($db, $settings);
             }
+            // Mesajul Stripe (sau al excepției) doar în jurnal: vizitatorul primește un text general.
             self::logAccountIssue('donatie_stripe', $e->getMessage());
-            $this->jsonResponse(['ok' => false, 'message' => 'Eroare la inițierea plății: ' . $e->getMessage()], 502);
+            $this->jsonResponse(['ok' => false, 'message' => 'Plata nu a putut fi inițiată. Verifică datele cardului sau încearcă din nou peste câteva minute.'], 502);
             return;
         }
 
@@ -281,16 +302,33 @@ final class DonatiiController
 
         $user = CustomerAuth::user($db);
         $donations = self::donatiileContului($db, is_array($user) ? $user : ['id' => $userId]);
-        $active = DonationService::activeSubscription($donations);
+        $actives = DonationService::activeSubscriptions($donations);
 
-        if (!is_array($active)) {
+        if ($actives === []) {
             Flash::set('error', 'Nu ai nicio donație lunară activă.');
             header('Location: /contul-meu?section=donations');
             return;
         }
 
-        // Id-ul vine din rândurile proprii ale utilizatorului, nu din formular,
-        // ca nimeni să nu poată opri abonamentul altcuiva.
+        // Formularul spune care donație lunară se oprește (o persoană poate avea mai multe); id-ul trebuie să fie al uneia din
+        // rândurile proprii ale contului, ca nimeni să nu poată opri abonamentul altcuiva. Fără id (formularul vechi), doar
+        // dacă e una singură.
+        $cerut = trim((string) ($_POST['subscription_id'] ?? ''));
+        $active = null;
+        foreach ($actives as $candidat) {
+            if ($cerut !== '' && hash_equals(trim((string) ($candidat['stripe_subscription_id'] ?? '')), $cerut)) {
+                $active = $candidat;
+                break;
+            }
+        }
+        if ($cerut === '' && count($actives) === 1) {
+            $active = $actives[0];
+        }
+        if (!is_array($active)) {
+            Flash::set('error', 'Nu am găsit donația lunară aleasă. Reîncarcă pagina și încearcă din nou.');
+            header('Location: /contul-meu?section=donations');
+            return;
+        }
         $subscriptionId = trim((string) ($active['stripe_subscription_id'] ?? ''));
         $settings = Settings::all($db);
         $secretKey = trim((string) ($settings['stripe_secret_key'] ?? ''));
@@ -358,22 +396,23 @@ final class DonatiiController
         if ($list === [] && $ascunse === 0) {
             return [];
         }
-        $active = DonationService::activeSubscription($list);
+        $actives = DonationService::activeSubscriptions($list);
         return [[
             'cheie' => 'donations',
             'eticheta' => 'Donații',
             'icon' => 'donations',
-            'insigna' => $active !== null ? 'lunar' : '',
-            'render' => static function (PDO $db, array $user) use ($list, $active, $ascunse): string {
+            'insigna' => $actives !== [] ? 'lunar' : '',
+            'render' => static function (PDO $db, array $user) use ($list, $actives, $ascunse): string {
                 $total = 0;
                 foreach ($list as $donation) {
                     if ((string) ($donation['status'] ?? '') === 'paid') {
-                        $total += (int) ($donation['amount_cents'] ?? 0);
+                        // O rambursare parțială scade din total (donatii/0064); una întreagă are starea „refunded”.
+                        $total += max(0, (int) ($donation['amount_cents'] ?? 0) - (int) ($donation['refunded_cents'] ?? 0));
                     }
                 }
                 return View::fragment('site/donatii/tab-cont', [
                     'donationList' => $list,
-                    'donationActive' => $active,
+                    'donationActives' => $actives,
                     'donationTotalCents' => $total,
                     'donatiiAscunse' => $ascunse,
                 ]);
@@ -465,6 +504,73 @@ final class DonatiiController
             DonationService::markSubscriptionCancelled($db, (string) ($obiect['id'] ?? ''));
             return 'abonament_oprit';
         });
+        // Decizia proprietarului (9 nov 2026): starea donațiilor lunare și a rambursărilor, ca în Stripe.
+        StripeEvenimente::handler('donatii', 'invoice.payment_failed', static function (PDO $db, array $obiect): ?string {
+            return DonationService::recordRecurringCharge($db, $obiect, false) !== null ? 'luna_neplatita' : 'nimic_nou';
+        });
+        StripeEvenimente::handler('donatii', 'customer.subscription.updated', static function (PDO $db, array $obiect): ?string {
+            // Un abonament încheiat de Stripe (plățile n-au reușit, sau prima plată n-a fost confirmată la timp) nu mai e activ.
+            if (in_array((string) ($obiect['status'] ?? ''), ['canceled', 'unpaid', 'incomplete_expired'], true)) {
+                DonationService::markSubscriptionCancelled($db, (string) ($obiect['id'] ?? ''));
+                return 'abonament_oprit';
+            }
+            return 'nimic_nou';
+        });
+        StripeEvenimente::handler('donatii', 'charge.refunded', static function (PDO $db, array $obiect): ?string {
+            $donation = DonationService::recordRefund($db, $obiect);
+            if ($donation === null) {
+                return 'nimic_nou';
+            }
+            return (string) ($donation['status'] ?? '') === 'refunded' ? 'rambursata' : 'rambursata_partial';
+        });
+    }
+
+    /**
+     * Agățarea `utilizator.sters` (Admin → Utilizatori și „Șterge contul”; decizia proprietarului din 9 nov 2026): donațiile lunare
+     * active ale contului (cele din cont și, cu adresa dovedită, cele fără cont cu adresa lui) se opresc în Stripe, ca nimeni să
+     * nu mai plătească după ce contul nu mai există; rândurile rămân (evidența banilor), dezlegate de cont.
+     *
+     * @param list<int> $ids
+     */
+    public static function utilizatorSters(PDO $db, array $ids): void
+    {
+        $secretKey = trim((string) (Settings::all($db)['stripe_secret_key'] ?? ''));
+        foreach ($ids as $id) {
+            $id = (int) $id;
+            if ($id <= 0) {
+                continue;
+            }
+            try {
+                $stmt = $db->prepare('SELECT id, email FROM users WHERE id = :id');
+                $stmt->execute(['id' => $id]);
+                $user = $stmt->fetch();
+            } catch (Throwable) {
+                $user = null;
+            }
+            if (!is_array($user)) {
+                continue;
+            }
+            foreach (DonationService::activeSubscriptions(self::donatiileContului($db, $user)) as $active) {
+                $subscriptionId = trim((string) ($active['stripe_subscription_id'] ?? ''));
+                if ($subscriptionId === '') {
+                    continue;
+                }
+                if ($secretKey === '') {
+                    self::logAccountIssue('cont_sters_donatie', 'abonamentul ' . $subscriptionId . ' nu a putut fi oprit: fără cheia Stripe');
+                    continue;
+                }
+                try {
+                    StripeGateway::cancelSubscription($secretKey, $subscriptionId);
+                    DonationService::markSubscriptionCancelled($db, $subscriptionId);
+                } catch (Throwable $exception) {
+                    self::logAccountIssue('cont_sters_donatie', 'abonamentul ' . $subscriptionId . ': ' . $exception->getMessage());
+                }
+            }
+            try {
+                $db->prepare('UPDATE donations SET user_id = NULL WHERE user_id = :id')->execute(['id' => $id]);
+            } catch (Throwable) {
+            }
+        }
     }
 
     /**
@@ -633,7 +739,7 @@ final class DonatiiController
         }
 
         $status = trim((string) ($_GET['status'] ?? ''));
-        if (!in_array($status, ['paid', 'pending', 'failed'], true)) {
+        if (!in_array($status, ['paid', 'pending', 'failed', 'refunded'], true)) {
             $status = '';
         }
         $search = trim((string) ($_GET['q'] ?? ''));
@@ -664,9 +770,9 @@ final class DonatiiController
         try {
             $row = $db->query(
                 'SELECT
-                    COALESCE(SUM(CASE WHEN status = "paid" THEN amount_cents ELSE 0 END), 0) AS all_cents,
+                    COALESCE(SUM(CASE WHEN status = "paid" THEN CAST(amount_cents AS SIGNED) - CAST(refunded_cents AS SIGNED) ELSE 0 END), 0) AS all_cents,
                     COALESCE(SUM(CASE WHEN status = "paid"
-                        AND paid_at >= DATE_FORMAT(NOW(), "%Y-%m-01") THEN amount_cents ELSE 0 END), 0) AS month_cents,
+                        AND paid_at >= DATE_FORMAT(NOW(), "%Y-%m-01") THEN CAST(amount_cents AS SIGNED) - CAST(refunded_cents AS SIGNED) ELSE 0 END), 0) AS month_cents,
                     COALESCE(SUM(status = "paid"), 0) AS cnt,
                     COALESCE(COUNT(DISTINCT CASE WHEN stripe_subscription_id IS NOT NULL
                         AND cancelled_at IS NULL THEN stripe_subscription_id END), 0) AS recurring

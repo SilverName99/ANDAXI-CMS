@@ -459,6 +459,22 @@ final class ProfessionAccounts
     }
 
     /**
+     * Semnul unei cotizații rambursate (`membri/0065`, charge.refunded), lângă starea plății în admin: „Rambursată” (toată suma)
+     * sau „Rambursată parțial: X”; nimic fără rambursare. Contul rămâne activ: decide administratorul.
+     */
+    public static function refundBadge(int $refundedCents, float $amount, string $currency = 'ron'): string
+    {
+        if ($refundedCents <= 0) {
+            return '';
+        }
+        $full = $refundedCents >= (int) round($amount * 100);
+        $text = $full ? 'Rambursată' : 'Rambursată parțial: ' . number_format($refundedCents / 100, 2, ',', '.') . ' ' . strtoupper($currency);
+        return ' <span style="display:inline-block;padding:3px 10px;border-radius:999px;white-space:nowrap;background:#fdeaec;color:#a11d33;'
+            . 'font-size:12px;font-weight:700;" title="Plata a fost rambursată din Stripe; contul nu s-a dezactivat singur.">'
+            . htmlspecialchars($text, ENT_QUOTES) . '</span>';
+    }
+
+    /**
      * Coloanele ultimei plăți de activare, pentru listele din admin. Aliasurile
      * sunt prefixate cu `activation_` ca să nu se bată cu ale tabelei gazdă.
      */
@@ -470,7 +486,8 @@ final class ProfessionAccounts
                 la.months AS activation_months,
                 la.period_start AS activation_period_start,
                 la.period_end AS activation_period_end,
-                la.paid_at AS activation_paid_at';
+                la.paid_at AS activation_paid_at,
+                la.refunded_cents AS activation_refunded_cents';
     }
 
     /**

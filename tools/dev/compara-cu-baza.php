@@ -1562,7 +1562,9 @@ $primaPostareDemo = $db->query('SELECT slug, content FROM blog_posts WHERE delet
 $porturiVertij[] = [
     'nume' => 'textul articolului ({{blog_content}}): paragrafele despărțite de un spațiu, entitățile decodate',
     'cale' => ['/blog/' . (string) ($primaPostareDemo['slug'] ?? '') . '?caz=video-mp4', '/blog/' . $slugVideoYoutube, '/blog/' . $slugVideoVimeo],
-    'nou' => '</p>' . \App\Support\PlainText::fromHtml((string) ($primaPostareDemo['content'] ?? '')) . '</article>',
+    // Revizuirea de securitate (9 nov 2026): textul decodat intră scăpat (htmlspecialchars) în șablon.
+    'nou' => '</p>' . htmlspecialchars(\App\Support\PlainText::fromHtml((string) ($primaPostareDemo['content'] ?? '')), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+        . '</article>',
     'vechi' => '</p>' . trim(strip_tags((string) ($primaPostareDemo['content'] ?? ''))) . '</article>',
     'motiv' => 'vertij 7d7d8cc: strip_tags lipea ultimul cuvânt al unui paragraf de primul din următorul și lăsa „&nbsp;” '
         . 'scris ca atare (site-uri/bioscem/ce-se-schimba.md).',

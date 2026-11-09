@@ -1514,18 +1514,26 @@ migrarea `donatii/0062`. Are nevoie de `plata_stripe`; în pachetul „Asociați
   Stripe, emailul de mulțumire, o singură dată), `payment_intent.payment_failed` („failed”, o plată reușită rămâne „paid”), `invoice.paid`
   și `invoice.payment_succeeded` (fiecare lună a unei donații lunare: un rând nou „paid”, cu factura, chitanța și emailul; ambele forme ale
   facturii; indexul unic pe `stripe_invoice_id` oprește dublurile, deci un endpoint care trimite ambele tipuri nu dublează nimic),
-  `customer.subscription.deleted` (`cancelled_at`). **Handler-ele rulează în orice stare a pluginului**: un abonament lunar al unui site
+  `customer.subscription.deleted` (`cancelled_at`). Deciziile proprietarului din 9 noiembrie: prima factură a unei donații lunare încă
+  „pending” o marchează plătită (orice formă a facturii, deci orice versiune API a contului Stripe); `invoice.payment_failed` (luna
+  neîncasată: un rând „failed”, același rând „paid” dacă Stripe reîncasează), `customer.subscription.updated` (`canceled`, `unpaid`,
+  `incomplete_expired` = `cancelled_at`), `charge.refunded` (`refunded_cents`, `refunded_at`; întreagă = starea `refunded`; în admin,
+  în tab și în totaluri). **Handler-ele rulează în orice stare a pluginului**: un abonament lunar al unui site
   cu pluginul oprit se reînnoiește la Stripe și se notează mai departe (fără email).
-- **Contul donatorului** (tab-ul „Donații”, `cont.taburi`, doar pentru cine a donat; insigna „lunar”): donația lunară activă cu „Oprește
-  donația lunară” (`POST /contul-meu/donatii/opreste`: abonamentul anulat la Stripe, `cancelled_at`; id-ul vine din rândurile contului, nu
-  din formular) și istoricul cu chitanțele. Donațiile făcute fără cont cu adresa contului apar (și se pot opri) doar după ce adresa e
+- **Contul donatorului** (tab-ul „Donații”, `cont.taburi`, doar pentru cine a donat; insigna „lunar”): fiecare donație lunară activă
+  cu „Oprește donația lunară” (`POST /contul-meu/donatii/opreste`: formularul trimite `subscription_id`, acceptat doar dacă e al uneia din
+  donațiile active ale contului; abonamentul anulat la Stripe, `cancelled_at`) și istoricul cu chitanțele și rambursările. Ștergerea
+  contului (`utilizator.sters`) oprește în Stripe donațiile lui lunare active și dezleagă rândurile de cont. Donațiile făcute fără cont cu adresa contului apar (și se pot opri) doar după ce adresa e
   dovedită (`users.email_confirmed_at`, regula comenzilor fără cont, G-M4); până atunci tab-ul arată „Confirmă adresa ca să le vezi aici”
   cu butonul nucleului (`/contul-meu/confirmare-email`).
 - **Admin** (Clienți → Donații, Setări → Setări donații): lista cu filtrul de stare, căutarea și totalurile (încasat, luna curentă, plătite,
   donatori lunari activi); setările sertarului.
 - **Diferențe față de vertij** (în `site-uri/vertij/ce-se-schimba.md`): jetonul formularului (AdminCsrf) pe setări și pe oprirea donației;
   donația doar ca JSON (415 altfel); `Idempotency-Key` pe creările spre Stripe (`donatie-<referință>…`); chitanța arătată doar ca link
-  `https://`; configurarea sertarului scrisă cu `JSON_HEX_TAG`; donațiile fără cont doar după dovada adresei.
+  `https://`; configurarea sertarului scrisă cu `JSON_HEX_TAG`; donațiile fără cont doar după dovada adresei (și doar cele fără cont,
+  `user_id IS NULL`); revizuirea de securitate din 9 noiembrie: bugetul vizitatorului (`App\Support\LimitaCereri`, 10 donații la 15
+  minute, apoi 429), suma maximă (`DonationService::MAX_LEI`, 100.000 lei), destinația doar din listă, mesajul Stripe doar în
+  `storage/logs/account.log` (vizitatorul primește un text general), mai multe donații lunare, rambursările, ștergerea contului.
 - **Stări**: **se oprește** — fără sertar și fără donații noi, contul și adminul rămân; **oprit** — adresele 404/403, meniul dispare,
   rândurile rămân, webhook-ul notează în continuare banii primiți (export legal: `scripts/exporta-date-legale.php --ce=donatii`). Un
   abonament lunar nu se oprește singur odată cu pluginul: se oprește din Stripe (decizia proprietarului).
@@ -1548,24 +1556,33 @@ Are nevoie de `conturi_clienti` și `plata_stripe`; în pachetul „Asociație�
   câmpurile categoriei, documentele (extensiile și mărimea din setări, conținutul verificat cu finfo; în `storage/account-documents`,
   `Paths::stocareSite`, numele opac, 0640) și acordul GDPR. Contul primește codul de membru (`<prefix>-00042`), cererea „așteaptă
   confirmarea pe email” și emailul de confirmare (linkul `/cont/confirmare/{token}`, doar hash-ul sha256 al tokenului în
-  `account_verifications`), apoi `/cont/verifica-email` (cu retrimiterea, `POST /cont/retrimite-confirmarea`, 5 la 15 minute). O
-  înscriere neconfirmată reluată cu aceeași adresă (`inregistrare.cont_existent`) se face peste cont (cererea și documentele vechi șterse).
+  `account_verifications`; valabil 7 zile de la trimitere), apoi `/cont/verifica-email` (cu retrimiterea, `POST /cont/retrimite-confirmarea`,
+  cu jetonul formularului, 5 la 15 minute). O înscriere nouă pe o adresă care are deja cont (`inregistrare.cont_existent`) **nu schimbă
+  contul** (revizuirea de securitate din 9 noiembrie; vertij relua înscrierea peste cont, cu parola nouă): cu adresa nedovedită, ultima
+  cerere „awaiting_email” și contul nefolosit, linkul cererii se retrimite și celelalte sesiuni se încheie; altfel, „Intră în cont sau
+  resetează parola”.
 - **Confirmarea**: linkul unei cereri e servit de pagina nucleului (`ConfirmareEmailController`: `confirmare.link_plugin` la GET, butonul
   „Confirmă adresa” și parola contului; `confirmare.foloseste_plugin` la POST): cererea trece „în verificare”, adresa e dovedită și pentru
   nucleu (`ConfirmareEmail::marcheazaConfirmat`), adminul primește emailul (`account_verification_notify_email`), clientul intră în cont.
-  Un link al nucleului folosit de același cont (de exemplu retrimis de pe pagina de intrare) face la fel (`confirmare.dupa`). Cu
-  `customer_email_confirmation_required` (vertij: înghețat 1), un cont cu cererea neconfirmată nu intră (`logare.blocata`).
+  Orice altă dovadă a adresei (un link al nucleului, resetarea parolei, logarea cu Google: `confirmare.dupa`, din
+  `ConfirmareEmail::marcheazaConfirmat`) face la fel. Cu `customer_email_confirmation_required` (vertij: înghețat 1), un cont cu cererea
+  neconfirmată nu intră (`logare.blocata`), afară de cererile de dinainte de adoptare (mai vechi decât momentul în care `membri/0063` a
+  găsit tabelele vertij), care intră ca pe codul vertij. La adoptare, `site/vertij/0001` dovedește adresa membrilor care o confirmaseră
+  pe codul vertij.
 - **Cererile** (Clienți → Cereri conturi): pe stări, cu căutarea, numărul documentelor și **ultima plată a cotizației** (suma, perioada
   achitată, starea, intervalul, plătit la; plățile încasate întâi, altfel ultima încercare); cererea cu răspunsurile, documentele
   (`/admin/accounts/documents/{id}`: doar adminului, PDF și imaginile inline, cu `Content-Security-Policy: … sandbox`, restul descărcate),
-  plățile, decizia (aprobată / respinsă cu motivul; jurnalul de activitate și emailul deciziei). Aceleași cinci coloane în Clienți →
+  plățile, decizia (aprobată / respinsă cu motivul; jurnalul de activitate și emailul deciziei; doar pe o cerere „pending” care e ultima a
+  contului). O cotizație rambursată din Stripe (`charge.refunded`, găsită după plata ei; `membri/0065`) apare „Rambursată” în listă, în
+  cerere și în lista utilizatorilor, cu un rând în jurnal; contul nu se dezactivează singur. Aceleași cinci coloane în Clienți →
   Clienți (`admin.utilizatori.coloane`), cu derularea pe orizontală a tabelului (`.admin-table-scroll`, vertij `b0a81e1`).
 - **Cotizația** (tab-ul „Activează contul” / „Cotizația mea”, `cont.taburi`, cu insigna zilelor rămase sau „!”): pe 1, 3, 6, 12 luni
   (`account_activation_durations`, prețul proporțional cu cel al categoriei); `POST /contul-meu/activare` face plata „pending” și sesiunea
   Stripe Checkout (`metadata.type = account_activation`); întoarcerea (`GET /contul-meu/activare/retur`, **mereu deschisă**) și webhook-ul
   (`checkout.session.completed` plătită, `async_payment_succeeded`; `expired`, `async_payment_failed` = „failed”) prelungesc contul de la
   data expirării dacă mai are zile, o singură dată (doar cererea care trece plata în „paid”), cu chitanța și emailul „Contul tău este
-  activ”. Cu pluginul „se oprește” nu pornește nicio plată nouă. Cererea nouă după o respingere: `/contul-meu/cerere-noua`.
+  activ”. Întoarcerea are un buget pe vizitator (20 la 15 minute) și primește doar un id de sesiune Checkout (`cs_…`). Cu pluginul „se
+  oprește” nu pornește nicio plată nouă. Cererea nouă după o respingere: `/contul-meu/cerere-noua`.
 - **Conținutul pentru membri**: poarta nucleului (`AccesMembri`, mai sus), cu agățările `continut.membru_activ` (aprobat și cotizația la zi),
   `continut.nota` și `continut.nota_titlu` (explicația pe stări a vertij: oaspete, confirmare, verificare, respins, neactivat, expirat; 403,
   noindex); bifa „Doar cont activ” din editorul paginii și al articolului.
@@ -1593,7 +1610,9 @@ adoptarea; B webhook-ul (aceleași răspunsuri, rânduri, cereri spre Stripe și
 donațiile din sertar, înscrierea cu documente, verificarea emailului, confirmarea, secțiunea cotizației octet cu octet, plata și
 întoarcerea, tab-ul donațiilor și oprirea, poza, cererea nouă, nota pe stări, fiecare pagină de admin (partea pluginului octet cu octet)
 și acțiune, celulele din lista de utilizatori, ștergerea unui membru; D doar pe codul comun: CSRF, JSON, logarea, donațiile după dovadă,
-pluginurile oprite.
+pluginurile oprite și reparațiile revizuirii de securitate din 9 noiembrie (unde codul comun diferă voit de vertij, declarate la locul
+lor): înscrierea peste un cont existent, resetarea parolei ca dovadă, expirarea linkului, decizia, bugetul și limitele donației, mai multe
+donații lunare, evenimentele Stripe noi, rambursările, ștergerea contului, membrii vechi la adoptare.
 
 ### Unealta internă `migrare_wordpress`
 

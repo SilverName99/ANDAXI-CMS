@@ -28,6 +28,7 @@ $statusLabel = static function (string $s): array {
         'paid' => ['Plătită', 'ok'],
         'failed' => ['Eșuată', 'off'],
         'pending' => ['În așteptare', 'wait'],
+        'refunded' => ['Rambursată', 'off'],
         default => [$s !== '' ? $s : '—', 'wait'],
     };
 };
@@ -122,6 +123,12 @@ $statusLabel = static function (string $s): array {
                 <?php foreach ($donations as $donation): ?>
                     <?php
                     [$label, $tone] = $statusLabel((string) ($donation['status'] ?? ''));
+                    // Rambursarea parțială (donatii/0064, charge.refunded): suma dată înapoi, lângă starea plății.
+                    $refundedCents = (int) ($donation['refunded_cents'] ?? 0);
+                    if ((string) ($donation['status'] ?? '') === 'paid' && $refundedCents > 0) {
+                        $label = 'Rambursată parțial: ' . $money($refundedCents, (string) ($donation['currency'] ?? 'ron'));
+                        $tone = 'wait';
+                    }
                     $isMonthly = (string) ($donation['frequency'] ?? 'once') === 'monthly';
                     $cancelled = trim((string) ($donation['cancelled_at'] ?? '')) !== '';
                     $name = trim((string) ($donation['donor_name'] ?? ''));
