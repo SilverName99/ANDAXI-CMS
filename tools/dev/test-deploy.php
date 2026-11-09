@@ -503,6 +503,13 @@ PHP);
         $amprentaCod($siteuri['a']['public']) === $amprente['a']['cod'] && $amprentaBaza('cms_dep_a') === $amprente['a']['baza']
         && $amprentaCod($siteuri['a']['site']) === $inainteSite && !is_dir($siteuri['a']['dosar'] . '/public_html.nou')
         && glob($acasa . '/platforma/plan-*') === [], $diferente($amprentaCod($siteuri['a']['public']), $amprente['a']['cod']));
+    // plati-in-curs.sh (Comutarea Bioscem): pe codul vechi (public_html/.env), doar numere, nimic scris; tabelul BT lipsă (baza
+    // e a codului Biovitality) e un rând „lipsește”, nu o oprire.
+    $bazaInaintePlati = $amprentaBaza('cms_dep_a');
+    [$c, $o] = $deploy('plati-in-curs', ['--domeniu=a.exemplu.test']);
+    $verifica('plati-in-curs.sh pe codul vechi: cod 0, „codul vechi”, BT „lipsește”, linkurile și ERP-ul numărate, baza neatinsă', $c === 0
+        && $contine($o, 'codul vechi', 'Banca Transilvania', 'lipsește', 'Linkurile de plată', 'ERP', 'Gata (doar citit)')
+        && $amprentaBaza('cms_dep_a') === $bazaInaintePlati, $scurt($o));
     [$c, $o] = $deploy('adopta', array_merge($argA, ['--aplica', '--commit-vechi=abcdef1']));
     $verifica('alt commit vechi decât cel revizuit → oprit în „verificari”, cod 1, nimic schimbat', $c === 1
         && $contine($o, 'nu la cel revizuit', 'site-ul a rămas pe codul vechi') && $amprentaCod($siteuri['a']['public']) === $amprente['a']['cod'], $scurt($o));
@@ -727,6 +734,10 @@ PHP);
     $verifica('adopta.sh --aplica: cod 0, „GATA”, în ' . round($durata, 1) . ' s; fiecare fază, testul de fum trecut', $c === 0 && $contine($o, 'GATA',
         'migrările sunt aplicate și verificate', 'diagnostic.php --pachet: pachetul', 'pingul: 200', 'o pagină de produs', 'pagina de logare din admin',
         'MENTENANTA ștearsă'), $scurt($o));
+    [$cPlati, $oPlati] = $deploy('plati-in-curs', ['--domeniu=a.exemplu.test']);
+    $verifica('plati-in-curs.sh după comutare: cod 0, citește site/.env („codul comun”), tabelul BT al migrărilor numărat', $cPlati === 0
+        && $contine($oPlati, 'codul comun', 'live: autorizate, neîncasate', 'Gata (doar citit)')
+        && !str_contains(explode('Linkurile de plată', $oPlati)[0], 'lipsește'), $scurt($oPlati));
     $verifica('pingul: versiunea ' . $v1 . ', schema la_zi; / e codul nou (nu „COD VECHI”), deschis oricui', ($p['cod'] ?? null) === $v1
         && ($p['schema'] ?? null) === 'la_zi' && ($r = $cerere($siteuri['a']['url'] . '/'))['cod'] === 200 && !str_contains($r['corp'], 'COD VECHI')
         && !is_file($siteuri['a']['site'] . '/MENTENANTA'), json_encode($p));

@@ -4,6 +4,7 @@
     "site": "bioscem",
     "sursa": "Nou-site-bioscem@c47f270",
     "amprenta_nucleu": "dce3e48b3da8efe73af5d25f5e3488badc9684094c4fc66faa4e116c4e617e9b",
+    "inchis": "pleacă pe bioscem.ro la adoptare (Etapa 2): sursa Nou-site-bioscem@c47f270 e commit-ul live (git pull în public_html pe 6 noiembrie 2026, spus de proprietar; adopta.sh --commit-vechi=c47f270 îl verifică cu git log -1, iar genereaza-setari.php --cod-vechi pe server trebuie să dea aceeași înghețare); de acum o corectură e setari-inghetate-2.json",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Bioscem",

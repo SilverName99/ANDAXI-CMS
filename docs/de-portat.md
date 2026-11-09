@@ -30,6 +30,12 @@ numită `claude/backend-migration-plan-tjpbjb` (pe GitHub ramura cu acest nume e
 commit-ul, pe care `adopta.sh --commit-vechi=d95598e` îl verifică. Până la comutare nu se mai urcă nimic pe codul vechi
 Biovitality: un commit nou ar trebui revizuit și ar schimba înghețarea (un fișier închis nu se mai generează).
 
+**Bioscem, live = `c47f270`** (9 noiembrie 2026): `~/domains/bioscem.ro/public_html` e checkout-ul ramurii de mai sus, adus la
+`c47f270` cu `git pull` pe 6 noiembrie (spus de proprietar); înghețarea Bioscem e `inchis` din acel commit, pentru adoptare
+([DEPLOY.md](DEPLOY.md), „Comutarea Bioscem”: `adopta.sh --commit-vechi=c47f270` verifică `git log -1`, iar
+`genereaza-setari.php --cod-vechi` pe server trebuie să dea exact înghețarea din pachet). Până la comutare nu se mai urcă nimic
+pe codul vechi Bioscem: un commit nou ar trebui revizuit și ar cere o corectură a înghețării (`setari-inghetate-2.json`).
+
 ## Bioscem (de la `11b1040`)
 
 | Commit | Data | Subiect | Stare |

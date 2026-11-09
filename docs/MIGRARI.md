@@ -692,7 +692,10 @@ vechi. Un fișier `inchis` nu se mai generează: `--toate` îl sare (`SĂRIT`), 
 
 Azi: **Bioscem** din `c47f270` (WP-R din 8 noiembrie; implicitele codului Bioscem sunt ale codului comun, afară de adresa
 sediului pentru ridicarea personală, `shipping_pickup_address`, scrisă de generator și peste gol, și de `erp_trimite_din` = gol,
-decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă; bulina cu reducerea, `produs_bulina_reducere` = 1, decizie); **Biovitality** din `d95598e`, confirmat live pe 5 noiembrie
+decizia G-M8, ca pasul de activare al ERP-ului să n-o atingă; bulina cu reducerea, `produs_bulina_reducere` = 1, decizie),
+`inchis` pe 9 noiembrie, pentru adoptare (sursa `c47f270` e codul live, spus de proprietar: `git pull` din 6 noiembrie; o
+verifică `adopta.sh --commit-vechi` și `--cod-vechi` pe server, [DEPLOY.md](DEPLOY.md), „Comutarea Bioscem”; „provizoriu” nu
+avea, deci `--confirmat` n-a schimbat nimic); **Biovitality** din `d95598e`, confirmat live pe 5 noiembrie
 (`git log -1` pe server și `--cod-vechi`, aceeași înghețare), `--confirmat` și `inchis` (pleacă pe site la adoptare);
 **vertij** și **grafoanaytis** din capetele ramurilor din de-portat.md, `provizoriu` până la raportul „live față de repo”
 din Etapa 0 (apoi `--confirmat`, eventual cu `--repo=` pe commit-ul confirmat, trecut întâi în de-portat.md).
@@ -770,7 +773,9 @@ live probabil lipsește. Fără el, un site adoptat abia acum (fără `stare-apl
 3. Sursa confirmată (`--confirmat`), fișierul `inchis`, commit; pe server valorile private din nou, pentru fișierul
    închis (`genereaza-setari.php --cod-vechi`, din checkout-ul versiunii; cele de dinainte sunt pentru alt sha, codul 15);
    pe site-ul live `--plan`, apoi `--aplica` (fără `--permite-provizoriu`). De acum fișierul nu se mai schimbă (codul 12):
-   o corectură e `setari-inghetate-2.json`. Biovitality: făcut pe 5 noiembrie, [DEPLOY.md](DEPLOY.md), „Noaptea comutării”.
+   o corectură e `setari-inghetate-2.json`. Biovitality: făcut pe 5 noiembrie, [DEPLOY.md](DEPLOY.md), „Noaptea comutării”;
+   Bioscem: fișierul închis pe 9 noiembrie, valorile private pe server ([DEPLOY.md](DEPLOY.md), „Comutarea Bioscem”, „Valorile
+   private”: dacă `--cod-vechi` refuză pe un commit mai nou al codului comun, se rulează din commit-ul care a închis fișierul).
 4. Pe site-ul live, `--aplica` rulează **imediat după urcarea codului comun** și se reia până termină (codul 13,
    bugetul de timp: rulezi din nou). Până la pasul site-ului (înghețarea setărilor) cheia `erp_trimite_din` lipsește,
    iar fără ea ERP-ul nu primește nimic automat (WP-12 E1; [PLUGINURI.md](PLUGINURI.md), `erp`): comenzile noi pleacă
