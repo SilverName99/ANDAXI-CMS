@@ -215,4 +215,8 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   site”) și `test-pachet-site.php biovitality` (valorile pachetului față de codul Biovitality, apoi baza servită cu el). Fără
   `redirecturi.json` și `seo.json` (codul Biovitality n-are nimic de păstrat; SEO-ul lui la adoptare, în Faza E) și fără
   `pluginuri.json` (WP-14). Banda partenerilor și restul temei Biovitality: Etapa 4 (P5).
+- **Făcut în pachetul vertij** (9 noiembrie, odată cu pluginurile `donatii` și `membri`): `tema/tema.json` doar cu foaia
+  `/tema/css/cont.css` (paginile de intrare în cont și de resetare a parolei în culorile site-ului, vertij `5e1d8bd`,
+  `6c4d97c`: aceleași reguli, pe aceleași clase, mutate din blocurile `<style>` ale vederilor); restul înfățișării vertij e
+  conținutul din baza lui.
 - Etapa 4: tema grafoanaytis (GR-19) și conținutul de pornire (`continut/`, GR-20).

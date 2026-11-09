@@ -25423,7 +25423,7 @@ HTML;
                 }
 
                 if ($title === '') {
-                    $contentText = trim(strip_tags($content));
+                    $contentText = \App\Support\PlainText::fromHtml($content);
                     $title = $contentText !== '' ? mb_substr($contentText, 0, 120) : 'Articol importat';
                 }
 
@@ -25444,10 +25444,7 @@ HTML;
                 $seenInFile[$slug] = true;
 
                 if ($excerpt === '') {
-                    $contentText = trim(strip_tags($content));
-                    if ($contentText !== '') {
-                        $excerpt = mb_substr($contentText, 0, 240) . (mb_strlen($contentText) > 240 ? '…' : '');
-                    }
+                    $excerpt = \App\Support\PlainText::excerpt($content, 240);
                 }
 
                 if ($featuredImage === '') {
@@ -26221,7 +26218,7 @@ HTML;
 
     private function estimateBlogReadingMinutes(string $content): int
     {
-        $text = trim(strip_tags($content));
+        $text = \App\Support\PlainText::fromHtml($content);
         if ($text === '') {
             return 1;
         }

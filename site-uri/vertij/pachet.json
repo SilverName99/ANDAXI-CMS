@@ -2,11 +2,13 @@
     "format": 1,
     "site": "vertij",
     "fisiere": {
-        "ce-se-schimba.md": "4c0e06b2648de85e7cd86cc1bd478319f00df7c6573b6094a76402e4785df59d",
+        "ce-se-schimba.md": "23af9ba575573b4ef78a9dd01b2bd33b9c4714f7c4b13145209ec79b3aeac934",
         "migrari.json": "f613501cb313a1029844b0a88d20ebbaef6c9b370bf6bdd42bcf1359bdcd8386",
         "seo.json": "b5ac424744685a06f1d8d9028babc0062721774abb89ad3c2f6012d75934e224",
-        "setari-inghetate.json": "c49520fa7db61a57363c346067b597d29067690f0a2f1e17ce903cc1c0fa8613",
-        "site.json": "b24a39a3b23ba3d73854e54d771fb84520275a5d33df50194396e9def965e931"
+        "setari-inghetate.json": "ae4e1e810a0cc7d56b747c7cc4c37255b81d69fe56c00316488f0d66eac18a32",
+        "site.json": "b24a39a3b23ba3d73854e54d771fb84520275a5d33df50194396e9def965e931",
+        "tema/public/css/cont.css": "234b1db892e359b48fc1cac500777c8f5732a6cdd880816ae12ed5baa4d0f89b",
+        "tema/tema.json": "5adfa37a8f6e298393ca4d10dc07f7b3e6d7720fd112119d056170646da0a236"
     },
     "obligatorii": []
 }

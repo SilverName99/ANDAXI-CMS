@@ -286,6 +286,10 @@ final class ConfirmareEmail
             || self::confirmat($db, $idUtilizator)) {
             return false;
         }
+        // Etapa 4 (pluginul membri): un cont cu cererea de membru încă neconfirmată pe email (linkul pluginului).
+        if (Hooks::oricare('logare.blocata', $db, $idUtilizator)) {
+            return true;
+        }
         $stmt = $db->prepare('SELECT COUNT(*) FROM customer_email_confirmations WHERE user_id = :id AND scop = :scop');
         $stmt->execute(['id' => $idUtilizator, 'scop' => self::SCOP_INREGISTRARE]);
         return (int) $stmt->fetchColumn() > 0;

@@ -1555,6 +1555,19 @@ $porturiVertij = [
         'mod' => 'repo',
     ],
 ];
+// Vertij 7d7d8cc (App\Support\PlainText, 9 nov 2026): textul articolului ({{blog_content}} al unui șablon de blog) are un spațiu
+// la capătul fiecărui paragraf sau titlu și entitățile decodate („&nbsp;” devine spațiu). Prima postare demo are paragrafe
+// fără spațiu între ele; doar paginile celor trei postări ale cazurilor de video (mai jos), cu șablonul lor de test.
+$primaPostareDemo = $db->query('SELECT slug, content FROM blog_posts WHERE deleted_at IS NULL ORDER BY id LIMIT 1')->fetch(PDO::FETCH_ASSOC) ?: [];
+$porturiVertij[] = [
+    'nume' => 'textul articolului ({{blog_content}}): paragrafele despărțite de un spațiu, entitățile decodate',
+    'cale' => ['/blog/' . (string) ($primaPostareDemo['slug'] ?? '') . '?caz=video-mp4', '/blog/' . $slugVideoYoutube, '/blog/' . $slugVideoVimeo],
+    'nou' => '</p>' . \App\Support\PlainText::fromHtml((string) ($primaPostareDemo['content'] ?? '')) . '</article>',
+    'vechi' => '</p>' . trim(strip_tags((string) ($primaPostareDemo['content'] ?? ''))) . '</article>',
+    'motiv' => 'vertij 7d7d8cc: strip_tags lipea ultimul cuvânt al unui paragraf de primul din următorul și lăsa „&nbsp;” '
+        . 'scris ca atare (site-uri/bioscem/ce-se-schimba.md).',
+    'mod' => 'repo',
+];
 // WP-24 (VT-C4, din vertij e577b94, 01e2773, 76dd45e, b0aa083): sliderul {{category_posts}} merge card cu card (scriptul
 // lui, citit din vederea fiecărui cod, între „const next” și „let st;”) și are stilul cardului de eveniment (doar pentru
 // postările cu data unui eveniment; în cazul de salvare de mai jos niciuna, deci cardurile rămân cele de azi).
@@ -1738,6 +1751,22 @@ $seoB = [
         'tipar' => '#<script data-ax-st>\(function\(w,d,n\)\{[^<]*\}\)\(window,document,navigator\);</script>#', 'max' => 1,
         'motiv' => 'pluginul statistici: scriptul fără cookie al paginilor (layout.final_body), doar cu pluginul pe site'],
 ];
+// Pluginul membri (9 nov 2026, din vertij; nu e în licența Bioscem): cu licența „toate”, în /contul-meu al clientului tab-ul
+// „Activează contul” (cont.taburi), poza de profil deasupra profilului (cont.profil) și cardul „Status cont” din antet
+// (cont.antet). Scoase întregi, doar cu pluginul pe site; cu licența Bioscem nu sunt declarate deloc.
+if (Plugins::vizibil('membri')) {
+    $seoB += [
+        'membri: tab-ul „Activează contul” din cont' => ['cale' => ['/contul-meu*'],
+            'tipar' => '#<a\n[ ]*class="[^"]*"\n[ ]*href="/contul-meu\?section=activare"\n[ ]*data-account-tab-plugin="activare"\n[ ]*>(?:(?!</a>).)*</a>\n[ ]*(?=<a\n)#s',
+            'max' => 1, 'motiv' => 'pluginul membri: tab-ul cotizației (agățarea cont.taburi), ca în vertij, doar cu pluginul pe site'],
+        'membri: poza de profil din cont' => ['cale' => ['/contul-meu*'],
+            'tipar' => '#<style>\n\.acc-avatar-block\{.*?</script>\n(?=[ ]*<form method="post" action="/contul-meu/profil")#s',
+            'max' => 1, 'motiv' => 'pluginul membri: poza de profil (agățarea cont.profil, vertij af8ab87), doar cu pluginul pe site'],
+        'membri: cardul „Status cont” din antetul contului' => ['cale' => ['/contul-meu*'],
+            'tipar' => '#\n[ ]*<article class="account-section-v2__card">\n[ ]*<strong>[^<]*</strong>\n[ ]*<span>Status cont</span>\n[ ]*</article>#',
+            'max' => 1, 'motiv' => 'pluginul membri: starea contului de membru (agățarea cont.antet), doar cu pluginul pe site'],
+    ];
+}
 $seoBGasite = array_fill_keys(array_keys($seoB), 0);
 $listeDeclarate = ['$deBioscem' => $deBioscem, '$porturiBiovitality' => $porturiBiovitality, '$porturiVertij' => $porturiVertij,
     '$porturiGrafo' => $porturiGrafo];
@@ -3265,7 +3294,8 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 $db->prepare('UPDATE blog_posts SET template_id = :t, video_url = :v WHERE id = :id')->execute([
                     't' => (int) $db->lastInsertId(), 'v' => '/uploads/gallery/film-de-test.mp4', 'id' => $idPostare]);
             },
-            'cereri' => [['GET', '/blog/' . (string) ($postare['slug'] ?? ''), [], 'viz']],
+            // „?caz=video-mp4”: pagina postării din lista de pagini (fără șablonul de test) rămâne fără declarația textului.
+            'cereri' => [['GET', '/blog/' . (string) ($postare['slug'] ?? '') . '?caz=video-mp4', [], 'viz']],
             'stare' => static fn (PDO $db): array => [],
             'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[0],
                 '<div class="video-test__player"><video controls preload="metadata" style="width:100%;height:auto;border-radius:14px;display:block;">'

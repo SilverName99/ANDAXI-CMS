@@ -750,7 +750,8 @@ $aruncat = static function (callable $f): string {
 };
 Hooks::reseteaza();
 // Pluginul statistici (8 nov 2026) e agățat de layout.final_body (scriptul paginilor): aici oprit, ca punctul să fie al probelor.
-Plugins::folosesteStari(array_merge(Plugins::stari(), ['statistici' => Plugins::OPRIT]));
+// La fel donatii și membri (portate din vertij 9 nov 2026; agățările lor din config/hooks.php): oprite pentru verificarea de mai jos.
+Plugins::folosesteStari(array_merge(Plugins::stari(), ['statistici' => Plugins::OPRIT, 'donatii' => Plugins::OPRIT, 'membri' => Plugins::OPRIT]));
 $verifica('fără agățări pe aceste puncte (config/hooks.php are doar punctele paginii Acasă, WP-32, și ale pluginurilor oprite aici): html() gol, ruleaza() [], oricare() false, primul() null',
     Hooks::html('layout.final_body') === '' && Hooks::ruleaza('utilizator.sters', $db, [1], 'admin') === []
     && Hooks::oricare('continut.membru_activ', $db, []) === false && Hooks::primul('inregistrare.dupa_creare', $db, 1, []) === null);
@@ -842,11 +843,12 @@ if ($catEvenimente > 0) {
     $db->prepare('INSERT IGNORE INTO blog_post_categories (post_id, category_id) VALUES (:p, :c)')->execute(['p' => $idArticolMembri, 'c' => $catEvenimente]);
 }
 ResponseCache::purgePageCache();
-// Membri pornit (licența „toate”), vizitator, fără agățări (serverul de dezvoltare): nota nucleului.
+// Membri pornit (licența „toate”), vizitator: nota pluginului membri (agățarea continut.nota, portată din vertij 9 nov 2026);
+// nota nucleului, fără agățări, o verifică tools/dev/test-donatii-membri.php cu pluginul oprit.
 $pagina = $cerere('GET', '/pagina-membri-test');
-$verifica('membri pornit, vizitator: pagina restricționată = 403, noindex, nofollow, nota nucleului, fără textul ei',
+$verifica('membri pornit, vizitator: pagina restricționată = 403, noindex, nofollow, nota pluginului membri, fără textul ei',
     $pagina['cod'] === 403 && str_contains($pagina['corp'], '<meta name="robots" content="noindex, nofollow">')
-    && str_contains($pagina['corp'], 'Conținut pentru membri') && str_contains($pagina['corp'], 'Pagina membrilor test')
+    && str_contains($pagina['corp'], 'Conținut dedicat profesioniștilor') && str_contains($pagina['corp'], 'Creează cont profesional')
     && !str_contains($pagina['corp'], 'Text secret al membrilor'), $pagina['cod'] . ' ' . mb_substr(strip_tags($pagina['corp']), 0, 300));
 $articol = $cerere('GET', '/blog/atelier-secret-membri');
 $verifica('membri pornit, vizitator: articolul restricționat = 403 cu nota, fără conținut', $articol['cod'] === 403
@@ -912,7 +914,8 @@ $salveazaPagina(['requires_active_account_present' => '1', 'requires_active_acco
 $verifica('pagina salvată fără câmpul pluginului păstrează fanionul (1); cu requires_active_account_present=1 și fără bifă → 0; cu bifă → 1',
     $dupaFara === 1 && $dupaDebifat === 0 && $fanion() === 1, json_encode([$dupaFara, $dupaDebifat, $fanion()]));
 $editor = $cerere('GET', '/admin/pages/' . $idPaginaMembri . '/edit', $jarAdmin)['corp'];
-$verifica('editorul paginii: fără pluginul membri portat, niciun câmp „Doar cont activ” (îl adaugă agățarea)', !str_contains($editor, 'requires_active_account'));
+$verifica('editorul paginii: câmpul „Doar cont activ” al pluginului membri (agățarea editor.pagina.campuri), bifat',
+    str_contains($editor, 'name="requires_active_account_present" value="1"') && (bool) preg_match('#name="requires_active_account" value="1"[^>]*checked#', $editor));
 $salveazaArticol = static function (array $extra) use ($cerere, $jarAdmin, $idArticolMembri): array {
     return $cerere('POST', '/admin/blog/posts', $jarAdmin, $extra + ['action' => 'save', 'id' => (string) $idArticolMembri,
         'title' => 'Atelier secret membri', 'slug' => 'atelier-secret-membri', 'content' => '<p>Conținut secret al atelierului.</p>',
@@ -1016,7 +1019,8 @@ $verifica('proprietarul: activarea unui cont → membri; o donație → donatii;
     && StripeEvenimente::proprietar($db, $ev(['object' => 'customer'], 'customer.created')) === null);
 $cerute = StripeEvenimente::ceruteDePluginuri();
 $verifica('evenimentele cerute de pluginurile vizibile (licența „toate”): ale magazinului, donațiilor și membrilor, fără dubluri',
-    in_array('checkout.session.completed', $cerute, true) && in_array('invoice.paid', $cerute, true) && in_array('charge.refunded', $cerute, true)
+    in_array('checkout.session.completed', $cerute, true) && in_array('invoice.paid', $cerute, true)
+    && in_array('payment_intent.succeeded', $cerute, true) && in_array('customer.subscription.deleted', $cerute, true)
     && count($cerute) === count(array_unique($cerute)), implode(', ', $cerute));
 putenv('STRIPE_API_BASE=http://127.0.0.1:' . $portStripe);
 $_ENV['STRIPE_API_BASE'] = 'http://127.0.0.1:' . $portStripe;
@@ -1646,9 +1650,14 @@ $r = $cerere('GET', '/_andaxi/export/' . bin2hex(random_bytes(32)));
 $verifica('un token necunoscut: 404; un export expirat se șterge la următoarea cerere (fișierul și descrierea)',
     $r['cod'] === 404 && !is_file($metaGdpr) && !is_file(substr($metaGdpr, 0, -5) . '.csv'));
 $eDonatii = $ruleaza('--ce=donatii');
+// Cu pluginul donatii portat (9 nov 2026) tabelul există: exportul se face (0 rânduri); fișierele lui se șterg aici.
+if (preg_match('#/_andaxi/export/([a-f0-9]{64})#', $eDonatii['iesire'], $mDonatii)) {
+    @unlink($dosarExport . '/' . hash('sha256', $mDonatii[1]) . '.json');
+    @unlink($dosarExport . '/' . hash('sha256', $mDonatii[1]) . '.csv');
+}
 $eGresit = $ruleaza('--ce=parole');
 $eData = $ruleaza('--ce=comenzi', '--din=31-12-2025');
-$verifica('refuzuri: --ce necunoscut cod 2, o dată greșită cod 2, un tabel care nu există pe site (donations) cod 1, fără fișier lăsat',
+$verifica('refuzuri: --ce necunoscut cod 2, o dată greșită cod 2; donațiile: cod 0 cu tabelul (pluginul donatii), cod 1 fără el; fără fișier lăsat',
     $eGresit['cod'] === 2 && $eData['cod'] === 2 && $eDonatii['cod'] === ((int) $unu("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'donations'") === 1 ? 0 : 1)
     && array_diff(array_merge(glob($dosarExport . '/*.csv') ?: [], glob($dosarExport . '/*.json') ?: []), $exportInainte) === [],
     $eGresit['iesire'] . ' | ' . $eData['iesire'] . ' | ' . $eDonatii['iesire']);

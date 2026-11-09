@@ -1,6 +1,347 @@
 {
     "format": 1,
     "tabele": {
+        "account_activations": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "amount": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "currency": {
+                    "extra": "",
+                    "implicit": "'ron'",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "months": {
+                    "extra": "",
+                    "implicit": "12",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "paid_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "payment_error": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "period_end": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "period_start": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "profession_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "profession_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "receipt_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'pending'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "stripe_payment_intent_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "stripe_session_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_account_activations_session": {
+                    "coloane": [
+                        "stripe_session_id"
+                    ],
+                    "unic": false
+                },
+                "idx_account_activations_user": {
+                    "coloane": [
+                        "user_id",
+                        "status"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "account_verification_documents": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "field_key": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(100)"
+                },
+                "field_label": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "file_size": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "mime_type": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(100)"
+                },
+                "original_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "stored_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(255)"
+                },
+                "verification_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_account_documents_verification": {
+                    "coloane": [
+                        "verification_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "account_verifications": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "answers_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "confirm_token_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(128)"
+                },
+                "confirmed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "gdpr_accepted": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "gdpr_accepted_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "profession_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "profession_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "review_note": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "reviewed_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "reviewed_by": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'awaiting_email'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "submitted_ip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(64)"
+                },
+                "submitted_user_agent": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_account_verifications_status": {
+                    "coloane": [
+                        "status",
+                        "created_at"
+                    ],
+                    "unic": false
+                },
+                "idx_account_verifications_token": {
+                    "coloane": [
+                        "confirm_token_hash"
+                    ],
+                    "unic": false
+                },
+                "idx_account_verifications_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "admin_activity_log": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -2201,6 +2542,195 @@
                 "token_hash": {
                     "coloane": [
                         "token_hash"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "donations": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "amount_cents": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "cancelled_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "consent": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "cover_fees": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "currency": {
+                    "extra": "",
+                    "implicit": "'ron'",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "designation": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "donor_email": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "donor_name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "fee_cents": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "frequency": {
+                    "extra": "",
+                    "implicit": "'once'",
+                    "null": false,
+                    "tip": "enum('once','monthly')"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "newsletter_optin": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "paid_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "receipt_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "reference": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "'pending'",
+                    "null": false,
+                    "tip": "varchar(30)"
+                },
+                "stripe_customer_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "stripe_invoice_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "stripe_payment_intent_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "stripe_subscription_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "user_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_donations_email": {
+                    "coloane": [
+                        "donor_email"
+                    ],
+                    "unic": false
+                },
+                "idx_donations_invoice": {
+                    "coloane": [
+                        "stripe_invoice_id"
+                    ],
+                    "unic": true
+                },
+                "idx_donations_pi": {
+                    "coloane": [
+                        "stripe_payment_intent_id"
+                    ],
+                    "unic": false
+                },
+                "idx_donations_status": {
+                    "coloane": [
+                        "status"
+                    ],
+                    "unic": false
+                },
+                "idx_donations_sub": {
+                    "coloane": [
+                        "stripe_subscription_id"
+                    ],
+                    "unic": false
+                },
+                "idx_donations_user": {
+                    "coloane": [
+                        "user_id"
+                    ],
+                    "unic": false
+                },
+                "reference": {
+                    "coloane": [
+                        "reference"
                     ],
                     "unic": true
                 }
@@ -6403,6 +6933,182 @@
             },
             "motor": "InnoDB"
         },
+        "profession_fields": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "field_key": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "field_type": {
+                    "extra": "",
+                    "implicit": "'text'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "help_text": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "is_required": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "label": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "options_json": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "longtext"
+                },
+                "profession_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_profession_fields_profession": {
+                    "coloane": [
+                        "profession_id",
+                        "sort_order"
+                    ],
+                    "unic": false
+                },
+                "uniq_profession_field": {
+                    "coloane": [
+                        "profession_id",
+                        "field_key"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "professions": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "activation_months": {
+                    "extra": "",
+                    "implicit": "12",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "activation_price": {
+                    "extra": "",
+                    "implicit": "0.00",
+                    "null": false,
+                    "tip": "decimal(10,2)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "description": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "is_active": {
+                    "extra": "",
+                    "implicit": "1",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
+                "name": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "slug": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "sort_order": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int"
+                },
+                "updated_at": {
+                    "extra": "on update current_timestamp",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "slug": {
+                    "coloane": [
+                        "slug"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "promotional_products": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -7818,6 +8524,24 @@
         "users": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
+                "account_active_until": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "account_status": {
+                    "extra": "",
+                    "implicit": "'none'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "avatar_url": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
+                },
                 "birth_date": {
                     "extra": "",
                     "implicit": null,
@@ -7878,6 +8602,12 @@
                     "null": false,
                     "tip": "int"
                 },
+                "member_code": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(32)"
+                },
                 "password_hash": {
                     "extra": "",
                     "implicit": null,
@@ -7890,11 +8620,23 @@
                     "null": true,
                     "tip": "varchar(30)"
                 },
+                "profession_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
                 "session_version": {
                     "extra": "",
                     "implicit": "0",
                     "null": false,
                     "tip": "int unsigned"
+                },
+                "stripe_customer_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(255)"
                 }
             },
             "fk": [],
@@ -7914,6 +8656,12 @@
                 "uniq_users_google_id": {
                     "coloane": [
                         "google_id"
+                    ],
+                    "unic": true
+                },
+                "uniq_users_member_code": {
+                    "coloane": [
+                        "member_code"
                     ],
                     "unic": true
                 }

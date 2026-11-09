@@ -131,6 +131,7 @@ $logoutIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H6a2 2 
                         <div class="account-section-v2__profile-head">
                             <h2>Profilul meu</h2>
                         </div>
+<?= \App\Support\Hooks::html('cont.profil', is_array($customer) ? $customer : []) /* membri: poza de profil (vertij af8ab87) */ ?>
                         <form method="post" action="/contul-meu/profil" class="account-section-v2__profile-form">
                             <div class="account-section-v2__profile-grid">
                                 <div>

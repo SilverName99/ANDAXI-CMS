@@ -716,6 +716,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Pluginurile donatii și membri (Etapa 4, din vertij): tools/dev/test-donatii-membri.php, pe licența „toate”: webhook-ul Stripe,
+# donațiile, înscrierea, confirmarea, cotizația, adminul, față de codul vertij (clona CMS_DEV_REPO_VT), CSRF, pluginurile oprite.
+# Bazele și serverele lui (+52 … +55, cu două Stripe-uri false) sunt ale testului, șterse la final.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Donațiile și membrii (tools/dev/test-donatii-membri.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-donatii-membri.php" > "$TMP/test-donatii-membri.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-donatii-membri.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-donatii-membri.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-donatii-membri.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Paginile refăcute ale fazei D, partea a doua (WP-32 … WP-34): tools/dev/test-admin-faza-d.php, pe licența „toate”: indecșii și
 # cifrele paginii Acasă (pe o bază separată, ștearsă la final), plus ce adaugă WP-33/WP-34.
 if [ "$PACHET" = "toate" ]; then

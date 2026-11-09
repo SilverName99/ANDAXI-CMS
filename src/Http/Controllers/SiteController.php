@@ -2774,6 +2774,10 @@ final class SiteController
             \App\Support\StripeEvenimente::handler($proprietar, 'payment_intent.succeeded', $plata(true));
             \App\Support\StripeEvenimente::handler($proprietar, 'payment_intent.payment_failed', $plata(false));
         }
+        // Etapa 4 (din vertij): donațiile și cotizațiile membrilor, cu handler-ele pluginurilor lor. Rulează în orice stare a
+        // pluginului (banii primiți se notează mereu; abonamentele lunare se reînnoiesc și se notează în continuare).
+        DonatiiController::handlereStripe();
+        MembriController::handlereStripe();
     }
 
     public function cartHeartbeat(): void
@@ -3892,6 +3896,13 @@ final class SiteController
         }
         $settings = Settings::all($db);
         $registrationFields = $this->customerRegistrationFields($settings);
+        // Etapa 4 (vertij, pluginul membri): un plugin poate cere alte câmpuri ale contului (cu tipurile de cont: prenumele,
+        // numele și telefonul, fără data nașterii și gen); fără agățări, câmpurile din setări.
+        foreach (\App\Support\Hooks::ruleaza('inregistrare.campuri', $db) as $campuriPlugin) {
+            if (is_array($campuriPlugin)) {
+                $registrationFields = array_merge($registrationFields, array_map('boolval', array_intersect_key($campuriPlugin, $registrationFields)));
+            }
+        }
 
         $firstName = $registrationFields['first_name'] ? trim((string) ($_POST['first_name'] ?? '')) : 'Client';
         $lastName = $registrationFields['last_name'] ? trim((string) ($_POST['last_name'] ?? '')) : 'Nou';
@@ -5061,7 +5072,7 @@ final class SiteController
         http_response_code(403);
         header('Cache-Control: no-store, private');
         View::render('site/custom-page', [
-            'title' => 'Conținut pentru membri',
+            'title' => \App\Support\AccesMembri::titluNota($db),
             'page' => [
                 'html_content' => \App\Support\AccesMembri::nota($db, $titluContinut),
                 'css_content' => '',
@@ -7255,7 +7266,7 @@ HTML;
                     $row['cover_image_url'] = trim((string) ($row['cover_image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg';
                     $published = trim((string) ($row['published_at'] ?? ''));
                     $row['published_at_label'] = $published !== '' ? date('d.m.Y', strtotime($published) ?: time()) : '';
-                    $row['content_text'] = trim(strip_tags((string) ($row['content'] ?? '')));
+                    $row['content_text'] = \App\Support\PlainText::fromHtml((string) ($row['content'] ?? '')); // vertij 7d7d8cc
                 }
                 unset($row);
 
@@ -7462,7 +7473,7 @@ HTML;
         }
         $referencesHtml = $referencesRaw !== '' ? \App\Support\BlogReferences::render($referencesRaw) : '';
 
-        $contentText = trim(strip_tags($contentHtml));
+        $contentText = \App\Support\PlainText::fromHtml($contentHtml); // vertij 7d7d8cc: fără „&nbsp;” în rezumat
         $excerpt = trim((string) ($post['excerpt'] ?? ''));
         if ($excerpt === '' && $contentText !== '') {
             $excerpt = mb_substr($contentText, 0, 180) . (mb_strlen($contentText) > 180 ? '…' : '');

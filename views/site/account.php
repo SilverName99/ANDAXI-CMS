@@ -325,6 +325,7 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                             <h2>Profilul meu</h2>
                             <a class="btn btn-secondary" href="/contul-meu?section=profile">Editează</a>
                         </div>
+<?= \App\Support\Hooks::html('cont.profil', is_array($customer) ? $customer : []) /* membri: poza de profil (vertij af8ab87) */ ?>
                         <h3 style="margin:0 0 12px;">Informații personale</h3>
                         <form method="post" action="/contul-meu/profil" class="customer-form-grid">
                             <div class="field">
@@ -391,7 +392,8 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
 
             <article class="panel" style="<?= $activeView === 'register' ? '' : 'display:none;' ?>" data-auth-view="register">
                 <h3 style="margin-top:0;">Creează cont</h3>
-                <form method="post" action="/register" class="form-grid">
+<?php $campuriPlugin = \App\Support\Hooks::oricare('inregistrare.inlocuieste_campurile'); /* membri: tipul de cont aduce câmpurile (vertij) */ ?>
+                <form method="post" action="/register" class="form-grid"<?= $campuriPlugin ? ' enctype="multipart/form-data"' : '' ?>>
                     <input type="hidden" name="next" value="<?= htmlspecialchars($next, ENT_QUOTES) ?>">
                     <input type="hidden" name="register_form_token" value="<?= htmlspecialchars($registerAntiBotToken, ENT_QUOTES) ?>">
                     <input type="hidden" name="register_form_rendered_at" value="<?= $registerAntiBotRenderedAt > 0 ? $registerAntiBotRenderedAt : time() ?>">
@@ -399,6 +401,7 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                         <label for="register-hp-website">Website</label>
                         <input id="register-hp-website" type="text" name="register_hp_website" value="" tabindex="-1" autocomplete="off">
                     </div>
+<?php if (!$campuriPlugin): ?>
                     <?php if (!empty($registrationFields['first_name'])): ?>
                         <div class="field">
                             <label>Prenume</label>
@@ -451,6 +454,7 @@ $birthDate = is_array($customer) ? (string) ($customer['birth_date'] ?? '') : ''
                             <input type="password" name="password_confirm" minlength="8" required>
                         </div>
                     <?php endif; ?>
+<?php endif; ?>
 <?= \App\Support\Hooks::html('inregistrare.formular') ?>
                     <div style="grid-column:1/-1;">
                         <button class="btn" type="submit">Creează cont</button>

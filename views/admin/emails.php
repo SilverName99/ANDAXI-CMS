@@ -410,7 +410,7 @@ if (count($taburiEmail) > 1) {
     }
     $campaignInitialBlocks = $selectedCampaignBlocks;
     if (is_array($selectedCampaign) && $campaignInitialBlocks === []) {
-        $campaignTextFallback = trim((string) preg_replace('/\s+/', ' ', strip_tags((string) ($selectedCampaign['html_content'] ?? ''))));
+        $campaignTextFallback = \App\Support\PlainText::fromHtml((string) ($selectedCampaign['html_content'] ?? ''));
         if ($campaignTextFallback === '') {
             $campaignTextFallback = 'Scrie conținutul newsletter-ului aici.';
         }
@@ -690,7 +690,7 @@ if (count($taburiEmail) > 1) {
                             <article class="newsletter-template-card <?= ((int) ($selectedNewsletter['id'] ?? 0) === $tplId) ? 'selected' : '' ?>">
                                 <div class="newsletter-template-preview">
                                     <div class="top"><?= htmlspecialchars((string) ($tpl['subject'] ?? ''), ENT_QUOTES) ?></div>
-                                    <div class="body"><?= htmlspecialchars((string) substr(strip_tags((string) ($tpl['html_content'] ?? '')), 0, 80), ENT_QUOTES) ?></div>
+                                    <div class="body"><?= htmlspecialchars(\App\Support\PlainText::excerpt((string) ($tpl['html_content'] ?? ''), 80), ENT_QUOTES) ?></div>
                                 </div>
                                 <div class="newsletter-template-foot">
                                     <strong><?= htmlspecialchars((string) ($tpl['name'] ?? 'Template'), ENT_QUOTES) ?></strong>

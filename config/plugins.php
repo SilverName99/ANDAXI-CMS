@@ -495,29 +495,63 @@ return [
             'tabele' => [],
         ],
 
+        // Din vertij (32db865 … 8412906, dc52498 … ca1120c; DonatiiController, DonationService, migrarea donatii/0062): sertarul
+        // „SUSȚINE” (o dată sau lunar, comisionul acoperit, modul „Exemplu”), plata prin Stripe, chitanțele, tab-ul „Donații” din
+        // cont, Admin → Donații și Setări donații. docs/PLUGINURI.md, „Donații”.
         'donatii' => [
             'nume' => 'Donații',
             'descriere' => 'Donații o dată sau lunar, cu istoric în contul donatorului.',
             'necesita' => ['plata_stripe'],
             'bani' => true,
-            'portat' => false,
             'sursa' => 'vertij-tinitus.ro',
-            'stripe_evenimente' => ['payment_intent.succeeded', 'payment_intent.payment_failed', 'invoice.paid', 'invoice.payment_failed',
-                'customer.subscription.updated', 'customer.subscription.deleted', 'charge.refunded'],
+            'rute_admin' => ['/admin/donations', '/admin/settings/donations'],
+            // Sertarul trimite donația aici; oprirea donației lunare din cont (o adresă a contului, deci mai precisă decât
+            // `/contul-meu/*` al conturilor de clienți). Webhook-ul e al nucleului (/webhook/stripe, plata_stripe).
+            'rute_publice' => ['/api/donations/*', '/contul-meu/donatii/*'],
+            'meniu' => [
+                ['grup' => 'clienti', 'ordine' => 50, 'eticheta' => 'Donații', 'href' => '/admin/donations', 'icon' => 'coupon',
+                    'activ' => ['/admin/donations']],
+                ['grup' => 'setari', 'ordine' => 57, 'eticheta' => 'Setări donații', 'href' => '/admin/settings/donations',
+                    'icon' => 'settings', 'activ' => ['/admin/settings/donations']],
+            ],
+            // Evenimentele Stripe pe care le procesează pluginul („Verifică webhook-ul” din Setări plăți le cere endpoint-ului):
+            // plata unei donații, fiecare lună plătită (invoice.paid; invoice.payment_succeeded, dacă endpoint-ul îl are, e
+            // procesat la fel), abonamentul oprit.
+            'stripe_evenimente' => ['payment_intent.succeeded', 'payment_intent.payment_failed', 'invoice.paid',
+                'customer.subscription.deleted'],
             'tabele' => ['donations'],
         ],
 
+        // Din vertij (d3439a5 … ffa3d9c, 50ef812, af8ab87, 7d7d8cc, b0a81e1; MembriController, ProfessionAccounts, migrarea
+        // membri/0063): categoriile de membru cu câmpurile lor, cererile cu documente și aprobarea lor, cotizația pe 1–12 luni prin
+        // Stripe Checkout, conținutul doar pentru membri, poza de profil, plata cotizației în listele adminului. docs/PLUGINURI.md,
+        // „Membri”.
         'membri' => [
             'nume' => 'Membri',
             'descriere' => 'Categorii de membri, documente, aprobare, cotizație pe 1–12 luni și pagini doar pentru membri.',
             'necesita' => ['conturi_clienti', 'plata_stripe'],
             'bani' => true,
-            'portat' => false,
             'sursa' => 'vertij-tinitus.ro',
+            'rute_admin' => ['/admin/accounts/*'],
+            // Adresele contului ale pluginului, mai precise decât `/contul-meu/*` al conturilor de clienți.
+            'rute_publice' => ['/contul-meu/activare', '/contul-meu/poza', '/contul-meu/cerere-noua', '/cont/verifica-email',
+                '/cont/retrimite-confirmarea'],
+            // Întoarcerea de la Stripe după plata cotizației: plata se notează în orice stare a pluginului (ca webhook-ul).
+            'rute_mereu_deschise' => ['GET /contul-meu/activare/retur'],
+            'meniu' => [
+                ['grup' => 'clienti', 'ordine' => 25, 'eticheta' => 'Cereri conturi', 'href' => '/admin/accounts/verifications',
+                    'icon' => 'shield', 'activ' => ['/admin/accounts/verifications']],
+                ['grup' => 'clienti', 'ordine' => 26, 'eticheta' => 'Tipuri de cont', 'href' => '/admin/accounts/professions',
+                    'icon' => 'categories', 'activ' => ['/admin/accounts/professions']],
+                ['grup' => 'clienti', 'ordine' => 27, 'eticheta' => 'Setări conturi', 'href' => '/admin/accounts/settings',
+                    'icon' => 'settings', 'activ' => ['/admin/accounts/settings']],
+            ],
+            // Sesiunile de plată ale cotizației (metadata.type = account_activation; plățile lor nu au handler, ca în vertij).
             'stripe_evenimente' => ['checkout.session.completed', 'checkout.session.async_payment_succeeded',
-                'checkout.session.async_payment_failed', 'checkout.session.expired', 'charge.refunded'],
+                'checkout.session.async_payment_failed', 'checkout.session.expired'],
             'tabele' => ['professions', 'profession_fields', 'account_verifications', 'account_verification_documents',
-                'account_activations'],
+                'account_activations', 'users.profession_id', 'users.account_status', 'users.account_active_until',
+                'users.member_code', 'users.avatar_url', 'users.stripe_customer_id'],
         ],
 
         // WP-26 (GR-15, din grafoanaytis): butonul „Cere ofertă” cu sertarul lui pe pagina de produs ({{product_quote_button}}),

@@ -264,8 +264,8 @@ Dashboard-ul arată cardurile și listele doar pentru pluginurile vizibile
 ## Punctele de legătură și conținutul pentru membri (WP-24)
 
 **Punctele de legătură** (`App\Support\Hooks`, din vertij VT-X2, port-vertij §4.2): nucleul cheamă un punct,
-un plugin se agață de el dintr-un singur loc, `config/hooks.php` (gol în Etapa 1: `membri` și `donatii` vin în
-Etapa 4). O agățare contează doar cât pluginul ei e vizibil (sau, cu `'stare' => 'activ'`, doar pornit); fără
+un plugin se agață de el dintr-un singur loc, `config/hooks.php` (din 9 noiembrie 2026 și `membri`, `donatii`, portate
+din vertij: mai jos). O agățare contează doar cât pluginul ei e vizibil (sau, cu `'stare' => 'activ'`, doar pornit); fără
 agățări, nucleul se poartă exact ca înainte. Punctele și locul lor: `inregistrare.formular` (formularul de
 înregistrare din contul clientului; și `{{auth_form}}`, WP-25), `inregistrare.valideaza` / `inregistrare.cont_existent` /
 `inregistrare.dupa_creare` (`accountRegister`: înainte de creare, adresa care are deja cont, după creare — o
@@ -1494,16 +1494,106 @@ teste: `tools/dev/php.sh tools/dev/licenta.php biovitality statistici=pornit`.
 - **Ce lipsește încă**: legătura cu Google Search Console (cuvintele căutate pe Google); căutarea din blog nu se notează (doar căutarea
   de produse); o comandă plasată în altă zi decât vizita nu se leagă de sursa vizitei (fără cookie nu se poate).
 
-### Neportate încă
+### Donații (`donatii`)
 
-Există în alte site-uri și se portează mai târziu; în catalog sunt deja, cu
-dependențele lor, fără nicio rută, meniu, cron sau email (deci „oprit” și „pornit”
-nu schimbă încă nimic):
+Din vertij (`32db865` … `8412906` „fundație, popup, mod Exemplu”, 22 iulie; `dc52498` … `ca1120c` „donații lunare, chitanțe,
+versiunea API Stripe”, 5 octombrie; „ultimul commit revizuit” `9ab7999`), portat pe 9 noiembrie 2026. `DonatiiController`,
+`App\Support\DonationService` (copiată, fără `ensureSchema`), vederile `views/site/donation-widget.php`, `views/site/donatii/tab-cont.php`,
+`views/admin/donations.php`, `views/admin/settings-donations.php`, scriptul `public/assets/js/donation-widget.js` (aceiași octeți),
+migrarea `donatii/0062`. Are nevoie de `plata_stripe`; în pachetul „Asociație” și în `licente_dev.vertij`.
 
-| Cheie | Din site-ul | Are nevoie de | Tabele (la portare) |
-|---|---|---|---|
-| `donatii` | vertij-tinitus.ro | plata_stripe | `donations` |
-| `membri` | vertij-tinitus.ro | conturi_clienti, plata_stripe | `professions`, `profession_fields`, `account_verification*`, `account_activations` |
+- **Sertarul „SUSȚINE”** (agățarea `layout.final_body`, pe paginile publice): o dată sau lunar, sumele, destinațiile, comisionul acoperit
+  la cerere, numele, emailul, abonarea la newsletter, acordul; apare cu donațiile pornite (`donations_enabled`) și cheia publică Stripe,
+  sau în **modul „Exemplu”** (`donations_demo_enabled`, ori fără cheie: tot fluxul, fără nicio plată). Plata: `POST /api/donations/intent`
+  (JSON) face rândul „pending” și, pentru o donație unică, un PaymentIntent; pentru una lunară, clientul Stripe, produsul „Donație lunară”
+  (făcut o dată, ținut în `donations_stripe_product_id`, uitat dacă Stripe refuză) și abonamentul (`default_incomplete`, cheia de
+  confirmare din `confirmation_secret`, cu rezerva pentru versiunile API de dinainte de basil). Cu pluginul „se oprește” sertarul
+  dispare și nicio donație nouă nu pornește.
+- **Webhook-ul** (același `/webhook/stripe`, aceeași semnătură, prin dispecerul `StripeEvenimente`, mai sus; proprietarul: metadata
+  `type = donation` sau un abonament, o factură, o plată găsite în `donations`): `payment_intent.succeeded` („paid”, chitanța cerută la
+  Stripe, emailul de mulțumire, o singură dată), `payment_intent.payment_failed` („failed”, o plată reușită rămâne „paid”), `invoice.paid`
+  și `invoice.payment_succeeded` (fiecare lună a unei donații lunare: un rând nou „paid”, cu factura, chitanța și emailul; ambele forme ale
+  facturii; indexul unic pe `stripe_invoice_id` oprește dublurile, deci un endpoint care trimite ambele tipuri nu dublează nimic),
+  `customer.subscription.deleted` (`cancelled_at`). **Handler-ele rulează în orice stare a pluginului**: un abonament lunar al unui site
+  cu pluginul oprit se reînnoiește la Stripe și se notează mai departe (fără email).
+- **Contul donatorului** (tab-ul „Donații”, `cont.taburi`, doar pentru cine a donat; insigna „lunar”): donația lunară activă cu „Oprește
+  donația lunară” (`POST /contul-meu/donatii/opreste`: abonamentul anulat la Stripe, `cancelled_at`; id-ul vine din rândurile contului, nu
+  din formular) și istoricul cu chitanțele. Donațiile făcute fără cont cu adresa contului apar (și se pot opri) doar după ce adresa e
+  dovedită (`users.email_confirmed_at`, regula comenzilor fără cont, G-M4); până atunci tab-ul arată „Confirmă adresa ca să le vezi aici”
+  cu butonul nucleului (`/contul-meu/confirmare-email`).
+- **Admin** (Clienți → Donații, Setări → Setări donații): lista cu filtrul de stare, căutarea și totalurile (încasat, luna curentă, plătite,
+  donatori lunari activi); setările sertarului.
+- **Diferențe față de vertij** (în `site-uri/vertij/ce-se-schimba.md`): jetonul formularului (AdminCsrf) pe setări și pe oprirea donației;
+  donația doar ca JSON (415 altfel); `Idempotency-Key` pe creările spre Stripe (`donatie-<referință>…`); chitanța arătată doar ca link
+  `https://`; configurarea sertarului scrisă cu `JSON_HEX_TAG`; donațiile fără cont doar după dovada adresei.
+- **Stări**: **se oprește** — fără sertar și fără donații noi, contul și adminul rămân; **oprit** — adresele 404/403, meniul dispare,
+  rândurile rămân, webhook-ul notează în continuare banii primiți (export legal: `scripts/exporta-date-legale.php --ce=donatii`). Un
+  abonament lunar nu se oprește singur odată cu pluginul: se oprește din Stripe (decizia proprietarului).
+- **Schema**: `donatii/0062`, adoptivă (definițiile `DonationService::ensureSchema` din vertij, cu coloanele și indexurile adăugate
+  după): pe vertij-tinitus.ro „detectata”, 0 operații. Pe copia de verificare: doar structura (regulile Bioscem 25).
+
+### Membri (`membri`)
+
+Din vertij (`d3439a5` … `ffa3d9c` „conturi profesionale, categorii de membri, cereri noi”, 30 august – 5 octombrie; `50ef812`
+„confirmarea emailului”; `af8ab87` „poza de profil”; `7d7d8cc` + `b0a81e1` „plata activării în listele adminului”, 26 octombrie),
+portat pe 9 noiembrie 2026. `MembriController`, `App\Support\ProfessionAccounts` (copiată, fără `ensureSchema`, dosarul documentelor
+prin `Paths`), vederile `views/site/membri/*`, `views/admin/account-*.php`, `views/admin/membri/activation-*.php`, migrarea `membri/0063`.
+Are nevoie de `conturi_clienti` și `plata_stripe`; în pachetul „Asociație” și în `licente_dev.vertij`.
+
+- **Tipurile de cont** (Clienți → Tipuri de cont, `/admin/accounts/professions`): categoriile de membru (nume, slug, descriere, cotizația
+  și perioada ei, activ, ordinea) și câmpurile fiecăreia (text, text lung, număr, dată, listă, bifă, document; obligatoriu, activ, ajutor).
+- **Înscrierea** (agățările `inregistrare.*`, doar cu pluginul pornit): cu măcar o categorie activă, formularul de înregistrare
+  (`/register`, `{{auth_form}}`) e cel al categoriei (`inregistrare.inlocuieste_campurile`, `inregistrare.formular`, cu
+  `enctype="multipart/form-data"`): tipul de cont, datele contului (prenume, nume, email, telefon, parolă: `inregistrare.campuri`),
+  câmpurile categoriei, documentele (extensiile și mărimea din setări, conținutul verificat cu finfo; în `storage/account-documents`,
+  `Paths::stocareSite`, numele opac, 0640) și acordul GDPR. Contul primește codul de membru (`<prefix>-00042`), cererea „așteaptă
+  confirmarea pe email” și emailul de confirmare (linkul `/cont/confirmare/{token}`, doar hash-ul sha256 al tokenului în
+  `account_verifications`), apoi `/cont/verifica-email` (cu retrimiterea, `POST /cont/retrimite-confirmarea`, 5 la 15 minute). O
+  înscriere neconfirmată reluată cu aceeași adresă (`inregistrare.cont_existent`) se face peste cont (cererea și documentele vechi șterse).
+- **Confirmarea**: linkul unei cereri e servit de pagina nucleului (`ConfirmareEmailController`: `confirmare.link_plugin` la GET, butonul
+  „Confirmă adresa” și parola contului; `confirmare.foloseste_plugin` la POST): cererea trece „în verificare”, adresa e dovedită și pentru
+  nucleu (`ConfirmareEmail::marcheazaConfirmat`), adminul primește emailul (`account_verification_notify_email`), clientul intră în cont.
+  Un link al nucleului folosit de același cont (de exemplu retrimis de pe pagina de intrare) face la fel (`confirmare.dupa`). Cu
+  `customer_email_confirmation_required` (vertij: înghețat 1), un cont cu cererea neconfirmată nu intră (`logare.blocata`).
+- **Cererile** (Clienți → Cereri conturi): pe stări, cu căutarea, numărul documentelor și **ultima plată a cotizației** (suma, perioada
+  achitată, starea, intervalul, plătit la; plățile încasate întâi, altfel ultima încercare); cererea cu răspunsurile, documentele
+  (`/admin/accounts/documents/{id}`: doar adminului, PDF și imaginile inline, cu `Content-Security-Policy: … sandbox`, restul descărcate),
+  plățile, decizia (aprobată / respinsă cu motivul; jurnalul de activitate și emailul deciziei). Aceleași cinci coloane în Clienți →
+  Clienți (`admin.utilizatori.coloane`), cu derularea pe orizontală a tabelului (`.admin-table-scroll`, vertij `b0a81e1`).
+- **Cotizația** (tab-ul „Activează contul” / „Cotizația mea”, `cont.taburi`, cu insigna zilelor rămase sau „!”): pe 1, 3, 6, 12 luni
+  (`account_activation_durations`, prețul proporțional cu cel al categoriei); `POST /contul-meu/activare` face plata „pending” și sesiunea
+  Stripe Checkout (`metadata.type = account_activation`); întoarcerea (`GET /contul-meu/activare/retur`, **mereu deschisă**) și webhook-ul
+  (`checkout.session.completed` plătită, `async_payment_succeeded`; `expired`, `async_payment_failed` = „failed”) prelungesc contul de la
+  data expirării dacă mai are zile, o singură dată (doar cererea care trece plata în „paid”), cu chitanța și emailul „Contul tău este
+  activ”. Cu pluginul „se oprește” nu pornește nicio plată nouă. Cererea nouă după o respingere: `/contul-meu/cerere-noua`.
+- **Conținutul pentru membri**: poarta nucleului (`AccesMembri`, mai sus), cu agățările `continut.membru_activ` (aprobat și cotizația la zi),
+  `continut.nota` și `continut.nota_titlu` (explicația pe stări a vertij: oaspete, confirmare, verificare, respins, neactivat, expirat; 403,
+  noindex); bifa „Doar cont activ” din editorul paginii și al articolului.
+- **Contul**: poza de profil (`cont.profil`, în „Profilul meu”: `POST /contul-meu/poza`, JPG/PNG/WebP până la `account_avatar_max_mb`, în
+  `uploads/gallery/profile` și în Galerie, folderul `account_avatar_folder`; cea veche ștearsă); categoria, starea și codul de membru în
+  antetul contului (`cont.antet`). La ștergerea unui cont (din admin sau de client, `utilizator.sters`): cererile, documentele de pe disc,
+  plățile cotizației și poza de profil.
+- **Setări conturi** (Clienți → Setări conturi): documentele, duratele, prefixul codului (implicit „M”; vertij înghețat „SVTH”), eticheta
+  contului din antet, numele și logo-ul emailurilor, poza de profil, acordul GDPR, textele secțiunii de activare și ale notei.
+- **Diferențe față de vertij** (în `site-uri/vertij/ce-se-schimba.md`): linkul de confirmare cere apăsarea butonului și parola contului
+  (vertij confirma și loga la simpla deschidere); logarea unui cont neconfirmat oprită; jetonul formularului pe POST-urile din admin și
+  pe formularele contului (cotizația, poza, cererea nouă); documentul cu CSP sandbox; plata cotizației prelungește contul o singură dată
+  și la două confirmări simultane; poza de profil ștearsă odată cu contul; cererile șterse și la „Șterge contul” (vertij: doar din admin).
+- **Stări**: **se oprește** — fără înscrieri noi de membru (formularul devine cel clasic) și fără plăți noi ale cotizației; restul rămâne;
+  **oprit** — adresele 404/403, meniul și coloanele dispar, paginile „doar cont activ” dau 404; rândurile, documentele și pozele rămân,
+  webhook-ul și întoarcerea de la Stripe notează în continuare plățile.
+- **Schema**: `membri/0063`, adoptivă (cele cinci tabele și coloanele contului `profession_id`, `account_status`, `account_active_until`,
+  `member_code` unic, `avatar_url`, `stripe_customer_id`, exact ca în vertij): pe vertij-tinitus.ro „detectata”, 0 operații (indexul unic
+  al codului de membru e acolo sub două nume). Pe copia de verificare: tabelele doar structura, pe conturi categoria, starea și data
+  păstrate, codul, poza și clientul Stripe golite (regulile Bioscem 25).
+
+**Dovada (ambele pluginuri)**: `tools/dev/test-donatii-membri.php` (în testul de fum, pe „toate”), față de codul vertij la `9ab7999`, pe
+două baze făcute ca a lui, fiecare cod cu un Stripe fals al lui (în copia codului vertij, singura schimbare e adresa API-ului): A
+adoptarea; B webhook-ul (aceleași răspunsuri, rânduri, cereri spre Stripe și emailuri; un eveniment retrimis: „duplicate”); C sertarul,
+donațiile din sertar, înscrierea cu documente, verificarea emailului, confirmarea, secțiunea cotizației octet cu octet, plata și
+întoarcerea, tab-ul donațiilor și oprirea, poza, cererea nouă, nota pe stări, fiecare pagină de admin (partea pluginului octet cu octet)
+și acțiune, celulele din lista de utilizatori, ștergerea unui membru; D doar pe codul comun: CSRF, JSON, logarea, donațiile după dovadă,
+pluginurile oprite.
 
 ### Unealta internă `migrare_wordpress`
 
