@@ -32,11 +32,12 @@ use Throwable;
  *  - nicio licență nu se verifică acum → `Plugins` merge cu ultima licență
  *    aplicată (`stare-aplicata.json`); nicio licență, niciodată → doar nucleul.
  *
- * Granița pentru Etapa 2: aici stau și memoria (ultima bună) și intrarea
- * licențelor noi (`instaleaza`). Preluarea de la CRM (cererea HTTP la 15 minute,
- * cu nonce și check-in) se adaugă tot aici, ca `reimprospateazaDeLaCrm()`, care
- * descarcă licența și o dă lui `instaleaza()`; restul codului nu se schimbă.
- * Până atunci licența o scriu scriptul „site nou” sau `tools/dev/licenta.php`.
+ * Aici stau memoria (ultima bună) și intrarea licențelor noi (`instaleaza`).
+ * Licența o scriu: preluarea automată de la CRM (`LicentaSincronizare`, cronul
+ * `scripts/licenta-sincronizare.php` la 5 minute și „Verifică acum” din Admin →
+ * Abonamentul tău), omul care urcă fișierul de mână, scriptul „site nou” sau
+ * `tools/dev/licenta.php`. Toate ajung la aceleași reguli de mai sus; restul
+ * codului nu știe de unde a venit licența.
  */
 final class Licenta
 {
@@ -247,12 +248,13 @@ final class Licenta
 
     /**
      * Pune o licență nouă pe site: o verifică, apoi o scrie ca `licenta.json`.
-     * Folosită de scriptul „site nou”, de unealta de dezvoltare și, în Etapa 2,
-     * de preluarea de la CRM. O licență respinsă nu se scrie (rămâne ce era).
+     * Folosită de scriptul „site nou”, de unealta de dezvoltare și de preluarea
+     * de la CRM (`LicentaSincronizare`, cu `$mod` 0600). O licență respinsă nu se
+     * scrie (rămâne ce era).
      *
      * @return array{ok: bool, eroare: string, versiune: int}
      */
-    public static function instaleaza(string $json): array
+    public static function instaleaza(string $json, int $mod = 0660): array
     {
         $verificare = self::verifica($json);
         if (!$verificare['ok']) {
@@ -270,7 +272,7 @@ final class Licenta
         if (!is_dir(self::dosar())) {
             @mkdir(self::dosar(), 0770, true);
         }
-        if (!self::scrieAtomic(self::dosar() . '/' . self::FISIER, $json)) {
+        if (!self::scrieAtomic(self::dosar() . '/' . self::FISIER, $json, $mod)) {
             return ['ok' => false, 'eroare' => 'nu pot scrie în ' . self::dosar() . '.', 'versiune' => $versiune];
         }
         self::$rezultat = null;
@@ -345,14 +347,18 @@ final class Licenta
         return $octeti === false ? null : $octeti;
     }
 
-    /** Scrie un fișier prin fișier temporar + rename, ca nimeni să nu citească o jumătate. */
-    public static function scrieAtomic(string $cale, string $continut): bool
+    /**
+     * Scrie un fișier prin fișier temporar + rename, ca nimeni să nu citească o jumătate. Drepturile (`$mod`) se pun pe
+     * fișierul temporar, înainte de rename, deci fișierul final le are din prima clipă.
+     */
+    public static function scrieAtomic(string $cale, string $continut, int $mod = 0660): bool
     {
         $temporar = $cale . '.' . bin2hex(random_bytes(4)) . '.tmp';
         if (@file_put_contents($temporar, $continut, LOCK_EX) === false) {
+            @unlink($temporar);
             return false;
         }
-        @chmod($temporar, 0660);
+        @chmod($temporar, $mod);
         if (!@rename($temporar, $cale)) {
             @unlink($temporar);
             return false;

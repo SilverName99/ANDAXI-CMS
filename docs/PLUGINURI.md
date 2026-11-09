@@ -10,7 +10,8 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 | Fișier | Ce e |
 |---|---|
 | `config/plugins.php` | **Catalogul**: pentru fiecare plugin numele, descrierea, de ce are nevoie, rutele, paginile, intrările din meniu, cronurile, tabelele. Plus ordinea meniului adminului, rutele împărțite între pluginuri, pachetele de abonament și licențele de dezvoltare ale celor patru site-uri existente (`licente_dev`, doar pentru teste). |
-| `src/Support/Licenta.php` | Citirea și verificarea licenței (`storage/licenta/licenta.json`) și memoria „ultima bună”. Aici se adaugă în Etapa 2 preluarea de la CRM. |
+| `src/Support/Licenta.php` | Citirea și verificarea licenței (`storage/licenta/licenta.json`) și memoria „ultima bună”. |
+| `src/Support/LicentaSincronizare.php`, `scripts/licenta-sincronizare.php` | Preluarea automată a licenței de la CRM (cronul la 5 minute și „Verifică acum” din Admin → Abonamentul tău); mai jos, „Preluarea automată”. |
 | `src/Support/Plugins.php` | Întrebările pentru tot codul: `activ`, `permiteInceput`, `vizibil`, `stare`; regula dependențelor; proprietarul unei rute; meniul. |
 | `src/Http/rute.php` | Toate rutele site-ului (mutate din `public/index.php`). |
 | `src/Http/GardaPluginuri.php` | Garda routerului: o rută a unui plugin care nu e pe site nu ajunge la controller. |
@@ -19,7 +20,8 @@ nimic și nu vede nimic despre pluginurile pe care nu le are.
 | `tools/dev/instantaneu-rute.php` | Instantaneul rutelor: ce face garda cu fiecare rută, meniul și cronurile, pe fiecare licență de test, față de fișierele din `tools/dev/instantanee/` (în git); plus regulile fixe care nu depind de catalog. |
 | `tools/dev/test-pluginuri.php` | Testele: licența, garda, fiecare pachet parcurs pagină cu pagină (și cu browserul, inclusiv textul vizibil), „se oprește”, comparația cu codul de bază, la cerere fiecare plugin oprit pe rând. |
 | `tools/dev/compara-cu-baza.sh` | Cu licența „toate” (sau, cu `--licenta=bioscem`, cu licența de dezvoltare a Bioscem, fără unealta internă), compară HTML-ul paginilor-cheie cu cel al codului Bioscem însuși (ultimul commit revizuit din `docs/de-portat.md`); diferențele voite sunt declarate explicit, cu motivul lor, și se scot înainte. Istoric: `--baza=f5ae5ea`, codul dinaintea pluginurilor. |
-| `scripts/diagnostic.php --licenta` | Verificarea dinaintea unui deploy: licența se verifică cu cheia și site-ul din `.env`? Iese cu 1 dacă nu. |
+| `scripts/diagnostic.php --licenta` | Verificarea dinaintea unui deploy: licența se verifică cu cheia și site-ul din `.env`? Iese cu 1 dacă nu. Arată și dacă preluarea automată e configurată și ultima ei rulare. |
+| `tools/dev/test-licenta-sincronizare.php` | Testele preluării automate, cu un CRM simulat (poarta G-lic). |
 | `tools/dev/crawl-pachet.cjs` | Trecerea cu Playwright prin paginile unui pachet (DOM și text după JavaScript, ferestrele comenzilor și ale produselor, contul clientului, erori JS, captura meniului). |
 | `tools/dev/test-seo.php` | Testele SEO pe fiecare pachet: sitemap, robots.txt, date structurate, redirecționări (niciodată pe adresele mereu deschise). Vezi [SEO.md](SEO.md). |
 
@@ -136,9 +138,53 @@ mesajelor, stările efective, de când e fiecare plugin în „se oprește”
 (`se_opreste_din`, folosit de ERP) și ultima licență aplicată (pentru regula 3).
 Cine poate scrie în `storage/` poate schimba și codul, deci fișierul nu e semnat.
 
-**Etapa 2** (preluarea de la CRM la 15 minute, cu check-in): se adaugă în
-`Licenta` o metodă care descarcă licența și o dă lui `Licenta::instaleaza()`.
-Restul codului nu se schimbă.
+### Preluarea automată
+
+Licența nu mai trebuie generată, descărcată și urcată de mână: site-ul o ia singur de la CRM. Omul bifează pluginul în
+CRM (Site-uri → site-ul → Salvează); CRM-ul semnează pe loc licența următoare (versiunea +1) și o ține ca licența
+curentă a site-ului; site-ul o preia în cel mult 5 minute (sau imediat, cu „Verifică acum”).
+
+- **Cine cere:** cronul `scripts/licenta-sincronizare.php` la 5 minute (prin `bin/platforma`, [DEPLOY.md](DEPLOY.md),
+  „Cronurile”) și butonul **Verifică acum** din Admin → Abonamentul tău (doar administratorul general, cu jetonul
+  formularului; `POST /admin/abonament/verifica`). Amândouă cheamă `App\Support\LicentaSincronizare::ruleaza()`; un
+  lacăt (`storage/licenta/.sincronizare.lock`) face ca doar unul să lucreze odată.
+- **Ce cere:** `GET LICENTA_URL` (`https://crm.andaxi.ro/api/site/licenta`) cu `Authorization: Bearer LICENTA_CHEIE`
+  (cheia site-ului din CRM), ambele din `.env`-ul site-ului. CRM-ul răspunde cu fișierul semnat, neschimbat.
+- **Ce acceptă** (toate, altfel nimic nu se schimbă): semnătura Ed25519 se verifică cu `LICENTA_CHEIE_PUBLICA`
+  (aceeași verificare `Licenta::verifica` ca pentru un fișier urcat de mână) și licența e pentru acest site
+  (`LICENTA_SITE` = `site`-ul licenței de acum); `versiune` ≥ cea de acum (licența folosită sau, dacă acum nu se
+  verifică niciuna, ultima aplicată din `stare-aplicata.json`), iar aceeași versiune doar cu exact același conținut:
+  nicio întoarcere la o listă veche, nicio reluare; dacă licența are câmpul semnat opțional `expira_la` (ISO-8601),
+  el trebuie să fie în viitor (CRM-ul de azi nu-l pune; o licență fără el nu expiră, ca până acum).
+- **Doar HTTPS**, cu certificatul verificat, fără să urmeze redirecționări, cel mult 256 KB; `http://` doar spre
+  `127.0.0.1`/`localhost` (testele). O adresă cu `user:parola@` e refuzată.
+- **Cum scrie:** `Licenta::instaleaza($json, 0600)`: fișier temporar în același dosar + `rename`, deci nimeni nu
+  citește o licență pe jumătate (testul o verifică cu un cititor în buclă). Apoi stările se aplică pe loc
+  (`Plugins`: `stare-aplicata.json`, jurnalul pluginurilor, golirea memoriei paginilor), exact ce ar face prima cerere
+  după un fișier urcat de mână.
+- **La eșec** (CRM-ul căzut, HTTP 401/404/429/500, un răspuns respins, disc fără drept de scriere): licența de acum
+  rămâne, site-ul merge mai departe. Motivul ajunge în `storage/licenta/sincronizare.json` (0600; îl arată
+  Abonamentul tău și `diagnostic.php --licenta`) și în `storage/logs/licenta-sincronizare.log` (o schimbare, sau
+  același eșec cel mult o dată pe oră). Cheia nu se scrie nicăieri.
+- **Ieșirea cronului:** 0 licență nouă sau la zi, 1 un răspuns respins sau CRM-ul care nu răspunde, 2 preluarea
+  neconfigurată.
+
+**La fel ca un fișier urcat de mână.** Licența preluată trece prin aceleași reguli (1–4 de mai sus) și același cod.
+Un plugin pornit astfel:
+
+- **Pașii de activare** (`config/activari.php`: pagina `/acorduri-gdpr`, pragul `erp_trimite_din` al ERP-ului) rulează
+  ca azi, la prima cerere web de după (`Activari::laCerere`) sau la următorul `erp-sync.php`, o singură dată pe bază
+  și doar pe o bază la zi cu migrările (garda). Cronul preluării nu atinge baza.
+- **Migrările:** schema nu depinde de pluginuri (fiecare site are toate tabelele, oricare ar fi licența), deci un plugin
+  pornit nu cere nicio migrare. Doar un plugin care vine cu o **versiune nouă de cod** (o migrare nouă) cere
+  actualizarea obișnuită (`deploy/actualizeaza.sh`, care rulează `migreaza.php --aplica`); până atunci garda ține
+  pașii de activare în așteptare, ca la un fișier urcat de mână.
+- **Oprirea** unui plugin din CRM e tot o licență nouă (lista fără el, versiunea +1); datele lui nu se șterg. Pentru un
+  plugin cu bani rămâne regula: întâi „se oprește”.
+
+Cheia site-ului din CRM nu e ancora de încredere: o cheie furată lasă pe cineva doar să citească licența acelui site
+(care nici nu e secretă). Semnătura e cea care contează; fără cheia privată a CRM-ului nu se poate face o licență pe
+care site-ul s-o accepte.
 
 ### Vector de test (pentru CRM)
 

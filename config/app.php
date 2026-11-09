@@ -35,5 +35,9 @@ return [
         'site' => Env::get('LICENTA_SITE', ''),
         // Unde stau licenta.json și licenta-buna.json; gol = storage/licenta.
         'dosar' => Env::get('LICENTA_DOSAR', ''),
+        // Preluarea automată de la CRM (App\Support\LicentaSincronizare): adresa (https://…/api/site/licenta) și cheia
+        // site-ului din CRM. Goale = fără preluare automată (licența se urcă de mână, ca până acum).
+        'url' => Env::get('LICENTA_URL', ''),
+        'cheie' => Env::get('LICENTA_CHEIE', ''),
     ],
 ];

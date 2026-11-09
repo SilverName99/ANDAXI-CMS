@@ -95,8 +95,8 @@ return [
             '/admin/emails', '/admin/emails/test', '/admin/emails/history/*', '/admin/emails/contact-recipients',
             // WP-31: pagina de probă a componentelor adminului (faza D).
             '/admin/componente',
-            // WP-32: „Abonamentul tău” (modulele din licență).
-            '/admin/abonament',
+            // WP-32: „Abonamentul tău” (modulele din licență); „Verifică acum”, preluarea licenței de la CRM.
+            '/admin/abonament', 'POST /admin/abonament/verifica',
             // WP-36: căutarea în tot adminul (fiecare rol vede doar sursele lui; App\Support\CautareAdmin).
             '/admin/cauta',
             // WP-37, WP-38: SEO-ul nucleului (verificările panoului SEO; managerul redirecționărilor și jurnalul 404).

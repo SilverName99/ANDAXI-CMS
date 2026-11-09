@@ -45,3 +45,40 @@ admin_componenta('antet-pagina', [
     <?php endforeach; ?>
 </ul>
 <p class="adm-acasa__nota"><?= count($module) ?> <?= count($module) === 1 ? 'modul' : 'module' ?> în abonament, pe lângă funcțiile de bază.</p>
+<?php if (is_array($sincronizare ?? null)): ?>
+    <?php
+    // Preluarea automată a licenței de la ANDAXI (App\Support\LicentaSincronizare; AbonamentController::sincronizare).
+    $stareSinc = is_array($sincronizare['stare'] ?? null) ? $sincronizare['stare'] : null;
+    $bunSinc = $stareSinc !== null && in_array($stareSinc['rezultat'], ['ok', 'la_zi'], true);
+    $dataSinc = static function (?string $text): string {
+        $moment = $text !== null && $text !== '' ? strtotime($text) : false;
+        return $moment !== false ? date('d.m.Y H:i', $moment) : '—';
+    };
+    ?>
+    <section class="adm-abonament__modul adm-abonament__sincronizare" id="abonament-sincronizare" aria-labelledby="abonament-sincronizare-titlu">
+        <h2 id="abonament-sincronizare-titlu" class="adm-abonament__nume">Licența de la ANDAXI</h2>
+        <?php if ($stareSinc === null): ?>
+            <p class="adm-abonament__descriere">Licența se verifică automat la câteva minute; prima verificare n-a rulat încă.</p>
+        <?php else: ?>
+            <p class="adm-abonament__descriere" data-sincronizare="<?= $e($stareSinc['rezultat']) ?>">
+                Ultima verificare: <strong><?= $e($dataSinc($stareSinc['la'])) ?></strong> —
+                <?php if ($bunSinc): ?>
+                    <span class="adm-stare adm-stare--trimis"><?= $stareSinc['rezultat'] === 'ok' ? 'Licență nouă aplicată' : 'La zi' ?></span>
+                    (versiunea <?= (int) $stareSinc['versiune'] ?>).
+                <?php else: ?>
+                    <span class="adm-stare adm-stare--programat">Neactualizată</span>
+                    site-ul merge mai departe cu licența de până acum<?= (int) $stareSinc['versiune_curenta'] > 0 ? ' (versiunea ' . (int) $stareSinc['versiune_curenta'] . ')' : '' ?>.
+                <?php endif; ?>
+            </p>
+            <?php if (!$bunSinc): ?>
+                <p class="adm-acasa__nota">Motivul: <?= $e($stareSinc['mesaj']) ?><?= $stareSinc['ultima_reusita'] !== null ? ' Ultima verificare reușită: ' . $e($dataSinc($stareSinc['ultima_reusita'])) . '.' : '' ?></p>
+            <?php endif; ?>
+        <?php endif; ?>
+        <?php if (!empty($sincronizare['configurata'])): ?>
+            <form method="post" action="/admin/abonament/verifica">
+                <?= \App\Support\AdminCsrf::camp() ?>
+                <button type="submit" class="btn btn-secondary">Verifică acum</button>
+            </form>
+        <?php endif; ?>
+    </section>
+<?php endif; ?>

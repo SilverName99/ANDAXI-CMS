@@ -815,8 +815,9 @@ date inventate (un email simulat prin drumul obișnuit al aplicației, cu SendGr
 `ErpClient` spre o adresă inventată; un AWB și un tarif FAN; o cheie Stripe `sk_live_` inventată; BT cu
 `BT_IPAY_MODE=live`; EuPlătesc pornit; tawk.to pornit). Pentru gărzile din șabloane și din controller (11–14 și
 redirecționarea pozelor) se verifică și că fișierul deployat are chemarea gărzii. Cât le cheamă, procesul are
-proxy-ul spre `127.0.0.1:9`: chiar o gardă lipsă nu poate trimite nimic în afară. Licența (check-in-ul la CRM)
-vine cu sincronizarea licenței (WP-27, Etapa 2), care pe copie rulează doar cu `LICENTA_CRM_URL` completat.
+proxy-ul spre `127.0.0.1:9`: chiar o gardă lipsă nu poate trimite nimic în afară. Licența nu se preia de la CRM pe copie:
+preluarea automată (`scripts/licenta-sincronizare.php`, [PLUGINURI.md](PLUGINURI.md), „Preluarea automată”) rulează doar cu
+`LICENTA_URL` și `LICENTA_CHEIE` completate, iar `.env`-ul copiei nu le are (licența ei e cea de verificare, mai jos).
 
 ### Licența de verificare
 

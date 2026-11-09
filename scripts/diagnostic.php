@@ -105,6 +105,10 @@ $arataLicenta = static function (): bool {
         }
     }
     echo 'pluginuri    : ' . ($pornite === [] ? 'doar nucleul' : implode(', ', $pornite)) . "\n";
+    // Preluarea automată de la CRM (LicentaSincronizare): configurată? ultima rulare? (cheia nu se arată)
+    $sinc = \App\Support\LicentaSincronizare::ultimaStare();
+    echo 'preluare CRM : ' . (\App\Support\LicentaSincronizare::configurata() ? 'configurata' : 'neconfigurata (LICENTA_URL, LICENTA_CHEIE)')
+        . ($sinc !== null ? '; ultima: ' . $sinc['la'] . ' ' . $sinc['rezultat'] . ' (' . $sinc['mesaj'] . ')' : '') . "\n";
     return $licenta !== null;
 };
 

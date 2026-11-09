@@ -369,6 +369,8 @@ return static function (Router $router): void {
     $router->get('/admin/componente', [ComponenteAdminController::class, 'proba']);
     // WP-32 (faza D, OD-52 = b): „Abonamentul tău”, modulele din licența aplicată (doar administratorul general).
     $router->get('/admin/abonament', [AbonamentController::class, 'arata']);
+    // „Verifică acum”: preluarea licenței de la CRM, pe loc (App\Support\LicentaSincronizare; jetonul formularului).
+    $router->post('/admin/abonament/verifica', [AbonamentController::class, 'verifica']);
     // WP-35 (IA-05): „Oferte BBD”, toate ofertele cu dată minimă de valabilitate din toate produsele (doar citire).
     $router->get('/admin/products/oferte-bbd', [OferteBbdController::class, 'lista']);
     // WP-36 (faza D): căutarea în tot adminul (Ctrl+K): JSON pentru fereastra ei, pagina rezultatelor fără JavaScript.

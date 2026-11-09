@@ -134,10 +134,31 @@ install -m 640 <licenta.json din CRM> ~/domains/<domeniu>/site/storage/licenta/l
 ```
 
 Dosarul trebuie să rămână scriibil pentru PHP-ul site-ului (pe Hostinger, același utilizator): acolo scrie site-ul
-`licenta-buna.json` și `stare-aplicata.json`. Cheia publică a CRM-ului (base64, 32 de octeți) merge la `--cheie-licenta=`
+`licenta-buna.json`, `stare-aplicata.json` și, cu preluarea automată, `licenta.json` însuși și `sincronizare.json`. Cheia publică a CRM-ului (base64, 32 de octeți) merge la `--cheie-licenta=`
 și ajunge în `site/.env` ca `LICENTA_CHEIE_PUBLICA`; la pregătire `diagnostic.php --licenta` verifică semnătura cu ea.
 Pentru Biovitality licența are `config/plugins.php` → `licente_dev.biovitality` plus `campanii` (cerut pe 5 noiembrie;
 fără o campanie activă nu schimbă nimic în pagini, [PLUGINURI.md](PLUGINURI.md), „Campanii pe site”), toate `pornit`.
+
+**Preluarea automată** ([PLUGINURI.md](PLUGINURI.md), „Preluarea automată”): după prima licență, site-ul își ia singur
+licența curentă de la CRM la 5 minute, deci un plugin bifat (sau oprit) în CRM se aplică fără niciun fișier urcat. O
+singură dată pe site:
+
+1. CRM → Site-uri → site-ul → **Preluare automată** → **Generează cheia site-ului**. Cheia se arată o singură dată: o
+   copiezi direct în `.env`-ul site-ului de pe server (nu pe chat, nu pe email). Una nouă o înlocuiește pe cea veche.
+2. În `~/domains/<domeniu>/site/.env` (0600):
+
+   ```
+   LICENTA_URL=https://crm.andaxi.ro/api/site/licenta
+   LICENTA_CHEIE=<cheia din CRM>
+   ```
+
+3. Cronul `scripts/licenta-sincronizare.php`, la 5 minute (mai jos, „Cronurile”).
+4. Verifici: `$PHP ~/platforma/bin/platforma --site=<domeniu> scripts/licenta-sincronizare.php` scrie `Licența: ok: …`
+   sau `Licența: la_zi: …`; în CRM, la site, apare „Ultima preluare de site: <ora>, versiunea <n>”; în admin, la
+   Abonamentul tău, „Ultima verificare: … La zi (versiunea <n>)”, cu butonul **Verifică acum**.
+
+Fără cele două rânduri din `.env`, totul merge ca înainte (licența se urcă de mână). Un plugin nou al unei versiuni noi
+de cod (cu o migrare nouă) cere tot actualizarea obișnuită (`deploy/actualizeaza.sh`).
 
 ### Comenzile
 
@@ -285,6 +306,13 @@ Rândurile noi pornesc prin lansator și citesc `RELEASE`, deci după o actualiz
 
 ```
 */10 * * * *  /opt/alt/php83/usr/bin/php -d extension=sodium.so /home/uXXXXXXXXX/platforma/bin/platforma --site=/home/uXXXXXXXXX/domains/biovitality.ro/site scripts/erp-sync.php
+```
+
+Preluarea automată a licenței (al nucleului: nu e un rând vechi de rescris, se **ADAUGĂ** o dată, după ce `.env`-ul are
+`LICENTA_URL` și `LICENTA_CHEIE`; „Licența”, mai sus):
+
+```
+*/5 * * * *  /opt/alt/php83/usr/bin/php -d extension=sodium.so /home/uXXXXXXXXX/platforma/bin/platforma --site=/home/uXXXXXXXXX/domains/biovitality.ro/site scripts/licenta-sincronizare.php
 ```
 
 `adopta.sh` le scrie din cele vechi (același program, același script, aceleași opțiuni PHP și argumente; și pentru

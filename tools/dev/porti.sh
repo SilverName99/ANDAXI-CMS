@@ -70,7 +70,8 @@ poarta G-vizual "stilurile calculate ale paginilor publice față de codul Biosc
     "tools/dev/capturi-publice.sh --autotest ;; tools/dev/capturi-publice.sh ;; tools/dev/capturi-publice.sh --licenta=bioscem ;; tools/dev/vizual-valori-noi.sh" WP-13
 poarta G-pachet "pachetul Bioscem, pachetul Biovitality (cu baza în forma Biovitality) și pachetul neutru" \
     "tools/dev/php.sh tools/dev/test-pachet-site.php bioscem ;; tools/dev/php.sh tools/dev/test-pachet-site.php biovitality ;; tools/dev/php.sh tools/dev/test-pachet-site.php neutru" WP-16
-poarta G-lic "sincronizarea licenței cu CRM-ul (CRM fals)" "tools/dev/php.sh tools/dev/test-licenta-crm.php" WP-27
+poarta G-lic "preluarea automată a licenței de la CRM (CRM simulat): verificările, scrierea atomică, cronul prin bin/platforma, „Verifică acum”; și cu php$MINIM" \
+    "tools/dev/php.sh tools/dev/test-licenta-sincronizare.php ;; CMS_DEV_PHP=php$MINIM tools/dev/php.sh tools/dev/test-licenta-sincronizare.php" WP-27
 poarta G-nestrict "al doilea MariaDB, în modul Hostinger (sql_mode fără STRICT_TRANS_TABLES, max_allowed_packet 1G; tools/dev/mariadb-nestrict.sh): comparația cu Bioscem cu baza în forma Bioscem făcută pe el (testele migrărilor pe el sunt în G-mig)" \
     "tools/dev/mariadb-nestrict.sh porneste ;; tools/dev/mariadb-nestrict.sh ruleaza tools/dev/compara-cu-baza.sh ;; tools/dev/mariadb-nestrict.sh opreste" WP-14
 poarta G-admin "contractul adminului (formulare, câmpuri, linkuri) față de eticheta dinaintea refacerii" \
