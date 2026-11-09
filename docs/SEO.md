@@ -607,7 +607,7 @@ newsletterul. **Revizuirea WP-39/40 (GDPR):** `ax_sursa` și `bv_gclid` se scriu
 urmărire (`CookieConsent::permiteUrmarire`); fără el comanda are sursa `necunoscuta`. Doar pe un site cu magazin.
 Comutatorul `sursa_comenzii` (implicit pornit; înghețat la „0” pe Bioscem și Biovitality, oprit până după trecere: decizia
 proprietarului din 5 noiembrie 2026; `comutatoare-seo.php --porneste` fără
-listă nu-l pornește, doar `--porneste=sursa_comenzii`). Coloana `ad_source` rămâne neschimbată.
+listă nu-l pornește, doar `--porneste=sursa_comenzii`). Din 9 noiembrie 2026 îl pornește și administratorul general din pagina raportului: butonul „Pornește notarea sursei pe comenzile noi” (`POST /admin/orders/sursa-comenzilor/comutator`, cu jetonul formularului; „Oprește notarea sursei” îl oprește la loc). Coloana `ad_source` rămâne neschimbată.
 
 ## 9. Datele unui site
 

@@ -6,6 +6,7 @@
  * @var array{saptamani: list<array<string, mixed>>, totaluri: array<string, array{numar: int, valoare: float}>, total: int, coloana: bool}|null $raport
  * @var int $saptamani
  * @var bool $pornita
+ * @var bool $poateComuta
  */
 $etichete = \App\Support\SursaComenzii::SURSE + ['necunoscuta' => 'Necunoscută'];
 $lei = static fn (float $v): string => number_format($v, 2, ',', '.') . ' lei';
@@ -21,7 +22,14 @@ admin_componenta('antet-pagina', [
 ?>
 <?php if (!$pornita): ?>
 <?php admin_componenta('mesaj', ['tip' => 'info', 'titlu' => 'Sursa comenzilor nu se notează pe acest site',
-    'text' => 'Comutatorul sursa_comenzii e oprit: comenzile noi nu primesc sursa. Se pornește după ce vezi raportul pe site-ul de verificare.']); ?>
+    'text' => 'Comenzile noi nu primesc sursa, deci apar la „Necunoscută”. Pentru vizitele de azi încolo, fără cookie-uri, vezi și Rapoarte → Statistici.']); ?>
+<?php endif; ?>
+<?php if (!empty($poateComuta)): ?>
+<form method="post" action="/admin/orders/sursa-comenzilor/comutator" class="adm-sursa-comutator" style="margin:0 0 16px;">
+    <?= \App\Support\AdminCsrf::camp() . "\n" ?>
+    <input type="hidden" name="pornita" value="<?= $pornita ? '0' : '1' ?>">
+    <button type="submit" class="btn <?= $pornita ? 'btn-secondary' : 'btn-primary' ?>"><?= $pornita ? 'Oprește notarea sursei' : 'Pornește notarea sursei pe comenzile noi' ?></button>
+</form>
 <?php endif; ?>
 <?php if ($raport === null || !$raport['coloana']): ?>
 <?php admin_componenta('mesaj', ['tip' => 'avertisment', 'titlu' => 'Coloana sursei lipsește', 'text' => 'Rulează migrările (scripts/migreaza.php --aplica).']); ?>
@@ -54,7 +62,8 @@ foreach ($raport['saptamani'] as $s) {
 $total = ['<strong>Total</strong>'];
 foreach (array_keys($etichete) as $cheie) {
     $c = $raport['totaluri'][$cheie];
-    $total[] = '<span class="adm-numar"><strong>' . (int) $c['numar'] . '</strong><br><small>' . adm_e($lei((float) $c['valoare'])) . '</small></span>';
+    $total[] = '<span class="adm-numar"><strong>' . (int) $c['numar'] . '</strong></span>'
+        . '<small style="display:block;margin-top:2px;white-space:nowrap;color:var(--ax-text-muted,#64748b);">' . adm_e($lei((float) $c['valoare'])) . '</small>';
 }
 $total[] = '<span class="adm-numar"><strong>' . (int) $raport['total'] . '</strong></span>';
 $randuri[] = ['celule' => $total];
