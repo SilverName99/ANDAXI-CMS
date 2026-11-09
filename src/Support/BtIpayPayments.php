@@ -25,6 +25,12 @@ use Throwable;
  * și ele prin BT: fiecare e o comandă separată la bancă, tot în două faze, dar
  * încasată imediat după autorizare (nu există o aprobare ERP pentru ea).
  *
+ * Linkul de plată ÎNTREAGĂ al unei comenzi a cărei plată cu cardul a eșuat (PaymentLink::plataIntegrala) nu e o
+ * diferență: pornește o plată obișnuită a comenzii (`order`, numărul „{nr}-R{n}"), cu linkul ținut pe ea (`link_id`),
+ * deci merge pe drumul plății de la checkout: autorizarea face comanda plătită (emailul, ERP-ul) și linkul plătit,
+ * încasarea vine la factura din ERP sau din cron, eliberarea la anulare. O asemenea plată autorizată pe o comandă
+ * deja plătită pe alt drum se eliberează singură, la fel ca plata inițială întârziată peste un link deja plătit.
+ *
  * Plata cu puncte STAR („LOY") vine de la bancă împărțită în două comenzi BT:
  * partea pe card și partea în puncte. Starea comenzii de card decide (ca în
  * modulul BT), iar o plată cu puncte e întreagă abia când AMBELE părți sunt
@@ -579,6 +585,114 @@ final class BtIpayPayments
     }
 
     /**
+     * Plata ÎNTREAGĂ a unei comenzi printr-un link (PaymentLink::plataIntegrala): o plată obișnuită a comenzii la
+     * bancă (`order`, numărul „{nr}-R{n}", textul „Comanda <nr>"), pentru totalul ei, cu linkul ținut pe ea. Aceleași
+     * gărzi ca la diferență: o plată a linkului pornită în ultimele 10 minute se refolosește, cel mult 5 pe oră, nicio
+     * plată nouă cât una e autorizată; în plus, nicio plată pe o comandă plătită între timp.
+     *
+     * @param array<string, mixed> $link
+     * @return array{ok: bool, url: string, eroare: string, tx_id: int, numar: string}
+     */
+    public static function pornestePlataIntegrala(PDO $db, array $link, string $returnUrlBaza, string $userAgent = ''): array
+    {
+        self::ensureSchema($db);
+        $linkId = (int) ($link['id'] ?? 0);
+        $orderId = (int) ($link['order_id'] ?? 0);
+        $nu = static fn (string $eroare): array => ['ok' => false, 'url' => '', 'eroare' => $eroare, 'tx_id' => 0, 'numar' => ''];
+        if (BtIpayGateway::mod() !== BtIpayGateway::MOD_LIVE) {
+            return $nu('Plata prin Banca Transilvania nu este disponibilă acum.');
+        }
+        if ($linkId <= 0 || (string) ($link['status'] ?? '') !== PaymentLink::STATUS_ASTEPTARE) {
+            return $nu('Linkul de plată nu mai este valabil.');
+        }
+        $comanda = self::comandaPentruPlata($db, $orderId);
+        $stare = self::comanda($db, $orderId);
+        if ($comanda === null || $stare === null) {
+            return $nu('Comanda asociată nu mai există.');
+        }
+        $suma = (int) round((float) ($link['amount'] ?? 0) * 100);
+        if ($suma <= 0) {
+            return $nu('Suma linkului este invalidă.');
+        }
+        $lacat = 'link-start:' . $linkId;
+        if (!self::iaLacat($db, $lacat, 5)) {
+            return $nu('Plata acestui link se pornește chiar acum; reîncearcă în câteva secunde.');
+        }
+        try {
+            $motiv = PaymentLink::motivLinkNeplatibil($link, $stare);
+            if ($motiv !== '') {
+                return $nu($motiv);
+            }
+            $recenta = self::plataLinkDeRefolosit($db, $linkId, $suma, self::TIP_COMANDA);
+            if ($recenta !== null) {
+                return ['ok' => true, 'url' => (string) $recenta['form_url'], 'eroare' => '', 'tx_id' => (int) $recenta['id'], 'numar' => (string) $recenta['bt_order_number']];
+            }
+            $stare = self::comanda($db, $orderId) ?? $stare;
+            $linkAcum = PaymentLink::dupaId($db, $linkId);
+            if ($linkAcum === null || (string) ($linkAcum['status'] ?? '') !== PaymentLink::STATUS_ASTEPTARE || !PaymentLink::nimicIncasat($stare)) {
+                return $nu($linkAcum !== null && (string) ($linkAcum['status'] ?? '') === PaymentLink::STATUS_PLATIT || !PaymentLink::nimicIncasat($stare)
+                    ? 'Plata acestei comenzi a fost deja făcută; nu e nevoie să plătești din nou.'
+                    : 'Linkul de plată nu mai este valabil.');
+            }
+            if (self::plataLinkInCurs($db, $linkId) !== null) {
+                return $nu('Plata acestui link a fost deja autorizată; nu e nevoie să plătești din nou.');
+            }
+            if (self::porniriLinkInUltimaOra($db, $linkId, self::TIP_COMANDA) >= self::MAX_PORNIRI_LINK_PE_ORA) {
+                return $nu('Plata acestui link a fost pornită de prea multe ori în ultima oră. Din motive de siguranță, '
+                    . 'poți încerca din nou puțin mai târziu; dacă te grăbești, scrie-ne și te ajutăm imediat.');
+            }
+            $date = self::dateClient($comanda) + [
+                'suma' => $suma,
+                'descriere' => self::descriere(self::TIP_COMANDA, (string) $comanda['order_number'], Settings::all($db)),
+                'user_agent' => $userAgent,
+            ];
+            return self::inregistreaza($db, self::TIP_COMANDA, $orderId, (string) $comanda['order_number'], $date, $returnUrlBaza, $linkId);
+        } finally {
+            self::elibereazaLacat($db, $lacat);
+        }
+    }
+
+    /**
+     * De ce nu se trimite acum un link de plată întreagă pentru comandă, din partea plăților BT (gol = se poate): o
+     * plată a comenzii (sau a unui link al ei) e autorizată, are bani încasați, ori e începută la bancă de mai puțin
+     * decât expirarea plăților (clientul poate fi chiar acum pe pagina băncii).
+     */
+    public static function motivFaraPlataIntegrala(PDO $db, int $orderId, int $minuteExpirare): string
+    {
+        if ($orderId <= 0) {
+            return '';
+        }
+        try {
+            $stmt = $db->prepare(
+                'SELECT state, created_at FROM bt_ipay_transactions
+                 WHERE order_id = :o AND kind IN ("order", "link")
+                   AND state IN ("authorized", "deposited", "partially_refunded", "registered", "pending_3ds")'
+            );
+            $stmt->execute(['o' => $orderId]);
+            $randuri = $stmt->fetchAll() ?: [];
+        } catch (Throwable) {
+            return '';
+        }
+        $limita = time() - max(1, $minuteExpirare) * 60;
+        foreach ($randuri as $rand) {
+            $stare = (string) ($rand['state'] ?? '');
+            if ($stare === self::STARE_AUTORIZATA) {
+                return 'Comanda are o plată Banca Transilvania autorizată (suma e blocată pe cardul clientului): nu trimitem încă un link. '
+                    . 'Verifică plata din fereastra comenzii; dacă nu mai e nevoie de ea, eliberează suma întâi.';
+            }
+            if (in_array($stare, [self::STARE_INCASATA, self::STARE_RAMBURSATA_PARTIAL], true)) {
+                return 'Comanda are o plată Banca Transilvania încasată, nesocotită pe comandă: verifică plata din fereastra comenzii.';
+            }
+            $creata = strtotime((string) ($rand['created_at'] ?? ''));
+            if ($creata !== false && $creata > $limita) {
+                return 'O plată Banca Transilvania a comenzii e încă în curs la bancă (pornită de mai puțin de ' . $minuteExpirare
+                    . ' de minute): linkul se poate trimite după ce expiră.';
+            }
+        }
+        return '';
+    }
+
+    /**
      * Plata linkului pornită în ultimele 10 minute, pentru aceeași sumă și încă
      * neplătită (pagina ei de la bancă e încă valabilă). Dacă n-a mai fost
      * verificată de 30 de secunde, starea se citește întâi de la bancă: una
@@ -586,7 +700,7 @@ final class BtIpayPayments
      *
      * @return array<string, mixed>|null
      */
-    private static function plataLinkDeRefolosit(PDO $db, int $linkId, int $suma): ?array
+    private static function plataLinkDeRefolosit(PDO $db, int $linkId, int $suma, string $tip = self::TIP_LINK): ?array
     {
         $stmt = $db->prepare(
             'SELECT id FROM bt_ipay_transactions
@@ -595,7 +709,7 @@ final class BtIpayPayments
              ORDER BY id DESC LIMIT 1'
         );
         $stmt->execute([
-            'k' => self::TIP_LINK,
+            'k' => $tip,
             'l' => $linkId,
             'mod' => BtIpayGateway::MOD_LIVE,
             'suma' => $suma,
@@ -619,16 +733,17 @@ final class BtIpayPayments
     }
 
     /** Câte plăți s-au înregistrat pe link în ultima oră (plafonul încercărilor noi). */
-    private static function porniriLinkInUltimaOra(PDO $db, int $linkId): int
+    private static function porniriLinkInUltimaOra(PDO $db, int $linkId, string $tip = self::TIP_LINK): int
     {
         $stmt = $db->prepare('SELECT COUNT(*) FROM bt_ipay_transactions WHERE kind = :k AND link_id = :l AND created_at >= :dupa');
-        $stmt->execute(['k' => self::TIP_LINK, 'l' => $linkId, 'dupa' => date('Y-m-d H:i:s', time() - 3600)]);
+        $stmt->execute(['k' => $tip, 'l' => $linkId, 'dupa' => date('Y-m-d H:i:s', time() - 3600)]);
         return (int) $stmt->fetchColumn();
     }
 
     /**
      * O plată BT a linkului deja autorizată sau încasată, dar încă neconfirmată
-     * pe comandă: nu pornim alta (clientul ar plăti de două ori).
+     * pe comandă: nu pornim alta (clientul ar plăti de două ori). Și plata
+     * obișnuită a comenzii pornită dintr-un link de plată întreagă.
      *
      * @return array<string, mixed>|null
      */
@@ -640,10 +755,10 @@ final class BtIpayPayments
         }
         $stmt = $db->prepare(
             'SELECT * FROM bt_ipay_transactions
-             WHERE kind = :k AND link_id = :l AND in_comanda = 0 AND state IN ("authorized", "deposited")
+             WHERE kind IN (:k, :k2) AND link_id = :l AND in_comanda = 0 AND state IN ("authorized", "deposited")
              ORDER BY id DESC LIMIT 1'
         );
-        $stmt->execute(['k' => self::TIP_LINK, 'l' => $linkId]);
+        $stmt->execute(['k' => self::TIP_LINK, 'k2' => self::TIP_COMANDA, 'l' => $linkId]);
         $rand = $stmt->fetch();
         return is_array($rand) ? $rand : null;
     }
@@ -1413,7 +1528,10 @@ final class BtIpayPayments
                     $efecte['elibereaza'] = $nou === self::STARE_AUTORIZATA;
                     $efecte['alerte'][] = $nou === self::STARE_AUTORIZATA ? 'plata_comanda_inchisa' : 'necesita_rambursare';
                 } elseif ($platita || $altaPlata) {
-                    $efecte['elibereaza'] = $nou === self::STARE_AUTORIZATA && $altaPlata;
+                    // O plată pornită dintr-un link de plată întreagă pe o comandă plătită între timp, sau plata inițială
+                    // întârziată pe o comandă deja plătită printr-un asemenea link: banii doar blocați se eliberează.
+                    $dinLinkIntegral = (int) ($tx['link_id'] ?? 0) > 0 || PaymentLink::integralPlatit($db, $orderId) !== null;
+                    $efecte['elibereaza'] = $nou === self::STARE_AUTORIZATA && ($altaPlata || $dinLinkIntegral);
                     $efecte['alerte'][] = 'plata_in_plus';
                 } elseif ($netDupa <= 0) {
                     // Nu se poate întâmpla cu un răspuns corect al băncii; dacă
@@ -1492,7 +1610,9 @@ final class BtIpayPayments
         // să ruleze în mijlocul tranzacției de mai jos (ar închide-o).
         if (isset($setariComanda['prima_plata']) || $efecte['confirma_link'] || $efecte['esuata'] !== '') {
             ErpSync::ensureSchema($db);
+            PaymentLink::ensureSchema($db);
         }
+        $linkIntegralPlatit = false;
 
         $inTranzactie = false;
         $linkConfirmat = false;
@@ -1574,6 +1694,14 @@ final class BtIpayPayments
                 if ($stmt->rowCount() > 0) {
                     $db->prepare('UPDATE bt_ipay_transactions SET in_comanda = 1 WHERE id = :id')->execute(['id' => $txId]);
                     $efecte['prima_plata'] = true;
+                    $linkPlataIntegrala = (int) ($tx['link_id'] ?? 0) > 0 ? PaymentLink::dupaId($db, (int) $tx['link_id']) : null;
+                    if ($linkPlataIntegrala !== null) {
+                        // Plata pornită dintr-un link de plată întreagă: linkul e plătit (comanda tocmai a primit suma).
+                        $linkIntegralPlatit = PaymentLink::marcheazaPlatit($db, $linkPlataIntegrala, (string) ($tx['bt_order_id'] ?? ''),
+                            $aprobare !== '' ? $aprobare : (string) ($tx['approval_code'] ?? ''));
+                    }
+                    // Plata comenzii s-a confirmat (și cea inițială, întârziată): linkurile de plată întreagă rămase se anulează.
+                    PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
                 } else {
                     $efecte['alerte'][] = 'plata_in_plus';
                 }
@@ -1638,6 +1766,9 @@ final class BtIpayPayments
         }
 
         // Efectele care pleacă în afară, după ce baza e la zi.
+        if ($linkIntegralPlatit) {
+            AdminActivityLog::log($db, 'order_platita_link_integral', ['order_id' => $orderId, 'plata_bt' => (string) ($tx['bt_order_number'] ?? '')]);
+        }
         if ($efecte['prima_plata']) {
             try {
                 EmailAutomation::sendOrderTemplateById($db, Settings::all($db), $orderId, 'new_order');
@@ -2796,6 +2927,7 @@ final class BtIpayPayments
                             WHERE t2.order_id = t.order_id AND t2.kind = "order" AND t2.id <> t.id AND t2.in_comanda = 1
                               AND t2.state IN ("authorized", "deposited", "partially_refunded")))
                      OR (t.kind = "link" AND t.in_comanda = 0 AND (l.id IS NULL OR l.status <> "pending"))
+                     OR (t.kind = "order" AND t.in_comanda = 0 AND t.link_id IS NOT NULL AND o.payment_status = "paid")
                      OR (t.kind = "test" AND t.authorized_at <= :limita_test)
                  ))
                  OR (t.state IN ("declined", "expired") AND (t.bt_status = 1 OR t.loy_status = 1))

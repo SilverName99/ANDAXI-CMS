@@ -1496,7 +1496,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
 <?php endif; ?>
                 <p><small>Observații</small><br>${orderNotes !== '' ? esc(orderNotes) : '-'}</p>
                 <div class="order-items-box">
-                    <div id="order-items-${order.id}">${itemsHtml}</div>
+                    <div id="order-items-${order.id}">${itemsHtml}</div><?= \App\Support\Dev::marcaj('lp:fereastra') ?><?= $poateLinkPlata ? '${typeof window.lpZonaLinkuri === \'function\' ? window.lpZonaLinkuri(order) : \'\'}' : '' ?><?= \App\Support\Dev::marcaj('lp:fereastra', true) ?>
                     ${restDeIncasat > 0
                         ? `<div style="margin:8px 0 0;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
                         <p style="margin:0 0 8px;color:#92400e;font-size:13px;">
@@ -2327,4 +2327,21 @@ function saveOrderPromo(orderId){
     });
 })();
 </script>
+<?= \App\Support\Dev::marcaj('lp:linkuri-js') ?>
+<?php if ($poateLinkPlata): ?>
+<?php // Linkurile de plată ale comenzii în fereastra ei și „Trimite link de plată” pentru o comandă cu plata eșuată (9 nov 2026). ?>
+<?php
+// Rândurile listei cu „Trimite din nou link de plată”: comenzile cu cardul cu plata eșuată sau neterminată, fără nimic încasat
+// (PaymentLink::motivFaraPlataIntegrala; plățile BT le verifică serverul la trimitere). Id => totalul.
+$lpDeTrimis = [];
+foreach ($orders as $comandaLp) {
+    if (is_array($comandaLp) && \App\Support\PaymentLink::motivFaraPlataIntegrala($comandaLp, $settings) === '') {
+        $lpDeTrimis[(string) (int) ($comandaLp['id'] ?? 0)] = round((float) ($comandaLp['total'] ?? 0), 2);
+    }
+}
+?>
+<script>window.LP_CSRF = <?= json_encode(\App\Support\AdminCsrf::token()) ?>; window.LP_DE_TRIMIS = <?= json_encode((object) $lpDeTrimis) ?>;</script>
+<script src="/assets/js/admin/link-plata.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/link-plata.js')) ?: 1) ?>" defer></script>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('lp:linkuri-js', true) ?>
 <script src="/assets/js/admin/comenzi.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/comenzi.js')) ?: 1) ?>" defer></script>

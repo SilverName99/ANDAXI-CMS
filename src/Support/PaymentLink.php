@@ -25,6 +25,18 @@ use Throwable;
  * producție, sau Stripe (WP-20, X5, din Biovitality: site-urile care încasează
  * doar prin Stripe), când niciunul dintre primele două nu e pornit. Linkurile
  * deja trimise merg mai departe pe procesatorul lor.
+ *
+ * Plata întreagă (9 nov 2026): o comandă cu cardul a cărei plată a eșuat, a expirat, a fost
+ * anulată sau n-a fost terminată, fără nimic încasat, primește din admin un link pentru TOT totalul („Trimite link
+ * de plată”). Linkul e tot un rând aici, cu aceeași referință `{numar_comanda}-P{n}`; ce fel de link e se vede din
+ * comandă (`esteIntegral`: suma lui acoperă totalul), deci tabelul nu are nicio coloană nouă. Plătit, linkul face
+ * comanda plătită exact ca o plată reușită din checkout (`confirmaPlataDetaliat`, `efecteDupaConfirmare`): starea,
+ * emailul „comandă nouă”, trimiterea în ERP. La BT linkul pornește o plată obișnuită a comenzii, cu linkul ținut pe
+ * ea (BtIpayPayments::pornestePlataIntegrala), deci autorizarea, încasarea la factura din ERP sau la 96 de ore și
+ * eliberarea rămân cele ale comenzii. Gărzile împotriva plății duble: linkul nu se trimite cât o plată a comenzii e
+ * autorizată sau în curs (`plataIntegrala`), se anulează când plata inițială se confirmă totuși
+ * (`anuleazaIntegralePentruComanda`), nu mai pornește pe o comandă plătită (`motivLinkNeplatibil`), iar o plată
+ * venită oricum peste una deja socotită lasă pe comandă nota „Plătită de două ori” (`NOTA_DUBLA`), cu ce e de rambursat.
  */
 final class PaymentLink
 {
@@ -35,6 +47,18 @@ final class PaymentLink
     public const PROCESATOR_EUPLATESC = 'euplatesc';
     public const PROCESATOR_BT = 'btipay';
     public const PROCESATOR_STRIPE = 'stripe';
+
+    /** Ce a făcut o plată de link pe comandă (confirmaPlataDetaliat). */
+    public const TIP_DIFERENTA = 'diferenta';
+    public const TIP_INTEGRALA = 'integrala';
+    /** Linkul a fost plătit peste o plată deja socotită pe comandă (sau pe o comandă închisă): nimic adunat, doar nota. */
+    public const TIP_DUBLURA = 'dublura';
+
+    /** Începutul notei puse pe comandă (orders.payment_error) când a fost plătită de două ori. */
+    public const NOTA_DUBLA = 'Plătită de două ori';
+
+    /** Comenzile care nu mai primesc un link de plată întreagă (și pe care un asemenea link nu se mai plătește). */
+    private const COMENZI_INCHISE = ['cancelled', 'completed', 'refunded', 'returned'];
 
     /** Cât timp rămâne valabil un link netrimis la plată (zile). */
     private const VALABILITATE_ZILE = 30;
@@ -368,19 +392,46 @@ final class PaymentLink
      */
     public static function confirmaPlata(PDO $db, array $link, string $epId = '', string $approval = ''): bool
     {
+        return self::confirmaPlataDetaliat($db, $link, $epId, $approval)['nou'];
+    }
+
+    /**
+     * Confirmarea plății unui link, cu ce a făcut ea pe comandă (`tip`):
+     *  - `integrala`: comanda nu avea nimic încasat (plata cu cardul eșuată sau neterminată), deci linkul o plătește
+     *    ca o plată reușită din checkout: „plătită”, starea „în așteptare plată”/„eșuată” → „în așteptare”, suma
+     *    încasată = suma linkului; emailul și ERP-ul le face apoi efecteDupaConfirmare;
+     *  - `dublura`: un link de plată întreagă plătit peste o plată deja socotită (plata inițială a venit totuși, de
+     *    exemplu printr-o confirmare întârziată) sau pe o comandă anulată: banii s-au luat, deci linkul rămâne plătit,
+     *    dar nu se adună nimic; comanda primește nota „Plătită de două ori”, cu ce e de rambursat;
+     *  - `diferenta`: ca până acum, suma se adaugă la cea încasată.
+     * Și un link anulat se trece plătit dacă plata lui vine totuși (clientul era deja pe pagina procesatorului):
+     * banii au fost luați și trebuie să se vadă. Doar prima confirmare schimbă ceva (`nou`).
+     *
+     * @return array{nou: bool, tip: string, order_id: int, eroare_anterioara?: string}
+     */
+    public static function confirmaPlataDetaliat(PDO $db, array $link, string $epId = '', string $approval = ''): array
+    {
         $linkId = (int) ($link['id'] ?? 0);
         $orderId = (int) ($link['order_id'] ?? 0);
         $suma = round((float) ($link['amount'] ?? 0), 2);
+        $rezultat = ['nou' => false, 'tip' => self::TIP_DIFERENTA, 'order_id' => $orderId];
         if ($linkId <= 0 || $orderId <= 0 || $suma <= 0) {
-            return false;
+            return $rezultat;
         }
 
+        // Coloanele ERP înaintea tranzacției: un DDL în mijlocul ei ar închide-o.
+        ErpSync::ensureSchema($db);
+        $amDeschis = false;
         try {
-            // Doar tranziția „în așteptare" → „plătit" adaugă banii.
+            if (!$db->inTransaction()) {
+                $db->beginTransaction();
+                $amDeschis = true;
+            }
+            // Doar tranziția „în așteptare" (sau „anulat") → „plătit" schimbă comanda.
             $stmt = $db->prepare(
                 'UPDATE order_payment_links
                  SET status = :platit, paid_at = NOW(), ep_id = :ep_id, approval = :approval
-                 WHERE id = :id AND status = :asteptare'
+                 WHERE id = :id AND status IN (:asteptare, :anulat)'
             );
             $stmt->execute([
                 'platit' => self::STATUS_PLATIT,
@@ -388,27 +439,423 @@ final class PaymentLink
                 'approval' => $approval !== '' ? substr($approval, 0, 64) : null,
                 'id' => $linkId,
                 'asteptare' => self::STATUS_ASTEPTARE,
+                'anulat' => self::STATUS_ANULAT,
             ]);
             if ($stmt->rowCount() < 1) {
-                return false;
+                if ($amDeschis) {
+                    $db->commit();
+                }
+                return $rezultat;
             }
 
-            ErpSync::ensureSchema($db);
-            $db->prepare(
-                'UPDATE orders
-                 SET paid_amount = ROUND(COALESCE(paid_amount, total) + :suma, 2),
-                     payment_status = \'paid\',
-                     paid_at = COALESCE(paid_at, NOW())
-                 WHERE id = :order_id AND deleted_at IS NULL'
-            )->execute([
-                'suma' => number_format($suma, 2, '.', ''),
-                'order_id' => $orderId,
+            $stmt = $db->prepare(
+                'SELECT id, order_number, total, paid_amount, payment_status, status, payment_error
+                 FROM orders WHERE id = :id AND deleted_at IS NULL LIMIT 1 FOR UPDATE'
+            );
+            $stmt->execute(['id' => $orderId]);
+            $comanda = $stmt->fetch();
+            $comanda = is_array($comanda) ? $comanda : null;
+
+            if ($comanda !== null && self::nimicIncasat($comanda) && !self::comandaInchisa($comanda)) {
+                $rezultat['tip'] = self::TIP_INTEGRALA;
+                // Motivul plății eșuate se șterge de pe comandă, ca la o plată reușită din checkout; rămâne în jurnal.
+                $rezultat['eroare_anterioara'] = (string) ($comanda['payment_error'] ?? '');
+                $db->prepare(
+                    "UPDATE orders
+                     SET payment_status = 'paid',
+                         status = CASE WHEN status IN ('pending_payment', 'failed') THEN 'pending' ELSE status END,
+                         paid_at = COALESCE(paid_at, NOW()),
+                         payment_error = NULL,
+                         paid_amount = :suma
+                     WHERE id = :order_id AND deleted_at IS NULL"
+                )->execute([
+                    'suma' => number_format($suma, 2, '.', ''),
+                    'order_id' => $orderId,
+                ]);
+            } elseif ($comanda !== null && (self::comandaInchisa($comanda) && self::nimicIncasat($comanda)
+                || (self::esteIntegral($link, $comanda) && !self::nimicIncasat($comanda)))) {
+                $rezultat['tip'] = self::TIP_DUBLURA;
+                $db->prepare('UPDATE orders SET payment_error = :nota WHERE id = :order_id')->execute([
+                    'nota' => mb_substr(self::notaDubla($link, $comanda), 0, 1000),
+                    'order_id' => $orderId,
+                ]);
+            } else {
+                $db->prepare(
+                    'UPDATE orders
+                     SET paid_amount = ROUND(COALESCE(paid_amount, total) + :suma, 2),
+                         payment_status = \'paid\',
+                         paid_at = COALESCE(paid_at, NOW())
+                     WHERE id = :order_id AND deleted_at IS NULL'
+                )->execute([
+                    'suma' => number_format($suma, 2, '.', ''),
+                    'order_id' => $orderId,
+                ]);
+            }
+            if ($amDeschis) {
+                $db->commit();
+            }
+        } catch (Throwable) {
+            if ($amDeschis && $db->inTransaction()) {
+                $db->rollBack();
+            }
+            return $rezultat;
+        }
+
+        $rezultat['nou'] = true;
+        return $rezultat;
+    }
+
+    /**
+     * Ce urmează după prima confirmare a unui link (în afara bazei): la plata întreagă emailul „comandă nouă” și
+     * trimiterea în ERP, ca după o plată reușită din checkout (comanda cu cardul pleacă în ERP abia după plată); la o
+     * diferență, ERP-ul află noua sumă încasată pe aceeași comandă; o dublură nu pleacă nicăieri (nota e pe comandă).
+     *
+     * @param array{nou: bool, tip: string, order_id: int} $confirmare
+     */
+    public static function efecteDupaConfirmare(PDO $db, array $confirmare): void
+    {
+        $orderId = (int) ($confirmare['order_id'] ?? 0);
+        if (empty($confirmare['nou']) || $orderId <= 0) {
+            return;
+        }
+        if ($confirmare['tip'] === self::TIP_INTEGRALA) {
+            try {
+                EmailAutomation::sendOrderTemplateById($db, Settings::all($db), $orderId, 'new_order');
+            } catch (Throwable) {
+                // Emailul nu ține plata pe loc.
+            }
+            try {
+                ErpSync::push($db, $orderId);
+            } catch (Throwable) {
+                // Cronul ERP reîncearcă; banii sunt deja înregistrați pe site.
+            }
+            AdminActivityLog::log($db, 'order_platita_link_integral', ['order_id' => $orderId,
+                'plata_esuata_inainte' => mb_substr((string) ($confirmare['eroare_anterioara'] ?? ''), 0, 300)]);
+            return;
+        }
+        if ($confirmare['tip'] === self::TIP_DIFERENTA) {
+            try {
+                ErpSync::push($db, $orderId, true);
+            } catch (Throwable) {
+                // Cronul reîncearcă; banii sunt deja înregistrați pe site.
+            }
+            return;
+        }
+        AdminActivityLog::log($db, 'order_platita_de_doua_ori', ['order_id' => $orderId]);
+    }
+
+    /** Pe comandă nu e încasat nimic (nici plătită, nici o sumă trecută)? */
+    public static function nimicIncasat(array $order): bool
+    {
+        $plata = strtolower(trim((string) ($order['payment_status'] ?? '')));
+        $incasat = $order['paid_amount'] ?? null;
+        return !in_array($plata, ['paid', 'refunded'], true) && ($incasat === null || $incasat === '' || (float) $incasat <= 0.004);
+    }
+
+    private static function comandaInchisa(array $order): bool
+    {
+        return in_array(strtolower(trim((string) ($order['status'] ?? ''))), self::COMENZI_INCHISE, true);
+    }
+
+    /**
+     * Linkul acoperă tot totalul comenzii (un link de plată întreagă)? O diferență e mereu mai mică decât totalul
+     * (pe comandă era deja ceva încasat), deci suma deosebește cele două feluri fără o coloană în plus.
+     */
+    public static function esteIntegral(array $link, array $order): bool
+    {
+        $total = round((float) ($order['total'] ?? 0), 2);
+        $suma = round((float) ($link['amount'] ?? 0), 2);
+        return $total > 0 && $suma > 0 && $suma >= $total - 0.01;
+    }
+
+    /**
+     * Comanda poate primi acum un link pentru plata întreagă? Doar o comandă cu plata online cu cardul (orice
+     * procesator al site-ului), neanulată și neterminată, fără nimic încasat, a cărei plată a eșuat, a expirat, a fost
+     * anulată (suma eliberată) sau n-a fost terminată (în „Plată în așteptare” de mai mult decât expirarea plăților,
+     * `bt_ipay_expire_minutes`, implicit 60 de minute); și fără o plată BT a comenzii autorizată sau încă în curs la
+     * bancă (clientul ar plăti de două ori). Suma e totalul comenzii.
+     *
+     * @param array<string, mixed> $order rândul din `orders` (payment_method, status, payment_status, paid_amount, total, created_at)
+     * @return array{ok: bool, motiv: string, suma: float}
+     */
+    public static function plataIntegrala(PDO $db, array $order, array $settings): array
+    {
+        $motiv = self::motivFaraPlataIntegrala($order, $settings);
+        if ($motiv === '' && BtIpayPayments::areTabele($db)) {
+            $motiv = BtIpayPayments::motivFaraPlataIntegrala($db, (int) ($order['id'] ?? 0), BtIpayPayments::setari($settings)['minute_expirare']);
+        }
+        return $motiv !== ''
+            ? ['ok' => false, 'motiv' => $motiv, 'suma' => 0.0]
+            : ['ok' => true, 'motiv' => '', 'suma' => round((float) ($order['total'] ?? 0), 2)];
+    }
+
+    /**
+     * Partea din plataIntegrala care se citește doar din rândul comenzii (fără plățile BT; o folosește și lista comenzilor,
+     * pentru „Trimite din nou link de plată”): gol = comanda poate primi linkul.
+     *
+     * @param array<string, mixed> $order
+     */
+    public static function motivFaraPlataIntegrala(array $order, array $settings): string
+    {
+        if (!PaymentMethods::esteCard((string) ($order['payment_method'] ?? ''))) {
+            return 'Comanda nu e cu plata online cu cardul.';
+        }
+        if (($order['deleted_at'] ?? null) !== null || self::comandaInchisa($order)) {
+            return 'Comanda e anulată sau încheiată; nu se mai plătește.';
+        }
+        $plata = strtolower(trim((string) ($order['payment_status'] ?? '')));
+        if ($plata === 'paid') {
+            return 'Comanda e deja plătită.';
+        }
+        if ($plata === 'refunded') {
+            return 'Plata comenzii a fost rambursată.';
+        }
+        if (!self::nimicIncasat($order)) {
+            return 'Pe comandă e deja încasată o sumă; restul se cere ca diferență.';
+        }
+        if (round((float) ($order['total'] ?? 0), 2) <= 0) {
+            return 'Comanda nu are nimic de plătit.';
+        }
+        if (strtolower(trim((string) ($order['status'] ?? ''))) === 'pending_payment' && $plata !== 'failed') {
+            $minute = BtIpayPayments::setari($settings)['minute_expirare'];
+            $creata = strtotime((string) ($order['created_at'] ?? ''));
+            if ($creata === false || $creata > time() - $minute * 60) {
+                return 'Plata cu cardul a comenzii poate fi încă în curs: linkul se poate trimite după ' . $minute
+                    . ' de minute de la plasare, dacă plata nu s-a confirmat.';
+            }
+        }
+        return '';
+    }
+
+    /**
+     * De ce nu se mai poate plăti acum un link de plată întreagă (gol = se poate). Linkurile pentru diferență merg ca
+     * până acum. Comanda plătită între timp (plata inițială confirmată totuși), anulată sau încheiată nu se mai plătește
+     * prin link; nici una al cărei total a scăzut după trimitere (se cere un link nou, cu suma de acum). Un total crescut
+     * face din link unul mai mic decât totalul: se plătește, iar restul rămâne de cerut ca diferență.
+     *
+     * @param array<string, mixed> $order
+     */
+    public static function motivLinkNeplatibil(array $link, array $order): string
+    {
+        if ((string) ($link['status'] ?? '') !== self::STATUS_ASTEPTARE || !self::esteIntegral($link, $order)) {
+            return '';
+        }
+        if (!self::nimicIncasat($order)) {
+            return 'Comanda a fost deja plătită; nu e nevoie să plătești din nou.';
+        }
+        if (self::comandaInchisa($order) || ($order['deleted_at'] ?? null) !== null) {
+            return 'Comanda a fost anulată sau încheiată, deci linkul nu mai poate fi plătit.';
+        }
+        if (round((float) ($link['amount'] ?? 0), 2) > round((float) ($order['total'] ?? 0), 2) + 0.01) {
+            return 'Totalul comenzii s-a schimbat de când ți-am trimis linkul. Scrie-ne și îți trimitem unul nou.';
+        }
+        return '';
+    }
+
+    /**
+     * Linkul de plată întreagă plătit printr-o plată a comenzii însăși (Banca Transilvania: plata obișnuită a comenzii,
+     * pornită din link, a făcut deja comanda plătită): doar linkul trece „plătit”, comanda nu se mai atinge aici.
+     */
+    public static function marcheazaPlatit(PDO $db, array $link, string $epId = '', string $approval = ''): bool
+    {
+        $linkId = (int) ($link['id'] ?? 0);
+        if ($linkId <= 0) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare(
+                'UPDATE order_payment_links SET status = :platit, paid_at = NOW(), ep_id = :ep_id, approval = :approval
+                 WHERE id = :id AND status IN (:asteptare, :anulat)'
+            );
+            $stmt->execute([
+                'platit' => self::STATUS_PLATIT,
+                'ep_id' => $epId !== '' ? substr($epId, 0, 64) : null,
+                'approval' => $approval !== '' ? substr($approval, 0, 64) : null,
+                'id' => $linkId,
+                'asteptare' => self::STATUS_ASTEPTARE,
+                'anulat' => self::STATUS_ANULAT,
             ]);
+            return $stmt->rowCount() > 0;
         } catch (Throwable) {
             return false;
         }
+    }
 
+    /** Anulează un link încă neplătit (întors: dacă acum e anulat). */
+    public static function anuleaza(PDO $db, int $linkId): bool
+    {
+        if ($linkId <= 0) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare('UPDATE order_payment_links SET status = :anulat WHERE id = :id AND status = :asteptare');
+            $stmt->execute(['anulat' => self::STATUS_ANULAT, 'id' => $linkId, 'asteptare' => self::STATUS_ASTEPTARE]);
+            return $stmt->rowCount() > 0;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Comanda tocmai a devenit plătită pe alt drum (plata inițială confirmată totuși, de callback, de cron sau de
+     * întoarcerea clientului; marcată plătită din admin): linkurile ei de plată întreagă încă neplătite se anulează,
+     * ca nimeni să nu mai plătească o dată. Diferențele nu se ating. Întoarce câte s-au anulat.
+     */
+    public static function anuleazaIntegralePentruComanda(PDO $db, int $orderId): int
+    {
+        if ($orderId <= 0) {
+            return 0;
+        }
+        try {
+            $stmt = $db->prepare(
+                'UPDATE order_payment_links l JOIN orders o ON o.id = l.order_id
+                 SET l.status = :anulat
+                 WHERE l.order_id = :order_id AND l.status = :asteptare AND o.total > 0 AND l.amount >= ROUND(o.total - 0.01, 2)'
+            );
+            $stmt->execute(['anulat' => self::STATUS_ANULAT, 'order_id' => $orderId, 'asteptare' => self::STATUS_ASTEPTARE]);
+            return $stmt->rowCount();
+        } catch (Throwable) {
+            return 0;
+        }
+    }
+
+    /** Un link anulat, de plată întreagă, al unei comenzi plătite între timp (clientul nu mai are nimic de plătit)? */
+    public static function anulatFiindcaPlatita(PDO $db, array $link): bool
+    {
+        if ((string) ($link['status'] ?? '') !== self::STATUS_ANULAT) {
+            return false;
+        }
+        try {
+            $stmt = $db->prepare('SELECT total, paid_amount, payment_status FROM orders WHERE id = :id AND deleted_at IS NULL LIMIT 1');
+            $stmt->execute(['id' => (int) ($link['order_id'] ?? 0)]);
+            $comanda = $stmt->fetch();
+        } catch (Throwable) {
+            return false;
+        }
+        return is_array($comanda) && self::esteIntegral($link, $comanda) && !self::nimicIncasat($comanda);
+    }
+
+    /** Linkul de plată întreagă plătit al comenzii (cel mai nou), dacă are. @return array<string, mixed>|null */
+    public static function integralPlatit(PDO $db, int $orderId): ?array
+    {
+        if ($orderId <= 0) {
+            return null;
+        }
+        try {
+            $stmt = $db->prepare(
+                'SELECT l.* FROM order_payment_links l JOIN orders o ON o.id = l.order_id
+                 WHERE l.order_id = :order_id AND l.status = :platit AND o.total > 0 AND l.amount >= ROUND(o.total - 0.01, 2)
+                 ORDER BY l.id DESC LIMIT 1'
+            );
+            $stmt->execute(['order_id' => $orderId, 'platit' => self::STATUS_PLATIT]);
+            $rand = $stmt->fetch();
+            return is_array($rand) ? $rand : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Plata inițială a comenzii (EuPlătesc, Stripe) s-a confirmat pe o comandă deja plătită printr-un link de plată
+     * întreagă: banii au venit de două ori. Comanda primește nota „Plătită de două ori”, cu ce e de rambursat; suma
+     * încasată rămâne a unei singure plăți. Întoarce true dacă a pus nota.
+     */
+    public static function semnaleazaPlataInitialaDubla(PDO $db, int $orderId, string $procesator, string $referinta): bool
+    {
+        $link = self::integralPlatit($db, $orderId);
+        if ($link === null) {
+            return false;
+        }
+        $nota = self::NOTA_DUBLA . ': plata inițială a comenzii (' . $procesator . ($referinta !== '' ? ', ' . $referinta : '')
+            . ') s-a confirmat după ce comanda fusese plătită prin linkul de plată ' . (string) ($link['referinta'] ?? '') . ' ('
+            . number_format((float) ($link['amount'] ?? 0), 2, ',', '.') . ' lei, ' . self::numeProcesator((string) ($link['procesator'] ?? ''))
+            . '). ' . self::INDICIU_RAMBURSARE;
+        try {
+            $db->prepare('UPDATE orders SET payment_error = :nota WHERE id = :id')->execute(['nota' => mb_substr($nota, 0, 1000), 'id' => $orderId]);
+        } catch (Throwable) {
+            return false;
+        }
+        AdminActivityLog::log($db, 'order_platita_de_doua_ori', ['order_id' => $orderId, 'link' => (string) ($link['referinta'] ?? '')]);
         return true;
+    }
+
+    private const INDICIU_RAMBURSARE = 'Rambursează una dintre plăți: o autorizare Banca Transilvania încă neîncasată se eliberează din '
+        . 'fereastra comenzii („Anulează autorizarea”), o plată EuPlătesc sau Stripe se rambursează din panoul procesatorului. '
+        . 'Pe comandă e socotită o singură plată.';
+
+    /** Comanda poartă nota „Plătită de două ori”? */
+    public static function platitaDeDouaOri(array $order): bool
+    {
+        return str_starts_with(trim((string) ($order['payment_error'] ?? '')), self::NOTA_DUBLA);
+    }
+
+    public static function numeProcesator(string $procesator): string
+    {
+        return match ($procesator) {
+            self::PROCESATOR_BT => 'Banca Transilvania',
+            self::PROCESATOR_STRIPE => 'Stripe',
+            default => 'EuPlătesc',
+        };
+    }
+
+    /** @param array<string, mixed> $comanda */
+    private static function notaDubla(array $link, array $comanda): string
+    {
+        $suma = number_format((float) ($link['amount'] ?? 0), 2, ',', '.') . ' lei';
+        $cum = self::numeProcesator((string) ($link['procesator'] ?? ''));
+        if (self::comandaInchisa($comanda) && self::nimicIncasat($comanda)) {
+            return self::NOTA_DUBLA . '? Linkul de plată ' . (string) ($link['referinta'] ?? '') . ' (' . $suma . ', ' . $cum
+                . ') a fost plătit după ce comanda fusese anulată sau încheiată; plata nu a fost socotită pe comandă. '
+                . 'Rambursează-o clientului din panoul procesatorului, dacă nu reactivezi comanda.';
+        }
+        return self::NOTA_DUBLA . ': linkul de plată ' . (string) ($link['referinta'] ?? '') . ' (' . $suma . ', ' . $cum
+            . ') a fost plătit după ce comanda era deja încasată. ' . self::INDICIU_RAMBURSARE;
+    }
+
+    /**
+     * Linkurile comenzii, pentru fereastra comenzii din admin: referința, suma, felul (diferență / plată întreagă),
+     * starea („trimis”, „plătit”, „anulat”, „expirat”), procesatorul și datele; adresa doar pentru cele încă valabile.
+     *
+     * @param array<string, mixed> $order
+     * @return list<array<string, mixed>>
+     */
+    public static function pentruAdmin(PDO $db, array $order): array
+    {
+        $orderId = (int) ($order['id'] ?? 0);
+        if ($orderId <= 0) {
+            return [];
+        }
+        try {
+            $stmt = $db->prepare('SELECT * FROM order_payment_links WHERE order_id = :id ORDER BY id DESC LIMIT 50');
+            $stmt->execute(['id' => $orderId]);
+            $randuri = $stmt->fetchAll() ?: [];
+        } catch (Throwable) {
+            return [];
+        }
+        $lista = [];
+        foreach ($randuri as $rand) {
+            if (!is_array($rand)) {
+                continue;
+            }
+            $stare = (string) ($rand['status'] ?? '');
+            $eticheta = match (true) {
+                $stare === self::STATUS_PLATIT => 'plătit',
+                $stare === self::STATUS_ANULAT => 'anulat',
+                self::esteExpirat($rand) => 'expirat',
+                default => 'trimis',
+            };
+            $lista[] = [
+                'referinta' => (string) ($rand['referinta'] ?? ''),
+                'suma' => round((float) ($rand['amount'] ?? 0), 2),
+                'tip' => self::esteIntegral($rand, $order) ? self::TIP_INTEGRALA : self::TIP_DIFERENTA,
+                'stare' => $eticheta,
+                'procesator' => self::numeProcesator(self::procesator($rand)),
+                'creat_la' => (string) ($rand['created_at'] ?? ''),
+                'platit_la' => (string) ($rand['paid_at'] ?? ''),
+                'url' => $eticheta === 'trimis' ? AppUrl::absolut('/plata/' . rawurlencode((string) ($rand['token'] ?? ''))) : '',
+            ];
+        }
+        return $lista;
     }
 
     /** @return array<string, mixed>|null */

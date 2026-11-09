@@ -1,7 +1,9 @@
 <?php
 /**
- * Pagina de plată a diferenței rămase pe o comandă.
+ * Pagina de plată a diferenței rămase pe o comandă, sau a întregii comenzi (linkul de plată întreagă trimis din admin
+ * după o plată cu cardul eșuată: $integrala, cu textele „Finalizează plata comenzii”).
  *
+ * @var bool $integrala
  * @var array<string, mixed> $link
  * @var array<string, mixed> $order
  * @var bool $esteplatit
@@ -22,13 +24,15 @@ $urlReverificare = (string) ($urlReverificare ?? '');
 $procesorOprit = (bool) ($procesorOprit ?? false) && !$platitAcum && !$inCurs;
 // Culoarea butoanelor: a temei site-ului (tema.json → culoare_principala), implicit #2f8d5b.
 $culoareButon = \App\Support\Tema::culoarePrincipala();
+$integrala = (bool) ($integrala ?? false);
+$titluPlata = $integrala ? 'Finalizează plata comenzii' : 'Diferență de plată';
 ?>
 <section class="panel" style="max-width:560px;margin-left:auto;margin-right:auto;padding:32px 26px;text-align:center;">
     <?php if ($platitAcum): ?>
         <p style="margin:0 0 10px;font-size:52px;line-height:1;">✅</p>
         <h1 style="margin:0 0 12px;font-size:24px;color:#0f172a;">Plata a fost efectuată</h1>
         <p style="margin:0 auto;max-width:420px;color:#475569;font-size:15px;line-height:1.6;">
-            Mulțumim! Diferența pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong>
+            Mulțumim! <?= $integrala ? 'Plata' : 'Diferența' ?> pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong>
             a fost achitată. Îți pregătim comanda pentru livrare.
         </p>
         <p style="margin:24px 0 0;">
@@ -37,7 +41,7 @@ $culoareButon = \App\Support\Tema::culoarePrincipala();
     <?php elseif ($inCurs): ?>
         <h1 style="margin:0 0 12px;font-size:24px;color:#0f172a;">Verificăm plata</h1>
         <p style="margin:0 auto;max-width:440px;color:#475569;font-size:15px;line-height:1.6;">
-            Plata diferenței pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong>
+            Plata <?= $integrala ? '' : 'diferenței ' ?>pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong>
             a fost trimisă la bancă și se confirmă în câteva momente. Nu e nevoie să plătești din nou.
         </p>
         <?php if ($urlReverificare !== ''): ?>
@@ -48,17 +52,22 @@ $culoareButon = \App\Support\Tema::culoarePrincipala();
             <script>setTimeout(function () { var a = document.querySelector('[data-reverificare]'); if (a) { window.location.href = a.href; } }, 30000);</script>
         <?php endif; ?>
     <?php elseif ($procesorOprit): ?>
-        <h1 style="margin:0 0 10px;font-size:24px;color:#0f172a;">Diferență de plată</h1>
+        <h1 style="margin:0 0 10px;font-size:24px;color:#0f172a;"><?= $titluPlata ?></h1>
         <p style="margin:0 auto;max-width:440px;color:#475569;font-size:15px;line-height:1.6;">
-            Pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong> a rămas de achitat
+            Pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong> <?= $integrala ? 'e' : 'a rămas' ?> de achitat
             <strong><?= number_format($suma, 2, ',', '.') ?> lei</strong>. Plata online a acestui link nu mai este
             disponibilă; te rugăm să ne contactezi pentru altă modalitate de plată.
         </p>
     <?php else: ?>
-        <h1 style="margin:0 0 10px;font-size:24px;color:#0f172a;">Diferență de plată</h1>
+        <h1 style="margin:0 0 10px;font-size:24px;color:#0f172a;"><?= $titluPlata ?></h1>
         <p style="margin:0 auto 18px;max-width:440px;color:#475569;font-size:15px;line-height:1.6;">
+<?php if ($integrala): ?>
+            Plata cu cardul pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong> nu a fost
+            finalizată. Comanda te așteaptă: o poți plăti acum, cu suma de mai jos.
+<?php else: ?>
             Pentru comanda <strong><?= htmlspecialchars($numarComanda, ENT_QUOTES) ?></strong> a rămas
             de achitat suma de mai jos, în urma produselor adăugate la cererea ta.
+<?php endif; ?>
         </p>
 
         <?php if ($esuat): ?>

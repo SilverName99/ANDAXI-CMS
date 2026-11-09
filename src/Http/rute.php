@@ -235,6 +235,7 @@ return static function (Router $router): void {
     $router->post('/admin/orders/{id}/discount', [AdminController::class, 'orderDiscountSave']);
     $router->post('/admin/orders/{id}/note-interne', [AdminController::class, 'orderNotesSave']);
     $router->post('/admin/orders/{id}/shipping', [AdminController::class, 'orderShippingSave']);
+    $router->get('/admin/orders/{id}/payment-link', [AdminController::class, 'orderPaymentLinks']);
     $router->post('/admin/orders/{id}/payment-link', [AdminController::class, 'orderPaymentLinkSend']);
     $router->post('/admin/orders/{id}/incasare', [AdminController::class, 'orderIncasareManuala']);
     $router->post('/admin/orders/{id}/bt/{actiune}', [AdminController::class, 'orderBtIpayAction']);

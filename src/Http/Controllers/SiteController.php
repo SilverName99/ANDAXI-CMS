@@ -2540,7 +2540,8 @@ final class SiteController
             || (!empty($verificare['amanat']) && in_array($stare, [BtIpayPayments::STARE_INREGISTRATA, BtIpayPayments::STARE_3DS], true))
             || $stare === BtIpayPayments::STARE_3DS;
 
-        if ((string) $tx['kind'] === BtIpayPayments::TIP_LINK) {
+        // O diferență, sau plata comenzii pornită dintr-un link de plată întreagă: înapoi pe pagina linkului.
+        if ((string) $tx['kind'] === BtIpayPayments::TIP_LINK || (int) ($tx['link_id'] ?? 0) > 0) {
             $this->btIpayReturLink($db, $tx, $ref, $neclar);
             return;
         }
@@ -8834,20 +8835,14 @@ CSS;
             return false;
         }
 
-        $prima = \App\Support\PaymentLink::confirmaPlata(
+        // O diferență: suma se adaugă, iar ERP-ul află noua sumă încasată. Linkul de plată întreagă al unei comenzi cu
+        // plata eșuată: comanda devine plătită ca după checkout (emailul, ERP-ul; PaymentLink::efecteDupaConfirmare).
+        \App\Support\PaymentLink::efecteDupaConfirmare($db, \App\Support\PaymentLink::confirmaPlataDetaliat(
             $db,
             $link,
             (string) ($response['ep_id'] ?? ''),
             (string) ($response['approval'] ?? '')
-        );
-        if ($prima) {
-            // ERP-ul trebuie să afle noua sumă încasată pe aceeași comandă.
-            try {
-                \App\Support\ErpSync::push($db, (int) $link['order_id'], true);
-            } catch (Throwable) {
-                // Cronul reîncearcă; banii sunt deja înregistrați pe site.
-            }
-        }
+        ));
         return true;
     }
 
@@ -8890,8 +8885,10 @@ CSS;
             ? '/checkout/bt/retur?ref=' . rawurlencode($refVerificare)
             : '';
 
+        $integrala = \App\Support\PaymentLink::esteIntegral($link, $order);
         View::render('site/payment-link', [
-            'title' => 'Plata diferenței — comanda ' . (string) ($order['order_number'] ?? ''),
+            'title' => ($integrala ? 'Finalizează plata' : 'Plata diferenței') . ' — comanda ' . (string) ($order['order_number'] ?? ''),
+            'integrala' => $integrala,
             'link' => $link,
             'order' => $order,
             'esteplatit' => $esteplatit,
@@ -8934,10 +8931,14 @@ CSS;
             return;
         }
 
+        $integrala = \App\Support\PaymentLink::esteIntegral($link, $order);
         if (\App\Support\PaymentLink::procesorEfectiv($link, $settings) === \App\Support\PaymentLink::PROCESATOR_BT) {
             // Diferența prin Banca Transilvania: o plată separată la bancă, pe
-            // numărul linkului, încasată imediat după autorizare.
-            $start = BtIpayPayments::pornestePlataLink($db, $link, $appUrl . '/checkout/bt/retur', (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            // numărul linkului, încasată imediat după autorizare. Plata întreagă a
+            // unei comenzi: o plată obișnuită a comenzii, în două faze, ca la checkout.
+            $start = $integrala
+                ? BtIpayPayments::pornestePlataIntegrala($db, $link, $appUrl . '/checkout/bt/retur', (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''))
+                : BtIpayPayments::pornestePlataLink($db, $link, $appUrl . '/checkout/bt/retur', (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
             if (!$start['ok']) {
                 Flash::set('error', 'Plata nu a putut fi pornită: ' . $start['eroare']);
                 header('Location: /plata/' . rawurlencode((string) $link['token']));
@@ -8977,7 +8978,7 @@ CSS;
                 // ca aparținând comenzii.
                 'order_number' => (string) $link['referinta'],
                 'amount' => round((float) $link['amount'], 2),
-                'description' => 'Diferență comanda ' . $numarComanda,
+                'description' => ($integrala ? 'Comanda ' : 'Diferență comanda ') . $numarComanda,
                 'first_name' => (string) ($order['billing_first_name'] ?? ''),
                 'last_name' => (string) ($order['billing_last_name'] ?? ''),
                 'address' => (string) ($order['billing_address_line1'] ?? ''),
@@ -9038,7 +9039,7 @@ CSS;
             'metadata[payment_link_reference]' => (string) ($link['referinta'] ?? ''),
             'payment_intent_data[metadata][payment_link_token]' => (string) ($link['token'] ?? ''),
             'line_items[0][price_data][currency]' => $currency,
-            'line_items[0][price_data][product_data][name]' => 'Diferență comanda ' . $numarComanda,
+            'line_items[0][price_data][product_data][name]' => (\App\Support\PaymentLink::esteIntegral($link, $order) ? 'Comanda ' : 'Diferență comanda ') . $numarComanda,
             'line_items[0][price_data][unit_amount]' => (string) $suma,
             'line_items[0][quantity]' => '1',
             'locale' => 'auto',
@@ -9101,15 +9102,8 @@ CSS;
         }
         $intent = $session['payment_intent'] ?? '';
         $intentId = is_array($intent) ? (string) ($intent['id'] ?? '') : (string) $intent;
-        $prima = \App\Support\PaymentLink::confirmaPlata($db, $link, (string) ($session['id'] ?? ''), $intentId);
-        if ($prima) {
-            // ERP-ul trebuie să afle noua sumă încasată pe aceeași comandă.
-            try {
-                \App\Support\ErpSync::push($db, (int) $link['order_id'], true);
-            } catch (Throwable) {
-                // Cronul reîncearcă; banii sunt deja înregistrați pe site.
-            }
-        }
+        // Ca la EuPlătesc: diferența se adaugă, plata întreagă face comanda plătită ca după checkout.
+        \App\Support\PaymentLink::efecteDupaConfirmare($db, \App\Support\PaymentLink::confirmaPlataDetaliat($db, $link, (string) ($session['id'] ?? ''), $intentId));
         return true;
     }
 
@@ -9125,14 +9119,17 @@ CSS;
             return [null, [], 'Linkul nu există sau a fost înlocuit de unul mai nou.'];
         }
         if ((string) ($link['status'] ?? '') === \App\Support\PaymentLink::STATUS_ANULAT) {
-            return [null, [], 'Linkul a fost anulat. Cere-ne unul nou.'];
+            // Linkul de plată întreagă anulat fiindcă plata comenzii s-a confirmat totuși: clientul nu mai are nimic de plătit.
+            return [null, [], \App\Support\PaymentLink::anulatFiindcaPlatita($db, $link)
+                ? 'Comanda a fost deja plătită; nu e nevoie să plătești din nou.'
+                : 'Linkul a fost anulat. Cere-ne unul nou.'];
         }
         if (\App\Support\PaymentLink::esteExpirat($link)) {
             return [null, [], 'Linkul a expirat. Cere-ne unul nou.'];
         }
 
         $stmt = $db->prepare(
-            'SELECT id, order_number, total, paid_amount, payment_status,
+            'SELECT id, order_number, total, paid_amount, payment_status, status,
                     billing_first_name, billing_last_name, billing_email, billing_phone,
                     billing_address_line1, billing_city, billing_county, billing_postcode
              FROM orders WHERE id = :id AND deleted_at IS NULL LIMIT 1'
@@ -9141,6 +9138,14 @@ CSS;
         $order = $stmt->fetch();
         if (!is_array($order)) {
             return [null, [], 'Comanda asociată nu mai există.'];
+        }
+        // Linkul de plată întreagă al unei comenzi plătite între timp (plata inițială confirmată totuși), anulate sau
+        // cu totalul scăzut: nu se mai plătește, ca nimeni să nu plătească de două ori. Linkul se anulează; o diferență
+        // nu se atinge (PaymentLink::motivLinkNeplatibil).
+        $neplatibil = \App\Support\PaymentLink::motivLinkNeplatibil($link, $order);
+        if ($neplatibil !== '' && !(BtIpayPayments::areTabele($db) && BtIpayPayments::plataLinkInCurs($db, (int) $link['id']) !== null)) {
+            \App\Support\PaymentLink::anuleaza($db, (int) $link['id']);
+            return [null, [], $neplatibil];
         }
         return [$link, $order, ''];
     }
@@ -9254,9 +9259,14 @@ CSS;
         ]);
 
         if (!$eraPlatita) {
+            // Plata comenzii s-a confirmat: un link de plată întreagă trimis între timp nu se mai plătește.
+            \App\Support\PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
             EmailAutomation::sendOrderTemplateById($db, $settings, $orderId, 'new_order');
             // Comanda pleacă spre ERP abia acum, după confirmarea încasării.
             \App\Support\ErpSync::push($db, $orderId);
+        } else {
+            // Comanda era deja plătită printr-un link de plată întreagă: banii au venit de două ori.
+            \App\Support\PaymentLink::semnaleazaPlataInitialaDubla($db, $orderId, 'EuPlătesc', $epId);
         }
         return true;
     }
@@ -9467,6 +9477,7 @@ CSS;
 
         \App\Support\ErpSync::ensureSchema($db);
         $where = $orderNumber !== '' ? 'order_number = :order_number AND deleted_at IS NULL' : 'id = :id AND deleted_at IS NULL';
+        $eraPlatita = $paid && $this->comandaStripeEraPlatita($db, $where, $orderNumber, $orderId);
         $sql = $paid
             ? "UPDATE orders
                SET payment_status = 'paid',
@@ -9501,6 +9512,7 @@ CSS;
         if ($paid) {
             $settings = Settings::all($db);
             if ($targetOrderId > 0) {
+                $this->dupaPlataStripeComanda($db, $targetOrderId, $eraPlatita, $sessionId);
                 EmailAutomation::sendOrderTemplateById($db, $settings, $targetOrderId, 'new_order');
                 \App\Support\ErpSync::push($db, $targetOrderId);
             }
@@ -9526,6 +9538,7 @@ CSS;
         }
 
         $where = $orderNumber !== '' ? 'order_number = :order_number AND deleted_at IS NULL' : 'id = :id AND deleted_at IS NULL';
+        $eraPlatita = $paid && $this->comandaStripeEraPlatita($db, $where, $orderNumber, $orderId);
         $sql = $paid
             ? "UPDATE orders
                SET payment_status = 'paid',
@@ -9557,6 +9570,7 @@ CSS;
 
         if ($paid) {
             $settings = Settings::all($db);
+            $this->dupaPlataStripeComanda($db, $targetOrderId, $eraPlatita, $paymentIntentId);
             EmailAutomation::sendOrderTemplateById($db, $settings, $targetOrderId, 'new_order');
             \App\Support\ErpSync::push($db, $targetOrderId);
             return;
@@ -9564,6 +9578,32 @@ CSS;
 
         LoyaltyService::refundRedeemedPointsForOrder($db, $targetOrderId);
         LoyaltyService::reverseAwardedPointsForOrder($db, $targetOrderId);
+    }
+
+    /** Comanda plății Stripe era deja „plătită” înaintea acestei confirmări? (pentru gărzile linkului de plată întreagă) */
+    private function comandaStripeEraPlatita(PDO $db, string $where, string $orderNumber, int $orderId): bool
+    {
+        try {
+            $stmt = $db->prepare('SELECT payment_status FROM orders WHERE ' . $where . ' LIMIT 1');
+            $stmt->execute($orderNumber !== '' ? ['order_number' => $orderNumber] : ['id' => $orderId]);
+            return strtolower((string) ($stmt->fetchColumn() ?: '')) === 'paid';
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * După confirmarea Stripe a plății inițiale a unei comenzi: dacă abia acum a devenit plătită, linkurile ei de plată
+     * întreagă rămase nu se mai plătesc; dacă era deja plătită printr-un asemenea link, banii au venit de două ori
+     * (nota „Plătită de două ori” pe comandă).
+     */
+    private function dupaPlataStripeComanda(PDO $db, int $orderId, bool $eraPlatita, string $referinta): void
+    {
+        if ($eraPlatita) {
+            \App\Support\PaymentLink::semnaleazaPlataInitialaDubla($db, $orderId, 'Stripe', $referinta);
+            return;
+        }
+        \App\Support\PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
     }
 
     private function resolveOrderIdForStripeSession(PDO $db, string $orderNumber, int $orderId): int

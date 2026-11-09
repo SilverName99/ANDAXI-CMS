@@ -7806,7 +7806,9 @@ final class AdminController
 
     /**
      * Trimite clientului un link de plată pentru diferența rămasă pe comandă
-     * (produse adăugate după ce a plătit deja cu cardul).
+     * (produse adăugate după ce a plătit deja cu cardul). Cu `tip=integrala`,
+     * linkul e pentru TOATĂ comanda, a cărei plată cu cardul a eșuat sau n-a
+     * fost terminată (orderPaymentLinkIntegralSend).
      */
     public function orderPaymentLinkSend(array $params): void
     {
@@ -7814,6 +7816,10 @@ final class AdminController
             return;
         }
         header('Content-Type: application/json');
+        if ((string) ($_POST['tip'] ?? '') === \App\Support\PaymentLink::TIP_INTEGRALA) {
+            $this->orderPaymentLinkIntegralSend($params);
+            return;
+        }
         // Pluginul „se oprește”: linkurile trimise deja se pot plăti, dar nu se mai trimit altele noi.
         if (!\App\Support\Plugins::permiteInceput('link_plata')) {
             echo json_encode(['ok' => false, 'error' => 'Linkurile de plată noi nu mai sunt disponibile.']);
@@ -7933,6 +7939,179 @@ final class AdminController
             $raspuns['procesator'] = 'Stripe';
         }
         echo json_encode($raspuns, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * „Trimite link de plată” pentru o comandă cu cardul a cărei plată a eșuat, a expirat, a fost anulată sau n-a fost
+     * terminată, fără nimic încasat (PaymentLink::plataIntegrala): un link pentru tot totalul, prin același procesator
+     * ca linkurile pentru diferență (BT pornit în producție și deschis clienților, altfel EuPlătesc, altfel Stripe).
+     * Plătit, linkul face comanda plătită ca o plată reușită din checkout. Cu jetonul anti-CSRF al sesiunii (o acțiune
+     * cu bani, ca butoanele BT). Un link încă neplătit pentru aceeași sumă se retrimite, nu se face altul.
+     */
+    private function orderPaymentLinkIntegralSend(array $params): void
+    {
+        if (!\App\Support\AdminCsrf::valid()) {
+            echo json_encode(['ok' => false, 'error' => 'Sesiunea formularului a expirat. Reîncarcă pagina și încearcă din nou.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        if (!\App\Support\Plugins::permiteInceput('link_plata')) {
+            echo json_encode(['ok' => false, 'error' => 'Linkurile de plată noi nu mai sunt disponibile.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $orderId = max(0, (int) ($params['id'] ?? 0));
+        $db = $this->db();
+        if (!$db instanceof PDO || $orderId <= 0) {
+            echo json_encode(['ok' => false, 'error' => 'Date invalide.']);
+            return;
+        }
+        \App\Support\ErpSync::ensureSchema($db);
+        $order = $this->comandaPentruLinkIntegral($db, $orderId);
+        if ($order === null) {
+            echo json_encode(['ok' => false, 'error' => 'Comanda nu există.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $settings = Settings::all($db);
+        $posibil = \App\Support\PaymentLink::plataIntegrala($db, $order, $settings);
+        if (!$posibil['ok']) {
+            echo json_encode(['ok' => false, 'error' => $posibil['motiv']], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $procesator = \App\Support\PaymentLink::procesorPentruLinkNou($settings);
+        if ($procesator === '') {
+            echo json_encode([
+                'ok' => false,
+                'error' => 'Linkurile de plată merg prin Banca Transilvania (pornită în producție), prin EuPlătesc sau prin Stripe, '
+                    . 'dar niciunul nu e pornit și configurat în Setări plăți. Pornește unul acolo.',
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $email = trim((string) ($order['billing_email'] ?? ''));
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(['ok' => false, 'error' => 'Comanda nu are o adresă de email validă.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        $suma = (float) $posibil['suma'];
+        $numarComanda = (string) ($order['order_number'] ?? '');
+        $inainte = $db->prepare('SELECT id FROM order_payment_links WHERE order_id = :id AND status = :s');
+        $inainte->execute(['id' => $orderId, 's' => \App\Support\PaymentLink::STATUS_ASTEPTARE]);
+        $neplatiteInainte = array_map('intval', $inainte->fetchAll(PDO::FETCH_COLUMN) ?: []);
+        $link = \App\Support\PaymentLink::creeaza($db, $orderId, $numarComanda, $suma, $procesator, $settings);
+        if ($link === null) {
+            echo json_encode(['ok' => false, 'error' => 'Nu am putut genera linkul de plată.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $refolosit = in_array((int) ($link['id'] ?? 0), $neplatiteInainte, true);
+
+        $url = \App\Support\AppUrl::absolut('/plata/' . rawurlencode((string) $link['token']));
+        $numeClient = trim((string) ($order['billing_first_name'] ?? '') . ' ' . (string) ($order['billing_last_name'] ?? ''));
+        $magazin = \App\Support\Brand::numeExpeditor($settings);
+        $sumaText = number_format($suma, 2, ',', '.');
+        // Același email ca linkul pentru diferență, cu textul plății întregi.
+        $html = '<p>Bună' . ($numeClient !== '' ? ' ' . htmlspecialchars($numeClient, ENT_QUOTES) : '') . ',</p>'
+            . '<p>Plata cu cardul pentru comanda <strong>' . htmlspecialchars($numarComanda, ENT_QUOTES) . '</strong> nu a fost finalizată. '
+            . 'Comanda te așteaptă: o poți plăti acum, securizat, cu suma de <strong>' . $sumaText . ' lei</strong>.</p>'
+            . '<p style="margin:22px 0;"><a href="' . htmlspecialchars($url, ENT_QUOTES) . '"'
+            . ' style="display:inline-block;padding:13px 24px;border-radius:10px;background:#2f8d5b;color:#ffffff;text-decoration:none;font-weight:700;">'
+            . 'Plătește ' . $sumaText . ' lei</a></p>'
+            . '<p style="color:#64748b;font-size:14px;">Dacă butonul nu funcționează, deschide acest link:<br>'
+            . htmlspecialchars($url, ENT_QUOTES) . '</p>'
+            . '<p style="color:#64748b;font-size:14px;">Plata se face securizat, cu cardul. Linkul este valabil 30 de zile. '
+            . 'Dacă ai plătit între timp, nu e nevoie să faci nimic: linkul nu te mai lasă să plătești a doua oară.</p>'
+            . '<p>Mulțumim,<br>Echipa ' . htmlspecialchars($magazin, ENT_QUOTES) . '</p>';
+
+        AdminActivityLog::log($db, 'order_link_plata_integral', [
+            'order_id' => $orderId,
+            'order_number' => $numarComanda,
+            'link' => (string) ($link['referinta'] ?? ''),
+            'suma' => number_format($suma, 2, '.', ''),
+            'procesator' => \App\Support\PaymentLink::procesator($link),
+            'refolosit' => $refolosit ? 'da' : 'nu',
+        ]);
+        $raspuns = [
+            'url' => $url,
+            'suma' => $suma,
+            'email' => $email,
+            'procesator' => \App\Support\PaymentLink::numeProcesator(\App\Support\PaymentLink::procesator($link)),
+            'refolosit' => $refolosit,
+            'linkuri' => \App\Support\PaymentLink::pentruAdmin($db, $order),
+        ];
+        try {
+            OrderMailer::sendCustom(
+                $email,
+                'Finalizează plata comenzii ' . $numarComanda,
+                $html,
+                $settings,
+                $db,
+                [
+                    'email_type' => 'payment_link',
+                    'source' => 'admin_orders',
+                    'trigger' => 'payment_link_integral_send',
+                    'order_id' => $orderId,
+                ]
+            );
+        } catch (Throwable $e) {
+            echo json_encode(['ok' => false, 'error' => 'Linkul a fost creat, dar emailul nu a plecat: ' . $e->getMessage()] + $raspuns,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            return;
+        }
+        echo json_encode(['ok' => true] + $raspuns, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * Linkurile de plată ale comenzii, pentru fereastra ei (GET /admin/orders/{id}/payment-link): fiecare cu suma,
+     * felul, starea („trimis”, „plătit”, „anulat”, „expirat”) și procesatorul; dacă se poate trimite acum un link de
+     * plată întreagă (și de ce nu); nota „Plătită de două ori”, dacă o are.
+     */
+    public function orderPaymentLinks(array $params): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        header('Content-Type: application/json');
+        header('Cache-Control: no-store, private');
+        $orderId = max(0, (int) ($params['id'] ?? 0));
+        $db = $this->db();
+        if (!$db instanceof PDO || $orderId <= 0) {
+            echo json_encode(['ok' => false, 'error' => 'Date invalide.']);
+            return;
+        }
+        \App\Support\ErpSync::ensureSchema($db);
+        $order = $this->comandaPentruLinkIntegral($db, $orderId);
+        if ($order === null) {
+            echo json_encode(['ok' => false, 'error' => 'Comanda nu există.'], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+        $settings = Settings::all($db);
+        $posibil = \App\Support\PaymentLink::plataIntegrala($db, $order, $settings);
+        // Butonul are rost doar pe comenzile cu cardul neplătite; pe celelalte motivul nu se arată.
+        $deArata = \App\Support\PaymentMethods::esteCard((string) ($order['payment_method'] ?? ''))
+            && \App\Support\PaymentLink::nimicIncasat($order);
+        echo json_encode([
+            'ok' => true,
+            'linkuri' => \App\Support\PaymentLink::pentruAdmin($db, $order),
+            'integrala' => [
+                'arata' => $deArata,
+                'poate' => $posibil['ok'] && \App\Support\Plugins::permiteInceput('link_plata'),
+                'motiv' => $posibil['ok'] ? '' : $posibil['motiv'],
+                'suma' => $posibil['suma'],
+            ],
+            'platita_de_doua_ori' => \App\Support\PaymentLink::platitaDeDouaOri($order),
+            'nota' => \App\Support\PaymentLink::platitaDeDouaOri($order) ? (string) ($order['payment_error'] ?? '') : '',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function comandaPentruLinkIntegral(PDO $db, int $orderId): ?array
+    {
+        $stmt = $db->prepare(
+            'SELECT id, order_number, total, paid_amount, payment_status, payment_method, payment_error, status, created_at, deleted_at,
+                    billing_first_name, billing_last_name, billing_email
+             FROM orders WHERE id = :id AND deleted_at IS NULL LIMIT 1'
+        );
+        $stmt->execute(['id' => $orderId]);
+        $order = $stmt->fetch();
+        return is_array($order) ? $order : null;
     }
 
     /** Cum se poate încasa restul, pe lângă site. */
@@ -13841,6 +14020,8 @@ final class AdminController
                  status = CASE WHEN status IN ('pending_payment', 'failed') THEN 'pending' ELSE status END
              WHERE id = :id"
         )->execute(['id' => $orderId]);
+        // Plătită pe alt drum: un link de plată întreagă trimis înainte nu se mai plătește.
+        \App\Support\PaymentLink::anuleazaIntegralePentruComanda($db, $orderId);
 
         // Mailul „comandă nouă" pleacă doar dacă n-a plecat deja. La ramburs și
         // la OP a plecat din checkout; la card pleacă abia la confirmarea

@@ -17,7 +17,7 @@ namespace App\Support;
  * dă `<!--port:bv:tab-spam-->…<!--/port:bv:tab-spam-->`, dar doar când variabila de
  * mediu `CMS_DEV_MARCAJE_PORT=1` e pusă (o pune doar `tools/dev/comun.sh`). Pe site-uri
  * variabila nu există, deci marcajul e un șir gol și HTML-ul nu are niciun comentariu în
- * plus. Numele (`<sursa>:<NUME>`: bv, vt, gr, deb) se declară o singură dată, cu pagina
+ * plus. Numele (`<sursa>:<NUME>`: bv, vt, gr, deb; seo, lp pentru bucățile noi ale codului comun) se declară o singură dată, cu pagina
  * lui, în `$marcajePort` din compara-cu-baza.php. Marcajul se scrie la mijlocul rândului:
  * un `?>` de la capăt de rând înghite sfârșitul de rând.
  */

@@ -1694,6 +1694,14 @@ $marcajePort = [
         . '(peste condițiile din pachetul site-ului; goală = ca în pachet)'],
     'seo:flux-merchant' => ['cale' => '/admin/settings/store', 'motiv' => 'WP-40 (B8): comutatorul fluxului Google Merchant '
         . '(setarea merchant_feed, înghețată la „1”: fluxul rămâne ca azi)'],
+    // Linkul de plată pentru o comandă cu plata cu cardul eșuată (link_plata, 9 nov 2026, cerut de Bioscem; nou, nu din alt
+    // site: sursa „lp”). În fereastra comenzii, zona linkurilor (lista lor cu starea și „Trimite link de plată” pentru toată
+    // comanda, cerute la GET /admin/orders/{id}/payment-link) și scriptul ei; doar cu pluginul pe site (marcajele apar goale
+    // fără el). site-uri/bioscem/ce-se-schimba.md și site-uri/biovitality/ce-se-schimba.md.
+    'lp:fereastra' => ['cale' => ['/admin/orders', '/admin/orders?*'], 'motiv' => 'link_plata (9 nov): zona linkurilor de plată '
+        . 'în fereastra comenzii (lista cu starea lor, „Trimite link de plată” pentru o comandă cu plata eșuată)'],
+    'lp:linkuri-js' => ['cale' => ['/admin/orders', '/admin/orders?*'], 'motiv' => 'link_plata (9 nov): scriptul zonei '
+        . '(public/assets/js/admin/link-plata.js) și jetonul anti-CSRF al trimiterii'],
 ];
 // WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
 // dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de
