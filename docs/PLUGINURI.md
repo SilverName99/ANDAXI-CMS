@@ -662,6 +662,30 @@ dispar, iar linkurile spre el se scot din pagini.
   plăți, cu cheia secretă): o sesiune Stripe Checkout pe referința linkului, confirmată de
   webhook-ul `checkout.session.completed` (suma verificată în bani) sau la întoarcerea clientului;
   suma se adaugă la încasat, starea comenzii nu se schimbă. Un link își păstrează procesatorul.
+- **Link de plată pentru o comandă cu plata eșuată** (9 nov 2026, cerut de Bioscem): o comandă cu cardul (orice procesator al
+  site-ului) a cărei plată a eșuat, a expirat, a fost anulată (suma BT eliberată) sau n-a fost terminată („Plată în așteptare” de
+  peste `bt_ipay_expire_minutes`, implicit 60 de minute), neanulată, nefinalizată și fără nimic încasat, primește din fereastra
+  comenzii (și din butonul 💳 al rândului din listă) „Trimite link de plată” pentru tot totalul: `POST /admin/orders/{id}/payment-link`
+  cu `tip=integrala` și jetonul anti-CSRF (AdminCsrf, ca acțiunile BT); `GET` pe aceeași adresă dă fereastrei lista linkurilor
+  comenzii (trimis, plătit, anulat, expirat) și dacă se poate trimite acum. Același procesator ca la diferențe, același tabel și
+  felul scris la creare în referință, `{nr}-PI{n}` (`PaymentLink::esteIntegral`; nicio coloană nouă). Plătit, linkul
+  face comanda plătită ca o plată reușită din checkout (`PaymentLink::confirmaPlataDetaliat`, `efecteDupaConfirmare`: starea,
+  emailul „comandă nouă”, ERP-ul). La BT linkul pornește o plată obișnuită a comenzii (`order`, „{nr}-R{n}”, cu `link_id`;
+  `BtIpayPayments::pornestePlataIntegrala`), deci autorizarea, încasarea la factura din ERP sau la 96 de ore și eliberarea sunt
+  ale comenzii. Gărzile împotriva plății duble: nu se trimite cât o plată BT a comenzii e autorizată sau în curs (sau plata unui
+  link al ei); plata inițială confirmată totuși (callback, cron, retur, „Plătit prin link extern”) anulează linkurile de plată
+  întreagă rămase; un asemenea link nu mai pornește pe o comandă plătită; o plată BT de prisos doar autorizată se eliberează
+  singură; banii veniți totuși de două ori lasă pe comandă nota „Plătită de două ori: …” (`PaymentLink::NOTA_DUBLA`, în
+  `payment_error`), cu plata de rambursat și cea socotită, fiecare cu procesatorul și id-ul ei; plata BT socotită a unei asemenea
+  comenzi nu se eliberează / rambursează din fereastră fără `confirm_dubla=1` (btActiune îl trimite după o fereastră de confirmare care
+  numește plata socotită). Pentru toate linkurile: orice încasare anulează
+  linkurile neplătite mai mari decât restul (`anuleazaDepasite`), o diferență mai mare decât restul nu mai pornește, același link
+  plătit a doua oară (alt ep_id / altă sesiune) lasă nota; confirmările EuPlătesc și Stripe sunt atomice (`UPDATE … WHERE
+  payment_status <> 'paid'`), iar o scriere nereușită răspunde cu eroare (procesatorul reîncearcă). Stripe: sesiunea linkului se
+  refolosește cât e deschisă și expiră după 35 de minute, a checkout-ului după `bt_ipay_expire_minutes`; înainte de un link de
+  plată întreagă, sesiunea checkout-ului comenzii se expiră (`/v1/checkout/sessions/{id}/expire`). Trimiterea linkului pentru
+  diferență cere și ea jetonul AdminCsrf. Testele: `tools/dev/test-link-plata.php` (și în testul de fum), cu o bancă BT falsă
+  (`tools/dev/lib/bt-fals.php`).
 - **Are nevoie de**: magazin și cel puțin o plată cu cardul.
 - **Se oprește**: nu se mai trimit linkuri noi; cele trimise se pot plăti.
 - **Oprit**: butonul dispare, `/plata/…` dă 404.

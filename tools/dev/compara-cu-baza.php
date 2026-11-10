@@ -1150,6 +1150,54 @@ $deBioscem = [
         'vechi' => '',
         'motiv' => 'WP-39 (B4): câmpul nou „Cod EAN (GTIN)” primește valoarea produsului când se deschide editorul.',
     ],
+    // Linkul de plată (link_plata, revizuirea din 9 nov): „Trimite link de plată pentru diferență” trimite și jetonul anti-CSRF
+    // al sesiunii (window.LP_CSRF, din marcajul lp:linkuri-js); serverul îl cere, ca la celelalte acțiuni cu bani.
+    [
+        'nume' => 'Admin → Comenzi: linkul pentru diferență trimite jetonul anti-CSRF',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => ", headers: {'X-CSRF-Token': window.LP_CSRF || ''}})",
+        'vechi' => '})',
+        'motiv' => 'link_plata (revizuirea din 9 nov): POST /admin/orders/{id}/payment-link cere jetonul AdminCsrf (antetul X-CSRF-Token); '
+            . 'site-uri/bioscem/ce-se-schimba.md',
+    ],
+    // Revizuirea a doua (9 nov): pe o comandă „Plătită de două ori”, „Rambursează” / „Anulează autorizarea” pe plata BT socotită
+    // cere confirmarea explicită (fereastra spune care plată e socotită), apoi trimite confirm_dubla=1.
+    [
+        'nume' => 'Admin → Comenzi: btActiune primește confirmarea plății duble',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => ', confirmActiva, confirmDubla){',
+        'vechi' => ', confirmActiva){',
+        'motiv' => 'link_plata (revizuirea a doua): parametrul confirmDubla al acțiunilor BT. site-uri/bioscem/ce-se-schimba.md',
+    ],
+    [
+        'nume' => 'Admin → Comenzi: btActiune trimite confirm_dubla=1',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => '
+    if (confirmDubla) { date.append(\'confirm_dubla\', \'1\'); }',
+        'vechi' => '',
+        'motiv' => 'link_plata (revizuirea a doua): confirmarea plății duble ajunge la server (AdminController::orderBtIpayAction).',
+    ],
+    [
+        'nume' => 'Admin → Comenzi: btActiune nu mai întreabă a doua oară după confirmarea plății duble',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => "&& !confirmDubla && !window.confirm(confirmare)",
+        'vechi' => "&& !window.confirm(confirmare)",
+        'motiv' => 'link_plata (revizuirea a doua): după fereastra plății duble, cererea pleacă fără confirmarea obișnuită.',
+    ],
+    [
+        'nume' => 'Admin → Comenzi: btActiune, fereastra confirmării plății duble',
+        'cale' => ['/admin/orders', '/admin/orders?*'],
+        'nou' => '            if (data.cere_confirmare_dubla && !confirmDubla) {
+                // Comanda e plătită de două ori, iar aceasta e plata socotită: doar cu confirmarea explicită.
+                if (panou) { panou.querySelectorAll(\'button\').forEach((b) => { b.disabled = false; }); }
+                if (window.confirm(data.confirmare || data.error || \'\')) { btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, true); return; }
+                if (status) { status.style.color = \'#dc2626\'; status.textContent = data.error || \'Eroare\'; }
+                return;
+            }
+',
+        'vechi' => '',
+        'motiv' => 'link_plata (revizuirea a doua): răspunsul cere_confirmare_dubla deschide window.confirm cu plata socotită și reia cererea cu confirm_dubla=1.',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
@@ -1694,6 +1742,14 @@ $marcajePort = [
         . '(peste condițiile din pachetul site-ului; goală = ca în pachet)'],
     'seo:flux-merchant' => ['cale' => '/admin/settings/store', 'motiv' => 'WP-40 (B8): comutatorul fluxului Google Merchant '
         . '(setarea merchant_feed, înghețată la „1”: fluxul rămâne ca azi)'],
+    // Linkul de plată pentru o comandă cu plata cu cardul eșuată (link_plata, 9 nov 2026, cerut de Bioscem; nou, nu din alt
+    // site: sursa „lp”). În fereastra comenzii, zona linkurilor (lista lor cu starea și „Trimite link de plată” pentru toată
+    // comanda, cerute la GET /admin/orders/{id}/payment-link) și scriptul ei; doar cu pluginul pe site (marcajele apar goale
+    // fără el). site-uri/bioscem/ce-se-schimba.md și site-uri/biovitality/ce-se-schimba.md.
+    'lp:fereastra' => ['cale' => ['/admin/orders', '/admin/orders?*'], 'motiv' => 'link_plata (9 nov): zona linkurilor de plată '
+        . 'în fereastra comenzii (lista cu starea lor, „Trimite link de plată” pentru o comandă cu plata eșuată)'],
+    'lp:linkuri-js' => ['cale' => ['/admin/orders', '/admin/orders?*'], 'motiv' => 'link_plata (9 nov): scriptul zonei '
+        . '(public/assets/js/admin/link-plata.js) și jetonul anti-CSRF al trimiterii'],
 ];
 // WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
 // dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de

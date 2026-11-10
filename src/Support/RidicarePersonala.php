@@ -181,9 +181,9 @@ final class RidicarePersonala
 
     /**
      * Localitatea sediului de unde se ridică comanda, pentru ERP: ultima bucată a adresei de ridicare („…, Sector 2,
-     * București” → „București”), scrisă cum o vede clientul. Codul Bioscem trimitea exact această localitate
-     * („București”), nu pe cea a expeditorului FAN (scrisă ca în nomenclatorul FAN): fără ea, repetiția pe copia
-     * Bioscem (compara-calcule, 10 noiembrie 2026) arăta `livrareOras` diferit pe comenzile ridicate. O bucată cu
+     * București” → „București”), scrisă cum o vede clientul. Codul vechi al site-ului de unde vine ridicarea trimitea exact această
+     * localitate, nu pe cea a expeditorului FAN (scrisă ca în nomenclatorul FAN): fără ea, repetiția pe copia acelui
+     * site (compara-calcule, 10 noiembrie 2026) arăta `livrareOras` diferit pe comenzile ridicate. O bucată cu
      * cifre (o stradă, un cod poștal) sau goală nu e o localitate: atunci rămâne localitatea expeditorului FAN.
      */
     public static function localitateComenzii(array $order, array $settings): string

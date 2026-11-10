@@ -669,6 +669,22 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Linkul de plată pentru o comandă cu plata cu cardul eșuată (link_plata, 9 nov 2026): tools/dev/test-link-plata.php, pe licența
+# „toate”, pe serverul pornit aici: regulile, adminul (CSRF, refuzurile, rolurile), EuPlătesc, Stripe, BT pe o bancă falsă (+61) și
+# ERP-ul fals (+62), garda plății duble. Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Linkul de plată pentru o comandă cu plata eșuată (tools/dev/test-link-plata.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-link-plata.php" > "$TMP/test-link-plata.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-link-plata.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-link-plata.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-link-plata.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Pluginul campanii (5 nov 2026, pentru Biovitality): tools/dev/test-campanii.php, pe licența „toate”, pe serverul pornit aici:
 # regulile (întoarcerea, roboții, adresele neoprite), adminul, prima intrare, insigna, bannerul, fereastra, pluginul oprit, Chromium
 # pe desktop și pe telefon. Pune la loc toată baza (CHECKSUM TABLE).

@@ -1496,7 +1496,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
 <?php endif; ?>
                 <p><small>Observații</small><br>${orderNotes !== '' ? esc(orderNotes) : '-'}</p>
                 <div class="order-items-box">
-                    <div id="order-items-${order.id}">${itemsHtml}</div>
+                    <div id="order-items-${order.id}">${itemsHtml}</div><?= \App\Support\Dev::marcaj('lp:fereastra') ?><?= $poateLinkPlata ? '${typeof window.lpZonaLinkuri === \'function\' ? window.lpZonaLinkuri(order) : \'\'}' : '' ?><?= \App\Support\Dev::marcaj('lp:fereastra', true) ?>
                     ${restDeIncasat > 0
                         ? `<div style="margin:8px 0 0;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;">
                         <p style="margin:0 0 8px;color:#92400e;font-size:13px;">
@@ -2114,12 +2114,13 @@ function btArataAlegere(txId, arata){
     const caseta = document.getElementById('bt-alegere-' + txId);
     if (caseta) { caseta.hidden = arata === false; }
 }
-function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
+function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, confirmDubla){
     const status = document.getElementById('bt-status-' + txId);
     const panou = document.getElementById('order-bt-' + txId);
     const date = new URLSearchParams();
     date.append('tx_id', String(txId));
     date.append('_csrf', window.BT_CSRF || '');
+    if (confirmDubla) { date.append('confirm_dubla', '1'); }
     let confirmare = '';
     if (actiune === 'deposit' || actiune === 'refund') {
         const camp = document.getElementById((actiune === 'deposit' ? 'bt-suma-incasare-' : 'bt-suma-rambursare-') + txId);
@@ -2146,7 +2147,7 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
     } else if (actiune === 'anuleaza_comanda') {
         confirmare = 'Anulezi comanda? Suma blocată se eliberează, <?= $cuErp('ERP-ul e anunțat, iar ', '') ?>clientul primește emailul de anulare.';
     }
-    if (confirmare !== '' && !window.confirm(confirmare)) {
+    if (confirmare !== '' && !confirmDubla && !window.confirm(confirmare)) {
         return;
     }
     if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = true; }); }
@@ -2165,6 +2166,13 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
             }
             // Eroarea rămâne pe ecran, ca să poată fi citită; starea reală se
             // vede după reîncărcarea paginii.
+            if (data.cere_confirmare_dubla && !confirmDubla) {
+                // Comanda e plătită de două ori, iar aceasta e plata socotită: doar cu confirmarea explicită.
+                if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
+                if (window.confirm(data.confirmare || data.error || '')) { btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva, true); return; }
+                if (status) { status.style.color = '#dc2626'; status.textContent = data.error || 'Eroare'; }
+                return;
+            }
             if (data.cere_confirmare) { btArataAlegere(txId, true); }
             if (status) { status.style.color = '#dc2626'; status.textContent = (data.error || 'Eroare') + ' (Reîncarcă pagina ca să vezi starea actualizată.)'; }
             if (panou) { panou.querySelectorAll('button').forEach((b) => { b.disabled = false; }); }
@@ -2180,7 +2188,7 @@ function btActiune(orderId, txId, actiune, maxim, puncte, confirmActiva){
 function sendPaymentLink(orderId){
     const status = document.getElementById('payment-link-status-' + orderId);
     if (status) { status.style.color = '#6b7280'; status.textContent = 'Se trimite...'; }
-    fetch('/admin/orders/' + orderId + '/payment-link', {method:'POST'})
+    fetch('/admin/orders/' + orderId + '/payment-link', {method:'POST', headers: {'X-CSRF-Token': window.LP_CSRF || ''}})
         .then((r) => r.json())
         .then((data) => {
             if (!status) return;
@@ -2327,4 +2335,21 @@ function saveOrderPromo(orderId){
     });
 })();
 </script>
+<?= \App\Support\Dev::marcaj('lp:linkuri-js') ?>
+<?php if ($poateLinkPlata): ?>
+<?php // Linkurile de plată ale comenzii în fereastra ei și „Trimite link de plată” pentru o comandă cu plata eșuată (9 nov 2026). ?>
+<?php
+// Rândurile listei cu „Trimite din nou link de plată”: comenzile cu cardul cu plata eșuată sau neterminată, fără nimic încasat
+// (PaymentLink::motivFaraPlataIntegrala; plățile BT le verifică serverul la trimitere). Id => totalul.
+$lpDeTrimis = [];
+foreach ($orders as $comandaLp) {
+    if (is_array($comandaLp) && \App\Support\PaymentLink::motivFaraPlataIntegrala($comandaLp, $settings) === '') {
+        $lpDeTrimis[(string) (int) ($comandaLp['id'] ?? 0)] = round((float) ($comandaLp['total'] ?? 0), 2);
+    }
+}
+?>
+<script>window.LP_CSRF = <?= json_encode(\App\Support\AdminCsrf::token()) ?>; window.LP_DE_TRIMIS = <?= json_encode((object) $lpDeTrimis) ?>;</script>
+<script src="/assets/js/admin/link-plata.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/link-plata.js')) ?: 1) ?>" defer></script>
+<?php endif; ?>
+<?= \App\Support\Dev::marcaj('lp:linkuri-js', true) ?>
 <script src="/assets/js/admin/comenzi.js?v=<?= (int) (@filemtime(\App\Support\Paths::public('assets/js/admin/comenzi.js')) ?: 1) ?>" defer></script>
