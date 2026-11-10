@@ -698,13 +698,13 @@ final class BtIpayPayments
             return null;
         }
         // Ridicare personală de la sediu (portul 807058e; livrare_fan/0052, citită separat): marfa se ridică de la
-        // sediu, deci acolo e „livrarea” (localitatea: a expeditorului FAN, altfel cea de facturare).
+        // sediu, deci acolo e „livrarea” (localitatea: din adresa de ridicare, ca în codul Bioscem; altfel a expeditorului FAN).
         $campuriRidicare = RidicarePersonala::campuriComanda($db, $orderId);
         if (RidicarePersonala::esteComanda($campuriRidicare)) {
             $setari = Settings::all($db);
             $comanda += $campuriRidicare;
             $comanda['pickup_address'] = RidicarePersonala::adresaComenzii($campuriRidicare, $setari);
-            $comanda['pickup_city'] = RidicarePersonala::localitateSediu($setari)['localitate'];
+            $comanda['pickup_city'] = RidicarePersonala::localitateComenzii($campuriRidicare, $setari);
         }
         return $comanda;
     }

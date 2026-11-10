@@ -180,6 +180,23 @@ final class RidicarePersonala
     }
 
     /**
+     * Localitatea sediului de unde se ridică comanda, pentru ERP: ultima bucată a adresei de ridicare („…, Sector 2,
+     * București” → „București”), scrisă cum o vede clientul. Codul Bioscem trimitea exact această localitate
+     * („București”), nu pe cea a expeditorului FAN (scrisă ca în nomenclatorul FAN): fără ea, repetiția pe copia
+     * Bioscem (compara-calcule, 10 noiembrie 2026) arăta `livrareOras` diferit pe comenzile ridicate. O bucată cu
+     * cifre (o stradă, un cod poștal) sau goală nu e o localitate: atunci rămâne localitatea expeditorului FAN.
+     */
+    public static function localitateComenzii(array $order, array $settings): string
+    {
+        $bucati = array_map('trim', explode(',', self::adresaComenzii($order, $settings)));
+        $ultima = (string) end($bucati);
+        if (count($bucati) >= 2 && $ultima !== '' && preg_match('/\d/', $ultima) !== 1 && mb_strlen($ultima) <= 60) {
+            return $ultima;
+        }
+        return self::localitateSediu($settings)['localitate'];
+    }
+
+    /**
      * Caseta cu adresa și programul, pentru emailuri și pagina de confirmare. Stiluri inline și tabel: trebuie să arate
      * la fel în Gmail.
      */

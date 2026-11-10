@@ -810,8 +810,10 @@ final class ErpSync
             $payload['livrareAdresa'] = $adresaRidicare;
             // Județul și localitatea sediului: ale expeditorului FAN (codul vechi le avea scrise în cod); fără
             // ele, rămân cele de facturare de mai sus.
-            if ($sediu['judet'] !== '' && $sediu['localitate'] !== '') {
-                $payload['livrareOras'] = $sediu['localitate'];
+            // Localitatea: cea din adresa de ridicare („…, București”), ca în codul Bioscem; altfel a expeditorului.
+            $localitate = RidicarePersonala::localitateComenzii($order, $setariRidicare);
+            if ($sediu['judet'] !== '' && $localitate !== '') {
+                $payload['livrareOras'] = $localitate;
                 $payload['livrareJudet'] = $sediu['judet'];
             }
             $payload['livrareCodPostal'] = '';

@@ -583,7 +583,7 @@ dispar, iar linkurile spre el se scot din pagini.
   emailul `pickup_ready` din Emailuri de comandă, cu `{{ridicare_personala}}`, `{{pickup_address}}`, `{{pickup_program}}`;
   contează doar dacă a ajuns la adresa clientului; retrimiterea cere confirmare) și destinația adresă / FANbox / ridicare
   înainte de facturare. ERP: `ridicarePersonala`, `ridicareAdresa` (doar pe comenzile cu ridicare), livrarea = sediul
-  (județul și localitatea expeditorului FAN), `transport` 0. Șablonul de email și codurile lui apar doar cu pluginul pe site.
+  (județul expeditorului FAN; localitatea din ultima bucată a adresei de ridicare, „…, București”, ca în codul Bioscem — altfel a expeditorului FAN; la fel `pickup_city` pentru BT), `transport` 0. Șablonul de email și codurile lui apar doar cu pluginul pe site.
   La aprobarea din ERP (Bioscem `81766bc`) emailul „Gata de ridicare” pleacă singur, o singură dată (comanda se rezervă cu
   `pickup_ready_notified_at` IS NULL; dacă emailul nu ajunge la client, rezervarea se ridică și butonul rămâne), cu bifa
   „Trimite automat emailul…” din Setări livrare (`shipping_pickup_auto_ready`, implicit `1`; bifa apare și se salvează doar cu
