@@ -1195,20 +1195,25 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   - **„Al N-lea la −Y%”** (`al_n`; „1+1 −50%” = N 2, Y 50; eticheta „1+1 −50%”, altfel „Al N-lea la −Y%”);
   - **„N la preț de M”** (`n_la_m`, N > M ≥ 1; de exemplu 3 la preț de 2): cele mai ieftine N−M bucăți din fiecare grupă, gratuite;
   - **„−X%”** (`procent`) pe fiecare linie eligibilă;
-  - **„Preț de campanie”** (`pret_fix`): prețul scris lângă fiecare produs în lista din editor, care **înlocuiește** prețul (nu se
-    adaugă peste o reducere): la salvare trebuie să fie mai mic decât **prețul de acum** al produsului (cel redus, dacă are un
-    preț redus sau o perioadă de reducere în curs; la un produs cu oferte BBD, prețul fără lot; editorul îl arată lângă câmp),
-    altfel salvarea dă 422 („un preț mai mic decât prețul lui de acum (90.00 lei, redus de la 100.00 lei)”); în coș se aplică
-    doar pe liniile al căror preț e mai mare (prețul mai mic câștigă): A redus la 90 cu prețul de campanie 85 plătește 85; un lot
-    BBD de 70 cu prețul de campanie 75 rămâne 70; o reducere pusă după salvare sub prețul de campanie (A redus la 80) rămâne 80,
-    fără ofertă pe linie. Un preț lipsă sau nu mai mic decât prețul liniei nu schimbă nimic.
+  - **„Preț de campanie”** (`pret_fix`): prețul scris lângă fiecare produs în lista din editor, care **înlocuiește** prețul (nu
+    se adaugă peste o reducere). La salvare: un preț (lipsă, 0 sau un text dau 422) mai mic decât prețul produsului (egal sau
+    peste dă 422, „un preț mai mic decât prețul lui (100.00 lei)”, fiindcă nu s-ar aplica niciodată). Unul care nu e sub
+    **prețul de acum** (un preț redus sau o perioadă de reducere în curs; editorul arată prețul de acum lângă câmp) se salvează,
+    cu un **avertisment** în editor, „Prețuri de campanie care acum nu schimbă nimic” (produsul, prețul de campanie, prețul
+    redus și cel de bază; `Campanii::avertismentPretCampanie`), care nu oprește salvarea: se poate pregăti o campanie pentru
+    după o reducere temporară, iar o campanie se poate salva sau opri și după ce un produs a primit o reducere mai mare. În coș
+    se aplică doar liniilor al căror preț e mai mare (prețul mai mic câștigă; `OfertaCampanie::eligibila`): A redus la 90 cu
+    prețul de campanie 85 plătește 85; un lot BBD de 70 cu prețul de campanie 75 rămâne 70; o reducere pusă după salvare sub
+    prețul de campanie (A redus la 80) rămâne 80. O linie cu prețul de campanie lipsă, egal sau mai mare **nu e a ofertei**:
+    nicio reducere, nu aduce rândul ofertei în coș și primește cuponul ca orice alt produs (lotul de 70 cu DEMO10: −7,00).
   **Perechile și grupele** (`al_n`, `n_la_m`), deterministe: toate bucățile eligibile din coș (peste linii) se pun în ordinea
   prețului, de la cel mai scump; la preț egal, în ordinea liniilor din coș, apoi a bucăților; se iau câte N la rând, iar în
   fiecare grupă întreagă reducerea merge pe ultimele bucăți (cele mai ieftine ale grupei). Bucățile care nu fac o grupă întreagă
   rămân la preț întreg. **Rotunjirea**, în bani întregi (cenți): reducerea unei bucăți (`al_n`) sau a unei linii (`procent`) =
   prețul × procentul, rotunjit la cent, jumătatea în sus (de exemplu 45,99 la −50% = 23,00); gratuitatea și prețul fix sunt
-  exacte. **Eligibile**: toate liniile produselor campaniei, și cele cu o reducere proprie (prețul redus, o perioadă în curs,
-  lotul BBD ales). **Reducerile se adună**: prețul unei bucăți e cel al liniei de dinainte de ofertă (același cu care se
+  exacte. **Eligibile** (`OfertaCampanie::eligibila`): liniile produselor campaniei, și cele cu o reducere proprie (prețul
+  redus, o perioadă în curs, lotul BBD ales); la prețul de campanie, doar cele cu un preț mai mare decât el (mai sus).
+  **Reducerile se adună**: prețul unei bucăți e cel al liniei de dinainte de ofertă (același cu care se
   socotește linia, o singură dată), deci perechile și grupele se fac după prețurile reduse: „−20%” pe 90 (redus de la 100) =
   72,00, pe 3 × 33,33 = 99,99 → 79,99 (19,998 rotunjit la 20,00); „1+1 −50%” pe A redus de la 100 la 70 și B la preț întreg
   80: perechea (80, 70), reducerea 35,00 pe A (cel mai ieftin după prețul de acum); „3 la preț de 2” pe 100, 90 (redus) și un
@@ -1222,10 +1227,11 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   „shipping_include_coupons” (implicit da, deci pe ce se plătește); punctele (folosite și câștigate) pe subtotal minus cupon,
   adică pe prețurile de după ofertă, ca la un cupon. **Cuponul** nu se aplică niciunei linii eligibile pentru ofertă (redusă sau
   rămasă fără pereche; și o linie cu o reducere proprie a unui produs al campaniei e eligibilă, deci nu primește cuponul: se
-  adună reducerea proprie și oferta, nu și cuponul): se socotește doar pe produsele din afara campaniei (subtotalul eligibil, ca
-  la un cupon „fără cumulare”), iar coșul și checkout-ul spun „Cuponul nu se aplică produselor din oferta campaniei”. Dacă, fără
-  produsele ofertei, cuponul nu mai are pe ce să se aplice, e **refuzat** cu mesajul „Cuponul nu se aplică produselor din oferta
-  campaniei, iar în coș nu sunt alte produse pe care să se aplice.”
+  adună reducerea proprie și oferta, nu și cuponul; o linie la care prețul de campanie nu schimbă nimic nu e eligibilă și
+  primește cuponul): se socotește doar pe produsele din afara campaniei (subtotalul eligibil, ca la un cupon „fără cumulare”),
+  iar coșul și checkout-ul spun „Cuponul nu se aplică produselor din oferta campaniei”. Dacă, fără produsele ofertei, cuponul nu
+  mai are pe ce să se aplice, e **refuzat** cu mesajul „Cuponul nu se aplică produselor din oferta campaniei, iar în coș nu sunt
+  alte produse pe care să se aplice.”
   (`CheckoutCalculator::MESAJ_CUPON_OFERTA`): la aplicare (scos din coș, cu mesajul) și la trimiterea comenzii (comanda nu
   se plasează, clientul e întors în coș cu mesajul), deci nu se atașează comenzii și nu consumă un cupon unic sau o
   folosire din `max_uses_total`. **Îndemnul** „Mai adaugă un produs din

@@ -185,23 +185,25 @@ final class CheckoutCalculator
         }
 
         // Pluginul campanii: oferta campaniei active (OfertaCampanie), socotită înaintea liniilor, pe bucățile eligibile ale
-        // întregului coș (perechile „1+1” trec peste linii). Eligibile: toate liniile produselor campaniei, și cele cu o reducere
-        // proprie (prețul redus, o perioadă în curs, lotul BBD ales): oferta se adaugă peste ea, pornind de la prețul liniei de
-        // dinainte de ofertă (cel de mai sus). Reducerea scade din prețul liniei, mai jos. Fără ofertă activă: nimic, liniile și
-        // sumele exact ca înainte.
+        // întregului coș (perechile „1+1” trec peste linii). Eligibile (OfertaCampanie::eligibila): liniile produselor campaniei,
+        // și cele cu o reducere proprie (prețul redus, o perioadă în curs, lotul BBD ales): oferta se adaugă peste ea, pornind de
+        // la prețul liniei de dinainte de ofertă (cel de mai sus); la prețul de campanie, doar liniile cu un preț mai mare decât
+        // el (celelalte rămân în afara ofertei, cu cuponul). Reducerea scade din prețul liniei, mai jos. Fără ofertă activă:
+        // nimic, liniile și sumele exact ca înainte.
         $ofertaCampanie = OfertaCampanie::activa($db);
         $calculOferta = null;
         if ($ofertaCampanie !== null) {
             $liniiOferta = [];
             foreach ($cartItems as $cartItem) {
                 $idOferta = (int) ($cartItem['product_id'] ?? 0);
-                if (!isset($cartItem['price']) || !array_key_exists($idOferta, $ofertaCampanie['produse'])) {
+                $pretOferta = isset($cartItem['price']) ? (int) round((float) $cartItem['price'] * 100) : 0;
+                if (!isset($cartItem['price']) || !OfertaCampanie::eligibila($ofertaCampanie, $idOferta, $pretOferta)) {
                     continue;
                 }
                 $liniiOferta[] = [
                     'cheie' => (string) ($cartItem['item_key'] ?? ''),
                     'produs' => $idOferta,
-                    'pret' => (int) round((float) $cartItem['price'] * 100),
+                    'pret' => $pretOferta,
                     'cantitate' => max(1, (int) ($cartItem['quantity'] ?? 1)),
                 ];
             }

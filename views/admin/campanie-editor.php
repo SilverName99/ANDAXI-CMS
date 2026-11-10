@@ -24,6 +24,17 @@ $tipOferta = (string) ($c['oferta_tip'] ?? '');
 $areCatalog = \App\Support\Plugins::vizibil('catalog');
 $stare = $id > 0 ? Campanii::stare($c) : null;
 $bifat = static fn (mixed $v): string => (int) $v === 1 ? ' checked' : '';
+// Prețurile de campanie care acum nu schimbă nimic (nu sunt sub prețul redus de acum al produsului): un avertisment, nu o eroare.
+$avertismentePreturi = [];
+if ($tipOferta === 'pret_fix') {
+    foreach ($produse as $p) {
+        $idP = (int) ($p['id'] ?? 0);
+        $avertisment = isset($alese[$idP]) ? Campanii::avertismentPretCampanie($p, isset($preturiCampanie[$idP]) ? (float) $preturiCampanie[$idP] : null) : '';
+        if ($avertisment !== '') {
+            $avertismentePreturi[] = $avertisment;
+        }
+    }
+}
 
 admin_componenta('antet-pagina', [
     'titlu' => $id > 0 ? (string) $c['nume'] : 'Campanie nouă',
@@ -41,6 +52,11 @@ admin_componenta('antet-pagina', [
 <?php endif; ?>
 <?php if ($erori !== []): ?>
 <?php admin_componenta('mesaj', ['tip' => 'eroare', 'titlu' => 'Campania nu a fost salvată', 'text' => implode(' ', $erori)]); ?>
+<?php endif; ?>
+<?php if ($avertismentePreturi !== []): ?>
+<div data-campanie-avertisment-preturi>
+<?php admin_componenta('mesaj', ['tip' => 'avertisment', 'titlu' => 'Prețuri de campanie care acum nu schimbă nimic', 'text' => implode(' ', $avertismentePreturi)]); ?>
+</div>
 <?php endif; ?>
 <?php foreach (Campanii::FONTURI as $font): ?>
 <?php if ($font['css'] !== null): ?>
@@ -225,7 +241,7 @@ admin_componenta('antet-pagina', [
             <input type="number" id="campanie-oferta-m" name="oferta_m" min="1" max="9" value="<?= (int) ($c['oferta_m'] ?? 1) ?>">
         </div>
         <div class="field campanie-camp-lat" data-oferta-camp="pret_fix"<?= $tipOferta === 'pret_fix' ? '' : ' hidden' ?>>
-            <small class="muted">Prețul de campanie al fiecărui produs se scrie în lista de mai sus, lângă produs: mai mic decât prețul lui de acum (cel redus, dacă are o reducere). În coș se aplică doar cât e sub prețul liniei (de exemplu sub prețul lotului BBD ales).</small>
+            <small class="muted">Prețul de campanie al fiecărui produs se scrie în lista de mai sus, lângă produs: mai mic decât prețul lui. Înlocuiește prețul și se aplică în coș doar cât e sub prețul liniei: sub prețul redus al unui produs care are deja o reducere (lângă câmp e prețul de acum) sau sub prețul lotului BBD ales; altfel rămâne prețul mai mic, fără ofertă, iar cuponul se aplică.</small>
         </div>
     </div>
     <script>

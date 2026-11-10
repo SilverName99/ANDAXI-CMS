@@ -24,9 +24,10 @@ use Throwable;
  *    lipsă sau nu mai mic decât prețul liniei (cel redus, dacă produsul are o reducere proprie) nu schimbă nimic.
  *
  * Rotunjirea: reducerea unei bucăți (al_n) sau a unei linii (procent) = preț în cenți × procent, rotunjit la cent (jumătatea
- * în sus); gratuitatea și prețul fix sunt exacte. Eligibile: toate liniile produselor campaniei. Reducerile se adună: prețul
- * unei bucăți e cel al liniei de dinainte de ofertă (prețul redus, al perioadei în curs sau al lotului BBD ales, dacă are),
- * de exemplu 100 lei redus la 90, cu −20%: 72 lei.
+ * în sus); gratuitatea și prețul fix sunt exacte. Eligibile (OfertaCampanie::eligibila): liniile produselor campaniei; la
+ * prețul de campanie, doar cele al căror preț e mai mare decât prețul de campanie (altfel linia nu e a ofertei: nicio reducere,
+ * iar cuponul i se aplică, ca oricărui produs). Reducerile se adună: prețul unei bucăți e cel al liniei de dinainte de ofertă
+ * (prețul redus, al perioadei în curs sau al lotului BBD ales, dacă are), de exemplu 100 lei redus la 90, cu −20%: 72 lei.
  */
 final class OfertaCampanie
 {
@@ -120,6 +121,25 @@ final class OfertaCampanie
             'pret_fix' => 'Preț de campanie',
             default => '',
         };
+    }
+
+    /**
+     * O linie a coșului e a ofertei? Produsul e al campaniei, iar la prețul de campanie (`pret_fix`) doar cu un preț de campanie
+     * mai mic decât prețul liniei (în cenți, cel de dinainte de ofertă): un preț lipsă, egal sau mai mare nu schimbă nimic, deci
+     * linia rămâne în afara ofertei (și primește cuponul, ca oricare alta).
+     *
+     * @param array{tip: string, produse: array<int, ?int>} $oferta
+     */
+    public static function eligibila(array $oferta, int $idProdus, int $pretCenti): bool
+    {
+        if (!array_key_exists($idProdus, $oferta['produse'])) {
+            return false;
+        }
+        if ($oferta['tip'] !== 'pret_fix') {
+            return true;
+        }
+        $fix = $oferta['produse'][$idProdus];
+        return $fix !== null && $fix > 0 && $fix < $pretCenti;
     }
 
     /**

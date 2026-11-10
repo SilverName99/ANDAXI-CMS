@@ -32,10 +32,12 @@ declare(strict_types=1);
  *    produse, un produs redus între timp rămas în ofertă, celelalte tipuri, fără ofertă = campania oprită), comanda și liniile ei,
  *    emailul, Admin → Comenzi, payload-ul ERP.
  * F2. Reducerile adunate (decizia proprietarului din 10 nov): oferta peste prețul redus, peste o perioadă de reducere în curs și
- *    peste lotul BBD ales (−20%, rotunjirea la cent, 1+1 −50% și 3 la preț de 2 cu prețuri reduse și întregi amestecate),
- *    cuponul tot doar pe produsele din afara ofertei, prețul de campanie (la salvare sub prețul de acum; în coș doar sub prețul
- *    liniei), cardurile {{campanie_produse}} și pagina produsului (de la prețul redus; cu loturi BBD de ales, doar eticheta),
- *    comanda (prețul de dinainte de ofertă = cel redus) și ERP-ul.
+ *    peste lotul BBD ales (−20%, rotunjirea la cent, TVA-ul adăugat la preț, 1+1 −50% și 3 la preț de 2 cu prețuri reduse și
+ *    întregi amestecate), cuponul tot doar pe produsele din afara ofertei, prețul de campanie (la salvare sub prețul produsului,
+ *    cu avertismentul din editor când nu e sub cel redus de acum, și pentru o campanie viitoare sau oprită; în coș doar sub
+ *    prețul liniei, altfel, și la preț egal, linia nu e a ofertei și primește cuponul, inclusiv la comandă), cardurile
+ *    {{campanie_produse}} și pagina produsului (de la prețul redus; cu loturi BBD de ales, doar eticheta), comanda (prețul de
+ *    dinainte de ofertă = cel redus) și ERP-ul.
  * D. În Chromium (tools/dev/campanii-browser.cjs), desktop 1366 px și telefon 390 px: vizitatorul nou, butonul în stânga sus,
  *    întoarcerea, insigna, bannerul lipit, fără derulare laterală; editorul cu previzualizarea bannerului și a insignei.
  * E. Curățenia: toată baza (fiecare tabel) e pusă la loc, verificat cu CHECKSUM TABLE; la fel licența „toate”, cache-ul
@@ -1135,6 +1137,33 @@ $umpleCos = static function (array $linii) use ($cerere, $jarF): void {
         $cerere('POST', '/cos/adauga/' . $id, $jarF, ['quantity' => (string) $cantitate] + ($lot !== '' ? ['bbd_key' => $lot] : []));
     }
 };
+// Comanda coșului din $jarF (plata la livrare): [răspunsul trimiterii, rândul comenzii noi sau null]; apoi ștearsă cu emailurile ei.
+$plaseazaComanda = static function () use ($cerere, $jarF, $db): array {
+    $pagina = $cerere('GET', '/checkout', $jarF)['corp'];
+    preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagina, $jeton);
+    preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagina, $randat);
+    sleep(3);
+    $ultima = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM orders')->fetchColumn();
+    $trimis = $cerere('POST', '/checkout', $jarF, [
+        'checkout_form_token' => $jeton[1] ?? '', 'checkout_form_rendered_at' => $randat[1] ?? '',
+        'billing_first_name' => 'Test', 'billing_last_name' => 'Oferta', 'billing_phone' => '0700000781',
+        'billing_email' => 'oferta-campanie@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '11',
+        'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400001',
+        'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
+    ]);
+    $comanda = $db->query('SELECT * FROM orders WHERE id > ' . $ultima . ' ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    return [$trimis, is_array($comanda) ? $comanda : null];
+};
+$stergeComanda = static function (?array $comanda, array $mailuriInainte) use ($db, $dosarDev): void {
+    $idSters = is_array($comanda) ? (int) $comanda['id'] : 0;
+    if ($idSters > 0) {
+        foreach (['order_items', 'email_logs'] as $tabel) {
+            $db->exec('DELETE FROM ' . $tabel . ' WHERE order_id = ' . $idSters);
+        }
+        $db->exec('DELETE FROM orders WHERE id = ' . $idSters);
+    }
+    array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte));
+};
 
 // −20% pe A (redus), B (perioada), C (două loturi): fiecare linie pornește de la prețul ei de dinainte de ofertă.
 $puneOfertaF2('procent', 2, 1, 20);
@@ -1167,6 +1196,21 @@ $umpleCos([[$pA, 3, '']]);
 $s = $sumar();
 $verifica('rotunjirea: 3 × 33,33 (redus de la 100) = 99,99, −20% = 19,998 → 20,00 lei, linia 79,99',
     $sumeLinie($liniePe($s, $pA)) === [2000, 7999, 9999] && $centiDin($s['subtotal'] ?? 0) === 7999, json_encode($liniePe($s, $pA), JSON_UNESCAPED_UNICODE));
+// Un produs cu TVA-ul adăugat la preț (fără TVA inclus): 3 × (100 → 90) cu −20% = 216,00, iar TVA-ul (cota produsului) se
+// socotește pe prețul de după ambele reduceri și se adaugă la total.
+$puneProdusF2($pA, 100, 90);
+$cotaA = (float) $unu('SELECT vat_percent FROM products WHERE id = :id', ['id' => $pA]);
+$db->prepare('UPDATE products SET vat_included = 0 WHERE id = :id')->execute(['id' => $pA]);
+$umpleCos([[$pA, 3, '']]);
+$s = $sumar();
+$tvaA = round(216 * $cotaA / 100, 2);
+$verifica('TVA adăugat la preț: 3 × (100 → 90), −20% = 216,00 fără TVA; TVA-ul ' . rtrim(rtrim(number_format($cotaA, 2), '0'), '.') . '% = '
+    . number_format($tvaA, 2) . ' lei adăugat la total',
+    $sumeLinie($liniePe($s, $pA)) === [5400, 21600, 27000] && $centiDin($s['subtotal'] ?? 0) === 21600
+    && $centiDin($s['subtotal_without_vat'] ?? 0) === 21600 && abs((float) ($s['vat_total'] ?? 0) - $tvaA) < 0.006
+    && abs((float) $s['total'] - (216 + $tvaA + (float) $s['shipping'])) < 0.011,
+    json_encode(array_intersect_key($s, array_flip(['subtotal', 'subtotal_without_vat', 'vat_total', 'shipping', 'total'])), JSON_UNESCAPED_UNICODE));
+$db->prepare('UPDATE products SET vat_included = 1 WHERE id = :id')->execute(['id' => $pA]);
 
 // 1+1 −50% cu o bucată redusă și una la preț întreg: perechea se face după prețul de acum (cel redus), nu după prețul de bază.
 // A: 100 redus la 70, B: 80 fără reducere → ordinea B (80), A (70): reducerea pe A, 35,00 (după prețul de bază ar fi fost pe B).
@@ -1195,26 +1239,49 @@ $verifica('3 la preț de 2 pe B (100), A (redus la 90) și lotul BBD (70): lotul
     && $centiDin($s['campanie_oferta']['reducere'] ?? 0) === 7000 && $centiDin($s['subtotal'] ?? 0) === 19000,
     json_encode($s['lines'] ?? null, JSON_UNESCAPED_UNICODE));
 
-// Prețul de campanie: la salvare, sub prețul de acum al produsului (cel redus, al perioadei; la un produs cu loturi BBD, prețul
-// fără lot); în coș, doar cât e sub prețul liniei (prețul mai mic câștigă).
+// Prețul de campanie: la salvare, doar un preț mai mic decât prețul produsului; unul care nu e sub prețul redus de acum se
+// salvează, cu un avertisment în editor (nu schimbă nimic cât ține reducerea). În coș, doar cât e sub prețul liniei (prețul mai
+// mic câștigă); o linie fără ofertă rămâne în afara ei și primește cuponul.
 $puneProdusF2($pB, 100, null, $perioadaB);
 $preturiF2 = [];
 foreach ($produseCampanie as $idProdus) {
     $preturiF2[$idProdus] = number_format((float) $unu('SELECT price FROM products WHERE id = :id', ['id' => $idProdus]) - 1, 2, '.', '');
 }
-$r = $cerere('POST', '/admin/campanii/salveaza', $jarAdmin, ['oferta_tip' => 'pret_fix',
-    'pret_campanie' => [$pA => '95', $pB => '90', $pC => '75'] + $preturiF2, 'produse' => $produseCampanie] + $campDateF);
-$verifica('prețul de campanie peste prețul redus refuzat la salvare (422): A 95 > 90 (redus de la 100), B 90 > 85 (perioada); C 75 (loturi BBD) trece',
-    $r['cod'] === 422 && str_contains($r['corp'], 'un preț mai mic decât prețul lui de acum (90.00 lei, redus de la 100.00 lei)')
-    && str_contains($r['corp'], 'un preț mai mic decât prețul lui de acum (85.00 lei, redus de la 100.00 lei)')
-    && substr_count($r['corp'], 'un preț mai mic decât prețul lui de acum') === 2
+$salveazaPretFix = static function (array $preturi, array $alteCampuri = []) use ($cerere, $jarAdmin, $preturiF2, $produseCampanie, $campDateF): array {
+    return $cerere('POST', '/admin/campanii/salveaza', $jarAdmin, $alteCampuri + ['oferta_tip' => 'pret_fix',
+        'pret_campanie' => $preturi + $preturiF2, 'produse' => $produseCampanie] + $campDateF);
+};
+$avertismente = static function (string $html): string {
+    return preg_match('#<div data-campanie-avertisment-preturi>(.*?)</div>\s*</div>\s*</div>#s', $html, $m) === 1
+        ? trim(html_entity_decode(strip_tags($m[1]), ENT_QUOTES, 'UTF-8')) : '';
+};
+$r = $salveazaPretFix([$pA => '100', $pB => '80', $pC => '75']);
+$verifica('prețul de campanie egal cu prețul produsului (A 100): refuzat la salvare (422), „un preț mai mic decât prețul lui (100.00 lei)”',
+    $r['cod'] === 422 && str_contains($r['corp'], 'un preț mai mic decât prețul lui (100.00 lei)')
     && $unu('SELECT COALESCE(oferta_tip, "") FROM campanii WHERE id = :id', ['id' => $idCampanie]) === 'n_la_m', $r['cod'] . ' ' . mb_substr(strip_tags($r['corp']), 0, 300));
-$r = $cerere('POST', '/admin/campanii/salveaza', $jarAdmin, ['oferta_tip' => 'pret_fix',
-    'pret_campanie' => [$pA => '85', $pB => '80', $pC => '75'] + $preturiF2, 'produse' => $produseCampanie] + $campDateF);
-$verifica('prețul de campanie sub prețul de acum (A 85 < 90, B 80 < 85, C 75 < 100): salvat',
+$r = $salveazaPretFix([$pA => '95', $pB => '90', $pC => '75']);
+$avertismentEditor = $avertismente($cerere('GET', '/admin/campanii/' . $idCampanie, $jarAdmin)['corp']);
+$verifica('prețul de campanie sub prețul produsului, dar nu sub cel redus de acum (A 95 ≥ 90, B 90 ≥ 85 din perioadă): salvat, cu avertismentul din editor',
+    $r['cod'] === 302 && $unu('SELECT oferta_tip FROM campanii WHERE id = :id', ['id' => $idCampanie]) === 'pret_fix'
+    && str_contains($avertismentEditor, '(95.00 lei) nu e sub prețul lui redus de acum (90.00 lei, redus de la 100.00 lei)')
+    && str_contains($avertismentEditor, '(90.00 lei) nu e sub prețul lui redus de acum (85.00 lei, redus de la 100.00 lei)')
+    && substr_count($avertismentEditor, 'nu e sub prețul lui redus de acum') === 2, $r['cod'] . ' | ' . $avertismentEditor);
+// O campanie pregătită pentru după o reducere temporară (perioada lui B, în curs acum): se salvează, cu avertismentul.
+$r = $salveazaPretFix([$pB => '90'], ['id' => '0', 'nume' => 'După reducere', 'slug' => 'dupa-reducere', 'pornita' => '1',
+    'incepe_la' => date('Y-m-d\TH:i', time() + 86400 * 60), 'se_termina_la' => date('Y-m-d\TH:i', time() + 86400 * 67), 'produse' => [$pB]]);
+$idDupaReducere = (int) $unu("SELECT id FROM campanii WHERE slug = 'dupa-reducere'");
+$verifica('o campanie viitoare cu prețul de campanie al lui B (90) peste perioada lui de acum (85): salvată, cu avertismentul',
+    $r['cod'] === 302 && $idDupaReducere > 0 && $unu('SELECT pret_campanie FROM campanii_produse WHERE campanie_id = :id', ['id' => $idDupaReducere]) === '90.00'
+    && str_contains($avertismente($cerere('GET', '/admin/campanii/' . $idDupaReducere, $jarAdmin)['corp']), '(90.00 lei) nu e sub prețul lui redus de acum (85.00 lei'),
+    $r['cod'] . ' ' . ($r['antete']['location'] ?? ''));
+$db->prepare('DELETE FROM campanii_produse WHERE campanie_id = :id')->execute(['id' => $idDupaReducere]);
+$db->prepare('DELETE FROM campanii WHERE id = :id')->execute(['id' => $idDupaReducere]);
+$r = $salveazaPretFix([$pA => '85', $pB => '80', $pC => '75']);
+$verifica('prețul de campanie sub prețul de acum (A 85 < 90, B 80 < 85, C 75 < 100): salvat, fără avertisment',
     $r['cod'] === 302 && $unu('SELECT oferta_tip FROM campanii WHERE id = :id', ['id' => $idCampanie]) === 'pret_fix'
     && $unu('SELECT GROUP_CONCAT(pret_campanie ORDER BY FIELD(product_id, :a, :b, :c)) FROM campanii_produse WHERE campanie_id = :id AND product_id IN (:a2, :b2, :c2)',
-        ['id' => $idCampanie, 'a' => $pA, 'b' => $pB, 'c' => $pC, 'a2' => $pA, 'b2' => $pB, 'c2' => $pC]) === '85.00,80.00,75.00', (string) $r['cod']);
+        ['id' => $idCampanie, 'a' => $pA, 'b' => $pB, 'c' => $pC, 'a2' => $pA, 'b2' => $pB, 'c2' => $pC]) === '85.00,80.00,75.00'
+    && !str_contains($cerere('GET', '/admin/campanii/' . $idCampanie, $jarAdmin)['corp'], 'data-campanie-avertisment-preturi'), (string) $r['cod']);
 ResponseCache::purgePageCache();
 $umpleCos([[$pA, 1, ''], [$pB, 1, ''], [$pC, 1, 'lotr'], [$pC, 1, 'lotp']]);
 $s = $sumar();
@@ -1222,13 +1289,64 @@ $verifica('„Preț de campanie” în coș: A 90 → 85, B 85 → 80, lotul de 
     $sumeLinie($liniePe($s, $pA)) === [500, 8500, 9000] && $sumeLinie($liniePe($s, $pB)) === [500, 8000, 8500]
     && $sumeLinie($liniaCheie($s, $cheieLotR)) === [0, 7000, 7000] && $sumeLinie($liniaCheie($s, $cheieLotP)) === [2500, 7500, 10000]
     && $centiDin($s['campanie_oferta']['reducere'] ?? 0) === 3500, json_encode($s['lines'] ?? null, JSON_UNESCAPED_UNICODE));
-// O reducere pusă după salvare, sub prețul de campanie: prețul mai mic rămâne, oferta nu schimbă nimic pe linie.
+// O reducere pusă după salvare, sub prețul de campanie: prețul mai mic rămâne, linia nu e a ofertei, deci primește cuponul
+// (ca lotul de 70); liniile reduse de ofertă (B, lotul fără preț) nu.
 $puneProdusF2($pA, 100, 80);
+$cerere('POST', '/cos/cupon', $jarF, ['coupon_code' => 'DEMO10']);
 $s = $sumar();
-$verifica('o reducere pusă după salvare sub prețul de campanie (A redus la 80, prețul de campanie 85): A rămâne 80,00, fără ofertă pe linie',
+$cuponPe = static fn (array $l): int => $centiDin($l['coupon_discount'] ?? -1);
+$verifica('o reducere pusă după salvare sub prețul de campanie (A redus la 80, prețul de campanie 85): A 80,00 fără ofertă, cu cuponul DEMO10 (8,00)',
     $sumeLinie($liniePe($s, $pA)) === [0, 8000, 8000] && !isset($liniePe($s, $pA)['campanie_reducere'])
-    && $centiDin($s['campanie_oferta']['reducere'] ?? 0) === 3000, json_encode($liniePe($s, $pA), JSON_UNESCAPED_UNICODE));
+    && $centiDin($s['campanie_oferta']['reducere'] ?? 0) === 3000 && ($s['coupon']['code'] ?? '') === 'DEMO10'
+    && $cuponPe($liniePe($s, $pA)) === 800 && $cuponPe($liniaCheie($s, $cheieLotR)) === 700
+    && $cuponPe($liniePe($s, $pB)) === 0 && $cuponPe($liniaCheie($s, $cheieLotP)) === 0 && $centiDin($s['discount'] ?? 0) === 1500,
+    json_encode(['discount' => $s['discount'] ?? null, 'err' => $s['coupon_error'] ?? null, 'linii' => $s['lines'] ?? null], JSON_UNESCAPED_UNICODE));
+// Oprirea campaniei (sau orice salvare) după acea reducere: se salvează, cu avertismentul pentru A.
+$r = $salveazaPretFix([$pA => '85', $pB => '80', $pC => '75'], ['pornita' => '0']);
+$verifica('salvarea campaniei (oprită) după o reducere sub prețul de campanie: salvată, cu avertismentul pentru A (85 ≥ 80)', $r['cod'] === 302
+    && $unu('SELECT pornita FROM campanii WHERE id = :id', ['id' => $idCampanie]) === '0'
+    && str_contains($avertismente($cerere('GET', '/admin/campanii/' . $idCampanie, $jarAdmin)['corp']), '(85.00 lei) nu e sub prețul lui redus de acum (80.00 lei, redus de la 100.00 lei)'),
+    (string) $r['cod']);
+$db->prepare('UPDATE campanii SET pornita = 1 WHERE id = :id')->execute(['id' => $idCampanie]);
+ResponseCache::purgePageCache();
+// Prețul de campanie egal cu prețul liniei (B: perioada 85, prețul de campanie 85): nicio ofertă pe B, iar cuponul i se aplică.
+$db->prepare('UPDATE campanii_produse SET pret_campanie = 85 WHERE campanie_id = :c AND product_id = :p')->execute(['c' => $idCampanie, 'p' => $pB]);
+$s = $sumar();
+$verifica('prețul de campanie egal cu prețul liniei (B 85 = 85): fără ofertă pe B, cuponul pe B (8,50); oferta doar pe lotul fără preț (25,00)',
+    $sumeLinie($liniePe($s, $pB)) === [0, 8500, 8500] && $cuponPe($liniePe($s, $pB)) === 850
+    && $centiDin($s['campanie_oferta']['reducere'] ?? 0) === 2500 && $centiDin($s['discount'] ?? 0) === 2350,
+    json_encode(['discount' => $s['discount'] ?? null, 'linii' => $s['lines'] ?? null], JSON_UNESCAPED_UNICODE));
 $puneProdusF2($pA, 100, 90);
+// Doar lotul de 70 (prețul de campanie 75) și cuponul: oferta nu schimbă nimic, deci nici rândul ei în coș; cuponul 7,00 se
+// aplică și comanda se plasează cu el.
+$umpleCos([[$pC, 1, 'lotr']]);
+$cerere('POST', '/cos/cupon', $jarF, ['coupon_code' => 'DEMO10']);
+$s = $sumar();
+$verifica('lotul BBD de 70 cu prețul de campanie 75 și DEMO10: cuponul 7,00, totalul 63,00 + transport, fără rândul ofertei',
+    ($s['coupon']['code'] ?? '') === 'DEMO10' && $centiDin($s['discount'] ?? 0) === 700 && ($s['coupon_error'] ?? '') === ''
+    && !isset($s['campanie_oferta']) && $centiDin($s['total'] ?? 0) === 6300 + $centiDin($s['shipping'] ?? 0),
+    json_encode(array_intersect_key($s, array_flip(['subtotal', 'discount', 'shipping', 'total', 'coupon_error', 'campanie_oferta'])), JSON_UNESCAPED_UNICODE));
+$totalLot = (float) ($s['total'] ?? 0);
+$cos = $cerere('GET', '/cos', $jarF)['corp'];
+$verifica('pagina coșului: fără rândul ofertei și fără nota „Cuponul nu se aplică produselor din oferta campaniei”',
+    !str_contains($cos, 'data-campanie-sumar') && !str_contains($cos, 'data-campanie-cupon') && !str_contains($cos, 'data-campanie-linie'));
+$mailuriInainte = glob($dosarDev . '/mail/*') ?: [];
+[$trimis, $comanda] = $plaseazaComanda();
+$verifica('comanda cu lotul de 70 și DEMO10: plasată (nu întoarsă în coș), reducerea cuponului 7,00, totalul coșului, fără ofertă pe comandă',
+    $trimis['cod'] === 302 && ($trimis['antete']['location'] ?? '') !== '/cos' && is_array($comanda)
+    && $centiDin($comanda['discount_total'] ?? 0) === 700 && abs((float) $comanda['total'] - $totalLot) < 0.001
+    && (float) ($comanda['campanie_reducere'] ?? 0) === 0.0,
+    $trimis['cod'] . ' ' . ($trimis['antete']['location'] ?? '') . ' ' . json_encode($comanda ? array_intersect_key($comanda, array_flip(['total', 'discount_total', 'campanie_reducere'])) : null));
+$stergeComanda($comanda, $mailuriInainte);
+// Lotul de 70 și un produs din afara campaniei: cuponul pe amândouă.
+$umpleCos([[$pC, 1, 'lotr'], [$idAfara, 1, '']]);
+$cerere('POST', '/cos/cupon', $jarF, ['coupon_code' => 'DEMO10']);
+$s = $sumar();
+$cuponAfara = (int) round((float) $liniePe($s, $idAfara)['line_total'] * 10);
+$verifica('lotul de 70 (prețul de campanie 75) și un produs din afara campaniei: DEMO10 pe amândouă (7,00 + 10% din celălalt)',
+    $centiDin($s['discount'] ?? 0) === 700 + $cuponAfara && $cuponPe($liniaCheie($s, $cheieLotR)) === 700 && !isset($s['campanie_oferta']),
+    json_encode(['discount' => $s['discount'] ?? null, 'linii' => $s['lines'] ?? null], JSON_UNESCAPED_UNICODE));
+@unlink($jarF);
 
 // Cardurile {{campanie_produse}} și pagina produsului, cu −20%: de la prețul de acum (cel redus); cu loturi BBD, doar eticheta.
 $puneOfertaF2('procent', 2, 1, 20);
@@ -1282,20 +1400,8 @@ $verifica('rândul ofertei de la un preț redus (90,00): 1+1, al 3-lea, 3 la pre
 
 // Comanda cu reducerile adunate: prețul de dinainte de ofertă pe linie e cel redus (al lotului BBD), ERP-ul ia prețul plătit.
 $umpleCos([[$pA, 1, ''], [$pC, 2, 'lotr']]);
-$pagCheckout = $cerere('GET', '/checkout', $jarF)['corp'];
-preg_match('/name="checkout_form_token" value="([^"]*)"/', $pagCheckout, $tokenF);
-preg_match('/name="checkout_form_rendered_at" value="([^"]*)"/', $pagCheckout, $randatF);
-sleep(3);
-$ultimaComanda = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM orders')->fetchColumn();
 $mailuriInainte = glob($dosarDev . '/mail/*') ?: [];
-$trimis = $cerere('POST', '/checkout', $jarF, [
-    'checkout_form_token' => $tokenF[1] ?? '', 'checkout_form_rendered_at' => $randatF[1] ?? '',
-    'billing_first_name' => 'Test', 'billing_last_name' => 'Oferta', 'billing_phone' => '0700000781',
-    'billing_email' => 'oferta-campanie@exemplu.ro', 'billing_street' => 'Strada Exemplului', 'billing_street_no' => '11',
-    'billing_city' => 'Cluj-Napoca', 'billing_county' => 'Cluj', 'billing_postcode' => '400001',
-    'shipping_same_as_billing' => '1', 'payment_method' => 'cod', 'accept_terms' => '1',
-]);
-$comanda = $db->query('SELECT * FROM orders WHERE id > ' . $ultimaComanda . ' ORDER BY id DESC LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+[$trimis, $comanda] = $plaseazaComanda();
 $idComanda = is_array($comanda) ? (int) $comanda['id'] : 0;
 $liniiComanda = $db->query('SELECT * FROM order_items WHERE order_id = ' . $idComanda . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) ?: [];
 $liniaComanda = static function (int $id, string $lot) use ($liniiComanda): array {
@@ -1317,13 +1423,7 @@ $payload = is_array($comanda) ? \App\Support\ErpSync::buildPayload($db, $comanda
 $preturiErp = array_map(static fn (array $l): float => (float) $l['pretUnitar'], (array) ($payload['linii'] ?? []));
 $verifica('ERP: liniile cu prețul plătit (72,0000 și 56,0000), după ambele reduceri', $preturiErp === [72.0, 56.0]
     || $preturiErp === [56.0, 72.0], json_encode($payload['linii'] ?? null, JSON_UNESCAPED_UNICODE));
-if ($idComanda > 0) {
-    foreach (['order_items', 'email_logs'] as $tabel) {
-        $db->exec('DELETE FROM ' . $tabel . ' WHERE order_id = ' . $idComanda);
-    }
-    $db->exec('DELETE FROM orders WHERE id = ' . $idComanda);
-}
-array_map('unlink', array_diff(glob($dosarDev . '/mail/*') ?: [], $mailuriInainte));
+$stergeComanda($comanda, $mailuriInainte);
 @unlink($jarF);
 // Înapoi: produsele, pagina, fără ofertă (D și C2 pornesc de la datele de dinainte).
 $inapoiC1();

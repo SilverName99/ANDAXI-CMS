@@ -745,8 +745,28 @@ final class Campanii
     }
 
     /**
+     * Avertismentul din editor pentru un preț de campanie care se salvează, dar acum nu schimbă nimic: e sub prețul produsului,
+     * dar nu și sub prețul lui redus de acum (un preț redus, o perioadă de reducere în curs). În coș prețul mai mic câștigă,
+     * deci cât ține reducerea clientul plătește prețul redus, fără ofertă (și cu cuponul); prețul de campanie se aplică după
+     * ce reducerea se termină. '' altfel (fără preț, peste prețul produsului: refuzat la salvare; sub prețul de acum: se aplică).
+     *
+     * @param array<string, mixed> $produs name, price, sale_price, sale_price_periods_json
+     */
+    public static function avertismentPretCampanie(array $produs, ?float $pretCampanie): string
+    {
+        [$pretAcum, $pretVechi] = self::preturi($produs);
+        if ($pretCampanie === null || $pretCampanie <= 0 || $pretVechi === null || $pretCampanie < $pretAcum || $pretCampanie >= $pretVechi) {
+            return '';
+        }
+        return 'Prețul de campanie al produsului „' . (string) ($produs['name'] ?? '') . '” (' . number_format($pretCampanie, 2)
+            . ' lei) nu e sub prețul lui redus de acum (' . number_format($pretAcum, 2) . ' lei, redus de la ' . number_format($pretVechi, 2)
+            . ' lei): cât ține reducerea, în coș rămâne prețul redus, fără ofertă; prețul de campanie se aplică după ce ea se termină.';
+    }
+
+    /**
      * Produsele din catalog pentru lista din editor, cu reducerea proprie a fiecăruia (cheia `motiv_reducere`, '' = niciuna) și
-     * prețul lui de acum (`pret_acum`: cel redus, dacă are o reducere; prețul de campanie trebuie să fie sub el).
+     * prețul lui de acum (`pret_acum`: cel redus, dacă are o reducere; un preț de campanie care nu e sub el nu schimbă nimic
+     * cât ține reducerea).
      *
      * @return list<array<string, mixed>>
      */
@@ -1071,22 +1091,22 @@ final class Campanii
                 $c['preturi'][(int) $idProdus] = is_numeric($pret) ? round((float) $pret, 2) : -1.0;
             }
         }
-        // Prețul de campanie: sub prețul de acum al produsului (cel redus, dacă are un preț redus sau o perioadă de reducere în
-        // curs; la un produs cu oferte BBD, prețul fără lot). Un produs cu o reducere proprie se poate alege: oferta se adaugă
-        // peste ea, iar prețul fix se aplică în coș doar cât e sub prețul liniei.
+        // Prețul de campanie: un preț, mai mic decât prețul produsului (altfel nu s-ar aplica niciodată). Unul care nu e sub
+        // prețul redus de acum (un preț redus, o perioadă în curs) se salvează: în coș nu schimbă nimic cât ține reducerea,
+        // iar editorul o spune (Campanii::avertismentPretCampanie), fără să oprească salvarea, deci și o campanie pregătită
+        // pentru după reducere, sau oprirea uneia, merg. Un produs cu o reducere proprie se poate alege: oferta se adaugă peste ea.
         if ($c['produse'] !== [] && $c['oferta_tip'] === 'pret_fix') {
             try {
-                $randuri = $db->query('SELECT id, name, price, sale_price, sale_price_periods_json FROM products
+                $randuri = $db->query('SELECT id, name, price FROM products
                     WHERE id IN (' . implode(',', array_map('intval', $c['produse'])) . ')')->fetchAll(PDO::FETCH_ASSOC) ?: [];
             } catch (Throwable) {
                 $randuri = [];
             }
             foreach ($randuri as $rand) {
-                [$pretAcum, $pretVechi] = self::preturi($rand);
                 $pretFix = $c['preturi'][(int) $rand['id']] ?? null;
-                if ($pretFix === null || $pretFix <= 0 || $pretFix >= $pretAcum) {
-                    $erori[] = 'Prețul de campanie al produsului „' . (string) $rand['name'] . '”: un preț mai mic decât prețul lui de acum ('
-                        . number_format($pretAcum, 2) . ' lei' . ($pretVechi !== null ? ', redus de la ' . number_format($pretVechi, 2) . ' lei' : '') . ').';
+                if ($pretFix === null || $pretFix <= 0 || $pretFix >= (float) $rand['price']) {
+                    $erori[] = 'Prețul de campanie al produsului „' . (string) $rand['name'] . '”: un preț mai mic decât prețul lui ('
+                        . number_format((float) $rand['price'], 2) . ' lei).';
                 }
             }
         }
