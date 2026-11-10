@@ -830,9 +830,19 @@ function copie(Adoptare $a): void
     $dosar = $s->lucru . '/copii/' . date('Ymd-His');
     Fisiere::dosar($dosar, 0700);
     $inceput = microtime(true);
-    $r = Comanda::ruleaza(['tar', '-czf', $dosar . '/cod-vechi.tar.gz', '-C', $s->dosar, '--exclude=public_html/public/uploads', 'public_html']);
-    if ($r['cod'] !== 0) {
+    // Site-ul merge în timpul copiei: sesiunile, cache-ul și jurnalele se scriu chiar atunci (bioscem.ro, 10 noiembrie 2026:
+    // „storage/sessions: file changed as we read it”, tar iese cu 1). Sesiunile și cache-ul nu trebuie în copie (revenirea
+    // pune la loc public_html.vechi, nu arhiva); un fișier schimbat în timpul citirii (un jurnal) e doar un avertisment.
+    $r = Comanda::ruleaza(['tar', '-czf', $dosar . '/cod-vechi.tar.gz', '-C', $s->dosar, '--exclude=public_html/public/uploads',
+        '--exclude=public_html/storage/sessions', '--exclude=public_html/storage/cache', 'public_html']);
+    $doarSchimbate = $r['cod'] === 1 && trim($r['erori']) !== ''
+        && array_filter(preg_split('/\R/', trim($r['erori'])) ?: [], static fn (string $l): bool =>
+            trim($l) !== '' && !str_contains($l, 'file changed as we read it') && !str_contains($l, 'Exiting with failure status due to previous errors')) === [];
+    if ($r['cod'] !== 0 && !$doarSchimbate) {
         throw new Oprire('copia codului vechi n-a mers: ' . trim($r['erori']));
+    }
+    if ($doarSchimbate) {
+        Iesire::info('codul vechi: câteva fișiere s-au schimbat în timpul copiei (site-ul merge): ' . trim($r['erori']));
     }
     @chmod($dosar . '/cod-vechi.tar.gz', 0600);
     Iesire::ok('codul vechi: ' . $dosar . '/cod-vechi.tar.gz (' . Fisiere::om((int) filesize($dosar . '/cod-vechi.tar.gz')) . ', '
