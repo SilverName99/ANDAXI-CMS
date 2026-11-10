@@ -8564,12 +8564,67 @@ final class AdminController
                 $ordersMap[$on]['items'][] = ['name' => (string) ($r['name'] ?? ''), 'quantity' => (int) ($r['quantity'] ?? 1)];
             }
 
+            // Istoricul comenzilor clientului (ultimele 100): produse, prețuri, transport, total
+            // și promoționalele date pe fiecare — ca în fereastra pe două zone a codului vechi.
+            $ist = $db->prepare("SELECT o.id, o.order_number, o.created_at, o.status, o.payment_status, o.total, o.shipping_cost
+                                 FROM orders o
+                                 WHERE o.deleted_at IS NULL AND $cond
+                                 ORDER BY o.created_at DESC, o.id DESC
+                                 LIMIT 100");
+            $ist->execute(['m' => $m]);
+            $comenzi = [];
+            foreach ($ist->fetchAll() ?: [] as $r) {
+                $idComanda = (int) ($r['id'] ?? 0);
+                $comenzi[$idComanda] = [
+                    'id' => $idComanda,
+                    'order_number' => (string) ($r['order_number'] ?? ''),
+                    'created_at' => $this->promoFmtDate((string) ($r['created_at'] ?? '')),
+                    'status' => (string) ($r['status'] ?? ''),
+                    'payment_status' => (string) ($r['payment_status'] ?? ''),
+                    'total' => (float) ($r['total'] ?? 0),
+                    'shipping_cost' => (float) ($r['shipping_cost'] ?? 0),
+                    'items' => [],
+                    'promo' => [],
+                ];
+            }
+            if ($comenzi !== []) {
+                $idComenzi = array_keys($comenzi);
+                $semne = implode(',', array_fill(0, count($idComenzi), '?'));
+                $li = $db->prepare("SELECT order_id, product_name, quantity, unit_price, line_total
+                                    FROM order_items WHERE order_id IN ($semne) ORDER BY id ASC");
+                $li->execute($idComenzi);
+                foreach ($li->fetchAll() ?: [] as $r) {
+                    $comenzi[(int) $r['order_id']]['items'][] = [
+                        'name' => (string) ($r['product_name'] ?? ''),
+                        'quantity' => (int) ($r['quantity'] ?? 1),
+                        'unit_price' => (float) ($r['unit_price'] ?? 0),
+                        'line_total' => (float) ($r['line_total'] ?? 0),
+                    ];
+                }
+                $lp = $db->prepare("SELECT order_id, name, quantity FROM order_promo_items WHERE order_id IN ($semne) ORDER BY id ASC");
+                $lp->execute($idComenzi);
+                foreach ($lp->fetchAll() ?: [] as $r) {
+                    $comenzi[(int) $r['order_id']]['promo'][] = [
+                        'name' => (string) ($r['name'] ?? ''),
+                        'quantity' => (int) ($r['quantity'] ?? 1),
+                    ];
+                }
+            }
+            $totalIstoric = 0.0;
+            foreach ($comenzi as $c) {
+                if (!in_array($c['status'], ['cancelled', 'refunded', 'returned', 'failed'], true)) {
+                    $totalIstoric += $c['total'];
+                }
+            }
+
             echo json_encode([
                 'ok' => true,
                 'client_name' => $name !== '' ? $name : 'Client',
                 'email' => $email,
                 'items' => $items,
                 'orders' => array_values($ordersMap),
+                'history' => array_values($comenzi),
+                'history_total' => round($totalIstoric, 2),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         } catch (Throwable) {
             echo json_encode(['ok' => false, 'error' => 'Eroare la interogare.']);

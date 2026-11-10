@@ -148,7 +148,8 @@ varianta Stripe a linkului de plată portată în WP-20, X5: `PaymentLink::PROCE
 dovada pe datele BV: WP-11b); `5d071e2`, `18d44ab` Lot C; `9f5b196`, `98f81b6`
 (portate din Bioscem); `1b0d61f` tab „Sertar Oferte”; `fca58bd`, `c32bc8d` chat live (Bioscem l-a primit din BV);
 `0fadb19` data nașterii pe liste; `f78ecb7` coloana „Cui a fost dat” (echivalentul Bioscem
-`promoProductRecipientsApi`); `4acb250` linia de produs dublată (Bioscem `11b1040`); `88b7f4d` unire.
+`promoProductRecipientsApi`; fereastra pe două zone de la 🎁, cu istoricul comenzilor clientului, scăpată atunci, portată pe
+10 noiembrie 2026: `orderClientPromo` dă și `history`); `4acb250` linia de produs dublată (Bioscem `11b1040`); `88b7f4d` unire.
 
 | Commit | Data | Subiect | Stare |
 |---|---|---|---|

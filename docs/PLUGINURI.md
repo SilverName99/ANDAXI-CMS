@@ -837,7 +837,11 @@ dispar, iar linkurile spre el se scot din pagini.
   `order_promo_items` (WP-21, C13, din Biovitality `657c0cf`, `2ebc0cb`, `9cca65b`: „dat la” și
   „dat de”, `given_at`/`given_by` din `produse_promo/0031`, păstrate peste re-salvările comenzii;
   exportul Excel `GET /admin/promo-products/export`, cu `App\Support\XlsxWriter` din nucleu: foile
-  „Produse” și „Cui a fost dat”, pe intervalul filtrat; fereastra „Cui a fost dat” derulează).
+  „Produse” și „Cui a fost dat”, pe intervalul filtrat; fereastra „Cui a fost dat” derulează). Butonul 🎁 din lista de
+  comenzi (`GET /admin/orders/{id}/client-promo`) deschide fereastra clientului pe două zone (Biovitality `f78ecb7`): în
+  stânga promoționalele primite, în dreapta ultimele 100 de comenzi ale lui, cu produse, prețuri, transport, total și ce
+  promoționale s-au dat pe fiecare („Fără promoționale” altfel); totalul de sus nu numără comenzile anulate, rambursate,
+  returnate sau eșuate. Pe telefon, zonele stau una sub alta.
 - **Are nevoie de**: magazin.
 - **Se oprește**: ca pornit (se folosește doar în admin, pe comenzile existente).
 - **Oprit**: nimic promo în comenzi sau în meniu.

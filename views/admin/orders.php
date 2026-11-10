@@ -785,12 +785,24 @@ admin_componenta('panou-lateral', ['mod' => 'sertar', 'id' => 'comanda-panou', '
 ?>
 
 <div id="client-promo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:0 24px 64px rgba(0,0,0,.3);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+    <?php /* Două zone: în stânga promoționalele primite, în dreapta istoricul comenzilor (pe telefon, una sub alta). */ ?>
+    <style>
+        #client-promo-body .cp-zone{display:grid;grid-template-columns:minmax(240px,1fr) minmax(320px,1.6fr);gap:18px;height:100%;min-height:0;}
+        #client-promo-body .cp-stanga,#client-promo-body .cp-dreapta{min-height:0;overflow-y:auto;padding-right:6px;}
+        #client-promo-body .cp-stanga{border-right:1px solid #eef2f7;}
+        @media (max-width:760px){
+            #client-promo-body{overflow-y:auto !important;}
+            #client-promo-body .cp-zone{grid-template-columns:1fr;height:auto;}
+            #client-promo-body .cp-stanga{border-right:0;border-bottom:1px solid #eef2f7;padding-bottom:12px;}
+            #client-promo-body .cp-stanga,#client-promo-body .cp-dreapta{overflow:visible;}
+        }
+    </style>
+    <div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;max-height:92vh;display:flex;flex-direction:column;padding:22px 24px;box-shadow:0 24px 64px rgba(0,0,0,.3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex:0 0 auto;">
             <h3 id="client-promo-title" style="margin:0;">Promoționale client</h3>
             <button type="button" id="client-promo-close" style="border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:#6b7280;">&times;</button>
         </div>
-        <div id="client-promo-body"></div>
+        <div id="client-promo-body" style="flex:1 1 auto;min-height:0;overflow:hidden;"></div>
     </div>
 </div>
 
@@ -2315,7 +2327,7 @@ function saveOrderPromo(orderId){
                 .then(function(r){ return r.json(); })
                 .then(function(d){
                     if (!d.ok) { if (body) body.innerHTML = '<p style="color:#dc2626;">' + esc(d.error || 'Eroare.') + '</p>'; return; }
-                    if (title) title.textContent = 'Promoționale — ' + (d.client_name || 'client');
+                    if (title) title.textContent = 'Client — ' + (d.client_name || 'client');
                     var items = Array.isArray(d.items) ? d.items : [];
                     var totalHtml = items.length
                         ? '<ul style="margin:0 0 4px;padding-left:20px;line-height:1.8;">' + items.map(function(i){ return '<li>' + esc(i.name) + ' × <strong>' + (Number(i.quantity)||0) + '</strong></li>'; }).join('') + '</ul>'
@@ -2325,10 +2337,45 @@ function saveOrderPromo(orderId){
                         var its = Array.isArray(o.items) ? o.items.map(function(i){ return esc(i.name) + ' × ' + (Number(i.quantity)||1); }).join(', ') : '';
                         return '<div style="border-top:1px solid #eee;padding:8px 0;font-size:13px;"><strong>' + esc(o.order_number) + '</strong> <span style="color:#94a3b8;">' + esc(o.created_at) + '</span><br>' + its + '</div>';
                     }).join('');
+                    var bani = function(v){ return (Number(v)||0).toFixed(2).replace('.', ',') + ' RON'; };
+                    var stari = {cancelled:'Anulată', refunded:'Rambursată', returned:'Returnată', failed:'Eșuată'};
+                    var istoric = Array.isArray(d.history) ? d.history : [];
+                    var istoricHtml = istoric.length ? istoric.map(function(c){
+                        var linii = Array.isArray(c.items) ? c.items.map(function(i){
+                            return '<tr>'
+                                + '<td style="padding:4px 6px;">' + esc(i.name) + '</td>'
+                                + '<td style="padding:4px 6px;text-align:right;color:#6b7280;white-space:nowrap;">' + (Number(i.quantity)||1) + ' × ' + bani(i.unit_price) + '</td>'
+                                + '<td style="padding:4px 6px;text-align:right;font-weight:600;white-space:nowrap;">' + bani(i.line_total) + '</td>'
+                                + '</tr>';
+                        }).join('') : '';
+                        var cadouri = Array.isArray(c.promo) && c.promo.length
+                            ? '<div style="margin-top:6px;font-size:12px;color:#0f8f7a;">🎁 ' + c.promo.map(function(p){ return esc(p.name) + ' × ' + (Number(p.quantity)||1); }).join(', ') + '</div>'
+                            : '<div style="margin-top:6px;font-size:12px;color:#9ca3af;">🎁 Fără promoționale</div>';
+                        var stare = stari[c.status] ? ' <span style="font-size:11px;color:#b91c1c;background:#fee2e2;border-radius:999px;padding:1px 8px;">' + stari[c.status] + '</span>' : '';
+                        return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:10px;">'
+                            + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap;">'
+                            + '<a href="/admin/orders?q=' + encodeURIComponent(c.order_number) + '" style="font-weight:700;">' + esc(c.order_number) + '</a>' + stare
+                            + '<span style="color:#94a3b8;font-size:12px;">' + esc(c.created_at) + '</span>'
+                            + '<strong style="margin-left:auto;">' + bani(c.total) + '</strong>'
+                            + '</div>'
+                            + (linii ? '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;">' + linii + '</table>' : '<p style="margin:6px 0 0;color:#9ca3af;font-size:13px;">Fără produse înregistrate.</p>')
+                            + (Number(c.shipping_cost) > 0 ? '<div style="margin-top:4px;font-size:12px;color:#6b7280;">Transport: ' + bani(c.shipping_cost) + '</div>' : '')
+                            + cadouri
+                            + '</div>';
+                    }).join('') : '<p style="color:#6b7280;font-style:italic;">Nicio comandă în istoric.</p>';
                     if (body) body.innerHTML =
-                        (d.email ? '<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">' + esc(d.email) + '</p>' : '') +
-                        '<p style="margin:0 0 6px;font-weight:700;">Total primite (toate comenzile):</p>' + totalHtml +
-                        (orders.length ? '<p style="margin:16px 0 4px;font-weight:700;">Pe comenzi:</p>' + ordersHtml : '');
+                        '<div class="cp-zone">'
+                        + '<div class="cp-stanga">'
+                        +   (d.email ? '<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">' + esc(d.email) + '</p>' : '')
+                        +   '<p style="margin:0 0 6px;font-weight:700;">Promoționale primite (toate comenzile):</p>' + totalHtml
+                        +   (orders.length ? '<p style="margin:16px 0 4px;font-weight:700;">Pe comenzi:</p>' + ordersHtml : '')
+                        + '</div>'
+                        + '<div class="cp-dreapta">'
+                        +   '<p style="margin:0 0 8px;font-weight:700;">Comenzi anterioare'
+                        +   (istoric.length ? ' (' + istoric.length + (istoric.length >= 100 ? '+, ultimele 100' : '') + ' — total ' + bani(d.history_total) + ', fără cele anulate)' : '') + ':</p>'
+                        +   istoricHtml
+                        + '</div>'
+                        + '</div>';
                 })
                 .catch(function(){ if (body) body.innerHTML = '<p style="color:#dc2626;">Eroare de comunicare.</p>'; });
         });
