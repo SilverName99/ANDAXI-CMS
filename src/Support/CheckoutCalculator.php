@@ -173,25 +173,35 @@ final class CheckoutCalculator
         $totalWeightGrams = 0;
         $nowTs = (new DateTimeImmutable('now'))->getTimestamp();
 
+        // Prețul unei bucăți pe fiecare linie (prețul redus sau al perioadei în curs, apoi lotul BBD ales), socotit o singură
+        // dată: liniile de mai jos îl folosesc, iar oferta campaniei pornește de la el (aceeași bază).
+        foreach ($cartItems as $i => $cartItem) {
+            $produsLinie = $productMap[(int) ($cartItem['product_id'] ?? 0)] ?? null;
+            if (!is_array($produsLinie)) {
+                continue;
+            }
+            $cartItems[$i]['bbd_selection'] = self::resolveBbdSelection($produsLinie, (string) ($cartItem['bbd_key'] ?? ''));
+            $cartItems[$i]['price'] = self::effectiveProductPrice($produsLinie, $nowTs, $cartItems[$i]['bbd_selection']['reduced_price'] ?? null);
+        }
+
         // Pluginul campanii: oferta campaniei active (OfertaCampanie), socotită înaintea liniilor, pe bucățile eligibile ale
-        // întregului coș (perechile „1+1” trec peste linii). Eligibile: produsele campaniei fără reducere proprie acum
-        // (Campanii::motivReducere: unul redus după ce a fost ales e sărit) și fără o ofertă BBD aleasă. Reducerea scade din
-        // prețul liniei, mai jos. Fără ofertă activă: nimic, liniile și sumele exact ca înainte.
+        // întregului coș (perechile „1+1” trec peste linii). Eligibile: toate liniile produselor campaniei, și cele cu o reducere
+        // proprie (prețul redus, o perioadă în curs, lotul BBD ales): oferta se adaugă peste ea, pornind de la prețul liniei de
+        // dinainte de ofertă (cel de mai sus). Reducerea scade din prețul liniei, mai jos. Fără ofertă activă: nimic, liniile și
+        // sumele exact ca înainte.
         $ofertaCampanie = OfertaCampanie::activa($db);
         $calculOferta = null;
         if ($ofertaCampanie !== null) {
             $liniiOferta = [];
             foreach ($cartItems as $cartItem) {
                 $idOferta = (int) ($cartItem['product_id'] ?? 0);
-                $produsOferta = $productMap[$idOferta] ?? null;
-                if (!is_array($produsOferta) || !array_key_exists($idOferta, $ofertaCampanie['produse'])
-                    || (string) ($cartItem['bbd_key'] ?? '') !== '' || Campanii::motivReducere($produsOferta) !== '') {
+                if (!isset($cartItem['price']) || !array_key_exists($idOferta, $ofertaCampanie['produse'])) {
                     continue;
                 }
                 $liniiOferta[] = [
                     'cheie' => (string) ($cartItem['item_key'] ?? ''),
                     'produs' => $idOferta,
-                    'pret' => (int) round(self::effectiveProductPrice($produsOferta, $nowTs) * 100),
+                    'pret' => (int) round((float) $cartItem['price'] * 100),
                     'cantitate' => max(1, (int) ($cartItem['quantity'] ?? 1)),
                 ];
             }
@@ -214,12 +224,8 @@ final class CheckoutCalculator
                 continue;
             }
             $qty = max(1, (int) ($cartItem['quantity'] ?? 1));
-            $bbdSelection = self::resolveBbdSelection($product, (string) ($cartItem['bbd_key'] ?? ''));
-            $price = self::effectiveProductPrice(
-                $product,
-                $nowTs,
-                $bbdSelection['reduced_price'] ?? null
-            );
+            $bbdSelection = (array) ($cartItem['bbd_selection'] ?? []);
+            $price = (float) ($cartItem['price'] ?? 0.0);
             $lineTotal = $price * $qty;
             // Oferta campaniei pe această linie (în cenți, din calculul de mai sus): prețul liniei scade, iar prețul unei bucăți
             // devine media (în coș și în ERP; pe comandă se păstrează și prețul de dinainte).

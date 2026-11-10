@@ -191,7 +191,7 @@ final class CampaniiController
                 $pagini = [];
             }
             if (\App\Support\Plugins::vizibil('catalog')) {
-                // Cu motivul reducerii fiecărui produs: cele care au deja o reducere nu se pot alege (Campanii::motivReducere).
+                // Cu reducerea proprie a fiecărui produs (Campanii::motivReducere, doar informativ: oferta se adaugă peste ea).
                 $produse = Campanii::produsePentruEditor($db);
             }
         }

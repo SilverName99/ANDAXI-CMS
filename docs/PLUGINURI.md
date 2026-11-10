@@ -1122,17 +1122,23 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   `{pret x 1.5}`, `{pret×1,5}`) = prețul curent înmulțit, de exemplu „2 bucăți: {pret*1.5}”; gol = fără rând. **„Cardurile
   produselor”** (`carduri_inchise`): deschise (albe, chenar gri) sau închise (card `#161616` pe fundal negru, text alb, ca pe
   pagina Biovitality). **Prețul ofertei** (cu oferta campaniei aleasă, doar cât campania arătată e cea activă, nu la
-  previzualizarea adminului, și doar pe produsele ei fără reducere proprie; `Campanii::randOfertaCard`, aceeași rotunjire ca în
-  coș): un rând sub preț, cu prețul tăiat în roșu (`#c0392b`; `#f87171` pe cardurile închise) și prețul de ofertă îngroșat:
-  „1+1 −50%”: „71.67 lei + ~~71.67~~ 35.83 lei” (reducerea 35,835 se rotunjește la 35,84, deci a doua bucată costă 35,83, ca în
-  coș); „Al 3-lea la −30%”: „Al 3-lea: ~~71.67~~ 50.17 lei”; „3 la preț de 2”: „3 la preț de 2: ~~215.01~~ 143.34 lei” (N ×
-  prețul tăiat, M × prețul); „−10%”: „~~71.67~~ 64.50 lei”; prețul de campanie: „~~71.67~~ 59.99 lei” (doar sub prețul
-  produsului). Fără ofertă, campanie inactivă sau produs neeligibil: cardul de dinainte. **Pagina produsului** are același
-  rând (`Campanii::ofertaPagina`, cu eticheta ofertei într-o pastilă): sub preț în aspectul fără șablon; în aspectul cu șablon,
-  scriptul paginii îl mută după primul element de preț al șablonului (`.pdp-price`, `.product-price`, `[data-product-price]`,
-  `.price`, altfel elementul cu textul prețului), altfel sub titlu. Prețul tăiat e `<s>`, cel nou `<b>` (scriptul paginii care
-  caută prețul printre `span`/`strong` nu le ia drept prețul produsului). **Insigna** produsului din campanie stă, în aspectul cu
-  șablon, chiar deasupra titlului (înaintea primului `<h1>` al șablonului; fără `<h1>`, în capul panoului, ca înainte).
+  previzualizarea adminului; `Campanii::randOfertaCard`, aceeași rotunjire ca în coș, de la prețul de acum al produsului, deci
+  la un produs cu o reducere proprie de la prețul redus, mai jos, „Produsele campaniei cu o reducere proprie”): un rând sub
+  preț, cu prețul tăiat în roșu (`#c0392b`; `#f87171` pe cardurile închise) și prețul de ofertă îngroșat: „1+1 −50%”: „71.67 lei +
+  ~~71.67~~ 35.83 lei” (reducerea 35,835 se rotunjește la 35,84, deci a doua bucată costă 35,83, ca în coș); „Al 3-lea la
+  −30%”: „Al 3-lea: ~~71.67~~ 50.17 lei”; „3 la preț de 2”: „3 la preț de 2: ~~215.01~~ 143.34 lei” (N × prețul tăiat, M ×
+  prețul); „−10%”: „~~71.67~~ 64.50 lei”; prețul de campanie: „~~71.67~~ 59.99 lei” (doar sub prețul produsului). Un produs
+  redus (100 lei redus la 90, −20%): prețul cardului „90.00 lei ~~100.00 lei~~”, apoi rândul ofertei „~~90.00~~ 72.00 lei”. Un
+  produs cu **oferte BBD de ales** (`Campanii::randOfertaLot`): cardul și pagina lui nu știu ce lot va alege clientul, deci nici
+  prețul de la care pornește oferta în coș (al lotului, dacă e mai mic); rândul are doar eticheta, fără sume: „**−20%** în coș,
+  la oferta aleasă” (la prețul de campanie, doar cu un preț sub prețul de acum al produsului). Sume socotite de la prețul fără
+  lot ar fi greșite (prea mari) pentru loturile reduse, de aceea nu se arată. Fără ofertă sau campanie inactivă: cardul de
+  dinainte. **Pagina produsului** are același rând (`Campanii::ofertaPagina`, cu eticheta ofertei într-o pastilă): sub preț în
+  aspectul fără șablon; în aspectul cu șablon, scriptul paginii îl mută după primul element de preț al șablonului (`.pdp-price`,
+  `.product-price`, `[data-product-price]`, `.price`, altfel elementul cu textul prețului), altfel sub titlu. Prețul tăiat e
+  `<s>`, cel nou `<b>` (scriptul paginii care caută prețul printre `span`/`strong` nu le ia drept prețul produsului).
+  **Insigna** produsului din campanie stă, în aspectul cu șablon, chiar deasupra titlului (înaintea primului `<h1>` al
+  șablonului; fără `<h1>`, în capul panoului, ca înainte).
   **„Colțurile cardurilor”** (`carduri_drepte`, `campanii/0057`): rotunjite (implicit, aspectul de până
   acum) sau drepte (cardul, cutia pozei și butoanele cu `border-radius: 0`; insigna rămâne rotunjită). Editorul nu are o
   previzualizare a cardurilor (se vede pe pagina campaniei, și ca previzualizare a administratorului). Responsivă: câte încap de minimum 230 px pe desktop, două pe rând sub 600 px.
@@ -1156,13 +1162,16 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   următoarea intrare din afară sau dacă apasă bannerul (mai jos).
 - **Fără cookie** (de la a doua decizie din 5 nov): `campanie_vazuta` nu se mai pune și nu se mai citește (unul rămas de la
   versiunea de dinainte nu schimbă nimic); se poate scoate din politica de cookie-uri a site-ului.
-- **Produsele campaniei fără reducere proprie** (cerut pe 5 nov, ca să nu se cumuleze două reduceri): un produs care are deja
-  o schimbare de preț nu se poate alege (`Campanii::motivReducere`): prețul redus sau o perioadă de reducere în curs (prețul de
-  pe card sub prețul lui, ca în magazin) și ofertele BBD de ales (pluginul „Oferte BBD” pornit). Precomanda nu are preț propriu
-  în acest cod, deci nu contează. În editor bifa lui e dezactivată, cu „(are deja o reducere: <motiv>)”; un produs ales înainte
-  și redus între timp e arătat așa, cu „scos din campanie la salvare”. Serverul aplică aceeași regulă la salvare (422, cu
-  numele produsului și motivul), deci nici un formular trimis altfel nu trece. Un produs redus după salvare rămâne în campanie
-  (insigna și cardul din `{{campanie_produse}}` îl arată cu prețul lui redus) până la următoarea salvare.
+- **Produsele campaniei cu o reducere proprie** (decizia proprietarului din 10 nov; de pe 5 nov până atunci, un astfel de produs
+  nu se putea alege, ca să nu se cumuleze două reduceri): un produs care are deja o schimbare de preț **se poate alege**, iar
+  **reducerile se adună**: oferta campaniei se aplică peste prețul lui redus. Reducerea proprie (`Campanii::motivReducere`):
+  prețul redus sau o perioadă de reducere în curs (prețul de pe card sub prețul lui, ca în magazin) și ofertele BBD de ales
+  (pluginul „Oferte BBD” pornit); precomanda nu are preț propriu în acest cod, deci nu contează. În editor bifa lui e ca a
+  oricărui produs, cu nota „(are deja o reducere: <motiv>; oferta campaniei se adaugă peste ea)”, iar salvarea îl primește.
+  Exemplu: 100 lei redus la 90, cu −20%: 72 lei. Prețul de la care pornește oferta e prețul liniei din coș de dinainte de ofertă
+  (`CheckoutCalculator::effectiveProductPrice`, cu lotul BBD ales): prețul redus, al perioadei în curs (cel mai mic) sau al
+  lotului BBD ales (dacă lotul are un preț mai mic; un lot fără preț propriu are prețul produsului). Un produs redus după
+  salvare rămâne în ofertă, de la noul lui preț. Regulile pe tipuri sunt mai jos („Oferta campaniei”).
 - **Insigna** (textul, implicit „Campanie”, și două culori): pe produsele alese (lista cu căutare din editor), pe pagina
   produsului (în capul panoului, în ambele aspecte: cu șablon și fără), pe cardurile catalogului (`{{shop_catalog}}`,
   `/magazin`, `/categorie/…`, `{{products_by_template:…}}`; jos în stânga pozei, sus sunt reducerea și ofertele BBD), în grila
@@ -1186,26 +1195,37 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   - **„Al N-lea la −Y%”** (`al_n`; „1+1 −50%” = N 2, Y 50; eticheta „1+1 −50%”, altfel „Al N-lea la −Y%”);
   - **„N la preț de M”** (`n_la_m`, N > M ≥ 1; de exemplu 3 la preț de 2): cele mai ieftine N−M bucăți din fiecare grupă, gratuite;
   - **„−X%”** (`procent`) pe fiecare linie eligibilă;
-  - **„Preț de campanie”** (`pret_fix`): prețul scris lângă fiecare produs în lista din editor (mai mic decât prețul lui; altfel
-    salvarea dă 422); un produs fără preț nu are reducere.
+  - **„Preț de campanie”** (`pret_fix`): prețul scris lângă fiecare produs în lista din editor, care **înlocuiește** prețul (nu se
+    adaugă peste o reducere): la salvare trebuie să fie mai mic decât **prețul de acum** al produsului (cel redus, dacă are un
+    preț redus sau o perioadă de reducere în curs; la un produs cu oferte BBD, prețul fără lot; editorul îl arată lângă câmp),
+    altfel salvarea dă 422 („un preț mai mic decât prețul lui de acum (90.00 lei, redus de la 100.00 lei)”); în coș se aplică
+    doar pe liniile al căror preț e mai mare (prețul mai mic câștigă): A redus la 90 cu prețul de campanie 85 plătește 85; un lot
+    BBD de 70 cu prețul de campanie 75 rămâne 70; o reducere pusă după salvare sub prețul de campanie (A redus la 80) rămâne 80,
+    fără ofertă pe linie. Un preț lipsă sau nu mai mic decât prețul liniei nu schimbă nimic.
   **Perechile și grupele** (`al_n`, `n_la_m`), deterministe: toate bucățile eligibile din coș (peste linii) se pun în ordinea
   prețului, de la cel mai scump; la preț egal, în ordinea liniilor din coș, apoi a bucăților; se iau câte N la rând, iar în
   fiecare grupă întreagă reducerea merge pe ultimele bucăți (cele mai ieftine ale grupei). Bucățile care nu fac o grupă întreagă
   rămân la preț întreg. **Rotunjirea**, în bani întregi (cenți): reducerea unei bucăți (`al_n`) sau a unei linii (`procent`) =
   prețul × procentul, rotunjit la cent, jumătatea în sus (de exemplu 45,99 la −50% = 23,00); gratuitatea și prețul fix sunt
-  exacte. **Eligibile**: produsele campaniei, fără o reducere proprie în clipa aceea (aceeași regulă ca la alegere,
-  `Campanii::motivReducere`: un produs redus după ce a fost ales e sărit) și fără o ofertă BBD aleasă pe linie.
+  exacte. **Eligibile**: toate liniile produselor campaniei, și cele cu o reducere proprie (prețul redus, o perioadă în curs,
+  lotul BBD ales). **Reducerile se adună**: prețul unei bucăți e cel al liniei de dinainte de ofertă (același cu care se
+  socotește linia, o singură dată), deci perechile și grupele se fac după prețurile reduse: „−20%” pe 90 (redus de la 100) =
+  72,00, pe 3 × 33,33 = 99,99 → 79,99 (19,998 rotunjit la 20,00); „1+1 −50%” pe A redus de la 100 la 70 și B la preț întreg
+  80: perechea (80, 70), reducerea 35,00 pe A (cel mai ieftin după prețul de acum); „3 la preț de 2” pe 100, 90 (redus) și un
+  lot BBD de 70: lotul gratuit (70,00).
   **Calculul** (`CheckoutCalculator::buildSummary`): reducerea scade din prețul liniei înaintea TVA-ului, deci linia, prețul
   mediu al bucății, TVA-ul liniei (cu cota ei), subtotalul și totalul sunt cele de după ofertă; linia păstrează prețul și
-  totalul de dinainte (`campanie_pret_initial`, `campanie_total_inainte`) și reducerea (`campanie_reducere`), iar sumarul are
-  `campanie_oferta` (textul „<campania>: <eticheta>”, reducerea totală, îndemnul, nota cuponului) doar cu cel puțin o bucată
-  eligibilă în coș. **Transportul gratuit și punctele** socotesc oferta ca pe un cupon: pragul pe subtotalul de dinainte de
-  ofertă, minus reducerile (oferta, cuponul, punctele) doar cu „shipping_include_coupons” (implicit da, deci pe ce se plătește);
-  punctele (folosite și câștigate) pe subtotal minus cupon, adică pe prețurile de după ofertă, ca la un cupon. **Cuponul** nu
-  se aplică niciunei linii eligibile pentru ofertă (redusă sau rămasă fără pereche): se socotește doar pe produsele din afara
-  campaniei (subtotalul eligibil, ca la un cupon „fără cumulare”), iar coșul și checkout-ul spun „Cuponul nu se aplică
-  produselor din oferta campaniei”. Dacă, fără produsele ofertei, cuponul nu mai are pe ce să se aplice, e **refuzat** cu
-  mesajul „Cuponul nu se aplică produselor din oferta campaniei, iar în coș nu sunt alte produse pe care să se aplice.”
+  totalul de dinainte de ofertă (`campanie_pret_initial`, `campanie_total_inainte`; cele reduse, la o linie cu o reducere
+  proprie) și reducerea (`campanie_reducere`), iar sumarul are `campanie_oferta` (textul „<campania>: <eticheta>”, reducerea
+  totală, îndemnul, nota cuponului) doar cu cel puțin o bucată eligibilă în coș. **Transportul gratuit și punctele** socotesc
+  oferta ca pe un cupon: pragul pe subtotalul de dinainte de ofertă, minus reducerile (oferta, cuponul, punctele) doar cu
+  „shipping_include_coupons” (implicit da, deci pe ce se plătește); punctele (folosite și câștigate) pe subtotal minus cupon,
+  adică pe prețurile de după ofertă, ca la un cupon. **Cuponul** nu se aplică niciunei linii eligibile pentru ofertă (redusă sau
+  rămasă fără pereche; și o linie cu o reducere proprie a unui produs al campaniei e eligibilă, deci nu primește cuponul: se
+  adună reducerea proprie și oferta, nu și cuponul): se socotește doar pe produsele din afara campaniei (subtotalul eligibil, ca
+  la un cupon „fără cumulare”), iar coșul și checkout-ul spun „Cuponul nu se aplică produselor din oferta campaniei”. Dacă, fără
+  produsele ofertei, cuponul nu mai are pe ce să se aplice, e **refuzat** cu mesajul „Cuponul nu se aplică produselor din oferta
+  campaniei, iar în coș nu sunt alte produse pe care să se aplice.”
   (`CheckoutCalculator::MESAJ_CUPON_OFERTA`): la aplicare (scos din coș, cu mesajul) și la trimiterea comenzii (comanda nu
   se plasează, clientul e întors în coș cu mesajul), deci nu se atașează comenzii și nu consumă un cupon unic sau o
   folosire din `max_uses_total`. **Îndemnul** „Mai adaugă un produs din

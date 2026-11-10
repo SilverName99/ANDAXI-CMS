@@ -21,11 +21,12 @@ use Throwable;
  *    bucăți (cele mai ieftine) sunt gratuite. „3 la preț de 2” = N 3, M 2.
  *  - `procent` „−X%” (`oferta_procent` = X): fiecare linie eligibilă are X% reducere.
  *  - `pret_fix` „Preț de campanie”: fiecare produs are prețul lui de campanie (`campanii_produse.pret_campanie`); un preț
- *    lipsă sau nu mai mic decât prețul produsului nu schimbă nimic.
+ *    lipsă sau nu mai mic decât prețul liniei (cel redus, dacă produsul are o reducere proprie) nu schimbă nimic.
  *
  * Rotunjirea: reducerea unei bucăți (al_n) sau a unei linii (procent) = preț în cenți × procent, rotunjit la cent (jumătatea
- * în sus); gratuitatea și prețul fix sunt exacte. Eligibile: doar produsele campaniei, fără o reducere proprie în acel moment
- * (Campanii::motivReducere: un produs redus după ce a fost ales e sărit) și fără o ofertă BBD aleasă pe linie.
+ * în sus); gratuitatea și prețul fix sunt exacte. Eligibile: toate liniile produselor campaniei. Reducerile se adună: prețul
+ * unei bucăți e cel al liniei de dinainte de ofertă (prețul redus, al perioadei în curs sau al lotului BBD ales, dacă are),
+ * de exemplu 100 lei redus la 90, cu −20%: 72 lei.
  */
 final class OfertaCampanie
 {

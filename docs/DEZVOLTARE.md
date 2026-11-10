@@ -148,7 +148,7 @@ tools/dev/php.sh tools/dev/test-incarcare.php       # încărcarea copiei de ver
 tools/dev/php.sh tools/dev/test-securitate.php      # securitatea nucleului (WP-12b): parolele adminilor, id-ul sesiunii la logare, adresa vizitatorului (și în testul de fum)
 tools/dev/php.sh tools/dev/test-porturi-vt-gr.php   # porturile din vertij și grafoanaytis (WP-15, WP-24…WP-26; și în testul de fum)
 tools/dev/php.sh tools/dev/test-newsletter.php      # newsletterul portat din Bioscem (WP-R din 30 oct; și în testul de fum)
-tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, oferta campaniei (calculul, coșul, comanda, ERP), Chromium 1366/390 px (și în testul de fum)
+tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, oferta campaniei (calculul, coșul, comanda, ERP; peste reducerile proprii, 10 nov), Chromium 1366/390 px (și în testul de fum)
 tools/dev/php.sh tools/dev/test-fisiere-cloud.php  # pluginul fisiere_cloud (6 nov): aplicația Windows față de codul Biovitality (cerere cu cerere), adoptarea, adminul, CSRF, „Cloud user” (și în testul de fum)
 tools/dev/php.sh tools/dev/test-concurenta.php     # pluginul concurenta (6 nov): analiza prețurilor concurenței față de codul Biovitality, CSRF (și în testul de fum)
 tools/dev/php.sh tools/dev/test-statistici.php     # pluginul statistici (8 nov): sursele, hash-ul și sarea zilei, agregarea, atribuirea comenzilor, punctul de primire, tabloul, Chromium (și în testul de fum)

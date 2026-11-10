@@ -495,8 +495,14 @@ final class Campanii
                 $pretHtml = '<p class="campanie-grila__pret">' . number_format($pret, 2) . ' lei'
                     . ($pretVechi !== null ? ' <del class="campanie-grila__vechi">' . number_format($pretVechi, 2) . ' lei</del>' : '')
                     . '</p>';
-                $randOferta = $ofertaCard !== null && $pretVechi === null && self::motivReducere($p) === ''
-                    ? self::randOfertaCard($ofertaCard, (int) $p['id'], (int) round($pret * 100)) : '';
+                // Și pe un produs cu o reducere proprie: oferta pornește de la prețul lui de acum (cel redus). Cu oferte BBD de
+                // ales, cardul nu știe lotul, deci nici prețul: doar eticheta ofertei.
+                $randOferta = '';
+                if ($ofertaCard !== null) {
+                    $randOferta = BbdOferte::cereAlegere($p)
+                        ? self::randOfertaLot($ofertaCard, (int) $p['id'], (int) round($pret * 100))
+                        : self::randOfertaCard($ofertaCard, (int) $p['id'], (int) round($pret * 100));
+                }
                 if ($randOferta !== '') {
                     $pretHtml .= '<p class="campanie-grila__oferta">' . $randOferta . '</p>';
                 }
@@ -575,7 +581,8 @@ final class Campanii
      *    N > 2: „Al 3-lea: ~~71.67~~ 50.17 lei”;
      *  - n_la_m: „3 la preț de 2: ~~215.01~~ 143.34 lei”;
      *  - procent: „~~71.67~~ 64.50 lei”; pret_fix: „~~71.67~~ <prețul de campanie> lei” (doar sub prețul produsului).
-     * '' fără ofertă de arătat.
+     * `$pretCenti` e prețul de acum al produsului: cel redus, dacă are o reducere proprie (oferta se adaugă peste ea, ca în coș;
+     * 90 lei redus de la 100, cu −20%: „~~90.00~~ 72.00 lei”). '' fără ofertă de arătat.
      *
      * @param array{tip: string, n: int, m: int, procent_bp: int, produse: array<int, ?int>} $oferta
      */
@@ -607,12 +614,37 @@ final class Campanii
     }
 
     /**
-     * Rândul ofertei campaniei pe pagina produsului (views/site/product.php, sub preț; în aspectul cu șablon, mutat lângă preț
-     * de scriptul paginii), cu aceleași reguli ca pe carduri (randOfertaCard), sau '': nicio ofertă activă, produsul nu e al
-     * ei, are o reducere proprie (preț redus, perioadă, BBD) sau magazinul nu arată prețuri. Prețul tăiat e `<s>`, cel nou
-     * `<b>`: scriptul paginii, care caută prețul printre `span`/`strong` cu textul prețului, nu le ia drept prețul produsului.
+     * Rândul ofertei pentru un produs cu oferte BBD de ales: cardul și pagina lui nu știu ce lot va alege clientul, deci nici
+     * prețul de la care pornește oferta în coș (al lotului, dacă e mai mic). Fără sume (ar fi greșite pentru loturile reduse),
+     * doar eticheta ofertei: „<strong>1+1 −50%</strong> în coș, la oferta aleasă”; cu `$eticheta` '', doar textul (pe pagina
+     * produsului eticheta e deja în pastilă). '' fără ofertă pe produs, iar la prețul de campanie și fără un preț sub prețul
+     * de acum al produsului (`$pretCenti`).
      *
-     * @param array<string, mixed> $produs rândul normalizat al produsului (price, has_sale_price, bbd_*)
+     * @param array{tip: string, n: int, m: int, procent_bp: int, produse: array<int, ?int>, eticheta: string} $oferta
+     */
+    public static function randOfertaLot(array $oferta, int $idProdus, int $pretCenti, string $eticheta = 'strong'): string
+    {
+        if ($pretCenti <= 0 || !array_key_exists($idProdus, $oferta['produse'])) {
+            return '';
+        }
+        if ($oferta['tip'] === 'pret_fix') {
+            $fix = $oferta['produse'][$idProdus] ?? null;
+            if ($fix === null || $fix <= 0 || $fix >= $pretCenti) {
+                return '';
+            }
+        }
+        return ($eticheta !== '' ? '<' . $eticheta . '>' . self::e((string) ($oferta['eticheta'] ?? '')) . '</' . $eticheta . '> ' : '')
+            . 'în coș, la oferta aleasă';
+    }
+
+    /**
+     * Rândul ofertei campaniei pe pagina produsului (views/site/product.php, sub preț; în aspectul cu șablon, mutat lângă preț
+     * de scriptul paginii), cu aceleași reguli ca pe carduri (randOfertaCard, de la prețul de acum, cel redus dacă produsul are
+     * o reducere proprie; cu oferte BBD de ales, randOfertaLot), sau '': nicio ofertă activă, produsul nu e al ei sau magazinul
+     * nu arată prețuri. Prețul tăiat e `<s>`, cel nou `<b>`: scriptul paginii, care caută prețul printre `span`/`strong` cu
+     * textul prețului, nu le ia drept prețul produsului.
+     *
+     * @param array<string, mixed> $produs rândul normalizat al produsului (price = prețul de acum, bbd_*)
      */
     public static function ofertaPagina(array $produs): string
     {
@@ -621,11 +653,12 @@ final class Campanii
             return '';
         }
         $oferta = OfertaCampanie::activa(self::db());
-        if ($oferta === null || !array_key_exists($id, $oferta['produse']) || !empty($produs['has_sale_price'])
-            || BbdOferte::cereAlegere($produs)) {
+        if ($oferta === null || !array_key_exists($id, $oferta['produse'])) {
             return '';
         }
-        $rand = self::randOfertaCard($oferta, $id, (int) round((float) ($produs['price'] ?? 0) * 100), ['s', 'b']);
+        $pretCenti = (int) round((float) ($produs['price'] ?? 0) * 100);
+        $rand = BbdOferte::cereAlegere($produs) ? self::randOfertaLot($oferta, $id, $pretCenti, '')
+            : self::randOfertaCard($oferta, $id, $pretCenti, ['s', 'b']);
         if ($rand === '') {
             return '';
         }
@@ -689,12 +722,13 @@ final class Campanii
         return [$baza, null];
     }
 
-    // ── Produsele campaniei: fără cele care au deja o reducere ────────────────────────────────────────────────────────
+    // ── Produsele campaniei și reducerile lor proprii ──────────────────────────────────────────────────────────────────
 
     /**
-     * De ce un produs nu poate intra în campanie (are deja propria schimbare de preț), sau '': prețul redus sau o perioadă de
-     * reducere în curs (prețul de pe card sub prețul lui, ca în magazin), oferte BBD de ales (pluginul „Oferte BBD” pornit).
-     * Precomanda nu schimbă prețul în acest cod (nu are preț propriu). Aceeași regulă în editor (bifa dezactivată) și la salvare.
+     * Ce reducere proprie are un produs acum (propria schimbare de preț), sau '': prețul redus sau o perioadă de reducere în
+     * curs (prețul de pe card sub prețul lui, ca în magazin), oferte BBD de ales (pluginul „Oferte BBD” pornit). Precomanda nu
+     * schimbă prețul în acest cod (nu are preț propriu). Doar informativ, în editor, lângă produs: un astfel de produs se poate
+     * alege, iar oferta campaniei se adaugă peste reducerea lui (decizia proprietarului din 10 nov; până atunci era refuzat).
      *
      * @param array<string, mixed> $produs id, price, sale_price, sale_price_periods_json, bbd_enabled, bbd_entries_json
      */
@@ -711,7 +745,8 @@ final class Campanii
     }
 
     /**
-     * Produsele din catalog pentru lista din editor, cu motivul reducerii fiecăruia (cheia `motiv_reducere`, '' = se poate alege).
+     * Produsele din catalog pentru lista din editor, cu reducerea proprie a fiecăruia (cheia `motiv_reducere`, '' = niciuna) și
+     * prețul lui de acum (`pret_acum`: cel redus, dacă are o reducere; prețul de campanie trebuie să fie sub el).
      *
      * @return list<array<string, mixed>>
      */
@@ -725,6 +760,7 @@ final class Campanii
         }
         foreach ($produse as $i => $p) {
             $produse[$i]['motiv_reducere'] = self::motivReducere($p);
+            $produse[$i]['pret_acum'] = self::preturi($p)[0];
         }
         return $produse;
     }
@@ -1035,26 +1071,22 @@ final class Campanii
                 $c['preturi'][(int) $idProdus] = is_numeric($pret) ? round((float) $pret, 2) : -1.0;
             }
         }
-        // Un produs care are deja o reducere proprie nu intră în campanie (editorul îl arată dezactivat; aici, aceeași regulă).
-        if ($c['produse'] !== []) {
+        // Prețul de campanie: sub prețul de acum al produsului (cel redus, dacă are un preț redus sau o perioadă de reducere în
+        // curs; la un produs cu oferte BBD, prețul fără lot). Un produs cu o reducere proprie se poate alege: oferta se adaugă
+        // peste ea, iar prețul fix se aplică în coș doar cât e sub prețul liniei.
+        if ($c['produse'] !== [] && $c['oferta_tip'] === 'pret_fix') {
             try {
-                $randuri = $db->query('SELECT id, name, price, sale_price, sale_price_periods_json, bbd_enabled, bbd_entries_json FROM products
+                $randuri = $db->query('SELECT id, name, price, sale_price, sale_price_periods_json FROM products
                     WHERE id IN (' . implode(',', array_map('intval', $c['produse'])) . ')')->fetchAll(PDO::FETCH_ASSOC) ?: [];
             } catch (Throwable) {
                 $randuri = [];
             }
             foreach ($randuri as $rand) {
-                if ($c['oferta_tip'] === 'pret_fix') {
-                    $pretFix = $c['preturi'][(int) $rand['id']] ?? null;
-                    if ($pretFix === null || $pretFix <= 0 || $pretFix >= (float) $rand['price']) {
-                        $erori[] = 'Prețul de campanie al produsului „' . (string) $rand['name'] . '”: un preț mai mic decât prețul lui ('
-                            . number_format((float) $rand['price'], 2) . ' lei).';
-                    }
-                }
-                $motiv = self::motivReducere($rand);
-                if ($motiv !== '') {
-                    $erori[] = 'Produsul „' . (string) $rand['name'] . '” are deja o reducere: ' . $motiv . '. Scoate-l din campanie sau '
-                        . 'scoate întâi reducerea lui.';
+                [$pretAcum, $pretVechi] = self::preturi($rand);
+                $pretFix = $c['preturi'][(int) $rand['id']] ?? null;
+                if ($pretFix === null || $pretFix <= 0 || $pretFix >= $pretAcum) {
+                    $erori[] = 'Prețul de campanie al produsului „' . (string) $rand['name'] . '”: un preț mai mic decât prețul lui de acum ('
+                        . number_format($pretAcum, 2) . ' lei' . ($pretVechi !== null ? ', redus de la ' . number_format($pretVechi, 2) . ' lei' : '') . ').';
                 }
             }
         }

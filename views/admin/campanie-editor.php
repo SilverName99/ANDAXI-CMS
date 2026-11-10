@@ -162,19 +162,17 @@ admin_componenta('antet-pagina', [
                 <?php endif; ?>
                 <?php foreach ($produse as $p): ?>
                     <?php $motivReducere = (string) ($p['motiv_reducere'] ?? ''); ?>
-                    <label data-cauta="<?= adm_e(mb_strtolower((string) $p['name'] . ' ' . (string) ($p['sku'] ?? ''))) ?>"<?= $motivReducere !== '' ? ' data-are-reducere style="opacity:.6;"' : '' ?>>
-                        <input type="checkbox" name="produse[]" value="<?= (int) $p['id'] ?>"<?= $motivReducere !== '' ? ' disabled' : (isset($alese[(int) $p['id']]) ? ' checked' : '') ?>>
-                        <span><?= adm_e((string) $p['name']) ?><?= trim((string) ($p['sku'] ?? '')) !== '' ? ' <small class="muted adm-mono">' . adm_e((string) $p['sku']) . '</small>' : '' ?><?= (int) ($p['is_active'] ?? 1) !== 1 ? ' <small class="muted">(inactiv)</small>' : '' ?><?= $motivReducere !== '' ? ' <small class="muted">(are deja o reducere: ' . adm_e($motivReducere) . (isset($alese[(int) $p['id']]) ? '; scos din campanie la salvare' : '') . ')</small>' : '' ?></span>
-<?php if ($motivReducere === ''): ?>
+                    <label data-cauta="<?= adm_e(mb_strtolower((string) $p['name'] . ' ' . (string) ($p['sku'] ?? ''))) ?>"<?= $motivReducere !== '' ? ' data-are-reducere' : '' ?>>
+                        <input type="checkbox" name="produse[]" value="<?= (int) $p['id'] ?>"<?= isset($alese[(int) $p['id']]) ? ' checked' : '' ?>>
+                        <span><?= adm_e((string) $p['name']) ?><?= trim((string) ($p['sku'] ?? '')) !== '' ? ' <small class="muted adm-mono">' . adm_e((string) $p['sku']) . '</small>' : '' ?><?= (int) ($p['is_active'] ?? 1) !== 1 ? ' <small class="muted">(inactiv)</small>' : '' ?><?= $motivReducere !== '' ? ' <small class="muted">(are deja o reducere: ' . adm_e($motivReducere) . '; oferta campaniei se adaugă peste ea)</small>' : '' ?></span>
                         <span class="campanie-pret-fix" data-oferta-camp="pret_fix" style="margin-left:auto;display:<?= $tipOferta === 'pret_fix' ? 'inline-flex' : 'none' ?>;gap:6px;align-items:center;white-space:nowrap;">
-                            <small class="muted"><?= number_format((float) ($p['price'] ?? 0), 2) ?> lei →</small>
+                            <small class="muted"><?= number_format((float) ($p['pret_acum'] ?? $p['price'] ?? 0), 2) ?> lei →</small>
                             <input type="text" inputmode="decimal" name="pret_campanie[<?= (int) $p['id'] ?>]" value="<?= isset($preturiCampanie[(int) $p['id']]) ? adm_e(number_format((float) $preturiCampanie[(int) $p['id']], 2, '.', '')) : '' ?>" placeholder="preț" aria-label="Prețul de campanie: <?= adm_e((string) $p['name']) ?>" style="width:90px;">
                         </span>
-<?php endif; ?>
                     </label>
                 <?php endforeach; ?>
             </div>
-            <small class="muted">Produsele alese primesc insigna pe pagina lor și pe cardurile din magazin și din categorii, doar cât campania e activă. Un produs care are deja o reducere (preț redus, o perioadă de reducere în curs, oferte BBD) nu se poate alege.</small>
+            <small class="muted">Produsele alese primesc insigna pe pagina lor și pe cardurile din magazin și din categorii, doar cât campania e activă. Se poate alege și un produs care are deja o reducere (preț redus, o perioadă de reducere în curs, oferte BBD): oferta campaniei se adaugă peste ea.</small>
         </div>
         <div class="field campanie-camp-lat">
             <p class="muted" style="margin:0;">Codul <code>{{campanie_produse}}</code>, scris în conținutul paginii campaniei, pune acolo produsele alese, ca o grilă de carduri (poza, numele, insigna, prețul, „Adaugă în coș”, „Vezi produsul”). Doar pe /campanie/…; la adresa proprie a paginii iese gol.</p>
@@ -211,7 +209,7 @@ admin_componenta('antet-pagina', [
                     <option value="<?= adm_e($cheieTip) ?>"<?= $tipOferta === $cheieTip ? ' selected' : '' ?>><?= adm_e($numeTip) ?></option>
                 <?php endforeach; ?>
             </select>
-            <small class="muted">Cât campania e activă, coșul scade singur reducerea pe produsele campaniei (fără cod). Perechile se fac de la cel mai scump produs eligibil din coș în jos; în fiecare grupă, reducerea merge pe cel mai ieftin. Un cupon nu se aplică produselor reduse de ofertă. Un produs care primește între timp o reducere proprie e sărit.</small>
+            <small class="muted">Cât campania e activă, coșul scade singur reducerea pe produsele campaniei (fără cod). Perechile se fac de la cel mai scump produs eligibil din coș în jos; în fiecare grupă, reducerea merge pe cel mai ieftin. Reducerile se adună: pe un produs care are deja o reducere (preț redus, perioadă, lotul BBD ales), oferta pornește de la prețul lui redus (100 lei redus la 90, cu −20%: 72 lei). Un cupon nu se aplică produselor din ofertă.</small>
         </div>
         <div class="field" data-oferta-camp="al_n n_la_m"<?= in_array($tipOferta, ['al_n', 'n_la_m'], true) ? '' : ' hidden' ?>>
             <label for="campanie-oferta-n">N (câte produse fac o grupă)</label>
@@ -227,7 +225,7 @@ admin_componenta('antet-pagina', [
             <input type="number" id="campanie-oferta-m" name="oferta_m" min="1" max="9" value="<?= (int) ($c['oferta_m'] ?? 1) ?>">
         </div>
         <div class="field campanie-camp-lat" data-oferta-camp="pret_fix"<?= $tipOferta === 'pret_fix' ? '' : ' hidden' ?>>
-            <small class="muted">Prețul de campanie al fiecărui produs se scrie în lista de mai sus, lângă produs (mai mic decât prețul lui).</small>
+            <small class="muted">Prețul de campanie al fiecărui produs se scrie în lista de mai sus, lângă produs: mai mic decât prețul lui de acum (cel redus, dacă are o reducere). În coș se aplică doar cât e sub prețul liniei (de exemplu sub prețul lotului BBD ales).</small>
         </div>
     </div>
     <script>
