@@ -28,6 +28,7 @@ admin_componenta('antet-pagina', [
         $applyFloatingCart = (string) ($settings['store_quantity_apply_floating_cart'] ?? '0') === '1';
         $applyCartPage = (string) ($settings['store_quantity_apply_cart_page'] ?? '0') === '1';
         $bbdSidebarEnabled = (string) ($settings['store_bbd_sidebar_enabled'] ?? '1') !== '0';
+        $ascundeInactive = \App\Support\Catalog::ascundeInactive($settings);
         $orderNumberMode = trim((string) ($settings['order_number_mode'] ?? \App\Support\OrderNumber::MOD_SECVENTIAL));
         if (!in_array($orderNumberMode, [\App\Support\OrderNumber::MOD_SECVENTIAL, \App\Support\OrderNumber::MOD_VECHI], true)) {
             $orderNumberMode = \App\Support\OrderNumber::MOD_SECVENTIAL;
@@ -75,7 +76,7 @@ admin_componenta('antet-pagina', [
         $aliasSetari = [
             'pages' => ['general', 'setari-pages'], 'branding' => ['general', 'setari-branding'], 'maintenance' => ['general', 'setari-maintenance'],
             'tva' => ['magazin', 'setari-tva'], 'numerotare' => ['magazin', 'setari-numerotare'], 'quantity' => ['magazin', 'setari-quantity'],
-            'widgets' => ['magazin', 'setari-widgets'], 'sitemap' => ['seo', 'setari-sitemap'], 'clarity' => ['seo', 'setari-clarity'],
+            'widgets' => ['magazin', 'setari-widgets'], 'inactive' => ['magazin', 'setari-inactive'], 'sitemap' => ['seo', 'setari-sitemap'], 'clarity' => ['seo', 'setari-clarity'],
             'google' => ['seo', 'setari-google'], 'caching' => ['viteza', ''], 'popup' => ['cookies', 'setari-popup'],
         ];
         [$tabSetari, $tintaSetari] = adm_tab_ales($taburiSetari, $aliasSetari);
@@ -443,6 +444,36 @@ admin_componenta('antet-pagina', [
             </div>
         </section>
 <?php endif; ?>
+        <section class="adm-sectiune" id="setari-inactive" aria-labelledby="setari-inactive-titlu">
+            <header class="adm-sectiune__antet">
+                <div>
+                    <h2 class="adm-sectiune__titlu" id="setari-inactive-titlu">Produsele inactive</h2>
+                    <p class="adm-sectiune__descriere">
+                Bifat: un produs cu „Activ” debifat nu mai apare nicăieri pe site (magazin, categorii, prima pagină,
+                căutare, produse similare), iar pagina lui se deschide doar cu linkul de ciornă din fișa produsului.
+                Când bifezi la loc „Activ”, produsul reapare. Nebifat: produsele inactive rămân în liste, ca pe site-ul vechi.
+                    </p>
+                </div>
+            </header>
+            <div class="adm-sectiune__corp">
+            <form method="post" action="/admin/settings/store">
+                <input type="hidden" name="action" value="save_catalog_inactive">
+                <div style="display:grid;gap:8px;">
+                    <label style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" name="catalog_ascunde_inactive" value="1" <?= $ascundeInactive ? 'checked' : '' ?>>
+                        Ascunde de pe site produsele inactive
+                    </label>
+                    <p class="field-hint" style="margin:0;">
+                Un produs inactiv care aduce vizitatori din Google rămâne fără pagină: pune-i o redirecționare
+                (Setări → Redirecționări) către categoria lui sau un produs asemănător.
+                    </p>
+                </div>
+                <div style="margin-top:10px;">
+                    <button class="btn" type="submit">Salvează</button>
+                </div>
+            </form>
+            </div>
+        </section>
 <?php if ($taburiPluginuri['widgets']): ?>
         <section class="adm-sectiune" id="setari-widgets" aria-labelledby="setari-widgets-titlu">
             <header class="adm-sectiune__antet">

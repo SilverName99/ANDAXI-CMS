@@ -837,6 +837,14 @@ try {
             'store_quantity_control_style' => $stilInainte === 'stepper' ? 'default' : 'stepper']);
         $stilDupa = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'store_quantity_control_style'")->fetchColumn();
         $verifica('Setări magazin: o acțiune necunoscută nu salvează nimic', $stilDupa === $stilInainte, $stilInainte . ' → ' . $stilDupa);
+        // Bifa „Ascunde de pe site produsele inactive” (catalog_ascunde_inactive): se salvează în ambele sensuri.
+        $inactiveInainte = (string) ($db->query("SELECT `value` FROM settings WHERE `key` = 'catalog_ascunde_inactive'")->fetchColumn() ?: '1');
+        $cerere('POST', '/admin/settings/store', $jar, ['action' => 'save_catalog_inactive']);
+        $oprit = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'catalog_ascunde_inactive'")->fetchColumn();
+        $cerere('POST', '/admin/settings/store', $jar, ['action' => 'save_catalog_inactive', 'catalog_ascunde_inactive' => '1']);
+        $pornit = (string) $db->query("SELECT `value` FROM settings WHERE `key` = 'catalog_ascunde_inactive'")->fetchColumn();
+        $verifica('Setări magazin: bifa produselor inactive se salvează (debifat 0, bifat 1)', $oprit === '0' && $pornit === '1', $oprit . ' / ' . $pornit);
+        \App\Support\Settings::save($db, ['catalog_ascunde_inactive' => $inactiveInainte]);
 
         if ($numeScenariu === 'prezentare') {
             $faraCerere = [

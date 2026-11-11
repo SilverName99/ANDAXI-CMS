@@ -11868,6 +11868,21 @@ final class AdminController
             return;
         }
 
+        // Produsele inactive: ascunse de pe site sau lăsate în liste (App\Support\Catalog::ascundeInactive).
+        if ($action === 'save_catalog_inactive') {
+            $ascunde = isset($_POST['catalog_ascunde_inactive']);
+            Settings::save($db, ['catalog_ascunde_inactive' => $ascunde ? '1' : '0']);
+            $this->refreshCacheAfterPublicContentChange();
+            Flash::set(
+                'success',
+                $ascunde
+                    ? 'Produsele inactive nu mai apar pe site.'
+                    : 'Produsele inactive apar din nou în listele site-ului.'
+            );
+            header('Location: /admin/settings/store?tab=inactive');
+            return;
+        }
+
         if ($action === 'save_bbd_sidebar') {
             Settings::save($db, [
                 'store_bbd_sidebar_enabled' => isset($_POST['store_bbd_sidebar_enabled']) ? '1' : '0',

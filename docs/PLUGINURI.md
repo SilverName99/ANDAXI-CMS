@@ -453,7 +453,8 @@ dispar, iar linkurile spre el se scot din pagini.
     linkul lui de ciornă, `/produs/<slug>?draft=<cheie>` (`products.preview_token`, din migrarea `catalog/0026`;
     `hash_equals`; bara „Ciornă”, `Cache-Control: no-store, private`, `X-Robots-Tag: noindex, nofollow`, deci nici în
     cache-ul paginilor). Cu `0` (Bioscem, vertij, grafoanaytis înghețate; BV `1`) produsul inactiv apare ca înainte,
-    iar linkul de ciornă merge oricum. Linkul îl dă Admin → Produse (editorul și eticheta „ciornă” din listă); un produs
+    iar linkul de ciornă merge oricum. Din noiembrie 2026 se schimbă din admin: Setări magazin → Magazin → „Produsele
+    inactive” → bifa „Ascunde de pe site produsele inactive” (acțiunea `save_catalog_inactive`, golește cache-ul paginilor). Linkul îl dă Admin → Produse (editorul și eticheta „ciornă” din listă); un produs
     nou, sau unul fără cheie, o primește la salvare. Un produs inactiv nu se poate cumpăra, cu sau fără setare;
   - `products.sort_position` (Admin → Produse, „Poziție în liste”): locul fix în listele în ordinea bazei (prima pagină,
     produsele similare din alegerea adminului, `{{products_by_template:…}}`), `App\Support\ProductOrder::aseaza`, și
