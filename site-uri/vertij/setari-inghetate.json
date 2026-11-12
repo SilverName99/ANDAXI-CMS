@@ -2,96 +2,12 @@
     "_despre": "Valorile pe care codul vechi al site-ului le folosea efectiv acolo unde codul comun ar folosi altceva; se scriu o singură dată, la adoptare, și doar unde lipsesc (docs/MIGRARI.md, „Înghețarea setărilor”). Generat de tools/inghetare/genereaza-setari.php: intrările „din”: „implicit”/„cod” le face generatorul; deciziile („din”: „manual”/„extras”, fara_inghetare) se scriu aici de mână. Valorile „privat” sunt înlocuitori: cele adevărate stau în privat/setari-inghetate.json, în afara git-ului (decizia OD-49).",
     "format": 2,
     "site": "vertij",
-    "sursa": "vertij-tinitus-refacut@0fc2b2c",
+    "sursa": "vertij-tinitus-refacut@9ab7999",
     "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
-    "amprenta_nucleu": "dce3e48b3da8efe73af5d25f5e3488badc9684094c4fc66faa4e116c4e617e9b",
+    "amprenta_nucleu": "a1e4c7e71c1f65a2283283fe38b01c1054a98ce5537564e399cf07e32f02e84a",
     "setari": {
-        "account_activation_active_text": {
-            "valoare": "Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_activation_button": {
-            "valoare": "Activează contul",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_activation_durations": {
-            "valoare": "1,3,6,12",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_activation_intro": {
-            "valoare": "Contul tău a fost verificat și aprobat. Pentru a avea acces la conținutul dedicat profesioniștilor, activează-l pentru un an.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_activation_renew_button": {
-            "valoare": "Reactivează contul",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_activation_title": {
-            "valoare": "Activează contul",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_avatar_folder": {
-            "valoare": "Poze de profil",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_avatar_max_mb": {
-            "valoare": "3",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_gdpr_label": {
-            "valoare": "Am citit și sunt de acord cu politica de confidențialitate și cu prelucrarea datelor mele.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_gdpr_url": {
-            "valoare": "/politica-de-confidentialitate",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
         "account_member_code_prefix": {
             "valoare": "SVTH",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_registration_intro": {
-            "valoare": "Alege tipul de cont pe care vrei să îl creezi. În funcție de alegere îți vom cere documentele necesare pentru validare.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_upload_allowed_ext": {
-            "valoare": "pdf,jpg,jpeg,png,webp",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_upload_max_files": {
-            "valoare": "10",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "account_upload_max_mb": {
-            "valoare": "8",
             "mod": "lipsa",
             "din": "implicit",
             "sursa": "Settings::DEFAULTS"
@@ -225,72 +141,6 @@
             "sursa": "VT scrie 19 % în cod (AdminController la salvarea produsului, CheckoutCalculator); înghețat ca TVA-ul să nu se schimbe singur (invariantul I4 din de-bioscem.md, OD-07)",
             "vechi": "lipsește",
             "nucleu": "implicit \"21\""
-        },
-        "donations_amounts": {
-            "valoare": "1000,500,250,100,50,25",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_amounts'] ?? … (rezerva din cod)"
-        },
-        "donations_campaign_title": {
-            "valoare": "Susține misiunea noastră!",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_campaign_title'] ?? … (rezerva din cod)"
-        },
-        "donations_cover_fees_enabled": {
-            "valoare": "1",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_cover_fees_enabled'] ?? … (rezerva din cod)"
-        },
-        "donations_cover_fees_fixed": {
-            "valoare": "1",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_cover_fees_fixed'] ?? … (rezerva din cod)"
-        },
-        "donations_cover_fees_percent": {
-            "valoare": "2.9",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_cover_fees_percent'] ?? … (rezerva din cod)"
-        },
-        "donations_demo_enabled": {
-            "valoare": "0",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_demo_enabled'] ?? … (rezerva din cod)"
-        },
-        "donations_designations": {
-            "valoare": "Unde e nevoie mai mult\nCercetare\nEducația pacienților\nEvenimente și conferințe",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_designations'] ?? … (rezerva din cod)"
-        },
-        "donations_enabled": {
-            "valoare": "0",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_enabled'] ?? … (rezerva din cod)"
-        },
-        "donations_min": {
-            "valoare": "5",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_min'] ?? … (rezerva din cod)"
-        },
-        "donations_monthly_enabled": {
-            "valoare": "1",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_monthly_enabled'] ?? … (rezerva din cod)"
-        },
-        "donations_thanks_text": {
-            "valoare": "Îți mulțumim din suflet pentru sprijin! Contribuția ta contează enorm.",
-            "mod": "lipsa",
-            "din": "cod",
-            "sursa": "$settings['donations_thanks_text'] ?? … (rezerva din cod)"
         },
         "email_brand_color": {
             "valoare": "#ea4968",
@@ -480,48 +330,6 @@
             "vechi": "lipsește",
             "nucleu": "implicit \"sequential\""
         },
-        "restricted_awaiting_email_text": {
-            "valoare": "Ți-am trimis un email de confirmare. Confirmă adresa pentru ca cererea ta să ajungă la echipa noastră.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "restricted_expired_text": {
-            "valoare": "Abonamentul contului tău a expirat. Reactivează-l pentru a avea din nou acces la acest conținut.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "restricted_guest_text": {
-            "valoare": "Această pagină este disponibilă doar membrilor cu cont activ. Creează-ți un cont profesional sau autentifică-te pentru a continua.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "restricted_inactive_text": {
-            "valoare": "Contul tău este aprobat, dar nu este activat. Activează-l pentru a avea acces la acest conținut.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "restricted_page_title": {
-            "valoare": "Conținut dedicat profesioniștilor",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "restricted_pending_text": {
-            "valoare": "Cererea ta este în curs de verificare de către echipa noastră. Te anunțăm pe email imediat ce contul este aprobat.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
-        "restricted_rejected_text": {
-            "valoare": "Cererea ta nu a putut fi aprobată. Scrie-ne dacă vrei să reiei procesul cu documente actualizate.",
-            "mod": "lipsa",
-            "din": "implicit",
-            "sursa": "Settings::DEFAULTS"
-        },
         "store_bbd_sidebar_enabled": {
             "valoare": "0",
             "mod": "lipsa",
@@ -707,11 +515,6 @@
             "motiv": "WP-40 (B6): CSS-ul și JavaScript-ul fix al șablonului din fișiere versionate, pornit la adoptare (același aspect, dovedit de G-vizual cu valorile noi); în ce-se-schimba.md",
             "vechi": "lipsește",
             "nucleu": "implicit \"1\""
-        },
-        "donations_currency": {
-            "motiv": "Pluginul donatii (Etapa 4, VT-D1) își aduce setările; înghețarea lor vine atunci",
-            "vechi": "cod expresie",
-            "nucleu": "lipsește"
         },
         "erp_enabled": {
             "motiv": "ERP-ul e nou pentru VT (codul vechi nu-l avea): fără rând e oprit (erp_enabled = 0), iar erp nu e în licența VT",

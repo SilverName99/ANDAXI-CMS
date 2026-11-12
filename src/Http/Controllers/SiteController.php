@@ -2775,6 +2775,10 @@ final class SiteController
             \App\Support\StripeEvenimente::handler($proprietar, 'payment_intent.succeeded', $plata(true));
             \App\Support\StripeEvenimente::handler($proprietar, 'payment_intent.payment_failed', $plata(false));
         }
+        // Etapa 4 (din vertij): donațiile și cotizațiile membrilor, cu handler-ele pluginurilor lor. Rulează în orice stare a
+        // pluginului (banii primiți se notează mereu; abonamentele lunare se reînnoiesc și se notează în continuare).
+        DonatiiController::handlereStripe();
+        MembriController::handlereStripe();
     }
 
     public function cartHeartbeat(): void
@@ -3893,6 +3897,13 @@ final class SiteController
         }
         $settings = Settings::all($db);
         $registrationFields = $this->customerRegistrationFields($settings);
+        // Etapa 4 (vertij, pluginul membri): un plugin poate cere alte câmpuri ale contului (cu tipurile de cont: prenumele,
+        // numele și telefonul, fără data nașterii și gen); fără agățări, câmpurile din setări.
+        foreach (\App\Support\Hooks::ruleaza('inregistrare.campuri', $db) as $campuriPlugin) {
+            if (is_array($campuriPlugin)) {
+                $registrationFields = array_merge($registrationFields, array_map('boolval', array_intersect_key($campuriPlugin, $registrationFields)));
+            }
+        }
 
         $firstName = $registrationFields['first_name'] ? trim((string) ($_POST['first_name'] ?? '')) : 'Client';
         $lastName = $registrationFields['last_name'] ? trim((string) ($_POST['last_name'] ?? '')) : 'Nou';
@@ -5062,7 +5073,7 @@ final class SiteController
         http_response_code(403);
         header('Cache-Control: no-store, private');
         View::render('site/custom-page', [
-            'title' => 'Conținut pentru membri',
+            'title' => \App\Support\AccesMembri::titluNota($db),
             'page' => [
                 'html_content' => \App\Support\AccesMembri::nota($db, $titluContinut),
                 'css_content' => '',
@@ -7256,7 +7267,7 @@ HTML;
                     $row['cover_image_url'] = trim((string) ($row['cover_image_url'] ?? '')) ?: '/assets/img/product-placeholder.svg';
                     $published = trim((string) ($row['published_at'] ?? ''));
                     $row['published_at_label'] = $published !== '' ? date('d.m.Y', strtotime($published) ?: time()) : '';
-                    $row['content_text'] = trim(strip_tags((string) ($row['content'] ?? '')));
+                    $row['content_text'] = \App\Support\PlainText::fromHtml((string) ($row['content'] ?? '')); // vertij 7d7d8cc
                 }
                 unset($row);
 
@@ -7463,11 +7474,19 @@ HTML;
         }
         $referencesHtml = $referencesRaw !== '' ? \App\Support\BlogReferences::render($referencesRaw) : '';
 
-        $contentText = trim(strip_tags($contentHtml));
+        $contentText = \App\Support\PlainText::fromHtml($contentHtml); // vertij 7d7d8cc: fără „&nbsp;” în rezumat
         $excerpt = trim((string) ($post['excerpt'] ?? ''));
+        $excerptDinText = false;
         if ($excerpt === '' && $contentText !== '') {
             $excerpt = mb_substr($contentText, 0, 180) . (mb_strlen($contentText) > 180 ? '…' : '');
+            $excerptDinText = true;
         }
+        // Revizuirea de securitate (9 nov 2026): textul din PlainText are entitățile decodate („&lt;b&gt;” scris în articol
+        // devine „<b>”), deci intră în șablon scăpat: ca HTML în paginile și CSS-ul șablonului, ca șir JavaScript în scriptul lui.
+        // Rezumatul scris de admin rămâne cum e (ca înainte).
+        $textHtml = static fn (string $t): string => htmlspecialchars($t, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $textJs = static fn (string $t): string => substr((string) json_encode($t, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE), 1, -1);
         $image = trim((string) ($post['cover_image_url'] ?? ''));
         if ($image === '') {
             $image = '/assets/img/product-placeholder.svg';
@@ -7628,8 +7647,8 @@ CSS;
         $tokens = [
             '{{blog_title}}' => $title,
             '{{blog_slug}}' => $slug,
-            '{{blog_excerpt}}' => $excerpt,
-            '{{blog_content}}' => $contentText,
+            '{{blog_excerpt}}' => $excerptDinText ? $textHtml($excerpt) : $excerpt,
+            '{{blog_content}}' => $textHtml($contentText),
             '{{blog_content_html}}' => $contentHtml,
             '{{blog_image_url}}' => $image,
             '{{blog_category}}' => $blogCategory,
@@ -7658,10 +7677,11 @@ CSS;
         $renderHtml = $templateHtml;
         $renderCss = $templateCss;
         $renderJs = $templateJs;
+        $tokensJs = ['{{blog_content}}' => $textJs($contentText)] + ($excerptDinText ? ['{{blog_excerpt}}' => $textJs($excerpt)] : []) + $tokens;
         foreach ($tokens as $needle => $value) {
             $renderHtml = str_replace($needle, $value, $renderHtml);
             $renderCss = str_replace($needle, $value, $renderCss);
-            $renderJs = str_replace($needle, $value, $renderJs);
+            $renderJs = str_replace($needle, $tokensJs[$needle], $renderJs);
         }
 
         // Template-urile scrise înainte de bibliografie și etichete n-au

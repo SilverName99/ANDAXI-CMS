@@ -99,7 +99,12 @@ return [
     // magazin concurent e al unei firme), copiate cum sunt, în grupul catalogului (până acum doar în regulile Biovitality).
     // 24 (pluginul statistici, statistici/0061): evenimentele și agregatele statisticilor doar structura (o copie nu are nevoie de
     // ele; evenimentele au hash-ul zilnic al vizitatorilor), iar hash-ul zilnic de pe comenzi (orders.statistici_vizitator) golit.
-    'versiune' => 24,
+    // 25 (pluginurile donatii și membri, din vertij, donatii/0062, membri/0063): donațiile (donatorii, sumele, abonamentele
+    // Stripe), categoriile de membru cu câmpurile lor, cererile de înscriere cu răspunsurile și documentele lor (acte, diplome) și
+    // plățile cotizației, doar structura (o copie nu primește webhook-uri și nu are nevoie de ele); pe conturi, categoria, starea
+    // cererii și data până la care e activ contul păstrate (stări, nu date personale), codul de membru, poza de profil și clientul
+    // Stripe golite.
+    'versiune' => 25,
     'schema' => 'Nou-site-bioscem@c47f270 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -159,6 +164,13 @@ return [
         'statistici_comenzi' => ['mod' => 'doar_structura', 'motiv' => 'atribuirea comenzilor pe surse'],
         'statistici_zile' => ['mod' => 'doar_structura', 'motiv' => 'starea agregării statisticilor'],
         'stripe_events' => ['mod' => 'doar_structura', 'motiv' => 'evenimentele Stripe primite: id-urile plăților, fără folos pe o copie'],
+        // 25: donațiile și membrii (din vertij): doar structura.
+        'donations' => ['mod' => 'doar_structura', 'motiv' => 'donațiile: numele și emailul donatorilor, sumele, abonamentele Stripe'],
+        'professions' => ['mod' => 'doar_structura', 'motiv' => 'categoriile de membru: fără folos pe o copie a unui site fără membri'],
+        'profession_fields' => ['mod' => 'doar_structura', 'motiv' => 'câmpurile categoriilor de membru'],
+        'account_verifications' => ['mod' => 'doar_structura', 'motiv' => 'cererile de înscriere: răspunsurile, IP-ul, browserul, jetonul confirmării'],
+        'account_verification_documents' => ['mod' => 'doar_structura', 'motiv' => 'documentele cererilor (acte, diplome): numele fișierelor'],
+        'account_activations' => ['mod' => 'doar_structura', 'motiv' => 'plățile cotizației: sumele, sesiunile Stripe, chitanțele'],
         // WP-26: trimiterile cererilor de ofertă (hash-ul adresei vizitatorului), doar pentru limită.
         'quote_submit_logs' => ['mod' => 'doar_structura', 'motiv' => 'trimiterile cererilor de ofertă: hash-ul adresei IP a vizitatorului'],
         // WP-R din 30 oct (newsletter/0040). Lista „nu trimite” ține doar amprenta SHA-256 a adresei unui abonat șters: o adresă
@@ -309,9 +321,14 @@ return [
             // cont arătate în cont, deci copia o păstrează.
             'email_confirmed_at',
             // Revizuirea WP-25 (conturi_clienti/0038): un număr care crește la resetarea parolei, nu un identificator de sesiune.
-            'session_version'],
+            'session_version',
+            // 25 (membri/0063): categoria, starea cererii și data până la care e activ contul de membru (stări, nu date personale).
+            'profession_id', 'account_status', 'account_active_until'],
             'motive' => ['email_confirmed_at' => 'data confirmării adresei, nu adresa (regula comenzilor fără cont depinde de ea)',
-                'session_version' => 'un contor (0, 1, 2…) al sesiunilor închise de o resetare a parolei, nu un id de sesiune'],
+                'session_version' => 'un contor (0, 1, 2…) al sesiunilor închise de o resetare a parolei, nu un id de sesiune',
+                'profession_id' => 'categoria de membru (un id), nu o dată personală',
+                'account_status' => 'starea cererii de membru (none, pending, approved…), nu o dată personală',
+                'account_active_until' => 'până când e plătită cotizația (o dată), nu o dată personală'],
             'transforma' => [
                 'first_name' => ['prenume'],
                 'last_name' => ['nume', 'email' => 'email'],
@@ -322,6 +339,10 @@ return [
                 // Auth::attempt compară în clar o parolă salvată necriptat (App\Support\ParolaAdmin): toate devin bcrypt aleatoare.
                 'password_hash' => ['parola'],
                 'google_id' => ['nul'],
+                // 25 (membri/0063): codul de membru (un identificator), poza de profil și clientul Stripe.
+                'member_code' => ['nul'],
+                'avatar_url' => ['nul'],
+                'stripe_customer_id' => ['nul'],
             ]],
         'user_addresses' => ['mod' => 'anonimizeaza', 'pastreaza' => ['id', 'user_id', 'city', 'county', 'is_default', 'created_at'],
             'transforma' => [

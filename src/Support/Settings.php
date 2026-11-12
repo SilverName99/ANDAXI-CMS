@@ -360,6 +360,32 @@ final class Settings
         'css_js_in_fisiere' => '1',       // B6: CSS-ul și JavaScript-ul fix al șablonului în fișiere versionate, nu în fiecare pagină
         'merchant_feed' => '1',           // B8: fluxul /feed/google-merchant.xml pornit (cu magazinul)
         'sursa_comenzii' => '1',          // B9: sursa fiecărei comenzi (Google, reclamă, email, alt site, direct) și raportul ei
+        // Pluginul `membri` (din vertij, Etapa 4; App\Support\ProfessionAccounts, MembriController): documentele cererii de
+        // înscriere, duratele cotizației, codul de membru (prefix neutru; vertij îl are înghețat), acordul GDPR, poza de profil
+        // și textele secțiunii „Activează contul” și ale paginii „acces restricționat”, aceleași cu ale codului vertij.
+        'account_upload_max_mb' => '8',
+        'account_upload_allowed_ext' => 'pdf,jpg,jpeg,png,webp',
+        'account_upload_max_files' => '10',
+        'account_activation_durations' => '1,3,6,12',
+        'account_member_code_prefix' => 'M',
+        'account_gdpr_label' => 'Am citit și sunt de acord cu politica de confidențialitate și cu prelucrarea datelor mele.',
+        'account_gdpr_url' => '/politica-de-confidentialitate',
+        'account_verification_notify_email' => '',
+        'account_registration_intro' => 'Alege tipul de cont pe care vrei să îl creezi. În funcție de alegere îți vom cere documentele necesare pentru validare.',
+        'account_activation_title' => 'Activează contul',
+        'account_activation_intro' => 'Contul tău a fost verificat și aprobat. Pentru a avea acces la conținutul dedicat profesioniștilor, activează-l pentru un an.',
+        'account_activation_button' => 'Activează contul',
+        'account_activation_active_text' => 'Cont activ până la {{data_expirare}} — mai sunt {{zile_ramase}} zile.',
+        'account_activation_renew_button' => 'Reactivează contul',
+        'restricted_page_title' => 'Conținut dedicat profesioniștilor',
+        'restricted_guest_text' => 'Această pagină este disponibilă doar membrilor cu cont activ. Creează-ți un cont profesional sau autentifică-te pentru a continua.',
+        'restricted_awaiting_email_text' => 'Ți-am trimis un email de confirmare. Confirmă adresa pentru ca cererea ta să ajungă la echipa noastră.',
+        'restricted_pending_text' => 'Cererea ta este în curs de verificare de către echipa noastră. Te anunțăm pe email imediat ce contul este aprobat.',
+        'restricted_rejected_text' => 'Cererea ta nu a putut fi aprobată. Scrie-ne dacă vrei să reiei procesul cu documente actualizate.',
+        'restricted_inactive_text' => 'Contul tău este aprobat, dar nu este activat. Activează-l pentru a avea acces la acest conținut.',
+        'restricted_expired_text' => 'Abonamentul contului tău a expirat. Reactivează-l pentru a avea din nou acces la acest conținut.',
+        'account_avatar_max_mb' => '3',
+        'account_avatar_folder' => 'Poze de profil',
     ];
 
     /**

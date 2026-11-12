@@ -231,6 +231,13 @@ final class AccesMembri
             . '</div></section>';
     }
 
+    /** Titlul paginii „acces restricționat”: al pluginului `membri` (`continut.nota_titlu`), altfel al nucleului. */
+    public static function titluNota(?PDO $db): string
+    {
+        $titlu = Hooks::primul('continut.nota_titlu', $db);
+        return is_string($titlu) && trim($titlu) !== '' ? trim($titlu) : 'Conținut pentru membri';
+    }
+
     /** Doar pentru teste și pentru linia de comandă care servește mai multe cereri: uită ce s-a citit. */
     public static function reseteaza(): void
     {

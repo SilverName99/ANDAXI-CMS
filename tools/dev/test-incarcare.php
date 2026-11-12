@@ -222,7 +222,8 @@ $oracolPastrate = [
     // Id-urile produselor, ale categoriilor și ale clienților unui cupon; eticheta unui lot de coduri unice (o scrie magazinul).
     'coupons' => ['product_ids_json', 'category_ids_json', 'allowed_user_ids_json', 'import_batch', 'used_at', 'starts_at', 'ends_at', 'created_at'],
     // Data confirmării adresei (WP-25), nu adresa.
-    'users' => ['created_at', 'email_confirmed_at'],
+    // Regulile Bioscem 25 (pluginul membri, membri/0063): starea cererii și data până la care e activ contul (stări, nu date personale).
+    'users' => ['created_at', 'email_confirmed_at', 'account_status', 'account_active_until'],
     // Orașul și județul: regulile livrării depind de ele.
     'user_addresses' => ['city', 'county', 'created_at'],
     // Numărul, stările și metodele; orașele și județele; FANbox-ul ales (date publice ale lockerului); starea coletului dată de FAN;
@@ -274,7 +275,10 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     'admin_app_tokens', 'bunny_protected_folders', 'bunny_folder_unlocks', 'file_locks', 'file_versions',
     // Regulile Bioscem 24 (pluginul statistici, statistici/0061): evenimentele (hash-ul zilnic al vizitatorilor) și agregatele.
     'statistici_evenimente', 'statistici_vizite', 'statistici_pagini', 'statistici_produse', 'statistici_cautari', 'statistici_comenzi',
-    'statistici_zile'];
+    'statistici_zile',
+    // Regulile Bioscem 25 (pluginurile donatii și membri, donatii/0062, membri/0063): donațiile, categoriile de membru, cererile cu
+    // documentele lor și plățile cotizației.
+    'donations', 'professions', 'profession_fields', 'account_verifications', 'account_verification_documents', 'account_activations'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',

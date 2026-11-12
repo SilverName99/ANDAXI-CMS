@@ -24,7 +24,9 @@ use App\Http\Controllers\ComponenteAdminController;
 use App\Http\Controllers\ConcurentaController;
 use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\DesktopApiController;
+use App\Http\Controllers\DonatiiController;
 use App\Http\Controllers\FisiereCloudController;
+use App\Http\Controllers\MembriController;
 use App\Http\Controllers\RedirectionariController;
 use App\Http\Controllers\SeoAdminController;
 use App\Http\Controllers\SiteController;
@@ -461,5 +463,30 @@ return static function (Router $router): void {
     $router->get('/admin/statistici/impact', [StatisticiController::class, 'impact']);
     $router->get('/admin/statistici/setari', [StatisticiController::class, 'setari']);
     $router->post('/admin/statistici/setari', [StatisticiController::class, 'setari']);
+    // Etapa 4: pluginul donatii (din vertij; App\Http\Controllers\DonatiiController), aceleași adrese ca în vertij: plata din
+    // sertarul „SUSȚINE”, oprirea donației lunare din cont, Admin → Donații și Setări donații.
+    $router->post('/api/donations/intent', [DonatiiController::class, 'intent']);
+    $router->post('/contul-meu/donatii/opreste', [DonatiiController::class, 'opreste']);
+    $router->get('/admin/donations', [DonatiiController::class, 'lista']);
+    $router->get('/admin/settings/donations', [DonatiiController::class, 'setari']);
+    $router->post('/admin/settings/donations', [DonatiiController::class, 'setariSalveaza']);
+    // Etapa 4: pluginul membri (din vertij; App\Http\Controllers\MembriController), aceleași adrese ca în vertij. Linkul de
+    // confirmare al unei cereri (/cont/confirmare/{token}) e al nucleului, care îl dă pluginului (ConfirmareEmailController).
+    $router->get('/cont/verifica-email', [MembriController::class, 'verificaEmail']);
+    $router->post('/cont/retrimite-confirmarea', [MembriController::class, 'retrimite']);
+    $router->post('/contul-meu/poza', [MembriController::class, 'poza']);
+    $router->post('/contul-meu/activare', [MembriController::class, 'activare']);
+    $router->get('/contul-meu/activare/retur', [MembriController::class, 'activareRetur']);
+    $router->get('/contul-meu/cerere-noua', [MembriController::class, 'cerereNoua']);
+    $router->post('/contul-meu/cerere-noua', [MembriController::class, 'cerereNouaTrimite']);
+    $router->get('/admin/accounts/professions', [MembriController::class, 'profesii']);
+    $router->post('/admin/accounts/professions', [MembriController::class, 'profesiiSalveaza']);
+    $router->post('/admin/accounts/professions/fields', [MembriController::class, 'campuriSalveaza']);
+    $router->get('/admin/accounts/verifications', [MembriController::class, 'cereri']);
+    $router->get('/admin/accounts/verifications/{id}', [MembriController::class, 'cerere']);
+    $router->post('/admin/accounts/verifications/{id}/decision', [MembriController::class, 'decizie']);
+    $router->get('/admin/accounts/documents/{id}', [MembriController::class, 'document']);
+    $router->get('/admin/accounts/settings', [MembriController::class, 'setari']);
+    $router->post('/admin/accounts/settings', [MembriController::class, 'setariSalveaza']);
     $router->get('/{slug*}', [SiteController::class, 'customPage']);
 };

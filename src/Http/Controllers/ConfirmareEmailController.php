@@ -34,6 +34,11 @@ final class ConfirmareEmailController
         $db = $this->db();
         $token = (string) ($params['token'] ?? '');
         $link = $db instanceof PDO ? ConfirmareEmail::linkValid($db, $token) : null;
+        // Etapa 4 (pluginul membri): linkul din emailul unei cereri de membru (vertij: `account_verifications`), cu aceeași
+        // pagină și același buton, parola contului cerută.
+        if ($link === null && $db instanceof PDO && \App\Support\Hooks::oricare('confirmare.link_plugin', $db, $token)) {
+            $link = ['id' => 0, 'user_id' => 0, 'scop' => ConfirmareEmail::SCOP_INREGISTRARE];
+        }
         if ($link === null) {
             Flash::set('error', 'Linkul de confirmare a expirat sau a fost deja folosit. Cere unul nou din contul tău.');
             header('Location: ' . ((int) (CustomerAuth::id() ?? 0) > 0 ? '/contul-meu' : '/login'));
@@ -75,6 +80,17 @@ final class ConfirmareEmailController
         $token = (string) ($params['token'] ?? '');
         $rezultat = $db instanceof PDO ? ConfirmareEmail::folosesteLink($db, $token, $logat, (string) ($_POST['password'] ?? ''))
             : ['rezultat' => ConfirmareEmail::LINK_INVALID, 'user_id' => null, 'comenzi' => 0, 'puncte' => 0];
+        if ($rezultat['rezultat'] === ConfirmareEmail::LINK_INVALID && $db instanceof PDO) {
+            // Etapa 4 (pluginul membri): linkul unei cereri de membru; pluginul spune unde duce și ce mesaj arată.
+            $plugin = \App\Support\Hooks::primul('confirmare.foloseste_plugin', $db, $token, (string) ($_POST['password'] ?? ''));
+            if (is_array($plugin) && is_string($plugin['location'] ?? null) && is_array($plugin['flash'] ?? null)) {
+                unset($_SESSION['confirmare_email_cont']);
+                Flash::set((string) ($plugin['flash'][0] ?? 'success'), (string) ($plugin['flash'][1] ?? ''));
+                header('Location: ' . $plugin['location']);
+                return;
+            }
+        }
+        // Pasul pluginurilor după dovadă (`confirmare.dupa`) îl face ConfirmareEmail::marcheazaConfirmat, pentru orice dovadă.
         switch ($rezultat['rezultat']) {
             case ConfirmareEmail::LINK_LOGARE:
                 Flash::set('error', 'Intră în contul pentru care ai cerut linkul, apoi apasă „Confirmă adresa”.');

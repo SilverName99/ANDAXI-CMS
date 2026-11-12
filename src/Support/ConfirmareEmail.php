@@ -190,6 +190,12 @@ final class ConfirmareEmail
                 'dovada' => $sursa,
             ]);
         }
+        // Adresa e dovedită (oricare dovadă: linkul nucleului sau al unui plugin, resetarea parolei, logarea cu Google): pasul
+        // pluginurilor (de exemplu `membri`, cererea care aștepta confirmarea trece la verificare), o singură dată pe dovadă.
+        try {
+            Hooks::ruleaza('confirmare.dupa', $db, $idUtilizator);
+        } catch (Throwable) {
+        }
         return ['comenzi' => $legate, 'puncte' => $puncte];
     }
 
@@ -286,6 +292,10 @@ final class ConfirmareEmail
             || self::confirmat($db, $idUtilizator)) {
             return false;
         }
+        // Etapa 4 (pluginul membri): un cont cu cererea de membru încă neconfirmată pe email (linkul pluginului).
+        if (Hooks::oricare('logare.blocata', $db, $idUtilizator)) {
+            return true;
+        }
         $stmt = $db->prepare('SELECT COUNT(*) FROM customer_email_confirmations WHERE user_id = :id AND scop = :scop');
         $stmt->execute(['id' => $idUtilizator, 'scop' => self::SCOP_INREGISTRARE]);
         return (int) $stmt->fetchColumn() > 0;
@@ -305,7 +315,7 @@ final class ConfirmareEmail
         try {
             [$acelasiVizitator, $parametri] = IpClient::conditieLimita('ip_address', $ip);
             $stmt = $db->prepare('SELECT COUNT(*) FROM register_submit_logs WHERE ' . $acelasiVizitator
-                . ' AND created_at >= (NOW() - INTERVAL 15 MINUTE) AND ' . ($retrimitere ? "status = 'resend'" : "(status IS NULL OR status <> 'resend')"));
+                . ' AND created_at >= (NOW() - INTERVAL 15 MINUTE) AND ' . ($retrimitere ? "status = 'resend'" : "(status IS NULL OR (status <> 'resend' AND status NOT LIKE 'l:%'))"));
             $stmt->execute($parametri);
             return (int) $stmt->fetchColumn() >= ($retrimitere ? self::RETRIMITERI_LA_15_MINUTE : self::INREGISTRARI_LA_15_MINUTE);
         } catch (Throwable) {

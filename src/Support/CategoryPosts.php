@@ -512,8 +512,8 @@ final class CategoryPosts
     {
         $excerpt = trim((string) ($p['excerpt'] ?? ''));
         if ($excerpt === '') {
-            $plain = trim(strip_tags((string) ($p['content'] ?? '')));
-            $excerpt = mb_substr($plain, 0, $len) . (mb_strlen($plain) > $len ? '…' : '');
+            // vertij 7d7d8cc: entitățile (`&nbsp;`) decodate și sfârșitul unui bloc ca spațiu (App\Support\PlainText).
+            $excerpt = PlainText::excerpt((string) ($p['content'] ?? ''), $len);
         }
         return $excerpt;
     }

@@ -1,0 +1,34 @@
+/*
+ * Paginile contului vertij în culorile site-ului (codul vechi 5e1d8bd, 6c4d97c; aceleași reguli, mutate din blocurile <style>
+ * ale vederilor în foaia temei). Doar clasele acestor pagini: .account-auth-tabs, .account-auth-grid (logarea și înregistrarea
+ * din /contul-meu) și .account-reset-panel (resetarea parolei și, în codul comun, confirmarea adresei de email).
+ */
+.account-auth-tabs{display:flex;gap:8px;max-width:520px;margin:6px auto 18px;}
+.account-auth-tabs a{flex:1;text-align:center;padding:11px 14px;border-radius:999px !important;font-weight:700;text-decoration:none;color:#6f2b98;background:#f4ecf7;border:1.5px solid transparent;transition:background .15s ease,color .15s ease,border-color .15s ease;}
+.account-auth-tabs a:hover{border-color:#d9c2e6;}
+.account-auth-tabs a.active{background:linear-gradient(135deg,#ea4968,#6f2b98);color:#fff;}
+.account-auth-grid{max-width:520px;margin:0 auto;}
+.account-auth-grid .panel{background:#fff;border:1px solid #efe3f2;border-radius:18px !important;box-shadow:0 16px 40px rgba(111,43,152,.08);padding:26px 26px 24px;margin:0;}
+.account-auth-grid h3{color:#1f2937;font-family:"Playfair Display","DM Sans",serif;font-size:22px;margin-bottom:6px;}
+.account-auth-grid label{display:block;font-size:13px;font-weight:600;color:#4b5563;margin:14px 0 6px;}
+.account-auth-grid input[type=email],
+.account-auth-grid input[type=text],
+.account-auth-grid input[type=password],
+.account-auth-grid input[type=tel]{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #e5d9ec;border-radius:10px !important;font-size:15px;background:#fdfbfe;transition:border-color .15s ease,box-shadow .15s ease;}
+.account-auth-grid input:focus{outline:none;border-color:#ea4968;box-shadow:0 0 0 3px rgba(234,73,104,.12);}
+.account-auth-grid .btn{width:100%;margin-top:20px;border:0;cursor:pointer;background:linear-gradient(135deg,#ea4968,#6f2b98) !important;color:#fff !important;font-weight:700;font-size:15px;letter-spacing:.02em;padding:13px 18px;border-radius:12px !important;transition:transform .15s ease,opacity .15s ease;}
+.account-auth-grid .btn:hover{transform:translateY(-2px);opacity:.95;}
+.account-auth-grid a{color:#ea4968;font-weight:600;}
+.account-auth-grid a:hover{text-decoration:underline;}
+
+.account-reset-panel{max-width:520px;margin:40px auto;background:#fff;border:1px solid #efe3f2;border-radius:18px !important;box-shadow:0 16px 40px rgba(111,43,152,.08);padding:30px 30px 28px;}
+.account-reset-panel h1{font-family:"Playfair Display","DM Sans",serif;color:#1f2937;}
+.account-reset-panel p{color:#6b7280;}
+.account-reset-panel form{max-width:none !important;}
+.account-reset-panel label{display:block;font-size:13px;font-weight:600;color:#4b5563;margin:14px 0 6px;}
+.account-reset-panel input[type=email],.account-reset-panel input[type=password]{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #e5d9ec;border-radius:10px !important;font-size:15px;background:#fdfbfe;transition:border-color .15s ease,box-shadow .15s ease;}
+.account-reset-panel input:focus{outline:none;border-color:#ea4968;box-shadow:0 0 0 3px rgba(234,73,104,.12);}
+.account-reset-panel .btn{width:100%;margin-top:20px;border:0;cursor:pointer;background:linear-gradient(135deg,#ea4968,#6f2b98) !important;color:#fff !important;font-weight:700;font-size:15px;padding:13px 18px;border-radius:12px !important;transition:transform .15s ease,opacity .15s ease;}
+.account-reset-panel .btn:hover{transform:translateY(-2px);opacity:.95;}
+.account-reset-panel a{color:#ea4968;font-weight:600;}
+.account-reset-panel a:hover{text-decoration:underline;}

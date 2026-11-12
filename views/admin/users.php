@@ -256,7 +256,21 @@ admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Clienții', 'taburi' => [
                     </label>
                 </div>
 
-                <div class="users-table-wrap">
+<?php
+// Coloanele pluginurilor (punctul `admin.utilizatori.coloane`: membri, ultima plată a cotizației; vertij 7d7d8cc): capul,
+// celulele fiecărui rând și numărul lor. Fără agățări: nimic, deci lista rămâne cea de azi.
+$coloanePlugin = ['cap' => '', 'celule' => [], 'numar' => 0];
+foreach (\App\Support\Hooks::ruleaza('admin.utilizatori.coloane', $users) as $bucataPlugin) {
+    if (is_array($bucataPlugin)) {
+        $coloanePlugin['cap'] .= (string) ($bucataPlugin['cap'] ?? '');
+        $coloanePlugin['numar'] += (int) ($bucataPlugin['numar'] ?? 0);
+        foreach ((array) ($bucataPlugin['celule'] ?? []) as $idRand => $celule) {
+            $coloanePlugin['celule'][(int) $idRand] = ($coloanePlugin['celule'][(int) $idRand] ?? '') . (string) $celule;
+        }
+    }
+}
+?>
+                <div class="users-table-wrap<?= $coloanePlugin['numar'] > 0 ? ' admin-table-scroll' : '' ?>">
                     <table class="table users-table">
                         <thead>
                         <tr>
@@ -283,13 +297,14 @@ admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Clienții', 'taburi' => [
                                 </a>
                             </th>
 <?php endif; ?>
+<?= $coloanePlugin['cap'] ?>
                             <th style="width:120px;"></th>
                         </tr>
                         </thead>
                         <tbody>
                         <?php if ($users === []): ?>
                             <tr>
-                                <td colspan="6">Nu există utilizatori care corespund căutării.</td>
+                                <td colspan="<?= 6 + $coloanePlugin['numar'] ?>">Nu există utilizatori care corespund căutării.</td>
                             </tr>
                         <?php else: ?>
                             <?php foreach ($users as $user): ?>
@@ -318,6 +333,7 @@ admin_componenta('tab-uri-cu-numar', ['eticheta' => 'Clienții', 'taburi' => [
                                     <td><strong><?= (int) ($user['orders_count'] ?? 0) ?></strong> comenzi</td>
                                     <td><?= number_format((float) ($user['total_spent'] ?? 0), 2) ?> lei</td>
 <?php endif; ?>
+<?= $coloanePlugin['celule'][$id] ?? '' ?>
                                     <td>
                                         <a class="btn btn-secondary users-detail-btn" href="/admin/users/<?= $id ?><?= $searchSuffix ?>">Detalii</a>
                                     </td>

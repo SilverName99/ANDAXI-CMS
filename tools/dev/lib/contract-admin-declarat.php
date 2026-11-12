@@ -418,4 +418,31 @@ return [
         'meniu-statistici' => ['ce' => 'adaugat', 'rand' => '^link /admin/statistici$', 'licenta' => 'toate', 'rol' => ['adm', 'magazin', 'emailuri'],
             'motiv' => 'intrarea „Statistici” din Rapoarte (vizite, surse, pagini, produse, căutări, comenzi și venituri pe sursă)'],
     ],
+    // Pluginurile donatii și membri (9 nov 2026, din vertij-tinitus.ro 0fc2b2c..9ab7999): intrările lor din meniu (Donații și
+    // Setări donații; Profesii, Cereri de verificare, Setări conturi), pentru administratorul general, doar cu pluginurile pe site
+    // (licența „toate”; nu sunt în licențele de dezvoltare Bioscem și grafoanaytis). Paginile lor sunt noi: ce trimit le verifică
+    // tools/dev/test-donatii-membri.php, față de codul vertij, răspuns cu răspuns.
+    'donatii' => [
+        'meniu-donatii' => ['ce' => 'adaugat', 'rand' => '^link /admin/donations$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „Donații” (lista donațiilor unice și lunare, ca în vertij)'],
+        'meniu-setari-donatii' => ['ce' => 'adaugat', 'rand' => '^link /admin/settings/donations$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „Setări donații” (fereastra fundației, sumele, modul Exemplu)'],
+    ],
+    'membri' => [
+        'meniu-profesii' => ['ce' => 'adaugat', 'rand' => '^link /admin/accounts/professions$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „Profesii” (profesiile conturilor profesionale și câmpurile lor)'],
+        'meniu-cereri' => ['ce' => 'adaugat', 'rand' => '^link /admin/accounts/verifications$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „Cereri de verificare” (cererile conturilor profesionale, cu ultima plată a activării)'],
+        'meniu-setari-conturi' => ['ce' => 'adaugat', 'rand' => '^link /admin/accounts/settings$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'intrarea „Setări conturi” (categoriile membrilor, prețul și durata activării, textele notei)'],
+        'utilizatori-coloane' => ['ce' => 'adaugat', 'rand' => '^celula —$', 'cale' => '^/admin/users(\\?panel=import|/1)?$', 'licenta' => 'toate',
+            'rol' => 'adm', 'motiv' => 'coloanele pluginului în lista utilizatorilor (agățarea admin.utilizatori.coloane: profesia, starea '
+                . 'contului, activ până la, codul de membru, ultima plată a activării; „—” la un client fără cont profesional)'],
+        'editor-pagina-bifa' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/pages/save input:(hidden requires_active_account_present = 1'
+            . '|checkbox requires_active_account = 1)$', 'licenta' => 'toate', 'rol' => 'adm',
+            'motiv' => 'bifa „Doar pentru conturi active” din editorul paginii (agățarea editor.pagina.campuri, ca în vertij)'],
+        'editor-articol-bifa' => ['ce' => 'adaugat', 'rand' => '^camp POST /admin/blog/posts input:(hidden requires_active_account_present = 1'
+            . '|checkbox requires_active_account = )$', 'licenta' => 'toate', 'rol' => ['adm', 'blog', 'emailuri'],
+            'motiv' => 'bifa „Doar pentru conturi active” din editorul articolului (agățarea editor.articol.campuri; fără value, ca în vertij)'],
+    ],
 ];

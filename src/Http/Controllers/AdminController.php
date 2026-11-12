@@ -1114,13 +1114,13 @@ final class AdminController
             $cuInregistrare = \App\Support\Plugins::vizibil('conturi_clienti');
             $cuCheckout = \App\Support\Plugins::vizibil('magazin');
             if ($source === 'register' && $cuInregistrare) {
-                $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs';
+                $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs WHERE status NOT LIKE \'l:%\'';
             } elseif ($source === 'checkout' && $cuCheckout) {
                 $subqueries[] = 'SELECT "checkout" AS source, id, ip_address, user_agent, status, created_at FROM checkout_submit_logs';
             } else {
                 $source = 'all';
                 if ($cuInregistrare) {
-                    $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs';
+                    $subqueries[] = 'SELECT "register" AS source, id, ip_address, user_agent, status, created_at FROM register_submit_logs WHERE status NOT LIKE \'l:%\'';
                 }
                 if ($cuCheckout) {
                     $subqueries[] = 'SELECT "checkout" AS source, id, ip_address, user_agent, status, created_at FROM checkout_submit_logs';
@@ -25747,7 +25747,7 @@ HTML;
                 }
 
                 if ($title === '') {
-                    $contentText = trim(strip_tags($content));
+                    $contentText = \App\Support\PlainText::fromHtmlNoTags($content);
                     $title = $contentText !== '' ? mb_substr($contentText, 0, 120) : 'Articol importat';
                 }
 
@@ -25768,10 +25768,7 @@ HTML;
                 $seenInFile[$slug] = true;
 
                 if ($excerpt === '') {
-                    $contentText = trim(strip_tags($content));
-                    if ($contentText !== '') {
-                        $excerpt = mb_substr($contentText, 0, 240) . (mb_strlen($contentText) > 240 ? '…' : '');
-                    }
+                    $excerpt = \App\Support\PlainText::excerptNoTags($content, 240);
                 }
 
                 if ($featuredImage === '') {
@@ -26545,7 +26542,7 @@ HTML;
 
     private function estimateBlogReadingMinutes(string $content): int
     {
-        $text = trim(strip_tags($content));
+        $text = \App\Support\PlainText::fromHtml($content);
         if ($text === '') {
             return 1;
         }

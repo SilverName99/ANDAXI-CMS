@@ -162,7 +162,10 @@ $mereuDeschiseFixe = ['POST /webhook/stripe', 'POST /webhook/euplatesc', 'POST /
     'GET /contul-meu/confirmare/{token}',
     // WP-R din 30 oct 2026 (codul vechi e2e2d77, 7123076): dezabonarea „cu un clic” a clientului de email (antetul
     // List-Unsubscribe-Post al unui newsletter trimis) și butonul „Confirm dezabonarea” din pagina linkului, la aceeași adresă.
-    'POST /newsletter/unsubscribe/{token}'];
+    'POST /newsletter/unsubscribe/{token}',
+    // Etapa 4 (pluginul membri, din vertij): întoarcerea de la Stripe după plata cotizației; plata se notează în orice stare a
+    // pluginului (ca webhook-ul), iar fără sesiunea Stripe a unei cotizații nu face nimic (trimite la cont).
+    'GET /contul-meu/activare/retur'];
 $mereuDeschiseFixeNorm = [];
 foreach ($mereuDeschiseFixe as $adresa) {
     [$metodaFixa, $tiparFix] = explode(' ', $adresa, 2);

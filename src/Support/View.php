@@ -43,6 +43,25 @@ final class View
     }
 
     /**
+     * O vedere fără aspect, ca text (bucățile pluginurilor: tab-ul unui cont, sertarul donațiilor). Vederea nu schimbă
+     * `vedereaCurenta()`, deci aspectul paginii în care intră rămâne cel al paginii.
+     */
+    public static function fragment(string $template, array $data = []): string
+    {
+        $templateFile = __DIR__ . '/../../views/' . $template . '.php';
+        if (!is_file($templateFile)) {
+            return '';
+        }
+        $randeaza = static function (string $__fisier, array $__date): string {
+            extract($__date, EXTR_SKIP);
+            ob_start();
+            require $__fisier;
+            return (string) ob_get_clean();
+        };
+        return $randeaza($templateFile, $data);
+    }
+
+    /**
      * Un text ca șir JavaScript între apostrofuri, sigur într-un <script> („'Supliment natural'”): \, ', rândurile noi
      * și separatorii de rând Unicode scăpați, iar „<” scris \x3C (nimic nu poate închide scriptul).
      */

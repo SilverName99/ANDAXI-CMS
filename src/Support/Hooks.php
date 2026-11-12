@@ -37,7 +37,15 @@ namespace App\Support;
  *    pagina Acasă a adminului (WP-32, App\Support\AcasaAdmin::deFacut; una cu `numar` 0 nu se arată) → `magazin`,
  *    `livrare_fan`, `erp`, `recenzii`, `precomenzi`, `link_plata` (config/hooks.php, din Etapa 1);
  *  - `acasa.sanatate($db, $setari)` → listă de `{text, ton?, href?}`: bucățile rândului de sănătate de pe Acasă (WP-32)
- *    → `erp`, `livrare_fan`.
+ *    → `erp`, `livrare_fan`;
+ *  - Etapa 4 (`membri`, din vertij): `inregistrare.campuri($db)` → câmpurile contului cerute (`first_name` … `password_confirm`
+ *    => bool) peste cele din setări; `inregistrare.inlocuieste_campurile()` → bool: câmpurile contului le randează pluginul
+ *    (formularul primește și `enctype="multipart/form-data"`); `confirmare.link_plugin($db, $token)` → bool și
+ *    `confirmare.foloseste_plugin($db, $token, $parola)` → `{location, flash: [tip, text]}` sau null: un link de confirmare
+ *    al pluginului pe `/cont/confirmare/{token}`; `confirmare.dupa($db, $idUtilizator)`: adresa a fost dovedită (orice dovadă: un link, resetarea parolei, Google; din ConfirmareEmail::marcheazaConfirmat);
+ *    `logare.blocata($db, $idUtilizator)` → bool (cu confirmarea cerută la înregistrare); `cont.profil($utilizator)` (HTML,
+ *    în „Profilul meu”); `continut.nota_titlu($db)` → titlul notei; `admin.utilizatori.coloane($randuri)` →
+ *    `{cap, celule: id => HTML, numar}` (Admin → Utilizatori).
  */
 final class Hooks
 {
@@ -50,6 +58,10 @@ final class Hooks
         'acasa.de_facut', 'acasa.sanatate',
         // Pluginul campanii (5 nov 2026): începutul paginilor publice.
         'layout.inceput_body',
+        // Etapa 4 (din vertij, pluginul membri): câmpurile contului la înscriere, linkul de confirmare al cererii, logarea
+        // unui cont neconfirmat, poza de profil, titlul notei, coloanele listei de utilizatori.
+        'inregistrare.campuri', 'inregistrare.inlocuieste_campurile', 'confirmare.link_plugin', 'confirmare.foloseste_plugin',
+        'confirmare.dupa', 'logare.blocata', 'cont.profil', 'continut.nota_titlu', 'admin.utilizatori.coloane',
     ];
 
     /** @var array<string, list<array{plugin: string, fn: callable, stare: string}>>|null */

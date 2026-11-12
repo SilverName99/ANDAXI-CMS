@@ -55,7 +55,11 @@
         "campanii/0058_oferta_campaniei": "2c79e366589715a37c0551f47d72e0995f6f231d0c5c5e28ad74433d7b1d262c",
         "fisiere_cloud/0059_fisiere_cloud": "7232c41793544f60c8ca4ac32c595c3663f43e10aa86bce6a50d67f407769dc1",
         "concurenta/0060_concurenta": "ddab8c252baddf7d5c63bfd35d7beb488beba1c3728a15b672b9e0bb2958623f",
-        "statistici/0061_statistici": "bc29427913f7309b58cf2539c6702b87bd5dc9144661e81350248da9da99ffab"
+        "statistici/0061_statistici": "bc29427913f7309b58cf2539c6702b87bd5dc9144661e81350248da9da99ffab",
+        "donatii/0062_donatii": "69cf117d9b50c7b117dfa8430a15537ffd65321867b2ddb8436bad2730e8e811",
+        "membri/0063_membri": "352fb6bcffb5ccd4a3281c1c8ee6b3b4b8c3e02132c4de00f062d1b2ffbc510d",
+        "donatii/0064_donatii_rambursari": "7396c786f0e59afc9bcd07fe1a576541cf170d8b445681075ead2f4ff86169d4",
+        "membri/0065_membri_rambursari": "148354c065707e1db15ae99ca19a2b9c094717c3a28ad6413148e429f476bc6b"
     },
     "retrase": {}
 }
