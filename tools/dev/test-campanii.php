@@ -689,14 +689,14 @@ $verifica('fără bifă: pagina campaniei cu antetul, subsolul și coșul plutit
     && str_contains($r['corp'], '/assets/js/floating-cart.js') && !str_contains($r['corp'], '.floating-cart__trigger{display:none')
     && str_contains($r['corp'], 'data-campanie-inapoi') && !str_contains($r['corp'], 'data-bara-inchisa'), (string) $r['cod']);
 $numarCarduri = substr_count($r['corp'], '<article class="campanie-grila__card">');
-$verifica('{{campanie_produse}}: un card pe produs vizibil (fără cel ascuns din catalog), codul înlocuit', $numarCarduri === count($produseCampanie) - 1
+$verifica('{{campanie_produse}}: un card pe fiecare produs ales (și pe cel ascuns din lista magazinului), codul înlocuit', $numarCarduri === count($produseCampanie)
     && !str_contains($r['corp'], '{{campanie_produse}}') && str_contains($r['corp'], 'campanie-grila--deschise'), $numarCarduri . ' carduri');
 $slugRedus = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $pRedus]);
 $verifica('cardul: poza, numele, insigna campaniei, prețul redus și cel vechi tăiat, „Vezi produsul” spre produs',
     str_contains($r['corp'], '80.00 lei <del class="campanie-grila__vechi">100.00 lei</del>')
     && str_contains($r['corp'], '<a class="campanie-grila__buton" href="/produs/' . rawurlencode($slugRedus) . '">Vezi produsul</a>')
     && str_contains($r['corp'], '<span class="campanie-grila__insigna" style="background:#e31c23;color:#ffffff;">Campanie</span>')
-    && !str_contains($r['corp'], '/produs/' . rawurlencode($unu('SELECT slug FROM products WHERE id = :id', ['id' => $pAscuns])) . '"'));
+    );
 // „Adaugă în coș”: același formular ca pe cardul din magazin (views/site/components/product-card.php): POST /cos/adauga/<id>.
 $magazin = $cerere('GET', '/magazin', null, [], $cuCookie);
 $verifica('„Adaugă în coș” pe card: formularul cardului din magazin (POST /cos/adauga/<id>, același drum ca în /magazin); epuizat: „Stoc epuizat”, fără formular',
@@ -712,25 +712,12 @@ $cos = $cerere('GET', '/cos', $jarCos);
 $verifica('formularul de pe card pune produsul în coș (o bucată), ca în magazin', in_array($adaugat['cod'], [302, 303], true)
     && $cos['cod'] === 200 && str_contains($cos['corp'], '/produs/' . rawurlencode($slugRedus)), $adaugat['cod'] . ' ' . ($adaugat['antete']['location'] ?? '') . ' / ' . $cos['cod']);
 $verifica('fără „Text sub preț”: niciun rând sub preț', !str_contains($r['corp'], '<p class="campanie-grila__sub">'));
-// Produsul ascuns din catalog, bifat „Arată pe pagina campaniei” (campanii/0066, 12 nov 2026): pe pagina campaniei da, în magazin nu.
+// Produsul ascuns din lista magazinului, ales în campanie (12 nov 2026): pe pagina campaniei da, în magazin nu; nicio bifă în editor.
 $editor = $cerere('GET', '/admin/products', $jarAdmin);
-$verifica('editorul produsului (pluginul pornit): bifa „Arată pe pagina campaniei chiar dacă e ascuns din lista magazinului”, cu marcajul formularului',
-    str_contains($editor['corp'], 'name="campanie_arata_ascuns" id="p_campanie_arata_ascuns"')
-    && str_contains($editor['corp'], 'name="campanie_campuri_trimise" value="1"'), (string) $editor['cod']);
-$db->prepare('UPDATE products SET campanie_arata_ascuns = 1 WHERE id = :id')->execute(['id' => $pAscuns]);
-ResponseCache::purgePageCache();
-$rAratat = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
 $slugAscuns = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $pAscuns]);
-$magazinAratat = $cerere('GET', '/magazin', null, [], $cuCookie);
-$editorAratat = $cerere('GET', '/admin/products', $jarAdmin);
-$verifica('… bifat: produsul ascuns apare pe pagina campaniei (toate cardurile), dar tot nu în lista magazinului; editorul îl știe bifat',
-    substr_count($rAratat['corp'], '<article class="campanie-grila__card">') === count($produseCampanie)
-    && str_contains($rAratat['corp'], '/produs/' . rawurlencode($slugAscuns) . '"')
-    && !str_contains($magazinAratat['corp'], '/produs/' . rawurlencode($slugAscuns) . '"')
-    && preg_match('/"' . $pAscuns . '":\{[^}]*"campanie_arata_ascuns":1/', $editorAratat['corp']) === 1,
-    substr_count($rAratat['corp'], '<article class="campanie-grila__card">') . ' carduri');
-$db->prepare('UPDATE products SET campanie_arata_ascuns = 0 WHERE id = :id')->execute(['id' => $pAscuns]);
-ResponseCache::purgePageCache();
+$verifica('produsul ascuns din lista magazinului, ales în campanie: apare pe pagina campaniei, nu și în /magazin; editorul produsului fără bifa campaniei',
+    str_contains($r['corp'], '/produs/' . rawurlencode($slugAscuns) . '"') && !str_contains($magazin['corp'], '/produs/' . rawurlencode($slugAscuns) . '"')
+    && !str_contains($editor['corp'], 'campanie_arata_ascuns'), (string) $editor['cod']);
 
 $db->prepare("UPDATE campanii SET fara_antet_subsol = 1, bara_inchisa = 1, carduri_inchise = 1, text_sub_pret = :t WHERE id = :id")
     ->execute(['id' => $idCampanie, 't' => '2 bucăți: {pret*1.5} <b>'] );

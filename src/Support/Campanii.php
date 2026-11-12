@@ -419,9 +419,9 @@ final class Campanii
     /**
      * Grila produselor campaniei, pentru codul `{{campanie_produse}}` din pagina campaniei (views/site/custom-page.php): un
      * card pe produs, cu poza, numele, insigna, prețul (ca pe cardul magazinului: reducerea și perioadele ei, prețul vechi
-     * tăiat), rândul opțional „Text sub preț”, „Adaugă în coș” (formularul cardului din magazin) și „Vezi produsul”. Produsele inactive, șterse sau ascunse din catalog
-     * nu apar (ca în lista magazinului), afară de cele ascunse bifate „Arată pe pagina campaniei” (campanii/0066, 12 nov 2026);
-     * cele epuizate apar, cu „Stoc epuizat”. '' în afara paginii campaniei, fără catalog
+     * tăiat), rândul opțional „Text sub preț”, „Adaugă în coș” (formularul cardului din magazin) și „Vezi produsul”. Produsele inactive
+     * sau șterse nu apar; cele ascunse din lista magazinului („Ascuns din lista magazinului”) apar, fiindcă au fost alese anume în
+     * campanie (decizia proprietarului, 12 nov 2026); cele epuizate apar, cu „Stoc epuizat”. '' în afara paginii campaniei, fără catalog
      * pe site sau fără produse.
      */
     public static function htmlProduse(?PDO $db = null): string
@@ -436,21 +436,13 @@ final class Campanii
         if ($idProduse === []) {
             return '';
         }
-        $citeste = static function (string $ascunse) use ($db, $idProduse): array {
+        try {
             $stmt = $db->prepare('SELECT id, name, slug, price, sale_price, sale_price_periods_json, image_url, out_of_stock, preorder_enabled,
                 bbd_enabled, bbd_entries_json
                 FROM products WHERE id IN (' . implode(',', array_map('intval', $idProduse)) . ')
-                AND deleted_at IS NULL AND is_active = 1 AND ' . $ascunse . ' ORDER BY name, id');
+                AND deleted_at IS NULL AND is_active = 1 ORDER BY name, id');
             $stmt->execute();
-            return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        };
-        try {
-            try {
-                $produse = $citeste('(hidden_in_catalog = 0 OR campanie_arata_ascuns = 1)');
-            } catch (Throwable) {
-                // Fără campanii/0066 încă: ca înainte, fără produsele ascunse.
-                $produse = $citeste('hidden_in_catalog = 0');
-            }
+            $produse = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } catch (Throwable) {
             return '';
         }

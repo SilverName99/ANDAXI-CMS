@@ -659,7 +659,8 @@ return [
                     'activ' => ['/admin/campanii']],
             ],
             // campanii/0058: oferta campaniei, păstrată pe comandă și pe liniile ei.
-            // campanii/0066: produsul ascuns din lista magazinului, arătat totuși pe pagina campaniei.
+            // campanii/0066: coloana bifei „arată pe pagina campaniei” (12 nov 2026), scoasă din folosință în aceeași zi: produsele
+            // alese în campanie apar pe pagina ei oricum. Migrarea rămâne (publicată și aplicată), coloana nu mai e citită.
             'tabele' => ['campanii', 'campanii_produse', 'orders.campanie_*', 'order_items.campanie_*', 'products.campanie_*'],
         ],
 
