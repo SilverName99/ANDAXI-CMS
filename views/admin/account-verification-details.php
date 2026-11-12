@@ -4,6 +4,7 @@ $verification = is_array($verification ?? null) ? $verification : [];
 $answers = is_array($answers ?? null) ? $answers : [];
 $documents = is_array($documents ?? null) ? $documents : [];
 $activations = is_array($activations ?? null) ? $activations : [];
+$poatePrelungi = (bool) ($poatePrelungi ?? false);
 
 $verificationId = (int) ($verification['id'] ?? 0);
 $status = (string) ($verification['status'] ?? '');
@@ -202,6 +203,31 @@ $statusLabel = \App\Support\ProfessionAccounts::statusLabel($status);
         </div>
     </form>
 </section>
+
+<?php if ($poatePrelungi): ?>
+<section class="panel">
+    <h2>Prelungește contul fără plată</h2>
+    <p style="color:#64748b;">
+        Adaugă luni de abonament din admin, fără plată (de exemplu un cont oferit sau o plată primită altfel).
+        Dacă mai are zile rămase, lunile se adaugă de la data expirării; dacă a expirat, de azi.
+        În istoric apare „Acordat fără plată”, cu suma 0.
+    </p>
+    <form method="post" action="/admin/accounts/verifications/<?= $verificationId ?>/extend" class="form-grid">
+        <?= \App\Support\AdminCsrf::camp() . "\n" ?>
+        <div class="field">
+            <label>Câte luni</label>
+            <input type="number" name="months" min="1" max="60" step="1" value="12" required>
+        </div>
+        <div class="field">
+            <label>Motiv (opțional, doar pentru admin)</label>
+            <input type="text" name="motiv" maxlength="300" placeholder="ex. cont oferit, plată prin transfer">
+        </div>
+        <div style="grid-column:1/-1;">
+            <button class="btn" type="submit" onclick="return confirm('Prelungești contul fără plată?');">Prelungește contul</button>
+        </div>
+    </form>
+</section>
+<?php endif; ?>
 
 <?php if ($activations !== []): ?>
 <section class="panel">

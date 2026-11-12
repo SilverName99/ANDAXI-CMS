@@ -485,6 +485,7 @@ return static function (Router $router): void {
     $router->get('/admin/accounts/verifications', [MembriController::class, 'cereri']);
     $router->get('/admin/accounts/verifications/{id}', [MembriController::class, 'cerere']);
     $router->post('/admin/accounts/verifications/{id}/decision', [MembriController::class, 'decizie']);
+    $router->post('/admin/accounts/verifications/{id}/extend', [MembriController::class, 'prelungeste']);
     $router->get('/admin/accounts/documents/{id}', [MembriController::class, 'document']);
     $router->get('/admin/accounts/settings', [MembriController::class, 'setari']);
     $router->post('/admin/accounts/settings', [MembriController::class, 'setariSalveaza']);

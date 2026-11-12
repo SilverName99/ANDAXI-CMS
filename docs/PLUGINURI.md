@@ -1635,6 +1635,11 @@ Are nevoie de `conturi_clienti` și `plata_stripe`; în pachetul „Asociație�
   contului). O cotizație rambursată din Stripe (`charge.refunded`, găsită după plata ei; `membri/0065`) apare „Rambursată” în listă, în
   cerere și în lista utilizatorilor, cu un rând în jurnal; contul nu se dezactivează singur. Aceleași cinci coloane în Clienți →
   Clienți (`admin.utilizatori.coloane`), cu derularea pe orizontală a tabelului (`.admin-table-scroll`, vertij `b0a81e1`).
+- **Prelungirea fără plată** (12 noiembrie 2026, doar pe codul comun): în cererea aprobată care e ultima a contului, panoul
+  „Prelungește contul fără plată” (`POST /admin/accounts/verifications/{id}/extend`, 1–60 de luni, motivul opțional) prelungește contul ca
+  o plată (`ProfessionAccounts::extendActivation`: de la expirare dacă mai are zile, altfel de azi), cu un rând `granted` („Acordat fără
+  plată”, suma 0) în `account_activations` și `account_extended_free` (cu motivul) în jurnalul adminului. Fără email, fără Stripe; rândul nu
+  apare în „Cotizația mea” (acolo doar plățile).
 - **Cotizația** (tab-ul „Activează contul” / „Cotizația mea”, `cont.taburi`, cu insigna zilelor rămase sau „!”): pe 1, 3, 6, 12 luni
   (`account_activation_durations`, prețul proporțional cu cel al categoriei); `POST /contul-meu/activare` face plata „pending” și sesiunea
   Stripe Checkout (`metadata.type = account_activation`); întoarcerea (`GET /contul-meu/activare/retur`, **mereu deschisă**) și webhook-ul

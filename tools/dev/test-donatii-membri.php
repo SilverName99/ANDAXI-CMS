@@ -1004,6 +1004,8 @@ try {
         // TIMESTAMP se arată în ora României și NOW() scrie ora României (declarat în site-uri/vertij/ce-se-schimba.md); data rămâne.
         // Rândurile scrise în timpul testului: ora lor poate cădea și în minute diferite pe cele două coduri.
         $p = (string) preg_replace('/(\d\d\.\d\d\.\d{4}) \d\d:\d\d/', '$1 hh:mm', $p);
+        // Panoul „Prelungește contul fără plată” (12 noiembrie 2026) e doar pe codul comun (verificat în D, mai jos).
+        $p = (string) preg_replace('#<section class="panel">\s*<h2>Prelungește contul fără plată</h2>.*?</section>\s*#s', '', $p);
         // Referințele donațiilor noi sunt aleatoare (DON-xxxxxxxx).
         $p = (string) preg_replace('/DON-[0-9A-F]{8}/', 'DON-XXXXXXXX', $p);
         // Exemplul din câmpul adresei de notificare: în codul comun fără numele unui client (WP-16).
@@ -1271,6 +1273,37 @@ try {
     $y = $an('POST', '/admin/accounts/verifications/' . $idAwaiting . '/decision', ['decision' => 'approved', 'review_note' => '', '_csrf' => $jetonAdmin()]);
     $verifica('D decizia pe o cerere veche (înlocuită de una nouă) sau neconfirmată („awaiting_email”): refuzată, nimic schimbat, niciun email',
         $x['cod'] === 302 && $y['cod'] === 302 && $starea('nou') === $inainteDecizie && $emailuri('nou') === []);
+
+    // 5b. Prelungirea fără plată (12 noiembrie 2026): doar pe cererea aprobată, cea mai nouă a contului.
+    $aprobata = $dbN->query("SELECT v.id, v.user_id FROM account_verifications v WHERE v.status = 'approved'
+        AND v.id = (SELECT MAX(v2.id) FROM account_verifications v2 WHERE v2.user_id = v.user_id) ORDER BY v.id LIMIT 1")->fetch() ?: [];
+    $idAprobata = (int) ($aprobata['id'] ?? 0);
+    $uAprobat = (int) ($aprobata['user_id'] ?? 0);
+    $dbN->prepare("UPDATE users SET account_active_until = ? WHERE id = ?")->execute([date('Y-m-d H:i:s', strtotime('-10 days')), $uAprobat]);
+    $paginaAprobata = (string) $an('GET', '/admin/accounts/verifications/' . $idAprobata)['corp'];
+    $paginaVeche = (string) $an('GET', '/admin/accounts/verifications/' . $idCerereVeche)['corp'];
+    $randuriActivari = static fn (): int => (int) $dbN->query('SELECT COUNT(*) FROM account_activations WHERE user_id = ' . $uAprobat)->fetchColumn();
+    $activariInainte = $randuriActivari();
+    $x = $an('POST', '/admin/accounts/verifications/' . $idCerereVeche . '/extend', ['months' => '3', '_csrf' => $jetonAdmin()]);
+    $y = $an('POST', '/admin/accounts/verifications/' . $idAprobata . '/extend', ['months' => '0', '_csrf' => $jetonAdmin()]);
+    $z = $an('POST', '/admin/accounts/verifications/' . $idAprobata . '/extend', ['months' => '3']);
+    $panaLa = static fn (): string => (string) $dbN->query('SELECT account_active_until FROM users WHERE id = ' . $uAprobat)->fetchColumn();
+    $verifica('D prelungirea fără plată: panoul doar pe cererea aprobată cea mai nouă; pe o cerere veche, cu 0 luni sau fără jeton: refuzată, nimic schimbat',
+        $idAprobata > 0 && str_contains($paginaAprobata, 'Prelungește contul fără plată') && !str_contains($paginaVeche, 'Prelungește contul fără plată')
+        && $x['cod'] === 302 && $y['cod'] === 302 && $z['cod'] === 302 && $randuriActivari() === $activariInainte
+        && substr($panaLa(), 0, 10) === date('Y-m-d', strtotime('-10 days')), $panaLa());
+    $an('POST', '/admin/accounts/verifications/' . $idAprobata . '/extend', ['months' => '3', 'motiv' => 'cont oferit', '_csrf' => $jetonAdmin()]);
+    $dupaPrima = $panaLa();
+    $rand = $dbN->query('SELECT * FROM account_activations WHERE user_id = ' . $uAprobat . ' ORDER BY id DESC LIMIT 1')->fetch() ?: [];
+    $an('POST', '/admin/accounts/verifications/' . $idAprobata . '/extend', ['months' => '2', '_csrf' => $jetonAdmin()]);
+    $dupaADoua = $panaLa();
+    $paginaDupa = (string) $an('GET', '/admin/accounts/verifications/' . $idAprobata)['corp'];
+    $verifica('D contul expirat prelungit cu 3 luni: de azi; apoi cu încă 2: de la noua expirare; în istoric „Acordat fără plată”, suma 0, 3 luni; contul aprobat',
+        substr($dupaPrima, 0, 10) === date('Y-m-d', strtotime('+3 months')) && substr($dupaADoua, 0, 10) === date('Y-m-d', strtotime('+2 months', strtotime($dupaPrima)))
+        && ($rand['status'] ?? '') === 'granted' && (float) ($rand['amount'] ?? 1) === 0.0 && (int) ($rand['months'] ?? 0) === 3
+        && $randuriActivari() === $activariInainte + 2 && str_contains($paginaDupa, 'Acordat fără plată')
+        && (string) $dbN->query('SELECT account_status FROM users WHERE id = ' . $uAprobat)->fetchColumn() === 'approved',
+        json_encode([$dupaPrima, $dupaADoua, $rand]));
 
     // 6. Donația: suma maximă, destinația din listă, bugetul vizitatorului.
     $dbN->exec("DELETE FROM register_submit_logs WHERE status LIKE 'l:%'");

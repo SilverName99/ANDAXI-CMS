@@ -435,6 +435,7 @@ final class ProfessionAccounts
     {
         return match (strtolower(trim($status))) {
             'paid' => 'Plătit',
+            'granted' => 'Acordat fără plată',
             'failed' => 'Eșuat',
             'pending' => 'În așteptare',
             '' => '—',
@@ -447,6 +448,7 @@ final class ProfessionAccounts
     {
         [$background, $color] = match (strtolower(trim($status))) {
             'paid' => ['#e7f6ee', '#12734a'],
+            'granted' => ['#e8f0fe', '#1e40af'],
             'failed' => ['#fdeaec', '#a11d33'],
             'pending' => ['#fdf1e3', '#9a5b12'],
             default => ['#eef1f6', '#5a6472'],

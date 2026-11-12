@@ -2,7 +2,7 @@
 # Pe site: catalog, magazin, livrare_fan, plata_stripe, plata_euplatesc, plata_bt, link_plata, erp, cupoane, fidelitate, recenzii, precomenzi, oferte_bbd, produse_promo, pachete_produse, conturi_clienti, blog, newsletter, chat_live, donatii, membri, cereri_oferta, fisiere_cloud, concurenta, manechin, acorduri_gdpr, campanii, statistici, migrare_wordpress
 # MEREU = adresă mereu deschisă; CONTROLLER = ajunge la controller; 403 = „Modulul nu este inclus în abonament”; 404 = pagina 404
 
-RUTE (380)
+RUTE (381)
 GET  / -> CONTROLLER [nucleu]
 GET  /_andaxi/export/{token} -> CONTROLLER [nucleu]
 GET  /_andaxi/ping -> CONTROLLER [nucleu]
@@ -172,6 +172,7 @@ POST /admin/accounts/professions -> CONTROLLER [membri]
 POST /admin/accounts/professions/fields -> CONTROLLER [membri]
 POST /admin/accounts/settings -> CONTROLLER [membri]
 POST /admin/accounts/verifications/{id}/decision -> CONTROLLER [membri]
+POST /admin/accounts/verifications/{id}/extend -> CONTROLLER [membri]
 POST /admin/blog/authors -> CONTROLLER [blog]
 POST /admin/blog/categories -> CONTROLLER [blog]
 POST /admin/blog/categories/eticheta-seo -> CONTROLLER [blog]

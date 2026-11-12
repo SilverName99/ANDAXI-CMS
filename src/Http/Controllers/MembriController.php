@@ -2518,7 +2518,92 @@ final class MembriController
             'answers' => ProfessionAccounts::decodeAnswers((string) ($verification['answers_json'] ?? '')),
             'documents' => ProfessionAccounts::documents($db, $verificationId),
             'activations' => is_array($activations) ? $activations : [],
+            'poatePrelungi' => self::poatePrelungi($db, $verification),
         ], 'admin/layout');
+    }
+
+    /**
+     * Prelungirea fără plată se poate doar pe cererea aprobată care e ultima cerere a contului (contul e aprobat pe ea);
+     * una veche, respinsă sau încă în verificare nu activează nimic.
+     */
+    private static function poatePrelungi(PDO $db, array $verification): bool
+    {
+        $userId = (int) ($verification['user_id'] ?? 0);
+        if ($userId <= 0 || (string) ($verification['status'] ?? '') !== ProfessionAccounts::STATUS_APPROVED) {
+            return false;
+        }
+        $latest = ProfessionAccounts::latestVerification($db, $userId);
+        return is_array($latest) && (int) ($latest['id'] ?? 0) === (int) ($verification['id'] ?? 0);
+    }
+
+    /**
+     * `POST /admin/accounts/verifications/{id}/extend`: luni de abonament acordate din admin, fără plată (decizia
+     * proprietarului, 12 noiembrie 2026). Contul se prelungește ca după o plată (ProfessionAccounts::extendActivation: de la
+     * expirare dacă mai are zile, altfel de azi), iar în istoric rămâne un rând „granted” cu suma 0 și perioada; motivul
+     * merge în jurnalul adminului. Fără email și fără Stripe.
+     */
+    public function prelungeste(array $params): void
+    {
+        if (!$this->guard()) {
+            return;
+        }
+        $db = $this->db();
+        $verificationId = (int) ($params['id'] ?? 0);
+        $inapoi = '/admin/accounts/verifications/' . $verificationId;
+        if (!$db instanceof PDO) {
+            Flash::set('error', 'Conexiunea DB nu este disponibilă.');
+            header('Location: /admin/accounts/verifications');
+            return;
+        }
+        $verification = ProfessionAccounts::verification($db, $verificationId);
+        if (!is_array($verification)) {
+            Flash::set('error', 'Cererea nu a fost găsită.');
+            header('Location: /admin/accounts/verifications');
+            return;
+        }
+        if (!AdminCsrf::valid()) {
+            Flash::set('error', 'Formularul a expirat. Reîncarcă pagina și încearcă din nou.');
+            header('Location: ' . $inapoi);
+            return;
+        }
+        if (!self::poatePrelungi($db, $verification)) {
+            Flash::set('error', 'Contul se poate prelungi doar pe cererea aprobată, cea mai nouă a contului.');
+            header('Location: ' . $inapoi);
+            return;
+        }
+        $luni = (int) trim((string) ($_POST['months'] ?? ''));
+        if ($luni < 1 || $luni > 60) {
+            Flash::set('error', 'Numărul de luni trebuie să fie între 1 și 60.');
+            header('Location: ' . $inapoi);
+            return;
+        }
+        $motiv = mb_substr(trim((string) ($_POST['motiv'] ?? '')), 0, 300);
+        $userId = (int) $verification['user_id'];
+
+        $perioada = ProfessionAccounts::extendActivation($db, $userId, $luni);
+        try {
+            $db->prepare(
+                "INSERT INTO account_activations (user_id, profession_id, profession_name, amount, currency, status, months,
+                    period_start, period_end, paid_at)
+                 VALUES (:uid, :pid, :pname, 0, 'ron', 'granted', :luni, :start, :end, NOW())"
+            )->execute([
+                'uid' => $userId,
+                'pid' => isset($verification['profession_id']) ? (int) $verification['profession_id'] : null,
+                'pname' => ($verification['profession_name'] ?? null) !== null ? (string) $verification['profession_name'] : null,
+                'luni' => $luni,
+                'start' => $perioada['start'],
+                'end' => $perioada['end'],
+            ]);
+        } catch (Throwable) {
+            // Contul e deja prelungit; rândul din istoric e doar informativ.
+        }
+        AdminActivityLog::log($db, 'account_extended_free', [
+            'verification_id' => $verificationId, 'user_id' => $userId, 'months' => $luni,
+            'pana_la' => $perioada['end'], 'motiv' => $motiv,
+        ]);
+        Flash::set('success', 'Contul a fost prelungit cu ' . ProfessionAccounts::durationLabel($luni) . ', până la '
+            . date('d.m.Y', strtotime($perioada['end']) ?: time()) . '.');
+        header('Location: ' . $inapoi);
     }
 
     /** `POST /admin/accounts/verifications/{id}/decision`: aprobarea sau respingerea, cu emailul deciziei. */
