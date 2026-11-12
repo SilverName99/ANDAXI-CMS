@@ -48,6 +48,7 @@ return [
     ['punct' => 'logare.blocata', 'plugin' => 'membri', 'fn' => [MembriController::class, 'logareBlocata']],
     ['punct' => 'cont.taburi', 'plugin' => 'membri', 'fn' => [MembriController::class, 'tabCont']],
     ['punct' => 'cont.antet', 'plugin' => 'membri', 'fn' => [MembriController::class, 'antetCont']],
+    ['punct' => 'cont.stare', 'plugin' => 'membri', 'fn' => [MembriController::class, 'stareCont']],
     ['punct' => 'cont.profil', 'plugin' => 'membri', 'fn' => [MembriController::class, 'blocPoza']],
     ['punct' => 'continut.membru_activ', 'plugin' => 'membri', 'fn' => [MembriController::class, 'membruActiv']],
     ['punct' => 'continut.nota', 'plugin' => 'membri', 'fn' => [MembriController::class, 'nota']],

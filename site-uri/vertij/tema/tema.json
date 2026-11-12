@@ -1,4 +1,5 @@
 {
-    "_despre": "Tema vertij (Etapa 4): doar paginile contului (logarea și înregistrarea, resetarea parolei) în culorile site-ului, din codul vechi 5e1d8bd și 6c4d97c (acolo blocuri <style> în views/site/account.php și în cele două pagini de resetare; aici o foaie a temei, aceleași reguli). Restul înfățișării e conținutul din baza site-ului.",
-    "css": ["/tema/css/cont.css"]
+    "_despre": "Tema vertij (Etapa 4): doar paginile contului în culorile și forma site-ului, din codul vechi. Logarea și înregistrarea, resetarea parolei: 5e1d8bd și 6c4d97c (acolo blocuri <style> în views/site/account.php și în cele două pagini de resetare; aici o foaie a temei, aceleași reguli). Contul clientului logat: pagina cu antet (pagina_cont: antet, vederea views/site/account-antet.php a nucleului), ca în 9ab7999, cu blocul ei <style> mutat în aceeași foaie. Restul înfățișării e conținutul din baza site-ului.",
+    "css": ["/tema/css/cont.css"],
+    "pagina_cont": "antet"
 }

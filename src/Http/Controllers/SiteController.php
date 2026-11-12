@@ -3611,7 +3611,13 @@ final class SiteController
             }
         }
 
-        View::render('site/account', [
+        // Tema site-ului alege pagina contului (tema.json → pagina_cont): vederea nucleului sau cea cu antet (vertij), cu aceleași
+        // date; cea cu antet primește în plus starea membrului (`cont.stare`) și dacă magazinul e pe site (comenzile, adresele).
+        $paginaCuAntet = \App\Support\Tema::paginaCont() === 'antet';
+        View::render($paginaCuAntet ? 'site/account-antet' : 'site/account', ($paginaCuAntet ? [
+            'stareCont' => is_array($user) && $db instanceof PDO ? \App\Support\Hooks::primul('cont.stare', $db, $user) : null,
+            'magazinPeSite' => \App\Support\Plugins::vizibil('magazin'),
+        ] : []) + [
             'title' => 'Contul meu',
             'customer' => $user,
             'orders' => $orders,
@@ -3645,7 +3651,7 @@ final class SiteController
      * insigna, render}`; un plugin dă un tab doar când are ce arăta), HTML-ul celui deschis și statisticile din antet
      * (`cont.antet`: listă de `{eticheta, valoare}`). Fără agățări: nimic, deci pagina contului rămâne cea de azi.
      *
-     * @return array{taburi: array<string, array{eticheta: string, icon: string, insigna: string}>, html: string, statistici: list<array{eticheta: string, valoare: string}>}
+     * @return array{taburi: array<string, array{eticheta: string, icon: string, insigna: string}>, html: string, statistici: list<array{eticheta: string, valoare: string, cheie: string}>}
      */
     private function taburiCont(PDO $db, array $user, string $sectiune): array
     {
@@ -3672,7 +3678,9 @@ final class SiteController
         foreach (\App\Support\Hooks::ruleaza('cont.antet', $db, $user) as $lista) {
             foreach (is_array($lista) ? $lista : [] as $stat) {
                 if (is_array($stat) && trim((string) ($stat['eticheta'] ?? '')) !== '') {
-                    $statistici[] = ['eticheta' => trim((string) $stat['eticheta']), 'valoare' => trim((string) ($stat['valoare'] ?? ''))];
+                    // `cheie` (opțională): pagina contului cu antet pune `cod_membru` în caseta lui; vederea nucleului n-o folosește.
+                    $statistici[] = ['eticheta' => trim((string) $stat['eticheta']), 'valoare' => trim((string) ($stat['valoare'] ?? '')),
+                        'cheie' => trim((string) ($stat['cheie'] ?? ''))];
                 }
             }
         }

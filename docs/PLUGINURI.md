@@ -269,7 +269,9 @@ din vertij: mai jos). O agățare contează doar cât pluginul ei e vizibil (sau
 agățări, nucleul se poartă exact ca înainte. Punctele și locul lor: `inregistrare.formular` (formularul de
 înregistrare din contul clientului; și `{{auth_form}}`, WP-25), `inregistrare.valideaza` / `inregistrare.cont_existent` /
 `inregistrare.dupa_creare` (`accountRegister`: înainte de creare, adresa care are deja cont, după creare — o
-redirecționare a pluginului înseamnă fără logare automată), `cont.taburi` și `cont.antet` (pagina contului, WP-25),
+redirecționare a pluginului înseamnă fără logare automată), `cont.taburi` și `cont.antet` (pagina contului, WP-25; o
+statistică poate avea și `cheie`), `cont.stare` (doar pagina contului cu antet, tema → `pagina_cont: antet`: insigna de sub nume
+și cardul de stare din „Profilul meu”),
 `continut.membru_activ` și `continut.nota` (poarta de mai jos), `editor.pagina.campuri` / `editor.articol.campuri`
 (câmpurile din editorul paginii și al articolului), `utilizator.sters` (din Admin → Utilizatori și din „Șterge contul”,
 înaintea ștergerii, în aceeași tranzacție), `layout.final_body` (înainte de `</body>` pe paginile publice),
@@ -857,7 +859,9 @@ dispar, iar linkurile spre el se scot din pagini.
 - **Din vertij** (WP-25): `{{auth_form}}` (VT-C5: formularul de intrare și de înregistrare, doar pe paginile cu adresa
   `login` și `register`, cu capcana anti-robot a codului comun și culoarea principală a temei; câmpurile unui plugin prin
   `inregistrare.formular`); tab-urile pluginurilor în cont (VT-X3, `cont.taburi`, doar cele cu conținut; `cont.antet`
-  pentru statistici; decizia OD-20 luată ca recomandarea: pagina de cont a nucleului, nu cea refăcută a vertij);
+  pentru statistici; decizia OD-20 luată ca recomandarea: pagina de cont a nucleului, nu cea refăcută a vertij; din 12 nov 2026, la
+  cererea proprietarului vertij, un site își poate alege din temă pagina contului cu antet, a vertij: `pagina_cont` în
+  [PACHETE.md](PACHETE.md), cu aceleași date, tab-uri și formulare);
   confirmarea adresei (VT-C9, OD-19 ca recomandarea, `App\Support\ConfirmareEmail`, migrarea `conturi_clienti/0036`):
   `users.email_confirmed_at`, linkurile din `customer_email_confirmations` (hash sha256, 7 zile, o folosire),
   `GET /cont/confirmare/{token}` (pagina cu butonul) și `POST /cont/confirmare/{token}` (confirmarea), mereu deschise,
@@ -1653,7 +1657,10 @@ Are nevoie de `conturi_clienti` și `plata_stripe`; în pachetul „Asociație�
   noindex); bifa „Doar cont activ” din editorul paginii și al articolului.
 - **Contul**: poza de profil (`cont.profil`, în „Profilul meu”: `POST /contul-meu/poza`, JPG/PNG/WebP până la `account_avatar_max_mb`, în
   `uploads/gallery/profile` și în Galerie, folderul `account_avatar_folder`; cea veche ștearsă); categoria, starea și codul de membru în
-  antetul contului (`cont.antet`). La ștergerea unui cont (din admin sau de client, `utilizator.sters`): cererile, documentele de pe disc,
+  antetul contului (`cont.antet`, cu cheile `categorie`, `status`, `cod_membru`). Pe pagina contului cu antet (tema vertij, `pagina_cont:
+  antet`, ca în vertij 9ab7999): poza în antet, codul de membru în caseta lui de sub nume, iar `cont.stare` dă insigna de sub nume
+  („Membru activ”, „Cerere în verificare”, „Confirmă emailul”, „Cerere respinsă”, „Cotizație neachitată”, „Cont fără cerere de membru”)
+  și cardul „Statutul de membru” din „Profilul meu” (cod, categorie, stare, valabilitatea; „Vezi cotizația”). La ștergerea unui cont (din admin sau de client, `utilizator.sters`): cererile, documentele de pe disc,
   plățile cotizației și poza de profil.
 - **Setări conturi** (Clienți → Setări conturi): documentele, duratele, prefixul codului (implicit „M”; vertij înghețat „SVTH”), eticheta
   contului din antet, numele și logo-ul emailurilor, poza de profil, acordul GDPR, textele secțiunii de activare și ale notei.

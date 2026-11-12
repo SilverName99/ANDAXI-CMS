@@ -22,7 +22,10 @@ namespace App\Support;
  *    logare automată) → `membri`;
  *  - `cont.taburi($db, $utilizator)` → listă de `{cheie, eticheta, icon, insigna, render}`: tab-urile contului (WP-25)
  *    → `donatii`, `membri`;
- *  - `cont.antet($db, $utilizator)` → statistici în antetul contului (WP-25) → `membri`;
+ *  - `cont.antet($db, $utilizator)` → statistici în antetul contului (WP-25; opțional cu `cheie`, de exemplu `cod_membru`)
+ *    → `membri`;
+ *  - `cont.stare($db, $utilizator)` → `{insigna, ton, card}` sau null: starea contului în pagina contului cu antet (tema →
+ *    `pagina_cont: antet`): insigna de sub nume și cardul de stare din „Profilul meu” → `membri`;
  *  - `continut.membru_activ($db, $utilizator)` → bool: are cont activ? (App\Support\AccesMembri) → `membri`;
  *  - `continut.nota($db, $utilizator, $titlu)` → HTML-ul paginii „acces restricționat” (AccesMembri) → `membri`;
  *  - `editor.pagina.campuri`, `editor.articol.campuri` (HTML, cu rândul editat): câmpuri în editorul paginii și al
@@ -62,6 +65,8 @@ final class Hooks
         // unui cont neconfirmat, poza de profil, titlul notei, coloanele listei de utilizatori.
         'inregistrare.campuri', 'inregistrare.inlocuieste_campurile', 'confirmare.link_plugin', 'confirmare.foloseste_plugin',
         'confirmare.dupa', 'logare.blocata', 'cont.profil', 'continut.nota_titlu', 'admin.utilizatori.coloane',
+        // Pagina contului cu antet (tema vertij, `pagina_cont: antet`): starea membrului sub nume și în „Profilul meu”.
+        'cont.stare',
     ];
 
     /** @var array<string, list<array{plugin: string, fn: callable, stare: string}>>|null */
