@@ -1005,6 +1005,36 @@ $verifica('… plata linkului autorizată după: eliberată singură la bancă (
     json_encode($tx44));
 $din3 = BtIpayPayments::pornestePlataIntegrala($db, (array) PaymentLink::dupaId($db, (int) $link44['id']), 'http://127.0.0.1:' . $port . '/checkout/bt/retur');
 $verifica('… și linkul anulat nu mai pornește nicio plată', !$din3['ok']);
+
+// Bioscem 211287 / 211408 (noiembrie 2026): banca pune în attributes.loyalties un id de comandă LOY care nu există (cod 6),
+// la o plată fără puncte. Site-ul rămânea pe „înregistrată” (fiecare verificare pica), deși banii erau blocați la bancă.
+$c1043 = $comanda('1043'); // BT, „Plată în așteptare”, 67,50 lei
+$id1043 = (int) $c1043['id'];
+$autorizatLaBanca = time() - 2 * 86400;
+$idLoyFals = $txBt($c1043, 'registered', 2 * 86400 + 300, 0, '1043');
+$cuLoyFals = static fn (array $stare, int $puncte = 0): array => $stare + ['authDateTime' => $autorizatLaBanca * 1000,
+    'attributes' => [['name' => 'mdOrder', 'value' => 'x'], ['name' => 'loyalties', 'value' => '{mdOrder:loy-inexistent-1043, amount:0}']],
+    'merchantOrderParams' => [['name' => 'loyaltyAmount', 'value' => (string) $puncte]]];
+$stariBt(['fals-1043' => $cuLoyFals($autorizata(6750))]);
+$cron = BtIpayPayments::cron($db, $setari());
+$tx43 = BtIpayPayments::tx($db, $idLoyFals) ?? [];
+$dupa = $comanda('1043');
+$verifica('plata fără puncte cu o comandă LOY inexistentă la bancă (cod 6): cronul o vede autorizată, doar pe card; comanda plătită (67,50), trimisă în ERP',
+    ($tx43['state'] ?? '') === 'authorized' && array_key_exists('loy_order_id', $tx43) && $tx43['loy_order_id'] === null && $dupa['payment_status'] === 'paid'
+    && $dupa['paid_amount'] === '67.50' && $trimiseInErp('1043') === 1
+    && str_contains((string) file_get_contents($dosarBt . '/cereri.jsonl'), '"orderId":"loy-inexistent-1043"'), json_encode([$dupa['payment_status'], $dupa['paid_amount'], $dupa['status'], $trimiseInErp('1043'),
+    $cron, $tx43['state'] ?? '']));
+$verifica('… ora autorizării e a băncii (acum două zile), nu ora la care a aflat site-ul: încasarea automată rămâne în termenul băncii',
+    ($tx43['authorized_at'] ?? '') === date('Y-m-d H:i:s', $autorizatLaBanca), (string) ($tx43['authorized_at'] ?? ''));
+// Cu puncte cerute (loyaltyAmount > 0), partea LOY negăsită rămâne eroare: plata nu se confirmă pe jumătate.
+$c1040 = $comanda('1040');
+$idCuPuncte = $txBt($c1040, 'registered', 600, 0, '1040');
+$stariBt(['fals-1040' => $cuLoyFals(['amount' => 8800] + $autorizata(8800), 4000)]);
+$r40 = BtIpayPayments::sincronizeaza($db, $idCuPuncte, 'admin');
+$verifica('… cu puncte cerute și partea LOY negăsită: eroare (cu sumele în mesaj), plata rămâne „înregistrată”, comanda neatinsă',
+    !$r40['ok'] && str_contains($r40['mesaj'], 'puncte STAR') && str_contains($r40['mesaj'], 'puncte cerute: 40,00 lei')
+    && $unu('SELECT state FROM bt_ipay_transactions WHERE id = :id', ['id' => $idCuPuncte]) === 'registered'
+    && $comanda('1040')['payment_status'] === $c1040['payment_status'], json_encode($r40, JSON_UNESCAPED_UNICODE));
 foreach (['BT_IPAY_MODE' => 'test', 'BT_IPAY_LIVE_USER' => '', 'BT_IPAY_LIVE_PASS' => '', 'BT_IPAY_BASE_URL_OVERRIDE' => 'http://127.0.0.1:9'] as $cheie => $valoare) {
     putenv($cheie . '=' . $valoare);
     $_ENV[$cheie] = $valoare;
