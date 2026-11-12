@@ -928,6 +928,16 @@ $articolFara = $fanionArticol();
 $salveazaArticol(['requires_active_account_present' => '1']);
 $verifica('articolul salvat fără câmpul pluginului păstrează fanionul; cu requires_active_account_present=1 fără bifă → 0',
     $articolFara === 1 && $fanionArticol() === 0, json_encode([$articolFara, $fanionArticol()]));
+// Bifa articolului, cum o trimite browserul: întâi forma veche fără value (→ „on”), apoi cu value="1".
+$salveazaArticol(['requires_active_account_present' => '1', 'requires_active_account' => 'on']);
+$cuOn = $fanionArticol();
+$db->prepare('UPDATE blog_posts SET requires_active_account = 0 WHERE id = :id')->execute(['id' => $idArticolMembri]);
+$salveazaArticol(['requires_active_account_present' => '1', 'requires_active_account' => '1']);
+$verifica('articolul salvat cu bifa „Doar pentru conturi active” rămâne doar pentru membri (și cu „on”, și cu „1”)',
+    $cuOn === 1 && $fanionArticol() === 1, json_encode([$cuOn, $fanionArticol()]));
+$editorArticol = $cerere('GET', '/admin/blog/posts/editor?post=' . $idArticolMembri, $jarAdmin)['corp'];
+$verifica('editorul articolului: bifa „Doar pentru conturi active” are value="1" și e bifată',
+    (bool) preg_match('#name="requires_active_account" value="1"[^>]*checked#', $editorArticol), mb_substr(strip_tags($editorArticol), 0, 200));
 $db->prepare('UPDATE blog_posts SET requires_active_account = 1 WHERE id = :id')->execute(['id' => $idArticolMembri]);
 
 // =====================================================================
@@ -1730,6 +1740,33 @@ $verifica('diagnostic.php --email: doar numere (trimiterile pe tipuri și stări
 foreach (['contact_form_recipients', 'smtp_host', 'smtp_username', 'smtp_password', 'order_email_from_address'] as $cheieOp) {
     $setare($cheieOp, null);
 }
+
+// =====================================================================
+// Pagina de evenimente ({{category_events:slug}}): un articol fără dată de eveniment nu e eveniment
+// =====================================================================
+$scrie('');
+$scrie('== Pagina de evenimente: articolele fără dată la „Postări de blog”');
+$db->prepare("INSERT INTO blog_categories (name, slug) VALUES ('Forumuri test', 'forumuri-test-ev')")->execute();
+$idCatEv = (int) $db->lastInsertId();
+$postEv = static function (string $titlu, string $slug, ?string $start) use ($db, $idCatEv): void {
+    $db->prepare('INSERT INTO blog_posts (title, slug, content, published_at, is_published, category_id, event_start_date)
+        VALUES (:t, :s, :c, NOW() - INTERVAL 1 DAY, 1, :cat, :st)')
+        ->execute(['t' => $titlu, 's' => $slug, 'c' => '<p>text</p>', 'cat' => $idCatEv, 'st' => $start]);
+};
+$postEv('Forum trecut test', 'forum-trecut-test', date('Y-m-d', strtotime('-20 days')));
+$postEv('Cum a fost la forum test', 'cum-a-fost-forum-test', null);
+$paginaEv = \App\Support\CategoryPosts::renderEventsPage($db, 'forumuri-test-ev');
+$pozArticol = strpos($paginaEv, 'cum-a-fost-forum-test');
+$pozPostari = strpos($paginaEv, 'Postări de blog');
+$verifica('fără eveniment viitor: articolul fără dată nu ajunge „Următorul eveniment” și nici la „Evenimente viitoare”; e la „Postări de blog”',
+    $pozArticol !== false && $pozPostari !== false && $pozArticol > $pozPostari && !str_contains($paginaEv, 'Evenimente viitoare')
+    && str_contains($paginaEv, 'Niciun eveniment viitor programat') && str_contains($paginaEv, 'Evenimente trecute'), mb_substr(strip_tags($paginaEv), 0, 400));
+$postEv('Forum viitor test', 'forum-viitor-test', date('Y-m-d', strtotime('+30 days')));
+$paginaEv = \App\Support\CategoryPosts::renderEventsPage($db, 'forumuri-test-ev');
+$verifica('cu un eveniment viitor: el e primul (hero), articolul rămâne la „Postări de blog”, la capăt',
+    strpos($paginaEv, 'forum-viitor-test') < strpos($paginaEv, 'forum-trecut-test')
+    && strpos($paginaEv, 'Postări de blog') < strpos($paginaEv, 'cum-a-fost-forum-test')
+    && strpos($paginaEv, 'Evenimente trecute') < strpos($paginaEv, 'Postări de blog'), mb_substr(strip_tags($paginaEv), 0, 400));
 
 // =====================================================================
 // Final: baza pusă la loc, nicio eroare PHP nouă

@@ -351,12 +351,17 @@ final class CategoryPosts
         $today = date('Y-m-d');
         $upcoming = [];
         $past = [];
+        $articole = [];
         foreach ($rows as $p) {
             $start = trim((string) ($p['event_start_date'] ?? ''));
             $end = trim((string) ($p['event_end_date'] ?? ''));
             $refDate = $end !== '' ? $end : $start;
-            // fără dată → tratăm ca „viitor" (ține-l vizibil sus, nu îl ascunde în „trecut")
-            if ($refDate === '' || $refDate >= $today) {
+            // Fără dată de început nu e un eveniment, ci un articol pus în aceeași categorie (de pildă „Cum a fost la
+            // forum”): merge jos, la „Postări de blog”. Până în 12 noiembrie 2026 era tratat ca eveniment viitor și
+            // ajungea chiar „Următorul eveniment” când nu era altul programat.
+            if ($start === '') {
+                $articole[] = $p;
+            } elseif ($refDate >= $today) {
                 $upcoming[] = $p;
             } else {
                 $past[] = $p;
@@ -395,6 +400,18 @@ final class CategoryPosts
             }
             $html .= '<section class="vte__section">'
                 . '<h2 class="vte__h2">Evenimente trecute</h2>'
+                . '<div class="vtcg">' . $cards . '</div>'
+                . '</section>';
+        }
+
+        // Articolele din categorie (fără dată de eveniment), cele mai noi primele.
+        if ($articole !== []) {
+            $cards = '';
+            foreach ($articole as $p) {
+                $cards .= self::gridCard($p, $today);
+            }
+            $html .= '<section class="vte__section">'
+                . '<h2 class="vte__h2">Postări de blog</h2>'
                 . '<div class="vtcg">' . $cards . '</div>'
                 . '</section>';
         }

@@ -2036,7 +2036,7 @@ final class MembriController
         return '<input type="hidden" name="requires_active_account_present" value="1">'
             . '<div class="field" style="grid-column:1/-1;">'
             . '<label style="display:flex;align-items:flex-start;gap:8px;">'
-            . '<input type="checkbox" name="requires_active_account" style="margin-top:3px;"' . ($requiresActiveAccount ? ' checked' : '') . '>'
+            . '<input type="checkbox" name="requires_active_account" value="1" style="margin-top:3px;"' . ($requiresActiveAccount ? ' checked' : '') . '>'
             . '<span>Doar pentru conturi active<br><small style="color:#64748b;">'
             . 'Vizitatorii fără cont activat vor vedea pagina care le explică ce au de făcut.</small></span></label></div>';
     }

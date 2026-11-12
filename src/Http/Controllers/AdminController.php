@@ -3357,7 +3357,10 @@ final class AdminController
             || !\App\Support\AccesMembri::areColoana($db, $tabel)) {
             return;
         }
-        $valoare = (string) ($_POST['requires_active_account'] ?? '') === '1' ? 1 : 0;
+        // Bifat = trimis cu orice valoare în afară de gol și „0”: bifa articolului n-avea `value="1"`, deci browserul
+        // trimitea „on”, iar până în 12 noiembrie 2026 articolul se salva deschis tuturor, deși bifa era pusă.
+        $trimis = (string) ($_POST['requires_active_account'] ?? '');
+        $valoare = $trimis !== '' && $trimis !== '0' ? 1 : 0;
         $db->prepare('UPDATE ' . ($tabel === 'pages' ? 'pages' : 'blog_posts') . ' SET requires_active_account = :v WHERE id = :id')
             ->execute(['v' => $valoare, 'id' => $id]);
     }
