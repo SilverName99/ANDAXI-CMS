@@ -659,7 +659,8 @@ return [
                     'activ' => ['/admin/campanii']],
             ],
             // campanii/0058: oferta campaniei, păstrată pe comandă și pe liniile ei.
-            'tabele' => ['campanii', 'campanii_produse', 'orders.campanie_*', 'order_items.campanie_*'],
+            // campanii/0066: produsul ascuns din lista magazinului, arătat totuși pe pagina campaniei.
+            'tabele' => ['campanii', 'campanii_produse', 'orders.campanie_*', 'order_items.campanie_*', 'products.campanie_*'],
         ],
 
         // Cerut pentru Biovitality (8 nov 2026), generic: analiza proprie a vizitelor, fără cookie-uri și fără nimic ținut în

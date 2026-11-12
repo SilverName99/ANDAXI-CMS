@@ -1073,7 +1073,8 @@ loc de comenzi.
 
 Cerut pentru Biovitality (5 noiembrie 2026), făcut generic. `App\Support\Campanii`, `CampaniiController`, migrările
 `campanii/0054`, `campanii/0056` (pagina fără antet și subsol, codul `{{campanie_produse}}`), `campanii/0057` (colțurile
-cardurilor) și `campanii/0058` (oferta campaniei, `App\Support\OfertaCampanie`), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
+cardurilor), `campanii/0058` (oferta campaniei, `App\Support\OfertaCampanie`) și `campanii/0066` (produsul ascuns arătat pe
+pagina campaniei), testele `tools/dev/test-campanii.php` (în testul de fum pe „toate”) și `tools/dev/campanii-browser.cjs`.
 **Oprit pe orice site**: nu e în niciun pachet și în nicio licență de dezvoltare (`licente_dev`); îl pune doar CRM-ul în
 licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/licenta.php biovitality campanii=pornit`.
 
@@ -1112,7 +1113,9 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   produselor alese ale campaniei (`Campanii::htmlProduse`, randată pe server, în `views/site/custom-page.php`); în rest (la
   adresa proprie a paginii, pe orice altă pagină, cu pluginul oprit) și fără niciun produs vizibil iese **gol**; o pagină fără
   cod nu se schimbă. Produsele: cele bifate în campanie, active, neșterse și **neascunse din catalog** (ca lista magazinului),
-  după nume; disponibilitatea din ERP, ca în catalog. Fiecare card: poza (fișierul refăcut, dimensiunile, variantele, ca pe
+  afară de cele ascunse bifate în editorul produsului (Afișare și asocieri, doar cu pluginul pornit) **„Arată pe pagina campaniei
+  chiar dacă e ascuns din lista magazinului”** (`products.campanie_arata_ascuns`, `campanii/0066`, 12 nov 2026; în magazin rămân
+  ascunse), după nume; disponibilitatea din ERP, ca în catalog. Fiecare card: poza (fișierul refăcut, dimensiunile, variantele, ca pe
   cardul magazinului), numele, insigna campaniei (textul și culorile ei), prețul curent (prețul redus sau al unei perioade de
   reducere în curs, ca pe cardul magazinului, același format) cu prețul vechi tăiat, rândul opțional **„Text sub preț”**,
   **„Adaugă în coș”** și **„Vezi produsul”** (spre `/produs/<slug>`). „Adaugă în coș” are regulile cardului din magazin

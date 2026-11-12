@@ -5149,6 +5149,15 @@ final class AdminController
         } catch (Throwable) {
             // Fără magazin/0028 încă: niciun produs cu transport gratuit.
         }
+        try {
+            foreach ($db->query('SELECT id FROM products WHERE deleted_at IS NULL AND campanie_arata_ascuns = 1')->fetchAll(PDO::FETCH_COLUMN) ?: [] as $id) {
+                if (isset($harta[(string) (int) $id])) {
+                    $harta[(string) (int) $id]['campanie_arata_ascuns'] = 1;
+                }
+            }
+        } catch (Throwable) {
+            // Fără campanii/0066 încă: niciun produs ascuns arătat pe pagina campaniei.
+        }
         return $harta;
     }
 
@@ -5251,6 +5260,15 @@ final class AdminController
         }
         // WP-20 (C14a): bifa „transport gratuit”, doar când formularul a arătat-o (marcajul `transport_campuri_trimise`,
         // cu pluginul magazinului pe site); altfel rămâne ce era în bază.
+        // Bifa „arată pe pagina campaniei” (campanii/0066), doar când formularul a arătat-o (pluginul campaniilor pe site).
+        if (array_key_exists('campanie_campuri_trimise', $_POST)) {
+            try {
+                $db->prepare('UPDATE products SET campanie_arata_ascuns = :arata WHERE id = :id')
+                    ->execute(['arata' => isset($_POST['campanie_arata_ascuns']) ? 1 : 0, 'id' => $productId]);
+            } catch (Throwable) {
+                // Fără campanii/0066 încă: bifa vine după migrare.
+            }
+        }
         if (array_key_exists('transport_campuri_trimise', $_POST)) {
             try {
                 $db->prepare('UPDATE products SET free_shipping = :gratuit WHERE id = :id')

@@ -6704,6 +6704,12 @@
                     "null": true,
                     "tip": "longtext"
                 },
+                "campanie_arata_ascuns": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "tinyint(1)"
+                },
                 "category": {
                     "extra": "",
                     "implicit": null,

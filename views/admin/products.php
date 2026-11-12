@@ -563,6 +563,22 @@ $adminScurtaturiPagina = [['Ctrl + S', 'Salvează produsul deschis în editor'],
                                     catalogului (de exemplu un pachet care are deja secțiunea lui).
                                 </p>
                             </div>
+<?php if (\App\Support\Plugins::vizibil('campanii')): ?>
+                            <div class="field full" id="p_campanie_campuri">
+                                <input type="hidden" name="campanie_campuri_trimise" value="1">
+                                <label>Pagina campaniei</label>
+                                <div class="product-status-flags">
+                                    <label>
+                                        <input type="checkbox" name="campanie_arata_ascuns" id="p_campanie_arata_ascuns" value="1">
+                                        Arată pe pagina campaniei chiar dacă e ascuns din lista magazinului
+                                    </label>
+                                </div>
+                                <p class="field-hint" style="margin-top:6px;">
+                                    Contează doar la produsele bifate „Ascuns din lista magazinului” și alese în campanie: apar
+                                    în grila produselor de pe pagina campaniei. În lista magazinului rămân ascunse.
+                                </p>
+                            </div>
+<?php endif; ?>
 <?php if (\App\Support\Plugins::vizibil('magazin')): ?>
                             <div class="field full" id="p_transport_campuri">
                                 <input type="hidden" name="transport_campuri_trimise" value="1">
@@ -1895,6 +1911,7 @@ $dateCatalogProduse = [
     const pozitie = document.getElementById('p_sort_position');
     const ascuns = document.getElementById('p_hidden_in_catalog');
     const transportGratuit = document.getElementById('p_free_shipping');
+    const aratatInCampanie = document.getElementById('p_campanie_arata_ascuns');
     const blocCiorna = document.getElementById('p_draft_wrap');
     const linkCiorna = document.getElementById('p_draft_url');
     const deschideCiorna = document.getElementById('p_draft_open');
@@ -1908,6 +1925,9 @@ $dateCatalogProduse = [
         }
         if (transportGratuit instanceof HTMLInputElement) {
             transportGratuit.checked = Boolean(info && Number(info.free_shipping) === 1);
+        }
+        if (aratatInCampanie instanceof HTMLInputElement) {
+            aratatInCampanie.checked = Boolean(info && Number(info.campanie_arata_ascuns) === 1);
         }
         const url = info && info.draft_url ? new URL(info.draft_url, window.location.origin).toString() : '';
         // Cu style.display, nu [hidden]: .field are display:flex, care bate atributul hidden.

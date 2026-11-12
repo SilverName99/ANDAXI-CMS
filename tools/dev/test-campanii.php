@@ -712,6 +712,25 @@ $cos = $cerere('GET', '/cos', $jarCos);
 $verifica('formularul de pe card pune produsul în coș (o bucată), ca în magazin', in_array($adaugat['cod'], [302, 303], true)
     && $cos['cod'] === 200 && str_contains($cos['corp'], '/produs/' . rawurlencode($slugRedus)), $adaugat['cod'] . ' ' . ($adaugat['antete']['location'] ?? '') . ' / ' . $cos['cod']);
 $verifica('fără „Text sub preț”: niciun rând sub preț', !str_contains($r['corp'], '<p class="campanie-grila__sub">'));
+// Produsul ascuns din catalog, bifat „Arată pe pagina campaniei” (campanii/0066, 12 nov 2026): pe pagina campaniei da, în magazin nu.
+$editor = $cerere('GET', '/admin/products', $jarAdmin);
+$verifica('editorul produsului (pluginul pornit): bifa „Arată pe pagina campaniei chiar dacă e ascuns din lista magazinului”, cu marcajul formularului',
+    str_contains($editor['corp'], 'name="campanie_arata_ascuns" id="p_campanie_arata_ascuns"')
+    && str_contains($editor['corp'], 'name="campanie_campuri_trimise" value="1"'), (string) $editor['cod']);
+$db->prepare('UPDATE products SET campanie_arata_ascuns = 1 WHERE id = :id')->execute(['id' => $pAscuns]);
+ResponseCache::purgePageCache();
+$rAratat = $cerere('GET', $adresaCampanie, null, [], $cuCookie);
+$slugAscuns = $unu('SELECT slug FROM products WHERE id = :id', ['id' => $pAscuns]);
+$magazinAratat = $cerere('GET', '/magazin', null, [], $cuCookie);
+$editorAratat = $cerere('GET', '/admin/products', $jarAdmin);
+$verifica('… bifat: produsul ascuns apare pe pagina campaniei (toate cardurile), dar tot nu în lista magazinului; editorul îl știe bifat',
+    substr_count($rAratat['corp'], '<article class="campanie-grila__card">') === count($produseCampanie)
+    && str_contains($rAratat['corp'], '/produs/' . rawurlencode($slugAscuns) . '"')
+    && !str_contains($magazinAratat['corp'], '/produs/' . rawurlencode($slugAscuns) . '"')
+    && preg_match('/"' . $pAscuns . '":\{[^}]*"campanie_arata_ascuns":1/', $editorAratat['corp']) === 1,
+    substr_count($rAratat['corp'], '<article class="campanie-grila__card">') . ' carduri');
+$db->prepare('UPDATE products SET campanie_arata_ascuns = 0 WHERE id = :id')->execute(['id' => $pAscuns]);
+ResponseCache::purgePageCache();
 
 $db->prepare("UPDATE campanii SET fara_antet_subsol = 1, bara_inchisa = 1, carduri_inchise = 1, text_sub_pret = :t WHERE id = :id")
     ->execute(['id' => $idCampanie, 't' => '2 bucăți: {pret*1.5} <b>'] );
