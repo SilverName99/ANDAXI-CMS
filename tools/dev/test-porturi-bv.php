@@ -1031,6 +1031,22 @@ $verifica('… fără niciun produs bifat: fără restricție de produs (lista g
 $paginaUnice = $cerere('GET', '/admin/coupons/unique', $jarAdmin)['corp'];
 $verifica('pagina cupoanelor unice: rândul „Produse” în panoul de editare și produsele fiecărui cupon în datele lui',
     str_contains($paginaUnice, 'name="edit_products"') && str_contains($paginaUnice, 'id="vuc-produse-date"') && str_contains($paginaUnice, '"' . $cupoaneUnice[0] . '":{"p":'));
+// Cerut pentru Biovitality (12 nov 2026): lotul fiecărui cod (și la cele folosite) și, la cele folosite, clientul și produsele comenzii.
+$cuponFolosit = $cupoaneUnice[0];
+$codFolosit = $unu('SELECT code FROM coupons WHERE id = :id', ['id' => $cuponFolosit]);
+$comandaCupon = $db->query('SELECT o.id, o.order_number, o.billing_first_name, o.billing_last_name FROM orders o
+    WHERE EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id) ORDER BY o.id LIMIT 1')->fetch(PDO::FETCH_ASSOC) ?: [];
+$db->prepare("UPDATE coupons SET used_at = NOW(), import_batch = 'Lot proba noiembrie' WHERE id = :id")->execute(['id' => $cuponFolosit]);
+$db->prepare('UPDATE orders SET coupon_code = :c WHERE id = :id')->execute(['c' => $codFolosit, 'id' => (int) $comandaCupon['id']]);
+$liniiCupon = $db->query('SELECT product_name, quantity FROM order_items WHERE order_id = ' . (int) $comandaCupon['id'] . ' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+$folosite = $cerere('GET', '/admin/coupons/unique?view=used', $jarAdmin)['corp'];
+$numeClient = trim($comandaCupon['billing_first_name'] . ' ' . $comandaCupon['billing_last_name']);
+$verifica('codurile folosite: coloana „Lot” (cu legătura spre lot), comanda, clientul ei și produsele cu cantitățile',
+    str_contains($folosite, '<th>Lot</th>') && str_contains($folosite, 'batch=Lot+proba+noiembrie') && str_contains($folosite, '>Lot proba noiembrie</a>')
+    && str_contains($folosite, '#' . htmlspecialchars((string) $comandaCupon['order_number'], ENT_QUOTES) . '</a>')
+    && str_contains($folosite, '<strong>' . htmlspecialchars($numeClient, ENT_QUOTES) . '</strong>')
+    && $liniiCupon !== [] && str_contains($folosite, '<li>' . (int) $liniiCupon[0]['quantity'] . ' × ' . htmlspecialchars((string) $liniiCupon[0]['product_name'], ENT_QUOTES) . '</li>'),
+    mb_substr(strip_tags((string) strstr($folosite, 'vuc-table')), 0, 600));
 
 // =====================================================================
 // WP-21 C. Produsele promoționale: „dat la” / „dat de”, exportul Excel (C13)

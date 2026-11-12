@@ -754,7 +754,8 @@ dispar, iar linkurile spre el se scot din pagini.
 ### Cupoane (`cupoane`)
 
 - **Conține**: meniul Cupoane (tab-urile Cupoane și Coduri unice, WP-35; cu produsele schimbate în masă, WP-21 C12, din
-  Biovitality `222ed71`); câmpul de cupon din coș, din
+  Biovitality `222ed71`; din 12 nov 2026 coloana „Lot” la ambele stări, cu legătura spre filtrul lotului, iar la „Coduri
+  folosite”, sub numărul comenzii, clientul, adresa lui de email și produsele cumpărate, cu cantitățile și totalul); câmpul de cupon din coș, din
   coșul flotant și din checkout; reducerea cu cupon din fereastra comenzii.
   Tabel: `coupons`. Un cod scris cu spații („AZ 987”) găsește cuponul AZ987 când nu există
   exact așa (WP-20, C9, din Biovitality `aed0cee`); comanda ține codul din bază. În tranzacția

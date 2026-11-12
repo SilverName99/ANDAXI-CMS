@@ -18374,6 +18374,11 @@ final class AdminController
             } catch (Throwable) {
                 $coupons = [];
             }
+            // Cerut pentru Biovitality (12 nov 2026): la codurile folosite, cine a cumpărat și ce (clientul comenzii,
+            // produsele cu cantitățile, totalul), din comanda în care s-a consumat codul.
+            if ($view === 'used' && $coupons !== []) {
+                $coupons = $this->cupoaneCuComanda($db, $coupons);
+            }
 
             $products = $db->query('SELECT id, name FROM products WHERE deleted_at IS NULL AND is_active = 1 ORDER BY name ASC LIMIT 2000')->fetchAll() ?: [];
             $categories = $db->query('SELECT id, name FROM product_categories ORDER BY name ASC LIMIT 1000')->fetchAll() ?: [];
@@ -18419,6 +18424,54 @@ final class AdminController
             'activeCount' => $activeCount,
             'usedCount' => $usedCount,
         ], 'admin/layout');
+    }
+
+    /**
+     * Codurile unice folosite, cu comanda lor: `comanda` = {client, email, total, data, produse: [{nume, cantitate}]}
+     * (doar la cele cu `order_id`). Două citiri pentru toată pagina, nu câte una pe cod.
+     *
+     * @param list<array<string, mixed>> $coupons
+     * @return list<array<string, mixed>>
+     */
+    private function cupoaneCuComanda(PDO $db, array $coupons): array
+    {
+        $iduri = array_values(array_unique(array_filter(array_map(static fn (array $c): int => (int) ($c['order_id'] ?? 0), $coupons))));
+        if ($iduri === []) {
+            return $coupons;
+        }
+        $semne = implode(',', array_fill(0, count($iduri), '?'));
+        $comenzi = [];
+        try {
+            $st = $db->prepare('SELECT id, billing_first_name, billing_last_name, billing_email, total, created_at FROM orders WHERE id IN (' . $semne . ')');
+            $st->execute($iduri);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $o) {
+                $comenzi[(int) $o['id']] = [
+                    'client' => trim((string) ($o['billing_first_name'] ?? '') . ' ' . (string) ($o['billing_last_name'] ?? '')),
+                    'email' => trim((string) ($o['billing_email'] ?? '')),
+                    'total' => (float) ($o['total'] ?? 0),
+                    'data' => (string) ($o['created_at'] ?? ''),
+                    'produse' => [],
+                ];
+            }
+            $st = $db->prepare('SELECT order_id, product_name, quantity FROM order_items WHERE order_id IN (' . $semne . ') ORDER BY order_id, id');
+            $st->execute($iduri);
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $l) {
+                $oid = (int) $l['order_id'];
+                if (isset($comenzi[$oid])) {
+                    $comenzi[$oid]['produse'][] = ['nume' => (string) ($l['product_name'] ?? ''), 'cantitate' => (int) ($l['quantity'] ?? 0)];
+                }
+            }
+        } catch (Throwable) {
+            return $coupons;
+        }
+        foreach ($coupons as &$c) {
+            $oid = (int) ($c['order_id'] ?? 0);
+            if (isset($comenzi[$oid])) {
+                $c['comanda'] = $comenzi[$oid];
+            }
+        }
+        unset($c);
+        return $coupons;
     }
 
     /**

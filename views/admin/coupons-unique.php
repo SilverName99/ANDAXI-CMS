@@ -385,7 +385,8 @@ $dateProduseCupoane = ['cupoane' => (object) (is_array($produseCupoane ?? null) 
                         <th>Denumire</th>
                         <th>Reducere</th>
                         <th>Status</th>
-                        <th><?= $view === 'used' ? 'Folosit la' : 'Lot' ?></th>
+                        <?php if ($view === 'used'): ?><th>Folosit la</th><?php endif; ?>
+                        <th>Lot</th>
                         <?php if ($view === 'used'): ?><th>Comandă</th><?php endif; ?>
                         <th class="vuc-actions-col">Acțiuni</th>
                     </tr>
@@ -413,16 +414,40 @@ $dateProduseCupoane = ['cupoane' => (object) (is_array($produseCupoane ?? null) 
                                 <span class="vuc-pill <?= $isActive ? 'vuc-pill--on' : 'vuc-pill--off' ?>"><?= $isActive ? 'Activ' : 'Inactiv' ?></span>
                             <?php endif; ?>
                         </td>
+                        <?php if ($view === 'used'): ?>
+                            <td><?= htmlspecialchars((string) ($c['used_at_local'] ?? ($c['used_at'] ?? '')), ENT_QUOTES) ?></td>
+                        <?php endif; ?>
+                        <?php $lotCupon = trim((string) ($c['import_batch'] ?? '')); ?>
                         <td>
-                            <?= $view === 'used'
-                                ? htmlspecialchars((string) ($c['used_at_local'] ?? ($c['used_at'] ?? '')), ENT_QUOTES)
-                                : htmlspecialchars((string) ($c['import_batch'] ?? ''), ENT_QUOTES) ?>
+                            <?php if ($lotCupon !== ''): ?>
+                                <a href="/admin/coupons/unique?<?= htmlspecialchars(http_build_query(['view' => $view, 'batch' => $lotCupon]), ENT_QUOTES) ?>" title="Doar codurile din acest lot"><?= htmlspecialchars($lotCupon, ENT_QUOTES) ?></a>
+                            <?php else: ?>
+                                <span class="vuc-muted">—</span>
+                            <?php endif; ?>
                         </td>
                         <?php if ($view === 'used'): ?>
-                            <?php $ordNo = trim((string) ($c['order_number'] ?? '')); ?>
-                            <td>
+                            <?php
+                            $ordNo = trim((string) ($c['order_number'] ?? ''));
+                            $cmd = is_array($c['comanda'] ?? null) ? $c['comanda'] : null;
+                            ?>
+                            <td class="vuc-comanda">
                                 <?php if ($ordNo !== ''): ?>
                                     <a class="btn btn-secondary btn-sm" href="/admin/orders?q=<?= rawurlencode($ordNo) ?>" title="Vezi comanda">#<?= htmlspecialchars($ordNo, ENT_QUOTES) ?></a>
+                                    <?php if ($cmd !== null): ?>
+                                        <div class="vuc-comanda__client">
+                                            <strong><?= htmlspecialchars($cmd['client'] !== '' ? $cmd['client'] : '—', ENT_QUOTES) ?></strong>
+                                            <?php if ($cmd['email'] !== ''): ?><span class="vuc-muted"><?= htmlspecialchars($cmd['email'], ENT_QUOTES) ?></span><?php endif; ?>
+                                        </div>
+                                        <?php $nrProduse = array_sum(array_map(static fn (array $p): int => (int) $p['cantitate'], $cmd['produse'])); ?>
+                                        <details class="vuc-comanda__produse">
+                                            <summary><?= $nrProduse ?> <?= $nrProduse === 1 ? 'produs' : 'produse' ?> · <?= htmlspecialchars(number_format((float) $cmd['total'], 2, ',', '.'), ENT_QUOTES) ?> lei</summary>
+                                            <ul>
+                                                <?php foreach ($cmd['produse'] as $p): ?>
+                                                    <li><?= (int) $p['cantitate'] ?> × <?= htmlspecialchars((string) $p['nume'], ENT_QUOTES) ?></li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </details>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="vuc-muted">—</span>
                                 <?php endif; ?>
@@ -518,6 +543,11 @@ $dateProduseCupoane = ['cupoane' => (object) (is_array($produseCupoane ?? null) 
 .vuc-batchbar__label{color:#8a2148;font-size:13px;}
 .vuc-editpanel__actions{display:flex;gap:8px;flex-wrap:wrap;}
 .vuc-muted{color:var(--ax-text-3);}
+.vuc-comanda{min-width:220px;}
+.vuc-comanda__client{display:flex;flex-direction:column;gap:1px;margin-top:6px;font-size:13px;line-height:1.35;}
+.vuc-comanda__produse{margin-top:4px;font-size:13px;}
+.vuc-comanda__produse summary{cursor:pointer;color:var(--ax-text-2);}
+.vuc-comanda__produse ul{margin:4px 0 0;padding-left:18px;}
 .vuc-editpanel{border:1px solid var(--ax-linie);border-radius:12px;padding:14px 16px;margin:0 0 14px;background:var(--ax-suprafata);}
 .vuc-editpanel__hint{margin:0 0 12px;font-size:13px;color:var(--ax-text-3);}
 .vuc-editgrid{display:flex;flex-direction:column;gap:12px;margin-bottom:12px;}
