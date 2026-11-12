@@ -1598,6 +1598,21 @@ function verificaSiteul(Site $s, string $url, ?string $jeton, string $versiune, 
     $r = Http::cere($url . '/', $antete);
     $verifica('prima pagină: 200, HTML, fără erori PHP', $r['cod'] === 200 && stripos($r['corp'], '<html') !== false && !$fatal($r['corp'])
         && !str_contains($r['corp'], 'Revenim în câteva minute'), $scurt($r));
+    // Un site fără magazin (de pildă o asociație, ca vertij) n-are nici pagini de produs, nici coș: acolo 404 e
+    // răspunsul corect. Ce pluginuri are se citește din licența pusă pe site; fără licență lizibilă, ca înainte.
+    $pluginuri = null;
+    $fLicenta = $s->site . '/storage/licenta/licenta.json';
+    if (is_file($fLicenta)) {
+        $l = json_decode((string) file_get_contents($fLicenta), true);
+        if (is_array($l) && is_array($l['pluginuri'] ?? null)) {
+            $pluginuri = array_keys(array_filter($l['pluginuri'], static fn ($st): bool => in_array($st, ['pornit', 'se_opreste'], true)));
+        }
+    }
+    $areCatalog = $pluginuri === null || in_array('catalog', $pluginuri, true);
+    $areMagazin = $pluginuri === null || in_array('magazin', $pluginuri, true);
+    if (!$areCatalog) {
+        $produs = '';
+    }
     if ($produs === null) {
         try {
             $baza = new Baza(Env::citeste($s->site . '/.env'));
@@ -1610,14 +1625,20 @@ function verificaSiteul(Site $s, string $url, ?string $jeton, string $versiune, 
     if ($produs !== '') {
         $r = Http::cere($url . '/produs/' . rawurlencode($produs), $antete);
         $verifica('o pagină de produs (/produs/' . $produs . '): 200, fără erori PHP', $r['cod'] === 200 && !$fatal($r['corp']), $scurt($r));
+    } elseif (!$areCatalog) {
+        Iesire::info('pagina de produs nu se verifică: licența site-ului n-are pluginul catalog');
     } else {
         Iesire::atentie('niciun produs activ în bază: pagina de produs nu s-a verificat (--produs=<slug>)');
     }
     $r = Http::cere($url . '/admin/login', $antete);
     $verifica('pagina de logare din admin: 200, cu câmpul parolei', $r['cod'] === 200 && preg_match('/type=["\']password["\']/i', $r['corp']) === 1
         && !$fatal($r['corp']), $scurt($r));
-    $r = Http::cere($url . '/cos', $antete);
-    $verifica('coșul (/cos): 200, fără erori PHP', $r['cod'] === 200 && !$fatal($r['corp']), $scurt($r));
+    if ($areMagazin) {
+        $r = Http::cere($url . '/cos', $antete);
+        $verifica('coșul (/cos): 200, fără erori PHP', $r['cod'] === 200 && !$fatal($r['corp']), $scurt($r));
+    } else {
+        Iesire::info('coșul nu se verifică: licența site-ului n-are pluginul magazin');
+    }
     $r = Http::cere($url . '/assets/css/app.css', $antete);
     $verifica('un fișier din assets/ (/assets/css/app.css): 200', $r['cod'] === 200 && strlen($r['corp']) > 100, $scurt($r));
     $poza = null;
