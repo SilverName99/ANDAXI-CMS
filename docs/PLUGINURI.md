@@ -560,7 +560,9 @@ dispar, iar linkurile spre el se scot din pagini.
 
 - **Conține**: Setări livrare (meniul Configurare); în fereastra comenzii: AWB,
   previzualizarea AWB, urmărirea, FANbox; în checkout: alegerea unui FANbox și
-  tariful calculat live de FAN; AWB-ul generat automat la comanda plătită sau
+  tariful calculat live de FAN (sub FANbox și ridicarea de la sediu, cât niciuna nu e bifată, nota „🚚 Dacă nu alegi
+  niciuna dintre opțiunile de mai sus, coletul se livrează prin curier la adresa de mai sus.”, cerută pentru Bioscem,
+  12 nov 2026); AWB-ul generat automat la comanda plătită sau
   aprobată și emailul cu AWB; cu ERP-ul pe site, regula coletelor trimisă cu
   fiecare comandă (`coleteCalcul`: colet sau plic, kg maxim pe colet, minimul din
   setări, greutatea implicită, un singur AWB sau câte unul per depozit, cu

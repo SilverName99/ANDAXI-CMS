@@ -142,6 +142,8 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
         .bv-checkout-v3__fanbox-pick.is-visible{display:block;}
         .bv-checkout-v3__fanbox-pick select{width:100%;}
         .bv-checkout-v3__fanbox-note{margin:6px 0 0;font-size:13px;color:#64748b;}
+        .bv-checkout-v3__curier-nota{margin:0;padding:10px 12px;border-radius:10px;background:#f1f7f3;color:#1e3a2b;font-size:13.5px;line-height:1.45;}
+        .bv-checkout-v3__curier-nota[hidden]{display:none;}
         .bv-checkout-v3__fanbox-maptoggle{margin-top:8px;border:0;background:none;padding:0;color:#1f8b57;font:600 13px/1.2 "DM Sans",Arial,sans-serif;text-decoration:underline;cursor:pointer;}
         .bv-checkout-v3__fanbox-map{margin-top:10px;height:320px;border-radius:12px;overflow:hidden;border:1px solid #d2e0d7;}
         .bv-checkout-v3__fanbox-map .leaflet-container{height:100%;width:100%;}
@@ -368,6 +370,16 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
                                 <div class="bv-checkout-v3__fanbox-map" data-fanbox-map hidden></div>
                             </div>
                         </div>
+                        <?php endif; ?>
+                        <?php
+                        // Cerut pentru Bioscem (12 nov 2026): clienții nu înțelegeau că, fără FANbox și fără ridicarea de la
+                        // sediu, coletul vine prin curier acasă. Nota apare doar cât niciuna dintre cele două nu e bifată.
+                        $areAlternativeLivrare = !empty($fanboxDisponibil) || ($ridicareSchelet && $ridicareDisponibila);
+                        ?>
+                        <?php if ($areAlternativeLivrare): ?>
+                        <p class="bv-checkout-v3__field bv-checkout-v3__field--full bv-checkout-v3__curier-nota" data-curier-nota<?= ($ridicareAleasa || !empty($fanboxAles)) ? ' hidden' : '' ?>>
+                            🚚 Dacă nu alegi niciuna dintre opțiunile de mai sus, coletul se livrează prin curier la adresa de mai sus.
+                        </p>
                         <?php endif; ?>
                         <?php $shippingSame = ((int) ($values['shipping_same_as_billing'] ?? 1)) === 1; ?>
                         <input type="hidden" name="has_shipping_toggle" value="1">
@@ -1099,6 +1111,19 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
         };
         if (fanboxSelect instanceof HTMLSelectElement) {
             fanboxSelect.addEventListener('change', () => void requestShippingQuote());
+        }
+        // Nota „prin curier la adresă”: doar cât nici FANbox, nici ridicarea de la sediu nu e bifată. Pe formular, după
+        // ascultătorii bifelor (care pot debifa cealaltă opțiune).
+        const curierNota = form.querySelector('[data-curier-nota]');
+        if (curierNota instanceof HTMLElement) {
+            const sincronizeazaCurierNota = () => {
+                const alesFanbox = form.querySelector('[data-fanbox-toggle]');
+                const alesRidicare = form.querySelector('[data-ridicare-toggle]');
+                curierNota.hidden = (alesFanbox instanceof HTMLInputElement && alesFanbox.checked)
+                    || (alesRidicare instanceof HTMLInputElement && alesRidicare.checked);
+            };
+            form.addEventListener('change', sincronizeazaCurierNota);
+            sincronizeazaCurierNota();
         }
         if (fanboxToggle instanceof HTMLInputElement) {
             fanboxToggle.addEventListener('change', () => {
