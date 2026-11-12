@@ -90,6 +90,7 @@ O temă aduce doar ce cheile de mai jos permit; tot restul înfățișării unui
 | `logo_meniu_mobil` | (lipsă) | `{"candidati": [...], "implicit": "...", "alt": "..."}`: logo-ul sertarului `{{mobile_menu}}`, primul candidat care există ca fișier (`/uploads/…`, `/tema/…`, `/assets/…`), altfel `implicit`; fără cheie, ca azi |
 | `iconite_categorii` | (lipsă) | `[["cuvânt", "<path …/>"], …]`: iconițele din `{{product_categories}}`, încercate în ordine (cuvântul în numele categoriei, cu litere mici, fără diacritice) înaintea celei implicite; fără cheie, lista de azi a nucleului |
 | `css_inline` | `{}` | `{"pagina_succes": "pagina-succes.css"}`: blocul `<style>` al paginii de mulțumire (`views/site/checkout-success.php`) înlocuit cu fișierul din `tema/` |
+| `pagina_cont` | `"panou"` | `"antet"`: pagina „Contul meu” (`/contul-meu`, `/login`, `/register` fără pagină în bază) e `views/site/account-antet.php`, pagina contului din vertij 9ab7999: antetul cu poza, numele, adresa, starea și statisticile, meniul cu iconițe, cardurile, „Șterge contul” în Setări; aceleași date, formulare, adrese și tab-uri ale pluginurilor ca vederea nucleului (`views/site/account.php`), comenzile și adresele doar cu pluginul `magazin`; fiecare secțiune e o pagină. Înfățișarea (clasele `.acc-*`) o dă foaia temei |
 | `newsletter` | (lipsă) | `{"logo": "/uploads/…png", "logo_alt": "…", "culori": {"principala", "inchisa", "fundal_deschis", "text", "text_secundar", "linie"}}`: înfățișarea șabloanelor de newsletter („Alege un șablon”), a emailurilor de confirmare a abonării și cu linkul de dezabonare, a paginilor publice de confirmare și dezabonare (WP-R din 30 oct, Bioscem `42984c1`, `7123076`). Logo-ul: o adresă `/uploads/`, `/tema/` sau `/assets/` a unei poze PNG, JPEG sau GIF (WebP nu apare în Outlook). Fără cheie: fără logo, paleta neutră a nucleului (`Tema::CULORI_NEWSLETTER`); o culoare nedată rămâne neutră |
 
 Reguli:
@@ -218,5 +219,8 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
 - **Făcut în pachetul vertij** (9 noiembrie, odată cu pluginurile `donatii` și `membri`): `tema/tema.json` doar cu foaia
   `/tema/css/cont.css` (paginile de intrare în cont și de resetare a parolei în culorile site-ului, vertij `5e1d8bd`,
   `6c4d97c`: aceleași reguli, pe aceleași clase, mutate din blocurile `<style>` ale vederilor); restul înfățișării vertij e
-  conținutul din baza lui.
+  conținutul din baza lui. Din 12 noiembrie (proprietarul: „s-a stricat de la mutare interfața de la contul meu”) și
+  `"pagina_cont": "antet"`: contul clientului ca în vertij `9ab7999`, cu blocul `<style>` al paginii mutat în aceeași foaie
+  (`html` → `html:has(.acc-wrap)`, ca rezerva barei de derulare să rămână a paginii contului). Dovada:
+  `tools/dev/test-donatii-membri.php` (semnele paginii vertij pe ambele coduri, fără comenzi și adrese pe codul comun).
 - Etapa 4: tema grafoanaytis (GR-19) și conținutul de pornire (`continut/`, GR-20).

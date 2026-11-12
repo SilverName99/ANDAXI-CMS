@@ -64,7 +64,7 @@ $verifica('fără dosarul site-ului: fiecare cheie la implicit, nicio problemă'
 $tImplicitAzi = ['css' => [], 'incarca_app_css' => true, 'fonturi' => ['/assets/vendor/fonturi/dm-sans/dm-sans.css',
     '/assets/vendor/fonturi/playfair/playfair.css'], 'fonturi_google' => false, 'bootstrap' => false, 'js_final' => [],
     'main' => 'container', 'flash' => 'panou', 'buton_sus' => false, 'culoare_principala' => '#2f8d5b', 'logo_meniu_mobil' => null,
-    'iconite_categorii' => null, 'css_inline' => [], 'newsletter' => null];
+    'iconite_categorii' => null, 'css_inline' => [], 'newsletter' => null, 'pagina_cont' => 'panou'];
 $verifica('valorile implicite ale celor ' . count($tImplicitAzi) . ' chei sunt comportamentul de azi (fonturile din nucleu, app.css, .container, '
     . 'panourile, fără buton „sus”, #2f8d5b …)', Tema::IMPLICIT === $tImplicitAzi,
     (string) json_encode(array_diff_assoc(array_map('json_encode', Tema::IMPLICIT), array_map('json_encode', $tImplicitAzi)), JSON_UNESCAPED_SLASHES));
@@ -81,6 +81,8 @@ $tGresite = [
     'iconite_categorii' => ['ceai' => '<path d="M0 0"/>'], 'css_inline' => ['antet' => 'a.css'], 'culoare' => '#000',
     // WP-R din 30 oct (newsletterul): o culoare greșită (și, mai jos, logo-ul WebP, o culoare necunoscută, o cheie necunoscută).
     'newsletter' => ['culori' => ['principala' => 'verde']],
+    // Pagina contului (vertij, 12 nov 2026): doar `panou` sau `antet`.
+    'pagina_cont' => 'vertij',
 ];
 $tGresiteNeprinse = [];
 foreach ($tGresite as $cheie => $valoare) {
@@ -109,6 +111,9 @@ foreach ($tNlGresite as $ce => $valoare) {
 $verifica('newsletter: ' . count($tNlGresite) . ' greșeli prinse, fiecare o problemă; una bună dă logo-ul, textul și culorile peste cele neutre',
     $tNlNeprinse === [] && $p === [] && $v['newsletter'] === ['culori' => ['principala' => '#123456', 'linie' => '#abc'],
         'logo' => '/uploads/gallery/logo.png', 'logo_alt' => 'Firma Demo'], implode(', ', $tNlNeprinse) . implode('; ', $p));
+
+[$v, $p] = Tema::valideaza(['pagina_cont' => 'antet'], $tPachet);
+$verifica('pagina_cont: „antet” (pagina contului cu antet, tema vertij) se ia, fără probleme', $v['pagina_cont'] === 'antet' && $p === [], implode('; ', $p));
 
 $tScrie('tema/public/css/a.css', "body{color:#123}\n");
 $tScrie('tema/public/js/a.js', "void 0;\n");

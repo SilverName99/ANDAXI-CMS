@@ -1,7 +1,8 @@
 /*
  * Paginile contului vertij în culorile site-ului (codul vechi 5e1d8bd, 6c4d97c; aceleași reguli, mutate din blocurile <style>
  * ale vederilor în foaia temei). Doar clasele acestor pagini: .account-auth-tabs, .account-auth-grid (logarea și înregistrarea
- * din /contul-meu) și .account-reset-panel (resetarea parolei și, în codul comun, confirmarea adresei de email).
+ * din /contul-meu; câmpurile de dată și listele și grila pe două coloane din vertij 9ab7999), .account-reset-panel (resetarea
+ * parolei și, în codul comun, confirmarea adresei de email) și .acc-* (contul clientului logat, mai jos).
  */
 .account-auth-tabs{display:flex;gap:8px;max-width:520px;margin:6px auto 18px;}
 .account-auth-tabs a{flex:1;text-align:center;padding:11px 14px;border-radius:999px !important;font-weight:700;text-decoration:none;color:#6f2b98;background:#f4ecf7;border:1.5px solid transparent;transition:background .15s ease,color .15s ease,border-color .15s ease;}
@@ -14,8 +15,13 @@
 .account-auth-grid input[type=email],
 .account-auth-grid input[type=text],
 .account-auth-grid input[type=password],
-.account-auth-grid input[type=tel]{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #e5d9ec;border-radius:10px !important;font-size:15px;background:#fdfbfe;transition:border-color .15s ease,box-shadow .15s ease;}
-.account-auth-grid input:focus{outline:none;border-color:#ea4968;box-shadow:0 0 0 3px rgba(234,73,104,.12);}
+.account-auth-grid input[type=tel],
+.account-auth-grid input[type=date],
+.account-auth-grid select{width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #e5d9ec;border-radius:10px !important;font-size:15px;background:#fdfbfe;transition:border-color .15s ease,box-shadow .15s ease;}
+.account-auth-grid input:focus,.account-auth-grid select:focus{outline:none;border-color:#ea4968;box-shadow:0 0 0 3px rgba(234,73,104,.12);}
+.account-auth-grid .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;}
+.account-auth-grid .form-grid .field{margin:0;}
+@media(max-width:560px){.account-auth-grid .form-grid{grid-template-columns:1fr;}}
 .account-auth-grid .btn{width:100%;margin-top:20px;border:0;cursor:pointer;background:linear-gradient(135deg,#ea4968,#6f2b98) !important;color:#fff !important;font-weight:700;font-size:15px;letter-spacing:.02em;padding:13px 18px;border-radius:12px !important;transition:transform .15s ease,opacity .15s ease;}
 .account-auth-grid .btn:hover{transform:translateY(-2px);opacity:.95;}
 .account-auth-grid a{color:#ea4968;font-weight:600;}
@@ -32,3 +38,165 @@
 .account-reset-panel .btn:hover{transform:translateY(-2px);opacity:.95;}
 .account-reset-panel a{color:#ea4968;font-weight:600;}
 .account-reset-panel a:hover{text-decoration:underline;}
+
+/*
+ * Pagina contului cu antet (tema.json → "pagina_cont": "antet", views/site/account-antet.php): blocul <style> al paginii contului
+ * din codul vertij 9ab7999 (views/site/account.php), aceleași reguli pe aceleași clase; doar `html` → `html:has(.acc-wrap)`, ca
+ * rezerva barei de derulare să rămână a paginii contului (foaia temei e pe toate paginile).
+ */
+/* Bara de scroll apare/dispare cand treci de la un panou lung la unul scurt,
+   iar pagina isi schimba latimea. Rezervam mereu locul ei. */
+html:has(.acc-wrap){scrollbar-gutter:stable;}
+/* Pagina sta intr-un container flex (main.site-container). Acolo, "margin:0 auto"
+   anuleaza intinderea pe latime, deci sectiunea s-ar ingusta dupa continutul
+   fiecarui tab. Latimea explicita o tine identica in toate tab-urile. */
+.acc-wrap{width:100%;max-width:1160px;margin:0 auto;padding:26px 18px 56px;font-family:"DM Sans",Arial,sans-serif;}
+.acc-hero{position:relative;overflow:hidden;border-radius:22px;padding:30px 32px;margin-bottom:22px;
+  background:linear-gradient(135deg,#ea4968,#6f2b98);color:#fff;box-shadow:0 20px 46px rgba(111,43,152,.22);}
+.acc-hero::after{content:"";position:absolute;right:-70px;top:-70px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.09);}
+.acc-hero-top{position:relative;z-index:1;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+.acc-avatar-form{flex:0 0 auto;margin:0;line-height:0;}
+.acc-avatar{position:relative;width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.4);
+  display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;letter-spacing:.02em;
+  cursor:pointer;transition:transform .18s ease,box-shadow .18s ease;}
+.acc-avatar:hover,.acc-avatar:focus-within{transform:scale(1.04);box-shadow:0 0 0 4px rgba(255,255,255,.18);}
+.acc-avatar-initials{line-height:1;}
+.acc-avatar-input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);border:0;}
+.acc-avatar-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+.acc-avatar-edit{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;background:#fff;
+  border:2px solid rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 10px rgba(31,41,55,.22);opacity:0;transform:scale(.82);transition:opacity .18s ease,transform .18s ease;}
+.acc-avatar-edit svg{width:14px;height:14px;fill:none;stroke:#6f2b98;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.acc-avatar.has-no-photo .acc-avatar-edit,
+.acc-avatar:hover .acc-avatar-edit,
+.acc-avatar:focus-within .acc-avatar-edit{opacity:1;transform:scale(1);}
+.acc-hero-id{flex:1;min-width:220px;}
+.acc-hero-id h1{margin:0 0 4px;font-family:"Playfair Display",Georgia,serif;font-size:30px;line-height:1.15;color:#fff;}
+.acc-hero-id p{margin:0;font-size:14.5px;color:rgba(255,255,255,.85);word-break:break-word;}
+.acc-pill{display:inline-flex;align-items:center;gap:7px;margin-top:10px;padding:6px 14px;border-radius:999px;
+  font-size:12.5px;font-weight:700;letter-spacing:.02em;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);}
+.acc-pill.is-ok{background:rgba(255,255,255,.94);color:#12734a;border-color:transparent;}
+.acc-pill.is-wait{background:rgba(255,255,255,.94);color:#9a5b12;border-color:transparent;}
+.acc-pill.is-off{background:rgba(255,255,255,.94);color:#a11d33;border-color:transparent;}
+.acc-code{position:relative;z-index:1;margin-top:16px;display:inline-flex;align-items:center;gap:10px;padding:9px 16px;border-radius:12px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.24);font-size:13.5px;}
+.acc-code strong{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.06em;font-size:15px;}
+
+.acc-stats{position:relative;z-index:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:24px;}
+.acc-stat{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px 16px;}
+.acc-stat strong{display:block;font-size:23px;line-height:1.15;font-weight:700;}
+.acc-stat span{display:block;margin-top:3px;font-size:12.5px;color:rgba(255,255,255,.82);}
+
+.acc-grid{display:grid;grid-template-columns:264px 1fr;gap:22px;align-items:start;}
+.acc-side{position:sticky;top:18px;display:flex;flex-direction:column;gap:14px;}
+.acc-nav{background:#fff;border:1px solid #efe3f2;border-radius:18px;padding:10px;box-shadow:0 12px 32px rgba(111,43,152,.07);}
+.acc-nav a{display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:12px;text-decoration:none;
+  color:#4b5563;font-size:14.5px;font-weight:600;transition:background .15s ease,color .15s ease;}
+.acc-nav a:hover{background:#faf6fc;color:#6f2b98;}
+.acc-nav a.is-active{background:linear-gradient(135deg,#ea4968,#6f2b98);color:#fff;}
+.acc-nav a .acc-badge{margin-left:auto;padding:2px 8px;border-radius:999px;background:#f4ecf7;color:#6f2b98;font-size:11.5px;font-weight:700;}
+.acc-nav a.is-active .acc-badge{background:rgba(255,255,255,.24);color:#fff;}
+.acc-ico{width:19px;height:19px;flex:0 0 auto;fill:currentColor;}
+.acc-logout{width:100%;padding:12px 16px;border-radius:12px;border:1.5px solid #e5d9ec;background:#fff;color:#6f2b98;
+  font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;}
+.acc-logout:hover{border-color:#d9c2e6;background:#faf6fc;}
+
+.acc-panel{display:none;}
+.acc-panel.is-active{display:block;animation:accPanelIn .26s ease both;}
+@keyframes accPanelIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+/* Înălțimea minimă ține pagina stabilă când treci de la un panou lung la unul scurt:
+   podeaua fixă evită saltul, iar variabila animează trecerea. */
+.acc-main{min-height:max(var(--acc-main-min,0px),var(--acc-main-floor,520px));transition:min-height .26s ease;}
+@media(prefers-reduced-motion:reduce){
+  .acc-panel.is-active{animation:none;}
+  .acc-main{transition:none;}
+  .acc-avatar,.acc-avatar-edit{transition:none;}
+}
+.acc-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;}
+.acc-card{background:#fff;border:1px solid #efe3f2;border-radius:18px;padding:26px 26px 24px;box-shadow:0 12px 32px rgba(111,43,152,.07);}
+.acc-card + .acc-card{margin-top:18px;}
+.acc-card h2{margin:0 0 6px;font-family:"Playfair Display",Georgia,serif;font-size:23px;color:#1f2937;}
+.acc-card h3{margin:22px 0 12px;font-size:15px;color:#1f2937;}
+.acc-card h3:first-of-type{margin-top:14px;}
+.acc-lead{margin:0 0 18px;color:#6b7280;font-size:14.5px;line-height:1.6;}
+.acc-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:4px;}
+
+.acc-form{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px;}
+.acc-form .acc-full{grid-column:1/-1;}
+.acc-form label{display:block;font-size:13px;font-weight:600;color:#4b5563;margin-bottom:6px;}
+.acc-form input[type=text],.acc-form input[type=email],.acc-form input[type=tel],
+.acc-form input[type=password],.acc-form input[type=date],.acc-form select{
+  width:100%;box-sizing:border-box;padding:11px 13px;border:1px solid #e5d9ec;border-radius:10px;
+  font-size:15px;background:#fdfbfe;font-family:inherit;color:#1f2937;}
+.acc-form input:focus,.acc-form select:focus{outline:none;border-color:#ea4968;box-shadow:0 0 0 3px rgba(234,73,104,.12);}
+.acc-form input:disabled{background:#f6f4f8;color:#6b7280;}
+.acc-btn{display:inline-block;border:0;cursor:pointer;padding:12px 22px;border-radius:12px;font-weight:700;font-size:14.5px;
+  font-family:inherit;background:linear-gradient(135deg,#ea4968,#6f2b98);color:#fff;text-decoration:none;text-align:center;}
+.acc-btn:hover{opacity:.94;}
+.acc-btn--ghost{background:#fff;color:#6f2b98;border:1.5px solid #e5d9ec;}
+.acc-btn--ghost:hover{background:#faf6fc;opacity:1;}
+.acc-btn--danger{background:#fff;color:#a11d33;border:1.5px solid #f3c9d0;}
+.acc-btn--danger:hover{background:#fdf3f5;opacity:1;}
+
+.acc-empty{margin:0;padding:30px 22px;border:1.5px dashed #e5d9ec;border-radius:14px;background:#fdfbfe;text-align:center;color:#6b7280;font-size:14.5px;line-height:1.6;}
+.acc-empty strong{display:block;margin-bottom:5px;color:#1f2937;font-size:15.5px;}
+
+.acc-table-wrap{overflow-x:auto;}
+.acc-table{width:100%;border-collapse:collapse;font-size:14px;}
+.acc-table th{text-align:left;padding:10px 12px;border-bottom:1.5px solid #efe3f2;color:#6b7280;font-size:12.5px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+.acc-table td{padding:13px 12px;border-bottom:1px solid #f4eef7;color:#374151;vertical-align:middle;}
+.acc-table tr:last-child td{border-bottom:0;}
+.acc-tag{display:inline-block;padding:3px 10px;border-radius:999px;background:#f4ecf7;color:#6f2b98;font-size:12px;font-weight:700;}
+.acc-tag.is-ok{background:#e7f6ee;color:#12734a;}
+.acc-tag.is-off{background:#fdeaec;color:#a11d33;}
+
+.acc-address-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:16px;}
+.acc-address{border:1px solid #efe3f2;border-radius:14px;padding:16px 18px;background:#fdfbfe;}
+.acc-address .acc-address-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.acc-address strong{font-size:14.5px;color:#1f2937;}
+.acc-address p{margin:3px 0;color:#6b7280;font-size:13.5px;line-height:1.5;}
+
+.acc-info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px;}
+.acc-info{padding:14px 16px;border-radius:12px;background:#faf6fc;}
+.acc-info span{display:block;font-size:12.5px;color:#6b7280;margin-bottom:3px;}
+.acc-info strong{font-size:14.5px;color:#1f2937;word-break:break-word;}
+
+.acc-donation-active{border-color:#e7d6f0;background:linear-gradient(180deg,#fdfbfe,#fff);}
+.acc-danger{margin-top:22px;padding:18px 20px;border:1px solid #f3c9d0;border-radius:14px;background:#fdf7f8;}
+.acc-danger h3{margin:0 0 6px;color:#a11d33;}
+.acc-danger p{margin:0 0 14px;color:#6b7280;font-size:13.5px;line-height:1.55;}
+
+@media(max-width:900px){
+  .acc-grid{grid-template-columns:1fr;}
+  .acc-side{position:static;}
+  .acc-nav{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;}
+}
+@media(max-width:560px){
+  .acc-main{--acc-main-floor:360px;}
+  .acc-wrap{padding:18px 14px 44px;}
+  .acc-hero{padding:24px 20px;}
+  .acc-hero-id h1{font-size:25px;}
+  .acc-card{padding:20px 18px;}
+  .acc-form{grid-template-columns:1fr;}
+}
+
+/* Ce aduce codul comun în plus față de vertij: poza de profil a pluginului membri (cu „Șterge poza”) pusă în antet, inițialele
+   fără plugin, data nașterii din trei liste, nota comenzilor fără cont confirmat, valorile din antet după cheia lor. */
+.acc-hero .acc-avatar-block{margin:0;flex-direction:column;align-items:center;gap:6px;}
+.acc-hero .acc-avatar{background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.4);color:#fff;}
+.acc-hero .acc-avatar:hover,.acc-hero .acc-avatar:focus-within{box-shadow:0 0 0 4px rgba(255,255,255,.18);}
+.acc-hero .acc-avatar-edit{border-color:rgba(255,255,255,.55);}
+.acc-hero .acc-avatar-remove button{color:rgba(255,255,255,.9);font-size:12.5px;}
+.acc-hero .acc-avatar--fara-poza{cursor:default;flex:0 0 auto;}
+.acc-hero .acc-avatar--fara-poza:hover{transform:none;box-shadow:none;}
+.acc-stat--categorie strong{font-size:17px;}
+.acc-stat--status strong{font-size:19px;}
+.acc-form .bv-birthdate{display:grid;grid-template-columns:minmax(64px,.8fr) minmax(0,1.6fr) minmax(80px,1fr);gap:8px;}
+.acc-form .acc-check{display:flex;align-items:center;gap:9px;font-weight:500;}
+.acc-form .acc-check input{width:auto;}
+.acc-card--nota{margin-bottom:18px;}
+.acc-card--nota .acc-lead{margin:0 0 12px;}
+.acc-card--nota form{margin:0;}
+.acc-table td.acc-plus{font-weight:700;color:#12734a;}
+.acc-table td.acc-minus{font-weight:700;color:#a11d33;}

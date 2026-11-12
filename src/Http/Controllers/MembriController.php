@@ -1484,14 +1484,58 @@ final class MembriController
         $statistici = [];
         $professionName = trim((string) ($state['profession_name'] ?? ''));
         if ($professionName !== '') {
-            $statistici[] = ['eticheta' => 'Categorie', 'valoare' => $professionName];
+            $statistici[] = ['eticheta' => 'Categorie', 'valoare' => $professionName, 'cheie' => 'categorie'];
         }
-        $statistici[] = ['eticheta' => 'Status cont', 'valoare' => $statusValue];
+        $statistici[] = ['eticheta' => 'Status cont', 'valoare' => $statusValue, 'cheie' => 'status'];
         $memberCode = trim((string) ($state['member_code'] ?? ''));
         if ($memberCode !== '') {
-            $statistici[] = ['eticheta' => 'Cod de membru', 'valoare' => $memberCode];
+            // În pagina contului cu antet (tema vertij) codul stă în caseta lui de sub nume, nu printre statistici.
+            $statistici[] = ['eticheta' => 'Cod de membru', 'valoare' => $memberCode, 'cheie' => 'cod_membru'];
         }
         return $statistici;
+    }
+
+    /**
+     * Agățarea `cont.stare` (doar pagina contului cu antet, tema → `pagina_cont: antet`; ca în vertij 9ab7999): insigna de sub
+     * nume (starea cererii și a cotizației) și cardul „Statutul de membru” din „Profilul meu” (doar pentru un cont cu categorie
+     * sau cod de membru).
+     *
+     * @return array{insigna: string, ton: string, card: ?array{titlu: string, legatura: array{text: string, href: string}, randuri: list<array{eticheta: string, valoare: string}>}}
+     */
+    public static function stareCont(PDO $db, array $user): array
+    {
+        $user = self::contMembru($db, $user) ?? $user;
+        $state = ProfessionAccounts::accountState($db, $user, Settings::all($db));
+        $isActive = (bool) ($state['is_active'] ?? false);
+        $status = (string) ($state['verification_status'] ?? 'none');
+        [$insigna, $ton] = match (true) {
+            $isActive => ['Membru activ', 'ok'],
+            $status === 'pending' => ['Cerere în verificare', 'asteapta'],
+            $status === 'awaiting_email' => ['Confirmă emailul', 'asteapta'],
+            $status === 'rejected' => ['Cerere respinsă', 'oprit'],
+            (bool) ($state['is_approved'] ?? false) => ['Cotizație neachitată', 'asteapta'],
+            default => ['Cont fără cerere de membru', 'asteapta'],
+        };
+        $memberCode = trim((string) ($state['member_code'] ?? ''));
+        $professionName = trim((string) ($state['profession_name'] ?? ''));
+        $activeUntilLabel = trim((string) ($state['active_until_label'] ?? ''));
+        $card = null;
+        if ($professionName !== '' || $memberCode !== '') {
+            $randuri = [];
+            if ($memberCode !== '') {
+                $randuri[] = ['eticheta' => 'Cod de membru', 'valoare' => $memberCode];
+            }
+            if ($professionName !== '') {
+                $randuri[] = ['eticheta' => 'Categorie', 'valoare' => $professionName];
+            }
+            $randuri[] = ['eticheta' => 'Stare', 'valoare' => $insigna];
+            if ($activeUntilLabel !== '') {
+                $randuri[] = ['eticheta' => $isActive ? 'Valabilă până la' : 'A expirat pe', 'valoare' => $activeUntilLabel];
+            }
+            $card = ['titlu' => 'Statutul de membru', 'legatura' => ['text' => 'Vezi cotizația', 'href' => '/contul-meu?section=activare'],
+                'randuri' => $randuri];
+        }
+        return ['insigna' => $insigna, 'ton' => $ton, 'card' => $card];
     }
 
     /** `POST /contul-meu/activare`: plata cotizației pentru perioada aleasă (Stripe Checkout). */

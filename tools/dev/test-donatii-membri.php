@@ -948,6 +948,17 @@ try {
     $verifica('C contul: tab-ul „Donații” (donația lunară activă, istoricul cu lunile și chitanțele), același HTML (spațiile normalizate)',
         $panouDonatii($donV['corp']) !== '' && $panouDonatii($donV['corp']) === $panouDonatii($donN['corp']) && str_contains($donN['corp'], '>Donații')
         && str_contains($donN['corp'], 'lunar'), json_encode([$panouDonatii($donV['corp']), $panouDonatii($donN['corp'])], JSON_UNESCAPED_UNICODE) ?: '');
+    // Înfățișarea paginii (12 nov 2026): tema vertij (`pagina_cont: antet`) dă pagina contului cu antet, ca în codul vertij (antetul
+    // cu poza, numele, starea și codul, meniul cu iconițe, cardurile), fără părțile magazinului (vertij nu are pluginul magazin).
+    $profilV = $clientPe('vechi', $emailActiv)('GET', '/contul-meu?section=profile')['corp'];
+    $profilN = $clientPe('nou', $emailActiv)('GET', '/contul-meu?section=profile')['corp'];
+    $semneAntet = ['<header class="acc-hero">', 'class="acc-avatar-form"', '<span class="acc-pill is-ok">Membru activ</span>', '<div class="acc-code">',
+        '<nav class="acc-nav">', '<svg class="acc-ico"', '<h2>Profilul meu</h2>', '<h2>Statutul de membru</h2>', '>Deconectare</button>'];
+    $lipsa = static fn (string $html): array => array_values(array_filter($semneAntet, static fn (string $semn): bool => !str_contains($html, $semn)));
+    $verifica('C contul pe tema vertij: pagina cu antet, ca în codul vertij (antetul cu poza, starea și codul, meniul cu iconițe, cardul „Statutul de '
+        . 'membru”), fără pagina nucleului și fără comenzi, adrese și totalul comenzilor (fără magazin)', $lipsa($profilV) === [] && $lipsa($profilN) === []
+        && !str_contains($profilN, 'customer-account-shell') && !str_contains($profilN, 'Comenzile mele') && !str_contains($profilN, '>Adrese<')
+        && !str_contains($profilN, '<span>Comenzi</span>') && !str_contains($profilN, 'customer-stats') && str_contains($profilN, '/tema/css/cont.css'), json_encode([$lipsa($profilV), $lipsa($profilN)], JSON_UNESCAPED_UNICODE) ?: '');
     $membru = ['vechi' => $clientPe('vechi', $emailActiv), 'nou' => $clientPe('nou', $emailActiv)];
     $pasCont('oprirea donației lunare din cont: abonamentul anulat la Stripe (DELETE), „cancelled_at”', 'POST', '/contul-meu/donatii/opreste');
     $pasCont('oprirea a doua oară: „Nu ai nicio donație lunară activă”', 'POST', '/contul-meu/donatii/opreste');

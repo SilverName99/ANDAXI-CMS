@@ -68,6 +68,10 @@ final class Tema
         'iconite_categorii' => null,
         'css_inline' => [],
         'newsletter' => null,
+        // Pagina „Contul meu” a clientului logat (și intrarea în cont): `panou` = vederea nucleului (views/site/account.php),
+        // `antet` = antetul mare cu numele, starea și statisticile, meniul cu iconițe și cardurile (views/site/account-antet.php,
+        // pagina contului din codul vertij 9ab7999); înfățișarea ei (clasele `.acc-*`) o dă foaia temei.
+        'pagina_cont' => 'panou',
     ];
 
     /**
@@ -147,6 +151,12 @@ final class Tema
     public static function flash(): string
     {
         return (string) self::valori()['flash'];
+    }
+
+    /** `panou` (implicit: vederea nucleului) sau `antet` (pagina contului cu antet, din vertij). */
+    public static function paginaCont(): string
+    {
+        return (string) self::valori()['pagina_cont'];
     }
 
     public static function butonSus(): bool
@@ -344,7 +354,12 @@ final class Tema
                     break;
                 case 'main':
                 case 'flash':
-                    $permise = $cheie === 'main' ? ['container', 'lat'] : ['panou', 'bootstrap'];
+                case 'pagina_cont':
+                    $permise = match ($cheie) {
+                        'main' => ['container', 'lat'],
+                        'flash' => ['panou', 'bootstrap'],
+                        default => ['panou', 'antet'],
+                    };
                     if (is_string($valoare) && in_array($valoare, $permise, true)) {
                         $valori[$cheie] = $valoare;
                     } else {
