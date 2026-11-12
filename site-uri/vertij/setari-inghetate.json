@@ -3,8 +3,8 @@
     "format": 2,
     "site": "vertij",
     "sursa": "vertij-tinitus-refacut@9ab7999",
-    "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
     "amprenta_nucleu": "a1e4c7e71c1f65a2283283fe38b01c1054a98ce5537564e399cf07e32f02e84a",
+    "inchis": "pleacă pe vertij-tinitus.ro la adoptare: sursa vertij-tinitus-refacut@9ab7999 e commit-ul live (git log -1 în public_html pe 12 noiembrie 2026, arătat de proprietar; singurul fișier în plus, public/uploads/, sunt pozele încărcate; adopta.sh --commit-vechi=9ab7999 îl verifică cu git log -1, iar genereaza-setari.php --cod-vechi pe server trebuie să dea aceeași înghețare); de acum o corectură e setari-inghetate-2.json",
     "setari": {
         "account_member_code_prefix": {
             "valoare": "SVTH",

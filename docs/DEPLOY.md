@@ -679,7 +679,8 @@ Plățile BT autorizate rămân la bancă și le încasează din nou cronul codu
 
 ## Adoptarea vertij: ce cer pluginurile `donatii` și `membri`
 
-Pregătirea (nu e încă o noapte a comutării: vertij nu are înghețarea confirmată din live). Pe lângă pașii obișnuiți ai adoptării
+Înghețarea e închisă pe commit-ul live `9ab7999` (confirmat pe 12 noiembrie 2026: `git log -1` în `public_html`); comenzile serii și ale
+nopții sunt ca la „Comutarea Bioscem”, cu `--site=vertij --domeniu=vertij-tinitus.ro --commit-vechi=9ab7999`. Pe lângă pașii obișnuiți ai adoptării
 (mai sus) și `site-uri/vertij/ce-se-schimba.md`:
 
 - **Documentele cererilor de membru.** Codul vertij le ține în `public_html/storage/account-documents/`; codul comun în
