@@ -26,6 +26,7 @@ use App\Http\Controllers\ConfirmareEmailController;
 use App\Http\Controllers\DesktopApiController;
 use App\Http\Controllers\DonatiiController;
 use App\Http\Controllers\FisiereCloudController;
+use App\Http\Controllers\IstoricEmailController;
 use App\Http\Controllers\MembriController;
 use App\Http\Controllers\RedirectionariController;
 use App\Http\Controllers\SeoAdminController;
@@ -296,6 +297,9 @@ return static function (Router $router): void {
     $router->post('/admin/emails', [AdminController::class, 'emailsSave']);
     $router->post('/admin/emails/test', [AdminController::class, 'emailsSendTest']);
     $router->post('/admin/emails/history/resend', [AdminController::class, 'emailsHistoryResend']);
+    // „Vezi” din Emailuri trimise (16 nov 2026): corpul sertarului și emailul izolat (App\Http\Controllers\IstoricEmailController).
+    $router->get('/admin/emails/history/vezi', [IstoricEmailController::class, 'vezi']);
+    $router->get('/admin/emails/history/continut', [IstoricEmailController::class, 'continut']);
     $router->post('/admin/emails/contact-recipients', [AdminController::class, 'contactRecipientsSave']);
     $router->get('/admin/pages', [AdminController::class, 'pages']);
     $router->get('/admin/pages/trash', [AdminController::class, 'pagesTrash']);

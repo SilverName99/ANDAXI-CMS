@@ -424,6 +424,54 @@ activare”, fără administrator). Un plugin nou care are conținut de pus pe b
 scrie aici pasul, nu într-o migrare (migrările nu scriu conținut) și nu într-o
 funcție chemată la fiecare cerere.
 
+## Emailurile trimise și conținutul lor (nucleu)
+
+Admin → Rapoarte → **Emailuri trimise** (`/admin/emails/newsletters?tab=history`, tabelul „Istoric trimitere email-uri”) are,
+din 16 noiembrie 2026 (cererea proprietarului Biovitality, după un client care a văzut alt preț în checkout decât în emailul de
+expediere), butonul **„Vezi”** pe fiecare rând: emailul se deschide în sertarul din dreapta **exact cum a plecat**, nu refăcut
+din datele de azi. Codul: `App\Support\EmailContinut`, `App\Http\Controllers\IstoricEmailController`,
+`views/admin/emails/istoric-vezi.php`, migrarea `nucleu/0067`; testul: `tools/dev/test-emailuri-trimise.php` (și în testul de fum).
+
+- **Ce se păstrează.** Fiecare rând nou din `email_send_history` scris de `OrderMailer` (singurul loc care trimite emailuri:
+  comenzile — comandă nouă, OP, procesare, expediere/AWB, livrare, anulare, ridicare —, linkul de plată, contul, resetarea
+  parolei, confirmarea adresei, formularul de contact, cererile de ofertă, donațiile, membrii, coșul abandonat, confirmările și
+  linkurile de dezabonare ale newsletterului, testele), trimis sau eșuat, primește în `email_send_bodies` HTML-ul exact dat
+  furnizorului (SMTP, SendGrid, `mail()`), **comprimat** cu `gzcompress` (nivelul 6; un email de comandă de ~30 KB ajunge la
+  ~5 KB). Partea text/plain a SMTP-ului e `OrderMailer::htmlInText` din același HTML, deci nu se păstrează separat: „Vezi” o
+  arată calculată din el („Varianta text”). Peste 4 MB de HTML nu se păstrează nimic (`prea_mare`). O greșeală la păstrare
+  nu oprește trimiterea; pe o bază fără migrarea `nucleu/0067` nu se păstrează nimic.
+- **Ce nu se păstrează: newsletterele trimise.** O campanie pleacă la mii de abonați cu același conținut, deci rândurile
+  `newsletter_campaign` nu au o copie fiecare: „Vezi” le arată din campanie (`newsletter_campaigns`, după `campaign_id` din
+  `meta_json`; blocurile constructorului sau HTML-ul salvat, ca la trimitere), cu subsolul de dezabonare al trimiterii, dar cu
+  un loc gol (`#link-dezabonare-abonat`) în locul linkului personal al abonatului și fără pixelul și linkurile de urmărire.
+  O campanie ștearsă: „Newsletterul a plecat dintr-o campanie care nu mai există…”. Newsletterul de test (un destinatar) se
+  păstrează ca orice email.
+- **Emailurile de dinainte** (fără rând în `email_send_bodies`): „Conținutul nu a fost păstrat (email trimis înainte de
+  <data migrării `nucleu/0067` pe site>).”
+- **Păstrarea limitată: 90 de zile** (`EmailContinut::ZILE_PASTRARE`). Conținutul mai vechi se golește (`html_gz` = NULL,
+  `cleared_reason` = `retentie`; rândul rămâne, ca „Vezi” să spună „Conținutul a fost șters automat pe <data>: se păstrează
+  90 de zile de la trimitere.”) la fiecare email nou și la fiecare deschidere a istoricului, câte cel mult 500 o dată (indexul
+  `cleared_at, created_at`; fără cron nou). Pe un site cu ~150 de emailuri pe zi (~5 KB comprimat fiecare): ~0,75 MB pe zi, ~70 MB în total.
+- **Izolarea.** HTML-ul emailului nu intră niciodată în pagina adminului. Sertarul încarcă fragmentul
+  `GET /admin/emails/history/vezi?id=<rând>` (datele rândului, starea conținutului, varianta text escapată), cu emailul într-un
+  `<iframe sandbox="">` (fără `allow-scripts`, fără `allow-same-origin`, fără formulare și ferestre) spre
+  `GET /admin/emails/history/continut?id=<rând>`, care trimite emailul cu `Content-Security-Policy: sandbox; default-src 'none';
+  img-src * data: cid:; style-src 'unsafe-inline' *; …; frame-ancestors 'self'` și `Referrer-Policy: no-referrer`: și deschis
+  direct (Ctrl+clic pe „Vezi”, „Deschide emailul într-un tab nou”) rulează într-o origine opacă, fără scripturi. Imaginile și
+  stilurile de pe alte site-uri din email se încarcă (fără Referer).
+- **Cine vede.** Aceeași gardă ca pagina istoricului (`/admin/emails…`: administratorul general și cel de emailuri; magazinul,
+  blogul și cloudul nu; nelogat: login). GET-uri doar de citire, fără jeton; `Cache-Control: no-store`, `noindex`.
+- **Datele personale.** Conținutul are nume, adrese, comenzi: nu se scrie în niciun jurnal, nu iese din pagina de mai sus, iar
+  pe copia de verificare tabelul vine **doar cu structura** (regulile Bioscem 26, `tools/verificare/reguli/bioscem.php`).
+  Ștergerea unui cont (Admin → Utilizatori, „Șterge contul” din contul clientului) golește conținutul emailurilor trimise
+  adresei lui și al emailurilor comenzilor plasate cu ea (și copiile adminului); ștergerea unui abonat (Liste abonați) pe al
+  emailurilor trimise adresei lui (`cleared_reason` = `gdpr`; „Conținutul a fost șters pe <data>, odată cu datele
+  destinatarului…”). Rândurile istoricului (destinatarul, subiectul) rămân, ca până acum. Codul nu are altă ștergere a datelor
+  unui om (exportul `scripts/exporta-date-legale.php` doar citește).
+- **Compararea cu Bioscem.** Butonul îl pune un script dintr-un singur bloc de sub tabel (lista id-urilor rândurilor, stilul,
+  sertarul), între marcajele `em:istoric-vezi` (`$marcajePort` din `tools/dev/compara-cu-baza.php`): rândurile tabelului rămân
+  octet cu octet cele din bază. Rândul din `site-uri/*/ce-se-schimba.md`.
+
 ## Pluginurile, unul câte unul
 
 „Se oprește” și „oprit” descriu ce se schimbă față de „pornit”. Datele nu se

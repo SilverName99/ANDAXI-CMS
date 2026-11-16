@@ -4399,6 +4399,10 @@ final class SiteController
 
         try {
             $db->beginTransaction();
+            // Conținutul păstrat al emailurilor trimise adresei contului și al emailurilor comenzilor ei (App\Support\EmailContinut).
+            $adresaCont = $db->prepare('SELECT email FROM users WHERE id = :id LIMIT 1');
+            $adresaCont->execute(['id' => $userId]);
+            \App\Support\EmailContinut::stergePentruAdrese($db, [(string) ($adresaCont->fetchColumn() ?: '')], true);
             $db->prepare('UPDATE orders SET user_id = NULL WHERE user_id = :user_id')
                 ->execute(['user_id' => $userId]);
             $db->prepare('DELETE FROM user_addresses WHERE user_id = :user_id')

@@ -893,7 +893,7 @@ site din cont (verificat înainte de conexiune) și e goală sau are `_verificar
    „nume de date personale” dacă se potrivește `CitireLive::TIPAR_PERSONAL`). Un tabel fără reguli primește doar
    structura (și e numit pe ecran), la fel cele `doar_structura` (jurnalele, resetările de parolă, acordurile GDPR,
    coșurile abandonate, linkurile de confirmare a adresei și evenimentele Stripe primite, WP-25; trimiterile cererilor
-   de ofertă, WP-26). Cererile de ofertă (`quote_requests`, WP-26) se anonimizează ca mesajele de contact. Tabelele de lucru FAN (`fan_*__sync`, `__vechi`) iau regulile tabelului lor.
+   de ofertă, WP-26; conținutul păstrat al emailurilor trimise, `email_send_bodies`, din regulile Bioscem 26). Cererile de ofertă (`quote_requests`, WP-26) se anonimizează ca mesajele de contact. Tabelele de lucru FAN (`fan_*__sync`, `__vechi`) iau regulile tabelului lor.
 6. **Structura**: `SHOW CREATE TABLE` al sursei, cu `sql_mode`-ul ei.
 7. **Datele, grup cu grup** (`grupuri` din reguli: setări, conținut, catalog, blog, FAN, comenzi, recenzii,
    newsletter, mesaje, admini): un grup = un instantaneu al sursei (`START TRANSACTION WITH CONSISTENT SNAPSHOT,

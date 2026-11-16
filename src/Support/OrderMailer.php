@@ -559,6 +559,7 @@ HTML;
                 'error_message' => null,
                 'provider' => $provider,
                 'meta' => $meta,
+                'html' => $html,
             ]);
         } catch (RuntimeException $exception) {
             self::logEmailSend($db, [
@@ -571,6 +572,7 @@ HTML;
                 'error_message' => $exception->getMessage(),
                 'provider' => $provider,
                 'meta' => $meta,
+                'html' => $html,
             ]);
             throw $exception;
         }
@@ -660,6 +662,7 @@ HTML;
                 'error_message' => null,
                 'provider' => $provider,
                 'meta' => $meta,
+                'html' => $html,
             ]);
         } catch (RuntimeException $exception) {
             self::logEmailSend($db, [
@@ -673,6 +676,7 @@ HTML;
                     . $exception->getMessage(),
                 'provider' => $provider,
                 'meta' => $meta,
+                'html' => $html,
             ]);
             throw $exception;
         }
@@ -1117,6 +1121,14 @@ HTML;
                 'sent_at' => $status === 'sent' ? (new DateTimeImmutable('now'))->format('Y-m-d H:i:s') : null,
             ]);
         } catch (Throwable) {
+            return;
+        }
+
+        // „Vezi” din istoric (16 nov 2026): HTML-ul exact dat furnizorului, comprimat, cu păstrare limitată; nu și la
+        // trimiterile unei campanii de newsletter (App\Support\EmailContinut, migrarea nucleu/0067).
+        $html = (string) ($payload['html'] ?? '');
+        if ($html !== '') {
+            EmailContinut::pastreaza($db, (int) $db->lastInsertId(), substr($emailType, 0, 80), $html);
         }
     }
 

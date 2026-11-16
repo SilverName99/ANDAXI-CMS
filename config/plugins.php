@@ -143,7 +143,7 @@ return [
                 'href' => '/admin/emails/newsletters?tab=history', 'icon' => 'emails', 'activ' => $activTab('history')],
         ],
         'tabele' => ['admins', 'settings', 'pages', 'seo_pages', 'gallery_images', 'gallery_folders', 'contact_form_messages',
-            'email_send_history', 'admin_activity_log', 'checkout_submit_logs', 'register_submit_logs',
+            'email_send_history', 'email_send_bodies', 'admin_activity_log', 'checkout_submit_logs', 'register_submit_logs',
             // WP-24 (VT-X2): fanionul „doar pentru membri” al articolelor e al nucleului (poarta, App\Support\AccesMembri),
             // nu al blogului (migrarea nucleu/0034).
             'blog_posts.requires_active_account',

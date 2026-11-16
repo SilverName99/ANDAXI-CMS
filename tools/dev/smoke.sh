@@ -685,6 +685,24 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# „Vezi” din Emailuri trimise (16 nov 2026): tools/dev/test-emailuri-trimise.php, pe licența „toate”, pe serverul pornit aici:
+# conținutul păstrat (comprimat, exact ce a plecat), emailurile de dinainte, newsletterul din campanie, rolurile, păstrarea
+# limitată, ștergerea datelor; Chromium doar cu capturi (iframe-ul izolat). Pune la loc toată baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Emailurile trimise și conținutul lor (tools/dev/test-emailuri-trimise.php)"
+    optiuni_emailuri=()
+    [ "$cu_capturi" = 0 ] && optiuni_emailuri+=("--fara-browser")
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-emailuri-trimise.php" "${optiuni_emailuri[@]}" > "$TMP/test-emailuri-trimise.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-emailuri-trimise.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-emailuri-trimise.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-emailuri-trimise.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Pluginul campanii (5 nov 2026, pentru Biovitality): tools/dev/test-campanii.php, pe licența „toate”, pe serverul pornit aici:
 # regulile (întoarcerea, roboții, adresele neoprite), adminul, prima intrare, insigna, bannerul, fereastra, pluginul oprit, Chromium
 # pe desktop și pe telefon. Pune la loc toată baza (CHECKSUM TABLE).

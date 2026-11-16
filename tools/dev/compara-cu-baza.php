@@ -1765,6 +1765,11 @@ $marcajePort = [
         . 'în fereastra comenzii (lista cu starea lor, „Trimite link de plată” pentru o comandă cu plata eșuată)'],
     'lp:linkuri-js' => ['cale' => ['/admin/orders', '/admin/orders?*'], 'motiv' => 'link_plata (9 nov): scriptul zonei '
         . '(public/assets/js/admin/link-plata.js) și jetonul anti-CSRF al trimiterii'],
+    // „Vezi” din Emailuri trimise (16 nov 2026, cerut de Biovitality; nou, al nucleului, pe orice site: sursa „em”). Sub tabelul
+    // istoricului: lista id-urilor rândurilor, scriptul care pune butonul „Vezi” pe fiecare rând, stilul și sertarul în care se
+    // încarcă emailul (App\Support\EmailContinut; tools/dev/test-emailuri-trimise.php). Rândurile tabelului rămân cele din bază.
+    'em:istoric-vezi' => ['cale' => '/admin/emails/newsletters?tab=history', 'motiv' => '„Vezi” din Emailuri trimise (16 nov): '
+        . 'butonul pe fiecare rând (pus de script) și sertarul cu emailul păstrat, izolat într-un iframe sandbox'],
 ];
 // WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
 // dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de

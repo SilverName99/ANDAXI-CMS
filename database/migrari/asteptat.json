@@ -2837,6 +2837,64 @@
             },
             "motor": "InnoDB"
         },
+        "email_send_bodies": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cleared_at": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "cleared_reason": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(20)"
+                },
+                "created_at": {
+                    "extra": "",
+                    "implicit": "current_timestamp",
+                    "null": true,
+                    "tip": "timestamp"
+                },
+                "history_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "html_bytes": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "html_gz": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumblob"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "history_id"
+                    ],
+                    "unic": true
+                },
+                "idx_email_send_bodies_curatare": {
+                    "coloane": [
+                        "cleared_at",
+                        "created_at"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "email_send_history": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {

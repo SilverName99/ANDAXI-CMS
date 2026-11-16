@@ -1965,6 +1965,63 @@ if (count($taburiEmail) > 1) {
                         </tbody>
                     </table>
                 </div>
+<?= \App\Support\Dev::marcaj('em:istoric-vezi') ?>
+<?php
+/*
+ * „Vezi” pe fiecare rând (16 nov 2026, cererea proprietarului Biovitality; App\Support\EmailContinut, docs/PLUGINURI.md,
+ * „Emailurile trimise și conținutul lor”): un script pune butonul în ultima celulă a fiecărui rând, din lista id-urilor de
+ * mai jos (în ordinea rândurilor), iar butonul deschide sertarul din dreapta cu emailul, încărcat de la
+ * /admin/emails/history/vezi (iframe `sandbox=""`). Clic cu Ctrl / rotița: emailul singur, într-un tab nou (izolat și acolo).
+ */
+$idsIstoricVezi = [];
+foreach ($emailSendHistory as $randVezi) {
+    if (is_array($randVezi)) {
+        $idsIstoricVezi[] = (int) ($randVezi['id'] ?? 0);
+    }
+}
+?>
+<style>
+#email-vezi-panou .adm-panou--sertar{width:min(760px,100vw);}
+.email-vezi__date{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0 0 12px;font-size:13px;}
+.email-vezi__date dt{color:var(--ax-text-3);}
+.email-vezi__date dd{margin:0;overflow-wrap:anywhere;}
+.email-vezi__nota{margin:8px 0;color:var(--ax-text-3);font-size:13px;}
+.email-vezi__cadru{display:block;width:100%;height:68vh;min-height:360px;border:1px solid var(--ax-linie);border-radius:8px;background:#fff;}
+.email-vezi__text pre{white-space:pre-wrap;font-size:12px;max-height:40vh;overflow:auto;background:var(--ax-suprafata-2);padding:10px;border-radius:6px;}
+</style>
+<script type="application/json" id="email-istoric-vezi"><?= json_encode($idsIstoricVezi) ?></script>
+<script>
+(function () {
+    var date = document.getElementById('email-istoric-vezi');
+    var cadru = date ? date.closest('article') : null;
+    var tabel = cadru ? cadru.querySelector('table.users-table') : null;
+    var ids = [];
+    try { ids = JSON.parse(date.textContent || '[]') || []; } catch (e) { return; }
+    if (!tabel || !ids.length) return;
+    var randuri = tabel.querySelectorAll('tbody > tr');
+    ids.forEach(function (id, i) {
+        var rand = randuri[i];
+        var celula = rand ? rand.lastElementChild : null;
+        if (!celula || !id) return;
+        var link = document.createElement('a');
+        link.className = 'btn btn-secondary';
+        link.href = '/admin/emails/history/continut?id=' + id;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.setAttribute('data-adm-panou', 'email-vezi-panou');
+        link.setAttribute('data-adm-panou-sursa', '/admin/emails/history/vezi?id=' + id);
+        link.setAttribute('aria-label', 'Vezi emailul');
+        link.textContent = 'Vezi';
+        var cutie = document.createElement('div');
+        cutie.style.cssText = 'display:flex;gap:6px;align-items:center;';
+        cutie.appendChild(link);
+        while (celula.firstChild) cutie.appendChild(celula.firstChild);
+        celula.appendChild(cutie);
+    });
+})();
+</script>
+<?php admin_componenta('panou-lateral', ['mod' => 'sertar', 'id' => 'email-vezi-panou', 'titlu' => 'Emailul trimis', 'continut' => '']); ?>
+<?= \App\Support\Dev::marcaj('em:istoric-vezi', true) ?>
                 <?php if ($emailSendHistoryTotalPages > 1): ?>
                     <?php
                     $historyStart = max(1, $emailSendHistoryPage - 2);

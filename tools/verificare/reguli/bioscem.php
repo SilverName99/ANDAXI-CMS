@@ -104,7 +104,9 @@ return [
     // plățile cotizației, doar structura (o copie nu primește webhook-uri și nu are nevoie de ele); pe conturi, categoria, starea
     // cererii și data până la care e activ contul păstrate (stări, nu date personale), codul de membru, poza de profil și clientul
     // Stripe golite.
-    'versiune' => 25,
+    // 26 (nucleu/0067, „Vezi” din Emailuri trimise): conținutul păstrat al emailurilor trimise (HTML-ul lor comprimat: nume,
+    // adrese, comenzi), doar structura; istoricul (`email_send_history`) rămâne cum era, anonimizat.
+    'versiune' => 26,
     'schema' => 'Nou-site-bioscem@c47f270 (tools/dev/migrari/vechi/bs.sql) + database/migrari/asteptat.json',
     // Pachetul de pluginuri pus pe copie (config/plugins.php → licente_dev) și pachetul site-ului (site-uri/<pachet>/).
     'licenta' => 'bioscem',
@@ -148,6 +150,8 @@ return [
         'admin_activity_log' => ['mod' => 'doar_structura', 'motiv' => 'jurnalul adminilor: emailul și IP-ul lor, cereri'],
         'bt_ipay_log' => ['mod' => 'doar_structura', 'motiv' => 'jurnalul băncii: cererile și răspunsurile, cu datele cardului'],
         'checkout_submit_logs' => ['mod' => 'doar_structura', 'motiv' => 'IP-uri și browsere'],
+        // 26: conținutul emailurilor trimise (nucleu/0067), doar structura.
+        'email_send_bodies' => ['mod' => 'doar_structura', 'motiv' => 'conținutul emailurilor trimise: numele, adresele și comenzile destinatarilor'],
         'register_submit_logs' => ['mod' => 'doar_structura', 'motiv' => 'IP-uri și browsere'],
         'customer_password_resets' => ['mod' => 'doar_structura', 'motiv' => 'emailuri și jetoane de resetare a parolei'],
         'cart_abandonments' => ['mod' => 'doar_structura', 'motiv' => 'emailul, numele și conținutul coșului vizitatorilor'],

@@ -606,6 +606,9 @@ final class AdminController
             }
             $emails = array_values($emails);
 
+            // Conținutul păstrat al emailurilor trimise acestor adrese și al emailurilor comenzilor lor (App\Support\EmailContinut).
+            \App\Support\EmailContinut::stergePentruAdrese($db, $emails, true);
+
             $db->prepare('UPDATE orders SET user_id = NULL WHERE user_id IN (' . $in . ')')
                 ->execute($ids);
             $db->prepare('DELETE FROM user_addresses WHERE user_id IN (' . $in . ')')
@@ -15193,6 +15196,8 @@ final class AdminController
                     }
                 }
             } elseif ($newsletterTab === 'history') {
+                // Păstrarea limitată a conținutului emailurilor („Vezi”, App\Support\EmailContinut): și la deschiderea istoricului.
+                \App\Support\EmailContinut::curataVechi($db);
                 $emailSendHistoryFilters['q'] = trim((string) ($_GET['history_q'] ?? ''));
                 $historyStatus = strtolower(trim((string) ($_GET['history_status'] ?? 'all')));
                 if ($historyStatus === 'error') {
@@ -16301,6 +16306,8 @@ final class AdminController
             $emailSters = (string) ($adresa->fetchColumn() ?: '');
             if ($emailSters !== '') {
                 NewsletterService::suprima($db, $emailSters);
+                // Și conținutul păstrat al emailurilor trimise adresei (confirmări, newsletter de test; App\Support\EmailContinut).
+                \App\Support\EmailContinut::stergePentruAdrese($db, [$emailSters]);
             }
             $db->prepare('DELETE FROM newsletter_list_subscribers WHERE subscriber_id = :id')->execute(['id' => $subscriberId]);
             $db->prepare('DELETE FROM newsletter_subscribers WHERE id = :id')->execute(['id' => $subscriberId]);

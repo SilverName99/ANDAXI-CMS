@@ -165,7 +165,7 @@ dezvoltare, `config/plugins.php` → `licente_dev`). „Toate” = orice site (n
 | Email-uri | Formulare opt-in (`?tab=optin`) | formularele de abonare | newsletter | B, BV, VT | **Marketing** |
 | Email-uri | Formulare contact (`?tab=contact_forms`) | mesajele primite și cine le primește | nucleu | toate | **Clienți** |
 | Email-uri | Statistici (`?tab=stats`) | deschideri și clicuri pe campanii | newsletter | B, BV, VT | **Rapoarte** |
-| Email-uri | Istoric trimitere (`?tab=history`) | toate emailurile trimise, cu retrimiterea | nucleu | toate | **Rapoarte** |
+| Email-uri | Istoric trimitere (`?tab=history`) | toate emailurile trimise, cu retrimiterea și „Vezi” (emailul exact cum a plecat; din 16 nov 2026) | nucleu | toate | **Rapoarte** |
 
 ### Paginile la care se ajunge doar din butoane
 
