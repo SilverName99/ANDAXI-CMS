@@ -1118,7 +1118,11 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
         if (curierNota instanceof HTMLElement) {
             const sincronizeazaCurierNota = () => {
                 const alesFanbox = form.querySelector('[data-fanbox-toggle]');
+<?php if ($ridicareSchelet): ?>
                 const alesRidicare = form.querySelector('[data-ridicare-toggle]');
+<?php else: ?>
+                const alesRidicare = null;
+<?php endif; ?>
                 curierNota.hidden = (alesFanbox instanceof HTMLInputElement && alesFanbox.checked)
                     || (alesRidicare instanceof HTMLInputElement && alesRidicare.checked);
             };
