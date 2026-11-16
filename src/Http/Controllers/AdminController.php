@@ -10652,6 +10652,13 @@ final class AdminController
                 $sterge->execute(array_merge([$orderId], $pastrate));
             }
 
+            // Produsele comenzii, din liniile rescrise: emailurile („Produse”), punctele câștigate și recalculările din admin
+            // citesc `subtotal`, care altfel rămânea cel de la plasare (suma liniilor ≠ produsele, iar tabelul totalurilor din
+            // emailul de expediere nu se mai aduna la total).
+            $db->prepare('UPDATE orders SET subtotal = (SELECT COALESCE(SUM(line_total), 0) FROM order_items WHERE order_id = :id2) WHERE id = :id')
+                ->execute(['id' => $orderId, 'id2' => $orderId]);
+            $this->refaOfertaDupaErp($db, $orderId);
+
             $transport = round((float) ($event['transport'] ?? 0), 2);
             $total = round((float) ($event['total'] ?? 0), 2);
             // Transportul schimbat din ERP e tot mâna unui operator: dacă
@@ -10675,6 +10682,40 @@ final class AdminController
             'ok' => true,
             'message' => 'Comanda a fost actualizată din ERP (' . count($linii) . ' linii).',
         ];
+    }
+
+    /**
+     * Oferta campaniei pe o comandă ale cărei linii tocmai au fost rescrise din ERP (campanii/0058): reducerea fiecărei linii a
+     * ofertei se reface din ce a rămas pe ea, prețul de dinainte de ofertă × cantitatea nouă − totalul nou al liniei (ERP-ul
+     * păstrează prețul plătit, media perechii, deci o bucată scoasă scade și reducerea); o linie fără nimic sub prețul de
+     * dinainte iese din ofertă (NULL), iar reducerea comenzii e suma liniilor (NULL la 0, textul ofertei rămâne). Altfel
+     * emailul de expediere și fereastra comenzii arătau „cantitate × preț − ofertă” cu oferta veche, care nu se mai aduna la
+     * totalul liniei. O comandă fără ofertă, sau o bază fără migrare: nimic.
+     */
+    private function refaOfertaDupaErp(PDO $db, int $orderId): void
+    {
+        if (!$this->tableHasColumn($db, 'order_items', 'campanie_pret_initial') || !$this->tableHasColumn($db, 'orders', 'campanie_reducere')) {
+            return;
+        }
+        $stmt = $db->prepare('SELECT id, quantity, line_total, campanie_pret_initial FROM order_items
+            WHERE order_id = :id AND campanie_pret_initial IS NOT NULL');
+        $stmt->execute(['id' => $orderId]);
+        $linii = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if ($linii === [] && (float) $db->query('SELECT COALESCE(campanie_reducere, 0) FROM orders WHERE id = ' . (int) $orderId)->fetchColumn() <= 0) {
+            return;
+        }
+        $actualizeaza = $db->prepare('UPDATE order_items SET campanie_reducere = :r, campanie_pret_initial = :p WHERE id = :id');
+        $total = 0;
+        foreach ($linii as $linie) {
+            $inainte = (int) round((float) $linie['campanie_pret_initial'] * 100) * max(1, (int) $linie['quantity']);
+            $reducere = $inainte - (int) round((float) $linie['line_total'] * 100);
+            $ramane = $reducere > 0;
+            $actualizeaza->execute(['r' => $ramane ? $reducere / 100 : null, 'p' => $ramane ? $linie['campanie_pret_initial'] : null,
+                'id' => (int) $linie['id']]);
+            $total += $ramane ? $reducere : 0;
+        }
+        $db->prepare('UPDATE orders SET campanie_reducere = :r WHERE id = :id')
+            ->execute(['r' => $total > 0 ? $total / 100 : null, 'id' => $orderId]);
     }
 
     /**

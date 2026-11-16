@@ -1260,10 +1260,31 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   se pot modifica aici. Anulează comanda și plaseaz-o din nou, sau modific-o în ERP.”, iar editorul arată liniile doar de
   citit, cu același text): refacerea liniilor le-ar reprețui fără ofertă. Reducerea comercială și destinația (FANbox, ridicare)
   se schimbă ca la orice comandă; transportul lor recalculat socotește oferta ca în coș (subtotalul de dinainte de ofertă,
-  oferta printre reduceri). **Din ERP** (o comandă schimbată acolo și trimisă înapoi): liniile primite sunt cele facturate
-  de ERP (prețul și totalul lor, deci sumele rămân corecte), iar coloanele ofertei rămân pe liniile păstrate; textul ofertei
-  de pe comandă poate rămâne cel de la plasare (doar informativ). Fără ofertă aleasă (implicit) sau fără campanie activă, coșul,
+  oferta printre reduceri). **Din ERP** (`comanda_modificata`, o comandă schimbată acolo și trimisă înapoi;
+  `AdminController::applyErpOrderChange`): liniile primite sunt cele facturate de ERP (prețul și totalul lor), iar `orders.subtotal`
+  se reface din ele (suma liniilor; până pe 16 nov rămânea cel de la plasare, deci „Produse” din emailuri și punctele câștigate
+  erau ale comenzii vechi). Pe liniile ofertei păstrate, reducerea se reface din ce a rămas: prețul de dinainte de ofertă ×
+  cantitatea nouă − totalul nou al liniei (ERP-ul păstrează prețul plătit, media perechii, deci o bucată scoasă scade și
+  reducerea: A 100 + B 80 cu 1+1 −50%, B dus în ERP la 2 bucăți de 40 → linia 80, „2 × 80 − 80”); o linie fără nimic sub prețul
+  de dinainte iese din ofertă, iar `orders.campanie_reducere` e suma liniilor (NULL la 0; textul ofertei rămâne, informativ). Până
+  pe 16 nov coloanele rămâneau cele de la plasare și emailul de expediere arăta „2 × 80,00 · ofertă: −40,00” lângă 80,00 lei, cu
+  rândul ofertei −40,00 și „Produse” 140,00 lângă un total de 199,00. Fără ofertă aleasă (implicit) sau fără campanie activă, coșul,
   comanda și ERP-ul sunt octet cu octet cele de dinainte (sumarul coșului nu are nicio cheie nouă).
+- **Consecvența sumelor** (verificarea din 16 nov 2026, `tools/dev/test-preturi-comenzi.php`, după o clientă cu „1+1 −50%” care a
+  văzut la checkout altă sumă decât în emailul de expediere): după plasare, sursa unică e rândul comenzii (`orders`, `order_items`);
+  fiecare suprafață îl citește, nu catalogul. Testul plasează 18 combinații (fiecare tip de ofertă, peste reducerile proprii și
+  lotul BBD; cupoanele, și cele fără cumulare, pe produse alese, cu minim de bucăți, unice; punctele; transportul sub și peste
+  prag, produsul cu transport gratuit, FANbox, ridicarea; precomanda; ramburs și EuPlătesc) și compară coșul plutitor, pagina
+  coșului, checkout-ul, comanda, emailurile „Comandă nouă” și „Comandă expediată” (din Admin și din aprobarea ERP, cu șablonul
+  implicit și cu `{{order_totals_html}}`), contul, Admin → Comenzi, payload-ul ERP și suma trimisă la plată. Reparate atunci, pe
+  lângă corectura din ERP de mai sus: tabelul totalurilor din emailuri (`{{order_totals_html}}`) are și rândul „Reducere
+  comercială” (pusă din Admin după plasare, scăzută din total; fără el Produse − reduceri + transport ≠ Total); coșul plutitor
+  socotește pragul transportului gratuit cu referința sumarului cât e oferta în coș (cu `shipping_include_coupons` = 0 spunea „Mai
+  adaugă 20 lei” la 230 de lei după ofertă, deși transportul era deja gratuit la 280 înainte de ofertă); fereastra comenzii din
+  Admin arată pe o comandă blocată totalul liniei, nu preț × cantitate (după un preț scris în ERP, 4 × 700,00 = 2.800,00 față de
+  linia facturată 2.799,99). **De știut**: șablonul implicit „Comandă expediată” are doar produsele (fără transport, reduceri și
+  total), iar rândul ofertei „−X lei (inclusă în prețuri)” stă sub ele: clientul vede liniile reduse și încă un −X, fără totalul
+  plătit; un șablon cu `{{order_totals_html}}` arată și totalurile (întrebare deschisă pentru proprietar).
 - **Cache-ul paginilor**: cheia primește `|campanie:<id>:<updated_at>` doar cât e o campanie activă (fără ea, cheia e exact
   cea de dinainte); salvarea și ștergerea golesc cache-ul. Un CDN care ține pagini HTML întregi pentru vizitatori le-ar servi
   fără PHP (atunci nici trimiterea, nici bannerul nu se schimbă până expiră copia).
