@@ -701,6 +701,23 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Consecvența prețurilor comenzilor (16 nov 2026): tools/dev/test-preturi-comenzi.php, pe licența „toate”, pe serverul pornit aici:
+# comenzi plasate prin site cu oferta campaniei, cupoane, puncte, transport, plăți, apoi fiecare suprafață (coșul, checkout-ul,
+# comanda, emailurile de comandă și de expediere, contul, adminul, ERP-ul, EuPlătesc) față de rândul comenzii. Pune la loc toată
+# baza (CHECKSUM TABLE).
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Prețurile comenzilor (tools/dev/test-preturi-comenzi.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-preturi-comenzi.php" > "$TMP/test-preturi-comenzi.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-preturi-comenzi.log" | sed 's/ Raport: .*//')"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-preturi-comenzi.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-preturi-comenzi.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Pluginul fisiere_cloud (6 nov 2026, din Biovitality): tools/dev/test-fisiere-cloud.php, pe licența „toate”: aplicația Windows față
 # de codul Biovitality (clona CMS_DEV_REPO_BV, cerere cu cerere), adoptarea, adminul, CSRF. Bazele și serverele lui (+44 … +47) sunt
 # ale testului, șterse la final; baza de dezvoltare doar o citește.

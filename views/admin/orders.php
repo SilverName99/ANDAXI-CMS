@@ -1328,7 +1328,7 @@ window.orderProducts = <?= json_encode(array_map(static function (array $p): arr
                     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
                         <span style="flex:1;">${esc(it.product_name || '')}${eticheta}</span>
                         <span style="width:60px;text-align:center;">${qty}</span>
-                        <span style="min-width:92px;text-align:right;font-weight:600;">${orderMoney(cuOfertaCampanie ? lineTotal : unitPrice * qty)}</span>
+                        <span style="min-width:92px;text-align:right;font-weight:600;">${orderMoney(cuOfertaCampanie || lineTotal > 0 ? lineTotal : unitPrice * qty)}</span>
                     </div>`;
                 }
                 if (eticheta !== '') {

@@ -132,7 +132,7 @@ final class EmailAutomation
         $stmt = $db->prepare(
             'SELECT id, order_number, status, payment_method, billing_first_name, billing_last_name, billing_email,
                     fan_awb, fan_awb_list, fan_tracking_url, created_at, total,
-                    subtotal, shipping_cost, discount_total, loyalty_points_discount
+                    subtotal, shipping_cost, discount_total, loyalty_points_discount, manual_discount
              FROM orders
              WHERE id = :id AND deleted_at IS NULL
              LIMIT 1'
@@ -395,7 +395,7 @@ final class EmailAutomation
 
         $stmt = $db->prepare(
             'SELECT id, order_number, status, payment_method, billing_first_name, billing_last_name, billing_email,
-                    created_at, total, subtotal, shipping_cost, discount_total, loyalty_points_discount,
+                    created_at, total, subtotal, shipping_cost, discount_total, loyalty_points_discount, manual_discount,
                     pickup_in_person, pickup_address
              FROM orders
              WHERE id = :id AND deleted_at IS NULL
@@ -730,6 +730,9 @@ final class EmailAutomation
         $transport = (float) ($order['shipping_cost'] ?? 0);
         $reducere = (float) ($order['discount_total'] ?? 0);
         $puncte = (float) ($order['loyalty_points_discount'] ?? 0);
+        // Reducerea comercială pusă din Admin → Comenzi (după plasare) e scăzută din total; fără rândul ei, tabelul nu se mai
+        // aduna la total (Produse − reduceri + transport ≠ Total) în emailurile trimise după ea (expedierea, livrarea).
+        $comerciala = (float) ($order['manual_discount'] ?? 0);
 
         $rand = static function (string $eticheta, string $valoare, bool $tare = false, bool $liniePeste = false): string {
             $bord = $liniePeste ? 'border-top:1px solid #e5e7eb;' : '';
@@ -750,6 +753,9 @@ final class EmailAutomation
         }
         if ($puncte > 0) {
             $randuri .= $rand('Puncte de fidelitate', '−' . self::formatLei($puncte));
+        }
+        if ($comerciala > 0) {
+            $randuri .= $rand('Reducere comercială', '−' . self::formatLei($comerciala));
         }
         $randuri .= $rand(
             'Transport',

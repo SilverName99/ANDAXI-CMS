@@ -8457,6 +8457,13 @@ CSS;
                     - (float) ($summary['points_discount'] ?? 0.0)
             )
             : max(0.0, (float) ($summary['subtotal'] ?? 0.0));
+        // Pluginul campanii: cu oferta în coș, referința pragului e a sumarului (CheckoutCalculator::buildSummary: subtotalul de
+        // dinainte de ofertă, minus reducerile doar cu „shipping_include_coupons”), cea după care se socotește transportul. Fără
+        // „shipping_include_coupons”, subtotalul de mai sus (redus de ofertă) spunea „Mai adaugă X lei” deși transportul era deja
+        // gratuit. Fără ofertă, cele două sunt aceeași sumă.
+        if (is_array($summary['campanie_oferta'] ?? null) && isset($summary['shipping_reference']) && empty($summary['shipping_free_by_product'])) {
+            $shippingReference = max(0.0, (float) $summary['shipping_reference']);
+        }
         $shippingRemainingForFree = max(0.0, $shippingFreeThreshold - $shippingReference);
         // WP-20 (C14a): transportul gratuit dintr-un produs: coșul flotant arată direct „Gratuit”.
         $gratuitDinProdus = !empty($summary['shipping_free_by_product']);
