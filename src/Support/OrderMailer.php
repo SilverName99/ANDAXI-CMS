@@ -447,6 +447,23 @@ final class OrderMailer
             }
         }
 
+        // Totalurile comenzii (transport, reduceri, puncte, total plătit) sub produse, și în șabloanele care au doar produsele
+        // (cerut pentru Biovitality, 16 nov 2026: emailul „Comandă expediată” arăta liniile cu oferta campaniei, dar nu și suma
+        // plătită, iar clienta credea că a plătit altceva). Doar când emailul are totalurile pregătite și șablonul nu le pune deja
+        // ({{order_totals_html}}, {{order_total}}, {{order_summary}}); fără produse în șablon, nimic.
+        $blocTotaluri = trim((string) ($context['order_totals_html'] ?? ''));
+        if ($blocTotaluri !== '' && !str_contains($sablonCorp, '{{order_totals_html}}') && !str_contains($sablonCorp, '{{order_total}}')
+            && !str_contains($sablonCorp, '{{order_summary}}')) {
+            foreach (['{{order_items_html}}', '{{order_summary_rows}}'] as $ancora) {
+                $pozitie = strrpos($sablonCorp, $ancora);
+                if ($pozitie !== false) {
+                    $dupa = self::sfarsitBloc($sablonCorp, $pozitie + strlen($ancora));
+                    $sablonCorp = substr($sablonCorp, 0, $dupa) . '<div style="margin:0 0 18px;">{{order_totals_html}}</div>' . substr($sablonCorp, $dupa);
+                    break;
+                }
+            }
+        }
+
         // Ridicarea personală de la sediu (portul 807058e): confirmarea comenzii spune unde și când vine clientul
         // după ea. Stă unde o pune șablonul ({{ridicare_personala}}); altfel sub totaluri ori sub produse, iar dacă
         // șablonul n-are niciuna, la final. Fără ridicare, șablonul rămâne exact cum e.

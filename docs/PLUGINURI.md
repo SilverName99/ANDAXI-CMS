@@ -1332,7 +1332,11 @@ licență (`"campanii": "pornit"`). Pentru teste: `tools/dev/php.sh tools/dev/li
   Admin arată pe o comandă blocată totalul liniei, nu preț × cantitate (după un preț scris în ERP, 4 × 700,00 = 2.800,00 față de
   linia facturată 2.799,99). **De știut**: șablonul implicit „Comandă expediată” are doar produsele (fără transport, reduceri și
   total), iar rândul ofertei „−X lei (inclusă în prețuri)” stă sub ele: clientul vede liniile reduse și încă un −X, fără totalul
-  plătit; un șablon cu `{{order_totals_html}}` arată și totalurile (întrebare deschisă pentru proprietar).
+  plătit; un șablon cu `{{order_totals_html}}` arată și totalurile. **Din 16 nov 2026** (decizia proprietarului): emailurile
+  comenzii trimise din automatizare (expediată, livrată, în procesare, gata de ridicare…) pun totalurile (produse, reduceri,
+  puncte, reducere comercială, transport, total, TVA) singure sub produse când șablonul are produsele (`{{order_items_html}}`
+  ori `{{order_summary_rows}}`) dar n-are niciunul dintre `{{order_totals_html}}`, `{{order_total}}`, `{{order_summary}}`
+  (`OrderMailer`, după blocul produselor); șabloanele care le pun deja rămân cum sunt.
 - **Cache-ul paginilor**: cheia primește `|campanie:<id>:<updated_at>` doar cât e o campanie activă (fără ea, cheia e exact
   cea de dinainte); salvarea și ștergerea golesc cache-ul. Un CDN care ține pagini HTML întregi pentru vizitatori le-ar servi
   fără PHP (atunci nici trimiterea, nici bannerul nu se schimbă până expiră copia).
