@@ -124,6 +124,23 @@ de sintaxă e refuzat. Nu schimbă niciun site. `--verifica=<v>` spune dacă o v
 6. Dacă site-ul are un CDN în față: `IP_PROXY_DE_INCREDERE=<rețelele lui>` în `.env`-ul vechi (codul vechi nu-l citește;
    adoptarea îl copiază) — [MIGRARI.md](MIGRARI.md), „Pe server, la adoptare”, pasul 5.
 
+**Înfățișarea și fișierele vechi din git.** Pe codul comun, paginile au stilurile nucleului plus ce aduce tema din pachet
+(`tema/tema.json`, [PACHETE.md](PACHETE.md), „Tema”); foile, scripturile și fonturile pe care le lega `views/layout.php` al
+codului vechi nu mai vin singure. Iar din `public/` al codului vechi adoptarea aduce în docroot doar fișierele pe care git
+le ignoră (sitemap-uri, fișiere de verificare a domeniului); cele ținute în git (poze din `/assets/img/`, PDF-uri) rămân
+în `public_html.vechi/public/`, iar paginile care le folosesc ar primi 404, dacă nu le are pachetul (`public/`). Planul și
+faza `verificari` le spun, ca ATENȚIE (nu opresc): „views/layout.php al codului vechi leagă foi de stil … și pachetul n-are
+tema/tema.json” și „fișiere publice ale codului vechi, din git, pe care nu le aduce nici versiunea, nici pachetul”. Prima
+înseamnă că pachetul nu e gata; a doua, fișierele de copiat de mână după comutare (le păstrează și actualizările):
+
+```sh
+cd ~/domains/<domeniu>
+for f in <fișierele din ATENȚIE>; do mkdir -p "public_html/$(dirname "$f")"; cp -n "public_html.vechi/public/$f" "public_html/$f"; done
+```
+
+Și, înainte de adoptare, **comparația vizuală** a paginilor publice, codul vechi față de codul comun cu pachetul site-ului,
+pe aceeași bază (tools/dev: [DEZVOLTARE.md](DEZVOLTARE.md)); apoi, după comutare, aceleași pagini în browser.
+
 ### Licența
 
 `licenta.json` îl semnează CRM-ul (crm.andaxi.ro: perechea de chei Ed25519 stă acolo, lista de pluginuri e a fiecărui
@@ -686,6 +703,54 @@ Comenzile serii și ale nopții sunt ca la „Comutarea Bioscem”, cu `--site=g
 magazin). Pluginurile vin din licența CRM (abonamentul de azi: catalogul și cererile de ofertă, decizia OD-23); înainte de
 comutare, linkurile spre `/acorduri-gdpr` (meniu, subsol, pagini) se scot dacă pluginul Acorduri GDPR nu e în licență
 (`site-uri/grafoanaytis/ce-se-schimba.md`).
+
+**Prima adoptare (17 noiembrie 2026) a fost întoarsă**: pachetul n-avea temă, deci paginile publice au ieșit cu stilurile
+nucleului (filmul din primul ecran pe tot ecranul, conținutul fără așezare, bara de derulare orizontală). Codul vechi
+încărca pe paginile publice Rubik, Bootstrap 5.3.8, `tokens.css` (nu și `app.css`, scos de pe paginile publice) și, la
+final, `bootstrap.bundle.min.js`, `imagini.js`, `sertar-oferta.js`, `miscare.js`. Acum le aduce tema
+`site-uri/grafoanaytis/tema/tema.json` (fontul și Bootstrap-ul din nucleu, `tokens.css` și blocul catalogului din modul
+prezentare ca foi ale temei, `imagini.js` și `miscare.js` ca scripturi ale ei, `sertar-oferta.js` al pluginului
+`cereri_oferta`; `main` „lat”, mesajele flash Bootstrap, butonul „Înapoi sus”, turcoazul `#0f766e` al bannerului de
+cookie-uri și al paginii 404), iar pozele din `/assets/img/` ținute în git de codul vechi (sigla, sigla AFAS, banda de
+sigle, pozele de producție și de produs) le are pachetul în `public/assets/img/`.
+
+Pașii în plus față de „Comutarea Bioscem”:
+
+- [ ] **Seara, înainte: comparația vizuală (obligatorie).** Două servere alături: codul vechi `d3c4b79` (`git archive`) pe
+      baza lui și codul comun cu `site-uri/grafoanaytis/` pe o copie a ei trecută prin `scripts/migreaza.php --aplica
+      --site=grafoanaytis` (ca la adoptare; `public/` al pachetului copiat peste `public/`, plus cele 7 fișiere de mai jos).
+      Baza: copia locală a celei live sau, fără ea, cea făcută de codul vechi (`scripts/install.php`, o cerere la site,
+      apoi `scripts/seed-design.php`, `seed-pagini.php` și `seed-produse.php` cu `--suprascrie`), cum s-a făcut pe 17
+      noiembrie. Capturi (Playwright, `deviceScaleFactor` 1) la 1440 și 390 px: prima pagină, `/produse`, un produs
+      cu sertarul „Solicită mostre și ofertă de preț” deschis, `/contact`, `/companie`, `/certificari`, o pagină legală, un
+      404, meniul de pe telefon, bannerul de cookie-uri. Trebuie să arate la fel, fără bară de derulare orizontală;
+      diferențele știute sunt în `site-uri/grafoanaytis/ce-se-schimba.md`. Nu se adoptă cu o diferență nescrisă acolo.
+- [ ] **Planul** (`adopta.sh … --plan`) arată un singur ATENȚIE despre înfățișare: cele 7 fișiere publice din git ale
+      codului vechi pe care pachetul nu le are: certificatele scanate (cu numele și semnăturile celor care le-au emis) și
+      poza de la stand (cu oameni) au date personale, deci nu intră în repo-ul public; PDF-urile proiectului nu pot sta în
+      pachet (în `public/` doar imagini, iar anunțul de angajare are și numele unei persoane):
+      `assets/img/certificari/cert-eurocert-conformitate-4069.webp`, `assets/img/certificari/cert-eurocert-proces-4068.webp`,
+      `assets/img/certificari/cert-infocons-marca-increderii.webp`, `assets/img/certificari/cert-iso-9001-evalcertprod.webp`,
+      `assets/img/companie/productie-2-stand.webp`, `documente/anunt-recrutare-332198.pdf`,
+      `documente/comunicat-presa-proiect-332198.pdf`. Un ATENȚIE despre foile de stil („pachetul n-are tema/tema.json”)
+      înseamnă o versiune fără temă: nu se adoptă.
+- [ ] **Imediat după `GATA`**, înaintea verificării în browser: cele 7 fișiere, din codul vechi (benzile de sus ale
+      fiecărei pagini trimit la cele două PDF-uri: obligația de informare a proiectului):
+      ```sh
+      cd ~/domains/grafoanaytis.ro
+      for f in assets/img/certificari/cert-eurocert-conformitate-4069.webp assets/img/certificari/cert-eurocert-proces-4068.webp \
+               assets/img/certificari/cert-infocons-marca-increderii.webp assets/img/certificari/cert-iso-9001-evalcertprod.webp \
+               assets/img/companie/productie-2-stand.webp documente/anunt-recrutare-332198.pdf \
+               documente/comunicat-presa-proiect-332198.pdf; do
+          mkdir -p "public_html/$(dirname "$f")"; cp -n "public_html.vechi/public/$f" "public_html/$f"; done
+      curl -sI https://grafoanaytis.ro/documente/comunicat-presa-proiect-332198.pdf | head -1     # 200
+      curl -s https://grafoanaytis.ro/ | grep -c '/tema/css/tokens.css'                          # 1
+      ```
+- [ ] **În browser** (fereastră privată, pe calculator și pe telefon): aceleași pagini ca seara, față de capturile codului
+      vechi; benzile de sus, sigla, filmul din primul ecran cu butonul „Oprește filmul de fundal”, cifrele care cresc, banda
+      de sigle, `/certificari` cu cele patru certificate, sertarul de ofertă (trimis o dată, cu adresa ta), butonul
+      „Înapoi sus”. Fără bară de derulare orizontală. Ceva altfel decât seara: `deploy/revino.sh --site=grafoanaytis
+      --aplica` și ne trimiți capturile.
 
 ## Adoptarea vertij: ce cer pluginurile `donatii` și `membri`
 

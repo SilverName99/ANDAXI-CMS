@@ -2,12 +2,33 @@
     "format": 1,
     "site": "grafoanaytis",
     "fisiere": {
-        "ce-se-schimba.md": "6592687087574a5976964024a4b0b42f82edd9806f3277fc4642a7de3226c7f8",
+        "ce-se-schimba.md": "a3ba118279afacd29719194e68f107307aa55f1fd9be8b35b16fe4850cf8ba4b",
         "migrari.json": "2d2f2adb78394f8638c5801e77270cdb114cf0310744560c302d8a720b94986a",
+        "public/assets/img/certificari/afas-logo.png": "f2988c4786298db06023bb5955636bdf39d7223621f5d661fbd5ed5f5f95f1c5",
+        "public/assets/img/certificari/banda-sigle.webp": "2f1dc41ad10b6adee52e634a4d2a5d456246254ba46c98fc02642dd1bbe5701c",
+        "public/assets/img/companie/productie-1-packshow.webp": "1c7d491abd203c2431985bba84c5ce263e1503fa0cd76bdeb939e0afaaac7745",
+        "public/assets/img/companie/productie-3-stantat.webp": "144b709e7bc15dc96831baef96566a8601d97c34272567b31c2a5337396b7e6e",
+        "public/assets/img/companie/productie-4-ferestre.webp": "5d5d07cbf8ec2f8bc02fc551d8f110fd006e732300a339e9cd31d946a4a198b7",
+        "public/assets/img/companie/productie-5-lipit.webp": "19672c2c3004b1cd4a8b4b03b4929e0cd9b0d5b939e61868271ca6f321ece873",
+        "public/assets/img/productie/masina-stantat-automata.webp": "144b709e7bc15dc96831baef96566a8601d97c34272567b31c2a5337396b7e6e",
+        "public/assets/img/produse/ambalaje-sticle-vin-1.webp": "e60fd160d809586e25f980da2a1f6eb54ee94f3a6d445e1ca97472bec8b997ba",
+        "public/assets/img/produse/ambalaje-sticle-vin-2.webp": "a682fc965d4ea5c58b619acc6a9db60248ba577d585d797ed186e076d32ae4ae",
+        "public/assets/img/produse/ambalaje-sticle-vin-3.webp": "06b19e966513736da0fc52f23faace9adc71b93a7cd4d698dd8fea2d9bf1475b",
+        "public/assets/img/produse/etichete-ambalaje-textile.webp": "47308bb8d07f7d6d562e84e69475ecd90b877019705e3f10f6d677db102eb488",
+        "public/assets/img/sigla/grafoanaytis-alb.png": "641dedccb47f1246764dd94c74627acb56f536c8452750014bc8916793759085",
+        "public/assets/img/sigla/grafoanaytis.png": "9288d5c216221d305e26caaf89428c24444420f38f2eee82fc3b52014deae220",
         "setari-inghetate.json": "ac1f995ac932af74cdaf57ec6ad5680bdda8f137ff14b80f4a84c34f936f478e",
-        "site.json": "213f0bf2b6c549f9c71c735115acdaa1e7270a0459ade94be06b7d05cd7a6fd9"
+        "site.json": "213f0bf2b6c549f9c71c735115acdaa1e7270a0459ade94be06b7d05cd7a6fd9",
+        "tema/public/css/catalog.css": "d86944c95142205979d850750412c25f0df84da950be8095d2fe30f604e5b37e",
+        "tema/public/css/produs.css": "5a0eede0b05ecf6f5760dbe6e33fa98900b4b691fcc6681e76a04549acd563e7",
+        "tema/public/css/tokens.css": "f97eeae99253b702626effdd0a0c3661059f9f20a0d5818489806df8416f32f5",
+        "tema/public/img/linii-decorative.svg": "ff5f1bf05e2f5fa284b353104f064c18854a37fc787353d6050ab969af14339e",
+        "tema/public/js/imagini.js": "ae6338eeff684b77ca54512c9523015b2579c3df0411c82a96adcc26790d4678",
+        "tema/public/js/miscare.js": "195fe3780a9eec022280c54a27b59f435644e925e03ff9d453cfb27680326fef",
+        "tema/tema.json": "6a73d9e390c49982997a84728af3e794a65a7f71df3088b2029788fb9d6a8f5f"
     },
     "obligatorii": [
-        "site.json"
+        "site.json",
+        "tema/tema.json"
     ]
 }

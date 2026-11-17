@@ -1,0 +1,1107 @@
+/*
+ * Tokeni de culoare — grafoanaytis.ro
+ *
+ * Culoarea de brand este albastrul #1F3D9D, cerut de client în locul
+ * portocaliului pal #FFB877 cu care a fost construit site-ul.
+ *
+ * Schimbarea nu e o simplă înlocuire de nuanță, ci desface un ocol. Portocaliul
+ * dădea 1,70:1 pe alb, deci nu putea fi niciodată culoare de text; de aceea
+ * umplerea și textul erau roluri separate, cu nuanțe diferite, iar pe fundal de
+ * brand textul era negru. Albastrul dă 9,49:1 pe alb și tot 9,49:1 sub alb —
+ * merge deopotrivă ca text și ca umplere, deci rolurile se pot uni, iar textul
+ * de pe fundalul de brand trece pe alb.
+ *
+ * Toată paleta pleacă din --brand-700, treapta pe care stă exact culoarea
+ * clientului. Contrastele de mai jos sunt măsurate, nu estimate.
+ */
+
+:root {
+  /* Scala de brand. Nuanța (225,7°) e cea a culorii cerute; variază doar
+     luminozitatea, iar spre capătul deschis scade și saturația, ca tentele
+     palide să nu iasă țipătoare. */
+  --brand-050: #F1F3F9;
+  --brand-100: #DCE1F1;
+  --brand-200: #BFC9E8;
+  --brand-300: #9AAADD;
+  --brand-400: #6F87D2;
+  --brand-500: #4161C8;
+  --brand-600: #2E4DAD;
+  --brand-700: #1F3D9D;  /* culoarea de brand */
+  --brand-800: #18307C;
+  --brand-900: #12245C;
+
+  /* Neutre */
+  --ink:        #212529;
+  --ink-muted:  #52525B;
+  --line:       #DEE2E6;
+  /* Linia care marchează o margine, nu o desparte: 3,32:1 pe alb. */
+  --line-forte: #868E96;
+  --surface:    #FFFFFF;
+  --surface-alt:#F8F9FA;
+
+  /*
+   * Roluri. Albastrul e destul de închis încât aceeași treaptă să meargă și ca
+   * umplere, și ca text — ceea ce portocaliul nu putea. Treptele 800 și 900
+   * rămân deasupra ca stări de hover și de apăsare.
+   */
+
+  /* Umplere: bandă/buton albastru cu text alb deasupra — 9,49:1 */
+  --fill-brand:      var(--brand-700);
+  --fill-brand-hover:var(--brand-800);
+  --fill-brand-active:var(--brand-900);
+  --on-fill-brand:   #FFFFFF;
+
+  /* Text mare și titluri pe fundal alb — 9,49:1 (prag 3,0 pentru text mare) */
+  --text-brand-large: var(--brand-700);
+
+  /* Linkuri și text mic pe fundal alb — 9,49:1 (prag 4,5) */
+  --text-brand:       var(--brand-700);
+  --text-brand-hover: var(--brand-800);
+
+  /* Contur de focus vizibil pe ambele fundaluri */
+  --focus-ring: 0 0 0 0.25rem rgba(31, 61, 157, 0.45);
+}
+
+/* Punte către Bootstrap 5, ca utilitarele .btn-primary / .bg-primary să preia brandul. */
+:root {
+  --bs-primary: var(--brand-700);
+  --bs-primary-rgb: 31, 61, 157;
+  --bs-link-color: var(--text-brand);
+  --bs-link-color-rgb: 31, 61, 157;
+  --bs-link-hover-color: var(--text-brand-hover);
+}
+
+.btn-primary {
+  --bs-btn-color: var(--on-fill-brand);
+  --bs-btn-bg: var(--fill-brand);
+  --bs-btn-border-color: var(--fill-brand);
+  --bs-btn-hover-color: var(--on-fill-brand);
+  --bs-btn-hover-bg: var(--fill-brand-hover);
+  --bs-btn-hover-border-color: var(--fill-brand-hover);
+  --bs-btn-active-color: var(--on-fill-brand);
+  --bs-btn-active-bg: var(--fill-brand-active);
+  --bs-btn-active-border-color: var(--fill-brand-active);
+  --bs-btn-focus-shadow-rgb: 31, 61, 157;
+}
+
+/* Secțiunile pe fundal de brand (ex. banda video de pe prima pagină). */
+.bg-brand { background-color: var(--fill-brand); color: var(--on-fill-brand); }
+.bg-brand a:not(.btn) { color: var(--on-fill-brand); text-decoration: underline; }
+
+.text-brand { color: var(--text-brand); }
+.text-brand-lg { color: var(--text-brand-large); }
+
+/*
+ * Semnul de focalizare, în două inele.
+ *
+ * Un contur de o singură culoare nu poate merge peste tot. Cel închis dă
+ * 14,66:1 pe pagina albă, dar 1,21:1 în subsolul întunecat și 1,54:1 pe banda
+ * de brand — adică dispare exact acolo unde e mai des apăsat cu tastatura.
+ * (Cu portocaliul dădea 3,51:1 în subsol; schimbarea de culoare l-a stins.)
+ *
+ * Soluția nu e o a treia culoare, ci două inele lipite: unul deschis, în
+ * culoarea suprafeței, desenat lipit de element, și conturul închis imediat în
+ * afara lui. Pe fundal alb se vede cel închis; pe fundal închis se vede cel
+ * deschis — 17,74:1 în subsol, 9,49:1 pe banda de brand. Unul dintre ele
+ * contrastează întotdeauna, fără să știm dinainte pe ce stă elementul.
+ */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand-900);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--surface), var(--focus-ring);
+}
+
+/*
+ * Elementele pe care Bootstrap le stinge, reluate cu specificitate de clasă.
+ *
+ * Bootstrap pune „outline: 0" pe „.btn" și pe „.nav-link" la focalizare și se
+ * bizuie pe umbra lui — care la butoane nu se desenează deloc, iar la meniu e
+ * albastrul lui implicit, nu al nostru. Regula generală de mai sus nu-i poate
+ * corecta: „:where()" are specificitate zero, deci pierde în fața oricărei
+ * reguli de clasă. Rezultatul era că butoanele — „Cere ofertă" printre ele,
+ * cel mai apăsat element de pe site — nu aveau niciun semn de focalizare la
+ * navigarea cu tastatura. Nu e o urmare a schimbării de culoare, era așa
+ * dinainte; s-a văzut abia când am măsurat conturul.
+ *
+ * Videoclipul intră în aceeași listă: cu comenzile native, este element
+ * focalizabil, iar conturul implicit al browserului dă 2:1 pe banda de brand.
+ */
+.btn:focus-visible,
+.nav-link:focus-visible,
+video:focus-visible {
+  outline: 2px solid var(--brand-900);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--surface), var(--focus-ring);
+}
+
+/* Pe fundal închis inelul interior trebuie să fie deschis, nu alb-pe-alb. */
+footer.bg-dark :where(a, button, [tabindex]):focus-visible,
+footer.bg-dark .btn:focus-visible,
+footer.bg-dark .nav-link:focus-visible,
+.bg-brand :where(a, button, [tabindex]):focus-visible,
+.bg-brand .btn:focus-visible,
+.bg-brand .nav-link:focus-visible,
+.bg-brand video:focus-visible {
+  outline-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--brand-900), var(--focus-ring);
+}
+
+/*
+ * Tipografie
+ *
+ * Modelul exonia.ro folosește Rubik la 16px, cu meniul scris cu majuscule la
+ * greutatea 500 și elementul activ la 800. Valorile sunt măsurate din pagina
+ * lor, nu estimate.
+ */
+
+:root {
+  --font-baza: Rubik, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --nav-culoare: #1B1817;
+}
+
+body {
+  font-family: var(--font-baza);
+  font-size: 16px;
+}
+
+h1, h2, h3, h4, h5, h6, .navbar-brand, .btn {
+  font-family: var(--font-baza);
+}
+
+/*
+ * Imagini care încă nu există pe server.
+ *
+ * Site-ul se construiește înaintea ședinței foto. Un dreptunghi discret arată
+ * a machetă în lucru; pictograma de imagine ruptă arată a site stricat.
+ */
+.imagine-lipsa {
+  /* Sursa devine un pixel transparent, ca browserul să nu mai deseneze
+     pictograma de imagine ruptă; hașura vine de aici. */
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  object-fit: cover;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-alt), var(--surface-alt) 14px,
+    #f1f2f4 14px, #f1f2f4 28px
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Corecturi din compararea cu modelul exonia.ro
+   Valorile sunt măsurate pe ambele site-uri, nu estimate.
+   ══════════════════════════════════════════════════════════════════ */
+
+/*
+ * Măsura textului.
+ *
+ * WCAG 2.1 SC 1.4.8 cere text de corp sub 80 de caractere pe rând. Textele
+ * introductive rulau pe toată lățimea containerului: 147 de caractere pe
+ * /contact, 143 pe /produse — o panglică de text pe tot ecranul.
+ *
+ * Unitatea „ch" este lățimea cifrei zero, cu circa 39% mai lată decât
+ * caracterul mediu dintr-un text românesc scris cu Rubik. De aceea 48ch
+ * înseamnă în jur de 72 de caractere reale, nu 48.
+ */
+.custom-page-content .lead {
+  max-width: 48ch;
+}
+
+.custom-page-content p {
+  max-width: 54ch;
+}
+
+/*
+ * Fără asta, un text centrat rămâne lipit la stânga când primește max-width.
+ *
+ * Regula acoperea doar paragraful dintr-un container centrat, nu și paragraful
+ * pe care stă chiar el „text-center" — caz în care textul se centra în cutia
+ * lui de 54ch, iar cutia rămânea lipită la stânga. Se vedea ca un text
+ * necentrat, deși clasa era pusă. Contează acum: revizia clientului cere
+ * centrare în mai multe locuri.
+ */
+.custom-page-content .text-center p,
+.custom-page-content .text-center .lead,
+.custom-page-content p.text-center,
+.custom-page-content .lead.text-center {
+  margin-inline: auto;
+}
+
+/* Proza lungă respiră mai mult; etichetele de o linie rămân strânse. */
+.custom-page-content p:not(.small):not(.mb-0) {
+  line-height: 1.6;
+}
+
+/*
+ * Contrast.
+ *
+ * Bootstrap dă .text-secondary culoarea #6C757D, adică 4,69:1 pe alb — exact
+ * la limita AA. Tokenul propriu urcă la 7,73:1 fără să schimbe mărimea.
+ */
+.text-secondary {
+  color: var(--ink-muted) !important;
+}
+
+/*
+ * Subsolul.
+ *
+ * Negrul era cald — 30,26,23 — fiindcă gri-albastrul rece al lui .bg-dark arăta
+ * murdar sub portocaliu. Sub albastru motivul dispare, ba chiar se inversează:
+ * un negru cald sub un brand rece dezacordează. Trece pe neutru, ușor răcit
+ * spre nuanța brandului. Culoarea se schimbă prin variabila Bootstrap, nu în
+ * markup: subsolul este editabil din dashboard, iar o regulă pusă în markup
+ * s-ar pierde la prima editare.
+ */
+footer.bg-dark {
+  --bs-dark-rgb: 22, 24, 30;
+}
+
+/* ── Subsolul, după modelul exonia (punctul 30) ─────────────────────── */
+
+/*
+ * Înălțimea subsolului.
+ *
+ * Avea „py-5" de la Bootstrap — 48px sus și jos — potrivit pentru un subsol cu
+ * trei rânduri. Al nostru are patru, iar la marginile acelea arăta ca o notă,
+ * nu ca finalul paginii. Marginile stau acum aici, nu pe clasa utilitară, ca
+ * să se poată strânge pe telefon, unde 88px de gol se derulează degeaba.
+ */
+.subsol {
+  padding: 5.5rem 0 3.5rem;
+}
+
+@media (max-width: 767.98px) {
+  .subsol { padding: 3.5rem 0 2.5rem; }
+}
+
+.subsol__sigla {
+  display: inline-block;
+  margin-bottom: 2.5rem;
+}
+
+.subsol__sigla img {
+  height: 46px;
+  width: auto;
+  display: block;
+}
+
+/*
+ * Datele de contact, pe un rând pe ecran lat și una sub alta pe telefon.
+ * Punctele de despărțire le pune CSS-ul, nu markup-ul: un „•" scris în text
+ * ar fi citit cu voce tare de cititoarele de ecran, la fiecare intrare.
+ */
+.subsol__contact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: .75rem 1.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.subsol__contact li {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.subsol__contact li + li::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .45;
+  margin-right: 1.1rem;
+  flex: none;
+}
+
+@media (max-width: 767.98px) {
+  /* Pe telefon fiecare intrare stă pe rândul ei, deci punctele n-au ce despărți. */
+  .subsol__contact { flex-direction: column; gap: .5rem; }
+  .subsol__contact li + li::before { display: none; }
+}
+
+.subsol__nume {
+  font-size: .8125rem;
+  opacity: .75;
+}
+
+.subsol__jos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem 2rem;
+  /*
+   * Aer între rânduri. Subsolul modelului este înalt și rar; al nostru avea
+   * aceleași rânduri strânse unul în altul, deci arăta ca o notă de subsol,
+   * nu ca finalul paginii.
+   */
+  padding-top: 2.75rem;
+  margin-top: 2.5rem;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  font-size: .875rem;
+}
+
+.subsol__drepturi,
+.subsol__credit { margin: 0; }
+
+/*
+ * Paginile legale, pe același rând cu drepturile de autor, ca la model.
+ *
+ * Lista își pierde bulinele, dar nu și rolul: rămâne „ul", deci se aude „trei
+ * elemente" înainte de a fi parcursă. Fiecare legătură are 44px pe verticală,
+ * cât cere WCAG 2.5.8, obținuți din marginea interioară — nu din înălțime
+ * fixă, care ar fi rupt alinierea cu restul rândului.
+ */
+.subsol__legal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0 1.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.subsol__legal a {
+  display: inline-block;
+  padding: .75rem 0;
+  margin: -.75rem 0;
+  font-size: .8125rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.subsol__retea {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Ținta de atingere: 44px, cât cere WCAG 2.1 SC 2.5.8 la mărimea recomandată. */
+  width: 44px;
+  height: 44px;
+  margin: -12px 0;
+  color: inherit;
+}
+
+.subsol__retea:hover { color: #FFFFFF; }
+
+.subsol__autoritati {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.subsol__autoritati img { height: 30px; width: auto; display: block; }
+
+/*
+ * Butoane.
+ *
+ * Modelul compilează Bootstrap cu colțuri drepte. Înălțimea implicită de 38px
+ * nu este o alegere, ci valoarea din cutie, iar pentru o țintă de atingere pe
+ * telefon pragul recomandat este 44px.
+ */
+.btn {
+  border-radius: 0;
+}
+
+/*
+ * 44px este pragul recomandat pentru o țintă de atingere pe telefon. Butoanele
+ * rămâneau la 38px, valoarea implicită Bootstrap, adică sub prag peste tot în
+ * afară de hero. Butoanele care nu sunt ținte de atingere — legăturile de tip
+ * text — nu sunt afectate vizual, fiindcă oricum nu au fundal.
+ */
+.btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Etichetele de acțiune cu majuscule, ca .btn-link, care e deja așa. */
+a.btn-primary,
+a.btn-outline-light,
+a.btn-light {
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
+
+/*
+ * Adresele de email nu au unde să se rupă și ies din coloană pe ecran îngust.
+ * Fără asta, pagina capătă derulare orizontală pe telefon.
+ */
+a[href^="mailto:"],
+a[href^="tel:"] {
+  overflow-wrap: anywhere;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Benzile de prezentare de pe prima pagină
+
+   Modelul exonia.ro le construiește pe toată lățimea ecranului: fotografia
+   se lipește de o margine, iar jumătatea cu text stă pe un fundal decorativ
+   care iese pe cealaltă margine. Textul rămâne aliniat la container.
+
+   Valorile de tipografie sunt măsurate pe pagina lor, nu estimate:
+   titlu 72px / greutate 400 / interlinie 1,2 și corp 28px / 400 / 1,2 pe
+   ecran lat. Aceleași valori le dau clasele .display-2 și .h3 din Bootstrap,
+   folosite și de ei, deci mărimile se potrivesc la orice lățime de ecran.
+   ══════════════════════════════════════════════════════════════════ */
+
+.banda-alternanta {
+  position: relative;
+  /*
+   * „isolation" ține stratul de mai jos (z-index: -1) în interiorul secțiunii:
+   * decorul rămâne peste fundalul benzii, dar sub text și sub fotografie.
+   * Fără el ar trebui ridicat containerul cu „position: relative", iar atunci
+   * fotografia s-ar ancora de container și s-ar opri la marginea lui.
+   */
+  isolation: isolate;
+}
+
+/*
+ * Jumătățile se măsoară în procente din secțiune, nu în „vw".
+ *
+ * Unitatea vw include și lățimea barei de derulare, deci 50vw depășește cu
+ * 15px jumătatea vizibilă și ar împinge fotografia peste text. Secțiunea, ca
+ * bloc obișnuit, are exact lățimea vizibilă, deci 50% cade fix pe mijloc.
+ */
+.banda-alternanta::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: -1;
+  background: url('/tema/img/linii-decorative.svg') no-repeat center center / cover;
+}
+
+.banda-alternanta--foto-dreapta::before { left: 0; }
+
+/* Aceleași linii, oglindite, ca banda următoare să nu pară o repetare. */
+.banda-alternanta--foto-stanga::before {
+  right: 0;
+  transform: scaleX(-1);
+}
+
+/*
+ * Marginile interioare ale coloanei cu text, ca la model: mai lată în stânga
+ * decât în dreapta, ca textul să nu se lipească de fotografie.
+ */
+.banda-alternanta__text {
+  padding: 3rem 5% 3rem 8%;
+}
+
+/* Alinierea optică a titlului: bara literei iese cu puțin în afara coloanei. */
+.banda-alternanta__titlu {
+  margin-left: -.03em;
+}
+
+/*
+ * Interlinia strânsă a corpului este cerută explicit („aceeași spațiere ca la
+ * exonia") și este potrivită pentru text de 28px. Regula generală de mai sus,
+ * scrisă pentru proza de 16px, ar urca-o la 1,6 și ar rări prea mult rândurile.
+ */
+.banda-alternanta .banda-alternanta__corp p:not(.small) {
+  line-height: 1.2;
+  max-width: none;
+  margin-bottom: 1rem;
+}
+
+/*
+ * Benzile cu text lung, de la punctele 25 și 26 din revizie.
+ *
+ * Corpul benzii este scris pentru două-trei rânduri, la 28px. Textele noi ale
+ * clientului au patru paragrafe și, la aceeași mărime, ar fi umplut peste
+ * douăzeci de rânduri într-o coloană de jumătate de ecran — un zid, nu o
+ * bandă de prezentare. Coborâte la 24px pe ecran lat rămân tot mai mari decât
+ * proza obișnuită a paginii, dar se citesc pe rânduri de lungime normală.
+ *
+ * Interlinia urcă odată cu ele: 1,2 este potrivit pentru un titlu-frază de
+ * 28px, nu pentru patru paragrafe de proză.
+ */
+.banda-alternanta .banda-alternanta__corp--lung p:not(.small) {
+  font-size: clamp(1.0625rem, .95rem + .22vw, 1.25rem);
+  line-height: 1.5;
+  margin-bottom: .8rem;
+}
+
+.banda-alternanta .banda-alternanta__corp--lung p:last-child {
+  margin-bottom: 0;
+}
+
+/*
+ * Titlul de bandă cu mai mult de un cuvânt.
+ *
+ * „.display-2" ajunge la 72px pe ecran lat. Acolo încape „Experiență", dar nu
+ * și „Sustenabilitate": singur, cuvântul măsoară mai mult decât coloana de
+ * text și ar ieși peste fotografie. Regula de aici îl ține la 52px, unde
+ * intră întreg, fără să atingă benzile cu titlu scurt.
+ */
+.banda-alternanta__titlu--lung {
+  font-size: clamp(2rem, 1.2rem + 2.6vw, 3.25rem);
+  line-height: 1.1;
+}
+
+.banda-alternanta__actiune {
+  gap: .5rem;
+}
+
+.banda-alternanta__actiune .sageata {
+  color: var(--text-brand-large);
+  flex: none;
+}
+
+/* Fotografia umple jumătatea ei de ecran, până în marginea paginii. */
+.banda-alternanta__foto {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.banda-alternanta__cadru {
+  position: relative;
+  aspect-ratio: 9 / 7;
+}
+
+.banda-alternanta__cadru img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+@media (min-width: 768px) {
+  /*
+   * Cadrul devine simplu distanțier: dă înălțimea minimă a benzii, iar
+   * fotografia se agață de secțiune, ca să treacă dincolo de container.
+   *
+   * Coloana trebuie scoasă și ea din „position: relative", valoarea implicită
+   * a coloanelor Bootstrap. Altfel fotografia se ancorează de coloană și se
+   * oprește la marginea containerului, nu la marginea ecranului.
+   */
+  .banda-alternanta__foto,
+  .banda-alternanta__cadru {
+    position: static;
+  }
+
+  /*
+   * Înălțimea se scrie explicit, nu „auto".
+   *
+   * La o imagine, „height: auto" cu top și bottom fixate nu întinde cutia: se
+   * ia înălțimea proprie a fotografiei. Cu fotografiile de acum ieșea din
+   * întâmplare aproape cât banda, dar pentru un fișier lipsă — înlocuit cu un
+   * pixel pătrat — cutia devenea 720×720 și dădea peste secțiunea următoare.
+   */
+  .banda-alternanta__cadru img {
+    inset: 0 auto;
+    width: 50%;
+    height: 100%;
+  }
+
+  .banda-alternanta--foto-dreapta .banda-alternanta__cadru img { right: 0; }
+  .banda-alternanta--foto-stanga  .banda-alternanta__cadru img { left: 0; }
+
+  /*
+   * Banda cu text lung: fotografia nu se mai întinde pe toată înălțimea.
+   *
+   * Textul lung face banda de peste 800px, iar o fotografie lată — 1600×855 —
+   * pusă să umple o cutie de 720×800 se taie la jumătate pe orizontală: se
+   * vede un umăr, nu o scenă. Cu înălțimea plafonată la 34rem și fotografia
+   * așezată la mijloc, din aceeași imagine se vede aproape trei sferturi.
+   *
+   * Restul jumătății nu rămâne alb: primește aceleași linii decorative ca
+   * jumătatea cu text, ca golul să pară parte din bandă, nu o scăpare.
+   */
+  .banda-alternanta--foto-plafon .banda-alternanta__cadru img {
+    inset: 50% auto auto;
+    height: min(100%, 34rem);
+    transform: translateY(-50%);
+  }
+}
+
+.banda-alternanta--foto-plafon::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: -1;
+  background: url('/tema/img/linii-decorative.svg') no-repeat center center / cover;
+}
+
+.banda-alternanta--foto-plafon.banda-alternanta--foto-dreapta::after {
+  right: 0;
+  transform: scaleX(-1);
+}
+
+.banda-alternanta--foto-plafon.banda-alternanta--foto-stanga::after { left: 0; }
+
+/* Pe telefon coloanele stau una sub alta, deci nu mai există „jumătatea" ei. */
+@media (max-width: 767.98px) {
+  .banda-alternanta--foto-plafon::after { display: none; }
+}
+
+/* Pe telefon coloanele se așază una sub alta, deci decorul ia toată lățimea. */
+@media (max-width: 767.98px) {
+  .banda-alternanta::before {
+    width: 100%;
+    left: 0;
+    right: auto;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Sertarul cu cererea de ofertă
+
+   Site-ul nu vinde, ci ofertează: în locul butonului de coș, fiecare produs
+   are un panou lateral cu formular, ca la model.
+   ══════════════════════════════════════════════════════════════════ */
+
+.sertar-oferta {
+  --bs-offcanvas-width: min(28rem, 100vw);
+}
+
+.sertar-oferta .offcanvas-header h2 {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+}
+
+.sertar-oferta__poza {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  flex: none;
+}
+
+/*
+ * Capcana pentru roboți.
+ *
+ * „display: none" ar fi mai simplu, dar unele completări automate sar peste
+ * câmpurile ascunse așa, iar unii roboți le recunosc și le ocolesc. Scoaterea
+ * din ecran păstrează câmpul „real" pentru amândoi, dar invizibil pentru om.
+ */
+.sertar-oferta__capcana {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.sertar-oferta__raspuns:empty {
+  display: none;
+}
+
+.sertar-oferta__raspuns {
+  margin-bottom: .75rem;
+  padding: .625rem .75rem;
+  font-size: .9375rem;
+}
+
+/* Verde 5,9:1 și roșu 5,5:1 pe fundalurile lor: peste pragul AA. */
+.sertar-oferta__raspuns.este-bine {
+  background: #E8F5EC;
+  color: #14602E;
+}
+
+.sertar-oferta__raspuns.este-eroare {
+  background: #FDECEC;
+  color: #8B1A1A;
+}
+
+.sertar-oferta__declansator .sageata,
+.sertar-oferta__formular .sageata {
+  margin-left: .5rem;
+  flex: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGINILE LEGALE
+
+   Termeni, confidențialitate, cookies. Sunt pagini pe care nimeni nu le
+   citește din plăcere: tot ce urmează ține de un singur lucru — să poți
+   găsi repede paragraful care te privește și să-l poți citi fără efort.
+   ══════════════════════════════════════════════════════════════════ */
+
+.pagina-legala { max-width: 46rem; }
+
+/*
+ * Antetul este „sticky-top", deci o legătură din cuprins ar duce titlul fix
+ * sub bara de meniu, unde nu se vede. Marginea de derulare îl ține dedesubt.
+ */
+.pagina-legala section[id] { scroll-margin-top: 7.5rem; }
+
+.pagina-legala h2 {
+  font-size: 1.5rem;
+  color: var(--text-brand-large);
+  margin-top: 2.75rem;
+  margin-bottom: .75rem;
+}
+
+.pagina-legala h2:first-child { margin-top: 0; }
+
+.pagina-legala h3 {
+  font-size: 1.125rem;
+  color: var(--text-brand);
+  margin-top: 1.75rem;
+  margin-bottom: .5rem;
+}
+
+/*
+ * Rândurile de aici sunt enumerări și trimiteri, nu proză de prezentare: la
+ * lățimea obișnuită a paginii un aliniat juridic s-ar rupe în prea multe
+ * rânduri scurte. 68ch rămâne sub pragul de 80 de semne cerut de WCAG 1.4.8.
+ */
+.pagina-legala p,
+.pagina-legala li { max-width: 68ch; }
+
+.pagina-legala ul,
+.pagina-legala ol { padding-left: 1.25rem; }
+
+.pagina-legala li { margin-bottom: .5rem; line-height: 1.65; }
+
+.pagina-legala code {
+  font-size: .9em;
+  padding: .1em .35em;
+  background: var(--brand-050);
+  border-radius: 2px;
+}
+
+.pagina-legala__actualizat {
+  font-size: .875rem;
+  color: var(--ink-muted);
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+/* ── Cuprinsul ─────────────────────────────────────────────────────── */
+
+/*
+ * Pe ecran lat rămâne lângă text, ca să se știe tot timpul unde ești. Sub
+ * 992px devine o listă obișnuită așezată înaintea textului: nimic fix, nimic
+ * care să acopere conținutul pe telefon.
+ */
+.cuprins {
+  padding: 1.25rem 1.5rem;
+  background: var(--brand-050);
+  border-left: 3px solid var(--fill-brand);
+}
+
+@media (min-width: 992px) {
+  .cuprins { position: sticky; top: 7.5rem; }
+}
+
+.cuprins__titlu {
+  font-size: .8125rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-brand);
+  margin-bottom: .75rem;
+}
+
+.cuprins ol {
+  list-style: none;
+  counter-reset: cuprins;
+  margin: 0;
+  padding: 0;
+}
+
+.cuprins li { counter-increment: cuprins; margin-bottom: .35rem; }
+
+.cuprins a {
+  display: block;
+  /* Ținta de atingere: peste 24px pe verticală, cât cere WCAG 2.5.8. */
+  padding: .3rem 0;
+  font-size: .9375rem;
+  line-height: 1.4;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cuprins a::before {
+  content: counter(cuprins) ". ";
+  color: var(--text-brand);
+  font-weight: 700;
+}
+
+.cuprins a:hover,
+.cuprins a:focus-visible { text-decoration: underline; }
+
+/* ── Caseta cu datele firmei ───────────────────────────────────────── */
+
+.caseta-operator {
+  padding: 1.25rem 1.5rem;
+  background: var(--brand-050);
+  border: 1px solid var(--line);
+  margin-bottom: 1.5rem;
+}
+
+.caseta-operator dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .35rem 1rem;
+  margin: 0;
+}
+
+.caseta-operator dt { font-weight: 700; color: var(--text-brand-large); }
+.caseta-operator dd { margin: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 575.98px) {
+  /* Sub 576px cele două coloane ar lăsa valorilor un deget de lățime. */
+  .caseta-operator dl { grid-template-columns: 1fr; gap: 0; }
+  .caseta-operator dd { margin-bottom: .6rem; }
+}
+
+/* ── Tabelul de cookie-uri ─────────────────────────────────────────── */
+
+/*
+ * Un tabel cu patru coloane nu încape pe un telefon. Nu-l strâng: îl las să se
+ * deruleze pe orizontală în cutia lui, cu pagina nemișcată.
+ */
+.tabel-cookies-cutie {
+  overflow-x: auto;
+  /*
+   * Conturul marchează unde se taie tabelul, deci nu e decor: îi trebuie o
+   * linie care se vede — 3,32:1 pe alb, peste pragul de 3:1 din WCAG 1.4.11 —
+   * nu cea de 1,4:1 folosită între secțiuni.
+   */
+  border: 1px solid var(--line-forte);
+}
+
+/*
+ * Nota „se derulează în lateral". Marginea tăiată a tabelului spune singură că
+ * textul continuă, dar numai dacă te uiți la ea. Dispare de la 768px în sus,
+ * unde tabelul încape întreg și nota ar fi minciună.
+ */
+.nota-derulare {
+  font-size: .875rem;
+  color: var(--ink-muted);
+  margin-bottom: .5rem;
+}
+
+@media (min-width: 768px) {
+  .nota-derulare { display: none; }
+}
+
+.tabel-cookies {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+  font-size: .9375rem;
+}
+
+.tabel-cookies th,
+.tabel-cookies td {
+  padding: .75rem 1rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabel-cookies thead th {
+  background: var(--brand-800);
+  color: #FFFFFF;
+  font-size: .8125rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.tabel-cookies tbody tr:last-child th,
+.tabel-cookies tbody tr:last-child td { border-bottom: 0; }
+
+/* ══════════════════════════════════════════════════════════════════
+   BUTONUL „ÎNAPOI SUS"
+   ══════════════════════════════════════════════════════════════════ */
+
+.sus {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 1030;
+  /*
+   * 48×48: peste minimul de 24px cerut de WCAG 2.5.8 și peste cei 44px pe
+   * care îi cere un deget pe telefon.
+   */
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fill-brand);
+  color: var(--on-fill-brand);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(18, 36, 92, .28);
+  transition: background-color .18s ease, transform .18s ease;
+}
+
+.sus:hover {
+  background: var(--fill-brand-hover);
+  color: var(--on-fill-brand);
+  transform: translateY(-2px);
+}
+
+/*
+ * Pe telefon, butonul stă deasupra colțului din dreapta jos, unde se așază de
+ * obicei degetul mare. Îl ridic puțin, ca să nu acopere ultimul rând al
+ * subsolului.
+ */
+@media (max-width: 575.98px) {
+  .sus { right: 1rem; bottom: 1rem; width: 44px; height: 44px; }
+}
+
+/*
+ * Derularea lină, cerută o singură dată pentru toate ancorele paginii —
+ * inclusiv pentru cuprinsul paginilor legale. Cine a cerut mai puțină mișcare
+ * din sistem sare direct, fără drum.
+ */
+html { scroll-behavior: smooth; }
+
+/*
+ * Antetul este lipicios, deci o ancoră ar duce titlul fix sub el. Marginea de
+ * derulare îl ține dedesubt, pe toate țintele de ancoră.
+ */
+:target { scroll-margin-top: 7.5rem; }
+
+#inceput-pagina:focus { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .sus { transition: none; }
+  .sus:hover { transform: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   APARIȚIA BLOCURILOR LA DERULARE
+
+   Starea de pornire este scrisă sub „.are-aparitii", clasă pusă de
+   „miscare.js" pe elementul „html". Fără script — sau cu el blocat —
+   selectorul nu se potrivește, iar pagina rămâne întreagă: nimic nu
+   depinde de JavaScript ca să fie vizibil.
+   ══════════════════════════════════════════════════════════════════ */
+
+.are-aparitii .apare {
+  opacity: 0;
+  transform: translateY(14px);
+  /*
+   * Curba pornește repede și se așază lin. 0,45s este pragul de sub care
+   * mișcarea se simte ca o pagină vie și peste care începe să pară o pagină
+   * care se încarcă greu.
+   */
+  transition: opacity .45s ease, transform .45s cubic-bezier(.22, .61, .36, 1);
+  /* Cât timp elementul se mișcă, browserul îl desenează pe strat propriu. */
+  will-change: opacity, transform;
+}
+
+.are-aparitii .apare--vizibil {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+/*
+ * Fotografia benzilor apare doar stingându-se, fără urcare.
+ *
+ * Nu e o alegere de gust. Fotografia este poziționată absolut și se agață de
+ * secțiune, ca să iasă din container până în marginea ecranului. Un „transform"
+ * pus pe cadru — și la fel un „will-change: transform" — face din cadru
+ * blocul-container al oricărui descendent poziționat absolut: fotografia se
+ * ancorează brusc de el și se strânge la jumătate de jumătate, iar la sfârșitul
+ * animației sare înapoi la loc. Se vedea exact ca o redimensionare la încărcare.
+ *
+ * Aceeași grijă e nevoie oriunde un element cu copil poziționat absolut ar
+ * intra în lista de apariții.
+ */
+.are-aparitii .banda-alternanta__cadru.apare {
+  transform: none;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .are-aparitii .apare {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Cifrele care cresc nu trebuie să miște rândul de sub ele. */
+[data-creste] {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGINA CONTACT — cele trei rubrici
+   ══════════════════════════════════════════════════════════════════ */
+
+/*
+ * Datele de contact și locația se centrează, cum a cerut clientul. Formularul
+ * nu: o etichetă centrată deasupra unui câmp lat se rupe de el, iar ochiul nu
+ * mai știe care etichetă ține de care câmp. Acolo se centrează doar titlul
+ * rubricii și butonul.
+ */
+.rubrica-contact {
+  text-align: center;
+}
+
+.rubrica-contact__eticheta {
+  font-size: .8125rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-brand);
+  margin-bottom: .25rem;
+}
+
+/* ── Harta, încărcată la cerere ──────────────────────────────────────── */
+
+.harta {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--brand-050);
+  border: 1px solid var(--line);
+}
+
+.harta iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.harta__acoperire {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.harta__adresa {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-brand-large);
+  margin: 0;
+}
+
+.harta__nota {
+  font-size: .8125rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 34ch;
+  margin: 0;
+}

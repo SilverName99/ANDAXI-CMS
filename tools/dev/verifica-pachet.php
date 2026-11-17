@@ -435,7 +435,8 @@ $verificaPachet = static function (string $dosar, ?string $site, bool $alUnuiCli
             if ($externa !== null) {
                 $probleme[] = $relativ . ': poate încărca ceva de pe alt server: ' . $externa;
             }
-            if (preg_match('/javascript:|expression\s*\(|behavior\s*:/i', $continut) === 1) {
+            // `behavior:` e proprietatea IE care încarcă un .htc; `scroll-behavior:` (derularea lină) e CSS obișnuit.
+            if (preg_match('/javascript:|expression\s*\(|(?<![\w-])behavior\s*:/i', $continut) === 1) {
                 $probleme[] = $relativ . ': conține „javascript:”, expression() sau behavior';
             }
         }
@@ -604,6 +605,10 @@ if ($autotest) {
     $caz('CSS: adrese locale, un SVG data: (cu xmlns http) și un șir obișnuit: trece', $cssExtern(".j{background:url(/tema/img/logo-demo.svg) no-repeat,"
         . " url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E\")}\n.k::before{content:\"Tel: 0700 000 000\"}"
         . "\n/* url(https://exemplu.test/comentariu.png) */"), null);
+    $caz('CSS: behavior: (fișier .htc, IE)', $cssExtern('.m{behavior:url(/tema/x.htc)}'), 'behavior');
+    $caz('CSS: scroll-behavior (derularea lină): trece', $cssExtern('html{scroll-behavior:smooth}'), null);
+    $caz('un SVG cu vector-effect (linii de grosime fixă): trece', static fn (string $d) => file_put_contents($d . '/tema/public/img/linii.svg',
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><g fill="none" stroke="#000" vector-effect="non-scaling-stroke"><path d="M0 0 10 10"/></g></svg>'), null);
     $caz('o cheie necunoscută în tema.json', static fn (string $d) => $tema($d, static function (array $t): array {
         $t['culoare'] = '#000';
         return $t;

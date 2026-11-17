@@ -348,6 +348,9 @@ function verificari(Adoptare $a): void
     } elseif ($schimbate === [] && is_dir($s->docroot . '/.git')) {
         Iesire::ok('git status: nicio schimbare față de commit' . ($noi !== [] ? ', ' . count($noi) . ' fișiere noi acceptate' : ''));
     }
+    if (is_dir($s->docroot . '/.git')) {
+        aspectulVechi($a, $git);
+    }
 
     // .env-ul și baza.
     $a->envVechi = Env::citeste($s->docroot . '/.env');
@@ -475,6 +478,54 @@ function verificari(Adoptare $a): void
     Iesire::ok('toate verificările au trecut');
     if ($a->aplica) {
         $a->stare->salveaza();
+    }
+}
+
+/**
+ * Ce din înfățișarea site-ului vechi n-ar ajunge pe codul comun (doar ATENȚIE, nu oprește; grafoanaytis, 17 noiembrie
+ * 2026: adoptat fără temă, paginile au ieșit fără stiluri). Citește doar codul vechi din git, versiunea și pachetul:
+ *  - foile de stil pe care le leagă views/layout.php al codului vechi (afară de app.css, pe care nucleul îl are), când
+ *    pachetul n-are tema/tema.json: fără temă paginile primesc doar fonturile și app.css ale nucleului;
+ *  - fișierele din public/ ale codului vechi, ținute în git, pe care nu le are nici versiunea, nici pachetul (public/,
+ *    tema/public/ după nume): adoptarea aduce în docroot doar fișierele pe care git le ignoră (faza mentenanta), deci o
+ *    pagină care le folosește (o poză din /assets/img/, un PDF) ar primi 404. Fără public/assets/vendor/ (bibliotecile
+ *    nucleului, aceleași sau altele), PHP și .htaccess.
+ *
+ * @param callable(string ...): array{cod: int, iesire: string, erori: string} $git
+ */
+function aspectulVechi(Adoptare $a, callable $git): void
+{
+    [$manifest] = $a->citestePachet();
+    $fisierePachet = array_map('strval', array_keys((array) ($manifest['fisiere'] ?? [])));
+    $layout = $git('show', 'HEAD:views/layout.php');
+    if ($layout['cod'] === 0 && !in_array('tema/tema.json', $fisierePachet, true)
+        && preg_match_all('#<link[^>]+rel=["\']stylesheet["\'][^>]*href=["\'](/[^"\'?<]+\.css)#i', $layout['iesire'], $m) > 0) {
+        $foi = array_values(array_unique(array_diff($m[1], ['/assets/css/app.css'])));
+        if ($foi !== []) {
+            Iesire::atentie('views/layout.php al codului vechi leagă foi de stil (' . implode(', ', array_slice($foi, 0, 6))
+                . ') și pachetul n-are tema/tema.json: pe codul comun paginile ar avea doar stilurile nucleului (docs/PACHETE.md, „Tema”)');
+        }
+    }
+    $numeTema = [];
+    foreach ($fisierePachet as $f) {
+        if (str_starts_with($f, 'tema/public/')) {
+            $numeTema[basename($f)] = true;
+        }
+    }
+    $lipsa = [];
+    foreach (array_filter(explode("\0", $git('ls-files', '-z', '--', 'public/')['iesire'])) as $rel) {
+        $tinta = substr($rel, 7);
+        if ($tinta === '' || str_starts_with($tinta, 'assets/vendor/') || str_starts_with($tinta, 'uploads/')
+            || preg_match('/\.(php\d?|phtml|phar)$|(^|\/)\.htaccess$/i', $tinta) === 1
+            || is_file($a->cod . '/public/' . $tinta) || in_array('public/' . $tinta, $fisierePachet, true) || isset($numeTema[basename($tinta)])) {
+            continue;
+        }
+        $lipsa[] = $tinta;
+    }
+    if ($lipsa !== []) {
+        Iesire::atentie('fișiere publice ale codului vechi, din git, pe care nu le aduce nici versiunea, nici pachetul (' . count($lipsa) . '): '
+            . implode(', ', array_slice($lipsa, 0, 8)) . (count($lipsa) > 8 ? ', …' : '') . '; după comutare rămân doar în public_html.vechi/public/ '
+            . '(docs/DEPLOY.md, „Adoptarea unui site”, fișierele vechi din git)');
     }
 }
 

@@ -1,0 +1,21 @@
+/*
+ * Pagina produsului (șablonul „Ambalaj și tipăritură” din baza site-ului).
+ *
+ * Descrierea produsului: șablonul grafoanaytis o pune într-un <p class="produs__text"> cu „white-space: pre-line”, ca
+ * rândurile textului simplu să rămână rânduri (codul grafoanaytis de la d3c4b79 o punea în pagină ca text). Codul comun
+ * scrie textul simplu cu <br> la fiecare rând (App\Support\RichText::render, din Bioscem), deci cu pre-line fiecare
+ * rând gol ar ieși dublu. Cu spațierea obișnuită, <br>-urile dau exact rândurile de azi; o descriere scrisă ca HTML
+ * (paragrafe) se așază și ea normal. „html body” în față: blocul <style> al șablonului vine după această foaie.
+ */
+html body .produs__text {
+  white-space: normal;
+}
+
+/*
+ * Poza mare din carusel: codul comun scrie la poze width și height (lățimea și înălțimea fișierului, ca pagina să nu
+ * sară la încărcare). Atributul height devine înălțimea pozei, iar regula șablonului (lățime 100%, aspect-ratio 4/3,
+ * max-height) nu spune nimic despre înălțime: poza ar ieși la max-height, nu la 4/3 din lățime, ca azi.
+ */
+html body .product-carousel__slide img {
+  height: auto;
+}

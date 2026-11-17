@@ -1,0 +1,13 @@
+{
+    "_despre": "Tema grafoanaytis (GR-19): ce încărca views/layout.php al codului grafoanaytis de la d3c4b79 (commit-ul live) pe paginile publice, în aceeași ordine. În <head>: Rubik servit de site (aici fontul din nucleu, aceleași greutăți), Bootstrap 5.3.8 (al nucleului, aceiași octeți) și tokens.css (/tema/css/tokens.css, aceleași reguli; doar adresa liniilor decorative mutată în temă, /tema/img/linii-decorative.svg); app.css NU (codul grafoanaytis îl scosese de pe paginile publice; adminul îl încarcă din layoutul lui), deci incarca_app_css = false. catalog.css: blocul <style> pe care codul grafoanaytis îl punea după stilurile catalogului în modul prezentare (views/site/components/shop-catalog.php); produs.css: pagina produsului ca azi pe ce scrie codul comun (descrierea cu <br>, poza mare cu width/height). Foile temei vin înaintea blocurilor <style> din pagină, deci regulile care azi câștigau fiindcă veneau după ele au în față „html body”. Înainte de </body>: bootstrap.bundle.min.js, imagini.js (pozele lipsă hașurate), sertar-oferta.js (al pluginului cereri_oferta, pus de {{product_quote_button}}) și miscare.js (apariția blocurilor, cifrele care cresc). <main class=\"site-container\"> fără .container, mesajele flash ca .alert într-un .container propriu, butonul „Înapoi sus”, bannerul de cookie-uri și pagina 404 în turcoazul #0f766e scris în codul grafoanaytis. Antetul, subsolul, meniul și paginile sunt conținutul din baza site-ului (Design site, Pagini); pozele din /assets/img/ ținute în git de codul vechi sunt în public/ al pachetului.",
+    "fonturi": ["/assets/vendor/fonturi/rubik/rubik.css"],
+    "fonturi_google": false,
+    "bootstrap": true,
+    "incarca_app_css": false,
+    "css": ["/tema/css/tokens.css", "/tema/css/catalog.css", "/tema/css/produs.css"],
+    "js_final": ["/tema/js/imagini.js", "/tema/js/miscare.js"],
+    "main": "lat",
+    "flash": "bootstrap",
+    "buton_sus": true,
+    "culoare_principala": "#0f766e"
+}

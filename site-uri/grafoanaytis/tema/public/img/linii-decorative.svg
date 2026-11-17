@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="520" viewBox="0 0 800 520" role="presentation">
+  <!--
+    Linii decorative pentru secțiunile de prezentare de pe prima pagină.
+
+    Desen propriu, în spiritul colii tipărite: muchii de foaie tăiată și de
+    pliu, pornite din trei noduri și ieșite din cadru. Nu este preluat din tema
+    modelului — desenul de acolo este al lor.
+
+    Culoarea este scrisă literal fiindcă fișierul este încărcat ca imagine de
+    fundal, iar un SVG folosit ca imagine nu vede variabilele paginii. Este
+    tokenul brand-600 din tokens.css; la o schimbare de brand se schimbă și aici.
+
+    Transparența ține contrastul, nu opacitatea: desenul trebuie să rămână la
+    1,25:1 față de alb, cât stătea și în portocaliu. Albastrul fiind mult mai
+    închis, aceeași transparență de 0,32 l-ar urca la 1,70:1 — un desen discret
+    ar deveni grafic în prim-plan. La 0,14 ajunge înapoi la 1,25:1.
+  -->
+  <g fill="none" stroke="#2E4DAD" stroke-width="1.6" stroke-opacity=".14"
+     vector-effect="non-scaling-stroke">
+    <!-- nodul de sus-stânga: colț de coală ridicat -->
+    <path d="M-70 34 L86 132 L-40 214"/>
+    <path d="M86 132 L306 -36"/>
+    <path d="M86 132 L188 -34"/>
+
+    <!-- nodul de jos-stânga: pliu -->
+    <path d="M-60 296 L104 372 L26 554"/>
+    <path d="M104 372 L246 556"/>
+    <path d="M104 372 L-58 470"/>
+
+    <!-- muchia lungă dintre cele două noduri -->
+    <path d="M86 132 L104 372"/>
+
+    <!-- nodul din dreapta, mai discret -->
+    <path d="M742 214 L636 556"/>
+    <path d="M742 214 L816 458"/>
+    <path d="M742 214 L560 556"/>
+
+  </g>
+</svg>

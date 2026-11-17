@@ -117,15 +117,23 @@ Reguli:
 - O temă schimbă CSS-ul, deci se dovedește cu stilurile calculate (G-vizual, `tools/dev/capturi-publice.sh`;
   [DEZVOLTARE.md](DEZVOLTARE.md), „Bioscem nu se schimbă”), nu doar cu HTML-ul.
 
-Exemplu, tema grafoanaytis (GR-19, în Etapa 4; valorile din planul portului, §7):
+Exemplu, tema grafoanaytis (GR-19, `site-uri/grafoanaytis/tema/`, 17 noiembrie 2026, după prima adoptare întoarsă: fără
+temă paginile au ieșit cu stilurile nucleului). Reface ce încărca `views/layout.php` al codului grafoanaytis de la `d3c4b79`
+pe paginile publice: Rubik, Bootstrap, `tokens.css` (fără `app.css`), apoi `bootstrap.bundle.min.js`, `imagini.js`,
+`sertar-oferta.js` (al pluginului `cereri_oferta`) și `miscare.js`. `catalog.css` e blocul `<style>` pe care codul
+grafoanaytis îl punea după stilurile catalogului în modul prezentare, iar `produs.css` potrivește pagina produsului cu
+ce scrie codul comun (descrierea cu `<br>`, pozele cu `width`/`height`). Foile temei vin în `<head>`, înaintea blocurilor
+`<style>` din pagină (ale componentelor, ale șabloanelor din bază), deci o regulă care în codul vechi câștiga doar fiindcă
+venea după ele are în față `html body`. Dovada: capturile la 1440 și 390 px, codul vechi față de codul comun pe aceeași bază
+(docs/DEPLOY.md, „Adoptarea grafoanaytis”).
 
 ```json
 {
-  "css": ["/tema/css/tokens.css", "/tema/css/catalog.css", "/tema/css/produs.css"],
-  "incarca_app_css": false,
   "fonturi": ["/assets/vendor/fonturi/rubik/rubik.css"],
   "fonturi_google": false,
   "bootstrap": true,
+  "incarca_app_css": false,
+  "css": ["/tema/css/tokens.css", "/tema/css/catalog.css", "/tema/css/produs.css"],
   "js_final": ["/tema/js/imagini.js", "/tema/js/miscare.js"],
   "main": "lat",
   "flash": "bootstrap",
@@ -223,4 +231,11 @@ refăcute greșite (fără `"marimi_de_pe": "disc"`, fără fișierul nou, cu m�
   `"pagina_cont": "antet"`: contul clientului ca în vertij `9ab7999`, cu blocul `<style>` al paginii mutat în aceeași foaie
   (`html` → `html:has(.acc-wrap)`, ca rezerva barei de derulare să rămână a paginii contului). Dovada:
   `tools/dev/test-donatii-membri.php` (semnele paginii vertij pe ambele coduri, fără comenzi și adrese pe codul comun).
-- Etapa 4: tema grafoanaytis (GR-19) și conținutul de pornire (`continut/`, GR-20).
+- **Făcut în pachetul grafoanaytis** (17 noiembrie 2026, după prima adoptare, întoarsă: pachetul n-avea temă): tema
+  (`tema/tema.json`, foile `tokens.css`, `catalog.css`, `produs.css`, scripturile `imagini.js`, `miscare.js`, liniile
+  decorative) și pozele din `/assets/img/` pe care codul vechi le ținea în git (`public/assets/img/`: sigla, sigla AFAS,
+  banda de sigle, pozele de producție și de produs; certificatele scanate, poza cu oameni și PDF-urile proiectului nu,
+  docs/DEPLOY.md, „Adoptarea grafoanaytis”). Verificarea lasă acum `scroll-behavior` în CSS (refuză tot `behavior:`, al
+  IE) și `vector-effect` în SVG (`SvgSigur`). `adopta.sh` spune, ca ATENȚIE, foile legate de layoutul vechi fără
+  `tema/tema.json` în pachet și fișierele publice din git ale codului vechi pe care nu le are nici versiunea, nici pachetul.
+- Etapa 4: conținutul de pornire grafoanaytis (`continut/`, GR-20).

@@ -37,7 +37,7 @@ final class SvgSigur
         'offset', 'stop-color', 'stop-opacity', 'clip-path', 'clip-rule', 'clippathunits', 'mask', 'maskunits',
         'maskcontentunits', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-anchor', 'dominant-baseline',
         'letter-spacing', 'textlength', 'lengthadjust', 'rotate', 'href', 'aria-hidden', 'aria-label', 'role', 'focusable',
-        'overflow', 'visibility', 'display', 'color', 'space'];
+        'overflow', 'visibility', 'display', 'color', 'space', 'vector-effect'];
 
     /** O iconiță (fragmentul din interiorul `<svg>`) e sigură? */
     public static function fragment(string $svg): bool
@@ -150,7 +150,7 @@ final class SvgSigur
                     }
                 }
             }
-            if ($nume === 'style' && preg_match('/@import|expression\s*\(|behavior\s*:/i', $valoare) === 1) {
+            if ($nume === 'style' && preg_match('/@import|expression\s*\(|(?<![\w-])behavior\s*:/i', $valoare) === 1) {
                 return 'style nepermis: ' . $valoare;
             }
         }

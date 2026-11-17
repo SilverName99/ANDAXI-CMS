@@ -1,0 +1,162 @@
+/*
+ * Catalogul (/produse, {{shop_catalog}}) în hainele grafoanaytis.
+ *
+ * Blocul <style> pe care codul grafoanaytis (d3c4b79, views/site/components/shop-catalog.php) îl punea după stilurile
+ * componentei, doar în modul prezentare (site fără coș: grafoanaytis are catalogul și cererile de ofertă, nu magazinul):
+ * colțuri drepte, fontul și culorile site-ului (variabilele din tokens.css), descrierea scurtă pe rânduri întregi, fără
+ * bulina de reducere. Regulile sunt aceleași; doar fiecare selector are în față „html body”: aici foaia vine în <head>,
+ * înaintea blocului <style> al componentei (din <body>), deci la specificitate egală ar fi câștigat componenta, nu
+ * ca în codul grafoanaytis, unde blocul acesta venea după ea.
+ */
+/*
+ * Hainele de magazin ale componentei.
+ *
+ * Este preluată din proiectul anterior: verde, „Playfair Display" la titluri,
+ * cerc roșu de reducere. Pe site-ul tipografiei nu se potrivesc niciuna. Se
+ * suprascriu aici, nu în componentă, ca instalarea de magazin să rămână
+ * neatinsă — comutatorul de mod prezentare decide care variantă se vede.
+ */
+/*
+ * „!important" aici nu este lene: mai sus, în aceeași componentă, colțurile
+ * rotunde sunt impuse cu !important și cu clip-path, ca să taie fotografia.
+ * O regulă obișnuită, oricât de specifică, nu le poate întoarce.
+ */
+html body .shop-catalog-v2 .bv-popular-card,
+html body .shop-catalog-v2 .bv-popular__grid > .bv-popular-card {
+  border-color: var(--line);
+  border-radius: 0 !important;
+  background: var(--surface);
+  clip-path: none !important;
+}
+
+html body .shop-catalog-v2 .bv-popular-card__media,
+html body .shop-catalog-v2 .bv-popular-card__media-wrap,
+html body .shop-catalog-v2 .bv-popular__grid > .bv-popular-card .bv-popular-card__media-wrap {
+  border-radius: 0 !important;
+  background: var(--surface-alt);
+}
+
+html body .shop-catalog-v2 .bv-popular-card:hover {
+  border-color: var(--fill-brand);
+  box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .08);
+}
+
+html body .shop-catalog-v2 .bv-popular-card__name {
+  font-family: var(--font-baza);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+html body .shop-catalog-v2 .bv-popular-card__desc {
+  font-family: var(--font-baza);
+  color: var(--ink-muted);
+  letter-spacing: normal;
+  text-transform: none;
+  font-size: .875rem;
+  white-space: normal;
+}
+
+/*
+ * Cardurile au titluri de lungimi diferite, deci rândul de jos ajungea la
+ * înălțimi diferite pe același rând de grilă. Corpul se întinde, iar rândul de
+ * jos este împins la bază: butoanele stau pe aceeași linie de la un card la altul.
+ */
+html body .shop-catalog-v2 .bv-popular-card {
+  display: flex;
+  flex-direction: column;
+}
+
+html body .shop-catalog-v2 .bv-popular-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+html body .shop-catalog-v2 .bv-popular-card__bottom {
+  margin-top: auto;
+}
+
+/*
+ * Rândul de jos al cardului.
+ *
+ * Săgeata arată ca un buton, deci trebuie să se poarte ca unul: legătura
+ * acoperă și eticheta, și săgeata, iar zona de atins trece de 44px pe înălțime.
+ */
+html body .shop-catalog-v2 .bv-popular-card__quote-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  text-decoration: none;
+}
+
+html body .shop-catalog-v2 .bv-popular-card__quote-link:focus-visible {
+  outline: 2px solid var(--text-brand);
+  outline-offset: 3px;
+}
+
+html body .shop-catalog-v2 .bv-popular-card__quote {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  color: var(--text-brand);
+}
+
+html body .shop-catalog-v2 .bv-popular-card__cart-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 0;
+  background: var(--fill-brand);
+  /* Săgeata era desenată închis pe portocaliu pal; pe albastru trebuie albă. */
+  color: var(--on-fill-brand);
+}
+
+html body .shop-catalog-v2 .bv-popular-card__bubble {
+  display: none;
+}
+
+html body .shop-catalog-v2__sort-btn {
+  border-color: var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-baza);
+}
+
+html body .shop-catalog-v2__sort-menu {
+  border-radius: 0;
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+html body .shop-catalog-v2__sort-option {
+  border-radius: 0;
+  font-family: var(--font-baza);
+}
+
+html body .shop-catalog-v2__filter-toggle,
+html body .shop-catalog-v2__filter-col h4,
+html body .shop-catalog-v2__filter-col label {
+  font-family: var(--font-baza);
+}
+
+/*
+ * Panoul de filtre, închis.
+ *
+ * Are înălțime zero și „overflow: hidden", dar titlul „CATEGORII" tot se
+ * desena peste primul card. „visibility" nu lasă loc de interpretare: conținutul
+ * nu se pictează și nu primește nici focus de la tastatură cât e închis.
+ */
+html body .shop-catalog-v2__filters:not(.is-open) {
+  border-width: 0;
+  margin-bottom: 0;
+  visibility: hidden;
+}
+
+html body .shop-catalog-v2__filters.is-open {
+  visibility: visible;
+}
