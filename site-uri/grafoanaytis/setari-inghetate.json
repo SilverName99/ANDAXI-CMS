@@ -3,8 +3,8 @@
     "format": 2,
     "site": "grafoanaytis",
     "sursa": "site-nou-grafoanaytis.ro@d3c4b79",
-    "provizoriu": "Sursa e capul ramurii din clona de lucru („ultimul commit revizuit” din docs/de-portat.md), nu un commit confirmat ca live: se confirmă cu raportul „live față de repo” din Etapa 0, apoi genereaza-setari.php --confirmat",
     "amprenta_nucleu": "a1e4c7e71c1f65a2283283fe38b01c1054a98ce5537564e399cf07e32f02e84a",
+    "inchis": "pleacă pe grafoanaytis.ro la adoptare: sursa site-nou-grafoanaytis.ro@d3c4b79 e commit-ul live (git log -1 și git status curat în public_html pe 17 noiembrie 2026, arătate de proprietar; adopta.sh --commit-vechi=d3c4b79 îl verifică cu git log -1, iar genereaza-setari.php --cod-vechi pe server trebuie să dea aceeași înghețare); de acum o corectură e setari-inghetate-2.json",
     "setari": {
         "blog_autor_implicit": {
             "valoare": "Grafoanaytis",

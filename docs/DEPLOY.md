@@ -677,6 +677,16 @@ Plățile BT autorizate rămân la bancă și le încasează din nou cronul codu
 - După 7 zile fără probleme: `public_html.vechi/`, `~/platforma/inghetare-bs` (`git -C ~/platforma/repo worktree remove
   ~/platforma/inghetare-bs`, dacă l-ai făcut) și copiile din `site/deploy/copii/` se pot șterge. Ne întrebi întâi.
 
+## Adoptarea grafoanaytis
+
+Înghețarea e închisă pe commit-ul live `d3c4b79` (confirmat pe 17 noiembrie 2026: `git log -1` și `git status --short` curat în
+`~/domains/grafoanaytis.ro/public_html`; `grafoanaytis-ro-557157.hostingersite.com` e doar domeniul temporar Hostinger, fără git).
+Comenzile serii și ale nopții sunt ca la „Comutarea Bioscem”, cu `--site=grafoanaytis --domeniu=grafoanaytis.ro
+--commit-vechi=d3c4b79` (fișierele `~/cron-gr.txt`, `~/deploy-gr.log`); fără pașii plăților BT și ai ERP-ului (site-ul n-are
+magazin). Pluginurile vin din licența CRM (abonamentul de azi: catalogul și cererile de ofertă, decizia OD-23); înainte de
+comutare, linkurile spre `/acorduri-gdpr` (meniu, subsol, pagini) se scot dacă pluginul Acorduri GDPR nu e în licență
+(`site-uri/grafoanaytis/ce-se-schimba.md`).
+
 ## Adoptarea vertij: ce cer pluginurile `donatii` și `membri`
 
 Înghețarea e închisă pe commit-ul live `9ab7999` (confirmat pe 12 noiembrie 2026: `git log -1` în `public_html`); comenzile serii și ale
