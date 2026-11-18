@@ -53,7 +53,7 @@ $panouTest = (string) ob_get_clean();
                     </div>
                 </div>
                 <div class="nlp-ecran" id="nlp-ecran">
-                    <iframe id="nlp-iframe" title="Previzualizarea newsletterului" sandbox="allow-same-origin allow-popups"></iframe>
+                    <iframe id="nlp-iframe" title="Previzualizarea newsletterului" sandbox="allow-scripts allow-popups"></iframe>
                 </div>
             </div>
             <div>

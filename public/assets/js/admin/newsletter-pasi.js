@@ -29,6 +29,18 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  // Previzualizarea newsletterului e izolată (sandbox="allow-scripts", fără allow-same-origin: origine opacă; N1a,
+  // docs/SECURITATE.md), deci pagina nu-i mai poate citi documentul. Înălțimea o trimite cadrul printr-un mesaj, la
+  // încărcare; ascultăm doar mesajele cadrului de previzualizare, de la originea opacă.
+  const scriptInaltime = '<scr' + 'ipt>(function(){function t(){parent.postMessage({ax:"nlp-inaltime",h:document.documentElement.scrollHeight},"*");}'
+    + 'if(document.readyState==="complete"){t();}else{window.addEventListener("load",t);}})();<' + '/scr' + 'ipt>';
+  window.addEventListener('message', (e) => {
+    const iframe = $('#nlp-iframe');
+    if (!iframe || e.source !== iframe.contentWindow || e.origin !== 'null' || !e.data || e.data.ax !== 'nlp-inaltime') return;
+    const h = Number(e.data.h);
+    if (Number.isFinite(h) && h > 0 && h < 200000) iframe.style.height = (h + 24) + 'px';
+  });
+
   function listeAlese() {
     return $$('.nlp-lista:checked').map((x) => Number(x.value));
   }
@@ -113,13 +125,7 @@
       const r = await fetch('/admin/emails/builder/preview', { method: 'POST', body: corpCerere(), credentials: 'same-origin' });
       const d = await r.json();
       if (d && d.ok) {
-        iframe.srcdoc = d.html;
-        iframe.onload = () => {
-          try {
-            const h = iframe.contentDocument.documentElement.scrollHeight;
-            if (h) iframe.style.height = (h + 24) + 'px';
-          } catch (e) { /* înălțimea rămâne cea implicită */ }
-        };
+        iframe.srcdoc = d.html + scriptInaltime;
       }
     } catch (e) {
       iframe.srcdoc = '<p style="font-family:sans-serif;padding:20px;color:#b91c1c;">Nu am putut genera previzualizarea. Reîncearcă.</p>';

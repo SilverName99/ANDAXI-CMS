@@ -174,7 +174,7 @@ if (!is_string($previewAppCssContent)) {
             <div class="preview-column">
                 <h3 style="margin-top:0;">Preview — <span id="preview-mode-label">Desktop</span></h3>
                 <div class="preview-shell desktop" id="preview-shell">
-                    <iframe id="page-preview" title="Preview pagină"></iframe>
+                    <iframe id="page-preview" title="Preview pagină" sandbox="allow-scripts"></iframe>
                 </div>
             </div>
         </div>
@@ -386,6 +386,48 @@ admin_componenta('panou-seo', [
         return html;
     };
 
+    // Puntea din previzualizare (N1a, docs/SECURITATE.md): cadrul e izolat (sandbox="allow-scripts", fără allow-same-origin,
+    // deci cu o origine opacă) și pagina nu-i mai poate citi documentul. Scripturile de mai jos (chenarele codurilor cu
+    // parametri) îi cer, printr-un mesaj, nodurile de text cu un cod și îi trimit înapoi HTML-ul lor; cadrul ascultă doar
+    // de fereastra și de originea adminului.
+    const puntePrevizualizare = function (originePagina) {
+        const noduri = {};
+        window.addEventListener('message', (e) => {
+            const d = e.data;
+            if (e.source !== window.parent || e.origin !== originePagina || !d || typeof d !== 'object' || typeof d.id !== 'string') {
+                return;
+            }
+            if (d.ax === 'cere-noduri' && typeof d.test === 'string') {
+                let test;
+                try {
+                    test = new RegExp(d.test, 'i');
+                } catch (_) {
+                    return;
+                }
+                const gasite = [];
+                const parcurgere = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                while (parcurgere.nextNode()) {
+                    if (test.test(parcurgere.currentNode.nodeValue || '')) {
+                        gasite.push(parcurgere.currentNode);
+                    }
+                }
+                noduri[d.id] = gasite;
+                window.parent.postMessage({ ax: 'noduri', id: d.id, texte: gasite.map((nod) => nod.nodeValue || '') }, originePagina);
+            } else if (d.ax === 'inlocuieste-noduri' && Array.isArray(d.html) && Array.isArray(noduri[d.id])) {
+                noduri[d.id].forEach((nod, i) => {
+                    if (typeof d.html[i] !== 'string' || !nod.parentNode) {
+                        return;
+                    }
+                    const loc = document.createElement('span');
+                    loc.innerHTML = d.html[i];
+                    nod.replaceWith(...Array.from(loc.childNodes));
+                });
+                delete noduri[d.id];
+            }
+        });
+    };
+    const scriptPunte = '<script>(' + puntePrevizualizare.toString() + ')(' + JSON.stringify(window.location.origin) + ');<\/script>';
+
     const renderPreview = () => {
         const bodyRaw = getEditorValue('html') || '<p>Scrie codul paginii pentru preview...</p>';
         const body = applyPreviewTokens(bodyRaw);
@@ -399,7 +441,7 @@ admin_componenta('panou-seo', [
             + '<style>' + previewAppCssContent + '</style>'
             + '<style>body{margin:0;padding:24px;line-height:1.6;background:#fff;}img{max-width:100%;height:auto;}</style>'
             + '<style>' + css + '</style>'
-            + '</head><body>' + body + '<script>' + js + '<\/script></body></html>';
+            + '</head><body>' + body + '<script>' + js + '<\/script>' + scriptPunte + '</body></html>';
     };
 
     editors.html?.onChange?.(renderPreview);
@@ -543,26 +585,22 @@ admin_componenta('panou-seo', [
     }
     const escapa = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
     const tipar = /\{\{\s*(?:products_by_template\s*:\s*([^}]*)|produse_serviciu\s*)\}\}/gi;
+    // Cadrul e izolat (N1a): nodurile de text cu un cod le dă puntea din previzualizare, prin mesaje; HTML-ul lor pleacă înapoi.
+    let cerere = 0;
     iframe.addEventListener('load', () => {
-        const doc = iframe.contentDocument;
-        if (!doc || !doc.body) {
+        cerere++;
+        iframe.contentWindow?.postMessage({ ax: 'cere-noduri', id: 'bv:' + cerere, test: '\\{\\{\\s*(products_by_template|produse_serviciu)' }, '*');
+    });
+    window.addEventListener('message', (e) => {
+        const d = e.data;
+        if (e.source !== iframe.contentWindow || e.origin !== 'null' || !d || d.ax !== 'noduri' || d.id !== 'bv:' + cerere
+            || !Array.isArray(d.texte)) {
             return;
         }
-        const noduri = [];
-        const parcurgere = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-        while (parcurgere.nextNode()) {
-            if (/\{\{\s*(products_by_template|produse_serviciu)/i.test(parcurgere.currentNode.nodeValue || '')) {
-                noduri.push(parcurgere.currentNode);
-            }
-        }
-        noduri.forEach((nod) => {
-            const html = escapa(nod.nodeValue || '').replace(tipar, (_, argumente) => (argumente !== undefined
-                ? (chenarSablon !== '' ? chenarSablon.replace('%s', escapa(argumente)) : '')
-                : chenarServiciu));
-            const loc = doc.createElement('span');
-            loc.innerHTML = html;
-            nod.replaceWith(...Array.from(loc.childNodes));
-        });
+        const html = d.texte.map((text) => escapa(String(text)).replace(tipar, (_, argumente) => (argumente !== undefined
+            ? (chenarSablon !== '' ? chenarSablon.replace('%s', escapa(argumente)) : '')
+            : chenarServiciu)));
+        iframe.contentWindow?.postMessage({ ax: 'inlocuieste-noduri', id: d.id, html }, '*');
     });
 })();
 </script>
@@ -584,27 +622,23 @@ admin_componenta('panou-seo', [
     }
     const escapa = (text) => String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[c]));
     const tipar = /\{\{\s*(category_event_rows|category_grid_paged)\s*:\s*([^}]*)\}\}/gi;
+    // Cadrul e izolat (N1a): nodurile de text cu un cod le dă puntea din previzualizare, prin mesaje; HTML-ul lor pleacă înapoi.
+    let cerere = 0;
     iframe.addEventListener('load', () => {
-        const doc = iframe.contentDocument;
-        if (!doc || !doc.body) {
+        cerere++;
+        iframe.contentWindow?.postMessage({ ax: 'cere-noduri', id: 'vt:' + cerere, test: '\\{\\{\\s*(category_event_rows|category_grid_paged)' }, '*');
+    });
+    window.addEventListener('message', (e) => {
+        const d = e.data;
+        if (e.source !== iframe.contentWindow || e.origin !== 'null' || !d || d.ax !== 'noduri' || d.id !== 'vt:' + cerere
+            || !Array.isArray(d.texte)) {
             return;
         }
-        const noduri = [];
-        const parcurgere = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-        while (parcurgere.nextNode()) {
-            if (/\{\{\s*(category_event_rows|category_grid_paged)/i.test(parcurgere.currentNode.nodeValue || '')) {
-                noduri.push(parcurgere.currentNode);
-            }
-        }
-        noduri.forEach((nod) => {
-            const html = escapa(nod.nodeValue || '').replace(tipar, (_, cod, argumente) => {
-                const chenar = cod.toLowerCase() === 'category_event_rows' ? chenarRanduri : chenarGrila;
-                return chenar !== '' ? chenar.replace('%s', escapa(argumente)) : '';
-            });
-            const loc = doc.createElement('span');
-            loc.innerHTML = html;
-            nod.replaceWith(...Array.from(loc.childNodes));
-        });
+        const html = d.texte.map((text) => escapa(String(text)).replace(tipar, (_, cod, argumente) => {
+            const chenar = cod.toLowerCase() === 'category_event_rows' ? chenarRanduri : chenarGrila;
+            return chenar !== '' ? chenar.replace('%s', escapa(argumente)) : '';
+        }));
+        iframe.contentWindow?.postMessage({ ax: 'inlocuieste-noduri', id: d.id, html }, '*');
     });
 })();
 </script>

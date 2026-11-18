@@ -105,6 +105,7 @@ if (\App\Support\Ping::eCererea()) {
 // codul final), o adresă publică la care site-ul a răspuns 404 se notează (doar calea, fără parametri, fără IP).
 register_shutdown_function([\App\Support\Jurnal404::class, 'laFinal']);
 
+use App\Http\GardaCodActiv;
 use App\Http\GardaPluginuri;
 use App\Http\Router;
 use App\Support\Database;
@@ -202,8 +203,10 @@ if (($pageCacheContext['served'] ?? false) === true) {
 }
 
 // Rutele stau în src/Http/rute.php. Garda oprește rutele pluginurilor pe care
-// site-ul nu le are (404 pe site, „Modulul nu este inclus în abonament” în admin).
-$router = new Router([GardaPluginuri::class, 'permite']);
+// site-ul nu le are (404 pe site, „Modulul nu este inclus în abonament” în admin), apoi codul care poate rula salvat din
+// admin de un rol parțial (N1b, App\Http\GardaCodActiv: doar administratorul general salvează cod).
+$router = new Router(static fn (string $metoda, string $tipar, array $parametri): bool
+    => GardaPluginuri::permite($metoda, $tipar, $parametri) && GardaCodActiv::permite($metoda, $tipar, $parametri));
 (require __DIR__ . '/../src/Http/rute.php')($router);
 
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

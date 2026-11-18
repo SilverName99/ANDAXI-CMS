@@ -199,7 +199,7 @@ admin_componenta('antet-pagina', [
                 <div class="preview-column">
                     <h3 style="margin-top:0;">Preview — <span id="design-preview-label">Desktop</span></h3>
                     <div class="preview-shell desktop" id="design-preview-shell">
-                        <iframe id="design-preview" title="Preview design"></iframe>
+                        <iframe id="design-preview" title="Preview design" sandbox="allow-scripts"></iframe>
                     </div>
                 </div>
             </div>

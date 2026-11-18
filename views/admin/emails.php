@@ -1363,7 +1363,7 @@ if (count($taburiEmail) > 1) {
                     <strong style="margin-left:auto;">Mod: <span id="optin-preview-mode-label">Desktop</span></strong>
                 </div>
                 <div class="preview-shell desktop" id="optin-preview-shell" style="margin-top:12px;">
-                    <iframe id="optin-preview-frame" title="Preview formular opt-in"></iframe>
+                    <iframe id="optin-preview-frame" title="Preview formular opt-in" sandbox="allow-scripts"></iframe>
                 </div>
             </div>
         </div>
@@ -2087,7 +2087,7 @@ foreach ($emailSendHistory as $randVezi) {
                     <strong style="margin-left:auto;">Mod: <span id="newsletter-preview-mode-label">Desktop</span></strong>
                 </div>
                 <div class="preview-shell desktop" id="newsletter-preview-shell" style="margin-top:12px;">
-                    <iframe id="newsletter-preview-frame" title="Preview email"></iframe>
+                    <iframe id="newsletter-preview-frame" title="Preview email" sandbox="allow-scripts"></iframe>
                 </div>
             </div>
         </div>

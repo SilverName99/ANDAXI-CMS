@@ -25741,6 +25741,50 @@ HTML;
         ];
     }
 
+    /**
+     * N1b (docs/SECURITATE.md, „Codul activ”): pentru un admin care nu e administratorul general, mesajul refuzului unui
+     * import dacă un rând aduce cod care poate rula (App\Support\CodActiv) și care nu e deja în rândul salvat cu același
+     * slug din $tabel (null: niciun rând salvat, deci orice cod e nou); null dacă importul poate merge. Refuzul se notează
+     * în Jurnal activitate, ca la formulare (App\Http\GardaCodActiv).
+     *
+     * @param list<mixed> $rows
+     */
+    private function codActivNouInImport(PDO $db, array $rows, ?string $tabel): ?string
+    {
+        if (Auth::isGeneralAdmin()) {
+            return null;
+        }
+        $dupaSlug = $tabel !== null ? $db->prepare('SELECT * FROM ' . $tabel . ' WHERE slug = :slug LIMIT 1') : null;
+        foreach ($rows as $numar => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $noi = \App\Support\CodActiv::partiDin($row);
+            if ($noi === []) {
+                continue;
+            }
+            $vechi = [];
+            $slug = trim((string) ($row['slug'] ?? ''));
+            if ($dupaSlug !== null && $slug !== '') {
+                $dupaSlug->execute(['slug' => $slug]);
+                $salvat = $dupaSlug->fetch(PDO::FETCH_ASSOC);
+                $vechi = is_array($salvat) ? \App\Support\CodActiv::partiDin($salvat) : [];
+            }
+            $neacoperite = \App\Support\CodActiv::noi($noi, $vechi);
+            if ($neacoperite === []) {
+                continue;
+            }
+            AdminActivityLog::log($db, \App\Http\GardaCodActiv::JURNAL, [
+                'adresa' => (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH) ?? ''),
+                'rand' => (int) $numar + 1,
+                'cod' => \App\Support\CodActiv::descrie($neacoperite[0]),
+                'parti_noi' => count($neacoperite),
+            ]);
+            return 'Importul a fost refuzat (rândul ' . ((int) $numar + 1) . ' din fișier): ' . \App\Http\GardaCodActiv::mesaj($neacoperite);
+        }
+        return null;
+    }
+
     private function importBlogPostsFromUploadedFile(PDO $db, mixed $file): array
     {
         if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
@@ -25768,6 +25812,12 @@ HTML;
             : $this->blogPostsRowsFromXlsx($tmpPath);
         if ($rows === []) {
             return ['ok' => false, 'message' => 'Nu am găsit rânduri valide în fișier (Title + Content/Slug).'];
+        }
+        // N1b (docs/SECURITATE.md, „Codul activ”): un rol parțial nu aduce prin import cod care poate rula (codul unui rând e
+        // primit doar dacă e deja în articolul salvat cu același slug); altfel importul se refuză întreg, nimic scris.
+        $refuzCod = $this->codActivNouInImport($db, $rows, 'blog_posts');
+        if ($refuzCod !== null) {
+            return ['ok' => false, 'message' => $refuzCod];
         }
 
         $selectBySlugStmt = $db->prepare('SELECT id FROM blog_posts WHERE slug = :slug LIMIT 1');
@@ -26269,6 +26319,11 @@ HTML;
             : $this->productReviewRowsFromXlsx($tmpPath);
         if ($rows === []) {
             return ['ok' => false, 'message' => 'Nu am găsit rânduri valide în fișier (coloana product_slug este obligatorie).'];
+        }
+        // N1b (docs/SECURITATE.md, „Codul activ”): recenziile importate de un rol parțial nu aduc cod care poate rula.
+        $refuzCod = $this->codActivNouInImport($db, $rows, null);
+        if ($refuzCod !== null) {
+            return ['ok' => false, 'message' => $refuzCod];
         }
 
         $findProductStmt = $db->prepare('SELECT id FROM products WHERE LOWER(slug) = :slug AND deleted_at IS NULL LIMIT 1');

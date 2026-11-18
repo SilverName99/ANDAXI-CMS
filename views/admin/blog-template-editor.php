@@ -103,7 +103,7 @@ $isActive = (int) ($blogTemplate['is_active'] ?? 1) === 1;
             <div class="preview-column">
                 <h3 style="margin-top:0;">Preview — <span id="preview-mode-label">Desktop</span></h3>
                 <div class="preview-shell desktop" id="preview-shell">
-                    <iframe id="template-preview" title="Preview template blog"></iframe>
+                    <iframe id="template-preview" title="Preview template blog" sandbox="allow-scripts"></iframe>
                 </div>
                 <small style="display:block;margin-top:10px;color:var(--ax-text-3);">
                     Preview demo pentru codurile disponibile.

@@ -376,7 +376,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
       <div class="eb-preview-pane" id="eb-preview-pane" style="display:none;">
         <div class="eb-preview-frame" id="eb-preview-frame">
           <div class="eb-preview-loading" id="eb-preview-loading">Se generează previzualizarea...</div>
-          <iframe id="eb-preview-iframe" title="Preview email" style="display:none;"></iframe>
+          <iframe id="eb-preview-iframe" title="Preview email" sandbox="allow-scripts" style="display:none;"></iframe>
         </div>
       </div>
     </div>
@@ -490,7 +490,7 @@ $adminJsNl       = @filemtime(\App\Support\Paths::public('assets/js/admin/newsle
     <div class="eb-modal-body" style="padding:0;overflow:auto;display:flex;justify-content:center;background:var(--ax-suprafata-2);">
       <div id="eb-fprev-wrap" style="padding:16px;width:100%;display:flex;justify-content:center;">
         <div id="eb-fprev-loading" style="padding:60px;color:var(--ax-text-3);font-size:13px;">Se generează previzualizarea...</div>
-        <iframe id="eb-fprev-iframe" title="Full preview" style="display:none;border:1px solid var(--ax-linie-tare);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.1);background:var(--ax-suprafata);" frameborder="0"></iframe>
+        <iframe id="eb-fprev-iframe" title="Full preview" sandbox="allow-scripts" style="display:none;border:1px solid var(--ax-linie-tare);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.1);background:var(--ax-suprafata);" frameborder="0"></iframe>
       </div>
     </div>
   </div>
@@ -1757,6 +1757,21 @@ function applyPreviewMode() {
   }
 }
 
+/* Previzualizările sunt izolate (sandbox="allow-scripts", fără allow-same-origin: cadrul are o origine opacă; N1a,
+   docs/SECURITATE.md), deci pagina nu le mai poate citi documentul. Înălțimea o trimite cadrul, printr-un mesaj, la
+   încărcare (scriptul de mai jos, pus la sfârșitul emailului); pagina primește doar mesajele propriilor cadre. */
+const EB_SCRIPT_INALTIME = '<script>(function(){var o=' + JSON.stringify(window.location.origin)
+  + ';function t(){parent.postMessage({ax:"eb-inaltime",h:document.documentElement.scrollHeight},o);}'
+  + 'if(document.readyState==="complete"){t();}else{window.addEventListener("load",t);}})();<\/script>';
+window.addEventListener('message', (e) => {
+  if (e.origin !== 'null' || !e.data || e.data.ax !== 'eb-inaltime') return;
+  ['eb-preview-iframe', 'eb-fprev-iframe'].forEach((id) => {
+    const cadru = document.getElementById(id);
+    const h = Number(e.data.h);
+    if (cadru && e.source === cadru.contentWindow && Number.isFinite(h) && h > 0 && h < 200000) cadru.style.height = (h + 10) + 'px';
+  });
+});
+
 function loadPreview(width) {
   const loading = document.getElementById('eb-preview-loading');
   const iframe  = document.getElementById('eb-preview-iframe');
@@ -1781,11 +1796,7 @@ function loadPreview(width) {
     if(d.ok && iframe) {
       iframe.style.width  = width+'px';
       iframe.style.height = '600px';
-      iframe.srcdoc = d.html;
-      iframe.onload = () => {
-        const h = iframe.contentDocument?.documentElement?.scrollHeight;
-        if(h) iframe.style.height = h+10+'px';
-      };
+      iframe.srcdoc = d.html + EB_SCRIPT_INALTIME;
       if(loading) loading.style.display = 'none';
       iframe.style.display = '';
     }
@@ -2013,8 +2024,7 @@ function ebFullPreviewLoad(width) {
   .then(r=>r.json()).then(d=>{
     if(d.ok&&iframe){
       iframe.style.cssText=`width:${width}px;max-width:100%;min-height:400px;border:none;display:block;border-radius:8px;`;
-      iframe.srcdoc=d.html;
-      iframe.onload=()=>{const h=iframe.contentDocument?.documentElement?.scrollHeight;if(h)iframe.style.height=h+10+'px';};
+      iframe.srcdoc=d.html + EB_SCRIPT_INALTIME;
       if(loading) loading.style.display='none';
       iframe.style.display='';
     }
