@@ -86,8 +86,14 @@ final class GardaCodActiv
     {
         $valori = is_array($_POST) ? $_POST : [];
         $tip = strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? ''));
-        if (str_contains($tip, 'json')) {
-            $corp = json_decode((string) file_get_contents('php://input'), true);
+        // Corpul JSON: când Content-Type spune „json”, dar și când $_POST e gol și corpul arată a JSON, oricare ar fi
+        // Content-Type (unele controllere, de exemplu ConcurentaController::competitionCellSave, citesc php://input direct,
+        // fără să se uite la Content-Type; garda nu trebuie să rateze codul din ele).
+        $brut = (string) file_get_contents('php://input');
+        $inceput = ltrim($brut);
+        $pareJson = $inceput !== '' && ($inceput[0] === '{' || $inceput[0] === '[');
+        if (str_contains($tip, 'json') || ($valori === [] && $pareJson)) {
+            $corp = json_decode($brut, true);
             if (is_array($corp)) {
                 $valori['__corp_json'] = $corp;
             }
@@ -96,8 +102,12 @@ final class GardaCodActiv
     }
 
     /**
-     * Ce e salvat acum pentru ce editează cererea (rândurile din bază, ca text): codul din ele poate rămâne.
-     * O adresă care nu e aici (sau un rând nou) nu are nimic salvat: orice cod trimis e nou.
+     * Ce e salvat acum EXACT pentru ce scrie cererea (rândul sau rândurile pe care le atinge, după ruta, secțiunea și
+     * id-ul propriu al acelei entități): codul din ele poate rămâne. O entitate nouă sau o rută/secțiune pe care garda
+     * nu o poate lega de un rând scris nu are nimic salvat (baza goală), deci orice cod trimis e nou și e refuzat pentru
+     * un rol parțial (fail-closed). Nu se adună niciodată rânduri nelegate de ce se scrie (de exemplu abonații, al căror
+     * nume îl scrie formularul public de opt-in) sau setări alese după numele câmpurilor trimise: altfel un rol parțial ar
+     * putea muta cod scris de administratorul general dintr-un loc în altul.
      *
      * @param array<string, string> $parametri
      * @param array<array-key, mixed> $post
@@ -119,7 +129,8 @@ final class GardaCodActiv
                         self::seo($db, 'product', $idRuta),
                     ];
                 case '/admin/products/fields':
-                    return self::randuri($db, 'SELECT * FROM product_extra_fields', []);
+                    // Un singur câmp, cel scris (id-ul lui din formular); un câmp nou n-are nimic salvat.
+                    return self::rand($db, 'product_extra_fields', $idPost('id'));
                 case '/admin/categories/{id}/update':
                     return [self::rand($db, 'product_categories', $idRuta), self::seo($db, 'category', $idRuta)];
                 case '/admin/products/reviews':
@@ -137,8 +148,10 @@ final class GardaCodActiv
                 case '/admin/gallery/{id}/update':
                     return self::rand($db, 'gallery_images', $idRuta);
                 case '/admin/settings/floating-cart':
+                    // Doar setările pe care le scrie formularul coșului flotant (prefixul lor), niciodată altele.
+                    return self::setariCuPrefix($db, ['floating_cart_']);
                 case '/admin/statistici/setari':
-                    return self::setari($db, array_keys($post));
+                    return self::setariCuPrefix($db, ['statistici_']);
                 case '/admin/emails/builder':
                     $tip = (string) ($post['builder_type'] ?? 'template');
                     if ($tip === 'campaign') {
@@ -149,21 +162,33 @@ final class GardaCodActiv
                     }
                     return self::rand($db, 'newsletter_templates', $idPost('builder_id'));
                 case '/admin/emails':
-                    return [
-                        self::rand($db, 'newsletter_templates', $idPost('newsletter_id')),
-                        self::rand($db, 'newsletter_campaigns', $idPost('campaign_id')),
-                        self::rand($db, 'newsletter_optin_forms', $idPost('optin_form_id')),
-                        self::rand($db, 'newsletter_lists', $idPost('list_id')),
-                        self::rand($db, 'newsletter_subscribers', $idPost('subscriber_id')),
-                        self::setariSablonEmail($db, (string) ($post['template_type'] ?? '')),
-                        self::setariSablonEmail($db, (string) ($post['ecommerce_template_type'] ?? '')),
-                        self::setari($db, array_keys($post)),
-                    ];
+                    return self::emailsSalvate($db, (string) ($post['section'] ?? ''), $post);
             }
         } catch (Throwable) {
             // O bază care nu răspunde: nimic salvat de luat în seamă (codul trimis rămâne nou).
         }
         return [];
+    }
+
+    /**
+     * Baza pentru POST /admin/emails: exact entitatea pe care o scrie secțiunea, după id-ul ei propriu din formular.
+     * O secțiune pe care garda n-o leagă de un rând scris (orice altceva) dă baza goală (fail-closed), deci un rol
+     * parțial nu poate trece cod nou prin ea. Nu se ating niciodată abonații, listele sau alte rânduri nelegate.
+     *
+     * @param array<array-key, mixed> $post
+     * @return array<array-key, mixed>
+     */
+    private static function emailsSalvate(PDO $db, string $section, array $post): array
+    {
+        $id = static fn (string $camp): int => (int) ($post[$camp] ?? 0);
+        return match ($section) {
+            'newsletter-save' => self::rand($db, 'newsletter_templates', $id('newsletter_id')),
+            'newsletter-campaign-save' => self::rand($db, 'newsletter_campaigns', $id('campaign_id')),
+            'newsletter-optin-save' => self::rand($db, 'newsletter_optin_forms', $id('optin_form_id')),
+            'newsletter-ecommerce-save' => self::setariSablonEmail($db, (string) ($post['ecommerce_template_type'] ?? '')),
+            'template-single' => self::setariSablonEmail($db, (string) ($post['template_type'] ?? '')),
+            default => [],
+        };
     }
 
     /** @return array<string, mixed> */
@@ -200,9 +225,9 @@ final class GardaCodActiv
     }
 
     /**
-     * Setările cu numele câmpurilor trimise (formularele de setări își trimit câmpurile cu numele setării).
+     * Setările cu cheile date exact (lista fixă a câmpurilor pe care le scrie un formular, nu numele trimise de cerere).
      *
-     * @param list<array-key> $chei
+     * @param list<string> $chei
      * @return array<string, string>
      */
     private static function setari(PDO $db, array $chei): array
@@ -214,6 +239,33 @@ final class GardaCodActiv
         $locuri = implode(',', array_fill(0, count($chei), '?'));
         $stmt = $db->prepare('SELECT `key`, value FROM settings WHERE `key` IN (' . $locuri . ')');
         $stmt->execute($chei);
+        $setari = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
+            $setari[(string) $rand['key']] = (string) ($rand['value'] ?? '');
+        }
+        return $setari;
+    }
+
+    /**
+     * Setările al căror nume începe cu unul dintre prefixele date — exact grupul pe care îl scrie un formular de setări
+     * (de exemplu `floating_cart_`), niciodată o setare din alt grup (cum ar fi un `<script>` de urmărire din Setări → Google).
+     *
+     * @param list<string> $prefixe
+     * @return array<string, string>
+     */
+    private static function setariCuPrefix(PDO $db, array $prefixe): array
+    {
+        $conditii = [];
+        $param = [];
+        foreach ($prefixe as $i => $prefix) {
+            $conditii[] = '`key` LIKE ?';
+            $param[] = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $prefix) . '%';
+        }
+        if ($conditii === []) {
+            return [];
+        }
+        $stmt = $db->prepare('SELECT `key`, value FROM settings WHERE ' . implode(' OR ', $conditii));
+        $stmt->execute($param);
         $setari = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $rand) {
             $setari[(string) $rand['key']] = (string) ($rand['value'] ?? '');

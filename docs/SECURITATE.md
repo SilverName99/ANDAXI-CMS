@@ -44,6 +44,16 @@ adresă `javascript:`/`vbscript:` (cu entitățile decodate, ca în browser), un
 întregime JavaScript (`js_content`). Citirea e mai largă decât a browserului (etichete în comentarii, în atribute, în
 `<textarea>`), ca să nu scape nimic.
 
+Baza de comparație e **exact entitatea pe care o scrie cererea**, aleasă după rută, secțiune (`$_POST['section']`) și
+id-ul propriu al acelei entități — niciodată o uniune de rânduri nelegate. Pe `/admin/emails` se ia doar rândul scris de
+secțiunea cerută (șablonul de newsletter după `newsletter_id`, campania după `campaign_id`, formularul opt-in după
+`optin_form_id`, setările șablonului de comandă după tipul lui), nu abonații (al căror nume îl scrie formularul public de
+opt-in) sau listele; setările se iau doar din grupul scris de formular (prefixul lor, de exemplu `floating_cart_`),
+nu după numele câmpurilor trimise. O rută sau secțiune pe care garda n-o poate lega de un rând scris are baza goală
+(fail-closed), deci orice cod e nou și se refuză. Corpul cererii se citește și când e JSON trimis cu alt `Content-Type`
+(unele controllere citesc `php://input` direct). Altfel un rol parțial ar fi putut muta cod scris de administratorul
+general dintr-un loc în altul (de exemplu numele unui abonat, pus prin opt-in public, folosit ca „cod deja salvat”).
+
 Regula exactă (decizia: **se refuză doar când se schimbă codul**): o salvare trece dacă părțile ei care pot rula sunt
 **deja** în ce e salvat acum pentru ce se editează (rândul șablonului, al produsului…). Așa un rol parțial poate
 corecta un text într-un șablon care conține JavaScript scris de administratorul general, fără să-l rupă, dar nu poate

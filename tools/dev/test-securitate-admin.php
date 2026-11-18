@@ -177,7 +177,7 @@ $port = (string) (getenv('CMS_DEV_PORT') ?: '8701');
 $baza = 'http://127.0.0.1:' . $port;
 $origine = $baza;
 
-$cerere = static function (string $metoda, string $cale, ?string $jar = null, array $date = [], array $antete = [], bool $siteOrigin = true) use ($baza, $origine): array {
+$cerere = static function (string $metoda, string $cale, ?string $jar = null, array $date = [], array $antete = [], bool $siteOrigin = true, ?string $corpBrut = null) use ($baza, $origine): array {
     $c = curl_init($baza . $cale);
     $raspAntete = [];
     curl_setopt_array($c, [
@@ -196,7 +196,9 @@ $cerere = static function (string $metoda, string $cale, ?string $jar = null, ar
         $linii[] = 'Origin: ' . $origine;
         $linii[] = 'Sec-Fetch-Site: same-origin';
     }
-    if ($metoda === 'POST') {
+    if ($corpBrut !== null) {
+        curl_setopt($c, CURLOPT_POSTFIELDS, $corpBrut);
+    } elseif ($metoda === 'POST') {
         curl_setopt($c, CURLOPT_POSTFIELDS, http_build_query($date));
     }
     if ($linii !== []) {
@@ -250,11 +252,19 @@ foreach (['google_tag_manager_enabled', 'google_tag_manager_id'] as $cheie) {
 }
 $svgProba = \App\Support\Paths::uploads() . '/gallery/' . $MARCA . '.svg';
 $jurnalInainte = (int) $db->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cod_activ_refuzat'")->fetchColumn();
+// Rândurile din tabelele pe care le ating testele N1b (newsletter): le șterg la final pe cele apărute acum.
+$maxInainte = [];
+foreach (['blog_templates', 'newsletter_templates', 'newsletter_subscribers'] as $tabel) {
+    $maxInainte[$tabel] = (int) $db->query('SELECT COALESCE(MAX(id), 0) FROM ' . $tabel)->fetchColumn();
+}
 
-$puneLaLoc = static function () use ($db, $sabloaneInainte, $setariGtmInainte, $svgProba, $jurnalInainte, $dosarJar, $amPornitServerul, $radacina): void {
+$puneLaLoc = static function () use ($db, $sabloaneInainte, $setariGtmInainte, $svgProba, $jurnalInainte, $maxInainte, $dosarJar, $amPornitServerul, $radacina): void {
     $pastrate = $sabloaneInainte === [] ? ['0'] : array_map('strval', $sabloaneInainte);
     $locuri = implode(',', array_fill(0, count($pastrate), '?'));
     $db->prepare('DELETE FROM blog_templates WHERE id NOT IN (' . $locuri . ')')->execute($pastrate);
+    foreach (['newsletter_templates', 'newsletter_subscribers'] as $tabel) {
+        $db->prepare('DELETE FROM ' . $tabel . ' WHERE id > :m')->execute(['m' => $maxInainte[$tabel]]);
+    }
     foreach ($setariGtmInainte as $cheie => $valoare) {
         if ($valoare === null) {
             $db->prepare('DELETE FROM settings WHERE `key` = :k')->execute(['k' => $cheie]);
@@ -288,7 +298,10 @@ $login = static function (string $email) use ($cerere, $dosarJar, $parola): stri
 
 $jarGeneral = $login('admin@exemplu.ro');
 $jarBlog = $login('blog@exemplu.ro');
-$verifica('logare administrator general și administrator de blog', $jarGeneral !== '' && $jarBlog !== '');
+$jarEmailuri = $login('emailuri@exemplu.ro');
+$jarMagazin = $login('magazin@exemplu.ro');
+$verifica('logare administrator general, de blog, de emailuri și de magazin',
+    $jarGeneral !== '' && $jarBlog !== '' && $jarEmailuri !== '' && $jarMagazin !== '');
 
 // ---- N2: garda originii pe server ----
 $store = static fn (array $antete): int => $cerere('POST', '/admin/settings/store', null, ['a' => '1'], $antete, false)['cod'];
@@ -333,6 +346,53 @@ $verifica('N1b: rol parțial, re-salvare neschimbată cu scriptul generalului �
 $salveazaSablon($jarBlog, ['id' => (string) $idSablon, 'html_content' => '<div>{{blog_content_html}}</div>', 'js_content' => $MARCA . '(2);']);
 $jsAcum = (string) $db->query('SELECT js_content FROM blog_templates WHERE id = ' . $idSablon)->fetchColumn();
 $verifica('N1b: rol parțial, schimbarea scriptului → refuzată, scriptul rămâne cel vechi', $jsAcum === $MARCA . '(1);');
+
+// ---- N1b: baza e exact entitatea scrisă, nu o uniune de rânduri nelegate (revizuirea din 18 noiembrie) ----
+// Un cod pus de formularul public de opt-in în numele unui abonat (newsletter_subscribers.name, scris brut) nu mai
+// poate servi drept „cod deja salvat” pentru o altă entitate. Simulez abonatul venit din opt-in printr-un rând direct.
+$codExploit = '<img src=x on' . 'error="' . $MARCA . 'Exploit()">';
+$db->prepare('INSERT INTO newsletter_subscribers (email, name) VALUES (:e, :n)')
+    ->execute(['e' => $MARCA . '-abonat@exemplu.ro', 'n' => $codExploit]);
+$idAbonat = (int) $db->lastInsertId();
+// Generalul creează un șablon de newsletter cu cod (ca să existe o entitate proprie cu cod salvat).
+$cerere('POST', '/admin/emails', $jarGeneral, ['section' => 'newsletter-save', 'newsletter_id' => '0',
+    'newsletter_name' => 'Proba NL', 'newsletter_subject' => 'Subiect', 'newsletter_html' => '<p>ok</p>' . $codExploit]);
+$idNlGeneral = (int) $db->query("SELECT id FROM newsletter_templates WHERE name = 'Proba NL' ORDER BY id DESC LIMIT 1")->fetchColumn();
+$verifica('N1b/exploit: administratorul general a creat un șablon de newsletter cu cod', $idNlGeneral > 0);
+
+$nlInainte = (int) $db->query('SELECT COUNT(*) FROM newsletter_templates')->fetchColumn();
+$refuzuriInainteExploit = (int) $db->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cod_activ_refuzat'")->fetchColumn();
+// Rolul emailuri: șablon NOU cu același cod, plus subscriber_id = abonatul cu cod în nume. Înainte trecea (baza
+// folosea rândul abonatului); acum trebuie refuzat și niciun șablon creat.
+$cerere('POST', '/admin/emails', $jarEmailuri, ['section' => 'newsletter-save', 'newsletter_id' => '0',
+    'newsletter_name' => 'Proba NL Exploit', 'newsletter_subject' => 'S', 'newsletter_html' => '<p>hi</p>' . $codExploit,
+    'subscriber_id' => (string) $idAbonat]);
+$nlDupa = (int) $db->query('SELECT COUNT(*) FROM newsletter_templates')->fetchColumn();
+$refuzuriDupaExploit = (int) $db->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cod_activ_refuzat'")->fetchColumn();
+$verifica('N1b/exploit: rol parțial nu mai poate „acoperi” cod cu numele unui abonat (subscriber_id) → refuzat, niciun șablon creat',
+    $nlDupa === $nlInainte && $refuzuriDupaExploit > $refuzuriInainteExploit, 'șabloane ' . $nlInainte . '→' . $nlDupa);
+$existaExploit = (int) $db->query("SELECT COUNT(*) FROM newsletter_templates WHERE name = 'Proba NL Exploit'")->fetchColumn();
+$verifica('N1b/exploit: niciun șablon „Proba NL Exploit” în bază', $existaExploit === 0);
+
+// Rolul emailuri re-salvează șablonul generalului NESCHIMBAT (codul lui rămâne) → acceptat (baza e chiar acel rând).
+$cerere('POST', '/admin/emails', $jarEmailuri, ['section' => 'newsletter-save', 'newsletter_id' => (string) $idNlGeneral,
+    'newsletter_name' => 'Proba NL', 'newsletter_subject' => 'Subiect', 'newsletter_html' => '<p>ok</p>' . $codExploit]);
+$htmlNl = (string) $db->query('SELECT html_content FROM newsletter_templates WHERE id = ' . $idNlGeneral)->fetchColumn();
+$verifica('N1b/exploit: re-salvarea neschimbată a șablonului propriu (cu codul generalului) → acceptată',
+    str_contains($htmlNl, $MARCA . 'Exploit'));
+
+// ---- N1b: corpul JSON text/plain e citit de gardă (ConcurentaController citește php://input oricare ar fi Content-Type) ----
+$refuzInainteJson = (int) $db->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cod_activ_refuzat'")->fetchColumn();
+$corpJsonCod = json_encode(['product_id' => 1, 'partner_id' => 1, 'value' => '<scr' . 'ipt>' . $MARCA . 'Json()</scr' . 'ipt>'], JSON_UNESCAPED_SLASHES);
+$cerere('POST', '/admin/competition/cell', $jarMagazin, [], ['Content-Type' => 'text/plain'], true, $corpJsonCod);
+$refuzDupaJson = (int) $db->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cod_activ_refuzat'")->fetchColumn();
+$verifica('N1b: corp JSON cu Content-Type: text/plain e citit și codul din el e refuzat (rol parțial)',
+    $refuzDupaJson > $refuzInainteJson);
+// Un corp JSON text/plain FĂRĂ cod nu produce un refuz de cod activ (garda nu se aprinde în gol).
+$corpJsonCurat = json_encode(['product_id' => 1, 'partner_id' => 1, 'value' => '12,50 lei'], JSON_UNESCAPED_SLASHES);
+$cerere('POST', '/admin/competition/cell', $jarMagazin, [], ['Content-Type' => 'text/plain'], true, $corpJsonCurat);
+$refuzFaraCod = (int) $db->query("SELECT COUNT(*) FROM admin_activity_log WHERE action = 'cod_activ_refuzat'")->fetchColumn();
+$verifica('N1b: corp JSON text/plain fără cod nu produce un refuz de cod activ', $refuzFaraCod === $refuzDupaJson);
 
 // ---- N3: scripturile terților fără admin în sesiune ----
 foreach (['google_tag_manager_enabled' => '1', 'google_tag_manager_id' => 'GTM-SONDA00'] as $k => $v) {
