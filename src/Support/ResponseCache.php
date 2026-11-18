@@ -77,6 +77,13 @@ final class ResponseCache
         if (self::requestForcesNoCache()) {
             return $disabled;
         }
+        // N4 (revizuirea de securitate din 18 noiembrie 2026, docs/SECURITATE.md, „Gazda cererii”): o cerere pe altă gazdă
+        // decât a site-ului (un antet Host scris de altcineva, adresa tehnică a găzduirii) nu citește și nu scrie cache-ul,
+        // iar gazda intră în cheie: o pagină făcută pentru o gazdă nu se dă niciodată pe alta.
+        $gazda = self::gazdaCerere();
+        if (!self::gazdaCunoscuta($gazda, (string) Env::get('APP_URL', ''), (string) Env::get('SEO_GAZDE_ALIAS', ''))) {
+            return $disabled;
+        }
 
         $rule = self::resolveRuleForPath($path, $settings);
         if (!is_array($rule)) {
@@ -98,7 +105,7 @@ final class ResponseCache
         // Campania activă (pluginul campanii) intră și ea, doar când există: bannerul și insignele sunt în pagină, deci o pagină
         // randată înainte de începutul campaniei sau cu bannerul de dinainte de o salvare nu se mai servește. Fără campanie
         // activă, cheia e exact cea de dinainte.
-        $cacheKey = sha1($path . '|' . $query . '|' . CookieConsent::cheieCache() . '|' . Plugins::amprenta() . Campanii::cheieCache());
+        $cacheKey = sha1($gazda . '|' . $path . '|' . $query . '|' . CookieConsent::cheieCache() . '|' . Plugins::amprenta() . Campanii::cheieCache());
         $cacheDir = self::cacheDirectory();
         $cacheFile = $cacheDir . '/' . $cacheKey . '.html';
         $metaFile = $cacheDir . '/' . $cacheKey . '.json';
@@ -727,6 +734,39 @@ final class ResponseCache
             }
         }
         unset($item);
+    }
+
+    /** Gazda cererii, cum intră în cheie: litere mici, portul păstrat, fără punctul final. */
+    public static function gazdaCerere(): string
+    {
+        $gazda = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '')));
+        return rtrim($gazda, '.');
+    }
+
+    /**
+     * Gazda e a site-ului? Numele ei (fără port) e cel din APP_URL, varianta lui cu sau fără www sau una din
+     * SEO_GAZDE_ALIAS (aceleași gazde pe care SeoRedirects le mută pe cea canonică). Fără APP_URL (o instalare
+     * neconfigurată) orice gazdă e primită: cheia o păstrează oricum separat. Serverul de dezvoltare (APP_URL
+     * http://127.0.0.1:<port>) primește 127.0.0.1 pe orice port.
+     */
+    public static function gazdaCunoscuta(string $gazda, string $appUrl, string $aliasuri = ''): bool
+    {
+        $site = strtolower(rtrim((string) (parse_url(trim($appUrl), PHP_URL_HOST) ?? ''), '.'));
+        if ($site === '') {
+            return true;
+        }
+        $nume = strtolower(rtrim((string) preg_replace('/:\d+$/', '', trim($gazda)), '.'));
+        if ($nume === '') {
+            return false;
+        }
+        $cunoscute = [$site, str_starts_with($site, 'www.') ? substr($site, 4) : 'www.' . $site];
+        foreach (explode(',', $aliasuri) as $alias) {
+            $alias = strtolower(rtrim(trim($alias), '.'));
+            if ($alias !== '') {
+                $cunoscute[] = $alias;
+            }
+        }
+        return in_array($nume, $cunoscute, true);
     }
 
     private static function hasUnsafeSessionContext(): bool

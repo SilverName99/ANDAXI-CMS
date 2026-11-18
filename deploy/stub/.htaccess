@@ -22,6 +22,17 @@ RewriteRule ^assets/ - [E=AX_VERSIONAT:1]
     Header always set Cache-Control "public, max-age=31536000, immutable" env=AX_VERSIONAT
 </IfModule>
 
+# N5 (revizuirea de securitate din 18 noiembrie 2026, docs/SECURITATE.md, „Fișierele încărcate”): fișierele din /uploads/,
+# servite direct de serverul web, păstrează tipul trimis (nosniff: browserul nu ghicește altul din conținut), iar un SVG sau
+# un fișier de tip HTML/XML deschis direct e un document izolat (CSP sandbox: fără scripturi, cu altă origine decât site-ul).
+# La fel ca public/index.php, care le servește când serverul web nu le găsește singur.
+RewriteRule ^uploads/ - [E=AX_INCARCAT:1]
+RewriteRule ^uploads/.+\.(svgz?|x?html?|xht|shtml|xml|xslt?)$ - [NC,E=AX_INCARCAT_ACTIV:1]
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff" env=AX_INCARCAT
+    Header always set Content-Security-Policy "sandbox" env=AX_INCARCAT_ACTIV
+</IfModule>
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]

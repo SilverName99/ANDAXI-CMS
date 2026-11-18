@@ -68,6 +68,13 @@ require_once __DIR__ . '/../src/Support/Verificare.php';
     header('Content-Type: ' . $mime);
     header('Content-Length: ' . filesize($resolved));
     header('Cache-Control: public, max-age=604800');
+    // N5 (revizuirea de securitate din 18 noiembrie 2026, docs/SECURITATE.md, „Fișierele încărcate”): browserul ia tipul de
+    // mai sus, nu ghicește altul din conținut; un SVG sau un fișier de tip HTML/XML deschis direct e un document izolat
+    // (fără scripturi, cu altă origine decât site-ul). Ca în public/.htaccess, unde serverul web le servește singur.
+    header('X-Content-Type-Options: nosniff');
+    if (in_array($ext, ['svg', 'svgz', 'html', 'htm', 'xhtml', 'xht', 'shtml', 'xml', 'xsl', 'xslt'], true)) {
+        header('Content-Security-Policy: sandbox');
+    }
     readfile($resolved);
     exit;
 })();
@@ -130,6 +137,12 @@ if (!$faraSesiune) {
 // WP-40 (B6): HSTS pe https, după setarea `hsts` (App\Support\Hsts: oprit, treptele 300 → 86400 → 31536000, 0 = oprirea de
 // urgență cu max-age=0; HSTS=0 în .env). Pe http (dezvoltarea, un site fără certificat) nimic.
 \App\Support\Hsts::trimite($cacheSettings);
+// N2 (revizuirea de securitate din 18 noiembrie 2026, docs/SECURITATE.md, „Cererile venite din alte site-uri”): o cerere care
+// schimbă ceva sub /admin (orice metodă în afară de GET, HEAD, OPTIONS) trece doar dacă vine de pe site-ul însuși
+// (Sec-Fetch-Site, altfel Origin); fără niciunul dintre antete, ca înainte. Plățile, ERP-ul, formularele publice nu sunt sub /admin.
+if (!\App\Support\GardaOrigine::verifica()) {
+    return;
+}
 
 // Capture Google Ads click id (gclid / gbraid / wbraid) so an order placed
 // later in the session can be attributed to the ad that brought the visitor.

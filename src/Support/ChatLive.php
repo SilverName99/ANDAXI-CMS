@@ -84,8 +84,9 @@ final class ChatLive
      */
     public static function activ(array $settings): bool
     {
-        // Site-ul de verificare (docs/VERIFICARE.md): fără widgetul tawk.to, orice ar scrie în setări.
-        if (!Verificare::eticheteTertePermise()) {
+        // Site-ul de verificare (docs/VERIFICARE.md): fără widgetul tawk.to, orice ar scrie în setări. Nici cu un admin în
+        // sesiune sau pe o adresă a adminului (N3, docs/SECURITATE.md): scriptul tawk.to ar rula cu sesiunea adminului.
+        if (!EticheteTerte::permise()) {
             return false;
         }
         // Pluginul „Chat live” din licență: fără el (sau când se oprește) bulina nu mai apare.

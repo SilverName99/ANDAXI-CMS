@@ -43,8 +43,9 @@ if (!\App\Support\LinkuriCategorii::paginaCurentaExclusa()) {
     $designHeader = \App\Support\LogoAntet::webp($designHeader);
 }
 // Fără consimțământ, niciun script de analiză/marketing nu ajunge în pagină; pe site-ul de verificare
-// niciodată (docs/VERIFICARE.md), orice ar scrie în setări.
-$acceptaUrmarire = \App\Support\CookieConsent::permiteUrmarire() && \App\Support\Verificare::eticheteTertePermise();
+// niciodată (docs/VERIFICARE.md), orice ar scrie în setări. Nici cu un admin în sesiune și nici pe adresele adminului
+// (N3, docs/SECURITATE.md): GTM, Analytics, Ads, Clarity și chatul ar rula cu sesiunea adminului. Pentru vizitatori, la fel.
+$acceptaUrmarire = \App\Support\CookieConsent::permiteUrmarire() && \App\Support\EticheteTerte::permise();
 $chatActiv = \App\Support\ChatLive::activ($designSettings);
 $chatUrcaCosul = \App\Support\ChatLive::suprapunePestecos($designSettings);
 $clarityEnabled = $acceptaUrmarire && (string) ($designSettings['microsoft_clarity_enabled'] ?? '0') === '1';
