@@ -1311,7 +1311,7 @@ final class BtIpayPayments
             if (!$rezLoy['ok'] && $rezLoy['cod'] === '6' && trim((string) ($tx['loy_order_id'] ?? '')) === ''
                 && BtIpayGateway::puncteLoy($stare) === 0 && max(0, (int) ($stare['amount'] ?? 0)) === (int) $tx['amount_minor']) {
                 // Banca pune uneori în attributes.loyalties un id de comandă LOY care nu există (cod 6), la o plată
-                // fără puncte (Bioscem 211287, un card Revolut, 10 noiembrie 2026: autorizată la bancă, dar site-ul
+                // fără puncte (comanda 211287 a unui site, un card Revolut, 10 noiembrie 2026: autorizată la bancă, dar site-ul
                 // a rămas două zile pe „înregistrată”, iar fiecare verificare pica aici). Fără puncte cerute
                 // (loyaltyAmount 0) și cu toată suma pe card, nu există o parte în puncte: plata e doar pe card.
                 // Cu puncte cerute, sau cu o parte LOY văzută deja la o citire de dinainte, rămâne eroare.
@@ -1331,7 +1331,7 @@ final class BtIpayPayments
     /**
      * Când a fost autorizată plata, pentru `authorized_at` (de la el se numără reamintirea și încasarea automată din
      * ziua 4): ora băncii (`authDateTime`, în milisecunde), nu ora la care a aflat site-ul. O autorizare aflată târziu
-     * (Bioscem 211287: după două zile) nu mai împinge încasarea automată peste termenul de 5 zile al băncii.
+     * (comanda 211287: după două zile) nu mai împinge încasarea automată peste termenul de 5 zile al băncii.
      * Fără o oră plauzibilă (lipsă, în viitor, dinaintea plății), ora de acum.
      */
     private static function autorizataLa(array $stare, array $tx, string $acum): string

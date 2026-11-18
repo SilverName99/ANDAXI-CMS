@@ -372,7 +372,7 @@ $avertismente = is_array($avertismente ?? null) ? $avertismente : [];
                         </div>
                         <?php endif; ?>
                         <?php
-                        // Cerut pentru Bioscem (12 nov 2026): clienții nu înțelegeau că, fără FANbox și fără ridicarea de la
+                        // Cerută pe 12 nov 2026: clienții nu înțelegeau că, fără FANbox și fără ridicarea de la
                         // sediu, coletul vine prin curier acasă. Nota apare doar cât niciuna dintre cele două nu e bifată.
                         $areAlternativeLivrare = !empty($fanboxDisponibil) || ($ridicareSchelet && $ridicareDisponibila);
                         ?>
