@@ -591,6 +591,23 @@ if [ "$PACHET" = "toate" ]; then
     fi
 fi
 
+# Reparațiile de securitate ale adminului (18 noiembrie 2026, tools/dev/test-securitate-admin.php, pe licența „toate”, pe
+# serverul pornit aici): codul activ salvat de un rol parțial (N1b), garda originii cererilor din admin (N2), scripturile
+# terților fără admin în sesiune (N3), cheia cache-ului cu gazda (N4) și anteturile fișierelor încărcate (N5). Își pune la
+# loc rândurile și setările scrise.
+if [ "$PACHET" = "toate" ]; then
+    scrie ""
+    scrie "== Securitatea adminului N1–N5 (tools/dev/test-securitate-admin.php)"
+    if "$RADACINA/tools/dev/php.sh" "$RADACINA/tools/dev/test-securitate-admin.php" > "$TMP/test-securitate-admin.log" 2>&1; then
+        TRECUTE=$((TRECUTE + 1))
+        scrie "  OK    $(tail -1 "$TMP/test-securitate-admin.log")"
+    else
+        ESECURI=$((ESECURI + 1))
+        scrie "  EȘEC  test-securitate-admin.php:"
+        grep -E 'EȘEC|EROARE|Rezultat' "$TMP/test-securitate-admin.log" | head -20 | sed 's/^/        /' | tee -a "$RAPORT"
+    fi
+fi
+
 # Porturile din Biovitality și grafoanaytis ale catalogului (WP-19), banilor (WP-20) și recenziilor (WP-21):
 # tools/dev/test-porturi-bv.php, pe licența „toate”, pe serverul pornit aici. Pune la loc toată baza (CHECKSUM TABLE).
 if [ "$PACHET" = "toate" ]; then

@@ -43,7 +43,7 @@ poarta G-cmp-istoric "la fel, față de f5ae5ea (codul dinaintea pluginurilor; l
 poarta G-plug "testele pluginurilor (A–G) și ale temei site-ului (T)" "tools/dev/php.sh tools/dev/test-pluginuri.php" WP-01
 poarta G-plug-fiecare "testele pluginurilor plus fiecare plugin oprit pe rând (~20 min)" \
     "tools/dev/php.sh tools/dev/test-pluginuri.php --fiecare-plugin" WP-01
-poarta G-smoke "testul de fum pe fiecare pachet și pe licența grafoanaytis" \
+poarta G-smoke "testul de fum pe fiecare pachet și pe licența grafoanaytis (cu test-securitate.php și test-securitate-admin.php, N1–N5)" \
     "tools/dev/smoke.sh --toate-pachetele ;; tools/dev/smoke.sh --pachet=grafoanaytis" WP-01
 poarta G-seo "testele SEO pe fiecare pachet" "tools/dev/php.sh tools/dev/test-seo.php" WP-01
 poarta G-php "PHP-ul minim ($MINIM): sintaxa codului de pe site-uri, testul de fum și testele pluginurilor cu php$MINIM" \

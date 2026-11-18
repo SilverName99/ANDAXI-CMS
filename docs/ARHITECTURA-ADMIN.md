@@ -61,6 +61,23 @@ comandă găsită se deschide direct în panoul ei; nicio acțiune nu se face di
 M Marketing, T Conținut, R Rapoarte, S Setări. Lista întreagă e la „?”, doar cu grupurile pe care le are site-ul și rolul tău.
 Nicio scurtătură nu pornește cât scrii într-un câmp.
 
+## Securitatea cererilor din admin (18 noiembrie 2026)
+
+Două straturi peste `AdminCsrf`, pentru toate paginile, oricare ar fi ruta (detaliile și testele: [SECURITATE.md](SECURITATE.md)):
+
+- **Garda originii (N2):** orice cerere sub `/admin` cu altă metodă decât GET/HEAD/OPTIONS trece doar dacă vine de pe
+  originea site-ului — `Sec-Fetch-Site: same-origin`/`none`, altfel `Origin` egal cu gazda site-ului; fără niciun astfel
+  de antet, ca înainte (cookie-ul `SameSite=Lax` și `AdminCsrf`). O cerere de pe alt site e refuzată (403) și notată în
+  `storage/logs/securitate.log`. `App\Support\GardaOrigine`, în `public/index.php` înaintea routerului. Plățile, ERP-ul,
+  aplicația de desktop și formularele publice nu sunt sub `/admin`, deci nu sunt atinse.
+- **Codul activ, doar pentru administratorul general (N1b):** un rol parțial (magazin, blog, emailuri) nu poate salva
+  conținut care rulează în browser — `<script>`, atribute `on…`, adrese `javascript:`, câmpuri de JavaScript — în
+  șabloane, pagini, design, newslettere, produse sau articole. O salvare cu astfel de cod **nou sau schimbat** față de
+  ce era salvat e refuzată întreagă, cu un mesaj în română și un rând în Jurnal activitate (`cod_activ_refuzat`); una
+  neschimbată (codul scris de administratorul general rămâne) trece. `App\Http\GardaCodActiv`, `App\Support\CodActiv`.
+  Previzualizările din editoare sunt izolate (`sandbox="allow-scripts"` fără `allow-same-origin`), deci codul din ele nu
+  mai atinge originea adminului.
+
 ## SEO în admin (WP-37, 1 noiembrie)
 
 Panoul SEO e o componentă (`panou-seo`, `docs/ui/README.md`), aceeași în editorul produsului, al paginii, al articolului, pe
