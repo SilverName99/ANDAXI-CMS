@@ -1121,7 +1121,11 @@ pagina se reîncarcă o dată); `divi4/v1/carusel-dg.js` (caruselele dg, scrise 
 ecran, spațiul, viteza, bucla și bulinele din `data-props`, pe punctele de rupere 981/768; duplicatele buclei, lățimile, poziția
 benzii, clasele `swiper-*`, săgețile și bulinele cu atributele lor, anunțul `swiper-notification`; săgețile, bulinele, tragerea cu
 mouse-ul și glisarea cu degetul, prag 15 px; un carusel ascuns ca pe live, așezat la primul resize; lightbox-ul dg al pozelor:
-`open`, ╳ și fundalul îl închid). Poarta:
+`open`, ╳ și fundalul îl închid); `divi4/v1/galerie-dge.js` (grila galeriei, scrisă de noi: fiecare element în coloana cea mai
+scurtă, `left` în procente și `top` în px, înălțimea grilei, refăcute la încărcarea pozelor, la `load` și la resize; filtrele vin cu
+felia 3) și `divi4/v1/lightbox-mfp.js` (lightbox-urile galeriei și ale imaginilor Divi, scrise de noi, cu marcajul observat: fundalul
+și wrap-ul la sfârșitul lui body, săgețile și ← → circular în galerie, × și Esc și clicul pe fundal închid, `mfp-fade` cu închiderea
+în 500 ms la imaginea Divi, derularea blocată pe desktop; adresele prin `adresaSigura()`). Poarta:
 **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde

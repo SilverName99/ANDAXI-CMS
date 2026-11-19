@@ -267,6 +267,23 @@ const STIL_DG = 'body{margin:0}.proba-latime{width:1093px;max-width:100%}.proba-
   + '.swiper-button-prev,.swiper-button-next{display:inline-block;width:20px;height:20px}.swiper-button-disabled{opacity:.35;pointer-events:none}'
   + '.dg-carousel-lightbox.open{display:block!important;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(51,51,51,.88)}.dg-carousel-lightbox img{max-height:85vh}';
 
+// Galeria (galerie-dge.md, lightbox-mfp.md; inventată: 7 poze de probă cu rapoartele 4:3, 3:4, 2:1) și o imagine Divi cu lightbox.
+const POZE_GALERIE = ['4x3', '3x4', '4x3', '2x1', '3x4', '4x3', '2x1'];
+const DIM_POZE = { '4x3': [40, 30], '3x4': [30, 40], '2x1': [40, 20] };
+const CORP_GALERIE = '<div id="page-container"><div id="et-main-area"><div class="et_pb_module el_dynamic_masonry_gallery el_dynamic_masonry_gallery_0">'
+  + '<div class="el_masonry_gallery_wrapper" data-enable_lightbox="on" data-lightbox_effect="none" data-enable_navigation="on" data-isotope_transition_duration="400">'
+  + '<div class="el_masonry_gallery_item_gutter"></div>'
+  + POZE_GALERIE.map((r, i) => '<div data-mfp-src="/fixturi/galerie-' + r + '.png?n=' + i + '" class="el_masonry_gallery_item el_masonry_gallery_item_page_1">'
+    + '<div class="el_masonry_gallery_image_wrapper"><img loading="lazy" decoding="async" width="' + DIM_POZE[r][0] + '" height="' + DIM_POZE[r][1]
+    + '" src="/fixturi/galerie-' + r + '.png" class="el_dynamic_masonry_gallery_module__image" alt=""></div></div>').join('')
+  + '</div></div>'
+  + '<p><a href="/fixturi/galerie-4x3.png?divi" class="et_pb_lightbox_image" title=""><img src="/fixturi/galerie-4x3.png" alt="" width="40" height="30"></a>'
+  + '<a href="javascript:alert(1)" class="et_pb_lightbox_image proba-rau">rău</a></p></div></div>\n';
+const STIL_GALERIE = 'body{margin:0}.el_masonry_gallery_wrapper{width:1000px}.el_masonry_gallery_item{width:calc(25% - 11.25px);margin-bottom:15px}'
+  + '.el_masonry_gallery_item_gutter{width:15px}.el_masonry_gallery_item img{width:100%;height:auto;display:block}'
+  + '.mfp-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:#0b0b0b;opacity:.8}.mfp-wrap{position:fixed;top:0;left:0;width:100%;height:100%}'
+  + '.mfp-container{width:100%;height:100%;text-align:center}.mfp-img{max-width:100%;padding:0}.mfp-s-ready .mfp-preloader{display:none}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -369,6 +386,7 @@ const PAGINI = {
   meniu: { corp: CORP_MENIU, stil: STIL_MENIU },
   consimtamant: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ }) },
   carusel: { corp: CORP_DG, stil: STIL_DG },
+  galerie: { corp: CORP_GALERIE, stil: STIL_GALERIE },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -928,6 +946,8 @@ async function verificaIdempotenta(browser, baza) {
     ax.meniuMobil.aplica();
     ax.consimtamant.aplica();
     ax.caruselDg.aplica();
+    ax.galerieDge.aplica();
+    ax.lightboxMfp.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1387,6 +1407,92 @@ async function verificaCaruselul(browser) {
   await q.context.close();
 }
 
+async function verificaGaleria(browser) {
+  scrie('== galerie-dge și lightbox-mfp (felia 2–3): masonry, lightbox-ul galeriei și al imaginii Divi');
+  const p = await deschide(browser, { cale: '/pagina/galerie' });
+  const f = p.page.mainFrame();
+  await p.page.waitForTimeout(300);
+  const s0 = await stare(f);
+  const g = await f.evaluate(() => {
+    const w = document.querySelector('.el_masonry_gallery_wrapper');
+    return { w: w.getAttribute('style'), el: Array.from(w.querySelectorAll('.el_masonry_gallery_item')).map((x) => x.getAttribute('style')) };
+  });
+  const parte = (st) => { const m = /^position: absolute; left: ([0-9.]+)%; top: ([0-9.]+)px;$/.exec(st || ''); return m ? [Number(m[1]), Number(m[2])] : null; };
+  const ast = [[0, 0], [25.375, 0], [50.75, 0], [76.125, 0], [76.125, 134.375], [0, 194.0625], [50.75, 194.0625]];
+  const ok = g.el.every((st, i) => { const x = parte(st); return x && Math.abs(x[0] - ast[i][0]) < 0.01 && Math.abs(x[1] - ast[i][1]) < 0.01; });
+  const h = /^position: relative; height: ([0-9.]+)px;$/.exec(g.w || '');
+  verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă', curate(p.ev, s0), detaliiCurate(p.ev, s0));
+  verifica('masonry (1000 px, 4 coloane de 238.75 + 15): fiecare element în coloana cea mai scurtă, left în %, top în px; grila position: relative cu înălțimea celei mai înalte coloane',
+    ok && h && Math.abs(Number(h[1]) - 467.708) < 0.01, g);
+  await f.evaluate(() => document.querySelectorAll('.el_masonry_gallery_item img')[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await p.page.waitForTimeout(100);
+  const lb = () => f.evaluate(() => {
+    const w = document.querySelector('.mfp-wrap');
+    const b = document.querySelector('.mfp-bg');
+    return { wrap: w ? w.outerHTML : null, bg: b ? [b.className, b.getAttribute('style')] : null, ultimii: Array.from(document.body.children).slice(-2).map((x) => x.className.split(' ')[0]),
+      html: document.documentElement.getAttribute('style'), src: w ? w.querySelector('.mfp-img').getAttribute('src') : null, focus: document.activeElement === w };
+  });
+  const o = await lb();
+  const ASTEPTAT = '<div class="mfp-wrap mfp-gallery mfp-auto-cursor mfp-img-mobile el_masonry_gallery_lightbox el_dynamic_masonry_gallery_0_lightbox dipl_mfp_none mfp-ready" tabindex="-1" '
+    + 'style="overflow: hidden auto;"><div class="mfp-container mfp-s-ready mfp-image-holder"><div class="mfp-content"><div class="mfp-figure"><div class="mfp-close"></div>'
+    + '<img class="mfp-img" alt="" src="/fixturi/galerie-3x4.png?n=1" style="max-height: 900px;"><div class="mfp-bottom-bar"><div class="mfp-title"></div></div></div></div>'
+    + '<div class="mfp-preloader">Loading...</div><button title="" type="button" class="mfp-arrow mfp-arrow-left mfp-prevent-close"></button>'
+    + '<button title="" type="button" class="mfp-arrow mfp-arrow-right mfp-prevent-close"></button></div><button title="Close (Esc)" type="button" class="mfp-close">×</button></div>';
+  verifica('lightbox-ul galeriei: marcajul observat (clasele, figura, preloader-ul, săgețile, × în afara containerului), sursa = data-mfp-src, '
+    + 'fundalul și wrap-ul la sfârșitul lui body, html overflow: hidden, focusul pe wrap', o.wrap === ASTEPTAT
+    && egal(o.bg, ['mfp-bg mfp-img-mobile el_masonry_gallery_lightbox el_dynamic_masonry_gallery_0_lightbox dipl_mfp_none mfp-ready', null])
+    && egal(o.ultimii, ['mfp-bg', 'mfp-wrap']) && o.html === 'overflow: hidden;' && o.focus, o);
+  await p.page.keyboard.press('ArrowRight');
+  const a1 = (await lb()).src;
+  await p.page.keyboard.press('ArrowLeft');
+  await p.page.keyboard.press('ArrowLeft');
+  const a2 = (await lb()).src;
+  await f.evaluate(() => document.querySelector('.mfp-arrow-left').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const a3 = (await lb()).src;
+  await f.evaluate(() => document.querySelector('.mfp-img').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const a4 = await lb();
+  verifica('navigarea: → următoarea, ← ← circular (de la a doua la prima, apoi la ultima), săgeata stângă, clicul pe imagine nu închide',
+    a1 === '/fixturi/galerie-4x3.png?n=2' && a2 === '/fixturi/galerie-4x3.png?n=0' && a3 === '/fixturi/galerie-2x1.png?n=6' && a4.wrap !== null, { a1, a2, a3 });
+  await f.evaluate(() => document.querySelector('.mfp-container').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const c1 = await lb();
+  verifica('clicul pe fundal închide: fundalul și wrap-ul scoase, html fără overflow', c1.wrap === null && c1.bg === null && (c1.html === '' || c1.html === null), c1);
+  await f.evaluate(() => document.querySelectorAll('.el_masonry_gallery_item')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await p.page.keyboard.press('Escape');
+  const c2 = await lb();
+  await f.evaluate(() => document.querySelectorAll('.el_masonry_gallery_item')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await f.evaluate(() => document.querySelector('button.mfp-close').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const c3 = await lb();
+  verifica('Esc și × închid', c2.wrap === null && c3.wrap === null, { c2, c3 });
+  // Imaginea Divi: fade, × în figură, închiderea după 500 ms
+  await f.evaluate(() => document.querySelector('a.et_pb_lightbox_image').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await p.page.waitForTimeout(100);
+  const dv = await f.evaluate(() => { const w = document.querySelector('.mfp-wrap'); return [w.className, document.querySelector('.mfp-bg').className,
+    !!w.querySelector('.mfp-figure > button.mfp-close'), !!w.querySelector('.mfp-figure figure > img.mfp-img'), w.querySelectorAll('.mfp-arrow').length,
+    w.querySelector('.mfp-img').getAttribute('src'), location.pathname]; });
+  await p.page.keyboard.press('Escape');
+  const dv1 = await f.evaluate(() => { const w = document.querySelector('.mfp-wrap'); return w ? w.className : null; });
+  await p.page.waitForTimeout(650);
+  const dv2 = await f.evaluate(() => !!document.querySelector('.mfp-wrap'));
+  verifica('imaginea Divi: mfp-close-btn-in mfp-fade, × în figură, fără săgeți, sursa = href, fără navigare; Esc: mfp-removing, apoi scos după 500 ms',
+    egal(dv, ['mfp-wrap mfp-close-btn-in mfp-auto-cursor mfp-fade mfp-ready', 'mfp-bg mfp-fade mfp-ready', true, true, 0, '/fixturi/galerie-4x3.png?divi', '/pagina/galerie'])
+    && dv1 === 'mfp-wrap mfp-close-btn-in mfp-auto-cursor mfp-fade mfp-ready mfp-removing' && dv2 === false, { dv, dv1, dv2 });
+  await f.evaluate(() => document.querySelector('a.proba-rau').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const rau = await f.evaluate(() => !!document.querySelector('.mfp-wrap'));
+  verifica('o adresă nesigură (javascript:) nu deschide nimic', rau === false);
+  await p.context.close();
+  // Telefon: fundalul pe tot documentul, derularea rămâne
+  const q = await deschide(browser, { cale: '/pagina/galerie', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone });
+  const fq = q.page.mainFrame();
+  await q.page.waitForTimeout(300);
+  await fq.evaluate(() => document.querySelectorAll('.el_masonry_gallery_item')[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await q.page.waitForTimeout(100);
+  const m = await fq.evaluate(() => ({ bg: document.querySelector('.mfp-bg').getAttribute('style'), wrap: document.querySelector('.mfp-wrap').getAttribute('style'),
+    html: document.documentElement.getAttribute('style'), h: document.documentElement.scrollHeight, img: document.querySelector('.mfp-img').getAttribute('style') }));
+  verifica('telefon: fundalul position: absolute pe înălțimea documentului, wrap-ul absolut la derularea de acum, html neatins, max-height 844',
+    m.bg === 'height: ' + m.h + 'px; position: absolute;' && m.wrap === 'top: 0px; position: absolute;' && m.html === null && m.img === 'max-height: 844px;', m);
+  await q.context.close();
+}
+
 async function verificaUrmarirea(browser) {
   scrie('== urmarire (trackerele după acord, pe categorie; managerul din Cookie Policy)');
   const TRACKERE = ['https://www.googletagmanager.com/gtag/js?id=GT-PROBA123', 'https://www.clarity.ms/tag/proba6789?ref=wordpress',
@@ -1634,6 +1740,7 @@ async function main() {
     await verificaConsimtamantul(browser);
     await verificaUrmarirea(browser);
     await verificaCaruselul(browser);
+    await verificaGaleria(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);
