@@ -31,6 +31,7 @@ namespace App\Support;
  * | `cadru` | `""` | `"capturat"`: paginile cu un document în `pagini_capturate` (un site mutat de pe WordPress pe drumul capturat) ies prin cadrul capturat (CadruCapturat), cu politica CSP a site-ului (CspSite) |
  * | `runtime` | `""` | `"divi4@1"`: versiunea runtime-ului compat, al cărei manifest (`public/assets/compat/divi4/v1/sloturi.json`) dă scripturile sloturilor |
  * | `csp` | `{}` | `{"mod": "aplica" \| "raport", "<directivă>": ["<sursă https>", …]}`: politica pe cadrul capturat (`raport`: Report-Only, pe copia de verificare) și sursele ei în plus |
+ * | `urmarire` | `[]` | trackerele site-ului adoptat (Urmarire): felul (`gtag`, `gtm`, `clarity`), categoria de acord, adresa scriptului cu `{id}`, sursele CSP exacte pe directivă, cookie-urile de șters la retragere; identificatorii stau în `privat/urmarire.json` (git-ignorat); pornesc doar după acord |
  * | `previzualizare` | `[390, 820, 1440]` | lățimile previzualizării paginilor capturate în admin (pasul 12) |
  *
  * Fișierele publice ale temei stau în pachet în `tema/public/` și se servesc la `/tema/…`: pe server din
@@ -42,7 +43,7 @@ namespace App\Support;
  * O valoare greșită nu oprește site-ul: cheia rămâne la implicit (un element greșit dintr-o listă se scoate) și se scrie
  * un rând în jurnalul PHP. `tools/dev/verifica-pachet.php` refuză un pachet cu astfel de probleme (`valideaza()`).
  *
- * Rulează în pagini, după autoloader; folosește doar DateSite, Paths și SvgSigur.
+ * Rulează în pagini, după autoloader; folosește doar DateSite, Paths, SvgSigur și Urmarire.
  */
 final class Tema
 {
@@ -80,6 +81,7 @@ final class Tema
         'cadru' => '',
         'runtime' => '',
         'csp' => [],
+        'urmarire' => [],
         'previzualizare' => [390, 820, 1440],
     ];
 
@@ -532,6 +534,10 @@ final class Tema
                         }
                     }
                     $valori[$cheie] = $csp;
+                    break;
+                case 'urmarire':
+                    [$valori[$cheie], $pb] = Urmarire::valideaza($valoare);
+                    array_push($probleme, ...$pb);
                     break;
                 case 'previzualizare':
                     if (is_array($valoare) && $valoare !== [] && array_is_list($valoare) && count($valoare) <= 6

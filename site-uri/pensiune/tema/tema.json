@@ -2,5 +2,96 @@
     "_despre": "Cadrul capturat (pasul 6): paginile ies din documentele capturate, cu runtime-ul compat divi4@1 pe sloturi și CSP-ul site-ului. Pe copia de verificare, înainte de comutare, csp.mod poate fi „raport” (Report-Only).",
     "cadru": "capturat",
     "runtime": "divi4@1",
-    "previzualizare": [390, 820, 1440]
+    "previzualizare": [
+        390,
+        820,
+        1440
+    ],
+    "urmarire": [
+        {
+            "fel": "gtag",
+            "categorie": "statistics",
+            "motiv": "Google Site Kit pe live: gtag.js cu eticheta Google (GT-…); colectarea GA4 merge la google-analytics.com, pe gazda globală sau pe cea regională a UE",
+            "src": "https://www.googletagmanager.com/gtag/js?id={id}",
+            "csp": {
+                "script-src": [
+                    "https://www.googletagmanager.com"
+                ],
+                "connect-src": [
+                    "https://www.googletagmanager.com",
+                    "https://www.google-analytics.com",
+                    "https://region1.google-analytics.com",
+                    "https://analytics.google.com",
+                    "https://region1.analytics.google.com"
+                ],
+                "img-src": [
+                    "https://www.googletagmanager.com",
+                    "https://www.google-analytics.com"
+                ]
+            },
+            "cookie_retragere": [
+                "_ga",
+                "_ga_*",
+                "_gid",
+                "_gat*",
+                "_gcl_*"
+            ],
+            "parametri": {
+                "googlesitekit_post_type": "page"
+            },
+            "seturi": {
+                "developer_id.dZTNiMT": true
+            }
+        },
+        {
+            "fel": "gtm",
+            "categorie": "statistics",
+            "motiv": "containerul Google Tag Manager de pe live (GTM-…), pornit o singură dată",
+            "src": "https://www.googletagmanager.com/gtm.js?id={id}",
+            "csp": {
+                "script-src": [
+                    "https://www.googletagmanager.com"
+                ],
+                "connect-src": [
+                    "https://www.googletagmanager.com"
+                ],
+                "img-src": [
+                    "https://www.googletagmanager.com"
+                ]
+            },
+            "cookie_retragere": [
+                "_ga",
+                "_ga_*",
+                "_gid",
+                "_gat*"
+            ]
+        },
+        {
+            "fel": "clarity",
+            "categorie": "statistics",
+            "motiv": "Microsoft Clarity pe live; ad_Storage urmează acordul marketing (puntea consentv2 de pe live)",
+            "src": "https://www.clarity.ms/tag/{id}?ref=wordpress",
+            "csp": {
+                "script-src": [
+                    "https://www.clarity.ms",
+                    "https://scripts.clarity.ms"
+                ],
+                "connect-src": [
+                    "https://*.clarity.ms",
+                    "https://c.bing.com"
+                ],
+                "img-src": [
+                    "https://c.clarity.ms",
+                    "https://c.bing.com"
+                ]
+            },
+            "csp_motiv": {
+                "https://*.clarity.ms": "Clarity trimite sesiunile la un subdomeniu de colectare cu o literă, ales dinamic pe proiect (de exemplu k.clarity.ms/collect); nu se poate fixa dinainte"
+            },
+            "cookie_retragere": [
+                "_clck",
+                "_clsk"
+            ]
+        }
+    ]
 }

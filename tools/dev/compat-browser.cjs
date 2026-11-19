@@ -224,9 +224,22 @@ const CORP_CMPLZ = '<div id="page-container"><div id="et-main-area"><p class="pr
   + '<div class="cmplz-documents cmplz-links"><ul><li><a class="cmplz-link cookie-statement" href="#" data-relative_url="">{title}</a></li>'
   + '<li><a class="cmplz-link privacy-statement" href="#" data-relative_url="">{title}</a></li><li><a class="cmplz-link impressum" href="#" data-relative_url="">{title}</a></li></ul></div>'
   + '</div></div>\n<div id="cmplz-manage-consent" data-nosnippet="true"><button class="cmplz-btn cmplz-hidden cmplz-manage-consent manage-consent-1">Gestionați</button></div>\n';
-const STIL_CMPLZ = '.cmplz-hidden{display:none}.cmplz-cookiebanner.cmplz-dismissed{display:none}.cmplz-cookiebanner .cmplz-categories,'
+const STIL_CMPLZ = '#cmplz-manage-consent-container{display:none}.cmplz-hidden{display:none}.cmplz-cookiebanner.cmplz-dismissed{display:none}.cmplz-cookiebanner .cmplz-categories,'
   + '.cmplz-cookiebanner .cmplz-save-preferences{display:none}.cmplz-cookiebanner .cmplz-categories.cmplz-fade-in{display:block}'
   + '#cmplz-manage-consent .cmplz-manage-consent.cmplz-dismissed{display:none}.cmplz-placeholder-parent{height:inherit}';
+
+// Trackerele (urmarire.js, inventate: id-uri de probă; gazdele lor reale, interceptate de test, niciuna nu pleacă în rețea).
+const URMARIRE = [
+  { fel: 'gtag', categorie: 'statistics', id: 'GT-PROBA123', src: 'https://www.googletagmanager.com/gtag/js?id=GT-PROBA123',
+    cookie_retragere: ['_ga', '_ga_*'], parametri: { googlesitekit_post_type: 'page' }, seturi: { 'developer_id.proba': true } },
+  { fel: 'gtm', categorie: 'statistics', id: 'GTM-PROBA45', src: 'https://www.googletagmanager.com/gtm.js?id=GTM-PROBA45', cookie_retragere: [] },
+  { fel: 'clarity', categorie: 'statistics', id: 'proba6789', src: 'https://www.clarity.ms/tag/proba6789?ref=wordpress', cookie_retragere: ['_clck', '_clsk'] },
+];
+const CSP_URMARIRE = politica("script-src 'self' 'inline-speculation-rules' https://www.googletagmanager.com https://www.clarity.ms");
+const BANNER_CMPLZ = CORP_CMPLZ.slice(CORP_CMPLZ.indexOf('<div id="cmplz-cookiebanner-container">'), CORP_CMPLZ.indexOf('<div id="cmplz-manage-consent"'));
+const CORP_MANAGER = '<div id="page-container"><div id="et-main-area"><h3>Gestionați consimțământul – Pensiunea Probă</h3>'
+  + '<div id="cmplz-manage-consent-container-nojavascript">Pagina fără JavaScript.</div>'
+  + '<div id="cmplz-manage-consent-container" name="cmplz-manage-consent-container" class="cmplz-manage-consent-container"></div></div></div>\n';
 
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
@@ -248,7 +261,7 @@ const STRUCTURA_ASTEPTATA = {
 function pagina(o) {
   o = Object.assign({ date: DATE_IMPLICITE, cap: capImplicit(), final: finalImplicit(), repere: 'ambele', inainte: false,
     lipsa: false, inline: false, dateDuble: false, dateDiv: false, dateInainteDeCap: false, corpDevreme: false, clobber: null,
-    dupaFinal: false, speculatii: true, corp: CORP, stil: '' }, o || {});
+    dupaFinal: false, speculatii: true, corp: CORP, stil: '', coada: '' }, o || {});
   const bloc = o.date === null ? '' : '<script type="application/json" id="ax-date">'
     + (typeof o.date === 'string' ? o.date : jsonAxDate(o.date)) + '</script>';
   const sloturi = (lista) => lista.map((a) => '<script src="' + a + '"></script>').join('\n');
@@ -278,7 +291,7 @@ function pagina(o) {
     + (o.inline ? '<script>window.__axProba.inline = 1;</script>\n' : '')
     + '{{ax:runtime:final}}\n<span class="et_pb_scroll_top et-pb-icon"></span>\n'
     + (o.dupaFinal ? '<script type="application/json" id="ax-date">{}</script>\n' : '')
-    + '</body>\n</html>\n';
+    + o.coada + '</body>\n</html>\n';
   const rez = html.replace('{{ax:runtime:cap}}', sloturi(o.cap) + '\n').replace('{{ax:runtime:final}}', sloturi(o.final));
   if (rez.includes('{{ax:')) {
     throw new Error('un jeton {{ax: a rămas în pagina de probă (cadrul ar da 500)');
@@ -329,6 +342,9 @@ const PAGINI = {
   sandbox: { inainte: true },
   meniu: { corp: CORP_MENIU, stil: STIL_MENIU },
   consimtamant: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ }) },
+  urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
+  manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
+    date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -401,6 +417,9 @@ async function deschide(browser, o) {
       return ruta.continue();
     }
     ev.straine.push(url);
+    if (o.straineJs && /^https:\/\//.test(url) && ruta.request().resourceType() === 'script') {
+      return ruta.fulfill({ status: 200, contentType: 'text/javascript; charset=utf-8', body: '/* tracker de probă */' });
+    }
     return ruta.abort();
   });
   if (o.init) {
@@ -1189,6 +1208,108 @@ async function verificaConsimtamantul(browser) {
   await pb.context.close();
 }
 
+async function verificaUrmarirea(browser) {
+  scrie('== urmarire (trackerele după acord, pe categorie; managerul din Cookie Policy)');
+  const TRACKERE = ['https://www.googletagmanager.com/gtag/js?id=GT-PROBA123', 'https://www.clarity.ms/tag/proba6789?ref=wordpress',
+    'https://www.googletagmanager.com/gtm.js?id=GTM-PROBA45'];
+  const tr = (l) => l.filter((u) => !u.startsWith('https://www.google.com/maps/'));
+  const coada = (f) => f.evaluate(() => ({
+    dl: Array.isArray(window.dataLayer) ? window.dataLayer.map((x) => (Object.prototype.toString.call(x) === '[object Arguments]' ? ['args'].concat(JSON.parse(JSON.stringify(Array.from(x).map((v) => (v instanceof Date ? 'data' : v))))) : x)) : null,
+    cl: typeof window.clarity === 'function' ? (window.clarity.q || []).map((a) => JSON.parse(JSON.stringify(Array.from(a)))) : null,
+    pornite: window.axCompat.urmarire.pornite().sort(),
+    scripturi: Array.from(document.scripts).slice(0, 3).map((x) => x.getAttribute('src')),
+  }));
+  const clic = (f, sel) => f.evaluate((sel) => { document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true })); }, sel);
+  // 1. Prima vedere: nimic
+  const p = await deschide(browser, { cale: '/pagina/urmarire', straineJs: true });
+  const f = p.page.mainFrame();
+  await p.page.waitForTimeout(300);
+  const s0 = await stare(f);
+  const c0 = await coada(f);
+  verifica('prima vedere: nicio cerere spre gazdele trackerelor (nici altundeva), fără dataLayer și fără clarity, fără erori/încălcări CSP',
+    curate(p.ev, s0) && c0.dl === null && c0.cl === null && c0.pornite.length === 0, { ev: detaliiCurate(p.ev, s0), c0 });
+  // 2. Acceptă: toate trei, o dată fiecare, înaintea primului script
+  await clic(f, '.cmplz-accept');
+  await p.page.waitForTimeout(300);
+  const c1 = await coada(f);
+  const t1 = tr(p.ev.straine);
+  verifica('Acceptă: câte o cerere spre fiecare tracker (gtag, clarity, GTM o dată), cu id-urile din configurație; scripturile înaintea primului script',
+    egal(t1.slice().sort(), TRACKERE.slice().sort()) && egal(c1.pornite, ['clarity', 'gtag', 'gtm'])
+    && c1.scripturi.filter((x) => TRACKERE.includes(x)).length === 3, { t1, c1 });
+  verifica('coada gtag ca pe live: set linker (gazda), js, set din seturi, config cu parametrii; apoi gtm.start; clarity: consentv2 cu ambele acordate',
+    egal(c1.dl.slice(0, 4), [['args', 'set', 'linker', { domains: ['127.0.0.1'] }], ['args', 'js', 'data'], ['args', 'set', 'developer_id.proba', true],
+      ['args', 'config', 'GT-PROBA123', { googlesitekit_post_type: 'page' }]]) && c1.dl[4].event === 'gtm.js' && typeof c1.dl[4]['gtm.start'] === 'number'
+    && egal(c1.cl, [['consentv2', { analytics_Storage: 'granted', ad_Storage: 'granted' }]]), c1);
+  // 3. Reîncărcarea: pornesc la încărcare, o singură dată
+  const n1 = p.ev.straine.length;
+  await p.page.reload({ waitUntil: 'load' });
+  await p.page.waitForTimeout(300);
+  const t2 = tr(p.ev.straine.slice(n1));
+  verifica('reîncărcarea după acord: trackerele pornesc la încărcare, câte o cerere', egal(t2.slice().sort(), TRACKERE.slice().sort()), t2);
+  await p.context.close();
+  // 4. Respinge, doar marketing: nimic
+  const fara = async (actiune) => {
+    const q = await deschide(browser, { cale: '/pagina/urmarire', straineJs: true });
+    const g = q.page.mainFrame();
+    await actiune(g);
+    await q.page.waitForTimeout(300);
+    const r = { straine: tr(q.ev.straine), c: await coada(g) };
+    await q.context.close();
+    return r;
+  };
+  const re = await fara((g) => clic(g, '.cmplz-deny'));
+  verifica('Respinge: nicio cerere spre trackere, nimic pornit', re.straine.length === 0 && re.c.pornite.length === 0 && re.c.dl === null, re);
+  const mk = await fara(async (g) => { await clic(g, '.cmplz-view-preferences'); await g.evaluate(() => { document.getElementById('cmplz-marketing-optin').checked = true; }); await clic(g, '.cmplz-save-preferences'); });
+  verifica('doar marketing (trackerele sunt pe statistics): nicio cerere spre trackere', mk.straine.length === 0 && mk.c.pornite.length === 0, mk);
+  // 5. Managerul din Cookie Policy
+  const m = await deschide(browser, { cale: '/pagina/manager', straineJs: true });
+  const fm = m.page.mainFrame();
+  await m.page.waitForTimeout(300);
+  const sm = await stare(fm);
+  const am = await fm.evaluate(() => {
+    const c = document.getElementById('cmplz-manage-consent-container');
+    return { cat: Array.from(c.querySelectorAll('.cmplz-category')).map((x) => x.className), copii: Array.from(c.children).map((x) => x.className),
+      sablon: !!document.getElementById('ax-cmplz-sablon'), nj: document.getElementById('cmplz-manage-consent-container-nojavascript').getAttribute('style'),
+      stil: c.getAttribute('style'),
+      bifate: Array.from(c.querySelectorAll('input.cmplz-consent-checkbox')).map((x) => x.id + ':' + x.checked), banner: !!document.querySelector('.cmplz-cookiebanner'),
+      ids: Array.from(document.querySelectorAll('[id="cmplz-statistics-optin"]')).length };
+  });
+  verifica('managerul: categoriile bannerului copiate în container (din șablon, apoi șablonul scos), textul fără JS cu display: none, '
+    + 'doar funcțional bifat, niciun banner, niciun id dublat, nicio cerere spre trackere', curate(m.ev, sm) && egal(am.copii, ['cmplz-categories'])
+    && egal(am.cat, ['cmplz-category cmplz-functional', 'cmplz-category cmplz-statistics', 'cmplz-category cmplz-marketing']) && am.sablon === false
+    && am.nj === 'display: none;' && am.stil === 'display: block;' && egal(am.bifate, ['cmplz-functional-optin:true', 'cmplz-statistics-optin:false', 'cmplz-marketing-optin:false'])
+    && am.banner === false && am.ids === 1, { am, ev: detaliiCurate(m.ev, sm) });
+  await fm.evaluate(() => { const i = document.getElementById('cmplz-statistics-optin'); i.checked = true; i.dispatchEvent(new Event('change', { bubbles: true })); });
+  await m.page.waitForTimeout(300);
+  const bm = await fm.evaluate(() => ({ cookie: document.cookie.split('; ').sort(), body: document.body.classList.contains('cmplz-statistics') }));
+  verifica('bifarea Statistici scrie acordul pe loc (statistics allow, functional allow, policy_id, banner-status dismissed), body cmplz-statistics, trackerele pornesc',
+    egal(bm.cookie, ['cmplz_banner-status=dismissed', 'cmplz_functional=allow', 'cmplz_policy_id=7', 'cmplz_statistics=allow']) && bm.body
+    && egal(tr(m.ev.straine).slice().sort(), TRACKERE.slice().sort()), { bm, straine: m.ev.straine });
+  // Retragerea: cookie-urile trackerelor șterse, o reîncărcare, apoi nimic
+  await fm.evaluate(() => { document.cookie = '_ga=GA1.1.proba;path=/'; document.cookie = '_ga_PROBA=GS1.1.proba;path=/'; document.cookie = '_clck=proba;path=/'; document.cookie = 'pastrat=1;path=/'; });
+  let incarcari = 0;
+  m.page.on('load', () => { incarcari++; });
+  const n2 = m.ev.straine.length;
+  await fm.evaluate(() => { const i = document.getElementById('cmplz-statistics-optin'); i.checked = false; i.dispatchEvent(new Event('change', { bubbles: true })); });
+  await m.page.waitForTimeout(1200);
+  const rm = await m.page.mainFrame().evaluate(() => ({ cookie: document.cookie.split('; ').sort(), bifat: document.getElementById('cmplz-statistics-optin').checked }));
+  verifica('retragerea Statistici: _ga, _ga_*, _clck șterse (celelalte rămân), statistics deny, o singură reîncărcare, după ea nicio cerere spre trackere',
+    egal(rm.cookie, ['cmplz_banner-status=dismissed', 'cmplz_functional=allow', 'cmplz_policy_id=7', 'cmplz_statistics=deny', 'pastrat=1']) && incarcari === 1
+    && rm.bifat === false && tr(m.ev.straine.slice(n2)).length === 0, { rm, incarcari, straine: m.ev.straine.slice(n2) });
+  await m.context.close();
+  // 6. Configurația refuzată: un src pe http sau un fel necunoscut nu pornește nimic
+  const pr = await deschide(browser, { cale: '/pagina/urmarire', straineJs: true, init: () => {
+    const orig = JSON.parse; let gata = false;
+    JSON.parse = function (t) { const v = orig.apply(this, arguments); if (!gata && v && v.ax_urmarire) { gata = true; v.ax_urmarire = [{ fel: 'gtag', categorie: 'statistics', id: 'GT-PROBA123', src: 'http://rau.proba/x.js' }, { fel: 'pixel', categorie: 'statistics', id: 'abcd', src: 'https://www.googletagmanager.com/x' }]; } return v; };
+  } });
+  await clic(pr.page.mainFrame(), '.cmplz-accept');
+  await pr.page.waitForTimeout(300);
+  const cr = await coada(pr.page.mainFrame());
+  verifica('configurația refuzată (src pe http, fel necunoscut): nicio cerere spre trackere după Acceptă', tr(pr.ev.straine).length === 0 && cr.pornite.length === 0,
+    { straine: pr.ev.straine, cr });
+  await pr.context.close();
+}
+
 async function verificaClaseleUa(browser) {
   scrie('== clase-ua: regula pe tabel și clasele puse în pagină');
   {
@@ -1332,6 +1453,7 @@ async function main() {
     await verificaStructura(browser);
     await verificaMeniulMobil(browser);
     await verificaConsimtamantul(browser);
+    await verificaUrmarirea(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);

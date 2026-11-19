@@ -10,6 +10,8 @@ la început (felia 1, aspectul static); feliile 2 și 3 o completează (consimț
 |---|---|---|---|
 | VC-URL-024 | Adresele greșite (de exemplu un început de adresă: `/au…/`, `/h…/`) | Primesc pagina 404 a site-ului, fără redirecționare. WordPress „ghicea” o pagină după primele litere și trimitea acolo. | Ghicirea ducea uneori la pagini scoase sau la autori; o adresă greșită dă acum mereu 404. |
 | VC-URL-024 | Fluxurile RSS | Rămân doar fluxurile legate din paginile site-ului (`/feed/`, `/comments/feed/` și fluxul paginii legat din head-ul ei), cu răspunsul de azi. Orice alt flux (de exemplu `/<pagină>/feed/`, nelegat de nicăieri) dă 404. | WordPress răspundea cu un flux gol pentru orice pagină; nimeni nu le folosea. Fluxul căutării vine în felia 3. |
+| VC-TRACKING-001…003 | Statisticile (Google Analytics prin Site Kit, Google Tag Manager, Microsoft Clarity) | Pornesc doar după ce vizitatorul acceptă statisticile (în banner, cu „Acceptă” sau în preferințe, ori în managerul din Cookie Policy), cu aceleași identificatoare ca azi; GTM o singură dată (azi de două ori). Retragerea acordului le șterge cookie-urile și reîncarcă pagina o dată. | Azi pornesc înainte de orice alegere; legea cere acordul înainte. Fără acord nu pleacă nicio cerere spre alte servere. |
+| VC-COOKIEPOL-009 | Managerul de consimțământ din Cookie Policy | Aceleași categorii ca în banner; bifarea schimbă acordul pe loc. | La fel ca azi; categoriile vin din bannerul site-ului, nu dintr-o cerere separată. |
 | VC-URL-024 | `/hello-world/` și `/auto-draft/` (o pagină goală a constructorului) | Redirecționare permanentă (301) spre prima pagină. | Pagini puse de WordPress sau de constructor, fără conținut al site-ului (decizia proprietarului, H.10). |
 
 ## Ce nu se vede (dar se verifică)

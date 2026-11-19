@@ -28,6 +28,12 @@ final class CadruCapturat
     /** Fragmentele unui document, în ordinea din el. */
     public const FRAGMENTE = ['antet', 'subsol', 'banner'];
 
+    /** Containerul managerului de consimțământ din pagina Cookie Policy (Complianz), gol în captură. */
+    public const MANAGER_CMPLZ = 'id="cmplz-manage-consent-container"';
+
+    /** Id-ul șablonului inert cu bannerul site-ului, pus pe pagina managerului (consimtamant.js îi copiază categoriile). */
+    public const SABLON_CMPLZ = 'ax-cmplz-sablon';
+
     /** Forma unui nonce scris de Normalizare în captură (`{{ax:nonce}}`). */
     public const LOC_NONCE = '{{ax:nonce}}';
 
@@ -38,7 +44,7 @@ final class CadruCapturat
      *   (obiect: partea paginii din `ax-date`), `date_reteta` (rețeta ordinii), `meniu` (clasele și aria-current ale elementelor
      *   de meniu care diferă pe pagina aceasta de cele ale fragmentului), `valori_import` (cale, an, seo: valorile de la import)
      * @param array<string, array{html: string, date?: mixed, meniu?: array<string, array{0: string, 1: string}>}> $fragmente fel → fragmentul ales
-     * @param array{cale: string, nonce: string, an: string, runtime?: array{cap?: string, final?: string}, seo?: array<string, string>} $cerere
+     * @param array{cale: string, nonce: string, an: string, runtime?: array{cap?: string, final?: string}, seo?: array<string, string>, sablon_cmplz?: string, urmarire?: list<array<string, mixed>>|null} $cerere
      * @throws EroareJeton
      */
     public static function randeaza(array $doc, string $continut, array $fragmente, array $cerere): string
@@ -46,6 +52,7 @@ final class CadruCapturat
         $html = self::asambleazaBucati((string) $doc['html_atribute'], (string) $doc['cap_html'], (string) $doc['body_atribute'], (string) $doc['inainte'],
             $continut, (string) $doc['dupa']);
         $html = self::puneFragmente($html, array_map(static fn (array $f): string => (string) $f['html'], $fragmente));
+        $html = self::puneSablonManager($html, (string) ($cerere['sablon_cmplz'] ?? ''));
         $meniuPagina = self::lista($doc['meniu'] ?? []);
         $seoImport = self::lista(self::lista($doc['valori_import'] ?? [])['seo'] ?? []);
         $nonce = (string) $cerere['nonce'];
@@ -72,6 +79,11 @@ final class CadruCapturat
                 }
                 $d = self::asambleaza(self::obiecte($doc['date_pagina'] ?? null), self::obiecte($fragmente['antet']['date'] ?? null),
                     self::obiecte($fragmente['subsol']['date'] ?? null), $reteta);
+                // Trackerele active (Urmarire): doar la randare, din pachet și din privat; importul nu poate scrie cheia.
+                $u = $cerere['urmarire'] ?? Urmarire::date();
+                if ($u !== null && $u !== []) {
+                    $d[Urmarire::CHEIE_DATE] = $u;
+                }
                 return self::json(self::cuNonce($d, $nonce));
             }
             if (preg_match('/^meniu:(antet|subsol):(\d{1,4}):(clase|aria)$/D', $nume, $m) === 1) {
@@ -118,6 +130,14 @@ final class CadruCapturat
                 throw new EroareJeton('lipsește fragmentul ' . $doc[$f]);
             }
             $fragmente[$f] = ['html' => (string) $r['html'], 'date' => self::dinJson($r['date']), 'meniu' => self::dinJsonLista($r['meniu'])];
+        }
+        if (!isset($fragmente['banner']) && str_contains($continut, self::MANAGER_CMPLZ)) {
+            $q = $db->prepare("SELECT html FROM fragmente_capturate WHERE fel = 'banner' ORDER BY cheie LIMIT 1");
+            $q->execute();
+            $sablon = $q->fetchColumn();
+            if (is_string($sablon) && !str_contains($sablon, '{{ax:fragment:')) {
+                $cerere['sablon_cmplz'] = $sablon;
+            }
         }
         $doc['date_pagina'] = self::dinJson($doc['date_pagina'] ?? null);
         $doc['date_reteta'] = self::dinJsonLista($doc['date_reteta'] ?? null);
@@ -337,6 +357,21 @@ final class CadruCapturat
     public static function asambleazaBucati(string $htmlAtribute, string $cap, string $bodyAtribute, string $inainte, string $continut, string $dupa): string
     {
         return self::DOCTYPE . '<html' . $htmlAtribute . ">\n<head>" . $cap . "\n<body" . $bodyAtribute . '>' . $inainte . $continut . $dupa . "\n</html>\n";
+    }
+
+    /**
+     * Pagina Cookie Policy (fără banner, cu containerul managerului): bannerul site-ului (fragmentul lui, HTML-ul capturat și
+     * verificat la import) într-un `<template>` inert înainte de `</body>`. Runtime-ul (consimtamant.js) copiază din el categoriile
+     * în manager prin cloneNode, ca pe live (unde managerul vine din răspunsul `manage_consent_html`, același HTML cu categoriile
+     * bannerului), apoi scoate șablonul; nimic nu se construiește din text în browser.
+     */
+    public static function puneSablonManager(string $html, string $sablon): string
+    {
+        $i = strrpos($html, '</body>');
+        if ($sablon === '' || $i === false || !str_contains($html, self::MANAGER_CMPLZ) || str_contains($sablon, '</template')) {
+            return $html;
+        }
+        return substr($html, 0, $i) . '<template id="' . self::SABLON_CMPLZ . '">' . $sablon . '</template>' . substr($html, $i);
     }
 
     /**

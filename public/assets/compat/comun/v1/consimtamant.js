@@ -22,9 +22,17 @@
  * butonul unei hărți (acceptă categoria ei). Cookie-urile, în ordinea observată (OBS-24): `<prefix><nume>=<valoare>;SameSite=Lax;
  * secure;expires=<+zile>;path=/`, doar valori dintr-o listă închisă. Nimic trimis la server.
  *
- * Trackerele (VC-TRACKING-001…003) nu pornesc de aici: politica CSP a site-ului (script-src 'self') nu permite scripturi de pe alte
- * gazde; `axCompat.consimtamant.permis(categorie)` le spune altor module ce e acceptat. Managerul din pagina Cookie Policy (HTML
- * din răspunsul înghețat) nu se construiește din text: rămâne textul fără JS al paginii.
+ * Trackerele (VC-TRACKING-001…003): după fiecare alegere și la încărcare (doar cu o alegere salvată), categoriile acceptate ajung
+ * la încărcătorul `urmarire.js` (`axCompat.urmarire.actualizeaza`), care pornește trackerele lor și, la o retragere, le șterge
+ * cookie-urile și reîncarcă pagina; înainte de acord nu pleacă nicio cerere. `axCompat.consimtamant.permis(categorie)` le spune
+ * altor module ce e acceptat.
+ *
+ * Managerul din pagina Cookie Policy (VC-COOKIEPOL-009; `#cmplz-manage-consent-container`, fără banner pe pagină): pe live îl
+ * umple răspunsul `manage_consent_html`, adică exact categoriile bannerului. Aici cadrul pune bannerul site-ului într-un
+ * `<template id="ax-cmplz-sablon">` inert; categoriile lui se copiază în container (importNode, nimic construit din text),
+ * șablonul se scoate, textul fără JS (`#cmplz-manage-consent-container-nojavascript`) primește `display: none`, containerul
+ * `display: block` (CSS-ul capturat îl ascunde până la umplere). Comutatoarele
+ * arată alegerea salvată; bifarea scrie acordul pe loc (fără buton de salvare): politica, categoria, `banner-status`.
  *
  * O a doua includere nu face nimic; `aplica()` nu dublează nimic.
  */
@@ -338,6 +346,12 @@
         return h;
     }
 
+    function semnaleaza() {
+        if (ax.urmarire && typeof ax.urmarire.actualizeaza === 'function') {
+            ax.urmarire.actualizeaza({ statistics: permis('statistics'), marketing: permis('marketing'), preferences: permis('preferences') });
+        }
+    }
+
     function dupaAlegere() {
         claseCorp();
         for (var i = 0; i < harti.length; i++) {
@@ -345,6 +359,65 @@
                 activeaza(harti[i]);
             }
         }
+        var m = d.getElementById('cmplz-manage-consent-container');
+        if (m) {
+            comutatoare(m);
+        }
+        semnaleaza();
+    }
+
+    function laSchimbareManager(e) {
+        var t = e.target;
+        if (!t || t.nodeName !== 'INPUT' || !areClasa(t, 'cmplz-consent-checkbox')) {
+            return;
+        }
+        var cat = String(t.getAttribute('data-category') || '').replace(/^cmplz_/, '');
+        if (cat === 'functional') {
+            t.checked = true;
+            return;
+        }
+        if (CATEGORII.indexOf(cat) < 0) {
+            return;
+        }
+        scriePolitica();
+        scrie(cat, t.checked ? 'allow' : 'deny');
+        scriePolitica();
+        scrie('functional', 'allow');
+        scrie('banner-status', 'dismissed');
+        dupaAlegere();
+    }
+
+    function laClicManager(e) {
+        var c = cauta(e.target, '.cmplz-category-toggle', e.currentTarget);
+        if (c) {
+            categorie(c);
+        }
+    }
+
+    function manager() {
+        var cont = d.getElementById('cmplz-manage-consent-container');
+        var sablon = d.getElementById('ax-cmplz-sablon');
+        if (!cont) {
+            return;
+        }
+        if (sablon && sablon.nodeName === 'TEMPLATE' && sablon.content) {
+            var cat = sablon.content.querySelector('.cmplz-categories');
+            if (cat && !cont.querySelector('.cmplz-categories')) {
+                cont.appendChild(d.importNode(cat, true));
+            }
+            sablon.parentNode.removeChild(sablon);
+        }
+        if (!cont.querySelector('.cmplz-categories')) {
+            return;
+        }
+        var nj = d.getElementById('cmplz-manage-consent-container-nojavascript');
+        if (nj) {
+            nj.style.display = 'none';
+        }
+        cont.style.display = 'block'; // CSS-ul pluginului îl ascunde (#cmplz-manage-consent-container{display:none}) până la umplere
+        comutatoare(cont);
+        cont.addEventListener('change', laSchimbareManager);
+        cont.addEventListener('click', laClicManager);
     }
 
     function accepta() {
@@ -522,6 +595,10 @@
             masoara();
             w.addEventListener('resize', masoara);
             d.body.addEventListener('click', laClicHarta);
+        }
+        manager();
+        if (s.ales) {
+            semnaleaza();
         }
     }
 

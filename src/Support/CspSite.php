@@ -20,6 +20,9 @@ namespace App\Support;
  *    `frame-ancestors 'self'`, `upgrade-insecure-requests`, `report-uri /_andaxi/raport`; plus sursele exacte din `tema.json` →
  *    `csp` (Tema::CSP_DIRECTIVE), iar `csp.mod` = `raport` o trimite ca `Content-Security-Policy-Report-Only` (copia de
  *    verificare, înainte de comutare);
+ *  - trackerele active ale site-ului (Urmarire: declarate în pachet, cu identificatorul în privat) adaugă sursele lor exacte în
+ *    `script-src`, `connect-src`, `img-src` și `frame-src` (singura cale prin care `script-src` primește o gazdă străină); fără
+ *    trackere active politica e cea strictă de mai sus, neschimbată;
  *  - `X-Content-Type-Options: nosniff` pe tot.
  *
  * Fără `tema.json` → `cadru` = `capturat` nu trimite nimic: site-urile de azi ies octet cu octet ca înainte (G-cmp).
@@ -36,8 +39,9 @@ final class CspSite
      * Politica, ca text de antet. `$embed`: varianta cardurilor embed (fără `frame-ancestors`).
      *
      * @param array<string, mixed> $extra sursele în plus, pe directivă (Tema::csp())
+     * @param array<string, mixed> $urmarire sursele trackerelor active, pe directivă (Urmarire::csp())
      */
-    public static function politica(bool $embed = false, array $extra = []): string
+    public static function politica(bool $embed = false, array $extra = [], array $urmarire = []): string
     {
         $d = [
             'default-src' => ["'self'"],
@@ -60,6 +64,15 @@ final class CspSite
             foreach ((array) ($extra[$dir] ?? []) as $sursa) {
                 if (is_string($sursa) && preg_match('#^https://[a-z0-9.-]+(?::[0-9]{2,5})?(?:/[A-Za-z0-9._~/-]*)?$#D', $sursa) === 1
                     && !in_array($sursa, $d[$dir], true)) {
+                    $d[$dir][] = $sursa;
+                }
+            }
+        }
+        foreach (Urmarire::DIRECTIVE as $dir) {
+            foreach ((array) ($urmarire[$dir] ?? []) as $sursa) {
+                $bun = is_string($sursa) && (preg_match('#^https://[a-z0-9-]+(?:\.[a-z0-9-]+)+$#D', $sursa) === 1
+                    || (in_array($dir, Urmarire::DIRECTIVE_STEA, true) && preg_match('#^https://\*(?:\.[a-z0-9-]+){2,}$#D', $sursa) === 1));
+                if ($bun && !in_array($sursa, $d[$dir], true)) {
                     $d[$dir][] = $sursa;
                 }
             }
@@ -97,7 +110,7 @@ final class CspSite
         }
         $csp = Tema::csp();
         $antet = ($csp['mod'] ?? 'aplica') === 'raport' ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
-        header($antet . ': ' . self::politica(self::caleEmbed($uri), $csp));
+        header($antet . ': ' . self::politica(self::caleEmbed($uri), $csp, Urmarire::csp()));
         return true;
     }
 

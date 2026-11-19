@@ -1040,7 +1040,9 @@ cerere: nici gazda): `default-src 'self'`, `script-src 'self' 'inline-speculatio
 `style-src 'self' 'unsafe-inline'`, `img-src 'self' data:`, `frame-src` doar harta Google, `object-src 'none'`, `base-uri` și
 `form-action 'self'`, `worker-src 'none'`, `frame-ancestors 'self'` (nu pe cardurile embed, pe care le încadrează alte site-uri),
 `upgrade-insecure-requests`, `report-uri /_andaxi/raport`, plus sursele https exacte din `csp`; `csp.mod` = `raport` o trimite ca
-Report-Only (copia de verificare, înainte de comutare). `X-Content-Type-Options: nosniff` pe orice răspuns. Fără `cadru`, nimic din
+Report-Only (copia de verificare, înainte de comutare). Trackerele active ale site-ului (`tema.json` → `urmarire`, cu id-urile în
+`privat/urmarire.json`; `App\Support\Urmarire`) adaugă doar sursele lor exacte, și numai ele pot lărgi `script-src`; fără id-uri în
+privat, politica rămâne cea strictă. Încălcările de după acord (o gazdă de colectare nedeclarată) se văd în rapoartele CSP. `X-Content-Type-Options: nosniff` pe orice răspuns. Fără `cadru`, nimic din
 toate acestea: site-urile de azi ies octet cu octet ca înainte (G-cmp). Poarta: **G-capturat** (`tools/dev/test-capturat.php`).
 
 **P1 după import** (pasul 7): `php scripts/verifica-randare.php --capturat` randează din linia de comandă fiecare document
@@ -1112,7 +1114,10 @@ deschide și o închide în 500 ms pe curba „swing”, cu `closed`/`opened`, i
 containerul mutat primul în body, documentele din `page_links`, butoanele Acceptă/Respinge/X/Preferințe/Salvează și tabul, cookie-urile
 în ordinea observată, OBS-24, valori dintr-o listă închisă; hărțile blocate, `iframe[data-src-cmplz]`, primesc placeholderul cu imaginea
 și înălțimea după raport, iar `src` se pune doar după acordul categoriei și doar pentru o adresă https trecută prin `adresaSigura()`;
-nicio cerere spre altă gazdă înainte de acord; scripturile de urmărire nu se încarcă, CSP-ul rămâne `script-src 'self'`). Poarta:
+nicio cerere spre altă gazdă înainte de acord; managerul din pagina Cookie Policy: categoriile bannerului copiate din șablonul
+inert pus de cadru, `<template id="ax-cmplz-sablon">`, bifarea scrie acordul pe loc) și `comun/v1/urmarire.js` (trackerele din
+`ax-date` → `ax_urmarire`, pornite doar după acordul categoriei lor, o dată pe pagină; la retragere cookie-urile lor se șterg și
+pagina se reîncarcă o dată). Poarta:
 **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde

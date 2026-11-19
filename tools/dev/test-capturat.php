@@ -55,6 +55,7 @@ use App\Support\ImportWordPress\PlanCapturat;
 use App\Support\ImportWordPress\ScriereCapturata;
 use App\Support\RaportCsp;
 use App\Support\Tema;
+use App\Support\Urmarire;
 
 $fisierRaport = $dosarDev . '/test-capturat-raport.txt';
 @file_put_contents($fisierRaport, '');
@@ -291,6 +292,74 @@ $verifica('cardul embed: 200 din documentul lui, foaia pe media="all", fără fr
 // Fonturile de iconițe din foile furnizorilor (Swiper: „swiper-icons” ca data:application/font-woff), ca pe site-ul live.
 $verifica('CSP: font-src permite data: (fonturile de iconițe ale foilor furnizorilor), iar script-src nu', str_contains(CspSite::politica(), "font-src 'self' data:")
     && !preg_match("/script-src[^;]*data:/", CspSite::politica()) && !preg_match("/default-src[^;]*data:/", CspSite::politica()));
+// Trackerele (Urmarire): declarate în pachet, id-urile în privat; doar cele active lărgesc CSP-ul și ajung în ax-date.
+$declUrm = [
+    ['fel' => 'gtag', 'categorie' => 'statistics', 'src' => 'https://www.googletagmanager.com/gtag/js?id={id}',
+        'csp' => ['script-src' => ['https://www.googletagmanager.com'], 'connect-src' => ['https://region1.google-analytics.com']],
+        'cookie_retragere' => ['_ga', '_ga_*'], 'parametri' => ['googlesitekit_post_type' => 'page'], 'seturi' => ['developer_id.proba' => true]],
+    ['fel' => 'clarity', 'categorie' => 'statistics', 'src' => 'https://www.clarity.ms/tag/{id}?ref=wordpress',
+        'csp' => ['script-src' => ['https://www.clarity.ms'], 'connect-src' => ['https://*.clarity.ms']],
+        'csp_motiv' => ['https://*.clarity.ms' => 'subdomeniul de colectare e ales dinamic pe proiect'], 'cookie_retragere' => ['_clck']],
+];
+[$vu, $pu] = Urmarire::valideaza($declUrm);
+$verifica('urmarire: declarația bună trece (gtag cu parametri și seturi, clarity cu *.clarity.ms motivată)', count($vu) === 2 && $pu === [], implode('; ', $pu));
+$rele = [
+    'fel necunoscut' => ['fel' => 'pixel'] + $declUrm[0],
+    'script-src cu *.' => array_replace($declUrm[1], ['csp' => ['script-src' => ['https://*.clarity.ms']]]),
+    '*. fără motiv' => array_replace($declUrm[1], ['csp_motiv' => []]),
+    'motiv prea scurt' => array_replace($declUrm[1], ['csp_motiv' => ['https://*.clarity.ms' => 'dinamic']]),
+    'gazda src lipsă din script-src' => array_replace($declUrm[0], ['src' => 'https://alt.example.test/g.js?id={id}']),
+    'src pe http' => array_replace($declUrm[0], ['src' => 'http://www.googletagmanager.com/gtag/js?id={id}']),
+    'src fără {id}' => array_replace($declUrm[0], ['src' => 'https://www.googletagmanager.com/gtag/js']),
+    'sursă cu cale' => array_replace($declUrm[0], ['csp' => ['script-src' => ['https://www.googletagmanager.com/gtag/']]]),
+    'sursă care închide directiva' => array_replace($declUrm[0], ['csp' => ['script-src' => ["https://www.googletagmanager.com; script-src 'unsafe-inline'"]]]),
+    'directivă nepermisă' => array_replace($declUrm[0], ['csp' => ['default-src' => ['https://www.googletagmanager.com']]]),
+    'parametri la clarity' => $declUrm[1] + ['parametri' => ['x' => 'y']],
+    'valoare cu cod în seturi' => array_replace($declUrm[0], ['seturi' => ['x' => '<script>']]),
+    'cookie cu ;' => array_replace($declUrm[0], ['cookie_retragere' => ['_ga;path=/']]),
+    'cheie necunoscută' => $declUrm[0] + ['inline' => 'x'],
+];
+$scapate = [];
+foreach ($rele as $nume => $t) {
+    [$v, $p] = Urmarire::valideaza([$t]);
+    if ($v !== [] || $p === []) {
+        $scapate[] = $nume;
+    }
+}
+[$vd, $pd] = Urmarire::valideaza([$declUrm[0], $declUrm[0]]);
+$verifica('urmarire: fiecare declarație greșită e scoasă, cu problema ei (și felul dublat)', $scapate === [] && count($vd) === 1 && count($pd) === 1, implode(', ', $scapate));
+$activeU = Urmarire::active($vu, ['gtag' => 'GT-PROBA123', 'clarity' => 'id rău"']);
+$verifica('urmarire: activ doar trackerul cu id valid în privat; adresa cu id-ul', count($activeU) === 1 && $activeU[0]['adresa'] === 'https://www.googletagmanager.com/gtag/js?id=GT-PROBA123'
+    && Urmarire::active($vu, []) === [] && Urmarire::date([]) === null);
+$politicaU = CspSite::politica(false, [], Urmarire::csp(Urmarire::active($vu, ['gtag' => 'GT-PROBA123', 'clarity' => 'proba6789'])));
+$verifica('CSP cu trackere active: gazdele lor exacte în script-src și connect-src (*.clarity.ms doar în connect-src); fără trackere active: politica strictă, neschimbată',
+    str_contains($politicaU, "script-src 'self' 'inline-speculation-rules' https://www.googletagmanager.com https://www.clarity.ms;")
+    && str_contains($politicaU, "connect-src 'self' https://region1.google-analytics.com https://*.clarity.ms;")
+    && CspSite::politica(false, [], Urmarire::csp([])) === CspSite::politica() && CspSite::politica(false, [], []) === CspSite::politica(), $politicaU);
+$verifica('CSP: o sursă a trackerelor care închide directiva, sau *. în script-src, e ignorată (apărare în adâncime)',
+    CspSite::politica(false, [], ['script-src' => ["https://a.test; script-src *", 'https://*.b.test'], 'connect-src' => ['https://*.b.test']])
+        === str_replace("connect-src 'self'", "connect-src 'self' https://*.b.test", CspSite::politica()));
+$dateU = Urmarire::date(Urmarire::active($vu, ['gtag' => 'GT-PROBA123']));
+$htmlU = CadruCapturat::randeaza(['html_atribute' => '', 'cap_html' => '<script type="application/json" id="ax-date">{{ax:date}}</script>', 'body_atribute' => '',
+    'inainte' => '', 'dupa' => '</body>', 'date_pagina' => (object) ['file' => []], 'date_reteta' => ['file' => ['lista', ['pagina']]]], '', [],
+    ['cale' => '/', 'nonce' => 'abcdef0123', 'an' => '2026', 'urmarire' => $dateU]);
+$verifica('ax-date: ax_urmarire pus la randare (felul, categoria, id-ul, adresa, parametrii); fără trackere, cheia lipsește',
+    str_contains($htmlU, '"ax_urmarire":[{"fel":"gtag","categorie":"statistics","id":"GT-PROBA123","src":"https://www.googletagmanager.com/gtag/js?id=GT-PROBA123"')
+    && str_contains($htmlU, '"parametri":{"googlesitekit_post_type":"page"}')
+    && !str_contains(CadruCapturat::randeaza(['html_atribute' => '', 'cap_html' => '<script type="application/json" id="ax-date">{{ax:date}}</script>', 'body_atribute' => '',
+        'inainte' => '', 'dupa' => '</body>', 'date_pagina' => (object) ['file' => []], 'date_reteta' => ['file' => ['lista', ['pagina']]]], '', [],
+        ['cale' => '/', 'nonce' => 'abcdef0123', 'an' => '2026', 'urmarire' => []]), 'ax_urmarire'), substr($htmlU, 0, 400));
+$verifica('import: cheia ax_urmarire nu e o cheie a capturii (importul nu o poate scrie)', !in_array(Urmarire::CHEIE_DATE, \App\Support\HtmlCapturat\SchemaDivi4::CHEI_AX_DATE, true));
+$cuManager = '<body><div id="cmplz-manage-consent-container" class="cmplz-manage-consent-container"></div></body>';
+$verifica('șablonul managerului: bannerul într-un <template> înainte de </body>, doar pe pagina cu containerul; niciodată cu „</template” în el',
+    CadruCapturat::puneSablonManager($cuManager, '<div id="cmplz-cookiebanner-container">B</div>')
+        === '<body><div id="cmplz-manage-consent-container" class="cmplz-manage-consent-container"></div><template id="ax-cmplz-sablon"><div id="cmplz-cookiebanner-container">B</div></template></body>'
+    && CadruCapturat::puneSablonManager('<body><p>x</p></body>', 'B') === '<body><p>x</p></body>'
+    && CadruCapturat::puneSablonManager($cuManager, '</template><script>x</script>') === $cuManager && CadruCapturat::puneSablonManager($cuManager, '') === $cuManager);
+[$tv, $tp] = Tema::valideaza(json_decode((string) file_get_contents(dirname(__DIR__, 2) . '/site-uri/pensiune/tema/tema.json'), true), dirname(__DIR__, 2) . '/site-uri/pensiune');
+$verifica('pachetul pensiune: trackerele declarate (gtag, gtm, clarity) trec de verificare, fără identificatoare în pachet', $tp === [] && array_column($tv['urmarire'], 'fel') === ['gtag', 'gtm', 'clarity']
+    && !preg_match('/\b(?:GT|GTM|G)-[A-Z0-9]{6,}\b/', (string) file_get_contents(dirname(__DIR__, 2) . '/site-uri/pensiune/tema/tema.json')), implode('; ', $tp));
+
 $db->exec("UPDATE pagini_capturate SET dupa = CONCAT(dupa, '{{ax:necunoscut}}') WHERE cheie = 'pagina:103'");
 $r500 = $cerere($port, '/contact/');
 $verifica('un jeton necunoscut în document: 500, fără nimic din pagină', $r500['cod'] === 500 && !str_contains($r500['corp'], 'et_pb_section') && !str_contains($r500['corp'], '{{ax:'),
