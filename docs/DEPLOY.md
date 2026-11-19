@@ -1125,7 +1125,10 @@ mouse-ul și glisarea cu degetul, prag 15 px; un carusel ascuns ca pe live, așe
 scurtă, `left` în procente și `top` în px, înălțimea grilei, refăcute la încărcarea pozelor, la `load` și la resize; filtrele vin cu
 felia 3) și `divi4/v1/lightbox-mfp.js` (lightbox-urile galeriei și ale imaginilor Divi, scrise de noi, cu marcajul observat: fundalul
 și wrap-ul la sfârșitul lui body, săgețile și ← → circular în galerie, × și Esc și clicul pe fundal închid, `mfp-fade` cu închiderea
-în 500 ms la imaginea Divi, derularea blocată pe desktop; adresele prin `adresaSigura()`). Poarta:
+în 500 ms la imaginea Divi, derularea blocată pe desktop; adresele prin `adresaSigura()`); `divi4/v1/divimenus.js` (modulele
+DiviMenus, scrise de noi: `dd-has-divimenu` pe coloanele lor, popup-urile mutate primele în `.et-l--post`, pinii care ies din
+fereastră corectați ca pe live; deschiderea după `data-popup-id`, clasele de pe body, slideup/slidedown în 500 ms pe curba
+„swing”, închiderea cu X, fundalul și Esc). Poarta:
 **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde

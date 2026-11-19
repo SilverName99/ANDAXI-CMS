@@ -284,6 +284,25 @@ const STIL_GALERIE = 'body{margin:0}.el_masonry_gallery_wrapper{width:1000px}.el
   + '.mfp-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:#0b0b0b;opacity:.8}.mfp-wrap{position:fixed;top:0;left:0;width:100%;height:100%}'
   + '.mfp-container{width:100%;height:100%;text-align:center}.mfp-img{max-width:100%;padding:0}.mfp-s-ready .mfp-preloader{display:none}';
 
+// DiviMenus (popup-divimenus.md, pini-overflow.md; inventate): un pin care iese la dreapta, un pin cu popup simplu și unul cu slideup.
+const itemDm = (n, pop, efecte, flex) => '<div class="et_pb_divimenus' + (flex ? '_flex' : '') + '_item et_pb_divimenus' + (flex ? '_flex' : '') + '_item_' + n + '" role="menuitem"><div class="et_pb_module_inner">'
+  + '<div class="dd-menu-item-wrapper"><div class="dd-mi dd-menu-item"><a href="#" tabindex="-1"' + (efecte ? ' data-effect-in="slideup" data-effect-out="slidedown" data-effect-ms="500"' : '')
+  + ' aria-haspopup="true" data-popup-id="' + pop + '" class="dd-modal dd-disable-page-scroll"><span class="dd-item">' + n + '</span></a></div></div>'
+  + '<div class="dd-tooltip dd-title-clickable"><div class="dd-title">Popup ' + n + '</div></div>'
+  + '<div id="' + pop + '" class="dd-popup-c et_pb_section et_pb_column_4_4" style="background-color:rgba(0,0,0,0.4);justify-content:center;align-items:center;">'
+  + '<div class="dd-menu-item-modal dd-modal-width" style="max-width:100%;max-height:100%;" data-width="100%"><span class="dd-close-icon" tabindex="0" role="button" aria-label="Close Popup">Q</span>'
+  + '<div class="et_pb_section proba-card-' + n + '"><p class="proba-card">Pensiunea Probă – popup ' + n + '</p></div></div></div></div></div>';
+const modulDm = (n, pop, efecte, flex) => '<div class="et_pb_module et_pb_divimenus' + (flex ? '_flex' : '') + ' et_pb_divimenus' + (flex ? '_flex' : '') + '_' + n + '"><div class="et_pb_module_inner"><nav class="dd-divimenu dd-dm" aria-label="DiviMenu">'
+  + (flex ? '' : '<div class="dd-menu-bg"></div>') + '<div class="dd-menu-items" role="menu">' + itemDm(n, pop, efecte, flex) + '</div></nav></div></div>';
+const CORP_DM = '<div id="page-container"><div id="et-main-area"><div class="et-l et-l--post"><div class="et_builder_inner_content">'
+  + '<div class="et_pb_section"><div class="et_pb_row"><div class="et_pb_column et_pb_column_4_4 proba-col-pini">' + modulDm(0, 'et_pb_divimenus_item_0_popup', false)
+  + '</div><div class="et_pb_column et_pb_column_1_2 proba-col-grila">' + modulDm(0, 'et_pb_divimenus_flex_item_0_popup', true, true)
+  + '</div><div class="et_pb_column et_pb_column_1_2 proba-col-fara"><p>Fără meniu</p></div></div></div></div></div></div></div>\n';
+const STIL_DM = 'body{margin:0}.et_pb_divimenus{position:relative;height:60px}.et_pb_divimenus_0{position:absolute;left:1380px;top:0;width:0}'
+  + '.dd-menu-bg{width:40px;height:40px}.dd-item{display:inline-block;width:40px}.dd-title{width:148px;height:33.40625px}'
+  + '.dd-popup-c{position:fixed!important;display:none;left:0;top:0;width:100%;height:100%;z-index:159899;overflow-y:auto}'
+  + '.et_pb_divimenus_flex{position:relative;height:60px}.dd-menu-item-modal{position:relative;width:600px;height:400px;background:#ebe4dd}.dd-popup-active--disable-page-scroll{overflow:hidden!important}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -387,6 +406,7 @@ const PAGINI = {
   consimtamant: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ }) },
   carusel: { corp: CORP_DG, stil: STIL_DG },
   galerie: { corp: CORP_GALERIE, stil: STIL_GALERIE },
+  divimenus: { corp: CORP_DM, stil: STIL_DM },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -948,6 +968,7 @@ async function verificaIdempotenta(browser, baza) {
     ax.caruselDg.aplica();
     ax.galerieDge.aplica();
     ax.lightboxMfp.aplica();
+    ax.divimenus.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1493,6 +1514,72 @@ async function verificaGaleria(browser) {
   await q.context.close();
 }
 
+async function verificaDivimenus(browser) {
+  scrie('== divimenus (felia 2–3): coloanele, mutarea popup-urilor, pinul care iese, deschiderea și închiderea');
+  const p = await deschide(browser, { cale: '/pagina/divimenus' });
+  const f = p.page.mainFrame();
+  await p.page.waitForTimeout(200);
+  const s0 = await stare(f);
+  const a = await f.evaluate(() => ({ copii: Array.from(document.querySelector('.et-l.et-l--post').children).map((x) => x.id || x.className),
+    col: [document.querySelector('.proba-col-pini').className, document.querySelector('.proba-col-grila').className, document.querySelector('.proba-col-fara').className],
+    pin: [document.querySelector('.et_pb_divimenus_0').getAttribute('style'), document.querySelector('.et_pb_divimenus_0 nav').getAttribute('style'),
+      document.querySelector('.et_pb_divimenus_flex_0').getAttribute('style'), document.querySelector('.et_pb_divimenus_flex_0 nav').getAttribute('style')] }));
+  verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă', curate(p.ev, s0), detaliiCurate(p.ev, s0));
+  verifica('pornirea: coloanele cu meniuri (pinii și grila) dd-has-divimenu (cealaltă nu), popup-urile (și ale grilei) mutate primele în .et-l--post, în ordine inversă; '
+    + 'pinul care iese la dreapta: overflow-x: auto pe modul, margin-bottom = înălțimea etichetei și margin-left = jumătate din lățimea ei pe nav; celălalt neatins',
+    egal(a.copii, ['et_pb_divimenus_flex_item_0_popup', 'et_pb_divimenus_item_0_popup', 'et_builder_inner_content']) && a.col[0].endsWith(' dd-has-divimenu')
+    && a.col[1].endsWith(' dd-has-divimenu') && !a.col[2].includes('dd-has-divimenu') && egal(a.pin, ['overflow-x: auto;', 'margin-bottom: 33.4062px; margin-left: 74px;', null, null]), a);
+  await p.page.setViewportSize({ width: 1700, height: 900 });
+  await p.page.waitForTimeout(150);
+  const b = await f.evaluate(() => [document.querySelector('.et_pb_divimenus_0').getAttribute('style'), document.querySelector('.et_pb_divimenus_0 nav').getAttribute('style')]);
+  verifica('resize: pinul care nu mai iese își pierde stilurile', egal(b, ['', '']) || egal(b, [null, null]), b);
+  await p.page.setViewportSize({ width: 1440, height: 900 });
+  const st = () => f.evaluate(() => { const x = document.getElementById('et_pb_divimenus_item_0_popup');
+    return [x.className, x.getAttribute('style'), document.body.className.split(' ').filter((k) => /^dd-/.test(k)), location.hash]; });
+  await f.evaluate(() => document.querySelector('.et_pb_divimenus_item_0 a.dd-modal').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const o1 = await st();
+  await f.evaluate(() => document.querySelector('.proba-card-0 .proba-card').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const o2 = await st();
+  await f.evaluate(() => document.querySelector('#et_pb_divimenus_item_0_popup .dd-close-icon').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const o3 = await st();
+  verifica('deschiderea: open, display: flex, body dd-popup-active și --disable-page-scroll, fără navigare; clicul în card nu închide; X-ul închide (display: none, clasele scoase)',
+    egal(o1, ['dd-popup-c et_pb_section et_pb_column_4_4 open', 'background-color: rgba(0, 0, 0, 0.4); justify-content: center; align-items: center; display: flex;',
+      ['dd-popup-active', 'dd-popup-active--disable-page-scroll'], '']) && egal(o2, o1)
+    && egal(o3, ['dd-popup-c et_pb_section et_pb_column_4_4', 'background-color: rgba(0, 0, 0, 0.4); justify-content: center; align-items: center; display: none;', [], '']), { o1, o2, o3 });
+  await f.evaluate(() => document.querySelector('.et_pb_divimenus_item_0 .dd-title').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const e1 = (await st())[0];
+  await p.page.keyboard.press('Escape');
+  const e2 = (await st())[0];
+  await f.evaluate(() => document.querySelector('.et_pb_divimenus_item_0 a.dd-modal').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await f.evaluate(() => document.getElementById('et_pb_divimenus_item_0_popup').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const e3 = (await st())[0];
+  verifica('eticheta deschide; Esc închide; clicul pe fundal (în afara cutiei) închide', e1.endsWith(' open') && !e2.endsWith(' open') && !e3.endsWith(' open'), { e1, e2, e3 });
+  // slideup / slidedown
+  await f.evaluate(() => {
+    window.__urma = [];
+    const c = document.querySelector('#et_pb_divimenus_flex_item_0_popup .dd-menu-item-modal');
+    const t0 = performance.now();
+    const pas = () => { window.__urma.push([Math.round(performance.now() - t0), c.style.transform]); if (performance.now() - t0 < 700) requestAnimationFrame(pas); };
+    document.querySelector('.et_pb_divimenus_flex_item_0 a.dd-modal').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    requestAnimationFrame(pas);
+  });
+  await p.page.waitForTimeout(800);
+  const urma = await f.evaluate(() => window.__urma);
+  const y = urma.map(([t, tr]) => [t, tr === 'none' ? 0 : parseFloat((/translateY\(([-0-9.]+)px\)/.exec(tr) || [0, NaN])[1])]);
+  const mijloc = y.filter(([t]) => t >= 200 && t <= 300).map(([, v]) => v);
+  verifica('slideup: cutia pornește de la translateY(400px), coboară simetric („swing”, ~jumătate la 250 ms), ajunge la transform: none după ~500 ms',
+    y.length > 5 && y[0][1] > 380 && mijloc.length > 0 && mijloc.every((v) => v > 80 && v < 320) && urma[urma.length - 1][1] === 'none', urma);
+  await f.evaluate(() => document.querySelector('#et_pb_divimenus_flex_item_0_popup .dd-close-icon').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await p.page.waitForTimeout(200);
+  const sd1 = await f.evaluate(() => getComputedStyle(document.getElementById('et_pb_divimenus_flex_item_0_popup')).display);
+  await p.page.waitForTimeout(500);
+  const sd2 = await f.evaluate(() => [getComputedStyle(document.getElementById('et_pb_divimenus_flex_item_0_popup')).display, document.body.className.includes('dd-popup-active')]);
+  verifica('slidedown: popup-ul rămâne afișat cât coboară cutia, apoi display: none și derularea deblocată', sd1 === 'flex' && egal(sd2, ['none', false]), { sd1, sd2 });
+  const idem = await f.evaluate(() => { window.axCompat.divimenus.aplica(); return Array.from(document.querySelector('.et-l.et-l--post').children).map((x) => x.id || x.className); });
+  verifica('aplica() a doua oară: nimic mutat din nou', egal(idem, ['et_pb_divimenus_flex_item_0_popup', 'et_pb_divimenus_item_0_popup', 'et_builder_inner_content']), idem);
+  await p.context.close();
+}
+
 async function verificaUrmarirea(browser) {
   scrie('== urmarire (trackerele după acord, pe categorie; managerul din Cookie Policy)');
   const TRACKERE = ['https://www.googletagmanager.com/gtag/js?id=GT-PROBA123', 'https://www.clarity.ms/tag/proba6789?ref=wordpress',
@@ -1741,6 +1828,7 @@ async function main() {
     await verificaUrmarirea(browser);
     await verificaCaruselul(browser);
     await verificaGaleria(browser);
+    await verificaDivimenus(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);
