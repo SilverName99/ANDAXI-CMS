@@ -479,6 +479,39 @@ $verifica('capturat/radacina: nimic peste un dosar al CMS-ului (/assets/…), ni
     $ciocnire['corp'] !== "\x89PNG\r\n\x1a\nciocnire" && $ascuns['corp'] !== "\x89PNG\r\n\x1a\nascuns" && $js['corp'] !== 'alert(1)'
     && $urcare['corp'] !== "\x00\x00\x01\x00proba" && $faraRad['corp'] !== "\x00\x00\x01\x00proba",
     json_encode([$ciocnire['cod'], $ascuns['cod'], $js['cod'], $urcare['cod'], $faraRad['cod']]));
+// Diagnosticul fișierelor manifestului: copiile la calea publicată, cu sha256-ul lor; cele necopiate intenționat (cu motivul), doar numărate.
+$verifica('diagnostic --capturat: copiate = la calea publicată (și capturat/radacina/) cu sha256-ul lor; necopiate cu motiv (.js, SVG refuzat) nu lipsesc; '
+    . 'fără copie și fără motiv, o copie lipsă sau schimbată — NU', (static function () use ($lucru): bool {
+    $dr = $lucru . '/docroot-diagnostic';
+    exec('rm -rf ' . escapeshellarg($dr));
+    @mkdir($dr . '/wp-content/themes/t', 0770, true);
+    @mkdir($dr . '/capturat/radacina', 0770, true);
+    file_put_contents($dr . '/wp-content/themes/t/a.css', 'p{}');
+    file_put_contents($dr . '/capturat/radacina/favicon.ico', 'ico');
+    file_put_contents($dr . '/wp-content/themes/t/b.css', 'schimbat');
+    $sha = static fn (string $t): string => hash('sha256', $t);
+    $f = static fn (string $cale, array $x): array => ['cale' => $cale, 'sha256' => str_repeat('0', 64)] + $x;
+    $bune = ['fisiere' => [
+        $f('/wp-content/themes/t/a.css', ['publicat' => '/wp-content/themes/t/a.css', 'sha256_publicat' => $sha('p{}')]),
+        $f('/favicon.ico', ['publicat' => '/capturat/radacina/favicon.ico', 'sha256_publicat' => $sha('ico')]),
+        $f('/wp-content/plugins/p/x.js', ['publicat' => '/wp-content/plugins/p/x.js', 'sha256_publicat' => null, 'necopiat' => 'tip nepermis: .js']),
+        $f('/wp-includes/js/m/c.svg', ['publicat' => '/wp-includes/js/m/c.svg', 'sha256_publicat' => null, 'necopiat' => 'SVG refuzat de SvgSigur (element nepermis: <style>)']),
+    ]];
+    $r = \App\Support\CadruCapturat::verificaFisiereManifest($bune, $dr);
+    $rele = ['fisiere' => [
+        $f('/wp-content/themes/t/lipsa.css', ['publicat' => '/wp-content/themes/t/lipsa.css', 'sha256_publicat' => null]),
+        $f('/wp-content/themes/t/c.css', ['publicat' => '/wp-content/themes/t/c.css', 'sha256_publicat' => $sha('c')]),
+        $f('/wp-content/themes/t/b.css', ['publicat' => '/wp-content/themes/t/b.css', 'sha256_publicat' => $sha('b')]),
+        $f('/wp-content/themes/t/gol.css', ['publicat' => '/wp-content/themes/t/gol.css', 'sha256_publicat' => null, 'necopiat' => ' ']),
+        $f('/../x.css', []),
+    ]];
+    $q = \App\Support\CadruCapturat::verificaFisiereManifest($rele, $dr);
+    exec('rm -rf ' . escapeshellarg($dr));
+    return $r === ['verificate' => 2, 'necopiate' => 2, 'probleme' => []] && $q['necopiate'] === 0 && count($q['probleme']) === 5
+        && in_array('lipsește /wp-content/themes/t/lipsa.css', $q['probleme'], true) && in_array('lipsește /wp-content/themes/t/c.css', $q['probleme'], true)
+        && in_array('alt sha256 decât în manifest: /wp-content/themes/t/b.css', $q['probleme'], true)
+        && in_array('lipsește /wp-content/themes/t/gol.css', $q['probleme'], true) && in_array('manifest: o intrare fără cale bună', $q['probleme'], true);
+})());
 $verifica('capturat/radacina: coliziunile ies la diagnostic (NU)', (static function (): bool {
     $c = \App\Support\RadacinaCapturata::coliziuni();
     return count($c) === 1 && str_contains($c[0], '/assets/ciocnire-proba.png');

@@ -276,22 +276,10 @@ if (in_array('--capturat', $argv, true)) {
     if (!is_array($m)) {
         $probleme[] = 'manifestul capturii lipsește sau e stricat: ' . $manifest;
     }
-    $verificate = 0;
-    foreach (is_array($m) && is_array($m['fisiere'] ?? null) ? $m['fisiere'] : [] as $f) {
-        $cale = is_array($f) ? (string) ($f['cale'] ?? '') : '';
-        $sha = is_array($f) ? (string) ($f['sha256_publicat'] ?? $f['sha256'] ?? '') : '';
-        if ($cale === '' || !str_starts_with($cale, '/') || str_contains($cale, '..')) {
-            $probleme[] = 'manifest: o intrare fără cale bună';
-            continue;
-        }
-        $fisier = Paths::public(ltrim($cale, '/'));
-        if (!is_file($fisier)) {
-            $probleme[] = 'lipsește ' . $cale;
-        } elseif ($sha !== '' && hash_file('sha256', $fisier) !== $sha) {
-            $probleme[] = 'alt sha256 decât în manifest: ' . $cale;
-        }
-        $verificate++;
-    }
+    // Fișierele copiate, la calea lor publicată; cele lăsate intenționat necopiate (cu motivul în manifest) doar numărate.
+    $vf = \App\Support\CadruCapturat::verificaFisiereManifest(is_array($m) ? $m : [], Paths::public());
+    $verificate = $vf['verificate'];
+    $probleme = array_merge($probleme, $vf['probleme']);
     // Și capturat/ servit din docroot (fonturile, radacina/), nu doar dosarul manifestului (recenzia 2, R2-6).
     foreach (array_unique([Paths::public('wp-content'), Paths::public('wp-includes'), Paths::public('capturat'), dirname($manifest)]) as $dosar) {
         if (!is_dir($dosar)) {
@@ -323,7 +311,7 @@ if (in_array('--capturat', $argv, true)) {
             . ($r['sursa'] !== '' ? ' (' . $r['sursa'] . ($r['linie'] > 0 ? ':' . $r['linie'] : '') . ')' : '') . "\n";
     }
     echo 'manifest     : ' . $manifest . (is_file($manifest) ? ' (' . substr((string) hash_file('sha256', $manifest), 0, 12) . ')' : '') . "\n";
-    echo 'fisiere      : ' . $verificate . " verificate\n";
+    echo 'fisiere      : ' . $verificate . ' verificate, ' . $vf['necopiate'] . " necopiate intentionat (motivul in manifest)\n";
     foreach ($probleme as $p) {
         echo '  problema   : ' . $p . "\n";
     }

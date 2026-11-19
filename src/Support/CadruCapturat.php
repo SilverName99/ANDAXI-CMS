@@ -245,6 +245,47 @@ final class CadruCapturat
         return $status;
     }
 
+    /**
+     * Fișierele manifestului capturii în docroot (`diagnostic.php --capturat`): fiecare fișier copiat (`sha256_publicat`) trebuie
+     * să fie la calea lui publicată (`publicat`; sub `capturat/radacina/` pentru cele de la rădăcină), cu acel sha256. Cele lăsate
+     * intenționat necopiate la captură (`necopiat`, cu motivul: scripturile, SVG-urile refuzate de SvgSigur, tipurile nepermise)
+     * nu se cer și se numără separat. Unul fără copie și fără motiv, care lipsește, e NU; la fel unul cu alt sha256.
+     *
+     * @param array<mixed> $m manifestul
+     * @return array{verificate: int, necopiate: int, probleme: list<string>}
+     */
+    public static function verificaFisiereManifest(array $m, string $docroot): array
+    {
+        $rez = ['verificate' => 0, 'necopiate' => 0, 'probleme' => []];
+        $bun = static fn (string $c): bool => $c !== '' && str_starts_with($c, '/') && !str_contains($c, '..') && !str_contains($c, "\0");
+        foreach (is_array($m['fisiere'] ?? null) ? $m['fisiere'] : [] as $f) {
+            $cale = is_array($f) ? (string) ($f['cale'] ?? '') : '';
+            if (!$bun($cale)) {
+                $rez['probleme'][] = 'manifest: o intrare fără cale bună';
+                continue;
+            }
+            $shaPublicat = is_string($f['sha256_publicat'] ?? null) ? $f['sha256_publicat'] : '';
+            if ($shaPublicat === '' && is_string($f['necopiat'] ?? null) && trim($f['necopiat']) !== '') {
+                $rez['necopiate']++;
+                continue;
+            }
+            $publicat = is_string($f['publicat'] ?? null) && $f['publicat'] !== '' ? $f['publicat'] : $cale;
+            if (!$bun($publicat)) {
+                $rez['probleme'][] = 'manifest: o cale publicată greșită pentru ' . $cale;
+                continue;
+            }
+            $sha = $shaPublicat !== '' ? $shaPublicat : (string) ($f['sha256'] ?? '');
+            $fisier = rtrim($docroot, '/') . $publicat;
+            if (!is_file($fisier)) {
+                $rez['probleme'][] = 'lipsește ' . $publicat;
+            } elseif ($sha !== '' && !hash_equals($sha, (string) hash_file('sha256', $fisier))) {
+                $rez['probleme'][] = 'alt sha256 decât în manifest: ' . $publicat;
+            }
+            $rez['verificate']++;
+        }
+        return $rez;
+    }
+
     /** Manifestul capturii site-ului (pasul 4): `capturat/manifest.json` lângă `.env` (unde îl caută și importul). */
     public static function fisierManifest(): string
     {
