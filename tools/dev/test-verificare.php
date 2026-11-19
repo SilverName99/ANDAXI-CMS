@@ -1120,7 +1120,8 @@ try {
         8 => ['src/Support/StripeGateway.php', 'Verificare::verificaCheieStripe($secretKey);', ''],
         9 => ['src/Support/BtIpayGateway.php', "if (!Verificare::btLivePermis()) {\n            return self::MOD_TEST;", "if (false) {\n            return self::MOD_TEST;"],
         10 => ['src/Support/EuPlatescGateway.php', "if (!Verificare::euplatescPermis()) {\n            return false;", "if (false) {\n            return false;"],
-        11 => ['views/layout.php', '\App\Support\CookieConsent::permiteUrmarire() && \App\Support\Verificare::eticheteTertePermise()', '\App\Support\CookieConsent::permiteUrmarire()'],
+        // Din „Securitate admin N2–N5” layout-ul cere EticheteTerte::permise(), iar garda copiei stă acolo.
+        11 => ['src/Support/EticheteTerte.php', 'return Verificare::eticheteTertePermise() && ', 'return '],
         12 => ['src/Http/Controllers/SiteController.php', '&& \App\Support\Verificare::loginGooglePermis();', ';'],
         13 => ['public/index.php', '\App\Support\Verificare::redirectUploadLipsa($reqPath);', ''],
         14 => ['views/layout.php', "echo \App\Support\Verificare::banner('site'); ", ''],

@@ -360,6 +360,22 @@ acordul GDPR) trebuie pe server, lângă pachet, valorile private ale îngheță
 cu `genereaza-setari.php --cod-vechi`, ca la pasul 6b și în [DEPLOY.md](DEPLOY.md), „Comutarea Bioscem”; nu e în git): fără el încărcarea refuză
 de la început (codul 2, „… codul 15 …”), înainte de orice schimbare.
 
+**Copia goală** (un site care se adoptă de pe WordPress, pe drumul capturat: el însuși e sursa, nu o bază urcată din altă
+parte): `--gol --pachet=<site>` face baza copiei doar din migrări (cu pașii pachetului), seed-ul neutru și setările
+implicite, ca `scripts/install.php`, fără `seed.sql` și fără datele inventate (paginile lor s-ar bate cap în cap cu cele
+importate), apoi contul tău, setările neutralizate, verificările G1 (copia e goală), A1, A5, A6, licența și `incarcat-la`.
+Nicio bază nu se deschide. Conținutul îl aduce apoi, pe copie, importul WordPress (`scripts/importa-wordpress.php`, cu
+captura de la `scripts/captureaza-wordpress.php` într-un dosar din afara `public_html`; [DEPLOY.md](DEPLOY.md), „Adoptarea
+unui site WordPress”). `.env`: `SITE_SLUG=<site>`, `SITE_DATE_DOSAR=<dosarul codului>/site-uri/<site>`, `VERIFICARE_SURSA=gol`
+(le scrie încărcarea); `privat/` al pachetului stă lângă el, în `site-uri/<site>/privat/` (ignorat de git, în afara
+docroot-ului `public/`). După 7 zile copia expiră ca oricare: `--gol --reincarca`, apoi importul din nou, din aceeași captură.
+
+```sh
+$PHP tools/verificare/sterge.php                                              # întâi, dacă pe copie e altceva
+$PHP tools/verificare/incarca.php --gol --pachet=pensiune --licenta=prezentare
+#   întreabă: „da”; emailul și parola contului tău (ca mai sus); ultimul rând: „GATA: copia e anonimizată, toate verificările au trecut”
+```
+
 ### 6b. Biovitality: încărcarea, comparația calculelor și amprenta (noaptea, după ce îți scriem că e pe GitHub; WP-11b)
 
 Ca la pasul 6, pentru biovitality.ro (decizia OD-46: baza Biovitality se citește noaptea, doar în citire, anonimizată în
@@ -1203,7 +1219,7 @@ CDN ca site-ul live.
 | `VERIFICARE_POARTA_UTILIZATOR`, `VERIFICARE_POARTA_HASH`, `VERIFICARE_POARTA_MOD` | `verificare`, `password_hash` al parolei porții, `basic` | poarta |
 | `VERIFICARE_ZILE_PASTRARE` | `7` (cel mult 7) | poarta (expirarea copiei) |
 | `IP_PROXY_DE_INCREDERE` | gol | `IpClient` |
-| `VERIFICARE_SURSA`, `VERIFICARE_UPLOADS_DIN`, `VERIFICARE_WEBHOOKURI_DESCHISE` | `bioscem`, `https://bioscem.ro`, `0` | sursa copiei și pozele (garda 13; pe amândouă le scrie și încărcarea: site-ul copiat, sau `demo`), webhook-urile (poarta) |
+| `VERIFICARE_SURSA`, `VERIFICARE_UPLOADS_DIN`, `VERIFICARE_WEBHOOKURI_DESCHISE` | `bioscem`, `https://bioscem.ro`, `0` | sursa copiei și pozele (garda 13; pe amândouă le scrie și încărcarea: site-ul copiat, `demo` sau `gol`), webhook-urile (poarta) |
 | `VERIFICARE_EMAIL`, `VERIFICARE_SMTP_HOST`, `_PORT`, `_UTILIZATOR`, `_PAROLA`, `_CRIPTARE` | adresa proprietarului; căsuța lui (`smtp.hostinger.com`, `465`, ea, parola ei, `ssl`) sau gazda goală | garda 5 (toate emailurile spre proprietar; fără gazdă, fișiere `.eml`) |
 | `VERIFICARE_ERP_URL`, `VERIFICARE_ERP_CHEIE` | lipsesc (ERP oprit, D5) | garda 6 (doar o copie `*-verif.erp.andaxi.ro`, mai târziu) |
 | `VERIFICARE_FAN_TEST`, `VERIFICARE_EUPLATESC_TEST` | lipsesc | gărzile 7 și 10 (`1` = un cont de test al FAN, al EuPlătesc) |

@@ -532,7 +532,9 @@ if ($activ) {
         \App\Support\EuPlatescGateway::buildRequest($setariEu, array('order_number' => 'proba', 'amount' => 1));
     }, 'EuPlătesc e oprit')) ? true : 'EuPlatescGateway nu e oprit';
     $locuri['etichete'] = !\App\Support\ChatLive::activ(array('tawk_enabled' => '1', 'tawk_property_id' => 'proba123', 'tawk_requires_consent' => '0'))
-        && stare_cheama($radacina, 'views/layout.php', '\App\Support\CookieConsent::permiteUrmarire() && \App\Support\Verificare::eticheteTertePermise()')
+        // Din „Securitate admin N2–N5” layout-ul trece prin EticheteTerte::permise(), care cere întâi garda copiei.
+        && stare_cheama($radacina, 'views/layout.php', '\App\Support\CookieConsent::permiteUrmarire() && \App\Support\EticheteTerte::permise()')
+        && stare_cheama($radacina, 'src/Support/EticheteTerte.php', 'return Verificare::eticheteTertePermise() && ')
         ? true : 'layout-ul sau ChatLive mai pun etichetele';
     $locuri['google'] = stare_cheama($radacina, 'src/Http/Controllers/SiteController.php', '\App\Support\Verificare::loginGooglePermis()')
         ? true : 'SiteController nu oprește login-ul cu Google';

@@ -10,6 +10,7 @@ declare(strict_types=1);
  *   $PHP tools/verificare/incarca.php --din=bioscem --reincarca     # o face din nou peste copia de dinainte
  *   $PHP tools/verificare/incarca.php --din=bioscem --reia          # continuă o încărcare oprită (de la grupul la care a rămas)
  *   $PHP tools/verificare/incarca.php --demo --pachet=<site> [--licenta=<pachet>]   # copia demonstrativă, fără date personale
+ *   $PHP tools/verificare/incarca.php --gol --pachet=<site> [--licenta=<pachet>]    # copia goală a unui site adoptat de pe WordPress
  *
  * Opțiuni (--din): --dosar=<dosarul site-ului live> (implicit îl caută după domeniu, ca agregate.php), --fara-cod-vechi
  * (fără copia codului vechi în ~/domains/<verificare>/cod-vechi/), --fara-bt-test (fără datele de test ale băncii, decizia

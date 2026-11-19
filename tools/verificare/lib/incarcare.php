@@ -12,6 +12,9 @@ declare(strict_types=1);
  *   și scriere, după regulile din tools/verificare/reguli/<site>.php. Nicio dată personală nu ajunge în baza copiei.
  * - `--demo`: baza copiei făcută din migrări și din datele inventate ale tools/dev/date-demo.php, cu pachetul unui site și
  *   o licență; nicio bază sursă nu se deschide (repetițiile personalului clienților, decizia OD-39).
+ * - `--gol`: baza copiei doar din migrări, seed-ul neutru și setările implicite (ca scripts/install.php), cu pachetul unui
+ *   site și o licență, fără date inventate și fără nicio bază sursă: copia unui site care se adoptă de pe WordPress, al cărui
+ *   conținut îl aduce apoi, pe copie, importul (scripts/importa-wordpress.php; docs/VERIFICARE.md, „Copia goală”).
  *
  * Ordinea (--din): verificările de loc și de bază, fără să atingă nimic → întrebările (confirmarea, contul de admin al
  * proprietarului) → sesiunea sursei, deschisă și verificată doar de citire (niciun rând citit; dacă nu merge: refuz, cod 2,
@@ -1240,8 +1243,8 @@ final class Incarcare
                 $incarcare->spune($text . 'Nu am atins nimic.');
                 return self::COD_REFUZ;
             }
-            $incarcare->incheie($text . 'Copia neterminată rămâne închisă (fără incarcat-la): ' . ($incarcare->sursaNume === 'demo'
-                ? 'fă-o din nou cu --demo --reincarca' : 'rulează din nou cu --reia') . ', sau o ștergi cu sterge.php.');
+            $incarcare->incheie($text . 'Copia neterminată rămâne închisă (fără incarcat-la): ' . (in_array($incarcare->sursaNume, ['demo', 'gol'], true)
+                ? 'fă-o din nou cu --' . $incarcare->sursaNume . ' --reincarca' : 'rulează din nou cu --reia') . ', sau o ștergi cu sterge.php.');
             return self::COD_REIA;
         });
         try {
@@ -1257,7 +1260,7 @@ final class Incarcare
         } catch (Intrerupere $e) {
             $incarcare->spune('');
             $incarcare->incheie('ÎNTRERUPT: ' . $incarcare->faraNumeBaza($e->getMessage()) . '. Copia neterminată rămâne închisă (fără incarcat-la). '
-                . ($incarcare->sursaNume === 'demo' ? 'Fă-o din nou cu: ' . PhpCli::comanda('tools/verificare/incarca.php --demo --reincarca')
+                . (in_array($incarcare->sursaNume, ['demo', 'gol'], true) ? 'Fă-o din nou cu: ' . PhpCli::comanda('tools/verificare/incarca.php --' . $incarcare->sursaNume . ' --reincarca')
                     : 'Continuă cu: ' . PhpCli::comanda('tools/verificare/incarca.php --din=' . $incarcare->sursaNume . ' --reia')));
             return self::COD_REIA;
         } catch (Throwable $e) {
@@ -1452,13 +1455,15 @@ final class Incarcare
     private function executa(array $argv): int
     {
         Rulare::faraSesiune();
-        $this->arg = Rulare::argumente($argv, ['din', 'demo', 'pachet', 'licenta', 'dosar', 'reincarca', 'reia', 'da', 'fara-cod-vechi', 'fara-bt-test', 'buget']);
-        $demo = isset($this->arg['demo']);
-        if ($demo === isset($this->arg['din'])) {
-            throw new Refuz('alege ce încarci: --din=bioscem sau --din=biovitality (copia anonimizată a site-ului live) sau --demo [--pachet=<site>] [--licenta=<pachet>] '
-                . '(copia demonstrativă, fără date personale)');
+        $this->arg = Rulare::argumente($argv, ['din', 'demo', 'gol', 'pachet', 'licenta', 'dosar', 'reincarca', 'reia', 'da', 'fara-cod-vechi', 'fara-bt-test', 'buget']);
+        $gol = isset($this->arg['gol']);
+        // $demo: fără nicio bază sursă (copia demonstrativă sau cea goală); $gol o deosebește doar la date și la întrebări.
+        $demo = isset($this->arg['demo']) || $gol;
+        if ((int) isset($this->arg['din']) + (int) isset($this->arg['demo']) + (int) $gol !== 1) {
+            throw new Refuz('alege ce încarci: --din=bioscem sau --din=biovitality (copia anonimizată a site-ului live), --demo [--pachet=<site>] [--licenta=<pachet>] '
+                . '(copia demonstrativă, fără date personale) sau --gol --pachet=<site> [--licenta=<pachet>] (copia goală a unui site adoptat de pe WordPress)');
         }
-        foreach (['demo', 'reincarca', 'reia', 'da', 'fara-cod-vechi', 'fara-bt-test'] as $comutator) {
+        foreach (['demo', 'gol', 'reincarca', 'reia', 'da', 'fara-cod-vechi', 'fara-bt-test'] as $comutator) {
             if (isset($this->arg[$comutator]) && $this->arg[$comutator] !== true) {
                 throw new Refuz('--' . $comutator . ' nu primește o valoare');
             }
@@ -1467,13 +1472,16 @@ final class Incarcare
             throw new Refuz('--reincarca (de la capăt) și --reia (continuă) nu merg împreună');
         }
         if ($demo && isset($this->arg['reia'])) {
-            throw new Refuz('copia demonstrativă nu se continuă: se face din nou (--demo --reincarca)');
+            throw new Refuz($gol ? 'copia goală nu se continuă: se face din nou (--gol --reincarca)' : 'copia demonstrativă nu se continuă: se face din nou (--demo --reincarca)');
+        }
+        if ($gol && !is_string($this->arg['pachet'] ?? null)) {
+            throw new Refuz('--gol cere --pachet=<site> (pachetul site-ului adoptat de pe WordPress, de exemplu pensiune)');
         }
         if ($demo && (isset($this->arg['dosar']) || isset($this->arg['fara-cod-vechi']) || isset($this->arg['fara-bt-test']))) {
             throw new Refuz('--dosar, --fara-cod-vechi și --fara-bt-test sunt doar pentru --din');
         }
         if (!$demo && isset($this->arg['pachet'])) {
-            throw new Refuz('--pachet e doar pentru --demo (pachetul copiei unui site îl dau regulile lui)');
+            throw new Refuz('--pachet e doar pentru --demo și --gol (pachetul copiei unui site îl dau regulile lui)');
         }
         if (isset($this->arg['buget'])) {
             if (!is_string($this->arg['buget']) || preg_match('/^\d{1,6}$/', $this->arg['buget']) !== 1) {
@@ -1503,16 +1511,21 @@ final class Incarcare
         $this->spune('Încărcarea copiei pe site-ul de verificare https://' . $this->gazda . ' — ' . date('Y-m-d H:i'));
 
         if ($demo) {
-            $this->sursaNume = 'demo';
+            $this->sursaNume = $gol ? 'gol' : 'demo';
             $this->pachet = is_string($this->arg['pachet'] ?? null) ? (string) $this->arg['pachet'] : (trim($this->env['SITE_SLUG'] ?? '') !== '' ? trim($this->env['SITE_SLUG']) : 'bioscem');
             if (preg_match('/^[a-z0-9][a-z0-9-]{0,40}$/', $this->pachet) !== 1 || !is_dir($this->radacina . '/site-uri/' . $this->pachet)) {
                 throw new Refuz('--pachet: nu există pachetul site-uri/' . (preg_match('/^[a-z0-9-]{1,40}$/', $this->pachet) === 1 ? $this->pachet : '?')
-                    . ' (bioscem, biovitality, vertij, grafoanaytis)');
+                    . ' (bioscem, biovitality, vertij, grafoanaytis, pensiune)');
             }
-            if (!is_file($this->radacina . '/tools/dev/date-demo.php')) {
-                throw new Refuz('lipsește tools/dev/date-demo.php din codul de pe server (datele inventate ale copiei demonstrative)');
+            if ($gol) {
+                $this->info('copie goală: doar migrări, seed-ul neutru și setările implicite, fără date inventate; nicio bază sursă nu se deschide '
+                    . '(conținutul îl aduce apoi importul WordPress, scripts/importa-wordpress.php)');
+            } else {
+                if (!is_file($this->radacina . '/tools/dev/date-demo.php')) {
+                    throw new Refuz('lipsește tools/dev/date-demo.php din codul de pe server (datele inventate ale copiei demonstrative)');
+                }
+                $this->info('copie demonstrativă: doar migrări și date inventate (tools/dev/date-demo.php); nicio bază sursă nu se deschide');
             }
-            $this->info('copie demonstrativă: doar migrări și date inventate (tools/dev/date-demo.php); nicio bază sursă nu se deschide');
         } else {
             $this->sursaNume = (string) $this->arg['din'];
             $this->reguli = Reguli::incarca($this->radacina, $this->sursaNume);
@@ -1627,7 +1640,7 @@ final class Incarcare
         if ($mod !== 'reia') {
             $sare = random_bytes(32);
             $this->scrieSare($sare);
-            $this->copie->scrieMarcaj(['sursa' => $this->sursaNume, 'versiune_reguli' => $this->reguli?->versiune() ?? 'demo',
+            $this->copie->scrieMarcaj(['sursa' => $this->sursaNume, 'versiune_reguli' => $this->reguli?->versiune() ?? $this->sursaNume,
                 'cod_sursa_commit' => $this->commitSursa]);
             $this->rand(true, '_verificare scris primul (anonimizat = 0): o încărcare oprită rămâne o copie de verificare (sterge.php, --reia)');
         } else {
@@ -1642,7 +1655,7 @@ final class Incarcare
         require_once $this->radacina . '/bootstrap.php';
 
         if ($demo) {
-            return $this->demo();
+            return $gol ? $this->gol() : $this->demo();
         }
         return $this->dinSursa($mod === 'reia' ? $marcaj : null);
     }
@@ -1666,7 +1679,8 @@ final class Incarcare
         if (!isset($this->arg['da'])) {
             $intrebare = $this->sursaNume === 'demo'
                 ? 'Fac copia demonstrativă (pachetul ' . $this->pachet . ', licența ' . $this->licenta . ')? Scrie „da”: '
-                : 'Încarc copia anonimizată din ~/' . $this->site?->dosarRelativ . '? Scrie „da”: ';
+                : ($this->sursaNume === 'gol' ? 'Fac copia goală (pachetul ' . $this->pachet . ', licența ' . $this->licenta . '; conținutul îl aduce apoi importul WordPress)? Scrie „da”: '
+                : 'Încarc copia anonimizată din ~/' . $this->site?->dosarRelativ . '? Scrie „da”: ');
             if (verificare_intreaba($intrebare, false) !== 'da') {
                 throw new Refuz('n-ai scris „da”. Nu am atins nimic');
             }
@@ -2674,6 +2688,67 @@ final class Incarcare
         $this->spune('Durata: ' . $this->durata($this->start) . '. Trimite-ne tot textul (doar numere și nume de tabele, nicio dată a clienților).');
         $this->incheie('GATA: copia e anonimizată, toate verificările au trecut');
         return self::COD_GATA;
+    }
+
+    // ─────────────────────────────────────────────────── --gol
+
+    /**
+     * Copia goală a unui site adoptat de pe WordPress: migrările (cu pașii pachetului), seed-ul neutru și setările implicite,
+     * ca scripts/install.php, fără seed.sql și fără date inventate (paginile lor s-ar bate cap în cap cu cele importate); apoi
+     * setările neutralizate ca la o copie a unui site, contul proprietarului, verificările care au sens fără date, licența și
+     * marcajul. Nicio bază sursă nu se deschide; conținutul îl aduce apoi importul WordPress, pe copie.
+     */
+    private function gol(): int
+    {
+        $this->migrari(true);
+        $db = \App\Support\Database::connection((array) ((require $this->radacina . '/config/app.php')['db'] ?? []));
+        if (!$db instanceof PDO) {
+            throw new EsecIncarcare('baza copiei nu răspunde după migrări');
+        }
+        if ((int) $db->query('SELECT COUNT(*) FROM blog_categories')->fetchColumn() === 0) {
+            $categorie = $db->prepare('INSERT IGNORE INTO blog_categories (name, slug, sort_order) VALUES (:name, :slug, :sort_order)');
+            foreach ([['Noutăți', 'noutati', 1], ['Evenimente', 'evenimente', 2]] as [$nume, $slug, $ordine]) {
+                $categorie->execute(['name' => $nume, 'slug' => $slug, 'sort_order' => $ordine]);
+            }
+        }
+        \App\Support\Settings::save($db, \App\Support\Settings::all($db));
+        $this->rand(true, 'migrările, seed-ul neutru și setările implicite (ca scripts/install.php); fără date inventate');
+
+        $this->neutralizeazaSetari();
+        $adminId = $this->adminProprietar();
+        $this->copie->actualizeazaMarcaj(['admin_proprietar_id' => $adminId, 'pas' => 'verificari']);
+
+        $this->spune('');
+        $this->spune('Verificările copiei goale (doar numere):');
+        $db2 = $this->copie->db;
+        $numar = static fn (string $sql): int => (int) $db2->query($sql)->fetchColumn();
+        $esecuri = [];
+        $existente = $db2->query('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
+        $randuri = 0;
+        foreach (array_intersect(['pages', 'products', 'users', 'orders', 'newsletter_subscribers', 'blog_posts'], $existente) as $tabel) {
+            $randuri += $numar('SELECT COUNT(*) FROM `' . $tabel . '`');
+        }
+        $esecuri[] = $this->aserțiune('G1', $randuri === 0, 'copia e goală: nicio pagină, niciun produs, articol, client, comandă sau abonat (' . $randuri . ' rânduri)');
+        $altiAdmini = $numar('SELECT COUNT(*) FROM admins WHERE id <> ' . $adminId);
+        $esecuri[] = $this->aserțiune('A1', $altiAdmini === 0, 'un singur cont de admin, al tău (' . $altiAdmini . ' altele)');
+        $releParola = $numar("SELECT COUNT(*) FROM admins WHERE password_hash NOT LIKE '$2y$%'");
+        $esecuri[] = $this->aserțiune('A5', $releParola === 0, 'parolele: bcrypt (' . $releParola . ' altfel)');
+        $setari = (array) Reguli::din(['setari' => $this->neutralizareImplicita()])->date['setari'];
+        $gresite = 0;
+        $valori = $db2->query('SELECT `key`, `value` FROM settings')->fetchAll(PDO::FETCH_KEY_PAIR);
+        foreach (array_merge((array) $setari['goale'], (array) $setari['zero'], (array) $setari['proprietar'], (array) $setari['casuta'],
+            (array) $setari['prefix'], (array) $setari['aleatoare']) as $cheie) {
+            if (!array_key_exists($cheie, $valori) || self::setareNeutralizata($cheie, (string) $valori[$cheie], $setari, $this->proprietar(), $this->casuta()) === false) {
+                $gresite++;
+            }
+        }
+        $esecuri[] = $this->aserțiune('A6', $gresite === 0, 'setările neutralizate au valoarea copiei (' . $gresite . ' altfel)');
+        $this->info('A2–A4, A7–A9: nu se aplică (nicio bază sursă, nicio dată)');
+        if (array_filter($esecuri) !== []) {
+            throw new EsecIncarcare('verificările ' . implode(', ', array_filter($esecuri)) . ' au picat');
+        }
+        $this->puneLicenta();
+        return $this->termina([]);
     }
 
     // ─────────────────────────────────────────────────── --demo

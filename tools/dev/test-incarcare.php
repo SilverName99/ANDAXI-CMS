@@ -63,7 +63,8 @@ declare(strict_types=1);
  *    B8 --demo: fără nicio bază sursă (site-ul live ascuns), aceleași rânduri ca datele demo din baza de dezvoltare, adresele
  *       @verificare.invalid, personalul și clienții cu parola personalului (se loghează), contul proprietarului; un pachet cu
  *       înghețare privată fără privat/ → refuzat înainte de orice schimbare; cu valori private inventate și --licenta=toate → „GATA”;
- *       sterge.php șterge și pozele copiei.
+ *       sterge.php șterge și pozele copiei. --gol --pachet=pensiune: copia goală a unui site adoptat de pe WordPress (G1 A1 A5 A6,
+ *       nicio pagină, niciun cont în afară de al proprietarului, sursa gol), deschisă cu parola porții; fără --pachet sau cu --reia: refuzat.
  *    B9 pe MySQL 8 (pornit dacă nu mergea): aceeași sursă și aceeași încărcare, „GATA”, niciun marcaj.
  *
  * Cere baza de dezvoltare făcută de tools/dev/instaleaza.sh (B8 o compară cu copia demonstrativă). Bazele cms_incarc_* și
@@ -1441,7 +1442,8 @@ try {
         'un site fără reguli (vertij)' => [['--din=vertij'], [], 'nu există încă reguli de anonimizare pentru „vertij”'],
         'un nume de site nepermis' => [['--din=../x'], [], 'nume de site nepermis'],
         'un argument necunoscut' => [['--din=bioscem', '--sterge-tot'], [], 'argument necunoscut'],
-        '--pachet fără --demo' => [['--din=bioscem', '--pachet=vertij'], [], '--pachet e doar pentru --demo'],
+        '--pachet fără --demo' => [['--din=bioscem', '--pachet=vertij'], [], '--pachet e doar pentru --demo și --gol'],
+        '--din și --gol împreună' => [['--din=bioscem', '--gol', '--pachet=pensiune'], [], 'alege ce încarci'],
         '--reia fără o încărcare oprită' => [['--din=bioscem', '--reia', '--da'], $raspunsuriAdmin, 'nu e nicio încărcare oprită'],
         '--reia și --reincarca' => [['--din=bioscem', '--reia', '--reincarca'], [], 'nu merg împreună'],
         '--buget nu e un număr' => [['--din=bioscem', '--buget=mult'], [], '--buget'],
@@ -2174,6 +2176,40 @@ try {
     $s = $sterge();
     $verifica('sterge.php pe copia demonstrativă: „GATA”, șterge și pozele inventate (public/uploads/demo)', $s['cod'] === 0 && str_contains($s['iesire'], 'poze ale copiei demonstrative')
         && !file_exists($copie . '/public/uploads/demo') && $stearsa($tinta), $descrie($s));
+    // --gol: copia goală a unui site adoptat de pe WordPress (conținutul îl aduce apoi importul, pe copie).
+    $raspunsuriGol = ['', $parolaAdmin, $parolaAdmin];
+    $rFara = $incarca(['--gol', '--da'], $raspunsuriGol);
+    $rDoua = $incarca(['--gol', '--demo', '--pachet=pensiune', '--da'], $raspunsuriGol);
+    $rReia = $incarca(['--gol', '--reia', '--pachet=pensiune', '--da'], $raspunsuriGol);
+    $verifica('--gol fără --pachet, --gol cu --demo, --gol --reia: refuzate (cod 2), nimic atins', $rFara['cod'] === 2 && str_contains($rFara['tot'], '--gol cere --pachet=')
+        && $rDoua['cod'] === 2 && str_contains($rDoua['tot'], 'alege ce încarci') && $rReia['cod'] === 2 && str_contains($rReia['tot'], 'copia goală nu se continuă')
+        && $stearsa($tinta), $descrie($rFara) . $descrie($rDoua) . $descrie($rReia));
+    $r = $incarca(['--gol', '--pachet=pensiune', '--licenta=prezentare', '--da'], $raspunsuriGol);
+    $envCopie = \App\Support\Verificare::citesteEnv((string) file_get_contents($copie . '/.env'));
+    $licenta = json_decode((string) @file_get_contents($copie . '/storage/licenta/licenta.json'), true);
+    $mk = $marcaj($tinta);
+    $goale = [];
+    foreach (['pages', 'products', 'users', 'orders', 'blog_posts', 'newsletter_subscribers'] as $tabel) {
+        $n = (int) $tinta->query('SELECT COUNT(*) FROM `' . $tabel . '`')->fetchColumn();
+        if ($n !== 0) {
+            $goale[] = $tabel . ' ' . $n;
+        }
+    }
+    $adminiGol = $tinta->query('SELECT email, password_hash FROM admins')->fetchAll();
+    $verifica('--gol --pachet=pensiune --licenta=prezentare: „GATA”, G1 A1 A5 A6 DA, nicio întrebare pentru personal; copia goală (nicio pagină, niciun produs, '
+        . 'client, articol); doar contul tău; _verificare: sursa gol, anonimizat = 1; .env cu pachetul pensiune și sursa gol; licența prezentare; incarcat-la scris',
+        $r['cod'] === 0 && $ultimul($r['iesire']) === 'GATA: copia e anonimizată, toate verificările au trecut' && preg_match_all('/^  DA    (G1|A1|A5|A6) /m', $r['iesire']) === 4
+        && !str_contains($r['iesire'], 'personalului') && $goale === [] && count($adminiGol) === 1 && $adminiGol[0]['email'] === $emailProprietar
+        && password_verify($parolaAdmin, (string) $adminiGol[0]['password_hash']) && ($mk['sursa'] ?? '') === 'gol' && (int) ($mk['anonimizat'] ?? 0) === 1
+        && ($envCopie['SITE_SLUG'] ?? '') === 'pensiune' && ($envCopie['VERIFICARE_SURSA'] ?? '') === 'gol'
+        && rtrim((string) ($envCopie['SITE_DATE_DOSAR'] ?? ''), '/') === $copie . '/site-uri/pensiune' && array_keys((array) ($licenta['pluginuri'] ?? [])) === []
+        && is_file($copie . '/storage/verificare/incarcat-la') && $curat($r), $descrie($r) . ' ' . implode(', ', $goale));
+    $pagina = $cerere('GET', '/', ['basic' => $basic]);
+    $rDin = $incarca(['--demo', '--reincarca', '--da'], $raspunsuriDemo);
+    $verifica('copia goală deschisă cu parola porții (nu 503: „lipsește”/„a expirat”); --demo --reincarca peste ea: refuzat (altă sursă: întâi sterge.php)', $pagina['cod'] !== 503 && $pagina['cod'] < 500
+        && $rDin['cod'] === 2 && str_contains($rDin['tot'], 'pe copie e altă sursă (gol)'), (string) $pagina['cod'] . $descrie($rDin));
+    $s = $sterge();
+    $verifica('sterge.php pe copia goală: „GATA”, copia ștearsă', $s['cod'] === 0 && $stearsa($tinta), $descrie($s));
     rename($live . '-ascuns', $live);
 
     // =================================================================
