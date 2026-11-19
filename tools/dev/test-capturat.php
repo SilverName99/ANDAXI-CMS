@@ -169,7 +169,7 @@ $pagini = [
     ['cale' => '/contact/', 'titlu' => 'Contact', 'id' => 103, 'formular' => true, 'seoTitlu' => 'Contact - Pensiunea Probă'],
 ];
 $optiuni = ['url' => $url, 'nonce' => 'cccc111111', 'ua' => 'windows', 'an' => $an, 'antet' => 11, 'subsol' => 12, 'corp404' => 13,
-    'meniu' => [['/', 'Acasă'], ['/camere/', 'Camere'], ['/contact/', 'Contact']], 'cale404' => '/x1-inexistent/', 'embed' => ['/camere/']];
+    'meniu' => [['/', 'Acasă'], ['/camere/', 'Camere'], ['/contact/', 'Contact']], 'cale404' => '/x1-inexistent/', 'embed' => ['/camere/'], 'oembed' => ['/', '/contact/']];
 capturaDiviProba($lucru . '/captura', $pagini, $optiuni);
 // Prima pagină are un antet puțin altfel (o clasă în plus): două variante de antet.
 $fisierAcasa = $lucru . '/captura/brut/' . hash('sha256', $url . '/') . '/chrome-win-1.corp';
@@ -221,6 +221,14 @@ try {
     $db->rollBack();
     $scris = ['eroare' => $e->getMessage()];
 }
+// oEmbed-ul primei pagini și al paginii de contact: înghețat la endpointul lui (calea din index e a paginii), nu peste rutele / și /contact.
+$oembedInghetate = array_values(array_filter($pc->raspunsuri, static fn (array $x): bool => $x['sursa'] === 'captura:oembed'));
+$verifica('oEmbed-ul paginilor / și /contact/: înghețat la /wp-json/oembed/1.0/embed?url=…, cu JSON-ul lui, fără ciocnire cu rutele / și /contact; nimic înghețat la / sau /contact/',
+    count($oembedInghetate) === 2 && array_unique(array_column($oembedInghetate, 'cale')) === ['/wp-json/oembed/1.0/embed']
+    && array_column($oembedInghetate, 'query') === ['url=' . rawurlencode($url . '/'), 'url=' . rawurlencode($url . '/contact/')]
+    && str_contains((string) $oembedInghetate[0]['corp'], '"type":"rich"')
+    && array_filter($pc->raspunsuri, static fn (array $x): bool => in_array($x['cale'], ['/', '/contact/', '/contact'], true)) === []
+    && array_filter($pc->probleme, static fn (string $t): bool => str_contains($t, 'se ciocnește')) === [], json_encode([$pc->probleme, array_column($pc->raspunsuri, 'cale')], JSON_UNESCAPED_UNICODE));
 $verifica('tăierea și scrierea: 5 documente (3 pagini, 404, embed), 2 variante de antet, P1 la import cu runtime-ul', $pc->probleme === [] && ($scris['documente'] ?? 0) === 5
     && count(array_filter($pc->fragmente, static fn (array $f): bool => $f['fel'] === 'antet')) === 2, json_encode([$pc->probleme, $scris], JSON_UNESCAPED_UNICODE));
 

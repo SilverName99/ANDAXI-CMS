@@ -141,7 +141,7 @@ function embedDiviProba(string $u, string $cale, string $titlu, string $secret):
  *
  * @param list<array{cale: string, titlu: string, id: int, formular?: bool, inCorp?: string, descriere?: string}> $pagini
  * @param array{url: string, nonce: string, ua: string, an: string, antet: int, subsol: int, corp404: int, meniu: list<array{0: string, 1: string}>,
- *   cale404: string, embed?: list<string>, facuta?: string} $o
+ *   cale404: string, embed?: list<string>, oembed?: list<string>, facuta?: string} $o
  */
 function capturaDiviProba(string $dosar, array $pagini, array $o): void
 {
@@ -151,8 +151,8 @@ function capturaDiviProba(string $dosar, array $pagini, array $o): void
     exec('rm -rf ' . escapeshellarg($dosar));
     $u = $o['url'];
     $adrese = [];
-    $scrie = static function (string $fel, string $cale, string $corp, int $status, string $tipContinut) use ($dosar, $u, &$adrese): void {
-        $url = $u . $cale;
+    $scrie = static function (string $fel, string $cale, string $corp, int $status, string $tipContinut, ?string $url = null) use ($dosar, $u, &$adrese): void {
+        $url ??= $u . $cale;
         $sha = hash('sha256', $url);
         @mkdir($dosar . '/brut/' . $sha, 0770, true);
         file_put_contents($dosar . '/brut/' . $sha . '/chrome-win-1.corp', $corp);
@@ -168,6 +168,15 @@ function capturaDiviProba(string $dosar, array $pagini, array $o): void
         foreach ($pagini as $pg) {
             if ($pg['cale'] === $cale) {
                 $scrie('embed', $cale . 'embed/', embedDiviProba($u, $cale, $pg['titlu'], 'Pr0baSecr' . $n), 200, 'text/html; charset=UTF-8');
+            }
+        }
+    }
+    // oEmbed ca în captura reală: calea din index e a paginii, adresa e a endpointului.
+    foreach ($o['oembed'] ?? [] as $cale) {
+        foreach ($pagini as $pg) {
+            if ($pg['cale'] === $cale) {
+                $scrie('oembed', $cale, (string) json_encode(['version' => '1.0', 'type' => 'rich', 'title' => $pg['titlu']], JSON_UNESCAPED_UNICODE), 200,
+                    'application/json; charset=UTF-8', $u . '/wp-json/oembed/1.0/embed?url=' . rawurlencode($u . $cale));
             }
         }
     }

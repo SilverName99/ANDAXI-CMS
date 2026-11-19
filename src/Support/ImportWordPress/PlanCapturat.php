@@ -163,7 +163,9 @@ final class PlanCapturat
         $divi4 = new Divi4($d);
         $ctxPolitica = $divi4->contextPolitica();
         foreach (self::adrese($d) as $a) {
-            $r = $d->dupaCale($a['cale']);
+            // După adresa cerută, nu după cale: la oEmbed calea din index e a paginii, adresa e a endpointului
+            // (/wp-json/oembed/1.0/embed?url=…); după cale ar ieși pagina, înghețată peste ruta ei.
+            $r = isset($a['url']) ? $d->raspuns($a['url']) : $d->dupaCale($a['cale']);
             if ($r === null) {
                 continue;
             }
@@ -180,7 +182,7 @@ final class PlanCapturat
                         continue 2; // feed-ul sau cardul unei pagini scoase (urmările ei: redirecționările, pasul 5b)
                     }
                 }
-                $p = parse_url($a['cale']);
+                $p = parse_url(isset($a['url']) ? (string) preg_replace('#^https?://[^/?\#]+#i', '', $a['url']) : $a['cale']);
                 // Nimic peste o rută, un fișier sau un dosar al CMS-ului (recenzia 2, R2-1), nici un Location care nu e strict relativ (R2-4).
                 if (($col = \App\Support\RaspunsuriInghetate::coliziune((string) ($p['path'] ?? '/'), (string) ($p['query'] ?? ''))) !== null) {
                     $this->probleme[] = $a['cale'] . ': răspunsul înghețat se ciocnește cu CMS-ul: ' . $col;
@@ -375,7 +377,7 @@ final class PlanCapturat
             $ix = json_decode((string) file_get_contents($d->dosar . '/index.json'), true);
             foreach ((array) ($ix['adrese'] ?? []) as $a) {
                 if (is_array($a) && is_string($a['cale'] ?? null) && is_string($a['fel'] ?? null)) {
-                    $rez[] = ['fel' => $a['fel'], 'cale' => $a['cale']];
+                    $rez[] = ['fel' => $a['fel'], 'cale' => $a['cale']] + (is_string($a['url'] ?? null) ? ['url' => $a['url']] : []);
                 }
             }
             return $rez;
