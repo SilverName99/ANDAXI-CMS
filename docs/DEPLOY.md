@@ -1117,7 +1117,11 @@ containerul mutat primul în body, documentele din `page_links`, butoanele Accep
 nicio cerere spre altă gazdă înainte de acord; managerul din pagina Cookie Policy: categoriile bannerului copiate din șablonul
 inert pus de cadru, `<template id="ax-cmplz-sablon">`, bifarea scrie acordul pe loc) și `comun/v1/urmarire.js` (trackerele din
 `ax-date` → `ax_urmarire`, pornite doar după acordul categoriei lor, o dată pe pagină; la retragere cookie-urile lor se șterg și
-pagina se reîncarcă o dată). Poarta:
+pagina se reîncarcă o dată); `divi4/v1/carusel-dg.js` (caruselele dg, scrise de noi, fără biblioteca furnizorului: slide-urile pe
+ecran, spațiul, viteza, bucla și bulinele din `data-props`, pe punctele de rupere 981/768; duplicatele buclei, lățimile, poziția
+benzii, clasele `swiper-*`, săgețile și bulinele cu atributele lor, anunțul `swiper-notification`; săgețile, bulinele, tragerea cu
+mouse-ul și glisarea cu degetul, prag 15 px; un carusel ascuns ca pe live, așezat la primul resize; lightbox-ul dg al pozelor:
+`open`, ╳ și fundalul îl închid). Poarta:
 **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde

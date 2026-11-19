@@ -241,6 +241,32 @@ const CORP_MANAGER = '<div id="page-container"><div id="et-main-area"><h3>Gestio
   + '<div id="cmplz-manage-consent-container-nojavascript">Pagina fără JavaScript.</div>'
   + '<div id="cmplz-manage-consent-container" name="cmplz-manage-consent-container" class="cmplz-manage-consent-container"></div></div></div>\n';
 
+// Caruselele dg (carusel-dg.md; inventate: testimoniale „Oaspete K – Pensiunea Probă”): cu buclă și buline, fără buclă cu
+// lightbox, unul ascuns (doar pe telefon, ca pe live).
+const propsDg = (o) => JSON.stringify(Object.assign({ desktop: '3', tablet: '3', mobile: '1', speed: '500', arrow: 'on', dots: 'on', autoplay: 'off',
+  loop: 'on', item_spacing: '30', item_spacing_tablet: '30', item_spacing_phone: '30', simulatetouch: 'off', allowtouchmove: 'off', keyboard: 'off',
+  mousewheel: 'off' }, o));
+const caruselDg = (n, cate, props, lightbox) => {
+  let slideuri = '';
+  for (let k = 0; k < cate; k++) {
+    const id = n * 10 + k;
+    slideuri += '<div class="et_pb_module dica_divi_carouselitem dica_divi_carouselitem_' + id + '"><div class="et_pb_module_inner"><div class="dica-item" data-hash="dica_divi_carouselitem_' + id + '">'
+      + (lightbox ? '<a href="#" class="image" data-lightbox="on" data-lightbox_type="image" data-src="/fixturi/harta-proba-1280x920.png"><img src="/fixturi/harta-proba-1280x920.png" alt="" width="128" height="92"></a>' : '')
+      + '<p class="proba-oaspete">Oaspete ' + (k + 1) + ' – Pensiunea Probă</p></div></div></div>';
+  }
+  return '<div class="et_pb_module dica_divi_carousel dica_divi_carousel_' + n + '"><div class="et_pb_module_inner"><div class="dica-container  desktop_middle-outside tablet_top mobile_top" data-props="'
+    + atribut(props) + '"><div class="swiper-container"><div class="swiper-wrapper">' + slideuri + '</div></div><div class="swiper-buttton-container">'
+    + '<div class="swiper-button-prev dica-prev-btn-' + n + '" data-icon="#"></div><div class="swiper-button-next dica-next-btn-' + n + '" data-icon="$"></div></div>'
+    + (JSON.parse(props).dots === 'on' ? '<div class="swiper-pagination dica-paination-' + n + '"></div>' : '') + '</div></div></div>';
+};
+const CORP_DG = '<div id="page-container"><div id="et-main-area"><div class="proba-latime">' + caruselDg(0, 5, propsDg({}), false) + '</div>'
+  + '<div class="proba-latime">' + caruselDg(1, 6, propsDg({ desktop: '4', tablet: '3', mobile: '2', dots: 'off', loop: 'off' }), true) + '</div>'
+  + '<div class="proba-latime proba-ascuns">' + caruselDg(2, 6, propsDg({ desktop: '4', tablet: '2', mobile: '1' }), false) + '</div></div></div>\n';
+const STIL_DG = 'body{margin:0}.proba-latime{width:1093px;max-width:100%}.proba-ascuns{display:none}.swiper-container{position:relative;overflow:hidden}'
+  + '.swiper-wrapper{position:relative;width:100%;display:flex;transition-property:transform;box-sizing:content-box}.dica_divi_carouselitem{flex-shrink:0}'
+  + '.swiper-button-prev,.swiper-button-next{display:inline-block;width:20px;height:20px}.swiper-button-disabled{opacity:.35;pointer-events:none}'
+  + '.dg-carousel-lightbox.open{display:block!important;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(51,51,51,.88)}.dg-carousel-lightbox img{max-height:85vh}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -342,6 +368,7 @@ const PAGINI = {
   sandbox: { inainte: true },
   meniu: { corp: CORP_MENIU, stil: STIL_MENIU },
   consimtamant: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ }) },
+  carusel: { corp: CORP_DG, stil: STIL_DG },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -900,6 +927,7 @@ async function verificaIdempotenta(browser, baza) {
     ax.dgLightbox.aplica();
     ax.meniuMobil.aplica();
     ax.consimtamant.aplica();
+    ax.caruselDg.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1208,6 +1236,157 @@ async function verificaConsimtamantul(browser) {
   await pb.context.close();
 }
 
+async function verificaCaruselul(browser) {
+  scrie('== carusel-dg (felia 2, carusel-dg.md): bucla, bulinele, săgețile, tragerea, fără buclă, ascuns, lightbox-ul');
+  const rezumat = (f, n) => f.evaluate((n) => {
+    const m = document.querySelector('.dica_divi_carousel_' + n);
+    const sc = m.querySelector('.swiper-container');
+    const wr = m.querySelector('.swiper-wrapper');
+    const pag = m.querySelector('.swiper-pagination');
+    const at = (e) => (e ? Array.from(e.attributes).filter((a) => a.name !== 'class' && a.name !== 'data-icon').map((a) => a.name + '=' + a.value).join(' ') : null);
+    return { sc: sc.getAttribute('class'), wr: wr.getAttribute('style'), latime: sc.clientWidth,
+      slideuri: Array.from(wr.children).map((x) => [x.getAttribute('data-swiper-slide-index'), x.className.replace(/^et_pb_module dica_divi_carouselitem dica_divi_carouselitem_\d+ ?/, '').split(' ').filter(Boolean).sort().join(' ')]),
+      stil: Array.from(new Set(Array.from(wr.children).map((x) => x.getAttribute('style')))),
+      buline: pag ? [pag.getAttribute('class'), Array.from(pag.children).map((b) => b.className + '|' + b.getAttribute('tabindex') + '|' + b.getAttribute('role') + '|' + b.getAttribute('aria-label'))] : null,
+      prev: [m.querySelector('.swiper-button-prev').getAttribute('class'), at(m.querySelector('.swiper-button-prev'))],
+      next: [m.querySelector('.swiper-button-next').getAttribute('class'), at(m.querySelector('.swiper-button-next'))],
+      notif: (() => { const x = sc.querySelector(':scope > .swiper-notification'); return x ? [at(x), x.textContent] : null; })(),
+      activ: (() => { const a = wr.querySelector('.swiper-slide-active'); return a ? a.querySelector('.proba-oaspete').textContent : null; })(),
+      vizibile: Array.from(wr.querySelectorAll('.swiper-slide-visible .proba-oaspete')).map((x) => x.textContent) };
+  }, n);
+  const clic = (f, sel) => f.evaluate((sel) => { document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true })); }, sel);
+  const p = await deschide(browser, { cale: '/pagina/carusel' });
+  const f = p.page.mainFrame();
+  await p.page.waitForTimeout(200);
+  const s0 = await stare(f);
+  const a = await rezumat(f, 0);
+  const D = 'swiper-slide-duplicate';
+  verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă', curate(p.ev, s0), detaliiCurate(p.ev, s0));
+  verifica('bucla, 3 pe ecran (1093 px, spațiu 30): containerul inițializat, banda la -1123 px fără tranziție, 3 duplicate în față și 3 la sfârșit '
+    + 'cu data-swiper-slide-index, clasele active/next/prev/visible și perechile duplicate-* ca pe live, lățimea 344.333 px',
+    a.sc === 'swiper-container swiper-container-initialized swiper-container-horizontal' && a.wr === 'transition-duration: 0ms; transform: translate3d(-1123px, 0px, 0px);'
+    && egal(a.slideuri, [['2', D], ['3', D], ['4', D + ' swiper-slide-prev'], ['0', 'swiper-slide-active swiper-slide-visible'], ['1', 'swiper-slide-next swiper-slide-visible'],
+      ['2', 'swiper-slide-visible'], ['3', ''], ['4', 'swiper-slide-duplicate-prev'], ['0', D + ' swiper-slide-duplicate-active'], ['1', D + ' swiper-slide-duplicate-next'], ['2', D]])
+    && egal(a.stil, ['width: 344.333px; margin-right: 30px;']), a);
+  verifica('săgețile (tabindex=0 role=button aria-label, fără aria-disabled în buclă), 5 buline cu prima activă, swiper-notification gol la sfârșitul containerului',
+    a.prev[1] === 'tabindex=0 role=button aria-label=Previous slide' && a.next[1] === 'tabindex=0 role=button aria-label=Next slide'
+    && egal(a.buline, ['swiper-pagination dica-paination-0 swiper-pagination-clickable swiper-pagination-bullets', [0, 1, 2, 3, 4].map((i) => 'swiper-pagination-bullet'
+      + (i === 0 ? ' swiper-pagination-bullet-active' : '') + '|0|button|Go to slide ' + (i + 1))]) && egal(a.notif, ['aria-live=assertive aria-atomic=true', '']), a);
+  await clic(f, '.dica-next-btn-0');
+  const t1 = await rezumat(f, 0);
+  await p.page.waitForTimeout(650);
+  const b = await rezumat(f, 0);
+  verifica('„next”: tranziția de 500 ms pe bandă, apoi Oaspete 2 activ (vizibile 2, 3, 4), bulina 2, anunțul „Next slide”',
+    /^transition-duration: 500ms; transform: translate3d\(-1497\.33/.test(t1.wr) && b.activ === 'Oaspete 2 – Pensiunea Probă'
+    && egal(b.vizibile, [2, 3, 4].map((k) => 'Oaspete ' + k + ' – Pensiunea Probă')) && b.buline[1][1].includes('active') && b.notif[1] === 'Next slide', { t1: t1.wr, b });
+  await clic(f, '.dica-next-btn-0');
+  await p.page.waitForTimeout(90);
+  await clic(f, '.dica-next-btn-0');
+  await p.page.waitForTimeout(650);
+  const c = await rezumat(f, 0);
+  verifica('două clicuri la 90 ms în buclă: un singur pas (al doilea, în timpul tranziției, nu face nimic)', c.activ === 'Oaspete 3 – Pensiunea Probă', c.activ);
+  await f.evaluate(() => document.querySelectorAll('.dica-paination-0 .swiper-pagination-bullet')[0].dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await p.page.waitForTimeout(650);
+  await clic(f, '.dica-prev-btn-0');
+  await p.page.waitForTimeout(650);
+  const dd = await rezumat(f, 0);
+  verifica('bulina 1, apoi „prev” de la primul: bucla duce la Oaspete 5 (vizibile 5, 1, 2), anunțul „Previous slide”', dd.activ === 'Oaspete 5 – Pensiunea Probă'
+    && egal(dd.vizibile, [5, 1, 2].map((k) => 'Oaspete ' + k + ' – Pensiunea Probă')) && dd.notif[1] === 'Previous slide', dd);
+  // Tragerea cu mouse-ul: ~60% din lățime, lent (peste 300 ms): două slide-uri
+  const cutie = await f.evaluate(() => { const r = document.querySelector('.dica_divi_carousel_0 .swiper-container').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+  const cx = cutie[0] + cutie[2] * 0.8;
+  const cy = cutie[1] + cutie[3] / 2;
+  await p.page.mouse.move(cx, cy);
+  await p.page.mouse.down();
+  for (let i = 1; i <= 10; i++) {
+    await p.page.mouse.move(cx - 66 * i, cy);
+    await p.page.waitForTimeout(40);
+  }
+  await p.page.mouse.up();
+  await p.page.waitForTimeout(650);
+  const e = await rezumat(f, 0);
+  verifica('tragerea cu mouse-ul (660 px, lent): două slide-uri, de la Oaspete 5 la Oaspete 2', e.activ === 'Oaspete 2 – Pensiunea Probă', e.activ);
+  await p.page.mouse.move(cx, cy);
+  await p.page.mouse.down();
+  await p.page.mouse.move(cx - 10, cy);
+  await p.page.mouse.up();
+  await p.page.waitForTimeout(300);
+  const g = await rezumat(f, 0);
+  verifica('o tragere sub prag (10 px): nimic; banda nu trece de capăt (Oaspete 2 activ pe duplicatul de la sfârșit: vizibile 1, 2, 3, fără gol)',
+    g.activ === 'Oaspete 2 – Pensiunea Probă' && g.wr === e.wr && egal(g.vizibile, [1, 2, 3].map((k) => 'Oaspete ' + k + ' – Pensiunea Probă')), { e: e.wr, g });
+  // Fără buclă, cu lightbox
+  const h = await rezumat(f, 1);
+  verifica('fără buclă (4 pe ecran): banda doar cu transform 0, fără data-swiper-slide-index și fără duplicate, primele 4 vizibile, '
+    + '„prev” dezactivată (swiper-button-disabled, tabindex=-1, aria-disabled=true), „next” aria-disabled=false',
+    h.wr === 'transform: translate3d(0px, 0px, 0px);' && egal(h.slideuri, [[null, 'swiper-slide-active swiper-slide-visible'], [null, 'swiper-slide-next swiper-slide-visible'],
+      [null, 'swiper-slide-visible'], [null, 'swiper-slide-visible'], [null, ''], [null, '']]) && h.prev[0].includes('swiper-button-disabled')
+    && h.prev[1] === 'tabindex=-1 role=button aria-label=Previous slide aria-disabled=true' && h.next[1] === 'tabindex=0 role=button aria-label=Next slide aria-disabled=false'
+    && h.buline === null, h);
+  await clic(f, '.dica-next-btn-1');
+  await p.page.waitForTimeout(600);
+  await clic(f, '.dica-next-btn-1');
+  await p.page.waitForTimeout(600);
+  const k = await rezumat(f, 1);
+  verifica('fără buclă, două „next”: capătul (banda la -561.5 px), „next” dezactivată, „prev” activă, anunțul „This is the last slide”',
+    /translate3d\(-561\.5px/.test(k.wr) && k.next[0].includes('swiper-button-disabled') && k.next[1].includes('aria-disabled=true') && !k.prev[0].includes('swiper-button-disabled')
+    && k.notif[1] === 'This is the last slide', k);
+  const lb = () => f.evaluate(() => { const l = document.querySelector('.dg-carousel-lightbox'); return [l.className, l.querySelector('img').getAttribute('src')]; });
+  await f.evaluate(() => document.querySelector('.dica_divi_carousel_1 .swiper-slide-active a.image img').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const l1 = await lb();
+  await f.evaluate(() => document.querySelector('.dg-carousel-lightbox img').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await p.page.keyboard.press('Escape');
+  const l2 = await lb();
+  await clic(f, '.dg-carousel-lightbox .close-btn');
+  const l3 = await lb();
+  await f.evaluate(() => document.querySelector('.dica_divi_carousel_1 .swiper-slide-active a.image').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  await clic(f, '.dg-carousel-lightbox');
+  const l4 = await lb();
+  const url = p.page.url();
+  verifica('lightbox-ul: clicul pe poză îl deschide (open, src = data-src), clicul pe imagine și Esc nu-l închid, ╳ și fundalul îl închid; fără navigare',
+    egal(l1, ['dg-carousel-lightbox open', '/fixturi/harta-proba-1280x920.png']) && l2[0] === 'dg-carousel-lightbox open' && l3[0] === 'dg-carousel-lightbox'
+    && l4[0] === 'dg-carousel-lightbox' && url.endsWith('/pagina/carusel'), { l1, l2, l3, l4, url });
+  const cutie1 = await f.evaluate(() => { const r = document.querySelector('.dica_divi_carousel_1 .swiper-container').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+  await p.page.mouse.move(cutie1[0] + 300, cutie1[1] + 40);
+  await p.page.mouse.down();
+  await p.page.mouse.move(cutie1[0] + 360, cutie1[1] + 40, { steps: 5 });
+  await p.page.mouse.up();
+  const l5 = await lb();
+  verifica('clicul de la sfârșitul unei trageri nu deschide lightbox-ul', l5[0] === 'dg-carousel-lightbox', l5);
+  // Ascuns, apoi afișat
+  const m = await rezumat(f, 2);
+  verifica('caruselul ascuns (buclă, 4 pe ecran): banda doar cu transition-duration 0ms, 4 duplicate în față și 4 la sfârșit, '
+    + 'doar swiper-slide-duplicate-active pe copia slide-ului 4, fără lățimi, paginarea goală', m.latime === 0 && m.wr === 'transition-duration: 0ms;'
+    && egal(m.slideuri, [['2', D], ['3', D], ['4', D + ' swiper-slide-duplicate-active'], ['5', D], ['0', ''], ['1', ''], ['2', ''], ['3', ''], ['4', ''], ['5', ''],
+      ['0', D], ['1', D], ['2', D], ['3', D]]) && egal(m.stil, [null]) && m.buline[1].length === 0, m);
+  await f.evaluate(() => { document.querySelector('.proba-ascuns').classList.remove('proba-ascuns'); window.dispatchEvent(new Event('resize')); });
+  await p.page.waitForTimeout(100);
+  const n2 = await rezumat(f, 2);
+  verifica('afișat (resize): așezarea completă, Oaspete 1 activ la -1123 px, 6 buline', n2.activ === 'Oaspete 1 – Pensiunea Probă' && /translate3d\(-1123px/.test(n2.wr)
+    && n2.buline[1].length === 6 && egal(n2.stil, ['width: 250.75px; margin-right: 30px;']), n2);
+  const idem = await f.evaluate(() => { const n = document.querySelectorAll('.dica_divi_carouselitem').length; window.axCompat.caruselDg.aplica(); return n === document.querySelectorAll('.dica_divi_carouselitem').length; });
+  verifica('aplica() a doua oară: nimic dublat', idem);
+  await p.context.close();
+  // Telefon: 1 pe ecran, glisarea cu degetul
+  const q = await deschide(browser, { cale: '/pagina/carusel', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone });
+  const fq = q.page.mainFrame();
+  await q.page.waitForTimeout(200);
+  const r = await rezumat(fq, 0);
+  const w0 = r.latime;
+  verifica('telefon (390): 1 pe ecran, câte un duplicat în față și la sfârșit, lățimea = containerul', r.slideuri.length === 7 && r.wr === 'transition-duration: 0ms; transform: translate3d(-' + (w0 + 30) + 'px, 0px, 0px);'
+    && egal(r.stil, ['width: ' + w0 + 'px; margin-right: 30px;']) && egal(r.vizibile, ['Oaspete 1 – Pensiunea Probă']), r);
+  const cdp = await q.context.newCDPSession(q.page);
+  const cq = await fq.evaluate(() => { const x = document.querySelector('.dica_divi_carousel_0 .swiper-container').getBoundingClientRect(); return [x.x + x.width * 0.8, x.y + x.height / 2]; });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cq[0], y: cq[1] }] });
+  for (let i = 1; i <= 5; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cq[0] - 30 * i, y: cq[1] }] });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await q.page.waitForTimeout(650);
+  const sw = await rezumat(fq, 0);
+  verifica('glisarea cu degetul (150 px, repede): slide-ul următor', sw.activ === 'Oaspete 2 – Pensiunea Probă', sw.activ);
+  await q.context.close();
+}
+
 async function verificaUrmarirea(browser) {
   scrie('== urmarire (trackerele după acord, pe categorie; managerul din Cookie Policy)');
   const TRACKERE = ['https://www.googletagmanager.com/gtag/js?id=GT-PROBA123', 'https://www.clarity.ms/tag/proba6789?ref=wordpress',
@@ -1454,6 +1633,7 @@ async function main() {
     await verificaMeniulMobil(browser);
     await verificaConsimtamantul(browser);
     await verificaUrmarirea(browser);
+    await verificaCaruselul(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);
