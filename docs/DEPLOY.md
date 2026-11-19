@@ -898,7 +898,7 @@ păstrați (T păstrează secretul cardului embed), patru variații aleatoare g�
 (`Normalizare::FELURI_COMPARATIE`, declarate și ele în `ce-se-schimba.md`, după revizie): secretul cardului embed, referințele
 numerice cu care un plugin de cookie-uri ascunde un email (doar în `span.cmplz-obfuscate`, cu fanionul ei), ID-urile taburilor
 din cardul embed (valoarea întreagă a atributului, și doar dacă fiecare `aria-controls` are `id`-ul pereche cu aceeași valoare)
-și ora generării, doar în comentariul exact al generatorului și doar într-un sitemap. Orice altă diferență între UA-uri sau între
+și ora generării, doar în comentariul exact al generatorului și doar într-un sitemap (XML, sau cel RSS al AIOSEO, `/sitemap.rss`). Orice altă diferență între UA-uri sau între
 două cereri e NU, cu diferența arătată. Ieșirea, numai în dosarul capturii (implicit `site/capturat/`, niciodată în repo, judecat
 pe calea reală): `brut/<sha256 adresei>/` cu corpul decodat al fiecărui răspuns și antetele lui (cele de codare și de fir se scot
 și se notează), `index.json`, `manifest.json` (paginile și fișierele cerute de ele și, recursiv, de foile proprii, cu sha256-ul

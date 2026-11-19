@@ -446,6 +446,14 @@ $verifica('ora-generarii: doar comentariul întreg al generatorului, doar pe un 
     && $rs($com('9:14')) !== $rs($com('9:15')) && $rs($com('9:14', rest: '<urlset></urlset>')) === $rs($com('9:15', rest: '<urlset></urlset>'))
     && str_contains($rs($com('9:14', rest: '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></sitemapindex>'), '/page-sitemap.xml'), '{{ax:data}}')
     && !str_contains($rs($com('9:14', rest: '<urlset></urlset>'), '/feed/'), '{{ax:data}}') && !str_contains($rs($com('9:14', rest: '<rss></rss>')), '{{ax:data}}'));
+// Sitemap-ul RSS al AIOSEO (/sitemap.rss, rădăcina <rss>): același comentariu întreg; un feed (/feed/, alt .rss) sau alt corp, nu.
+$rssC = '<rss version="2.0"><channel><lastBuildDate>Mon, 03 Mar 2031 09:00:00 +0000</lastBuildDate></channel></rss>';
+$verifica('ora-generarii pe sitemap-ul RSS: doar /sitemap.rss cu <rss>, doar comentariul întreg; /feed/, /alt.rss, /sitemap.rss fără <rss>, <lastBuildDate> — diferite',
+    $rs($com('9:14', rest: $rssC), '/sitemap.rss') === $rs($com('9:15', rest: $rssC), '/sitemap.rss') && str_contains($rs($com('9:14', rest: $rssC), '/sitemap.rss'), '{{ax:data}}')
+    && $rs($com('9:14', rest: $rssC), '/feed/') !== $rs($com('9:15', rest: $rssC), '/feed/') && $rs($com('9:14', rest: $rssC), '/alt.rss') !== $rs($com('9:15', rest: $rssC), '/alt.rss')
+    && $rs($com('9:14', rest: '<channel></channel>'), '/sitemap.rss') !== $rs($com('9:15', rest: '<channel></channel>'), '/sitemap.rss')
+    && $rs($com('9:14', rest: str_replace('09:00', '09:14', $rssC)), '/sitemap.rss') !== $rs($com('9:14', rest: str_replace('09:00', '09:15', $rssC)), '/sitemap.rss')
+    && !str_contains($rs($com('9:14', 'generated on', $rssC), '/sitemap.rss'), '{{ax:data}}'));
 if (class_exists(\App\Support\CadruCapturat\Jetoane::class)) {
     $verifica('fail-closed: o captură care conține deja „{{ax:” (oricum scris) e NU la dialect, fără T', ($rJ = (new Divi4())->transforma('<!doctype html><p>{{AX:cale}}</p>', 'https://pensiune-proba.test', []))->html === ''
         && str_contains(implode(' ', $rJ->probleme), '{{ax:') && (new Divi4())->transforma('<!doctype html><p>{ {ax:cale}}</p>', 'https://pensiune-proba.test', [])->probleme === []);

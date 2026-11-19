@@ -67,7 +67,7 @@ final class Normalizare
      * `id-aleator-embed` — numărul aleator din valoarea ÎNTREAGĂ a unui `id` / `aria-controls` / `aria-describedby` /
      * `aria-labelledby` / `for` de forma `wp-embed-share-(tab|description)-(wordpress|html)-<pagină>-<aleator>` (cardul embed);
      * `ora-generarii` — data și ora din comentariul întreg „This sitemap was dynamically generated on <dată> at <oră> by All in One
-     * SEO v<versiune> - the original SEO plugin for WordPress.” al unui sitemap.
+     * SEO v<versiune> - the original SEO plugin for WordPress.” al unui sitemap (XML, sau sitemap-ul RSS al AIOSEO, `/sitemap.rss`).
      */
     public const FELURI_COMPARATIE = ['secret', 'entitati-text', 'id-aleator-embed', 'ora-generarii'];
 
@@ -99,6 +99,10 @@ final class Normalizare
 
     /** Rădăcina unui sitemap (sitemaps.org): `<urlset` sau `<sitemapindex`. */
     private const RE_CORP_SITEMAP = '#<(?:urlset|sitemapindex)[\s>]#';
+
+    /** Sitemap-ul RSS al AIOSEO: doar calea lui exactă, cu rădăcina `<rss` (un feed obișnuit, `/feed/`, nu e sitemap). */
+    private const CALE_SITEMAP_RSS = '/sitemap.rss';
+    private const RE_CORP_SITEMAP_RSS = '#<rss[\s>]#';
 
     /** @var list<string> */
     private array $gazde;
@@ -381,7 +385,7 @@ final class Normalizare
 
     /**
      * Un răspuns înghețat, pentru comparație: nonce-urile; la oEmbed (`$fel` = `oembed`) secretul codului de încorporare; doar la
-     * un sitemap (`$cale` de sitemap și corpul cu rădăcina `<urlset>`/`<sitemapindex>`), ora din comentariul întreg al
+     * un sitemap (`$cale` de sitemap și corpul cu rădăcina `<urlset>`/`<sitemapindex>`, sau `/sitemap.rss` cu `<rss>`), ora din comentariul întreg al
      * generatorului. Adresele rămân absolute. (Octeții răspunsului se păstrează cum au venit.)
      */
     public function raspuns(string $corp, string $fel = 'raspuns', string $cale = ''): string
@@ -391,7 +395,9 @@ final class Normalizare
         if ($fel === 'oembed') {
             return $this->secrete($corp, $f);
         }
-        if (preg_match(self::RE_CALE_SITEMAP, $cale) !== 1 || preg_match(self::RE_CORP_SITEMAP, $corp) !== 1) {
+        $xml = preg_match(self::RE_CALE_SITEMAP, $cale) === 1 && preg_match(self::RE_CORP_SITEMAP, $corp) === 1;
+        $rss = $cale === self::CALE_SITEMAP_RSS && preg_match(self::RE_CORP_SITEMAP_RSS, $corp) === 1;
+        if (!$xml && !$rss) {
             return $corp;
         }
         return (string) preg_replace(self::RE_ORA_GENERARII, '${1}{{ax:data}}${2}', $corp);
