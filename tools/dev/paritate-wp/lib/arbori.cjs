@@ -4,7 +4,10 @@
 //
 //  - rezolvaMasti: selectorii măștilor → cheile elementelor prinse (drumul de etichete, ca în sonde-pagina.cjs);
 //  - comparaDom: cei doi arbori, aliniați nod cu nod (aceeași potrivire ca inventarul mutațiilor), după normalizările
-//    declarate (elemente și atribute ignorate, clasele ca mulțimi, stilul gol = absent, înlocuirile pe valori).
+//    declarate (elemente și atribute ignorate, clasele ca mulțimi, stilul gol = absent, înlocuirile pe valori). Întoarce și
+//    harta cheilor (cheia de dinainte de normalizări a fiecărui element al candidatului → cheia perechii lui din referință) și
+//    cheile elementelor ignorate pe fiecare parte: celelalte sonde compară elementele după pereche, nu după poziție, deci un
+//    nod mutat sau un subarbore în plus nu mai deplasează cheile vecinilor, iar un element fără pereche e raportat.
 
 'use strict';
 
@@ -35,10 +38,23 @@ function comparaDom(o) {
     const ignoraAtribute = (n.ignora_atribute || []).map((x) => new RegExp(x));
     const inlocuiri = (o.inlocuiri || []).map((x) => ({ re: new RegExp(x.re, 'g'), cu: x.cu }));
     const atributeUrl = new Set(['href', 'src', 'action', 'poster', 'data-src', 'data-mfp-src', 'data-placeholder-image', 'cite', 'formaction']);
-    const pregateste = (html, urlDoc, origine) => {
+    const cheieInitiala = (el) => {
+        const parti = [];
+        for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+            let i = 1;
+            for (let f = e.previousElementSibling; f; f = f.previousElementSibling) { if (f.tagName === e.tagName) { i++; } }
+            parti.unshift(e.tagName.toLowerCase() + ':' + i);
+        }
+        return parti.join('>');
+    };
+    const pregateste = (html, urlDoc, origine, cuMasti) => {
         const doc = new DOMParser().parseFromString(html, 'text/html');
+        // cheile din măsurători (sonde-pagina.cjs) sunt ale DOM-ului întreg: se notează înainte de orice normalizare
+        const initiala = new WeakMap();
+        for (const e of [doc.documentElement, ...doc.documentElement.querySelectorAll('*')]) { initiala.set(e, cheieInitiala(e)); }
+        const ignorate = [];
         for (const sel of (n.ignora_elemente || [])) {
-            try { doc.querySelectorAll(sel).forEach((e) => e.remove()); } catch (e) { /* selectorul greșit apare în raport prin rezolvaMasti */ }
+            try { doc.querySelectorAll(sel).forEach((e) => { ignorate.push(initiala.get(e)); e.remove(); }); } catch (e) { /* selectorul greșit apare în raport prin rezolvaMasti */ }
         }
         // clasele și atributele ignorate doar pe anumite elemente (de exemplu clasele de sistem puse de server după UA)
         for (const r of (n.ignora_clase || [])) {
@@ -49,7 +65,7 @@ function comparaDom(o) {
         }
         // măștile: un selector golește elementul (conținutul și atributele nu se mai compară); o mască pe atribute
         // ({selector, atribute, clase}) scoate doar atributele sau clasele date de pe elementele prinse
-        for (const m of (o.masti || [])) {
+        for (const m of (cuMasti === false ? [] : (o.masti || []))) {
             const sel = typeof m === 'string' ? m : m.selector;
             const peAtribute = typeof m === 'object' && m && ((m.atribute && m.atribute.length) || (m.clase && m.clase.length));
             try {
@@ -64,7 +80,7 @@ function comparaDom(o) {
                 });
             } catch (e) { /* idem */ }
         }
-        return { doc, urlDoc, origine };
+        return { doc, urlDoc, origine, initiala, ignorate };
     };
     const valoare = (ctx, el, nume, v) => {
         let x = v;
@@ -201,10 +217,22 @@ function comparaDom(o) {
         for (const [i, j] of perechi) { compara(la[i], lb[j]); }
     };
     compara(A.doc.documentElement, B.doc.documentElement);
+    // Harta perechilor, pe arborii fără măști (o mască golește elementul pentru sonda mutatii, dar elementele din el rămân în
+    // celelalte sonde, care își aplică singure măștile): aceeași aliniere, până la frunze.
+    const A0 = pregateste(o.referinta, o.urlReferinta, o.origineReferinta, false);
+    const B0 = pregateste(o.candidat, o.urlCandidat, o.origineCandidat, false);
+    const harta = {};
+    const perecheaza = (a, b) => {
+        harta[B0.initiala.get(b)] = A0.initiala.get(a);
+        const la = Array.from(a.children);
+        const lb = Array.from(b.children);
+        for (const [i, j] of aliniaza(la, lb)) { perecheaza(la[i], lb[j]); }
+    };
+    perecheaza(A0.doc.documentElement, B0.doc.documentElement);
     const dtA = A.doc.doctype ? A.doc.doctype.name : '';
     const dtB = B.doc.doctype ? B.doc.doctype.name : '';
     if (dtA !== dtB) { pune({ tip: 'doctype', referinta: dtA, candidat: dtB }); }
-    return { total, diferente: dif };
+    return { total, diferente: dif, harta, ignorateReferinta: A0.ignorate, ignorateCandidat: B0.ignorate };
 }
 
 module.exports = { rezolvaMasti, comparaDom };

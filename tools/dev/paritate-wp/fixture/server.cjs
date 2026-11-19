@@ -1,7 +1,7 @@
 // Serverul fixture-ului inventat „Pensiunea Probă” pentru autotestul harness-ului de paritate (G-paritate). Servește
 // fixture/site/ cu o politică CSP impusă și, la cerere, o diferență plantată (o singură variantă pe server):
 //
-//   node server.cjs --port=<p> [--varianta=nimic|pixel|clasa|mutatie|terta|csp|tracker]
+//   node server.cjs --port=<p> [--varianta=nimic|pixel|clasa|mutatie|terta|csp|tracker|subarbore]
 //
 //   pixel   — poza are un pixel schimbat (doar pixelii și octeții pozei diferă);
 //   clasa   — o clasă în plus în HTML-ul static (fără niciun efect vizual);
@@ -25,7 +25,7 @@ for (const x of process.argv.slice(2)) {
 }
 const port = Number(arg.port || 0);
 const varianta = arg.varianta || 'nimic';
-const VARIANTE = ['nimic', 'pixel', 'clasa', 'mutatie', 'terta', 'csp', 'tracker'];
+const VARIANTE = ['nimic', 'pixel', 'clasa', 'mutatie', 'terta', 'csp', 'tracker', 'subarbore'];
 if (!port || !VARIANTE.includes(varianta)) {
     console.error('folosire: server.cjs --port=<p> [--varianta=' + VARIANTE.join('|') + ']');
     process.exit(2);
@@ -58,6 +58,8 @@ function html(fisier) {
     let s = fs.readFileSync(fisier, 'utf8');
     if (varianta === 'clasa') { s = s.replace('<div class="card card-2">', '<div class="card card-2 card-plantat">'); }
     if (varianta === 'terta') { s = s.replace('<!--PLANTAT-CORP-->', '<img class="terta" src="https://cdn.terta.example/p.gif" alt="" width="1" height="1">'); }
+    // un subarbore în plus înaintea primei secțiuni: cheile poziționale ale secțiunilor de după se deplasează
+    if (varianta === 'subarbore') { s = s.replace('<section class="erou">', '<section class="extra"><h2>Anunț inventat</h2><p>Text în plus.</p></section>\n  <section class="erou">'); }
     if (varianta === 'csp') { s = s.replace('<!--PLANTAT-CORP-->', '<script>document.body.setAttribute("data-inline", "1");</script>'); }
     return s;
 }

@@ -9,7 +9,9 @@
 //   2. fără mască, ceasul fixture-ului (conținut diferit la fiecare încărcare) trebuie să apară ca diferență: măștile lucrează;
 //   3. fiecare diferență plantată pe al doilea server trebuie prinsă de sonda ei: un pixel (pixeli), o clasă (mutatii), o
 //      mutație (mutatii), o cerere terță înainte de acord (retea), o încălcare CSP (csp), o cerere spre un tracker fără fișier
-//      de probă (retea);
+//      de probă (retea); un subarbore în plus la candidat (o secțiune înaintea celorlalte): raportat ca atare (mutatii, stil,
+//      text, geometrie: elementele lui „doar la candidat”, nimic sărit), iar elementele de după, puse în pereche după arborii
+//      aliniați, nu după poziție, nu dau diferențe false (poza și linkurile lor trec);
 //   4. raportul pică fără dovezile P1/P2 (un ID fără dovadă) și pe o diferență plantată; un raport modificat nu mai trece
 //      verificarea sha256;
 //   5. măștile și regiunile: masca ceasului apare în lista măștilor din raport („aplicată”); o mască cu aria pe un singur
@@ -167,6 +169,13 @@ async function main() {
             mutatie: (c) => picate(c, 'mutatii', 'acasa').length === 2 && detalii(c, 'mutatii', 'acasa').some((d) => d.tip === 'atribut' && d.atribut === 'aria-expanded'),
             terta: (c) => picate(c, 'retea', 'acasa').length === 2 && detalii(c, 'retea', 'acasa').some((d) => d.tip === 'cerere terță înainte de acord' && /cdn\.terta\.example/.test(d.url)),
             csp: (c) => picate(c, 'csp', 'acasa').length === 2 && detalii(c, 'csp', 'acasa').some((d) => /script-src/.test(d.efectiva || d.directiva || '')) && picate(c, 'csp', 'pagina-2').length === 0,
+            subarbore: (c) => picate(c, 'mutatii', 'acasa').length === 2 && detalii(c, 'mutatii', 'acasa').some((d) => d.tip === 'nod-doar-in-candidat' && /class="extra"/.test(d.html || ''))
+                && picate(c, 'stil', 'acasa').length === 2 && detalii(c, 'stil', 'acasa').every((d) => (d.tip === 'element vizibil doar la candidat' && /main:1>section:1/.test(d.k))
+                    || (d.proprietate === 'height' && /^html:1(>body:1(>main:1)?)?$/.test(d.k)))
+                && detalii(c, 'stil', 'acasa').filter((d) => d.tip === 'element vizibil doar la candidat').length === 6
+                && picate(c, 'geometrie', 'acasa').length === 2 && detalii(c, 'geometrie', 'acasa').filter((d) => d.tip === 'element doar la candidat').length >= 6
+                && picate(c, 'imagini').length === 0 && picate(c, 'linkuri').length === 0 && detalii(c, 'text', 'acasa').filter((d) => d.k !== '(innerText al paginii)').every((d) => d.referinta === null)
+                && picate(c, 'mutatii', 'pagina-2').length === 0,
             tracker: (c) => picate(c, 'retea').length === 4 && detalii(c, 'retea').some((d) => d.tip === 'tracker fără fișier de probă' && /googletagmanager/.test(d.url))
                 && detalii(c, 'retea').some((d) => d.tip === 'cerere terță înainte de acord' && /googletagmanager/.test(d.url)),
         };

@@ -6,6 +6,11 @@
 //   rezolvate), text (punctele de cod exacte), linkuri, imagini (și sha256 al octeților primiți), head, mutatii (DOM-ul după
 //   scripturi, nod cu nod: inventarul mutațiilor trebuie să fie același), retea (nicio cerere terță înainte de acord, niciun
 //   4xx/5xx, nicio cerere de tracker fără fișier de probă, aceleași adrese proprii), csp (nicio încălcare în afara excepțiilor).
+// Perechile elementelor: sondele pe elemente (stil, geometrie, text, linkuri, imagini) pun elementele în pereche după arborii
+// DOM aliniați (aceeași aliniere ca sonda mutatii), nu după cheia pozițională: un nod mutat sau un subarbore în plus nu mai
+// deplasează cheile vecinilor (care ar fi comparați cu alte elemente), iar fiecare element fără pereche, pe oricare parte, e o
+// diferență raportată („doar în referință” / „doar la candidat”, inclusiv în geometrie); nimic nu se sare în tăcere. Măștile se
+// aplică pe fiecare parte cu cheile prinse pe ea.
 // Normalizările sunt doar cele declarate în paritate.json (listă închisă, DECIZIE §6.7); fiecare are un nume și un motiv.
 // Măștile (paritate.json „masti”) au un nume și un motiv și o arie: pagini, profiluri, ferestre („1440” sau „1440x900”), stari,
 // felii, capturi (lista exactă „pagina/profil/fereastra/stare”), sonde; prind elemente (selector), doar atribute sau clase ale
@@ -211,12 +216,15 @@ class Comparatie {
         const kRef = Object.keys(selectori).length ? await this.pagina.evaluate(A.rezolvaMasti, { html: domRef, selectori }) : {};
         const kCand = Object.keys(selectori).length ? await this.pagina.evaluate(A.rezolvaMasti, { html: domCand, selectori }) : {};
         const prinse = (n) => [...new Set([...(Array.isArray(kRef[n]) ? kRef[n] : []), ...(Array.isArray(kCand[n]) ? kCand[n] : [])])];
-        const prefixe = (sonda) => {
+        // `parte`: 'ref' sau 'cand' = doar cheile prinse pe acea parte (cheile poziționale ale unei părți nu înseamnă nimic pe
+        // cealaltă: după un subarbore în plus, cheia unui element mascat al referinței e a altui element la candidat)
+        const prefixe = (sonda, parte) => {
             const l = [];
             masti.forEach((m, i) => {
                 if (m.sonde && !m.sonde.includes(sonda)) { return; }
                 if (m.atribute || m.clase) { return; } // măștile pe atribute lucrează doar în sonda mutatii
-                for (const k of prinse('m' + i)) { l.push(k); }
+                const chei = parte === 'ref' ? (Array.isArray(kRef['m' + i]) ? kRef['m' + i] : []) : parte === 'cand' ? (Array.isArray(kCand['m' + i]) ? kCand['m' + i] : []) : prinse('m' + i);
+                for (const k of chei) { l.push(k); }
             });
             return l;
         };
@@ -245,10 +253,16 @@ class Comparatie {
         const iRef = this.ref.citesteJson(mr.obiecte.incarcare);
         const iCand = this.cand.citesteJson(mc.obiecte.incarcare);
         const norm = (v) => aplicaInlocuiri(v, this.inlocuiri, origini);
+        // Perechile elementelor (comparaDom: arborii aliniați): sondele pe elemente compară după pereche, nu după poziție, ca un
+        // nod mutat sau un subarbore în plus să nu deplaseze cheile vecinilor; un element fără pereche e o diferență. Fără DOM-uri,
+        // perechile rămân pozițiile (cheile egale).
+        const dom = domRef && domCand ? await this.comparaArbori({ domRef, domCand, mr, mc, masti }) : null;
+        const pereche = this.pereche(dom);
         for (const s of this.sondeFelie) {
             const p = prefixe(s);
+            const pp = { ref: prefixe(s, 'ref'), cand: prefixe(s, 'cand') };
             try {
-                rez.sonde[s] = await this['sonda_' + s]({ mr, mc, mRef, mCand, iRef, iCand, domRef, domCand, p, masti, norm, origini, id });
+                rez.sonde[s] = await this['sonda_' + s]({ mr, mc, mRef, mCand, iRef, iCand, domRef, domCand, p, pp, masti, norm, origini, id, dom, pereche });
             } catch (e) {
                 rez.sonde[s] = { stare: 'picat', diferente: 1, detalii: ['eroare a sondei: ' + String(e && e.message || e)] };
             }
@@ -302,6 +316,54 @@ class Comparatie {
             geometrie: this.rezultat(g, { pasi: a.pasi.length }), stil: this.rezultat(st, { pasi: a.pasi.length }),
             pixeli: { stare: pixeliDif === 0 ? 'trecut' : 'picat', diferente: pixeliDif, detalii: px.slice(0, 60), pasi: a.pasi.length, pasi_zone: pasiZone },
         };
+    }
+
+    async comparaArbori({ domRef, domCand, mr, mc, masti }) {
+        const nd = (this.config.normalizari || {}).dom || {};
+        const sel = masti.filter((m) => m.selector && (!m.sonde || m.sonde.includes('mutatii'))).map((m) => (m.atribute || m.clase ? { selector: m.selector, atribute: m.atribute || [], clase: m.clase || [] } : m.selector));
+        return this.pagina.evaluate(A.comparaDom, {
+            referinta: domRef, candidat: domCand, urlReferinta: mr.urlFinal || mr.url, urlCandidat: mc.urlFinal || mc.url,
+            origineReferinta: new URL(mr.url).origin, origineCandidat: new URL(mc.url).origin,
+            normalizari: nd, inlocuiri: (this.config.normalizari || {}).inlocuiri || [], masti: sel,
+        });
+    }
+
+    // Perechea unei chei a candidatului: cheia elementului din referință aliniat cu el; `null` = fără pereche (subarbore doar la
+    // candidat), `false` = element ignorat de normalizări. Pe referință: `false` = ignorat, altfel cheia ei.
+    pereche(dom) {
+        if (!dom) { return { cand: (k) => k, ref: () => true }; }
+        const h = new Map(Object.entries(dom.harta || {}));
+        const ir = dom.ignorateReferinta || [];
+        const ic = dom.ignorateCandidat || [];
+        return {
+            cand: (k) => (sub(k, ic) ? false : (h.has(k) ? h.get(k) : null)),
+            ref: (k) => !sub(k, ir),
+        };
+    }
+
+    // Elementele celor două părți, puse în pereche: [referință, candidat] (unul dintre ele poate lipsi). Cheile mascate (p) se
+    // sar pe partea lor; o pereche se raportează cu cheia referinței, un element doar la candidat cu cheia lui.
+    perechi(lr, lc, pereche, pp) {
+        const hc = new Map();
+        const doarCand = [];
+        for (const e of lc) {
+            if (sub(e.k, pp.cand)) { continue; }
+            const kr = pereche.cand(e.k);
+            if (kr === false) { continue; }
+            if (kr === null) { doarCand.push(e); continue; }
+            hc.set(kr, e);
+        }
+        const rez = [];
+        const vazute = new Set();
+        for (const e of lr) {
+            if (sub(e.k, pp.ref) || !pereche.ref(e.k)) { continue; }
+            const c = hc.get(e.k);
+            if (c) { vazute.add(e.k); }
+            rez.push([e, c || null]);
+        }
+        for (const [kr, c] of hc) { if (!vazute.has(kr)) { doarCand.push(c); } }
+        for (const c of doarCand) { rez.push([null, c]); }
+        return rez;
     }
 
     // Rezultatul unei sonde: primele 60 de diferențe în detalii și lista completă a cheilor diferite (pentru regiunile punctelor
@@ -383,20 +445,14 @@ class Comparatie {
         return { instabil_captura: rez };
     }
 
-    sonda_stil({ mRef, mCand, p, norm, masti, id }) {
+    sonda_stil({ mRef, mCand, p, norm, masti, id, pp, pereche }) {
         if (!mRef || !mCand) { return { stare: 'picat', diferente: 1, detalii: ['stilurile lipsesc'] }; }
-        const harta = (m) => {
-            const h = new Map();
-            for (const e of m.stiluri.elemente) { if (!sub(e.k, p)) { h.set(e.k, e); } }
-            return h;
-        };
-        const hr = harta(mRef);
-        const hc = harta(mCand);
         const dif = [];
         const prop = mRef.stiluri.proprietati;
         const ps = mRef.stiluri.pseudo;
-        for (const [k, er] of hr) {
-            const ec = hc.get(k);
+        for (const [er, ec] of this.perechi(mRef.stiluri.elemente, mCand.stiluri.elemente, pereche, pp)) {
+            if (!er) { dif.push({ k: ec.k, tip: 'element vizibil doar la candidat' }); continue; }
+            const k = er.k;
             if (!ec) { dif.push({ k, tip: 'element vizibil doar în referință' }); continue; }
             for (let i = 0; i < prop.length; i++) {
                 const vr = norm(mRef.stiluri.tabel[er.v[i]]);
@@ -414,32 +470,31 @@ class Comparatie {
                 }
             }
         }
-        for (const k of hc.keys()) { if (!hr.has(k)) { dif.push({ k, tip: 'element vizibil doar la candidat' }); } }
         // măștile cu stări observate (zgomot.cjs): elementul mascat trebuie să cadă pe una dintre ele; se spune pe care
         const stariMasti = [];
         for (const m of masti || []) {
             const so = m.stari_observate && m.stari_observate[id];
             if (!so || (m.sonde && !m.sonde.includes('stil'))) { continue; }
             for (const [k, x] of Object.entries(so)) {
-                const ec = mCand.stiluri.elemente.find((e) => e.k === k);
+                const ec = mCand.stiluri.elemente.find((e) => pereche.cand(e.k) === k);
                 const val = ec ? x.proprietati.map((pr) => { const ix = mCand.stiluri.proprietati.indexOf(pr); return ix < 0 ? null : norm(mCand.stiluri.tabel[ec.v[ix]]); }) : null;
                 const idx = val ? x.stari.findIndex((st) => JSON.stringify(st.valori.map((v) => norm(v))) === JSON.stringify(val)) : -1;
                 stariMasti.push({ masca: m.nume, i: m.i, k, stare: idx, incarcari: idx >= 0 ? x.stari[idx].incarcari : null, candidat: val });
                 if (idx < 0) { dif.push({ k, tip: 'în afara stărilor observate ale măștii „' + m.nume + '”', proprietati: x.proprietati, candidat: val, stari: x.stari.map((st) => st.valori) }); }
             }
         }
-        return this.rezultat(dif, { elemente: hr.size, ...(stariMasti.length ? { stari_masti: stariMasti } : {}) });
+        const elemente = mRef.stiluri.elemente.filter((e) => !sub(e.k, pp.ref) && pereche.ref(e.k)).length;
+        return this.rezultat(dif, { elemente, ...(stariMasti.length ? { stari_masti: stariMasti } : {}) });
     }
 
-    sonda_geometrie({ mRef, mCand, p }) {
+    sonda_geometrie({ mRef, mCand, p, pp, pereche }) {
         if (!mRef || !mCand) { return { stare: 'picat', diferente: 1, detalii: ['geometria lipsește'] }; }
         const t = this.toleranta.geometrie_px;
-        const hc = new Map(mCand.stiluri.elemente.map((e) => [e.k, e]));
         const dif = [];
-        for (const er of mRef.stiluri.elemente) {
-            if (sub(er.k, p)) { continue; }
-            const ec = hc.get(er.k);
-            if (!ec) { continue; } // lipsa elementului o raportează sonda stilului și sonda mutațiilor
+        // fiecare element vizibil fără pereche e o diferență (nimic sărit în tăcere)
+        for (const [er, ec] of this.perechi(mRef.stiluri.elemente, mCand.stiluri.elemente, pereche, pp)) {
+            if (!ec) { dif.push({ k: er.k, tip: 'element doar în referință', referinta: er.g, candidat: null }); continue; }
+            if (!er) { dif.push({ k: ec.k, tip: 'element doar la candidat', referinta: null, candidat: ec.g }); continue; }
             const d = er.g.map((v, i) => Math.abs(v - ec.g[i]));
             if (d.some((x) => x > t)) { dif.push({ k: er.k, referinta: er.g, candidat: ec.g }); }
         }
@@ -480,13 +535,13 @@ class Comparatie {
         return this.rezultat(dif, { foi: fr.length });
     }
 
-    sonda_text({ iRef, iCand, p }) {
+    sonda_text({ iRef, iCand, p, pp, pereche }) {
         const dif = [];
         // textul vizibil al paginii, cu textul elementelor mascate înlocuit (fiecare parte cu al ei)
         // (o singură înlocuire pe text mascat, cele lungi întâi, cu un marcaj fără litere: înlocuirile nu se pot hrăni una pe alta)
-        const faraMascate = (i) => {
+        const faraMascate = (i, pl) => {
             let t = i.textPagina || '';
-            const mascate = (i.text || []).filter((x) => sub(x.k, p)).map((x) => (x.i !== undefined ? x.i : x.t)).filter((v) => v && v.trim().length >= 2)
+            const mascate = (i.text || []).filter((x) => sub(x.k, pl)).map((x) => (x.i !== undefined ? x.i : x.t)).filter((v) => v && v.trim().length >= 2)
                 .sort((u, v) => v.length - u.length);
             for (const v of mascate) {
                 const j = t.indexOf(v);
@@ -494,32 +549,25 @@ class Comparatie {
             }
             return t;
         };
-        const a = faraMascate(iRef);
-        const b = faraMascate(iCand);
+        const a = faraMascate(iRef, pp.ref);
+        const b = faraMascate(iCand, pp.cand);
         if (a !== b) {
             let j = 0;
             while (j < Math.min(a.length, b.length) && a[j] === b[j]) { j++; }
             dif.push({ k: '(innerText al paginii)', la: j, referinta: JSON.stringify(a.slice(Math.max(0, j - 40), j + 80)), candidat: JSON.stringify(b.slice(Math.max(0, j - 40), j + 80)) });
         }
-        const hc = new Map((iCand.text || []).map((x) => [x.k, x]));
-        const hr = new Map((iRef.text || []).map((x) => [x.k, x]));
-        for (const [k, a] of hr) {
-            if (sub(k, p)) { continue; }
-            const b = hc.get(k);
-            if (!b) { dif.push({ k, referinta: a.t || a.i, candidat: null }); continue; }
-            if ((a.t || '') !== (b.t || '') || (a.i || '') !== (b.i || '')) { dif.push({ k, referinta: a.t !== undefined ? a.t : a.i, candidat: b.t !== undefined ? b.t : b.i }); }
+        for (const [a, b] of this.perechi(iRef.text || [], iCand.text || [], pereche, pp)) {
+            if (!a) { dif.push({ k: b.k, referinta: null, candidat: b.t || b.i }); continue; }
+            if (!b) { dif.push({ k: a.k, referinta: a.t || a.i, candidat: null }); continue; }
+            if ((a.t || '') !== (b.t || '') || (a.i || '') !== (b.i || '')) { dif.push({ k: a.k, referinta: a.t !== undefined ? a.t : a.i, candidat: b.t !== undefined ? b.t : b.i }); }
         }
-        for (const [k, b] of hc) { if (!hr.has(k) && !sub(k, p)) { dif.push({ k, referinta: null, candidat: b.t || b.i }); } }
         return this.rezultat(dif);
     }
 
-    sonda_linkuri({ iRef, iCand, p, norm }) {
-        const cheie = (l) => l.k;
-        const hc = new Map(iCand.linkuri.map((l) => [cheie(l), l]));
+    sonda_linkuri({ iRef, iCand, p, norm, pp, pereche }) {
         const dif = [];
-        for (const a of iRef.linkuri) {
-            if (sub(a.k, p)) { continue; }
-            const b = hc.get(cheie(a));
+        for (const [a, b] of this.perechi(iRef.linkuri, iCand.linkuri, pereche, pp)) {
+            if (!a) { dif.push({ k: b.k, referinta: null, candidat: b.href }); continue; }
             if (!b) { dif.push({ k: a.k, referinta: a.href, candidat: null }); continue; }
             for (const c of ['href', 'target', 'rel', 'text']) {
                 const va = c === 'href' ? norm(a[c]) : a[c];
@@ -527,20 +575,16 @@ class Comparatie {
                 if (va !== vb) { dif.push({ k: a.k, camp: c, referinta: va, candidat: vb }); }
             }
         }
-        const kr = new Set(iRef.linkuri.map(cheie));
-        for (const b of iCand.linkuri) { if (!kr.has(cheie(b)) && !sub(b.k, p)) { dif.push({ k: b.k, referinta: null, candidat: b.href }); } }
         return this.rezultat(dif);
     }
 
-    sonda_imagini({ mr, mc, mRef, mCand, p, norm }) {
+    sonda_imagini({ mr, mc, mRef, mCand, p, norm, pp, pereche }) {
         if (!mRef || !mCand) { return { stare: 'picat', diferente: 1, detalii: ['imaginile lipsesc'] }; }
         const shaRef = this.shaPrimite(this.ref, mr);
         const shaCand = this.shaPrimite(this.cand, mc);
-        const hc = new Map(mCand.imagini.map((i) => [i.k, i]));
         const dif = [];
-        for (const a of mRef.imagini) {
-            if (sub(a.k, p)) { continue; }
-            const b = hc.get(a.k);
+        for (const [a, b] of this.perechi(mRef.imagini, mCand.imagini, pereche, pp)) {
+            if (!a) { dif.push({ k: b.k, referinta: null, candidat: b.currentSrc }); continue; }
             if (!b) { dif.push({ k: a.k, referinta: a.currentSrc, candidat: null }); continue; }
             for (const c of ['currentSrc', 'src', 'srcset', 'sizes', 'alt', 'title', 'loading', 'decoding']) {
                 const va = norm(a[c]);
@@ -552,8 +596,6 @@ class Comparatie {
             const sb = shaCand.get(norm(b.currentSrc));
             if (sa && sb && sa !== sb) { dif.push({ k: a.k, camp: 'sha256', referinta: sa, candidat: sb }); }
         }
-        const kr = new Set(mRef.imagini.map((i) => i.k));
-        for (const b of mCand.imagini) { if (!kr.has(b.k) && !sub(b.k, p)) { dif.push({ k: b.k, referinta: null, candidat: b.currentSrc }); } }
         return this.rezultat(dif);
     }
 
@@ -601,15 +643,9 @@ class Comparatie {
         return this.rezultat(dif, { elemente: a.length, ...(peReguli.size ? { comparate_pe_reguli: [...peReguli].map((id) => id + ': comparat pe reguli') } : {}) });
     }
 
-    async sonda_mutatii({ domRef, domCand, mr, mc, masti, p }) {
-        if (!domRef || !domCand) { return { stare: 'picat', diferente: 1, detalii: ['DOM-ul după scripturi lipsește'] }; }
-        const nd = (this.config.normalizari || {}).dom || {};
-        const sel = masti.filter((m) => m.selector && (!m.sonde || m.sonde.includes('mutatii'))).map((m) => (m.atribute || m.clase ? { selector: m.selector, atribute: m.atribute || [], clase: m.clase || [] } : m.selector));
-        const r = await this.pagina.evaluate(A.comparaDom, {
-            referinta: domRef, candidat: domCand, urlReferinta: mr.urlFinal || mr.url, urlCandidat: mc.urlFinal || mc.url,
-            origineReferinta: new URL(mr.url).origin, origineCandidat: new URL(mc.url).origin,
-            normalizari: nd, inlocuiri: (this.config.normalizari || {}).inlocuiri || [], masti: sel,
-        });
+    async sonda_mutatii({ domRef, domCand, dom }) {
+        if (!domRef || !domCand || !dom) { return { stare: 'picat', diferente: 1, detalii: ['DOM-ul după scripturi lipsește'] }; }
+        const r = dom;
         // unitățile (felul, cheia, părintele, atributul, clasele) tuturor diferențelor, pentru zgomot.cjs
         const unitati = r.diferente.map((d) => ({ tip: d.tip, k: d.k, ...(d.parinte ? { parinte: d.parinte } : {}), ...(d.atribut ? { atribut: d.atribut } : {}),
             ...(d.tip === 'clase' ? { clase: [...(d.referinta_plus || []), ...(d.candidat_plus || [])] } : {}) }));
