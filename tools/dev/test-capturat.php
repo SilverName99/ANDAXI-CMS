@@ -288,6 +288,9 @@ $rEmbed = $cerere($port, '/camere/embed/');
 $verifica('cardul embed: 200 din documentul lui, foaia pe media="all", fără frame-ancestors în CSP', $rEmbed['cod'] === 200 && str_contains($rEmbed['corp'], 'media="all"')
     && !str_contains($rEmbed['corp'], 'onload') && !str_contains((string) ($rEmbed['antete']['content-security-policy'] ?? ''), 'frame-ancestors')
     && str_contains((string) ($rEmbed['antete']['content-security-policy'] ?? ''), "script-src 'self' 'inline-speculation-rules'"), $rEmbed['cod'] . ' ' . json_encode($rEmbed['antete']));
+// Fonturile de iconițe din foile furnizorilor (Swiper: „swiper-icons” ca data:application/font-woff), ca pe site-ul live.
+$verifica('CSP: font-src permite data: (fonturile de iconițe ale foilor furnizorilor), iar script-src nu', str_contains(CspSite::politica(), "font-src 'self' data:")
+    && !preg_match("/script-src[^;]*data:/", CspSite::politica()) && !preg_match("/default-src[^;]*data:/", CspSite::politica()));
 $db->exec("UPDATE pagini_capturate SET dupa = CONCAT(dupa, '{{ax:necunoscut}}') WHERE cheie = 'pagina:103'");
 $r500 = $cerere($port, '/contact/');
 $verifica('un jeton necunoscut în document: 500, fără nimic din pagină', $r500['cod'] === 500 && !str_contains($r500['corp'], 'et_pb_section') && !str_contains($r500['corp'], '{{ax:'),

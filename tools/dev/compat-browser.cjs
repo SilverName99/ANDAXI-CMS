@@ -57,7 +57,7 @@ const PORT = Number(process.env.CMS_DEV_COMPAT_PORT || 0);
 // (serverul de probă e http); frame-ancestors ca la previzualizare. 'inline-speculation-rules': blocul speculationrules rămâne
 // în pagini (D3), iar Chromium îi aplică script-src (martorul de mai jos). Gazda previzualizării are politica ei; un cadru srcdoc
 // moștenește politica gazdei, deci și ea are nevoie de cuvânt (previzualizarea planificată e cu adresă, C2 §6, cu politica site-ului).
-const politica = (script) => ["default-src 'self'", script, "style-src 'self' 'unsafe-inline'", "img-src 'self' data:", "font-src 'self'",
+const politica = (script) => ["default-src 'self'", script, "style-src 'self' 'unsafe-inline'", "img-src 'self' data:", "font-src 'self' data:",
   "connect-src 'self'", 'frame-src https://www.google.com', "object-src 'none'", "base-uri 'self'", "form-action 'self'",
   "worker-src 'none'", "frame-ancestors 'self'"].join('; ');
 const CSP_SITE = politica("script-src 'self' 'inline-speculation-rules'");

@@ -14,7 +14,8 @@ namespace App\Support;
  *  - `script-src 'self' 'inline-speculation-rules'`: niciun script inline (C nu lasă să ruleze niciun script capturat; datele
  *    stau în `ax-date`, inert), fără hash-uri, fără `'unsafe-inline'` și fără `'unsafe-eval'`; cuvântul pentru blocul
  *    `speculationrules`, care rămâne în pagini ca date (D3) și căruia Chromium îi aplică `script-src`;
- *  - `style-src 'self' 'unsafe-inline'` (Divi are stiluri inline), `img-src 'self' data:`, `font-src 'self'`, `connect-src
+ *  - `style-src 'self' 'unsafe-inline'` (Divi are stiluri inline), `img-src 'self' data:`, `font-src 'self' data:` (foile
+ *    furnizorilor au fonturi de iconițe ca URI `data:`, de exemplu Swiper; un font nu rulează nimic), `connect-src
  *    'self'`, `frame-src` doar harta Google, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, `worker-src 'none'`,
  *    `frame-ancestors 'self'`, `upgrade-insecure-requests`, `report-uri /_andaxi/raport`; plus sursele exacte din `tema.json` →
  *    `csp` (Tema::CSP_DIRECTIVE), iar `csp.mod` = `raport` o trimite ca `Content-Security-Policy-Report-Only` (copia de
@@ -43,7 +44,7 @@ final class CspSite
             'script-src' => ["'self'", "'inline-speculation-rules'"],
             'style-src' => ["'self'", "'unsafe-inline'"],
             'img-src' => ["'self'", 'data:'],
-            'font-src' => ["'self'"],
+            'font-src' => ["'self'", 'data:'],
             'connect-src' => ["'self'"],
             'media-src' => ["'self'"],
             'frame-src' => [self::HARTA],
