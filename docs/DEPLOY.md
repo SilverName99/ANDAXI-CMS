@@ -1105,7 +1105,10 @@ cadru) și `clase-ua.js` (clasele de browser și de dispozitiv pe `<body>`, din 
 (`et_pb_column_single`, `et_pb_row_<mărimi>` pe rândurile interioare din conținut și pe rândul „specialty” din antet, `z-index: 3` pe
 acel rând și pe rândul subsolului, clasele dintr-o listă pe pagină, `ax-date` → `ax_structura` = `{"et-last-child": [selectori]}`, pusă de import
 din pachetul site-ului), `fit-vids.js` (`<style id="fit-vids-style">`, cu textul observat, la sfârșitul lui head) și `dg-lightbox.js` (containerul ascuns
-`.dg-carousel-lightbox` la sfârșitul lui body). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
+`.dg-carousel-lightbox` la sfârșitul lui body). Felia 2: `meniu-mobil.js` (pe fiecare `.mobile_nav` al unui modul meniu,
+`ul#mobile_menuN.et_mobile_menu` cu o copie a listei desktop, prin `cloneNode`, fără id-uri și fără `data-ax-*`; tapul pe bară o
+deschide și o închide în 500 ms pe curba „swing”, cu `closed`/`opened`, iar un tap în timpul animației o întoarce, OBS-06). Poarta:
+**G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
 la adresele vechi ca WordPress-ul: slash-ul final (`/x` → `/x/`), majusculele cu 200, `?page_id=`, `?p=`, `?cat=`,

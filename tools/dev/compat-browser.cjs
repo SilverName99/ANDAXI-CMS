@@ -183,6 +183,23 @@ const CORP = '<div id="page-container">\n<div id="et-boc" class="et-boc">\n'
   + '<div class="et_pb_column et_pb_column_1_2 et_pb_column_inner et_pb_column_inner_1_tb_footer"></div></div></div></div>'
   + '</div></div></footer>\n</div>\n</div>\n';
 
+// Două module meniu „ca Divi” (antetul și subsolul), inventate: lista desktop și containerul telefonului (meniu-mobil.md §1).
+const meniuDivi = (n, curenta) => '<div class="et_pb_module et_pb_menu et_pb_menu_' + n + '"><div class="et_pb_menu_inner_container clearfix">'
+  + '<div class="et_pb_menu__wrap"><div class="et_pb_menu__menu"><nav class="et-menu-nav"><ul id="menu-principal-' + n + '" class="et-menu nav">'
+  + '<li class="menu-item menu-item-home menu-item-' + n + '1" data-ax-slot="meniu"><a href="/pagina/meniu#acasa">Acasă</a></li>\n'
+  + '<li id="menu-item-' + n + '2" class="menu-item menu-item-' + n + '2' + (curenta ? ' current-menu-item' : '') + '" data-ax-slot="meniu">'
+  + '<a href="/pagina/meniu#camere"' + (curenta ? ' aria-current="page"' : '') + '>Camere</a></li>\n'
+  + '<li class="menu-item menu-item-' + n + '3" data-ax-slot="meniu"><a href="/pagina/meniu#contact">Contact</a></li>\n'
+  + '</ul></nav></div>\n<div class="et_mobile_nav_menu">\n<div class="mobile_nav closed">\n<span class="mobile_menu_bar"></span>\n</div>\n</div></div>'
+  + '</div></div>';
+const CORP_MENIU = '<div id="page-container">\n<header class="et-l et-l--header">' + meniuDivi(1, true) + '</header>\n'
+  + '<div id="et-main-area"><p class="proba-text">Pensiunea Probă – camere la munte</p>'
+  + '<div class="et_mobile_nav_menu"><div class="mobile_nav closed"><span class="mobile_menu_bar"></span></div></div></div>\n'
+  + '<footer class="et-l et-l--footer">' + meniuDivi(2, false) + '</footer>\n</div>\n';
+// CSS-ul capturat al meniului (ca live, inventat ca valori): lista ascunsă, rândurile de 51 px.
+const STIL_MENIU = '.et_mobile_menu{display:none;position:absolute;left:0;width:100%;padding:0;margin:0;list-style:none}'
+  + '.mobile_nav{position:relative}.mobile_menu_bar{display:block;height:32px;width:32px}.et_mobile_menu li a{display:block;height:51px;line-height:51px}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -203,7 +220,7 @@ const STRUCTURA_ASTEPTATA = {
 function pagina(o) {
   o = Object.assign({ date: DATE_IMPLICITE, cap: capImplicit(), final: finalImplicit(), repere: 'ambele', inainte: false,
     lipsa: false, inline: false, dateDuble: false, dateDiv: false, dateInainteDeCap: false, corpDevreme: false, clobber: null,
-    dupaFinal: false, speculatii: true }, o || {});
+    dupaFinal: false, speculatii: true, corp: CORP, stil: '' }, o || {});
   const bloc = o.date === null ? '' : '<script type="application/json" id="ax-date">'
     + (typeof o.date === 'string' ? o.date : jsonAxDate(o.date)) + '</script>';
   const sloturi = (lista) => lista.map((a) => '<script src="' + a + '"></script>').join('\n');
@@ -227,7 +244,8 @@ function pagina(o) {
     + '<link rel="preload" as="style" id="et-core-unified-deferred-7-cached-inline-styles" href="/fixturi/css/amanat.min.css?ver=1" data-ax-tarziu>\n'
     + (o.lipsa ? '<link rel="preload" as="style" id="proba-lipsa-css" href="/fixturi/css/lipsa.css?ver=1" media="all" data-ax-tarziu>\n' : '')
     + (o.speculatii ? SPECULATII + '\n' : '')
-    + '</head>\n<body class="' + BODY_SERVER + '">\n' + (o.dateDiv ? '<div id="ax-date"></div>\n' : '') + CORP
+    + (o.stil ? '<style id="proba-pagina-css">' + o.stil + '</style>\n' : '')
+    + '</head>\n<body class="' + BODY_SERVER + '">\n' + (o.dateDiv ? '<div id="ax-date"></div>\n' : '') + o.corp
     + (o.dateDuble ? bloc + '\n' : '')
     + (o.inline ? '<script>window.__axProba.inline = 1;</script>\n' : '')
     + '{{ax:runtime:final}}\n<span class="et_pb_scroll_top et-pb-icon"></span>\n'
@@ -281,6 +299,7 @@ const PAGINI = {
   'csp-martor': { inline: true },
   'speculatii-fara-cuvant': { csp: CSP_FARA_SPECULATII },
   sandbox: { inainte: true },
+  meniu: { corp: CORP_MENIU, stil: STIL_MENIU },
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -831,6 +850,7 @@ async function verificaIdempotenta(browser, baza) {
     ax.structura.aplica();
     ax.fitVids.aplica();
     ax.dgLightbox.aplica();
+    ax.meniuMobil.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -928,6 +948,98 @@ const TABEL_UA = [
   ['UA gol', '', 'gol', []],
   ['navigator.standalone care aruncă', 'iphone', 'arunca', ['et_mobile_device', 'et_mobile_device_not_ipad', 'safari', 'iphone']],
 ];
+
+async function verificaMeniulMobil(browser) {
+  scrie('== meniu-mobil (felia 2, meniu-mobil.md, OBS-06): listele telefonului, comutarea, animația de 500 ms, tapul dublu');
+  const { context, page, ev } = await deschide(browser, { cale: '/pagina/meniu', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+    ua: UA.iphone });
+  const f = page.mainFrame();
+  const s = await stare(f);
+  verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă', curate(ev, s), detaliiCurate(ev, s));
+  const liste = await f.evaluate(() => Array.from(document.querySelectorAll('div.mobile_nav')).map((nav) => {
+    const ul = nav.querySelector(':scope > ul.et_mobile_menu');
+    const modul = nav.closest('.et_pb_menu');
+    const desk = modul ? modul.querySelector('nav.et-menu-nav > ul') : null;
+    return { ul: !!ul, id: ul ? ul.id : null, ultimul: !!ul && nav.lastElementChild === ul, dupaBara: !!ul && !!ul.previousElementSibling
+      && ul.previousElementSibling.classList.contains('mobile_menu_bar'),
+      clase: ul ? Array.from(ul.children).map((li) => li.getAttribute('class')) : null,
+      claseDesk: desk ? Array.from(desk.children).map((li) => li.getAttribute('class')) : null,
+      href: ul ? Array.from(ul.querySelectorAll('a')).map((a) => a.getAttribute('href') + '|' + a.getAttribute('aria-current') + '|' + a.textContent) : null,
+      hrefDesk: desk ? Array.from(desk.querySelectorAll('a')).map((a) => a.getAttribute('href') + '|' + a.getAttribute('aria-current') + '|' + a.textContent) : null,
+      noduri: ul ? ul.childNodes.length : null, noduriDesk: desk ? desk.childNodes.length : null,
+      atributeStraine: ul ? Array.from(ul.querySelectorAll('*')).filter((e) => e.hasAttribute('id') || Array.from(e.attributes).some((a) => a.name.startsWith('data-ax-'))).length : null,
+      afisare: ul ? getComputedStyle(ul).display : null, clasaNav: nav.getAttribute('class'), stil: ul ? ul.getAttribute('style') : null };
+  }));
+  const [a, b, c] = liste;
+  verifica('fiecare .mobile_nav al unui modul meniu primește ul#mobile_menuN.et_mobile_menu (N în ordinea documentului), ultimul copil, după bară; '
+    + 'cel fără modul meniu, nimic', liste.length === 3 && a.ul && a.id === 'mobile_menu1' && a.ultimul && a.dupaBara && c.ul && c.id === 'mobile_menu2'
+    && b.ul === false, liste);
+  verifica('copia listei desktop: aceleași li (clasele, cu et_first_mobile_item la sfârșit pe primul), aceleași legături, aria-current și texte, '
+    + 'aceleași spații; fără id-uri și fără data-ax-*', [a, c].every((x) => egal(x.clase, x.claseDesk.map((k, i) => (i === 0 ? k + ' et_first_mobile_item' : k)))
+    && egal(x.href, x.hrefDesk) && x.noduri === x.noduriDesk && x.atributeStraine === 0) && a.href[1].includes('|page|'), liste);
+  verifica('închis la încărcare: .mobile_nav closed, lista ascunsă de CSS, fără style', [a, c].every((x) => x.clasaNav === 'mobile_nav closed'
+    && x.afisare === 'none' && x.stil === null), liste);
+  const urma = (sel, actiuni) => f.evaluate(async ([sel, actiuni]) => {
+    const nav = document.querySelectorAll('div.mobile_nav')[0];
+    const ul = nav.querySelector('ul.et_mobile_menu');
+    const tinta = sel === 'bara' ? nav.querySelector('.mobile_menu_bar') : document.querySelector(sel);
+    const rez = [];
+    const t0 = performance.now();
+    let gata = false;
+    const pas = () => {
+      rez.push([Math.round(performance.now() - t0), Math.round(ul.getBoundingClientRect().height * 10) / 10]);
+      if (!gata) {
+        requestAnimationFrame(pas);
+      }
+    };
+    requestAnimationFrame(pas);
+    for (const [dupa, unde] of actiuni) {
+      await new Promise((r) => setTimeout(r, dupa));
+      (unde === 'bara' ? nav.querySelector('.mobile_menu_bar') : document.querySelector(unde)).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+    await new Promise((r) => setTimeout(r, 700));
+    gata = true;
+    return { urma: rez, clasa: nav.getAttribute('class'), stil: ul.getAttribute('style'), afisare: getComputedStyle(ul).display,
+      inaltime: ul.getBoundingClientRect().height, totala: ul.scrollHeight, tinta: !!tinta };
+  }, [sel, actiuni]);
+  const deschis = await urma('bara', [[0, 'bara']]);
+  const la = (u, t) => { const x = u.filter((p) => p[0] <= t); return x.length ? x[x.length - 1][1] : null; };
+  const H = 3 * 51;
+  verifica('tap pe bară: opened, display:block, înălțimea de la 0 la toată (3 × 51 px) în ~500 ms pe curba swing (≈50% la jumătate), '
+    + 'apoi fără height/overflow în style', deschis.clasa === 'mobile_nav opened' && deschis.afisare === 'block' && Math.abs(deschis.inaltime - H) < 1
+    && deschis.stil === 'display: block;' && la(deschis.urma, 60) < H * 0.15 && la(deschis.urma, 270) > H * 0.3 && la(deschis.urma, 270) < H * 0.75
+    && la(deschis.urma, 450) < H, deschis);
+  const afara = await urma('.proba-text', [[0, '.proba-text']]);
+  verifica('tap în afara meniului: rămâne deschis', afara.clasa === 'mobile_nav opened' && Math.abs(afara.inaltime - H) < 1, afara);
+  const inchis = await urma('bara', [[0, 'bara']]);
+  verifica('al doilea tap: closed, înălțimea scade la 0 în ~500 ms, apoi display:none rămâne în style', inchis.clasa === 'mobile_nav closed'
+    && inchis.afisare === 'none' && inchis.stil === 'display: none;' && la(inchis.urma, 270) > H * 0.25 && la(inchis.urma, 270) < H * 0.7, inchis);
+  const dublu = await urma('bara', [[0, 'bara'], [90, 'bara']]);
+  const maxim = Math.max.apply(null, dublu.urma.map((p) => p[1]));
+  verifica('tap dublu la 90 ms: se întoarce din punctul atins (sub un sfert), închis la capăt, display:none', dublu.clasa === 'mobile_nav closed'
+    && dublu.afisare === 'none' && maxim > 0 && maxim < H * 0.25, { maxim, dublu });
+  const legatura = await f.evaluate(async () => {
+    const nav = document.querySelectorAll('div.mobile_nav')[0];
+    nav.querySelector('.mobile_menu_bar').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 650));
+    const a = nav.querySelector('ul.et_mobile_menu a[href$="#contact"]');
+    a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 100));
+    return { clasa: nav.getAttribute('class'), hash: location.hash };
+  });
+  verifica('clic pe o legătură din listă: navighează (aici, la ancoră), lista nu se comută', legatura.clasa === 'mobile_nav opened' && legatura.hash === '#contact', legatura);
+  const idem = await f.evaluate(() => {
+    const inainte = document.querySelectorAll('ul.et_mobile_menu').length;
+    window.axCompat.meniuMobil.aplica();
+    return [inainte, document.querySelectorAll('ul.et_mobile_menu').length];
+  });
+  verifica('aplica() din nou: nicio listă în plus', egal(idem, [2, 2]), idem);
+  const fara = await deschide(browser, { cale: '/pagina/baza' });
+  const nr = await fara.page.evaluate(() => document.querySelectorAll('ul.et_mobile_menu').length);
+  verifica('pagina fără meniuri: nimic adăugat', nr === 0, nr);
+  await fara.context.close();
+  await context.close();
+}
 
 async function verificaClaseleUa(browser) {
   scrie('== clase-ua: regula pe tabel și clasele puse în pagină');
@@ -1070,6 +1182,7 @@ async function main() {
     await verificaIdempotenta(browser, baza);
     await verificaFile(browser);
     await verificaStructura(browser);
+    await verificaMeniulMobil(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);

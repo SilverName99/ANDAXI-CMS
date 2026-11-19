@@ -10,6 +10,7 @@
         "comun/v1/clase-ua.js",
         "divi4/v1/fit-vids.js",
         "divi4/v1/structura.js",
-        "divi4/v1/dg-lightbox.js"
+        "divi4/v1/dg-lightbox.js",
+        "divi4/v1/meniu-mobil.js"
     ]
 }
