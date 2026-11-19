@@ -119,7 +119,7 @@ return [
     'grupuri' => [
         'setari' => ['settings'],
         'platforma' => ['_platforma_migrari', '_platforma_stare'],
-        'continut' => ['pages', 'seo_pages', 'seo_redirects', 'gallery_folders', 'gallery_images', 'mannequin_points', 'mannequin_point_products',
+        'continut' => ['pages', 'seo_pages', 'seo_redirects', 'wp_harta', 'gallery_folders', 'gallery_images', 'mannequin_points', 'mannequin_point_products',
             'promotional_products', 'loyalty_points_rules'],
         'catalog' => ['product_categories', 'products', 'product_category_links', 'product_extra_fields', 'product_extra_field_values',
             'product_templates', 'product_template_fields', 'product_warnings', 'product_brands', 'product_tags', 'product_tag_links',
@@ -222,6 +222,26 @@ return [
             'source', 'note', 'hits', 'last_hit_at', 'created_at', 'updated_at'], 'motive' => ['note' => 'nota publică a unei redirecționări',
             'from_path' => 'adresa veche, publică', 'to_url' => 'ținta, publică'],
             'transforma' => ['created_by' => ['email']]],
+        // Adoptarea WordPress (nucleu/0069): harta adreselor vechi pe ID-uri, publică (slug-urile și căile site-ului mutat),
+        // citită de stratul de adrese WordPress. Goală pe un site care nu vine din WordPress. Copiată, ca o copie de verificare a
+        // unui site adoptat să dea aceleași 301-uri pe adresele vechi.
+        'wp_harta' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'wp_id', 'tip', 'slug_wp', 'cale', 'stare', 'ordine', 'fisier', 'pagina_id'],
+            'motive' => ['slug_wp' => 'slug-ul vechi WordPress, public', 'cale' => 'adresa veche, publică', 'fisier' => 'calea fișierului unui atașament, publică']],
+        // Adoptarea WordPress (nucleu/0068): amprentele importului (hash-ul fiecărui rând scris, ca reimportul să nu scrie peste
+        // munca oamenilor). Fără date personale (doar hash-uri sha256 și id-uri), dar o copie de verificare nu se reimportă: doar
+        // structura. Goală pe un site care nu vine din WordPress.
+        'import_amprente' => ['mod' => 'doar_structura', 'motiv' => 'amprentele importului WordPress (hash-urile rândurilor scrise): o copie nu se reimportă'],
+        // Adoptarea WordPress pe drumul capturat (nucleu/0070): paginile capturate ale unui site mutat de pe WordPress, cu
+        // fragmentele, răspunsurile înghețate, formularele (destinatarul lor e o adresă de email) și galeriile. Goale pe un site
+        // care nu vine din WordPress; o copie de verificare le ia doar structura (se refac din captură, la import).
+        'pagini_capturate' => ['mod' => 'doar_structura', 'motiv' => 'paginile capturate ale unui site mutat de pe WordPress: se refac din captură, la import'],
+        'fragmente_capturate' => ['mod' => 'doar_structura', 'motiv' => 'antetele, subsolurile și bannerele capturate: se refac din captură, la import'],
+        'raspunsuri_inghetate' => ['mod' => 'doar_structura', 'motiv' => 'răspunsurile înghețate din captură (robots, sitemap-uri, feed-uri): se refac la import'],
+        'formulare_compat' => ['mod' => 'doar_structura', 'motiv' => 'formularele capturate, cu destinatarul lor (o adresă de email): se refac la import'],
+        'galerii_capturate' => ['mod' => 'doar_structura', 'motiv' => 'galeriile capturate: se refac din captură, la import'],
+        'galerii_capturate_elemente' => ['mod' => 'doar_structura', 'motiv' => 'elementele galeriilor capturate: se refac din captură, la import'],
+        // Rapoartele CSP ale cadrului capturat (nucleu/0071): numărători pe zi, fără nimic despre vizitator, ale site-ului de pe care vin.
+        'rapoarte_csp' => ['mod' => 'doar_structura', 'motiv' => 'rapoartele CSP ale site-ului (numărători pe zi): ale site-ului, nu ale copiei'],
         'gallery_folders' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'name', 'slug', 'created_at'],
             'motive' => ['name' => 'numele unui dosar al galeriei']],
         'gallery_images' => ['mod' => 'copiaza', 'pastreaza' => ['id', 'title', 'media_type', 'image_url', 'folder_id', 'alt_text', 'sort_order',

@@ -282,6 +282,19 @@ PORT_BAZA=$((CMS_DEV_PORT + 1))
 export CMS_DEV_MAIL_DIR_BAZA="$CMS_DEV_DIR/compara-mail/baza" CMS_DEV_MAIL_DIR_CURENT="$CMS_DEV_DIR/compara-mail/curent"
 rm -rf "$CMS_DEV_DIR/compara-mail"
 mkdir -p "$CMS_DEV_MAIL_DIR_BAZA" "$CMS_DEV_MAIL_DIR_CURENT"
+# Cazurile cu emailuri citesc fișierele în ordinea numelor (glob, „primul email”): mail-capturat.sh trebuie să le dea nume
+# de lățime fixă, în ordinea trimiterii (altfel, în aceeași secundă, PID-ul ca text le amestecă: o comparație care pică doar
+# uneori).
+VERIF_MAIL="$CMS_DEV_DIR/compara-mail/verificare"
+mkdir -p "$VERIF_MAIL"
+for n in 1 2 3; do
+    printf 'Subject: %s\n\nx\n' "$n" | CMS_DEV_MAIL_DIR="$VERIF_MAIL" "$RADACINA/tools/dev/mail-capturat.sh"
+done
+ORDINE_MAIL="$(for f in "$VERIF_MAIL"/*.eml; do sed -n 's/^Subject: //p' "$f"; done | tr -d '\n')"
+NUME_MAIL="$(ls "$VERIF_MAIL" | grep -c -E '^[0-9]{8}-[0-9]{6}-[0-9]{9}-[0-9]{10}\.eml$' || true)"
+[ "$ORDINE_MAIL" = 123 ] && [ "$NUME_MAIL" = 3 ] \
+    || die "tools/dev/mail-capturat.sh nu dă nume în ordinea trimiterii (ordinea citită: $ORDINE_MAIL; nume de lățime fixă: $NUME_MAIL din 3)"
+rm -rf "$VERIF_MAIL"
 PID_BAZA="$CMS_DEV_DIR/server-baza.pid"
 PID_CURENT="$CMS_DEV_DIR/server-compara.pid"
 

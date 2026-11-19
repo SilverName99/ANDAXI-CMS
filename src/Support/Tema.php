@@ -28,6 +28,10 @@ namespace App\Support;
  * | `iconite_categorii` | (lipsă) | `[[cuvânt, svg], …]`: iconițele `{{product_categories}}`, încercate în ordine înaintea celei implicite |
  * | `css_inline` | `{}` | `{"pagina_succes": "pagina-succes.css"}`: un bloc `<style>` al nucleului înlocuit cu fișierul din `tema/` |
  * | `newsletter` | (lipsă) | `{logo, logo_alt, culori}`: înfățișarea șabloanelor de newsletter, a emailurilor de confirmare și a paginilor publice ale newsletterului (`newsletter()`) |
+ * | `cadru` | `""` | `"capturat"`: paginile cu un document în `pagini_capturate` (un site mutat de pe WordPress pe drumul capturat) ies prin cadrul capturat (CadruCapturat), cu politica CSP a site-ului (CspSite) |
+ * | `runtime` | `""` | `"divi4@1"`: versiunea runtime-ului compat, al cărei manifest (`public/assets/compat/divi4/v1/sloturi.json`) dă scripturile sloturilor |
+ * | `csp` | `{}` | `{"mod": "aplica" \| "raport", "<directivă>": ["<sursă https>", …]}`: politica pe cadrul capturat (`raport`: Report-Only, pe copia de verificare) și sursele ei în plus |
+ * | `previzualizare` | `[390, 820, 1440]` | lățimile previzualizării paginilor capturate în admin (pasul 12) |
  *
  * Fișierele publice ale temei stau în pachet în `tema/public/` și se servesc la `/tema/…`: pe server din
  * `public/tema/` (le copiază acolo instalarea și fiecare actualizare a pachetului), în dezvoltare direct din pachet
@@ -72,7 +76,15 @@ final class Tema
         // `antet` = antetul mare cu numele, starea și statisticile, meniul cu iconițe și cardurile (views/site/account-antet.php,
         // pagina contului din codul vertij 9ab7999); înfățișarea ei (clasele `.acc-*`) o dă foaia temei.
         'pagina_cont' => 'panou',
+        // Adoptarea WordPress pe drumul capturat (pasul 6): cadrul capturat, runtime-ul compat, CSP-ul lui, previzualizarea.
+        'cadru' => '',
+        'runtime' => '',
+        'csp' => [],
+        'previzualizare' => [390, 820, 1440],
     ];
+
+    /** Directivele CSP în care `csp` poate adăuga surse (restul politicii e fix, CspSite). */
+    public const CSP_DIRECTIVE = ['img-src', 'connect-src', 'frame-src', 'font-src', 'media-src'];
 
     /**
      * Culorile implicite ale newsletterului (fără `newsletter.culori` în temă): o paletă neutră. Cheile: `principala`
@@ -157,6 +169,30 @@ final class Tema
     public static function paginaCont(): string
     {
         return (string) self::valori()['pagina_cont'];
+    }
+
+    /** `""` (implicit: paginile nucleului) sau `"capturat"` (cadrul paginilor capturate, pasul 6). */
+    public static function cadru(): string
+    {
+        return (string) self::valori()['cadru'];
+    }
+
+    /** Versiunea runtime-ului compat (`divi4@1`), sau `""`. */
+    public static function runtime(): string
+    {
+        return (string) self::valori()['runtime'];
+    }
+
+    /** @return array{mod?: string, img-src?: list<string>, connect-src?: list<string>, frame-src?: list<string>, font-src?: list<string>, media-src?: list<string>} */
+    public static function csp(): array
+    {
+        return (array) self::valori()['csp'];
+    }
+
+    /** @return list<int> lățimile previzualizării paginilor capturate (pasul 12) */
+    public static function previzualizare(): array
+    {
+        return array_map('intval', (array) self::valori()['previzualizare']);
     }
 
     public static function butonSus(): bool
@@ -446,6 +482,63 @@ final class Tema
                         $probleme[] = 'newsletter: ' . $newsletter;
                     } else {
                         $valori[$cheie] = $newsletter;
+                    }
+                    break;
+                case 'cadru':
+                    if (is_string($valoare) && in_array($valoare, ['', 'capturat'], true)) {
+                        $valori[$cheie] = $valoare;
+                    } else {
+                        $probleme[] = 'cadru trebuie să fie "" sau "capturat"';
+                    }
+                    break;
+                case 'runtime':
+                    if ($valoare === '') {
+                        $valori[$cheie] = '';
+                    } elseif (is_string($valoare) && preg_match('/^([a-z0-9]{2,20})@([1-9][0-9]{0,2})$/D', $valoare, $mr) === 1
+                        && is_file(Paths::public('assets/compat/' . $mr[1] . '/v' . $mr[2] . '/sloturi.json'))) {
+                        $valori[$cheie] = $valoare;
+                    } else {
+                        $probleme[] = 'runtime: „' . (is_string($valoare) ? $valoare : gettype($valoare)) . '” nu e o versiune a runtime-ului compat '
+                            . '(<dialect>@<versiune>, cu public/assets/compat/<dialect>/v<versiune>/sloturi.json)';
+                    }
+                    break;
+                case 'csp':
+                    if (!is_array($valoare) || ($valoare !== [] && array_is_list($valoare))) {
+                        $probleme[] = 'csp trebuie să fie un obiect {"mod": "aplica"|"raport", "<directivă>": ["<sursă>", …]}';
+                        break;
+                    }
+                    $csp = [];
+                    foreach ($valoare as $dir => $surse) {
+                        $dir = (string) $dir;
+                        if ($dir === 'mod') {
+                            if (in_array($surse, ['aplica', 'raport'], true)) {
+                                $csp['mod'] = $surse;
+                            } else {
+                                $probleme[] = 'csp.mod trebuie să fie "aplica" sau "raport"';
+                            }
+                            continue;
+                        }
+                        if (!in_array($dir, self::CSP_DIRECTIVE, true)) {
+                            $probleme[] = 'csp: directiva „' . $dir . '” nu se poate lărgi (doar ' . implode(', ', self::CSP_DIRECTIVE) . ')';
+                            continue;
+                        }
+                        foreach (is_array($surse) && array_is_list($surse) ? $surse : [null] as $sursa) {
+                            // O sursă: o adresă https cu gazdă exactă (fără `*`) și, eventual, o cale; nimic care să închidă directiva.
+                            if (is_string($sursa) && preg_match('#^https://[a-z0-9.-]+(?::[0-9]{2,5})?(?:/[A-Za-z0-9._~/-]*)?$#D', $sursa) === 1) {
+                                $csp[$dir][] = $sursa;
+                            } else {
+                                $probleme[] = 'csp.' . $dir . ': „' . (is_string($sursa) ? mb_substr($sursa, 0, 60) : gettype($sursa)) . '” nu e o sursă https exactă';
+                            }
+                        }
+                    }
+                    $valori[$cheie] = $csp;
+                    break;
+                case 'previzualizare':
+                    if (is_array($valoare) && $valoare !== [] && array_is_list($valoare) && count($valoare) <= 6
+                        && array_filter($valoare, static fn (mixed $l): bool => !is_int($l) || $l < 240 || $l > 3840) === []) {
+                        $valori[$cheie] = $valoare;
+                    } else {
+                        $probleme[] = 'previzualizare trebuie să fie o listă de 1–6 lățimi întregi (240–3840)';
                     }
                     break;
                 case 'css_inline':

@@ -80,6 +80,20 @@ poarta G-tastatura "plimbarea cu tastatura prin admin (focusul vizibil pe fiecar
     "tools/dev/php.sh tools/dev/contract-admin.php --plimbare" WP-31
 poarta G-deploy "deploy-ul din Etapa 2 (docs/DEPLOY.md) pe o găzduire simulată cu două site-uri, pe al doilea MariaDB (privat, modul Hostinger): release.sh, bin/platforma, adopta.sh (o migrare care pică, un test de fum care pică, reluarea), actualizeaza.sh (întoarcerea singură), revino.sh (codul și baza exact cele de dinainte); și cu php$MINIM" \
     "tools/dev/mariadb-nestrict.sh porneste ;; tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php ;; CMS_DEV_PHP=php$MINIM tools/dev/mariadb-nestrict.sh ruleaza tools/dev/php.sh tools/dev/test-deploy.php" E2-deploy
+poarta G-wp "adoptarea unui site WordPress: importul (corecturile 1.1–1.15, tools/dev/test-import-wordpress.php) și stratul de adrese WordPress (wp-compat.json, slug-urile Unicode; tools/dev/test-wp-compat.php), pe fixture-uri inventate" \
+    "tools/dev/php.sh tools/dev/test-import-wordpress.php ;; tools/dev/php.sh tools/dev/test-wp-compat.php" ADOPTA-WP-2
+poarta G-html5 "tokenizerul HTML5 al HTML-ului capturat (App\\Support\\Html5: Tokenizer, Token, Atribut, Editare): tokenizarea + recompunerea = octeții de intrare, tokenii WHATWG, editările doar pe intervalul lor, pe un corpus inventat (tools/dev/test-html5.php)" \
+    "tools/dev/php.sh tools/dev/test-html5.php" ADOPTA-WP-3
+poarta G-html-capturat "politica listei albe a HTML-ului capturat (App\\Support\\HtmlCapturat, HtmlCapturat\\{ContextCapturat, SchemaDivi4, Problema}): niciun script capturat nu rulează, handlerele doar din lista închisă transformate, adresele și documentele purtate de adrese permise doar unde trebuie, documentele nesigure refuzate; încărcături plantate prinse una câte una, un fixture inventat „ca Divi” trece neschimbat (tools/dev/test-html-capturat.php)" \
+    "tools/dev/php.sh tools/dev/test-html-capturat.php" ADOPTA-WP-3
+poarta G-paritate "harness-ul de paritate (P3; tools/dev/paritate-wp): pe fixture-ul inventat „Pensiunea Probă”, servit de două servere locale (porturile 9770–9799), referința și candidatul luate cu aceeași unealtă dau 0 diferențe pe toate sondele (pixeli, stil, geometrie, cssom, text, linkuri, imagini, head, mutații, rețea, CSP), iar raportul feliei e „trecut”; fiecare diferență plantată e prinsă de sonda ei (un pixel, o clasă, o mutație, o cerere terță înainte de acord, o încălcare CSP, o cerere spre un tracker fără fișier de probă); măștile lucrează; un ID fără dovadă și un raport modificat pică (sha256)" \
+    "tools/dev/paritate-wp/paritate-wp.sh --autotest" ADOPTA-WP-10
+poarta G-captura "captura site-ului WordPress live, fără browser (App\\Support\\ImportWordPress\\Captura, scripts/captureaza-wordpress.php): doar GET, fără cookie-uri, ritmul, bugetul, 429, trackerele refuzate înaintea rețelei, normalizarea declarată (nonce-urile și în textul scripturilor, clasele de sistem, adresele proprii), comparația pe 6 UA × 2, ieșirea în afara repo-ului, manifestul, copierea statică, fonturile, integritatea, .htaccess-urile cu nosniff; pe un site Divi inventat servit local (tools/dev/test-captura.php)" \
+    "tools/dev/php.sh tools/dev/test-captura.php" ADOPTA-WP-4a
+poarta G-compat "runtime-ul compat al paginilor capturate (public/assets/compat/: comun/v1 incarcare, tarziu, clase-ua; divi4/v1 structura, fit-vids, dg-lightbox; manifestul sloturilor divi4/v1/sloturi.json) în Chromium, cu Playwright, pe pagini inventate, cu CSP-ul site-ului (fără inline): html.js din head, momentele modulelor, ax-date lipsă/invalid/dublu/suprapus fără excepții și cu un singur rând în consolă, adresaSigura, preload → stylesheet la load-ul foii (și pentru foile venite înaintea scriptului, 404 rămâne preload), foaia late din file la locul ei înainte de DOMContentLoaded, ordinea CSSOM, clasele UA pe tabel și în pagină, momentele OBS-01, structura, fit-vids-style, containerul dg, DOM-ul după scripturi = DOM-ul fără JS plus exact mutațiile așteptate, previzualizarea în sandbox (origine opacă: cookie și Web Storage fără excepții), idempotența, martorii CSP (script inline, speculationrules) (tools/dev/compat.sh)" \
+    "tools/dev/compat.sh" ADOPTA-WP-8a
+poarta G-capturat "cadrul paginilor capturate (App\\Support\\CadruCapturat, App\\Support\\CspSite, tema.json → cadru, runtime, csp): pe un server cu o captură inventată, paginile = T cu scripturile runtime-ului la sloturi, 404-ul și cardul embed capturate, variantele de antet, nicio scurgere a layout-ului nucleului, 500 pe un jeton necunoscut, aceeași politică CSP la fiecare cerere și pe orice gazdă, nosniff, embed fără frame-ancestors, Report-Only; fără cadru, ca înainte (tools/dev/test-capturat.php)" \
+    "tools/dev/php.sh tools/dev/test-capturat.php" ADOPTA-WP-6
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
@@ -198,14 +212,38 @@ declare -A PORTI=(
     [WP-R]="G-rute G-cmp G-cmp-istoric G-plug G-php"
     # Etapa 2, deploy-ul (docs/DEPLOY.md): stub-ul (G-paths, cu jetonul din MENTENANTA), uneltele (G-deploy), sintaxa (G-php).
     [E2-deploy]="G-rute G-paths G-deploy G-php"
+    # Adoptarea WordPress, pasul 2 (docs/SEO.md §1b): stratul de adrese atinge calea cererii (SeoRedirects, SiteController,
+    # adminul), deci G-cmp, G-plug, G-smoke și G-seo arată că fără wp-compat.json totul e ca înainte; G-wp, regulile lui.
+    [ADOPTA-WP-2]="G-rute G-cmp G-plug G-smoke G-seo G-wp G-php"
+    # Adoptarea WordPress, pasul 3: tokenizerul (G-html5) și politica listei albe a HTML-ului capturat (G-html-capturat);
+    # clase noi, fără nicio cale a cererii atinsă, deci plus doar G-rute și G-php.
+    [ADOPTA-WP-3]="G-rute G-html5 G-html-capturat G-php"
+    # Adoptarea WordPress, pasul 4a: captura (G-captura, clase și o unealtă noi) și șabloanele .htaccess ale arborilor copiați
+    # (nosniff; testul lor e în G-wp, 1.12); nicio cale a cererii atinsă.
+    [ADOPTA-WP-4a]="G-rute G-captura G-wp G-php"
+    # Adoptarea WordPress, pasul 5a: dialectul divi4 legat în importator (Plan, Importator, regulile pachetului): G-wp, plus
+    # porțile care arată că fără drumul capturat totul e ca înainte (G-cmp, G-plug, G-smoke, G-seo) și politica, tokenizerul,
+    # captura pe care se sprijină.
+    [ADOPTA-WP-5a]="G-rute G-cmp G-plug G-smoke G-seo G-wp G-html5 G-html-capturat G-captura G-php"
+    # Adoptarea WordPress, pasul 8a (pista R): piesele de bază ale runtime-ului compat (incarcare, tarziu, clase-ua) și manifestul
+    # sloturilor: fișiere statice noi în public/assets/compat/, niciun PHP și nicio cale a cererii atinsă, deci G-compat (Chromium, pe
+    # pagini inventate), plus G-rute (verificarea 11 citește și public/) și G-php.
+    [ADOPTA-WP-8a]="G-rute G-compat G-php"
+    # Adoptarea WordPress, pasul 6: cadrul capturat și CSP-ul site-ului (public/index.php, SiteController, Tema): porțile care
+    # arată că fără `cadru` totul e ca înainte (G-cmp, G-plug, G-smoke, G-seo, G-rute), cadrul (G-capturat), importul și
+    # politica pe care se sprijină (G-wp, G-html5, G-html-capturat, G-captura) și runtime-ul ale cărui sloturi le pune (G-compat).
+    [ADOPTA-WP-6]="G-rute G-cmp G-plug G-smoke G-seo G-wp G-html5 G-html-capturat G-captura G-capturat G-compat G-php"
+    # Adoptarea WordPress, pasul 10 (pista H): harness-ul de paritate (G-paritate), unelte Node noi în tools/dev/paritate-wp/,
+    # fără PHP și fără nicio cale a cererii atinsă; referința live și rapoartele reale rămân în afara repo-ului.
+    [ADOPTA-WP-10]="G-rute G-paritate"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33
-WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy"
+WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy ADOPTA-WP-2 ADOPTA-WP-3 ADOPTA-WP-4a ADOPTA-WP-5a ADOPTA-WP-8a ADOPTA-WP-6 ADOPTA-WP-10"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy G-wp G-html5 G-html-capturat G-captura G-compat G-capturat G-paritate; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo

@@ -1,0 +1,178 @@
+{
+  "_despre": "Configurația de paritate a fixture-ului inventat „Pensiunea Probă” (autotestul G-paritate). Forma e aceeași ca a pachetului unui site (site-uri/<site>/paritate.json): captura (paginile, matricea, politica rețelei), normalizările declarate (listă închisă, fiecare cu motivul), măștile pe felii, excepțiile CSP, harta zonă → pagini și feliile. Nicio dată de client.",
+  "captura": {
+    "pagini": [
+      {
+        "nume": "acasa",
+        "cale": "/",
+        "matrice": [
+          {
+            "profil": "chrome-win",
+            "ferestre": [
+              "1440"
+            ]
+          },
+          {
+            "profil": "safari-iphone",
+            "ferestre": [
+              "390"
+            ]
+          },
+          {
+            "profil": "chrome-win",
+            "ferestre": [
+              "1440"
+            ],
+            "stari": [
+              "baleiaj-antet"
+            ],
+            "scenarii": [
+              "baleiaj"
+            ]
+          }
+        ]
+      },
+      {
+        "nume": "pagina-2",
+        "cale": "/pagina-2/"
+      }
+    ],
+    "matrice": [
+      {
+        "profil": "chrome-win",
+        "ferestre": [
+          "1440"
+        ]
+      },
+      {
+        "profil": "safari-iphone",
+        "ferestre": [
+          "390"
+        ]
+      }
+    ],
+    "stari": [
+      "incarcare"
+    ],
+    "gazde_fonturi": [],
+    "cai_abortate": [],
+    "post_permise": [
+      "^/_andaxi/raport"
+    ],
+    "probe_trackere": {},
+    "pauza_navigare_ms": 0,
+    "liniste_ms": 800,
+    "maxim_asteptare_ms": 8000,
+    "scenarii": "../scenarii/baleiaj.cjs",
+    "baleiaj": {
+      "selector": ".antet",
+      "de_la": 981,
+      "pana_la": 1301,
+      "pas": 80,
+      "inaltime": 900,
+      "masti": []
+    }
+  },
+  "toleranta": {
+    "geometrie_px": 1,
+    "prag_pixeli": 0.1
+  },
+  "normalizari": {
+    "inlocuiri": [],
+    "dom": {
+      "ignora_elemente": [],
+      "ignora_atribute": [
+        "^data-ax-"
+      ],
+      "clase_multimi": true,
+      "stil_gol_absent": true
+    },
+    "head": {
+      "ignora": [],
+      "ignora_atribute": [
+        "^data-ax-"
+      ],
+      "stiluri_pe_reguli": [
+        "fit-vids-style"
+      ]
+    },
+    "cssom": {
+      "ignora_foi": []
+    },
+    "retea": {
+      "ignora_cai": []
+    }
+  },
+  "masti": [
+    {
+      "nume": "ceasul (conținut diferit la fiecare încărcare)",
+      "selector": ".ceas",
+      "pagini": [
+        "acasa"
+      ],
+      "sonde": [
+        "pixeli",
+        "stil",
+        "text",
+        "mutatii"
+      ],
+      "motiv": "fixture: ora curentă și o culoare aleatoare, puse de script"
+    }
+  ],
+  "csp_exceptii": [],
+  "harta": {
+    "zone": {
+      "acasa": [
+        "acasa"
+      ],
+      "pagina-2": [
+        "pagina-2"
+      ],
+      "global": [
+        "*"
+      ]
+    },
+    "id": {
+      "PP-GLOBAL-003": {
+        "stari": [
+          "baleiaj-antet"
+        ]
+      },
+      "PP-ACASA-003": {
+        "regiune": ".carduri",
+        "pagini": [
+          "acasa"
+        ]
+      },
+      "PP-GLOBAL-002": {
+        "sonde": [
+          "P3-head",
+          "P2-http(feed înghețat)",
+          "P2-http(404 pentru restul)"
+        ],
+        "motiv_sonde": "decizie inventată (fixture): sondele punctului înlocuite din config, ca după o decizie H.9"
+      }
+    }
+  },
+  "felii": {
+    "1": {
+      "stari": [
+        "incarcare",
+        "baleiaj-antet"
+      ],
+      "sonde_p3": [
+        "pixeli",
+        "stil",
+        "geometrie",
+        "cssom",
+        "text",
+        "linkuri",
+        "imagini",
+        "head",
+        "mutatii",
+        "retea",
+        "csp"
+      ]
+    }
+  }
+}

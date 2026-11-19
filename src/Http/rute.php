@@ -44,6 +44,11 @@ return static function (Router $router): void {
     $router->get('/health', static function (): void {
         $schema = \App\Support\Migrari\Garda::stareSite();
         $pachet = 'pachet: ' . (\App\Support\PachetSite::amprenta(\App\Support\DateSite::dosar()) ?? 'lipsa');
+        // Adoptarea WordPress, pasul 7: pe cadrul capturat, și manifestul capturii (primele 12 caractere ale sha256-ului lui).
+        if (\App\Support\Tema::cadru() === 'capturat') {
+            $manifest = \App\Support\CadruCapturat::fisierManifest();
+            $pachet .= "\ncapturat: " . (is_file($manifest) ? substr((string) hash_file('sha256', $manifest), 0, 12) : 'lipsa');
+        }
         header('Content-Type: text/plain; charset=utf-8');
         if ($schema === \App\Support\Migrari\Garda::IN_URMA) {
             http_response_code(503);

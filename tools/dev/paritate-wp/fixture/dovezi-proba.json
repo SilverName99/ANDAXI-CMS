@@ -1,0 +1,9 @@
+{
+  "_despre": "Dovezile inventate din afara harness-ului (P1, P2), în forma pe care o primește raport.cjs --dovezi=.",
+  "dovezi": [
+    { "id": "PP-ACASA-001", "sonda": "P1-octeti", "stare": "trecut", "dovada": "verifica-randare (inventat): 0 octeți diferiți" },
+    { "id": "*", "sonda": "P2-http", "stare": "trecut", "dovada": "paritate-http (inventat): 0 abateri" },
+    { "id": "PP-GLOBAL-002", "sonda": "P2-http(feed înghețat)", "stare": "trecut", "dovada": "paritate-http (inventat): feed-ul identic cu cel viu" },
+    { "id": "PP-GLOBAL-002", "sonda": "P2-http(404 pentru restul)", "stare": "trecut", "dovada": "paritate-http (inventat): 404 pe celelalte" }
+  ]
+}

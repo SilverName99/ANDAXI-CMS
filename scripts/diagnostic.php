@@ -33,6 +33,10 @@ declare(strict_types=1);
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --licenta    # doar licența și PHP-ul (verificarea dinaintea unui deploy)
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --pachet     # doar pachetul de date al site-ului (la adoptare, după copiere)
+ *   /usr/bin/php /cale/catre/scripts/diagnostic.php --capturat   # un site mutat de pe WordPress pe drumul capturat (pasul 7):
+ *                                                                # fiecare fișier din manifestul capturii, cu sha256-ul lui, în
+ *                                                                # docroot; niciun .php/.phtml/.phar în wp-content/, wp-includes/,
+ *                                                                # capturat/; .htaccess-urile arborilor copiați, cu nosniff
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --cheie-newsletter   # rândul NEWSLETTER_CHEIE_SEMNARE=… de pus în .env la
  *                                                                        # adoptare: cheia derivată pe care site-ul o folosește acum
  *   /usr/bin/php /cale/catre/scripts/diagnostic.php --email      # emailurile trimise, doar numere (WP-26, VT-O1): pe tipuri și
@@ -261,6 +265,70 @@ $arataPachet = static function (): bool {
 
 if (in_array('--pachet', $argv, true)) {
     exit($arataPachet() ? 0 : 1);
+}
+
+if (in_array('--capturat', $argv, true)) {
+    // Adoptarea WordPress pe drumul capturat (pasul 7): fișierele capturii în docroot-ul nou, fără cod PHP strecurat.
+    echo "=== Captura (drumul capturat) ===\n";
+    $probleme = [];
+    $manifest = \App\Support\CadruCapturat::fisierManifest();
+    $m = is_file($manifest) ? json_decode((string) file_get_contents($manifest), true) : null;
+    if (!is_array($m)) {
+        $probleme[] = 'manifestul capturii lipsește sau e stricat: ' . $manifest;
+    }
+    $verificate = 0;
+    foreach (is_array($m) && is_array($m['fisiere'] ?? null) ? $m['fisiere'] : [] as $f) {
+        $cale = is_array($f) ? (string) ($f['cale'] ?? '') : '';
+        $sha = is_array($f) ? (string) ($f['sha256_publicat'] ?? $f['sha256'] ?? '') : '';
+        if ($cale === '' || !str_starts_with($cale, '/') || str_contains($cale, '..')) {
+            $probleme[] = 'manifest: o intrare fără cale bună';
+            continue;
+        }
+        $fisier = Paths::public(ltrim($cale, '/'));
+        if (!is_file($fisier)) {
+            $probleme[] = 'lipsește ' . $cale;
+        } elseif ($sha !== '' && hash_file('sha256', $fisier) !== $sha) {
+            $probleme[] = 'alt sha256 decât în manifest: ' . $cale;
+        }
+        $verificate++;
+    }
+    // Și capturat/ servit din docroot (fonturile, radacina/), nu doar dosarul manifestului (recenzia 2, R2-6).
+    foreach (array_unique([Paths::public('wp-content'), Paths::public('wp-includes'), Paths::public('capturat'), dirname($manifest)]) as $dosar) {
+        if (!is_dir($dosar)) {
+            continue;
+        }
+        $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dosar, FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $x) {
+            if (preg_match('/\.(php\d?|phtml|phar)$/i', $x->getFilename()) === 1) {
+                $probleme[] = 'fișier PHP în arborii capturii: ' . $x->getPathname();
+            }
+        }
+    }
+    // Fișierele de la rădăcină (capturat/radacina/) care s-ar ciocni cu CMS-ul: nu se servesc, deci NU.
+    foreach (\App\Support\RadacinaCapturata::coliziuni() as $c) {
+        $probleme[] = 'capturat/radacina: ' . $c;
+    }
+    foreach (['wp-content', 'wp-includes', 'capturat'] as $arbore) {
+        $h = Paths::public($arbore . '/.htaccess');
+        if (is_dir(Paths::public($arbore)) && (!is_file($h) || !str_contains((string) file_get_contents($h), 'nosniff'))) {
+            $probleme[] = $arbore . '/.htaccess lipsește sau n-are nosniff (șabloanele din deploy/stub/)';
+        }
+    }
+    // Rapoartele CSP din ultimele 7 zile (App\Support\RaportCsp), doar ca text.
+    $dbDiag = Database::connection((array) ($config['db'] ?? []));
+    $rapoarte = $dbDiag instanceof PDO ? \App\Support\RaportCsp::recente($dbDiag, 7, 20) : [];
+    echo 'rapoarte CSP : ' . array_sum(array_column($rapoarte, 'numar')) . " în ultimele 7 zile\n";
+    foreach ($rapoarte as $r) {
+        echo '  raport     : ' . $r['numar'] . ' × ' . $r['directiva'] . ' ' . ($r['blocat'] !== '' ? $r['blocat'] : '-') . ' pe ' . ($r['document'] !== '' ? $r['document'] : '-')
+            . ($r['sursa'] !== '' ? ' (' . $r['sursa'] . ($r['linie'] > 0 ? ':' . $r['linie'] : '') . ')' : '') . "\n";
+    }
+    echo 'manifest     : ' . $manifest . (is_file($manifest) ? ' (' . substr((string) hash_file('sha256', $manifest), 0, 12) . ')' : '') . "\n";
+    echo 'fisiere      : ' . $verificate . " verificate\n";
+    foreach ($probleme as $p) {
+        echo '  problema   : ' . $p . "\n";
+    }
+    echo 'rezultat     : ' . ($probleme === [] ? 'ok' : 'NU E IN REGULA (' . count($probleme) . ' probleme)') . "\n";
+    exit($probleme === [] ? 0 : 1);
 }
 
 echo "=== Mediu ===\n";

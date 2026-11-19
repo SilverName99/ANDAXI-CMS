@@ -280,7 +280,13 @@ $oracolFaraRanduri = ['admin_activity_log', 'bt_ipay_log', 'checkout_submit_logs
     // documentele lor și plățile cotizației.
     'donations', 'professions', 'profession_fields', 'account_verifications', 'account_verification_documents', 'account_activations',
     // Regulile Bioscem 26 (nucleu/0067): conținutul păstrat al emailurilor trimise („Vezi” din Emailuri trimise).
-    'email_send_bodies'];
+    'email_send_bodies',
+    // Adoptarea WordPress (nucleu/0068): amprentele importului (hash-urile rândurilor scrise); o copie nu se reimportă.
+    'import_amprente',
+    // Adoptarea WordPress pe drumul capturat (nucleu/0070): paginile capturate și ce ține de ele; se refac din captură, la import.
+    'pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat', 'galerii_capturate', 'galerii_capturate_elemente',
+    // Rapoartele CSP ale cadrului capturat (nucleu/0071): ale site-ului, nu ale copiei.
+    'rapoarte_csp'];
 $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages', 'gallery_folders', 'gallery_images', 'mannequin_points',
     'mannequin_point_products', 'promotional_products', 'loyalty_points_rules', 'product_categories', 'products', 'product_category_links', 'product_extra_fields',
     'product_extra_field_values', 'product_templates', 'product_template_fields', 'product_warnings', 'blog_authors', 'blog_categories', 'blog_posts',
@@ -290,6 +296,8 @@ $oracolPublice = ['_platforma_migrari', '_platforma_stare', 'pages', 'seo_pages'
     'product_brands', 'product_tags', 'product_tag_links',
     // WP-38 (nucleu/0046): harta adreselor vechi (publică; emailul adminului, pseudonim).
     'seo_redirects',
+    // Adoptarea WordPress (nucleu/0069): harta adreselor vechi pe ID-uri (publică: slug-urile și căile site-ului mutat).
+    'wp_harta',
     // Pluginul campanii (campanii/0054): campaniile de pe site și produsele lor (numele campaniei, fereastra, textele și culorile
     // insignei și ale bannerului, id-uri; niciun client, niciun admin).
     'campanii', 'campanii_produse',

@@ -32,6 +32,11 @@ declare(strict_types=1);
  *     un fișier nou cu potriviri, sau mai multe decât în listă, pică, iar unul cu mai
  *     puține cere lista micșorată (`--actualizeaza-nume-client` o rescrie: lista doar
  *     scade). Lista goală = verificarea strictă din plan.
+ *     11b. Termenii listei explicite (privați: `site-uri/<site>/privat/lista-neagra.txt` și
+ *     fișierele din `CMS_DEV_LISTA_NEAGRA`, în afara repo-ului; tools/dev/lib/lista-neagra.php)
+ *     nu apar în niciun fișier din git (`git ls-files`, nu doar în nucleu), fără clichet: numele,
+ *     domeniile, telefoanele și adresele unui client care se adoptă nu intră nici în teste,
+ *     nici în documentație. Fără listă explicită (o clonă fără ea), doar un rând de informare.
  *
  * Listează toate rutele cu proprietarul lor. Cod de ieșire 0 doar dacă totul e în regulă.
  *
@@ -421,10 +426,75 @@ foreach ($candidati as $relativ) {
     $text = (string) file_get_contents($radacina . '/' . $relativ);
     $n = 0;
     foreach ($listaNeagra as $termen) {
-        $n += (int) preg_match_all('/(?<![\p{L}\p{N}])' . preg_quote($termen, '/') . '(?![\p{L}\p{N}])/iu', $text);
+        $n += (int) preg_match_all(lista_neagra_tipar($termen), $text);
     }
     if ($n > 0) {
         $potriviriClient[$relativ] = $n;
+    }
+}
+// 11b. Lista explicită (termenii privați ai unui client, în afara git-ului) nicăieri în git: în niciun fișier urmărit, fără
+// clichet. (Termenii firmei Bioscem au voie în unelte și în documentație, unde codul Bioscem e baza comparației; numele
+// unui client care se adoptă, nu.)
+$explicita = lista_neagra_explicita($radacina);
+// Proba potrivirii 11b (recenzia 2, R3-1; formele din reproducerea recenziei), pe termeni inventați: fiecare formă trebuie găsită.
+$probaTermeni = ['pensiuneaproba', 'proba-domeniu.test', '0700 000 111'];
+$probaForme = ['Vila Pensiunea Proba', 'www.pensiuneaproba.test', 'site-uri/pensiuneaproba/', 'PROBA_DOMENIU.TEST', '+40700000111', '0040 700 000 111',
+    '0700-000-111', '0700 000111', '(0700) 000.111', 'pensiunea%20proba', 'pensiunea&#112;roba', 'proba&#45;domeniu&period;test', '0700%20000%20111',
+    'pensiunea\\u0020proba', '\\u0050ensiunea\\u0070roba', 'pensiunea%2520proba', 'pensiunea&amp;#112;roba', 'proba%26%2345%3Bdomeniu.test', '0700\\u0020000\\u0020111'];
+foreach ($probaForme as $forma) {
+    if (lista_neagra_gaseste($forma, $probaTermeni) === []) {
+        $problema('Verificarea 11b: potrivirea nu găsește forma „' . $forma . '” a unui termen de probă (tools/dev/lib/lista-neagra.php, lista_neagra_gaseste).');
+    }
+}
+if (lista_neagra_gaseste('pensiunea de probă, 0700 001 111, 2026-07-00', $probaTermeni) !== []) {
+    $problema('Verificarea 11b: potrivirea găsește termeni de probă unde nu sunt (lista_neagra_gaseste).');
+}
+$explicitaGasita = [];
+if ($explicita !== []) {
+    $git = static fn (string $arg): array => array_values(array_filter(explode("\0", (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' ' . $arg . ' 2>/dev/null'))));
+    $urmarite = $git('ls-files -z');
+    if ($urmarite === []) {
+        $problema('Verificarea 11b: lista fișierelor din git nu se poate citi (git ls-files), deci lista neagră explicită nu s-a verificat.');
+    }
+    // Recenzia 2, R3-2: și fișierele încă neurmărite (neignorate), și conținutul din index al celor puse pentru commit.
+    $neurmarite = $git('ls-files -z --others --exclude-standard');
+    $inIndex = $git('diff --cached --name-only -z --diff-filter=ACMR');
+    $texte = [];
+    foreach (array_unique(array_merge($urmarite, $neurmarite)) as $relativ) {
+        if (is_file($radacina . '/' . $relativ) && !is_link($radacina . '/' . $relativ)) {
+            $texte[] = [$relativ, static fn () => (string) file_get_contents($radacina . '/' . $relativ)];
+        }
+    }
+    foreach ($inIndex as $relativ) {
+        $texte[] = [$relativ . ' (index)', static fn () => (string) shell_exec('git -C ' . escapeshellarg($radacina) . ' show ' . escapeshellarg(':' . $relativ) . ' 2>/dev/null')];
+    }
+    // Arhivele și PDF-urile noi pe ramură (față de baza comună cu ramura principală), neurmărite sau puse în index: NU, în afara
+    // listei albe (LISTA_NEAGRA_BINARE_PERMISE); un .gz se dezarhivează și se citește.
+    $baza = trim((string) shell_exec('git -C ' . escapeshellarg($radacina) . ' merge-base HEAD origin/claude/etapa1-cod-comun 2>/dev/null'));
+    $noi = array_merge($baza !== '' ? $git('diff -z --name-only --diff-filter=A ' . escapeshellarg($baza) . ' HEAD') : [], $neurmarite, $inIndex);
+    foreach (array_unique($noi) as $relativ) {
+        if (preg_match('/\.(zip|pdf|7z|rar|tar|tgz)$/i', $relativ) === 1 && !in_array($relativ, LISTA_NEAGRA_BINARE_PERMISE, true)) {
+            $problema('Verificarea 11b: arhivă sau PDF nou pe ramură, care nu se poate citi pentru lista neagră: ' . $relativ
+                . ' (scoate-l, sau trece-l în LISTA_NEAGRA_BINARE_PERMISE din tools/dev/lib/lista-neagra.php, după o privire de om)');
+        }
+    }
+    foreach ($texte as [$relativ, $citeste]) {
+        $nume = preg_replace('/ \(index\)$/', '', $relativ);
+        if (preg_match('/\.(png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|eot|pdf|zip|mp4|webm|7z|rar|tar|tgz)$/i', (string) $nume) === 1) {
+            continue;
+        }
+        $text = $citeste();
+        if (preg_match('/\.gz$/i', (string) $nume) === 1) {
+            $text = (string) @gzdecode($text);
+        }
+        foreach (lista_neagra_gaseste($text, $explicita) as $n) {
+            $explicitaGasita[$relativ] = ($explicitaGasita[$relativ] ?? 0) + $n;
+        }
+    }
+    ksort($explicitaGasita, SORT_STRING);
+    foreach ($explicitaGasita as $relativ => $n) {
+        $problema('Un termen privat al unui client (lista neagră explicită, 11b) e în git: ' . $relativ . ' (' . $n . ' potriviri). Scoate-l '
+            . '(și din istoric, dacă e într-un commit nepublicat); datele clientului stau doar în pachetul lui privat sau în afara repo-ului.');
     }
 }
 ksort($potriviriClient, SORT_STRING);
@@ -473,7 +543,9 @@ echo 'Rute: ' . count($rute) . '; declarații în catalog: ' . count(Plugins::li
     . '; reguli împărțite: ' . count($catalog['rute_impartite']) . '; intrări de meniu: ' . count($intrari)
     . '; cronuri: ' . count($cronuriCatalog) . '; întrebări Plugins::… în cod: ' . $intrebari
     . '; blocuri pe coloana 0 în șabloane: ' . $blocuri
-    . '; nume de client în nucleu (clichetul 11): ' . array_sum($potriviriClient) . ' în ' . count($potriviriClient) . " fișiere\n";
+    . '; nume de client în nucleu (clichetul 11): ' . array_sum($potriviriClient) . ' în ' . count($potriviriClient) . ' fișiere'
+    . '; lista neagră explicită (11b): ' . ($explicita === [] ? 'lipsă (fără privat/lista-neagra.txt și fără CMS_DEV_LISTA_NEAGRA)'
+        : count($explicita) . ' termeni, ' . array_sum($explicitaGasita) . ' potriviri în git') . "\n";
 $bucati = [];
 foreach ($numarate as $cheie => $n) {
     $bucati[] = $cheie . ' ' . $n;

@@ -19,6 +19,11 @@
 
 # Fișiere scrise de aplicație în public/: încărcări, sitemap, reguli de cache.
 /public/uploads/
+# Arborii copiați de captura unui site WordPress (scripts/captureaza-wordpress.php --public): fișierele clientului (mediile, foile,
+# fonturile), niciodată în git cât repo-ul e public. Captura refuză un --public într-un arbore git care nu-i ignoră.
+/public/wp-content/
+/public/wp-includes/
+/public/capturat/
 /public/assets/.htaccess
 /public/*.xml
 # Fișierele publice ale temei site-ului: copiate din pachetul lui (tema/public/) la instalare și la fiecare
@@ -39,3 +44,4 @@
 # tools/inghetare/genereaza-setari.php le scrie aici, în fișierul din git rămân înlocuitori @exemplu.ro).
 # Cât repo-ul e public nu intră în git (decizia OD-49); pe server stau lângă pachetul site-ului.
 /site-uri/*/privat/
+/capturat/

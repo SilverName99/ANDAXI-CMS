@@ -42,6 +42,7 @@ if (PHP_SAPI !== 'cli') {
 $radacina = (string) realpath(dirname(__DIR__, 2));
 require_once $radacina . '/bootstrap.php';
 
+use App\Support\ImportWordPress\ImportWordPress;
 use App\Support\Migrari\Eroare;
 use App\Support\Migrari\Inghetare;
 use App\Support\PachetSite;
@@ -64,6 +65,8 @@ const FISIERE_RADACINA = [
     'avertismente-produse.json' => 'avertismentele produselor (scripts/avertisment-produse.php)',
     'seo-continut.json' => 'conținutul schimbat o dată: produse redenumite, linkuri din texte (scripts/seo-continut.php)',
     'poze-optimizate.json' => 'pozele mari afișate din fișiere noi (PozeOptimizate; fișierele în public/)',
+    'import-wordpress.json' => 'regulile importului WordPress (App\\Support\\ImportWordPress, ImportWordPress::valideazaReguli)',
+    'wp-compat.json' => 'stratul de adrese al unui site mutat de pe WordPress (App\\Support\\WpCompat, WpCompat::valideaza)',
 ];
 
 $argumente = array_slice($argv, 1);
@@ -459,6 +462,32 @@ $verificaPachet = static function (string $dosar, ?string $site, bool $alUnuiCli
         }
     }
 
+    // Recenzia 2, R3-6: referința parității unui site real stă doar în privat/paritate.json.
+    if (in_array('paritate.json', $fisiere, true)) {
+        $probleme[] = 'paritate.json: configurația parității unui site stă doar în privat/paritate.json (git-ignorat), nu în pachetul public';
+    }
+
+    // Regulile importului WordPress: cheile și valorile știute (ImportWordPress::REGULI), drumul capturat cu dialectul lui.
+    if (in_array('import-wordpress.json', $fisiere, true)) {
+        $regulileImportului = json_decode((string) @file_get_contents($dosar . '/import-wordpress.json'), true);
+        foreach (ImportWordPress::valideazaReguli($regulileImportului) as $problema) {
+            $probleme[] = 'import-wordpress.json: ' . $problema;
+        }
+        // Recenzia 2, R3-7: ce e derivat din site-ul real stă doar în privat/.
+        foreach (ImportWordPress::doarPrivate(is_array($regulileImportului) ? $regulileImportului : []) as $cheie) {
+            $probleme[] = 'import-wordpress.json: „' . $cheie . '” stă doar în privat/ (git-ignorat), nu în pachetul public';
+        }
+    }
+
+    // Stratul de adrese WordPress: doar cheile știute, cu tipurile lor (WpCompat::valideaza); pe server un fișier stricat
+    // oprește tot stratul, deci nu ajunge acolo.
+    if (in_array(\App\Support\WpCompat::FISIER, $fisiere, true)) {
+        $wpCompat = json_decode((string) @file_get_contents($dosar . '/' . \App\Support\WpCompat::FISIER), true);
+        foreach (\App\Support\WpCompat::valideaza($wpCompat) as $problema) {
+            $probleme[] = \App\Support\WpCompat::FISIER . ': ' . $problema;
+        }
+    }
+
     // Înghețarea setărilor (și corecturile ei, setari-inghetate-<N>.json): se citește exact ca la runner-ul migrărilor și e
     // a site-ului pachetului. Conținutul (completitudinea, datele private) îl verifică tools/inghetare/verifica-inghetare.php.
     foreach ($fisiere as $relativ) {
@@ -475,13 +504,27 @@ $verificaPachet = static function (string $dosar, ?string $site, bool $alUnuiCli
         }
     }
 
-    // privat/ (valorile private ale înghețării, ignorate de git, OD-49): nu intră în manifest, dar tot doar JSON.
+    // privat/ (valorile private ale înghețării, ignorate de git, OD-49): nu intră în manifest, dar tot doar JSON, plus lista neagră
+    // a igienei (`lista-neagra.txt`, text, tools/dev/lib/lista-neagra.php).
     $dosarPrivat = $dosar . '/' . PachetSite::DOSAR_PRIVAT;
     if (is_dir($dosarPrivat)) {
         foreach (PachetSite::fisiere($dosarPrivat) as $privat) {
             $cale = $dosarPrivat . '/' . $privat;
+            // Recenzia 2, R3-9: fișierele private cunoscute, pe schema lor, nu doar ca JSON.
+            if (!is_link($cale) && in_array($privat, ['import-wordpress.json', 'captura-structura.json', 'paritate.json'], true)) {
+                foreach (problemePrivat($privat, (string) file_get_contents($cale)) as $pb) {
+                    $probleme[] = PachetSite::DOSAR_PRIVAT . '/' . $privat . ': ' . $pb;
+                }
+                continue;
+            }
+            if ($privat === 'lista-neagra.txt' && !is_link($cale)) {
+                if (!mb_check_encoding((string) file_get_contents($cale), 'UTF-8')) {
+                    $probleme[] = PachetSite::DOSAR_PRIVAT . '/' . $privat . ': nu e UTF-8';
+                }
+                continue;
+            }
             if (is_link($cale) || str_contains($privat, '/') || strtolower(pathinfo($privat, PATHINFO_EXTENSION)) !== 'json') {
-                $probleme[] = PachetSite::DOSAR_PRIVAT . '/' . $privat . ': în privat/ stau doar fișiere .json';
+                $probleme[] = PachetSite::DOSAR_PRIVAT . '/' . $privat . ': în privat/ stau doar fișiere .json (și lista-neagra.txt)';
             } elseif (!is_array(json_decode((string) file_get_contents($cale), true))) {
                 $probleme[] = PachetSite::DOSAR_PRIVAT . '/' . $privat . ': nu e JSON valid';
             }
@@ -637,6 +680,18 @@ if ($autotest) {
     $caz('un JSON stricat în rădăcină', static fn (string $d) => file_put_contents($d . '/seo.json', '{"a": '), 'nu e un obiect JSON');
     $caz('altceva decât JSON în privat/', static fn (string $d) => @mkdir($d . '/privat', 0770, true)
         && file_put_contents($d . '/privat/note.txt', 'x'), 'doar fișiere .json');
+    // Recenzia 3, R3-9: fișierele private cunoscute, pe schema lor; cheile private în pachetul public; paritate.json public.
+    $privatCaz = static fn (string $nume, string $text): callable => static fn (string $d) => @mkdir($d . '/privat', 0770, true)
+        && file_put_contents($d . '/privat/' . $nume, $text);
+    $caz('privat/import-wordpress.json cu o cheie nepermisă', $privatCaz('import-wordpress.json', '{"pagini": {}}'), 'cheie nepermisă');
+    $caz('privat/import-wordpress.json cu o cheie dublată', $privatCaz('import-wordpress.json', '{"scripturi_aruncate": [], "scripturi_aruncate": []}'), 'nu e JSON strict');
+    $caz('privat/import-wordpress.json cu un sha256 greșit', $privatCaz('import-wordpress.json', '{"scripturi_aruncate": [{"sha256": "abc", "motiv": "x"}]}'), 'scripturi_aruncate[0]');
+    $caz('privat/import-wordpress.json cu captura.nonce care nu e o listă', $privatCaz('import-wordpress.json', '{"captura": {"nonce": "x"}}'), 'captura: doar');
+    $caz('privat/captura-structura.json cu un selector nepermis', $privatCaz('captura-structura.json', '{"/camere/": {"et-last-child": ["div > *"]}}'), 'captura.structura');
+    $caz('privat/paritate.json fără secțiunea captura', $privatCaz('paritate.json', '{"felii": {}}'), 'secțiunea „captura”');
+    $caz('paritate.json în pachetul public', static fn (string $d) => file_put_contents($d . '/paritate.json', '{"captura": {}}'), 'doar în privat/paritate.json');
+    $caz('scripturi_aruncate în import-wordpress.json public', static fn (string $d) => file_put_contents($d . '/import-wordpress.json',
+        '{"continut": "capturat", "dialect": "divi4", "scripturi_aruncate": []}'), 'stă doar în privat/');
     $caz('o înghețare a setărilor pe care runner-ul n-o citește', static fn (string $d) => file_put_contents($d . '/' . Inghetare::FISIER,
         '{"format": 2, "site": "demo", "altceva": 1}'), 'runner-ul migrărilor n-o citește');
     // Pozele refăcute: un pachet cu o poză bună trece; fără „marimi_de_pe”: „disc”, fără fișierul nou sau cu o mărime care nu e număr, nu.
@@ -653,6 +708,23 @@ if ($autotest) {
             ], $schimba)));
         };
     };
+    // Regulile importului WordPress (corectura 1.15): drumul capturat cere un dialect știut; o cheie necunoscută pică.
+    $importWp = static fn (array $reguli): callable => static fn (string $d) => file_put_contents($d . '/import-wordpress.json',
+        (string) json_encode($reguli, JSON_UNESCAPED_UNICODE));
+    $caz('import-wordpress.json pe drumul capturat, cu dialectul divi4: trece', $importWp(['continut' => 'capturat', 'dialect' => 'divi4']), null);
+    $caz('import-wordpress.json pe drumul capturat fără dialect', $importWp(['continut' => 'capturat']), 'dialect: pe drumul capturat');
+    $caz('import-wordpress.json cu un dialect fără drumul capturat', $importWp(['continut' => 'divi', 'dialect' => 'divi4']), 'dialect: doar cu');
+    $caz('import-wordpress.json cu o cheie necunoscută', $importWp(['altceva' => 1]), 'cheie necunoscută');
+    // Stratul de adrese WordPress: exemplul din docs/SEO.md trece; o cheie necunoscută, un tip greșit sau o cale cu „..” pică.
+    $wpCompat = static fn (array $date): callable => static fn (string $d) => file_put_contents($d . '/wp-compat.json',
+        (string) json_encode($date, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    $caz('wp-compat.json cu toate cheile: trece', $wpCompat(['slash_final' => true, 'majuscule' => '200', 'ghicire' => true, 'harta_id' => true,
+        'atasamente_la_fisier' => true, 'cautare_wp' => true, 'sitemap_302' => ['/wp-sitemap.xml'], 'resturi_410' => ['/wp-json/', '/xmlrpc.php'],
+        'compatibile' => [['metoda' => 'POST', 'cale' => '/wp-admin/admin-ajax.php', 'actiune' => 'galerie_proba']], 'antete_404' => 'wordpress']), null);
+    $caz('wp-compat.json cu o cheie necunoscută', $wpCompat(['slash_finale' => true]), 'cheie necunoscută');
+    $caz('wp-compat.json cu „slash_final” scris ca text', $wpCompat(['slash_final' => 'da']), 'true sau false');
+    $caz('wp-compat.json cu o cale cu „..” în resturi_410', $wpCompat(['resturi_410' => ['/wp-admin/../admin/']]), 'cale nevalidă');
+    $caz('wp-compat.json cu un endpoint compatibil fără metodă', $wpCompat(['compatibile' => [['cale' => '/wp-json/proba/']]]), 'metoda GET, POST sau HEAD');
     $caz('poze-optimizate.json cu o poză și fișierul ei WebP: trece', $pozeOptimizate(), null);
     $caz('poze-optimizate.json fără „marimi_de_pe”: „disc” (mărimi luate prin CDN?)', $pozeOptimizate(['marimi_de_pe' => 'cdn']), 'stat -c %s');
     $caz('poze-optimizate.json fără fișierul nou în public/', $pozeOptimizate([], false), 'fișierul nou lipsește');
@@ -690,3 +762,49 @@ if ($cuProbleme > 0) {
 }
 echo 'verifica-pachet: ', $total, ' pachete, ', $fisiereTotal, ' fișiere, ', $cuProbleme, " cu probleme\n";
 exit($cuProbleme === 0 ? 0 : 1);
+
+/**
+ * Problemele unui fișier privat cunoscut, pe schema lui (recenzia 2, R3-9).
+ *
+ * @return list<string>
+ */
+function problemePrivat(string $nume, string $text): array
+{
+    if (strlen($text) > ImportWordPress::PRIVAT_MAX) {
+        return ['prea mare (peste ' . ImportWordPress::PRIVAT_MAX . ' octeți)'];
+    }
+    try {
+        $strict = \App\Support\HtmlCapturat\SchemaDivi4::jsonStrict($text);
+    } catch (\InvalidArgumentException $e) {
+        return ['nu e JSON strict: ' . $e->getMessage()];
+    }
+    $j = json_decode($text, true);
+    if (!$strict instanceof \stdClass || !is_array($j)) {
+        return ['nu e un obiect JSON'];
+    }
+    $p = [];
+    if ($nume === 'import-wordpress.json') {
+        foreach (array_keys($j) as $k) {
+            if (!in_array($k, ['_despre', 'scripturi_aruncate', 'captura'], true)) {
+                $p[] = 'cheie nepermisă „' . $k . '” (doar scripturi_aruncate și captura.nonce)';
+            }
+        }
+        if (isset($j['captura']) && (!is_array($j['captura']) || array_keys($j['captura']) !== ['nonce'] || !is_array($j['captura']['nonce'])
+            || !array_is_list($j['captura']['nonce']))) {
+            $p[] = 'captura: doar {"nonce": ["<nume>", …]}';
+        }
+        foreach (ImportWordPress::valideazaReguli(['continut' => 'capturat', 'dialect' => 'divi4'] + array_diff_key($j, ['_despre' => 1])) as $pb) {
+            $p[] = $pb;
+        }
+    } elseif ($nume === 'captura-structura.json') {
+        $st = array_diff_key($j, ['_despre' => 1]);
+        foreach (ImportWordPress::valideazaReguli(['continut' => 'capturat', 'dialect' => 'divi4', 'captura' => ['structura' => $st]]) as $pb) {
+            $p[] = $pb;
+        }
+    } elseif ($nume === 'paritate.json') {
+        if (!isset($j['captura']) || !is_array($j['captura'])) {
+            $p[] = 'lipsește secțiunea „captura” a harness-ului';
+        }
+    }
+    return $p;
+}

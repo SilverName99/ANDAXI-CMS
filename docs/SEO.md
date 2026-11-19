@@ -14,6 +14,7 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | Fișier | Ce e |
 |---|---|
 | `src/Support/SeoRedirects.php` | Adresa unică (gazdă, „/” final) și harta adreselor vechi; rulează în `public/index.php`, înaintea sesiunii |
+| `src/Support/WpCompat.php`, `src/Support/WpCompat/Ghicire.php`, `src/Support/WpCompat/Harta.php` | Adresele unui site mutat de pe WordPress (`wp-compat.json`, §1b): slash-ul final, majusculele, `?page_id=`, atașamentele, ghicirea, 410 pe resturile WordPress; harta pe ID-uri (`wp_harta`) |
 | `src/Support/Redirectionari.php` | Harta adreselor vechi în baza de date (`seo_redirects`; WP-38): verificările unei reguli noi, pachetul ca sămânță, CSV, redirecționările automate, copia citită de `SeoRedirects` |
 | `src/Support/Jurnal404.php` | Jurnalul paginilor negăsite (`seo_404_log`; WP-38), fără date personale, cu păstrare limitată |
 | `src/Support/Robots.php` | Regulile din robots.txt (și pentru sitemap) |
@@ -43,6 +44,7 @@ același comportament, dar fără nimic scris pentru un anumit site:
 | `site-uri/bioscem/` | Pachetul de date Bioscem (harta și regulile SEO din livrarea 1) |
 | `tools/dev/site-demo/` | Pachetul de date inventat al site-ului de dezvoltare (folosit de teste) |
 | `tools/dev/test-seo.php` | Testele SEO (vezi mai jos) |
+| `tools/dev/test-wp-compat.php` | Testele adreselor WordPress (§1b, poarta G-wp), pe un site inventat; cu `--oracol` și `--redirecturi`, pe datele reale ale unui site (din afara repo-ului) |
 
 ## 1. O singură adresă pentru fiecare pagină
 
@@ -98,6 +100,96 @@ același comportament, dar fără nimic scris pentru un anumit site:
 
 **Oprire de urgență**: `SEO_REDIRECTURI=0` în `.env` oprește tot stratul (sitemap-ul,
 robots.txt și datele structurate rămân).
+
+## 1b. Adresele unui site mutat de pe WordPress (`wp-compat.json`)
+
+Un site adoptat de pe WordPress ([DEPLOY.md](DEPLOY.md), „Adoptarea unui site WordPress”) păstrează adresele și
+răspunsurile pe care le dădea WordPress-ul lui: linkurile din Google, din reclame și din bookmark-uri duc tot acolo, cu
+același cod. Stratul (`App\Support\WpCompat`) îl pornește **doar** `wp-compat.json` din pachetul site-ului; fără el
+nicio cerere, niciun antet și nicio adresă nu se schimbă (toate site-urile de azi). Un fișier stricat se ignoră întreg
+(un rând în jurnalul PHP); `tools/dev/verifica-pachet.php` nu-l lasă să ajungă pe un server.
+
+```json
+{"slash_final": true, "majuscule": "200", "ghicire": true, "harta_id": true, "atasamente_la_fisier": true,
+ "cautare_wp": true, "sitemap_302": ["/wp-sitemap.xml", "/sitemap_index.xml"],
+ "resturi_410": ["/wp-json/", "/xmlrpc.php", "/wp-login.php", "/wp-admin/", "/readme.html"],
+ "compatibile": [{"metoda": "POST", "cale": "/wp-admin/admin-ajax.php", "actiune": "galerie_proba"},
+                 {"metoda": "GET", "cale": "/wp-json/proba/v1/consimtamant"}],
+ "antete_404": "wordpress"}
+```
+
+- **`slash_final`**: adresa canonică a unei pagini are „/” la sfârșit (permalinkurile `/%postname%/`): `/x` → 301 → `/x/`
+  într-un singur salt, cu query-ul păstrat (`SeoRedirects::formaCale`, invers față de §1); `/x//y` → `/x/y/`. O cale al
+  cărei ultim segment are „.” (`/sitemap.xml`, `/index.php`) e un fișier și rămâne fără. La fel: canonicalul nucleului
+  (`Seo::rezolva`), sitemap-urile generate, paginile propuse în meniu, adresa din editorul paginii și redirecționările
+  automate de la schimbarea slug-ului (WP-38, §2b: `/vechi/` → `/nou/`); o regulă din hartă cu ținta fără „/” pleacă
+  tot într-un salt, cu „/”. Cheile hărții rămân fără „/” (`SeoRedirects::cheie`). Routerul nu se schimbă: potrivirea
+  rutelor nu depinde de „/” final (WordPress însuși taie „/”-urile la potrivire), iar forma canonică o dau stratul SEO și
+  generatoarele de adrese.
+- **`majuscule`: "200"**: `/CAMERE/` răspunde 200, cu canonicalul cu litere mici, ca WordPress (în locul 301-ului din §1).
+  Doar literele ASCII: o pagină găsită de colația bazei e cea cerută numai dacă diferă cel mult literele mari ASCII
+  (`WpCompat::acelasiSlug`), deci fără diacritice tăiate și fără `Ș` = `ș`; potrivirile aproximative ale nucleului
+  (`gasesteProdusDupaSlugAproximativ`, 301 la slug-ul „corect”, și pe adresele paginilor, și pe `/produs/…`) sunt oprite:
+  o adresă necunoscută trece prin ghicire, apoi 404.
+- **`harta_id`**: `?page_id=N`, `?p=N`, `?cat=N`, `?author=N` și `/index.php` → 301 la adresa frumoasă, cu restul
+  query-ului (`WpCompat::intercepteaza`, în `public/index.php` după pluginuri și înaintea cache-ului de pagini); un ID
+  necunoscut, o ciornă sau o pagină ștearsă: 404, ca WordPress. **`atasamente_la_fisier`**: `?attachment_id=N` și adresa
+  frumoasă a unui atașament (`/<pagină>/<atașament>/`) → 301 la fișierul din `/wp-content/uploads/` (WordPress 6.4+, fără
+  paginile atașamentelor).
+- **`ghicire`** (`WpCompat\Ghicire`, după rutele reale și înaintea paginii 404, din `SiteController::paginaNegasita`):
+  redirect_guess_404_permalink al WordPress-ului. 1–2 segmente; „numele” e ultimul segment, curățat ca
+  sanitize_title_for_query (litere mici, și în afara ASCII-ului, deci `/CAMERE-ȘI/` ajunge la `camere-și`); câștigă
+  postarea publicată (pagină, articol, proiect; niciodată un atașament, o ciornă sau un layout) al cărei slug începe cu
+  numele, cu ID-ul WordPress cel mai mic, iar paginile făcute în constructor după import vin după, în ordinea creării;
+  query string-ul se păstrează întocmai. `/x/2/` → `/câștigătoarea/2/` → `/câștigătoarea/` (două salturi, ca live);
+  `/x/page/2/` și `/x/comment-page-2/` → fără număr. Nu se ghicește: 3 segmente, fluxurile (`/x/feed/`), embed,
+  trackback, arhivele (anul, `category/`, `tag/`, `author/`, `search/`, `type/`; altele în `baze_fara_ghicire`), pagina
+  „404” (nu e o pagină adresabilă: `/404/` răspunde 404).
+- **Harta** (`wp_harta`, migrarea nucleu/0069; `WpCompat\Harta`): fiecare postare publicată, atașament, categorie și autor
+  al site-ului WordPress, cu ID-ul, slug-ul în forma WordPress, adresa scrisă de WordPress, starea, ordinea creării,
+  fișierul atașamentului și pagina din constructor în care a devenit postarea (`pagina_id`: o pagină redenumită în admin
+  rămâne ținta, cu adresa nouă; una ștearsă nu mai e țintă). O scrie importul (`Harta::scrie`).
+- **`sitemap_302`**: sitemap-urile vechi → 302 `/sitemap.xml`.
+- **`resturi_410`**: adresele tehnice WordPress → 410, oricare ar fi metoda; o cale cu „/” la sfârșit acoperă tot ce e sub
+  ea. Fișierele copiate (`wp-content/`, `wp-includes/`) le servește serverul web înaintea PHP-ului, deci nu primesc 410.
+  **`compatibile`**: excepțiile, endpointurile pe care site-ul le servește în forma WordPress (cu `actiune`: doar cererile
+  cu acel `action`; calea se compară decodată, fără deosebire de litere mari și cu „//” strâns, ca la resturi).
+  Redirecționările SEO nu ating nici resturile, nici endpointurile (nici 301 spre „/x/”, nici regulile hărții:
+  `WpCompat::neatinsDeSeo`), dar ele nu intră în lista căilor excluse a coșului și a contului (`SeoRedirects::caiExcluse`):
+  un endpoint al cărui pas nu e încă în cod răspunde un 404 obișnuit, fără canonical.
+- **`antete_404`: "wordpress"**: orice 404 pleacă cu antetele `nocache_headers()` ale WordPress
+  (`Cache-Control: no-cache, must-revalidate, max-age=0, no-store, private`, `Expires: Wed, 11 Jan 1984 05:00:00 GMT`),
+  puse chiar înainte de trimiterea antetelor (nu pe site-ul de verificare, care își pune antetele lui).
+- **Slug-urile Unicode** (`Slug::unicode`, pe site-urile cu `wp-compat.json`): litere (`\p{L}`, `\p{M}`), cifre și cratimă,
+  NFC. Le folosesc slug-ul paginilor din admin (și cel din titlu), slugify-ul JS al editorului paginii, `slugify()` al
+  adminului pentru adrese (numele tehnice, ca un câmp de formular, rămân ASCII) și comparația aproximativă a nucleului
+  (`slugComparabil`; în modul WordPress potrivirea aproximativă e oricum oprită, ramura e pentru site-urile cu limbi). Un
+  slug neschimbat în formular nu se renormalizează la salvare; unul lipit din bara browserului (percent-encoded) se
+  decodează; unicitatea se verifică pe calea întreagă, cu adresa și pagina care o are deja în mesaj. În bază slug-ul stă
+  decodat (Unicode); în `Location`, canonical, sitemap și meniu iese în forma percent-encoded cu litere mici pe care o
+  scria WordPress din `post_name` (`WpCompat::adresaPagina`, `WpCompat::caleCanonica`: fiecare segment al căii cerute e
+  decodat și codat din nou, deci `/cam%65re/` are canonicalul `/camere/`, ca slug-ul paginii găsite). Canonicalul unei pagini
+  din constructor găsite vine din slug-ul ei din bază (`SiteController::seoPagina` → `adresaPagina(slug)`), nu din calea cerută:
+  o cerere mai largă decât slug-ul (un spațiu tăiat de `trim`, un „/” codat `%2f` spre pagina imbricată) răspunde tot 200, dar
+  cu canonicalul `/camere/` sau `/camere/camera-dubla/`, pe care AIOSEO l-ar scrie din `post_name`, nu `/camere%20/`.
+- **Parametrii adreselor simple pe gazda www sau cu „//”.** Când 301-ul unei adrese simple (`?page_id=`, `?p=`, `?cat=`,
+  `?author=`, `?attachment_id=`) pleacă pe gazda greșită (www) sau cu „//”, SeoRedirects nu mai lipește înapoi query-ul cerut:
+  WpCompat îi dă query-ul ales (gol când a scos toți parametrii, `WpCompat::raspunde` → `SeoRedirects::fixeazaQueryCanonic`),
+  deci `www/?page_id=14` → `/camere/`, nu `/camere/?page_id=14`, într-un singur salt, ca `redirect_canonical`.
+- `cautare_wp` (căutarea în forma WordPress) se validează aici; o servește pasul ei (căutarea compatibilă).
+- **HEAD** (fără cheie, oricare ar fi cheile de mai sus): o cerere HEAD primește răspunsul unui GET (codul, `Location`,
+  antetele; corpul îl taie serverul web), ca la WordPress, în locul 404-ului nucleului din §11 (routerul n-are rute HEAD);
+  un endpoint compatibil cu metoda GET primește și HEAD-ul lui. Fără `wp-compat.json`, HEAD rămâne ca până acum.
+
+Testele: `tools/dev/php.sh tools/dev/test-wp-compat.php` (poarta G-wp, §10), pe un site inventat: fiecare regulă, plus
+„fără `wp-compat.json`, adresele ca înainte” și instantaneul rutelor neschimbat. Pe datele reale ale unui site, din afara
+repo-ului: `tools/dev/php.sh tools/dev/test-wp-compat.php --oracol=<inventar>/goluri/r2-2/guess-permalink-301.json
+--redirecturi=<inventar>/seo/redirects.json[,<alt tabel în același format>] [--antete=<inventar>/seo/headers.json]
+--raport=<fișier în afara repo-ului>` face harta ID-urilor din exporturile REST ale site-ului live (`<inventar>/cache`, sau
+`--rest=`), o compară cu cea din oracol și cere fiecare rând al oracolului ghicirii și al tabelelor de redirecționări (codul
+și `Location`) și, cu `--antete`, fiecare 404 al site-ului live (codul, `Cache-Control`, `Expires`); rândurile servite de
+alți pași (răspunsurile înghețate, căutarea), cele date de serverul web fără PHP (fișierele statice), resturile cu 410
+(diferența declarată) și primul salt de pe http (al găzduirii) se trec separat, iar orice altă deosebire e o diferență.
 
 ## 2. Adresele vechi ale site-ului (harta)
 
@@ -752,9 +844,16 @@ discul serverului, și `public/assets/img/optimizate/`), conținutul AIRCALL și
   G-calc (`tools/dev/test-amprenta-site.php`): codul Bioscem față de codul comun, aceleași
   câmpuri pe toate adresele, iar corpul diferă doar la `/robots.txt` (diferența din
   `$deBioscem`).
+- `tools/dev/php.sh tools/dev/test-wp-compat.php` (poarta G-wp, cu `test-import-wordpress.php`): adresele unui site mutat
+  de pe WordPress (§1b) pe un site inventat, pe un server cu `wp-compat.json` și pe unul fără (ca înainte, plus
+  instantaneul rutelor); cu `--oracol` și `--redirecturi`, aceleași reguli pe oracolul real al unui site, cu 0 diferențe.
 
 ## 11. Ce nu e aici (încă)
 
+- Pe site-urile mutate de pe WordPress (§1b): fluxurile, arhivele, embed-urile, sitemap-urile AIOSEO, `/page/N/` și
+  căutarea `?s=` / `/search/<t>/` (răspunsurile înghețate și căutarea compatibilă, pașii lor); până atunci, 404.
+
 - Noindex pe etichetele mici, H1, linkurile interne, termenul de livrare pentru Google
   (livrările 3–4 Bioscem, apoi în nucleu).
-- `HEAD` pe o adresă corectă răspunde 404 (routerul n-are rute HEAD; moștenit, neschimbat).
+- `HEAD` pe o adresă corectă răspunde 404 (routerul n-are rute HEAD; moștenit, neschimbat), în afara site-urilor cu
+  `wp-compat.json` (§1b: acolo HEAD primește răspunsul unui GET).

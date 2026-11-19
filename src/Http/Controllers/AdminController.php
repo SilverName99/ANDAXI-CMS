@@ -16363,7 +16363,8 @@ final class AdminController
                 return;
             }
 
-            $slug = $this->slugify($name);
+            // Numele tehnic al formularului (adresa lui de trimitere, /newsletter/optin/<slug>): ASCII, ca până acum.
+            $slug = $this->slugifyAscii($name);
             if ($slug === '') {
                 $slug = 'formular-optin';
             }
@@ -16441,7 +16442,7 @@ final class AdminController
 
             $formId = (int) ($_POST['optin_form_id'] ?? 0);
             $name = trim((string) ($_POST['optin_name'] ?? ''));
-            $slug = $this->slugify((string) ($_POST['optin_slug'] ?? ''));
+            $slug = $this->slugifyAscii((string) ($_POST['optin_slug'] ?? ''));
             $listId = (int) ($_POST['optin_list_id'] ?? 0);
             $buttonLabel = trim((string) ($_POST['optin_button_label'] ?? 'Ma abonez'));
             $successMessage = trim((string) ($_POST['optin_success_message'] ?? 'Te-ai abonat cu succes.'));
@@ -16500,7 +16501,7 @@ final class AdminController
                 if (!in_array($type, ['email', 'text', 'textarea', 'tel', 'checkbox'], true)) {
                     $type = 'text';
                 }
-                $fieldName = $this->slugify((string) ($field['name'] ?? ''));
+                $fieldName = $this->slugifyAscii((string) ($field['name'] ?? ''));
                 if ($fieldName === '') {
                     continue;
                 }
@@ -17110,8 +17111,13 @@ final class AdminController
                 $existingSlug = trim((string) ($existingPage['slug'] ?? ''));
             }
         }
+        $slugUnicode = \App\Support\WpCompat::slugUnicode();
         if ($slugInput === '/' || strtolower($slugInput) === 'acasa' || strtolower($slugInput) === 'home') {
             $slug = '';
+        } elseif ($slugUnicode && $existingSlug !== null && $existingSlug !== '' && trim($slugInput, '/') === $existingSlug) {
+            // Slug-urile Unicode: un slug neschimbat în formular rămâne exact cum e (cel importat din WordPress poate avea
+            // litere sau semne pe care normalizarea de azi le-ar scrie altfel), deci adresa paginii nu se schimbă.
+            $slug = $existingSlug;
         } elseif ($slugInput !== '') {
             $slug = $this->normalizePageSlug($slugInput);
         } elseif ($existingSlug === '') {
@@ -17136,6 +17142,19 @@ final class AdminController
             if ($stmtRootConflict->fetch()) {
                 Flash::set('error', 'Există deja o pagină setată ca Home (URL /).');
                 header('Location: /admin/pages');
+                return;
+            }
+        }
+        // Slug-urile Unicode: unicitatea pe calea întreagă („camere/dubla” și „oferte/dubla” pot sta amândouă), cu adresa
+        // și pagina care o are deja în mesaj (colația bazei: o adresă care diferă doar prin litere mari sau diacritice e tot luată).
+        if ($slugUnicode && $slug !== '') {
+            $stmtSlugLuat = $db->prepare('SELECT id, title, deleted_at FROM pages WHERE slug = :slug AND id != :id LIMIT 1');
+            $stmtSlugLuat->execute(['slug' => $slug, 'id' => $id]);
+            $luata = $stmtSlugLuat->fetch() ?: null;
+            if (is_array($luata)) {
+                Flash::set('error', 'Adresa ' . \App\Support\WpCompat::adresaPagina($slug) . ' e deja a paginii „' . (string) ($luata['title'] ?? '')
+                    . '”' . (($luata['deleted_at'] ?? null) !== null ? ' (ștearsă; o restaurezi sau îi schimbi adresa)' : '') . '. Alege altă adresă.');
+                header('Location: ' . ($id > 0 ? '/admin/pages/' . $id . '/edit' : '/admin/pages'));
                 return;
             }
         }
@@ -17198,7 +17217,8 @@ final class AdminController
             'canonical_url' => $seoCanonicalUrl,
             'image_url' => $seoImageUrl,
         ]);
-        // WP-38: adresa veche a paginii → cea nouă (o pagină existentă cu alt slug; nu prima pagină).
+        // WP-38: adresa veche a paginii → cea nouă (o pagină existentă cu alt slug; nu prima pagină). În modul WordPress,
+        // amândouă în forma WordPress („/vechi/” → „/nou/”, un singur salt).
         $redirectPagina = isset($existingSlug) ? $this->redirectLaSlugNou($db, '/', (string) $existingSlug, 'pages', $id) : '';
         $this->refreshCacheAfterPublicContentChange($db);
 
@@ -17343,7 +17363,13 @@ final class AdminController
         } catch (Throwable) {
         }
         // Și când nu s-a făcut (o regulă scrisă de om pe adresa veche, un prefix care acoperă adresa nouă), adminul află de ce.
-        $rezultat = \App\Support\Redirectionari::laSchimbareaAdresei($db, $prefix . $slugVechi, $prefix . $slugNou, $email);
+        // Modul WordPress (wp-compat.json): paginile în forma WordPress, cu „/” final (WpCompat::adresaPagina).
+        if ($tabel === 'pages' && $prefix === '/' && \App\Support\WpCompat::activ()) {
+            $rezultat = \App\Support\Redirectionari::laSchimbareaAdresei($db, \App\Support\WpCompat::adresaPagina($slugVechi),
+                \App\Support\WpCompat::adresaPagina($slugNou), $email);
+        } else {
+            $rezultat = \App\Support\Redirectionari::laSchimbareaAdresei($db, $prefix . $slugVechi, $prefix . $slugNou, $email);
+        }
         return $rezultat['mesaj'] !== '' ? ' ' . rtrim($rezultat['mesaj'], '.') . '.' : '';
     }
 
@@ -19223,7 +19249,7 @@ final class AdminController
             if ($eticheta === '' || mb_strlen($eticheta) > 60) {
                 continue;
             }
-            $cheie = $this->slugify($eticheta);
+            $cheie = $this->slugifyAscii($eticheta);
             if ($cheie === '' || isset($vazute[$cheie])) {
                 continue;
             }
@@ -20704,11 +20730,13 @@ HTML;
 
     private function availableMenuPages(PDO $db): array
     {
+        // Modul WordPress (wp-compat.json): adresele în forma WordPress („/contact/”, slug-urile percent-encoded).
+        $modWp = \App\Support\WpCompat::activ();
         $items = [
             ['title' => 'Acasă', 'url' => '/', 'source' => 'sistem'],
-            ['title' => 'Magazin', 'url' => '/magazin', 'source' => 'sistem'],
-            ['title' => 'Contact', 'url' => '/contact', 'source' => 'sistem'],
-            ['title' => 'Contul meu', 'url' => '/contul-meu', 'source' => 'sistem'],
+            ['title' => 'Magazin', 'url' => $modWp ? \App\Support\WpCompat::adresaPagina('magazin') : '/magazin', 'source' => 'sistem'],
+            ['title' => 'Contact', 'url' => $modWp ? \App\Support\WpCompat::adresaPagina('contact') : '/contact', 'source' => 'sistem'],
+            ['title' => 'Contul meu', 'url' => $modWp ? \App\Support\WpCompat::adresaPagina('contul-meu') : '/contul-meu', 'source' => 'sistem'],
         ];
 
         $rows = $db->query(
@@ -20726,7 +20754,7 @@ HTML;
                 continue;
             }
 
-            $url = '/' . ltrim($slug, '/');
+            $url = $modWp ? \App\Support\WpCompat::adresaPagina($slug) : '/' . ltrim($slug, '/');
             $exists = false;
             foreach ($items as $item) {
                 if ((string) ($item['url'] ?? '') === $url) {
@@ -20772,9 +20800,12 @@ HTML;
         }
 
         $defaults = [];
+        $implicite = \App\Support\WpCompat::activ()
+            ? ['/', \App\Support\WpCompat::adresaPagina('magazin'), \App\Support\WpCompat::adresaPagina('contact')]
+            : ['/', '/magazin', '/contact'];
         foreach ($availablePages as $page) {
             $url = trim((string) ($page['url'] ?? ''));
-            if (!in_array($url, ['/', '/magazin', '/contact'], true)) {
+            if (!in_array($url, $implicite, true)) {
                 continue;
             }
             $defaults[] = [
@@ -22519,7 +22550,7 @@ HTML;
             if ($id === '') {
                 $id = 'point-' . ($index + 1);
             }
-            $id = strtolower($this->slugify(str_replace('_', '-', $id)));
+            $id = strtolower($this->slugifyAscii(str_replace('_', '-', $id)));
             if ($id === '') {
                 $id = 'point-' . ($index + 1);
             }
@@ -27989,7 +28020,22 @@ HTML;
     }
 
 
+    /**
+     * Slug-ul unei adrese (pagini, articole, categorii, produse…). Pe site-urile cu slug-uri Unicode (WpCompat::slugUnicode:
+     * cele cu wp-compat.json, mutate de pe WordPress) literele oricărei limbi rămân (Slug::unicode); altfel, ca până acum, doar
+     * ASCII. Numele tehnice (câmpurile formularelor, cheile, fișierele încărcate, adresa de trimitere a formularelor de
+     * abonare) folosesc slugifyAscii().
+     */
     private function slugify(string $value): string
+    {
+        if (\App\Support\WpCompat::slugUnicode()) {
+            return \App\Support\Slug::unicode($value);
+        }
+        return $this->slugifyAscii($value);
+    }
+
+    /** Ca slugify() de până acum: doar litere ASCII, cifre și cratimă (numele câmpurilor, cheile, id-urile, fișierele). */
+    private function slugifyAscii(string $value): string
     {
         $value = strtolower(trim($value));
         $value = preg_replace('/[^a-z0-9\- ]/i', '', $value) ?? '';
@@ -28138,8 +28184,10 @@ HTML;
         }
 
         $normalized = [];
+        $unicode = \App\Support\WpCompat::slugUnicode();
         foreach ($segments as $segment) {
-            $part = $this->slugify($segment);
+            // Slug-urile Unicode: un segment lipit din bara browserului („camere-%C8%99i”) e același slug („camere-și”).
+            $part = $this->slugify($unicode ? rawurldecode($segment) : $segment);
             if ($part !== '') {
                 $normalized[] = $part;
             }
@@ -28187,8 +28235,9 @@ HTML;
         }
 
         $originalName = trim((string) pathinfo((string) ($file['name'] ?? ''), PATHINFO_FILENAME));
-        $baseFromTitle = $this->slugify($preferredName);
-        $baseFromOriginal = $this->slugify($originalName);
+        // Numele fișierului e un nume tehnic: ASCII, ca până acum (și pe site-urile cu slug-uri Unicode).
+        $baseFromTitle = $this->slugifyAscii($preferredName);
+        $baseFromOriginal = $this->slugifyAscii($originalName);
         $baseName = $baseFromTitle !== ''
             ? $baseFromTitle
             : ($baseFromOriginal !== '' ? $baseFromOriginal : 'media');

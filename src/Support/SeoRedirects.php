@@ -24,7 +24,9 @@ namespace App\Support;
  *     ar trimite fiecare pagină la ea însăși. Cine are deja coș sau cont deschis
  *     pe gazda veche rămâne acolo (cookie-ul de sesiune e legat de gazdă);
  *     roboții și vizitatorii noi se mută;
- *  2. calea: „/x/" și „/x//y" → „/x" și „/x/y" (prima pagină rămâne „/");
+ *  2. calea: „/x/" și „/x//y" → „/x" și „/x/y" (prima pagină rămâne „/"); pe un site cu wp-compat.json și
+ *     `slash_final` (App\Support\WpCompat, adresele unui site mutat de pe WordPress) invers: „/x” și „/x//y” →
+ *     „/x/” și „/x/y/”, iar un fișier („/sitemap.xml”) rămâne fără „/”;
  *  3. harta adreselor vechi ale site-ului: adresa veche → pagina nouă, cu 301,
  *     sau 410 pentru resturi tehnice. Nucleul nu conține nicio regulă. Din
  *     WP-38 harta stă în baza de date (`seo_redirects`, managerul din admin,
@@ -80,7 +82,8 @@ final class SeoRedirects
     private static int $nivelBuffer = 0;
     private static string $caleCurata = '/';
     private static string $query = '';
-    /** Query-ul ales de redirectCanonic() (poate fi gol: „?category=” mutat în cale); null dacă n-a fost apelat. */
+    /** Query-ul ales de redirectCanonic() sau de WpCompat (poate fi gol: „?category=” mutat în cale, parametrii `?page_id=`
+     * scoși); null dacă n-a fost apelat. Îl folosește locatieCanonica() când corectează gazda sau „//". */
     private static ?string $queryCanonic = null;
     private static ?string $bazaCanonica = null;
     private static bool $gazdaGresita = false;
@@ -131,6 +134,9 @@ final class SeoRedirects
         if (!class_exists(DateSite::class, false)) {
             require_once __DIR__ . '/DateSite.php';
         }
+        if (!class_exists(WpCompat::class, false)) {
+            require_once __DIR__ . '/WpCompat.php';
+        }
         Env::load(Paths::env());
         if (self::oprit()) {
             return;
@@ -147,7 +153,7 @@ final class SeoRedirects
         if (self::eExclusaDupa(self::CAI_EXCLUSE, $caleBruta)) {
             return;
         }
-        $caleCurata = self::curataCale($caleBruta);
+        $caleCurata = self::formaCale($caleBruta);
 
         self::$bazaCanonica = self::bazaCanonica();
         $gazdaGresita = false;
@@ -178,8 +184,9 @@ final class SeoRedirects
         if (!$gazdaGresita && !$caleGresita && $regula === null && !$headCuMajuscule && !$deRefacut) {
             return;
         }
-        // Abia acum lista completă (cu adresele de confirmare ale pluginurilor și ale site-ului).
-        if (self::eExclusa($caleBruta) || self::eExclusa($caleCurata)) {
+        // Abia acum lista completă (cu adresele de confirmare ale pluginurilor și ale site-ului) și, în modul WordPress
+        // (wp-compat.json), resturile cu 410 și endpointurile compatibile, pe care stratul nu le redirecționează (WpCompat).
+        if (self::eExclusa($caleBruta) || self::eExclusa($caleCurata) || WpCompat::neatinsDeSeo($caleBruta)) {
             return;
         }
 
@@ -263,7 +270,8 @@ final class SeoRedirects
                 // O țintă care e pagina unui plugin pe care site-ul nu-l are ar da
                 // 404 după redirecționare: atunci adresa veche rămâne 404.
                 if ($tinta !== null && self::tintaVizibila($tinta)) {
-                    self::redirectioneaza(self::adresaCompleta($tinta, self::$query), 301);
+                    // Modul WordPress: ținta în forma canonică („/x/”), ca saltul să fie unul singur.
+                    self::redirectioneaza(self::adresaCompleta(WpCompat::cuSlashAdresa($tinta), self::$query), 301);
                     self::numaraAccesarea(self::$caleCurata);
                     return;
                 }
@@ -367,7 +375,7 @@ final class SeoRedirects
      * cookie-uri: pagina la care ajunge îi pornește sesiunea, ca înainte. Cine
      * are deja o sesiune își primește cookie-urile neatinse.
      */
-    private static function faraCookieuriPentruVizitatorNou(): void
+    public static function faraCookieuriPentruVizitatorNou(): void
     {
         if (!headers_sent() && !self::areSesiuneExistenta()) {
             header_remove('Set-Cookie');
@@ -415,6 +423,15 @@ final class SeoRedirects
         if ($caleCorecta === '' || self::eExclusa($caleCorecta)) {
             return false;
         }
+        // Modul WordPress (wp-compat.json, slash_final): adresa corectă e cea cu „/” final; resturile și endpointurile
+        // compatibile nu se redirecționează.
+        if (!class_exists(WpCompat::class, false)) {
+            require_once __DIR__ . '/WpCompat.php';
+        }
+        if (WpCompat::neatinsDeSeo($caleCorecta)) {
+            return false;
+        }
+        $caleCorecta = WpCompat::cuSlash($caleCorecta);
         if ($query === null) {
             [, $query] = self::imparteUri((string) ($_SERVER['REQUEST_URI'] ?? '/'));
         }
@@ -427,6 +444,16 @@ final class SeoRedirects
         header('Location: ' . $caleCorecta . ($query !== '' ? '?' . $query : ''), true, 301);
         header('Cache-Control: ' . self::cacheControlRedirect(), true);
         return true;
+    }
+
+    /**
+     * Query-ul pe care îl va avea redirecționarea canonică (WpCompat îl pune când scoate parametrii `?page_id=`, `?p=`, `?cat=`
+     * … dintr-o adresă simplă): când termina() mai corectează gazda (www) sau „//", locatieCanonica() folosește acest query (gol
+     * = fără parametri), nu îl lipește la loc pe cel original. Ca redirect_canonical din WordPress, care îi scoate în același salt.
+     */
+    public static function fixeazaQueryCanonic(string $query): void
+    {
+        self::$queryCanonic = $query;
     }
 
     /**
@@ -534,6 +561,20 @@ final class SeoRedirects
         // „//cos" sau „/cos/" ajung la router tot ca „/cos"; „%2F" la fel, decodat.
         $faraDuble = (string) preg_replace('#/{2,}#', '/', rawurldecode($cale));
         return $faraDuble !== $cale && self::eExclusaDupa($lista, $faraDuble);
+    }
+
+    /**
+     * Forma curată a căii din adresă: curataCale(), iar pe un site cu wp-compat.json și `slash_final` cu „/” final la
+     * paginile (WpCompat::cuSlash: „/x//y” → „/x/y/”; un fișier, „/sitemap.xml”, rămâne fără). Cheile hărții (cheie())
+     * rămân fără „/”.
+     */
+    public static function formaCale(string $cale): string
+    {
+        $cale = self::curataCale($cale);
+        if (!class_exists(WpCompat::class, false)) {
+            require_once __DIR__ . '/WpCompat.php';
+        }
+        return WpCompat::cuSlash($cale);
     }
 
     /** „/x//y/" → „/x/y"; prima pagină rămâne „/". Codarea literelor rămâne neatinsă. */
@@ -987,7 +1028,7 @@ final class SeoRedirects
         $queryImplicit = self::$queryCanonic ?? self::$query;
         if (str_starts_with($locatie, '/') && !str_starts_with($locatie, '//')) {
             [$cale, $query] = self::imparteUri($locatie);
-            return self::adresaCompleta(self::curataCale($cale), $query !== '' ? $query : $queryImplicit);
+            return self::adresaCompleta(self::formaCale($cale), $query !== '' ? $query : $queryImplicit);
         }
         $parti = parse_url($locatie);
         if (!is_array($parti) || !isset($parti['host'])) {
@@ -999,7 +1040,7 @@ final class SeoRedirects
             return null;
         }
         $query = (string) ($parti['query'] ?? '');
-        return self::adresaCompleta(self::curataCale((string) ($parti['path'] ?? '/')), $query !== '' ? $query : $queryImplicit);
+        return self::adresaCompleta(self::formaCale((string) ($parti['path'] ?? '/')), $query !== '' ? $query : $queryImplicit);
     }
 
     /** @return array{0: string, 1: string} calea brută și query-ul, fără parse_url („//x" nu e o gazdă aici) */
@@ -1032,7 +1073,8 @@ final class SeoRedirects
         return in_array(strtolower(trim($valoare)), ['0', 'false', 'off', 'nu'], true);
     }
 
-    private static function cacheControlRedirect(): string
+    /** Cache-Control-ul unei redirecționări a stratului (SEO_REDIRECT_CACHE; implicit no-store); și pentru WpCompat. */
+    public static function cacheControlRedirect(): string
     {
         $valoare = trim((string) Env::get('SEO_REDIRECT_CACHE', ''));
         return $valoare !== '' ? $valoare : 'no-store';
@@ -1041,6 +1083,9 @@ final class SeoRedirects
     /** Doar pentru teste: uită harta, lista de excluderi și starea cererii. */
     public static function reseteaza(): void
     {
+        if (class_exists(WpCompat::class, false)) {
+            WpCompat::reseteaza();
+        }
         self::$harta = null;
         self::$prefixe = null;
         self::$iduri = [];

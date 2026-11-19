@@ -205,7 +205,11 @@ admin_componenta('panou-seo', [
     </form>
 
     <div style="margin-top:12px;">
+<?php if (\App\Support\WpCompat::activ()): ?>
+        URL public: <strong id="page-url-preview" data-slash-final="<?= \App\Support\WpCompat::slashFinal() ? '1' : '0' ?>"><?= $pageSlug !== '' ? ('/' . htmlspecialchars($pageSlug, ENT_QUOTES) . (\App\Support\WpCompat::slashFinal() ? '/' : '')) : '/' ?></strong>
+<?php else: ?>
         URL public: <strong id="page-url-preview"><?= $pageSlug !== '' ? ('/' . htmlspecialchars($pageSlug, ENT_QUOTES)) : '/' ?></strong>
+<?php endif; ?>
     </div>
 </section>
 
@@ -503,6 +507,31 @@ admin_componenta('panou-seo', [
         codeFullscreenBtn.textContent = codeColumn.classList.contains('is-fullscreen') ? 'Exit fullscreen' : 'Fullscreen';
     });
 
+<?php if (\App\Support\WpCompat::slugUnicode()): ?>
+    // Modul WordPress (wp-compat.json): adresa cu „/” final și slug-urile cu literele oricărei limbi (ca Slug::unicode).
+    const slashFinal = pageUrlPreview?.dataset.slashFinal === '1' ? '/' : '';
+    slugInput.addEventListener('input', () => {
+        slugTouched = true;
+        const safe = slugInput.value.trim().replace(/^\/+|\/+$/g, '');
+        pageUrlPreview.textContent = safe !== '' ? '/' + safe + slashFinal : '/';
+    });
+
+    const slugify = (value) => value
+        .normalize('NFC')
+        .toLowerCase()
+        .replace(/[\s_-]+/gu, '-')
+        .replace(/[^\p{L}\p{M}\p{N}-]/gu, '')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    titleInput.addEventListener('input', () => {
+        if (!slugTouched) {
+            const generated = slugify(titleInput.value);
+            slugInput.value = generated;
+            pageUrlPreview.textContent = generated !== '' ? '/' + generated + slashFinal : '/';
+        }
+    });
+<?php else: ?>
     slugInput.addEventListener('input', () => {
         slugTouched = true;
         const safe = slugInput.value.trim();
@@ -522,6 +551,7 @@ admin_componenta('panou-seo', [
             pageUrlPreview.textContent = generated !== '' ? '/' + generated : '/';
         }
     });
+<?php endif; ?>
 
     const encodeBase64Utf8 = (value) => {
         try {

@@ -131,6 +131,11 @@ $cacheSettings = Settings::all($cacheDb);
 if (\App\Support\Statistici::intercepteaza($cacheDb, $cacheSettings)) {
     return;
 }
+// Adoptarea WordPress (pasul 9a): rapoartele CSP ale cadrului capturat (POST /_andaxi/raport), tot înaintea sesiunii, deci fără
+// cookie; răspunde 204 și nimic altceva (App\Support\RaportCsp). Fără cadrul capturat nu face nimic.
+if (\App\Support\RaportCsp::intercepteaza($cacheDb)) {
+    return;
+}
 if (!$faraSesiune) {
     \App\Support\SesiuneLaNevoie::decide($cacheSettings);
 }
@@ -200,6 +205,27 @@ Plugins::incarca();
 \App\Support\Activari::laCerere($cacheDb, $cacheSettings);
 if (Plugins::hartaSiteDeRefacut()) {
     (new \App\Http\Controllers\AdminController())->refaHartaSiteDupaPluginuri();
+}
+// Cadrul capturat (adoptarea WordPress, pasul 6): politica CSP a site-ului și nosniff, pe orice răspuns de aici încolo (și pe
+// redirecționările stratului WordPress), înaintea cache-ului de pagini, deci aceeași la MISS, la HIT și la 304
+// (App\Support\CspSite). Fără tema.json → cadru = capturat nu trimite nimic.
+\App\Support\CspSite::trimite((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+// Pasul 9a: răspunsurile înghețate din captură (robots, sitemap-urile, XSL, feed-urile, oEmbed), înaintea stratului de adrese
+// WordPress, a ghicirii și a lui 404 (App\Support\RaspunsuriInghetate). Fără cadrul capturat nu face nimic.
+if (\App\Support\RaspunsuriInghetate::intercepteaza($cacheDb instanceof PDO ? $cacheDb : null, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+    (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
+}
+// Pasul 9a: fișierele de la rădăcina site-ului WordPress, copiate sub capturat/radacina/, la adresa lor (nosniff; SVG în sandbox;
+// nimic peste un fișier sau o rută a CMS-ului: App\Support\RadacinaCapturata). Fără cadrul capturat nu face nimic.
+if (\App\Support\RadacinaCapturata::intercepteaza((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'), (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
+}
+// Adresele unui site mutat de pe WordPress (wp-compat.json, App\Support\WpCompat): resturile tehnice (410, în afara
+// endpointurilor compatibile), sitemap-urile vechi (302), ?page_id=, ?p=, ?cat=, ?author=, ?attachment_id= și /index.php
+// (301), înaintea campaniilor și a cache-ului de pagini. Fără wp-compat.json nu face nimic.
+if (\App\Support\WpCompat::intercepteaza($cacheDb, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'), (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
 }
 // Pluginul campanii: la prima intrare pe site, vizitatorul (un om, pe o pagină de conținut) vede o dată pagina campaniei
 // active; înaintea cache-ului de pagini, ca o pagină din cache să nu-l ocolească. Fără campanie activă nu face nimic.

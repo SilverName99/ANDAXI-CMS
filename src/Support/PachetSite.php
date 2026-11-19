@@ -96,7 +96,8 @@ final class PachetSite
             $existent = self::manifest($dosar);
             $obligatorii = is_array($existent['obligatorii'] ?? null)
                 ? array_values(array_map('strval', $existent['obligatorii']))
-                : array_values(array_intersect(['redirecturi.json', 'seo.json', 'site.json', Tema::FISIER, PozeOptimizate::FISIER], array_keys($fisiere)));
+                : array_values(array_intersect(['redirecturi.json', 'seo.json', 'site.json', Tema::FISIER, PozeOptimizate::FISIER, WpCompat::FISIER],
+                    array_keys($fisiere)));
         }
         return ['format' => self::FORMAT, 'site' => $site, 'fisiere' => $fisiere, 'obligatorii' => $obligatorii];
     }

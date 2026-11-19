@@ -45,6 +45,11 @@ exit(porneste(static function () use ($argv): int {
     $s = Site::gaseste($o);
     $lacat = $s->lacat();
     $url = rtrim($o->text('url') ?? 'https://' . $s->domeniu, '/');
+    // Un site adoptat din WordPress (deploy/adopta-wp.sh) se întoarce la WordPress: alt drum, fără baza de pus la loc.
+    if (!is_file($s->lucru . '/adopta.stare') && is_file($s->lucru . '/adopta-wp.stare')) {
+        require_once __DIR__ . '/revino-wp.php';
+        return revinoWp($o, $s, $aplica, $url);
+    }
     $fisierStare = $s->lucru . '/adopta.stare';
     $stare = new Stare($fisierStare);
     Iesire::titlu('Revenirea site-ului ' . $s->domeniu . ' la codul vechi' . ($aplica ? '' : ' — PLAN'));

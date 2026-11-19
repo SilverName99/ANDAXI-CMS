@@ -1,0 +1,22 @@
+# Ce se schimbă pentru site când trece de pe WordPress pe codul comun
+
+Lista se predă proprietarului la adoptare. Implicitul e „identic”: paginile ies din documentele capturate de pe site-ul de azi
+(DOM-ul, CSS-ul, fonturile, pozele, adresele), iar fiecare abatere e scrisă aici, cu motivul, în commit-ul care o face. Lista e
+la început (felia 1, aspectul static); feliile 2 și 3 o completează (consimțământul, formularele, trackerele).
+
+## Ce se vede
+
+| ID | Unde | Ce se schimbă | De ce |
+|---|---|---|---|
+| VC-URL-024 | Adresele greșite (de exemplu un început de adresă: `/au…/`, `/h…/`) | Primesc pagina 404 a site-ului, fără redirecționare. WordPress „ghicea” o pagină după primele litere și trimitea acolo. | Ghicirea ducea uneori la pagini scoase sau la autori; o adresă greșită dă acum mereu 404. |
+| VC-URL-024 | Fluxurile RSS | Rămân doar fluxurile legate din paginile site-ului (`/feed/`, `/comments/feed/` și fluxul paginii legat din head-ul ei), cu răspunsul de azi. Orice alt flux (de exemplu `/<pagină>/feed/`, nelegat de nicăieri) dă 404. | WordPress răspundea cu un flux gol pentru orice pagină; nimeni nu le folosea. Fluxul căutării vine în felia 3. |
+| VC-URL-024 | `/hello-world/` și `/auto-draft/` (o pagină goală a constructorului) | Redirecționare permanentă (301) spre prima pagină. | Pagini puse de WordPress sau de constructor, fără conținut al site-ului (decizia proprietarului, H.10). |
+
+## Ce nu se vede (dar se verifică)
+
+| Unde | Ce se schimbă | De ce |
+|---|---|---|
+| Head-ul paginilor | Indiciile de resurse spre alte servere (`dns-prefetch`, `preconnect` spre gazdele fonturilor și ale scripturilor scoase) se scot. | Fonturile și scripturile vin acum de pe site; un indiciu spre alt server ar trimite adresa vizitatorului acolo degeaba. |
+| Scripturile | Scripturile WordPress și ale modulelor Divi nu mai rulează; comportamentul lor (clasele de structură, video-urile, galeria) îl dă runtime-ul site-ului, pe același DOM. Politica de securitate a paginilor (CSP) nu mai permite niciun script inline. | Siguranța: niciun cod de la terți și niciun script capturat nu rulează pe site. |
+| Adresele din pagini | Adresele absolute spre site devin relative, doar când duc exact la aceeași gazdă; cele cu `www.` sau spre alte gazde rămân cum sunt. | Același site pe copia de verificare și pe domeniu; nicio adresă nu e îndreptată spre altă gazdă. |
+| Comparația capturilor (doar la verificare, nu în paginile servite) | Patru valori care diferă la fiecare cerere pe site-ul de azi se compară fără ele: secretul cardului de încorporare, literele ascunse ale unei adrese de email (pluginul de cookie-uri), numărul aleator din ID-urile taburilor cardului de încorporare, ora generării sitemap-ului. Paginile servite le păstrează pe cele capturate. | Altfel două cereri la rând pe site-ul de azi ar părea diferite; fiecare regulă e ancorată pe construcția ei exactă și testată. |

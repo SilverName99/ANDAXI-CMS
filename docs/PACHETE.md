@@ -26,6 +26,8 @@ pe un server, iar `scripts/diagnostic.php --pachet` îl vede pe server (mai jos)
 | `ce-se-schimba.md` | proprietarul, la adoptare | **obligatoriu** în `site-uri/<site>/`: ce vede altfel clientul pe codul comun (G-m4) |
 | `redirecturi.json` | `SeoRedirects` ([SEO.md](SEO.md), „Adresele vechi”) | la fiecare cerere |
 | `seo.json` | `DateSite::seo` ([SEO.md](SEO.md), „Datele unui site”) | la fiecare cerere |
+| `wp-compat.json` | `WpCompat` ([SEO.md](SEO.md), §1b: adresele unui site mutat de pe WordPress; validat de `WpCompat::valideaza`) | la fiecare cerere; fără el stratul e oprit |
+| `import-wordpress.json` | `scripts/importa-wordpress.php` ([DEPLOY.md](DEPLOY.md), „Adoptarea unui site WordPress”; validat de `ImportWordPress::valideazaReguli`) | la import |
 | `site.json` | `DateSite::site` | la fiecare cerere: constantele tehnice care nu se schimbă niciodată pe un site existent (WP-16: `cookie_consimtamant`, numele cookie-ului acordului, `CookieConsent::nume`, implicit `cookie_consent`; `cheie_popup_inchis`, cheia din `localStorage` a ferestrei de bun venit închise, `Brand::cheiePopupInchis`, implicit `welcome_popup_inchis`; WP-17: `newsletter_sare_semnatura`, sarea cu care codul vechi își semna linkurile din newslettere, „bioscem”, „biovitality” sau „grafoanaytis”; o cheie fixă din `.env`, `NEWSLETTER_CHEIE_SEMNARE`, are întâietate). Un nume care nu e simplu (`[A-Za-z0-9_-]`) se ignoră, cu un rând în jurnal |
 | `tema/tema.json`, `tema/*.css` | `Tema` (mai jos) | la fiecare cerere |
 | `tema/public/**` | serverul web, la `/tema/**` | copiat în `public/tema/` la instalare și la fiecare actualizare |
@@ -59,7 +61,8 @@ doar `tema.json` și blocuri `.css`; în `tema/public/` imagini (`svg png jpg jp
 - `fisiere`: **fiecare** fișier al pachetului (fără manifest și fără `privat/`), cu sha256-ul lui. Un fișier lipsă,
   unul în plus sau unul schimbat se văd imediat.
 - `obligatorii`: fișierele fără de care site-ul s-ar schimba fără să spună nimic (implicit cele citite la fiecare
-  cerere care există în pachet: `redirecturi.json`, `seo.json`, `site.json`, `tema/tema.json`, `poze-optimizate.json`).
+  cerere care există în pachet: `redirecturi.json`, `seo.json`, `site.json`, `tema/tema.json`, `poze-optimizate.json`,
+  `wp-compat.json`).
 
 Îl scrie `tools/dev/php.sh tools/dev/verifica-pachet.php --actualizeaza-manifest` (determinist: aceleași fișiere, aceiași
 octeți), după orice schimbare voită într-un pachet; `tools/inghetare/genereaza-setari.php` îl rescrie singur când
@@ -92,6 +95,10 @@ O temă aduce doar ce cheile de mai jos permit; tot restul înfățișării unui
 | `css_inline` | `{}` | `{"pagina_succes": "pagina-succes.css"}`: blocul `<style>` al paginii de mulțumire (`views/site/checkout-success.php`) înlocuit cu fișierul din `tema/` |
 | `pagina_cont` | `"panou"` | `"antet"`: pagina „Contul meu” (`/contul-meu`, `/login`, `/register` fără pagină în bază) e `views/site/account-antet.php`, pagina contului din vertij 9ab7999: antetul cu poza, numele, adresa, starea și statisticile, meniul cu iconițe, cardurile, „Șterge contul” în Setări; aceleași date, formulare, adrese și tab-uri ale pluginurilor ca vederea nucleului (`views/site/account.php`), comenzile și adresele doar cu pluginul `magazin`; fiecare secțiune e o pagină. Înfățișarea (clasele `.acc-*`) o dă foaia temei |
 | `newsletter` | (lipsă) | `{"logo": "/uploads/…png", "logo_alt": "…", "culori": {"principala", "inchisa", "fundal_deschis", "text", "text_secundar", "linie"}}`: înfățișarea șabloanelor de newsletter („Alege un șablon”), a emailurilor de confirmare a abonării și cu linkul de dezabonare, a paginilor publice de confirmare și dezabonare (WP-R din 30 oct, Bioscem `42984c1`, `7123076`). Logo-ul: o adresă `/uploads/`, `/tema/` sau `/assets/` a unei poze PNG, JPEG sau GIF (WebP nu apare în Outlook). Fără cheie: fără logo, paleta neutră a nucleului (`Tema::CULORI_NEWSLETTER`); o culoare nedată rămâne neutră |
+| `cadru` | `""` | `"capturat"`: cadrul paginilor capturate ale unui site mutat de pe WordPress (pasul 6; `App\Support\CadruCapturat`): prima pagină, paginile, `/contact`, cardurile embed, arhivele și 404-ul cu un document în `pagini_capturate` ies din bucățile, fragmentele și jetoanele lor, nu prin `views/layout.php`; politica CSP a site-ului (`App\Support\CspSite`) și `nosniff` pe orice răspuns |
+| `runtime` | `""` | `"divi4@1"`: versiunea runtime-ului compat; manifestul ei (`public/assets/compat/divi4/v1/sloturi.json`) dă scripturile sloturilor `cap` și `final`, fiecare `<script src="/assets/compat/<cale>?v=<12 hex din sha256>">`, sincron, în ordine |
+| `csp` | `{}` | `{"mod": "aplica" \| "raport", "img-src" \| "connect-src" \| "frame-src" \| "font-src" \| "media-src": ["https://…"]}`: `raport` trimite politica ca `Content-Security-Policy-Report-Only` (copia de verificare, înainte de comutare); sursele https exacte (fără `*`) se adaugă directivelor lor; `script-src` nu se poate lărgi |
+| `previzualizare` | `[390, 820, 1440]` | lățimile previzualizării paginilor capturate în admin (1–6 întregi, 240–3840) |
 
 Reguli:
 

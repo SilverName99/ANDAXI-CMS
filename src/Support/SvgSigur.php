@@ -21,6 +21,12 @@ use DOMNode;
  *    gradienți și text; atributele de prezentare; `href` doar spre `#id`, `url()` doar spre `#id`; fără `script`,
  *    `foreignObject`, `image`, `a`, `style`, atribute `on…`, DOCTYPE sau entități.
  *
+ *  - `problemaFisierNesigur()`: un .svg de NEÎNCREDERE (copiat de pe un site WordPress, Captura\CopiereStatica): regulile lui
+ *    fisier(), plus: doar UTF-8 (fără BOM, fără octetul 0, octeți UTF-8 corecți, declarația `<?xml` doar la octetul 0 și doar
+ *    cu `encoding` UTF-8); niciun DOCTYPE, nicio entitate declarată și nicio instrucțiune de procesare nicăieri (căutate în
+ *    text și în tot DOM-ul, inclusiv înaintea și după rădăcină); nicio bară inversă într-o valoare de atribut (stilurile și
+ *    atributele de prezentare sunt CSS: escapările nu se decodează, se refuză).
+ *
  * Fără dependențe în afara extensiei dom; nu încarcă nimic din rețea (LIBXML_NONET).
  */
 final class SvgSigur
@@ -113,6 +119,64 @@ final class SvgSigur
             return 'rădăcina nu e <svg> (cu xmlns-ul SVG)';
         }
         return self::verificaNodFisier($radacina);
+    }
+
+    /** De ce nu e sigur un fișier .svg de neîncredere (copiat de pe un site WordPress), sau null. */
+    public static function problemaFisierNesigur(string $continut): ?string
+    {
+        if (preg_match('/^(\xEF\xBB\xBF|\xFE\xFF|\xFF\xFE|\x00\x00\xFE\xFF)/', $continut) === 1) {
+            return 'are BOM (doar UTF-8 fără BOM)';
+        }
+        if (str_contains($continut, "\0") || !mb_check_encoding($continut, 'UTF-8')) {
+            return 'nu e UTF-8 (octetul 0 sau octeți nevalizi)';
+        }
+        $decl = preg_match('/^<\?xml[\t\n\r ][^?]*\?>/', $continut, $m) === 1 ? $m[0] : '';
+        if ($decl !== '' && preg_match('/\bencoding\s*=\s*["\']([^"\']*)["\']/i', $decl, $e) === 1 && strtolower($e[1]) !== 'utf-8') {
+            return 'declarația XML cere altă codare decât UTF-8 (' . $e[1] . ')';
+        }
+        $rest = substr($continut, strlen($decl));
+        if (str_contains($rest, '<?')) {
+            return 'are o instrucțiune de procesare (sau o declarație XML în afara octetului 0)';
+        }
+        if (preg_match('/<!DOCTYPE|<!ENTITY|<!\[CDATA\[/i', $rest) === 1) {
+            return 'are DOCTYPE, entități sau CDATA';
+        }
+        $p = self::problemaFisier($continut);
+        if ($p !== null) {
+            return $p;
+        }
+        $doc = self::document($continut);
+        if ($doc === null || $doc->doctype !== null) {
+            return 'nu e XML corect sau are DOCTYPE';
+        }
+        foreach ($doc->childNodes as $nod) {
+            if ($nod->nodeType !== XML_ELEMENT_NODE && $nod->nodeType !== XML_COMMENT_NODE) {
+                return 'nod nepermis în afara rădăcinii (' . $nod->nodeName . ')';
+            }
+        }
+        return self::faraBareInverse($doc->documentElement);
+    }
+
+    /** Nicio bară inversă în valorile atributelor (stilurile și atributele de prezentare sunt CSS; escapările nu se decodează). */
+    private static function faraBareInverse(DOMNode $nod): ?string
+    {
+        if ($nod instanceof DOMElement) {
+            foreach ($nod->attributes ?? [] as $atribut) {
+                if (str_contains((string) $atribut->value, '\\')) {
+                    return 'bară inversă în atributul ' . $atribut->nodeName . ' (escapările CSS nu sunt permise)';
+                }
+            }
+        }
+        foreach ($nod->childNodes as $copil) {
+            if ($copil->nodeType === XML_ENTITY_REF_NODE || $copil->nodeType === XML_PI_NODE) {
+                return 'entitate sau instrucțiune de procesare în document';
+            }
+            $p = self::faraBareInverse($copil);
+            if ($p !== null) {
+                return $p;
+            }
+        }
+        return null;
     }
 
     private static function verificaNodFisier(DOMNode $nod): ?string

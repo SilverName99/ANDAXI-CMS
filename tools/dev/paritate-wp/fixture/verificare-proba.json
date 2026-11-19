@@ -1,0 +1,117 @@
+{
+  "_despre": "Punctele de verificare inventate ale fixture-ului (forma lui verificare-per-id: id, zona, clasa, critic, sonde, latimi, felie, diferenta_declarata).",
+  "puncte": [
+    {
+      "id": "PP-ACASA-001",
+      "zona": "acasa",
+      "clasa": "S",
+      "critic": true,
+      "sonde": [
+        "P1-octeti",
+        "P3-pixeli",
+        "P3-stil",
+        "P3-geometrie",
+        "P3-cssom"
+      ],
+      "latimi": "390,1440",
+      "felie": 1,
+      "diferenta_declarata": null
+    },
+    {
+      "id": "PP-ACASA-002",
+      "zona": "acasa",
+      "clasa": "RM",
+      "critic": true,
+      "sonde": [
+        "P3-mutatii",
+        "P3-scenariu",
+        "P4-dispozitiv"
+      ],
+      "latimi": "390,1440",
+      "felie": 1,
+      "diferenta_declarata": null
+    },
+    {
+      "id": "PP-ACASA-003",
+      "zona": "acasa",
+      "clasa": "S",
+      "critic": false,
+      "sonde": [
+        "P3-text",
+        "P3-linkuri",
+        "P3-imagini"
+      ],
+      "latimi": "390,1440",
+      "felie": 1,
+      "diferenta_declarata": null
+    },
+    {
+      "id": "PP-GLOBAL-001",
+      "zona": "global",
+      "clasa": "X",
+      "critic": true,
+      "sonde": [
+        "P3-retea",
+        "P3-csp",
+        "M-declarat"
+      ],
+      "latimi": "390,1440",
+      "felie": 1,
+      "diferenta_declarata": "trackerele doar după acord"
+    },
+    {
+      "id": "PP-GLOBAL-002",
+      "zona": "global",
+      "clasa": "N",
+      "critic": true,
+      "sonde": [
+        "P3-head",
+        "P2-http"
+      ],
+      "latimi": "-",
+      "felie": 1,
+      "diferenta_declarata": null
+    },
+    {
+      "id": "PP-GLOBAL-003",
+      "zona": "global",
+      "clasa": "S",
+      "critic": true,
+      "sonde": [
+        "P3-geometrie",
+        "P3-stil",
+        "P3-pixeli"
+      ],
+      "latimi": "baleiaj 981–1301 din 80 în 80 px, 1440",
+      "felie": 1,
+      "diferenta_declarata": null
+    },
+    {
+      "id": "PP-PAGINA2-001",
+      "zona": "pagina-2",
+      "clasa": "S",
+      "critic": false,
+      "sonde": [
+        "P3-stil",
+        "P3-text",
+        "P3-linkuri"
+      ],
+      "latimi": "390,1440",
+      "felie": 1,
+      "diferenta_declarata": null
+    },
+    {
+      "id": "PP-ACASA-010",
+      "zona": "acasa",
+      "clasa": "SR",
+      "critic": true,
+      "sonde": [
+        "P3-scenariu(stare)",
+        "P3-pixeli"
+      ],
+      "latimi": "390,1440",
+      "felie": 2,
+      "diferenta_declarata": null
+    }
+  ]
+}

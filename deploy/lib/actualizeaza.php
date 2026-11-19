@@ -76,6 +76,14 @@ final class Actualizare
         if (is_file($adoptare->fisier) && !$adoptare->facuta('deschidere')) {
             throw new Oprire('adoptarea lui ' . $this->s->domeniu . ' nu e terminată: întâi o termini (deploy/adopta.sh, aceeași comandă) sau revii (deploy/revino.sh)', 2);
         }
+        // Un site adoptat din WordPress (deploy/adopta-wp.sh): adoptarea terminată și neîntoarsă.
+        $adoptareWp = new Stare($this->s->lucru . '/adopta-wp.stare');
+        if (is_file($adoptareWp->fisier) && (array) $adoptareWp->ia('revino', []) !== []) {
+            throw new Oprire('o revenire a lui ' . $this->s->domeniu . ' la WordPress a început sau s-a făcut (deploy/revino.sh); o adoptare nouă: deploy/adopta-wp.sh', 2);
+        }
+        if (is_file($adoptareWp->fisier) && !$adoptareWp->facuta('deschidere')) {
+            throw new Oprire('adoptarea WordPress a lui ' . $this->s->domeniu . ' nu e terminată: întâi o termini (deploy/adopta-wp.sh, aceeași comandă) sau revii (deploy/revino.sh)', 2);
+        }
         $this->url = rtrim($o->text('url') ?? 'https://' . $this->s->domeniu, '/');
         $this->aplica = $o->aplica();
         $this->stare = new Stare($this->s->lucru . '/actualizare.stare');
@@ -529,7 +537,7 @@ function curataCopii(Actualizare $u): void
     $copii = glob($radacina . '/*-actualizare-*', GLOB_ONLYDIR) ?: [];
     sort($copii);
     $pomenite = '';
-    foreach ([$u->s->lucru . '/adopta.stare', $u->stare->fisier] as $f) {
+    foreach ([$u->s->lucru . '/adopta.stare', $u->s->lucru . '/adopta-wp.stare', $u->stare->fisier] as $f) {
         $pomenite .= (string) @file_get_contents($f);
     }
     $pomenite = str_replace('\\/', '/', $pomenite);

@@ -273,6 +273,10 @@ final class AcasaAdmin
                 ];
             }
         }
+        // Nucleul: rapoartele CSP ale cadrului capturat (adoptarea WordPress, pasul 9a); nimic pe celelalte site-uri.
+        foreach (RaportCsp::sanatate($db) as $bucata) {
+            $lista[] = ['plugin' => 'nucleu'] + $bucata;
+        }
         return $lista;
     }
 

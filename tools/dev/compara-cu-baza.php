@@ -1198,6 +1198,67 @@ $deBioscem = [
         'vechi' => '',
         'motiv' => 'link_plata (revizuirea a doua): răspunsul cere_confirmare_dubla deschide window.confirm cu plata socotită și reia cererea cu confirm_dubla=1.',
     ],
+    // Nota curierului din checkout (81fc11c, 028f6bd, 12 și 16 noiembrie): „coletul se livrează prin curier la adresă”,
+    // doar pe site-urile cu FANbox sau cu ridicarea de la sediu și doar cât niciuna nu e bifată. Stilurile și scriptul ei
+    // sunt pe fiecare checkout; paragraful doar unde una dintre opțiuni e disponibilă (aici: cazul ridicării pornite, cerut
+    // la /checkout?ridicare-pornita=1). Tagurile PHP ale notei sunt indentate (șablonul de dinaintea adoptării WordPress,
+    // octet cu octet): fiecare își lasă cele 24 de spații în pagină, deci rândul câmpului ascuns de după ele are 48 de spații
+    // în plus fără notă și 72 cu nota (după paragraful scos mai sus).
+    [
+        'nume' => 'checkout: stilurile notei curierului',
+        'cale' => ['/checkout', '/checkout?ridicare-pornita=1'],
+        'nou' => "        .bv-checkout-v3__curier-nota{margin:0;padding:10px 12px;border-radius:10px;background:#f1f7f3;color:#1e3a2b;font-size:13.5px;line-height:1.45;}\n"
+            . "        .bv-checkout-v3__curier-nota[hidden]{display:none;}\n",
+        'vechi' => '',
+        'motiv' => 'nucleul (81fc11c): nota „prin curier la adresă” sub FANbox și ridicarea de la sediu; ascunsă cât una e bifată.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'checkout: scriptul notei curierului',
+        'cale' => ['/checkout', '/checkout?ridicare-pornita=1'],
+        'nou' => "        // Nota „prin curier la adresă”: doar cât nici FANbox, nici ridicarea de la sediu nu e bifată. Pe formular, după\n"
+            . "        // ascultătorii bifelor (care pot debifa cealaltă opțiune).\n"
+            . "        const curierNota = form.querySelector('[data-curier-nota]');\n"
+            . "        if (curierNota instanceof HTMLElement) {\n"
+            . "            const sincronizeazaCurierNota = () => {\n"
+            . "                const alesFanbox = form.querySelector('[data-fanbox-toggle]');\n"
+            . "                const alesRidicare = form.querySelector('[data-ridicare-toggle]');\n"
+            . "                curierNota.hidden = (alesFanbox instanceof HTMLInputElement && alesFanbox.checked)\n"
+            . "                    || (alesRidicare instanceof HTMLInputElement && alesRidicare.checked);\n"
+            . "            };\n"
+            . "            form.addEventListener('change', sincronizeazaCurierNota);\n"
+            . "            sincronizeazaCurierNota();\n"
+            . "        }\n",
+        'vechi' => '',
+        'motiv' => 'nucleul (81fc11c, 028f6bd): nota curierului se ascunde la bifarea FANbox sau a ridicării de la sediu.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'checkout: paragraful notei curierului, cu ridicarea de la sediu pornită',
+        'cale' => '/checkout?ridicare-pornita=1',
+        'nou' => "                        <p class=\"bv-checkout-v3__field bv-checkout-v3__field--full bv-checkout-v3__curier-nota\" data-curier-nota>\n"
+            . "                            🚚 Dacă nu alegi niciuna dintre opțiunile de mai sus, coletul se livrează prin curier la adresa de mai sus.\n"
+            . "                        </p>\n",
+        'vechi' => '',
+        'motiv' => 'nucleul (81fc11c): nota se vede doar cu FANbox sau cu ridicarea de la sediu disponibile.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'checkout: spațiile tagurilor PHP ale notei curierului, fără notă',
+        'cale' => '/checkout',
+        'nou' => "\n" . str_repeat(' ', 144) . '<input type="hidden" name="has_shipping_toggle" value="1">',
+        'vechi' => "\n" . str_repeat(' ', 96) . '<input type="hidden" name="has_shipping_toggle" value="1">',
+        'motiv' => 'nucleul (81fc11c): blocul PHP și `if`-ul notei, indentate cu 24 de spații fiecare, își lasă spațiile în pagină.',
+        'mod' => 'repo',
+    ],
+    [
+        'nume' => 'checkout: spațiile tagurilor PHP ale notei curierului, cu nota',
+        'cale' => '/checkout?ridicare-pornita=1',
+        'nou' => "\n" . str_repeat(' ', 168) . '<input type="hidden" name="has_shipping_toggle" value="1">',
+        'vechi' => "\n" . str_repeat(' ', 96) . '<input type="hidden" name="has_shipping_toggle" value="1">',
+        'motiv' => 'nucleul (81fc11c): blocul PHP, `if`-ul și `endif`-ul notei, indentate, își lasă spațiile în pagină (paragraful e scos mai sus).',
+        'mod' => 'repo',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
@@ -4433,7 +4494,9 @@ if (!$fataDeCommit && $siteBaza === 'bioscem') {
                 $stmt->execute(['shipping_pickup_enabled', '1']);
                 $stmt->execute(['shipping_pickup_program', "Luni–Vineri 09:00–17:00\nSâmbătă închis"]);
             },
-            'cereri' => [['POST', '/cos/adauga/' . $idMentaInt, ['quantity' => '1'], 'viz'], ['GET', '/checkout', [], 'viz']],
+            // Checkout-ul cu un parametru pe care nu-l citește nimic: adresa lui proprie ține declarația paragrafului notei
+            // curierului (81fc11c), care apare doar aici ($deBioscem).
+            'cereri' => [['POST', '/cos/adauga/' . $idMentaInt, ['quantity' => '1'], 'viz'], ['GET', '/checkout?ridicare-pornita=1', [], 'viz']],
             'stare' => static fn (PDO $db): array => [],
             'verifica' => static fn (array $stare, array $raspunsuri): array => $contine($raspunsuri[1], 'data-ridicare-toggle')
                 && $contine($raspunsuri[1], 'Sâmbătă închis') && $contine($raspunsuri[1], '<p><strong>Adresa:</strong> Str. ')

@@ -78,7 +78,8 @@ final class Sitemap
             if (!Plugins::adresaVizibila($cale)) {
                 return;
             }
-            $loc = $baseUrl . $cale;
+            // Modul WordPress (wp-compat.json): adresa în forma WordPress („/x/”, escape-urile cu litere mici).
+            $loc = $baseUrl . (WpCompat::activ() ? WpCompat::caleCanonica($cale) : $cale);
             if (isset($vazute[$loc])) {
                 return;
             }

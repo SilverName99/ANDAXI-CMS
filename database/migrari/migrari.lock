@@ -61,7 +61,11 @@
         "donatii/0064_donatii_rambursari": "7396c786f0e59afc9bcd07fe1a576541cf170d8b445681075ead2f4ff86169d4",
         "membri/0065_membri_rambursari": "148354c065707e1db15ae99ca19a2b9c094717c3a28ad6413148e429f476bc6b",
         "campanii/0066_campanii_produs_ascuns": "436ebbdab4ccfdeaca195beaad8ca6461d31a560602c45083f1c64788e407419",
-        "nucleu/0067_continut_emailuri": "94b1091eda7fa853ae07f5f7c2be1118a8d65bf605202650817c089a63b856fd"
+        "nucleu/0067_continut_emailuri": "94b1091eda7fa853ae07f5f7c2be1118a8d65bf605202650817c089a63b856fd",
+        "nucleu/0068_import_amprente": "593f8023726ee9125aac8e20c343f64357dfb7be14acc5b38217eb79edd40229",
+        "nucleu/0069_wp_harta": "93d576ad1276f3ffbc7b0e2254ad165b008ffba0d7ab2b6d21a345b0857752c0",
+        "nucleu/0070_capturat": "6cebbd448084b5e6d2de60a3caa18ecd6bd8491fe3e757be71bdb085b493764c",
+        "nucleu/0071_rapoarte_csp": "520e0cee8a6d656b529687773ff36ee5e3b58a1d1d5062b1b7d43f8eedb8301d"
     },
     "retrase": {}
 }

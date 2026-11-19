@@ -1,0 +1,9 @@
+{
+    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md). Sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json; clasele de structură în privat/captura-structura.json.",
+    "continut": "capturat",
+    "dialect": "divi4",
+    "redirecturi": [
+        ["/hello-world", "/", 301, "articolul pus de WordPress la instalare, scos la adoptare (VC-URL-024)"],
+        ["/auto-draft", "/", 301, "o pagină goală a constructorului, scoasă la adoptare (VC-URL-024)"]
+    ]
+}

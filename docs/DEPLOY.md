@@ -792,6 +792,333 @@ nopții sunt ca la „Comutarea Bioscem”, cu `--site=vertij --domeniu=vertij-t
   confirmare.
 - **Cronuri noi**: niciunul (donațiile și cotizațiile vin doar pe webhook și pe întoarcerea de la Stripe).
 
+## Adoptarea unui site WordPress
+
+Un site WordPress (de exemplu cu tema Divi) trece pe codul comun cu `deploy/adopta-wp.sh`. Spre deosebire de
+`adopta.sh`, site-ul nou primește o **bază nouă** (făcută de proprietar în hPanel), instalată de `scripts/install.php`, în
+care `scripts/importa-wordpress.php` aduce paginile, SEO-ul, setările și mediile. Baza WordPress e doar **citită** (cu
+datele din `wp-config.php`, fără să-l ruleze), iar WordPress rămâne întreg în `public_html.vechi/`: revenirea doar îl pune
+la loc.
+
+```bash
+# o dată: datele bazei noi (din hPanel → Databases), întrebate pe ecran, scrise în site/.env (0600)
+deploy/adopta-wp.sh --site=<slug> --domeniu=<domeniu> --baza-noua
+# planul (nu schimbă nimic) și adoptarea
+deploy/adopta-wp.sh --site=<slug> --domeniu=<domeniu> --versiune=<v> --cheie-licenta=<cheia> --admin-email=<adresa>
+deploy/adopta-wp.sh … aceleași … --aplica
+```
+
+`--admin-email` e **obligatoriu**: adresa primului administrator al site-ului nou nu se ia niciodată din `admin_email` al
+WordPress (poate fi a agenției care a făcut site-ul). Fazele lui `--aplica` (ținute minte în `site/deploy/adopta-wp.stare`;
+aceeași comandă continuă de la prima neterminată): `verificari`, `pregatire`, `instalare`, `import`, `copie`, `comutare`,
+`verificare`, `deschidere`.
+
+- **Mediile rămân la adresele lor.** Fișierele din `wp-content/uploads/` se copiază de pe disc în
+  `public_html.nou/wp-content/uploads/`, la aceeași cale și cu aceiași octeți (fără `/uploads/wordpress/` și fără 301).
+  Se copiază doar fișiere obișnuite, cu extensii de media și documente; se refuză legăturile simbolice (și dosarele-legătură),
+  ce iese din dosar prin `realpath`, fișierele peste 200 MB, numele cu o extensie executabilă înăuntru (`poza.php.png`) și
+  orice fișier cu cod PHP înăuntru: `<?php` oriunde, `<?=` și `<?` urmat de spațiu în fișierele text, iar pentru orice alt
+  `<?` (fiecare, presupunând `short_open_tag=1`, inclusiv un short tag lipit `<?echo`) cod PHP pe care PHP l-ar compila și rula
+  (o poză poliglotă; verificat cu `token_get_all(TOKEN_PARSE)`, tagul rescris în `<?php`: un cod închis cu `?>` sau
+  `__halt_compiler()` înaintea datelor binare, chiar cu un octet non-ASCII în comentariu sau șir, se refuză; fereastra de
+  compilare se mărește dacă padding-ul — spații, un comentariu sau un șir lung — a tăiat codul la margine, până la EOF sau
+  8 MiB, și atunci se refuză; `<?xml` dintr-un SVG nu compilează ca PHP, deci nu se refuză pentru el; cei doi octeți apar și
+  la întâmplare în pozele comprimate, dar acolo PHP dă o eroare de compilare înainte de margine, deci nu rulează nimic și
+  fișierul trece). Numărul de `<?` verificate astfel e mărginit pe fișier (cel puțin 16 384, sau mărimea împărțită la 4 KiB
+  dacă e mai mare): un fișier care trece de buget (o „bombă” de `<?`, care altfel ar ține minute) se refuză fail-closed;
+  pozele adevărate au `<?` rar, la întâmplare, mult sub buget. Chiar înainte de copiere sursa se verifică din nou
+  (legăturile pe drum, `realpath`,
+  mărimea, codul PHP) și se copiază din fișierul deschis, care trebuie să fie chiar cel verificat: un dosar înlocuit între
+  plan și copiere cu o legătură spre afara lui nu se urmează. Manifestul, cu sha256 de pe disc al fiecărui fișier:
+  `site/storage/import-wordpress/media.json`. Paginile folosesc variantele de poze ale WordPress: adoptarea nu face
+  variantele WebP ale nucleului.
+- **Arborii copiați** (`wp-content/`, `wp-includes/`, `capturat/`) primesc la comutare `.htaccess`-urile din git
+  (`deploy/stub/wp-content.htaccess`, `wp-includes.htaccess`, `capturat.htaccess`): nimic nu se execută (`Require all
+  denied` pe PHP și scripturi, `Options -ExecCGI -Indexes`, niciun `.js` servit), cache de 7 zile cu `Expires`, ca pe
+  site-ul live, CORS doar pe fonturi, `X-Content-Type-Options: nosniff` pe tot și `Content-Security-Policy: sandbox` pe SVG.
+  Fișierele lor le servește serverul web înaintea PHP-ului; unul care lipsește răspunde 404, ca înainte.
+- **Spațiul.** Mediile și arborii statici stau de două ori pe disc (în WordPress, neatins pentru revenire, și în docroot-ul
+  nou), plus copia codului WordPress și a bazei. Verificările spun cât trebuie, iar `df` nu arată cota contului Hostinger:
+  rândul ATENȚIE cere verificarea în hPanel → Disk usage.
+
+**Importul** (`scripts/importa-wordpress.php --wp=<dosarul WordPress> --plan|--aplica`, rulat de adoptare prin
+`bin/platforma --public=public_html.nou`):
+
+- regulile site-ului stau în pachet, `import-wordpress.json` (`pagini`, `articole`, `redirecturi`, `setari`, `continut`,
+  `dialect`, `scripturi_aruncate`, `captura`), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
+- slug-ul fiecărei pagini e `post_name`-ul WordPress, păstrat exact: decodat în `pages.slug` (și Unicode), în forma
+  percent-encoded a WordPress în adrese; căile păstrează „/” final cum îl pune structura permalinkurilor. Două slug-uri care
+  diferă doar printr-un accent se bat cap în cap pe cheia UNIQUE a bazei (colația `utf8mb4_unicode_ci`), deși sunt distincte ca
+  text: planul le prinde așa cum le compară baza (un tabel temporar cu aceeași cheie și colație) și spune NU cu ambele ID-uri
+  WordPress și adrese, înainte de orice `1062 Duplicate entry`;
+- resturile tehnice primesc 410 în harta adreselor vechi (`/wp-admin/…`, `/wp-json/…`, `/wp-login.php`, `/xmlrpc.php`,
+  `/readme.html`), dar niciodată arborii copiați și niciodată un endpoint compatibil al site-ului (lista albă din
+  `ImportWordPress\Plan::COMPATIBILE`: `POST /wp-admin/admin-ajax.php` cu acțiunea galeriei, managerul consimțământului sub
+  `/wp-json/`): unde unul ar fi acoperit, planul spune ATENȚIE și regula nu se scrie;
+- harta WordPress (id-ul fiecărei pagini, articol, proiect, atașament, categorii și autor, cu adresa lui) intră în raport;
+- **reimportul nu scrie peste munca oamenilor**: fiecare pagină, rând SEO și setare scrise de import au amprenta lor
+  (`import_amprente`, migrarea `nucleu/0068`); un rând editat după import e NU în plan și e refuzat la `--aplica`, afară de
+  `--suprascrie`. Amprenta SEO acoperă și `og_type` și `intro_html` (editabile de om în panoul SEO, dar nescrise de import):
+  un om care le pune e un conflict, iar un reimport cu SEO gol nu mai poate șterge tot rândul (cu intro_html-ul omului) în
+  tăcere. Ștergerile sunt tot editări: un rând SEO golit din panoul SEO (rândul dispare, amprenta rămâne), o pagină
+  a importului mutată în coș (cu `--suprascrie` se restaurează pe același id) sau ștearsă definitiv. La un reimport, o setare
+  pe care importul de dinainte n-a scris-o, dar pe care a pus-o omul (alta decât implicita instalării), e tot NU. O pagină
+  care nu e a importului, pe o adresă din plan, e NU în plan, și când stă în coș (unicitatea adresei cuprinde coșul: o ștergi
+  definitiv sau îi schimbi adresa). Conflictele (paginile care nu sunt din import, rândurile editate de om) se verifică din nou
+  în tranzacția scrierii, cu rândurile blocate (`SELECT … FOR UPDATE`): o salvare făcută de om în timpul copierii mediilor
+  (secunde–minute) se vede și oprește reimportul cu mesajul conflictului, fără să scrie nimic (mediile deja copiate rămân pe
+  disc, se spune în mesaj);
+- **drumul capturat** (`"continut": "capturat"`, `"dialect": "divi4"`): `--url` și captura site-ului live (pasul 4,
+  `capturat/` din dosarul site-ului, sau `--captura=<dosar>`) sunt obligatorii; paginile le transformă dialectul `divi4` din
+  captură (mai jos), iar politica listei albe le verifică (NU pe pagină); head-ul și antetul/subsolul sunt ale capturii (fără
+  setările `design_*`), SEO-ul primește valorile AIOSEO exacte, iar dintre trackere rămân doar ID-urile, fără fanioanele de
+  pornire (bannerul nucleului oprit: `cookie_banner_enabled=0`). Paginile private sau cu parolă nu se importă (n-au captură:
+  ATENȚIE). Fiecare document se taie apoi în cele cinci bucăți (mai jos): `pages.html_content` primește doar conținutul, iar
+  restul (și 404-ul, cardurile embed ale paginilor importate, arhivele, răspunsurile înghețate, fragmentele, formularele,
+  galeriile) tabelele capturii (migrarea `nucleu/0070`), în aceeași tranzacție, cu `hash_import` pe fiecare rând: un rând editat
+  de om după importul de dinainte e NU fără `--suprascrie`, ca paginile. **P1 la import:** fiecare document se randează din
+  rândurile abia scrise și se compară cu documentul servit (după normalizarea de comparație); o diferență anulează tot.
+
+**Captura** (`scripts/captureaza-wordpress.php --url=https://<site> --wp=<dosar> | --lista=<adrese.json>
+--fara-integritate=<motiv> --plan|--aplica`; `App\Support\ImportWordPress\Captura`): cere site-ul live prin HTTP, fără browser,
+cum îl vede un vizitator: doar GET, fără cookie-uri și fără autentificare, cel mult o cerere pe secundă (`--ritm=`, cel puțin 1),
+cu un buget fix de cereri (`--buget=`, implicit 300, cel mult 2000: fiecare încercare se numără, iar planul, cu rezerve pentru ce
+se află abia la captură, spune NU dacă nu încape), reluare la 429 și la 503 cu `Retry-After` și oprire politicoasă după prea
+multe la rând. Nicio cerere spre trackere (Clarity, Google Analytics, Tag Manager, DoubleClick…) și spre altă gazdă decât site-ul
+(și, cu `--fonturi`, gazdele fonturilor Google; la integritate, api.wordpress.org și downloads.wordpress.org); niciun formular
+trimis. Lista adreselor vine din baza WordPress, doar citită (pe server), sau dintr-un fișier (când captura se face din mediul
+nostru și HTML-ul se urcă): paginile publicate rămase, un 404 aleator, cardul embed și oEmbed-ul fiecărei pagini, robots,
+sitemap-urile (cu sub-sitemap-urile și XSL-ul găsite în index), feed-urile. Documentele HTML se cer pe șase UA × 2
+(`--raspunsuri-ua=2`: răspunsurile înghețate pe două UA × 2, când bugetul e mic) și se compară după **normalizarea declarată**
+(`Captura\Normalizare`, DECIZIE §6.7): nonce-urile (și în textul scripturilor) devin jetoane, clasele de sistem puse de server pe
+`<body>` după UA se scot, adresele proprii absolute devin relative în atribute, CSS și JSON (head-ul SEO, sitemap-urile și robots
+rămân absolute; la comparație doar cele cu schema și gazda exacte ale site-ului, deci o diferență http/https sau www/fără www
+între două răspunsuri rămâne NU); un `{{ax:` aflat deja într-un răspuns e NU. Doar la comparație, fără să schimbe octeții
+păstrați (T păstrează secretul cardului embed), patru variații aleatoare găsite de comparația pe UA pe un site real
+(`Normalizare::FELURI_COMPARATIE`, declarate și ele în `ce-se-schimba.md`, după revizie): secretul cardului embed, referințele
+numerice cu care un plugin de cookie-uri ascunde un email (doar în `span.cmplz-obfuscate`, cu fanionul ei), ID-urile taburilor
+din cardul embed (valoarea întreagă a atributului, și doar dacă fiecare `aria-controls` are `id`-ul pereche cu aceeași valoare)
+și ora generării, doar în comentariul exact al generatorului și doar într-un sitemap. Orice altă diferență între UA-uri sau între
+două cereri e NU, cu diferența arătată. Ieșirea, numai în dosarul capturii (implicit `site/capturat/`, niciodată în repo, judecat
+pe calea reală): `brut/<sha256 adresei>/` cu corpul decodat al fiecărui răspuns și antetele lui (cele de codare și de fir se scot
+și se notează), `index.json`, `manifest.json` (paginile și fișierele cerute de ele și, recursiv, de foile proprii, cu sha256-ul
+sursei și al copiei publicate, cele negăsite, gazdele externe pentru revizia omului, fișierele din `brut/` cu sha256-ul lor),
+jurnalele `jurnal-cereri.jsonl` și `jurnal-integritate.jsonl` (doar adăugate, scrise pe disc după fiecare cerere, cu metoda și
+începutul în ms) și `raport-captura.json` (ritmul, bugetul, gazdele permise, problemele, sha256-ul fiecărui fișier al lanțului;
+scris și la o oprire), al cărui sha256 se tipărește la sfârșit. `--din-dosar=` citește o captură urcată, fără rețea, doar cu
+`--sha-raport=<acel sha256>`: lanțul se verifică întreg (raport → index, manifest, jurnale, integritate → fiecare fișier din
+`brut/`), iar orice nepotrivire e NU (cod 2); `--din-oglinda=` citește o oglindă locală, neverificată (doar în mediul nostru). Cu
+`--public=` (și `--aplica`) fișierele statice se copiază de pe disc în docroot-ul nou, la aceeași cale, doar în arborii copiați
+`wp-content/`, `wp-includes/` și `capturat/`, pe care git trebuie să-i ignore acolo (restul fișierelor de la rădăcina site-ului
+sub `capturat/radacina/`; o coliziune cu un fișier sau o rută a CMS-ului e NU) (`Captura\CopiereStatica`: doar fonturi, foi, poze
+și video, niciun `.js`/`.php`, fără legături simbolice sau tari, fără fișiere ascunse; o poză (PNG, JPEG, GIF, WebP, AVIF, ICO)
+doar cu semnătura extensiei ei și un antet acceptat de `getimagesize()`, apoi fără `<?php` (orice litere); orice alt
+fișier fără `<?php`, `<?=` sau `<?` urmat de spațiu, în afară de `<?xml` la începutul unui SVG; fiecare fișier deschis o singură
+dată, SVG-urile prin
+`SvgSigur` strict, adresele proprii din foi relative), iar cu `--fonturi` fonturile Google (doar https, foaia `text/css`, fiecare
+font cu tipul extensiei lui) în `capturat/fonturi/`. Întâi, înaintea oricărei cereri spre site, vine integritatea WordPress-ului
+de pe disc (`Captura\Integritate`): nucleul față de sumele publice ale versiunii și limbii instalației (fișierele diferite și
+PHP-ul în plus din `wp-admin/` și `wp-includes/` sunt NU, ca orice PHP din `uploads/`), pluginurile de pe wordpress.org față de
+sumele lor, semnele codului ascuns (și în `uploads/` și `mu-plugins/`, ATENȚIE); codul fără sume publice (pluginurile premium,
+temele, mu-plugins) iese „neverificabil”, cu sha256-ul fiecărui fișier. Un NU oprește totul (cod 2); fără discul WordPress, doar
+cu `--fara-integritate=<motiv>`, iar starea ei rămâne „în așteptare (server)”. Linkurile externe din elemente ascunse ies
+ATENȚIE. Codurile de ieșire: 0 fără NU, 1 măcar un NU al capturii, 2 folosire greșită sau un refuz înaintea capturii. Poarta:
+**G-captura** (`tools/dev/test-captura.php`), pe un site Divi inventat servit local.
+
+**Dialectul `divi4`** (`App\Support\ImportWordPress\Continut\Divi4`, interfața `Continut\Dialect`) face din pagina capturată
+documentul servit de site-ul nou, T(captura), doar prin editări pe intervale de octeți (`Html5\Editare`), fiecare de un fel din
+lista închisă: scripturile furnizorilor și ale trackerelor se scot doar dacă sha256-ul lor (calculat după normalizarea adreselor
+și a nonce-urilor, ca o recaptură să dea aceleași hash-uri) e în `import-wordpress.json` → `scripturi_aruncate`, cu motivul;
+configurațiile inline (`var <nume> = <JSON>;`, din lista închisă) se citesc strict ca JSON și trec în blocul
+`<script type="application/json" id="ax-date">`, pus unde stătea primul script din head (și împărțite pe pagină, antet și
+subsol); `onload`-ul preload-urilor devine `data-ax-tarziu`, cel al cardurilor embed `media="all"` (doar formele exacte, pe
+tagul lor; orice alt `on…` îl refuză politica); legăturile spre adresele WordPress care dispar (pingback, EditURI, wlwmanifest,
+`api.w.org`, JSON-ul REST al paginii) și `dns-prefetch`-urile se scot, un `<link>` doar dacă toate `rel`-urile lui sunt din
+listă; orice indiciu de resurse spre altă gazdă (`preconnect`, `prefetch`, `preload`, `modulepreload`) se scoate și el
+(`indiciu-tert`, declarat în `ce-se-schimba.md`: site-ul nou nu pregătește conexiuni spre terți), iar politica refuză unul
+rămas; foile Google devin `/capturat/fonturi/<cheie>.css`; plus normalizările capturii. Pe drumul capturat, politica primește
+manifestul capturii: un `<link>` dintr-un `<noscript>` doar spre o foaie a site-ului din el. Din pachet,
+`import-wordpress.json` → `captura.structura` (`{"<cale>" | "404": {"et-last-child": ["<selector>", …]}}`: clasele de structură
+observate pe un document fără o regulă care să reiasă din DOM) devine, pe documentul lui, ultima cheie din `ax-date`,
+`ax_structura`, pe care runtime-ul o aplică la încărcare; clasele sunt din lista închisă, selectorii doar taguri, `#id`,
+`.clasă`, spații și „>”, iar cheile de sus ale lui `ax-date` sunt și ele închise (configurațiile știute, `file`,
+`ax_structura`): altceva e NU. Un script necunoscut e NU (cu sha256-ul lui, de revizuit
+și trecut pe listă); un handler sau un `data-*` necunoscut îl refuză politica. Rezultatul dă și lista editărilor (în afara lor,
+octeții capturii) și pozițiile scripturilor runtime-ului. Poarta: **G-wp** (`tools/dev/test-import-wordpress.php`, secțiunea 5a).
+
+**Tăierea** (`Continut\Divi4Taiere`, peste rezultatul dialectului; `Continut\Taiere`) face, tot pe intervale de octeți:
+(1) conținutul servit, T: `data-ax-s` pe fiecare secțiune din conținut (numele din eticheta admin Divi stau separat),
+`data-ax-slot` pe texte, titluri, butoane, poze, video-uri, elemente de meniu, de carusel și de galerie, câmpuri de formular,
+`data-ax-g` pe textele egale din conținut (seturile desktop/telefon) și câmpul-capcană al fiecărui formular Divi; (2) jetoanele
+`{{ax:…}}` peste T: scripturile runtime-ului (`runtime:cap` pe tagul lui `ax-date` sau pe `</head>`, `runtime:final` unde stătea
+ultimul script scos sau pe `</body>`: exact o ancoră, altfel NU), datele (`ax-date`, refăcut la randare din partea paginii și
+a fragmentelor, după o rețetă a ordinii), clasele și `aria-current` ale elementelor de meniu (elementul curent), numărul
+formularului din subsol (`formular_index`), calea cererii (`action`, `_wp_http_referer`, pe 404 și JSON-LD-ul), anul (doar cu
+Divi Dynamic Content în subsol) și head-ul SEO (toate locurile valorilor AIOSEO; dacă unul diferă, head-ul rămâne înghețat
+întreg, cu motivul în plan); (3) cele cinci bucăți (atributele `<html>`, head-ul până la `</head>`, atributele `<body>`, înainte,
+conținutul, după până la `</body>`), cu antetul (`header.et-l--header`), subsolul (`footer.et-l--footer`) și bannerul
+(`#cmplz-cookiebanner-container`) ca fragmente deduplicate pe octeți (o diferență face o variantă nouă). **Dovada:** bucățile, cu
+fragmentele și valorile de la import, refac exact T (altfel NU). Plus formularele (câmpurile din DOM, destinatarul și mesajele
+din atributele modulului, din baza WordPress), galeriile (lista din DOM și categoriile) și corpusul căutării (titlul,
+rezumatul și conținutul brut din WordPress). Un „{{ax:” deja în captură, și într-un răspuns înghețat, e NU la import. Randarea
+(`App\Support\CadruCapturat`) pune la loc fragmentele, apoi toate jetoanele într-o singură trecere, cu valorile escapate pe
+locul lor; un jeton necunoscut sau rămas e o eroare (500 și un rând în jurnal), niciodată o pagină pe jumătate. Poarta: **G-wp**
+(secțiunea 5a.2, pe o captură inventată: `tools/dev/lib/captura-divi-proba.php`).
+
+**HTML-ul capturat se editează doar pe tokeni** (`App\Support\Html5`): `Tokenizer` îl împarte în tokeni WHATWG cu
+intervalele lor de octeți (textul, tagurile cu atributele lor, comentariile, doctype, textul brut al `script`/`style`/…,
+RCDATA, CDATA în SVG și MathML), fără reserializare (niciodată DOMDocument). Unde textul brut începe și unde `<![CDATA[` e
+CDATA o hotărăște, ca în browser, constructorul arborelui (`Constructie`: stiva elementelor deschise cu spațiul lor de
+nume, formatarea și algoritmul de adopție, modurile de inserare, tabelele, punctele de integrare ale SVG și MathML), fără
+DOM; tot el dă fiecărui tag spațiul de nume, perechea și dacă parserul l-a ignorat sau i-a mutat nodurile.
+
+**Contractul** (în docblock-urile `Constructie` și `Tokenizer`): pentru orice intrare, ori lista `nesigure` e nevidă, ori
+deciziile tokenizerului (ce octeți sunt text brut/RCDATA/script/PLAINTEXT/CDATA/comentariu și ce taguri fac elemente vii, în
+ce spațiu de nume) se potrivesc cu Chromium de azi. Unde browserele se abat de la WHATWG sau unele de altele, nu imităm
+fiecare capriciu, ci prindem construcția care îl declanșează și marcăm documentul nesigur, cu declanșatori largi pe care
+conținutul real nu-i conține. `Tokenizer::analizeaza` marchează nesigur: conținutul unui `<select>`, `<search>`, un `<input>`/`<keygen>`/`<textarea>`
+în `<select>` (parserele vechi închid select-ul, Chromium îl ține înăuntru), orice `<frameset>`/`<frame>` (frameset-ok nu
+se resetează la fel între browsere pe U+FFFD/NUL), orice `<template>` (conținutul lui poate fi viu: shadow DOM declarativ
+`shadowrootmode`/`shadowroot` sau clonat de JS în DOM), orice atribut `srcdoc` (`<iframe srcdoc>` construiește un
+subdocument viu neparcurs), CDATA
+într-un punct de integrare, un BOM UTF-16; o închidere în conținut străin cu un nume SVG camelCase (`clippath`,
+`lineargradient`…) care nu închide chiar nodul curent (abaterea Blink, și peste un element MathML, nu doar HTML); orice `&`
+în valoarea unui atribut care dirijează construcția (`encoding` la `annotation-xml`, `type` la `input`: referințele din ele
+se decodează altfel între browsere, iar codarea se face într-o singură trecere, fără dubla decodare); o stivă de peste 512
+elemente sau un buget de lucru depășit (reconstruirea formatării și plimbările stivei, proporțional cu lungimea
+documentului — o pagină obișnuită folosește sub 0,2% din el). Octeții se citesc ca UTF-8: CMS-ul servește paginile cu
+`Content-Type: text/html; charset=utf-8`, care face browserul să ignore `<meta charset>`, deci o codare `<meta>` ne-UTF-8
+din conținut nu schimbă decodarea. Politica HTML-ului capturat refuză un document nesigur. `Editare` schimbă doar
+intervale: valoarea unui atribut, interiorul unui element, un nod (doar cu sfârșitul lui: un nod închis implicit, neînchis
+sau mutat de parser se refuză) sau un atribut șters (fără să schimbe tokenizarea tagului), un atribut inserat; restul
+octeților rămâne neatins. În plus, o editare care, prin construcția arborelui, ar schimba tokenizarea din afara nodului ei
+(ar scoate parserul din SVG/MathML, ar face dintr-un text brut inert un `<img onerror>` viu) sau ar face documentul nesigur
+e refuzată, nu doar cea care schimbă octeți în afara intervalului; iar efectul COMBINAT al tuturor editărilor se verifică
+mereu pe rezultatul final la `aplica()` (o editare refuzată oprește tot, iar una acceptată abia atunci intră în uniunea
+protejată). Tokenizarea recompusă dă exact octeții paginii (poarta G-html5, `tools/dev/test-html5.php`).
+
+**Politica listei albe** (`App\Support\HtmlCapturat`, cu `HtmlCapturat\ContextCapturat`, `SchemaDivi4` și `Problema`) rulează
+peste acești tokeni la import și la fiecare salvare a unei pagini capturate (`verifica($html, $ctx, 'import'|'salvare')`):
+HTML-ul capturat e de neîncredere, iar pe site-ul nou NU rulează niciun script capturat — comportamentul vine doar din
+runtime-ul nostru, pe același DOM. Ce nu e explicit permis e REFUZAT, cu motivul (o `Problema`); nimic nu se scoate în
+tăcere, lista albă se lărgește doar după o revizie de om. Un document cu măcar o problemă nu se importă și nu se salvează
+(în planul importului: „NU” pe pagină). Politica permite, pe scurt:
+- **scripturi — numai date inerte scrise de noi:** `application/ld+json` (JSON valid), `speculationrules` (schemă închisă:
+  doar `prefetch`/`prerender` cu adrese relative) și `<script type="application/json" id="ax-date">`. Orice alt `<script>`
+  (inline, `src`, `module`, cu tip, cu categorie de consimțământ) e refuzat. Dialectul (pasul 5a) le-a scos deja:
+  configurațiile în `ax-date`, restul pe lista aruncată;
+- **atribute de eveniment:** orice `on…`, oriunde (inclusiv în SVG), e refuzat. Cele din lista închisă (cele două forme
+  `onload` de preload CSS → `data-ax-tarziu`; `onload="media='all'"` din răspunsurile embed → atributul `media`) le
+  transformă determinist dialectul, înainte de politică (`SchemaDivi4::handlerRecunoscut`);
+- **documente purtate de adrese:** `<iframe>` doar din lista albă (`ContextCapturat`, implicit harta Google Maps), inclusiv
+  forma `data-src-cmplz`; `data:` doar în `<img src>` și `srcset`, doar imagini rastru, base64 corect, ≤ 2 KB decodați, cu
+  octeții de început potriviți cu tipul; `<link>` doar cu `rel` dintr-o listă închisă; `href`/`src`/`srcset`/`poster`/
+  `action`/`formaction` doar http(s), relative, `mailto`, `tel`, `#`. Refuzate: `object`/`embed`/`applet`/`portal`,
+  `<base>`, `meta http-equiv=refresh`, formularele spre alt server, schemele de script în ORICE atribut (inclusiv `style`
+  și JSON-ul `data-*`, citite după decodarea entităților, fără spații și fără caractere de control, fără deosebire de litere
+  mari), `data:` oriunde în afara imaginilor rastru. `<frame>`/`<frameset>`, `<template>`, `srcdoc` le prinde deja
+  tokenizerul (document nesigur, refuzat);
+- **atribute și stiluri:** `class`/`id` fără metacaractere de marcaj; `data-*` doar din schema dialectului (`SchemaDivi4`),
+  cu JSON-ul validat recursiv (cheile de poluare a prototipului refuzate, variantele HTML din multi-view trec prin aceeași
+  politică); `style` declarație cu declarație (fără `expression`/`behavior`/`-moz-binding`, `url()` doar spre căi
+  relative/http(s) sau imagini `data:`); SVG prin lista albă; `<noscript>` doar cu conținut inert verificat recursiv;
+- **necunoscutele:** un tag sau un atribut care nu e în nicio listă e refuzat.
+
+Poarta **G-html-capturat** (`tools/dev/test-html-capturat.php`) o încearcă pe încărcături plantate inventate (fiecare
+prinsă), pe un fixture „ca Divi” care trece neschimbat, iar pe datele reale (întregul site capturat) și pe documente
+adversariale în Chromium — din afara repo-ului.
+
+**Cadrul capturat** (pasul 6; `App\Support\CadruCapturat`, `App\Support\CspSite`; `tema.json` → `cadru` = `capturat`, `runtime`,
+`csp`, `previzualizare`, docs/PACHETE.md): prima pagină, paginile (și `/contact`), cardurile embed, arhivele și 404-ul cu un document
+în `pagini_capturate` ies din bucățile lor, cu fragmentele alese ale documentului (variantele de antet și subsol), conținutul din
+`pages.html_content` și jetoanele rezolvate pe cerere: calea, anul, nonce-ul formularelor (un jeton HMAC al zilei, cu cheia
+aplicației; îl verifică serverul formularelor, pasul 9b), SEO-ul din `seo_pages`, datele `ax-date`, elementul curent din meniu și
+scripturile runtime-ului din manifestul versiunii lui. Nimic din `views/layout.php`. Un jeton necunoscut sau rămas, un runtime
+lipsă: 500 și un rând în jurnal, niciodată o pagină pe jumătate. 404-ul capturat are statusul 404 și antetele lui. Politica CSP e
+una pe tot site-ul, trimisă din `public/index.php` înaintea cache-ului de pagini (aceeași la MISS, la HIT și la 304, fără nimic din
+cerere: nici gazda): `default-src 'self'`, `script-src 'self' 'inline-speculation-rules'` (niciun script inline, fără hash-uri),
+`style-src 'self' 'unsafe-inline'`, `img-src 'self' data:`, `frame-src` doar harta Google, `object-src 'none'`, `base-uri` și
+`form-action 'self'`, `worker-src 'none'`, `frame-ancestors 'self'` (nu pe cardurile embed, pe care le încadrează alte site-uri),
+`upgrade-insecure-requests`, `report-uri /_andaxi/raport`, plus sursele https exacte din `csp`; `csp.mod` = `raport` o trimite ca
+Report-Only (copia de verificare, înainte de comutare). `X-Content-Type-Options: nosniff` pe orice răspuns. Fără `cadru`, nimic din
+toate acestea: site-urile de azi ies octet cu octet ca înainte (G-cmp). Poarta: **G-capturat** (`tools/dev/test-capturat.php`).
+
+**P1 după import** (pasul 7): `php scripts/verifica-randare.php --capturat` randează din linia de comandă fiecare document
+capturat, pe drumul cererii web (CadruCapturat, cu scripturile runtime-ului din `tema.json` → `runtime`), cu valorile de la
+import, și compară sha256-ul cu amprenta aprobată (`pagini_capturate.sha_randare`, scrisă de P1 la import); verifică și că nicio
+ieșire n-are un script nepermis (doar `ax-date`, JSON-LD, `speculationrules` și scripturile runtime-ului de pe sloturi) și că
+politica CSP n-are `'unsafe-inline'`/`'unsafe-eval'` în `script-src`. Cod 1 la orice diferență; după o editare văzută de om sau o
+versiune nouă a runtime-ului, `--aproba=<page_id>` sau `--aproba-toate` reînnoiește amprenta. `php scripts/diagnostic.php
+--capturat`: fiecare fișier din manifestul capturii există în docroot cu sha256-ul lui, niciun `.php`/`.phtml`/`.phar` în
+`wp-content/`, `wp-includes/`, `capturat/`, iar `.htaccess`-urile arborilor copiați au `nosniff`. Pe cadrul capturat, `/health`
+are și rândul `capturat: <primele 12 caractere ale sha256-ului manifestului>` (sau `lipsa`).
+
+**Răspunsurile înghețate** (pasul 9a; `App\Support\RaspunsuriInghetate`): pe cadrul capturat, o cerere GET sau HEAD cu metoda, calea
+și query-ul exacte ale unui răspuns din captură (robots.txt, sitemap-urile și XSL-ul lor, feed-urile, oEmbed, redirecționările
+capturate) îl primește din `raspunsuri_inghetate`, înaintea stratului de adrese WordPress, a ghicirii, a rutelor nucleului și a
+lui 404: statusul și corpul octet cu octet, cu antetele din lista albă (tipul conținutului, cache-ul, `expires`, `x-robots-tag`,
+`location` doar relativ). Codarea (`content-encoding`), lungimea și antetele hop-by-hop nu se reiau niciodată: le face serverul
+nostru pentru corpul trimis. Pe drumul capturat, `GET /wp-json/oembed/1.0/embed` e între endpointurile compatibile (nu primește
+410): îl servesc răspunsurile înghețate.
+
+**Fișierele de la rădăcină** (pasul 9a; `App\Support\RadacinaCapturata`): cele copiate de captură sub `capturat/radacina/<cale>`
+(`/favicon.ico`, poze de la rădăcină, `/wp-admin/images/…`) se servesc pe cadrul capturat la adresa lor, ca răspunsuri înghețate:
+doar GET și HEAD, doar tipurile copiate, cu tipul fix al extensiei, `nosniff`, cache 7 zile, iar un SVG cu
+`Content-Security-Policy: sandbox`. O adresă care se ciocnește cu un fișier, un dosar sau o rută a CMS-ului nu se servește
+(`diagnostic.php --capturat` o arată NU), nici un fișier ascuns, o legătură simbolică sau o cale cu „..”.
+
+**Adresele greșite** (VC-URL-024): pe cadrul capturat nu se ghicește nimic (`ghicire` din wp-compat.json e ignorat): o adresă
+greșită, oricare ar fi prefixul (`/au…/`, `/h…/`), primește 404-ul capturat, fără redirecționare. Fluxurile: doar cele înghețate
+din captură (`/feed/`, `/comments/feed/`, fluxul unei pagini legat din head-ul ei) răspund; orice alt flux (de exemplu
+`/<pagină>/feed/` nelegat) e 404. Paginile scoase la adoptare (articolul pus de WordPress la instalare, o pagină goală a constructorului) au 301 explicite spre `/`, din
+`redirecturi` al pachetului.
+
+**Rapoartele CSP** (pasul 9a; `App\Support\RaportCsp`): `POST /_andaxi/raport`, adresa din `report-uri`, interceptat în
+`public/index.php` înaintea sesiunii (ca statisticile: fără cookie, fără fișier de sesiune), doar pe cadrul capturat. Primește doar
+`application/csp-report` și `application/reports+json` (cel mult 10 rapoarte `csp-violation` pe cerere), corpul cel mult 8 KB, cu
+bugetul pe rețeaua vizitatorului (120 pe zi pe IPv6 /64 sau IPv4, într-un singur fișier al zilei, numele găleții un HMAC cu o
+sare a zilei din APP_KEY sau dintr-un secret aleator scris o dată; fișierul zilei trecute se șterge;
+nimic în `register_submit_logs`), un plafon al site-ului (2000 de rapoarte pe zi, apoi 204 fără nimic scris), și răspunde 204. Nu
+ține nimic despre vizitator (nici IP-ul, nici agentul):
+doar cinci câmpuri, fiecare tăiat la 200 de caractere și fără query (calea documentului, directiva, adresa blocată, fișierul sursă,
+linia), numărate pe zi în `rapoarte_csp` (nucleu/0071; cel mult 200 de rânduri pe zi, restul pe rândul `altele`, păstrate 30 de
+zile). Le vezi pe Acasă, în rândul de sănătate (text escapat), și în `php scripts/diagnostic.php --capturat` (cele mai dese 20 din
+ultimele 7 zile). Pe copia de verificare, cu `csp.mod` = `raport`, aici se văd încălcările înainte de comutare.
+
+**Runtime-ul compat** (`public/assets/compat/`, scris clean-room, din specificațiile de comportament, fără niciun cod de
+furnizor) reface pe același DOM ce făceau scripturile scoase. Site-ul își fixează versiunea (`divi4@1`), iar manifestul ei,
+`public/assets/compat/divi4/v1/sloturi.json`, spune ce scripturi pune cadrul capturat pe cele două sloturi ale dialectului:
+fiecare cale din `cap` și din `final` devine `<script src="/assets/compat/<cale>?v=<12 hex din sha256>"></script>`, sincron (fără
+`async`/`defer`), în ordine, la poziția slotului — `cap` în head, înaintea lui `ax-date`; `final` unde stătea ultimul script scos din
+corp. Fără slot `cap` (niciun script scos din head), scripturile lui stau înaintea lui `ax-date` sau a lui `</head>`; fără `final`,
+înaintea lui `</body>`. Niciun script inline: `script-src 'self'`, fără hash-uri, plus `'inline-speculation-rules'`, fiindcă blocul
+`speculationrules` rămâne în pagini (date inerte), iar Chromium îi aplică `script-src` (fără cuvânt: o încălcare pe fiecare pagină și
+nicio preîncărcare). Piesele de bază (pasul 8a, în `comun/v1/`): `incarcare.js` (clasa `js` pe `<html>` din head; `window.axCompat`:
+modulele pornite la `imediat`, într-o sarcină după DOMContentLoaded (`dom`) sau la `load`, în ordinea manifestului, doar cu un
+`ax-date` valid — exact un element cu acest id,
+un `<script type="application/json">` cu un obiect JSON; altfel niciun modul și un singur rând în consolă; `date()` cu copii ale
+configurației; `adresaSigura()`, prin care trece orice adresă din configurație: https sau aceeași origine; accesul la cookie-uri și la
+Web Storage fără excepții, ca în previzualizarea izolată din admin), `tarziu.js` (fiecare `link[data-ax-tarziu]` trece din `preload` pe
+`stylesheet` la `load`-ul foii, pe loc, fără `ax-date`; foile „late” din `file` la locul lor, înainte de DOMContentLoaded, la primul
+cadru) și `clase-ua.js` (clasele de browser și de dispozitiv pe `<body>`, din slotul final, înainte de DOMContentLoaded; în Safari,
+`display: block` pe `<body>` după `load`). Felia 1 mai are, în `divi4/v1/`, toate la `dom`, ca pe live: `structura.js`
+(`et_pb_column_single`, `et_pb_row_<mărimi>` pe rândurile interioare din conținut și pe rândul „specialty” din antet, `z-index: 3` pe
+acel rând și pe rândul subsolului, clasele dintr-o listă pe pagină, `ax-date` → `ax_structura` = `{"et-last-child": [selectori]}`, pusă de import
+din pachetul site-ului), `fit-vids.js` (`<style id="fit-vids-style">`, cu textul observat, la sfârșitul lui head) și `dg-lightbox.js` (containerul ascuns
+`.dg-carousel-lightbox` la sfârșitul lui body). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
+
+**Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
+la adresele vechi ca WordPress-ul: slash-ul final (`/x` → `/x/`), majusculele cu 200, `?page_id=`, `?p=`, `?cat=`,
+`?author=`, `/index.php` și atașamentele (301 la fișier), ghicirea adresei greșite, sitemap-urile vechi (302), 404 cu
+antetele WordPress, 410 pe resturile tehnice (în afara endpointurilor compatibile) și slug-urile Unicode în admin. ID-urile
+WordPress le ia din tabelul `wp_harta` (migrarea `nucleu/0069`), pe care îl scrie importul (`WpCompat\Harta::scrie`, din
+harta WordPress a planului; legarea în import vine cu pasul ei). Fără `wp-compat.json` nimic din toate acestea nu pornește.
+
+**Revenirea**: `deploy/revino.sh` vede `site/deploy/adopta-wp.stare` și ia drumul WordPress (`deploy/lib/revino-wp.php`):
+înainte de comutare șterge doar `public_html.nou`; după, pune `public_html.vechi` la loc (WordPress, verificat cu amprenta
+de la comutare), iar baza nouă rămâne neatinsă. `deploy/actualizeaza.sh` refuză un site cu adoptarea WordPress neterminată
+sau cu o revenire începută.
+
 ## Ce nu face (încă)
 
 - **Sesiunile codului vechi nu trec**: clienții și adminii se loghează din nou, coșurile deschise se pierd.
@@ -825,3 +1152,6 @@ nopții sunt ca la „Comutarea Bioscem”, cu `--site=vertij --domeniu=vertij-t
   `CMS_DEV_PASTREAZA=1` lasă găzduirea pentru cercetat. `plati-in-curs.sh` rulează acolo înainte de adoptare (codul vechi, un
   tabel lipsă) și după (`site/.env`), iar baza trebuie să rămână neatinsă.
 - Stub-ul și `bin/platforma` le verifică și `tools/dev/test-paths.php` (B).
+- Adoptarea WordPress: `deploy/adopta-wp.sh`, `deploy/lib/{adopta-wp,revino-wp,wordpress}.php`, importul
+  `App\Support\ImportWordPress` și `scripts/importa-wordpress.php`; testul `tools/dev/php.sh tools/dev/test-import-wordpress.php`
+  (un site WordPress inventat, [DEZVOLTARE.md](DEZVOLTARE.md)).

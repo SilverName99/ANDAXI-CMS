@@ -1,0 +1,35 @@
+# capturat/ al unui site adoptat din WordPress (deploy/adopta-wp.sh; docs/DEPLOY.md, „Adoptarea unui site WordPress”):
+# fișierele publice ale capturii (fonturile Google servite de pe site, capturat/fonturi/). Șablonul stă în git
+# (deploy/stub/capturat.htaccess); îl scrie comutarea (wpComutare).
+# Nimic nu se execută și nicio listă de fișiere; antetele de cache ca pe site-ul live (7 zile, cu Expires); CORS doar pe fonturi;
+# `nosniff` pe tot și `CSP: sandbox` pe SVG (lecția N5, dusă la arborii copiați, pasul 4a). Niciun .js nu se servește de aici.
+Options -ExecCGI -Indexes
+
+# Nimic nu se execută: nicio extensie de script de server, oricum ar fi scrisă (FilesMatch ține seama de litere mari, deci
+# clasele [pP]… în loc de (?i), ca pe Apache 2.4 și pe LiteSpeed): .php, .php0-9, .phtml, .pht, .phps, .phar, .shtml, .pl, .py, .cgi, .sh.
+<FilesMatch "\.([pP][hH][pP][0-9]?|[pP][hH][tT]([mM][lL]?)?|[pP][hH][pP][sS]|[pP][hH][aA][rR]|[sS][hH][tT][mM][lL]?|[pP][lL]|[pP][yY]|[cC][gG][iI]|[sS][hH])$">
+    Require all denied
+</FilesMatch>
+# Niciun JavaScript servit de aici (runtime-ul nostru stă în /assets/compat/).
+<FilesMatch "\.([mMcC]?[jJ][sS]|[jJ][sS][xX])$">
+    Require all denied
+</FilesMatch>
+<IfModule mod_mime.c>
+    RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .pht .phps .phar .shtml .pl .py .cgi .sh
+    RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .pht .phps .phar .shtml .pl .py .cgi .sh
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresDefault "access plus 7 days"
+</IfModule>
+<IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=604800"
+    Header always set X-Content-Type-Options "nosniff"
+    <FilesMatch "\.[sS][vV][gG][zZ]?$">
+        Header set Content-Security-Policy "sandbox"
+    </FilesMatch>
+    <FilesMatch "\.([wW][oO][fF][fF]2?|[tT][tT][fF]|[oO][tT][fF]|[eE][oO][tT])$">
+        Header set Access-Control-Allow-Origin "*"
+    </FilesMatch>
+</IfModule>

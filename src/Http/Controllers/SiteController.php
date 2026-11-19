@@ -80,6 +80,10 @@ final class SiteController
             if ($this->poartaMembri($db instanceof PDO ? $db : null, $homePage)) {
                 return;
             }
+            // Cadrul capturat (pasul 6): prima pagină a unui site mutat de pe WordPress, din documentul ei capturat.
+            if ($this->paginaCapturata($db instanceof PDO ? $db : null, $homePage)) {
+                return;
+            }
             $settings = $this->cachedSettings($db);
             View::render('site/custom-page', array_merge([
                 'title' => (string) ($homePage['title'] ?? 'Acasă'),
@@ -1056,6 +1060,12 @@ final class SiteController
         }
 
         if ($product === null) {
+            // Modul WordPress (wp-compat.json): fără potrivirea aproximativă a nucleului; atașamentul, ghicirea, apoi 404,
+            // ca la orice adresă necunoscută (paginaNegasita).
+            if (\App\Support\WpCompat::activ()) {
+                $this->paginaNegasita();
+                return;
+            }
             // Link vechi (site-ul anterior, Google, bookmark): dacă putem
             // identifica fără dubiu produsul, trimitem clientul direct la el.
             $potrivit = $this->gasesteProdusDupaSlugAproximativ($db, (string) $slug);
@@ -4551,12 +4561,22 @@ final class SiteController
         $contactPage = $this->findPublishedPageBySlug('contact');
         if (is_array($contactPage)) {
             $db = $this->db();
+            // Cadrul capturat (pasul 6): pagina „contact” a unui site mutat de pe WordPress, din documentul ei capturat.
+            if ($this->paginaCapturata($db instanceof PDO ? $db : null, $contactPage)) {
+                return;
+            }
             $settings = $this->cachedSettings($db);
             View::render('site/custom-page', array_merge([
                 'title' => (string) ($contactPage['title'] ?? 'Contact'),
                 'page' => $contactPage,
                 'mannequinSectionHtml' => $this->renderMannequinSection($db, $settings),
             ], $this->customPageSeoMeta($db instanceof PDO ? $db : null, $contactPage)));
+            return;
+        }
+        // Modul WordPress (wp-compat.json): fără pagina „contact”, adresa e necunoscută, ca pe WordPress (ghicirea, apoi 404),
+        // nu formularul de contact al nucleului.
+        if (\App\Support\WpCompat::activ()) {
+            $this->paginaNegasita();
             return;
         }
 
@@ -5099,6 +5119,16 @@ final class SiteController
     public function paginaNegasita(): void
     {
         $db = $this->db();
+        // Modul WordPress (wp-compat.json): atașamentul de la această adresă (301 la fișier) sau pagina ghicită (301), ca
+        // WordPress înaintea paginii 404 (App\Support\WpCompat::raspundeNegasit). Fără fișier nu face nimic.
+        if (\App\Support\WpCompat::raspundeNegasit($db instanceof PDO ? $db : null, (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+            return;
+        }
+        // Cadrul capturat (pasul 6): 404-ul capturat al site-ului (cu antetele lui), înaintea celui al nucleului.
+        if ($db instanceof PDO && \App\Support\Tema::cadru() === 'capturat'
+            && $this->documentCapturat($db, \App\Support\CadruCapturat::document($db, cheie: '404'), 404)) {
+            return;
+        }
         $notFoundPage = null;
         if ($db instanceof PDO) {
             $this->ensureOptionalPageSchema($db);
@@ -5145,7 +5175,19 @@ final class SiteController
         }
         $this->ensureOptionalPageSchema($db);
 
+        // Cadrul capturat (pasul 6): un card embed sau o arhivă capturată, după calea cererii (nu sunt pagini în `pages`).
+        if (\App\Support\Tema::cadru() === 'capturat'
+            && $this->documentCapturat($db, \App\Support\CadruCapturat::document($db, cale: (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/')), 200)) {
+            return;
+        }
         $page = $this->findPublishedPageBySlug($slug);
+        // Modul WordPress (wp-compat.json, App\Support\WpCompat): pagina găsită de colația bazei e cea cerută doar dacă
+        // diferă cel mult literele mari ASCII (fără diacritice tăiate, fără `Ș` = `ș`), iar pagina „404” nu are adresă.
+        $modWp = \App\Support\WpCompat::activ();
+        if ($modWp && $page !== null && (!\App\Support\WpCompat::acelasiSlug($slug, (string) ($page['slug'] ?? ''))
+            || trim((string) ($page['slug'] ?? ''), '/') === '404')) {
+            $page = null;
+        }
 
         // Pagina e a unui plugin pe care site-ul nu-l are? Garda routerului o oprește
         // după adresă; aici o oprim și după slug-ul din bază (baza găsește pagina și
@@ -5162,9 +5204,10 @@ final class SiteController
             }
         }
 
-        // Aceeași pagină scrisă altfel (litere mari): 301 la adresa ei.
+        // Aceeași pagină scrisă altfel (litere mari): 301 la adresa ei. În modul WordPress cu `majuscule` "200": 200, ca
+        // WordPress, cu canonicalul cu litere mici (Seo::rezolva).
         $slugSalvat = is_array($page) ? (string) ($page['slug'] ?? '') : '';
-        if ($slugSalvat !== '' && $slugSalvat !== $slug) {
+        if ($slugSalvat !== '' && $slugSalvat !== $slug && !($modWp && \App\Support\WpCompat::majuscule200())) {
             $caleCorecta = '/' . implode('/', array_map('rawurlencode', explode('/', $slugSalvat)));
             $queryCorect = null;
             if ($slugSalvat === 'magazin') {
@@ -5198,6 +5241,12 @@ final class SiteController
         }
 
         if ($page === null) {
+            // Modul WordPress: atașamentul de la adresă, ghicirea, apoi 404 (paginaNegasita); fără potrivirile aproximative.
+            // Cadrul capturat: tot acolo, la 404-ul capturat.
+            if ($modWp || \App\Support\Tema::cadru() === 'capturat') {
+                $this->paginaNegasita();
+                return;
+            }
             $notFoundPage = $this->findPublishedPageBySlug('404');
             if (!is_array($notFoundPage)) {
                 // Poate fi un link vechi către un produs, fără /produs/ în față
@@ -5233,6 +5282,10 @@ final class SiteController
             return;
         }
 
+        // Cadrul capturat (pasul 6): pagina din documentul ei capturat (bucățile, fragmentele, jetoanele), nu din layout.php.
+        if ($this->paginaCapturata($db, $page)) {
+            return;
+        }
         $settings = $this->cachedSettings($db);
         // WP-19 (GR-09): pagina catalogului, alta decât „magazin” (catalog_pagina, de exemplu „produse”), se afișează
         // exact ca /magazin: lista, filtrul categoriei din adresă, SEO-ul listei și căutarea (noindex).
@@ -5325,6 +5378,14 @@ final class SiteController
     private function seoPagina(PDO $db, array $page, string $slug): array
     {
         $seo = $this->customPageSeoMeta($db, $page);
+        // Modul WordPress (wp-compat.json): canonicalul paginii găsite e adresa slug-ului ei din bază (ca AIOSEO din post_name),
+        // nu a căii cerute. O cerere mai largă decât slug-ul (un spațiu tăiat de trim, un „/" codat %2f) găsește tot pagina, dar
+        // n-ar mai primi un canonical pe care WordPress nu l-ar scrie niciodată (SPEC-R2-04). Un canonical scris pentru pagină
+        // (seo_pages.canonical_url) are întâietate, ca până acum. Baza e aceeași ca a celorlalte canonicaluri (Seo::rezolva,
+        // din views/layout.php: APP_URL sau schema și gazda cererii), nu doar gazda https a redirecționărilor.
+        if (\App\Support\WpCompat::activ() && trim((string) ($seo['metaCanonicalUrl'] ?? '')) === '') {
+            $seo['metaCanonicalUrl'] = $this->appUrl() . \App\Support\WpCompat::adresaPagina((string) ($page['slug'] ?? ''));
+        }
         $slugMic = mb_strtolower(trim($slug, '/'));
         if (!\App\Support\SeoMeta::activ()
             || trim((string) ($seo['metaDescription'] ?? '')) !== ''
@@ -5646,6 +5707,46 @@ final class SiteController
         $stmt->execute(['slug' => $slug]);
         $page = $stmt->fetch() ?: null;
         return is_array($page) ? $page : null;
+    }
+
+    /**
+     * Cadrul capturat (adoptarea WordPress, pasul 6; Tema::cadru() === 'capturat'): documentul capturat al paginii, randat de
+     * CadruCapturat cu valorile cererii (calea, nonce-ul zilei, anul, SEO-ul din seo_pages). false: site-ul n-are cadrul capturat
+     * sau pagina n-are document (iese ca înainte).
+     *
+     * @param array<string, mixed> $page
+     */
+    private function paginaCapturata(?PDO $db, array $page): bool
+    {
+        if (!$db instanceof PDO || \App\Support\Tema::cadru() !== 'capturat') {
+            return false;
+        }
+        return $this->documentCapturat($db, \App\Support\CadruCapturat::document($db, pagina: (int) ($page['id'] ?? 0)), 200, (int) ($page['id'] ?? 0));
+    }
+
+    /**
+     * Un document capturat ca răspuns (statusul lui: 200, ori 404 pentru pagina 404). false fără cadrul capturat sau fără document.
+     *
+     * @param array<string, mixed>|null $doc
+     */
+    private function documentCapturat(?PDO $db, ?array $doc, int $status, int $pagina = 0): bool
+    {
+        if (!$db instanceof PDO || $doc === null || \App\Support\Tema::cadru() !== 'capturat') {
+            return false;
+        }
+        $seo = [];
+        if ($pagina > 0) {
+            $q = $db->prepare("SELECT title, description, canonical_url, robots, image_url FROM seo_pages WHERE page_type = 'custom_page' AND page_ref = ?");
+            $q->execute([(string) $pagina]);
+            $r = $q->fetch(PDO::FETCH_ASSOC);
+            if (is_array($r)) {
+                $seo = array_filter(['titlu' => $r['title'], 'descriere' => $r['description'], 'canonical' => $r['canonical_url'], 'robots' => $r['robots'],
+                    'imagine' => $r['image_url']], static fn (mixed $v): bool => is_string($v) && $v !== '');
+            }
+        }
+        $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/');
+        \App\Support\CadruCapturat::raspunde($db, $doc, ['cale' => $cale, 'nonce' => \App\Support\CadruCapturat::nonceZi(), 'an' => date('Y'), 'seo' => $seo], $status);
+        return true;
     }
 
     private function findPublishedRootPage(): ?array
@@ -13621,6 +13722,10 @@ CSS;
     /**
      * Forma „de comparat" a unui slug: fără diacritice, doar litere și cifre.
      * „Kit-Vacanță_2024" și „kit vacanta 2024" ajung la același rezultat.
+     * Cu slug-urile Unicode (WpCompat::slugUnicode) literele altor alfabete rămân: două slug-uri grecești diferite nu mai
+     * ajung amândouă la „” (sau doar la cifrele lor). Azi slug-urile Unicode sunt doar ale site-urilor cu wp-compat.json, pe
+     * care potrivirea aproximativă (singurul apelant) e oprită de tot; ramura e pentru site-urile cu limbi (slugUnicode o va
+     * porni și fără wp-compat.json), iar tools/dev/test-wp-compat.php (A) o verifică direct.
      */
     private function slugComparabil(string $value): string
     {
@@ -13636,6 +13741,9 @@ CSS;
             'ç' => 'c', 'ñ' => 'n', 'ß' => 'ss',
         ];
         $value = strtr($value, $inlocuiri);
+        if (\App\Support\WpCompat::slugUnicode()) {
+            return (string) preg_replace('/[^\p{L}\p{N}]/u', '', $value);
+        }
         return (string) preg_replace('/[^a-z0-9]/', '', $value);
     }
 

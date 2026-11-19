@@ -13,6 +13,9 @@ namespace App\Support;
  * slug-uri care nu pierd litere pe diacritice. `slugify()` din controllere taie orice nu e ASCII, așa că „Sănătatea
  * sistemului respirator” ajungea „sntatea-sistemului-respirator”; aici diacriticele se transliterează întâi, apoi se taie
  * restul.
+ *
+ * `unicode()` e slug-ul site-urilor care păstrează literele oricărei limbi (WpCompat::slugUnicode: azi cele cu
+ * wp-compat.json, mutate de pe WordPress, unde slug-urile românești și grecești sunt adrese publice).
  */
 final class Slug
 {
@@ -92,6 +95,31 @@ final class Slug
         }
 
         return $candidat;
+    }
+
+    /**
+     * Slug-ul care păstrează literele oricărei limbi: litere (`\p{L}` cu semnele lor, `\p{M}`), cifre și cratimă; literele mici;
+     * spațiile, „_” și cratimele la rând devin o cratimă, fără cratimă la capete; restul (punctuația, simbolurile) pleacă.
+     * Forma NFC când există `Normalizer` (ș scris ca s + virgulă devine un singur caracter, ca în adresă).
+     * „Camere și Prețuri!” → „camere-și-prețuri”; „Δωμάτια 2026” → „δωμάτια-2026”.
+     */
+    public static function unicode(string $value): string
+    {
+        if (class_exists(\Normalizer::class)) {
+            $nfc = \Normalizer::normalize($value, \Normalizer::FORM_C);
+            if (is_string($nfc)) {
+                $value = $nfc;
+            }
+        }
+        if (!mb_check_encoding($value, 'UTF-8')) {
+            $value = (string) mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+        }
+        $value = mb_strtolower(trim($value), 'UTF-8');
+        $value = (string) preg_replace('/[\s_\-]+/u', '-', $value);
+        $value = (string) preg_replace('/[^\p{L}\p{M}\p{N}\-]/u', '', $value);
+        $value = (string) preg_replace('/-{2,}/', '-', $value);
+
+        return trim($value, '-');
     }
 
     /** Marca și eticheta: „Vitamina D” → „vitamina-d” (ca pe site, de la început). */

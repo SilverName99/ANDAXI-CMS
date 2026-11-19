@@ -1,0 +1,15 @@
+{
+    "format": 1,
+    "runtime": "divi4@1",
+    "descriere": "Scripturile runtime-ului pe sloturile paginii capturate: fiecare cale (față de /assets/compat/) devine <script src=\"/assets/compat/<cale>\"></script>, sincron (fără async și defer), în ordinea listei, la poziția slotului. cap = {{ax:runtime:cap}} (în head, înaintea lui ax-date); final = {{ax:runtime:final}} (în corp, unde stătea ultimul script scos). incarcare.js e primul în cap.",
+    "cap": [
+        "comun/v1/incarcare.js",
+        "comun/v1/tarziu.js"
+    ],
+    "final": [
+        "comun/v1/clase-ua.js",
+        "divi4/v1/fit-vids.js",
+        "divi4/v1/structura.js",
+        "divi4/v1/dg-lightbox.js"
+    ]
+}

@@ -3697,6 +3697,277 @@
             },
             "motor": "InnoDB"
         },
+        "formulare_compat": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "config": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "mediumtext"
+                },
+                "fragment": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "hash_import": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "importat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "indice": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "limba": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "pagina_capturata": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "cheie"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "fragmente_capturate": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "date": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "fel": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "hash_import": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "html": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "mediumtext"
+                },
+                "importat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "layout": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(40)"
+                },
+                "limba": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "meniu": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "sha": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "cheie"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "galerii_capturate": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "hash_import": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "importat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "modul": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(100)"
+                },
+                "pagina_capturata": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "setari": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_galerii_capturate_cheie": {
+                    "coloane": [
+                        "cheie"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "galerii_capturate_elemente": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "alt": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(500)"
+                },
+                "categorii": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "fisier": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(760)"
+                },
+                "galerie_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ordine": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "titlu": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(500)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_galerii_capturate_elemente": {
+                    "coloane": [
+                        "galerie_id",
+                        "ordine"
+                    ],
+                    "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
         "gallery_folders": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -4003,6 +4274,64 @@
                         "prenume"
                     ],
                     "unic": false
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "import_amprente": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "fel": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "scris_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "wp_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "bigint unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_import_amprente": {
+                    "coloane": [
+                        "fel",
+                        "cheie"
+                    ],
+                    "unic": true
                 }
             },
             "motor": "InnoDB"
@@ -6062,6 +6391,243 @@
             },
             "motor": "InnoDB"
         },
+        "pagini_capturate": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "antet": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "antete_http": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "banner": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "body_atribute": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "cale": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(760)"
+                },
+                "cale_hash": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "char(64)"
+                },
+                "cap_html": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "mediumtext"
+                },
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(190)"
+                },
+                "continut": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "corpus_cautare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "date_pagina": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "mediumtext"
+                },
+                "date_reteta": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "dialect": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "dupa": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "mediumtext"
+                },
+                "editat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                },
+                "hash_import": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "html_atribute": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "importat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "inainte": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "mediumtext"
+                },
+                "limba": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "meniu": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "page_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "sectiuni": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "seo": {
+                    "extra": "",
+                    "implicit": "'inghetat'",
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "seo_motiv": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(500)"
+                },
+                "sha_captura": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "sha_randare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": "200",
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "subsol": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "varchar(190)"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "valori_import": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "text"
+                },
+                "wp_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "bigint unsigned"
+                },
+                "wp_modificat": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "datetime"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_pagini_capturate_cale": {
+                    "coloane": [
+                        "cale_hash"
+                    ],
+                    "unic": true
+                },
+                "uniq_pagini_capturate_cheie": {
+                    "coloane": [
+                        "cheie"
+                    ],
+                    "unic": true
+                },
+                "uniq_pagini_capturate_page": {
+                    "coloane": [
+                        "page_id"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "product_brands": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -7411,6 +7977,169 @@
             },
             "motor": "InnoDB"
         },
+        "rapoarte_csp": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "blocat": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(200)"
+                },
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "directiva": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(200)"
+                },
+                "document": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(200)"
+                },
+                "linie": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "numar": {
+                    "extra": "",
+                    "implicit": "0",
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(200)"
+                },
+                "ultimul_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "zi": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "date"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "zi",
+                        "cheie"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "raspunsuri_inghetate": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "antete": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "text"
+                },
+                "cale": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(760)"
+                },
+                "cheie": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "corp": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "longblob"
+                },
+                "hash_import": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "importat_la": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "datetime"
+                },
+                "metoda": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(10)"
+                },
+                "query": {
+                    "extra": "",
+                    "implicit": "''",
+                    "null": false,
+                    "tip": "varchar(760)"
+                },
+                "sha256": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "char(64)"
+                },
+                "status": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "smallint unsigned"
+                },
+                "sursa": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(40)"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "uniq_raspunsuri_inghetate_cheie": {
+                    "coloane": [
+                        "cheie"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
         "register_submit_logs": {
             "colatie": "utf8mb4_unicode_ci",
             "coloane": {
@@ -8750,6 +9479,94 @@
                 "uniq_users_member_code": {
                     "coloane": [
                         "member_code"
+                    ],
+                    "unic": true
+                }
+            },
+            "motor": "InnoDB"
+        },
+        "wp_harta": {
+            "colatie": "utf8mb4_unicode_ci",
+            "coloane": {
+                "cale": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(760)"
+                },
+                "fisier": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(760)"
+                },
+                "id": {
+                    "extra": "auto_increment",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "ordine": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "int unsigned"
+                },
+                "pagina_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": true,
+                    "tip": "int unsigned"
+                },
+                "slug_wp": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(200)"
+                },
+                "stare": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "tip": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "varchar(20)"
+                },
+                "wp_id": {
+                    "extra": "",
+                    "implicit": null,
+                    "null": false,
+                    "tip": "bigint unsigned"
+                }
+            },
+            "fk": [],
+            "indecsi": {
+                "PRIMARY": {
+                    "coloane": [
+                        "id"
+                    ],
+                    "unic": true
+                },
+                "idx_wp_harta_cale": {
+                    "coloane": [
+                        "cale"
+                    ],
+                    "unic": false
+                },
+                "idx_wp_harta_wp_id": {
+                    "coloane": [
+                        "wp_id"
+                    ],
+                    "unic": false
+                },
+                "uniq_wp_harta": {
+                    "coloane": [
+                        "tip",
+                        "wp_id"
                     ],
                     "unic": true
                 }

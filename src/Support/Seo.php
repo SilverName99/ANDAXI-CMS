@@ -316,8 +316,9 @@ final class Seo
      *  - titlul: pe prima pagină, cel din Setări magazin → SEO Google are întâietate; apoi cel scris pentru pagină, altfel
      *    „{titlul paginii} | {magazin}” (SeoMeta::titluPagina; cu SEO_TITLURI=0, regula de dinaintea livrării 2);
      *  - descrierea: cea scrisă, apoi (prima pagină) cea din setări, apoi descrierea implicită din setări;
-     *  - canonicalul: cel scris (o adresă întreagă), altfel adresa paginii; niciunul pe 404/410 (în afara căilor de
-     *    coș, comandă, cont, admin) și unde controllerul cere (căutarea internă);
+     *  - canonicalul: cel scris (o adresă întreagă), altfel adresa paginii (pe un site cu wp-compat.json în forma
+     *    WordPress: litere mici, „/” final; WpCompat::caleCanonica); niciunul pe 404/410 (în afara căilor de coș, comandă,
+     *    cont, admin) și unde controllerul cere (căutarea internă);
      *  - robots: cel dat de controller (căutarea internă, /blog gol) sau scris pentru pagină, doar litere, „,”, „-”;
      *  - og:type: cel scris pentru pagină, altfel „website”.
      *
@@ -368,7 +369,8 @@ final class Seo
         $appUrl = rtrim((string) ($ctx['appUrl'] ?? ''), '/');
         $canonical = trim((string) ($ctx['metaCanonicalUrl'] ?? ''));
         if ($canonical === '') {
-            $canonical = $appUrl . ($cale === '/' ? '/' : $cale);
+            // Modul WordPress (wp-compat.json): forma WordPress a căii (litere mici, „/” final, escape-urile cu litere mici).
+            $canonical = $appUrl . (WpCompat::activ() ? WpCompat::caleCanonica($cale) : ($cale === '/' ? '/' : $cale));
         }
         // Fără canonical (și fără og:url) pe pagina „nu există” (404/410) și unde
         // controllerul o cere (căutarea internă cu noindex). Vezi SeoIndexare.

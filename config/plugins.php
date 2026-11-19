@@ -148,7 +148,14 @@ return [
             // nu al blogului (migrarea nucleu/0034).
             'blog_posts.requires_active_account',
             // WP-38 (B2): redirecționările site-ului și jurnalul 404 (nucleu/0046, nucleu/0047; docs/SEO.md §2).
-            'seo_redirects', 'seo_404_log'],
+            'seo_redirects', 'seo_404_log',
+            // Adoptarea WordPress: amprentele importului (nucleu/0068; reimportul nu scrie peste munca oamenilor), harta
+            // WordPress pe ID-uri a stratului de adrese (nucleu/0069; App\Support\WpCompat\Harta) și paginile capturate
+            // (nucleu/0070; App\Support\ImportWordPress\ScriereCapturata, App\Support\CadruCapturat).
+            'import_amprente', 'wp_harta', 'pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat',
+            'galerii_capturate', 'galerii_capturate_elemente',
+            // Rapoartele CSP ale cadrului capturat (nucleu/0071; App\Support\RaportCsp): numărătorile pe zi.
+            'rapoarte_csp'],
     ],
 
     'pluginuri' => [
