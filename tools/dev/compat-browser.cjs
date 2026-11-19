@@ -200,6 +200,34 @@ const CORP_MENIU = '<div id="page-container">\n<header class="et-l et-l--header"
 const STIL_MENIU = '.et_mobile_menu{display:none;position:absolute;left:0;width:100%;padding:0;margin:0;list-style:none}'
   + '.mobile_nav{position:relative}.mobile_menu_bar{display:block;height:32px;width:32px}.et_mobile_menu li a{display:block;height:51px;line-height:51px}';
 
+// Consimțământul (consimtamant.md, inventat: textele „Pensiunea Probă”): bannerul cu documentele ca șabloane, tabul și o hartă blocată.
+const CONFIG_CMPLZ = { prefix: 'cmplz_', cookie_expiry: '365', current_policy_id: '7', region: 'eu', consenttype: 'optin',
+  placeholdertext: 'Apasă ca să accepți cookie-urile {category} – Pensiunea Probă',
+  page_links: { eu: { 'cookie-statement': { title: 'Politica cookie ', url: '/pagina/baza' }, 'privacy-statement': { title: 'Confidențialitate', url: '/pagina/meniu' } } } };
+const categorieCmplz = (c, titlu) => '<div class="cmplz-category cmplz-' + c + '"><div class="cmplz-category-header"><span class="cmplz-category-title">' + titlu + '</span>'
+  + '<span class="cmplz-banner-checkbox"><input type="checkbox" id="cmplz-' + c + '-optin" data-category="cmplz_' + c + '" class="cmplz-consent-checkbox cmplz-' + c + '"></span>'
+  + '<button class="cmplz-category-toggle" aria-expanded="false" aria-controls="cmplz-desc-' + c + '-1-optin"></button></div>'
+  + '<div class="cmplz-description" id="cmplz-desc-' + c + '-1-optin" hidden>Descrierea ' + titlu + '</div></div>';
+const CORP_CMPLZ = '<div id="page-container"><div id="et-main-area"><p class="proba-text">Pensiunea Probă – contact</p>'
+  + '<div class="et_pb_code_inner" style="width:640px"><div class="cmplz-placeholder-parent"><iframe data-placeholder-image="/fixturi/harta-proba-1280x920.png" data-category="marketing" '
+  + 'data-service="google-maps" class="cmplz-placeholder-element cmplz-iframe cmplz-iframe-styles cmplz-no-video " data-cmplz-target="src" '
+  + 'data-src-cmplz="https://www.google.com/maps/embed?pb=proba" src="about:blank" width="640" height="400"></iframe></div></div>'
+  + '<div class="et_pb_code_inner proba-ascuns" style="display:none"><div class="cmplz-placeholder-parent"><iframe data-placeholder-image="/fixturi/harta-proba-1280x920.png" '
+  + 'data-category="marketing" data-service="google-maps" class="cmplz-placeholder-element cmplz-iframe" data-cmplz-target="src" '
+  + 'data-src-cmplz="https://www.google.com/maps/embed?pb=proba" src="about:blank"></iframe></div></div></div></div>\n'
+  + '<div id="cmplz-cookiebanner-container"><div id="cmplz-cookiebanner-1-optin" class="cmplz-cookiebanner cmplz-hidden banner-1 cookies optin cmplz-bottom-right" role="dialog">'
+  + '<div class="cmplz-header"><div class="cmplz-title">Gestionați consimțământul</div><div class="cmplz-close" tabindex="0" role="button" aria-label="Close dialog">X</div></div>'
+  + '<div class="cmplz-categories">' + categorieCmplz('functional', 'Funcțional') + categorieCmplz('statistics', 'Statistici') + categorieCmplz('marketing', 'Marketing') + '</div>'
+  + '<div class="cmplz-buttons"><button class="cmplz-btn cmplz-accept">Acceptă</button><button class="cmplz-btn cmplz-deny">Respinge</button>'
+  + '<button class="cmplz-btn cmplz-view-preferences">Preferințe</button><button class="cmplz-btn cmplz-save-preferences">Salvează</button>'
+  + '<a class="cmplz-btn cmplz-manage-options tcf cookie-statement" href="#" data-relative_url="#cmplz-manage-consent-container">Preferințe</a></div>'
+  + '<div class="cmplz-documents cmplz-links"><ul><li><a class="cmplz-link cookie-statement" href="#" data-relative_url="">{title}</a></li>'
+  + '<li><a class="cmplz-link privacy-statement" href="#" data-relative_url="">{title}</a></li><li><a class="cmplz-link impressum" href="#" data-relative_url="">{title}</a></li></ul></div>'
+  + '</div></div>\n<div id="cmplz-manage-consent" data-nosnippet="true"><button class="cmplz-btn cmplz-hidden cmplz-manage-consent manage-consent-1">Gestionați</button></div>\n';
+const STIL_CMPLZ = '.cmplz-hidden{display:none}.cmplz-cookiebanner.cmplz-dismissed{display:none}.cmplz-cookiebanner .cmplz-categories,'
+  + '.cmplz-cookiebanner .cmplz-save-preferences{display:none}.cmplz-cookiebanner .cmplz-categories.cmplz-fade-in{display:block}'
+  + '#cmplz-manage-consent .cmplz-manage-consent.cmplz-dismissed{display:none}.cmplz-placeholder-parent{height:inherit}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -300,13 +328,14 @@ const PAGINI = {
   'speculatii-fara-cuvant': { csp: CSP_FARA_SPECULATII },
   sandbox: { inainte: true },
   meniu: { corp: CORP_MENIU, stil: STIL_MENIU },
+  consimtamant: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ }) },
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Serverul de probă
 // ---------------------------------------------------------------------------------------------------------------------
 const server = { intarzieri: {} };
-const TIPURI = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
+const TIPURI = { '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png' };
 
 function trimite(res, cod, tip, corp, csp) {
   const antete = { 'Content-Type': tip, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'max-age=600' };
@@ -851,6 +880,7 @@ async function verificaIdempotenta(browser, baza) {
     ax.fitVids.aplica();
     ax.dgLightbox.aplica();
     ax.meniuMobil.aplica();
+    ax.consimtamant.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1041,6 +1071,124 @@ async function verificaMeniulMobil(browser) {
   await context.close();
 }
 
+async function verificaConsimtamantul(browser) {
+  scrie('== consimtamant (felia 2–3, consimtamant.md, OBS-24): bannerul, cookie-urile, tabul, harta blocată');
+  const HARTA = 'https://www.google.com/maps/embed?pb=proba';
+  const citeste = (f) => f.evaluate(() => {
+    const b = document.querySelector('.cmplz-cookiebanner');
+    const tab = document.querySelector('#cmplz-manage-consent .cmplz-manage-consent');
+    const p = document.querySelector('.cmplz-placeholder-parent');
+    const ifr = p ? p.querySelector('iframe') : null;
+    const btn = p ? p.querySelector('button.cmplz-blocked-content-notice') : null;
+    const stiluri = Array.from(document.head.querySelectorAll('style[type="text/css"]')).map((s) => s.textContent);
+    const atributeStiluri = Array.from(document.head.querySelectorAll('style[type="text/css"]')).map((s) => s.getAttributeNames().join(','));
+    const cookie = {};
+    document.cookie.split(';').map((x) => x.trim()).filter(Boolean).forEach((x) => { const i = x.indexOf('='); cookie[x.slice(0, i)] = x.slice(i + 1); });
+    return { body: Array.from(document.body.classList), dataCmplz: document.body.getAttribute('data-cmplz'),
+      primul: document.body.firstElementChild ? document.body.firstElementChild.id : null,
+      banner: b ? Array.from(b.classList) : null, afisareBanner: b ? getComputedStyle(b).display : null, tab: tab ? Array.from(tab.classList) : null,
+      linkuri: Array.from(document.querySelectorAll('.cmplz-cookiebanner a')).map((a) => [a.getAttribute('class'), a.getAttribute('href'), a.textContent]),
+      parinte: p ? p.getAttribute('class') : null, index: p ? p.getAttribute('data-placeholder_class_index') : null, imagine: p ? p.getAttribute('data-placeholder-image') : null,
+      latime: p ? p.getBoundingClientRect().width : null, inaltime: p ? p.getBoundingClientRect().height : null,
+      iframe: ifr ? [ifr.getAttribute('class'), ifr.getAttribute('src')] : null, buton: btn ? [btn.getAttribute('class'), btn.textContent, btn.getAttribute('aria-label'),
+        btn.getAttribute('data-category'), btn.getAttribute('data-service'), btn.previousElementSibling === ifr] : null,
+      stiluri, atributeStiluri, cookie, al2: (() => { const q = document.querySelectorAll('.cmplz-placeholder-parent')[1]; return q ? q.getAttribute('class') : null; })(),
+      categorii: (() => { const c = document.querySelector('.cmplz-categories'); return c ? [c.getAttribute('class'), getComputedStyle(c).display] : null; })(),
+      salveaza: (() => { const c = document.querySelector('.cmplz-save-preferences'); return c ? getComputedStyle(c).display : null; })(),
+      vezi: (() => { const c = document.querySelector('.cmplz-buttons .cmplz-view-preferences'); return c ? getComputedStyle(c).display : null; })() };
+  });
+  const clic = (f, sel) => f.evaluate((sel) => { document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true })); }, sel);
+  // 1. Prima vedere
+  const p1 = await deschide(browser, { cale: '/pagina/consimtamant', conditie: () => { const p = document.querySelector('.cmplz-placeholder-parent'); return !!p
+    && Array.from(document.head.querySelectorAll('style[type="text/css"]')).some((s) => /height:/.test(s.textContent)); } });
+  const f1 = p1.page.mainFrame();
+  const s1 = await stare(f1);
+  const a = await citeste(f1);
+  verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă (harta nu se cere înainte de acord)', curate(p1.ev, s1), detaliiCurate(p1.ev, s1));
+  verifica('prima vedere: <body data-cmplz="1"> cu cmplz-functional, cmplz-eu, cmplz-optin (fără categoriile acceptate); containerul bannerului primul în body; '
+    + 'bannerul cmplz-show (fără cmplz-hidden), tabul cmplz-dismissed; niciun cookie', a.dataCmplz === '1' && ['cmplz-functional', 'cmplz-eu', 'cmplz-optin'].every((k) => a.body.includes(k))
+    && !a.body.includes('cmplz-marketing') && a.primul === 'cmplz-cookiebanner-container' && a.banner.includes('cmplz-show') && !a.banner.includes('cmplz-hidden')
+    && a.afisareBanner !== 'none' && a.tab.includes('cmplz-dismissed') && !a.tab.includes('cmplz-hidden') && Object.keys(a.cookie).length === 0, a);
+  verifica('documentele: adresa paginii din page_links (+ data-relative_url) și titlul în locul lui {title}; impressum (fără pagină) cmplz-hidden',
+    egal(a.linkuri, [['cmplz-btn cmplz-manage-options tcf cookie-statement', '/pagina/baza#cmplz-manage-consent-container', 'Preferințe'],
+      ['cmplz-link cookie-statement', '/pagina/baza', 'Politica cookie '], ['cmplz-link privacy-statement', '/pagina/meniu', 'Confidențialitate'],
+      ['cmplz-link impressum cmplz-hidden', '#', '{title}']]), a.linkuri);
+  const H = 640 * 920 / 1280;
+  verifica('harta blocată: părintele cmplz-placeholder-1 cmplz-blocked-content-container, indexul și imaginea; iframe-ul cmplz-processed, src neschimbat; '
+    + 'butonul după iframe, cu textul din placeholdertext; două <style> (fundalul, înălțimea = lățimea × 920/1280)',
+    a.parinte === 'cmplz-placeholder-parent cmplz-placeholder-1 cmplz-blocked-content-container' && a.index === '1' && a.imagine === '/fixturi/harta-proba-1280x920.png'
+    && a.iframe[0].endsWith('cmplz-processed') && a.iframe[1] === 'about:blank' && a.buton && a.buton[0] === 'cmplz-blocked-content-notice cmplz-accept-category cmplz-accept-marketing'
+    && a.buton[1] === 'Apasă ca să accepți cookie-urile marketing – Pensiunea Probă' && a.buton[2] === a.buton[1] && a.buton[3] === 'marketing' && a.buton[4] === 'google-maps' && a.buton[5]
+    && a.stiluri.includes('.cmplz-placeholder-1 {background-image: url(/fixturi/harta-proba-1280x920.png) !important;}')
+    && a.stiluri.includes('.cmplz-placeholder-1 {height:' + H + 'px;}') && Math.abs(a.inaltime - H) < 1, a);
+  verifica('a doua hartă, ascunsă: placeholderul 2 (clasele), dar fără <style> (ca pe live, doar pentru placeholderul afișat); stilurile fără alte atribute decât type',
+    a.al2 === 'cmplz-placeholder-parent cmplz-placeholder-2 cmplz-blocked-content-container' && !a.stiluri.some((x) => /cmplz-placeholder-2/.test(x))
+    && a.atributeStiluri.every((x) => x === 'type'), { al2: a.al2, stiluri: a.stiluri, atr: a.atributeStiluri });
+  // 2. Preferințele și categoria
+  await clic(f1, '.cmplz-view-preferences');
+  await clic(f1, '.cmplz-category-toggle[aria-controls="cmplz-desc-statistics-1-optin"]');
+  const pr = await citeste(f1);
+  const cat = await f1.evaluate(() => [document.querySelector('[aria-controls="cmplz-desc-statistics-1-optin"]').getAttribute('aria-expanded'),
+    document.getElementById('cmplz-desc-statistics-1-optin').hasAttribute('hidden')]);
+  verifica('Vizualizați preferințele: categoriile cmplz-fade-in (afișate), Salvează în locul butonului de preferințe; chevronul: aria-expanded și descrierea',
+    pr.categorii[0] === 'cmplz-categories cmplz-fade-in' && pr.categorii[1] === 'block' && pr.salveaza === 'block' && pr.vezi === 'none' && egal(cat, ['true', false]), { pr, cat });
+  await f1.evaluate(() => { document.getElementById('cmplz-statistics-optin').checked = true; });
+  await clic(f1, '.cmplz-save-preferences');
+  const sv = await citeste(f1);
+  verifica('Salvați preferințele (statistici bifat): statistics allow, marketing și preferences deny, functional allow, policy_id, banner-status dismissed; '
+    + 'bannerul închis, tabul afișat, body cu cmplz-statistics; harta tot blocată', sv.cookie.cmplz_statistics === 'allow' && sv.cookie.cmplz_marketing === 'deny'
+    && sv.cookie.cmplz_preferences === 'deny' && sv.cookie.cmplz_functional === 'allow' && sv.cookie.cmplz_policy_id === '7' && sv.cookie['cmplz_banner-status'] === 'dismissed'
+    && sv.banner.includes('cmplz-dismissed') && sv.afisareBanner === 'none' && sv.tab.includes('cmplz-show') && sv.body.includes('cmplz-statistics') && !sv.body.includes('cmplz-marketing')
+    && sv.iframe[1] === 'about:blank' && p1.ev.straine.length === 0, sv);
+  await clic(f1, '#cmplz-manage-consent .cmplz-manage-consent');
+  const tb = await citeste(f1);
+  verifica('tabul: bannerul se redeschide direct în preferințe (deschise în sesiune), tabul dispare', tb.banner.includes('cmplz-show') && tb.tab.includes('cmplz-dismissed')
+    && tb.salveaza === 'block', tb);
+  // 3. Butonul hărții
+  await clic(f1, '.cmplz-blocked-content-notice');
+  await f1.waitForTimeout(200);
+  const hm = await citeste(f1);
+  verifica('butonul hărții: marketing allow, banner-status dismissed; src ← data-src-cmplz (o cerere spre gazda hărții), iframe cmplz-activated, butonul și stilurile scoase',
+    hm.cookie.cmplz_marketing === 'allow' && hm.cookie['cmplz_banner-status'] === 'dismissed' && hm.iframe[1] === HARTA && /cmplz-activated/.test(hm.iframe[0])
+    && hm.buton === null && !/cmplz-blocked-content-container/.test(hm.parinte) && !hm.stiluri.some((x) => /cmplz-placeholder-1/.test(x))
+    && p1.ev.straine.length >= 1 && p1.ev.straine.every((u) => u.startsWith('https://www.google.com/maps/embed')), { hm, straine: p1.ev.straine });
+  // 4. Reîncărcarea, cu alegerea făcută
+  await p1.page.reload({ waitUntil: 'load' });
+  await p1.page.waitForTimeout(400);
+  const rl = await citeste(f1);
+  verifica('reîncărcarea după alegere: bannerul cmplz-dismissed, tabul cmplz-show, body cu categoriile acceptate, harta încărcată direct (fără placeholder)',
+    rl.banner.includes('cmplz-dismissed') && rl.tab.includes('cmplz-show') && rl.body.includes('cmplz-marketing') && rl.body.includes('cmplz-statistics')
+    && rl.iframe[1] === HARTA && rl.buton === null && !/cmplz-blocked-content-container/.test(rl.parinte), rl);
+  await p1.context.close();
+  // 5. Acceptă, Respinge, X (contexte noi)
+  const actiune = async (sel) => {
+    const p = await deschide(browser, { cale: '/pagina/consimtamant' });
+    await clic(p.page.mainFrame(), sel);
+    await p.page.waitForTimeout(150);
+    const r = await citeste(p.page.mainFrame());
+    const straine = p.ev.straine.slice();
+    await p.context.close();
+    return { r, straine };
+  };
+  const ac = await actiune('.cmplz-accept');
+  verifica('Acceptă: toate categoriile allow, policy_id, consented_services gol, banner-status dismissed; body cu cmplz-marketing/statistics/preferences; harta încărcată',
+    ['marketing', 'statistics', 'preferences', 'functional'].every((c) => ac.r.cookie['cmplz_' + c] === 'allow') && ac.r.cookie.cmplz_consented_services === ''
+    && ac.r.cookie.cmplz_policy_id === '7' && ac.r.cookie['cmplz_banner-status'] === 'dismissed' && ['cmplz-marketing', 'cmplz-statistics', 'cmplz-preferences'].every((k) => ac.r.body.includes(k))
+    && ac.r.banner.includes('cmplz-dismissed') && ac.r.iframe[1] === HARTA && ac.straine.length >= 1, ac);
+  const re = await actiune('.cmplz-deny');
+  verifica('Respinge: marketing, statistics, preferences deny, functional allow; harta rămâne blocată, nicio cerere spre altă gazdă',
+    ['marketing', 'statistics', 'preferences'].every((c) => re.r.cookie['cmplz_' + c] === 'deny') && re.r.cookie.cmplz_functional === 'allow'
+    && re.r.cookie['cmplz_banner-status'] === 'dismissed' && re.r.iframe[1] === 'about:blank' && re.r.buton !== null && re.straine.length === 0 && !re.r.body.includes('cmplz-marketing'), re);
+  const x = await actiune('.cmplz-close');
+  verifica('X: doar banner-status dismissed; bannerul închis, tabul afișat', egal(Object.keys(x.r.cookie), ['cmplz_banner-status']) && x.r.banner.includes('cmplz-dismissed')
+    && x.r.tab.includes('cmplz-show') && x.straine.length === 0, x);
+  // 6. Fără configurație: nimic
+  const pb = await deschide(browser, { cale: '/pagina/baza' });
+  const nb = await pb.page.evaluate(() => document.body.hasAttribute('data-cmplz'));
+  verifica('o pagină fără configurația complianz: nimic (fără data-cmplz)', nb === false, nb);
+  await pb.context.close();
+}
+
 async function verificaClaseleUa(browser) {
   scrie('== clase-ua: regula pe tabel și clasele puse în pagină');
   {
@@ -1183,6 +1331,7 @@ async function main() {
     await verificaFile(browser);
     await verificaStructura(browser);
     await verificaMeniulMobil(browser);
+    await verificaConsimtamantul(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);

@@ -1107,7 +1107,12 @@ acel rând și pe rândul subsolului, clasele dintr-o listă pe pagină, `ax-dat
 din pachetul site-ului), `fit-vids.js` (`<style id="fit-vids-style">`, cu textul observat, la sfârșitul lui head) și `dg-lightbox.js` (containerul ascuns
 `.dg-carousel-lightbox` la sfârșitul lui body). Felia 2: `meniu-mobil.js` (pe fiecare `.mobile_nav` al unui modul meniu,
 `ul#mobile_menuN.et_mobile_menu` cu o copie a listei desktop, prin `cloneNode`, fără id-uri și fără `data-ax-*`; tapul pe bară o
-deschide și o închide în 500 ms pe curba „swing”, cu `closed`/`opened`, iar un tap în timpul animației o întoarce, OBS-06). Poarta:
+deschide și o închide în 500 ms pe curba „swing”, cu `closed`/`opened`, iar un tap în timpul animației o întoarce, OBS-06) și
+`comun/v1/consimtamant.js` (bannerul de consimțământ capturat, cu `ax-date` → `complianz`: clasele și `data-cmplz` pe `<body>`,
+containerul mutat primul în body, documentele din `page_links`, butoanele Acceptă/Respinge/X/Preferințe/Salvează și tabul, cookie-urile
+în ordinea observată, OBS-24, valori dintr-o listă închisă; hărțile blocate, `iframe[data-src-cmplz]`, primesc placeholderul cu imaginea
+și înălțimea după raport, iar `src` se pune doar după acordul categoriei și doar pentru o adresă https trecută prin `adresaSigura()`;
+nicio cerere spre altă gazdă înainte de acord; scripturile de urmărire nu se încarcă, CSP-ul rămâne `script-src 'self'`). Poarta:
 **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
