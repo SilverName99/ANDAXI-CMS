@@ -303,6 +303,15 @@ const STIL_DM = 'body{margin:0}.et_pb_divimenus{position:relative;height:60px}.e
   + '.dd-popup-c{position:fixed!important;display:none;left:0;top:0;width:100%;height:100%;z-index:159899;overflow-y:auto}'
   + '.et_pb_divimenus_flex{position:relative;height:60px}.dd-menu-item-modal{position:relative;width:600px;height:400px;background:#ebe4dd}.dd-popup-active--disable-page-scroll{overflow:hidden!important}';
 
+// Video-ul Divi cu copertă (video.md; inventat): unul cu copertă, unul fără.
+const videoDivi = (n, coperta) => '<div class="et_pb_module et_pb_video et_pb_video_' + n + '"><div class="et_pb_video_box"><video controls>'
+  + '<source type="video/mp4" src="/fixturi/video-proba-' + n + '.mp4"></video></div>'
+  + (coperta ? '<div class="et_pb_video_overlay" style="background-image:url(/fixturi/galerie-4x3.png)"><div class="et_pb_video_overlay_hover">'
+    + '<a href="#" class="et_pb_video_play"></a></div></div>' : '') + '</div>';
+const CORP_VIDEO = '<div id="page-container"><div id="et-main-area">' + videoDivi(0, true) + videoDivi(1, false) + '</div></div>\n';
+const STIL_VIDEO = '.et_pb_video{position:relative;width:400px;height:225px}.et_pb_video_overlay{position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer}'
+  + '.et_pb_video_play{display:block;width:100%;height:100%}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -407,6 +416,7 @@ const PAGINI = {
   carusel: { corp: CORP_DG, stil: STIL_DG },
   galerie: { corp: CORP_GALERIE, stil: STIL_GALERIE },
   divimenus: { corp: CORP_DM, stil: STIL_DM },
+  video: { corp: CORP_VIDEO, stil: STIL_VIDEO },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -969,6 +979,7 @@ async function verificaIdempotenta(browser, baza) {
     ax.galerieDge.aplica();
     ax.lightboxMfp.aplica();
     ax.divimenus.aplica();
+    ax.videoDivi.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1580,6 +1591,37 @@ async function verificaDivimenus(browser) {
   await p.context.close();
 }
 
+async function verificaVideo(browser) {
+  scrie('== video (felia 3): coperta pornește video-ul și se estompează');
+  const p = await deschide(browser, { cale: '/pagina/video', permise: ERORI_ASTEPTATE, init: () => {
+    window.__play = [];
+    HTMLMediaElement.prototype.play = function () { window.__play.push([this.closest('.et_pb_video').className, Math.round(performance.now())]); return Promise.resolve(); };
+  } });
+  const f = p.page.mainFrame();
+  await p.page.waitForTimeout(200);
+  await f.evaluate(() => {
+    window.__urma = [];
+    const c = document.querySelector('.et_pb_video_0 .et_pb_video_overlay');
+    const t0 = performance.now();
+    window.__t0 = t0;
+    const pas = () => { window.__urma.push([Math.round(performance.now() - t0), c.style.opacity, getComputedStyle(c).display]); if (performance.now() - t0 < 700) requestAnimationFrame(pas); };
+    document.querySelector('.et_pb_video_0 .et_pb_video_play').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    requestAnimationFrame(pas);
+  });
+  await p.page.waitForTimeout(800);
+  const r = await f.evaluate(() => ({ play: window.__play.map((x) => [x[0], x[1] - Math.round(window.__t0)]), urma: window.__urma, stil: document.querySelector('.et_pb_video_0 .et_pb_video_overlay').getAttribute('style'),
+    hash: location.hash, atribute: document.querySelector('.et_pb_video_0 .et_pb_video_overlay').getAttributeNames() }));
+  const mij = r.urma.filter(([t]) => t >= 220 && t <= 280).map(([, o]) => Number(o));
+  verifica('clicul pe copertă: play() o dată, imediat (sub 50 ms); opacitatea scade simetric („swing”, ~0,5 la 250 ms) și coperta ajunge la display: none; fără navigare, fără atribute noi',
+    r.play.length === 1 && r.play[0][0] === 'et_pb_module et_pb_video et_pb_video_0' && r.play[0][1] < 50 && mij.length > 0 && mij.every((o) => o > 0.25 && o < 0.75)
+    && r.urma[r.urma.length - 1][2] === 'none' && r.stil === 'background-image:url(/fixturi/galerie-4x3.png); opacity: 0; display: none;'.replace('background-image:url(/fixturi/galerie-4x3.png);', 'background-image: url("/fixturi/galerie-4x3.png");')
+    && r.hash === '' && egal(r.atribute, ['class', 'style']), r);
+  await f.evaluate(() => document.querySelector('.et_pb_video_1 video').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const r2 = await f.evaluate(() => window.__play.length);
+  verifica('video-ul fără copertă: nimic de la runtime (controalele native)', r2 === 1, r2);
+  await p.context.close();
+}
+
 async function verificaUrmarirea(browser) {
   scrie('== urmarire (trackerele după acord, pe categorie; managerul din Cookie Policy)');
   const TRACKERE = ['https://www.googletagmanager.com/gtag/js?id=GT-PROBA123', 'https://www.clarity.ms/tag/proba6789?ref=wordpress',
@@ -1829,6 +1871,7 @@ async function main() {
     await verificaCaruselul(browser);
     await verificaGaleria(browser);
     await verificaDivimenus(browser);
+    await verificaVideo(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);

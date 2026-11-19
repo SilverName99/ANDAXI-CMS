@@ -1128,7 +1128,8 @@ felia 3) și `divi4/v1/lightbox-mfp.js` (lightbox-urile galeriei și ale imagini
 în 500 ms la imaginea Divi, derularea blocată pe desktop; adresele prin `adresaSigura()`); `divi4/v1/divimenus.js` (modulele
 DiviMenus, scrise de noi: `dd-has-divimenu` pe coloanele lor, popup-urile mutate primele în `.et-l--post`, pinii care ies din
 fereastră corectați ca pe live; deschiderea după `data-popup-id`, clasele de pe body, slideup/slidedown în 500 ms pe curba
-„swing”, închiderea cu X, fundalul și Esc). Poarta:
+„swing”, închiderea cu X, fundalul și Esc) și `divi4/v1/video.js` (coperta modulelor video Divi: clicul pornește `play()` imediat,
+iar coperta se estompează în 500 ms pe curba „swing”, apoi `display: none`; video-ul rămâne cu controalele native). Poarta:
 **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
