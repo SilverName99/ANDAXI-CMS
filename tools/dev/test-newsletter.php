@@ -21,6 +21,9 @@ declare(strict_types=1);
  * D. Lista „nu trimite” (doar amprenta) și importurile care nu reactivează un dezabonat.
  * E. Pe site: GET-ul arată doar butonul, POST-ul „cu un clic” din antet dezabonează, tokenul vechi pe POST e refuzat, clicurile
  *    (cheia nouă, cheia veche peste prag), 12 cereri de abonare în paralel = un email, pluginul oprit.
+ * F. Statistici newsletter, comenzile atribuite unei campanii (20 nov 2026): aceeași condiție ca totalul din card, cele mai noi
+ *    întâi, paginile, linkul spre comandă (și spre coș), etichetele listei comenzilor, textul scris ca text; fără comenzi nimic
+ *    nou; rolul emailuri și un site fără pluginul magazin nu văd panoul (nici datele clienților).
  *
  * Toată baza (fiecare tabel) e pusă la loc la final, verificat cu CHECKSUM TABLE; la fel licența „toate”, sesiunile și emailurile
  * capturate. Raportul: $CMS_DEV_DIR/test-newsletter-raport.txt; cod de ieșire 0 doar dacă totul a trecut. Date inventate.
@@ -525,6 +528,103 @@ $verifica('E7 newsletterul oprit: un link nevalid dă pagina 404 a site-ului, de
     . 'abonării și lista de verificare din admin nu (garda)', $gresit['cod'] === 404 && !isset($gresit['antete']['x-andaxi-garda'])
     && $bun['cod'] === 200 && trim($bun['corp']) === 'Dezabonat' && $confirmare['cod'] === 404 && isset($confirmare['antete']['x-andaxi-garda'])
     && $verificare['cod'] === 403, json_encode([$gresit['cod'], $bun['cod'], $confirmare['cod'], $verificare['cod']]));
+
+// =====================================================================
+$scrie('');
+$scrie('== F. Statistici newsletter: comenzile atribuite unei campanii (20 nov 2026)');
+// O campanie trimisă și 28 de comenzi demo atribuite ei: una anulată și una cu plata neconfirmată (nu se numără), una mutată în
+// coș (se numără, ca în card), una cu un nume și o adresă care ar strica pagina dacă n-ar fi scrise ca text.
+$cF = $campanieNoua('Test: comenzi atribuite');
+$db->exec("UPDATE newsletter_campaigns SET status = 'sent', sent_at = NOW() WHERE id = " . $cF);
+$cGoala = $campanieNoua('Test: fără comenzi');
+$db->exec("UPDATE newsletter_campaigns SET status = 'sent', sent_at = NOW() WHERE id = " . $cGoala);
+$idsF = array_map('intval', $db->query('SELECT id FROM orders WHERE deleted_at IS NULL ORDER BY id LIMIT 28')->fetchAll(PDO::FETCH_COLUMN));
+$db->exec("UPDATE orders SET nl_campaign_id = " . $cF . ", status = 'completed' WHERE id IN (" . implode(',', $idsF) . ')');
+$db->exec("UPDATE orders SET status = 'processing' WHERE id = " . $idsF[4]);
+$db->exec("UPDATE orders SET status = 'pending' WHERE id = " . $idsF[5]);
+$db->exec("UPDATE orders SET status = 'cancelled' WHERE id = " . $idsF[0]);
+$db->exec("UPDATE orders SET status = 'pending_payment' WHERE id = " . $idsF[1]);
+$db->exec('UPDATE orders SET deleted_at = NOW() WHERE id = ' . $idsF[2]);
+$db->prepare('UPDATE orders SET billing_first_name = :n, billing_last_name = :p, billing_email = :e WHERE id = :id')
+    ->execute(['n' => '<img src=x onerror=alert(1)>', 'p' => 'Proba', 'e' => 'ana&"proba"@exemplu.ro', 'id' => $idsF[3]]);
+$undeF = 'o.nl_campaign_id = :c AND o.status NOT IN ("cancelled","refunded","failed","returned","trash","pending_payment")';
+$asteptateF = $db->prepare('SELECT o.order_number FROM orders o WHERE ' . $undeF . ' ORDER BY o.created_at DESC, o.id DESC');
+$asteptateF->execute(['c' => $cF]);
+$asteptateF = array_map('strval', $asteptateF->fetchAll(PDO::FETCH_COLUMN));
+$nrInCos = $unu('SELECT order_number FROM orders WHERE id = ' . $idsF[2]);
+$numereExcluse = [$unu('SELECT order_number FROM orders WHERE id = ' . $idsF[0]), $unu('SELECT order_number FROM orders WHERE id = ' . $idsF[1])];
+$adresaF = '/admin/emails/newsletters?tab=stats&campaign_id=' . $cF;
+/** Numerele de comandă din panou, în ordine, și linkurile lor. */
+$randuriF = static function (string $html): array {
+    preg_match_all('#<td class="ac-nr">\s*<a class="nl-stats-ancora" href="([^"]*)">([^<]*)</a>#', $html, $m);
+    return ['numere' => array_map(static fn (string $v): string => html_entity_decode($v, ENT_QUOTES), $m[2]), 'linkuri' => $m[1]];
+};
+$verifica('F1 logarea adminului', $logareAdmin());
+$p1 = $cerere('GET', $adresaF, $jarAdmin);
+$p2 = $cerere('GET', $adresaF . '&com_page=2', $jarAdmin);
+$r1 = $randuriF($p1['corp']);
+$r2 = $randuriF($p2['corp']);
+$verifica('F2 cardul „Venituri atribuite”: „N comenzi” e o ancoră spre panoul „Comenzile atribuite (N)”, cu N numărat cu aceeași condiție '
+    . '(fără cea anulată și cea cu plata neconfirmată, cu cea din coș)', $p1['cod'] === 200 && count($asteptateF) === 26
+    && str_contains($p1['corp'], '<a class="nl-stats-ancora" href="#nl-comenzi-panel">26 comenzi</a>')
+    && str_contains($p1['corp'], '<div class="nl-stats-panel" id="nl-comenzi-panel">')
+    && str_contains($p1['corp'], 'Comenzile atribuite (26)</p>'), $p1['cod'] . ' ' . count($asteptateF));
+$verifica('F3 lista: cele mai noi întâi, 25 pe pagină, a doua pagină cu restul (com_page=2, ancora panoului), aceleași comenzi ca în card',
+    count($r1['numere']) === 25 && count($r2['numere']) === 1 && array_merge($r1['numere'], $r2['numere']) === $asteptateF
+    && str_contains($p1['corp'], 'Pagina 1 din 2 — 26 comenzi') && str_contains($p1['corp'], 'com_page=2#nl-comenzi-panel')
+    && array_intersect($numereExcluse, array_merge($r1['numere'], $r2['numere'])) === [],
+    json_encode([count($r1['numere']), count($r2['numere'])]));
+$toateLinkurile = array_combine(array_merge($r1['numere'], $r2['numere']), array_merge($r1['linkuri'], $r2['linkuri']));
+$nrObisnuit = $asteptateF[0] === $nrInCos ? $asteptateF[1] : $asteptateF[0];
+$verifica('F4 numărul duce la comanda din Admin → Comenzi (căutată după număr); cea mutată în coș, la coș, cu eticheta „în coș”',
+    ($toateLinkurile[$nrObisnuit] ?? '') === '/admin/orders?q=' . rawurlencode($nrObisnuit)
+    && ($toateLinkurile[$nrInCos] ?? '') === '/admin/orders/trash' && str_contains($p1['corp'] . $p2['corp'], 'title="Mutată în coș din Admin → Comenzi">în coș</span>'),
+    json_encode([$nrObisnuit => $toateLinkurile[$nrObisnuit] ?? null, $nrInCos => $toateLinkurile[$nrInCos] ?? null]));
+// Rândul unei comenzi: data, clientul (ca în lista comenzilor), totalul, starea și plata cu etichetele listei comenzilor.
+$randRef = $db->query('SELECT order_number, created_at, billing_first_name, billing_last_name, billing_email, total, status, payment_method
+    FROM orders WHERE id = ' . $idsF[5])->fetch(PDO::FETCH_ASSOC);
+$etichetaPlata = ['cod' => 'Ramburs', 'euplatesc' => 'Card', 'stripe' => 'Card', 'btipay' => 'Card BT', 'card' => 'Card', 'bank_transfer' => 'OP'];
+$etichetaStare = ['pending' => 'În așteptare', 'processing' => 'În procesare', 'completed' => 'Finalizată'];
+$htmlRand = '';
+foreach ([$p1['corp'], $p2['corp']] as $corpF) {
+    if (preg_match('#<tr>\s*<td class="ac-nr">\s*<a class="nl-stats-ancora" href="[^"]*">' . preg_quote(htmlspecialchars((string) $randRef['order_number'], ENT_QUOTES), '#')
+        . '</a>.*?</tr>#s', $corpF, $mr) === 1) {
+        $htmlRand = $mr[0];
+    }
+}
+$verifica('F5 un rând: data și ora plasării, clientul și adresa lui, totalul, starea și plata cu etichetele din lista comenzilor',
+    $htmlRand !== '' && str_contains($htmlRand, '<td class="ac-data">' . date('d.m.Y H:i', (int) strtotime((string) $randRef['created_at'])) . '</td>')
+    && str_contains($htmlRand, '<strong>' . htmlspecialchars(\App\Support\CustomerDisplay::nume((string) $randRef['billing_first_name'],
+        (string) $randRef['billing_last_name'], (string) $randRef['billing_email']), ENT_QUOTES) . '</strong>')
+    && str_contains($htmlRand, '<span class="nl-stats-mic">' . htmlspecialchars((string) $randRef['billing_email'], ENT_QUOTES) . '</span>')
+    && str_contains($htmlRand, '<strong>' . number_format((float) $randRef['total'], 2) . ' RON</strong>')
+    && str_contains($htmlRand, '>' . ($etichetaStare[(string) $randRef['status']] ?? '?') . '</span>')
+    && str_contains($htmlRand, '<td class="ac-plata">' . ($etichetaPlata[strtolower((string) $randRef['payment_method'])] ?? '?') . '</td>'),
+    mb_substr(strip_tags($htmlRand), 0, 400));
+$verifica('F6 numele și adresa clientului sunt scrise ca text (niciun <img> din numele comenzii)',
+    !str_contains($p1['corp'] . $p2['corp'], '<img src=x onerror') && str_contains($p1['corp'] . $p2['corp'], '&lt;img src=x onerror=alert(1)&gt; Proba')
+    && str_contains($p1['corp'] . $p2['corp'], 'ana&amp;&quot;proba&quot;@exemplu.ro'));
+$goala = $cerere('GET', '/admin/emails/newsletters?tab=stats&campaign_id=' . $cGoala, $jarAdmin);
+$verifica('F7 o campanie fără comenzi atribuite: cardul fără „comenzi” și fără panou (pagina ca înainte)', $goala['cod'] === 200
+    && str_contains($goala['corp'], '<div class="nl-kpi-sub"></div>') && !str_contains($goala['corp'], 'nl-comenzi-panel'));
+// Rolul emailuri vede statisticile newsletterului, dar nu și Admin → Comenzi: nici lista, nici datele clienților.
+$jarEmailuri = $dosarLucru . '/jar-emailuri.txt';
+$logareEmailuri = $cerere('POST', '/admin/login', $jarEmailuri, ['email' => 'emailuri@exemplu.ro', 'password' => $parolaAdmin]);
+$rolEmailuri = $cerere('GET', $adresaF, $jarEmailuri);
+$comenziEmailuri = $cerere('GET', '/admin/orders', $jarEmailuri);
+$emailuriClienti = $db->query('SELECT DISTINCT billing_email FROM orders WHERE nl_campaign_id = ' . $cF)->fetchAll(PDO::FETCH_COLUMN);
+$scapate = array_values(array_filter($emailuriClienti, static fn ($e): bool => str_contains($rolEmailuri['corp'], htmlspecialchars((string) $e, ENT_QUOTES))));
+$verifica('F8 rolul emailuri (fără Admin → Comenzi): vede cardul cu „26 comenzi” ca text, fără ancoră, fără panou și fără nicio adresă de client',
+    $logareEmailuri['cod'] === 302 && $comenziEmailuri['cod'] === 302 && $rolEmailuri['cod'] === 200
+    && str_contains($rolEmailuri['corp'], '<div class="nl-kpi-sub">26 comenzi</div>') && !str_contains($rolEmailuri['corp'], 'nl-comenzi-panel')
+    && $scapate === [], json_encode([$logareEmailuri['cod'], $comenziEmailuri['cod'], $rolEmailuri['cod'], $scapate]));
+// Fără pluginul magazin, Admin → Comenzi nu există: nici panoul (garda paginii comenzilor, Plugins::adresaVizibila).
+$licenta('toate', 'magazin=oprit');
+$faraMagazin = $cerere('GET', $adresaF, $jarAdmin);
+$licenta('toate');
+$verifica('F9 fără pluginul magazin (fără Admin → Comenzi): cardul ca text, fără panou', $faraMagazin['cod'] === 200
+    && str_contains($faraMagazin['corp'], '<div class="nl-kpi-sub">26 comenzi</div>') && !str_contains($faraMagazin['corp'], 'nl-comenzi-panel'),
+    (string) $faraMagazin['cod']);
 
 // =====================================================================
 $scrie('');

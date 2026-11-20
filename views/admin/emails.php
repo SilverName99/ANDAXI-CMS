@@ -1521,6 +1521,11 @@ if (count($taburiEmail) > 1) {
             $dcTotaluri = is_array($statsCampaignDetail['totaluri'] ?? null) ? $statsCampaignDetail['totaluri'] : [];
             $dcOrders  = (int) ($statsRevenue['orders_count'] ?? 0);
             $dcRevenue = (float) ($statsRevenue['revenue'] ?? 0);
+            // Comenzile atribuite (lista din spatele cardului „Venituri atribuite”): doar pentru cine vede lista comenzilor.
+            $acComenzi = is_array($statsAttributedOrders ?? null) ? $statsAttributedOrders : [];
+            $acVizibile = !empty($statsAttributedOrdersVisible) && $acComenzi !== [];
+            $acPage = max(1, (int) ($statsAttributedOrdersPage ?? 1));
+            $acPages = max(1, (int) ($statsAttributedOrdersPages ?? 1));
             ?>
             <div class="nl-stats-breadcrumb">
                 <a href="?tab=stats">&#8592; Toate campaniile</a>
@@ -1558,7 +1563,7 @@ if (count($taburiEmail) > 1) {
                 <div class="nl-stats-kpi">
                     <div class="nl-kpi-icon">💰</div>
                     <div class="nl-kpi-val"><?= $dcOrders > 0 ? number_format($dcRevenue, 2) . ' RON' : '—' ?></div>
-                    <div class="nl-kpi-sub"><?= $dcOrders > 0 ? $dcOrders . ' comenzi' : '' ?></div>
+                    <div class="nl-kpi-sub"><?php if ($dcOrders > 0 && $acVizibile): ?><a class="nl-stats-ancora" href="#nl-comenzi-panel"><?= $dcOrders ?> comenzi</a><?php else: ?><?= $dcOrders > 0 ? $dcOrders . ' comenzi' : '' ?><?php endif; ?></div>
                     <div class="nl-kpi-label">Venituri atribuite</div>
                 </div>
             </div>
@@ -1573,6 +1578,110 @@ if (count($taburiEmail) > 1) {
                 </p>
             <?php endif; ?>
             <p class="nl-stats-nota">„Venituri atribuite” = comenzile plasate în cel mult 7 zile după un clic din acest newsletter, din același browser (fără cele anulate, returnate, eșuate sau cu plata neconfirmată).</p>
+<?php /* Comenzile atribuite: doar cu cel puțin o comandă și doar pentru cine vede lista comenzilor; altfel pagina rămâne cum era. */ ?>
+<?php if ($acVizibile): ?>
+            <?php
+            // Paginile listei păstrează filtrul și pagina destinatarilor; ancora aduce ecranul înapoi la panou.
+            $acLink = static function (int $pagina) use ($statsCampaignId, $statsRecipientsFilter, $statsRecipientsQuery, $statsRecipientsPerPage, $statsRecipientsPage): string {
+                $params = [
+                    'tab' => 'stats',
+                    'campaign_id' => (int) $statsCampaignId,
+                    'recip_f' => (string) ($statsRecipientsFilter ?? 'all'),
+                    'recip_q' => (string) ($statsRecipientsQuery ?? ''),
+                    'recip_per_page' => (int) ($statsRecipientsPerPage ?? 50),
+                    'recip_page' => (int) ($statsRecipientsPage ?? 1) > 1 ? (int) $statsRecipientsPage : null,
+                    'com_page' => $pagina > 1 ? $pagina : null,
+                ];
+                return '?' . http_build_query(array_filter($params, static fn ($v) => $v !== '' && $v !== null)) . '#nl-comenzi-panel';
+            };
+            ?>
+            <style>
+            .nl-stats-ancora { color: var(--ax-accent); font-weight: 600; text-decoration: none; }
+            .nl-stats-ancora:hover { text-decoration: underline; }
+            .nl-stats-table .nl-stats-mic { display: block; color: var(--ax-text-3); font-size: 11.5px; }
+            .nl-stats-comenzi .ac-nr, .nl-stats-comenzi .ac-data, .nl-stats-comenzi .ac-total { white-space: nowrap; }
+            /* Sub bara de sus a adminului (lipită), nu ascuns de ea, când „N comenzi” din card aduce ecranul aici. */
+            #nl-comenzi-panel { scroll-margin-top: 68px; }
+            /* Pe telefon fiecare comandă e un card de trei rânduri: numărul și totalul, clientul și starea, data și plata. */
+            @media (max-width: 640px) {
+                .nl-stats-comenzi, .nl-stats-comenzi tbody { display: block; }
+                .nl-stats-comenzi thead { display: none; }
+                .nl-stats-comenzi tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "nr total" "client stare" "data plata";
+                    gap: 4px 12px; padding: 12px 2px; border-bottom: 1px solid var(--ax-suprafata-2); }
+                .nl-stats-comenzi tr:last-child { border-bottom: none; }
+                .nl-stats-comenzi td, .nl-stats-comenzi tr:hover td { display: block; padding: 0; border: none; background: none; }
+                .nl-stats-comenzi .ac-nr { grid-area: nr; }
+                .nl-stats-comenzi .ac-total { grid-area: total; text-align: right; }
+                .nl-stats-comenzi .ac-client { grid-area: client; overflow-wrap: anywhere; }
+                .nl-stats-comenzi .ac-stare { grid-area: stare; text-align: right; }
+                .nl-stats-comenzi .ac-data { grid-area: data; color: var(--ax-text-3); font-size: 12px; }
+                .nl-stats-comenzi .ac-plata { grid-area: plata; text-align: right; color: var(--ax-text-3); font-size: 12px; }
+            }
+            </style>
+            <div class="nl-stats-panel" id="nl-comenzi-panel">
+                <p class="nl-stats-section-title">Comenzile atribuite (<?= number_format($dcOrders) ?>)</p>
+                <div style="overflow-x:auto;">
+                <table class="nl-stats-table nl-stats-comenzi">
+                    <thead><tr><th>Comanda</th><th>Plasată</th><th>Client</th><th>Total</th><th>Status</th><th>Plata</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($acComenzi as $ac): ?>
+                        <?php
+                        $acNumar = (string) ($ac['order_number'] ?? '');
+                        $acInCos = !empty($ac['in_trash']);
+                        // Pagina comenzii din admin: lista Comenzi căutată după număr (ca din Acasă și din căutare); una mutată în coș, coșul.
+                        $acUrl = $acInCos ? '/admin/orders/trash' : '/admin/orders?q=' . rawurlencode($acNumar);
+                        // Data ca în lista comenzilor (zi.lună.an oră:minut).
+                        $acCandRaw = trim((string) ($ac['created_at'] ?? ''));
+                        $acCandTs = $acCandRaw !== '' ? strtotime($acCandRaw) : false;
+                        $acCand = $acCandRaw === '' ? '-' : ($acCandTs !== false ? date('d.m.Y H:i', $acCandTs) : $acCandRaw);
+                        $acStare = (string) ($ac['status'] ?? '');
+                        ?>
+                        <tr>
+                            <td class="ac-nr">
+                                <a class="nl-stats-ancora" href="<?= htmlspecialchars($acUrl, ENT_QUOTES) ?>"><?= htmlspecialchars($acNumar, ENT_QUOTES) ?></a>
+                                <?php if ($acInCos): ?><span class="nl-stats-badge" title="Mutată în coș din Admin → Comenzi">în coș</span><?php endif; ?>
+                            </td>
+                            <td class="ac-data"><?= htmlspecialchars($acCand, ENT_QUOTES) ?></td>
+                            <td class="ac-client">
+                                <strong><?= htmlspecialchars((string) ($ac['client'] ?? '') !== '' ? (string) $ac['client'] : 'Client', ENT_QUOTES) ?></strong>
+                                <span class="nl-stats-mic"><?= htmlspecialchars((string) ($ac['email'] ?? ''), ENT_QUOTES) ?></span>
+                            </td>
+                            <td class="ac-total"><strong><?= number_format((float) ($ac['total'] ?? 0), 2) ?> RON</strong></td>
+                            <td class="ac-stare"><span class="nl-stats-badge <?= $acStare === 'completed' ? 'green' : ($acStare === 'processing' ? 'blue' : '') ?>"><?= htmlspecialchars((string) ($ac['status_label'] ?? ''), ENT_QUOTES) ?></span></td>
+                            <td class="ac-plata"><?= htmlspecialchars((string) ($ac['payment_label'] ?? ''), ENT_QUOTES) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+                <?php if ($acPages > 1): ?>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-top:12px;">
+                    <span style="color:var(--ax-text-3);font-size:13px;">
+                        Pagina <?= $acPage ?> din <?= $acPages ?> — <?= number_format($dcOrders) ?> comenzi
+                    </span>
+                    <span style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                        <?php if ($acPage > 1): ?>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($acLink(1), ENT_QUOTES) ?>">« Prima</a>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($acLink($acPage - 1), ENT_QUOTES) ?>">‹ Înapoi</a>
+                        <?php endif; ?>
+                        <?php
+                        $acStart = max(1, $acPage - 2);
+                        $acEnd = min($acPages, $acStart + 4);
+                        $acStart = max(1, $acEnd - 4);
+                        for ($acI = $acStart; $acI <= $acEnd; $acI++):
+                        ?>
+                            <a class="btn <?= $acI === $acPage ? '' : 'btn-light' ?>" style="padding:6px 12px;"
+                               href="<?= htmlspecialchars($acLink($acI), ENT_QUOTES) ?>"><?= $acI ?></a>
+                        <?php endfor; ?>
+                        <?php if ($acPage < $acPages): ?>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($acLink($acPage + 1), ENT_QUOTES) ?>">Înainte ›</a>
+                            <a class="btn btn-light" style="padding:6px 12px;" href="<?= htmlspecialchars($acLink($acPages), ENT_QUOTES) ?>">Ultima »</a>
+                        <?php endif; ?>
+                    </span>
+                </div>
+                <?php endif; ?>
+            </div>
+<?php endif; ?>
 
             <!-- Hourly opens chart -->
             <?php if (!empty($statsHourlyOpens)): ?>

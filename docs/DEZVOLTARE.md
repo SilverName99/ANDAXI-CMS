@@ -148,7 +148,7 @@ tools/dev/php.sh tools/dev/test-incarcare.php       # încărcarea copiei de ver
 tools/dev/php.sh tools/dev/test-securitate.php      # securitatea nucleului (WP-12b): parolele adminilor, id-ul sesiunii la logare, adresa vizitatorului (și în testul de fum)
 tools/dev/php.sh tools/dev/test-securitate-admin.php # securitatea adminului (18 nov, N1–N5): codul activ al rolurilor parțiale, garda originii, scripturile terților, cheia cache-ului, /uploads (docs/SECURITATE.md; și în testul de fum)
 tools/dev/php.sh tools/dev/test-porturi-vt-gr.php   # porturile din vertij și grafoanaytis (WP-15, WP-24…WP-26; și în testul de fum)
-tools/dev/php.sh tools/dev/test-newsletter.php      # newsletterul portat din Bioscem (WP-R din 30 oct; și în testul de fum)
+tools/dev/php.sh tools/dev/test-newsletter.php      # newsletterul portat din Bioscem (WP-R din 30 oct) și comenzile atribuite din Statistici newsletter (20 nov; și în testul de fum)
 tools/dev/php.sh tools/dev/test-preturi-comenzi.php # consecvența prețurilor (16 nov): comenzi plasate cu oferta campaniei, cupoane, puncte, transport, plăți; coșul, checkout-ul, comanda, emailurile (și de expediere, din Admin și din ERP), contul, adminul, ERP-ul, EuPlătesc față de rândul comenzii (și în testul de fum)
 tools/dev/php.sh tools/dev/test-campanii.php       # pluginul campanii (5 nov): regulile, adminul, site-ul, oferta campaniei (calculul, coșul, comanda, ERP; peste reducerile proprii, 10 nov), Chromium 1366/390 px (și în testul de fum)
 tools/dev/php.sh tools/dev/test-fisiere-cloud.php  # pluginul fisiere_cloud (6 nov): aplicația Windows față de codul Biovitality (cerere cu cerere), adoptarea, adminul, CSRF, „Cloud user” (și în testul de fum)

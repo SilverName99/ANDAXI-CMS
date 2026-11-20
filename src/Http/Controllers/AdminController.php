@@ -50,6 +50,27 @@ final class AdminController
     private const PRODUCT_REVIEWS_IMPORT_UPLOAD_MAX_SIZE = 12_000_000;
     private const NEWSLETTER_SUBSCRIBERS_IMPORT_UPLOAD_MAX_SIZE = 12_000_000;
     private const ORDER_ALLOWED_STATUSES = ['pending', 'pending_payment', 'processing', 'completed', 'cancelled', 'refunded', 'failed', 'returned'];
+    /** Eticheta stării și a metodei de plată din lista Admin → Comenzi; aceleași în comenzile atribuite unui newsletter. */
+    private const ETICHETE_STARE_COMANDA = [
+        'pending' => 'În așteptare',
+        'pending_payment' => 'Plată în așteptare',
+        'processing' => 'În procesare',
+        'completed' => 'Finalizată',
+        'cancelled' => 'Anulată',
+        'refunded' => 'Rambursată',
+        'returned' => 'Returnată',
+        'failed' => 'Eșuată',
+    ];
+    private const ETICHETE_PLATA_COMANDA = [
+        'cod' => 'Ramburs',
+        'euplatesc' => 'Card',
+        'stripe' => 'Card',
+        'btipay' => 'Card BT',
+        'card' => 'Card',
+        'bank_transfer' => 'OP',
+    ];
+    /** Comenzile atribuite unui newsletter, pe o pagină din Statistici newsletter. */
+    private const COMENZI_ATRIBUITE_PE_PAGINA = 25;
 
     /**
      * Intrare în lista „Status comandă" care NU e un status, ci o încasare:
@@ -5786,16 +5807,7 @@ final class AdminController
             'pending_like_count' => 0,
             'total_value' => 0.0,
         ];
-        $orderStatusLabels = [
-            'pending' => 'În așteptare',
-            'pending_payment' => 'Plată în așteptare',
-            'processing' => 'În procesare',
-            'completed' => 'Finalizată',
-            'cancelled' => 'Anulată',
-            'refunded' => 'Rambursată',
-            'returned' => 'Returnată',
-            'failed' => 'Eșuată',
-        ];
+        $orderStatusLabels = self::ETICHETE_STARE_COMANDA;
         $orderPaymentStatusLabels = [
             'paid' => 'Plătit',
             'unpaid' => 'Neplătit',
@@ -5804,14 +5816,7 @@ final class AdminController
             // Doar plățile BT ajung aici, după o rambursare integrală din admin.
             'refunded' => 'Rambursat',
         ];
-        $orderPaymentMethodLabels = [
-            'cod' => 'Ramburs',
-            'euplatesc' => 'Card',
-            'stripe' => 'Card',
-            'btipay' => 'Card BT',
-            'card' => 'Card',
-            'bank_transfer' => 'OP',
-        ];
+        $orderPaymentMethodLabels = self::ETICHETE_PLATA_COMANDA;
         $ordersStatusCounts = [];
 
         if ($db instanceof PDO) {
@@ -15057,6 +15062,10 @@ final class AdminController
                 $statsTopLinks = [];
                 $statsRecipients = [];
                 $statsRevenue = ['orders_count' => 0, 'revenue' => 0];
+                $statsAttributedOrders = [];
+                $statsAttributedOrdersVisible = false;
+                $statsAttributedOrdersPage = 1;
+                $statsAttributedOrdersPages = 1;
                 if ($statsCampaignId > 0) {
                     try {
                         $stmt = $db->prepare('SELECT c.*, l.name AS list_name FROM newsletter_campaigns c LEFT JOIN newsletter_lists l ON l.id=c.subscriber_list_id WHERE c.id=:id LIMIT 1');
@@ -15183,15 +15192,69 @@ final class AdminController
                             $statsRecipientsCounts = [];
                         }
 
+                        // Vânzările atribuite numără doar comenzile reale: nu și pe cele
+                        // eșuate la plată, returnate, în coș de gunoi sau cu
+                        // plata cu cardul încă neconfirmată. Aceeași condiție pentru
+                        // total și pentru lista comenzilor, ca ele să nu se contrazică.
+                        $undeAtribuite = 'o.nl_campaign_id=:id AND o.status NOT IN ("cancelled","refunded","failed","returned","trash","pending_payment")';
                         try {
-                            // Vânzările atribuite numără doar comenzile reale: nu și pe cele
-                            // eșuate la plată, returnate, în coș de gunoi sau cu
-                            // plata cu cardul încă neconfirmată.
-                            $rev = $db->prepare('SELECT COUNT(*) AS orders_count, COALESCE(SUM(o.total),0) AS revenue FROM orders o WHERE o.nl_campaign_id=:id AND o.status NOT IN ("cancelled","refunded","failed","returned","trash","pending_payment")');
+                            $rev = $db->prepare('SELECT COUNT(*) AS orders_count, COALESCE(SUM(o.total),0) AS revenue FROM orders o WHERE ' . $undeAtribuite);
                             $rev->execute(['id' => $statsCampaignId]);
                             $statsRevenue = $rev->fetch() ?: ['orders_count' => 0, 'revenue' => 0];
                         } catch (\Throwable) {
                             $statsRevenue = ['orders_count' => 0, 'revenue' => 0];
+                        }
+
+                        // Comenzile din spatele totalului (cerute pe 20 nov 2026): numărul, data, clientul,
+                        // totalul, starea și plata, cele mai noi întâi. Sunt datele clienților, deci doar pentru cine vede
+                        // și lista comenzilor (rolul lui, pluginul magazin), cu garda paginii Admin → Comenzi: un admin cu
+                        // rolul emailuri vede statisticile, dar nu și comenzile (Auth::canAccessPath), iar pentru el nici
+                        // nu se citesc.
+                        $statsAttributedOrdersVisible = Auth::canAccessPath('/admin/orders') && \App\Support\Plugins::adresaVizibila('/admin/orders');
+                        $totalAtribuite = (int) ($statsRevenue['orders_count'] ?? 0);
+                        if ($statsAttributedOrdersVisible && $totalAtribuite > 0) {
+                            try {
+                                $pePagina = self::COMENZI_ATRIBUITE_PE_PAGINA;
+                                $statsAttributedOrdersPages = max(1, (int) ceil($totalAtribuite / $pePagina));
+                                $statsAttributedOrdersPage = min(max(1, (int) ($_GET['com_page'] ?? 1)), $statsAttributedOrdersPages);
+                                // Ridicarea de la sediu (livrare_fan/0052): „Plată la ridicare” în locul lui „Ramburs”, ca în listă.
+                                $cuRidicareAtribuite = $this->tableHasColumn($db, 'orders', 'pickup_in_person');
+                                $com = $db->prepare(
+                                    'SELECT o.id, o.order_number, o.created_at, o.billing_first_name, o.billing_last_name, o.billing_email,
+                                            o.total, o.status, o.payment_method, o.deleted_at' . ($cuRidicareAtribuite ? ', o.pickup_in_person' : '') . '
+                                     FROM orders o
+                                     WHERE ' . $undeAtribuite . '
+                                     ORDER BY o.created_at DESC, o.id DESC
+                                     LIMIT ' . $pePagina . ' OFFSET ' . (($statsAttributedOrdersPage - 1) * $pePagina)
+                                );
+                                $com->execute(['id' => $statsCampaignId]);
+                                foreach ($com->fetchAll() ?: [] as $randComanda) {
+                                    $metoda = strtolower((string) ($randComanda['payment_method'] ?? ''));
+                                    $stare = (string) ($randComanda['status'] ?? '');
+                                    $statsAttributedOrders[] = [
+                                        'order_number' => (string) ($randComanda['order_number'] ?? ''),
+                                        'created_at' => (string) ($randComanda['created_at'] ?? ''),
+                                        'client' => \App\Support\CustomerDisplay::nume(
+                                            (string) ($randComanda['billing_first_name'] ?? ''),
+                                            (string) ($randComanda['billing_last_name'] ?? ''),
+                                            (string) ($randComanda['billing_email'] ?? '')
+                                        ),
+                                        'email' => (string) ($randComanda['billing_email'] ?? ''),
+                                        'total' => (float) ($randComanda['total'] ?? 0),
+                                        'status' => strtolower($stare),
+                                        'status_label' => (string) (self::ETICHETE_STARE_COMANDA[$stare] ?? $stare),
+                                        'payment_label' => \App\Support\RidicarePersonala::esteComanda($randComanda) && $metoda === 'cod'
+                                            ? 'Plată la ridicare'
+                                            : (string) (self::ETICHETE_PLATA_COMANDA[$metoda] ?? (string) ($randComanda['payment_method'] ?? '')),
+                                        // Mutată în coș (Admin → Comenzi → Coș): numărată ca până acum, dar nu mai e în listă.
+                                        'in_trash' => !empty($randComanda['deleted_at']),
+                                    ];
+                                }
+                            } catch (\Throwable) {
+                                $statsAttributedOrders = [];
+                                $statsAttributedOrdersPage = 1;
+                                $statsAttributedOrdersPages = 1;
+                            }
                         }
                     }
                 }
@@ -15307,6 +15370,10 @@ final class AdminController
             'statsRecipientsTotal' => $statsRecipientsTotal ?? 0,
             'statsRecipientsCounts' => $statsRecipientsCounts ?? [],
             'statsRevenue' => $statsRevenue ?? ['orders_count' => 0, 'revenue' => 0],
+            'statsAttributedOrders' => $statsAttributedOrders ?? [],
+            'statsAttributedOrdersVisible' => $statsAttributedOrdersVisible ?? false,
+            'statsAttributedOrdersPage' => $statsAttributedOrdersPage ?? 1,
+            'statsAttributedOrdersPages' => $statsAttributedOrdersPages ?? 1,
         ], 'admin/layout');
     }
 

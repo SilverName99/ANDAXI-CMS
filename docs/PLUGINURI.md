@@ -1030,7 +1030,13 @@ dispar, iar linkurile spre el se scot din pagini.
   șabloanele magazinului (`NewsletterSabloane`: logo-ul și culorile din tema pachetului, `tema.json` → `newsletter`, altfel fără
   logo și paleta neutră; fără catalogul pe site, fără carduri de produs; fără magazin, fără prețuri). Componentele adminului
   folosite de pași (`views/admin/componente/`) sunt ale nucleului ([ui/README.md](ui/README.md)). Tabelele și coloanele noi:
-  migrarea `newsletter/0040`. Testele: `tools/dev/test-newsletter.php`.
+  migrarea `newsletter/0040`. Statisticile unei campanii (20 nov 2026): „N comenzi” din cardul „Venituri atribuite” e o
+  ancoră spre panoul „Comenzile atribuite”, exact comenzile numărate în card (aceeași condiție: `orders.nl_campaign_id`, fără
+  cele anulate, rambursate, eșuate, returnate sau cu plata neconfirmată), cele mai noi întâi, câte 25 pe pagină (`com_page`):
+  numărul (spre Admin → Comenzi căutată după el; una mutată în coș, spre coș), data și ora, clientul și adresa lui, totalul,
+  starea și plata, cu etichetele listei comenzilor. Panoul și citirea lui sunt doar pentru cine vede Admin → Comenzi (rolul,
+  pluginul magazin; un admin cu rolul emailuri vede doar numărul), iar fără comenzi atribuite pagina rămâne cum era.
+  Testele: `tools/dev/test-newsletter.php`.
 - **Are nevoie de**: nimic.
 - **Se oprește**: campaniile pornite se termină (cronul le duce la capăt); „Trimite
   acum” și „Programează” sunt refuzate, iar cronul nu mai pornește campaniile
