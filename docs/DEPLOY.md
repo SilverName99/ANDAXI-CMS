@@ -1123,8 +1123,9 @@ ecran, spațiul, viteza, bucla și bulinele din `data-props`, pe punctele de rup
 benzii, clasele `swiper-*`, săgețile și bulinele cu atributele lor, anunțul `swiper-notification`; săgețile, bulinele, tragerea cu
 mouse-ul și glisarea cu degetul, prag 15 px; un carusel ascuns ca pe live, așezat la primul resize; lightbox-ul dg al pozelor:
 `open`, ╳ și fundalul îl închid); `divi4/v1/galerie-dge.js` (grila galeriei, scrisă de noi: fiecare element în coloana cea mai
-scurtă, `left` în procente și `top` în px, înălțimea grilei, refăcute la încărcarea pozelor, la `load` și la resize; filtrele vin cu
-felia 3) și `divi4/v1/lightbox-mfp.js` (lightbox-urile galeriei și ale imaginilor Divi, scrise de noi, cu marcajul observat: fundalul
+scurtă, `left` în procente și `top` în px, înălțimea grilei, refăcute la încărcarea pozelor, la `load` și la resize; filtrele de
+categorie fără server: toate pozele sunt în pagină, fiecare cu slug-urile categoriilor ca clase, deci clicul păstrează în grilă doar
+pozele categoriei, cu estomparea și apariția de pe live) și `divi4/v1/lightbox-mfp.js` (lightbox-urile galeriei și ale imaginilor Divi, scrise de noi, cu marcajul observat: fundalul
 și wrap-ul la sfârșitul lui body, săgețile și ← → circular în galerie, × și Esc și clicul pe fundal închid, `mfp-fade` cu închiderea
 în 500 ms la imaginea Divi, derularea blocată pe desktop; adresele prin `adresaSigura()`); `divi4/v1/divimenus.js` (modulele
 DiviMenus, scrise de noi: `dd-has-divimenu` pe coloanele lor, popup-urile mutate primele în `.et-l--post`, pinii care ies din

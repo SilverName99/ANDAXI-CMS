@@ -272,12 +272,19 @@ const STIL_DG = 'body{margin:0}.proba-latime{width:1093px;max-width:100%}.proba-
 // Galeria (galerie-dge.md, lightbox-mfp.md; inventată: 7 poze de probă cu rapoartele 4:3, 3:4, 2:1) și o imagine Divi cu lightbox.
 const POZE_GALERIE = ['4x3', '3x4', '4x3', '2x1', '3x4', '4x3', '2x1'];
 const DIM_POZE = { '4x3': [40, 30], '3x4': [30, 40], '2x1': [40, 20] };
+// Categoriile ca pe Galerie: slug-urile pe <img> (o imagine poate fi în două), filtrele cu data-category și numele (unul cu diacritice).
+const CATEGORII_GALERIE = ['hotelul', 'loc-de-relaxare mese-si-activitati', 'hotelul', 'sala-de-mese', 'hotelul', 'intrarea', 'mese-si-activitati curte-si-gradina'];
+const FILTRE_GALERIE = [['', 'Toate'], ['15', 'Hotelul'], ['16', 'Intrarea'], ['19', 'Loc de relaxare'], ['20', 'Mese si activitati'], ['17', 'Sala de mese'],
+  ['21', 'Curte și grădină']];
 const CORP_GALERIE = '<div id="page-container"><div id="et-main-area"><div class="et_pb_module el_dynamic_masonry_gallery el_dynamic_masonry_gallery_0">'
+  + '<div class="el_masonry_gallery_filter_wrapper" data-include_categories="15,16,19,20,17,21"><ul class="el_masonry_gallery_filter_categories">'
+  + FILTRE_GALERIE.map(([c, n], i) => '<li' + (i === 0 ? ' class="el_masonry_gallery_active_category"' : '') + ' data-category="' + c + '"' + (i === 0 ? '' : ' class=""') + '>' + n + '</li>').join('')
+  + '</ul></div>'
   + '<div class="el_masonry_gallery_wrapper" data-enable_lightbox="on" data-lightbox_effect="none" data-enable_navigation="on" data-isotope_transition_duration="400">'
   + '<div class="el_masonry_gallery_item_gutter"></div>'
   + POZE_GALERIE.map((r, i) => '<div data-mfp-src="/fixturi/galerie-' + r + '.png?n=' + i + '" class="el_masonry_gallery_item el_masonry_gallery_item_page_1">'
     + '<div class="el_masonry_gallery_image_wrapper"><img loading="lazy" decoding="async" width="' + DIM_POZE[r][0] + '" height="' + DIM_POZE[r][1]
-    + '" src="/fixturi/galerie-' + r + '.png" class="el_dynamic_masonry_gallery_module__image" alt=""></div></div>').join('')
+    + '" src="/fixturi/galerie-' + r + '.png" class="el_dynamic_masonry_gallery_module__image ' + CATEGORII_GALERIE[i] + '" alt=""></div></div>').join('')
   + '</div></div>'
   + '<p><a href="/fixturi/galerie-4x3.png?divi" class="et_pb_lightbox_image" title=""><img src="/fixturi/galerie-4x3.png" alt="" width="40" height="30"></a>'
   + '<a href="javascript:alert(1)" class="et_pb_lightbox_image proba-rau">rău</a></p></div></div>\n';
@@ -1654,6 +1661,77 @@ async function verificaGaleria(browser) {
   verifica('telefon: fundalul position: absolute pe înălțimea documentului, wrap-ul absolut la derularea de acum, html neatins, max-height 844',
     m.bg === 'height: ' + m.h + 'px; position: absolute;' && m.wrap === 'top: 0px; position: absolute;' && m.html === null && m.img === 'max-height: 844px;', m);
   await q.context.close();
+  // Filtrele categoriilor (ca pe Galerie; pe live: admin-ajax dge_get_images = exact imaginile cu slug-ul categoriei, în aceeași ordine)
+  {
+    const r = await deschide(browser, { cale: '/pagina/galerie' });
+    const fr = r.page.mainFrame();
+    const sr = await stare(fr);
+    const grila = () => fr.evaluate(() => {
+      const g = document.querySelector('.el_masonry_gallery_wrapper');
+      return { n: Array.from(g.querySelectorAll('.el_masonry_gallery_item')).map((e) => e.getAttribute('data-mfp-src').replace(/.*n=/, '')),
+        stiluri: Array.from(g.querySelectorAll('.el_masonry_gallery_item')).map((e) => e.getAttribute('style')), grila: g.getAttribute('style'),
+        activ: Array.from(document.querySelectorAll('.el_masonry_gallery_filter_categories li')).filter((l) => l.classList.contains('el_masonry_gallery_active_category')).map((l) => l.textContent) };
+    });
+    const inceput = await grila();
+    const clic = async (nume, ms) => {
+      const u = await fr.evaluate(async ([nume, ms]) => {
+        const g = document.querySelector('.el_masonry_gallery_wrapper');
+        const li = Array.from(document.querySelectorAll('.el_masonry_gallery_filter_categories li')).find((l) => l.textContent === nume);
+        const t0 = performance.now();
+        const urma = [];
+        li.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        while (performance.now() - t0 < ms) {
+          await new Promise((x) => requestAnimationFrame(x));
+          const prim = g.querySelector('.el_masonry_gallery_item');
+          urma.push([Math.round(performance.now() - t0), parseFloat(g.style.opacity || '1'), g.querySelectorAll('.el_masonry_gallery_item').length, prim ? getComputedStyle(prim).opacity : null]);
+        }
+        return urma;
+      }, [nume, ms]);
+      return { urma: u, dupa: await grila() };
+    };
+    const h = await clic('Hotelul', 1100);
+    const laMs = (u, t) => u.filter((x) => x[0] <= t).pop();
+    verifica('filtrul „Hotelul”: clasa activă mutată; grila se estompează spre 0,2 în ~400 ms (cu toate elementele încă în ea), apoi rămân doar imaginile '
+      + 'cu slug-ul hotelul, în ordinea inițială, re-așezate, care apar din opacity 0; la sfârșit grila are opacity: 1 și elementele doar poziția',
+    curate(r.ev, sr) && egal(h.dupa.activ, ['Hotelul']) && egal(h.dupa.n, ['0', '2', '4']) && laMs(h.urma, 200)[1] < 0.9 && laMs(h.urma, 200)[1] > 0.3
+      && laMs(h.urma, 200)[2] === 7 && h.urma.some((x) => x[2] === 3 && Number(x[3]) < 0.9) && /opacity: 1;$/.test(h.dupa.grila)
+      && h.dupa.stiluri.every((s) => /^position: absolute; left: [0-9.]+%; top: [0-9.]+px;$/.test(s)) && egal(h.dupa.stiluri.slice(0, 3).map((s) => /top: 0px;$/.test(s)), [true, true, true]),
+    { urma: h.urma.filter((x, k) => k % 4 === 0), dupa: h.dupa });
+    const c = await clic('Curte și grădină', 1000);
+    const l = await clic('Loc de relaxare', 1000);
+    const a = await clic('Loc de relaxare', 300);
+    const toate = await clic('Toate', 1000);
+    verifica('filtrele: un nume cu diacritice („Curte și grădină” → curte-si-gradina), o imagine în două categorii (Loc de relaxare / Mese si activitati); '
+      + 'clicul pe categoria activă nu schimbă nimic; „Toate” (data-category gol) aduce înapoi toate elementele, în ordinea și la pozițiile de la încărcare',
+    egal(c.dupa.n, ['6']) && egal(l.dupa.n, ['1']) && egal(a.dupa, l.dupa) && a.urma.every((x) => x[1] === 1) && egal(toate.dupa.n, inceput.n)
+      && egal(toate.dupa.stiluri, inceput.stiluri) && egal(toate.dupa.activ, ['Toate']), { c: c.dupa.n, l: l.dupa.n, a: a.urma.slice(0, 3), toate: toate.dupa, inceput });
+    await clic('Hotelul', 1100);
+    const lb = await fr.evaluate(async () => {
+      document.querySelectorAll('.el_masonry_gallery_item img')[1].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((x) => setTimeout(x, 150));
+      const s = [document.querySelector('.mfp-img').getAttribute('src')];
+      document.querySelector('.mfp-arrow-right').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((x) => setTimeout(x, 150));
+      s.push(document.querySelector('.mfp-img').getAttribute('src'));
+      document.querySelector('.mfp-arrow-right').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((x) => setTimeout(x, 150));
+      s.push(document.querySelector('.mfp-img').getAttribute('src'));
+      return s;
+    });
+    verifica('lightbox-ul după filtru: setul = elementele din grilă (Hotelul: 2 → 4 → 0, circular)', egal(lb, ['/fixturi/galerie-4x3.png?n=2', '/fixturi/galerie-3x4.png?n=4',
+      '/fixturi/galerie-4x3.png?n=0']), lb);
+    await r.context.close();
+  }
+  {
+    const r = await deschide(browser, { cale: '/pagina/galerie', reducedMotion: 'reduce' });
+    const x = await r.page.mainFrame().evaluate(() => {
+      document.querySelectorAll('.el_masonry_gallery_filter_categories li')[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const g = document.querySelector('.el_masonry_gallery_wrapper');
+      return [g.querySelectorAll('.el_masonry_gallery_item').length, g.style.opacity, getComputedStyle(g.querySelector('.el_masonry_gallery_item')).opacity];
+    });
+    verifica('filtrul cu prefers-reduced-motion: reduce: schimbarea pe loc, fără estompare', egal(x, [3, '1', '1']), x);
+    await r.context.close();
+  }
 }
 
 async function verificaDivimenus(browser) {
