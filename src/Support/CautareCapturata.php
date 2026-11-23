@@ -56,11 +56,19 @@ final class CautareCapturata
             error_log('ANDAXI-CMS: căutarea: ' . get_class($e) . ': ' . $e->getMessage());
             return false;
         }
-        $doc['continut'] = self::continut($termen, $rezultate);
+        // Rezultatele (termenul cererii, titlurile paginilor) intră DUPĂ randare, în locul unui semn aleator: nimic din cerere nu
+        // trece prin Jetoane::rezolva, deci un `{{ax:…}}` în termen sau într-un titlu rămâne text (escapat), niciodată un jeton.
+        $semn = "\u{E000}ax-cautare-" . bin2hex(random_bytes(8)) . "\u{E000}";
+        $doc['continut'] = $semn;
+        $continut = self::continut($termen, $rezultate);
         $titlu = 'Rezultatele căutării pentru „' . $termen . '” – ' . Brand::numeSite(Settings::all($db));
         header('X-Robots-Tag: noindex, follow');
         CadruCapturat::raspunde($db, $doc, ['cale' => '/', 'nonce' => CadruCapturat::nonceZi(), 'an' => date('Y')], 200,
-            static function (string $html) use ($titlu): string {
+            static function (string $html) use ($titlu, $semn, $continut): string {
+                if (substr_count($html, $semn) !== 1) {
+                    throw new \RuntimeException('locul rezultatelor nu e o dată în pagina de rezultate');
+                }
+                $html = str_replace($semn, $continut, $html);
                 try {
                     return self::cap($html, $titlu);
                 } catch (Throwable $e) {
@@ -171,7 +179,8 @@ final class CautareCapturata
      */
     public static function continut(string $termen, array $rezultate): string
     {
-        $e = static fn (string $t): string => htmlspecialchars($t, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+        // Escapat ca un jeton (și `{`): textul nu poate face un `{{ax:` nici dacă ar ajunge vreodată înaintea randării.
+        $e = static fn (string $t): string => \App\Support\CadruCapturat\Jetoane::scapa($t, 'html');
         if ($rezultate === []) {
             $text = '<h1 class="not-found-title">Nu am găsit niciun rezultat</h1>'
                 . '<p>Nicio pagină nu se potrivește cu „' . $e($termen) . '”. Încearcă alte cuvinte sau folosește meniul de mai sus pentru a găsi ce cauți.</p>';
@@ -200,7 +209,7 @@ final class CautareCapturata
                 continue;
             }
             if ($t->nume === 'title') {
-                $e->interior($k, htmlspecialchars($titlu, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'));
+                $e->interior($k, \App\Support\CadruCapturat\Jetoane::scapa($titlu, 'html'));
                 $schimbat = true;
             } elseif ($t->nume === 'meta' && strtolower((string) $t->valoare($html, 'name')) === 'robots') {
                 $e->valoareAtribut($k, 'content', 'noindex, follow');
