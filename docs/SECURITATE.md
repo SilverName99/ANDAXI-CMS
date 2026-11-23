@@ -134,3 +134,24 @@ calea PHP (`public/index.php`) și în șabloanele `.htaccess` (`public/.htacces
   decât site-ul).
 
 Pentru paginile obișnuite diferențialul HTTP arată doar aceste antete noi pe `/uploads`.
+
+## Formularele site-urilor capturate (adoptarea WordPress, pasul 9b)
+
+Formularele de contact Divi ale unui site mutat de pe WordPress primesc date de la oricine, deci serverul lor
+(`App\Support\FormularCapturat`; pe larg în [DEPLOY.md](DEPLOY.md), „Formularele de contact”) e fail-closed la fiecare pas:
+
+- **CSRF:** câmpul nonce al fiecărui formular e un HMAC cu `APP_KEY` (scris de adoptare, o dată) peste zi, calea paginii și
+  numărul formularului (`CadruCapturat::nonceFormular`); se primește doar cel de azi sau de ieri, cu `hash_equals`. În plus,
+  `Sec-Fetch-Site`, altfel `Origin`, trebuie să fie ale site-ului (aceeași regulă ca garda adminului, N2:
+  `GardaOrigine::aceeasiOrigine`). Fără `APP_KEY`, cheia e un secret aleator scris o dată în `storage/`, niciodată o constantă.
+- **Roboții:** câmpul-capcană `ax_capcana` (și `et_pb_contactform_validate_N` al Divi) completat = refuz, nimic scris; bugetul pe
+  rețeaua vizitatorului (`LimitaCereri`: 10 încercări în 15 minute, 30 pe zi) și al site-ului (300 de mesaje pe zi; peste 60 pe oră
+  mesajele rămân doar în admin, fără email).
+- **Datele:** câmpurile se citesc doar după configurația capturată la import (definițiile trimise de browser se ignoră), cu
+  limitele lor (corpul 64 KB, un rând 500 de caractere, un text 10 000), UTF-8 valid; într-un câmp de un rând orice caracter de
+  control devine spațiu, deci nimic din formular nu ajunge ca antet de email (OrderMailer curăță oricum subiectul și Reply-To).
+- **Ieșirea:** fiecare valoare arătată din nou în formular, în pagina căutării sau în email e escapată; mesajul de succes din baza
+  WordPress e tratat ca text. Răspunsurile nu intră în cache (`no-store`).
+- **Nimic pierdut:** mesajul se scrie în `contact_form_messages` înaintea emailului; unul care nu pleacă rămâne în admin, marcat.
+
+Testul: `tools/dev/test-formulare-wp.php` (poarta G-formulare).

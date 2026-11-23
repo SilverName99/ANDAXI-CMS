@@ -1316,7 +1316,7 @@ if (count($taburiEmail) > 1) {
                                 <td><?= htmlspecialchars((string) ($message['phone'] ?? '-'), ENT_QUOTES) ?></td>
                                 <td><?= htmlspecialchars((string) ($message['subject'] ?? ''), ENT_QUOTES) ?></td>
                                 <td><?= nl2br(htmlspecialchars((string) ($message['message'] ?? ''), ENT_QUOTES)) ?></td>
-                                <td><?= htmlspecialchars((string) ($message['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                                <td><?= htmlspecialchars((string) ($message['created_at'] ?? ''), ENT_QUOTES) ?><?php if ((string) ($message['status'] ?? '') === \App\Support\FormularCapturat::STARE_NETRIMIS): ?><br><span style="color:var(--ax-eroare);font-size:12px;">emailul n-a plecat (mesajul e aici)</span><?php endif; ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if ($contactMessages === []): ?>

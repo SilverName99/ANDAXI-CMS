@@ -188,13 +188,97 @@ final class CadruCapturat
     }
 
     /**
-     * Valoarea câmpurilor nonce ale formularelor capturate (`{{ax:nonce}}`) pentru o zi: un jeton HMAC cu cheia aplicației, aceeași
-     * pentru toată ziua (pagina poate sta în cache), pe care serverul formularelor (pasul 9b) îl acceptă și pe ziua de dinainte.
+     * Valoarea jetoanelor `{{ax:nonce}}` (nonce-urile capturate din `ax-date` și din câmpuri) pentru o zi: un HMAC cu cheia
+     * site-ului (cheie()), același pentru toată ziua (pagina poate sta în cache). Câmpul nonce al unui formular Divi primește
+     * apoi, la răspuns, nonce-ul legat de formularul lui (nonceFormular(), legaNonceFormulare()).
      */
     public static function nonceZi(?string $zi = null, string $cheie = ''): string
     {
-        $cheie = $cheie !== '' ? $cheie : (string) (getenv('APP_KEY') ?: ($_ENV['APP_KEY'] ?? 'cadru-capturat'));
-        return substr(hash_hmac('sha256', 'formular-capturat|' . ($zi ?? date('Y-m-d')), $cheie), 0, 10);
+        $cheie = $cheie !== '' ? $cheie : self::cheie();
+        return $cheie === '' ? '' : substr(hash_hmac('sha256', 'formular-capturat|' . ($zi ?? date('Y-m-d')), $cheie), 0, 10);
+    }
+
+    /**
+     * Nonce-ul unui formular Divi capturat (serverul formularelor, App\Support\FormularCapturat): HMAC cu cheia site-ului peste
+     * zi, calea paginii (cum a fost cerută: acolo trimite `action`) și numărul formularului (`et_pb_contact_form_N`). Un nonce
+     * luat de pe o pagină nu trece pe alt formular sau pe altă pagină; serverul îl primește pe ziua de azi și pe cea de ieri.
+     * Gol fără cheie (atunci niciun formular nu trece: fail-closed).
+     */
+    public static function nonceFormular(string $cale, int $numar, ?string $zi = null, string $cheie = ''): string
+    {
+        $cheie = $cheie !== '' ? $cheie : self::cheie();
+        return $cheie === '' ? '' : substr(hash_hmac('sha256', 'formular-capturat|' . ($zi ?? date('Y-m-d')) . '|' . $cale . '|' . $numar, $cheie), 0, 20);
+    }
+
+    /**
+     * Cheia nonce-urilor: APP_KEY din `.env` (o scrie adoptarea, deploy/adopta-wp.sh), altfel un secret aleator scris o dată în
+     * `storage/cache/cadru-capturat/secret` (0600; dezvoltarea, testele). Niciodată o constantă. Gol dacă nici secretul nu se
+     * poate scrie: atunci nonce-urile sunt goale și niciun formular nu trece.
+     */
+    public static function cheie(): string
+    {
+        $cheie = trim((string) Env::get('APP_KEY', ''));
+        if ($cheie !== '') {
+            return $cheie;
+        }
+        if (self::$secret !== null) {
+            return self::$secret;
+        }
+        $dosar = Paths::stocare('cache/cadru-capturat');
+        $f = $dosar . '/secret';
+        $s = is_file($f) ? trim((string) @file_get_contents($f)) : '';
+        if (strlen($s) < 32) {
+            if (!is_dir($dosar) && !@mkdir($dosar, 0770, true) && !is_dir($dosar)) {
+                return '';
+            }
+            $h = @fopen($f, 'x');
+            if ($h === false) {
+                $s = trim((string) @file_get_contents($f)); // altă cerere l-a scris între timp
+            } else {
+                $s = bin2hex(random_bytes(32));
+                fwrite($h, $s);
+                fclose($h);
+                @chmod($f, 0600);
+            }
+        }
+        return self::$secret = strlen($s) >= 32 ? $s : '';
+    }
+
+    /**
+     * Câmpurile nonce ale formularelor Divi din documentul randat (`_wpnonce-et-pb-contact-form-submitted-N`) primesc nonce-ul
+     * legat de formular (nonceFormular, pe calea cererii). Doar tagurile `<input>` cu exact acest nume; restul octeților rămâne.
+     */
+    public static function legaNonceFormulare(string $html, string $cale, ?string $zi = null): string
+    {
+        if (!str_contains($html, 'et-pb-contact-form-submitted-')) {
+            return $html;
+        }
+        return (string) preg_replace_callback('/<input\b[^<>]*>/i', static function (array $m) use ($cale, $zi): string {
+            if (preg_match('/\sname=(["\'])_wpnonce-et-pb-contact-form-submitted-(\d{1,3})\1/', $m[0], $n) !== 1) {
+                return $m[0];
+            }
+            $nonce = self::nonceFormular($cale, (int) $n[2], $zi);
+            $nou = preg_replace('/(\svalue=)(["\'])[^"\'<>]*\2/', '${1}"' . $nonce . '"', $m[0], 1, $inlocuiri);
+            return $inlocuiri === 1 && is_string($nou) ? $nou : $m[0];
+        }, $html);
+    }
+
+    /**
+     * SEO-ul scris pentru o pagină capturată (rândul ei din `seo_pages`), ca valori ale jetoanelor `seo.*`. @return array<string, string>
+     */
+    public static function seoPagina(\PDO $db, int $pagina): array
+    {
+        if ($pagina <= 0) {
+            return [];
+        }
+        $q = $db->prepare("SELECT title, description, canonical_url, robots, image_url FROM seo_pages WHERE page_type = 'custom_page' AND page_ref = ?");
+        $q->execute([(string) $pagina]);
+        $r = $q->fetch(\PDO::FETCH_ASSOC);
+        if (!is_array($r)) {
+            return [];
+        }
+        return array_filter(['titlu' => $r['title'], 'descriere' => $r['description'], 'canonical' => $r['canonical_url'], 'robots' => $r['robots'],
+            'imagine' => $r['image_url']], static fn (mixed $v): bool => is_string($v) && $v !== '');
     }
 
     /**
@@ -228,13 +312,21 @@ final class CadruCapturat
      * `expires`, `x-robots-tag`), corpul randat. Un jeton necunoscut sau rămas, un runtime lipsă: 500, un rând în jurnal, nicio
      * pagină pe jumătate. Întoarce codul trimis.
      *
+     * Câmpurile nonce ale formularelor Divi primesc nonce-ul legat de formular (legaNonceFormulare). Serverul formularelor
+     * (FormularCapturat) dă `$dupa` (mesajul în locul formularului, valorile trimise) și `$faraCache` (răspunsul unui POST:
+     * `Cache-Control: no-store`, fără antetele de cache capturate).
+     *
      * @param array<string, mixed> $doc rândul din `pagini_capturate`
      * @param array{cale: string, nonce: string, an: string, seo?: array<string, string>} $cerere
+     * @param (callable(string): string)|null $dupa
      */
-    public static function raspunde(\PDO $db, array $doc, array $cerere, int $status): int
+    public static function raspunde(\PDO $db, array $doc, array $cerere, int $status, ?callable $dupa = null, bool $faraCache = false): int
     {
         try {
-            $html = self::randeazaRand($db, $doc, $cerere, self::scripturiRuntime(Tema::runtime()));
+            $html = self::legaNonceFormulare(self::randeazaRand($db, $doc, $cerere, self::scripturiRuntime(Tema::runtime())), (string) $cerere['cale']);
+            if ($dupa !== null) {
+                $html = $dupa($html);
+            }
         } catch (\Throwable $e) {
             error_log('ANDAXI-CMS: cadrul capturat: documentul „' . (string) ($doc['cheie'] ?? '?') . '” nu se poate randa (' . get_class($e) . ': ' . $e->getMessage() . ')');
             http_response_code(500);
@@ -253,6 +345,9 @@ final class CadruCapturat
                 continue;
             }
             $n = strtolower($a[0]);
+            if ($faraCache && in_array($n, ['cache-control', 'expires'], true)) {
+                continue;
+            }
             if (in_array($n, ['content-type', 'cache-control', 'expires', 'x-robots-tag'], true)) {
                 header(self::numeAntet($n) . ': ' . $a[1], $n !== 'x-robots-tag');
                 $tip = $tip || $n === 'content-type';
@@ -260,6 +355,9 @@ final class CadruCapturat
         }
         if (!$tip) {
             header('Content-Type: text/html; charset=UTF-8');
+        }
+        if ($faraCache) {
+            header('Cache-Control: no-store, private', true);
         }
         echo self::foiTarziiCaFoi($html);
         return $status;
@@ -297,10 +395,15 @@ final class CadruCapturat
      * intenționat necopiate la captură (`necopiat`, cu motivul: scripturile, SVG-urile refuzate de SvgSigur, tipurile nepermise)
      * nu se cer și se numără separat. Unul fără copie și fără motiv, care lipsește, e NU; la fel unul cu alt sha256.
      *
+     * Cu `$publicate` (manifestul adoptării, `storage/import-wordpress/statice.json`: Statice::publicate, adresa → copia), copia
+     * de acolo are întâietate (calea și sha256-ul publicat, sau motivul pentru care a rămas necopiată), iar un script fără copie
+     * e necopiat intenționat (scripturile nu se publică niciodată).
+     *
      * @param array<mixed> $m manifestul
+     * @param array<string, array<string, mixed>> $publicate
      * @return array{verificate: int, necopiate: int, probleme: list<string>}
      */
-    public static function verificaFisiereManifest(array $m, string $docroot): array
+    public static function verificaFisiereManifest(array $m, string $docroot, array $publicate = []): array
     {
         $rez = ['verificate' => 0, 'necopiate' => 0, 'probleme' => []];
         $bun = static fn (string $c): bool => $c !== '' && str_starts_with($c, '/') && !str_contains($c, '..') && !str_contains($c, "\0");
@@ -309,6 +412,12 @@ final class CadruCapturat
             if (!$bun($cale)) {
                 $rez['probleme'][] = 'manifest: o intrare fără cale bună';
                 continue;
+            }
+            $copie = $publicate[(string) ($f['url'] ?? '')] ?? null;
+            if (is_array($copie)) {
+                $f = array_merge($f, array_intersect_key($copie, ['publicat' => 1, 'sha256_publicat' => 1, 'necopiat' => 1]));
+            } elseif ($publicate !== [] && (($f['fel'] ?? '') === 'script' || preg_match('/\.(?:m|c)?js$/i', $cale) === 1) && !is_string($f['sha256_publicat'] ?? null)) {
+                $f['necopiat'] = 'script (aruncat)';
             }
             $shaPublicat = is_string($f['sha256_publicat'] ?? null) ? $f['sha256_publicat'] : '';
             if ($shaPublicat === '' && is_string($f['necopiat'] ?? null) && trim($f['necopiat']) !== '') {
@@ -371,6 +480,9 @@ final class CadruCapturat
 
     /** @var array<string, array{cap: string, final: string}> */
     private static array $runtime = [];
+
+    /** Secretul de rezervă al cheii (cheie()), citit o dată pe proces. */
+    private static ?string $secret = null;
 
     /** Un JSON salvat ca listă asociativă (rețeta, meniul, valorile de la import); gol = []. @return array<mixed> */
     public static function dinJsonLista(?string $json): array

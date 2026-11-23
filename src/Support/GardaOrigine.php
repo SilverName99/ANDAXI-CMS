@@ -59,6 +59,18 @@ final class GardaOrigine
         if (in_array(strtoupper(trim($metoda)), ['GET', 'HEAD', 'OPTIONS'], true) || !self::caleAdmin($cale)) {
             return null;
         }
+        return self::aceeasiOrigine($server, $appUrl);
+    }
+
+    /**
+     * Partea de antete a regulii, pentru orice cale (o folosește și serverul formularelor capturate, FormularCapturat): null =
+     * cererea vine de pe site-ul însuși (`Sec-Fetch-Site`: `same-origin` sau `none`; altfel `Origin` egal cu originea site-ului)
+     * sau browserul n-a trimis niciunul dintre antete; altfel motivul refuzului (`sec-fetch-site`, `origin`).
+     *
+     * @param array<string, mixed> $server
+     */
+    public static function aceeasiOrigine(array $server, string $appUrl): ?string
+    {
         $secFetchSite = strtolower(trim((string) ($server['HTTP_SEC_FETCH_SITE'] ?? '')));
         if ($secFetchSite !== '') {
             return in_array($secFetchSite, ['same-origin', 'none'], true) ? null : 'sec-fetch-site';

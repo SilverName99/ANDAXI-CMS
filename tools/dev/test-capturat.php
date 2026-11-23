@@ -281,8 +281,9 @@ $verifica('foaia amânată a dialectului (în T: <link rel="preload" as="style" 
     && CadruCapturat::foiTarziiCaFoi("<head><link rel='preload' as='font' href='/f.woff2' data-ax-tarziu></head><body><p>data-ax-tarziu</p></body>")
         === "<head><link rel='preload' as='font' href='/f.woff2' data-ax-tarziu></head><body><p>data-ax-tarziu</p></body>", $tarziuT . " → " . $tarziuServit);
 $camere = $raspunsuri['/camere/']['corp'];
-$verifica('valorile cererii: nonce-ul zilei în formulare și în ax-date, anul de azi, niciun jeton rămas', !str_contains($camere, '{{ax:')
-    && substr_count($camere, 'value="' . CadruCapturat::nonceZi(null, 'cheie-de-proba-a-cadrului') . '"') === 1 && str_contains($camere, '© ' . $an . ' ' . WP_PROBA_SITE)
+$verifica('valorile cererii: nonce-ul legat de formular (calea, numărul) în câmpul formularului, al zilei în ax-date, anul de azi, niciun jeton rămas',
+    !str_contains($camere, '{{ax:') && substr_count($camere, 'value="' . CadruCapturat::nonceFormular('/camere/', 0, null, 'cheie-de-proba-a-cadrului') . '"') === 1
+    && !str_contains($camere, 'value="' . CadruCapturat::nonceZi(null, 'cheie-de-proba-a-cadrului') . '"') && str_contains($camere, '© ' . $an . ' ' . WP_PROBA_SITE)
     && str_contains($camere, '"et_frontend_nonce":"' . CadruCapturat::nonceZi(null, 'cheie-de-proba-a-cadrului') . '"'));
 $verifica('variantele de antet: prima pagină cu antetul ei, celelalte cu al lor', str_contains($raspunsuri['/']['corp'], 'proba-acasa') && !str_contains($camere, 'proba-acasa'));
 $verifica('nicio scurgere a layout-ului nucleului (app.css, site-shell, bannerul și scripturile nucleului)', !str_contains($camere, '/assets/css/app.css')

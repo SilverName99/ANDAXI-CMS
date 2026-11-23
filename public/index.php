@@ -210,6 +210,19 @@ if (Plugins::hartaSiteDeRefacut()) {
 // redirecționările stratului WordPress), înaintea cache-ului de pagini, deci aceeași la MISS, la HIT și la 304
 // (App\Support\CspSite). Fără tema.json → cadru = capturat nu trimite nimic.
 \App\Support\CspSite::trimite((string) ($_SERVER['REQUEST_URI'] ?? '/'));
+// Pasul 9b: formularele de contact Divi ale paginilor capturate (POST la adresa paginii, cu et_pb_contactform_submit_N): nonce-ul
+// legat de formular, capcana, bugetul vizitatorului, mesajul scris în baza site-ului înaintea emailului, apoi pagina cu mesajul în
+// locul formularului (App\Support\FormularCapturat). Înaintea cache-ului de pagini. Fără cadrul capturat nu face nimic.
+if (\App\Support\FormularCapturat::intercepteaza($cacheDb instanceof PDO ? $cacheDb : null, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+    (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
+}
+// Pasul 9b: căutarea WordPress (GET /?s=…, wp-compat.json → cautare_wp): rezultatele în cadrul site-ului capturat (antetul și
+// subsolul capturate), noindex, niciodată în cache (App\Support\CautareCapturata). Fără cadrul capturat nu face nimic.
+if (\App\Support\CautareCapturata::intercepteaza($cacheDb instanceof PDO ? $cacheDb : null, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+    (string) ($_SERVER['REQUEST_URI'] ?? '/'))) {
+    return;
+}
 // Pasul 9a: răspunsurile înghețate din captură (robots, sitemap-urile, XSL, feed-urile, oEmbed), înaintea stratului de adrese
 // WordPress, a ghicirii și a lui 404 (App\Support\RaspunsuriInghetate). Fără cadrul capturat nu face nimic.
 if (\App\Support\RaspunsuriInghetate::intercepteaza($cacheDb instanceof PDO ? $cacheDb : null, (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),

@@ -5734,16 +5734,7 @@ final class SiteController
         if (!$db instanceof PDO || $doc === null || \App\Support\Tema::cadru() !== 'capturat') {
             return false;
         }
-        $seo = [];
-        if ($pagina > 0) {
-            $q = $db->prepare("SELECT title, description, canonical_url, robots, image_url FROM seo_pages WHERE page_type = 'custom_page' AND page_ref = ?");
-            $q->execute([(string) $pagina]);
-            $r = $q->fetch(PDO::FETCH_ASSOC);
-            if (is_array($r)) {
-                $seo = array_filter(['titlu' => $r['title'], 'descriere' => $r['description'], 'canonical' => $r['canonical_url'], 'robots' => $r['robots'],
-                    'imagine' => $r['image_url']], static fn (mixed $v): bool => is_string($v) && $v !== '');
-            }
-        }
+        $seo = \App\Support\CadruCapturat::seoPagina($db, $pagina);
         $cale = (string) (parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?? '/');
         \App\Support\CadruCapturat::raspunde($db, $doc, ['cale' => $cale, 'nonce' => \App\Support\CadruCapturat::nonceZi(), 'an' => date('Y'), 'seo' => $seo], $status);
         return true;
