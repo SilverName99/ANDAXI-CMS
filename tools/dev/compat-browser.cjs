@@ -439,6 +439,27 @@ const STIL_DERULARE = '*{box-sizing:border-box}body{margin:0}.et_pb_row_0_tb_hea
   + '.et_pb_sticky_placeholder{opacity:0!important}.et_pb_section_3{padding-top:1400px;height:3000px}.et-waypoint:not(.et_pb_counters){opacity:0}'
   + '.et-waypoint.et-animated{opacity:1}';
 
+// Formularele de contact Divi (formular-divi.md; inventate, cu marcajul capturii): al paginii (N = 0) și cel din subsol (N = 1).
+const formularDivi = (n, cale) => '<div id="et_pb_contact_form_' + n + '" class="et_pb_module et_pb_contact_form_' + n + ' et_pb_contact_form_container clearfix" '
+  + 'data-form_unique_num="' + n + '"><div class="et-pb-contact-message"></div><div class="et_pb_contact"><form class="et_pb_contact_form clearfix" method="post" action="' + cale + '">'
+  + [['nume', 'input', 'Nume'], ['email', 'email', 'Email'], ['mesaj', 'text', 'Mesaj']].map(([id, tip, et], k) => '<p class="et_pb_contact_field et_pb_contact_field_' + k
+    + ' et_pb_contact_field_last" data-id="' + id + '" data-type="' + tip + '"><label for="et_pb_contact_' + id + '_' + n + '" class="et_pb_contact_form_label">' + et + '</label>'
+    + (tip === 'text' ? '<textarea name="et_pb_contact_' + id + '_' + n + '" id="et_pb_contact_' + id + '_' + n + '" class="et_pb_contact_message input" data-required_mark="required" '
+      + 'data-field_type="text" data-original_id="' + id + '" placeholder="' + et + '"></textarea>'
+      : '<input type="text" id="et_pb_contact_' + id + '_' + n + '" class="input" value="" name="et_pb_contact_' + id + '_' + n + '" data-required_mark="required" data-field_type="'
+      + tip + '" data-original_id="' + id + '" placeholder="' + et + '">') + '</p>').join('')
+  + '<input type="hidden" value="et_contact_proccess" name="et_pb_contactform_submit_' + n + '"/><div class="et_contact_bottom_container">'
+  + '<button type="submit" name="et_builder_submit_button" class="et_pb_contact_submit et_pb_button">Trimite</button></div>'
+  + '<input type="hidden" id="_wpnonce-et-pb-contact-form-submitted-' + n + '" name="_wpnonce-et-pb-contact-form-submitted-' + n + '" value="53df77e5d9" />'
+  + '<input type="text" name="ax_capcana" value="" tabindex="-1" autocomplete="off" aria-hidden="true" class="ax-capcana" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">'
+  + '<input type="hidden" name="_wp_http_referer" value="' + cale + '" /></form></div></div>';
+const CORP_FORMULAR = '<div id="page-container"><div id="et-main-area"><div class="proba-pagina">' + formularDivi(0, '/pagina/formular') + '</div>'
+  + '<footer class="et-l et-l--footer"><div class="proba-subsol">' + formularDivi(1, '/pagina/formular') + '</div></footer></div></div>\n';
+const STIL_FORMULAR = 'body{margin:0}.et_contact_error{border:1px solid #f00!important}.et_pb_contact_form_label{display:none}';
+const TEXTE_FORMULAR = { fill_message: 'Please, fill in the following fields:', contact_error_message: 'Please, fix the following errors:', invalid: 'Invalid email',
+  captcha: 'Captcha', wrong_captcha: 'You entered the wrong number in captcha.' };
+const formulareTrimise = [];
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -547,6 +568,7 @@ const PAGINI = {
   toggle: { corp: CORP_TOGGLE, stil: STIL_TOGGLE },
   'toggle-dublu': { corp: CORP_TOGGLE, stil: STIL_TOGGLE, cap: capImplicit().concat(capImplicit()), final: finalImplicit().concat(finalImplicit()) },
   multiview: { corp: CORP_MV, stil: STIL_MV },
+  formular: { corp: CORP_FORMULAR, stil: STIL_FORMULAR, date: Object.assign({}, DATE_IMPLICITE, { et_pb_custom: Object.assign({}, DATE_IMPLICITE.et_pb_custom, TEXTE_FORMULAR) }) },
   derulare: { corp: CORP_DERULARE, stil: STIL_DERULARE, date: Object.assign({}, DATE_IMPLICITE, { et_pb_sticky_elements: CONFIG_STICKY }) },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
@@ -593,8 +615,53 @@ function raspunde(u, res) {
   return trimite(res, 404, 'text/plain; charset=utf-8', 'nu există', CSP_SITE);
 }
 
+// Serverul formularelor de probă (contractul App\Support\FormularCapturat): cu X-Ax-Formular: 1, JSON după numele trimis; fără
+// antet (trimiterea nativă), pagina cu rezultatul. Fiecare POST e notat în formulareTrimise.
+function formularProba(req, res) {
+  const bucati = [];
+  req.on('data', (b) => bucati.push(b));
+  req.on('end', () => {
+    const corp = Buffer.concat(bucati).toString('utf8');
+    const campuri = [];
+    const valori = {};
+    const rx = /name="([^"]+)"\r\n\r\n([\s\S]*?)\r\n--/g;
+    let m;
+    while ((m = rx.exec(corp)) !== null) {
+      campuri.push(m[1]);
+      valori[m[1]] = m[2];
+    }
+    if (/application\/x-www-form-urlencoded/.test(String(req.headers['content-type'] || ''))) {
+      for (const [k, v] of new URLSearchParams(corp)) {
+        campuri.push(k);
+        valori[k] = v;
+      }
+    }
+    const json = req.headers['x-ax-formular'] === '1';
+    const nume = valori.et_pb_contact_nume_0 || valori.et_pb_contact_nume_1 || (/et_pb_contact_nume_[01]=([^&]*)/.exec(corp) || [])[1] || '';
+    formulareTrimise.push({ json, nume, campuri, tip: String(req.headers['content-type'] || '').split(';')[0], fetchSite: req.headers['sec-fetch-site'] || null });
+    const js = (cod, o) => trimite(res, cod, 'application/json; charset=utf-8', JSON.stringify(o));
+    if (!json) {
+      return trimite(res, 200, 'text/html; charset=utf-8', '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Rezultat</title></head><body><p id="rezultat-nativ">'
+        + 'Pagina cu rezultatul (trimiterea nativă)</p></body></html>', CSP_SITE);
+    }
+    const r = {
+      Eroare: () => js(200, { stare: 'eroare', mesaje: ['Adresă de email nevalidă.'], campuri: ['email'] }),
+      Limita: () => js(429, { stare: 'eroare', mesaje: ['Ai trimis prea multe mesaje într-un timp scurt. Încearcă din nou mai târziu.'], campuri: [] }),
+      Html: () => trimite(res, 200, 'text/html; charset=utf-8', '<!DOCTYPE html><p>nu e JSON</p>', CSP_SITE),
+      Redirect: () => js(200, { stare: 'trimis', mesaje: ['Mulțumim!'], campuri: [], redirect: '/pagina/baza' }),
+      RedirectAlt: () => js(200, { stare: 'trimis', mesaje: ['Mulțumim!'], campuri: [], redirect: 'https://alt.example/x' }),
+      Injectie: () => js(200, { stare: 'trimis', mesaje: ['<img src=x onerror=alert(1)><b>gros</b>'], campuri: [] }),
+      Lent: () => setTimeout(() => js(200, { stare: 'trimis', mesaje: ['Îți mulțumim că ne-ai contactat'], campuri: [] }), 700),
+    }[nume];
+    return r ? r() : js(200, { stare: 'trimis', mesaje: ['Îți mulțumim că ne-ai contactat'], campuri: [] });
+  });
+}
+
 const srv = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1');
+  if (req.method === 'POST' && u.pathname === '/pagina/formular') {
+    return formularProba(req, res);
+  }
   if (req.method !== 'GET') {
     return trimite(res, 405, 'text/plain; charset=utf-8', 'doar GET');
   }
@@ -2287,6 +2354,174 @@ async function verificaMultiView(browser) {
   }
 }
 
+async function verificaFormularul(browser) {
+  scrie('== formular (felia 3, formular-divi.md, FormularCapturat): validarea din browser ca pe live, trimiterea pe loc, răspunsurile, rezerva nativă');
+  const stareF = (f, n) => f.evaluate((n) => {
+    const c = document.getElementById('et_pb_contact_form_' + n);
+    const b = c.querySelector('button');
+    return { mesaj: c.querySelector('.et-pb-contact-message').innerHTML, clase: Array.from(c.querySelectorAll('.et_pb_contact_field input, .et_pb_contact_field textarea'))
+      .map((e) => e.className), formular: !!c.querySelector('form'), contact: !!c.querySelector('.et_pb_contact'), stil: c.getAttribute('style'), buton: b ? b.disabled : null };
+  }, n);
+  const completeaza = (f, n, v) => f.evaluate(([n, v]) => {
+    for (const k of Object.keys(v)) {
+      document.querySelector('[name="et_pb_contact_' + k + '_' + n + '"]').value = v[k];
+    }
+  }, [n, v]);
+  const apasa = (f, n) => f.evaluate((n) => document.querySelector('#et_pb_contact_form_' + n + ' button[type=submit]').click(), n);
+  const BUN = { nume: 'Ion Popescu', email: 'ion@exemplu.ro', mesaj: 'Aș dori o cameră dublă.' };
+  // 1. validarea din browser (textele și forma observate pe live, offline, fără nicio cerere)
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/formular' });
+    const f = page.mainFrame();
+    const s = await stare(f);
+    formulareTrimise.length = 0;
+    const r = {};
+    await apasa(f, 0);
+    r.gol = await stareF(f, 0);
+    await completeaza(f, 0, { nume: 'Ion' });
+    await apasa(f, 0);
+    r.doarNume = await stareF(f, 0);
+    await completeaza(f, 0, { email: 'ion@exemplu', mesaj: 'Salut' });
+    await apasa(f, 0);
+    r.emailRau = await stareF(f, 0);
+    await completeaza(f, 0, { nume: '' });
+    await apasa(f, 0);
+    r.ambele = await stareF(f, 0);
+    r.subsol = await stareF(f, 1);
+    verifica('validarea din browser, ca pe live: niciun POST; gol → „Please, fill in the following fields:” cu lista etichetelor (și un <ul> gol), '
+      + 'câmpurile cu et_contact_error; un câmp completat își pierde clasa; doar emailul greșit (fără TLD) → <ul><li>Invalid email</li></ul>; amândouă → '
+      + 'lista, <p class="et_normal_padding">Please, fix the following errors:</p> și lista erorilor; formularul din subsol neatins',
+    curate(ev, s) && formulareTrimise.length === 0
+      && r.gol.mesaj === '<p>Please, fill in the following fields:</p><ul><li>Nume</li><li>Email</li><li>Mesaj</li></ul><ul></ul>'
+      && egal(r.gol.clase, ['input et_contact_error', 'input et_contact_error', 'et_pb_contact_message input et_contact_error'])
+      && r.doarNume.mesaj === '<p>Please, fill in the following fields:</p><ul><li>Email</li><li>Mesaj</li></ul><ul></ul>'
+      && egal(r.doarNume.clase, ['input', 'input et_contact_error', 'et_pb_contact_message input et_contact_error'])
+      && r.emailRau.mesaj === '<ul><li>Invalid email</li></ul>' && egal(r.emailRau.clase, ['input', 'input et_contact_error', 'et_pb_contact_message input'])
+      && r.ambele.mesaj === '<p>Please, fill in the following fields:</p><ul><li>Nume</li></ul><p class="et_normal_padding">Please, fix the following errors:</p><ul><li>Invalid email</li></ul>'
+      && egal(r.ambele.clase, ['input et_contact_error', 'input et_contact_error', 'et_pb_contact_message input']) && r.subsol.mesaj === '' && r.subsol.clase.every((c) => !/error/.test(c)),
+    { r, trimise: formulareTrimise, ...detaliiCurate(ev, s) });
+    // 2. trimiterea pe loc, succesul
+    await completeaza(f, 0, BUN);
+    await f.evaluate(() => window.axCompat.formular.aplica());
+    const urma = await f.evaluate(async () => {
+      const c = document.getElementById('et_pb_contact_form_0');
+      const u = [];
+      const t0 = performance.now();
+      c.querySelector('button[type=submit]').click();
+      u.push([0, c.querySelector('button').disabled]);
+      while (performance.now() - t0 < 700) {
+        await new Promise((x) => requestAnimationFrame(x));
+        u.push([Math.round(performance.now() - t0), parseFloat(getComputedStyle(c).opacity)]);
+      }
+      return u;
+    });
+    const dupa = await stareF(f, 0);
+    const subsol = await stareF(f, 1);
+    const t = formulareTrimise[0] || {};
+    verifica('formular valid (și aplica() chemat din nou): exact un POST, prin fetch, cu X-Ax-Formular: 1, multipart cu câmpurile formularului (cu nonce, capcană, '
+      + 'referer), butonul dezactivat cât merge; containerul coboară spre 0,2 (~200 ms) și revine la 1; la „trimis” formularul (.et_pb_contact) dispare, '
+      + 'mesajul ca <p> în .et-pb-contact-message, containerul cu style="opacity: 1;"; formularul din subsol neatins',
+    formulareTrimise.length === 1 && t.json === true && t.tip === 'multipart/form-data' && t.fetchSite === 'same-origin'
+      && egal(t.campuri, ['et_pb_contact_nume_0', 'et_pb_contact_email_0', 'et_pb_contact_mesaj_0', 'et_pb_contactform_submit_0', '_wpnonce-et-pb-contact-form-submitted-0',
+        'ax_capcana', '_wp_http_referer']) && urma[0][1] === true && urma.some((x) => x[0] > 150 && x[0] < 300 && x[1] < 0.35)
+      && dupa.mesaj === '<p>Îți mulțumim că ne-ai contactat</p>' && !dupa.contact && dupa.stil === 'opacity: 1;' && subsol.contact && subsol.mesaj === '',
+    { trimise: formulareTrimise, urma: urma.filter((x, k) => k % 3 === 0), dupa, subsol });
+    await context.close();
+  }
+  // 3. erorile serverului, clicul dublu, textul (nu HTML), redirect-urile
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/formular', permise: /status of 429/ });
+    const f = page.mainFrame();
+    formulareTrimise.length = 0;
+    await completeaza(f, 0, Object.assign({}, BUN, { nume: 'Eroare' }));
+    await apasa(f, 0);
+    await page.waitForTimeout(700);
+    const e1 = await stareF(f, 0);
+    await completeaza(f, 1, Object.assign({}, BUN, { nume: 'Limita' }));
+    await apasa(f, 1);
+    await page.waitForTimeout(700);
+    const e2 = await stareF(f, 1);
+    verifica('răspunsul „eroare” (200 și 429): mesajele ca <p class="et_pb_contact_error_text">, câmpurile din „campuri” cu et_contact_error, formularul '
+      + 'rămâne, butonul activ din nou; cele două formulare independente', formulareTrimise.length === 2
+      && e1.mesaj === '<p class="et_pb_contact_error_text">Adresă de email nevalidă.</p>' && egal(e1.clase, ['input', 'input et_contact_error', 'et_pb_contact_message input'])
+      && e1.contact && e1.buton === false && e2.mesaj === '<p class="et_pb_contact_error_text">Ai trimis prea multe mesaje într-un timp scurt. Încearcă din nou mai târziu.</p>'
+      && e2.contact && e2.buton === false, { e1, e2, trimise: formulareTrimise });
+    formulareTrimise.length = 0;
+    await completeaza(f, 0, Object.assign({}, BUN, { nume: 'Lent' }));
+    const dublu = await f.evaluate(async () => {
+      const c = document.getElementById('et_pb_contact_form_0');
+      const b = c.querySelector('button[type=submit]');
+      b.click();
+      b.click();
+      c.querySelector('form').requestSubmit();
+      c.querySelector('[name="et_pb_contact_nume_0"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await new Promise((x) => setTimeout(x, 1200));
+      return { contact: !!c.querySelector('.et_pb_contact'), mesaj: c.querySelector('.et-pb-contact-message').textContent };
+    });
+    verifica('clicul dublu (și requestSubmit cât trimiterea merge): un singur POST, apoi succesul', formulareTrimise.length === 1 && dublu.contact === false
+      && dublu.mesaj === 'Îți mulțumim că ne-ai contactat', { dublu, trimise: formulareTrimise });
+    await completeaza(f, 1, Object.assign({}, BUN, { nume: 'Injectie' }));
+    await apasa(f, 1);
+    await page.waitForTimeout(700);
+    const inj = await f.evaluate(() => { const m = document.querySelector('#et_pb_contact_form_1 .et-pb-contact-message'); return [m.innerHTML, m.querySelectorAll('img, b').length]; });
+    verifica('mesajele serverului ajung ca text (textContent), niciodată ca HTML', inj[1] === 0 && inj[0] === '<p>&lt;img src=x onerror=alert(1)&gt;&lt;b&gt;gros&lt;/b&gt;</p>'
+      && curate(ev, await stare(f)), inj);
+    await context.close();
+  }
+  {
+    const { context, page } = await deschide(browser, { cale: '/pagina/formular' });
+    const f = page.mainFrame();
+    await completeaza(f, 0, Object.assign({}, BUN, { nume: 'RedirectAlt' }));
+    await apasa(f, 0);
+    await page.waitForTimeout(800);
+    const alt = [page.url().replace(BAZA, ''), (await stareF(f, 0)).mesaj];
+    await completeaza(f, 1, Object.assign({}, BUN, { nume: 'Redirect' }));
+    await Promise.all([page.waitForURL(/\/pagina\/baza$/, { timeout: 5000 }).catch(() => {}), apasa(f, 1)]);
+    const redirect = page.url().replace(BAZA, '');
+    verifica('redirect: unul spre altă gazdă e ignorat (succesul rămâne pe pagină), unul pe origine e urmat', egal(alt, ['/pagina/formular', '<p>Mulțumim!</p>'])
+      && redirect === '/pagina/baza', { alt, redirect });
+    await context.close();
+  }
+  // 4. rezerva: rețeaua picată sau un răspuns care nu e JSON → trimiterea nativă (pagina cu rezultatul de la server)
+  const CAMPURI_0 = ['et_pb_contact_nume_0', 'et_pb_contact_email_0', 'et_pb_contact_mesaj_0', 'et_pb_contactform_submit_0', '_wpnonce-et-pb-contact-form-submitted-0',
+    'ax_capcana', '_wp_http_referer'];
+  for (const nume of ['Retea', 'Html']) {
+    const { context, page } = await deschide(browser, { cale: '/pagina/formular' });
+    const f = page.mainFrame();
+    if (nume === 'Retea') {
+      // rețeaua picată doar pentru trimiterea din runtime (cererea cu X-Ax-Formular), nu și pentru cea nativă de după
+      await page.route('**/pagina/formular', (r) => (r.request().method() === 'POST' && r.request().headers()['x-ax-formular'] === '1' ? r.abort('failed') : r.continue()));
+    }
+    formulareTrimise.length = 0;
+    await completeaza(f, 0, Object.assign({}, BUN, { nume }));
+    await Promise.all([page.waitForSelector('#rezultat-nativ', { timeout: 8000 }).catch(() => {}), apasa(f, 0)]);
+    const ok = await page.$('#rezultat-nativ');
+    verifica('rezerva (' + (nume === 'Retea' ? 'rețeaua picată' : 'răspuns HTML, nu JSON') + '): după încercarea prin fetch, trimiterea nativă a formularului, '
+      + 'fără antet, cu aceleași câmpuri; pagina cu rezultatul', !!ok && formulareTrimise.length === (nume === 'Retea' ? 1 : 2)
+      && formulareTrimise[formulareTrimise.length - 1].json === false && egal(formulareTrimise[formulareTrimise.length - 1].campuri, CAMPURI_0)
+      && (nume === 'Retea' || formulareTrimise[0].json === true), formulareTrimise);
+    await context.close();
+  }
+  {
+    const { context, page } = await deschide(browser, { cale: '/pagina/formular', reducedMotion: 'reduce' });
+    const f = page.mainFrame();
+    formulareTrimise.length = 0;
+    await completeaza(f, 0, BUN);
+    const op = await f.evaluate(async () => {
+      const c = document.getElementById('et_pb_contact_form_0');
+      c.querySelector('button[type=submit]').click();
+      const u = [];
+      for (let i = 0; i < 10; i++) {
+        await new Promise((x) => setTimeout(x, 30));
+        u.push(parseFloat(getComputedStyle(c).opacity));
+      }
+      return u;
+    });
+    verifica('prefers-reduced-motion: reduce: fără estompare (containerul rămâne la opacitatea 1)', formulareTrimise.length === 1 && op.every((x) => x === 1), op);
+    await context.close();
+  }
+}
+
 // Starea elementelor sticky la un scrollY: vârful vizual, poziția, clasele, style-ul, placeholder-ul de după fiecare.
 const stareSticky = (f, y) => f.evaluate(async (y) => {
   window.scrollTo(0, y);
@@ -2819,6 +3054,7 @@ async function main() {
     await verificaVideo(browser);
     await verificaToggle(browser);
     await verificaMultiView(browser);
+    await verificaFormularul(browser);
     await verificaSticky(browser);
     await verificaSusSiAncorele(browser);
     await verificaClaseleUa(browser);

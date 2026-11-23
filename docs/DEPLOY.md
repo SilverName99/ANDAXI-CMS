@@ -1146,7 +1146,12 @@ trimise, escapate), `Cache-Control: no-store`. Cu antetul `X-Ax-Formular: 1` (tr
 `{"stare": "trimis"|"eroare", "mesaje": [text], "campuri": [id-urile câmpurilor greșite], "redirect"?: adresa de după succes, doar pe
 același site}`. Textele Divi (succesul implicit „Thanks for contacting us”, erorile) urmează `<html lang>` al capturii (`en` pe
 pensiune, ca WordPress-ul de azi, sau `ro`); cele noi (limitele) sunt în română. Poarta: **G-formulare**
-(`tools/dev/test-formulare-wp.php`).
+(`tools/dev/test-formulare-wp.php`). În browser, `divi4/v1/formular.js` (runtime-ul compat, slotul final) trimite formularul pe loc:
+validarea Divi ca pe live (câmpurile obligatorii goale și emailul greșit, cu `et_contact_error` și mesajul din `et_pb_custom`, fără
+nicio cerere), apoi `fetch` POST cu `new FormData(form)` și `X-Ax-Formular: 1`, doar pe originea paginii, cu butonul dezactivat cât
+merge și containerul estompat ca pe live; la „trimis” formularul dispare și rămâne mesajul, la „eroare” mesajele și câmpurile marcate;
+textul doar prin `textContent`; o rețea picată sau un răspuns care nu e JSON trimite formularul nativ (pagina cu rezultatul). Poarta
+browserului: **G-compat**.
 
 **Căutarea** (pasul 9b; `App\Support\CautareCapturata`, `wp-compat.json` → `cautare_wp`; VC-CAUT-001): `GET /?s=<termeni>` (lupa din
 antet) primește o pagină de rezultate în cadrul site-ului: documentul 404 capturat (antetul, subsolul, bannerul, foile), cu
