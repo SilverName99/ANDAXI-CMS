@@ -804,14 +804,46 @@ la loc.
 # o dată: datele bazei noi (din hPanel → Databases), întrebate pe ecran, scrise în site/.env (0600)
 deploy/adopta-wp.sh --site=<slug> --domeniu=<domeniu> --baza-noua
 # planul (nu schimbă nimic) și adoptarea
-deploy/adopta-wp.sh --site=<slug> --domeniu=<domeniu> --versiune=<v> --cheie-licenta=<cheia> --admin-email=<adresa>
+deploy/adopta-wp.sh --site=<slug> --domeniu=<domeniu> --versiune=<v> --cheie-licenta=<cheia> --admin-email=<adresa> \
+    [--url=https://<domeniu>] [--sha-captura=<sha256>] [--captura=<dosar>] [--cron-vechi=<fișier>]
 deploy/adopta-wp.sh … aceleași … --aplica
 ```
+
+**Înainte** (o dată, pe server; planul le verifică pe fiecare și spune NU unde lipsește ceva):
+
+- **PHP 8.3 cu sodium**, și pentru site, și în linia de comandă. Site-ul: hPanel → Advanced → PHP Configuration → PHP 8.3, iar în
+  fila PHP extensions bifezi `sodium`. Linia de comandă: `PHP="/opt/alt/php83/usr/bin/php -d extension=sodium.so"` (mai sus, „O dată,
+  pe server”). Planul pune o clipă o sondă în docroot-ul WordPress și cere rândul `PHP-ul site-ului (web): 8.3…, sodium da`. O
+  revenire lasă WordPress pe PHP 8.3, deci îl încerci pe 8.3 înainte (prima pagină, o galerie, logarea în `/wp-admin`).
+- **Cronurile**: hPanel nu se citește din SSH. Rândurile care pomenesc site-ul (de obicei `wp-cron.php`) le copiezi într-un fișier pe
+  care îl dai cu `--cron-vechi=` (gol dacă nu e niciunul). Un rând care nu e al WordPress e NU până îl rezolvi tu și dai
+  `--cron-de-mana`. După GATA ștergi din hPanel rândurile `ȘTERGI`: site-ul nou n-are nevoie de cron (preluarea licenței e
+  opțională, „Licența”).
+- **Fișierele private ale pachetului** (cele din `site-uri/<site>/privat/`, ignorate de git) stau pe server în
+  `~/domains/<domeniu>/site/privat/` (dosarul 0700, fișierele 0600). La fiecare pregătire, adoptarea pune pachetul din commit-ul
+  versiunii în `site/pachet/` și copiază lângă el `site/privat/` (`site/pachet/privat/`, `go-rwx`). Pentru `pensiune`:
+  `import-wordpress.json` (sha256-urile scripturilor aruncate, nonce-urile în plus), `captura-structura.json` și, doar cu
+  statisticile păstrate, `urmarire.json`. Niciodată în git și niciodată în chat.
+- **Captura** (drumul capturat): în `~/domains/<domeniu>/site/capturat/`, sau în dosarul dat cu `--captura=`. O faci din clona
+  repo-ului, cu WordPress încă pornit și needitat de atunci, ca un vizitator: `scripts/captureaza-wordpress.php --url=https://<domeniu>
+  --wp=<public_html> --iesire=~/domains/<domeniu>/site/capturat --fonturi --ritm=2 --buget=450 --raspunsuri-ua=2 --plan`, apoi aceeași
+  comandă cu `--aplica` (15–20 de minute; „Captura”, mai jos). **Fără `--public`**: fișierele statice le copiază adoptarea. Ultimul rând
+  dă sha256-ul lui `raport-captura.json`: îl dai adoptării cu `--sha-captura=` (ancora lanțului; fără ea, adoptarea ia sha256-ul
+  raportului din dosar). Planul spune NU dacă lipsește `manifest.json` sau `raport-captura.json`.
+- **`.htaccess`-ul WordPress nu trece**: docroot-ul nou are `.htaccess`-ul stub-ului. Rândurile puse de mână în `.htaccess`-ul
+  WordPress (în afara blocurilor `# BEGIN …` / `# END …` ale WordPress și ale pluginurilor de cache: redirecționări, antete) apar în
+  plan ca ATENȚIE, cu primele 8; le muți tu (o redirecționare în Admin → Setări → Redirecționări) sau ne scrii. `.user.ini` și
+  `php.ini` nu se aduc nici ele (ATENȚIE la comutare).
 
 `--admin-email` e **obligatoriu**: adresa primului administrator al site-ului nou nu se ia niciodată din `admin_email` al
 WordPress (poate fi a agenției care a făcut site-ul). Fazele lui `--aplica` (ținute minte în `site/deploy/adopta-wp.stare`;
 aceeași comandă continuă de la prima neterminată): `verificari`, `pregatire`, `instalare`, `import`, `copie`, `comutare`,
-`verificare`, `deschidere`.
+`verificare`, `deschidere`. La `pregatire`, `site/.env` primește `APP_KEY` (64 de cifre hexa aleatoare, o singură dată: o reluare
+sau o adoptare nouă după o revenire o păstrează), cheia nonce-urilor formularelor și a gălețile rapoartelor CSP; fără ea, codul
+folosește un secret aleator scris o dată în `storage/cache/cadru-capturat/secret`, niciodată o constantă. Pe drumul capturat,
+`verificari` mai face planul fișierelor statice (`scripts/publica-statice.php --plan`), `pregatire` le copiază (mai jos), iar
+`verificare` rulează `diagnostic.php --capturat` și cere fiecare fișier static publicat, fiecare font Google și fiecare mediu cerut de
+pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier care lipsește oprește adoptarea înainte de deschidere.
 
 - **Mediile rămân la adresele lor.** Fișierele din `wp-content/uploads/` se copiază de pe disc în
   `public_html.nou/wp-content/uploads/`, la aceeași cale și cu aceiași octeți (fără `/uploads/wordpress/` și fără 301).
@@ -832,6 +864,19 @@ aceeași comandă continuă de la prima neterminată): `verificari`, `pregatire`
   plan și copiere cu o legătură spre afara lui nu se urmează. Manifestul, cu sha256 de pe disc al fiecărui fișier:
   `site/storage/import-wordpress/media.json`. Paginile folosesc variantele de poze ale WordPress: adoptarea nu face
   variantele WebP ale nucleului.
+- **Fișierele statice** (drumul capturat; `scripts/publica-statice.php`, `App\Support\ImportWordPress\Statice`, rulat de adoptare în
+  `pregatire`, prin `bin/platforma --public=public_html.nou`): tot ce cer paginile din manifestul capturii verificate (foile temei și
+  ale pluginurilor, `et-cache/`, `wp-includes/`, fonturile și pozele temei, fișierele de la rădăcină sub `capturat/radacina/`), în
+  afară de `wp-content/uploads/` (mediile, ale importului) și de scripturi (aruncate: comportamentul îl dă runtime-ul compat), se
+  copiază de pe discul WordPress, doar citit, cu aceleași verificări ca la captură (`Captura\CopiereStatica`: fără legături
+  simbolice sau tari, `realpath` în rădăcina WordPress, fără fișiere ascunse, doar tipurile de fonturi, foi, poze și video, nicio
+  bucată executabilă în nume, fără cod PHP înăuntru, SVG-urile prin `SvgSigur`, cel mult 200 MB pe fișier), dintr-o singură
+  deschidere, scris atomic, cu adresele proprii din foi relative; plus fonturile Google aduse de captură (`capturat/fonturi/`,
+  fiecare cu sha256-ul din manifest). Sha256-ul fiecărei surse trebuie să fie cel din captură (altfel WordPress s-a schimbat de
+  atunci: copia se scoate și e NU; o captură nouă); o coliziune cu un fișier sau o rută a CMS-ului e NU; un fișier refuzat de
+  verificări rămâne necopiat, cu motivul (ATENȚIE, și la `verificare`); plafoanele: 20 000 de fișiere și 2 GB (NU). Manifestul, cu
+  sha256-ul sursei și al copiei: `site/storage/import-wordpress/statice.json` (îl citesc `diagnostic.php --capturat` și
+  `verificare`). Pasul de mână de dinainte (o a doua captură cu `--din-dosar … --public=public_html.nou`) nu mai trebuie.
 - **Arborii copiați** (`wp-content/`, `wp-includes/`, `capturat/`) primesc la comutare `.htaccess`-urile din git
   (`deploy/stub/wp-content.htaccess`, `wp-includes.htaccess`, `capturat.htaccess`): nimic nu se execută (`Require all
   denied` pe PHP și scripturi, `Options -ExecCGI -Indexes`, niciun `.js` servit), cache de 7 zile cu `Expires`, ca pe
@@ -998,7 +1043,8 @@ mereu pe rezultatul final la `aplica()` (o editare refuzată oprește tot, iar u
 protejată). Tokenizarea recompusă dă exact octeții paginii (poarta G-html5, `tools/dev/test-html5.php`).
 
 **Politica listei albe** (`App\Support\HtmlCapturat`, cu `HtmlCapturat\ContextCapturat`, `SchemaDivi4` și `Problema`) rulează
-peste acești tokeni la import și la fiecare salvare a unei pagini capturate (`verifica($html, $ctx, 'import'|'salvare')`):
+peste acești tokeni la import (`verifica($html, $ctx, 'import')`; modul `'salvare'` există în cod, dar **niciun drum de salvare din
+admin nu o cheamă încă**: editorul paginilor capturate nu e făcut, deci o pagină capturată nu se editează din admin până atunci):
 HTML-ul capturat e de neîncredere, iar pe site-ul nou NU rulează niciun script capturat — comportamentul vine doar din
 runtime-ul nostru, pe același DOM. Ce nu e explicit permis e REFUZAT, cu motivul (o `Problema`); nimic nu se scoate în
 tăcere, lista albă se lărgește doar după o revizie de om. Un document cu măcar o problemă nu se importă și nu se salvează
@@ -1031,8 +1077,9 @@ adversariale în Chromium — din afara repo-ului.
 **Cadrul capturat** (pasul 6; `App\Support\CadruCapturat`, `App\Support\CspSite`; `tema.json` → `cadru` = `capturat`, `runtime`,
 `csp`, `previzualizare`, docs/PACHETE.md): prima pagină, paginile (și `/contact`), cardurile embed, arhivele și 404-ul cu un document
 în `pagini_capturate` ies din bucățile lor, cu fragmentele alese ale documentului (variantele de antet și subsol), conținutul din
-`pages.html_content` și jetoanele rezolvate pe cerere: calea, anul, nonce-ul formularelor (un jeton HMAC al zilei, cu cheia
-aplicației; îl verifică serverul formularelor, pasul 9b), SEO-ul din `seo_pages`, datele `ax-date`, elementul curent din meniu și
+`pages.html_content` și jetoanele rezolvate pe cerere: calea, anul, nonce-urile (`{{ax:nonce}}`: un HMAC al zilei cu cheia site-ului,
+`APP_KEY`; la răspuns, câmpul nonce al fiecărui formular Divi primește nonce-ul legat de formular, `CadruCapturat::nonceFormular`:
+HMAC peste zi, calea cererii și numărul formularului, pe care îl verifică serverul formularelor, mai jos), SEO-ul din `seo_pages`, datele `ax-date`, elementul curent din meniu și
 scripturile runtime-ului din manifestul versiunii lui. Nimic din `views/layout.php`. Un jeton necunoscut sau rămas, un runtime
 lipsă: 500 și un rând în jurnal, niciodată o pagină pe jumătate. 404-ul capturat are statusul 404 și antetele lui. Politica CSP e
 una pe tot site-ul, trimisă din `public/index.php` înaintea cache-ului de pagini (aceeași la MISS, la HIT și la 304, fără nimic din
@@ -1051,7 +1098,9 @@ import, și compară sha256-ul cu amprenta aprobată (`pagini_capturate.sha_rand
 ieșire n-are un script nepermis (doar `ax-date`, JSON-LD, `speculationrules` și scripturile runtime-ului de pe sloturi) și că
 politica CSP n-are `'unsafe-inline'`/`'unsafe-eval'` în `script-src`. Cod 1 la orice diferență; după o editare văzută de om sau o
 versiune nouă a runtime-ului, `--aproba=<page_id>` sau `--aproba-toate` reînnoiește amprenta. `php scripts/diagnostic.php
---capturat`: fiecare fișier din manifestul capturii există în docroot cu sha256-ul lui, niciun `.php`/`.phtml`/`.phar` în
+--capturat`: fiecare fișier din manifestul capturii există în docroot cu sha256-ul lui (copiile adoptării, din
+`storage/import-wordpress/statice.json`, au întâietate: o foaie cu adresele relative are alt sha256 decât sursa, iar scripturile nu
+se publică), niciun `.php`/`.phtml`/`.phar` în
 `wp-content/`, `wp-includes/`, `capturat/`, iar `.htaccess`-urile arborilor copiați au `nosniff`. Pe cadrul capturat, `/health`
 are și rândul `capturat: <primele 12 caractere ale sha256-ului manifestului>` (sau `lipsa`).
 
@@ -1068,6 +1117,47 @@ nostru pentru corpul trimis. Pe drumul capturat, `GET /wp-json/oembed/1.0/embed`
 doar GET și HEAD, doar tipurile copiate, cu tipul fix al extensiei, `nosniff`, cache 7 zile, iar un SVG cu
 `Content-Security-Policy: sandbox`. O adresă care se ciocnește cu un fișier, un dosar sau o rută a CMS-ului nu se servește
 (`diagnostic.php --capturat` o arată NU), nici un fișier ascuns, o legătură simbolică sau o cale cu „..”.
+
+**Formularele de contact** (pasul 9b; `App\Support\FormularCapturat`, interceptat în `public/index.php` după mentenanță și
+înaintea cache-ului de pagini; VC-FORM-001…002 în `ce-se-schimba.md`): Divi trimite formularul prin POST la adresa paginii (`action` =
+calea cererii), cu `et_pb_contactform_submit_N`, câmpurile `et_pb_contact_<id>_N`, nonce-ul și capcana `ax_capcana`. Răspunde doar pe
+cadrul capturat, doar pe o cale care dă un document capturat (o pagină după slug, un card embed, altfel 404-ul capturat, ca
+WordPress) și doar pentru un formular din `formulare_compat` (configurația scrisă de import: câmpurile din DOM, destinatarul,
+titlul, mesajul de succes, tiparul emailului și redirecționarea din baza WordPress); altfel cererea merge mai departe ca înainte.
+Pașii, fiecare fail-closed: corpul cel mult 64 KB și 60 de câmpuri (413); originea (`Sec-Fetch-Site`, altfel `Origin`, ale site-ului:
+`GardaOrigine::aceeasiOrigine`; 403); bugetul vizitatorului pe rețeaua lui (`LimitaCereri`: 10 încercări în 15 minute, 30 pe zi; 429);
+capcana completată (`ax_capcana`, `et_pb_contactform_validate_N`) e un robot: refuzat, nimic scris; nonce-ul legat de formular, al
+zilei de azi sau de ieri (`hash_equals`; o pagină din cache sau din browser trăiește cel mult o zi); câmpurile, **doar după
+configurația capturată** (definițiile trimise de browser, `et_pb_contact_email_fields_N`, se ignoră): obligatoriu, emailul valid,
+UTF-8 valid, un rând cel mult 500 de caractere (numele și emailul 190), un text cel mult 10 000, iar într-un câmp de un rând orice
+caracter de control (și liniile noi) devine spațiu, deci nimic din formular nu ajunge ca antet; aceeași trimitere de la aceeași
+adresă în 10 minute (o pagină reîncărcată) nu se scrie de două ori; plafonul site-ului, 300 de mesaje pe zi (429). Captcha-ul Divi
+(adunarea, verificată doar de scriptul Divi) nu se verifică. Apoi **mesajul se scrie întâi în baza site-ului**, în
+`contact_form_messages` (aceleași mesaje ca ale formularului de contact al nucleului, în Admin → Emailuri → Formulare de contact:
+numele, emailul, textul cu celelalte câmpuri, pagina, adresa vizitatorului), și abia apoi pleacă emailul, prin `OrderMailer` (aceeași
+infrastructură ca `/contact/send`: metoda și SMTP-ul din Admin → Emailuri, expeditorul `order_email_from_address`, Reply-To
+vizitatorul, fiecare valoare escapată, istoricul în Emailuri trimise). Destinatarii: `contact_form_recipients` din admin, dacă sunt
+puși, altfel adresa formularului din baza WordPress, altfel adresa de contact a site-ului (`Brand::destinatariContact`). Subiectul e
+al Divi („New Message From <site> - <titlul formularului>”, în limba documentului capturat). Un email care nu pleacă (sau peste 60 de
+mesaje pe oră) lasă mesajul cu starea `netrimis` (în admin: „emailul n-a plecat”), iar vizitatorul vede succesul: nimic nu s-a
+pierdut. Răspunsul, fără JavaScript: pagina întreagă (cu statusul documentului), cu mesajul în `.et-pb-contact-message` al
+formularului, ca Divi (`<p>` la succes, fără formular; `<p class="et_pb_contact_error_text">` la o eroare, cu formularul și valorile
+trimise, escapate), `Cache-Control: no-store`. Cu antetul `X-Ax-Formular: 1` (trimiterea prin `fetch` a runtime-ului compat), JSON:
+`{"stare": "trimis"|"eroare", "mesaje": [text], "campuri": [id-urile câmpurilor greșite], "redirect"?: adresa de după succes, doar pe
+același site}`. Textele Divi (succesul implicit „Thanks for contacting us”, erorile) urmează `<html lang>` al capturii (`en` pe
+pensiune, ca WordPress-ul de azi, sau `ro`); cele noi (limitele) sunt în română. Poarta: **G-formulare**
+(`tools/dev/test-formulare-wp.php`).
+
+**Căutarea** (pasul 9b; `App\Support\CautareCapturata`, `wp-compat.json` → `cautare_wp`; VC-CAUT-001): `GET /?s=<termeni>` (lupa din
+antet) primește o pagină de rezultate în cadrul site-ului: documentul 404 capturat (antetul, subsolul, bannerul, foile), cu
+conținutul înlocuit de lista paginilor găsite (titlul și legătura, escapate) sau de „Nu am găsit niciun rezultat”, statusul 200,
+titlul „Rezultatele căutării pentru „…” – <site>”, `noindex, follow` (meta robots și `X-Robots-Tag`), fără canonical, niciodată în
+cache. Potrivirea e a WordPress-ului (`WP_Query::parse_search`): frazele între ghilimele, cuvintele de legătură en_US și literele
+singure scoase, peste 9 termeni toată fraza, `-termen` exclus; fiecare termen în titlu, rezumat sau conținutul brut din WordPress
+(`pagini_capturate.corpus_cautare`, scris de import; o pagină editată după import se caută în textul ei de acum), fără deosebire de
+litere mari și de diacritice; ordinea WordPress (titlul cu fraza, cu toți termenii, cu unul, rezumatul, conținutul), apoi cele mai
+noi (id-ul WordPress). Doar paginile publicate, cel mult 50, fără paginare și fără rezumate; termenul cel mult 200 de caractere.
+Fluxul RSS al căutării nu există. Poarta: G-formulare.
 
 **Adresele greșite** (VC-URL-024): pe cadrul capturat nu se ghicește nimic (`ghicire` din wp-compat.json e ignorat): o adresă
 greșită, oricare ar fi prefixul (`/au…/`, `/h…/`), primește 404-ul capturat, fără redirecționare. Fluxurile: doar cele înghețate
@@ -1155,14 +1245,39 @@ fereastră). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inv
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
 la adresele vechi ca WordPress-ul: slash-ul final (`/x` → `/x/`), majusculele cu 200, `?page_id=`, `?p=`, `?cat=`,
 `?author=`, `/index.php` și atașamentele (301 la fișier), ghicirea adresei greșite, sitemap-urile vechi (302), 404 cu
-antetele WordPress, 410 pe resturile tehnice (în afara endpointurilor compatibile) și slug-urile Unicode în admin. ID-urile
-WordPress le ia din tabelul `wp_harta` (migrarea `nucleu/0069`), pe care îl scrie importul (`WpCompat\Harta::scrie`, din
-harta WordPress a planului; legarea în import vine cu pasul ei). Fără `wp-compat.json` nimic din toate acestea nu pornește.
+antetele WordPress, 410 pe resturile tehnice (în afara endpointurilor compatibile) și slug-urile Unicode în admin, fiecare doar cu
+cheia ei. ID-urile WordPress le ia din tabelul `wp_harta` (migrarea `nucleu/0069`), pe care importul îl rescrie întreg la fiecare
+`--aplica`, în tranzacția lui (`WpCompat\Harta::scrie`, din harta WordPress a planului, cu pagina din constructor a fiecărei postări
+importate: o pagină redenumită în admin rămâne ținta). Pachetul `pensiune` pornește `slash_final`, `majuscule`, `harta_id`
+(`?page_id=`, `?p=` → 301), `cautare_wp`, `antete_404` și `resturi_410` (`/wp-admin/`, `/wp-json/`, `/wp-login.php`, `/xmlrpc.php`,
+`/wp-cron.php`, `/readme.html` și celelalte fișiere ale nucleului: 410, VC-URL-025), cu oEmbed și managerul consimțământului în
+`compatibile`. Pe drumul capturat 410-ul resturilor îl dă acest strat: în harta adreselor vechi a importului regula `/wp-admin/…` nu
+se scrie, fiindcă sub ea e `POST /wp-admin/admin-ajax.php` al galeriei (`ImportWordPress\Plan::COMPATIBILE`; pe site-ul nou filtrul
+galeriei nu mai cere nimic, deci cererea primește 410). Pornite nu sunt `ghicire` (pe cadrul capturat nu se ghicește oricum) și
+`atasamente_la_fisier`: adresa unui atașament (`/?attachment_id=`, pagina lui) dă 404, fiindcă nu știm dacă WordPress-ul de azi are
+paginile atașamentelor pornite. Fără `wp-compat.json` nimic din toate acestea nu pornește.
 
 **Revenirea**: `deploy/revino.sh` vede `site/deploy/adopta-wp.stare` și ia drumul WordPress (`deploy/lib/revino-wp.php`):
 înainte de comutare șterge doar `public_html.nou`; după, pune `public_html.vechi` la loc (WordPress, verificat cu amprenta
-de la comutare), iar baza nouă rămâne neatinsă. `deploy/actualizeaza.sh` refuză un site cu adoptarea WordPress neterminată
-sau cu o revenire începută.
+de la comutare), iar baza nouă rămâne neatinsă (cu mesajele formularelor scrise după deschidere). Prima pagină se verifică după
+revenire până nu mai e a site-ului capturat (OPcache-ul serverului poate da câteva secunde `index.php`-ul de la aceeași cale).
+`deploy/actualizeaza.sh` refuză un site cu adoptarea WordPress neterminată sau cu o revenire începută.
+
+**Ce configurează proprietarul** (după GATA, înainte de mesajul de probă): Admin → **Emailuri** (`/admin/emails`): metoda SMTP, gazda,
+portul și criptarea căsuței de trimitere a domeniului (din hPanel → Emails → căsuța → datele de configurare: pe Hostinger
+`smtp.hostinger.com`, 465 cu SSL), utilizatorul (adresa căsuței) și **parola, tastată de proprietar doar acolo** (stă în baza
+site-ului; niciodată în git, în chat sau în fișiere), adresa și numele expeditorului (aceeași căsuță: altfel SPF/DMARC resping
+emailul). Până atunci emailurile pleacă prin `mail()`, pe care Hostinger le aruncă în tăcere: mesajele formularelor sunt în admin,
+dar nu ajung pe email. Opțional, destinatarii formularelor (Emailuri → destinatarii formularului de contact); fără ei, adresa
+formularului din WordPress. Apoi un singur mesaj de probă, din pagina de contact.
+
+**Repetiția** cap-coadă, local: `tools/dev/php.sh tools/dev/test-deploy-wp.php` (poarta **G-deploy-wp**): o găzduire simulată ca
+Hostinger (`acasa/domains/<domeniu>/public_html` cu un WordPress Divi de probă și baza lui, `site/capturat/` cu captura inventată,
+fișierele cerute de pagini și fontul Google, `site/privat/`, o bază nouă cu utilizatorul ei, versiunea făcută cu `release.sh`, licența
+de test, un server `php -S` cu routerul .htaccess-urilor), `--baza-noua` pe stdin, planul (niciun NU), `--aplica` până la `deschidere`,
+apoi paginile, foile (cu adresele relative), fontul, un formular trimis (scris în baza nouă, emailul prins), căutarea, adresele
+vechi (301), `/wp-admin/` și `/wp-login.php` (410), `diagnostic.php --capturat`, iar la sfârșit `revino.sh --aplica`: WordPress octet
+cu octet ca înainte (fiecare fișier și drepturile lui) și baza lui neatinsă (CHECKSUM TABLE).
 
 ## Ce nu face (încă)
 
@@ -1198,5 +1313,7 @@ sau cu o revenire începută.
   tabel lipsă) și după (`site/.env`), iar baza trebuie să rămână neatinsă.
 - Stub-ul și `bin/platforma` le verifică și `tools/dev/test-paths.php` (B).
 - Adoptarea WordPress: `deploy/adopta-wp.sh`, `deploy/lib/{adopta-wp,revino-wp,wordpress}.php`, importul
-  `App\Support\ImportWordPress` și `scripts/importa-wordpress.php`; testul `tools/dev/php.sh tools/dev/test-import-wordpress.php`
-  (un site WordPress inventat, [DEZVOLTARE.md](DEZVOLTARE.md)).
+  `App\Support\ImportWordPress` și `scripts/importa-wordpress.php`, fișierele statice `scripts/publica-statice.php`; testele
+  `tools/dev/php.sh tools/dev/test-import-wordpress.php` (un site WordPress inventat, [DEZVOLTARE.md](DEZVOLTARE.md)),
+  `tools/dev/php.sh tools/dev/test-formulare-wp.php` (formularele și căutarea) și `tools/dev/php.sh tools/dev/test-deploy-wp.php`
+  (repetiția cap-coadă, cu revenirea).

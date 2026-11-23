@@ -94,6 +94,10 @@ poarta G-compat "runtime-ul compat al paginilor capturate (public/assets/compat/
     "tools/dev/compat.sh" ADOPTA-WP-8a
 poarta G-capturat "cadrul paginilor capturate (App\\Support\\CadruCapturat, App\\Support\\CspSite, tema.json → cadru, runtime, csp): pe un server cu o captură inventată, paginile = T cu scripturile runtime-ului la sloturi (foile amânate data-ax-tarziu trimise ca <link rel=stylesheet>), 404-ul și cardul embed capturate, variantele de antet, nicio scurgere a layout-ului nucleului, 500 pe un jeton necunoscut, aceeași politică CSP la fiecare cerere și pe orice gazdă, trackerele declarate (Urmarire: doar cele cu id lărgesc CSP-ul și ajung în ax-date), șablonul managerului Cookie Policy, nosniff, embed fără frame-ancestors, Report-Only; fără cadru, ca înainte (tools/dev/test-capturat.php)" \
     "tools/dev/php.sh tools/dev/test-capturat.php" ADOPTA-WP-6
+poarta G-formulare "serverul formularelor de contact și căutarea site-ului capturat (App\\Support\\FormularCapturat, CautareCapturata; nonce-ul legat de formular cu APP_KEY): pe o captură inventată servită local, o trimitere fără JavaScript și cu fetch (JSON), mesajul scris în contact_form_messages înaintea emailului (prins), refuzurile (nonce, capcana, originea, mărimea, antetele, bugetul vizitatorului), emailul care nu pleacă (starea netrimis), căutarea /?s= în cadrul site-ului, noindex, escapată (tools/dev/test-formulare-wp.php)" \
+    "tools/dev/php.sh tools/dev/test-formulare-wp.php" ADOPTA-WP-9b
+poarta G-deploy-wp "repetiția adoptării WordPress cap-coadă pe o găzduire simulată (deploy/adopta-wp.sh --baza-noua, planul, --aplica până la deschidere, fișierele statice, un formular, căutarea, adresele vechi, 410, apoi revino.sh: WordPress octet cu octet) (tools/dev/test-deploy-wp.php)" \
+    "tools/dev/php.sh tools/dev/test-deploy-wp.php" ADOPTA-WP-9b
 
 # WP → porți, din „Acceptance” și „Bioscem identity” ale fiecărui WP (planul, §5). „Toate porțile”
 # = cele care există la acel WP. WP-14 mută G-cmp pe --site=bioscem (se schimbă aici, atunci).
@@ -236,14 +240,18 @@ declare -A PORTI=(
     # Adoptarea WordPress, pasul 10 (pista H): harness-ul de paritate (G-paritate), unelte Node noi în tools/dev/paritate-wp/,
     # fără PHP și fără nicio cale a cererii atinsă; referința live și rapoartele reale rămân în afara repo-ului.
     [ADOPTA-WP-10]="G-rute G-paritate"
+    # Adoptarea WordPress, pasul 9b (serverul): formularele de contact, căutarea, APP_KEY, fișierele statice și harta WordPress la
+    # adoptare (public/index.php, CadruCapturat, deploy/lib/adopta-wp.php, importul): porțile cadrului și ale importului (G-capturat,
+    # G-wp), cele noi (G-formulare, G-deploy-wp) și cele care arată că fără cadru totul e ca înainte (G-cmp, G-smoke, G-rute).
+    [ADOPTA-WP-9b]="G-rute G-cmp G-smoke G-wp G-capturat G-formulare G-deploy-wp G-php"
 )
 ORDINE_WP="WP-01 WP-02 WP-03 WP-04 WP-05 WP-06 WP-07 WP-08a WP-08 WP-09 WP-10 WP-11 WP-11b BV-pachet WP-12 WP-12b WP-13 WP-14
 WP-15 WP-16 WP-17 WP-18 WP-19 WP-20 WP-21 WP-22 WP-23 WP-24 WP-25 WP-26 WP-27 WP-28 WP-29 WP-30 WP-31 WP-32 WP-33
-WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy ADOPTA-WP-2 ADOPTA-WP-3 ADOPTA-WP-4a ADOPTA-WP-5a ADOPTA-WP-8a ADOPTA-WP-6 ADOPTA-WP-10"
+WP-34 WP-35 WP-36 WP-37 WP-38 WP-39 WP-40 WP-41 WP-R E2-deploy ADOPTA-WP-2 ADOPTA-WP-3 ADOPTA-WP-4a ADOPTA-WP-5a ADOPTA-WP-8a ADOPTA-WP-6 ADOPTA-WP-10 ADOPTA-WP-9b"
 
 if [ "$LISTA" = 1 ]; then
     echo "Porțile:"
-    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy G-wp G-html5 G-html-capturat G-captura G-compat G-capturat G-paritate; do
+    for p in G-rute G-cmp G-cmp-istoric G-plug G-plug-fiecare G-smoke G-seo G-php G-runner G-baza G-mig G-nestrict G-inst G-vechi G-paths G-verif G-sonde G-calc G-vizual G-pachet G-lic G-admin G-tastatura G-deploy G-wp G-html5 G-html-capturat G-captura G-compat G-capturat G-formulare G-deploy-wp G-paritate; do
         printf '  %-15s %s (din %s)\n' "$p" "${DESCRIERE[$p]}" "${ADUSA_DE[$p]}"
     done
     echo
