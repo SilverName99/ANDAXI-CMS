@@ -24,9 +24,11 @@
  * Hover (valoarea `hover`, de exemplu imaginile de pe Obiective): `mouseenter` pe țintă pune atributele valorii hover pe imagine
  * (`et_multi_view_image__loading` + `et_multi_view_swapped`, deci ascunsă de CSS), iar la `load`-ul imaginii `__loading` devine
  * `__loaded` (CSS-ul capturat o estompează în 0,5 s); `mouseleave` întoarce, la fel, valoarea modului curent. Ultima stare
- * câștigă. Resize peste un prag (OBS-16, neobservat pe live): valoarea modului nou; înapoi într-un mod fără valoare proprie
- * (desktop), starea de la încărcare: nodurile originale ale conținutului (fără `et_multi_view_swapped`), imaginea ascunsă
- * originală a logo-ului (nodul ei, cu `et_multi_view_hidden_image`), valoarea desktop pe o imagine schimbată pe loc.
+ * câștigă. Resize peste un prag: valoarea modului nou; înapoi într-un mod fără valoare proprie (desktop), ce face live-ul
+ * (observat offline pe Camere, 1366 → 820 → 1366 → 390 → 1366): conținutul desktop — aici nodurile originale — cu
+ * `et_multi_view_swapped` păstrat; imaginea ascunsă a logo-ului — aici nodul original — cu `et_multi_view_hidden_image`, src gol,
+ * plus `et_multi_view_swapped et_multi_view_image__loading` (ascunsă, fără cutie goală); o imagine schimbată pe loc primește
+ * valoarea desktop. O nouă copie a logo-ului pe tabletă/telefon nu ia `__loading`.
  *
  * Variantele HTML nu trec prin parserul browserului (fără innerHTML/DOMParser): le citește `citesteFragment`, un cititor strict
  * pe o listă închisă de etichete și atribute, care construiește nodurile cu createElement/createTextNode într-un document inert
@@ -714,6 +716,7 @@
         var nou = vechi.cloneNode(false);
         aplicaAtribute(nou, lista);
         nou.classList.remove('et_multi_view_hidden_image');
+        nou.classList.remove('et_multi_view_image__loading');
         nou.classList.add('et_multi_view_swapped');
         nou.classList.add('et_multi_view_image__loaded');
         if (vechi.parentNode) {
@@ -765,17 +768,18 @@
         }
     }
 
-    /** Înapoi într-un mod fără valoare proprie (desktop): starea de la încărcare. */
+    /** Înapoi într-un mod fără valoare proprie (desktop): conținutul și imaginea de la încărcare, cu clasele lăsate de live. */
     function restaureaza(intr, x) {
         if (intr.fel === 'content') {
             restaureazaContinut(intr);
-            intr.el.classList.remove('et_multi_view_swapped');
         } else if (intr.imagineOriginala !== null) {
             if (intr.el.parentNode) {
                 intr.el.parentNode.replaceChild(intr.imagineOriginala, intr.el);
             }
             intr.el = intr.imagineOriginala;
             intr.imagineOriginala = null;
+            intr.el.classList.add('et_multi_view_swapped');
+            intr.el.classList.add('et_multi_view_image__loading');
         } else if (intr.el.nodeName === 'IMG' && x !== null) {
             aplicaValoare(intr, x.v, false);
         } else {

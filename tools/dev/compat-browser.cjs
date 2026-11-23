@@ -2101,20 +2101,23 @@ async function verificaMultiView(browser) {
     const r1 = await marimi(390, 844);
     const r2 = await marimi(1440, 900);
     verifica('resize 1440 → 390 → 1440: varianta modului nou (telefon: lista de telefon; varianta de telefon refuzată: conținutul original, afișat), '
-      + 'apoi înapoi starea de la încărcare: nodurile originale ale conținutului, fără et_multi_view_swapped', r1.t6[1] === MV_TELEFON && r1.t5[1] === MV_LISTE
+      + 'apoi înapoi conținutul desktop — nodurile originale — cu et_multi_view_swapped păstrat, ca pe live', r1.t6[1] === MV_TELEFON && r1.t5[1] === MV_LISTE
       && r1.t7[1] === MV_TABEL_SERIAL && r1.t7[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && r1.t7[2] === 'block'
       && r2.t5[1] === MV_TABEL_SERIAL && r2.t6[1] === MV_TABEL_SERIAL && r2.t7[1] === MV_TABEL_SERIAL && r2.t5Original && r2.t7Original
-      && [r2.t5[0], r2.t6[0], r2.t7[0]].every((c) => c === 'et_pb_toggle_content clearfix'),
+      && [r2.t5[0], r2.t6[0], r2.t7[0]].every((c) => c === 'et_pb_toggle_content clearfix et_multi_view_swapped'),
     { r1: [r1.t5[1].slice(0, 60), r1.t6[1].slice(0, 60), r1.t7], r2: [r2.t5, r2.t6[0], r2.t7, r2.t5Original, r2.t7Original] });
     const r3 = await marimi(820, 1180);
     const r4 = await marimi(390, 844);
     const r5 = await marimi(1440, 900);
-    verifica('resize 1440 → 820 → 390 → 1440: tableta pune lista, telefonul (variantă refuzată) aduce înapoi nodurile originale cu et_multi_view_swapped; '
-      + 'logo-ul: pe tabletă copia cu src-ul de tabletă, înapoi pe desktop nodul original (et_multi_view_hidden_image, src gol, ascuns: nicio cutie goală)',
+    const r6 = await marimi(390, 844);
+    verifica('resize 1440 → 820 → 390 → 1440 → 390: tableta pune lista, telefonul (variantă refuzată) aduce înapoi nodurile originale cu et_multi_view_swapped; '
+      + 'logo-ul: pe tabletă copia cu src-ul de tabletă, înapoi pe desktop nodul original (et_multi_view_hidden_image, src gol, ascuns: nicio cutie '
+      + 'goală) cu et_multi_view_swapped și __loading, ca pe live; o copie nouă pe telefon fără __loading',
     r3.t7[1] === MV_LISTE && r4.t7[1] === MV_TABEL_SERIAL && r4.t7Original && r4.t7[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && r4.t7[2] === 'block'
-      && r5.t7Original && r5.t7[0] === 'et_pb_toggle_content clearfix' && r3.logo[1] === '/fixturi/galerie-2x1.png?logo' && !r3.logoOriginal
-      && r5.logoOriginal && egal(r5.logo, ['et_multi_view_hidden_image et_multi_view__hover_selector', '', null, null, 'none']),
-    { r3: [r3.t7[1].slice(0, 40), r3.logo], r4: r4.t7, r5: [r5.t7[0], r5.logo, r5.logoOriginal] });
+      && r5.t7Original && r5.t7[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && r3.logo[1] === '/fixturi/galerie-2x1.png?logo' && !r3.logoOriginal
+      && r5.logoOriginal && egal(r5.logo, ['et_multi_view_hidden_image et_multi_view__hover_selector et_multi_view_swapped et_multi_view_image__loading', '', null, null, 'none'])
+      && egal(r6.logo.slice(0, 2), ['et_multi_view__hover_selector et_multi_view_swapped et_multi_view_image__loaded', '/fixturi/galerie-2x1.png?logo']) && !r6.logoOriginal,
+    { r3: [r3.t7[1].slice(0, 40), r3.logo], r4: r4.t7, r5: [r5.t7[0], r5.logo, r5.logoOriginal], r6: r6.logo });
     await context.close();
   }
   for (const [eticheta, o, t5, t6, t7] of [['telefon (390, iPhone)', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }, MV_LISTE, MV_TELEFON, MV_TABEL_SERIAL],
