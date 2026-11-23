@@ -1102,7 +1102,9 @@ un `<script type="application/json">` cu un obiect JSON; altfel niciun modul și
 configurației; `adresaSigura()`, prin care trece orice adresă din configurație: https sau aceeași origine; accesul la cookie-uri și la
 Web Storage fără excepții, ca în previzualizarea izolată din admin), `tarziu.js` (fiecare `link[data-ax-tarziu]` trece din `preload` pe
 `stylesheet` la `load`-ul foii, pe loc, fără `ax-date`; foile „late” din `file` la locul lor, înainte de DOMContentLoaded, la primul
-cadru) și `clase-ua.js` (clasele de browser și de dispozitiv pe `<body>`, din slotul final, înainte de DOMContentLoaded; `uiwebview` și
+cadru; la răspunsul web, cadrul capturat trimite deja aceste linkuri ca `<link rel="stylesheet">` — `CadruCapturat::foiTarziiCaFoi`
+—, deci foaia amânată a paginii, cu modulele de sub prima ecranare și subsolul Theme Builder, nu mai depinde de un script; T, P1 și
+amprenta randării rămân ale capturii) și `clase-ua.js` (clasele de browser și de dispozitiv pe `<body>`, din slotul final, înainte de DOMContentLoaded; `uiwebview` și
 clasele de dispozitiv și când `navigator.standalone === false`, ca pe iPad cu iPadOS, care are UA de Mac; în Safari, `display: block` pe
 `<body>` după `load`). Felia 1 mai are, în `divi4/v1/`, toate la `dom`, ca pe live: `structura.js`
 (`et_pb_column_single`, `et_pb_row_<mărimi>` pe rândurile interioare din conținut și pe rândul „specialty” din antet, `z-index: 3` pe

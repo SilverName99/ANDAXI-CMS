@@ -248,7 +248,8 @@ foreach (['pachet', 'pachet-fara', 'pachet-raport'] as $pa) {
 $port = (int) (getenv('CMS_DEV_PORT') ?: 8701) + 31;
 $verifica('serverul cu cadru = capturat pornește', $pornesteServer($port, $lucru . '/pachet', $lucru . '/site'));
 $norm = new Normalizare($url);
-$asteptatPagina = static fn (string $cale): string => ScriereCapturata::asteptat($taieri[$cale], $runtime);
+// Răspunsul web = T cu runtime-ul, cu foile amânate ale dialectului (data-ax-tarziu) trimise ca foi obișnuite (CadruCapturat::foiTarziiCaFoi).
+$asteptatPagina = static fn (string $cale): string => CadruCapturat::foiTarziiCaFoi(ScriereCapturata::asteptat($taieri[$cale], $runtime));
 $egale = static function (string $a, string $b) use ($norm): ?int {
     $na = $norm->document($a);
     $nb = $norm->document($b);
@@ -271,6 +272,14 @@ foreach (['/', '/camere/'] as $cale) {
     }
 }
 $verifica('paginile = T cu scripturile runtime-ului la sloturi (octet cu octet, cu nonce-urile normalizate)', $dif === [], implode('; ', $dif));
+$tarziuT = (string) (preg_match('/<link[^>]*proba-tarziu-css[^>]*>/', ScriereCapturata::asteptat($taieri['/'], $runtime), $mt) === 1 ? $mt[0] : '');
+$tarziuServit = (string) (preg_match('/<link[^>]*proba-tarziu-css[^>]*>/', $raspunsuri['/']['corp'], $ms) === 1 ? $ms[0] : '');
+$verifica('foaia amânată a dialectului (în T: <link rel="preload" as="style" … data-ax-tarziu>) pleacă la răspuns ca <link rel="stylesheet">, pe loc, '
+    . 'fără as și fără data-ax-tarziu (aspectul nu depinde de un script); niciun alt link schimbat',
+    str_contains($tarziuT, 'data-ax-tarziu') && str_contains($tarziuT, "rel='preload'") && str_contains($tarziuServit, "rel='stylesheet'")
+    && !str_contains($tarziuServit, 'data-ax-tarziu') && !str_contains($tarziuServit, " as='style'") && !str_contains($raspunsuri['/']['corp'], 'data-ax-tarziu')
+    && CadruCapturat::foiTarziiCaFoi("<head><link rel='preload' as='font' href='/f.woff2' data-ax-tarziu></head><body><p>data-ax-tarziu</p></body>")
+        === "<head><link rel='preload' as='font' href='/f.woff2' data-ax-tarziu></head><body><p>data-ax-tarziu</p></body>", $tarziuT . " → " . $tarziuServit);
 $camere = $raspunsuri['/camere/']['corp'];
 $verifica('valorile cererii: nonce-ul zilei în formulare și în ax-date, anul de azi, niciun jeton rămas', !str_contains($camere, '{{ax:')
     && substr_count($camere, 'value="' . CadruCapturat::nonceZi(null, 'cheie-de-proba-a-cadrului') . '"') === 1 && str_contains($camere, '© ' . $an . ' ' . WP_PROBA_SITE)
@@ -279,7 +288,7 @@ $verifica('variantele de antet: prima pagină cu antetul ei, celelalte cu al lor
 $verifica('nicio scurgere a layout-ului nucleului (app.css, site-shell, bannerul și scripturile nucleului)', !str_contains($camere, '/assets/css/app.css')
     && !str_contains($camere, 'site-shell') && !str_contains($camere, 'cookie-banner') && !str_contains($camere, '/assets/js/'), '');
 $r404 = $cerere($port, '/nu-exista/');
-$e404 = ScriereCapturata::randeazaDinBaza($db, '404', $runtime, ['cale' => '/nu-exista/', 'nonce' => 'abcdef0123', 'an' => $an]);
+$e404 = CadruCapturat::foiTarziiCaFoi(ScriereCapturata::randeazaDinBaza($db, '404', $runtime, ['cale' => '/nu-exista/', 'nonce' => 'abcdef0123', 'an' => $an]));
 $d404 = $egale($r404['corp'], $e404);
 $verifica('404-ul capturat: status 404, calea cerută în formular și JSON-LD, antetele capturii', $r404['cod'] === 404 && $d404 === null
     && str_contains($r404['corp'], 'value="/nu-exista/"') && str_contains($r404['corp'], '\/nu-exista\/') && str_starts_with($r404['antete']['content-type'] ?? '', 'text/html'),

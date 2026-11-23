@@ -261,8 +261,34 @@ final class CadruCapturat
         if (!$tip) {
             header('Content-Type: text/html; charset=UTF-8');
         }
-        echo $html;
+        echo self::foiTarziiCaFoi($html);
         return $status;
+    }
+
+    /**
+     * Foile amânate ale dialectului, trimise ca foi obișnuite: în head, fiecare `<link rel="preload" as="style" … data-ax-tarziu>`
+     * (CSS-ul pe care Divi îl încarca după pagină cu `onload="this.rel='stylesheet'"`: foaia „deferred” a paginii, cu restul
+     * modulelor și subsolul Theme Builder, și foile dinamice) iese `<link rel="stylesheet" …>`, pe loc (aceeași cascadă), fără
+     * `as` și fără `data-ax-tarziu`. Aspectul paginii nu mai depinde de un script și de evenimentul `load` al unui preload
+     * (tarziu.js rămâne rezerva pentru un document care le-ar mai avea), cu prețul că foile se aplică înaintea primei desenări,
+     * nu după ea. Doar la răspunsul web: T, P1 și amprenta randării (`randeazaRand`) rămân octet cu octet ale capturii.
+     */
+    public static function foiTarziiCaFoi(string $html): string
+    {
+        $sf = stripos($html, '</head>');
+        $cap = $sf === false ? $html : substr($html, 0, $sf);
+        $cap = (string) preg_replace_callback('/<link\b[^<>]*\sdata-ax-tarziu(?=[\s\/>=])[^<>]*>/i', static function (array $m): string {
+            $t = $m[0];
+            $rel = '/\srel\s*=\s*(["\']?)preload\1(?=[\s\/>])/i';
+            $as = '/\sas\s*=\s*(["\']?)style\1(?=[\s\/>])/i';
+            if (preg_match($rel, $t) !== 1 || preg_match($as, $t) !== 1) {
+                return $t;
+            }
+            $t = (string) preg_replace($rel, ' rel=$1stylesheet$1', $t, 1);
+            $t = (string) preg_replace($as, '', $t, 1);
+            return (string) preg_replace('/\sdata-ax-tarziu(?:\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s"\'=<>`]+))?(?=[\s\/>])/i', '', $t, 1);
+        }, $cap);
+        return $sf === false ? $cap : $cap . substr($html, $sf);
     }
 
     /**

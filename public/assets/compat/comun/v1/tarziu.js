@@ -20,6 +20,9 @@
  *     fără niciunul, nimic, cu un rând în diagnostic). Doar adrese care trec de `axCompat.adresaSigura` (https sau pe originea
  *     paginii); o adresă deja inserată nu se mai inserează.
  *
+ * Pe paginile servite de cadrul capturat, linkurile acestea vin deja ca `<link rel="stylesheet">` (CadruCapturat::foiTarziiCaFoi, la
+ * răspunsul web: aspectul paginii nu depinde de acest script); trecerea de mai sus rămâne rezerva pentru un document care le-ar avea
+ * încă (P1, previzualizări, porțile).
  * Preload-urile nu țin pe loc evenimentul `load` al ferestrei: pe o rețea lentă, foile târzii se pot aplica după el, ca pe live.
  * Atributul `data-ax-tarziu` rămâne pe link (pe live rămânea atributul `onload`). Starea: `axCompat.tarziu.stare()`;
  * `axCompat.tarziu.aplica()` reia ambele treceri, fără efect peste ce s-a făcut. O a doua includere nu face nimic.
