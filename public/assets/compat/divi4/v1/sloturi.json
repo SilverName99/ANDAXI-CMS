@@ -17,6 +17,8 @@
         "divi4/v1/divimenus.js",
         "divi4/v1/video.js",
         "divi4/v1/meniu-mobil.js",
+        "divi4/v1/multi-view.js",
+        "divi4/v1/toggle.js",
         "comun/v1/urmarire.js",
         "comun/v1/consimtamant.js"
     ]

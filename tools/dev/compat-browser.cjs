@@ -312,6 +312,55 @@ const CORP_VIDEO = '<div id="page-container"><div id="et-main-area">' + videoDiv
 const STIL_VIDEO = '.et_pb_video{position:relative;width:400px;height:225px}.et_pb_video_overlay{position:absolute;top:0;left:0;width:100%;height:100%;cursor:pointer}'
   + '.et_pb_video_play{display:block;width:100%;height:100%}';
 
+// Toggle-urile și un acordeon Divi (toggle.md; inventate: facilitățile „Pensiunea Probă”). Conținutul: 20 px sus + 5 rânduri × 30 px.
+const RANDURI_TOGGLE = ['Prosoape', 'Papuci de casă', 'Uscător de păr', 'Ceainic', 'Balcon'].map((x) => '<p class="proba-rand">' + x + '</p>').join('');
+const toggleDivi = (n, deschis, titlu, item) => '<div class="et_pb_module et_pb_toggle et_pb_toggle_' + n + ' ' + (item || 'et_pb_toggle_item') + ' et_pb_text_align_left '
+  + (deschis ? 'et_pb_toggle_open' : 'et_pb_toggle_close') + '"><h2 class="et_pb_toggle_title">' + titlu + '</h2><div class="et_pb_toggle_content clearfix">'
+  + RANDURI_TOGGLE + '</div></div>';
+const CORP_TOGGLE = '<div id="page-container"><div id="et-main-area">' + toggleDivi(0, false, 'Facilitățile camerei – Pensiunea Probă')
+  + toggleDivi(1, false, 'Facilitățile băii – Pensiunea Probă')
+  + '<div class="et_pb_module et_pb_accordion et_pb_accordion_0">' + toggleDivi(2, true, 'Mic dejun', 'et_pb_accordion_item et_pb_accordion_item_0')
+  + toggleDivi(3, false, 'Cină', 'et_pb_accordion_item et_pb_accordion_item_1') + '</div></div></div>\n';
+const STIL_TOGGLE = '*{box-sizing:border-box}body{margin:0}.et_pb_toggle{width:600px}.et_pb_toggle_title{margin:0;height:40px;font-size:16px}'
+  + '.et_pb_toggle_content{padding-top:20px}.et_pb_toggle_close .et_pb_toggle_content{display:none}.proba-rand{margin:0;height:30px}';
+
+// Multi-view (multi-view.md; inventat): logo-ul ascuns al meniului, un conținut tabel ↔ liste, o imagine cu hover și variante rele.
+const mv = (o) => atribut(JSON.stringify(o));
+const MV_TABEL = '<p>\u00a0</p>\n<table class="alignleft" style="width: 100%;" border="1">\n<tbody>\n<tr>\n<td style="width: 50%;">\n<h2><strong>Camera</strong></h2>\n'
+  + '</td>\n<td style="width: 50%;">\n<h2>Baia</h2>\n</td>\n</tr>\n<tr>\n<td>\n<ul>\n<li>Pat dublu</li>\n<li>TV</li>\n</ul>\n</td>\n<td>\n<ul>\n'
+  + '<li class="proba-li" data-id="31"><span class="">Duș</span></li>\n</ul>\n</td>\n</tr>\n</tbody>\n</table>';
+const MV_LISTE = '<h2><strong><span style="color: #000000;">Camera</span></strong></h2>\n<ul>\n<li>Pat dublu</li>\n<li>TV &amp; radio</li>\n</ul>\n'
+  + '<h2>Baia</h2>\n<ul>\n<li class="proba-li" data-id="31"><span class="">Duș</span></li>\n</ul>\n<!-- variantă -->\n';
+const MV_TELEFON = MV_LISTE.replace('Pat dublu', '1x Pat dublu');
+const MV_TABEL_SERIAL = MV_TABEL.replace('\u00a0', '&nbsp;');
+const MV_RELE = [
+  ['handler', '<p>ok</p><img src="/fixturi/galerie-2x1.png" onerror="alert(1)">'],
+  ['tbody', '<table><tr><td>x</td></tr></table>'],
+  ['p-inchis', '<p>a<ul><li>b</li></ul></p>'],
+  ['script', '<script>alert(1)</script>'],
+  ['adresa', '<a href="javascript:alert(1)">x</a>'],
+  ['entitate', '<p>&icirc;</p>'],
+];
+const CORP_MV = '<div id="page-container"><div id="et-main-area">'
+  + '<div class="et_pb_module et_pb_menu et_pb_menu_0"><div class="et_pb_menu__logo-wrap"><div class="et_pb_menu__logo"><a href="/pagina/baza">'
+  + '<img decoding="async" src="" alt="" class="et_multi_view_hidden_image" data-et-multi-view="' + mv({ schema: { attrs: { desktop: { src: '', alt: '' },
+    tablet: { src: '/fixturi/galerie-2x1.png?logo' } } }, slug: 'et_pb_menu', hover_selector: '.et_pb_menu_0 .et_pb_menu__logo img' }) + '"></a></div></div></div>'
+  + '<div class="et_pb_module et_pb_toggle et_pb_toggle_5 et_pb_toggle_item et_pb_toggle_open"><h2 class="et_pb_toggle_title">Facilitățile – Pensiunea Probă</h2>'
+  + '<div class="et_pb_toggle_content clearfix" data-et-multi-view="' + mv({ schema: { content: { desktop: MV_TABEL, tablet: MV_LISTE } }, slug: 'et_pb_toggle' })
+  + '" data-et-multi-view-load-tablet-hidden="true">' + MV_TABEL + '</div></div>'
+  + '<div class="et_pb_module et_pb_toggle et_pb_toggle_6 et_pb_toggle_item et_pb_toggle_open"><h2 class="et_pb_toggle_title">Facilitățile – telefon</h2>'
+  + '<div class="et_pb_toggle_content clearfix" data-et-multi-view="' + mv({ schema: { content: { desktop: MV_TABEL, tablet: MV_LISTE, phone: MV_TELEFON } }, slug: 'et_pb_toggle' })
+  + '" data-et-multi-view-load-tablet-hidden="true" data-et-multi-view-load-phone-hidden="true">' + MV_TABEL + '</div></div>'
+  + '<div class="et_pb_module et_pb_image et_pb_image_0"><span class="et_pb_image_wrap"><img decoding="async" width="40" height="30" src="/fixturi/galerie-4x3.png" alt="" '
+  + 'class="wp-image-7" data-et-multi-view="' + mv({ schema: { attrs: { desktop: { src: '/fixturi/galerie-4x3.png', alt: '', class: 'wp-image-7' },
+    hover: { src: '/fixturi/galerie-3x4.png?hover', srcset: '/fixturi/galerie-3x4.png?hover 30w' } } }, slug: 'et_pb_image' }) + '"></span></div>'
+  + MV_RELE.map(([n, v]) => '<div class="et_pb_module et_pb_text proba-rau-' + n + '"><div class="et_pb_text_inner" data-et-multi-view="'
+    + mv({ schema: { content: { desktop: '<p>Text desktop</p>', tablet: v } }, slug: 'et_pb_text' }) + '"><p>Text desktop</p></div></div>').join('')
+  + '</div></div>\n';
+const STIL_MV = 'body{margin:0}@media (min-width:768px) and (max-width:980px){[data-et-multi-view-load-tablet-hidden=true]:not(.et_multi_view_swapped){display:none!important}}'
+  + '@media (max-width:767px){[data-et-multi-view-load-phone-hidden=true]:not(.et_multi_view_swapped){display:none!important}}'
+  + '.et_multi_view_image__loading{visibility:hidden}@media (max-width:980px){.et_pb_menu{display:none}}.et_pb_image{width:40px}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -417,6 +466,8 @@ const PAGINI = {
   galerie: { corp: CORP_GALERIE, stil: STIL_GALERIE },
   divimenus: { corp: CORP_DM, stil: STIL_DM },
   video: { corp: CORP_VIDEO, stil: STIL_VIDEO },
+  toggle: { corp: CORP_TOGGLE, stil: STIL_TOGGLE },
+  multiview: { corp: CORP_MV, stil: STIL_MV },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -980,6 +1031,8 @@ async function verificaIdempotenta(browser, baza) {
     ax.lightboxMfp.aplica();
     ax.divimenus.aplica();
     ax.videoDivi.aplica();
+    ax.multiView.aplica();
+    ax.toggle.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1725,6 +1778,203 @@ async function verificaUrmarirea(browser) {
   await pr.context.close();
 }
 
+// Urma unui clic pe titlul unui toggle: [ms, înălțimea conținutului, starea din clasă, style], la fiecare cadru.
+const urmaToggle = (f, n, actiuni, ms) => f.evaluate(async ([n, actiuni, ms]) => {
+  const m = document.querySelector('.et_pb_toggle_' + n);
+  const c = m.querySelector('.et_pb_toggle_content');
+  const rez = [];
+  const t0 = performance.now();
+  let gata = false;
+  const stareClasa = () => (m.classList.contains('et_pb_toggle_open') ? 'open' : '') + (m.classList.contains('et_pb_toggle_close') ? 'close' : '');
+  const pas = () => {
+    rez.push([Math.round(performance.now() - t0), Math.round(c.getBoundingClientRect().height * 10) / 10, stareClasa(), c.getAttribute('style')]);
+    if (!gata) {
+      requestAnimationFrame(pas);
+    }
+  };
+  requestAnimationFrame(pas);
+  for (const [dupa, unde] of actiuni) {
+    await new Promise((r) => setTimeout(r, dupa));
+    document.querySelector(unde).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  }
+  await new Promise((r) => setTimeout(r, ms));
+  gata = true;
+  return { urma: rez, clasa: m.getAttribute('class'), stil: c.getAttribute('style'), inaltime: c.getBoundingClientRect().height };
+}, [n, actiuni, ms]);
+const laMomentul = (u, t) => { const x = u.filter((p) => p[0] <= t); return x.length ? x[x.length - 1] : null; };
+
+async function verificaToggle(browser) {
+  scrie('== toggle (felia 3, toggle.md): deschiderea și închiderea în 700 ms „swing”, clasele la sfârșit, acordeonul, fără tastatură');
+  const { context, page, ev } = await deschide(browser, { cale: '/pagina/toggle' });
+  const f = page.mainFrame();
+  const s = await stare(f);
+  verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă; nimic schimbat la încărcare', curate(ev, s)
+    && (await f.evaluate(() => Array.from(document.querySelectorAll('.et_pb_toggle_content')).every((c) => !c.hasAttribute('style')))), detaliiCurate(ev, s));
+  const H = 170;
+  const d = await urmaToggle(f, 0, [[0, '.et_pb_toggle_0 .et_pb_toggle_title']], 850);
+  const mij = laMomentul(d.urma, 350);
+  const ultimaInchisa = d.urma.filter((p) => p[2] === 'close').pop();
+  verifica('clic pe titlu: conținutul crește de la 0 la toată înălțimea (20 + 5 × 30 px) pe „swing” în 700 ms (≈ jumătate la 350 ms), cu style-ul '
+    + 'de pe live (display, overflow, height, padding-top, margin-top, padding-bottom, margin-bottom, în ordinea asta), clasa schimbată abia la sfârșit',
+  d.clasa === 'et_pb_module et_pb_toggle et_pb_toggle_0 et_pb_toggle_item et_pb_text_align_left et_pb_toggle_open' && d.stil === 'display: block;'
+    && Math.abs(d.inaltime - H) < 0.5 && mij && mij[1] > H * 0.3 && mij[1] < H * 0.7 && laMomentul(d.urma, 60)[1] < H * 0.1
+    && ultimaInchisa && ultimaInchisa[0] > 600 && /^display: block; overflow: hidden; height: [0-9.]+px; padding-top: [0-9.e-]+px; margin-top: 0px; padding-bottom: 0px; margin-bottom: 0px;$/.test(mij[3]),
+  { clasa: d.clasa, stil: d.stil, mij, ultimaInchisa, urma: d.urma.slice(0, 4) });
+  const i = await urmaToggle(f, 0, [[0, '.et_pb_toggle_0 .et_pb_toggle_title']], 850);
+  verifica('al doilea clic: închiderea de la înălțimea de acum la 0 în 700 ms, apoi display:none rămâne în style și et_pb_toggle_open → et_pb_toggle_close',
+    i.clasa === 'et_pb_module et_pb_toggle et_pb_toggle_0 et_pb_toggle_item et_pb_text_align_left et_pb_toggle_close' && i.stil === 'display: none;'
+    && laMomentul(i.urma, 350)[1] > H * 0.3 && laMomentul(i.urma, 350)[1] < H * 0.7 && laMomentul(i.urma, 350)[2] === 'open', { clasa: i.clasa, stil: i.stil, mij: laMomentul(i.urma, 350) });
+  const dublu = await urmaToggle(f, 0, [[0, '.et_pb_toggle_0 .et_pb_toggle_title'], [120, '.et_pb_toggle_0 .et_pb_toggle_title']], 850);
+  const maxim = Math.max.apply(null, dublu.urma.map((p) => p[1]));
+  verifica('clic dublu la 120 ms: animația se întoarce din punctul atins (sub un sfert), închis la capăt, fără clasa open în tot acest timp',
+    dublu.clasa.endsWith('et_pb_toggle_close') && dublu.stil === 'display: none;' && maxim > 0 && maxim < H * 0.25 && dublu.urma.every((p) => p[2] === 'close'), { maxim, clasa: dublu.clasa });
+  const ambele = await f.evaluate(async () => {
+    document.querySelector('.et_pb_toggle_0 .et_pb_toggle_title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document.querySelector('.et_pb_toggle_1 .et_pb_toggle_title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 800));
+    document.querySelector('.et_pb_toggle_1 .proba-rand').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 100));
+    return [0, 1].map((n) => document.querySelector('.et_pb_toggle_' + n).classList.contains('et_pb_toggle_open'));
+  });
+  verifica('două toggle-uri sunt independente (ambele deschise); clicul în conținut nu închide nimic', egal(ambele, [true, true]), ambele);
+  const ac = await f.evaluate(async () => {
+    const st = () => [2, 3].map((n) => document.querySelector('.et_pb_toggle_' + n).classList.contains('et_pb_toggle_open'));
+    const r = { start: st() };
+    document.querySelector('.et_pb_toggle_2 .et_pb_toggle_title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((x) => setTimeout(x, 800));
+    r.peDeschis = st();
+    document.querySelector('.et_pb_toggle_3 .et_pb_toggle_title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((x) => setTimeout(x, 350));
+    r.mijloc = [2, 3].map((n) => Math.round(document.querySelector('.et_pb_toggle_' + n + ' .et_pb_toggle_content').getBoundingClientRect().height));
+    await new Promise((x) => setTimeout(x, 500));
+    r.dupa = st();
+    r.stiluri = [2, 3].map((n) => document.querySelector('.et_pb_toggle_' + n + ' .et_pb_toggle_content').getAttribute('style'));
+    return r;
+  });
+  verifica('acordeonul: clicul pe elementul deschis nu face nimic; deschiderea altuia îl închide pe cel deschis, în aceeași animație',
+    egal(ac.start, [true, false]) && egal(ac.peDeschis, [true, false]) && egal(ac.dupa, [false, true]) && ac.mijloc[0] > 30 && ac.mijloc[0] < 140
+    && ac.mijloc[1] > 30 && ac.mijloc[1] < 140 && egal(ac.stiluri, ['display: none;', 'display: block;']), ac);
+  const tast = await f.evaluate(async () => {
+    const t = document.querySelector('.et_pb_toggle_0 .et_pb_toggle_title');
+    const inainte = document.querySelector('.et_pb_toggle_0').className;
+    t.focus();
+    t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    t.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    await new Promise((r) => setTimeout(r, 800));
+    return { tab: t.tabIndex, atribute: Array.from(t.attributes).map((a) => a.name), activ: document.activeElement === t, schimbat: document.querySelector('.et_pb_toggle_0').className !== inainte };
+  });
+  verifica('tastatura: titlul rămâne nefocalizabil și fără ARIA (ca pe live), Enter/Space nu comută', tast.tab === -1 && egal(tast.atribute, ['class'])
+    && tast.activ === false && tast.schimbat === false, tast);
+  const n = await f.evaluate(() => {
+    window.axCompat.toggle.aplica();
+    document.querySelector('.et_pb_toggle_1 .et_pb_toggle_title').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return new Promise((r) => setTimeout(() => r(document.querySelector('.et_pb_toggle_1').classList.contains('et_pb_toggle_close')), 800));
+  });
+  verifica('aplica() din nou nu dublează ascultătorul (un clic = o comutare)', n === true, n);
+  await context.close();
+}
+
+async function verificaMultiView(browser) {
+  scrie('== multi-view (felia 2, multi-view.md): conținutul și imaginile pe dispozitiv, hover, cititorul strict al variantelor');
+  // Cititorul: aceleași noduri ca parserul HTML pe variantele acceptate, refuz pe cele care ar fi construite altfel sau sunt rele.
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/multiview' });
+    const bune = [MV_TABEL, MV_LISTE, MV_TELEFON, '<p>a &lt;b&gt; &#259; &#x21B; &nbsp;x</p>', 'text <span>1</span> &amp; 2 < 3', '<ul><li>a<ul><li>b</li></ul></li></ul>',
+      '<table><tbody><tr><td><table><tbody><tr><td>x</td></tr></tbody></table></td></tr></tbody></table>', '<p>a<br>b<br/>c</p><hr>',
+      '<a href="#sus" target="_blank" rel="noopener">sus</a> <a href="mailto:oaspeti@example.org">scrie</a> <img src="/fixturi/galerie-4x3.png" alt="" width="4">'];
+    const rele = MV_RELE.map((x) => x[1]).concat(['<span/>', '<div id="1x">x</div>', '<p style="background:url(javascript:alert(1))">x</p>', '<h2><h3>x</h3></h2>',
+      '<li>a<li>b', '<b><i>x</b></i>', '<p>a</span>', '<a href="//alt.example/x">x</a>', '<form action="/x"></form>', '<iframe src="/x"></iframe>', '<![CDATA[x]]>']);
+    const r = await page.evaluate(([bune, rele]) => {
+      const ser = (frag) => { const dv = document.createElement('div'); dv.appendChild(frag); return dv.innerHTML; };
+      const parser = (s) => { const t = document.createElement('template'); t.innerHTML = s; return ser(t.content.cloneNode(true)); };
+      const citeste = (s) => { try { return ser(window.axCompat.multiView.citesteFragment(s)); } catch (e) { return e.refuzFragment ? 'REFUZ: ' + e.message : 'EROARE: ' + e.message; } };
+      return { bune: bune.map((s) => [citeste(s), parser(s)]), rele: rele.map(citeste) };
+    }, [bune, rele]);
+    const gresite = r.bune.filter(([a, b]) => a !== b);
+    verifica('cititorul strict: ' + bune.length + ' variante (tabelul și listele de tip Divi, referințe de caractere, liste și tabele imbricate, '
+      + 'elemente vide, legături sigure) dau exact nodurile parserului HTML', gresite.length === 0, gresite);
+    const neRefuzate = r.rele.map((x, k) => [rele[k], x]).filter(([, x]) => !/^REFUZ: /.test(x));
+    verifica('cititorul strict refuză (fail-closed) ' + rele.length + ' variante: handler on*, tbody implicit, <p> închis implicit, <script>, javascript:, '
+      + 'o referință necunoscută, „/>” pe un element nevid, un id invalid, url(javascript:), titlu în titlu, li deschis în li, închideri încrucișate, '
+      + 'adresă spre altă gazdă, form, iframe, CDATA', neRefuzate.length === 0, neRefuzate);
+    verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă', curate(ev, await stare(page.mainFrame())), ev);
+    await context.close();
+  }
+  const citesteMv = (f) => f.evaluate(() => {
+    const logo = document.querySelector('.et_pb_menu__logo img');
+    const t5 = document.querySelector('.et_pb_toggle_5 .et_pb_toggle_content');
+    const t6 = document.querySelector('.et_pb_toggle_6 .et_pb_toggle_content');
+    const img = document.querySelector('.et_pb_image_0 img');
+    const rele = Array.from(document.querySelectorAll('[class*="proba-rau-"] .et_pb_text_inner')).map((e) => [e.className, e.innerHTML]);
+    return { logo: [logo.getAttribute('class'), logo.getAttribute('src'), logo.getAttribute('srcset'), logo.getAttribute('sizes')], t5: [t5.className, t5.innerHTML, getComputedStyle(t5).display],
+      t6: [t6.className, t6.innerHTML, getComputedStyle(t6).display], hoverClase: Array.from(document.querySelectorAll('.et_multi_view__hover_selector')).map((e) => e.className),
+      img: [img.getAttribute('class'), img.getAttribute('src')], rele, diag: window.axCompat.diagnostic().filter((x) => /^multi-view/.test(x)),
+      noduriImg: window.__axProba.jurnal.filter((j) => j.fel === 'nod' && j.tinta === 'img' && j.t >= window.__axProba.dcl).length };
+  });
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/multiview' });
+    const s = await stare(page.mainFrame());
+    const m = await citesteMv(page.mainFrame());
+    const tinte = m.hoverClase.map((c) => c.split(' ').find((k) => /^(et_multi_view_hidden_image|et_pb_toggle_[0-9]|et_pb_image_[0-9]|proba-rau-.*)$/.test(k)));
+    verifica('desktop (1440): doar clasa et_multi_view__hover_selector pe ținte (logo-ul însuși, prin hover_selector; modulul cu clasa slug-ului: '
+      + 'toggle, imagine, text); nimic schimbat, nicio cerere pentru logo-ul de tabletă', curate(ev, s) && egal(m.logo, ['et_multi_view_hidden_image et_multi_view__hover_selector', '', null, null])
+      && m.t5[0] === 'et_pb_toggle_content clearfix' && m.t5[1] === MV_TABEL_SERIAL && m.t6[1] === MV_TABEL_SERIAL && m.noduriImg === 0
+      && egal(tinte, ['et_multi_view_hidden_image', 'et_pb_toggle_5', 'et_pb_toggle_6', 'et_pb_image_0'].concat(MV_RELE.map((x) => 'proba-rau-' + x[0])))
+      && !ev.cereri.some((c) => /\?logo/.test(c)), { tinte, m, cereri: ev.cereri, ...detaliiCurate(ev, s) });
+    // hover pe imagine: ascunsă cât se încarcă, apoi __loaded; la ieșire, înapoi
+    const h = await page.evaluate(async () => {
+      const mod = document.querySelector('.et_pb_image_0');
+      const img = mod.querySelector('img');
+      const r = {};
+      mod.dispatchEvent(new MouseEvent('mouseenter'));
+      r.imediat = [img.getAttribute('class'), img.getAttribute('src'), img.getAttribute('srcset'), getComputedStyle(img).visibility];
+      await new Promise((x) => setTimeout(x, 400));
+      r.incarcat = [img.getAttribute('class'), getComputedStyle(img).visibility];
+      mod.dispatchEvent(new MouseEvent('mouseleave'));
+      r.iesire = [img.getAttribute('class'), img.getAttribute('src')];
+      await new Promise((x) => setTimeout(x, 400));
+      r.dupa = img.getAttribute('class');
+      return r;
+    });
+    verifica('hover (desktop): mouseenter pune valoarea hover (src, srcset) cu et_multi_view_image__loading + et_multi_view_swapped (ascunsă), apoi '
+      + '__loaded la load; mouseleave întoarce valoarea desktop, la fel', egal(h.imediat, ['wp-image-7 et_multi_view_image__loading et_multi_view_swapped',
+      '/fixturi/galerie-3x4.png?hover', '/fixturi/galerie-3x4.png?hover 30w', 'hidden']) && egal(h.incarcat, ['wp-image-7 et_multi_view_swapped et_multi_view_image__loaded', 'visible'])
+      && egal(h.iesire, ['wp-image-7 et_multi_view_swapped et_multi_view_image__loading', '/fixturi/galerie-4x3.png']) && h.dupa === 'wp-image-7 et_multi_view_swapped et_multi_view_image__loaded', h);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(200);
+    const r1 = await citesteMv(page.mainFrame());
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(200);
+    const r2 = await citesteMv(page.mainFrame());
+    verifica('resize 1440 → 390 → 1440: varianta modului nou (telefon: lista de telefon), apoi înapoi tabelul desktop', r1.t6[1] === MV_TELEFON && r1.t5[1] === MV_LISTE
+      && r2.t5[1] === MV_TABEL_SERIAL && r2.t6[1] === MV_TABEL_SERIAL, { r1: [r1.t5[1].slice(0, 60), r1.t6[1].slice(0, 60)], r2: [r2.t5[1].slice(0, 60), r2.t6[1].slice(0, 60)] });
+    await context.close();
+  }
+  for (const [eticheta, o, t5, t6] of [['telefon (390, iPhone)', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }, MV_LISTE, MV_TELEFON],
+    ['tabletă (820, iPad)', { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true, ua: UA.safariMac, init: STANDALONE_FALS }, MV_LISTE, MV_LISTE]]) {
+    const { context, page, ev } = await deschide(browser, Object.assign({ cale: '/pagina/multiview' }, o));
+    const s = await stare(page.mainFrame());
+    const m = await citesteMv(page.mainFrame());
+    const conditii = { curat: curate(ev, s), t5: m.t5[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && m.t5[1] === t5 && m.t5[2] === 'block',
+      t6: m.t6[1] === t6 && m.t6[2] === 'block', logo: egal(m.logo, ['et_multi_view__hover_selector et_multi_view_swapped et_multi_view_image__loaded', '/fixturi/galerie-2x1.png?logo', '', '']),
+      inlocuit: m.noduriImg === 1, cerut: ev.cereri.some((c) => /galerie-2x1\.png\?logo/.test(c)) };
+    verifica(eticheta + ': conținutul înlocuit cu varianta modului (phone → tablet → desktop) și et_multi_view_swapped, deci afișat; logo-ul ascuns '
+      + 'înlocuit în DOM de o copie cu src-ul de tabletă (srcset și sizes goale, ca pe live), fără et_multi_view_hidden_image, cu et_multi_view_swapped '
+      + 'et_multi_view_image__loaded (și cerut)',
+    Object.values(conditii).every(Boolean), { conditii, m: { logo: m.logo, t5: m.t5[0], t6: m.t6[0], noduriImg: m.noduriImg }, cereri: ev.cereri, ...detaliiCurate(ev, s) });
+    verifica(eticheta + ': variantele rele (handler, tbody implicit, <p> închis implicit, <script>, javascript:, referință necunoscută) refuzate: '
+      + 'elementul rămâne cu textul desktop, câte un rând în diagnostic; imaginea fără valoare de mod rămâne neatinsă', m.rele.every(([c, h]) => h === '<p>Text desktop</p>' && !/swapped/.test(c))
+      && m.diag.filter((x) => /^multi-view: variantă refuzată/.test(x)).length === MV_RELE.length && egal(m.img, ['wp-image-7', '/fixturi/galerie-4x3.png']), { rele: m.rele, diag: m.diag });
+    const idem = await page.evaluate(() => {
+      const a = document.body.innerHTML;
+      window.axCompat.multiView.aplica();
+      return a === document.body.innerHTML;
+    });
+    verifica(eticheta + ': aplica() din nou nu schimbă nimic', idem === true);
+    await context.close();
+  }
+}
+
 async function verificaClaseleUa(browser) {
   scrie('== clase-ua: regula pe tabel și clasele puse în pagină');
   {
@@ -1873,6 +2123,8 @@ async function main() {
     await verificaGaleria(browser);
     await verificaDivimenus(browser);
     await verificaVideo(browser);
+    await verificaToggle(browser);
+    await verificaMultiView(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);
