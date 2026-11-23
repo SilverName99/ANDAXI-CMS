@@ -25,24 +25,29 @@ use Throwable;
  * Ordinea, fiecare pas fail-closed:
  *  1. mărimea: corpul cel mult MARIME_CERERE octeți și cel mult MAX_CAMPURI câmpuri (413);
  *  2. originea: `Sec-Fetch-Site`, altfel `Origin`, ale site-ului însuși (GardaOrigine::aceeasiOrigine; 403);
- *  3. bugetul vizitatorului (LimitaCereri, pe rețeaua lui: INCERCARI_15_MIN încercări în 15 minute, INCERCARI_ZI pe zi; 429);
+ *  3. bugetul vizitatorului (LimitaCereri, pe rețeaua lui, IPv6 /64 ca una: INCERCARI_15_MIN încercări în 15 minute, INCERCARI_ZI pe
+ *     zi; 429). E singurul refuz din cauza numărului: plafoanele site-ului opresc doar emailurile (pasul 10), niciodată mesajul;
  *  4. capcana: `ax_capcana` (sau `et_pb_contactform_validate_N` al Divi) completat = un robot: refuzat, nimic scris;
  *  5. nonce-ul: CadruCapturat::nonceFormular pe calea și numărul formularului, al zilei de azi sau de ieri (hash_equals);
- *  6. câmpurile, DOAR după configurația capturată (definițiile trimise de browser, `et_pb_contact_email_fields_N`, se ignoră):
- *     obligatoriu, emailul valid, text UTF-8 valid, lungimea (un rând: LUNGIME_RAND, un text: LUNGIME_TEXT; numele și emailul
- *     încap în coloanele lor); rândurile câmpurilor de un rând fără caractere de control (nicio linie nouă în antete). Captcha-ul
+ *  6. câmpurile, DOAR după configurația capturată (definițiile trimise de browser, `et_pb_contact_email_fields_N`, și câmpurile
+ *     necunoscute se ignoră): obligatoriu, emailul valid, text UTF-8 valid, lungimea (un rând: LUNGIME_RAND, un text: LUNGIME_TEXT;
+ *     numele, emailul și telefonul în coloanele lor, COLOANE); rândurile câmpurilor de un rând fără caractere de control (nicio
+ *     linie nouă în antete). Captcha-ul
  *     Divi (o adunare, verificată doar de scriptul Divi; serverul WordPress cerea doar să nu fie gol) nu se verifică: apărarea sunt
  *     nonce-ul, capcana și bugetul;
  *  7. același mesaj de la aceeași adresă în ultimele 10 minute (o pagină reîncărcată după trimitere): succes, nescris de două ori;
- *  8. plafonul site-ului: MESAJE_ZI mesaje pe zi (429);
- *  9. mesajul se SCRIE în `contact_form_messages` (aceleași mesaje din Admin → Emailuri → Formulare de contact), ÎNAINTE de email;
- *  10. emailul, prin OrderMailer (setările Admin → Emailuri: SMTP și expeditorul), cu Reply-To adresa vizitatorului; un email care
- *     nu pleacă (sau peste EMAILURI_ORA pe oră) lasă mesajul în admin cu starea `netrimis`. Vizitatorul vede succesul: mesajul
- *     nu s-a pierdut.
+ *  8. mesajul se SCRIE în `contact_form_messages` (aceleași mesaje din Admin → Emailuri → Formulare de contact), ÎNAINTE de email;
+ *  9. plafoanele emailurilor: cel mult EMAILURI_IP_ZI emailuri pe zi de pe aceeași rețea, EMAILURI_ORA pe oră și EMAILURI_ZI pe zi pe
+ *     tot site-ul (numărate în `register_submit_logs`, starea `l:formular_wp_email`). Peste oricare, mesajul rămâne în admin cu
+ *     starea `retinut` (marcat, cu numărul celor din ultima zi deasupra listei), fără email, iar vizitatorul vede succesul: zece
+ *     rețele nu pot umple căsuța proprietarului și nici nu pot opri mesajele altora;
+ *  10. emailul, prin OrderMailer (setările Admin → Emailuri: SMTP și expeditorul), cu Reply-To adresa vizitatorului; unul care nu
+ *     pleacă lasă mesajul în admin cu starea `netrimis`. Vizitatorul vede succesul: mesajul nu s-a pierdut.
  *
  * Răspunsul, fără JavaScript (forma de azi a paginilor, fără scripturile Divi): pagina întreagă, cu mesajul în
  * `.et-pb-contact-message` al formularului și, la succes, fără formular, ca Divi; la o eroare, formularul rămâne, cu valorile
- * trimise (escapate). Cu antetul `X-Ax-Formular: 1` (trimiterea din runtime-ul compat, prin fetch), JSON: `{"stare": "trimis" |
+ * trimise (escapate); cu o adresă de după succes a formularului (Divi „redirect”), 303 spre ea, doar pe același site
+ * (redirectPermis). Cu antetul `X-Ax-Formular: 1` (trimiterea din runtime-ul compat, prin fetch), JSON: `{"stare": "trimis" |
  * "eroare", "mesaje": [...], "campuri": [...], "redirect"?: "..."}`, ca runtime-ul să schimbe doar formularul (fără HTML
  * construit din text în browser). Textele Divi (succesul, erorile) urmează limba documentului capturat (`<html lang>`), ca
  * WordPress; mesajul de succes al formularului vine din baza WordPress.
@@ -53,10 +58,17 @@ final class FormularCapturat
     public const MAX_CAMPURI = 60;
     public const LUNGIME_RAND = 500;
     public const LUNGIME_TEXT = 10000;
-    public const INCERCARI_15_MIN = 10;
-    public const INCERCARI_ZI = 30;
-    public const MESAJE_ZI = 300;
+    public const INCERCARI_15_MIN = 20;
+    public const INCERCARI_ZI = 60;
+    public const EMAILURI_IP_ZI = 5;
     public const EMAILURI_ORA = 60;
+    public const EMAILURI_ZI = 300;
+
+    /** Coloanele din `contact_form_messages` cu lungimea lor (caractere): un câmp mai lung e o eroare, nu un mesaj tăiat sau pierdut. */
+    public const COLOANE = ['nume' => 190, 'email' => 190, 'telefon' => 60];
+
+    /** Scopul LimitaCereri al emailurilor trimise (plafoanele vizitatorului și ale site-ului). */
+    public const SCOP_EMAIL = 'formular_wp_email';
 
     /** Antetul trimiterii din runtime-ul compat (fetch): răspunsul e JSON. */
     public const ANTET_JSON = 'X-Ax-Formular';
@@ -66,6 +78,9 @@ final class FormularCapturat
 
     /** Starea mesajului scris în `contact_form_messages` când emailul n-a plecat. */
     public const STARE_NETRIMIS = 'netrimis';
+
+    /** Starea mesajului scris fără email, fiindcă un plafon al emailurilor era atins (EMAILURI_IP_ZI, EMAILURI_ORA, EMAILURI_ZI). */
+    public const STARE_RETINUT = 'retinut';
 
     /** Textele Divi (et_builder), în limba site-ului WordPress (`<html lang>` al capturii). */
     private const DIVI = [
@@ -114,6 +129,15 @@ final class FormularCapturat
         $rez = self::proceseaza($db, $formular, $n, $cale, $_POST, $_SERVER, $limba, (string) ($gasit['doc']['cheie'] ?? ''));
         if (self::cuJson($_SERVER)) {
             self::raspundeJson($rez);
+            return true;
+        }
+        if ($rez['stare'] === 'trimis' && $rez['redirect'] !== '') {
+            // Divi „redirect” după succes, și fără JavaScript: 303, doar spre același site (redirectPermis), fără cache.
+            http_response_code(303);
+            header('Location: ' . $rez['redirect']);
+            header('Cache-Control: no-store, private');
+            header('Content-Type: text/html; charset=UTF-8');
+            echo self::paginaSimpla($rez);
             return true;
         }
         $status = $rez['cod'] !== 200 ? $rez['cod'] : $gasit['status'];
@@ -276,7 +300,7 @@ final class FormularCapturat
             $v = $text ? self::curataText($v) : self::curataRand($v);
             $valori[$nume] = $v;
             $limita = $text ? self::LUNGIME_TEXT : self::LUNGIME_RAND;
-            if (mb_strlen($v) > $limita || (in_array(self::rol($camp), ['nume', 'email'], true) && mb_strlen($v) > 190)) {
+            if (mb_strlen($v) > $limita || mb_strlen($v) > (self::COLOANE[self::rol($camp)] ?? PHP_INT_MAX)) {
                 $mesaje[] = self::NOI['prea_lung'];
                 $gresite[] = $id;
                 continue;
@@ -334,11 +358,6 @@ final class FormularCapturat
             if ($q->fetchColumn() !== false) {
                 return $ok; // aceeași trimitere, din nou (o pagină reîncărcată): scrisă deja
             }
-            if ((int) $db->query('SELECT COUNT(*) FROM contact_form_messages WHERE created_at >= (NOW() - INTERVAL 1 DAY)')->fetchColumn() >= self::MESAJE_ZI) {
-                error_log('ANDAXI-CMS: formularul capturat: plafonul de ' . self::MESAJE_ZI . ' mesaje pe zi atins; trimitere refuzată');
-                return $eroare(self::NOI['prea_multe'], 429);
-            }
-            $peOra = (int) $db->query('SELECT COUNT(*) FROM contact_form_messages WHERE created_at >= (NOW() - INTERVAL 1 HOUR)')->fetchColumn();
             $db->prepare('INSERT INTO contact_form_messages (name, email, phone, subject, message, status, source_url, ip_address, user_agent, created_at)
                 VALUES (?, ?, ?, ?, ?, \'new\', ?, ?, ?, NOW())')->execute([$nume, $email, $telefon !== '' ? $telefon : null, mb_substr($subiect, 0, 255), $corp,
                 mb_substr($cale, 0, 500), $ip !== '' ? $ip : null, mb_substr(self::curataRand((string) ($server['HTTP_USER_AGENT'] ?? '')), 0, 255) ?: null]);
@@ -349,7 +368,8 @@ final class FormularCapturat
             return $eroare($t['reincarca'], 500);
         }
         $trimise = 0;
-        if ($peOra < self::EMAILURI_ORA) {
+        $plafon = self::plafonEmail($db);
+        if ($plafon === null) {
             $html = self::corpEmail($campuri, $c, $cale, $document);
             foreach (self::destinatari($db, $setari, $c) as $destinatar) {
                 try {
@@ -361,15 +381,37 @@ final class FormularCapturat
                 }
             }
         } else {
-            error_log('ANDAXI-CMS: formularul capturat: peste ' . self::EMAILURI_ORA . ' mesaje în ultima oră; mesajul ' . $id . ' rămâne doar în admin');
+            error_log('ANDAXI-CMS: formularul capturat: ' . $plafon . '; mesajul ' . $id . ' rămâne doar în admin, fără email');
         }
         if ($trimise === 0) {
             try {
-                $db->prepare('UPDATE contact_form_messages SET status = ? WHERE id = ?')->execute([self::STARE_NETRIMIS, $id]);
+                $db->prepare('UPDATE contact_form_messages SET status = ? WHERE id = ?')->execute([$plafon !== null ? self::STARE_RETINUT : self::STARE_NETRIMIS, $id]);
             } catch (Throwable) {
             }
         }
         return $ok;
+    }
+
+    /**
+     * Un plafon al emailurilor atins (motivul), sau null: emailul poate pleca, iar plecarea lui se numără (pe rețeaua vizitatorului
+     * și pe site). Întâi plafoanele site-ului (fără să scrie nimic), apoi al vizitatorului (LimitaCereri, care numără).
+     */
+    public static function plafonEmail(PDO $db): ?string
+    {
+        try {
+            $stare = LimitaCereri::PREFIX . self::SCOP_EMAIL;
+            foreach ([[60, self::EMAILURI_ORA, 'pe oră'], [1440, self::EMAILURI_ZI, 'pe zi']] as [$minute, $maxim, $cand]) {
+                $q = $db->prepare('SELECT COUNT(*) FROM register_submit_logs WHERE status = ? AND created_at >= (NOW() - INTERVAL ' . $minute . ' MINUTE)');
+                $q->execute([$stare]);
+                if ((int) $q->fetchColumn() >= $maxim) {
+                    return 'plafonul site-ului de ' . $maxim . ' emailuri ' . $cand . ' e atins';
+                }
+            }
+        } catch (Throwable) {
+            return null; // fără tabel, fără plafon (LimitaCereri face la fel): mesajul e oricum scris
+        }
+        return LimitaCereri::incearca($db, self::SCOP_EMAIL, self::EMAILURI_IP_ZI, 1440) ? null
+            : 'plafonul de ' . self::EMAILURI_IP_ZI . ' emailuri pe zi de pe aceeași rețea e atins';
     }
 
     /**
@@ -535,21 +577,27 @@ final class FormularCapturat
             . self::scapa($cale) . '</p>';
     }
 
-    /** Adresa de după succes (opțiunea Divi „redirect”), doar spre același site: o cale relativă sau o adresă cu gazda din APP_URL. */
-    private static function redirectPermis(string $url): string
+    /**
+     * Adresa de după succes (opțiunea Divi „redirect”), doar spre același site: o cale relativă (`/…`, nu `//…`) sau o adresă cu
+     * schema și gazda din APP_URL (sau perechea ei www), fără utilizator și parolă, doar ASCII vizibil (fără spații, `\`,
+     * caractere de control). Altfel '' (fără redirecționare: mesajul de succes, ca fără opțiune).
+     */
+    public static function redirectPermis(string $url, ?string $appUrl = null): string
     {
         $url = trim($url);
-        if ($url === '' || preg_match('/[\x00-\x1F\x7F\s\\\\]/', $url) === 1) {
+        if ($url === '' || preg_match('/[^\x21-\x7E]|\\\\/', $url) === 1) {
             return '';
         }
         if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
             return $url;
         }
-        $gazda = strtolower((string) parse_url((string) Env::get('APP_URL', ''), PHP_URL_HOST));
+        $baza = parse_url($appUrl ?? (string) Env::get('APP_URL', ''));
+        $gazda = strtolower((string) ($baza['host'] ?? ''));
+        $schema = strtolower((string) ($baza['scheme'] ?? 'https'));
         $p = parse_url($url);
-        return is_array($p) && in_array(strtolower((string) ($p['scheme'] ?? '')), ['https', 'http'], true) && $gazda !== ''
-            && in_array(strtolower((string) ($p['host'] ?? '')), [$gazda, 'www.' . $gazda, (string) preg_replace('/^www\./', '', $gazda)], true)
-            && !isset($p['user']) && !isset($p['pass']) ? $url : '';
+        $gazde = [$gazda, 'www.' . $gazda, (string) preg_replace('/^www\./', '', $gazda)];
+        return is_array($p) && $gazda !== '' && strtolower((string) ($p['scheme'] ?? '')) === $schema && in_array(strtolower((string) ($p['host'] ?? '')), $gazde, true)
+            && ($p['port'] ?? null) === ($baza['port'] ?? null) && !isset($p['user']) && !isset($p['pass']) ? $url : '';
     }
 
     /** Un câmp de un rând: fără caractere de control (nici linii noi), spațiile strânse la capete. */

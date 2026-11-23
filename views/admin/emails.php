@@ -1297,6 +1297,14 @@ if (count($taburiEmail) > 1) {
 
             <article class="panel" style="margin-top:12px;">
                 <h3 style="margin:0 0 10px;">Mesaje primite din formularele de contact</h3>
+                <?php
+                // Formularele site-ului capturat (App\Support\FormularCapturat): mesajele scrise fără email în ultima zi, peste plafonul emailurilor.
+                $faraEmailZi = count(array_filter($contactMessages, static fn (array $m): bool => (string) ($m['status'] ?? '') === \App\Support\FormularCapturat::STARE_RETINUT
+                    && strtotime((string) ($m['created_at'] ?? '')) >= time() - 86400));
+                ?>
+                <?php if ($faraEmailZi > 0): ?>
+                    <p role="status" style="margin:0 0 10px;color:var(--ax-eroare);">Plafonul emailurilor formularelor a fost atins: <?= $faraEmailZi ?> <?= $faraEmailZi === 1 ? 'mesaj din ultima zi n-a plecat' : 'mesaje din ultima zi n-au plecat' ?> pe email. Sunt toate mai jos, marcate.</p>
+                <?php endif; ?>
                 <table class="table">
                     <thead>
                         <tr>
@@ -1316,7 +1324,7 @@ if (count($taburiEmail) > 1) {
                                 <td><?= htmlspecialchars((string) ($message['phone'] ?? '-'), ENT_QUOTES) ?></td>
                                 <td><?= htmlspecialchars((string) ($message['subject'] ?? ''), ENT_QUOTES) ?></td>
                                 <td><?= nl2br(htmlspecialchars((string) ($message['message'] ?? ''), ENT_QUOTES)) ?></td>
-                                <td><?= htmlspecialchars((string) ($message['created_at'] ?? ''), ENT_QUOTES) ?><?php if ((string) ($message['status'] ?? '') === \App\Support\FormularCapturat::STARE_NETRIMIS): ?><br><span style="color:var(--ax-eroare);font-size:12px;">emailul n-a plecat (mesajul e aici)</span><?php endif; ?></td>
+                                <td><?= htmlspecialchars((string) ($message['created_at'] ?? ''), ENT_QUOTES) ?><?php if ((string) ($message['status'] ?? '') === \App\Support\FormularCapturat::STARE_NETRIMIS): ?><br><span style="color:var(--ax-eroare);font-size:12px;">emailul n-a plecat (mesajul e aici)</span><?php elseif ((string) ($message['status'] ?? '') === \App\Support\FormularCapturat::STARE_RETINUT): ?><br><span style="color:var(--ax-eroare);font-size:12px;">fără email: plafonul emailurilor atins (mesajul e aici)</span><?php endif; ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if ($contactMessages === []): ?>

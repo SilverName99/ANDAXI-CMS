@@ -4585,6 +4585,13 @@ final class SiteController
 
     public function contactSend(): void
     {
+        // Modul WordPress (wp-compat.json): formularul de contact al nucleului nu există pe un site mutat de pe WordPress (ca GET
+        // /contact, mai sus), deci nici trimiterea lui: 404. Formularele site-ului sunt cele capturate (App\Support\FormularCapturat,
+        // cu nonce-ul, capcana și plafoanele lor); altfel /contact/send, fără ele, ar umple aceeași listă de mesaje.
+        if (\App\Support\WpCompat::activ()) {
+            $this->paginaNegasita();
+            return;
+        }
         $db = $this->db();
         if (!$db instanceof PDO) {
             $this->jsonResponse([
