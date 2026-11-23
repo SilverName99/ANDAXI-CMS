@@ -18,6 +18,11 @@
  * `.dd-menu-item-modal` urcă din `translateY(<înălțimea ei>)` în `data-effect-ms` (curba „swing”, 0,5 − cos(πp)/2), apoi
  * `transform: none`. Închiderea: X-ul (`.dd-close-icon`), clicul pe fundal în afara cutiei, Esc; cu `data-effect-out="slidedown"`
  * cutia coboară întâi. Linkul `#` nu navighează. Un singur popup deschis o dată.
+ * Meniul „flex” (`.et_pb_divimenus_flex`, butonul rotund plutitor de pe Obiective, observat pe live offline și online): clicul pe
+ * butonul `.dd-menu-button` sau Enter/Space pe `.dd-menu-button-content` comută `dd-divimenu-open` pe `nav.dd-divimenu` (CSS-ul
+ * capturat arată și estompează elementele) și `aria-pressed` pe buton, care primește `hover`; trecerea mouse-ului îi pune și îi
+ * scoate `hover`. Clicul în afară, Esc și clicul pe un element nu-l închid (ca pe live); legăturile `#id` ale elementelor le
+ * derulează ancore.js.
  */
 (function (w, d) {
     'use strict';
@@ -116,6 +121,11 @@
 
     function laClic(e) {
         var t = e.target;
+        var flex = deschis ? null : butonFlex(t);
+        if (flex) {
+            comutaFlex(flex);
+            return;
+        }
         if (deschis) {
             if (stramos(t, '.dd-close-icon') || (deschis.pop.contains(t) && !(deschis.cutie && deschis.cutie.contains(t)))) {
                 e.preventDefault();
@@ -138,6 +148,38 @@
     function laTasta(e) {
         if (e.key === 'Escape' && deschis) {
             inchide();
+            return;
+        }
+        if ((e.key === 'Enter' || e.key === ' ') && !e.defaultPrevented) {
+            var b = stramos(e.target, '.et_pb_divimenus_flex .dd-menu-button-content');
+            if (b) {
+                e.preventDefault();
+                comutaFlex(b);
+            }
+        }
+    }
+
+    /** Meniul flex: deschis ↔ închis (clasa de pe nav, aria-pressed pe buton, `hover` pe buton). */
+    function comutaFlex(buton) {
+        var nav = stramos(buton, 'nav.dd-divimenu');
+        if (!nav) {
+            return;
+        }
+        var acum = !nav.classList.contains('dd-divimenu-open');
+        nav.classList.toggle('dd-divimenu-open', acum);
+        buton.classList.add('hover');
+        buton.setAttribute('aria-pressed', acum ? 'true' : 'false');
+    }
+
+    function butonFlex(t) {
+        var b = stramos(t, '.et_pb_divimenus_flex .dd-menu-button');
+        return b ? b.querySelector('.dd-menu-button-content') : null;
+    }
+
+    function laTrecere(e) {
+        var b = butonFlex(e.target);
+        if (b && !(e.relatedTarget && b.parentNode.contains(e.relatedTarget))) {
+            b.classList.toggle('hover', e.type === 'mouseover');
         }
     }
 
@@ -208,6 +250,10 @@
             pornit = true;
             d.addEventListener('click', laClic);
             d.addEventListener('keydown', laTasta);
+            if (d.querySelector('.et_pb_divimenus_flex .dd-menu-button')) {
+                d.addEventListener('mouseover', laTrecere);
+                d.addEventListener('mouseout', laTrecere);
+            }
             if (d.querySelector('.et_pb_divimenus')) {
                 w.addEventListener('resize', pini);
             }

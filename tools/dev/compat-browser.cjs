@@ -296,14 +296,27 @@ const itemDm = (n, pop, efecte, flex) => '<div class="et_pb_divimenus' + (flex ?
   + '<div class="et_pb_section proba-card-' + n + '"><p class="proba-card">Pensiunea Probă – popup ' + n + '</p></div></div></div></div></div>';
 const modulDm = (n, pop, efecte, flex) => '<div class="et_pb_module et_pb_divimenus' + (flex ? '_flex' : '') + ' et_pb_divimenus' + (flex ? '_flex' : '') + '_' + n + '"><div class="et_pb_module_inner"><nav class="dd-divimenu dd-dm" aria-label="DiviMenu">'
   + (flex ? '' : '<div class="dd-menu-bg"></div>') + '<div class="dd-menu-items" role="menu">' + itemDm(n, pop, efecte, flex) + '</div></nav></div></div>';
+// Meniul flex plutitor ca pe Obiective: butonul rotund care deschide o listă de ancore din pagină.
+const DM_PLUTITOR = '<div class="et_pb_module et_pb_divimenus_flex et_pb_divimenus_flex_1 proba-flex-plutitor"><div class="et_pb_module_inner"><div class="dd-wrapper">'
+  + '<nav class="dd-divimenu dd-flex dd-closed-desktop dd-closed-tablet dd-closed-phone" role="menu" aria-label="DiviMenu"><div class="dd-menu-button" role="menuitem">'
+  + '<span class="dd-item dd-menu-button-content dd-icon-content notranslate" aria-label="a Icon Font" role="button" aria-pressed="false" tabindex="0">a</span></div>'
+  + [['proba-dm-tinta', 'Cascada'], ['proba-dm-varf', 'Vârful']].map(([id, n], k) => '<div class="et_pb_divimenus_flex_item et_pb_divimenus_flex_item_' + (k + 1) + '" role="menuitem">'
+    + '<div class="et_pb_module_inner"><div class="dd-mi-w dd-menu-flex-item-wrapper"><div class="dd-mi dd-menu-flex-item"><a href="#' + id + '" tabindex="-1">'
+    + '<div class="dd-item dd-menu-item-content dd-text" tabindex="0"><span class="dd-text-content">' + n + '</span></div></a></div></div></div></div>').join('')
+  + '</nav></div></div></div>';
 const CORP_DM = '<div id="page-container"><div id="et-main-area"><div class="et-l et-l--post"><div class="et_builder_inner_content">'
   + '<div class="et_pb_section"><div class="et_pb_row"><div class="et_pb_column et_pb_column_4_4 proba-col-pini">' + modulDm(0, 'et_pb_divimenus_item_0_popup', false)
-  + '</div><div class="et_pb_column et_pb_column_1_2 proba-col-grila">' + modulDm(0, 'et_pb_divimenus_flex_item_0_popup', true, true)
-  + '</div><div class="et_pb_column et_pb_column_1_2 proba-col-fara"><p>Fără meniu</p></div></div></div></div></div></div></div>\n';
+  + '</div><div class="et_pb_column et_pb_column_1_2 proba-col-grila">' + modulDm(0, 'et_pb_divimenus_flex_item_0_popup', true, true) + DM_PLUTITOR
+  + '</div><div class="et_pb_column et_pb_column_1_2 proba-col-fara"><p>Fără meniu</p></div></div></div>'
+  + '<div id="proba-dm-tinta" class="et_pb_section proba-dm-tinta"><p>Cascada – Pensiunea Probă</p></div><div id="proba-dm-varf" class="et_pb_section proba-dm-tinta"><p>Vârful</p></div>'
+  + '</div></div></div></div>\n';
 const STIL_DM = 'body{margin:0}.et_pb_divimenus{position:relative;height:60px}.et_pb_divimenus_0{position:absolute;left:1380px;top:0;width:0}'
   + '.dd-menu-bg{width:40px;height:40px}.dd-item{display:inline-block;width:40px}.dd-title{width:148px;height:33.40625px}'
   + '.dd-popup-c{position:fixed!important;display:none;left:0;top:0;width:100%;height:100%;z-index:159899;overflow-y:auto}'
-  + '.et_pb_divimenus_flex{position:relative;height:60px}.dd-menu-item-modal{position:relative;width:600px;height:400px;background:#ebe4dd}.dd-popup-active--disable-page-scroll{overflow:hidden!important}';
+  + '.et_pb_divimenus_flex{position:relative;height:60px}.dd-menu-item-modal{position:relative;width:600px;height:400px;background:#ebe4dd}.dd-popup-active--disable-page-scroll{overflow:hidden!important}'
+  + '.et_pb_divimenus_flex.proba-flex-plutitor{position:fixed;left:5px;top:300px;height:auto;z-index:99}.dd-menu-button{width:63px;height:63px}'
+  + '.dd-flex .et_pb_divimenus_flex_item{visibility:hidden;opacity:0}.dd-flex.dd-divimenu-open .et_pb_divimenus_flex_item{visibility:visible;opacity:1}'
+  + '.proba-dm-tinta{margin-top:2500px;height:400px}#proba-dm-varf{margin-bottom:1200px}';
 
 // Video-ul Divi cu copertă (video.md; inventat): unul cu copertă, unul fără.
 const videoDivi = (n, coperta) => '<div class="et_pb_module et_pb_video et_pb_video_' + n + '"><div class="et_pb_video_box"><video controls>'
@@ -1706,6 +1719,50 @@ async function verificaDivimenus(browser) {
   verifica('slidedown: popup-ul rămâne afișat cât coboară cutia, apoi display: none și derularea deblocată', sd1 === 'flex' && egal(sd2, ['none', false]), { sd1, sd2 });
   const idem = await f.evaluate(() => { window.axCompat.divimenus.aplica(); return Array.from(document.querySelector('.et-l.et-l--post').children).map((x) => x.id || x.className); });
   verifica('aplica() a doua oară: nimic mutat din nou', egal(idem, ['et_pb_divimenus_flex_item_0_popup', 'et_pb_divimenus_item_0_popup', 'et_builder_inner_content']), idem);
+  // Meniul flex plutitor (ca pe Obiective, observat pe live): butonul comută lista, elementele derulează la ancore
+  const fl = () => f.evaluate(() => { const n = document.querySelector('.proba-flex-plutitor nav'); const b = n.querySelector('.dd-menu-button-content');
+    return [n.className.includes('dd-divimenu-open'), b.className, b.getAttribute('aria-pressed'), getComputedStyle(n.querySelector('.et_pb_divimenus_flex_item')).visibility]; });
+  const z0 = await fl();
+  await f.evaluate(() => document.querySelector('.proba-flex-plutitor .dd-menu-button-content').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const z1 = await fl();
+  const dr = await f.evaluate(async () => {
+    window.scrollTo(0, 0);
+    const tinta = document.getElementById('proba-dm-varf').getBoundingClientRect().top + scrollY;
+    document.querySelector('.proba-flex-plutitor .et_pb_divimenus_flex_item_2 .dd-item').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    await new Promise((x) => setTimeout(x, 400));
+    const mij = scrollY;
+    await new Promise((x) => setTimeout(x, 550));
+    return { tinta, mij, final: scrollY, hash: location.hash };
+  });
+  const z2 = await fl();
+  await f.evaluate(() => { document.querySelector('#proba-dm-tinta').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); });
+  await p.page.keyboard.press('Escape');
+  const z3 = await fl();
+  await f.evaluate(() => document.querySelector('.proba-flex-plutitor .dd-menu-button').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+  const z4 = await fl();
+  verifica('meniul flex plutitor: închis la încărcare (elementele ascunse de CSS); clicul pe buton → nav dd-divimenu-open, aria-pressed true, hover pe buton; '
+    + 'un element derulează lin (~800 ms) la ancora lui, fără hash, iar meniul rămâne deschis; clicul în afară și Esc nu-l închid; al doilea clic (și pe '
+    + 'cutia butonului) îl închide', egal(z0, [false, 'dd-item dd-menu-button-content dd-icon-content notranslate', 'false', 'hidden'])
+    && egal(z1, [true, 'dd-item dd-menu-button-content dd-icon-content notranslate hover', 'true', 'visible']) && dr.hash === '' && Math.abs(dr.final - dr.tinta) <= 1
+    && dr.mij > dr.tinta * 0.2 && dr.mij < dr.tinta * 0.8 && z2[0] === true && z3[0] === true && egal(z4, [false, 'dd-item dd-menu-button-content dd-icon-content notranslate hover', 'false', 'hidden']),
+  { z0, z1, dr, z2, z3, z4 });
+  const k = await f.evaluate(() => {
+    const b = document.querySelector('.proba-flex-plutitor .dd-menu-button-content');
+    const n = b.closest('nav');
+    const r = [];
+    b.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+    r.push(b.classList.contains('hover'));
+    b.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body }));
+    r.push(b.classList.contains('hover'));
+    b.focus();
+    b.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    r.push(n.classList.contains('dd-divimenu-open'));
+    const sp = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    b.dispatchEvent(sp);
+    r.push(n.classList.contains('dd-divimenu-open'), sp.defaultPrevented);
+    return r;
+  });
+  verifica('meniul flex: hover pus și scos de trecerea mouse-ului; Enter îl deschide, Space îl închide (fără derularea paginii)', egal(k, [false, true, true, false, true]), k);
   await p.context.close();
 }
 

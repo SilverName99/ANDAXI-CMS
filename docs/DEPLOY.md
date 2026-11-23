@@ -1129,7 +1129,8 @@ felia 3) și `divi4/v1/lightbox-mfp.js` (lightbox-urile galeriei și ale imagini
 în 500 ms la imaginea Divi, derularea blocată pe desktop; adresele prin `adresaSigura()`); `divi4/v1/divimenus.js` (modulele
 DiviMenus, scrise de noi: `dd-has-divimenu` pe coloanele lor, popup-urile mutate primele în `.et-l--post`, pinii care ies din
 fereastră corectați ca pe live; deschiderea după `data-popup-id`, clasele de pe body, slideup/slidedown în 500 ms pe curba
-„swing”, închiderea cu X, fundalul și Esc) și `divi4/v1/video.js` (coperta modulelor video Divi: clicul pornește `play()` imediat,
+„swing”, închiderea cu X, fundalul și Esc; meniul flex plutitor — butonul rotund de pe Obiective — se deschide și se închide din
+buton, cu clic, Enter sau Space, iar elementele lui sunt ancore derulate de `ancore.js`) și `divi4/v1/video.js` (coperta modulelor video Divi: clicul pornește `play()` imediat,
 iar coperta se estompează în 500 ms pe curba „swing”, apoi `display: none`; video-ul rămâne cu controalele native). După rularea de
 paritate (toate scrise de noi, din urmele luate pe pagina live rulată offline din cache-ul referinței): `divi4/v1/multi-view.js`
 (`data-et-multi-view`: clasa `et_multi_view__hover_selector` pe ținte; pe tabletă și telefon conținutul modului, cu
