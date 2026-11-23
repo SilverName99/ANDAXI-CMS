@@ -289,6 +289,7 @@ $mailuri = static function () use ($lucru): array {
     sort($f);
     return array_map(static fn (string $x): string => (string) file_get_contents($x), $f);
 };
+$ultim = static fn (array $l): mixed => $l === [] ? false : $l[array_key_last($l)];
 $mesaje = static fn (): array => $db->query('SELECT id, name, email, phone, subject, message, status, source_url, ip_address FROM contact_form_messages ORDER BY id')->fetchAll();
 $ip = 0;
 /** Un vizitator nou (altă adresă, prin proxy-ul de încredere al testului): bugetul lui pornește de la zero. */
@@ -359,12 +360,12 @@ $verifica('formularul din conținut: destinatarul lui, subiectul cu titlul formu
 $r1 = $trimite('/contact/', 1, ['name' => 'Eva', 'email' => 'eva@exemplu.ro', 'mesaj' => 'Din subsol.']);
 $f1 = $formular($r1['corp'], 1);
 $verifica('formularul din subsolul unei pagini cu formular în conținut (numărul 1): scris, mesajul în el, formularul din conținut neatins',
-    $r1['cod'] === 200 && $f1 !== null && !$f1['are_form'] && ($formular($r1['corp'], 0)['are_form'] ?? false) && end($mailuri()) !== false
-    && str_contains((string) end($mailuri()), 'To: subsol@exemplu.ro') && count($mesaje()) === 3, $r1['cod'] . ' ' . json_encode($f1, JSON_UNESCAPED_UNICODE));
+    $r1['cod'] === 200 && $f1 !== null && !$f1['are_form'] && ($formular($r1['corp'], 0)['are_form'] ?? false) && $ultim($mailuri()) !== false
+    && str_contains((string) $ultim($mailuri()), 'To: subsol@exemplu.ro') && count($mesaje()) === 3, $r1['cod'] . ' ' . json_encode($f1, JSON_UNESCAPED_UNICODE));
 $cale404 = '/nu-exista-' . bin2hex(random_bytes(3)) . '/';
 $r404 = $trimite($cale404, 0, ['name' => 'Dan', 'email' => 'dan@exemplu.ro', 'mesaj' => 'De pe 404.']);
 $verifica('formularul din subsolul 404-ului (orice adresă necunoscută, ca WordPress): 404, scris, mesajul în pagină', $r404['cod'] === 404
-    && ($formular($r404['corp'], 0)['mesaj'] ?? '') === '<p>Îți mulțumim că ne-ai contactat</p>' && count($mesaje()) === 4 && end($mesaje())['source_url'] === $cale404);
+    && ($formular($r404['corp'], 0)['mesaj'] ?? '') === '<p>Îți mulțumim că ne-ai contactat</p>' && count($mesaje()) === 4 && $ultim($mesaje())['source_url'] === $cale404);
 
 // ---------------------------------------------------------------------------------------------------------------------
 $scrie('');
@@ -404,8 +405,8 @@ $rM = $cerere($port, '/camere/', $vizitator(), null, http_build_query(['et_pb_co
 $verifica('un câmp peste limită: eroarea lui; un corp peste ' . FormularCapturat::MARIME_CERERE . ' octeți: 413; nimic scris',
     str_contains((string) ($formular($rL['corp'], 0)['mesaj'] ?? ''), 'prea lung') && $rM['cod'] === 413 && count($mesaje()) === $inainte + 2, $rL['cod'] . ' ' . $rM['cod']);
 $rH = $trimite('/camere/', 0, ['name' => "Mihai\r\nBcc: victima@exemplu.ro", 'email' => 'mihai@exemplu.ro', 'mesaj' => 'antete']);
-$ultimul = end($mesaje());
-$ultimulMail = (string) end($mailuri());
+$ultimul = $ultim($mesaje());
+$ultimulMail = (string) $ultim($mailuri());
 $verifica('antetele: o linie nouă dintr-un câmp de un rând devine spațiu (în bază și în email), niciun Bcc în email', $ultimul['name'] === 'Mihai Bcc: victima@exemplu.ro'
     && preg_match('/^Bcc:/mi', $ultimulMail) !== 1 && !str_contains($ultimulMail, "\nBcc: victima"), $ultimulMail);
 $dublu = ['name' => 'Dublu', 'email' => 'dublu@exemplu.ro', 'mesaj' => 'același mesaj'];
@@ -433,7 +434,7 @@ $db->exec("INSERT INTO settings (`key`, `value`) VALUES ('smtp_port', '9') ON DU
 \App\Support\ResponseCache::purgePageCache();
 $mailInainte = count($mailuri());
 $rS = $trimite('/camere/', 0, ['name' => 'Fără SMTP', 'email' => 'f@exemplu.ro', 'mesaj' => 'serverul de email e oprit']);
-$ultimul = end($mesaje());
+$ultimul = $ultim($mesaje());
 $verifica('SMTP-ul nu răspunde: vizitatorul vede succesul, mesajul e în bază cu starea netrimis, niciun email', ($formular($rS['corp'], 0)['are_form'] ?? true) === false
     && $ultimul['name'] === 'Fără SMTP' && $ultimul['status'] === FormularCapturat::STARE_NETRIMIS && count($mailuri()) === $mailInainte, json_encode($ultimul, JSON_UNESCAPED_UNICODE));
 $vedere = (string) file_get_contents($radacina . '/views/admin/emails.php');
