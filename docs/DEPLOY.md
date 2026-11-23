@@ -842,7 +842,9 @@ aceeași comandă continuă de la prima neterminată): `verificari`, `pregatire`
 sau o adoptare nouă după o revenire o păstrează), cheia nonce-urilor formularelor și a gălețile rapoartelor CSP; fără ea, codul
 folosește un secret aleator scris o dată în `storage/cache/cadru-capturat/secret`, niciodată o constantă. Pe drumul capturat,
 `verificari` mai face planul fișierelor statice (`scripts/publica-statice.php --plan`), `pregatire` le copiază (mai jos), iar
-`verificare` rulează `diagnostic.php --capturat` și cere fiecare fișier static publicat, fiecare font Google și fiecare mediu cerut de
+`verificare` așteaptă întâi codul nou (pingul cu versiunea lui, `/health` și `/admin/login`, cel mult 20 de secunde: imediat după comutare,
+OPcache-ul serverului poate da încă `index.php`-ul WordPress de la aceeași cale), apoi rulează `diagnostic.php --capturat` și cere
+fiecare fișier static publicat, fiecare font Google și fiecare mediu cerut de
 pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier care lipsește oprește adoptarea înainte de deschidere.
 
 - **Mediile rămân la adresele lor.** Fișierele din `wp-content/uploads/` se copiază de pe disc în
@@ -1125,24 +1127,33 @@ cadrul capturat, doar pe o cale care dă un document capturat (o pagină după s
 WordPress) și doar pentru un formular din `formulare_compat` (configurația scrisă de import: câmpurile din DOM, destinatarul,
 titlul, mesajul de succes, tiparul emailului și redirecționarea din baza WordPress); altfel cererea merge mai departe ca înainte.
 Pașii, fiecare fail-closed: corpul cel mult 64 KB și 60 de câmpuri (413); originea (`Sec-Fetch-Site`, altfel `Origin`, ale site-ului:
-`GardaOrigine::aceeasiOrigine`; 403); bugetul vizitatorului pe rețeaua lui (`LimitaCereri`: 10 încercări în 15 minute, 30 pe zi; 429);
+`GardaOrigine::aceeasiOrigine`: `same-site`, `cross-site` și `Origin: null` sunt 403); bugetul vizitatorului pe rețeaua lui (`LimitaCereri`, IPv6
+/64 ca una, adresa doar din `IpClient`: `X-Forwarded-For` contează numai de la un proxy din `IP_PROXY_DE_INCREDERE`; 20 de încercări
+în 15 minute, 60 pe zi; 429), singurul refuz din cauza numărului;
 capcana completată (`ax_capcana`, `et_pb_contactform_validate_N`) e un robot: refuzat, nimic scris; nonce-ul legat de formular, al
 zilei de azi sau de ieri (`hash_equals`; o pagină din cache sau din browser trăiește cel mult o zi); câmpurile, **doar după
-configurația capturată** (definițiile trimise de browser, `et_pb_contact_email_fields_N`, se ignoră): obligatoriu, emailul valid,
-UTF-8 valid, un rând cel mult 500 de caractere (numele și emailul 190), un text cel mult 10 000, iar într-un câmp de un rând orice
-caracter de control (și liniile noi) devine spațiu, deci nimic din formular nu ajunge ca antet; aceeași trimitere de la aceeași
-adresă în 10 minute (o pagină reîncărcată) nu se scrie de două ori; plafonul site-ului, 300 de mesaje pe zi (429). Captcha-ul Divi
+configurația capturată** (definițiile trimise de browser, `et_pb_contact_email_fields_N`, și câmpurile necunoscute se ignoră):
+obligatoriu, emailul valid, UTF-8 valid, un rând cel mult 500 de caractere, numele și emailul cel mult 190, telefonul cel mult 60 (cât
+coloanele lor: un câmp mai lung e eroarea „prea lung”, niciodată un mesaj tăiat sau pierdut), un text cel mult 10 000, iar într-un câmp
+de un rând orice caracter de control (și liniile noi) devine spațiu, deci nimic din formular nu ajunge ca antet; aceeași trimitere de
+la aceeași adresă în 10 minute (o pagină reîncărcată) nu se scrie de două ori. Captcha-ul Divi
 (adunarea, verificată doar de scriptul Divi) nu se verifică. Apoi **mesajul se scrie întâi în baza site-ului**, în
 `contact_form_messages` (aceleași mesaje ca ale formularului de contact al nucleului, în Admin → Emailuri → Formulare de contact:
 numele, emailul, textul cu celelalte câmpuri, pagina, adresa vizitatorului), și abia apoi pleacă emailul, prin `OrderMailer` (aceeași
 infrastructură ca `/contact/send`: metoda și SMTP-ul din Admin → Emailuri, expeditorul `order_email_from_address`, Reply-To
 vizitatorul, fiecare valoare escapată, istoricul în Emailuri trimise). Destinatarii: `contact_form_recipients` din admin, dacă sunt
 puși, altfel adresa formularului din baza WordPress, altfel adresa de contact a site-ului (`Brand::destinatariContact`). Subiectul e
-al Divi („New Message From <site> - <titlul formularului>”, în limba documentului capturat). Un email care nu pleacă (sau peste 60 de
-mesaje pe oră) lasă mesajul cu starea `netrimis` (în admin: „emailul n-a plecat”), iar vizitatorul vede succesul: nimic nu s-a
-pierdut. Răspunsul, fără JavaScript: pagina întreagă (cu statusul documentului), cu mesajul în `.et-pb-contact-message` al
+al Divi („New Message From <site> - <titlul formularului>”, în limba documentului capturat). Plafoanele emailurilor (numărate în
+`register_submit_logs`, `l:formular_wp_email`): cel mult 5 pe zi de pe aceeași rețea, 60 pe oră și 300 pe zi pe tot site-ul; peste
+oricare, mesajul se scrie tot, cu starea `retinut` (în admin: „fără email: plafonul emailurilor atins”, și numărul celor din ultima zi
+deasupra listei), iar vizitatorul vede succesul. Așa zece rețele nu pot umple căsuța proprietarului, iar un plafon plin nu oprește
+mesajele nimănui. Un email care nu pleacă lasă mesajul cu starea `netrimis` („emailul n-a plecat”); vizitatorul vede tot succesul:
+nimic nu s-a pierdut. Pe un site cu `wp-compat.json`, formularul de contact al nucleului nu există: `POST /contact/send` dă 404, ca `GET
+/contact` (altfel, fără niciuna dintre apărările de mai sus, ar umple aceeași listă). Răspunsul, fără JavaScript: pagina întreagă (cu statusul documentului), cu mesajul în `.et-pb-contact-message` al
 formularului, ca Divi (`<p>` la succes, fără formular; `<p class="et_pb_contact_error_text">` la o eroare, cu formularul și valorile
-trimise, escapate), `Cache-Control: no-store`. Cu antetul `X-Ax-Formular: 1` (trimiterea prin `fetch` a runtime-ului compat), JSON:
+trimise, escapate), `Cache-Control: no-store`; cu o adresă de după succes în configurația formularului (Divi „redirect”), 303 spre
+ea, doar pe același site (`FormularCapturat::redirectPermis`: o cale, sau schema, gazda și portul din APP_URL). Valorile trimise și
+mesajele intră în pagină după randare (Html5\Editare), deci un `{{ax:…}}` într-un câmp rămâne text. Cu antetul `X-Ax-Formular: 1` (trimiterea prin `fetch` a runtime-ului compat), JSON:
 `{"stare": "trimis"|"eroare", "mesaje": [text], "campuri": [id-urile câmpurilor greșite], "redirect"?: adresa de după succes, doar pe
 același site}`. Textele Divi (succesul implicit „Thanks for contacting us”, erorile) urmează `<html lang>` al capturii (`en` pe
 pensiune, ca WordPress-ul de azi, sau `ro`); cele noi (limitele) sunt în română. Poarta: **G-formulare**
@@ -1157,7 +1168,8 @@ browserului: **G-compat**.
 antet) primește o pagină de rezultate în cadrul site-ului: documentul 404 capturat (antetul, subsolul, bannerul, foile), cu
 conținutul înlocuit de lista paginilor găsite (titlul și legătura, escapate) sau de „Nu am găsit niciun rezultat”, statusul 200,
 titlul „Rezultatele căutării pentru „…” – <site>”, `noindex, follow` (meta robots și `X-Robots-Tag`), fără canonical, niciodată în
-cache. Potrivirea e a WordPress-ului (`WP_Query::parse_search`): frazele între ghilimele, cuvintele de legătură en_US și literele
+cache. Lista și titlul intră după randare, în locul unui semn aleator, escapate și cu `{` scăpat: termenul cererii și titlurile
+paginilor nu trec niciodată prin `Jetoane::rezolva`, deci un `{{ax:…}}` în ele rămâne text. Potrivirea e a WordPress-ului (`WP_Query::parse_search`): frazele între ghilimele, cuvintele de legătură en_US și literele
 singure scoase, peste 9 termeni toată fraza, `-termen` exclus; fiecare termen în titlu, rezumat sau conținutul brut din WordPress
 (`pagini_capturate.corpus_cautare`, scris de import; o pagină editată după import se caută în textul ei de acum), fără deosebire de
 litere mari și de diacritice; ordinea WordPress (titlul cu fraza, cu toți termenii, cu unul, rezumatul, conținutul), apoi cele mai

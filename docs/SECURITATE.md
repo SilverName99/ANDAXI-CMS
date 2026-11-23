@@ -145,13 +145,19 @@ Formularele de contact Divi ale unui site mutat de pe WordPress primesc date de 
   `Sec-Fetch-Site`, altfel `Origin`, trebuie să fie ale site-ului (aceeași regulă ca garda adminului, N2:
   `GardaOrigine::aceeasiOrigine`). Fără `APP_KEY`, cheia e un secret aleator scris o dată în `storage/`, niciodată o constantă.
 - **Roboții:** câmpul-capcană `ax_capcana` (și `et_pb_contactform_validate_N` al Divi) completat = refuz, nimic scris; bugetul pe
-  rețeaua vizitatorului (`LimitaCereri`: 10 încercări în 15 minute, 30 pe zi) și al site-ului (300 de mesaje pe zi; peste 60 pe oră
-  mesajele rămân doar în admin, fără email).
+  rețeaua vizitatorului (`LimitaCereri`, adresa din `IpClient`: 20 de încercări în 15 minute, 60 pe zi; 429), singurul refuz din cauza
+  numărului. Emailurile au plafoane (5 pe zi de pe aceeași rețea, 60 pe oră și 300 pe zi pe site): peste ele mesajul se scrie, fără
+  email, marcat în admin, deci câteva rețele nu pot nici umple căsuța proprietarului, nici opri mesajele vizitatorilor.
+- **Ocolirea:** pe un site cu `wp-compat.json`, `POST /contact/send` (formularul nucleului, fără apărările de aici) dă 404.
 - **Datele:** câmpurile se citesc doar după configurația capturată la import (definițiile trimise de browser se ignoră), cu
   limitele lor (corpul 64 KB, un rând 500 de caractere, un text 10 000), UTF-8 valid; într-un câmp de un rând orice caracter de
   control devine spațiu, deci nimic din formular nu ajunge ca antet de email (OrderMailer curăță oricum subiectul și Reply-To).
 - **Ieșirea:** fiecare valoare arătată din nou în formular, în pagina căutării sau în email e escapată; mesajul de succes din baza
-  WordPress e tratat ca text. Răspunsurile nu intră în cache (`no-store`).
+  WordPress e tratat ca text. Valorile cererii (câmpurile, termenul căutării) și titlurile paginilor intră în pagină după randare,
+  niciodată prin `Jetoane::rezolva`: un `{{ax:…}}` trimis rămâne text. Redirecționarea de după succes, doar pe același site.
+  Răspunsurile nu intră în cache (`no-store`).
+- **Coloanele:** numele și emailul cel mult 190 de caractere, telefonul 60: un câmp mai lung e o eroare arătată vizitatorului, nu un
+  rând tăiat (modul nestrict al bazei) sau o eroare 500 (modul strict).
 - **Nimic pierdut:** mesajul se scrie în `contact_form_messages` înaintea emailului; unul care nu pleacă rămâne în admin, marcat.
 
 Testul: `tools/dev/test-formulare-wp.php` (poarta G-formulare).

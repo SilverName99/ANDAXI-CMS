@@ -18,13 +18,19 @@ declare(strict_types=1);
  *     pagini, de alaltăieri (cel de ieri trece), capcana, altă origine (Sec-Fetch-Site, Origin), un corp prea mare, un câmp prea
  *     lung, antetele (nicio linie nouă din câmpuri în email), bugetul vizitatorului (429), trimiterea dublă, un POST fără
  *     formular capturat (merge mai departe, ca înainte);
+ *  4b. plafoanele: emailurile vizitatorului (5 pe zi), ale site-ului pe oră și pe zi (mesajul scris fără email, `retinut`, succes,
+ *     niciun 429), bugetul vizitatorului pe zi (429, JSON „eroare”);
+ *  4c. `Sec-Fetch-Site: same-site`, `Origin: null`, definițiile câmpurilor trimise de browser și câmpurile necunoscute ignorate,
+ *     lungimile coloanelor (telefonul, numele, emailul), codurile JSON, redirectPermis și 303-ul fără JavaScript, jetoanele în valori;
+ *  4d. `/contact/send` (404 cu wp-compat.json, ca înainte fără), `X-Forwarded-For` fără proxy de încredere (ignorat);
  *  4. emailul care nu pleacă: mesajul rămâne în bază cu starea `netrimis`, vizitatorul vede succesul;
  *  5. căutarea `/?s=`: rezultatele în cadrul site-ului (antetul și subsolul capturate), noindex, termenul escapat, mesajul fără
- *     rezultate, diacriticele și literele mari ca WordPress, niciodată în cache; fără `cautare_wp`, prima pagină ca înainte.
+ *     rezultate, diacriticele și literele mari ca WordPress, niciodată în cache, jetoanele în termen și în titluri ca text, paginile
+ *     nepublicate și cele din coș ascunse; fără `cautare_wp`, prima pagină ca înainte.
  *
  *   tools/dev/php.sh tools/dev/test-formulare-wp.php
  *
- * Baza (cms_form), serverele (CMS_DEV_PORT+41, +42) și dosarul $CMS_DEV_DIR/test-formulare/ se șterg la final. Raport:
+ * Baza (cms_form), serverele (CMS_DEV_PORT+41, +42, +43) și dosarul $CMS_DEV_DIR/test-formulare/ se șterg la final. Raport:
  * $CMS_DEV_DIR/test-formulare-raport.txt; cod 0 doar dacă totul a trecut.
  */
 
@@ -37,7 +43,7 @@ $radacina = dirname(__DIR__, 2);
 $dosarDev = rtrim((string) (getenv('CMS_DEV_DIR') ?: $radacina . '/storage/logs/dev'), '/');
 $lucru = $dosarDev . '/test-formulare';
 exec('rm -rf ' . escapeshellarg($lucru));
-foreach (['site/storage', 'site-fara/storage', 'pachet/tema', 'pachet-fara/tema', 'licenta', 'mail'] as $d) {
+foreach (['site/storage', 'site-fara/storage', 'site-nowp/storage', 'pachet/tema', 'pachet-fara/tema', 'pachet-nowp/tema', 'licenta', 'mail'] as $d) {
     @mkdir($lucru . '/' . $d, 0770, true);
 }
 
@@ -121,7 +127,7 @@ $cerere = static function (int $port, string $cale, array $antete = [], ?array $
     curl_close($c);
     return ['cod' => $cod, 'antete' => $primite, 'corp' => $corp];
 };
-$pornesteServer = static function (int $port, string $pachet, string $dosarSite) use ($radacina, $lucru, $dosarDev, $baza, $cerere, &$serverePornite, $cheieApp): bool {
+$pornesteServer = static function (int $port, string $pachet, string $dosarSite, bool $proxy = true) use ($radacina, $lucru, $dosarDev, $baza, $cerere, &$serverePornite, $cheieApp): bool {
     $preludiu = $dosarSite . '/preludiu.php';
     file_put_contents($preludiu, "<?php\ndefine('PLATFORMA_SITE_DIR', " . var_export($dosarSite, true) . ");\n");
     $ini = ['-d ' . escapeshellarg('auto_prepend_file=' . $preludiu)];
@@ -132,7 +138,7 @@ $pornesteServer = static function (int $port, string $pachet, string $dosarSite)
         }
     }
     $mediu = ['PHP_CLI_SERVER_WORKERS' => '2', 'DB_DATABASE' => $baza, 'SITE_DATE_DOSAR' => $pachet, 'LICENTA_DOSAR' => $lucru . '/licenta',
-        'APP_URL' => 'https://pensiune-proba.example.test', 'APP_KEY' => $cheieApp, 'IP_PROXY_DE_INCREDERE' => '127.0.0.1', 'CMS_DEV_MAIL_DIR' => $lucru . '/mail'];
+        'APP_URL' => 'https://pensiune-proba.example.test', 'APP_KEY' => $cheieApp, 'IP_PROXY_DE_INCREDERE' => $proxy ? '127.0.0.1' : '', 'CMS_DEV_MAIL_DIR' => $lucru . '/mail'];
     $env = '';
     foreach ($mediu as $n => $v) {
         $env .= ' ' . $n . '=' . escapeshellarg($v);
@@ -196,6 +202,8 @@ fclose($pipe[2]);
 $db = new PDO('mysql:unix_socket=' . $socket . ';dbname=' . $baza . ';charset=utf8mb4', $utilizator, $parolaDb, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 $verifica('scripts/install.php: baza cu tabelele capturii', proc_close($p) === 0 && ScriereCapturata::disponibil($db), $outI);
+// Același fus orar al sesiunii ca aplicația (Database::connection), ca rândurile scrise de test să aibă ora serverului.
+$db->exec("SET time_zone = '" . date('P') . "'");
 $url = 'https://pensiune-proba.example.test';
 $an = date('Y');
 $pagini = [
@@ -274,7 +282,7 @@ $db->prepare("UPDATE pages SET html_content = REPLACE(html_content, '<input type
 $db->exec("INSERT INTO settings (`key`, `value`) VALUES ('store_name', 'Pensiunea Probă'), ('order_email_from_address', 'site@exemplu.ro'), ('email_delivery_method', 'smtp'), ('smtp_host', '')
     ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)");
 $db->exec("DELETE FROM settings WHERE `key` = 'contact_form_recipients'");
-foreach (['pachet', 'pachet-fara'] as $pa) {
+foreach (['pachet', 'pachet-fara', 'pachet-nowp'] as $pa) {
     file_put_contents($lucru . '/' . $pa . '/tema/tema.json', json_encode(['cadru' => 'capturat', 'runtime' => 'divi4@1']));
     file_put_contents($lucru . '/' . $pa . '/redirecturi.json', '{"exacte": [], "prefixe": []}');
     file_put_contents($lucru . '/' . $pa . '/seo.json', '{}');
@@ -426,6 +434,151 @@ $rFara = $cerere($port, '/camere/', $vizitator(), ['nume' => 'fara formular']);
 $verifica('un POST fără et_pb_contactform_submit_N: nu e al formularelor, merge mai departe (ca înainte, nicio pagină capturată cu mesaj)', $rFara['cod'] !== 200
     || !str_contains($rFara['corp'], 'et_pb_contact_error_text'), (string) $rFara['cod']);
 
+
+// ---------------------------------------------------------------------------------------------------------------------
+$scrie('');
+$scrie('== 4b. Plafoanele: emailurile se opresc, mesajele nu; refuzurile doar pe rețeaua vizitatorului');
+$seed = static function (string $stare, int $n, string $ip, int $minuteInUrma = 0) use ($db): void {
+    $q = $db->prepare('INSERT INTO register_submit_logs (ip_address, user_agent, status, created_at) VALUES (?, NULL, ?, NOW() - INTERVAL ' . $minuteInUrma . ' MINUTE)');
+    for ($i = 0; $i < $n; $i++) {
+        $q->execute([$ip, $stare]);
+    }
+};
+$curataSeed = static fn () => $db->exec("DELETE FROM register_submit_logs WHERE ip_address LIKE '192.0.2.%'");
+$stareEmail = \App\Support\LimitaCereri::PREFIX . FormularCapturat::SCOP_EMAIL;
+$vm = $vizitator();
+$stari = [];
+$coduriM = [];
+$mailInainte = count($mailuri());
+for ($i = 0; $i <= FormularCapturat::EMAILURI_IP_ZI; $i++) {
+    $r = $trimite('/camere/', 0, ['name' => 'Plafon ' . $i, 'email' => 'plafon@exemplu.ro', 'mesaj' => 'mesajul ' . $i], $vm);
+    $coduriM[] = $r['cod'] . (($formular($r['corp'], 0)['are_form'] ?? true) ? '+form' : '');
+    $stari[] = $ultim($mesaje())['status'];
+}
+$verifica('plafonul vizitatorului (' . FormularCapturat::EMAILURI_IP_ZI . ' emailuri pe zi de pe aceeași rețea): primele pleacă, următorul e scris fără email (retinut), vizitatorul vede succesul',
+    array_slice($stari, 0, FormularCapturat::EMAILURI_IP_ZI) === array_fill(0, FormularCapturat::EMAILURI_IP_ZI, 'new') && end($stari) === FormularCapturat::STARE_RETINUT
+    && array_unique($coduriM) === ['200'] && count($mailuri()) === $mailInainte + FormularCapturat::EMAILURI_IP_ZI, json_encode([$stari, $coduriM]));
+$seed($stareEmail, FormularCapturat::EMAILURI_ORA, '192.0.2.10');
+$mailInainte = count($mailuri());
+$rOra = $trimite('/camere/', 0, ['name' => 'Plafon oră', 'email' => 'ora@exemplu.ro', 'mesaj' => 'peste plafonul orei']);
+$verifica('plafonul site-ului pe oră (' . FormularCapturat::EMAILURI_ORA . ' emailuri, din alte rețele): mesajul scris fără email (retinut), vizitatorul vede succesul, niciun 429',
+    $rOra['cod'] === 200 && ($formular($rOra['corp'], 0)['are_form'] ?? true) === false && $ultim($mesaje())['status'] === FormularCapturat::STARE_RETINUT
+    && count($mailuri()) === $mailInainte);
+$curataSeed();
+$seed($stareEmail, FormularCapturat::EMAILURI_ZI, '192.0.2.11', 120);
+$rZi = $trimite('/camere/', 0, ['name' => 'Plafon zi', 'email' => 'zi@exemplu.ro', 'mesaj' => 'peste plafonul zilei']);
+$rZiJ = $trimite('/camere/', 0, ['name' => 'Plafon zi J', 'email' => 'zij@exemplu.ro', 'mesaj' => 'peste plafonul zilei, json'], array_merge($vizitator(), ['X-Ax-Formular: 1']));
+$verifica('plafonul site-ului pe zi (' . FormularCapturat::EMAILURI_ZI . ' emailuri): scris fără email, succes (și JSON: stare „trimis”, 200), niciun email',
+    $rZi['cod'] === 200 && $ultim($mesaje())['status'] === FormularCapturat::STARE_RETINUT && $rZiJ['cod'] === 200 && (json_decode($rZiJ['corp'], true)['stare'] ?? '') === 'trimis'
+    && count($mailuri()) === $mailInainte, $rZiJ['corp']);
+$curataSeed();
+$mailInainte = count($mailuri());
+$rDupa = $trimite('/camere/', 0, ['name' => 'După plafon', 'email' => 'dupa@exemplu.ro', 'mesaj' => 'plafonul a trecut']);
+$verifica('după ce plafoanele se golesc, emailul pleacă din nou', $ultim($mesaje())['status'] === 'new' && count($mailuri()) === $mailInainte + 1);
+$ipZi = '198.51.100.' . (++$ip);
+$seed(\App\Support\LimitaCereri::PREFIX . 'formular_wp_zi', FormularCapturat::INCERCARI_ZI, $ipZi);
+$rIpZi = $trimite('/camere/', 0, ['name' => 'Prea multe', 'email' => 'pm@exemplu.ro', 'mesaj' => 'x'], ['X-Forwarded-For: ' . $ipZi, 'X-Ax-Formular: 1']);
+$verifica('bugetul vizitatorului pe zi (' . FormularCapturat::INCERCARI_ZI . ' încercări): 429, JSON „eroare” cu mesajul, nimic scris', $rIpZi['cod'] === 429
+    && (json_decode($rIpZi['corp'], true)['stare'] ?? '') === 'eroare' && $ultim($mesaje())['name'] !== 'Prea multe', $rIpZi['cod'] . ' ' . $rIpZi['corp']);
+$db->exec("DELETE FROM register_submit_logs WHERE ip_address = '" . $ipZi . "'");
+$vedereA = (string) file_get_contents($radacina . '/views/admin/emails.php');
+$verifica('adminul: mesajele fără email marcate („plafonul emailurilor atins”) și numărul celor din ultima zi deasupra listei', str_contains($vedereA, 'FormularCapturat::STARE_RETINUT')
+    && str_contains($vedereA, 'Plafonul emailurilor formularelor a fost atins'));
+
+// ---------------------------------------------------------------------------------------------------------------------
+$scrie('');
+$scrie('== 4c. Originea, câmpurile necunoscute, lungimile coloanelor, codurile JSON, redirecționarea, jetoanele în valori');
+$rSS = $trimite('/camere/', 0, $bune, array_merge($vizitator(), ['Sec-Fetch-Site: same-site']));
+$rON = $trimite('/camere/', 0, $bune, array_merge($vizitator(), ['Origin: null']));
+$rOJ = $trimite('/camere/', 0, $bune, array_merge($vizitator(), ['Origin: null', 'X-Ax-Formular: 1']));
+$verifica('Sec-Fetch-Site: same-site și Origin: null: 403 (și în JSON: „eroare”, 403)', $rSS['cod'] === 403 && $rON['cod'] === 403 && $rOJ['cod'] === 403
+    && (json_decode($rOJ['corp'], true)['stare'] ?? '') === 'eroare', $rSS['cod'] . ' ' . $rON['cod'] . ' ' . $rOJ['corp']);
+$definitii = json_encode([['field_id' => 'et_pb_contact_name_0', 'original_id' => 'name', 'required_mark' => 'not_required', 'field_type' => 'input', 'field_label' => 'Nume']]);
+$rDef = $trimite('/camere/', 0, ['name' => '', 'email' => 'def@exemplu.ro', 'mesaj' => 'fără nume', 'et_pb_contact_email_fields_0' => $definitii]);
+$rNec = $trimite('/camere/', 0, ['name' => 'Necunoscute', 'email' => 'nec@exemplu.ro', 'mesaj' => 'câmpuri în plus', 'secret' => 'VALOARE-STRAINA-1',
+    'et_pb_contact_secret_0' => 'VALOARE-STRAINA-2']);
+$verifica('definițiile câmpurilor trimise de browser (et_pb_contact_email_fields_N) se ignoră; câmpurile necunoscute nu ajung în mesaj',
+    ($formular($rDef['corp'], 0)['mesaj'] ?? '') !== '' && str_contains((string) $formular($rDef['corp'], 0)['mesaj'], 'obligatorii')
+    && $ultim($mesaje())['name'] === 'Necunoscute' && !str_contains((string) $ultim($mesaje())['message'], 'VALOARE-STRAINA'));
+$cfgS = $db->query("SELECT cheie, config FROM formulare_compat WHERE cheie NOT LIKE 'doc:%'")->fetchAll(PDO::FETCH_KEY_PAIR);
+foreach ($cfgS as $k => $c) {
+    $c = json_decode((string) $c, true);
+    $c['campuri'][] = ['id' => 'telefon', 'tip' => 'input', 'eticheta' => 'Telefon', 'obligatoriu' => false, 'fel' => 'input'];
+    $db->prepare('UPDATE formulare_compat SET config = ? WHERE cheie = ?')->execute([json_encode($c, JSON_UNESCAPED_UNICODE), $k]);
+}
+$n0 = count($mesaje());
+$rT61 = $trimite('/camere/', 0, ['name' => 'Tel', 'email' => 't@exemplu.ro', 'mesaj' => 'tel', 'telefon' => str_repeat('7', 61)]);
+$rN191 = $trimite('/camere/', 0, ['name' => str_repeat('n', 191), 'email' => 't2@exemplu.ro', 'mesaj' => 'nume lung']);
+$emailLung = str_repeat('a', 60) . '@' . str_repeat('b', 60) . '.' . str_repeat('c', 60) . '.ddddd.ro';
+$rE191 = $trimite('/camere/', 0, ['name' => 'Email lung', 'email' => $emailLung, 'mesaj' => 'email lung']);
+$rT60 = $trimite('/camere/', 0, ['name' => 'Tel 60', 'email' => 't3@exemplu.ro', 'mesaj' => 'tel 60', 'telefon' => str_repeat('7', 60)]);
+$verifica('lungimile coloanelor: telefonul peste 60, numele peste 190, emailul peste 190 (' . strlen($emailLung) . '): „prea lung”, nimic scris; telefonul de 60 se scrie întreg',
+    str_contains((string) ($formular($rT61['corp'], 0)['mesaj'] ?? ''), 'prea lung') && str_contains((string) ($formular($rN191['corp'], 0)['mesaj'] ?? ''), 'prea lung')
+    && str_contains((string) ($formular($rE191['corp'], 0)['mesaj'] ?? ''), 'prea lung') && count($mesaje()) === $n0 + 1 && $ultim($mesaje())['phone'] === str_repeat('7', 60),
+    json_encode([$formular($rT61['corp'], 0)['mesaj'] ?? null, count($mesaje()) - $n0, $ultim($mesaje())['phone']]));
+$rJO = $trimite('/camere/', 0, ['name' => '', 'email' => ''], array_merge($vizitator(), ['X-Ax-Formular: 1']));
+$jo = json_decode($rJO['corp'], true);
+$rJM = $cerere($port, '/camere/', array_merge($vizitator(), ['X-Ax-Formular: 1']), null, http_build_query(['et_pb_contactform_submit_0' => 'et_contact_proccess',
+    'x' => str_repeat('b', FormularCapturat::MARIME_CERERE + 10)]));
+$verifica('codurile JSON: câmpurile greșite 200 („eroare”, id-urile lor în „campuri”), corpul prea mare 413', $rJO['cod'] === 200 && ($jo['stare'] ?? '') === 'eroare'
+    && in_array('name', (array) ($jo['campuri'] ?? []), true) && in_array('email', (array) ($jo['campuri'] ?? []), true) && $rJM['cod'] === 413
+    && (json_decode($rJM['corp'], true)['stare'] ?? '') === 'eroare', $rJO['corp'] . ' | ' . $rJM['cod']);
+$app = 'https://pensiune-proba.example.test';
+$rp = static fn (string $u): string => FormularCapturat::redirectPermis($u, $app);
+$verifica('redirectPermis: o cale, aceeași gazdă (și www) pe aceeași schemă; refuzate //gazdă, altă gazdă, http pe https, alt port, user:parolă, javascript:, \\, spații',
+    $rp('/multumim/') === '/multumim/' && $rp($app . '/m/') === $app . '/m/' && $rp('https://www.pensiune-proba.example.test/m/') !== ''
+    && $rp('//alt.example/') === '' && $rp('https://alt.example/') === '' && $rp('http://pensiune-proba.example.test/') === '' && $rp($app . ':8443/') === ''
+    && $rp('https://u:p@pensiune-proba.example.test/') === '' && $rp('javascript:alert(1)') === '' && $rp('/a\\b') === '' && $rp('/a b') === '' && $rp('') === '');
+$cuRedirect = static function (string $r) use ($db): void {
+    foreach ($db->query("SELECT cheie, config FROM formulare_compat WHERE cheie NOT LIKE 'doc:%'")->fetchAll(PDO::FETCH_KEY_PAIR) as $k => $c) {
+        $c = json_decode((string) $c, true);
+        $c['redirect'] = $r;
+        $db->prepare('UPDATE formulare_compat SET config = ? WHERE cheie = ?')->execute([json_encode($c, JSON_UNESCAPED_UNICODE), $k]);
+    }
+};
+$cuRedirect('/multumim/');
+$rR = $trimite('/camere/', 0, ['name' => 'Redirect', 'email' => 'r@exemplu.ro', 'mesaj' => 'redirect']);
+$rRJ = $trimite('/camere/', 0, ['name' => 'Redirect J', 'email' => 'rj@exemplu.ro', 'mesaj' => 'redirect json'], array_merge($vizitator(), ['X-Ax-Formular: 1']));
+$cuRedirect('https://alt.example/capcana');
+$rRX = $trimite('/camere/', 0, ['name' => 'Redirect X', 'email' => 'rx@exemplu.ro', 'mesaj' => 'redirect extern']);
+$cuRedirect('');
+$verifica('redirecționarea Divi după succes: fără JavaScript 303 spre adresa de pe același site (no-store), în JSON „redirect”; una spre altă gazdă se ignoră (mesajul)',
+    $rR['cod'] === 303 && ($rR['antete']['location'] ?? '') === '/multumim/' && str_contains((string) ($rR['antete']['cache-control'] ?? ''), 'no-store')
+    && (json_decode($rRJ['corp'], true)['redirect'] ?? '') === '/multumim/' && $rRX['cod'] === 200 && !isset($rRX['antete']['location'])
+    && ($formular($rRX['corp'], 0)['are_form'] ?? true) === false, $rR['cod'] . ' ' . json_encode($rR['antete']) . ' ' . $rRJ['corp']);
+$rTok = $trimite('/camere/', 0, ['name' => '{{ax:runtime:cap}}', 'email' => '', 'mesaj' => '{{ax:fragment:subsol}}']);
+$verifica('valori ca jetoanele ({{ax:…}}) în formularul arătat din nou: 200, text, niciun jeton rezolvat (subsolul o dată, scripturile runtime-ului ca de obicei)',
+    $rTok['cod'] === 200 && substr_count($rTok['corp'], 'et-l--footer') === substr_count($rCamere['corp'], 'et-l--footer')
+    && substr_count($rTok['corp'], '/assets/compat/') === substr_count($rCamere['corp'], '/assets/compat/') && str_contains($rTok['corp'], 'value="{{ax:runtime:cap}}"'), (string) $rTok['cod']);
+
+// ---------------------------------------------------------------------------------------------------------------------
+$scrie('');
+$scrie('== 4d. /contact/send al nucleului; X-Forwarded-For fără proxy de încredere');
+$nInainte = count($mesaje());
+$rCS = $cerere($port, '/contact/send', array_merge($vizitator(), ['Content-Type: application/json']), null,
+    json_encode(['name' => 'Ocolire', 'email' => 'o@exemplu.ro', 'subject' => 's', 'message' => 'pe lângă formularele capturate']));
+$verifica('cu wp-compat.json: POST /contact/send dă 404 (ca GET /contact), nimic scris, niciun email', $rCS['cod'] === 404 && count($mesaje()) === $nInainte, (string) $rCS['cod']);
+$portN = $port + 2;
+$verifica('serverul fără wp-compat.json și fără proxy de încredere pornește', $pornesteServer($portN, $lucru . '/pachet-nowp', $lucru . '/site-nowp', false));
+$rCSN = $cerere($portN, '/contact/send', ['Content-Type: application/json'], null, json_encode(['name' => '', 'email' => '', 'subject' => '', 'message' => '']));
+$verifica('fără wp-compat.json: /contact/send ca înainte (JSON 422 pentru câmpuri goale)', $rCSN['cod'] === 422 && (json_decode($rCSN['corp'], true)['ok'] ?? null) === false, $rCSN['cod'] . ' ' . $rCSN['corp']);
+$db->exec("DELETE FROM register_submit_logs WHERE ip_address = '127.0.0.1'");
+$codN = [];
+for ($i = 0; $i <= FormularCapturat::INCERCARI_15_MIN; $i++) {
+    // Fără wp-compat.json (fără slash_final), adresa canonică e fără „/” final: /camere/ → 301 → /camere.
+    $pagina = $cerere($portN, '/camere');
+    $nonceN = (string) ($formular($pagina['corp'], 0)['nonce'] ?? '');
+    $rN = $cerere($portN, '/camere', ['X-Forwarded-For: 203.0.113.' . ($i + 1)], ['et_pb_contactform_submit_0' => 'et_contact_proccess',
+        '_wpnonce-et-pb-contact-form-submitted-0' => $nonceN, 'ax_capcana' => '', 'et_pb_contact_name_0' => 'XFF ' . $i, 'et_pb_contact_email_0' => 'xff' . $i . '@exemplu.ro',
+        'et_pb_contact_mesaj_0' => 'xff ' . $i]);
+    $codN[] = $rN['cod'];
+    $mesajN ??= (string) ($formular($rN['corp'], 0)['mesaj'] ?? substr($rN['corp'], 0, 200));
+}
+$ipuri = array_values(array_unique(array_column(array_filter($mesaje(), static fn (array $m): bool => str_starts_with((string) $m['name'], 'XFF ')), 'ip_address')));
+$verifica('X-Forwarded-For fără proxy de încredere: ignorat (adresa scrisă e cea a conexiunii), bugetul e al ei: după ' . FormularCapturat::INCERCARI_15_MIN . ' încercări, 429',
+    $ipuri === ['127.0.0.1'] && end($codN) === 429 && $codN[0] === 200, json_encode([$ipuri, $codN, $mesajN ?? null], JSON_UNESCAPED_UNICODE));
+$db->exec("DELETE FROM register_submit_logs WHERE ip_address = '127.0.0.1'");
+
 // ---------------------------------------------------------------------------------------------------------------------
 $scrie('');
 $scrie('== 5. Emailul care nu pleacă: mesajul rămâne în admin');
@@ -462,6 +615,29 @@ $verifica('fără rezultate: mesajul în română, termenul escapat (în titlu �
     && str_contains($rZ['corp'], 'Nu am găsit niciun rezultat') && str_contains($rZ['corp'], '„&lt;script&gt;alert(1)&lt;/script&gt; zzz”')
     && !str_contains($rZ['corp'], '<script>alert(1)'), substr($rZ['corp'], 0, 200));
 $verifica('formularul din subsolul paginii de rezultate are nonce-ul căii / (trimite la prima pagină)', ($formular($rQ['corp'], 0)['nonce'] ?? '') === CadruCapturat::nonceFormular('/', 0));
+$tokCoduri = [];
+foreach (['{{ax:x}}', '{{AX:x}}', '{{ax:runtime:cap}}', '{{ax:fragment:subsol}}', '{{ax:nonce}}', '{{ax:seo.titlu}}'] as $tok) {
+    $rTk = $cerere($port, '/?s=' . rawurlencode($tok));
+    if ($rTk['cod'] !== 200 || substr_count($rTk['corp'], 'et-l--footer') !== substr_count($rQ['corp'], 'et-l--footer')
+        || substr_count($rTk['corp'], '/assets/compat/') !== substr_count($rQ['corp'], '/assets/compat/') || str_contains($rTk['corp'], '<h1>Rezultatele căutării pentru „{{')
+        || (!str_contains($rTk['corp'], '&#123;&#123;ax:') && !str_contains($rTk['corp'], '&#123;&#123;AX:'))) {
+        $tokCoduri[] = $tok . ' → ' . $rTk['cod'];
+    }
+}
+$jurnalErori = (string) @file_get_contents((string) ini_get('error_log'));
+$verifica('jetoanele în termen (/?s={{ax:x}}, runtime:cap, fragment:subsol, nonce, seo.titlu): 200, text escapat, niciun subsol sau script în plus, niciun rând în jurnal',
+    $tokCoduri === [] && !str_contains($jurnalErori, 'jetoane necunoscute: {{ax:x}}'), implode('; ', $tokCoduri));
+$db->exec("UPDATE pages SET title = '{{ax:runtime:cap}} Știri' WHERE slug = 'stiri'");
+$rTitlu = $cerere($port, '/?s=stiri');
+$verifica('un titlu de pagină ca un jeton: 200, escapat în listă', $rTitlu['cod'] === 200 && str_contains($lista($rTitlu['corp']), '&#123;&#123;ax:runtime:cap}} Știri')
+    && substr_count($rTitlu['corp'], '/assets/compat/') === substr_count($rQ['corp'], '/assets/compat/'), (string) $rTitlu['cod']);
+$db->exec("UPDATE pages SET title = 'Știri de la munte', is_published = 0 WHERE slug = 'stiri'");
+$rNepub = $cerere($port, '/?s=stiri');
+$db->exec("UPDATE pages SET is_published = 1, deleted_at = NOW() WHERE slug = 'stiri'");
+$rSters = $cerere($port, '/?s=stiri');
+$db->exec("UPDATE pages SET deleted_at = NULL WHERE slug = 'stiri'");
+$verifica('căutarea nu arată o pagină nepublicată sau ștearsă (în coș)', !str_contains($rNepub['corp'], 'href="/stiri/"') && !str_contains($rSters['corp'], 'href="/stiri/"')
+    && str_contains($rNepub['corp'], 'Nu am găsit niciun rezultat') && str_contains($lista($cerere($port, '/?s=stiri')['corp']), 'href="/stiri/"'));
 $portF = $port + 1;
 $verifica('serverul fără cautare_wp pornește', $pornesteServer($portF, $lucru . '/pachet-fara', $lucru . '/site-fara'));
 $rF = $cerere($portF, '/?s=camera');

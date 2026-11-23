@@ -104,6 +104,9 @@ register_shutdown_function(static function () use (&$pidServer, $root, $bazaWp, 
 // PHP-ul scripturilor de deploy și al serverului: socketul bazei de test, emailurile prinse (mail-capturat.sh), fără internet.
 $ini = ['-d', 'pdo_mysql.default_socket=' . $sock, '-d', 'sendmail_path=' . $radacina . '/tools/dev/mail-capturat.sh', '-d', 'error_reporting=E_ALL',
     '-d', 'display_errors=0', '-d', 'log_errors=1', '-d', 'error_log=' . $lucru . '/php-erori.log', '-d', 'memory_limit=512M'];
+// Serverul: OPcache-ul cu revalidarea la 4 secunde (Hostinger: cel puțin 2), ca după comutare index.php-ul WordPress compilat să mai
+// răspundă câteva secunde de la aceeași cale: verificarea adoptării și revenirea trebuie să aștepte codul nou.
+$iniServer = array_merge($ini, ['-d', 'opcache.enable=1', '-d', 'opcache.validate_timestamps=1', '-d', 'opcache.revalidate_freq=4']);
 $php = PHP_BINARY . ' ' . implode(' ', $ini);
 $mediu = static function (array $plus = []) use ($php, $lucru): array {
     $m = [];
@@ -123,8 +126,8 @@ $ruleaza = static function (array $comanda, string $intrare = '', array $plus = 
     file_put_contents($lucru . '/comenzi.log', '$ ' . implode(' ', array_map('escapeshellarg', $comanda)) . "\n" . $iesire . "\n[cod " . $cod . "]\n\n", FILE_APPEND);
     return [$cod, $iesire];
 };
-$deploy = static fn (string $script, array $argumente, string $intrare = '') => $ruleaza(array_merge(['bash', $radacina . '/deploy/' . $script . '.sh'], $argumente,
-    ['--acasa=' . $acasa]), $intrare);
+$deploy = static fn (string $script, array $argumente, string $intrare = '', array $plus = []) => $ruleaza(array_merge(['bash', $radacina . '/deploy/' . $script . '.sh'],
+    $argumente, ['--acasa=' . $acasa]), $intrare, $plus);
 $git = static fn (string $dosar, string ...$a) => $ruleaza(array_merge(['git', '-C', $dosar, '-c', 'user.email=test@exemplu.ro', '-c', 'user.name=Test'], $a));
 /** @return array{cod: int, antete: array<string, string>, corp: string, locatie: string} */
 $cerere = static function (string $cale, ?array $post = null, array $antete = []) use ($url): array {
@@ -334,7 +337,7 @@ PHP);
         $envText .= ' ' . $k . '=' . escapeshellarg($v);
     }
     $pidServer = (int) trim((string) shell_exec('cd ' . escapeshellarg($lucru) . ' && env -i' . $envText . ' nohup ' . escapeshellarg(PHP_BINARY) . ' '
-        . implode(' ', array_map('escapeshellarg', $ini)) . ' -S 127.0.0.1:' . $port . ' -t ' . escapeshellarg($lucru) . ' ' . escapeshellarg($lucru . '/router.php')
+        . implode(' ', array_map('escapeshellarg', $iniServer)) . ' -S 127.0.0.1:' . $port . ' -t ' . escapeshellarg($lucru) . ' ' . escapeshellarg($lucru . '/router.php')
         . ' >> ' . escapeshellarg($lucru . '/server.log') . ' 2>&1 & echo $!'));
     $wpAcasa = ['cod' => 0, 'corp' => ''];
     for ($n = 0; $n < 50 && $wpAcasa['cod'] === 0; $n++) {
@@ -359,7 +362,17 @@ PHP);
         $c === 0 && !preg_match('/^\s+NU /m', $o) && str_contains($o, 'captura site-ului live: ' . $captura) && str_contains($o, 'planul importului: fără probleme')
         && str_contains($o, 'planul fișierelor statice: fără probleme') && str_contains($o, 'sodium da') && str_contains($o, 'PLAN: site-ul n-a fost schimbat')
         && !is_dir($dosarSite . '/public_html.nou') && $amprentaArbore($public) === $amprentaWp, $scurt($o));
+    // Întâi până după pregătire (ca o noapte în doi pași), apoi pregătirea din nou: APP_KEY se scrie o dată, rămâne la o reluare,
+    // stă doar în site/.env (0600) și nu apare în nicio ieșire.
+    [$c0, $o0] = $deploy('adopta-wp', array_merge($adopta, ['--aplica']), '', ['PLATFORMA_TEST_OPRESTE_DUPA' => 'inainte-instalare']);
+    $cheie1 = preg_match('/^APP_KEY=([0-9a-f]{64})$/m', (string) @file_get_contents($site . '/.env'), $mk) === 1 ? $mk[1] : '';
+    [$c1, $o1] = $deploy('adopta-wp', array_merge($adopta, ['--aplica', '--reia=pregatire']), '', ['PLATFORMA_TEST_OPRESTE_DUPA' => 'inainte-instalare']);
+    $cheie2 = preg_match('/^APP_KEY=([0-9a-f]{64})$/m', (string) @file_get_contents($site . '/.env'), $mk) === 1 ? $mk[1] : '';
+    $verifica('APP_KEY: scris la pregătire (64 de cifre hexa), același după pregătirea din nou (--reia=pregatire), .env 0600, în nicio ieșire a comenzilor',
+        $c0 === 9 && $c1 === 9 && $cheie1 !== '' && $cheie1 === $cheie2 && (fileperms($site . '/.env') & 0777) === 0600
+        && str_contains($o1, 'APP_KEY (cea de dinainte)') && !str_contains((string) file_get_contents($lucru . '/comenzi.log'), $cheie1), $scurt($o0 . $o1));
     [$c, $o] = $deploy('adopta-wp', array_merge($adopta, ['--aplica']));
+    $verifica('APP_KEY neschimbat de restul adoptării', preg_match('/^APP_KEY=([0-9a-f]{64})$/m', (string) @file_get_contents($site . '/.env'), $mk) === 1 && $mk[1] === $cheie1);
     $stare = json_decode((string) @file_get_contents($site . '/deploy/adopta-wp.stare'), true);
     $faze = array_keys((array) ($stare['faze'] ?? []));
     $verifica('--aplica: GATA, fiecare fază făcută (verificari … deschidere)', $c === 0 && str_contains($o, '== GATA')
@@ -367,8 +380,8 @@ PHP);
     if ($c !== 0) {
         throw new RuntimeException('adoptarea n-a ajuns la GATA; restul pașilor n-au rost (ieșirea, mai sus)');
     }
-    $verifica('pregătirea: APP_KEY scris (64 de cifre hexa), fișierele statice copiate cu manifestul lor', preg_match('/^APP_KEY=[0-9a-f]{64}$/m', (string) @file_get_contents($site . '/.env')) === 1
-        && str_contains($o, 'fișierele statice ale paginilor capturate') && is_file($site . '/storage/import-wordpress/statice.json'), $scurt($o));
+    $verifica('pregătirea: fișierele statice copiate cu manifestul lor', str_contains($o0 . $o1, 'fișierele statice ale paginilor capturate')
+        && is_file($site . '/storage/import-wordpress/statice.json'), $scurt($o1));
     $verifica('verificarea: diagnostic --capturat și fiecare fișier cerut de pagini la adresa lui, 200, aceiași octeți', str_contains($o, 'diagnostic.php --capturat: fiecare fișier')
         && preg_match('/fișierele cerute de pagini \(\d+: foile, fonturile, mediile\), la adresele lor: 200, aceiași octeți/u', $o) === 1, $scurt($o));
 
@@ -420,6 +433,8 @@ PHP);
     }
     $verifica('adresele vechi: /camere → /camere/, ?page_id= (harta WordPress), slug-ul vechi, /hello-world/ → / (301); /wp-admin/, /wp-login.php, /xmlrpc.php: 410',
         $rele === [], implode('; ', $rele));
+    $cs = $cerere('/contact/send', ['name' => 'Ocolire', 'email' => 'o@exemplu.ro', 'subject' => 's', 'message' => 'm']);
+    $verifica('/contact/send al nucleului: 404 pe site-ul adoptat (doar formularele capturate primesc mesaje)', $cs['cod'] === 404, (string) $cs['cod']);
     $harta = (int) $pdoNou->query('SELECT COUNT(*) FROM wp_harta')->fetchColumn();
     $verifica('importul a scris harta WordPress (wp_harta) pentru ?page_id= și ?p=', $harta > 0, (string) $harta);
     [$c, $o] = $ruleaza(array_merge(explode(' ', $php), [$acasa . '/platforma/releases/' . $versiune . '/bin/platforma', '--site=' . $site, 'scripts/diagnostic.php', '--capturat']));
