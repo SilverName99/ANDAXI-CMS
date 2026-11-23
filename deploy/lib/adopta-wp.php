@@ -35,7 +35,8 @@ declare(strict_types=1);
  *               public_html.vechi, public_html.nou → public_html, amprenta WordPress (pentru revenire), fișierele de verificare a
  *               domeniului aduse, .htaccess-urile arborilor copiați (wp-content/, wp-includes/, capturat/: din deploy/stub/, fără
  *               execuție, cu cache-ul ca live), primele cereri, mentenanța ușoară
- *   verificare  testul de fum (pingul, /health, /, /admin/login, assets/, o poză) și adresele vechi: fiecare pagină importată,
+ *   verificare  întâi așteaptă (până la SECUNDE_CODUL_NOU) codul nou în locul celui vechi din OPcache-ul serverului; apoi
+ *               testul de fum (pingul, /health, /, /admin/login, assets/, o poză) și adresele vechi: fiecare pagină importată,
  *               o poză la adresa ei din wp-content/uploads (200, aceiași octeți), sitemap.xml; pe drumul capturat
  *               diagnostic.php --capturat (fiecare fișier cerut de pagini, cu sha256-ul lui, în docroot) și fiecare fișier static
  *               publicat și fiecare mediu cerut de pagini, la adresa lui (200, aceiași octeți)
@@ -56,6 +57,9 @@ require __DIR__ . '/deploy.php';
 require __DIR__ . '/wordpress.php';
 
 const FAZE_WP = ['verificari', 'pregatire', 'instalare', 'import', 'copie', 'comutare', 'verificare', 'deschidere'];
+
+/** Cât așteaptă verificarea, după comutare, să răspundă codul nou (OPcache-ul serverului; asteaptaCodulNou). */
+const SECUNDE_CODUL_NOU = 20;
 
 final class AdoptareWp
 {
@@ -737,7 +741,7 @@ function planulWp(AdoptareWp $a): void
         'copie       ' . $s->lucru . '/copii/<data>-wordpress/: codul WordPress (fără poze) și baza lui (~' . Fisiere::om((int) $a->stare->ia('wp_octeti', 0)) . ')',
         'comutare    MENTENANTA; ' . $s->docroot . ' → ' . $s->vechi . ' (WordPress, neatins); ' . $s->nou . ' → ' . $s->docroot
             . '; fișierele de verificare a domeniului; .htaccess-urile arborilor copiați (deploy/stub/: fără execuție, cache ca live)',
-        'verificare  ping, /health, /, /admin/login, assets/, o poză; fiecare pagină veche; o poză la adresa ei (200, aceiași octeți); sitemap.xml'
+        'verificare  codul nou așteptat (până la ' . SECUNDE_CODUL_NOU . ' s, OPcache-ul); ping, /health, /, /admin/login, assets/, o poză; fiecare pagină veche; o poză la adresa ei (200, aceiași octeți); sitemap.xml'
             . ($a->capturat() ? '; diagnostic --capturat; fiecare fișier cerut de pagini la adresa lui' : ''),
         'deschidere  MENTENANTA ștearsă; apoi cronurile pentru hPanel',
     ] as $rand) {
@@ -1051,6 +1055,7 @@ function wpComutare(AdoptareWp $a): void
 function wpVerificare(AdoptareWp $a): void
 {
     $jeton = (string) $a->stare->ia('jeton');
+    asteaptaCodulNou($a, $jeton);
     $probleme = verificaSiteul($a->s, $a->url, $jeton, $a->versiune, '');
     $antete = ['X-Andaxi-Deploy' => $jeton, 'Cookie' => 'andaxi_deploy=' . $jeton, 'Cache-Control' => 'no-cache'];
     $pagini = (array) $a->stare->ia('pagini_importate', []);
@@ -1096,6 +1101,33 @@ function wpVerificare(AdoptareWp $a): void
     }
     if ($probleme !== []) {
         throw new Oprire(count($probleme) . ' verificări ale site-ului nou au picat: ' . implode('; ', $probleme));
+    }
+}
+
+/**
+ * Imediat după comutare, OPcache-ul serverului poate da încă, câteva secunde, `index.php`-ul WordPress de la aceeași cale
+ * (opcache.revalidate_freq; la Hostinger cel puțin 2 secunde). Pingul, /health și /admin/login se cer din nou, cel mult
+ * SECUNDE_CODUL_NOU secunde, până răspunde codul nou (pingul cu versiunea lui, /health „ok”, logarea 200); abia apoi verificarea.
+ */
+function asteaptaCodulNou(AdoptareWp $a, string $jeton): void
+{
+    $antete = ['Cache-Control' => 'no-cache', 'Pragma' => 'no-cache', 'X-Andaxi-Deploy' => $jeton, 'Cookie' => 'andaxi_deploy=' . $jeton];
+    $inceput = microtime(true);
+    for ($incercare = 1; ; $incercare++) {
+        $ping = json_decode(Http::cere($a->url . '/_andaxi/ping', $antete)['corp'], true);
+        $health = Http::cere($a->url . '/health', $antete);
+        $login = Http::cere($a->url . '/admin/login', $antete);
+        if (is_array($ping) && ($ping['cod'] ?? null) === $a->versiune && $health['cod'] === 200 && str_starts_with($health['corp'], "ok\n") && $login['cod'] === 200) {
+            if ($incercare > 1) {
+                Iesire::info('codul nou răspunde după ' . round(microtime(true) - $inceput, 1) . ' s (OPcache-ul serverului)');
+            }
+            return;
+        }
+        if (microtime(true) - $inceput >= SECUNDE_CODUL_NOU) {
+            Iesire::atentie('după ' . SECUNDE_CODUL_NOU . ' s, pingul, /health sau /admin/login nu răspund încă ca site-ul nou; verificarea de mai jos spune ce');
+            return;
+        }
+        sleep(1);
     }
 }
 
