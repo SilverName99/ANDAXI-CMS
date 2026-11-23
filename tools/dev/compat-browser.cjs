@@ -339,8 +339,12 @@ const MV_RELE = [
   ['p-inchis', '<p>a<ul><li>b</li></ul></p>'],
   ['script', '<script>alert(1)</script>'],
   ['adresa', '<a href="javascript:alert(1)">x</a>'],
-  ['entitate', '<p>&icirc;</p>'],
+  ['entitate', '<p>&xyzzy;</p>'],
+  ['inert', '<p><img src="/fixturi/galerie-3x4.png?inert" alt=""></p><script>alert(1)</script>'],
+  ['stil-fix', '<p style="position: fixed; top: 0">Text fixat</p>'],
 ];
+// Un modul cu varianta de tabletă bună și cea de telefon refuzată (la telefon: conținutul original, afișat).
+const MV_RAU_TELEFON = '<p>&xyzzy; telefon</p>';
 const CORP_MV = '<div id="page-container"><div id="et-main-area">'
   + '<div class="et_pb_module et_pb_menu et_pb_menu_0"><div class="et_pb_menu__logo-wrap"><div class="et_pb_menu__logo"><a href="/pagina/baza">'
   + '<img decoding="async" src="" alt="" class="et_multi_view_hidden_image" data-et-multi-view="' + mv({ schema: { attrs: { desktop: { src: '', alt: '' },
@@ -351,14 +355,21 @@ const CORP_MV = '<div id="page-container"><div id="et-main-area">'
   + '<div class="et_pb_module et_pb_toggle et_pb_toggle_6 et_pb_toggle_item et_pb_toggle_open"><h2 class="et_pb_toggle_title">Facilitățile – telefon</h2>'
   + '<div class="et_pb_toggle_content clearfix" data-et-multi-view="' + mv({ schema: { content: { desktop: MV_TABEL, tablet: MV_LISTE, phone: MV_TELEFON } }, slug: 'et_pb_toggle' })
   + '" data-et-multi-view-load-tablet-hidden="true" data-et-multi-view-load-phone-hidden="true">' + MV_TABEL + '</div></div>'
+  + '<div class="et_pb_module et_pb_toggle et_pb_toggle_7 et_pb_toggle_item et_pb_toggle_open"><h2 class="et_pb_toggle_title">Facilitățile – telefon refuzat</h2>'
+  + '<div class="et_pb_toggle_content clearfix" data-et-multi-view="' + mv({ schema: { content: { desktop: MV_TABEL, tablet: MV_LISTE, phone: MV_RAU_TELEFON } }, slug: 'et_pb_toggle' })
+  + '" data-et-multi-view-load-tablet-hidden="true" data-et-multi-view-load-phone-hidden="true">' + MV_TABEL + '</div></div>'
   + '<div class="et_pb_module et_pb_image et_pb_image_0"><span class="et_pb_image_wrap"><img decoding="async" width="40" height="30" src="/fixturi/galerie-4x3.png" alt="" '
   + 'class="wp-image-7" data-et-multi-view="' + mv({ schema: { attrs: { desktop: { src: '/fixturi/galerie-4x3.png', alt: '', class: 'wp-image-7' },
     hover: { src: '/fixturi/galerie-3x4.png?hover', srcset: '/fixturi/galerie-3x4.png?hover 30w' } } }, slug: 'et_pb_image' }) + '"></span></div>'
+  + '<div class="et_pb_module et_pb_text proba-attrs"><div class="et_pb_text_inner" title="d" data-et-multi-view="' + mv({ schema: { attrs: { desktop: { title: 'd' },
+    tablet: { title: 't', src: '/fixturi/galerie-2x1.png?div', class: 'proba-clasa-t' } } }, slug: 'et_pb_text' }) + '">Atribute pe un div</div></div>'
   + MV_RELE.map(([n, v]) => '<div class="et_pb_module et_pb_text proba-rau-' + n + '"><div class="et_pb_text_inner" data-et-multi-view="'
-    + mv({ schema: { content: { desktop: '<p>Text desktop</p>', tablet: v } }, slug: 'et_pb_text' }) + '"><p>Text desktop</p></div></div>').join('')
+    + mv({ schema: { content: { desktop: '<p>Text desktop</p>', tablet: v } }, slug: 'et_pb_text' })
+    + '" data-et-multi-view-load-tablet-hidden="true" data-et-multi-view-load-phone-hidden="true"><p>Text desktop</p></div></div>').join('')
   + '</div></div>\n';
 const STIL_MV = 'body{margin:0}@media (min-width:768px) and (max-width:980px){[data-et-multi-view-load-tablet-hidden=true]:not(.et_multi_view_swapped){display:none!important}}'
   + '@media (max-width:767px){[data-et-multi-view-load-phone-hidden=true]:not(.et_multi_view_swapped){display:none!important}}'
+  + '.et_multi_view_hidden,.et_multi_view_hidden_image{display:none!important}'
   + '.et_multi_view_image__loading{visibility:hidden}@media (max-width:980px){.et_pb_menu{display:none}}.et_pb_image{width:40px}';
 
 // Sticky, ancorele și butonul „sus” (sticky.md, ancore-aterizare.md, sus.md; inventate): antetul de telefon (doar ≤ 980), un
@@ -1923,22 +1934,51 @@ async function verificaMultiView(browser) {
     const { context, page, ev } = await deschide(browser, { cale: '/pagina/multiview' });
     const bune = [MV_TABEL, MV_LISTE, MV_TELEFON, '<p>a &lt;b&gt; &#259; &#x21B; &nbsp;x</p>', 'text <span>1</span> &amp; 2 < 3', '<ul><li>a<ul><li>b</li></ul></li></ul>',
       '<table><tbody><tr><td><table><tbody><tr><td>x</td></tr></tbody></table></td></tr></tbody></table>', '<p>a<br>b<br/>c</p><hr>',
-      '<a href="#sus" target="_blank" rel="noopener">sus</a> <a href="mailto:oaspeti@example.org">scrie</a> <img src="/fixturi/galerie-4x3.png" alt="" width="4">'];
+      '<a href="#sus" target="_blank" rel="noopener">sus</a> <a href="mailto:oaspeti@example.org">scrie</a> <img src="/fixturi/galerie-4x3.png" alt="" width="4">',
+      // ieșirea obișnuită din WordPress: entitățile Latin-1 și românești, <a name>, atributele de imagine noi, etichetele de text
+      '<p>&Icirc;n camer&abreve; &scedil;i &Scedil;, &tcedil;/&Tcedil;, &acirc;&Acirc;, &icirc;nc&abreve;lzire &ndash; &eacute;t&eacute; &copy; &frac12; &hellip;</p>',
+      '<p><a name="sus"></a><del>vechi</del> <ins>nou</ins> <s>x</s> <u>y</u> <small>z</small> H<sub>2</sub>O m<sup>2</sup> <mark>m</mark> '
+        + '<abbr title="Wi-Fi">wifi</abbr> <time datetime="2026-11-23">azi</time> <cite>c</cite> <q>q</q> <code>c</code></p>',
+      '<figure class="wp-block-image"><img src="/fixturi/galerie-4x3.png" alt="" fetchpriority="high" decoding="async" loading="lazy" tabindex="0">'
+        + '<figcaption>Camera</figcaption></figure>',
+      '<pre>\nlinia 1\n  linia 2</pre><pre>fără salt</pre>', '<dl><dt>Mic dejun</dt><dd>7–10</dd><dt>Cină</dt><dd>18–21</dd></dl>',
+      '<p>AT&T, R&D, &foo bar, 5 &lt; 6</p>', '<ul><li>a<blockquote><li>b</li></blockquote></li></ul>', '<p>a</p\t>',
+      '<p style="background-image: url(/fixturi/galerie-4x3.png); font-family: \'Open Sans\', sans-serif; position: relative;">x</p>',
+      '<p style="background: url(&quot;data:image/png;base64,iVBORw0KGgo=&quot;) no-repeat">x</p>'];
     const rele = MV_RELE.map((x) => x[1]).concat(['<span/>', '<div id="1x">x</div>', '<p style="background:url(javascript:alert(1))">x</p>', '<h2><h3>x</h3></h2>',
-      '<li>a<li>b', '<b><i>x</b></i>', '<p>a</span>', '<a href="//alt.example/x">x</a>', '<form action="/x"></form>', '<iframe src="/x"></iframe>', '<![CDATA[x]]>']);
-    const r = await page.evaluate(([bune, rele]) => {
+      '<li>a<li>b', '<b><i>x</b></i>', '<p>a</span>', '<a href="//alt.example/x">x</a>', '<form action="/x"></form>', '<iframe src="/x"></iframe>', '<![CDATA[x]]>',
+      // paritatea cu parserul: dd/dt, li prin div, <?, NUL, închideri cu spații neobișnuite, <pre> + referință, adâncimea
+      '<dl><dt>a<dd>b</dd></dl>', '<dl><dd>a<dt>b</dt></dl>', '<ul><li>a<div><li>b</li></div></li></ul>', '<?php echo 1; ?>', '<p>a\u0000b</p>',
+      '<p>a</p\u000b>', '<p>a</p\u00a0>', '<pre>&#10;x</pre>', '<span>'.repeat(70) + 'x', '&copy 2026', '<p>&copyx;</p>',
+      // politica: stiluri declarație cu declarație, rel=opener, id/name ax-*, data-ax-*, multi-view imbricat, name pe altceva decât <a>
+      '<p style="position: fixed; top: 0">x</p>', '<p style="position:var(--p)">x</p>', '<p style="background: url(https://alt.example/x.png)">x</p>',
+      '<p style="background: url(//alt.example/x.png)">x</p>', '<p style="background: image-set(\'/x.png\' 1x)">x</p>', '<p style="color: red /* x */">x</p>',
+      '<p style="color: r\\65 d">x</p>', '<p style="width: expression(alert(1))">x</p>', '<p style="background: url(data:text/html,x)">x</p>',
+      '<p style="color: red; }">x</p>', '<a href="/x" rel="noreferrer opener">x</a>', '<div id="ax-date">x</div>', '<a name="ax-x">x</a>', '<div id="axCompat">x</div>',
+      '<span data-ax-x="1">x</span>', '<div data-et-multi-view="{}">x</div>', '<img name="sus" src="/fixturi/galerie-4x3.png">', '<a href="/x" tabindex="unu">x</a>',
+      '<img src="/fixturi/galerie-2x1.png?inert-citit" alt=""><p>a</span>']);
+    const r = await page.evaluate(async ([bune, rele]) => {
       const ser = (frag) => { const dv = document.createElement('div'); dv.appendChild(frag); return dv.innerHTML; };
       const parser = (s) => { const t = document.createElement('template'); t.innerHTML = s; return ser(t.content.cloneNode(true)); };
       const citeste = (s) => { try { return ser(window.axCompat.multiView.citesteFragment(s)); } catch (e) { return e.refuzFragment ? 'REFUZ: ' + e.message : 'EROARE: ' + e.message; } };
-      return { bune: bune.map((s) => [citeste(s), parser(s)]), rele: rele.map(citeste) };
+      const rez = { bune: bune.map((s) => [citeste(s), parser(s)]), rele: rele.map(citeste) };
+      await new Promise((x) => setTimeout(x, 300));
+      return rez;
     }, [bune, rele]);
     const gresite = r.bune.filter(([a, b]) => a !== b);
     verifica('cititorul strict: ' + bune.length + ' variante (tabelul și listele de tip Divi, referințe de caractere, liste și tabele imbricate, '
-      + 'elemente vide, legături sigure) dau exact nodurile parserului HTML', gresite.length === 0, gresite);
+      + 'elemente vide, legături sigure; ieșirea obișnuită din WordPress: entitățile Latin-1 și românești, <a name>, del/ins/s/u/small/sub/sup/mark/abbr/'
+      + 'time/figure/figcaption/pre, fetchpriority/decoding/loading/tabindex, „&” fără referință, li într-un blockquote, stiluri cu url() local și '
+      + 'data:image) dau exact nodurile parserului HTML', gresite.length === 0, gresite);
     const neRefuzate = r.rele.map((x, k) => [rele[k], x]).filter(([, x]) => !/^REFUZ: /.test(x));
     verifica('cititorul strict refuză (fail-closed) ' + rele.length + ' variante: handler on*, tbody implicit, <p> închis implicit, <script>, javascript:, '
       + 'o referință necunoscută, „/>” pe un element nevid, un id invalid, url(javascript:), titlu în titlu, li deschis în li, închideri încrucișate, '
-      + 'adresă spre altă gazdă, form, iframe, CDATA', neRefuzate.length === 0, neRefuzate);
+      + 'adresă spre altă gazdă, form, iframe, CDATA; dd/dt deschise unul în altul, li prin div, <?…>, NUL, închideri cu \\v sau NBSP, <pre> + referință, '
+      + 'peste 64 de niveluri, referințe fără „;” care ar putea fi vechi; position:fixed (și prin var()), url() spre altă gazdă, image-set, comentarii '
+      + 'și escape-uri CSS, expression, data: non-imagine, acolade; rel=opener, id/name ax-*, id axCompat, data-ax-*, multi-view imbricat, name pe <img>, '
+      + 'tabindex invalid', neRefuzate.length === 0, neRefuzate);
+    verifica('o variantă refuzată după o imagine: nicio cerere pentru imagine (nodurile se construiesc într-un document inert, adoptate abia la sfârșit)',
+      !ev.cereri.some((c) => /inert-citit/.test(c)), ev.cereri.filter((c) => /galerie/.test(c)));
     verifica('fără erori, fără consolă, fără încălcări CSP, nicio cerere spre altă gazdă', curate(ev, await stare(page.mainFrame())), ev);
     await context.close();
   }
@@ -1946,10 +1986,17 @@ async function verificaMultiView(browser) {
     const logo = document.querySelector('.et_pb_menu__logo img');
     const t5 = document.querySelector('.et_pb_toggle_5 .et_pb_toggle_content');
     const t6 = document.querySelector('.et_pb_toggle_6 .et_pb_toggle_content');
+    const t7 = document.querySelector('.et_pb_toggle_7 .et_pb_toggle_content');
     const img = document.querySelector('.et_pb_image_0 img');
-    const rele = Array.from(document.querySelectorAll('[class*="proba-rau-"] .et_pb_text_inner')).map((e) => [e.className, e.innerHTML]);
-    return { logo: [logo.getAttribute('class'), logo.getAttribute('src'), logo.getAttribute('srcset'), logo.getAttribute('sizes')], t5: [t5.className, t5.innerHTML, getComputedStyle(t5).display],
-      t6: [t6.className, t6.innerHTML, getComputedStyle(t6).display], hoverClase: Array.from(document.querySelectorAll('.et_multi_view__hover_selector')).map((e) => e.className),
+    const at = document.querySelector('.proba-attrs .et_pb_text_inner');
+    const rele = Array.from(document.querySelectorAll('[class*="proba-rau-"] .et_pb_text_inner')).map((e) => [e.className, e.innerHTML, getComputedStyle(e).display]);
+    const P = window.__axProba;
+    P.mvNoduri = P.mvNoduri || { logo, t5: t5.firstElementChild, t7: t7.firstElementChild };
+    return { logo: [logo.getAttribute('class'), logo.getAttribute('src'), logo.getAttribute('srcset'), logo.getAttribute('sizes'), getComputedStyle(logo).display],
+      logoOriginal: logo === P.mvNoduri.logo, t5: [t5.className, t5.innerHTML, getComputedStyle(t5).display], t5Original: t5.firstElementChild === P.mvNoduri.t5,
+      t6: [t6.className, t6.innerHTML, getComputedStyle(t6).display], t7: [t7.className, t7.innerHTML, getComputedStyle(t7).display],
+      t7Original: t7.firstElementChild === P.mvNoduri.t7, at: [at.className, at.getAttribute('title'), at.getAttribute('src')],
+      hoverClase: Array.from(document.querySelectorAll('.et_multi_view__hover_selector')).map((e) => e.className),
       img: [img.getAttribute('class'), img.getAttribute('src')], rele, diag: window.axCompat.diagnostic().filter((x) => /^multi-view/.test(x)),
       noduriImg: window.__axProba.jurnal.filter((j) => j.fel === 'nod' && j.tinta === 'img' && j.t >= window.__axProba.dcl).length };
   });
@@ -1957,11 +2004,11 @@ async function verificaMultiView(browser) {
     const { context, page, ev } = await deschide(browser, { cale: '/pagina/multiview' });
     const s = await stare(page.mainFrame());
     const m = await citesteMv(page.mainFrame());
-    const tinte = m.hoverClase.map((c) => c.split(' ').find((k) => /^(et_multi_view_hidden_image|et_pb_toggle_[0-9]|et_pb_image_[0-9]|proba-rau-.*)$/.test(k)));
+    const tinte = m.hoverClase.map((c) => c.split(' ').find((k) => /^(et_multi_view_hidden_image|et_pb_toggle_[0-9]|et_pb_image_[0-9]|proba-attrs|proba-rau-.*)$/.test(k)));
     verifica('desktop (1440): doar clasa et_multi_view__hover_selector pe ținte (logo-ul însuși, prin hover_selector; modulul cu clasa slug-ului: '
-      + 'toggle, imagine, text); nimic schimbat, nicio cerere pentru logo-ul de tabletă', curate(ev, s) && egal(m.logo, ['et_multi_view_hidden_image et_multi_view__hover_selector', '', null, null])
-      && m.t5[0] === 'et_pb_toggle_content clearfix' && m.t5[1] === MV_TABEL_SERIAL && m.t6[1] === MV_TABEL_SERIAL && m.noduriImg === 0
-      && egal(tinte, ['et_multi_view_hidden_image', 'et_pb_toggle_5', 'et_pb_toggle_6', 'et_pb_image_0'].concat(MV_RELE.map((x) => 'proba-rau-' + x[0])))
+      + 'toggle, imagine, text); nimic schimbat, nicio cerere pentru logo-ul de tabletă', curate(ev, s) && egal(m.logo, ['et_multi_view_hidden_image et_multi_view__hover_selector', '', null, null, 'none'])
+      && m.t5[0] === 'et_pb_toggle_content clearfix' && m.t5[1] === MV_TABEL_SERIAL && m.t6[1] === MV_TABEL_SERIAL && m.t7[1] === MV_TABEL_SERIAL && m.noduriImg === 0
+      && egal(tinte, ['et_multi_view_hidden_image', 'et_pb_toggle_5', 'et_pb_toggle_6', 'et_pb_toggle_7', 'et_pb_image_0', 'proba-attrs'].concat(MV_RELE.map((x) => 'proba-rau-' + x[0])))
       && !ev.cereri.some((c) => /\?logo/.test(c)), { tinte, m, cereri: ev.cereri, ...detaliiCurate(ev, s) });
     // hover pe imagine: ascunsă cât se încarcă, apoi __loaded; la ieșire, înapoi
     const h = await page.evaluate(async () => {
@@ -1982,31 +2029,52 @@ async function verificaMultiView(browser) {
       + '__loaded la load; mouseleave întoarce valoarea desktop, la fel', egal(h.imediat, ['wp-image-7 et_multi_view_image__loading et_multi_view_swapped',
       '/fixturi/galerie-3x4.png?hover', '/fixturi/galerie-3x4.png?hover 30w', 'hidden']) && egal(h.incarcat, ['wp-image-7 et_multi_view_swapped et_multi_view_image__loaded', 'visible'])
       && egal(h.iesire, ['wp-image-7 et_multi_view_swapped et_multi_view_image__loading', '/fixturi/galerie-4x3.png']) && h.dupa === 'wp-image-7 et_multi_view_swapped et_multi_view_image__loaded', h);
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(200);
-    const r1 = await citesteMv(page.mainFrame());
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.waitForTimeout(200);
-    const r2 = await citesteMv(page.mainFrame());
-    verifica('resize 1440 → 390 → 1440: varianta modului nou (telefon: lista de telefon), apoi înapoi tabelul desktop', r1.t6[1] === MV_TELEFON && r1.t5[1] === MV_LISTE
-      && r2.t5[1] === MV_TABEL_SERIAL && r2.t6[1] === MV_TABEL_SERIAL, { r1: [r1.t5[1].slice(0, 60), r1.t6[1].slice(0, 60)], r2: [r2.t5[1].slice(0, 60), r2.t6[1].slice(0, 60)] });
+    const marimi = async (latime, inaltime) => {
+      await page.setViewportSize({ width: latime, height: inaltime });
+      await page.waitForTimeout(200);
+      return citesteMv(page.mainFrame());
+    };
+    const r1 = await marimi(390, 844);
+    const r2 = await marimi(1440, 900);
+    verifica('resize 1440 → 390 → 1440: varianta modului nou (telefon: lista de telefon; varianta de telefon refuzată: conținutul original, afișat), '
+      + 'apoi înapoi starea de la încărcare: nodurile originale ale conținutului, fără et_multi_view_swapped', r1.t6[1] === MV_TELEFON && r1.t5[1] === MV_LISTE
+      && r1.t7[1] === MV_TABEL_SERIAL && r1.t7[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && r1.t7[2] === 'block'
+      && r2.t5[1] === MV_TABEL_SERIAL && r2.t6[1] === MV_TABEL_SERIAL && r2.t7[1] === MV_TABEL_SERIAL && r2.t5Original && r2.t7Original
+      && [r2.t5[0], r2.t6[0], r2.t7[0]].every((c) => c === 'et_pb_toggle_content clearfix'),
+    { r1: [r1.t5[1].slice(0, 60), r1.t6[1].slice(0, 60), r1.t7], r2: [r2.t5, r2.t6[0], r2.t7, r2.t5Original, r2.t7Original] });
+    const r3 = await marimi(820, 1180);
+    const r4 = await marimi(390, 844);
+    const r5 = await marimi(1440, 900);
+    verifica('resize 1440 → 820 → 390 → 1440: tableta pune lista, telefonul (variantă refuzată) aduce înapoi nodurile originale cu et_multi_view_swapped; '
+      + 'logo-ul: pe tabletă copia cu src-ul de tabletă, înapoi pe desktop nodul original (et_multi_view_hidden_image, src gol, ascuns: nicio cutie goală)',
+    r3.t7[1] === MV_LISTE && r4.t7[1] === MV_TABEL_SERIAL && r4.t7Original && r4.t7[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && r4.t7[2] === 'block'
+      && r5.t7Original && r5.t7[0] === 'et_pb_toggle_content clearfix' && r3.logo[1] === '/fixturi/galerie-2x1.png?logo' && !r3.logoOriginal
+      && r5.logoOriginal && egal(r5.logo, ['et_multi_view_hidden_image et_multi_view__hover_selector', '', null, null, 'none']),
+    { r3: [r3.t7[1].slice(0, 40), r3.logo], r4: r4.t7, r5: [r5.t7[0], r5.logo, r5.logoOriginal] });
     await context.close();
   }
-  for (const [eticheta, o, t5, t6] of [['telefon (390, iPhone)', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }, MV_LISTE, MV_TELEFON],
-    ['tabletă (820, iPad)', { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true, ua: UA.safariMac, init: STANDALONE_FALS }, MV_LISTE, MV_LISTE]]) {
+  for (const [eticheta, o, t5, t6, t7] of [['telefon (390, iPhone)', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }, MV_LISTE, MV_TELEFON, MV_TABEL_SERIAL],
+    ['tabletă (820, iPad)', { viewport: { width: 820, height: 1180 }, isMobile: true, hasTouch: true, ua: UA.safariMac, init: STANDALONE_FALS }, MV_LISTE, MV_LISTE, MV_LISTE]]) {
     const { context, page, ev } = await deschide(browser, Object.assign({ cale: '/pagina/multiview' }, o));
     const s = await stare(page.mainFrame());
     const m = await citesteMv(page.mainFrame());
     const conditii = { curat: curate(ev, s), t5: m.t5[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && m.t5[1] === t5 && m.t5[2] === 'block',
-      t6: m.t6[1] === t6 && m.t6[2] === 'block', logo: egal(m.logo, ['et_multi_view__hover_selector et_multi_view_swapped et_multi_view_image__loaded', '/fixturi/galerie-2x1.png?logo', '', '']),
+      t6: m.t6[1] === t6 && m.t6[2] === 'block', t7: m.t7[1] === t7 && m.t7[0] === 'et_pb_toggle_content clearfix et_multi_view_swapped' && m.t7[2] === 'block',
+      logo: egal(m.logo, ['et_multi_view__hover_selector et_multi_view_swapped et_multi_view_image__loaded', '/fixturi/galerie-2x1.png?logo', '', '', 'inline']),
       inlocuit: m.noduriImg === 1, cerut: ev.cereri.some((c) => /galerie-2x1\.png\?logo/.test(c)) };
     verifica(eticheta + ': conținutul înlocuit cu varianta modului (phone → tablet → desktop) și et_multi_view_swapped, deci afișat; logo-ul ascuns '
       + 'înlocuit în DOM de o copie cu src-ul de tabletă (srcset și sizes goale, ca pe live), fără et_multi_view_hidden_image, cu et_multi_view_swapped '
       + 'et_multi_view_image__loaded (și cerut)',
     Object.values(conditii).every(Boolean), { conditii, m: { logo: m.logo, t5: m.t5[0], t6: m.t6[0], noduriImg: m.noduriImg }, cereri: ev.cereri, ...detaliiCurate(ev, s) });
-    verifica(eticheta + ': variantele rele (handler, tbody implicit, <p> închis implicit, <script>, javascript:, referință necunoscută) refuzate: '
-      + 'elementul rămâne cu textul desktop, câte un rând în diagnostic; imaginea fără valoare de mod rămâne neatinsă', m.rele.every(([c, h]) => h === '<p>Text desktop</p>' && !/swapped/.test(c))
-      && m.diag.filter((x) => /^multi-view: variantă refuzată/.test(x)).length === MV_RELE.length && egal(m.img, ['wp-image-7', '/fixturi/galerie-4x3.png']), { rele: m.rele, diag: m.diag });
+    const refuzuri = MV_RELE.length + (t7 === MV_TABEL_SERIAL ? 1 : 0);
+    verifica(eticheta + ': variantele rele (handler, tbody implicit, <p> închis implicit, <script>, javascript:, referință necunoscută, o imagine '
+      + 'înaintea unui <script>, position:fixed) refuzate pe module cu data-et-multi-view-load-*-hidden: elementul rămâne cu textul desktop și '
+      + 'primește et_multi_view_swapped, deci rămâne afișat; câte un rând în diagnostic; nicio cerere pentru imaginea variantei refuzate; '
+      + 'imaginea fără valoare de mod rămâne neatinsă', m.rele.every(([c, h, afis]) => h === '<p>Text desktop</p>' && c === 'et_pb_text_inner et_multi_view_swapped' && afis === 'block')
+      && m.diag.filter((x) => /^multi-view: variantă refuzată/.test(x)).length === refuzuri && egal(m.img, ['wp-image-7', '/fixturi/galerie-4x3.png'])
+      && !ev.cereri.some((c) => /\?inert/.test(c)), { rele: m.rele, diag: m.diag, cereri: ev.cereri.filter((c) => /inert/.test(c)) });
+    verifica(eticheta + ': attrs pe un element care nu e IMG: doar clasele (proba-clasa-t) și et_multi_view_swapped; title și src neatinse, nicio cerere',
+      egal(m.at, ['et_pb_text_inner proba-clasa-t et_multi_view_swapped', 'd', null]) && !ev.cereri.some((c) => /\?div/.test(c)), m.at);
     const idem = await page.evaluate(() => {
       const a = document.body.innerHTML;
       window.axCompat.multiView.aplica();

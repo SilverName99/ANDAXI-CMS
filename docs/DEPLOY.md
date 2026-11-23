@@ -1133,8 +1133,11 @@ fereastră corectați ca pe live; deschiderea după `data-popup-id`, clasele de 
 iar coperta se estompează în 500 ms pe curba „swing”, apoi `display: none`; video-ul rămâne cu controalele native). După rularea de
 paritate (toate scrise de noi, din urmele luate pe pagina live rulată offline din cache-ul referinței): `divi4/v1/multi-view.js`
 (`data-et-multi-view`: clasa `et_multi_view__hover_selector` pe ținte; pe tabletă și telefon conținutul modului, cu
-`et_multi_view_swapped`, și logo-ul ascuns înlocuit de o copie cu atributele lui; hover-ul imaginilor cu `__loading`/`__loaded`; variantele
-HTML nu trec prin parserul browserului, ci printr-un cititor strict pe o listă închisă, care refuză orice ar construi altfel), `divi4/v1/toggle.js`
+`et_multi_view_swapped`, și logo-ul ascuns înlocuit de o copie cu atributele lui; înapoi pe desktop, nodurile originale; hover-ul imaginilor
+cu `__loading`/`__loaded`; variantele HTML nu trec prin parserul browserului, ci printr-un cititor strict pe o listă închisă (entitățile
+HTML 4, Latin-1 și literele românești, etichetele de text obișnuite din WordPress; stilurile declarație cu declarație, `url()` doar spre
+origine), într-un document inert, care refuză orice ar construi altfel; o variantă refuzată lasă conținutul original al paginii, afișat,
+cu `et_multi_view_swapped`), `divi4/v1/toggle.js`
 (toggle-urile și acordeoanele: înălțimea, padding-urile și marginile de la 0 la valorile naturale în 700 ms „swing”, clasele
 `et_pb_toggle_open`/`_close` la sfârșit, fără tastatură, ca pe live), `divi4/v1/sticky.js` (opțiunile sticky din `ax-date` →
 `et_pb_sticky_elements`: offsetul cu `offsetSurrounding`, limita secțiunii prin `margin-top`, placeholder-ul, clasele și `style`-ul
