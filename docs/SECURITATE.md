@@ -36,6 +36,14 @@ sursei (fereastra chiar a cadrului de previzualizare). Înălțimea o trimite ca
 editorul paginii (`{{products_by_template:…}}`, `{{category_event_rows:…}}`…) se cer și se trimit tot prin mesaje.
 Fiecare previzualizare randează și se actualizează ca înainte, inclusiv scripturile din ea.
 
+Un lucru pe care originea opacă îl schimbă: browserul cere fonturile cu CORS, deci un cadru izolat nu primește fonturile
+servite de site (`/assets/vendor/fonturi/…`, `/tema/…`), iar fișierele lor nu trimit `Access-Control-Allow-Origin`.
+Previzualizarea din Antet, subsol și meniu (`design-site.php`, 23 noiembrie 2026; [PACHETE.md](PACHETE.md), „Tema”) le
+primește de la pagina adminului: cadrul cere fonturile (`postMessage`), pagina verifică sursa (fereastra cadrului) și
+originea (`"null"`), citește `@font-face` din foile site-ului de pe originea ei și îi trimite doar fișierele fonturilor,
+pe care cadrul (care primește mesaje doar de la `parent`) le adaugă cu `FontFace`. Izolarea rămâne aceeași: cadrul nu
+primește nimic altceva și nu atinge pagina adminului.
+
 **b) Doar administratorul general poate salva cod activ.** O gardă centrală a routerului
 (`App\Http\GardaCodActiv`, după `GardaPluginuri`) prinde orice POST din admin al unui admin logat care **nu** e
 administrator general, pe o adresă la care rolul lui are voie. Din tot ce trimite formularul (și corpul JSON, câmpurile

@@ -114,6 +114,16 @@ Reguli:
   scrie un rând în jurnalul PHP. `verifica-pachet.php` refuză pachetul (`Tema::valideaza`).
 - **Fonturile și Bootstrap-ul** sunt ale nucleului (`public/assets/vendor/`, proveniența în `VERSIUNE.txt`, licențele
   alături): o temă le cere prin chei, nu le copiază în pachet.
+- **Previzualizarea din Admin → Antet, subsol și meniu** (`views/admin/design-site.php`) arată antetul și subsolul cu
+  stilurile paginilor publice (23 noiembrie 2026; înainte, pe grafoanaytis, antetul Bootstrap ieșea cu linkuri albastre și
+  buline): în cadrul ei intră aceleași foi ca în `<head>`-ul lui `views/layout.php`, în aceeași ordine (`Tema::foiDeStil`:
+  Google Fonts sau fonturile din nucleu, Bootstrap, `app.css`, foile temei), după stilul ei de bază și înaintea CSS-ului
+  din Design, plus JavaScript-ul Bootstrap când tema îl cere (butonul de meniu pe telefon). Foaia șablonului
+  (`sablon-site.css`) și scripturile `js_final` nu intră: stilizează și pornesc ce construiește layoutul (căutarea,
+  sertarul `{{mobile_menu}}`, apariția blocurilor), pe care previzualizarea nu le are. Cadrul e izolat (originea lui e
+  opacă, [SECURITATE.md](SECURITATE.md), N1), iar browserul nu-i dă fonturile site-ului (le cere cu CORS): pagina
+  adminului citește regulile `@font-face` din foile site-ului și îi trimite fișierele prin `postMessage`. Testul temei
+  (T2, T3, T5) verifică lista față de pagina publică și, în Chromium, antetul din cadru.
 - O temă schimbă CSS-ul, deci se dovedește cu stilurile calculate (G-vizual, `tools/dev/capturi-publice.sh`;
   [DEZVOLTARE.md](DEZVOLTARE.md), „Bioscem nu se schimbă”), nu doar cu HTML-ul.
 

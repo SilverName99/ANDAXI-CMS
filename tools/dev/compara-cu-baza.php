@@ -1770,6 +1770,16 @@ $marcajePort = [
     // încarcă emailul (App\Support\EmailContinut; tools/dev/test-emailuri-trimise.php). Rândurile tabelului rămân cele din bază.
     'em:istoric-vezi' => ['cale' => '/admin/emails/newsletters?tab=history', 'motiv' => '„Vezi” din Emailuri trimise (16 nov): '
         . 'butonul pe fiecare rând (pus de script) și sertarul cu emailul păstrat, izolat într-un iframe sandbox'],
+    // Previzualizarea din Admin → Antet, subsol și meniu cu stilurile site-ului (23 nov 2026, văzută pe grafoanaytis: antetul
+    // Bootstrap ieșea fără stiluri; nou, al nucleului, pe orice site: sursa „ds”). Doar în scriptul paginii: foile din <head>-ul
+    // paginilor publice (Tema::foiDeStil) puse în cadru între stilul de bază al previzualizării și CSS-ul din Design, fonturile
+    // site-ului trimise cadrului de pagina adminului și JavaScript-ul Bootstrap al temei (tools/dev/lib/test-tema.php, T2, T3, T5).
+    'ds:stiluri-site-js' => ['cale' => '/admin/design', 'motiv' => 'previzualizarea din Antet, subsol și meniu (23 nov): foile de stil '
+        . 'ale site-ului, fonturile trimise cadrului și JavaScript-ul Bootstrap al temei (datele și scriptul)'],
+    'ds:stiluri-site' => ['cale' => '/admin/design', 'motiv' => 'aceeași previzualizare: foile site-ului în <head>-ul cadrului, între '
+        . 'stilul ei de bază și CSS-ul din Design'],
+    'ds:script-site' => ['cale' => '/admin/design', 'motiv' => 'aceeași previzualizare: JavaScript-ul Bootstrap al temei, după scriptul '
+        . 'din Design'],
 ];
 // WP-26: intrările din meniul adminului ale pluginurilor pe care Bioscem nu le-a avut niciodată (nu sunt în licența ei de
 // dezvoltare, config/plugins.php → licente_dev): cu licența „toate” apar în meniul fiecărei pagini de admin (azi „Cereri de

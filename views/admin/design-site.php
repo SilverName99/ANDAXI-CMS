@@ -40,6 +40,12 @@ $availableMenuPages = is_array($availableMenuPages ?? null) ? $availableMenuPage
 $menuItems = is_array($menuItems ?? null) ? $menuItems : [];
 $menuEmbedToken = '{{menu}}';
 $mobileMenuEmbedToken = '{{mobile_menu}}';
+// Previzualizarea arată antetul și subsolul cu stilurile paginilor publice ale site-ului: foile din <head>-ul lui
+// views/layout.php, în aceeași ordine (Tema::foiDeStil: fonturile, Bootstrap, app.css, foile temei), puse între stilul de
+// bază al previzualizării și CSS-ul din Design; plus JavaScript-ul Bootstrap când tema îl încarcă (butonul de meniu,
+// submeniurile). Adresele încep cu „/”: documentul din srcdoc le rezolvă față de pagina adminului.
+$foiSitePrevizualizare = \App\Support\Tema::foiDeStil(\App\Support\ResponseCache::assetVersionToken($settings));
+$scriptBootstrapPrevizualizare = \App\Support\Tema::bootstrap() ? \App\Support\Tema::url(\App\Support\Tema::BOOTSTRAP_JS) : '';
 ?>
 
 <?php
@@ -560,7 +566,64 @@ admin_componenta('antet-pagina', [
         sections[section].css = cssInput ? (cssInput.value || '') : '';
         sections[section].js = jsInput ? (jsInput.value || '') : '';
         return sections;
+    };<?= \App\Support\Dev::marcaj('ds:stiluri-site-js') . "\n" ?>
+
+    /* Stilurile paginilor publice în previzualizare (Tema::foiDeStil), în ordinea din views/layout.php: după stilul de bază
+       al previzualizării și înaintea CSS-ului din Design, deci câștigă ele, ca pe site. JavaScript-ul Bootstrap (butonul de
+       meniu, submeniurile) cu defer, după scriptul din Design, tot ca acolo. */
+    const foiSite = <?= json_encode($foiSitePrevizualizare, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
+    const scriptBootstrap = <?= json_encode($scriptBootstrapPrevizualizare, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
+    /* Fonturile site-ului: cadrul are o origine opacă (sandbox fără allow-same-origin), iar browserul îi dă un font de pe
+       site doar cu CORS, pe care fișierele site-ului nu-l trimit. Pagina adminului, cu originea site-ului, citește regulile
+       @font-face din foile site-ului și îi trimite cadrului fișierele, pe care el le adaugă cu FontFace. Cererea și
+       răspunsul trec prin postMessage, cu sursa verificată de ambele părți; răspunsul are doar fonturile. */
+    const primesteFonturi = '<script>addEventListener("message",(e)=>{if(e.source!==parent||!e.data||e.data.tip!=="ax-fonturi-site")return;'
+        + 'e.data.fete.forEach((f)=>{try{document.fonts.add(new FontFace(f.familie,f.date,f.descriptori));}catch(_){}});});'
+        + 'parent.postMessage({tip:"ax-fonturi-cere"},"*");<\/script>\n';
+    const stiluriSite = primesteFonturi + foiSite.map((adresa) => `<link rel="stylesheet" href="${esc(adresa)}">\n`).join('');
+    const scriptSite = scriptBootstrap !== '' ? `<script src="${esc(scriptBootstrap)}" defer><\/script>\n` : '';
+    const descriptoriFont = [['style', 'font-style'], ['weight', 'font-weight'], ['stretch', 'font-stretch'],
+        ['unicodeRange', 'unicode-range'], ['display', 'font-display']];
+    let feteFonturiSite = null;
+    // Un fișier de font servește de obicei mai multe greutăți (fonturile variabile): se citește o dată.
+    const fisiereFont = new Map();
+    const fisierFont = (adresa) => {
+        if (!fisiereFont.has(adresa)) {
+            fisiereFont.set(adresa, fetch(adresa).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
+        }
+        return fisiereFont.get(adresa);
     };
+    const fonturiSite = () => feteFonturiSite ??= Promise.all(foiSite.filter((adresa) => adresa.startsWith('/')).map(async (adresa) => {
+        try {
+            const baza = new URL(adresa, window.location.href);
+            const foaie = new CSSStyleSheet();
+            foaie.replaceSync(await (await fetch(baza)).text());
+            const fete = [];
+            for (const regula of foaie.cssRules) {
+                const sursa = regula instanceof CSSFontFaceRule
+                    ? /url\(\s*(['"]?)([^'")]+)\1\s*\)/.exec(regula.style.getPropertyValue('src')) : null;
+                if (!sursa) continue;
+                const descriptori = {};
+                descriptoriFont.forEach(([cheie, nume]) => {
+                    const valoare = regula.style.getPropertyValue(nume);
+                    if (valoare) descriptori[cheie] = valoare;
+                });
+                const date = await fisierFont(new URL(sursa[2], baza).href);
+                if (date) {
+                    fete.push({ familie: regula.style.getPropertyValue('font-family'), date, descriptori });
+                }
+            }
+            return fete;
+        } catch {
+            return [];
+        }
+    })).then((liste) => liste.flat());
+    window.addEventListener('message', (e) => {
+        if (!preview || e.source !== preview.contentWindow || e.origin !== 'null' || e.data?.tip !== 'ax-fonturi-cere') return;
+        fonturiSite().then((fete) => {
+            if (fete.length) preview.contentWindow?.postMessage({ tip: 'ax-fonturi-site', fete }, '*');
+        });
+    });<?= \App\Support\Dev::marcaj('ds:stiluri-site-js', true) . "\n" ?>
 
     const renderPreview = () => {
         if (!preview || !shell || !label) return;
@@ -631,6 +694,7 @@ img{max-width:100%}
   }
 }
 </style>
+<?= \App\Support\Dev::marcaj('ds:stiluri-site') ?>${stiluriSite}<?= \App\Support\Dev::marcaj('ds:stiluri-site', true) ?>
 <style>${joinedCss}</style>
 </head>
 <body>
@@ -638,6 +702,7 @@ ${headerHtml}
 <div class="body"><h2>Conținut pagină</h2><p>Acesta este doar preview-ul pentru secțiunea ${section}.</p></div>
 ${footerHtml}
 <script>${joinedJs}<\/script>
+<?= \App\Support\Dev::marcaj('ds:script-site') ?>${scriptSite}<?= \App\Support\Dev::marcaj('ds:script-site', true) ?>
 </body>
 </html>`;
     };

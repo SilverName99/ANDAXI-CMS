@@ -46,6 +46,8 @@ final class Tema
     public const CULOARE_IMPLICITA = '#2f8d5b';
     public const BOOTSTRAP_CSS = '/assets/vendor/bootstrap/css/bootstrap.min.css';
     public const BOOTSTRAP_JS = '/assets/vendor/bootstrap/js/bootstrap.bundle.min.js';
+    /** Foaia Google Fonts a cheii `fonturi_google` (DM Sans, Playfair): aceeași adresă ca în views/layout.php. */
+    public const GOOGLE_FONTS_CSS = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap';
 
     /** Valorile implicite: exact ce face nucleul fără temă. */
     public const IMPLICIT = [
@@ -127,6 +129,37 @@ final class Tema
     public static function bootstrap(): bool
     {
         return (bool) self::valori()['bootstrap'];
+    }
+
+    /**
+     * Foile de stil ale paginilor publice, exact cele din `<head>`-ul lui views/layout.php și în aceeași ordine: Google
+     * Fonts (`fonturi_google`), fonturile din nucleu (`fonturi`), Bootstrap (`bootstrap`), `app.css` (`incarca_app_css`,
+     * cu `?v=<data fișierului>` și, ca în layout, `&v=<$versiune>`: ResponseCache::assetVersionToken) și foile temei
+     * (`css`). Fără temă: DM Sans, Playfair și app.css. CSS-ul din Design (antet, meniu, subsol) vine în pagină după ele.
+     *
+     * O folosește previzualizarea din Admin → Antet, subsol și meniu (views/admin/design-site.php), ca antetul să se vadă
+     * acolo cu stilurile site-ului. Layoutul își scrie etichetele singur (pagina publică rămâne octet cu octet aceeași);
+     * testul temei (tools/dev/test-pluginuri.php, T) verifică pe fiecare temă că lista de aici e cea din pagina publică.
+     *
+     * @return list<string> adresele, în ordine (neescapate pentru HTML)
+     */
+    public static function foiDeStil(string $versiune = ''): array
+    {
+        $foi = self::fonturiGoogle() ? [self::GOOGLE_FONTS_CSS] : [];
+        foreach (self::fonturi() as $font) {
+            $foi[] = self::url($font);
+        }
+        if (self::bootstrap()) {
+            $foi[] = self::url(self::BOOTSTRAP_CSS);
+        }
+        if (self::incarcaAppCss()) {
+            $foi[] = '/assets/css/app.css?v=' . (@filemtime(Paths::public('assets/css/app.css')) ?: time())
+                . ($versiune !== '' ? '&v=' . urlencode($versiune) : '');
+        }
+        foreach (self::css() as $css) {
+            $foi[] = self::url($css);
+        }
+        return $foi;
     }
 
     /** @return list<string> scripturile temei (`/tema/…js`), în ordine */

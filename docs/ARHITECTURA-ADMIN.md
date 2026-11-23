@@ -76,7 +76,9 @@ Două straturi peste `AdminCsrf`, pentru toate paginile, oricare ar fi ruta (det
   ce era salvat e refuzată întreagă, cu un mesaj în română și un rând în Jurnal activitate (`cod_activ_refuzat`); una
   neschimbată (codul scris de administratorul general rămâne) trece. `App\Http\GardaCodActiv`, `App\Support\CodActiv`.
   Previzualizările din editoare sunt izolate (`sandbox="allow-scripts"` fără `allow-same-origin`), deci codul din ele nu
-  mai atinge originea adminului.
+  mai atinge originea adminului. Cea din Antet, subsol și meniu are totuși stilurile site-ului: foile din `<head>`-ul
+  paginilor publice (`Tema::foiDeStil`), JavaScript-ul Bootstrap al temei și fonturile, pe care i le trimite pagina
+  adminului prin `postMessage` ([PACHETE.md](PACHETE.md), „Tema”; [SECURITATE.md](SECURITATE.md), N1).
 
 ## SEO în admin (WP-37, 1 noiembrie)
 

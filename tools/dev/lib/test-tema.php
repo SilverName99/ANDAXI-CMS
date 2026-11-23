@@ -12,11 +12,13 @@ declare(strict_types=1);
  *      fișierelor SVG (cele 19 iconițe de azi ale nucleului trec), adresele publice ale temei, DateSite::site și căile
  *      din pachet, Tema la rulare (blocul inline, logo-ul, versiunea) în cele trei locuri: pe server cu tema necopiată
  *      în public/tema/ (nicio legătură spre ea), sub routerul de dezvoltare (din pachet) și pe o găzduire simulată după
- *      copiere (din public/tema/); diagnostic.php --pachet (manifestul, LICENTA_SITE și SITE_SLUG, copia de verificare).
+ *      copiere (din public/tema/); diagnostic.php --pachet (manifestul, LICENTA_SITE și SITE_SLUG, copia de verificare);
+ *      Tema::foiDeStil (foile paginilor publice, pentru previzualizarea din Antet, subsol și meniu) pe patru teme.
  *  T2, un server al codului curent pe CMS_DEV_PORT+21 cu pachetul tools/dev/site-demo-tema: efectul fiecărei chei în HTML
  *      (fonturile, Bootstrap, app.css, foile și scripturile temei, <main>, mesajele, butonul „Înapoi sus”, culoarea
  *      bannerelor și a paginilor de rezervă, logo-ul sertarului, iconițele categoriilor, blocul paginii de mulțumire),
- *      fișierele /tema/… servite (cele din afara tema/public/ nu), niciun avertisment PHP.
+ *      fișierele /tema/… servite (cele din afara tema/public/ nu), niciun avertisment PHP; previzualizarea din Admin → Antet,
+ *      subsol și meniu cu foile de stil ale paginii publice (în aceeași ordine) și JavaScript-ul Bootstrap.
  *  T3, același port: fără temă, cu tema.json gol și cu fiecare cheie scrisă la valoarea ei implicită, paginile (și
  *      vederile de rezervă: 404, mulțumirea, linkul de plată, verificarea BT, sertarul de meniu) ies octet cu octet la fel,
  *      și au semnele codului de dinainte (Google Fonts, app.css, .container, fără butonul „sus”, #2f8d5b) și implicitele neutre
@@ -26,6 +28,10 @@ declare(strict_types=1);
  *  T4, Playwright (tools/dev/capturi-publice.php verificari, instrumentul porții G-vizual): stilurile calculate ale temei
  *      demo (Rubik încărcat și folosit, Bootstrap aplicat și pornit, scriptul temei, <main> lat, butonul sus fix după
  *      derulare, culoarea butonului 404, fără app.css).
+ *  T5, Playwright (tools/dev/previzualizare-design-browser.cjs): previzualizarea din Admin → Antet, subsol și meniu cu tema
+ *      demo; un antet Bootstrap scris în editor (nesalvat) arată în cadru cu foile temei, CSS-ul din Design deasupra lor,
+ *      fontul temei (trimis cadrului de pagina adminului) și JavaScript-ul Bootstrap; cadrul rămâne izolat. T3 verifică și
+ *      previzualizarea fără temă (foile paginii publice, fără Bootstrap).
  *
  * Pe durata ei, în baza de dezvoltare: paginile din bază „checkout/succes” și „404” nepublicate (ca să se vadă vederile
  * de rezervă) și un antet de test cu {{mobile_menu}}; la final totul pus la loc și cache-ul paginilor golit.
@@ -232,6 +238,38 @@ $verifica('site.json stricat: valorile implicite (nu oprește site-ul)', DateSit
 DateSite::reseteaza();
 Tema::reseteaza();
 
+// Tema::foiDeStil (foile din <head>-ul paginilor publice, pentru previzualizarea din Admin → Antet, subsol și meniu): fără temă,
+// cu Google Fonts, cu Bootstrap și fără app.css; versiunea din Setări → Cache pe app.css, ca în layout. Că lista e chiar cea
+// din pagina publică o arată T2 și T3, pe server; adresa Google Fonts e aceeași ca în views/layout.php.
+$tFoi = static function (?array $tema, string $versiune = '') use ($tTemp, $tJson): array {
+    $dosar = $tTemp . '/foi-' . md5((string) json_encode($tema));
+    @mkdir($dosar, 0770, true);
+    if ($tema !== null) {
+        @mkdir($dosar . '/tema', 0770, true);
+        file_put_contents($dosar . '/tema/tema.json', $tJson($tema));
+    }
+    DateSite::reseteaza($dosar);
+    Tema::reseteaza();
+    return Tema::foiDeStil($versiune);
+};
+$tAppCss = '/assets/css/app.css?v=' . filemtime(Paths::public('assets/css/app.css'));
+$tFonturiNucleu = [Tema::url('/assets/vendor/fonturi/dm-sans/dm-sans.css'), Tema::url('/assets/vendor/fonturi/playfair/playfair.css')];
+$tCazuriFoi = [
+    'fără temă' => [$tFoi(null), array_merge($tFonturiNucleu, [$tAppCss])],
+    'Google Fonts (Bioscem, Biovitality)' => [$tFoi(['fonturi_google' => true, 'fonturi' => []]), [Tema::GOOGLE_FONTS_CSS, $tAppCss]],
+    'Rubik, Bootstrap, fără app.css' => [$tFoi(['fonturi' => ['/assets/vendor/fonturi/rubik/rubik.css'], 'bootstrap' => true, 'incarca_app_css' => false]),
+        [Tema::url('/assets/vendor/fonturi/rubik/rubik.css'), Tema::url(Tema::BOOTSTRAP_CSS)]],
+    'versiunea din Setări → Cache' => [$tFoi(null, 'ab_12'), array_merge($tFonturiNucleu, [$tAppCss . '&v=ab_12'])],
+];
+$tFoiGresite = array_keys(array_filter($tCazuriFoi, static fn (array $c): bool => $c[0] !== $c[1]));
+$verifica('Tema::foiDeStil: fonturile, Bootstrap, app.css (cu versiunea din Setări → Cache) și foile temei, în ordinea layoutului ('
+    . count($tCazuriFoi) . ' cazuri); adresa Google Fonts e cea din views/layout.php', $tFoiGresite === []
+    && str_contains((string) file_get_contents($radacina . '/views/layout.php'), Tema::GOOGLE_FONTS_CSS)
+    && str_starts_with($tFonturiNucleu[0], '/assets/vendor/fonturi/dm-sans/dm-sans.css?v='),
+    implode('; ', array_map(static fn (string $n): string => $n . ': ' . json_encode($tCazuriFoi[$n][0], JSON_UNESCAPED_SLASHES), $tFoiGresite)));
+DateSite::reseteaza();
+Tema::reseteaza();
+
 // scripts/diagnostic.php --pachet (pe server, la adoptare): manifestul, site-ul din .env (LICENTA_SITE și SITE_SLUG, ambele
 // ale pachetului; pe copia de verificare licența e a copiei), copiile publice.
 $tDiagnostic = static function (string $pachet, string $site, ?string $slug = null, bool $copie = false) use ($radacina): array {
@@ -351,6 +389,34 @@ $tNr = $tDb instanceof PDO ? (string) $tDb->query('SELECT order_number FROM orde
 $tToken = $tDb instanceof PDO ? (string) $tDb->query('SELECT token FROM order_payment_links ORDER BY id LIMIT 1')->fetchColumn() : '';
 $tIdProdus = $tDb instanceof PDO ? (string) $tDb->query("SELECT id FROM products WHERE slug = 'ceai-de-menta'")->fetchColumn() : '';
 $tTema = $radacina . '/tools/dev/site-demo-tema';
+$tAdminEmail = (string) (getenv('CMS_DEV_ADMIN_EMAIL') ?: 'admin@exemplu.ro');
+$tParolaAdmin = trim((string) @file_get_contents($dosarDev . '/admin-parola.txt'));
+// Foile de stil din <head>-ul unei pagini publice, în ordine, fără foaia șablonului (sablon-site.css, după CSS-ul din Design).
+$tFoiPagina = static function (string $html): array {
+    preg_match_all('#<link\b[^>]*>#', (string) strstr($html, '</head>', true), $etichete);
+    $foi = [];
+    foreach ($etichete[0] as $eticheta) {
+        if (preg_match('#\brel="stylesheet"#', $eticheta) === 1 && preg_match('#\bhref="([^"]*)"#', $eticheta, $h) === 1
+            && !str_starts_with($h[1], \App\Support\SablonSite::caleMinificata('sablon-site.css') . '?')) {
+            $foi[] = html_entity_decode($h[1], ENT_QUOTES | ENT_HTML5);
+        }
+    }
+    return $foi;
+};
+// Previzualizarea din Admin → Antet, subsol și meniu, pe serverul temei: foile site-ului și scriptul Bootstrap pe care le pune
+// în cadru, și locul lor în documentul cadrului (după stilul de bază, înaintea CSS-ului din Design; scriptul după cel din Design).
+$tPrevizualizare = static function (string $cale) use ($tCerere, $tTemp, $tAdminEmail, $tParolaAdmin): array {
+    $jar = $tTemp . '/jar-admin.txt';
+    @unlink($jar);
+    $tCerere('POST', '/admin/login', $jar, ['email' => $tAdminEmail, 'password' => $tParolaAdmin]);
+    $r = $tCerere('GET', $cale, $jar);
+    $html = (string) preg_replace('#<!--/?port:[^>]*-->#', '', $r['corp']);
+    $foi = preg_match('#\n    const foiSite = (\[[^\n]*\]);\n#', $html, $f) === 1 ? json_decode($f[1], true) : null;
+    $script = preg_match('#\n    const scriptBootstrap = ("[^\n]*");\n#', $html, $s) === 1 ? json_decode($s[1], true) : null;
+    $ordine = $r['cod'] === 200 && str_contains($html, "</style>\n" . '${stiluriSite}<style>${joinedCss}</style>')
+        && str_contains($html, '<script>${joinedJs}<\/script>' . "\n" . '${scriptSite}</body>');
+    return [$foi, $script === '' ? null : $script, $ordine];
+};
 
 try {
     if (!$tDb instanceof PDO || count($tPaginiBaza) !== 2 || $tNr === '' || $tToken === '' || $tIdProdus === '') {
@@ -447,6 +513,17 @@ try {
     $verifica('fișierele temei la /tema/… (din tema/public/ a pachetului, cu tipul lor), nimic din afara tema/public/; fonturile și '
         . 'Bootstrap din nucleu', $servite && $refuzate === [] && $vendor === [], implode(', ', array_merge($refuzate, $vendor)));
 
+    // Previzualizarea din Admin → Antet, subsol și meniu (views/admin/design-site.php): foile de stil ale paginii publice, în
+    // aceeași ordine (în afara foii șablonului, sablon-site.css, care stilizează ce construiesc scripturile layoutului: căutarea,
+    // sertarul de meniu, insigna punctelor), între stilul ei de bază și CSS-ul din Design, plus JavaScript-ul Bootstrap al temei.
+    [$foiAdmin, $scriptAdmin, $ordineAdmin] = $tPrevizualizare('/admin/design?section=header');
+    $foiAcasa = $tFoiPagina($acasa);
+    $scriptAcasa = preg_match('#<script src="(/assets/vendor/bootstrap/js/bootstrap\.bundle\.min\.js\?v=\d+)" defer></script>#', $acasa, $m) === 1 ? $m[1] : null;
+    $verifica('previzualizarea din Antet, subsol și meniu: foile de stil din <head>-ul paginii publice (Rubik, Bootstrap, foaia temei; '
+        . 'fără sablon-site.css), în aceeași ordine, între stilul ei de bază și CSS-ul din Design; JavaScript-ul Bootstrap după scriptul din Design',
+        $foiAdmin === $foiAcasa && count($foiAcasa) === 3 && $scriptAdmin === $scriptAcasa && $scriptAcasa !== null && $ordineAdmin,
+        json_encode(['admin' => [$foiAdmin, $scriptAdmin, $ordineAdmin], 'pagina' => [$foiAcasa, $scriptAcasa]], JSON_UNESCAPED_SLASHES));
+
     // T4. Stilurile calculate ale temei demo (Playwright, capturi-publice.php verificari).
     $tVerificari = [
         ['eticheta' => 'flash „bootstrap”: .alert-success cu fundalul Bootstrap', 'cale' => '/cos',
@@ -479,6 +556,23 @@ try {
     $verifica('stilurile calculate ale temei demo (' . count($tVerificari) . ' verificări cu Playwright; '
         . trim((string) end($iesireVizual)) . ')', $codVizual === 0, implode("\n          ", $gresite !== [] ? $gresite : array_slice($iesireVizual, -5)));
 
+    // T5. Previzualizarea din Antet, subsol și meniu cu tema demo, în Chromium (tools/dev/previzualizare-design-browser.cjs): un
+    // antet Bootstrap scris în editor (nesalvat) arată în cadru cu stilurile, fontul și JavaScript-ul Bootstrap ale temei.
+    $iesireT5 = [];
+    exec('env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy NO_PROXY=\'*\' no_proxy=\'*\''
+        . ' NODE_PATH=' . escapeshellarg((string) (getenv('NODE_PATH') ?: '/opt/node22/lib/node_modules'))
+        . ' CMS_DEV_URL=' . escapeshellarg($tBaza) . ' CMS_DEV_ADMIN_EMAIL=' . escapeshellarg($tAdminEmail) . ' CMS_DEV_PAROLA=' . escapeshellarg($tParolaAdmin)
+        . ' node ' . escapeshellarg($radacina . '/tools/dev/previzualizare-design-browser.cjs') . ' 2>&1', $iesireT5, $codT5);
+    $rezultateT5 = json_decode((string) end($iesireT5), true);
+    if (!is_array($rezultateT5) || $rezultateT5 === []) {
+        $verifica('previzualizarea din Antet, subsol și meniu în Chromium', false, 'cod ' . $codT5 . ': ' . implode("\n", array_slice($iesireT5, -15)));
+    } else {
+        foreach ($rezultateT5 as $rezultatT5) {
+            $verifica('previzualizarea din Antet, subsol și meniu, Chromium: ' . (string) $rezultatT5['eticheta'], (bool) $rezultatT5['ok'],
+                (string) $rezultatT5['detalii']);
+        }
+    }
+
     // T3. Fără temă, cu tema.json gol și cu fiecare cheie la implicit: aceleași pagini, octet cu octet.
     $paginiT3 = ['/', '/magazin', '/produs/ceai-de-menta', '/cos', '/blog', '/termeni-si-conditii', '/pagina-care-nu-exista',
         '/checkout/succes/' . $tNr, '/plata/' . $tToken, '/checkout/bt/retur'];
@@ -504,12 +598,23 @@ try {
     file_put_contents($tTemp . '/gol/tema/tema.json', '{}');
     file_put_contents($tTemp . '/implicit/tema/tema.json', $tJson($tImplicitExplicit));
     $variante = [];
+    $previzualizariT3 = [];
     foreach (['fără temă (tools/dev/site-demo)' => $pachetDemo, 'tema.json gol' => $tTemp . '/gol', 'fiecare cheie scrisă la implicit' => $tTemp . '/implicit'] as $nume => $pachet) {
         if (!$tPorneste($pachet)) {
             throw new RuntimeException('serverul nu pornește cu pachetul ' . $pachet);
         }
         $variante[$nume] = $captura();
+        $previzualizariT3[$nume] = [$tPrevizualizare('/admin/design?section=footer'), $tFoiPagina($variante[$nume]['/'])];
     }
+    $previzualizariGresite = [];
+    foreach ($previzualizariT3 as $nume => [[$foiAdmin, $scriptAdmin, $ordineAdmin], $foiPagina]) {
+        if ($foiAdmin !== $foiPagina || $scriptAdmin !== null || !$ordineAdmin || count($foiPagina) !== 3
+            || !str_starts_with((string) end($foiPagina), '/assets/css/app.css?v=')) {
+            $previzualizariGresite[] = $nume . ': ' . json_encode([$foiAdmin, $scriptAdmin, $ordineAdmin, $foiPagina], JSON_UNESCAPED_SLASHES);
+        }
+    }
+    $verifica('fără temă, cu tema.json gol și cu fiecare cheie la implicit: previzualizarea din Antet, subsol și meniu are foile '
+        . 'paginii publice (DM Sans, Playfair, app.css), în aceeași ordine, fără Bootstrap', $previzualizariGresite === [], implode('; ', $previzualizariGresite));
     $referinta = reset($variante);
     $diferite = [];
     foreach (array_slice($variante, 1, null, true) as $nume => $pagini) {
