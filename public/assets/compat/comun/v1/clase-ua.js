@@ -8,15 +8,17 @@
  * serverul, în captură). Modulul `clase-ua` pornește o singură dată (doar cu ax-date valid), la execuția lui din slotul final,
  * deci înainte de DOMContentLoaded, ca pe live (OBS-01), și nu reacționează la resize sau la rotirea ecranului (OBS-03).
  * Adaugă, după clasele serverului, în această ordine:
- *  1. clasele de dispozitiv: `et_mobile_device` pe un UA de telefon sau tabletă, plus `et_mobile_device_not_ipad` când nu e
- *     iPad. Potrivit cu ce s-a observat (OBS-03): Chrome și Firefox desktop, Safari pe Mac: niciuna; iPhone și Android: ambele;
- *     iPad cu iPadOS (UA de Mac): niciuna;
+ *  1. clasele de dispozitiv: `et_mobile_device` pe un UA de telefon sau tabletă **sau** când `navigator` are proprietatea
+ *     `standalone` și ea e `false` (Safari pe iOS și iPadOS), plus `et_mobile_device_not_ipad` când UA-ul nu conține „iPad”.
+ *     Potrivit cu ce s-a observat (OBS-03 și rularea de paritate din 23.11): Chrome și Firefox desktop, Safari pe Mac: niciuna;
+ *     iPhone și Android: ambele; iPad cu iPadOS (UA de Mac, `standalone === false`): ambele (UA-ul de Mac nu conține „iPad”);
  *  2. o singură clasă de browser:
  *     - `ie` dacă UA-ul conține „trident” (fără deosebire de litere mari);
  *     - altfel, dacă primul cuvânt găsit în UA dintre opera, chrome, safari, firefox, msie, trident (fără deosebire de litere
  *       mari) e „Chrome”: `opera` dacă UA-ul conține „OPR”, `edge` dacă UA-ul conține „Edge”;
- *     - altfel `uiwebview`, dacă `navigator` are proprietatea `standalone` (și moștenită), ea e `false` și UA-ul e al unui
- *       dispozitiv iOS (iPhone, iPad, iPod): așa pe iPhone; iPadOS, cu UA de Mac și standalone `false`, dă `safari` (OBS-03);
+ *     - altfel `uiwebview`, dacă `navigator` are proprietatea `standalone` (și moștenită) și ea e `false` (DECIZIE §2.6.4, ca
+ *       fapt): așa pe iPhone și pe iPad cu iPadOS, și cu UA de Mac (observat pe live: `et_mobile_device
+ *       et_mobile_device_not_ipad uiwebview`; o observație mai veche, fără `standalone` emulat, dădea `safari`);
  *     - altfel acel prim cuvânt, cu litere mici, cu `firefox` → `gecko` și `msie` → `ie`; niciun cuvânt, nicio clasă;
  *  3. `iphone` dacă UA-ul conține „iPhone”.
  * Cu clasa `safari`, după load-ul ferestrei, `<body>` primește `style="display: block;"` (observat pe Safari pe Mac, pe fiecare
@@ -34,7 +36,6 @@
     }
 
     var DISPOZITIV = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|webOS/i;
-    var IOS = /iPhone|iPad|iPod/;
 
     function standaloneFals(nav) {
         try {
@@ -47,7 +48,8 @@
     function calculeaza(ua, nav) {
         ua = String(ua || '');
         var clase = [];
-        if (DISPOZITIV.test(ua)) {
+        var fals = standaloneFals(nav);
+        if (DISPOZITIV.test(ua) || fals) {
             clase.push('et_mobile_device');
             if (!/iPad/i.test(ua)) {
                 clase.push('et_mobile_device_not_ipad');
@@ -63,7 +65,7 @@
                 browser = 'opera';
             } else if (primul === 'Chrome' && ua.indexOf('Edge') !== -1) {
                 browser = 'edge';
-            } else if (standaloneFals(nav) && IOS.test(ua)) {
+            } else if (fals) {
                 browser = 'uiwebview';
             } else if (primul !== '') {
                 browser = primul.toLowerCase();

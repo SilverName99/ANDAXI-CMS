@@ -1102,8 +1102,9 @@ un `<script type="application/json">` cu un obiect JSON; altfel niciun modul și
 configurației; `adresaSigura()`, prin care trece orice adresă din configurație: https sau aceeași origine; accesul la cookie-uri și la
 Web Storage fără excepții, ca în previzualizarea izolată din admin), `tarziu.js` (fiecare `link[data-ax-tarziu]` trece din `preload` pe
 `stylesheet` la `load`-ul foii, pe loc, fără `ax-date`; foile „late” din `file` la locul lor, înainte de DOMContentLoaded, la primul
-cadru) și `clase-ua.js` (clasele de browser și de dispozitiv pe `<body>`, din slotul final, înainte de DOMContentLoaded; în Safari,
-`display: block` pe `<body>` după `load`). Felia 1 mai are, în `divi4/v1/`, toate la `dom`, ca pe live: `structura.js`
+cadru) și `clase-ua.js` (clasele de browser și de dispozitiv pe `<body>`, din slotul final, înainte de DOMContentLoaded; `uiwebview` și
+clasele de dispozitiv și când `navigator.standalone === false`, ca pe iPad cu iPadOS, care are UA de Mac; în Safari, `display: block` pe
+`<body>` după `load`). Felia 1 mai are, în `divi4/v1/`, toate la `dom`, ca pe live: `structura.js`
 (`et_pb_column_single`, `et_pb_row_<mărimi>` pe rândurile interioare din conținut și pe rândul „specialty” din antet, `z-index: 3` pe
 acel rând și pe rândul subsolului, clasele dintr-o listă pe pagină, `ax-date` → `ax_structura` = `{"et-last-child": [selectori]}`, pusă de import
 din pachetul site-ului), `fit-vids.js` (`<style id="fit-vids-style">`, cu textul observat, la sfârșitul lui head) și `dg-lightbox.js` (containerul ascuns
