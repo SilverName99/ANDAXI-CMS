@@ -111,8 +111,16 @@ function revinoWp(Optiuni $o, Site $s, bool $aplica, string $url): int
         }
     }
     Mentenanta::scoate($s);
-    $r = Http::cere($url . '/', ['Cache-Control' => 'no-cache']);
-    if ($r['cod'] === 200 && WordPress::pagina($r['corp'])) {
+    // Paginile capturate pomenesc și ele /wp-content/: o pagină a site-ului nou (OPcache-ul serverului poate da câteva secunde
+    // index.php-ul vechi de la aceeași cale, opcache.revalidate_freq) nu e WordPress; încerc din nou de câteva ori.
+    for ($incercare = 0; $incercare < 6; $incercare++) {
+        $r = Http::cere($url . '/', ['Cache-Control' => 'no-cache']);
+        if (!str_contains($r['corp'], 'id="ax-date"') && !str_contains($r['corp'], '/assets/compat/')) {
+            break;
+        }
+        sleep(1);
+    }
+    if ($r['cod'] === 200 && WordPress::pagina($r['corp']) && !str_contains($r['corp'], 'id="ax-date"')) {
         Iesire::ok('WordPress răspunde la ' . $url . '/ (200)');
     } else {
         Iesire::atentie('prima pagină răspunde HTTP ' . $r['cod'] . (WordPress::pagina($r['corp']) ? '' : ' și nu pare WordPress') . ': verifici în browser');

@@ -178,6 +178,33 @@ final class WordPress
     }
 
     /** Răspunsul unei pagini arată a WordPress (generatorul, wp-content, wp-json)? */
+    /**
+     * Rândurile unui `.htaccess` WordPress puse de mână: în afara blocurilor `# BEGIN <nume>` … `# END <nume>` (WordPress, LiteSpeed
+     * Cache, alte pluginuri), fără comentarii și rânduri goale. Nu trec la site-ul nou (docroot-ul lui are `.htaccess`-ul stub-ului).
+     *
+     * @return list<string>
+     */
+    public static function reguliHtaccessDeMana(string $text): array
+    {
+        $rez = [];
+        $bloc = null;
+        foreach (preg_split('/\R/', $text) ?: [] as $l) {
+            $t = trim($l);
+            if (preg_match('/^#\s*BEGIN\s+(.+)$/i', $t, $m) === 1) {
+                $bloc = strtolower(trim($m[1]));
+                continue;
+            }
+            if (preg_match('/^#\s*END\s+(.+)$/i', $t, $m) === 1) {
+                $bloc = null;
+                continue;
+            }
+            if ($bloc === null && $t !== '' && !str_starts_with($t, '#')) {
+                $rez[] = $t;
+            }
+        }
+        return $rez;
+    }
+
     public static function pagina(string $html): bool
     {
         return preg_match('#<meta[^>]+generator[^>]+WordPress|/wp-content/|/wp-json/|/wp-includes/#i', $html) === 1;

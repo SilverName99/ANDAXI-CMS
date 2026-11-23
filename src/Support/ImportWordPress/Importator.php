@@ -136,6 +136,12 @@ final class Importator
             }
             $rez['setari'] = count($setari);
             $rez['galerie'] = self::scrieGalerie($db, $plan, $harta);
+            // Harta WordPress pe ID-uri (`wp_harta`, migrarea nucleu/0069), rescrisă întreagă la fiecare import, cu pagina din
+            // constructor a fiecărei postări importate: o citește stratul de adrese (`?page_id=`, `?p=`, atașamentele; WpCompat).
+            if (\App\Support\WpCompat\Harta::disponibil($db)) {
+                $rez['harta_wp'] = \App\Support\WpCompat\Harta::scrie($db, $plan->hartaWp,
+                    array_map('intval', array_filter((array) $harta['pagini'], static fn (mixed $id): bool => (int) $id > 0)));
+            }
             $db->commit();
         } catch (Throwable $e) {
             if ($db->inTransaction()) {

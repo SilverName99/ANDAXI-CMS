@@ -227,7 +227,7 @@ try {
             . ($facut['media']['sarite'] !== [] ? ', ' . count($facut['media']['sarite']) . ' sărite: ' . implode('; ', array_slice($facut['media']['sarite'], 0, 3)) : ''));
     }
     $scrie('  OK', 'paginile: ' . $facut['pagini'] . ' (SEO scris la ' . $facut['seo'] . '), setările: ' . $facut['setari'] . ', în Galerie: ' . $facut['galerie']
-        . ' poze noi, redirecționări: ' . $facut['redirecturi']);
+        . ' poze noi, redirecționări: ' . $facut['redirecturi'] . (isset($facut['harta_wp']) ? ', harta WordPress (wp_harta): ' . $facut['harta_wp'] . ' rânduri' : ''));
     if (is_array($facut['capturat'] ?? null)) {
         $c = $facut['capturat'];
         $scrie('  OK', 'captura: ' . $c['documente'] . ' documente, ' . $c['fragmente'] . ' fragmente, ' . $c['raspunsuri'] . ' răspunsuri înghețate, ' . $c['formulare']

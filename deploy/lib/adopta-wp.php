@@ -11,16 +11,20 @@ declare(strict_types=1);
  * (deploy/revino.sh) doar îl pune la loc.
  *
  *   deploy/adopta-wp.sh --site=<slug> --domeniu=<d> --baza-noua              o dată: datele bazei noi (din hPanel), întrebate pe ecran
- *   deploy/adopta-wp.sh --site=<slug> --domeniu=<d> --versiune=<v> --cheie-licenta=<cheia CRM>          planul: nu schimbă nimic
+ *   deploy/adopta-wp.sh --site=<slug> --domeniu=<d> --versiune=<v> --cheie-licenta=<cheia CRM> --admin-email=<adresa>
+ *                                                                            planul: nu schimbă nimic
  *   deploy/adopta-wp.sh … aceleași … --aplica                                adoptarea
  *
  * Fazele lui --aplica (ținute minte în site/deploy/adopta-wp.stare; aceeași comandă continuă de la prima neterminată):
  *
  *   verificari  uneltele, PHP-ul, versiunea, WordPress (wp-config.php, baza lui, doar citită), baza nouă (goală, alta decât a
  *               WordPress, cu drepturile cerute), pachetul, licența, spațiul, site-ul răspunde, sonda web, planul importului
- *               (scripts/importa-wordpress.php --plan: fără nicio problemă NU), cronurile; nimic schimbat
- *   pregatire   site/ (.env cu cheile site-ului nou, RELEASE, pachetul, storage/), public_html.nou/ (stub-ul, assets/, tema/);
- *               diagnostic --pachet și --licenta
+ *               (scripts/importa-wordpress.php --plan: fără nicio problemă NU), pe drumul capturat captura (site/capturat/, sau
+ *               --captura=) și planul fișierelor statice (scripts/publica-statice.php --plan), cronurile; nimic schimbat
+ *   pregatire   site/ (.env cu cheile site-ului nou, cu APP_KEY scris o dată, RELEASE, pachetul, storage/), public_html.nou/
+ *               (stub-ul, assets/, tema/); pe drumul capturat fișierele statice cerute de pagini (scripts/publica-statice.php
+ *               --aplica: foile, et-cache/, wp-includes/, fonturile, de pe discul WordPress, cu manifestul
+ *               site/storage/import-wordpress/statice.json); diagnostic --pachet și --licenta
  *   instalare   scripts/install.php pe baza nouă (migrările, setările, primul administrator, cu o parolă nouă scrisă în
  *               site/deploy/parola-admin.txt, 0600), apoi migreaza --plan = la zi
  *   import      scripts/importa-wordpress.php --aplica (paginile, SEO, setările, redirecționările; mediile copiate în
@@ -32,11 +36,15 @@ declare(strict_types=1);
  *               domeniului aduse, .htaccess-urile arborilor copiați (wp-content/, wp-includes/, capturat/: din deploy/stub/, fără
  *               execuție, cu cache-ul ca live), primele cereri, mentenanța ușoară
  *   verificare  testul de fum (pingul, /health, /, /admin/login, assets/, o poză) și adresele vechi: fiecare pagină importată,
- *               o poză la adresa ei din wp-content/uploads (200, aceiași octeți), sitemap.xml
+ *               o poză la adresa ei din wp-content/uploads (200, aceiași octeți), sitemap.xml; pe drumul capturat
+ *               diagnostic.php --capturat (fiecare fișier cerut de pagini, cu sha256-ul lui, în docroot) și fiecare fișier static
+ *               publicat și fiecare mediu cerut de pagini, la adresa lui (200, aceiași octeți)
  *   deschidere  MENTENANTA ștearsă, site-ul deschis
  *
  * Opțiuni: --admin-email=<email> (OBLIGATORIU: primul administrator al site-ului nou; niciodată adresa de administrare din
  * WordPress, care poate fi a agenției), --url=<adresa> (implicit https://<d>), --repo=<clonă>, --pachet=<dosar>,
+ * --captura=<dosar> (drumul capturat: captura site-ului live; implicit site/capturat/), --sha-captura=<sha256 al lui
+ * raport-captura.json> (ancora capturii, tipărită la sfârșitul ei; fără ea, sha256-ul raportului din dosar),
  * --cron-vechi=<fișier>, --cron-de-mana, --fara-sonda-web,
  * --fara-magazin, --fara-newsletter, --fara-articole (părți ale site-ului WordPress lăsate deoparte, vezi planul importului),
  * --reia=<faza>, --inlocuieste (cu --baza-noua: alte date ale bazei noi), --acasa=<dosar> (teste).
@@ -95,7 +103,7 @@ final class AdoptareWp
     {
         return ['versiune' => $this->versiune, 'pachet' => (string) $this->o->text('pachet'), 'repo' => $this->repo(),
             'cheie-licenta' => hash('sha256', (string) $this->o->text('cheie-licenta')), 'admin-email' => (string) $this->o->text('admin-email'),
-            'fara' => implode(',', $this->fara())];
+            'fara' => implode(',', $this->fara()), 'captura' => (string) $this->o->text('captura'), 'sha-captura' => (string) $this->o->text('sha-captura')];
     }
 
     /** @return list<string> părțile lăsate deoparte (--fara-magazin, --fara-newsletter, --fara-articole) */
@@ -117,6 +125,30 @@ final class AdoptareWp
     public function repo(): string
     {
         return $this->o->text('repo') ?? $this->s->acasa . '/platforma/repo';
+    }
+
+    /** Captura site-ului live (drumul capturat): --captura=, altfel site/capturat/ (unde o scrie scripts/captureaza-wordpress.php). */
+    public function captura(): string
+    {
+        return rtrim($this->o->text('captura') ?? $this->s->site . '/capturat', '/');
+    }
+
+    /** Pachetul site-ului e pe drumul capturat (`import-wordpress.json` → `"continut": "capturat"`)? Citit din --pachet sau din repo. */
+    public function capturat(): bool
+    {
+        if (($dosar = $this->o->text('pachet')) !== null) {
+            return WordPress::capturat($dosar);
+        }
+        $r = Comanda::ruleaza(['git', '-C', $this->repo(), 'show', $this->commitVersiune() . ':site-uri/' . $this->slug . '/import-wordpress.json']);
+        $d = $r['cod'] === 0 ? json_decode($r['iesire'], true) : null;
+        return is_array($d) && ($d['continut'] ?? null) === 'capturat';
+    }
+
+    /** Argumentele capturii pentru scripturile codului nou (importul, fișierele statice). @return list<string> */
+    public function argumenteCaptura(): array
+    {
+        $sha = $this->o->text('sha-captura');
+        return array_merge(['--captura=' . $this->captura()], $sha !== null ? ['--sha-raport=' . $sha] : []);
     }
 
     public function scriePachet(string $tinta): void
@@ -161,7 +193,8 @@ final class AdoptareWp
 }
 
 exit(porneste(static function () use ($argv): int {
-    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'url=', 'repo=', 'pachet=', 'cheie-licenta=', 'admin-email=', 'cron-vechi=', 'cron-de-mana',
+    $o = Optiuni::citeste($argv, ['site=', 'domeniu=', 'versiune=', 'url=', 'repo=', 'pachet=', 'cheie-licenta=', 'admin-email=', 'captura=', 'sha-captura=',
+        'cron-vechi=', 'cron-de-mana',
         'fara-sonda-web', 'fara-magazin', 'fara-newsletter', 'fara-articole', 'baza-noua', 'inlocuieste', 'reia=', 'acasa=', 'plan', 'aplica']);
     $a = new AdoptareWp($o);
     $lacat = $a->s->lacat();
@@ -402,10 +435,20 @@ function siteTemporar(AdoptareWp $a, callable $f): mixed
     }
 }
 
-/** Argumentele importului (dosarul WordPress, adresa, părțile lăsate deoparte). @return list<string> */
+/**
+ * Argumentele importului (dosarul WordPress, adresa, părțile lăsate deoparte, captura). Captura se dă mereu explicit: planul rulează
+ * pe un dosar de site temporar (siteTemporar), unde implicitul importului (capturat/ lângă .env) n-ar găsi-o. @return list<string>
+ */
 function argumenteImport(AdoptareWp $a): array
 {
-    return array_merge(['scripts/importa-wordpress.php', '--wp=' . $a->dosarWp(), '--url=' . $a->url], array_map(static fn (string $p): string => '--fara-' . $p, $a->fara()));
+    return array_merge(['scripts/importa-wordpress.php', '--wp=' . $a->dosarWp(), '--url=' . $a->url], array_map(static fn (string $p): string => '--fara-' . $p, $a->fara()),
+        $a->argumenteCaptura());
+}
+
+/** Argumentele fișierelor statice (scripts/publica-statice.php), cu --plan sau --aplica. @return list<string> */
+function argumenteStatice(AdoptareWp $a, string $mod): array
+{
+    return array_merge(['scripts/publica-statice.php', '--wp=' . $a->dosarWp(), '--url=' . $a->url], $a->argumenteCaptura(), [$mod]);
 }
 
 function verificariWp(AdoptareWp $a): void
@@ -581,6 +624,27 @@ function verificariWp(AdoptareWp $a): void
         }
     }
 
+    // .htaccess-ul WordPress nu trece: docroot-ul nou are .htaccess-ul stub-ului. Regulile puse de mână (în afara blocurilor scrise
+    // de WordPress și de pluginurile de cache, cu „# BEGIN …” / „# END …”) se arată, ca să fie mutate de om dacă trebuie.
+    $deMana = WordPress::reguliHtaccessDeMana((string) @file_get_contents($s->docroot . '/.htaccess'));
+    if ($deMana !== []) {
+        Iesire::atentie('.htaccess-ul WordPress are ' . count($deMana) . ' rânduri puse de mână, care NU trec la site-ul nou (docs/DEPLOY.md): '
+            . implode(' | ', array_map(static fn (string $l): string => mb_substr($l, 0, 120), array_slice($deMana, 0, 8))) . (count($deMana) > 8 ? ' | …' : ''));
+    }
+
+    // Drumul capturat: captura site-ului live trebuie să fie la locul ei (docs/DEPLOY.md, „Captura”).
+    $capturat = $problemeVersiune === [] && $problemePachet === [] && $a->capturat();
+    if ($capturat) {
+        $c = $a->captura();
+        if (!is_file($c . '/manifest.json') || !is_file($c . '/raport-captura.json')) {
+            $nu('drumul capturat: lipsește captura site-ului live în ' . $c . ' (manifest.json, raport-captura.json); o faci cu scripts/captureaza-wordpress.php '
+                . '--url=' . $a->url . ' --wp=' . $s->docroot . ' --iesire=' . $c . ' --fonturi --aplica (docs/DEPLOY.md, „Captura”), sau dai --captura=<dosar>');
+        } else {
+            Iesire::ok('captura site-ului live: ' . $c . ' (raport-captura.json: sha256 ' . substr((string) ($a->o->text('sha-captura') ?? hash_file('sha256', $c . '/raport-captura.json')), 0, 12)
+                . ($a->o->text('sha-captura') !== null ? ', ancora dată' : ', ancora din dosar') . ')');
+        }
+    }
+
     // Planul importului (codul nou, pe un dosar de site temporar; baza WordPress doar citită).
     if ($problemeVersiune === [] && $problemePachet === [] && $wp !== null) {
         Iesire::titlu('Planul importului WordPress (scripts/importa-wordpress.php --plan, doar citire)');
@@ -589,6 +653,19 @@ function verificariWp(AdoptareWp $a): void
             $nu('planul importului are probleme (NU, mai sus) sau n-a mers (codul ' . $r['cod'] . ')');
         } else {
             Iesire::ok('planul importului: fără probleme');
+        }
+        if ($capturat) {
+            Iesire::titlu('Planul fișierelor statice (scripts/publica-statice.php --plan, doar citire)');
+            // Un docroot gol al planului (public_html.nou se face abia la pregătire): coliziunile se caută și în codul versiunii.
+            $r = siteTemporar($a, static function (string $temp) use ($a): array {
+                Fisiere::dosar(dirname($temp) . '/docroot', 0700);
+                return platforma($temp, $a->cod, $a->versiune, argumenteStatice($a, '--plan'), true, dirname($temp) . '/docroot');
+            });
+            if ($r['cod'] !== 0) {
+                $nu('planul fișierelor statice are probleme (NU, mai sus) sau n-a mers (codul ' . $r['cod'] . ')');
+            } else {
+                Iesire::ok('planul fișierelor statice: fără probleme');
+            }
         }
     }
 
@@ -651,8 +728,8 @@ function planulWp(AdoptareWp $a): void
     $s = $a->s;
     Iesire::titlu('Ce ar face --aplica');
     foreach ([
-        'pregatire   ' . $s->site . '/ (.env: baza nouă + SITE_SLUG, APP_URL, LICENTA_*; RELEASE=' . $a->versiune . '; pachet/; storage/), '
-            . $s->nou . '/ (stub-ul, assets/, tema/); diagnostic --pachet, --licenta',
+        'pregatire   ' . $s->site . '/ (.env: baza nouă + SITE_SLUG, APP_URL, APP_KEY, LICENTA_*; RELEASE=' . $a->versiune . '; pachet/; storage/), '
+            . $s->nou . '/ (stub-ul, assets/, tema/' . ($a->capturat() ? '; fișierele statice cerute de pagini, din ' . $a->captura() : '') . '); diagnostic --pachet, --licenta',
         'instalare   scripts/install.php pe baza nouă: migrările, setările, primul administrator (' . ($a->adminEmail() ?: '?') . ', parola nouă în '
             . $s->lucru . '/parola-admin.txt)',
         'import      scripts/importa-wordpress.php --aplica: paginile, SEO-ul, setările, redirecționările; mediile copiate în ' . $s->nou
@@ -660,7 +737,8 @@ function planulWp(AdoptareWp $a): void
         'copie       ' . $s->lucru . '/copii/<data>-wordpress/: codul WordPress (fără poze) și baza lui (~' . Fisiere::om((int) $a->stare->ia('wp_octeti', 0)) . ')',
         'comutare    MENTENANTA; ' . $s->docroot . ' → ' . $s->vechi . ' (WordPress, neatins); ' . $s->nou . ' → ' . $s->docroot
             . '; fișierele de verificare a domeniului; .htaccess-urile arborilor copiați (deploy/stub/: fără execuție, cache ca live)',
-        'verificare  ping, /health, /, /admin/login, assets/, o poză; fiecare pagină veche; o poză la adresa ei (200, aceiași octeți); sitemap.xml',
+        'verificare  ping, /health, /, /admin/login, assets/, o poză; fiecare pagină veche; o poză la adresa ei (200, aceiași octeți); sitemap.xml'
+            . ($a->capturat() ? '; diagnostic --capturat; fiecare fișier cerut de pagini la adresa lui' : ''),
         'deschidere  MENTENANTA ștearsă; apoi cronurile pentru hPanel',
     ] as $rand) {
         Iesire::info($rand);
@@ -698,9 +776,15 @@ function wpPregatire(AdoptareWp $a): void
     Fisiere::muta($nou, $s->site . '/pachet');
     Iesire::ok('pachetul: ' . $s->site . '/pachet');
     $admin = (string) $a->stare->ia('admin_email', '') ?: $a->adminEmail();
-    Fisiere::scrie($s->site . '/.env', Env::cuChei((string) file_get_contents($s->site . '/.env'), $a->cheiEnv($s->site . '/pachet', $admin),
+    $chei = $a->cheiEnv($s->site . '/pachet', $admin);
+    // APP_KEY: cheia nonce-urilor formularelor (CadruCapturat::nonceFormular) și a gălețile rapoartelor CSP; scrisă o singură dată
+    // (o reluare sau o revenire o păstrează: paginile din cache și formularele deschise rămân bune), aleatoare, niciodată în git.
+    $cheieVeche = (string) (Env::citeste($s->site . '/.env')['APP_KEY'] ?? '');
+    $chei['APP_KEY'] = strlen($cheieVeche) >= 32 ? $cheieVeche : bin2hex(random_bytes(32));
+    Fisiere::scrie($s->site . '/.env', Env::cuChei((string) file_get_contents($s->site . '/.env'), $chei,
         'Site-ul nou (deploy/adopta-wp.sh, ' . date('Y-m-d H:i') . ')'), 0600);
-    Iesire::ok('.env: baza nouă, plus APP_URL, SITE_SLUG=' . $a->slug . ', SITE_DATE_DOSAR, LICENTA_*, ADMIN_DEFAULT_EMAIL');
+    Iesire::ok('.env: baza nouă, plus APP_URL, APP_KEY' . (strlen($cheieVeche) >= 32 ? ' (cea de dinainte)' : ' (nouă)') . ', SITE_SLUG=' . $a->slug
+        . ', SITE_DATE_DOSAR, LICENTA_*, ADMIN_DEFAULT_EMAIL');
     Fisiere::scrie($s->site . '/RELEASE', $a->versiune . "\n", 0644);
     golesteCacheCod($s);
     if ($a->stare->ia('release_local', false)) {
@@ -732,6 +816,15 @@ function wpPregatire(AdoptareWp $a): void
     $cuTema = Docroot::tema($s->site . '/pachet', $s->nou . '/tema');
     Fisiere::dosar($s->nou . '/uploads', 0755);
     Iesire::ok('docroot-ul nou: ' . $s->nou . ' (stub-ul, assets/' . ($cuTema ? ', tema/' : '') . ', uploads/)');
+    // Drumul capturat: foile, et-cache/, wp-includes/, fonturile și pozele temei cerute de pagini, de pe discul WordPress (doar citit),
+    // verificate față de captură (aceleași verificări ca mediile; scripts/publica-statice.php). Mediile le copiază importul.
+    if ($a->capturat()) {
+        $r = platforma($s->site, $cod, $a->versiune, argumenteStatice($a, '--aplica'), true, $s->nou);
+        if ($r['cod'] !== 0) {
+            throw new Oprire('fișierele statice ale paginilor nu s-au copiat (scripts/publica-statice.php, codul ' . $r['cod'] . ', mai sus); site-ul a rămas pe WordPress');
+        }
+        Iesire::ok('fișierele statice ale paginilor capturate: în ' . $s->nou . ' (manifestul: ' . $s->site . '/storage/import-wordpress/statice.json)');
+    }
     foreach (['--pachet' => 'pachetul site-ului', '--licenta' => 'licența'] as $opt => $ce) {
         $r = platforma($s->site, $cod, $a->versiune, ['scripts/diagnostic.php', $opt], true, $s->nou);
         if ($r['cod'] !== 0) {
@@ -989,6 +1082,9 @@ function wpVerificare(AdoptareWp $a): void
             break;
         }
     }
+    if ($a->capturat()) {
+        $probleme = array_merge($probleme, verificaStaticeWp($a, $antete));
+    }
     if ($poza !== null) {
         $r = Http::cere($a->url . '/wp-content/uploads/' . str_replace('%2F', '/', rawurlencode($poza)), $antete);
         if ($r['cod'] === 200 && hash('sha256', $r['corp']) === (string) hash_file('sha256', $a->s->docroot . '/wp-content/uploads/' . $poza)) {
@@ -1001,6 +1097,69 @@ function wpVerificare(AdoptareWp $a): void
     if ($probleme !== []) {
         throw new Oprire(count($probleme) . ' verificări ale site-ului nou au picat: ' . implode('; ', $probleme));
     }
+}
+
+/**
+ * Drumul capturat, după comutare: fiecare fișier cerut de pagini e în docroot cu sha256-ul lui (diagnostic.php --capturat, pe
+ * manifestul capturii și al copiilor), iar fiecare fișier static publicat, fiecare font Google și fiecare mediu cerut de pagini
+ * răspunde la adresa lui cu aceiași octeți (prin serverul web, cu .htaccess-urile arborilor copiați). @return list<string> problemele
+ */
+function verificaStaticeWp(AdoptareWp $a, array $antete): array
+{
+    $s = $a->s;
+    $probleme = [];
+    $r = platforma($s->site, $a->codSite(), $a->versiune, ['scripts/diagnostic.php', '--capturat'], true, $s->docroot);
+    if ($r['cod'] !== 0) {
+        Iesire::nu('diagnostic.php --capturat: un fișier cerut de pagini lipsește sau are alt sha256 (mai sus)');
+        $probleme[] = 'fișierele cerute de pagini (diagnostic.php --capturat)';
+    } else {
+        Iesire::ok('diagnostic.php --capturat: fiecare fișier cerut de pagini e în docroot, cu sha256-ul lui');
+    }
+    $deCerut = [];
+    $statice = json_decode((string) @file_get_contents($s->site . '/storage/import-wordpress/statice.json'), true);
+    if (!is_array($statice)) {
+        Iesire::nu('lipsește manifestul fișierelor statice (' . $s->site . '/storage/import-wordpress/statice.json)');
+        return array_merge($probleme, ['manifestul fișierelor statice']);
+    }
+    foreach ((array) ($statice['fisiere'] ?? []) as $f) {
+        if (is_array($f) && is_string($f['sha256_publicat'] ?? null) && is_string($f['cale'] ?? null)) {
+            $deCerut[$f['cale']] = $f['sha256_publicat'];
+        }
+    }
+    foreach ((array) ($statice['fonturi'] ?? []) as $f) {
+        if (is_array($f) && is_string($f['publicat'] ?? null) && is_string($f['sha256_publicat'] ?? null)) {
+            $deCerut[$f['publicat']] = $f['sha256_publicat'];
+        }
+    }
+    $manifest = json_decode((string) @file_get_contents($a->captura() . '/manifest.json'), true);
+    foreach (is_array($manifest) ? (array) ($manifest['fisiere'] ?? []) : [] as $f) {
+        if (is_array($f) && str_starts_with(strtolower((string) ($f['cale'] ?? '')), '/wp-content/uploads/') && is_string($f['sha256'] ?? null)) {
+            $deCerut[(string) $f['cale']] = (string) ($f['sha256_sursa'] ?? $f['sha256']);
+        }
+    }
+    $rele = [];
+    $n = 0;
+    foreach ($deCerut as $cale => $sha) {
+        if (++$n > 2000) {
+            break;
+        }
+        $r = Http::cere($a->url . str_replace('%2F', '/', rawurlencode((string) $cale)), $antete);
+        if ($r['cod'] !== 200 || !hash_equals($sha, hash('sha256', $r['corp']))) {
+            $rele[] = $cale . ' (HTTP ' . $r['cod'] . ($r['cod'] === 200 ? ', alți octeți' : '') . ')';
+        }
+    }
+    if ($rele === []) {
+        Iesire::ok('fișierele cerute de pagini (' . count($deCerut) . ': foile, fonturile, mediile), la adresele lor: 200, aceiași octeți');
+    } else {
+        Iesire::nu('fișierele cerute de pagini: ' . count($rele) . ' nu răspund cu octeții lor: ' . implode(', ', array_slice($rele, 0, 8)));
+        $probleme[] = 'fișierele cerute de pagini, la adresele lor';
+    }
+    $necopiate = array_values(array_filter((array) ($statice['fisiere'] ?? []), static fn (mixed $f): bool => is_array($f) && is_string($f['necopiat'] ?? null)
+        && !str_starts_with((string) $f['necopiat'], 'script')));
+    foreach (array_slice($necopiate, 0, 8) as $f) {
+        Iesire::atentie('necopiat (refuzat de verificări la pregătire): ' . $f['cale'] . ': ' . $f['necopiat']);
+    }
+    return $probleme;
 }
 
 function wpDeschidere(AdoptareWp $a): void

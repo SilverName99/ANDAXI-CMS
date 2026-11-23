@@ -277,7 +277,10 @@ if (in_array('--capturat', $argv, true)) {
         $probleme[] = 'manifestul capturii lipsește sau e stricat: ' . $manifest;
     }
     // Fișierele copiate, la calea lor publicată; cele lăsate intenționat necopiate (cu motivul în manifest) doar numărate.
-    $vf = \App\Support\CadruCapturat::verificaFisiereManifest(is_array($m) ? $m : [], Paths::public());
+    // Copiile adoptării (scripts/publica-statice.php → storage/import-wordpress/statice.json) au întâietate: foile cu adresele
+    // proprii relative au alt sha256 decât sursa, iar scripturile nu se publică.
+    $vf = \App\Support\CadruCapturat::verificaFisiereManifest(is_array($m) ? $m : [], Paths::public(),
+        \App\Support\ImportWordPress\Statice::publicate(Paths::stocareSite('import-wordpress') . '/statice.json'));
     $verificate = $vf['verificate'];
     $probleme = array_merge($probleme, $vf['probleme']);
     // Și capturat/ servit din docroot (fonturile, radacina/), nu doar dosarul manifestului (recenzia 2, R2-6).
