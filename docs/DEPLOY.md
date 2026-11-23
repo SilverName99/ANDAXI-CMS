@@ -1141,9 +1141,11 @@ cu `et_multi_view_swapped`), `divi4/v1/toggle.js`
 (toggle-urile și acordeoanele: înălțimea, padding-urile și marginile de la 0 la valorile naturale în 700 ms „swing”, clasele
 `et_pb_toggle_open`/`_close` la sfârșit, fără tastatură, ca pe live), `divi4/v1/sticky.js` (opțiunile sticky din `ax-date` →
 `et_pb_sticky_elements`: offsetul cu `offsetSurrounding`, limita secțiunii prin `margin-top`, placeholder-ul, clasele și `style`-ul
-observate, `<style class="et_pb_sticky_module_style">` pe desktop), `divi4/v1/sus.js` (butonul „înapoi sus”: `et-hidden`/`et-visible` peste
-800 px, derularea la 0 în 800 ms), `divi4/v1/ancore.js` (legăturile `#id` din pagină derulate în 800 ms sub antetul fixat, fără hash;
-aterizarea cu `#id`: la 0 la `load`, apoi alunecarea după 700 ms) și `divi4/v1/aparitii.js` (`et-animated` pe `.et-waypoint` când intră în
+observate, `<style class="et_pb_sticky_module_style">` pe desktop, refăcut la resize; padding-ul urmează pragurile cât e fixat, `style`-ul
+de dinainte revine la eliberare; doar id-uri `et_pb_*`), `divi4/v1/sus.js` (butonul „înapoi sus”: `et-hidden`/`et-visible` peste
+800 px, derularea la 0 în 800 ms), `divi4/v1/ancore.js` (legăturile `#id` din pagină — și cele scrise cu calea paginii — derulate în
+800 ms sub antetul fixat, fără hash; aterizarea cu `#id`: la 0 la `load`, apoi alunecarea după 700 ms; amândouă: salt cu
+`prefers-reduced-motion`, oprite de rotița sau atingerea utilizatorului) și `divi4/v1/aparitii.js` (`et-animated` pe `.et-waypoint` când intră în
 fereastră). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde

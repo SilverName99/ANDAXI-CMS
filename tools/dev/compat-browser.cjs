@@ -26,7 +26,9 @@
 //  - DOM-ul de după scripturi = DOM-ul fără JS plus exact mutațiile așteptate; nicio încălcare CSP (și doi martori: un script
 //    inline e blocat; speculationrules fără 'inline-speculation-rules' e blocat); totul și în previzualizarea din admin (iframe
 //    sandbox="allow-scripts", cu adresă și srcdoc, origine opacă);
-//  - idempotența: fiecare fișier inclus de două ori și fiecare piesă rulată din nou nu schimbă nimic.
+//  - idempotența: fiecare fișier inclus de două ori și fiecare piesă rulată din nou nu schimbă nimic (și un clic pe un toggle cu
+//    runtime-ul inclus de două ori = o singură animație);
+//  - spațiul global: pe toate paginile cu module, singura proprietate proprie nouă a lui window e `axCompat`.
 //
 // Raport: $CMS_DEV_DIR/compat-raport.txt. Cod de ieșire 0 doar dacă trec toate verificările.
 'use strict';
@@ -523,6 +525,7 @@ const PAGINI = {
   divimenus: { corp: CORP_DM, stil: STIL_DM },
   video: { corp: CORP_VIDEO, stil: STIL_VIDEO },
   toggle: { corp: CORP_TOGGLE, stil: STIL_TOGGLE },
+  'toggle-dublu': { corp: CORP_TOGGLE, stil: STIL_TOGGLE, cap: capImplicit().concat(capImplicit()), final: finalImplicit().concat(finalImplicit()) },
   multiview: { corp: CORP_MV, stil: STIL_MV },
   derulare: { corp: CORP_DERULARE, stil: STIL_DERULARE, date: Object.assign({}, DATE_IMPLICITE, { et_pb_sticky_elements: CONFIG_STICKY }) },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -1933,6 +1936,59 @@ async function verificaToggle(browser) {
   });
   verifica('aplica() din nou nu dublează ascultătorul (un clic = o comutare)', n === true, n);
   await context.close();
+  {
+    const { context: c2, page: p2, ev: e2 } = await deschide(browser, { cale: '/pagina/toggle-dublu' });
+    const f2 = p2.mainFrame();
+    const s2 = await stare(f2);
+    await f2.evaluate(() => window.axCompat.toggle.aplica());
+    const u = await urmaToggle(f2, 0, [[0, '.et_pb_toggle_0 .et_pb_toggle_title']], 850);
+    const h = u.urma.map((x) => x[1]);
+    const crescator = h.every((x, k) => k === 0 || x >= h[k - 1] - 0.05);
+    const pasiDeschisi = u.urma.filter((x) => x[2] === 'open');
+    verifica('runtime-ul inclus de două ori și aplica() încă o dată: un clic = o singură animație (înălțimea doar crește, 0 → plin în ~700 ms, '
+      + 'clasa schimbată o dată, la sfârșit)', curate(e2, s2) && crescator && Math.abs(u.inaltime - 170) < 0.5 && u.clasa.endsWith('et_pb_toggle_open')
+      && u.stil === 'display: block;' && pasiDeschisi.length > 0 && pasiDeschisi[0][0] > 600 && laMomentul(u.urma, 350)[1] > 170 * 0.3 && laMomentul(u.urma, 350)[1] < 170 * 0.7,
+    { crescator, inaltime: u.inaltime, clasa: u.clasa, primulDeschis: pasiDeschisi[0], mij: laMomentul(u.urma, 350) });
+    await c2.close();
+  }
+}
+
+// Runtime-ul nu lasă nimic în spațiul global în afara lui `window.axCompat` (fixtura își are `__axProba`), pe toate paginile cu
+// module, după interacțiuni (derulare, resize, clic), inclusiv cu fișierele incluse de două ori.
+async function verificaGlobalele(browser) {
+  scrie('== spațiul global: doar window.axCompat');
+  const noi = (f) => f.evaluate(() => {
+    const ini = new Set(window.__axProba.globaleInitiale);
+    // indicii cadrelor (window[0], window[1]: iframe-urile hărții din corpul paginii, parsate după observator) nu sunt globale
+    return Object.getOwnPropertyNames(window).filter((k) => !ini.has(k) && !(/^[0-9]+$/.test(k) && Number(k) < window.length));
+  });
+  const rez = {};
+  for (const [nume, o] of [['baza', {}], ['dublu', {}], ['meniu', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }],
+    ['consimtamant', {}], ['urmarire', {}], ['carusel', {}], ['galerie', {}], ['divimenus', {}], ['video', {}], ['toggle-dublu', {}],
+    ['multiview', { viewport: { width: 820, height: 1180 } }], ['derulare', {}], ['derulare', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }]]) {
+    const { context, page } = await deschide(browser, Object.assign({ cale: '/pagina/' + nume }, o));
+    const f = page.mainFrame();
+    await f.evaluate(async () => {
+      for (const y of [400, 1500, 3000, 0]) {
+        window.scrollTo(0, y);
+        await new Promise((x) => setTimeout(x, 60));
+      }
+      const t = document.querySelector('.et_pb_toggle_title, .mobile_menu_bar, .et_pb_scroll_top');
+      if (t) {
+        t.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      }
+      await new Promise((x) => setTimeout(x, 900));
+    });
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.waitForTimeout(120);
+    const lista = await noi(f);
+    rez[nume + (o.viewport ? '@' + o.viewport.width : '')] = lista;
+    await context.close();
+  }
+  const rele = Object.entries(rez).filter(([, l]) => !egal(l, ['axCompat']));
+  verifica('pe ' + Object.keys(rez).length + ' pagini (bază, incluse de două ori, meniu, consimțământ, urmărire fără consimțământ, carusel, galerie, '
+    + 'DiviMenus, video, toggle, multi-view, derulare pe desktop și telefon), după derulare, clic și resize: singura proprietate nouă a lui window e axCompat',
+  rele.length === 0, rele);
 }
 
 async function verificaMultiView(browser) {
@@ -2628,6 +2684,7 @@ async function main() {
     await verificaSticky(browser);
     await verificaSusSiAncorele(browser);
     await verificaClaseleUa(browser);
+    await verificaGlobalele(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);
   } finally {

@@ -3,7 +3,7 @@
  * inventate, înaintea runtime-ului, și nu schimbă nimic în DOM: doar notează, în `window.__axProba`, ce fac piesele runtime-ului
  * și când (mutațiile pe `class`, `rel` și `style` și nodurile adăugate, cu ora `performance.now()`; evenimentele `load`/`error`
  * ale linkurilor; starea preload-urilor la DOMContentLoaded; momentele „interactive”, DOMContentLoaded și load; încălcările CSP;
- * erorile).
+ * erorile; proprietățile proprii ale lui window de dinaintea runtime-ului).
  * Pe site-uri nu ajunge niciodată (e doar în tools/dev/).
  */
 (function () {
@@ -11,6 +11,8 @@
     var P = window.__axProba = {
         jurnal: [], linkuri: [], csp: [], erori: [], ordine: [], interactiv: -1, dcl: -1, load: -1, laDcl: null, axLaDcl: null, lateLaDcl: null, moduleLaDcl: null, inline: 0
     };
+    // Proprietățile proprii ale lui window înaintea runtime-ului (poarta cere ca runtime-ul să adauge doar `axCompat`).
+    P.globaleInitiale = Object.getOwnPropertyNames(window);
 
     // Ora față de începutul navigării (aceeași bază ca Resource Timing), ca să se poată compara cu sfârșitul fiecărei cereri.
     function acum() {
