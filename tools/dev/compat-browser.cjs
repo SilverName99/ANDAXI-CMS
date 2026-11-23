@@ -399,7 +399,9 @@ const CORP_DERULARE = '<div id="page-container">\n<header class="et-l et-l--head
   + '<div class="et_pb_column et_pb_column_0_tb_header">Antetul de telefon – Pensiunea Probă</div></div></div></div></header>\n'
   + '<div id="et-main-area"><div class="et-l et-l--post"><div class="et_builder_inner_content et_pb_gutters3">'
   + '<div class="et_pb_section et_pb_section_0 proba-inalt"><p><a class="proba-a" href="#tinta">Camerele</a> <a class="proba-gol" href="#">#</a> '
-  + '<a class="proba-ascuns" href="#ascuns">ascuns</a> <a class="proba-lipsa" href="#lipsa">lipsă</a></p><div id="ascuns" style="display:none">Ascuns'
+  + '<a class="proba-ascuns" href="#ascuns">ascuns</a> <a class="proba-lipsa" href="#lipsa">lipsă</a> <a class="proba-cale" href="/pagina/derulare#tinta">cu calea</a> '
+  + '<a class="proba-absolut" href="/pagina/derulare?x=1#tinta">absolută</a> <a class="proba-alta" href="/pagina/baza#tinta">altă pagină</a></p>'
+  + '<div id="ascuns" style="display:none">Ascuns'
   + '<span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-ascuns">6 min</span></div>'
   + '<p><span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-sus">2 km</span> <span class="et_pb_counters et-waypoint proba-apare-contor">7</span></p></div>'
   + '<div class="et_pb_section et_pb_section_1 proba-carduri">' + cardSticky(1, 'Închiriere') + cardSticky(2, 'Evenimente') + cardSticky(3, 'Obiective')
@@ -589,7 +591,7 @@ async function deschide(browser, o) {
   o = o || {};
   server.intarzieri = o.intarzieri || {};
   const context = await browser.newContext({ userAgent: o.ua || UA.chromeWin, viewport: o.viewport || { width: 1440, height: 900 },
-    isMobile: !!o.isMobile, hasTouch: !!o.hasTouch, javaScriptEnabled: o.js !== false, deviceScaleFactor: 1 });
+    isMobile: !!o.isMobile, hasTouch: !!o.hasTouch, javaScriptEnabled: o.js !== false, deviceScaleFactor: 1, reducedMotion: o.reducedMotion || 'no-preference' });
   const ev = { erori: [], consola: [], refuzuri: [], straine: [], cereri: [] };
   await context.route('**/*', (ruta) => {
     const url = ruta.request().url();
@@ -2324,6 +2326,89 @@ async function verificaSusSiAncorele(browser) {
     verifica('ancora (desktop): clic pe href="#tinta": derulare animată în ~800 ms până la vârful țintei (decalaj 0), fără hash, implicitul împiedicat; '
       + '„#”, o țintă ascunsă și una inexistentă rămân ale browserului', a.prevenit && a.hash === '' && Math.abs(a.final - a.tinta) <= 1 && a.mij > a.tinta * 0.3
       && a.mij < a.tinta * 0.7 && egal(a.alte, [true, true, true]), a);
+    const c = await f.evaluate(async () => {
+      document.querySelector('.proba-absolut').setAttribute('href', location.origin + '/pagina/derulare?x=1#tinta');
+      const tinta = document.getElementById('tinta').getBoundingClientRect().top + scrollY;
+      const r = { tinta };
+      for (const sel of ['.proba-cale', '.proba-absolut', '.proba-alta']) {
+        window.scrollTo(0, 0);
+        await new Promise((x) => setTimeout(x, 50));
+        let prevenit = null;
+        window.addEventListener('click', (e) => { prevenit = e.defaultPrevented; e.preventDefault(); }, { once: true });
+        document.querySelector(sel).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        await new Promise((x) => setTimeout(x, 900));
+        r[sel] = { prevenit, y: scrollY, hash: location.hash };
+      }
+      return r;
+    });
+    verifica('ancora scrisă cu calea paginii (/pagina/derulare#tinta) sau absolută, cu alt query: aceeași derulare, fără hash; spre altă pagină '
+      + '(/pagina/baza#tinta): a browserului', c['.proba-cale'].prevenit === true && Math.abs(c['.proba-cale'].y - c.tinta) <= 1 && c['.proba-cale'].hash === ''
+      && c['.proba-absolut'].prevenit === true && Math.abs(c['.proba-absolut'].y - c.tinta) <= 1 && c['.proba-alta'].prevenit === false && c['.proba-alta'].y === 0, c);
+    const opr = await f.evaluate(async () => {
+      const r = {};
+      window.scrollTo(0, 2500);
+      await new Promise((x) => setTimeout(x, 80));
+      document.querySelector('.et_pb_scroll_top').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((x) => setTimeout(x, 250));
+      window.dispatchEvent(new WheelEvent('wheel', { deltaY: 10 }));
+      r.sus = [scrollY];
+      await new Promise((x) => setTimeout(x, 400));
+      r.sus.push(scrollY);
+      window.scrollTo(0, 0);
+      await new Promise((x) => setTimeout(x, 80));
+      document.querySelector('.proba-a').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((x) => setTimeout(x, 250));
+      window.dispatchEvent(new Event('touchstart'));
+      r.ancora = [scrollY];
+      await new Promise((x) => setTimeout(x, 400));
+      r.ancora.push(scrollY);
+      r.tinta = document.getElementById('tinta').getBoundingClientRect().top + scrollY;
+      return r;
+    });
+    verifica('o rotiță în timpul derulării butonului „sus” și o atingere în timpul celei spre ancoră o opresc pe loc (utilizatorul câștigă)',
+      opr.sus[0] > 0 && opr.sus[0] < 2500 && opr.sus[1] === opr.sus[0] && opr.ancora[0] > 0 && opr.ancora[0] < opr.tinta - 5 && opr.ancora[1] === opr.ancora[0], opr);
+    await context.close();
+  }
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/derulare', reducedMotion: 'reduce' });
+    const f = page.mainFrame();
+    const r = await f.evaluate(async () => {
+      const rez = {};
+      window.scrollTo(0, 2500);
+      await new Promise((x) => setTimeout(x, 80));
+      document.querySelector('.et_pb_scroll_top').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await new Promise((x) => setTimeout(x, 60));
+      rez.sus = scrollY;
+      const tinta = document.getElementById('tinta').getBoundingClientRect().top + scrollY;
+      document.querySelector('.proba-a').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((x) => setTimeout(x, 60));
+      rez.ancora = [scrollY, tinta, location.hash];
+      return rez;
+    });
+    verifica('prefers-reduced-motion: reduce: butonul „sus” și ancora sar direct (fără animație), tot fără hash', curate(ev, await stare(f)) && r.sus === 0
+      && Math.abs(r.ancora[0] - r.ancora[1]) <= 1 && r.ancora[2] === '', r);
+    await context.close();
+  }
+  {
+    const { context, page } = await deschide(browser, { cale: '/pagina/derulare#tinta', reducedMotion: 'reduce', asteptare: 50 });
+    const r = await page.evaluate(async () => {
+      const tinta = Math.round(document.getElementById('tinta').getBoundingClientRect().top + scrollY);
+      const la = async (t) => { await new Promise((x) => setTimeout(x, Math.max(0, t - (performance.now() - window.__axProba.load)))); return Math.round(scrollY); };
+      return { tinta, devreme: await la(300), tarziu: await la(1200), restaurare: history.scrollRestoration };
+    });
+    verifica('prefers-reduced-motion: reduce, aterizarea cu #tinta: direct la țintă la load (fără saltul la 0 și fără alunecare), scrollRestoration = manual',
+      Math.abs(r.devreme - r.tinta) <= 1 && Math.abs(r.tarziu - r.tinta) <= 1 && r.restaurare === 'manual', r);
+    await context.close();
+  }
+  {
+    const { context, page } = await deschide(browser, { cale: '/pagina/derulare#tinta', asteptare: 50 });
+    const r = await page.evaluate(async () => {
+      const la = async (t) => { await new Promise((x) => setTimeout(x, Math.max(0, t - (performance.now() - window.__axProba.load)))); return Math.round(scrollY); };
+      const inainte = await la(300);
+      window.dispatchEvent(new WheelEvent('wheel', { deltaY: 10 }));
+      return { inainte, dupa: await la(1700) };
+    });
+    verifica('aterizarea cu #tinta și o rotiță în pauza de 700 ms: alunecarea nu mai pornește (pagina rămâne unde a lăsat-o utilizatorul)', r.inainte === 0 && r.dupa === 0, r);
     await context.close();
   }
   {
@@ -2356,10 +2441,17 @@ async function verificaSusSiAncorele(browser) {
       const tinta = t.getBoundingClientRect().top + scrollY;
       document.querySelector('.proba-a').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
       await new Promise((x) => setTimeout(x, 950));
-      return { tinta, final: scrollY, decalaj: window.axCompat.sticky.decalaj(), vizibil: Math.round(t.getBoundingClientRect().top) };
+      const r = { tinta, final: scrollY, decalaj: window.axCompat.sticky.decalaj(), vizibil: Math.round(t.getBoundingClientRect().top) };
+      window.scrollTo(0, 0);
+      await new Promise((x) => setTimeout(x, 80));
+      document.querySelector('.proba-cale').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((x) => setTimeout(x, 950));
+      r.cale = [scrollY, Math.round(t.getBoundingClientRect().top), location.hash];
+      return r;
     });
-    verifica('ancora (telefon): oprită sub antetul de telefon fixat (decalaj = înălțimea lui, 90 px)', curate(ev, await stare(page.mainFrame()))
-      && a.decalaj === 90 && Math.abs(a.final - (a.tinta - 90)) <= 1 && a.vizibil === 90, a);
+    verifica('ancora (telefon): oprită sub antetul de telefon fixat (decalaj = înălțimea lui, 90 px), și cea scrisă cu calea paginii, fără hash',
+      curate(ev, await stare(page.mainFrame())) && a.decalaj === 90 && Math.abs(a.final - (a.tinta - 90)) <= 1 && a.vizibil === 90
+      && Math.abs(a.cale[0] - (a.tinta - 90)) <= 1 && a.cale[1] === 90 && a.cale[2] === '', a);
     await context.close();
   }
   for (const [hash, asteptare, eticheta] of [['#tinta', 1700, 'o țintă sub 4000 px: 800 ms'], ['#departe', 2600, 'o țintă dincolo de 4000 px: 1600 ms']]) {

@@ -8,7 +8,8 @@
  *  - scrollY > 800: clasa `et-hidden` înlocuită cu `et-visible`, iar `style` primește `display: inline;` (rămâne, ca pe live);
  *  - altfel: `et-visible` înlocuită cu `et-hidden` (la prima derulare, `et-hidden` se adaugă și fără `et-visible`).
  * Clicul (tapul) derulează fereastra animat de unde e până la 0, în 800 ms pe curba „swing” (0,5 − cos(πp)/2); adresa nu se
- * schimbă. Butonul e un `span` nefocalizabil, ca pe live (fără tastatură, fără ARIA).
+ * schimbă. Cu `prefers-reduced-motion: reduce`, un salt la 0; o rotiță sau o atingere a utilizatorului oprește animația în curs.
+ * Butonul e un `span` nefocalizabil, ca pe live (fără tastatură, fără ARIA).
  *
  * `axCompat.sus.aplica()` nu dublează ascultătorii. O a doua includere nu face nimic.
  */
@@ -50,12 +51,29 @@
         }
     }
 
-    function laClic() {
-        var de = w.pageYOffset || d.documentElement.scrollTop || 0;
-        var a = { oprita: false };
+    function miscareRedusa() {
+        try {
+            return !!(w.matchMedia && w.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function opreste() {
         if (animatie) {
             animatie.oprita = true;
+            animatie = null;
         }
+    }
+
+    function laClic() {
+        opreste();
+        if (miscareRedusa()) {
+            w.scrollTo(0, 0);
+            return;
+        }
+        var de = w.pageYOffset || d.documentElement.scrollTop || 0;
+        var a = { oprita: false };
         animatie = a;
         var start = acum();
         function pas() {
@@ -85,6 +103,8 @@
         }
         if (noi && butoane.length === noi) {
             w.addEventListener('scroll', laDerulare, { passive: true });
+            w.addEventListener('wheel', opreste, { passive: true });
+            w.addEventListener('touchstart', opreste, { passive: true });
         }
     }
 
