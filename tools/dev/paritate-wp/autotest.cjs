@@ -21,7 +21,10 @@
 //   6. zgomotul: trei încărcări ale aceluiași fixture, fără masca ceasului → zgomot.cjs propune o singură mască, a ceasului
 //      (.ceas, „instabil pe referință (3/3 încărcări)”, propusă automat, pe cele două capturi în care s-a văzut) și nimic
 //      altceva; cu ea, comparația dă 0 diferențe, iar raportul o listează și spune pe ce stare observată a căzut candidatul;
-//      o stare neobservată e o diferență.
+//      o stare neobservată e o diferență;
+//   7. rețeaua, pe un server local cu un video inventat de 3 MiB + 123 o: felia de exact 1 MiB a unei cereri Range (206) e un corp
+//      întreg, nu „depășit” (video-urile se încarcă în capturi), felia de la capăt e scurtă, iar un server care ignoră Range (200
+//      cu tot corpul) e tăiat la plafon și dat browserului ca 206.
 // Cod 0 = toate verificările trecute; 1 = cel puțin una picată; 2 = eroare.
 
 'use strict';
@@ -323,9 +326,67 @@ async function main() {
         verifica('fiecare program care scrie (captura, jurnal, mutatii, zgomot, raport; compara mai sus) refuză o ieșire în repo, cod 2, nimic scris',
             rele.length === 0, rele.join('; '));
     }
+    await verificaIntervale();
     const ok = rezultate.filter((r) => r.ok).length;
     console.log('G-paritate: ' + ok + '/' + rezultate.length + ' verificări trecute' + (ok === rezultate.length ? '' : ' — EȘEC'));
     return ok === rezultate.length ? 0 : 1;
 }
+
+// 7. Cererile Range ale video-urilor (lib/retea.cjs): felia de exact 1 MiB nu e tăiată.
+async function verificaIntervale() {
+    const http = require('http');
+    const crypto = require('crypto');
+    const { Retea } = require('./lib/retea.cjs');
+    const MIB = 1024 * 1024;
+    const corp = crypto.createHash('sha256').update('Pensiunea Probă – video inventat').digest();
+    const video = Buffer.alloc(3 * MIB + 123);
+    for (let i = 0; i < video.length; i++) { video[i] = corp[i % corp.length] ^ (i >> 8); }
+    const srv = http.createServer((req, res) => {
+        const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
+        if (req.url === '/video-proba.mp4' && m) {
+            const a = Number(m[1]);
+            const b = m[2] === '' ? video.length - 1 : Math.min(Number(m[2]), video.length - 1);
+            res.writeHead(206, { 'content-type': 'video/mp4', 'content-range': 'bytes ' + a + '-' + b + '/' + video.length, 'accept-ranges': 'bytes', 'content-length': b - a + 1 });
+            return res.end(video.subarray(a, b + 1));
+        }
+        if (req.url === '/video-fara-range.mp4') {
+            res.writeHead(200, { 'content-type': 'video/mp4', 'content-length': video.length });
+            return res.end(video);
+        }
+        res.writeHead(404);
+        res.end();
+    });
+    await new Promise((gata) => srv.listen(0, '127.0.0.1', gata));
+    const site = 'http://127.0.0.1:' + srv.address().port;
+    const retea = new Retea({ mod: 'candidat', site, sursa: 'retea', cache: null, paralel: 2 });
+    const cere = (cale, range) => retea.obtine({ resourceType: () => 'media', allHeaders: async () => ({ range, 'user-agent': 'proba' }) },
+        new URL(cale, site), 'propriu', { profil: 'chrome-win' });
+    const rez = {};
+    try {
+        for (const [nume, cale, range] of [['primul MiB', '/video-proba.mp4', 'bytes=0-'], ['al doilea MiB', '/video-proba.mp4', 'bytes=1048576-'],
+            ['capătul', '/video-proba.mp4', 'bytes=3145728-'], ['fără Range', '/video-fara-range.mp4', 'bytes=0-']]) {
+            try {
+                const r = await cere(cale, range);
+                rez[nume] = { status: r.intrare.status, octeti: r.corp.length, interval: r.intrare.antete['content-range'], egal: null };
+                const a = Number(/^bytes=(\d+)-/.exec(range)[1]);
+                rez[nume].egal = r.corp.equals(video.subarray(a, a + r.corp.length));
+            } catch (e) {
+                rez[nume] = { eroare: String(e.message || e).slice(0, 200) };
+            }
+        }
+    } finally {
+        retea.inchide();
+        srv.close();
+    }
+    const t = video.length;
+    verifica('7. rețeaua: felia de exact 1 MiB a unei cereri Range (206) e un corp întreg, nu „depășit”; felia a doua la fel, cea de la capăt scurtă (123 o); '
+        + 'un server care ignoră Range e tăiat la 1 MiB și dat ca 206 cu totalul din Content-Length',
+    egal(rez['primul MiB'], { status: 206, octeti: MIB, interval: 'bytes 0-1048575/' + t, egal: true })
+        && egal(rez['al doilea MiB'], { status: 206, octeti: MIB, interval: 'bytes 1048576-2097151/' + t, egal: true })
+        && egal(rez['capătul'], { status: 206, octeti: 123, interval: 'bytes 3145728-3145850/' + t, egal: true })
+        && egal(rez['fără Range'], { status: 206, octeti: MIB, interval: 'bytes 0-1048575/' + t, egal: true }), JSON.stringify(rez));
+}
+
+const egal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 main().then((c) => { process.exitCode = c; }).catch((e) => { console.error('EROARE ' + (e && e.stack || e)); process.exit(2); });

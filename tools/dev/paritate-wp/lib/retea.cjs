@@ -465,7 +465,8 @@ class Retea {
                             if (done) { break; }
                             bucati.push(Buffer.from(value));
                             n += value.length;
-                            if (n >= limita) {
+                            // tăiat = mai mult decât plafonul; exact plafonul (felia de 1 MiB a unei cereri Range) e un corp întreg
+                            if (n > limita) {
                                 taiat = true;
                                 await cititor.cancel().catch(() => {});
                                 ac.abort();
