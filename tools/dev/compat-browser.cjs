@@ -387,6 +387,10 @@ const CONFIG_STICKY = {
   et_pb_row_5: stickyCfg('et_pb_row_5', { position: { desktop: 'top', tablet: 'none', phone: 'none' }, bottomLimit: 'section', offsetSurrounding: 'off',
     styles: { width: { desktop: '100%' }, 'max-width': { desktop: '2580px' } } }),
   et_pb_row_8: stickyCfg('et_pb_row_8', { selector: '.proba-alt' }),
+  // o clasă care nu e a unui modul Divi (body-ul are „page”): refuzată, nimic clonat
+  page: stickyCfg('page', { styles: {} }),
+  // o limită de jos care e o cheie a prototipului: nesuportată, nu o „clasă” găsită pe Object.prototype
+  et_pb_row_9: stickyCfg('et_pb_row_9', { bottomLimit: 'toString', offsetSurrounding: 'off', styles: {} }),
 };
 const cardSticky = (n, text) => '<div class="et_pb_row et_pb_row_' + n + ' et_pb_sticky_module et_pb_equal_columns proba-card"><div class="et_pb_column et_pb_column_' + n + '">'
   + '<h3>' + text + ' – Pensiunea Probă</h3></div></div>';
@@ -401,11 +405,13 @@ const CORP_DERULARE = '<div id="page-container">\n<header class="et-l et-l--head
   + '<div class="et_pb_section et_pb_section_1 proba-carduri">' + cardSticky(1, 'Închiriere') + cardSticky(2, 'Evenimente') + cardSticky(3, 'Obiective')
   + cardSticky(4, 'Contact') + '</div>'
   + '<div id="tinta" class="et_pb_section et_pb_section_2 proba-inalt"><div class="et_pb_row et_pb_row_5 et_pb_sticky_module proba-lat">Doar pe desktop</div></div>'
-  + '<div class="et_pb_section et_pb_section_3 proba-inalt"><p id="departe">Departe <span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-jos">45 min</span></p></div>'
+  + '<div class="et_pb_section et_pb_section_3 proba-inalt"><p id="departe">Departe <span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-jos">45 min</span></p>'
+  + '<div class="et_pb_row et_pb_row_9 et_pb_sticky_module proba-noua">Limita necunoscută</div></div>'
   + '</div></div></div>\n</div>\n';
 const STIL_DERULARE = '*{box-sizing:border-box}body{margin:0}.et_pb_row_0_tb_header{height:90px;background:#fff}'
   + '@media (min-width:981px){.et_pb_row_0_tb_header{display:none}}.proba-inalt{height:1500px;margin:0}.proba-carduri{padding:50px 0}'
   + '.proba-card{width:80%;max-width:1080px;margin:0 auto 25px;padding:40px;height:360px}.et_pb_row_3{height:300px}.proba-lat{height:400px}'
+  + '@media (min-width:768px) and (max-width:980px){.proba-card{padding:30px}}.proba-noua{height:50px}'
   + '.et_pb_sticky_placeholder{opacity:0!important}.et_pb_section_3{padding-top:1400px;height:3000px}.et-waypoint:not(.et_pb_counters){opacity:0}'
   + '.et-waypoint.et-animated{opacity:1}';
 
@@ -2152,12 +2158,12 @@ async function verificaSticky(browser) {
       + 'la vârful min(S, B − H), deci lipit de marginea de jos a secțiunii la sfârșit', gresite.length === 0, gresite.slice(0, 6));
     verifica(eticheta + ': cardul fixat: et_pb_sticky et_pb_sticky--top, style-ul observat (position fixed și padding !important, marginile laterale 0 '
       + '!important, z-index 10000, lățimea și stânga din flux, top 50px, bottom auto, margin-top 0px); placeholder-ul imediat după el: o copie întreagă, '
-      + 'cu et_pb_sticky_placeholder și data-sticky-placeholder-id, fără style (cu <style>-ul de desktop copiat), invizibilă', !!fixatUnu
+      + 'cu et_pb_sticky_placeholder și data-sticky-placeholder-id, fără style și fără <style>-ul de desktop, invizibilă', !!fixatUnu
       && fixatUnu.clase === 'et_pb_row et_pb_row_1 et_pb_sticky_module et_pb_equal_columns proba-card et_pb_sticky et_pb_sticky--top'
       && egal(declaratii(fixatUnu.style), declaratii('position: fixed !important; padding: 40px !important; margin-right: 0px !important; margin-left: 0px !important; '
         + 'z-index: 10000; width: ' + (latime * 0.8) + 'px; left: ' + (latime * 0.1) + 'px; top: 50px; bottom: auto; margin-top: 0px;'))
       && fixatUnu.ph && fixatUnu.ph.clase === 'et_pb_row et_pb_row_1 et_pb_sticky_module et_pb_equal_columns proba-card et_pb_sticky_placeholder'
-      && fixatUnu.ph.style === null && fixatUnu.ph.id === 'et_pb_row_1' && fixatUnu.ph.copii === (latime === 1440 ? 2 : 1) && fixatUnu.ph.opacitate === '0', fixatUnu);
+      && fixatUnu.ph.style === null && fixatUnu.ph.id === 'et_pb_row_1' && fixatUnu.ph.copii === 1 && fixatUnu.ph.opacitate === '0', fixatUnu);
     const jos = await stareSticky(f, B + 100);
     const limitat = jos.et_pb_row_1;
     verifica(eticheta + ': limita secțiunii: margin-top negativ !important (B − H − S); has_et_pb_sticky pe conținutul fiecărui layout cu un element fixat',
@@ -2185,6 +2191,77 @@ async function verificaSticky(browser) {
       return a === document.body.innerHTML;
     });
     verifica(eticheta + ': aplica() din nou nu schimbă nimic', idem === true);
+    await context.close();
+  }
+  // Resize-urile (pe live neobservate; recenzia înaintea comutării): regula de lățime refăcută fără ea însăși, padding-ul urmând
+  // pragurile cât e fixat, valorile de dinainte din style întoarse la eliberare; id-urile care nu sunt ale unui modul și limitele ciudate.
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/derulare' });
+    const f = page.mainFrame();
+    const citeste = () => f.evaluate(() => ({
+      stiluri: Array.from(document.querySelectorAll('style.et_pb_sticky_module_style')).map((st) => {
+        const lat = /(?:^|[{ ])width: ([0-9.]+)px;/.exec(st.textContent);
+        const max = /max-width: ([0-9.]+)px;/.exec(st.textContent);
+        return [Array.from(st.parentNode.classList).find((k) => /^et_pb_row_[0-9]/.test(k)), lat ? Number(lat[1]) : null, max ? Number(max[1]) : null,
+          st.parentNode.classList.contains('et_pb_sticky_placeholder')];
+      }),
+      latimePagina: document.documentElement.scrollWidth, fereastra: innerWidth,
+      r5: [document.querySelector('.et_pb_row_5:not(.et_pb_sticky_placeholder)').getBoundingClientRect().width, getComputedStyle(document.querySelector('.et_pb_row_5:not(.et_pb_sticky_placeholder)')).position],
+    }));
+    const marime = async (l) => {
+      await page.setViewportSize({ width: l, height: 900 });
+      await page.waitForTimeout(150);
+    };
+    await marime(1100);
+    const a = await citeste();
+    const stil = (x, id) => x.stiluri.find((s) => s[0] === id) || null;
+    verifica('resize 1440 → 1100 (desktop): <style>-ul de lățime refăcut la noua lățime (măsurată fără regula lui: 1100, nu 1440), max-width din procent '
+      + 'refăcut; pagina fără depășire orizontală', curate(ev, await stare(f)) && egal(stil(a, 'et_pb_row_5'), ['et_pb_row_5', 1100, 2580, false])
+      && egal(stil(a, 'et_pb_row_1'), ['et_pb_row_1', null, 1100, false]) && a.latimePagina === 1100 && a.r5[0] === 1100, a);
+    const y5 = await f.evaluate(() => document.querySelector('.et_pb_row_5').getBoundingClientRect().top + scrollY + 50);
+    await stareSticky(f, y5);
+    await marime(1300);
+    const b = await citeste();
+    await stareSticky(f, 0);
+    verifica('resize 1100 → 1300 cu rândul fixat: regula măsurată pe placeholder (1300), rândul fixat la lățimea nouă; fără <style> copiat în placeholder',
+      b.r5[1] === 'fixed' && b.r5[0] === 1300 && egal(stil(b, 'et_pb_row_5'), ['et_pb_row_5', 1300, 2580, false]) && b.stiluri.every((s) => !s[3]) && b.latimePagina === 1300, b);
+    await marime(1440);
+    const geo = await f.evaluate(() => ({ c1: document.querySelector('.et_pb_row_1').getBoundingClientRect().top + scrollY,
+      c2: document.querySelector('.et_pb_row_2').getBoundingClientRect().top + scrollY }));
+    const pad = (st, id) => /(?:^|; )padding: ([^;]+) !important/.exec((st[id] && st[id].style) || '');
+    const p1 = await stareSticky(f, geo.c1 + 200);
+    await marime(820);
+    const p2 = await stareSticky(f, geo.c1 + 200);
+    const stiluriTableta = await f.evaluate(() => document.querySelectorAll('style.et_pb_sticky_module_style').length);
+    await marime(1440);
+    const p3 = await stareSticky(f, geo.c1 + 200);
+    const stiluriDesktop = await citeste();
+    verifica('cardul fixat peste praguri: padding-ul !important recitit din placeholder (40px desktop → 30px tabletă → 40px desktop); pe tabletă niciun '
+      + '<style> de lățime (nici în placeholdere), înapoi pe desktop pe fiecare rând, nu în placeholdere', p1.et_pb_row_1.pos === 'fixed' && p2.et_pb_row_1.pos === 'fixed'
+      && pad(p1, 'et_pb_row_1') && pad(p1, 'et_pb_row_1')[1] === '40px' && pad(p2, 'et_pb_row_1') && pad(p2, 'et_pb_row_1')[1] === '30px'
+      && pad(p3, 'et_pb_row_1') && pad(p3, 'et_pb_row_1')[1] === '40px' && stiluriTableta === 0 && stiluriDesktop.stiluri.length === 6
+      && stiluriDesktop.stiluri.every((s) => !s[3]), { p1: p1.et_pb_row_1.style, p2: p2.et_pb_row_1.style, p3: p3.et_pb_row_1.style, stiluriTableta, s: stiluriDesktop.stiluri });
+    await stareSticky(f, 0);
+    await f.evaluate(() => {
+      const c = document.querySelector('.et_pb_row_2');
+      c.style.setProperty('z-index', '7');
+      c.style.setProperty('padding-top', '41px');
+    });
+    const fix2 = await stareSticky(f, geo.c2 - 50);
+    const lib2 = await stareSticky(f, 0);
+    verifica('valorile din style de dinainte de fixare (z-index: 7, padding-top: 41px) acoperite cât e fixat, întoarse la eliberare (fără margin-top: '
+      + 'eliberarea nu era limitată)', fix2.et_pb_row_2.pos === 'fixed' && /z-index: 10000/.test(fix2.et_pb_row_2.style) && /padding: 41px 40px 40px !important/.test(fix2.et_pb_row_2.style)
+      && egal(declaratii(lib2.et_pb_row_2.style), ['padding-top: 41px', 'z-index: 7']), { fix: fix2.et_pb_row_2.style, lib: lib2.et_pb_row_2.style });
+    const y9 = await f.evaluate(() => document.querySelector('.et_pb_row_9').getBoundingClientRect().top + scrollY + 30);
+    const s9 = await stareSticky(f, y9);
+    const corp = await f.evaluate(() => ({ clase: document.body.getAttribute('class'), style: document.body.getAttribute('style'),
+      ph: document.querySelectorAll('[data-sticky-placeholder-id="page"], body.et_pb_sticky_placeholder').length,
+      diag: window.axCompat.diagnostic().filter((x) => /^sticky/.test(x)) }));
+    await stareSticky(f, 0);
+    verifica('id-ul „page” (o clasă a body-ului, nu a unui modul et_pb_*) refuzat: body-ul nici clonat, nici fixat; bottomLimit „toString” (cheie a '
+      + 'prototipului) nesuportat, cu un rând în diagnostic, fără limită', curate(ev, await stare(f)) && !/et_pb_sticky/.test(corp.clase) && corp.style === null && corp.ph === 0
+      && s9.et_pb_row_9.pos === 'fixed' && !/margin-top: -/.test(s9.et_pb_row_9.style) && corp.diag.includes('sticky: bottomLimit „toString” nesuportat')
+      && corp.diag.filter((x) => x === 'sticky: intrare refuzată în „et_pb_sticky_elements”').length >= 1, { corp, s9: s9.et_pb_row_9 });
     await context.close();
   }
 }
