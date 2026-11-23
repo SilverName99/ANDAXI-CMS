@@ -1134,9 +1134,14 @@ iar coperta se estompează în 500 ms pe curba „swing”, apoi `display: none`
 paritate (toate scrise de noi, din urmele luate pe pagina live rulată offline din cache-ul referinței): `divi4/v1/multi-view.js`
 (`data-et-multi-view`: clasa `et_multi_view__hover_selector` pe ținte; pe tabletă și telefon conținutul modului, cu
 `et_multi_view_swapped`, și logo-ul ascuns înlocuit de o copie cu atributele lui; hover-ul imaginilor cu `__loading`/`__loaded`; variantele
-HTML nu trec prin parserul browserului, ci printr-un cititor strict pe o listă închisă, care refuză orice ar construi altfel) și `divi4/v1/toggle.js`
+HTML nu trec prin parserul browserului, ci printr-un cititor strict pe o listă închisă, care refuză orice ar construi altfel), `divi4/v1/toggle.js`
 (toggle-urile și acordeoanele: înălțimea, padding-urile și marginile de la 0 la valorile naturale în 700 ms „swing”, clasele
-`et_pb_toggle_open`/`_close` la sfârșit, fără tastatură, ca pe live). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
+`et_pb_toggle_open`/`_close` la sfârșit, fără tastatură, ca pe live), `divi4/v1/sticky.js` (opțiunile sticky din `ax-date` →
+`et_pb_sticky_elements`: offsetul cu `offsetSurrounding`, limita secțiunii prin `margin-top`, placeholder-ul, clasele și `style`-ul
+observate, `<style class="et_pb_sticky_module_style">` pe desktop), `divi4/v1/sus.js` (butonul „înapoi sus”: `et-hidden`/`et-visible` peste
+800 px, derularea la 0 în 800 ms), `divi4/v1/ancore.js` (legăturile `#id` din pagină derulate în 800 ms sub antetul fixat, fără hash;
+aterizarea cu `#id`: la 0 la `load`, apoi alunecarea după 700 ms) și `divi4/v1/aparitii.js` (`et-animated` pe `.et-waypoint` când intră în
+fereastră). Poarta: **G-compat** (`tools/dev/compat.sh`, Chromium pe pagini inventate).
 
 **Adresele WordPress** (`wp-compat.json` în pachetul site-ului; [SEO.md](SEO.md), §1b): după comutare, site-ul nou răspunde
 la adresele vechi ca WordPress-ul: slash-ul final (`/x` → `/x/`), majusculele cu 200, `?page_id=`, `?p=`, `?cat=`,

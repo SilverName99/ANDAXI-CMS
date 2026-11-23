@@ -361,6 +361,43 @@ const STIL_MV = 'body{margin:0}@media (min-width:768px) and (max-width:980px){[d
   + '@media (max-width:767px){[data-et-multi-view-load-phone-hidden=true]:not(.et_multi_view_swapped){display:none!important}}'
   + '.et_multi_view_image__loading{visibility:hidden}@media (max-width:980px){.et_pb_menu{display:none}}.et_pb_image{width:40px}';
 
+// Sticky, ancorele și butonul „sus” (sticky.md, ancore-aterizare.md, sus.md; inventate): antetul de telefon (doar ≤ 980), un
+// teanc de 4 carduri ca pe Acasă (50/100/150/200, offsetSurrounding off/off/on/on, limita: secțiunea), un rând sticky doar pe
+// desktop, ancore spre o țintă, una ascunsă, una inexistentă și una dincolo de 4000 px.
+const stickyCfg = (id, o) => Object.assign({ id, selector: '.' + id, position: 'top', topOffset: '0px', bottomOffset: '0px', topLimit: 'none',
+  bottomLimit: 'none', offsetSurrounding: 'on', transition: 'on', styles: { 'max-width': { desktop: '100%' }, positioning: 'relative' },
+  stickyStyles: { position_origin_r: 'top_left' } }, o);
+const CONFIG_STICKY = {
+  et_pb_row_0_tb_header: stickyCfg('et_pb_row_0_tb_header', { styles: { width: { desktop: '100%' }, 'max-width': { desktop: '2560px' } } }),
+  et_pb_row_1: stickyCfg('et_pb_row_1', { topOffset: { desktop: '50px', tablet: '50px', phone: '50px' }, bottomLimit: 'section', offsetSurrounding: 'off' }),
+  et_pb_row_2: stickyCfg('et_pb_row_2', { topOffset: { desktop: '100px', tablet: '100px', phone: '100px' }, bottomLimit: 'section', offsetSurrounding: 'off' }),
+  et_pb_row_3: stickyCfg('et_pb_row_3', { topOffset: { desktop: '150px', tablet: '150px', phone: '150px' }, bottomLimit: 'section' }),
+  et_pb_row_4: stickyCfg('et_pb_row_4', { topOffset: { desktop: '200px', tablet: '200px', phone: '200px' }, bottomLimit: 'section' }),
+  et_pb_row_5: stickyCfg('et_pb_row_5', { position: { desktop: 'top', tablet: 'none', phone: 'none' }, bottomLimit: 'section', offsetSurrounding: 'off',
+    styles: { width: { desktop: '100%' }, 'max-width': { desktop: '2580px' } } }),
+  et_pb_row_8: stickyCfg('et_pb_row_8', { selector: '.proba-alt' }),
+};
+const cardSticky = (n, text) => '<div class="et_pb_row et_pb_row_' + n + ' et_pb_sticky_module et_pb_equal_columns proba-card"><div class="et_pb_column et_pb_column_' + n + '">'
+  + '<h3>' + text + ' – Pensiunea Probă</h3></div></div>';
+const CORP_DERULARE = '<div id="page-container">\n<header class="et-l et-l--header"><div class="et_builder_inner_content et_pb_gutters3">'
+  + '<div class="et_pb_section et_pb_section_0_tb_header"><div class="et_pb_row et_pb_row_0_tb_header et_pb_sticky_module et_pb_row--with-menu">'
+  + '<div class="et_pb_column et_pb_column_0_tb_header">Antetul de telefon – Pensiunea Probă</div></div></div></div></header>\n'
+  + '<div id="et-main-area"><div class="et-l et-l--post"><div class="et_builder_inner_content et_pb_gutters3">'
+  + '<div class="et_pb_section et_pb_section_0 proba-inalt"><p><a class="proba-a" href="#tinta">Camerele</a> <a class="proba-gol" href="#">#</a> '
+  + '<a class="proba-ascuns" href="#ascuns">ascuns</a> <a class="proba-lipsa" href="#lipsa">lipsă</a></p><div id="ascuns" style="display:none">Ascuns'
+  + '<span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-ascuns">6 min</span></div>'
+  + '<p><span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-sus">2 km</span> <span class="et_pb_counters et-waypoint proba-apare-contor">7</span></p></div>'
+  + '<div class="et_pb_section et_pb_section_1 proba-carduri">' + cardSticky(1, 'Închiriere') + cardSticky(2, 'Evenimente') + cardSticky(3, 'Obiective')
+  + cardSticky(4, 'Contact') + '</div>'
+  + '<div id="tinta" class="et_pb_section et_pb_section_2 proba-inalt"><div class="et_pb_row et_pb_row_5 et_pb_sticky_module proba-lat">Doar pe desktop</div></div>'
+  + '<div class="et_pb_section et_pb_section_3 proba-inalt"><p id="departe">Departe <span class="et-pb-icon et-waypoint et_pb_animation_top proba-apare-jos">45 min</span></p></div>'
+  + '</div></div></div>\n</div>\n';
+const STIL_DERULARE = '*{box-sizing:border-box}body{margin:0}.et_pb_row_0_tb_header{height:90px;background:#fff}'
+  + '@media (min-width:981px){.et_pb_row_0_tb_header{display:none}}.proba-inalt{height:1500px;margin:0}.proba-carduri{padding:50px 0}'
+  + '.proba-card{width:80%;max-width:1080px;margin:0 auto 25px;padding:40px;height:360px}.et_pb_row_3{height:300px}.proba-lat{height:400px}'
+  + '.et_pb_sticky_placeholder{opacity:0!important}.et_pb_section_3{padding-top:1400px;height:3000px}.et-waypoint:not(.et_pb_counters){opacity:0}'
+  + '.et-waypoint.et-animated{opacity:1}';
+
 // Ce așteaptă structura pe acest corp (selectorul elementului → clasele adăugate, în ordine).
 const STRUCTURA_ASTEPTATA = {
   '.et_pb_row_1_tb_header': ['et_pb_row_1-4_3-4'],
@@ -468,6 +505,7 @@ const PAGINI = {
   video: { corp: CORP_VIDEO, stil: STIL_VIDEO },
   toggle: { corp: CORP_TOGGLE, stil: STIL_TOGGLE },
   multiview: { corp: CORP_MV, stil: STIL_MV },
+  derulare: { corp: CORP_DERULARE, stil: STIL_DERULARE, date: Object.assign({}, DATE_IMPLICITE, { et_pb_sticky_elements: CONFIG_STICKY }) },
   urmarire: { corp: CORP_CMPLZ, stil: STIL_CMPLZ, csp: CSP_URMARIRE, date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
   manager: { corp: CORP_MANAGER, stil: STIL_CMPLZ, csp: CSP_URMARIRE, coada: '<template id="ax-cmplz-sablon">' + BANNER_CMPLZ + '</template>\n',
     date: Object.assign({}, DATE_IMPLICITE, { complianz: CONFIG_CMPLZ, ax_urmarire: URMARIRE }) },
@@ -1033,6 +1071,10 @@ async function verificaIdempotenta(browser, baza) {
     ax.videoDivi.aplica();
     ax.multiView.aplica();
     ax.toggle.aplica();
+    ax.sticky.aplica();
+    ax.sus.aplica();
+    ax.ancore.aplica();
+    ax.aparitii.aplica();
     return { la: inainte === document.documentElement.outerHTML, ordine: ordine === JSON.stringify(window.__axProba.ordine) };
   });
   await page.waitForTimeout(200);
@@ -1975,6 +2017,227 @@ async function verificaMultiView(browser) {
   }
 }
 
+// Starea elementelor sticky la un scrollY: vârful vizual, poziția, clasele, style-ul, placeholder-ul de după fiecare.
+const stareSticky = (f, y) => f.evaluate(async (y) => {
+  window.scrollTo(0, y);
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const rez = {};
+  document.querySelectorAll('.et_pb_sticky_module:not(.et_pb_sticky_placeholder)').forEach((e) => {
+    const id = Array.from(e.classList).find((k) => /^et_pb_row_[0-9]/.test(k));
+    const ph = e.nextElementSibling && e.nextElementSibling.classList.contains('et_pb_sticky_placeholder') ? e.nextElementSibling : null;
+    rez[id] = { top: Math.round(e.getBoundingClientRect().top * 10) / 10, h: e.getBoundingClientRect().height, pos: getComputedStyle(e).position,
+      clase: e.getAttribute('class'), style: e.getAttribute('style'), ph: ph ? { clase: ph.getAttribute('class'), style: ph.getAttribute('style'),
+        id: ph.getAttribute('data-sticky-placeholder-id'), copii: ph.childElementCount, opacitate: getComputedStyle(ph).opacity } : null };
+  });
+  rez.placeholdere = document.querySelectorAll('.et_pb_sticky_placeholder').length;
+  rez.has = Array.from(document.querySelectorAll('.has_et_pb_sticky')).map((e) => e.parentNode.className);
+  rez.y = Math.round(scrollY);
+  return rez;
+}, y);
+const declaratii = (s) => (s || '').split(';').map((x) => x.trim()).filter(Boolean).sort();
+
+async function verificaSticky(browser) {
+  scrie('== sticky (felia 3, sticky.md): antetul de telefon, teancul de carduri, limita secțiunii, <style>-urile de desktop, revenirea');
+  for (const [eticheta, o, Hh] of [['desktop (1440)', {}, 0], ['telefon (390)', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone }, 90]]) {
+    const { context, page, ev } = await deschide(browser, Object.assign({ cale: '/pagina/derulare' }, o));
+    const f = page.mainFrame();
+    const s = await stare(f);
+    const latime = o.viewport ? o.viewport.width : 1440;
+    const geo = await f.evaluate(() => {
+      const r = (sel) => { const b = document.querySelector(sel).getBoundingClientRect(); return [b.top + scrollY, b.height]; };
+      return { c: [1, 2, 3, 4].map((n) => r('.et_pb_row_' + n)), sectiune: r('.et_pb_section_1'), stiluri: Array.from(document.querySelectorAll('style.et_pb_sticky_module_style'))
+        .map((st) => [Array.from(st.parentNode.classList).find((k) => /^et_pb_row_[0-9]/.test(k)), st.textContent, st.parentNode.lastElementChild === st]),
+      diag: window.axCompat.diagnostic().filter((x) => /^sticky/.test(x)), decalaj: window.axCompat.sticky.decalaj() };
+    });
+    const B = geo.sectiune[0] + geo.sectiune[1];
+    const S = [50, 100, 150 + Hh, 200 + Hh + 150 + geo.c[2][1]];
+    const inceput = await stareSticky(f, 0);
+    const txt = (id, corp) => '\n        .' + id + '.et_pb_sticky_module:not(.et_pb_sticky--editing) {' + corp + '}\n      ';
+    const stiluriAsteptate = latime === 1440 ? [['et_pb_row_0_tb_header', txt('et_pb_row_0_tb_header', 'width: 0px; max-width: 2560px;'), true]]
+      .concat([1, 2, 3, 4].map((n) => ['et_pb_row_' + n, txt('et_pb_row_' + n, ' max-width: 1440px;'), true]), [['et_pb_row_5', txt('et_pb_row_5', 'width: 1440px; max-width: 2580px;'), true]]) : [];
+    verifica(eticheta + ': la încărcare nimic fixat (nici antetul aflat la vârf: N < S strict), niciun placeholder; <style class="et_pb_sticky_module_style"> '
+      + (latime === 1440 ? 'cu textul observat ca ultim copil al fiecărui rând (lățimea lui, max-width din configurație, procentul din părinte)' : 'nu se pune pe telefon')
+      + '; intrarea cu selectorul altfel refuzată', curate(ev, s) && inceput.placeholdere === 0 && inceput.has.length === 0
+      && Object.keys(inceput).filter((k) => /^et_pb_row/.test(k)).every((k) => inceput[k].style === null && !/et_pb_sticky( |$)/.test(inceput[k].clase))
+      && egal(geo.stiluri, stiluriAsteptate) && geo.diag.includes('sticky: intrare refuzată în „et_pb_sticky_elements”') && geo.decalaj === Hh,
+    { stiluri: geo.stiluri, diag: geo.diag, decalaj: geo.decalaj, inceput, ...detaliiCurate(ev, s) });
+    // modelul: fixat când N < S, vârful vizual min(S, B − H); în pași de-a lungul secțiunii
+    const gresite = [];
+    let fixatUnu = null;
+    for (let y = geo.c[0][0] - 400; y < B + 200; y += 97) {
+      const st = await stareSticky(f, y);
+      [1, 2, 3, 4].forEach((n, k) => {
+        const N = geo.c[k][0] - st.y;
+        const H = geo.c[k][1];
+        const fix = N < S[k];
+        const top = fix ? Math.min(S[k], B - st.y - H) : N;
+        const e = st['et_pb_row_' + n];
+        if ((e.pos === 'fixed') !== fix || Math.abs(e.top - top) > 1) {
+          gresite.push({ y: st.y, card: n, fix, top, real: [e.pos, e.top] });
+        }
+        if (n === 1 && fix && !fixatUnu && B - st.y - H > S[k]) {
+          fixatUnu = e;
+        }
+      });
+    }
+    verifica(eticheta + ': teancul pe secțiune (pași de 97 px): fiecare card fixat exact când N < S (S = 50, 100, 150 + antet, 200 + antet + 150 + H3), '
+      + 'la vârful min(S, B − H), deci lipit de marginea de jos a secțiunii la sfârșit', gresite.length === 0, gresite.slice(0, 6));
+    verifica(eticheta + ': cardul fixat: et_pb_sticky et_pb_sticky--top, style-ul observat (position fixed și padding !important, marginile laterale 0 '
+      + '!important, z-index 10000, lățimea și stânga din flux, top 50px, bottom auto, margin-top 0px); placeholder-ul imediat după el: o copie întreagă, '
+      + 'cu et_pb_sticky_placeholder și data-sticky-placeholder-id, fără style (cu <style>-ul de desktop copiat), invizibilă', !!fixatUnu
+      && fixatUnu.clase === 'et_pb_row et_pb_row_1 et_pb_sticky_module et_pb_equal_columns proba-card et_pb_sticky et_pb_sticky--top'
+      && egal(declaratii(fixatUnu.style), declaratii('position: fixed !important; padding: 40px !important; margin-right: 0px !important; margin-left: 0px !important; '
+        + 'z-index: 10000; width: ' + (latime * 0.8) + 'px; left: ' + (latime * 0.1) + 'px; top: 50px; bottom: auto; margin-top: 0px;'))
+      && fixatUnu.ph && fixatUnu.ph.clase === 'et_pb_row et_pb_row_1 et_pb_sticky_module et_pb_equal_columns proba-card et_pb_sticky_placeholder'
+      && fixatUnu.ph.style === null && fixatUnu.ph.id === 'et_pb_row_1' && fixatUnu.ph.copii === (latime === 1440 ? 2 : 1) && fixatUnu.ph.opacitate === '0', fixatUnu);
+    const jos = await stareSticky(f, B + 100);
+    const limitat = jos.et_pb_row_1;
+    verifica(eticheta + ': limita secțiunii: margin-top negativ !important (B − H − S); has_et_pb_sticky pe conținutul fiecărui layout cu un element fixat',
+      /margin-top: -[0-9.]+px !important/.test(limitat.style || '') && egal(jos.has, Hh ? ['et-l et-l--header', 'et-l et-l--post'] : ['et-l et-l--post']), { style: limitat.style, has: jos.has });
+    const sus = await stareSticky(f, 0);
+    verifica(eticheta + ': înapoi la 0: niciun placeholder, clasele scoase, has_et_pb_sticky scos, în style rămâne doar margin-top: 0px (după limită)',
+      sus.placeholdere === 0 && sus.has.length === 0 && [1, 2, 3, 4].every((n) => sus['et_pb_row_' + n].style === 'margin-top: 0px;'
+        && sus['et_pb_row_' + n].clase === 'et_pb_row et_pb_row_' + n + ' et_pb_sticky_module et_pb_equal_columns proba-card'), sus);
+    if (Hh) {
+      const a = await stareSticky(f, 5);
+      const h = a.et_pb_row_0_tb_header;
+      const b = await stareSticky(f, 0);
+      verifica(eticheta + ': antetul de telefon fixat de la primul pixel derulat, la top 0, cu z-index 10010 (antetul Theme Builder), placeholder după el; '
+        + 'la 0 eliberat, cu style gol; rândul doar-desktop nu se fixează niciodată pe telefon', h.pos === 'fixed' && h.top === 0
+        && egal(declaratii(h.style), declaratii('position: fixed !important; padding: 0px !important; z-index: 10010; width: 390px; left: 0px; top: 0px; bottom: auto; margin-top: 0px;'))
+        && h.ph && egal(a.has, ['et-l et-l--header']) && b.et_pb_row_0_tb_header.style === '' && b.placeholdere === 0
+        && (await stareSticky(f, geo.c[3][0] + 1700)).et_pb_row_5.pos !== 'fixed', { h, b: b.et_pb_row_0_tb_header });
+    } else {
+      const r5 = await stareSticky(f, geo.c[3][0] + 1700);
+      verifica(eticheta + ': rândul cu position doar pe desktop se fixează pe desktop', r5.et_pb_row_5.pos === 'fixed', r5.et_pb_row_5);
+    }
+    const idem = await f.evaluate(() => {
+      const a = document.body.innerHTML;
+      window.axCompat.sticky.aplica();
+      return a === document.body.innerHTML;
+    });
+    verifica(eticheta + ': aplica() din nou nu schimbă nimic', idem === true);
+    await context.close();
+  }
+}
+
+async function verificaSusSiAncorele(browser) {
+  scrie('== sus, ancore și apariții (felia 2–3, sus.md, ancore-aterizare.md, aparitii.md): butonul „înapoi sus”, derularea lină la ancore, '
+    + 'aterizarea cu #hash, et-animated');
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/derulare' });
+    const f = page.mainFrame();
+    const s = await stare(f);
+    const pasi = await f.evaluate(async () => {
+      const b = document.querySelector('.et_pb_scroll_top');
+      const r = [[b.getAttribute('class'), b.getAttribute('style')]];
+      for (const y of [200, 850, 1200, 799, 2500]) {
+        window.scrollTo(0, y);
+        await new Promise((x) => setTimeout(x, 80));
+        r.push([b.getAttribute('class'), b.getAttribute('style')]);
+      }
+      return r;
+    });
+    verifica('butonul: la încărcare fără clasă; după derulare et-hidden (≤ 800), et-visible (> 800) cu style="display: inline;" care rămâne', curate(ev, s)
+      && egal(pasi, [['et_pb_scroll_top et-pb-icon', null], ['et_pb_scroll_top et-pb-icon et-hidden', null], ['et_pb_scroll_top et-pb-icon et-visible', 'display: inline;'],
+        ['et_pb_scroll_top et-pb-icon et-visible', 'display: inline;'], ['et_pb_scroll_top et-pb-icon et-hidden', 'display: inline;'], ['et_pb_scroll_top et-pb-icon et-visible', 'display: inline;']]), pasi);
+    const clic = await f.evaluate(async () => {
+      const u = [];
+      const t0 = performance.now();
+      document.querySelector('.et_pb_scroll_top').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      for (const t of [400, 950]) {
+        await new Promise((x) => setTimeout(x, t - (performance.now() - t0)));
+        u.push(Math.round(scrollY));
+      }
+      return { u, clasa: document.querySelector('.et_pb_scroll_top').getAttribute('class'), hash: location.hash };
+    });
+    verifica('clic pe buton: derulare animată până la 0 în ~800 ms („swing”: ≈ jumătate la 400 ms), apoi et-hidden; adresa neschimbată',
+      clic.u[0] > 2500 * 0.3 && clic.u[0] < 2500 * 0.7 && clic.u[1] === 0 && clic.clasa === 'et_pb_scroll_top et-pb-icon et-hidden' && clic.hash === '', clic);
+    const a = await f.evaluate(async () => {
+      window.scrollTo(0, 0);
+      const t = document.getElementById('tinta');
+      const tinta = t.getBoundingClientRect().top + scrollY;
+      const ev1 = new MouseEvent('click', { bubbles: true, cancelable: true });
+      const t0 = performance.now();
+      document.querySelector('.proba-a').dispatchEvent(ev1);
+      await new Promise((x) => setTimeout(x, 400 - (performance.now() - t0)));
+      const mij = scrollY;
+      await new Promise((x) => setTimeout(x, 500));
+      const r = { tinta, mij, final: scrollY, hash: location.hash, prevenit: ev1.defaultPrevented };
+      const alte = [];
+      for (const sel of ['.proba-gol', '.proba-ascuns', '.proba-lipsa']) {
+        const e = new MouseEvent('click', { bubbles: true, cancelable: true });
+        document.querySelector(sel).addEventListener('click', (x) => x.preventDefault(), { once: true });
+        const y0 = scrollY;
+        document.querySelector(sel).dispatchEvent(e);
+        await new Promise((x) => setTimeout(x, 120));
+        alte.push(scrollY === y0);
+      }
+      r.alte = alte;
+      return r;
+    });
+    verifica('ancora (desktop): clic pe href="#tinta": derulare animată în ~800 ms până la vârful țintei (decalaj 0), fără hash, implicitul împiedicat; '
+      + '„#”, o țintă ascunsă și una inexistentă rămân ale browserului', a.prevenit && a.hash === '' && Math.abs(a.final - a.tinta) <= 1 && a.mij > a.tinta * 0.3
+      && a.mij < a.tinta * 0.7 && egal(a.alte, [true, true, true]), a);
+    await context.close();
+  }
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/derulare' });
+    const ap = await page.evaluate(async () => {
+      const cl = () => ['sus', 'ascuns', 'contor', 'jos'].map((n) => document.querySelector('.proba-apare-' + n).classList.contains('et-animated'));
+      const r = { incarcare: cl(), opacitate: getComputedStyle(document.querySelector('.proba-apare-jos')).opacity };
+      const jos = document.querySelector('.proba-apare-jos');
+      window.scrollTo(0, jos.getBoundingClientRect().top + scrollY - innerHeight - 20);
+      await new Promise((x) => setTimeout(x, 80));
+      r.inainte = cl();
+      window.scrollTo(0, jos.getBoundingClientRect().top + scrollY - innerHeight + 20);
+      await new Promise((x) => setTimeout(x, 80));
+      r.intrat = cl();
+      window.scrollTo(0, 0);
+      await new Promise((x) => setTimeout(x, 80));
+      r.inapoi = cl();
+      return r;
+    });
+    verifica('apariții: la load, elementul din fereastră și cel ascuns primesc et-animated (cutia ascunsă e la 0, ca pe live), contorul niciodată; '
+      + 'cel de jos, ascuns de CSS, abia când vârful lui intră în fereastră; derularea înapoi nu scoate clasa', curate(ev, await stare(page.mainFrame()))
+      && egal(ap.incarcare, [true, true, false, false]) && ap.opacitate === '0' && egal(ap.inainte, [true, true, false, false])
+      && egal(ap.intrat, [true, true, false, true]) && egal(ap.inapoi, [true, true, false, true]), ap);
+    await context.close();
+  }
+  {
+    const { context, page, ev } = await deschide(browser, { cale: '/pagina/derulare', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, ua: UA.iphone });
+    const a = await page.evaluate(async () => {
+      const t = document.getElementById('tinta');
+      const tinta = t.getBoundingClientRect().top + scrollY;
+      document.querySelector('.proba-a').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      await new Promise((x) => setTimeout(x, 950));
+      return { tinta, final: scrollY, decalaj: window.axCompat.sticky.decalaj(), vizibil: Math.round(t.getBoundingClientRect().top) };
+    });
+    verifica('ancora (telefon): oprită sub antetul de telefon fixat (decalaj = înălțimea lui, 90 px)', curate(ev, await stare(page.mainFrame()))
+      && a.decalaj === 90 && Math.abs(a.final - (a.tinta - 90)) <= 1 && a.vizibil === 90, a);
+    await context.close();
+  }
+  for (const [hash, asteptare, eticheta] of [['#tinta', 1700, 'o țintă sub 4000 px: 800 ms'], ['#departe', 2600, 'o țintă dincolo de 4000 px: 1600 ms']]) {
+    const { context, page } = await deschide(browser, { cale: '/pagina/derulare' + hash, asteptare: 50 });
+    const r = await page.evaluate(async (asteptare) => {
+      const t0 = performance.now() - (performance.now() - window.__axProba.load);
+      const la = async (t) => { await new Promise((x) => setTimeout(x, Math.max(0, t - (performance.now() - t0)))); return Math.round(scrollY); };
+      const el = document.getElementById(location.hash.slice(1));
+      const tinta = Math.round(el.getBoundingClientRect().top + scrollY);
+      return { pauza: await la(600), mijloc: await la(asteptare === 1700 ? 1100 : 1500), final: await la(asteptare), tinta, restaurare: history.scrollRestoration, hash: location.hash };
+    }, asteptare);
+    verifica('aterizarea cu ' + hash + ' (' + eticheta + '): la load sare la 0 și scrollRestoration = manual; după 700 ms alunecă spre țintă; hash-ul rămâne',
+      r.pauza === 0 && r.mijloc > 0 && r.mijloc < r.tinta && Math.abs(r.final - r.tinta) <= 1 && r.restaurare === 'manual' && r.hash === hash, r);
+    await context.close();
+  }
+  for (const hash of ['#ascuns', '#lipsa']) {
+    const { context, page } = await deschide(browser, { cale: '/pagina/derulare' + hash, asteptare: 1600 });
+    const r = await page.evaluate(() => ({ y: scrollY, restaurare: history.scrollRestoration }));
+    verifica('aterizarea cu ' + hash + ' (ascunsă / inexistentă): rămâne la 0, scrollRestoration neatins', r.y === 0 && r.restaurare === 'auto', r);
+    await context.close();
+  }
+}
+
 async function verificaClaseleUa(browser) {
   scrie('== clase-ua: regula pe tabel și clasele puse în pagină');
   {
@@ -2125,6 +2388,8 @@ async function main() {
     await verificaVideo(browser);
     await verificaToggle(browser);
     await verificaMultiView(browser);
+    await verificaSticky(browser);
+    await verificaSusSiAncorele(browser);
     await verificaClaseleUa(browser);
     await verificaSandbox(browser, baza);
     await verificaMartorii(browser);
