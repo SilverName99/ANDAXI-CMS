@@ -308,6 +308,27 @@ final class CopiereStatica
     }
 
     /**
+     * Textul pe care copiaza() l-ar scrie pentru `$cale` (CSS-ul rescris de Normalizare), fără să scrie nimic: aceleași verificări,
+     * dintr-o singură deschidere. Pentru planul fișierelor statice (Statice, stilurile comune).
+     *
+     * @throws EroareCaptura dacă fișierul e refuzat
+     */
+    public static function continut(string $radacinaSursa, string $cale, ?Normalizare $normalizare = null): string
+    {
+        $out = fopen('php://memory', 'w+b');
+        if ($out === false) {
+            throw new EroareCaptura('scriere', 'nu pot citi ' . $cale);
+        }
+        try {
+            self::citeste($radacinaSursa, $cale, $out, $normalizare);
+            rewind($out);
+            return (string) stream_get_contents($out);
+        } finally {
+            fclose($out);
+        }
+    }
+
+    /**
      * Copiază `$cale` din `$radacinaSursa` în `$radacinaTinta`, la calea publicată (tinta()), dintr-o singură deschidere a sursei.
      *
      * @return array{publicat: string, sha256_sursa: string, sha256_publicat: string, marime: int}

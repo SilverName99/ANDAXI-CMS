@@ -727,6 +727,46 @@ $verifica('sănătatea: fără cadru nicio bucată; pe cadru, numărul pe 7 zile
 
 // ---------------------------------------------------------------------------------------------------------------------
 $scrie('');
+$scrie('== 9. Stilurile comune (StiluriComune, import-wordpress.json → stiluri_comune): subsolul Theme Builder rămas vechi în foaia unei pagini');
+{
+    $S = \App\Support\ImportWordPress\StiluriComune::class;
+    // Foile inventate: sursa (subsolul nou), una veche, una cu același subsol în forma CPT (.et-db #et-boc .et-l, spații după
+    // virgule, altă regulă de ligaturi), una fără reguli de subsol; o pagină cu subsolul vechi doar în <style>.
+    $nou = '.et_pb_row_0_tb_footer{border-bottom-width:1px}.et_pb_text_0_tb_footer,.et_pb_text_1_tb_footer{font-weight:700}'
+        . '@media only screen and (max-width:980px){.et_pb_row_0_tb_footer{width:90%}}body.iphone .et_pb_text_0_tb_footer h4{font-variant-ligatures:no-common-ligatures}';
+    $vechi = '.et_pb_row_0_tb_footer{border-bottom-width:0}@media only screen and (max-width:767px){.alta{color:red}.et_pb_row_0_tb_footer{display:none}}'
+        . '@media only screen and (max-width:980px){.et_pb_text_9_tb_footer{font-size:9px}}';
+    $foi = [
+        '/wp-content/et-cache/1/sursa.css' => '.et_pb_section_0{padding:1px}' . $nou . '.et_pb_section_1{padding:2px}',
+        '/wp-content/et-cache/2/veche.css' => '.et_pb_section_0{padding:3px}' . $vechi . '/* sfârșit */',
+        '/wp-content/et-cache/3/cpt.css' => '.et-db #et-boc .et-l .et_pb_row_0_tb_footer{border-bottom-width:1px}.et-db #et-boc .et-l .et_pb_text_0_tb_footer, '
+            . '.et-db #et-boc .et-l .et_pb_text_1_tb_footer{font-weight:700}@media only screen and (max-width:980px){.et-db #et-boc .et-l .et_pb_row_0_tb_footer{width:90%}}'
+            . 'body.uiwebview .et_pb_text_0_tb_footer h2{font-variant-ligatures:no-common-ligatures}',
+        '/wp-content/et-cache/4/fara.css' => '.et_pb_section_0{padding:4px}',
+    ];
+    $pag = static fn (string ...$f): string => '<html><head>' . implode('', array_map(static fn (string $x): string => "<link rel='stylesheet' href='https://site.test" . $x . "?ver=1' />", $f))
+        . '</head><body></body></html>';
+    $pagini = ['/' => $pag('/wp-content/et-cache/1/sursa.css'), '/camere/' => $pag('/wp-content/et-cache/2/veche.css'), '/404/' => $pag('/wp-content/et-cache/3/cpt.css'),
+        '/contact/' => $pag('/wp-content/et-cache/4/fara.css'), '/inline/' => '<html><head><style id="et-critical-inline-css">' . $vechi . '</style></head><body></body></html>'];
+    $u = $S::unifica($pagini, $foi, ['_tb_footer' => '/']);
+    $scrisa = $u['foi']['/wp-content/et-cache/2/veche.css'] ?? '';
+    $verifica('o pagină cu subsolul vechi în foaia ei: regulile vechi scoase (și din @media, unde blocul gol dispare, iar cel cu alte reguli rămâne), '
+        . 'ale sursei adăugate la sfârșit cu @media-urile lor; restul foii octet cu octet',
+        array_keys($u['foi']) === ['/wp-content/et-cache/2/veche.css'] && $u['pagini'] === ['/camere/']
+        && $scrisa === ".et_pb_section_0{padding:3px}@media only screen and (max-width:767px){.alta{color:red}}/* sfârșit */\n" . $nou . "\n", $scrisa);
+    $verifica('același subsol în forma CPT (.et-db #et-boc .et-l, spații după virgule) sau cu altă regulă de ligaturi: neatins; o pagină fără reguli de subsol: '
+        . 'neatinsă; una cu subsolul vechi doar în <style>: neatinsă, cu o problemă raportată',
+        !isset($u['foi']['/wp-content/et-cache/3/cpt.css']) && !isset($u['foi']['/wp-content/et-cache/4/fara.css'])
+        && $u['probleme'] === ['stiluri_comune._tb_footer: /inline/ are alte reguli decât /, dar doar în HTML (nu se schimbă)'], (string) json_encode($u['probleme'], JSON_UNESCAPED_UNICODE));
+    $doi = $S::unifica($pagini, array_merge($foi, $u['foi']), ['_tb_footer' => '/']);
+    $verifica('a doua trecere peste foile rescrise nu mai schimbă nimic (idempotent); o sursă absentă sau fără reguli e o problemă',
+        $doi['foi'] === [] && $S::unifica($pagini, $foi, ['_tb_footer' => '/lipsa/'])['probleme'] === ['stiluri_comune._tb_footer: pagina-sursă /lipsa/ nu e în captură']
+        && $S::unifica($pagini, $foi, ['_tb_footer' => '/contact/'])['probleme'] === ['stiluri_comune._tb_footer: pagina-sursă /contact/ n-are reguli _tb_footer'], (string) json_encode($doi, JSON_UNESCAPED_UNICODE));
+    $verifica('regula pachetului: doar {"_tb_footer"|"_tb_header": "/cale/"}', $S::valideaza(['_tb_footer' => '/']) === [] && $S::valideaza(['_tb_header' => '/acasa/']) === []
+        && $S::valideaza(['body' => '/']) !== [] && $S::valideaza(['_tb_footer' => 'https://x/']) !== [] && $S::valideaza(['/']) !== [] && $S::valideaza('x') !== []);
+}
+
+$scrie('');
 $scrie('== 5. Tema::valideaza pe cheile cadrului capturat');
 [$v, $pb] = Tema::valideaza(['cadru' => 'capturat', 'runtime' => 'divi4@1', 'csp' => ['mod' => 'raport', 'img-src' => ['https://poze.example.test/p/']],
     'previzualizare' => [390, 1440]], $lucru . '/pachet');

@@ -40,9 +40,11 @@ final class ImportWordPress
      *    structură observate pe un document fără o regulă în DOM, puse de dialect în `ax-date` → `ax_structura` (runtime-ul
      *    `structura.js` le aplică; SchemaDivi4::structura: clasele din lista închisă, selectorii doar taguri, #id, .clasă,
      *    spații și „>”).
+     *  - `stiluri_comune`: pe drumul capturat, `{"_tb_footer": "/"}`: regulile layout-ului Theme Builder (subsolul, antetul) se iau
+     *    din foile paginii numite, pe toate paginile unde au rămas vechi (StiluriComune, la publicarea fișierelor statice);
      * Pachetul e public: niciun literal de email, nicio adresă de destinatar.
      */
-    public const REGULI = ['_despre', 'pagini', 'articole', 'redirecturi', 'setari', 'continut', 'dialect', 'scripturi_aruncate', 'captura'];
+    public const REGULI = ['_despre', 'pagini', 'articole', 'redirecturi', 'setari', 'continut', 'dialect', 'scripturi_aruncate', 'captura', 'stiluri_comune'];
 
     /** Valoarea lui `continut` pentru drumul capturat. */
     public const CONTINUT_CAPTURAT = 'capturat';
@@ -194,6 +196,9 @@ final class ImportWordPress
         if (isset($r['articole']) && (!is_array($r['articole']) || array_diff(array_keys($r['articole']), ['spre']) !== []
             || (isset($r['articole']['spre']) && (!is_string($r['articole']['spre']) || !str_starts_with($r['articole']['spre'], '/'))))) {
             $p[] = 'articole: doar {"spre": "/cale"}';
+        }
+        if (array_key_exists('stiluri_comune', $r)) {
+            $p = array_merge($p, StiluriComune::valideaza($r['stiluri_comune']));
         }
         foreach ((array) ($r['redirecturi'] ?? []) as $i => $regula) {
             if (!is_array($regula) || !is_string($regula[0] ?? null) || !str_starts_with((string) $regula[0], '/')

@@ -879,6 +879,20 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
   verificări rămâne necopiat, cu motivul (ATENȚIE, și la `verificare`); plafoanele: 20 000 de fișiere și 2 GB (NU). Manifestul, cu
   sha256-ul sursei și al copiei: `site/storage/import-wordpress/statice.json` (îl citesc `diagnostic.php --capturat` și
   `verificare`). Pasul de mână de dinainte (o a doua captură cu `--din-dosar … --public=public_html.nou`) nu mai trebuie.
+  **Stilurile comune** (`import-wordpress.json` → `stiluri_comune`, `App\Support\ImportWordPress\StiluriComune`): Divi scrie regulile
+  antetului și subsolului Theme Builder (selectorii cu `_tb_header`, `_tb_footer`) în foaia `et-cache` a fiecărei pagini și o
+  reface doar când pagina e salvată, deci după o reproiectare a subsolului unele pagini rămân cu regulile vechi (pe `pensiune`,
+  Camere și Obiective turistice arătau subsolul vechi). Pachetul numește doar pagina-sursă (`{"_tb_footer": "/"}`; niciun CSS al
+  clientului în git); la copiere, o pagină ale cărei reguli cu marcajul diferă de ale sursei (după normalizare: forma CPT a 404-ului,
+  spațiile, regula `font-variant-ligatures`) primește în foaia ei `et-cache` regulile sursei în locul celor vechi (restul foii octet
+  cu octet; manifestul ține sha256-ul foii rescrise). O pagină care diferă, dar își ține regulile doar în `<style>`-ul din HTML, sau
+  o pagină-sursă fără reguli e NU. Planul (`--plan`) spune ce pagini s-ar schimba. Pe un site deja adoptat, o schimbare a regulii
+  (sau a codului ei) ajunge în foi doar cu o nouă publicare a fișierelor statice, un rând după `deploy/actualizeaza.sh … --aplica`
+  (din WordPress-ul păstrat în `public_html.vechi`, cu captura adoptării; `--captura=`/`--sha-raport=` dacă adoptarea le-a primit;
+  repetat de G-deploy-wp):
+  `$PHP ~/platforma/bin/platforma --site=<domeniu> scripts/publica-statice.php --wp=$HOME/domains/<domeniu>/public_html.vechi --url=https://<domeniu> --aplica`.
+  Foile au aceeași adresă (`?ver=` neschimbat) și 7 zile de cache: un browser care o are deja vede subsolul vechi până expiră sau
+  până la o reîncărcare forțată (Ctrl+F5).
 - **Arborii copiați** (`wp-content/`, `wp-includes/`, `capturat/`) primesc la comutare `.htaccess`-urile din git
   (`deploy/stub/wp-content.htaccess`, `wp-includes.htaccess`, `capturat.htaccess`): nimic nu se execută (`Require all
   denied` pe PHP și scripturi, `Options -ExecCGI -Indexes`, niciun `.js` servit), cache de 7 zile cu `Expires`, ca pe
@@ -892,7 +906,7 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
 `bin/platforma --public=public_html.nou`):
 
 - regulile site-ului stau în pachet, `import-wordpress.json` (`pagini`, `articole`, `redirecturi`, `setari`, `continut`,
-  `dialect`, `scripturi_aruncate`, `captura`), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
+  `dialect`, `scripturi_aruncate`, `captura`, `stiluri_comune`: al ei e la fișierele statice, mai sus), verificate de `tools/dev/verifica-pachet.php` (fără literale de email);
 - slug-ul fiecărei pagini e `post_name`-ul WordPress, păstrat exact: decodat în `pages.slug` (și Unicode), în forma
   percent-encoded a WordPress în adrese; căile păstrează „/” final cum îl pune structura permalinkurilor. Două slug-uri care
   diferă doar printr-un accent se bat cap în cap pe cheia UNIQUE a bazei (colația `utf8mb4_unicode_ci`), deși sunt distincte ca

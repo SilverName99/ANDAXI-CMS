@@ -1,7 +1,8 @@
 {
-    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md). Sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json; clasele de structură în privat/captura-structura.json.",
+    "_despre": "Partea publică a regulilor importului (docs/DEPLOY.md). Sha256-urile scripturilor scoase și nonce-urile în plus stau în privat/import-wordpress.json; clasele de structură în privat/captura-structura.json. stiluri_comune: stilurile subsolului Theme Builder se iau de pe Acasă pe toate paginile (Camere și Obiective rămăseseră în cache-ul Divi cu subsolul vechi; ce-se-schimba.md).",
     "continut": "capturat",
     "dialect": "divi4",
+    "stiluri_comune": {"_tb_footer": "/"},
     "redirecturi": [
         ["/hello-world", "/", 301, "articolul pus de WordPress la instalare, scos la adoptare (VC-URL-024)"],
         ["/auto-draft", "/", 301, "o pagină goală a constructorului, scoasă la adoptare (VC-URL-024)"]

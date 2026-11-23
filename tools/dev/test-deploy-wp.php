@@ -217,10 +217,18 @@ try {
     $cere('/wp-content/themes/Divi/core/fonts/iconite.woff2', 'font');
     $cere('/wp-content/themes/Divi/js/proba.min.js', 'script');
     $cere('/wp-includes/css/dashicons.min.css', 'foaie');
+    // Subsolul Theme Builder în foaia et-cache a fiecărei pagini (pachetul: import-wordpress.json → stiluri_comune, subsolul din „/”):
+    // pe Camere regulile vechi, rămase din cache (ca pe site-ul real), pe celelalte cele de acum, ca pe Acasă.
+    $subsolNou = "\n.et_pb_section_0_tb_footer.et_pb_section{padding-top:40px}\n.et_pb_text_0_tb_footer{font-size:15px}\n"
+        . '@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:13px}}';
+    $foiLate = [];
     foreach ($paginiProba as $pg) {
         $late = '/wp-content/et-cache/' . $pg['id'] . '/et-proba-late.css';
         @mkdir(dirname($public . $late), 0775, true);
-        file_put_contents($public . $late, '.et_pb_section_' . $pg['id'] . "{padding:1px}\n");
+        $foiLate[$pg['cale']] = [$late, '.et_pb_section_' . $pg['id'] . '{padding:1px}' . ($pg['cale'] === '/camere/'
+            ? "\n.et_pb_section_0_tb_footer{padding:9px}\n@media only screen and (max-width:980px){.et_pb_text_0_tb_footer{font-size:11px}.et_pb_section_" . $pg['id'] . '{margin:0}}'
+            : $subsolNou) . "\n"];
+        file_put_contents($public . $late, $foiLate[$pg['cale']][1]);
         $cere($late, 'foaie');
     }
     $cere('/wp-content/uploads/2024/05/camera-dubla-300x200.jpg', 'imagine');
@@ -360,7 +368,8 @@ PHP);
     [$c, $o] = $deploy('adopta-wp', $adopta);
     $verifica('planul: cod 0, niciun NU; captura găsită, planul importului și al fișierelor statice fără probleme, PHP-ul web cu sodium; nimic schimbat',
         $c === 0 && !preg_match('/^\s+NU /m', $o) && str_contains($o, 'captura site-ului live: ' . $captura) && str_contains($o, 'planul importului: fără probleme')
-        && str_contains($o, 'planul fișierelor statice: fără probleme') && str_contains($o, 'sodium da') && str_contains($o, 'PLAN: site-ul n-a fost schimbat')
+        && str_contains($o, 'planul fișierelor statice: fără probleme') && str_contains($o, 'stilurile comune (_tb_footer din /): /camere/ (1 foi de rescris)')
+        && str_contains($o, 'sodium da') && str_contains($o, 'PLAN: site-ul n-a fost schimbat')
         && !is_dir($dosarSite . '/public_html.nou') && $amprentaArbore($public) === $amprentaWp, $scurt($o));
     // Întâi până după pregătire (ca o noapte în doi pași), apoi pregătirea din nou: APP_KEY se scrie o dată, rămâne la o reluare,
     // stă doar în site/.env (0600) și nu apare în nicio ieșire.
@@ -382,6 +391,33 @@ PHP);
     }
     $verifica('pregătirea: fișierele statice copiate cu manifestul lor', str_contains($o0 . $o1, 'fișierele statice ale paginilor capturate')
         && is_file($site . '/storage/import-wordpress/statice.json'), $scurt($o1));
+    // Stilurile comune: pe Camere, regulile vechi ale subsolului scoase (și din @media, unde rămâne regula paginii), cele de pe Acasă
+    // puse la sfârșit; celelalte foi copiate neschimbate (servite de site-ul nou, la adresele lor); manifestul are sha256-ul foii
+    // rescrise (diagnostic --capturat îl verifică).
+    [$foaieCamere, $sursaCamere] = $foiLate['/camere/'];
+    $idCamere = (string) preg_replace('#^/wp-content/et-cache/(\d+)/.*$#', '$1', $foaieCamere);
+    $asteptatCamere = '.et_pb_section_' . $idCamere . "{padding:1px}\n@media only screen and (max-width:980px){.et_pb_section_" . $idCamere . "{margin:0}}\n" . $subsolNou . "\n";
+    $statice = json_decode((string) file_get_contents($site . '/storage/import-wordpress/statice.json'), true);
+    $intrareCamere = array_values(array_filter((array) ($statice['fisiere'] ?? []), static fn (array $f): bool => ($f['cale'] ?? '') === $foaieCamere))[0] ?? [];
+    $servitCamere = $cerere($foaieCamere . '?ver=1')['corp'];
+    $alteSchimbate = array_keys(array_filter($foiLate, static fn (array $x): bool => $x[0] !== $foaieCamere && $cerere($x[0] . '?ver=1')['corp'] !== $x[1]));
+    $randStiluri = str_contains($o0 . $o1, 'stilurile comune (_tb_footer din /): /camere/ (1 foi rescrise)');
+    $verifica('stilurile comune (subsolul din „/”): foaia et-cache a Camerelor rescrisă (regulile vechi scoase, cele de pe Acasă la sfârșit), celelalte '
+        . (count($foiLate) - 1) . ' neschimbate, manifestul cu sha256-ul foii rescrise',
+        $randStiluri && $servitCamere === $asteptatCamere && $alteSchimbate === []
+        && ($intrareCamere['sha256_publicat'] ?? '') === hash('sha256', $asteptatCamere) && ($intrareCamere['sha256_sursa'] ?? '') === hash('sha256', $sursaCamere),
+        json_encode(['randul' => $randStiluri, 'servit' => $servitCamere, 'alte' => $alteSchimbate, 'manifest' => $intrareCamere], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    // Pe un site deja adoptat, schimbarea pachetului (stiluri_comune) vine cu o nouă publicare a fișierelor statice: rândul pe care
+    // proprietarul îl rulează după actualizeaza.sh (docs/DEPLOY.md, „Stilurile comune”), cu lansatorul cronurilor și WordPress-ul
+    // din public_html.vechi. Același rezultat, aceeași foaie servită, același manifest.
+    [$cP, $oP] = $ruleaza(array_merge([PHP_BINARY], $ini, [$acasa . '/platforma/bin/platforma', '--site=' . $domeniu, 'scripts/publica-statice.php',
+        '--wp=' . $dosarSite . '/public_html.vechi', '--url=' . $url, '--aplica']), '', ['HOME' => $acasa]);
+    $statice2 = json_decode((string) file_get_contents($site . '/storage/import-wordpress/statice.json'), true);
+    $intrareCamere2 = array_values(array_filter((array) ($statice2['fisiere'] ?? []), static fn (array $f): bool => ($f['cale'] ?? '') === $foaieCamere))[0] ?? [];
+    $verifica('publicarea din nou pe site-ul adoptat (bin/platforma … scripts/publica-statice.php --wp=public_html.vechi --aplica): GATA, Camere rescrisă la fel, '
+        . 'manifestul la fel', $cP === 0 && str_contains($oP, 'stilurile comune (_tb_footer din /): /camere/ (1 foi rescrise)') && str_contains($oP, 'GATA: fișierele statice')
+        && $cerere($foaieCamere . '?ver=2')['corp'] === $asteptatCamere && ($intrareCamere2['sha256_publicat'] ?? '') === hash('sha256', $asteptatCamere)
+        && count((array) ($statice2['fisiere'] ?? [])) === count((array) ($statice['fisiere'] ?? [])), $scurt($oP));
     $verifica('verificarea: diagnostic --capturat și fiecare fișier cerut de pagini la adresa lui, 200, aceiași octeți', str_contains($o, 'diagnostic.php --capturat: fiecare fișier')
         && preg_match('/fișierele cerute de pagini \(\d+: foile, fonturile, mediile\), la adresele lor: 200, aceiași octeți/u', $o) === 1, $scurt($o));
 

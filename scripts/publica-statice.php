@@ -13,7 +13,9 @@ declare(strict_types=1);
  * Captura: implicit `capturat/` lângă `.env` (dosarul site-ului), deschisă doar verificată (lanțul sha256 al raportului; ancora:
  * --sha-raport=, altfel sha256-ul lui raport-captura.json din dosar). Pe server îl rulează deploy/adopta-wp.sh în faza `pregatire`,
  * prin bin/platforma cu --public=public_html.nou (App\Support\Paths::public). Manifestul copiilor:
- * `storage/import-wordpress/statice.json`.
+ * `storage/import-wordpress/statice.json`. Cu `stiluri_comune` în `import-wordpress.json` al pachetului (`{"_tb_footer": "/"}`), regulile
+ * subsolului (antetului) Theme Builder rămase vechi în foile `et-cache` ale unor pagini se iau din cele ale paginii numite
+ * (StiluriComune); planul spune ce pagini s-ar schimba.
  *
  * Coduri de ieșire: 0 fără NU; 1 măcar un NU (nimic nu se copiază peste o coliziune; o copie cu alt sha256 decât în captură se scoate);
  * 2 folosire greșită.
@@ -26,7 +28,9 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/../bootstrap.php';
 
+use App\Support\ImportWordPress\ImportWordPress;
 use App\Support\ImportWordPress\Statice;
+use App\Support\ImportWordPress\StiluriComune;
 use App\Support\Paths;
 
 $o = ['wp' => null, 'url' => null, 'captura' => null, 'sha-raport' => null, 'aplica' => false, 'plan' => false];
@@ -54,12 +58,25 @@ $scrie = static function (string $fel, string $text): void {
 echo '== Fișierele statice ale paginilor capturate' . ($o['aplica'] ? '' : ' — PLAN') . "\n";
 $scrie('  ..', 'captura: ' . $captura . ' (raport-captura.json: sha256 ' . ($sha !== '' ? substr($sha, 0, 12) : '?') . ')');
 $scrie('  ..', 'de pe discul WordPress ' . $o['wp'] . ' (doar citit), în ' . $docroot);
-$r = Statice::publica((string) $o['wp'], $captura, $sha, (string) $o['url'], $docroot, (bool) $o['aplica']);
+// Stilurile comune ale pachetului (import-wordpress.json → stiluri_comune): doar o regulă validă (altfel NU, ca importul).
+$reguli = ImportWordPress::reguli();
+$stiluri = $reguli['stiluri_comune'] ?? [];
+$problemeStiluri = array_key_exists('stiluri_comune', $reguli) ? StiluriComune::valideaza($stiluri) : [];
+if ($problemeStiluri !== []) {
+    fwrite(STDERR, 'NU: import-wordpress.json: ' . implode('; ', $problemeStiluri) . "\n");
+    exit(1);
+}
+$r = Statice::publica((string) $o['wp'], $captura, $sha, (string) $o['url'], $docroot, (bool) $o['aplica'], $stiluri);
 foreach ($r['necopiate'] as $n) {
     $scrie('  ATENȚIE', 'necopiat (refuzat de verificări): ' . $n['cale'] . ': ' . $n['motiv']);
 }
 foreach ($r['probleme'] as $p) {
     $scrie('  NU', $p);
+}
+if ($stiluri !== [] && $r['probleme'] === []) {
+    $scrie('  ..', 'stilurile comune (' . implode(', ', array_keys($stiluri)) . ' din ' . implode(', ', array_unique(array_values($stiluri))) . '): '
+        . ($r['stiluri']['pagini'] === [] ? 'toate paginile au deja regulile paginii-sursă'
+            : implode(', ', $r['stiluri']['pagini']) . ' (' . count($r['stiluri']['foi']) . ($o['aplica'] ? ' foi rescrise)' : ' foi de rescris)')));
 }
 $scrie('  ..', ($o['aplica'] ? 'copiate: ' : 'de copiat: ') . $r['copiate'] . ' fișiere statice (' . number_format($r['octeti'] / 1048576, 1, ',', '') . ' MB), fonturi Google: '
     . $r['fonturi'] . ', necopiate: ' . count($r['necopiate']));

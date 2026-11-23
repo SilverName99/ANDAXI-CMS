@@ -24,7 +24,10 @@ use App\Support\ImportWordPress\Captura\Normalizare;
  *  - sha256-ul sursei trebuie să fie cel din manifestul capturii (altfel WordPress s-a schimbat de la captură: copia se scoate, NU);
  *  - o coliziune cu un fișier sau o rută a CMS-ului (fișierele de la rădăcină, sub `capturat/radacina/`) e NU;
  *  - un fișier refuzat de verificări rămâne necopiat, cu motivul (ATENȚIE; verificarea de după comutare îl arată);
- *  - plafoanele: cel mult MAX_FISIERE fișiere și MAX_OCTETI octeți în total (NU).
+ *  - plafoanele: cel mult MAX_FISIERE fișiere și MAX_OCTETI octeți în total (NU);
+ *  - stilurile comune ale pachetului (`import-wordpress.json` → `stiluri_comune`, StiluriComune): regulile unui layout Theme
+ *    Builder rămase vechi în foaia `et-cache` a unor pagini se înlocuiesc cu cele ale paginii-sursă, în copiile publicate (sha256-ul
+ *    copiei din manifest e al foii rescrise); `stiluri` din rezultat spune ce pagini și ce foi.
  * Manifestul, cu sha256-ul sursei și al copiei: `storage/import-wordpress/statice.json` (îl citesc `diagnostic.php --capturat` și
  * verificarea adoptării, CadruCapturat::verificaFisiereManifest).
  */
@@ -37,12 +40,13 @@ final class Statice
     public const UPLOADS = '/wp-content/uploads/';
 
     /**
+     * @param array<string, string> $stiluriComune `import-wordpress.json` → `stiluri_comune` (marcaj → calea paginii-sursă), validat
      * @return array{copiate: int, octeti: int, necopiate: list<array{cale: string, motiv: string}>, probleme: list<string>, fonturi: int,
-     *   manifest: array<string, mixed>}
+     *   manifest: array<string, mixed>, stiluri: array{pagini: list<string>, foi: list<string>}}
      */
-    public static function publica(string $dosarWp, string $dosarCaptura, string $shaRaport, string $url, string $docroot, bool $aplica): array
+    public static function publica(string $dosarWp, string $dosarCaptura, string $shaRaport, string $url, string $docroot, bool $aplica, array $stiluriComune = []): array
     {
-        $rez = ['copiate' => 0, 'octeti' => 0, 'necopiate' => [], 'probleme' => [], 'fonturi' => 0, 'manifest' => []];
+        $rez = ['copiate' => 0, 'octeti' => 0, 'necopiate' => [], 'probleme' => [], 'fonturi' => 0, 'manifest' => [], 'stiluri' => ['pagini' => [], 'foi' => []]];
         try {
             $dosar = DosarCapturi::deschideVerificat($dosarCaptura, $shaRaport, $url);
         } catch (EroareCaptura $e) {
@@ -52,6 +56,7 @@ final class Statice
         $m = $dosar->manifest();
         $normalizare = new Normalizare((string) ($m['url'] ?? $url));
         $fisiere = [];
+        $planFoi = [];
         $numar = 0;
         $total = 0;
         foreach (is_array($m['fisiere'] ?? null) ? $m['fisiere'] : [] as $f) {
@@ -86,6 +91,7 @@ final class Statice
                     $rez['probleme'][] = 'fișierul de pe disc nu e cel din captură (alt sha256; WordPress s-a schimbat de la captură?): ' . $cale;
                 } else {
                     $rez['copiate']++;
+                    $planFoi[] = $cale;
                 }
                 continue;
             }
@@ -105,6 +111,25 @@ final class Statice
                 'marime' => $copie['marime']];
             $rez['copiate']++;
             $rez['octeti'] += $copie['marime'];
+        }
+        if ($stiluriComune !== [] && $rez['probleme'] === []) {
+            // Foile et-cache: la copiere, copiile abia scrise; la plan, textul pe care copierea l-ar scrie (de pe discul WordPress).
+            $foiCss = [];
+            foreach ($aplica ? $fisiere : array_map(static fn (string $c): array => ['cale' => $c], $planFoi) as $f) {
+                $cale = (string) $f['cale'];
+                if (!str_contains($cale, '/et-cache/') || !str_ends_with($cale, '.css') || ($aplica && !isset($f['publicat']))) {
+                    continue;
+                }
+                try {
+                    $text = $aplica ? @file_get_contents(rtrim($docroot, '/') . $f['publicat']) : CopiereStatica::continut($dosarWp, $cale, $normalizare);
+                } catch (EroareCaptura) {
+                    $text = false;
+                }
+                if (is_string($text)) {
+                    $foiCss[$cale] = $text;
+                }
+            }
+            $fisiere = self::stiluriComune($dosar, $fisiere, $foiCss, $docroot, $aplica, $stiluriComune, $rez);
         }
         // Fonturile Google ale capturii (FonturiGoogle: în `fonturi/` al capturii, sha256-ul fiecăruia în manifestul verificat).
         $fonturi = [];
@@ -132,6 +157,60 @@ final class Statice
         }
         $rez['manifest'] = ['format' => 1, 'facut' => date('c'), 'captura' => $shaRaport, 'url' => (string) ($m['url'] ?? $url), 'fisiere' => $fisiere, 'fonturi' => $fonturi];
         return $rez;
+    }
+
+    /**
+     * Stilurile comune (StiluriComune::unifica): paginile HTML ale capturii și foile `et-cache` (`$foi`, calea → textul copiei). La
+     * copiere, o foaie rescrisă se scrie atomic, iar intrarea ei din manifest primește sha256-ul și mărimea noi; la plan, doar se
+     * spune ce pagini și ce foi s-ar schimba și ce probleme ar fi.
+     *
+     * @param list<array<string, mixed>> $fisiere
+     * @param array<string, string> $foi
+     * @param array<string, string> $config
+     * @param array<string, mixed> $rez
+     * @return list<array<string, mixed>>
+     */
+    private static function stiluriComune(DosarCapturi $dosar, array $fisiere, array $foi, string $docroot, bool $aplica, array $config, array &$rez): array
+    {
+        $pagini = [];
+        foreach ($dosar->toate() as $url => $i) {
+            $tip = '';
+            foreach ($i['antete'] as [$n, $v]) {
+                $tip = strtolower((string) $n) === 'content-type' ? strtolower((string) $v) : $tip;
+            }
+            $cale = (string) parse_url((string) $url, PHP_URL_PATH);
+            if ($i['status'] === 200 && str_contains($tip, 'text/html') && preg_match('#^/(?:[a-z0-9-]+/)*$#', $cale) === 1 && !isset($pagini[$cale])) {
+                $r = $dosar->raspuns((string) $url);
+                if ($r !== null) {
+                    $pagini[$cale] = $r->corp;
+                }
+            }
+        }
+        $u = StiluriComune::unifica($pagini, $foi, $config);
+        foreach ($u['probleme'] as $p) {
+            $rez['probleme'][] = $p;
+        }
+        $rez['stiluri'] = ['pagini' => $u['pagini'], 'foi' => array_keys($u['foi'])];
+        if (!$aplica) {
+            return $fisiere;
+        }
+        foreach ($fisiere as $k => $f) {
+            $cale = (string) ($f['cale'] ?? '');
+            if (!isset($u['foi'][$cale], $f['publicat'])) {
+                continue;
+            }
+            $tinta = rtrim($docroot, '/') . $f['publicat'];
+            $tmp = dirname($tinta) . '/.copie-' . bin2hex(random_bytes(8));
+            if (@file_put_contents($tmp, $u['foi'][$cale], LOCK_EX) !== strlen($u['foi'][$cale]) || !@chmod($tmp, 0644) || !@rename($tmp, $tinta)) {
+                @unlink($tmp);
+                $rez['probleme'][] = 'stiluri_comune: foaia ' . $cale . ' nu s-a putut rescrie';
+                continue;
+            }
+            $fisiere[$k]['sha256_publicat'] = hash('sha256', $u['foi'][$cale]);
+            $rez['octeti'] += strlen($u['foi'][$cale]) - (int) ($f['marime'] ?? 0);
+            $fisiere[$k]['marime'] = strlen($u['foi'][$cale]);
+        }
+        return $fisiere;
     }
 
     /** sha256-ul unui fișier de pe discul WordPress (doar pentru plan; copierea îl citește din nou, verificat), sau null. */

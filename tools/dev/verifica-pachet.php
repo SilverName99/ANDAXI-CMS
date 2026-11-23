@@ -714,6 +714,9 @@ if ($autotest) {
     $caz('import-wordpress.json pe drumul capturat, cu dialectul divi4: trece', $importWp(['continut' => 'capturat', 'dialect' => 'divi4']), null);
     $caz('import-wordpress.json pe drumul capturat fără dialect', $importWp(['continut' => 'capturat']), 'dialect: pe drumul capturat');
     $caz('import-wordpress.json cu un dialect fără drumul capturat', $importWp(['continut' => 'divi', 'dialect' => 'divi4']), 'dialect: doar cu');
+    $caz('import-wordpress.json cu stiluri_comune din pagina „/”: trece', $importWp(['continut' => 'capturat', 'dialect' => 'divi4', 'stiluri_comune' => ['_tb_footer' => '/']]), null);
+    $caz('import-wordpress.json cu stiluri_comune pe un marcaj necunoscut', $importWp(['continut' => 'capturat', 'dialect' => 'divi4', 'stiluri_comune' => ['body' => '/']]), 'stiluri_comune.body');
+    $caz('import-wordpress.json cu stiluri_comune spre o adresă care nu e o cale', $importWp(['continut' => 'capturat', 'dialect' => 'divi4', 'stiluri_comune' => ['_tb_footer' => 'https://x/']]), 'stiluri_comune._tb_footer');
     $caz('import-wordpress.json cu o cheie necunoscută', $importWp(['altceva' => 1]), 'cheie necunoscută');
     // Stratul de adrese WordPress: exemplul din docs/SEO.md trece; o cheie necunoscută, un tip greșit sau o cale cu „..” pică.
     $wpCompat = static fn (array $date): callable => static fn (string $d) => file_put_contents($d . '/wp-compat.json',

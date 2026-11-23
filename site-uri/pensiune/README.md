@@ -3,7 +3,7 @@
 Pachetul de date al unui site de prezentare mutat de pe WordPress (Divi 4) pe drumul capturat (docs/DEPLOY.md, „Adoptarea unui
 site WordPress”). Aici stă doar configurația generică a adoptării: cadrul capturat și runtime-ul (`tema/tema.json`), adresele ca
 WordPress (`wp-compat.json`), regulile publice ale importului (`import-wordpress.json`: drumul capturat, dialectul, paginile
-scoase cu 301 spre prima pagină), SEO-ul (`seo.json`) și ce se schimbă pentru client (`ce-se-schimba.md`).
+scoase cu 301 spre prima pagină, pagina de pe care se iau stilurile subsolului Theme Builder), SEO-ul (`seo.json`) și ce se schimbă pentru client (`ce-se-schimba.md`).
 
 Tot ce ține de site-ul real (domeniul, numele, sha256-urile scripturilor scoase, clasele de structură observate, referința
 parității, lista neagră a igienei) stă **doar** în `privat/`, ignorat de git și copiat de mână pe server:
