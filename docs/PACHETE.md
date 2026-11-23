@@ -122,8 +122,10 @@ Reguli:
   (`sablon-site.css`) și scripturile `js_final` nu intră: stilizează și pornesc ce construiește layoutul (căutarea,
   sertarul `{{mobile_menu}}`, apariția blocurilor), pe care previzualizarea nu le are. Cadrul e izolat (originea lui e
   opacă, [SECURITATE.md](SECURITATE.md), N1), iar browserul nu-i dă fonturile site-ului (le cere cu CORS): pagina
-  adminului citește regulile `@font-face` din foile site-ului și îi trimite fișierele prin `postMessage`. Testul temei
-  (T2, T3, T5) verifică lista față de pagina publică și, în Chromium, antetul din cadru.
+  adminului citește regulile `@font-face` din foile site-ului și îi trimite fișierele prin `postMessage`. Previzualizarea
+  urmează ce se tastează (citește editoarele CodeMirror, nu textarea-urile, pe care ele le scriu doar la salvare) și se reface
+  la 300 ms după ultima tastă, nu la fiecare. Testul temei (T2, T3, T5) verifică lista față de pagina publică și, în
+  Chromium, antetul din cadru, tastarea și salvarea.
 - O temă schimbă CSS-ul, deci se dovedește cu stilurile calculate (G-vizual, `tools/dev/capturi-publice.sh`;
   [DEZVOLTARE.md](DEZVOLTARE.md), „Bioscem nu se schimbă”), nu doar cu HTML-ul.
 

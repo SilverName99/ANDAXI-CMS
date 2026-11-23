@@ -562,9 +562,10 @@ admin_componenta('antet-pagina', [
 
     const buildSections = () => {
         const sections = JSON.parse(JSON.stringify(savedSections));
-        sections[section].html = htmlInput ? (htmlInput.value || '') : '';
-        sections[section].css = cssInput ? (cssInput.value || '') : '';
-        sections[section].js = jsInput ? (jsInput.value || '') : '';
+        // Ce e acum în editoare, nu în textarea (CodeMirror o scrie doar la salvare): previzualizarea urmează ce se tastează.
+        sections[section].html = getEditorValue('html');
+        sections[section].css = getEditorValue('css');
+        sections[section].js = getEditorValue('js');
         return sections;
     };<?= \App\Support\Dev::marcaj('ds:stiluri-site-js') . "\n" ?>
 
@@ -707,10 +708,17 @@ ${footerHtml}
 </html>`;
     };
 
+    // La tastare previzualizarea se reface o dată, la 300 ms după ultima schimbare, nu la fiecare tastă: fiecare refacere
+    // reîncarcă documentul cadrului, cu foile de stil ale site-ului.
+    let temporizatorPrevizualizare = null;
+    const renderPreviewLaTastare = () => {
+        window.clearTimeout(temporizatorPrevizualizare);
+        temporizatorPrevizualizare = window.setTimeout(renderPreview, 300);
+    };
     if (!menuEnabled) {
-        editors.html?.onChange?.(renderPreview);
-        editors.js?.onChange?.(renderPreview);
-        editors.css?.onChange?.(renderPreview);
+        editors.html?.onChange?.(renderPreviewLaTastare);
+        editors.js?.onChange?.(renderPreviewLaTastare);
+        editors.css?.onChange?.(renderPreviewLaTastare);
     }
 
     codeTypeTabs.forEach((button) => {

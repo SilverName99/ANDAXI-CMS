@@ -30,7 +30,8 @@ declare(strict_types=1);
  *      derulare, culoarea butonului 404, fără app.css).
  *  T5, Playwright (tools/dev/previzualizare-design-browser.cjs): previzualizarea din Admin → Antet, subsol și meniu cu tema
  *      demo; un antet Bootstrap scris în editor (nesalvat) arată în cadru cu foile temei, CSS-ul din Design deasupra lor,
- *      fontul temei (trimis cadrului de pagina adminului) și JavaScript-ul Bootstrap; cadrul rămâne izolat. T3 verifică și
+ *      fontul temei (trimis cadrului de pagina adminului) și JavaScript-ul Bootstrap; cadrul rămâne izolat; textul tastat în
+ *      editor ajunge în previzualizare (cadrul refăcut o dată, după pauză), iar salvarea trimite ce e în editor. T3 verifică și
  *      previzualizarea fără temă (foile paginii publice, fără Bootstrap).
  *
  * Pe durata ei, în baza de dezvoltare: paginile din bază „checkout/succes” și „404” nepublicate (ca să se vadă vederile

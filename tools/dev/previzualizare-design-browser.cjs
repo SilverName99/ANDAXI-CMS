@@ -40,14 +40,13 @@ const CSS = '.navbar-brand{color:var(--tema-demo-accent)}';
     await pagina.fill('input[name="password"]', process.env.CMS_DEV_PAROLA || '');
     await Promise.all([pagina.waitForNavigation({ waitUntil: 'load' }), pagina.press('input[name="password"]', 'Enter')]);
     await pagina.goto(baza + '/admin/design?section=header', { waitUntil: 'load' });
-    // Editoarele: CSS-ul, apoi HTML-ul. Previzualizarea citește textarea-urile (CodeMirror, care stă imediat după textarea lui,
-    // le scrie doar la salvare), deci întâi textarea, apoi editorul, a cărui schimbare refă previzualizarea.
+    // Editoarele (CodeMirror stă imediat după textarea lui): CSS-ul, apoi HTML-ul; previzualizarea citește editoarele și se
+    // reface la 300 ms după ultima schimbare.
     await pagina.evaluate(([html, css]) => {
       const scrie = (id, valoare) => {
         const t = document.getElementById(id);
-        t.value = valoare;
         const cm = t.nextElementSibling?.CodeMirror;
-        if (cm) { cm.setValue(valoare); } else { t.dispatchEvent(new Event('input')); }
+        if (cm) { cm.setValue(valoare); } else { t.value = valoare; t.dispatchEvent(new Event('input')); }
       };
       scrie('design-css', css);
       scrie('design-html', html);
@@ -105,6 +104,36 @@ const CSS = '.navbar-brand{color:var(--tema-demo-accent)}';
       getComputedStyle(document.getElementById('meniu-proba')).display]);
     nota('telefon: JavaScript-ul Bootstrap încărcat; meniul strâns se deschide din butonul lui',
       stare.bootstrapJs && inainte === 'none' && dupa[0] === true && dupa[1] !== 'none', JSON.stringify({ bootstrapJs: stare.bootstrapJs, inainte, dupa }));
+
+    // Tastarea în editor: previzualizarea o urmează, refăcută o dată după ultima tastă (nu la fiecare), iar salvarea trimite
+    // ce s-a tastat (cererea primește aici 204, deci baza rămâne neatinsă și pagina pe loc).
+    const TASTAT = ' TASTAT IN EDITOR';
+    const areTastat = () => cadru.evaluate((t) => document.body.innerText.includes(t), TASTAT.trim()).catch(() => false);
+    let reincarcari = 0;
+    const numara = (f) => { if (f === cadru) reincarcari++; };
+    pagina.on('framenavigated', numara);
+    await pagina.click('#design-html + .CodeMirror .CodeMirror-lines');
+    await pagina.keyboard.press('Control+End');
+    await pagina.keyboard.type(TASTAT, { delay: 25 });
+    const imediat = await areTastat();
+    await cadru.waitForFunction((t) => document.body.innerText.includes(t), TASTAT.trim(), { timeout: 3000 }).catch(() => {});
+    await pagina.waitForTimeout(600);
+    pagina.off('framenavigated', numara);
+    const apare = await areTastat();
+    nota('tastarea în editor: textul ajunge în previzualizare, cadrul refăcut o dată (cel mult de două ori) pentru ' + TASTAT.length
+      + ' taste, după pauză', apare && reincarcari >= 1 && reincarcari <= 2, JSON.stringify({ imediatDupaUltimaTasta: imediat, apare, reincarcari }));
+    let trimis = null;
+    await pagina.route('**/admin/design/save', async (ruta) => {
+      trimis = ruta.request().postData() || '';
+      await ruta.fulfill({ status: 204, body: '' });
+    });
+    await pagina.click('#design-site-form button[type="submit"]');
+    for (let i = 0; i < 30 && trimis === null; i++) await pagina.waitForTimeout(100);
+    const campuri = new URLSearchParams(trimis || '');
+    nota('salvarea trimite ce e în editor (textarea scrisă la trimitere), cu secțiunea și CSS-ul',
+      campuri.get('section') === 'header' && (campuri.get('html_content') || '').includes('antet-proba')
+      && (campuri.get('html_content') || '').includes(TASTAT.trim()) && campuri.get('css_content') === CSS,
+      JSON.stringify({ section: campuri.get('section'), html: (campuri.get('html_content') || '').slice(-60), css: campuri.get('css_content') }));
     nota('nicio eroare JavaScript în pagina adminului', erori.length === 0, erori.join(' | '));
   } catch (e) {
     nota('Chromium: ' + String(e && e.message ? e.message : e), false);

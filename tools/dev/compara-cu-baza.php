@@ -1198,6 +1198,42 @@ $deBioscem = [
         'vechi' => '',
         'motiv' => 'link_plata (revizuirea a doua): răspunsul cere_confirmare_dubla deschide window.confirm cu plata socotită și reia cererea cu confirm_dubla=1.',
     ],
+    // Previzualizarea din Admin → Antet, subsol și meniu urmează ce se tastează (23 nov 2026, după previzualizarea cu stilurile
+    // site-ului, marcajele ds:): în Bioscem citea textarea-urile, pe care CodeMirror le scrie doar la salvare, deci arăta mereu
+    // ce era salvat. Doar în scriptul paginii; salvarea rămâne aceeași (tools/dev/lib/test-tema.php, T5).
+    [
+        'nume' => 'Antet, subsol și meniu: previzualizarea citește editoarele, nu textarea-urile',
+        'cale' => '/admin/design',
+        'nou' => "        // Ce e acum în editoare, nu în textarea (CodeMirror o scrie doar la salvare): previzualizarea urmează ce se tastează.\n"
+            . "        sections[section].html = getEditorValue('html');\n"
+            . "        sections[section].css = getEditorValue('css');\n"
+            . "        sections[section].js = getEditorValue('js');\n",
+        'vechi' => "        sections[section].html = htmlInput ? (htmlInput.value || '') : '';\n"
+            . "        sections[section].css = cssInput ? (cssInput.value || '') : '';\n"
+            . "        sections[section].js = jsInput ? (jsInput.value || '') : '';\n",
+        'motiv' => 'previzualizarea arată ce e în editor, nu ultima variantă salvată (CodeMirror scrie textarea doar la trimiterea '
+            . 'formularului, care rămâne neschimbată).',
+    ],
+    [
+        'nume' => 'Antet, subsol și meniu: previzualizarea refăcută la 300 ms după ultima tastă',
+        'cale' => '/admin/design',
+        'nou' => "    // La tastare previzualizarea se reface o dată, la 300 ms după ultima schimbare, nu la fiecare tastă: fiecare refacere\n"
+            . "    // reîncarcă documentul cadrului, cu foile de stil ale site-ului.\n"
+            . "    let temporizatorPrevizualizare = null;\n"
+            . "    const renderPreviewLaTastare = () => {\n"
+            . "        window.clearTimeout(temporizatorPrevizualizare);\n"
+            . "        temporizatorPrevizualizare = window.setTimeout(renderPreview, 300);\n"
+            . "    };\n"
+            . "    if (!menuEnabled) {\n"
+            . "        editors.html?.onChange?.(renderPreviewLaTastare);\n"
+            . "        editors.js?.onChange?.(renderPreviewLaTastare);\n"
+            . "        editors.css?.onChange?.(renderPreviewLaTastare);\n",
+        'vechi' => "    if (!menuEnabled) {\n"
+            . "        editors.html?.onChange?.(renderPreview);\n"
+            . "        editors.js?.onChange?.(renderPreview);\n"
+            . "        editors.css?.onChange?.(renderPreview);\n",
+        'motiv' => 'perechea rândului de mai sus: fiecare refacere reîncarcă cadrul cu foile site-ului, deci nu la fiecare tastă.',
+    ],
 ];
 /**
  * Tot în ambele moduri: paginile la care codul de stare diferă voit de cel al Bioscem (o
