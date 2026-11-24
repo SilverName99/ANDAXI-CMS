@@ -58,8 +58,11 @@ final class ImportWordPress
     public const REGULI = ['_despre', 'pagini', 'articole', 'redirecturi', 'setari', 'continut', 'dialect', 'scripturi_aruncate', 'captura', 'stiluri_comune',
         'stiluri_dupa_model', 'legaturi', 'regiuni', 'sabloane'];
 
-    /** Felurile documentelor-șablon din `sabloane` (pista B; tipurile `sablon_*` din Divi4Taiere::TIPURI). */
-    public const SABLOANE = ['articol', 'categorie', 'cautare'];
+    /**
+     * Felurile documentelor-șablon din `sabloane` (tipurile `sablon_*` din Divi4Taiere::TIPURI, PlanCapturat::dinCaptura): un articol,
+     * o categorie, o căutare (pista B) și comanda primită (`/checkout/order-received/<n>/?key=…`, pista L).
+     */
+    public const SABLOANE = ['articol', 'categorie', 'cautare', 'comanda'];
 
     /** Valoarea lui `continut` pentru drumul capturat. */
     public const CONTINUT_CAPTURAT = 'capturat';
@@ -266,7 +269,7 @@ final class ImportWordPress
         if (array_key_exists('sabloane', $r)) {
             $sab = $r['sabloane'];
             if (!is_array($sab) || ($sab !== [] && array_is_list($sab))) {
-                $p[] = 'sabloane: un obiect {"articol": "/<cale>/", "categorie": "/<cale>/", "cautare": "/?s=<termen>"}';
+                $p[] = 'sabloane: un obiect {"articol": "/<cale>/", "categorie": "/<cale>/", "cautare": "/?s=<termen>", "comanda": "/<cale>/?key=…"}';
             } else {
                 foreach ($sab as $fel => $cale) {
                     if (!in_array((string) $fel, self::SABLOANE, true)) {

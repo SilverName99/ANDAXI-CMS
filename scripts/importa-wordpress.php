@@ -146,6 +146,12 @@ try {
             // O bază încă neinstalată (fără tabelul pages) nu are pagini care să se bată cap în cap cu planul.
         }
     }
+    // Drumul capturat pe o bază căreia îi lipsește o migrare (codul nou, baza încă nemigrată): spus în plan, cu migrarea și comanda
+    // (INERT-2); importul însuși se oprește la ea (Importator). Conflictele documentelor capturate (nucleu/0070) se văd oricum: lipsa
+    // tabelului regiunilor (nucleu/0072) nu le mai ascunde.
+    if ($db !== null && $plan->capturat && Amprente::disponibil($db) && ($lipsaCapturat = ScriereCapturata::lipsa($db)) !== null) {
+        $plan->avertismente[] = $lipsaCapturat . ' (importul nu pornește până atunci)';
+    }
     if ($db !== null && Amprente::disponibil($db)) {
         $plan->conflicte = array_merge(Amprente::conflicte($db, $plan, Importator::harta(), $plan->capturat),
             $plan->capturat ? ScriereCapturata::conflicte($db) : []);

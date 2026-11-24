@@ -20,8 +20,8 @@ use App\Support\Paths;
  *  - **Importul** (Divi4Taiere) pune în locul regiunii jetonul `{{ax:regiune:<id>:<n>}}`, printr-o editare Html5\Editare (contextul
  *    arborelui verificat), iar octeții capturați rămân în `regiuni_capturate` (nucleu/0072), cu starea pe care o arată captura.
  *  - **Dovada** (dovada(), la import și în G-regiuni): randatorul, cu starea capturii, dă exact octeții capturați după normalizarea
- *    declarată (Captura\Normalizare plus Randator::normalizeaza); altfel NU, cu primul octet diferit. Un randator încă neconstruit
- *    (pista lui nu e gata) nu are dovadă: importul unui document cu regiunea lui e NU.
+ *    declarată (Captura\Normalizare plus normalizările randatorului, alese din lista închisă NORMALIZARI); altfel NU, cu primul octet
+ *    diferit. Un randator încă neconstruit (pista lui nu e gata) nu are dovadă: importul unui document cu regiunea lui e NU.
  *  - **Randarea** (CadruCapturat): la o cerere, jetonul primește ieșirea randatorului (randeaza()), pusă în pagină fără să mai treacă
  *    prin jetoane; la P1, la previzualizare și la verificarea salvării, octeții capturați (nimic nu se randează din date).
  *  - **Cache-ul** (CATALOG → `cache`): `pagina` (documentul poate sta în cache; randatorul nu citește sesiunea) sau `sesiune`
@@ -87,8 +87,8 @@ final class Regiuni
     /** Modurile unei regiuni. */
     public const MODURI = ['interior', 'atribut'];
 
-    /** Documentele-șablon (paginile capturate cu `tip` = `sablon_*`, pista B). */
-    public const SABLOANE = ['sablon:articol', 'sablon:categorie', 'sablon:cautare'];
+    /** Documentele-șablon (paginile capturate cu `tip` = `sablon_*`): articolul, categoria, căutarea (pista B), comanda primită (pista L). */
+    public const SABLOANE = ['sablon:articol', 'sablon:categorie', 'sablon:cautare', 'sablon:comanda'];
 
     /** Cheile unei reguli. */
     public const CHEI_REGULA = ['document', 'selector', 'regiune', 'mod', 'atribut', 'jeton'];
@@ -278,7 +278,7 @@ final class Regiuni
 
     /**
      * Regulile care se aplică unui document: cele cu documentul lui (calea, comparată decodată), „404”, „produs:*” (tip `produs`) sau
-     * șablonul lui (tip `sablon_articol`, `sablon_categorie`, `sablon_cautare`).
+     * șablonul lui (tip `sablon_articol`, `sablon_categorie`, `sablon_cautare`, `sablon_comanda`).
      *
      * @param list<array<string, mixed>> $reguli validate
      * @return list<array<string, mixed>>
@@ -350,23 +350,78 @@ final class Regiuni
     }
 
     /**
-     * Dovada unei regiuni (la import și în teste): randatorul, cu starea capturii, dă octeții capturați după normalizarea declarată
-     * (Captura\Normalizare, apoi Randator::normalizeaza, pe ambele părți). null = dovedită; altfel motivul (NU), cu primul octet diferit.
+     * Normalizările dovezii (lista închisă, §13 din specificația markupului WooCommerce): ce diferă între două randări ale aceleiași
+     * stări, sau ce există doar pe live. Un randator își alege doar dintre ele (Randator::normalizari); orice altceva e NU.
+     *  - `quantity_uniqid`: id-urile `quantity_<13 hexa>` (uniqid) din `for=` și `id=`, ca `quantity_X`;
+     *  - `nonce:<nume>`: nonce-ul WordPress (10 hexa) al câmpului `<nume>` (valoarea unui `<input name="<nume>">`, parametrul `<nume>=`
+     *    al unei adrese), ca `{{nonce}}`; niciodată un hexa oarecare (cheile coșului și sumele sunt tot hexa);
+     *  - `cheie_cos`: cheile rândurilor coșului WooCommerce (32 hexa) din `cart[…]`, `data-cart-item-key`, `remove_item=`, `undo_item=`
+     *    și `fcwc-qty-…`, ca `{{cheie}}`;
+     *  - `recaptcha`: blocul reCAPTCHA al formularului de logare (câmpul `g-recaptcha-response` și scripturile lui), scos (decizia D1);
+     *  - `atribuire_comanda`: `<wc-order-attribution-inputs></wc-order-attribution-inputs>`, scos (atribuirea comenzii nu se portează).
      */
-    public static function dovada(string $id, string $capturat, ContextRegiune $ctx, Normalizare $norm): ?string
+    public const NORMALIZARI = ['quantity_uniqid', 'nonce:*', 'cheie_cos', 'recaptcha', 'atribuire_comanda'];
+
+    /** Normalizările declarate, valide? null = da; altfel motivul. @param mixed $normalizari */
+    public static function normalizariGresite(mixed $normalizari): ?string
+    {
+        if (!is_array($normalizari) || !array_is_list($normalizari)) {
+            return 'normalizările nu sunt o listă';
+        }
+        foreach ($normalizari as $n) {
+            if (!is_string($n) || (!in_array($n, self::NORMALIZARI, true) && preg_match('/^nonce:[A-Za-z0-9_-]{1,64}$/D', $n) !== 1) || $n === 'nonce:*') {
+                return 'normalizarea „' . (is_string($n) ? mb_substr($n, 0, 60) : gettype($n)) . '” nu e în lista închisă (' . implode(', ', self::NORMALIZARI) . ')';
+            }
+        }
+        return null;
+    }
+
+    /** Aplică normalizările (deja validate) pe un text. @param list<string> $normalizari */
+    public static function normalizeaza(array $normalizari, string $html): string
+    {
+        foreach ($normalizari as $n) {
+            if ($n === 'quantity_uniqid') {
+                $html = (string) preg_replace('/\bquantity_[0-9a-f]{13}\b/', 'quantity_X', $html);
+            } elseif ($n === 'cheie_cos') {
+                $html = (string) preg_replace('/(cart\[|data-cart-item-key="|[?&;]remove_item=|[?&;]undo_item=|fcwc-qty-)[0-9a-f]{32}/', '${1}{{cheie}}', $html);
+            } elseif ($n === 'recaptcha') {
+                $html = (string) preg_replace('/<input type="hidden" name="g-recaptcha-response"[^<>]*>\s*(?:<script\b[^>]*>.*?<\/script>\s*)*/s', '', $html);
+            } elseif ($n === 'atribuire_comanda') {
+                $html = str_replace('<wc-order-attribution-inputs></wc-order-attribution-inputs>', '', $html);
+            } elseif (str_starts_with($n, 'nonce:')) {
+                $q = preg_quote(substr($n, 6), '/');
+                $html = (string) preg_replace('/(<input\b[^<>]*\bname="' . $q . '"[^<>]*\bvalue=")[0-9a-f]{10}"/', '${1}{{nonce}}"', $html);
+                $html = (string) preg_replace('/(<input\b[^<>]*\bvalue=")[0-9a-f]{10}("[^<>]*\bname="' . $q . '")/', '${1}{{nonce}}${2}', $html);
+                $html = (string) preg_replace('/((?:[?&]|&amp;|&#038;)' . $q . '=)[0-9a-f]{10}\b/', '${1}{{nonce}}', $html);
+            }
+        }
+        return $html;
+    }
+
+    /**
+     * Dovada unei regiuni (la import și în teste): randatorul, cu starea capturii, dă octeții capturați după normalizarea declarată
+     * (Captura\Normalizare, apoi normalizările randatorului din NORMALIZARI, pe ambele părți). null = dovedită; altfel motivul (NU), cu
+     * primul octet diferit. `$iesire` primește ieșirea randatorului (o singură randare: clasele corpului și titlul cerute de ea
+     * rămân în contextul comun al documentului, ScriereCapturata::dovadaRegiuni).
+     */
+    public static function dovada(string $id, string $capturat, ContextRegiune $ctx, Normalizare $norm, ?string &$iesire = null): ?string
     {
         $r = self::randator($id);
         if ($r === null) {
             return self::declaratie($id) === null ? 'randatorul „' . $id . '” nu e în lista închisă'
                 : 'randatorul „' . $id . '” nu e încă construit (pista ' . (self::declaratie($id)['pista'] ?? '?') . '): regiunea nu se poate dovedi';
         }
+        $normalizari = $r->normalizari();
+        if (($gresit = self::normalizariGresite($normalizari)) !== null) {
+            return 'randatorul „' . $id . '”: ' . $gresit;
+        }
         try {
-            $iesire = $r->randeaza($ctx);
+            $iesire = self::randeaza($id, $ctx);
         } catch (\Throwable $e) {
             return 'randatorul „' . $id . '” a aruncat ' . get_class($e) . ': ' . mb_substr($e->getMessage(), 0, 200);
         }
-        $a = $r->normalizeaza($norm->document($capturat));
-        $b = $r->normalizeaza($norm->document($iesire));
+        $a = self::normalizeaza($normalizari, $norm->document($capturat));
+        $b = self::normalizeaza($normalizari, $norm->document($iesire));
         $dif = Normalizare::primaDiferenta($a, $b);
         if ($dif === null) {
             return null;
@@ -396,6 +451,17 @@ final class Regiuni
     public static function html(string $text): string
     {
         return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8');
+    }
+
+    /**
+     * Date în interiorul unui `<script type="application/ld+json">` (singurul element cu text brut în care poate sta o regiune,
+     * SEC-A5): JSON cu `<`, `>`, `&`, `'` și `"` din șiruri codate (`\u003C`…), deci niciun `</script>` și niciun `<!--` din date nu
+     * închide elementul. Cadrul refuză oricum (500) o ieșire cu `<` într-un `<script>` (CadruCapturat::randeaza).
+     */
+    public static function jsonScript(mixed $date): string
+    {
+        return (string) json_encode($date, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /** Valoarea unui atribut între ghilimele (ca esc_attr). */

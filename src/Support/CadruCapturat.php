@@ -143,9 +143,14 @@ final class CadruCapturat
             }
             if ($ctx instanceof ContextRegiune) {
                 $iesire = Regiuni::randeaza($m[1], $ctx->pentru($m[1], (int) $m[2], Regiuni::cache($m[1]), (string) ($r['fel'] ?? 'interior'),
-                    isset($r['atribut']) ? (string) $r['atribut'] : null));
+                    isset($r['atribut']) ? (string) $r['atribut'] : null, (string) ($r['octeti'] ?? '')));
                 if ((string) ($r['fel'] ?? '') === 'atribut' && !Regiuni::valoareAtributSigura($iesire)) {
                     throw new EroareJeton('regiunea ' . $j['nume'] . ': ieșirea nu se poate pune între ghilimelele atributului');
+                }
+                // SEC-A5: o regiune din interiorul unui <script> (doar JSON-LD, TaiereRegiuni::locuri) nu are voie la „<” (un
+                // „</script>” sau un „<!--” din date ar închide elementul sau i-ar schimba citirea): Regiuni::jsonScript le codează.
+                if (str_contains($iesire, '<') && self::inScript($html, $j['start'])) {
+                    throw new EroareJeton('regiunea ' . $j['nume'] . ': ieșirea dintr-un <script> are „<” (Regiuni::jsonScript)');
                 }
             } else {
                 $iesire = (string) ($r['octeti'] ?? '');
@@ -237,8 +242,11 @@ final class CadruCapturat
             }
         }
         // Regiunile dinamice (pista A): rândurile lor, doar când documentul are jetoanele lor.
+        // Toate bucățile documentului, și atributele lui <html> și <body> (SPEC-A-08: tăierea nu mai pune regiuni acolo, dar un rând
+        // vechi cu un jeton într-un atribut se randează sau e o EroareJeton, niciodată octeții capturați înghețați).
         if (!is_array($doc['regiuni'] ?? null)) {
-            $doc['regiuni'] = str_contains((string) ($doc['cap_html'] ?? '') . (string) ($doc['inainte'] ?? '') . $continut . (string) ($doc['dupa'] ?? ''), '{{ax:regiune:')
+            $doc['regiuni'] = str_contains((string) ($doc['html_atribute'] ?? '') . (string) ($doc['cap_html'] ?? '') . (string) ($doc['body_atribute'] ?? '')
+                . (string) ($doc['inainte'] ?? '') . $continut . (string) ($doc['dupa'] ?? ''), '{{ax:regiune:')
                 ? self::regiuniDocument($db, (string) ($doc['cheie'] ?? '')) : [];
         }
         $doc['date_pagina'] = self::dinJson($doc['date_pagina'] ?? null);
@@ -556,7 +564,9 @@ final class CadruCapturat
                 $q = $db->prepare('SELECT * FROM pagini_capturate WHERE cheie = ?');
                 $q->execute([$cheie]);
             } else {
-                $q = $db->prepare('SELECT * FROM pagini_capturate WHERE cale_hash = ? AND tip IN (\'embed\', \'arhiva\')');
+                // Și paginile de produs capturate (tip `produs`, pista A): pe un site cu magazin_wc le servește ruta /product/{slug}
+                // (pista G), pe oricare altul se servesc la adresa lor, ca arhivele de dinainte.
+                $q = $db->prepare('SELECT * FROM pagini_capturate WHERE cale_hash = ? AND tip IN (\'embed\', \'arhiva\', \'produs\')');
                 $q->execute([hash('sha256', (string) $cale)]);
             }
             $r = $q->fetch(\PDO::FETCH_ASSOC);
@@ -645,6 +655,18 @@ final class CadruCapturat
         }
         echo self::foiTarziiCaFoi($html);
         return $status;
+    }
+
+    /** Poziția `$poz` din documentul `$html` e în interiorul unui `<script>` (ultimul deschis înaintea ei nu s-a închis)? */
+    private static function inScript(string $html, int $poz): bool
+    {
+        $inainte = strtolower(substr($html, 0, $poz));
+        $deschis = strrpos($inainte, '<script');
+        if ($deschis === false) {
+            return false;
+        }
+        $inchis = strrpos($inainte, '</script');
+        return $inchis === false || $inchis < $deschis;
     }
 
     /**

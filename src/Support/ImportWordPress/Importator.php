@@ -43,8 +43,9 @@ final class Importator
             if ($plan->capturata === null || array_filter($plan->pagini, static fn (array $pg): bool => !isset($pg['document'])) !== []) {
                 throw new EroareImport('drumul capturat: o pagină a planului n-are documentul ei tăiat (pasul 5a); nu import nimic');
             }
-            if (!ScriereCapturata::disponibil($db)) {
-                throw new EroareImport('baza site-ului n-are tabelele capturii (migrarea nucleu/0070: pagini_capturate…): php scripts/migreaza.php --aplica');
+            // Tabelele capturii (nucleu/0070) și al regiunilor (nucleu/0072), fiecare cu migrarea ei în mesaj.
+            if (($lipsa = ScriereCapturata::lipsa($db)) !== null) {
+                throw new EroareImport($lipsa);
             }
         }
         $harta = self::harta();

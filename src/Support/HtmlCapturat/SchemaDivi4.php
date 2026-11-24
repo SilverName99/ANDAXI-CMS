@@ -62,6 +62,17 @@ final class SchemaDivi4
         // ordinea câmpurilor din checkout, produsul și cantitatea unui link de coș, textul gol al unei liste de alegere.
         'data-events' => 'json', 'data-columns' => 'scalar', 'data-priority' => 'scalar', 'data-product_id' => 'scalar',
         'data-product_sku' => 'scalar', 'data-quantity' => 'scalar', 'data-placeholder' => 'scalar',
+        // Runda 1 de reparații a pistei A (SPEC-A-03), adunate cu Divi4::transforma și politica `import` de pe toate documentele
+        // capturii reale (doar numele): rândurile coșului și ale panoului plutitor, cuponul, selectorul județului, metodele și
+        // butonul plății, sesiunea Stripe Checkout (JSON), lista metodelor salvate, opțiunea MailPoet din checkout și validarea
+        // formularelor MailPoet (parsley), butoanele (Bootstrap), indicii unui modul de cod scurt, tooltipurile de pe <abbr>
+        // (titlul, text fără „<”, ca data-title) și marcajele unui editor de text pe <p> și <br>.
+        'data-cart-item-key' => 'scalar', 'data-coupon' => 'scalar', 'data-input-classes' => 'scalar', 'data-label' => 'scalar',
+        'data-installed' => 'scalar', 'data-order_button_text' => 'scalar', 'data-payment-method-type' => 'scalar',
+        'data-checkout-session' => 'json', 'data-count' => 'scalar', 'data-automation-id' => 'scalar', 'data-value' => 'scalar',
+        'data-parsley-errors-container' => 'scalar', 'data-parsley-names' => 'json', 'data-toggle' => 'scalar',
+        'data-shortcode_index' => 'scalar', 'data-mdb-original-title' => 'scalar', 'data-mdb-tooltip-init' => 'scalar',
+        'data-mdb-tooltip-initialized' => 'scalar', 'data-start' => 'scalar', 'data-end' => 'scalar',
     ];
 
     /**

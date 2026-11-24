@@ -26,6 +26,12 @@ final class PlanCapturat
     /** Antetele unui răspuns capturat care se trimit din nou (restul — codarea, lungimea, hop-by-hop, serverul, CSP-ul lor — nu). */
     public const ANTETE = ['content-type', 'cache-control', 'expires', 'x-robots-tag'];
 
+    /**
+     * Mutarea unui site WooCommerce (pista A, docs/MAGAZIN-WC.md): o pagină capturată sub baza produselor WooCommerce
+     * (`/product/<slug>/`, baza implicită) e documentul `produs` (cheia `produs:<sha16>`, regulile `produs:*`), nu o arhivă.
+     */
+    public const RE_PRODUS = '#^/product/[^/?\#]+/$#';
+
     /** @var array<string, array<string, mixed>> cheie → documentul (tip, cale, wp_id, taiere, sha_captura, antete, …) */
     public array $documente = [];
     /** @var array<string, array<string, mixed>> cheie → fragmentul (fel, layout, html, date, meniu, sha) */
@@ -210,6 +216,7 @@ final class PlanCapturat
         $divi4 = new Divi4($d);
         $ctxPolitica = $divi4->contextPolitica();
         $this->politica = $ctxPolitica;
+        $produseCapturate = false;
         foreach (self::adrese($d) as $a) {
             // După adresa cerută, nu după cale: la oEmbed calea din index e a paginii, adresa e a endpointului
             // (/wp-json/oembed/1.0/embed?url=…); după cale ar ieși pagina, înghețată peste ruta ei.
@@ -252,51 +259,52 @@ final class PlanCapturat
             $tip = match ($a['fel']) {
                 '404' => '404',
                 'embed' => 'embed',
-                default => 'arhiva',
+                default => preg_match(self::RE_PRODUS, $a['cale']) === 1 ? 'produs' : 'arhiva',
             };
+            if ($tip === 'produs') {
+                $produseCapturate = true;
+            }
             $cheie = match ($tip) {
                 '404' => '404',
                 'embed' => 'embed:' . substr((string) ($pagini[(string) preg_replace('#embed/$#', '', $a['cale'])] ?? ''), strlen('pagina:')),
+                'produs' => 'produs:' . substr(hash('sha256', $a['cale']), 0, 16),
                 default => 'arhiva:' . substr(hash('sha256', $a['cale']), 0, 16),
             };
             if ($tip === 'embed' && $cheie === 'embed:') {
                 continue; // cardul unei pagini care nu se importă
             }
-            if ($tip === 'arhiva' && in_array(rawurldecode($a['cale']), array_map('rawurldecode', $neimportate), true)) {
+            if (in_array($tip, ['arhiva', 'produs'], true) && in_array(rawurldecode($a['cale']), array_map('rawurldecode', $neimportate), true)) {
                 continue;
             }
             if ($tip !== '404' && $r->status !== 200) {
                 $this->avertismente[] = $a['cale'] . ': captura are statusul ' . $r->status . ', nu se scrie';
                 continue;
             }
-            $document = $tip === '404' ? '404' : $a['cale'];
-            $this->documenteVazute[] = $document;
-            $dialect = $divi4->transforma($r->corp, $d->url, $reguli, $document);
-            foreach ($dialect->probleme as $pr) {
-                $this->probleme[] = $a['cale'] . ': ' . $pr;
-            }
-            if ($dialect->probleme !== []) {
-                continue;
-            }
-            $pb = HtmlCapturat::verifica($dialect->html, $ctxPolitica, 'import');
-            foreach ($pb as $problema) {
-                $this->probleme[] = $a['cale'] . ' (HtmlCapturat): ' . $problema->linie();
-            }
-            if ($pb !== []) {
-                continue;
-            }
-            $t = Divi4Taiere::taie($dialect, ['tip' => $tip, 'cale' => $a['cale'], 'an' => $an,
-                'regiuni' => self::regiuniDocument($reguli, $tip, $tip === '404' ? null : $a['cale']), 'stare' => $this->stareCaptura($d, $a['cale'])]);
-            if ($t->probleme === []) {
-                foreach (HtmlCapturat::verifica($t->html, $ctxPolitica, 'import') as $problema) {
-                    $this->probleme[] = $a['cale'] . ' (HtmlCapturat, după pasul 5a): ' . $problema->linie();
-                }
-            }
-            $this->adaugaDocument($cheie, $tip, $t, ['titlu' => $a['cale'], 'cale' => $tip === '404' ? null : $a['cale'], 'status' => $r->status,
-                'sha_captura' => $r->sha256(), 'antete' => $antete, 'valori_import' => ['cale' => $a['cale']]]);
+            $this->documentDinCaptura($d, $divi4, $reguli, $an, $a['cale'], $r, $antete, $tip, $cheie, $tip === '404' ? null : $a['cale']);
         }
         if (!isset($this->documente['404'])) {
             $this->avertismente[] = 'fără pagina 404 a site-ului: adresele necunoscute primesc 404-ul nucleului';
+        }
+        // Documentele-șablon (privat/import-wordpress.json → sabloane): câte unul pe fel (`sablon_<fel>`, cheia `sablon:<fel>`), din
+        // captura adresei lui, fără cale (nu se servește la o adresă; adresa lui rămâne documentul ei, dacă e în import): un articol,
+        // o categorie, o căutare (pista B) și comanda primită (pista L). Regulile `sablon:<fel>` se aplică lui.
+        foreach ((array) ($reguli['sabloane'] ?? []) as $fel => $caleSablon) {
+            $fel = (string) $fel;
+            $caleSablon = (string) $caleSablon;
+            $r = $d->dupaCale($caleSablon);
+            if ($r === null) {
+                $this->probleme[] = 'import-wordpress.json → sabloane.' . $fel . ': adresa „' . $caleSablon . '” nu e în captură';
+                continue;
+            }
+            if ($r->status !== 200) {
+                $this->probleme[] = 'import-wordpress.json → sabloane.' . $fel . ': captura adresei „' . $caleSablon . '” are statusul ' . $r->status;
+                continue;
+            }
+            if (($j = Jetoane::literal($r->corp)) !== null) {
+                $this->probleme[] = $caleSablon . ': captura conține deja textul „{{ax:” la octetul ' . $j . ' (forma jetoanelor noastre)';
+                continue;
+            }
+            $this->documentDinCaptura($d, $divi4, $reguli, $an, $caleSablon, $r, self::antete($r->antete, $d->url), 'sablon_' . $fel, 'sablon:' . $fel, null);
         }
         // Regiunile dinamice (pista A): o regulă pe calea unui document care nu e în import e NU (fail-closed: pagina ar ieși înghețată,
         // cu starea capturii în ea, și ar putea intra în cache); una pe produse sau pe un șablon fără documente e doar o atenționare.
@@ -314,7 +322,11 @@ final class PlanCapturat
                 }
                 if (!$gasit) {
                     $text = 'import-wordpress.json → regiuni[' . $i . '] („' . $doc . '”): niciun document importat nu e al ei';
-                    if (str_starts_with($doc, '/') || $doc === '404') {
+                    // `produs:*` cu pagini de produs în captură și `sablon:<fel>` cu șablonul lui în `sabloane`: tot NU (documentul
+                    // există, dar n-a ieșit din import, deci ar rămâne înghețat sau fără regiuni); fără ele, doar o atenționare.
+                    $areDocumente = ($doc === 'produs:*' && $produseCapturate)
+                        || (str_starts_with($doc, 'sablon:') && isset($reguli['sabloane'][substr($doc, strlen('sablon:'))]));
+                    if (str_starts_with($doc, '/') || $doc === '404' || $areDocumente) {
                         $this->probleme[] = $text . ' (regiunea ar rămâne înghețată în pagină)';
                     } else {
                         $this->avertismente[] = $text;
@@ -336,6 +348,42 @@ final class PlanCapturat
                 $this->avertismente[] = 'import-wordpress.json → captura.structura: „' . $cheieS . '” nu e niciun document importat (clasele lui nu se pun)';
             }
         }
+    }
+
+    /**
+     * Un document al capturii (dialectul, politica, tăierea cu regiunile lui), adăugat planului. `$caleDoc`: adresa la care se
+     * servește (null: 404-ul, un șablon); `$cale`: adresa capturii (jetoanele căii, starea capturii, regulile pe cale).
+     *
+     * @param list<array{0: string, 1: string}> $antete
+     */
+    private function documentDinCaptura(DosarCapturi $d, Divi4 $divi4, array $reguli, ?array $an, string $cale, \App\Support\ImportWordPress\Captura\Raspuns $r,
+        array $antete, string $tip, string $cheie, ?string $caleDoc): void
+    {
+        $document = $tip === '404' ? '404' : $cale;
+        $this->documenteVazute[] = $document;
+        $dialect = $divi4->transforma($r->corp, $d->url, $reguli, $document);
+        foreach ($dialect->probleme as $pr) {
+            $this->probleme[] = $cale . ': ' . $pr;
+        }
+        if ($dialect->probleme !== []) {
+            return;
+        }
+        $pb = HtmlCapturat::verifica($dialect->html, $this->politica, 'import');
+        foreach ($pb as $problema) {
+            $this->probleme[] = $cale . ' (HtmlCapturat): ' . $problema->linie();
+        }
+        if ($pb !== []) {
+            return;
+        }
+        $t = Divi4Taiere::taie($dialect, ['tip' => $tip, 'cale' => $cale, 'an' => $an,
+            'regiuni' => self::regiuniDocument($reguli, $tip, $tip === '404' ? null : $cale), 'stare' => $this->stareCaptura($d, $cale)]);
+        if ($t->probleme === []) {
+            foreach (HtmlCapturat::verifica($t->html, $this->politica, 'import') as $problema) {
+                $this->probleme[] = $cale . ' (HtmlCapturat, după pasul 5a): ' . $problema->linie();
+            }
+        }
+        $this->adaugaDocument($cheie, $tip, $t, ['titlu' => $tip === '404' || $caleDoc !== null ? $cale : $cheie . ' (' . $cale . ')', 'cale' => $caleDoc,
+            'status' => $r->status, 'sha_captura' => $r->sha256(), 'antete' => $antete, 'valori_import' => ['cale' => $cale]]);
     }
 
     /**

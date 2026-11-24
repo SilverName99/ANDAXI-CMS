@@ -21,6 +21,7 @@
         {"document": "sablon:articol", "selector": "div.et_pb_post_title > div.et_pb_title_featured_container", "regiune": "articol:meta"},
         {"document": "sablon:articol", "selector": "div.et_pb_post_content", "regiune": "articol:continut"},
         {"document": "sablon:categorie", "selector": "div.et_pb_blog_grid > div.et_pb_ajax_pagination_container", "regiune": "blog:lista"},
-        {"document": "sablon:cautare", "selector": "div.et_pb_blog_grid > div.et_pb_ajax_pagination_container", "regiune": "blog:lista"}
+        {"document": "sablon:cautare", "selector": "div.et_pb_blog_grid > div.et_pb_ajax_pagination_container", "regiune": "blog:lista"},
+        {"document": "sablon:comanda", "selector": "div.woocommerce-order", "regiune": "wc:comanda_primita"}
     ]
 }

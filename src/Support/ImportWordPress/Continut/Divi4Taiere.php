@@ -59,11 +59,12 @@ final class Divi4Taiere
 
     /**
      * Felurile documentelor capturate. Pe lângă pagini, 404, carduri embed și arhive, pista A a rezervat (nucleu/0072, coloana
-     * `pagini_capturate.tip`): `produs` (pagina capturată a unui produs, `/product/<slug>/`, pista G) și șabloanele
-     * `sablon_articol`, `sablon_categorie`, `sablon_cautare` (un articol, o categorie, o căutare capturate, randate pentru alte
-     * articole și categorii prin regiunile lor; pista B).
+     * `pagini_capturate.tip`): `produs` (pagina capturată a unui produs, `/product/<slug>/`, PlanCapturat::RE_PRODUS; pista G) și
+     * șabloanele `sablon_articol`, `sablon_categorie`, `sablon_cautare` (un articol, o categorie, o căutare capturate, randate pentru
+     * alte articole și categorii prin regiunile lor; pista B) și `sablon_comanda` (comanda primită, randată pentru orice comandă;
+     * pista L), din `privat/import-wordpress.json` → `sabloane` (PlanCapturat::dinCaptura).
      */
-    public const TIPURI = ['pagina', '404', 'embed', 'arhiva', 'produs', 'sablon_articol', 'sablon_categorie', 'sablon_cautare'];
+    public const TIPURI = ['pagina', '404', 'embed', 'arhiva', 'produs', 'sablon_articol', 'sablon_categorie', 'sablon_cautare', 'sablon_comanda'];
 
     /** Fragmentele, în ordinea din document. */
     public const FRAGMENTE = ['antet', 'subsol', 'banner'];
@@ -457,6 +458,15 @@ final class Divi4Taiere
             if ($lr2['probleme'] !== [] || array_column($lr2['locuri'], 'jeton') !== array_column($locuriD, 'jeton')) {
                 return Taiere::refuz($lr2['probleme'] !== [] ? $lr2['probleme'] : ['regiuni: locurile de pe T nu sunt cele din documentul dialectului'], $T);
             }
+            // Fiecare regiune stă într-o bucată a documentului (capul sau corpul: inainte, continut, dupa); în afara lor (atributele lui
+            // <html> și <body>, care se copiază întocmai) jetonul n-ar ajunge în pagină și regiunea ar rămâne înghețată (SPEC-A-08).
+            foreach ($lr2['locuri'] as $l) {
+                $inCap = $l['start'] >= $s2['headStart'] && $l['end'] <= $s2['capEnd'];
+                $inCorp = $l['start'] >= $s2['bodyStart'] && $l['end'] <= $s2['corpEnd'];
+                if ($l['fel'] === 'regiune' && !$inCap && !$inCorp) {
+                    return Taiere::refuz(['regiuni: regiunea „' . $l['regiune'] . '” de la octetul ' . $l['start'] . ' nu e în nicio bucată a documentului (capul sau corpul)'], $T);
+                }
+            }
             $jr = TaiereRegiuni::jetoane($T, $tk2, $lr2['locuri']);
             if (is_string($jr)) {
                 return Taiere::refuz([$jr], $T);
@@ -661,7 +671,7 @@ final class Divi4Taiere
             return $rez;
         };
         $prima = static fn (array $l): ?int => $l[0] ?? null;
-        if (in_array($tip, ['pagina', 'arhiva', '404', 'produs', 'sablon_articol', 'sablon_categorie', 'sablon_cautare'], true)) {
+        if (in_array($tip, ['pagina', 'arhiva', '404', 'produs', 'sablon_articol', 'sablon_categorie', 'sablon_cautare', 'sablon_comanda'], true)) {
             $invelis = $prima($cauta(static fn (Token $t, array $c): bool => $t->nume === 'div' && in_array($tip === '404' ? 'et-l--body' : 'et-l--post', $c, true)));
             $zona = null;
             if ($invelis !== null && ($el = $element($invelis)) !== null) {

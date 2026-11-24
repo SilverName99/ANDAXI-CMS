@@ -50,8 +50,12 @@ if (!$capturat) {
 try {
     $config = require __DIR__ . '/../config/app.php';
     $db = Database::connection((array) ($config['db'] ?? []));
-    if (!$db instanceof PDO || !ScriereCapturata::disponibil($db)) {
-        fwrite(STDERR, "NU: baza site-ului nu răspunde sau n-are tabelele capturii (migrarea nucleu/0070)\n");
+    if (!$db instanceof PDO) {
+        fwrite(STDERR, "NU: baza site-ului nu răspunde\n");
+        exit(1);
+    }
+    if (($lipsa = ScriereCapturata::lipsa($db)) !== null) {
+        fwrite(STDERR, 'NU: ' . $lipsa . "\n");
         exit(1);
     }
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

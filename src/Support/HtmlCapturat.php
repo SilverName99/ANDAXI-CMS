@@ -50,7 +50,9 @@ use InvalidArgumentException;
 final class HtmlCapturat
 {
     /** Elementele HTML permise. Ce nu e aici (în spațiul HTML) e refuzat. Lipsesc, voit: object, embed, applet, portal,
-     * base, frame, frameset, template, keygen, param, marquee, noembed, noframes, xmp, plaintext, listing, canvas, math. */
+     * base, frame, frameset, template, keygen, param, marquee, noembed, noframes, xmp, plaintext, listing, canvas, math.
+     * Singurul element personalizat: `wc-order-attribution-inputs`, gol în formularele WooCommerce (checkout, contul): fără
+     * scriptul atribuirii comenzii (care nu se portează) e inert; atributele lui trec prin aceeași listă albă. */
     public const TAGURI_HTML = ['a', 'abbr', 'address', 'area', 'article', 'aside', 'audio', 'b', 'bdi', 'bdo', 'blockquote',
         'body', 'br', 'button', 'caption', 'cite', 'code', 'col', 'colgroup', 'data', 'datalist', 'dd', 'del', 'details',
         'dfn', 'dialog', 'div', 'dl', 'dt', 'em', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3',
@@ -58,7 +60,7 @@ final class HtmlCapturat
         'legend', 'li', 'link', 'main', 'map', 'mark', 'menu', 'meta', 'meter', 'nav', 'noscript', 'ol', 'optgroup', 'option',
         'output', 'p', 'picture', 'pre', 'progress', 'q', 'rp', 'rt', 'ruby', 's', 'samp', 'script', 'section', 'select',
         'small', 'source', 'span', 'strong', 'style', 'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'textarea', 'tfoot',
-        'th', 'thead', 'time', 'title', 'tr', 'track', 'u', 'ul', 'var', 'video', 'wbr'];
+        'th', 'thead', 'time', 'title', 'tr', 'track', 'u', 'ul', 'var', 'video', 'wbr', 'wc-order-attribution-inputs'];
 
     /** Elementele SVG permise (lista albă SvgSigur a fișierului, desenul). Lipsesc: foreignObject, script, a, image, style. */
     public const TAGURI_SVG = ['svg', 'g', 'defs', 'symbol', 'use', 'title', 'desc', 'metadata', 'switch', 'path', 'circle',
@@ -532,8 +534,8 @@ final class HtmlCapturat
         $dec = html_entity_decode($valoare, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $this->valoareFaraScript($nume, $valoare, $octet);
         if ($fel === 'scalar') {
-            if (str_contains($dec, '<') && in_array($nume, ['data-title', 'data-caption', 'data-name-en'], true)) {
-                $this->nu('data-title', 'atributul „' . $nume . '” conține „<” (citit de un lightbox)', $octet);
+            if (str_contains($dec, '<') && in_array($nume, ['data-title', 'data-caption', 'data-name-en', 'data-mdb-original-title'], true)) {
+                $this->nu('data-title', 'atributul „' . $nume . '” conține „<” (citit de un lightbox sau de un tooltip)', $octet);
             }
             return;
         }

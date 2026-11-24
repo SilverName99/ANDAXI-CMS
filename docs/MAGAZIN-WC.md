@@ -50,17 +50,32 @@ poate ajunge pe server cu o regiune înghețată în starea capturii.
 O clasă care servește mai multe id-uri sau ambele moduri ale unui id le deosebește prin `ContextRegiune::regiune()`, `mod()` și
 `atribut()`. Contractul unui randator (`Randator`): își scapă singur datele (`Regiuni::html`, `Regiuni::attr`, `Regiuni::jsonAttr`;
 ieșirea nu mai trece prin jetoane), un randator `pagina` nu citește sesiunea (`ContextRegiune::sesiune` aruncă, iar `$_SESSION` e
-un tablou gol cât randează; o scriere în el = 500; docs/DEPLOY.md, „Cache-ul”), iar
-`normalizeaza()` declară câmpurile volatile (nonce-urile, cheile rândurilor coșului, id-urile `quantity_<uniqid>`) pentru dovadă.
+un tablou gol cât randează; o scriere în el = 500; docs/DEPLOY.md, „Cache-ul”), iar `normalizari()` își alege, pentru dovadă,
+câmpurile volatile doar din lista închisă `Regiuni::NORMALIZARI` (§13 din specificația markupului): `quantity_uniqid` (id-urile
+`quantity_<13 hexa>`), `nonce:<numele câmpului>` (nonce-ul de 10 hexa al unui `<input name="…">` sau al parametrului din adresă, nu
+orice hexa), `cheie_cos` (cheile de 32 hexa ale rândurilor coșului în `cart[…]`, `data-cart-item-key`, `remove_item=`,
+`undo_item=`, `fcwc-qty-…`), `recaptcha` și `atribuire_comanda` (blocurile care există doar pe live: câmpul reCAPTCHA al logării și
+`<wc-order-attribution-inputs>`). O normalizare din afara listei e NU la dovadă. Octeții capturați ai regiunii îi dă
+`ContextRegiune::capturat()` (la o cerere din `regiuni_capturate`, la dovadă din tăiere): de pildă clasele Divi ale modulelor
+coșului, la care randatorul adaugă sau scoate `et_pb_wc_cart_empty`. Un randator care scrie în `<script type="application/ld+json">`
+(`wc:jsonld_produs`) își codează datele cu `Regiuni::jsonScript` (`<`, `>`, `&`, ghilimelele ca `\u003C`…); cadrul refuză (500)
+o ieșire cu `<` acolo. La dovadă, toate regiunile documentului primesc același context, iar clasele corpului și titlul de la sfârșit
+trebuie să fie cele capturate (o regiune care, cu starea capturii, scoate `woocommerce-cart` sau schimbă titlul e NU).
 Clasele corpului pe care le poate cere o regiune sunt lista închisă `SchemaDivi4::CLASE_BODY` (`logged-in`,
 `woocommerce-account`, `woocommerce-cart`, `woocommerce-checkout`, `woocommerce-order-received`, `woocommerce-order-pay` și cele
 ale endpointurilor contului); schimbarea `woocommerce-no-js` → `woocommerce-js` o face un modul al runtime-ului, ca scriptul inline
 al WooCommerce, nu o regiune.
 
-Documentele noi ale capturii (coloana `pagini_capturate.tip`, `VARCHAR`, fără DDL): `produs` (o pagină de produs capturată,
-`/product/<slug>/`, regulile cu `"document": "produs:*"`) și șabloanele `sablon_articol`, `sablon_categorie`, `sablon_cautare` (un
-articol, o categorie și o căutare capturate, ale căror adrese stau în `privat/import-wordpress.json` → `sabloane`), pe care le
-importă pistele G și B.
+Documentele noi ale capturii (coloana `pagini_capturate.tip`, `VARCHAR`, fără DDL): `produs` (o adresă capturată sub
+`/product/<slug>/`, `PlanCapturat::RE_PRODUS`, cheia `produs:<sha16>`, regulile cu `"document": "produs:*"`) și șabloanele
+`sablon_articol`, `sablon_categorie`, `sablon_cautare` (un articol, o categorie și o căutare capturate) și `sablon_comanda` (comanda
+primită, `/checkout/order-received/<n>/?key=…`, randată pentru orice comandă de pista L), câte unul pe intrarea din
+`privat/import-wordpress.json` → `sabloane`, cu cheia `sablon:<fel>`, fără cale (nu se servește la o adresă) și regulile
+`sablon:<fel>`. O adresă din `sabloane` lipsă din captură (sau cu alt status decât 200) e NU; o regulă `produs:*` sau
+`sablon:<fel>` care nu ajunge la niciun document, când captura are pagini de produs sau șablonul e în `sabloane`, e NU. Locurile
+regiunilor: niciuna pe `<html>`, `<head>`, `<body>` (doar jetonul `clase_body` pe `class`-ul lui `<body>`) și niciuna `interior`
+într-un element cu text brut sau RCDATA (`script`, `style`, `textarea`, `title`, `noscript`, `iframe`, `xmp`…), în afara lui
+`<script type="application/ld+json">`.
 
 ### Rutele
 
@@ -171,8 +186,17 @@ lipsește, fără excepții, fără scripturi inline.
 `HtmlCapturat\SchemaDivi4` primește atributele `data-*` ale markupului WooCommerce și Divi pe care le poartă documentele magazinului
 (`data-events` JSON; `data-columns`, `data-priority`, `data-product_id`, `data-product_sku`, `data-quantity`, `data-placeholder`
 scalare), atributele regiunilor (`REGIUNI_ATRIBUTE`: `data-events`, `class`), forma jetonului unei regiuni (`RE_JETON_REGIUNE`) și
-clasele corpului (`CLASE_BODY`). Doar lărgesc politica pentru documentele care au aceste atribute; niciun document de azi nu se
-schimbă.
+clasele corpului (`CLASE_BODY`). Runda 1 de reparații (SPEC-A-03) adaugă, adunate cu `Divi4::transforma` și politica `import` de
+pe toate documentele capturii reale (doar numele, unealta în afara repo-ului): `data-checkout-session` și `data-parsley-names`
+(JSON); `data-cart-item-key`, `data-coupon`, `data-input-classes`, `data-label`, `data-installed`, `data-order_button_text`,
+`data-payment-method-type`, `data-count`, `data-automation-id`, `data-value`, `data-parsley-errors-container`, `data-toggle`,
+`data-shortcode_index`, `data-mdb-original-title` (text fără `<`, ca `data-title`), `data-mdb-tooltip-init`,
+`data-mdb-tooltip-initialized`, `data-start`, `data-end` (scalare). `HtmlCapturat::TAGURI_HTML` primește singurul element
+personalizat al formularelor WooCommerce, `<wc-order-attribution-inputs>` (gol; fără scriptul atribuirii comenzii, care nu se
+portează, e inert). După ele, pe documentele capturii reale (cu scripturile necunoscute scoase), politica nu mai refuză coșul,
+checkout-ul, contul sau paginile simple; rămân doar documentele care nu sunt pagini (foile XSL ale sitemap-urilor, oEmbed) și
+iframe-urile din afara listei albe (pista C). Doar lărgesc politica pentru documentele care au aceste atribute; niciun document
+de azi nu se schimbă.
 
 ### Pluginurile noi și migrările rezervate
 

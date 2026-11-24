@@ -31,8 +31,14 @@ use Throwable;
  */
 final class ScriereCapturata
 {
-    public const TABELE = ['pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat', 'galerii_capturate', 'galerii_capturate_elemente',
-        'regiuni_capturate'];
+    public const TABELE = ['pagini_capturate', 'fragmente_capturate', 'raspunsuri_inghetate', 'formulare_compat', 'galerii_capturate', 'galerii_capturate_elemente'];
+
+    /**
+     * Tabelul regiunilor dinamice (nucleu/0072, pista A), verificat separat de TABELE (nucleu/0070): o bază cu codul nou, încă
+     * nemigrată (înainte de `php scripts/migreaza.php --aplica`), are capturile și conflictele lor, dar nu regiunile; mesajul ei
+     * (lipsa()) numește migrarea care lipsește (INERT-2).
+     */
+    public const TABELE_REGIUNI = ['regiuni_capturate'];
 
     /** Coloanele unui document acoperite de amprenta lui. */
     public const COLOANE_DOC = ['tip', 'page_id', 'cale', 'status', 'html_atribute', 'cap_html', 'body_atribute', 'inainte', 'continut', 'dupa', 'antet', 'subsol',
@@ -44,8 +50,35 @@ final class ScriereCapturata
 
     public static function disponibil(PDO $db): bool
     {
+        return self::tabeleExista($db, self::TABELE);
+    }
+
+    /** Tabelul regiunilor dinamice (nucleu/0072) există? */
+    public static function disponibilRegiuni(PDO $db): bool
+    {
+        return self::tabeleExista($db, self::TABELE_REGIUNI);
+    }
+
+    /**
+     * Ce lipsește din bază pentru drumul capturat, cu migrarea care îl aduce și comanda, sau null: întâi tabelele capturii
+     * (nucleu/0070), apoi tabelul regiunilor (nucleu/0072).
+     */
+    public static function lipsa(PDO $db): ?string
+    {
+        if (!self::disponibil($db)) {
+            return 'baza site-ului n-are tabelele capturii (migrarea nucleu/0070: pagini_capturate…): php scripts/migreaza.php --aplica';
+        }
+        if (!self::disponibilRegiuni($db)) {
+            return 'baza site-ului n-are tabelul regiunilor dinamice (migrarea nucleu/0072: regiuni_capturate): php scripts/migreaza.php --aplica';
+        }
+        return null;
+    }
+
+    /** @param list<string> $tabele */
+    private static function tabeleExista(PDO $db, array $tabele): bool
+    {
         try {
-            foreach (self::TABELE as $t) {
+            foreach ($tabele as $t) {
                 $db->query('SELECT 1 FROM ' . $t . ' LIMIT 1');
             }
             return true;
@@ -292,16 +325,22 @@ final class ScriereCapturata
         }
         $cale = (string) ($doc['cale'] ?? ($doc['valori_import']['cale'] ?? '/'));
         $problemeCaptura = null;
+        // Un singur context pentru tot documentul (ca la o cerere, CadruCapturat::randeaza): clasele corpului și titlul cerute de o
+        // regiune le văd și celelalte, iar la sfârșit se compară cu cele capturate (SPEC-A-07). Starea e a capturii (aceeași pentru
+        // toate regiunile documentului: contextul tăierii).
+        $prima = $t->regiuni[0];
+        $comun = new ContextRegiune($db, $cheie, $cale, [], 'GET', is_array($prima['stare'] ?? null) ? $prima['stare'] : []);
         foreach ($t->regiuni as $r) {
             $id = (string) $r['regiune'];
-            $ctx = (new ContextRegiune($db, $cheie, $cale, [], 'GET', is_array($r['stare']) ? $r['stare'] : []))
-                ->pentru($id, (int) $r['n'], Regiuni::cache($id), (string) $r['mod'], isset($r['atribut']) ? (string) $r['atribut'] : null);
-            $pb = Regiuni::dovada($id, (string) $r['octeti'], $ctx, $norm);
+            $ctx = $comun->pentru($id, (int) $r['n'], Regiuni::cache($id), (string) $r['mod'], isset($r['atribut']) ? (string) $r['atribut'] : null,
+                (string) $r['octeti']);
+            $iesire = '';
+            $pb = Regiuni::dovada($id, (string) $r['octeti'], $ctx, $norm, $iesire);
             if ($pb !== null) {
                 return 'regiunea ' . $id . ':' . $r['n'] . ': ' . $pb;
             }
             // Politica pe ieșirea randatorului, în documentul ei: nicio problemă în plus față de captură.
-            $iesire = (string) Regiuni::randator($id)?->randeaza($ctx);
+            $iesire = (string) $iesire;
             if ($r['mod'] === 'atribut' && !Regiuni::valoareAtributSigura($iesire)) {
                 return 'regiunea ' . $id . ':' . $r['n'] . ': ieșirea randatorului nu se poate pune între ghilimelele atributului ' . $r['atribut'];
             }
@@ -322,6 +361,42 @@ final class ScriereCapturata
                 if ($n > ($problemeCaptura[$k] ?? 0)) {
                     return 'regiunea ' . $id . ':' . $r['n'] . ': ieșirea randatorului are o problemă de politică (HtmlCapturat): ' . explode("\0", $k)[1];
                 }
+            }
+        }
+        return self::dovadaJetoaneDocument($comun, $t->valori);
+    }
+
+    /**
+     * Jetoanele documentului după toate regiunile lui (SPEC-A-07): clasele corpului (`{{ax:clase_body}}`, ca listă de clase) și titlul
+     * (`{{ax:titlu}}`, ca text) cerute de randatori, cu starea capturii, trebuie să fie cele capturate; o cerere fără jetonul ei în
+     * document (nicio regulă `clase_body` sau `titlu`) e NU, fiindcă la o cerere n-ar avea unde ajunge. null = dovedite.
+     *
+     * @param array<string, string> $valori valorile de la import ale tăierii (octeții capturați ai jetoanelor)
+     */
+    public static function dovadaJetoaneDocument(ContextRegiune $ctx, array $valori): ?string
+    {
+        $clase = static fn (string $v): array => array_values(array_filter(preg_split('/[\t\n\f\r ]+/', $v) ?: [], static fn (string $c): bool => $c !== ''));
+        if ($ctx->cereClaseBody()) {
+            if (!isset($valori['clase_body'])) {
+                return 'regiunile cer clase ale corpului, dar documentul n-are jetonul {{ax:clase_body}} (regula „clase_body” lipsește)';
+            }
+            $final = $clase($ctx->claseBody((string) $valori['clase_body']));
+            $capturate = $clase((string) $valori['clase_body']);
+            if ($final !== $capturate) {
+                $lipsa = array_values(array_diff($capturate, $final));
+                $inPlus = array_values(array_diff($final, $capturate));
+                return 'clasele corpului cerute de regiuni, cu starea capturii, nu sunt cele capturate (lipsă: ' . ($lipsa === [] ? '-' : implode(' ', $lipsa))
+                    . '; în plus: ' . ($inPlus === [] ? '-' : implode(' ', $inPlus)) . ')';
+            }
+        }
+        if ($ctx->cereTitlu()) {
+            if (!isset($valori['titlu'])) {
+                return 'o regiune cere un titlu, dar documentul n-are jetonul {{ax:titlu}} (regula „titlu” lipsește)';
+            }
+            $text = static fn (string $v): string => html_entity_decode($v, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            if ($text($ctx->titluFinal((string) $valori['titlu'])) !== $text((string) $valori['titlu'])) {
+                return 'titlul cerut de regiuni, cu starea capturii, nu e cel capturat („' . mb_substr($text($ctx->titluFinal((string) $valori['titlu'])), 0, 80)
+                    . '” în loc de „' . mb_substr($text((string) $valori['titlu']), 0, 80) . '”)';
             }
         }
         return null;

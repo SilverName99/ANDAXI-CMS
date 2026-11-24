@@ -16,8 +16,13 @@ namespace App\Support\CadruCapturat;
  *    refuză, iar cât randează, Regiuni::randeaza îi dă un `$_SESSION` gol, desprins de sesiune (o scriere în el, o sesiune pornită sau
  *    închisă = EroareJeton, 500); pe una cu `sesiune`, documentul pleacă cu `Cache-Control: no-store, private`, ca orice document cu
  *    regiuni randat cu o sesiune pornită (CadruCapturat::raspunde);
- *  - dovada (la import și în teste): cu starea capturii (ContextRegiune::stare), ieșirea normalizată (normalizeaza) trebuie să fie
- *    octeții capturați normalizați la fel; altfel NU, cu primul octet diferit.
+ *  - octeții capturați ai regiunii îi dă ContextRegiune::capturat() (de exemplu clasele Divi ale unui modul al coșului); clasele
+ *    corpului și titlul le cere prin ContextRegiune (comune tuturor regiunilor documentului);
+ *  - dovada (la import și în teste): cu starea capturii (ContextRegiune::stare), ieșirea trebuie să fie octeții capturați, după
+ *    Captura\Normalizare și normalizările declarate de randator, alese doar din lista închisă Regiuni::NORMALIZARI (id-urile
+ *    `quantity_<uniqid>`, nonce-urile după numele câmpului, cheile rândurilor coșului WooCommerce, blocurile reCAPTCHA și de
+ *    atribuire a comenzii, care există doar pe live); altfel NU, cu primul octet diferit. Clasele corpului și titlul de la sfârșitul
+ *    dovezii documentului trebuie să fie cele capturate.
  */
 interface Randator
 {
@@ -25,8 +30,10 @@ interface Randator
     public function randeaza(ContextRegiune $ctx): string;
 
     /**
-     * Normalizarea declarată a câmpurilor volatile ale regiunii (nonce-urile, cheile rândurilor coșului WooCommerce, id-urile
-     * `quantity_<uniqid>`), aplicată la dovadă ambelor părți, după Captura\Normalizare. Fără câmpuri volatile: textul neschimbat.
+     * Normalizările câmpurilor volatile ale regiunii, aplicate la dovadă ambelor părți: chei din lista închisă Regiuni::NORMALIZARI
+     * (`quantity_uniqid`, `nonce:<numele câmpului>`, `cheie_cos`, `recaptcha`, `atribuire_comanda`). Fără câmpuri volatile: [].
+     *
+     * @return list<string>
      */
-    public function normalizeaza(string $html): string;
+    public function normalizari(): array;
 }

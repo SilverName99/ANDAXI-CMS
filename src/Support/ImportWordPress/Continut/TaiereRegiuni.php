@@ -21,10 +21,20 @@ use InvalidArgumentException;
  * Selectorii sunt cei din gramatica închisă SchemaDivi4::selectorSigur, potriviți pe elementele HTML ale constructorului arborelui
  * (Tokenizer::analizeaza): un nume de tag, `#id`, `.clasă`, legate prin spații (descendent) și „>” (copil). Fail-closed:
  *  - o regulă care nu găsește nimic, un element fără tagul lui de închidere (sau mutat de parser), un atribut lipsă, dublat sau fără
- *    ghilimele, un titlu cu taguri în el, două locuri care se suprapun sau unul într-un fragment (antet, subsol, banner) = NU.
+ *    ghilimele, un titlu cu taguri în el, două locuri care se suprapun sau unul într-un fragment (antet, subsol, banner) = NU;
+ *  - o regiune pe `<html>`, `<head>` sau `<body>` = NU (SPEC-A-08: atributele lor și interiorul lor întreg nu sunt bucăți ale
+ *    documentului; pe `class`-ul lui `<body>` stă doar jetonul `clase_body`);
+ *  - o regiune `interior` într-un element cu text brut sau RCDATA (Tokenizer::TEXT_BRUT, Tokenizer::RCDATA: script, style, textarea,
+ *    title, noscript, iframe, xmp…) = NU (SEC-A5: o ieșire cu `</script>` ar închide elementul), în afară de
+ *    `<script type="application/ld+json">`, unde ieșirea vine din Regiuni::jsonScript (și cadrul refuză un `<` acolo, la randare).
+ *
+ * Potrivirea selectorilor e memoizată pe (element, compus): O(N·D·m), nu exponențială în numărul de spații (SEC-A6).
  */
 final class TaiereRegiuni
 {
+    /** Elementele pe care nu stă nicio regiune (doar jetonul `clase_body` pe `class`-ul lui `<body>`). */
+    public const FARA_REGIUNI = ['html', 'head', 'body'];
+
     /**
      * Locurile tuturor regulilor într-un document: regiunile (id, numărul în document, felul, atributul, intervalul `[start, end)`
      * al octeților capturați, indexul tagului) și jetoanele, în ordinea documentului; plus problemele.
@@ -59,6 +69,16 @@ final class TaiereRegiuni
             foreach ($gasite as $k) {
                 $t = $tk[$k];
                 $mod = (string) ($r['mod'] ?? 'interior');
+                if (($r['jeton'] ?? null) === null && in_array($t->nume, self::FARA_REGIUNI, true)) {
+                    $probleme[] = $et . ': o regiune nu poate sta pe <' . $t->nume . '> (în afara bucăților documentului; pe class-ul lui <body> stă doar jetonul clase_body)';
+                    continue;
+                }
+                if (($r['jeton'] ?? null) === null && $mod === 'interior' && (in_array($t->nume, Tokenizer::TEXT_BRUT, true) || in_array($t->nume, Tokenizer::RCDATA, true))
+                    && !self::jsonLd($h, $t)) {
+                    $probleme[] = $et . ': <' . $t->nume . '> de la octetul ' . $t->start . ' are text brut: o regiune în el ar putea ieși din element (doar '
+                        . '<script type="application/ld+json">, cu Regiuni::jsonScript)';
+                    continue;
+                }
                 if (($r['jeton'] ?? null) === 'titlu' || $mod === 'interior') {
                     $p = Tokenizer::pereche($tk, $k);
                     if ($p === null || $t->mutat) {
@@ -211,24 +231,30 @@ final class TaiereRegiuni
             return true;
         };
         $ultim = count($compusi) - 1;
-        $urca = static function (int $k, int $i) use (&$urca, $compusi, $legaturi, $parinti, $potriveste): bool {
-            if (!$potriveste($k, $compusi[$i])) {
-                return false;
+        // Memoizat pe (element, compus): fiecare pereche se calculează o dată (SEC-A6; fără memorie, un lanț de descendenți pe
+        // elemente imbricate e exponențial).
+        $memorie = [];
+        $urca = static function (int $k, int $i) use (&$urca, &$memorie, $compusi, $legaturi, $parinti, $potriveste): bool {
+            if (isset($memorie[$i][$k])) {
+                return $memorie[$i][$k];
             }
-            if ($i === 0) {
-                return true;
-            }
-            $p = $parinti[$k] ?? null;
-            if ($legaturi[$i - 1] === '>') {
-                return $p !== null && $urca($p, $i - 1);
-            }
-            while ($p !== null) {
-                if ($urca($p, $i - 1)) {
-                    return true;
+            $rez = false;
+            if ($potriveste($k, $compusi[$i])) {
+                if ($i === 0) {
+                    $rez = true;
+                } else {
+                    $p = $parinti[$k] ?? null;
+                    if ($legaturi[$i - 1] === '>') {
+                        $rez = $p !== null && $urca($p, $i - 1);
+                    } else {
+                        while ($p !== null && !$rez) {
+                            $rez = $urca($p, $i - 1);
+                            $p = $parinti[$p] ?? null;
+                        }
+                    }
                 }
-                $p = $parinti[$p] ?? null;
             }
-            return false;
+            return $memorie[$i][$k] = $rez;
         };
         $rez = [];
         foreach ($tk as $k => $t) {
@@ -237,6 +263,16 @@ final class TaiereRegiuni
             }
         }
         return $rez;
+    }
+
+    /** `<script type="application/ld+json">` (tipul fără diferență de litere și fără spațiile de la margini)? */
+    private static function jsonLd(string $h, Token $t): bool
+    {
+        if ($t->nume !== 'script') {
+            return false;
+        }
+        $tip = $t->valoare($h, 'type');
+        return $tip !== null && strtolower(trim(html_entity_decode($tip, ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \t\n\f\r")) === 'application/ld+json';
     }
 
     /**

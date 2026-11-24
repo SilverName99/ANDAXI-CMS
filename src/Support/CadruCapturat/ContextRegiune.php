@@ -16,8 +16,14 @@ use PDO;
  *  - `sesiune()`: datele sesiunii, doar pentru o regiune cu `cache` = `sesiune` (altfel \LogicException: o regiune a unei pagini
  *    care poate sta în cache nu citește sesiunea, deci niciun document din cache nu are date de sesiune);
  *  - `stare()`: starea arătată de captură (de exemplu „coșul cu produsul P, cantitatea 1”), doar la dovadă; null la o cerere;
+ *  - `capturat()`: octeții capturați ai regiunii (din `regiuni_capturate` la o cerere, din tăiere la dovadă), de exemplu lista
+ *    claselor Divi a unui modul al coșului, la care randatorul adaugă sau scoate `et_pb_wc_cart_empty`;
  *  - `adaugaClasaBody()`, `scoateClasaBody()`: clasele corpului, doar din lista închisă SchemaDivi4::CLASE_BODY;
- *  - `titlu()`: titlul paginii (endpointurile contului), text simplu (scăpat aici).
+ *  - `titlu()`: titlul paginii (endpointurile contului), text simplu (scăpat aici, cu `{` ca `&#123;`: un `{{ax:` din date rămâne
+ *    text, ca la Jetoane::scapa).
+ *
+ * Toate regiunile unui document primesc clone ale aceluiași context (pentru()), deci clasele corpului și titlul cerute de una se
+ * văd la toate; la dovadă, valorile finale se compară cu cele capturate (ScriereCapturata::dovadaRegiuni).
  */
 final class ContextRegiune
 {
@@ -26,6 +32,7 @@ final class ContextRegiune
     private string $cache = 'pagina';
     private string $mod = 'interior';
     private ?string $atribut = null;
+    private string $capturat = '';
 
     /** Starea comună a documentului (clasele corpului, titlul), aceeași pentru toate regiunile lui. */
     private \stdClass $comun;
@@ -50,9 +57,9 @@ final class ContextRegiune
 
     /**
      * Același context, pentru regiunea dată: id-ul, numărul ei în document, felul cache-ului din Regiuni::CATALOG, modul (`interior`
-     * sau `atribut`) și, la `atribut`, numele atributului (din `regiuni_capturate`: `fel`, `atribut`).
+     * sau `atribut`), la `atribut` numele atributului și octeții ei capturați (din `regiuni_capturate`: `fel`, `atribut`, `octeti`).
      */
-    public function pentru(string $regiune, int $n, string $cache, string $mod = 'interior', ?string $atribut = null): self
+    public function pentru(string $regiune, int $n, string $cache, string $mod = 'interior', ?string $atribut = null, string $capturat = ''): self
     {
         $c = clone $this;
         $c->regiune = $regiune;
@@ -60,7 +67,14 @@ final class ContextRegiune
         $c->cache = $cache;
         $c->mod = $mod === 'atribut' ? 'atribut' : 'interior';
         $c->atribut = $c->mod === 'atribut' ? $atribut : null;
+        $c->capturat = $capturat;
         return $c;
+    }
+
+    /** Octeții capturați ai regiunii (interiorul elementului sau valoarea atributului), la o cerere și la dovadă. */
+    public function capturat(): string
+    {
+        return $this->capturat;
     }
 
     public function regiune(): string
@@ -132,10 +146,22 @@ final class ContextRegiune
         unset($this->comun->adauga[$clasa]);
     }
 
-    /** Titlul paginii (`{{ax:titlu}}`), ca text simplu. */
+    /** Titlul paginii (`{{ax:titlu}}`), ca text simplu (scăpat; `{` ca `&#123;`, ca Jetoane::scapa: titlul trece prin jetoane). */
     public function titlu(string $text): void
     {
-        $this->comun->titlu = Regiuni::html($text);
+        $this->comun->titlu = str_replace('{', '&#123;', Regiuni::html($text));
+    }
+
+    /** A cerut vreo regiune a documentului clase ale corpului? (dovada: un document fără `{{ax:clase_body}}` nu le poate pune) */
+    public function cereClaseBody(): bool
+    {
+        return $this->comun->adauga !== [] || $this->comun->scoate !== [];
+    }
+
+    /** A cerut vreo regiune a documentului un titlu? (dovada: un document fără `{{ax:titlu}}` nu îl poate pune) */
+    public function cereTitlu(): bool
+    {
+        return is_string($this->comun->titlu);
     }
 
     /**

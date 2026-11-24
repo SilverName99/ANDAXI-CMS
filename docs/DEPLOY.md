@@ -1175,7 +1175,8 @@ documentului capturat al cărui interior, sau valoarea unui atribut, îl randeaz
 foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de articole, calendarul). Restul documentului rămâne T.
 
 - **Regulile** stau în pachet: `import-wordpress.json` → `regiuni`, o listă de `{"document", "selector", "regiune", "mod",
-  "atribut"}` (`document`: o cale „/…/”, `404`, `produs:*` sau un șablon, `sablon:articol`, `sablon:categorie`, `sablon:cautare`;
+  "atribut"}` (`document`: o cale „/…/”, `404`, `produs:*` sau un șablon, `sablon:articol`, `sablon:categorie`, `sablon:cautare`,
+  `sablon:comanda`;
   `mod`: `interior`, implicit, sau `atribut`, cu `atribut` = `data-events` sau `class`), plus `{"document", "jeton": "clase_body"}`
   și `{"document", "selector", "jeton": "titlu"}`. Selectorii au o gramatică închisă (`SchemaDivi4::selectorSigur`: taguri, `#id`,
   `.clasă`, legate prin spații și `>`; fără atribute, pseudo-clase, `*`, virgule, `+`, `~`, escapări), iar randatorii o listă
@@ -1183,7 +1184,13 @@ foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de artico
   formă de selector, o cheie necunoscută sau aceeași regulă de două ori sunt refuzate de `verifica-pachet.php` și de import, pe
   fiecare document cu reguli: o regulă greșită nu se ignoră în tăcere. Același element poate avea o regiune pe interior și una pe
   `class`. Regulile pe paginile al căror nume ține de site și adresele documentelor-șablon (`sabloane`: un articol, o categorie,
-  un termen de căutare) stau în `privat/import-wordpress.json`; regulile de acolo se adaugă celor publice.
+  un termen de căutare, o comandă primită) stau în `privat/import-wordpress.json`; regulile de acolo se adaugă celor publice.
+- **Documentele noi ale capturii**: o adresă capturată sub baza produselor WooCommerce (`/product/<slug>/`,
+  `PlanCapturat::RE_PRODUS`) e documentul `produs` (cheia `produs:<sha16>`, regulile `produs:*`), nu o arhivă; fiecare intrare din
+  `sabloane` dă documentul `sablon_<fel>` (cheia `sablon:<fel>`, fără cale: nu se servește la o adresă), din captura adresei lui,
+  cu regulile `sablon:<fel>`. O adresă din `sabloane` care nu e în captură, sau nu e 200, e NU; o regulă `produs:*` (ori
+  `sablon:<fel>`) care nu ajunge la niciun document, deși captura are pagini de produs (ori șablonul e în `sabloane`), e NU
+  (regiunea ar rămâne înghețată); fără ele, doar o atenționare.
 - **Tăierea** (`Divi4Taiere` cu `TaiereRegiuni`): pasul 5a nu atinge nimic din interiorul unei regiuni. Pe T, fiecare loc primește
   jetonul `{{ax:regiune:<id>:<n>}}` (`n`: al câtelea loc al aceluiași randator în document) printr-o editare `Html5\Editare`, care
   verifică efectul în arbore; `{{ax:clase_body}}` intră în valoarea lui `class` de pe `<body>`, `{{ax:titlu}}` în interiorul
@@ -1192,17 +1199,29 @@ foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de artico
   Refuzate (NU, pe documentul lor): o regulă care nu găsește nimic, o regulă pe o cale fără document importat (pagina ar rămâne
   înghețată în starea capturii), un element fără tagul lui de închidere sau mutat de parser, un atribut lipsă, dublat sau fără
   ghilimele, un titlu cu taguri, două locuri care se suprapun, un loc într-un fragment (antetul, subsolul și bannerul sunt comune
-  mai multor documente). Fără reguli `regiuni` (toate site-urile de azi), tăierea e cea de dinainte.
+  mai multor documente), o regiune pe `<html>`, `<head>` sau `<body>` sau în afara capului și a corpului (atributele lui `<html>` și
+  `<body>` se copiază întocmai, deci jetonul n-ar ajunge în pagină; pe `class`-ul lui `<body>` stă doar `{{ax:clase_body}}`), o
+  regiune `interior` într-un element cu text brut sau RCDATA (`script`, `style`, `textarea`, `title`, `noscript`, `iframe`, `xmp`…:
+  o ieșire cu `</script>` ar închide elementul), în afara lui `<script type="application/ld+json">`, unde ieșirea vine din
+  `Regiuni::jsonScript` (JSON cu `<`, `>`, `&`, ghilimelele codate). Potrivirea selectorilor e memoizată (fiecare pereche element ×
+  compus o dată), deci un lanț lung de descendenți nu încetinește importul. Fără reguli `regiuni` (toate site-urile de azi), tăierea
+  e cea de dinainte.
 - **Dovada** (la import, după P1): fiecare randator, cu starea capturii, dă octeții capturați după normalizarea declarată
-  (`Captura\Normalizare`, apoi `Randator::normalizeaza` pe ambele părți: nonce-urile, cheile rândurilor coșului, id-urile
-  `quantity_<uniqid>`); altfel NU, cu primul octet diferit, și nimic scris. Ieșirea lui, pusă în documentul așteptat, nu aduce nicio
-  problemă nouă a politicii HTML-ului capturat, iar ieșirea unui atribut se poate pune între ghilimele. Un randator încă
-  neconstruit (clasa lui din catalog nu există) n-are dovadă: un document cu regiunea lui nu se poate importa.
+  (`Captura\Normalizare`, apoi normalizările randatorului pe ambele părți, alese doar din lista închisă `Regiuni::NORMALIZARI`:
+  `quantity_uniqid`, `nonce:<numele câmpului>`, `cheie_cos`, `recaptcha`, `atribuire_comanda`; una din afara ei e NU); altfel NU, cu
+  primul octet diferit, și nimic scris. Toate regiunile unui document trec prin același `ContextRegiune`, ca la o cerere, iar la
+  sfârșit clasele corpului și titlul cerute de ele trebuie să fie cele capturate (o cerere fără jetonul ei în document e tot NU).
+  Ieșirea lui, pusă în documentul așteptat, nu aduce nicio problemă nouă a politicii HTML-ului capturat, iar ieșirea unui atribut se
+  poate pune între ghilimele. Un randator încă neconstruit (clasa lui din catalog nu există) n-are dovadă: un document cu regiunea
+  lui nu se poate importa. O bază fără `regiuni_capturate` (codul nou, baza încă nemigrată) oprește importul capturat cu mesajul
+  migrării `nucleu/0072` și comanda `php scripts/migreaza.php --aplica` (la fel `verifica-randare.php --capturat` și planul), iar
+  tabelele capturii (`nucleu/0070`) și conflictele lor rămân vizibile.
 - **Randarea** (CadruCapturat): la o cerere, fiecare jeton de regiune primește ieșirea randatorului (`Regiuni::randeaza`, cu
-  `ContextRegiune`: baza, documentul, calea, query-ul, metoda, modul, atributul); bucățile dintre regiuni se rezolvă fiecare, în
+  `ContextRegiune`: baza, documentul, calea, query-ul, metoda, modul, atributul și octeții capturați ai regiunii, `capturat()`, din
+  `regiuni_capturate`); jetoanele se caută în toate bucățile documentului, și în atributele lui `<html>` și `<body>`. Bucățile dintre regiuni se rezolvă fiecare, în
   aceeași singură trecere a jetoanelor, iar ieșirile se pun între ele nerezolvate, deci un `{{ax:` din datele cererii sau ale unui
-  client rămâne text. O valoare de atribut cu ghilimele, `<` sau un `&` care nu e o referință, un jeton de regiune nedeclarat
-  pentru document, un randator lipsă: 500 și nimic din pagină. La P1, la previzualizare și la verificarea salvării din editor se pun
+  client rămâne text. O valoare de atribut cu ghilimele, `<` sau un `&` care nu e o referință, o ieșire cu `<` într-un `<script>`
+  (JSON-LD), un jeton de regiune nedeclarat pentru document, un randator lipsă: 500 și nimic din pagină. La P1, la previzualizare și la verificarea salvării din editor se pun
   octeții capturați (niciun randator nu rulează); o regiune nedeclarată pentru pagină e refuzată la salvare.
 - **Cache-ul**: fiecare randator e `pagina` sau `sesiune`. Un document cu o regiune `sesiune` pleacă `Cache-Control: no-store,
   private` și nu se scrie în cache-ul de pagini (`X-Page-Cache: BYPASS`). Un randator `pagina` (documentul lui poate sta în cache)
@@ -1214,7 +1233,8 @@ foaia capturată să-l stilizeze (coșul, checkout-ul, contul, listele de artico
   vin din aceeași citire a adresei ca cheia cache-ului (`CadruCapturat::cerereCitita`; N6 din [SECURITATE.md](SECURITATE.md)).
 - **Clasele corpului și titlul**: `{{ax:clase_body}}` dă clasele capturate, neschimbate, cât nicio regiune nu cere altceva; o regiune
   poate adăuga sau scoate doar clase din lista închisă `SchemaDivi4::CLASE_BODY` (`logged-in`, `woocommerce-account`,
-  `woocommerce-<endpoint>`…), puse la sfârșit. `{{ax:titlu}}` dă titlul capturat sau pe cel cerut de o regiune, ca text scăpat.
+  `woocommerce-<endpoint>`…), puse la sfârșit. `{{ax:titlu}}` dă titlul capturat sau pe cel cerut de o regiune, ca text scăpat
+  (cu `{` ca `&#123;`, deci un `{{ax:` din datele cererii rămâne text, oricum ar fi scris).
 
 Poarta: **G-regiuni** (`tools/dev/test-regiuni.php`), pe o captură inventată și randatori de probă (`proba:*`, încărcați doar de
 uneltele de dezvoltare).
