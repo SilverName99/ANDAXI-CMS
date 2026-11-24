@@ -66,6 +66,11 @@ final class ResponseCache
         if (strtoupper(trim($method)) !== 'GET') {
             return $disabled;
         }
+        // N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate calea
+        // ei nu citește și nu scrie cache-ul (adresaCuCheie); altfel ar primi cheia primei pagini.
+        if (!self::adresaCuCheie($requestUri)) {
+            return $disabled;
+        }
 
         $path = self::normalizePathFromUri($requestUri);
         if ($path === '' || self::isPathExcluded($path, $settings)) {
@@ -629,10 +634,30 @@ final class ResponseCache
         return preg_match($regex, $safePath) === 1;
     }
 
+    /**
+     * N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): adresa cererii poate avea o pagină în cache? Cheia
+     * e calea și query-ul citite de parse_url, deci doar dacă parse_url scoate din ea calea ei. Nu: o adresă refuzată de
+     * parse_url („/x:1/?s=…”: un „:cifre” urmat de „/” pare un port; calea și query-ul ieșeau „/” și gol, iar `$_GET` rămânea
+     * al cererii), una fără cale („//x?s=…”) și una cu o gazdă fără schemă („//cos/”: gazda „cos” și calea „/”, adică cheia
+     * primei pagini, deși restul codului vede calea „//cos/”). Forma absolută („http://gazda/cale”) își păstrează calea.
+     */
+    public static function adresaCuCheie(string $requestUri): bool
+    {
+        $parti = parse_url($requestUri);
+        if (!is_array($parti) || !is_string($parti['path'] ?? null)) {
+            return false;
+        }
+        return !isset($parti['host']) || isset($parti['scheme']);
+    }
+
     private static function normalizePathFromUri(string $requestUri): string
     {
         $path = parse_url($requestUri, PHP_URL_PATH);
-        if (!is_string($path) || trim($path) === '') {
+        if (!is_string($path)) {
+            // N6: nicio cale citită (adresaCuCheie), deci nicio cheie; niciodată „/”, cheia primei pagini.
+            return '';
+        }
+        if (trim($path) === '') {
             return '/';
         }
         $path = rtrim($path, '/');

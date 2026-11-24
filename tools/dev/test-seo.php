@@ -13,7 +13,8 @@ declare(strict_types=1);
  *    fiecare adresă „mereu deschisă” din catalogul pluginurilor, fiecare rută de
  *    plată, cont, admin, API, plus seo.json), harta (pachetul demo și pachetul
  *    Bioscem: format, ținte, lanțuri și bucle), robots, JSON-LD, etichetele din
- *    sitemap.
+ *    sitemap; N6: nicio rută și nicio cheie în cache-ul de pagini pentru o adresă
+ *    din care parse_url nu scoate o cale (docs/SECURITATE.md).
  * B. Pe serverul de dezvoltare (APP_URL pe http, deci fără regula de gazdă):
  *    „/” final, bare duble, majuscule, harta (lanț, buclă, 410, țintă pe alt
  *    site, sursă exclusă, pagină existentă, parametrii păstrați), POST și HEAD,
@@ -573,6 +574,35 @@ $verifica('fără datele unui site: numele implicit din config (APP_NAME), nu �
     DateSite::reseteaza();
     return $ok;
 })());
+
+// A-N6 (docs/SECURITATE.md, „Adresele din care parse_url nu scoate o cale”): o adresă din care parse_url nu scoate o cale (un
+// „:cifre” urmat de „/” sau de sfârșit pare un port; „//x” n-are cale) nu are nicio rută și nicio cheie în cache-ul de pagini;
+// înainte routerul și cheia o citeau ca „/”. Celelalte adrese au exact rutele de până acum.
+$rutaN6 = [
+    '/x:1/?s=n6' => null, '/lista:1/?s=n6' => null, '/a/b:1/c?s=n6' => null, '/x:1' => null, '/x:99999/' => null, '//' => null,
+    '//cos' => null, '//x?s=n6' => null,
+    '/' => '/', '/?s=n6' => '/', '/x:1?s=n6' => '/{slug*}', '/x:/' => '/{slug*}', '/produs/ceai?sort=n6' => '/produs/{slug}', '//cos/' => '/',
+];
+$gresite = [];
+foreach ($rutaN6 as $adresa => $asteptat) {
+    $gasita = $router->gaseste('GET', (string) $adresa);
+    $tipar = $gasita['tipar'] ?? null;
+    if ($tipar !== $asteptat || (Router::caleCerere((string) $adresa) === null) !== ($asteptat === null)) {
+        $gresite[] = $adresa . ' → ' . var_export($tipar, true);
+    }
+}
+$verifica('N6: nicio rută pentru o adresă din care parse_url nu scoate o cale (8 adrese: „/x:1/?s=”, „/a/b:1/c?s=”, „/x:1”, „//x?s=”…, '
+    . 'niciodată „/”); celelalte au rutele de până acum („/x:1?s=” la pagina generală, „//cos/” tot la „/”)', $gresite === [], implode('; ', $gresite));
+$cheieN6 = ['/' => true, '/?page=2' => true, '/x:1?s=n6' => true, '/produs/ceai?sort=n6' => true, 'http://exemplu.test/magazin' => true,
+    '/x:1/?s=n6' => false, '/a/b:1/c?s=n6' => false, '/x:1' => false, '//x?s=n6' => false, '//cos/' => false, 'http://exemplu.test?s=n6' => false];
+$gresite = [];
+foreach ($cheieN6 as $adresa => $asteptat) {
+    if (ResponseCache::adresaCuCheie((string) $adresa) !== $asteptat) {
+        $gresite[] = $adresa;
+    }
+}
+$verifica('N6: cheia cache-ului de pagini doar pentru adresele din care parse_url scoate calea lor (nu „/x:1/…”, „//x”, „//cos/”, '
+    . 'forma absolută fără cale)', $gresite === [], implode('; ', $gresite));
 
 // =====================================================================
 // Serverul de dezvoltare și cererile

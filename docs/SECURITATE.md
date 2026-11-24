@@ -142,3 +142,42 @@ calea PHP (`public/index.php`) și în șabloanele `.htaccess` (`public/.htacces
   decât site-ul).
 
 Pentru paginile obișnuite diferențialul HTTP arată doar aceste antete noi pe `/uploads`.
+
+## Adresele din care parse_url nu scoate o cale (N6, 24 noiembrie 2026)
+
+O revizuire de securitate a găsit o otrăvire a cache-ului de pagini prin forma adresei, pe ambele linii de cod
+(`claude/etapa1-cod-comun` și `claude/pensiune`). `parse_url()` din PHP refuză de tot o adresă ca `/x:1/?s=…`, `/x:1/y?s=…` sau
+`/x:1` (un „:cifre” urmat de „/” sau de sfârșitul căii pare portul unei gazde) și nu găsește nicio cale în `//x?s=…` („x” pare o
+gazdă). Routerul (`App\Http\Router::gaseste`) și cheia cache-ului de pagini (`App\Support\ResponseCache`) luau atunci calea „/” și
+query-ul gol, deci cererea se randa ca prima pagină și se scria în cache sub cheia primei pagini, în timp ce `$_GET` rămânea al
+cererii (serverul web îl ia din adresa întreagă). Cu o singură cerere, oricine putea înlocui prima pagină din cache cu o pagină
+randată pentru adresa lui, la toți vizitatorii, până la expirarea intrării (10 minute la cache-ul extins), și o putea reface oricând.
+Stratul SEO nu oprea asta: repară „/” final și „//” doar când calea curată e alta, iar cache-ul se scrie înaintea redirecționării lui.
+
+Ce ajungea la vizitatori depinde de site. Pe un site capturat (adoptarea WordPress) prima pagină din cache era randată cu calea
+goală, deci formularul de contact din subsolul ei avea `action=""` și nonce-ul căii goale: orice trimitere era refuzată („Te rugăm să
+reîncarci pagina”), iar mesajul nu se scria. Pe celelalte site-uri prima pagină de azi nu citește nimic din `$_GET`, deci intrarea
+avea același conținut; dar `//cos/` (pentru `parse_url` gazda „cos” cu calea „/”, pentru restul codului calea coșului, unde pozele
+nu se optimizează) punea în cache o primă pagină cu pozele fără `width`/`height`. Orice afișare care ar depinde de `$_GET` pe prima
+pagină ar fi fost pusă în cache la fel.
+
+Ce s-a schimbat (același cod pe ambele linii):
+
+- `Router::caleCerere()` (nou): calea citită de `parse_url`, sau null; `Router::gaseste()` nu găsește nicio rută pentru o adresă
+  fără cale (nu mai cade pe „/”).
+- `public/index.php`, după interceptările de dinainte (mentenanța, campaniile…) și înaintea cache-ului de pagini: o adresă fără cale
+  primește răspunsul unei adrese necunoscute — la GET pagina 404 a site-ului (`SiteController::paginaNegasita`, ca ruta generală
+  pentru o pagină care nu există), altfel 404-ul routerului —, cu `Cache-Control: no-store`, fără cache-ul de pagini.
+- `ResponseCache::adresaCuCheie()` (nou), la începutul lui `beginRequest`: o adresă fără cale citită de `parse_url`, ori cu o gazdă
+  fără schemă (`//cos/`), nu citește și nu scrie cache-ul. Forma absolută (`http://gazda/cale`) își păstrează calea și cache-ul.
+- `views/layout.php`: pagina 404 a unei astfel de adrese are calea ei scrisă (până la „?”), nu „/”, deci titlul, descrierea și
+  canonicalul paginii 404, ca orice adresă necunoscută (altfel ar fi luat titlul și descrierea primei pagini).
+
+Adresele obișnuite (cu o cale citită de `parse_url`) merg exact ca înainte: aceleași rute, aceeași cheie, aceeași pagină. Singura
+excepție voită: o adresă care începe cu „//” și pe care stratul SEO n-o repară (căile excluse, de exemplu `//cos/`) își păstrează
+pagina, dar nu mai intră în cache. O cerere în forma absolută fără cale (`GET http://gazda HTTP/1.1`, pe care browserele nu o
+trimit) primește acum 404-ul, ca orice adresă fără cale.
+
+Testele: `tools/dev/test-seo.php`, A (routerul și cheia, fără server) și `tools/dev/lib/test-seo-viteza.php`, E4.2 (pe server, cu
+cache-ul extins pornit: fiecare astfel de adresă dă 404-ul site-ului cu `no-store` și nicio intrare; prima pagină rămâne octet cu
+octet a ei, fără marca din adrese; `?page=` are intrarea lui, `utm_*` și `?s=` ocolesc cache-ul, ca înainte), în poarta G-seo.
