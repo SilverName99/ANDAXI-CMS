@@ -131,7 +131,8 @@ final class CadruCapturat
             }
             $fragmente[$f] = ['html' => (string) $r['html'], 'date' => self::dinJson($r['date']), 'meniu' => self::dinJsonLista($r['meniu'])];
         }
-        if (!isset($fragmente['banner']) && str_contains($continut, self::MANAGER_CMPLZ)) {
+        // Șablonul managerului din Cookie Policy: doar la răspunsul web (P1 și amprenta randării îl opresc, cu `sablon_cmplz` gol).
+        if (!array_key_exists('sablon_cmplz', $cerere) && !isset($fragmente['banner']) && str_contains($continut, self::MANAGER_CMPLZ)) {
             $q = $db->prepare("SELECT html FROM fragmente_capturate WHERE fel = 'banner' ORDER BY cheie LIMIT 1");
             $q->execute();
             $sablon = $q->fetchColumn();

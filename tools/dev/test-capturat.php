@@ -847,6 +847,18 @@ $scrie('== 10. Stilurile după model (StiluriComune::dupaModel, import-wordpress
 }
 
 $scrie('');
+$scrie('== 11. P1 la import: valorile de la import fără adaosurile răspunsului web, mesajul diferenței');
+{
+    $ci = ScriereCapturata::cerereImport(['valori_import' => '{"cale":"/camere/","an":"2026"}']);
+    $verifica('cerereImport: fără trackere (urmarire = []) și fără șablonul managerului Cookie Policy (sablon_cmplz = ""), deci fără fișierul privat',
+        $ci['urmarire'] === [] && $ci['sablon_cmplz'] === '' && $ci['cale'] === '/camere/' && $ci['an'] === '2026', (string) json_encode($ci));
+    $m = ScriereCapturata::diferenta("<head>\n<script id=\"ax-date\">{\"a\":1}</script>", "<head>\n<script id=\"ax-date\">{\"a\":1,\"ax_urmarire\":[]}</script>");
+    $verifica('mesajul P1: octetul primei diferențe, lungimile și câte un fragment din fiecare parte (de la 30 de octeți înainte; rândurile noi ca ⏎)',
+        $m === ' (prima diferență la octetul 34 din 44 așteptați / 61 randați; T: „d>⏎<script id="ax-date">{"a":1}</script>”; randat: „d>⏎<script id="ax-date">{"a":1,"ax_urmarire":[]}</script>”)'
+        && ScriereCapturata::diferenta('x', 'x') === '', $m);
+}
+
+$scrie('');
 $scrie('== 5. Tema::valideaza pe cheile cadrului capturat');
 [$v, $pb] = Tema::valideaza(['cadru' => 'capturat', 'runtime' => 'divi4@1', 'csp' => ['mod' => 'raport', 'img-src' => ['https://poze.example.test/p/']],
     'previzualizare' => [390, 1440]], $lucru . '/pachet');

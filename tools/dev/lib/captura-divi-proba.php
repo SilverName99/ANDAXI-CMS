@@ -26,9 +26,10 @@ if (!defined('WP_PROBA_SITE')) {
 /**
  * O pagină Divi inventată.
  *
- * @param array{cale: string, titlu: string, id: int, formular?: bool, inCorp?: string, seoTitlu?: string, descriere?: string, stil?: string} $pg
+ * @param array{cale: string, titlu: string, id: int, formular?: bool, inCorp?: string, seoTitlu?: string, descriere?: string, stil?: string, faraBanner?: bool} $pg
  *   `seoTitlu`, `descriere`: valorile SEO ale paginii (AIOSEO, din inventar), scrise în head cu escaparea locului lor (ca jetoanele);
- *   `stil`: CSS-ul critic al paginii, în `<style id="et-critical-inline-css">` (Divi pune acolo și regulile subsolului unor pagini)
+ *   `stil`: CSS-ul critic al paginii, în `<style id="et-critical-inline-css">` (Divi pune acolo și regulile subsolului unor pagini);
+ *   `faraBanner`: pagina fără bannerul de cookie-uri (ca pagina Cookie Policy, cu managerul consimțământului)
  * @param array{url: string, nonce: string, ua: string, an: string, antet: int, subsol: int, corp404?: int, meniu: list<array{0: string, 1: string}>,
  *   tip?: string, cale404?: string, credit?: bool} $o
  *   `credit`: în subsol și modulul agenției („Powered by Andaxi Web Solutions”, `et_pb_text_8_tb_footer`, cu legătura Divi prin script)
@@ -101,7 +102,8 @@ function paginaDiviProba(array $pg, array $o): string
         . "<div class=\"cmplz-message\"><p>Folosim cookie-uri pentru statistici.</p></div><div class=\"cmplz-buttons\"><button class=\"cmplz-btn cmplz-accept\">Accept</button>"
         . "<button class=\"cmplz-btn cmplz-deny\">Refuz</button></div></div></div>";
     $corp = "<noscript><iframe src=\"https://www.googletagmanager.com/proba.html?id=GTM-PROBA\" height=\"0\" width=\"0\" hidden></iframe></noscript>\n"
-        . "<div id=\"page-container\">\n<div id=\"et-boc\" class=\"et-boc\">\n" . $antet . "\n" . $continut . $subsol . "\n</div>\n</div>\n</div>\n" . $banner . "\n"
+        . "<div id=\"page-container\">\n<div id=\"et-boc\" class=\"et-boc\">\n" . $antet . "\n" . $continut . $subsol . "\n</div>\n</div>\n</div>\n"
+        . (($pg['faraBanner'] ?? false) ? '' : $banner) . "\n"
         . "<script type=\"speculationrules\">{\"prefetch\":[{\"source\":\"document\",\"where\":{\"href_matches\":\"/*\"},\"eagerness\":\"conservative\"}]}</script>\n"
         . "<script type=\"text/javascript\">\n\t\t\t\tvar et_link_options_data = [{\"class\":\"et_pb_text_0_tb_footer\",\"url\":\"{$j}\\/contact\\/\",\"target\":\"_self\"},"
         . "{\"class\":\"et_pb_text_0\",\"url\":\"{$j}\\/\",\"target\":\"_self\"}" . (($o['credit'] ?? false)

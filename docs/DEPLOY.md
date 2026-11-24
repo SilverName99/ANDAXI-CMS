@@ -953,7 +953,11 @@ pagini, la adresa lui, prin serverul web (200, aceiași octeți): un fișier car
   restul (și 404-ul, cardurile embed ale paginilor importate, arhivele, răspunsurile înghețate, fragmentele, formularele,
   galeriile) tabelele capturii (migrarea `nucleu/0070`), în aceeași tranzacție, cu `hash_import` pe fiecare rând: un rând editat
   de om după importul de dinainte e NU fără `--suprascrie`, ca paginile. **P1 la import:** fiecare document se randează din
-  rândurile abia scrise și se compară cu documentul servit (după normalizarea de comparație); o diferență anulează tot.
+  rândurile abia scrise și se compară cu documentul servit (după normalizarea de comparație); o diferență anulează tot, cu
+  octetul ei, lungimile și câte un fragment din fiecare parte în mesaj. Randarea lui P1 (și a amprentei de după import) e cu
+  valorile de la import, fără adaosurile răspunsului web: trackerele din `privat/urmarire.json` (`ax_urmarire`) și șablonul
+  managerului de pe Cookie Policy (`ax-cmplz-sablon`) le pune cadrul doar la răspuns, deci P1 nu depinde de fișierul privat. Un
+  reimport (același rând, cu `--plan` și `--aplica`) pe o bază deja importată scrie peste rândurile importului de dinainte.
 
 **Captura** (`scripts/captureaza-wordpress.php --url=https://<site> --wp=<dosar> | --lista=<adrese.json>
 --fara-integritate=<motiv> --plan|--aplica`; `App\Support\ImportWordPress\Captura`): cere site-ul live prin HTTP, fără browser,

@@ -212,7 +212,11 @@ try {
                 'stil' => $stilInline[$pg['slug']] ?? '',
                 // Pe Camere, două module text: modelul (et_pb_text_1) și ținta (et_pb_text_2, rămasă cu regulile vechi în foaie; mai jos).
                 'inCorp' => $pg['slug'] === 'camere' ? '<div class="et_pb_module et_pb_text et_pb_text_1"><div class="et_pb_text_inner"><p>45 min</p></div></div>'
-                    . '<div class="et_pb_module et_pb_text et_pb_text_2"><div class="et_pb_text_inner"><p>1h 18min</p></div></div>' : ''];
+                    . '<div class="et_pb_module et_pb_text et_pb_text_2"><div class="et_pb_text_inner"><p>1h 18min</p></div></div>'
+                    // Pe Politica, ca pe Cookie Policy a site-ului real: managerul consimțământului și niciun banner (șablonul
+                    // managerului îl pune cadrul doar la răspunsul web).
+                    : ($pg['slug'] === 'politica-de-confidentialitate' ? '<div id="cmplz-manage-consent-container" class="cmplz-manage-consent-container"></div>' : ''),
+                'faraBanner' => $pg['slug'] === 'politica-de-confidentialitate'];
         }
     }
     $captura = $site . '/capturat';
@@ -273,6 +277,9 @@ try {
     }
     @mkdir($site . '/privat', 0700, true);
     file_put_contents($site . '/privat/import-wordpress.json', json_encode(['scripturi_aruncate' => array_values($aruncate)], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    // Statisticile păstrate (ca pe copie): identificatorii inventați ai trackerelor declarate în tema pachetului. Trackerele intră
+    // în pagină doar la răspunsul web (ax-date → ax_urmarire); P1 la import compară fără ele.
+    file_put_contents($site . '/privat/urmarire.json', json_encode(['gtag' => 'G-PROBA12345', 'gtm' => 'GTM-PROBA12', 'clarity' => 'proba12345']));
     $verifica('WordPress de probă (Divi 4) în public_html, baza lui, captura cu ' . count($fisiere) . ' fișiere cerute de pagini și fontul Google, '
         . count($aruncate) . ' scripturi aruncate în site/privat/', is_file($public . '/wp-config.php') && is_file($captura . '/raport-captura.json') && $aruncate !== []);
 
@@ -293,6 +300,9 @@ try {
     // Stilurile după model ale pachetului sunt ale paginilor site-ului real: aici, regula pentru modulele inventate de pe Camere.
     $regPachet = json_decode((string) file_get_contents($tintaPachet . '/import-wordpress.json'), true);
     $regPachet['stiluri_dupa_model'] = ['/camere/' => [['et_pb_text_2' => 'et_pb_text_1']]];
+    // Adoptarea cu pachetul de dinainte, fără `legaturi` (ca importul de pe copie); regula vine apoi cu un reimport (secțiunea 3b).
+    $legaturiPachet = $regPachet['legaturi'];
+    unset($regPachet['legaturi']);
     file_put_contents($tintaPachet . '/import-wordpress.json', json_encode($regPachet, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
     $manifestP = json_decode((string) file_get_contents($tintaPachet . '/pachet.json'), true);
     $manifestP['site'] = $slug;
@@ -458,18 +468,24 @@ PHP);
     $verifica('paginile (' . count($coduri) . '): 200, din documentele capturate (antetul, subsolul, runtime-ul compat), fără WordPress', array_values(array_unique($coduri)) === [200]
         && str_contains($acasaNou['corp'], 'et-l--header') && str_contains($acasaNou['corp'], '/assets/compat/') && !str_contains($acasaNou['corp'], 'WORDPRESS PROBA')
         && isset($acasaNou['antete']['content-security-policy']), json_encode($coduri) . ' ' . json_encode($acasaNou['antete']) . ' ' . substr($acasaNou['corp'], 0, 600));
-    // Legătura pachetului (import-wordpress.json → legaturi) în subsolul fiecărei pagini și al 404-ului: <a href> pe textul agenției,
-    // fără legătura Divi prin script (et_clickable, intrarea din et_link_options_data).
-    $subsoluri = [];
-    foreach (['/', '/camere/', '/x1-inexistent/'] as $c) {
-        $corp = $cerere($c)['corp'];
-        preg_match('#<script type="application/json" id="ax-date">(.*?)</script>#s', $corp, $mAx);
-        $subsoluri[$c] = str_contains($corp, '<div class="et_pb_module et_pb_text et_pb_text_8_tb_footer  et_pb_text_align_center et_pb_bg_layout_light">')
-            && str_contains($corp, '<p><a href="https://andaxi.ro" style="line-height:inherit">Powered by Andaxi Web Solutions</a></p>') && !str_contains($mAx[1] ?? '', 'et_pb_text_8_tb_footer')
-            && str_contains($mAx[1] ?? '', 'et_pb_text_0_tb_footer');
-    }
-    $verifica('subsolul (pe Acasă, Camere și 404): „Powered by Andaxi Web Solutions” e legătura <a href="https://andaxi.ro">, modulul fără legătura Divi prin script',
-        array_values(array_unique($subsoluri)) === [true], json_encode($subsoluri));
+    // Subsolul fiecărei pagini și al 404-ului: legătura pachetului (import-wordpress.json → legaturi) și legătura Divi prin script.
+    $subsol = static function () use ($cerere): array {
+        $rez = [];
+        foreach (['/', '/camere/', '/x1-inexistent/'] as $c) {
+            $corp = $cerere($c)['corp'];
+            preg_match('#<script type="application/json" id="ax-date">(.*?)</script>#s', $corp, $mAx);
+            $rez[$c] = ['legatura' => str_contains($corp, '<div class="et_pb_module et_pb_text et_pb_text_8_tb_footer  et_pb_text_align_center et_pb_bg_layout_light">')
+                && str_contains($corp, '<p><a href="https://andaxi.ro" style="line-height:inherit">Powered by Andaxi Web Solutions</a></p>')
+                && !str_contains($mAx[1] ?? '', 'et_pb_text_8_tb_footer'), 'divi' => str_contains($corp, 'et_pb_text_8_tb_footer et_clickable')
+                && str_contains($mAx[1] ?? '', '"class":"et_pb_text_8_tb_footer"'), 'subsol' => str_contains($mAx[1] ?? '', 'et_pb_text_0_tb_footer'),
+                'trackere' => str_contains($mAx[1] ?? '', '"ax_urmarire":[{"fel":"gtag"')];
+        }
+        return $rez;
+    };
+    $inainte = $subsol();
+    $verifica('adoptarea cu pachetul de dinainte (fără legaturi): subsolul cu legătura Divi prin script, ca pe live; trackerele din privat/urmarire.json '
+        . 'în ax-date doar la răspuns (P1 la import a trecut cu ele)', array_map(static fn (array $x): array => [$x['legatura'], $x['divi'], $x['subsol'], $x['trackere']], $inainte)
+        === array_fill_keys(['/', '/camere/', '/x1-inexistent/'], [false, true, true, true]), json_encode($inainte));
     $foaie = $cerere('/wp-content/themes/Divi/style.css');
     $font = $cerere('/capturat/fonturi/' . $cheieFont . '.css');
     $verifica('fișierele statice: foaia temei cu adresa proprie relativă, fontul temei, foaia fontului Google, scriptul temei nepublicat',
@@ -515,6 +531,32 @@ PHP);
     $verifica('diagnostic.php --capturat după deschidere: rezultat ok', $c === 0 && str_contains($o, 'rezultat     : ok'), $scurt($o));
     $verifica('WordPress neatins de adoptare (public_html.vechi = arborele de dinainte; baza lui la fel)', $amprentaArbore($dosarSite . '/public_html.vechi') === $amprentaWp
         && $amprentaBaza($bazaWp) === $amprentaBazaWp);
+
+    // ─────────────────────────────────────────────────────────────────
+    $scrie('');
+    $scrie('3b. Reimportul pe baza deja importată (ca pe copie): pachetul cu legaturi, importul --plan și --aplica');
+    $rp = json_decode((string) file_get_contents($site . '/pachet/import-wordpress.json'), true);
+    $rp['legaturi'] = $legaturiPachet;
+    file_put_contents($site . '/pachet/import-wordpress.json', json_encode($rp, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n");
+    // Rândul proprietarului, cu lansatorul cronurilor și WordPress-ul din public_html.vechi.
+    $import = static fn (string $mod): array => $ruleaza(array_merge([PHP_BINARY], $ini, [$acasa . '/platforma/bin/platforma', '--site=' . $domeniu,
+        'scripts/importa-wordpress.php', '--wp=' . $dosarSite . '/public_html.vechi', '--url=' . $url, '--captura=' . $captura, $mod]), '', ['HOME' => $acasa]);
+    [$cI, $oI] = $import('--plan');
+    $verifica('reimportul --plan: cod 0, niciun NU, captura cu aceleași documente', $cI === 0 && !preg_match('/^\s+NU\s/m', $oI) && str_contains($oI, 'captura: documente pagina 6, 404 1'),
+        $scurt($oI));
+    [$cI, $oI] = $import('--aplica');
+    $verifica('reimportul --aplica: GATA, P1 la import trece pe fiecare document (cu trackerele în privat și managerul Cookie Policy fără banner)', $cI === 0
+        && str_contains($oI, 'P1 la import: fiecare document randat din bază = T') && str_contains($oI, 'GATA: importul WordPress e făcut'), $scurt($oI));
+    $dupaReimport = $subsol();
+    $verifica('după reimport: „Powered by Andaxi Web Solutions” e legătura <a href="https://andaxi.ro"> pe Acasă, Camere și 404, fără legătura Divi prin '
+        . 'script; restul subsolului și trackerele ca înainte', array_map(static fn (array $x): array => [$x['legatura'], $x['divi'], $x['subsol'], $x['trackere']], $dupaReimport)
+        === array_fill_keys(['/', '/camere/', '/x1-inexistent/'], [true, false, true, true]), json_encode($dupaReimport));
+    $politica = $cerere('/politica-de-confidentialitate/')['corp'];
+    $verifica('pe pagina cu managerul consimțământului și fără banner: șablonul managerului (din fragmentul bannerului) pus doar la răspuns',
+        str_contains($politica, '<template id="ax-cmplz-sablon"><div id="cmplz-cookiebanner-container">') && substr_count($politica, 'ax-cmplz-sablon') === 1,
+        substr($politica, -600));
+    [$c, $o] = $ruleaza(array_merge(explode(' ', $php), [$acasa . '/platforma/releases/' . $versiune . '/bin/platforma', '--site=' . $site, 'scripts/verifica-randare.php', '--capturat']));
+    $verifica('scripts/verifica-randare.php --capturat după reimport: amprentele randării aprobate (fără trackere și fără șablon)', $c === 0, $scurt($o));
 
     // ─────────────────────────────────────────────────────────────────
     $scrie('');

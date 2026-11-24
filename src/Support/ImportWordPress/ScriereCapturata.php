@@ -237,15 +237,28 @@ final class ScriereCapturata
             $asteptat = self::asteptat($doc['taiere'], $runtime);
             $na = $norm->document($asteptat);
             if ($norm->document($randare) !== $na) {
-                $dif = Normalizare::primaDiferenta($na, $norm->document($randare));
-                throw new EroareImport('P1 la import: documentul ' . $k . ' randat din bază diferă de T' . ($dif !== null ? ' (prima diferență la octetul '
-                    . $dif[0] . ')' : '') . '; nimic scris');
+                throw new EroareImport('P1 la import: documentul ' . $k . ' randat din bază diferă de T' . self::diferenta($na, $norm->document($randare)) . '; nimic scris');
             }
             // Amprenta aprobată: a randării cu valorile de la import (deterministă, deci o refac la fel P1 de după import,
             // scripts/verifica-randare.php, fără captură și fără normalizare).
             $db->prepare('UPDATE pagini_capturate SET sha_randare = ? WHERE cheie = ?')->execute([hash('sha256', $randare), $k]);
         }
         return $rez;
+    }
+
+    /**
+     * Unde diferă două documente, pentru mesajul P1: octetul primei diferențe, lungimile și câte un fragment scurt din fiecare
+     * (de la 30 de octeți înainte; caracterele de control ca „?”, rândurile noi ca „⏎”), ca diferența să se vadă din mesaj.
+     */
+    public static function diferenta(string $asteptat, string $randat): string
+    {
+        $dif = Normalizare::primaDiferenta($asteptat, $randat);
+        if ($dif === null) {
+            return '';
+        }
+        $arata = static fn (string $s): string => '„' . str_replace(["\r\n", "\n", "\r", "\t"], ['⏎', '⏎', '⏎', ' '], $s) . '”';
+        return ' (prima diferență la octetul ' . $dif['octet'] . ' din ' . strlen($asteptat) . ' așteptați / ' . strlen($randat) . ' randați; T: '
+            . $arata($dif['a']) . '; randat: ' . $arata($dif['b']) . ')';
     }
 
     /** T cu scripturile runtime-ului puse la ancorele lor (ce trebuie să dea randarea). @param array{cap?: string, final?: string} $runtime */
@@ -278,12 +291,21 @@ final class ScriereCapturata
         return CadruCapturat::randeazaRand($db, $doc, $cerere ?? self::cerereImport($doc), $runtime);
     }
 
-    /** Valorile de la import ale unui document (P1): calea și anul capturii, SEO-ul de atunci. @return array{cale: string, nonce: string, an: string, seo: array<string, string>} */
+    /**
+     * Valorile de la import ale unui document (P1 la import și scripts/verifica-randare.php): calea și anul capturii, SEO-ul de
+     * atunci, fără adaosurile răspunsului web. Trackerele active (privat/urmarire.json, `ax-date` → `ax_urmarire`) și șablonul
+     * managerului din Cookie Policy (`<template id="ax-cmplz-sablon">`, din fragmentul bannerului) le pune cadrul doar la
+     * răspunsul web: T e captura, deci nu le are, iar P1 și amprenta randării nu depind de ele (cu fișierul privat pus, P1
+     * dădea NU pe primul document, fără nicio editare; cu Cookie Policy importată, pe pagina ei).
+     *
+     * @return array{cale: string, nonce: string, an: string, seo: array<string, string>, urmarire: array{}, sablon_cmplz: string}
+     */
     public static function cerereImport(array $doc): array
     {
         $v = json_decode((string) ($doc['valori_import'] ?? ''), true);
         $v = is_array($v) ? $v : [];
-        return ['cale' => (string) ($v['cale'] ?? '/'), 'nonce' => 'p1', 'an' => (string) ($v['an'] ?? date('Y')), 'seo' => is_array($v['seo'] ?? null) ? $v['seo'] : []];
+        return ['cale' => (string) ($v['cale'] ?? '/'), 'nonce' => 'p1', 'an' => (string) ($v['an'] ?? date('Y')), 'seo' => is_array($v['seo'] ?? null) ? $v['seo'] : [],
+            'urmarire' => [], 'sablon_cmplz' => ''];
     }
 
     /** Cheia unui răspuns înghețat: metoda, calea și query-ul. */
